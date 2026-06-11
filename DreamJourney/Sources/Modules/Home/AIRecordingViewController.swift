@@ -130,6 +130,11 @@ final class AIRecordingViewController: UIViewController {
         return b
     }()
 
+    private let roadshowBannerView = RoadshowModeBannerView()
+    private var roadshowBannerTopConstraint: NSLayoutConstraint!
+    private var roadshowBannerHeightConstraint: NSLayoutConstraint!
+    private var messageTableTopConstraint: NSLayoutConstraint!
+
     // MARK: - State
     private var messages: [TGMessage] = []
     private var voiceBallState: VoiceBallState = .idle
@@ -161,6 +166,7 @@ final class AIRecordingViewController: UIViewController {
         navigationController?.navigationBar.isHidden = true
         hideKeyboardWhenTapped()
         setupLayout()
+        updateRoadshowBanner()
         setupNotifications()
         updateVoiceBallState(.idle)
         // 预初始化 Dialog 引擎
@@ -195,6 +201,7 @@ final class AIRecordingViewController: UIViewController {
     private func setupLayout() {
         view.addSubview(titleLabel)
         view.addSubview(privacyScopeButton)
+        view.addSubview(roadshowBannerView)
         view.addSubview(messageTableView)
         view.addSubview(bottomDivider)
         view.addSubview(bottomContainer)
@@ -203,7 +210,7 @@ final class AIRecordingViewController: UIViewController {
         bottomContainer.addSubview(voiceBallButton)
         bottomContainer.addSubview(cameraButton)
 
-        [titleLabel, privacyScopeButton, messageTableView, bottomDivider, bottomContainer,
+        [titleLabel, privacyScopeButton, roadshowBannerView, messageTableView, bottomDivider, bottomContainer,
          albumButton, voiceBallButton, cameraButton].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
@@ -213,6 +220,9 @@ final class AIRecordingViewController: UIViewController {
 
         // 底部操作区底部约束（动态调整避开 TabBar）
         bottomContainerBottomConstraint = bottomContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -56)
+        roadshowBannerTopConstraint = roadshowBannerView.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 0)
+        roadshowBannerHeightConstraint = roadshowBannerView.heightAnchor.constraint(equalToConstant: 0)
+        messageTableTopConstraint = messageTableView.topAnchor.constraint(equalTo: roadshowBannerView.bottomAnchor, constant: 0)
 
         NSLayoutConstraint.activate([
             // 顶部标题
@@ -222,8 +232,13 @@ final class AIRecordingViewController: UIViewController {
             privacyScopeButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
             privacyScopeButton.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 12),
 
+            roadshowBannerTopConstraint,
+            roadshowBannerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            roadshowBannerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            roadshowBannerHeightConstraint,
+
             // 消息流
-            messageTableView.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 12),
+            messageTableTopConstraint,
             messageTableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             messageTableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             messageTableView.bottomAnchor.constraint(equalTo: bottomDivider.topAnchor),
@@ -259,6 +274,15 @@ final class AIRecordingViewController: UIViewController {
             cameraButton.leadingAnchor.constraint(equalTo: voiceBallButton.trailingAnchor, constant: 44),
         ])
         updatePrivacyScopeButton()
+    }
+
+    private func updateRoadshowBanner() {
+        let status = RoadshowDemoSeed.runtimeStatus()
+        roadshowBannerView.configure(status: status)
+        roadshowBannerView.isHidden = !status.isActive
+        roadshowBannerTopConstraint.constant = status.isActive ? 10 : 0
+        roadshowBannerHeightConstraint.constant = status.isActive ? 74 : 0
+        messageTableTopConstraint.constant = 12
     }
 
     // MARK: - Voice Ball State Machine

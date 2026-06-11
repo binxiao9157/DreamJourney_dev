@@ -15,7 +15,7 @@
 | Privacy Scope 模型 | 92% | `ConversationTurn`、`Stage1MailboxMemoryInput`、`DialogMessage`、MemoryArchive、TimeMailbox、KBLite v2 实体已携带 `privacyMetadata`；`FamilyMemberVisibility` 已区分 all-family 与 selected-members，空成员选择不再误开放为全体可见，旧数据继续兼容迁移。 |
 | KBLite/Export/Widget 过滤 | 78% | KBLite remote extraction、prompt context、JSON export、Widget App Group、PDF 输入图谱、backend sync 已按 scope 过滤；familySync/careDashboard graph 支持按目标家庭成员二次裁剪。 |
 | CareDashboard/Family Sync 阶段2 | 72% | Family share package、FamilyRepository 已改用 familyCircle sanitized graph；CareDashboard transcript 入口按 `.careDashboard` 和目标成员可见性过滤；亲友成员行可进入成员视角看板，KBSync 导出可显式选择全体或单个成员目标；看板新增用户观测窗口、数据覆盖说明、脱敏观察报告和风险信号解释。 |
-| Roadshow Demo Cut 闭环 | 78% | 已补路演 seed、reset、offline launch 参数，App 启动自动注入演示家庭成员/信箱/档案/照片 mock analysis/KBLite graph/关怀转录；offline 参数已驱动 mock dialog 和 mock safety；完成 12 步路演脚本、真机 smoke checklist、失败兜底矩阵、产品边界文案和真机 preflight 脚本；下一步是接入物理 iPhone 后逐屏 smoke、导出分享包 JSON 抽查和现场计时演练。 |
+| Roadshow Demo Cut 闭环 | 82% | 已补路演 seed、reset、offline launch 参数，App 启动自动注入演示家庭成员/信箱/档案/照片 mock analysis/KBLite graph/关怀转录；offline 参数已驱动 mock dialog 和 mock safety；首页新增路演状态 Banner，可见确认 seed/offline/demo 边界；完成 12 步路演脚本、真机 smoke checklist、失败兜底矩阵、产品边界文案和真机 preflight 脚本；下一步是接入物理 iPhone 后逐屏 smoke、导出分享包 JSON 抽查和现场计时演练。 |
 
 ## 已完成
 
@@ -62,6 +62,9 @@
 - 新增 `Scripts/RoadshowDemoVerify/main.swift`，覆盖 seed 包完整性、launch 参数/env 解析、成员级可见性、CareDashboard 非空信号、五段路演步骤、KBLite/分享包文案和边界文案。
 - 新增 `docs/superpowers/reports/2026-06-11-roadshow-demo-cut.md`，沉淀真机前置条件、启动参数、demo seed 规格、12 步路演脚本、手动验收 checklist、失败兜底矩阵和产品边界文案。
 - 新增 `Scripts/roadshow_device_smoke_preflight.sh` 和 `docs/superpowers/reports/2026-06-11-roadshow-device-smoke-preflight.md`，自动检查物理 iOS 设备、关键 build settings、iPhoneOS build gate 和真机手动 smoke 步骤；当前机器未连接真机，脚本以 `PASS_WITH_CONCERNS` 记录。
+- 新增 `RoadshowModeBannerView`，首页在 seed/reset/offline/已 seed 状态下显示路演模式 Banner，明确本机演示、mock 对话、mock 安全兜底和“不复活/不诊断/不展示私密原文”的边界。
+- `RoadshowDemoSeed` 新增 `RuntimeStatus` 与 `runtimeStatus(...)`，统一 launch args、env 和 UserDefaults seeded/offline 标记，供 UI 和脚本验证复用。
+- 新增 `docs/superpowers/reports/2026-06-11-product-design-ios-optimization.md`，记录 Product Design 审计、Build iOS 插件检查、本轮设计优化、验证证据和真机/路演剩余缺口。
 
 ## 最新验证
 
@@ -80,14 +83,14 @@ bash Scripts/verify_phase2.sh
 - `KBLite 验收结果: 32/32 通过`
 - `DreamJourney.xcodeproj/project.pbxproj: OK`
 - iPhoneOS Debug build: `** BUILD SUCCEEDED **`
-- `RoadshowDemoSeed verification passed`，覆盖 roadshow seed 包、launch args/env、成员级可见性、CareDashboard 输入和边界文案。
+- `RoadshowDemoSeed verification passed`，覆盖 roadshow seed 包、launch args/env、runtime status、成员级可见性、CareDashboard 输入和边界文案。
 - `MockDialogEngine verification passed`
 - `SafetyGuard verification: 14/14 passed`，覆盖真实 HTTP POST `/v1/safety/evaluate`、完整 evaluate URL 与尾斜杠归一化、JSON/Bearer/no_store_raw/no-store 请求边界、无 key 时不发 Authorization、非 2xx/网络错误/解码失败 fail-closed、环境变量和 Info.plist 配置默认 client 走 HTTP transport、mock allow 优先级。
 - `PrivacyScope verification passed`，覆盖 `.selectedMembers([])` 不误开放、旧版 `allowedMemberIDs` JSON 可兼容解码为成员限定范围。
 - `MemoryPrivacyIntegration verification passed`，覆盖 graph-level sanitized 输出、family/export/widget/backend/care surface 过滤、CareDashboard family-only transcript、成员级 family visibility、selected-member graph 裁剪、DialogMessage memoirGeneration 过滤、summary prompt scope 迁移、mixed-scope 派生降级、跨 scope 禁止合并和 prompt 相关事实过滤。
 - `RemoteSafetyGuard verification passed`，覆盖 default fail-closed、env/launch arg mock allow、roadshow offline mock allow、本地 high 阻断。
 - `MockDialogEngine simulator typecheck` 通过
-- `Scripts/roadshow_device_smoke_preflight.sh --allow-no-device` 通过脚本/build gate 验证；当前无物理 iOS 设备，未执行逐屏 smoke。
+- `Scripts/roadshow_device_smoke_preflight.sh --allow-no-device` 通过脚本/build gate 验证；结果为 `PASS_WITH_CONCERNS`，当前无物理 iOS 设备，未执行逐屏 smoke。
 - `git diff --check` / `git diff --cached --check` 通过
 
 ## 下一步

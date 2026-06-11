@@ -39,6 +39,19 @@ assertCondition(envConfiguration.shouldSeed, "seed environment should enable roa
 assertCondition(envConfiguration.offlineMode, "offline environment should enable roadshow offline mode")
 assertCondition(envConfiguration.shouldReset, "reset environment should enable roadshow reset")
 
+let runtimeDefaults = UserDefaults(suiteName: "RoadshowDemoVerify-\(UUID().uuidString)")!
+runtimeDefaults.set(true, forKey: "dreamjourney.roadshow.seeded.v1")
+let runtimeStatus = RoadshowDemoSeed.runtimeStatus(
+    arguments: ["DreamJourney", "--roadshow-offline-mode"],
+    environment: [:],
+    userDefaults: runtimeDefaults
+)
+assertCondition(runtimeStatus.isActive, "runtime status should be active when roadshow offline mode or seed data is present")
+assertCondition(runtimeStatus.offlineMode, "runtime status should expose offline mode for UI")
+assertCondition(runtimeStatus.hasSeededData, "runtime status should expose seeded data for UI")
+assertCondition(runtimeStatus.title.contains("路演"), "runtime status title should be roadshow-oriented")
+assertCondition(runtimeStatus.detail.contains("不复活"), "runtime status detail should include product boundary copy")
+
 let viewerMemberID = package.selectedMemberIDForVisibility
 assertCondition(package.members.count >= 3, "roadshow seed should include at least 3 family members")
 assertCondition(

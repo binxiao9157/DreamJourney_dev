@@ -1,10 +1,41 @@
 import Foundation
 
 enum RoadshowDemoSeed {
+    private static let seededKey = "dreamjourney.roadshow.seeded.v1"
+    private static let offlineModeKey = "dreamjourney.roadshow.offlineMode"
+
     struct LaunchConfiguration: Equatable {
         let shouldSeed: Bool
         let shouldReset: Bool
         let offlineMode: Bool
+    }
+
+    struct RuntimeStatus: Equatable {
+        let shouldSeed: Bool
+        let shouldReset: Bool
+        let offlineMode: Bool
+        let hasSeededData: Bool
+
+        var isActive: Bool {
+            shouldSeed || shouldReset || offlineMode || hasSeededData
+        }
+
+        var title: String {
+            if offlineMode {
+                return "路演模式：本机演示已就绪"
+            }
+            if shouldSeed || shouldReset || hasSeededData {
+                return "路演数据已准备"
+            }
+            return "路演模式"
+        }
+
+        var detail: String {
+            if offlineMode {
+                return "使用 seed 数据、mock 对话和 mock 安全兜底；不复活、不诊断、不展示私密原文。"
+            }
+            return "使用固定家庭、信箱、档案、看板和分享包数据；适合现场走完整主线。"
+        }
     }
 
     enum DemoStepID: String, Codable, CaseIterable, Hashable {
@@ -49,6 +80,20 @@ enum RoadshowDemoSeed {
             shouldSeed: arguments.contains("--seed-roadshow-demo") || seedValue == "roadshow_demo",
             shouldReset: arguments.contains("--reset-roadshow-demo") || resetValue == "1" || resetValue == "true",
             offlineMode: arguments.contains("--roadshow-offline-mode") || offlineValue == "1" || offlineValue == "true"
+        )
+    }
+
+    static func runtimeStatus(
+        arguments: [String] = ProcessInfo.processInfo.arguments,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        userDefaults: UserDefaults = .standard
+    ) -> RuntimeStatus {
+        let configuration = launchConfiguration(arguments: arguments, environment: environment)
+        return RuntimeStatus(
+            shouldSeed: configuration.shouldSeed,
+            shouldReset: configuration.shouldReset,
+            offlineMode: configuration.offlineMode || userDefaults.bool(forKey: offlineModeKey),
+            hasSeededData: userDefaults.bool(forKey: seededKey)
         )
     }
 
@@ -163,9 +208,6 @@ enum RoadshowDemoSeed {
 
 #if !CARE_DASHBOARD_VERIFY && !MEMORY_PRIVACY_INTEGRATION_VERIFY
 extension RoadshowDemoSeed {
-    private static let seededKey = "dreamjourney.roadshow.seeded.v1"
-    private static let offlineModeKey = "dreamjourney.roadshow.offlineMode"
-
     static func applyIfRequested(
         arguments: [String] = ProcessInfo.processInfo.arguments,
         environment: [String: String] = ProcessInfo.processInfo.environment,

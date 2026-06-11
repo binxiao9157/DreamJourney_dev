@@ -31,6 +31,7 @@
 		50F8EF0F3B0F4C70B9C80B7A /* MemoirService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFEC7EA9CB8D7181EFC70161 /* MemoirService.swift */; };
 		51E5260630E2B3EB0C6D96F1 /* TGLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4571331D3ED0551FB8C8DE7 /* TGLoadingView.swift */; };
 		52B3383F8F4517669DA70A7B /* MemoryDetailViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 830FF3B188863CA5E93ACA26 /* MemoryDetailViewController.swift */; };
+		53C95E6C71B747CC88E07F01 /* RoadshowModeBannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53C95E6C71B747CC88E07F02 /* RoadshowModeBannerView.swift */; };
 		55D3EB0986C561C7F208E19A /* MemoirModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07B6BA3BDEF61B3A339E10DD /* MemoirModel.swift */; };
 		56272F68DA6D144F29C65952 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 41B3D2BD9BE7DFE0AABF34F1 /* Assets.xcassets */; };
 		596491B3EBC0F9D31FB1C2E1 /* MemoryAnnotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89ABFCBCF51B9FD6CEB5799F /* MemoryAnnotation.swift */; };
@@ -128,6 +129,7 @@
 		4ADA8AA6438842A1899F726B /* SafetyMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafetyMonitor.swift; sourceTree = "<group>"; };
 		4B70B14E8FFEE31DDE6BAB7B /* pako.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = pako.min.js; sourceTree = "<group>"; };
 		520A85AB37898C097F761313 /* MemoirRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirRepository.swift; sourceTree = "<group>"; };
+		53C95E6C71B747CC88E07F02 /* RoadshowModeBannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadshowModeBannerView.swift; sourceTree = "<group>"; };
 		5628E3908BA5F87F7FC6373B /* KBLiteGapDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLiteGapDetector.swift; sourceTree = "<group>"; };
 		56ED8B99EE2B18AC4D06CC30 /* MemoryEditViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryEditViewController.swift; sourceTree = "<group>"; };
 		576656BFF57471DCF9B231CB /* KBLiteManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLiteManager.swift; sourceTree = "<group>"; };
@@ -331,6 +333,7 @@
 				9CA664A32F94C89A9CE536C1 /* TGButton.swift */,
 				6E96DEA2DA5C7BD48E6F45C1 /* TGColors.swift */,
 				E4571331D3ED0551FB8C8DE7 /* TGLoadingView.swift */,
+				53C95E6C71B747CC88E07F02 /* RoadshowModeBannerView.swift */,
 				7750B20E0FBEFB67B5664936 /* TGToast.swift */,
 			);
 			path = UI;
@@ -849,6 +852,7 @@
 				397C1F6023E56C8E016A0D71 /* OpenAvatarChatService.swift in Sources */,
 				A56CE000000000000000001 /* MemoryPrivacyScope.swift in Sources */,
 				A59CE000000000000000001 /* RoadshowDemoSeed.swift in Sources */,
+				53C95E6C71B747CC88E07F01 /* RoadshowModeBannerView.swift in Sources */,
 				0FD1CC7F9A6E47179833E092 /* SafetyModels.swift in Sources */,
 				A55CE000000000000000002 /* SafetyGuardClient.swift in Sources */,
 				A55CE000000000000000001 /* SafetyGuardModels.swift in Sources */,
