@@ -15,7 +15,7 @@
 | Privacy Scope 模型 | 92% | `ConversationTurn`、`Stage1MailboxMemoryInput`、`DialogMessage`、MemoryArchive、TimeMailbox、KBLite v2 实体已携带 `privacyMetadata`；`FamilyMemberVisibility` 已区分 all-family 与 selected-members，空成员选择不再误开放为全体可见，旧数据继续兼容迁移。 |
 | KBLite/Export/Widget 过滤 | 78% | KBLite remote extraction、prompt context、JSON export、Widget App Group、PDF 输入图谱、backend sync 已按 scope 过滤；familySync/careDashboard graph 支持按目标家庭成员二次裁剪。 |
 | CareDashboard/Family Sync 阶段2 | 72% | Family share package、FamilyRepository 已改用 familyCircle sanitized graph；CareDashboard transcript 入口按 `.careDashboard` 和目标成员可见性过滤；亲友成员行可进入成员视角看板，KBSync 导出可显式选择全体或单个成员目标；看板新增用户观测窗口、数据覆盖说明、脱敏观察报告和风险信号解释。 |
-| Roadshow Demo Cut 闭环 | 82% | 已补路演 seed、reset、offline launch 参数，App 启动自动注入演示家庭成员/信箱/档案/照片 mock analysis/KBLite graph/关怀转录；offline 参数已驱动 mock dialog 和 mock safety；首页新增路演状态 Banner，可见确认 seed/offline/demo 边界；完成 12 步路演脚本、真机 smoke checklist、失败兜底矩阵、产品边界文案和真机 preflight 脚本；下一步是接入物理 iPhone 后逐屏 smoke、导出分享包 JSON 抽查和现场计时演练。 |
+| Roadshow Demo Cut 闭环 | 86% | 已补路演 seed、reset、offline launch 参数，App 启动自动注入演示家庭成员/信箱/档案/照片 mock analysis/KBLite graph/关怀转录；offline 参数已驱动 mock dialog 和 mock safety；首页新增路演状态 Banner，可见确认 seed/offline/demo 边界；真机 iPhone 17 已完成签名、安装、roadshow 参数启动和容器数据抽查；下一步是逐屏 UI smoke、截图留档、分享包 JSON 抽查和现场计时演练。 |
 
 ## 已完成
 
@@ -90,7 +90,7 @@ bash Scripts/verify_phase2.sh
 - `MemoryPrivacyIntegration verification passed`，覆盖 graph-level sanitized 输出、family/export/widget/backend/care surface 过滤、CareDashboard family-only transcript、成员级 family visibility、selected-member graph 裁剪、DialogMessage memoirGeneration 过滤、summary prompt scope 迁移、mixed-scope 派生降级、跨 scope 禁止合并和 prompt 相关事实过滤。
 - `RemoteSafetyGuard verification passed`，覆盖 default fail-closed、env/launch arg mock allow、roadshow offline mock allow、本地 high 阻断。
 - `MockDialogEngine simulator typecheck` 通过
-- `Scripts/roadshow_device_smoke_preflight.sh` 在已连接 iPhone 17 / iOS 26.6 上通过，结果为 `PASS`；真机目标 build 已进入签名阶段，但因本机没有 Apple Developer Team、codesigning identity 和 provisioning profile，安装/启动/逐屏 smoke 尚未执行。详见 `docs/superpowers/reports/2026-06-11-roadshow-device-validation.md`。
+- `Scripts/roadshow_device_smoke_preflight.sh` 在已连接 iPhone 17 / iOS 26.6 上通过，结果为 `PASS`；真机 device build `** BUILD SUCCEEDED **`；App 已安装为 `com.yxj.dreamjourney.app`，并使用 reset+seed+offline 参数启动成功；从真机容器抽查到 roadshow seeded/offline/login 标记、时空信箱、记忆档案馆和 CareDashboard transcript 数据。详见 `docs/superpowers/reports/2026-06-11-roadshow-device-validation.md`。
 - `git diff --check` / `git diff --cached --check` 通过
 
 ## 下一步
