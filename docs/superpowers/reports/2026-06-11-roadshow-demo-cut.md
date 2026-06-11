@@ -41,6 +41,18 @@ xcodebuild \
   build
 ```
 
+推荐先跑 preflight：
+
+```bash
+Scripts/roadshow_device_smoke_preflight.sh
+```
+
+若当前机器没有连接真机，只验证脚本和 iPhoneOS build gate：
+
+```bash
+Scripts/roadshow_device_smoke_preflight.sh --allow-no-device
+```
+
 现场运行优先用 Xcode 直接 Run 到真机，便于设置 launch arguments/env 和查看控制台日志。若使用 `ios-deploy` 或 Xcode Devices 安装 ipa，需要另行确认 launch arguments 是否能注入。
 
 ## 2. 推荐 Launch Arguments / Env
