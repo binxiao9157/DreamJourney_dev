@@ -101,12 +101,12 @@ final class OpenAvatarChatService {
 
     /// 推送知识库到后端
     ///
-    /// 调用 `KBLiteManager.shared.exportJSON()` 获取完整知识库 JSON，
+    /// 调用 `KBLiteManager.shared.exportJSON(surface: .backendSync)` 获取可同步知识库 JSON，
     /// 然后 POST 到后端 `/api/knowledge/inject`
     ///
     /// - Parameter completion: 回调，成功返回 Void，失败返回错误；网络不通时静默失败
     func syncKnowledgeBase(completion: @escaping (Result<Void, Error>) -> Void) {
-        guard let graphJSON = KBLiteManager.shared.exportJSON(), !graphJSON.isEmpty else {
+        guard let graphJSON = KBLiteManager.shared.exportJSON(surface: .backendSync), !graphJSON.isEmpty else {
             print("[OpenAvatarChat] ⚠️ 知识库为空，跳过推送")
             completion(.failure(ServiceError.noKnowledgeData))
             return

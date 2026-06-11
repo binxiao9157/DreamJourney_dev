@@ -232,7 +232,7 @@ final class KBLiteMultiUser {
 
     /// 生成当前知识库的分享包（包含 userId 和 nickname 元数据）
     func generateSharePackage() -> SharePackage? {
-        guard let graphJSON = KBLiteManager.shared.exportJSON() else {
+        guard let graphJSON = KBLiteManager.shared.exportJSON(surface: .familySync) else {
             print("[KBMultiUser] 导出 graph JSON 失败")
             return nil
         }

@@ -138,8 +138,8 @@ final class Stage1MemoryFacade {
         knowledgeBase.ingestImageAnalysis(result, sessionId: sessionId)
     }
 
-    func exportKnowledgeJSON() -> String? {
-        knowledgeBase.exportJSON()
+    func exportKnowledgeJSON(surface: MemoryUseSurface = .export) -> String? {
+        knowledgeBase.exportJSON(surface: surface)
     }
 
     @discardableResult

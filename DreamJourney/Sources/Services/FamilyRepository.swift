@@ -45,7 +45,7 @@ final class FamilyRepository {
 
     /// 将知识库中识别到的人物自动同步到亲属圈列表
     private func syncFromKnowledgeBase() {
-        let graph = KBLiteManager.shared.graph
+        let graph = KBLiteManager.shared.sanitizedGraph(for: .familySync)
         guard !graph.people.isEmpty else { return }
 
         // 常见关系映射
@@ -91,7 +91,7 @@ final class FamilyRepository {
             }
 
             // 在线状态：最近 24 小时内有会话更新的人物标记为"在线"
-            let isRecent = person.sourceSessionIds.last.map { $0 >= KBLiteManager.shared.graph.sessionCount - 1 } ?? false
+            let isRecent = person.sourceSessionIds.last.map { $0 >= graph.sessionCount - 1 } ?? false
 
             let lastUpdated: String
             if isRecent {

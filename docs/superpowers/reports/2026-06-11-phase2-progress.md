@@ -13,8 +13,8 @@
 | Mock/Simulator 基线 | 80% | `MockDialogEngine` 已实现，纯 Swift 验证、iPhoneOS build、simulator SDK typecheck 通过；完整 Simulator app build 仍受 `SpeechEngineToB` slice 影响，后续需独立 smoke target 或 Pod 条件化。 |
 | Safety Guard 合约 | 70% | 合约和 iOS client 已固化；DeepSeek chat/knowledge/image、Memoir、TTS 入口默认 fail-closed，并支持显式 mock allow 演示开关。 |
 | Privacy Scope 模型 | 70% | `ConversationTurn`、`Stage1MailboxMemoryInput`、KBLite v2 实体已携带 `privacyMetadata`，旧数据默认迁移为 `.localOnly`。 |
-| KBLite/Export/Widget 过滤 | 35% | KBLite remote extraction 和 prompt context 已按 scope 过滤；Export/Widget/PDF/Family/CareDashboard 仍待 sanitized 输出改造。 |
-| CareDashboard/Family Sync 阶段2 | 0% | 等 scope 和家庭授权模型进入代码后开始。 |
+| KBLite/Export/Widget 过滤 | 65% | KBLite remote extraction、prompt context、JSON export、Widget App Group、PDF 输入图谱、backend sync 已按 scope 过滤；仍待显式授权 UI 和更多端到端 UI 验证。 |
+| CareDashboard/Family Sync 阶段2 | 25% | Family share package、FamilyRepository 已改用 familyCircle sanitized graph；CareSignalAnalyzer 当前不直接读取 KBLite graph，仍待家庭授权模型和看板数据源整合。 |
 
 ## 已完成
 
@@ -32,6 +32,9 @@
 - 新增 `KBLitePrivacyScopePolicy`，KBLite 远端提取只允许 `.generationAllowed` transcript，prompt context 过滤不可用实体。
 - 新增 `DeepSeekSafetyGuarding`，DeepSeek chat/knowledge/image、Memoir 生成、Memoir TTS 发起前执行 guard。
 - 新增 SafetyGuard mock allow 选择器：默认仍 fail-closed，使用 `--use-mock-safety-guard` 或 `DREAMJOURNEY_SAFETY_GUARD=mock_allow` 时才允许阶段2远端演示。
+- 新增 `KBLitePrivacyScopePolicy.sanitizedGraph`，按 `MemoryUseSurface` 裁剪 KBLite graph 并清理人物、地点、事件、事实之间的悬挂引用。
+- `KBLiteManager.exportJSON(surface:)`、Widget App Group 输出、OpenAvatar backend sync、KBLite PDF 输入图谱已统一走 sanitized graph；当前 `.export`、`.widget`、`.backendSync` 在未显式授权前保持空输出。
+- Family share package 和 `FamilyRepository` 改用 `.familySync` sanitized graph，只允许 `familyCircle` 进入家庭同步/亲属圈自动同步。
 
 ## 最新验证
 
@@ -53,7 +56,7 @@ bash Scripts/verify_phase2.sh
 - `MockDialogEngine verification passed`
 - `SafetyGuard verification: 4/4 passed`
 - `PrivacyScope verification passed`
-- `MemoryPrivacyIntegration verification passed`
+- `MemoryPrivacyIntegration verification passed`，覆盖 graph-level sanitized 输出、family/export/widget/backend/care surface 过滤和关系引用清理。
 - `RemoteSafetyGuard verification passed`，覆盖 default fail-closed、env/launch arg mock allow、本地 high 阻断。
 - `MockDialogEngine simulator typecheck` 通过
 - `git diff --check` / `git diff --cached --check` 通过
@@ -61,6 +64,6 @@ bash Scripts/verify_phase2.sh
 ## 下一步
 
 1. 接入真实 `/v1/safety/evaluate` transport；当前 mock allow 只用于阶段2演示，不是生产安全方案。
-2. 推进 export/widget/PDF/family/care 的 sanitized 输出改造。
-3. 为 `MemoryArchive`、`TimeMailbox`、普通对话 UI 增加显式 scope 授权选择。
+2. 为 `MemoryArchive`、`TimeMailbox`、普通对话 UI 增加显式 scope 授权选择，决定用户何时授予 export/widget/backend 权限。
+3. 补 Family/CareDashboard 的家庭授权模型、成员级可见性和端到端 UI 验证。
 4. 处理完整 Simulator app build 的 `SpeechEngineToB` slice 阻断。

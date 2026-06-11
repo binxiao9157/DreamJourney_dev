@@ -115,8 +115,9 @@ final class KBLiteManager {
             forSecurityApplicationGroupIdentifier: "group.com.dreamjourney.shared"
         ) else { return }
         let widgetFile = containerURL.appendingPathComponent("kb_widget_data.json")
+        let widgetGraph = KBLitePrivacyScopePolicy.sanitizedGraph(graph, for: .widget)
         // 只写入 events（Widget 只需要事件数据）
-        let widgetEvents = graph.events.map { e -> [String: Any] in
+        let widgetEvents = widgetGraph.events.map { e -> [String: Any] in
             var dict: [String: Any] = [
                 "id": e.id,
                 "title": e.title
@@ -993,6 +994,12 @@ final class KBLiteManager {
         save()
     }
 
+    func sanitizedGraph(for surface: MemoryUseSurface) -> KBLiteGraph {
+        readGraph { graph in
+            KBLitePrivacyScopePolicy.sanitizedGraph(graph, for: surface)
+        }
+    }
+
     // MARK: - Maintenance
 
     /// 重置知识库（调试用 / 用户主动清除）
@@ -1003,12 +1010,13 @@ final class KBLiteManager {
         print("[KBLite] 🔄 知识库已重置")
     }
 
-    /// 导出知识库为 JSON 字符串（用于备份/分享）
-    func exportJSON() -> String? {
+    /// 导出知识库为 JSON 字符串。默认走用户外发导出 surface，避免泄漏本地完整图谱。
+    func exportJSON(surface: MemoryUseSurface = .export) -> String? {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(graph) else { return nil }
+        let exportGraph = sanitizedGraph(for: surface)
+        guard let data = try? encoder.encode(exportGraph) else { return nil }
         return String(data: data, encoding: .utf8)
     }
 

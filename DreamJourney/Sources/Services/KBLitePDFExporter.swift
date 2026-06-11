@@ -32,7 +32,7 @@ final class KBLitePDFExporter {
     /// - Parameter completion: 完成回调，返回 PDF 文件 URL（主线程）
     static func generateFamilyBook(completion: @escaping (URL?) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
-            let graph = KBLiteManager.shared.graph
+            let graph = KBLiteManager.shared.sanitizedGraph(for: .export)
             let memoirs = MemoirRepository.shared.getAll()
 
             let renderer = UIGraphicsPDFRenderer(bounds: pageRect)
