@@ -162,4 +162,8 @@ public enum MemoryPrivacyMigration {
     public static func scopeForExplicitGenerationAuthorization() -> MemoryPrivacyScope {
         .generationAllowed
     }
+
+    public static func scopeForExplicitFamilyAuthorization() -> MemoryPrivacyScope {
+        .familyCircle
+    }
 }

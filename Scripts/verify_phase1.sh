@@ -16,6 +16,7 @@ echo "== TimeMailbox =="
 xcrun swiftc \
   DreamJourney/Sources/Services/Safety/SafetyModels.swift \
   DreamJourney/Sources/Services/Safety/SafetyMonitor.swift \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
   DreamJourney/Sources/Services/TimeMailbox/TimeMailboxModels.swift \
   DreamJourney/Sources/Services/TimeMailbox/TimeMailboxRepository.swift \
   Scripts/TimeMailboxVerify/main.swift \
@@ -24,6 +25,7 @@ xcrun swiftc \
 
 echo "== MemoryArchive =="
 xcrun swiftc \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
   DreamJourney/Sources/Services/MemoryArchive/MemoryArchiveModels.swift \
   DreamJourney/Sources/Services/MemoryArchive/MemoryArchiveRepository.swift \
   Scripts/MemoryArchiveVerify/main.swift \

@@ -138,5 +138,9 @@ assertCondition(
     MemoryPrivacyMigration.scopeForExplicitGenerationAuthorization() == .generationAllowed,
     "explicit generation authorization should use generationAllowed"
 )
+assertCondition(
+    MemoryPrivacyMigration.scopeForExplicitFamilyAuthorization() == .familyCircle,
+    "explicit family authorization should use familyCircle"
+)
 
 print("PrivacyScope verification passed")

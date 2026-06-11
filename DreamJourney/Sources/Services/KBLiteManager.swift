@@ -882,7 +882,11 @@ final class KBLiteManager {
     /// - Parameters:
     ///   - result: 图片分析结果
     ///   - sessionId: 当前会话序号
-    func ingestImageAnalysis(_ result: KBImageAnalysisResult, sessionId: Int) {
+    func ingestImageAnalysis(
+        _ result: KBImageAnalysisResult,
+        sessionId: Int,
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+    ) {
         var addedCount = 0
         let now = Date()
 
@@ -895,7 +899,8 @@ final class KBLiteManager {
                     name: result.scene,
                     description: result.description,
                     sourceSessionIds: [sessionId],
-                    createdAt: now
+                    createdAt: now,
+                    privacyMetadata: privacyMetadata
                 )
                 graph.places.append(place)
                 addedCount += 1
@@ -916,7 +921,8 @@ final class KBLiteManager {
                     traits: [],
                     sourceSessionIds: [sessionId],
                     createdAt: now,
-                    updatedAt: now
+                    updatedAt: now,
+                    privacyMetadata: privacyMetadata
                 )
                 graph.people.append(person)
                 addedCount += 1

@@ -25,6 +25,7 @@ do {
     )
     assertCondition(note.analysisStatus == .manual, "text material should be manual")
     assertCondition(note.isPrivate, "text privacy should persist")
+    assertCondition(note.privacyMetadata.scope == .privateOnly, "private text should map to privateOnly")
     assertCondition(repo.summary().textCount == 1, "summary should count text materials")
 
     let photo = try repo.addPhoto(
@@ -33,10 +34,35 @@ do {
         note: "相册里翻出来的旧照片",
         tags: ["旧照片"],
         isPrivate: false,
+        privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed),
         now: now
     )
     assertCondition(photo.analysisStatus == .pending, "photo should start pending")
+    assertCondition(photo.privacyMetadata.scope == .generationAllowed, "photo should persist explicit generation scope")
     assertCondition(repo.summary().photoCount == 1, "summary should count photos")
+
+    let familyPhoto = try repo.addPhoto(
+        localPath: "/tmp/family_photo.jpg",
+        title: "家庭共享照片",
+        note: "只给家人看，不做远端分析",
+        tags: ["家庭"],
+        isPrivate: false,
+        privacyMetadata: MemoryPrivacyMetadata(scope: .familyCircle),
+        now: now
+    )
+    assertCondition(familyPhoto.analysisStatus == .manual, "family photo should not start remote analysis")
+    assertCondition(familyPhoto.privacyMetadata.scope == .familyCircle, "family photo should persist explicit family scope")
+
+    let familyNote = try repo.addText(
+        kind: .textNote,
+        title: "家庭可见回忆",
+        note: "这段可以给家人看。",
+        tags: ["家庭"],
+        isPrivate: false,
+        privacyMetadata: MemoryPrivacyMetadata(scope: .familyCircle),
+        now: now
+    )
+    assertCondition(familyNote.privacyMetadata.scope == .familyCircle, "text should persist explicit family scope")
 
     let analysis = MemoryArchiveImageAnalysis(
         summary: "一家人在老房子门口合影。",
@@ -61,7 +87,7 @@ do {
     assertCondition(failed.analysisStatus == .failed, "photo can be marked failed")
 
     try repo.delete(id: note.id)
-    assertCondition(repo.items().count == 1, "deleted item should be removed")
+    assertCondition(repo.items().count == 3, "deleted item should be removed")
 
     do {
         _ = try repo.addText(
@@ -76,6 +102,25 @@ do {
     } catch MemoryArchiveRepositoryError.invalidText {
         assertCondition(true, "blank text material throws expected error")
     }
+
+    let legacyJSON = """
+    [{
+      "id":"legacy-private",
+      "kind":"textNote",
+      "title":"旧私密",
+      "note":"旧内容",
+      "createdAt":"2026-01-01T00:00:00Z",
+      "updatedAt":"2026-01-01T00:00:00Z",
+      "analysisStatus":"manual",
+      "detectedPeople":[],
+      "tags":[],
+      "isPrivate":true
+    }]
+    """.data(using: .utf8)!
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    let legacyItems = try decoder.decode([MemoryArchiveItem].self, from: legacyJSON)
+    assertCondition(legacyItems.first?.privacyMetadata.scope == .privateOnly, "legacy private archive item should migrate to privateOnly")
 } catch {
     fputs("FAIL: unexpected error \(error)\n", stderr)
     exit(1)

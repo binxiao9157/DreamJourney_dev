@@ -134,8 +134,16 @@ final class Stage1MemoryFacade {
         )
     }
 
-    func ingestImageAnalysis(_ result: KBImageAnalysisResult, sessionId: Int) {
-        knowledgeBase.ingestImageAnalysis(result, sessionId: sessionId)
+    func ingestImageAnalysis(
+        _ result: KBImageAnalysisResult,
+        sessionId: Int,
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+    ) {
+        knowledgeBase.ingestImageAnalysis(
+            result,
+            sessionId: sessionId,
+            privacyMetadata: privacyMetadata
+        )
     }
 
     func exportKnowledgeJSON(surface: MemoryUseSurface = .export) -> String? {

@@ -54,6 +54,7 @@ final class MemoryArchiveRepository {
         note: String,
         tags: [String] = [],
         isPrivate: Bool = true,
+        privacyMetadata: MemoryPrivacyMetadata? = nil,
         now: Date = Date()
     ) throws -> MemoryArchiveItem {
         let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -61,6 +62,9 @@ final class MemoryArchiveRepository {
         guard kind != .photo, !cleanNote.isEmpty else {
             throw MemoryArchiveRepositoryError.invalidText
         }
+        let resolvedPrivacyMetadata = privacyMetadata
+            ?? MemoryPrivacyMetadata(scope: MemoryPrivacyMigration.scopeFromLegacy(isPrivate: isPrivate))
+        let resolvedIsPrivate = resolvedPrivacyMetadata.scope == .privateOnly
 
         let item = MemoryArchiveItem(
             id: UUID().uuidString,
@@ -78,7 +82,8 @@ final class MemoryArchiveRepository {
             mood: nil,
             estimatedDecade: nil,
             tags: Self.cleanTags(tags),
-            isPrivate: isPrivate
+            isPrivate: resolvedIsPrivate,
+            privacyMetadata: resolvedPrivacyMetadata
         )
 
         var all = load()
@@ -94,12 +99,20 @@ final class MemoryArchiveRepository {
         note: String = "",
         tags: [String] = [],
         isPrivate: Bool = true,
+        privacyMetadata: MemoryPrivacyMetadata? = nil,
         now: Date = Date()
     ) throws -> MemoryArchiveItem {
         let cleanPath = localPath.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanPath.isEmpty else { throw MemoryArchiveRepositoryError.invalidPhotoPath }
 
         let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedPrivacyMetadata = privacyMetadata
+            ?? MemoryPrivacyMetadata(scope: MemoryPrivacyMigration.scopeFromLegacy(isPrivate: isPrivate))
+        let resolvedIsPrivate = resolvedPrivacyMetadata.scope == .privateOnly
+        let shouldAnalyze = PrivacyScopePolicy.canUse(
+            metadata: resolvedPrivacyMetadata,
+            surface: .remoteExtraction
+        )
         let item = MemoryArchiveItem(
             id: UUID().uuidString,
             kind: .photo,
@@ -108,7 +121,7 @@ final class MemoryArchiveRepository {
             localPath: cleanPath,
             createdAt: now,
             updatedAt: now,
-            analysisStatus: isPrivate ? .manual : .pending,
+            analysisStatus: shouldAnalyze ? .pending : .manual,
             analysisSummary: nil,
             detectedPeople: [],
             scene: nil,
@@ -116,7 +129,8 @@ final class MemoryArchiveRepository {
             mood: nil,
             estimatedDecade: nil,
             tags: Self.cleanTags(tags),
-            isPrivate: isPrivate
+            isPrivate: resolvedIsPrivate,
+            privacyMetadata: resolvedPrivacyMetadata
         )
 
         var all = load()

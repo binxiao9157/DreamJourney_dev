@@ -71,6 +71,9 @@ final class CareDashboardViewController: UIViewController {
     }
 
     private func isCareEligibleTurn(_ turn: ConversationTurn) -> Bool {
+        guard PrivacyScopePolicy.canUse(metadata: turn.privacyMetadata, surface: .careDashboard) else {
+            return false
+        }
         guard turn.role.lowercased() == "user" else { return true }
         let excludedPrefixes = [
             "时空信箱写给",

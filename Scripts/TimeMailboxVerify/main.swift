@@ -21,10 +21,12 @@ do {
         body: "我今天路过老房子，想起你做饭的味道。",
         deliverAt: now.addingTimeInterval(60),
         now: now,
-        boundaryAcknowledged: true
+        boundaryAcknowledged: true,
+        privacyMetadata: MemoryPrivacyMetadata(scope: .familyCircle)
     )
 
     assertCondition(letter.status == .sealed, "new letter should start sealed")
+    assertCondition(letter.privacyMetadata.scope == .familyCircle, "letter should persist explicit family scope")
     assertCondition(repo.letters().count == 1, "letter should persist")
     assertCondition(repo.refreshDelivery(now: now).isEmpty, "letter should not deliver before deliverAt")
 
@@ -47,7 +49,8 @@ do {
             body: "内容",
             deliverAt: now,
             now: now,
-            boundaryAcknowledged: true
+            boundaryAcknowledged: true,
+            privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed)
         )
         assertCondition(false, "blank recipient should throw")
     } catch TimeMailboxRepositoryError.invalidRecipient {
@@ -61,12 +64,40 @@ do {
             body: "内容",
             deliverAt: now,
             now: now,
-            boundaryAcknowledged: false
+            boundaryAcknowledged: false,
+            privacyMetadata: MemoryPrivacyMetadata(scope: .localOnly)
         )
         assertCondition(false, "missing boundary acknowledgement should throw")
     } catch TimeMailboxRepositoryError.boundaryNotAcknowledged {
         assertCondition(true, "missing boundary acknowledgement throws expected error")
     }
+
+    let defaultLetter = try repo.createLetter(
+        recipientName: "爸爸",
+        title: "",
+        body: "默认只保存在本机。",
+        deliverAt: now,
+        now: now,
+        boundaryAcknowledged: true
+    )
+    assertCondition(defaultLetter.privacyMetadata.scope == .localOnly, "default letter scope should be localOnly")
+
+    let legacyJSON = """
+    [{
+      "id":"legacy-letter",
+      "recipientName":"妈妈",
+      "title":"旧信",
+      "body":"旧内容",
+      "createdAt":"2026-01-01T00:00:00Z",
+      "deliverAt":"2026-01-02T00:00:00Z",
+      "status":"sealed",
+      "boundaryAcknowledged":true
+    }]
+    """.data(using: .utf8)!
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    let legacyLetters = try decoder.decode([TimeMailboxLetter].self, from: legacyJSON)
+    assertCondition(legacyLetters.first?.privacyMetadata.scope == .localOnly, "legacy mailbox letter should migrate to localOnly")
 } catch {
     fputs("FAIL: unexpected error \(error)\n", stderr)
     exit(1)

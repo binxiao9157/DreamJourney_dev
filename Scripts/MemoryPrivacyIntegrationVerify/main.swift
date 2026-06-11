@@ -23,10 +23,15 @@ assertCondition(generationInput.privacyMetadata.scope == .generationAllowed, "in
 let scopedTurns = [
     ConversationTurn(role: "user", text: "私密内容", timestamp: Date(), privacyMetadata: MemoryPrivacyMetadata(scope: .privateOnly)),
     ConversationTurn(role: "user", text: "本机内容", timestamp: Date(), privacyMetadata: MemoryPrivacyMetadata(scope: .localOnly)),
-    ConversationTurn(role: "user", text: "可生成内容", timestamp: Date(), privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed))
+    ConversationTurn(role: "user", text: "可生成内容", timestamp: Date(), privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed)),
+    ConversationTurn(role: "user", text: "家庭关怀内容", timestamp: Date(), privacyMetadata: MemoryPrivacyMetadata(scope: .familyCircle))
 ]
 let remoteTurns = KBLitePrivacyScopePolicy.remoteExtractableTurns(from: scopedTurns)
 assertCondition(remoteTurns.map(\.text) == ["可生成内容"], "only generationAllowed turns should enter remote extraction")
+let careTurns = scopedTurns.filter {
+    PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .careDashboard)
+}
+assertCondition(careTurns.map(\.text) == ["家庭关怀内容"], "only familyCircle turns should enter care dashboard")
 
 var person = KBPerson(id: "p1", name: "爷爷", aliases: [], relation: nil, traits: [], sourceSessionIds: [1], createdAt: Date(), updatedAt: Date())
 assertCondition(person.privacyMetadata.scope == .localOnly, "new KBPerson should default to localOnly")

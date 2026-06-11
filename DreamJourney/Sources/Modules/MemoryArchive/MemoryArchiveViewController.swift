@@ -173,10 +173,14 @@ final class MemoryArchiveViewController: UIViewController {
                 title: draft.title,
                 note: draft.note,
                 tags: draft.tags,
-                isPrivate: draft.isPrivate
+                isPrivate: draft.isPrivate,
+                privacyMetadata: draft.privacyMetadata
             )
-            if !item.isPrivate {
-                Stage1MemoryFacade.shared.recordUserTurn("记忆档案馆保存\(item.kind.displayName)：\(item.note)")
+            if item.privacyMetadata.scope != .privateOnly {
+                Stage1MemoryFacade.shared.recordUserTurn(Stage1MailboxMemoryInput(
+                    "记忆档案馆保存\(item.kind.displayName)：\(item.note)",
+                    privacyMetadata: item.privacyMetadata
+                ))
             }
             dismiss(animated: true) { [weak self] in
                 self?.showToast("素材已保存", type: .success)
@@ -235,10 +239,17 @@ final class MemoryArchiveViewController: UIViewController {
                     )
                     do {
                         let item = try self.repository.applyImageAnalysis(id: itemId, analysis: archiveAnalysis)
-                        if !item.isPrivate {
+                        if item.privacyMetadata.scope != .privateOnly {
                             let sessionId = ConversationMemoryManager.shared.currentMemory.sessionCount + 1
-                            Stage1MemoryFacade.shared.ingestImageAnalysis(kbAnalysis, sessionId: sessionId)
-                            Stage1MemoryFacade.shared.recordUserTurn("记忆档案馆上传旧照片：\(archiveAnalysis.summary)")
+                            Stage1MemoryFacade.shared.ingestImageAnalysis(
+                                kbAnalysis,
+                                sessionId: sessionId,
+                                privacyMetadata: item.privacyMetadata
+                            )
+                            Stage1MemoryFacade.shared.recordUserTurn(Stage1MailboxMemoryInput(
+                                "记忆档案馆上传旧照片：\(archiveAnalysis.summary)",
+                                privacyMetadata: item.privacyMetadata
+                            ))
                         }
                         self.showToast("照片分析完成", type: .success)
                     } catch {
@@ -296,14 +307,36 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
     private func presentPhotoPrivacyChoice(image: UIImage, imagePath: String) {
         let alert = UIAlertController(
             title: "照片保存方式",
-            message: "私密保存只保存在本机档案馆；选择分析整理会调用图片分析并写入记忆线索。",
+            message: "私密只留在档案馆；可生成会调用图片分析；亲友可进入家庭同步。",
             preferredStyle: .actionSheet
         )
-        alert.addAction(UIAlertAction(title: "仅私密保存", style: .default) { [weak self] _ in
-            self?.savePickedPhoto(image, imagePath: imagePath, allowAnalysis: false)
+        alert.addAction(UIAlertAction(title: "私密", style: .default) { [weak self] _ in
+            self?.savePickedPhoto(
+                image,
+                imagePath: imagePath,
+                privacyMetadata: MemoryPrivacyMetadata(scope: .privateOnly)
+            )
         })
-        alert.addAction(UIAlertAction(title: "分析并整理为记忆线索", style: .default) { [weak self] _ in
-            self?.savePickedPhoto(image, imagePath: imagePath, allowAnalysis: true)
+        alert.addAction(UIAlertAction(title: "本机", style: .default) { [weak self] _ in
+            self?.savePickedPhoto(
+                image,
+                imagePath: imagePath,
+                privacyMetadata: MemoryPrivacyMetadata(scope: .localOnly)
+            )
+        })
+        alert.addAction(UIAlertAction(title: "可生成", style: .default) { [weak self] _ in
+            self?.savePickedPhoto(
+                image,
+                imagePath: imagePath,
+                privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed)
+            )
+        })
+        alert.addAction(UIAlertAction(title: "亲友", style: .default) { [weak self] _ in
+            self?.savePickedPhoto(
+                image,
+                imagePath: imagePath,
+                privacyMetadata: MemoryPrivacyMetadata(scope: .familyCircle)
+            )
         })
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
         alert.popoverPresentationController?.sourceView = view
@@ -316,21 +349,26 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
         present(alert, animated: true)
     }
 
-    private func savePickedPhoto(_ image: UIImage, imagePath: String, allowAnalysis: Bool) {
+    private func savePickedPhoto(
+        _ image: UIImage,
+        imagePath: String,
+        privacyMetadata: MemoryPrivacyMetadata
+    ) {
         do {
             let item = try repository.addPhoto(
                 localPath: imagePath,
                 title: "旧照片",
                 note: "从相册加入的记忆照片",
                 tags: ["旧照片"],
-                isPrivate: !allowAnalysis
+                isPrivate: privacyMetadata.scope == .privateOnly,
+                privacyMetadata: privacyMetadata
             )
             reloadData()
-            if allowAnalysis {
+            if item.analysisStatus == .pending {
                 showToast("照片已加入档案馆，开始分析", type: .success)
                 analyzePhoto(image, itemId: item.id)
             } else {
-                showToast("照片已私密保存", type: .success)
+                showToast("照片已保存", type: .success)
             }
         } catch {
             showToast("照片加入失败", type: .error)
@@ -368,7 +406,11 @@ private struct MemoryArchiveTextDraft {
     let title: String
     let note: String
     let tags: [String]
-    let isPrivate: Bool
+    let privacyMetadata: MemoryPrivacyMetadata
+
+    var isPrivate: Bool {
+        privacyMetadata.scope == .privateOnly
+    }
 }
 
 private final class MemoryArchiveTextComposerViewController: UIViewController {
@@ -397,10 +439,12 @@ private final class MemoryArchiveTextComposerViewController: UIViewController {
         return textView
     }()
 
-    private let privateSwitch: UISwitch = {
-        let control = UISwitch()
-        control.isOn = true
-        control.onTintColor = .warmAccent
+    private let privacyControl: UISegmentedControl = {
+        let control = UISegmentedControl(items: ["私密", "本机", "可生成", "亲友"])
+        control.selectedSegmentIndex = 0
+        control.selectedSegmentTintColor = .warmAccent
+        control.setTitleTextAttributes([.foregroundColor: UIColor.white], for: .selected)
+        control.setTitleTextAttributes([.foregroundColor: UIColor.warmPrimary], for: .normal)
         return control
     }()
 
@@ -442,7 +486,7 @@ private final class MemoryArchiveTextComposerViewController: UIViewController {
         stack.addArrangedSubview(makeSection(title: "素材类型", view: kindControl, height: 36))
         stack.addArrangedSubview(makeSection(title: "标题", view: titleField, height: 44))
         stack.addArrangedSubview(makeSection(title: "内容", view: noteTextView, height: 220))
-        stack.addArrangedSubview(makePrivateRow())
+        stack.addArrangedSubview(makeSection(title: "使用范围", view: privacyControl, height: 36))
 
         NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
@@ -472,19 +516,6 @@ private final class MemoryArchiveTextComposerViewController: UIViewController {
         return stack
     }
 
-    private func makePrivateRow() -> UIView {
-        let label = UILabel()
-        label.text = "私密保存"
-        label.font = .systemFont(ofSize: 15)
-        label.textColor = .warmPrimary
-
-        let row = UIStackView(arrangedSubviews: [label, UIView(), privateSwitch])
-        row.axis = .horizontal
-        row.alignment = .center
-        row.spacing = 10
-        return row
-    }
-
     @objc private func cancelTapped() {
         dismiss(animated: true)
     }
@@ -502,9 +533,22 @@ private final class MemoryArchiveTextComposerViewController: UIViewController {
             title: (titleField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
             note: noteTextView.text.trimmingCharacters(in: .whitespacesAndNewlines),
             tags: [kind.displayName],
-            isPrivate: privateSwitch.isOn
+            privacyMetadata: MemoryPrivacyMetadata(scope: selectedPrivacyScope())
         )
         onSave?(draft)
+    }
+
+    private func selectedPrivacyScope() -> MemoryPrivacyScope {
+        switch privacyControl.selectedSegmentIndex {
+        case 1:
+            return .localOnly
+        case 2:
+            return MemoryPrivacyMigration.scopeForExplicitGenerationAuthorization()
+        case 3:
+            return MemoryPrivacyMigration.scopeForExplicitFamilyAuthorization()
+        default:
+            return .privateOnly
+        }
     }
 
     private static func makeTextField(placeholder: String) -> UITextField {

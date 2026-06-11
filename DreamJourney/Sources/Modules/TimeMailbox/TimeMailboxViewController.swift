@@ -136,7 +136,8 @@ final class TimeMailboxViewController: UIViewController {
                 title: draft.title,
                 body: draft.body,
                 deliverAt: draft.deliverAt,
-                boundaryAcknowledged: draft.boundaryAcknowledged
+                boundaryAcknowledged: draft.boundaryAcknowledged,
+                privacyMetadata: draft.privacyMetadata
             )
             dismiss(animated: true) { [weak self] in
                 self?.showToast("信已封存", type: .success)
@@ -210,6 +211,7 @@ private struct TimeMailboxDraft {
     let body: String
     let deliverAt: Date
     let boundaryAcknowledged: Bool
+    let privacyMetadata: MemoryPrivacyMetadata
 }
 
 private final class TimeMailboxComposerViewController: UIViewController {
@@ -241,6 +243,15 @@ private final class TimeMailboxComposerViewController: UIViewController {
     private let deliveryControl: UISegmentedControl = {
         let control = UISegmentedControl(items: ["立即", "1 分钟", "明日"])
         control.selectedSegmentIndex = 1
+        control.selectedSegmentTintColor = .warmAccent
+        control.setTitleTextAttributes([.foregroundColor: UIColor.white], for: .selected)
+        control.setTitleTextAttributes([.foregroundColor: UIColor.warmPrimary], for: .normal)
+        return control
+    }()
+
+    private let privacyControl: UISegmentedControl = {
+        let control = UISegmentedControl(items: ["本机", "可生成", "亲友"])
+        control.selectedSegmentIndex = 0
         control.selectedSegmentTintColor = .warmAccent
         control.setTitleTextAttributes([.foregroundColor: UIColor.white], for: .selected)
         control.setTitleTextAttributes([.foregroundColor: UIColor.warmPrimary], for: .normal)
@@ -287,6 +298,7 @@ private final class TimeMailboxComposerViewController: UIViewController {
         stackView.addArrangedSubview(makeSection(title: "标题", view: titleField, height: 44))
         stackView.addArrangedSubview(makeSection(title: "想说的话", view: bodyTextView, height: 220))
         stackView.addArrangedSubview(makeSection(title: "投递时间", view: deliveryControl, height: 36))
+        stackView.addArrangedSubview(makeSection(title: "使用范围", view: privacyControl, height: 36))
         stackView.addArrangedSubview(makeBoundaryRow())
 
         NSLayoutConstraint.activate([
@@ -356,9 +368,21 @@ private final class TimeMailboxComposerViewController: UIViewController {
                 title: title,
                 body: body,
                 deliverAt: deliverAt,
-                boundaryAcknowledged: boundarySwitch.isOn
+                boundaryAcknowledged: boundarySwitch.isOn,
+                privacyMetadata: MemoryPrivacyMetadata(scope: selectedPrivacyScope())
             )
         )
+    }
+
+    private func selectedPrivacyScope() -> MemoryPrivacyScope {
+        switch privacyControl.selectedSegmentIndex {
+        case 1:
+            return MemoryPrivacyMigration.scopeForExplicitGenerationAuthorization()
+        case 2:
+            return MemoryPrivacyMigration.scopeForExplicitFamilyAuthorization()
+        default:
+            return .localOnly
+        }
     }
 
     private static func makeTextField(placeholder: String) -> UITextField {

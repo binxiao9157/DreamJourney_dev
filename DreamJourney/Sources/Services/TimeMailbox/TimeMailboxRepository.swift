@@ -41,7 +41,8 @@ final class TimeMailboxRepository {
         body: String,
         deliverAt: Date,
         now: Date = Date(),
-        boundaryAcknowledged: Bool
+        boundaryAcknowledged: Bool,
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
     ) throws -> TimeMailboxLetter {
         let cleanRecipient = recipientName.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -61,7 +62,8 @@ final class TimeMailboxRepository {
             deliveredAt: nil,
             status: .sealed,
             replyText: nil,
-            boundaryAcknowledged: true
+            boundaryAcknowledged: true,
+            privacyMetadata: privacyMetadata
         )
 
         var all = load()
