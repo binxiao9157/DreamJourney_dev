@@ -136,7 +136,7 @@ final class AIRecordingViewController: UIViewController {
     private(set) var lastSessionRecordingURL: URL?
     /// 与录音文件配对的 sessionId（用于详情页查找 recordings/{sessionId}.m4a）
     private(set) var lastSessionId: String?
-    private let dialogEngine: DialogEngineProtocol = DialogEngineFactory.make(type: .volcengine)
+    private let dialogEngine: DialogEngineProtocol = DialogEngineFactory.makeDefault()
 
     // MARK: - Lifecycle
     override func viewDidLoad() {

@@ -3,34 +3,6 @@ import AVFoundation
 import CocoaLumberjack
 import SpeechEngineToB
 
-// MARK: - 对话结束原因
-
-enum DialogEndReason {
-    case manual            // 用户手动停止
-    case keyword(String)   // 识别到结束关键词
-    case silenceTimeout    // 静音超时
-    case serverEnded       // 服务端结束
-    case crisis(SafetyAssessment) // 触发安全危机干预
-}
-
-// MARK: - DialogEngineDelegate 协议
-
-/// Dialog 引擎对外回调协议
-protocol DialogEngineDelegate: AnyObject {
-    func onDialogStarted()
-    func onASRResult(text: String, isFinal: Bool)
-    func onTTSStarted(text: String)
-    func onTTSFinished()
-    func onChatStreaming(text: String)
-    func onError(error: Error)
-    func onSafetyTriggered(assessment: SafetyAssessment)
-    func onDialogEnded(reason: DialogEndReason)
-}
-
-extension DialogEngineDelegate {
-    func onSafetyTriggered(assessment: SafetyAssessment) {}
-}
-
 // MARK: - DialogEngineManager
 
 /// Dialog 语音对话引擎管理器 - 直接封装火山引擎 SpeechEngineToB SDK
