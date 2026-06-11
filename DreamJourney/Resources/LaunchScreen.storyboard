@@ -14,80 +14,55 @@
                         <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <!-- 底部暖色叠加层，模拟从底部向上渐暖 -->
-                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="bg-overlay">
-                                <color key="backgroundColor" red="0.92157" green="0.86275" blue="0.78431" alpha="0.5" colorSpace="custom" customColorSpace="sRGB"/>
+                            <view contentMode="scaleToFill" layer.cornerRadius="48" translatesAutoresizingMaskIntoConstraints="NO" id="brand-halo">
+                                <color key="backgroundColor" red="0.9568627451" green="0.8823529412" blue="0.7568627451" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                             </view>
-                            <!-- 橙色装饰圆环，居中偏上（用 layer.cornerRadius 原生属性） -->
-                            <view contentMode="scaleToFill" layer.cornerRadius="160" translatesAutoresizingMaskIntoConstraints="NO" id="deco-ring">
-                                <color key="backgroundColor" red="0.96078" green="0.51765" blue="0.12157" alpha="0.18" colorSpace="custom" customColorSpace="sRGB"/>
-                            </view>
-                            <!-- "寻梦环游" 主标题 -->
-                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left"
-                                   horizontalHuggingPriority="251" verticalHuggingPriority="251"
-                                   text="寻梦环游" textAlignment="center"
-                                   lineBreakMode="middleTruncation" baselineAdjustment="alignBaselines"
-                                   adjustsFontSizeToFit="NO"
-                                   translatesAutoresizingMaskIntoConstraints="NO" id="lbl-title">
-                                <fontDescription key="fontDescription" name="PingFangSC-Semibold" family="PingFang SC" pointSize="72"/>
-                                <color key="textColor" red="0.23922" green="0.16863" blue="0.12157" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="LaunchEmblem" translatesAutoresizingMaskIntoConstraints="NO" id="brand-emblem">
+                                <rect key="frame" x="132" y="285" width="128" height="128"/>
+                            </imageView>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="寻梦环游" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="YES" minimumScaleFactor="0.82" translatesAutoresizingMaskIntoConstraints="NO" id="title-label">
+                                <fontDescription key="fontDescription" name="PingFangSC-Semibold" family="PingFang SC" pointSize="42"/>
+                                <color key="textColor" red="0.1725490196" green="0.1058823529" blue="0.07843137255" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                                 <nil key="highlightedColor"/>
                             </label>
-                            <!-- 橙色短分隔线 -->
-                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="deco-divider">
-                                <color key="backgroundColor" red="0.96078" green="0.51765" blue="0.12157" alpha="0.7" colorSpace="custom" customColorSpace="sRGB"/>
-                            </view>
-                            <!-- 副标题 -->
-                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left"
-                                   horizontalHuggingPriority="251" verticalHuggingPriority="251"
-                                   text="记录珍贵回忆，留住美好时光" textAlignment="center"
-                                   lineBreakMode="middleTruncation" baselineAdjustment="alignBaselines"
-                                   adjustsFontSizeToFit="NO"
-                                   translatesAutoresizingMaskIntoConstraints="NO" id="lbl-subtitle">
-                                <fontDescription key="fontDescription" name="PingFangSC-Light" family="PingFang SC" pointSize="17"/>
-                                <color key="textColor" red="0.54510" green="0.45098" blue="0.33333" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="把家族记忆，稳稳交给时间" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="YES" minimumScaleFactor="0.8" translatesAutoresizingMaskIntoConstraints="NO" id="subtitle-label">
+                                <fontDescription key="fontDescription" name="PingFangSC-Regular" family="PingFang SC" pointSize="16"/>
+                                <color key="textColor" red="0.431372549" green="0.337254902" blue="0.2352941176" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                                 <nil key="highlightedColor"/>
                             </label>
-                            <!-- 底部标语 -->
-                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left"
-                                   horizontalHuggingPriority="251" verticalHuggingPriority="251"
-                                   text="银龄记忆  温暖陪伴" textAlignment="center"
-                                   lineBreakMode="middleTruncation" baselineAdjustment="alignBaselines"
-                                   adjustsFontSizeToFit="NO"
-                                   translatesAutoresizingMaskIntoConstraints="NO" id="lbl-tagline">
-                                <fontDescription key="fontDescription" name="PingFangSC-Light" family="PingFang SC" pointSize="13"/>
-                                <color key="textColor" red="0.54510" green="0.45098" blue="0.33333" alpha="0.55" colorSpace="custom" customColorSpace="sRGB"/>
+                            <view contentMode="scaleToFill" layer.cornerRadius="1" translatesAutoresizingMaskIntoConstraints="NO" id="divider">
+                                <color key="backgroundColor" red="0.8352941176" green="0.3921568627" blue="0.168627451" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                            </view>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="不复活 · 不诊断 · 只呈现授权记忆" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="YES" minimumScaleFactor="0.78" translatesAutoresizingMaskIntoConstraints="NO" id="ethics-label">
+                                <fontDescription key="fontDescription" name="PingFangSC-Regular" family="PingFang SC" pointSize="12"/>
+                                <color key="textColor" red="0.431372549" green="0.337254902" blue="0.2352941176" alpha="0.62" colorSpace="custom" customColorSpace="sRGB"/>
                                 <nil key="highlightedColor"/>
                             </label>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="6Tk-OE-BBY"/>
-                        <!-- 主背景：米白 #FAF7F2 -->
-                        <color key="backgroundColor" red="0.97647" green="0.96863" blue="0.94902" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                        <color key="backgroundColor" red="0.9843137255" green="0.9568627451" blue="0.9058823529" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
-                            <!-- overlay：铺满下半屏 -->
-                            <constraint firstItem="bg-overlay" firstAttribute="bottom" secondItem="Ze5-6b-2t3" secondAttribute="bottom" id="c-ov-b"/>
-                            <constraint firstItem="bg-overlay" firstAttribute="leading" secondItem="Ze5-6b-2t3" secondAttribute="leading" id="c-ov-l"/>
-                            <constraint firstItem="bg-overlay" firstAttribute="trailing" secondItem="Ze5-6b-2t3" secondAttribute="trailing" id="c-ov-r"/>
-                            <constraint firstItem="bg-overlay" firstAttribute="height" secondItem="Ze5-6b-2t3" secondAttribute="height" multiplier="0.5" id="c-ov-h"/>
-                            <!-- 装饰圆环：320×320，垂直居中偏上 40pt -->
-                            <constraint firstItem="deco-ring" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c-ring-cx"/>
-                            <constraint firstItem="deco-ring" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" constant="-40" id="c-ring-cy"/>
-                            <constraint firstItem="deco-ring" firstAttribute="width" secondItem="Ze5-6b-2t3" secondAttribute="width" multiplier="0" constant="320" id="c-ring-w"/>
-                            <constraint firstItem="deco-ring" firstAttribute="height" secondItem="deco-ring" secondAttribute="width" id="c-ring-sq"/>
-                            <!-- 主标题：水平居中，垂直居中偏上 20pt -->
-                            <constraint firstItem="lbl-title" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c-t-cx"/>
-                            <constraint firstItem="lbl-title" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" constant="-20" id="c-t-cy"/>
-                            <!-- 分隔线：宽 56pt，高 1.5pt，在标题下方 14pt -->
-                            <constraint firstItem="deco-divider" firstAttribute="top" secondItem="lbl-title" secondAttribute="bottom" constant="14" id="c-div-t"/>
-                            <constraint firstItem="deco-divider" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c-div-cx"/>
-                            <constraint firstItem="deco-divider" firstAttribute="width" secondItem="Ze5-6b-2t3" secondAttribute="width" multiplier="0" constant="56" id="c-div-w"/>
-                            <constraint firstItem="deco-divider" firstAttribute="height" secondItem="Ze5-6b-2t3" secondAttribute="height" multiplier="0" constant="1.5" id="c-div-h"/>
-                            <!-- 副标题：在分隔线下方 12pt -->
-                            <constraint firstItem="lbl-subtitle" firstAttribute="top" secondItem="deco-divider" secondAttribute="bottom" constant="12" id="c-sub-t"/>
-                            <constraint firstItem="lbl-subtitle" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c-sub-cx"/>
-                            <!-- 底部标语：距安全区底部 32pt -->
-                            <constraint firstItem="lbl-tagline" firstAttribute="bottom" secondItem="6Tk-OE-BBY" secondAttribute="bottom" constant="-32" id="c-tag-b"/>
-                            <constraint firstItem="lbl-tagline" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c-tag-cx"/>
+                            <constraint firstItem="brand-emblem" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="emblem-cx"/>
+                            <constraint firstItem="brand-emblem" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" constant="-88" id="emblem-cy"/>
+                            <constraint firstItem="brand-emblem" firstAttribute="width" constant="128" id="emblem-w"/>
+                            <constraint firstItem="brand-emblem" firstAttribute="height" secondItem="brand-emblem" secondAttribute="width" id="emblem-square"/>
+                            <constraint firstItem="brand-halo" firstAttribute="centerX" secondItem="brand-emblem" secondAttribute="centerX" id="halo-cx"/>
+                            <constraint firstItem="brand-halo" firstAttribute="centerY" secondItem="brand-emblem" secondAttribute="centerY" id="halo-cy"/>
+                            <constraint firstItem="brand-halo" firstAttribute="width" constant="172" id="halo-w"/>
+                            <constraint firstItem="brand-halo" firstAttribute="height" secondItem="brand-halo" secondAttribute="width" id="halo-square"/>
+                            <constraint firstItem="title-label" firstAttribute="top" secondItem="brand-emblem" secondAttribute="bottom" constant="28" id="title-top"/>
+                            <constraint firstItem="title-label" firstAttribute="leading" secondItem="6Tk-OE-BBY" secondAttribute="leading" constant="32" id="title-leading"/>
+                            <constraint firstItem="6Tk-OE-BBY" firstAttribute="trailing" secondItem="title-label" secondAttribute="trailing" constant="32" id="title-trailing"/>
+                            <constraint firstItem="subtitle-label" firstAttribute="top" secondItem="title-label" secondAttribute="bottom" constant="8" id="subtitle-top"/>
+                            <constraint firstItem="subtitle-label" firstAttribute="leading" secondItem="6Tk-OE-BBY" secondAttribute="leading" constant="32" id="subtitle-leading"/>
+                            <constraint firstItem="6Tk-OE-BBY" firstAttribute="trailing" secondItem="subtitle-label" secondAttribute="trailing" constant="32" id="subtitle-trailing"/>
+                            <constraint firstItem="divider" firstAttribute="top" secondItem="subtitle-label" secondAttribute="bottom" constant="18" id="divider-top"/>
+                            <constraint firstItem="divider" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="divider-cx"/>
+                            <constraint firstItem="divider" firstAttribute="width" constant="44" id="divider-w"/>
+                            <constraint firstItem="divider" firstAttribute="height" constant="2" id="divider-h"/>
+                            <constraint firstItem="ethics-label" firstAttribute="bottom" secondItem="6Tk-OE-BBY" secondAttribute="bottom" constant="-34" id="ethics-bottom"/>
+                            <constraint firstItem="ethics-label" firstAttribute="leading" secondItem="6Tk-OE-BBY" secondAttribute="leading" constant="28" id="ethics-leading"/>
+                            <constraint firstItem="6Tk-OE-BBY" firstAttribute="trailing" secondItem="ethics-label" secondAttribute="trailing" constant="28" id="ethics-trailing"/>
                         </constraints>
                     </view>
                 </viewController>
@@ -96,4 +71,7 @@
             <point key="canvasLocation" x="53" y="375"/>
         </scene>
     </scenes>
+    <resources>
+        <image name="LaunchEmblem" width="512" height="512"/>
+    </resources>
 </document>
