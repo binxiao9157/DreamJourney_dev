@@ -90,14 +90,14 @@ bash Scripts/verify_phase2.sh
 - `MemoryPrivacyIntegration verification passed`，覆盖 graph-level sanitized 输出、family/export/widget/backend/care surface 过滤、CareDashboard family-only transcript、成员级 family visibility、selected-member graph 裁剪、DialogMessage memoirGeneration 过滤、summary prompt scope 迁移、mixed-scope 派生降级、跨 scope 禁止合并和 prompt 相关事实过滤。
 - `RemoteSafetyGuard verification passed`，覆盖 default fail-closed、env/launch arg mock allow、roadshow offline mock allow、本地 high 阻断。
 - `MockDialogEngine simulator typecheck` 通过
-- `Scripts/roadshow_device_smoke_preflight.sh --allow-no-device` 通过脚本/build gate 验证；结果为 `PASS_WITH_CONCERNS`，当前无物理 iOS 设备，未执行逐屏 smoke。
+- `Scripts/roadshow_device_smoke_preflight.sh` 在已连接 iPhone 17 / iOS 26.6 上通过，结果为 `PASS`；真机目标 build 已进入签名阶段，但因本机没有 Apple Developer Team、codesigning identity 和 provisioning profile，安装/启动/逐屏 smoke 尚未执行。详见 `docs/superpowers/reports/2026-06-11-roadshow-device-validation.md`。
 - `git diff --check` / `git diff --cached --check` 通过
 
 ## 下一步
 
 1. 与服务端联调真实 `/v1/safety/evaluate`：确认响应字段、状态码、鉴权、超时和审计 HMAC 策略，并补充失败注入/端到端 smoke。
 2. 决定 export/widget/backend 是否需要新的显式授权 scope，或保持当前默认空输出策略。
-3. 接入物理 iPhone 后执行 `Scripts/roadshow_device_smoke_preflight.sh`，再用 reset+seed+offline 参数 Xcode Run，逐屏确认信箱、档案、回忆 mock、关怀看板、分享包，并保存截图/日志。
+3. 在 Xcode 登录 Apple ID 并给 `DreamJourney` target 选择 Team，生成开发证书/provisioning profile 后，用 reset+seed+offline 参数 Xcode Run，逐屏确认信箱、档案、回忆 mock、关怀看板、分享包，并保存截图/日志。
 4. 抽查分享包 JSON：自动断言不含 `localOnly`、信件正文、完整对话原文。
 5. 补 Family/CareDashboard 的授权 UI：为记忆/对话选择具体可见成员，并把当前访问者身份接到真实登录亲友身份；现阶段已完成亲友成员行、分享包导出的目标成员入口，以及本机脱敏周报展示。
 6. 处理完整 Simulator app build 的 `SpeechEngineToB` slice 阻断，并补普通对话 scope 按钮的 UI 自动化 smoke。
