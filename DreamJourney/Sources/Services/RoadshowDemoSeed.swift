@@ -98,9 +98,9 @@ enum RoadshowDemoSeed {
     }
 
     static func makePackage(now: Date = Date()) -> Package {
-        let daughterID = "fm_daughter_lin"
-        let sonID = "fm_son_hao"
-        let grandchildID = "fm_grandchild_yu"
+        let daughterID = "fm_daughter_chen_lan"
+        let sonID = "fm_son_chen_hao"
+        let granddaughterID = "fm_granddaughter_chen_yu"
         let familyMetadata = MemoryPrivacyMetadata(
             scope: .familyCircle,
             createdBySurface: .careDashboard,
@@ -115,9 +115,9 @@ enum RoadshowDemoSeed {
 
         return Package(
             members: [
-                DemoFamilyMember(id: daughterID, displayName: "林岚", relation: "女儿"),
+                DemoFamilyMember(id: daughterID, displayName: "陈岚", relation: "女儿"),
                 DemoFamilyMember(id: sonID, displayName: "陈浩", relation: "儿子"),
-                DemoFamilyMember(id: grandchildID, displayName: "小予", relation: "外孙")
+                DemoFamilyMember(id: granddaughterID, displayName: "陈予", relation: "孙女")
             ],
             selectedMemberIDForVisibility: daughterID,
             transcript: [
@@ -135,7 +135,7 @@ enum RoadshowDemoSeed {
                 ),
                 ConversationTurn(
                     role: "user",
-                    text: "下午一个人在家有点孤单，想听听小予的声音。",
+                    text: "下午一个人在家有点孤单，想听听陈予的声音。",
                     timestamp: now.addingTimeInterval(-2 * 24 * 60 * 60),
                     privacyMetadata: familyMetadata
                 ),
@@ -159,7 +159,7 @@ enum RoadshowDemoSeed {
                 ),
                 ConversationTurn(
                     role: "user",
-                    text: "时空信箱写给小予十八岁生日：记得常回家吃饭。",
+                    text: "时空信箱写给陈予十八岁生日：记得常回家吃饭。",
                     timestamp: now.addingTimeInterval(-21 * 60 * 60),
                     privacyMetadata: familyMetadata
                 )
@@ -169,7 +169,7 @@ enum RoadshowDemoSeed {
                     id: "demo_time_mailbox_001",
                     stepID: DemoStepID.timeMailbox.rawValue,
                     title: "时空信箱示例",
-                    body: "给小予十八岁生日的一封信，包含称呼、触发日期、家人可见范围和本机草稿内容。"
+                    body: "给陈予十八岁生日的一封信，包含称呼、触发日期、家人可见范围和本机草稿内容。"
                 ),
                 DemoItem(
                     id: "demo_memory_archive_001",
@@ -276,9 +276,9 @@ extension RoadshowDemoSeed {
 
     private static func seedMailbox(now: Date) {
         _ = try? TimeMailboxRepository.shared.createLetter(
-            recipientName: "外公",
-            title: "写给外公的一封信",
-            body: "外公，我今天又想起 1975 年外滩那张合影。\n我会把这份想念好好放进生活里。",
+            recipientName: "爷爷",
+            title: "写给爷爷的一封信",
+            body: "爷爷，我今天又想起 1975 年外滩那张合影。\n我会把这份想念好好放进生活里。",
             deliverAt: now.addingTimeInterval(-60),
             now: now.addingTimeInterval(-3600),
             boundaryAcknowledged: true,
@@ -292,7 +292,7 @@ extension RoadshowDemoSeed {
         _ = try? MemoryArchiveRepository.shared.addText(
             kind: .textNote,
             title: "外滩合影的背景",
-            note: "1975 年 7 月，外公和外婆在外滩拍过一张全家合影。",
+            note: "1975 年 7 月，陈树安和陈静文在外滩拍过一张全家合影。",
             tags: ["路演", "外滩", "家庭合影"],
             isPrivate: false,
             privacyMetadata: familyMetadata,
@@ -300,7 +300,7 @@ extension RoadshowDemoSeed {
         )
         _ = try? MemoryArchiveRepository.shared.addText(
             kind: .personalityNote,
-            title: "外公的习惯",
+            title: "陈树安的习惯",
             note: "说话慢，喜欢先听完别人讲完再回答。",
             tags: ["路演", "人格边界"],
             isPrivate: false,
@@ -329,7 +329,7 @@ extension RoadshowDemoSeed {
                 id: photo.id,
                 analysis: MemoryArchiveImageAnalysis(
                     summary: "老照片中可能是一家人在江边合影，背景有城市建筑和栏杆，整体氛围温暖。",
-                    detectedPeople: ["林静文", "外公", "张国强"],
+                    detectedPeople: ["陈树安", "陈静文", "陈岚"],
                     scene: "上海外滩江边",
                     occasion: "家庭合影",
                     mood: "怀旧、温暖",
@@ -355,9 +355,9 @@ extension RoadshowDemoSeed {
             people: [
                 KBPerson(
                     id: "roadshow_person_grandpa",
-                    name: "外公",
-                    aliases: ["阿公"],
-                    relation: "外祖父",
+                    name: "陈树安",
+                    aliases: ["爷爷"],
+                    relation: "祖父",
                     traits: ["说话慢", "重视团圆"],
                     briefBio: "家人记忆中的温和长辈，常提醒晚辈慢慢来。",
                     sourceSessionIds: [1],
@@ -367,7 +367,7 @@ extension RoadshowDemoSeed {
                 ),
                 KBPerson(
                     id: "roadshow_person_grandma",
-                    name: "林静文",
+                    name: "陈静文",
                     aliases: [],
                     relation: "祖母",
                     traits: ["喜欢整理老照片"],

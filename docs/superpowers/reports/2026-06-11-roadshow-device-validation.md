@@ -10,7 +10,7 @@ CoreDevice ID：`B7887DD8-3561-5F2A-8D62-A3FEACDC80D9`
 
 ## 结论
 
-当前真机连接、iPhoneOS 构建、签名、安装、启动已通过。App 已使用 roadshow reset/seed/offline 参数在真机启动，进程仍在运行，并且已从真机 App 容器抽查到 roadshow seed/offline 标记、登录账号、时空信箱、记忆档案馆和 CareDashboard transcript 数据。
+当前真机连接、iPhoneOS 构建、签名、安装、启动已通过。App 已使用 roadshow reset/seed/offline 参数在真机启动，进程仍在运行，并且已从真机 App 容器抽查到 roadshow seed/offline 标记、登录账号、时空信箱、记忆档案馆和 CareDashboard transcript 数据。最新路演包已替换 AppIcon，并把 mock 亲友统一为陈氏家族线。
 
 当前剩余事项：
 
@@ -265,10 +265,11 @@ Preferences 抽查：
 
 Documents 抽查：
 
-- `conversation_memory.json` 已写入 7 条 roadshow transcript，包含睡眠、孤独、胸闷、档案、时空信箱等 CareDashboard 输入。
+- `conversation_memory.json` 已写入 7 条 roadshow transcript，包含睡眠、孤独、胸闷、档案、时空信箱等 CareDashboard 输入；最新抽查确认文本使用 `陈予`，未保留旧 `小予`。
 - `knowledge_base/kb_graph_user_0001.json` 已写入 KBLite v2 空图谱骨架。
-- `dreamjourney.timeMailbox.letters` 已写入 delivered 信件，包含边界文案：不是逝者真实回复。
-- `dreamjourney.memoryArchive.items` 已写入 4 条路演档案，包括外滩老照片、口头禅、人格边界说明和外滩合影背景。
+- `dreamjourney.timeMailbox.letters` 已写入 delivered 信件，收件人为 `爷爷`，包含边界文案：不是逝者真实回复。
+- `dreamjourney.memoryArchive.items` 已写入 4 条路演档案，包括外滩老照片、口头禅、人格边界说明和外滩合影背景；最新抽查确认 detectedPeople 为 `陈树安`、`陈静文`、`陈岚`。
+- 最新 AppIcon asset catalog 已替换为家族树/记忆盒图标，全部 PNG 尺寸匹配，且 `hasAlpha: no`。
 
 ## 尚未完成
 

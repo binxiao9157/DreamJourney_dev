@@ -58,6 +58,30 @@ assertCondition(
     package.members.contains { $0.id == viewerMemberID },
     "selected-member visibility ID should match a seeded family member"
 )
+assertCondition(
+    package.members.contains { $0.id == "fm_daughter_chen_lan" && $0.displayName == "陈岚" && $0.relation == "女儿" },
+    "roadshow seed should include daughter Chen Lan"
+)
+assertCondition(
+    package.members.contains { $0.id == "fm_son_chen_hao" && $0.displayName == "陈浩" && $0.relation == "儿子" },
+    "roadshow seed should include son Chen Hao"
+)
+assertCondition(
+    package.members.contains { $0.id == "fm_granddaughter_chen_yu" && $0.displayName == "陈予" && $0.relation == "孙女" },
+    "roadshow seed should include granddaughter Chen Yu"
+)
+
+let forbiddenLegacyFamilyTerms = [
+    "fm_daughter_lin",
+    "fm_grandchild_yu",
+    "林岚",
+    "小予",
+    "外孙"
+]
+let roadshowSeedText = allStrings(in: package).joined(separator: "\n")
+for term in forbiddenLegacyFamilyTerms {
+    assertCondition(!roadshowSeedText.contains(term), "roadshow family seed should not keep legacy term \(term)")
+}
 
 let careTurns = CareDashboardInputPolicy.eligibleInputTurns(
     from: package.transcript,
