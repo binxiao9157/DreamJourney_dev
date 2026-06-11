@@ -10,22 +10,22 @@ CoreDevice ID：`B7887DD8-3561-5F2A-8D62-A3FEACDC80D9`
 
 ## 结论
 
-当前真机连接和 iPhoneOS 构建门禁已通过，但尚未完成安装、启动、截图和逐屏 smoke。
+当前真机连接和 iPhoneOS 构建门禁已通过，但尚未完成安装、启动、截图和逐屏 smoke。最新重试后，keychain 已出现 Apple Development 证书，但 Xcode 仍无法为 `com.dreamjourney.app` 生成/匹配开发 provisioning profile。
 
-阻断原因是本机缺少 Apple 签名资产：
+当前阻断原因：
 
-- Xcode target `DreamJourney` 未配置 `DEVELOPMENT_TEAM`。
-- 本机 keychain 中 `0 valid identities found`。
-- `~/Library/MobileDevice/Provisioning Profiles` 下没有可用 provisioning profile。
-- Xcode 偏好设置中没有已保存 Apple Developer account/team。
+- 本机 keychain 已有 `Apple Development: xbnjupt@163.com (BLVP6JU3M3)`。
+- 命令行覆盖 `DEVELOPMENT_TEAM=BLVP6JU3M3` 后，Xcode 报 `No Account for Team "BLVP6JU3M3"`。
+- Xcode 报 `No profiles for 'com.dreamjourney.app' were found`。
+- `DreamJourney` target 的 build settings 仍未显示持久化的 `DEVELOPMENT_TEAM`。
 
 ## 设备状态
 
 `xcrun devicectl list devices`：
 
 - 设备名称：`iPhone`
-- 状态：`available`
-- 型号：`iPhone18,3`
+- 状态：`connected`
+- 型号：`iPhone 17 (iPhone18,3)`
 
 `xcrun devicectl device info details --device B7887DD8-3561-5F2A-8D62-A3FEACDC80D9`：
 
@@ -77,6 +77,26 @@ xcodebuild \
 - 退出码：`65`
 - 失败原因：`Signing for "DreamJourney" requires a development team. Select a development team in the Signing & Capabilities editor.`
 
+重试命令：
+
+```bash
+set -o pipefail
+xcodebuild \
+  -workspace DreamJourney.xcworkspace \
+  -scheme DreamJourney \
+  -configuration Debug \
+  -destination 'platform=iOS,id=00008150-001402D60A04401C' \
+  DEVELOPMENT_TEAM=BLVP6JU3M3 \
+  -allowProvisioningUpdates \
+  build
+```
+
+结果：
+
+- 退出码：`65`
+- 新失败原因：`No Account for Team "BLVP6JU3M3". Add a new account in Accounts settings or verify that your accounts have valid credentials.`
+- 新失败原因：`No profiles for 'com.dreamjourney.app' were found: Xcode couldn't find any iOS App Development provisioning profiles matching 'com.dreamjourney.app'.`
+
 ### 3. 签名资产检查
 
 命令：
@@ -87,7 +107,8 @@ security find-identity -v -p codesigning
 
 结果：
 
-- `0 valid identities found`
+- `1 valid identities found`
+- `Apple Development: xbnjupt@163.com (BLVP6JU3M3)`
 
 命令：
 
@@ -138,7 +159,7 @@ xcrun devicectl device info apps \
 
 ## 解除阻断后的下一条命令
 
-在 Xcode 登录 Apple ID 并给 `DreamJourney` target 选择 Team 后，重新执行：
+在 Xcode 的 Settings > Accounts 中确认 Apple ID 已登录、凭据有效，并给 `DreamJourney` target 持久化选择 Team 后，重新执行：
 
 ```bash
 xcodebuild \
@@ -146,6 +167,7 @@ xcodebuild \
   -scheme DreamJourney \
   -configuration Debug \
   -destination 'platform=iOS,id=00008150-001402D60A04401C' \
+  DEVELOPMENT_TEAM=BLVP6JU3M3 \
   -allowProvisioningUpdates \
   build
 ```
