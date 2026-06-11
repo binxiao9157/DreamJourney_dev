@@ -10,14 +10,15 @@ CoreDevice ID：`B7887DD8-3561-5F2A-8D62-A3FEACDC80D9`
 
 ## 结论
 
-当前真机连接和 iPhoneOS 构建门禁已通过，但尚未完成安装、启动、截图和逐屏 smoke。最新重试后，keychain 已出现 Apple Development 证书，但 Xcode 仍无法为 `com.dreamjourney.app` 生成/匹配开发 provisioning profile。
+当前真机连接、iPhoneOS 构建、签名、安装已通过，但尚未完成启动、截图和逐屏 smoke。最新状态是 App 已安装到设备，启动被 iOS 拒绝，原因是设备上尚未显式信任该开发者 profile。
 
 当前阻断原因：
 
 - 本机 keychain 已有 `Apple Development: xbnjupt@163.com (BLVP6JU3M3)`。
-- 命令行覆盖 `DEVELOPMENT_TEAM=BLVP6JU3M3` 后，Xcode 报 `No Account for Team "BLVP6JU3M3"`。
-- Xcode 报 `No profiles for 'com.dreamjourney.app' were found`。
-- `DreamJourney` target 的 build settings 仍未显示持久化的 `DEVELOPMENT_TEAM`。
+- 阶段2工程已持久化 `DEVELOPMENT_TEAM = 2BTR77V3R8`。
+- 阶段2工程主 App Bundle ID 已改为 `com.yxj.dreamjourney.app`，Widget Bundle ID 已改为 `com.yxj.dreamjourney.app.widget`。
+- Xcode 已创建 `iOS Team Provisioning Profile: com.yxj.dreamjourney.app`。
+- 设备拒绝启动：`profile has not been explicitly trusted by the user`。
 
 ## 设备状态
 
@@ -97,6 +98,26 @@ xcodebuild \
 - 新失败原因：`No Account for Team "BLVP6JU3M3". Add a new account in Accounts settings or verify that your accounts have valid credentials.`
 - 新失败原因：`No profiles for 'com.dreamjourney.app' were found: Xcode couldn't find any iOS App Development provisioning profiles matching 'com.dreamjourney.app'.`
 
+签名配置同步到阶段2工程后，重试命令：
+
+```bash
+xcodebuild \
+  -workspace DreamJourney.xcworkspace \
+  -scheme DreamJourney \
+  -configuration Debug \
+  -destination 'platform=iOS,id=00008150-001402D60A04401C' \
+  -allowProvisioningUpdates \
+  build
+```
+
+结果：
+
+- 退出码：`0`
+- iPhoneOS device build：`** BUILD SUCCEEDED **`
+- Signing Identity：`Apple Development: xbnjupt@163.com (BLVP6JU3M3)`
+- Provisioning Profile：`iOS Team Provisioning Profile: com.yxj.dreamjourney.app`
+- Built app：`/Users/yxj/Library/Developer/Xcode/DerivedData/DreamJourney-harrinatqdphdkhaqmlyfhxjmemq/Build/Products/Debug-iphoneos/DreamJourney.app`
+
 ### 3. 签名资产检查
 
 命令：
@@ -142,12 +163,48 @@ xcrun devicectl device info apps \
 
 结果：
 
-- `Apps installed:` 下无 `com.dreamjourney.app`。
-- 因此无法绕过安装步骤直接启动旧包。
+- `Apps installed:` 下已有 `寻梦环游`
+- Bundle Identifier：`com.yxj.dreamjourney.app`
+- Version：`1.0.0`
+- Bundle Version：`1`
+
+### 5. 安装与启动
+
+安装命令：
+
+```bash
+xcrun devicectl device install app \
+  --device B7887DD8-3561-5F2A-8D62-A3FEACDC80D9 \
+  /Users/yxj/Library/Developer/Xcode/DerivedData/DreamJourney-harrinatqdphdkhaqmlyfhxjmemq/Build/Products/Debug-iphoneos/DreamJourney.app
+```
+
+结果：
+
+- 退出码：`0`
+- `App installed`
+- Bundle ID：`com.yxj.dreamjourney.app`
+
+启动命令：
+
+```bash
+xcrun devicectl device process launch \
+  --device B7887DD8-3561-5F2A-8D62-A3FEACDC80D9 \
+  --terminate-existing \
+  --environment-variables '{"DREAMJOURNEY_SEED":"roadshow_demo","DREAMJOURNEY_RESET_DEMO":"1","DREAMJOURNEY_ROADSHOW_OFFLINE":"1"}' \
+  com.yxj.dreamjourney.app \
+  --reset-roadshow-demo \
+  --seed-roadshow-demo \
+  --roadshow-offline-mode
+```
+
+结果：
+
+- 退出码：`1`
+- 失败原因：`Unable to launch com.yxj.dreamjourney.app because it has an invalid code signature, inadequate entitlements or its profile has not been explicitly trusted by the user.`
+- 当前判断：需要在 iPhone 上手动信任开发者 profile 后重试。
 
 ## 尚未完成
 
-- 真机安装 `DreamJourney.app`
 - 使用 roadshow launch 参数启动：
   - `--reset-roadshow-demo`
   - `--seed-roadshow-demo`
@@ -159,17 +216,17 @@ xcrun devicectl device info apps \
 
 ## 解除阻断后的下一条命令
 
-在 Xcode 的 Settings > Accounts 中确认 Apple ID 已登录、凭据有效，并给 `DreamJourney` target 持久化选择 Team 后，重新执行：
+在 iPhone 上进入 Settings > General > VPN & Device Management，信任 `Apple Development: xbnjupt@163.com` 对应的 Developer App 后，重新执行：
 
 ```bash
-xcodebuild \
-  -workspace DreamJourney.xcworkspace \
-  -scheme DreamJourney \
-  -configuration Debug \
-  -destination 'platform=iOS,id=00008150-001402D60A04401C' \
-  DEVELOPMENT_TEAM=BLVP6JU3M3 \
-  -allowProvisioningUpdates \
-  build
+xcrun devicectl device process launch \
+  --device B7887DD8-3561-5F2A-8D62-A3FEACDC80D9 \
+  --terminate-existing \
+  --environment-variables '{"DREAMJOURNEY_SEED":"roadshow_demo","DREAMJOURNEY_RESET_DEMO":"1","DREAMJOURNEY_ROADSHOW_OFFLINE":"1"}' \
+  com.yxj.dreamjourney.app \
+  --reset-roadshow-demo \
+  --seed-roadshow-demo \
+  --roadshow-offline-mode
 ```
 
-若 build 成功，再用 Xcode Run 或 `devicectl` 安装/启动，并带上 roadshow 参数继续逐屏 smoke。
+若 launch 成功，再继续捕获日志、截图和逐屏 smoke。
