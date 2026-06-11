@@ -13,7 +13,7 @@ final class MemoirService {
 
     /// 串行队列，保证同一时间只处理一个生成请求
     private let generateQueue = DispatchQueue(label: "com.dreamjourney.memoir.generate", qos: .userInitiated)
-    private let safetyGuardClient = SafetyGuardClient(transport: DeepSeekSafetyGuardUnavailableTransport())
+    private let safetyGuardClient = DeepSeekSafetyGuarding.makeDefaultClient()
 
     // MARK: - System Prompt
 

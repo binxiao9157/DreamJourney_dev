@@ -26,7 +26,7 @@ final class DeepSeekService {
 
     private let model = "DeepSeek-V4-Flash"
     private let timeoutInterval: TimeInterval = 60
-    private let safetyGuardClient = SafetyGuardClient(transport: DeepSeekSafetyGuardUnavailableTransport())
+    private let safetyGuardClient = DeepSeekSafetyGuarding.makeDefaultClient()
 
     // MARK: - Init
 

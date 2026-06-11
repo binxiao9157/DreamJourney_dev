@@ -75,4 +75,43 @@ assertCondition(!unavailableDecision.canSendToTTS, "unavailable guard should fai
 assertCondition(unavailableDecision.action == .block, "unavailable guard should block")
 assertCondition(unavailableDecision.reasonCode == "GUARD_UNAVAILABLE", "unavailable guard should report guard unavailable")
 
+let defaultClient = DeepSeekSafetyGuarding.makeDefaultClient(arguments: ["DreamJourney"], environment: [:])
+let defaultDecision = DeepSeekSafetyGuarding.guardDecision(
+    text: "普通回忆",
+    surface: .memoir,
+    stage: .userInputPreLLM,
+    target: .deepseek,
+    guardClient: defaultClient
+)
+assertCondition(!defaultDecision.canSendToLLM, "default safety guard client should fail closed")
+assertCondition(defaultDecision.reasonCode == "GUARD_UNAVAILABLE", "default fail-closed should report guard unavailable")
+
+let envAllowClient = DeepSeekSafetyGuarding.makeDefaultClient(
+    arguments: ["DreamJourney"],
+    environment: ["DREAMJOURNEY_SAFETY_GUARD": "mock_allow"]
+)
+let envAllowDecision = DeepSeekSafetyGuarding.guardDecision(
+    text: "普通回忆",
+    surface: .memoir,
+    stage: .userInputPreLLM,
+    target: .deepseek,
+    guardClient: envAllowClient
+)
+assertCondition(envAllowDecision.canSendToLLM, "mock_allow environment should allow LLM")
+assertCondition(envAllowDecision.action == .allow, "mock_allow environment should return allow")
+assertCondition(envAllowDecision.reasonCode == "MOCK_ALLOW", "mock_allow environment should expose mock reason")
+
+let argAllowClient = DeepSeekSafetyGuarding.makeDefaultClient(
+    arguments: ["DreamJourney", "--use-mock-safety-guard"],
+    environment: [:]
+)
+let argTTSDecision = DeepSeekSafetyGuarding.guardDecision(
+    text: "普通回忆",
+    surface: .tts,
+    stage: .ttsInputPreSynth,
+    target: .volcengineTTS,
+    guardClient: argAllowClient
+)
+assertCondition(argTTSDecision.canSendToTTS, "mock safety launch arg should allow TTS")
+
 print("RemoteSafetyGuard verification passed")

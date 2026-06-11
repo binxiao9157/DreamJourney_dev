@@ -26,7 +26,7 @@ final class MemoirTTSService {
     /// TTS V3 HTTP 流式接口（一次性输入文本，流式输出音频）
     /// 比 WebSocket 更简单，适合回忆录这种完整文本一次性合成的场景
     private let ttsURL = "https://openspeech.bytedance.com/api/v3/tts/unidirectional"
-    private let safetyGuardClient = SafetyGuardClient(transport: DeepSeekSafetyGuardUnavailableTransport())
+    private let safetyGuardClient = DeepSeekSafetyGuarding.makeDefaultClient()
 
     /// 音频存储目录
     private let audioDirectory: URL

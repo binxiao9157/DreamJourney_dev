@@ -11,7 +11,7 @@
 | 开发包 | 完成度 | 状态 |
 | --- | ---: | --- |
 | Mock/Simulator 基线 | 80% | `MockDialogEngine` 已实现，纯 Swift 验证、iPhoneOS build、simulator SDK typecheck 通过；完整 Simulator app build 仍受 `SpeechEngineToB` slice 影响，后续需独立 smoke target 或 Pod 条件化。 |
-| Safety Guard 合约 | 65% | 合约和 iOS client 已固化；新增 `DeepSeekSafetyGuarding`，DeepSeek chat/knowledge/image、Memoir、TTS 入口已接入 fail-closed guard 骨架。 |
+| Safety Guard 合约 | 70% | 合约和 iOS client 已固化；DeepSeek chat/knowledge/image、Memoir、TTS 入口默认 fail-closed，并支持显式 mock allow 演示开关。 |
 | Privacy Scope 模型 | 70% | `ConversationTurn`、`Stage1MailboxMemoryInput`、KBLite v2 实体已携带 `privacyMetadata`，旧数据默认迁移为 `.localOnly`。 |
 | KBLite/Export/Widget 过滤 | 35% | KBLite remote extraction 和 prompt context 已按 scope 过滤；Export/Widget/PDF/Family/CareDashboard 仍待 sanitized 输出改造。 |
 | CareDashboard/Family Sync 阶段2 | 0% | 等 scope 和家庭授权模型进入代码后开始。 |
@@ -31,6 +31,7 @@
 - `KBLiteGraph.version` 升至 2，`KBPerson/KBPlace/KBEvent/KBFact` 增加 privacy metadata。
 - 新增 `KBLitePrivacyScopePolicy`，KBLite 远端提取只允许 `.generationAllowed` transcript，prompt context 过滤不可用实体。
 - 新增 `DeepSeekSafetyGuarding`，DeepSeek chat/knowledge/image、Memoir 生成、Memoir TTS 发起前执行 guard。
+- 新增 SafetyGuard mock allow 选择器：默认仍 fail-closed，使用 `--use-mock-safety-guard` 或 `DREAMJOURNEY_SAFETY_GUARD=mock_allow` 时才允许阶段2远端演示。
 
 ## 最新验证
 
@@ -53,13 +54,13 @@ bash Scripts/verify_phase2.sh
 - `SafetyGuard verification: 4/4 passed`
 - `PrivacyScope verification passed`
 - `MemoryPrivacyIntegration verification passed`
-- `RemoteSafetyGuard verification passed`
+- `RemoteSafetyGuard verification passed`，覆盖 default fail-closed、env/launch arg mock allow、本地 high 阻断。
 - `MockDialogEngine simulator typecheck` 通过
 - `git diff --check` / `git diff --cached --check` 通过
 
 ## 下一步
 
-1. 接入真实 `/v1/safety/evaluate` transport 或阶段2 mock allow transport；当前默认 fail-closed 会阻断远端 DeepSeek/TTS 功能。
+1. 接入真实 `/v1/safety/evaluate` transport；当前 mock allow 只用于阶段2演示，不是生产安全方案。
 2. 推进 export/widget/PDF/family/care 的 sanitized 输出改造。
 3. 为 `MemoryArchive`、`TimeMailbox`、普通对话 UI 增加显式 scope 授权选择。
 4. 处理完整 Simulator app build 的 `SpeechEngineToB` slice 阻断。
