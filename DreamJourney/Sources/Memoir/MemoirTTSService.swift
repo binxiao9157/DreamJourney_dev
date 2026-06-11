@@ -26,6 +26,7 @@ final class MemoirTTSService {
     /// TTS V3 HTTP 流式接口（一次性输入文本，流式输出音频）
     /// 比 WebSocket 更简单，适合回忆录这种完整文本一次性合成的场景
     private let ttsURL = "https://openspeech.bytedance.com/api/v3/tts/unidirectional"
+    private let safetyGuardClient = SafetyGuardClient(transport: DeepSeekSafetyGuardUnavailableTransport())
 
     /// 音频存储目录
     private let audioDirectory: URL
@@ -75,6 +76,11 @@ final class MemoirTTSService {
 
         guard !memoir.prose.isEmpty else {
             completion(.failure(.emptyText))
+            return
+        }
+
+        guard canSendToTTS(text: memoir.prose) else {
+            completion(.failure(.synthesisFailed("安全检查未通过")))
             return
         }
 
@@ -258,6 +264,17 @@ final class MemoirTTSService {
         // 实际使用时建议直接用 AVSpeechSynthesizer 播放，不保存文件
         DDLogInfo("[MemoirTTS] 使用系统TTS降级播放（无法导出文件）")
         completion(.failure(.systemTTSNoExport))
+    }
+
+    private func canSendToTTS(text: String) -> Bool {
+        let decision = DeepSeekSafetyGuarding.guardDecision(
+            text: text,
+            surface: .tts,
+            stage: .ttsInputPreSynth,
+            target: .volcengineTTS,
+            guardClient: safetyGuardClient
+        )
+        return decision.canSendToTTS && (decision.action == .allow || decision.action == .allowWithCare)
     }
 }
 

@@ -5,17 +5,28 @@ import Foundation
 struct Stage1MailboxMemoryInput {
     let text: String
     let timestamp: Date
+    let privacyMetadata: MemoryPrivacyMetadata
 
-    init(text: String, timestamp: Date = Date()) {
+    init(
+        text: String,
+        timestamp: Date = Date(),
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+    ) {
         self.text = text
         self.timestamp = timestamp
+        self.privacyMetadata = privacyMetadata
     }
 
-    init(_ text: String, timestamp: Date = Date()) {
-        self.init(text: text, timestamp: timestamp)
+    init(
+        _ text: String,
+        timestamp: Date = Date(),
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+    ) {
+        self.init(text: text, timestamp: timestamp, privacyMetadata: privacyMetadata)
     }
 }
 
+#if !MEMORY_PRIVACY_INTEGRATION_VERIFY
 struct Stage1MemoryDashboardSnapshot {
     let stats: String
     let isEmpty: Bool
@@ -50,7 +61,7 @@ final class Stage1MemoryFacade {
     }
 
     func recordUserTurn(_ input: Stage1MailboxMemoryInput) {
-        conversationMemory.recordUserTurn(text: input.text)
+        conversationMemory.recordUserTurn(text: input.text, privacyMetadata: input.privacyMetadata)
     }
 
     func recordUserTurn(_ text: String) {
@@ -58,7 +69,7 @@ final class Stage1MemoryFacade {
     }
 
     func recordAssistantTurn(_ input: Stage1MailboxMemoryInput) {
-        conversationMemory.recordAITurn(text: input.text)
+        conversationMemory.recordAITurn(text: input.text, privacyMetadata: input.privacyMetadata)
     }
 
     func recordAssistantTurn(_ text: String) {
@@ -136,3 +147,4 @@ final class Stage1MemoryFacade {
         knowledgeBase.importJSON(jsonString)
     }
 }
+#endif

@@ -11,9 +11,9 @@
 | 开发包 | 完成度 | 状态 |
 | --- | ---: | --- |
 | Mock/Simulator 基线 | 80% | `MockDialogEngine` 已实现，纯 Swift 验证、iPhoneOS build、simulator SDK typecheck 通过；完整 Simulator app build 仍受 `SpeechEngineToB` slice 影响，后续需独立 smoke target 或 Pod 条件化。 |
-| Safety Guard 合约 | 55% | 合约已固化；新增 iOS 端 `SafetyGuardClient`/模型骨架，覆盖本地 high 短路、远端 guard 不可用 fail closed、snake_case 编解码验证。 |
-| Privacy Scope 模型 | 55% | 审计与 scope 规格已固化；新增 `MemoryPrivacyScope`/`PrivacyScopePolicy` 最小模型，覆盖 scope policy、sanitized 过滤、旧 `isPrivate` 迁移验证。 |
-| KBLite/Export/Widget 过滤 | 0% | 等 privacy scope 数据模型进入代码后开始。 |
+| Safety Guard 合约 | 65% | 合约和 iOS client 已固化；新增 `DeepSeekSafetyGuarding`，DeepSeek chat/knowledge/image、Memoir、TTS 入口已接入 fail-closed guard 骨架。 |
+| Privacy Scope 模型 | 70% | `ConversationTurn`、`Stage1MailboxMemoryInput`、KBLite v2 实体已携带 `privacyMetadata`，旧数据默认迁移为 `.localOnly`。 |
+| KBLite/Export/Widget 过滤 | 35% | KBLite remote extraction 和 prompt context 已按 scope 过滤；Export/Widget/PDF/Family/CareDashboard 仍待 sanitized 输出改造。 |
 | CareDashboard/Family Sync 阶段2 | 0% | 等 scope 和家庭授权模型进入代码后开始。 |
 
 ## 已完成
@@ -27,6 +27,10 @@
 - 新增 `SafetyGuardRequest/Response/Audit` 与 `SafetyGuardClient`，建立服务端 guard 接入骨架。
 - 新增 `MemoryPrivacyScope`、`MemoryUseSurface`、`PrivacyScopePolicy` 和 migration helper。
 - 新增 `Scripts/SafetyGuardVerify/main.swift`、`Scripts/PrivacyScopeVerify/main.swift`，并接入阶段2统一验证脚本。
+- 新增 `ConversationTurn.privacyMetadata` 与 `Stage1MailboxMemoryInput.privacyMetadata`，旧数据缺字段时默认 `.localOnly`。
+- `KBLiteGraph.version` 升至 2，`KBPerson/KBPlace/KBEvent/KBFact` 增加 privacy metadata。
+- 新增 `KBLitePrivacyScopePolicy`，KBLite 远端提取只允许 `.generationAllowed` transcript，prompt context 过滤不可用实体。
+- 新增 `DeepSeekSafetyGuarding`，DeepSeek chat/knowledge/image、Memoir 生成、Memoir TTS 发起前执行 guard。
 
 ## 最新验证
 
@@ -48,12 +52,14 @@ bash Scripts/verify_phase2.sh
 - `MockDialogEngine verification passed`
 - `SafetyGuard verification: 4/4 passed`
 - `PrivacyScope verification passed`
+- `MemoryPrivacyIntegration verification passed`
+- `RemoteSafetyGuard verification passed`
 - `MockDialogEngine simulator typecheck` 通过
 - `git diff --check` / `git diff --cached --check` 通过
 
 ## 下一步
 
-1. 提交并推送阶段2第二批 Safety/Privacy 基线。
-2. 开始 Memory/KBLite agent：把 scope metadata 接入 `ConversationMemory` 与 `KBLiteGraph`。
-3. 开始 DeepSeek/图片/回忆录 agent：在远端模型入口前接入 `SafetyGuardClient`。
-4. 再推进 export/widget/care/family 的 sanitized 输出改造。
+1. 接入真实 `/v1/safety/evaluate` transport 或阶段2 mock allow transport；当前默认 fail-closed 会阻断远端 DeepSeek/TTS 功能。
+2. 推进 export/widget/PDF/family/care 的 sanitized 输出改造。
+3. 为 `MemoryArchive`、`TimeMailbox`、普通对话 UI 增加显式 scope 授权选择。
+4. 处理完整 Simulator app build 的 `SpeechEngineToB` slice 阻断。

@@ -74,6 +74,8 @@
 		A55CE000000000000000001 /* SafetyGuardModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A55CE000000000000000003 /* SafetyGuardModels.swift */; };
 		A55CE000000000000000002 /* SafetyGuardClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A55CE000000000000000004 /* SafetyGuardClient.swift */; };
 		A56CE000000000000000001 /* MemoryPrivacyScope.swift in Sources */ = {isa = PBXBuildFile; fileRef = A56CE000000000000000003 /* MemoryPrivacyScope.swift */; };
+		A57CE000000000000000001 /* KBLitePrivacyScopePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A57CE000000000000000003 /* KBLitePrivacyScopePolicy.swift */; };
+		A58CE000000000000000001 /* DeepSeekSafetyGuarding.swift in Sources */ = {isa = PBXBuildFile; fileRef = A58CE000000000000000003 /* DeepSeekSafetyGuarding.swift */; };
 		A45E9D7E5541F7288DD4141D /* ConversationMemoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97D922D4C28AF76D7CB85DFF /* ConversationMemoryManager.swift */; };
 		A52FFB266D8D9FC320182A0A /* MemoryRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BCB52701683AE3FAFABA6F /* MemoryRepository.swift */; };
 		A88DF4F43BC833D9433CEE7B /* MemoirTTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00898E98E95E3808561BEB51 /* MemoirTTSService.swift */; };
@@ -175,6 +177,8 @@
 		A55CE000000000000000003 /* SafetyGuardModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafetyGuardModels.swift; sourceTree = "<group>"; };
 		A55CE000000000000000004 /* SafetyGuardClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafetyGuardClient.swift; sourceTree = "<group>"; };
 		A56CE000000000000000003 /* MemoryPrivacyScope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryPrivacyScope.swift; sourceTree = "<group>"; };
+		A57CE000000000000000003 /* KBLitePrivacyScopePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLitePrivacyScopePolicy.swift; sourceTree = "<group>"; };
+		A58CE000000000000000003 /* DeepSeekSafetyGuarding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepSeekSafetyGuarding.swift; sourceTree = "<group>"; };
 		A99960BA8CC38BCA98CB98F8 /* KnowledgeBaseViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeBaseViewController.swift; sourceTree = "<group>"; };
 		AA3777B38C40C14928088B38 /* MiniMateLoader.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = MiniMateLoader.js; sourceTree = "<group>"; };
 		AB6F020939B8B3A55A3A9013 /* LoginViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginViewController.swift; sourceTree = "<group>"; };
@@ -243,6 +247,7 @@
 		0B70C2227D6F7A33398AA861 /* Memoir */ = {
 			isa = PBXGroup;
 			children = (
+				A58CE000000000000000003 /* DeepSeekSafetyGuarding.swift */,
 				9E6B98F4607CB693F12830D9 /* DeepSeekService.swift */,
 				0E34D9D2B8943EBBDECBC489 /* MemoirAudioPlayer.swift */,
 				97DC22CAC741ACB9DFED60AC /* MemoirDetailViewController.swift */,
@@ -284,6 +289,7 @@
 				766106FFCA3A78A7BE5B2E76 /* KBLiteModels.swift */,
 				8310EA30F87E2748EE0535A1 /* KBLiteMultiUser.swift */,
 				EA7025362579F4B59C5376E8 /* KBLitePDFExporter.swift */,
+				A57CE000000000000000003 /* KBLitePrivacyScopePolicy.swift */,
 				0616F4B34725AE4D0BCCA4D9 /* KBLiteSemanticSearch.swift */,
 				8C5B565061358529E1029413 /* KBLiteTestHelper.swift */,
 				A22CE000000000000000007 /* MemoryArchive */,
@@ -791,6 +797,7 @@
 				DCE5E73A3C424E6E804AD460 /* CrisisInterventionViewController.swift in Sources */,
 				EB8C6638C1D5E34AC579873D /* Coordinator.swift in Sources */,
 				F90DDD2F07DD62057280F6B1 /* DeepSeekService.swift in Sources */,
+				A58CE000000000000000001 /* DeepSeekSafetyGuarding.swift in Sources */,
 				78142C015083490992DB2062 /* DialogEngineFactory.swift in Sources */,
 				A44CE000000000000000001 /* DialogEngineModels.swift in Sources */,
 				7FE1A54F9280057AA970D224 /* DialogEngineManager.swift in Sources */,
@@ -809,6 +816,7 @@
 				C24EFDB81921BF13946AB289 /* KBLiteModels.swift in Sources */,
 				FB97211C6E68808436C7DC76 /* KBLiteMultiUser.swift in Sources */,
 				90DF2D00B2A745900FF43F33 /* KBLitePDFExporter.swift in Sources */,
+				A57CE000000000000000001 /* KBLitePrivacyScopePolicy.swift in Sources */,
 				824FE84FF055277FD802AE21 /* KBLiteSemanticSearch.swift in Sources */,
 				70BCC3629F42D8E233158576 /* KBLiteTestHelper.swift in Sources */,
 				896769650B9A953A6C0B6F19 /* KBSyncViewController.swift in Sources */,

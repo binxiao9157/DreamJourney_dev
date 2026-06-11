@@ -190,6 +190,10 @@ final class KBLiteManager {
             completion(0)
             return
         }
+        let localTurns = KBLitePrivacyScopePolicy.localExtractableTurns(from: turns)
+        let remoteTurns = KBLitePrivacyScopePolicy.remoteExtractableTurns(from: turns)
+        let localPrivacyMetadata = KBLitePrivacyScopePolicy.derivedEntityMetadata(from: localTurns)
+        let remotePrivacyMetadata = KBLitePrivacyScopePolicy.derivedEntityMetadata(from: remoteTurns)
 
         // 提取频率控制：每 3 次会话才触发一次 LLM 提取（节省成本）
         // 第 1 次、第 10 次、以及距离上次提取超过 24 小时的会话强制执行
@@ -200,7 +204,19 @@ final class KBLiteManager {
         guard shouldForceExtract else {
             print("[KBLite] ⏭️ 提取频率控制：跳过会话#\(sessionId)，上次提取#\(graph.sessionCount)")
             // 仍然用本地正则做快速提取
-            let count = quickExtract(turns: turns, sessionId: sessionId)
+            let count = quickExtract(turns: localTurns, sessionId: sessionId, privacyMetadata: localPrivacyMetadata)
+            if count > 0 {
+                save()
+            }
+            completion(count)
+            return
+        }
+
+        guard !remoteTurns.isEmpty else {
+            print("[KBLite] 🔒 无可远端提取 transcript，跳过 LLM，仅执行本地快速提取")
+            let count = quickExtract(turns: localTurns, sessionId: sessionId, privacyMetadata: localPrivacyMetadata)
+            graph.sessionCount = sessionId
+            save()
             completion(count)
             return
         }
@@ -215,16 +231,16 @@ final class KBLiteManager {
             }
 
             self.isExtracting = true
-            print("[KBLite] 🔍 开始 LLM 知识提取 (会话#\(sessionId), \(turns.count)轮)")
+            print("[KBLite] 🔍 开始 LLM 知识提取 (会话#\(sessionId), \(remoteTurns.count)/\(turns.count)轮可远端)")
 
             // 组装 transcript 文本
-            let transcript = turns.map { t in
+            let transcript = remoteTurns.map { t in
                 let role = t.role == "user" ? "长辈" : "寻梦环游"
                 return "[\(role)]: \(t.text)"
             }.joined(separator: "\n")
 
             // 构建已有知识摘要（减少重复提取）
-            let existingSummary = self.buildExistingSummary()
+            let existingSummary = self.buildExistingSummary(surface: .remoteExtraction)
 
             // 构造提取 prompt
             let prompt = self.buildExtractionPrompt(transcript: transcript, existingSummary: existingSummary)
@@ -236,7 +252,11 @@ final class KBLiteManager {
 
                 switch result {
                 case .success(let extractionResult):
-                    let addedCount = self.mergeExtractionResult(extractionResult, sessionId: sessionId)
+                    let addedCount = self.mergeExtractionResult(
+                        extractionResult,
+                        sessionId: sessionId,
+                        privacyMetadata: remotePrivacyMetadata
+                    )
                     self.graph.sessionCount = sessionId
                     self.save()
                     print("[KBLite] ✅ 知识提取完成: 新增 \(addedCount) 实体")
@@ -244,7 +264,11 @@ final class KBLiteManager {
 
                 case .failure(let error):
                     print("[KBLite] ⚠️ LLM 提取失败: \(error.localizedDescription)，使用正则 fallback")
-                    let count = self.quickExtract(turns: turns, sessionId: sessionId)
+                    let count = self.quickExtract(
+                        turns: localTurns,
+                        sessionId: sessionId,
+                        privacyMetadata: localPrivacyMetadata
+                    )
                     self.graph.sessionCount = sessionId
                     self.save()
                     DispatchQueue.main.async { completion(count) }
@@ -255,7 +279,11 @@ final class KBLiteManager {
 
     /// 本地正则快速提取（LLM 不可用时的 fallback）
     /// 复用 ConversationMemoryManager 的维度提取逻辑，但存入知识库
-    private func quickExtract(turns: [ConversationTurn], sessionId: Int) -> Int {
+    private func quickExtract(
+        turns: [ConversationTurn],
+        sessionId: Int,
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+    ) -> Int {
         let userTexts = turns.filter { $0.role == "user" }.map { $0.text }
         let allText = userTexts.joined(separator: " ")
 
@@ -272,7 +300,8 @@ final class KBLiteManager {
                 if existing == nil {
                     let person = KBPerson(id: UUID().uuidString, name: kw, aliases: [], relation: nil,
                                           traits: [], sourceSessionIds: [sessionId],
-                                          createdAt: Date(), updatedAt: Date())
+                                          createdAt: Date(), updatedAt: Date(),
+                                          privacyMetadata: privacyMetadata)
                     graph.people.append(person)
                     addedCount += 1
                 } else {
@@ -295,7 +324,12 @@ final class KBLiteManager {
             if allText.contains(city) {
                 let existing = graph.places.first { $0.name == city }
                 if existing == nil {
-                    let place = KBPlace(id: UUID().uuidString, name: city, sourceSessionIds: [sessionId])
+                    let place = KBPlace(
+                        id: UUID().uuidString,
+                        name: city,
+                        sourceSessionIds: [sessionId],
+                        privacyMetadata: privacyMetadata
+                    )
                     graph.places.append(place)
                     addedCount += 1
                 }
@@ -309,7 +343,12 @@ final class KBLiteManager {
             if allText.contains(kw) {
                 let existing = graph.events.first { $0.title.contains(kw) }
                 if existing == nil {
-                    let event = KBEvent(id: UUID().uuidString, title: kw, sourceSessionIds: [sessionId])
+                    let event = KBEvent(
+                        id: UUID().uuidString,
+                        title: kw,
+                        sourceSessionIds: [sessionId],
+                        privacyMetadata: privacyMetadata
+                    )
                     graph.events.append(event)
                     addedCount += 1
                 }
@@ -323,31 +362,36 @@ final class KBLiteManager {
     // MARK: - Private: Prompt Building
 
     /// 构建已有知识摘要（供 LLM prompt 使用）
-    private func buildExistingSummary() -> String {
-        if graph.people.isEmpty && graph.places.isEmpty && graph.events.isEmpty {
+    private func buildExistingSummary(surface: MemoryUseSurface = .prompt) -> String {
+        let people = graph.people.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface) }
+        let places = graph.places.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface) }
+        let events = graph.events.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface) }
+        let facts = graph.facts.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface) }
+
+        if people.isEmpty && places.isEmpty && events.isEmpty {
             return "（暂无已有知识）"
         }
 
         var lines: [String] = []
 
-        if !graph.people.isEmpty {
+        if !people.isEmpty {
             lines.append("已知人物：")
-            for p in graph.people.prefix(15) {
+            for p in people.prefix(15) {
                 let traits = p.traits.isEmpty ? "" : "（\(p.traits.joined(separator: "、"))）"
                 lines.append("  - \(p.name)\(traits)")
             }
         }
 
-        if !graph.places.isEmpty {
-            lines.append("已知地点：\(graph.places.prefix(10).map { $0.name }.joined(separator: "、"))")
+        if !places.isEmpty {
+            lines.append("已知地点：\(places.prefix(10).map { $0.name }.joined(separator: "、"))")
         }
 
-        if !graph.events.isEmpty {
-            lines.append("已知事件：\(graph.events.prefix(10).map { $0.title }.joined(separator: "、"))")
+        if !events.isEmpty {
+            lines.append("已知事件：\(events.prefix(10).map { $0.title }.joined(separator: "、"))")
         }
 
-        if !graph.facts.isEmpty {
-            let recentFacts = graph.facts.sorted { ($0.sourceSessionIds.last ?? 0) > ($1.sourceSessionIds.last ?? 0) }
+        if !facts.isEmpty {
+            let recentFacts = facts.sorted { ($0.sourceSessionIds.last ?? 0) > ($1.sourceSessionIds.last ?? 0) }
             lines.append("最近事实：")
             for f in recentFacts.prefix(5) {
                 lines.append("  - \(f.statement)")
@@ -435,7 +479,11 @@ final class KBLiteManager {
 
     /// 将 LLM 提取结果合并到知识图谱
     /// - Returns: 新增实体数量
-    private func mergeExtractionResult(_ result: KBExtractionResult, sessionId: Int) -> Int {
+    private func mergeExtractionResult(
+        _ result: KBExtractionResult,
+        sessionId: Int,
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+    ) -> Int {
         var addedCount = 0
         let now = Date()
 
@@ -489,7 +537,8 @@ final class KBLiteManager {
                     briefBio: ep.briefBio,
                     sourceSessionIds: [sessionId],
                     createdAt: now,
-                    updatedAt: now
+                    updatedAt: now,
+                    privacyMetadata: privacyMetadata
                 )
                 graph.people.append(person)
                 addedCount += 1
@@ -517,7 +566,8 @@ final class KBLiteManager {
                     latitude: ep.latitude,
                     longitude: ep.longitude,
                     description: ep.description,
-                    sourceSessionIds: [sessionId]
+                    sourceSessionIds: [sessionId],
+                    privacyMetadata: privacyMetadata
                 )
                 graph.places.append(place)
                 addedCount += 1
@@ -544,7 +594,8 @@ final class KBLiteManager {
                     description: ee.description,
                     year: ee.year,
                     month: ee.month,
-                    sourceSessionIds: [sessionId]
+                    sourceSessionIds: [sessionId],
+                    privacyMetadata: privacyMetadata
                 )
                 graph.events.append(event)
                 addedCount += 1
@@ -569,7 +620,8 @@ final class KBLiteManager {
                     id: UUID().uuidString,
                     statement: stmt,
                     confidence: ef.confidence ?? "high",
-                    sourceSessionIds: [sessionId]
+                    sourceSessionIds: [sessionId],
+                    privacyMetadata: privacyMetadata
                 )
                 graph.facts.append(fact)
                 addedCount += 1
@@ -743,7 +795,11 @@ final class KBLiteManager {
 
         // 有 query → 检索相关知识
         if let q = query, !q.trimmingCharacters(in: .whitespaces).isEmpty {
-            let result = search(query: q)
+            var result = search(query: q)
+            result.people = result.people.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .prompt) }
+            result.places = result.places.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .prompt) }
+            result.events = result.events.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .prompt) }
+            result.facts = result.facts.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .prompt) }
 
             if !result.people.isEmpty {
                 let summaries: [String] = result.people.prefix(maxItems).map { p in
@@ -793,13 +849,17 @@ final class KBLiteManager {
 
         // 无 query 或检索结果为空 → 提供最近摘要
         if parts.isEmpty {
-            let recentPeople = graph.people.sorted { ($0.sourceSessionIds.last ?? 0) > ($1.sourceSessionIds.last ?? 0) }
+            let recentPeople = graph.people
+                .filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .prompt) }
+                .sorted { ($0.sourceSessionIds.last ?? 0) > ($1.sourceSessionIds.last ?? 0) }
             if !recentPeople.isEmpty {
                 let names = recentPeople.prefix(5).map { $0.name }.joined(separator: "、")
                 parts.append("【已知人物】您提到过：\(names)等")
             }
 
-            let recentEvents = graph.events.sorted { ($0.sourceSessionIds.last ?? 0) > ($1.sourceSessionIds.last ?? 0) }
+            let recentEvents = graph.events
+                .filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .prompt) }
+                .sorted { ($0.sourceSessionIds.last ?? 0) > ($1.sourceSessionIds.last ?? 0) }
             if !recentEvents.isEmpty {
                 let titles = recentEvents.prefix(5).map { e in
                     let d = e.formattedDate

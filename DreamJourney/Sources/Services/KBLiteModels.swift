@@ -4,13 +4,52 @@ import Foundation
 
 /// 知识库顶层容器 — 单文件持久化到 kb_graph.json
 struct KBLiteGraph: Codable {
-    var version: Int = 1
+    var version: Int = 2
     var lastUpdated: Date = Date()
     var sessionCount: Int = 0        // 已处理的会话数
     var people: [KBPerson] = []
     var places: [KBPlace] = []
     var events: [KBEvent] = []
     var facts: [KBFact] = []
+
+    init(
+        version: Int = 2,
+        lastUpdated: Date = Date(),
+        sessionCount: Int = 0,
+        people: [KBPerson] = [],
+        places: [KBPlace] = [],
+        events: [KBEvent] = [],
+        facts: [KBFact] = []
+    ) {
+        self.version = max(version, 2)
+        self.lastUpdated = lastUpdated
+        self.sessionCount = sessionCount
+        self.people = people
+        self.places = places
+        self.events = events
+        self.facts = facts
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case version
+        case lastUpdated
+        case sessionCount
+        case people
+        case places
+        case events
+        case facts
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        version = max(try container.decodeIfPresent(Int.self, forKey: .version) ?? 2, 2)
+        lastUpdated = try container.decodeIfPresent(Date.self, forKey: .lastUpdated) ?? Date()
+        sessionCount = try container.decodeIfPresent(Int.self, forKey: .sessionCount) ?? 0
+        people = try container.decodeIfPresent([KBPerson].self, forKey: .people) ?? []
+        places = try container.decodeIfPresent([KBPlace].self, forKey: .places) ?? []
+        events = try container.decodeIfPresent([KBEvent].self, forKey: .events) ?? []
+        facts = try container.decodeIfPresent([KBFact].self, forKey: .facts) ?? []
+    }
 }
 
 // MARK: - 人物
@@ -26,6 +65,63 @@ struct KBPerson: Codable, Identifiable {
     var sourceSessionIds: [Int] // 来源：第几次会话提到此人
     var createdAt: Date
     var updatedAt: Date
+    var privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+
+    init(
+        id: String,
+        name: String,
+        aliases: [String],
+        relation: String?,
+        traits: [String],
+        briefBio: String? = nil,
+        relatedPersonIds: [String] = [],
+        sourceSessionIds: [Int],
+        createdAt: Date,
+        updatedAt: Date,
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+    ) {
+        self.id = id
+        self.name = name
+        self.aliases = aliases
+        self.relation = relation
+        self.traits = traits
+        self.briefBio = briefBio
+        self.relatedPersonIds = relatedPersonIds
+        self.sourceSessionIds = sourceSessionIds
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.privacyMetadata = privacyMetadata
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case aliases
+        case relation
+        case traits
+        case briefBio
+        case relatedPersonIds
+        case sourceSessionIds
+        case createdAt
+        case updatedAt
+        case privacyMetadata
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        aliases = try container.decodeIfPresent([String].self, forKey: .aliases) ?? []
+        relation = try container.decodeIfPresent(String.self, forKey: .relation)
+        traits = try container.decodeIfPresent([String].self, forKey: .traits) ?? []
+        briefBio = try container.decodeIfPresent(String.self, forKey: .briefBio)
+        relatedPersonIds = try container.decodeIfPresent([String].self, forKey: .relatedPersonIds) ?? []
+        sourceSessionIds = try container.decodeIfPresent([Int].self, forKey: .sourceSessionIds) ?? []
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? createdAt
+        privacyMetadata = try container.decodeIfPresent(MemoryPrivacyMetadata.self, forKey: .privacyMetadata)
+            ?? MemoryPrivacyMetadata(scope: .localOnly)
+    }
 
     /// 所有可用于搜索和匹配的文本
     var searchableText: String {
@@ -46,6 +142,59 @@ struct KBPlace: Codable, Identifiable {
     var relatedPersonIds: [String] = []
     var sourceSessionIds: [Int] = []
     var createdAt: Date = Date()
+    var privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+
+    init(
+        id: String,
+        name: String,
+        category: String? = nil,
+        latitude: Double? = nil,
+        longitude: Double? = nil,
+        description: String? = nil,
+        relatedPersonIds: [String] = [],
+        sourceSessionIds: [Int] = [],
+        createdAt: Date = Date(),
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+    ) {
+        self.id = id
+        self.name = name
+        self.category = category
+        self.latitude = latitude
+        self.longitude = longitude
+        self.description = description
+        self.relatedPersonIds = relatedPersonIds
+        self.sourceSessionIds = sourceSessionIds
+        self.createdAt = createdAt
+        self.privacyMetadata = privacyMetadata
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case category
+        case latitude
+        case longitude
+        case description
+        case relatedPersonIds
+        case sourceSessionIds
+        case createdAt
+        case privacyMetadata
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        category = try container.decodeIfPresent(String.self, forKey: .category)
+        latitude = try container.decodeIfPresent(Double.self, forKey: .latitude)
+        longitude = try container.decodeIfPresent(Double.self, forKey: .longitude)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        relatedPersonIds = try container.decodeIfPresent([String].self, forKey: .relatedPersonIds) ?? []
+        sourceSessionIds = try container.decodeIfPresent([Int].self, forKey: .sourceSessionIds) ?? []
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        privacyMetadata = try container.decodeIfPresent(MemoryPrivacyMetadata.self, forKey: .privacyMetadata)
+            ?? MemoryPrivacyMetadata(scope: .localOnly)
+    }
 
     var searchableText: String {
         [name, category, description].compactMap { $0 }.joined(separator: " ")
@@ -66,6 +215,67 @@ struct KBEvent: Codable, Identifiable {
     var memoirId: String?       // 关联已有回忆录
     var sourceSessionIds: [Int] = []
     var createdAt: Date = Date()
+    var privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+
+    init(
+        id: String,
+        title: String,
+        description: String? = nil,
+        year: Int? = nil,
+        month: Int? = nil,
+        locationId: String? = nil,
+        participantIds: [String] = [],
+        mediaIds: [String] = [],
+        memoirId: String? = nil,
+        sourceSessionIds: [Int] = [],
+        createdAt: Date = Date(),
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+    ) {
+        self.id = id
+        self.title = title
+        self.description = description
+        self.year = year
+        self.month = month
+        self.locationId = locationId
+        self.participantIds = participantIds
+        self.mediaIds = mediaIds
+        self.memoirId = memoirId
+        self.sourceSessionIds = sourceSessionIds
+        self.createdAt = createdAt
+        self.privacyMetadata = privacyMetadata
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case description
+        case year
+        case month
+        case locationId
+        case participantIds
+        case mediaIds
+        case memoirId
+        case sourceSessionIds
+        case createdAt
+        case privacyMetadata
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        year = try container.decodeIfPresent(Int.self, forKey: .year)
+        month = try container.decodeIfPresent(Int.self, forKey: .month)
+        locationId = try container.decodeIfPresent(String.self, forKey: .locationId)
+        participantIds = try container.decodeIfPresent([String].self, forKey: .participantIds) ?? []
+        mediaIds = try container.decodeIfPresent([String].self, forKey: .mediaIds) ?? []
+        memoirId = try container.decodeIfPresent(String.self, forKey: .memoirId)
+        sourceSessionIds = try container.decodeIfPresent([Int].self, forKey: .sourceSessionIds) ?? []
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        privacyMetadata = try container.decodeIfPresent(MemoryPrivacyMetadata.self, forKey: .privacyMetadata)
+            ?? MemoryPrivacyMetadata(scope: .localOnly)
+    }
 
     var searchableText: String {
         [title, description].compactMap { $0 }.joined(separator: " ")
@@ -91,6 +301,55 @@ struct KBFact: Codable, Identifiable {
     var relatedEventIds: [String] = []
     var sourceSessionIds: [Int] = []
     var createdAt: Date = Date()
+    var privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+
+    init(
+        id: String,
+        statement: String,
+        confidence: String,
+        relatedPersonIds: [String] = [],
+        relatedPlaceIds: [String] = [],
+        relatedEventIds: [String] = [],
+        sourceSessionIds: [Int] = [],
+        createdAt: Date = Date(),
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+    ) {
+        self.id = id
+        self.statement = statement
+        self.confidence = confidence
+        self.relatedPersonIds = relatedPersonIds
+        self.relatedPlaceIds = relatedPlaceIds
+        self.relatedEventIds = relatedEventIds
+        self.sourceSessionIds = sourceSessionIds
+        self.createdAt = createdAt
+        self.privacyMetadata = privacyMetadata
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case statement
+        case confidence
+        case relatedPersonIds
+        case relatedPlaceIds
+        case relatedEventIds
+        case sourceSessionIds
+        case createdAt
+        case privacyMetadata
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        statement = try container.decode(String.self, forKey: .statement)
+        confidence = try container.decodeIfPresent(String.self, forKey: .confidence) ?? "high"
+        relatedPersonIds = try container.decodeIfPresent([String].self, forKey: .relatedPersonIds) ?? []
+        relatedPlaceIds = try container.decodeIfPresent([String].self, forKey: .relatedPlaceIds) ?? []
+        relatedEventIds = try container.decodeIfPresent([String].self, forKey: .relatedEventIds) ?? []
+        sourceSessionIds = try container.decodeIfPresent([Int].self, forKey: .sourceSessionIds) ?? []
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        privacyMetadata = try container.decodeIfPresent(MemoryPrivacyMetadata.self, forKey: .privacyMetadata)
+            ?? MemoryPrivacyMetadata(scope: .localOnly)
+    }
 }
 
 // MARK: - LLM 提取响应模型

@@ -26,6 +26,7 @@ final class DeepSeekService {
 
     private let model = "DeepSeek-V4-Flash"
     private let timeoutInterval: TimeInterval = 60
+    private let safetyGuardClient = SafetyGuardClient(transport: DeepSeekSafetyGuardUnavailableTransport())
 
     // MARK: - Init
 
@@ -118,6 +119,14 @@ final class DeepSeekService {
             return
         }
 
+        let guardText = messages
+            .map { "\($0.role): \($0.content)" }
+            .joined(separator: "\n")
+        guard canSendToLLM(text: guardText, surface: .memoir, stage: .userInputPreLLM) else {
+            completion(.failure(.invalidResponse))
+            return
+        }
+
         let request = ChatRequest(
             model: model,
             messages: messages,
@@ -152,6 +161,11 @@ final class DeepSeekService {
     ) {
         guard apiKey != Self.placeholderKey else {
             completion(.failure(.apiKeyMissing))
+            return
+        }
+
+        guard canSendToLLM(text: prompt, surface: .knowledge, stage: .userInputPreLLM) else {
+            completion(.failure(.invalidResponse))
             return
         }
 
@@ -267,6 +281,11 @@ final class DeepSeekService {
         描述这张照片的内容。关注：1. 场景（在哪里、什么场合）2. 人物（数量、年龄、推测关系）3. 活动（在做什么）4. 情绪氛围 5. 年代特征。
         请输出严格JSON：{"description":"...","detectedPeople":["..."],"scene":"...","occasion":"...","mood":"...","estimatedDecade":1970}
         """
+
+        guard canSendToLLM(text: analysisPrompt, surface: .photoAnalysis, stage: .imagePreAnalysis) else {
+            completion(.failure(.invalidResponse))
+            return
+        }
 
         let messages: [[String: Any]] = [
             ["role": "system", "content": "你是老照片分析专家。输出严格JSON，不要其他文字。"],
@@ -384,5 +403,20 @@ final class DeepSeekService {
             }
             completion(.failure(.networkError(error)))
         }
+    }
+
+    private func canSendToLLM(
+        text: String,
+        surface: SafetyGuardSurface,
+        stage: SafetyGuardStage
+    ) -> Bool {
+        let decision = DeepSeekSafetyGuarding.guardDecision(
+            text: text,
+            surface: surface,
+            stage: stage,
+            target: .deepseek,
+            guardClient: safetyGuardClient
+        )
+        return decision.canSendToLLM && (decision.action == .allow || decision.action == .allowWithCare)
     }
 }

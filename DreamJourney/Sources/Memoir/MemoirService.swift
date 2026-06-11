@@ -13,6 +13,7 @@ final class MemoirService {
 
     /// 串行队列，保证同一时间只处理一个生成请求
     private let generateQueue = DispatchQueue(label: "com.dreamjourney.memoir.generate", qos: .userInitiated)
+    private let safetyGuardClient = SafetyGuardClient(transport: DeepSeekSafetyGuardUnavailableTransport())
 
     // MARK: - System Prompt
 
@@ -78,6 +79,16 @@ final class MemoirService {
 
             // 1. 构建消息列表
             let chatMessages = self.buildChatMessages(from: dialogMessages)
+            let transcript = dialogMessages
+                .map { "\($0.role): \($0.text)" }
+                .joined(separator: "\n")
+
+            guard self.canSendMemoirTextToLLM(transcript) else {
+                DispatchQueue.main.async {
+                    completion(.failure(DeepSeekService.DeepSeekError.invalidResponse))
+                }
+                return
+            }
 
             // 2. 调用 DeepSeek API
             DeepSeekService.shared.chat(messages: chatMessages) { result in
@@ -85,6 +96,13 @@ final class MemoirService {
                 case .success(let content):
                     // 3. 解析 JSON 响应
                     var memoir = self.parseMemoirResponse(content)
+
+                    guard self.canSendMemoirTextToLLM(memoir.prose) else {
+                        DispatchQueue.main.async {
+                            completion(.failure(DeepSeekService.DeepSeekError.invalidResponse))
+                        }
+                        return
+                    }
 
                     // 4. 关联当前用户的 speaker_id（声音复刻音色）
                     if let speakerId = VoiceCloneService.shared.currentSpeakerId {
@@ -162,6 +180,17 @@ final class MemoirService {
         ))
 
         return messages
+    }
+
+    private func canSendMemoirTextToLLM(_ text: String) -> Bool {
+        let decision = DeepSeekSafetyGuarding.guardDecision(
+            text: text,
+            surface: .memoir,
+            stage: .userInputPreLLM,
+            target: .deepseek,
+            guardClient: safetyGuardClient
+        )
+        return decision.canSendToLLM && (decision.action == .allow || decision.action == .allowWithCare)
     }
 
     // MARK: - Private: Parse Response

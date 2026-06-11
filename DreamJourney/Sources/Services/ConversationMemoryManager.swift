@@ -7,6 +7,35 @@ struct ConversationTurn: Codable {
     let role: String     // "user" / "ai"
     let text: String
     let timestamp: Date
+    let privacyMetadata: MemoryPrivacyMetadata
+
+    init(
+        role: String,
+        text: String,
+        timestamp: Date,
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+    ) {
+        self.role = role
+        self.text = text
+        self.timestamp = timestamp
+        self.privacyMetadata = privacyMetadata
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case role
+        case text
+        case timestamp
+        case privacyMetadata
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        role = try container.decode(String.self, forKey: .role)
+        text = try container.decode(String.self, forKey: .text)
+        timestamp = try container.decode(Date.self, forKey: .timestamp)
+        privacyMetadata = try container.decodeIfPresent(MemoryPrivacyMetadata.self, forKey: .privacyMetadata)
+            ?? MemoryPrivacyMetadata(scope: .localOnly)
+    }
 }
 
 /// 回忆录四维度摘要（核心数据结构）
@@ -99,6 +128,7 @@ struct ConversationMemory: Codable {
     var recentTopics: [String] = []
 }
 
+#if !MEMORY_PRIVACY_INTEGRATION_VERIFY
 // MARK: - ConversationMemoryManager
 
 /// 对话记忆管理器 - 围绕时间/地点/人物/事件四维度提取摘要
@@ -131,16 +161,22 @@ final class ConversationMemoryManager {
 
     // MARK: - 记录对话
 
-    func recordUserTurn(text: String) {
+    func recordUserTurn(
+        text: String,
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+    ) {
         guard !text.isEmpty else { return }
-        let turn = ConversationTurn(role: "user", text: text, timestamp: Date())
+        let turn = ConversationTurn(role: "user", text: text, timestamp: Date(), privacyMetadata: privacyMetadata)
         currentTranscript.append(turn)
         print("[Memory] 📝 记录用户: \(text.prefix(50))")
     }
 
-    func recordAITurn(text: String) {
+    func recordAITurn(
+        text: String,
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+    ) {
         guard !text.isEmpty else { return }
-        let turn = ConversationTurn(role: "ai", text: text, timestamp: Date())
+        let turn = ConversationTurn(role: "ai", text: text, timestamp: Date(), privacyMetadata: privacyMetadata)
         currentTranscript.append(turn)
         print("[Memory] 📝 记录AI: \(text.prefix(50))")
     }
@@ -402,3 +438,4 @@ final class ConversationMemoryManager {
         print("[Memory]   时间: \(s.time), 地点: \(s.place), 人物: \(s.person), 事件: \(s.event)")
     }
 }
+#endif
