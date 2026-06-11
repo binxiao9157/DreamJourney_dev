@@ -93,6 +93,7 @@ final class CareDashboardViewController: UIViewController {
 
         let metrics = [
             ("用户发言", "\(snapshot.userTurnCount) 轮"),
+            ("观测天数", "\(snapshot.windowDayCount) 天"),
             ("字数", "\(snapshot.characterCount)"),
             ("词汇丰富度", String(format: "%.0f%%", snapshot.lexicalDiversity * 100)),
             ("重复表达", String(format: "%.0f%%", snapshot.repetitionRatio * 100)),
@@ -101,6 +102,7 @@ final class CareDashboardViewController: UIViewController {
             ("身体信号", "\(snapshot.bodyDiscomfortMentions)"),
         ]
         stackView.addArrangedSubview(makeMetricGrid(metrics))
+        stackView.addArrangedSubview(makeWeeklyReport(snapshot))
         stackView.addArrangedSubview(makeSuggestions(snapshot.suggestions))
     }
 
@@ -123,7 +125,25 @@ final class CareDashboardViewController: UIViewController {
         timeLabel.font = .systemFont(ofSize: 12)
         timeLabel.textColor = .warmSubtitle
 
-        let stack = UIStackView(arrangedSubviews: [titleLabel, summaryLabel, timeLabel])
+        let coverageLabel = UILabel()
+        let coverageSummary = snapshot.dataCoverageSummary.trimmingCharacters(in: .whitespacesAndNewlines)
+        coverageLabel.text = "数据覆盖 \(coverageSummary.isEmpty ? "暂无覆盖说明" : coverageSummary)"
+        coverageLabel.font = .systemFont(ofSize: 12)
+        coverageLabel.textColor = .warmSubtitle
+        coverageLabel.numberOfLines = 0
+
+        var headerItems: [UIView] = [titleLabel, summaryLabel, timeLabel, coverageLabel]
+        if let windowStart = snapshot.windowStart, let windowEnd = snapshot.windowEnd {
+            let windowLabel = UILabel()
+            let startText = CareDashboardViewController.windowDateFormatter.string(from: windowStart)
+            let endText = CareDashboardViewController.windowDateFormatter.string(from: windowEnd)
+            windowLabel.text = "观测窗口 \(startText)-\(endText)"
+            windowLabel.font = .systemFont(ofSize: 12)
+            windowLabel.textColor = .warmSubtitle
+            headerItems.append(windowLabel)
+        }
+
+        let stack = UIStackView(arrangedSubviews: headerItems)
         stack.axis = .vertical
         stack.spacing = 8
         container.addSubview(stack)
@@ -199,6 +219,50 @@ final class CareDashboardViewController: UIViewController {
         return stack
     }
 
+    private func makeWeeklyReport(_ snapshot: CareSignalSnapshot) -> UIView {
+        let container = makeSurface()
+
+        let title = UILabel()
+        title.text = "脱敏观察报告"
+        title.font = .systemFont(ofSize: 18, weight: .bold)
+        title.textColor = .warmPrimary
+
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 10
+        stack.addArrangedSubview(title)
+
+        if snapshot.weeklyHighlights.isEmpty {
+            stack.addArrangedSubview(makeBulletLabel("暂无可展示的脱敏观察摘要。"))
+        } else {
+            snapshot.weeklyHighlights.forEach { highlight in
+                stack.addArrangedSubview(makeBulletLabel(highlight))
+            }
+        }
+
+        if !snapshot.riskSignalDescriptions.isEmpty {
+            let riskTitle = UILabel()
+            riskTitle.text = "需关注信号"
+            riskTitle.font = .systemFont(ofSize: 15, weight: .semibold)
+            riskTitle.textColor = .warmPrimary
+            stack.addArrangedSubview(riskTitle)
+
+            snapshot.riskSignalDescriptions.forEach { description in
+                stack.addArrangedSubview(makeBulletLabel(description))
+            }
+        }
+
+        container.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 16),
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16),
+        ])
+        return container
+    }
+
     private func makeSuggestions(_ suggestions: [String]) -> UIView {
         let container = makeSurface()
 
@@ -213,12 +277,7 @@ final class CareDashboardViewController: UIViewController {
         stack.addArrangedSubview(title)
 
         for suggestion in suggestions {
-            let label = UILabel()
-            label.text = "• \(suggestion)"
-            label.font = .systemFont(ofSize: 14)
-            label.textColor = .warmPrimary
-            label.numberOfLines = 0
-            stack.addArrangedSubview(label)
+            stack.addArrangedSubview(makeBulletLabel(suggestion))
         }
 
         container.addSubview(stack)
@@ -230,6 +289,15 @@ final class CareDashboardViewController: UIViewController {
             stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16),
         ])
         return container
+    }
+
+    private func makeBulletLabel(_ text: String) -> UILabel {
+        let label = UILabel()
+        label.text = "• \(text)"
+        label.font = .systemFont(ofSize: 14)
+        label.textColor = .warmPrimary
+        label.numberOfLines = 0
+        return label
     }
 
     private func paddedSurface(_ content: UIView) -> UIView {
@@ -257,6 +325,12 @@ final class CareDashboardViewController: UIViewController {
     private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "MM/dd HH:mm"
+        return formatter
+    }()
+
+    private static let windowDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM/dd"
         return formatter
     }()
 }

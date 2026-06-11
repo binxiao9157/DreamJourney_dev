@@ -14,7 +14,7 @@
 | Safety Guard 合约 | 82% | 合约和 iOS client 已固化；DeepSeek chat/knowledge/image、Memoir、TTS 入口默认 fail-closed，支持显式 mock allow 演示开关，并已接入真实 `/v1/safety/evaluate` HTTP transport 最小闭环。 |
 | Privacy Scope 模型 | 92% | `ConversationTurn`、`Stage1MailboxMemoryInput`、`DialogMessage`、MemoryArchive、TimeMailbox、KBLite v2 实体已携带 `privacyMetadata`；`FamilyMemberVisibility` 已区分 all-family 与 selected-members，空成员选择不再误开放为全体可见，旧数据继续兼容迁移。 |
 | KBLite/Export/Widget 过滤 | 78% | KBLite remote extraction、prompt context、JSON export、Widget App Group、PDF 输入图谱、backend sync 已按 scope 过滤；familySync/careDashboard graph 支持按目标家庭成员二次裁剪。 |
-| CareDashboard/Family Sync 阶段2 | 65% | Family share package、FamilyRepository 已改用 familyCircle sanitized graph；CareDashboard transcript 入口按 `.careDashboard` 和目标成员可见性过滤；亲友成员行可进入成员视角看板，KBSync 导出可显式选择全体或单个成员目标。 |
+| CareDashboard/Family Sync 阶段2 | 72% | Family share package、FamilyRepository 已改用 familyCircle sanitized graph；CareDashboard transcript 入口按 `.careDashboard` 和目标成员可见性过滤；亲友成员行可进入成员视角看板，KBSync 导出可显式选择全体或单个成员目标；看板新增用户观测窗口、数据覆盖说明、脱敏观察报告和风险信号解释。 |
 
 ## 已完成
 
@@ -53,6 +53,8 @@
 - KBLite prompt query 关联事实、开场白 hint、知识缺口上下文均按 `.prompt` 过滤；local summary 不再阻断已有 generation KBLite prompt context。
 - Family 亲友列表成员行接入 `CareDashboardViewController(viewerFamilyMemberID:)`，成员级可见性从 UI 入口传到看板输入过滤；行内文案同步调整为“关怀看板”。
 - KBSync 导出入口新增目标对象 action sheet：用户需显式选择“全体亲友”或具体成员，成员导出会调用 `generateSharePackage(forFamilyMemberID:)`，取消不会生成分享包。
+- CareDashboard snapshot 增加基于用户发言的观测窗口、观测天数、数据覆盖摘要、脱敏观察报告和需关注信号说明；这些字段只输出聚合/解释性文本，不展示原始对话句子。
+- CareDashboard UI 在 header 展示数据覆盖和观测窗口，在指标区展示观测天数，并新增“脱敏观察报告”卡片，作为阶段1“脱敏健康周报/趋势提示”的本机雏形。
 
 ## 最新验证
 
@@ -67,7 +69,7 @@ bash Scripts/verify_phase2.sh
 - `SafetyMonitor verification: 10/10 passed`
 - `TimeMailbox verification passed`，覆盖 mailbox scope 持久化和旧信件默认 localOnly 迁移。
 - `MemoryArchive verification passed`，覆盖 archive scope 持久化、旧数据迁移、generation photo pending、family photo 不远端分析。
-- `CareDashboard verification passed`，覆盖成员级可见性输入过滤：目标成员只能看到 all-family 和显式授权给自己的 familyCircle turns。
+- `CareDashboard verification passed`，覆盖成员级可见性输入过滤：目标成员只能看到 all-family 和显式授权给自己的 familyCircle turns；同时覆盖基于用户发言的观测窗口、数据覆盖摘要、脱敏观察报告、风险信号说明和不泄露完整原文。
 - `KBLite 验收结果: 32/32 通过`
 - `DreamJourney.xcodeproj/project.pbxproj: OK`
 - iPhoneOS Debug build: `** BUILD SUCCEEDED **`
@@ -83,5 +85,5 @@ bash Scripts/verify_phase2.sh
 
 1. 与服务端联调真实 `/v1/safety/evaluate`：确认响应字段、状态码、鉴权、超时和审计 HMAC 策略，并补充失败注入/端到端 smoke。
 2. 决定 export/widget/backend 是否需要新的显式授权 scope，或保持当前默认空输出策略。
-3. 补 Family/CareDashboard 的授权 UI：为记忆/对话选择具体可见成员，并把当前访问者身份接到真实登录亲友身份；现阶段已完成亲友成员行和分享包导出的目标成员入口。
+3. 补 Family/CareDashboard 的授权 UI：为记忆/对话选择具体可见成员，并把当前访问者身份接到真实登录亲友身份；现阶段已完成亲友成员行、分享包导出的目标成员入口，以及本机脱敏周报展示。
 4. 处理完整 Simulator app build 的 `SpeechEngineToB` slice 阻断，并补普通对话 scope 按钮的 UI 自动化 smoke。

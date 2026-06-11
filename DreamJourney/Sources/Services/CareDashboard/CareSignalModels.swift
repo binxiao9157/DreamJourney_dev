@@ -15,6 +15,10 @@ enum CareSignalRiskLevel: String, Codable, Equatable {
 
 struct CareSignalSnapshot: Codable, Equatable {
     let generatedAt: Date
+    let windowStart: Date?
+    let windowEnd: Date?
+    let windowDayCount: Int
+    let dataCoverageSummary: String
     let totalTurns: Int
     let userTurnCount: Int
     let characterCount: Int
@@ -27,6 +31,8 @@ struct CareSignalSnapshot: Codable, Equatable {
     let riskLevel: CareSignalRiskLevel
     let summary: String
     let suggestions: [String]
+    let weeklyHighlights: [String]
+    let riskSignalDescriptions: [String]
 }
 
 enum CareDashboardInputPolicy {
