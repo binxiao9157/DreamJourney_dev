@@ -71,6 +71,9 @@
 		A33CE000000000000000003 /* CareDashboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A33CE000000000000000006 /* CareDashboardViewController.swift */; };
 		A44CE000000000000000001 /* DialogEngineModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A44CE000000000000000003 /* DialogEngineModels.swift */; };
 		A44CE000000000000000002 /* MockDialogEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A44CE000000000000000004 /* MockDialogEngine.swift */; };
+		A55CE000000000000000001 /* SafetyGuardModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A55CE000000000000000003 /* SafetyGuardModels.swift */; };
+		A55CE000000000000000002 /* SafetyGuardClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A55CE000000000000000004 /* SafetyGuardClient.swift */; };
+		A56CE000000000000000001 /* MemoryPrivacyScope.swift in Sources */ = {isa = PBXBuildFile; fileRef = A56CE000000000000000003 /* MemoryPrivacyScope.swift */; };
 		A45E9D7E5541F7288DD4141D /* ConversationMemoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97D922D4C28AF76D7CB85DFF /* ConversationMemoryManager.swift */; };
 		A52FFB266D8D9FC320182A0A /* MemoryRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BCB52701683AE3FAFABA6F /* MemoryRepository.swift */; };
 		A88DF4F43BC833D9433CEE7B /* MemoirTTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00898E98E95E3808561BEB51 /* MemoirTTSService.swift */; };
@@ -169,6 +172,9 @@
 		A33CE000000000000000006 /* CareDashboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CareDashboardViewController.swift; sourceTree = "<group>"; };
 		A44CE000000000000000003 /* DialogEngineModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DialogEngineModels.swift; sourceTree = "<group>"; };
 		A44CE000000000000000004 /* MockDialogEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDialogEngine.swift; sourceTree = "<group>"; };
+		A55CE000000000000000003 /* SafetyGuardModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafetyGuardModels.swift; sourceTree = "<group>"; };
+		A55CE000000000000000004 /* SafetyGuardClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafetyGuardClient.swift; sourceTree = "<group>"; };
+		A56CE000000000000000003 /* MemoryPrivacyScope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryPrivacyScope.swift; sourceTree = "<group>"; };
 		A99960BA8CC38BCA98CB98F8 /* KnowledgeBaseViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeBaseViewController.swift; sourceTree = "<group>"; };
 		AA3777B38C40C14928088B38 /* MiniMateLoader.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = MiniMateLoader.js; sourceTree = "<group>"; };
 		AB6F020939B8B3A55A3A9013 /* LoginViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginViewController.swift; sourceTree = "<group>"; };
@@ -285,6 +291,7 @@
 				B2BCB52701683AE3FAFABA6F /* MemoryRepository.swift */,
 				3CCF5FAEB2B1690C0FB7E56E /* MicrophonePermissionManager.swift */,
 				DF3727699437781613AA5CB5 /* OpenAvatarChatService.swift */,
+				A56CE000000000000000007 /* Privacy */,
 				D02862A4C9294AFE8E6FD396 /* Safety */,
 				26F1251EE7B24A20A8058F38 /* Stage1MemoryFacade.swift */,
 				A11CE000000000000000007 /* TimeMailbox */,
@@ -563,8 +570,18 @@
 			children = (
 				0C67D21A8CDD412CB4A85883 /* SafetyModels.swift */,
 				4ADA8AA6438842A1899F726B /* SafetyMonitor.swift */,
+				A55CE000000000000000003 /* SafetyGuardModels.swift */,
+				A55CE000000000000000004 /* SafetyGuardClient.swift */,
 			);
 			path = Safety;
+			sourceTree = "<group>";
+		};
+		A56CE000000000000000007 /* Privacy */ = {
+			isa = PBXGroup;
+			children = (
+				A56CE000000000000000003 /* MemoryPrivacyScope.swift */,
+			);
+			path = Privacy;
 			sourceTree = "<group>";
 		};
 		F9A16ACB58DF276F2BF39DE4 /* DreamJourney */ = {
@@ -819,7 +836,10 @@
 				1D6C68E038F68B262E1C025D /* MicrophonePermissionManager.swift in Sources */,
 				A44CE000000000000000002 /* MockDialogEngine.swift in Sources */,
 				397C1F6023E56C8E016A0D71 /* OpenAvatarChatService.swift in Sources */,
+				A56CE000000000000000001 /* MemoryPrivacyScope.swift in Sources */,
 				0FD1CC7F9A6E47179833E092 /* SafetyModels.swift in Sources */,
+				A55CE000000000000000002 /* SafetyGuardClient.swift in Sources */,
+				A55CE000000000000000001 /* SafetyGuardModels.swift in Sources */,
 				357355C9F74F4A08A3334B01 /* SafetyMonitor.swift in Sources */,
 				7BD7AD6BC3423E10E98379EF /* SceneDelegate.swift in Sources */,
 				23BDFD1F211846E9B5241243 /* Stage1MemoryFacade.swift in Sources */,
