@@ -147,7 +147,7 @@ final class MemoirService {
         }
 
         // 【KBLite】注入知识库上下文
-        let kbCtx = KBLiteManager.shared.buildContextString(query: nil)
+        let kbCtx = Stage1MemoryFacade.shared.promptContext(query: nil, includeGaps: false)
         if !kbCtx.isEmpty {
             messages.append(DeepSeekService.ChatMessage(
                 role: "system",

@@ -133,7 +133,7 @@ final class KnowledgeBaseViewController: UIViewController {
     }
 
     private func exportKnowledgeBase() {
-        guard let json = KBLiteManager.shared.exportJSON() else {
+        guard let json = Stage1MemoryFacade.shared.exportKnowledgeJSON() else {
             showToast("导出失败", type: .error)
             return
         }

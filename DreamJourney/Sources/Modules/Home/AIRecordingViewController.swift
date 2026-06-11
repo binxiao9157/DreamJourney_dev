@@ -124,6 +124,10 @@ final class AIRecordingViewController: UIViewController {
     private var pendingUserText: String?
     /// AI 流式拼接缓存（不直接显示，等 TTS 句子完整时再展示）
     private var pendingAIText: String?
+    /// 当前是否处于危机干预流程，用于阻止已排队的普通收尾 UI。
+    private var isCrisisInterventionActive = false
+    private var currentDialogStartMessageIndex = 0
+    private var currentDialogAllowsMemoir = true
 
     // MARK: - 对话录音（用于声音复刻）
     /// 并行录音器：对话期间录制用户语音，供声音复刻训练使用
@@ -132,6 +136,7 @@ final class AIRecordingViewController: UIViewController {
     private(set) var lastSessionRecordingURL: URL?
     /// 与录音文件配对的 sessionId（用于详情页查找 recordings/{sessionId}.m4a）
     private(set) var lastSessionId: String?
+    private let dialogEngine: DialogEngineProtocol = DialogEngineFactory.make(type: .volcengine)
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -143,8 +148,8 @@ final class AIRecordingViewController: UIViewController {
         setupNotifications()
         updateVoiceBallState(.idle)
         // 预初始化 Dialog 引擎
-        DialogEngineManager.shared.delegate = self
-        DialogEngineManager.shared.setup()
+        dialogEngine.delegate = self
+        dialogEngine.setup()
     }
 
     override func viewDidLayoutSubviews() {
@@ -321,7 +326,7 @@ final class AIRecordingViewController: UIViewController {
             if granted {
                 // 先启动 DialogEngine（由 SDK 配置 AudioSession），再启动并行录音（共享同一 AudioSession）
                 // 顺序很重要：如果先启动 AVAudioRecorder，它会隐式修改 AudioSession 配置，可能影响 SDK 的 AEC
-                DialogEngineManager.shared.startDialog()
+                dialogEngine.startDialog()
                 self.startSessionRecording()
             } else {
                 MicrophonePermissionManager.shared.showPermissionDeniedAlert(on: self)
@@ -333,7 +338,7 @@ final class AIRecordingViewController: UIViewController {
     private func stopRecording() {
         // 先停止并行录音，再停止 DialogEngine
         stopSessionRecording()
-        DialogEngineManager.shared.stopDialog()
+        dialogEngine.stopDialog()
     }
 
     private func handleRecognizeAndReply() {
@@ -371,12 +376,12 @@ final class AIRecordingViewController: UIViewController {
         messages = []
         messageTableView.reloadData()
         updateVoiceBallState(.idle)
-        DialogEngineManager.shared.destroyEngine()
+        dialogEngine.destroyEngine()
     }
 
     @objc private func handleDidEnterBackground() {
-        if DialogEngineManager.shared.isDialogActive {
-            DialogEngineManager.shared.stopDialog()
+        if dialogEngine.isDialogActive {
+            dialogEngine.stopDialog()
             updateVoiceBallState(.idle)
         }
         // 安全防护：确保并行录音也被停止（正常流程由 onDialogEnded 触发，此处兜底）
@@ -384,8 +389,8 @@ final class AIRecordingViewController: UIViewController {
     }
 
     @objc private func handleWillEnterForeground() {
-        if !DialogEngineManager.shared.isEngineReady {
-            DialogEngineManager.shared.setup()
+        if !dialogEngine.isEngineReady {
+            dialogEngine.setup()
         }
         // 检查声音复刻训练是否在后台完成（Timer 会被挂起，需要手动检查）
         VoiceCloneService.shared.checkPendingTraining()
@@ -467,8 +472,8 @@ extension AIRecordingViewController: UIImagePickerControllerDelegate, UINavigati
         scrollToBottom()
 
         // 记录到对话记忆
-        ConversationMemoryManager.shared.recordUserTurn(text: "[发送了一张照片]")
-        ConversationMemoryManager.shared.recordAITurn(text: "照片收到了！能不能跟我说说这张照片背后的故事？")
+        Stage1MemoryFacade.shared.recordUserTurn("[发送了一张照片]")
+        Stage1MemoryFacade.shared.recordAssistantTurn("照片收到了！能不能跟我说说这张照片背后的故事？")
 
         // 【KBLite】异步分析图片
         analyzeUploadedPhoto(image, aiMessageIndex: aiMessageIndex, imagePath: imagePath)
@@ -508,7 +513,7 @@ extension AIRecordingViewController: UIImagePickerControllerDelegate, UINavigati
 
                     // 入库
                     let sessionId = ConversationMemoryManager.shared.currentMemory.sessionCount + 1
-                    KBLiteManager.shared.ingestImageAnalysis(analysis, sessionId: sessionId)
+                    Stage1MemoryFacade.shared.ingestImageAnalysis(analysis, sessionId: sessionId)
 
                     // 关联照片到足迹地图
                     if !analysis.scene.isEmpty || analysis.estimatedDecade != nil {
@@ -520,7 +525,7 @@ extension AIRecordingViewController: UIImagePickerControllerDelegate, UINavigati
                     if aiMessageIndex < self.messages.count {
                         self.messages[aiMessageIndex] = .ai(text: enrichedReply, timestamp: Date())
                         // 更新记忆记录
-                        ConversationMemoryManager.shared.recordAITurn(text: enrichedReply)
+                        Stage1MemoryFacade.shared.recordAssistantTurn(enrichedReply)
                         self.messageTableView.reloadRows(at: [IndexPath(row: aiMessageIndex, section: 0)], with: .automatic)
                     }
 
@@ -632,6 +637,9 @@ extension AIRecordingViewController: DialogEngineDelegate {
 
     func onDialogStarted() {
         // 保留历史消息，不清空（新会话消息追加在旧消息下方）
+        isCrisisInterventionActive = false
+        currentDialogStartMessageIndex = messages.count
+        currentDialogAllowsMemoir = true
         pendingUserText = nil
         pendingAIText = nil
         updateVoiceBallState(.active)
@@ -645,7 +653,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
             messageTableView.reloadData()
             scrollToBottom()
             // 记录到对话记忆
-            ConversationMemoryManager.shared.recordUserTurn(text: text)
+            Stage1MemoryFacade.shared.recordUserTurn(text)
         } else {
             // 中间结果：只记录不显示，等待最终确认
             pendingUserText = text
@@ -662,7 +670,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
         messageTableView.reloadData()
         scrollToBottom()
         // 记录到对话记忆
-        ConversationMemoryManager.shared.recordAITurn(text: text)
+        Stage1MemoryFacade.shared.recordAssistantTurn(text)
     }
 
     func onChatStreaming(text: String) {
@@ -675,7 +683,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
         if let text = pendingUserText, !text.isEmpty {
             messages.append(.user(text: text, timestamp: Date()))
             // 记录到对话记忆
-            ConversationMemoryManager.shared.recordUserTurn(text: text)
+            Stage1MemoryFacade.shared.recordUserTurn(text)
             pendingUserText = nil
         }
     }
@@ -689,23 +697,49 @@ extension AIRecordingViewController: DialogEngineDelegate {
         showToast(error.localizedDescription, type: .error)
     }
 
+    func onSafetyTriggered(assessment: SafetyAssessment) {
+        isCrisisInterventionActive = true
+        currentDialogAllowsMemoir = false
+        pendingUserText = nil
+        pendingAIText = nil
+        Stage1MemoryFacade.shared.discardCurrentConversationSession()
+        stopSessionRecording()
+        updateVoiceBallState(.idle)
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, self.presentedViewController == nil else { return }
+            let viewController = CrisisInterventionViewController(assessment: assessment)
+            viewController.modalPresentationStyle = .fullScreen
+            self.present(viewController, animated: true)
+        }
+    }
+
     func onDialogEnded(reason: DialogEndReason) {
+        if case .crisis = reason {
+            pendingUserText = nil
+            pendingAIText = nil
+            currentDialogAllowsMemoir = false
+            Stage1MemoryFacade.shared.discardCurrentConversationSession()
+            updateVoiceBallState(.idle)
+            return
+        }
+
         // 对话结束时，刷新未展示的待确认文本
         flushPendingUserText()
         // 如果有未展示的 AI 流式文本（没有经过 TTS），兜底展示
         if let aiText = pendingAIText, !aiText.isEmpty {
             messages.append(.ai(text: aiText, timestamp: Date()))
-            ConversationMemoryManager.shared.recordAITurn(text: aiText)
+            Stage1MemoryFacade.shared.recordAssistantTurn(aiText)
             pendingAIText = nil
             messageTableView.reloadData()
             scrollToBottom()
         }
         // 结束会话：提取摘要并持久化
-        ConversationMemoryManager.shared.endSession()
+        Stage1MemoryFacade.shared.finishConversationSession()
         updateVoiceBallState(.idle)
 
         switch reason {
-        case .keyword(let kw):
+        case .keyword:
             showToast("寻梦环游已经记住您说的了，下次再聊～", type: .success)
         case .silenceTimeout:
             showToast("您好像有事忙，寻梦环游先告辞啦～", type: .info)
@@ -713,11 +747,17 @@ extension AIRecordingViewController: DialogEngineDelegate {
             break
         case .serverEnded:
             break
+        case .crisis:
+            break
         }
 
         // 延迟弹出回忆录生成卡片（等待 toast 消失后）
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-            self?.showMemoirGenerationCard()
+            guard let self = self,
+                  !self.isCrisisInterventionActive,
+                  self.currentDialogAllowsMemoir,
+                  self.presentedViewController == nil else { return }
+            self.showMemoirGenerationCard()
         }
     }
 
@@ -783,6 +823,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
 
     /// 显示回忆录生成弹窗
     private func showMemoirGenerationCard() {
+        guard currentDialogAllowsMemoir else { return }
         MemoirGenerationCard.show(in: view,
             onGenerate: { [weak self] in
                 self?.handleMemoirGeneration()
@@ -793,8 +834,17 @@ extension AIRecordingViewController: DialogEngineDelegate {
 
     /// 处理回忆录生成请求
     private func handleMemoirGeneration() {
+        guard currentDialogAllowsMemoir else {
+            showToast("安全事件后的对话不会生成回忆录", type: .info)
+            return
+        }
+        let sessionMessages = Array(messages.dropFirst(currentDialogStartMessageIndex))
+        guard !sessionMessages.isEmpty else {
+            showToast("本次对话内容不足，暂不能生成回忆录", type: .info)
+            return
+        }
         // 将 TGMessage 转换为 Memoir 模块的 DialogMessage 格式
-        let dialogMessages = MemoirFlowManager.convertToDialogMessages(messages)
+        let dialogMessages = MemoirFlowManager.convertToDialogMessages(sessionMessages)
 
         // 本地内容质量检测（即时反馈，无需等 API 调用）
         if let reason = MemoirFlowManager.checkDialogContent(dialogMessages) {

@@ -1,0 +1,139 @@
+import Foundation
+
+enum TimeMailboxRepositoryError: Error, Equatable {
+    case invalidRecipient
+    case invalidBody
+    case boundaryNotAcknowledged
+    case letterNotFound
+}
+
+final class TimeMailboxRepository {
+    static let shared = TimeMailboxRepository()
+
+    private let defaults: UserDefaults
+    private let storageKey: String
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+
+    init(
+        defaults: UserDefaults = .standard,
+        storageKey: String = "dreamjourney.timeMailbox.letters"
+    ) {
+        self.defaults = defaults
+        self.storageKey = storageKey
+        encoder.dateEncodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = .iso8601
+    }
+
+    func letters() -> [TimeMailboxLetter] {
+        load().sorted { lhs, rhs in
+            if lhs.deliverAt == rhs.deliverAt {
+                return lhs.createdAt > rhs.createdAt
+            }
+            return lhs.deliverAt > rhs.deliverAt
+        }
+    }
+
+    @discardableResult
+    func createLetter(
+        recipientName: String,
+        title: String,
+        body: String,
+        deliverAt: Date,
+        now: Date = Date(),
+        boundaryAcknowledged: Bool
+    ) throws -> TimeMailboxLetter {
+        let cleanRecipient = recipientName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !cleanRecipient.isEmpty else { throw TimeMailboxRepositoryError.invalidRecipient }
+        guard !cleanBody.isEmpty else { throw TimeMailboxRepositoryError.invalidBody }
+        guard boundaryAcknowledged else { throw TimeMailboxRepositoryError.boundaryNotAcknowledged }
+
+        let letter = TimeMailboxLetter(
+            id: UUID().uuidString,
+            recipientName: cleanRecipient,
+            title: cleanTitle.isEmpty ? "给\(cleanRecipient)的一封信" : cleanTitle,
+            body: cleanBody,
+            createdAt: now,
+            deliverAt: max(deliverAt, now),
+            deliveredAt: nil,
+            status: .sealed,
+            replyText: nil,
+            boundaryAcknowledged: true
+        )
+
+        var all = load()
+        all.insert(letter, at: 0)
+        save(all)
+        return letter
+    }
+
+    @discardableResult
+    func refreshDelivery(now: Date = Date()) -> [TimeMailboxLetter] {
+        var all = load()
+        var delivered: [TimeMailboxLetter] = []
+
+        for index in all.indices {
+            guard all[index].status == .sealed, all[index].deliverAt <= now else { continue }
+            all[index].status = .delivered
+            all[index].deliveredAt = now
+            all[index].replyText = Self.makeReply(for: all[index])
+            delivered.append(all[index])
+        }
+
+        if !delivered.isEmpty {
+            save(all)
+        }
+        return delivered.sorted { $0.deliverAt > $1.deliverAt }
+    }
+
+    func markRead(id: String) throws {
+        var all = load()
+        guard let index = all.firstIndex(where: { $0.id == id }) else {
+            throw TimeMailboxRepositoryError.letterNotFound
+        }
+        if all[index].status == .delivered {
+            all[index].status = .read
+        }
+        save(all)
+    }
+
+    func delete(id: String) throws {
+        var all = load()
+        guard let index = all.firstIndex(where: { $0.id == id }) else {
+            throw TimeMailboxRepositoryError.letterNotFound
+        }
+        all.remove(at: index)
+        save(all)
+    }
+
+    private func load() -> [TimeMailboxLetter] {
+        guard let data = defaults.data(forKey: storageKey) else { return [] }
+        return (try? decoder.decode([TimeMailboxLetter].self, from: data)) ?? []
+    }
+
+    private func save(_ letters: [TimeMailboxLetter]) {
+        guard let data = try? encoder.encode(letters) else { return }
+        defaults.set(data, forKey: storageKey)
+    }
+
+    private static func makeReply(for letter: TimeMailboxLetter) -> String {
+        let firstLine = letter.body
+            .split(whereSeparator: \.isNewline)
+            .map(String.init)
+            .first?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let memoryLine = firstLine.map { "你写下了：“\($0)”" } ?? "你把这份想念认真保存了下来。"
+
+        return """
+        这段回应基于你留下的记忆整理而来，不是逝者真实回复。
+
+        \(memoryLine)
+
+        愿这封信先替你收好今天的思念。你可以慢慢地把想说的话写下来，也可以在准备好的时候，把这份记忆带回现实生活里，交给还在身边的人一起珍藏。
+        """
+    }
+}

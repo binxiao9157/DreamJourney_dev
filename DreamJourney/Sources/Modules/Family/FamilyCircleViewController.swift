@@ -100,6 +100,58 @@ final class FamilyCircleViewController: UIViewController {
         return b
     }()
 
+    /// 长辈关怀看板入口
+    private lazy var careDashboardButton: UIButton = {
+        let b = UIButton(type: .system)
+        b.backgroundColor = .white
+        b.layer.cornerRadius = 12
+        b.layer.borderWidth = 0.5
+        b.layer.borderColor = UIColor.warmDivider.cgColor
+
+        let iconConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
+        let icon = UIImageView(image: UIImage(systemName: "heart.text.square", withConfiguration: iconConfig))
+        icon.tintColor = .warmAccent
+        icon.contentMode = .scaleAspectFit
+
+        let title = UILabel()
+        title.text = "长辈关怀看板"
+        title.font = .systemFont(ofSize: 16, weight: .semibold)
+        title.textColor = .warmPrimary
+
+        let subtitle = UILabel()
+        subtitle.text = "查看脱敏信号与问候建议"
+        subtitle.font = .systemFont(ofSize: 12)
+        subtitle.textColor = .warmSubtitle
+
+        let textStack = UIStackView(arrangedSubviews: [title, subtitle])
+        textStack.axis = .vertical
+        textStack.spacing = 2
+
+        let arrow = UIImageView(image: UIImage(systemName: "chevron.right", withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)))
+        arrow.tintColor = .warmSubtitle
+        arrow.contentMode = .scaleAspectFit
+
+        let row = UIStackView(arrangedSubviews: [icon, textStack, UIView(), arrow])
+        row.axis = .horizontal
+        row.alignment = .center
+        row.spacing = 12
+        row.isUserInteractionEnabled = false
+
+        b.addSubview(row)
+        row.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            icon.widthAnchor.constraint(equalToConstant: 28),
+            icon.heightAnchor.constraint(equalToConstant: 28),
+            arrow.widthAnchor.constraint(equalToConstant: 14),
+            row.topAnchor.constraint(equalTo: b.topAnchor, constant: 10),
+            row.leadingAnchor.constraint(equalTo: b.leadingAnchor, constant: 14),
+            row.trailingAnchor.constraint(equalTo: b.trailingAnchor, constant: -14),
+            row.bottomAnchor.constraint(equalTo: b.bottomAnchor, constant: -10),
+        ])
+        b.addTarget(self, action: #selector(careDashboardTapped), for: .touchUpInside)
+        return b
+    }()
+
     // MARK: - UI：亲友圈列表
     private let circleHeaderLabel: UILabel = {
         let l = UILabel()
@@ -155,6 +207,7 @@ final class FamilyCircleViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        navigationController?.navigationBar.isHidden = true
         memberCountLabel.text = "\(members.count) 位成员"
         membersTableView.reloadData()
     }
@@ -203,7 +256,7 @@ final class FamilyCircleViewController: UIViewController {
         ])
 
         [titleLabel, addButton, inviteSectionLabel, searchContainer, inviteButton,
-         circleHeaderLabel, memberCountLabel, membersTableView, sloganLabel].forEach {
+         careDashboardButton, circleHeaderLabel, memberCountLabel, membersTableView, sloganLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview($0)
         }
@@ -235,8 +288,13 @@ final class FamilyCircleViewController: UIViewController {
             inviteButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
             inviteButton.heightAnchor.constraint(equalToConstant: 56),
 
+            careDashboardButton.topAnchor.constraint(equalTo: inviteButton.bottomAnchor, constant: 12),
+            careDashboardButton.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
+            careDashboardButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
+            careDashboardButton.heightAnchor.constraint(equalToConstant: 64),
+
             // 亲友圈列表
-            circleHeaderLabel.topAnchor.constraint(equalTo: inviteButton.bottomAnchor, constant: 28),
+            circleHeaderLabel.topAnchor.constraint(equalTo: careDashboardButton.bottomAnchor, constant: 28),
             circleHeaderLabel.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
 
             memberCountLabel.centerYAnchor.constraint(equalTo: circleHeaderLabel.centerYAnchor),
@@ -264,6 +322,11 @@ final class FamilyCircleViewController: UIViewController {
     @objc private func copyInviteTapped() {
         UIPasteboard.general.string = "邀请你加入寻梦环游家族圈，下载寻梦环游App后使用此邀请码：DJ-2025"
         showToast("邀请邮票已复制到剪贴板", type: .success)
+    }
+
+    @objc private func careDashboardTapped() {
+        navigationController?.navigationBar.isHidden = false
+        navigationController?.pushViewController(CareDashboardViewController(), animated: true)
     }
 }
 

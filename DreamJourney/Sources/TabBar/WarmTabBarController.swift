@@ -64,7 +64,7 @@ final class WarmTabBarController: UITabBarController {
 }
 
 // MARK: - WarmTabBarView
-// 自定义 TabBar 视图：三个 Tab 按钮 + 深棕/米白配色
+// 自定义 TabBar 视图：深棕/米白配色
 final class WarmTabBarView: UIView {
 
     /// WarmTabBar 内容区域固定高度（不含 home indicator）
@@ -80,7 +80,8 @@ final class WarmTabBarView: UIView {
         TabItem(iconName: "mic", iconNameFill: "mic.fill", title: "回忆"),
         TabItem(iconName: "book", iconNameFill: "book.fill", title: "足迹"),
         TabItem(iconName: "person.2", iconNameFill: "person.2.fill", title: "亲友"),
-        TabItem(iconName: "brain", iconNameFill: "brain.head.profile.fill", title: "知识"),
+        TabItem(iconName: "envelope", iconNameFill: "envelope.fill", title: "信箱"),
+        TabItem(iconName: "archivebox", iconNameFill: "archivebox.fill", title: "档案"),
     ]
 
     private var buttons: [UIButton] = []
@@ -116,7 +117,7 @@ final class WarmTabBarView: UIView {
             divider.heightAnchor.constraint(equalToConstant: 0.5),
         ])
 
-        // 创建三个 Tab 按钮
+        // 创建 Tab 按钮
         for (index, item) in items.enumerated() {
             let circle = makeCircleView()
             selectedCircles.append(circle)

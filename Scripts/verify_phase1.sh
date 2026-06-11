@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
+
+echo "== SafetyMonitor =="
+xcrun swiftc \
+  DreamJourney/Sources/Services/Safety/SafetyModels.swift \
+  DreamJourney/Sources/Services/Safety/SafetyMonitor.swift \
+  Scripts/SafetyVerify/main.swift \
+  -o /tmp/dreamjourney_safety_verify
+/tmp/dreamjourney_safety_verify
+
+echo "== TimeMailbox =="
+xcrun swiftc \
+  DreamJourney/Sources/Services/Safety/SafetyModels.swift \
+  DreamJourney/Sources/Services/Safety/SafetyMonitor.swift \
+  DreamJourney/Sources/Services/TimeMailbox/TimeMailboxModels.swift \
+  DreamJourney/Sources/Services/TimeMailbox/TimeMailboxRepository.swift \
+  Scripts/TimeMailboxVerify/main.swift \
+  -o /tmp/dreamjourney_time_mailbox_verify
+/tmp/dreamjourney_time_mailbox_verify
+
+echo "== MemoryArchive =="
+xcrun swiftc \
+  DreamJourney/Sources/Services/MemoryArchive/MemoryArchiveModels.swift \
+  DreamJourney/Sources/Services/MemoryArchive/MemoryArchiveRepository.swift \
+  Scripts/MemoryArchiveVerify/main.swift \
+  -o /tmp/dreamjourney_memory_archive_verify
+/tmp/dreamjourney_memory_archive_verify
+
+echo "== CareDashboard =="
+xcrun swiftc \
+  DreamJourney/Sources/Services/CareDashboard/CareSignalModels.swift \
+  DreamJourney/Sources/Services/CareDashboard/CareSignalAnalyzer.swift \
+  Scripts/CareDashboardVerify/main.swift \
+  -o /tmp/dreamjourney_care_dashboard_verify
+/tmp/dreamjourney_care_dashboard_verify
+
+echo "== KBLite =="
+swift kblite_verify.swift
+
+echo "== diff --check =="
+git diff --check
+git diff --cached --check
+
+echo "== pbxproj plist =="
+plutil -lint DreamJourney.xcodeproj/project.pbxproj
+
+echo "== iPhoneOS Debug build =="
+xcodebuild \
+  -workspace DreamJourney.xcworkspace \
+  -scheme DreamJourney \
+  -sdk iphoneos \
+  -configuration Debug \
+  CODE_SIGNING_ALLOWED=NO \
+  build

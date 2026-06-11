@@ -10,6 +10,7 @@ enum DialogEndReason {
     case keyword(String)   // 识别到结束关键词
     case silenceTimeout    // 静音超时
     case serverEnded       // 服务端结束
+    case crisis(SafetyAssessment) // 触发安全危机干预
 }
 
 // MARK: - DialogEngineDelegate 协议
@@ -22,14 +23,19 @@ protocol DialogEngineDelegate: AnyObject {
     func onTTSFinished()
     func onChatStreaming(text: String)
     func onError(error: Error)
+    func onSafetyTriggered(assessment: SafetyAssessment)
     func onDialogEnded(reason: DialogEndReason)
+}
+
+extension DialogEngineDelegate {
+    func onSafetyTriggered(assessment: SafetyAssessment) {}
 }
 
 // MARK: - DialogEngineManager
 
 /// Dialog 语音对话引擎管理器 - 直接封装火山引擎 SpeechEngineToB SDK
 /// 提供语音对话的启动、停止、生命周期管理
-final class DialogEngineManager: NSObject {
+final class DialogEngineManager: NSObject, DialogEngineProtocol {
 
     // MARK: - Singleton
 
@@ -183,6 +189,12 @@ final class DialogEngineManager: NSObject {
     /// AI 回复流式拼接缓冲区
     private var chatBuffer: String = ""
 
+    /// 当前会话已触发的安全风险，用于阻断后续 LLM/TTS 回调
+    private var activeSafetyAssessment: SafetyAssessment?
+
+    /// 危机结束回调去重，避免 stopDialog 和 SDK session finished/canceled 双重通知。
+    private var hasNotifiedCrisisEnd = false
+
     private override init() {
         super.init()
         // 从 Info.plist 读取火山引擎配置
@@ -270,6 +282,9 @@ final class DialogEngineManager: NSObject {
 
     /// 开始语音对话
     func startDialog() {
+        activeSafetyAssessment = nil
+        hasNotifiedCrisisEnd = false
+
         // 引擎未就绪时先初始化
         guard isEngineReady, let engine = engine else {
             DDLogInfo("[DialogEngine] 引擎未就绪，先初始化")
@@ -321,13 +336,14 @@ final class DialogEngineManager: NSObject {
         case .silenceTimeout:
             print("[DialogEngine] ⏰ 静音超时触发结束")
             DDLogInfo("[DialogEngine] 静音超时触发结束")
+        case .crisis(let assessment):
+            print("[DialogEngine] 🚨 安全危机触发结束: \(assessment.reason)")
+            DDLogWarn("[DialogEngine] 安全危机触发结束: \(assessment.reason)")
         default:
             DDLogInfo("[DialogEngine] 对话已停止")
         }
 
-        DispatchQueue.main.async { [weak self] in
-            self?.delegate?.onDialogEnded(reason: reason)
-        }
+        notifyDialogEnded(reason)
     }
 
     /// 播报开场白（对应豆包SDK的 SayHello 事件 3006）
@@ -640,6 +656,50 @@ final class DialogEngineManager: NSObject {
         return config.endKeywords.first { lowered.contains($0) }
     }
 
+    /// 检测危机表达并中断角色扮演链路，避免继续进入 LLM/TTS。
+    private func handleSafetyIfNeeded(text: String) -> Bool {
+        let assessment = SafetyMonitor.shared.evaluate(text)
+        guard assessment.shouldBlockRoleplay else { return false }
+
+        activeSafetyAssessment = assessment
+        chatBuffer = ""
+        isEnding = true
+
+        DispatchQueue.main.async { [weak self] in
+            self?.delegate?.onSafetyTriggered(assessment: assessment)
+            self?.stopDialog(reason: .crisis(assessment))
+        }
+        return true
+    }
+
+    /// 检测 AI 输出，避免 unsafe Chat/TTS 文本继续进入 UI 或播放器状态。
+    private func handleAssistantSafetyIfNeeded(text: String) -> Bool {
+        let assessment = SafetyMonitor.shared.evaluateAssistantOutput(text)
+        guard assessment.shouldBlockRoleplay else { return false }
+
+        activeSafetyAssessment = assessment
+        chatBuffer = ""
+        isAISpeaking = false
+        isEnding = true
+
+        DispatchQueue.main.async { [weak self] in
+            self?.delegate?.onSafetyTriggered(assessment: assessment)
+            self?.stopDialog(reason: .crisis(assessment))
+        }
+        return true
+    }
+
+    private func notifyDialogEnded(_ reason: DialogEndReason) {
+        if case .crisis = reason {
+            guard !hasNotifiedCrisisEnd else { return }
+            hasNotifiedCrisisEnd = true
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            self?.delegate?.onDialogEnded(reason: reason)
+        }
+    }
+
     // MARK: - 静音超时计时器
 
     /// 启动/重置静音超时计时器
@@ -719,9 +779,13 @@ extension DialogEngineManager: SpeechEngineDelegate {
             DDLogInfo("[DialogEngine] 对话会话已结束")
             invalidateSilenceTimer()
             isDialogActive = false
-            DispatchQueue.main.async { [weak self] in
-                self?.delegate?.onDialogEnded(reason: .serverEnded)
+            let reason: DialogEndReason
+            if let assessment = activeSafetyAssessment {
+                reason = .crisis(assessment)
+            } else {
+                reason = .serverEnded
             }
+            notifyDialogEnded(reason)
 
         case SEEventSessionFailed:
             let msg = parseErrorMessage(from: data)
@@ -736,9 +800,13 @@ extension DialogEngineManager: SpeechEngineDelegate {
             DDLogInfo("[DialogEngine] 会话已取消")
             invalidateSilenceTimer()
             isDialogActive = false
-            DispatchQueue.main.async { [weak self] in
-                self?.delegate?.onDialogEnded(reason: .serverEnded)
+            let reason: DialogEndReason
+            if let assessment = activeSafetyAssessment {
+                reason = .crisis(assessment)
+            } else {
+                reason = .serverEnded
             }
+            notifyDialogEnded(reason)
 
         // MARK: ASR Events
         case SEEventASRInfo:
@@ -760,6 +828,9 @@ extension DialogEngineManager: SpeechEngineDelegate {
             if let result = parseASRResult(from: data) {
                 print("[DialogEngine] 🎤 ASRInfo parsed: text=\(result.text), isFinal=\(result.isFinal)")
                 if result.isFinal {
+                    if handleSafetyIfNeeded(text: result.text) {
+                        return
+                    }
                     if let keyword = checkEndKeyword(in: result.text) {
                         print("[DialogEngine] 🛑 检测到结束关键词: \(keyword)")
                         isEnding = true
@@ -777,6 +848,9 @@ extension DialogEngineManager: SpeechEngineDelegate {
                 // 解析失败，尝试从 raw JSON 中提取任何文本
                 print("[DialogEngine] ⚠️ ASRInfo parseASRResult 返回 nil，尝试 raw 提取")
                 if let extractedText = extractAnyText(from: data) {
+                    if handleSafetyIfNeeded(text: extractedText) {
+                        return
+                    }
                     // 检测关键词
                     if let keyword = checkEndKeyword(in: extractedText) {
                         print("[DialogEngine] 🛑 raw 匹配到结束关键词: \(keyword)")
@@ -793,6 +867,9 @@ extension DialogEngineManager: SpeechEngineDelegate {
                     }
                 } else {
                     // 最终兜底：raw string 中匹配关键词或提取中文文本
+                    if handleSafetyIfNeeded(text: asrRawStr) {
+                        return
+                    }
                     if let keyword = checkEndKeyword(in: asrRawStr) {
                         print("[DialogEngine] 🛑 raw string 匹配到结束关键词: \(keyword)")
                         isEnding = true
@@ -805,6 +882,9 @@ extension DialogEngineManager: SpeechEngineDelegate {
                     // 尝试从 raw string 中提取引号内文本或中文字符
                     let chineseText = extractChineseText(from: asrRawStr)
                     if !chineseText.isEmpty {
+                        if handleSafetyIfNeeded(text: chineseText) {
+                            return
+                        }
                         DispatchQueue.main.async { [weak self] in
                             self?.delegate?.onASRResult(text: chineseText, isFinal: false)
                         }
@@ -825,6 +905,9 @@ extension DialogEngineManager: SpeechEngineDelegate {
             if let result = parseASRResult(from: data) {
                 print("[DialogEngine] 🎤 ASRResponse: text=\(result.text), isFinal=\(result.isFinal)")
                 if result.isFinal {
+                    if handleSafetyIfNeeded(text: result.text) {
+                        return
+                    }
                     if let keyword = checkEndKeyword(in: result.text) {
                         print("[DialogEngine] 🛑 ASRResponse 检测到结束关键词: \(keyword)")
                         isEnding = true
@@ -856,6 +939,9 @@ extension DialogEngineManager: SpeechEngineDelegate {
             }
             // 解析用户查询文本
             if let queryText = parseQueryConfirmedText(from: data), !queryText.isEmpty {
+                if handleSafetyIfNeeded(text: queryText) {
+                    return
+                }
                 // 检测结束关键词
                 if let keyword = checkEndKeyword(in: queryText) {
                     print("[DialogEngine] 🛑 用户确认文本中检测到结束关键词: \(keyword)")
@@ -873,6 +959,11 @@ extension DialogEngineManager: SpeechEngineDelegate {
 
         // MARK: TTS Events
         case SEEventTTSSentenceStart:
+            if activeSafetyAssessment != nil {
+                chatBuffer = ""
+                isAISpeaking = false
+                return
+            }
             // TTS 句子开始 - 标记 AI 正在播报
             isAISpeaking = true
             // AI 说话时也重置静音计时器（AI 播报期间不应触发超时）
@@ -880,6 +971,9 @@ extension DialogEngineManager: SpeechEngineDelegate {
                 self?.resetSilenceTimer()
             }
             if let text = parseTTSText(from: data), !text.isEmpty {
+                if handleAssistantSafetyIfNeeded(text: text) {
+                    return
+                }
                 if !chatBuffer.isEmpty {
                     // streaming 已经展示了内容，不重复调用 onTTSStarted
                     chatBuffer = ""
@@ -895,6 +989,10 @@ extension DialogEngineManager: SpeechEngineDelegate {
             }
 
         case SEEventTTSEnded:
+            if activeSafetyAssessment != nil {
+                isAISpeaking = false
+                return
+            }
             isAISpeaking = false
             DDLogInfo("[DialogEngine] TTS 播放结束")
             DispatchQueue.main.async { [weak self] in
@@ -902,6 +1000,10 @@ extension DialogEngineManager: SpeechEngineDelegate {
             }
 
         case SEPlayerFinishPlayAudio:
+            if activeSafetyAssessment != nil {
+                isAISpeaking = false
+                return
+            }
             isAISpeaking = false
             DDLogInfo("[DialogEngine] 播放器播放完毕")
             DispatchQueue.main.async { [weak self] in
@@ -910,9 +1012,16 @@ extension DialogEngineManager: SpeechEngineDelegate {
 
         // MARK: Chat Events
         case SEEventChatResponse:
+            if activeSafetyAssessment != nil {
+                chatBuffer = ""
+                return
+            }
             // AI 对话流式 chunk —— 拼接到 buffer，不直接展示
             if let text = parseChatText(from: data) {
                 chatBuffer += text
+                if handleAssistantSafetyIfNeeded(text: chatBuffer) {
+                    return
+                }
                 // 实时更新 UI（流式效果）
                 let currentText = chatBuffer
                 DispatchQueue.main.async { [weak self] in
@@ -921,10 +1030,17 @@ extension DialogEngineManager: SpeechEngineDelegate {
             }
 
         case SEEventChatEnded:
+            if activeSafetyAssessment != nil {
+                chatBuffer = ""
+                return
+            }
             DDLogInfo("[DialogEngine] Chat 结束")
             // 如果 chatBuffer 有内容但未通过 TTS 展示，展示它
             if !chatBuffer.isEmpty {
                 let finalText = chatBuffer
+                if handleAssistantSafetyIfNeeded(text: finalText) {
+                    return
+                }
                 chatBuffer = ""
                 DispatchQueue.main.async { [weak self] in
                     self?.delegate?.onTTSStarted(text: finalText)
@@ -1146,7 +1262,7 @@ extension DialogEngineManager: SpeechEngineDelegate {
         let sentence = summary.toNaturalSentence()
 
         // 【KBLite】尝试用知识库丰富开场白
-        let kbHint = KBLiteManager.shared.buildGreetingHint()
+        let kbHint = Stage1MemoryFacade.shared.greetingHint()
 
         // 有自然摘要时，围绕摘要构造开场白
         if !sentence.isEmpty {
@@ -1237,7 +1353,7 @@ extension DialogEngineManager: SpeechEngineDelegate {
         }
 
         // 【KBLite】附加知识库上下文（累计的人物、地点、事件、事实）
-        let kbContext = KBLiteManager.shared.buildContextString(query: nil)
+        let kbContext = Stage1MemoryFacade.shared.promptContext(query: nil, includeGaps: false)
         if !kbContext.isEmpty {
             context += kbContext
         }

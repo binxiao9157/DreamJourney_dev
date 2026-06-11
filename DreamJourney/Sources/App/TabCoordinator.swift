@@ -1,6 +1,6 @@
 import UIKit
 
-// MARK: - TabCoordinator：3-Tab 主界面
+// MARK: - TabCoordinator：主界面
 final class TabCoordinator: Coordinator {
 
     var navigationController: UINavigationController
@@ -46,14 +46,21 @@ final class TabCoordinator: Coordinator {
             self?.didRequestLogout?()
         }
 
-        // Tab4: 知识库（KBLite）
-        let kbNav = UINavigationController()
-        let kbVC = KnowledgeBaseViewController()
-        kbVC.title = "知识库"
-        kbNav.viewControllers = [kbVC]
-        kbNav.navigationBar.tintColor = .warmPrimary
+        // Tab4: 时空信箱
+        let mailboxNav = UINavigationController()
+        let mailboxVC = TimeMailboxViewController()
+        mailboxVC.title = "时空信箱"
+        mailboxNav.viewControllers = [mailboxVC]
+        mailboxNav.navigationBar.tintColor = .warmPrimary
 
-        tabBarController.viewControllers = [homeNav, mapNav, familyNav, kbNav]
+        // Tab5: 记忆档案馆
+        let archiveNav = UINavigationController()
+        let archiveVC = MemoryArchiveViewController()
+        archiveVC.title = "记忆档案馆"
+        archiveNav.viewControllers = [archiveVC]
+        archiveNav.navigationBar.tintColor = .warmPrimary
+
+        tabBarController.viewControllers = [homeNav, mapNav, familyNav, mailboxNav, archiveNav]
     }
 
     private func configureAppearance() {

@@ -220,7 +220,7 @@ extension KBSyncViewController: UITableViewDataSource {
         case 0:
             let cell = tableView.dequeueReusableCell(withIdentifier: "UserInfoCell", for: indexPath) as! KBSyncUserInfoCell
             let user = UserManager.shared.currentUser
-            let stats = KBLiteManager.shared.stats
+            let stats = Stage1MemoryFacade.shared.dashboardSnapshot().stats
             cell.configure(nickname: user?.nickname ?? "未登录", avatarName: user?.avatarName, stats: stats)
             return cell
 

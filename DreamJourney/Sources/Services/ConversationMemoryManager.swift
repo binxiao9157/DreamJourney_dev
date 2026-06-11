@@ -123,6 +123,12 @@ final class ConversationMemoryManager {
         return currentMemory.recentTranscript
     }
 
+    func discardCurrentSession() {
+        guard !currentTranscript.isEmpty else { return }
+        print("[Memory] ⚠️ 当前临时会话已因安全事件丢弃: \(currentTranscript.count) 轮")
+        currentTranscript = []
+    }
+
     // MARK: - 记录对话
 
     func recordUserTurn(text: String) {
