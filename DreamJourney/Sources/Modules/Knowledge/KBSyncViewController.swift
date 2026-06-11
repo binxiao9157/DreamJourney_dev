@@ -58,7 +58,33 @@ final class KBSyncViewController: UIViewController {
     // MARK: - Actions
 
     private func exportKnowledgeBase() {
-        guard let package = KBLiteMultiUser.shared.generateSharePackage() else {
+        let alert = UIAlertController(
+            title: "选择导出对象",
+            message: "只导出对所选对象可见的家族知识",
+            preferredStyle: .actionSheet
+        )
+
+        alert.addAction(UIAlertAction(title: "全体亲友", style: .default) { [weak self] _ in
+            self?.exportKnowledgeBase(forFamilyMemberID: nil)
+        })
+
+        FamilyRepository.shared.getAll().forEach { member in
+            alert.addAction(UIAlertAction(title: "\(member.name)（\(member.relation)）", style: .default) { [weak self] _ in
+                self?.exportKnowledgeBase(forFamilyMemberID: member.id)
+            })
+        }
+
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = view
+            popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 0, height: 0)
+        }
+        present(alert, animated: true)
+    }
+
+    private func exportKnowledgeBase(forFamilyMemberID familyMemberID: String?) {
+        guard let package = KBLiteMultiUser.shared.generateSharePackage(forFamilyMemberID: familyMemberID) else {
             showToast("导出失败，请稍后重试", type: .error)
             return
         }

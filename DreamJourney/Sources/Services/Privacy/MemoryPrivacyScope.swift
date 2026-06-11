@@ -50,15 +50,17 @@ public struct MemorySourceRef: Codable, Equatable, Hashable {
 }
 
 public struct FamilyMemberVisibility: Codable, Equatable, Hashable {
+    public let includesAllMembers: Bool
     public let allowedMemberIDs: [String]
 
-    public static let allMembers = FamilyMemberVisibility(allowedMemberIDs: [])
+    public static let allMembers = FamilyMemberVisibility(includesAllMembers: true, allowedMemberIDs: [])
 
     public static func selectedMembers(_ memberIDs: [String]) -> FamilyMemberVisibility {
-        FamilyMemberVisibility(allowedMemberIDs: memberIDs)
+        FamilyMemberVisibility(includesAllMembers: false, allowedMemberIDs: memberIDs)
     }
 
-    public init(allowedMemberIDs: [String] = []) {
+    public init(includesAllMembers: Bool = true, allowedMemberIDs: [String] = []) {
+        self.includesAllMembers = includesAllMembers
         var seen: Set<String> = []
         self.allowedMemberIDs = allowedMemberIDs.compactMap { rawID in
             let id = rawID.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -71,13 +73,27 @@ public struct FamilyMemberVisibility: Codable, Equatable, Hashable {
     }
 
     public func allows(memberID: String?) -> Bool {
-        guard !allowedMemberIDs.isEmpty else {
+        if includesAllMembers {
             return true
         }
         guard let memberID else {
             return false
         }
         return allowedMemberIDs.contains(memberID)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case includesAllMembers
+        case allowedMemberIDs
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let ids = try container.decodeIfPresent([String].self, forKey: .allowedMemberIDs) ?? []
+        let hasExplicitAllFlag = container.contains(.includesAllMembers)
+        let includesAllMembers = try container.decodeIfPresent(Bool.self, forKey: .includesAllMembers)
+            ?? !hasExplicitAllFlag && ids.isEmpty
+        self.init(includesAllMembers: includesAllMembers, allowedMemberIDs: ids)
     }
 }
 

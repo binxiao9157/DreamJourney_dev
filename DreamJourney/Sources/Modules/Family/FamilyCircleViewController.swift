@@ -350,7 +350,11 @@ extension FamilyCircleViewController: UITableViewDelegate {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         let member = members[indexPath.row]
-        showToast("查看 \(member.name) 的足迹", type: .info)
+        navigationController?.navigationBar.isHidden = false
+        navigationController?.pushViewController(
+            CareDashboardViewController(viewerFamilyMemberID: member.id),
+            animated: true
+        )
     }
 }
 
@@ -430,10 +434,10 @@ final class FriendMemberCell: UITableViewCell {
         return l
     }()
 
-    // MARK: 查看足迹按钮
+    // MARK: 关怀看板按钮
     private let footprintButton: UIButton = {
         let b = UIButton(type: .system)
-        b.setTitle("查看足迹", for: .normal)
+        b.setTitle("关怀看板", for: .normal)
         b.setTitleColor(UIColor(red: 0.30, green: 0.25, blue: 0.20, alpha: 1.0), for: .normal)
         b.titleLabel?.font = .systemFont(ofSize: 13, weight: .regular)
         b.backgroundColor = .white

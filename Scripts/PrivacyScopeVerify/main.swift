@@ -93,6 +93,10 @@ let familyMetadata = MemoryPrivacyMetadata(
     scope: .familyCircle,
     sourceRefs: [MemorySourceRef(kind: .memoryArchiveItem, id: "archive-1")]
 )
+let emptySelectedFamilyMetadata = MemoryPrivacyMetadata(
+    scope: .familyCircle,
+    familyVisibility: .selectedMembers([])
+)
 
 assertCondition(
     !PrivacyScopePolicy.canUse(metadata: privateMetadata, surface: .prompt),
@@ -101,6 +105,26 @@ assertCondition(
 assertCondition(
     PrivacyScopePolicy.canUse(metadata: generationMetadata, surface: .memoirGeneration),
     "metadata helper should allow generation metadata for memoir generation"
+)
+assertCondition(
+    !PrivacyScopePolicy.canUse(metadata: emptySelectedFamilyMetadata, surface: .familySync, familyMemberID: nil),
+    "empty selected family visibility should not default to all family sync"
+)
+assertCondition(
+    !PrivacyScopePolicy.canUse(metadata: emptySelectedFamilyMetadata, surface: .careDashboard, familyMemberID: "fm_001"),
+    "empty selected family visibility should not allow any care dashboard member"
+)
+let legacyVisibilityJSON = """
+{"allowedMemberIDs":["fm_001"]}
+""".data(using: .utf8)!
+let legacyVisibility = try JSONDecoder().decode(FamilyMemberVisibility.self, from: legacyVisibilityJSON)
+assertCondition(
+    legacyVisibility.allows(memberID: "fm_001"),
+    "legacy family visibility JSON should still decode selected members"
+)
+assertCondition(
+    !legacyVisibility.allows(memberID: "fm_002"),
+    "legacy family visibility JSON should preserve selected-member restriction"
 )
 
 private let items = [
