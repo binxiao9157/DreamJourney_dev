@@ -3,7 +3,7 @@ import Foundation
 // MARK: - 数据模型
 
 /// 单轮对话记录
-struct ConversationTurn: Codable {
+struct ConversationTurn: Codable, MemoryPrivacyScoped {
     let role: String     // "user" / "ai"
     let text: String
     let timestamp: Date
@@ -161,7 +161,7 @@ struct ConversationMemory: Codable {
     }
 }
 
-#if !MEMORY_PRIVACY_INTEGRATION_VERIFY
+#if !MEMORY_PRIVACY_INTEGRATION_VERIFY && !CARE_DASHBOARD_VERIFY
 // MARK: - ConversationMemoryManager
 
 /// 对话记忆管理器 - 围绕时间/地点/人物/事件四维度提取摘要

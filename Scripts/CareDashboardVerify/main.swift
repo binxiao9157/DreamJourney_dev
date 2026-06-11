@@ -38,4 +38,28 @@ assertCondition(empty.userTurnCount == 0, "empty input should have no user turns
 assertCondition(empty.riskLevel == .insufficientData, "empty input should be data-insufficient instead of stable")
 assertCondition(empty.summary.contains("暂无"), "empty summary should explain missing data")
 
+let familyAll = MemoryPrivacyMetadata(scope: .familyCircle)
+let daughterOnly = MemoryPrivacyMetadata(
+    scope: .familyCircle,
+    familyVisibility: .selectedMembers(["fm_daughter"])
+)
+let sonOnly = MemoryPrivacyMetadata(
+    scope: .familyCircle,
+    familyVisibility: .selectedMembers(["fm_son"])
+)
+let visibleTurns = CareDashboardInputPolicy.eligibleInputTurns(
+    from: [
+        ConversationTurn(role: "user", text: "全体亲友可见：今天睡得还可以。", timestamp: now, privacyMetadata: familyAll),
+        ConversationTurn(role: "user", text: "女儿可见：最近有点孤单。", timestamp: now, privacyMetadata: daughterOnly),
+        ConversationTurn(role: "user", text: "儿子可见：最近胸闷。", timestamp: now, privacyMetadata: sonOnly),
+        ConversationTurn(role: "user", text: "本机内容不进看板。", timestamp: now, privacyMetadata: MemoryPrivacyMetadata(scope: .localOnly)),
+        ConversationTurn(role: "user", text: "时空信箱写给未来的我", timestamp: now, privacyMetadata: familyAll)
+    ],
+    viewerFamilyMemberID: "fm_daughter"
+)
+assertCondition(
+    visibleTurns.map(\.text) == ["全体亲友可见：今天睡得还可以。", "女儿可见：最近有点孤单。"],
+    "care dashboard input policy should include all-family plus selected-member turns"
+)
+
 print("CareDashboard verification passed")

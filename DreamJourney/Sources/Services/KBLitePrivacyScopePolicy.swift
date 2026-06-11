@@ -33,9 +33,17 @@ enum KBLitePrivacyScopePolicy {
         }
     }
 
-    static func sanitizedGraph(_ graph: KBLiteGraph, for surface: MemoryUseSurface) -> KBLiteGraph {
-        let retainedPeople = graph.people.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface) }
-        let retainedPlaces = graph.places.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface) }
+    static func sanitizedGraph(
+        _ graph: KBLiteGraph,
+        for surface: MemoryUseSurface,
+        familyMemberID: String? = nil
+    ) -> KBLiteGraph {
+        let retainedPeople = graph.people.filter {
+            PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface, familyMemberID: familyMemberID)
+        }
+        let retainedPlaces = graph.places.filter {
+            PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface, familyMemberID: familyMemberID)
+        }
 
         let peopleIDs = Set(retainedPeople.map(\.id))
         let placeIDs = Set(retainedPlaces.map(\.id))
@@ -53,7 +61,7 @@ enum KBLitePrivacyScopePolicy {
         }
 
         let events = graph.events
-            .filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface) }
+            .filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface, familyMemberID: familyMemberID) }
             .map { event -> KBEvent in
                 var sanitized = event
                 sanitized.participantIds = event.participantIds.filter { peopleIDs.contains($0) }
@@ -66,7 +74,7 @@ enum KBLitePrivacyScopePolicy {
         let eventIDs = Set(events.map(\.id))
 
         let facts = graph.facts
-            .filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface) }
+            .filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface, familyMemberID: familyMemberID) }
             .map { fact -> KBFact in
                 var sanitized = fact
                 sanitized.relatedPersonIds = fact.relatedPersonIds.filter { peopleIDs.contains($0) }

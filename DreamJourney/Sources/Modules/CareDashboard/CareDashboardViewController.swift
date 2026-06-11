@@ -3,6 +3,7 @@ import UIKit
 final class CareDashboardViewController: UIViewController {
 
     private let analyzer = CareSignalAnalyzer()
+    private let viewerFamilyMemberID: String?
     private var snapshot: CareSignalSnapshot?
 
     private let scrollView = UIScrollView()
@@ -12,6 +13,16 @@ final class CareDashboardViewController: UIViewController {
         stack.spacing = 14
         return stack
     }()
+
+    init(viewerFamilyMemberID: String? = nil) {
+        self.viewerFamilyMemberID = viewerFamilyMemberID
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        self.viewerFamilyMemberID = nil
+        super.init(coder: coder)
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -61,26 +72,12 @@ final class CareDashboardViewController: UIViewController {
     }
 
     private func reloadSnapshot() {
-        let turns = ConversationMemoryManager.shared.getCurrentTranscript().filter {
-            isCareEligibleTurn($0)
-        }.map {
-            CareSignalInputTurn(role: $0.role, text: $0.text, timestamp: $0.timestamp)
-        }
+        let turns = CareDashboardInputPolicy.eligibleInputTurns(
+            from: ConversationMemoryManager.shared.getCurrentTranscript(),
+            viewerFamilyMemberID: viewerFamilyMemberID
+        )
         snapshot = analyzer.analyze(turns: turns)
         render()
-    }
-
-    private func isCareEligibleTurn(_ turn: ConversationTurn) -> Bool {
-        guard PrivacyScopePolicy.canUse(metadata: turn.privacyMetadata, surface: .careDashboard) else {
-            return false
-        }
-        guard turn.role.lowercased() == "user" else { return true }
-        let excludedPrefixes = [
-            "时空信箱写给",
-            "记忆档案馆保存",
-            "记忆档案馆上传旧照片"
-        ]
-        return !excludedPrefixes.contains { turn.text.hasPrefix($0) }
     }
 
     private func render() {

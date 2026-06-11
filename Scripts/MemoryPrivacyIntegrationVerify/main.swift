@@ -13,6 +13,7 @@ let localTurnJSON = """
 
 let decodedLegacyTurn = try JSONDecoder().decode(ConversationTurn.self, from: localTurnJSON)
 assertCondition(decodedLegacyTurn.privacyMetadata.scope == .localOnly, "legacy turn should default to localOnly")
+assertCondition(decodedLegacyTurn.privacyMetadata.familyVisibility == .allMembers, "legacy turn should default to all family visibility")
 
 let legacyMemoryJSON = """
 {"lastSessionDate":0,"lastSummary":{"time":"1968年","place":"杭州","person":"爷爷","event":"散步"},"sessionCount":1,"recentTranscript":[]}
@@ -57,6 +58,53 @@ let careTurns = scopedTurns.filter {
     PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .careDashboard)
 }
 assertCondition(careTurns.map(\.text) == ["家庭关怀内容"], "only familyCircle turns should enter care dashboard")
+
+let familyForAllMembers = MemoryPrivacyMetadata(scope: .familyCircle)
+let familyForDaughterOnly = MemoryPrivacyMetadata(
+    scope: .familyCircle,
+    familyVisibility: .selectedMembers(["fm_daughter"])
+)
+let familyForSonOnly = MemoryPrivacyMetadata(
+    scope: .familyCircle,
+    familyVisibility: .selectedMembers(["fm_son"])
+)
+assertCondition(
+    PrivacyScopePolicy.canUse(metadata: familyForAllMembers, surface: .careDashboard, familyMemberID: nil),
+    "all-family metadata should remain usable without a target member"
+)
+assertCondition(
+    PrivacyScopePolicy.canUse(metadata: familyForDaughterOnly, surface: .careDashboard, familyMemberID: "fm_daughter"),
+    "selected family member should see explicitly authorized care metadata"
+)
+assertCondition(
+    !PrivacyScopePolicy.canUse(metadata: familyForDaughterOnly, surface: .careDashboard, familyMemberID: "fm_son"),
+    "non-selected family member should not see restricted care metadata"
+)
+assertCondition(
+    !PrivacyScopePolicy.canUse(metadata: familyForDaughterOnly, surface: .careDashboard, familyMemberID: nil),
+    "restricted family metadata should not be used when no target member is known"
+)
+assertCondition(
+    !PrivacyScopePolicy.canUse(
+        metadata: MemoryPrivacyMetadata(scope: .generationAllowed, familyVisibility: .selectedMembers(["fm_daughter"])),
+        surface: .careDashboard,
+        familyMemberID: "fm_daughter"
+    ),
+    "member visibility should not upgrade non-family scope into care dashboard"
+)
+let targetedCareTurns = PrivacyScopePolicy.sanitized(
+    items: [
+        ConversationTurn(role: "user", text: "全体亲友可见", timestamp: Date(), privacyMetadata: familyForAllMembers),
+        ConversationTurn(role: "user", text: "女儿可见", timestamp: Date(), privacyMetadata: familyForDaughterOnly),
+        ConversationTurn(role: "user", text: "儿子可见", timestamp: Date(), privacyMetadata: familyForSonOnly)
+    ],
+    surface: .careDashboard,
+    familyMemberID: "fm_daughter"
+)
+assertCondition(
+    targetedCareTurns.map(\.text) == ["全体亲友可见", "女儿可见"],
+    "targeted care dashboard transcript should include all-family plus selected-member turns"
+)
 assertCondition(
     KBLitePrivacyScopePolicy.derivedEntityMetadata(from: remoteTurns).scope == .generationAllowed,
     "entities derived only from generationAllowed turns should remain generationAllowed"
@@ -138,6 +186,35 @@ let sentinelGraph = KBLiteGraph(
             createdAt: Date(),
             updatedAt: Date(),
             privacyMetadata: MemoryPrivacyMetadata(scope: .familyCircle)
+        ),
+        KBPerson(
+            id: "daughter-family-person",
+            name: "DAUGHTER_FAMILY_PERSON_SENTINEL",
+            aliases: [],
+            relation: nil,
+            traits: [],
+            relatedPersonIds: ["family-person"],
+            sourceSessionIds: [4],
+            createdAt: Date(),
+            updatedAt: Date(),
+            privacyMetadata: MemoryPrivacyMetadata(
+                scope: .familyCircle,
+                familyVisibility: .selectedMembers(["fm_daughter"])
+            )
+        ),
+        KBPerson(
+            id: "son-family-person",
+            name: "SON_FAMILY_PERSON_SENTINEL",
+            aliases: [],
+            relation: nil,
+            traits: [],
+            sourceSessionIds: [5],
+            createdAt: Date(),
+            updatedAt: Date(),
+            privacyMetadata: MemoryPrivacyMetadata(
+                scope: .familyCircle,
+                familyVisibility: .selectedMembers(["fm_son"])
+            )
         )
     ],
     places: [
@@ -157,6 +234,15 @@ let sentinelGraph = KBLiteGraph(
             name: "FAMILY_PLACE_SENTINEL",
             relatedPersonIds: ["family-person", "generation-person", "private-person"],
             privacyMetadata: MemoryPrivacyMetadata(scope: .familyCircle)
+        ),
+        KBPlace(
+            id: "daughter-family-place",
+            name: "DAUGHTER_FAMILY_PLACE_SENTINEL",
+            relatedPersonIds: ["daughter-family-person", "son-family-person", "family-person"],
+            privacyMetadata: MemoryPrivacyMetadata(
+                scope: .familyCircle,
+                familyVisibility: .selectedMembers(["fm_daughter"])
+            )
         )
     ],
     events: [
@@ -173,6 +259,16 @@ let sentinelGraph = KBLiteGraph(
             locationId: "family-place",
             participantIds: ["generation-person", "family-person"],
             privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed)
+        ),
+        KBEvent(
+            id: "daughter-family-event",
+            title: "DAUGHTER_FAMILY_EVENT_SENTINEL",
+            locationId: "daughter-family-place",
+            participantIds: ["daughter-family-person", "son-family-person", "family-person"],
+            privacyMetadata: MemoryPrivacyMetadata(
+                scope: .familyCircle,
+                familyVisibility: .selectedMembers(["fm_daughter"])
+            )
         )
     ],
     facts: [
@@ -200,6 +296,16 @@ let sentinelGraph = KBLiteGraph(
             relatedPlaceIds: ["family-place", "generation-place"],
             relatedEventIds: ["family-event", "generation-event"],
             privacyMetadata: MemoryPrivacyMetadata(scope: .familyCircle)
+        ),
+        KBFact(
+            id: "daughter-family-fact",
+            statement: "DAUGHTER_FAMILY_FACT_SENTINEL",
+            confidence: "high",
+            relatedPersonIds: ["daughter-family-person", "son-family-person", "family-person"],
+            privacyMetadata: MemoryPrivacyMetadata(
+                scope: .familyCircle,
+                familyVisibility: .selectedMembers(["fm_daughter"])
+            )
         )
     ]
 )
@@ -238,6 +344,44 @@ assertCondition(familyGraph.events.first?.participantIds == ["family-person"], "
 assertCondition(familyGraph.facts.first?.relatedPersonIds == ["family-person"], "family sync graph should prune fact person refs")
 assertCondition(familyGraph.facts.first?.relatedPlaceIds == ["family-place"], "family sync graph should prune fact place refs")
 assertCondition(familyGraph.facts.first?.relatedEventIds == ["family-event"], "family sync graph should prune fact event refs")
+assertCondition(!familyGraph.people.map(\.id).contains("daughter-family-person"), "untargeted family sync should omit selected-member people")
+assertCondition(!familyGraph.places.map(\.id).contains("daughter-family-place"), "untargeted family sync should omit selected-member places")
+assertCondition(!familyGraph.events.map(\.id).contains("daughter-family-event"), "untargeted family sync should omit selected-member events")
+assertCondition(!familyGraph.facts.map(\.id).contains("daughter-family-fact"), "untargeted family sync should omit selected-member facts")
+let daughterFamilyGraph = KBLitePrivacyScopePolicy.sanitizedGraph(sentinelGraph, for: .familySync, familyMemberID: "fm_daughter")
+assertCondition(
+    daughterFamilyGraph.people.map(\.id) == ["family-person", "daughter-family-person"],
+    "daughter family sync graph should include all-family plus daughter-authorized people"
+)
+assertCondition(
+    daughterFamilyGraph.places.map(\.id) == ["family-place", "daughter-family-place"],
+    "daughter family sync graph should include all-family plus daughter-authorized places"
+)
+assertCondition(
+    daughterFamilyGraph.events.map(\.id) == ["family-event", "daughter-family-event"],
+    "daughter family sync graph should include all-family plus daughter-authorized events"
+)
+assertCondition(
+    daughterFamilyGraph.facts.map(\.id) == ["family-fact", "daughter-family-fact"],
+    "daughter family sync graph should include all-family plus daughter-authorized facts"
+)
+assertCondition(
+    daughterFamilyGraph.places.first(where: { $0.id == "daughter-family-place" })?.relatedPersonIds == ["daughter-family-person", "family-person"],
+    "daughter family sync should prune place references to non-visible family members"
+)
+assertCondition(
+    daughterFamilyGraph.events.first(where: { $0.id == "daughter-family-event" })?.participantIds == ["daughter-family-person", "family-person"],
+    "daughter family sync should prune event participants to visible family members"
+)
+assertCondition(
+    daughterFamilyGraph.facts.first(where: { $0.id == "daughter-family-fact" })?.relatedPersonIds == ["daughter-family-person", "family-person"],
+    "daughter family sync should prune references to non-visible family members"
+)
+let sonCareGraph = KBLitePrivacyScopePolicy.sanitizedGraph(sentinelGraph, for: .careDashboard, familyMemberID: "fm_son")
+assertCondition(
+    sonCareGraph.people.map(\.id) == ["family-person", "son-family-person"],
+    "son care dashboard graph should include all-family plus son-authorized people"
+)
 let familyData = try JSONEncoder().encode(familyGraph)
 let familyJSON = String(data: familyData, encoding: .utf8) ?? ""
 assertCondition(!familyJSON.contains("PRIVATE_"), "family sync JSON should not contain private sentinel")

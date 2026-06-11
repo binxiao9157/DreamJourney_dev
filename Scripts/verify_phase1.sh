@@ -33,7 +33,9 @@ xcrun swiftc \
 /tmp/dreamjourney_memory_archive_verify
 
 echo "== CareDashboard =="
-xcrun swiftc \
+xcrun swiftc -D CARE_DASHBOARD_VERIFY \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
+  DreamJourney/Sources/Services/ConversationMemoryManager.swift \
   DreamJourney/Sources/Services/CareDashboard/CareSignalModels.swift \
   DreamJourney/Sources/Services/CareDashboard/CareSignalAnalyzer.swift \
   Scripts/CareDashboardVerify/main.swift \

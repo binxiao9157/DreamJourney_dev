@@ -49,22 +49,75 @@ public struct MemorySourceRef: Codable, Equatable, Hashable {
     }
 }
 
+public struct FamilyMemberVisibility: Codable, Equatable, Hashable {
+    public let allowedMemberIDs: [String]
+
+    public static let allMembers = FamilyMemberVisibility(allowedMemberIDs: [])
+
+    public static func selectedMembers(_ memberIDs: [String]) -> FamilyMemberVisibility {
+        FamilyMemberVisibility(allowedMemberIDs: memberIDs)
+    }
+
+    public init(allowedMemberIDs: [String] = []) {
+        var seen: Set<String> = []
+        self.allowedMemberIDs = allowedMemberIDs.compactMap { rawID in
+            let id = rawID.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !id.isEmpty, !seen.contains(id) else {
+                return nil
+            }
+            seen.insert(id)
+            return id
+        }
+    }
+
+    public func allows(memberID: String?) -> Bool {
+        guard !allowedMemberIDs.isEmpty else {
+            return true
+        }
+        guard let memberID else {
+            return false
+        }
+        return allowedMemberIDs.contains(memberID)
+    }
+}
+
 public struct MemoryPrivacyMetadata: Codable, Equatable, Hashable {
     public let scope: MemoryPrivacyScope
     public let sourceRefs: [MemorySourceRef]
     public let createdBySurface: MemoryUseSurface?
     public let createdAt: Date?
+    public let familyVisibility: FamilyMemberVisibility
 
     public init(
         scope: MemoryPrivacyScope,
         sourceRefs: [MemorySourceRef] = [],
         createdBySurface: MemoryUseSurface? = nil,
-        createdAt: Date? = nil
+        createdAt: Date? = nil,
+        familyVisibility: FamilyMemberVisibility = .allMembers
     ) {
         self.scope = scope
         self.sourceRefs = sourceRefs
         self.createdBySurface = createdBySurface
         self.createdAt = createdAt
+        self.familyVisibility = familyVisibility
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case scope
+        case sourceRefs
+        case createdBySurface
+        case createdAt
+        case familyVisibility
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        scope = try container.decode(MemoryPrivacyScope.self, forKey: .scope)
+        sourceRefs = try container.decodeIfPresent([MemorySourceRef].self, forKey: .sourceRefs) ?? []
+        createdBySurface = try container.decodeIfPresent(MemoryUseSurface.self, forKey: .createdBySurface)
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
+        familyVisibility = try container.decodeIfPresent(FamilyMemberVisibility.self, forKey: .familyVisibility)
+            ?? .allMembers
     }
 }
 
@@ -119,8 +172,20 @@ public enum PrivacyScopePolicy {
         }
     }
 
-    public static func canUse(metadata: MemoryPrivacyMetadata, surface: MemoryUseSurface) -> Bool {
-        canUse(scope: metadata.scope, surface: surface)
+    public static func canUse(
+        metadata: MemoryPrivacyMetadata,
+        surface: MemoryUseSurface,
+        familyMemberID: String? = nil
+    ) -> Bool {
+        guard canUse(scope: metadata.scope, surface: surface) else {
+            return false
+        }
+        guard metadata.scope == .familyCircle,
+              surface == .careDashboard || surface == .familySync
+        else {
+            return true
+        }
+        return metadata.familyVisibility.allows(memberID: familyMemberID)
     }
 
     public static func canUse(scopeRawValue: String, surfaceRawValue: String) -> Bool {
@@ -136,9 +201,10 @@ public enum PrivacyScopePolicy {
 
     public static func sanitized<Item: MemoryPrivacyScoped>(
         items: [Item],
-        surface: MemoryUseSurface
+        surface: MemoryUseSurface,
+        familyMemberID: String? = nil
     ) -> [Item] {
-        items.filter { canUse(metadata: $0.privacyMetadata, surface: surface) }
+        items.filter { canUse(metadata: $0.privacyMetadata, surface: surface, familyMemberID: familyMemberID) }
     }
 }
 

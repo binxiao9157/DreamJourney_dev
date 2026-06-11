@@ -1034,9 +1034,9 @@ final class KBLiteManager {
         save()
     }
 
-    func sanitizedGraph(for surface: MemoryUseSurface) -> KBLiteGraph {
+    func sanitizedGraph(for surface: MemoryUseSurface, familyMemberID: String? = nil) -> KBLiteGraph {
         readGraph { graph in
-            KBLitePrivacyScopePolicy.sanitizedGraph(graph, for: surface)
+            KBLitePrivacyScopePolicy.sanitizedGraph(graph, for: surface, familyMemberID: familyMemberID)
         }
     }
 
@@ -1051,11 +1051,11 @@ final class KBLiteManager {
     }
 
     /// 导出知识库为 JSON 字符串。默认走用户外发导出 surface，避免泄漏本地完整图谱。
-    func exportJSON(surface: MemoryUseSurface = .export) -> String? {
+    func exportJSON(surface: MemoryUseSurface = .export, familyMemberID: String? = nil) -> String? {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
-        let exportGraph = sanitizedGraph(for: surface)
+        let exportGraph = sanitizedGraph(for: surface, familyMemberID: familyMemberID)
         guard let data = try? encoder.encode(exportGraph) else { return nil }
         return String(data: data, encoding: .utf8)
     }
