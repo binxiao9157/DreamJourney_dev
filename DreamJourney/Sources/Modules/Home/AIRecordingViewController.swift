@@ -116,6 +116,20 @@ final class AIRecordingViewController: UIViewController {
         return b
     }()
 
+    private lazy var privacyScopeButton: UIButton = {
+        var config = UIButton.Configuration.filled()
+        config.cornerStyle = .capsule
+        config.baseBackgroundColor = UIColor(red: 0.87, green: 0.83, blue: 0.78, alpha: 0.55)
+        config.baseForegroundColor = UIColor(red: 0.40, green: 0.35, blue: 0.30, alpha: 1.0)
+        config.image = UIImage(systemName: "lock.shield")
+        config.imagePadding = 4
+        config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10)
+        let b = UIButton(configuration: config)
+        b.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
+        b.addTarget(self, action: #selector(privacyScopeTapped), for: .touchUpInside)
+        return b
+    }()
+
     // MARK: - State
     private var messages: [TGMessage] = []
     private var voiceBallState: VoiceBallState = .idle
@@ -128,6 +142,8 @@ final class AIRecordingViewController: UIViewController {
     private var isCrisisInterventionActive = false
     private var currentDialogStartMessageIndex = 0
     private var currentDialogAllowsMemoir = true
+    private var selectedDialogPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+    private var currentDialogPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
 
     // MARK: - 对话录音（用于声音复刻）
     /// 并行录音器：对话期间录制用户语音，供声音复刻训练使用
@@ -178,6 +194,7 @@ final class AIRecordingViewController: UIViewController {
     // MARK: - Layout
     private func setupLayout() {
         view.addSubview(titleLabel)
+        view.addSubview(privacyScopeButton)
         view.addSubview(messageTableView)
         view.addSubview(bottomDivider)
         view.addSubview(bottomContainer)
@@ -186,7 +203,7 @@ final class AIRecordingViewController: UIViewController {
         bottomContainer.addSubview(voiceBallButton)
         bottomContainer.addSubview(cameraButton)
 
-        [titleLabel, messageTableView, bottomDivider, bottomContainer,
+        [titleLabel, privacyScopeButton, messageTableView, bottomDivider, bottomContainer,
          albumButton, voiceBallButton, cameraButton].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
@@ -201,6 +218,9 @@ final class AIRecordingViewController: UIViewController {
             // 顶部标题
             titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
             titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            privacyScopeButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
+            privacyScopeButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            privacyScopeButton.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 12),
 
             // 消息流
             messageTableView.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 12),
@@ -238,6 +258,7 @@ final class AIRecordingViewController: UIViewController {
             cameraButton.centerYAnchor.constraint(equalTo: voiceBallButton.centerYAnchor),
             cameraButton.leadingAnchor.constraint(equalTo: voiceBallButton.trailingAnchor, constant: 44),
         ])
+        updatePrivacyScopeButton()
     }
 
     // MARK: - Voice Ball State Machine
@@ -317,6 +338,81 @@ final class AIRecordingViewController: UIViewController {
         picker.sourceType = .photoLibrary
         picker.delegate = self
         present(picker, animated: true)
+    }
+
+    @objc private func privacyScopeTapped() {
+        guard voiceBallState == .idle else {
+            showToast("本次对话进行中，使用范围会在下次开聊前生效", type: .info)
+            return
+        }
+
+        let alert = UIAlertController(
+            title: "本次对话使用范围",
+            message: "本机只保留在设备；可生成可用于知识提取和回忆录生成；亲友可进入家庭关怀和亲属圈。",
+            preferredStyle: .actionSheet
+        )
+        alert.addAction(UIAlertAction(title: "本机", style: .default) { [weak self] _ in
+            self?.setDialogPrivacyScope(.localOnly)
+        })
+        alert.addAction(UIAlertAction(title: "可生成", style: .default) { [weak self] _ in
+            self?.setDialogPrivacyScope(.generationAllowed)
+        })
+        alert.addAction(UIAlertAction(title: "亲友", style: .default) { [weak self] _ in
+            self?.setDialogPrivacyScope(.familyCircle)
+        })
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.popoverPresentationController?.sourceView = privacyScopeButton
+        alert.popoverPresentationController?.sourceRect = privacyScopeButton.bounds
+        present(alert, animated: true)
+    }
+
+    private func setDialogPrivacyScope(_ scope: MemoryPrivacyScope) {
+        selectedDialogPrivacyMetadata = MemoryPrivacyMetadata(
+            scope: scope,
+            sourceRefs: [
+                MemorySourceRef(
+                    kind: .userAuthorization,
+                    id: "home-dialog-\(scope.rawValue)",
+                    title: dialogPrivacyTitle(for: scope),
+                    capturedAt: Date()
+                )
+            ],
+            createdAt: Date()
+        )
+        updatePrivacyScopeButton()
+    }
+
+    private func updatePrivacyScopeButton() {
+        var config = privacyScopeButton.configuration
+        let scope = selectedDialogPrivacyMetadata.scope
+        config?.title = dialogPrivacyTitle(for: scope)
+        config?.image = UIImage(systemName: dialogPrivacyIconName(for: scope))
+        privacyScopeButton.configuration = config
+        privacyScopeButton.accessibilityLabel = "对话使用范围：\(dialogPrivacyTitle(for: scope))"
+    }
+
+    private func dialogPrivacyTitle(for scope: MemoryPrivacyScope) -> String {
+        switch scope {
+        case .privateOnly:
+            return "私密"
+        case .localOnly:
+            return "本机"
+        case .generationAllowed:
+            return "可生成"
+        case .familyCircle:
+            return "亲友"
+        }
+    }
+
+    private func dialogPrivacyIconName(for scope: MemoryPrivacyScope) -> String {
+        switch scope {
+        case .privateOnly, .localOnly:
+            return "lock.shield"
+        case .generationAllowed:
+            return "wand.and.stars"
+        case .familyCircle:
+            return "person.2"
+        }
     }
 
     // MARK: - Mock Dialog
@@ -472,11 +568,25 @@ extension AIRecordingViewController: UIImagePickerControllerDelegate, UINavigati
         scrollToBottom()
 
         // 记录到对话记忆
-        Stage1MemoryFacade.shared.recordUserTurn("[发送了一张照片]")
-        Stage1MemoryFacade.shared.recordAssistantTurn("照片收到了！能不能跟我说说这张照片背后的故事？")
+        let privacyMetadata = selectedDialogPrivacyMetadata
+        Stage1MemoryFacade.shared.recordUserTurn(Stage1MailboxMemoryInput(
+            "[发送了一张照片]",
+            privacyMetadata: privacyMetadata
+        ))
+        Stage1MemoryFacade.shared.recordAssistantTurn(Stage1MailboxMemoryInput(
+            "照片收到了！能不能跟我说说这张照片背后的故事？",
+            privacyMetadata: privacyMetadata
+        ))
 
         // 【KBLite】异步分析图片
-        analyzeUploadedPhoto(image, aiMessageIndex: aiMessageIndex, imagePath: imagePath)
+        if PrivacyScopePolicy.canUse(metadata: privacyMetadata, surface: .remoteExtraction) {
+            analyzeUploadedPhoto(
+                image,
+                aiMessageIndex: aiMessageIndex,
+                imagePath: imagePath,
+                privacyMetadata: privacyMetadata
+            )
+        }
     }
 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
@@ -484,7 +594,12 @@ extension AIRecordingViewController: UIImagePickerControllerDelegate, UINavigati
     }
 
     /// 异步分析上传的照片（KBLite）
-    private func analyzeUploadedPhoto(_ image: UIImage, aiMessageIndex: Int, imagePath: String) {
+    private func analyzeUploadedPhoto(
+        _ image: UIImage,
+        aiMessageIndex: Int,
+        imagePath: String,
+        privacyMetadata: MemoryPrivacyMetadata
+    ) {
         // 压缩图片并转 base64（限制大小）
         let maxDimension: CGFloat = 1024
         let scaledImage: UIImage
@@ -513,7 +628,11 @@ extension AIRecordingViewController: UIImagePickerControllerDelegate, UINavigati
 
                     // 入库
                     let sessionId = ConversationMemoryManager.shared.currentMemory.sessionCount + 1
-                    Stage1MemoryFacade.shared.ingestImageAnalysis(analysis, sessionId: sessionId)
+                    Stage1MemoryFacade.shared.ingestImageAnalysis(
+                        analysis,
+                        sessionId: sessionId,
+                        privacyMetadata: privacyMetadata
+                    )
 
                     // 关联照片到足迹地图
                     if !analysis.scene.isEmpty || analysis.estimatedDecade != nil {
@@ -525,7 +644,10 @@ extension AIRecordingViewController: UIImagePickerControllerDelegate, UINavigati
                     if aiMessageIndex < self.messages.count {
                         self.messages[aiMessageIndex] = .ai(text: enrichedReply, timestamp: Date())
                         // 更新记忆记录
-                        Stage1MemoryFacade.shared.recordAssistantTurn(enrichedReply)
+                        Stage1MemoryFacade.shared.recordAssistantTurn(Stage1MailboxMemoryInput(
+                            enrichedReply,
+                            privacyMetadata: privacyMetadata
+                        ))
                         self.messageTableView.reloadRows(at: [IndexPath(row: aiMessageIndex, section: 0)], with: .automatic)
                     }
 
@@ -640,6 +762,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
         isCrisisInterventionActive = false
         currentDialogStartMessageIndex = messages.count
         currentDialogAllowsMemoir = true
+        currentDialogPrivacyMetadata = selectedDialogPrivacyMetadata
         pendingUserText = nil
         pendingAIText = nil
         updateVoiceBallState(.active)
@@ -653,7 +776,10 @@ extension AIRecordingViewController: DialogEngineDelegate {
             messageTableView.reloadData()
             scrollToBottom()
             // 记录到对话记忆
-            Stage1MemoryFacade.shared.recordUserTurn(text)
+            Stage1MemoryFacade.shared.recordUserTurn(Stage1MailboxMemoryInput(
+                text,
+                privacyMetadata: currentDialogPrivacyMetadata
+            ))
         } else {
             // 中间结果：只记录不显示，等待最终确认
             pendingUserText = text
@@ -670,7 +796,10 @@ extension AIRecordingViewController: DialogEngineDelegate {
         messageTableView.reloadData()
         scrollToBottom()
         // 记录到对话记忆
-        Stage1MemoryFacade.shared.recordAssistantTurn(text)
+        Stage1MemoryFacade.shared.recordAssistantTurn(Stage1MailboxMemoryInput(
+            text,
+            privacyMetadata: currentDialogPrivacyMetadata
+        ))
     }
 
     func onChatStreaming(text: String) {
@@ -683,7 +812,10 @@ extension AIRecordingViewController: DialogEngineDelegate {
         if let text = pendingUserText, !text.isEmpty {
             messages.append(.user(text: text, timestamp: Date()))
             // 记录到对话记忆
-            Stage1MemoryFacade.shared.recordUserTurn(text)
+            Stage1MemoryFacade.shared.recordUserTurn(Stage1MailboxMemoryInput(
+                text,
+                privacyMetadata: currentDialogPrivacyMetadata
+            ))
             pendingUserText = nil
         }
     }
@@ -729,7 +861,10 @@ extension AIRecordingViewController: DialogEngineDelegate {
         // 如果有未展示的 AI 流式文本（没有经过 TTS），兜底展示
         if let aiText = pendingAIText, !aiText.isEmpty {
             messages.append(.ai(text: aiText, timestamp: Date()))
-            Stage1MemoryFacade.shared.recordAssistantTurn(aiText)
+            Stage1MemoryFacade.shared.recordAssistantTurn(Stage1MailboxMemoryInput(
+                aiText,
+                privacyMetadata: currentDialogPrivacyMetadata
+            ))
             pendingAIText = nil
             messageTableView.reloadData()
             scrollToBottom()
@@ -824,6 +959,9 @@ extension AIRecordingViewController: DialogEngineDelegate {
     /// 显示回忆录生成弹窗
     private func showMemoirGenerationCard() {
         guard currentDialogAllowsMemoir else { return }
+        guard PrivacyScopePolicy.canUse(metadata: currentDialogPrivacyMetadata, surface: .memoirGeneration) else {
+            return
+        }
         MemoirGenerationCard.show(in: view,
             onGenerate: { [weak self] in
                 self?.handleMemoirGeneration()
@@ -838,13 +976,23 @@ extension AIRecordingViewController: DialogEngineDelegate {
             showToast("安全事件后的对话不会生成回忆录", type: .info)
             return
         }
+        guard PrivacyScopePolicy.canUse(metadata: currentDialogPrivacyMetadata, surface: .memoirGeneration) else {
+            showToast("当前对话未授权生成回忆录，可在下次开聊前选择“可生成”", type: .info)
+            return
+        }
         let sessionMessages = Array(messages.dropFirst(currentDialogStartMessageIndex))
         guard !sessionMessages.isEmpty else {
             showToast("本次对话内容不足，暂不能生成回忆录", type: .info)
             return
         }
         // 将 TGMessage 转换为 Memoir 模块的 DialogMessage 格式
-        let dialogMessages = MemoirFlowManager.convertToDialogMessages(sessionMessages)
+        let dialogMessages = PrivacyScopePolicy.sanitized(
+            items: MemoirFlowManager.convertToDialogMessages(
+                sessionMessages,
+                privacyMetadata: currentDialogPrivacyMetadata
+            ),
+            surface: .memoirGeneration
+        )
 
         // 本地内容质量检测（即时反馈，无需等 API 调用）
         if let reason = MemoirFlowManager.checkDialogContent(dialogMessages) {

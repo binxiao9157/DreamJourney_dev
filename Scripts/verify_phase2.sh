@@ -42,6 +42,7 @@ xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
   DreamJourney/Sources/Services/Stage1MemoryFacade.swift \
   DreamJourney/Sources/Services/KBLiteModels.swift \
   DreamJourney/Sources/Services/KBLitePrivacyScopePolicy.swift \
+  DreamJourney/Sources/Memoir/MemoirModel.swift \
   Scripts/MemoryPrivacyIntegrationVerify/main.swift \
   -o /tmp/dreamjourney_memory_privacy_integration_verify
 /tmp/dreamjourney_memory_privacy_integration_verify

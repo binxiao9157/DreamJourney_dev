@@ -351,13 +351,16 @@ final class MemoirFlowManager {
     // MARK: - TGMessage → DialogMessage 转换
 
     /// 将 AIRecordingVC 的 [TGMessage] 转换为 [DialogMessage]（Memoir 模块使用的格式）
-    static func convertToDialogMessages(_ tgMessages: [TGMessage]) -> [DialogMessage] {
+    static func convertToDialogMessages(
+        _ tgMessages: [TGMessage],
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+    ) -> [DialogMessage] {
         return tgMessages.compactMap { msg -> DialogMessage? in
             switch msg {
             case .user(let text, _):
-                return DialogMessage(role: "user", text: text)
+                return DialogMessage(role: "user", text: text, privacyMetadata: privacyMetadata)
             case .ai(let text, _):
-                return DialogMessage(role: "ai", text: text)
+                return DialogMessage(role: "ai", text: text, privacyMetadata: privacyMetadata)
             case .photo(_, _), .privacyConfirmation:
                 return nil
             }

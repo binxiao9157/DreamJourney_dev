@@ -77,9 +77,20 @@ final class MemoirService {
         generateQueue.async { [weak self] () -> Void in
             guard let self = self else { return }
 
+            let generationMessages = PrivacyScopePolicy.sanitized(
+                items: dialogMessages,
+                surface: .memoirGeneration
+            )
+            guard !generationMessages.isEmpty else {
+                DispatchQueue.main.async {
+                    completion(.failure(DeepSeekService.DeepSeekError.invalidResponse))
+                }
+                return
+            }
+
             // 1. 构建消息列表
-            let chatMessages = self.buildChatMessages(from: dialogMessages)
-            let transcript = dialogMessages
+            let chatMessages = self.buildChatMessages(from: generationMessages)
+            let transcript = generationMessages
                 .map { "\($0.role): \($0.text)" }
                 .joined(separator: "\n")
 
@@ -135,15 +146,16 @@ final class MemoirService {
     /// 使用伪造的对话上下文测试 memoir 生成流程
     /// 用于开发阶段验证，无需真实对话数据
     func generateMemoirFromMock(completion: @escaping (Result<MemoirModel, Error>) -> Void) {
+        let mockPrivacyMetadata = MemoryPrivacyMetadata(scope: .generationAllowed)
         let mockMessages: [DialogMessage] = [
-            DialogMessage(role: "user", text: "我今天想讲讲小时候的事。"),
-            DialogMessage(role: "ai", text: "好的，您想聊聊哪段回忆呢？"),
-            DialogMessage(role: "user", text: "1968年那会儿，我和你爷爷刚结婚，住在杭州西湖边上的老房子里。那时候日子虽然苦，但每天傍晚我们都会去湖边散步。"),
-            DialogMessage(role: "ai", text: "西湖的黄昏一定很美。能再讲讲当时的情景吗？"),
-            DialogMessage(role: "user", text: "到了秋天，湖面上的荷叶都黄了，风一吹沙沙响。你爷爷总会摘一朵给我，说'等日子好了，天天给你买花'。那时候哪有花店，路边的野花就是最好的了。"),
-            DialogMessage(role: "ai", text: "这些细节太珍贵了。您爷爷后来怎么样了？"),
-            DialogMessage(role: "user", text: "后来啊，他在厂里干了一辈子，退了休还是每天陪我去湖边走走。走不动了就坐长椅上看夕阳。算起来，西湖陪了我们五十多年。"),
-            DialogMessage(role: "ai", text: "五十多年的相伴，西湖见证了你们的爱情。非常感人。"),
+            DialogMessage(role: "user", text: "我今天想讲讲小时候的事。", privacyMetadata: mockPrivacyMetadata),
+            DialogMessage(role: "ai", text: "好的，您想聊聊哪段回忆呢？", privacyMetadata: mockPrivacyMetadata),
+            DialogMessage(role: "user", text: "1968年那会儿，我和你爷爷刚结婚，住在杭州西湖边上的老房子里。那时候日子虽然苦，但每天傍晚我们都会去湖边散步。", privacyMetadata: mockPrivacyMetadata),
+            DialogMessage(role: "ai", text: "西湖的黄昏一定很美。能再讲讲当时的情景吗？", privacyMetadata: mockPrivacyMetadata),
+            DialogMessage(role: "user", text: "到了秋天，湖面上的荷叶都黄了，风一吹沙沙响。你爷爷总会摘一朵给我，说'等日子好了，天天给你买花'。那时候哪有花店，路边的野花就是最好的了。", privacyMetadata: mockPrivacyMetadata),
+            DialogMessage(role: "ai", text: "这些细节太珍贵了。您爷爷后来怎么样了？", privacyMetadata: mockPrivacyMetadata),
+            DialogMessage(role: "user", text: "后来啊，他在厂里干了一辈子，退了休还是每天陪我去湖边走走。走不动了就坐长椅上看夕阳。算起来，西湖陪了我们五十多年。", privacyMetadata: mockPrivacyMetadata),
+            DialogMessage(role: "ai", text: "五十多年的相伴，西湖见证了你们的爱情。非常感人。", privacyMetadata: mockPrivacyMetadata),
         ]
 
         generateMemoir(dialogMessages: mockMessages, completion: completion)

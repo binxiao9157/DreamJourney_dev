@@ -1,15 +1,38 @@
 import Foundation
 
 // MARK: - 对话消息（输入给大模型的上下文单元）
-struct DialogMessage: Codable {
+struct DialogMessage: Codable, MemoryPrivacyScoped {
     let role: String      // "user" / "ai"
     let text: String
     let timestamp: Date
+    let privacyMetadata: MemoryPrivacyMetadata
 
-    init(role: String, text: String, timestamp: Date = Date()) {
+    init(
+        role: String,
+        text: String,
+        timestamp: Date = Date(),
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+    ) {
         self.role = role
         self.text = text
         self.timestamp = timestamp
+        self.privacyMetadata = privacyMetadata
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case role
+        case text
+        case timestamp
+        case privacyMetadata
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        role = try container.decode(String.self, forKey: .role)
+        text = try container.decode(String.self, forKey: .text)
+        timestamp = try container.decode(Date.self, forKey: .timestamp)
+        privacyMetadata = try container.decodeIfPresent(MemoryPrivacyMetadata.self, forKey: .privacyMetadata)
+            ?? MemoryPrivacyMetadata(scope: .localOnly)
     }
 }
 

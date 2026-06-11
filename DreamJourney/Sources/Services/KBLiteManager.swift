@@ -297,7 +297,11 @@ final class KBLiteManager {
                               "儿子", "女儿", "孙子", "孙女", "老师", "师傅", "同学", "战友"]
         for kw in peopleKeywords {
             if allText.contains(kw) {
-                let existing = graph.people.first { $0.name == kw || $0.aliases.contains(kw) }
+                let existing = findMatchingPerson(
+                    name: kw,
+                    aliases: [],
+                    privacyMetadata: privacyMetadata
+                )
                 if existing == nil {
                     let person = KBPerson(id: UUID().uuidString, name: kw, aliases: [], relation: nil,
                                           traits: [], sourceSessionIds: [sessionId],
@@ -323,7 +327,7 @@ final class KBLiteManager {
                       "东北", "四川", "湖南", "湖北", "广东", "江西", "安徽", "河南", "山东"]
         for city in cities {
             if allText.contains(city) {
-                let existing = graph.places.first { $0.name == city }
+                let existing = findMatchingPlace(name: city, privacyMetadata: privacyMetadata)
                 if existing == nil {
                     let place = KBPlace(
                         id: UUID().uuidString,
@@ -342,7 +346,10 @@ final class KBLiteManager {
                              "生孩子", "做饭", "种地", "打工", "赶集", "学手艺", "出国", "下海"]
         for kw in eventKeywords {
             if allText.contains(kw) {
-                let existing = graph.events.first { $0.title.contains(kw) }
+                let existing = graph.events.first {
+                    $0.title.contains(kw)
+                        && KBLitePrivacyScopePolicy.canMerge(existing: $0.privacyMetadata, incoming: privacyMetadata)
+                }
                 if existing == nil {
                     let event = KBEvent(
                         id: UUID().uuidString,
@@ -493,7 +500,11 @@ final class KBLiteManager {
 
         // 1. 合并人物
         for ep in result.people {
-            let matched = findMatchingPerson(name: ep.name, aliases: ep.aliases)
+            let matched = findMatchingPerson(
+                name: ep.name,
+                aliases: ep.aliases,
+                privacyMetadata: privacyMetadata
+            )
             if let existing = matched {
                 // 更新已有人物
                 if let idx = graph.people.firstIndex(where: { $0.id == existing.id }) {
@@ -549,7 +560,7 @@ final class KBLiteManager {
 
         // 2. 合并地点
         for ep in result.places {
-            let matched = findMatchingPlace(name: ep.name)
+            let matched = findMatchingPlace(name: ep.name, privacyMetadata: privacyMetadata)
             if let existing = matched {
                 if let idx = graph.places.firstIndex(where: { $0.id == existing.id }) {
                     var p = graph.places[idx]
@@ -578,7 +589,10 @@ final class KBLiteManager {
 
         // 3. 合并事件
         for ee in result.events {
-            let existing = graph.events.first { $0.title == ee.title }
+            let existing = graph.events.first {
+                $0.title == ee.title
+                    && KBLitePrivacyScopePolicy.canMerge(existing: $0.privacyMetadata, incoming: privacyMetadata)
+            }
             if let existing = existing {
                 if let idx = graph.events.firstIndex(where: { $0.id == existing.id }) {
                     var e = graph.events[idx]
@@ -611,9 +625,10 @@ final class KBLiteManager {
 
             // 检查是否已存在相同或高度相似的事实
             let isDuplicate = graph.facts.contains { existing in
-                existing.statement == stmt ||
-                (existing.statement.count >= 10 && stmt.count >= 10 &&
-                 (existing.statement.contains(stmt) || stmt.contains(existing.statement)))
+                KBLitePrivacyScopePolicy.canMerge(existing: existing.privacyMetadata, incoming: privacyMetadata)
+                    && (existing.statement == stmt ||
+                        (existing.statement.count >= 10 && stmt.count >= 10 &&
+                         (existing.statement.contains(stmt) || stmt.contains(existing.statement))))
             }
 
             if !isDuplicate {
@@ -636,16 +651,24 @@ final class KBLiteManager {
     // MARK: - Private: Matching
 
     /// 查找匹配的人物（按名字、别名）
-    private func findMatchingPerson(name: String, aliases: [String]) -> KBPerson? {
+    private func findMatchingPerson(
+        name: String,
+        aliases: [String],
+        privacyMetadata: MemoryPrivacyMetadata? = nil
+    ) -> KBPerson? {
         let allNames = [name] + aliases
+        let people = graph.people.filter {
+            guard let privacyMetadata else { return true }
+            return KBLitePrivacyScopePolicy.canMerge(existing: $0.privacyMetadata, incoming: privacyMetadata)
+        }
 
         // 1. 完全匹配名字
-        if let match = graph.people.first(where: { allNames.contains($0.name) }) {
+        if let match = people.first(where: { allNames.contains($0.name) }) {
             return match
         }
 
         // 2. 匹配别名
-        if let match = graph.people.first(where: { p in
+        if let match = people.first(where: { p in
             p.aliases.contains(where: { alias in allNames.contains(alias) })
         }) {
             return match
@@ -653,7 +676,7 @@ final class KBLiteManager {
 
         // 3. 模糊匹配（包含关系）
         if name.count >= 2 {
-            for p in graph.people {
+            for p in people {
                 let searchText = [p.name] + p.aliases
                 for text in searchText {
                     if text.contains(name) || name.contains(text) {
@@ -667,12 +690,19 @@ final class KBLiteManager {
     }
 
     /// 查找匹配的地点（按名字）
-    private func findMatchingPlace(name: String) -> KBPlace? {
-        if let match = graph.places.first(where: { $0.name == name }) {
+    private func findMatchingPlace(
+        name: String,
+        privacyMetadata: MemoryPrivacyMetadata? = nil
+    ) -> KBPlace? {
+        let places = graph.places.filter {
+            guard let privacyMetadata else { return true }
+            return KBLitePrivacyScopePolicy.canMerge(existing: $0.privacyMetadata, incoming: privacyMetadata)
+        }
+        if let match = places.first(where: { $0.name == name }) {
             return match
         }
         // 包含关系匹配（"外滩" ⊂ "上海外滩"）
-        for place in graph.places {
+        for place in places {
             if place.name.contains(name) || name.contains(place.name) {
                 return place
             }
@@ -809,7 +839,11 @@ final class KBLiteManager {
                     if !p.traits.isEmpty { line += "，特征：\(p.traits.joined(separator: "、"))" }
 
                     // 附上关联事实
-                    let relatedFacts = graph.facts.filter { $0.relatedPersonIds.contains(p.id) }
+                    let relatedFacts = KBLitePrivacyScopePolicy.relatedFacts(
+                        in: graph,
+                        relatedPersonId: p.id,
+                        surface: .prompt
+                    )
                     if !relatedFacts.isEmpty {
                         let factsText = relatedFacts.prefix(3).map { $0.statement }.joined(separator: "；")
                         line += "。已知：\(factsText)"
@@ -892,7 +926,7 @@ final class KBLiteManager {
 
         // 场景 → 地点
         if !result.scene.isEmpty {
-            let existing = findMatchingPlace(name: result.scene)
+            let existing = findMatchingPlace(name: result.scene, privacyMetadata: privacyMetadata)
             if existing == nil {
                 let place = KBPlace(
                     id: UUID().uuidString,
@@ -911,7 +945,7 @@ final class KBLiteManager {
         for personDesc in result.detectedPeople {
             // 尝试从描述中提取名字（如 "爷爷"、"奶奶"）
             let name = extractPersonNameFromDescription(personDesc)
-            let existing = findMatchingPerson(name: name, aliases: [])
+            let existing = findMatchingPerson(name: name, aliases: [], privacyMetadata: privacyMetadata)
             if existing == nil {
                 let person = KBPerson(
                     id: UUID().uuidString,
@@ -1036,25 +1070,35 @@ final class KBLiteManager {
         }
         var addedCount = 0
         for person in imported.people {
-            if findMatchingPerson(name: person.name, aliases: person.aliases) == nil {
+            if findMatchingPerson(
+                name: person.name,
+                aliases: person.aliases,
+                privacyMetadata: person.privacyMetadata
+            ) == nil {
                 graph.people.append(person)
                 addedCount += 1
             }
         }
         for place in imported.places {
-            if findMatchingPlace(name: place.name) == nil {
+            if findMatchingPlace(name: place.name, privacyMetadata: place.privacyMetadata) == nil {
                 graph.places.append(place)
                 addedCount += 1
             }
         }
         for event in imported.events {
-            if graph.events.first(where: { $0.title == event.title }) == nil {
+            if graph.events.first(where: {
+                $0.title == event.title
+                    && KBLitePrivacyScopePolicy.canMerge(existing: $0.privacyMetadata, incoming: event.privacyMetadata)
+            }) == nil {
                 graph.events.append(event)
                 addedCount += 1
             }
         }
         for fact in imported.facts {
-            if !graph.facts.contains(where: { $0.statement == fact.statement }) {
+            if !graph.facts.contains(where: {
+                $0.statement == fact.statement
+                    && KBLitePrivacyScopePolicy.canMerge(existing: $0.privacyMetadata, incoming: fact.privacyMetadata)
+            }) {
                 graph.facts.append(fact)
                 addedCount += 1
             }
@@ -1070,7 +1114,10 @@ final class KBLiteManager {
         if isEmpty { return "" }
         var hints: [String] = []
         let recentPeople = graph.people
-            .filter { !$0.traits.isEmpty || $0.briefBio != nil }
+            .filter {
+                PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .prompt)
+                    && (!$0.traits.isEmpty || $0.briefBio != nil)
+            }
             .sorted { ($0.sourceSessionIds.last ?? 0) > ($1.sourceSessionIds.last ?? 0) }
             .prefix(3)
         if !recentPeople.isEmpty {
@@ -1082,7 +1129,10 @@ final class KBLiteManager {
             hints.append("记得：\(peopleHints.joined(separator: "、"))")
         }
         let recentEvents = graph.events
-            .filter { $0.year != nil }
+            .filter {
+                PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .prompt)
+                    && $0.year != nil
+            }
             .sorted { ($0.sourceSessionIds.last ?? 0) > ($1.sourceSessionIds.last ?? 0) }
             .prefix(2)
         if !recentEvents.isEmpty {

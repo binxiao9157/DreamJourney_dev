@@ -18,6 +18,21 @@ enum KBLitePrivacyScopePolicy {
         return MemoryPrivacyMetadata(scope: scope)
     }
 
+    static func canMerge(existing: MemoryPrivacyMetadata, incoming: MemoryPrivacyMetadata) -> Bool {
+        existing.scope == incoming.scope
+    }
+
+    static func relatedFacts(
+        in graph: KBLiteGraph,
+        relatedPersonId: String,
+        surface: MemoryUseSurface
+    ) -> [KBFact] {
+        graph.facts.filter {
+            $0.relatedPersonIds.contains(relatedPersonId)
+                && PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface)
+        }
+    }
+
     static func sanitizedGraph(_ graph: KBLiteGraph, for surface: MemoryUseSurface) -> KBLiteGraph {
         let retainedPeople = graph.people.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface) }
         let retainedPlaces = graph.places.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface) }
@@ -72,10 +87,10 @@ enum KBLitePrivacyScopePolicy {
     }
 
     private static func highestAvailableScope(in turns: [ConversationTurn]) -> MemoryPrivacyScope? {
-        let scopes = turns.map { $0.privacyMetadata.scope }
-        if scopes.contains(.generationAllowed) { return .generationAllowed }
-        if scopes.contains(.familyCircle) { return .familyCircle }
-        if scopes.contains(.localOnly) { return .localOnly }
-        return nil
+        let scopes = Set(turns.map { $0.privacyMetadata.scope })
+        guard scopes.count == 1, let scope = scopes.first, scope != .privateOnly else {
+            return .localOnly
+        }
+        return scope
     }
 }

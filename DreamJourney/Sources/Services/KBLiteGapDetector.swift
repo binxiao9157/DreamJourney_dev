@@ -49,8 +49,9 @@ final class KBLiteGapDetector {
     // MARK: - Public API
 
     /// 检测所有知识缺口
-    func detectAllGaps() -> GapReport {
-        let graph = KBLiteManager.shared.graph
+    func detectAllGaps(surface: MemoryUseSurface? = nil) -> GapReport {
+        let sourceGraph = KBLiteManager.shared.graph
+        let graph = surface.map { KBLitePrivacyScopePolicy.sanitizedGraph(sourceGraph, for: $0) } ?? sourceGraph
         var gaps: [KnowledgeGap] = []
 
         // 1. 人物缺口
@@ -136,8 +137,8 @@ final class KBLiteGapDetector {
     }
 
     /// 生成适合注入 system_prompt 的缺口上下文
-    func buildGapContext() -> String {
-        let report = detectAllGaps()
+    func buildGapContext(surface: MemoryUseSurface? = nil) -> String {
+        let report = detectAllGaps(surface: surface)
         return report.buildContextString()
     }
 }

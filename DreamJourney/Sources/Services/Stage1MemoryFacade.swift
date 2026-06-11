@@ -97,7 +97,7 @@ final class Stage1MemoryFacade {
         }
 
         if includeGaps {
-            let gapContext = gapDetector.detectAllGaps().buildContextString(maxGaps: maxItems)
+            let gapContext = gapDetector.detectAllGaps(surface: .prompt).buildContextString(maxGaps: maxItems)
             if !gapContext.isEmpty {
                 parts.append(gapContext)
             }

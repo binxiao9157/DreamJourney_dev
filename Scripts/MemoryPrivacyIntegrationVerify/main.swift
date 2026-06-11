@@ -14,11 +14,36 @@ let localTurnJSON = """
 let decodedLegacyTurn = try JSONDecoder().decode(ConversationTurn.self, from: localTurnJSON)
 assertCondition(decodedLegacyTurn.privacyMetadata.scope == .localOnly, "legacy turn should default to localOnly")
 
+let legacyMemoryJSON = """
+{"lastSessionDate":0,"lastSummary":{"time":"1968年","place":"杭州","person":"爷爷","event":"散步"},"sessionCount":1,"recentTranscript":[]}
+""".data(using: .utf8)!
+let decodedLegacyMemory = try JSONDecoder().decode(ConversationMemory.self, from: legacyMemoryJSON)
+assertCondition(decodedLegacyMemory.lastSummaryPrivacyMetadata.scope == .localOnly, "legacy memory summary should default to localOnly")
+assertCondition(
+    !PrivacyScopePolicy.canUse(metadata: decodedLegacyMemory.lastSummaryPrivacyMetadata, surface: .prompt),
+    "legacy local summary should not be prompt-usable"
+)
+var generationMemory = ConversationMemory()
+generationMemory.lastSummary = decodedLegacyMemory.lastSummary
+generationMemory.lastSummaryPrivacyMetadata = MemoryPrivacyMetadata(scope: .generationAllowed)
+assertCondition(
+    PrivacyScopePolicy.canUse(metadata: generationMemory.lastSummaryPrivacyMetadata, surface: .prompt),
+    "explicit generation summary should be prompt-usable"
+)
+
 let generationInput = Stage1MailboxMemoryInput(
     text: "可以用于生成的上海工作记忆",
     privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed)
 )
 assertCondition(generationInput.privacyMetadata.scope == .generationAllowed, "input should carry explicit generation scope")
+
+let dialogMessages = [
+    DialogMessage(role: "user", text: "本机对话", privacyMetadata: MemoryPrivacyMetadata(scope: .localOnly)),
+    DialogMessage(role: "user", text: "生成授权对话", privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed)),
+    DialogMessage(role: "ai", text: "亲友对话", privacyMetadata: MemoryPrivacyMetadata(scope: .familyCircle))
+]
+let memoirDialogMessages = PrivacyScopePolicy.sanitized(items: dialogMessages, surface: .memoirGeneration)
+assertCondition(memoirDialogMessages.map(\.text) == ["生成授权对话"], "memoir generation should only use generationAllowed dialog messages")
 
 let scopedTurns = [
     ConversationTurn(role: "user", text: "私密内容", timestamp: Date(), privacyMetadata: MemoryPrivacyMetadata(scope: .privateOnly)),
@@ -32,6 +57,36 @@ let careTurns = scopedTurns.filter {
     PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .careDashboard)
 }
 assertCondition(careTurns.map(\.text) == ["家庭关怀内容"], "only familyCircle turns should enter care dashboard")
+assertCondition(
+    KBLitePrivacyScopePolicy.derivedEntityMetadata(from: remoteTurns).scope == .generationAllowed,
+    "entities derived only from generationAllowed turns should remain generationAllowed"
+)
+assertCondition(
+    KBLitePrivacyScopePolicy.derivedEntityMetadata(from: careTurns).scope == .familyCircle,
+    "entities derived only from familyCircle turns should remain familyCircle"
+)
+let mixedDerivedMetadata = KBLitePrivacyScopePolicy.derivedEntityMetadata(from: [
+    ConversationTurn(role: "user", text: "本机片段", timestamp: Date(), privacyMetadata: MemoryPrivacyMetadata(scope: .localOnly)),
+    ConversationTurn(role: "user", text: "可生成片段", timestamp: Date(), privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed))
+])
+assertCondition(
+    mixedDerivedMetadata.scope == .localOnly,
+    "mixed-scope derived entities should not upgrade local content into remote-usable scope"
+)
+assertCondition(
+    KBLitePrivacyScopePolicy.canMerge(
+        existing: MemoryPrivacyMetadata(scope: .generationAllowed),
+        incoming: MemoryPrivacyMetadata(scope: .generationAllowed)
+    ),
+    "same-scope generation entities should be mergeable"
+)
+assertCondition(
+    !KBLitePrivacyScopePolicy.canMerge(
+        existing: MemoryPrivacyMetadata(scope: .familyCircle),
+        incoming: MemoryPrivacyMetadata(scope: .generationAllowed)
+    ),
+    "cross-scope family and generation entities should not merge"
+)
 
 var person = KBPerson(id: "p1", name: "爷爷", aliases: [], relation: nil, traits: [], sourceSessionIds: [1], createdAt: Date(), updatedAt: Date())
 assertCondition(person.privacyMetadata.scope == .localOnly, "new KBPerson should default to localOnly")
@@ -161,6 +216,15 @@ assertCondition(promptGraph.events.first?.participantIds == ["generation-person"
 assertCondition(promptGraph.facts.first?.relatedPersonIds == ["generation-person"], "prompt graph should prune fact person refs")
 assertCondition(promptGraph.facts.first?.relatedPlaceIds == ["generation-place"], "prompt graph should prune fact place refs")
 assertCondition(promptGraph.facts.first?.relatedEventIds == ["generation-event"], "prompt graph should prune fact event refs")
+let promptRelatedFacts = KBLitePrivacyScopePolicy.relatedFacts(
+    in: sentinelGraph,
+    relatedPersonId: "generation-person",
+    surface: .prompt
+)
+assertCondition(
+    promptRelatedFacts.map(\.id) == ["generation-fact"],
+    "prompt related facts should not include family/private facts linked to a prompt-usable person"
+)
 
 let familyGraph = KBLitePrivacyScopePolicy.sanitizedGraph(sentinelGraph, for: .familySync)
 assertCondition(familyGraph.people.map(\.id) == ["family-person"], "family sync graph should only contain familyCircle people")

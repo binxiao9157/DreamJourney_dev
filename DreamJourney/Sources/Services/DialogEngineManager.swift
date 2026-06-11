@@ -1205,12 +1205,14 @@ extension DialogEngineManager: SpeechEngineDelegate {
         let memory = ConversationMemoryManager.shared.currentMemory
         let greeting: String
 
-        // 判断是否有有意义的上下文（四维度摘要至少1个维度）
-        let hasContext = memory.sessionCount > 0 && memory.lastSummary.hasAnyDimension
+        let canUseSummary = PrivacyScopePolicy.canUse(metadata: memory.lastSummaryPrivacyMetadata, surface: .prompt)
+        let kbHint = Stage1MemoryFacade.shared.greetingHint()
+        let hasContext = (memory.sessionCount > 0 && memory.lastSummary.hasAnyDimension && canUseSummary)
+            || !kbHint.isEmpty
 
         if hasContext {
             // 有历史记忆 → 上下文关联开场白
-            greeting = generateContextGreeting(memory: memory)
+            greeting = generateContextGreeting(memory: memory, kbHint: kbHint)
         } else {
             // 首次对话或无有意义上下文 → 系统推荐话题
             greeting = recommendedTopicGreeting()
@@ -1229,12 +1231,13 @@ extension DialogEngineManager: SpeechEngineDelegate {
     }
 
     /// 生成上下文关联的开场白（基于四维度摘要 + 知识库，每次随机不重复）
-    private func generateContextGreeting(memory: ConversationMemory) -> String {
+    private func generateContextGreeting(memory: ConversationMemory, kbHint: String? = nil) -> String {
         let summary = memory.lastSummary
-        let sentence = summary.toNaturalSentence()
+        let canUseSummary = PrivacyScopePolicy.canUse(metadata: memory.lastSummaryPrivacyMetadata, surface: .prompt)
+        let sentence = canUseSummary ? summary.toNaturalSentence() : ""
 
         // 【KBLite】尝试用知识库丰富开场白
-        let kbHint = Stage1MemoryFacade.shared.greetingHint()
+        let kbHint = kbHint ?? Stage1MemoryFacade.shared.greetingHint()
 
         // 有自然摘要时，围绕摘要构造开场白
         if !sentence.isEmpty {
@@ -1259,16 +1262,16 @@ extension DialogEngineManager: SpeechEngineDelegate {
         }
 
         // 只有个别维度，直接引用
-        if !summary.person.isEmpty {
+        if canUseSummary, !summary.person.isEmpty {
             return "又见面啦！上次您提到的\(summary.person)，后来怎么样了呀？"
         }
-        if !summary.place.isEmpty {
+        if canUseSummary, !summary.place.isEmpty {
             return "您好呀！上次聊到\(summary.place)，今天还想说说那儿的事吗？"
         }
-        if !summary.event.isEmpty {
+        if canUseSummary, !summary.event.isEmpty {
             return "您来啦！上次聊的\(summary.event)，今天想接着讲吗？"
         }
-        if !summary.time.isEmpty {
+        if canUseSummary, !summary.time.isEmpty {
             return "又见面啦！上次您聊起\(summary.time)的事，今天还想继续吗？"
         }
 
@@ -1297,31 +1300,36 @@ extension DialogEngineManager: SpeechEngineDelegate {
 
     /// 将历史记忆构建为 system_prompt 追加段落（基于四维度摘要 + 知识库）
     private func buildMemoryContext(memory: ConversationMemory) -> String {
+        let canUseSummary = PrivacyScopePolicy.canUse(metadata: memory.lastSummaryPrivacyMetadata, surface: .prompt)
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "M月d日"
         let dateStr = dateFormatter.string(from: memory.lastSessionDate)
 
         let summary = memory.lastSummary
-        var context = "\n\n【用户记忆档案】\n"
-        context += "- 这是第\(memory.sessionCount + 1)次和这位长辈聊天。\n"
-        context += "- 上次聊天时间：\(dateStr)\n"
+        var context = ""
 
-        if !summary.time.isEmpty {
-            context += "- 提到的时间：\(summary.time)\n"
-        }
-        if !summary.place.isEmpty {
-            context += "- 提到的地方：\(summary.place)\n"
-        }
-        if !summary.person.isEmpty {
-            context += "- 提到的人物：\(summary.person)\n"
-        }
-        if !summary.event.isEmpty {
-            context += "- 聊到的事件：\(summary.event)\n"
-        }
+        if canUseSummary {
+            context += "\n\n【用户记忆档案】\n"
+            context += "- 这是第\(memory.sessionCount + 1)次和这位长辈聊天。\n"
+            context += "- 上次聊天时间：\(dateStr)\n"
 
-        if summary.hasAnyDimension {
-            let sentence = summary.toNaturalSentence()
-            context += "- 上次对话摘要：\(sentence)\n"
+            if !summary.time.isEmpty {
+                context += "- 提到的时间：\(summary.time)\n"
+            }
+            if !summary.place.isEmpty {
+                context += "- 提到的地方：\(summary.place)\n"
+            }
+            if !summary.person.isEmpty {
+                context += "- 提到的人物：\(summary.person)\n"
+            }
+            if !summary.event.isEmpty {
+                context += "- 聊到的事件：\(summary.event)\n"
+            }
+
+            if summary.hasAnyDimension {
+                let sentence = summary.toNaturalSentence()
+                context += "- 上次对话摘要：\(sentence)\n"
+            }
         }
 
         // 【KBLite】附加知识库上下文（累计的人物、地点、事件、事实）
@@ -1331,9 +1339,13 @@ extension DialogEngineManager: SpeechEngineDelegate {
         }
 
         // 【KBLite】知识缺口检测（仅在合适时机引导补充）
-        let gapContext = KBLiteGapDetector.shared.buildGapContext()
+        let gapContext = KBLiteGapDetector.shared.buildGapContext(surface: .prompt)
         if !gapContext.isEmpty {
             context += gapContext
+        }
+
+        if context.isEmpty {
+            return ""
         }
 
         context += "\n请基于以上记忆自然地延续话题，让长辈感受到你记得他/她说过的事。\n"

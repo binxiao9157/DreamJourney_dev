@@ -12,9 +12,9 @@
 | --- | ---: | --- |
 | Mock/Simulator 基线 | 80% | `MockDialogEngine` 已实现，纯 Swift 验证、iPhoneOS build、simulator SDK typecheck 通过；完整 Simulator app build 仍受 `SpeechEngineToB` slice 影响，后续需独立 smoke target 或 Pod 条件化。 |
 | Safety Guard 合约 | 70% | 合约和 iOS client 已固化；DeepSeek chat/knowledge/image、Memoir、TTS 入口默认 fail-closed，并支持显式 mock allow 演示开关。 |
-| Privacy Scope 模型 | 80% | `ConversationTurn`、`Stage1MailboxMemoryInput`、MemoryArchive、TimeMailbox、KBLite v2 实体已携带 `privacyMetadata`，旧数据可迁移到保守默认 scope。 |
-| KBLite/Export/Widget 过滤 | 70% | KBLite remote extraction、prompt context、JSON export、Widget App Group、PDF 输入图谱、backend sync 已按 scope 过滤；MemoryArchive 可显式授予 generation/family scope。 |
-| CareDashboard/Family Sync 阶段2 | 35% | Family share package、FamilyRepository 已改用 familyCircle sanitized graph；CareDashboard transcript 入口已按 `.careDashboard` 过滤，只允许 familyCircle。 |
+| Privacy Scope 模型 | 88% | `ConversationTurn`、`Stage1MailboxMemoryInput`、`DialogMessage`、MemoryArchive、TimeMailbox、KBLite v2 实体已携带 `privacyMetadata`，旧数据可迁移到保守默认 scope。 |
+| KBLite/Export/Widget 过滤 | 75% | KBLite remote extraction、prompt context、JSON export、Widget App Group、PDF 输入图谱、backend sync 已按 scope 过滤；MemoryArchive 与普通对话均可显式授予 generation/family scope。 |
+| CareDashboard/Family Sync 阶段2 | 40% | Family share package、FamilyRepository 已改用 familyCircle sanitized graph；CareDashboard transcript 入口已按 `.careDashboard` 过滤，只允许 familyCircle。 |
 
 ## 已完成
 
@@ -38,6 +38,13 @@
 - MemoryArchive 和 TimeMailbox 模型新增 `privacyMetadata`，旧数据迁移为保守 scope；MemoryArchive 文本/照片、TimeMailbox 写信 UI 已支持显式选择私密/本机/可生成/亲友范围。
 - MemoryArchive 保存到 Stage1 对话记忆和图片分析入 KBLite 时保留用户选择的 scope；照片只有 `.generationAllowed` 才触发远端图片分析。
 - CareDashboard 读取当前 transcript 前按 `.careDashboard` 过滤，默认 localOnly 对话不进入家庭关怀看板统计。
+- 普通对话首页新增会话级使用范围选择：默认本机，可显式选择可生成或亲友；ASR/TTS/chat 兜底消息写入 Stage1 时保留当前会话 scope。
+- 普通对话照片上传沿用会话 scope；只有 `.generationAllowed` 才触发 DeepSeek Vision 与 KBLite 图片分析入库。
+- `DialogMessage` 新增 `privacyMetadata`，回忆录生成入口和 `MemoirService` 服务层均按 `.memoirGeneration` 过滤，未授权内容不进入 DeepSeek 生成。
+- `ConversationMemory.lastSummaryPrivacyMetadata` 记录会话摘要 scope，SDK prompt context 和历史开场白只使用 `.prompt` 允许的 generation 摘要；旧 summary 默认 `.localOnly`。
+- KBLite 派生实体遇到 mixed-scope transcript 时降级为 `.localOnly`，避免 local 内容被 generation 片段共同提升为远端可用实体。
+- KBLite 同名实体/事实只允许同 scope 合并；LLM merge、quickExtract fallback、图片分析入库和 JSON import 均使用同 scope matcher，跨 scope 同名内容保留为独立实体，避免 generation/family/local 字段互相污染或丢失。
+- KBLite prompt query 关联事实、开场白 hint、知识缺口上下文均按 `.prompt` 过滤；local summary 不再阻断已有 generation KBLite prompt context。
 
 ## 最新验证
 
@@ -59,7 +66,7 @@ bash Scripts/verify_phase2.sh
 - `MockDialogEngine verification passed`
 - `SafetyGuard verification: 4/4 passed`
 - `PrivacyScope verification passed`
-- `MemoryPrivacyIntegration verification passed`，覆盖 graph-level sanitized 输出、family/export/widget/backend/care surface 过滤、CareDashboard family-only transcript 和关系引用清理。
+- `MemoryPrivacyIntegration verification passed`，覆盖 graph-level sanitized 输出、family/export/widget/backend/care surface 过滤、CareDashboard family-only transcript、DialogMessage memoirGeneration 过滤、summary prompt scope 迁移、mixed-scope 派生降级、跨 scope 禁止合并和 prompt 相关事实过滤。
 - `RemoteSafetyGuard verification passed`，覆盖 default fail-closed、env/launch arg mock allow、本地 high 阻断。
 - `MockDialogEngine simulator typecheck` 通过
 - `git diff --check` / `git diff --cached --check` 通过
@@ -67,6 +74,6 @@ bash Scripts/verify_phase2.sh
 ## 下一步
 
 1. 接入真实 `/v1/safety/evaluate` transport；当前 mock allow 只用于阶段2演示，不是生产安全方案。
-2. 为普通对话 UI 增加显式 scope 授权选择，并决定 export/widget/backend 是否需要新的显式授权 scope。
+2. 决定 export/widget/backend 是否需要新的显式授权 scope，或保持当前默认空输出策略。
 3. 补 Family/CareDashboard 的家庭授权模型、成员级可见性和端到端 UI 验证。
-4. 处理完整 Simulator app build 的 `SpeechEngineToB` slice 阻断。
+4. 处理完整 Simulator app build 的 `SpeechEngineToB` slice 阻断，并补普通对话 scope 按钮的 UI 自动化 smoke。

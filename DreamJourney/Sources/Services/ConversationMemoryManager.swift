@@ -117,6 +117,7 @@ struct MemorySummary: Codable {
 struct ConversationMemory: Codable {
     var lastSessionDate: Date = Date()
     var lastSummary: MemorySummary = MemorySummary()  // 上次对话的四维度摘要
+    var lastSummaryPrivacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
     var sessionCount: Int = 0                          // 累计对话次数
     var recentTranscript: [ConversationTurn] = []      // 最近一次对话记录（最多保留20轮）
 
@@ -126,6 +127,38 @@ struct ConversationMemory: Codable {
     var mentionedFoods: [String] = []
     var lastTopic: String = ""
     var recentTopics: [String] = []
+
+    private enum CodingKeys: String, CodingKey {
+        case lastSessionDate
+        case lastSummary
+        case lastSummaryPrivacyMetadata
+        case sessionCount
+        case recentTranscript
+        case mentionedPeople
+        case mentionedPlaces
+        case mentionedFoods
+        case lastTopic
+        case recentTopics
+    }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        lastSessionDate = try container.decodeIfPresent(Date.self, forKey: .lastSessionDate) ?? Date()
+        lastSummary = try container.decodeIfPresent(MemorySummary.self, forKey: .lastSummary) ?? MemorySummary()
+        lastSummaryPrivacyMetadata = try container.decodeIfPresent(
+            MemoryPrivacyMetadata.self,
+            forKey: .lastSummaryPrivacyMetadata
+        ) ?? MemoryPrivacyMetadata(scope: .localOnly)
+        sessionCount = try container.decodeIfPresent(Int.self, forKey: .sessionCount) ?? 0
+        recentTranscript = try container.decodeIfPresent([ConversationTurn].self, forKey: .recentTranscript) ?? []
+        mentionedPeople = try container.decodeIfPresent([String].self, forKey: .mentionedPeople) ?? []
+        mentionedPlaces = try container.decodeIfPresent([String].self, forKey: .mentionedPlaces) ?? []
+        mentionedFoods = try container.decodeIfPresent([String].self, forKey: .mentionedFoods) ?? []
+        lastTopic = try container.decodeIfPresent(String.self, forKey: .lastTopic) ?? ""
+        recentTopics = try container.decodeIfPresent([String].self, forKey: .recentTopics) ?? []
+    }
 }
 
 #if !MEMORY_PRIVACY_INTEGRATION_VERIFY
@@ -187,6 +220,7 @@ final class ConversationMemoryManager {
 
         // 提取四维度摘要
         currentMemory.lastSummary = extractFourDimensionSummary()
+        currentMemory.lastSummaryPrivacyMetadata = KBLitePrivacyScopePolicy.derivedEntityMetadata(from: currentTranscript)
 
         // 更新元数据
         currentMemory.lastSessionDate = Date()
