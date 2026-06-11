@@ -114,4 +114,35 @@ let argTTSDecision = DeepSeekSafetyGuarding.guardDecision(
 )
 assertCondition(argTTSDecision.canSendToTTS, "mock safety launch arg should allow TTS")
 
+let offlineArgClient = DeepSeekSafetyGuarding.makeDefaultClient(
+    arguments: ["DreamJourney", "--roadshow-offline-mode"],
+    environment: ["DREAMJOURNEY_SAFETY_GUARD_BASE_URL": "https://guard.example"]
+)
+let offlineArgDecision = DeepSeekSafetyGuarding.guardDecision(
+    text: "普通回忆",
+    surface: .memoir,
+    stage: .userInputPreLLM,
+    target: .deepseek,
+    guardClient: offlineArgClient
+)
+assertCondition(offlineArgDecision.canSendToLLM, "roadshow offline launch arg should use mock allow safety guard")
+assertCondition(offlineArgDecision.reasonCode == "MOCK_ALLOW", "roadshow offline launch arg should not call configured guard endpoint")
+
+let offlineEnvClient = DeepSeekSafetyGuarding.makeDefaultClient(
+    arguments: ["DreamJourney"],
+    environment: [
+        "DREAMJOURNEY_ROADSHOW_OFFLINE": "true",
+        "DREAMJOURNEY_SAFETY_GUARD_BASE_URL": "https://guard.example"
+    ]
+)
+let offlineEnvDecision = DeepSeekSafetyGuarding.guardDecision(
+    text: "普通回忆",
+    surface: .memoir,
+    stage: .userInputPreLLM,
+    target: .deepseek,
+    guardClient: offlineEnvClient
+)
+assertCondition(offlineEnvDecision.canSendToLLM, "roadshow offline environment should use mock allow safety guard")
+assertCondition(offlineEnvDecision.reasonCode == "MOCK_ALLOW", "roadshow offline environment should not call configured guard endpoint")
+
 print("RemoteSafetyGuard verification passed")

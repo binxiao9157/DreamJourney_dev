@@ -79,6 +79,18 @@ let envEngine = DialogEngineFactory.makeDefault(
 )
 assertCondition(envEngine is MockDialogEngine, "environment should select MockDialogEngine")
 
+let offlineArgEngine = DialogEngineFactory.makeDefault(
+    arguments: ["DreamJourney", "--roadshow-offline-mode"],
+    environment: [:]
+)
+assertCondition(offlineArgEngine is MockDialogEngine, "roadshow offline launch arg should select MockDialogEngine")
+
+let offlineEnvEngine = DialogEngineFactory.makeDefault(
+    arguments: ["DreamJourney"],
+    environment: ["DREAMJOURNEY_ROADSHOW_OFFLINE": "1"]
+)
+assertCondition(offlineEnvEngine is MockDialogEngine, "roadshow offline environment should select MockDialogEngine")
+
 mock.simulateUserTurn("今天想聊聊年轻时在上海工作的事")
 assertCondition(delegate.finalASRText?.contains("上海") == true, "mock should emit final ASR text")
 assertCondition(delegate.ttsText?.contains("上海") == true, "mock should emit deterministic TTS reply")

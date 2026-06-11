@@ -6,6 +6,17 @@ cd "$ROOT_DIR"
 
 bash Scripts/verify_phase1.sh
 
+echo "== RoadshowDemoSeed =="
+xcrun swiftc -D CARE_DASHBOARD_VERIFY \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
+  DreamJourney/Sources/Services/ConversationMemoryManager.swift \
+  DreamJourney/Sources/Services/CareDashboard/CareSignalModels.swift \
+  DreamJourney/Sources/Services/CareDashboard/CareSignalAnalyzer.swift \
+  DreamJourney/Sources/Services/RoadshowDemoSeed.swift \
+  Scripts/RoadshowDemoVerify/main.swift \
+  -o /tmp/dreamjourney_roadshow_demo_verify
+/tmp/dreamjourney_roadshow_demo_verify
+
 echo "== MockDialogEngine =="
 xcrun swiftc -D MOCK_DIALOG_VERIFY \
   DreamJourney/Sources/Services/Safety/SafetyModels.swift \

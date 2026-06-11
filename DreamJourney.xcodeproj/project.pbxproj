@@ -76,6 +76,7 @@
 		A56CE000000000000000001 /* MemoryPrivacyScope.swift in Sources */ = {isa = PBXBuildFile; fileRef = A56CE000000000000000003 /* MemoryPrivacyScope.swift */; };
 		A57CE000000000000000001 /* KBLitePrivacyScopePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A57CE000000000000000003 /* KBLitePrivacyScopePolicy.swift */; };
 		A58CE000000000000000001 /* DeepSeekSafetyGuarding.swift in Sources */ = {isa = PBXBuildFile; fileRef = A58CE000000000000000003 /* DeepSeekSafetyGuarding.swift */; };
+		A59CE000000000000000001 /* RoadshowDemoSeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = A59CE000000000000000002 /* RoadshowDemoSeed.swift */; };
 		A45E9D7E5541F7288DD4141D /* ConversationMemoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97D922D4C28AF76D7CB85DFF /* ConversationMemoryManager.swift */; };
 		A52FFB266D8D9FC320182A0A /* MemoryRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BCB52701683AE3FAFABA6F /* MemoryRepository.swift */; };
 		A88DF4F43BC833D9433CEE7B /* MemoirTTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00898E98E95E3808561BEB51 /* MemoirTTSService.swift */; };
@@ -179,6 +180,7 @@
 		A56CE000000000000000003 /* MemoryPrivacyScope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryPrivacyScope.swift; sourceTree = "<group>"; };
 		A57CE000000000000000003 /* KBLitePrivacyScopePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLitePrivacyScopePolicy.swift; sourceTree = "<group>"; };
 		A58CE000000000000000003 /* DeepSeekSafetyGuarding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepSeekSafetyGuarding.swift; sourceTree = "<group>"; };
+		A59CE000000000000000002 /* RoadshowDemoSeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadshowDemoSeed.swift; sourceTree = "<group>"; };
 		A99960BA8CC38BCA98CB98F8 /* KnowledgeBaseViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeBaseViewController.swift; sourceTree = "<group>"; };
 		AA3777B38C40C14928088B38 /* MiniMateLoader.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = MiniMateLoader.js; sourceTree = "<group>"; };
 		AB6F020939B8B3A55A3A9013 /* LoginViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginViewController.swift; sourceTree = "<group>"; };
@@ -299,6 +301,7 @@
 				DF3727699437781613AA5CB5 /* OpenAvatarChatService.swift */,
 				A56CE000000000000000007 /* Privacy */,
 				D02862A4C9294AFE8E6FD396 /* Safety */,
+				A59CE000000000000000002 /* RoadshowDemoSeed.swift */,
 				26F1251EE7B24A20A8058F38 /* Stage1MemoryFacade.swift */,
 				A11CE000000000000000007 /* TimeMailbox */,
 				817EC556B1CCA40FC905A139 /* UserManager.swift */,
@@ -845,6 +848,7 @@
 				A44CE000000000000000002 /* MockDialogEngine.swift in Sources */,
 				397C1F6023E56C8E016A0D71 /* OpenAvatarChatService.swift in Sources */,
 				A56CE000000000000000001 /* MemoryPrivacyScope.swift in Sources */,
+				A59CE000000000000000001 /* RoadshowDemoSeed.swift in Sources */,
 				0FD1CC7F9A6E47179833E092 /* SafetyModels.swift in Sources */,
 				A55CE000000000000000002 /* SafetyGuardClient.swift in Sources */,
 				A55CE000000000000000001 /* SafetyGuardModels.swift in Sources */,

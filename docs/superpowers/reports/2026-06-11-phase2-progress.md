@@ -15,6 +15,7 @@
 | Privacy Scope 模型 | 92% | `ConversationTurn`、`Stage1MailboxMemoryInput`、`DialogMessage`、MemoryArchive、TimeMailbox、KBLite v2 实体已携带 `privacyMetadata`；`FamilyMemberVisibility` 已区分 all-family 与 selected-members，空成员选择不再误开放为全体可见，旧数据继续兼容迁移。 |
 | KBLite/Export/Widget 过滤 | 78% | KBLite remote extraction、prompt context、JSON export、Widget App Group、PDF 输入图谱、backend sync 已按 scope 过滤；familySync/careDashboard graph 支持按目标家庭成员二次裁剪。 |
 | CareDashboard/Family Sync 阶段2 | 72% | Family share package、FamilyRepository 已改用 familyCircle sanitized graph；CareDashboard transcript 入口按 `.careDashboard` 和目标成员可见性过滤；亲友成员行可进入成员视角看板，KBSync 导出可显式选择全体或单个成员目标；看板新增用户观测窗口、数据覆盖说明、脱敏观察报告和风险信号解释。 |
+| Roadshow Demo Cut 闭环 | 75% | 已补路演 seed、reset、offline launch 参数，App 启动自动注入演示家庭成员/信箱/档案/照片 mock analysis/KBLite graph/关怀转录；offline 参数已驱动 mock dialog 和 mock safety；完成 12 步路演脚本、真机 smoke checklist、失败兜底矩阵和边界文案；下一步是上真机逐屏 smoke、导出分享包 JSON 抽查和现场计时演练。 |
 
 ## 已完成
 
@@ -55,6 +56,11 @@
 - KBSync 导出入口新增目标对象 action sheet：用户需显式选择“全体亲友”或具体成员，成员导出会调用 `generateSharePackage(forFamilyMemberID:)`，取消不会生成分享包。
 - CareDashboard snapshot 增加基于用户发言的观测窗口、观测天数、数据覆盖摘要、脱敏观察报告和需关注信号说明；这些字段只输出聚合/解释性文本，不展示原始对话句子。
 - CareDashboard UI 在 header 展示数据覆盖和观测窗口，在指标区展示观测天数，并新增“脱敏观察报告”卡片，作为阶段1“脱敏健康周报/趋势提示”的本机雏形。
+- 新增 `RoadshowDemoSeed`，支持 `--seed-roadshow-demo` / `DREAMJOURNEY_SEED=roadshow_demo`、`--reset-roadshow-demo` / `DREAMJOURNEY_RESET_DEMO=1`、`--roadshow-offline-mode` / `DREAMJOURNEY_ROADSHOW_OFFLINE=1`。
+- App 启动时接入路演 seed：自动登录路演测试账号，写入路演家庭成员、时空信箱 delivered 信件、记忆档案馆文本/照片 mock analysis、KBLite graph 和 CareDashboard 可用的 familyCircle 对话转录。
+- Roadshow offline mode 接入默认兜底：`DialogEngineFactory` 在 offline 参数/env 下返回 `MockDialogEngine`；`DeepSeekSafetyGuarding` 在 offline 参数/env 下优先使用 mock allow guard，不调用已配置的真实 guard endpoint。
+- 新增 `Scripts/RoadshowDemoVerify/main.swift`，覆盖 seed 包完整性、launch 参数/env 解析、成员级可见性、CareDashboard 非空信号、五段路演步骤、KBLite/分享包文案和边界文案。
+- 新增 `docs/superpowers/reports/2026-06-11-roadshow-demo-cut.md`，沉淀真机前置条件、启动参数、demo seed 规格、12 步路演脚本、手动验收 checklist、失败兜底矩阵和产品边界文案。
 
 ## 最新验证
 
@@ -73,11 +79,12 @@ bash Scripts/verify_phase2.sh
 - `KBLite 验收结果: 32/32 通过`
 - `DreamJourney.xcodeproj/project.pbxproj: OK`
 - iPhoneOS Debug build: `** BUILD SUCCEEDED **`
+- `RoadshowDemoSeed verification passed`，覆盖 roadshow seed 包、launch args/env、成员级可见性、CareDashboard 输入和边界文案。
 - `MockDialogEngine verification passed`
 - `SafetyGuard verification: 14/14 passed`，覆盖真实 HTTP POST `/v1/safety/evaluate`、完整 evaluate URL 与尾斜杠归一化、JSON/Bearer/no_store_raw/no-store 请求边界、无 key 时不发 Authorization、非 2xx/网络错误/解码失败 fail-closed、环境变量和 Info.plist 配置默认 client 走 HTTP transport、mock allow 优先级。
 - `PrivacyScope verification passed`，覆盖 `.selectedMembers([])` 不误开放、旧版 `allowedMemberIDs` JSON 可兼容解码为成员限定范围。
 - `MemoryPrivacyIntegration verification passed`，覆盖 graph-level sanitized 输出、family/export/widget/backend/care surface 过滤、CareDashboard family-only transcript、成员级 family visibility、selected-member graph 裁剪、DialogMessage memoirGeneration 过滤、summary prompt scope 迁移、mixed-scope 派生降级、跨 scope 禁止合并和 prompt 相关事实过滤。
-- `RemoteSafetyGuard verification passed`，覆盖 default fail-closed、env/launch arg mock allow、本地 high 阻断。
+- `RemoteSafetyGuard verification passed`，覆盖 default fail-closed、env/launch arg mock allow、roadshow offline mock allow、本地 high 阻断。
 - `MockDialogEngine simulator typecheck` 通过
 - `git diff --check` / `git diff --cached --check` 通过
 
@@ -85,5 +92,7 @@ bash Scripts/verify_phase2.sh
 
 1. 与服务端联调真实 `/v1/safety/evaluate`：确认响应字段、状态码、鉴权、超时和审计 HMAC 策略，并补充失败注入/端到端 smoke。
 2. 决定 export/widget/backend 是否需要新的显式授权 scope，或保持当前默认空输出策略。
-3. 补 Family/CareDashboard 的授权 UI：为记忆/对话选择具体可见成员，并把当前访问者身份接到真实登录亲友身份；现阶段已完成亲友成员行、分享包导出的目标成员入口，以及本机脱敏周报展示。
-4. 处理完整 Simulator app build 的 `SpeechEngineToB` slice 阻断，并补普通对话 scope 按钮的 UI 自动化 smoke。
+3. 执行 Roadshow Demo Cut 真机 smoke：使用 reset+seed+mock+offline 参数启动，逐屏确认信箱、档案、回忆 mock、关怀看板、分享包，并保存截图/日志。
+4. 抽查分享包 JSON：自动断言不含 `localOnly`、信件正文、完整对话原文。
+5. 补 Family/CareDashboard 的授权 UI：为记忆/对话选择具体可见成员，并把当前访问者身份接到真实登录亲友身份；现阶段已完成亲友成员行、分享包导出的目标成员入口，以及本机脱敏周报展示。
+6. 处理完整 Simulator app build 的 `SpeechEngineToB` slice 阻断，并补普通对话 scope 按钮的 UI 自动化 smoke。

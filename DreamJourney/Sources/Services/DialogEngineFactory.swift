@@ -14,10 +14,21 @@ final class DialogEngineFactory {
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> DialogEngineProtocol {
         if arguments.contains("--use-mock-dialog-engine") ||
-            environment["DREAMJOURNEY_DIALOG_ENGINE"]?.lowercased() == "mock" {
+            environment["DREAMJOURNEY_DIALOG_ENGINE"]?.lowercased() == "mock" ||
+            isRoadshowOfflineModeEnabled(arguments: arguments, environment: environment) {
             return make(type: .mock)
         }
         return make(type: .volcengine)
+    }
+
+    private static func isRoadshowOfflineModeEnabled(
+        arguments: [String],
+        environment: [String: String]
+    ) -> Bool {
+        let offlineValue = environment["DREAMJOURNEY_ROADSHOW_OFFLINE"]?.lowercased()
+        return arguments.contains("--roadshow-offline-mode") ||
+            offlineValue == "1" ||
+            offlineValue == "true"
     }
 
     static func make(type: DialogEngineType = .volcengine) -> DialogEngineProtocol {
