@@ -24,6 +24,7 @@ xcrun swiftc \
   DreamJourney/Sources/Services/Safety/SafetyMonitor.swift \
   DreamJourney/Sources/Services/Safety/SafetyGuardModels.swift \
   DreamJourney/Sources/Services/Safety/SafetyGuardClient.swift \
+  DreamJourney/Sources/Memoir/DeepSeekSafetyGuarding.swift \
   Scripts/SafetyGuardVerify/main.swift \
   -o /tmp/dreamjourney_safety_guard_verify
 /tmp/dreamjourney_safety_guard_verify

@@ -3,10 +3,21 @@ import Foundation
 enum DeepSeekSafetyGuarding {
     static func makeDefaultClient(
         arguments: [String] = ProcessInfo.processInfo.arguments,
-        environment: [String: String] = ProcessInfo.processInfo.environment
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        bundle: Bundle = .main,
+        httpClient: (any SafetyGuardHTTPClient)? = nil
     ) -> SafetyGuardClient {
         if isMockAllowEnabled(arguments: arguments, environment: environment) {
             return SafetyGuardClient(transport: DeepSeekSafetyGuardMockAllowTransport())
+        }
+        if let baseURL = configuredSafetyGuardBaseURL(environment: environment, bundle: bundle) {
+            return SafetyGuardClient(
+                transport: SafetyGuardHTTPTransport(
+                    baseURL: baseURL,
+                    apiKey: configuredSafetyGuardAPIKey(environment: environment, bundle: bundle),
+                    httpClient: httpClient
+                )
+            )
         }
         return SafetyGuardClient(transport: DeepSeekSafetyGuardUnavailableTransport())
     }
@@ -43,6 +54,37 @@ enum DeepSeekSafetyGuarding {
     ) -> Bool {
         arguments.contains("--use-mock-safety-guard") ||
             environment["DREAMJOURNEY_SAFETY_GUARD"]?.lowercased() == "mock_allow"
+    }
+
+    private static func configuredSafetyGuardBaseURL(
+        environment: [String: String],
+        bundle: Bundle
+    ) -> URL? {
+        let rawValue = environment["DREAMJOURNEY_SAFETY_GUARD_BASE_URL"]
+            ?? environment["DREAMJOURNEY_SAFETY_GUARD_URL"]
+            ?? bundle.object(forInfoDictionaryKey: "SafetyGuardBaseURL") as? String
+        return trimmedURL(from: rawValue)
+    }
+
+    private static func configuredSafetyGuardAPIKey(
+        environment: [String: String],
+        bundle: Bundle
+    ) -> String? {
+        let rawValue = environment["DREAMJOURNEY_SAFETY_GUARD_API_KEY"]
+            ?? bundle.object(forInfoDictionaryKey: "SafetyGuardAPIKey") as? String
+        let trimmed = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let trimmed, !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
+    }
+
+    private static func trimmedURL(from rawValue: String?) -> URL? {
+        let trimmed = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let trimmed, !trimmed.isEmpty else {
+            return nil
+        }
+        return URL(string: trimmed)
     }
 }
 

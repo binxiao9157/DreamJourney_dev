@@ -11,7 +11,7 @@
 | 开发包 | 完成度 | 状态 |
 | --- | ---: | --- |
 | Mock/Simulator 基线 | 80% | `MockDialogEngine` 已实现，纯 Swift 验证、iPhoneOS build、simulator SDK typecheck 通过；完整 Simulator app build 仍受 `SpeechEngineToB` slice 影响，后续需独立 smoke target 或 Pod 条件化。 |
-| Safety Guard 合约 | 70% | 合约和 iOS client 已固化；DeepSeek chat/knowledge/image、Memoir、TTS 入口默认 fail-closed，并支持显式 mock allow 演示开关。 |
+| Safety Guard 合约 | 82% | 合约和 iOS client 已固化；DeepSeek chat/knowledge/image、Memoir、TTS 入口默认 fail-closed，支持显式 mock allow 演示开关，并已接入真实 `/v1/safety/evaluate` HTTP transport 最小闭环。 |
 | Privacy Scope 模型 | 88% | `ConversationTurn`、`Stage1MailboxMemoryInput`、`DialogMessage`、MemoryArchive、TimeMailbox、KBLite v2 实体已携带 `privacyMetadata`，旧数据可迁移到保守默认 scope。 |
 | KBLite/Export/Widget 过滤 | 75% | KBLite remote extraction、prompt context、JSON export、Widget App Group、PDF 输入图谱、backend sync 已按 scope 过滤；MemoryArchive 与普通对话均可显式授予 generation/family scope。 |
 | CareDashboard/Family Sync 阶段2 | 40% | Family share package、FamilyRepository 已改用 familyCircle sanitized graph；CareDashboard transcript 入口已按 `.careDashboard` 过滤，只允许 familyCircle。 |
@@ -32,6 +32,8 @@
 - 新增 `KBLitePrivacyScopePolicy`，KBLite 远端提取只允许 `.generationAllowed` transcript，prompt context 过滤不可用实体。
 - 新增 `DeepSeekSafetyGuarding`，DeepSeek chat/knowledge/image、Memoir 生成、Memoir TTS 发起前执行 guard。
 - 新增 SafetyGuard mock allow 选择器：默认仍 fail-closed，使用 `--use-mock-safety-guard` 或 `DREAMJOURNEY_SAFETY_GUARD=mock_allow` 时才允许阶段2远端演示。
+- 新增 `SafetyGuardHTTPTransport` 和可注入 `SafetyGuardHTTPClient`，配置 `DREAMJOURNEY_SAFETY_GUARD_BASE_URL` 或 `SafetyGuardBaseURL` 后 POST 到 `/v1/safety/evaluate`；支持可选 `DREAMJOURNEY_SAFETY_GUARD_API_KEY` / `SafetyGuardAPIKey` Bearer token。
+- `DeepSeekSafetyGuarding.makeDefaultClient` 增加真实 guard endpoint 配置入口；显式 mock allow 优先，未配置 endpoint 时仍使用 unavailable transport fail-closed。
 - 新增 `KBLitePrivacyScopePolicy.sanitizedGraph`，按 `MemoryUseSurface` 裁剪 KBLite graph 并清理人物、地点、事件、事实之间的悬挂引用。
 - `KBLiteManager.exportJSON(surface:)`、Widget App Group 输出、OpenAvatar backend sync、KBLite PDF 输入图谱已统一走 sanitized graph；当前 `.export`、`.widget`、`.backendSync` 在未显式授权前保持空输出。
 - Family share package 和 `FamilyRepository` 改用 `.familySync` sanitized graph，只允许 `familyCircle` 进入家庭同步/亲属圈自动同步。
@@ -64,7 +66,7 @@ bash Scripts/verify_phase2.sh
 - `DreamJourney.xcodeproj/project.pbxproj: OK`
 - iPhoneOS Debug build: `** BUILD SUCCEEDED **`
 - `MockDialogEngine verification passed`
-- `SafetyGuard verification: 4/4 passed`
+- `SafetyGuard verification: 14/14 passed`，覆盖真实 HTTP POST `/v1/safety/evaluate`、完整 evaluate URL 与尾斜杠归一化、JSON/Bearer/no_store_raw/no-store 请求边界、无 key 时不发 Authorization、非 2xx/网络错误/解码失败 fail-closed、环境变量和 Info.plist 配置默认 client 走 HTTP transport、mock allow 优先级。
 - `PrivacyScope verification passed`
 - `MemoryPrivacyIntegration verification passed`，覆盖 graph-level sanitized 输出、family/export/widget/backend/care surface 过滤、CareDashboard family-only transcript、DialogMessage memoirGeneration 过滤、summary prompt scope 迁移、mixed-scope 派生降级、跨 scope 禁止合并和 prompt 相关事实过滤。
 - `RemoteSafetyGuard verification passed`，覆盖 default fail-closed、env/launch arg mock allow、本地 high 阻断。
@@ -73,7 +75,7 @@ bash Scripts/verify_phase2.sh
 
 ## 下一步
 
-1. 接入真实 `/v1/safety/evaluate` transport；当前 mock allow 只用于阶段2演示，不是生产安全方案。
+1. 与服务端联调真实 `/v1/safety/evaluate`：确认响应字段、状态码、鉴权、超时和审计 HMAC 策略，并补充失败注入/端到端 smoke。
 2. 决定 export/widget/backend 是否需要新的显式授权 scope，或保持当前默认空输出策略。
 3. 补 Family/CareDashboard 的家庭授权模型、成员级可见性和端到端 UI 验证。
 4. 处理完整 Simulator app build 的 `SpeechEngineToB` slice 阻断，并补普通对话 scope 按钮的 UI 自动化 smoke。
