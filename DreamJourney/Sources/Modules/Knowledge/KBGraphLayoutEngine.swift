@@ -38,7 +38,9 @@ final class KBGraphLayoutEngine {
         var positions = initialPositions(for: people)
 
         // 找到"我"（用户自己），固定在中心
-        let selfId = people.first(where: { $0.relation == nil || $0.relation == "自己" || $0.name == "我" })?.id
+        // 优先使用 __self__ 虚拟节点 ID，fallback 到原有启发式匹配
+        let selfId = people.first(where: { $0.id == "__self__" })?.id
+            ?? people.first(where: { $0.relation == nil || $0.relation == "自己" || $0.name == "我" })?.id
 
         // 构建关系边集合
         let edges = buildEdges(from: people)
@@ -106,6 +108,11 @@ final class KBGraphLayoutEngine {
         // 确保最小距离
         enforceMinDistance(&positions, people: people, selfId: selfId)
 
+        // 强制 __self__ 节点始终固定在中心 (0, 0)
+        if let sid = selfId {
+            positions[sid] = .zero
+        }
+
         return positions
     }
 
@@ -121,12 +128,19 @@ final class KBGraphLayoutEngine {
         var selfPerson: KBPerson?
 
         for p in people {
-            if p.relation == nil || p.relation == "自己" || p.name == "我" {
+            if p.id == "__self__" {
                 selfPerson = p
             } else if isGrandparentRelation(p.relation) {
                 tier1.append(p)
             } else if isParentRelation(p.relation) {
                 tier2.append(p)
+            } else if p.relation == nil || p.relation == "自己" || p.name == "我" {
+                // 非 __self__ 节点但无关系信息，若尚未指定 selfPerson 则作为自身
+                if selfPerson == nil {
+                    selfPerson = p
+                } else {
+                    tier3.append(p)
+                }
             } else {
                 tier3.append(p)
             }

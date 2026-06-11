@@ -169,3 +169,9 @@ struct KBImageAnalysisResult: Codable {
     var mood: String = ""
     var estimatedDecade: Int?
 }
+
+// MARK: - Notifications
+
+extension Notification.Name {
+    static let kbLiteDidUpdate = Notification.Name("com.dreamjourney.kblite.didUpdate")
+}

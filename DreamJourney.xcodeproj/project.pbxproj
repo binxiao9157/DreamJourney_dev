@@ -13,7 +13,6 @@
 		0F70ED911BFB7D4BB385430C /* TodayInHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8671DFE378573EA24A2FACC1 /* TodayInHistoryView.swift */; };
 		1074B6D9588F46B0001A61E1 /* TodayInHistoryProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF7E1F392A912E6A3B365A8C /* TodayInHistoryProvider.swift */; };
 		179BE070081D916DE52040A2 /* MemoryAnnotationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89B794AF9178933332C22526 /* MemoryAnnotationView.swift */; };
-		1D0401C7E019447659D4E6E2 /* Pods_DreamJourney.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AC41951122B5EBD61185853B /* Pods_DreamJourney.framework */; };
 		1D6C68E038F68B262E1C025D /* MicrophonePermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CCF5FAEB2B1690C0FB7E56E /* MicrophonePermissionManager.swift */; };
 		27EE981CBDE11D52F4E65EFE /* WarmMemoryAnnotationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE368D9CDFA77A1F03C66806 /* WarmMemoryAnnotationView.swift */; };
 		328F094BD6DC27B02845187F /* MemoirAudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E34D9D2B8943EBBDECBC489 /* MemoirAudioPlayer.swift */; };
@@ -48,6 +47,7 @@
 		885C95FBDAA6BCEA04BEC2F6 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 912061891274737BC5D94274 /* AppDelegate.swift */; };
 		896769650B9A953A6C0B6F19 /* KBSyncViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98DD9E92DD052BF00C55A0CB /* KBSyncViewController.swift */; };
 		89C5568D19D2A39E9AEEFBF3 /* FamilyRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B20338C4C40695560A52B81 /* FamilyRepository.swift */; };
+		8C9B58C4A5C3BD5EF09847E6 /* Pods_DreamJourney.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6F92F68CA0C355AE2B34198A /* Pods_DreamJourney.framework */; };
 		8CE4E17850336E26E4389B8B /* pako.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 4B70B14E8FFEE31DDE6BAB7B /* pako.min.js */; };
 		8D3329C01B2DE3980D08E92E /* MemoryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EC2B6D3AE2C256785CCE388 /* MemoryModel.swift */; };
 		90DF2D00B2A745900FF43F33 /* KBLitePDFExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA7025362579F4B59C5376E8 /* KBLitePDFExporter.swift */; };
@@ -93,6 +93,7 @@
 		0E34D9D2B8943EBBDECBC489 /* MemoirAudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirAudioPlayer.swift; sourceTree = "<group>"; };
 		101D4CAEA6C25FCE0B7B8C8A /* BridgingHeader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BridgingHeader.h; sourceTree = "<group>"; };
 		165FB245CE23B3EF2C90C799 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
+		16DC1997EF2F7459C92D09EF /* Pods-DreamJourney.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DreamJourney.release.xcconfig"; path = "Target Support Files/Pods-DreamJourney/Pods-DreamJourney.release.xcconfig"; sourceTree = "<group>"; };
 		1EC2B6D3AE2C256785CCE388 /* MemoryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryModel.swift; sourceTree = "<group>"; };
 		2A0648C7E87957BF18381DE1 /* DHLiveMini.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = DHLiveMini.js; sourceTree = "<group>"; };
 		33790F6FDDECF7ADE231C869 /* VoiceCloneService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceCloneService.swift; sourceTree = "<group>"; };
@@ -100,8 +101,6 @@
 		41B3D2BD9BE7DFE0AABF34F1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		4B70B14E8FFEE31DDE6BAB7B /* pako.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = pako.min.js; sourceTree = "<group>"; };
 		520A85AB37898C097F761313 /* MemoirRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirRepository.swift; sourceTree = "<group>"; };
-		53A74D8BBBE8D1D58DA05F20 /* Pods-DreamJourney.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DreamJourney.release.xcconfig"; path = "Target Support Files/Pods-DreamJourney/Pods-DreamJourney.release.xcconfig"; sourceTree = "<group>"; };
-		53D04F142F68D4E8F6B8E79B /* Pods-DreamJourney.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DreamJourney.debug.xcconfig"; path = "Target Support Files/Pods-DreamJourney/Pods-DreamJourney.debug.xcconfig"; sourceTree = "<group>"; };
 		5628E3908BA5F87F7FC6373B /* KBLiteGapDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLiteGapDetector.swift; sourceTree = "<group>"; };
 		56ED8B99EE2B18AC4D06CC30 /* MemoryEditViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryEditViewController.swift; sourceTree = "<group>"; };
 		576656BFF57471DCF9B231CB /* KBLiteManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLiteManager.swift; sourceTree = "<group>"; };
@@ -113,6 +112,7 @@
 		6B8C7B2C35F25BFE0EECF1DC /* AIRecordingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIRecordingViewController.swift; sourceTree = "<group>"; };
 		6D151E9314D78EB40CF2EE48 /* DreamJourneyWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DreamJourneyWidget.swift; sourceTree = "<group>"; };
 		6E96DEA2DA5C7BD48E6F45C1 /* TGColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TGColors.swift; sourceTree = "<group>"; };
+		6F92F68CA0C355AE2B34198A /* Pods_DreamJourney.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_DreamJourney.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		71EF8575113A0367F332FE72 /* UIColor+WarmTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIColor+WarmTheme.swift"; sourceTree = "<group>"; };
 		766106FFCA3A78A7BE5B2E76 /* KBLiteModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLiteModels.swift; sourceTree = "<group>"; };
 		7750B20E0FBEFB67B5664936 /* TGToast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TGToast.swift; sourceTree = "<group>"; };
@@ -140,7 +140,6 @@
 		A99960BA8CC38BCA98CB98F8 /* KnowledgeBaseViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeBaseViewController.swift; sourceTree = "<group>"; };
 		AA3777B38C40C14928088B38 /* MiniMateLoader.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = MiniMateLoader.js; sourceTree = "<group>"; };
 		AB6F020939B8B3A55A3A9013 /* LoginViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginViewController.swift; sourceTree = "<group>"; };
-		AC41951122B5EBD61185853B /* Pods_DreamJourney.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_DreamJourney.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		AE23737BEAD63674ABA24223 /* MemoirGenerationCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirGenerationCard.swift; sourceTree = "<group>"; };
 		B1BA39C954DE93A9C6B92546 /* FamilyCircleViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyCircleViewController.swift; sourceTree = "<group>"; };
 		B274A4971D76C1D3BFEE4E9A /* WarmTabBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WarmTabBarController.swift; sourceTree = "<group>"; };
@@ -152,6 +151,7 @@
 		C0BBE3B2755905EC665443B5 /* UIViewController+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIViewController+Extensions.swift"; sourceTree = "<group>"; };
 		C31B66E6C099EABF318FC693 /* DreamJourneyWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = DreamJourneyWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		C9115FEF531F2DA00EDE4969 /* bs_texture_halfFace.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = bs_texture_halfFace.png; sourceTree = "<group>"; };
+		CCCEC476950937337FC59A5C /* Pods-DreamJourney.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DreamJourney.debug.xcconfig"; path = "Target Support Files/Pods-DreamJourney/Pods-DreamJourney.debug.xcconfig"; sourceTree = "<group>"; };
 		D4566C37A3A020CABC4D249A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D4C24A29B21F6E3786F14398 /* MapFootprintViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapFootprintViewController.swift; sourceTree = "<group>"; };
 		D6AC678D507A1494FFBFDAA0 /* SharedModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedModels.swift; sourceTree = "<group>"; };
@@ -169,11 +169,11 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		1BF687CBE5D01E3C5EEC1A79 /* Frameworks */ = {
+		BE15FA31F4ACF2193B267454 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1D0401C7E019447659D4E6E2 /* Pods_DreamJourney.framework in Frameworks */,
+				8C9B58C4A5C3BD5EF09847E6 /* Pods_DreamJourney.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -277,6 +277,14 @@
 			path = Theme;
 			sourceTree = "<group>";
 		};
+		43C21E05558EE05B32A77B17 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				6F92F68CA0C355AE2B34198A /* Pods_DreamJourney.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		50CAE6F5337E5B6CA13DDD7A /* Home */ = {
 			isa = PBXGroup;
 			children = (
@@ -334,16 +342,6 @@
 			path = DreamJourneyWidget;
 			sourceTree = "<group>";
 		};
-		69CD2C2C29F511343EDAC25D /* Pods */ = {
-			isa = PBXGroup;
-			children = (
-				53D04F142F68D4E8F6B8E79B /* Pods-DreamJourney.debug.xcconfig */,
-				53A74D8BBBE8D1D58DA05F20 /* Pods-DreamJourney.release.xcconfig */,
-			);
-			name = Pods;
-			path = Pods;
-			sourceTree = "<group>";
-		};
 		6D7389191CC91FC0D5B9F427 /* Family */ = {
 			isa = PBXGroup;
 			children = (
@@ -359,6 +357,16 @@
 				C31B66E6C099EABF318FC693 /* DreamJourneyWidget.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		7EAFE3F5C63985A98B874F53 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				CCCEC476950937337FC59A5C /* Pods-DreamJourney.debug.xcconfig */,
+				16DC1997EF2F7459C92D09EF /* Pods-DreamJourney.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
 			sourceTree = "<group>";
 		};
 		8567BB0E0F370030BBDBC660 /* Common */ = {
@@ -425,14 +433,6 @@
 			path = Memory;
 			sourceTree = "<group>";
 		};
-		B9CA1DF946FA9B7F989910A3 /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-				AC41951122B5EBD61185853B /* Pods_DreamJourney.framework */,
-			);
-			name = Frameworks;
-			sourceTree = "<group>";
-		};
 		BAEBFA31204DE842BAB734A2 /* TabBar */ = {
 			isa = PBXGroup;
 			children = (
@@ -447,8 +447,8 @@
 				F9A16ACB58DF276F2BF39DE4 /* DreamJourney */,
 				697A85CBA95E64BD34FC210E /* DreamJourneyWidget */,
 				7DE936DB591FFBAD8E9E50A5 /* Products */,
-				69CD2C2C29F511343EDAC25D /* Pods */,
-				B9CA1DF946FA9B7F989910A3 /* Frameworks */,
+				7EAFE3F5C63985A98B874F53 /* Pods */,
+				43C21E05558EE05B32A77B17 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -498,12 +498,12 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 1CCDD1B6E5FF0C6547206FAE /* Build configuration list for PBXNativeTarget "DreamJourney" */;
 			buildPhases = (
-				D8DEDA255B14BC5737067063 /* [CP] Check Pods Manifest.lock */,
+				7D834CCB6EB51CA3F9AEBD44 /* [CP] Check Pods Manifest.lock */,
 				AD48F7659B7B3B317EFE8FD0 /* Sources */,
 				0FB3C3E22E7CD4BBD93204A0 /* Resources */,
-				1BF687CBE5D01E3C5EEC1A79 /* Frameworks */,
-				5E6BAB56E8C686489F57150E /* [CP] Embed Pods Frameworks */,
-				33A2319A5F829CC60335AD8C /* [CP] Copy Pods Resources */,
+				BE15FA31F4ACF2193B267454 /* Frameworks */,
+				A5D68B9D0372FD4EFAAE195A /* [CP] Embed Pods Frameworks */,
+				E3A5D35B643EA409B9B966A7 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -573,41 +573,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		33A2319A5F829CC60335AD8C /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-DreamJourney/Pods-DreamJourney-resources-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Copy Pods Resources";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-DreamJourney/Pods-DreamJourney-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-DreamJourney/Pods-DreamJourney-resources.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		5E6BAB56E8C686489F57150E /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-DreamJourney/Pods-DreamJourney-frameworks-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-DreamJourney/Pods-DreamJourney-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-DreamJourney/Pods-DreamJourney-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		D8DEDA255B14BC5737067063 /* [CP] Check Pods Manifest.lock */ = {
+		7D834CCB6EB51CA3F9AEBD44 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -627,6 +593,40 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		A5D68B9D0372FD4EFAAE195A /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-DreamJourney/Pods-DreamJourney-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-DreamJourney/Pods-DreamJourney-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-DreamJourney/Pods-DreamJourney-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		E3A5D35B643EA409B9B966A7 /* [CP] Copy Pods Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-DreamJourney/Pods-DreamJourney-resources-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Copy Pods Resources";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-DreamJourney/Pods-DreamJourney-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-DreamJourney/Pods-DreamJourney-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -792,7 +792,7 @@
 		};
 		2222E1245F8E900D1C044CB8 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 53D04F142F68D4E8F6B8E79B /* Pods-DreamJourney.debug.xcconfig */;
+			baseConfigurationReference = CCCEC476950937337FC59A5C /* Pods-DreamJourney.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -832,7 +832,7 @@
 		};
 		C8DD16459E3E0B3840AE970F /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 53A74D8BBBE8D1D58DA05F20 /* Pods-DreamJourney.release.xcconfig */;
+			baseConfigurationReference = 16DC1997EF2F7459C92D09EF /* Pods-DreamJourney.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;

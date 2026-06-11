@@ -4,7 +4,18 @@ import Foundation
 final class FamilyRepository {
 
     static let shared = FamilyRepository()
-    private init() { seedMockData(); syncFromKnowledgeBase() }
+    private init() {
+        seedMockData()
+        NotificationCenter.default.addObserver(self, selector: #selector(onKBUpdated), name: .kbLiteDidUpdate, object: nil)
+        // 延迟首次同步（等知识库加载完成）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.syncFromKnowledgeBase()
+        }
+    }
+
+    @objc private func onKBUpdated() {
+        syncFromKnowledgeBase()
+    }
 
     private var members: [FamilyMember] = []
 
@@ -26,8 +37,14 @@ final class FamilyRepository {
     }
 
     // MARK: - KBLite 同步：从知识库中提取人物 → 亲属圈
+
+    /// 供外部按需调用的公开同步方法
+    func refreshFromKnowledgeBase() {
+        syncFromKnowledgeBase()
+    }
+
     /// 将知识库中识别到的人物自动同步到亲属圈列表
-    func syncFromKnowledgeBase() {
+    private func syncFromKnowledgeBase() {
         let graph = KBLiteManager.shared.graph
         guard !graph.people.isEmpty else { return }
 

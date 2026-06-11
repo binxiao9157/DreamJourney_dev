@@ -249,6 +249,10 @@ final class DeepSeekService {
 
     // MARK: - Image Analysis (KBLite)
 
+    // analyzeImage 使用 URLRequest 而非 Alamofire 参数编码，
+    // 因为 Vision API 的 content 字段需要混合 text + image_url 的数组格式，
+    // Alamofire 的 JSONParameterEncoder 无法直接表达 [String: Any] 中嵌套异构数组。
+
     /// 调用 DeepSeek Vision API 分析图片
     func analyzeImage(
         imageBase64: String,

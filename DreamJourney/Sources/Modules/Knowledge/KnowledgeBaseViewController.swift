@@ -50,6 +50,11 @@ final class KnowledgeBaseViewController: UIViewController {
         view.backgroundColor = .warmBackground
         setupNavigationBar()
         setupLayout()
+        NotificationCenter.default.addObserver(self, selector: #selector(onKBUpdated), name: .kbLiteDidUpdate, object: nil)
+    }
+
+    @objc private func onKBUpdated() {
+        tableView.reloadData()
     }
 
     override func viewWillAppear(_ animated: Bool) {

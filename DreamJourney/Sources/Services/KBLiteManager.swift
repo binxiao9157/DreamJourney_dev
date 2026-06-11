@@ -29,7 +29,10 @@ final class KBLiteManager {
     // MARK: - Properties
 
     /// 内存中的知识图谱
-    internal(set) var graph = KBLiteGraph()
+    private(set) var graph = KBLiteGraph()
+
+    /// 读写锁，保护 graph 的并发访问
+    private let graphLock = NSLock()
 
     /// 是否正在进行提取（避免并发）
     private var isExtracting = false
@@ -39,6 +42,23 @@ final class KBLiteManager {
 
     /// 是否已输出过容量警告
     private var didWarnCapacity = false
+
+    // MARK: - Thread-Safe Graph Access
+
+    /// 线程安全地读取 graph
+    func readGraph<T>(_ block: (KBLiteGraph) -> T) -> T {
+        graphLock.lock()
+        defer { graphLock.unlock() }
+        return block(graph)
+    }
+
+    /// 线程安全地修改 graph（修改后自动保存并发送通知）
+    func writeGraph(_ block: (inout KBLiteGraph) -> Void) {
+        graphLock.lock()
+        block(&graph)
+        graphLock.unlock()
+        save()
+    }
 
     // MARK: - File Path
 
@@ -83,6 +103,10 @@ final class KBLiteManager {
         }
         // 同步到 App Group 共享容器（供 Widget 读取）
         writeToAppGroup()
+        // 通知 UI 数据已更新
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .kbLiteDidUpdate, object: nil)
+        }
     }
 
     /// 将事件数据写入 App Group 共享容器，供 Widget Extension 读取
@@ -330,7 +354,12 @@ final class KBLiteManager {
             }
         }
 
-        return lines.joined(separator: "\n")
+        let result = lines.joined(separator: "\n")
+        // 限制 prompt 长度
+        if result.count > 800 {
+            return String(result.prefix(800)) + "\n..."
+        }
+        return result
     }
 
     /// 构建知识提取 prompt
@@ -895,6 +924,13 @@ final class KBLiteManager {
             print("[KBLite] ⚠️ 知识库容量告警：\(type)超出上限，已清理 \(removed) 条旧记录")
             print("[KBLite] ⚠️ 当前: 人\(graph.people.count)/\(maxPeople) 地\(graph.places.count)/\(maxPlaces) 事\(graph.events.count)/\(maxEvents) 实\(graph.facts.count)/\(maxFacts)")
         }
+    }
+
+    // MARK: - External Save Notification
+
+    /// 外部模块（如 MultiUser）修改图谱后调用此方法持久化
+    func notifyGraphUpdated() {
+        save()
     }
 
     // MARK: - Maintenance

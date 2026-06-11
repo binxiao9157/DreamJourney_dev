@@ -25,6 +25,19 @@ final class KBGraphViewController: UIViewController {
     /// 画布内容视图
     private let canvasView = UIView()
 
+    // MARK: - Empty State
+
+    private lazy var emptyLabel: UILabel = {
+        let l = UILabel()
+        l.text = "还没有认识的人物\n\n与寻梦环游多聊聊家人，\n图谱会自动生长"
+        l.numberOfLines = 0
+        l.textAlignment = .center
+        l.font = .systemFont(ofSize: 16)
+        l.textColor = .warmSubtitle
+        l.translatesAutoresizingMaskIntoConstraints = false
+        return l
+    }()
+
     // MARK: - ScrollView
 
     private lazy var scrollView: UIScrollView = {
@@ -84,8 +97,28 @@ final class KBGraphViewController: UIViewController {
     // MARK: - Build Graph
 
     private func buildGraph() {
-        let people = KBLiteManager.shared.graph.people
-        guard !people.isEmpty else {
+        // 确保有一个"我"节点
+        let selfId = "__self__"
+        var people = KBLiteManager.shared.graph.people
+
+        let currentUserName = UserManager.shared.currentUser?.nickname ?? "我"
+        if !people.contains(where: { $0.id == selfId }) {
+            let selfPerson = KBPerson(
+                id: selfId,
+                name: currentUserName,
+                aliases: ["我"],
+                relation: nil,
+                traits: [],
+                relatedPersonIds: people.map { $0.id },
+                sourceSessionIds: [],
+                createdAt: Date(),
+                updatedAt: Date()
+            )
+            people.insert(selfPerson, at: 0)
+        }
+
+        // 人物数 < 2（只有"我"节点），显示空态提示
+        guard people.count >= 2 else {
             showEmptyState()
             return
         }
@@ -200,20 +233,13 @@ final class KBGraphViewController: UIViewController {
     // MARK: - Empty State
 
     private func showEmptyState() {
-        let label = UILabel()
-        label.text = "暂无人物数据\n\n与寻梦环游多聊聊家人的故事，\nAI 会自动构建家族图谱。"
-        label.numberOfLines = 0
-        label.textAlignment = .center
-        label.font = .systemFont(ofSize: 16)
-        label.textColor = .warmSubtitle
-        label.translatesAutoresizingMaskIntoConstraints = false
-
-        view.addSubview(label)
+        scrollView.isHidden = true
+        view.addSubview(emptyLabel)
         NSLayoutConstraint.activate([
-            label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            label.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            label.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
-            label.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40),
+            emptyLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            emptyLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            emptyLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
+            emptyLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40),
         ])
     }
 

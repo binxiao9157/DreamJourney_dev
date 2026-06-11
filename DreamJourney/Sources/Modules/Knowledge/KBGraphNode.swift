@@ -9,6 +9,10 @@ final class KBGraphNode: UIView {
     // MARK: - Constants
 
     static let diameter: CGFloat = 60.0
+    static let selfDiameter: CGFloat = 70.0
+
+    /// 用于标识"我"节点的特殊 ID
+    static let selfNodeId = "__self__"
 
     // MARK: - Properties
 
@@ -23,7 +27,6 @@ final class KBGraphNode: UIView {
 
     private let circleView: UIView = {
         let v = UIView()
-        v.layer.cornerRadius = diameter / 2.0
         v.clipsToBounds = true
         return v
     }()
@@ -59,7 +62,9 @@ final class KBGraphNode: UIView {
 
     init(person: KBPerson) {
         self.person = person
-        super.init(frame: CGRect(x: 0, y: 0, width: Self.diameter, height: Self.diameter + 30))
+        let isSelf = person.id == Self.selfNodeId
+        let d = isSelf ? Self.selfDiameter : Self.diameter
+        super.init(frame: CGRect(x: 0, y: 0, width: d, height: d + 30))
         setupUI()
         configure()
     }
@@ -69,14 +74,18 @@ final class KBGraphNode: UIView {
     // MARK: - Setup
 
     private func setupUI() {
+        let isSelf = person.id == Self.selfNodeId
+        let d = isSelf ? Self.selfDiameter : Self.diameter
+
         // 圆形节点
+        circleView.layer.cornerRadius = d / 2.0
         addSubview(circleView)
         circleView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             circleView.topAnchor.constraint(equalTo: topAnchor),
             circleView.centerXAnchor.constraint(equalTo: centerXAnchor),
-            circleView.widthAnchor.constraint(equalToConstant: Self.diameter),
-            circleView.heightAnchor.constraint(equalToConstant: Self.diameter),
+            circleView.widthAnchor.constraint(equalToConstant: d),
+            circleView.heightAnchor.constraint(equalToConstant: d),
         ])
 
         // 首字
@@ -118,8 +127,12 @@ final class KBGraphNode: UIView {
         nameLabel.text = person.name
         relationLabel.text = person.relation ?? ""
 
-        // 背景色按关系分类
-        circleView.backgroundColor = colorForRelation(person.relation)
+        // 背景色：__self__ 节点使用金色，其他按关系分类
+        if person.id == Self.selfNodeId {
+            circleView.backgroundColor = UIColor(red: 0.85, green: 0.65, blue: 0.13, alpha: 1.0) // 金色
+        } else {
+            circleView.backgroundColor = colorForRelation(person.relation)
+        }
     }
 
     // MARK: - Selection
