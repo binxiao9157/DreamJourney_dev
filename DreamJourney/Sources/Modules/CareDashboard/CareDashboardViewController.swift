@@ -114,7 +114,7 @@ final class CareDashboardViewController: UIViewController {
 
     private func reloadSnapshot() {
         let turns = CareDashboardInputPolicy.eligibleInputTurns(
-            from: ConversationMemoryManager.shared.getCurrentTranscript(),
+            from: ConversationMemoryManager.shared.getCareDashboardTranscriptHistory(),
             viewerFamilyMemberID: viewerFamilyMemberID
         )
         let localSnapshot = analyzer.analyze(turns: turns)

@@ -120,6 +120,7 @@ struct ConversationMemory: Codable {
     var lastSummaryPrivacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
     var sessionCount: Int = 0                          // 累计对话次数
     var recentTranscript: [ConversationTurn] = []      // 最近一次对话记录（最多保留20轮）
+    var careDashboardTranscriptHistory: [ConversationTurn] = [] // 关怀看板跨会话历史，使用时仍按隐私过滤
 
     // 兼容旧数据迁移
     var mentionedPeople: [String] = []
@@ -134,6 +135,7 @@ struct ConversationMemory: Codable {
         case lastSummaryPrivacyMetadata
         case sessionCount
         case recentTranscript
+        case careDashboardTranscriptHistory
         case mentionedPeople
         case mentionedPlaces
         case mentionedFoods
@@ -153,6 +155,10 @@ struct ConversationMemory: Codable {
         ) ?? MemoryPrivacyMetadata(scope: .localOnly)
         sessionCount = try container.decodeIfPresent(Int.self, forKey: .sessionCount) ?? 0
         recentTranscript = try container.decodeIfPresent([ConversationTurn].self, forKey: .recentTranscript) ?? []
+        careDashboardTranscriptHistory = try container.decodeIfPresent(
+            [ConversationTurn].self,
+            forKey: .careDashboardTranscriptHistory
+        ) ?? recentTranscript
         mentionedPeople = try container.decodeIfPresent([String].self, forKey: .mentionedPeople) ?? []
         mentionedPlaces = try container.decodeIfPresent([String].self, forKey: .mentionedPlaces) ?? []
         mentionedFoods = try container.decodeIfPresent([String].self, forKey: .mentionedFoods) ?? []
@@ -184,6 +190,14 @@ final class ConversationMemoryManager {
             return currentTranscript
         }
         return currentMemory.recentTranscript
+    }
+
+    func getCareDashboardTranscriptHistory() -> [ConversationTurn] {
+        let combined = currentMemory.careDashboardTranscriptHistory + currentTranscript
+        if !combined.isEmpty {
+            return Array(combined.suffix(Self.maxCareDashboardTranscriptHistoryCount))
+        }
+        return getCurrentTranscript()
     }
 
     func discardCurrentSession() {
@@ -269,6 +283,8 @@ final class ConversationMemoryManager {
         return String(collapsed[..<endIndex]) + "..."
     }
 
+    private static let maxCareDashboardTranscriptHistoryCount = 160
+
     /// 对话结束时调用：提取四维度摘要并持久化
     func endSession() {
         guard !currentTranscript.isEmpty else { return }
@@ -281,6 +297,10 @@ final class ConversationMemoryManager {
         currentMemory.lastSessionDate = Date()
         currentMemory.sessionCount += 1
         currentMemory.recentTranscript = Array(currentTranscript.suffix(20))
+        currentMemory.careDashboardTranscriptHistory = Array(
+            (currentMemory.careDashboardTranscriptHistory + currentTranscript)
+                .suffix(Self.maxCareDashboardTranscriptHistoryCount)
+        )
 
         // 清理旧字段
         currentMemory.mentionedPeople = []

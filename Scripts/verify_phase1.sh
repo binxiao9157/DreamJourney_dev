@@ -54,6 +54,17 @@ xcrun swiftc -D CARE_DASHBOARD_VERIFY \
   -o /tmp/dreamjourney_care_dashboard_verify
 /tmp/dreamjourney_care_dashboard_verify
 
+echo "== Conversation memory care history =="
+xcrun swiftc \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
+  DreamJourney/Sources/Services/KBLiteModels.swift \
+  DreamJourney/Sources/Services/KBLitePrivacyScopePolicy.swift \
+  DreamJourney/Sources/Services/ConversationMemoryManager.swift \
+  DreamJourney/Sources/Services/CareDashboard/CareSignalModels.swift \
+  Scripts/ConversationMemoryCareHistoryVerify/main.swift \
+  -o /tmp/dreamjourney_conversation_memory_care_history_verify
+/tmp/dreamjourney_conversation_memory_care_history_verify
+
 echo "== CareDashboard snapshot selection =="
 xcrun swiftc -D CARE_DASHBOARD_VERIFY \
   DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \

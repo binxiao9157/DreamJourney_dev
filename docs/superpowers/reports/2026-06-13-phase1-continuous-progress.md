@@ -312,6 +312,21 @@
   - accepted + active 亲友可以写入并读取自己的看板快照。
 - `Scripts/CareDashboardBackendSyncVerify/main.py` 增加静态验收锚点，防止后续改动绕开亲友访问状态校验。
 
+### 24. 长辈关怀看板：跨会话亲友范围历史进入本机趋势
+
+- `ConversationMemory` 新增 `careDashboardTranscriptHistory`：
+  - 每次对话结束时，把当前 transcript 追加到关怀历史，最多保留最近 160 轮。
+  - 兼容旧本机 JSON；没有该字段时以 `recentTranscript` 兜底。
+  - 只负责保存候选对话轮次，真正进入看板前仍由 `CareDashboardInputPolicy` 按隐私范围和亲友可见性过滤。
+- `CareDashboardViewController.reloadSnapshot` 改为读取 `getCareDashboardTranscriptHistory()`：
+  - 当前进行中的会话会参与本机看板刷新。
+  - 过去会话中已授权给亲友范围的内容也会参与本机趋势分析。
+  - `localOnly`、`generationAllowed`、未授权 selected-member 内容仍不会进入关怀看板。
+- 新增 `Scripts/ConversationMemoryCareHistoryVerify/main.swift`：
+  - 验证第一轮已结束会话和第二轮进行中会话都会出现在关怀历史。
+  - 验证通过 `CareDashboardInputPolicy` 后，亲友范围发言可进入看板输入。
+  - 验证第二轮结束后，多轮用户关怀发言仍被保留。
+
 ## 真机验收建议
 
 ### 记忆档案馆
@@ -362,6 +377,7 @@
 - 关怀看板快照可按 `viewerFamilyMemberID` 上传/拉取。
 - 关怀看板历史快照可按 `viewerFamilyMemberID` 拉取最近 N 条；本机无数据时页面会显示“服务器同步历史 x 条”。
 - 关怀看板快照读写会校验亲友状态：只有已接受且 active 的亲友成员可按 `viewerFamilyMemberID` 读写；pending、未知或 revoked 成员返回 403。
+- 本机看板会读取跨会话亲友范围历史：多次结束对话后刷新看板，应看到数据覆盖和趋势不是只来自最后一次对话。
 - 亲友邀请可复制 `dreamjourney://family/invite?code=...` 链接；另一台设备登录被邀请手机号后，可通过链接或粘贴邀请码接受邀请。
 
 ## 已运行验证
@@ -381,6 +397,7 @@
 - `KBLiteArchiveMaterialMetadata verification passed`
 - `KBLiteImportSanitizer verification passed`
 - `ConversationTurnSourceRef verification passed`
+- `ConversationMemoryCareHistory verification passed`
 - `DreamJourneyBackend pytest 36/36 OK`
 - `PrivacyScope verification passed`
 - `MemoryPrivacyIntegration verification passed`

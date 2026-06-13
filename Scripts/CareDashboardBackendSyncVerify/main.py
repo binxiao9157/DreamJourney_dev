@@ -37,6 +37,7 @@ required_vc_fragments = [
     "fetchLatestSnapshotFromBackend",
     "fetchSnapshotHistoryFromBackend",
     "applyRemoteSnapshotIfUseful",
+    "getCareDashboardTranscriptHistory",
     "careOwnerUserID",
     "ownerUserId == currentUserId",
     "snapshotSourceText",
