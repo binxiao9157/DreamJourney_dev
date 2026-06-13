@@ -137,13 +137,7 @@ final class TimeMailboxRepository {
         for letter: TimeMailboxLetter,
         evidence: TimeMailboxEchoEvidence
     ) -> String {
-        let firstLine = letter.body
-            .split(whereSeparator: \.isNewline)
-            .map(String.init)
-            .first?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        let memoryLine = firstLine.map { "你写下了：“\($0)”" } ?? "你把这份想念认真保存了下来。"
+        let memoryLine = "你把这份想念认真保存了下来；信件正文仍只留在本机信箱里。"
         let evidenceLine: String
         if evidence.isEmpty {
             evidenceLine = "这次没有找到足够的已授权记忆细节，所以不会替Ta编造具体经历。"

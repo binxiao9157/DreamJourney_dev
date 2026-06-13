@@ -45,6 +45,7 @@ do {
     assertCondition(delivered[0].replyText?.contains("基于你留下的记忆") == true, "reply must carry memory-boundary wording")
     assertCondition(delivered[0].replyText?.contains("不是逝者真实回复") == true, "reply must avoid resurrection framing")
     assertCondition(delivered[0].replyText?.contains("不会替Ta编造具体经历") == true, "reply without evidence should refuse fabrication")
+    assertCondition(delivered[0].replyText?.contains("我今天路过老房子") != true, "reply must not echo the private letter body")
 
     try repo.markRead(id: letter.id)
     assertCondition(repo.letters().first?.status == .read, "delivered letter should be markable as read")
@@ -139,6 +140,7 @@ do {
     assertCondition(evidenceDelivered[0].replyText?.contains("我能参考到的已授权记忆") == true, "reply should disclose authorized evidence")
     assertCondition(evidenceDelivered[0].replyText?.contains("妈妈做的桂花糕") == true, "reply should include supplied evidence")
     assertCondition(evidenceDelivered[0].replyText?.contains("不是逝者真实回复") == true, "evidence reply must keep boundary wording")
+    assertCondition(evidenceDelivered[0].replyText?.contains("我今天又想起桂花糕") != true, "evidence reply must not echo the private letter body")
 
     let legacyJSON = """
     [{
