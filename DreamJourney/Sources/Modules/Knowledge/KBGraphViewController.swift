@@ -125,7 +125,7 @@ final class KBGraphViewController: UIViewController {
         }
 
         // 计算布局
-        nodePositions = layoutEngine.computeLayout(for: people)
+        nodePositions = layoutEngine.computeLayout(for: people, graph: displayGraph)
 
         // 确定画布尺寸
         let canvasSize = calculateCanvasSize()

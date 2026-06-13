@@ -241,14 +241,14 @@ final class Stage1MemoryFacade {
     }
 
     func archiveSnapshot() -> KBLiteGraph {
-        knowledgeBase.readGraph { $0 }
+        knowledgeBase.displayGraphForLocalBrowsing()
     }
 
     func dashboardSnapshot() -> Stage1MemoryDashboardSnapshot {
         let graph = archiveSnapshot()
         return Stage1MemoryDashboardSnapshot(
-            stats: knowledgeBase.stats,
-            isEmpty: knowledgeBase.isEmpty,
+            stats: Self.statsSummary(for: graph),
+            isEmpty: Self.isEmpty(graph),
             lastUpdated: graph.lastUpdated,
             sessionCount: graph.sessionCount,
             peopleCount: graph.people.count,
@@ -258,6 +258,14 @@ final class Stage1MemoryFacade {
             topGaps: topKnowledgeGaps(limit: 5),
             greetingHint: greetingHint()
         )
+    }
+
+    private static func statsSummary(for graph: KBLiteGraph) -> String {
+        "\(graph.people.count)人 · \(graph.places.count)地 · \(graph.events.count)事 · \(graph.facts.count)实 · 共\(graph.sessionCount)次会话"
+    }
+
+    private static func isEmpty(_ graph: KBLiteGraph) -> Bool {
+        graph.people.isEmpty && graph.places.isEmpty && graph.events.isEmpty && graph.facts.isEmpty
     }
 
     @discardableResult

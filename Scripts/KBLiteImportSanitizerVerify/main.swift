@@ -184,6 +184,24 @@ let importedGraph = KBLiteGraph(
             sourceSessionIds: [2],
             createdAt: now,
             privacyMetadata: metadata
+        ),
+        KBFact(
+            id: "generic_mother_fact",
+            statement: "妈妈",
+            confidence: "confirmed",
+            relatedPersonIds: [],
+            sourceSessionIds: [1],
+            createdAt: now,
+            privacyMetadata: metadata
+        ),
+        KBFact(
+            id: "real_mother_memory_fact",
+            statement: "妈妈喜欢做桂花糕。",
+            confidence: "confirmed",
+            relatedPersonIds: [],
+            sourceSessionIds: [2],
+            createdAt: now,
+            privacyMetadata: metadata
         )
     ]
 )
@@ -205,9 +223,10 @@ assertCondition(
 assertCondition(
     Set(graph.facts.map(\.statement)) == Set([
         "陈建国1968年住在绍兴越城区仓桥直街。",
-        "陈建国2001年参加过一次产品路演。"
+        "陈建国2001年参加过一次产品路演。",
+        "妈妈喜欢做桂花糕。"
     ]),
-    "import should remove roadshow seed facts without deleting real user roadshow stories"
+    "import should remove roadshow/generic placeholder facts without deleting real user stories"
 )
 
 KBLiteManager.shared.writeGraph { graph in
@@ -227,9 +246,10 @@ assertCondition(
 assertCondition(
     Set(displayGraph.facts.map(\.statement)) == Set([
         "陈建国1968年住在绍兴越城区仓桥直街。",
-        "陈建国2001年参加过一次产品路演。"
+        "陈建国2001年参加过一次产品路演。",
+        "妈妈喜欢做桂花糕。"
     ]),
-    "display graph should hide roadshow seed facts without deleting real roadshow-word facts"
+    "display graph should hide roadshow/generic placeholder facts without deleting real user facts"
 )
 
 KBLiteManager.shared.reset()

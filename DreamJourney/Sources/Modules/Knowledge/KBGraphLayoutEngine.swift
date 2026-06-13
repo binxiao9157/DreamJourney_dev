@@ -31,7 +31,7 @@ final class KBGraphLayoutEngine {
     /// 计算布局
     /// - Parameter people: 所有人物数据
     /// - Returns: personId → 坐标 的映射
-    func computeLayout(for people: [KBPerson]) -> [String: CGPoint] {
+    func computeLayout(for people: [KBPerson], graph: KBLiteGraph) -> [String: CGPoint] {
         guard !people.isEmpty else { return [:] }
 
         // 初始化位置：按关系分层放置
@@ -43,7 +43,7 @@ final class KBGraphLayoutEngine {
             ?? people.first(where: { $0.relation == nil || $0.relation == "自己" || $0.name == "我" })?.id
 
         // 构建关系边集合
-        let edges = buildEdges(from: people)
+        let edges = buildEdges(from: people, graph: graph)
 
         // 力导向迭代
         for _ in 0..<iterations {
@@ -184,7 +184,7 @@ final class KBGraphLayoutEngine {
     }
 
     /// 构建关系边
-    private func buildEdges(from people: [KBPerson]) -> [(String, String)] {
+    private func buildEdges(from people: [KBPerson], graph: KBLiteGraph) -> [(String, String)] {
         var edges: Set<String> = []
         var result: [(String, String)] = []
 
@@ -201,8 +201,7 @@ final class KBGraphLayoutEngine {
         // 如果没有显式关系，根据事件参与者推断
         if result.isEmpty {
             let allIds = Set(people.map { $0.id })
-            let events = KBLiteManager.shared.graph.events
-            for event in events {
+            for event in graph.events {
                 let participants = event.participantIds.filter { allIds.contains($0) }
                 for i in 0..<participants.count {
                     for j in (i + 1)..<participants.count {

@@ -6,6 +6,8 @@ import sys
 source = Path("DreamJourney/Sources/Services/KBLiteManager.swift").read_text()
 knowledge_view = Path("DreamJourney/Sources/Modules/Knowledge/KnowledgeBaseViewController.swift").read_text()
 graph_view = Path("DreamJourney/Sources/Modules/Knowledge/KBGraphViewController.swift").read_text()
+layout_engine = Path("DreamJourney/Sources/Modules/Knowledge/KBGraphLayoutEngine.swift").read_text()
+facade = Path("DreamJourney/Sources/Services/Stage1MemoryFacade.swift").read_text()
 
 checks = [
     (
@@ -32,8 +34,23 @@ checks = [
         "displayGraphForLocalBrowsing" in graph_view,
     ),
     (
+        "knowledge graph layout should not infer relationship edges from the raw graph",
+        "KBLiteManager.shared.graph.events" not in layout_engine
+        and "computeLayout(for people: [KBPerson], graph: KBLiteGraph)" in layout_engine,
+    ),
+    (
+        "dashboard snapshots should use the cleaned local display graph for stats",
+        "displayGraphForLocalBrowsing" in facade
+        and "stats: Self.statsSummary(for: graph)" in facade
+        and "isEmpty: Self.isEmpty(graph)" in facade,
+    ),
+    (
         "knowledge graph empty state should guide users to add concrete names instead of bare kinship labels",
         "具体姓名" in graph_view and "妈妈/奶奶" in graph_view,
+    ),
+    (
+        "KBLite should hide isolated bare kinship facts from local browsing",
+        "isGenericKinshipOnlyFact" in source,
     ),
 ]
 

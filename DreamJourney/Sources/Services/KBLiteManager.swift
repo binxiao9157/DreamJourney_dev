@@ -489,30 +489,34 @@ final class KBLiteManager {
 
     private func removeLegacyOrLowQualityEntities(from graph: inout KBLiteGraph) -> Int {
         let beforeCount = graph.people.count + graph.places.count + graph.events.count + graph.facts.count
-        let roadshowPeople = Set(graph.people.filter { $0.id.hasPrefix("roadshow_") }.map(\.id))
-        let roadshowPlaces = Set(graph.places.filter { $0.id.hasPrefix("roadshow_") }.map(\.id))
-        let roadshowEvents = Set(graph.events.filter { $0.id.hasPrefix("roadshow_") }.map(\.id))
-        let genericPeople = Set(graph.people.filter(Self.isGenericKinshipOnly).map(\.id))
-        let removedPeople = roadshowPeople.union(genericPeople)
-        let removedPlaces = roadshowPlaces
-        let removedEvents = roadshowEvents
-
-        graph.people.removeAll { person in
+        let removedPeople = Set(graph.people.filter { person in
             person.id.hasPrefix("roadshow_") ||
                 Self.isGenericKinshipOnly(person)
-        }
-        graph.places.removeAll { place in
+        }.map(\.id))
+        let removedPlaces = Set(graph.places.filter { place in
             place.id.hasPrefix("roadshow_") ||
                 place.relatedPersonIds.contains(where: { removedPeople.contains($0) })
-        }
-        graph.events.removeAll { event in
+        }.map(\.id))
+        let removedEvents = Set(graph.events.filter { event in
             event.id.hasPrefix("roadshow_") ||
                 event.locationId.map { removedPlaces.contains($0) } == true ||
                 event.participantIds.contains(where: { removedPeople.contains($0) })
+        }.map(\.id))
+
+        graph.people.removeAll { person in
+            removedPeople.contains(person.id)
+        }
+        graph.places.removeAll { place in
+            removedPlaces.contains(place.id)
+        }
+        graph.events.removeAll { event in
+            removedEvents.contains(event.id)
         }
         graph.facts.removeAll { fact in
             fact.id.hasPrefix("roadshow_") ||
+                Self.isGenericKinshipOnlyFact(fact) ||
                 fact.relatedPersonIds.contains(where: { removedPeople.contains($0) }) ||
+                fact.relatedPlaceIds.contains(where: { removedPlaces.contains($0) }) ||
                 fact.relatedEventIds.contains(where: { removedEvents.contains($0) })
         }
 
@@ -526,6 +530,19 @@ final class KBLiteManager {
 
     private static func isGenericKinshipOnly(_ person: KBPerson) -> Bool {
         isGenericKinshipDisplayName(person.name)
+    }
+
+    private static func isGenericKinshipOnlyFact(_ fact: KBFact) -> Bool {
+        let statement = normalizedFactStatement(fact.statement)
+        guard !statement.isEmpty else { return true }
+        if isGenericKinshipDisplayName(statement) {
+            return true
+        }
+        if statement.hasPrefix("我的") {
+            let suffix = String(statement.dropFirst(2))
+            return isGenericKinshipDisplayName(suffix)
+        }
+        return false
     }
 
     private static func shouldPersistPerson(
@@ -544,6 +561,14 @@ final class KBLiteManager {
 
     private static func normalizedEntityName(_ name: String) -> String {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func normalizedFactStatement(_ statement: String) -> String {
+        statement
+            .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters))
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+            .replacingOccurrences(of: "\t", with: "")
     }
 
     private static func normalizedQuickExtractEntity(_ value: String) -> String {
