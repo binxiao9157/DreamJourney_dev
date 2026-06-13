@@ -30,6 +30,14 @@ FORBIDDEN_TOKENS = [
     "mock dialog engine",
     "mock safety guard",
     "roadshow demo",
+    "fm_daughter_chen_lan",
+    "fm_son_chen_hao",
+    "fm_granddaughter_chen_yu",
+    "陈岚",
+    "陈浩",
+    "陈予",
+    "外滩老照片",
+    "roadshow_demo_photo_placeholder",
 ]
 
 

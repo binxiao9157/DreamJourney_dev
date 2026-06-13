@@ -200,6 +200,7 @@ python3 Scripts/RoadshowMailboxSeedVerify/main.py
 
 echo "== Real-device no-demo state =="
 python3 Scripts/RealDeviceNoDemoStateVerify/main.py
+python3 Scripts/RealDeviceNoDemoStateTokensVerify/main.py
 
 echo "== diff --check =="
 git diff --check
