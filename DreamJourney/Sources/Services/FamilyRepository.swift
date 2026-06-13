@@ -60,10 +60,49 @@ final class FamilyRepository {
                 switch result {
                 case .success(let response):
                     let backendMembers = response.members.compactMap { $0.toFamilyMember() }
-                    let merged = self.mergeBackendMembers(backendMembers)
+                    let revokedMemberIDs = Set(response.members.filter(\.isRevoked).map(\.id))
+                    let merged = self.mergeBackendMembers(backendMembers, revokedMemberIDs: revokedMemberIDs)
                     completion?(.success(merged))
                 case .failure(let error):
                     completion?(.failure(error))
+                }
+            }
+        }
+    }
+
+    func revokeBackendAccess(
+        for memberID: String,
+        completion: @escaping (Result<FamilyMember, Swift.Error>) -> Void
+    ) {
+        guard let member = get(by: memberID) else {
+            completion(.failure(FamilyRepositoryBackendError.invalidBackendMember))
+            return
+        }
+        guard let userID = UserManager.shared.currentUser?.id else {
+            _ = revokeAccess(for: memberID)
+            completion(.success(member))
+            return
+        }
+        guard DreamJourneyBackendClient.shared.isConfigured,
+              !memberID.hasPrefix("kb_") else {
+            _ = revokeAccess(for: memberID)
+            completion(.success(member))
+            return
+        }
+
+        DreamJourneyBackendClient.shared.revokeFamilyMember(userId: userID, memberId: memberID) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success(let response):
+                    guard let revokedMember = response.member.toFamilyMember() else {
+                        completion(.failure(FamilyRepositoryBackendError.invalidBackendMember))
+                        return
+                    }
+                    _ = self.mergeBackendMembers([revokedMember], revokedMemberIDs: [revokedMember.id])
+                    completion(.success(revokedMember))
+                case .failure(let error):
+                    completion(.failure(error))
                 }
             }
         }
@@ -293,24 +332,48 @@ final class FamilyRepository {
     }
 
     @discardableResult
-    private func mergeBackendMembers(_ backendMembers: [FamilyMember]) -> [FamilyMember] {
+    private func mergeBackendMembers(
+        _ backendMembers: [FamilyMember],
+        revokedMemberIDs: Set<String> = []
+    ) -> [FamilyMember] {
         for member in backendMembers {
+            let isRevoked = revokedMemberIDs.contains(member.id)
             if let index = members.firstIndex(where: { $0.id == member.id }) {
                 members[index] = member
+                applyBackendRevocationIfNeeded(memberID: member.id, isRevoked: isRevoked)
                 continue
             }
             if let phone = normalizedPhone(member.phone),
                let index = members.firstIndex(where: { normalizedPhone($0.phone) == phone }) {
                 members[index] = member
+                applyBackendRevocationIfNeeded(memberID: member.id, isRevoked: isRevoked)
                 continue
             }
             if let index = members.firstIndex(where: { $0.name == member.name }) {
                 members[index] = member
+                applyBackendRevocationIfNeeded(memberID: member.id, isRevoked: isRevoked)
                 continue
             }
             members.append(member)
+            applyBackendRevocationIfNeeded(memberID: member.id, isRevoked: isRevoked)
         }
         return members
+    }
+
+    private func applyBackendRevocationIfNeeded(memberID: String, isRevoked: Bool) {
+        guard isRevoked else { return }
+        revokedAccessMemberIDs.insert(memberID)
+        acceptedInvitations[memberID] = acceptedInvitations[memberID].map {
+            FamilyAccessControlService.Invitation(
+                id: $0.id,
+                familyMemberID: $0.familyMemberID,
+                phone: $0.phone,
+                status: .revoked,
+                createdAt: $0.createdAt,
+                acceptedAt: $0.acceptedAt
+            )
+        }
+        saveLocalAccessState()
     }
 
     private static func defaultInviteName(for phone: String) -> String {

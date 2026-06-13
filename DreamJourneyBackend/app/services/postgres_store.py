@@ -154,6 +154,36 @@ class PostgresStore:
     def list_family_members(self, user_id: str) -> List[Dict[str, Any]]:
         return self._list_payloads("family_members", user_id)
 
+    def revoke_family_member(self, user_id: str, member_id: str) -> Optional[Dict[str, Any]]:
+        row = self._fetchone(
+            """
+            SELECT payload FROM family_members
+            WHERE user_id = %s AND id = %s
+            """,
+            (user_id, member_id),
+        )
+        if row is None:
+            return None
+
+        item = deepcopy(row["payload"])
+        item["accessStatus"] = "revoked"
+        item["invitationStatus"] = "revoked"
+        item["isOnline"] = False
+        item["revokedAt"] = self._now()
+        item["lastUpdated"] = "访问已撤回"
+
+        updated = self._fetchone(
+            """
+            UPDATE family_members
+            SET payload = %s
+            WHERE user_id = %s AND id = %s
+            RETURNING payload
+            """,
+            (item, user_id, member_id),
+            commit=True,
+        )
+        return None if updated is None else deepcopy(updated["payload"])
+
     def save_care_snapshot(
         self,
         user_id: str,

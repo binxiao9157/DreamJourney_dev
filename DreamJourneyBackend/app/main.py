@@ -179,6 +179,14 @@ def family_members(user_id: str) -> Dict[str, Any]:
     return {"userId": user_id, "members": store.list_family_members(user_id)}
 
 
+@app.post("/family/members/{user_id}/{member_id}/revoke")
+def revoke_family_member(user_id: str, member_id: str) -> Dict[str, Any]:
+    member = store.revoke_family_member(user_id, member_id)
+    if member is None:
+        raise HTTPException(status_code=404, detail="family member not found")
+    return {"status": "revoked", "member": member}
+
+
 @app.post("/care/snapshots")
 def save_care_snapshot(payload: Dict[str, Any]) -> Dict[str, Any]:
     user_id = str(payload.get("userId") or "").strip()

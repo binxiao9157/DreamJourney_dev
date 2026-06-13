@@ -81,12 +81,14 @@
 - `DreamJourneyBackendClient` 新增：
   - `POST /family/invite`
   - `GET /family/members/{userId}`
+  - `POST /family/members/{userId}/{memberId}/revoke`
 - `FamilyRepository` 新增后端同步入口：
   - 打开亲友页时拉取服务器成员并合并到本地列表。
   - 输入手机号复制邀请时先在后端创建亲友成员，再生成邀请文案。
+  - 撤回访问时优先调用后端 revoke，后端返回 revoked 状态后再同步本地可见性。
 - 去掉亲友页邀请文案里的硬编码路演手机号 `18800000001`。
 - 亲友列表高度改为随成员数量动态刷新，避免后端拉到成员后列表显示不全。
-- 当前边界：接受邀请和撤回访问仍是本地状态，后端还没有 invitation accept / revoke 状态机。
+- 当前边界：接受邀请仍是本地手机号匹配，后端还没有完整 invitation accept 状态机。
 
 ## 真机验收建议
 
@@ -124,6 +126,7 @@
 - 周报只含脱敏聚合信号，不含原始聊天内容。
 - selected-member 可见性会过滤非授权成员内容。
 - 亲友成员可从后端拉取；邀请会先写入后端 `family_members`。
+- 亲友撤回会写入后端 `accessStatus=revoked`，再次拉取成员时仍可识别撤回状态。
 - 关怀看板快照可按 `viewerFamilyMemberID` 上传/拉取。
 
 ## 已运行验证
@@ -134,7 +137,7 @@
 - `CareDashboard verification passed`
 - `CareDashboardBackendSync verification passed`
 - `FamilyBackendSync verification passed`
-- `DreamJourneyBackend unittest 15/15 OK`
+- `DreamJourneyBackend unittest 18/18 OK`
 - `SecretConfig verification passed`
 - `LocalTestDataCleanup verification passed`
 - `git diff --check`
@@ -144,5 +147,5 @@
 
 ## 下一步
 
-1. 补后端 invitation accept / revoke 状态机，替代本机 UserDefaults 撤回状态。
+1. 补后端 invitation accept 状态机，替代本机手机号匹配接受邀请。
 2. 补真机证据包：档案入库截图、结构化知识库截图、信箱回声截图、关怀周报导出文本。

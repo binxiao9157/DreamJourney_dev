@@ -68,6 +68,21 @@ class InMemoryStore:
     def list_family_members(self, user_id: str) -> List[Dict[str, Any]]:
         return deepcopy(self._family_members.get(user_id, []))
 
+    def revoke_family_member(self, user_id: str, member_id: str) -> Optional[Dict[str, Any]]:
+        members = self._family_members.get(user_id, [])
+        for index, item in enumerate(members):
+            if item.get("id") != member_id:
+                continue
+            revoked = deepcopy(item)
+            revoked["accessStatus"] = "revoked"
+            revoked["invitationStatus"] = "revoked"
+            revoked["isOnline"] = False
+            revoked["revokedAt"] = self._now()
+            revoked["lastUpdated"] = "访问已撤回"
+            members[index] = revoked
+            return deepcopy(revoked)
+        return None
+
     def save_care_snapshot(
         self,
         user_id: str,

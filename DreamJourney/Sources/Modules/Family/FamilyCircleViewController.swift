@@ -462,12 +462,15 @@ final class FamilyCircleViewController: UIViewController {
         )
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
         alert.addAction(UIAlertAction(title: "撤回访问", style: .destructive) { [weak self] _ in
-            guard FamilyRepository.shared.revokeAccess(for: member.id) else {
-                self?.showToast("撤回失败，请稍后重试", type: .error)
-                return
+            FamilyRepository.shared.revokeBackendAccess(for: member.id) { result in
+                switch result {
+                case .success:
+                    self?.updateMemberListUI()
+                    self?.showToast("已撤回 \(member.name) 的访问权限，剩余 \(remainingVisibleCount) 位可见", type: .success)
+                case .failure(let error):
+                    self?.showToast(error.localizedDescription, type: .error)
+                }
             }
-            self?.updateMemberListUI()
-            self?.showToast("已撤回 \(member.name) 的访问权限，剩余 \(remainingVisibleCount) 位可见", type: .success)
         })
         present(alert, animated: true)
     }

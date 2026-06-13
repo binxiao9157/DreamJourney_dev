@@ -161,6 +161,18 @@ class StoreTests(unittest.TestCase):
         )
         self.assertIsNone(store.get_latest_care_snapshot("u2"))
 
+    def test_store_marks_family_member_revoked(self):
+        store = InMemoryStore()
+
+        member = store.add_family_member("u1", {"name": "陈岚", "phone": "13900001111"})
+        revoked = store.revoke_family_member("u1", member["id"])
+
+        self.assertEqual(revoked["accessStatus"], "revoked")
+        self.assertEqual(revoked["invitationStatus"], "revoked")
+        self.assertFalse(revoked["isOnline"])
+        self.assertIn("revokedAt", revoked)
+        self.assertEqual(store.list_family_members("u1")[0]["accessStatus"], "revoked")
+
 
 class CareSnapshotAPITests(unittest.TestCase):
     def test_care_snapshot_api_saves_and_returns_latest_by_viewer(self):
@@ -203,6 +215,31 @@ class CareSnapshotAPITests(unittest.TestCase):
         response = client.get("/care/snapshots/latest/missing_user")
 
         self.assertEqual(response.status_code, 404)
+
+
+class FamilyAPITests(unittest.TestCase):
+    def test_family_member_revoke_api_marks_member_revoked(self):
+        client = TestClient(app)
+
+        created = client.post(
+            "/family/invite",
+            json={
+                "userId": "u1",
+                "name": "陈岚",
+                "relation": "女儿",
+                "phone": "13900001111",
+            },
+        )
+        member_id = created.json()["member"]["id"]
+        revoked = client.post(f"/family/members/u1/{member_id}/revoke")
+        listed = client.get("/family/members/u1")
+
+        self.assertEqual(created.status_code, 200)
+        self.assertEqual(revoked.status_code, 200)
+        self.assertEqual(revoked.json()["member"]["accessStatus"], "revoked")
+        self.assertEqual(revoked.json()["member"]["invitationStatus"], "revoked")
+        self.assertIn("revokedAt", revoked.json()["member"])
+        self.assertEqual(listed.json()["members"][0]["accessStatus"], "revoked")
 
 
 if __name__ == "__main__":

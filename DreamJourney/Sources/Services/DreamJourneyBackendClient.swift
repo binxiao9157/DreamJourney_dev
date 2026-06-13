@@ -155,6 +155,22 @@ final class DreamJourneyBackendClient {
         )
     }
 
+    func revokeFamilyMember(
+        userId: String,
+        memberId: String,
+        completion: @escaping (Result<FamilyRevokeResponse, Swift.Error>) -> Void
+    ) {
+        let escapedUserID = userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId
+        let escapedMemberID = memberId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? memberId
+        performJSONRequest(
+            path: "family/members/\(escapedUserID)/\(escapedMemberID)/revoke",
+            method: "POST",
+            bodyObject: nil,
+            responseType: FamilyRevokeResponse.self,
+            completion: completion
+        )
+    }
+
     func fetchDistrictPayload(keyword: String) async throws -> Data {
         guard var components = URLComponents(url: try endpointURL(path: "maps/district"), resolvingAgainstBaseURL: false) else {
             throw Error.invalidURL
@@ -319,15 +335,27 @@ extension DreamJourneyBackendClient {
         let members: [FamilyMemberPayload]
     }
 
+    struct FamilyRevokeResponse: Decodable {
+        let status: String
+        let member: FamilyMemberPayload
+    }
+
     struct FamilyMemberPayload: Decodable {
         let id: String
         let name: String?
         let displayName: String?
         let relation: String?
         let phone: String?
+        let accessStatus: String?
+        let invitationStatus: String?
         let isOnline: Bool?
         let lastUpdated: String?
         let createdAt: String?
+        let revokedAt: String?
+
+        var isRevoked: Bool {
+            accessStatus == "revoked" || invitationStatus == "revoked" || revokedAt != nil
+        }
 
         func toFamilyMember() -> FamilyMember? {
             let resolvedName = (name ?? displayName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)

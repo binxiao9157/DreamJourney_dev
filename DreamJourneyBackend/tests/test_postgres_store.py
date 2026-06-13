@@ -32,6 +32,13 @@ class FakeCursor:
         elif normalized.startswith("SELECT payload FROM memories"):
             user_id = params[0]
             self.result = [{"payload": item} for item in self.connection.memories.get(user_id, [])]
+        elif normalized.startswith("SELECT payload FROM family_members WHERE user_id = %s AND id = %s"):
+            user_id, item_id = params
+            members = [
+                item for item in self.connection.family_members.get(user_id, [])
+                if item.get("id") == item_id
+            ]
+            self.result = None if not members else {"payload": members[0]}
         elif normalized.startswith("SELECT payload FROM family_members"):
             user_id = params[0]
             self.result = [{"payload": item} for item in self.connection.family_members.get(user_id, [])]
@@ -74,6 +81,17 @@ class FakeCursor:
             payload = unwrap_jsonb(payload)
             self.connection.family_members.setdefault(user_id, []).append(dict(payload))
             self.result = {"payload": payload}
+        elif normalized.startswith("UPDATE family_members"):
+            payload, user_id, item_id = params
+            payload = unwrap_jsonb(payload)
+            members = self.connection.family_members.get(user_id, [])
+            for index, item in enumerate(members):
+                if item.get("id") == item_id:
+                    members[index] = dict(payload)
+                    self.result = {"payload": payload}
+                    break
+            else:
+                self.result = None
         elif normalized.startswith("INSERT INTO care_snapshots"):
             user_id, item_id, viewer_family_member_id, payload = params
             payload = unwrap_jsonb(payload)
@@ -146,6 +164,18 @@ class PostgresStoreTests(unittest.TestCase):
         self.assertTrue(member["id"].startswith("family_"))
         self.assertEqual(store.list_memories("u1")[0]["title"], "绍兴记忆")
         self.assertEqual(store.list_family_members("u1")[0]["name"], "林桂芳")
+
+    def test_store_persists_family_member_revocation(self):
+        connection = FakeConnection()
+        store = PostgresStore(connection_factory=lambda: connection)
+
+        member = store.add_family_member("u1", {"name": "林桂芳"})
+        revoked = store.revoke_family_member("u1", member["id"])
+
+        self.assertEqual(revoked["accessStatus"], "revoked")
+        self.assertEqual(revoked["invitationStatus"], "revoked")
+        self.assertFalse(revoked["isOnline"])
+        self.assertEqual(store.list_family_members("u1")[0]["accessStatus"], "revoked")
 
     def test_store_persists_latest_care_snapshot_by_viewer(self):
         connection = FakeConnection()
