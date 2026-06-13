@@ -332,10 +332,6 @@ final class MemoryArchiveViewController: UIViewController {
                                 archiveTitle: item.title,
                                 capturedAt: item.createdAt
                             )
-                            Stage1MemoryFacade.shared.recordUserTurn(Stage1MailboxMemoryInput(
-                                "记忆档案馆上传旧照片：\(archiveAnalysis.summary)",
-                                privacyMetadata: item.privacyMetadata
-                            ))
                             let afterStatus = KBLiteDepositStatusBuilder.build(from: KBLiteManager.shared.graph)
                             let addedCount = max(0, afterStatus.totalEntityCount - beforeStatus.totalEntityCount)
                             if addedCount == 0 {

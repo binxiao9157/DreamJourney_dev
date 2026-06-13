@@ -82,8 +82,6 @@ final class Stage1MemoryFacade {
         )
         let resolvedInput = input.withSourceRef(sourceRef)
 
-        recordUserTurn(resolvedInput)
-
         guard resolvedInput.privacyMetadata.scope != .privateOnly else {
             completion(0)
             return

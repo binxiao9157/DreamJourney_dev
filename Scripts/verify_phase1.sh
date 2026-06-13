@@ -92,6 +92,9 @@ python3 Scripts/MemoryArchiveVoiceKnowledgeVerify/main.py
 echo "== MemoryArchive knowledge deposit UI =="
 python3 Scripts/MemoryArchiveKnowledgeDepositUIVerify/main.py
 
+echo "== MemoryArchive conversation boundary =="
+python3 Scripts/MemoryArchiveConversationBoundaryVerify/main.py
+
 echo "== Family backend sync =="
 python3 Scripts/FamilyBackendSyncVerify/main.py
 
