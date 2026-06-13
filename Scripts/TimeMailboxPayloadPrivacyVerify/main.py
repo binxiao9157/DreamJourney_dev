@@ -27,6 +27,8 @@ payload_match = re.search(r"private static func mailboxLetterPayload[\s\S]*?\n  
 payload_body = payload_match.group(0) if payload_match else ""
 cell_config_match = re.search(r"func configure\(with letter: TimeMailboxLetter\)[\s\S]*?\n    \}", view)
 cell_config = cell_config_match.group(0) if cell_config_match else ""
+reader_match = re.search(r"private func presentReader\(for letter: TimeMailboxLetter\)[\s\S]*?\n    \}", view)
+reader_body = reader_match.group(0) if reader_match else ""
 
 require("mailboxLetterPayload" in payload_body, "client mailbox payload builder should exist")
 require("removeValue(forKey: \"body\")" in payload_body, "client payload must remove full body")
@@ -46,6 +48,14 @@ require(
 require(
     "正文仅本机保存" in cell_config or "完整正文不出端" in cell_config,
     "mailbox list should explain that full content remains local",
+)
+require(
+    "latest.body" in reader_body and "原信仅本机显示" in reader_body,
+    "mailbox reader should show the original letter body only inside the local reader",
+)
+require(
+    "回声边界" in reader_body and "latest.replyText" in reader_body,
+    "mailbox reader should separate local original letter from bounded echo text",
 )
 require(
     '"bodyPreview"' not in privacy and "payload.get(\"body\")" not in privacy,

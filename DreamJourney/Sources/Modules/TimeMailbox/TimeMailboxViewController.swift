@@ -255,9 +255,16 @@ final class TimeMailboxViewController: UIViewController {
 
         let latest = repository.letters().first(where: { $0.id == letter.id }) ?? letter
         syncLetterMetadataToBackend(latest)
+        let readerMessage = """
+        原信仅本机显示：
+        \(latest.body)
+
+        回声边界：
+        \(latest.replyText ?? "这封信已经到达，但回声还在整理中。")
+        """
         let alert = UIAlertController(
             title: latest.title,
-            message: latest.replyText ?? "这封信已经到达，但回声还在整理中。",
+            message: readerMessage,
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "我知道了", style: .default))
