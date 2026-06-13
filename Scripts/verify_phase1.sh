@@ -29,6 +29,9 @@ python3 Scripts/TimeMailboxNotificationVerify/main.py
 echo "== TimeMailbox delayed delivery =="
 python3 Scripts/TimeMailboxDeliveryDelayVerify/main.py
 
+echo "== TimeMailbox automatic delivery refresh =="
+python3 Scripts/TimeMailboxAutoDeliveryRefreshVerify/main.py
+
 echo "== TimeMailbox backend sync =="
 python3 Scripts/TimeMailboxBackendSyncVerify/main.py
 

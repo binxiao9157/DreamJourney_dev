@@ -4,6 +4,7 @@ final class TimeMailboxViewController: UIViewController {
 
     private let repository: TimeMailboxRepository
     private var letters: [TimeMailboxLetter] = []
+    private var deliveryRefreshTimer: Timer?
 
     private let titleLabel: UILabel = {
         let label = UILabel()
@@ -67,6 +68,10 @@ final class TimeMailboxViewController: UIViewController {
 
     required init?(coder: NSCoder) { fatalError() }
 
+    deinit {
+        deliveryRefreshTimer?.invalidate()
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .warmBackground
@@ -80,6 +85,12 @@ final class TimeMailboxViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         reloadLetters()
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        deliveryRefreshTimer?.invalidate()
+        deliveryRefreshTimer = nil
     }
 
     private func setupLayout() {
@@ -115,14 +126,35 @@ final class TimeMailboxViewController: UIViewController {
         ])
     }
 
-    private func reloadLetters() {
+    private func reloadLetters(showDeliveryToast: Bool = false) {
         let deliveredLetters = repository.refreshDelivery(evidenceProvider: Self.makeEchoEvidence)
         letters = repository.letters()
         emptyLabel.isHidden = !letters.isEmpty
+        scheduleNextDeliveryRefresh()
+        if showDeliveryToast, !deliveredLetters.isEmpty {
+            showToast("有信已到达，可以打开阅读", type: .success)
+        }
         updateMailboxBackendSyncStatusLabel()
         tableView.reloadData()
         syncDeliveredLettersToBackend(deliveredLetters)
         refreshMailboxBackendSyncStatus()
+    }
+
+    private func scheduleNextDeliveryRefresh() {
+        deliveryRefreshTimer?.invalidate()
+        deliveryRefreshTimer = nil
+
+        guard let nextDeliveryDate = letters.filter { $0.status == .sealed }.map(\.deliverAt).min() else {
+            return
+        }
+
+        let interval = max(1, nextDeliveryDate.timeIntervalSinceNow + 0.5)
+        deliveryRefreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+            self?.reloadLetters(showDeliveryToast: true)
+        }
+        if let deliveryRefreshTimer {
+            RunLoop.main.add(deliveryRefreshTimer, forMode: .common)
+        }
     }
 
     private static func makeEchoEvidence(for letter: TimeMailboxLetter) -> TimeMailboxEchoEvidence {
