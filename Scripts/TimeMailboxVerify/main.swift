@@ -15,6 +15,15 @@ let repo = TimeMailboxRepository(defaults: defaults, storageKey: "letters")
 let now = Date(timeIntervalSince1970: 1_800_000_000)
 
 do {
+    assertCondition(
+        PrivacyScopePolicy.canUse(scope: .generationAllowed, surface: .timeMailboxEcho),
+        "generationAllowed memories should be usable by on-device time mailbox echo"
+    )
+    assertCondition(
+        !PrivacyScopePolicy.canUse(scope: .familyCircle, surface: .timeMailboxEcho),
+        "familyCircle memories should not be used by time mailbox echo by default"
+    )
+
     let letter = try repo.createLetter(
         recipientName: "妈妈",
         title: "今天很想你",

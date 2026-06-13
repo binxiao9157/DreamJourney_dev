@@ -332,6 +332,28 @@ assertCondition(
     "prompt related facts should not include family/private facts linked to a prompt-usable person"
 )
 
+let timeMailboxEchoGraph = KBLitePrivacyScopePolicy.sanitizedGraph(sentinelGraph, for: .timeMailboxEcho)
+assertCondition(
+    timeMailboxEchoGraph.people.map(\.id) == ["generation-person"],
+    "time mailbox echo graph should include generationAllowed people"
+)
+assertCondition(
+    timeMailboxEchoGraph.places.map(\.id) == ["local-place", "generation-place"],
+    "time mailbox echo graph should include localOnly and generationAllowed places"
+)
+assertCondition(
+    timeMailboxEchoGraph.events.map(\.id) == ["generation-event"],
+    "time mailbox echo graph should include generationAllowed events"
+)
+assertCondition(
+    timeMailboxEchoGraph.facts.map(\.id) == ["generation-fact"],
+    "time mailbox echo graph should include generationAllowed facts"
+)
+let timeMailboxEchoData = try JSONEncoder().encode(timeMailboxEchoGraph)
+let timeMailboxEchoJSON = String(data: timeMailboxEchoData, encoding: .utf8) ?? ""
+assertCondition(!timeMailboxEchoJSON.contains("PRIVATE_"), "time mailbox echo graph should not contain private sentinel")
+assertCondition(!timeMailboxEchoJSON.contains("FAMILY_"), "time mailbox echo graph should not contain family sentinel")
+
 let familyGraph = KBLitePrivacyScopePolicy.sanitizedGraph(sentinelGraph, for: .familySync)
 assertCondition(familyGraph.people.map(\.id) == ["family-person"], "family sync graph should only contain familyCircle people")
 assertCondition(familyGraph.places.map(\.id) == ["family-place"], "family sync graph should only contain familyCircle places")

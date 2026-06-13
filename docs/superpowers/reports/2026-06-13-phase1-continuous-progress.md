@@ -327,6 +327,21 @@
   - 验证通过 `CareDashboardInputPolicy` 后，亲友范围发言可进入看板输入。
   - 验证第二轮结束后，多轮用户关怀发言仍被保留。
 
+### 25. 时空信箱：本机回声可引用“可生成”记忆
+
+- 修正 `PrivacyScopePolicy` 的 `timeMailboxEcho` 权限：
+  - `localOnly` 仍可用于本机信箱回声。
+  - `generationAllowed` 现在也可用于本机信箱回声，避免档案馆和对话中明确授权“可生成”的记忆无法被信箱回声参考。
+  - `privateOnly` 仍不可用。
+  - `familyCircle` 仍不默认进入信箱回声，避免把亲友共享范围误当作个人回声生成来源。
+- 这使阶段一“时空信箱基于已整理记忆生成边界回复”更贴近真实使用：
+  - 用户在档案馆保存“可生成”的人物、地点、事件后，写给相关人物的信件可以命中这些已授权线索。
+  - 回声仍由 `KBLitePrivacyScopePolicy.sanitizedGraph(..., for: .timeMailboxEcho)` 裁剪，private/family sentinel 不会进入本机回声图谱。
+- 验证增强：
+  - `Scripts/TimeMailboxVerify/main.swift` 增加 `generationAllowed -> timeMailboxEcho` 和 `familyCircle !-> timeMailboxEcho` 断言。
+  - `Scripts/PrivacyScopeVerify/main.swift` 更新 generation surfaces。
+  - `Scripts/MemoryPrivacyIntegrationVerify/main.swift` 增加 timeMailboxEcho 图谱裁剪断言。
+
 ## 真机验收建议
 
 ### 记忆档案馆
@@ -357,6 +372,7 @@
    - “不是逝者真实回复”。
    - 如有匹配，出现“我能参考到的已授权记忆”。
    - 如无匹配，明确说明不会编造具体经历。
+   - 如果此前保存过“可生成”的相关人物 / 地点 / 事件，回声应能引用这些已授权记忆线索；亲友范围内容不会默认被拿来生成信箱回声。
 6. 如果选择未来投递，首次使用时系统会请求通知权限；到点后预期收到“时空信箱有一封信到达”的本机提醒。
 7. 如果已配置 `DreamJourneyBackendBaseURL` 并登录：
    - 选择“本机”时，页面应仍提示完整内容只保存在本机，后端不会保存该信件。

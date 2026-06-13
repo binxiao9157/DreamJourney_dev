@@ -184,10 +184,9 @@ public enum PrivacyScopePolicy {
             }
         case .generationAllowed:
             switch surface {
-            case .remoteExtraction, .prompt, .memoirGeneration, .backendSync:
+            case .remoteExtraction, .prompt, .memoirGeneration, .timeMailboxEcho, .backendSync:
                 return true
-            case .timeMailboxEcho,
-                 .export,
+            case .export,
                  .widget,
                  .careDashboard,
                  .familySync:

@@ -18,6 +18,7 @@ private let generationSurfaces: Set<MemoryUseSurface> = [
     .remoteExtraction,
     .prompt,
     .memoirGeneration,
+    .timeMailboxEcho,
     .backendSync
 ]
 private let familySurfaces: Set<MemoryUseSurface> = [
@@ -69,6 +70,10 @@ for surface in outwardLocalDenied {
         "localOnly should deny outward surface \(surface.rawValue)"
     )
 }
+assertCondition(
+    PrivacyScopePolicy.canUse(scope: .localOnly, surface: .timeMailboxEcho),
+    "localOnly should allow on-device time mailbox echo"
+)
 
 for surface in MemoryUseSurface.allCases {
     assertCondition(
