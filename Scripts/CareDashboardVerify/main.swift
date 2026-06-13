@@ -130,6 +130,23 @@ let emptyReport = CareDashboardShareReportDescriptor.make(snapshot: empty)
 assertCondition(emptyReport.plainText.contains("风险等级：数据不足"), "empty share report should preserve insufficient-data state")
 assertCondition(!emptyReport.plainText.contains("风险等级：状态稳定"), "empty share report should not claim stable state")
 
+let thirtyDaysAgo = now.addingTimeInterval(-30 * 24 * 60 * 60)
+let recentWindow = analyzer.analyze(turns: [
+    CareSignalInputTurn(role: "user", text: "一个月前我睡不好，胸闷，也很孤单。", timestamp: thirtyDaysAgo),
+    CareSignalInputTurn(role: "user", text: "今天吃了晚饭，散步半小时。", timestamp: now)
+], now: now)
+assertCondition(recentWindow.userTurnCount == 1, "care dashboard should only count user turns inside the recent seven-day window")
+assertCondition(recentWindow.riskLevel == .stable, "old risk signals outside seven days should not affect current dashboard risk")
+assertCondition(recentWindow.sleepMentions == 0, "old sleep signals should be excluded from current dashboard metrics")
+assertCondition(recentWindow.bodyDiscomfortMentions == 0, "old body signals should be excluded from current dashboard metrics")
+assertCondition(recentWindow.negativeEmotionMentions == 0, "old emotion signals should be excluded from current dashboard metrics")
+
+let staleOnly = analyzer.analyze(turns: [
+    CareSignalInputTurn(role: "user", text: "一个月前我睡不好，胸闷，也很孤单。", timestamp: thirtyDaysAgo)
+], now: now)
+assertCondition(staleOnly.userTurnCount == 0, "stale-only care input should not be treated as current data")
+assertCondition(staleOnly.riskLevel == .insufficientData, "stale-only care input should show insufficient current data")
+
 let familyAll = MemoryPrivacyMetadata(scope: .familyCircle)
 let daughterOnly = MemoryPrivacyMetadata(
     scope: .familyCircle,

@@ -23,8 +23,10 @@ final class CareSignalAnalyzer {
                 )
             }
             .filter { !$0.text.isEmpty }
-        let window = observationWindow(for: userTurns)
-        let userTexts = userTurns.map(\.text)
+        let recentUserTurns = userTurns.filter { isInsideRecentWindow($0.timestamp, now: now) }
+        let recentTotalTurnCount = turns.filter { isInsideRecentWindow($0.timestamp, now: now) }.count
+        let window = observationWindow(for: recentUserTurns)
+        let userTexts = recentUserTurns.map(\.text)
 
         guard !userTexts.isEmpty else {
             return CareSignalSnapshot(
@@ -33,7 +35,7 @@ final class CareSignalAnalyzer {
                 windowEnd: window.end,
                 windowDayCount: window.dayCount,
                 dataCoverageSummary: dataCoverageSummary(dayCount: window.dayCount, userTurnCount: 0),
-                totalTurns: turns.count,
+                totalTurns: recentTotalTurnCount,
                 userTurnCount: 0,
                 characterCount: 0,
                 uniqueTokenCount: 0,
@@ -68,7 +70,7 @@ final class CareSignalAnalyzer {
             bodyCount: bodyCount,
             repetitionRatio: repetitionRatio
         )
-        let dailyTrend = dailyTrend(for: userTurns, endDate: window.end)
+        let dailyTrend = dailyTrend(for: recentUserTurns, endDate: now)
 
         return CareSignalSnapshot(
             generatedAt: now,
@@ -76,7 +78,7 @@ final class CareSignalAnalyzer {
             windowEnd: window.end,
             windowDayCount: window.dayCount,
             dataCoverageSummary: dataCoverageSummary(dayCount: window.dayCount, userTurnCount: userTexts.count),
-            totalTurns: turns.count,
+            totalTurns: recentTotalTurnCount,
             userTurnCount: userTexts.count,
             characterCount: characterCount,
             uniqueTokenCount: uniqueTokenCount,
@@ -104,6 +106,15 @@ final class CareSignalAnalyzer {
             dailyTrend: dailyTrend,
             trendSummary: trendSummary(for: dailyTrend)
         )
+    }
+
+    private func isInsideRecentWindow(_ timestamp: Date, now: Date) -> Bool {
+        let calendar = Calendar.current
+        let todayStart = calendar.startOfDay(for: now)
+        guard let windowStart = calendar.date(byAdding: .day, value: -6, to: todayStart) else {
+            return timestamp <= now
+        }
+        return timestamp >= windowStart && timestamp <= now
     }
 
     private func observationWindow(for turns: [CareSignalInputTurn]) -> (start: Date?, end: Date?, dayCount: Int) {
