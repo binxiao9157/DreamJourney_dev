@@ -57,6 +57,9 @@ class InMemoryStore:
         self._archive_items.setdefault(user_id, []).insert(0, item)
         return deepcopy(item)
 
+    def list_archive_items(self, user_id: str) -> List[Dict[str, Any]]:
+        return deepcopy(self._archive_items.get(user_id, []))
+
     def add_family_member(self, user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         item = deepcopy(payload)
         item.setdefault("id", f"family_{len(self._family_members.get(user_id, [])) + 1}")

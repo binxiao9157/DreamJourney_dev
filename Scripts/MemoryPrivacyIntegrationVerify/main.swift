@@ -402,7 +402,26 @@ let widgetGraph = KBLitePrivacyScopePolicy.sanitizedGraph(sentinelGraph, for: .w
 assertCondition(widgetGraph.events.isEmpty, "widget graph should omit events by default")
 
 let backendGraph = KBLitePrivacyScopePolicy.sanitizedGraph(sentinelGraph, for: .backendSync)
-assertCondition(backendGraph.people.isEmpty, "backend sync graph should be empty until explicit backend scope exists")
+assertCondition(
+    backendGraph.people.map(\.id) == ["generation-person", "family-person", "daughter-family-person", "son-family-person"],
+    "backend sync graph should include generationAllowed and familyCircle people for own-cloud persistence"
+)
+assertCondition(
+    backendGraph.places.map(\.id) == ["generation-place", "family-place", "daughter-family-place"],
+    "backend sync graph should include generationAllowed and familyCircle places"
+)
+assertCondition(
+    backendGraph.events.map(\.id) == ["family-event", "generation-event", "daughter-family-event"],
+    "backend sync graph should include generationAllowed and familyCircle events"
+)
+assertCondition(
+    backendGraph.facts.map(\.id) == ["generation-fact", "family-fact", "daughter-family-fact"],
+    "backend sync graph should include generationAllowed and familyCircle facts"
+)
+let backendData = try JSONEncoder().encode(backendGraph)
+let backendJSON = String(data: backendData, encoding: .utf8) ?? ""
+assertCondition(!backendJSON.contains("PRIVATE_"), "backend sync JSON should not contain private sentinel")
+assertCondition(!backendJSON.contains("LOCAL_"), "backend sync JSON should not contain local sentinel")
 
 let careGraph = KBLitePrivacyScopePolicy.sanitizedGraph(sentinelGraph, for: .careDashboard)
 assertCondition(careGraph.people.map(\.id) == ["family-person"], "care dashboard graph should only contain familyCircle people")

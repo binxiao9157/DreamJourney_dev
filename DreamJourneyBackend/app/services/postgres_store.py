@@ -147,6 +147,9 @@ class PostgresStore:
         item = self._with_identity(payload, "archive", user_id)
         return self._insert_payload("archive_items", user_id, item)
 
+    def list_archive_items(self, user_id: str) -> List[Dict[str, Any]]:
+        return self._list_payloads("archive_items", user_id)
+
     def add_family_member(self, user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         item = self._with_identity(payload, "family", user_id)
         return self._insert_payload("family_members", user_id, item)

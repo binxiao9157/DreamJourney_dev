@@ -197,6 +197,7 @@ final class MemoryArchiveViewController: UIViewController {
                     }
                 }
             }
+            syncArchiveItemMetadataToBackend(item)
             dismiss(animated: true) { [weak self] in
                 self?.showToast(
                     item.privacyMetadata.scope == .privateOnly ? "素材已保存" : "素材已保存，正在整理知识库",
@@ -423,6 +424,7 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
                 privacyMetadata: privacyMetadata
             )
             reloadData()
+            syncArchiveItemMetadataToBackend(item)
             if item.analysisStatus == .pending {
                 showToast("照片已加入档案馆，开始分析", type: .success)
                 analyzePhoto(image, itemId: item.id)
@@ -535,10 +537,28 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
                     privacyMetadata: item.privacyMetadata
                 ))
             }
+            syncArchiveItemMetadataToBackend(item)
             showToast("语音素材已保存", type: .success)
             reloadData()
         } catch {
             showToast("语音素材保存失败", type: .error)
+        }
+    }
+}
+
+private extension MemoryArchiveViewController {
+    func syncArchiveItemMetadataToBackend(_ item: MemoryArchiveItem) {
+        guard DreamJourneyBackendClient.shared.isConfigured,
+              let userId = UserManager.shared.currentUser?.id,
+              PrivacyScopePolicy.canUse(metadata: item.privacyMetadata, surface: .backendSync)
+        else {
+            return
+        }
+
+        DreamJourneyBackendClient.shared.syncArchiveItem(userId: userId, item: item) { result in
+            if case .failure(let error) = result {
+                print("[MemoryArchive] backend metadata sync skipped/failed: \(error.localizedDescription)")
+            }
         }
     }
 }

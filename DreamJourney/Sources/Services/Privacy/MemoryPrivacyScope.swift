@@ -162,27 +162,25 @@ public enum PrivacyScopePolicy {
             }
         case .generationAllowed:
             switch surface {
-            case .remoteExtraction, .prompt, .memoirGeneration:
+            case .remoteExtraction, .prompt, .memoirGeneration, .backendSync:
                 return true
             case .timeMailboxEcho,
                  .export,
                  .widget,
                  .careDashboard,
-                 .familySync,
-                 .backendSync:
+                 .familySync:
                 return false
             }
         case .familyCircle:
             switch surface {
-            case .careDashboard, .familySync:
+            case .careDashboard, .familySync, .backendSync:
                 return true
             case .remoteExtraction,
                  .prompt,
                  .memoirGeneration,
                  .timeMailboxEcho,
                  .export,
-                 .widget,
-                 .backendSync:
+                 .widget:
                 return false
             }
         }

@@ -17,11 +17,13 @@ private let allSurfaces = Set(MemoryUseSurface.allCases)
 private let generationSurfaces: Set<MemoryUseSurface> = [
     .remoteExtraction,
     .prompt,
-    .memoirGeneration
+    .memoirGeneration,
+    .backendSync
 ]
 private let familySurfaces: Set<MemoryUseSurface> = [
     .careDashboard,
-    .familySync
+    .familySync,
+    .backendSync
 ]
 private let outwardLocalDenied: Set<MemoryUseSurface> = [
     .remoteExtraction,
@@ -71,14 +73,14 @@ for surface in outwardLocalDenied {
 for surface in MemoryUseSurface.allCases {
     assertCondition(
         PrivacyScopePolicy.canUse(scope: .generationAllowed, surface: surface) == generationSurfaces.contains(surface),
-        "generationAllowed should only allow generation chain surface \(surface.rawValue)"
+        "generationAllowed should allow generation chain and own-backend sync surface \(surface.rawValue)"
     )
 }
 
 for surface in MemoryUseSurface.allCases {
     assertCondition(
         PrivacyScopePolicy.canUse(scope: .familyCircle, surface: surface) == familySurfaces.contains(surface),
-        "familyCircle should only allow family aggregation surface \(surface.rawValue)"
+        "familyCircle should allow family aggregation and own-backend sync surface \(surface.rawValue)"
     )
 }
 

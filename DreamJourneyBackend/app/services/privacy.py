@@ -55,3 +55,16 @@ def filter_syncable_graph(graph: Dict[str, Any]) -> Dict[str, Any]:
         "events": events,
         "facts": facts,
     }
+
+
+def sanitize_archive_item_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Return backend-safe archive metadata without local files or private scopes."""
+    if not _is_syncable(payload):
+        raise ValueError("archive item is not syncable")
+
+    item = deepcopy(payload)
+    item.pop("localPath", None)
+    item.pop("fileURL", None)
+    item.pop("absolutePath", None)
+    item["metadataOnly"] = True
+    return item

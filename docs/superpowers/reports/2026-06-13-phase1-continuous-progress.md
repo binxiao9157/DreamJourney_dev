@@ -92,6 +92,22 @@
 - 亲友列表高度改为随成员数量动态刷新，避免后端拉到成员后列表显示不全。
 - 当前边界：后端仍是 member 级 accept/revoke，尚未拆成独立 invitation code/deeplink 状态机。
 
+### 10. 记忆档案馆：档案条目元数据后端闭环
+
+- 后端新增通用档案 API：
+  - `POST /archive/items`
+  - `GET /archive/items/{userId}`
+- `archive_items` 原有 Postgres 表正式补齐 list 能力，InMemoryStore 也提供同样行为，方便本地和服务器一致测试。
+- 服务端新增 `sanitize_archive_item_payload`：
+  - 拒绝 `privateOnly` / `localOnly` 档案素材。
+  - 允许 `generationAllowed` / `familyCircle` 进入自有业务后端。
+  - 强制移除 `localPath`、`fileURL`、`absolutePath`，只保存元数据和已授权文本/分析摘要，不上传图片或音频本体。
+- iOS `DreamJourneyBackendClient` 新增：
+  - `syncArchiveItem(userId:item:)`
+  - `fetchArchiveItems(userId:)`
+- 档案馆保存文字、照片、语音素材后，会在后端已配置且用户已登录时同步授权元数据。
+- 隐私策略同步修正：`backendSync` 现在表示“同步到自有后端长期保存/联调”，不是公开分享；私密和本机素材仍不出端。
+
 ## 真机验收建议
 
 ### 记忆档案馆
@@ -107,6 +123,7 @@
 4. 保存后等待 3-10 秒。
 5. 进入“结构化知识库”，预期应出现人物、地点、事件或事实。
 6. 再导入一段本地音频，确认档案统计中的“语音”数量增加。
+7. 如果已配置 `DreamJourneyBackendBaseURL` 并登录，后端应能通过 `GET /archive/items/{userId}` 查到该素材元数据；响应中不应包含 `localPath`。
 
 ### 时空信箱
 
@@ -139,10 +156,13 @@
 - `TimeMailboxNotification verification passed`
 - `CareDashboard verification passed`
 - `CareDashboardBackendSync verification passed`
+- `MemoryArchiveBackendSync verification passed`
 - `FamilyBackendSync verification passed`
-- `DreamJourneyBackend unittest 21/21 OK`
-- `SecretConfig verification passed`
+- `DreamJourneyBackend unittest 24/24 OK`
+- `PrivacyScope verification passed`
+- `MemoryPrivacyIntegration verification passed`
 - `LocalTestDataCleanup verification passed`
+- `FastAPI smoke verification passed`
 - `git diff --check`
 - `xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -configuration Debug -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build`
 
@@ -150,5 +170,6 @@
 
 ## 下一步
 
-1. 进一步拆分 invitation code/deeplink 状态机，支持跨设备真实邀请链路。
-2. 补真机证据包：档案入库截图、结构化知识库截图、信箱回声截图、关怀周报导出文本。
+1. 给记忆档案馆补“服务器同步状态/最近同步时间”的轻量 UI，让真机测试者不需要抓接口也能确认素材是否进云端。
+2. 进一步拆分 invitation code/deeplink 状态机，支持跨设备真实邀请链路。
+3. 补真机证据包：档案入库截图、结构化知识库截图、信箱回声截图、关怀周报导出文本。

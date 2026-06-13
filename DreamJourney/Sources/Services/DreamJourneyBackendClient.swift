@@ -117,6 +117,38 @@ final class DreamJourneyBackendClient {
         }
     }
 
+    func syncArchiveItem(
+        userId: String,
+        item: MemoryArchiveItem,
+        completion: @escaping (Result<ArchiveItemResponse, Swift.Error>) -> Void
+    ) {
+        guard let payload = Self.archivePayload(userId: userId, item: item) else {
+            completion(.failure(Error.archiveItemNotSyncable))
+            return
+        }
+        performJSONRequest(
+            path: "archive/items",
+            method: "POST",
+            bodyObject: payload,
+            responseType: ArchiveItemResponse.self,
+            completion: completion
+        )
+    }
+
+    func fetchArchiveItems(
+        userId: String,
+        completion: @escaping (Result<ArchiveItemsResponse, Swift.Error>) -> Void
+    ) {
+        let escapedUserID = userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId
+        performJSONRequest(
+            path: "archive/items/\(escapedUserID)",
+            method: "GET",
+            bodyObject: nil,
+            responseType: ArchiveItemsResponse.self,
+            completion: completion
+        )
+    }
+
     func inviteFamilyMember(
         userId: String,
         name: String,
@@ -261,6 +293,17 @@ final class DreamJourneyBackendClient {
         return try? JSONSerialization.jsonObject(with: data)
     }
 
+    private static func archivePayload(userId: String, item: MemoryArchiveItem) -> [String: Any]? {
+        guard PrivacyScopePolicy.canUse(metadata: item.privacyMetadata, surface: .backendSync),
+              var object = jsonObject(fromEncodable: item) as? [String: Any] else {
+            return nil
+        }
+        object["userId"] = userId
+        object["metadataOnly"] = true
+        object.removeValue(forKey: "localPath")
+        return object
+    }
+
     private static func jsonDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -283,6 +326,7 @@ extension DreamJourneyBackendClient {
         case invalidURL
         case invalidGraphJSON
         case invalidCareSnapshot
+        case archiveItemNotSyncable
         case nonHTTPResponse
         case statusCode(Int)
 
@@ -296,6 +340,8 @@ extension DreamJourneyBackendClient {
                 return "KBLite 图谱 JSON 无效"
             case .invalidCareSnapshot:
                 return "关怀看板快照 JSON 无效"
+            case .archiveItemNotSyncable:
+                return "档案素材未授权同步到后端"
             case .nonHTTPResponse:
                 return "后端返回非 HTTP 响应"
             case .statusCode(let code):
@@ -340,6 +386,16 @@ extension DreamJourneyBackendClient {
         let viewerFamilyMemberID: String?
         let snapshot: CareSignalSnapshot
         let createdAt: String
+    }
+
+    struct ArchiveItemResponse: Decodable {
+        let status: String
+        let item: MemoryArchiveItem
+    }
+
+    struct ArchiveItemsResponse: Decodable {
+        let userId: String
+        let items: [MemoryArchiveItem]
     }
 
     struct FamilyInviteResponse: Decodable {

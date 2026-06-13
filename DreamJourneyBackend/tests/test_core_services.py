@@ -185,6 +185,41 @@ class StoreTests(unittest.TestCase):
         self.assertIn("acceptedAt", accepted)
         self.assertEqual(store.list_family_members("u1")[0]["invitationStatus"], "accepted")
 
+    def test_store_lists_archive_items_by_user(self):
+        store = InMemoryStore()
+
+        old_item = store.add_archive_item(
+            "u1",
+            {
+                "id": "archive-old",
+                "kind": "textNote",
+                "title": "旧记录",
+                "privacyMetadata": {"scope": "generationAllowed"},
+            },
+        )
+        new_item = store.add_archive_item(
+            "u1",
+            {
+                "id": "archive-new",
+                "kind": "voiceSample",
+                "title": "语音样本",
+                "privacyMetadata": {"scope": "generationAllowed"},
+            },
+        )
+        store.add_archive_item(
+            "u2",
+            {
+                "id": "archive-other",
+                "kind": "textNote",
+                "title": "其他用户",
+                "privacyMetadata": {"scope": "generationAllowed"},
+            },
+        )
+
+        self.assertEqual(old_item["userId"], "u1")
+        self.assertEqual([item["id"] for item in store.list_archive_items("u1")], ["archive-new", "archive-old"])
+        self.assertEqual([item["id"] for item in store.list_archive_items("u2")], ["archive-other"])
+
 
 class CareSnapshotAPITests(unittest.TestCase):
     def test_care_snapshot_api_saves_and_returns_latest_by_viewer(self):
@@ -227,6 +262,61 @@ class CareSnapshotAPITests(unittest.TestCase):
         response = client.get("/care/snapshots/latest/missing_user")
 
         self.assertEqual(response.status_code, 404)
+
+
+class ArchiveAPITests(unittest.TestCase):
+    def test_archive_items_api_saves_sanitized_metadata_and_lists_by_user(self):
+        client = TestClient(app)
+
+        created = client.post(
+            "/archive/items",
+            json={
+                "userId": "archive_user_1",
+                "id": "archive-text-1",
+                "kind": "textNote",
+                "title": "仓桥直街",
+                "note": "1968 年住在绍兴越城区仓桥直街。",
+                "localPath": "/private/var/mobile/archive_photo.jpg",
+                "privacyMetadata": {"scope": "generationAllowed"},
+            },
+        )
+        listed = client.get("/archive/items/archive_user_1")
+
+        self.assertEqual(created.status_code, 200)
+        item = created.json()["item"]
+        self.assertEqual(item["id"], "archive-text-1")
+        self.assertEqual(item["title"], "仓桥直街")
+        self.assertNotIn("localPath", item)
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.json()["items"][0]["id"], "archive-text-1")
+        self.assertNotIn("localPath", listed.json()["items"][0])
+
+    def test_archive_items_api_rejects_private_or_local_items(self):
+        client = TestClient(app)
+
+        private_response = client.post(
+            "/archive/items",
+            json={
+                "userId": "archive_user_2",
+                "id": "archive-private",
+                "kind": "textNote",
+                "title": "私密素材",
+                "privacyMetadata": {"scope": "privateOnly"},
+            },
+        )
+        local_response = client.post(
+            "/archive/items",
+            json={
+                "userId": "archive_user_2",
+                "id": "archive-local",
+                "kind": "textNote",
+                "title": "本机素材",
+                "privacyMetadata": {"scope": "localOnly"},
+            },
+        )
+
+        self.assertEqual(private_response.status_code, 403)
+        self.assertEqual(local_response.status_code, 403)
 
 
 class FamilyAPITests(unittest.TestCase):
