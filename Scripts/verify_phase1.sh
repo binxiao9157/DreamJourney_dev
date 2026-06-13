@@ -133,6 +133,16 @@ xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
   -o /tmp/dreamjourney_kblite_source_ref_verify
 /tmp/dreamjourney_kblite_source_ref_verify
 
+echo "== KBLite import sanitizer =="
+xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
+  DreamJourney/Sources/Services/KBLiteModels.swift \
+  DreamJourney/Sources/Services/KBLitePrivacyScopePolicy.swift \
+  DreamJourney/Sources/Services/KBLiteManager.swift \
+  Scripts/KBLiteImportSanitizerVerify/main.swift \
+  -o /tmp/dreamjourney_kblite_import_sanitizer_verify
+/tmp/dreamjourney_kblite_import_sanitizer_verify
+
 echo "== KBLite time mailbox =="
 xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
   DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \

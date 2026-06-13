@@ -94,12 +94,13 @@ final class KBLiteMultiUser {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
 
-        guard let importedGraph = try? decoder.decode(KBLiteGraph.self, from: data) else {
+        guard let decodedGraph = try? decoder.decode(KBLiteGraph.self, from: data) else {
             print("[KBMultiUser] JSON 解码为 KBLiteGraph 失败")
             return 0
         }
 
         let manager = KBLiteManager.shared
+        let importedGraph = manager.sanitizedIncomingGraph(decodedGraph)
         var addedCount = 0
 
         manager.writeGraph { graph in

@@ -236,8 +236,7 @@ final class KBLiteManager {
 
     @discardableResult
     func applyRemoteSnapshotIfUseful(_ remoteSnapshot: KBLiteGraph) -> Bool {
-        var remote = remoteSnapshot
-        _ = removeLegacyOrLowQualityEntities(from: &remote)
+        let remote = sanitizedIncomingGraph(remoteSnapshot)
         guard !remote.people.isEmpty || !remote.places.isEmpty || !remote.events.isEmpty || !remote.facts.isEmpty else {
             return false
         }
@@ -472,6 +471,12 @@ final class KBLiteManager {
             try? FileManager.default.moveItem(at: graphFilePath, to: backupPath)
             print("[KBLite] 📦 已备份损坏文件到: \(backupPath.lastPathComponent)")
         }
+    }
+
+    func sanitizedIncomingGraph(_ incoming: KBLiteGraph) -> KBLiteGraph {
+        var sanitized = incoming
+        _ = removeLegacyOrLowQualityEntities(from: &sanitized)
+        return sanitized
     }
 
     private func removeLegacyOrLowQualityEntities(from graph: inout KBLiteGraph) -> Int {
@@ -1852,11 +1857,14 @@ final class KBLiteManager {
     /// 从 JSON 字符串导入知识库（合并模式）
     @discardableResult
     func importJSON(_ jsonString: String) -> Bool {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
         guard let data = jsonString.data(using: .utf8),
-              let imported = try? JSONDecoder().decode(KBLiteGraph.self, from: data) else {
+              let decoded = try? decoder.decode(KBLiteGraph.self, from: data) else {
             print("[KBLite] ❌ 导入失败：JSON 解析错误")
             return false
         }
+        let imported = sanitizedIncomingGraph(decoded)
         var addedCount = 0
         for person in imported.people {
             guard !Self.isGenericKinshipDisplayName(person.name) else { continue }
