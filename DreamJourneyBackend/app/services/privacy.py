@@ -24,10 +24,57 @@ CARE_SNAPSHOT_SCALAR_KEYS = {
     "trendSummary",
 }
 
+CARE_SNAPSHOT_REQUIRED_SCALAR_KEYS = {
+    "generatedAt",
+    "windowDayCount",
+    "dataCoverageSummary",
+    "totalTurns",
+    "userTurnCount",
+    "characterCount",
+    "uniqueTokenCount",
+    "lexicalDiversity",
+    "negativeEmotionMentions",
+    "sleepMentions",
+    "bodyDiscomfortMentions",
+    "repetitionRatio",
+    "riskLevel",
+    "summary",
+    "trendSummary",
+}
+
 CARE_SNAPSHOT_STRING_LIST_KEYS = {
     "suggestions",
     "weeklyHighlights",
     "riskSignalDescriptions",
+}
+
+CARE_SNAPSHOT_REQUIRED_STRING_LIST_KEYS = CARE_SNAPSHOT_STRING_LIST_KEYS
+
+CARE_SNAPSHOT_RISK_LEVELS = {
+    "insufficientData",
+    "stable",
+    "watch",
+    "attention",
+}
+
+CARE_SNAPSHOT_TEXT_KEYS = {
+    "dataCoverageSummary",
+    "summary",
+    "trendSummary",
+}
+
+CARE_SNAPSHOT_RAW_TEXT_MARKERS = {
+    "care_raw_sentinel",
+    "rawtranscript",
+    "raw transcript",
+    "rawtext",
+    "source text",
+    "sourceTexts",
+    "transcript",
+    "messages",
+    "原始对话",
+    "原始聊天",
+    "完整对话",
 }
 
 CARE_DAILY_TREND_SCALAR_KEYS = {
@@ -39,6 +86,8 @@ CARE_DAILY_TREND_SCALAR_KEYS = {
     "repetitionRatio",
     "signalScore",
 }
+
+CARE_DAILY_TREND_REQUIRED_KEYS = CARE_DAILY_TREND_SCALAR_KEYS
 
 
 def _scope(entity: Dict[str, Any]) -> str:
@@ -139,38 +188,70 @@ def _string_list(value: Any) -> List[str]:
     return [item for item in value if isinstance(item, str)]
 
 
+def _ensure_no_raw_text(value: str, field_name: str, max_length: int = 260) -> None:
+    lowered = value.lower()
+    if any(marker.lower() in lowered for marker in CARE_SNAPSHOT_RAW_TEXT_MARKERS):
+        raise ValueError(f"raw care text is not allowed in {field_name}")
+    if "\n" in value or "\r" in value:
+        raise ValueError(f"raw care text is not allowed in {field_name}")
+    if len(value) > max_length:
+        raise ValueError(f"raw care text is not allowed in {field_name}")
+
+
 def _sanitize_daily_trend(value: Any) -> List[Dict[str, Any]]:
     if not isinstance(value, list):
-        return []
+        raise ValueError("dailyTrend must be a list")
 
     points = []
-    for point in value:
+    for index, point in enumerate(value):
         if not isinstance(point, dict):
-            continue
+            raise ValueError(f"dailyTrend[{index}] must be an object")
+        missing = sorted(CARE_DAILY_TREND_REQUIRED_KEYS - set(point.keys()))
+        if missing:
+            raise ValueError(f"missing required care snapshot dailyTrend[{index}] fields: {', '.join(missing)}")
         sanitized_point = {
             key: deepcopy(point[key])
             for key in CARE_DAILY_TREND_SCALAR_KEYS
             if key in point and _is_json_scalar(point[key])
         }
-        if sanitized_point:
-            points.append(sanitized_point)
+        if set(sanitized_point.keys()) != CARE_DAILY_TREND_REQUIRED_KEYS:
+            raise ValueError(f"invalid care snapshot dailyTrend[{index}] field types")
+        points.append(sanitized_point)
     return points
 
 
 def sanitize_care_snapshot_payload(snapshot: Dict[str, Any]) -> Dict[str, Any]:
     """Return backend-safe care dashboard aggregates without raw conversation text."""
+    missing_scalar = sorted(CARE_SNAPSHOT_REQUIRED_SCALAR_KEYS - set(snapshot.keys()))
+    missing_lists = sorted(CARE_SNAPSHOT_REQUIRED_STRING_LIST_KEYS - set(snapshot.keys()))
+    missing = missing_scalar + missing_lists
+    if "dailyTrend" not in snapshot:
+        missing.append("dailyTrend")
+    if missing:
+        raise ValueError(f"missing required care snapshot fields: {', '.join(missing)}")
+
     item = {
         key: deepcopy(snapshot[key])
         for key in CARE_SNAPSHOT_SCALAR_KEYS
         if key in snapshot and _is_json_scalar(snapshot[key])
     }
+    if not CARE_SNAPSHOT_REQUIRED_SCALAR_KEYS.issubset(item.keys()):
+        raise ValueError("invalid care snapshot scalar field types")
+    if item["riskLevel"] not in CARE_SNAPSHOT_RISK_LEVELS:
+        raise ValueError("invalid care snapshot riskLevel")
+    for key in CARE_SNAPSHOT_TEXT_KEYS:
+        _ensure_no_raw_text(str(item[key]), key)
 
     for key in CARE_SNAPSHOT_STRING_LIST_KEYS:
-        if key in snapshot:
-            item[key] = _string_list(snapshot[key])
+        if not isinstance(snapshot.get(key), list):
+            raise ValueError(f"{key} must be a list")
+        item[key] = _string_list(snapshot[key])
+        if len(item[key]) != len(snapshot[key]):
+            raise ValueError(f"{key} must contain only strings")
+        for index, text in enumerate(item[key]):
+            _ensure_no_raw_text(text, f"{key}[{index}]", max_length=180)
 
-    if "dailyTrend" in snapshot:
-        item["dailyTrend"] = _sanitize_daily_trend(snapshot["dailyTrend"])
+    item["dailyTrend"] = _sanitize_daily_trend(snapshot["dailyTrend"])
 
     item["metadataOnly"] = True
     item["contentRedacted"] = True

@@ -316,7 +316,10 @@ def save_care_snapshot(payload: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(snapshot, dict):
         raise HTTPException(status_code=400, detail="snapshot must be an object")
     _ensure_active_family_viewer(user_id, viewer_family_member_id)
-    sanitized_snapshot = sanitize_care_snapshot_payload(snapshot)
+    try:
+        sanitized_snapshot = sanitize_care_snapshot_payload(snapshot)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     item = store.save_care_snapshot(
         user_id,
         sanitized_snapshot,

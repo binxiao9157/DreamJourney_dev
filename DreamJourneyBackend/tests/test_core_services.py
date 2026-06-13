@@ -60,6 +60,19 @@ class PrivacyFilteringTests(unittest.TestCase):
     def test_care_snapshot_sanitizer_keeps_only_aggregate_fields(self):
         snapshot = {
             "generatedAt": "2026-06-13T00:00:00Z",
+            "windowStart": "2026-06-07T00:00:00Z",
+            "windowEnd": "2026-06-13T00:00:00Z",
+            "windowDayCount": 7,
+            "dataCoverageSummary": "近 7 天 6 轮授权对话",
+            "totalTurns": 10,
+            "userTurnCount": 6,
+            "characterCount": 180,
+            "uniqueTokenCount": 55,
+            "lexicalDiversity": 0.61,
+            "negativeEmotionMentions": 1,
+            "sleepMentions": 3,
+            "bodyDiscomfortMentions": 2,
+            "repetitionRatio": 0.25,
             "riskLevel": "watch",
             "summary": "睡眠和身体不适信号较多。",
             "suggestions": ["建议女儿今晚打电话确认近况。"],
@@ -77,6 +90,7 @@ class PrivacyFilteringTests(unittest.TestCase):
                     "rawText": "CARE_RAW_SENTINEL 不应保存",
                 }
             ],
+            "trendSummary": "近 7 天睡眠信号较集中。",
             "rawTranscript": "CARE_RAW_SENTINEL 原始对话不应保存",
             "messages": [{"role": "user", "text": "CARE_RAW_SENTINEL"}],
             "sourceTexts": ["CARE_RAW_SENTINEL"],
@@ -281,6 +295,47 @@ class StoreTests(unittest.TestCase):
 
 
 class CareSnapshotAPITests(unittest.TestCase):
+    def _care_snapshot(
+        self,
+        *,
+        summary: str,
+        risk_level: str = "stable",
+        user_turn_count: int = 3,
+    ) -> dict:
+        return {
+            "generatedAt": "2026-06-13T10:00:00Z",
+            "windowStart": "2026-06-07T00:00:00Z",
+            "windowEnd": "2026-06-13T10:00:00Z",
+            "windowDayCount": 7,
+            "dataCoverageSummary": "近 7 天 3 轮授权对话",
+            "totalTurns": 5,
+            "userTurnCount": user_turn_count,
+            "characterCount": 96,
+            "uniqueTokenCount": 32,
+            "lexicalDiversity": 0.67,
+            "negativeEmotionMentions": 0,
+            "sleepMentions": 1,
+            "bodyDiscomfortMentions": 0,
+            "repetitionRatio": 0.0,
+            "riskLevel": risk_level,
+            "summary": summary,
+            "suggestions": ["今晚主动电话问候。"],
+            "weeklyHighlights": ["睡眠信号 1 次。"],
+            "riskSignalDescriptions": [],
+            "dailyTrend": [
+                {
+                    "date": "2026-06-13T00:00:00Z",
+                    "userTurnCount": user_turn_count,
+                    "negativeEmotionMentions": 0,
+                    "sleepMentions": 1,
+                    "bodyDiscomfortMentions": 0,
+                    "repetitionRatio": 0.0,
+                    "signalScore": 1,
+                }
+            ],
+            "trendSummary": "近 7 天有轻微信号。",
+        }
+
     def _accept_family_member(self, client: TestClient, user_id: str, phone: str = "13900001111") -> str:
         created = client.post(
             "/family/invite",
@@ -308,7 +363,7 @@ class CareSnapshotAPITests(unittest.TestCase):
             "/care/snapshots",
             json={
                 "userId": "care_user_1",
-                "snapshot": {"riskLevel": "stable", "summary": "全家视角"},
+                "snapshot": self._care_snapshot(summary="全家视角", risk_level="stable"),
             },
         )
         daughter = client.post(
@@ -316,7 +371,7 @@ class CareSnapshotAPITests(unittest.TestCase):
             json={
                 "userId": "care_user_1",
                 "viewerFamilyMemberID": member_id,
-                "snapshot": {"riskLevel": "watch", "summary": "女儿视角"},
+                "snapshot": self._care_snapshot(summary="女儿视角", risk_level="watch"),
             },
         )
 
@@ -352,7 +407,7 @@ class CareSnapshotAPITests(unittest.TestCase):
                 json={
                     "userId": "care_history_user",
                     "viewerFamilyMemberID": member_id,
-                    "snapshot": {"riskLevel": "watch", "summary": f"女儿视角 {index}"},
+                    "snapshot": self._care_snapshot(summary=f"女儿视角 {index}", risk_level="watch"),
                 },
             )
             self.assertEqual(response.status_code, 200)
@@ -360,7 +415,7 @@ class CareSnapshotAPITests(unittest.TestCase):
             "/care/snapshots",
             json={
                 "userId": "care_history_user",
-                "snapshot": {"riskLevel": "stable", "summary": "全家视角"},
+                "snapshot": self._care_snapshot(summary="全家视角", risk_level="stable"),
             },
         )
 
@@ -421,7 +476,7 @@ class CareSnapshotAPITests(unittest.TestCase):
             json={
                 "userId": user_id,
                 "viewerFamilyMemberID": member_id,
-                "snapshot": {"summary": "已接受成员可写入"},
+                "snapshot": self._care_snapshot(summary="已接受成员可写入"),
             },
         )
         active_read = client.get(
@@ -458,27 +513,19 @@ class CareSnapshotAPITests(unittest.TestCase):
 
     def test_care_snapshot_api_never_persists_raw_conversation_payload(self):
         client = TestClient(app)
+        snapshot = self._care_snapshot(summary="需要尽快确认近况。", risk_level="attention", user_turn_count=8)
+        snapshot.update({
+            "rawTranscript": "CARE_RAW_SENTINEL 这段原始对话不能出现在响应或历史里。",
+            "messages": [{"role": "user", "text": "CARE_RAW_SENTINEL"}],
+            "sourceTexts": ["CARE_RAW_SENTINEL"],
+        })
+        snapshot["dailyTrend"][0]["rawText"] = "CARE_RAW_SENTINEL"
 
         response = client.post(
             "/care/snapshots",
             json={
                 "userId": "care_privacy_user",
-                "snapshot": {
-                    "riskLevel": "attention",
-                    "summary": "需要尽快确认近况。",
-                    "userTurnCount": 8,
-                    "rawTranscript": "CARE_RAW_SENTINEL 这段原始对话不能出现在响应或历史里。",
-                    "messages": [{"role": "user", "text": "CARE_RAW_SENTINEL"}],
-                    "sourceTexts": ["CARE_RAW_SENTINEL"],
-                    "dailyTrend": [
-                        {
-                            "date": "2026-06-13T00:00:00Z",
-                            "userTurnCount": 8,
-                            "signalScore": 9,
-                            "rawText": "CARE_RAW_SENTINEL",
-                        }
-                    ],
-                },
+                "snapshot": snapshot,
             },
         )
         history = client.get("/care/snapshots/care_privacy_user")
@@ -488,6 +535,38 @@ class CareSnapshotAPITests(unittest.TestCase):
         self.assertNotIn("CARE_RAW_SENTINEL", response.text)
         self.assertEqual(history.status_code, 200)
         self.assertNotIn("CARE_RAW_SENTINEL", history.text)
+
+    def test_care_snapshot_api_rejects_missing_required_fields(self):
+        client = TestClient(app)
+
+        response = client.post(
+            "/care/snapshots",
+            json={
+                "userId": "care_schema_user",
+                "snapshot": {"riskLevel": "stable", "summary": "字段不足"},
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("missing", response.text)
+
+    def test_care_snapshot_api_rejects_raw_text_inside_allowed_fields(self):
+        client = TestClient(app)
+        snapshot = self._care_snapshot(
+            summary="CARE_RAW_SENTINEL 原始对话：我昨晚整夜睡不着。",
+            risk_level="watch",
+        )
+
+        response = client.post(
+            "/care/snapshots",
+            json={
+                "userId": "care_raw_text_user",
+                "snapshot": snapshot,
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("raw", response.text.lower())
 
 
 class ArchiveAPITests(unittest.TestCase):

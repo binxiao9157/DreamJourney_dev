@@ -56,6 +56,8 @@ required_backend_fragments = [
     "family member access is not active",
     "family member is not authorized",
     "sanitize_care_snapshot_payload",
+    "except ValueError as exc",
+    "status_code=400",
     "save_care_snapshot",
     "get_latest_care_snapshot",
     "list_care_snapshots",
@@ -63,8 +65,12 @@ required_backend_fragments = [
 
 required_privacy_fragments = [
     "CARE_SNAPSHOT_SCALAR_KEYS",
+    "CARE_SNAPSHOT_REQUIRED_SCALAR_KEYS",
     "CARE_SNAPSHOT_STRING_LIST_KEYS",
+    "CARE_SNAPSHOT_REQUIRED_STRING_LIST_KEYS",
+    "CARE_SNAPSHOT_RAW_TEXT_MARKERS",
     "CARE_DAILY_TREND_SCALAR_KEYS",
+    "CARE_DAILY_TREND_REQUIRED_KEYS",
     "def sanitize_care_snapshot_payload",
     "contentRedacted",
 ]
@@ -72,6 +78,8 @@ required_privacy_fragments = [
 required_test_fragments = [
     "test_care_snapshot_sanitizer_keeps_only_aggregate_fields",
     "test_care_snapshot_api_never_persists_raw_conversation_payload",
+    "test_care_snapshot_api_rejects_missing_required_fields",
+    "test_care_snapshot_api_rejects_raw_text_inside_allowed_fields",
     "test_care_snapshot_api_requires_active_family_viewer",
     "pending_write.status_code, 403",
     "revoked_latest.status_code, 403",
