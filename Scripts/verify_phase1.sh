@@ -63,6 +63,9 @@ python3 Scripts/FamilyBackendSyncVerify/main.py
 echo "== Family invitation code =="
 python3 Scripts/FamilyInvitationCodeVerify/main.py
 
+echo "== DigitalHuman startup reveal =="
+python3 Scripts/DigitalHumanStartupRevealVerify/main.py
+
 echo "== KBLite =="
 swift kblite_verify.swift
 

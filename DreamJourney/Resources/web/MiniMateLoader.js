@@ -44,8 +44,7 @@ async function init()
             });
             postAvatarHealth('minimate_new_video_start', 'newVideoTask');
             await newVideoTask();
-            document.getElementById('screen2').style.display = 'block';
-            postAvatarHealth('minimate_new_video_done', 'screen2 visible');
+            postAvatarHealth('minimate_new_video_done', 'first frame will reveal screen2');
 }
 
 

@@ -1636,6 +1636,8 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
     private var currentState: AvatarState = .idle
     private var currentPrompt = "准备聆听家族故事"
     private var didFinishInitialLoad = false
+    private var didRevealInitialAvatar = false
+    private var initialAvatarRevealFallbackWorkItem: DispatchWorkItem?
     private var pendingSpeechDuration: TimeInterval?
     var onAudioPlaybackEnded: (() -> Void)?
     var onAudioPlaybackFailed: ((String) -> Void)?
@@ -1673,6 +1675,7 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
     }
 
     deinit {
+        initialAvatarRevealFallbackWorkItem?.cancel()
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "avatarHealth")
     }
 
@@ -1735,6 +1738,7 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
         layer.borderWidth = 0
 
         webView.navigationDelegate = self
+        webView.alpha = 0
         webView.isOpaque = false
         webView.backgroundColor = .clear
         webView.scrollView.isScrollEnabled = false
@@ -1773,6 +1777,7 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         didFinishInitialLoad = true
         applyCurrentState()
+        scheduleInitialAvatarRevealFallback()
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -1788,6 +1793,9 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
         DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
             "avatar_health type=\(DigitalHumanPlaybackEvidenceStore.sanitize(type)) detail=\(DigitalHumanPlaybackEvidenceStore.sanitize(String(describing: body["detail"] ?? "")))"
         )
+        if type == "avatar_first_frame_drawn" || type == "avatar_video_surface_ready" {
+            revealInitialAvatarIfNeeded(reason: type)
+        }
 
         switch DigitalHumanSpeechPlaybackPolicy.action(forWebAudioEvent: type) {
         case .finish:
@@ -1796,6 +1804,30 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
             onAudioPlaybackFailed?(String(describing: body["detail"] ?? type))
         case .ignore:
             break
+        }
+    }
+
+    private func scheduleInitialAvatarRevealFallback() {
+        initialAvatarRevealFallbackWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self, !self.didRevealInitialAvatar else { return }
+            DigitalHumanPlaybackEvidenceStore.shared.appendEvent("avatar_startup_reveal_fallback reason=timeout")
+            self.revealInitialAvatarIfNeeded(reason: "timeout")
+        }
+        initialAvatarRevealFallbackWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.8, execute: workItem)
+    }
+
+    private func revealInitialAvatarIfNeeded(reason: String) {
+        guard !didRevealInitialAvatar else { return }
+        didRevealInitialAvatar = true
+        initialAvatarRevealFallbackWorkItem?.cancel()
+        initialAvatarRevealFallbackWorkItem = nil
+        DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
+            "avatar_startup_reveal reason=\(DigitalHumanPlaybackEvidenceStore.sanitize(reason))"
+        )
+        UIView.animate(withDuration: 0.18, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
+            self.webView.alpha = 1
         }
     }
 
@@ -1985,7 +2017,6 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
       display: none;
     }
     #screen2 {
-      display: block;
       z-index: 20;
       pointer-events: none;
     }

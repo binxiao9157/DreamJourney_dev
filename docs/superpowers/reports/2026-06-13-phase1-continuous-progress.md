@@ -180,6 +180,17 @@
   - 登录后进入主 Tab 会自动切到亲友页并尝试接受邀请。
 - 亲友页输入框现在支持“手机号 / 邀请码 / 邀请链接”三种接受方式。
 
+### 15. 数字人：启动首帧淡入，减少打开应用的明显切换
+
+- 定位根因：`DigitalHumanAvatarView` 的 WKWebView 首次加载时会先显示 web 壳层、loading 文案，再等 DHLive 首帧后切到真人 canvas；`MiniMateLoader.js` 还会提前把 `screen2` 置为可见。
+- iOS `DigitalHumanAvatarView` 现在默认让 WKWebView 透明：
+  - 收到 `avatar_first_frame_drawn` 或 `avatar_video_surface_ready` 后，180ms 淡入真人数字人。
+  - 如果 2.8 秒内没有首帧，兜底显示壳层并记录 `avatar_startup_reveal_fallback`，避免黑屏式卡死。
+  - 启动显隐过程写入 `DigitalHumanPlaybackEvidenceStore`，真机诊断可追踪。
+- Web 资源 `MiniMateLoader.js` 不再抢先显示 `screen2`，改由首帧 ready 统一接管。
+- HTML 中 `#screen2` 默认保持隐藏，真人 canvas 仍由 `body[data-video-ready="true"]` 控制透明淡入。
+- 新增 `Scripts/DigitalHumanStartupRevealVerify/main.py`，并纳入 `Scripts/verify_phase1.sh`。
+
 ## 真机验收建议
 
 ### 记忆档案馆
@@ -240,6 +251,7 @@
 - `MemoryArchiveImageAnalysisProxy verification passed`
 - `FamilyBackendSync verification passed`
 - `FamilyInvitationCode verification passed`
+- `DigitalHumanStartupReveal verification passed`
 - `DreamJourneyBackend unittest 33/33 OK`
 - `PrivacyScope verification passed`
 - `MemoryPrivacyIntegration verification passed`
@@ -253,4 +265,5 @@
 ## 下一步
 
 1. 真机跨设备 smoke：A 设备创建亲友邀请，B 设备登录被邀请手机号，通过 `dreamjourney://family/invite?code=...` 接受。
-2. 补真机证据包：档案入库截图、结构化知识库截图、信箱回声截图、信箱后端元数据响应、亲友邀请码接受截图、关怀周报导出文本。
+2. 真机数字人启动 smoke：冷启动 App，观察首页数字人区域应从空白/背景直接淡入真人层，不应先闪出 loading 壳层或绿色背景。
+3. 补真机证据包：档案入库截图、结构化知识库截图、信箱回声截图、信箱后端元数据响应、亲友邀请码接受截图、关怀周报导出文本、数字人冷启动录屏。

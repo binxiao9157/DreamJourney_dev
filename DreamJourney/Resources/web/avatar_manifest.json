@@ -26,11 +26,11 @@
       },
       {
         "path": "MiniLive2.js",
-        "sha256": "7e5a4a0591258ffe64a09814cc34c7997f8a8d8f142ee125f35b96b485946331"
+        "sha256": "86dba6e2aa2aa8a936b2adf59d61dbd1757cb9d317e3952306c454dd311d6606"
       },
       {
         "path": "MiniMateLoader.js",
-        "sha256": "6ded75af34ab8757c5ee36a5c70bbf91788b35020e4a0d0342e7319d5370e24b"
+        "sha256": "3158f4185895e63b0d4abe08527fc1edd4cb3896bd368ae5f877d3de0ebc20c5"
       },
       {
         "path": "pako.min.js",
