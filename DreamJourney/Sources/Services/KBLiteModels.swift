@@ -418,6 +418,100 @@ struct KBSearchResult {
     }
 }
 
+// MARK: - 沉淀状态摘要
+
+struct KBLiteDepositStatus: Equatable {
+    let totalEntityCount: Int
+    let sessionCount: Int
+    let lastUpdated: Date
+    let conversationSourceCount: Int
+    let archiveSourceCount: Int
+    let mailboxSourceCount: Int
+    let importedSourceCount: Int
+    let untaggedSourceCount: Int
+    let localOnlyCount: Int
+    let generationAllowedCount: Int
+    let familyCircleCount: Int
+    let privateOnlyCount: Int
+
+    var sourceSummary: String {
+        var parts = [
+            "对话 \(conversationSourceCount)",
+            "档案 \(archiveSourceCount)",
+            "信箱 \(mailboxSourceCount)"
+        ]
+        if importedSourceCount > 0 {
+            parts.append("导入 \(importedSourceCount)")
+        }
+        if untaggedSourceCount > 0 {
+            parts.append("未标记 \(untaggedSourceCount)")
+        }
+        return "来源：" + parts.joined(separator: " · ")
+    }
+
+    var privacySummary: String {
+        var parts = [
+            "本机 \(localOnlyCount)",
+            "可生成 \(generationAllowedCount)",
+            "亲友 \(familyCircleCount)"
+        ]
+        if privateOnlyCount > 0 {
+            parts.append("私密 \(privateOnlyCount)")
+        }
+        return "隐私：" + parts.joined(separator: " · ")
+    }
+}
+
+enum KBLiteDepositStatusBuilder {
+    static func build(from graph: KBLiteGraph) -> KBLiteDepositStatus {
+        let metadatas = graph.allPrivacyMetadata
+        var sourceCounts: [MemorySourceKind: Int] = [:]
+        var untaggedCount = 0
+        var privacyCounts: [MemoryPrivacyScope: Int] = [:]
+
+        for metadata in metadatas {
+            privacyCounts[metadata.scope, default: 0] += 1
+
+            let sourceKinds = Set(metadata.sourceRefs.map(\.kind))
+            if sourceKinds.isEmpty {
+                untaggedCount += 1
+            } else {
+                for kind in sourceKinds {
+                    sourceCounts[kind, default: 0] += 1
+                }
+            }
+        }
+
+        let importedCount =
+            (sourceCounts[.importRecord] ?? 0) +
+            (sourceCounts[.kbLiteEntity] ?? 0)
+
+        return KBLiteDepositStatus(
+            totalEntityCount: metadatas.count,
+            sessionCount: graph.sessionCount,
+            lastUpdated: graph.lastUpdated,
+            conversationSourceCount: sourceCounts[.conversationTurn] ?? 0,
+            archiveSourceCount: sourceCounts[.memoryArchiveItem] ?? 0,
+            mailboxSourceCount: sourceCounts[.timeMailboxLetter] ?? 0,
+            importedSourceCount: importedCount,
+            untaggedSourceCount: untaggedCount,
+            localOnlyCount: privacyCounts[.localOnly] ?? 0,
+            generationAllowedCount: privacyCounts[.generationAllowed] ?? 0,
+            familyCircleCount: privacyCounts[.familyCircle] ?? 0,
+            privateOnlyCount: privacyCounts[.privateOnly] ?? 0
+        )
+    }
+}
+
+private extension KBLiteGraph {
+    var allPrivacyMetadata: [MemoryPrivacyMetadata] {
+        people.map(\.privacyMetadata) +
+            places.map(\.privacyMetadata) +
+            events.map(\.privacyMetadata) +
+            facts.map(\.privacyMetadata)
+    }
+}
+
 // MARK: - 图片分析响应
 
 struct KBImageAnalysisResult: Codable {

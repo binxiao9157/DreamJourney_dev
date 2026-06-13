@@ -209,7 +209,8 @@ extension KnowledgeBaseViewController: UITableViewDataSource {
                 placesCount: places.count,
                 eventsCount: events.count,
                 factsCount: facts.count,
-                sessionCount: KBLiteManager.shared.graph.sessionCount
+                sessionCount: KBLiteManager.shared.graph.sessionCount,
+                depositStatus: KBLiteDepositStatusBuilder.build(from: KBLiteManager.shared.graph)
             )
             return cell
         }
@@ -307,12 +308,12 @@ extension KnowledgeBaseViewController: UITableViewDelegate {
     }
 
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        if indexPath.section == 0 { return 120 }
+        if indexPath.section == 0 { return 164 }
         return UITableView.automaticDimension
     }
 
     func tableView(_ tableView: UITableView, estimatedHeightForRowAt indexPath: IndexPath) -> CGFloat {
-        if indexPath.section == 0 { return 120 }
+        if indexPath.section == 0 { return 164 }
         return 60
     }
 
@@ -366,8 +367,29 @@ final class KBStatsCell: UITableViewCell {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    func configure(peopleCount: Int, placesCount: Int, eventsCount: Int, factsCount: Int, sessionCount: Int) {
-        statsLabel.text = "\(peopleCount) 人 · \(placesCount) 地 · \(eventsCount) 事 · \(factsCount) 实\n共 \(sessionCount) 次会话"
+    func configure(
+        peopleCount: Int,
+        placesCount: Int,
+        eventsCount: Int,
+        factsCount: Int,
+        sessionCount: Int,
+        depositStatus: KBLiteDepositStatus
+    ) {
+        let updatedText = Self.updatedText(for: depositStatus.lastUpdated)
+        statsLabel.text = """
+        \(peopleCount) 人 · \(placesCount) 地 · \(eventsCount) 事 · \(factsCount) 实
+        沉淀状态：\(depositStatus.totalEntityCount) 条 · 共 \(sessionCount) 次会话
+        \(depositStatus.sourceSummary)
+        \(depositStatus.privacySummary)
+        最近更新：\(updatedText)
+        """
+    }
+
+    private static func updatedText(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyy.MM.dd HH:mm"
+        return formatter.string(from: date)
     }
 }
 

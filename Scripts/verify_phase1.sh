@@ -105,6 +105,17 @@ xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
   -o /tmp/dreamjourney_kblite_time_mailbox_verify
 /tmp/dreamjourney_kblite_time_mailbox_verify
 
+echo "== KBLite deposit status =="
+xcrun swiftc \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
+  DreamJourney/Sources/Services/KBLiteModels.swift \
+  Scripts/KBLiteDepositStatusVerify/main.swift \
+  -o /tmp/dreamjourney_kblite_deposit_status_verify
+/tmp/dreamjourney_kblite_deposit_status_verify
+
+echo "== KnowledgeBase deposit status UI =="
+python3 Scripts/KnowledgeBaseDepositStatusUIVerify/main.py
+
 echo "== KBLite entity quality =="
 python3 Scripts/KBLiteEntityQualityVerify/main.py
 
