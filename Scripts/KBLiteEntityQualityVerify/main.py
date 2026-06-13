@@ -5,6 +5,7 @@ import sys
 
 source = Path("DreamJourney/Sources/Services/KBLiteManager.swift").read_text()
 knowledge_view = Path("DreamJourney/Sources/Modules/Knowledge/KnowledgeBaseViewController.swift").read_text()
+graph_view = Path("DreamJourney/Sources/Modules/Knowledge/KBGraphViewController.swift").read_text()
 
 checks = [
     (
@@ -21,6 +22,10 @@ checks = [
     (
         "knowledge base people list should hide bare kinship labels such as 妈妈",
         "isGenericKinshipDisplayName" in knowledge_view,
+    ),
+    (
+        "knowledge graph empty state should guide users to add concrete names instead of bare kinship labels",
+        "具体姓名" in graph_view and "妈妈/奶奶" in graph_view,
     ),
 ]
 

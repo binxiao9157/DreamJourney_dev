@@ -199,6 +199,7 @@ AI 语音陪伴
 - Transcript 提取先执行本地确定性沉淀，再让 LLM 补充；即使远端抽取成功但返回空数组，明确姓名、地点、年份、居住/开店等事实仍会进入结构化知识库。
 - 记忆档案馆文字/照片素材直接以 `memoryArchiveItem` sourceRef 写入 KBLite，不再合成用户对话 turn，避免污染关怀看板、对话历史和二次抽取。
 - Demo/legacy 清理已收紧为明确 `roadshow_` ID 或专用占位路径，不再按“路演”“外滩老照片”等内容关键词删除真实档案或知识库条目。
+- 图谱页对“只有妈妈/奶奶等泛称、缺少具体姓名”的情况给出补名提示，避免用户把泛称过滤误判为建库失败。
 - Prompt context、开场白 hint、知识缺口上下文按 `.prompt` 可用性过滤。
 - 同名实体/事实只允许同 scope 合并，避免 local/family/generation 数据互相污染。
 - Export、Widget、Backend sync、PDF 输入图谱均通过 sanitized graph 输出。

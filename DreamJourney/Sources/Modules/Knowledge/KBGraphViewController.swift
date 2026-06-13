@@ -29,7 +29,7 @@ final class KBGraphViewController: UIViewController {
 
     private lazy var emptyLabel: UILabel = {
         let l = UILabel()
-        l.text = "还没有认识的人物\n\n与寻梦环游多聊聊家人，\n图谱会自动生长"
+        l.text = "还没有可成图的人物\n\n请在档案馆或对话里补充具体姓名和关系，\n不要只写“妈妈/奶奶”这类称谓。"
         l.numberOfLines = 0
         l.textAlignment = .center
         l.font = .systemFont(ofSize: 16)
