@@ -9,12 +9,14 @@ private func assertCondition(_ condition: @autoclosure () -> Bool, _ message: St
 
 final class StubVoiceTrainer: MemoryArchiveVoiceTrainingClient {
     private(set) var requestedSpeakerIds: [String] = []
+    private(set) var requestedAudioURLBatches: [[URL]] = []
 
     func trainVoice(
-        audioURL: URL,
+        audioURLs: [URL],
         speakerId: String,
         completion: @escaping (Result<String, MemoryArchiveVoiceProfileTrainingError>) -> Void
     ) {
+        requestedAudioURLBatches.append(audioURLs)
         requestedSpeakerIds.append(speakerId)
         completion(.success("\(speakerId)_ready"))
     }
@@ -111,7 +113,11 @@ var trainedProfile: MemoryArchiveVoiceProfile?
 var trainingError: MemoryArchiveVoiceProfileError?
 store.startTraining(
     profileID: readyProfile.id,
-    sampleURL: URL(fileURLWithPath: "/tmp/voice-3.m4a"),
+    sampleURLs: [
+        URL(fileURLWithPath: "/tmp/voice-1.m4a"),
+        URL(fileURLWithPath: "/tmp/voice-2.m4a"),
+        URL(fileURLWithPath: "/tmp/voice-3.m4a"),
+    ],
     trainer: trainer
 ) { result in
     switch result {
@@ -126,6 +132,15 @@ _ = semaphore.wait(timeout: .now() + 2)
 
 assertCondition(trainingError == nil, "voice profile training should succeed with stub trainer")
 assertCondition(trainer.requestedSpeakerIds.count == 1, "training should request exactly one per-person speaker id")
+assertCondition(trainer.requestedAudioURLBatches.count == 1, "training should pass one ordered batch of collected voice samples")
+assertCondition(
+    trainer.requestedAudioURLBatches.first?.map(\.path) == [
+        "/tmp/voice-1.m4a",
+        "/tmp/voice-2.m4a",
+        "/tmp/voice-3.m4a",
+    ],
+    "voice profile training should use all collected sample URLs in archive order"
+)
 assertCondition(trainer.requestedSpeakerIds.first?.hasPrefix("DJ_") == true, "speaker id should be generated for the voice profile")
 assertCondition(trainedProfile?.personName == "林桂芳", "trained profile should still bind to the same person")
 assertCondition(trainedProfile?.status == .ready, "trained profile should be ready")

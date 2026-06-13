@@ -171,6 +171,9 @@ xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
   -o /tmp/dreamjourney_memory_archive_voice_profile_verify
 /tmp/dreamjourney_memory_archive_voice_profile_verify
 
+echo "== Memory archive voice training samples =="
+python3 Scripts/MemoryArchiveVoiceTrainingSamplesVerify/main.py
+
 echo "== Voice clone profile persistence =="
 python3 Scripts/VoiceCloneProfilePersistenceVerify/main.py
 

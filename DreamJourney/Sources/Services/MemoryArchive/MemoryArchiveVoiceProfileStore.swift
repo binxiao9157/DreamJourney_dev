@@ -1,4 +1,7 @@
 import Foundation
+#if !MEMORY_PRIVACY_INTEGRATION_VERIFY
+import AVFoundation
+#endif
 
 enum MemoryArchiveVoiceProfileStatus: String, Codable, Equatable {
     case collecting
@@ -21,7 +24,7 @@ enum MemoryArchiveVoiceProfileError: Error, Equatable {
 
 protocol MemoryArchiveVoiceTrainingClient {
     func trainVoice(
-        audioURL: URL,
+        audioURLs: [URL],
         speakerId: String,
         completion: @escaping (Result<String, MemoryArchiveVoiceProfileTrainingError>) -> Void
     )
@@ -138,7 +141,7 @@ final class MemoryArchiveVoiceProfileStore {
 
     func startTraining(
         profileID: String,
-        sampleURL: URL,
+        sampleURLs: [URL],
         trainer: MemoryArchiveVoiceTrainingClient,
         completion: @escaping (Result<MemoryArchiveVoiceProfile, MemoryArchiveVoiceProfileError>) -> Void
     ) {
@@ -152,6 +155,10 @@ final class MemoryArchiveVoiceProfileStore {
             completion(.failure(.profileNotReady))
             return
         }
+        guard sampleURLs.count >= profile.requiredSampleCount else {
+            completion(.failure(.profileNotReady))
+            return
+        }
 
         let requestedSpeakerId = profile.speakerId ?? Self.proposedSpeakerId(for: profile)
         profile.status = .training
@@ -160,7 +167,7 @@ final class MemoryArchiveVoiceProfileStore {
         all[index] = profile
         save(all)
 
-        trainer.trainVoice(audioURL: sampleURL, speakerId: requestedSpeakerId) { [weak self] result in
+        trainer.trainVoice(audioURLs: sampleURLs, speakerId: requestedSpeakerId) { [weak self] result in
             guard let self else { return }
             var latest = self.load()
             guard let latestIndex = latest.firstIndex(where: { $0.id == profileID }) else {
@@ -351,6 +358,32 @@ final class VoiceCloneServiceProfileTrainer: MemoryArchiveVoiceTrainingClient {
     static let shared = VoiceCloneServiceProfileTrainer()
 
     func trainVoice(
+        audioURLs: [URL],
+        speakerId: String,
+        completion: @escaping (Result<String, MemoryArchiveVoiceProfileTrainingError>) -> Void
+    ) {
+        let cleanURLs = audioURLs.filter { !$0.path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        guard !cleanURLs.isEmpty else {
+            completion(.failure(.service("缺少可训练的语音样本")))
+            return
+        }
+
+        if cleanURLs.count == 1 {
+            trainVoiceClone(audioURL: cleanURLs[0], speakerId: speakerId, completion: completion)
+            return
+        }
+
+        mergeAudioSamples(cleanURLs) { [weak self] result in
+            switch result {
+            case .success(let mergedURL):
+                self?.trainVoiceClone(audioURL: mergedURL, speakerId: speakerId, completion: completion)
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    private func trainVoiceClone(
         audioURL: URL,
         speakerId: String,
         completion: @escaping (Result<String, MemoryArchiveVoiceProfileTrainingError>) -> Void
@@ -365,6 +398,65 @@ final class VoiceCloneServiceProfileTrainer: MemoryArchiveVoiceTrainingClient {
                 completion(.success(speakerId))
             case .failure(let error):
                 completion(.failure(.service(error.localizedDescription)))
+            }
+        }
+    }
+
+    private func mergeAudioSamples(
+        _ audioURLs: [URL],
+        completion: @escaping (Result<URL, MemoryArchiveVoiceProfileTrainingError>) -> Void
+    ) {
+        let composition = AVMutableComposition()
+        guard let track = composition.addMutableTrack(
+            withMediaType: .audio,
+            preferredTrackID: kCMPersistentTrackID_Invalid
+        ) else {
+            completion(.failure(.service("无法创建训练音频轨道")))
+            return
+        }
+
+        var cursor = CMTime.zero
+        do {
+            for audioURL in audioURLs {
+                let asset = AVURLAsset(url: audioURL)
+                guard let sourceTrack = asset.tracks(withMediaType: .audio).first else {
+                    continue
+                }
+                let range = CMTimeRange(start: .zero, duration: asset.duration)
+                try track.insertTimeRange(range, of: sourceTrack, at: cursor)
+                cursor = CMTimeAdd(cursor, asset.duration)
+            }
+        } catch {
+            completion(.failure(.service("合并语音样本失败：\(error.localizedDescription)")))
+            return
+        }
+
+        guard cursor > .zero else {
+            completion(.failure(.service("语音样本中没有可训练音轨")))
+            return
+        }
+
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("dreamjourney_voice_profile_\(UUID().uuidString).m4a")
+        try? FileManager.default.removeItem(at: outputURL)
+
+        guard let exporter = AVAssetExportSession(
+            asset: composition,
+            presetName: AVAssetExportPresetAppleM4A
+        ) else {
+            completion(.failure(.service("无法创建训练音频导出器")))
+            return
+        }
+        exporter.outputURL = outputURL
+        exporter.outputFileType = .m4a
+        exporter.exportAsynchronously {
+            switch exporter.status {
+            case .completed:
+                completion(.success(outputURL))
+            case .failed, .cancelled:
+                completion(.failure(.service(exporter.error?.localizedDescription ?? "训练音频导出失败")))
+            default:
+                completion(.failure(.service("训练音频导出未完成")))
             }
         }
     }

@@ -869,7 +869,7 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
             setKnowledgeDepositStatus(profile.statusMessage ?? "声纹档案：样本已足够，开始训练")
             MemoryArchiveVoiceProfileStore.shared.startTraining(
                 profileID: profile.id,
-                sampleURL: URL(fileURLWithPath: latestSamplePath),
+                sampleURLs: voiceSampleURLs(for: profile, latestSamplePath: latestSamplePath),
                 trainer: VoiceCloneServiceProfileTrainer.shared
             ) { [weak self] result in
                 DispatchQueue.main.async {
@@ -885,6 +885,19 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
         case .training, .ready, .failed, .disabled:
             setKnowledgeDepositStatus(profile.statusMessage ?? "声纹档案：语音样本已保存")
         }
+    }
+
+    private func voiceSampleURLs(
+        for profile: MemoryArchiveVoiceProfile,
+        latestSamplePath: String
+    ) -> [URL] {
+        let itemsByID = Dictionary(uniqueKeysWithValues: repository.items().map { ($0.id, $0) })
+        let orderedPaths = profile.sampleArchiveItemIds.compactMap { sampleID -> String? in
+            let path = itemsByID[sampleID]?.localPath?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return path?.isEmpty == false ? path : nil
+        }
+        let resolvedPaths = orderedPaths.isEmpty ? [latestSamplePath] : orderedPaths
+        return resolvedPaths.map { URL(fileURLWithPath: $0) }
     }
 }
 
