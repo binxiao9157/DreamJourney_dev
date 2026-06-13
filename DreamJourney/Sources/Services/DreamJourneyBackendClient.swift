@@ -609,12 +609,20 @@ extension DreamJourneyBackendClient {
             let resolvedName = (name ?? displayName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             guard !resolvedName.isEmpty else { return nil }
             let resolvedRelation = (relation ?? "亲友").trimmingCharacters(in: .whitespacesAndNewlines)
+            let accessStatus: FamilyMemberAccessStatus = isRevoked
+                ? .revoked
+                : (FamilyMemberAccessStatus(rawValue: accessStatus ?? "") ?? .active)
+            let invitationStatus: FamilyMemberInvitationStatus = isRevoked
+                ? .revoked
+                : (FamilyMemberInvitationStatus(rawValue: invitationStatus ?? "") ?? .accepted)
             return FamilyMember(
                 id: id,
                 name: resolvedName,
                 relation: resolvedRelation.isEmpty ? "亲友" : resolvedRelation,
                 phone: phone,
                 ownerUserId: ownerUserId ?? userId,
+                accessStatus: accessStatus,
+                invitationStatus: invitationStatus,
                 isOnline: isOnline ?? false,
                 lastUpdated: lastUpdated ?? "服务器同步"
             )

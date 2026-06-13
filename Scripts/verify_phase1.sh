@@ -98,6 +98,16 @@ python3 Scripts/MemoryArchiveConversationBoundaryVerify/main.py
 echo "== Family backend sync =="
 python3 Scripts/FamilyBackendSyncVerify/main.py
 
+echo "== Family member access state =="
+xcrun swiftc \
+  DreamJourney/Sources/Services/MemoryModel.swift \
+  Scripts/FamilyMemberAccessStateVerify/main.swift \
+  -o /tmp/dreamjourney_family_member_access_state_verify
+/tmp/dreamjourney_family_member_access_state_verify
+
+echo "== Family access control UI =="
+xcrun swift Scripts/FamilyAccessControlUIVerify/main.swift
+
 echo "== Family invitation code =="
 python3 Scripts/FamilyInvitationCodeVerify/main.py
 

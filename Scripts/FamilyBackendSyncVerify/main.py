@@ -38,6 +38,9 @@ required_client_fragments = [
     "struct FamilyRevokeResponse",
     "struct FamilyAcceptResponse",
     "accessStatus",
+    "invitationStatus",
+    "accessStatus: accessStatus",
+    "invitationStatus: invitationStatus",
 ]
 
 required_repo_fragments = [
@@ -110,6 +113,16 @@ for fragment in required_backend_test_fragments:
         missing.append(f"{backend_tests_file.name}: missing {fragment!r}")
 if "FamilyBackendSyncVerify/main.py" not in phase1_text:
     missing.append(f"{verify_phase1.name}: missing FamilyBackendSyncVerify/main.py")
+
+postgres_code_accept_start = backend_postgres_store_text.find("def accept_family_invitation_code")
+postgres_code_accept_end = backend_postgres_store_text.find("def revoke_family_member", postgres_code_accept_start)
+postgres_code_accept_body = backend_postgres_store_text[postgres_code_accept_start:postgres_code_accept_end]
+if 'item.get("accessStatus") == "revoked"' not in postgres_code_accept_body:
+    missing.append("postgres_store.py: invitation-code accept should reject revoked accessStatus")
+if 'item.get("invitationStatus") == "revoked"' not in postgres_code_accept_body:
+    missing.append("postgres_store.py: invitation-code accept should reject revoked invitationStatus")
+if 'item.get("accessStatus") == "active" and item.get("invitationStatus") == "accepted"' not in postgres_code_accept_body:
+    missing.append("postgres_store.py: invitation-code accept should be idempotent for already accepted members")
 
 if missing:
     raise SystemExit("\n".join(missing))

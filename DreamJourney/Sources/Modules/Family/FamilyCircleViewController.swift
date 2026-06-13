@@ -436,8 +436,9 @@ final class FamilyCircleViewController: UIViewController {
     }
 
     private func openCareDashboard(for member: FamilyMember) {
-        guard !FamilyRepository.shared.isAccessRevoked(for: member.id) else {
-            showToast("\(member.name) 的访问权限已撤回", type: .info)
+        guard member.isCareDashboardAccessible,
+              !FamilyRepository.shared.isAccessRevoked(for: member.id) else {
+            showToast(member.isAccessRevoked ? "\(member.name) 的访问权限已撤回" : "\(member.name) 尚未接受邀请", type: .info)
             return
         }
         navigationController?.navigationBar.isHidden = false
@@ -513,7 +514,7 @@ extension FamilyCircleViewController: UITableViewDataSource {
         cell.configure(
             with: member,
             isLast: indexPath.row == members.count - 1,
-            isAccessRevoked: FamilyRepository.shared.isAccessRevoked(for: member.id)
+            isAccessRevoked: FamilyRepository.shared.isAccessRevoked(for: member.id) || member.isAccessRevoked
         )
         return cell
     }
@@ -534,7 +535,8 @@ extension FamilyCircleViewController: UITableViewDelegate {
         trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath
     ) -> UISwipeActionsConfiguration? {
         let member = members[indexPath.row]
-        guard !FamilyRepository.shared.isAccessRevoked(for: member.id) else {
+        guard !FamilyRepository.shared.isAccessRevoked(for: member.id),
+              !member.isAccessRevoked else {
             return nil
         }
 
@@ -560,9 +562,9 @@ extension FamilyCircleViewController: UITableViewDelegate {
                 self?.openCareDashboard(for: member)
             }
             let revoke = UIAction(
-                title: FamilyRepository.shared.isAccessRevoked(for: member.id) ? "访问已撤回" : "撤回访问",
+                title: member.isAccessRevoked || FamilyRepository.shared.isAccessRevoked(for: member.id) ? "访问已撤回" : "撤回访问",
                 image: UIImage(systemName: "person.crop.circle.badge.xmark"),
-                attributes: FamilyRepository.shared.isAccessRevoked(for: member.id) ? [.disabled] : [.destructive]
+                attributes: member.isAccessRevoked || FamilyRepository.shared.isAccessRevoked(for: member.id) ? [.disabled] : [.destructive]
             ) { _ in
                 self?.revokeAccess(for: member)
             }
@@ -767,15 +769,16 @@ final class FriendMemberCell: UITableViewCell {
         let padding = "  \(member.relation)  "
         relationLabel.text = padding
 
-        lastUpdatedLabel.text = isAccessRevoked ? "访问权限已撤回" : "上次更新: \(member.lastUpdated)"
-        lastUpdatedLabel.textColor = isAccessRevoked ? UIColor.systemRed.withAlphaComponent(0.78) : UIColor(white: 0.60, alpha: 1.0)
+        let isBlocked = isAccessRevoked || !member.isCareDashboardAccessible
+        lastUpdatedLabel.text = member.accessStateText
+        lastUpdatedLabel.textColor = isBlocked ? UIColor.systemRed.withAlphaComponent(0.78) : UIColor(white: 0.60, alpha: 1.0)
 
-        footprintButton.setTitle(isAccessRevoked ? "已撤回" : "关怀看板", for: .normal)
+        footprintButton.setTitle(member.careDashboardActionTitle, for: .normal)
         footprintButton.setTitleColor(
-            isAccessRevoked ? UIColor.systemRed.withAlphaComponent(0.78) : UIColor(red: 0.30, green: 0.25, blue: 0.20, alpha: 1.0),
+            isBlocked ? UIColor.systemRed.withAlphaComponent(0.78) : UIColor(red: 0.30, green: 0.25, blue: 0.20, alpha: 1.0),
             for: .normal
         )
-        footprintButton.layer.borderColor = isAccessRevoked
+        footprintButton.layer.borderColor = isBlocked
             ? UIColor.systemRed.withAlphaComponent(0.25).cgColor
             : UIColor(white: 0.82, alpha: 1.0).cgColor
 

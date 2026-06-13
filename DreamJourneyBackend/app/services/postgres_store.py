@@ -252,6 +252,11 @@ class PostgresStore:
         expected_phone = self._normalized_phone(str(item.get("phone") or ""))
         if expected_phone and self._normalized_phone(phone) != expected_phone:
             return None
+        if item.get("accessStatus") == "revoked" or item.get("invitationStatus") == "revoked":
+            return None
+        if item.get("accessStatus") == "active" and item.get("invitationStatus") == "accepted":
+            item["ownerUserId"] = item.get("ownerUserId") or item.get("userId")
+            return deepcopy(item)
 
         item["accessStatus"] = "active"
         item["invitationStatus"] = "accepted"

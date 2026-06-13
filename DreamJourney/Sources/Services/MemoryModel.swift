@@ -101,6 +101,30 @@ struct UserModel: Codable {
 }
 
 // MARK: - 亲属模型
+enum FamilyMemberAccessStatus: String, Codable {
+    case pending
+    case active
+    case revoked
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = (try? container.decode(String.self)) ?? ""
+        self = FamilyMemberAccessStatus(rawValue: rawValue) ?? .pending
+    }
+}
+
+enum FamilyMemberInvitationStatus: String, Codable {
+    case pending
+    case accepted
+    case revoked
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = (try? container.decode(String.self)) ?? ""
+        self = FamilyMemberInvitationStatus(rawValue: rawValue) ?? .pending
+    }
+}
+
 struct FamilyMember: Codable, Identifiable {
     let id: String
     var name: String
@@ -109,13 +133,18 @@ struct FamilyMember: Codable, Identifiable {
     var ownerUserId: String?
     var avatarName: String?
     var joinedAt: Date
+    var accessStatus: FamilyMemberAccessStatus
+    var invitationStatus: FamilyMemberInvitationStatus
     /// 在线状态：true=在线，false=离线
     var isOnline: Bool
     /// 最近更新描述，如“2小时前”“昨天”“刚刚”
     var lastUpdated: String
 
     init(id: String = UUID().uuidString, name: String, relation: String,
-         phone: String? = nil, ownerUserId: String? = nil, isOnline: Bool = false, lastUpdated: String = "未知") {
+         phone: String? = nil, ownerUserId: String? = nil,
+         accessStatus: FamilyMemberAccessStatus = .active,
+         invitationStatus: FamilyMemberInvitationStatus = .accepted,
+         isOnline: Bool = false, lastUpdated: String = "未知") {
         self.id = id
         self.name = name
         self.relation = relation
@@ -123,8 +152,34 @@ struct FamilyMember: Codable, Identifiable {
         self.ownerUserId = ownerUserId
         self.avatarName = nil
         self.joinedAt = Date()
+        self.accessStatus = accessStatus
+        self.invitationStatus = invitationStatus
         self.isOnline = isOnline
         self.lastUpdated = lastUpdated
+    }
+
+    var isAccessRevoked: Bool {
+        accessStatus == .revoked || invitationStatus == .revoked
+    }
+
+    var isCareDashboardAccessible: Bool {
+        !isAccessRevoked && accessStatus == .active && invitationStatus == .accepted
+    }
+
+    var isSelectableForFamilyVisibility: Bool {
+        isCareDashboardAccessible
+    }
+
+    var accessStateText: String {
+        if isAccessRevoked { return "访问权限已撤回" }
+        if !isCareDashboardAccessible { return "等待接受邀请" }
+        return "上次更新: \(lastUpdated)"
+    }
+
+    var careDashboardActionTitle: String {
+        if isAccessRevoked { return "已撤回" }
+        if !isCareDashboardAccessible { return "待接受" }
+        return "关怀看板"
     }
 }
 

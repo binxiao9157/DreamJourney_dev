@@ -27,9 +27,11 @@ final class FamilyVisibilityPickerViewController: UIViewController {
         members: [FamilyMember] = FamilyRepository.shared.getAll(),
         initialVisibility: FamilyMemberVisibility = .allMembers
     ) {
-        self.members = members
+        let selectableMembers = members.filter(\.isSelectableForFamilyVisibility)
+        self.members = selectableMembers
         self.isAllMembersSelected = initialVisibility.includesAllMembers
-        self.selectedIDs = Set(initialVisibility.allowedMemberIDs)
+        let selectableIDs = Set(selectableMembers.map(\.id))
+        self.selectedIDs = Set(initialVisibility.allowedMemberIDs).intersection(selectableIDs)
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -164,7 +166,7 @@ extension MemoryPrivacyMetadata {
             return "全体亲友"
         }
         let names = FamilyRepository.shared.getAll()
-            .filter { familyVisibility.allowedMemberIDs.contains($0.id) }
+            .filter { $0.isSelectableForFamilyVisibility && familyVisibility.allowedMemberIDs.contains($0.id) }
             .map(\.name)
         return names.isEmpty ? "已选亲友" : names.joined(separator: "、")
     }

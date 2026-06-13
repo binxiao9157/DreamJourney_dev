@@ -303,7 +303,7 @@ final class FamilyRepository {
         let userRecord = UserManager.shared.currentUser.map {
             FamilyAccessIdentityResolver.UserRecord(id: $0.id, phone: $0.phone)
         }
-        let memberRecords = members.map {
+        let memberRecords = members.filter(\.isCareDashboardAccessible).map {
             FamilyAccessIdentityResolver.MemberRecord(id: $0.id, phone: $0.phone)
         }
         guard let identity = FamilyAccessIdentityResolver.resolveViewer(
@@ -320,6 +320,7 @@ final class FamilyRepository {
         let candidateMemberID = viewerFamilyMemberID ?? currentViewerIdentity()?.familyMemberID
         if let candidateMemberID,
            let member = get(by: candidateMemberID),
+           member.isCareDashboardAccessible,
            let ownerUserId = normalizedOwnerUserID(member.ownerUserId) {
             return ownerUserId
         }
@@ -350,6 +351,8 @@ final class FamilyRepository {
 
         acceptedInvitations[member.id] = accepted
         setLocalViewerFamilyMemberID(member.id)
+        members[memberIndex].accessStatus = .active
+        members[memberIndex].invitationStatus = .accepted
         members[memberIndex].isOnline = true
         members[memberIndex].lastUpdated = "刚刚接受邀请"
         saveLocalAccessState()
@@ -378,6 +381,8 @@ final class FamilyRepository {
             setLocalViewerFamilyMemberID(nil)
         }
         if let index = members.firstIndex(where: { $0.id == memberID }) {
+            members[index].accessStatus = .revoked
+            members[index].invitationStatus = .revoked
             members[index].isOnline = false
             members[index].lastUpdated = "访问已撤回"
         }
@@ -520,6 +525,12 @@ final class FamilyRepository {
     private func applyBackendRevocationIfNeeded(memberID: String, isRevoked: Bool) {
         guard isRevoked else { return }
         revokedAccessMemberIDs.insert(memberID)
+        if let index = members.firstIndex(where: { $0.id == memberID }) {
+            members[index].accessStatus = .revoked
+            members[index].invitationStatus = .revoked
+            members[index].isOnline = false
+            members[index].lastUpdated = "访问已撤回"
+        }
         acceptedInvitations[memberID] = acceptedInvitations[memberID].map {
             FamilyAccessControlService.Invitation(
                 id: $0.id,

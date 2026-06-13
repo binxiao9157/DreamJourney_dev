@@ -23,6 +23,20 @@ let repositoryURL = root
     .appendingPathComponent("FamilyRepository.swift")
 
 let repositorySource = try String(contentsOf: repositoryURL, encoding: .utf8)
+let modelURL = root
+    .appendingPathComponent("DreamJourney")
+    .appendingPathComponent("Sources")
+    .appendingPathComponent("Services")
+    .appendingPathComponent("MemoryModel.swift")
+let pickerURL = root
+    .appendingPathComponent("DreamJourney")
+    .appendingPathComponent("Sources")
+    .appendingPathComponent("Modules")
+    .appendingPathComponent("Family")
+    .appendingPathComponent("FamilyVisibilityPickerViewController.swift")
+
+let modelSource = try String(contentsOf: modelURL, encoding: .utf8)
+let pickerSource = try String(contentsOf: pickerURL, encoding: .utf8)
 
 require(source.contains("接受邀请"), "family page should expose accept invitation copy")
 require(source.contains("撤回访问"), "family member actions should expose revoke access copy")
@@ -43,6 +57,21 @@ require(
     source.contains("trailingSwipeActionsConfigurationForRowAt")
         || source.contains("contextMenuConfigurationForRowAt"),
     "member rows should expose an explicit revoke access action"
+)
+require(
+    modelSource.contains("accessStatus")
+        && modelSource.contains("invitationStatus")
+        && modelSource.contains("isCareDashboardAccessible")
+        && modelSource.contains("isSelectableForFamilyVisibility"),
+    "FamilyMember should preserve backend access/invitation state and expose UI gating helpers"
+)
+require(
+    source.contains("member.isCareDashboardAccessible"),
+    "family member care dashboard entry should require active accepted access"
+)
+require(
+    pickerSource.contains("isSelectableForFamilyVisibility"),
+    "family visibility picker should filter pending or revoked members"
 )
 
 print("FamilyAccessControlUI verification passed")
