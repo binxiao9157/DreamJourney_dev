@@ -192,6 +192,47 @@
 - HTML 中 `#screen2` 默认保持隐藏，真人 canvas 仍由 `body[data-video-ready="true"]` 控制透明淡入。
 - 新增 `Scripts/DigitalHumanStartupRevealVerify/main.py`，并纳入 `Scripts/verify_phase1.sh`。
 
+### 16. KBLite：后端快照恢复与用户生命周期隔离
+
+- iOS `DreamJourneyBackendClient` 新增 `fetchKnowledgeBaseSnapshot(userId:)`，对齐后端已有 `GET /kb/snapshot/{user_id}`。
+- `KBLiteManager` 新增 `bootstrapFromBackendIfNeeded`：
+  - 主 Tab 启动后，如果已配置 `DreamJourneyBackendBaseURL` 且用户已登录，会尝试拉取服务器 KBLite 图谱快照。
+  - 只补齐可同步图谱，不覆盖本机私密/localOnly 数据。
+  - 拉取失败只写日志，不阻断本机建库。
+- `KBLiteManager.applyRemoteSnapshotIfUseful` 支持按人物、地点、事件、事实合并服务器快照，避免同一实体重复堆叠。
+- `UserManager.login` 登录后会强制 `reloadForCurrentUser`，`logout` 后会 `clearForLoggedOutUser`：
+  - 避免 KBLite 单例在未登录时加载 `kb_graph_default.json` 后，把旧 default/路演残留写入真实用户图谱。
+  - 退出登录后只清空内存态，不把空图谱同步到服务器。
+- 新增并纳入 `verify_phase1.sh`：
+  - `Scripts/KBLiteBackendSnapshotVerify/main.py`
+  - `Scripts/KBLiteUserLifecycleVerify/main.py`
+
+### 17. 记忆档案馆：语音素材元信息进入结构化知识库
+
+- `KBLiteManager.ingestArchiveVoiceSampleMetadata` 新增“语音样本元信息”事实入库：
+  - 只记录“保存了哪份语音素材、用途是什么”。
+  - 不把音频本体或未转写内容当作用户对话。
+  - 不从标题中臆造人物、地点、事件。
+  - 同一标题重复导入会合并，不重复生成多条事实。
+- `Stage1MemoryFacade.ingestArchiveVoiceSampleMetadata` 作为统一入口，档案馆保存非私密语音素材后调用。
+- `MemoryArchiveViewController.savePickedVoiceSample` 不再用 `recordUserTurn` 伪装成对话沉淀，改为专门的档案素材元信息入库。
+- 新增并纳入 `verify_phase1.sh`：
+  - `Scripts/KBLiteArchiveVoiceVerify/main.swift`
+  - `Scripts/MemoryArchiveVoiceKnowledgeVerify/main.py`
+
+### 18. 时空信箱：信件元信息进入结构化知识库
+
+- `KBLiteManager.ingestTimeMailboxLetterMetadata` 新增“信件元信息”事实入库：
+  - 记录收件人、标题、计划投递时间和信件来源。
+  - 通过 `MemorySourceRef(kind: .timeMailboxLetter, id: letter.id)` 做去重锚点。
+  - 不保存完整正文，不保存回声文本。
+  - privateOnly 信件不入库；localOnly 信件只保留本机可见；generationAllowed / familyCircle 才按既有隐私策略进入后续链路。
+- `Stage1MemoryFacade.ingestTimeMailboxLetterMetadata` 作为统一入口。
+- `TimeMailboxViewController.sealLetter` 在封存信件后沉淀元信息，同时继续走原有后端 metadata-only 同步。
+- 新增并纳入 `verify_phase1.sh`：
+  - `Scripts/KBLiteTimeMailboxVerify/main.swift`
+  - `Scripts/TimeMailboxKnowledgeVerify/main.py`
+
 ## 真机验收建议
 
 ### 记忆档案馆
@@ -206,17 +247,19 @@
 
 4. 保存后等待 3-10 秒。
 5. 进入“结构化知识库”，预期应出现人物、地点、事件或事实。
-6. 再导入一段本地音频，确认档案统计中的“语音”数量增加。
+6. 再导入一段本地音频，选择“可生成”，确认档案统计中的“语音”数量增加，并在结构化知识库“事实”里看到一条语音样本元信息。
 7. 如果已配置 `DreamJourneyBackendBaseURL` 并登录，后端应能通过 `GET /archive/items/{userId}` 查到该素材元数据；响应中不应包含 `localPath`。
 8. 如果服务器配置了 `DEEPSEEK_API_KEY`，导入旧照片时应优先走后端图片分析代理；可用 `POST /archive/image-analysis?dryRun=true` 检查上游请求是否脱敏且不暴露 key。
+9. 卸载重装或换设备登录同一账号后，打开主界面会尝试从 `GET /kb/snapshot/{userId}` 拉回已同步 KBLite 图谱；如果服务器已有快照，结构化知识库应恢复对应实体。
 
 ### 时空信箱
 
 1. 先完成上面的记忆档案馆文本素材沉淀。
 2. 进入“信箱”，写给“林桂芳”或“陈建国”的信。
 3. 投递时间选择“立即”或“1 分钟”。
-4. 打开投递后的信件。
-5. 预期回声包含：
+4. 封存后进入结构化知识库，预期“事实”中出现一条时空信箱元信息；不应出现完整信件正文。
+5. 打开投递后的信件。
+6. 预期回声包含：
    - “不是逝者真实回复”。
    - 如有匹配，出现“我能参考到的已授权记忆”。
    - 如无匹配，明确说明不会编造具体经历。
