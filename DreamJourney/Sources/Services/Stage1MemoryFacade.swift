@@ -116,6 +116,25 @@ final class Stage1MemoryFacade {
         completion(addedCount)
     }
 
+    func ingestTimeMailboxLetterMetadata(
+        _ letter: TimeMailboxLetter,
+        completion: @escaping (Int) -> Void = { _ in }
+    ) {
+        guard letter.privacyMetadata.scope != .privateOnly else {
+            completion(0)
+            return
+        }
+        let addedCount = knowledgeBase.ingestTimeMailboxLetterMetadata(
+            letterId: letter.id,
+            recipientName: letter.recipientName,
+            title: letter.title,
+            deliverAt: letter.deliverAt,
+            createdAt: letter.createdAt,
+            privacyMetadata: letter.privacyMetadata
+        )
+        completion(addedCount)
+    }
+
     func recordAssistantTurn(_ input: Stage1MailboxMemoryInput) {
         conversationMemory.recordAITurn(text: input.text, privacyMetadata: input.privacyMetadata)
     }

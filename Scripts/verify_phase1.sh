@@ -29,6 +29,9 @@ python3 Scripts/TimeMailboxNotificationVerify/main.py
 echo "== TimeMailbox backend sync =="
 python3 Scripts/TimeMailboxBackendSyncVerify/main.py
 
+echo "== TimeMailbox knowledge metadata =="
+python3 Scripts/TimeMailboxKnowledgeVerify/main.py
+
 echo "== MemoryArchive =="
 xcrun swiftc \
   DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
@@ -91,6 +94,16 @@ xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
   Scripts/KBLiteArchiveVoiceVerify/main.swift \
   -o /tmp/dreamjourney_kblite_archive_voice_verify
 /tmp/dreamjourney_kblite_archive_voice_verify
+
+echo "== KBLite time mailbox =="
+xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
+  DreamJourney/Sources/Services/KBLiteModels.swift \
+  DreamJourney/Sources/Services/KBLitePrivacyScopePolicy.swift \
+  DreamJourney/Sources/Services/KBLiteManager.swift \
+  Scripts/KBLiteTimeMailboxVerify/main.swift \
+  -o /tmp/dreamjourney_kblite_time_mailbox_verify
+/tmp/dreamjourney_kblite_time_mailbox_verify
 
 echo "== KBLite entity quality =="
 python3 Scripts/KBLiteEntityQualityVerify/main.py

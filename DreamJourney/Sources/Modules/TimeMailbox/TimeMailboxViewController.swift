@@ -226,6 +226,7 @@ final class TimeMailboxViewController: UIViewController {
                 self?.showToast(letter.deliverAt > Date() ? "信已封存，到点会提醒" : "信已封存", type: .success)
                 self?.reloadLetters()
                 let latest = self?.repository.letters().first(where: { $0.id == letter.id }) ?? letter
+                Stage1MemoryFacade.shared.ingestTimeMailboxLetterMetadata(letter)
                 self?.syncLetterMetadataToBackend(latest)
             }
         } catch TimeMailboxRepositoryError.invalidRecipient {

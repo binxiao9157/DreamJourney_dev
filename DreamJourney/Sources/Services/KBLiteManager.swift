@@ -1916,6 +1916,94 @@ final class KBLiteManager {
         return 1
     }
 
+    @discardableResult
+    func ingestTimeMailboxLetterMetadata(
+        letterId: String,
+        recipientName rawRecipientName: String,
+        title rawTitle: String,
+        deliverAt: Date,
+        createdAt: Date,
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+    ) -> Int {
+        guard privacyMetadata.scope != .privateOnly else { return 0 }
+        let cleanLetterId = Self.normalizedQuickExtractEntity(letterId)
+        let recipientName = Self.normalizedQuickExtractEntity(rawRecipientName)
+        let title = Self.normalizedQuickExtractEntity(rawTitle)
+        guard !cleanLetterId.isEmpty, !recipientName.isEmpty else { return 0 }
+
+        let displayTitle = title.isEmpty ? "未命名信件" : title
+        let deliverText = Self.metadataDateFormatter.string(from: deliverAt)
+        let statement = "时空信箱封存给\(recipientName)的信《\(displayTitle)》，计划于\(deliverText)投递。"
+        let sourceRef = MemorySourceRef(
+            kind: .timeMailboxLetter,
+            id: cleanLetterId,
+            title: displayTitle,
+            capturedAt: createdAt
+        )
+        let resolvedMetadata = Self.metadataByAppending(sourceRef: sourceRef, to: privacyMetadata)
+
+        if let idx = graph.facts.firstIndex(where: { fact in
+            fact.privacyMetadata.sourceRefs.contains(where: { Self.isSameSourceRef($0, sourceRef) }) ||
+                (KBLitePrivacyScopePolicy.canMerge(existing: fact.privacyMetadata, incoming: resolvedMetadata)
+                 && fact.statement.contains("时空信箱")
+                 && fact.statement.contains("《\(displayTitle)》")
+                 && fact.statement.contains(recipientName))
+        }) {
+            var fact = graph.facts[idx]
+            if !fact.sourceSessionIds.contains(graph.sessionCount + 1) {
+                fact.sourceSessionIds.append(graph.sessionCount + 1)
+            }
+            if !fact.privacyMetadata.sourceRefs.contains(sourceRef) {
+                fact.privacyMetadata = Self.metadataByAppending(sourceRef: sourceRef, to: fact.privacyMetadata)
+            }
+            graph.facts[idx] = fact
+            save()
+            return 0
+        }
+
+        guard graph.facts.count < maxFacts else { return 0 }
+        graph.facts.append(
+            KBFact(
+                id: UUID().uuidString,
+                statement: statement,
+                confidence: "confirmed",
+                sourceSessionIds: [graph.sessionCount + 1],
+                privacyMetadata: resolvedMetadata
+            )
+        )
+        save()
+        print("[KBLite] ✉️ 时空信箱元信息入库: \(displayTitle)")
+        return 1
+    }
+
+    private static let metadataDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyy年M月d日 HH:mm"
+        return formatter
+    }()
+
+    private static func metadataByAppending(
+        sourceRef: MemorySourceRef,
+        to metadata: MemoryPrivacyMetadata
+    ) -> MemoryPrivacyMetadata {
+        var sourceRefs = metadata.sourceRefs
+        if !sourceRefs.contains(where: { isSameSourceRef($0, sourceRef) }) {
+            sourceRefs.append(sourceRef)
+        }
+        return MemoryPrivacyMetadata(
+            scope: metadata.scope,
+            sourceRefs: sourceRefs,
+            createdBySurface: metadata.createdBySurface,
+            createdAt: metadata.createdAt,
+            familyVisibility: metadata.familyVisibility
+        )
+    }
+
+    private static func isSameSourceRef(_ lhs: MemorySourceRef, _ rhs: MemorySourceRef) -> Bool {
+        lhs.kind == rhs.kind && lhs.id == rhs.id
+    }
+
     /// 生成包含知识库上下文的增强开场白提示
     func buildGreetingHint() -> String {
         if isEmpty { return "" }
