@@ -6,6 +6,7 @@ final class DreamJourneyBackendClient {
     static let shared = DreamJourneyBackendClient()
 
     private static let configKey = "DreamJourneyBackendBaseURL"
+    private static let apiTokenKey = "DreamJourneyBackendAPIToken"
     private let session: URLSession
     private let timeoutInterval: TimeInterval
 
@@ -20,6 +21,10 @@ final class DreamJourneyBackendClient {
 
     var isConfigured: Bool {
         baseURLString.flatMap(URL.init(string:)) != nil
+    }
+
+    private var apiToken: String? {
+        AppConfiguration.string(forKey: Self.apiTokenKey)
     }
 
     func syncKnowledgeBase(
@@ -125,6 +130,7 @@ final class DreamJourneyBackendClient {
             request.httpMethod = "GET"
             request.timeoutInterval = timeoutInterval
             request.setValue("application/json", forHTTPHeaderField: "Accept")
+            authorizeBackendRequest(&request)
             session.dataTask(with: request) { data, response, error in
                 if let error {
                     completion(.failure(error))
@@ -165,6 +171,7 @@ final class DreamJourneyBackendClient {
             request.httpMethod = "GET"
             request.timeoutInterval = timeoutInterval
             request.setValue("application/json", forHTTPHeaderField: "Accept")
+            authorizeBackendRequest(&request)
             session.dataTask(with: request) { data, response, error in
                 if let error {
                     completion(.failure(error))
@@ -344,6 +351,7 @@ final class DreamJourneyBackendClient {
         var request = URLRequest(url: url)
         request.timeoutInterval = timeoutInterval
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        authorizeBackendRequest(&request)
         let (data, response) = try await session.data(for: request)
         try Self.validate(response: response)
         return data
@@ -361,6 +369,7 @@ final class DreamJourneyBackendClient {
             request.httpMethod = method
             request.timeoutInterval = timeoutInterval
             request.setValue("application/json", forHTTPHeaderField: "Accept")
+            authorizeBackendRequest(&request)
             if let bodyObject {
                 request.httpBody = try JSONSerialization.data(withJSONObject: bodyObject)
                 request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
@@ -382,6 +391,12 @@ final class DreamJourneyBackendClient {
         } catch {
             completion(.failure(error))
         }
+    }
+
+    private func authorizeBackendRequest(_ request: inout URLRequest) {
+        guard let apiToken else { return }
+        request.setValue("Bearer \(apiToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(apiToken, forHTTPHeaderField: "X-DreamJourney-API-Token")
     }
 
     private func endpointURL(path: String) throws -> URL {

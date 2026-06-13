@@ -110,6 +110,9 @@ python3 Scripts/MemoryArchiveConversationBoundaryVerify/main.py
 echo "== Family backend sync =="
 python3 Scripts/FamilyBackendSyncVerify/main.py
 
+echo "== DreamJourney backend auth =="
+python3 Scripts/DreamJourneyBackendAuthVerify/main.py
+
 echo "== Family member access state =="
 xcrun swiftc \
   DreamJourney/Sources/Services/MemoryModel.swift \

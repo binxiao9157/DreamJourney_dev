@@ -636,6 +636,33 @@ class CareSnapshotAPITests(unittest.TestCase):
         self.assertIn("raw", response.text.lower())
 
 
+class BackendAuthTests(unittest.TestCase):
+    def test_backend_api_token_required_when_configured(self):
+        previous_settings = main_module.settings
+        main_module.settings = Settings(store_backend="memory", backend_api_token="server-secret")
+        client = TestClient(app)
+        try:
+            health = client.get("/health")
+            missing = client.post("/kb/sync", json={"userId": "u1", "graph": {}})
+            invalid = client.post(
+                "/kb/sync",
+                headers={"Authorization": "Bearer wrong-secret"},
+                json={"userId": "u1", "graph": {}},
+            )
+            valid = client.post(
+                "/kb/sync",
+                headers={"Authorization": "Bearer server-secret"},
+                json={"userId": "u1", "graph": {}},
+            )
+        finally:
+            main_module.settings = previous_settings
+
+        self.assertEqual(health.status_code, 200)
+        self.assertEqual(missing.status_code, 401)
+        self.assertEqual(invalid.status_code, 401)
+        self.assertEqual(valid.status_code, 200)
+
+
 class ArchiveAPITests(unittest.TestCase):
     def test_archive_items_api_saves_sanitized_metadata_and_lists_by_user(self):
         client = TestClient(app)

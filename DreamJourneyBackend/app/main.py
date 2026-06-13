@@ -2,7 +2,8 @@ import secrets
 from typing import Any, Dict, Optional
 
 try:
-    from fastapi import FastAPI, HTTPException
+    from fastapi import FastAPI, HTTPException, Request
+    from fastapi.responses import JSONResponse
 except ImportError as exc:  # pragma: no cover - exercised only without runtime deps
     raise RuntimeError("FastAPI is not installed. Run `pip install -r requirements.txt`.") from exc
 
@@ -23,6 +24,23 @@ from app.services.tts import VolcTTSProxy
 
 app = FastAPI(title=settings.app_name, version="0.1.0")
 store = make_store(settings)
+
+
+def _request_backend_api_token(request: Request) -> str:
+    authorization = str(request.headers.get("authorization") or "").strip()
+    if authorization.lower().startswith("bearer "):
+        return authorization[7:].strip()
+    return str(request.headers.get("x-dreamjourney-api-token") or "").strip()
+
+
+@app.middleware("http")
+async def require_backend_api_token(request: Request, call_next):
+    if request.url.path == "/health" or not settings.backend_api_token:
+        return await call_next(request)
+    token = _request_backend_api_token(request)
+    if not token or not secrets.compare_digest(token, settings.backend_api_token):
+        return JSONResponse(status_code=401, content={"detail": "invalid backend api token"})
+    return await call_next(request)
 
 
 @app.on_event("startup")

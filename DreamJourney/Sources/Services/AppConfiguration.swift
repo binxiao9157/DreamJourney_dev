@@ -45,6 +45,7 @@ enum AppConfiguration {
             "SafetyGuardBaseURL",
             "SafetyGuardAPIKey",
             "DreamJourneyBackendBaseURL",
+            "DreamJourneyBackendAPIToken",
             "OpenAvatarChatBaseURL"
         ]
         return Dictionary(uniqueKeysWithValues: knownKeys.compactMap { key in
