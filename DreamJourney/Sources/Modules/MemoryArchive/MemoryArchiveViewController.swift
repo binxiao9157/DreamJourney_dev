@@ -53,7 +53,7 @@ final class MemoryArchiveViewController: UIViewController {
 
     private lazy var photoButton = makeActionButton(title: "上传旧照片", iconName: "photo.on.rectangle")
     private lazy var voiceButton = makeActionButton(title: "导入语音素材", iconName: "waveform")
-    private lazy var textButton = makeActionButton(title: "添加文字素材", iconName: "square.and.pencil")
+    private lazy var textButton = makeActionButton(title: "添加文字/人格提示", iconName: "square.and.pencil")
     private lazy var knowledgeButton = makeActionButton(title: "结构化知识库", iconName: "brain.head.profile")
 
     private lazy var tableView: UITableView = {
@@ -914,7 +914,7 @@ private final class MemoryArchiveTextComposerViewController: UIViewController {
     var onSave: ((MemoryArchiveTextDraft) -> Void)?
 
     private let kindControl: UISegmentedControl = {
-        let control = UISegmentedControl(items: ["回忆", "性格", "口头禅"])
+        let control = UISegmentedControl(items: ["回忆", "人格提示", "口头禅"])
         control.selectedSegmentIndex = 0
         control.selectedSegmentTintColor = .warmAccent
         control.setTitleTextAttributes([.foregroundColor: UIColor.white], for: .selected)
@@ -1216,7 +1216,7 @@ private extension MemoryArchiveItemKind {
         case .photo: return "旧照片"
         case .voiceSample: return "语音样本"
         case .textNote: return "文字回忆"
-        case .personalityNote: return "性格描述"
+        case .personalityNote: return "人格提示"
         case .catchphrase: return "口头禅"
         }
     }
