@@ -28,6 +28,8 @@ required_seed_fragments = [
     "ConversationMemoryManager.shared.resetLocalStorage()",
     "KBLiteManager.shared.reset(syncToBackend: false)",
     "FamilyRepository.shared.resetLocalAccessState()",
+    "FamilyRepository.shared.removeDemoAndDerivedMembersForLocalTesting()",
+    "FamilyDerivedMembers",
     "MemoryRepository.shared.resetLocalStorage()",
     "MemoirRepository.shared.resetLocalStorage()",
 ]

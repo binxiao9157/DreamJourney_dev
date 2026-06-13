@@ -397,6 +397,17 @@ final class FamilyRepository {
         setLocalViewerFamilyMemberID(nil)
     }
 
+    func removeDemoAndDerivedMembersForLocalTesting() {
+        members.removeAll { member in
+            let id = member.id
+            let phone = normalizedPhone(member.phone)
+            return id.hasPrefix("roadshow_") ||
+                id.hasPrefix("kb_") ||
+                member.lastUpdated == "路演数据" ||
+                phone == "18800000001"
+        }
+    }
+
     // MARK: - KBLite 同步：从知识库中提取人物 → 亲属圈
 
     /// 供外部按需调用的公开同步方法

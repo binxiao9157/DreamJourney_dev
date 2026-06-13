@@ -192,6 +192,9 @@ xcrun swiftc \
 echo "== Local test data cleanup =="
 python3 Scripts/LocalTestDataCleanupVerify/main.py
 
+echo "== Family local test cleanup =="
+python3 Scripts/FamilyLocalTestCleanupVerify/main.py
+
 echo "== Roadshow mailbox seed cleanup marker =="
 python3 Scripts/RoadshowMailboxSeedVerify/main.py
 

@@ -280,6 +280,7 @@ enum LocalTestDataCleaner {
         ConversationMemoryManager.shared.resetLocalStorage()
         KBLiteManager.shared.reset(syncToBackend: false)
         FamilyRepository.shared.resetLocalAccessState()
+        FamilyRepository.shared.removeDemoAndDerivedMembersForLocalTesting()
         MemoryRepository.shared.resetLocalStorage()
         MemoirRepository.shared.resetLocalStorage()
 
@@ -287,7 +288,7 @@ enum LocalTestDataCleaner {
         let result = Result(
             removedKeys: userDefaultsKeys,
             removedPaths: removedPaths,
-            resetSubsystems: ["ConversationMemory", "KBLite", "FamilyAccess", "MemoryRepository", "MemoirRepository"]
+            resetSubsystems: ["ConversationMemory", "KBLite", "FamilyAccess", "FamilyDerivedMembers", "MemoryRepository", "MemoirRepository"]
         )
         print("[LocalTestDataCleaner] \(result.summary)")
         return result
