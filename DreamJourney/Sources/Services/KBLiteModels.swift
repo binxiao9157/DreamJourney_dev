@@ -462,6 +462,34 @@ struct KBLiteDepositStatus: Equatable {
     }
 }
 
+struct KBLiteExtractionSummary: Equatable {
+    let deterministicAddedCount: Int
+    let llmAddedCount: Int
+    let didAttemptLLM: Bool
+    let didSkipDueToFrequency: Bool
+    let didSkipDueToNoRemoteContent: Bool
+    let didSkipDueToInFlight: Bool
+    let llmErrorDescription: String?
+
+    var totalAddedCount: Int {
+        deterministicAddedCount + llmAddedCount
+    }
+
+    var didFailLLM: Bool {
+        llmErrorDescription?.isEmpty == false
+    }
+
+    static let empty = KBLiteExtractionSummary(
+        deterministicAddedCount: 0,
+        llmAddedCount: 0,
+        didAttemptLLM: false,
+        didSkipDueToFrequency: false,
+        didSkipDueToNoRemoteContent: false,
+        didSkipDueToInFlight: false,
+        llmErrorDescription: nil
+    )
+}
+
 enum KBLiteDepositStatusBuilder {
     static func build(from graph: KBLiteGraph) -> KBLiteDepositStatus {
         let metadatas = graph.allPrivacyMetadata

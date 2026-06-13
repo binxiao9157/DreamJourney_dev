@@ -115,21 +115,47 @@ KBLiteManager.shared.extractFromTranscript(
     extractionAddedCount = addedCount
 }
 
-let deadline = Date().addingTimeInterval(2)
-while extractionAddedCount == nil && Date() < deadline {
+let legacyDeadline = Date().addingTimeInterval(2)
+while extractionAddedCount == nil && Date() < legacyDeadline {
     RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
 }
 assertCondition(extractionAddedCount != nil, "extractFromTranscript should call completion when DeepSeek returns an empty success")
+assertCondition(
+    (extractionAddedCount ?? 0) >= 8,
+    "extractFromTranscript should preserve deterministic local extraction even when LLM succeeds with no entities"
+)
+
+KBLiteManager.shared.reset()
+var extractionSummary: KBLiteExtractionSummary?
+KBLiteManager.shared.extractFromTranscriptDetailed(
+    turns: [
+        ConversationTurn(
+            role: "user",
+            text: testText,
+            timestamp: Date(timeIntervalSince1970: 1_800_000_001),
+            privacyMetadata: metadata
+        )
+    ],
+    sessionId: 2
+) { summary in
+    extractionSummary = summary
+}
+
+let deadline = Date().addingTimeInterval(2)
+while extractionSummary == nil && Date() < deadline {
+    RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
+}
+assertCondition(extractionSummary != nil, "extractFromTranscriptDetailed should call completion with a structured summary")
+assertCondition((extractionSummary?.deterministicAddedCount ?? 0) >= 8, "detailed extraction should expose deterministic local additions")
+assertCondition(extractionSummary?.didAttemptLLM == true, "detailed extraction should expose whether LLM was attempted")
+assertCondition(extractionSummary?.llmAddedCount == 0, "empty LLM success should expose zero LLM additions")
+assertCondition((extractionSummary?.totalAddedCount ?? 0) >= (extractionSummary?.deterministicAddedCount ?? 0), "detailed extraction should expose total additions")
 let graphAfterEmptyLLMSuccess = KBLiteManager.shared.graph
 let emptySuccessPeople = Set(graphAfterEmptyLLMSuccess.people.map(\.name))
 let emptySuccessPlaces = Set(graphAfterEmptyLLMSuccess.places.map(\.name))
 let emptySuccessEvents = Set(graphAfterEmptyLLMSuccess.events.map(\.title))
 let emptySuccessFacts = graphAfterEmptyLLMSuccess.facts.map(\.statement).joined(separator: "\n")
 
-assertCondition(
-    (extractionAddedCount ?? 0) >= 8,
-    "extractFromTranscript should preserve deterministic local extraction even when LLM succeeds with no entities"
-)
 assertCondition(emptySuccessPeople.contains("陈建国"), "empty LLM success should still extract self name")
 assertCondition(emptySuccessPeople.contains("林桂芳"), "empty LLM success should still extract spouse name")
 assertCondition(emptySuccessPlaces.contains("绍兴越城区仓桥直街"), "empty LLM success should still extract lived address")
@@ -142,7 +168,7 @@ assertCondition(
     "empty LLM success should still persist explicit fact"
 )
 assertCondition(
-    graphAfterEmptyLLMSuccess.sessionCount == 1,
+    graphAfterEmptyLLMSuccess.sessionCount == 2,
     "extractFromTranscript should mark session processed after deterministic deposit"
 )
 

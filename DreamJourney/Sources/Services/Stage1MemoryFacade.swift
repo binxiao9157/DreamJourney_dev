@@ -27,6 +27,15 @@ struct Stage1MailboxMemoryInput {
 }
 
 #if !MEMORY_PRIVACY_INTEGRATION_VERIFY
+struct Stage1ArchiveTextDepositResult {
+    let metadataAddedCount: Int
+    let extractionSummary: KBLiteExtractionSummary
+
+    var totalAddedCount: Int {
+        metadataAddedCount + extractionSummary.totalAddedCount
+    }
+}
+
 struct Stage1MemoryDashboardSnapshot {
     let stats: String
     let isEmpty: Bool
@@ -75,6 +84,23 @@ final class Stage1MemoryFacade {
         archiveMaterialKind: String = "文字素材",
         completion: @escaping (Int) -> Void = { _ in }
     ) {
+        ingestArchiveTextMaterialDetailed(
+            input,
+            archiveItemID: archiveItemID,
+            archiveTitle: archiveTitle,
+            archiveMaterialKind: archiveMaterialKind
+        ) { result in
+            completion(result.totalAddedCount)
+        }
+    }
+
+    func ingestArchiveTextMaterialDetailed(
+        _ input: Stage1MailboxMemoryInput,
+        archiveItemID: String? = nil,
+        archiveTitle: String? = nil,
+        archiveMaterialKind: String = "文字素材",
+        completion: @escaping (Stage1ArchiveTextDepositResult) -> Void = { _ in }
+    ) {
         let sourceRef = Self.archiveSourceRef(
             id: archiveItemID,
             title: archiveTitle,
@@ -83,7 +109,10 @@ final class Stage1MemoryFacade {
         let resolvedInput = input.withSourceRef(sourceRef)
 
         guard resolvedInput.privacyMetadata.scope != .privateOnly else {
-            completion(0)
+            completion(Stage1ArchiveTextDepositResult(
+                metadataAddedCount: 0,
+                extractionSummary: .empty
+            ))
             return
         }
 
@@ -104,11 +133,14 @@ final class Stage1MemoryFacade {
             sessionId: sessionId,
             privacyMetadata: resolvedInput.privacyMetadata
         )
-        knowledgeBase.extractFromTranscript(
+        knowledgeBase.extractFromTranscriptDetailed(
             turns: [turn],
             sessionId: sessionId,
-            completion: { extractedCount in
-                completion(metadataCount + extractedCount)
+            completion: { extractionSummary in
+                completion(Stage1ArchiveTextDepositResult(
+                    metadataAddedCount: metadataCount,
+                    extractionSummary: extractionSummary
+                ))
             }
         )
     }

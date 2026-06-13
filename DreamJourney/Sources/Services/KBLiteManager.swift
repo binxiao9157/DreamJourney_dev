@@ -575,9 +575,19 @@ final class KBLiteManager {
         sessionId: Int,
         completion: @escaping (Int) -> Void = { _ in }
     ) {
+        extractFromTranscriptDetailed(turns: turns, sessionId: sessionId) { summary in
+            completion(summary.totalAddedCount)
+        }
+    }
+
+    func extractFromTranscriptDetailed(
+        turns: [ConversationTurn],
+        sessionId: Int,
+        completion: @escaping (KBLiteExtractionSummary) -> Void = { _ in }
+    ) {
         guard !turns.isEmpty else {
             print("[KBLite] ⚠️ 空 transcript，跳过提取")
-            completion(0)
+            completion(.empty)
             return
         }
         let localTurns = KBLitePrivacyScopePolicy.localExtractableTurns(from: turns)
@@ -609,7 +619,15 @@ final class KBLiteManager {
                 graph.sessionCount = max(graph.sessionCount, sessionId)
                 save()
             }
-            completion(deterministicCount)
+            completion(KBLiteExtractionSummary(
+                deterministicAddedCount: deterministicCount,
+                llmAddedCount: 0,
+                didAttemptLLM: false,
+                didSkipDueToFrequency: true,
+                didSkipDueToNoRemoteContent: false,
+                didSkipDueToInFlight: false,
+                llmErrorDescription: nil
+            ))
             return
         }
 
@@ -619,7 +637,15 @@ final class KBLiteManager {
                 graph.sessionCount = max(graph.sessionCount, sessionId)
                 save()
             }
-            completion(deterministicCount)
+            completion(KBLiteExtractionSummary(
+                deterministicAddedCount: deterministicCount,
+                llmAddedCount: 0,
+                didAttemptLLM: false,
+                didSkipDueToFrequency: false,
+                didSkipDueToNoRemoteContent: true,
+                didSkipDueToInFlight: false,
+                llmErrorDescription: nil
+            ))
             return
         }
 
@@ -628,7 +654,17 @@ final class KBLiteManager {
 
             guard !self.isExtracting else {
                 print("[KBLite] ⏳ 上一次提取尚未完成，跳过")
-                DispatchQueue.main.async { completion(0) }
+                DispatchQueue.main.async {
+                    completion(KBLiteExtractionSummary(
+                        deterministicAddedCount: deterministicCount,
+                        llmAddedCount: 0,
+                        didAttemptLLM: false,
+                        didSkipDueToFrequency: false,
+                        didSkipDueToNoRemoteContent: false,
+                        didSkipDueToInFlight: true,
+                        llmErrorDescription: nil
+                    ))
+                }
                 return
             }
 
@@ -663,13 +699,33 @@ final class KBLiteManager {
                     self.graph.sessionCount = max(self.graph.sessionCount, sessionId)
                     self.save()
                     print("[KBLite] ✅ 知识提取完成: 新增 \(addedCount) 实体")
-                    DispatchQueue.main.async { completion(addedCount) }
+                    DispatchQueue.main.async {
+                        completion(KBLiteExtractionSummary(
+                            deterministicAddedCount: deterministicCount,
+                            llmAddedCount: llmAddedCount,
+                            didAttemptLLM: true,
+                            didSkipDueToFrequency: false,
+                            didSkipDueToNoRemoteContent: false,
+                            didSkipDueToInFlight: false,
+                            llmErrorDescription: nil
+                        ))
+                    }
 
                 case .failure(let error):
                     print("[KBLite] ⚠️ LLM 提取失败: \(error.localizedDescription)，保留本地确定性沉淀")
                     self.graph.sessionCount = max(self.graph.sessionCount, sessionId)
                     self.save()
-                    DispatchQueue.main.async { completion(deterministicCount) }
+                    DispatchQueue.main.async {
+                        completion(KBLiteExtractionSummary(
+                            deterministicAddedCount: deterministicCount,
+                            llmAddedCount: 0,
+                            didAttemptLLM: true,
+                            didSkipDueToFrequency: false,
+                            didSkipDueToNoRemoteContent: false,
+                            didSkipDueToInFlight: false,
+                            llmErrorDescription: error.localizedDescription
+                        ))
+                    }
                 }
             }
         }

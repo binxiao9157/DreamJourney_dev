@@ -39,8 +39,15 @@ require(
     "private text material should explain why it does not enter KBLite",
 )
 require(
-    "addedCount == 0" in save_text_body and "暂无可抽取的新知识" in save_text_body,
-    "text material with zero extracted entities should surface a non-silent result",
+    "ingestArchiveTextMaterialDetailed" in save_text_body,
+    "text material ingestion should use the detailed KBLite extraction result",
+)
+require(
+    "archiveTextDepositStatusMessage" in view
+    and "暂无可抽取的新知识" in view
+    and "远端 AI 抽取暂未完成" in view
+    and "AI 暂无新增线索" in view,
+    "text material deposit status should distinguish local fallback, empty AI extraction, and zero-new results",
 )
 require(
     "ingestArchiveVoiceSampleMetadata" in save_voice_body and "addedCount" in save_voice_body,
