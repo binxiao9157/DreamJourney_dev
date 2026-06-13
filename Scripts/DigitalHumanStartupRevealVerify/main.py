@@ -21,7 +21,7 @@ required_vc_fragments = [
     "revealInitialAvatarIfNeeded(reason:",
     "avatar_video_surface_ready",
     "avatar_startup_reveal",
-    "avatar_startup_reveal_fallback",
+    "avatar_startup_waiting_for_video",
     'body[data-video-ready="true"] #canvas_video',
     'if type == "avatar_video_surface_ready" {',
 ]
@@ -36,6 +36,8 @@ if "#screen2 {\n      display: block;" in vc_text:
     missing.append(f"{vc.name}: screen2 should stay hidden until avatar video ready")
 if 'type == "avatar_first_frame_drawn" || type == "avatar_video_surface_ready"' in vc_text:
     missing.append(f"{vc.name}: should not reveal on avatar_first_frame_drawn before DOM video-ready state")
+if 'revealInitialAvatarIfNeeded(reason: "timeout")' in vc_text:
+    missing.append(f"{vc.name}: timeout fallback should not reveal the loading shell before real avatar video is ready")
 if "avatar_first_frame_drawn" not in mini_live_text:
     missing.append(f"{mini_live.name}: missing first-frame diagnostic event")
 if "minimate_new_video_done" not in mini_mate_text or "first frame will reveal screen2" not in mini_mate_text:

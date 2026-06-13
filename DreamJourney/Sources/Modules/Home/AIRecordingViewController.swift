@@ -1826,8 +1826,7 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
         initialAvatarRevealFallbackWorkItem?.cancel()
         let workItem = DispatchWorkItem { [weak self] in
             guard let self, !self.didRevealInitialAvatar else { return }
-            DigitalHumanPlaybackEvidenceStore.shared.appendEvent("avatar_startup_reveal_fallback reason=timeout")
-            self.revealInitialAvatarIfNeeded(reason: "timeout")
+            DigitalHumanPlaybackEvidenceStore.shared.appendEvent("avatar_startup_waiting_for_video reason=timeout")
         }
         initialAvatarRevealFallbackWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.8, execute: workItem)
