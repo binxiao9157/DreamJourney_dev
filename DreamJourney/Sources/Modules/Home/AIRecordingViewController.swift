@@ -8,14 +8,20 @@ enum TGMessage: Identifiable {
     case ai(text: String, timestamp: Date = Date())
     case user(text: String, timestamp: Date = Date())
     case photo(imagePath: String, timestamp: Date = Date())  // 用户发送的照片消息
+    case wellbeingNotice(text: String, timestamp: Date = Date())
     case privacyConfirmation
 
     var id: String { UUID().uuidString }
     var timestamp: Date {
         switch self {
-        case .ai(_, let t), .user(_, let t), .photo(_, let t): return t
+        case .ai(_, let t), .user(_, let t), .photo(_, let t), .wellbeingNotice(_, let t): return t
         case .privacyConfirmation: return Date()
         }
+    }
+
+    var isWellbeingNotice: Bool {
+        if case .wellbeingNotice = self { return true }
+        return false
     }
 }
 
@@ -210,6 +216,7 @@ final class AIRecordingViewController: UIViewController {
     private var selectedDialogPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
     private var currentDialogPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
     private var selectedDialogFamilyVisibility = FamilyVisibilitySelection.allMembers
+    private let conversationWellbeingLimiter = ConversationWellbeingLimiter()
 
     // MARK: - 对话录音（用于声音复刻）
     /// 并行录音器：对话期间录制用户语音，供声音复刻训练使用
@@ -582,6 +589,8 @@ final class AIRecordingViewController: UIViewController {
 
     // MARK: - Mock Dialog
     private func startRecording() {
+        guard handleConversationWellbeingBeforeRecording() else { return }
+
         MicrophonePermissionManager.shared.requestPermission { [weak self] granted in
             guard let self = self else { return }
             if granted {
@@ -595,6 +604,48 @@ final class AIRecordingViewController: UIViewController {
                 self.updateVoiceBallState(.idle)
             }
         }
+    }
+
+    private func handleConversationWellbeingBeforeRecording() -> Bool {
+        conversationWellbeingLimiter.startSession()
+        return presentConversationWellbeingDecisionIfNeeded(afterAssistantPlayback: false)
+    }
+
+    @discardableResult
+    private func presentConversationWellbeingDecisionIfNeeded(afterAssistantPlayback: Bool) -> Bool {
+        let decision = conversationWellbeingLimiter.decision()
+        switch decision {
+        case .allow:
+            return true
+        case .nudge(let message):
+            appendConversationWellbeingMessage(message)
+            conversationWellbeingLimiter.markNudgeShown()
+            if afterAssistantPlayback {
+                digitalHumanAvatarView.setState(.idle, prompt: "可以先休息一下")
+            }
+            return true
+        case .limit(let message):
+            appendConversationWellbeingMessage(message)
+            stopSessionRecording()
+            if dialogEngine.isDialogActive {
+                dialogEngine.stopDialog(reason: .manual)
+            }
+            updateVoiceBallState(.idle)
+            resetDigitalHumanSpeechPlayback(stopFallbackAudio: true)
+            digitalHumanAvatarView.clearSpeechAudio()
+            digitalHumanAvatarView.setState(.idle, prompt: "先休息一下")
+            showToast("今天先到这里，晚些时候再回来", type: .info)
+            return false
+        }
+    }
+
+    private func appendConversationWellbeingMessage(_ message: String) {
+        if case .wellbeingNotice(let lastMessage, _) = messages.last, lastMessage == message {
+            return
+        }
+        messages.append(.wellbeingNotice(text: message, timestamp: Date()))
+        messageTableView.reloadData()
+        scrollToBottom()
     }
 
     private func stopRecording() {
@@ -701,7 +752,7 @@ extension AIRecordingViewController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let msg = messages[indexPath.row]
         switch msg {
-        case .ai(let text, let ts):
+        case .ai(let text, let ts), .wellbeingNotice(let text, let ts):
             let cell = tableView.dequeueReusableCell(withIdentifier: "AIMessageCell", for: indexPath) as! TGMessageCell
             cell.configure(text: text, isUser: false, timestamp: ts)
             return cell
@@ -729,7 +780,7 @@ extension AIRecordingViewController: UITableViewDelegate {
             return TGPhotoCell.cellHeight
         case .privacyConfirmation:
             return 80
-        case .ai(let text, _), .user(let text, _):
+        case .ai(let text, _), .wellbeingNotice(let text, _), .user(let text, _):
             let maxWidth = TGMessageCell.maxBubbleWidth(for: tableView.bounds.width)
             let textSize = TGMessageCell.messageTextSize(
                 for: text,
@@ -966,6 +1017,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
         pendingAIText = nil
         resetDigitalHumanSpeechPlayback(stopFallbackAudio: true)
         hideDigitalHumanFallbackPresentation()
+        conversationWellbeingLimiter.startSession()
         updateVoiceBallState(.active)
         digitalHumanAvatarView.setState(.listening, prompt: "正在聆听")
     }
@@ -977,6 +1029,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
             pendingUserText = nil
             currentAssistantResponseText = nil
             retryableDigitalHumanSpeechText = nil
+            conversationWellbeingLimiter.recordFinalUserTurn(text)
             messages.append(.user(text: text, timestamp: Date()))
             messageTableView.reloadData()
             scrollToBottom()
@@ -1096,6 +1149,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
         } else {
             digitalHumanAvatarView.setState(.listening, prompt: "可以继续说")
         }
+        presentConversationWellbeingDecisionIfNeeded(afterAssistantPlayback: true)
     }
 
     func onError(error: Error) {
@@ -1545,14 +1599,15 @@ extension AIRecordingViewController: DialogEngineDelegate {
             return
         }
         let sessionMessages = Array(messages.dropFirst(currentDialogStartMessageIndex))
-        guard !sessionMessages.isEmpty else {
+        let memoirSessionMessages = sessionMessages.filter { !$0.isWellbeingNotice }
+        guard !memoirSessionMessages.isEmpty else {
             showToast("本次对话内容不足，暂不能生成回忆录", type: .info)
             return
         }
         // 将 TGMessage 转换为 Memoir 模块的 DialogMessage 格式
         let dialogMessages = PrivacyScopePolicy.sanitized(
             items: MemoirFlowManager.convertToDialogMessages(
-                sessionMessages,
+                memoirSessionMessages,
                 privacyMetadata: currentDialogPrivacyMetadata
             ),
             surface: .memoirGeneration

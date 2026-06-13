@@ -90,6 +90,19 @@ python3 Scripts/FamilyInvitationCodeVerify/main.py
 echo "== DigitalHuman startup reveal =="
 python3 Scripts/DigitalHumanStartupRevealVerify/main.py
 
+echo "== Conversation wellbeing limiter =="
+xcrun swiftc \
+  DreamJourney/Sources/Services/ConversationWellbeingLimiter.swift \
+  Scripts/ConversationWellbeingLimiterVerify/main.swift \
+  -o /tmp/dreamjourney_conversation_wellbeing_verify
+/tmp/dreamjourney_conversation_wellbeing_verify
+
+echo "== Conversation wellbeing UI =="
+python3 Scripts/ConversationWellbeingUIVerify/main.py
+
+echo "== Conversation wellbeing memory boundary =="
+python3 Scripts/ConversationWellbeingMemoryBoundaryVerify/main.py
+
 echo "== KBLite =="
 swift kblite_verify.swift
 

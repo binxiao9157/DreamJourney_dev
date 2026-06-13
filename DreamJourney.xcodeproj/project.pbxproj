@@ -101,6 +101,7 @@
 		A74CE000000000000000001 /* FamilyAccessControlService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A74CE000000000000000002 /* FamilyAccessControlService.swift */; };
 		A76CE000000000000000001 /* DigitalHumanReadinessReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A76CE000000000000000002 /* DigitalHumanReadinessReport.swift */; };
 		A77CE000000000000000001 /* DigitalHumanDiagnosticsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A77CE000000000000000002 /* DigitalHumanDiagnosticsViewController.swift */; };
+		A80CE000000000000000001 /* ConversationWellbeingLimiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80CE000000000000000002 /* ConversationWellbeingLimiter.swift */; };
 		A45E9D7E5541F7288DD4141D /* ConversationMemoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97D922D4C28AF76D7CB85DFF /* ConversationMemoryManager.swift */; };
 		A52FFB266D8D9FC320182A0A /* MemoryRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BCB52701683AE3FAFABA6F /* MemoryRepository.swift */; };
 		A88DF4F43BC833D9433CEE7B /* MemoirTTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00898E98E95E3808561BEB51 /* MemoirTTSService.swift */; };
@@ -226,6 +227,7 @@
 		A77CE000000000000000002 /* DigitalHumanDiagnosticsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanDiagnosticsViewController.swift; sourceTree = "<group>"; };
 		A78CE000000000000000002 /* DigitalHumanPlaybackEvidenceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanPlaybackEvidenceStore.swift; sourceTree = "<group>"; };
 		A79CE000000000000000002 /* AmapDistrictBoundaryProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmapDistrictBoundaryProvider.swift; sourceTree = "<group>"; };
+		A80CE000000000000000002 /* ConversationWellbeingLimiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationWellbeingLimiter.swift; sourceTree = "<group>"; };
 		A90CE000000000000000002 /* DreamJourneyBackendClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DreamJourneyBackendClient.swift; sourceTree = "<group>"; };
 		A99960BA8CC38BCA98CB98F8 /* KnowledgeBaseViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeBaseViewController.swift; sourceTree = "<group>"; };
 		AA3777B38C40C14928088B38 /* MiniMateLoader.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = MiniMateLoader.js; sourceTree = "<group>"; };
@@ -333,6 +335,7 @@
 			isa = PBXGroup;
 			children = (
 				97D922D4C28AF76D7CB85DFF /* ConversationMemoryManager.swift */,
+				A80CE000000000000000002 /* ConversationWellbeingLimiter.swift */,
 				A33CE000000000000000007 /* CareDashboard */,
 				A76CE000000000000000002 /* DigitalHumanReadinessReport.swift */,
 				A78CE000000000000000002 /* DigitalHumanPlaybackEvidenceStore.swift */,
@@ -891,6 +894,7 @@
 				A33CE000000000000000002 /* CareSignalAnalyzer.swift in Sources */,
 				A33CE000000000000000001 /* CareSignalModels.swift in Sources */,
 				A45E9D7E5541F7288DD4141D /* ConversationMemoryManager.swift in Sources */,
+				A80CE000000000000000001 /* ConversationWellbeingLimiter.swift in Sources */,
 				DCE5E73A3C424E6E804AD460 /* CrisisInterventionViewController.swift in Sources */,
 				A77CE000000000000000001 /* DigitalHumanDiagnosticsViewController.swift in Sources */,
 				A78CE000000000000000001 /* DigitalHumanPlaybackEvidenceStore.swift in Sources */,

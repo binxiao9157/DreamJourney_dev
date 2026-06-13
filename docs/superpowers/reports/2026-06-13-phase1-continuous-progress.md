@@ -244,6 +244,26 @@
 - 时空信箱本机通知不再暴露收件人姓名；后端同步继续保持 metadata-only，不包含 `body`、`replyText` 或 `bodyPreview`。
 - 数字人启动超时不再显示 loading 壳层；只有真人 video surface ready 后才淡入。
 
+### 20. 向阳生长：渐进式脱敏锁首版
+
+- 新增 `ConversationWellbeingLimiter`，按本轮连续使用时长和最终用户发言轮次给出三档决策：
+  - `allow`：正常继续。
+  - `nudge`：接近阈值时给出一次温和提醒，引导用户喝水、休息、看看外面的世界。
+  - `limit`：超过阈值后阻止继续开麦，并把当前会话安全收尾。
+- UI 接入点放在两个空档：
+  - 开麦前检查，避免用户已经超过硬限制还继续录音。
+  - AI 播放结束后检查，避免在用户讲话中途打断。
+- 脱敏锁不替代 `SafetyMonitor`：
+  - 生命风险表达仍走全屏危机干预。
+  - 脱敏锁只处理“聊太久/太频繁”的节制边界。
+- 脱敏锁提醒使用 `TGMessage.wellbeingNotice`：
+  - 页面上可见，但不写入 `Stage1MemoryFacade`。
+  - 回忆录生成前会过滤 `wellbeingNotice`，避免“今天先到这里”等边界提示污染记忆沉淀。
+- 新增并纳入 `verify_phase1.sh`：
+  - `Scripts/ConversationWellbeingLimiterVerify/main.swift`
+  - `Scripts/ConversationWellbeingUIVerify/main.py`
+  - `Scripts/ConversationWellbeingMemoryBoundaryVerify/main.py`
+
 ## 真机验收建议
 
 ### 记忆档案馆

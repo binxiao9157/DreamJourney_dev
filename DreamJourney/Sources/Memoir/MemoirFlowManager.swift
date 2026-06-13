@@ -361,7 +361,7 @@ final class MemoirFlowManager {
                 return DialogMessage(role: "user", text: text, privacyMetadata: privacyMetadata)
             case .ai(let text, _):
                 return DialogMessage(role: "ai", text: text, privacyMetadata: privacyMetadata)
-            case .photo(_, _), .privacyConfirmation:
+            case .photo(_, _), .wellbeingNotice(_, _), .privacyConfirmation:
                 return nil
             }
         }
