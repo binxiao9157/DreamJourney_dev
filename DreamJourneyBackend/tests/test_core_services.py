@@ -159,6 +159,14 @@ class StoreTests(unittest.TestCase):
             store.get_latest_care_snapshot("u1", viewer_family_member_id="fm_daughter")["snapshot"]["summary"],
             "女儿视角",
         )
+        self.assertEqual(
+            [item["snapshot"]["summary"] for item in store.list_care_snapshots("u1", limit=10)],
+            ["全家视角"],
+        )
+        self.assertEqual(
+            [item["snapshot"]["summary"] for item in store.list_care_snapshots("u1", viewer_family_member_id="fm_daughter", limit=10)],
+            ["女儿视角"],
+        )
         self.assertIsNone(store.get_latest_care_snapshot("u2"))
 
     def test_store_marks_family_member_revoked(self):
@@ -262,6 +270,39 @@ class CareSnapshotAPITests(unittest.TestCase):
         response = client.get("/care/snapshots/latest/missing_user")
 
         self.assertEqual(response.status_code, 404)
+
+    def test_care_snapshot_history_api_returns_recent_snapshots_by_viewer(self):
+        client = TestClient(app)
+
+        for index in range(3):
+            response = client.post(
+                "/care/snapshots",
+                json={
+                    "userId": "care_history_user",
+                    "viewerFamilyMemberID": "fm_daughter",
+                    "snapshot": {"riskLevel": "watch", "summary": f"女儿视角 {index}"},
+                },
+            )
+            self.assertEqual(response.status_code, 200)
+        client.post(
+            "/care/snapshots",
+            json={
+                "userId": "care_history_user",
+                "snapshot": {"riskLevel": "stable", "summary": "全家视角"},
+            },
+        )
+
+        history = client.get(
+            "/care/snapshots/care_history_user",
+            params={"viewerFamilyMemberID": "fm_daughter", "limit": 2},
+        )
+        all_family_history = client.get("/care/snapshots/care_history_user", params={"limit": 10})
+
+        self.assertEqual(history.status_code, 200)
+        self.assertEqual(history.json()["items"][0]["snapshot"]["summary"], "女儿视角 2")
+        self.assertEqual(len(history.json()["items"]), 2)
+        self.assertEqual(all_family_history.status_code, 200)
+        self.assertEqual([item["snapshot"]["summary"] for item in all_family_history.json()["items"]], ["全家视角"])
 
 
 class ArchiveAPITests(unittest.TestCase):

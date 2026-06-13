@@ -117,6 +117,45 @@ final class DreamJourneyBackendClient {
         }
     }
 
+    func fetchCareSnapshotHistory(
+        userId: String,
+        viewerFamilyMemberID: String?,
+        limit: Int = 7,
+        completion: @escaping (Result<CareSnapshotHistoryResponse, Swift.Error>) -> Void
+    ) {
+        do {
+            let path = "care/snapshots/\(userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId)"
+            guard var components = URLComponents(url: try endpointURL(path: path), resolvingAgainstBaseURL: false) else {
+                throw Error.invalidURL
+            }
+            var queryItems = [URLQueryItem(name: "limit", value: "\(max(1, min(limit, 30)))")]
+            if let viewerFamilyMemberID, !viewerFamilyMemberID.isEmpty {
+                queryItems.append(URLQueryItem(name: "viewerFamilyMemberID", value: viewerFamilyMemberID))
+            }
+            components.queryItems = queryItems
+            guard let url = components.url else { throw Error.invalidURL }
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.timeoutInterval = timeoutInterval
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            session.dataTask(with: request) { data, response, error in
+                if let error {
+                    completion(.failure(error))
+                    return
+                }
+                do {
+                    try Self.validate(response: response)
+                    let decoded = try Self.jsonDecoder().decode(CareSnapshotHistoryResponse.self, from: data ?? Data())
+                    completion(.success(decoded))
+                } catch {
+                    completion(.failure(error))
+                }
+            }.resume()
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
     func syncArchiveItem(
         userId: String,
         item: MemoryArchiveItem,
@@ -378,6 +417,11 @@ extension DreamJourneyBackendClient {
     struct CareSnapshotLatestResponse: Decodable {
         let userId: String
         let item: CareSnapshotItem
+    }
+
+    struct CareSnapshotHistoryResponse: Decodable {
+        let userId: String
+        let items: [CareSnapshotItem]
     }
 
     struct CareSnapshotItem: Decodable {

@@ -14,28 +14,35 @@ backend_text = backend_main.read_text(encoding="utf-8")
 required_client_fragments = [
     "func syncCareSnapshot",
     "func fetchLatestCareSnapshot",
+    "func fetchCareSnapshotHistory",
     "CareSnapshotResponse",
+    "CareSnapshotHistoryResponse",
     "CareSnapshotItem",
     "path: \"care/snapshots\"",
     "care/snapshots/latest",
+    "care/snapshots/",
     "viewerFamilyMemberID",
 ]
 
 required_vc_fragments = [
     "syncSnapshotToBackend",
     "fetchLatestSnapshotFromBackend",
+    "fetchSnapshotHistoryFromBackend",
     "applyRemoteSnapshotIfUseful",
     "snapshotSourceText",
     "CareSignalSnapshot",
     "DreamJourneyBackendClient.shared.syncCareSnapshot",
     "DreamJourneyBackendClient.shared.fetchLatestCareSnapshot",
+    "DreamJourneyBackendClient.shared.fetchCareSnapshotHistory",
 ]
 
 required_backend_fragments = [
     "@app.post(\"/care/snapshots\")",
     "@app.get(\"/care/snapshots/latest/{user_id}\")",
+    "@app.get(\"/care/snapshots/{user_id}\")",
     "save_care_snapshot",
     "get_latest_care_snapshot",
+    "list_care_snapshots",
 ]
 
 missing = []

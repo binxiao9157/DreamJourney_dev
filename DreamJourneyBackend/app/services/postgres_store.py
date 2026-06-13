@@ -272,6 +272,35 @@ class PostgresStore:
             )
         return None if row is None else deepcopy(row["payload"])
 
+    def list_care_snapshots(
+        self,
+        user_id: str,
+        viewer_family_member_id: Optional[str] = None,
+        limit: int = 7,
+    ) -> List[Dict[str, Any]]:
+        bounded_limit = max(1, min(limit, 30))
+        if viewer_family_member_id is None:
+            rows = self._fetchall(
+                """
+                SELECT payload FROM care_snapshots
+                WHERE user_id = %s AND viewer_family_member_id IS NULL
+                ORDER BY created_at DESC
+                LIMIT %s
+                """,
+                (user_id, bounded_limit),
+            )
+        else:
+            rows = self._fetchall(
+                """
+                SELECT payload FROM care_snapshots
+                WHERE user_id = %s AND viewer_family_member_id = %s
+                ORDER BY created_at DESC
+                LIMIT %s
+                """,
+                (user_id, viewer_family_member_id, bounded_limit),
+            )
+        return [deepcopy(row["payload"]) for row in rows]
+
     def _insert_payload(self, table: str, user_id: str, item: Dict[str, Any]) -> Dict[str, Any]:
         row = self._fetchone(
             f"""

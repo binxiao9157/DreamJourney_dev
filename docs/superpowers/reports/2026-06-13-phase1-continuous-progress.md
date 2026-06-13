@@ -113,6 +113,18 @@
   - 同步失败时明确提示“本机副本已保存”，不阻断建库。
 - 隐私策略同步修正：`backendSync` 现在表示“同步到自有后端长期保存/联调”，不是公开分享；私密和本机素材仍不出端。
 
+### 11. 长辈关怀看板：历史脱敏快照后端拉取
+
+- 后端新增 `GET /care/snapshots/{userId}`，支持：
+  - `viewerFamilyMemberID`：按亲友成员视角过滤。
+  - `limit`：返回最近 N 条，服务端限制在 1-30。
+- InMemoryStore 和 PostgresStore 都新增 `list_care_snapshots`，与 `latest` 逻辑保持同一视角过滤。
+- iOS `DreamJourneyBackendClient` 新增 `fetchCareSnapshotHistory`。
+- 关怀看板在本机无可用 familyCircle 对话时，优先拉取后端历史快照列表：
+  - 有历史时使用最新一条渲染页面，数据源显示为“服务器同步历史 x 条”。
+  - 历史为空或请求失败时，再回落到原来的 latest 快照兜底。
+- 仍只展示脱敏聚合信号，不拉取或显示原始 transcript。
+
 ## 真机验收建议
 
 ### 记忆档案馆
@@ -153,6 +165,7 @@
 - 亲友接受邀请会写入后端 `accessStatus=active`、`invitationStatus=accepted`。
 - 亲友撤回会写入后端 `accessStatus=revoked`，再次拉取成员时仍可识别撤回状态。
 - 关怀看板快照可按 `viewerFamilyMemberID` 上传/拉取。
+- 关怀看板历史快照可按 `viewerFamilyMemberID` 拉取最近 N 条；本机无数据时页面会显示“服务器同步历史 x 条”。
 
 ## 已运行验证
 
@@ -163,7 +176,7 @@
 - `CareDashboardBackendSync verification passed`
 - `MemoryArchiveBackendSync verification passed`
 - `FamilyBackendSync verification passed`
-- `DreamJourneyBackend unittest 24/24 OK`
+- `DreamJourneyBackend unittest 25/25 OK`
 - `PrivacyScope verification passed`
 - `MemoryPrivacyIntegration verification passed`
 - `LocalTestDataCleanup verification passed`

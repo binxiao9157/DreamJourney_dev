@@ -132,6 +132,19 @@ class InMemoryStore:
                 return deepcopy(item)
         return None
 
+    def list_care_snapshots(
+        self,
+        user_id: str,
+        viewer_family_member_id: Optional[str] = None,
+        limit: int = 7,
+    ) -> List[Dict[str, Any]]:
+        snapshots = self._care_snapshots.get(user_id, [])
+        filtered = [
+            item for item in snapshots
+            if item.get("viewerFamilyMemberID") == viewer_family_member_id
+        ]
+        return deepcopy(filtered[:max(1, min(limit, 30))])
+
     @staticmethod
     def _now() -> str:
         return datetime.now(timezone.utc).isoformat()

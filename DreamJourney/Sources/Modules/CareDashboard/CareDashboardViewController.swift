@@ -121,7 +121,7 @@ final class CareDashboardViewController: UIViewController {
         if localSnapshot.userTurnCount > 0 {
             syncSnapshotToBackend(localSnapshot)
         } else {
-            fetchLatestSnapshotFromBackend()
+            fetchSnapshotHistoryFromBackend()
         }
     }
 
@@ -153,7 +153,7 @@ final class CareDashboardViewController: UIViewController {
             DispatchQueue.main.async {
                 switch result {
                 case .success(let response):
-                    self?.applyRemoteSnapshotIfUseful(response.item.snapshot)
+                    self?.applyRemoteSnapshotIfUseful(response.item.snapshot, sourceText: "服务器同步快照")
                 case .failure(let error):
                     print("[CareDashboard] 后端快照拉取失败: \(error.localizedDescription)")
                 }
@@ -161,12 +161,41 @@ final class CareDashboardViewController: UIViewController {
         }
     }
 
-    private func applyRemoteSnapshotIfUseful(_ remoteSnapshot: CareSignalSnapshot) {
+    private func fetchSnapshotHistoryFromBackend() {
+        guard DreamJourneyBackendClient.shared.isConfigured,
+              let userId = UserManager.shared.currentUser?.id else {
+            return
+        }
+        DreamJourneyBackendClient.shared.fetchCareSnapshotHistory(
+            userId: userId,
+            viewerFamilyMemberID: viewerFamilyMemberID,
+            limit: 7
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let response):
+                    if let latest = response.items.first?.snapshot {
+                        self?.applyRemoteSnapshotIfUseful(
+                            latest,
+                            sourceText: "服务器同步历史 \(response.items.count) 条"
+                        )
+                    } else {
+                        self?.fetchLatestSnapshotFromBackend()
+                    }
+                case .failure(let error):
+                    print("[CareDashboard] 后端历史快照拉取失败: \(error.localizedDescription)")
+                    self?.fetchLatestSnapshotFromBackend()
+                }
+            }
+        }
+    }
+
+    private func applyRemoteSnapshotIfUseful(_ remoteSnapshot: CareSignalSnapshot, sourceText: String) {
         guard (snapshot?.userTurnCount ?? 0) == 0, remoteSnapshot.userTurnCount > 0 else {
             return
         }
         snapshot = remoteSnapshot
-        snapshotSourceText = "服务器同步快照"
+        snapshotSourceText = sourceText
         render()
     }
 

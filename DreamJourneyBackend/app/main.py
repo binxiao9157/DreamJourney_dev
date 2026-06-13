@@ -249,3 +249,18 @@ def latest_care_snapshot(user_id: str, viewerFamilyMemberID: str = None) -> Dict
     if item is None:
         raise HTTPException(status_code=404, detail="care snapshot not found")
     return {"userId": user_id, "item": item}
+
+
+@app.get("/care/snapshots/{user_id}")
+def care_snapshot_history(
+    user_id: str,
+    viewerFamilyMemberID: str = None,
+    limit: int = 7,
+) -> Dict[str, Any]:
+    viewer_family_member_id = viewerFamilyMemberID.strip() if viewerFamilyMemberID else None
+    items = store.list_care_snapshots(
+        user_id,
+        viewer_family_member_id=viewer_family_member_id,
+        limit=limit,
+    )
+    return {"userId": user_id, "items": items}
