@@ -1767,6 +1767,14 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
         case error
     }
 
+    private let startupPosterImageView: UIImageView = {
+        let imageView = UIImageView(image: UIImage(named: "avatar_poster"))
+        imageView.contentMode = .scaleAspectFit
+        imageView.backgroundColor = .clear
+        imageView.isUserInteractionEnabled = false
+        imageView.alpha = 1
+        return imageView
+    }()
     private let webView: WKWebView
     private let schemeHandler: AvatarWebResourceSchemeHandler
     private var currentState: AvatarState = .idle
@@ -1880,9 +1888,21 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
         webView.scrollView.isScrollEnabled = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
 
+        addSubview(startupPosterImageView)
         addSubview(webView)
+        startupPosterImageView.translatesAutoresizingMaskIntoConstraints = false
         webView.translatesAutoresizingMaskIntoConstraints = false
+
+        let posterWidth = startupPosterImageView.widthAnchor.constraint(equalTo: widthAnchor, multiplier: 0.60)
+        posterWidth.priority = UILayoutPriority(999)
         NSLayoutConstraint.activate([
+            startupPosterImageView.centerXAnchor.constraint(equalTo: centerXAnchor),
+            startupPosterImageView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: 8),
+            posterWidth,
+            startupPosterImageView.widthAnchor.constraint(lessThanOrEqualToConstant: 220),
+            startupPosterImageView.heightAnchor.constraint(equalTo: startupPosterImageView.widthAnchor, multiplier: 974.0 / 720.0),
+            startupPosterImageView.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, constant: -48),
+
             webView.topAnchor.constraint(equalTo: topAnchor),
             webView.leadingAnchor.constraint(equalTo: leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: trailingAnchor),
@@ -1965,6 +1985,9 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
         )
         UIView.animate(withDuration: 0.18, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
             self.webView.alpha = 1
+            self.startupPosterImageView.alpha = 0
+        } completion: { _ in
+            self.startupPosterImageView.isHidden = true
         }
     }
 

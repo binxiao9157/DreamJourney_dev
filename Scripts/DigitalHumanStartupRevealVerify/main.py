@@ -20,7 +20,11 @@ missing = []
 required_vc_fragments = [
     "private var didRevealInitialAvatar = false",
     "private var initialAvatarRevealFallbackWorkItem",
+    "private let startupPosterImageView",
+    'UIImage(named: "avatar_poster")',
+    "addSubview(startupPosterImageView)",
     "webView.alpha = 1",
+    "startupPosterImageView.alpha = 0",
     "scheduleInitialAvatarRevealFallback()",
     "revealInitialAvatarIfNeeded(reason:",
     "avatar_video_surface_ready",
