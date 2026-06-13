@@ -24,7 +24,7 @@ final class TimeMailboxViewController: UIViewController {
 
     private let boundaryLabel: UILabel = {
         let label = UILabel()
-        label.text = "信件默认只保存在时空信箱；回声基于已整理记忆生成，不是逝者真实回复。打开信箱后会刷新投递状态。"
+        label.text = "信件默认只保存在时空信箱；未来投递会安排本机提醒。回声基于已整理记忆生成，不是逝者真实回复。"
         label.font = .systemFont(ofSize: 13)
         label.textColor = .warmSubtitle
         label.numberOfLines = 0
@@ -197,7 +197,7 @@ final class TimeMailboxViewController: UIViewController {
         }
 
         do {
-            _ = try repository.createLetter(
+            let letter = try repository.createLetter(
                 recipientName: draft.recipientName,
                 title: draft.title,
                 body: draft.body,
@@ -205,8 +205,9 @@ final class TimeMailboxViewController: UIViewController {
                 boundaryAcknowledged: draft.boundaryAcknowledged,
                 privacyMetadata: draft.privacyMetadata
             )
+            TimeMailboxNotificationScheduler.shared.scheduleDeliveryNotification(for: letter)
             dismiss(animated: true) { [weak self] in
-                self?.showToast("信已封存", type: .success)
+                self?.showToast(letter.deliverAt > Date() ? "信已封存，到点会提醒" : "信已封存", type: .success)
                 self?.reloadLetters()
             }
         } catch TimeMailboxRepositoryError.invalidRecipient {

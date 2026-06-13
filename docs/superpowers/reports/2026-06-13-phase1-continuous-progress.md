@@ -31,12 +31,19 @@
 - 没有匹配记忆时明确说明“不会替Ta编造具体经历”。
 - 所有回声继续保留“不是逝者真实回复”的边界声明。
 
-### 4. 数字人首帧切换修复仍保留
+### 4. 时空信箱：未来投递本机提醒
+
+- 新增 `TimeMailboxNotificationScheduler`。
+- 用户封存未来投递信件时，会通过 `UNUserNotificationCenter` 注册本机通知。
+- 通知只包含“有信到达”和收件人提示，不暴露信件正文。
+- 打开信箱仍会刷新投递状态，通知只是提醒用户回到信箱查看。
+
+### 5. 数字人首帧切换修复仍保留
 
 - 真视频/画布首帧未 ready 前，不再先显示假的 fallback 人像再切换。
 - spinner 文案保持“正在准备真人数字人”，直到真实视频首帧 ready。
 
-### 5. 演示数据污染检查
+### 6. 演示数据污染检查
 
 - `RoadshowDemoSeed.applyIfRequested` 只有在显式启动参数或环境变量存在时才会注入演示数据：
   - `--seed-roadshow-demo`
@@ -48,7 +55,7 @@
 - 足迹页当前 `shouldIncludeDemoExpansion` 默认为 `false`，真实模式不会合并 roadshow expansion points。
 - 如果真机仍看到旧路演家庭/妈妈/示例足迹，大概率来自旧安装残留容器数据，可在数字人诊断页使用“清理本机测试数据”入口处理。
 
-### 6. 真机测试数据清理入口
+### 7. 真机测试数据清理入口
 
 - 数字人诊断页新增“清理本机测试数据”，带二次确认。
 - 清理范围：路演 seed/offline 标记、时空信箱、记忆档案、足迹已读/弹跳状态、路演路线完成状态、对话记忆、KBLite 本机图谱、归档照片、归档语音素材、回忆录本机目录。
@@ -56,7 +63,7 @@
 - 本机清理调用 `KBLiteManager.reset(syncToBackend: false)`，不会把空知识库同步到业务后端。
 - 新增 `Scripts/LocalTestDataCleanupVerify/main.py`，并接入 `Scripts/verify_phase1.sh`。
 
-### 7. 长辈关怀看板：脱敏快照后端闭环
+### 8. 长辈关怀看板：脱敏快照后端闭环
 
 - 后端新增 `care_snapshots` 存储：
   - `POST /care/snapshots`
@@ -95,6 +102,7 @@
    - “不是逝者真实回复”。
    - 如有匹配，出现“我能参考到的已授权记忆”。
    - 如无匹配，明确说明不会编造具体经历。
+6. 如果选择未来投递，首次使用时系统会请求通知权限；到点后预期收到“时空信箱有一封信到达”的本机提醒。
 
 ### 长辈关怀看板
 
@@ -108,6 +116,7 @@
 
 - `MemoryArchive verification passed`
 - `TimeMailbox verification passed`
+- `TimeMailboxNotification verification passed`
 - `CareDashboard verification passed`
 - `CareDashboardBackendSync verification passed`
 - `DreamJourneyBackend unittest 15/15 OK`
@@ -120,6 +129,5 @@
 
 ## 下一步
 
-1. 为时空信箱补本地通知或服务端投递状态，避免必须打开页面才刷新。
-2. 继续推进亲友真实成员/邀请/撤回状态后端化，替代本机 UserDefaults。
-3. 补真机证据包：档案入库截图、结构化知识库截图、信箱回声截图、关怀周报导出文本。
+1. 继续推进亲友真实成员/邀请/撤回状态后端化，替代本机 UserDefaults。
+2. 补真机证据包：档案入库截图、结构化知识库截图、信箱回声截图、关怀周报导出文本。
