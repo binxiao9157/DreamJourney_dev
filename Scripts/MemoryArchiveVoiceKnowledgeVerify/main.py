@@ -32,6 +32,15 @@ checks = [
         "archiveItemID: item.id" in save_voice_body,
     ),
     (
+        "voice import should collect optional transcript or summary for real memory deposit",
+        "voiceTranscriptNote" in view and "这段语音讲了什么" in view,
+    ),
+    (
+        "voice transcript should be deposited as archive text with a voice transcript material kind",
+        "ingestArchiveTextMaterialDetailed" in save_voice_body
+        and 'archiveMaterialKind: "语音转写"' in save_voice_body,
+    ),
+    (
         "archive text ingestion should pass concrete archive item id",
         "ingestArchiveTextMaterial" in view and "archiveItemID: item.id" in view and "archiveTitle: item.title" in view,
     ),

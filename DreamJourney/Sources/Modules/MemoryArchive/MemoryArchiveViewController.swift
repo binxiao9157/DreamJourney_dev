@@ -712,7 +712,7 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
     private func presentVoicePersonChoice(title: String, storedPath: String) {
         let alert = UIAlertController(
             title: "这是谁的声音",
-            message: "填写具体姓名后，3 段以上语音会形成这个人的声纹档案。请不要只写“妈妈/奶奶”这类泛称。",
+            message: "填写具体姓名后，3 段以上语音会形成这个人的声纹档案。也可以补一句转写或摘要，用于沉淀这段语音里的真实记忆。",
             preferredStyle: .alert
         )
         alert.addTextField { field in
@@ -720,12 +720,28 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
             field.text = MemoryArchiveVoiceProfileStore.shared.profile(for: title)?.personName
             field.clearButtonMode = .whileEditing
         }
-        alert.addAction(UIAlertAction(title: "跳过", style: .default) { [weak self] _ in
-            self?.presentVoicePrivacyChoice(title: title, storedPath: storedPath, targetPersonName: nil)
+        alert.addTextField { field in
+            field.placeholder = "这段语音讲了什么（可选）"
+            field.clearButtonMode = .whileEditing
+        }
+        alert.addAction(UIAlertAction(title: "跳过", style: .default) { [weak self, weak alert] _ in
+            let voiceTranscriptNote = alert?.textFields?.dropFirst().first?.text?.nilIfEmpty
+            self?.presentVoicePrivacyChoice(
+                title: title,
+                storedPath: storedPath,
+                targetPersonName: nil,
+                voiceTranscriptNote: voiceTranscriptNote
+            )
         })
         alert.addAction(UIAlertAction(title: "下一步", style: .default) { [weak self, weak alert] _ in
             let personName = alert?.textFields?.first?.text?.nilIfEmpty
-            self?.presentVoicePrivacyChoice(title: title, storedPath: storedPath, targetPersonName: personName)
+            let voiceTranscriptNote = alert?.textFields?.dropFirst().first?.text?.nilIfEmpty
+            self?.presentVoicePrivacyChoice(
+                title: title,
+                storedPath: storedPath,
+                targetPersonName: personName,
+                voiceTranscriptNote: voiceTranscriptNote
+            )
         })
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
         present(alert, animated: true)
@@ -734,7 +750,8 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
     private func presentVoicePrivacyChoice(
         title: String,
         storedPath: String,
-        targetPersonName: String?
+        targetPersonName: String?,
+        voiceTranscriptNote: String?
     ) {
         let alert = UIAlertController(
             title: "语音素材保存方式",
@@ -746,7 +763,8 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
                 title: title,
                 storedPath: storedPath,
                 privacyMetadata: MemoryPrivacyMetadata(scope: .privateOnly),
-                targetPersonName: targetPersonName
+                targetPersonName: targetPersonName,
+                voiceTranscriptNote: voiceTranscriptNote
             )
         })
         alert.addAction(UIAlertAction(title: "本机", style: .default) { [weak self] _ in
@@ -754,7 +772,8 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
                 title: title,
                 storedPath: storedPath,
                 privacyMetadata: MemoryPrivacyMetadata(scope: .localOnly),
-                targetPersonName: targetPersonName
+                targetPersonName: targetPersonName,
+                voiceTranscriptNote: voiceTranscriptNote
             )
         })
         alert.addAction(UIAlertAction(title: "可生成", style: .default) { [weak self] _ in
@@ -762,11 +781,17 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
                 title: title,
                 storedPath: storedPath,
                 privacyMetadata: MemoryPrivacyMetadata(scope: MemoryPrivacyMigration.scopeForExplicitGenerationAuthorization()),
-                targetPersonName: targetPersonName
+                targetPersonName: targetPersonName,
+                voiceTranscriptNote: voiceTranscriptNote
             )
         })
         alert.addAction(UIAlertAction(title: "亲友", style: .default) { [weak self] _ in
-            self?.presentVoiceFamilyVisibilityChoice(title: title, storedPath: storedPath, targetPersonName: targetPersonName)
+            self?.presentVoiceFamilyVisibilityChoice(
+                title: title,
+                storedPath: storedPath,
+                targetPersonName: targetPersonName,
+                voiceTranscriptNote: voiceTranscriptNote
+            )
         })
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
         alert.popoverPresentationController?.sourceView = view
@@ -782,7 +807,8 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
     private func presentVoiceFamilyVisibilityChoice(
         title: String,
         storedPath: String,
-        targetPersonName: String?
+        targetPersonName: String?,
+        voiceTranscriptNote: String?
     ) {
         let picker = FamilyVisibilityPickerViewController()
         picker.onSelect = { [weak self] selection in
@@ -793,7 +819,8 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
                     scope: MemoryPrivacyMigration.scopeForExplicitFamilyAuthorization(),
                     familyVisibility: selection.visibility
                 ),
-                targetPersonName: targetPersonName
+                targetPersonName: targetPersonName,
+                voiceTranscriptNote: voiceTranscriptNote
             )
         }
 
@@ -809,14 +836,16 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
         title: String,
         storedPath: String,
         privacyMetadata: MemoryPrivacyMetadata,
-        targetPersonName: String?
+        targetPersonName: String?,
+        voiceTranscriptNote: String?
     ) {
         do {
+            let voiceTranscriptText = Self.voiceTranscriptInputText(from: voiceTranscriptNote)
             var item = try repository.addVoiceSample(
                 localPath: storedPath,
                 title: title,
-                note: "导入的长辈语音样本，用于后续声纹和语气参考。",
-                tags: ["语音样本"],
+                note: Self.voiceSampleNote(from: voiceTranscriptText),
+                tags: voiceTranscriptText == nil ? ["语音样本"] : ["语音样本", "语音转写"],
                 isPrivate: privacyMetadata.scope == .privateOnly,
                 privacyMetadata: privacyMetadata,
                 targetPersonName: targetPersonName
@@ -840,10 +869,43 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
                     targetPersonName: item.targetPersonName
                 ) { [weak self] addedCount in
                     DispatchQueue.main.async {
+                        guard voiceTranscriptText == nil else {
+                            if addedCount > 0 {
+                                self?.setKnowledgeDepositStatus("结构化建库：语音样本元信息已记录，正在整理转写")
+                            }
+                            return
+                        }
                         if addedCount == 0 {
                             self?.setKnowledgeDepositStatus("结构化建库：语音素材已保存，暂无可抽取的新知识")
                         } else {
                             self?.setKnowledgeDepositStatus("结构化建库：语音样本元信息已沉淀 \(addedCount) 条")
+                        }
+                    }
+                }
+                if let voiceTranscriptText {
+                    Stage1MemoryFacade.shared.ingestArchiveTextMaterialDetailed(
+                        Stage1MailboxMemoryInput(
+                            voiceTranscriptText,
+                            timestamp: item.createdAt,
+                            privacyMetadata: item.privacyMetadata
+                        ),
+                        archiveItemID: item.id,
+                        archiveTitle: item.title,
+                        archiveMaterialKind: "语音转写"
+                    ) { [weak self] result in
+                        DispatchQueue.main.async {
+                            guard let self else { return }
+                            let textStatus = self.archiveTextDepositStatusMessage(result)
+                            self.setKnowledgeDepositStatus(
+                                textStatus.replacingOccurrences(
+                                    of: "结构化建库：文字素材",
+                                    with: "结构化建库：语音转写"
+                                )
+                            )
+                            if result.knowledgeAddedCount > 0 {
+                                self.showToast("语音转写已整理到知识库 \(result.knowledgeAddedCount) 条", type: .success)
+                            }
+                            self.reloadData()
                         }
                     }
                 }
@@ -856,6 +918,20 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
         } catch {
             showToast("语音素材保存失败", type: .error)
         }
+    }
+
+    private static func voiceTranscriptInputText(from voiceTranscriptNote: String?) -> String? {
+        let cleaned = voiceTranscriptNote?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .nilIfEmpty
+        return cleaned
+    }
+
+    private static func voiceSampleNote(from voiceTranscriptText: String?) -> String {
+        guard let voiceTranscriptText else {
+            return "导入的长辈语音样本，用于后续声纹和语气参考。"
+        }
+        return "导入的长辈语音样本，用于后续声纹和语气参考。\n语音转写/摘要：\(voiceTranscriptText)"
     }
 
     private func handleVoiceProfileStatus(
