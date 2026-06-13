@@ -49,6 +49,8 @@ final class KBLiteManager {
     /// 后端同步队列（串行，保存后防抖同步）
     private let backendSyncQueue = DispatchQueue(label: "com.dreamjourney.kblite.backendSync")
     private var pendingBackendSyncWorkItem: DispatchWorkItem?
+    private var didAttemptBackendBootstrapForUserId: String?
+    private var isFetchingBackendSnapshot = false
 
     /// 是否已输出过容量警告
     private var didWarnCapacity = false
@@ -68,6 +70,35 @@ final class KBLiteManager {
         block(&graph)
         graphLock.unlock()
         save()
+    }
+
+    func reloadForCurrentUser(bootstrapFromBackend: Bool = true) {
+        pendingBackendSyncWorkItem?.cancel()
+        didAttemptBackendBootstrapForUserId = nil
+        isFetchingBackendSnapshot = false
+
+        graphLock.lock()
+        graph = KBLiteGraph()
+        graphLock.unlock()
+
+        load()
+        if bootstrapFromBackend {
+            bootstrapFromBackendIfNeeded()
+        }
+    }
+
+    func clearForLoggedOutUser() {
+        pendingBackendSyncWorkItem?.cancel()
+        didAttemptBackendBootstrapForUserId = nil
+        isFetchingBackendSnapshot = false
+
+        graphLock.lock()
+        graph = KBLiteGraph()
+        graphLock.unlock()
+
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .kbLiteDidUpdate, object: nil)
+        }
     }
 
     // MARK: - File Path
@@ -123,6 +154,9 @@ final class KBLiteManager {
     }
 
     private func scheduleBackendSync() {
+#if MEMORY_PRIVACY_INTEGRATION_VERIFY
+        return
+#else
         guard DreamJourneyBackendClient.shared.isConfigured else { return }
         guard let userId = UserManager.shared.currentUser?.id else { return }
 
@@ -135,9 +169,13 @@ final class KBLiteManager {
             self.pendingBackendSyncWorkItem = workItem
             self.backendSyncQueue.asyncAfter(deadline: .now() + 2.0, execute: workItem)
         }
+#endif
     }
 
     private func syncToBackend(userId: String) {
+#if MEMORY_PRIVACY_INTEGRATION_VERIFY
+        return
+#else
         guard let graphJSON = exportJSON(surface: .backendSync), !graphJSON.isEmpty else {
             return
         }
@@ -149,6 +187,233 @@ final class KBLiteManager {
                 print("[KBLite] ⚠️ 后端同步失败（不影响本地）: \(error.localizedDescription)")
             }
         }
+#endif
+    }
+
+    func bootstrapFromBackendIfNeeded(force: Bool = false, completion: @escaping (Bool) -> Void = { _ in }) {
+#if MEMORY_PRIVACY_INTEGRATION_VERIFY
+        completion(false)
+#else
+        guard DreamJourneyBackendClient.shared.isConfigured else {
+            completion(false)
+            return
+        }
+        guard let userId = UserManager.shared.currentUser?.id else {
+            completion(false)
+            return
+        }
+
+        backendSyncQueue.async { [weak self] in
+            guard let self else { return }
+            guard force || self.didAttemptBackendBootstrapForUserId != userId else {
+                DispatchQueue.main.async { completion(false) }
+                return
+            }
+            guard !self.isFetchingBackendSnapshot else {
+                DispatchQueue.main.async { completion(false) }
+                return
+            }
+            self.didAttemptBackendBootstrapForUserId = userId
+            self.isFetchingBackendSnapshot = true
+
+            DreamJourneyBackendClient.shared.fetchKnowledgeBaseSnapshot(userId: userId) { [weak self] result in
+                guard let self else { return }
+                self.backendSyncQueue.async {
+                    self.isFetchingBackendSnapshot = false
+                }
+                switch result {
+                case .success(let response):
+                    let didApply = self.applyRemoteSnapshotIfUseful(response.graph)
+                    DispatchQueue.main.async { completion(didApply) }
+                case .failure(let error):
+                    print("[KBLite] ⚠️ 后端知识库快照拉取失败（不影响本地）: \(error.localizedDescription)")
+                    DispatchQueue.main.async { completion(false) }
+                }
+            }
+        }
+#endif
+    }
+
+    @discardableResult
+    func applyRemoteSnapshotIfUseful(_ remoteSnapshot: KBLiteGraph) -> Bool {
+        var remote = remoteSnapshot
+        _ = removeLegacyOrLowQualityEntities(from: &remote)
+        guard !remote.people.isEmpty || !remote.places.isEmpty || !remote.events.isEmpty || !remote.facts.isEmpty else {
+            return false
+        }
+
+        var didChange = false
+        graphLock.lock()
+        didChange = mergeRemotePeople(remote.people) || didChange
+        didChange = mergeRemotePlaces(remote.places) || didChange
+        didChange = mergeRemoteEvents(remote.events) || didChange
+        didChange = mergeRemoteFacts(remote.facts) || didChange
+        if remote.sessionCount > graph.sessionCount {
+            graph.sessionCount = remote.sessionCount
+            didChange = true
+        }
+        graphLock.unlock()
+
+        if didChange {
+            save(scheduleBackendSync: false)
+            print("[KBLite] ☁️ 已合并后端知识库快照")
+        }
+        return didChange
+    }
+
+    private func mergeRemotePeople(_ remotePeople: [KBPerson]) -> Bool {
+        var didChange = false
+        for remote in remotePeople {
+            guard Self.shouldPersistPerson(
+                name: remote.name,
+                aliases: remote.aliases,
+                traits: remote.traits,
+                briefBio: remote.briefBio
+            ) else { continue }
+
+            if let idx = graph.people.firstIndex(where: {
+                $0.id == remote.id ||
+                    ($0.name == remote.name &&
+                     KBLitePrivacyScopePolicy.canMerge(existing: $0.privacyMetadata, incoming: remote.privacyMetadata))
+            }) {
+                var person = graph.people[idx]
+                if appendUnique(remote.aliases.filter { $0 != person.name }, to: &person.aliases) { didChange = true }
+                if appendUnique(remote.traits, to: &person.traits) { didChange = true }
+                if appendUnique(remote.relatedPersonIds, to: &person.relatedPersonIds) { didChange = true }
+                if appendUnique(remote.sourceSessionIds, to: &person.sourceSessionIds) { didChange = true }
+                if person.relation == nil, let relation = remote.relation {
+                    person.relation = relation
+                    didChange = true
+                }
+                if person.briefBio == nil, let briefBio = remote.briefBio {
+                    person.briefBio = briefBio
+                    didChange = true
+                }
+                if remote.updatedAt > person.updatedAt {
+                    person.updatedAt = remote.updatedAt
+                    didChange = true
+                }
+                graph.people[idx] = person
+            } else if graph.people.count < maxPeople {
+                graph.people.append(remote)
+                didChange = true
+            }
+        }
+        return didChange
+    }
+
+    private func mergeRemotePlaces(_ remotePlaces: [KBPlace]) -> Bool {
+        var didChange = false
+        for remote in remotePlaces where remote.name.count >= 2 {
+            if let idx = graph.places.firstIndex(where: {
+                $0.id == remote.id ||
+                    ($0.name == remote.name &&
+                     KBLitePrivacyScopePolicy.canMerge(existing: $0.privacyMetadata, incoming: remote.privacyMetadata))
+            }) {
+                var place = graph.places[idx]
+                if place.category == nil, let category = remote.category {
+                    place.category = category
+                    didChange = true
+                }
+                if place.description == nil, let description = remote.description {
+                    place.description = description
+                    didChange = true
+                }
+                if place.latitude == nil, let latitude = remote.latitude {
+                    place.latitude = latitude
+                    didChange = true
+                }
+                if place.longitude == nil, let longitude = remote.longitude {
+                    place.longitude = longitude
+                    didChange = true
+                }
+                if appendUnique(remote.relatedPersonIds, to: &place.relatedPersonIds) { didChange = true }
+                if appendUnique(remote.sourceSessionIds, to: &place.sourceSessionIds) { didChange = true }
+                graph.places[idx] = place
+            } else if graph.places.count < maxPlaces {
+                graph.places.append(remote)
+                didChange = true
+            }
+        }
+        return didChange
+    }
+
+    private func mergeRemoteEvents(_ remoteEvents: [KBEvent]) -> Bool {
+        var didChange = false
+        for remote in remoteEvents where !remote.title.isEmpty {
+            if let idx = graph.events.firstIndex(where: {
+                $0.id == remote.id ||
+                    ($0.title == remote.title &&
+                     $0.year == remote.year &&
+                     KBLitePrivacyScopePolicy.canMerge(existing: $0.privacyMetadata, incoming: remote.privacyMetadata))
+            }) {
+                var event = graph.events[idx]
+                if event.description == nil, let description = remote.description {
+                    event.description = description
+                    didChange = true
+                }
+                if event.year == nil, let year = remote.year {
+                    event.year = year
+                    didChange = true
+                }
+                if event.month == nil, let month = remote.month {
+                    event.month = month
+                    didChange = true
+                }
+                if event.locationId == nil, let locationId = remote.locationId {
+                    event.locationId = locationId
+                    didChange = true
+                }
+                if event.memoirId == nil, let memoirId = remote.memoirId {
+                    event.memoirId = memoirId
+                    didChange = true
+                }
+                if appendUnique(remote.participantIds, to: &event.participantIds) { didChange = true }
+                if appendUnique(remote.mediaIds, to: &event.mediaIds) { didChange = true }
+                if appendUnique(remote.sourceSessionIds, to: &event.sourceSessionIds) { didChange = true }
+                graph.events[idx] = event
+            } else if graph.events.count < maxEvents {
+                graph.events.append(remote)
+                didChange = true
+            }
+        }
+        return didChange
+    }
+
+    private func mergeRemoteFacts(_ remoteFacts: [KBFact]) -> Bool {
+        var didChange = false
+        for remote in remoteFacts where remote.statement.count >= 4 {
+            if let idx = graph.facts.firstIndex(where: {
+                $0.id == remote.id ||
+                    ($0.statement == remote.statement &&
+                     KBLitePrivacyScopePolicy.canMerge(existing: $0.privacyMetadata, incoming: remote.privacyMetadata))
+            }) {
+                var fact = graph.facts[idx]
+                if fact.confidence != remote.confidence, fact.confidence != "confirmed" {
+                    fact.confidence = remote.confidence
+                    didChange = true
+                }
+                if appendUnique(remote.relatedPersonIds, to: &fact.relatedPersonIds) { didChange = true }
+                if appendUnique(remote.relatedPlaceIds, to: &fact.relatedPlaceIds) { didChange = true }
+                if appendUnique(remote.relatedEventIds, to: &fact.relatedEventIds) { didChange = true }
+                if appendUnique(remote.sourceSessionIds, to: &fact.sourceSessionIds) { didChange = true }
+                graph.facts[idx] = fact
+            } else if graph.facts.count < maxFacts {
+                graph.facts.append(remote)
+                didChange = true
+            }
+        }
+        return didChange
+    }
+
+    @discardableResult
+    private func appendUnique<T: Equatable>(_ values: [T], to target: inout [T]) -> Bool {
+        var didChange = false
+        for value in values where !target.contains(value) {
+            target.append(value)
+            didChange = true
+        }
+        return didChange
     }
 
     /// 将事件数据写入 App Group 共享容器，供 Widget Extension 读取

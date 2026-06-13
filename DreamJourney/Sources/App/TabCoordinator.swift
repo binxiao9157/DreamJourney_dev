@@ -17,6 +17,7 @@ final class TabCoordinator: Coordinator {
     func start() {
         setupTabs()
         configureAppearance()
+        KBLiteManager.shared.bootstrapFromBackendIfNeeded()
         familyInvitationObserver = NotificationCenter.default.addObserver(
             forName: .djFamilyInvitationDeepLinkReceived,
             object: nil,

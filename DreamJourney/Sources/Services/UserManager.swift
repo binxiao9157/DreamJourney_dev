@@ -22,6 +22,7 @@ final class UserManager {
         )
         currentUser = user
         saveToDefaults()
+        KBLiteManager.shared.reloadForCurrentUser()
         NotificationCenter.default.post(name: .djUserDidLogin, object: nil)
     }
 
@@ -30,6 +31,7 @@ final class UserManager {
         currentUser = nil
         UserDefaults.standard.removeObject(forKey: kUserKey)
         UserDefaults.standard.removeObject(forKey: kLoggedInKey)
+        KBLiteManager.shared.clearForLoggedOutUser()
         NotificationCenter.default.post(name: .djUserDidLogout, object: nil)
     }
 

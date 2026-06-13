@@ -44,6 +44,20 @@ final class DreamJourneyBackendClient {
         )
     }
 
+    func fetchKnowledgeBaseSnapshot(
+        userId: String,
+        completion: @escaping (Result<KBSnapshotResponse, Swift.Error>) -> Void
+    ) {
+        let escapedUserID = userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId
+        performJSONRequest(
+            path: "kb/snapshot/\(escapedUserID)",
+            method: "GET",
+            bodyObject: nil,
+            responseType: KBSnapshotResponse.self,
+            completion: completion
+        )
+    }
+
     func fetchRuntimeConfig(completion: @escaping (Result<RuntimeConfig, Swift.Error>) -> Void) {
         performJSONRequest(
             path: "config/runtime",
@@ -481,6 +495,11 @@ extension DreamJourneyBackendClient {
             let events: Int
             let facts: Int
         }
+    }
+
+    struct KBSnapshotResponse: Decodable {
+        let userId: String
+        let graph: KBLiteGraph
     }
 
     struct RuntimeConfig: Decodable {

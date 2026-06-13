@@ -69,6 +69,25 @@ python3 Scripts/DigitalHumanStartupRevealVerify/main.py
 echo "== KBLite =="
 swift kblite_verify.swift
 
+echo "== KBLite quick extract =="
+xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
+  DreamJourney/Sources/Services/KBLiteModels.swift \
+  DreamJourney/Sources/Services/KBLitePrivacyScopePolicy.swift \
+  DreamJourney/Sources/Services/KBLiteManager.swift \
+  Scripts/KBLiteQuickExtractVerify/main.swift \
+  -o /tmp/dreamjourney_kblite_quick_extract_verify
+/tmp/dreamjourney_kblite_quick_extract_verify
+
+echo "== KBLite entity quality =="
+python3 Scripts/KBLiteEntityQualityVerify/main.py
+
+echo "== KBLite backend snapshot restore =="
+python3 Scripts/KBLiteBackendSnapshotVerify/main.py
+
+echo "== KBLite user lifecycle =="
+python3 Scripts/KBLiteUserLifecycleVerify/main.py
+
 echo "== Local test data cleanup =="
 python3 Scripts/LocalTestDataCleanupVerify/main.py
 
