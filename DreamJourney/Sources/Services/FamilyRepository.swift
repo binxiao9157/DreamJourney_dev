@@ -316,6 +316,16 @@ final class FamilyRepository {
         return revokedAccessMemberIDs.contains(identity.familyMemberID) ? nil : identity
     }
 
+    func careOwnerUserID(for viewerFamilyMemberID: String? = nil) -> String? {
+        let candidateMemberID = viewerFamilyMemberID ?? currentViewerIdentity()?.familyMemberID
+        if let candidateMemberID,
+           let member = get(by: candidateMemberID),
+           let ownerUserId = normalizedOwnerUserID(member.ownerUserId) {
+            return ownerUserId
+        }
+        return UserManager.shared.currentUser?.id
+    }
+
     func acceptLocalInvitation(phone: String, acceptedAt: Date = Date()) -> FamilyMember? {
         guard let memberIndex = members.firstIndex(where: { normalizedPhone($0.phone) == normalizedPhone(phone) }),
               !revokedAccessMemberIDs.contains(members[memberIndex].id) else {
@@ -552,6 +562,11 @@ final class FamilyRepository {
         guard let phone else { return nil }
         let digits = phone.filter(\.isNumber)
         return digits.isEmpty ? nil : digits
+    }
+
+    private func normalizedOwnerUserID(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed?.isEmpty == false ? trimmed : nil
     }
 
     private func loadLocalAccessState() {

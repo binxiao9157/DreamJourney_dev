@@ -230,6 +230,7 @@ class PostgresStoreTests(unittest.TestCase):
         accepted = store.accept_family_invitation_code("ABCD1234", phone="13900001111")
 
         self.assertEqual(member["invitationCode"], "ABCD1234")
+        self.assertEqual(accepted["ownerUserId"], "u1")
         self.assertEqual(accepted["accessStatus"], "active")
         self.assertEqual(accepted["invitationStatus"], "accepted")
         self.assertIsNone(store.accept_family_invitation_code("ABCD1234", phone="13900002222"))

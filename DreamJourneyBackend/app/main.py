@@ -12,6 +12,7 @@ from app.services.deepseek import DeepSeekImageAnalysisProxy
 from app.services.privacy import (
     filter_syncable_graph,
     sanitize_archive_item_payload,
+    sanitize_care_snapshot_payload,
     sanitize_mailbox_letter_payload,
 )
 from app.services.runtime_config import RuntimeConfigService
@@ -297,9 +298,10 @@ def save_care_snapshot(payload: Dict[str, Any]) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="snapshot must be an object")
     if viewer_family_member_id is not None:
         viewer_family_member_id = str(viewer_family_member_id).strip() or None
+    sanitized_snapshot = sanitize_care_snapshot_payload(snapshot)
     item = store.save_care_snapshot(
         user_id,
-        snapshot,
+        sanitized_snapshot,
         viewer_family_member_id=viewer_family_member_id,
     )
     return {"status": "saved", "item": item}

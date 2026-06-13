@@ -82,6 +82,7 @@ class InMemoryStore:
         item.setdefault("invitationCode", "")
         item.setdefault("invitationURL", "")
         item["userId"] = user_id
+        item["ownerUserId"] = user_id
         item["createdAt"] = self._now()
         self._family_members.setdefault(user_id, []).append(item)
         return deepcopy(item)

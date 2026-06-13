@@ -35,11 +35,13 @@ required_client_fragments = [
     "/accept",
     "invitationCode",
     "invitationURL",
+    "ownerUserId",
 ]
 
 required_repo_fragments = [
     "FamilyInvitationDeepLinkService",
     "acceptBackendInvitationCode",
+    "careOwnerUserID",
     "invitationCode(from rawValue",
     "consumePendingInvitationCode",
     "DreamJourneyBackendClient.shared.acceptFamilyInvitationCode",
@@ -76,6 +78,7 @@ required_store_fragments = [
     "def accept_family_invitation_code",
     '"invitationCode"',
     '"invitationURL"',
+    '"ownerUserId"',
 ]
 
 required_backend_test_fragments = [
@@ -83,6 +86,7 @@ required_backend_test_fragments = [
     "/family/invitations/",
     "invitationCode",
     "invitationURL",
+    "ownerUserId",
 ]
 
 for fragment in required_client_fragments:

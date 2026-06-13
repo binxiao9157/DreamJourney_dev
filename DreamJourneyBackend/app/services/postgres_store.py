@@ -189,6 +189,7 @@ class PostgresStore:
 
     def add_family_member(self, user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         item = self._with_identity(payload, "family", user_id)
+        item["ownerUserId"] = user_id
         item.setdefault("invitationCode", "")
         item.setdefault("invitationURL", "")
         return self._insert_payload("family_members", user_id, item)
@@ -208,6 +209,7 @@ class PostgresStore:
             return None
 
         item = deepcopy(row["payload"])
+        item["ownerUserId"] = item.get("ownerUserId") or item.get("userId")
         expected_phone = self._normalized_phone(str(item.get("phone") or ""))
         if expected_phone and self._normalized_phone(phone) != expected_phone:
             return None

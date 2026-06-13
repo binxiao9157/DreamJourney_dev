@@ -4,6 +4,42 @@ from typing import Any, Dict, Iterable, List
 
 SYNCABLE_SCOPES = {"generationAllowed", "familyCircle"}
 
+CARE_SNAPSHOT_SCALAR_KEYS = {
+    "generatedAt",
+    "windowStart",
+    "windowEnd",
+    "windowDayCount",
+    "dataCoverageSummary",
+    "totalTurns",
+    "userTurnCount",
+    "characterCount",
+    "uniqueTokenCount",
+    "lexicalDiversity",
+    "negativeEmotionMentions",
+    "sleepMentions",
+    "bodyDiscomfortMentions",
+    "repetitionRatio",
+    "riskLevel",
+    "summary",
+    "trendSummary",
+}
+
+CARE_SNAPSHOT_STRING_LIST_KEYS = {
+    "suggestions",
+    "weeklyHighlights",
+    "riskSignalDescriptions",
+}
+
+CARE_DAILY_TREND_SCALAR_KEYS = {
+    "date",
+    "userTurnCount",
+    "negativeEmotionMentions",
+    "sleepMentions",
+    "bodyDiscomfortMentions",
+    "repetitionRatio",
+    "signalScore",
+}
+
 
 def _scope(entity: Dict[str, Any]) -> str:
     metadata = entity.get("privacyMetadata") or {}
@@ -87,6 +123,54 @@ def sanitize_mailbox_letter_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         "privacyMetadata",
     }
     item = {key: deepcopy(payload[key]) for key in allowed_keys if key in payload}
+
+    item["metadataOnly"] = True
+    item["contentRedacted"] = True
+    return item
+
+
+def _is_json_scalar(value: Any) -> bool:
+    return value is None or isinstance(value, (str, int, float, bool))
+
+
+def _string_list(value: Any) -> List[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
+
+
+def _sanitize_daily_trend(value: Any) -> List[Dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+
+    points = []
+    for point in value:
+        if not isinstance(point, dict):
+            continue
+        sanitized_point = {
+            key: deepcopy(point[key])
+            for key in CARE_DAILY_TREND_SCALAR_KEYS
+            if key in point and _is_json_scalar(point[key])
+        }
+        if sanitized_point:
+            points.append(sanitized_point)
+    return points
+
+
+def sanitize_care_snapshot_payload(snapshot: Dict[str, Any]) -> Dict[str, Any]:
+    """Return backend-safe care dashboard aggregates without raw conversation text."""
+    item = {
+        key: deepcopy(snapshot[key])
+        for key in CARE_SNAPSHOT_SCALAR_KEYS
+        if key in snapshot and _is_json_scalar(snapshot[key])
+    }
+
+    for key in CARE_SNAPSHOT_STRING_LIST_KEYS:
+        if key in snapshot:
+            item[key] = _string_list(snapshot[key])
+
+    if "dailyTrend" in snapshot:
+        item["dailyTrend"] = _sanitize_daily_trend(snapshot["dailyTrend"])
 
     item["metadataOnly"] = True
     item["contentRedacted"] = True

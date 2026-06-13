@@ -120,18 +120,19 @@ final class CareDashboardViewController: UIViewController {
 
         if localSnapshot.userTurnCount > 0 {
             syncSnapshotToBackend(localSnapshot)
-        } else {
-            fetchSnapshotHistoryFromBackend()
         }
+        fetchSnapshotHistoryFromBackend()
     }
 
     private func syncSnapshotToBackend(_ snapshot: CareSignalSnapshot) {
         guard DreamJourneyBackendClient.shared.isConfigured,
-              let userId = UserManager.shared.currentUser?.id else {
+              let currentUserId = UserManager.shared.currentUser?.id,
+              let ownerUserId = careOwnerUserID(),
+              ownerUserId == currentUserId else {
             return
         }
         DreamJourneyBackendClient.shared.syncCareSnapshot(
-            userId: userId,
+            userId: ownerUserId,
             viewerFamilyMemberID: viewerFamilyMemberID,
             snapshot: snapshot
         ) { result in
@@ -143,11 +144,11 @@ final class CareDashboardViewController: UIViewController {
 
     private func fetchLatestSnapshotFromBackend() {
         guard DreamJourneyBackendClient.shared.isConfigured,
-              let userId = UserManager.shared.currentUser?.id else {
+              let ownerUserId = careOwnerUserID() else {
             return
         }
         DreamJourneyBackendClient.shared.fetchLatestCareSnapshot(
-            userId: userId,
+            userId: ownerUserId,
             viewerFamilyMemberID: viewerFamilyMemberID
         ) { [weak self] result in
             DispatchQueue.main.async {
@@ -163,11 +164,11 @@ final class CareDashboardViewController: UIViewController {
 
     private func fetchSnapshotHistoryFromBackend() {
         guard DreamJourneyBackendClient.shared.isConfigured,
-              let userId = UserManager.shared.currentUser?.id else {
+              let ownerUserId = careOwnerUserID() else {
             return
         }
         DreamJourneyBackendClient.shared.fetchCareSnapshotHistory(
-            userId: userId,
+            userId: ownerUserId,
             viewerFamilyMemberID: viewerFamilyMemberID,
             limit: 7
         ) { [weak self] result in
@@ -200,6 +201,10 @@ final class CareDashboardViewController: UIViewController {
         snapshot = remoteSnapshot
         snapshotSourceText = sourceText
         render()
+    }
+
+    private func careOwnerUserID() -> String? {
+        FamilyRepository.shared.careOwnerUserID(for: viewerFamilyMemberID)
     }
 
     private func render() {

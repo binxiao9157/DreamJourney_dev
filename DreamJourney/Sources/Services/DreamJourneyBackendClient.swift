@@ -589,6 +589,8 @@ extension DreamJourneyBackendClient {
         let displayName: String?
         let relation: String?
         let phone: String?
+        let userId: String?
+        let ownerUserId: String?
         let accessStatus: String?
         let invitationStatus: String?
         let invitationCode: String?
@@ -611,6 +613,7 @@ extension DreamJourneyBackendClient {
                 name: resolvedName,
                 relation: resolvedRelation.isEmpty ? "亲友" : resolvedRelation,
                 phone: phone,
+                ownerUserId: ownerUserId ?? userId,
                 isOnline: isOnline ?? false,
                 lastUpdated: lastUpdated ?? "服务器同步"
             )

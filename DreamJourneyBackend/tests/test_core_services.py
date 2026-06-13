@@ -7,7 +7,7 @@ from app.main import app
 from app.core.config import Settings
 from app.services.in_memory_store import InMemoryStore
 from app.services.postgres_store import PostgresStore
-from app.services.privacy import filter_syncable_graph
+from app.services.privacy import filter_syncable_graph, sanitize_care_snapshot_payload
 from app.services.runtime_config import RuntimeConfigService
 from app.services.store_factory import make_store
 from app.services.tokens import TokenService
@@ -56,6 +56,45 @@ class PrivacyFilteringTests(unittest.TestCase):
         self.assertEqual(filtered["facts"][0]["relatedPersonIds"], ["p1"])
         self.assertEqual(filtered["facts"][0]["relatedPlaceIds"], ["l1"])
         self.assertEqual([f["id"] for f in filtered["facts"]], ["f1"])
+
+    def test_care_snapshot_sanitizer_keeps_only_aggregate_fields(self):
+        snapshot = {
+            "generatedAt": "2026-06-13T00:00:00Z",
+            "riskLevel": "watch",
+            "summary": "睡眠和身体不适信号较多。",
+            "suggestions": ["建议女儿今晚打电话确认近况。"],
+            "weeklyHighlights": ["连续提到睡不好。"],
+            "riskSignalDescriptions": ["睡眠信号 3 次。"],
+            "dailyTrend": [
+                {
+                    "date": "2026-06-12T00:00:00Z",
+                    "userTurnCount": 6,
+                    "negativeEmotionMentions": 1,
+                    "sleepMentions": 3,
+                    "bodyDiscomfortMentions": 2,
+                    "repetitionRatio": 0.25,
+                    "signalScore": 6,
+                    "rawText": "CARE_RAW_SENTINEL 不应保存",
+                }
+            ],
+            "rawTranscript": "CARE_RAW_SENTINEL 原始对话不应保存",
+            "messages": [{"role": "user", "text": "CARE_RAW_SENTINEL"}],
+            "sourceTexts": ["CARE_RAW_SENTINEL"],
+            "metadata": {"transcript": "CARE_RAW_SENTINEL"},
+        }
+
+        sanitized = sanitize_care_snapshot_payload(snapshot)
+        serialized = str(sanitized)
+
+        self.assertEqual(sanitized["riskLevel"], "watch")
+        self.assertEqual(sanitized["summary"], "睡眠和身体不适信号较多。")
+        self.assertEqual(sanitized["dailyTrend"][0]["signalScore"], 6)
+        self.assertNotIn("rawTranscript", sanitized)
+        self.assertNotIn("messages", sanitized)
+        self.assertNotIn("sourceTexts", sanitized)
+        self.assertNotIn("metadata", sanitized)
+        self.assertNotIn("rawText", sanitized["dailyTrend"][0])
+        self.assertNotIn("CARE_RAW_SENTINEL", serialized)
 
 
 class RuntimeConfigTests(unittest.TestCase):
@@ -316,6 +355,39 @@ class CareSnapshotAPITests(unittest.TestCase):
         self.assertEqual(all_family_history.status_code, 200)
         self.assertEqual([item["snapshot"]["summary"] for item in all_family_history.json()["items"]], ["全家视角"])
 
+    def test_care_snapshot_api_never_persists_raw_conversation_payload(self):
+        client = TestClient(app)
+
+        response = client.post(
+            "/care/snapshots",
+            json={
+                "userId": "care_privacy_user",
+                "snapshot": {
+                    "riskLevel": "attention",
+                    "summary": "需要尽快确认近况。",
+                    "userTurnCount": 8,
+                    "rawTranscript": "CARE_RAW_SENTINEL 这段原始对话不能出现在响应或历史里。",
+                    "messages": [{"role": "user", "text": "CARE_RAW_SENTINEL"}],
+                    "sourceTexts": ["CARE_RAW_SENTINEL"],
+                    "dailyTrend": [
+                        {
+                            "date": "2026-06-13T00:00:00Z",
+                            "userTurnCount": 8,
+                            "signalScore": 9,
+                            "rawText": "CARE_RAW_SENTINEL",
+                        }
+                    ],
+                },
+            },
+        )
+        history = client.get("/care/snapshots/care_privacy_user")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["item"]["snapshot"]["riskLevel"], "attention")
+        self.assertNotIn("CARE_RAW_SENTINEL", response.text)
+        self.assertEqual(history.status_code, 200)
+        self.assertNotIn("CARE_RAW_SENTINEL", history.text)
+
 
 class ArchiveAPITests(unittest.TestCase):
     def test_archive_items_api_saves_sanitized_metadata_and_lists_by_user(self):
@@ -511,6 +583,7 @@ class FamilyAPITests(unittest.TestCase):
         self.assertIn("invitationURL", member)
         self.assertEqual(accepted.status_code, 200)
         self.assertEqual(accepted.json()["member"]["id"], member["id"])
+        self.assertEqual(accepted.json()["member"]["ownerUserId"], "u_inviter")
         self.assertEqual(accepted.json()["member"]["accessStatus"], "active")
         listed_member = next(item for item in listed.json()["members"] if item["id"] == member["id"])
         self.assertEqual(listed_member["invitationStatus"], "accepted")

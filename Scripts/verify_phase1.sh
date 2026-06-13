@@ -66,6 +66,9 @@ xcrun swiftc -D CARE_DASHBOARD_VERIFY \
 echo "== CareDashboard backend sync =="
 python3 Scripts/CareDashboardBackendSyncVerify/main.py
 
+echo "== CareDashboard share report UI =="
+python3 Scripts/CareDashboardShareReportUIVerify/main.py
+
 echo "== MemoryArchive backend sync =="
 python3 Scripts/MemoryArchiveBackendSyncVerify/main.py
 

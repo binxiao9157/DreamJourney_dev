@@ -106,6 +106,7 @@ struct FamilyMember: Codable, Identifiable {
     var name: String
     var relation: String        // "祖母"/"父亲"/"母亲"/"子女"/"配偶"等
     var phone: String?
+    var ownerUserId: String?
     var avatarName: String?
     var joinedAt: Date
     /// 在线状态：true=在线，false=离线
@@ -114,11 +115,12 @@ struct FamilyMember: Codable, Identifiable {
     var lastUpdated: String
 
     init(id: String = UUID().uuidString, name: String, relation: String,
-         phone: String? = nil, isOnline: Bool = false, lastUpdated: String = "未知") {
+         phone: String? = nil, ownerUserId: String? = nil, isOnline: Bool = false, lastUpdated: String = "未知") {
         self.id = id
         self.name = name
         self.relation = relation
         self.phone = phone
+        self.ownerUserId = ownerUserId
         self.avatarName = nil
         self.joinedAt = Date()
         self.isOnline = isOnline
