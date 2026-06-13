@@ -95,6 +95,9 @@ python3 Scripts/MemoryArchiveVoiceKnowledgeVerify/main.py
 echo "== MemoryArchive knowledge deposit UI =="
 python3 Scripts/MemoryArchiveKnowledgeDepositUIVerify/main.py
 
+echo "== MemoryArchive privacy deposit UX =="
+python3 Scripts/MemoryArchivePrivacyDepositUXVerify/main.py
+
 echo "== MemoryArchive personality prompt UI =="
 python3 Scripts/MemoryArchivePersonalityPromptUIVerify/main.py
 

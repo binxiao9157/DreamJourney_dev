@@ -1087,11 +1087,19 @@ private final class MemoryArchiveTextComposerViewController: UIViewController {
 
     private let privacyControl: UISegmentedControl = {
         let control = UISegmentedControl(items: ["私密", "本机", "可生成", "亲友"])
-        control.selectedSegmentIndex = 0
+        control.selectedSegmentIndex = 2
         control.selectedSegmentTintColor = .warmAccent
         control.setTitleTextAttributes([.foregroundColor: UIColor.white], for: .selected)
         control.setTitleTextAttributes([.foregroundColor: UIColor.warmPrimary], for: .normal)
         return control
+    }()
+
+    private let privacyHintLabel: UILabel = {
+        let label = UILabel()
+        label.font = .systemFont(ofSize: 12)
+        label.textColor = .warmSubtitle
+        label.numberOfLines = 0
+        return label
     }()
 
     private let familyVisibilityButton: UIButton = {
@@ -1126,6 +1134,7 @@ private final class MemoryArchiveTextComposerViewController: UIViewController {
         setupLayout()
         privacyControl.addTarget(self, action: #selector(privacyChanged), for: .valueChanged)
         familyVisibilityButton.addTarget(self, action: #selector(familyVisibilityTapped), for: .touchUpInside)
+        updatePrivacyHint()
         updateFamilyVisibilityState()
     }
 
@@ -1159,6 +1168,7 @@ private final class MemoryArchiveTextComposerViewController: UIViewController {
         stack.addArrangedSubview(makeSection(title: "标题", view: titleField, height: 44))
         stack.addArrangedSubview(makeSection(title: "内容", view: noteTextView, height: 220))
         stack.addArrangedSubview(makeSection(title: "使用范围", view: privacyControl, height: 36))
+        stack.addArrangedSubview(privacyHintLabel)
         stack.addArrangedSubview(familyVisibilitySection)
 
         NSLayoutConstraint.activate([
@@ -1194,6 +1204,7 @@ private final class MemoryArchiveTextComposerViewController: UIViewController {
     }
 
     @objc private func privacyChanged() {
+        updatePrivacyHint()
         updateFamilyVisibilityState()
     }
 
@@ -1254,6 +1265,21 @@ private final class MemoryArchiveTextComposerViewController: UIViewController {
         config.title = selectedFamilyVisibility.summary
         config.baseForegroundColor = .warmPrimary
         familyVisibilityButton.configuration = config
+    }
+
+    private func updatePrivacyHint() {
+        switch privacyControl.selectedSegmentIndex {
+        case 0:
+            privacyHintLabel.text = "私密：只存档案馆，不进入知识库。"
+        case 1:
+            privacyHintLabel.text = "本机：进入本机知识库，不上传远端抽取。"
+        case 2:
+            privacyHintLabel.text = "可生成：进入知识库，并允许 AI 抽取补充线索。"
+        case 3:
+            privacyHintLabel.text = "亲友：进入知识库，并按亲友范围同步。"
+        default:
+            privacyHintLabel.text = nil
+        }
     }
 
     private static func makeTextField(placeholder: String) -> UITextField {
