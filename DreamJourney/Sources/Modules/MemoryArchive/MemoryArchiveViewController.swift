@@ -221,8 +221,9 @@ final class MemoryArchiveViewController: UIViewController {
             if item.privacyMetadata.scope != .privateOnly {
                 Stage1MemoryFacade.shared.ingestArchiveTextMaterial(Stage1MailboxMemoryInput(
                     item.note,
+                    timestamp: item.createdAt,
                     privacyMetadata: item.privacyMetadata
-                )) { [weak self] addedCount in
+                ), archiveItemID: item.id, archiveTitle: item.title) { [weak self] addedCount in
                     DispatchQueue.main.async {
                         if addedCount == 0 {
                             self?.setKnowledgeDepositStatus("结构化建库：文字素材已保存，暂无可抽取的新知识")
@@ -326,7 +327,10 @@ final class MemoryArchiveViewController: UIViewController {
                             Stage1MemoryFacade.shared.ingestImageAnalysis(
                                 kbAnalysis,
                                 sessionId: sessionId,
-                                privacyMetadata: item.privacyMetadata
+                                privacyMetadata: item.privacyMetadata,
+                                archiveItemID: item.id,
+                                archiveTitle: item.title,
+                                capturedAt: item.createdAt
                             )
                             Stage1MemoryFacade.shared.recordUserTurn(Stage1MailboxMemoryInput(
                                 "记忆档案馆上传旧照片：\(archiveAnalysis.summary)",
@@ -626,6 +630,7 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
                 Stage1MemoryFacade.shared.ingestArchiveVoiceSampleMetadata(
                     title: item.title,
                     note: item.note,
+                    archiveItemID: item.id,
                     timestamp: item.createdAt,
                     privacyMetadata: item.privacyMetadata
                 ) { [weak self] addedCount in

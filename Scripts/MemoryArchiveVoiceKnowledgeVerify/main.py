@@ -28,8 +28,24 @@ checks = [
         "Stage1MemoryFacade.shared.recordUserTurn" not in save_voice_body,
     ),
     (
+        "archive voice ingestion should pass concrete archive item id",
+        "archiveItemID: item.id" in save_voice_body,
+    ),
+    (
+        "archive text ingestion should pass concrete archive item id",
+        "ingestArchiveTextMaterial" in view and "archiveItemID: item.id" in view and "archiveTitle: item.title" in view,
+    ),
+    (
+        "archive image analysis ingestion should pass concrete archive item id",
+        "ingestImageAnalysis" in view and "archiveItemID: item.id" in view and "capturedAt: item.createdAt" in view,
+    ),
+    (
+        "Stage1 facade should build memoryArchiveItem source refs",
+        "archiveSourceRef" in facade and "kind: .memoryArchiveItem" in facade,
+    ),
+    (
         "phase1 verification should cover archive voice metadata KBLite ingestion",
-        "KBLiteArchiveVoiceVerify" in phase1 and "MemoryArchiveVoiceKnowledgeVerify" in phase1,
+        "KBLiteArchiveVoiceVerify" in phase1 and "KBLiteSourceRefPropagationVerify" in phase1 and "MemoryArchiveVoiceKnowledgeVerify" in phase1,
     ),
 ]
 

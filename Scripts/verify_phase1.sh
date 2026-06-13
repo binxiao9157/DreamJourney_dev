@@ -110,6 +110,16 @@ xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
   -o /tmp/dreamjourney_kblite_archive_voice_verify
 /tmp/dreamjourney_kblite_archive_voice_verify
 
+echo "== KBLite source refs =="
+xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
+  DreamJourney/Sources/Services/KBLiteModels.swift \
+  DreamJourney/Sources/Services/KBLitePrivacyScopePolicy.swift \
+  DreamJourney/Sources/Services/KBLiteManager.swift \
+  Scripts/KBLiteSourceRefPropagationVerify/main.swift \
+  -o /tmp/dreamjourney_kblite_source_ref_verify
+/tmp/dreamjourney_kblite_source_ref_verify
+
 echo "== KBLite time mailbox =="
 xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
   DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \

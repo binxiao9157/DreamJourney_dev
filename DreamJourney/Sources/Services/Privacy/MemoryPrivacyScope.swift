@@ -137,6 +137,28 @@ public struct MemoryPrivacyMetadata: Codable, Equatable, Hashable {
     }
 }
 
+public extension MemoryPrivacyMetadata {
+    func appendingSourceRef(_ sourceRef: MemorySourceRef) -> MemoryPrivacyMetadata {
+        var nextSourceRefs = sourceRefs
+        if !nextSourceRefs.contains(where: { $0.kind == sourceRef.kind && $0.id == sourceRef.id }) {
+            nextSourceRefs.append(sourceRef)
+        }
+        return MemoryPrivacyMetadata(
+            scope: scope,
+            sourceRefs: nextSourceRefs,
+            createdBySurface: createdBySurface,
+            createdAt: createdAt,
+            familyVisibility: familyVisibility
+        )
+    }
+
+    func mergingSourceRefs(from incoming: MemoryPrivacyMetadata) -> MemoryPrivacyMetadata {
+        incoming.sourceRefs.reduce(self) { metadata, sourceRef in
+            metadata.appendingSourceRef(sourceRef)
+        }
+    }
+}
+
 public protocol MemoryPrivacyScoped {
     var privacyMetadata: MemoryPrivacyMetadata { get }
 }

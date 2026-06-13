@@ -901,6 +901,7 @@ final class KBLiteManager {
                 person.sourceSessionIds.append(sessionId)
             }
             person.updatedAt = now
+            person.privacyMetadata = person.privacyMetadata.mergingSourceRefs(from: privacyMetadata)
             graph.people[idx] = person
             return 0
         }
@@ -942,6 +943,7 @@ final class KBLiteManager {
             if !place.sourceSessionIds.contains(sessionId) {
                 place.sourceSessionIds.append(sessionId)
             }
+            place.privacyMetadata = place.privacyMetadata.mergingSourceRefs(from: privacyMetadata)
             graph.places[idx] = place
             return 0
         }
@@ -979,6 +981,7 @@ final class KBLiteManager {
             if !event.sourceSessionIds.contains(sessionId) {
                 event.sourceSessionIds.append(sessionId)
             }
+            event.privacyMetadata = event.privacyMetadata.mergingSourceRefs(from: privacyMetadata)
             graph.events[idx] = event
             return 0
         }
@@ -1014,6 +1017,7 @@ final class KBLiteManager {
             if !fact.sourceSessionIds.contains(sessionId) {
                 fact.sourceSessionIds.append(sessionId)
             }
+            fact.privacyMetadata = fact.privacyMetadata.mergingSourceRefs(from: privacyMetadata)
             graph.facts[idx] = fact
             return 0
         }
@@ -1275,6 +1279,7 @@ final class KBLiteManager {
                         p.sourceSessionIds.append(sessionId)
                     }
                     p.updatedAt = now
+                    p.privacyMetadata = p.privacyMetadata.mergingSourceRefs(from: privacyMetadata)
                     graph.people[idx] = p
                     print("[KBLite] 🔄 合并人物: \(p.name)")
                 }
@@ -1307,6 +1312,7 @@ final class KBLiteManager {
                     if p.description == nil, let desc = ep.description { p.description = desc }
                     if p.category == nil, let cat = ep.category { p.category = cat }
                     if !p.sourceSessionIds.contains(sessionId) { p.sourceSessionIds.append(sessionId) }
+                    p.privacyMetadata = p.privacyMetadata.mergingSourceRefs(from: privacyMetadata)
                     graph.places[idx] = p
                     print("[KBLite] 🔄 合并地点: \(p.name)")
                 }
@@ -1339,6 +1345,7 @@ final class KBLiteManager {
                     if e.description == nil, let desc = ee.description { e.description = desc }
                     if e.year == nil, let y = ee.year { e.year = y }
                     if !e.sourceSessionIds.contains(sessionId) { e.sourceSessionIds.append(sessionId) }
+                    e.privacyMetadata = e.privacyMetadata.mergingSourceRefs(from: privacyMetadata)
                     graph.events[idx] = e
                     print("[KBLite] 🔄 合并事件: \(e.title)")
                 }
@@ -1364,14 +1371,21 @@ final class KBLiteManager {
             guard !stmt.isEmpty else { continue }
 
             // 检查是否已存在相同或高度相似的事实
-            let isDuplicate = graph.facts.contains { existing in
+            let duplicateIndex = graph.facts.firstIndex { existing in
                 KBLitePrivacyScopePolicy.canMerge(existing: existing.privacyMetadata, incoming: privacyMetadata)
                     && (existing.statement == stmt ||
                         (existing.statement.count >= 10 && stmt.count >= 10 &&
                          (existing.statement.contains(stmt) || stmt.contains(existing.statement))))
             }
 
-            if !isDuplicate {
+            if let duplicateIndex {
+                if !graph.facts[duplicateIndex].sourceSessionIds.contains(sessionId) {
+                    graph.facts[duplicateIndex].sourceSessionIds.append(sessionId)
+                }
+                graph.facts[duplicateIndex].privacyMetadata = graph.facts[duplicateIndex]
+                    .privacyMetadata
+                    .mergingSourceRefs(from: privacyMetadata)
+            } else {
                 let fact = KBFact(
                     id: UUID().uuidString,
                     statement: stmt,
@@ -1666,12 +1680,22 @@ final class KBLiteManager {
         privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
     ) {
         var addedCount = 0
+        var updatedExisting = false
         let now = Date()
 
         // 场景 → 地点
         if !result.scene.isEmpty {
             let existing = findMatchingPlace(name: result.scene, privacyMetadata: privacyMetadata)
-            if existing == nil {
+            if let existing,
+               let idx = graph.places.firstIndex(where: { $0.id == existing.id }) {
+                if !graph.places[idx].sourceSessionIds.contains(sessionId) {
+                    graph.places[idx].sourceSessionIds.append(sessionId)
+                }
+                graph.places[idx].privacyMetadata = graph.places[idx]
+                    .privacyMetadata
+                    .mergingSourceRefs(from: privacyMetadata)
+                updatedExisting = true
+            } else {
                 let place = KBPlace(
                     id: UUID().uuidString,
                     name: result.scene,
@@ -1692,7 +1716,16 @@ final class KBLiteManager {
                 continue
             }
             let existing = findMatchingPerson(name: name, aliases: [], privacyMetadata: privacyMetadata)
-            if existing == nil {
+            if let existing,
+               let idx = graph.people.firstIndex(where: { $0.id == existing.id }) {
+                if !graph.people[idx].sourceSessionIds.contains(sessionId) {
+                    graph.people[idx].sourceSessionIds.append(sessionId)
+                }
+                graph.people[idx].privacyMetadata = graph.people[idx]
+                    .privacyMetadata
+                    .mergingSourceRefs(from: privacyMetadata)
+                updatedExisting = true
+            } else {
                 let person = KBPerson(
                     id: UUID().uuidString,
                     name: name,
@@ -1709,7 +1742,7 @@ final class KBLiteManager {
             }
         }
 
-        if addedCount > 0 {
+        if addedCount > 0 || updatedExisting {
             graph.lastUpdated = now
             save()
             print("[KBLite] 🖼️ 图片分析入库: 新增 \(addedCount) 实体")
@@ -1895,9 +1928,10 @@ final class KBLiteManager {
             var fact = graph.facts[idx]
             if !fact.sourceSessionIds.contains(sessionId) {
                 fact.sourceSessionIds.append(sessionId)
-                graph.facts[idx] = fact
-                save()
             }
+            fact.privacyMetadata = fact.privacyMetadata.mergingSourceRefs(from: privacyMetadata)
+            graph.facts[idx] = fact
+            save()
             return 0
         }
 

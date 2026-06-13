@@ -15,7 +15,21 @@ enum KBLitePrivacyScopePolicy {
         guard let scope = highestAvailableScope(in: turns) else {
             return MemoryPrivacyMetadata(scope: .localOnly)
         }
-        return MemoryPrivacyMetadata(scope: scope)
+        let sourceRefs = turns.reduce(into: [MemorySourceRef]()) { result, turn in
+            for sourceRef in turn.privacyMetadata.sourceRefs
+                where !result.contains(where: { $0.kind == sourceRef.kind && $0.id == sourceRef.id }) {
+                result.append(sourceRef)
+            }
+        }
+        let familyVisibility = turns.first { $0.privacyMetadata.scope == .familyCircle }?
+            .privacyMetadata.familyVisibility ?? .allMembers
+        let createdAt = turns.compactMap { $0.privacyMetadata.createdAt }.min()
+        return MemoryPrivacyMetadata(
+            scope: scope,
+            sourceRefs: sourceRefs,
+            createdAt: createdAt,
+            familyVisibility: familyVisibility
+        )
     }
 
     static func canMerge(existing: MemoryPrivacyMetadata, incoming: MemoryPrivacyMetadata) -> Bool {

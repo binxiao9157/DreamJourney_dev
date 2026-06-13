@@ -70,20 +70,30 @@ final class Stage1MemoryFacade {
 
     func ingestArchiveTextMaterial(
         _ input: Stage1MailboxMemoryInput,
+        archiveItemID: String? = nil,
+        archiveTitle: String? = nil,
         completion: @escaping (Int) -> Void = { _ in }
     ) {
-        recordUserTurn(input)
+        let resolvedInput = input.withSourceRef(
+            Self.archiveSourceRef(
+                id: archiveItemID,
+                title: archiveTitle,
+                capturedAt: input.timestamp
+            )
+        )
 
-        guard input.privacyMetadata.scope != .privateOnly else {
+        recordUserTurn(resolvedInput)
+
+        guard resolvedInput.privacyMetadata.scope != .privateOnly else {
             completion(0)
             return
         }
 
         let turn = ConversationTurn(
             role: "user",
-            text: input.text,
-            timestamp: input.timestamp,
-            privacyMetadata: input.privacyMetadata
+            text: resolvedInput.text,
+            timestamp: resolvedInput.timestamp,
+            privacyMetadata: resolvedInput.privacyMetadata
         )
         let knowledgeSessionCount = knowledgeBase.readGraph { $0.sessionCount }
         let sessionId = max(conversationMemory.currentMemory.sessionCount + 1, knowledgeSessionCount + 1)
@@ -97,11 +107,15 @@ final class Stage1MemoryFacade {
     func ingestArchiveVoiceSampleMetadata(
         title: String,
         note: String?,
+        archiveItemID: String? = nil,
         timestamp: Date = Date(),
         privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly),
         completion: @escaping (Int) -> Void = { _ in }
     ) {
-        guard privacyMetadata.scope != .privateOnly else {
+        let resolvedMetadata = privacyMetadata.appendingSourceRef(
+            Self.archiveSourceRef(id: archiveItemID, title: title, capturedAt: timestamp)
+        )
+        guard resolvedMetadata.scope != .privateOnly else {
             completion(0)
             return
         }
@@ -111,7 +125,7 @@ final class Stage1MemoryFacade {
             title: title,
             note: note,
             sessionId: sessionId,
-            privacyMetadata: privacyMetadata
+            privacyMetadata: resolvedMetadata
         )
         completion(addedCount)
     }
@@ -204,12 +218,18 @@ final class Stage1MemoryFacade {
     func ingestImageAnalysis(
         _ result: KBImageAnalysisResult,
         sessionId: Int,
-        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly),
+        archiveItemID: String? = nil,
+        archiveTitle: String? = nil,
+        capturedAt: Date = Date()
     ) {
+        let resolvedMetadata = privacyMetadata.appendingSourceRef(
+            Self.archiveSourceRef(id: archiveItemID, title: archiveTitle ?? "旧照片", capturedAt: capturedAt)
+        )
         knowledgeBase.ingestImageAnalysis(
             result,
             sessionId: sessionId,
-            privacyMetadata: privacyMetadata
+            privacyMetadata: resolvedMetadata
         )
     }
 
@@ -220,6 +240,29 @@ final class Stage1MemoryFacade {
     @discardableResult
     func importKnowledgeJSON(_ jsonString: String) -> Bool {
         knowledgeBase.importJSON(jsonString)
+    }
+}
+
+private extension Stage1MailboxMemoryInput {
+    func withSourceRef(_ sourceRef: MemorySourceRef) -> Stage1MailboxMemoryInput {
+        Stage1MailboxMemoryInput(
+            text: text,
+            timestamp: timestamp,
+            privacyMetadata: privacyMetadata.appendingSourceRef(sourceRef)
+        )
+    }
+}
+
+private extension Stage1MemoryFacade {
+    static func archiveSourceRef(id: String?, title: String?, capturedAt: Date) -> MemorySourceRef {
+        let sourceID = id?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sourceTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return MemorySourceRef(
+            kind: .memoryArchiveItem,
+            id: sourceID?.isEmpty == false ? sourceID! : "archive-\(Int(capturedAt.timeIntervalSince1970))",
+            title: sourceTitle?.isEmpty == false ? sourceTitle : "记忆档案素材",
+            capturedAt: capturedAt
+        )
     }
 }
 #endif
