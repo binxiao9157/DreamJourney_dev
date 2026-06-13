@@ -152,11 +152,7 @@ final class DialogEngineManager: NSObject, DialogEngineProtocol {
         // MARK: - 对话结束机制
 
         /// 触发结束对话的关键词列表（ASR 识别结果包含其中任一则结束）
-        var endKeywords: [String] = [
-            "生成回忆录", "生成家书", "写家书",
-            "停止", "结束", "不聊了", "再见",
-            "我要去忙了", "先这样吧", "下次再聊"
-        ]
+        var endKeywords: [String] = DialogEndIntentPolicy.endKeywords
 
         /// 静音超时时长（秒），无语音输入超过此时间自动结束对话
         var silenceTimeoutSeconds: TimeInterval = 60
@@ -483,6 +479,12 @@ final class DialogEngineManager: NSObject, DialogEngineProtocol {
 - 如果老人对某个维度没有回应，不要硬追问，换一个角度
 """
 
+        role += DialogMemoryGroundingPolicy.systemRoleAppendix()
+        let memoryContext = buildMemoryContext(memory: ConversationMemoryManager.shared.currentMemory)
+        if !memoryContext.isEmpty {
+            role += memoryContext
+        }
+
         // 如果设置了当前话题，动态追加到人设末尾
         if let topic = currentTopic, !topic.isEmpty {
             role += "\n\n【本次聊天话题】\n家人想了解的是：「\(topic)」\n请以这个问题为起点，自然地引导老人聊起相关的故事。不要一上来就念问题，先打个招呼暖场，然后巧妙地引向这个话题。"
@@ -607,7 +609,7 @@ final class DialogEngineManager: NSObject, DialogEngineProtocol {
                     "channel": 1
                 ],
                 "extra": [
-                    "end_smooth_window_ms": 3000,   // 3秒停顿容忍，老人说话断续多
+                    "end_smooth_window_ms": 6500,   // 6.5秒停顿容忍，避免长辈叙述中途被抢话
                     "enable_custom_vad": true         // 启用自定义VAD
                 ]
             ],
@@ -623,11 +625,9 @@ final class DialogEngineManager: NSObject, DialogEngineProtocol {
         if !config.systemPrompt.isEmpty {
             var fullPrompt = config.systemPrompt
             // 注入跨会话记忆上下文
-            let memory = ConversationMemoryManager.shared.currentMemory
-            if memory.sessionCount > 0 {
-                fullPrompt += buildMemoryContext(memory: memory)
-                print("[DialogEngine] 🧠 已注入记忆上下文 (第\(memory.sessionCount + 1)次对话)")
-            }
+            fullPrompt += DialogMemoryGroundingPolicy.systemRoleAppendix()
+            fullPrompt += buildMemoryContext(memory: ConversationMemoryManager.shared.currentMemory)
+            print("[DialogEngine] 🧠 已注入记忆证据约束")
             // 正确写入 dialog 子字典的 system_role（而非 dialogConfig 顶层）
             if var dialog = dialogConfig["dialog"] as? [String: Any] {
                 dialog["system_role"] = fullPrompt
@@ -836,13 +836,6 @@ extension DialogEngineManager: SpeechEngineDelegate {
 
         // MARK: ASR Events
         case SEEventASRInfo:
-            // AI 播报期间，ASR 可能回声识别到 AI 的声音，需要过滤
-            if isAISpeaking {
-                print("[DialogEngine] 🎤 AI播报中，忽略ASRInfo回声")
-                return
-            }
-            // 用户开始说话 → 自动打断 AI 回复
-            interruptAI()
             // 重置静音超时计时器
             DispatchQueue.main.async { [weak self] in
                 self?.resetSilenceTimer()
@@ -853,6 +846,9 @@ extension DialogEngineManager: SpeechEngineDelegate {
 
             if let result = parseASRResult(from: data) {
                 print("[DialogEngine] 🎤 ASRInfo parsed: text=\(result.text), isFinal=\(result.isFinal)")
+                guard prepareForIncomingUserSpeech(result.text, eventName: "ASRInfo") else {
+                    return
+                }
                 if result.isFinal {
                     if handleSafetyIfNeeded(text: result.text) {
                         return
@@ -874,6 +870,9 @@ extension DialogEngineManager: SpeechEngineDelegate {
                 // 解析失败，尝试从 raw JSON 中提取任何文本
                 print("[DialogEngine] ⚠️ ASRInfo parseASRResult 返回 nil，尝试 raw 提取")
                 if let extractedText = extractAnyText(from: data) {
+                    guard prepareForIncomingUserSpeech(extractedText, eventName: "ASRInfoRaw") else {
+                        return
+                    }
                     if handleSafetyIfNeeded(text: extractedText) {
                         return
                     }
@@ -908,6 +907,9 @@ extension DialogEngineManager: SpeechEngineDelegate {
                     // 尝试从 raw string 中提取引号内文本或中文字符
                     let chineseText = extractChineseText(from: asrRawStr)
                     if !chineseText.isEmpty {
+                        guard prepareForIncomingUserSpeech(chineseText, eventName: "ASRInfoChinese") else {
+                            return
+                        }
                         if handleSafetyIfNeeded(text: chineseText) {
                             return
                         }
@@ -919,17 +921,15 @@ extension DialogEngineManager: SpeechEngineDelegate {
             }
 
         case SEEventASRResponse:
-            // AI 播报期间，ASR 可能回声识别到 AI 的声音，需要过滤
-            if isAISpeaking {
-                print("[DialogEngine] 🎤 AI播报中，忽略ASRResponse回声")
-                return
-            }
             // ASR 识别结果（流式，通过 is_interim 区分中间/最终）
             DispatchQueue.main.async { [weak self] in
                 self?.resetSilenceTimer()
             }
             if let result = parseASRResult(from: data) {
                 print("[DialogEngine] 🎤 ASRResponse: text=\(result.text), isFinal=\(result.isFinal)")
+                guard prepareForIncomingUserSpeech(result.text, eventName: "ASRResponse") else {
+                    return
+                }
                 if result.isFinal {
                     if handleSafetyIfNeeded(text: result.text) {
                         return
@@ -953,11 +953,6 @@ extension DialogEngineManager: SpeechEngineDelegate {
             DDLogInfo("[DialogEngine] ASR 结束")
 
         case SEEventChatTextQueryConfirmed:
-            // AI 播报期间，ASR 可能回声识别到 AI 的声音，需要过滤
-            if isAISpeaking {
-                print("[DialogEngine] 🎤 AI播报中，忽略ChatTextQueryConfirmed回声")
-                return
-            }
             // 用户语音已确认，这是发送给 LLM 的最终文本
             print("[DialogEngine] ✅ 用户语音确认: \(dataStr.prefix(300))")
             DispatchQueue.main.async { [weak self] in
@@ -965,10 +960,14 @@ extension DialogEngineManager: SpeechEngineDelegate {
             }
             // 解析用户查询文本
             if let queryText = parseQueryConfirmedText(from: data), !queryText.isEmpty {
+                guard prepareForIncomingUserSpeech(queryText, eventName: "ChatTextQueryConfirmed") else {
+                    return
+                }
                 deliveredAssistantFinalText = nil
                 if handleSafetyIfNeeded(text: queryText) {
                     return
                 }
+                logMemoryGroundingPlan(for: queryText)
                 // 检测结束关键词
                 if let keyword = checkEndKeyword(in: queryText) {
                     print("[DialogEngine] 🛑 用户确认文本中检测到结束关键词: \(keyword)")
@@ -1305,6 +1304,35 @@ extension DialogEngineManager: SpeechEngineDelegate {
         delegate?.onASRResult(text: text, isFinal: isFinal)
     }
 
+    private func prepareForIncomingUserSpeech(_ text: String, eventName: String) -> Bool {
+        guard isAISpeaking else { return true }
+        if shouldSuppressPlaybackEcho(text) {
+            DDLogInfo("[DialogEngine] Suppressed playback echo from \(eventName)")
+            print("[DialogEngine] 🔇 AI播报中已过滤回声(\(eventName)): \(text)")
+            return false
+        }
+        print("[DialogEngine] 🎤 AI播报中检测到用户继续说话，打断AI: \(text.prefix(60))")
+        interruptAI()
+        return true
+    }
+
+    private func shouldSuppressPlaybackEcho(_ text: String) -> Bool {
+        shouldSuppressSystemGreetingEcho(text) || shouldSuppressAssistantEcho(text)
+    }
+
+    private func shouldSuppressAssistantEcho(_ text: String) -> Bool {
+        let assistantText = deliveredAssistantFinalText ?? chatBuffer
+        let normalizedText = normalizeForEchoComparison(text)
+        let normalizedAssistant = normalizeForEchoComparison(assistantText)
+        guard normalizedText.count >= 8, normalizedAssistant.count >= 8 else {
+            return false
+        }
+
+        return normalizedText == normalizedAssistant ||
+            normalizedText.contains(normalizedAssistant) ||
+            normalizedAssistant.contains(normalizedText)
+    }
+
     private func shouldSuppressSystemGreetingEcho(_ text: String) -> Bool {
         guard let greeting = recentSystemGreetingText,
               let sentAt = recentSystemGreetingSentAt,
@@ -1396,6 +1424,25 @@ extension DialogEngineManager: SpeechEngineDelegate {
         return topics.randomElement()!
     }
 
+    private func logMemoryGroundingPlan(for query: String) {
+        let pack = MemoryEvidencePack.build(
+            query: query,
+            graph: Stage1MemoryFacade.shared.archiveSnapshot(),
+            maxItems: 5
+        )
+        let plan = MemoryGroundedReplyPlanner.makePlan(pack: pack)
+        let evidencePreview = plan.evidenceLines
+            .prefix(3)
+            .joined(separator: " | ")
+
+        DDLogInfo(
+            "[DialogMemoryGrounding] intent=\(pack.intent.rawValue), mode=\(plan.mode.rawValue), evidenceCount=\(pack.items.count), query=\(query)"
+        )
+        if !evidencePreview.isEmpty {
+            DDLogInfo("[DialogMemoryGrounding] evidencePreview=\(evidencePreview)")
+        }
+    }
+
     // MARK: - 记忆上下文构建
 
     /// 将历史记忆构建为 system_prompt 追加段落（基于四维度摘要 + 知识库）
@@ -1433,7 +1480,11 @@ extension DialogEngineManager: SpeechEngineDelegate {
         }
 
         // 【KBLite】附加知识库上下文（累计的人物、地点、事件、事实）
-        let kbContext = Stage1MemoryFacade.shared.promptContext(query: nil, includeGaps: false)
+        let kbContext = DialogMemoryGroundingPolicy.queryContext(
+            for: "",
+            graph: Stage1MemoryFacade.shared.archiveSnapshot(),
+            maxItems: 8
+        )
         if !kbContext.isEmpty {
             context += kbContext
         }
@@ -1449,6 +1500,7 @@ extension DialogEngineManager: SpeechEngineDelegate {
         }
 
         context += "\n请基于以上记忆自然地延续话题，让长辈感受到你记得他/她说过的事。\n"
+        context += "涉及事实时必须以【已知家庭记忆】为依据；没有证据就说还没有记住，不要编造。\n"
         context += "不要直接报出以上信息，而是在对话中自然地引用。\n"
         context += "继续围绕时间、地点、人物、事件这四个维度追问细节，帮老人把故事讲完整。"
 

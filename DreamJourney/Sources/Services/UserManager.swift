@@ -44,7 +44,19 @@ final class UserManager {
     private func loadFromDefaults() {
         guard let data = UserDefaults.standard.data(forKey: kUserKey),
               let user = try? JSONDecoder().decode(UserModel.self, from: data) else { return }
+        guard !Self.isLegacyRoadshowUser(user) else {
+            UserDefaults.standard.removeObject(forKey: kUserKey)
+            UserDefaults.standard.removeObject(forKey: kLoggedInKey)
+            currentUser = nil
+            return
+        }
         currentUser = user
+    }
+
+    private static func isLegacyRoadshowUser(_ user: UserModel) -> Bool {
+        user.id == "user_0001" ||
+            user.nickname == "路演家庭" ||
+            user.phone == "18800000001"
     }
 }
 

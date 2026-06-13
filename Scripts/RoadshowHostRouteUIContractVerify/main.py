@@ -11,20 +11,18 @@ route = (root / "DreamJourney/Sources/Services/RoadshowDemoRoute.swift").read_te
 
 checks = [
     (
-        "home screen should own a roadshow banner view",
-        "private let roadshowBannerView = RoadshowModeBannerView()" in home_vc,
+        "home screen should not own a roadshow banner view in the real testing experience",
+        "private let roadshowBannerView = RoadshowModeBannerView()" not in home_vc,
     ),
     (
-        "home screen should keep roadshow guide hidden so it does not interfere with the main experience",
-        "roadshowBannerView.isHidden = true" in home_vc
-        and "roadshowBannerTopConstraint.constant = 0" in home_vc
-        and "roadshowBannerHeightConstraint.constant = 0" in home_vc,
+        "home screen should not mount the roadshow guide layout",
+        "roadshowBannerTopConstraint" not in home_vc
+        and "roadshowBannerHeightConstraint" not in home_vc,
     ),
     (
-        "home screen route action should guard inactive status and push the host route page",
-        "guard RoadshowDemoSeed.runtimeStatus().isActive else { return }" in home_vc
-        and "RoadshowDemoRouteViewController()" in home_vc
-        and "pushViewController(viewController" in home_vc,
+        "home screen should not expose roadshow route actions in the main experience",
+        "openRoadshowRoute()" not in home_vc
+        and "continueRoadshowStep()" not in home_vc,
     ),
     (
         "banner should expose a route checklist button with an accessibility label",
@@ -72,16 +70,14 @@ checks = [
         "var onRouteTapped: (() -> Void)?" in banner and "onRouteTapped?()" in banner,
     ),
     (
-        "home screen continue action should jump to the next incomplete route step",
-        "roadshowBannerView.onContinueTapped" in home_vc
-        and "continueRoadshowStep()" in home_vc
-        and "RoadshowDemoRoute.nextIncompleteStep()" in home_vc
-        and "tabBarController?.selectedIndex = step.targetTabIndex" in home_vc,
+        "home screen should not wire roadshow continue actions",
+        "roadshowBannerView.onContinueTapped" not in home_vc
+        and "RoadshowDemoRoute.nextIncompleteStep()" not in home_vc,
     ),
     (
-        "home screen should reopen route review after the route is complete",
-        "guard let step = RoadshowDemoRoute.nextIncompleteStep() else" in home_vc
-        and "openRoadshowRoute()" in home_vc,
+        "home screen should not reopen roadshow route review automatically",
+        "guard let step = RoadshowDemoRoute.nextIncompleteStep() else" not in home_vc
+        and "openRoadshowRoute()" not in home_vc,
     ),
     (
         "route should keep six phase1 host-facing steps",

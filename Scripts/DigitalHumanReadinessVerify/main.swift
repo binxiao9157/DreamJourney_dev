@@ -70,7 +70,7 @@ let mock = DigitalHumanReadinessReport.make(
 expect(mock.primaryStatus == .missing, "missing TTS/realtime credentials remain visible even in mock")
 expect(mock.items.contains(where: { $0.title == "当前对话引擎" && $0.status == .warning }), "mock engine is marked as demonstrable")
 expect(mock.items.contains(where: { $0.title == "数字人知识后端" && $0.status == .warning && $0.detail.contains("真机需改为局域网") }), "localhost backend warns for device testing")
-expect(mock.copyableText.contains("移除 mock/offline 启动参数"), "mock diagnostic explains how to test real voice")
+expect(mock.copyableText.contains("移除 mock 启动参数"), "mock diagnostic explains how to test real voice")
 expect(mock.copyableText.contains("OpenAvatarChatBaseURL 改成 Mac 局域网 IP"), "localhost diagnostic explains device fix")
 
 let missing = DigitalHumanReadinessReport.make(

@@ -179,24 +179,34 @@ final class KBLiteManager {
         let roadshowPlaces = Set(graph.places.filter { $0.id.hasPrefix("roadshow_") }.map(\.id))
         let roadshowEvents = Set(graph.events.filter { $0.id.hasPrefix("roadshow_") }.map(\.id))
         let genericPeople = Set(graph.people.filter(Self.isGenericKinshipOnly).map(\.id))
-        let removedPeople = roadshowPeople.union(genericPeople)
+        let legacyRoadshowPeople = Set(graph.people.filter { Self.isLegacyRoadshowText($0.searchableText) }.map(\.id))
+        let legacyRoadshowPlaces = Set(graph.places.filter { Self.isLegacyRoadshowText($0.searchableText) }.map(\.id))
+        let legacyRoadshowEvents = Set(graph.events.filter { Self.isLegacyRoadshowText($0.searchableText) }.map(\.id))
+        let removedPeople = roadshowPeople.union(genericPeople).union(legacyRoadshowPeople)
+        let removedPlaces = roadshowPlaces.union(legacyRoadshowPlaces)
+        let removedEvents = roadshowEvents.union(legacyRoadshowEvents)
 
         graph.people.removeAll { person in
-            person.id.hasPrefix("roadshow_") || Self.isGenericKinshipOnly(person)
+            person.id.hasPrefix("roadshow_") ||
+                Self.isGenericKinshipOnly(person) ||
+                Self.isLegacyRoadshowText(person.searchableText)
         }
         graph.places.removeAll { place in
             place.id.hasPrefix("roadshow_") ||
+                Self.isLegacyRoadshowText(place.searchableText) ||
                 place.relatedPersonIds.contains(where: { removedPeople.contains($0) })
         }
         graph.events.removeAll { event in
             event.id.hasPrefix("roadshow_") ||
-                event.locationId.map { roadshowPlaces.contains($0) } == true ||
+                Self.isLegacyRoadshowText(event.searchableText) ||
+                event.locationId.map { removedPlaces.contains($0) } == true ||
                 event.participantIds.contains(where: { removedPeople.contains($0) })
         }
         graph.facts.removeAll { fact in
             fact.id.hasPrefix("roadshow_") ||
+                Self.isLegacyRoadshowText(fact.statement) ||
                 fact.relatedPersonIds.contains(where: { removedPeople.contains($0) }) ||
-                fact.relatedEventIds.contains(where: { roadshowEvents.contains($0) })
+                fact.relatedEventIds.contains(where: { removedEvents.contains($0) })
         }
 
         let afterCount = graph.people.count + graph.places.count + graph.events.count + graph.facts.count
@@ -207,6 +217,14 @@ final class KBLiteManager {
         let name = normalizedEntityName(person.name)
         guard genericKinshipNames.contains(name) else { return false }
         return true
+    }
+
+    private static func isLegacyRoadshowText(_ text: String) -> Bool {
+        let markers = [
+            "路演", "roadshow", "外滩留下的合影记忆",
+            "路演样例", "路演数据", "路演占位"
+        ]
+        return markers.contains { text.localizedCaseInsensitiveContains($0) }
     }
 
     private static func shouldPersistPerson(
@@ -225,6 +243,10 @@ final class KBLiteManager {
 
     private static func normalizedEntityName(_ name: String) -> String {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func normalizedQuickExtractEntity(_ value: String) -> String {
+        value.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters))
     }
 
 
@@ -358,24 +380,107 @@ final class KBLiteManager {
 
         // 本地快速抽取不再把“妈妈/爷爷”这类单独称谓入库；等待 LLM 抽到具体姓名或更完整人物信息。
 
+        addedCount += quickExtractConcretePeople(from: allText, sessionId: sessionId, privacyMetadata: privacyMetadata)
+        addedCount += quickExtractExplicitFacts(from: userTexts, sessionId: sessionId, privacyMetadata: privacyMetadata)
+
         // 提取地点
         let cities = ["北京", "上海", "广州", "深圳", "杭州", "南京", "苏州",
                       "成都", "重庆", "武汉", "长沙", "西安", "天津", "青岛",
-                      "东北", "四川", "湖南", "湖北", "广东", "江西", "安徽", "河南", "山东"]
+                      "绍兴", "越城区", "仓桥直街", "西湖", "西湖边",
+                      "东北", "四川", "湖南", "湖北", "浙江", "广东", "江西", "安徽", "河南", "山东"]
         for city in cities {
             if allText.contains(city) {
-                let existing = findMatchingPlace(name: city, privacyMetadata: privacyMetadata)
-                if existing == nil {
-                    let place = KBPlace(
-                        id: UUID().uuidString,
-                        name: city,
-                        sourceSessionIds: [sessionId],
-                        privacyMetadata: privacyMetadata
-                    )
-                    graph.places.append(place)
-                    addedCount += 1
-                }
+                addedCount += upsertQuickPlace(
+                    name: city,
+                    category: inferPlaceCategory(from: allText, place: city),
+                    description: nil,
+                    sessionId: sessionId,
+                    privacyMetadata: privacyMetadata
+                )
             }
+        }
+
+        for place in extractPlacePhrases(from: allText) {
+            addedCount += upsertQuickPlace(
+                name: place.name,
+                category: place.category,
+                description: place.description,
+                sessionId: sessionId,
+                privacyMetadata: privacyMetadata
+            )
+        }
+
+        if allText.contains("照相馆") {
+            let title = allText.contains("小照相馆") ? "开小照相馆" : "开照相馆"
+            addedCount += upsertQuickEvent(
+                title: title,
+                description: sentenceContaining(["照相馆"], in: userTexts) ?? "提到开过照相馆",
+                year: extractYear(near: "照相馆", in: allText),
+                sessionId: sessionId,
+                privacyMetadata: privacyMetadata
+            )
+        }
+
+        if allText.contains("开过一家") && !allText.contains("照相馆") {
+            addedCount += upsertQuickEvent(
+                title: "开店",
+                description: sentenceContaining(["开过一家"], in: userTexts) ?? "提到开过一家店",
+                year: extractYear(near: "开过一家", in: allText),
+                sessionId: sessionId,
+                privacyMetadata: privacyMetadata
+            )
+        }
+
+        if allText.contains("住在") {
+            addedCount += upsertQuickEvent(
+                title: "居住经历",
+                description: sentenceContaining(["住在"], in: userTexts) ?? "提到居住经历",
+                year: extractYear(near: "住在", in: allText),
+                sessionId: sessionId,
+                privacyMetadata: privacyMetadata
+            )
+        }
+
+        if allText.contains("我叫") {
+            addedCount += upsertQuickFact(
+                statement: sentenceContaining(["我叫"], in: userTexts) ?? allText,
+                sessionId: sessionId,
+                privacyMetadata: privacyMetadata
+            )
+        }
+
+        if allText.contains("妻子") || allText.contains("丈夫") || allText.contains("老伴") {
+            addedCount += upsertQuickFact(
+                statement: sentenceContaining(["妻子", "丈夫", "老伴"], in: userTexts) ?? allText,
+                sessionId: sessionId,
+                privacyMetadata: privacyMetadata
+            )
+        }
+
+        if allText.contains("住在") {
+            addedCount += upsertQuickFact(
+                statement: sentenceContaining(["住在"], in: userTexts) ?? allText,
+                sessionId: sessionId,
+                privacyMetadata: privacyMetadata
+            )
+        }
+
+        if allText.contains("照相馆") {
+            addedCount += upsertQuickFact(
+                statement: sentenceContaining(["照相馆"], in: userTexts) ?? allText,
+                sessionId: sessionId,
+                privacyMetadata: privacyMetadata
+            )
+        }
+
+        let yearMatches = regexMatches(pattern: "(19\\d{2}|20\\d{2})年", in: allText)
+        for match in yearMatches {
+            guard let yearText = match.first else { continue }
+            addedCount += upsertQuickFact(
+                statement: sentenceContaining([yearText], in: userTexts) ?? "\(yearText)被用户明确提及",
+                sessionId: sessionId,
+                privacyMetadata: privacyMetadata
+            )
         }
 
         // 提取事件
@@ -383,25 +488,309 @@ final class KBLiteManager {
                              "生孩子", "做饭", "种地", "打工", "赶集", "学手艺", "出国", "下海"]
         for kw in eventKeywords {
             if allText.contains(kw) {
-                let existing = graph.events.first {
-                    $0.title.contains(kw)
-                        && KBLitePrivacyScopePolicy.canMerge(existing: $0.privacyMetadata, incoming: privacyMetadata)
-                }
-                if existing == nil {
-                    let event = KBEvent(
-                        id: UUID().uuidString,
-                        title: kw,
-                        sourceSessionIds: [sessionId],
-                        privacyMetadata: privacyMetadata
-                    )
-                    graph.events.append(event)
-                    addedCount += 1
-                }
+                addedCount += upsertQuickEvent(
+                    title: kw,
+                    description: sentenceContaining([kw], in: userTexts),
+                    year: extractYear(near: kw, in: allText),
+                    sessionId: sessionId,
+                    privacyMetadata: privacyMetadata
+                )
             }
         }
 
         print("[KBLite] 📝 正则快速提取: 新增 \(addedCount) 实体")
         return addedCount
+    }
+
+#if MEMORY_PRIVACY_INTEGRATION_VERIFY
+    @discardableResult
+    func verifyQuickExtract(
+        turns: [ConversationTurn],
+        sessionId: Int,
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+    ) -> Int {
+        quickExtract(turns: turns, sessionId: sessionId, privacyMetadata: privacyMetadata)
+    }
+#endif
+
+    private func quickExtractConcretePeople(
+        from text: String,
+        sessionId: Int,
+        privacyMetadata: MemoryPrivacyMetadata
+    ) -> Int {
+        var addedCount = 0
+        for name in regexMatches(pattern: "我叫([\\u4e00-\\u9fa5]{2,4}?)(?:在|和|，|。|,|\\s|$)", in: text).compactMap({ $0.first }) {
+            addedCount += upsertQuickPerson(
+                name: name,
+                relation: "本人",
+                traits: [],
+                briefBio: "\(name)是用户在对话中明确自述的姓名。",
+                sessionId: sessionId,
+                privacyMetadata: privacyMetadata
+            )
+        }
+
+        let relationPatterns: [(pattern: String, relation: String)] = [
+            ("妻子([\\u4e00-\\u9fa5]{2,4}?)(?:在|和|，|。|,|\\s|$)", "妻子"),
+            ("丈夫([\\u4e00-\\u9fa5]{2,4}?)(?:在|和|，|。|,|\\s|$)", "丈夫"),
+            ("老伴([\\u4e00-\\u9fa5]{2,4}?)(?:在|和|，|。|,|\\s|$)", "老伴"),
+            ("父亲([\\u4e00-\\u9fa5]{2,4}?)(?:在|和|，|。|,|\\s|$)", "父亲"),
+            ("母亲([\\u4e00-\\u9fa5]{2,4}?)(?:在|和|，|。|,|\\s|$)", "母亲")
+        ]
+        for item in relationPatterns {
+            for name in regexMatches(pattern: item.pattern, in: text).compactMap({ $0.first }) {
+                addedCount += upsertQuickPerson(
+                    name: name,
+                    relation: item.relation,
+                    traits: [],
+                    briefBio: "\(name)在对话中被提及为\(item.relation)。",
+                    sessionId: sessionId,
+                    privacyMetadata: privacyMetadata
+                )
+            }
+        }
+        return addedCount
+    }
+
+    private func quickExtractExplicitFacts(
+        from texts: [String],
+        sessionId: Int,
+        privacyMetadata: MemoryPrivacyMetadata
+    ) -> Int {
+        let keywords = ["我叫", "住在", "妻子", "丈夫", "老伴", "照相馆", "开过", "开了", "工作", "结婚"]
+        var addedCount = 0
+        for sentence in splitMemorySentences(from: texts) {
+            guard keywords.contains(where: { sentence.contains($0) }) ||
+                    regexMatches(pattern: "(19\\d{2}|20\\d{2})年", in: sentence).isEmpty == false else {
+                continue
+            }
+            addedCount += upsertQuickFact(
+                statement: sentence,
+                sessionId: sessionId,
+                privacyMetadata: privacyMetadata
+            )
+        }
+        return addedCount
+    }
+
+    private func upsertQuickPerson(
+        name rawName: String,
+        relation: String?,
+        traits: [String],
+        briefBio: String?,
+        sessionId: Int,
+        privacyMetadata: MemoryPrivacyMetadata
+    ) -> Int {
+        let name = Self.normalizedQuickExtractEntity(rawName)
+        guard Self.shouldPersistPerson(name: name, aliases: [], traits: traits, briefBio: briefBio) else {
+            return 0
+        }
+        let now = Date()
+        if let existing = findMatchingPerson(name: name, aliases: [], privacyMetadata: privacyMetadata),
+           let idx = graph.people.firstIndex(where: { $0.id == existing.id }) {
+            var person = graph.people[idx]
+            if person.relation == nil { person.relation = relation }
+            if person.briefBio == nil { person.briefBio = briefBio }
+            for trait in traits where !person.traits.contains(trait) {
+                person.traits.append(trait)
+            }
+            if !person.sourceSessionIds.contains(sessionId) {
+                person.sourceSessionIds.append(sessionId)
+            }
+            person.updatedAt = now
+            graph.people[idx] = person
+            return 0
+        }
+
+        guard graph.people.count < maxPeople else { return 0 }
+        graph.people.append(
+            KBPerson(
+                id: UUID().uuidString,
+                name: name,
+                aliases: [],
+                relation: relation,
+                traits: traits,
+                briefBio: briefBio,
+                sourceSessionIds: [sessionId],
+                createdAt: now,
+                updatedAt: now,
+                privacyMetadata: privacyMetadata
+            )
+        )
+        return 1
+    }
+
+    private func upsertQuickPlace(
+        name rawName: String,
+        category: String?,
+        description: String?,
+        sessionId: Int,
+        privacyMetadata: MemoryPrivacyMetadata
+    ) -> Int {
+        let name = Self.normalizedQuickExtractEntity(rawName)
+        guard name.count >= 2 else { return 0 }
+        if let existing = graph.places.first(where: {
+            $0.name == name && KBLitePrivacyScopePolicy.canMerge(existing: $0.privacyMetadata, incoming: privacyMetadata)
+        }),
+           let idx = graph.places.firstIndex(where: { $0.id == existing.id }) {
+            var place = graph.places[idx]
+            if place.category == nil { place.category = category }
+            if place.description == nil { place.description = description }
+            if !place.sourceSessionIds.contains(sessionId) {
+                place.sourceSessionIds.append(sessionId)
+            }
+            graph.places[idx] = place
+            return 0
+        }
+
+        guard graph.places.count < maxPlaces else { return 0 }
+        graph.places.append(
+            KBPlace(
+                id: UUID().uuidString,
+                name: name,
+                category: category,
+                description: description,
+                sourceSessionIds: [sessionId],
+                privacyMetadata: privacyMetadata
+            )
+        )
+        return 1
+    }
+
+    private func upsertQuickEvent(
+        title rawTitle: String,
+        description: String?,
+        year: Int?,
+        sessionId: Int,
+        privacyMetadata: MemoryPrivacyMetadata
+    ) -> Int {
+        let title = Self.normalizedQuickExtractEntity(rawTitle)
+        guard !title.isEmpty else { return 0 }
+        if let idx = graph.events.firstIndex(where: {
+            KBLitePrivacyScopePolicy.canMerge(existing: $0.privacyMetadata, incoming: privacyMetadata)
+                && ($0.title == title || $0.title.contains(title) || title.contains($0.title))
+        }) {
+            var event = graph.events[idx]
+            if event.description == nil { event.description = description }
+            if event.year == nil { event.year = year }
+            if !event.sourceSessionIds.contains(sessionId) {
+                event.sourceSessionIds.append(sessionId)
+            }
+            graph.events[idx] = event
+            return 0
+        }
+
+        guard graph.events.count < maxEvents else { return 0 }
+        graph.events.append(
+            KBEvent(
+                id: UUID().uuidString,
+                title: title,
+                description: description,
+                year: year,
+                sourceSessionIds: [sessionId],
+                privacyMetadata: privacyMetadata
+            )
+        )
+        return 1
+    }
+
+    private func upsertQuickFact(
+        statement rawStatement: String,
+        sessionId: Int,
+        privacyMetadata: MemoryPrivacyMetadata
+    ) -> Int {
+        let statement = Self.normalizedQuickExtractEntity(rawStatement)
+        guard statement.count >= 4 else { return 0 }
+        if let idx = graph.facts.firstIndex(where: {
+            KBLitePrivacyScopePolicy.canMerge(existing: $0.privacyMetadata, incoming: privacyMetadata)
+                && ($0.statement == statement ||
+                    ($0.statement.count >= 10 && statement.count >= 10 &&
+                     ($0.statement.contains(statement) || statement.contains($0.statement))))
+        }) {
+            var fact = graph.facts[idx]
+            if !fact.sourceSessionIds.contains(sessionId) {
+                fact.sourceSessionIds.append(sessionId)
+            }
+            graph.facts[idx] = fact
+            return 0
+        }
+
+        guard graph.facts.count < maxFacts else { return 0 }
+        graph.facts.append(
+            KBFact(
+                id: UUID().uuidString,
+                statement: statement,
+                confidence: "high",
+                sourceSessionIds: [sessionId],
+                privacyMetadata: privacyMetadata
+            )
+        )
+        return 1
+    }
+
+    private func extractPlacePhrases(from text: String) -> [(name: String, category: String?, description: String?)] {
+        var results: [(String, String?, String?)] = []
+        for match in regexMatches(pattern: "住在([^。！？,，；;\\n]{2,24})", in: text) {
+            guard let raw = match.first else { continue }
+            let place = raw
+                .replacingOccurrences(of: "的", with: "")
+                .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters))
+            if place.count >= 2 {
+                results.append((place, "lived", "用户明确提到曾住在这里。"))
+            }
+        }
+        for match in regexMatches(pattern: "在([^。！？,，；;\\n]{2,18})(开过|开了|经营|工作|上班)", in: text) {
+            guard let raw = match.first else { continue }
+            let place = raw.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters))
+            if place.count >= 2 {
+                results.append((place, "worked", "用户明确提到在这里有工作或经营经历。"))
+            }
+        }
+        return results
+    }
+
+    private func inferPlaceCategory(from text: String, place: String) -> String? {
+        if text.contains("住在\(place)") || text.contains("\(place)住") {
+            return "lived"
+        }
+        if text.contains("\(place)边开") || text.contains("\(place)开") || text.contains("\(place)工作") {
+            return "worked"
+        }
+        return nil
+    }
+
+    private func sentenceContaining(_ keywords: [String], in texts: [String]) -> String? {
+        splitMemorySentences(from: texts).first { sentence in
+            keywords.contains { sentence.contains($0) }
+        }
+    }
+
+    private func splitMemorySentences(from texts: [String]) -> [String] {
+        texts.flatMap { text in
+            text.components(separatedBy: CharacterSet(charactersIn: "。！？!?；;\n"))
+        }
+        .map { Self.normalizedQuickExtractEntity($0) }
+        .filter { !$0.isEmpty }
+    }
+
+    private func extractYear(near keyword: String, in text: String) -> Int? {
+        let sentences = splitMemorySentences(from: [text])
+        let target = sentences.first { $0.contains(keyword) } ?? text
+        guard let yearText = regexMatches(pattern: "(19\\d{2}|20\\d{2})年", in: target).first?.first else {
+            return nil
+        }
+        return Int(yearText)
+    }
+
+    private func regexMatches(pattern: String, in text: String) -> [[String]] {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let nsRange = NSRange(text.startIndex..<text.endIndex, in: text)
+        return regex.matches(in: text, range: nsRange).map { match in
+            (1..<match.numberOfRanges).compactMap { index in
+                guard let range = Range(match.range(at: index), in: text) else { return nil }
+                return String(text[range])
+            }
+        }
     }
 
     // MARK: - Private: Prompt Building

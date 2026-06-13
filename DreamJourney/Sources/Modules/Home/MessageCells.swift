@@ -23,6 +23,8 @@ final class TGMessageCell: UITableViewCell {
         let l = UILabel()
         l.numberOfLines = 0
         l.font = .systemFont(ofSize: 16)
+        l.lineBreakMode = .byCharWrapping
+        l.clipsToBounds = true
         return l
     }()
 
@@ -142,7 +144,8 @@ final class TGMessageCell: UITableViewCell {
             y: Self.verticalPadding,
             width: bubbleView.bounds.width - Self.horizontalPadding * 2,
             height: bubbleView.bounds.height - Self.verticalPadding * 2
-        )
+        ).integral
+        messageLabel.preferredMaxLayoutWidth = messageLabel.bounds.width
     }
 
     override func sizeThatFits(_ size: CGSize) -> CGSize {
@@ -170,7 +173,7 @@ final class TGMessageCell: UITableViewCell {
     static func attributedMessage(_ text: String, isUser: Bool) -> NSAttributedString {
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineSpacing = 5
-        paragraphStyle.lineBreakMode = .byWordWrapping
+        paragraphStyle.lineBreakMode = .byCharWrapping
         return NSAttributedString(string: text, attributes: [
             .font: UIFont.systemFont(ofSize: 16),
             .foregroundColor: isUser

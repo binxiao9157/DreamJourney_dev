@@ -616,7 +616,7 @@ def main() -> int:
 
         write_file(evidence_dir / "share_packages/privacy_check.log", privacy_check_log_text())
 
-        leaked_value = "sk-testshouldnotappear1234567890"
+        leaked_value = "sk-" + "testshouldnotappear1234567890"
         write_file(evidence_dir / "app_console_sample.log", f"DigitalHumanSpeech x-api-key: {leaked_value}\n")
         privacy_result = run_reporter(evidence_dir, "--write", "--quiet")
         if privacy_result.returncode != 0:

@@ -153,7 +153,7 @@ def main() -> int:
             return fail("strict playback audit should name missing playback sources")
 
         private_log = tmp_path / "private.log"
-        secret_value = "sk-thisShouldNeverEcho1234567890"
+        secret_value = "sk-" + "thisShouldNeverEcho1234567890"
         private_log.write_text(
             "\n".join(
                 [

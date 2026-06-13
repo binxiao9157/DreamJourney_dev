@@ -1438,6 +1438,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
             guard let self = self,
                   !self.isCrisisInterventionActive,
+                  DialogEndIntentPolicy.shouldPromptMemoir(for: reason),
                   self.currentDialogAllowsMemoir,
                   self.presentedViewController == nil else { return }
             self.showMemoirGenerationCard()

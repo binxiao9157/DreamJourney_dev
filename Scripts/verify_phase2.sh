@@ -70,8 +70,10 @@ python3 Scripts/RoadshowEvidencePackageVerify/main.py
 
 echo "== MockDialogEngine =="
 xcrun swiftc -D MOCK_DIALOG_VERIFY \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
   DreamJourney/Sources/Services/Safety/SafetyModels.swift \
   DreamJourney/Sources/Services/Safety/SafetyMonitor.swift \
+  DreamJourney/Sources/Services/KBLiteModels.swift \
   DreamJourney/Sources/Services/DialogEngineModels.swift \
   DreamJourney/Sources/Services/DialogEngineProtocol.swift \
   DreamJourney/Sources/Services/MockDialogEngine.swift \
@@ -79,6 +81,26 @@ xcrun swiftc -D MOCK_DIALOG_VERIFY \
   Scripts/MockDialogEngineVerify/main.swift \
   -o /tmp/dreamjourney_mock_dialog_verify
 /tmp/dreamjourney_mock_dialog_verify
+
+echo "== DialogEndIntent =="
+xcrun swiftc \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
+  DreamJourney/Sources/Services/Safety/SafetyModels.swift \
+  DreamJourney/Sources/Services/KBLiteModels.swift \
+  DreamJourney/Sources/Services/DialogEngineModels.swift \
+  Scripts/DialogEndIntentVerify/main.swift \
+  -o /tmp/dreamjourney_dialog_end_intent_verify
+/tmp/dreamjourney_dialog_end_intent_verify
+
+echo "== DialogMemoryGrounding =="
+xcrun swiftc \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
+  DreamJourney/Sources/Services/Safety/SafetyModels.swift \
+  DreamJourney/Sources/Services/KBLiteModels.swift \
+  DreamJourney/Sources/Services/DialogEngineModels.swift \
+  Scripts/DialogMemoryGroundingVerify/main.swift \
+  -o /tmp/dreamjourney_dialog_memory_grounding_verify
+/tmp/dreamjourney_dialog_memory_grounding_verify
 
 echo "== SafetyGuard =="
 xcrun swiftc \
@@ -110,6 +132,16 @@ xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
   Scripts/MemoryPrivacyIntegrationVerify/main.swift \
   -o /tmp/dreamjourney_memory_privacy_integration_verify
 /tmp/dreamjourney_memory_privacy_integration_verify
+
+echo "== KBLiteQuickExtract =="
+xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
+  DreamJourney/Sources/Services/KBLiteModels.swift \
+  DreamJourney/Sources/Services/KBLitePrivacyScopePolicy.swift \
+  DreamJourney/Sources/Services/KBLiteManager.swift \
+  Scripts/KBLiteQuickExtractVerify/main.swift \
+  -o /tmp/dreamjourney_kblite_quick_extract_verify
+/tmp/dreamjourney_kblite_quick_extract_verify
 
 echo "== SharePackagePrivacy =="
 xcrun swiftc \
@@ -267,8 +299,10 @@ xcrun swiftc -sdk "$IOS_SDK" -target arm64-apple-ios15.0 -typecheck \
 echo "== MockDialogEngine simulator typecheck =="
 SIM_SDK="$(xcrun --sdk iphonesimulator --show-sdk-path)"
 xcrun swiftc -sdk "$SIM_SDK" -target arm64-apple-ios15.0-simulator -D MOCK_DIALOG_VERIFY -typecheck \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
   DreamJourney/Sources/Services/Safety/SafetyModels.swift \
   DreamJourney/Sources/Services/Safety/SafetyMonitor.swift \
+  DreamJourney/Sources/Services/KBLiteModels.swift \
   DreamJourney/Sources/Services/DialogEngineModels.swift \
   DreamJourney/Sources/Services/DialogEngineProtocol.swift \
   DreamJourney/Sources/Services/MockDialogEngine.swift \

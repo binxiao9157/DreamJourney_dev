@@ -125,8 +125,8 @@ let offlineArgDecision = DeepSeekSafetyGuarding.guardDecision(
     target: .deepseek,
     guardClient: offlineArgClient
 )
-assertCondition(offlineArgDecision.canSendToLLM, "roadshow offline launch arg should use mock allow safety guard")
-assertCondition(offlineArgDecision.reasonCode == "MOCK_ALLOW", "roadshow offline launch arg should not call configured guard endpoint")
+assertCondition(!offlineArgDecision.canSendToLLM, "roadshow offline launch arg should not silently mock safety guard in real testing mode")
+assertCondition(offlineArgDecision.reasonCode == "GUARD_UNAVAILABLE", "roadshow offline launch arg should fail closed unless mock guard is explicit")
 
 let offlineEnvClient = DeepSeekSafetyGuarding.makeDefaultClient(
     arguments: ["DreamJourney"],
@@ -142,7 +142,7 @@ let offlineEnvDecision = DeepSeekSafetyGuarding.guardDecision(
     target: .deepseek,
     guardClient: offlineEnvClient
 )
-assertCondition(offlineEnvDecision.canSendToLLM, "roadshow offline environment should use mock allow safety guard")
-assertCondition(offlineEnvDecision.reasonCode == "MOCK_ALLOW", "roadshow offline environment should not call configured guard endpoint")
+assertCondition(!offlineEnvDecision.canSendToLLM, "roadshow offline environment should not silently mock safety guard in real testing mode")
+assertCondition(offlineEnvDecision.reasonCode == "GUARD_UNAVAILABLE", "roadshow offline environment should fail closed unless mock guard is explicit")
 
 print("RemoteSafetyGuard verification passed")
