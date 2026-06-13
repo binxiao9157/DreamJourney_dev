@@ -31,6 +31,17 @@ checks = [
         and "getCurrentTranscript()" not in share_function,
     ),
     (
+        "share action should reject insufficient-data snapshots instead of exporting an empty report",
+        "canShareCareReport(snapshot)" in share_function
+        and "真实关怀数据不足" in share_function,
+    ),
+    (
+        "care dashboard should show a real-data empty state for insufficient local care input",
+        "makeInsufficientDataState" in vc
+        and "亲友范围" in vc
+        and "真实对话" in vc,
+    ),
+    (
         "report descriptor should state no raw chat content and no medical diagnosis",
         "不包含原始聊天内容" in models
         and "不是医疗诊断" in models,

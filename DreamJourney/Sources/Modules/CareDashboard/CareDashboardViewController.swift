@@ -94,6 +94,10 @@ final class CareDashboardViewController: UIViewController {
             showToast("暂无可分享的关怀周报", type: .info)
             return
         }
+        guard canShareCareReport(snapshot) else {
+            showToast("真实关怀数据不足，先完成一次亲友范围真实对话", type: .info)
+            return
+        }
         let descriptor = CareDashboardShareReportDescriptor.make(
             snapshot: snapshot,
             viewerName: viewerDisplayName()
@@ -218,6 +222,11 @@ final class CareDashboardViewController: UIViewController {
         stackView.addArrangedSubview(makeHeader(snapshot))
         stackView.addArrangedSubview(makePrivacyNotice())
 
+        guard canShareCareReport(snapshot) else {
+            stackView.addArrangedSubview(makeInsufficientDataState())
+            return
+        }
+
         let metrics = [
             ("用户发言", "\(snapshot.userTurnCount) 轮"),
             ("观测天数", "\(snapshot.windowDayCount) 天"),
@@ -232,6 +241,10 @@ final class CareDashboardViewController: UIViewController {
         stackView.addArrangedSubview(makeTrendCard(snapshot))
         stackView.addArrangedSubview(makeWeeklyReport(snapshot))
         stackView.addArrangedSubview(makeSuggestions(snapshot.suggestions))
+    }
+
+    private func canShareCareReport(_ snapshot: CareSignalSnapshot) -> Bool {
+        snapshot.riskLevel != .insufficientData && snapshot.userTurnCount > 0
     }
 
     private func makeHeader(_ snapshot: CareSignalSnapshot) -> UIView {
@@ -313,6 +326,34 @@ final class CareDashboardViewController: UIViewController {
         label.textColor = .warmSubtitle
         label.numberOfLines = 0
         return paddedSurface(label)
+    }
+
+    private func makeInsufficientDataState() -> UIView {
+        let container = makeSurface()
+
+        let titleLabel = UILabel()
+        titleLabel.text = "等待真实关怀数据"
+        titleLabel.font = .systemFont(ofSize: 18, weight: .bold)
+        titleLabel.textColor = .warmPrimary
+
+        let bodyLabel = UILabel()
+        bodyLabel.text = "请在首页隐私范围选择「亲友范围」，完成一次真实对话后再刷新。看板只使用授权给亲友的真实对话生成脱敏趋势，不会把本地私密内容或可生成内容当作关怀数据。"
+        bodyLabel.font = .systemFont(ofSize: 14)
+        bodyLabel.textColor = .warmSubtitle
+        bodyLabel.numberOfLines = 0
+
+        let stack = UIStackView(arrangedSubviews: [titleLabel, bodyLabel])
+        stack.axis = .vertical
+        stack.spacing = 8
+        container.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 16),
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16),
+        ])
+        return container
     }
 
     private func makeMetricGrid(_ metrics: [(String, String)]) -> UIView {
