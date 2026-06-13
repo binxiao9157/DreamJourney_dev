@@ -172,6 +172,38 @@ assertCondition(
     "extractFromTranscript should mark session processed after deterministic deposit"
 )
 
+let generalText = "我叫周明，1992年住在泉州鲤城区中山路。2001年我和妻子许安琪在厦门鼓浪屿开了一家茶馆。"
+KBLiteManager.shared.reset()
+let generalAddedCount = KBLiteManager.shared.verifyQuickExtract(
+    turns: [
+        ConversationTurn(
+            role: "user",
+            text: generalText,
+            timestamp: Date(timeIntervalSince1970: 1_800_000_002),
+            privacyMetadata: metadata
+        )
+    ],
+    sessionId: 3,
+    privacyMetadata: metadata
+)
+
+let generalGraph = KBLiteManager.shared.graph
+let generalPeople = Set(generalGraph.people.map(\.name))
+let generalPlaces = Set(generalGraph.places.map(\.name))
+let generalEvents = Set(generalGraph.events.map(\.title))
+let generalFacts = generalGraph.facts.map(\.statement).joined(separator: "\n")
+
+assertCondition(generalAddedCount >= 7, "quick extract should handle non-sample archive sentences")
+assertCondition(generalPeople.contains("周明"), "should extract self name from a non-sample sentence")
+assertCondition(generalPeople.contains("许安琪"), "should extract spouse name from a non-sample sentence")
+assertCondition(generalPlaces.contains("泉州鲤城区中山路"), "should extract lived address from a non-sample sentence")
+assertCondition(generalPlaces.contains("厦门鼓浪屿"), "should extract business location from a non-sample sentence")
+assertCondition(
+    generalEvents.contains("开茶馆") || generalEvents.contains("开店"),
+    "should extract generic opened-shop events without relying on 照相馆"
+)
+assertCondition(generalFacts.contains("2001年我和妻子许安琪在厦门鼓浪屿开了一家茶馆"), "should persist generic opened-shop fact")
+
 KBLiteManager.shared.reset()
 try? FileManager.default.removeItem(at: verifyGraph)
 print("KBLite quick extract verification passed")

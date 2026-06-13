@@ -800,10 +800,10 @@ final class KBLiteManager {
             )
         }
 
-        if allText.contains("照相馆") {
-            let title = allText.contains("小照相馆") ? "开小照相馆" : "开照相馆"
+        let openedBusinessEvents = extractOpenedBusinessEvents(from: userTexts)
+        if openedBusinessEvents.isEmpty, allText.contains("照相馆") {
             addedCount += upsertQuickEvent(
-                title: title,
+                title: allText.contains("小照相馆") ? "开小照相馆" : "开照相馆",
                 description: sentenceContaining(["照相馆"], in: userTexts) ?? "提到开过照相馆",
                 year: extractYear(near: "照相馆", in: allText),
                 sessionId: sessionId,
@@ -811,11 +811,11 @@ final class KBLiteManager {
             )
         }
 
-        if allText.contains("开过一家") && !allText.contains("照相馆") {
+        for event in openedBusinessEvents {
             addedCount += upsertQuickEvent(
-                title: "开店",
-                description: sentenceContaining(["开过一家"], in: userTexts) ?? "提到开过一家店",
-                year: extractYear(near: "开过一家", in: allText),
+                title: event.title,
+                description: event.description,
+                year: event.year,
                 sessionId: sessionId,
                 privacyMetadata: privacyMetadata
             )
@@ -1138,6 +1138,24 @@ final class KBLiteManager {
             let place = raw.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters))
             if place.count >= 2 {
                 results.append((place, "worked", "用户明确提到在这里有工作或经营经历。"))
+            }
+        }
+        return results
+    }
+
+    private func extractOpenedBusinessEvents(from texts: [String]) -> [(title: String, description: String, year: Int?)] {
+        var results: [(String, String, Int?)] = []
+        for sentence in splitMemorySentences(from: texts) {
+            for match in regexMatches(pattern: "开(?:过|了)?一家([^。！？,，；;\\n]{1,12})", in: sentence) {
+                guard let rawBusiness = match.first else { continue }
+                let business = Self.normalizedQuickExtractEntity(rawBusiness)
+                    .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters))
+                guard business.count >= 2 else { continue }
+                results.append((
+                    "开\(business)",
+                    sentence,
+                    extractYear(near: "开", in: sentence)
+                ))
             }
         }
         return results
