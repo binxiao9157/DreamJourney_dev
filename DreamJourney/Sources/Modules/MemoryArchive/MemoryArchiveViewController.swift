@@ -8,6 +8,7 @@ final class MemoryArchiveViewController: UIViewController {
     private var backendArchiveItemCount: Int?
     private var backendArchiveLastCheckedAt: Date?
     private var backendSyncStatusOverride: String?
+    private var knowledgeDepositStatusOverride: String?
 
     private let titleLabel: UILabel = {
         let label = UILabel()
@@ -30,6 +31,14 @@ final class MemoryArchiveViewController: UIViewController {
         let label = UILabel()
         label.font = .systemFont(ofSize: 14, weight: .medium)
         label.textColor = .warmPrimary
+        label.numberOfLines = 0
+        return label
+    }()
+
+    private let knowledgeDepositStatusLabel: UILabel = {
+        let label = UILabel()
+        label.font = .systemFont(ofSize: 12, weight: .medium)
+        label.textColor = .warmSubtitle
         label.numberOfLines = 0
         return label
     }()
@@ -104,7 +113,7 @@ final class MemoryArchiveViewController: UIViewController {
         actionStack.axis = .vertical
         actionStack.spacing = 10
 
-        [titleLabel, boundaryLabel, summaryLabel, backendSyncStatusLabel, actionStack, tableView, emptyLabel].forEach {
+        [titleLabel, boundaryLabel, summaryLabel, knowledgeDepositStatusLabel, backendSyncStatusLabel, actionStack, tableView, emptyLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview($0)
         }
@@ -122,7 +131,11 @@ final class MemoryArchiveViewController: UIViewController {
             summaryLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             summaryLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
 
-            backendSyncStatusLabel.topAnchor.constraint(equalTo: summaryLabel.bottomAnchor, constant: 6),
+            knowledgeDepositStatusLabel.topAnchor.constraint(equalTo: summaryLabel.bottomAnchor, constant: 6),
+            knowledgeDepositStatusLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+            knowledgeDepositStatusLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
+
+            backendSyncStatusLabel.topAnchor.constraint(equalTo: knowledgeDepositStatusLabel.bottomAnchor, constant: 4),
             backendSyncStatusLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             backendSyncStatusLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
 
@@ -144,6 +157,7 @@ final class MemoryArchiveViewController: UIViewController {
         items = repository.items()
         let summary = repository.summary()
         summaryLabel.text = "共 \(summary.totalCount) 份素材 · 照片 \(summary.photoCount) · 语音 \(summary.voiceSampleCount) · 文字 \(summary.textCount) · 已分析 \(summary.analyzedPhotoCount)"
+        updateKnowledgeDepositStatusLabel()
         updateBackendSyncStatusLabel()
         emptyLabel.isHidden = !items.isEmpty
         tableView.reloadData()
@@ -209,11 +223,17 @@ final class MemoryArchiveViewController: UIViewController {
                     item.note,
                     privacyMetadata: item.privacyMetadata
                 )) { [weak self] addedCount in
-                    guard addedCount > 0 else { return }
                     DispatchQueue.main.async {
-                        self?.showToast("知识库已更新 \(addedCount) 条", type: .success)
+                        if addedCount == 0 {
+                            self?.setKnowledgeDepositStatus("结构化建库：文字素材已保存，暂无可抽取的新知识")
+                        } else {
+                            self?.setKnowledgeDepositStatus("结构化建库：文字素材已沉淀 \(addedCount) 条")
+                            self?.showToast("知识库已更新 \(addedCount) 条", type: .success)
+                        }
                     }
                 }
+            } else {
+                setKnowledgeDepositStatus("结构化建库：私密素材仅存档案馆，不进入知识库")
             }
             syncArchiveItemMetadataToBackend(item)
             dismiss(animated: true) { [weak self] in
@@ -301,6 +321,7 @@ final class MemoryArchiveViewController: UIViewController {
                     do {
                         let item = try self.repository.applyImageAnalysis(id: itemId, analysis: archiveAnalysis)
                         if item.privacyMetadata.scope != .privateOnly {
+                            let beforeStatus = KBLiteDepositStatusBuilder.build(from: KBLiteManager.shared.graph)
                             let sessionId = ConversationMemoryManager.shared.currentMemory.sessionCount + 1
                             Stage1MemoryFacade.shared.ingestImageAnalysis(
                                 kbAnalysis,
@@ -311,6 +332,13 @@ final class MemoryArchiveViewController: UIViewController {
                                 "记忆档案馆上传旧照片：\(archiveAnalysis.summary)",
                                 privacyMetadata: item.privacyMetadata
                             ))
+                            let afterStatus = KBLiteDepositStatusBuilder.build(from: KBLiteManager.shared.graph)
+                            let addedCount = max(0, afterStatus.totalEntityCount - beforeStatus.totalEntityCount)
+                            if addedCount == 0 {
+                                self.setKnowledgeDepositStatus("结构化建库：照片分析已完成，暂无可抽取的新知识")
+                            } else {
+                                self.setKnowledgeDepositStatus("结构化建库：照片分析已沉淀到知识库 \(addedCount) 条")
+                            }
                         }
                         self.showToast("照片分析完成", type: .success)
                     } catch {
@@ -478,9 +506,20 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
             reloadData()
             syncArchiveItemMetadataToBackend(item)
             if item.analysisStatus == .pending {
+                setKnowledgeDepositStatus("结构化建库：照片已保存，等待分析后建库")
                 showToast("照片已加入档案馆，开始分析", type: .success)
                 analyzePhoto(image, itemId: item.id)
             } else {
+                switch item.privacyMetadata.scope {
+                case .privateOnly:
+                    setKnowledgeDepositStatus("结构化建库：私密素材仅存档案馆，不进入知识库")
+                case .familyCircle:
+                    setKnowledgeDepositStatus("结构化建库：亲友照片仅同步元数据，暂不做远端图片建库")
+                case .localOnly:
+                    setKnowledgeDepositStatus("结构化建库：本机照片已存档，未进入生成知识库")
+                case .generationAllowed:
+                    setKnowledgeDepositStatus("结构化建库：照片已存档，等待后续分析")
+                }
                 showToast("照片已保存", type: .success)
             }
         } catch {
@@ -589,7 +628,17 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
                     note: item.note,
                     timestamp: item.createdAt,
                     privacyMetadata: item.privacyMetadata
-                )
+                ) { [weak self] addedCount in
+                    DispatchQueue.main.async {
+                        if addedCount == 0 {
+                            self?.setKnowledgeDepositStatus("结构化建库：语音素材已保存，暂无可抽取的新知识")
+                        } else {
+                            self?.setKnowledgeDepositStatus("结构化建库：语音样本元信息已沉淀 \(addedCount) 条")
+                        }
+                    }
+                }
+            } else {
+                setKnowledgeDepositStatus("结构化建库：私密素材仅存档案馆，不进入知识库")
             }
             syncArchiveItemMetadataToBackend(item)
             showToast("语音素材已保存", type: .success)
@@ -601,6 +650,28 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
 }
 
 private extension MemoryArchiveViewController {
+    func setKnowledgeDepositStatus(_ text: String) {
+        knowledgeDepositStatusOverride = text
+        knowledgeDepositStatusLabel.text = text
+    }
+
+    func updateKnowledgeDepositStatusLabel() {
+        if let knowledgeDepositStatusOverride {
+            knowledgeDepositStatusLabel.text = knowledgeDepositStatusOverride
+            return
+        }
+
+        let status = KBLiteDepositStatusBuilder.build(from: KBLiteManager.shared.graph)
+        if status.totalEntityCount == 0 {
+            knowledgeDepositStatusLabel.text = "结构化建库：暂无已沉淀知识；保存可生成/亲友素材后会整理"
+        } else if status.archiveSourceCount > 0 {
+            let privacyText = status.privacySummary.replacingOccurrences(of: "隐私：", with: "")
+            knowledgeDepositStatusLabel.text = "结构化建库：档案 \(status.archiveSourceCount) 条 · 全库 \(status.totalEntityCount) 条 · \(privacyText)"
+        } else {
+            knowledgeDepositStatusLabel.text = "结构化建库：全库 \(status.totalEntityCount) 条，尚无档案来源"
+        }
+    }
+
     func refreshArchiveBackendSyncStatus() {
         guard DreamJourneyBackendClient.shared.isConfigured,
               let userId = UserManager.shared.currentUser?.id

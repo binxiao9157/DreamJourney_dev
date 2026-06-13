@@ -222,7 +222,7 @@ extension KnowledgeBaseViewController: UITableViewDataSource {
         switch currentTab {
         case .people:
             if people.isEmpty {
-                cell.textLabel?.text = "暂无人物数据\n\n与寻梦环游多聊聊您认识的人，AI 会自动提取。"
+                cell.textLabel?.text = "暂无人物数据\n\n可以在档案馆保存照片、语音或文字素材；明确姓名和关系后会进入结构化知识库。"
                 cell.textLabel?.textColor = .secondaryLabel
             } else {
                 let p = people[indexPath.row]
@@ -235,7 +235,7 @@ extension KnowledgeBaseViewController: UITableViewDataSource {
 
         case .places:
             if places.isEmpty {
-                cell.textLabel?.text = "暂无地点数据\n\n聊天中提到的地点会自动记录。"
+                cell.textLabel?.text = "暂无地点数据\n\n在档案馆或对话中提到老家、居住地、工作地，会自动整理到这里。"
                 cell.textLabel?.textColor = .secondaryLabel
             } else {
                 let p = places[indexPath.row]
@@ -247,7 +247,7 @@ extension KnowledgeBaseViewController: UITableViewDataSource {
 
         case .events:
             if events.isEmpty {
-                cell.textLabel?.text = "暂无事件数据\n\n聊天中提到的往事会自动记录。"
+                cell.textLabel?.text = "暂无事件数据\n\n在档案馆补充年份、地点和人物，往事会逐步沉淀成事件。"
                 cell.textLabel?.textColor = .secondaryLabel
             } else {
                 let e = events[indexPath.row]
@@ -259,7 +259,7 @@ extension KnowledgeBaseViewController: UITableViewDataSource {
 
         case .facts:
             if facts.isEmpty {
-                cell.textLabel?.text = "暂无事实数据\n\nAI 会在聊天中自动提取关键事实。"
+                cell.textLabel?.text = "暂无事实数据\n\n档案馆中的口头禅、性格线索、语音样本元信息会沉淀为可追溯事实。"
                 cell.textLabel?.textColor = .secondaryLabel
             } else {
                 let f = facts[indexPath.row]
