@@ -304,6 +304,21 @@ final class DreamJourneyBackendClient {
         )
     }
 
+    func acceptFamilyInvitationCode(
+        invitationCode: String,
+        phone: String,
+        completion: @escaping (Result<FamilyAcceptResponse, Swift.Error>) -> Void
+    ) {
+        let escapedCode = invitationCode.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? invitationCode
+        performJSONRequest(
+            path: "family/invitations/\(escapedCode)/accept",
+            method: "POST",
+            bodyObject: ["phone": phone],
+            responseType: FamilyAcceptResponse.self,
+            completion: completion
+        )
+    }
+
     func fetchDistrictPayload(keyword: String) async throws -> Data {
         guard var components = URLComponents(url: try endpointURL(path: "maps/district"), resolvingAgainstBaseURL: false) else {
             throw Error.invalidURL
@@ -562,6 +577,8 @@ extension DreamJourneyBackendClient {
         let phone: String?
         let accessStatus: String?
         let invitationStatus: String?
+        let invitationCode: String?
+        let invitationURL: String?
         let isOnline: Bool?
         let lastUpdated: String?
         let createdAt: String?

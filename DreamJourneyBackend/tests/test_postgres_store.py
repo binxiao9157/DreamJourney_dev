@@ -42,6 +42,14 @@ class FakeCursor:
                 if item.get("id") == item_id
             ]
             self.result = None if not members else {"payload": members[0]}
+        elif normalized.startswith("SELECT payload FROM family_members WHERE payload->>'invitationCode'"):
+            invitation_code = params[0]
+            matches = [
+                item for members in self.connection.family_members.values()
+                for item in members
+                if item.get("invitationCode") == invitation_code
+            ]
+            self.result = None if not matches else {"payload": matches[0]}
         elif normalized.startswith("SELECT payload FROM family_members"):
             user_id = params[0]
             self.result = [{"payload": item} for item in self.connection.family_members.get(user_id, [])]
@@ -150,6 +158,7 @@ class PostgresStoreTests(unittest.TestCase):
         self.assertIn("CREATE TABLE IF NOT EXISTS archive_items", sql)
         self.assertIn("CREATE TABLE IF NOT EXISTS mailbox_letters", sql)
         self.assertIn("CREATE TABLE IF NOT EXISTS family_members", sql)
+        self.assertIn("idx_family_members_invitation_code", sql)
         self.assertIn("CREATE TABLE IF NOT EXISTS care_snapshots", sql)
         self.assertGreaterEqual(connection.commits, 1)
 
@@ -203,6 +212,27 @@ class PostgresStoreTests(unittest.TestCase):
         self.assertEqual(accepted["invitationStatus"], "accepted")
         self.assertTrue(accepted["isOnline"])
         self.assertEqual(store.list_family_members("u1")[0]["invitationStatus"], "accepted")
+
+    def test_store_accepts_family_invitation_code(self):
+        connection = FakeConnection()
+        store = PostgresStore(connection_factory=lambda: connection)
+
+        member = store.add_family_member(
+            "u1",
+            {
+                "id": "family_code_1",
+                "name": "林桂芳",
+                "phone": "13900001111",
+                "invitationCode": "ABCD1234",
+                "invitationURL": "dreamjourney://family/invite?code=ABCD1234",
+            },
+        )
+        accepted = store.accept_family_invitation_code("ABCD1234", phone="13900001111")
+
+        self.assertEqual(member["invitationCode"], "ABCD1234")
+        self.assertEqual(accepted["accessStatus"], "active")
+        self.assertEqual(accepted["invitationStatus"], "accepted")
+        self.assertIsNone(store.accept_family_invitation_code("ABCD1234", phone="13900002222"))
 
     def test_store_persists_latest_care_snapshot_by_viewer(self):
         connection = FakeConnection()

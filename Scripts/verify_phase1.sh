@@ -60,6 +60,9 @@ python3 Scripts/MemoryArchiveImageAnalysisProxyVerify/main.py
 echo "== Family backend sync =="
 python3 Scripts/FamilyBackendSyncVerify/main.py
 
+echo "== Family invitation code =="
+python3 Scripts/FamilyInvitationCodeVerify/main.py
+
 echo "== KBLite =="
 swift kblite_verify.swift
 

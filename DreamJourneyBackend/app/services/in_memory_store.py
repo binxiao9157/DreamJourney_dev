@@ -79,6 +79,8 @@ class InMemoryStore:
     def add_family_member(self, user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         item = deepcopy(payload)
         item.setdefault("id", f"family_{len(self._family_members.get(user_id, [])) + 1}")
+        item.setdefault("invitationCode", "")
+        item.setdefault("invitationURL", "")
         item["userId"] = user_id
         item["createdAt"] = self._now()
         self._family_members.setdefault(user_id, []).append(item)
@@ -104,6 +106,35 @@ class InMemoryStore:
             accepted["lastUpdated"] = "刚刚接受邀请"
             members[index] = accepted
             return deepcopy(accepted)
+        return None
+
+    def accept_family_invitation_code(self, invitation_code: str, phone: str) -> Optional[Dict[str, Any]]:
+        normalized_code = invitation_code.strip()
+        if not normalized_code:
+            return None
+        normalized_phone = self._normalized_phone(phone)
+        for user_id, members in self._family_members.items():
+            for index, item in enumerate(members):
+                if str(item.get("invitationCode") or "").strip() != normalized_code:
+                    continue
+                expected_phone = self._normalized_phone(str(item.get("phone") or ""))
+                if expected_phone and normalized_phone != expected_phone:
+                    return None
+                if item.get("accessStatus") == "revoked" or item.get("invitationStatus") == "revoked":
+                    return None
+                if item.get("accessStatus") == "active" and item.get("invitationStatus") == "accepted":
+                    accepted = deepcopy(item)
+                    accepted["ownerUserId"] = user_id
+                    return accepted
+                accepted = deepcopy(item)
+                accepted["accessStatus"] = "active"
+                accepted["invitationStatus"] = "accepted"
+                accepted["isOnline"] = True
+                accepted["acceptedAt"] = self._now()
+                accepted["lastUpdated"] = "刚刚接受邀请"
+                accepted["ownerUserId"] = user_id
+                members[index] = accepted
+                return deepcopy(accepted)
         return None
 
     def revoke_family_member(self, user_id: str, member_id: str) -> Optional[Dict[str, Any]]:

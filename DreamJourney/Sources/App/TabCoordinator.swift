@@ -8,6 +8,7 @@ final class TabCoordinator: Coordinator {
     var didRequestLogout: (() -> Void)?
 
     let tabBarController = WarmTabBarController()
+    private var familyInvitationObserver: NSObjectProtocol?
 
     init() {
         self.navigationController = UINavigationController()
@@ -16,6 +17,16 @@ final class TabCoordinator: Coordinator {
     func start() {
         setupTabs()
         configureAppearance()
+        familyInvitationObserver = NotificationCenter.default.addObserver(
+            forName: .djFamilyInvitationDeepLinkReceived,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            self?.handleFamilyInvitationDeepLinkNotification(notification)
+        }
+        DispatchQueue.main.async { [weak self] in
+            self?.consumePendingFamilyInvitationDeepLink()
+        }
     }
 
     private func setupTabs() {
@@ -76,5 +87,29 @@ final class TabCoordinator: Coordinator {
         UINavigationBar.appearance().standardAppearance = navAppearance
         UINavigationBar.appearance().scrollEdgeAppearance = navAppearance
         UINavigationBar.appearance().tintColor = .warmPrimary
+    }
+
+    private func handleFamilyInvitationDeepLinkNotification(_ notification: Notification) {
+        if let code = notification.object as? String {
+            openFamilyInvitation(code: code)
+        } else {
+            consumePendingFamilyInvitationDeepLink()
+        }
+    }
+
+    private func consumePendingFamilyInvitationDeepLink() {
+        guard let code = FamilyInvitationDeepLinkService.consumePendingInvitationCode() else {
+            return
+        }
+        openFamilyInvitation(code: code)
+    }
+
+    private func openFamilyInvitation(code: String) {
+        tabBarController.selectedIndex = 2
+        guard let familyNav = tabBarController.viewControllers?.dropFirst(2).first as? UINavigationController,
+              let familyVC = familyNav.viewControllers.first as? FamilyCircleViewController else {
+            return
+        }
+        familyVC.acceptInvitationCodeFromDeepLink(code)
     }
 }

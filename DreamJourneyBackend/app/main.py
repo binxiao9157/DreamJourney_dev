@@ -1,3 +1,4 @@
+import secrets
 from typing import Any, Dict
 
 try:
@@ -238,7 +239,15 @@ def invite_family(payload: Dict[str, Any]) -> Dict[str, Any]:
     user_id = str(payload.get("userId") or "").strip()
     if not user_id:
         raise HTTPException(status_code=400, detail="userId is required")
-    member = store.add_family_member(user_id, payload)
+    invite_payload = dict(payload)
+    invite_payload.setdefault("accessStatus", "pending")
+    invite_payload.setdefault("invitationStatus", "pending")
+    invitation_code = str(invite_payload.get("invitationCode") or "").strip()
+    if not invitation_code:
+        invitation_code = secrets.token_urlsafe(6).replace("-", "").replace("_", "")[:10].upper()
+    invite_payload["invitationCode"] = invitation_code
+    invite_payload["invitationURL"] = f"dreamjourney://family/invite?code={invitation_code}"
+    member = store.add_family_member(user_id, invite_payload)
     return {"status": "created", "member": member}
 
 
@@ -255,6 +264,17 @@ def accept_family_member(user_id: str, member_id: str, payload: Dict[str, Any]) 
     member = store.accept_family_member(user_id, member_id, phone=phone)
     if member is None:
         raise HTTPException(status_code=404, detail="family member not found or phone mismatch")
+    return {"status": "accepted", "member": member}
+
+
+@app.post("/family/invitations/{invitation_code}/accept")
+def accept_family_invitation_code(invitation_code: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    phone = str(payload.get("phone") or "").strip()
+    if not phone:
+        raise HTTPException(status_code=400, detail="phone is required")
+    member = store.accept_family_invitation_code(invitation_code, phone=phone)
+    if member is None:
+        raise HTTPException(status_code=404, detail="invitation not found or phone mismatch")
     return {"status": "accepted", "member": member}
 
 

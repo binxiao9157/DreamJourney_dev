@@ -1,5 +1,47 @@
 import Foundation
 
+struct FamilyInvitationShare {
+    let member: FamilyMember
+    let invitationCode: String
+    let invitationURL: String
+
+    var shareText: String {
+        """
+        邀请你加入寻梦环游家族圈。
+        邀请码：\(invitationCode)
+        链接：\(invitationURL)
+        请用被邀请手机号登录后，在亲友页粘贴邀请码或链接接受邀请。
+        """
+    }
+}
+
+enum FamilyInvitationDeepLinkService {
+    private static let pendingCodeKey = "dj_family_pending_invitation_code"
+
+    @discardableResult
+    static func handle(url: URL) -> Bool {
+        guard let code = FamilyRepository.shared.invitationCode(from: url.absoluteString) else {
+            return false
+        }
+        UserDefaults.standard.set(code, forKey: pendingCodeKey)
+        NotificationCenter.default.post(name: .djFamilyInvitationDeepLinkReceived, object: code)
+        return true
+    }
+
+    static func consumePendingInvitationCode() -> String? {
+        guard let code = UserDefaults.standard.string(forKey: pendingCodeKey),
+              !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        UserDefaults.standard.removeObject(forKey: pendingCodeKey)
+        return code
+    }
+}
+
+extension Notification.Name {
+    static let djFamilyInvitationDeepLinkReceived = Notification.Name("dj.family.invitation.deepLink.received")
+}
+
 // MARK: - FamilyRepository 单例：亲属关系存储
 final class FamilyRepository {
 
@@ -162,7 +204,7 @@ final class FamilyRepository {
         name: String,
         relation: String,
         phone: String,
-        completion: @escaping (Result<FamilyMember, Swift.Error>) -> Void
+        completion: @escaping (Result<FamilyInvitationShare, Swift.Error>) -> Void
     ) {
         let trimmedPhone = phone.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedPhone.isEmpty else {
@@ -196,7 +238,51 @@ final class FamilyRepository {
                         return
                     }
                     _ = self.mergeBackendMembers([member])
-                    completion(.success(member))
+                    completion(.success(FamilyInvitationShare(
+                        member: member,
+                        invitationCode: response.member.invitationCode ?? "",
+                        invitationURL: response.member.invitationURL ?? ""
+                    )))
+                case .failure(let error):
+                    completion(.failure(error))
+                }
+            }
+        }
+    }
+
+    func acceptBackendInvitationCode(
+        _ rawCodeOrURL: String,
+        completion: @escaping (Result<FamilyMember, Swift.Error>) -> Void
+    ) {
+        guard let invitationCode = invitationCode(from: rawCodeOrURL) else {
+            completion(.failure(FamilyRepositoryBackendError.invalidInvitationCode))
+            return
+        }
+        guard let phone = UserManager.shared.currentUser?.phone,
+              !phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            completion(.failure(FamilyRepositoryBackendError.missingUser))
+            return
+        }
+        guard DreamJourneyBackendClient.shared.isConfigured else {
+            completion(.failure(FamilyRepositoryBackendError.missingBackendBaseURL))
+            return
+        }
+
+        DreamJourneyBackendClient.shared.acceptFamilyInvitationCode(
+            invitationCode: invitationCode,
+            phone: phone
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success(let response):
+                    guard let acceptedMember = response.member.toFamilyMember() else {
+                        completion(.failure(FamilyRepositoryBackendError.invalidBackendMember))
+                        return
+                    }
+                    _ = self.mergeBackendMembers([acceptedMember])
+                    _ = self.acceptLocalInvitation(phone: phone)
+                    completion(.success(acceptedMember))
                 case .failure(let error):
                     completion(.failure(error))
                 }
@@ -432,6 +518,36 @@ final class FamilyRepository {
         return "亲友\(digits.suffix(4))"
     }
 
+    func invitationCode(from rawValue: String) -> String? {
+        let raw = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { return nil }
+
+        if let components = URLComponents(string: raw),
+           let code = components.queryItems?.first(where: { $0.name.lowercased() == "code" })?.value,
+           let normalized = normalizedInvitationCode(code) {
+            return normalized
+        }
+
+        let separators = CharacterSet.whitespacesAndNewlines
+            .union(.punctuationCharacters)
+            .union(CharacterSet(charactersIn: "：，。；、"))
+        let tokens = raw.components(separatedBy: separators).reversed()
+        return tokens.compactMap { normalizedInvitationCode($0) }.first
+    }
+
+    private func normalizedInvitationCode(_ value: String) -> String? {
+        let scalars = value.uppercased().unicodeScalars.filter { scalar in
+            (48...57).contains(scalar.value) || (65...90).contains(scalar.value)
+        }
+        let code = String(String.UnicodeScalarView(scalars))
+        guard code.count >= 6,
+              code.count <= 16,
+              code.unicodeScalars.contains(where: { (65...90).contains($0.value) }) else {
+            return nil
+        }
+        return code
+    }
+
     private func normalizedPhone(_ phone: String?) -> String? {
         guard let phone else { return nil }
         let digits = phone.filter(\.isNumber)
@@ -457,6 +573,7 @@ final class FamilyRepository {
 
 private enum FamilyRepositoryBackendError: LocalizedError {
     case invalidPhone
+    case invalidInvitationCode
     case missingUser
     case missingBackendBaseURL
     case invalidBackendMember
@@ -465,6 +582,8 @@ private enum FamilyRepositoryBackendError: LocalizedError {
         switch self {
         case .invalidPhone:
             return "请输入亲友手机号"
+        case .invalidInvitationCode:
+            return "请输入有效的邀请码或邀请链接"
         case .missingUser:
             return "请先登录后再邀请亲友"
         case .missingBackendBaseURL:

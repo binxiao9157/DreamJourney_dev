@@ -19,6 +19,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let coordinator = AppCoordinator(window: window)
         appCoordinator = coordinator
         coordinator.start()
+        if let url = connectionOptions.urlContexts.first?.url {
+            FamilyInvitationDeepLinkService.handle(url: url)
+        }
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {}
@@ -26,4 +29,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func sceneWillResignActive(_ scene: UIScene) {}
     func sceneWillEnterForeground(_ scene: UIScene) {}
     func sceneDidEnterBackground(_ scene: UIScene) {}
+
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        guard let url = URLContexts.first?.url else { return }
+        FamilyInvitationDeepLinkService.handle(url: url)
+    }
 }

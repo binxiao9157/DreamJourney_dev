@@ -159,6 +159,27 @@
   - 后端不可用或未配置：回落到原本本机 `DeepSeekService.analyzeImage`。
 - 失败时仍标记 `analysisStatus=failed`，不会用 mock 结果假装分析成功。
 
+### 14. 亲友邀请：邀请码与 deeplink 真实跨设备闭环
+
+- 后端 `POST /family/invite` 现在会生成：
+  - `invitationCode`
+  - `invitationURL = dreamjourney://family/invite?code=...`
+- 后端新增 `POST /family/invitations/{invitationCode}/accept`：
+  - 接受端只需提交当前登录手机号。
+  - 手机号不匹配时拒绝。
+  - 已撤回的邀请不会被旧邀请码重新激活。
+  - 已接受的邀请可幂等返回 active 状态。
+- InMemoryStore 和 PostgresStore 都支持按 `invitationCode` 接受邀请；Postgres 新增 `idx_family_members_invitation_code` 表达式索引。
+- iOS `DreamJourneyBackendClient` 新增 `acceptFamilyInvitationCode`。
+- `FamilyRepository` 新增：
+  - `FamilyInvitationShare`：复制邀请文案时带邀请码和 deeplink。
+  - `invitationCode(from:)`：支持纯邀请码、`dreamjourney://family/invite?code=...` 和粘贴文本中提取 code。
+  - `acceptBackendInvitationCode`：用当前登录手机号调用后端接受，不再要求本机先有该成员。
+- iOS 注册 `dreamjourney://` URL Scheme：
+  - 冷启动/热启动 URL 会缓存 pending code。
+  - 登录后进入主 Tab 会自动切到亲友页并尝试接受邀请。
+- 亲友页输入框现在支持“手机号 / 邀请码 / 邀请链接”三种接受方式。
+
 ## 真机验收建议
 
 ### 记忆档案馆
@@ -205,6 +226,7 @@
 - 亲友撤回会写入后端 `accessStatus=revoked`，再次拉取成员时仍可识别撤回状态。
 - 关怀看板快照可按 `viewerFamilyMemberID` 上传/拉取。
 - 关怀看板历史快照可按 `viewerFamilyMemberID` 拉取最近 N 条；本机无数据时页面会显示“服务器同步历史 x 条”。
+- 亲友邀请可复制 `dreamjourney://family/invite?code=...` 链接；另一台设备登录被邀请手机号后，可通过链接或粘贴邀请码接受邀请。
 
 ## 已运行验证
 
@@ -217,7 +239,8 @@
 - `MemoryArchiveBackendSync verification passed`
 - `MemoryArchiveImageAnalysisProxy verification passed`
 - `FamilyBackendSync verification passed`
-- `DreamJourneyBackend unittest 30/30 OK`
+- `FamilyInvitationCode verification passed`
+- `DreamJourneyBackend unittest 33/33 OK`
 - `PrivacyScope verification passed`
 - `MemoryPrivacyIntegration verification passed`
 - `LocalTestDataCleanup verification passed`
@@ -229,5 +252,5 @@
 
 ## 下一步
 
-1. 进一步拆分 invitation code/deeplink 状态机，支持跨设备真实邀请链路。
-2. 补真机证据包：档案入库截图、结构化知识库截图、信箱回声截图、信箱后端元数据响应、关怀周报导出文本。
+1. 真机跨设备 smoke：A 设备创建亲友邀请，B 设备登录被邀请手机号，通过 `dreamjourney://family/invite?code=...` 接受。
+2. 补真机证据包：档案入库截图、结构化知识库截图、信箱回声截图、信箱后端元数据响应、亲友邀请码接受截图、关怀周报导出文本。

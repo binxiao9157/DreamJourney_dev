@@ -304,11 +304,12 @@ final class FamilyCircleViewController: UIViewController {
             phone: phone
         ) { [weak self] result in
             switch result {
-            case .success(let member):
-                UIPasteboard.general.string = "邀请你加入寻梦环游家族圈，请用手机号 \(phone) 登录后在亲友页接受邀请。"
+            case .success(let invitation):
+                let invitationCode = invitation.invitationCode
+                UIPasteboard.general.string = invitation.shareText
                 self?.searchField.text = nil
                 self?.updateMemberListUI()
-                self?.showToast("已创建 \(member.name) 的亲友邀请", type: .success)
+                self?.showToast("已复制 \(invitation.member.name) 的邀请码 \(invitationCode)", type: .success)
             case .failure(let error):
                 self?.showToast(error.localizedDescription, type: .error)
             }
@@ -337,11 +338,29 @@ final class FamilyCircleViewController: UIViewController {
         acceptInvitation(phone: searchField.text)
     }
 
+    func acceptInvitationCodeFromDeepLink(_ invitationCode: String) {
+        searchField.text = invitationCode
+        acceptInvitation(phone: invitationCode)
+    }
+
     private func acceptInvitation(phone rawPhone: String?) {
         let phone = rawPhone?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !phone.isEmpty else {
-            showToast("请输入手机号后接受邀请", type: .info)
+            showToast("请输入手机号、邀请码或邀请链接后接受邀请", type: .info)
             searchField.becomeFirstResponder()
+            return
+        }
+        if FamilyRepository.shared.invitationCode(from: phone) != nil {
+            FamilyRepository.shared.acceptBackendInvitationCode(phone) { [weak self] result in
+                switch result {
+                case .success(let acceptedMember):
+                    self?.searchField.text = nil
+                    self?.updateMemberListUI()
+                    self?.showToast("已通过邀请码加入 \(acceptedMember.name) 的亲友圈", type: .success)
+                case .failure(let error):
+                    self?.showToast(error.localizedDescription, type: .error)
+                }
+            }
             return
         }
         FamilyRepository.shared.acceptBackendInvitation(phone: phone) { [weak self] result in

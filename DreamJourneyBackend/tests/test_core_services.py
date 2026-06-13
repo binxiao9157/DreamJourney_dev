@@ -478,6 +478,56 @@ class FamilyAPITests(unittest.TestCase):
         listed_member = next(item for item in listed.json()["members"] if item["id"] == member_id)
         self.assertEqual(listed_member["invitationStatus"], "accepted")
 
+    def test_family_invitation_code_accept_api_marks_member_active(self):
+        client = TestClient(app)
+
+        created = client.post(
+            "/family/invite",
+            json={
+                "userId": "u_inviter",
+                "name": "陈岚",
+                "relation": "女儿",
+                "phone": "13900001111",
+            },
+        )
+        member = created.json()["member"]
+        accepted = client.post(
+            f"/family/invitations/{member['invitationCode']}/accept",
+            json={"phone": "13900001111"},
+        )
+        listed = client.get("/family/members/u_inviter")
+
+        self.assertEqual(created.status_code, 200)
+        self.assertIn("invitationCode", member)
+        self.assertIn("invitationURL", member)
+        self.assertEqual(accepted.status_code, 200)
+        self.assertEqual(accepted.json()["member"]["id"], member["id"])
+        self.assertEqual(accepted.json()["member"]["accessStatus"], "active")
+        listed_member = next(item for item in listed.json()["members"] if item["id"] == member["id"])
+        self.assertEqual(listed_member["invitationStatus"], "accepted")
+
+    def test_family_invitation_code_rejects_revoked_member(self):
+        client = TestClient(app)
+
+        created = client.post(
+            "/family/invite",
+            json={
+                "userId": "u_revoked_inviter",
+                "name": "陈岚",
+                "relation": "女儿",
+                "phone": "13900001111",
+            },
+        )
+        member = created.json()["member"]
+        revoked = client.post(f"/family/members/u_revoked_inviter/{member['id']}/revoke")
+        accepted = client.post(
+            f"/family/invitations/{member['invitationCode']}/accept",
+            json={"phone": "13900001111"},
+        )
+
+        self.assertEqual(revoked.status_code, 200)
+        self.assertEqual(accepted.status_code, 404)
+
     def test_family_member_revoke_api_marks_member_revoked(self):
         client = TestClient(app)
 

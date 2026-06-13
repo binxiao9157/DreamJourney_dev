@@ -79,6 +79,10 @@ class PostgresStore:
                 ON family_members(user_id, created_at ASC)
             """,
             """
+            CREATE INDEX IF NOT EXISTS idx_family_members_invitation_code
+                ON family_members ((payload->>'invitationCode'))
+            """,
+            """
             CREATE TABLE IF NOT EXISTS care_snapshots (
                 id TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL,
@@ -185,6 +189,8 @@ class PostgresStore:
 
     def add_family_member(self, user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         item = self._with_identity(payload, "family", user_id)
+        item.setdefault("invitationCode", "")
+        item.setdefault("invitationURL", "")
         return self._insert_payload("family_members", user_id, item)
 
     def list_family_members(self, user_id: str) -> List[Dict[str, Any]]:
@@ -197,6 +203,45 @@ class PostgresStore:
             WHERE user_id = %s AND id = %s
             """,
             (user_id, member_id),
+        )
+        if row is None:
+            return None
+
+        item = deepcopy(row["payload"])
+        expected_phone = self._normalized_phone(str(item.get("phone") or ""))
+        if expected_phone and self._normalized_phone(phone) != expected_phone:
+            return None
+        if item.get("accessStatus") == "revoked" or item.get("invitationStatus") == "revoked":
+            return None
+        if item.get("accessStatus") == "active" and item.get("invitationStatus") == "accepted":
+            return deepcopy(item)
+
+        item["accessStatus"] = "active"
+        item["invitationStatus"] = "accepted"
+        item["isOnline"] = True
+        item["acceptedAt"] = self._now()
+        item["lastUpdated"] = "刚刚接受邀请"
+
+        updated = self._fetchone(
+            """
+            UPDATE family_members
+            SET payload = %s
+            WHERE user_id = %s AND id = %s
+            RETURNING payload
+            """,
+            (item, user_id, member_id),
+            commit=True,
+        )
+        return None if updated is None else deepcopy(updated["payload"])
+
+    def accept_family_invitation_code(self, invitation_code: str, phone: str) -> Optional[Dict[str, Any]]:
+        row = self._fetchone(
+            """
+            SELECT payload FROM family_members
+            WHERE payload->>'invitationCode' = %s
+            LIMIT 1
+            """,
+            (invitation_code,),
         )
         if row is None:
             return None
@@ -219,7 +264,7 @@ class PostgresStore:
             WHERE user_id = %s AND id = %s
             RETURNING payload
             """,
-            (item, user_id, member_id),
+            (item, item.get("userId"), item.get("id")),
             commit=True,
         )
         return None if updated is None else deepcopy(updated["payload"])
