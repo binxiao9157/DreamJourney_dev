@@ -191,7 +191,10 @@ final class CareDashboardViewController: UIViewController {
     }
 
     private func applyRemoteSnapshotIfUseful(_ remoteSnapshot: CareSignalSnapshot, sourceText: String) {
-        guard (snapshot?.userTurnCount ?? 0) == 0, remoteSnapshot.userTurnCount > 0 else {
+        guard CareDashboardSnapshotSelectionPolicy.shouldPreferRemote(
+            current: snapshot,
+            remote: remoteSnapshot
+        ) else {
             return
         }
         snapshot = remoteSnapshot

@@ -188,3 +188,29 @@ enum CareDashboardInputPolicy {
         return !excludedPrefixes.contains { turn.text.hasPrefix($0) }
     }
 }
+
+enum CareDashboardSnapshotSelectionPolicy {
+    static func shouldPreferRemote(current: CareSignalSnapshot?, remote: CareSignalSnapshot) -> Bool {
+        guard remote.userTurnCount > 0 else {
+            return false
+        }
+        guard let current else {
+            return true
+        }
+        if current.userTurnCount <= 0 {
+            return true
+        }
+        if current.riskLevel == .insufficientData, remote.riskLevel != .insufficientData {
+            return true
+        }
+        if remote.windowDayCount > current.windowDayCount,
+           remote.userTurnCount >= current.userTurnCount {
+            return true
+        }
+        if remote.userTurnCount > current.userTurnCount,
+           remote.windowDayCount >= current.windowDayCount {
+            return true
+        }
+        return false
+    }
+}

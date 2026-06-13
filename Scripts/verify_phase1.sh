@@ -51,6 +51,15 @@ xcrun swiftc -D CARE_DASHBOARD_VERIFY \
   -o /tmp/dreamjourney_care_dashboard_verify
 /tmp/dreamjourney_care_dashboard_verify
 
+echo "== CareDashboard snapshot selection =="
+xcrun swiftc -D CARE_DASHBOARD_VERIFY \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
+  DreamJourney/Sources/Services/ConversationMemoryManager.swift \
+  DreamJourney/Sources/Services/CareDashboard/CareSignalModels.swift \
+  Scripts/CareDashboardSnapshotSelectionVerify/main.swift \
+  -o /tmp/dreamjourney_care_snapshot_selection_verify
+/tmp/dreamjourney_care_snapshot_selection_verify
+
 echo "== CareDashboard backend sync =="
 python3 Scripts/CareDashboardBackendSyncVerify/main.py
 
