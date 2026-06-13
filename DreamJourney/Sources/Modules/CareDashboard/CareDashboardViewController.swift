@@ -153,7 +153,10 @@ final class CareDashboardViewController: UIViewController {
                 case .success:
                     self?.setRemoteSnapshotStatus("服务器同步：本机快照已上传")
                 case .failure(let error):
-                    self?.setRemoteSnapshotStatus("服务器同步：上传失败，本机仍可查看")
+                    let status = self?.isCareSnapshotAccessFailure(error) == true
+                        ? self?.careSnapshotAccessFailureMessage(for: error)
+                        : "服务器同步：上传失败，本机仍可查看"
+                    self?.setRemoteSnapshotStatus(status ?? "服务器同步：上传失败，本机仍可查看")
                     print("[CareDashboard] 后端快照同步失败: \(error.localizedDescription)")
                 }
             }
@@ -165,6 +168,34 @@ final class CareDashboardViewController: UIViewController {
         if isViewLoaded {
             render()
         }
+    }
+
+    private func isCareSnapshotAccessFailure(_ error: Error) -> Bool {
+        if let backendError = error as? DreamJourneyBackendClient.Error,
+           case .statusCode(let code) = backendError {
+            return code == 401 || code == 403
+        }
+        let rawMessage = error.localizedDescription
+        let message = rawMessage.lowercased()
+        let accessFailureMarkers = [
+            "后端返回 HTTP 401".lowercased(),
+            "后端返回 HTTP 403".lowercased(),
+            "family member access is not active",
+            "family member is not authorized",
+            "permission",
+            "forbidden",
+            "unauthorized",
+            "pending",
+            "revoked",
+        ]
+        return accessFailureMarkers.contains { message.contains($0) }
+    }
+
+    private func careSnapshotAccessFailureMessage(for error: Error) -> String {
+        if isCareSnapshotAccessFailure(error) {
+            return "服务器同步：亲友权限未生效或已撤回"
+        }
+        return "服务器同步：暂无可用历史快照"
     }
 
     private func fetchLatestSnapshotFromBackend() {
@@ -182,7 +213,7 @@ final class CareDashboardViewController: UIViewController {
                     self?.setRemoteSnapshotStatus("服务器同步：已读取最近快照")
                     self?.applyRemoteSnapshotIfUseful(response.item.snapshot, sourceText: "服务器同步快照")
                 case .failure(let error):
-                    self?.setRemoteSnapshotStatus("服务器同步：暂无可用历史快照")
+                    self?.setRemoteSnapshotStatus(self?.careSnapshotAccessFailureMessage(for: error) ?? "服务器同步：暂无可用历史快照")
                     print("[CareDashboard] 后端快照拉取失败: \(error.localizedDescription)")
                 }
             }
@@ -214,6 +245,11 @@ final class CareDashboardViewController: UIViewController {
                     }
                 case .failure(let error):
                     self?.remoteSnapshotHistory = []
+                    if self?.isCareSnapshotAccessFailure(error) == true {
+                        self?.setRemoteSnapshotStatus(self?.careSnapshotAccessFailureMessage(for: error) ?? "服务器同步：亲友权限未生效或已撤回")
+                        print("[CareDashboard] 后端历史快照权限不足: \(error.localizedDescription)")
+                        return
+                    }
                     self?.setRemoteSnapshotStatus("服务器同步：历史拉取失败，尝试最近快照")
                     print("[CareDashboard] 后端历史快照拉取失败: \(error.localizedDescription)")
                     self?.fetchLatestSnapshotFromBackend()

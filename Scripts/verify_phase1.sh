@@ -83,6 +83,9 @@ python3 Scripts/CareDashboardBackendSyncVerify/main.py
 echo "== CareDashboard data readiness UI =="
 python3 Scripts/CareDashboardDataReadinessUIVerify/main.py
 
+echo "== CareDashboard backend access status UI =="
+python3 Scripts/CareDashboardBackendAccessStatusUIVerify/main.py
+
 echo "== CareDashboard share report UI =="
 python3 Scripts/CareDashboardShareReportUIVerify/main.py
 
