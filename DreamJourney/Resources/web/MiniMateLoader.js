@@ -1,14 +1,33 @@
+function postAvatarHealth(type, detail) {
+  try {
+    if (window.DreamJourneyAvatar && typeof window.DreamJourneyAvatar.postHealth === 'function') {
+      window.DreamJourneyAvatar.postHealth(type, detail);
+    }
+  } catch (_) {}
+}
+
 document.addEventListener('DOMContentLoaded', function () {
-  init();
+  init().catch(function (error) {
+    const message = String(error && error.message ? error.message : error);
+    postAvatarHealth('minimate_init_error', message);
+    if (window.DreamJourneyAvatar && typeof window.DreamJourneyAvatar.markShellReady === 'function') {
+      window.DreamJourneyAvatar.markShellReady('minimate init fallback');
+    }
+  });
 });
 
 async function init()
 {
+            postAvatarHealth('minimate_init_start', {
+                createQtAppInstance: typeof window.createQtAppInstance,
+                newVideoTask: typeof window.newVideoTask
+            });
             const spinner = document.querySelector('#loadingSpinner');
             const screen = document.querySelector('#screen');
             const showUi = () => {
                 spinner.style.display = 'none';
                 screen.style.display = 'block';
+                postAvatarHealth('minimate_qt_show_ui', 'qt onLoaded');
             }
             const instance = await qtLoad({
                     qt: {
@@ -17,8 +36,14 @@ async function init()
                         containerElements: [screen],
                     }
                 });
+            postAvatarHealth('minimate_qt_loaded', {
+                hasModule: !!window.Module,
+                hasInstance: !!instance
+            });
+            postAvatarHealth('minimate_new_video_start', 'newVideoTask');
             await newVideoTask();
             document.getElementById('screen2').style.display = 'block';
+            postAvatarHealth('minimate_new_video_done', 'screen2 visible');
 }
 
 

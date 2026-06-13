@@ -5,12 +5,12 @@ import CocoaLumberjack
 
 // MARK: - 回忆录 TTS 朗读服务
 
-/// 使用火山引擎大模型 TTS V3 + 声音复刻音色，将回忆录散文合成为语音
+/// 使用火山引擎新版 API Key TTS + 声音复刻音色，将回忆录散文合成为语音
 /// 
 /// 流程：
 /// 1. 检查 speaker_id 是否就绪
-/// 2. 调用 TTS V3 单向流式接口，传入 speaker_id + 文本
-/// 3. 流式接收音频数据，拼接为完整 MP3/M4A 文件
+/// 2. 调用 /api/v1/tts，传入 clone voice id + 文本
+/// 3. 解码响应中的 base64 MP3 数据
 /// 4. 保存到 ApplicationSupport/memoir_audio/{memoirId}.mp3
 final class MemoirTTSService {
 
@@ -18,14 +18,10 @@ final class MemoirTTSService {
 
     // MARK: - 配置
 
-    /// TTS API Key（复用声音复刻的 API Key）
-    private static let placeholderAPIKey = "YOUR_VOICECLONE_API_KEY"
+    /// TTS API Key。新版控制台优先使用 VolcEngineAPIKey，旧配置 VoiceCloneAPIKey 作为兜底。
+    private var apiKey: String?
 
-    private var apiKey: String
-
-    /// TTS V3 HTTP 流式接口（一次性输入文本，流式输出音频）
-    /// 比 WebSocket 更简单，适合回忆录这种完整文本一次性合成的场景
-    private let ttsURL = "https://openspeech.bytedance.com/api/v3/tts/unidirectional"
+    private let ttsURL = VolcEngineTTSRequestFactory.endpointURL
     private let safetyGuardClient = DeepSeekSafetyGuarding.makeDefaultClient()
 
     /// 音频存储目录
@@ -38,12 +34,7 @@ final class MemoirTTSService {
     // MARK: - Init
 
     private init() {
-        if let key = Bundle.main.infoDictionary?["VoiceCloneAPIKey"] as? String,
-           !key.isEmpty, key != Self.placeholderAPIKey {
-            apiKey = key
-        } else {
-            apiKey = Self.placeholderAPIKey
-        }
+        apiKey = VolcEngineCredentialProvider.apiKey()
 
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         audioDirectory = appSupport.appendingPathComponent("memoir_audio", isDirectory: true)
@@ -63,12 +54,12 @@ final class MemoirTTSService {
                     volume: Int = 10,
                     completion: @escaping (Result<URL, TTSError>) -> Void) {
 
-        guard apiKey != Self.placeholderAPIKey else {
+        guard let apiKey = apiKey else {
             completion(.failure(.apiKeyMissing))
             return
         }
 
-        guard let speakerId = memoir.speakerId ?? VoiceCloneService.shared.currentSpeakerId,
+        guard let speakerId = memoir.speakerId ?? VoiceCloneService.shared.currentSpeakerId ?? VolcEngineCredentialProvider.voiceType(),
               !speakerId.isEmpty else {
             completion(.failure(.noSpeakerId))
             return
@@ -91,16 +82,7 @@ final class MemoirTTSService {
 
         isSynthesizing = true
 
-        // 先检查音色是否就绪
-        VoiceCloneService.shared.isVoiceReady(speakerId: speakerId) { [weak self] ready in
-            guard let self = self else { return }
-            if !ready {
-                self.isSynthesizing = false
-                completion(.failure(.voiceNotReady))
-                return
-            }
-            self.performSynthesis(memoir: memoir, speakerId: speakerId, speed: speed, volume: volume, completion: completion)
-        }
+        performSynthesis(memoir: memoir, speakerId: speakerId, apiKey: apiKey, speed: speed, volume: volume, completion: completion)
     }
 
     /// 获取已合成的音频文件 URL
@@ -124,51 +106,25 @@ final class MemoirTTSService {
 
     private func performSynthesis(memoir: MemoirModel,
                                    speakerId: String,
+                                   apiKey: String,
                                    speed: Int,
                                    volume: Int,
                                    completion: @escaping (Result<URL, TTSError>) -> Void) {
-
-        // 构建请求体 — TTS V3 HTTP Chunked 单向流式
-        // 文档：https://www.volcengine.com/docs/6561/1598757
-        // 注意：req_params.additions 类型为 jsonstring，需要传 JSON 编码后的字符串
-        let additionsDict: [String: Any] = [
-            "explicit_language": "zh-cn"  // 中文为主，支持中英混
-        ]
-        let additionsString = (try? JSONSerialization.data(withJSONObject: additionsDict))
-            .flatMap { String(data: $0, encoding: .utf8) } ?? "{\"explicit_language\":\"zh-cn\"}"
-
-        let body: [String: Any] = [
-            "user": [
-                "uid": memoir.authorId  // 用户标识
-            ],
-            "req_params": [
-                "text": memoir.prose,
-                "speaker": speakerId,       // 声音复刻的 speaker_id
-                "audio_params": [
-                    "format": "mp3",         // 音频格式
-                    "sample_rate": 24000,    // 采样率
-                    "speech_rate": speed,    // 语速 [-50, 100]，默认 -10（稍慢，适老化）
-                    "loudness_rate": volume  // 音量 [-50, 100]，默认 10（稍大声，适老化）
-                ],
-                "additions": additionsString  // jsonstring 类型，传 JSON 字符串
-            ] as [String: Any]
-        ] as [String: Any]
+        let body = VolcEngineTTSRequestFactory.requestBody(
+            uid: memoir.authorId,
+            voiceType: speakerId,
+            text: memoir.prose,
+            speed: speed
+        )
 
         let headers: HTTPHeaders = [
             "Content-Type": "application/json",
-            "X-Api-Key": apiKey,
-            "X-Api-Request-Id": UUID().uuidString,
-            "X-Api-Resource-Id": "seed-icl-1.0"  // 声音复刻 ICL 1.0 版本
+            "x-api-key": apiKey
         ]
 
         let outputPath = audioDirectory.appendingPathComponent("\(memoir.id).mp3")
 
         DDLogInfo("[MemoirTTS] 开始合成: memoirId=\(memoir.id), speakerId=\(speakerId), 文本长度=\(memoir.prose.count)")
-
-        // V3 HTTP Chunked 返回的是 JSON 行，每行包含 base64 编码的音频数据
-        // 格式: {"code": 0, "message": "", "data": "<base64_audio_chunk>"}
-        // 结束标志: {"code": 20000000, "message": "ok", "data": null}
-        var audioData = Data()
 
         AF.request(ttsURL, method: .post, parameters: body, encoding: JSONEncoding.default, headers: headers)
             .validate(statusCode: 200..<300)
@@ -178,60 +134,17 @@ final class MemoirTTSService {
 
                 switch response.result {
                 case .success(let responseData):
-                    // V3 HTTP Chunked 返回的是多行 JSON，需要逐行解析
-                    // 每行格式: {"code":0, "message":"", "data":"base64_audio"} 或 {"code":20000000, ...}
-                    guard let responseString = String(data: responseData, encoding: .utf8) else {
-                        DDLogError("[MemoirTTS] 响应无法解码为字符串")
-                        completion(.failure(.synthesisFailed("响应解码失败")))
-                        return
-                    }
-
-                    let lines = responseString.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-
-                    for line in lines {
-                        let trimmed = line.trimmingCharacters(in: .whitespaces)
-                        guard let lineData = trimmed.data(using: .utf8),
-                              let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else {
-                            continue
-                        }
-
-                        let code = json["code"] as? Int ?? 0
-
-                        // 20000000 = 合成结束
-                        if code == 20000000 {
-                            DDLogInfo("[MemoirTTS] 合成完成标志收到")
-                            break
-                        }
-
-                        // 错误
-                        if code != 0 {
-                            let msg = json["message"] as? String ?? "未知错误"
-                            DDLogError("[MemoirTTS] 合成错误: code=\(code), message=\(msg)")
-                            completion(.failure(.synthesisFailed("TTS错误(\(code)): \(msg)")))
-                            return
-                        }
-
-                        // 提取 base64 音频数据
-                        if let base64Str = json["data"] as? String, !base64Str.isEmpty {
-                            if let chunkData = Data(base64Encoded: base64Str) {
-                                audioData.append(chunkData)
-                            }
-                        }
-                    }
-
-                    // 写入文件
-                    if audioData.count > 0 {
-                        do {
-                            try audioData.write(to: outputPath, options: .atomic)
-                            DDLogInfo("[MemoirTTS] 合成完成: \(outputPath.path), 大小=\(audioData.count) bytes")
-                            completion(.success(outputPath))
-                        } catch {
-                            DDLogError("[MemoirTTS] 写入文件失败: \(error.localizedDescription)")
-                            completion(.failure(.synthesisFailed("文件写入失败")))
-                        }
-                    } else {
-                        DDLogError("[MemoirTTS] 合成音频数据为空")
-                        completion(.failure(.synthesisFailed("合成的音频数据为空")))
+                    do {
+                        let audioData = try VolcEngineTTSRequestFactory.audioData(from: responseData)
+                        try audioData.write(to: outputPath, options: .atomic)
+                        DDLogInfo("[MemoirTTS] 合成完成: \(outputPath.path), 大小=\(audioData.count) bytes")
+                        completion(.success(outputPath))
+                    } catch VolcEngineTTSRequestError.serviceError(let code, let message) {
+                        DDLogError("[MemoirTTS] 合成错误: code=\(code), message=\(message)")
+                        completion(.failure(.synthesisFailed("TTS错误(\(code)): \(message)")))
+                    } catch {
+                        DDLogError("[MemoirTTS] 响应解析失败: \(error.localizedDescription)")
+                        completion(.failure(.synthesisFailed("响应解析失败")))
                     }
 
                 case .failure(let error):

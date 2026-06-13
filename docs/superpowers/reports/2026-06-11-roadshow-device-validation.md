@@ -10,7 +10,7 @@ CoreDevice ID：`B7887DD8-3561-5F2A-8D62-A3FEACDC80D9`
 
 ## 结论
 
-当前真机连接、iPhoneOS 构建、签名、安装、启动已通过。App 已使用 roadshow reset/seed/offline 参数在真机启动，进程仍在运行，并且已从真机 App 容器抽查到 roadshow seed/offline 标记、登录账号、时空信箱、记忆档案馆和 CareDashboard transcript 数据。最新路演包已替换 AppIcon，并把 mock 亲友统一为陈氏家族线。
+当前真机连接、iPhoneOS 构建、签名、安装、启动已通过。App 已使用 roadshow reset/seed/offline 参数在真机启动，并且已从真机 App 容器抽查到 roadshow seed/offline 标记、登录账号、时空信箱、记忆档案馆、CareDashboard transcript、对话记忆数据和数字人 readiness 诊断。最新路演包已替换 AppIcon，并把 mock 亲友统一为陈氏家族线。
 
 当前剩余事项：
 
@@ -18,7 +18,7 @@ CoreDevice ID：`B7887DD8-3561-5F2A-8D62-A3FEACDC80D9`
 - 阶段2工程已持久化 `DEVELOPMENT_TEAM = 2BTR77V3R8`。
 - 阶段2工程主 App Bundle ID 已改为 `com.yxj.dreamjourney.app`，Widget Bundle ID 已改为 `com.yxj.dreamjourney.app.widget`。
 - Xcode 已创建 `iOS Team Provisioning Profile: com.yxj.dreamjourney.app`。
-- 仍需人工逐屏确认首页 Banner、信箱、档案、mock 语音、关怀看板、KBLite 分享包 UI。
+- 仍需人工逐屏确认首页 Banner、信箱、档案、mock/真实语音、数字人播放、关怀看板、KBLite 分享包 UI。
 - 当前 `devicectl` 版本没有直接截图子命令，本轮没有保存自动截图。
 
 ## 设备状态
@@ -41,7 +41,7 @@ CoreDevice ID：`B7887DD8-3561-5F2A-8D62-A3FEACDC80D9`
 - `tunnelState: connected`
 - `ddiServicesAvailable: true`
 
-备注：`xcrun xctrace list devices` 同时把设备列在 `Devices Offline`，但 `devicectl`、`xcodebuild -showBuildSettings` 和 preflight 均能识别该真机目标。
+备注：`xcrun xctrace list devices` 同时把设备列在 `Devices Offline`，但 `devicectl`、`xcodebuild -showdestinations`、`xcodebuild -showBuildSettings` 和 preflight 均能识别该真机目标。2026-06-12 已把 preflight 调整为三路设备探测，避免因为 `xctrace` offline 误报阻断真机安装/启动。
 
 ## 已执行验证
 
@@ -55,9 +55,14 @@ bash Scripts/roadshow_device_smoke_preflight.sh
 
 结果：
 
-- 检测到物理 iOS 设备：`iPhone (26.6) (00008150-001402D60A04401C)`
+- 检测到物理 iOS 设备：`iPhone (26.6)`；当 `xctrace` offline 时可从 `xcodebuild -showdestinations` 与 `devicectl list devices` 兜底解析。
 - iPhoneOS build gate：`** BUILD SUCCEEDED **`
-- 脚本结论：`PASS: Physical iOS device detected and iPhoneOS build gate passed. Continue with manual Xcode Run and screenshot/log capture.`
+- 最新脚本结论：`PASS: Physical iOS device detected, iPhoneOS build gate passed, and install/launch evidence was captured.`
+- 最新证据目录：`/tmp/dreamjourney_roadshow_smoke_20260612_220440`
+- 最新启动结果：`com.yxj.dreamjourney.app` 已安装并用 roadshow reset/seed/offline 参数启动；本轮 `devicectl` launch 日志确认启动成功，但未输出 PID 行。
+- 最新 evidence status：`needs_manual_evidence`，证据完整度 `55%`，已存在 `17/31` 项，缺人工截图、录屏、数字人播放日志、分享包样本和隐私抽查日志；隐私扫描命中为 `0`。
+- 数字人 readiness 诊断已从真机容器自动同步为 `diagnostics/digital_human_readiness.txt` 和 `diagnostics/digital_human_readiness.json`，状态为“可演示”：本机演示引擎、数字人口型 TTS 已就绪、实时语音三件套已就绪、OpenAvatar 后端未配置但不阻断阶段1主线。
+- 数字人播放日志 `diagnostics/digital_human_playback.log` 尚未生成；自动 preflight 只负责启动 App，不会代替真人触发数字人播报。完成 WebAudio、系统 TTS 兜底或 timeout 演练后重跑 preflight，才会同步该文件。
 
 ### 2. 真机目标 build
 
@@ -271,12 +276,26 @@ Documents 抽查：
 - `dreamjourney.memoryArchive.items` 已写入 4 条路演档案，包括外滩老照片、口头禅、人格边界说明和外滩合影背景；最新抽查确认 detectedPeople 为 `陈树安`、`陈静文`、`陈岚`。
 - 最新 AppIcon asset catalog 已替换为家族树/记忆盒图标，全部 PNG 尺寸匹配，且 `hasAlpha: no`。
 
+## 风险矩阵
+
+| 类别 | 当前状态 | 证据/命令 | 路演含义 |
+| --- | --- | --- | --- |
+| 已自动证明 | iPhoneOS Debug build、签名、安装、roadshow 参数启动、容器 seed/offline/login 抽样已通过。 | `Scripts/roadshow_device_smoke_preflight.sh`、`xcodebuild ... build`、`devicectl install/launch`、Preferences/Documents 抽样。 | 工程可装可启，路演 seed 数据能进入真机容器。 |
+| 已自动证明 | 阶段1主流程代码 gate 已通过：路线、seed、数字人 readiness/runtime log、分享包隐私、足迹 fallback/poster、证据包归档 gate。 | `bash Scripts/verify_phase2.sh`；其中包含 `RoadshowSharePackageSampleVerify`、`DigitalHumanRuntimeLogVerify`、`FamilyFootprintFallbackVerify`、`RoadshowEvidencePackageVerify`。 | 脚本能防止明显回归，但不能替代现场 UI 观感和真实音频/地图表现。 |
+| 需真机证明 | 6 阶段逐屏 UI smoke、首页 Banner、路线勾选、截图/录屏、分享面板、DocumentPicker/ActivityViewController 交互。 | 按 `route_screen_checklist.md` 保存 `screens/*.png`、`recordings/roadshow_6min_run.mp4`、`route_completion/route_acceptance_checklist.md`。 | 路演 demo 是否顺滑、是否能 6 分钟跑完，只能现场验证。 |
+| 已自动证明 | 数字人 readiness 诊断会在首页启动/诊断页打开时自动写入 `Documents/diagnostics/digital_human_readiness.txt/json`，并可由 preflight 同步到 evidence 目录。 | `/tmp/dreamjourney_roadshow_smoke_20260612_220440/diagnostics/digital_human_readiness.txt`、`diagnostics/digital_human_readiness.json`。 | 真机上已能拿到脱敏诊断，不需要现场手动复制 key 状态；诊断显示 TTS 与实时语音配置可演示。 |
+| 需真机+key 证明 | 数字人 WAV 真实出声、WebAudio 口型同步、系统 TTS 兜底不双播、watchdog timeout 收口。 | App 会自动写 `Documents/diagnostics/digital_human_playback.log`，preflight 可拷贝到 evidence 目录；随后运行 `python3 Scripts/roadshow_digital_human_playback_audit.py <evidence-dir> --json`。 | 当前代码已有诊断、兜底、自动落盘日志和 gate；真实声音/口型仍取决于 VolcEngine key、音色和真机 WebAudio 行为。 |
+| 需真机证明 | 真机导出的 `share_packages/all_family.json`、`share_packages/selected_member.json` 和隐私收据截图。 | 运行 `python3 Scripts/roadshow_share_package_privacy_check.py <evidence-dir> --write-log <evidence-dir>/share_packages/privacy_check.log`，再跑 `roadshow_evidence_report.py --write --fail-on-missing`。 | 自动规则可查 JSON 结构和泄漏标记，但真实导出文件必须来自真机流程。 |
+| 需产品/数据替换 | 足迹真实行政区边界数据或高德 DistrictSearch provider。 | 当前 `FamilyFootprintPosterVerify` / `FamilyFootprintFallbackVerify` 只证明离线海报、点线 bounds 和 fallback 稳定。 | 路演可用 demo 边界讲清概念；正式产品需替换真实边界数据源。 |
+
 ## 尚未完成
 
 - 捕获 `[RoadshowDemo]` console 日志
-- 首页路演 Banner 截图
-- 信箱、档案、mock 语音、关怀看板、KBLite 分享包逐屏 smoke
-- 分享包 JSON 真机抽查
+- 首页路演 Banner 截图和 6 阶段逐屏截图
+- 信箱、档案、mock/真实语音、数字人、足迹、关怀看板、KBLite 分享包逐屏 smoke
+- 数字人播放日志和三链路严格审计；readiness 文本/JSON 已可由 preflight 自动同步
+- 分享包 JSON 真机抽查和 `privacy_check.log`
+- 6 分钟主线录屏与 evidence zip 归档
 
 ## 下一条验证命令
 

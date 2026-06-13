@@ -42,6 +42,7 @@ enum RoadshowDemoSeed {
         case timeMailbox
         case memoryArchive
         case voiceCompanion
+        case familyFootprint
         case careDashboard
         case familySharing
     }
@@ -124,19 +125,25 @@ enum RoadshowDemoSeed {
                 ConversationTurn(
                     role: "ai",
                     text: "今天想从哪段回忆开始聊？",
-                    timestamp: now.addingTimeInterval(-4 * 24 * 60 * 60),
+                    timestamp: now.addingTimeInterval(-6 * 24 * 60 * 60),
+                    privacyMetadata: familyMetadata
+                ),
+                ConversationTurn(
+                    role: "user",
+                    text: "这几天在阳台晒太阳，想起外滩那张老照片。",
+                    timestamp: now.addingTimeInterval(-6 * 24 * 60 * 60 + 600),
                     privacyMetadata: familyMetadata
                 ),
                 ConversationTurn(
                     role: "user",
                     text: "昨晚睡不好，翻到很晚才睡着。",
-                    timestamp: now.addingTimeInterval(-3 * 24 * 60 * 60),
+                    timestamp: now.addingTimeInterval(-5 * 24 * 60 * 60),
                     privacyMetadata: familyMetadata
                 ),
                 ConversationTurn(
                     role: "user",
                     text: "下午一个人在家有点孤单，想听听陈予的声音。",
-                    timestamp: now.addingTimeInterval(-2 * 24 * 60 * 60),
+                    timestamp: now.addingTimeInterval(-3 * 24 * 60 * 60),
                     privacyMetadata: familyMetadata
                 ),
                 ConversationTurn(
@@ -150,6 +157,12 @@ enum RoadshowDemoSeed {
                     text: "我会把这些近况整理成只给家人看的关怀提示。",
                     timestamp: now.addingTimeInterval(-23 * 60 * 60),
                     privacyMetadata: familyMetadata
+                ),
+                ConversationTurn(
+                    role: "user",
+                    text: "今天还是早醒，吃饭也没什么胃口。",
+                    timestamp: now.addingTimeInterval(-12 * 60 * 60),
+                    privacyMetadata: daughterMetadata
                 ),
                 ConversationTurn(
                     role: "user",
@@ -182,6 +195,12 @@ enum RoadshowDemoSeed {
                     stepID: DemoStepID.voiceCompanion.rawValue,
                     title: "语音陪伴示例",
                     body: "用预置文本演示问候、复述和陪伴，不调用外部服务。"
+                ),
+                DemoItem(
+                    id: "demo_family_footprint_001",
+                    stepID: DemoStepID.familyFootprint.rawValue,
+                    title: "家族足迹点亮",
+                    body: "从绍兴、杭州、上海一路到温哥华，展示不同代际让家族地图变大。"
                 ),
                 DemoItem(
                     id: "demo_care_dashboard_001",
@@ -252,6 +271,7 @@ extension RoadshowDemoSeed {
         }
 
         KBLiteManager.shared.reset()
+        FamilyRepository.shared.resetLocalAccessState()
         print("[RoadshowDemo] demo namespace reset")
     }
 
@@ -262,6 +282,7 @@ extension RoadshowDemoSeed {
                     id: member.id,
                     name: member.displayName,
                     relation: member.relation,
+                    phone: member.id == package.selectedMemberIDForVisibility ? "18800000001" : nil,
                     isOnline: member.id == package.selectedMemberIDForVisibility,
                     lastUpdated: member.id == package.selectedMemberIDForVisibility ? "刚刚" : "路演数据"
                 )

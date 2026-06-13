@@ -21,7 +21,7 @@ final class TGToast {
         DispatchQueue.main.async {
             currentToast?.removeFromSuperview()
 
-            guard let window = UIApplication.shared.windows.first(where: { $0.isKeyWindow }) else { return }
+            guard let window = keyWindow() else { return }
 
             let config = configFor(type: type)
             let container = makeContainer(config: config, message: message)
@@ -94,5 +94,12 @@ final class TGToast {
                                                  verticalFittingPriority: .fittingSizeLevel)
         container.frame = CGRect(x: 0, y: 0, width: min(size.width + 32, maxWidth), height: size.height + 24)
         return container
+    }
+
+    private static func keyWindow() -> UIWindow? {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first { $0.isKeyWindow }
     }
 }

@@ -30,11 +30,17 @@ final class DialogEngineManager: NSObject, DialogEngineProtocol {
     private(set) var isEnding = false
     /// 当前话题（由业务层设置，注入到 system_role 末尾）
     var currentTopic: String?
+    /// 最近一次由系统主动播报的开场白。部分实时语音 SDK 会把本机播报回声识别成用户 ASR。
+    private var recentSystemGreetingText: String?
+    private var recentSystemGreetingSentAt: Date?
+    private let systemGreetingEchoFilterWindow: TimeInterval = 30
 
     // MARK: - Configuration
 
     /// 火山引擎 Dialog 服务配置
     struct Config {
+        /// 新版控制台 API Key，优先用于实时对话 SDK request headers
+        var apiKey: String = ""
         /// 从火山控制台获取的 AppID
         var appID: String = ""
         /// 从火山控制台获取的 AppKey
@@ -53,6 +59,18 @@ final class DialogEngineManager: NSObject, DialogEngineProtocol {
         var enableAEC: Bool = false
         /// 是否启用内置播放器
         var enablePlayer: Bool = true
+
+        var hasModernAPIKey: Bool {
+            !apiKey.isEmpty
+        }
+
+        var hasLegacyCredentials: Bool {
+            !appID.isEmpty && !appKey.isEmpty && !token.isEmpty
+        }
+
+        var hasUsableCredentials: Bool {
+            hasModernAPIKey || hasLegacyCredentials
+        }
 
         // MARK: - 对话能力配置
 
@@ -160,6 +178,7 @@ final class DialogEngineManager: NSObject, DialogEngineProtocol {
 
     /// AI 回复流式拼接缓冲区
     private var chatBuffer: String = ""
+    private var deliveredAssistantFinalText: String?
 
     /// 当前会话已触发的安全风险，用于阻断后续 LLM/TTS 回调
     private var activeSafetyAssessment: SafetyAssessment?
@@ -169,19 +188,7 @@ final class DialogEngineManager: NSObject, DialogEngineProtocol {
 
     private override init() {
         super.init()
-        // 从 Info.plist 读取火山引擎配置
-        if let appID = Bundle.main.object(forInfoDictionaryKey: "VolcEngineAppID") as? String,
-           !appID.isEmpty {
-            config.appID = appID
-        }
-        if let appKey = Bundle.main.object(forInfoDictionaryKey: "VolcEngineAppKey") as? String,
-           !appKey.isEmpty {
-            config.appKey = appKey
-        }
-        if let token = Bundle.main.object(forInfoDictionaryKey: "VolcEngineAppToken") as? String,
-           !token.isEmpty {
-            config.token = token
-        }
+        applyRealtimeCredentials()
     }
 
     // MARK: - Public API
@@ -217,6 +224,13 @@ final class DialogEngineManager: NSObject, DialogEngineProtocol {
         }
 
         isSettingUp = true
+
+        guard config.hasUsableCredentials else {
+            isSettingUp = false
+            DDLogError("[DialogEngine] 实时语音凭证未配置")
+            delegate?.onError(error: DialogEngineError.missingCredentials)
+            return
+        }
 
         // 准备环境（首次调用）
         SpeechEngine.prepareEnvironment()
@@ -484,10 +498,17 @@ final class DialogEngineManager: NSObject, DialogEngineProtocol {
         // 引擎类型：Dialog
         engine.setStringParam(SE_DIALOG_ENGINE, forKey: SE_PARAMS_KEY_ENGINE_NAME_STRING)
 
-        // 鉴权
-        engine.setStringParam(config.appID, forKey: SE_PARAMS_KEY_APP_ID_STRING)
-        engine.setStringParam(config.appKey, forKey: SE_PARAMS_KEY_APP_KEY_STRING)
-        engine.setStringParam(config.token, forKey: SE_PARAMS_KEY_APP_TOKEN_STRING)
+        // 鉴权：新版控制台只注入 X-Api-Key 自定义 header。
+        // 不要把 API Key 写入 APP_KEY/TOKEN，否则旧 SDK 会生成 X-Api-App-Key 并被服务端拒绝。
+        if config.hasModernAPIKey {
+            if let headers = realtimeRequestHeadersJSON() {
+                engine.setStringParam(headers, forKey: SE_PARAMS_KEY_REQUEST_HEADERS_STRING)
+            }
+        } else {
+            engine.setStringParam(config.appID, forKey: SE_PARAMS_KEY_APP_ID_STRING)
+            engine.setStringParam(config.appKey, forKey: SE_PARAMS_KEY_APP_KEY_STRING)
+            engine.setStringParam(config.token, forKey: SE_PARAMS_KEY_APP_TOKEN_STRING)
+        }
 
         // 用户标识
         engine.setStringParam(config.uid, forKey: SE_PARAMS_KEY_UID_STRING)
@@ -517,6 +538,39 @@ final class DialogEngineManager: NSObject, DialogEngineProtocol {
         #else
         engine.setStringParam(SE_LOG_LEVEL_WARN, forKey: SE_PARAMS_KEY_LOG_LEVEL_STRING)
         #endif
+    }
+
+    private func applyRealtimeCredentials() {
+        guard let credentials = VolcEngineRealtimeCredentialProvider.credentials(
+            from: AppConfiguration.mergedInfoDictionary(),
+            defaultUID: config.uid
+        ) else {
+            return
+        }
+
+        config.resourceID = credentials.resourceID
+        config.address = credentials.address
+        config.uri = credentials.uri
+        config.uid = credentials.uid
+
+        switch credentials.authMode {
+        case .apiKey(let apiKey):
+            config.apiKey = apiKey
+        case .legacy(let appID, let appKey, let token):
+            config.appID = appID
+            config.appKey = appKey
+            config.token = token
+        }
+    }
+
+    private func realtimeRequestHeadersJSON() -> String? {
+        VolcEngineRealtimeCredentials(
+            authMode: .apiKey(config.apiKey),
+            resourceID: config.resourceID,
+            address: config.address,
+            uri: config.uri,
+            uid: config.uid
+        ).requestHeadersJSON()
     }
 
     /// 执行开始对话
@@ -807,14 +861,14 @@ extension DialogEngineManager: SpeechEngineDelegate {
                         print("[DialogEngine] 🛑 检测到结束关键词: \(keyword)")
                         isEnding = true
                         DispatchQueue.main.async { [weak self] in
-                            self?.delegate?.onASRResult(text: result.text, isFinal: true)
+                            self?.forwardASRResult(text: result.text, isFinal: true)
                             self?.stopDialog(reason: .keyword(keyword))
                         }
                         return
                     }
                 }
                 DispatchQueue.main.async { [weak self] in
-                    self?.delegate?.onASRResult(text: result.text, isFinal: result.isFinal)
+                    self?.forwardASRResult(text: result.text, isFinal: result.isFinal)
                 }
             } else {
                 // 解析失败，尝试从 raw JSON 中提取任何文本
@@ -828,14 +882,14 @@ extension DialogEngineManager: SpeechEngineDelegate {
                         print("[DialogEngine] 🛑 raw 匹配到结束关键词: \(keyword)")
                         isEnding = true
                         DispatchQueue.main.async { [weak self] in
-                            self?.delegate?.onASRResult(text: extractedText, isFinal: true)
+                            self?.forwardASRResult(text: extractedText, isFinal: true)
                             self?.stopDialog(reason: .keyword(keyword))
                         }
                         return
                     }
                     // 转发为中间结果
                     DispatchQueue.main.async { [weak self] in
-                        self?.delegate?.onASRResult(text: extractedText, isFinal: false)
+                        self?.forwardASRResult(text: extractedText, isFinal: false)
                     }
                 } else {
                     // 最终兜底：raw string 中匹配关键词或提取中文文本
@@ -846,7 +900,7 @@ extension DialogEngineManager: SpeechEngineDelegate {
                         print("[DialogEngine] 🛑 raw string 匹配到结束关键词: \(keyword)")
                         isEnding = true
                         DispatchQueue.main.async { [weak self] in
-                            self?.delegate?.onASRResult(text: keyword, isFinal: true)
+                            self?.forwardASRResult(text: keyword, isFinal: true)
                             self?.stopDialog(reason: .keyword(keyword))
                         }
                         return
@@ -858,7 +912,7 @@ extension DialogEngineManager: SpeechEngineDelegate {
                             return
                         }
                         DispatchQueue.main.async { [weak self] in
-                            self?.delegate?.onASRResult(text: chineseText, isFinal: false)
+                            self?.forwardASRResult(text: chineseText, isFinal: false)
                         }
                     }
                 }
@@ -884,14 +938,14 @@ extension DialogEngineManager: SpeechEngineDelegate {
                         print("[DialogEngine] 🛑 ASRResponse 检测到结束关键词: \(keyword)")
                         isEnding = true
                         DispatchQueue.main.async { [weak self] in
-                            self?.delegate?.onASRResult(text: result.text, isFinal: true)
+                            self?.forwardASRResult(text: result.text, isFinal: true)
                             self?.stopDialog(reason: .keyword(keyword))
                         }
                         return
                     }
                 }
                 DispatchQueue.main.async { [weak self] in
-                    self?.delegate?.onASRResult(text: result.text, isFinal: result.isFinal)
+                    self?.forwardASRResult(text: result.text, isFinal: result.isFinal)
                 }
             }
 
@@ -911,6 +965,7 @@ extension DialogEngineManager: SpeechEngineDelegate {
             }
             // 解析用户查询文本
             if let queryText = parseQueryConfirmedText(from: data), !queryText.isEmpty {
+                deliveredAssistantFinalText = nil
                 if handleSafetyIfNeeded(text: queryText) {
                     return
                 }
@@ -919,13 +974,13 @@ extension DialogEngineManager: SpeechEngineDelegate {
                     print("[DialogEngine] 🛑 用户确认文本中检测到结束关键词: \(keyword)")
                     isEnding = true
                     DispatchQueue.main.async { [weak self] in
-                        self?.delegate?.onASRResult(text: queryText, isFinal: true)
+                        self?.forwardASRResult(text: queryText, isFinal: true)
                         self?.stopDialog(reason: .keyword(keyword))
                     }
                     return
                 }
                 DispatchQueue.main.async { [weak self] in
-                    self?.delegate?.onASRResult(text: queryText, isFinal: true)
+                    self?.forwardASRResult(text: queryText, isFinal: true)
                 }
             }
 
@@ -946,11 +1001,19 @@ extension DialogEngineManager: SpeechEngineDelegate {
                 if handleAssistantSafetyIfNeeded(text: text) {
                     return
                 }
-                if !chatBuffer.isEmpty {
-                    // streaming 已经展示了内容，不重复调用 onTTSStarted
+                if deliveredAssistantFinalText == text {
+                    // ChatEnded 已经发布最终文本，不重复驱动 UI / 数字人 TTS。
+                } else if !chatBuffer.isEmpty {
+                    // streaming 已经有内容，先发布最终文本，再等待 SDK 播放结束事件。
+                    let finalText = chatBuffer
                     chatBuffer = ""
+                    deliveredAssistantFinalText = finalText
+                    DispatchQueue.main.async { [weak self] in
+                        self?.delegate?.onAssistantFinalText(text: finalText)
+                    }
                 } else {
                     // 没有 streaming，TTS 是唯一的文本来源
+                    deliveredAssistantFinalText = text
                     DispatchQueue.main.async { [weak self] in
                         self?.delegate?.onTTSStarted(text: text)
                     }
@@ -1014,8 +1077,9 @@ extension DialogEngineManager: SpeechEngineDelegate {
                     return
                 }
                 chatBuffer = ""
+                deliveredAssistantFinalText = finalText
                 DispatchQueue.main.async { [weak self] in
-                    self?.delegate?.onTTSStarted(text: finalText)
+                    self?.delegate?.onAssistantFinalText(text: finalText)
                 }
             }
 
@@ -1047,7 +1111,7 @@ extension DialogEngineManager: SpeechEngineDelegate {
                     print("[DialogEngine] 📨 default 分支提取到 ASR 文本: \(extracted)")
                     DispatchQueue.main.async { [weak self] in
                         self?.resetSilenceTimer()
-                        self?.delegate?.onASRResult(text: extracted, isFinal: false)
+                        self?.forwardASRResult(text: extracted, isFinal: false)
                     }
                 }
             }
@@ -1224,10 +1288,46 @@ extension DialogEngineManager: SpeechEngineDelegate {
 
         let result = engine.send(SEDirectiveEventSayHello, data: jsonStr)
         if result == SENoError {
+            recentSystemGreetingText = greeting
+            recentSystemGreetingSentAt = Date()
             print("[DialogEngine] ✅ 开场白已发送: \(greeting)")
         } else {
             print("[DialogEngine] ⚠️ 开场白发送失败: \(result.rawValue)")
         }
+    }
+
+    private func forwardASRResult(text: String, isFinal: Bool) {
+        guard !shouldSuppressSystemGreetingEcho(text) else {
+            DDLogInfo("[DialogEngine] Suppressed system greeting echo from ASR")
+            print("[DialogEngine] 🔇 已过滤系统开场白回声: \(text)")
+            return
+        }
+        delegate?.onASRResult(text: text, isFinal: isFinal)
+    }
+
+    private func shouldSuppressSystemGreetingEcho(_ text: String) -> Bool {
+        guard let greeting = recentSystemGreetingText,
+              let sentAt = recentSystemGreetingSentAt,
+              Date().timeIntervalSince(sentAt) <= systemGreetingEchoFilterWindow else {
+            return false
+        }
+
+        let normalizedText = normalizeForEchoComparison(text)
+        let normalizedGreeting = normalizeForEchoComparison(greeting)
+        guard normalizedText.count >= 8, normalizedGreeting.count >= 8 else {
+            return false
+        }
+
+        return normalizedText == normalizedGreeting ||
+            normalizedText.contains(normalizedGreeting) ||
+            normalizedGreeting.contains(normalizedText)
+    }
+
+    private func normalizeForEchoComparison(_ text: String) -> String {
+        text.unicodeScalars
+            .filter { CharacterSet.alphanumerics.contains($0) }
+            .map { String($0).lowercased() }
+            .joined()
     }
 
     /// 生成上下文关联的开场白（基于四维度摘要 + 知识库，每次随机不重复）
@@ -1359,6 +1459,7 @@ extension DialogEngineManager: SpeechEngineDelegate {
 // MARK: - Error
 
 enum DialogEngineError: LocalizedError {
+    case missingCredentials
     case initFailed(code: Int)
     case startFailed(code: Int)
     case audioSessionFailed
@@ -1366,6 +1467,8 @@ enum DialogEngineError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
+        case .missingCredentials:
+            return "实时语音 API Key 未配置，请在 Info.plist 中设置 VolcEngineRealtimeAPIKey 或 VolcEngineAPIKey"
         case .initFailed(let code):
             return "语音引擎初始化失败 (错误码: \(code))"
         case .startFailed(let code):

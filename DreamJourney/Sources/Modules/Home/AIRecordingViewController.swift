@@ -1,5 +1,6 @@
 import UIKit
 import AVFoundation
+import WebKit
 import CocoaLumberjack
 
 // MARK: - 对话消息模型
@@ -130,10 +131,69 @@ final class AIRecordingViewController: UIViewController {
         return b
     }()
 
+    private lazy var digitalHumanDiagnosticsButton: UIButton = {
+        var config = UIButton.Configuration.tinted()
+        config.cornerStyle = .capsule
+        config.baseBackgroundColor = UIColor(red: 0.87, green: 0.83, blue: 0.78, alpha: 0.55)
+        config.baseForegroundColor = UIColor(red: 0.40, green: 0.35, blue: 0.30, alpha: 1.0)
+        config.image = UIImage(systemName: "info.circle")
+        config.contentInsets = NSDirectionalEdgeInsets(top: 7, leading: 9, bottom: 7, trailing: 9)
+        let button = UIButton(configuration: config)
+        button.accessibilityLabel = "数字人真机诊断"
+        button.addTarget(self, action: #selector(digitalHumanDiagnosticsTapped), for: .touchUpInside)
+        return button
+    }()
+
     private let roadshowBannerView = RoadshowModeBannerView()
+    private let digitalHumanAvatarView = DigitalHumanAvatarView()
+    private lazy var digitalHumanFallbackCard: UIView = {
+        let view = UIView()
+        view.backgroundColor = UIColor(red: 1.00, green: 0.96, blue: 0.89, alpha: 1.0)
+        view.layer.cornerRadius = 14
+        view.layer.borderWidth = 1
+        view.layer.borderColor = UIColor(red: 0.93, green: 0.58, blue: 0.22, alpha: 0.26).cgColor
+        view.isHidden = true
+        view.alpha = 0
+        return view
+    }()
+    private let digitalHumanFallbackTitleLabel: UILabel = {
+        let label = UILabel()
+        label.font = .systemFont(ofSize: 14, weight: .bold)
+        label.textColor = UIColor(red: 0.31, green: 0.24, blue: 0.17, alpha: 1.0)
+        label.numberOfLines = 1
+        return label
+    }()
+    private let digitalHumanFallbackMessageLabel: UILabel = {
+        let label = UILabel()
+        label.font = .systemFont(ofSize: 12, weight: .medium)
+        label.textColor = UIColor(red: 0.48, green: 0.39, blue: 0.30, alpha: 1.0)
+        label.numberOfLines = 0
+        return label
+    }()
+    private lazy var digitalHumanRetryButton: UIButton = {
+        var config = UIButton.Configuration.tinted()
+        config.title = "重试数字人"
+        config.image = UIImage(systemName: "arrow.clockwise.circle.fill")
+        config.imagePadding = 4
+        config.baseForegroundColor = .warmAccent
+        config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10)
+        let button = UIButton(configuration: config)
+        button.addTarget(self, action: #selector(retryDigitalHumanTapped), for: .touchUpInside)
+        return button
+    }()
+    private lazy var digitalHumanContinueButton: UIButton = {
+        var config = UIButton.Configuration.plain()
+        config.title = "继续语音"
+        config.baseForegroundColor = .warmSubtitle
+        config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 8, bottom: 6, trailing: 8)
+        let button = UIButton(configuration: config)
+        button.addTarget(self, action: #selector(continueVoiceFallbackTapped), for: .touchUpInside)
+        return button
+    }()
     private var roadshowBannerTopConstraint: NSLayoutConstraint!
     private var roadshowBannerHeightConstraint: NSLayoutConstraint!
     private var messageTableTopConstraint: NSLayoutConstraint!
+    private var digitalHumanFallbackHeightConstraint: NSLayoutConstraint!
 
     // MARK: - State
     private var messages: [TGMessage] = []
@@ -149,6 +209,7 @@ final class AIRecordingViewController: UIViewController {
     private var currentDialogAllowsMemoir = true
     private var selectedDialogPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
     private var currentDialogPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+    private var selectedDialogFamilyVisibility = FamilyVisibilitySelection.allMembers
 
     // MARK: - 对话录音（用于声音复刻）
     /// 并行录音器：对话期间录制用户语音，供声音复刻训练使用
@@ -158,6 +219,19 @@ final class AIRecordingViewController: UIViewController {
     /// 与录音文件配对的 sessionId（用于详情页查找 recordings/{sessionId}.m4a）
     private(set) var lastSessionId: String?
     private let dialogEngine: DialogEngineProtocol = DialogEngineFactory.makeDefault()
+    private var digitalHumanSpeechRequestID = 0
+    private var isDigitalHumanSpeechPlaybackEnabled = false
+    private var currentAssistantResponseText: String?
+    private var retryableDigitalHumanSpeechText: String?
+    private var isAwaitingDigitalHumanAudioEnd = false
+    private let digitalHumanFallbackSynthesizer = AVSpeechSynthesizer()
+    private var digitalHumanNativeAudioPlayer: AVAudioPlayer?
+    private var digitalHumanNativeAudioURL: URL?
+    private var nativeAudioPlaybackRequestID: Int?
+    private var digitalHumanPlaybackWatchdog: DispatchWorkItem?
+    private var isDigitalHumanSystemSpeechFallbackActive = false
+    private var systemSpeechFallbackRequestID: Int?
+    private var isRealtimeDialogPausedForDigitalHumanPlayback = false
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -166,12 +240,48 @@ final class AIRecordingViewController: UIViewController {
         navigationController?.navigationBar.isHidden = true
         hideKeyboardWhenTapped()
         setupLayout()
+        configureDigitalHumanCallbacks()
+        configureRoadshowBannerActions()
         updateRoadshowBanner()
         setupNotifications()
         updateVoiceBallState(.idle)
         // 预初始化 Dialog 引擎
         dialogEngine.delegate = self
+        digitalHumanFallbackSynthesizer.delegate = self
+        configureDigitalHumanSpeechPlayback()
+        DigitalHumanReadinessReport.make().persistEvidenceFiles()
         dialogEngine.setup()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        updateRoadshowBanner()
+    }
+
+    private func configureDigitalHumanCallbacks() {
+        digitalHumanAvatarView.onAudioPlaybackEnded = { [weak self] in
+            guard let self = self else { return }
+            if self.isDigitalHumanSystemSpeechFallbackActive || self.digitalHumanNativeAudioPlayer != nil {
+                return
+            }
+            self.finishDigitalHumanSpeechPlayback(source: "speech_envelope")
+        }
+        digitalHumanAvatarView.onAudioPlaybackFailed = { [weak self] message in
+            DDLogWarn("[DigitalHuman] 音频播放异常: \(message)")
+            self?.handleDigitalHumanPlaybackFailure(
+                reason: "webview_audio_failed detail=\(DigitalHumanPlaybackEvidenceStore.sanitize(message))",
+                logReason: "webview_audio_failed: \(message)"
+            )
+        }
+    }
+
+    private func configureRoadshowBannerActions() {
+        roadshowBannerView.onRouteTapped = { [weak self] in
+            self?.openRoadshowRoute()
+        }
+        roadshowBannerView.onContinueTapped = { [weak self] in
+            self?.continueRoadshowStep()
+        }
     }
 
     override func viewDidLayoutSubviews() {
@@ -201,7 +311,10 @@ final class AIRecordingViewController: UIViewController {
     private func setupLayout() {
         view.addSubview(titleLabel)
         view.addSubview(privacyScopeButton)
+        view.addSubview(digitalHumanDiagnosticsButton)
         view.addSubview(roadshowBannerView)
+        view.addSubview(digitalHumanAvatarView)
+        view.addSubview(digitalHumanFallbackCard)
         view.addSubview(messageTableView)
         view.addSubview(bottomDivider)
         view.addSubview(bottomContainer)
@@ -210,10 +323,13 @@ final class AIRecordingViewController: UIViewController {
         bottomContainer.addSubview(voiceBallButton)
         bottomContainer.addSubview(cameraButton)
 
-        [titleLabel, privacyScopeButton, roadshowBannerView, messageTableView, bottomDivider, bottomContainer,
+        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        [titleLabel, privacyScopeButton, digitalHumanDiagnosticsButton, roadshowBannerView, digitalHumanAvatarView, digitalHumanFallbackCard, messageTableView, bottomDivider, bottomContainer,
          albumButton, voiceBallButton, cameraButton].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
+        setupDigitalHumanFallbackCard()
 
         let ballSize: CGFloat = 80
         let sideSize: CGFloat = 44
@@ -222,7 +338,8 @@ final class AIRecordingViewController: UIViewController {
         bottomContainerBottomConstraint = bottomContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -56)
         roadshowBannerTopConstraint = roadshowBannerView.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 0)
         roadshowBannerHeightConstraint = roadshowBannerView.heightAnchor.constraint(equalToConstant: 0)
-        messageTableTopConstraint = messageTableView.topAnchor.constraint(equalTo: roadshowBannerView.bottomAnchor, constant: 0)
+        messageTableTopConstraint = messageTableView.topAnchor.constraint(equalTo: digitalHumanFallbackCard.bottomAnchor, constant: 8)
+        digitalHumanFallbackHeightConstraint = digitalHumanFallbackCard.heightAnchor.constraint(equalToConstant: 0)
 
         NSLayoutConstraint.activate([
             // 顶部标题
@@ -230,12 +347,26 @@ final class AIRecordingViewController: UIViewController {
             titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             privacyScopeButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
             privacyScopeButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            privacyScopeButton.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 12),
+            digitalHumanDiagnosticsButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
+            digitalHumanDiagnosticsButton.trailingAnchor.constraint(equalTo: privacyScopeButton.leadingAnchor, constant: -8),
+            digitalHumanDiagnosticsButton.widthAnchor.constraint(equalToConstant: 38),
+            digitalHumanDiagnosticsButton.heightAnchor.constraint(equalToConstant: 34),
+            digitalHumanDiagnosticsButton.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 10),
 
             roadshowBannerTopConstraint,
             roadshowBannerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             roadshowBannerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
             roadshowBannerHeightConstraint,
+
+            digitalHumanAvatarView.topAnchor.constraint(equalTo: roadshowBannerView.bottomAnchor, constant: 12),
+            digitalHumanAvatarView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            digitalHumanAvatarView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            digitalHumanAvatarView.heightAnchor.constraint(equalToConstant: 218),
+
+            digitalHumanFallbackCard.topAnchor.constraint(equalTo: digitalHumanAvatarView.bottomAnchor, constant: 8),
+            digitalHumanFallbackCard.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            digitalHumanFallbackCard.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            digitalHumanFallbackHeightConstraint,
 
             // 消息流
             messageTableTopConstraint,
@@ -276,13 +407,65 @@ final class AIRecordingViewController: UIViewController {
         updatePrivacyScopeButton()
     }
 
+    private func setupDigitalHumanFallbackCard() {
+        let actionStack = UIStackView(arrangedSubviews: [digitalHumanRetryButton, digitalHumanContinueButton])
+        actionStack.axis = .horizontal
+        actionStack.spacing = 8
+        actionStack.alignment = .center
+        actionStack.distribution = .fillProportionally
+
+        let textStack = UIStackView(arrangedSubviews: [digitalHumanFallbackTitleLabel, digitalHumanFallbackMessageLabel])
+        textStack.axis = .vertical
+        textStack.spacing = 3
+
+        let contentStack = UIStackView(arrangedSubviews: [textStack, actionStack])
+        contentStack.axis = .vertical
+        contentStack.spacing = 8
+        digitalHumanFallbackCard.addSubview(contentStack)
+        contentStack.translatesAutoresizingMaskIntoConstraints = false
+        let top = contentStack.topAnchor.constraint(equalTo: digitalHumanFallbackCard.topAnchor, constant: 10)
+        let bottom = contentStack.bottomAnchor.constraint(equalTo: digitalHumanFallbackCard.bottomAnchor, constant: -10)
+        top.priority = .defaultHigh
+        bottom.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            top,
+            contentStack.leadingAnchor.constraint(equalTo: digitalHumanFallbackCard.leadingAnchor, constant: 12),
+            contentStack.trailingAnchor.constraint(equalTo: digitalHumanFallbackCard.trailingAnchor, constant: -12),
+            bottom
+        ])
+    }
+
     private func updateRoadshowBanner() {
         let status = RoadshowDemoSeed.runtimeStatus()
-        roadshowBannerView.configure(status: status)
-        roadshowBannerView.isHidden = !status.isActive
-        roadshowBannerTopConstraint.constant = status.isActive ? 10 : 0
-        roadshowBannerHeightConstraint.constant = status.isActive ? 74 : 0
-        messageTableTopConstraint.constant = 12
+        roadshowBannerView.configure(status: status, summary: RoadshowDemoRoute.completionSummary())
+        // Keep roadshow seed/route support available, but do not surface the
+        // rehearsal guide on the home screen during product validation.
+        roadshowBannerView.isHidden = true
+        roadshowBannerTopConstraint.constant = 0
+        roadshowBannerHeightConstraint.constant = 0
+        messageTableTopConstraint.constant = 8
+    }
+
+    private func openRoadshowRoute() {
+        guard RoadshowDemoSeed.runtimeStatus().isActive else { return }
+        let viewController = RoadshowDemoRouteViewController()
+        navigationController?.pushViewController(viewController, animated: true)
+    }
+
+    private func continueRoadshowStep() {
+        guard RoadshowDemoSeed.runtimeStatus().isActive else { return }
+        guard let step = RoadshowDemoRoute.nextIncompleteStep() else {
+            openRoadshowRoute()
+            return
+        }
+        if step.id == "family_share" {
+            let viewController = KBSyncViewController(autoPresentExportPicker: true)
+            viewController.title = "分享包收口"
+            navigationController?.pushViewController(viewController, animated: true)
+            return
+        }
+        tabBarController?.selectedIndex = step.targetTabIndex
+        showToast("继续：\(step.title)", type: .info)
     }
 
     // MARK: - Voice Ball State Machine
@@ -382,7 +565,7 @@ final class AIRecordingViewController: UIViewController {
             self?.setDialogPrivacyScope(.generationAllowed)
         })
         alert.addAction(UIAlertAction(title: "亲友", style: .default) { [weak self] _ in
-            self?.setDialogPrivacyScope(.familyCircle)
+            self?.presentDialogFamilyVisibilityPicker()
         })
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
         alert.popoverPresentationController?.sourceView = privacyScopeButton
@@ -390,52 +573,54 @@ final class AIRecordingViewController: UIViewController {
         present(alert, animated: true)
     }
 
+    @objc private func digitalHumanDiagnosticsTapped() {
+        let report = DigitalHumanReadinessReport.make()
+        let viewController = DigitalHumanDiagnosticsViewController(report: report)
+        let navigationController = UINavigationController(rootViewController: viewController)
+        if let sheet = navigationController.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
+        present(navigationController, animated: true)
+    }
+
     private func setDialogPrivacyScope(_ scope: MemoryPrivacyScope) {
-        selectedDialogPrivacyMetadata = MemoryPrivacyMetadata(
+        selectedDialogPrivacyMetadata = HomeDialogPrivacyMetadataFactory.make(
             scope: scope,
-            sourceRefs: [
-                MemorySourceRef(
-                    kind: .userAuthorization,
-                    id: "home-dialog-\(scope.rawValue)",
-                    title: dialogPrivacyTitle(for: scope),
-                    capturedAt: Date()
-                )
-            ],
-            createdAt: Date()
+            familyVisibility: selectedDialogFamilyVisibility.visibility
         )
         updatePrivacyScopeButton()
+    }
+
+    private func presentDialogFamilyVisibilityPicker() {
+        let picker = FamilyVisibilityPickerViewController(
+            initialVisibility: selectedDialogFamilyVisibility.visibility
+        )
+        picker.onSelect = { [weak self] selection in
+            self?.selectedDialogFamilyVisibility = selection
+            self?.setDialogPrivacyScope(.familyCircle)
+        }
+        let navigationController = UINavigationController(rootViewController: picker)
+        if let sheet = navigationController.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
+        present(navigationController, animated: true)
     }
 
     private func updatePrivacyScopeButton() {
         var config = privacyScopeButton.configuration
         let scope = selectedDialogPrivacyMetadata.scope
-        config?.title = dialogPrivacyTitle(for: scope)
-        config?.image = UIImage(systemName: dialogPrivacyIconName(for: scope))
+        config?.title = HomeDialogPrivacyMetadataFactory.buttonTitle(
+            for: selectedDialogPrivacyMetadata,
+            familySummary: selectedDialogFamilyVisibility.summary
+        )
+        config?.image = UIImage(systemName: HomeDialogPrivacyMetadataFactory.iconName(for: scope))
         privacyScopeButton.configuration = config
-        privacyScopeButton.accessibilityLabel = "对话使用范围：\(dialogPrivacyTitle(for: scope))"
-    }
-
-    private func dialogPrivacyTitle(for scope: MemoryPrivacyScope) -> String {
-        switch scope {
-        case .privateOnly:
-            return "私密"
-        case .localOnly:
-            return "本机"
-        case .generationAllowed:
-            return "可生成"
-        case .familyCircle:
-            return "亲友"
-        }
-    }
-
-    private func dialogPrivacyIconName(for scope: MemoryPrivacyScope) -> String {
-        switch scope {
-        case .privateOnly, .localOnly:
-            return "lock.shield"
-        case .generationAllowed:
-            return "wand.and.stars"
-        case .familyCircle:
-            return "person.2"
+        if scope == .familyCircle {
+            privacyScopeButton.accessibilityLabel = "对话使用范围：亲友，\(selectedDialogFamilyVisibility.summary)"
+        } else {
+            privacyScopeButton.accessibilityLabel = "对话使用范围：\(HomeDialogPrivacyMetadataFactory.title(for: scope))"
         }
     }
 
@@ -446,6 +631,7 @@ final class AIRecordingViewController: UIViewController {
             if granted {
                 // 先启动 DialogEngine（由 SDK 配置 AudioSession），再启动并行录音（共享同一 AudioSession）
                 // 顺序很重要：如果先启动 AVAudioRecorder，它会隐式修改 AudioSession 配置，可能影响 SDK 的 AEC
+                self.digitalHumanAvatarView.setState(.listening, prompt: "正在聆听")
                 dialogEngine.startDialog()
                 self.startSessionRecording()
             } else {
@@ -496,6 +682,7 @@ final class AIRecordingViewController: UIViewController {
         messages = []
         messageTableView.reloadData()
         updateVoiceBallState(.idle)
+        resetDigitalHumanSpeechPlayback(stopFallbackAudio: true)
         dialogEngine.destroyEngine()
     }
 
@@ -504,6 +691,7 @@ final class AIRecordingViewController: UIViewController {
             dialogEngine.stopDialog()
             updateVoiceBallState(.idle)
         }
+        resetDigitalHumanSpeechPlayback(stopFallbackAudio: true)
         // 安全防护：确保并行录音也被停止（正常流程由 onDialogEnded 触发，此处兜底）
         stopSessionRecording()
     }
@@ -514,6 +702,22 @@ final class AIRecordingViewController: UIViewController {
         }
         // 检查声音复刻训练是否在后台完成（Timer 会被挂起，需要手动检查）
         VoiceCloneService.shared.checkPendingTraining()
+    }
+
+    private func configureDigitalHumanSpeechPlayback() {
+        isDigitalHumanSpeechPlaybackEnabled =
+            VolcEngineCredentialProvider.apiKey() != nil &&
+            VolcEngineCredentialProvider.voiceType() != nil
+
+        guard isDigitalHumanSpeechPlaybackEnabled else {
+            DDLogWarn("[DigitalHumanSpeech] 未启用 WAV 播放：缺少 VolcEngineAPIKey 或 VolcEngineVoiceType")
+            return
+        }
+
+        if let manager = dialogEngine as? DialogEngineManager {
+            manager.config.enablePlayer = false
+            DDLogInfo("[DigitalHumanSpeech] 已关闭实时 SDK 内置播放器，改由 WebView 数字人播放 WAV")
+        }
     }
 }
 
@@ -555,21 +759,21 @@ extension AIRecordingViewController: UITableViewDelegate {
         case .privacyConfirmation:
             return 80
         case .ai(let text, _), .user(let text, _):
-            // 与 TGMessageCell.sizeThatFits 保持一致
-            let maxWidth = UIScreen.main.bounds.width * 0.72
-            let label = UILabel()
-            label.numberOfLines = 0
-            label.font = .systemFont(ofSize: 16)
-            let paragraphStyle = NSMutableParagraphStyle()
-            paragraphStyle.lineSpacing = 5
-            label.attributedText = NSAttributedString(string: text, attributes: [
-                .font: UIFont.systemFont(ofSize: 16),
-                .paragraphStyle: paragraphStyle
-            ])
-            let hPad: CGFloat = 16
-            let vPad: CGFloat = 12
-            let textSize = label.sizeThatFits(CGSize(width: maxWidth - hPad * 2, height: .infinity))
-            return textSize.height + vPad * 2 + 8 + 17 + 6
+            let maxWidth = TGMessageCell.maxBubbleWidth(for: tableView.bounds.width)
+            let textSize = TGMessageCell.messageTextSize(
+                for: text,
+                isUser: {
+                    if case .user = msg { return true }
+                    return false
+                }(),
+                maxBubbleWidth: maxWidth
+            )
+            return textSize.height
+                + TGMessageCell.verticalPadding * 2
+                + TGMessageCell.topPadding
+                + TGMessageCell.timestampHeight
+                + TGMessageCell.timestampTopPadding
+                + TGMessageCell.bottomPadding
         }
     }
 }
@@ -789,13 +993,19 @@ extension AIRecordingViewController: DialogEngineDelegate {
         currentDialogPrivacyMetadata = selectedDialogPrivacyMetadata
         pendingUserText = nil
         pendingAIText = nil
+        resetDigitalHumanSpeechPlayback(stopFallbackAudio: true)
+        hideDigitalHumanFallbackPresentation()
         updateVoiceBallState(.active)
+        digitalHumanAvatarView.setState(.listening, prompt: "正在聆听")
     }
 
     func onASRResult(text: String, isFinal: Bool) {
         if isFinal {
+            digitalHumanAvatarView.setState(.thinking, prompt: "正在整理")
             // 最终结果：直接显示为正式用户消息
             pendingUserText = nil
+            currentAssistantResponseText = nil
+            retryableDigitalHumanSpeechText = nil
             messages.append(.user(text: text, timestamp: Date()))
             messageTableView.reloadData()
             scrollToBottom()
@@ -807,21 +1017,48 @@ extension AIRecordingViewController: DialogEngineDelegate {
         } else {
             // 中间结果：只记录不显示，等待最终确认
             pendingUserText = text
+            digitalHumanAvatarView.setState(.listening, prompt: text.isEmpty ? "正在聆听" : text)
         }
     }
 
     func onTTSStarted(text: String) {
+        publishAssistantResponse(text)
+    }
+
+    func onAssistantFinalText(text: String) {
+        publishAssistantResponse(text)
+    }
+
+    private func publishAssistantResponse(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard currentAssistantResponseText != trimmed else {
+            digitalHumanAvatarView.setState(.speaking, prompt: trimmed)
+            return
+        }
+
+        currentAssistantResponseText = trimmed
+        retryableDigitalHumanSpeechText = trimmed
+        DDLogInfo("[DigitalHumanSpeech] assistant_final chars=\(trimmed.count) digitalSpeechEnabled=\(isDigitalHumanSpeechPlaybackEnabled)")
+        DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
+            "assistant_final chars=\(trimmed.count) digitalSpeechEnabled=\(isDigitalHumanSpeechPlaybackEnabled)"
+        )
+        digitalHumanAvatarView.setState(.speaking, prompt: trimmed)
+        if !isDigitalHumanSpeechPlaybackEnabled {
+            digitalHumanAvatarView.feedSpeechText(trimmed)
+        }
+        synthesizeDigitalHumanSpeechIfNeeded(trimmed)
         // AI 开始说话前，将待确认的用户文本显示出来
         flushPendingUserText()
         // 清空流式缓存（TTS 已提供完整文本）
         pendingAIText = nil
         // 显示完整的 AI 句子
-        messages.append(.ai(text: text, timestamp: Date()))
+        messages.append(.ai(text: trimmed, timestamp: Date()))
         messageTableView.reloadData()
         scrollToBottom()
         // 记录到对话记忆
         Stage1MemoryFacade.shared.recordAssistantTurn(Stage1MailboxMemoryInput(
-            text,
+            trimmed,
             privacyMetadata: currentDialogPrivacyMetadata
         ))
     }
@@ -829,6 +1066,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
     func onChatStreaming(text: String) {
         // 流式拼接：不更新 UI，只记录最新累积文本（用于 chat 结束时兜底展示）
         pendingAIText = text
+        digitalHumanAvatarView.setState(.thinking, prompt: text.isEmpty ? "正在组织回答" : text)
     }
 
     /// 将待确认的用户文本发布为正式消息
@@ -845,12 +1083,324 @@ extension AIRecordingViewController: DialogEngineDelegate {
     }
 
     func onTTSFinished() {
+        if isRealtimeDialogPausedForDigitalHumanPlayback {
+            DDLogInfo("[DigitalHumanSpeech] sdk_tts_finished_ignored requestID=\(digitalHumanSpeechRequestID) reason=native_audio_exclusive_playback")
+            DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
+                "sdk_tts_finished_ignored requestID=\(digitalHumanSpeechRequestID) reason=native_audio_exclusive_playback"
+            )
+            return
+        }
+        if !DigitalHumanSpeechPlaybackPolicy.shouldFinishOnSDKTTSFinished(
+            isDigitalHumanSpeechPlaybackEnabled: isDigitalHumanSpeechPlaybackEnabled,
+            isAwaitingDigitalHumanAudioEnd: isAwaitingDigitalHumanAudioEnd
+        ) {
+            return
+        }
+        finishDigitalHumanSpeechPlayback(source: "sdk_tts_finished")
+    }
+
+    private func finishDigitalHumanSpeechPlayback(source: String) {
+        let wasRealtimeDialogPaused = isRealtimeDialogPausedForDigitalHumanPlayback
         // TTS 播报结束，保持 active 状态等待用户继续说话
+        DDLogInfo("[DigitalHumanSpeech] playback_finished source=\(source) requestID=\(digitalHumanSpeechRequestID)")
+        DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
+            "playback_finished source=\(source) requestID=\(digitalHumanSpeechRequestID)"
+        )
+        cancelDigitalHumanPlaybackWatchdog()
+        stopDigitalHumanNativeAudio()
+        stopDigitalHumanSystemSpeechFallback()
+        if source == "timeout" {
+            retryableDigitalHumanSpeechText = currentAssistantResponseText
+        } else {
+            retryableDigitalHumanSpeechText = nil
+            hideDigitalHumanFallbackPresentation()
+        }
+        digitalHumanSpeechRequestID += 1
+        isAwaitingDigitalHumanAudioEnd = false
+        isRealtimeDialogPausedForDigitalHumanPlayback = false
+        currentAssistantResponseText = nil
+        if wasRealtimeDialogPaused {
+            updateVoiceBallState(.idle)
+            digitalHumanAvatarView.setState(.idle, prompt: "点麦克风继续说")
+        } else {
+            digitalHumanAvatarView.setState(.listening, prompt: "可以继续说")
+        }
     }
 
     func onError(error: Error) {
         updateVoiceBallState(.idle)
-        showToast(error.localizedDescription, type: .error)
+        stopSessionRecording()
+        resetDigitalHumanSpeechPlayback(stopFallbackAudio: true)
+        digitalHumanAvatarView.clearSpeechAudio()
+        digitalHumanAvatarView.setState(.error, prompt: "语音服务异常")
+        showVoiceServiceRecovery()
+    }
+
+    private func synthesizeDigitalHumanSpeechIfNeeded(_ text: String) {
+        guard isDigitalHumanSpeechPlaybackEnabled else { return }
+        digitalHumanSpeechRequestID += 1
+        isAwaitingDigitalHumanAudioEnd = true
+        let requestID = digitalHumanSpeechRequestID
+        let uid = UIDevice.current.identifierForVendor?.uuidString ?? "dreamjourney-user"
+        scheduleDigitalHumanPlaybackWatchdog(requestID: requestID, text: text)
+
+        DigitalHumanSpeechService.shared.synthesizeWAV(text: text, uid: uid) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self = self, requestID == self.digitalHumanSpeechRequestID else { return }
+
+                switch result {
+                case .success(let base64Wav):
+                    DDLogInfo("[DigitalHumanSpeech] wav_synth_success requestID=\(requestID) base64Chars=\(base64Wav.count)")
+                    DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
+                        "wav_synth_success requestID=\(requestID) base64Chars=\(base64Wav.count)"
+                    )
+                    self.startDigitalHumanNativeAudio(base64Wav, requestID: requestID, text: text)
+                case .failure(let error):
+                    self.handleDigitalHumanPlaybackFailure(
+                        reason: "wav_synth_failed error=\(error.diagnosticSummary)",
+                        logReason: "wav_synth_failed: \(error.localizedDescription)",
+                        requestID: requestID
+                    )
+                }
+            }
+        }
+    }
+
+    private func startDigitalHumanNativeAudio(_ base64Wav: String, requestID: Int, text: String) {
+        guard let wavData = Data(base64Encoded: base64Wav) else {
+            handleDigitalHumanPlaybackFailure(
+                reason: "native_audio_decode_failed",
+                logReason: "native_audio_decode_failed: invalid base64 WAV",
+                requestID: requestID
+            )
+            return
+        }
+
+        do {
+            pauseRealtimeDialogForDigitalHumanPlayback(requestID: requestID)
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(
+                .playback,
+                mode: .spokenAudio,
+                options: [.duckOthers]
+            )
+            try session.setActive(true)
+            logDigitalHumanAudioRoute(stage: "configured", requestID: requestID)
+
+            stopDigitalHumanNativeAudio()
+            let audioURL = try persistDigitalHumanNativeAudio(wavData, requestID: requestID)
+            let player = try AVAudioPlayer(contentsOf: audioURL)
+            player.delegate = self
+            player.volume = 1.0
+            player.prepareToPlay()
+            digitalHumanNativeAudioPlayer = player
+            digitalHumanNativeAudioURL = audioURL
+            nativeAudioPlaybackRequestID = requestID
+
+            guard player.play() else {
+                handleDigitalHumanPlaybackFailure(
+                    reason: "native_audio_play_failed",
+                    logReason: "native_audio_play_failed: AVAudioPlayer.play returned false",
+                    requestID: requestID
+                )
+                return
+            }
+
+            logDigitalHumanAudioRoute(stage: "started", requestID: requestID)
+            DDLogInfo("[DigitalHumanSpeech] native_audio_started requestID=\(requestID) duration=\(String(format: "%.2f", player.duration)) bytes=\(wavData.count)")
+            DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
+                "native_audio_started requestID=\(requestID) duration=\(String(format: "%.2f", player.duration)) bytes=\(wavData.count)"
+            )
+            digitalHumanAvatarView.playSpeechEnvelope(duration: player.duration, prompt: text)
+        } catch {
+            handleDigitalHumanPlaybackFailure(
+                reason: "native_audio_error",
+                logReason: "native_audio_error: \(error.localizedDescription)",
+                requestID: requestID
+            )
+        }
+    }
+
+    private func pauseRealtimeDialogForDigitalHumanPlayback(requestID: Int) {
+        guard dialogEngine.isDialogActive else { return }
+        isRealtimeDialogPausedForDigitalHumanPlayback = true
+        stopSessionRecording()
+        DDLogInfo("[DigitalHumanSpeech] realtime_dialog_pausing requestID=\(requestID) reason=native_audio_exclusive_playback")
+        DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
+            "realtime_dialog_pausing requestID=\(requestID) reason=native_audio_exclusive_playback"
+        )
+        dialogEngine.stopDialog(reason: .manual)
+    }
+
+    private func persistDigitalHumanNativeAudio(_ data: Data, requestID: Int) throws -> URL {
+        let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("diagnostics", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("digital_human_native_\(requestID).wav")
+        try data.write(to: url, options: .atomic)
+        DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
+            "native_audio_file requestID=\(requestID) path=Documents/diagnostics/\(url.lastPathComponent)"
+        )
+        return url
+    }
+
+    private func logDigitalHumanAudioRoute(stage: String, requestID: Int) {
+        let session = AVAudioSession.sharedInstance()
+        let outputs = session.currentRoute.outputs
+            .map { "\($0.portType.rawValue):\($0.portName)" }
+            .joined(separator: ",")
+        let inputs = session.currentRoute.inputs
+            .map { "\($0.portType.rawValue):\($0.portName)" }
+            .joined(separator: ",")
+        let message = "audio_route stage=\(stage) requestID=\(requestID) category=\(session.category.rawValue) mode=\(session.mode.rawValue) outputVolume=\(String(format: "%.2f", session.outputVolume)) inputs=\(inputs) outputs=\(outputs)"
+        DDLogInfo("[DigitalHumanSpeech] \(message)")
+        DigitalHumanPlaybackEvidenceStore.shared.appendEvent(message)
+    }
+
+    private func handleDigitalHumanPlaybackFailure(reason: String, logReason: String? = nil, requestID: Int? = nil) {
+        if let requestID, requestID != digitalHumanSpeechRequestID {
+            return
+        }
+        guard isAwaitingDigitalHumanAudioEnd else { return }
+        let text = currentAssistantResponseText ?? ""
+        stopDigitalHumanNativeAudio()
+        DDLogWarn("[DigitalHumanSpeech] \(logReason ?? reason) requestID=\(digitalHumanSpeechRequestID) fallback=systemTTS")
+        DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
+            "\(reason) requestID=\(digitalHumanSpeechRequestID) fallback=systemTTS"
+        )
+        let presentation = DigitalHumanSpeechPlaybackPolicy.fallbackPresentation(reason: reason)
+        showDigitalHumanFallbackPresentation(presentation)
+        digitalHumanAvatarView.feedSpeechText(text)
+        startDigitalHumanSystemSpeechFallback(text, requestID: digitalHumanSpeechRequestID)
+    }
+
+    private func scheduleDigitalHumanPlaybackWatchdog(requestID: Int, text: String) {
+        cancelDigitalHumanPlaybackWatchdog()
+        let timeout = DigitalHumanSpeechPlaybackPolicy.watchdogTimeout(for: text)
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self,
+                  self.digitalHumanSpeechRequestID == requestID,
+                  self.isAwaitingDigitalHumanAudioEnd else { return }
+            DDLogWarn("[DigitalHumanSpeech] playback_timeout requestID=\(requestID) timeout=\(String(format: "%.1f", timeout))")
+            DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
+                "playback_timeout requestID=\(requestID) timeout=\(String(format: "%.1f", timeout))"
+            )
+            let presentation = DigitalHumanSpeechPlaybackPolicy.fallbackPresentation(reason: "playback_timeout")
+            self.showDigitalHumanFallbackPresentation(presentation)
+            self.finishDigitalHumanSpeechPlayback(source: "timeout")
+        }
+        digitalHumanPlaybackWatchdog = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + timeout, execute: workItem)
+    }
+
+    private func cancelDigitalHumanPlaybackWatchdog() {
+        digitalHumanPlaybackWatchdog?.cancel()
+        digitalHumanPlaybackWatchdog = nil
+    }
+
+    private func startDigitalHumanSystemSpeechFallback(_ text: String, requestID: Int) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            finishDigitalHumanSpeechPlayback(source: "empty_fallback_text")
+            return
+        }
+        stopDigitalHumanSystemSpeechFallback()
+        let utterance = AVSpeechUtterance(string: trimmed)
+        utterance.voice = AVSpeechSynthesisVoice(language: "zh-CN")
+        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.92
+        utterance.pitchMultiplier = 1.0
+        isDigitalHumanSystemSpeechFallbackActive = true
+        systemSpeechFallbackRequestID = requestID
+        digitalHumanFallbackSynthesizer.speak(utterance)
+    }
+
+    private func stopDigitalHumanSystemSpeechFallback() {
+        isDigitalHumanSystemSpeechFallbackActive = false
+        systemSpeechFallbackRequestID = nil
+        if digitalHumanFallbackSynthesizer.isSpeaking {
+            digitalHumanFallbackSynthesizer.stopSpeaking(at: .immediate)
+        }
+    }
+
+    private func stopDigitalHumanNativeAudio() {
+        if digitalHumanNativeAudioPlayer?.isPlaying == true {
+            digitalHumanNativeAudioPlayer?.stop()
+        }
+        digitalHumanNativeAudioPlayer?.delegate = nil
+        digitalHumanNativeAudioPlayer = nil
+        digitalHumanNativeAudioURL = nil
+        nativeAudioPlaybackRequestID = nil
+    }
+
+    private func resetDigitalHumanSpeechPlayback(stopFallbackAudio: Bool) {
+        cancelDigitalHumanPlaybackWatchdog()
+        stopDigitalHumanNativeAudio()
+        if stopFallbackAudio {
+            stopDigitalHumanSystemSpeechFallback()
+        }
+        hideDigitalHumanFallbackPresentation()
+        digitalHumanSpeechRequestID += 1
+        isAwaitingDigitalHumanAudioEnd = false
+        isRealtimeDialogPausedForDigitalHumanPlayback = false
+        currentAssistantResponseText = nil
+        retryableDigitalHumanSpeechText = nil
+    }
+
+    private func showDigitalHumanFallbackPresentation(_ presentation: DigitalHumanSpeechPlaybackPolicy.FallbackPresentation) {
+        digitalHumanFallbackTitleLabel.text = presentation.title
+        digitalHumanFallbackMessageLabel.text = presentation.message
+        digitalHumanRetryButton.configuration?.title = presentation.recoveryActionTitle
+        digitalHumanContinueButton.configuration?.title = presentation.continueActionTitle
+        digitalHumanFallbackCard.isHidden = false
+        digitalHumanFallbackHeightConstraint.isActive = false
+        UIView.animate(withDuration: 0.22) {
+            self.digitalHumanFallbackCard.alpha = 1
+            self.view.layoutIfNeeded()
+        }
+    }
+
+    private func hideDigitalHumanFallbackPresentation() {
+        guard !digitalHumanFallbackCard.isHidden || digitalHumanFallbackCard.alpha > 0 else { return }
+        digitalHumanFallbackHeightConstraint.isActive = true
+        UIView.animate(withDuration: 0.18, animations: {
+            self.digitalHumanFallbackCard.alpha = 0
+            self.view.layoutIfNeeded()
+        }, completion: { _ in
+            self.digitalHumanFallbackCard.isHidden = true
+        })
+    }
+
+    private func showVoiceServiceRecovery() {
+        let presentation = DigitalHumanSpeechPlaybackPolicy.FallbackPresentation(
+            title: "语音服务暂时不可用",
+            message: "本次对话已安全收尾，可以稍后重试；已保留本机演示边界，不影响查看其他功能。",
+            recoveryActionTitle: "重试数字人",
+            continueActionTitle: "继续语音"
+        )
+        showDigitalHumanFallbackPresentation(presentation)
+        showToast("语音服务暂时不可用，可稍后重试", type: .info)
+    }
+
+    @objc private func retryDigitalHumanTapped() {
+        guard let text = (currentAssistantResponseText ?? retryableDigitalHumanSpeechText)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else {
+            hideDigitalHumanFallbackPresentation()
+            digitalHumanAvatarView.setState(.listening, prompt: "可以继续说")
+            return
+        }
+        currentAssistantResponseText = text
+        retryableDigitalHumanSpeechText = nil
+        stopDigitalHumanSystemSpeechFallback()
+        hideDigitalHumanFallbackPresentation()
+        digitalHumanAvatarView.clearSpeechAudio()
+        digitalHumanAvatarView.setState(.speaking, prompt: text)
+        synthesizeDigitalHumanSpeechIfNeeded(text)
+    }
+
+    @objc private func continueVoiceFallbackTapped() {
+        retryableDigitalHumanSpeechText = nil
+        hideDigitalHumanFallbackPresentation()
+        digitalHumanAvatarView.setState(.listening, prompt: "可以继续说")
     }
 
     func onSafetyTriggered(assessment: SafetyAssessment) {
@@ -858,9 +1408,12 @@ extension AIRecordingViewController: DialogEngineDelegate {
         currentDialogAllowsMemoir = false
         pendingUserText = nil
         pendingAIText = nil
+        resetDigitalHumanSpeechPlayback(stopFallbackAudio: true)
         Stage1MemoryFacade.shared.discardCurrentConversationSession()
         stopSessionRecording()
         updateVoiceBallState(.idle)
+        digitalHumanAvatarView.clearSpeechAudio()
+        digitalHumanAvatarView.setState(.idle, prompt: "准备聆听家族故事")
 
         DispatchQueue.main.async { [weak self] in
             guard let self = self, self.presentedViewController == nil else { return }
@@ -871,12 +1424,24 @@ extension AIRecordingViewController: DialogEngineDelegate {
     }
 
     func onDialogEnded(reason: DialogEndReason) {
+        if isRealtimeDialogPausedForDigitalHumanPlayback {
+            DDLogInfo("[DigitalHumanSpeech] dialog_end_ignored_for_native_audio reason=\(reason)")
+            DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
+                "dialog_end_ignored_for_native_audio reason=\(reason)"
+            )
+            updateVoiceBallState(.idle)
+            return
+        }
+
         if case .crisis = reason {
             pendingUserText = nil
             pendingAIText = nil
             currentDialogAllowsMemoir = false
             Stage1MemoryFacade.shared.discardCurrentConversationSession()
             updateVoiceBallState(.idle)
+            resetDigitalHumanSpeechPlayback(stopFallbackAudio: true)
+            digitalHumanAvatarView.clearSpeechAudio()
+            digitalHumanAvatarView.setState(.idle, prompt: "准备聆听家族故事")
             return
         }
 
@@ -896,6 +1461,9 @@ extension AIRecordingViewController: DialogEngineDelegate {
         // 结束会话：提取摘要并持久化
         Stage1MemoryFacade.shared.finishConversationSession()
         updateVoiceBallState(.idle)
+        resetDigitalHumanSpeechPlayback(stopFallbackAudio: true)
+        digitalHumanAvatarView.clearSpeechAudio()
+        digitalHumanAvatarView.setState(.idle, prompt: "准备聆听家族故事")
 
         switch reason {
         case .keyword:
@@ -1031,4 +1599,831 @@ extension AIRecordingViewController: DialogEngineDelegate {
             sessionId: lastSessionId
         )
     }
+}
+
+extension AIRecordingViewController: AVSpeechSynthesizerDelegate {
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self,
+                  DigitalHumanSpeechPlaybackPolicy.shouldAcceptSystemSpeechCallback(
+                    isFallbackActive: self.isDigitalHumanSystemSpeechFallbackActive,
+                    fallbackRequestID: self.systemSpeechFallbackRequestID,
+                    currentRequestID: self.digitalHumanSpeechRequestID
+                  ) else { return }
+            self.isDigitalHumanSystemSpeechFallbackActive = false
+            self.systemSpeechFallbackRequestID = nil
+            self.finishDigitalHumanSpeechPlayback(source: "system_tts")
+        }
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self,
+                  DigitalHumanSpeechPlaybackPolicy.shouldAcceptSystemSpeechCallback(
+                    isFallbackActive: self.isDigitalHumanSystemSpeechFallbackActive,
+                    fallbackRequestID: self.systemSpeechFallbackRequestID,
+                    currentRequestID: self.digitalHumanSpeechRequestID
+                  ) else { return }
+            self.isDigitalHumanSystemSpeechFallbackActive = false
+            self.systemSpeechFallbackRequestID = nil
+            self.finishDigitalHumanSpeechPlayback(source: "system_tts_cancelled")
+        }
+    }
+}
+
+extension AIRecordingViewController: AVAudioPlayerDelegate {
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self,
+                  player === self.digitalHumanNativeAudioPlayer,
+                  self.nativeAudioPlaybackRequestID == self.digitalHumanSpeechRequestID else { return }
+            if flag {
+                self.finishDigitalHumanSpeechPlayback(source: "native_audio")
+            } else {
+                self.handleDigitalHumanPlaybackFailure(
+                    reason: "native_audio_interrupted",
+                    logReason: "native_audio_interrupted: playback did not finish successfully",
+                    requestID: self.digitalHumanSpeechRequestID
+                )
+            }
+        }
+    }
+
+    func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self,
+                  player === self.digitalHumanNativeAudioPlayer,
+                  self.nativeAudioPlaybackRequestID == self.digitalHumanSpeechRequestID else { return }
+            self.handleDigitalHumanPlaybackFailure(
+                reason: "native_audio_decode_error",
+                logReason: "native_audio_decode_error: \(error?.localizedDescription ?? "unknown")",
+                requestID: self.digitalHumanSpeechRequestID
+            )
+        }
+    }
+}
+
+// MARK: - Digital Human Avatar
+
+private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScriptMessageHandler {
+    enum AvatarState: String {
+        case idle
+        case listening
+        case thinking
+        case speaking
+        case error
+    }
+
+    private let webView: WKWebView
+    private let schemeHandler: AvatarWebResourceSchemeHandler
+    private var currentState: AvatarState = .idle
+    private var currentPrompt = "准备聆听家族故事"
+    private var didFinishInitialLoad = false
+    private var pendingSpeechDuration: TimeInterval?
+    var onAudioPlaybackEnded: (() -> Void)?
+    var onAudioPlaybackFailed: ((String) -> Void)?
+
+    override init(frame: CGRect) {
+        let configuration = WKWebViewConfiguration()
+        configuration.allowsInlineMediaPlayback = true
+        if #available(iOS 10.0, *) {
+            configuration.mediaTypesRequiringUserActionForPlayback = []
+        }
+        let schemeHandler = AvatarWebResourceSchemeHandler()
+        configuration.setURLSchemeHandler(schemeHandler, forURLScheme: Self.avatarResourceScheme)
+        self.schemeHandler = schemeHandler
+        webView = WKWebView(frame: .zero, configuration: configuration)
+        super.init(frame: frame)
+        configuration.userContentController.add(WeakScriptMessageDelegate(self), name: "avatarHealth")
+        setupView()
+        loadAvatarHTML()
+    }
+
+    required init?(coder: NSCoder) {
+        let configuration = WKWebViewConfiguration()
+        configuration.allowsInlineMediaPlayback = true
+        if #available(iOS 10.0, *) {
+            configuration.mediaTypesRequiringUserActionForPlayback = []
+        }
+        let schemeHandler = AvatarWebResourceSchemeHandler()
+        configuration.setURLSchemeHandler(schemeHandler, forURLScheme: Self.avatarResourceScheme)
+        self.schemeHandler = schemeHandler
+        webView = WKWebView(frame: .zero, configuration: configuration)
+        super.init(coder: coder)
+        configuration.userContentController.add(WeakScriptMessageDelegate(self), name: "avatarHealth")
+        setupView()
+        loadAvatarHTML()
+    }
+
+    deinit {
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: "avatarHealth")
+    }
+
+    func setState(_ state: AvatarState, prompt: String? = nil) {
+        currentState = state
+        if state != .speaking {
+            pendingSpeechDuration = nil
+        }
+        if let prompt, !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            currentPrompt = prompt
+        }
+        applyCurrentState()
+    }
+
+    func feedSpeechText(_ text: String) {
+        let estimatedSeconds = min(max(Double(text.count) * 0.18, 1.2), 12.0)
+        playSpeechEnvelope(duration: estimatedSeconds, prompt: text)
+    }
+
+    func playSpeechEnvelope(duration: TimeInterval, prompt: String? = nil) {
+        if let prompt, !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            currentPrompt = prompt
+        }
+        currentState = .speaking
+        pendingSpeechDuration = duration
+        guard didFinishInitialLoad else { return }
+        let promptJSON = Self.jsonStringLiteral(currentPrompt)
+        let script = """
+        if (window.DreamJourneyAvatar) {
+          window.DreamJourneyAvatar.setState('speaking', \(promptJSON));
+          window.DreamJourneyAvatar.playSpeechEnvelope(\(duration));
+        }
+        """
+        webView.evaluateJavaScript(script, completionHandler: nil)
+    }
+
+    func feedAudioBase64(_ base64: String) {
+        guard didFinishInitialLoad else { return }
+        let audioJSON = Self.jsonStringLiteral(base64)
+        let script = "window.DreamJourneyAvatar && window.DreamJourneyAvatar.feedAudioBase64(\(audioJSON));"
+        webView.evaluateJavaScript(script) { [weak self] _, error in
+            if let error {
+                self?.onAudioPlaybackFailed?("evaluateJavaScript: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func clearSpeechAudio() {
+        pendingSpeechDuration = nil
+        guard didFinishInitialLoad else { return }
+        let script = "window.DreamJourneyAvatar && window.DreamJourneyAvatar.clearAudio();"
+        webView.evaluateJavaScript(script, completionHandler: nil)
+    }
+
+    private func setupView() {
+        backgroundColor = .clear
+        layer.cornerRadius = 16
+        layer.masksToBounds = true
+        layer.borderColor = UIColor.clear.cgColor
+        layer.borderWidth = 0
+
+        webView.navigationDelegate = self
+        webView.isOpaque = false
+        webView.backgroundColor = .clear
+        webView.scrollView.isScrollEnabled = false
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
+
+        addSubview(webView)
+        webView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            webView.topAnchor.constraint(equalTo: topAnchor),
+            webView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            webView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            webView.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
+    }
+
+    private func loadAvatarHTML() {
+        guard let url = URL(string: "\(Self.avatarResourceScheme)://local/avatar.html") else {
+            webView.loadHTMLString(Self.avatarHTML, baseURL: Bundle.main.resourceURL)
+            return
+        }
+        webView.load(URLRequest(url: url))
+        DigitalHumanPlaybackEvidenceStore.shared.appendEvent("avatar_web_load mode=url_scheme")
+    }
+
+    private func applyCurrentState() {
+        guard didFinishInitialLoad else { return }
+        let promptJSON = Self.jsonStringLiteral(currentPrompt)
+        let script = "window.DreamJourneyAvatar && window.DreamJourneyAvatar.setState('\(currentState.rawValue)', \(promptJSON));"
+        webView.evaluateJavaScript(script, completionHandler: nil)
+        if currentState == .speaking, let pendingSpeechDuration {
+            let speechScript = "window.DreamJourneyAvatar && window.DreamJourneyAvatar.playSpeechEnvelope(\(pendingSpeechDuration));"
+            webView.evaluateJavaScript(speechScript, completionHandler: nil)
+        }
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        didFinishInitialLoad = true
+        applyCurrentState()
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard message.name == "avatarHealth" else { return }
+        DDLogInfo("[DigitalHuman] \(message.body)")
+        guard let body = message.body as? [String: Any],
+              let type = body["type"] as? String else {
+            DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
+                "avatar_health type=unknown detail=\(DigitalHumanPlaybackEvidenceStore.sanitize(String(describing: message.body)))"
+            )
+            return
+        }
+        DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
+            "avatar_health type=\(DigitalHumanPlaybackEvidenceStore.sanitize(type)) detail=\(DigitalHumanPlaybackEvidenceStore.sanitize(String(describing: body["detail"] ?? "")))"
+        )
+
+        switch DigitalHumanSpeechPlaybackPolicy.action(forWebAudioEvent: type) {
+        case .finish:
+            onAudioPlaybackEnded?()
+        case .fail:
+            onAudioPlaybackFailed?(String(describing: body["detail"] ?? type))
+        case .ignore:
+            break
+        }
+    }
+
+    private static func jsonStringLiteral(_ value: String) -> String {
+        guard let data = try? JSONEncoder().encode(value),
+              let json = String(data: data, encoding: .utf8) else {
+            return "\"\""
+        }
+        return json
+    }
+
+    private final class WeakScriptMessageDelegate: NSObject, WKScriptMessageHandler {
+        weak var target: WKScriptMessageHandler?
+
+        init(_ target: WKScriptMessageHandler?) {
+            self.target = target
+        }
+
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            target?.userContentController(userContentController, didReceive: message)
+        }
+    }
+
+    private final class AvatarWebResourceSchemeHandler: NSObject, WKURLSchemeHandler {
+        func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
+            guard let url = urlSchemeTask.request.url else {
+                fail(urlSchemeTask, message: "missing URL")
+                return
+            }
+
+            do {
+                let path = normalizedPath(from: url)
+                let resource = try resourceData(for: path)
+                let response = HTTPURLResponse(
+                    url: url,
+                    statusCode: 200,
+                    httpVersion: "HTTP/1.1",
+                    headerFields: [
+                        "Content-Type": resource.mimeType,
+                        "Content-Length": "\(resource.data.count)",
+                        "Access-Control-Allow-Origin": "*",
+                        "Cache-Control": "no-store"
+                    ]
+                )
+                if let response {
+                    urlSchemeTask.didReceive(response)
+                }
+                urlSchemeTask.didReceive(resource.data)
+                urlSchemeTask.didFinish()
+            } catch {
+                fail(urlSchemeTask, message: error.localizedDescription)
+            }
+        }
+
+        func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {}
+
+        private func normalizedPath(from url: URL) -> String {
+            let rawPath = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            return rawPath.removingPercentEncoding ?? rawPath
+        }
+
+        private func resourceData(for path: String) throws -> (data: Data, mimeType: String) {
+            if path.isEmpty || path == "avatar.html" {
+                guard let data = DigitalHumanAvatarView.avatarHTML.data(using: .utf8) else {
+                    throw NSError(domain: "DigitalHumanAvatarView", code: 2, userInfo: [
+                        NSLocalizedDescriptionKey: "avatar html encoding failed"
+                    ])
+                }
+                return (data, "text/html; charset=utf-8")
+            }
+
+            let filename = (path as NSString).lastPathComponent
+            guard let sourceURL = bundleURL(for: filename) else {
+                throw NSError(domain: "DigitalHumanAvatarView", code: 3, userInfo: [
+                    NSLocalizedDescriptionKey: "missing avatar resource \(filename)"
+                ])
+            }
+            return (try Data(contentsOf: sourceURL), mimeType(for: filename))
+        }
+
+        private func bundleURL(for filename: String) -> URL? {
+            if let directURL = Bundle.main.url(forResource: filename, withExtension: nil) {
+                return directURL
+            }
+            let nsFilename = filename as NSString
+            let name = nsFilename.deletingPathExtension
+            let ext = nsFilename.pathExtension
+            if !name.isEmpty, !ext.isEmpty,
+               let typedURL = Bundle.main.url(forResource: name, withExtension: ext) {
+                return typedURL
+            }
+            return Bundle.main.resourceURL?.appendingPathComponent(filename)
+        }
+
+        private func mimeType(for filename: String) -> String {
+            switch (filename as NSString).pathExtension.lowercased() {
+            case "html":
+                return "text/html; charset=utf-8"
+            case "js":
+                return "application/javascript; charset=utf-8"
+            case "wasm":
+                return "application/wasm"
+            case "mp4":
+                return "video/mp4"
+            case "gz":
+                return "application/gzip"
+            case "png":
+                return "image/png"
+            default:
+                return "application/octet-stream"
+            }
+        }
+
+        private func fail(_ urlSchemeTask: WKURLSchemeTask, message: String) {
+            let error = NSError(
+                domain: "DigitalHumanAvatarView",
+                code: 4,
+                userInfo: [NSLocalizedDescriptionKey: message]
+            )
+            urlSchemeTask.didFailWithError(error)
+        }
+    }
+
+    private static let avatarResourceScheme = "dreamjourney-avatar"
+
+    private static let avatarHTML = """
+    <!doctype html>
+    <html>
+    <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <style>
+    :root {
+      color-scheme: light;
+      --ink: #2c251f;
+      --muted: rgba(44, 37, 31, .62);
+      --orange: #ed9239;
+      --green: #5a8f72;
+      --blue: #4c7498;
+      --paper: #fbf6ef;
+    }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+    }
+    #stage {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+    }
+    #status {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      right: 14px;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--ink);
+    }
+    #stateText {
+      font-size: 15px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    #prompt {
+      max-width: 58%;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.25;
+      text-align: right;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    #screen, #screen2 {
+      position: absolute;
+      inset: 0;
+      display: none;
+    }
+    #screen2 {
+      display: block;
+      z-index: 20;
+      pointer-events: none;
+    }
+    #canvas_video {
+      position: absolute;
+      left: 50%;
+      bottom: -8px;
+      width: min(60vw, 220px);
+      height: auto;
+      max-height: calc(100% - 48px);
+      transform: translateX(-50%);
+      object-fit: contain;
+      z-index: 21;
+    }
+    #canvas_gl, #background_video {
+      display: none;
+    }
+    #fallbackAvatar {
+      position: absolute;
+      left: 50%;
+      bottom: 16px;
+      width: 142px;
+      height: 142px;
+      transform: translateX(-50%);
+      z-index: 2;
+    }
+    .halo {
+      position: absolute;
+      inset: 8px;
+      border-radius: 50%;
+      background: rgba(237, 146, 57, .18);
+      box-shadow: 0 18px 46px rgba(237, 146, 57, .24);
+      animation: breathe 2.4s ease-in-out infinite;
+    }
+    .head {
+      position: absolute;
+      left: 26px;
+      top: 18px;
+      width: 90px;
+      height: 106px;
+      border-radius: 45px 45px 38px 38px;
+      background: linear-gradient(180deg, #f2c5a3, #d99b72);
+      box-shadow: inset 0 -10px 18px rgba(100, 60, 38, .12);
+    }
+    .hair {
+      position: absolute;
+      left: 22px;
+      top: 10px;
+      width: 98px;
+      height: 58px;
+      border-radius: 54px 54px 26px 26px;
+      background: #3a2c26;
+    }
+    .eye {
+      position: absolute;
+      top: 64px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #2c251f;
+    }
+    .eye.left { left: 56px; }
+    .eye.right { right: 56px; }
+    .mouth {
+      position: absolute;
+      left: 63px;
+      top: 90px;
+      width: 16px;
+      height: 5px;
+      border-radius: 10px;
+      background: #7a443a;
+      transform-origin: center;
+    }
+    body[data-state="speaking"] .mouth {
+      animation: talk .34s ease-in-out infinite;
+    }
+    body[data-state="listening"] .halo {
+      background: rgba(90, 143, 114, .22);
+      box-shadow: 0 18px 46px rgba(90, 143, 114, .25);
+    }
+    body[data-state="thinking"] .halo {
+      background: rgba(76, 116, 152, .20);
+      box-shadow: 0 18px 46px rgba(76, 116, 152, .22);
+    }
+    body[data-state="error"] .halo {
+      background: rgba(207, 76, 65, .20);
+      box-shadow: 0 18px 46px rgba(207, 76, 65, .22);
+    }
+    #loadingSpinner {
+      position: absolute;
+      right: 15px;
+      bottom: 14px;
+      z-index: 9;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--orange);
+      box-shadow: 14px 0 rgba(237, 146, 57, .5), 28px 0 rgba(237, 146, 57, .28);
+      animation: dots 1s ease-in-out infinite;
+    }
+    #startMessage {
+      position: absolute;
+      left: 14px;
+      bottom: 12px;
+      z-index: 8;
+      color: rgba(44, 37, 31, .45);
+      font-size: 11px;
+      font-weight: 600;
+    }
+    @keyframes breathe {
+      0%, 100% { transform: scale(.96); opacity: .72; }
+      50% { transform: scale(1.04); opacity: 1; }
+    }
+    @keyframes talk {
+      0%, 100% { height: 5px; transform: scaleX(1); }
+      50% { height: 16px; transform: scaleX(.78); }
+    }
+    @keyframes dots {
+      0%, 100% { opacity: .5; transform: translateY(0); }
+      50% { opacity: 1; transform: translateY(-2px); }
+    }
+    </style>
+    </head>
+    <body data-state="idle">
+      <div id="stage">
+        <div id="status">
+          <div id="stateText">准备聆听</div>
+          <div id="prompt">准备聆听家族故事</div>
+        </div>
+        <div id="fallbackAvatar" aria-hidden="true">
+          <div class="halo"></div>
+          <div class="hair"></div>
+          <div class="head"></div>
+          <div class="eye left"></div>
+          <div class="eye right"></div>
+          <div class="mouth"></div>
+        </div>
+        <div id="loadingSpinner"></div>
+        <div id="startMessage">正在加载数字人</div>
+        <div id="screen"></div>
+        <div id="screen2">
+          <video id="background_video" muted playsinline loop></video>
+          <canvas id="canvas_video"></canvas>
+          <canvas id="canvas_gl"></canvas>
+        </div>
+      </div>
+      <script>
+        const avatarRuntime = {
+          audioQueue: [],
+          audioContext: null,
+          currentSource: null,
+          isPlayingAudio: false,
+          isVideoReady: false,
+          pendingSpeechDuration: null,
+          speechTimer: null,
+          postHealth: function(type, detail) {
+            try {
+              window.webkit?.messageHandlers?.avatarHealth?.postMessage({ type, detail });
+            } catch (_) {}
+          },
+          hideFallbackAvatar: function() {
+            const fallback = document.getElementById('fallbackAvatar');
+            if (fallback) {
+              fallback.style.display = 'none';
+            }
+          },
+          markAvatarVideoReady: function(detail) {
+            this.isVideoReady = true;
+            const spinner = document.getElementById('loadingSpinner');
+            const startMessage = document.getElementById('startMessage');
+            const screen = document.getElementById('screen');
+            const screen2 = document.getElementById('screen2');
+            if (spinner) {
+              spinner.style.display = 'none';
+            }
+            if (startMessage) {
+              startMessage.textContent = '真人数字人已就绪';
+              startMessage.style.display = 'none';
+            }
+            if (screen) {
+              screen.style.display = 'block';
+            }
+            if (screen2) {
+              screen2.style.display = 'block';
+            }
+            this.hideFallbackAvatar();
+            this.postHealth('avatar_video_surface_ready', detail || 'video surface ready');
+            if (document.body.dataset.state === 'speaking' && this.pendingSpeechDuration) {
+              window.DreamJourneyMiniLive && window.DreamJourneyMiniLive.playForDuration(this.pendingSpeechDuration);
+            } else {
+              window.DreamJourneyMiniLive && window.DreamJourneyMiniLive.pause('video_ready_idle');
+            }
+          },
+          probeResources: async function() {
+            const result = {
+              baseURI: document.baseURI,
+              pako: !!window.pako,
+              createQtAppInstance: typeof window.createQtAppInstance,
+              webAssembly: typeof WebAssembly !== 'undefined'
+            };
+            const paths = [
+              'pako.min.js',
+              'DHLiveMini.js',
+              'DHLiveMini.wasm',
+              'MiniLive2.js',
+              'MiniMateLoader.js',
+              '01.mp4',
+              'combined_data.json.gz',
+              'bs_texture_halfFace.png'
+            ];
+            for (const path of paths) {
+              try {
+                const response = await fetch(path, { cache: 'no-store' });
+                result[path] = response.status + ':' + response.ok;
+              } catch (error) {
+                result[path] = 'error:' + String(error && error.message ? error.message : error);
+              }
+            }
+            this.postHealth('resource_probe', result);
+          },
+          markShellReady: function(detail) {
+            if (this.isVideoReady) {
+              this.postHealth('avatar_shell_ready_ignored', detail || 'video surface already ready');
+              return;
+            }
+            const spinner = document.getElementById('loadingSpinner');
+            const startMessage = document.getElementById('startMessage');
+            if (spinner) {
+              spinner.style.display = 'none';
+            }
+            if (startMessage) {
+              startMessage.textContent = '数字人动画已就绪';
+            }
+            this.postHealth('avatar_shell_ready', detail || 'fallback avatar ready');
+          },
+          setState: function(state, prompt) {
+            document.body.dataset.state = state || 'idle';
+            const title = {
+              idle: '准备聆听',
+              listening: '正在聆听',
+              thinking: '正在整理',
+              speaking: '正在讲述',
+              error: '需要重试'
+            }[state] || '准备聆听';
+            document.getElementById('stateText').textContent = title;
+            document.getElementById('prompt').textContent = prompt || '准备聆听家族故事';
+            if (state !== 'speaking') {
+              this.pendingSpeechDuration = null;
+              window.DreamJourneyMiniLive && window.DreamJourneyMiniLive.pause('state_' + (state || 'idle'));
+            }
+          },
+          playSpeechEnvelope: function(durationSeconds) {
+            clearTimeout(this.speechTimer);
+            document.body.dataset.state = 'speaking';
+            const duration = Math.max(600, Math.min(Number(durationSeconds || 2) * 1000, 60000));
+            this.pendingSpeechDuration = duration / 1000;
+            window.DreamJourneyMiniLive && window.DreamJourneyMiniLive.playForDuration(this.pendingSpeechDuration);
+            this.speechTimer = setTimeout(() => {
+              if (document.body.dataset.state === 'speaking') {
+                this.setState('listening', '可以继续说');
+                this.pendingSpeechDuration = null;
+                window.DreamJourneyMiniLive && window.DreamJourneyMiniLive.pause('speech_envelope_ended');
+                this.postHealth('speech_envelope_ended', duration);
+              }
+            }, duration);
+          },
+          feedAudioBase64: function(base64Audio) {
+            if (!base64Audio) {
+              this.postHealth('audio_ignored', 'empty base64');
+              return false;
+            }
+            try {
+              const bytes = this.base64ToUint8Array(base64Audio);
+              this.audioQueue.push(bytes);
+              this.playNextAudio();
+              return true;
+            } catch (error) {
+              this.postHealth('audio_error', String(error && error.message ? error.message : error));
+              return false;
+            }
+          },
+          playNextAudio: function() {
+            if (this.isPlayingAudio || this.audioQueue.length === 0) {
+              return;
+            }
+            const bytes = this.audioQueue.shift();
+            if (window.Module && Module._malloc && Module._setAudioBuffer && Module.HEAPU8) {
+              const ptr = Module._malloc(bytes.byteLength);
+              Module.HEAPU8.set(bytes, ptr);
+              Module._setAudioBuffer(ptr, bytes.byteLength);
+              Module._free(ptr);
+              this.postHealth('audio_buffered', bytes.byteLength);
+            } else {
+              this.postHealth('audio_module_unavailable', 'Module audio api unavailable');
+            }
+
+            this.isPlayingAudio = true;
+            this.ensureAudioContext();
+            const wavBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+            this.audioContext.decodeAudioData(wavBuffer, (audioBuffer) => {
+              const source = this.audioContext.createBufferSource();
+              this.currentSource = source;
+              source.buffer = audioBuffer;
+              source.connect(this.audioContext.destination);
+              source.onended = () => {
+                this.currentSource = null;
+                this.isPlayingAudio = false;
+                if (this.audioQueue.length > 0) {
+                  this.playNextAudio();
+                } else {
+                  this.pendingSpeechDuration = null;
+                  window.DreamJourneyMiniLive && window.DreamJourneyMiniLive.pause('audio_ended');
+                  this.postHealth('audio_ended', audioBuffer.duration);
+                }
+              };
+              this.setState('speaking', '正在讲述');
+              source.start(0);
+            }, (error) => {
+              this.postHealth('audio_decode_error', String(error && error.message ? error.message : error));
+              this.isPlayingAudio = false;
+              this.playSpeechEnvelope(Math.max(1.2, bytes.byteLength / 24000));
+              this.playNextAudio();
+            });
+          },
+          ensureAudioContext: function() {
+            if (!this.audioContext || this.audioContext.state === 'closed') {
+              this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            } else if (this.audioContext.state === 'suspended') {
+              this.audioContext.resume();
+            }
+          },
+          clearAudio: function() {
+            clearTimeout(this.speechTimer);
+            try {
+              if (this.currentSource) {
+                this.currentSource.stop();
+              }
+            } catch (_) {}
+            this.currentSource = null;
+            this.audioQueue = [];
+            this.isPlayingAudio = false;
+            if (window.Module && Module._clearAudio) {
+              Module._clearAudio();
+            }
+            this.pendingSpeechDuration = null;
+            window.DreamJourneyMiniLive && window.DreamJourneyMiniLive.pause('clear_audio');
+            this.setState('idle', '准备聆听家族故事');
+          },
+          base64ToUint8Array: function(base64) {
+            const raw = atob(base64);
+            const bytes = new Uint8Array(raw.length);
+            for (let i = 0; i < raw.length; i += 1) {
+              bytes[i] = raw.charCodeAt(i);
+            }
+            return bytes;
+          }
+        };
+        window.DreamJourneyAvatar = avatarRuntime;
+        avatarRuntime.markShellReady('dom ready');
+        setTimeout(function() {
+          window.DreamJourneyAvatar && window.DreamJourneyAvatar.markShellReady('startup timeout fallback');
+        }, 1800);
+        avatarRuntime.postHealth('capabilities', {
+          webgl2: !!document.createElement('canvas').getContext('webgl2'),
+          wasm: typeof WebAssembly !== 'undefined',
+          secureContext: window.isSecureContext
+        });
+        window.addEventListener('error', function(event) {
+          console.log('[DreamJourneyAvatar] fallback:', event.message);
+          window.DreamJourneyAvatar.markShellReady('runtime error fallback');
+          window.DreamJourneyAvatar.postHealth('runtime_error', event.message);
+        });
+        window.addEventListener('unhandledrejection', function(event) {
+          const reason = event.reason && event.reason.message ? event.reason.message : String(event.reason);
+          window.DreamJourneyAvatar.markShellReady('runtime promise fallback');
+          window.DreamJourneyAvatar.postHealth('runtime_unhandledrejection', reason);
+        });
+      </script>
+      <script src="pako.min.js"></script>
+      <script src="DHLiveMini.js"></script>
+      <script src="MiniLive2.js"></script>
+      <script>
+        if (window.CONFIG) {
+          CONFIG.chromaKeyEnabled = true;
+          CONFIG.faceRetargetEnabled = false;
+          CONFIG.videoSrc = '01.mp4';
+          CONFIG.dataSrc = 'combined_data.json.gz';
+          CONFIG.showFPS = false;
+        }
+      </script>
+      <script src="MiniMateLoader.js"></script>
+      <script>
+        window.DreamJourneyAvatar && window.DreamJourneyAvatar.probeResources();
+      </script>
+    </body>
+    </html>
+    """
 }

@@ -2,6 +2,14 @@ import UIKit
 
 // MARK: - AI/用户消息气泡Cell
 final class TGMessageCell: UITableViewCell {
+    static let horizontalPadding: CGFloat = 16
+    static let verticalPadding: CGFloat = 12
+    static let topPadding: CGFloat = 8
+    static let timestampHeight: CGFloat = 13
+    static let timestampTopPadding: CGFloat = 4
+    static let bottomPadding: CGFloat = 6
+    static let avatarSize: CGFloat = 32
+    static let avatarMargin: CGFloat = 10
 
     // MARK: - 气泡
     private let bubbleView: UIView = {
@@ -48,6 +56,7 @@ final class TGMessageCell: UITableViewCell {
     }()
 
     private var isUserMessage = false
+    private var currentText = ""
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -67,17 +76,9 @@ final class TGMessageCell: UITableViewCell {
 
     func configure(text: String, isUser: Bool, timestamp: Date? = nil) {
         isUserMessage = isUser
+        currentText = text
 
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineSpacing = 5
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: 16),
-            .foregroundColor: isUser
-                ? UIColor(white: 1.0, alpha: 0.95)
-                : UIColor(red: 0.15, green: 0.12, blue: 0.10, alpha: 1.0),
-            .paragraphStyle: paragraphStyle
-        ]
-        messageLabel.attributedText = NSAttributedString(string: text, attributes: attributes)
+        messageLabel.attributedText = Self.attributedMessage(text, isUser: isUser)
 
         if isUser {
             // 用户气泡：深棕色、左下直角
@@ -110,66 +111,83 @@ final class TGMessageCell: UITableViewCell {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        let maxWidth = UIScreen.main.bounds.width * 0.72
-        let avatarSize: CGFloat = 32
-        let avatarMargin: CGFloat = 10
-        let hPad: CGFloat = 16   // 气泡内左右padding
-        let vPad: CGFloat = 12   // 气泡内上下 padding
-
-        let size = messageLabel.systemLayoutSizeFitting(
-            CGSize(width: maxWidth - hPad * 2, height: .infinity),
-            withHorizontalFittingPriority: .required,
-            verticalFittingPriority: .fittingSizeLevel
-        )
-        let bubbleWidth = min(size.width + hPad * 2, maxWidth)
-        let bubbleHeight = size.height + vPad * 2
+        let availableWidth = max(contentView.bounds.width, UIScreen.main.bounds.width)
+        let maxWidth = Self.maxBubbleWidth(for: availableWidth)
+        let textSize = Self.messageTextSize(for: currentText, isUser: isUserMessage, maxBubbleWidth: maxWidth)
+        let bubbleWidth = min(max(textSize.width + Self.horizontalPadding * 2, 44), maxWidth)
+        let bubbleHeight = textSize.height + Self.verticalPadding * 2
 
         if isUserMessage {
             let x = contentView.bounds.width - bubbleWidth - 16
-            bubbleView.frame = CGRect(x: x, y: 8, width: bubbleWidth, height: bubbleHeight)
-            timeLabel.frame = CGRect(x: x, y: bubbleView.frame.maxY + 4, width: bubbleWidth, height: 13)
+            bubbleView.frame = CGRect(x: x, y: Self.topPadding, width: bubbleWidth, height: bubbleHeight)
+            timeLabel.frame = CGRect(x: x, y: bubbleView.frame.maxY + Self.timestampTopPadding, width: bubbleWidth, height: Self.timestampHeight)
             timeLabel.textAlignment = .right
         } else {
-            let bubbleX: CGFloat = 16 + avatarSize + avatarMargin
-            bubbleView.frame = CGRect(x: bubbleX, y: 8, width: bubbleWidth, height: bubbleHeight)
+            let bubbleX: CGFloat = 16 + Self.avatarSize + Self.avatarMargin
+            bubbleView.frame = CGRect(x: bubbleX, y: Self.topPadding, width: bubbleWidth, height: bubbleHeight)
             // 头像对齐气泡底部
             avatarView.frame = CGRect(
                 x: 16,
-                y: bubbleView.frame.maxY - avatarSize,
-                width: avatarSize,
-                height: avatarSize
+                y: bubbleView.frame.maxY - Self.avatarSize,
+                width: Self.avatarSize,
+                height: Self.avatarSize
             )
             avatarGradient.frame = avatarView.bounds
-            timeLabel.frame = CGRect(x: bubbleX, y: bubbleView.frame.maxY + 4, width: bubbleWidth, height: 13)
+            timeLabel.frame = CGRect(x: bubbleX, y: bubbleView.frame.maxY + Self.timestampTopPadding, width: bubbleWidth, height: Self.timestampHeight)
             timeLabel.textAlignment = .left
         }
 
         messageLabel.frame = CGRect(
-            x: hPad,
-            y: vPad,
-            width: bubbleView.bounds.width - hPad * 2,
-            height: bubbleView.bounds.height - vPad * 2
+            x: Self.horizontalPadding,
+            y: Self.verticalPadding,
+            width: bubbleView.bounds.width - Self.horizontalPadding * 2,
+            height: bubbleView.bounds.height - Self.verticalPadding * 2
         )
     }
 
     override func sizeThatFits(_ size: CGSize) -> CGSize {
-        let maxWidth = UIScreen.main.bounds.width * 0.72
-        let hPad: CGFloat = 16
-        let vPad: CGFloat = 12
-        let textSize = messageLabel.systemLayoutSizeFitting(
-            CGSize(width: maxWidth - hPad * 2, height: .infinity),
-            withHorizontalFittingPriority: .required,
-            verticalFittingPriority: .fittingSizeLevel
-        )
+        let maxWidth = Self.maxBubbleWidth(for: size.width)
+        let textSize = Self.messageTextSize(for: currentText, isUser: isUserMessage, maxBubbleWidth: maxWidth)
         // bubble高度 + top间距 + 时间戳高度 + bottom间距
-        return CGSize(width: size.width, height: textSize.height + vPad * 2 + 8 + 17 + 6)
+        return CGSize(
+            width: size.width,
+            height: textSize.height + Self.verticalPadding * 2 + Self.topPadding + Self.timestampHeight + Self.timestampTopPadding + Self.bottomPadding
+        )
     }
 
     override func prepareForReuse() {
         super.prepareForReuse()
         messageLabel.text = nil
+        currentText = ""
         timeLabel.text = nil
         avatarView.isHidden = true
+    }
+
+    static func maxBubbleWidth(for availableWidth: CGFloat) -> CGFloat {
+        min(max(availableWidth * 0.72, 220), availableWidth - 74)
+    }
+
+    static func attributedMessage(_ text: String, isUser: Bool) -> NSAttributedString {
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = 5
+        paragraphStyle.lineBreakMode = .byWordWrapping
+        return NSAttributedString(string: text, attributes: [
+            .font: UIFont.systemFont(ofSize: 16),
+            .foregroundColor: isUser
+                ? UIColor(white: 1.0, alpha: 0.95)
+                : UIColor(red: 0.15, green: 0.12, blue: 0.10, alpha: 1.0),
+            .paragraphStyle: paragraphStyle
+        ])
+    }
+
+    static func messageTextSize(for text: String, isUser: Bool, maxBubbleWidth: CGFloat) -> CGSize {
+        let maxTextWidth = max(maxBubbleWidth - horizontalPadding * 2, 40)
+        let bounds = attributedMessage(text, isUser: isUser).boundingRect(
+            with: CGSize(width: maxTextWidth, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            context: nil
+        )
+        return CGSize(width: ceil(bounds.width), height: ceil(bounds.height))
     }
 }
 

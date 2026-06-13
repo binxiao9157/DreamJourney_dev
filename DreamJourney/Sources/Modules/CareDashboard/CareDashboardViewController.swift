@@ -4,6 +4,7 @@ final class CareDashboardViewController: UIViewController {
 
     private let analyzer = CareSignalAnalyzer()
     private let viewerFamilyMemberID: String?
+    private let viewerIdentitySource: FamilyAccessIdentityResolver.Source?
     private var snapshot: CareSignalSnapshot?
 
     private let scrollView = UIScrollView()
@@ -15,12 +16,21 @@ final class CareDashboardViewController: UIViewController {
     }()
 
     init(viewerFamilyMemberID: String? = nil) {
-        self.viewerFamilyMemberID = viewerFamilyMemberID
+        if let viewerFamilyMemberID {
+            self.viewerFamilyMemberID = viewerFamilyMemberID
+            self.viewerIdentitySource = nil
+        } else {
+            let identity = FamilyRepository.shared.currentViewerIdentity()
+            self.viewerFamilyMemberID = identity?.familyMemberID
+            self.viewerIdentitySource = identity?.source
+        }
         super.init(nibName: nil, bundle: nil)
     }
 
     required init?(coder: NSCoder) {
-        self.viewerFamilyMemberID = nil
+        let identity = FamilyRepository.shared.currentViewerIdentity()
+        self.viewerFamilyMemberID = identity?.familyMemberID
+        self.viewerIdentitySource = identity?.source
         super.init(coder: coder)
     }
 
@@ -39,12 +49,19 @@ final class CareDashboardViewController: UIViewController {
     }
 
     private func setupNavigation() {
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
+        let refreshItem = UIBarButtonItem(
             barButtonSystemItem: .refresh,
             target: self,
             action: #selector(refreshTapped)
         )
-        navigationItem.rightBarButtonItem?.tintColor = .warmAccent
+        let shareItem = UIBarButtonItem(
+            barButtonSystemItem: .action,
+            target: self,
+            action: #selector(shareReportTapped)
+        )
+        refreshItem.tintColor = .warmAccent
+        shareItem.tintColor = .warmAccent
+        navigationItem.rightBarButtonItems = [shareItem, refreshItem]
     }
 
     private func setupLayout() {
@@ -69,6 +86,25 @@ final class CareDashboardViewController: UIViewController {
     @objc private func refreshTapped() {
         reloadSnapshot()
         showToast("关怀信号已刷新", type: .success)
+    }
+
+    @objc private func shareReportTapped() {
+        guard let snapshot else {
+            showToast("暂无可分享的关怀周报", type: .info)
+            return
+        }
+        let descriptor = CareDashboardShareReportDescriptor.make(
+            snapshot: snapshot,
+            viewerName: viewerDisplayName()
+        )
+        let activityVC = UIActivityViewController(
+            activityItems: [descriptor.plainText],
+            applicationActivities: nil
+        )
+        if let popover = activityVC.popoverPresentationController {
+            popover.barButtonItem = navigationItem.rightBarButtonItems?.first
+        }
+        present(activityVC, animated: true)
     }
 
     private func reloadSnapshot() {
@@ -102,6 +138,7 @@ final class CareDashboardViewController: UIViewController {
             ("身体信号", "\(snapshot.bodyDiscomfortMentions)"),
         ]
         stackView.addArrangedSubview(makeMetricGrid(metrics))
+        stackView.addArrangedSubview(makeTrendCard(snapshot))
         stackView.addArrangedSubview(makeWeeklyReport(snapshot))
         stackView.addArrangedSubview(makeSuggestions(snapshot.suggestions))
     }
@@ -127,7 +164,8 @@ final class CareDashboardViewController: UIViewController {
 
         let coverageLabel = UILabel()
         let coverageSummary = snapshot.dataCoverageSummary.trimmingCharacters(in: .whitespacesAndNewlines)
-        coverageLabel.text = "数据覆盖 \(coverageSummary.isEmpty ? "暂无覆盖说明" : coverageSummary)"
+        let viewerPrefix = viewerDescriptionText()
+        coverageLabel.text = "\(viewerPrefix)数据覆盖 \(coverageSummary.isEmpty ? "暂无覆盖说明" : coverageSummary)"
         coverageLabel.font = .systemFont(ofSize: 12)
         coverageLabel.textColor = .warmSubtitle
         coverageLabel.numberOfLines = 0
@@ -155,6 +193,26 @@ final class CareDashboardViewController: UIViewController {
             stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16),
         ])
         return container
+    }
+
+    private func viewerDescriptionText() -> String {
+        guard let viewerFamilyMemberID,
+              let member = FamilyRepository.shared.get(by: viewerFamilyMemberID) else {
+            return ""
+        }
+
+        if viewerIdentitySource == nil {
+            return "查看身份 \(member.name) · "
+        }
+        return "当前身份 \(member.name) · "
+    }
+
+    private func viewerDisplayName() -> String? {
+        guard let viewerFamilyMemberID,
+              let member = FamilyRepository.shared.get(by: viewerFamilyMemberID) else {
+            return nil
+        }
+        return member.name
     }
 
     private func makePrivacyNotice() -> UIView {
@@ -217,6 +275,87 @@ final class CareDashboardViewController: UIViewController {
         stack.isLayoutMarginsRelativeArrangement = true
         stack.layoutMargins = UIEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
         return stack
+    }
+
+    private func makeTrendCard(_ snapshot: CareSignalSnapshot) -> UIView {
+        let container = makeSurface()
+
+        let titleLabel = UILabel()
+        titleLabel.text = "7天趋势"
+        titleLabel.font = .systemFont(ofSize: 18, weight: .bold)
+        titleLabel.textColor = .warmPrimary
+
+        let summaryLabel = UILabel()
+        summaryLabel.text = snapshot.trendSummary
+        summaryLabel.font = .systemFont(ofSize: 13)
+        summaryLabel.textColor = .warmSubtitle
+        summaryLabel.numberOfLines = 0
+
+        let trendStack = UIStackView()
+        trendStack.axis = .horizontal
+        trendStack.spacing = 8
+        trendStack.alignment = .bottom
+        trendStack.distribution = .fillEqually
+
+        let points = snapshot.dailyTrend.isEmpty ? [] : snapshot.dailyTrend
+        if points.isEmpty {
+            trendStack.addArrangedSubview(makeEmptyTrendLabel())
+        } else {
+            points.forEach { point in
+                trendStack.addArrangedSubview(makeTrendColumn(point))
+            }
+        }
+
+        let stack = UIStackView(arrangedSubviews: [titleLabel, summaryLabel, trendStack])
+        stack.axis = .vertical
+        stack.spacing = 12
+        container.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 16),
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16),
+        ])
+        return container
+    }
+
+    private func makeEmptyTrendLabel() -> UILabel {
+        let label = UILabel()
+        label.text = "暂无趋势数据"
+        label.font = .systemFont(ofSize: 13)
+        label.textColor = .warmSubtitle
+        label.textAlignment = .center
+        return label
+    }
+
+    private func makeTrendColumn(_ point: CareSignalDailyTrendPoint) -> UIView {
+        let dayLabel = UILabel()
+        dayLabel.text = CareDashboardViewController.dayFormatter.string(from: point.date)
+        dayLabel.font = .systemFont(ofSize: 10, weight: .medium)
+        dayLabel.textColor = .warmSubtitle
+        dayLabel.textAlignment = .center
+
+        let score = point.signalScore + (point.repetitionRatio >= 0.4 ? 1 : 0)
+        let valueLabel = UILabel()
+        valueLabel.text = score == 0 ? "日常" : "\(score)"
+        valueLabel.font = .systemFont(ofSize: 10, weight: .semibold)
+        valueLabel.textColor = point.hasSignals ? .warmAccent : .warmSubtitle
+        valueLabel.textAlignment = .center
+
+        let bar = UIView()
+        bar.backgroundColor = point.hasSignals ? UIColor.warmAccent.withAlphaComponent(0.85) : UIColor.warmDivider
+        bar.layer.cornerRadius = 4
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        let barHeight = CGFloat(min(48, max(12, 12 + score * 10)))
+        bar.heightAnchor.constraint(equalToConstant: barHeight).isActive = true
+        bar.widthAnchor.constraint(greaterThanOrEqualToConstant: 12).isActive = true
+
+        let column = UIStackView(arrangedSubviews: [valueLabel, bar, dayLabel])
+        column.axis = .vertical
+        column.spacing = 5
+        column.alignment = .center
+        return column
     }
 
     private func makeWeeklyReport(_ snapshot: CareSignalSnapshot) -> UIView {
@@ -329,6 +468,12 @@ final class CareDashboardViewController: UIViewController {
     }()
 
     private static let windowDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM/dd"
+        return formatter
+    }()
+
+    private static let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "MM/dd"
         return formatter

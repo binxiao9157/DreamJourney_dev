@@ -15,6 +15,7 @@ protocol DialogEngineDelegate: AnyObject {
     func onASRResult(text: String, isFinal: Bool)
     func onTTSStarted(text: String)
     func onTTSFinished()
+    func onAssistantFinalText(text: String)
     func onChatStreaming(text: String)
     func onError(error: Error)
     func onSafetyTriggered(assessment: SafetyAssessment)
@@ -23,4 +24,5 @@ protocol DialogEngineDelegate: AnyObject {
 
 extension DialogEngineDelegate {
     func onSafetyTriggered(assessment: SafetyAssessment) {}
+    func onAssistantFinalText(text: String) {}
 }

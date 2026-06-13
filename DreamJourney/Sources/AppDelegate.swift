@@ -22,7 +22,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         MAMapView.updatePrivacyAgree(.didAgree)
 
         // 初始化高德地图 SDK
-        if let apiKey = Bundle.main.object(forInfoDictionaryKey: "AMapAPIKey") as? String, apiKey != "YOUR_AMAP_KEY" {
+        if let apiKey = AppConfiguration.string(forKey: "AMapAPIKey") {
             AMapServices.shared().apiKey = apiKey
         }
         return true

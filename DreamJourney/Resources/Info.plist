@@ -4,6 +4,8 @@
 <dict>
 	<key>AMapAPIKey</key>
 	<string>YOUR_AMAP_KEY</string>
+	<key>AMapWebServiceKey</key>
+	<string>YOUR_AMAP_WEBSERVICE_KEY</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -22,10 +24,10 @@
 	<string>1.0.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
-	<key>DeepSeekAPIKey</key>
-	<string>YOUR_DEEPSEEK_API_KEY</string>
 	<key>DeepSeekAPIBaseURL</key>
 	<string>https://api.deepseek.com/v1/chat/completions</string>
+	<key>DeepSeekAPIKey</key>
+	<string>YOUR_DEEPSEEK_API_KEY</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
@@ -40,6 +42,8 @@
 	<string>寻梦环游需要访问相册以选择回忆照片</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>寻梦环游需要使用语音识别服务进行回忆记录</string>
+	<key>SafetyGuardAPIKey</key>
+	<string>YOUR_SAFETY_GUARD_API_KEY</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -80,11 +84,23 @@
 	</array>
 	<key>VoiceCloneAPIKey</key>
 	<string>YOUR_VOICECLONE_API_KEY</string>
+	<key>VolcEngineAPIKey</key>
+	<string>YOUR_VOLCENGINE_API_KEY</string>
 	<key>VolcEngineAppID</key>
 	<string>YOUR_VOLCENGINE_APP_ID</string>
 	<key>VolcEngineAppKey</key>
 	<string>YOUR_VOLCENGINE_APP_KEY</string>
 	<key>VolcEngineAppToken</key>
 	<string>YOUR_VOLCENGINE_APP_TOKEN</string>
+	<key>VolcEngineRealtimeAPIKey</key>
+	<string>YOUR_VOLCENGINE_REALTIME_API_KEY</string>
+	<key>VolcEngineRealtimeAddress</key>
+	<string>wss://openspeech.bytedance.com</string>
+	<key>VolcEngineRealtimeResourceID</key>
+	<string>volc.speech.dialog</string>
+	<key>VolcEngineRealtimeURI</key>
+	<string>/api/v3/realtime/dialogue</string>
+	<key>VolcEngineVoiceType</key>
+	<string>zh_female_cancan_mars_bigtts</string>
 </dict>
 </plist>

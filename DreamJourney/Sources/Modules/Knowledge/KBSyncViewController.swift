@@ -6,6 +6,8 @@ import UniformTypeIdentifiers
 /// 家族知识库同步页面
 /// 功能：导出/导入知识库分享包，查看同步历史
 final class KBSyncViewController: UIViewController {
+    private let autoPresentExportPicker: Bool
+    private var didAutoPresentExportPicker = false
 
     // MARK: - UI Elements
 
@@ -28,6 +30,16 @@ final class KBSyncViewController: UIViewController {
         KBLiteMultiUser.shared.syncHistory
     }
 
+    init(autoPresentExportPicker: Bool = false) {
+        self.autoPresentExportPicker = autoPresentExportPicker
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        autoPresentExportPicker = false
+        super.init(coder: coder)
+    }
+
     // MARK: - Lifecycle
 
     override func viewDidLoad() {
@@ -40,6 +52,13 @@ final class KBSyncViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         tableView.reloadData()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        guard autoPresentExportPicker, !didAutoPresentExportPicker else { return }
+        didAutoPresentExportPicker = true
+        exportKnowledgeBase()
     }
 
     // MARK: - Setup
@@ -88,6 +107,9 @@ final class KBSyncViewController: UIViewController {
             showToast("导出失败，请稍后重试", type: .error)
             return
         }
+        let targetTitle = familyMemberID.flatMap { id in
+            FamilyRepository.shared.getAll().first(where: { $0.id == id }).map { "\($0.name)（\($0.relation)）" }
+        } ?? "全体亲友"
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
@@ -112,6 +134,21 @@ final class KBSyncViewController: UIViewController {
             return
         }
 
+        presentPrivacyReceipt(
+            SharePackagePrivacyReceipt(package: package, targetTitle: targetTitle),
+            tempFile: tempFile
+        )
+    }
+
+    private func presentPrivacyReceipt(_ receipt: SharePackagePrivacyReceipt, tempFile: URL) {
+        let receiptVC = SharePackagePrivacyReceiptViewController(receipt: receipt) { [weak self] in
+            self?.presentShareSheet(for: tempFile)
+        }
+        receiptVC.modalPresentationStyle = .pageSheet
+        present(receiptVC, animated: true)
+    }
+
+    private func presentShareSheet(for tempFile: URL) {
         let activityVC = UIActivityViewController(
             activityItems: [tempFile],
             applicationActivities: nil
@@ -216,6 +253,136 @@ final class KBSyncViewController: UIViewController {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd_HHmm"
         return formatter.string(from: date)
+    }
+}
+
+private struct SharePackagePrivacyReceipt {
+    let message: String
+
+    init(package: SharePackage, targetTitle: String) {
+        let counts = Self.graphCounts(from: package.graphJSON)
+        message = """
+        导出对象：\(targetTitle)
+        来源：\(package.sourceNickname)
+        内容：\(counts.people) 人 · \(counts.places) 地 · \(counts.events) 事 · \(counts.facts) 条事实
+
+        已排除：本机私密内容、未授权亲友内容、完整对话原文、完整信件正文和未授权生成内容。
+
+        这份分享包只用于家族记忆同步，不是复活，不是医疗诊断。
+        """
+    }
+
+    private static func graphCounts(from graphJSON: String) -> (people: Int, places: Int, events: Int, facts: Int) {
+        guard let data = graphJSON.data(using: .utf8),
+              let graph = try? JSONDecoder().decode(KBLiteGraph.self, from: data) else {
+            return (0, 0, 0, 0)
+        }
+        return (graph.people.count, graph.places.count, graph.events.count, graph.facts.count)
+    }
+}
+
+private final class SharePackagePrivacyReceiptViewController: UIViewController {
+    private let receipt: SharePackagePrivacyReceipt
+    private let onShare: () -> Void
+
+    init(receipt: SharePackagePrivacyReceipt, onShare: @escaping () -> Void) {
+        self.receipt = receipt
+        self.onShare = onShare
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .warmBackground
+        setupLayout()
+    }
+
+    private func setupLayout() {
+        let scrollView = UIScrollView()
+        let contentStack = UIStackView()
+        contentStack.axis = .vertical
+        contentStack.spacing = 14
+        contentStack.isLayoutMarginsRelativeArrangement = true
+        contentStack.layoutMargins = UIEdgeInsets(top: 22, left: 20, bottom: 22, right: 20)
+
+        let titleLabel = UILabel()
+        titleLabel.text = "分享包隐私收据"
+        titleLabel.font = .systemFont(ofSize: 22, weight: .bold)
+        titleLabel.textColor = .warmPrimary
+        titleLabel.numberOfLines = 0
+
+        let messageLabel = UILabel()
+        messageLabel.text = receipt.message
+        messageLabel.font = .systemFont(ofSize: 15, weight: .medium)
+        messageLabel.textColor = .warmSubtitle
+        messageLabel.numberOfLines = 0
+        messageLabel.lineBreakMode = .byWordWrapping
+        messageLabel.adjustsFontForContentSizeCategory = true
+
+        let noticeLabel = UILabel()
+        noticeLabel.text = "确认后将打开系统分享面板；取消不会生成新的分享动作。"
+        noticeLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        noticeLabel.textColor = .warmAccent
+        noticeLabel.numberOfLines = 0
+
+        let cancelButton = makeActionButton(title: "取消", imageName: "xmark.circle", filled: false)
+        let shareButton = makeActionButton(title: "分享 JSON", imageName: "square.and.arrow.up", filled: true)
+        cancelButton.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
+        shareButton.addTarget(self, action: #selector(shareTapped), for: .touchUpInside)
+
+        let buttonStack = UIStackView(arrangedSubviews: [cancelButton, shareButton])
+        buttonStack.axis = .horizontal
+        buttonStack.spacing = 12
+        buttonStack.distribution = .fillEqually
+
+        [titleLabel, messageLabel, noticeLabel, buttonStack].forEach(contentStack.addArrangedSubview)
+        view.addSubview(scrollView)
+        scrollView.addSubview(contentStack)
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        contentStack.translatesAutoresizingMaskIntoConstraints = false
+
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+
+            contentStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            contentStack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            contentStack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            contentStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            contentStack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
+
+            cancelButton.heightAnchor.constraint(equalToConstant: 46),
+            shareButton.heightAnchor.constraint(equalToConstant: 46)
+        ])
+    }
+
+    private func makeActionButton(title: String, imageName: String, filled: Bool) -> UIButton {
+        let button = UIButton(type: .system)
+        var configuration = filled ? UIButton.Configuration.filled() : UIButton.Configuration.tinted()
+        configuration.title = title
+        configuration.image = UIImage(systemName: imageName)
+        configuration.imagePadding = 6
+        configuration.baseForegroundColor = filled ? .white : .warmAccent
+        configuration.baseBackgroundColor = filled ? .warmAccent : UIColor.warmAccent.withAlphaComponent(0.12)
+        configuration.cornerStyle = .medium
+        button.configuration = configuration
+        return button
+    }
+
+    @objc private func cancelTapped() {
+        dismiss(animated: true)
+    }
+
+    @objc private func shareTapped() {
+        dismiss(animated: true) { [onShare] in
+            onShare()
+        }
     }
 }
 

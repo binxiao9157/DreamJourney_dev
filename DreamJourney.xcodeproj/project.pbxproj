@@ -10,6 +10,7 @@
 		04FA5845CC27422438AE44DA /* WarmTabBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B274A4971D76C1D3BFEE4E9A /* WarmTabBarController.swift */; };
 		06F7BBC5219F555B3CF8DCDD /* UIColor+WarmTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71EF8575113A0367F332FE72 /* UIColor+WarmTheme.swift */; };
 		0E5676BC344BFB67294DA939 /* MiniMateLoader.js in Resources */ = {isa = PBXBuildFile; fileRef = AA3777B38C40C14928088B38 /* MiniMateLoader.js */; };
+		0E8E0D9A6A7A4EC2892F88A4 /* avatar_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 0E8E0D996A7A4EC2892F88A4 /* avatar_manifest.json */; };
 		0F70ED911BFB7D4BB385430C /* TodayInHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8671DFE378573EA24A2FACC1 /* TodayInHistoryView.swift */; };
 		0FD1CC7F9A6E47179833E092 /* SafetyModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C67D21A8CDD412CB4A85883 /* SafetyModels.swift */; };
 		1074B6D9588F46B0001A61E1 /* TodayInHistoryProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF7E1F392A912E6A3B365A8C /* TodayInHistoryProvider.swift */; };
@@ -20,6 +21,10 @@
 		328F094BD6DC27B02845187F /* MemoirAudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E34D9D2B8943EBBDECBC489 /* MemoirAudioPlayer.swift */; };
 		344DFB2063508315CC912EF7 /* KBExportPreviewViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66A439914BFCD681134DAF8A /* KBExportPreviewViewController.swift */; };
 		357355C9F74F4A08A3334B01 /* SafetyMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ADA8AA6438842A1899F726B /* SafetyMonitor.swift */; };
+		A78CE000000000000000001 /* DigitalHumanPlaybackEvidenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A78CE000000000000000002 /* DigitalHumanPlaybackEvidenceStore.swift */; };
+		A79CE000000000000000001 /* AmapDistrictBoundaryProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A79CE000000000000000002 /* AmapDistrictBoundaryProvider.swift */; };
+		A75CE000000000000000001 /* DigitalHumanSpeechPlaybackPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A75CE000000000000000002 /* DigitalHumanSpeechPlaybackPolicy.swift */; };
+		36A64D01C09B4A8497BEAE01 /* DigitalHumanSpeechService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36A64D00C09B4A8497BEAE01 /* DigitalHumanSpeechService.swift */; };
 		397C1F6023E56C8E016A0D71 /* OpenAvatarChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF3727699437781613AA5CB5 /* OpenAvatarChatService.swift */; };
 		39AA8CDBD51067C54985F46B /* SharedModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6AC678D507A1494FFBFDAA0 /* SharedModels.swift */; };
 		3AC3C0D2430B572CCADC9995 /* MemoirFlowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DB287D9E73E12EEAE5656E6 /* MemoirFlowManager.swift */; };
@@ -78,6 +83,22 @@
 		A57CE000000000000000001 /* KBLitePrivacyScopePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A57CE000000000000000003 /* KBLitePrivacyScopePolicy.swift */; };
 		A58CE000000000000000001 /* DeepSeekSafetyGuarding.swift in Sources */ = {isa = PBXBuildFile; fileRef = A58CE000000000000000003 /* DeepSeekSafetyGuarding.swift */; };
 		A59CE000000000000000001 /* RoadshowDemoSeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = A59CE000000000000000002 /* RoadshowDemoSeed.swift */; };
+		A60CE000000000000000001 /* VolcEngineCredentialProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60CE000000000000000002 /* VolcEngineCredentialProvider.swift */; };
+		A61CE000000000000000001 /* VolcEngineTTSRequestFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A61CE000000000000000002 /* VolcEngineTTSRequestFactory.swift */; };
+		A62CE000000000000000001 /* FamilyFootprintTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = A62CE000000000000000002 /* FamilyFootprintTimeline.swift */; };
+		A63CE000000000000000001 /* VolcEngineRealtimeCredentialProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A63CE000000000000000002 /* VolcEngineRealtimeCredentialProvider.swift */; };
+		A64CE000000000000000001 /* FamilyFootprintIllumination.swift in Sources */ = {isa = PBXBuildFile; fileRef = A64CE000000000000000002 /* FamilyFootprintIllumination.swift */; };
+		A65CE000000000000000001 /* FamilyCircleQuickAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = A65CE000000000000000002 /* FamilyCircleQuickAction.swift */; };
+		A66CE000000000000000001 /* FamilyFootprintSharePoster.swift in Sources */ = {isa = PBXBuildFile; fileRef = A66CE000000000000000002 /* FamilyFootprintSharePoster.swift */; };
+		A67CE000000000000000001 /* RoadshowDemoRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = A67CE000000000000000002 /* RoadshowDemoRoute.swift */; };
+		A68CE000000000000000001 /* RoadshowDemoRouteViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A68CE000000000000000002 /* RoadshowDemoRouteViewController.swift */; };
+		A69CE000000000000000001 /* AppConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A69CE000000000000000002 /* AppConfiguration.swift */; };
+		A71CE000000000000000001 /* FamilyVisibilityPickerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A71CE000000000000000002 /* FamilyVisibilityPickerViewController.swift */; };
+		A72CE000000000000000001 /* HomeDialogPrivacyMetadataFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A72CE000000000000000002 /* HomeDialogPrivacyMetadataFactory.swift */; };
+		A73CE000000000000000001 /* FamilyAccessIdentityResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A73CE000000000000000002 /* FamilyAccessIdentityResolver.swift */; };
+		A74CE000000000000000001 /* FamilyAccessControlService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A74CE000000000000000002 /* FamilyAccessControlService.swift */; };
+		A76CE000000000000000001 /* DigitalHumanReadinessReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A76CE000000000000000002 /* DigitalHumanReadinessReport.swift */; };
+		A77CE000000000000000001 /* DigitalHumanDiagnosticsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A77CE000000000000000002 /* DigitalHumanDiagnosticsViewController.swift */; };
 		A45E9D7E5541F7288DD4141D /* ConversationMemoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97D922D4C28AF76D7CB85DFF /* ConversationMemoryManager.swift */; };
 		A52FFB266D8D9FC320182A0A /* MemoryRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BCB52701683AE3FAFABA6F /* MemoryRepository.swift */; };
 		A88DF4F43BC833D9433CEE7B /* MemoirTTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00898E98E95E3808561BEB51 /* MemoirTTSService.swift */; };
@@ -117,6 +138,7 @@
 		07B6BA3BDEF61B3A339E10DD /* MemoirModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirModel.swift; sourceTree = "<group>"; };
 		0C67D21A8CDD412CB4A85883 /* SafetyModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafetyModels.swift; sourceTree = "<group>"; };
 		0E34D9D2B8943EBBDECBC489 /* MemoirAudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirAudioPlayer.swift; sourceTree = "<group>"; };
+		0E8E0D996A7A4EC2892F88A4 /* avatar_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = avatar_manifest.json; sourceTree = "<group>"; };
 		101D4CAEA6C25FCE0B7B8C8A /* BridgingHeader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BridgingHeader.h; sourceTree = "<group>"; };
 		165FB245CE23B3EF2C90C799 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
 		16DC1997EF2F7459C92D09EF /* Pods-DreamJourney.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DreamJourney.release.xcconfig"; path = "Target Support Files/Pods-DreamJourney/Pods-DreamJourney.release.xcconfig"; sourceTree = "<group>"; };
@@ -183,6 +205,24 @@
 		A57CE000000000000000003 /* KBLitePrivacyScopePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLitePrivacyScopePolicy.swift; sourceTree = "<group>"; };
 		A58CE000000000000000003 /* DeepSeekSafetyGuarding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepSeekSafetyGuarding.swift; sourceTree = "<group>"; };
 		A59CE000000000000000002 /* RoadshowDemoSeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadshowDemoSeed.swift; sourceTree = "<group>"; };
+		A60CE000000000000000002 /* VolcEngineCredentialProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolcEngineCredentialProvider.swift; sourceTree = "<group>"; };
+		A61CE000000000000000002 /* VolcEngineTTSRequestFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolcEngineTTSRequestFactory.swift; sourceTree = "<group>"; };
+		A62CE000000000000000002 /* FamilyFootprintTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyFootprintTimeline.swift; sourceTree = "<group>"; };
+		A63CE000000000000000002 /* VolcEngineRealtimeCredentialProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolcEngineRealtimeCredentialProvider.swift; sourceTree = "<group>"; };
+		A64CE000000000000000002 /* FamilyFootprintIllumination.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyFootprintIllumination.swift; sourceTree = "<group>"; };
+		A65CE000000000000000002 /* FamilyCircleQuickAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyCircleQuickAction.swift; sourceTree = "<group>"; };
+		A66CE000000000000000002 /* FamilyFootprintSharePoster.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyFootprintSharePoster.swift; sourceTree = "<group>"; };
+		A67CE000000000000000002 /* RoadshowDemoRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadshowDemoRoute.swift; sourceTree = "<group>"; };
+		A68CE000000000000000002 /* RoadshowDemoRouteViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadshowDemoRouteViewController.swift; sourceTree = "<group>"; };
+		A69CE000000000000000002 /* AppConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfiguration.swift; sourceTree = "<group>"; };
+		A71CE000000000000000002 /* FamilyVisibilityPickerViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyVisibilityPickerViewController.swift; sourceTree = "<group>"; };
+		A72CE000000000000000002 /* HomeDialogPrivacyMetadataFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeDialogPrivacyMetadataFactory.swift; sourceTree = "<group>"; };
+		A73CE000000000000000002 /* FamilyAccessIdentityResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyAccessIdentityResolver.swift; sourceTree = "<group>"; };
+		A74CE000000000000000002 /* FamilyAccessControlService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyAccessControlService.swift; sourceTree = "<group>"; };
+		A76CE000000000000000002 /* DigitalHumanReadinessReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanReadinessReport.swift; sourceTree = "<group>"; };
+		A77CE000000000000000002 /* DigitalHumanDiagnosticsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanDiagnosticsViewController.swift; sourceTree = "<group>"; };
+		A78CE000000000000000002 /* DigitalHumanPlaybackEvidenceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanPlaybackEvidenceStore.swift; sourceTree = "<group>"; };
+		A79CE000000000000000002 /* AmapDistrictBoundaryProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmapDistrictBoundaryProvider.swift; sourceTree = "<group>"; };
 		A99960BA8CC38BCA98CB98F8 /* KnowledgeBaseViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeBaseViewController.swift; sourceTree = "<group>"; };
 		AA3777B38C40C14928088B38 /* MiniMateLoader.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = MiniMateLoader.js; sourceTree = "<group>"; };
 		AB6F020939B8B3A55A3A9013 /* LoginViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginViewController.swift; sourceTree = "<group>"; };
@@ -200,6 +240,8 @@
 		C9115FEF531F2DA00EDE4969 /* bs_texture_halfFace.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = bs_texture_halfFace.png; sourceTree = "<group>"; };
 		CCCEC476950937337FC59A5C /* Pods-DreamJourney.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DreamJourney.debug.xcconfig"; path = "Target Support Files/Pods-DreamJourney/Pods-DreamJourney.debug.xcconfig"; sourceTree = "<group>"; };
 		D4566C37A3A020CABC4D249A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A75CE000000000000000002 /* DigitalHumanSpeechPlaybackPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanSpeechPlaybackPolicy.swift; sourceTree = "<group>"; };
+		36A64D00C09B4A8497BEAE01 /* DigitalHumanSpeechService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanSpeechService.swift; sourceTree = "<group>"; };
 		D4C24A29B21F6E3786F14398 /* MapFootprintViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapFootprintViewController.swift; sourceTree = "<group>"; };
 		D6AC678D507A1494FFBFDAA0 /* SharedModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedModels.swift; sourceTree = "<group>"; };
 		DEB0707389E5BC6A57EAB3BD /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
@@ -239,7 +281,11 @@
 		052E7A6BA81C0A676BE77B9B /* Map */ = {
 			isa = PBXGroup;
 			children = (
+				A79CE000000000000000002 /* AmapDistrictBoundaryProvider.swift */,
 				8F284177749BB05238EC8575 /* FootprintNotificationBanner.swift */,
+				A64CE000000000000000002 /* FamilyFootprintIllumination.swift */,
+				A66CE000000000000000002 /* FamilyFootprintSharePoster.swift */,
+				A62CE000000000000000002 /* FamilyFootprintTimeline.swift */,
 				D4C24A29B21F6E3786F14398 /* MapFootprintViewController.swift */,
 				89ABFCBCF51B9FD6CEB5799F /* MemoryAnnotation.swift */,
 				89B794AF9178933332C22526 /* MemoryAnnotationView.swift */,
@@ -260,6 +306,8 @@
 				520A85AB37898C097F761313 /* MemoirRepository.swift */,
 				BFEC7EA9CB8D7181EFC70161 /* MemoirService.swift */,
 				00898E98E95E3808561BEB51 /* MemoirTTSService.swift */,
+				A60CE000000000000000002 /* VolcEngineCredentialProvider.swift */,
+				A61CE000000000000000002 /* VolcEngineTTSRequestFactory.swift */,
 				33790F6FDDECF7ADE231C869 /* VoiceCloneService.swift */,
 			);
 			path = Memoir;
@@ -282,11 +330,18 @@
 			children = (
 				97D922D4C28AF76D7CB85DFF /* ConversationMemoryManager.swift */,
 				A33CE000000000000000007 /* CareDashboard */,
+				A76CE000000000000000002 /* DigitalHumanReadinessReport.swift */,
+				A78CE000000000000000002 /* DigitalHumanPlaybackEvidenceStore.swift */,
+				A75CE000000000000000002 /* DigitalHumanSpeechPlaybackPolicy.swift */,
+				36A64D00C09B4A8497BEAE01 /* DigitalHumanSpeechService.swift */,
 				F33318C49AAF44499CE6ADC5 /* DialogEngineFactory.swift */,
 				A44CE000000000000000003 /* DialogEngineModels.swift */,
 				9B3A23A2BA7FD3D92A7BC975 /* DialogEngineManager.swift */,
 				041899534E394A1C93F5A0F6 /* DialogEngineProtocol.swift */,
 				A44CE000000000000000004 /* MockDialogEngine.swift */,
+				A63CE000000000000000002 /* VolcEngineRealtimeCredentialProvider.swift */,
+				A73CE000000000000000002 /* FamilyAccessIdentityResolver.swift */,
+				A74CE000000000000000002 /* FamilyAccessControlService.swift */,
 				5B20338C4C40695560A52B81 /* FamilyRepository.swift */,
 				5628E3908BA5F87F7FC6373B /* KBLiteGapDetector.swift */,
 				576656BFF57471DCF9B231CB /* KBLiteManager.swift */,
@@ -303,7 +358,10 @@
 				DF3727699437781613AA5CB5 /* OpenAvatarChatService.swift */,
 				A56CE000000000000000007 /* Privacy */,
 				D02862A4C9294AFE8E6FD396 /* Safety */,
+				A69CE000000000000000002 /* AppConfiguration.swift */,
+				A72CE000000000000000002 /* HomeDialogPrivacyMetadataFactory.swift */,
 				A59CE000000000000000002 /* RoadshowDemoSeed.swift */,
+				A67CE000000000000000002 /* RoadshowDemoRoute.swift */,
 				26F1251EE7B24A20A8058F38 /* Stage1MemoryFacade.swift */,
 				A11CE000000000000000007 /* TimeMailbox */,
 				817EC556B1CCA40FC905A139 /* UserManager.swift */,
@@ -359,8 +417,10 @@
 			isa = PBXGroup;
 			children = (
 				6B8C7B2C35F25BFE0EECF1DC /* AIRecordingViewController.swift */,
+				A77CE000000000000000002 /* DigitalHumanDiagnosticsViewController.swift */,
 				AE23737BEAD63674ABA24223 /* MemoirGenerationCard.swift */,
 				E42E6A033C32ECFE3C4F3D5B /* MessageCells.swift */,
+				A68CE000000000000000002 /* RoadshowDemoRouteViewController.swift */,
 				A00D2A28C9EB1DE503139EBF /* Views */,
 			);
 			path = Home;
@@ -415,6 +475,8 @@
 		6D7389191CC91FC0D5B9F427 /* Family */ = {
 			isa = PBXGroup;
 			children = (
+				A65CE000000000000000002 /* FamilyCircleQuickAction.swift */,
+				A71CE000000000000000002 /* FamilyVisibilityPickerViewController.swift */,
 				B1BA39C954DE93A9C6B92546 /* FamilyCircleViewController.swift */,
 			);
 			path = Family;
@@ -613,6 +675,7 @@
 				BD7318F07FAEE0966045F115 /* DHLiveMini.wasm */,
 				B918EB99B79AE43472DACB6A /* MiniLive2.js */,
 				AA3777B38C40C14928088B38 /* MiniMateLoader.js */,
+				0E8E0D996A7A4EC2892F88A4 /* avatar_manifest.json */,
 				4B70B14E8FFEE31DDE6BAB7B /* pako.min.js */,
 				5B1F3C5CF83899C7FC773A09 /* assets */,
 				156CBBC0D562C5D46752C0D0 /* common */,
@@ -645,6 +708,7 @@
 				7D834CCB6EB51CA3F9AEBD44 /* [CP] Check Pods Manifest.lock */,
 				AD48F7659B7B3B317EFE8FD0 /* Sources */,
 				0FB3C3E22E7CD4BBD93204A0 /* Resources */,
+				A70CE000000000000000001 /* Copy LocalConfig.plist */,
 				BE15FA31F4ACF2193B267454 /* Frameworks */,
 				A5D68B9D0372FD4EFAAE195A /* [CP] Embed Pods Frameworks */,
 				E3A5D35B643EA409B9B966A7 /* [CP] Copy Pods Resources */,
@@ -708,6 +772,7 @@
 				8635AA9D8CE8E081376A1C0C /* Main.storyboard in Resources */,
 				94CB623B80D962CEBEA8090D /* MiniLive2.js in Resources */,
 				0E5676BC344BFB67294DA939 /* MiniMateLoader.js in Resources */,
+				0E8E0D9A6A7A4EC2892F88A4 /* avatar_manifest.json in Resources */,
 				7D543DD05A96F0944D9BA409 /* bs_texture_halfFace.png in Resources */,
 				BD33BBCF43D9320C927EBC62 /* combined_data.json.gz in Resources */,
 				8CE4E17850336E26E4389B8B /* pako.min.js in Resources */,
@@ -773,6 +838,26 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-DreamJourney/Pods-DreamJourney-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
+		A70CE000000000000000001 /* Copy LocalConfig.plist */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Copy LocalConfig.plist";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/LocalConfig.copy.done",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "LOCAL_CONFIG=\"${SRCROOT}/DreamJourney/Resources/LocalConfig.plist\"\nDEST=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/LocalConfig.plist\"\nMARKER=\"${DERIVED_FILE_DIR}/LocalConfig.copy.done\"\nif [ -f \"$LOCAL_CONFIG\" ]; then\n  mkdir -p \"$(dirname \"$DEST\")\"\n  cp \"$LOCAL_CONFIG\" \"$DEST\"\nfi\nmkdir -p \"$(dirname \"$MARKER\")\"\ndate > \"$MARKER\"\n";
+			showEnvVarsInLog = 0;
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -801,6 +886,11 @@
 				A33CE000000000000000001 /* CareSignalModels.swift in Sources */,
 				A45E9D7E5541F7288DD4141D /* ConversationMemoryManager.swift in Sources */,
 				DCE5E73A3C424E6E804AD460 /* CrisisInterventionViewController.swift in Sources */,
+				A77CE000000000000000001 /* DigitalHumanDiagnosticsViewController.swift in Sources */,
+				A78CE000000000000000001 /* DigitalHumanPlaybackEvidenceStore.swift in Sources */,
+				A76CE000000000000000001 /* DigitalHumanReadinessReport.swift in Sources */,
+				A75CE000000000000000001 /* DigitalHumanSpeechPlaybackPolicy.swift in Sources */,
+				36A64D01C09B4A8497BEAE01 /* DigitalHumanSpeechService.swift in Sources */,
 				EB8C6638C1D5E34AC579873D /* Coordinator.swift in Sources */,
 				F90DDD2F07DD62057280F6B1 /* DeepSeekService.swift in Sources */,
 				A58CE000000000000000001 /* DeepSeekSafetyGuarding.swift in Sources */,
@@ -808,7 +898,14 @@
 				A44CE000000000000000001 /* DialogEngineModels.swift in Sources */,
 				7FE1A54F9280057AA970D224 /* DialogEngineManager.swift in Sources */,
 				D990F5DEB2364C70A838FFE4 /* DialogEngineProtocol.swift in Sources */,
+				A65CE000000000000000001 /* FamilyCircleQuickAction.swift in Sources */,
 				C4F36E09ECE184DE75C4D276 /* FamilyCircleViewController.swift in Sources */,
+				A71CE000000000000000001 /* FamilyVisibilityPickerViewController.swift in Sources */,
+				A73CE000000000000000001 /* FamilyAccessIdentityResolver.swift in Sources */,
+				A74CE000000000000000001 /* FamilyAccessControlService.swift in Sources */,
+				A64CE000000000000000001 /* FamilyFootprintIllumination.swift in Sources */,
+				A66CE000000000000000001 /* FamilyFootprintSharePoster.swift in Sources */,
+				A62CE000000000000000001 /* FamilyFootprintTimeline.swift in Sources */,
 				89C5568D19D2A39E9AEEFBF3 /* FamilyRepository.swift in Sources */,
 				9D62718D2F007D0949BE1701 /* FootprintNotificationBanner.swift in Sources */,
 				9A84BB0966C1478900AA56A3 /* HomeHeaderView.swift in Sources */,
@@ -822,6 +919,7 @@
 				C24EFDB81921BF13946AB289 /* KBLiteModels.swift in Sources */,
 				FB97211C6E68808436C7DC76 /* KBLiteMultiUser.swift in Sources */,
 				90DF2D00B2A745900FF43F33 /* KBLitePDFExporter.swift in Sources */,
+				A79CE000000000000000001 /* AmapDistrictBoundaryProvider.swift in Sources */,
 				A57CE000000000000000001 /* KBLitePrivacyScopePolicy.swift in Sources */,
 				824FE84FF055277FD802AE21 /* KBLiteSemanticSearch.swift in Sources */,
 				70BCC3629F42D8E233158576 /* KBLiteTestHelper.swift in Sources */,
@@ -848,10 +946,14 @@
 				A52FFB266D8D9FC320182A0A /* MemoryRepository.swift in Sources */,
 				E888BD0CCEFEF938A377A489 /* MessageCells.swift in Sources */,
 				1D6C68E038F68B262E1C025D /* MicrophonePermissionManager.swift in Sources */,
+				A69CE000000000000000001 /* AppConfiguration.swift in Sources */,
+				A72CE000000000000000001 /* HomeDialogPrivacyMetadataFactory.swift in Sources */,
 				A44CE000000000000000002 /* MockDialogEngine.swift in Sources */,
 				397C1F6023E56C8E016A0D71 /* OpenAvatarChatService.swift in Sources */,
 				A56CE000000000000000001 /* MemoryPrivacyScope.swift in Sources */,
 				A59CE000000000000000001 /* RoadshowDemoSeed.swift in Sources */,
+				A67CE000000000000000001 /* RoadshowDemoRoute.swift in Sources */,
+				A68CE000000000000000001 /* RoadshowDemoRouteViewController.swift in Sources */,
 				53C95E6C71B747CC88E07F01 /* RoadshowModeBannerView.swift in Sources */,
 				0FD1CC7F9A6E47179833E092 /* SafetyModels.swift in Sources */,
 				A55CE000000000000000002 /* SafetyGuardClient.swift in Sources */,
@@ -870,6 +972,9 @@
 				06F7BBC5219F555B3CF8DCDD /* UIColor+WarmTheme.swift in Sources */,
 				630597D6BC0859ECC771715E /* UIViewController+Extensions.swift in Sources */,
 				BA038E86B9A26433922B67CB /* UserManager.swift in Sources */,
+				A60CE000000000000000001 /* VolcEngineCredentialProvider.swift in Sources */,
+				A63CE000000000000000001 /* VolcEngineRealtimeCredentialProvider.swift in Sources */,
+				A61CE000000000000000001 /* VolcEngineTTSRequestFactory.swift in Sources */,
 				E1AE33CE9FE403E3E6DC1BCF /* ViewController.swift in Sources */,
 				48673DEDB4E6A975B309C688 /* VoiceCloneService.swift in Sources */,
 				27EE981CBDE11D52F4E65EFE /* WarmMemoryAnnotationView.swift in Sources */,

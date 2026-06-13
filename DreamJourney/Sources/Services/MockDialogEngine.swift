@@ -48,6 +48,7 @@ final class MockDialogEngine: DialogEngineProtocol {
         delegate?.onASRResult(text: text, isFinal: true)
         let reply = deterministicReply(for: text)
         delegate?.onChatStreaming(text: reply)
+        delegate?.onAssistantFinalText(text: reply)
         delegate?.onTTSStarted(text: reply)
         delegate?.onTTSFinished()
     }

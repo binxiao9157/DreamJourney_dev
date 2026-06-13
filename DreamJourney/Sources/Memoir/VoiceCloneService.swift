@@ -14,11 +14,8 @@ final class VoiceCloneService {
 
     // MARK: - 配置
 
-    /// 火山引擎声音复刻 API Key
-    /// 获取方式：火山引擎控制台 → 语音技术 → 声音复刻 → API Key 管理
-    private static let placeholderAPIKey = "YOUR_VOICECLONE_API_KEY"
-
-    private var apiKey: String
+    /// 火山引擎声音复刻 API Key。新版控制台优先使用 VolcEngineAPIKey，旧配置 VoiceCloneAPIKey 作为兜底。
+    private var apiKey: String?
 
     /// 训练 API
     private let cloneURL = "https://openspeech.bytedance.com/api/v3/tts/voice_clone"
@@ -41,13 +38,7 @@ final class VoiceCloneService {
     // MARK: - Init
 
     private init() {
-        // 优先从 Info.plist 读取，其次用硬编码
-        if let key = Bundle.main.infoDictionary?["VoiceCloneAPIKey"] as? String,
-           !key.isEmpty, key != Self.placeholderAPIKey {
-            apiKey = key
-        } else {
-            apiKey = Self.placeholderAPIKey
-        }
+        apiKey = VolcEngineCredentialProvider.apiKey()
     }
 
     // MARK: - 公开 API
@@ -73,7 +64,7 @@ final class VoiceCloneService {
                     language: Int = 0,
                     completion: @escaping (Result<String, VoiceCloneError>) -> Void) {
 
-        guard apiKey != Self.placeholderAPIKey else {
+        guard let apiKey = apiKey else {
             completion(.failure(.apiKeyMissing))
             return
         }
@@ -166,7 +157,7 @@ final class VoiceCloneService {
     func queryStatus(speakerId: String? = nil,
                      completion: @escaping (Result<VoiceCloneStatus, VoiceCloneError>) -> Void) {
 
-        guard apiKey != Self.placeholderAPIKey else {
+        guard let apiKey = apiKey else {
             completion(.failure(.apiKeyMissing))
             return
         }
@@ -375,7 +366,7 @@ enum VoiceCloneError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .apiKeyMissing:
-            return "声音复刻 API Key 未配置，请在 Info.plist 中设置 VoiceCloneAPIKey"
+            return "声音复刻 API Key 未配置，请在 Info.plist 中设置 VolcEngineAPIKey"
         case .speakerIdNotFound:
             return "未找到声音复刻音色 ID"
         case .audioReadFailed:

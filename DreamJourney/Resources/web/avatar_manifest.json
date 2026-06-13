@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "avatar_id": "dreamjourney_default_mini",
+  "engine": "DHLiveMini",
+  "engine_version": "mini2.0",
+  "model_size": 184,
+  "fps": 25,
+  "frame_count": 107,
+  "resources": {
+    "video": {
+      "path": "assets/01.mp4",
+      "sha256": "afed3f3f4569f5a599d004ccdbf9e8a981abec99962b6d900a584aba020037c7"
+    },
+    "data": {
+      "path": "assets/combined_data.json.gz",
+      "sha256": "62e4cf845993e50875ab127ee5d9c32884a69bf10a4261b4c016c753e99a8469"
+    },
+    "wasm": {
+      "path": "DHLiveMini.wasm",
+      "sha256": "7199459b6599a14190aa603d1859f9303fda004e4b78d3206907356d38094783"
+    },
+    "js": [
+      {
+        "path": "DHLiveMini.js",
+        "sha256": "d8d73e90011e87b40d49723f6d9bf2d8bbef7bb95dc6e2f40c6279d71bab5a9a"
+      },
+      {
+        "path": "MiniLive2.js",
+        "sha256": "7e5a4a0591258ffe64a09814cc34c7997f8a8d8f142ee125f35b96b485946331"
+      },
+      {
+        "path": "MiniMateLoader.js",
+        "sha256": "6ded75af34ab8757c5ee36a5c70bbf91788b35020e4a0d0342e7319d5370e24b"
+      },
+      {
+        "path": "pako.min.js",
+        "sha256": "59020f613e4f7d3bf11e8f6ac30ecaa15e2079f4fab1574487f029039d1da9d0"
+      }
+    ],
+    "common_texture": {
+      "path": "common/bs_texture_halfFace.png",
+      "sha256": "37c5b168b3b2745219cc8bd158f6052f7ae8dd1013dc9f9e5e86649d7b03a8fb"
+    }
+  },
+  "combined_data_requirements": {
+    "required_fields": [
+      "json_data",
+      "face3D_obj",
+      "size",
+      "version"
+    ],
+    "expected_size": 184
+  }
+}

@@ -27,7 +27,7 @@ final class FamilyCircleViewController: UIViewController {
     // MARK: - UI：邀请区
     private let inviteSectionLabel: UILabel = {
         let l = UILabel()
-        l.text = "邀请新成员"
+        l.text = "邀请新成员 / 接受邀请"
         l.font = .systemFont(ofSize: 13, weight: .regular)
         l.textColor = UIColor(white: 0.55, alpha: 1.0)
         return l
@@ -100,56 +100,14 @@ final class FamilyCircleViewController: UIViewController {
         return b
     }()
 
-    /// 长辈关怀看板入口
-    private lazy var careDashboardButton: UIButton = {
-        let b = UIButton(type: .system)
-        b.backgroundColor = .white
-        b.layer.cornerRadius = 12
-        b.layer.borderWidth = 0.5
-        b.layer.borderColor = UIColor.warmDivider.cgColor
-
-        let iconConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
-        let icon = UIImageView(image: UIImage(systemName: "heart.text.square", withConfiguration: iconConfig))
-        icon.tintColor = .warmAccent
-        icon.contentMode = .scaleAspectFit
-
-        let title = UILabel()
-        title.text = "长辈关怀看板"
-        title.font = .systemFont(ofSize: 16, weight: .semibold)
-        title.textColor = .warmPrimary
-
-        let subtitle = UILabel()
-        subtitle.text = "查看脱敏信号与问候建议"
-        subtitle.font = .systemFont(ofSize: 12)
-        subtitle.textColor = .warmSubtitle
-
-        let textStack = UIStackView(arrangedSubviews: [title, subtitle])
-        textStack.axis = .vertical
-        textStack.spacing = 2
-
-        let arrow = UIImageView(image: UIImage(systemName: "chevron.right", withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)))
-        arrow.tintColor = .warmSubtitle
-        arrow.contentMode = .scaleAspectFit
-
-        let row = UIStackView(arrangedSubviews: [icon, textStack, UIView(), arrow])
-        row.axis = .horizontal
-        row.alignment = .center
-        row.spacing = 12
-        row.isUserInteractionEnabled = false
-
-        b.addSubview(row)
-        row.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            icon.widthAnchor.constraint(equalToConstant: 28),
-            icon.heightAnchor.constraint(equalToConstant: 28),
-            arrow.widthAnchor.constraint(equalToConstant: 14),
-            row.topAnchor.constraint(equalTo: b.topAnchor, constant: 10),
-            row.leadingAnchor.constraint(equalTo: b.leadingAnchor, constant: 14),
-            row.trailingAnchor.constraint(equalTo: b.trailingAnchor, constant: -14),
-            row.bottomAnchor.constraint(equalTo: b.bottomAnchor, constant: -10),
-        ])
-        b.addTarget(self, action: #selector(careDashboardTapped), for: .touchUpInside)
-        return b
+    private lazy var quickActionsStack: UIStackView = {
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 10
+        FamilyCircleQuickAction.defaultActions.forEach { action in
+            stack.addArrangedSubview(makeQuickActionButton(for: action))
+        }
+        return stack
     }()
 
     // MARK: - UI：亲友圈列表
@@ -256,7 +214,7 @@ final class FamilyCircleViewController: UIViewController {
         ])
 
         [titleLabel, addButton, inviteSectionLabel, searchContainer, inviteButton,
-         careDashboardButton, circleHeaderLabel, memberCountLabel, membersTableView, sloganLabel].forEach {
+         quickActionsStack, circleHeaderLabel, memberCountLabel, membersTableView, sloganLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview($0)
         }
@@ -288,13 +246,12 @@ final class FamilyCircleViewController: UIViewController {
             inviteButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
             inviteButton.heightAnchor.constraint(equalToConstant: 56),
 
-            careDashboardButton.topAnchor.constraint(equalTo: inviteButton.bottomAnchor, constant: 12),
-            careDashboardButton.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
-            careDashboardButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
-            careDashboardButton.heightAnchor.constraint(equalToConstant: 64),
+            quickActionsStack.topAnchor.constraint(equalTo: inviteButton.bottomAnchor, constant: 12),
+            quickActionsStack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
+            quickActionsStack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
 
             // 亲友圈列表
-            circleHeaderLabel.topAnchor.constraint(equalTo: careDashboardButton.bottomAnchor, constant: 28),
+            circleHeaderLabel.topAnchor.constraint(equalTo: quickActionsStack.bottomAnchor, constant: 28),
             circleHeaderLabel.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
 
             memberCountLabel.centerYAnchor.constraint(equalTo: circleHeaderLabel.centerYAnchor),
@@ -315,18 +272,190 @@ final class FamilyCircleViewController: UIViewController {
 
     // MARK: - Actions
     @objc private func addTapped() {
-        // 弹出搜索/邀请弹窗（复用 searchField 聚焦）
-        searchField.becomeFirstResponder()
+        let alert = UIAlertController(title: "亲友邀请", message: nil, preferredStyle: .actionSheet)
+        alert.addAction(UIAlertAction(title: "输入手机号", style: .default) { [weak self] _ in
+            self?.searchField.becomeFirstResponder()
+        })
+        alert.addAction(UIAlertAction(title: "接受邀请", style: .default) { [weak self] _ in
+            self?.acceptInvitationFromCurrentInput()
+        })
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = addButton
+            popover.sourceRect = addButton.bounds
+        }
+        present(alert, animated: true)
     }
 
     @objc private func copyInviteTapped() {
-        UIPasteboard.general.string = "邀请你加入寻梦环游家族圈，下载寻梦环游App后使用此邀请码：DJ-2025"
+        UIPasteboard.general.string = "邀请你加入寻梦环游家族圈，下载寻梦环游App后使用手机号接受邀请：18800000001"
         showToast("邀请邮票已复制到剪贴板", type: .success)
     }
 
     @objc private func careDashboardTapped() {
         navigationController?.navigationBar.isHidden = false
         navigationController?.pushViewController(CareDashboardViewController(), animated: true)
+    }
+
+    @objc private func familyFootprintTapped() {
+        let currentUserId = UserManager.shared.currentUser?.id ?? "user_001"
+        let ownerName = UserManager.shared.currentUser?.nickname ?? "全家"
+        let viewController = MapFootprintViewController(
+            viewMode: .guest,
+            ownerId: currentUserId,
+            ownerName: ownerName,
+            includeDemoExpansionOverride: true
+        )
+        viewController.title = "家族足迹地图"
+        navigationController?.navigationBar.isHidden = false
+        navigationController?.pushViewController(viewController, animated: true)
+    }
+
+    private func acceptInvitationFromCurrentInput() {
+        acceptInvitation(phone: searchField.text)
+    }
+
+    private func acceptInvitation(phone rawPhone: String?) {
+        let phone = rawPhone?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !phone.isEmpty else {
+            showToast("请输入手机号后接受邀请", type: .info)
+            searchField.becomeFirstResponder()
+            return
+        }
+        guard let member = members.first(where: {
+            normalizedPhoneForFamilyAccessUI($0.phone) == normalizedPhoneForFamilyAccessUI(phone)
+                && !FamilyRepository.shared.isAccessRevoked(for: $0.id)
+        }) else {
+            showToast("未找到可接受的亲友邀请", type: .info)
+            return
+        }
+
+        let invitation = FamilyAccessControlService.Invitation(
+            id: "local_invite_\(member.id)",
+            familyMemberID: member.id,
+            phone: member.phone ?? phone,
+            status: .pending,
+            createdAt: member.joinedAt
+        )
+        guard FamilyAccessControlService.acceptInvitation(invitation, phone: phone) != nil,
+              let acceptedMember = FamilyRepository.shared.acceptLocalInvitation(phone: phone) else {
+            showToast("邀请信息不匹配", type: .error)
+            return
+        }
+
+        searchField.text = nil
+        memberCountLabel.text = "\(members.count) 位成员"
+        membersTableView.reloadData()
+        showToast("已接受 \(acceptedMember.name) 的亲友邀请", type: .success)
+    }
+
+    private func makeQuickActionButton(for action: FamilyCircleQuickAction) -> UIButton {
+        let button = UIButton(type: .system)
+        button.backgroundColor = .white
+        button.layer.cornerRadius = 12
+        button.layer.borderWidth = 0.5
+        button.layer.borderColor = UIColor.warmDivider.cgColor
+        button.accessibilityLabel = action.accessibilityLabel
+
+        let iconConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
+        let icon = UIImageView(image: UIImage(systemName: action.iconName, withConfiguration: iconConfig))
+        icon.tintColor = .warmAccent
+        icon.contentMode = .scaleAspectFit
+
+        let title = UILabel()
+        title.text = action.title
+        title.font = .systemFont(ofSize: 16, weight: .semibold)
+        title.textColor = .warmPrimary
+
+        let subtitle = UILabel()
+        subtitle.text = action.subtitle
+        subtitle.font = .systemFont(ofSize: 12)
+        subtitle.textColor = .warmSubtitle
+
+        let textStack = UIStackView(arrangedSubviews: [title, subtitle])
+        textStack.axis = .vertical
+        textStack.spacing = 2
+
+        let arrow = UIImageView(image: UIImage(systemName: "chevron.right", withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)))
+        arrow.tintColor = .warmSubtitle
+        arrow.contentMode = .scaleAspectFit
+
+        let row = UIStackView(arrangedSubviews: [icon, textStack, UIView(), arrow])
+        row.axis = .horizontal
+        row.alignment = .center
+        row.spacing = 12
+        row.isUserInteractionEnabled = false
+
+        button.addSubview(row)
+        row.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            icon.widthAnchor.constraint(equalToConstant: 28),
+            icon.heightAnchor.constraint(equalToConstant: 28),
+            arrow.widthAnchor.constraint(equalToConstant: 14),
+            row.topAnchor.constraint(equalTo: button.topAnchor, constant: 10),
+            row.leadingAnchor.constraint(equalTo: button.leadingAnchor, constant: 14),
+            row.trailingAnchor.constraint(equalTo: button.trailingAnchor, constant: -14),
+            row.bottomAnchor.constraint(equalTo: button.bottomAnchor, constant: -10),
+            button.heightAnchor.constraint(equalToConstant: 64),
+        ])
+
+        switch action.kind {
+        case .careDashboard:
+            button.addTarget(self, action: #selector(careDashboardTapped), for: .touchUpInside)
+        case .familyFootprint:
+            button.addTarget(self, action: #selector(familyFootprintTapped), for: .touchUpInside)
+        }
+
+        return button
+    }
+
+    private func openCareDashboard(for member: FamilyMember) {
+        guard !FamilyRepository.shared.isAccessRevoked(for: member.id) else {
+            showToast("\(member.name) 的访问权限已撤回", type: .info)
+            return
+        }
+        navigationController?.navigationBar.isHidden = false
+        navigationController?.pushViewController(
+            CareDashboardViewController(viewerFamilyMemberID: member.id),
+            animated: true
+        )
+    }
+
+    private func revokeAccess(for member: FamilyMember) {
+        guard !FamilyRepository.shared.isAccessRevoked(for: member.id) else {
+            showToast("\(member.name) 的访问权限已撤回", type: .info)
+            return
+        }
+
+        let revokedMetadata = FamilyAccessControlService.revokeMemberAccess(
+            from: MemoryPrivacyMetadata(scope: .familyCircle, familyVisibility: .allMembers),
+            revokedMemberID: member.id,
+            allFamilyMemberIDs: members.map(\.id)
+        )
+        let remainingVisibleCount = revokedMetadata.familyVisibility.allowedMemberIDs.count
+
+        let alert = UIAlertController(
+            title: "撤回 \(member.name) 的访问权限？",
+            message: "撤回后，本机演示中的当前访问者身份不会再匹配该成员，后续分享/关怀入口也会避开该成员视角。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "撤回访问", style: .destructive) { [weak self] _ in
+            guard FamilyRepository.shared.revokeAccess(for: member.id) else {
+                self?.showToast("撤回失败，请稍后重试", type: .error)
+                return
+            }
+            self?.memberCountLabel.text = "\(self?.members.count ?? 0) 位成员"
+            self?.membersTableView.reloadData()
+            self?.showToast("已撤回 \(member.name) 的访问权限，剩余 \(remainingVisibleCount) 位可见", type: .success)
+        })
+        present(alert, animated: true)
+    }
+
+    private func normalizedPhoneForFamilyAccessUI(_ phone: String?) -> String? {
+        guard let phone else { return nil }
+        let digits = phone.filter(\.isNumber)
+        return digits.isEmpty ? nil : digits
     }
 }
 
@@ -338,7 +467,12 @@ extension FamilyCircleViewController: UITableViewDataSource {
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "FriendMemberCell", for: indexPath) as! FriendMemberCell
-        cell.configure(with: members[indexPath.row], isLast: indexPath.row == members.count - 1)
+        let member = members[indexPath.row]
+        cell.configure(
+            with: member,
+            isLast: indexPath.row == members.count - 1,
+            isAccessRevoked: FamilyRepository.shared.isAccessRevoked(for: member.id)
+        )
         return cell
     }
 }
@@ -350,22 +484,59 @@ extension FamilyCircleViewController: UITableViewDelegate {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         let member = members[indexPath.row]
-        navigationController?.navigationBar.isHidden = false
-        navigationController?.pushViewController(
-            CareDashboardViewController(viewerFamilyMemberID: member.id),
-            animated: true
-        )
+        openCareDashboard(for: member)
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath
+    ) -> UISwipeActionsConfiguration? {
+        let member = members[indexPath.row]
+        guard !FamilyRepository.shared.isAccessRevoked(for: member.id) else {
+            return nil
+        }
+
+        let revoke = UIContextualAction(style: .destructive, title: "撤回") { [weak self] _, _, completion in
+            self?.revokeAccess(for: member)
+            completion(true)
+        }
+        revoke.image = UIImage(systemName: "person.crop.circle.badge.xmark")
+        return UISwipeActionsConfiguration(actions: [revoke])
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        contextMenuConfigurationForRowAt indexPath: IndexPath,
+        point: CGPoint
+    ) -> UIContextMenuConfiguration? {
+        let member = members[indexPath.row]
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+            let care = UIAction(
+                title: "查看关怀看板",
+                image: UIImage(systemName: "heart.text.square")
+            ) { _ in
+                self?.openCareDashboard(for: member)
+            }
+            let revoke = UIAction(
+                title: FamilyRepository.shared.isAccessRevoked(for: member.id) ? "访问已撤回" : "撤回访问",
+                image: UIImage(systemName: "person.crop.circle.badge.xmark"),
+                attributes: FamilyRepository.shared.isAccessRevoked(for: member.id) ? [.disabled] : [.destructive]
+            ) { _ in
+                self?.revokeAccess(for: member)
+            }
+            return UIMenu(title: member.name, children: [care, revoke])
+        }
     }
 }
 
 // MARK: - UITextFieldDelegate
 extension FamilyCircleViewController: UITextFieldDelegate {
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-        let phone = textField.text?.trimmingCharacters(in: .whitespaces) ?? ""
+        let phone = textField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if phone.isEmpty {
             showToast("请输入手机号", type: .info)
         } else {
-            showToast("正在搜索 \(phone)…", type: .info)
+            acceptInvitation(phone: phone)
         }
         textField.resignFirstResponder()
         return true
@@ -539,12 +710,12 @@ final class FriendMemberCell: UITableViewCell {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    func configure(with member: FamilyMember, isLast: Bool) {
+    func configure(with member: FamilyMember, isLast: Bool, isAccessRevoked: Bool = false) {
         // 头像首字
         avatarInitialLabel.text = String(member.name.prefix(1))
 
         // 在线状态圆点颜色
-        onlineDot.backgroundColor = member.isOnline
+        onlineDot.backgroundColor = member.isOnline && !isAccessRevoked
             ? UIColor(red: 0.20, green: 0.75, blue: 0.30, alpha: 1.0)
             : UIColor(white: 0.75, alpha: 1.0)
 
@@ -554,7 +725,17 @@ final class FriendMemberCell: UITableViewCell {
         let padding = "  \(member.relation)  "
         relationLabel.text = padding
 
-        lastUpdatedLabel.text = "上次更新: \(member.lastUpdated)"
+        lastUpdatedLabel.text = isAccessRevoked ? "访问权限已撤回" : "上次更新: \(member.lastUpdated)"
+        lastUpdatedLabel.textColor = isAccessRevoked ? UIColor.systemRed.withAlphaComponent(0.78) : UIColor(white: 0.60, alpha: 1.0)
+
+        footprintButton.setTitle(isAccessRevoked ? "已撤回" : "关怀看板", for: .normal)
+        footprintButton.setTitleColor(
+            isAccessRevoked ? UIColor.systemRed.withAlphaComponent(0.78) : UIColor(red: 0.30, green: 0.25, blue: 0.20, alpha: 1.0),
+            for: .normal
+        )
+        footprintButton.layer.borderColor = isAccessRevoked
+            ? UIColor.systemRed.withAlphaComponent(0.25).cgColor
+            : UIColor(white: 0.82, alpha: 1.0).cgColor
 
         // 最后一行不显示分割线
         divider.isHidden = isLast
@@ -566,6 +747,10 @@ final class FriendMemberCell: UITableViewCell {
         nameLabel.text = nil
         relationLabel.text = nil
         lastUpdatedLabel.text = nil
+        lastUpdatedLabel.textColor = UIColor(white: 0.60, alpha: 1.0)
+        footprintButton.setTitle("关怀看板", for: .normal)
+        footprintButton.setTitleColor(UIColor(red: 0.30, green: 0.25, blue: 0.20, alpha: 1.0), for: .normal)
+        footprintButton.layer.borderColor = UIColor(white: 0.82, alpha: 1.0).cgColor
         divider.isHidden = false
     }
 }

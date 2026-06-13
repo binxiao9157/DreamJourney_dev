@@ -6,6 +6,7 @@ final class FamilyRepository {
     static let shared = FamilyRepository()
     private init() {
         seedMockData()
+        loadLocalAccessState()
         NotificationCenter.default.addObserver(self, selector: #selector(onKBUpdated), name: .kbLiteDidUpdate, object: nil)
         // 延迟首次同步（等知识库加载完成）
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
@@ -18,6 +19,11 @@ final class FamilyRepository {
     }
 
     private var members: [FamilyMember] = []
+    private var acceptedInvitations: [String: FamilyAccessControlService.Invitation] = [:]
+    private var revokedAccessMemberIDs = Set<String>()
+    private let viewerOverrideKey = "dj_family_viewer_member_id"
+    private let acceptedInvitationsKey = "dj_family_accepted_invitations"
+    private let revokedAccessMemberIDsKey = "dj_family_revoked_access_member_ids"
 
     func getAll() -> [FamilyMember] { return members }
 
@@ -30,10 +36,110 @@ final class FamilyRepository {
 
     func remove(id: String) {
         members.removeAll { $0.id == id }
+        acceptedInvitations.removeValue(forKey: id)
+        revokedAccessMemberIDs.remove(id)
+        saveLocalAccessState()
     }
 
     func get(by id: String) -> FamilyMember? {
         return members.first { $0.id == id }
+    }
+
+    func setLocalViewerFamilyMemberID(_ memberID: String?) {
+        let trimmed = memberID?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let trimmed, !trimmed.isEmpty, get(by: trimmed) != nil {
+            UserDefaults.standard.set(trimmed, forKey: viewerOverrideKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: viewerOverrideKey)
+        }
+    }
+
+    func currentViewerIdentity() -> FamilyAccessIdentityResolver.ViewerIdentity? {
+        let userRecord = UserManager.shared.currentUser.map {
+            FamilyAccessIdentityResolver.UserRecord(id: $0.id, phone: $0.phone)
+        }
+        let memberRecords = members.map {
+            FamilyAccessIdentityResolver.MemberRecord(id: $0.id, phone: $0.phone)
+        }
+        guard let identity = FamilyAccessIdentityResolver.resolveViewer(
+            currentUser: userRecord,
+            members: memberRecords,
+            overrideFamilyMemberID: UserDefaults.standard.string(forKey: viewerOverrideKey)
+        ) else {
+            return nil
+        }
+        return revokedAccessMemberIDs.contains(identity.familyMemberID) ? nil : identity
+    }
+
+    func acceptLocalInvitation(phone: String, acceptedAt: Date = Date()) -> FamilyMember? {
+        guard let memberIndex = members.firstIndex(where: { normalizedPhone($0.phone) == normalizedPhone(phone) }),
+              !revokedAccessMemberIDs.contains(members[memberIndex].id) else {
+            return nil
+        }
+
+        let member = members[memberIndex]
+        let invitation = FamilyAccessControlService.Invitation(
+            id: "local_invite_\(member.id)",
+            familyMemberID: member.id,
+            phone: member.phone ?? phone,
+            status: .pending,
+            createdAt: member.joinedAt
+        )
+        guard let accepted = FamilyAccessControlService.acceptInvitation(
+            invitation,
+            phone: phone,
+            acceptedAt: acceptedAt
+        ) else {
+            return nil
+        }
+
+        acceptedInvitations[member.id] = accepted
+        setLocalViewerFamilyMemberID(member.id)
+        members[memberIndex].isOnline = true
+        members[memberIndex].lastUpdated = "刚刚接受邀请"
+        saveLocalAccessState()
+        return members[memberIndex]
+    }
+
+    @discardableResult
+    func revokeAccess(for memberID: String) -> Bool {
+        guard get(by: memberID) != nil else {
+            return false
+        }
+
+        let shouldClearViewerOverride = currentViewerIdentity()?.familyMemberID == memberID
+        revokedAccessMemberIDs.insert(memberID)
+        acceptedInvitations[memberID] = acceptedInvitations[memberID].map {
+            FamilyAccessControlService.Invitation(
+                id: $0.id,
+                familyMemberID: $0.familyMemberID,
+                phone: $0.phone,
+                status: .revoked,
+                createdAt: $0.createdAt,
+                acceptedAt: $0.acceptedAt
+            )
+        }
+        if shouldClearViewerOverride {
+            setLocalViewerFamilyMemberID(nil)
+        }
+        if let index = members.firstIndex(where: { $0.id == memberID }) {
+            members[index].isOnline = false
+            members[index].lastUpdated = "访问已撤回"
+        }
+        saveLocalAccessState()
+        return true
+    }
+
+    func isAccessRevoked(for memberID: String) -> Bool {
+        revokedAccessMemberIDs.contains(memberID)
+    }
+
+    func resetLocalAccessState() {
+        acceptedInvitations.removeAll()
+        revokedAccessMemberIDs.removeAll()
+        UserDefaults.standard.removeObject(forKey: acceptedInvitationsKey)
+        UserDefaults.standard.removeObject(forKey: revokedAccessMemberIDsKey)
+        setLocalViewerFamilyMemberID(nil)
     }
 
     // MARK: - KBLite 同步：从知识库中提取人物 → 亲属圈
@@ -118,9 +224,31 @@ final class FamilyRepository {
     // MARK: - Mock 数据
     private func seedMockData() {
         members = [
-            FamilyMember(id: "fm_001", name: "陈树安", relation: "祖父",  phone: nil, isOnline: false, lastUpdated: "2小时前"),
-            FamilyMember(id: "fm_002", name: "陈国梁", relation: "父亲",  phone: nil, isOnline: false, lastUpdated: "昨天"),
-            FamilyMember(id: "fm_003", name: "陈雅琴", relation: "母亲",  phone: nil, isOnline: true,  lastUpdated: "刚刚")
+            FamilyMember(id: "fm_001", name: "陈树安", relation: "祖父", phone: "18800000001", isOnline: false, lastUpdated: "2小时前"),
+            FamilyMember(id: "fm_002", name: "陈国梁", relation: "父亲", phone: "18800000002", isOnline: false, lastUpdated: "昨天"),
+            FamilyMember(id: "fm_003", name: "陈雅琴", relation: "母亲", phone: "18800000003", isOnline: true, lastUpdated: "刚刚")
         ]
+    }
+
+    private func normalizedPhone(_ phone: String?) -> String? {
+        guard let phone else { return nil }
+        let digits = phone.filter(\.isNumber)
+        return digits.isEmpty ? nil : digits
+    }
+
+    private func loadLocalAccessState() {
+        if let data = UserDefaults.standard.data(forKey: acceptedInvitationsKey),
+           let decoded = try? JSONDecoder().decode([String: FamilyAccessControlService.Invitation].self, from: data) {
+            acceptedInvitations = decoded
+        }
+        let revokedIDs = UserDefaults.standard.stringArray(forKey: revokedAccessMemberIDsKey) ?? []
+        revokedAccessMemberIDs = Set(revokedIDs)
+    }
+
+    private func saveLocalAccessState() {
+        if let data = try? JSONEncoder().encode(acceptedInvitations) {
+            UserDefaults.standard.set(data, forKey: acceptedInvitationsKey)
+        }
+        UserDefaults.standard.set(Array(revokedAccessMemberIDs).sorted(), forKey: revokedAccessMemberIDsKey)
     }
 }

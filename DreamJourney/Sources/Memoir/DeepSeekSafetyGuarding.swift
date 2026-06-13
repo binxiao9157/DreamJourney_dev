@@ -73,7 +73,7 @@ enum DeepSeekSafetyGuarding {
     ) -> URL? {
         let rawValue = environment["DREAMJOURNEY_SAFETY_GUARD_BASE_URL"]
             ?? environment["DREAMJOURNEY_SAFETY_GUARD_URL"]
-            ?? bundle.object(forInfoDictionaryKey: "SafetyGuardBaseURL") as? String
+            ?? AppConfiguration.string(forKey: "SafetyGuardBaseURL", infoDictionary: bundle.infoDictionary)
         return trimmedURL(from: rawValue)
     }
 
@@ -82,7 +82,7 @@ enum DeepSeekSafetyGuarding {
         bundle: Bundle
     ) -> String? {
         let rawValue = environment["DREAMJOURNEY_SAFETY_GUARD_API_KEY"]
-            ?? bundle.object(forInfoDictionaryKey: "SafetyGuardAPIKey") as? String
+            ?? AppConfiguration.string(forKey: "SafetyGuardAPIKey", infoDictionary: bundle.infoDictionary)
         let trimmed = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let trimmed, !trimmed.isEmpty else {
             return nil

@@ -100,11 +100,25 @@ assertCondition(
         || snapshot.riskLevel != .insufficientData,
     "care dashboard seed should generate watch/attention or at least non-insufficient snapshot"
 )
+assertCondition(
+    snapshot.dailyTrend.count >= 4,
+    "care dashboard roadshow seed should provide at least 4 active trend days"
+)
+assertCondition(
+    snapshot.trendSummary.contains("近") && !snapshot.trendSummary.contains("当前只有 1 天"),
+    "care dashboard roadshow seed should produce a multi-day trend summary"
+)
+let shareReport = CareDashboardShareReportDescriptor.make(snapshot: snapshot, viewerName: "陈岚")
+assertCondition(
+    shareReport.plainText.contains("趋势观察") && shareReport.plainText.contains("近"),
+    "roadshow care share report should include multi-day trend observation"
+)
 
 let expectedSteps: Set<RoadshowDemoSeed.DemoStepID> = [
     .timeMailbox,
     .memoryArchive,
     .voiceCompanion,
+    .familyFootprint,
     .careDashboard,
     .familySharing
 ]
@@ -152,6 +166,10 @@ for text in allStrings(in: package) {
 assertCondition(
     package.demoItems.contains { $0.stepID == RoadshowDemoSeed.DemoStepID.familySharing.rawValue && $0.body.contains("分享包") },
     "seed should include minimum viable family sharing package copy"
+)
+assertCondition(
+    package.demoItems.contains { $0.stepID == RoadshowDemoSeed.DemoStepID.familyFootprint.rawValue && $0.body.contains("代际") },
+    "seed should include family footprint route copy"
 )
 assertCondition(
     package.demoItems.contains { $0.body.contains("KBLite") || $0.title.contains("KBLite") },

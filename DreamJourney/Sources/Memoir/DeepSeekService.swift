@@ -31,17 +31,16 @@ final class DeepSeekService {
     // MARK: - Init
 
     private init() {
-        // 优先从 Info.plist 读取 API Key
-        if let key = Bundle.main.object(forInfoDictionaryKey: "DeepSeekAPIKey") as? String,
-           !key.isEmpty, key != Self.placeholderKey {
+        // 优先从 Scheme env / LocalConfig.plist / Info.plist 读取 API Key
+        if let key = AppConfiguration.string(forKey: "DeepSeekAPIKey"),
+           key != Self.placeholderKey {
             self.apiKey = key
         } else {
             self.apiKey = Self.placeholderKey
         }
 
-        // 优先从 Info.plist 读取 Base URL，否则使用 DeepSeek 官方 API
-        if let url = Bundle.main.object(forInfoDictionaryKey: "DeepSeekAPIBaseURL") as? String,
-           !url.isEmpty {
+        // 优先从 Scheme env / LocalConfig.plist / Info.plist 读取 Base URL，否则使用 DeepSeek 官方 API
+        if let url = AppConfiguration.string(forKey: "DeepSeekAPIBaseURL") {
             self.baseURL = url
         } else {
             self.baseURL = Self.defaultBaseURL

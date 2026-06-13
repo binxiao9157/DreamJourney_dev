@@ -14,7 +14,7 @@ final class OpenAvatarChatService {
 
     private static let defaultBaseURL = "http://localhost:8283"
 
-    /// 后端 Base URL — 优先从 Info.plist 读取
+    /// 后端 Base URL — 优先从 Scheme env / LocalConfig.plist / Info.plist 读取
     private let baseURL: String
 
     private let timeoutInterval: TimeInterval = 30
@@ -22,8 +22,7 @@ final class OpenAvatarChatService {
     // MARK: - Init
 
     private init() {
-        if let url = Bundle.main.object(forInfoDictionaryKey: "OpenAvatarChatBaseURL") as? String,
-           !url.isEmpty {
+        if let url = AppConfiguration.string(forKey: "OpenAvatarChatBaseURL") {
             // 去除末尾斜杠
             self.baseURL = url.hasSuffix("/") ? String(url.dropLast()) : url
         } else {

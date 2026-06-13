@@ -46,7 +46,9 @@ final class CareSignalAnalyzer {
                 summary: "暂无足够对话数据生成关怀信号。",
                 suggestions: ["先通过电话或日常对话积累真实近况，再观察趋势。"],
                 weeklyHighlights: [],
-                riskSignalDescriptions: []
+                riskSignalDescriptions: [],
+                dailyTrend: [],
+                trendSummary: "暂无足够数据形成趋势观察。"
             )
         }
 
@@ -66,6 +68,7 @@ final class CareSignalAnalyzer {
             bodyCount: bodyCount,
             repetitionRatio: repetitionRatio
         )
+        let dailyTrend = dailyTrend(for: userTurns, endDate: window.end)
 
         return CareSignalSnapshot(
             generatedAt: now,
@@ -97,7 +100,9 @@ final class CareSignalAnalyzer {
                 sleepCount: sleepCount,
                 bodyCount: bodyCount,
                 repetitionRatio: repetitionRatio
-            )
+            ),
+            dailyTrend: dailyTrend,
+            trendSummary: trendSummary(for: dailyTrend)
         )
     }
 
@@ -234,6 +239,75 @@ final class CareSignalAnalyzer {
             }
         }
         return Double(repeated) / Double(texts.count)
+    }
+
+    private func dailyTrend(
+        for turns: [CareSignalInputTurn],
+        endDate: Date?
+    ) -> [CareSignalDailyTrendPoint] {
+        guard !turns.isEmpty else { return [] }
+
+        let calendar = Calendar.current
+        let latestDate = endDate ?? turns.map(\.timestamp).max() ?? Date()
+        let latestDay = calendar.startOfDay(for: latestDate)
+        let earliestDay = calendar.date(byAdding: .day, value: -6, to: latestDay) ?? latestDay
+
+        let grouped = Dictionary(grouping: turns) { turn in
+            calendar.startOfDay(for: turn.timestamp)
+        }
+
+        return grouped.keys
+            .filter { $0 >= earliestDay && $0 <= latestDay }
+            .sorted()
+            .compactMap { day -> CareSignalDailyTrendPoint? in
+                guard let dayTurns = grouped[day], !dayTurns.isEmpty else { return nil }
+                let normalizedTexts = dayTurns.map { normalize($0.text) }.filter { !$0.isEmpty }
+                guard !normalizedTexts.isEmpty else { return nil }
+
+                let allText = normalizedTexts.joined(separator: "")
+                let negativeCount = countMatches(in: allText, keywords: negativeKeywords)
+                let sleepCount = countMatches(in: allText, keywords: sleepKeywords)
+                let bodyCount = countMatches(in: allText, keywords: bodyKeywords)
+                let repetitionRatio = repeatedRatio(for: normalizedTexts)
+                return CareSignalDailyTrendPoint(
+                    date: day,
+                    userTurnCount: normalizedTexts.count,
+                    negativeEmotionMentions: negativeCount,
+                    sleepMentions: sleepCount,
+                    bodyDiscomfortMentions: bodyCount,
+                    repetitionRatio: repetitionRatio,
+                    signalScore: negativeCount + sleepCount + bodyCount
+                )
+            }
+    }
+
+    private func trendSummary(for trend: [CareSignalDailyTrendPoint]) -> String {
+        guard !trend.isEmpty else {
+            return "暂无足够数据形成趋势观察。"
+        }
+        guard trend.count > 1 else {
+            return "当前只有 1 天可用数据，建议继续积累后再观察趋势。"
+        }
+
+        let scores = trend.map { Double($0.signalScore) + ($0.repetitionRatio >= 0.4 ? 1.0 : 0.0) }
+        let totalScore = scores.reduce(0, +)
+        if totalScore == 0 {
+            return "近 \(trend.count) 天趋势以日常表达为主，暂未出现聚合关怀信号。"
+        }
+
+        let splitIndex = max(1, trend.count / 2)
+        let earlyScores = scores.prefix(splitIndex)
+        let recentScores = scores.suffix(trend.count - splitIndex)
+        let earlyAverage = earlyScores.reduce(0, +) / Double(earlyScores.count)
+        let recentAverage = recentScores.reduce(0, +) / Double(recentScores.count)
+
+        if recentAverage > earlyAverage + 0.5 {
+            return "近 \(trend.count) 天关怀信号较前段增加，建议家人提高问候频率。"
+        }
+        if recentAverage + 0.5 < earlyAverage {
+            return "近 \(trend.count) 天关怀信号较前段回落，可继续保持稳定陪伴。"
+        }
+        return "近 \(trend.count) 天关怀信号维持在相近水平，建议结合线下近况继续观察。"
     }
 
     private func tokenize(_ text: String) -> [Character] {

@@ -4,6 +4,7 @@ private final class RecordingDelegate: DialogEngineDelegate {
     var events: [String] = []
     var finalASRText: String?
     var ttsText: String?
+    var assistantFinalText: String?
     var endedReason: DialogEndReason?
     var safetyAssessment: SafetyAssessment?
 
@@ -25,6 +26,11 @@ private final class RecordingDelegate: DialogEngineDelegate {
 
     func onTTSFinished() {
         events.append("tts-finished")
+    }
+
+    func onAssistantFinalText(text: String) {
+        events.append("assistant-final")
+        assistantFinalText = text
     }
 
     func onChatStreaming(text: String) {
@@ -93,7 +99,15 @@ assertCondition(offlineEnvEngine is MockDialogEngine, "roadshow offline environm
 
 mock.simulateUserTurn("今天想聊聊年轻时在上海工作的事")
 assertCondition(delegate.finalASRText?.contains("上海") == true, "mock should emit final ASR text")
+assertCondition(delegate.assistantFinalText?.contains("上海") == true, "mock should emit final assistant text")
 assertCondition(delegate.ttsText?.contains("上海") == true, "mock should emit deterministic TTS reply")
+if let finalIndex = delegate.events.firstIndex(of: "assistant-final"),
+   let finishIndex = delegate.events.firstIndex(of: "tts-finished") {
+    assertCondition(finalIndex < finishIndex, "assistant final text should be available before TTS finishes")
+} else {
+    fputs("FAIL: mock turn should include assistant final and TTS finished events\n", stderr)
+    exit(1)
+}
 
 mock.simulateUserTurn("我不想活了")
 assertCondition(delegate.safetyAssessment?.level == .high, "mock should trigger safety for high-risk text")

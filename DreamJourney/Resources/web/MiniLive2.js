@@ -1,18 +1,27 @@
 // ==================== 重要配置项 ====================
 let CONFIG = {
     showFPS: false,              // 是否显示 FPS
-    chromaKeyEnabled: true,     // 是否开启绿幕扣除
+    chromaKeyEnabled: true,     // iOS App 内以绿幕抠像输出透明悬浮真人层
+    faceRetargetEnabled: false, // DHLive 3D 口型贴片在当前素材上会错位，路演版先禁用黑框叠加
     backgroundVideoSrc: "background/bg.mp4",  // 背景视频路径（开启绿幕扣除时使用）
-    videoSrc: "assets/01.mp4",                // 默认视频文件路径
-    dataSrc: "assets/combined_data.json.gz",   // 默认数据文件路径
+    videoSrc: "01.mp4",                       // 默认视频文件路径
+    dataSrc: "combined_data.json.gz",         // 默认数据文件路径
     // 绿幕抠图参数配置
     chromaKey: {
         keyColor: { r: 0.0, g: 1.0, b: 0.0 },  // 要抠除的颜色（默认绿色）
-        similarity: 0.4,      // 相似度阈值：值越小，抠除范围越严格
-        smoothness: 0.1,      // 平滑度：值越大，边缘过渡越平滑
-        spill: 0.5           // 溢色抑制：减少绿色溢出到保留区域
+        similarity: 0.28,     // 相似度阈值：值越小，抠除范围越严格
+        smoothness: 0.10,     // 平滑度：值越大，边缘过渡越平滑
+        spill: 0.72           // 溢色抑制：减少绿色溢出到保留区域
     }
 };
+window.CONFIG = CONFIG;
+function postAvatarHealth(type, detail) {
+    try {
+        if (window.DreamJourneyAvatar && typeof window.DreamJourneyAvatar.postHealth === 'function') {
+            window.DreamJourneyAvatar.postHealth(type, detail);
+        }
+    } catch (_) {}
+}
 // ==================================================
 const model_size = 184;
 let frameTimes = [];
@@ -28,6 +37,10 @@ let chromaKeyTextures = { foreground: null };
 
 let frameIndexCanvas = null;
 let frameIndexCtx = null;
+let didReportFirstVideoFrame = false;
+let avatarVideoReady = false;
+let avatarVideoShouldPlay = false;
+let avatarSpeechTimer = null;
 
 class VideoProcessor {
     constructor() {
@@ -37,6 +50,7 @@ class VideoProcessor {
     }
 
     async init(videoUrl, gzipUrl) {
+        postAvatarHealth('avatar_video_init_start', { videoUrl, gzipUrl });
         if (this.video) {
             this.video.pause();
             this.video.src = '';
@@ -56,12 +70,23 @@ class VideoProcessor {
                 
                 canvas_video.width = videoW;
                 canvas_video.height = videoH;
-                canvasEl.width = videoW;
-                canvasEl.height = videoH;
+                canvas_gl.width = videoW;
+                canvas_gl.height = videoH;
+                postAvatarHealth('avatar_video_metadata', {
+                    videoWidth: videoW,
+                    videoHeight: videoH,
+                    readyState: this.video.readyState
+                });
                 
                 resolve();
             };
-            this.video.onerror = reject;
+            this.video.onerror = () => {
+                postAvatarHealth('avatar_video_error', {
+                    src: videoUrl,
+                    error: this.video.error ? this.video.error.code : 'unknown'
+                });
+                reject(this.video.error || new Error('video load failed'));
+            };
         });
 
         await this.fetchVideoUtilData(gzipUrl);
@@ -69,9 +94,21 @@ class VideoProcessor {
 
     async fetchVideoUtilData(gzipUrl) {
         const response = await fetch(gzipUrl);
+        if (!response.ok) {
+            postAvatarHealth('avatar_data_fetch_error', {
+                url: gzipUrl,
+                status: response.status
+            });
+            throw new Error(`video util data fetch failed: ${response.status}`);
+        }
         const compressedData = await response.arrayBuffer();
         const decompressedData = pako.inflate(new Uint8Array(compressedData), { to: 'string' });
         this.combinedData = JSON.parse(decompressedData);
+        postAvatarHealth('avatar_data_loaded', {
+            compressedBytes: compressedData.byteLength,
+            hasJsonData: Array.isArray(this.combinedData.json_data),
+            dataSets: Array.isArray(this.combinedData.json_data) ? this.combinedData.json_data.length : 0
+        });
     }
 
     decodeModuloFromPixels(pixelData) {
@@ -130,7 +167,9 @@ class VideoProcessor {
 
     play() {
         if (this.video) {
-            this.video.play();
+            this.video.play().catch(error => {
+                postAvatarHealth('avatar_video_play_error', String(error && error.message ? error.message : error));
+            });
         }
     }
 
@@ -139,7 +178,56 @@ class VideoProcessor {
             this.video.pause();
         }
     }
+
+    seekToStart() {
+        if (this.video && Number.isFinite(this.video.duration)) {
+            try {
+                this.video.currentTime = 0;
+            } catch (error) {
+                postAvatarHealth('avatar_video_seek_error', String(error && error.message ? error.message : error));
+            }
+        }
+    }
 }
+
+function pauseAvatarVideo(reason) {
+    avatarVideoShouldPlay = false;
+    clearTimeout(avatarSpeechTimer);
+    videoProcessor.pause();
+    postAvatarHealth('avatar_video_paused', reason || 'paused');
+}
+
+function playAvatarVideoForSpeech(durationSeconds) {
+    avatarVideoShouldPlay = true;
+    clearTimeout(avatarSpeechTimer);
+    videoProcessor.seekToStart();
+    videoProcessor.play();
+    const duration = Math.max(600, Math.min(Number(durationSeconds || 2) * 1000, 60000));
+    avatarSpeechTimer = setTimeout(() => {
+        pauseAvatarVideo('speech_duration_elapsed');
+    }, duration);
+    postAvatarHealth('avatar_video_speech_started', { duration });
+}
+
+window.DreamJourneyMiniLive = {
+    setState: function(state) {
+        if (state !== 'speaking' && avatarVideoReady) {
+            pauseAvatarVideo('state_' + (state || 'idle'));
+        }
+    },
+    playForDuration: function(durationSeconds) {
+        if (!avatarVideoReady) {
+            postAvatarHealth('avatar_video_speech_deferred', durationSeconds || 0);
+            return;
+        }
+        playAvatarVideoForSpeech(durationSeconds);
+    },
+    pause: function(reason) {
+        if (avatarVideoReady) {
+            pauseAvatarVideo(reason || 'native_pause');
+        }
+    }
+};
 
 function setupBackgroundVideo() {
     const bgVideo = document.getElementById('background_video');
@@ -432,6 +520,7 @@ async function loadCombinedData() {
         Module._free(stringPointer);
 
         if (version_valid == 0) {
+            postAvatarHealth('avatar_wasm_version_invalid', 'processJson returned 0');
             alert("DH_live前端版本不对，请检查")
         }
 
@@ -446,8 +535,14 @@ async function loadCombinedData() {
         // 提取 objData
         objData = parseObjFile(videoProcessor.combinedData.face3D_obj.join('\n'));
         console.log('OBJ data loaded successfully:', objData.vertices.length, 'vertices,', objData.faces.length, 'faces.');
+        postAvatarHealth('avatar_wasm_data_loaded', {
+            dataSets: dataSets.length,
+            vertices: objData.vertices.length,
+            faces: objData.faces.length
+        });
     } catch (error) {
         console.error('Error loading the combined data:', error);
+        postAvatarHealth('avatar_wasm_data_error', String(error && error.message ? error.message : error));
         throw error;
     }
 }
@@ -580,7 +675,12 @@ async function init_gl() {
             gl.activeTexture(gl.TEXTURE0);
             gl.uniform1i(gl.getUniformLocation(program, 'texture_bs'), 0);
         };
-        image.src = 'common/bs_texture_halfFace.png';
+        image.onerror = function () {
+            if (image.src.indexOf('common/bs_texture_halfFace.png') === -1) {
+                image.src = 'common/bs_texture_halfFace.png';
+            }
+        };
+        image.src = 'bs_texture_halfFace.png';
 }
 async function setupVertsBuffers() {
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
@@ -588,6 +688,12 @@ async function setupVertsBuffers() {
 }
 
 async function newVideoTask() {
+    postAvatarHealth('avatar_new_video_task_start', {
+        videoSrc: CONFIG.videoSrc,
+        dataSrc: CONFIG.dataSrc,
+        chromaKeyEnabled: CONFIG.chromaKeyEnabled,
+        faceRetargetEnabled: CONFIG.faceRetargetEnabled
+    });
     await videoProcessor.init(CONFIG.videoSrc, CONFIG.dataSrc);
     await loadCombinedData();
     await init_gl();
@@ -596,7 +702,7 @@ async function newVideoTask() {
     
     if (CONFIG.chromaKeyEnabled) {
         initChromaKeyGL();
-        setupBackgroundVideo();
+        hideBackgroundVideo();
     } else {
         hideBackgroundVideo();
     }
@@ -604,6 +710,10 @@ async function newVideoTask() {
     videoProcessor.play();
     processVideoFrames();
     document.getElementById('startMessage').style.display = 'none';
+    postAvatarHealth('avatar_new_video_task_done', {
+        canvasWidth: canvas_video.width,
+        canvasHeight: canvas_video.height
+    });
 }
 
 function cerateOrthoMatrix()
@@ -729,9 +839,43 @@ async function processVideoFrames() {
         } else {
             ctx_video.drawImage(lockedFrameCanvas, 0, 0, canvas_video.width, canvas_video.height);
         }
+        if (!didReportFirstVideoFrame) {
+            didReportFirstVideoFrame = true;
+            avatarVideoReady = true;
+            let sample = 'unavailable';
+            try {
+                const center = ctx_video.getImageData(
+                    Math.max(0, Math.floor(canvas_video.width / 2)),
+                    Math.max(0, Math.floor(canvas_video.height / 2)),
+                    1,
+                    1
+                ).data;
+                sample = Array.from(center).join(',');
+            } catch (error) {
+                sample = 'error:' + String(error && error.message ? error.message : error);
+            }
+            postAvatarHealth('avatar_first_frame_drawn', {
+                canvasWidth: canvas_video.width,
+                canvasHeight: canvas_video.height,
+                currentFrameIndex,
+                sample
+            });
+            if (window.DreamJourneyAvatar && typeof window.DreamJourneyAvatar.markAvatarVideoReady === 'function') {
+                window.DreamJourneyAvatar.markAvatarVideoReady({
+                    canvasWidth: canvas_video.width,
+                    canvasHeight: canvas_video.height,
+                    currentFrameIndex
+                });
+            }
+            if (!avatarVideoShouldPlay) {
+                pauseAvatarVideo('initial_idle_frame_ready');
+            }
+        }
         // console.log("currentFrameIndex", currentFrameIndex, videoProcessor.video.currentTime);
 
-        processDataSet(currentFrameIndex);
+        if (CONFIG.faceRetargetEnabled) {
+            processDataSet(currentFrameIndex);
+        }
 
         if (CONFIG.showFPS) {
             frameTimes.push(currentTime);

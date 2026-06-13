@@ -258,11 +258,34 @@ private final class TimeMailboxComposerViewController: UIViewController {
         return control
     }()
 
+    private let familyVisibilityButton: UIButton = {
+        var config = UIButton.Configuration.plain()
+        config.image = UIImage(systemName: "person.2")
+        config.imagePadding = 8
+        config.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12)
+        let button = UIButton(configuration: config)
+        button.backgroundColor = .warmSurface
+        button.layer.cornerRadius = 10
+        button.layer.borderWidth = 0.5
+        button.layer.borderColor = UIColor.warmDivider.cgColor
+        button.contentHorizontalAlignment = .leading
+        button.tintColor = .warmAccent
+        return button
+    }()
+
+    private lazy var familyVisibilitySection = makeSection(
+        title: "亲友范围",
+        view: familyVisibilityButton,
+        height: 44
+    )
+
     private let boundarySwitch: UISwitch = {
         let control = UISwitch()
         control.onTintColor = .warmAccent
         return control
     }()
+
+    private var selectedFamilyVisibility = FamilyVisibilitySelection.allMembers
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -271,6 +294,9 @@ private final class TimeMailboxComposerViewController: UIViewController {
         hideKeyboardWhenTapped()
         setupNavigation()
         setupLayout()
+        privacyControl.addTarget(self, action: #selector(privacyChanged), for: .valueChanged)
+        familyVisibilityButton.addTarget(self, action: #selector(familyVisibilityTapped), for: .touchUpInside)
+        updateFamilyVisibilityState()
     }
 
     private func setupNavigation() {
@@ -299,6 +325,7 @@ private final class TimeMailboxComposerViewController: UIViewController {
         stackView.addArrangedSubview(makeSection(title: "想说的话", view: bodyTextView, height: 220))
         stackView.addArrangedSubview(makeSection(title: "投递时间", view: deliveryControl, height: 36))
         stackView.addArrangedSubview(makeSection(title: "使用范围", view: privacyControl, height: 36))
+        stackView.addArrangedSubview(familyVisibilitySection)
         stackView.addArrangedSubview(makeBoundaryRow())
 
         NSLayoutConstraint.activate([
@@ -347,6 +374,26 @@ private final class TimeMailboxComposerViewController: UIViewController {
         dismiss(animated: true)
     }
 
+    @objc private func privacyChanged() {
+        updateFamilyVisibilityState()
+    }
+
+    @objc private func familyVisibilityTapped() {
+        let picker = FamilyVisibilityPickerViewController(
+            initialVisibility: selectedFamilyVisibility.visibility
+        )
+        picker.onSelect = { [weak self] selection in
+            self?.selectedFamilyVisibility = selection
+            self?.updateFamilyVisibilityState()
+        }
+        let navigationController = UINavigationController(rootViewController: picker)
+        if let sheet = navigationController.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
+        present(navigationController, animated: true)
+    }
+
     @objc private func sealTapped() {
         let recipient = (recipientField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let title = (titleField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -369,20 +416,32 @@ private final class TimeMailboxComposerViewController: UIViewController {
                 body: body,
                 deliverAt: deliverAt,
                 boundaryAcknowledged: boundarySwitch.isOn,
-                privacyMetadata: MemoryPrivacyMetadata(scope: selectedPrivacyScope())
+                privacyMetadata: selectedPrivacyMetadata()
             )
         )
     }
 
-    private func selectedPrivacyScope() -> MemoryPrivacyScope {
+    private func selectedPrivacyMetadata() -> MemoryPrivacyMetadata {
         switch privacyControl.selectedSegmentIndex {
         case 1:
-            return MemoryPrivacyMigration.scopeForExplicitGenerationAuthorization()
+            return MemoryPrivacyMetadata(scope: MemoryPrivacyMigration.scopeForExplicitGenerationAuthorization())
         case 2:
-            return MemoryPrivacyMigration.scopeForExplicitFamilyAuthorization()
+            return MemoryPrivacyMetadata(
+                scope: MemoryPrivacyMigration.scopeForExplicitFamilyAuthorization(),
+                familyVisibility: selectedFamilyVisibility.visibility
+            )
         default:
-            return .localOnly
+            return MemoryPrivacyMetadata(scope: .localOnly)
         }
+    }
+
+    private func updateFamilyVisibilityState() {
+        familyVisibilitySection.isHidden = privacyControl.selectedSegmentIndex != 2
+
+        var config = familyVisibilityButton.configuration ?? .plain()
+        config.title = selectedFamilyVisibility.summary
+        config.baseForegroundColor = .warmPrimary
+        familyVisibilityButton.configuration = config
     }
 
     private static func makeTextField(placeholder: String) -> UITextField {

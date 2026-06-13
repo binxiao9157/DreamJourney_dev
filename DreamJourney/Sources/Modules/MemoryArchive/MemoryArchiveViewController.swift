@@ -332,11 +332,7 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
             )
         })
         alert.addAction(UIAlertAction(title: "亲友", style: .default) { [weak self] _ in
-            self?.savePickedPhoto(
-                image,
-                imagePath: imagePath,
-                privacyMetadata: MemoryPrivacyMetadata(scope: .familyCircle)
-            )
+            self?.presentPhotoFamilyVisibilityChoice(image: image, imagePath: imagePath)
         })
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
         alert.popoverPresentationController?.sourceView = view
@@ -347,6 +343,27 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
             height: 1
         )
         present(alert, animated: true)
+    }
+
+    private func presentPhotoFamilyVisibilityChoice(image: UIImage, imagePath: String) {
+        let picker = FamilyVisibilityPickerViewController()
+        picker.onSelect = { [weak self] selection in
+            self?.savePickedPhoto(
+                image,
+                imagePath: imagePath,
+                privacyMetadata: MemoryPrivacyMetadata(
+                    scope: MemoryPrivacyMigration.scopeForExplicitFamilyAuthorization(),
+                    familyVisibility: selection.visibility
+                )
+            )
+        }
+
+        let navigationController = UINavigationController(rootViewController: picker)
+        if let sheet = navigationController.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
+        present(navigationController, animated: true)
     }
 
     private func savePickedPhoto(
@@ -448,6 +465,29 @@ private final class MemoryArchiveTextComposerViewController: UIViewController {
         return control
     }()
 
+    private let familyVisibilityButton: UIButton = {
+        var config = UIButton.Configuration.plain()
+        config.image = UIImage(systemName: "person.2")
+        config.imagePadding = 8
+        config.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12)
+        let button = UIButton(configuration: config)
+        button.backgroundColor = .warmSurface
+        button.layer.cornerRadius = 10
+        button.layer.borderWidth = 0.5
+        button.layer.borderColor = UIColor.warmDivider.cgColor
+        button.contentHorizontalAlignment = .leading
+        button.tintColor = .warmAccent
+        return button
+    }()
+
+    private lazy var familyVisibilitySection = makeSection(
+        title: "亲友范围",
+        view: familyVisibilityButton,
+        height: 44
+    )
+
+    private var selectedFamilyVisibility = FamilyVisibilitySelection.allMembers
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .warmBackground
@@ -455,6 +495,9 @@ private final class MemoryArchiveTextComposerViewController: UIViewController {
         hideKeyboardWhenTapped()
         setupNavigation()
         setupLayout()
+        privacyControl.addTarget(self, action: #selector(privacyChanged), for: .valueChanged)
+        familyVisibilityButton.addTarget(self, action: #selector(familyVisibilityTapped), for: .touchUpInside)
+        updateFamilyVisibilityState()
     }
 
     private func setupNavigation() {
@@ -487,6 +530,7 @@ private final class MemoryArchiveTextComposerViewController: UIViewController {
         stack.addArrangedSubview(makeSection(title: "标题", view: titleField, height: 44))
         stack.addArrangedSubview(makeSection(title: "内容", view: noteTextView, height: 220))
         stack.addArrangedSubview(makeSection(title: "使用范围", view: privacyControl, height: 36))
+        stack.addArrangedSubview(familyVisibilitySection)
 
         NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
@@ -520,6 +564,26 @@ private final class MemoryArchiveTextComposerViewController: UIViewController {
         dismiss(animated: true)
     }
 
+    @objc private func privacyChanged() {
+        updateFamilyVisibilityState()
+    }
+
+    @objc private func familyVisibilityTapped() {
+        let picker = FamilyVisibilityPickerViewController(
+            initialVisibility: selectedFamilyVisibility.visibility
+        )
+        picker.onSelect = { [weak self] selection in
+            self?.selectedFamilyVisibility = selection
+            self?.updateFamilyVisibilityState()
+        }
+        let navigationController = UINavigationController(rootViewController: picker)
+        if let sheet = navigationController.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
+        present(navigationController, animated: true)
+    }
+
     @objc private func saveTapped() {
         let kind: MemoryArchiveItemKind
         switch kindControl.selectedSegmentIndex {
@@ -533,22 +597,34 @@ private final class MemoryArchiveTextComposerViewController: UIViewController {
             title: (titleField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
             note: noteTextView.text.trimmingCharacters(in: .whitespacesAndNewlines),
             tags: [kind.displayName],
-            privacyMetadata: MemoryPrivacyMetadata(scope: selectedPrivacyScope())
+            privacyMetadata: selectedPrivacyMetadata()
         )
         onSave?(draft)
     }
 
-    private func selectedPrivacyScope() -> MemoryPrivacyScope {
+    private func selectedPrivacyMetadata() -> MemoryPrivacyMetadata {
         switch privacyControl.selectedSegmentIndex {
         case 1:
-            return .localOnly
+            return MemoryPrivacyMetadata(scope: .localOnly)
         case 2:
-            return MemoryPrivacyMigration.scopeForExplicitGenerationAuthorization()
+            return MemoryPrivacyMetadata(scope: MemoryPrivacyMigration.scopeForExplicitGenerationAuthorization())
         case 3:
-            return MemoryPrivacyMigration.scopeForExplicitFamilyAuthorization()
+            return MemoryPrivacyMetadata(
+                scope: MemoryPrivacyMigration.scopeForExplicitFamilyAuthorization(),
+                familyVisibility: selectedFamilyVisibility.visibility
+            )
         default:
-            return .privateOnly
+            return MemoryPrivacyMetadata(scope: .privateOnly)
         }
+    }
+
+    private func updateFamilyVisibilityState() {
+        familyVisibilitySection.isHidden = privacyControl.selectedSegmentIndex != 3
+
+        var config = familyVisibilityButton.configuration ?? .plain()
+        config.title = selectedFamilyVisibility.summary
+        config.baseForegroundColor = .warmPrimary
+        familyVisibilityButton.configuration = config
     }
 
     private static func makeTextField(placeholder: String) -> UITextField {
