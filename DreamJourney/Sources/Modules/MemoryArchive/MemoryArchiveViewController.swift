@@ -466,6 +466,43 @@ final class MemoryArchiveViewController: UIViewController {
         }
     }
 
+    private func presentArchiveItemActions(for item: MemoryArchiveItem) {
+        let alert = UIAlertController(
+            title: item.title,
+            message: item.displayDetail,
+            preferredStyle: .actionSheet
+        )
+        if item.kind == .photo || item.kind == .screenshot {
+            let retryTitle = item.kind == .screenshot ? "重新分析截图" : "重新分析照片"
+            alert.addAction(UIAlertAction(title: retryTitle, style: .default) { [weak self] _ in
+                self?.retryImageAnalysis(for: item)
+            })
+        }
+        alert.addAction(UIAlertAction(title: "关闭", style: .cancel))
+        alert.popoverPresentationController?.sourceView = view
+        alert.popoverPresentationController?.sourceRect = CGRect(
+            x: view.bounds.midX,
+            y: view.bounds.midY,
+            width: 1,
+            height: 1
+        )
+        present(alert, animated: true)
+    }
+
+    private func retryImageAnalysis(for item: MemoryArchiveItem) {
+        guard item.kind == .photo || item.kind == .screenshot else { return }
+        guard let localPath = item.localPath,
+              let image = UIImage(contentsOfFile: localPath) else {
+            setKnowledgeDepositStatus("结构化建库：本地图片文件不可用，无法重新分析")
+            showToast("本地图片文件不可用", type: .error)
+            return
+        }
+
+        setKnowledgeDepositStatus("结构化建库：正在重新分析\(item.kind.displayName)")
+        showToast("开始重新分析\(item.kind.displayName)", type: .info)
+        analyzePhoto(image, itemId: item.id)
+    }
+
     private func makeActionButton(title: String, iconName: String) -> UIButton {
         let button = UIButton(type: .system)
         button.backgroundColor = .warmSurface
@@ -1151,6 +1188,11 @@ extension MemoryArchiveViewController: UITableViewDataSource {
 extension MemoryArchiveViewController: UITableViewDelegate {
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
         112
+    }
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        presentArchiveItemActions(for: items[indexPath.row])
     }
 }
 

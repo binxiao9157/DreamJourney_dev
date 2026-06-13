@@ -92,6 +92,9 @@ python3 Scripts/MemoryArchiveBackendSyncVerify/main.py
 echo "== MemoryArchive image analysis proxy =="
 python3 Scripts/MemoryArchiveImageAnalysisProxyVerify/main.py
 
+echo "== MemoryArchive image analysis retry =="
+python3 Scripts/MemoryArchiveImageAnalysisRetryVerify/main.py
+
 echo "== MemoryArchive voice knowledge =="
 python3 Scripts/MemoryArchiveVoiceKnowledgeVerify/main.py
 
