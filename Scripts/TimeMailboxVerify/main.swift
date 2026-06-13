@@ -93,6 +93,22 @@ do {
     assertCondition(defaultLetter.privacyMetadata.scope == .localOnly, "default letter scope should be localOnly")
     try repo.delete(id: defaultLetter.id)
 
+    let realSimilarToOldSeed = try repo.createLetter(
+        recipientName: "爷爷",
+        title: "写给爷爷的一封信",
+        body: "1975 年外滩那张合影是我们家的真实记忆，不是演示数据。",
+        deliverAt: now.addingTimeInterval(120),
+        now: now,
+        boundaryAcknowledged: true,
+        privacyMetadata: MemoryPrivacyMetadata(scope: .localOnly)
+    )
+    let reloadedRepo = TimeMailboxRepository(defaults: defaults, storageKey: "letters")
+    assertCondition(
+        reloadedRepo.letters().contains(where: { $0.id == realSimilarToOldSeed.id }),
+        "real mailbox letters should not be deleted only because their content resembles old demo seed"
+    )
+    try repo.delete(id: realSimilarToOldSeed.id)
+
     let evidenceLetter = try repo.createLetter(
         recipientName: "妈妈",
         title: "想起西湖边的小照相馆",

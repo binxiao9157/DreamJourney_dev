@@ -164,8 +164,6 @@ final class TimeMailboxRepository {
     }
 
     private static func isLegacySeedLetter(_ letter: TimeMailboxLetter) -> Bool {
-        (letter.recipientName == "爷爷" && letter.title == "写给爷爷的一封信" &&
-            letter.body.contains("1975 年外滩那张合影")) ||
-            letter.id.hasPrefix("roadshow_")
+        letter.id.hasPrefix("roadshow_")
     }
 }
