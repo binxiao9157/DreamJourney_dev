@@ -54,6 +54,9 @@ python3 Scripts/CareDashboardBackendSyncVerify/main.py
 echo "== MemoryArchive backend sync =="
 python3 Scripts/MemoryArchiveBackendSyncVerify/main.py
 
+echo "== MemoryArchive image analysis proxy =="
+python3 Scripts/MemoryArchiveImageAnalysisProxyVerify/main.py
+
 echo "== Family backend sync =="
 python3 Scripts/FamilyBackendSyncVerify/main.py
 

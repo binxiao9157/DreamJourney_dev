@@ -372,6 +372,31 @@ class ArchiveAPITests(unittest.TestCase):
         self.assertEqual(local_response.status_code, 403)
 
 
+class ArchiveImageAnalysisAPITests(unittest.TestCase):
+    def test_archive_image_analysis_dry_run_redacts_secret(self):
+        client = TestClient(app)
+
+        response = client.post(
+            "/archive/image-analysis",
+            params={"dryRun": "true"},
+            json={"imageBase64": "abc123"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        serialized = str(response.json())
+        self.assertIn("data:image/jpeg;base64,abc123", serialized)
+        self.assertIn("Authorization", serialized)
+        self.assertIn("Bearer <server-side>", serialized)
+        self.assertNotIn("DEEPSEEK_API_KEY", serialized)
+
+    def test_archive_image_analysis_requires_image_base64(self):
+        client = TestClient(app)
+
+        response = client.post("/archive/image-analysis", json={})
+
+        self.assertEqual(response.status_code, 400)
+
+
 class MailboxAPITests(unittest.TestCase):
     def test_mailbox_letters_api_saves_sanitized_metadata_and_lists_by_user(self):
         client = TestClient(app)

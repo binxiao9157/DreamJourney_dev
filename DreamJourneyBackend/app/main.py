@@ -7,6 +7,7 @@ except ImportError as exc:  # pragma: no cover - exercised only without runtime 
 
 from app.core.config import settings
 from app.services.amap import AMapDistrictProxy
+from app.services.deepseek import DeepSeekImageAnalysisProxy
 from app.services.privacy import (
     filter_syncable_graph,
     sanitize_archive_item_payload,
@@ -189,6 +190,29 @@ def create_archive_item(payload: Dict[str, Any]) -> Dict[str, Any]:
 @app.get("/archive/items/{user_id}")
 def list_archive_items(user_id: str) -> Dict[str, Any]:
     return {"userId": user_id, "items": store.list_archive_items(user_id)}
+
+
+@app.post("/archive/image-analysis")
+def archive_image_analysis(payload: Dict[str, Any], dryRun: bool = False) -> Dict[str, Any]:
+    image_base64 = str(payload.get("imageBase64") or "").strip()
+    if not image_base64:
+        raise HTTPException(status_code=400, detail="imageBase64 is required")
+
+    proxy = DeepSeekImageAnalysisProxy(settings)
+    try:
+        if not dryRun:
+            return proxy.request_analysis(image_base64=image_base64)
+        request = proxy.redacted_request(image_base64=image_base64)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    return {
+        "provider": "deepseek",
+        "request": request,
+        "note": "dryRun=true returns the redacted upstream request without calling DeepSeek.",
+    }
 
 
 @app.post("/mailbox/letters")

@@ -144,6 +144,21 @@
   - 封存、到点投递、已读状态变化后都会尝试同步授权信件元数据。
 - 边界：完整正文、回声文本、本机/私密信件仍不出端。
 
+### 13. 记忆档案馆：旧照片分析优先走业务后端代理
+
+- 后端新增 DeepSeek 图片分析代理：
+  - `POST /archive/image-analysis`
+  - `dryRun=true` 可返回脱敏后的上游请求，便于服务器部署后自检。
+- 新增 `DeepSeekImageAnalysisProxy`：
+  - 服务端持有 `DEEPSEEK_API_KEY`，不再要求真机直接持有图片分析密钥。
+  - 统一构造 Vision 请求，解析严格 JSON 或从模型输出中抽取 JSON 子串。
+  - 返回结构保持与 iOS `KBImageAnalysisResult` 一致：`description`、`detectedPeople`、`scene`、`occasion`、`mood`、`estimatedDecade`。
+- iOS `DreamJourneyBackendClient` 新增 `analyzeArchiveImage(imageBase64:)`。
+- 档案馆照片分析改为：
+  - 已配置 `DreamJourneyBackendBaseURL`：优先走业务后端代理。
+  - 后端不可用或未配置：回落到原本本机 `DeepSeekService.analyzeImage`。
+- 失败时仍标记 `analysisStatus=failed`，不会用 mock 结果假装分析成功。
+
 ## 真机验收建议
 
 ### 记忆档案馆
@@ -160,6 +175,7 @@
 5. 进入“结构化知识库”，预期应出现人物、地点、事件或事实。
 6. 再导入一段本地音频，确认档案统计中的“语音”数量增加。
 7. 如果已配置 `DreamJourneyBackendBaseURL` 并登录，后端应能通过 `GET /archive/items/{userId}` 查到该素材元数据；响应中不应包含 `localPath`。
+8. 如果服务器配置了 `DEEPSEEK_API_KEY`，导入旧照片时应优先走后端图片分析代理；可用 `POST /archive/image-analysis?dryRun=true` 检查上游请求是否脱敏且不暴露 key。
 
 ### 时空信箱
 
@@ -199,8 +215,9 @@
 - `CareDashboard verification passed`
 - `CareDashboardBackendSync verification passed`
 - `MemoryArchiveBackendSync verification passed`
+- `MemoryArchiveImageAnalysisProxy verification passed`
 - `FamilyBackendSync verification passed`
-- `DreamJourneyBackend unittest 28/28 OK`
+- `DreamJourneyBackend unittest 30/30 OK`
 - `PrivacyScope verification passed`
 - `MemoryPrivacyIntegration verification passed`
 - `LocalTestDataCleanup verification passed`

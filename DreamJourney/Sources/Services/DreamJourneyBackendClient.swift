@@ -54,6 +54,19 @@ final class DreamJourneyBackendClient {
         )
     }
 
+    func analyzeArchiveImage(
+        imageBase64: String,
+        completion: @escaping (Result<KBImageAnalysisResult, Swift.Error>) -> Void
+    ) {
+        performJSONRequest(
+            path: "archive/image-analysis",
+            method: "POST",
+            bodyObject: ["imageBase64": imageBase64],
+            responseType: KBImageAnalysisResult.self,
+            completion: completion
+        )
+    }
+
     func syncCareSnapshot(
         userId: String,
         viewerFamilyMemberID: String?,

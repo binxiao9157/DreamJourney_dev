@@ -285,7 +285,7 @@ final class MemoryArchiveViewController: UIViewController {
         guard let imageData = scaledImage.jpegData(compressionQuality: 0.6) else { return }
         let base64 = imageData.base64EncodedString()
 
-        DeepSeekService.shared.analyzeImage(imageBase64: base64) { [weak self] result in
+        analyzePhotoViaBackendOrDirect(imageBase64: base64) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 switch result {
@@ -321,6 +321,40 @@ final class MemoryArchiveViewController: UIViewController {
                     self.showToast("照片已保存，分析稍后可重试", type: .info)
                 }
                 self.reloadData()
+            }
+        }
+    }
+
+    private func analyzePhotoViaBackendOrDirect(
+        imageBase64: String,
+        completion: @escaping (Result<KBImageAnalysisResult, Error>) -> Void
+    ) {
+        guard DreamJourneyBackendClient.shared.isConfigured else {
+            analyzePhotoDirectly(imageBase64: imageBase64, completion: completion)
+            return
+        }
+
+        DreamJourneyBackendClient.shared.analyzeArchiveImage(imageBase64: imageBase64) { result in
+            switch result {
+            case .success:
+                completion(result)
+            case .failure(let error):
+                print("[MemoryArchive] 后端照片分析失败，回落本机 DeepSeekService: \(error.localizedDescription)")
+                self.analyzePhotoDirectly(imageBase64: imageBase64, completion: completion)
+            }
+        }
+    }
+
+    private func analyzePhotoDirectly(
+        imageBase64: String,
+        completion: @escaping (Result<KBImageAnalysisResult, Error>) -> Void
+    ) {
+        DeepSeekService.shared.analyzeImage(imageBase64: imageBase64) { result in
+            switch result {
+            case .success(let analysis):
+                completion(.success(analysis))
+            case .failure(let error):
+                completion(.failure(error))
             }
         }
     }
