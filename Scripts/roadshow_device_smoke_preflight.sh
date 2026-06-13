@@ -158,7 +158,7 @@ Screenshots must be real PNG files, and the roadshow recording must be a real MP
 | Diagnostics | `diagnostics/digital_human_readiness.txt/json` | App auto-writes sanitized diagnostics under Documents/diagnostics; preflight copies them here. |
 | Playback | `diagnostics/digital_human_playback.log` | App auto-writes DigitalHumanSpeech lifecycle markers; console grep is fallback. |
 | Mailbox | `screens/04_time_mailbox_delivered_letter.png` | Delivered letter and "not a real reply" boundary. |
-| Archive | `screens/05_memory_archive_photo_analysis.png` | Text/photo archive sample and mock analysis. |
+| Archive | `screens/05_memory_archive_photo_analysis.png` | Text/photo archive sample, analyzed photo fields, and real analysis configuration boundary. |
 | Footprint | `screens/06_family_footprint_world_generation.png` | City/nation/world or generation illuminated map. |
 | Care | `screens/07_family_care_dashboard_member.png` | Member care dashboard, coverage, masked observation report. |
 | Share | `screens/08_share_package_export_sheet.png` | All-family/single-member export path or share sheet. |
@@ -524,7 +524,7 @@ cat <<'CHECKLIST'
 9. [manual] Stage 1 boundary: confirm host wording says no diagnosis and no impersonation.
 10. [semi-auto] Digital-human diagnostics: launch the app or open the top-right diagnostics sheet so it writes Documents/diagnostics/digital_human_readiness.txt and .json; preflight copies them into diagnostics/. Use the copy buttons only as fallback, and confirm no key/token/secret appears.
 11. [manual] Stage 2 信箱: open a delivered demo letter and confirm the reply says it is not a real reply from the deceased.
-12. [manual] Stage 3 档案: open text/personality/photo entries and confirm mock photo analysis is visible without live upload.
+12. [manual] Stage 3 档案: open text/personality/photo entries and confirm analyzed photo fields are visible; if adding a new photo, confirm real DeepSeek/backend configuration controls analysis instead of fabricated success.
 13. [manual] Stage 4 足迹: switch city/nation/world plus generations; confirm illuminated regions and stats change.
 14. [manual] Stage 4 分享海报: open poster preview/share/export and check text/QR readability.
 15. [manual] Stage 5 亲友: open member care dashboard and confirm observation window, coverage, masked report, and suggestions.

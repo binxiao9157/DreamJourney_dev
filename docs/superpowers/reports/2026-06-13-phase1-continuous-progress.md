@@ -158,6 +158,8 @@
   - 已配置 `DreamJourneyBackendBaseURL`：优先走业务后端代理。
   - 后端不可用或未配置：回落到原本本机 `DeepSeekService.analyzeImage`。
 - 失败时仍标记 `analysisStatus=failed`，不会用 mock 结果假装分析成功。
+- 后端真实分析要求服务器配置 `DEEPSEEK_API_KEY`；未配置时 `POST /archive/image-analysis` 返回 503，只有 `dryRun=true` 会返回脱敏上游请求用于部署自检。
+- 真机验收口径同步改为查看“已分析照片字段/真实分析配置状态”，不再把 mock 照片分析作为默认通过标准。
 
 ### 14. 亲友邀请：邀请码与 deeplink 真实跨设备闭环
 

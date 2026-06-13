@@ -3,6 +3,7 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from app import main as main_module
 from app.main import app
 from app.core.config import Settings
 from app.services.in_memory_store import InMemoryStore
@@ -647,6 +648,21 @@ class ArchiveImageAnalysisAPITests(unittest.TestCase):
         response = client.post("/archive/image-analysis", json={})
 
         self.assertEqual(response.status_code, 400)
+
+    def test_archive_image_analysis_without_key_returns_unavailable(self):
+        client = TestClient(app)
+        original_settings = main_module.settings
+        main_module.settings = Settings(deepseek_api_key=None)
+        try:
+            response = client.post(
+                "/archive/image-analysis",
+                json={"imageBase64": "abc123"},
+            )
+        finally:
+            main_module.settings = original_settings
+
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("DEEPSEEK_API_KEY is not configured", response.text)
 
 
 class MailboxAPITests(unittest.TestCase):
