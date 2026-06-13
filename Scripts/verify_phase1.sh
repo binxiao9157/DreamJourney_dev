@@ -98,6 +98,9 @@ python3 Scripts/MemoryArchiveVoiceKnowledgeVerify/main.py
 echo "== MemoryArchive knowledge deposit UI =="
 python3 Scripts/MemoryArchiveKnowledgeDepositUIVerify/main.py
 
+echo "== MemoryArchive metadata-only deposit =="
+python3 Scripts/MemoryArchiveMetadataOnlyDepositVerify/main.py
+
 echo "== MemoryArchive privacy deposit UX =="
 python3 Scripts/MemoryArchivePrivacyDepositUXVerify/main.py
 

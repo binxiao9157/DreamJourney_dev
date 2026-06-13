@@ -50,8 +50,16 @@ struct Stage1ArchiveTextDepositResult {
     let metadataAddedCount: Int
     let extractionSummary: KBLiteExtractionSummary
 
-    var totalAddedCount: Int {
+    var knowledgeAddedCount: Int {
+        extractionSummary.totalAddedCount
+    }
+
+    var storedAddedCount: Int {
         metadataAddedCount + extractionSummary.totalAddedCount
+    }
+
+    var totalAddedCount: Int {
+        storedAddedCount
     }
 }
 
@@ -115,7 +123,7 @@ final class Stage1MemoryFacade {
             archiveTitle: archiveTitle,
             archiveMaterialKind: archiveMaterialKind
         ) { result in
-            completion(result.totalAddedCount)
+            completion(result.knowledgeAddedCount)
         }
     }
 

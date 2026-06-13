@@ -266,8 +266,8 @@ final class MemoryArchiveViewController: UIViewController {
                     DispatchQueue.main.async {
                         guard let self = self else { return }
                         self.setKnowledgeDepositStatus(self.archiveTextDepositStatusMessage(result))
-                        if result.totalAddedCount > 0 {
-                            self.showToast("知识库已更新 \(result.totalAddedCount) 条", type: .success)
+                        if result.knowledgeAddedCount > 0 {
+                            self.showToast("知识库已更新 \(result.knowledgeAddedCount) 条", type: .success)
                         }
                     }
                 }
@@ -288,30 +288,30 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     private func archiveTextDepositStatusMessage(_ result: Stage1ArchiveTextDepositResult) -> String {
-        let total = result.totalAddedCount
+        let total = result.knowledgeAddedCount
         let extraction = result.extractionSummary
         guard total > 0 else {
+            if result.metadataAddedCount > 0 {
+                return "结构化建库：素材已归档为可追溯来源，暂无结构化知识"
+            }
             return "结构化建库：文字素材已保存，暂无可抽取的新知识"
         }
         if extraction.didFailLLM {
-            return "结构化建库：已本地整理 \(total) 条，远端 AI 抽取暂未完成"
+            return "结构化建库：已本地沉淀 \(total) 条，远端 AI 抽取暂未完成"
         }
         if extraction.llmAddedCount > 0 {
             return "结构化建库：文字素材已沉淀 \(total) 条，其中 AI 抽取 \(extraction.llmAddedCount) 条"
         }
         if extraction.didAttemptLLM {
-            return "结构化建库：已本地整理 \(total) 条，AI 暂无新增线索"
+            return "结构化建库：已本地沉淀 \(total) 条，AI 暂无新增线索"
         }
         if extraction.didSkipDueToFrequency {
-            return "结构化建库：已本地整理 \(total) 条，AI 抽取按节奏稍后触发"
+            return "结构化建库：已本地沉淀 \(total) 条，AI 抽取按节奏稍后触发"
         }
         if extraction.didSkipDueToNoRemoteContent {
-            return "结构化建库：已本地整理 \(total) 条，未进入远端抽取"
+            return "结构化建库：已本地沉淀 \(total) 条，未进入远端抽取"
         }
-        if result.metadataAddedCount > 0 && extraction.deterministicAddedCount == 0 {
-            return "结构化建库：已保存档案元信息 \(result.metadataAddedCount) 条"
-        }
-        return "结构化建库：已本地整理 \(total) 条"
+        return "结构化建库：已本地沉淀 \(total) 条"
     }
 
     private func saveArchiveImage(_ image: UIImage, kind: PendingImageMaterialKind) -> String? {
@@ -668,8 +668,8 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
                     DispatchQueue.main.async {
                         guard let self else { return }
                         self.setKnowledgeDepositStatus(self.archiveTextDepositStatusMessage(result))
-                        if result.totalAddedCount > 0 {
-                            self.showToast("截图文字已整理到知识库 \(result.totalAddedCount) 条", type: .success)
+                        if result.knowledgeAddedCount > 0 {
+                            self.showToast("截图文字已整理到知识库 \(result.knowledgeAddedCount) 条", type: .success)
                         }
                         self.reloadData()
                     }
