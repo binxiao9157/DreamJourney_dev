@@ -1088,6 +1088,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
             return
         }
 
+        cancelInFlightDigitalHumanPlaybackForNewAssistantResponse()
         currentAssistantResponseText = trimmed
         retryableDigitalHumanSpeechText = trimmed
         DDLogInfo("[DigitalHumanSpeech] assistant_final chars=\(trimmed.count) digitalSpeechEnabled=\(isDigitalHumanSpeechPlaybackEnabled)")
@@ -1132,6 +1133,24 @@ extension AIRecordingViewController: DialogEngineDelegate {
             ))
             pendingUserText = nil
         }
+    }
+
+    private func cancelInFlightDigitalHumanPlaybackForNewAssistantResponse() {
+        let hasInFlightPlayback = isAwaitingDigitalHumanAudioEnd
+            || digitalHumanNativeAudioPlayer != nil
+            || isDigitalHumanSystemSpeechFallbackActive
+        guard hasInFlightPlayback else { return }
+        let wasRealtimeDialogPaused = isRealtimeDialogPausedForDigitalHumanPlayback
+        DDLogInfo("[DigitalHumanSpeech] playback_cancelled_for_new_response requestID=\(digitalHumanSpeechRequestID)")
+        DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
+            "playback_cancelled_for_new_response requestID=\(digitalHumanSpeechRequestID)"
+        )
+        cancelDigitalHumanPlaybackWatchdog()
+        stopDigitalHumanNativeAudio()
+        stopDigitalHumanSystemSpeechFallback()
+        digitalHumanAvatarView.clearSpeechAudio()
+        isAwaitingDigitalHumanAudioEnd = false
+        isRealtimeDialogPausedForDigitalHumanPlayback = wasRealtimeDialogPaused
     }
 
     func onTTSFinished() {

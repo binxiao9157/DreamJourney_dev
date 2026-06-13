@@ -153,6 +153,9 @@ python3 Scripts/DigitalHumanStartupRevealVerify/main.py
 echo "== DigitalHuman dialog-end deposit =="
 python3 Scripts/DigitalHumanDialogEndDepositVerify/main.py
 
+echo "== DigitalHuman playback interruption =="
+python3 Scripts/DigitalHumanPlaybackInterruptVerify/main.py
+
 echo "== DigitalHuman diagnostics gate =="
 python3 Scripts/DigitalHumanDiagnosticsGateVerify/main.py
 
