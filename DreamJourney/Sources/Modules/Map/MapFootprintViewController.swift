@@ -524,8 +524,6 @@ final class MapFootprintViewController: UIViewController {
         annotations.removeAll()
         footprintAnnotations.removeAll()
 
-        guard !selectedGeneration.usesScriptedFootprintRange else { return }
-
         let visiblePoints = FamilyFootprintTimeline.filtered(footprintPoints, by: selectedGeneration)
         for point in visiblePoints {
             let annotation = FamilyFootprintAnnotation(point: point)
@@ -757,9 +755,7 @@ final class MapFootprintViewController: UIViewController {
 
     private func updateIlluminationLayer() {
         let visiblePoints = FamilyFootprintTimeline.filtered(footprintPoints, by: selectedGeneration)
-        let pointsForRender = selectedGeneration.usesScriptedFootprintRange
-            ? []
-            : (visiblePoints.isEmpty ? footprintPoints : visiblePoints)
+        let pointsForRender = visiblePoints.isEmpty ? footprintPoints : visiblePoints
         illuminationRequestSerial += 1
         let requestSerial = illuminationRequestSerial
 
@@ -920,36 +916,7 @@ final class MapFootprintViewController: UIViewController {
         generation: FamilyFootprintGeneration,
         points: [FamilyFootprintPoint]
     ) -> [FootprintIlluminationRegion] {
-        guard generation.usesScriptedFootprintRange else {
-            return remoteRegions
-        }
-
-        let localRegions = FootprintIlluminationCatalog.regions(
-            scope: scope,
-            points: points,
-            generation: generation
-        )
-        guard !remoteRegions.isEmpty else { return localRegions }
-
-        var completed = remoteRegions
-        var existingNames = Set(remoteRegions.map { canonicalRegionName($0.name) })
-        for region in localRegions where shouldAppendLocalRegion(region, generation: generation) {
-            let name = canonicalRegionName(region.name)
-            guard !existingNames.contains(name) else { continue }
-            completed.append(region)
-            existingNames.insert(name)
-        }
-        return completed
-    }
-
-    private func shouldAppendLocalRegion(
-        _ region: FootprintIlluminationRegion,
-        generation: FamilyFootprintGeneration
-    ) -> Bool {
-        switch generation {
-        case .all, .ancestors, .parents, .current, .next:
-            return true
-        }
+        remoteRegions
     }
 
     private func canonicalRegionName(_ name: String) -> String {
@@ -1005,9 +972,7 @@ private final class FootprintIlluminationCanvasView: UIView {
         drawGrid(in: context, rect: mapRect)
 
         let visiblePoints = FamilyFootprintTimeline.filtered(points, by: generation)
-        let renderPoints = generation.usesScriptedFootprintRange
-            ? []
-            : (visiblePoints.isEmpty ? points : visiblePoints)
+        let renderPoints = visiblePoints.isEmpty ? points : visiblePoints
         let bounds = coordinateBounds(regions: regions, points: renderPoints)
 
         context.saveGState()

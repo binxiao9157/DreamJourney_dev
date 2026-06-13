@@ -213,10 +213,12 @@ final class KBLiteManager {
         return beforeCount - afterCount
     }
 
+    static func isGenericKinshipDisplayName(_ name: String) -> Bool {
+        genericKinshipNames.contains(normalizedEntityName(name))
+    }
+
     private static func isGenericKinshipOnly(_ person: KBPerson) -> Bool {
-        let name = normalizedEntityName(person.name)
-        guard genericKinshipNames.contains(name) else { return false }
-        return true
+        isGenericKinshipDisplayName(person.name)
     }
 
     private static func isLegacyRoadshowText(_ text: String) -> Bool {
@@ -235,7 +237,7 @@ final class KBLiteManager {
     ) -> Bool {
         let normalizedName = normalizedEntityName(name)
         guard !normalizedName.isEmpty else { return false }
-        if genericKinshipNames.contains(normalizedName) {
+        if isGenericKinshipDisplayName(normalizedName) {
             return false
         }
         return true
@@ -797,7 +799,10 @@ final class KBLiteManager {
 
     /// 构建已有知识摘要（供 LLM prompt 使用）
     private func buildExistingSummary(surface: MemoryUseSurface = .prompt) -> String {
-        let people = graph.people.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface) }
+        let people = graph.people.filter {
+            PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface) &&
+                !Self.isGenericKinshipDisplayName($0.name)
+        }
         let places = graph.places.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface) }
         let events = graph.events.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface) }
         let facts = graph.facts.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface) }
@@ -1181,6 +1186,7 @@ final class KBLiteManager {
 
         // 人物匹配
         result.people = graph.people.filter { person in
+            guard !Self.isGenericKinshipDisplayName(person.name) else { return false }
             let searchTarget = person.searchableText
             return keywords.contains { kw in
                 searchTarget.contains(kw)
@@ -1319,7 +1325,10 @@ final class KBLiteManager {
         // 无 query 或检索结果为空 → 提供最近摘要
         if parts.isEmpty {
             let recentPeople = graph.people
-                .filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .prompt) }
+                .filter {
+                    PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .prompt) &&
+                        !Self.isGenericKinshipDisplayName($0.name)
+                }
                 .sorted { ($0.sourceSessionIds.last ?? 0) > ($1.sourceSessionIds.last ?? 0) }
             if !recentPeople.isEmpty {
                 let names = recentPeople.prefix(5).map { $0.name }.joined(separator: "、")
@@ -1377,7 +1386,6 @@ final class KBLiteManager {
 
         // 检测到的人物 → 尝试添加
         for personDesc in result.detectedPeople {
-            // 尝试从描述中提取名字（如 "爷爷"、"奶奶"）
             let name = extractPersonNameFromDescription(personDesc)
             guard Self.shouldPersistPerson(name: name, aliases: [], traits: [], briefBio: nil) else {
                 continue
@@ -1409,14 +1417,10 @@ final class KBLiteManager {
 
     /// 从图片人物描述中提取可能的姓名
     private func extractPersonNameFromDescription(_ desc: String) -> String {
-        // 尝试匹配常见称谓
-        let knownRelations = ["爷爷", "奶奶", "外公", "外婆", "爸爸", "妈妈",
-                             "老伴", "儿子", "女儿", "孙子", "孙女"]
-        for rel in knownRelations {
-            if desc.contains(rel) { return rel }
-        }
-        // 无法提取具体名字，返回简短描述
-        return desc.count <= 6 ? desc : String(desc.prefix(6))
+        let normalized = Self.normalizedQuickExtractEntity(desc)
+        guard !Self.isGenericKinshipDisplayName(normalized) else { return "" }
+        guard !Self.genericKinshipNames.contains(where: { normalized.contains($0) }) else { return "" }
+        return normalized.count <= 6 ? normalized : String(normalized.prefix(6))
     }
 
     // MARK: - Boundary Protection
@@ -1473,7 +1477,21 @@ final class KBLiteManager {
 
     func sanitizedGraph(for surface: MemoryUseSurface, familyMemberID: String? = nil) -> KBLiteGraph {
         readGraph { graph in
-            KBLitePrivacyScopePolicy.sanitizedGraph(graph, for: surface, familyMemberID: familyMemberID)
+            var sanitized = KBLitePrivacyScopePolicy.sanitizedGraph(graph, for: surface, familyMemberID: familyMemberID)
+            let removedPeopleIDs = Set(sanitized.people.filter { Self.isGenericKinshipDisplayName($0.name) }.map(\.id))
+            guard !removedPeopleIDs.isEmpty else { return sanitized }
+            sanitized.people.removeAll { removedPeopleIDs.contains($0.id) }
+            sanitized.events = sanitized.events.map { event in
+                var event = event
+                event.participantIds = event.participantIds.filter { !removedPeopleIDs.contains($0) }
+                return event
+            }
+            sanitized.facts = sanitized.facts.map { fact in
+                var fact = fact
+                fact.relatedPersonIds = fact.relatedPersonIds.filter { !removedPeopleIDs.contains($0) }
+                return fact
+            }
+            return sanitized
         }
     }
 
@@ -1507,6 +1525,7 @@ final class KBLiteManager {
         }
         var addedCount = 0
         for person in imported.people {
+            guard !Self.isGenericKinshipDisplayName(person.name) else { continue }
             if findMatchingPerson(
                 name: person.name,
                 aliases: person.aliases,

@@ -99,7 +99,9 @@ final class KBGraphViewController: UIViewController {
     private func buildGraph() {
         // 确保有一个"我"节点
         let selfId = "__self__"
-        var people = KBLiteManager.shared.graph.people
+        var people = KBLiteManager.shared.graph.people.filter {
+            !KBLiteManager.isGenericKinshipDisplayName($0.name)
+        }
 
         let currentUserName = UserManager.shared.currentUser?.nickname ?? "我"
         if !people.contains(where: { $0.id == selfId }) {

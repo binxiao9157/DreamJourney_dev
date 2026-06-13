@@ -170,6 +170,7 @@ final class FamilyRepository {
         ]
 
         for person in graph.people {
+            guard !KBLiteManager.isGenericKinshipDisplayName(person.name) else { continue }
             // 检查是否已存在
             if members.contains(where: { $0.name == person.name || person.aliases.contains($0.name) }) {
                 continue

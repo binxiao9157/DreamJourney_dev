@@ -19,16 +19,16 @@ enum FamilyFootprintGeneration: String, CaseIterable {
 
     var narrativeTitle: String {
         switch self {
-        case .all: return "家族足迹从绍兴铺向江浙沪广"
-        case .ancestors: return "祖辈守着绍兴老家的根"
-        case .parents: return "父辈把生活半径铺到浙江"
-        case .current: return "我们走到江浙沪广"
-        case .next: return "下一代的地图先留一片灰色"
+        case .all: return "家族足迹"
+        case .ancestors: return "祖辈足迹"
+        case .parents: return "父辈足迹"
+        case .current: return "我们这一代的足迹"
+        case .next: return "下一代足迹"
         }
     }
 
     var usesScriptedFootprintRange: Bool {
-        true
+        false
     }
 
     var sortOrder: Int {
@@ -119,9 +119,6 @@ enum FamilyFootprintTimeline {
     }
 
     static func narrativeText(for points: [FamilyFootprintPoint], generation: FamilyFootprintGeneration) -> String {
-        if let scripted = scriptedNarrativeText(for: generation) {
-            return scripted
-        }
         let visiblePoints = filtered(points, by: generation)
         guard let first = visiblePoints.first, let last = visiblePoints.last else {
             return "把回忆补充到地图上，家族迁徙会一点点被点亮。"
@@ -135,9 +132,6 @@ enum FamilyFootprintTimeline {
     }
 
     static func journeySummary(for points: [FamilyFootprintPoint], generation: FamilyFootprintGeneration) -> FamilyFootprintJourneySummary {
-        if let scripted = scriptedJourneySummary(for: generation) {
-            return scripted
-        }
         let visiblePoints = filtered(points, by: generation)
         guard !visiblePoints.isEmpty else {
             return FamilyFootprintJourneySummary(
@@ -170,61 +164,6 @@ enum FamilyFootprintTimeline {
             detailText: "\(spanText) · \(orderedCities.count) 座城 · \(countryText)",
             scaleText: scaleText
         )
-    }
-
-    static func scriptedNarrativeText(for generation: FamilyFootprintGeneration) -> String? {
-        switch generation {
-        case .all:
-            return "从绍兴老家，到浙江生活半径，再到江浙沪广，下一代的未来区域也会被一代代点亮。"
-        case .ancestors:
-            return "祖辈足迹聚在绍兴，那里是家族故事最早被记住的地方。"
-        case .parents:
-            return "父辈把生活半径铺到浙江，家的坐标从一个城市变成一片区域。"
-        case .current:
-            return "我们这一代走到江浙沪广，工作、团聚和新的生活一起展开。"
-        case .next:
-            return "下一代暂时不设定具体城市，先用灰色区域留下未来会被点亮的位置。"
-        }
-    }
-
-    static func scriptedJourneySummary(for generation: FamilyFootprintGeneration) -> FamilyFootprintJourneySummary? {
-        switch generation {
-        case .all:
-            return FamilyFootprintJourneySummary(
-                title: "家族足迹从绍兴铺向江浙沪广",
-                routeText: "绍兴 → 浙江 → 江浙沪广 → 未来区域",
-                detailText: "四代范围 · 家族迁徙 · 下一代待点亮",
-                scaleText: "一代代变大的生活半径"
-            )
-        case .ancestors:
-            return FamilyFootprintJourneySummary(
-                title: "祖辈守着绍兴老家的根",
-                routeText: "点亮范围：绍兴",
-                detailText: "祖辈范围 · 家族原点",
-                scaleText: "老家的根"
-            )
-        case .parents:
-            return FamilyFootprintJourneySummary(
-                title: "父辈把生活半径铺到浙江",
-                routeText: "点亮范围：浙江",
-                detailText: "父辈范围 · 从城市走向省域",
-                scaleText: "变大的生活半径"
-            )
-        case .current:
-            return FamilyFootprintJourneySummary(
-                title: "我们走到江浙沪广",
-                routeText: "点亮范围：江苏、浙江、上海、广东",
-                detailText: "我们这一代 · 工作与团聚的版图",
-                scaleText: "更大的中国"
-            )
-        case .next:
-            return FamilyFootprintJourneySummary(
-                title: "下一代的地图先留一片灰色",
-                routeText: "暂定范围：未来待点亮",
-                detailText: "下一代范围 · 不绑定具体城市",
-                scaleText: "未来会继续变大"
-            )
-        }
     }
 
     static func nextPlaybackGeneration(after generation: FamilyFootprintGeneration) -> FamilyFootprintGeneration {
@@ -338,7 +277,7 @@ enum FamilyFootprintTimeline {
     }
 
     private static func representativeRoute(from cities: [String]) -> String {
-        guard cities.count > 3 else {
+        guard cities.count > 5 else {
             return cities.joined(separator: " → ")
         }
 

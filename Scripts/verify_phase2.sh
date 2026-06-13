@@ -143,6 +143,9 @@ xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
   -o /tmp/dreamjourney_kblite_quick_extract_verify
 /tmp/dreamjourney_kblite_quick_extract_verify
 
+echo "== KBLiteEntityQuality =="
+python3 Scripts/KBLiteEntityQualityVerify/main.py
+
 echo "== SharePackagePrivacy =="
 xcrun swiftc \
   DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \

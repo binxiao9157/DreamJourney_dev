@@ -16,32 +16,21 @@ checks = [
         'if countries.contains("中国")' in source,
     ),
     (
-        "generation lighting should use fixed product ranges instead of raw memory-point spread",
-        'case .ancestors:' in source
-        and 'name: "绍兴"' in source
-        and 'case .parents:' in source
-        and 'name: "浙江"' in source
-        and 'case .current:' in source
-        and 'jiangzhehuguangRegions' in source
-        and 'name: "下一代暂定区域"' in source
-        and '.futureFill' in source,
+        "generation lighting should default to raw visible memory points",
+        "private static func scriptedRegions" not in source
+        and "scriptedStatsText" not in source
+        and "usesScriptedFootprintRange\n            ? []" not in Path("DreamJourney/Sources/Modules/Map/MapFootprintViewController.swift").read_text(),
     ),
     (
-        "AMap district WebService should request the same scripted generation ranges",
-        'case .ancestors:' in provider
-        and 'return ["绍兴市"]' in provider
-        and 'case .parents:' in provider
-        and 'return ["浙江省"]' in provider
-        and 'return ["江苏省", "浙江省", "上海市", "广东省"]' in provider
-        and 'case .next:' in provider
-        and 'return []' in provider,
+        "AMap district WebService should request visible point keywords, not scripted generation ranges",
+        "scriptedKeywords" not in provider
+        and "if let scripted = scriptedKeywords" not in provider,
     ),
     (
-        "generation copy should match the Shaoxing/Zhejiang/Jiangsu-Zhejiang-Shanghai-Guangdong story",
-        "祖辈守着绍兴老家的根" in timeline
-        and "父辈把生活半径铺到浙江" in timeline
-        and "我们走到江浙沪广" in timeline
-        and "下一代的地图先留一片灰色" in timeline,
+        "generation copy should not force the Shaoxing/Zhejiang/Jiangsu-Zhejiang-Shanghai-Guangdong story",
+        "scriptedNarrativeText" not in timeline
+        and "scriptedJourneySummary" not in timeline
+        and "江浙沪广" not in timeline,
     ),
 ]
 

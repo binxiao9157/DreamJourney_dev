@@ -155,10 +155,6 @@ actor AmapDistrictBoundaryProvider {
         points: [FamilyFootprintPoint],
         generation: FamilyFootprintGeneration
     ) -> [String] {
-        if let scripted = scriptedKeywords(for: generation) {
-            return scripted
-        }
-
         let cityNames = Array(Set(points.map { FootprintIlluminationCatalog.normalizedCityName($0.location) })).sorted()
         switch scope {
         case .city:
@@ -173,21 +169,6 @@ actor AmapDistrictBoundaryProvider {
                 FootprintIlluminationCatalog.countryName(latitude: $0.latitude, longitude: $0.longitude, location: $0.location)
             })
             return countries.contains("中国") ? ["中国"] : []
-        }
-    }
-
-    private static func scriptedKeywords(for generation: FamilyFootprintGeneration) -> [String]? {
-        switch generation {
-        case .ancestors:
-            return ["绍兴市"]
-        case .parents:
-            return ["浙江省"]
-        case .current:
-            return ["江苏省", "浙江省", "上海市", "广东省"]
-        case .next:
-            return []
-        case .all:
-            return ["绍兴市", "浙江省", "江苏省", "上海市", "广东省"]
         }
     }
 

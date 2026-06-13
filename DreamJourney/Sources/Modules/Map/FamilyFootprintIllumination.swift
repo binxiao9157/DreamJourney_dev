@@ -112,9 +112,6 @@ enum FootprintIlluminationCatalog {
         points: [FamilyFootprintPoint],
         generation: FamilyFootprintGeneration
     ) -> [FootprintIlluminationRegion] {
-        if let scripted = scriptedRegions(for: generation, scope: scope) {
-            return scripted
-        }
         return regions(scope: scope, points: points)
     }
 
@@ -145,10 +142,6 @@ enum FootprintIlluminationCatalog {
         generation: FamilyFootprintGeneration,
         isGuest: Bool
     ) -> NSAttributedString {
-        if let scripted = scriptedStatsText(for: generation) {
-            return scripted
-        }
-
         let visiblePoints = FamilyFootprintTimeline.filtered(points, by: generation)
         guard !visiblePoints.isEmpty else {
             return lineStats(numbers: ["0"], labels: [generation == .all ? "暂无足迹" : "\(generation.title)暂无足迹"], footer: "寻梦环游 · 家族足迹")
@@ -183,41 +176,6 @@ enum FootprintIlluminationCatalog {
                 numbers: ["\(max(countryCount, regions.count))", "\(days)"],
                 labels: ["全球国家(个)", "历时(天)"],
                 footer: "\(prefix)足迹 · 更大的世界"
-            )
-        }
-    }
-
-    private static func scriptedStatsText(for generation: FamilyFootprintGeneration) -> NSAttributedString? {
-        switch generation {
-        case .ancestors:
-            return lineStats(
-                numbers: ["绍兴", "1"],
-                labels: ["祖辈范围", "家族原点"],
-                footer: "祖辈足迹 · 绍兴老家的根"
-            )
-        case .parents:
-            return lineStats(
-                numbers: ["浙江", "1"],
-                labels: ["父辈范围", "省域点亮"],
-                footer: "父辈足迹 · 生活半径铺到浙江"
-            )
-        case .current:
-            return lineStats(
-                numbers: ["4", "江浙沪广"],
-                labels: ["省市范围", "我们这一代"],
-                footer: "我们足迹 · 江苏 浙江 上海 广东"
-            )
-        case .next:
-            return lineStats(
-                numbers: ["灰色", "待定"],
-                labels: ["下一代范围", "未来点亮"],
-                footer: "下一代足迹 · 暂不绑定具体城市"
-            )
-        case .all:
-            return lineStats(
-                numbers: ["4代", "江浙沪广"],
-                labels: ["家族范围", "当前版图"],
-                footer: "全家足迹 · 绍兴 浙江 江浙沪广 未来"
             )
         }
     }
@@ -266,88 +224,6 @@ enum FootprintIlluminationCatalog {
     private static let hangzhouDistrictKeys = [
         "西湖", "拱墅", "上城", "滨江", "萧山", "余杭", "临平", "富阳", "临安", "桐庐", "建德", "淳安"
     ]
-
-    private static func scriptedRegions(
-        for generation: FamilyFootprintGeneration,
-        scope: FootprintIlluminationScope
-    ) -> [FootprintIlluminationRegion]? {
-        switch generation {
-        case .ancestors:
-            return [
-                region(
-                    name: "绍兴",
-                    center: .init(latitude: 30.030, longitude: 120.580),
-                    latRadius: 0.35,
-                    lonRadius: 0.42,
-                    area: 8274,
-                    style: .ancestorFill
-                )
-            ]
-        case .parents:
-            return [
-                region(
-                    name: "浙江",
-                    center: .init(latitude: 29.160, longitude: 120.150),
-                    latRadius: 1.75,
-                    lonRadius: 2.20,
-                    area: 105500,
-                    style: .parentFill
-                )
-            ]
-        case .current:
-            return jiangzhehuguangRegions(style: .currentFill)
-        case .next:
-            return [
-                region(
-                    name: "下一代暂定区域",
-                    center: .init(latitude: 32.900, longitude: 114.800),
-                    latRadius: 3.10,
-                    lonRadius: 5.10,
-                    area: 0,
-                    style: .futureFill,
-                    glowStyle: .futureGlow
-                )
-            ]
-        case .all:
-            return [
-                region(
-                    name: "绍兴",
-                    center: .init(latitude: 30.030, longitude: 120.580),
-                    latRadius: 0.35,
-                    lonRadius: 0.42,
-                    area: 8274,
-                    style: .ancestorFill
-                ),
-                region(
-                    name: "浙江",
-                    center: .init(latitude: 29.160, longitude: 120.150),
-                    latRadius: 1.75,
-                    lonRadius: 2.20,
-                    area: 105500,
-                    style: .parentFill
-                )
-            ] + jiangzhehuguangRegions(style: .currentFill).filter { $0.name != "浙江" } + [
-                region(
-                    name: "下一代暂定",
-                    center: .init(latitude: 34.700, longitude: 112.000),
-                    latRadius: 2.20,
-                    lonRadius: 3.30,
-                    area: 0,
-                    style: .futureFill,
-                    glowStyle: .futureGlow
-                )
-            ]
-        }
-    }
-
-    private static func jiangzhehuguangRegions(style: FootprintIlluminationStyle) -> [FootprintIlluminationRegion] {
-        [
-            region(name: "江苏", center: .init(latitude: 32.060, longitude: 118.767), latRadius: 1.42, lonRadius: 1.64, area: 107200, style: style),
-            region(name: "浙江", center: .init(latitude: 29.160, longitude: 120.150), latRadius: 1.75, lonRadius: 2.20, area: 105500, style: style),
-            region(name: "上海", center: .init(latitude: 31.230, longitude: 121.474), latRadius: 0.36, lonRadius: 0.44, area: 6340, style: style),
-            region(name: "广东", center: .init(latitude: 23.379, longitude: 113.763), latRadius: 1.92, lonRadius: 2.36, area: 179800, style: style)
-        ]
-    }
 
     private static func cityRegions(points: [FamilyFootprintPoint]) -> [FootprintIlluminationRegion] {
         let cityNames = Set(points.map { normalizedCityName($0.location) })

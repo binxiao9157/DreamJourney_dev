@@ -37,7 +37,11 @@ final class KnowledgeBaseViewController: UIViewController {
     private var currentTab: Tab { Tab(rawValue: segmentedControl.selectedSegmentIndex) ?? .people }
 
     /// 数据源（从 KBLiteManager 获取）
-    private var people: [KBPerson] { KBLiteManager.shared.graph.people }
+    private var people: [KBPerson] {
+        KBLiteManager.shared.graph.people.filter {
+            !KBLiteManager.isGenericKinshipDisplayName($0.name)
+        }
+    }
     private var places: [KBPlace] { KBLiteManager.shared.graph.places }
     private var events: [KBEvent] { KBLiteManager.shared.graph.events }
     private var facts: [KBFact] { KBLiteManager.shared.graph.facts }
@@ -446,7 +450,10 @@ final class KBEntityDetailViewController: UIViewController {
             if let desc = e.description { text += "\n\(desc)\n" }
 
             // 关联人物
-            let relatedPersons = KBLiteManager.shared.graph.people.filter { e.participantIds.contains($0.id) }
+            let relatedPersons = KBLiteManager.shared.graph.people.filter {
+                e.participantIds.contains($0.id) &&
+                    !KBLiteManager.isGenericKinshipDisplayName($0.name)
+            }
             if !relatedPersons.isEmpty {
                 text += "\n【参与人物】\n"
                 for p in relatedPersons { text += "· \(p.name)\n" }
