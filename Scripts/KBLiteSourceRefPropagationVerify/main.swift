@@ -90,6 +90,26 @@ require(
     "conversation person should keep conversationTurn sourceRef"
 )
 
+let backendSyncJSON = KBLiteManager.shared.exportJSON(surface: .backendSync) ?? ""
+let backendSyncData = backendSyncJSON.data(using: .utf8) ?? Data()
+let backendSyncDecoder = JSONDecoder()
+backendSyncDecoder.dateDecodingStrategy = .iso8601
+let backendSyncGraph = (try? backendSyncDecoder.decode(KBLiteGraph.self, from: backendSyncData)) ?? KBLiteGraph()
+let backendSourceTitles = (
+    backendSyncGraph.people.flatMap { $0.privacyMetadata.sourceRefs } +
+    backendSyncGraph.places.flatMap { $0.privacyMetadata.sourceRefs } +
+    backendSyncGraph.events.flatMap { $0.privacyMetadata.sourceRefs } +
+    backendSyncGraph.facts.flatMap { $0.privacyMetadata.sourceRefs }
+).compactMap(\.title)
+require(
+    !backendSourceTitles.contains(where: { $0.contains("1968年住在绍兴越城区仓桥直街") }),
+    "backend sync export should redact raw conversation source-ref titles"
+)
+require(
+    backendSourceTitles.contains("对话来源"),
+    "backend sync export should keep a generic conversation source label"
+)
+
 let archivePhotoRef = MemorySourceRef(
     kind: .memoryArchiveItem,
     id: "archive-photo-1",

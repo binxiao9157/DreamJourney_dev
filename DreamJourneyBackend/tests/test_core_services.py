@@ -59,6 +59,58 @@ class PrivacyFilteringTests(unittest.TestCase):
         self.assertEqual(filtered["facts"][0]["relatedPlaceIds"], ["l1"])
         self.assertEqual([f["id"] for f in filtered["facts"]], ["f1"])
 
+    def test_backend_sync_redacts_source_ref_titles(self):
+        graph = {
+            "people": [
+                {
+                    "id": "p1",
+                    "name": "陈建国",
+                    "privacyMetadata": {
+                        "scope": "generationAllowed",
+                        "sourceRefs": [
+                            {
+                                "kind": "conversationTurn",
+                                "id": "conversation-1",
+                                "title": "用户对话 1：我叫陈建国，1968年住在绍兴越城区仓桥直街。",
+                            }
+                        ],
+                    },
+                }
+            ],
+            "places": [
+                {
+                    "id": "l1",
+                    "name": "绍兴",
+                    "privacyMetadata": {
+                        "scope": "familyCircle",
+                        "sourceRefs": [
+                            {
+                                "kind": "memoryArchiveItem",
+                                "id": "archive-1",
+                                "title": "仓桥直街旧照片",
+                            }
+                        ],
+                    },
+                }
+            ],
+            "events": [],
+            "facts": [],
+        }
+
+        filtered = filter_syncable_graph(graph)
+        serialized = str(filtered)
+
+        self.assertNotIn("1968年住在绍兴越城区仓桥直街", serialized)
+        self.assertNotIn("仓桥直街旧照片", serialized)
+        self.assertEqual(
+            filtered["people"][0]["privacyMetadata"]["sourceRefs"][0]["title"],
+            "对话来源",
+        )
+        self.assertEqual(
+            filtered["places"][0]["privacyMetadata"]["sourceRefs"][0]["title"],
+            "档案素材",
+        )
+
     def test_care_snapshot_sanitizer_keeps_only_aggregate_fields(self):
         snapshot = {
             "generatedAt": "2026-06-13T00:00:00Z",

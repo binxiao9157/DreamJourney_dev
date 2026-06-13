@@ -119,10 +119,44 @@ def _filter_ids(values: Iterable[str], allowed: set) -> List[str]:
     return [value for value in values if value in allowed]
 
 
+def _external_source_title(kind: str) -> str:
+    return {
+        "conversationTurn": "对话来源",
+        "memoryArchiveItem": "档案素材",
+        "timeMailboxLetter": "时空信件",
+        "kbLiteEntity": "知识条目",
+        "memoir": "回忆录",
+        "importRecord": "导入记录",
+        "userAuthorization": "授权记录",
+    }.get(kind, "来源记录")
+
+
+def _redact_source_ref_titles(entity: Dict[str, Any]) -> Dict[str, Any]:
+    metadata = entity.get("privacyMetadata")
+    if not isinstance(metadata, dict):
+        return entity
+    source_refs = metadata.get("sourceRefs")
+    if not isinstance(source_refs, list):
+        return entity
+
+    redacted_refs = []
+    for source_ref in source_refs:
+        if not isinstance(source_ref, dict):
+            continue
+        copied_ref = deepcopy(source_ref)
+        copied_ref["title"] = _external_source_title(str(copied_ref.get("kind") or "unknown"))
+        redacted_refs.append(copied_ref)
+
+    copied_metadata = deepcopy(metadata)
+    copied_metadata["sourceRefs"] = redacted_refs
+    entity["privacyMetadata"] = copied_metadata
+    return entity
+
+
 def filter_syncable_graph(graph: Dict[str, Any]) -> Dict[str, Any]:
     """Return a backend-safe KBLite graph without localOnly entities."""
-    people = [deepcopy(item) for item in graph.get("people", []) if _is_syncable(item)]
-    places = [deepcopy(item) for item in graph.get("places", []) if _is_syncable(item)]
+    people = [_redact_source_ref_titles(deepcopy(item)) for item in graph.get("people", []) if _is_syncable(item)]
+    places = [_redact_source_ref_titles(deepcopy(item)) for item in graph.get("places", []) if _is_syncable(item)]
     people_ids = {item.get("id") for item in people}
     place_ids = {item.get("id") for item in places}
 
@@ -134,7 +168,7 @@ def filter_syncable_graph(graph: Dict[str, Any]) -> Dict[str, Any]:
         copied["participantIds"] = _filter_ids(copied.get("participantIds", []), people_ids)
         if copied.get("locationId") not in place_ids:
             copied.pop("locationId", None)
-        events.append(copied)
+        events.append(_redact_source_ref_titles(copied))
 
     event_ids = {item.get("id") for item in events}
     facts = []
@@ -145,7 +179,7 @@ def filter_syncable_graph(graph: Dict[str, Any]) -> Dict[str, Any]:
         copied["relatedPersonIds"] = _filter_ids(copied.get("relatedPersonIds", []), people_ids)
         copied["relatedPlaceIds"] = _filter_ids(copied.get("relatedPlaceIds", []), place_ids)
         copied["relatedEventIds"] = _filter_ids(copied.get("relatedEventIds", []), event_ids)
-        facts.append(copied)
+        facts.append(_redact_source_ref_titles(copied))
 
     return {
         "version": graph.get("version", 1),

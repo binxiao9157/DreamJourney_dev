@@ -65,12 +65,14 @@ enum KBLitePrivacyScopePolicy {
         let people = retainedPeople.map { person -> KBPerson in
             var sanitized = person
             sanitized.relatedPersonIds = person.relatedPersonIds.filter { peopleIDs.contains($0) }
+            sanitized.privacyMetadata = sanitizedMetadata(person.privacyMetadata, for: surface)
             return sanitized
         }
 
         let places = retainedPlaces.map { place -> KBPlace in
             var sanitized = place
             sanitized.relatedPersonIds = place.relatedPersonIds.filter { peopleIDs.contains($0) }
+            sanitized.privacyMetadata = sanitizedMetadata(place.privacyMetadata, for: surface)
             return sanitized
         }
 
@@ -82,6 +84,7 @@ enum KBLitePrivacyScopePolicy {
                 if let locationId = event.locationId, !placeIDs.contains(locationId) {
                     sanitized.locationId = nil
                 }
+                sanitized.privacyMetadata = sanitizedMetadata(event.privacyMetadata, for: surface)
                 return sanitized
             }
 
@@ -94,6 +97,7 @@ enum KBLitePrivacyScopePolicy {
                 sanitized.relatedPersonIds = fact.relatedPersonIds.filter { peopleIDs.contains($0) }
                 sanitized.relatedPlaceIds = fact.relatedPlaceIds.filter { placeIDs.contains($0) }
                 sanitized.relatedEventIds = fact.relatedEventIds.filter { eventIDs.contains($0) }
+                sanitized.privacyMetadata = sanitizedMetadata(fact.privacyMetadata, for: surface)
                 return sanitized
             }
 
@@ -106,6 +110,62 @@ enum KBLitePrivacyScopePolicy {
             events: events,
             facts: facts
         )
+    }
+
+    private static func sanitizedMetadata(
+        _ metadata: MemoryPrivacyMetadata,
+        for surface: MemoryUseSurface
+    ) -> MemoryPrivacyMetadata {
+        guard shouldRedactSourceRefTitles(for: surface) else { return metadata }
+        let sourceRefs = metadata.sourceRefs.map { sourceRef in
+            MemorySourceRef(
+                kind: sourceRef.kind,
+                id: sourceRef.id,
+                title: externalSourceTitle(for: sourceRef.kind),
+                capturedAt: sourceRef.capturedAt
+            )
+        }
+        return MemoryPrivacyMetadata(
+            scope: metadata.scope,
+            sourceRefs: sourceRefs,
+            createdBySurface: metadata.createdBySurface,
+            createdAt: metadata.createdAt,
+            familyVisibility: metadata.familyVisibility
+        )
+    }
+
+    private static func shouldRedactSourceRefTitles(for surface: MemoryUseSurface) -> Bool {
+        switch surface {
+        case .backendSync, .familySync, .export, .widget:
+            return true
+        case .remoteExtraction,
+             .prompt,
+             .memoirGeneration,
+             .timeMailboxEcho,
+             .careDashboard:
+            return false
+        }
+    }
+
+    private static func externalSourceTitle(for kind: MemorySourceKind) -> String {
+        switch kind {
+        case .conversationTurn:
+            return "对话来源"
+        case .memoryArchiveItem:
+            return "档案素材"
+        case .timeMailboxLetter:
+            return "时空信件"
+        case .kbLiteEntity:
+            return "知识条目"
+        case .memoir:
+            return "回忆录"
+        case .importRecord:
+            return "导入记录"
+        case .userAuthorization:
+            return "授权记录"
+        case .unknown:
+            return "来源记录"
+        }
     }
 
     private static func highestAvailableScope(in turns: [ConversationTurn]) -> MemoryPrivacyScope? {
