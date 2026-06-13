@@ -28,6 +28,7 @@ required_scheduler_fragments = [
     "requestAuthorization",
     "UNCalendarNotificationTrigger",
     "TimeMailboxDeliveryStatus.sealed",
+    "content.userInfo",
 ]
 
 required_vc_fragments = [
@@ -49,6 +50,11 @@ for fragment in required_vc_fragments:
 for fragment in required_project_fragments:
     if fragment not in project_text:
         missing.append(f"{project_file.name}: missing {fragment!r}")
+
+if "content.body = \"你写给\\(letter.recipientName)的信已到达。打开时空信箱查看回声边界说明。\"" in scheduler_text:
+    missing.append(f"{scheduler_file.name}: notification body should not expose recipientName on lock screen")
+if "recipientName" in scheduler_text.split("private func addDeliveryRequest", 1)[-1].split("private func notificationIdentifier", 1)[0]:
+    missing.append(f"{scheduler_file.name}: delivery notification request should keep recipientName out of visible/userInfo payload")
 
 if missing:
     raise SystemExit("\n".join(missing))

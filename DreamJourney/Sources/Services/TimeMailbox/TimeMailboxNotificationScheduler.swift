@@ -35,7 +35,7 @@ final class TimeMailboxNotificationScheduler {
     private func addDeliveryRequest(for letter: TimeMailboxLetter, center: UNUserNotificationCenter) {
         let content = UNMutableNotificationContent()
         content.title = "时空信箱有一封信到达"
-        content.body = "你写给\(letter.recipientName)的信已到达。打开时空信箱查看回声边界说明。"
+        content.body = "一封封存的信已到达。打开时空信箱查看回声边界说明。"
         content.sound = .default
         content.userInfo = [
             "surface": "timeMailbox",
