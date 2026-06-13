@@ -264,6 +264,9 @@ python3 Scripts/KBLiteBackendSnapshotVerify/main.py
 echo "== KBLite user lifecycle =="
 python3 Scripts/KBLiteUserLifecycleVerify/main.py
 
+echo "== User identity stability =="
+python3 Scripts/UserIdentityStabilityVerify/main.py
+
 echo "== Conversation turn source refs =="
 xcrun swiftc \
   DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \

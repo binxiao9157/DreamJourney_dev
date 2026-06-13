@@ -15,7 +15,7 @@ final class UserManager {
     // MARK: - 登录
     func login(phone: String, nickname: String) {
         let user = UserModel(
-            id: "user_\(phone.suffix(4))",
+            id: Self.stableUserID(for: phone),
             nickname: nickname.isEmpty ? "寻梦环游用户" : nickname,
             phone: phone,
             avatarName: "person.circle.fill"
@@ -56,10 +56,28 @@ final class UserManager {
     }
 
     private static func isLegacyRoadshowUser(_ user: UserModel) -> Bool {
-        user.id == "user_0001" ||
-            user.nickname == "路演家庭" ||
+        user.nickname == "路演家庭" ||
             user.phone == "18800000001"
     }
+
+    private static func stableUserID(for phone: String) -> String {
+        let normalized = normalizedPhoneDigits(phone)
+        let source = normalized.isEmpty ? phone.trimmingCharacters(in: .whitespacesAndNewlines) : normalized
+        var hash = offsetBasis
+        for byte in source.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* fnvPrime
+        }
+        let hex = String(hash, radix: 16)
+        return "user_" + String(repeating: "0", count: max(0, 16 - hex.count)) + hex
+    }
+
+    private static func normalizedPhoneDigits(_ phone: String) -> String {
+        String(phone.filter { $0.isNumber })
+    }
+
+    private static let offsetBasis: UInt64 = 1_469_598_103_934_665_603
+    private static let fnvPrime: UInt64 = 1_099_511_628_211
 }
 
 // MARK: - Notification 名称
