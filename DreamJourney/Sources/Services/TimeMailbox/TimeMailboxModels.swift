@@ -75,3 +75,25 @@ struct TimeMailboxLetter: Codable, Identifiable, Equatable, MemoryPrivacyScoped 
             ?? MemoryPrivacyMetadata(scope: .localOnly)
     }
 }
+
+struct TimeMailboxEchoEvidence: Equatable {
+    var people: [String] = []
+    var places: [String] = []
+    var events: [String] = []
+    var facts: [String] = []
+
+    static let empty = TimeMailboxEchoEvidence()
+
+    var isEmpty: Bool {
+        people.isEmpty && places.isEmpty && events.isEmpty && facts.isEmpty
+    }
+
+    var lines: [String] {
+        var result: [String] = []
+        result.append(contentsOf: people.prefix(2).map { "人物：\($0)" })
+        result.append(contentsOf: places.prefix(2).map { "地点：\($0)" })
+        result.append(contentsOf: events.prefix(2).map { "事件：\($0)" })
+        result.append(contentsOf: facts.prefix(3).map { "事实：\($0)" })
+        return result
+    }
+}

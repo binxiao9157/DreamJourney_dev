@@ -226,6 +226,74 @@ enum RoadshowDemoSeed {
 }
 
 #if !CARE_DASHBOARD_VERIFY && !MEMORY_PRIVACY_INTEGRATION_VERIFY
+enum LocalTestDataCleaner {
+    struct Result {
+        let removedKeys: [String]
+        let removedPaths: [String]
+        let resetSubsystems: [String]
+
+        var summary: String {
+            "已清理 \(removedKeys.count) 个本机状态、\(removedPaths.count) 个本机目录/文件，并重置 \(resetSubsystems.count) 个本机模块。"
+        }
+    }
+
+    @discardableResult
+    static func cleanForRealDeviceTesting(
+        userDefaults: UserDefaults = .standard,
+        fileManager: FileManager = .default
+    ) -> Result {
+        let userDefaultsKeys = [
+            "dreamjourney.roadshow.seeded.v1",
+            "dreamjourney.roadshow.offlineMode",
+            "dreamjourney.timeMailbox.letters",
+            "dreamjourney.memoryArchive.items",
+            "dj.persistedMemories",
+            "dj.readMemoryIds",
+            "dj.bouncedMemoryIds"
+        ]
+        userDefaultsKeys.forEach { userDefaults.removeObject(forKey: $0) }
+        RoadshowDemoRoute.resetCompletions(userDefaults: userDefaults)
+
+        var removedPaths: [String] = []
+        if let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first {
+            [
+                "conversation_memory.json",
+                "knowledge_base",
+                "archive_photos",
+                "archive_voice_samples"
+            ].forEach { relativePath in
+                let url = documentsURL.appendingPathComponent(relativePath)
+                if fileManager.fileExists(atPath: url.path) {
+                    try? fileManager.removeItem(at: url)
+                    removedPaths.append(relativePath)
+                }
+            }
+        }
+        if let applicationSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            let memoirsURL = applicationSupportURL.appendingPathComponent("memoirs", isDirectory: true)
+            if fileManager.fileExists(atPath: memoirsURL.path) {
+                try? fileManager.removeItem(at: memoirsURL)
+                removedPaths.append("memoirs")
+            }
+        }
+
+        ConversationMemoryManager.shared.resetLocalStorage()
+        KBLiteManager.shared.reset(syncToBackend: false)
+        FamilyRepository.shared.resetLocalAccessState()
+        MemoryRepository.shared.resetLocalStorage()
+        MemoirRepository.shared.resetLocalStorage()
+
+        userDefaults.synchronize()
+        let result = Result(
+            removedKeys: userDefaultsKeys,
+            removedPaths: removedPaths,
+            resetSubsystems: ["ConversationMemory", "KBLite", "FamilyAccess", "MemoryRepository", "MemoirRepository"]
+        )
+        print("[LocalTestDataCleaner] \(result.summary)")
+        return result
+    }
+}
+
 extension RoadshowDemoSeed {
     static func applyIfRequested(
         arguments: [String] = ProcessInfo.processInfo.arguments,
@@ -261,17 +329,7 @@ extension RoadshowDemoSeed {
     }
 
     private static func resetDemoData() {
-        UserDefaults.standard.removeObject(forKey: seededKey)
-        UserDefaults.standard.removeObject(forKey: offlineModeKey)
-        UserDefaults.standard.removeObject(forKey: "dreamjourney.timeMailbox.letters")
-        UserDefaults.standard.removeObject(forKey: "dreamjourney.memoryArchive.items")
-
-        if let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-            try? FileManager.default.removeItem(at: documentsURL.appendingPathComponent("conversation_memory.json"))
-        }
-
-        KBLiteManager.shared.reset()
-        FamilyRepository.shared.resetLocalAccessState()
+        LocalTestDataCleaner.cleanForRealDeviceTesting()
         print("[RoadshowDemo] demo namespace reset")
     }
 

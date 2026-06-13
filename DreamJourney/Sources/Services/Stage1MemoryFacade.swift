@@ -68,6 +68,32 @@ final class Stage1MemoryFacade {
         recordUserTurn(Stage1MailboxMemoryInput(text))
     }
 
+    func ingestArchiveTextMaterial(
+        _ input: Stage1MailboxMemoryInput,
+        completion: @escaping (Int) -> Void = { _ in }
+    ) {
+        recordUserTurn(input)
+
+        guard input.privacyMetadata.scope != .privateOnly else {
+            completion(0)
+            return
+        }
+
+        let turn = ConversationTurn(
+            role: "user",
+            text: input.text,
+            timestamp: input.timestamp,
+            privacyMetadata: input.privacyMetadata
+        )
+        let knowledgeSessionCount = knowledgeBase.readGraph { $0.sessionCount }
+        let sessionId = max(conversationMemory.currentMemory.sessionCount + 1, knowledgeSessionCount + 1)
+        knowledgeBase.extractFromTranscript(
+            turns: [turn],
+            sessionId: sessionId,
+            completion: completion
+        )
+    }
+
     func recordAssistantTurn(_ input: Stage1MailboxMemoryInput) {
         conversationMemory.recordAITurn(text: input.text, privacyMetadata: input.privacyMetadata)
     }

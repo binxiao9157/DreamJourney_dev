@@ -709,7 +709,6 @@ async function newVideoTask() {
     
     videoProcessor.play();
     processVideoFrames();
-    document.getElementById('startMessage').style.display = 'none';
     postAvatarHealth('avatar_new_video_task_done', {
         canvasWidth: canvas_video.width,
         canvasHeight: canvas_video.height

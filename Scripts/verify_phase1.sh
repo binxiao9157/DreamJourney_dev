@@ -45,6 +45,9 @@ xcrun swiftc -D CARE_DASHBOARD_VERIFY \
 echo "== KBLite =="
 swift kblite_verify.swift
 
+echo "== Local test data cleanup =="
+python3 Scripts/LocalTestDataCleanupVerify/main.py
+
 echo "== diff --check =="
 git diff --check
 git diff --cached --check

@@ -107,6 +107,13 @@ final class MemoirRepository {
         MemoirTTSService.shared.deleteAudio(for: id)
     }
 
+    func resetLocalStorage() {
+        memoirs.removeAll()
+        try? FileManager.default.removeItem(at: storageDirectory)
+        try? FileManager.default.createDirectory(at: storageDirectory, withIntermediateDirectories: true)
+        DDLogInfo("[MemoirRepository] 本机回忆录目录已清理")
+    }
+
     // MARK: - 录音管理
 
     /// 保存对话录音文件到录音目录

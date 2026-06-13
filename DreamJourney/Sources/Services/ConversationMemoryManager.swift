@@ -192,6 +192,13 @@ final class ConversationMemoryManager {
         currentTranscript = []
     }
 
+    func resetLocalStorage() {
+        currentMemory = ConversationMemory()
+        currentTranscript = []
+        try? FileManager.default.removeItem(at: filePath)
+        print("[Memory] 🔄 本机对话记忆已清理")
+    }
+
     // MARK: - 记录对话
 
     func recordUserTurn(

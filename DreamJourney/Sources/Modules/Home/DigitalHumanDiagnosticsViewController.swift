@@ -73,6 +73,7 @@ final class DigitalHumanDiagnosticsViewController: UIViewController {
         }
         contentStack.addArrangedSubview(makePlaybackEvidenceCard())
         contentStack.addArrangedSubview(makeBoundaryCard())
+        contentStack.addArrangedSubview(makeLocalTestDataCleanupCard())
     }
 
     private func makeHeroCard() -> UIView {
@@ -189,6 +190,35 @@ final class DigitalHumanDiagnosticsViewController: UIViewController {
         return wrapCard(label, backgroundColor: UIColor(red: 1.0, green: 0.96, blue: 0.89, alpha: 1))
     }
 
+    private func makeLocalTestDataCleanupCard() -> UIView {
+        let titleLabel = UILabel()
+        titleLabel.text = "真机测试数据"
+        titleLabel.font = .systemFont(ofSize: 15, weight: .bold)
+        titleLabel.textColor = UIColor(red: 0.24, green: 0.18, blue: 0.13, alpha: 1)
+
+        let detailLabel = UILabel()
+        detailLabel.text = "清理本机演示残留、档案素材、时空信箱、知识库、对话记忆和足迹已读状态；不会清除 API Key、后端地址或登录信息。"
+        detailLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        detailLabel.textColor = .warmSubtitle
+        detailLabel.numberOfLines = 0
+
+        var configuration = UIButton.Configuration.filled()
+        configuration.title = "清理本机测试数据"
+        configuration.image = UIImage(systemName: "trash")
+        configuration.imagePadding = 8
+        configuration.baseBackgroundColor = UIColor(red: 0.80, green: 0.24, blue: 0.18, alpha: 1)
+        configuration.baseForegroundColor = .white
+        configuration.cornerStyle = .medium
+        let button = UIButton(configuration: configuration)
+        button.addTarget(self, action: #selector(confirmLocalTestDataCleanup), for: .touchUpInside)
+        button.heightAnchor.constraint(equalToConstant: 44).isActive = true
+
+        let stack = UIStackView(arrangedSubviews: [titleLabel, detailLabel, button])
+        stack.axis = .vertical
+        stack.spacing = 10
+        return wrapCard(stack, backgroundColor: UIColor(red: 1.0, green: 0.95, blue: 0.93, alpha: 1))
+    }
+
     private func wrapCard(_ content: UIView, backgroundColor: UIColor = .white) -> UIView {
         let card = UIView()
         card.backgroundColor = backgroundColor
@@ -236,5 +266,19 @@ final class DigitalHumanDiagnosticsViewController: UIViewController {
     @objc private func copyDiagnosticsJSON() {
         UIPasteboard.general.string = report.evidenceJSONText
         showToast("已复制诊断 JSON", type: .success)
+    }
+
+    @objc private func confirmLocalTestDataCleanup() {
+        let alert = UIAlertController(
+            title: "清理本机测试数据？",
+            message: "将删除本机演示残留、知识库、档案素材、时空信箱、对话记忆、回忆录和足迹已读状态。API Key、后端地址和登录信息会保留。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "清理", style: .destructive) { [weak self] _ in
+            let result = LocalTestDataCleaner.cleanForRealDeviceTesting()
+            self?.showToast(result.summary, type: .success)
+        })
+        present(alert, animated: true)
     }
 }

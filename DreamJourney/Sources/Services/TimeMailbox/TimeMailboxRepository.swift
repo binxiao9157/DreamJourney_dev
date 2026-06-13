@@ -73,7 +73,10 @@ final class TimeMailboxRepository {
     }
 
     @discardableResult
-    func refreshDelivery(now: Date = Date()) -> [TimeMailboxLetter] {
+    func refreshDelivery(
+        now: Date = Date(),
+        evidenceProvider: ((TimeMailboxLetter) -> TimeMailboxEchoEvidence)? = nil
+    ) -> [TimeMailboxLetter] {
         var all = load()
         var delivered: [TimeMailboxLetter] = []
 
@@ -81,7 +84,8 @@ final class TimeMailboxRepository {
             guard all[index].status == .sealed, all[index].deliverAt <= now else { continue }
             all[index].status = .delivered
             all[index].deliveredAt = now
-            all[index].replyText = Self.makeReply(for: all[index])
+            let evidence = evidenceProvider?(all[index]) ?? .empty
+            all[index].replyText = Self.makeReply(for: all[index], evidence: evidence)
             delivered.append(all[index])
         }
 
@@ -126,7 +130,10 @@ final class TimeMailboxRepository {
         defaults.set(data, forKey: storageKey)
     }
 
-    private static func makeReply(for letter: TimeMailboxLetter) -> String {
+    private static func makeReply(
+        for letter: TimeMailboxLetter,
+        evidence: TimeMailboxEchoEvidence
+    ) -> String {
         let firstLine = letter.body
             .split(whereSeparator: \.isNewline)
             .map(String.init)
@@ -134,11 +141,22 @@ final class TimeMailboxRepository {
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         let memoryLine = firstLine.map { "你写下了：“\($0)”" } ?? "你把这份想念认真保存了下来。"
+        let evidenceLine: String
+        if evidence.isEmpty {
+            evidenceLine = "这次没有找到足够的已授权记忆细节，所以不会替Ta编造具体经历。"
+        } else {
+            evidenceLine = """
+            我能参考到的已授权记忆有：
+            \(evidence.lines.prefix(5).map { "· \($0)" }.joined(separator: "\n"))
+            """
+        }
 
         return """
         这段回应基于你留下的记忆整理而来，不是逝者真实回复。
 
         \(memoryLine)
+
+        \(evidenceLine)
 
         愿这封信先替你收好今天的思念。你可以慢慢地把想说的话写下来，也可以在准备好的时候，把这份记忆带回现实生活里，交给还在身边的人一起珍藏。
         """

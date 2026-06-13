@@ -1,4 +1,5 @@
 import UIKit
+import UniformTypeIdentifiers
 
 final class MemoryArchiveViewController: UIViewController {
 
@@ -31,6 +32,7 @@ final class MemoryArchiveViewController: UIViewController {
     }()
 
     private lazy var photoButton = makeActionButton(title: "上传旧照片", iconName: "photo.on.rectangle")
+    private lazy var voiceButton = makeActionButton(title: "导入语音素材", iconName: "waveform")
     private lazy var textButton = makeActionButton(title: "添加文字素材", iconName: "square.and.pencil")
     private lazy var knowledgeButton = makeActionButton(title: "结构化知识库", iconName: "brain.head.profile")
 
@@ -79,12 +81,13 @@ final class MemoryArchiveViewController: UIViewController {
 
     private func setupActions() {
         photoButton.addTarget(self, action: #selector(photoTapped), for: .touchUpInside)
+        voiceButton.addTarget(self, action: #selector(voiceTapped), for: .touchUpInside)
         textButton.addTarget(self, action: #selector(textTapped), for: .touchUpInside)
         knowledgeButton.addTarget(self, action: #selector(knowledgeTapped), for: .touchUpInside)
     }
 
     private func setupLayout() {
-        let actionStack = UIStackView(arrangedSubviews: [photoButton, textButton, knowledgeButton])
+        let actionStack = UIStackView(arrangedSubviews: [photoButton, voiceButton, textButton, knowledgeButton])
         actionStack.axis = .vertical
         actionStack.spacing = 10
 
@@ -123,7 +126,7 @@ final class MemoryArchiveViewController: UIViewController {
     private func reloadData() {
         items = repository.items()
         let summary = repository.summary()
-        summaryLabel.text = "共 \(summary.totalCount) 份素材 · 照片 \(summary.photoCount) · 文字 \(summary.textCount) · 已分析 \(summary.analyzedPhotoCount)"
+        summaryLabel.text = "共 \(summary.totalCount) 份素材 · 照片 \(summary.photoCount) · 语音 \(summary.voiceSampleCount) · 文字 \(summary.textCount) · 已分析 \(summary.analyzedPhotoCount)"
         emptyLabel.isHidden = !items.isEmpty
         tableView.reloadData()
     }
@@ -136,6 +139,13 @@ final class MemoryArchiveViewController: UIViewController {
         let picker = UIImagePickerController()
         picker.sourceType = .photoLibrary
         picker.delegate = self
+        present(picker, animated: true)
+    }
+
+    @objc private func voiceTapped() {
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.audio], asCopy: true)
+        picker.delegate = self
+        picker.allowsMultipleSelection = false
         present(picker, animated: true)
     }
 
@@ -177,13 +187,21 @@ final class MemoryArchiveViewController: UIViewController {
                 privacyMetadata: draft.privacyMetadata
             )
             if item.privacyMetadata.scope != .privateOnly {
-                Stage1MemoryFacade.shared.recordUserTurn(Stage1MailboxMemoryInput(
-                    "记忆档案馆保存\(item.kind.displayName)：\(item.note)",
+                Stage1MemoryFacade.shared.ingestArchiveTextMaterial(Stage1MailboxMemoryInput(
+                    item.note,
                     privacyMetadata: item.privacyMetadata
-                ))
+                )) { [weak self] addedCount in
+                    guard addedCount > 0 else { return }
+                    DispatchQueue.main.async {
+                        self?.showToast("知识库已更新 \(addedCount) 条", type: .success)
+                    }
+                }
             }
             dismiss(animated: true) { [weak self] in
-                self?.showToast("素材已保存", type: .success)
+                self?.showToast(
+                    item.privacyMetadata.scope == .privateOnly ? "素材已保存" : "素材已保存，正在整理知识库",
+                    type: .success
+                )
                 self?.reloadData()
             }
         } catch {
@@ -201,6 +219,30 @@ final class MemoryArchiveViewController: UIViewController {
         guard let data = image.jpegData(compressionQuality: 0.82) else { return nil }
         do {
             try data.write(to: fileURL)
+            return fileURL.path
+        } catch {
+            return nil
+        }
+    }
+
+    private func saveArchiveVoiceSample(from sourceURL: URL) -> String? {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        guard let archiveDir = docs?.appendingPathComponent("archive_voice_samples") else { return nil }
+        try? FileManager.default.createDirectory(at: archiveDir, withIntermediateDirectories: true)
+
+        let hasSecurityAccess = sourceURL.startAccessingSecurityScopedResource()
+        defer {
+            if hasSecurityAccess {
+                sourceURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        let pathExtension = sourceURL.pathExtension.isEmpty ? "m4a" : sourceURL.pathExtension
+        let fileName = "archive_voice_\(Int(Date().timeIntervalSince1970))_\(UUID().uuidString.prefix(8)).\(pathExtension)"
+        let fileURL = archiveDir.appendingPathComponent(fileName)
+
+        do {
+            try FileManager.default.copyItem(at: sourceURL, to: fileURL)
             return fileURL.path
         } catch {
             return nil
@@ -394,6 +436,110 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         picker.dismiss(animated: true)
+    }
+}
+
+extension MemoryArchiveViewController: UIDocumentPickerDelegate {
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let sourceURL = urls.first,
+              let storedPath = saveArchiveVoiceSample(from: sourceURL) else {
+            showToast("语音素材导入失败", type: .error)
+            return
+        }
+
+        presentVoicePrivacyChoice(
+            title: sourceURL.deletingPathExtension().lastPathComponent,
+            storedPath: storedPath
+        )
+    }
+
+    private func presentVoicePrivacyChoice(title: String, storedPath: String) {
+        let alert = UIAlertController(
+            title: "语音素材保存方式",
+            message: "私密/本机只保留素材；可生成和亲友仅沉淀语音样本元信息，音频不会被当作文字对话共享。",
+            preferredStyle: .actionSheet
+        )
+        alert.addAction(UIAlertAction(title: "私密", style: .default) { [weak self] _ in
+            self?.savePickedVoiceSample(
+                title: title,
+                storedPath: storedPath,
+                privacyMetadata: MemoryPrivacyMetadata(scope: .privateOnly)
+            )
+        })
+        alert.addAction(UIAlertAction(title: "本机", style: .default) { [weak self] _ in
+            self?.savePickedVoiceSample(
+                title: title,
+                storedPath: storedPath,
+                privacyMetadata: MemoryPrivacyMetadata(scope: .localOnly)
+            )
+        })
+        alert.addAction(UIAlertAction(title: "可生成", style: .default) { [weak self] _ in
+            self?.savePickedVoiceSample(
+                title: title,
+                storedPath: storedPath,
+                privacyMetadata: MemoryPrivacyMetadata(scope: MemoryPrivacyMigration.scopeForExplicitGenerationAuthorization())
+            )
+        })
+        alert.addAction(UIAlertAction(title: "亲友", style: .default) { [weak self] _ in
+            self?.presentVoiceFamilyVisibilityChoice(title: title, storedPath: storedPath)
+        })
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.popoverPresentationController?.sourceView = view
+        alert.popoverPresentationController?.sourceRect = CGRect(
+            x: view.bounds.midX,
+            y: view.bounds.midY,
+            width: 1,
+            height: 1
+        )
+        present(alert, animated: true)
+    }
+
+    private func presentVoiceFamilyVisibilityChoice(title: String, storedPath: String) {
+        let picker = FamilyVisibilityPickerViewController()
+        picker.onSelect = { [weak self] selection in
+            self?.savePickedVoiceSample(
+                title: title,
+                storedPath: storedPath,
+                privacyMetadata: MemoryPrivacyMetadata(
+                    scope: MemoryPrivacyMigration.scopeForExplicitFamilyAuthorization(),
+                    familyVisibility: selection.visibility
+                )
+            )
+        }
+
+        let navigationController = UINavigationController(rootViewController: picker)
+        if let sheet = navigationController.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
+        present(navigationController, animated: true)
+    }
+
+    private func savePickedVoiceSample(
+        title: String,
+        storedPath: String,
+        privacyMetadata: MemoryPrivacyMetadata
+    ) {
+        do {
+            let item = try repository.addVoiceSample(
+                localPath: storedPath,
+                title: title,
+                note: "导入的长辈语音样本，用于后续声纹和语气参考。",
+                tags: ["语音样本"],
+                isPrivate: privacyMetadata.scope == .privateOnly,
+                privacyMetadata: privacyMetadata
+            )
+            if item.privacyMetadata.scope != .privateOnly {
+                Stage1MemoryFacade.shared.recordUserTurn(Stage1MailboxMemoryInput(
+                    "记忆档案馆保存语音样本：\(item.title)。这是音频素材元信息，不包含转写正文。",
+                    privacyMetadata: item.privacyMetadata
+                ))
+            }
+            showToast("语音素材已保存", type: .success)
+            reloadData()
+        } catch {
+            showToast("语音素材保存失败", type: .error)
+        }
     }
 }
 
@@ -734,6 +880,7 @@ private extension MemoryArchiveItemKind {
     var displayName: String {
         switch self {
         case .photo: return "旧照片"
+        case .voiceSample: return "语音样本"
         case .textNote: return "文字回忆"
         case .personalityNote: return "性格描述"
         case .catchphrase: return "口头禅"
@@ -743,6 +890,7 @@ private extension MemoryArchiveItemKind {
     var iconName: String {
         switch self {
         case .photo: return "photo"
+        case .voiceSample: return "waveform"
         case .textNote: return "text.alignleft"
         case .personalityNote: return "person.text.rectangle"
         case .catchphrase: return "quote.bubble"

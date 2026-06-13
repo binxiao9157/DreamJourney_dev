@@ -96,7 +96,7 @@ final class KBLiteManager {
 
     // MARK: - Persistence
 
-    private func save() {
+    private func save(scheduleBackendSync shouldScheduleBackendSync: Bool = true) {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
         encoder.dateEncodingStrategy = .iso8601
@@ -117,7 +117,9 @@ final class KBLiteManager {
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: .kbLiteDidUpdate, object: nil)
         }
-        scheduleBackendSync()
+        if shouldScheduleBackendSync {
+            scheduleBackendSync()
+        }
     }
 
     private func scheduleBackendSync() {
@@ -1532,10 +1534,10 @@ final class KBLiteManager {
     // MARK: - Maintenance
 
     /// 重置知识库（调试用 / 用户主动清除）
-    func reset() {
+    func reset(syncToBackend: Bool = true) {
         graph = KBLiteGraph()
         didWarnCapacity = false
-        save()
+        save(scheduleBackendSync: syncToBackend)
         print("[KBLite] 🔄 知识库已重置")
     }
 

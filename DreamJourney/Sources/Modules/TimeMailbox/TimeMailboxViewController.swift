@@ -103,10 +103,76 @@ final class TimeMailboxViewController: UIViewController {
     }
 
     private func reloadLetters() {
-        _ = repository.refreshDelivery()
+        _ = repository.refreshDelivery(evidenceProvider: Self.makeEchoEvidence)
         letters = repository.letters()
         emptyLabel.isHidden = !letters.isEmpty
         tableView.reloadData()
+    }
+
+    private static func makeEchoEvidence(for letter: TimeMailboxLetter) -> TimeMailboxEchoEvidence {
+        let graph = KBLiteManager.shared.sanitizedGraph(for: .timeMailboxEcho)
+        let terms = evidenceTerms(for: letter)
+        guard !terms.isEmpty else { return .empty }
+
+        let people = graph.people
+            .filter { matches($0.searchableText, terms: terms) }
+            .prefix(2)
+            .map { person -> String in
+                let detail = [person.relation, person.briefBio].compactMap { $0 }.joined(separator: "，")
+                return detail.isEmpty ? person.name : "\(person.name)：\(detail)"
+            }
+
+        let places = graph.places
+            .filter { matches($0.searchableText, terms: terms) }
+            .prefix(2)
+            .map { place -> String in
+                let detail = [place.category, place.description].compactMap { $0 }.joined(separator: "，")
+                return detail.isEmpty ? place.name : "\(place.name)：\(detail)"
+            }
+
+        let events = graph.events
+            .filter { matches($0.searchableText, terms: terms) }
+            .prefix(2)
+            .map { event -> String in
+                let date = event.formattedDate
+                let detail = [date.isEmpty ? nil : date, event.description].compactMap { $0 }.joined(separator: "，")
+                return detail.isEmpty ? event.title : "\(event.title)：\(detail)"
+            }
+
+        let facts = graph.facts
+            .filter { matches($0.statement, terms: terms) }
+            .prefix(3)
+            .map(\.statement)
+
+        return TimeMailboxEchoEvidence(
+            people: Array(people),
+            places: Array(places),
+            events: Array(events),
+            facts: Array(facts)
+        )
+    }
+
+    private static func evidenceTerms(for letter: TimeMailboxLetter) -> [String] {
+        let raw = [letter.recipientName, letter.title, letter.body].joined(separator: " ")
+        let separators = CharacterSet.whitespacesAndNewlines
+            .union(.punctuationCharacters)
+            .union(CharacterSet(charactersIn: "，。！？；、：“”‘’（）《》"))
+        var terms = raw
+            .components(separatedBy: separators)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.count >= 2 && $0.count <= 24 }
+        if !letter.recipientName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            terms.insert(letter.recipientName.trimmingCharacters(in: .whitespacesAndNewlines), at: 0)
+        }
+        return Array(NSOrderedSet(array: terms).compactMap { $0 as? String }).prefix(12).map { $0 }
+    }
+
+    private static func matches(_ text: String, terms: [String]) -> Bool {
+        let normalizedText = text.lowercased()
+        return terms.contains { term in
+            let normalizedTerm = term.lowercased()
+            return normalizedText.contains(normalizedTerm) || normalizedTerm.contains(normalizedText)
+        }
     }
 
     @objc private func addTapped() {

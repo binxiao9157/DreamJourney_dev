@@ -35,6 +35,7 @@ do {
     assertCondition(delivered[0].status == .delivered, "due letter should become delivered")
     assertCondition(delivered[0].replyText?.contains("基于你留下的记忆") == true, "reply must carry memory-boundary wording")
     assertCondition(delivered[0].replyText?.contains("不是逝者真实回复") == true, "reply must avoid resurrection framing")
+    assertCondition(delivered[0].replyText?.contains("不会替Ta编造具体经历") == true, "reply without evidence should refuse fabrication")
 
     try repo.markRead(id: letter.id)
     assertCondition(repo.letters().first?.status == .read, "delivered letter should be markable as read")
@@ -76,11 +77,35 @@ do {
         recipientName: "爸爸",
         title: "",
         body: "默认只保存在本机。",
-        deliverAt: now,
+        deliverAt: now.addingTimeInterval(3_600),
         now: now,
         boundaryAcknowledged: true
     )
     assertCondition(defaultLetter.privacyMetadata.scope == .localOnly, "default letter scope should be localOnly")
+    try repo.delete(id: defaultLetter.id)
+
+    let evidenceLetter = try repo.createLetter(
+        recipientName: "妈妈",
+        title: "想起西湖边的小照相馆",
+        body: "我今天又想起桂花糕和西湖边的小照相馆。",
+        deliverAt: now,
+        now: now,
+        boundaryAcknowledged: true,
+        privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed)
+    )
+    let evidenceDelivered = repo.refreshDelivery(now: now.addingTimeInterval(1)) { _ in
+        TimeMailboxEchoEvidence(
+            people: ["妈妈：喜欢做桂花糕"],
+            places: ["杭州西湖：一家人常去散步"],
+            events: ["西湖边的小照相馆：1978年开过一家小店"],
+            facts: ["妈妈做的桂花糕是家里常被提起的味道"]
+        )
+    }
+    assertCondition(evidenceDelivered.count == 1, "evidence letter should deliver")
+    assertCondition(evidenceDelivered[0].id == evidenceLetter.id, "delivered evidence letter should match")
+    assertCondition(evidenceDelivered[0].replyText?.contains("我能参考到的已授权记忆") == true, "reply should disclose authorized evidence")
+    assertCondition(evidenceDelivered[0].replyText?.contains("妈妈做的桂花糕") == true, "reply should include supplied evidence")
+    assertCondition(evidenceDelivered[0].replyText?.contains("不是逝者真实回复") == true, "evidence reply must keep boundary wording")
 
     let legacyJSON = """
     [{

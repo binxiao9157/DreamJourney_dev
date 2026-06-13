@@ -41,6 +41,21 @@ do {
     assertCondition(photo.privacyMetadata.scope == .generationAllowed, "photo should persist explicit generation scope")
     assertCondition(repo.summary().photoCount == 1, "summary should count photos")
 
+    let voiceSample = try repo.addVoiceSample(
+        localPath: "/tmp/grandma_voice.m4a",
+        title: "外婆语音",
+        note: "饭要趁热吃。",
+        tags: ["语音样本"],
+        isPrivate: false,
+        privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed),
+        now: now
+    )
+    assertCondition(voiceSample.kind == .voiceSample, "voice sample should persist its kind")
+    assertCondition(voiceSample.analysisStatus == .manual, "voice sample should be manual")
+    assertCondition(voiceSample.localPath == "/tmp/grandma_voice.m4a", "voice sample local path should persist")
+    assertCondition(voiceSample.privacyMetadata.scope == .generationAllowed, "voice sample should persist explicit generation scope")
+    assertCondition(repo.summary().voiceSampleCount == 1, "summary should count voice samples")
+
     let familyPhoto = try repo.addPhoto(
         localPath: "/tmp/family_photo.jpg",
         title: "家庭共享照片",
@@ -87,7 +102,7 @@ do {
     assertCondition(failed.analysisStatus == .failed, "photo can be marked failed")
 
     try repo.delete(id: note.id)
-    assertCondition(repo.items().count == 3, "deleted item should be removed")
+    assertCondition(repo.items().count == 4, "deleted item should be removed")
 
     do {
         _ = try repo.addText(
@@ -101,6 +116,18 @@ do {
         assertCondition(false, "blank text material should throw")
     } catch MemoryArchiveRepositoryError.invalidText {
         assertCondition(true, "blank text material throws expected error")
+    }
+
+    do {
+        _ = try repo.addVoiceSample(
+            localPath: " ",
+            title: "空路径语音",
+            isPrivate: false,
+            now: now
+        )
+        assertCondition(false, "blank voice sample path should throw")
+    } catch MemoryArchiveRepositoryError.invalidVoicePath {
+        assertCondition(true, "blank voice sample path throws expected error")
     }
 
     let legacyJSON = """

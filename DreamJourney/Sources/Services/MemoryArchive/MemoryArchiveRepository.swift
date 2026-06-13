@@ -3,6 +3,7 @@ import Foundation
 enum MemoryArchiveRepositoryError: Error, Equatable {
     case invalidText
     case invalidPhotoPath
+    case invalidVoicePath
     case itemNotFound
 }
 
@@ -36,13 +37,15 @@ final class MemoryArchiveRepository {
     func summary() -> MemoryArchiveSummary {
         let all = load()
         let photoCount = all.filter { $0.kind == .photo }.count
+        let voiceSampleCount = all.filter { $0.kind == .voiceSample }.count
         let analyzedPhotoCount = all.filter {
             $0.kind == .photo && $0.analysisStatus == .analyzed
         }.count
         return MemoryArchiveSummary(
             totalCount: all.count,
             photoCount: photoCount,
-            textCount: all.count - photoCount,
+            voiceSampleCount: voiceSampleCount,
+            textCount: all.count - photoCount - voiceSampleCount,
             analyzedPhotoCount: analyzedPhotoCount
         )
     }
@@ -59,7 +62,7 @@ final class MemoryArchiveRepository {
     ) throws -> MemoryArchiveItem {
         let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard kind != .photo, !cleanNote.isEmpty else {
+        guard kind != .photo, kind != .voiceSample, !cleanNote.isEmpty else {
             throw MemoryArchiveRepositoryError.invalidText
         }
         let resolvedPrivacyMetadata = privacyMetadata
@@ -72,6 +75,51 @@ final class MemoryArchiveRepository {
             title: cleanTitle.isEmpty ? Self.defaultTitle(for: kind) : cleanTitle,
             note: cleanNote,
             localPath: nil,
+            createdAt: now,
+            updatedAt: now,
+            analysisStatus: .manual,
+            analysisSummary: nil,
+            detectedPeople: [],
+            scene: nil,
+            occasion: nil,
+            mood: nil,
+            estimatedDecade: nil,
+            tags: Self.cleanTags(tags),
+            isPrivate: resolvedIsPrivate,
+            privacyMetadata: resolvedPrivacyMetadata
+        )
+
+        var all = load()
+        all.insert(item, at: 0)
+        save(all)
+        return item
+    }
+
+    @discardableResult
+    func addVoiceSample(
+        localPath: String,
+        title: String,
+        note: String = "",
+        tags: [String] = [],
+        isPrivate: Bool = true,
+        privacyMetadata: MemoryPrivacyMetadata? = nil,
+        now: Date = Date()
+    ) throws -> MemoryArchiveItem {
+        let cleanPath = localPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanPath.isEmpty else { throw MemoryArchiveRepositoryError.invalidVoicePath }
+
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedPrivacyMetadata = privacyMetadata
+            ?? MemoryPrivacyMetadata(scope: MemoryPrivacyMigration.scopeFromLegacy(isPrivate: isPrivate))
+        let resolvedIsPrivate = resolvedPrivacyMetadata.scope == .privateOnly
+
+        let item = MemoryArchiveItem(
+            id: UUID().uuidString,
+            kind: .voiceSample,
+            title: cleanTitle.isEmpty ? "语音样本" : cleanTitle,
+            note: cleanNote.isEmpty ? "导入的长辈语音样本，用于后续声纹和语气参考。" : cleanNote,
+            localPath: cleanPath,
             createdAt: now,
             updatedAt: now,
             analysisStatus: .manual,
@@ -211,6 +259,7 @@ final class MemoryArchiveRepository {
     private static func defaultTitle(for kind: MemoryArchiveItemKind) -> String {
         switch kind {
         case .photo: return "旧照片"
+        case .voiceSample: return "语音样本"
         case .textNote: return "文字回忆"
         case .personalityNote: return "性格描述"
         case .catchphrase: return "口头禅"

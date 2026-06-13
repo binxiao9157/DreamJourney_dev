@@ -85,6 +85,12 @@ final class MemoryRepository {
         savePersistedMemories()
     }
 
+    func resetLocalStorage() {
+        memories.removeAll()
+        UserDefaults.standard.removeObject(forKey: Self.persistKey)
+        print("[MemoirSync] MemoryRepository.resetLocalStorage")
+    }
+
     func addComment(_ comment: CommentModel, to memoryId: String) {
         if let index = memories.firstIndex(where: { $0.id == memoryId }) {
             memories[index].comments.append(comment)

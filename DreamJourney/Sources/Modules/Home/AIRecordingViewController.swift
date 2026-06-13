@@ -1999,6 +1999,12 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
       transform: translateX(-50%);
       object-fit: contain;
       z-index: 21;
+      opacity: 0;
+      transition: opacity .22s ease-out;
+      will-change: opacity;
+    }
+    body[data-video-ready="true"] #canvas_video {
+      opacity: 1;
     }
     #canvas_gl, #background_video {
       display: none;
@@ -2011,6 +2017,7 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
       height: 142px;
       transform: translateX(-50%);
       z-index: 2;
+      display: none;
     }
     .halo {
       position: absolute;
@@ -2154,6 +2161,7 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
           },
           markAvatarVideoReady: function(detail) {
             this.isVideoReady = true;
+            document.body.dataset.videoReady = 'true';
             const spinner = document.getElementById('loadingSpinner');
             const startMessage = document.getElementById('startMessage');
             const screen = document.getElementById('screen');
@@ -2211,15 +2219,11 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
               this.postHealth('avatar_shell_ready_ignored', detail || 'video surface already ready');
               return;
             }
-            const spinner = document.getElementById('loadingSpinner');
             const startMessage = document.getElementById('startMessage');
-            if (spinner) {
-              spinner.style.display = 'none';
-            }
             if (startMessage) {
-              startMessage.textContent = '数字人动画已就绪';
+              startMessage.textContent = '正在准备真人数字人';
             }
-            this.postHealth('avatar_shell_ready', detail || 'fallback avatar ready');
+            this.postHealth('avatar_shell_loading', detail || 'shell ready, waiting for first video frame');
           },
           setState: function(state, prompt) {
             document.body.dataset.state = state || 'idle';
