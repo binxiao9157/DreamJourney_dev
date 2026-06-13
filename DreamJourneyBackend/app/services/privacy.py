@@ -68,3 +68,31 @@ def sanitize_archive_item_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     item.pop("absolutePath", None)
     item["metadataOnly"] = True
     return item
+
+
+def sanitize_mailbox_letter_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Return backend-safe mailbox metadata without full letter or echo text."""
+    if not _is_syncable(payload):
+        raise ValueError("mailbox letter is not syncable")
+
+    allowed_keys = {
+        "id",
+        "recipientName",
+        "title",
+        "createdAt",
+        "deliverAt",
+        "deliveredAt",
+        "status",
+        "boundaryAcknowledged",
+        "privacyMetadata",
+        "bodyPreview",
+    }
+    item = {key: deepcopy(payload[key]) for key in allowed_keys if key in payload}
+
+    preview = str(item.get("bodyPreview") or payload.get("body") or "").strip()
+    if preview:
+        item["bodyPreview"] = preview[:80]
+
+    item["metadataOnly"] = True
+    item["contentRedacted"] = True
+    return item

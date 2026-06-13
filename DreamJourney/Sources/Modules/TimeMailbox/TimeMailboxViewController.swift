@@ -31,6 +31,15 @@ final class TimeMailboxViewController: UIViewController {
         return label
     }()
 
+    private let backendSyncStatusLabel: UILabel = {
+        let label = UILabel()
+        label.text = "服务器同步：未检查"
+        label.font = .systemFont(ofSize: 12)
+        label.textColor = .warmSubtitle
+        label.numberOfLines = 0
+        return label
+    }()
+
     private lazy var tableView: UITableView = {
         let table = UITableView(frame: .zero, style: .plain)
         table.backgroundColor = .clear
@@ -74,7 +83,7 @@ final class TimeMailboxViewController: UIViewController {
     }
 
     private func setupLayout() {
-        [titleLabel, addButton, boundaryLabel, tableView, emptyLabel].forEach {
+        [titleLabel, addButton, boundaryLabel, backendSyncStatusLabel, tableView, emptyLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview($0)
         }
@@ -92,7 +101,11 @@ final class TimeMailboxViewController: UIViewController {
             boundaryLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             boundaryLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
 
-            tableView.topAnchor.constraint(equalTo: boundaryLabel.bottomAnchor, constant: 16),
+            backendSyncStatusLabel.topAnchor.constraint(equalTo: boundaryLabel.bottomAnchor, constant: 8),
+            backendSyncStatusLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            backendSyncStatusLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+
+            tableView.topAnchor.constraint(equalTo: backendSyncStatusLabel.bottomAnchor, constant: 12),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tableView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
@@ -103,10 +116,13 @@ final class TimeMailboxViewController: UIViewController {
     }
 
     private func reloadLetters() {
-        _ = repository.refreshDelivery(evidenceProvider: Self.makeEchoEvidence)
+        let deliveredLetters = repository.refreshDelivery(evidenceProvider: Self.makeEchoEvidence)
         letters = repository.letters()
         emptyLabel.isHidden = !letters.isEmpty
+        updateMailboxBackendSyncStatusLabel()
         tableView.reloadData()
+        syncDeliveredLettersToBackend(deliveredLetters)
+        refreshMailboxBackendSyncStatus()
     }
 
     private static func makeEchoEvidence(for letter: TimeMailboxLetter) -> TimeMailboxEchoEvidence {
@@ -209,6 +225,8 @@ final class TimeMailboxViewController: UIViewController {
             dismiss(animated: true) { [weak self] in
                 self?.showToast(letter.deliverAt > Date() ? "信已封存，到点会提醒" : "信已封存", type: .success)
                 self?.reloadLetters()
+                let latest = self?.repository.letters().first(where: { $0.id == letter.id }) ?? letter
+                self?.syncLetterMetadataToBackend(latest)
             }
         } catch TimeMailboxRepositoryError.invalidRecipient {
             showToast("请填写收件人", type: .info)
@@ -235,6 +253,7 @@ final class TimeMailboxViewController: UIViewController {
         }
 
         let latest = repository.letters().first(where: { $0.id == letter.id }) ?? letter
+        syncLetterMetadataToBackend(latest)
         let alert = UIAlertController(
             title: latest.title,
             message: latest.replyText ?? "这封信已经到达，但回声还在整理中。",
@@ -243,6 +262,83 @@ final class TimeMailboxViewController: UIViewController {
         alert.addAction(UIAlertAction(title: "我知道了", style: .default))
         present(alert, animated: true)
         reloadLetters()
+    }
+
+    private func syncDeliveredLettersToBackend(_ deliveredLetters: [TimeMailboxLetter]) {
+        deliveredLetters.forEach { syncLetterMetadataToBackend($0) }
+    }
+
+    private func syncLetterMetadataToBackend(_ letter: TimeMailboxLetter) {
+        guard DreamJourneyBackendClient.shared.isConfigured else {
+            updateMailboxBackendSyncStatusLabel()
+            return
+        }
+        guard let userId = UserManager.shared.currentUser?.id else {
+            updateMailboxBackendSyncStatusLabel()
+            return
+        }
+        guard PrivacyScopePolicy.canUse(metadata: letter.privacyMetadata, surface: .backendSync) else {
+            updateMailboxBackendSyncStatusLabel()
+            return
+        }
+
+        DreamJourneyBackendClient.shared.syncMailboxLetter(userId: userId, letter: letter) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    self?.refreshMailboxBackendSyncStatus()
+                case .failure(let error):
+                    print("[TimeMailbox] 后端信箱元数据同步失败: \(error.localizedDescription)")
+                    self?.updateMailboxBackendSyncStatusLabel(remoteCount: nil, detail: "同步失败，本机副本已保存")
+                }
+            }
+        }
+    }
+
+    private func refreshMailboxBackendSyncStatus() {
+        guard DreamJourneyBackendClient.shared.isConfigured else {
+            updateMailboxBackendSyncStatusLabel()
+            return
+        }
+        guard let userId = UserManager.shared.currentUser?.id else {
+            updateMailboxBackendSyncStatusLabel(remoteCount: nil, detail: "登录后可同步授权信件元数据")
+            return
+        }
+
+        DreamJourneyBackendClient.shared.fetchMailboxLetters(userId: userId) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let response):
+                    self?.updateMailboxBackendSyncStatusLabel(remoteCount: response.items.count)
+                case .failure(let error):
+                    print("[TimeMailbox] 后端信箱列表拉取失败: \(error.localizedDescription)")
+                    self?.updateMailboxBackendSyncStatusLabel(remoteCount: nil, detail: "暂时无法确认服务器状态")
+                }
+            }
+        }
+    }
+
+    private func updateMailboxBackendSyncStatusLabel(remoteCount: Int? = nil, detail: String? = nil) {
+        let syncableCount = letters.filter {
+            PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .backendSync)
+        }.count
+        let localOnlyCount = max(0, letters.count - syncableCount)
+
+        guard DreamJourneyBackendClient.shared.isConfigured else {
+            backendSyncStatusLabel.text = "服务器同步：未配置后端；完整正文和回声仅本机保存"
+            return
+        }
+        if UserManager.shared.currentUser == nil {
+            backendSyncStatusLabel.text = detail ?? "服务器同步：登录后可同步授权信件元数据"
+            return
+        }
+        if let remoteCount {
+            backendSyncStatusLabel.text = "服务器同步：服务器已有 \(remoteCount) 封元数据 · 本机授权 \(syncableCount) 封 · 完整正文不出端"
+        } else if let detail {
+            backendSyncStatusLabel.text = "服务器同步：\(detail) · 本机私密 \(localOnlyCount) 封"
+        } else {
+            backendSyncStatusLabel.text = "服务器同步：本机授权 \(syncableCount) 封 · 本机私密 \(localOnlyCount) 封 · 完整正文不出端"
+        }
     }
 }
 

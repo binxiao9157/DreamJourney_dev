@@ -55,6 +55,18 @@ class PostgresStore:
                 ON archive_items(user_id, created_at DESC)
             """,
             """
+            CREATE TABLE IF NOT EXISTS mailbox_letters (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                payload JSONB NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_mailbox_letters_user_created
+                ON mailbox_letters(user_id, created_at DESC)
+            """,
+            """
             CREATE TABLE IF NOT EXISTS family_members (
                 id TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL,
@@ -149,6 +161,27 @@ class PostgresStore:
 
     def list_archive_items(self, user_id: str) -> List[Dict[str, Any]]:
         return self._list_payloads("archive_items", user_id)
+
+    def add_mailbox_letter(self, user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        item = self._with_identity(payload, "mailbox", user_id)
+        item["updatedAt"] = self._now()
+        row = self._fetchone(
+            """
+            INSERT INTO mailbox_letters (user_id, id, payload, created_at)
+            VALUES (%s, %s, %s, NOW())
+            ON CONFLICT (id) DO UPDATE SET
+                user_id = EXCLUDED.user_id,
+                payload = EXCLUDED.payload,
+                created_at = NOW()
+            RETURNING payload
+            """,
+            (user_id, item["id"], item),
+            commit=True,
+        )
+        return deepcopy(row["payload"])
+
+    def list_mailbox_letters(self, user_id: str) -> List[Dict[str, Any]]:
+        return self._list_payloads("mailbox_letters", user_id)
 
     def add_family_member(self, user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         item = self._with_identity(payload, "family", user_id)

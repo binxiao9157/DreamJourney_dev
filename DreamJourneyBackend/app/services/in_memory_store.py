@@ -9,6 +9,7 @@ class InMemoryStore:
         self._kb_snapshots: Dict[str, Dict[str, Any]] = {}
         self._memories: Dict[str, List[Dict[str, Any]]] = {}
         self._archive_items: Dict[str, List[Dict[str, Any]]] = {}
+        self._mailbox_letters: Dict[str, List[Dict[str, Any]]] = {}
         self._family_members: Dict[str, List[Dict[str, Any]]] = {}
         self._care_snapshots: Dict[str, List[Dict[str, Any]]] = {}
 
@@ -59,6 +60,21 @@ class InMemoryStore:
 
     def list_archive_items(self, user_id: str) -> List[Dict[str, Any]]:
         return deepcopy(self._archive_items.get(user_id, []))
+
+    def add_mailbox_letter(self, user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        item = deepcopy(payload)
+        item.setdefault("id", f"mailbox_{len(self._mailbox_letters.get(user_id, [])) + 1}")
+        item["userId"] = user_id
+        item["updatedAt"] = self._now()
+        item.setdefault("createdAt", item["updatedAt"])
+
+        letters = self._mailbox_letters.setdefault(user_id, [])
+        letters[:] = [letter for letter in letters if letter.get("id") != item["id"]]
+        letters.insert(0, item)
+        return deepcopy(item)
+
+    def list_mailbox_letters(self, user_id: str) -> List[Dict[str, Any]]:
+        return deepcopy(self._mailbox_letters.get(user_id, []))
 
     def add_family_member(self, user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         item = deepcopy(payload)

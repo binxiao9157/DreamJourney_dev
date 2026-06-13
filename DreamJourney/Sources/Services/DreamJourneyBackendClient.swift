@@ -188,6 +188,38 @@ final class DreamJourneyBackendClient {
         )
     }
 
+    func syncMailboxLetter(
+        userId: String,
+        letter: TimeMailboxLetter,
+        completion: @escaping (Result<MailboxLetterResponse, Swift.Error>) -> Void
+    ) {
+        guard let payload = Self.mailboxLetterPayload(userId: userId, letter: letter) else {
+            completion(.failure(Error.mailboxLetterNotSyncable))
+            return
+        }
+        performJSONRequest(
+            path: "mailbox/letters",
+            method: "POST",
+            bodyObject: payload,
+            responseType: MailboxLetterResponse.self,
+            completion: completion
+        )
+    }
+
+    func fetchMailboxLetters(
+        userId: String,
+        completion: @escaping (Result<MailboxLettersResponse, Swift.Error>) -> Void
+    ) {
+        let escapedUserID = userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId
+        performJSONRequest(
+            path: "mailbox/letters/\(escapedUserID)",
+            method: "GET",
+            bodyObject: nil,
+            responseType: MailboxLettersResponse.self,
+            completion: completion
+        )
+    }
+
     func inviteFamilyMember(
         userId: String,
         name: String,
@@ -343,6 +375,23 @@ final class DreamJourneyBackendClient {
         return object
     }
 
+    private static func mailboxLetterPayload(userId: String, letter: TimeMailboxLetter) -> [String: Any]? {
+        guard PrivacyScopePolicy.canUse(metadata: letter.privacyMetadata, surface: .backendSync),
+              var object = jsonObject(fromEncodable: letter) as? [String: Any] else {
+            return nil
+        }
+        let bodyPreview = (object["body"] as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .prefix(80)
+        object["userId"] = userId
+        object["bodyPreview"] = String(bodyPreview)
+        object["metadataOnly"] = true
+        object["contentRedacted"] = true
+        object.removeValue(forKey: "body")
+        object.removeValue(forKey: "replyText")
+        return object
+    }
+
     private static func jsonDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -366,6 +415,7 @@ extension DreamJourneyBackendClient {
         case invalidGraphJSON
         case invalidCareSnapshot
         case archiveItemNotSyncable
+        case mailboxLetterNotSyncable
         case nonHTTPResponse
         case statusCode(Int)
 
@@ -381,6 +431,8 @@ extension DreamJourneyBackendClient {
                 return "关怀看板快照 JSON 无效"
             case .archiveItemNotSyncable:
                 return "档案素材未授权同步到后端"
+            case .mailboxLetterNotSyncable:
+                return "时空信箱信件未授权同步到后端"
             case .nonHTTPResponse:
                 return "后端返回非 HTTP 响应"
             case .statusCode(let code):
@@ -440,6 +492,33 @@ extension DreamJourneyBackendClient {
     struct ArchiveItemsResponse: Decodable {
         let userId: String
         let items: [MemoryArchiveItem]
+    }
+
+    struct MailboxLetterResponse: Decodable {
+        let status: String
+        let item: MailboxLetterItem
+    }
+
+    struct MailboxLettersResponse: Decodable {
+        let userId: String
+        let items: [MailboxLetterItem]
+    }
+
+    struct MailboxLetterItem: Decodable {
+        let id: String
+        let userId: String?
+        let recipientName: String?
+        let title: String?
+        let bodyPreview: String?
+        let createdAt: String?
+        let deliverAt: String?
+        let deliveredAt: String?
+        let status: String?
+        let boundaryAcknowledged: Bool?
+        let privacyMetadata: MemoryPrivacyMetadata?
+        let metadataOnly: Bool?
+        let contentRedacted: Bool?
+        let updatedAt: String?
     }
 
     struct FamilyInviteResponse: Decodable {

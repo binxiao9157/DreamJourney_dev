@@ -125,6 +125,25 @@
   - 历史为空或请求失败时，再回落到原来的 latest 快照兜底。
 - 仍只展示脱敏聚合信号，不拉取或显示原始 transcript。
 
+### 12. 时空信箱：授权信件元数据后端同步
+
+- 后端新增通用信箱元数据 API：
+  - `POST /mailbox/letters`
+  - `GET /mailbox/letters/{userId}`
+- `mailbox_letters` Postgres 表和 InMemoryStore 同步补齐，按信件 `id` upsert，避免“立即投递”后 sealed 状态覆盖 delivered/read 状态。
+- 服务端新增 `sanitize_mailbox_letter_payload`：
+  - 拒绝 `privateOnly` / `localOnly` 信件。
+  - 允许 `generationAllowed` / `familyCircle` 的信件元数据进入自有业务后端。
+  - 强制移除完整 `body` 和 `replyText`，只保存 `bodyPreview`、标题、收件人、投递时间、状态、边界确认和隐私范围。
+- iOS `DreamJourneyBackendClient` 新增：
+  - `syncMailboxLetter(userId:letter:)`
+  - `fetchMailboxLetters(userId:)`
+- 信箱页新增“服务器同步”状态行：
+  - 未配置后端时说明完整正文和回声仅本机保存。
+  - 已配置并登录时显示服务器已有信件元数据数量、本机授权数量。
+  - 封存、到点投递、已读状态变化后都会尝试同步授权信件元数据。
+- 边界：完整正文、回声文本、本机/私密信件仍不出端。
+
 ## 真机验收建议
 
 ### 记忆档案馆
@@ -153,6 +172,10 @@
    - 如有匹配，出现“我能参考到的已授权记忆”。
    - 如无匹配，明确说明不会编造具体经历。
 6. 如果选择未来投递，首次使用时系统会请求通知权限；到点后预期收到“时空信箱有一封信到达”的本机提醒。
+7. 如果已配置 `DreamJourneyBackendBaseURL` 并登录：
+   - 选择“本机”时，页面应仍提示完整内容只保存在本机，后端不会保存该信件。
+   - 选择“可生成”或“亲友”时，后端应能通过 `GET /mailbox/letters/{userId}` 查到信件元数据。
+   - 响应不应包含完整 `body` 或 `replyText`，只允许出现短 `bodyPreview`。
 
 ### 长辈关怀看板
 
@@ -172,11 +195,12 @@
 - `MemoryArchive verification passed`
 - `TimeMailbox verification passed`
 - `TimeMailboxNotification verification passed`
+- `TimeMailboxBackendSync verification passed`
 - `CareDashboard verification passed`
 - `CareDashboardBackendSync verification passed`
 - `MemoryArchiveBackendSync verification passed`
 - `FamilyBackendSync verification passed`
-- `DreamJourneyBackend unittest 25/25 OK`
+- `DreamJourneyBackend unittest 28/28 OK`
 - `PrivacyScope verification passed`
 - `MemoryPrivacyIntegration verification passed`
 - `LocalTestDataCleanup verification passed`
@@ -189,4 +213,4 @@
 ## 下一步
 
 1. 进一步拆分 invitation code/deeplink 状态机，支持跨设备真实邀请链路。
-2. 补真机证据包：档案入库截图、结构化知识库截图、信箱回声截图、关怀周报导出文本。
+2. 补真机证据包：档案入库截图、结构化知识库截图、信箱回声截图、信箱后端元数据响应、关怀周报导出文本。

@@ -32,6 +32,9 @@ class FakeCursor:
         elif normalized.startswith("SELECT payload FROM memories"):
             user_id = params[0]
             self.result = [{"payload": item} for item in self.connection.memories.get(user_id, [])]
+        elif normalized.startswith("SELECT payload FROM mailbox_letters"):
+            user_id = params[0]
+            self.result = [{"payload": item} for item in self.connection.mailbox_letters.get(user_id, [])]
         elif normalized.startswith("SELECT payload FROM family_members WHERE user_id = %s AND id = %s"):
             user_id, item_id = params
             members = [
@@ -76,6 +79,13 @@ class FakeCursor:
             payload = unwrap_jsonb(payload)
             self.connection.archive_items.setdefault(user_id, []).insert(0, dict(payload))
             self.result = {"payload": payload}
+        elif normalized.startswith("INSERT INTO mailbox_letters"):
+            user_id, item_id, payload = params
+            payload = unwrap_jsonb(payload)
+            letters = self.connection.mailbox_letters.setdefault(user_id, [])
+            letters[:] = [item for item in letters if item.get("id") != item_id]
+            letters.insert(0, dict(payload))
+            self.result = {"payload": payload}
         elif normalized.startswith("INSERT INTO family_members"):
             user_id, item_id, payload = params
             payload = unwrap_jsonb(payload)
@@ -115,6 +125,7 @@ class FakeConnection:
         self.kb_snapshots = {}
         self.memories = {}
         self.archive_items = {}
+        self.mailbox_letters = {}
         self.family_members = {}
         self.care_snapshots = {}
 
@@ -137,6 +148,7 @@ class PostgresStoreTests(unittest.TestCase):
         self.assertIn("CREATE TABLE IF NOT EXISTS kb_snapshots", sql)
         self.assertIn("CREATE TABLE IF NOT EXISTS memories", sql)
         self.assertIn("CREATE TABLE IF NOT EXISTS archive_items", sql)
+        self.assertIn("CREATE TABLE IF NOT EXISTS mailbox_letters", sql)
         self.assertIn("CREATE TABLE IF NOT EXISTS family_members", sql)
         self.assertIn("CREATE TABLE IF NOT EXISTS care_snapshots", sql)
         self.assertGreaterEqual(connection.commits, 1)
@@ -157,12 +169,15 @@ class PostgresStoreTests(unittest.TestCase):
 
         memory = store.add_memory("u1", {"title": "绍兴记忆"})
         archive = store.add_archive_item("u1", {"title": "老照片"})
+        mailbox = store.add_mailbox_letter("u1", {"id": "letter_1", "title": "想说的话"})
         member = store.add_family_member("u1", {"name": "林桂芳"})
 
         self.assertTrue(memory["id"].startswith("memory_"))
         self.assertTrue(archive["id"].startswith("archive_"))
+        self.assertEqual(mailbox["id"], "letter_1")
         self.assertTrue(member["id"].startswith("family_"))
         self.assertEqual(store.list_memories("u1")[0]["title"], "绍兴记忆")
+        self.assertEqual(store.list_mailbox_letters("u1")[0]["title"], "想说的话")
         self.assertEqual(store.list_family_members("u1")[0]["name"], "林桂芳")
 
     def test_store_persists_family_member_revocation(self):

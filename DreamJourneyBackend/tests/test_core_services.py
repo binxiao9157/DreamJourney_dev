@@ -228,6 +228,18 @@ class StoreTests(unittest.TestCase):
         self.assertEqual([item["id"] for item in store.list_archive_items("u1")], ["archive-new", "archive-old"])
         self.assertEqual([item["id"] for item in store.list_archive_items("u2")], ["archive-other"])
 
+    def test_store_lists_mailbox_letters_by_user(self):
+        store = InMemoryStore()
+
+        store.add_mailbox_letter("u1", {"id": "letter_1", "title": "第一封", "privacyMetadata": {"scope": "familyCircle"}})
+        store.add_mailbox_letter("u1", {"id": "letter_2", "title": "第二封", "privacyMetadata": {"scope": "generationAllowed"}})
+        store.add_mailbox_letter("u2", {"id": "letter_3", "title": "其他用户", "privacyMetadata": {"scope": "familyCircle"}})
+        store.add_mailbox_letter("u1", {"id": "letter_1", "title": "第一封已读", "status": "read", "privacyMetadata": {"scope": "familyCircle"}})
+
+        self.assertEqual([item["title"] for item in store.list_mailbox_letters("u1")], ["第一封已读", "第二封"])
+        self.assertEqual(store.list_mailbox_letters("u1")[0]["status"], "read")
+        self.assertEqual([item["title"] for item in store.list_mailbox_letters("u2")], ["其他用户"])
+
 
 class CareSnapshotAPITests(unittest.TestCase):
     def test_care_snapshot_api_saves_and_returns_latest_by_viewer(self):
@@ -358,6 +370,59 @@ class ArchiveAPITests(unittest.TestCase):
 
         self.assertEqual(private_response.status_code, 403)
         self.assertEqual(local_response.status_code, 403)
+
+
+class MailboxAPITests(unittest.TestCase):
+    def test_mailbox_letters_api_saves_sanitized_metadata_and_lists_by_user(self):
+        client = TestClient(app)
+
+        response = client.post(
+            "/mailbox/letters",
+            json={
+                "userId": "mailbox_user",
+                "id": "letter_sync_1",
+                "recipientName": "林桂芳",
+                "title": "想说的话",
+                "body": "这是一封完整正文，应该只留短预览，不应该完整返回。",
+                "bodyPreview": "这是一封完整正文",
+                "replyText": "不是逝者真实回复，但这段回声不应同步。",
+                "createdAt": "2026-06-13T00:00:00Z",
+                "deliverAt": "2026-06-14T00:00:00Z",
+                "status": "sealed",
+                "boundaryAcknowledged": True,
+                "privacyMetadata": {"scope": "generationAllowed"},
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        item = response.json()["item"]
+        self.assertEqual(item["id"], "letter_sync_1")
+        self.assertEqual(item["bodyPreview"], "这是一封完整正文")
+        self.assertTrue(item["metadataOnly"])
+        self.assertTrue(item["contentRedacted"])
+        self.assertNotIn("body", item)
+        self.assertNotIn("replyText", item)
+
+        listed = client.get("/mailbox/letters/mailbox_user")
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.json()["items"][0]["id"], "letter_sync_1")
+        self.assertNotIn("body", listed.json()["items"][0])
+
+    def test_mailbox_letters_api_rejects_private_or_local_letters(self):
+        client = TestClient(app)
+
+        for scope in ["localOnly", "privateOnly"]:
+            response = client.post(
+                "/mailbox/letters",
+                json={
+                    "userId": "mailbox_private_user",
+                    "id": f"letter_{scope}",
+                    "recipientName": "林桂芳",
+                    "title": "私密信件",
+                    "body": "不应离开本机",
+                    "privacyMetadata": {"scope": scope},
+                },
+            )
+            self.assertEqual(response.status_code, 403)
 
 
 class FamilyAPITests(unittest.TestCase):

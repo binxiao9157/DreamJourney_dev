@@ -7,7 +7,11 @@ except ImportError as exc:  # pragma: no cover - exercised only without runtime 
 
 from app.core.config import settings
 from app.services.amap import AMapDistrictProxy
-from app.services.privacy import filter_syncable_graph, sanitize_archive_item_payload
+from app.services.privacy import (
+    filter_syncable_graph,
+    sanitize_archive_item_payload,
+    sanitize_mailbox_letter_payload,
+)
 from app.services.runtime_config import RuntimeConfigService
 from app.services.store_factory import init_store, make_store
 from app.services.tokens import TokenService
@@ -185,6 +189,24 @@ def create_archive_item(payload: Dict[str, Any]) -> Dict[str, Any]:
 @app.get("/archive/items/{user_id}")
 def list_archive_items(user_id: str) -> Dict[str, Any]:
     return {"userId": user_id, "items": store.list_archive_items(user_id)}
+
+
+@app.post("/mailbox/letters")
+def create_mailbox_letter(payload: Dict[str, Any]) -> Dict[str, Any]:
+    user_id = str(payload.get("userId") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=400, detail="userId is required")
+    try:
+        safe_payload = sanitize_mailbox_letter_payload(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    item = store.add_mailbox_letter(user_id, safe_payload)
+    return {"status": "saved", "item": item}
+
+
+@app.get("/mailbox/letters/{user_id}")
+def list_mailbox_letters(user_id: str) -> Dict[str, Any]:
+    return {"userId": user_id, "items": store.list_mailbox_letters(user_id)}
 
 
 @app.post("/family/invite")

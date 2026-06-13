@@ -26,6 +26,9 @@ xcrun swiftc \
 echo "== TimeMailbox notification =="
 python3 Scripts/TimeMailboxNotificationVerify/main.py
 
+echo "== TimeMailbox backend sync =="
+python3 Scripts/TimeMailboxBackendSyncVerify/main.py
+
 echo "== MemoryArchive =="
 xcrun swiftc \
   DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
