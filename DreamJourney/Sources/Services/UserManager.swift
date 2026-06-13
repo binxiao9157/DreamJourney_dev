@@ -67,4 +67,5 @@ extension Notification.Name {
     static let djUserDidLogin  = Notification.Name("dj.user.didLogin")
     static let djUserDidLogout = Notification.Name("dj.user.didLogout")
     static let djNewMemoryCreated = Notification.Name("dj.memory.newCreated")
+    static let djConversationKnowledgeExtractionFinished = Notification.Name("dj.conversation.knowledgeExtractionFinished")
 }

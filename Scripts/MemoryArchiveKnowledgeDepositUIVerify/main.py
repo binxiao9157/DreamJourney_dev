@@ -51,6 +51,10 @@ require(
     "photo analysis success should surface KBLite deposit feedback",
 )
 require(
+    "照片分析失败，素材已保存" in analyze_photo_body,
+    "photo analysis failure should surface a persistent diagnostic deposit status",
+)
+require(
     "档案馆" in kb_view and "照片、语音或文字素材" in kb_view,
     "knowledge base empty state should direct users to archive material ingestion",
 )

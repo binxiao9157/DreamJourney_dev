@@ -144,6 +144,9 @@ xcrun swiftc \
 echo "== KnowledgeBase deposit status UI =="
 python3 Scripts/KnowledgeBaseDepositStatusUIVerify/main.py
 
+echo "== Dialog knowledge deposit feedback =="
+python3 Scripts/DialogKnowledgeDepositFeedbackVerify/main.py
+
 echo "== KnowledgeBase source privacy UI =="
 python3 Scripts/KnowledgeBaseSourcePrivacyUIVerify/main.py
 

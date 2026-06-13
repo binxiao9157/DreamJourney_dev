@@ -350,6 +350,7 @@ final class MemoryArchiveViewController: UIViewController {
                     }
                 case .failure:
                     _ = try? self.repository.markAnalysisFailed(id: itemId)
+                    self.setKnowledgeDepositStatus("结构化建库：照片分析失败，素材已保存；请检查 DeepSeek 或后端配置后重试")
                     self.showToast("照片已保存，分析稍后可重试", type: .info)
                 }
                 self.reloadData()

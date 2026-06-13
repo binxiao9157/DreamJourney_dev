@@ -632,6 +632,12 @@ final class AIRecordingViewController: UIViewController {
             name: UIApplication.willEnterForegroundNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleKnowledgeExtractionFinished(_:)),
+            name: .djConversationKnowledgeExtractionFinished,
+            object: nil
+        )
     }
 
     @objc private func handleLogout() {
@@ -658,6 +664,15 @@ final class AIRecordingViewController: UIViewController {
         }
         // 检查声音复刻训练是否在后台完成（Timer 会被挂起，需要手动检查）
         VoiceCloneService.shared.checkPendingTraining()
+    }
+
+    @objc private func handleKnowledgeExtractionFinished(_ notification: Notification) {
+        let addedCount = notification.userInfo?["addedCount"] as? Int ?? 0
+        if addedCount > 0 {
+            showToast("结构化知识库已沉淀 \(addedCount) 条", type: .success)
+        } else {
+            showToast("本轮暂无可新增的结构化知识", type: .info)
+        }
     }
 
     private func configureDigitalHumanSpeechPlayback() {

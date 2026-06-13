@@ -268,6 +268,14 @@ final class ConversationMemoryManager {
                 if addedCount > 0 {
                     print("[Memory] 🧠 知识库新增 \(addedCount) 实体")
                 }
+                NotificationCenter.default.post(
+                    name: .djConversationKnowledgeExtractionFinished,
+                    object: nil,
+                    userInfo: [
+                        "sessionId": sessionId,
+                        "addedCount": addedCount
+                    ]
+                )
             }
         }
     }
