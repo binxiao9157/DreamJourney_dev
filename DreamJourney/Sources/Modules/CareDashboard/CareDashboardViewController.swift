@@ -7,6 +7,8 @@ final class CareDashboardViewController: UIViewController {
     private let viewerIdentitySource: FamilyAccessIdentityResolver.Source?
     private var snapshot: CareSignalSnapshot?
     private var snapshotSourceText = "本机近况"
+    private var localEligibleUserTurnCount = 0
+    private var remoteSnapshotStatusText = "服务器同步：未检查"
 
     private let scrollView = UIScrollView()
     private let stackView: UIStackView = {
@@ -117,6 +119,10 @@ final class CareDashboardViewController: UIViewController {
             from: ConversationMemoryManager.shared.getCareDashboardTranscriptHistory(),
             viewerFamilyMemberID: viewerFamilyMemberID
         )
+        localEligibleUserTurnCount = turns.filter { $0.role.lowercased() == "user" }.count
+        remoteSnapshotStatusText = DreamJourneyBackendClient.shared.isConfigured
+            ? "服务器同步：正在检查历史快照"
+            : "服务器同步：未配置，当前仅本机分析"
         let localSnapshot = analyzer.analyze(turns: turns)
         snapshot = localSnapshot
         snapshotSourceText = "本机近况"
@@ -139,10 +145,23 @@ final class CareDashboardViewController: UIViewController {
             userId: ownerUserId,
             viewerFamilyMemberID: viewerFamilyMemberID,
             snapshot: snapshot
-        ) { result in
-            if case .failure(let error) = result {
-                print("[CareDashboard] 后端快照同步失败: \(error.localizedDescription)")
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    self?.setRemoteSnapshotStatus("服务器同步：本机快照已上传")
+                case .failure(let error):
+                    self?.setRemoteSnapshotStatus("服务器同步：上传失败，本机仍可查看")
+                    print("[CareDashboard] 后端快照同步失败: \(error.localizedDescription)")
+                }
             }
+        }
+    }
+
+    private func setRemoteSnapshotStatus(_ text: String) {
+        remoteSnapshotStatusText = text
+        if isViewLoaded {
+            render()
         }
     }
 
@@ -158,8 +177,10 @@ final class CareDashboardViewController: UIViewController {
             DispatchQueue.main.async {
                 switch result {
                 case .success(let response):
+                    self?.setRemoteSnapshotStatus("服务器同步：已读取最近快照")
                     self?.applyRemoteSnapshotIfUseful(response.item.snapshot, sourceText: "服务器同步快照")
                 case .failure(let error):
+                    self?.setRemoteSnapshotStatus("服务器同步：暂无可用历史快照")
                     print("[CareDashboard] 后端快照拉取失败: \(error.localizedDescription)")
                 }
             }
@@ -179,6 +200,7 @@ final class CareDashboardViewController: UIViewController {
             DispatchQueue.main.async {
                 switch result {
                 case .success(let response):
+                    self?.setRemoteSnapshotStatus("服务器同步：已读取历史 \(response.items.count) 条")
                     if let latest = response.items.first?.snapshot {
                         self?.applyRemoteSnapshotIfUseful(
                             latest,
@@ -188,6 +210,7 @@ final class CareDashboardViewController: UIViewController {
                         self?.fetchLatestSnapshotFromBackend()
                     }
                 case .failure(let error):
+                    self?.setRemoteSnapshotStatus("服务器同步：历史拉取失败，尝试最近快照")
                     print("[CareDashboard] 后端历史快照拉取失败: \(error.localizedDescription)")
                     self?.fetchLatestSnapshotFromBackend()
                 }
@@ -354,7 +377,13 @@ final class CareDashboardViewController: UIViewController {
         bodyLabel.textColor = .warmSubtitle
         bodyLabel.numberOfLines = 0
 
-        let stack = UIStackView(arrangedSubviews: [titleLabel, bodyLabel])
+        let readinessLabel = UILabel()
+        readinessLabel.text = "本机可用发言 \(localEligibleUserTurnCount) 轮 · \(remoteSnapshotStatusText)"
+        readinessLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        readinessLabel.textColor = .warmPrimary
+        readinessLabel.numberOfLines = 0
+
+        let stack = UIStackView(arrangedSubviews: [titleLabel, bodyLabel, readinessLabel])
         stack.axis = .vertical
         stack.spacing = 8
         container.addSubview(stack)
@@ -573,7 +602,6 @@ final class CareDashboardViewController: UIViewController {
         ])
         return container
     }
-
     private func makeBulletLabel(_ text: String) -> UILabel {
         let label = UILabel()
         label.text = "• \(text)"
