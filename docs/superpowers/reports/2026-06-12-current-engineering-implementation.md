@@ -196,6 +196,7 @@ AI 语音陪伴
 - KBLite graph version 已升级到 v2。
 - 人物、地点、事件、事实均携带隐私 metadata。
 - 远端抽取只允许 `generationAllowed` transcript。
+- Transcript 提取先执行本地确定性沉淀，再让 LLM 补充；即使远端抽取成功但返回空数组，明确姓名、地点、年份、居住/开店等事实仍会进入结构化知识库。
 - Prompt context、开场白 hint、知识缺口上下文按 `.prompt` 可用性过滤。
 - 同名实体/事实只允许同 scope 合并，避免 local/family/generation 数据互相污染。
 - Export、Widget、Backend sync、PDF 输入图谱均通过 sanitized graph 输出。

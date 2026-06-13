@@ -53,7 +53,7 @@ final class DeepSeekService {
     }
 
     func extractKnowledge(prompt: String, completion: @escaping (Result<KBExtractionResult, StubError>) -> Void) {
-        completion(.failure(.unavailable))
+        completion(.success(KBExtractionResult()))
     }
 }
 
@@ -98,6 +98,53 @@ assertCondition(graph.people.allSatisfy { $0.privacyMetadata.scope == .generatio
 assertCondition(graph.places.allSatisfy { $0.privacyMetadata.scope == .generationAllowed }, "places should keep generation scope")
 assertCondition(graph.events.allSatisfy { $0.privacyMetadata.scope == .generationAllowed }, "events should keep generation scope")
 assertCondition(graph.facts.allSatisfy { $0.privacyMetadata.scope == .generationAllowed }, "facts should keep generation scope")
+
+KBLiteManager.shared.reset()
+var extractionAddedCount: Int?
+KBLiteManager.shared.extractFromTranscript(
+    turns: [
+        ConversationTurn(
+            role: "user",
+            text: testText,
+            timestamp: Date(timeIntervalSince1970: 1_800_000_000),
+            privacyMetadata: metadata
+        )
+    ],
+    sessionId: 1
+) { addedCount in
+    extractionAddedCount = addedCount
+}
+
+let deadline = Date().addingTimeInterval(2)
+while extractionAddedCount == nil && Date() < deadline {
+    RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
+}
+assertCondition(extractionAddedCount != nil, "extractFromTranscript should call completion when DeepSeek returns an empty success")
+let graphAfterEmptyLLMSuccess = KBLiteManager.shared.graph
+let emptySuccessPeople = Set(graphAfterEmptyLLMSuccess.people.map(\.name))
+let emptySuccessPlaces = Set(graphAfterEmptyLLMSuccess.places.map(\.name))
+let emptySuccessEvents = Set(graphAfterEmptyLLMSuccess.events.map(\.title))
+let emptySuccessFacts = graphAfterEmptyLLMSuccess.facts.map(\.statement).joined(separator: "\n")
+
+assertCondition(
+    (extractionAddedCount ?? 0) >= 8,
+    "extractFromTranscript should preserve deterministic local extraction even when LLM succeeds with no entities"
+)
+assertCondition(emptySuccessPeople.contains("陈建国"), "empty LLM success should still extract self name")
+assertCondition(emptySuccessPeople.contains("林桂芳"), "empty LLM success should still extract spouse name")
+assertCondition(emptySuccessPlaces.contains("绍兴越城区仓桥直街"), "empty LLM success should still extract lived address")
+assertCondition(
+    emptySuccessEvents.contains("开小照相馆") || emptySuccessEvents.contains("开照相馆"),
+    "empty LLM success should still extract photo studio event"
+)
+assertCondition(
+    emptySuccessFacts.contains("1978年我和妻子林桂芳在杭州西湖边开过一家小照相馆"),
+    "empty LLM success should still persist explicit fact"
+)
+assertCondition(
+    graphAfterEmptyLLMSuccess.sessionCount == 1,
+    "extractFromTranscript should mark session processed after deterministic deposit"
+)
 
 KBLiteManager.shared.reset()
 try? FileManager.default.removeItem(at: verifyGraph)

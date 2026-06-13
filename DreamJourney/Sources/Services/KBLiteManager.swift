@@ -591,30 +591,42 @@ final class KBLiteManager {
         let remoteTurns = KBLitePrivacyScopePolicy.remoteExtractableTurns(from: turns)
         let localPrivacyMetadata = KBLitePrivacyScopePolicy.derivedEntityMetadata(from: localTurns)
         let remotePrivacyMetadata = KBLitePrivacyScopePolicy.derivedEntityMetadata(from: remoteTurns)
+        let previouslyProcessedSessionCount = graph.sessionCount
 
         // 提取频率控制：每 3 次会话才触发一次 LLM 提取（节省成本）
         // 第 1 次、第 10 次、以及距离上次提取超过 24 小时的会话强制执行
-        let shouldForceExtract = graph.sessionCount == 0
-            || (sessionId - graph.sessionCount >= 3)
+        let shouldForceExtract = previouslyProcessedSessionCount == 0
+            || (sessionId - previouslyProcessedSessionCount >= 3)
             || (Date().timeIntervalSince(graph.lastUpdated) > 86400)
 
+        // 确定性本地沉淀先落库，确保明确姓名、地点、年份和事件不依赖 LLM 是否抽到。
+        let deterministicCount = quickExtract(
+            turns: localTurns,
+            sessionId: sessionId,
+            privacyMetadata: localPrivacyMetadata
+        )
+        if deterministicCount > 0 {
+            graph.sessionCount = max(graph.sessionCount, sessionId)
+            save()
+        }
+
         guard shouldForceExtract else {
-            print("[KBLite] ⏭️ 提取频率控制：跳过会话#\(sessionId)，上次提取#\(graph.sessionCount)")
-            // 仍然用本地正则做快速提取
-            let count = quickExtract(turns: localTurns, sessionId: sessionId, privacyMetadata: localPrivacyMetadata)
-            if count > 0 {
+            print("[KBLite] ⏭️ 提取频率控制：跳过会话#\(sessionId)，上次提取#\(previouslyProcessedSessionCount)")
+            if deterministicCount == 0 {
+                graph.sessionCount = max(graph.sessionCount, sessionId)
                 save()
             }
-            completion(count)
+            completion(deterministicCount)
             return
         }
 
         guard !remoteTurns.isEmpty else {
             print("[KBLite] 🔒 无可远端提取 transcript，跳过 LLM，仅执行本地快速提取")
-            let count = quickExtract(turns: localTurns, sessionId: sessionId, privacyMetadata: localPrivacyMetadata)
-            graph.sessionCount = sessionId
-            save()
-            completion(count)
+            if deterministicCount == 0 {
+                graph.sessionCount = max(graph.sessionCount, sessionId)
+                save()
+            }
+            completion(deterministicCount)
             return
         }
 
@@ -649,26 +661,22 @@ final class KBLiteManager {
 
                 switch result {
                 case .success(let extractionResult):
-                    let addedCount = self.mergeExtractionResult(
+                    let llmAddedCount = self.mergeExtractionResult(
                         extractionResult,
                         sessionId: sessionId,
                         privacyMetadata: remotePrivacyMetadata
                     )
-                    self.graph.sessionCount = sessionId
+                    let addedCount = deterministicCount + llmAddedCount
+                    self.graph.sessionCount = max(self.graph.sessionCount, sessionId)
                     self.save()
                     print("[KBLite] ✅ 知识提取完成: 新增 \(addedCount) 实体")
                     DispatchQueue.main.async { completion(addedCount) }
 
                 case .failure(let error):
-                    print("[KBLite] ⚠️ LLM 提取失败: \(error.localizedDescription)，使用正则 fallback")
-                    let count = self.quickExtract(
-                        turns: localTurns,
-                        sessionId: sessionId,
-                        privacyMetadata: localPrivacyMetadata
-                    )
-                    self.graph.sessionCount = sessionId
+                    print("[KBLite] ⚠️ LLM 提取失败: \(error.localizedDescription)，保留本地确定性沉淀")
+                    self.graph.sessionCount = max(self.graph.sessionCount, sessionId)
                     self.save()
-                    DispatchQueue.main.async { completion(count) }
+                    DispatchQueue.main.async { completion(deterministicCount) }
                 }
             }
         }
