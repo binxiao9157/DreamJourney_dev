@@ -28,9 +28,11 @@ required_seed_fragments = [
     "RoadshowDemoRoute.resetCompletions",
     "ConversationMemoryManager.shared.resetLocalStorage()",
     "KBLiteManager.shared.reset(syncToBackend: false)",
+    "MemoryArchiveVoiceProfileStore.shared.reset()",
     "FamilyRepository.shared.resetLocalAccessState()",
     "FamilyRepository.shared.removeDemoAndDerivedMembersForLocalTesting()",
     "FamilyDerivedMembers",
+    "MemoryArchiveVoiceProfiles",
     "MemoryRepository.shared.resetLocalStorage()",
     "MemoirRepository.shared.resetLocalStorage()",
 ]

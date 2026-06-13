@@ -49,6 +49,11 @@ require(
     "metadata-only archive deposits should be described as archived source material, not completed knowledge building",
 )
 require(
+    "ingestArchivePhotoMaterialMetadata(" in view
+    and "照片素材已归档为可追溯来源" in view,
+    "photo save flow should deposit source metadata before remote image analysis",
+)
+require(
     "已保存档案元信息" not in status_message_body,
     "archive metadata count should not be surfaced as a knowledge-building success",
 )

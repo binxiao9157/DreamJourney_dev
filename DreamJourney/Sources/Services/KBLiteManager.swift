@@ -2100,6 +2100,48 @@ final class KBLiteManager {
     }
 
     @discardableResult
+    func ingestArchivePhotoMaterialMetadata(
+        archiveItemID rawArchiveItemID: String,
+        title rawTitle: String,
+        note rawNote: String,
+        materialKind rawMaterialKind: String,
+        capturedAt: Date,
+        sessionId: Int,
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+    ) -> Int {
+        guard privacyMetadata.scope != .privateOnly else { return 0 }
+        let archiveItemID = Self.normalizedQuickExtractEntity(rawArchiveItemID)
+        let title = Self.normalizedQuickExtractEntity(rawTitle)
+        let note = Self.normalizedQuickExtractEntity(rawNote)
+        let materialKind = Self.normalizedQuickExtractEntity(rawMaterialKind)
+        guard !archiveItemID.isEmpty, !title.isEmpty else { return 0 }
+
+        let sourceRef = MemorySourceRef(
+            kind: .memoryArchiveItem,
+            id: archiveItemID,
+            title: title,
+            capturedAt: capturedAt
+        )
+        let resolvedMetadata = Self.metadataByAppending(sourceRef: sourceRef, to: privacyMetadata)
+        let kindText = materialKind.isEmpty ? "照片素材" : materialKind
+        let statement: String
+        if note.isEmpty {
+            statement = "记忆档案馆保存\(kindText)《\(title)》。"
+        } else {
+            statement = "记忆档案馆保存\(kindText)《\(title)》：\(Self.metadataSummary(note))。"
+        }
+
+        return upsertArchiveMetadataFact(
+            statement: statement,
+            sourceRef: sourceRef,
+            sessionId: sessionId,
+            privacyMetadata: resolvedMetadata,
+            logPrefix: "🖼️ 档案照片素材元信息入库",
+            logTitle: title
+        )
+    }
+
+    @discardableResult
     func ingestArchiveVoiceSampleMetadata(
         title rawTitle: String,
         note rawNote: String?,

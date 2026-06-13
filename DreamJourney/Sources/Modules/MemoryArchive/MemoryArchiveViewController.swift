@@ -650,9 +650,14 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
             }
             reloadData()
             syncArchiveItemMetadataToBackend(item)
+            let metadataAddedCount = depositImageMaterialMetadataIfNeeded(item)
             extractScreenshotTextForKnowledge(from: image, item: item)
             if item.analysisStatus == .pending {
-                setKnowledgeDepositStatus("结构化建库：\(item.kind.displayName)已保存，等待分析后建库")
+                if metadataAddedCount > 0 {
+                    setKnowledgeDepositStatus("结构化建库：照片素材已归档为可追溯来源，正在分析细节")
+                } else {
+                    setKnowledgeDepositStatus("结构化建库：\(item.kind.displayName)已保存，等待分析后建库")
+                }
                 showToast("\(item.kind.displayName)已加入档案馆，开始分析", type: .success)
                 analyzePhoto(image, itemId: item.id)
             } else {
@@ -660,17 +665,36 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
                 case .privateOnly:
                     setKnowledgeDepositStatus("结构化建库：私密素材仅存档案馆，不进入知识库")
                 case .familyCircle:
-                    setKnowledgeDepositStatus("结构化建库：亲友\(item.kind.displayName)仅同步元数据，暂不做远端图片建库")
+                    setKnowledgeDepositStatus("结构化建库：照片素材已归档为可追溯来源，亲友范围不做远端图片分析")
                 case .localOnly:
-                    setKnowledgeDepositStatus("结构化建库：本机\(item.kind.displayName)已存档，未进入生成知识库")
+                    setKnowledgeDepositStatus("结构化建库：照片素材已归档为可追溯来源，仅本机使用")
                 case .generationAllowed:
-                    setKnowledgeDepositStatus("结构化建库：\(item.kind.displayName)已存档，等待后续分析")
+                    setKnowledgeDepositStatus("结构化建库：照片素材已归档为可追溯来源，等待后续分析")
                 }
                 showToast("\(item.kind.displayName)已保存", type: .success)
             }
         } catch {
             showToast("素材加入失败", type: .error)
         }
+    }
+
+    @discardableResult
+    private func depositImageMaterialMetadataIfNeeded(_ item: MemoryArchiveItem) -> Int {
+        guard item.privacyMetadata.scope != .privateOnly else { return 0 }
+        let knowledgeSessionCount = KBLiteManager.shared.readGraph { $0.sessionCount }
+        let sessionId = max(
+            ConversationMemoryManager.shared.currentMemory.sessionCount + 1,
+            knowledgeSessionCount + 1
+        )
+        return KBLiteManager.shared.ingestArchivePhotoMaterialMetadata(
+            archiveItemID: item.id,
+            title: item.title,
+            note: item.note,
+            materialKind: item.kind.displayName,
+            capturedAt: item.createdAt,
+            sessionId: sessionId,
+            privacyMetadata: item.privacyMetadata
+        )
     }
 
     private func extractScreenshotTextForKnowledge(from image: UIImage, item: MemoryArchiveItem) {

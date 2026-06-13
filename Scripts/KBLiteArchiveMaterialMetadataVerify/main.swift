@@ -173,6 +173,26 @@ assertCondition(
     "archive photo fact should keep source ref and analysis summary"
 )
 
+let rawPhotoCount = KBLiteManager.shared.ingestArchivePhotoMaterialMetadata(
+    archiveItemID: "archive-photo-raw-1",
+    title: "老宅门口照片",
+    note: "从相册加入的记忆照片",
+    materialKind: "旧照片",
+    capturedAt: now,
+    sessionId: 16,
+    privacyMetadata: MemoryPrivacyMetadata(scope: .localOnly)
+)
+assertCondition(rawPhotoCount == 1, "non-private photo save should deposit source metadata before analysis")
+assertCondition(
+    KBLiteManager.shared.graph.facts.contains {
+        $0.statement.contains("老宅门口照片") &&
+            $0.statement.contains("旧照片") &&
+            $0.privacyMetadata.scope == .localOnly &&
+            $0.privacyMetadata.sourceRefs.contains(where: { $0.kind == .memoryArchiveItem && $0.id == "archive-photo-raw-1" })
+    },
+    "raw photo metadata fact should keep local privacy and archive source ref"
+)
+
 let privateCount = KBLiteManager.shared.ingestArchiveTextMaterialMetadata(
     archiveItemID: "archive-private",
     title: "私密素材",
