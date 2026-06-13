@@ -1,5 +1,5 @@
 import secrets
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 try:
     from fastapi import FastAPI, HTTPException
@@ -287,17 +287,35 @@ def revoke_family_member(user_id: str, member_id: str) -> Dict[str, Any]:
     return {"status": "revoked", "member": member}
 
 
+def _normalize_viewer_family_member_id(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    return normalized or None
+
+
+def _ensure_active_family_viewer(user_id: str, viewer_family_member_id: Optional[str]) -> None:
+    if viewer_family_member_id is None:
+        return
+    for member in store.list_family_members(user_id):
+        if str(member.get("id") or "") != viewer_family_member_id:
+            continue
+        if member.get("accessStatus") == "active" and member.get("invitationStatus") == "accepted":
+            return
+        raise HTTPException(status_code=403, detail="family member access is not active")
+    raise HTTPException(status_code=403, detail="family member is not authorized")
+
+
 @app.post("/care/snapshots")
 def save_care_snapshot(payload: Dict[str, Any]) -> Dict[str, Any]:
     user_id = str(payload.get("userId") or "").strip()
     snapshot = payload.get("snapshot")
-    viewer_family_member_id = payload.get("viewerFamilyMemberID")
+    viewer_family_member_id = _normalize_viewer_family_member_id(payload.get("viewerFamilyMemberID"))
     if not user_id:
         raise HTTPException(status_code=400, detail="userId is required")
     if not isinstance(snapshot, dict):
         raise HTTPException(status_code=400, detail="snapshot must be an object")
-    if viewer_family_member_id is not None:
-        viewer_family_member_id = str(viewer_family_member_id).strip() or None
+    _ensure_active_family_viewer(user_id, viewer_family_member_id)
     sanitized_snapshot = sanitize_care_snapshot_payload(snapshot)
     item = store.save_care_snapshot(
         user_id,
@@ -309,7 +327,8 @@ def save_care_snapshot(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 @app.get("/care/snapshots/latest/{user_id}")
 def latest_care_snapshot(user_id: str, viewerFamilyMemberID: str = None) -> Dict[str, Any]:
-    viewer_family_member_id = viewerFamilyMemberID.strip() if viewerFamilyMemberID else None
+    viewer_family_member_id = _normalize_viewer_family_member_id(viewerFamilyMemberID)
+    _ensure_active_family_viewer(user_id, viewer_family_member_id)
     item = store.get_latest_care_snapshot(
         user_id,
         viewer_family_member_id=viewer_family_member_id,
@@ -325,7 +344,8 @@ def care_snapshot_history(
     viewerFamilyMemberID: str = None,
     limit: int = 7,
 ) -> Dict[str, Any]:
-    viewer_family_member_id = viewerFamilyMemberID.strip() if viewerFamilyMemberID else None
+    viewer_family_member_id = _normalize_viewer_family_member_id(viewerFamilyMemberID)
+    _ensure_active_family_viewer(user_id, viewer_family_member_id)
     items = store.list_care_snapshots(
         user_id,
         viewer_family_member_id=viewer_family_member_id,

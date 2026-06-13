@@ -50,6 +50,10 @@ required_backend_fragments = [
     "@app.post(\"/care/snapshots\")",
     "@app.get(\"/care/snapshots/latest/{user_id}\")",
     "@app.get(\"/care/snapshots/{user_id}\")",
+    "_normalize_viewer_family_member_id",
+    "_ensure_active_family_viewer",
+    "family member access is not active",
+    "family member is not authorized",
     "sanitize_care_snapshot_payload",
     "save_care_snapshot",
     "get_latest_care_snapshot",
@@ -67,6 +71,9 @@ required_privacy_fragments = [
 required_test_fragments = [
     "test_care_snapshot_sanitizer_keeps_only_aggregate_fields",
     "test_care_snapshot_api_never_persists_raw_conversation_payload",
+    "test_care_snapshot_api_requires_active_family_viewer",
+    "pending_write.status_code, 403",
+    "revoked_latest.status_code, 403",
     "CARE_RAW_SENTINEL",
 ]
 

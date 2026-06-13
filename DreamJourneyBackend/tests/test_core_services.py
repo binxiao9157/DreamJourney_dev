@@ -281,8 +281,28 @@ class StoreTests(unittest.TestCase):
 
 
 class CareSnapshotAPITests(unittest.TestCase):
+    def _accept_family_member(self, client: TestClient, user_id: str, phone: str = "13900001111") -> str:
+        created = client.post(
+            "/family/invite",
+            json={
+                "userId": user_id,
+                "name": "陈岚",
+                "relation": "女儿",
+                "phone": phone,
+            },
+        )
+        self.assertEqual(created.status_code, 200)
+        member_id = created.json()["member"]["id"]
+        accepted = client.post(
+            f"/family/members/{user_id}/{member_id}/accept",
+            json={"phone": phone},
+        )
+        self.assertEqual(accepted.status_code, 200)
+        return member_id
+
     def test_care_snapshot_api_saves_and_returns_latest_by_viewer(self):
         client = TestClient(app)
+        member_id = self._accept_family_member(client, "care_user_1")
 
         all_family = client.post(
             "/care/snapshots",
@@ -295,19 +315,19 @@ class CareSnapshotAPITests(unittest.TestCase):
             "/care/snapshots",
             json={
                 "userId": "care_user_1",
-                "viewerFamilyMemberID": "fm_daughter",
+                "viewerFamilyMemberID": member_id,
                 "snapshot": {"riskLevel": "watch", "summary": "女儿视角"},
             },
         )
 
         self.assertEqual(all_family.status_code, 200)
         self.assertEqual(daughter.status_code, 200)
-        self.assertEqual(daughter.json()["item"]["viewerFamilyMemberID"], "fm_daughter")
+        self.assertEqual(daughter.json()["item"]["viewerFamilyMemberID"], member_id)
 
         latest_all = client.get("/care/snapshots/latest/care_user_1")
         latest_daughter = client.get(
             "/care/snapshots/latest/care_user_1",
-            params={"viewerFamilyMemberID": "fm_daughter"},
+            params={"viewerFamilyMemberID": member_id},
         )
 
         self.assertEqual(latest_all.status_code, 200)
@@ -324,13 +344,14 @@ class CareSnapshotAPITests(unittest.TestCase):
 
     def test_care_snapshot_history_api_returns_recent_snapshots_by_viewer(self):
         client = TestClient(app)
+        member_id = self._accept_family_member(client, "care_history_user")
 
         for index in range(3):
             response = client.post(
                 "/care/snapshots",
                 json={
                     "userId": "care_history_user",
-                    "viewerFamilyMemberID": "fm_daughter",
+                    "viewerFamilyMemberID": member_id,
                     "snapshot": {"riskLevel": "watch", "summary": f"女儿视角 {index}"},
                 },
             )
@@ -345,7 +366,7 @@ class CareSnapshotAPITests(unittest.TestCase):
 
         history = client.get(
             "/care/snapshots/care_history_user",
-            params={"viewerFamilyMemberID": "fm_daughter", "limit": 2},
+            params={"viewerFamilyMemberID": member_id, "limit": 2},
         )
         all_family_history = client.get("/care/snapshots/care_history_user", params={"limit": 10})
 
@@ -354,6 +375,86 @@ class CareSnapshotAPITests(unittest.TestCase):
         self.assertEqual(len(history.json()["items"]), 2)
         self.assertEqual(all_family_history.status_code, 200)
         self.assertEqual([item["snapshot"]["summary"] for item in all_family_history.json()["items"]], ["全家视角"])
+
+    def test_care_snapshot_api_requires_active_family_viewer(self):
+        client = TestClient(app)
+        user_id = "care_access_user"
+
+        created = client.post(
+            "/family/invite",
+            json={
+                "userId": user_id,
+                "name": "陈岚",
+                "relation": "女儿",
+                "phone": "13900001111",
+            },
+        )
+        self.assertEqual(created.status_code, 200)
+        member_id = created.json()["member"]["id"]
+
+        pending_write = client.post(
+            "/care/snapshots",
+            json={
+                "userId": user_id,
+                "viewerFamilyMemberID": member_id,
+                "snapshot": {"summary": "待接受成员不可写入"},
+            },
+        )
+        unknown_write = client.post(
+            "/care/snapshots",
+            json={
+                "userId": user_id,
+                "viewerFamilyMemberID": "family_missing",
+                "snapshot": {"summary": "未知成员不可写入"},
+            },
+        )
+
+        self.assertEqual(pending_write.status_code, 403)
+        self.assertEqual(unknown_write.status_code, 403)
+
+        accepted = client.post(
+            f"/family/members/{user_id}/{member_id}/accept",
+            json={"phone": "13900001111"},
+        )
+        active_write = client.post(
+            "/care/snapshots",
+            json={
+                "userId": user_id,
+                "viewerFamilyMemberID": member_id,
+                "snapshot": {"summary": "已接受成员可写入"},
+            },
+        )
+        active_read = client.get(
+            f"/care/snapshots/latest/{user_id}",
+            params={"viewerFamilyMemberID": member_id},
+        )
+
+        self.assertEqual(accepted.status_code, 200)
+        self.assertEqual(active_write.status_code, 200)
+        self.assertEqual(active_read.status_code, 200)
+
+        revoked = client.post(f"/family/members/{user_id}/{member_id}/revoke")
+        revoked_write = client.post(
+            "/care/snapshots",
+            json={
+                "userId": user_id,
+                "viewerFamilyMemberID": member_id,
+                "snapshot": {"summary": "撤销后不可写入"},
+            },
+        )
+        revoked_latest = client.get(
+            f"/care/snapshots/latest/{user_id}",
+            params={"viewerFamilyMemberID": member_id},
+        )
+        revoked_history = client.get(
+            f"/care/snapshots/{user_id}",
+            params={"viewerFamilyMemberID": member_id},
+        )
+
+        self.assertEqual(revoked.status_code, 200)
+        self.assertEqual(revoked_write.status_code, 403)
+        self.assertEqual(revoked_latest.status_code, 403)
+        self.assertEqual(revoked_history.status_code, 403)
 
     def test_care_snapshot_api_never_persists_raw_conversation_payload(self):
         client = TestClient(app)

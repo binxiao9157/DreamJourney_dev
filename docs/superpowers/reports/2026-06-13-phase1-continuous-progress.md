@@ -298,6 +298,20 @@
   - `Scripts/VoiceCloneProfilePersistenceVerify/main.py`
   - `Scripts/KBLiteArchiveVoiceVerify/main.swift`
 
+### 23. 长辈关怀看板：亲友访问状态进入快照读写入口
+
+- 后端 `care/snapshots` 入口增加亲友访问校验：
+  - `viewerFamilyMemberID` 为空时仍表示本人 / 全家视角，不走亲友成员校验。
+  - `viewerFamilyMemberID` 指向亲友成员时，必须同时满足 `accessStatus=active` 和 `invitationStatus=accepted`。
+  - `pending`、未知成员、`revoked` 成员不能上传、读取最新快照或读取历史快照。
+- 这把阶段一“亲友关怀看板”的隐私闭环从“前端裁剪 + 内容脱敏”推进到“后端读写入口也承认邀请 / 撤回状态”：
+  - 已撤回亲友即使保留旧 `viewerFamilyMemberID`，也无法继续读取历史聚合信号。
+  - 待接受邀请的成员不能提前看到或写入看板数据。
+- `DreamJourneyBackend/tests/test_core_services.py` 增加覆盖：
+  - pending / unknown / revoked 亲友访问返回 403。
+  - accepted + active 亲友可以写入并读取自己的看板快照。
+- `Scripts/CareDashboardBackendSyncVerify/main.py` 增加静态验收锚点，防止后续改动绕开亲友访问状态校验。
+
 ## 真机验收建议
 
 ### 记忆档案馆
@@ -347,6 +361,7 @@
 - 亲友撤回会写入后端 `accessStatus=revoked`，再次拉取成员时仍可识别撤回状态。
 - 关怀看板快照可按 `viewerFamilyMemberID` 上传/拉取。
 - 关怀看板历史快照可按 `viewerFamilyMemberID` 拉取最近 N 条；本机无数据时页面会显示“服务器同步历史 x 条”。
+- 关怀看板快照读写会校验亲友状态：只有已接受且 active 的亲友成员可按 `viewerFamilyMemberID` 读写；pending、未知或 revoked 成员返回 403。
 - 亲友邀请可复制 `dreamjourney://family/invite?code=...` 链接；另一台设备登录被邀请手机号后，可通过链接或粘贴邀请码接受邀请。
 
 ## 已运行验证
@@ -366,7 +381,7 @@
 - `KBLiteArchiveMaterialMetadata verification passed`
 - `KBLiteImportSanitizer verification passed`
 - `ConversationTurnSourceRef verification passed`
-- `DreamJourneyBackend unittest 33/33 OK`
+- `DreamJourneyBackend pytest 36/36 OK`
 - `PrivacyScope verification passed`
 - `MemoryPrivacyIntegration verification passed`
 - `LocalTestDataCleanup verification passed`
