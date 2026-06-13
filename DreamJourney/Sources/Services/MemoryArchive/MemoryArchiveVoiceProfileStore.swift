@@ -85,6 +85,27 @@ final class MemoryArchiveVoiceProfileStore {
         return load().first { $0.personName == normalizedName }
     }
 
+    func readySpeakerId(matching text: String, surface: MemoryUseSurface = .remoteExtraction) -> String? {
+        let normalizedText = Self.normalized(text)
+        guard !normalizedText.isEmpty else { return nil }
+        return profiles()
+            .filter { profile in
+                profile.status == .ready
+                    && PrivacyScopePolicy.canUse(metadata: profile.privacyMetadata, surface: surface)
+                    && normalizedText.contains(profile.personName)
+                    && profile.speakerId?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            }
+            .sorted { lhs, rhs in
+                if lhs.personName.count == rhs.personName.count {
+                    return lhs.updatedAt > rhs.updatedAt
+                }
+                return lhs.personName.count > rhs.personName.count
+            }
+            .first?
+            .speakerId?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     @discardableResult
     func registerSample(
         _ item: MemoryArchiveItem,

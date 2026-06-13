@@ -18,6 +18,7 @@ final class DigitalHumanSpeechService {
         text: String,
         uid: String,
         speed: Int = -10,
+        voiceType: String? = nil,
         completion: @escaping (Result<String, DigitalHumanSpeechError>) -> Void
     ) {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -31,7 +32,8 @@ final class DigitalHumanSpeechService {
             return
         }
 
-        guard let voiceType = VolcEngineCredentialProvider.voiceType(), !voiceType.isEmpty else {
+        let resolvedVoiceType = voiceType ?? MemoryArchiveVoiceProfileStore.shared.readySpeakerId(matching: trimmedText) ?? VolcEngineCredentialProvider.voiceType()
+        guard let voiceType = resolvedVoiceType, !voiceType.isEmpty else {
             completion(.failure(.voiceTypeMissing))
             return
         }

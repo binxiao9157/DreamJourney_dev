@@ -204,11 +204,23 @@ xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
   -o /tmp/dreamjourney_memory_archive_voice_profile_verify
 /tmp/dreamjourney_memory_archive_voice_profile_verify
 
+echo "== Memory archive voice profile speaker resolve =="
+xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
+  DreamJourney/Sources/Services/MemoryArchive/MemoryArchiveModels.swift \
+  DreamJourney/Sources/Services/MemoryArchive/MemoryArchiveVoiceProfileStore.swift \
+  Scripts/MemoryArchiveVoiceProfileSpeakerResolveVerify/main.swift \
+  -o /tmp/dreamjourney_memory_archive_voice_profile_speaker_resolve_verify
+/tmp/dreamjourney_memory_archive_voice_profile_speaker_resolve_verify
+
 echo "== Memory archive voice training samples =="
 python3 Scripts/MemoryArchiveVoiceTrainingSamplesVerify/main.py
 
 echo "== Voice clone profile persistence =="
 python3 Scripts/VoiceCloneProfilePersistenceVerify/main.py
+
+echo "== DigitalHuman voice profile TTS =="
+python3 Scripts/DigitalHumanVoiceProfileTTSVerify/main.py
 
 echo "== KBLite archive material metadata =="
 xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
