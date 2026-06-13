@@ -48,6 +48,15 @@ required_vc_fragments = [
     "syncArchiveItemMetadataToBackend(item)",
 ]
 
+analysis_success_block = vc_text[
+    vc_text.find("let item = try self.repository.applyImageAnalysis"):
+    vc_text.find("self.showToast(\"照片分析完成", vc_text.find("let item = try self.repository.applyImageAnalysis"))
+]
+analysis_failure_block = vc_text[
+    vc_text.find("markAnalysisFailed"):
+    vc_text.find("self.setKnowledgeDepositStatus(\"结构化建库：照片分析失败", vc_text.find("markAnalysisFailed"))
+]
+
 required_privacy_fragments = [
     "case .generationAllowed:",
     ".backendSync",
@@ -79,6 +88,10 @@ for fragment in required_client_fragments:
 for fragment in required_vc_fragments:
     if fragment not in vc_text:
         missing.append(f"{vc_file.name}: missing {fragment!r}")
+if "self.syncArchiveItemMetadataToBackend(item)" not in analysis_success_block:
+    missing.append(f"{vc_file.name}: image analysis success should resync updated archive metadata")
+if "self.syncArchiveItemMetadataToBackend(failedItem)" not in analysis_failure_block:
+    missing.append(f"{vc_file.name}: image analysis failure should resync failed archive metadata")
 for fragment in required_privacy_fragments:
     if fragment not in privacy_text:
         missing.append(f"{privacy_file.name}: missing {fragment!r}")

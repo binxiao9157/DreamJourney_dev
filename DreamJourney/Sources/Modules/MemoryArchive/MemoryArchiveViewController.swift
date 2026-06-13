@@ -399,6 +399,7 @@ final class MemoryArchiveViewController: UIViewController {
                     )
                     do {
                         let item = try self.repository.applyImageAnalysis(id: itemId, analysis: archiveAnalysis)
+                        self.syncArchiveItemMetadataToBackend(item)
                         if item.privacyMetadata.scope != .privateOnly {
                             let beforeStatus = KBLiteDepositStatusBuilder.build(from: KBLiteManager.shared.graph)
                             let sessionId = ConversationMemoryManager.shared.currentMemory.sessionCount + 1
@@ -423,7 +424,9 @@ final class MemoryArchiveViewController: UIViewController {
                         self.showToast("照片分析结果保存失败", type: .error)
                     }
                 case .failure:
-                    _ = try? self.repository.markAnalysisFailed(id: itemId)
+                    if let failedItem = try? self.repository.markAnalysisFailed(id: itemId) {
+                        self.syncArchiveItemMetadataToBackend(failedItem)
+                    }
                     self.setKnowledgeDepositStatus("结构化建库：照片分析失败，素材已保存；请检查 DeepSeek 或后端配置后重试")
                     self.showToast("照片已保存，分析稍后可重试", type: .info)
                 }
