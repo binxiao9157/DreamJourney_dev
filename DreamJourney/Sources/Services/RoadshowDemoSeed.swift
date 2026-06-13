@@ -260,6 +260,7 @@ enum LocalTestDataCleaner {
                 "conversation_memory.json",
                 "knowledge_base",
                 "archive_photos",
+                "archive_screenshots",
                 "archive_voice_samples"
             ].forEach { relativePath in
                 let url = documentsURL.appendingPathComponent(relativePath)

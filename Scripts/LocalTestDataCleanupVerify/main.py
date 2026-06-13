@@ -22,6 +22,7 @@ required_seed_fragments = [
     "conversation_memory.json",
     "knowledge_base",
     "archive_photos",
+    "archive_screenshots",
     "archive_voice_samples",
     "memoirs",
     "RoadshowDemoRoute.resetCompletions",
