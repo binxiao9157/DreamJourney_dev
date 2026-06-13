@@ -1866,6 +1866,56 @@ final class KBLiteManager {
         return true
     }
 
+    // MARK: - Public API: Archive Material Metadata
+
+    @discardableResult
+    func ingestArchiveVoiceSampleMetadata(
+        title rawTitle: String,
+        note rawNote: String?,
+        sessionId: Int,
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+    ) -> Int {
+        guard privacyMetadata.scope != .privateOnly else { return 0 }
+        let title = Self.normalizedQuickExtractEntity(rawTitle)
+        guard !title.isEmpty else { return 0 }
+
+        let note = Self.normalizedQuickExtractEntity(rawNote ?? "")
+        let statement: String
+        if note.isEmpty {
+            statement = "记忆档案馆保存语音样本《\(title)》。"
+        } else {
+            statement = "记忆档案馆保存语音样本《\(title)》：\(note)。"
+        }
+
+        if let idx = graph.facts.firstIndex(where: {
+            KBLitePrivacyScopePolicy.canMerge(existing: $0.privacyMetadata, incoming: privacyMetadata)
+                && $0.statement.contains("语音样本")
+                && $0.statement.contains("《\(title)》")
+        }) {
+            var fact = graph.facts[idx]
+            if !fact.sourceSessionIds.contains(sessionId) {
+                fact.sourceSessionIds.append(sessionId)
+                graph.facts[idx] = fact
+                save()
+            }
+            return 0
+        }
+
+        guard graph.facts.count < maxFacts else { return 0 }
+        graph.facts.append(
+            KBFact(
+                id: UUID().uuidString,
+                statement: statement,
+                confidence: "confirmed",
+                sourceSessionIds: [sessionId],
+                privacyMetadata: privacyMetadata
+            )
+        )
+        save()
+        print("[KBLite] 🎙️ 语音样本元信息入库: \(title)")
+        return 1
+    }
+
     /// 生成包含知识库上下文的增强开场白提示
     func buildGreetingHint() -> String {
         if isEmpty { return "" }

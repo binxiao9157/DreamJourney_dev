@@ -584,10 +584,12 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
                 privacyMetadata: privacyMetadata
             )
             if item.privacyMetadata.scope != .privateOnly {
-                Stage1MemoryFacade.shared.recordUserTurn(Stage1MailboxMemoryInput(
-                    "记忆档案馆保存语音样本：\(item.title)。这是音频素材元信息，不包含转写正文。",
+                Stage1MemoryFacade.shared.ingestArchiveVoiceSampleMetadata(
+                    title: item.title,
+                    note: item.note,
+                    timestamp: item.createdAt,
                     privacyMetadata: item.privacyMetadata
-                ))
+                )
             }
             syncArchiveItemMetadataToBackend(item)
             showToast("语音素材已保存", type: .success)

@@ -57,6 +57,9 @@ python3 Scripts/MemoryArchiveBackendSyncVerify/main.py
 echo "== MemoryArchive image analysis proxy =="
 python3 Scripts/MemoryArchiveImageAnalysisProxyVerify/main.py
 
+echo "== MemoryArchive voice knowledge =="
+python3 Scripts/MemoryArchiveVoiceKnowledgeVerify/main.py
+
 echo "== Family backend sync =="
 python3 Scripts/FamilyBackendSyncVerify/main.py
 
@@ -78,6 +81,16 @@ xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
   Scripts/KBLiteQuickExtractVerify/main.swift \
   -o /tmp/dreamjourney_kblite_quick_extract_verify
 /tmp/dreamjourney_kblite_quick_extract_verify
+
+echo "== KBLite archive voice =="
+xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
+  DreamJourney/Sources/Services/KBLiteModels.swift \
+  DreamJourney/Sources/Services/KBLitePrivacyScopePolicy.swift \
+  DreamJourney/Sources/Services/KBLiteManager.swift \
+  Scripts/KBLiteArchiveVoiceVerify/main.swift \
+  -o /tmp/dreamjourney_kblite_archive_voice_verify
+/tmp/dreamjourney_kblite_archive_voice_verify
 
 echo "== KBLite entity quality =="
 python3 Scripts/KBLiteEntityQualityVerify/main.py

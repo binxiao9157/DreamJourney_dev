@@ -94,6 +94,28 @@ final class Stage1MemoryFacade {
         )
     }
 
+    func ingestArchiveVoiceSampleMetadata(
+        title: String,
+        note: String?,
+        timestamp: Date = Date(),
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly),
+        completion: @escaping (Int) -> Void = { _ in }
+    ) {
+        guard privacyMetadata.scope != .privateOnly else {
+            completion(0)
+            return
+        }
+        let knowledgeSessionCount = knowledgeBase.readGraph { $0.sessionCount }
+        let sessionId = max(conversationMemory.currentMemory.sessionCount + 1, knowledgeSessionCount + 1)
+        let addedCount = knowledgeBase.ingestArchiveVoiceSampleMetadata(
+            title: title,
+            note: note,
+            sessionId: sessionId,
+            privacyMetadata: privacyMetadata
+        )
+        completion(addedCount)
+    }
+
     func recordAssistantTurn(_ input: Stage1MailboxMemoryInput) {
         conversationMemory.recordAITurn(text: input.text, privacyMetadata: input.privacyMetadata)
     }
