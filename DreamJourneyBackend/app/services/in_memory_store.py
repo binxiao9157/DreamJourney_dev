@@ -2,6 +2,8 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from app.services.user_identity import stable_user_id
+
 
 class InMemoryStore:
     def __init__(self):
@@ -14,7 +16,7 @@ class InMemoryStore:
         self._care_snapshots: Dict[str, List[Dict[str, Any]]] = {}
 
     def upsert_user(self, phone: str, nickname: str) -> Dict[str, Any]:
-        user_id = f"user_{phone[-4:]}" if phone else f"user_{len(self._users) + 1}"
+        user_id = stable_user_id(phone)
         user = {
             "id": user_id,
             "phone": phone,

@@ -5,6 +5,8 @@ import uuid
 
 from psycopg.types.json import Jsonb
 
+from app.services.user_identity import stable_user_id
+
 
 class PostgresStore:
     def __init__(self, dsn: str = None, connection_factory: Callable[[], Any] = None):
@@ -103,7 +105,7 @@ class PostgresStore:
         connection.commit()
 
     def upsert_user(self, phone: str, nickname: str) -> Dict[str, Any]:
-        user_id = f"user_{phone[-4:]}" if phone else f"user_{uuid.uuid4().hex[:8]}"
+        user_id = stable_user_id(phone)
         user = {
             "id": user_id,
             "phone": phone,

@@ -663,6 +663,32 @@ class BackendAuthTests(unittest.TestCase):
         self.assertEqual(valid.status_code, 200)
 
 
+class BackendUserIdentityTests(unittest.TestCase):
+    def test_auth_login_uses_stable_full_phone_hash_not_last_four_digits(self):
+        previous_store = main_module.store
+        main_module.store = InMemoryStore()
+        client = TestClient(app)
+        try:
+            first = client.post(
+                "/auth/login",
+                json={"phone": "19357579157", "nickname": "陈建国"},
+            )
+            second = client.post(
+                "/auth/login",
+                json={"phone": "18300009157", "nickname": "林桂芳"},
+            )
+        finally:
+            main_module.store = previous_store
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        first_user_id = first.json()["user"]["id"]
+        second_user_id = second.json()["user"]["id"]
+        self.assertEqual(first_user_id, "user_aef88d2439c15d38")
+        self.assertNotEqual(first_user_id, "user_9157")
+        self.assertNotEqual(first_user_id, second_user_id)
+
+
 class ArchiveAPITests(unittest.TestCase):
     def test_archive_items_api_saves_sanitized_metadata_and_lists_by_user(self):
         client = TestClient(app)

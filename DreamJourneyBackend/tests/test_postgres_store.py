@@ -172,6 +172,18 @@ class PostgresStoreTests(unittest.TestCase):
         self.assertEqual(store.get_kb_snapshot("u1")["people"][0]["id"], "p1")
         self.assertEqual(store.get_kb_snapshot("u2")["people"][0]["id"], "p2")
 
+    def test_upsert_user_uses_stable_full_phone_hash(self):
+        connection = FakeConnection()
+        store = PostgresStore(connection_factory=lambda: connection)
+
+        first = store.upsert_user("19357579157", "陈建国")
+        second = store.upsert_user("18300009157", "林桂芳")
+
+        self.assertEqual(first["id"], "user_aef88d2439c15d38")
+        self.assertNotEqual(first["id"], "user_9157")
+        self.assertNotEqual(first["id"], second["id"])
+        self.assertIn("user_aef88d2439c15d38", connection.users)
+
     def test_store_persists_memories_and_family_members(self):
         connection = FakeConnection()
         store = PostgresStore(connection_factory=lambda: connection)
