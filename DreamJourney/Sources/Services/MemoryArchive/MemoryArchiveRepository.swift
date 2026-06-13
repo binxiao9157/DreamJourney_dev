@@ -340,8 +340,20 @@ final class MemoryArchiveRepository {
         }
     }
 
+    private static let legacyRoadshowTextSeedFingerprints: Set<String> = [
+        "外滩合影的背景\n1975 年 7 月，陈树安和陈静文在外滩拍过一张全家合影。",
+        "陈树安的习惯\n说话慢，喜欢先听完别人讲完再回答。",
+        "慢慢来，饭要趁热吃\n家人记得的一句口头禅，用于记忆整理，不用于冒充真实逝者。"
+    ]
+
     private static func isLegacySeedItem(_ item: MemoryArchiveItem) -> Bool {
-        item.id.hasPrefix("roadshow_") ||
-            item.localPath == "roadshow_demo_photo_placeholder"
+        if item.id.hasPrefix("roadshow_") ||
+            item.localPath == "roadshow_demo_photo_placeholder" {
+            return true
+        }
+
+        guard item.tags.contains("路演") else { return false }
+        let fingerprint = "\(item.title)\n\(item.note)"
+        return legacyRoadshowTextSeedFingerprints.contains(fingerprint)
     }
 }

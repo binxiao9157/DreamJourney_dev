@@ -110,6 +110,46 @@ do {
         "real archive materials should not be deleted only because their title or tags look like old demo content"
     )
 
+    let legacySeedSuiteName = "MemoryArchiveLegacySeedVerify"
+    let legacySeedDefaults = UserDefaults(suiteName: legacySeedSuiteName)!
+    legacySeedDefaults.removePersistentDomain(forName: legacySeedSuiteName)
+    let legacySeedJSON = """
+    [{
+      "id":"random-uuid-from-old-seed",
+      "kind":"textNote",
+      "title":"外滩合影的背景",
+      "note":"1975 年 7 月，陈树安和陈静文在外滩拍过一张全家合影。",
+      "createdAt":"2026-01-01T00:00:00Z",
+      "updatedAt":"2026-01-01T00:00:00Z",
+      "analysisStatus":"manual",
+      "detectedPeople":[],
+      "tags":["路演","外滩","家庭合影"],
+      "isPrivate":false
+    }, {
+      "id":"real-similar-roadshow-memory",
+      "kind":"textNote",
+      "title":"外滩合影的背景",
+      "note":"这是我自己补录的真实项目路演经历，不是内置演示家庭。",
+      "createdAt":"2026-01-01T00:00:00Z",
+      "updatedAt":"2026-01-01T00:00:00Z",
+      "analysisStatus":"manual",
+      "detectedPeople":[],
+      "tags":["路演"],
+      "isPrivate":false
+    }]
+    """.data(using: .utf8)!
+    legacySeedDefaults.set(legacySeedJSON, forKey: "archive")
+    let legacySeedRepo = MemoryArchiveRepository(defaults: legacySeedDefaults, storageKey: "archive")
+    let legacySeedItems = legacySeedRepo.items()
+    assertCondition(
+        !legacySeedItems.contains(where: { $0.id == "random-uuid-from-old-seed" }),
+        "old roadshow text seed should be cleaned even when it has a random UUID"
+    )
+    assertCondition(
+        legacySeedItems.contains(where: { $0.id == "real-similar-roadshow-memory" }),
+        "real archive text with similar roadshow wording should be preserved"
+    )
+
     let analysis = MemoryArchiveImageAnalysis(
         summary: "一家人在老房子门口合影。",
         detectedPeople: ["妈妈", "外婆"],
