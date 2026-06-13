@@ -84,7 +84,7 @@ class DeepSeekImageAnalysisProxy:
             extracted = cls.extract_json_substring(cleaned)
             parsed = cls._loads_json(extracted) if extracted is not None else None
         if parsed is None:
-            parsed = {"description": cleaned}
+            raise ValueError("DeepSeek image analysis returned non-JSON content")
 
         return {
             "description": str(parsed.get("description") or ""),

@@ -342,8 +342,7 @@ final class DeepSeekService {
                               let result = try? JSONDecoder().decode(KBImageAnalysisResult.self, from: extractedData) {
                         completion(.success(result))
                     } else {
-                        let fallback = KBImageAnalysisResult(description: content)
-                        completion(.success(fallback))
+                        completion(.failure(.invalidResponse))
                     }
                 case .failure(let error):
                     completion(.failure(.networkError(error)))

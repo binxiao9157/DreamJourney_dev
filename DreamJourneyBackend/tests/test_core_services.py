@@ -14,6 +14,7 @@ from app.services.store_factory import make_store
 from app.services.tokens import TokenService
 from app.services.tts import VolcTTSProxy
 from app.services.amap import AMapDistrictProxy
+from app.services.deepseek import DeepSeekImageAnalysisProxy
 
 
 class PrivacyFilteringTests(unittest.TestCase):
@@ -626,6 +627,12 @@ class ArchiveAPITests(unittest.TestCase):
 
 
 class ArchiveImageAnalysisAPITests(unittest.TestCase):
+    def test_image_analysis_parse_requires_structured_json(self):
+        proxy = DeepSeekImageAnalysisProxy(Settings(deepseek_api_key="deepseek-secret"))
+
+        with self.assertRaisesRegex(ValueError, "non-JSON"):
+            proxy.parse_analysis("这是一张照片，有三个人，像是在老家门口。")
+
     def test_archive_image_analysis_dry_run_redacts_secret(self):
         client = TestClient(app)
 

@@ -5,6 +5,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 client_file = ROOT / "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
 vc_file = ROOT / "DreamJourney/Sources/Modules/MemoryArchive/MemoryArchiveViewController.swift"
+ios_deepseek_file = ROOT / "DreamJourney/Sources/Memoir/DeepSeekService.swift"
 backend_main_file = ROOT / "DreamJourneyBackend/app/main.py"
 backend_service_file = ROOT / "DreamJourneyBackend/app/services/deepseek.py"
 backend_tests_file = ROOT / "DreamJourneyBackend/tests/test_core_services.py"
@@ -16,6 +17,7 @@ missing = []
 
 client_text = client_file.read_text(encoding="utf-8")
 vc_text = vc_file.read_text(encoding="utf-8")
+ios_deepseek_text = ios_deepseek_file.read_text(encoding="utf-8")
 backend_main_text = backend_main_file.read_text(encoding="utf-8")
 backend_service_text = backend_service_file.read_text(encoding="utf-8") if backend_service_file.exists() else ""
 backend_tests_text = backend_tests_file.read_text(encoding="utf-8")
@@ -56,6 +58,7 @@ required_backend_test_fragments = [
     "test_archive_image_analysis_dry_run_redacts_secret",
     "test_archive_image_analysis_requires_image_base64",
     "test_archive_image_analysis_without_key_returns_unavailable",
+    "test_image_analysis_parse_requires_structured_json",
     "/archive/image-analysis",
     "Authorization",
     "DEEPSEEK_API_KEY is not configured",
@@ -81,6 +84,14 @@ for fragment in required_service_fragments:
 for fragment in required_backend_test_fragments:
     if fragment not in backend_tests_text:
         missing.append(f"{backend_tests_file.name}: missing {fragment!r}")
+if "DeepSeek image analysis returned non-JSON content" not in backend_service_text:
+    missing.append(f"{backend_service_file.name}: non-JSON analysis content should fail closed")
+if "status_code = 503 if \"DEEPSEEK_API_KEY\" in str(exc) else 502" not in backend_main_text:
+    missing.append(f"{backend_main_file.name}: image analysis route should distinguish missing key from malformed upstream content")
+if "let fallback = KBImageAnalysisResult(description: content)" in ios_deepseek_text:
+    missing.append(f"{ios_deepseek_file.name}: direct image analysis must not wrap non-JSON content as success")
+if "completion(.failure(.invalidResponse))" not in ios_deepseek_text:
+    missing.append(f"{ios_deepseek_file.name}: direct image analysis should fail on non-JSON content")
 if "MemoryArchiveImageAnalysisProxyVerify/main.py" not in phase1_text:
     missing.append(f"{verify_phase1.name}: missing MemoryArchiveImageAnalysisProxyVerify/main.py")
 for fragment in prohibited_validation_fragments:
