@@ -129,6 +129,9 @@ python3 Scripts/DigitalHumanStartupRevealVerify/main.py
 echo "== DigitalHuman dialog-end deposit =="
 python3 Scripts/DigitalHumanDialogEndDepositVerify/main.py
 
+echo "== DigitalHuman diagnostics gate =="
+python3 Scripts/DigitalHumanDiagnosticsGateVerify/main.py
+
 echo "== Conversation wellbeing limiter =="
 xcrun swiftc \
   DreamJourney/Sources/Services/ConversationWellbeingLimiter.swift \

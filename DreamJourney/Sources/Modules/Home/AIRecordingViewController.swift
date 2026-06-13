@@ -33,6 +33,16 @@ enum VoiceBallState {
 
 // MARK: - AIRecordingViewController：首页 AI 智能记录
 final class AIRecordingViewController: UIViewController {
+    private static var isDigitalHumanDiagnosticsEnabled: Bool {
+        let processInfo = ProcessInfo.processInfo
+        if processInfo.arguments.contains("--show-digital-human-diagnostics") {
+            return true
+        }
+        let rawValue = processInfo.environment["DREAMJOURNEY_SHOW_DIGITAL_HUMAN_DIAGNOSTICS"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        return rawValue == "1" || rawValue == "true" || rawValue == "yes" || rawValue == "enabled"
+    }
 
     // MARK: - UI：顶部标题
     private let titleLabel: UILabel = {
@@ -256,7 +266,9 @@ final class AIRecordingViewController: UIViewController {
         dialogEngine.delegate = self
         digitalHumanFallbackSynthesizer.delegate = self
         configureDigitalHumanSpeechPlayback()
-        DigitalHumanReadinessReport.make().persistEvidenceFiles()
+        if Self.isDigitalHumanDiagnosticsEnabled {
+            DigitalHumanReadinessReport.make().persistEvidenceFiles()
+        }
         dialogEngine.setup()
     }
 
@@ -308,7 +320,6 @@ final class AIRecordingViewController: UIViewController {
     private func setupLayout() {
         view.addSubview(titleLabel)
         view.addSubview(privacyScopeButton)
-        view.addSubview(digitalHumanDiagnosticsButton)
         validationSpacerView.isHidden = true
         view.addSubview(validationSpacerView)
         view.addSubview(digitalHumanAvatarView)
@@ -323,10 +334,11 @@ final class AIRecordingViewController: UIViewController {
 
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        [titleLabel, privacyScopeButton, digitalHumanDiagnosticsButton, validationSpacerView, digitalHumanAvatarView, digitalHumanFallbackCard, messageTableView, bottomDivider, bottomContainer,
+        [titleLabel, privacyScopeButton, validationSpacerView, digitalHumanAvatarView, digitalHumanFallbackCard, messageTableView, bottomDivider, bottomContainer,
          albumButton, voiceBallButton, cameraButton].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
+        configureDigitalHumanDiagnosticsIfNeeded()
         setupDigitalHumanFallbackCard()
 
         let ballSize: CGFloat = 80
@@ -345,11 +357,7 @@ final class AIRecordingViewController: UIViewController {
             titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             privacyScopeButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
             privacyScopeButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            digitalHumanDiagnosticsButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
-            digitalHumanDiagnosticsButton.trailingAnchor.constraint(equalTo: privacyScopeButton.leadingAnchor, constant: -8),
-            digitalHumanDiagnosticsButton.widthAnchor.constraint(equalToConstant: 38),
-            digitalHumanDiagnosticsButton.heightAnchor.constraint(equalToConstant: 34),
-            digitalHumanDiagnosticsButton.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 10),
+            privacyScopeButton.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 10),
 
             validationSpacerTopConstraint,
             validationSpacerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
@@ -430,6 +438,19 @@ final class AIRecordingViewController: UIViewController {
             contentStack.leadingAnchor.constraint(equalTo: digitalHumanFallbackCard.leadingAnchor, constant: 12),
             contentStack.trailingAnchor.constraint(equalTo: digitalHumanFallbackCard.trailingAnchor, constant: -12),
             bottom
+        ])
+    }
+
+    private func configureDigitalHumanDiagnosticsIfNeeded() {
+        guard Self.isDigitalHumanDiagnosticsEnabled else { return }
+        view.addSubview(digitalHumanDiagnosticsButton)
+        digitalHumanDiagnosticsButton.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            digitalHumanDiagnosticsButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
+            digitalHumanDiagnosticsButton.trailingAnchor.constraint(equalTo: privacyScopeButton.leadingAnchor, constant: -8),
+            digitalHumanDiagnosticsButton.widthAnchor.constraint(equalToConstant: 38),
+            digitalHumanDiagnosticsButton.heightAnchor.constraint(equalToConstant: 34),
+            digitalHumanDiagnosticsButton.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 10)
         ])
     }
 
@@ -539,6 +560,7 @@ final class AIRecordingViewController: UIViewController {
     }
 
     @objc private func digitalHumanDiagnosticsTapped() {
+        guard Self.isDigitalHumanDiagnosticsEnabled else { return }
         let report = DigitalHumanReadinessReport.make()
         let viewController = DigitalHumanDiagnosticsViewController(report: report)
         let navigationController = UINavigationController(rootViewController: viewController)
