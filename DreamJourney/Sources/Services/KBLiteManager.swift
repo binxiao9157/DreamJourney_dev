@@ -485,32 +485,25 @@ final class KBLiteManager {
         let roadshowPlaces = Set(graph.places.filter { $0.id.hasPrefix("roadshow_") }.map(\.id))
         let roadshowEvents = Set(graph.events.filter { $0.id.hasPrefix("roadshow_") }.map(\.id))
         let genericPeople = Set(graph.people.filter(Self.isGenericKinshipOnly).map(\.id))
-        let legacyRoadshowPeople = Set(graph.people.filter { Self.isLegacyRoadshowText($0.searchableText) }.map(\.id))
-        let legacyRoadshowPlaces = Set(graph.places.filter { Self.isLegacyRoadshowText($0.searchableText) }.map(\.id))
-        let legacyRoadshowEvents = Set(graph.events.filter { Self.isLegacyRoadshowText($0.searchableText) }.map(\.id))
-        let removedPeople = roadshowPeople.union(genericPeople).union(legacyRoadshowPeople)
-        let removedPlaces = roadshowPlaces.union(legacyRoadshowPlaces)
-        let removedEvents = roadshowEvents.union(legacyRoadshowEvents)
+        let removedPeople = roadshowPeople.union(genericPeople)
+        let removedPlaces = roadshowPlaces
+        let removedEvents = roadshowEvents
 
         graph.people.removeAll { person in
             person.id.hasPrefix("roadshow_") ||
-                Self.isGenericKinshipOnly(person) ||
-                Self.isLegacyRoadshowText(person.searchableText)
+                Self.isGenericKinshipOnly(person)
         }
         graph.places.removeAll { place in
             place.id.hasPrefix("roadshow_") ||
-                Self.isLegacyRoadshowText(place.searchableText) ||
                 place.relatedPersonIds.contains(where: { removedPeople.contains($0) })
         }
         graph.events.removeAll { event in
             event.id.hasPrefix("roadshow_") ||
-                Self.isLegacyRoadshowText(event.searchableText) ||
                 event.locationId.map { removedPlaces.contains($0) } == true ||
                 event.participantIds.contains(where: { removedPeople.contains($0) })
         }
         graph.facts.removeAll { fact in
             fact.id.hasPrefix("roadshow_") ||
-                Self.isLegacyRoadshowText(fact.statement) ||
                 fact.relatedPersonIds.contains(where: { removedPeople.contains($0) }) ||
                 fact.relatedEventIds.contains(where: { removedEvents.contains($0) })
         }
@@ -525,14 +518,6 @@ final class KBLiteManager {
 
     private static func isGenericKinshipOnly(_ person: KBPerson) -> Bool {
         isGenericKinshipDisplayName(person.name)
-    }
-
-    private static func isLegacyRoadshowText(_ text: String) -> Bool {
-        let markers = [
-            "路演", "roadshow", "外滩留下的合影记忆",
-            "路演样例", "路演数据", "路演占位"
-        ]
-        return markers.contains { text.localizedCaseInsensitiveContains($0) }
     }
 
     private static func shouldPersistPerson(

@@ -141,6 +141,17 @@ let importedGraph = KBLiteGraph(
             sourceSessionIds: [2],
             createdAt: now,
             privacyMetadata: metadata
+        ),
+        KBEvent(
+            id: "real_event_roadshow_story",
+            title: "年轻时参加产品路演",
+            description: "这是真实经历，不是演示 seed。",
+            year: 2001,
+            locationId: nil,
+            participantIds: ["real_person"],
+            sourceSessionIds: [2],
+            createdAt: now,
+            privacyMetadata: metadata
         )
     ],
     facts: [
@@ -163,6 +174,16 @@ let importedGraph = KBLiteGraph(
             sourceSessionIds: [2],
             createdAt: now,
             privacyMetadata: metadata
+        ),
+        KBFact(
+            id: "real_fact_roadshow_story",
+            statement: "陈建国2001年参加过一次产品路演。",
+            confidence: "confirmed",
+            relatedPersonIds: ["real_person"],
+            relatedEventIds: ["real_event_roadshow_story"],
+            sourceSessionIds: [2],
+            createdAt: now,
+            privacyMetadata: metadata
         )
     ]
 )
@@ -177,8 +198,17 @@ assertCondition(KBLiteManager.shared.importJSON(json), "import should parse mixe
 let graph = KBLiteManager.shared.graph
 assertCondition(graph.people.map(\.name) == ["陈建国"], "import should keep only real person")
 assertCondition(graph.places.map(\.name) == ["绍兴越城区仓桥直街"], "import should remove roadshow places")
-assertCondition(graph.events.map(\.title) == ["在杭州西湖边开过小照相馆"], "import should remove roadshow events")
-assertCondition(graph.facts.map(\.statement) == ["陈建国1968年住在绍兴越城区仓桥直街。"], "import should remove roadshow facts")
+assertCondition(
+    Set(graph.events.map(\.title)) == Set(["在杭州西湖边开过小照相馆", "年轻时参加产品路演"]),
+    "import should remove roadshow seed events without deleting real user roadshow stories"
+)
+assertCondition(
+    Set(graph.facts.map(\.statement)) == Set([
+        "陈建国1968年住在绍兴越城区仓桥直街。",
+        "陈建国2001年参加过一次产品路演。"
+    ]),
+    "import should remove roadshow seed facts without deleting real user roadshow stories"
+)
 
 KBLiteManager.shared.reset()
 try? FileManager.default.removeItem(at: verifyGraph)

@@ -79,6 +79,21 @@ do {
     )
     assertCondition(familyNote.privacyMetadata.scope == .familyCircle, "text should persist explicit family scope")
 
+    let realRoadshowArchive = try repo.addText(
+        kind: .textNote,
+        title: "外滩老照片",
+        note: "这是真实的产品路演经历，不是演示数据。",
+        tags: ["路演"],
+        isPrivate: false,
+        privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed),
+        now: now
+    )
+    let reloadedRepo = MemoryArchiveRepository(defaults: defaults, storageKey: "archive")
+    assertCondition(
+        reloadedRepo.items().contains(where: { $0.id == realRoadshowArchive.id }),
+        "real archive materials should not be deleted only because their title or tags look like old demo content"
+    )
+
     let analysis = MemoryArchiveImageAnalysis(
         summary: "一家人在老房子门口合影。",
         detectedPeople: ["妈妈", "外婆"],
@@ -102,7 +117,7 @@ do {
     assertCondition(failed.analysisStatus == .failed, "photo can be marked failed")
 
     try repo.delete(id: note.id)
-    assertCondition(repo.items().count == 4, "deleted item should be removed")
+    assertCondition(repo.items().count == 5, "deleted item should be removed")
 
     do {
         _ = try repo.addText(
