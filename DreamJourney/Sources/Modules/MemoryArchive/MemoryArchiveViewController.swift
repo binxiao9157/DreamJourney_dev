@@ -1,5 +1,6 @@
 import UIKit
 import UniformTypeIdentifiers
+import Vision
 
 final class MemoryArchiveViewController: UIViewController {
     private enum PendingImageMaterialKind {
@@ -599,6 +600,7 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
             }
             reloadData()
             syncArchiveItemMetadataToBackend(item)
+            extractScreenshotTextForKnowledge(from: image, item: item)
             if item.analysisStatus == .pending {
                 setKnowledgeDepositStatus("结构化建库：\(item.kind.displayName)已保存，等待分析后建库")
                 showToast("\(item.kind.displayName)已加入档案馆，开始分析", type: .success)
@@ -618,6 +620,73 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
             }
         } catch {
             showToast("素材加入失败", type: .error)
+        }
+    }
+
+    private func extractScreenshotTextForKnowledge(from image: UIImage, item: MemoryArchiveItem) {
+        guard item.kind == .screenshot else { return }
+        guard item.privacyMetadata.scope != .privateOnly else { return }
+        guard let cgImage = image.cgImage else {
+            setKnowledgeDepositStatus("结构化建库：截图已保存，暂未识别到文字")
+            return
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let request = VNRecognizeTextRequest { [weak self] request, error in
+                if let error {
+                    DispatchQueue.main.async {
+                        self?.setKnowledgeDepositStatus("结构化建库：截图文字识别失败（\(error.localizedDescription)）")
+                    }
+                    return
+                }
+
+                let observations = request.results as? [VNRecognizedTextObservation] ?? []
+                let recognizedText = observations
+                    .compactMap { $0.topCandidates(1).first?.string }
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                    .joined(separator: "\n")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+
+                guard !recognizedText.isEmpty else {
+                    DispatchQueue.main.async {
+                        self?.setKnowledgeDepositStatus("结构化建库：截图已保存，未识别到可沉淀文字")
+                    }
+                    return
+                }
+
+                Stage1MemoryFacade.shared.ingestArchiveTextMaterialDetailed(
+                    Stage1MailboxMemoryInput(
+                        recognizedText,
+                        timestamp: item.createdAt,
+                        privacyMetadata: item.privacyMetadata
+                    ),
+                    archiveItemID: item.id,
+                    archiveTitle: item.title,
+                    archiveMaterialKind: "截图文字"
+                ) { [weak self] result in
+                    DispatchQueue.main.async {
+                        guard let self else { return }
+                        self.setKnowledgeDepositStatus(self.archiveTextDepositStatusMessage(result))
+                        if result.totalAddedCount > 0 {
+                            self.showToast("截图文字已整理到知识库 \(result.totalAddedCount) 条", type: .success)
+                        }
+                        self.reloadData()
+                    }
+                }
+            }
+            request.recognitionLevel = .accurate
+            request.usesLanguageCorrection = true
+            request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US"]
+
+            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+            do {
+                try handler.perform([request])
+            } catch {
+                DispatchQueue.main.async {
+                    self?.setKnowledgeDepositStatus("结构化建库：截图文字识别失败（\(error.localizedDescription)）")
+                }
+            }
         }
     }
 

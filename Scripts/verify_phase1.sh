@@ -101,6 +101,9 @@ python3 Scripts/MemoryArchivePersonalityPromptUIVerify/main.py
 echo "== MemoryArchive screenshot material =="
 python3 Scripts/MemoryArchiveScreenshotMaterialVerify/main.py
 
+echo "== MemoryArchive screenshot OCR =="
+python3 Scripts/MemoryArchiveScreenshotOCRVerify/main.py
+
 echo "== MemoryArchive conversation boundary =="
 python3 Scripts/MemoryArchiveConversationBoundaryVerify/main.py
 
