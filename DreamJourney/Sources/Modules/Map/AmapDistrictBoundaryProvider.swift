@@ -3,11 +3,18 @@ import Foundation
 import UIKit
 
 actor AmapDistrictBoundaryProvider {
+    typealias DistrictPayloadLoader = @Sendable (_ keyword: String) async throws -> Data
+
     static let shared = AmapDistrictBoundaryProvider()
 
     private let endpoint = URL(string: "https://restapi.amap.com/v3/config/district")!
     private var cache: [String: [FootprintIlluminationRegion]] = [:]
     private var lastRequestDate: Date?
+    private var backendPayloadLoader: DistrictPayloadLoader?
+
+    func configureBackendPayloadLoader(_ loader: DistrictPayloadLoader?) {
+        backendPayloadLoader = loader
+    }
 
     func regions(
         scope: FootprintIlluminationScope,
@@ -16,7 +23,7 @@ actor AmapDistrictBoundaryProvider {
     ) async -> [FootprintIlluminationRegion] {
         let apiKey = AppConfiguration.string(forKey: "AMapWebServiceKey")
             ?? AppConfiguration.string(forKey: "AMapAPIKey")
-        guard DreamJourneyBackendClient.shared.isConfigured || apiKey != nil else {
+        guard backendPayloadLoader != nil || apiKey != nil else {
             return []
         }
 
@@ -92,8 +99,8 @@ actor AmapDistrictBoundaryProvider {
     }
 
     private func requestDistrictPayload(keyword: String, apiKey: String?, retryCount: Int) async throws -> AmapDistrictResponse {
-        if DreamJourneyBackendClient.shared.isConfigured {
-            let data = try await DreamJourneyBackendClient.shared.fetchDistrictPayload(keyword: keyword)
+        if let backendPayloadLoader {
+            let data = try await backendPayloadLoader(keyword)
             return try JSONDecoder().decode(AmapDistrictResponse.self, from: data)
         }
 

@@ -16,12 +16,24 @@ let familyViewURL = root
     .appendingPathComponent("FamilyCircleViewController.swift")
 
 let source = try String(contentsOf: familyViewURL, encoding: .utf8)
+let repositoryURL = root
+    .appendingPathComponent("DreamJourney")
+    .appendingPathComponent("Sources")
+    .appendingPathComponent("Services")
+    .appendingPathComponent("FamilyRepository.swift")
+
+let repositorySource = try String(contentsOf: repositoryURL, encoding: .utf8)
 
 require(source.contains("接受邀请"), "family page should expose accept invitation copy")
 require(source.contains("撤回访问"), "family member actions should expose revoke access copy")
 require(
-    source.contains("FamilyAccessControlService.acceptInvitation"),
-    "accept invitation UI should call FamilyAccessControlService.acceptInvitation"
+    source.contains("acceptBackendInvitation(phone:")
+        && source.contains("acceptBackendInvitationCode("),
+    "accept invitation UI should delegate phone/code acceptance to FamilyRepository"
+)
+require(
+    repositorySource.contains("FamilyAccessControlService.acceptInvitation"),
+    "FamilyRepository should apply FamilyAccessControlService.acceptInvitation when accepting local invitations"
 )
 require(
     source.contains("FamilyAccessControlService.revokeMemberAccess"),

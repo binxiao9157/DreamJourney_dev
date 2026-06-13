@@ -25,7 +25,23 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         if let apiKey = AppConfiguration.string(forKey: "AMapAPIKey") {
             AMapServices.shared().apiKey = apiKey
         }
+        configureAmapDistrictBoundaryProxy()
         return true
+    }
+
+    private func configureAmapDistrictBoundaryProxy() {
+        let loader: AmapDistrictBoundaryProvider.DistrictPayloadLoader?
+        if DreamJourneyBackendClient.shared.isConfigured {
+            loader = { keyword in
+                try await DreamJourneyBackendClient.shared.fetchDistrictPayload(keyword: keyword)
+            }
+        } else {
+            loader = nil
+        }
+
+        Task {
+            await AmapDistrictBoundaryProvider.shared.configureBackendPayloadLoader(loader)
+        }
     }
 
     // MARK: - UISceneSession Lifecycle
