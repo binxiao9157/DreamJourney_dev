@@ -20,8 +20,16 @@ checks = [
         "isGenericKinshipDisplayName" in source,
     ),
     (
-        "knowledge base people list should hide bare kinship labels such as 妈妈",
-        "isGenericKinshipDisplayName" in knowledge_view,
+        "KBLite should expose a local display graph that strips legacy seed and generic kinship entities",
+        "displayGraphForLocalBrowsing" in source and "removeLegacyOrLowQualityEntities" in source,
+    ),
+    (
+        "knowledge base should read from the cleaned local display graph",
+        "displayGraphForLocalBrowsing" in knowledge_view and "private var displayGraph" in knowledge_view,
+    ),
+    (
+        "knowledge graph should read from the cleaned local display graph",
+        "displayGraphForLocalBrowsing" in graph_view,
     ),
     (
         "knowledge graph empty state should guide users to add concrete names instead of bare kinship labels",

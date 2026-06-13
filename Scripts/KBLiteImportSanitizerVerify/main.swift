@@ -210,6 +210,28 @@ assertCondition(
     "import should remove roadshow seed facts without deleting real user roadshow stories"
 )
 
+KBLiteManager.shared.writeGraph { graph in
+    graph = importedGraph
+}
+let displayGraph = KBLiteManager.shared.displayGraphForLocalBrowsing()
+assertCondition(displayGraph.people.map(\.name) == ["陈建国"], "display graph should hide generic and roadshow people")
+assertCondition(displayGraph.places.map(\.name) == ["绍兴越城区仓桥直街"], "display graph should hide roadshow places")
+assertCondition(
+    Set(displayGraph.events.map(\.title)) == Set(["在杭州西湖边开过小照相馆", "年轻时参加产品路演"]),
+    "display graph should hide roadshow events without deleting real roadshow-word stories"
+)
+assertCondition(
+    displayGraph.events.allSatisfy { !$0.participantIds.contains("generic_mother") && !$0.participantIds.contains("roadshow_person_grandpa") },
+    "display graph should prune event participant refs to hidden people"
+)
+assertCondition(
+    Set(displayGraph.facts.map(\.statement)) == Set([
+        "陈建国1968年住在绍兴越城区仓桥直街。",
+        "陈建国2001年参加过一次产品路演。"
+    ]),
+    "display graph should hide roadshow seed facts without deleting real roadshow-word facts"
+)
+
 KBLiteManager.shared.reset()
 try? FileManager.default.removeItem(at: verifyGraph)
 print("KBLiteImportSanitizer verification passed")

@@ -99,9 +99,8 @@ final class KBGraphViewController: UIViewController {
     private func buildGraph() {
         // 确保有一个"我"节点
         let selfId = "__self__"
-        var people = KBLiteManager.shared.graph.people.filter {
-            !KBLiteManager.isGenericKinshipDisplayName($0.name)
-        }
+        let displayGraph = KBLiteManager.shared.displayGraphForLocalBrowsing()
+        var people = displayGraph.people
 
         let currentUserName = UserManager.shared.currentUser?.nickname ?? "我"
         if !people.contains(where: { $0.id == selfId }) {
@@ -136,7 +135,7 @@ final class KBGraphViewController: UIViewController {
         let center = CGPoint(x: canvasSize.width / 2.0, y: canvasSize.height / 2.0)
 
         // 创建连线
-        buildEdges(people: people, center: center)
+        buildEdges(people: people, events: displayGraph.events, center: center)
 
         // 创建节点
         for person in people {
@@ -154,7 +153,7 @@ final class KBGraphViewController: UIViewController {
         updateEdgePaths(center: center)
     }
 
-    private func buildEdges(people: [KBPerson], center: CGPoint) {
+    private func buildEdges(people: [KBPerson], events: [KBEvent], center: CGPoint) {
         // 收集所有需要连线的人物对
         var edgeSet: Set<String> = []
 
@@ -176,7 +175,6 @@ final class KBGraphViewController: UIViewController {
         // 如果没有显式关系边，用事件推断
         if edges.isEmpty {
             let allIds = Set(people.map { $0.id })
-            let events = KBLiteManager.shared.graph.events
             for event in events {
                 let participants = event.participantIds.filter { allIds.contains($0) }
                 for i in 0..<participants.count {

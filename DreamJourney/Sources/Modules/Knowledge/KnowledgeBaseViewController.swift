@@ -36,15 +36,12 @@ final class KnowledgeBaseViewController: UIViewController {
 
     private var currentTab: Tab { Tab(rawValue: segmentedControl.selectedSegmentIndex) ?? .people }
 
-    /// 数据源（从 KBLiteManager 获取）
-    private var people: [KBPerson] {
-        KBLiteManager.shared.graph.people.filter {
-            !KBLiteManager.isGenericKinshipDisplayName($0.name)
-        }
-    }
-    private var places: [KBPlace] { KBLiteManager.shared.graph.places }
-    private var events: [KBEvent] { KBLiteManager.shared.graph.events }
-    private var facts: [KBFact] { KBLiteManager.shared.graph.facts }
+    /// 数据源（从 KBLiteManager 获取）。UI 使用本地浏览图谱，避免旧 seed / 泛称人物污染真实测试视图。
+    private var displayGraph: KBLiteGraph { KBLiteManager.shared.displayGraphForLocalBrowsing() }
+    private var people: [KBPerson] { displayGraph.people }
+    private var places: [KBPlace] { displayGraph.places }
+    private var events: [KBEvent] { displayGraph.events }
+    private var facts: [KBFact] { displayGraph.facts }
 
     // MARK: - Lifecycle
 
@@ -204,13 +201,14 @@ extension KnowledgeBaseViewController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         if indexPath.section == 0 {
             let cell = tableView.dequeueReusableCell(withIdentifier: "KBStatsCell", for: indexPath) as! KBStatsCell
+            let graph = displayGraph
             cell.configure(
-                peopleCount: people.count,
-                placesCount: places.count,
-                eventsCount: events.count,
-                factsCount: facts.count,
-                sessionCount: KBLiteManager.shared.graph.sessionCount,
-                depositStatus: KBLiteDepositStatusBuilder.build(from: KBLiteManager.shared.graph)
+                peopleCount: graph.people.count,
+                placesCount: graph.places.count,
+                eventsCount: graph.events.count,
+                factsCount: graph.facts.count,
+                sessionCount: graph.sessionCount,
+                depositStatus: KBLiteDepositStatusBuilder.build(from: graph)
             )
             return cell
         }
@@ -457,7 +455,8 @@ final class KBEntityDetailViewController: UIViewController {
             if let bio = p.briefBio { text += "\n\(bio)\n" }
 
             // 关联事实
-            let relatedFacts = KBLiteManager.shared.graph.facts.filter { $0.relatedPersonIds.contains(p.id) }
+            let displayGraph = KBLiteManager.shared.displayGraphForLocalBrowsing()
+            let relatedFacts = displayGraph.facts.filter { $0.relatedPersonIds.contains(p.id) }
             if !relatedFacts.isEmpty {
                 text += "\n【相关事实】\n"
                 for f in relatedFacts {
@@ -466,7 +465,7 @@ final class KBEntityDetailViewController: UIViewController {
             }
 
             // 关联事件
-            let relatedEvents = KBLiteManager.shared.graph.events.filter { $0.participantIds.contains(p.id) }
+            let relatedEvents = displayGraph.events.filter { $0.participantIds.contains(p.id) }
             if !relatedEvents.isEmpty {
                 text += "\n【相关事件】\n"
                 for e in relatedEvents {
@@ -487,7 +486,8 @@ final class KBEntityDetailViewController: UIViewController {
             if let category = p.category { text += "【类型】\(category)\n" }
             if let desc = p.description { text += "\n\(desc)\n" }
 
-            let relatedPersons = KBLiteManager.shared.graph.people.filter {
+            let displayGraph = KBLiteManager.shared.displayGraphForLocalBrowsing()
+            let relatedPersons = displayGraph.people.filter {
                 p.relatedPersonIds.contains($0.id) &&
                     !KBLiteManager.isGenericKinshipDisplayName($0.name)
             }
@@ -509,7 +509,8 @@ final class KBEntityDetailViewController: UIViewController {
             if let desc = e.description { text += "\n\(desc)\n" }
 
             // 关联人物
-            let relatedPersons = KBLiteManager.shared.graph.people.filter {
+            let displayGraph = KBLiteManager.shared.displayGraphForLocalBrowsing()
+            let relatedPersons = displayGraph.people.filter {
                 e.participantIds.contains($0.id) &&
                     !KBLiteManager.isGenericKinshipDisplayName($0.name)
             }
@@ -529,7 +530,8 @@ final class KBEntityDetailViewController: UIViewController {
             var text = "【事实】\(f.statement)\n"
             text += "【置信度】\(KBEntityDetailFormatter.confidenceText(f.confidence))\n"
 
-            let relatedPersons = KBLiteManager.shared.graph.people.filter {
+            let displayGraph = KBLiteManager.shared.displayGraphForLocalBrowsing()
+            let relatedPersons = displayGraph.people.filter {
                 f.relatedPersonIds.contains($0.id) &&
                     !KBLiteManager.isGenericKinshipDisplayName($0.name)
             }
@@ -538,7 +540,7 @@ final class KBEntityDetailViewController: UIViewController {
                 for person in relatedPersons { text += "· \(person.name)\n" }
             }
 
-            let relatedPlaces = KBLiteManager.shared.graph.places.filter {
+            let relatedPlaces = displayGraph.places.filter {
                 f.relatedPlaceIds.contains($0.id)
             }
             if !relatedPlaces.isEmpty {

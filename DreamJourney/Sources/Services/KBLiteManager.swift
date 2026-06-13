@@ -479,6 +479,14 @@ final class KBLiteManager {
         return sanitized
     }
 
+    func displayGraphForLocalBrowsing() -> KBLiteGraph {
+        readGraph { current in
+            var display = current
+            _ = removeLegacyOrLowQualityEntities(from: &display)
+            return display
+        }
+    }
+
     private func removeLegacyOrLowQualityEntities(from graph: inout KBLiteGraph) -> Int {
         let beforeCount = graph.people.count + graph.places.count + graph.events.count + graph.facts.count
         let roadshowPeople = Set(graph.people.filter { $0.id.hasPrefix("roadshow_") }.map(\.id))
