@@ -70,6 +70,14 @@ final class MemoryArchiveViewController: UIViewController {
         return label
     }()
 
+    private let voiceProfileStatusLabel: UILabel = {
+        let label = UILabel()
+        label.font = .systemFont(ofSize: 12, weight: .medium)
+        label.textColor = .warmSubtitle
+        label.numberOfLines = 0
+        return label
+    }()
+
     private let backendSyncStatusLabel: UILabel = {
         let label = UILabel()
         label.font = .systemFont(ofSize: 12, weight: .medium)
@@ -142,7 +150,7 @@ final class MemoryArchiveViewController: UIViewController {
         actionStack.axis = .vertical
         actionStack.spacing = 10
 
-        [titleLabel, boundaryLabel, summaryLabel, knowledgeDepositStatusLabel, backendSyncStatusLabel, actionStack, tableView, emptyLabel].forEach {
+        [titleLabel, boundaryLabel, summaryLabel, knowledgeDepositStatusLabel, voiceProfileStatusLabel, backendSyncStatusLabel, actionStack, tableView, emptyLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview($0)
         }
@@ -164,7 +172,11 @@ final class MemoryArchiveViewController: UIViewController {
             knowledgeDepositStatusLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             knowledgeDepositStatusLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
 
-            backendSyncStatusLabel.topAnchor.constraint(equalTo: knowledgeDepositStatusLabel.bottomAnchor, constant: 4),
+            voiceProfileStatusLabel.topAnchor.constraint(equalTo: knowledgeDepositStatusLabel.bottomAnchor, constant: 4),
+            voiceProfileStatusLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+            voiceProfileStatusLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
+
+            backendSyncStatusLabel.topAnchor.constraint(equalTo: voiceProfileStatusLabel.bottomAnchor, constant: 4),
             backendSyncStatusLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             backendSyncStatusLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
 
@@ -187,6 +199,7 @@ final class MemoryArchiveViewController: UIViewController {
         let summary = repository.summary()
         summaryLabel.text = "共 \(summary.totalCount) 份素材 · 照片 \(summary.photoCount) · 截图 \(summary.screenshotCount) · 语音 \(summary.voiceSampleCount) · 文字 \(summary.textCount) · 已分析 \(summary.analyzedPhotoCount)"
         updateKnowledgeDepositStatusLabel()
+        updateVoiceProfileStatusLabel()
         updateBackendSyncStatusLabel()
         emptyLabel.isHidden = !items.isEmpty
         tableView.reloadData()
@@ -998,6 +1011,24 @@ private extension MemoryArchiveViewController {
         } else {
             knowledgeDepositStatusLabel.text = "结构化建库：全库 \(status.totalEntityCount) 条，尚无档案来源"
         }
+    }
+
+    func updateVoiceProfileStatusLabel() {
+        let profiles = MemoryArchiveVoiceProfileStore.shared.profiles()
+        guard !profiles.isEmpty else {
+            voiceProfileStatusLabel.text = "声纹档案：暂无人物声纹；导入语音并填写具体姓名后开始收集"
+            return
+        }
+
+        let collecting = profiles.filter { $0.status == .collecting }.count
+        let readyForTraining = profiles.filter { $0.status == .readyForTraining }.count
+        let training = profiles.filter { $0.status == .training }.count
+        let ready = profiles.filter { $0.status == .ready }.count
+        let failed = profiles.filter { $0.status == .failed }.count
+        let disabled = profiles.filter { $0.status == .disabled }.count
+        let latestMessage = profiles.first?.statusMessage?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let latestText = latestMessage?.isEmpty == false ? " · 最近：\(latestMessage!)" : ""
+        voiceProfileStatusLabel.text = "声纹档案：\(profiles.count) 人 · 待补 \(collecting) · 可训练 \(readyForTraining) · 训练中 \(training) · 已就绪 \(ready) · 失败 \(failed) · 仅本机 \(disabled)\(latestText)"
     }
 
     func refreshArchiveBackendSyncStatus() {

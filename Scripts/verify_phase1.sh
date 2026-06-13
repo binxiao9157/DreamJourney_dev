@@ -95,6 +95,9 @@ python3 Scripts/MemoryArchiveImageAnalysisProxyVerify/main.py
 echo "== MemoryArchive voice knowledge =="
 python3 Scripts/MemoryArchiveVoiceKnowledgeVerify/main.py
 
+echo "== MemoryArchive voice profile status UI =="
+python3 Scripts/MemoryArchiveVoiceProfileStatusUIVerify/main.py
+
 echo "== MemoryArchive knowledge deposit UI =="
 python3 Scripts/MemoryArchiveKnowledgeDepositUIVerify/main.py
 
