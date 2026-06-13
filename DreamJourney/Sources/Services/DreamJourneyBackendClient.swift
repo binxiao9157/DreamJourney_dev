@@ -422,11 +422,7 @@ final class DreamJourneyBackendClient {
               var object = jsonObject(fromEncodable: letter) as? [String: Any] else {
             return nil
         }
-        let bodyPreview = (object["body"] as? String ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .prefix(80)
         object["userId"] = userId
-        object["bodyPreview"] = String(bodyPreview)
         object["metadataOnly"] = true
         object["contentRedacted"] = true
         object.removeValue(forKey: "body")
@@ -556,7 +552,6 @@ extension DreamJourneyBackendClient {
         let userId: String?
         let recipientName: String?
         let title: String?
-        let bodyPreview: String?
         let createdAt: String?
         let deliverAt: String?
         let deliveredAt: String?

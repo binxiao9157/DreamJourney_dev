@@ -649,7 +649,7 @@ private final class TimeMailboxCell: UITableViewCell {
         titleLabel.text = letter.title
         recipientLabel.text = "写给 \(letter.recipientName)"
         dateLabel.text = "投递 \(Self.formatter.string(from: letter.deliverAt))"
-        previewLabel.text = letter.body.replacingOccurrences(of: "\n", with: " ")
+        previewLabel.text = "正文仅本机保存，回声到达后需点开阅读"
     }
 
     private func setupView() {

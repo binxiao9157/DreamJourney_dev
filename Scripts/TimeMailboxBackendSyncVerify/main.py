@@ -34,7 +34,8 @@ required_client_fragments = [
     "MailboxLetterItem",
     'path: "mailbox/letters"',
     'path: "mailbox/letters/',
-    "bodyPreview",
+    'object.removeValue(forKey: "body")',
+    'object.removeValue(forKey: "replyText")',
     "mailboxLetterNotSyncable",
 ]
 
@@ -66,8 +67,10 @@ required_backend_test_fragments = [
     "test_mailbox_letters_api_rejects_private_or_local_letters",
     "test_store_lists_mailbox_letters_by_user",
     "/mailbox/letters",
-    "bodyPreview",
-    "replyText",
+    "MAILBOX_PRIVATE_BODY_SENTINEL",
+    "ECHO_SENTINEL",
+    "assertNotIn(\"bodyPreview\"",
+    "assertNotIn(\"replyText\"",
 ]
 
 for fragment in required_client_fragments:

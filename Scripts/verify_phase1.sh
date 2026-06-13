@@ -29,6 +29,9 @@ python3 Scripts/TimeMailboxNotificationVerify/main.py
 echo "== TimeMailbox backend sync =="
 python3 Scripts/TimeMailboxBackendSyncVerify/main.py
 
+echo "== TimeMailbox payload privacy =="
+python3 Scripts/TimeMailboxPayloadPrivacyVerify/main.py
+
 echo "== TimeMailbox knowledge metadata =="
 python3 Scripts/TimeMailboxKnowledgeVerify/main.py
 

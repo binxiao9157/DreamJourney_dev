@@ -408,9 +408,9 @@ class MailboxAPITests(unittest.TestCase):
                 "id": "letter_sync_1",
                 "recipientName": "林桂芳",
                 "title": "想说的话",
-                "body": "这是一封完整正文，应该只留短预览，不应该完整返回。",
-                "bodyPreview": "这是一封完整正文",
-                "replyText": "不是逝者真实回复，但这段回声不应同步。",
+                "body": "MAILBOX_PRIVATE_BODY_SENTINEL 这是一封完整正文，不应该返回。",
+                "bodyPreview": "MAILBOX_PRIVATE_BODY_SENTINEL 这是一封正文预览，也不应该返回。",
+                "replyText": "ECHO_SENTINEL 不是逝者真实回复，但这段回声不应同步。",
                 "createdAt": "2026-06-13T00:00:00Z",
                 "deliverAt": "2026-06-14T00:00:00Z",
                 "status": "sealed",
@@ -421,16 +421,25 @@ class MailboxAPITests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         item = response.json()["item"]
         self.assertEqual(item["id"], "letter_sync_1")
-        self.assertEqual(item["bodyPreview"], "这是一封完整正文")
         self.assertTrue(item["metadataOnly"])
         self.assertTrue(item["contentRedacted"])
         self.assertNotIn("body", item)
+        self.assertNotIn("bodyPreview", item)
         self.assertNotIn("replyText", item)
+        response_text = response.text
+        self.assertNotIn("MAILBOX_PRIVATE_BODY_SENTINEL", response_text)
+        self.assertNotIn("ECHO_SENTINEL", response_text)
 
         listed = client.get("/mailbox/letters/mailbox_user")
         self.assertEqual(listed.status_code, 200)
-        self.assertEqual(listed.json()["items"][0]["id"], "letter_sync_1")
-        self.assertNotIn("body", listed.json()["items"][0])
+        listed_item = listed.json()["items"][0]
+        self.assertEqual(listed_item["id"], "letter_sync_1")
+        self.assertNotIn("body", listed_item)
+        self.assertNotIn("bodyPreview", listed_item)
+        self.assertNotIn("replyText", listed_item)
+        listed_text = listed.text
+        self.assertNotIn("MAILBOX_PRIVATE_BODY_SENTINEL", listed_text)
+        self.assertNotIn("ECHO_SENTINEL", listed_text)
 
     def test_mailbox_letters_api_rejects_private_or_local_letters(self):
         client = TestClient(app)

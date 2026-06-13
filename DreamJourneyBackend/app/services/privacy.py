@@ -85,13 +85,8 @@ def sanitize_mailbox_letter_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         "status",
         "boundaryAcknowledged",
         "privacyMetadata",
-        "bodyPreview",
     }
     item = {key: deepcopy(payload[key]) for key in allowed_keys if key in payload}
-
-    preview = str(item.get("bodyPreview") or payload.get("body") or "").strip()
-    if preview:
-        item["bodyPreview"] = preview[:80]
 
     item["metadataOnly"] = True
     item["contentRedacted"] = True
