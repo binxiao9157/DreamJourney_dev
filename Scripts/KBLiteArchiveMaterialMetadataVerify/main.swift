@@ -77,7 +77,7 @@ let textCount = KBLiteManager.shared.ingestArchiveTextMaterialMetadata(
     sessionId: 11,
     privacyMetadata: textMetadata
 )
-assertCondition(textCount == 1, "archive text metadata should add one fact")
+assertCondition(textCount >= 1, "archive text metadata should add at least one fact")
 assertCondition(
     KBLiteManager.shared.graph.facts.contains {
         $0.statement.contains("林桂芳的口头禅") &&
@@ -103,6 +103,40 @@ assertCondition(
         $0.privacyMetadata.sourceRefs.contains(where: { $0.id == "archive-text-1" })
     })?.sourceSessionIds == [11, 12],
     "duplicate archive text metadata should append source session"
+)
+
+let personaMetadata = MemoryPrivacyMetadata(scope: .generationAllowed).appendingSourceRef(
+    MemorySourceRef(
+        kind: .memoryArchiveItem,
+        id: "archive-persona-1",
+        title: "林桂芳的性格",
+        capturedAt: now
+    )
+)
+_ = KBLiteManager.shared.ingestArchiveTextMaterialMetadata(
+    archiveItemID: "archive-persona-1",
+    title: "林桂芳的性格",
+    note: "她慢性子，说话轻声细语，常说慢慢来。",
+    materialKind: "性格描述",
+    capturedAt: now,
+    sessionId: 15,
+    privacyMetadata: personaMetadata
+)
+guard let persona = KBLiteManager.shared.graph.people.first(where: { $0.name == "林桂芳" }) else {
+    fputs("FAIL: persona archive material should create or reuse a concrete person\n", stderr)
+    exit(1)
+}
+assertCondition(
+    KBLiteManager.shared.graph.facts.contains {
+        $0.statement.contains("林桂芳的性格") &&
+            $0.relatedPersonIds.contains(persona.id) &&
+            $0.privacyMetadata.sourceRefs.contains(where: { $0.kind == .memoryArchiveItem && $0.id == "archive-persona-1" })
+    },
+    "persona archive fact should be linked to the concrete person for prompt retrieval"
+)
+assertCondition(
+    KBLiteManager.shared.buildContextString(query: "林桂芳平时怎么说话").contains("慢慢来"),
+    "persona archive fact should be available in prompt context"
 )
 
 let photoMetadata = MemoryPrivacyMetadata(scope: .generationAllowed).appendingSourceRef(

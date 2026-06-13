@@ -1941,7 +1941,7 @@ final class KBLiteManager {
             statement = "记忆档案馆保存\(kindText)《\(title)》：\(Self.metadataSummary(note))。"
         }
 
-        return upsertArchiveMetadataFact(
+        let metadataCount = upsertArchiveMetadataFact(
             statement: statement,
             sourceRef: sourceRef,
             sessionId: sessionId,
@@ -1949,6 +1949,15 @@ final class KBLiteManager {
             logPrefix: "📝 档案文字元信息入库",
             logTitle: title
         )
+        let personaCount = linkArchivePersonaFactIfNeeded(
+            title: title,
+            note: note,
+            materialKind: kindText,
+            sourceRef: sourceRef,
+            sessionId: sessionId,
+            privacyMetadata: resolvedMetadata
+        )
+        return metadataCount + personaCount
     }
 
     @discardableResult
@@ -2141,6 +2150,48 @@ final class KBLiteManager {
         return 1
     }
 
+    private func linkArchivePersonaFactIfNeeded(
+        title: String,
+        note: String,
+        materialKind: String,
+        sourceRef: MemorySourceRef,
+        sessionId: Int,
+        privacyMetadata: MemoryPrivacyMetadata
+    ) -> Int {
+        guard Self.isPersonaMaterialKind(materialKind),
+              let personName = Self.inferredArchivePersonaName(fromTitle: title, materialKind: materialKind) else {
+            return 0
+        }
+
+        let traits = Self.archivePersonaTraits(from: note, materialKind: materialKind)
+        let personAddedCount = upsertQuickPerson(
+            name: personName,
+            relation: nil,
+            traits: traits,
+            briefBio: nil,
+            sessionId: sessionId,
+            privacyMetadata: privacyMetadata
+        )
+
+        guard let person = findMatchingPerson(name: personName, aliases: [], privacyMetadata: privacyMetadata),
+              let factIndex = graph.facts.firstIndex(where: { fact in
+                  fact.privacyMetadata.sourceRefs.contains(where: { Self.isSameSourceRef($0, sourceRef) })
+              }) else {
+            graph.lastUpdated = Date()
+            save()
+            return personAddedCount
+        }
+
+        var fact = graph.facts[factIndex]
+        if !fact.relatedPersonIds.contains(person.id) {
+            fact.relatedPersonIds.append(person.id)
+            graph.facts[factIndex] = fact
+        }
+        graph.lastUpdated = Date()
+        save()
+        return personAddedCount
+    }
+
     private static let metadataDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
@@ -2153,6 +2204,57 @@ final class KBLiteManager {
         guard trimmed.count > maxLength else { return trimmed }
         let endIndex = trimmed.index(trimmed.startIndex, offsetBy: maxLength)
         return String(trimmed[..<endIndex]) + "..."
+    }
+
+    private static func isPersonaMaterialKind(_ materialKind: String) -> Bool {
+        materialKind.contains("性格") || materialKind.contains("口头禅") || materialKind.contains("人格")
+    }
+
+    private static func inferredArchivePersonaName(fromTitle title: String, materialKind: String) -> String? {
+        guard isPersonaMaterialKind(materialKind) || isPersonaMaterialKind(title) else { return nil }
+        var candidate = normalizedQuickExtractEntity(title)
+        let suffixes = [
+            "的性格描述", "性格描述", "的性格", "性格",
+            "的口头禅", "口头禅",
+            "的人格线索", "人格线索", "的人格", "人格"
+        ]
+        for suffix in suffixes where candidate.hasSuffix(suffix) {
+            candidate.removeLast(suffix.count)
+            break
+        }
+        candidate = normalizedQuickExtractEntity(candidate.replacingOccurrences(of: "关于", with: ""))
+        guard candidate.count >= 2, candidate.count <= 6 else { return nil }
+        guard isLikelyChineseName(candidate) else { return nil }
+        guard !isGenericKinshipDisplayName(candidate) else { return nil }
+        guard !genericKinshipNames.contains(where: { candidate.contains($0) }) else { return nil }
+        return candidate
+    }
+
+    private static func archivePersonaTraits(from note: String, materialKind: String) -> [String] {
+        let summary = metadataSummary(note, maxLength: 80)
+        guard !summary.isEmpty else { return [] }
+        if materialKind.contains("口头禅") {
+            return ["口头禅：\(summary)"]
+        }
+
+        let separators = CharacterSet(charactersIn: "，。！？；、,!?;")
+        let fragments = summary
+            .components(separatedBy: separators)
+            .map { fragment -> String in
+                var value = normalizedQuickExtractEntity(fragment)
+                for prefix in ["她", "他", "老人", "长辈"] where value.hasPrefix(prefix) {
+                    value.removeFirst(prefix.count)
+                }
+                return normalizedQuickExtractEntity(value)
+            }
+            .filter { $0.count >= 2 && $0.count <= 12 }
+        return Array(fragments.prefix(4))
+    }
+
+    private static func isLikelyChineseName(_ value: String) -> Bool {
+        value.unicodeScalars.allSatisfy { scalar in
+            scalar.value >= 0x4E00 && scalar.value <= 0x9FFF
+        }
     }
 
     private static func metadataByAppending(

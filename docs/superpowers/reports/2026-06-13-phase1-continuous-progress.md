@@ -264,6 +264,19 @@
   - `Scripts/ConversationWellbeingUIVerify/main.py`
   - `Scripts/ConversationWellbeingMemoryBoundaryVerify/main.py`
 
+### 21. 记忆档案馆：人格线索与口头禅关联到具体人物
+
+- `KBLiteManager.ingestArchiveTextMaterialMetadata` 增强“性格描述 / 口头禅 / 人格线索”素材处理：
+  - 如果标题能识别出具体姓名，例如“林桂芳的性格”，会创建或复用 `KBPerson`。
+  - 档案事实会写入 `relatedPersonIds`，让数字人 prompt 的“相关人物 -> 关联事实”能稳定带出这些线索。
+  - 通用亲属称呼如“妈妈 / 奶奶”仍不会被当作具体人物写入，避免泛称或旧测试残留污染图谱。
+- 这使阶段一“人格 prompt text / 口头禅素材”不再只是普通文字事实，而能进入人物维度检索：
+  - 用户问“林桂芳平时怎么说话”时，prompt context 可以带出“她慢性子，说话轻声细语，常说慢慢来”等档案事实。
+- `Scripts/KBLiteArchiveMaterialMetadataVerify/main.swift` 增加覆盖：
+  - 人格素材创建/复用具体人物。
+  - 档案事实保留 `memoryArchiveItem` 来源锚点。
+  - prompt context 能检索到人格线索内容。
+
 ## 真机验收建议
 
 ### 记忆档案馆
