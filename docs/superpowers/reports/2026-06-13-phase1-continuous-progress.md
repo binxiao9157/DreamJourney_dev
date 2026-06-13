@@ -184,7 +184,8 @@
 
 - 定位根因：`DigitalHumanAvatarView` 的 WKWebView 首次加载时会先显示 web 壳层、loading 文案，再等 DHLive 首帧后切到真人 canvas；`MiniMateLoader.js` 还会提前把 `screen2` 置为可见。
 - iOS `DigitalHumanAvatarView` 现在默认让 WKWebView 透明：
-  - 收到 `avatar_first_frame_drawn` 或 `avatar_video_surface_ready` 后，180ms 淡入真人数字人。
+  - 只在收到 `avatar_video_surface_ready` 后，180ms 淡入真人数字人。
+  - `avatar_first_frame_drawn` 仅保留为诊断事件，避免 DOM 尚未完成 video-ready 状态时过早露出 loading 壳层。
   - 如果 2.8 秒内没有首帧，兜底显示壳层并记录 `avatar_startup_reveal_fallback`，避免黑屏式卡死。
   - 启动显隐过程写入 `DigitalHumanPlaybackEvidenceStore`，真机诊断可追踪。
 - Web 资源 `MiniMateLoader.js` 不再抢先显示 `screen2`，改由首帧 ready 统一接管。

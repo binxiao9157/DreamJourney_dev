@@ -1793,7 +1793,7 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
         DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
             "avatar_health type=\(DigitalHumanPlaybackEvidenceStore.sanitize(type)) detail=\(DigitalHumanPlaybackEvidenceStore.sanitize(String(describing: body["detail"] ?? "")))"
         )
-        if type == "avatar_first_frame_drawn" || type == "avatar_video_surface_ready" {
+        if type == "avatar_video_surface_ready" {
             revealInitialAvatarIfNeeded(reason: type)
         }
 
