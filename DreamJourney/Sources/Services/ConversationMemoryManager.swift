@@ -206,7 +206,18 @@ final class ConversationMemoryManager {
         privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
     ) {
         guard !text.isEmpty else { return }
-        let turn = ConversationTurn(role: "user", text: text, timestamp: Date(), privacyMetadata: privacyMetadata)
+        let timestamp = Date()
+        let turn = ConversationTurn(
+            role: "user",
+            text: text,
+            timestamp: timestamp,
+            privacyMetadata: metadataWithConversationSource(
+                role: "user",
+                text: text,
+                timestamp: timestamp,
+                privacyMetadata: privacyMetadata
+            )
+        )
         currentTranscript.append(turn)
         print("[Memory] 📝 记录用户: \(text.prefix(50))")
     }
@@ -216,9 +227,46 @@ final class ConversationMemoryManager {
         privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
     ) {
         guard !text.isEmpty else { return }
-        let turn = ConversationTurn(role: "ai", text: text, timestamp: Date(), privacyMetadata: privacyMetadata)
+        let timestamp = Date()
+        let turn = ConversationTurn(
+            role: "ai",
+            text: text,
+            timestamp: timestamp,
+            privacyMetadata: metadataWithConversationSource(
+                role: "ai",
+                text: text,
+                timestamp: timestamp,
+                privacyMetadata: privacyMetadata
+            )
+        )
         currentTranscript.append(turn)
         print("[Memory] 📝 记录AI: \(text.prefix(50))")
+    }
+
+    private func metadataWithConversationSource(
+        role: String,
+        text: String,
+        timestamp: Date,
+        privacyMetadata: MemoryPrivacyMetadata
+    ) -> MemoryPrivacyMetadata {
+        let turnIndex = currentTranscript.count + 1
+        let titlePrefix = role == "user" ? "用户对话" : "AI回复"
+        let sourceRef = MemorySourceRef(
+            kind: .conversationTurn,
+            id: "conversation-\(Int(timestamp.timeIntervalSince1970 * 1000))-\(role)-\(turnIndex)",
+            title: "\(titlePrefix) \(turnIndex)：\(Self.sourceTitlePreview(text))",
+            capturedAt: timestamp
+        )
+        return privacyMetadata.appendingSourceRef(sourceRef)
+    }
+
+    private static func sourceTitlePreview(_ text: String, maxLength: Int = 24) -> String {
+        let collapsed = text
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        guard collapsed.count > maxLength else { return collapsed }
+        let endIndex = collapsed.index(collapsed.startIndex, offsetBy: maxLength)
+        return String(collapsed[..<endIndex]) + "..."
     }
 
     /// 对话结束时调用：提取四维度摘要并持久化
@@ -310,12 +358,6 @@ final class ConversationMemoryManager {
 
     /// 从文本中提取时间描述
     private func extractTime(from text: String) -> String {
-        // 精确的时间表达
-        let exactTimePatterns = [
-            // 年份
-            (pattern: "(\\d{4})年", type: "year"),
-        ]
-
         // 检查精确年份
         if let regex = try? NSRegularExpression(pattern: "(\\d{3,4})年"),
            let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) {

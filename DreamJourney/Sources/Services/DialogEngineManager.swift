@@ -371,7 +371,7 @@ final class DialogEngineManager: NSObject, DialogEngineProtocol {
             try session.setCategory(
                 .playAndRecord,
                 mode: .voiceChat,
-                options: [.defaultToSpeaker, .allowBluetooth]
+                options: [.defaultToSpeaker, .allowBluetoothHFP]
             )
             try session.setActive(true)
             DDLogInfo("[DialogEngine] AudioSession 配置为 playAndRecord + voiceChat")

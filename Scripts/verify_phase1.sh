@@ -179,6 +179,16 @@ python3 Scripts/KBLiteBackendSnapshotVerify/main.py
 echo "== KBLite user lifecycle =="
 python3 Scripts/KBLiteUserLifecycleVerify/main.py
 
+echo "== Conversation turn source refs =="
+xcrun swiftc \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
+  DreamJourney/Sources/Services/KBLiteModels.swift \
+  DreamJourney/Sources/Services/KBLitePrivacyScopePolicy.swift \
+  DreamJourney/Sources/Services/ConversationMemoryManager.swift \
+  Scripts/ConversationTurnSourceRefVerify/main.swift \
+  -o /tmp/dreamjourney_conversation_turn_source_ref_verify
+/tmp/dreamjourney_conversation_turn_source_ref_verify
+
 echo "== Local test data cleanup =="
 python3 Scripts/LocalTestDataCleanupVerify/main.py
 
