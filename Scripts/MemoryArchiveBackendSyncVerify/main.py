@@ -39,8 +39,12 @@ required_client_fragments = [
 ]
 
 required_vc_fragments = [
+    "backendSyncStatusLabel",
+    "refreshArchiveBackendSyncStatus",
+    "updateBackendSyncStatusLabel",
     "syncArchiveItemMetadataToBackend",
     "DreamJourneyBackendClient.shared.syncArchiveItem",
+    "DreamJourneyBackendClient.shared.fetchArchiveItems",
     "syncArchiveItemMetadataToBackend(item)",
 ]
 

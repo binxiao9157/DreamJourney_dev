@@ -5,6 +5,9 @@ final class MemoryArchiveViewController: UIViewController {
 
     private let repository: MemoryArchiveRepository
     private var items: [MemoryArchiveItem] = []
+    private var backendArchiveItemCount: Int?
+    private var backendArchiveLastCheckedAt: Date?
+    private var backendSyncStatusOverride: String?
 
     private let titleLabel: UILabel = {
         let label = UILabel()
@@ -27,6 +30,14 @@ final class MemoryArchiveViewController: UIViewController {
         let label = UILabel()
         label.font = .systemFont(ofSize: 14, weight: .medium)
         label.textColor = .warmPrimary
+        label.numberOfLines = 0
+        return label
+    }()
+
+    private let backendSyncStatusLabel: UILabel = {
+        let label = UILabel()
+        label.font = .systemFont(ofSize: 12, weight: .medium)
+        label.textColor = .warmSubtitle
         label.numberOfLines = 0
         return label
     }()
@@ -71,12 +82,14 @@ final class MemoryArchiveViewController: UIViewController {
         setupActions()
         setupLayout()
         reloadData()
+        refreshArchiveBackendSyncStatus()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.navigationBar.isHidden = true
         reloadData()
+        refreshArchiveBackendSyncStatus()
     }
 
     private func setupActions() {
@@ -91,7 +104,7 @@ final class MemoryArchiveViewController: UIViewController {
         actionStack.axis = .vertical
         actionStack.spacing = 10
 
-        [titleLabel, boundaryLabel, summaryLabel, actionStack, tableView, emptyLabel].forEach {
+        [titleLabel, boundaryLabel, summaryLabel, backendSyncStatusLabel, actionStack, tableView, emptyLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview($0)
         }
@@ -109,7 +122,11 @@ final class MemoryArchiveViewController: UIViewController {
             summaryLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             summaryLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
 
-            actionStack.topAnchor.constraint(equalTo: summaryLabel.bottomAnchor, constant: 14),
+            backendSyncStatusLabel.topAnchor.constraint(equalTo: summaryLabel.bottomAnchor, constant: 6),
+            backendSyncStatusLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+            backendSyncStatusLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
+
+            actionStack.topAnchor.constraint(equalTo: backendSyncStatusLabel.bottomAnchor, constant: 14),
             actionStack.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             actionStack.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
 
@@ -127,6 +144,7 @@ final class MemoryArchiveViewController: UIViewController {
         items = repository.items()
         let summary = repository.summary()
         summaryLabel.text = "共 \(summary.totalCount) 份素材 · 照片 \(summary.photoCount) · 语音 \(summary.voiceSampleCount) · 文字 \(summary.textCount) · 已分析 \(summary.analyzedPhotoCount)"
+        updateBackendSyncStatusLabel()
         emptyLabel.isHidden = !items.isEmpty
         tableView.reloadData()
     }
@@ -547,6 +565,70 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
 }
 
 private extension MemoryArchiveViewController {
+    func refreshArchiveBackendSyncStatus() {
+        guard DreamJourneyBackendClient.shared.isConfigured,
+              let userId = UserManager.shared.currentUser?.id
+        else {
+            backendArchiveItemCount = nil
+            backendArchiveLastCheckedAt = nil
+            backendSyncStatusOverride = nil
+            updateBackendSyncStatusLabel()
+            return
+        }
+
+        DreamJourneyBackendClient.shared.fetchArchiveItems(userId: userId) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let response):
+                    self?.backendArchiveItemCount = response.items.count
+                    self?.backendArchiveLastCheckedAt = Date()
+                    self?.backendSyncStatusOverride = nil
+                case .failure:
+                    self?.backendSyncStatusOverride = "服务器同步：暂时无法确认，素材已保留在本机"
+                }
+                self?.updateBackendSyncStatusLabel()
+            }
+        }
+    }
+
+    func updateBackendSyncStatusLabel() {
+        let syncableCount = repository.items().filter {
+            PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .backendSync)
+        }.count
+
+        if !DreamJourneyBackendClient.shared.isConfigured {
+            backendSyncStatusLabel.text = "服务器同步：未配置后端，当前仅本机保存"
+            return
+        }
+
+        guard UserManager.shared.currentUser?.id != nil else {
+            backendSyncStatusLabel.text = "服务器同步：登录后可同步已授权素材"
+            return
+        }
+
+        if syncableCount == 0 {
+            backendSyncStatusLabel.text = "服务器同步：暂无已授权素材"
+            return
+        }
+
+        if let backendSyncStatusOverride {
+            backendSyncStatusLabel.text = backendSyncStatusOverride
+            return
+        }
+
+        if let backendArchiveItemCount {
+            let checkedText: String
+            if let backendArchiveLastCheckedAt {
+                checkedText = Self.backendSyncDateFormatter.string(from: backendArchiveLastCheckedAt)
+            } else {
+                checkedText = "刚刚"
+            }
+            backendSyncStatusLabel.text = "服务器同步：服务器已有 \(backendArchiveItemCount) 份 · 本机已授权 \(syncableCount) 份 · \(checkedText)"
+        } else {
+            backendSyncStatusLabel.text = "服务器同步：\(syncableCount) 份已授权素材待确认"
+        }
+    }
+
     func syncArchiveItemMetadataToBackend(_ item: MemoryArchiveItem) {
         guard DreamJourneyBackendClient.shared.isConfigured,
               let userId = UserManager.shared.currentUser?.id,
@@ -555,11 +637,33 @@ private extension MemoryArchiveViewController {
             return
         }
 
-        DreamJourneyBackendClient.shared.syncArchiveItem(userId: userId, item: item) { result in
-            if case .failure(let error) = result {
-                print("[MemoryArchive] backend metadata sync skipped/failed: \(error.localizedDescription)")
+        DreamJourneyBackendClient.shared.syncArchiveItem(userId: userId, item: item) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    self?.backendArchiveItemCount = max(
+                        self?.backendArchiveItemCount ?? 0,
+                        self?.repository.items().filter {
+                            PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .backendSync)
+                        }.count ?? 0
+                    )
+                    self?.backendArchiveLastCheckedAt = Date()
+                    self?.backendSyncStatusOverride = nil
+                    self?.updateBackendSyncStatusLabel()
+                case .failure(let error):
+                    print("[MemoryArchive] backend metadata sync skipped/failed: \(error.localizedDescription)")
+                    self?.backendSyncStatusOverride = "服务器同步：同步失败，本机副本已保存"
+                    self?.updateBackendSyncStatusLabel()
+                }
             }
         }
+    }
+
+    static var backendSyncDateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "HH:mm"
+        return formatter
     }
 }
 
