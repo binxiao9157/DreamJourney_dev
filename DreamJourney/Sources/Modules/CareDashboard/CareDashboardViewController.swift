@@ -227,7 +227,7 @@ final class CareDashboardViewController: UIViewController {
             return
         }
 
-        let metrics = [
+        var metrics = [
             ("用户发言", "\(snapshot.userTurnCount) 轮"),
             ("观测天数", "\(snapshot.windowDayCount) 天"),
             ("字数", "\(snapshot.characterCount)"),
@@ -237,6 +237,18 @@ final class CareDashboardViewController: UIViewController {
             ("睡眠信号", "\(snapshot.sleepMentions)"),
             ("身体信号", "\(snapshot.bodyDiscomfortMentions)"),
         ]
+        if let rate = snapshot.averageWordsPerMinute {
+            metrics.append(("平均语速", "\(Int(rate.rounded()))字/分"))
+        }
+        if let slowCount = snapshot.slowSpeechTurnCount {
+            metrics.append(("慢语速", "\(slowCount) 轮"))
+        }
+        if let pauseCount = snapshot.longPauseTurnCount {
+            metrics.append(("长停顿", "\(pauseCount) 轮"))
+        }
+        if let volatility = snapshot.emotionVolatilityScore {
+            metrics.append(("情绪波动", String(format: "%.0f%%", volatility * 100)))
+        }
         stackView.addArrangedSubview(makeMetricGrid(metrics))
         stackView.addArrangedSubview(makeTrendCard(snapshot))
         stackView.addArrangedSubview(makeWeeklyReport(snapshot))

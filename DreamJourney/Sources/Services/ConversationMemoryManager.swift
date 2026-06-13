@@ -7,17 +7,26 @@ struct ConversationTurn: Codable, MemoryPrivacyScoped {
     let role: String     // "user" / "ai"
     let text: String
     let timestamp: Date
+    let speechDurationSeconds: Double?
+    let pauseCount: Int?
+    let emotionHint: String?
     let privacyMetadata: MemoryPrivacyMetadata
 
     init(
         role: String,
         text: String,
         timestamp: Date,
+        speechDurationSeconds: Double? = nil,
+        pauseCount: Int? = nil,
+        emotionHint: String? = nil,
         privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
     ) {
         self.role = role
         self.text = text
         self.timestamp = timestamp
+        self.speechDurationSeconds = speechDurationSeconds
+        self.pauseCount = pauseCount
+        self.emotionHint = emotionHint
         self.privacyMetadata = privacyMetadata
     }
 
@@ -25,6 +34,9 @@ struct ConversationTurn: Codable, MemoryPrivacyScoped {
         case role
         case text
         case timestamp
+        case speechDurationSeconds
+        case pauseCount
+        case emotionHint
         case privacyMetadata
     }
 
@@ -33,6 +45,9 @@ struct ConversationTurn: Codable, MemoryPrivacyScoped {
         role = try container.decode(String.self, forKey: .role)
         text = try container.decode(String.self, forKey: .text)
         timestamp = try container.decode(Date.self, forKey: .timestamp)
+        speechDurationSeconds = try container.decodeIfPresent(Double.self, forKey: .speechDurationSeconds)
+        pauseCount = try container.decodeIfPresent(Int.self, forKey: .pauseCount)
+        emotionHint = try container.decodeIfPresent(String.self, forKey: .emotionHint)
         privacyMetadata = try container.decodeIfPresent(MemoryPrivacyMetadata.self, forKey: .privacyMetadata)
             ?? MemoryPrivacyMetadata(scope: .localOnly)
     }
@@ -217,6 +232,9 @@ final class ConversationMemoryManager {
 
     func recordUserTurn(
         text: String,
+        speechDurationSeconds: Double? = nil,
+        pauseCount: Int? = nil,
+        emotionHint: String? = nil,
         privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
     ) {
         guard !text.isEmpty else { return }
@@ -225,6 +243,9 @@ final class ConversationMemoryManager {
             role: "user",
             text: text,
             timestamp: timestamp,
+            speechDurationSeconds: speechDurationSeconds,
+            pauseCount: pauseCount,
+            emotionHint: emotionHint,
             privacyMetadata: metadataWithConversationSource(
                 role: "user",
                 text: text,

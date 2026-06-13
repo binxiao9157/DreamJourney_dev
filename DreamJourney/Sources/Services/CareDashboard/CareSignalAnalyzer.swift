@@ -19,7 +19,10 @@ final class CareSignalAnalyzer {
                 CareSignalInputTurn(
                     role: $0.role,
                     text: $0.text.trimmingCharacters(in: .whitespacesAndNewlines),
-                    timestamp: $0.timestamp
+                    timestamp: $0.timestamp,
+                    speechDurationSeconds: $0.speechDurationSeconds,
+                    pauseCount: $0.pauseCount,
+                    emotionHint: $0.emotionHint
                 )
             }
             .filter { !$0.text.isEmpty }
@@ -64,11 +67,15 @@ final class CareSignalAnalyzer {
         let sleepCount = countMatches(in: allText, keywords: sleepKeywords)
         let bodyCount = countMatches(in: allText, keywords: bodyKeywords)
         let repetitionRatio = repeatedRatio(for: normalizedTexts)
+        let speechMetrics = speechMetrics(for: recentUserTurns)
         let riskLevel = classify(
             negativeCount: negativeCount,
             sleepCount: sleepCount,
             bodyCount: bodyCount,
-            repetitionRatio: repetitionRatio
+            repetitionRatio: repetitionRatio,
+            slowSpeechTurnCount: speechMetrics.slowSpeechTurnCount,
+            longPauseTurnCount: speechMetrics.longPauseTurnCount,
+            emotionVolatilityScore: speechMetrics.emotionVolatilityScore
         )
         let dailyTrend = dailyTrend(for: recentUserTurns, endDate: now)
 
@@ -87,6 +94,10 @@ final class CareSignalAnalyzer {
             sleepMentions: sleepCount,
             bodyDiscomfortMentions: bodyCount,
             repetitionRatio: repetitionRatio,
+            averageWordsPerMinute: speechMetrics.averageWordsPerMinute,
+            slowSpeechTurnCount: speechMetrics.slowSpeechTurnCount,
+            longPauseTurnCount: speechMetrics.longPauseTurnCount,
+            emotionVolatilityScore: speechMetrics.emotionVolatilityScore,
             riskLevel: riskLevel,
             summary: summary(for: riskLevel, userTurnCount: userTexts.count),
             suggestions: suggestions(for: riskLevel),
@@ -95,13 +106,19 @@ final class CareSignalAnalyzer {
                 negativeCount: negativeCount,
                 sleepCount: sleepCount,
                 bodyCount: bodyCount,
-                repetitionRatio: repetitionRatio
+                repetitionRatio: repetitionRatio,
+                slowSpeechTurnCount: speechMetrics.slowSpeechTurnCount,
+                longPauseTurnCount: speechMetrics.longPauseTurnCount,
+                emotionVolatilityScore: speechMetrics.emotionVolatilityScore
             ),
             riskSignalDescriptions: riskSignalDescriptions(
                 negativeCount: negativeCount,
                 sleepCount: sleepCount,
                 bodyCount: bodyCount,
-                repetitionRatio: repetitionRatio
+                repetitionRatio: repetitionRatio,
+                slowSpeechTurnCount: speechMetrics.slowSpeechTurnCount,
+                longPauseTurnCount: speechMetrics.longPauseTurnCount,
+                emotionVolatilityScore: speechMetrics.emotionVolatilityScore
             ),
             dailyTrend: dailyTrend,
             trendSummary: trendSummary(for: dailyTrend)
@@ -138,14 +155,24 @@ final class CareSignalAnalyzer {
         negativeCount: Int,
         sleepCount: Int,
         bodyCount: Int,
-        repetitionRatio: Double
+        repetitionRatio: Double,
+        slowSpeechTurnCount: Int?,
+        longPauseTurnCount: Int?,
+        emotionVolatilityScore: Double?
     ) -> CareSignalRiskLevel {
         let signalClasses = [negativeCount > 0, sleepCount > 0, bodyCount > 0].filter { $0 }.count
         let totalSignalMentions = negativeCount + sleepCount + bodyCount
-        if (signalClasses >= 2 && totalSignalMentions >= 3) || repetitionRatio >= 0.4 || bodyCount >= 2 {
+        let slowCount = slowSpeechTurnCount ?? 0
+        let pauseCount = longPauseTurnCount ?? 0
+        let volatility = emotionVolatilityScore ?? 0
+        if (signalClasses >= 2 && totalSignalMentions >= 3) ||
+            repetitionRatio >= 0.4 ||
+            bodyCount >= 2 ||
+            pauseCount >= 3 ||
+            (slowCount >= 3 && volatility >= 0.5) {
             return .attention
         }
-        if signalClasses >= 1 {
+        if signalClasses >= 1 || slowCount > 0 || pauseCount > 0 || volatility >= 0.5 {
             return .watch
         }
         return .stable
@@ -182,7 +209,10 @@ final class CareSignalAnalyzer {
         negativeCount: Int,
         sleepCount: Int,
         bodyCount: Int,
-        repetitionRatio: Double
+        repetitionRatio: Double,
+        slowSpeechTurnCount: Int?,
+        longPauseTurnCount: Int?,
+        emotionVolatilityScore: Double?
     ) -> [String] {
         switch riskLevel {
         case .insufficientData:
@@ -194,7 +224,10 @@ final class CareSignalAnalyzer {
                 negativeCount: negativeCount,
                 sleepCount: sleepCount,
                 bodyCount: bodyCount,
-                repetitionRatio: repetitionRatio
+                repetitionRatio: repetitionRatio,
+                slowSpeechTurnCount: slowSpeechTurnCount,
+                longPauseTurnCount: longPauseTurnCount,
+                emotionVolatilityScore: emotionVolatilityScore
             )
         }
     }
@@ -203,7 +236,10 @@ final class CareSignalAnalyzer {
         negativeCount: Int,
         sleepCount: Int,
         bodyCount: Int,
-        repetitionRatio: Double
+        repetitionRatio: Double,
+        slowSpeechTurnCount: Int?,
+        longPauseTurnCount: Int?,
+        emotionVolatilityScore: Double?
     ) -> [String] {
         var descriptions: [String] = []
         if sleepCount > 0 {
@@ -218,7 +254,52 @@ final class CareSignalAnalyzer {
         if repetitionRatio >= 0.4 {
             descriptions.append("重复信号：相似表达多次出现，建议结合近期生活变化继续观察。")
         }
+        if (slowSpeechTurnCount ?? 0) > 0 {
+            descriptions.append("语速信号：授权语音中出现慢语速聚合信号，建议结合当天精神状态温和确认。")
+        }
+        if (longPauseTurnCount ?? 0) > 0 {
+            descriptions.append("停顿信号：授权语音中出现较长停顿聚合信号，建议关注是否疲惫或表达困难。")
+        }
+        if (emotionVolatilityScore ?? 0) >= 0.5 {
+            descriptions.append("情绪波动：授权语音或文本情绪提示变化较明显，建议增加陪伴。")
+        }
         return descriptions
+    }
+
+    private func speechMetrics(
+        for turns: [CareSignalInputTurn]
+    ) -> (
+        averageWordsPerMinute: Double?,
+        slowSpeechTurnCount: Int?,
+        longPauseTurnCount: Int?,
+        emotionVolatilityScore: Double?
+    ) {
+        let speechRates = turns.compactMap { turn -> Double? in
+            guard let duration = turn.speechDurationSeconds, duration > 0 else { return nil }
+            let tokenCount = tokenize(normalize(turn.text)).count
+            guard tokenCount > 0 else { return nil }
+            return Double(tokenCount) / (duration / 60.0)
+        }
+        let averageRate = speechRates.isEmpty ? nil : speechRates.reduce(0, +) / Double(speechRates.count)
+        let slowSpeechCount = speechRates.isEmpty ? nil : speechRates.filter { $0 < 40 }.count
+
+        let pauseCounts = turns.compactMap(\.pauseCount)
+        let longPauseCount = pauseCounts.isEmpty ? nil : pauseCounts.filter { $0 >= 3 }.count
+
+        let emotionHints = turns
+            .compactMap { $0.emotionHint?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .filter { !$0.isEmpty }
+        let emotionVolatility: Double?
+        if emotionHints.isEmpty {
+            emotionVolatility = nil
+        } else if emotionHints.count == 1 {
+            emotionVolatility = 0
+        } else {
+            let changedTransitions = zip(emotionHints, emotionHints.dropFirst()).filter { $0 != $1 }.count
+            emotionVolatility = Double(changedTransitions) / Double(emotionHints.count - 1)
+        }
+
+        return (averageRate, slowSpeechCount, longPauseCount, emotionVolatility)
     }
 
     private func countMatches(in text: String, keywords: [String]) -> Int {
@@ -280,6 +361,10 @@ final class CareSignalAnalyzer {
                 let sleepCount = countMatches(in: allText, keywords: sleepKeywords)
                 let bodyCount = countMatches(in: allText, keywords: bodyKeywords)
                 let repetitionRatio = repeatedRatio(for: normalizedTexts)
+                let speechMetrics = speechMetrics(for: dayTurns)
+                let speechSignalScore = (speechMetrics.slowSpeechTurnCount ?? 0) +
+                    (speechMetrics.longPauseTurnCount ?? 0) +
+                    (((speechMetrics.emotionVolatilityScore ?? 0) >= 0.5) ? 1 : 0)
                 return CareSignalDailyTrendPoint(
                     date: day,
                     userTurnCount: normalizedTexts.count,
@@ -287,7 +372,11 @@ final class CareSignalAnalyzer {
                     sleepMentions: sleepCount,
                     bodyDiscomfortMentions: bodyCount,
                     repetitionRatio: repetitionRatio,
-                    signalScore: negativeCount + sleepCount + bodyCount
+                    averageWordsPerMinute: speechMetrics.averageWordsPerMinute,
+                    slowSpeechTurnCount: speechMetrics.slowSpeechTurnCount,
+                    longPauseTurnCount: speechMetrics.longPauseTurnCount,
+                    emotionVolatilityScore: speechMetrics.emotionVolatilityScore,
+                    signalScore: negativeCount + sleepCount + bodyCount + speechSignalScore
                 )
             }
     }

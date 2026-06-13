@@ -5,24 +5,43 @@ import Foundation
 struct Stage1MailboxMemoryInput {
     let text: String
     let timestamp: Date
+    let speechDurationSeconds: Double?
+    let pauseCount: Int?
+    let emotionHint: String?
     let privacyMetadata: MemoryPrivacyMetadata
 
     init(
         text: String,
         timestamp: Date = Date(),
+        speechDurationSeconds: Double? = nil,
+        pauseCount: Int? = nil,
+        emotionHint: String? = nil,
         privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
     ) {
         self.text = text
         self.timestamp = timestamp
+        self.speechDurationSeconds = speechDurationSeconds
+        self.pauseCount = pauseCount
+        self.emotionHint = emotionHint
         self.privacyMetadata = privacyMetadata
     }
 
     init(
         _ text: String,
         timestamp: Date = Date(),
+        speechDurationSeconds: Double? = nil,
+        pauseCount: Int? = nil,
+        emotionHint: String? = nil,
         privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
     ) {
-        self.init(text: text, timestamp: timestamp, privacyMetadata: privacyMetadata)
+        self.init(
+            text: text,
+            timestamp: timestamp,
+            speechDurationSeconds: speechDurationSeconds,
+            pauseCount: pauseCount,
+            emotionHint: emotionHint,
+            privacyMetadata: privacyMetadata
+        )
     }
 }
 
@@ -70,7 +89,13 @@ final class Stage1MemoryFacade {
     }
 
     func recordUserTurn(_ input: Stage1MailboxMemoryInput) {
-        conversationMemory.recordUserTurn(text: input.text, privacyMetadata: input.privacyMetadata)
+        conversationMemory.recordUserTurn(
+            text: input.text,
+            speechDurationSeconds: input.speechDurationSeconds,
+            pauseCount: input.pauseCount,
+            emotionHint: input.emotionHint,
+            privacyMetadata: input.privacyMetadata
+        )
     }
 
     func recordUserTurn(_ text: String) {
@@ -320,6 +345,9 @@ private extension Stage1MailboxMemoryInput {
         Stage1MailboxMemoryInput(
             text: text,
             timestamp: timestamp,
+            speechDurationSeconds: speechDurationSeconds,
+            pauseCount: pauseCount,
+            emotionHint: emotionHint,
             privacyMetadata: privacyMetadata.appendingSourceRef(sourceRef)
         )
     }

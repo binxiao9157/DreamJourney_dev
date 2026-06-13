@@ -96,6 +96,43 @@ assertReportDoesNotExposeFullInput(
     "watch share report should not expose full input sentences"
 )
 
+let speechRadar = analyzer.analyze(turns: [
+    CareSignalInputTurn(
+        role: "user",
+        text: "今天不太想说话",
+        timestamp: now.addingTimeInterval(-2 * 24 * 60 * 60),
+        speechDurationSeconds: 36,
+        pauseCount: 4,
+        emotionHint: "low"
+    ),
+    CareSignalInputTurn(
+        role: "user",
+        text: "我有点烦，也睡不好",
+        timestamp: now.addingTimeInterval(-24 * 60 * 60),
+        speechDurationSeconds: 42,
+        pauseCount: 5,
+        emotionHint: "negative"
+    )
+], now: now)
+assertCondition(speechRadar.averageWordsPerMinute != nil, "speech radar should compute average speech rate when durations are present")
+assertCondition((speechRadar.averageWordsPerMinute ?? 999) < 40, "slow speech samples should lower average speech rate")
+assertCondition(speechRadar.slowSpeechTurnCount == 2, "speech radar should count slow speech turns")
+assertCondition(speechRadar.longPauseTurnCount == 2, "speech radar should count long-pause turns")
+assertCondition((speechRadar.emotionVolatilityScore ?? 0) > 0, "speech radar should aggregate emotion hint changes")
+assertCondition(speechRadar.riskSignalDescriptions.contains { $0.contains("语速") }, "speech radar should describe slow speech signal")
+assertCondition(speechRadar.riskSignalDescriptions.contains { $0.contains("停顿") }, "speech radar should describe long pause signal")
+assertCondition(speechRadar.dailyTrend.allSatisfy { $0.averageWordsPerMinute != nil }, "daily trend should include aggregate speech rate when present")
+let speechRadarReport = CareDashboardShareReportDescriptor.make(snapshot: speechRadar, viewerName: "陈岚")
+assertCondition(speechRadarReport.plainText.contains("平均语速"), "share report should include aggregate speech-rate metric")
+assertCondition(speechRadarReport.plainText.contains("慢语速轮次 2"), "share report should include aggregate slow-speech count")
+assertCondition(speechRadarReport.plainText.contains("长停顿轮次 2"), "share report should include aggregate long-pause count")
+assertCondition(speechRadarReport.plainText.contains("情绪波动"), "share report should include aggregate emotion volatility")
+assertReportDoesNotExposeFullInput(
+    speechRadarReport,
+    sourceTexts: ["今天不太想说话", "我有点烦，也睡不好", "raw audio", "rawTranscript"],
+    "speech radar share report should not expose raw speech or transcript content"
+)
+
 let attention = analyzer.analyze(turns: [
     CareSignalInputTurn(role: "user", text: "我睡不好，胸闷，也吃不下。", timestamp: now),
     CareSignalInputTurn(role: "user", text: "我睡不好，胸闷，也吃不下。", timestamp: now)

@@ -19,6 +19,10 @@ CARE_SNAPSHOT_SCALAR_KEYS = {
     "sleepMentions",
     "bodyDiscomfortMentions",
     "repetitionRatio",
+    "averageWordsPerMinute",
+    "slowSpeechTurnCount",
+    "longPauseTurnCount",
+    "emotionVolatilityScore",
     "riskLevel",
     "summary",
     "trendSummary",
@@ -84,10 +88,22 @@ CARE_DAILY_TREND_SCALAR_KEYS = {
     "sleepMentions",
     "bodyDiscomfortMentions",
     "repetitionRatio",
+    "averageWordsPerMinute",
+    "slowSpeechTurnCount",
+    "longPauseTurnCount",
+    "emotionVolatilityScore",
     "signalScore",
 }
 
-CARE_DAILY_TREND_REQUIRED_KEYS = CARE_DAILY_TREND_SCALAR_KEYS
+CARE_DAILY_TREND_REQUIRED_KEYS = {
+    "date",
+    "userTurnCount",
+    "negativeEmotionMentions",
+    "sleepMentions",
+    "bodyDiscomfortMentions",
+    "repetitionRatio",
+    "signalScore",
+}
 
 
 def _scope(entity: Dict[str, Any]) -> str:
@@ -214,7 +230,7 @@ def _sanitize_daily_trend(value: Any) -> List[Dict[str, Any]]:
             for key in CARE_DAILY_TREND_SCALAR_KEYS
             if key in point and _is_json_scalar(point[key])
         }
-        if set(sanitized_point.keys()) != CARE_DAILY_TREND_REQUIRED_KEYS:
+        if not CARE_DAILY_TREND_REQUIRED_KEYS.issubset(sanitized_point.keys()):
             raise ValueError(f"invalid care snapshot dailyTrend[{index}] field types")
         points.append(sanitized_point)
     return points

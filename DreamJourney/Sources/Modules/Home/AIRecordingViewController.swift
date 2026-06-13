@@ -1036,6 +1036,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
             // 记录到对话记忆
             Stage1MemoryFacade.shared.recordUserTurn(Stage1MailboxMemoryInput(
                 text,
+                emotionHint: careEmotionHint(for: text),
                 privacyMetadata: currentDialogPrivacyMetadata
             ))
         } else {
@@ -1100,6 +1101,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
             // 记录到对话记忆
             Stage1MemoryFacade.shared.recordUserTurn(Stage1MailboxMemoryInput(
                 text,
+                emotionHint: careEmotionHint(for: text),
                 privacyMetadata: currentDialogPrivacyMetadata
             ))
             pendingUserText = nil
@@ -1537,6 +1539,20 @@ extension AIRecordingViewController: DialogEngineDelegate {
             DDLogWarn("[AIRecording] 并行录音启动失败: \(error.localizedDescription)")
             sessionRecorder = nil
         }
+    }
+
+    private func careEmotionHint(for text: String) -> String? {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return nil }
+        let negativeHints = ["孤单", "难过", "烦", "没意思", "不想说", "睡不好", "失眠", "头晕", "胸闷", "疼", "不舒服", "吃不下"]
+        if negativeHints.contains(where: { normalized.contains($0) }) {
+            return "negative"
+        }
+        let lowEnergyHints = ["累", "没精神", "不太想", "想休息"]
+        if lowEnergyHints.contains(where: { normalized.contains($0) }) {
+            return "low"
+        }
+        return "neutral"
     }
 
     /// 停止并行录音并保存到持久化目录

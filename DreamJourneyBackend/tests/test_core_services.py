@@ -319,6 +319,10 @@ class CareSnapshotAPITests(unittest.TestCase):
             "sleepMentions": 1,
             "bodyDiscomfortMentions": 0,
             "repetitionRatio": 0.0,
+            "averageWordsPerMinute": 88.5,
+            "slowSpeechTurnCount": 1,
+            "longPauseTurnCount": 1,
+            "emotionVolatilityScore": 0.25,
             "riskLevel": risk_level,
             "summary": summary,
             "suggestions": ["今晚主动电话问候。"],
@@ -332,6 +336,10 @@ class CareSnapshotAPITests(unittest.TestCase):
                     "sleepMentions": 1,
                     "bodyDiscomfortMentions": 0,
                     "repetitionRatio": 0.0,
+                    "averageWordsPerMinute": 88.5,
+                    "slowSpeechTurnCount": 1,
+                    "longPauseTurnCount": 1,
+                    "emotionVolatilityScore": 0.25,
                     "signalScore": 1,
                 }
             ],
@@ -520,6 +528,7 @@ class CareSnapshotAPITests(unittest.TestCase):
             "rawTranscript": "CARE_RAW_SENTINEL 这段原始对话不能出现在响应或历史里。",
             "messages": [{"role": "user", "text": "CARE_RAW_SENTINEL"}],
             "sourceTexts": ["CARE_RAW_SENTINEL"],
+            "rawAudioURL": "file:///private/raw_audio.m4a",
         })
         snapshot["dailyTrend"][0]["rawText"] = "CARE_RAW_SENTINEL"
 
@@ -534,9 +543,13 @@ class CareSnapshotAPITests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["item"]["snapshot"]["riskLevel"], "attention")
+        self.assertEqual(response.json()["item"]["snapshot"]["averageWordsPerMinute"], 88.5)
+        self.assertEqual(response.json()["item"]["snapshot"]["dailyTrend"][0]["longPauseTurnCount"], 1)
         self.assertNotIn("CARE_RAW_SENTINEL", response.text)
+        self.assertNotIn("raw_audio", response.text)
         self.assertEqual(history.status_code, 200)
         self.assertNotIn("CARE_RAW_SENTINEL", history.text)
+        self.assertNotIn("raw_audio", history.text)
 
     def test_care_snapshot_api_rejects_missing_required_fields(self):
         client = TestClient(app)

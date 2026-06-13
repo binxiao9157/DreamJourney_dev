@@ -4,6 +4,25 @@ struct CareSignalInputTurn: Codable, Equatable {
     let role: String
     let text: String
     let timestamp: Date
+    let speechDurationSeconds: Double?
+    let pauseCount: Int?
+    let emotionHint: String?
+
+    init(
+        role: String,
+        text: String,
+        timestamp: Date,
+        speechDurationSeconds: Double? = nil,
+        pauseCount: Int? = nil,
+        emotionHint: String? = nil
+    ) {
+        self.role = role
+        self.text = text
+        self.timestamp = timestamp
+        self.speechDurationSeconds = speechDurationSeconds
+        self.pauseCount = pauseCount
+        self.emotionHint = emotionHint
+    }
 }
 
 enum CareSignalRiskLevel: String, Codable, Equatable {
@@ -28,6 +47,10 @@ struct CareSignalSnapshot: Codable, Equatable {
     let sleepMentions: Int
     let bodyDiscomfortMentions: Int
     let repetitionRatio: Double
+    let averageWordsPerMinute: Double?
+    let slowSpeechTurnCount: Int?
+    let longPauseTurnCount: Int?
+    let emotionVolatilityScore: Double?
     let riskLevel: CareSignalRiskLevel
     let summary: String
     let suggestions: [String]
@@ -35,6 +58,60 @@ struct CareSignalSnapshot: Codable, Equatable {
     let riskSignalDescriptions: [String]
     let dailyTrend: [CareSignalDailyTrendPoint]
     let trendSummary: String
+
+    init(
+        generatedAt: Date,
+        windowStart: Date?,
+        windowEnd: Date?,
+        windowDayCount: Int,
+        dataCoverageSummary: String,
+        totalTurns: Int,
+        userTurnCount: Int,
+        characterCount: Int,
+        uniqueTokenCount: Int,
+        lexicalDiversity: Double,
+        negativeEmotionMentions: Int,
+        sleepMentions: Int,
+        bodyDiscomfortMentions: Int,
+        repetitionRatio: Double,
+        averageWordsPerMinute: Double? = nil,
+        slowSpeechTurnCount: Int? = nil,
+        longPauseTurnCount: Int? = nil,
+        emotionVolatilityScore: Double? = nil,
+        riskLevel: CareSignalRiskLevel,
+        summary: String,
+        suggestions: [String],
+        weeklyHighlights: [String],
+        riskSignalDescriptions: [String],
+        dailyTrend: [CareSignalDailyTrendPoint],
+        trendSummary: String
+    ) {
+        self.generatedAt = generatedAt
+        self.windowStart = windowStart
+        self.windowEnd = windowEnd
+        self.windowDayCount = windowDayCount
+        self.dataCoverageSummary = dataCoverageSummary
+        self.totalTurns = totalTurns
+        self.userTurnCount = userTurnCount
+        self.characterCount = characterCount
+        self.uniqueTokenCount = uniqueTokenCount
+        self.lexicalDiversity = lexicalDiversity
+        self.negativeEmotionMentions = negativeEmotionMentions
+        self.sleepMentions = sleepMentions
+        self.bodyDiscomfortMentions = bodyDiscomfortMentions
+        self.repetitionRatio = repetitionRatio
+        self.averageWordsPerMinute = averageWordsPerMinute
+        self.slowSpeechTurnCount = slowSpeechTurnCount
+        self.longPauseTurnCount = longPauseTurnCount
+        self.emotionVolatilityScore = emotionVolatilityScore
+        self.riskLevel = riskLevel
+        self.summary = summary
+        self.suggestions = suggestions
+        self.weeklyHighlights = weeklyHighlights
+        self.riskSignalDescriptions = riskSignalDescriptions
+        self.dailyTrend = dailyTrend
+        self.trendSummary = trendSummary
+    }
 }
 
 struct CareSignalDailyTrendPoint: Codable, Equatable {
@@ -44,10 +121,44 @@ struct CareSignalDailyTrendPoint: Codable, Equatable {
     let sleepMentions: Int
     let bodyDiscomfortMentions: Int
     let repetitionRatio: Double
+    let averageWordsPerMinute: Double?
+    let slowSpeechTurnCount: Int?
+    let longPauseTurnCount: Int?
+    let emotionVolatilityScore: Double?
     let signalScore: Int
 
+    init(
+        date: Date,
+        userTurnCount: Int,
+        negativeEmotionMentions: Int,
+        sleepMentions: Int,
+        bodyDiscomfortMentions: Int,
+        repetitionRatio: Double,
+        averageWordsPerMinute: Double? = nil,
+        slowSpeechTurnCount: Int? = nil,
+        longPauseTurnCount: Int? = nil,
+        emotionVolatilityScore: Double? = nil,
+        signalScore: Int
+    ) {
+        self.date = date
+        self.userTurnCount = userTurnCount
+        self.negativeEmotionMentions = negativeEmotionMentions
+        self.sleepMentions = sleepMentions
+        self.bodyDiscomfortMentions = bodyDiscomfortMentions
+        self.repetitionRatio = repetitionRatio
+        self.averageWordsPerMinute = averageWordsPerMinute
+        self.slowSpeechTurnCount = slowSpeechTurnCount
+        self.longPauseTurnCount = longPauseTurnCount
+        self.emotionVolatilityScore = emotionVolatilityScore
+        self.signalScore = signalScore
+    }
+
     var hasSignals: Bool {
-        signalScore > 0 || repetitionRatio >= 0.4
+        signalScore > 0 ||
+            repetitionRatio >= 0.4 ||
+            (slowSpeechTurnCount ?? 0) > 0 ||
+            (longPauseTurnCount ?? 0) > 0 ||
+            (emotionVolatilityScore ?? 0) >= 0.5
     }
 }
 
@@ -104,20 +215,37 @@ struct CareDashboardShareReportDescriptor: Equatable {
             generatedAtText: Self.dateTimeFormatter.string(from: snapshot.generatedAt),
             observationWindowText: observationWindowText(snapshot: snapshot),
             coverageText: snapshot.dataCoverageSummary,
-            metricLines: [
-                "用户发言 \(snapshot.userTurnCount) 轮",
-                "观测天数 \(snapshot.windowDayCount) 天",
-                "情绪信号 \(snapshot.negativeEmotionMentions)",
-                "睡眠信号 \(snapshot.sleepMentions)",
-                "身体信号 \(snapshot.bodyDiscomfortMentions)",
-                "重复表达 \(Self.percent(snapshot.repetitionRatio))"
-            ],
+            metricLines: Self.metricLines(snapshot: snapshot),
             summary: snapshot.summary,
             highlights: highlights,
             trendSummary: snapshot.trendSummary,
             suggestions: snapshot.suggestions,
             boundaryNotice: "仅包含脱敏聚合信号和关怀建议，不包含原始聊天内容；本周报不是医疗诊断。"
         )
+    }
+
+    private static func metricLines(snapshot: CareSignalSnapshot) -> [String] {
+        var lines = [
+            "用户发言 \(snapshot.userTurnCount) 轮",
+            "观测天数 \(snapshot.windowDayCount) 天",
+            "情绪信号 \(snapshot.negativeEmotionMentions)",
+            "睡眠信号 \(snapshot.sleepMentions)",
+            "身体信号 \(snapshot.bodyDiscomfortMentions)",
+            "重复表达 \(Self.percent(snapshot.repetitionRatio))"
+        ]
+        if let rate = snapshot.averageWordsPerMinute {
+            lines.append("平均语速 \(Int(rate.rounded()))字/分")
+        }
+        if let slowCount = snapshot.slowSpeechTurnCount {
+            lines.append("慢语速轮次 \(slowCount)")
+        }
+        if let pauseCount = snapshot.longPauseTurnCount {
+            lines.append("长停顿轮次 \(pauseCount)")
+        }
+        if let volatility = snapshot.emotionVolatilityScore {
+            lines.append("情绪波动 \(Self.percent(volatility))")
+        }
+        return lines
     }
 
     private static func snapshotTrendLine(from value: String, fallback: String) -> String {
@@ -174,7 +302,14 @@ enum CareDashboardInputPolicy {
         )
         .filter(isCareEligibleTurn)
         .map {
-            CareSignalInputTurn(role: $0.role, text: $0.text, timestamp: $0.timestamp)
+            CareSignalInputTurn(
+                role: $0.role,
+                text: $0.text,
+                timestamp: $0.timestamp,
+                speechDurationSeconds: $0.speechDurationSeconds,
+                pauseCount: $0.pauseCount,
+                emotionHint: $0.emotionHint
+            )
         }
     }
 
