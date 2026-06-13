@@ -26,6 +26,9 @@ xcrun swiftc \
 echo "== TimeMailbox notification =="
 python3 Scripts/TimeMailboxNotificationVerify/main.py
 
+echo "== TimeMailbox delayed delivery =="
+python3 Scripts/TimeMailboxDeliveryDelayVerify/main.py
+
 echo "== TimeMailbox backend sync =="
 python3 Scripts/TimeMailboxBackendSyncVerify/main.py
 

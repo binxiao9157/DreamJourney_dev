@@ -9,6 +9,7 @@ enum TimeMailboxRepositoryError: Error, Equatable {
 
 final class TimeMailboxRepository {
     static let shared = TimeMailboxRepository()
+    private static let minimumDeliveryDelay: TimeInterval = 60
 
     private let defaults: UserDefaults
     private let storageKey: String
@@ -53,13 +54,14 @@ final class TimeMailboxRepository {
         guard !cleanBody.isEmpty else { throw TimeMailboxRepositoryError.invalidBody }
         guard boundaryAcknowledged else { throw TimeMailboxRepositoryError.boundaryNotAcknowledged }
 
+        let minimumDeliverAt = now.addingTimeInterval(Self.minimumDeliveryDelay)
         let letter = TimeMailboxLetter(
             id: id,
             recipientName: cleanRecipient,
             title: cleanTitle.isEmpty ? "给\(cleanRecipient)的一封信" : cleanTitle,
             body: cleanBody,
             createdAt: now,
-            deliverAt: max(deliverAt, now),
+            deliverAt: max(deliverAt, minimumDeliverAt),
             deliveredAt: nil,
             status: .sealed,
             replyText: nil,

@@ -405,8 +405,8 @@ private final class TimeMailboxComposerViewController: UIViewController {
     }()
 
     private let deliveryControl: UISegmentedControl = {
-        let control = UISegmentedControl(items: ["立即", "1 分钟", "明日"])
-        control.selectedSegmentIndex = 1
+        let control = UISegmentedControl(items: ["1 分钟", "明日", "一周"])
+        control.selectedSegmentIndex = 0
         control.selectedSegmentTintColor = .warmAccent
         control.setTitleTextAttributes([.foregroundColor: UIColor.white], for: .selected)
         control.setTitleTextAttributes([.foregroundColor: UIColor.warmPrimary], for: .normal)
@@ -565,10 +565,10 @@ private final class TimeMailboxComposerViewController: UIViewController {
 
         let deliverAt: Date
         switch deliveryControl.selectedSegmentIndex {
-        case 0:
-            deliverAt = Date()
-        case 2:
+        case 1:
             deliverAt = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date().addingTimeInterval(86_400)
+        case 2:
+            deliverAt = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date().addingTimeInterval(604_800)
         default:
             deliverAt = Date().addingTimeInterval(60)
         }

@@ -86,11 +86,19 @@ do {
         recipientName: "爸爸",
         title: "",
         body: "默认只保存在本机。",
-        deliverAt: now.addingTimeInterval(3_600),
+        deliverAt: now,
         now: now,
         boundaryAcknowledged: true
     )
     assertCondition(defaultLetter.privacyMetadata.scope == .localOnly, "default letter scope should be localOnly")
+    assertCondition(
+        defaultLetter.deliverAt.timeIntervalSince(now) >= 60,
+        "repository should clamp immediate mailbox letters to at least one minute later"
+    )
+    assertCondition(
+        repo.refreshDelivery(now: now.addingTimeInterval(1)).isEmpty,
+        "clamped mailbox letter should not deliver one second after sealing"
+    )
     try repo.delete(id: defaultLetter.id)
 
     let realSimilarToOldSeed = try repo.createLetter(
@@ -113,12 +121,12 @@ do {
         recipientName: "妈妈",
         title: "想起西湖边的小照相馆",
         body: "我今天又想起桂花糕和西湖边的小照相馆。",
-        deliverAt: now,
+        deliverAt: now.addingTimeInterval(60),
         now: now,
         boundaryAcknowledged: true,
         privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed)
     )
-    let evidenceDelivered = repo.refreshDelivery(now: now.addingTimeInterval(1)) { _ in
+    let evidenceDelivered = repo.refreshDelivery(now: now.addingTimeInterval(61)) { _ in
         TimeMailboxEchoEvidence(
             people: ["妈妈：喜欢做桂花糕"],
             places: ["杭州西湖：一家人常去散步"],
