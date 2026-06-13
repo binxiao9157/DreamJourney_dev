@@ -1,6 +1,9 @@
 import os
 import unittest
 
+from fastapi.testclient import TestClient
+
+from app.main import app
 from app.core.config import Settings
 from app.services.in_memory_store import InMemoryStore
 from app.services.postgres_store import PostgresStore
@@ -134,6 +137,72 @@ class StoreTests(unittest.TestCase):
 
         self.assertEqual(store.get_kb_snapshot("u1")["people"][0]["id"], "p1")
         self.assertEqual(store.get_kb_snapshot("u2")["people"][0]["id"], "p2")
+
+    def test_store_keeps_latest_care_snapshot_by_user_and_viewer(self):
+        store = InMemoryStore()
+
+        all_family = store.save_care_snapshot(
+            "u1",
+            {"riskLevel": "stable", "summary": "全家视角"},
+            viewer_family_member_id=None,
+        )
+        daughter = store.save_care_snapshot(
+            "u1",
+            {"riskLevel": "watch", "summary": "女儿视角"},
+            viewer_family_member_id="fm_daughter",
+        )
+
+        self.assertEqual(all_family["snapshot"]["summary"], "全家视角")
+        self.assertEqual(daughter["viewerFamilyMemberID"], "fm_daughter")
+        self.assertEqual(store.get_latest_care_snapshot("u1")["snapshot"]["summary"], "全家视角")
+        self.assertEqual(
+            store.get_latest_care_snapshot("u1", viewer_family_member_id="fm_daughter")["snapshot"]["summary"],
+            "女儿视角",
+        )
+        self.assertIsNone(store.get_latest_care_snapshot("u2"))
+
+
+class CareSnapshotAPITests(unittest.TestCase):
+    def test_care_snapshot_api_saves_and_returns_latest_by_viewer(self):
+        client = TestClient(app)
+
+        all_family = client.post(
+            "/care/snapshots",
+            json={
+                "userId": "care_user_1",
+                "snapshot": {"riskLevel": "stable", "summary": "全家视角"},
+            },
+        )
+        daughter = client.post(
+            "/care/snapshots",
+            json={
+                "userId": "care_user_1",
+                "viewerFamilyMemberID": "fm_daughter",
+                "snapshot": {"riskLevel": "watch", "summary": "女儿视角"},
+            },
+        )
+
+        self.assertEqual(all_family.status_code, 200)
+        self.assertEqual(daughter.status_code, 200)
+        self.assertEqual(daughter.json()["item"]["viewerFamilyMemberID"], "fm_daughter")
+
+        latest_all = client.get("/care/snapshots/latest/care_user_1")
+        latest_daughter = client.get(
+            "/care/snapshots/latest/care_user_1",
+            params={"viewerFamilyMemberID": "fm_daughter"},
+        )
+
+        self.assertEqual(latest_all.status_code, 200)
+        self.assertEqual(latest_all.json()["item"]["snapshot"]["summary"], "全家视角")
+        self.assertEqual(latest_daughter.status_code, 200)
+        self.assertEqual(latest_daughter.json()["item"]["snapshot"]["summary"], "女儿视角")
+
+    def test_care_snapshot_api_404_for_missing_user(self):
+        client = TestClient(app)
+
+        response = client.get("/care/snapshots/latest/missing_user")
+
+        self.assertEqual(response.status_code, 404)
 
 
 if __name__ == "__main__":

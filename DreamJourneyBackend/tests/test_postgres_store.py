@@ -35,6 +35,20 @@ class FakeCursor:
         elif normalized.startswith("SELECT payload FROM family_members"):
             user_id = params[0]
             self.result = [{"payload": item} for item in self.connection.family_members.get(user_id, [])]
+        elif normalized.startswith("SELECT payload FROM care_snapshots"):
+            if "viewer_family_member_id = %s" in normalized:
+                user_id, viewer_family_member_id = params
+                snapshots = [
+                    item for item in self.connection.care_snapshots.get(user_id, [])
+                    if item.get("viewerFamilyMemberID") == viewer_family_member_id
+                ]
+            else:
+                user_id = params[0]
+                snapshots = [
+                    item for item in self.connection.care_snapshots.get(user_id, [])
+                    if item.get("viewerFamilyMemberID") is None
+                ]
+            self.result = {"payload": snapshots[0]} if snapshots else None
         elif normalized.startswith("INSERT INTO users"):
             user_id, phone, nickname, payload = params
             payload = unwrap_jsonb(payload)
@@ -60,6 +74,11 @@ class FakeCursor:
             payload = unwrap_jsonb(payload)
             self.connection.family_members.setdefault(user_id, []).append(dict(payload))
             self.result = {"payload": payload}
+        elif normalized.startswith("INSERT INTO care_snapshots"):
+            user_id, item_id, viewer_family_member_id, payload = params
+            payload = unwrap_jsonb(payload)
+            self.connection.care_snapshots.setdefault(user_id, []).insert(0, dict(payload))
+            self.result = {"payload": payload}
         else:
             self.result = None
 
@@ -79,6 +98,7 @@ class FakeConnection:
         self.memories = {}
         self.archive_items = {}
         self.family_members = {}
+        self.care_snapshots = {}
 
     def cursor(self, row_factory=None):
         return FakeCursor(self)
@@ -100,6 +120,7 @@ class PostgresStoreTests(unittest.TestCase):
         self.assertIn("CREATE TABLE IF NOT EXISTS memories", sql)
         self.assertIn("CREATE TABLE IF NOT EXISTS archive_items", sql)
         self.assertIn("CREATE TABLE IF NOT EXISTS family_members", sql)
+        self.assertIn("CREATE TABLE IF NOT EXISTS care_snapshots", sql)
         self.assertGreaterEqual(connection.commits, 1)
 
     def test_store_persists_kb_snapshot_by_user(self):
@@ -125,6 +146,27 @@ class PostgresStoreTests(unittest.TestCase):
         self.assertTrue(member["id"].startswith("family_"))
         self.assertEqual(store.list_memories("u1")[0]["title"], "绍兴记忆")
         self.assertEqual(store.list_family_members("u1")[0]["name"], "林桂芳")
+
+    def test_store_persists_latest_care_snapshot_by_viewer(self):
+        connection = FakeConnection()
+        store = PostgresStore(connection_factory=lambda: connection)
+
+        store.save_care_snapshot(
+            "u1",
+            {"riskLevel": "stable", "summary": "全家视角"},
+            viewer_family_member_id=None,
+        )
+        store.save_care_snapshot(
+            "u1",
+            {"riskLevel": "watch", "summary": "女儿视角"},
+            viewer_family_member_id="fm_daughter",
+        )
+
+        self.assertEqual(store.get_latest_care_snapshot("u1")["snapshot"]["summary"], "全家视角")
+        self.assertEqual(
+            store.get_latest_care_snapshot("u1", viewer_family_member_id="fm_daughter")["snapshot"]["summary"],
+            "女儿视角",
+        )
 
 
 if __name__ == "__main__":

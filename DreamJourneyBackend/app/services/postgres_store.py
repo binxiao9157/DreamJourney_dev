@@ -66,6 +66,19 @@ class PostgresStore:
             CREATE INDEX IF NOT EXISTS idx_family_members_user_created
                 ON family_members(user_id, created_at ASC)
             """,
+            """
+            CREATE TABLE IF NOT EXISTS care_snapshots (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                viewer_family_member_id TEXT,
+                payload JSONB NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_care_snapshots_user_viewer_created
+                ON care_snapshots(user_id, viewer_family_member_id, created_at DESC)
+            """,
         ]
         connection = self._connect()
         with connection.cursor() as cursor:
@@ -140,6 +153,57 @@ class PostgresStore:
 
     def list_family_members(self, user_id: str) -> List[Dict[str, Any]]:
         return self._list_payloads("family_members", user_id)
+
+    def save_care_snapshot(
+        self,
+        user_id: str,
+        snapshot: Dict[str, Any],
+        viewer_family_member_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        item = {
+            "id": f"care_{uuid.uuid4().hex}",
+            "userId": user_id,
+            "viewerFamilyMemberID": viewer_family_member_id,
+            "snapshot": deepcopy(snapshot),
+            "createdAt": self._now(),
+        }
+        row = self._fetchone(
+            """
+            INSERT INTO care_snapshots (user_id, id, viewer_family_member_id, payload, created_at)
+            VALUES (%s, %s, %s, %s, NOW())
+            RETURNING payload
+            """,
+            (user_id, item["id"], viewer_family_member_id, item),
+            commit=True,
+        )
+        return deepcopy(row["payload"])
+
+    def get_latest_care_snapshot(
+        self,
+        user_id: str,
+        viewer_family_member_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        if viewer_family_member_id is None:
+            row = self._fetchone(
+                """
+                SELECT payload FROM care_snapshots
+                WHERE user_id = %s AND viewer_family_member_id IS NULL
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (user_id,),
+            )
+        else:
+            row = self._fetchone(
+                """
+                SELECT payload FROM care_snapshots
+                WHERE user_id = %s AND viewer_family_member_id = %s
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (user_id, viewer_family_member_id),
+            )
+        return None if row is None else deepcopy(row["payload"])
 
     def _insert_payload(self, table: str, user_id: str, item: Dict[str, Any]) -> Dict[str, Any]:
         row = self._fetchone(

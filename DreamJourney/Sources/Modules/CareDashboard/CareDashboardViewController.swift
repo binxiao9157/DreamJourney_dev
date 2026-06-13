@@ -6,6 +6,7 @@ final class CareDashboardViewController: UIViewController {
     private let viewerFamilyMemberID: String?
     private let viewerIdentitySource: FamilyAccessIdentityResolver.Source?
     private var snapshot: CareSignalSnapshot?
+    private var snapshotSourceText = "本机近况"
 
     private let scrollView = UIScrollView()
     private let stackView: UIStackView = {
@@ -112,7 +113,60 @@ final class CareDashboardViewController: UIViewController {
             from: ConversationMemoryManager.shared.getCurrentTranscript(),
             viewerFamilyMemberID: viewerFamilyMemberID
         )
-        snapshot = analyzer.analyze(turns: turns)
+        let localSnapshot = analyzer.analyze(turns: turns)
+        snapshot = localSnapshot
+        snapshotSourceText = "本机近况"
+        render()
+
+        if localSnapshot.userTurnCount > 0 {
+            syncSnapshotToBackend(localSnapshot)
+        } else {
+            fetchLatestSnapshotFromBackend()
+        }
+    }
+
+    private func syncSnapshotToBackend(_ snapshot: CareSignalSnapshot) {
+        guard DreamJourneyBackendClient.shared.isConfigured,
+              let userId = UserManager.shared.currentUser?.id else {
+            return
+        }
+        DreamJourneyBackendClient.shared.syncCareSnapshot(
+            userId: userId,
+            viewerFamilyMemberID: viewerFamilyMemberID,
+            snapshot: snapshot
+        ) { result in
+            if case .failure(let error) = result {
+                print("[CareDashboard] 后端快照同步失败: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func fetchLatestSnapshotFromBackend() {
+        guard DreamJourneyBackendClient.shared.isConfigured,
+              let userId = UserManager.shared.currentUser?.id else {
+            return
+        }
+        DreamJourneyBackendClient.shared.fetchLatestCareSnapshot(
+            userId: userId,
+            viewerFamilyMemberID: viewerFamilyMemberID
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let response):
+                    self?.applyRemoteSnapshotIfUseful(response.item.snapshot)
+                case .failure(let error):
+                    print("[CareDashboard] 后端快照拉取失败: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func applyRemoteSnapshotIfUseful(_ remoteSnapshot: CareSignalSnapshot) {
+        guard (snapshot?.userTurnCount ?? 0) == 0, remoteSnapshot.userTurnCount > 0 else {
+            return
+        }
+        snapshot = remoteSnapshot
+        snapshotSourceText = "服务器同步快照"
         render()
     }
 
@@ -165,7 +219,7 @@ final class CareDashboardViewController: UIViewController {
         let coverageLabel = UILabel()
         let coverageSummary = snapshot.dataCoverageSummary.trimmingCharacters(in: .whitespacesAndNewlines)
         let viewerPrefix = viewerDescriptionText()
-        coverageLabel.text = "\(viewerPrefix)数据覆盖 \(coverageSummary.isEmpty ? "暂无覆盖说明" : coverageSummary)"
+        coverageLabel.text = "\(viewerPrefix)数据来源 \(snapshotSourceText) · 数据覆盖 \(coverageSummary.isEmpty ? "暂无覆盖说明" : coverageSummary)"
         coverageLabel.font = .systemFont(ofSize: 12)
         coverageLabel.textColor = .warmSubtitle
         coverageLabel.numberOfLines = 0

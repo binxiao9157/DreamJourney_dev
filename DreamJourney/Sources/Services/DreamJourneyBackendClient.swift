@@ -54,6 +54,69 @@ final class DreamJourneyBackendClient {
         )
     }
 
+    func syncCareSnapshot(
+        userId: String,
+        viewerFamilyMemberID: String?,
+        snapshot: CareSignalSnapshot,
+        completion: @escaping (Result<CareSnapshotResponse, Swift.Error>) -> Void
+    ) {
+        guard let snapshotObject = Self.jsonObject(fromEncodable: snapshot) else {
+            completion(.failure(Error.invalidCareSnapshot))
+            return
+        }
+        var payload: [String: Any] = [
+            "userId": userId,
+            "snapshot": snapshotObject
+        ]
+        if let viewerFamilyMemberID, !viewerFamilyMemberID.isEmpty {
+            payload["viewerFamilyMemberID"] = viewerFamilyMemberID
+        }
+        performJSONRequest(
+            path: "care/snapshots",
+            method: "POST",
+            bodyObject: payload,
+            responseType: CareSnapshotResponse.self,
+            completion: completion
+        )
+    }
+
+    func fetchLatestCareSnapshot(
+        userId: String,
+        viewerFamilyMemberID: String?,
+        completion: @escaping (Result<CareSnapshotLatestResponse, Swift.Error>) -> Void
+    ) {
+        do {
+            let path = "care/snapshots/latest/\(userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId)"
+            guard var components = URLComponents(url: try endpointURL(path: path), resolvingAgainstBaseURL: false) else {
+                throw Error.invalidURL
+            }
+            if let viewerFamilyMemberID, !viewerFamilyMemberID.isEmpty {
+                components.queryItems = [URLQueryItem(name: "viewerFamilyMemberID", value: viewerFamilyMemberID)]
+            }
+            guard let url = components.url else { throw Error.invalidURL }
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.timeoutInterval = timeoutInterval
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            session.dataTask(with: request) { data, response, error in
+                if let error {
+                    completion(.failure(error))
+                    return
+                }
+                do {
+                    try Self.validate(response: response)
+                    let decoder = Self.jsonDecoder()
+                    let decoded = try decoder.decode(CareSnapshotLatestResponse.self, from: data ?? Data())
+                    completion(.success(decoded))
+                } catch {
+                    completion(.failure(error))
+                }
+            }.resume()
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
     func fetchDistrictPayload(keyword: String) async throws -> Data {
         guard var components = URLComponents(url: try endpointURL(path: "maps/district"), resolvingAgainstBaseURL: false) else {
             throw Error.invalidURL
@@ -94,7 +157,7 @@ final class DreamJourneyBackendClient {
                 }
                 do {
                     try Self.validate(response: response)
-                    let decoded = try JSONDecoder().decode(T.self, from: data ?? Data())
+                    let decoded = try Self.jsonDecoder().decode(T.self, from: data ?? Data())
                     completion(.success(decoded))
                 } catch {
                     completion(.failure(error))
@@ -120,6 +183,19 @@ final class DreamJourneyBackendClient {
         return try? JSONSerialization.jsonObject(with: data)
     }
 
+    private static func jsonObject<T: Encodable>(fromEncodable value: T) -> Any? {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(value) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data)
+    }
+
+    private static func jsonDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }
+
     private static func validate(response: URLResponse?) throws {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw Error.nonHTTPResponse
@@ -135,6 +211,7 @@ extension DreamJourneyBackendClient {
         case missingBaseURL
         case invalidURL
         case invalidGraphJSON
+        case invalidCareSnapshot
         case nonHTTPResponse
         case statusCode(Int)
 
@@ -146,6 +223,8 @@ extension DreamJourneyBackendClient {
                 return "DreamJourney 后端地址无效"
             case .invalidGraphJSON:
                 return "KBLite 图谱 JSON 无效"
+            case .invalidCareSnapshot:
+                return "关怀看板快照 JSON 无效"
             case .nonHTTPResponse:
                 return "后端返回非 HTTP 响应"
             case .statusCode(let code):
@@ -172,5 +251,23 @@ extension DreamJourneyBackendClient {
         let environment: String
         let baseURL: String?
         let capabilities: [String: Bool]
+    }
+
+    struct CareSnapshotResponse: Decodable {
+        let status: String
+        let item: CareSnapshotItem
+    }
+
+    struct CareSnapshotLatestResponse: Decodable {
+        let userId: String
+        let item: CareSnapshotItem
+    }
+
+    struct CareSnapshotItem: Decodable {
+        let id: String
+        let userId: String
+        let viewerFamilyMemberID: String?
+        let snapshot: CareSignalSnapshot
+        let createdAt: String
     }
 }

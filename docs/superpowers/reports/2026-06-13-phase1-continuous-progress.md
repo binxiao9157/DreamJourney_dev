@@ -56,6 +56,19 @@
 - 本机清理调用 `KBLiteManager.reset(syncToBackend: false)`，不会把空知识库同步到业务后端。
 - 新增 `Scripts/LocalTestDataCleanupVerify/main.py`，并接入 `Scripts/verify_phase1.sh`。
 
+### 7. 长辈关怀看板：脱敏快照后端闭环
+
+- 后端新增 `care_snapshots` 存储：
+  - `POST /care/snapshots`
+  - `GET /care/snapshots/latest/{user_id}`
+  - 支持 `viewerFamilyMemberID` 区分全家视角和指定亲友视角。
+- iOS `DreamJourneyBackendClient` 新增 `syncCareSnapshot` 和 `fetchLatestCareSnapshot`。
+- `CareDashboardViewController` 行为：
+  - 本机有真实可见对话时，本地生成 `CareSignalSnapshot` 并上传脱敏聚合快照。
+  - 本机无可用对话时，尝试拉取后端最近快照作为真实测试兜底。
+  - 页面会显示数据来源：`本机近况` 或 `服务器同步快照`。
+- 边界：不上传原始 transcript，不上传私密/localOnly 对话，只上传看板聚合结果。
+
 ## 真机验收建议
 
 ### 记忆档案馆
@@ -96,6 +109,8 @@
 - `MemoryArchive verification passed`
 - `TimeMailbox verification passed`
 - `CareDashboard verification passed`
+- `CareDashboardBackendSync verification passed`
+- `DreamJourneyBackend unittest 15/15 OK`
 - `SecretConfig verification passed`
 - `LocalTestDataCleanup verification passed`
 - `git diff --check`
@@ -105,6 +120,6 @@
 
 ## 下一步
 
-1. 把关怀看板从“本机最近 transcript”逐步接到后端/亲友同步数据源。
-2. 为时空信箱补本地通知或服务端投递状态，避免必须打开页面才刷新。
+1. 为时空信箱补本地通知或服务端投递状态，避免必须打开页面才刷新。
+2. 继续推进亲友真实成员/邀请/撤回状态后端化，替代本机 UserDefaults。
 3. 补真机证据包：档案入库截图、结构化知识库截图、信箱回声截图、关怀周报导出文本。

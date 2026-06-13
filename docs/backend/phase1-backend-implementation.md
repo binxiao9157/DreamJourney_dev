@@ -10,6 +10,7 @@
 - 高德行政区代理：`GET /maps/district` 默认转发高德 WebService，`dryRun=true` 可查看脱敏 URL。
 - KBLite 同步：`POST /kb/sync` 过滤 `localOnly`，保留可同步图谱。
 - 记忆、档案、亲友最小接口：默认写入 Postgres JSONB 表，支持服务重启后继续测试。
+- 长辈关怀看板脱敏快照：`POST /care/snapshots` 保存本机分析后的聚合快照，`GET /care/snapshots/latest/{user_id}` 按全家或指定 `viewerFamilyMemberID` 拉取最近快照。
 
 ## 未完成但已预留
 
@@ -17,7 +18,7 @@
 - 照片对象存储。
 - DeepSeek chat / image analyze 统一代理。
 - Safety Guard 后端化。
-- iOS 端把现有 LocalConfig key 切到后端代理。
+- 更完整的亲友权限校验和服务端关怀信号分析；当前 care snapshot 只存脱敏聚合结果，不上传原始对话。
 
 ## 验收
 
@@ -25,6 +26,12 @@
 
 ```bash
 PYTHONPATH=DreamJourneyBackend python3 -m unittest discover DreamJourneyBackend/tests
+```
+
+如果本机使用仓库虚拟环境，推荐直接运行：
+
+```bash
+bash Scripts/verify_backend.sh
 ```
 
 FastAPI 本机 smoke 可显式切到内存模式，避免本机未启动 Postgres 时阻塞：
@@ -36,4 +43,14 @@ from app.main import app
 client = TestClient(app)
 assert client.get("/health").json()["status"] == "ok"
 PY
+```
+
+关怀快照接口 smoke：
+
+```bash
+curl -X POST http://127.0.0.1:3100/care/snapshots \
+  -H 'Content-Type: application/json' \
+  -d '{"userId":"user_9157","snapshot":{"riskLevel":"stable","summary":"脱敏聚合测试"}}'
+
+curl 'http://127.0.0.1:3100/care/snapshots/latest/user_9157'
 ```

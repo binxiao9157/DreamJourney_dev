@@ -337,6 +337,32 @@ curl https://www.mmdd10.tech/dreamjourney-api/config/runtime
 }
 ```
 
+关怀看板脱敏快照接口：
+
+```bash
+curl -X POST https://www.mmdd10.tech/dreamjourney-api/care/snapshots \
+  -H 'Content-Type: application/json' \
+  -d '{"userId":"user_9157","snapshot":{"riskLevel":"stable","summary":"脱敏聚合测试"}}'
+
+curl 'https://www.mmdd10.tech/dreamjourney-api/care/snapshots/latest/user_9157'
+```
+
+按亲友成员视角保存和读取：
+
+```bash
+curl -X POST https://www.mmdd10.tech/dreamjourney-api/care/snapshots \
+  -H 'Content-Type: application/json' \
+  -d '{"userId":"user_9157","viewerFamilyMemberID":"fm_daughter","snapshot":{"riskLevel":"watch","summary":"女儿视角脱敏聚合测试"}}'
+
+curl 'https://www.mmdd10.tech/dreamjourney-api/care/snapshots/latest/user_9157?viewerFamilyMemberID=fm_daughter'
+```
+
+说明：
+
+- App 不上传原始对话，只上传 `CareSignalSnapshot` 这类脱敏聚合结果。
+- Postgres 会在服务启动时自动 `CREATE TABLE IF NOT EXISTS care_snapshots`。
+- iOS 端本机有真实对话时优先本地分析并上传；本机无数据时才尝试拉取后端最近快照。
+
 登录：
 
 ```bash

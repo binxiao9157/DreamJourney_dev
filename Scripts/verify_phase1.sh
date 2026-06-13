@@ -42,6 +42,9 @@ xcrun swiftc -D CARE_DASHBOARD_VERIFY \
   -o /tmp/dreamjourney_care_dashboard_verify
 /tmp/dreamjourney_care_dashboard_verify
 
+echo "== CareDashboard backend sync =="
+python3 Scripts/CareDashboardBackendSyncVerify/main.py
+
 echo "== KBLite =="
 swift kblite_verify.swift
 

@@ -177,3 +177,34 @@ def invite_family(payload: Dict[str, Any]) -> Dict[str, Any]:
 @app.get("/family/members/{user_id}")
 def family_members(user_id: str) -> Dict[str, Any]:
     return {"userId": user_id, "members": store.list_family_members(user_id)}
+
+
+@app.post("/care/snapshots")
+def save_care_snapshot(payload: Dict[str, Any]) -> Dict[str, Any]:
+    user_id = str(payload.get("userId") or "").strip()
+    snapshot = payload.get("snapshot")
+    viewer_family_member_id = payload.get("viewerFamilyMemberID")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="userId is required")
+    if not isinstance(snapshot, dict):
+        raise HTTPException(status_code=400, detail="snapshot must be an object")
+    if viewer_family_member_id is not None:
+        viewer_family_member_id = str(viewer_family_member_id).strip() or None
+    item = store.save_care_snapshot(
+        user_id,
+        snapshot,
+        viewer_family_member_id=viewer_family_member_id,
+    )
+    return {"status": "saved", "item": item}
+
+
+@app.get("/care/snapshots/latest/{user_id}")
+def latest_care_snapshot(user_id: str, viewerFamilyMemberID: str = None) -> Dict[str, Any]:
+    viewer_family_member_id = viewerFamilyMemberID.strip() if viewerFamilyMemberID else None
+    item = store.get_latest_care_snapshot(
+        user_id,
+        viewer_family_member_id=viewer_family_member_id,
+    )
+    if item is None:
+        raise HTTPException(status_code=404, detail="care snapshot not found")
+    return {"userId": user_id, "item": item}

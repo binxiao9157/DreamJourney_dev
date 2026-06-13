@@ -10,6 +10,7 @@ class InMemoryStore:
         self._memories: Dict[str, List[Dict[str, Any]]] = {}
         self._archive_items: Dict[str, List[Dict[str, Any]]] = {}
         self._family_members: Dict[str, List[Dict[str, Any]]] = {}
+        self._care_snapshots: Dict[str, List[Dict[str, Any]]] = {}
 
     def upsert_user(self, phone: str, nickname: str) -> Dict[str, Any]:
         user_id = f"user_{phone[-4:]}" if phone else f"user_{len(self._users) + 1}"
@@ -66,6 +67,33 @@ class InMemoryStore:
 
     def list_family_members(self, user_id: str) -> List[Dict[str, Any]]:
         return deepcopy(self._family_members.get(user_id, []))
+
+    def save_care_snapshot(
+        self,
+        user_id: str,
+        snapshot: Dict[str, Any],
+        viewer_family_member_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        item = {
+            "id": f"care_{len(self._care_snapshots.get(user_id, [])) + 1}",
+            "userId": user_id,
+            "viewerFamilyMemberID": viewer_family_member_id,
+            "snapshot": deepcopy(snapshot),
+            "createdAt": self._now(),
+        }
+        self._care_snapshots.setdefault(user_id, []).insert(0, item)
+        return deepcopy(item)
+
+    def get_latest_care_snapshot(
+        self,
+        user_id: str,
+        viewer_family_member_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        snapshots = self._care_snapshots.get(user_id, [])
+        for item in snapshots:
+            if item.get("viewerFamilyMemberID") == viewer_family_member_id:
+                return deepcopy(item)
+        return None
 
     @staticmethod
     def _now() -> str:
