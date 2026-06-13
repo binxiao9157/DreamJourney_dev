@@ -117,7 +117,7 @@ struct DigitalHumanReadinessReport: Equatable {
             arguments: arguments,
             environment: environment
         )
-        let backendItem = makeOpenAvatarItem(infoDictionary: infoDictionary)
+        let backendItem = makeDreamJourneyBackendItem(infoDictionary: infoDictionary)
 
         let readyCount = [ttsItem, realtimeItem, dialogItem, backendItem]
             .filter { $0.status == .ready }
@@ -233,30 +233,30 @@ struct DigitalHumanReadinessReport: Equatable {
         )
     }
 
-    private static func makeOpenAvatarItem(infoDictionary: [String: Any]) -> Item {
-        guard let configuredURL = validString(infoDictionary["OpenAvatarChatBaseURL"] as? String) else {
+    private static func makeDreamJourneyBackendItem(infoDictionary: [String: Any]) -> Item {
+        guard let configuredURL = validString(infoDictionary["DreamJourneyBackendBaseURL"] as? String) else {
             return Item(
-                title: "数字人知识后端",
+                title: "DreamJourney 后端",
                 status: .warning,
-                detail: "未配置 OpenAvatarChatBaseURL，知识同步停留在本机",
-                recommendation: "阶段1主线可先不配；需要 OpenAvatar 知识后端时再配置。"
+                detail: "未配置 DreamJourneyBackendBaseURL，知识同步停留在本机",
+                recommendation: "真机测试先配置为 https://www.mmdd10.tech/dreamjourney-api；正式域名放行后切到 dreamjourney-api.liftora.cn。"
             )
         }
 
         let lowercased = configuredURL.lowercased()
         if lowercased.contains("localhost") || lowercased.contains("127.0.0.1") {
             return Item(
-                title: "数字人知识后端",
+                title: "DreamJourney 后端",
                 status: .warning,
                 detail: "配置为本机地址；真机需改为局域网 IP 或可访问域名",
-                recommendation: "把 OpenAvatarChatBaseURL 改成 Mac 局域网 IP 或公网/内网域名。"
+                recommendation: "把 DreamJourneyBackendBaseURL 改成 HTTPS 后端地址。"
             )
         }
         return Item(
-            title: "数字人知识后端",
+            title: "DreamJourney 后端",
             status: .ready,
-            detail: "已配置真机可访问的后端地址",
-            recommendation: "可在知识同步页验证后端注入和状态查询。"
+            detail: "已配置真机可访问的业务后端地址",
+            recommendation: "可验证 runtime、KBLite 同步、高德代理和实时语音配置接口。"
         )
     }
 

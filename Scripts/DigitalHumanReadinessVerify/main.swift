@@ -13,7 +13,7 @@ let modernInfo: [String: Any] = [
     "VolcEngineVoiceType": "zh_female_cancan_mars_bigtts",
     "VolcEngineRealtimeAPIKey": "secret-realtime-api-key",
     "VolcEngineRealtimeResourceID": "volc.speech.dialog",
-    "OpenAvatarChatBaseURL": "https://avatar.example.com"
+    "DreamJourneyBackendBaseURL": "https://www.mmdd10.tech/dreamjourney-api"
 ]
 let modern = DigitalHumanReadinessReport.make(
     infoDictionary: modernInfo,
@@ -46,7 +46,7 @@ let legacyInfo: [String: Any] = [
     "VolcEngineAppID": "test-app-id",
     "VolcEngineAppKey": "secret-app-key",
     "VolcEngineAppToken": "secret-access-token",
-    "OpenAvatarChatBaseURL": "http://192.168.1.20:8283"
+    "DreamJourneyBackendBaseURL": "https://www.mmdd10.tech/dreamjourney-api"
 ]
 let legacy = DigitalHumanReadinessReport.make(
     infoDictionary: legacyInfo,
@@ -62,16 +62,16 @@ let mock = DigitalHumanReadinessReport.make(
     infoDictionary: [
         "VolcEngineAPIKey": "YOUR_VOLCENGINE_API_KEY",
         "VolcEngineVoiceType": "zh_female_cancan_mars_bigtts",
-        "OpenAvatarChatBaseURL": "http://localhost:8283"
+        "DreamJourneyBackendBaseURL": "http://localhost:3100"
     ],
     arguments: ["--use-mock-dialog-engine"],
     environment: [:]
 )
 expect(mock.primaryStatus == .missing, "missing TTS/realtime credentials remain visible even in mock")
 expect(mock.items.contains(where: { $0.title == "当前对话引擎" && $0.status == .warning }), "mock engine is marked as demonstrable")
-expect(mock.items.contains(where: { $0.title == "数字人知识后端" && $0.status == .warning && $0.detail.contains("真机需改为局域网") }), "localhost backend warns for device testing")
+expect(mock.items.contains(where: { $0.title == "DreamJourney 后端" && $0.status == .warning && $0.detail.contains("真机需改为局域网") }), "localhost backend warns for device testing")
 expect(mock.copyableText.contains("移除 mock 启动参数"), "mock diagnostic explains how to test real voice")
-expect(mock.copyableText.contains("OpenAvatarChatBaseURL 改成 Mac 局域网 IP"), "localhost diagnostic explains device fix")
+expect(mock.copyableText.contains("DreamJourneyBackendBaseURL 改成 HTTPS 后端地址"), "localhost diagnostic explains device fix")
 
 let missing = DigitalHumanReadinessReport.make(
     infoDictionary: [

@@ -46,6 +46,10 @@ final class KBLiteManager {
     /// 提取队列（串行）
     private let extractQueue = DispatchQueue(label: "com.dreamjourney.kblite.extract")
 
+    /// 后端同步队列（串行，保存后防抖同步）
+    private let backendSyncQueue = DispatchQueue(label: "com.dreamjourney.kblite.backendSync")
+    private var pendingBackendSyncWorkItem: DispatchWorkItem?
+
     /// 是否已输出过容量警告
     private var didWarnCapacity = false
 
@@ -112,6 +116,36 @@ final class KBLiteManager {
         // 通知 UI 数据已更新
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: .kbLiteDidUpdate, object: nil)
+        }
+        scheduleBackendSync()
+    }
+
+    private func scheduleBackendSync() {
+        guard DreamJourneyBackendClient.shared.isConfigured else { return }
+        guard let userId = UserManager.shared.currentUser?.id else { return }
+
+        backendSyncQueue.async { [weak self] in
+            guard let self else { return }
+            self.pendingBackendSyncWorkItem?.cancel()
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.syncToBackend(userId: userId)
+            }
+            self.pendingBackendSyncWorkItem = workItem
+            self.backendSyncQueue.asyncAfter(deadline: .now() + 2.0, execute: workItem)
+        }
+    }
+
+    private func syncToBackend(userId: String) {
+        guard let graphJSON = exportJSON(surface: .backendSync), !graphJSON.isEmpty else {
+            return
+        }
+        DreamJourneyBackendClient.shared.syncKnowledgeBase(userId: userId, graphJSON: graphJSON) { result in
+            switch result {
+            case .success(let response):
+                print("[KBLite] ☁️ 后端同步完成: \(response.counts.people)人, \(response.counts.places)地, \(response.counts.events)事, \(response.counts.facts)实")
+            case .failure(let error):
+                print("[KBLite] ⚠️ 后端同步失败（不影响本地）: \(error.localizedDescription)")
+            }
         }
     }
 

@@ -23,6 +23,7 @@
 		357355C9F74F4A08A3334B01 /* SafetyMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ADA8AA6438842A1899F726B /* SafetyMonitor.swift */; };
 		A78CE000000000000000001 /* DigitalHumanPlaybackEvidenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A78CE000000000000000002 /* DigitalHumanPlaybackEvidenceStore.swift */; };
 		A79CE000000000000000001 /* AmapDistrictBoundaryProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A79CE000000000000000002 /* AmapDistrictBoundaryProvider.swift */; };
+		A90CE000000000000000001 /* DreamJourneyBackendClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A90CE000000000000000002 /* DreamJourneyBackendClient.swift */; };
 		A75CE000000000000000001 /* DigitalHumanSpeechPlaybackPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A75CE000000000000000002 /* DigitalHumanSpeechPlaybackPolicy.swift */; };
 		36A64D01C09B4A8497BEAE01 /* DigitalHumanSpeechService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36A64D00C09B4A8497BEAE01 /* DigitalHumanSpeechService.swift */; };
 		397C1F6023E56C8E016A0D71 /* OpenAvatarChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF3727699437781613AA5CB5 /* OpenAvatarChatService.swift */; };
@@ -223,6 +224,7 @@
 		A77CE000000000000000002 /* DigitalHumanDiagnosticsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanDiagnosticsViewController.swift; sourceTree = "<group>"; };
 		A78CE000000000000000002 /* DigitalHumanPlaybackEvidenceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanPlaybackEvidenceStore.swift; sourceTree = "<group>"; };
 		A79CE000000000000000002 /* AmapDistrictBoundaryProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmapDistrictBoundaryProvider.swift; sourceTree = "<group>"; };
+		A90CE000000000000000002 /* DreamJourneyBackendClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DreamJourneyBackendClient.swift; sourceTree = "<group>"; };
 		A99960BA8CC38BCA98CB98F8 /* KnowledgeBaseViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeBaseViewController.swift; sourceTree = "<group>"; };
 		AA3777B38C40C14928088B38 /* MiniMateLoader.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = MiniMateLoader.js; sourceTree = "<group>"; };
 		AB6F020939B8B3A55A3A9013 /* LoginViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginViewController.swift; sourceTree = "<group>"; };
@@ -334,6 +336,7 @@
 				A78CE000000000000000002 /* DigitalHumanPlaybackEvidenceStore.swift */,
 				A75CE000000000000000002 /* DigitalHumanSpeechPlaybackPolicy.swift */,
 				36A64D00C09B4A8497BEAE01 /* DigitalHumanSpeechService.swift */,
+				A90CE000000000000000002 /* DreamJourneyBackendClient.swift */,
 				F33318C49AAF44499CE6ADC5 /* DialogEngineFactory.swift */,
 				A44CE000000000000000003 /* DialogEngineModels.swift */,
 				9B3A23A2BA7FD3D92A7BC975 /* DialogEngineManager.swift */,
@@ -920,6 +923,7 @@
 				FB97211C6E68808436C7DC76 /* KBLiteMultiUser.swift in Sources */,
 				90DF2D00B2A745900FF43F33 /* KBLitePDFExporter.swift in Sources */,
 				A79CE000000000000000001 /* AmapDistrictBoundaryProvider.swift in Sources */,
+				A90CE000000000000000001 /* DreamJourneyBackendClient.swift in Sources */,
 				A57CE000000000000000001 /* KBLitePrivacyScopePolicy.swift in Sources */,
 				824FE84FF055277FD802AE21 /* KBLiteSemanticSearch.swift in Sources */,
 				70BCC3629F42D8E233158576 /* KBLiteTestHelper.swift in Sources */,

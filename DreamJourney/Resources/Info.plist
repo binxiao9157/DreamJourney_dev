@@ -28,6 +28,8 @@
 	<string>https://api.deepseek.com/v1/chat/completions</string>
 	<key>DeepSeekAPIKey</key>
 	<string>YOUR_DEEPSEEK_API_KEY</string>
+	<key>DreamJourneyBackendBaseURL</key>
+	<string>https://www.mmdd10.tech/dreamjourney-api</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>

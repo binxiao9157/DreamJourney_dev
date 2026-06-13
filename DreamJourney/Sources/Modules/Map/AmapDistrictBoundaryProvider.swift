@@ -14,8 +14,9 @@ actor AmapDistrictBoundaryProvider {
         points: [FamilyFootprintPoint],
         generation: FamilyFootprintGeneration = .all
     ) async -> [FootprintIlluminationRegion] {
-        guard let apiKey = AppConfiguration.string(forKey: "AMapWebServiceKey")
-            ?? AppConfiguration.string(forKey: "AMapAPIKey") else {
+        let apiKey = AppConfiguration.string(forKey: "AMapWebServiceKey")
+            ?? AppConfiguration.string(forKey: "AMapAPIKey")
+        guard DreamJourneyBackendClient.shared.isConfigured || apiKey != nil else {
             return []
         }
 
@@ -52,7 +53,7 @@ actor AmapDistrictBoundaryProvider {
         keyword: String,
         scope: FootprintIlluminationScope,
         generation: FamilyFootprintGeneration,
-        apiKey: String
+        apiKey: String?
     ) async throws -> [FootprintIlluminationRegion] {
         var lastError: Error?
         for attempt in 0..<3 {
@@ -79,9 +80,26 @@ actor AmapDistrictBoundaryProvider {
         keyword: String,
         scope: FootprintIlluminationScope,
         generation: FamilyFootprintGeneration,
-        apiKey: String
+        apiKey: String?
     ) async throws -> [FootprintIlluminationRegion] {
         try await throttleRequests()
+        let payload = try await requestDistrictPayload(keyword: keyword, apiKey: apiKey, retryCount: 2)
+        guard payload.status == "1" else { throw AmapDistrictBoundaryError.serviceUnavailable(payload.info) }
+
+        return payload.districts.compactMap { district in
+            Self.region(from: district, fallbackName: keyword, scope: scope, generation: generation)
+        }
+    }
+
+    private func requestDistrictPayload(keyword: String, apiKey: String?, retryCount: Int) async throws -> AmapDistrictResponse {
+        if DreamJourneyBackendClient.shared.isConfigured {
+            let data = try await DreamJourneyBackendClient.shared.fetchDistrictPayload(keyword: keyword)
+            return try JSONDecoder().decode(AmapDistrictResponse.self, from: data)
+        }
+
+        guard let apiKey else {
+            return AmapDistrictResponse(status: "0", info: "MISSING_AMAP_KEY", districts: [])
+        }
         var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)!
         components.queryItems = [
             URLQueryItem(name: "key", value: apiKey),
@@ -90,17 +108,8 @@ actor AmapDistrictBoundaryProvider {
             URLQueryItem(name: "extensions", value: "all"),
             URLQueryItem(name: "output", value: "JSON")
         ]
-        guard let url = components.url else { return [] }
+        guard let url = components.url else { return AmapDistrictResponse(status: "0", info: "INVALID_URL", districts: []) }
 
-        let payload = try await requestDistrictPayload(url: url, retryCount: 2)
-        guard payload.status == "1" else { throw AmapDistrictBoundaryError.serviceUnavailable(payload.info) }
-
-        return payload.districts.compactMap { district in
-            Self.region(from: district, fallbackName: keyword, scope: scope, generation: generation)
-        }
-    }
-
-    private func requestDistrictPayload(url: URL, retryCount: Int) async throws -> AmapDistrictResponse {
         let (data, response) = try await URLSession.shared.data(from: url)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             return AmapDistrictResponse(status: "0", info: "HTTP_\(http.statusCode)", districts: [])
@@ -110,7 +119,7 @@ actor AmapDistrictBoundaryProvider {
             return payload
         }
         try await Task.sleep(nanoseconds: 750_000_000)
-        return try await requestDistrictPayload(url: url, retryCount: retryCount - 1)
+        return try await requestDistrictPayload(keyword: keyword, apiKey: apiKey, retryCount: retryCount - 1)
     }
 
     private func throttleRequests() async throws {
