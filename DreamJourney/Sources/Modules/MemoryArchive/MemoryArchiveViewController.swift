@@ -223,7 +223,7 @@ final class MemoryArchiveViewController: UIViewController {
                     item.note,
                     timestamp: item.createdAt,
                     privacyMetadata: item.privacyMetadata
-                ), archiveItemID: item.id, archiveTitle: item.title) { [weak self] addedCount in
+                ), archiveItemID: item.id, archiveTitle: item.title, archiveMaterialKind: item.kind.displayName) { [weak self] addedCount in
                     DispatchQueue.main.async {
                         if addedCount == 0 {
                             self?.setKnowledgeDepositStatus("结构化建库：文字素材已保存，暂无可抽取的新知识")

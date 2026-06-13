@@ -1902,6 +1902,93 @@ final class KBLiteManager {
     // MARK: - Public API: Archive Material Metadata
 
     @discardableResult
+    func ingestArchiveTextMaterialMetadata(
+        archiveItemID rawArchiveItemID: String,
+        title rawTitle: String,
+        note rawNote: String,
+        materialKind rawMaterialKind: String,
+        capturedAt: Date,
+        sessionId: Int,
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+    ) -> Int {
+        guard privacyMetadata.scope != .privateOnly else { return 0 }
+        let archiveItemID = Self.normalizedQuickExtractEntity(rawArchiveItemID)
+        let title = Self.normalizedQuickExtractEntity(rawTitle)
+        let note = Self.normalizedQuickExtractEntity(rawNote)
+        let materialKind = Self.normalizedQuickExtractEntity(rawMaterialKind)
+        guard !archiveItemID.isEmpty, !title.isEmpty else { return 0 }
+
+        let sourceRef = MemorySourceRef(
+            kind: .memoryArchiveItem,
+            id: archiveItemID,
+            title: title,
+            capturedAt: capturedAt
+        )
+        let resolvedMetadata = Self.metadataByAppending(sourceRef: sourceRef, to: privacyMetadata)
+        let kindText = materialKind.isEmpty ? "文字素材" : materialKind
+        let statement: String
+        if note.isEmpty {
+            statement = "记忆档案馆保存\(kindText)《\(title)》。"
+        } else {
+            statement = "记忆档案馆保存\(kindText)《\(title)》：\(Self.metadataSummary(note))。"
+        }
+
+        return upsertArchiveMetadataFact(
+            statement: statement,
+            sourceRef: sourceRef,
+            sessionId: sessionId,
+            privacyMetadata: resolvedMetadata,
+            logPrefix: "📝 档案文字元信息入库",
+            logTitle: title
+        )
+    }
+
+    @discardableResult
+    func ingestArchivePhotoAnalysisMetadata(
+        archiveItemID rawArchiveItemID: String,
+        title rawTitle: String,
+        analysis: KBImageAnalysisResult,
+        capturedAt: Date,
+        sessionId: Int,
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+    ) -> Int {
+        guard privacyMetadata.scope != .privateOnly else { return 0 }
+        let archiveItemID = Self.normalizedQuickExtractEntity(rawArchiveItemID)
+        let title = Self.normalizedQuickExtractEntity(rawTitle)
+        guard !archiveItemID.isEmpty, !title.isEmpty else { return 0 }
+
+        let sourceRef = MemorySourceRef(
+            kind: .memoryArchiveItem,
+            id: archiveItemID,
+            title: title,
+            capturedAt: capturedAt
+        )
+        let resolvedMetadata = Self.metadataByAppending(sourceRef: sourceRef, to: privacyMetadata)
+        let summary = Self.metadataSummary(analysis.description)
+        var details = [String]()
+        if !analysis.scene.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            details.append("场景：\(Self.metadataSummary(analysis.scene))")
+        }
+        if let decade = analysis.estimatedDecade {
+            details.append("年代：\(decade)年代")
+        }
+        if !analysis.detectedPeople.isEmpty {
+            details.append("人物：\(analysis.detectedPeople.prefix(5).joined(separator: "、"))")
+        }
+        let suffix = details.isEmpty ? "" : "（\(details.joined(separator: "；"))）"
+        let statement = "记忆档案馆照片《\(title)》分析摘要：\(summary)\(suffix)。"
+
+        return upsertArchiveMetadataFact(
+            statement: statement,
+            sourceRef: sourceRef,
+            sessionId: sessionId,
+            privacyMetadata: resolvedMetadata,
+            logPrefix: "🖼️ 档案照片元信息入库",
+            logTitle: title
+        )
+    }
+
+    @discardableResult
     func ingestArchiveVoiceSampleMetadata(
         title rawTitle: String,
         note rawNote: String?,
@@ -2010,12 +2097,55 @@ final class KBLiteManager {
         return 1
     }
 
+    private func upsertArchiveMetadataFact(
+        statement: String,
+        sourceRef: MemorySourceRef,
+        sessionId: Int,
+        privacyMetadata: MemoryPrivacyMetadata,
+        logPrefix: String,
+        logTitle: String
+    ) -> Int {
+        if let idx = graph.facts.firstIndex(where: { fact in
+            fact.privacyMetadata.sourceRefs.contains(where: { Self.isSameSourceRef($0, sourceRef) })
+        }) {
+            var fact = graph.facts[idx]
+            if !fact.sourceSessionIds.contains(sessionId) {
+                fact.sourceSessionIds.append(sessionId)
+            }
+            fact.privacyMetadata = fact.privacyMetadata.mergingSourceRefs(from: privacyMetadata)
+            graph.facts[idx] = fact
+            save()
+            return 0
+        }
+
+        guard graph.facts.count < maxFacts else { return 0 }
+        graph.facts.append(
+            KBFact(
+                id: UUID().uuidString,
+                statement: statement,
+                confidence: "confirmed",
+                sourceSessionIds: [sessionId],
+                privacyMetadata: privacyMetadata
+            )
+        )
+        save()
+        print("[KBLite] \(logPrefix): \(logTitle)")
+        return 1
+    }
+
     private static let metadataDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.dateFormat = "yyyy年M月d日 HH:mm"
         return formatter
     }()
+
+    private static func metadataSummary(_ value: String, maxLength: Int = 120) -> String {
+        let trimmed = normalizedQuickExtractEntity(value)
+        guard trimmed.count > maxLength else { return trimmed }
+        let endIndex = trimmed.index(trimmed.startIndex, offsetBy: maxLength)
+        return String(trimmed[..<endIndex]) + "..."
+    }
 
     private static func metadataByAppending(
         sourceRef: MemorySourceRef,

@@ -72,15 +72,15 @@ final class Stage1MemoryFacade {
         _ input: Stage1MailboxMemoryInput,
         archiveItemID: String? = nil,
         archiveTitle: String? = nil,
+        archiveMaterialKind: String = "文字素材",
         completion: @escaping (Int) -> Void = { _ in }
     ) {
-        let resolvedInput = input.withSourceRef(
-            Self.archiveSourceRef(
-                id: archiveItemID,
-                title: archiveTitle,
-                capturedAt: input.timestamp
-            )
+        let sourceRef = Self.archiveSourceRef(
+            id: archiveItemID,
+            title: archiveTitle,
+            capturedAt: input.timestamp
         )
+        let resolvedInput = input.withSourceRef(sourceRef)
 
         recordUserTurn(resolvedInput)
 
@@ -97,10 +97,21 @@ final class Stage1MemoryFacade {
         )
         let knowledgeSessionCount = knowledgeBase.readGraph { $0.sessionCount }
         let sessionId = max(conversationMemory.currentMemory.sessionCount + 1, knowledgeSessionCount + 1)
+        let metadataCount = knowledgeBase.ingestArchiveTextMaterialMetadata(
+            archiveItemID: sourceRef.id,
+            title: sourceRef.title ?? archiveTitle ?? "文字素材",
+            note: resolvedInput.text,
+            materialKind: archiveMaterialKind,
+            capturedAt: input.timestamp,
+            sessionId: sessionId,
+            privacyMetadata: resolvedInput.privacyMetadata
+        )
         knowledgeBase.extractFromTranscript(
             turns: [turn],
             sessionId: sessionId,
-            completion: completion
+            completion: { extractedCount in
+                completion(metadataCount + extractedCount)
+            }
         )
     }
 
@@ -215,6 +226,7 @@ final class Stage1MemoryFacade {
         )
     }
 
+    @discardableResult
     func ingestImageAnalysis(
         _ result: KBImageAnalysisResult,
         sessionId: Int,
@@ -222,15 +234,33 @@ final class Stage1MemoryFacade {
         archiveItemID: String? = nil,
         archiveTitle: String? = nil,
         capturedAt: Date = Date()
-    ) {
+    ) -> Int {
         let resolvedMetadata = privacyMetadata.appendingSourceRef(
             Self.archiveSourceRef(id: archiveItemID, title: archiveTitle ?? "旧照片", capturedAt: capturedAt)
         )
+        guard resolvedMetadata.scope != .privateOnly else {
+            return 0
+        }
+        let sourceRef = Self.archiveSourceRef(id: archiveItemID, title: archiveTitle ?? "旧照片", capturedAt: capturedAt)
+        let metadataCount: Int
+        if archiveItemID?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            metadataCount = knowledgeBase.ingestArchivePhotoAnalysisMetadata(
+                archiveItemID: sourceRef.id,
+                title: sourceRef.title ?? "旧照片",
+                analysis: result,
+                capturedAt: capturedAt,
+                sessionId: sessionId,
+                privacyMetadata: resolvedMetadata
+            )
+        } else {
+            metadataCount = 0
+        }
         knowledgeBase.ingestImageAnalysis(
             result,
             sessionId: sessionId,
             privacyMetadata: resolvedMetadata
         )
+        return metadataCount
     }
 
     func exportKnowledgeJSON(surface: MemoryUseSurface = .export) -> String? {
