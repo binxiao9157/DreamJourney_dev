@@ -178,6 +178,7 @@ AI 语音陪伴
 - `FamilyVisibilityPickerViewController` 已接入采集端 UI，普通对话、档案文字、档案照片、时空信箱写信在选择“亲友”时可进一步选择“全体亲友”或具体家庭成员。
 - `HomeDialogPrivacyMetadataFactory` 统一生成首页对话授权 metadata，确保本机/可生成 scope 不会遗留上一次的具体亲友名单。
 - `.selectedMembers([])` 不再误等价于全体可见。
+- 关怀看板跨会话历史落盘时只保留 `familyCircle` 对话 turn；`localOnly` 和 `generationAllowed` 不再先混存后过滤。
 - 旧数据缺字段时保守迁移为 `localOnly` 或兼容旧 JSON。
 
 ### 4.4 KBLite 家庭知识图谱

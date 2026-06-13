@@ -120,7 +120,7 @@ struct ConversationMemory: Codable {
     var lastSummaryPrivacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
     var sessionCount: Int = 0                          // 累计对话次数
     var recentTranscript: [ConversationTurn] = []      // 最近一次对话记录（最多保留20轮）
-    var careDashboardTranscriptHistory: [ConversationTurn] = [] // 关怀看板跨会话历史，使用时仍按隐私过滤
+    var careDashboardTranscriptHistory: [ConversationTurn] = [] // 关怀看板跨会话历史，仅持久化 familyCircle 授权内容
 
     // 兼容旧数据迁移
     var mentionedPeople: [String] = []
@@ -193,11 +193,11 @@ final class ConversationMemoryManager {
     }
 
     func getCareDashboardTranscriptHistory() -> [ConversationTurn] {
-        let combined = currentMemory.careDashboardTranscriptHistory + currentTranscript
+        let combined = currentMemory.careDashboardTranscriptHistory + Self.careDashboardHistoryTurns(from: currentTranscript)
         if !combined.isEmpty {
             return Array(combined.suffix(Self.maxCareDashboardTranscriptHistoryCount))
         }
-        return getCurrentTranscript()
+        return Self.careDashboardHistoryTurns(from: getCurrentTranscript())
     }
 
     func discardCurrentSession() {
@@ -285,6 +285,10 @@ final class ConversationMemoryManager {
 
     private static let maxCareDashboardTranscriptHistoryCount = 160
 
+    private static func careDashboardHistoryTurns(from turns: [ConversationTurn]) -> [ConversationTurn] {
+        turns.filter { $0.privacyMetadata.scope == .familyCircle }
+    }
+
     /// 对话结束时调用：提取四维度摘要并持久化
     func endSession() {
         guard !currentTranscript.isEmpty else { return }
@@ -298,7 +302,7 @@ final class ConversationMemoryManager {
         currentMemory.sessionCount += 1
         currentMemory.recentTranscript = Array(currentTranscript.suffix(20))
         currentMemory.careDashboardTranscriptHistory = Array(
-            (currentMemory.careDashboardTranscriptHistory + currentTranscript)
+            (currentMemory.careDashboardTranscriptHistory + Self.careDashboardHistoryTurns(from: currentTranscript))
                 .suffix(Self.maxCareDashboardTranscriptHistoryCount)
         )
 

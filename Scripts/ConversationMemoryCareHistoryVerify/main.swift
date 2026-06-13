@@ -83,4 +83,38 @@ require(
 )
 
 ConversationMemoryManager.shared.resetLocalStorage()
+ConversationMemoryManager.shared.recordUserTurn(
+    text: "本机私密内容：不想让家人看到。",
+    privacyMetadata: MemoryPrivacyMetadata(scope: .localOnly)
+)
+ConversationMemoryManager.shared.recordUserTurn(
+    text: "可生成内容：只允许生成回忆录，不进入关怀看板。",
+    privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed)
+)
+ConversationMemoryManager.shared.recordUserTurn(
+    text: "亲友关怀内容：这周睡眠不好，希望家人知道。",
+    privacyMetadata: familyMetadata
+)
+ConversationMemoryManager.shared.endSession()
+
+let persistedCareHistory = ConversationMemoryManager.shared.getCareDashboardTranscriptHistory()
+let rawPersistedCareHistory = ConversationMemoryManager.shared.currentMemory.careDashboardTranscriptHistory
+require(
+    persistedCareHistory.contains(where: { $0.text.contains("亲友关怀内容") }),
+    "care dashboard history should persist family-circle turns"
+)
+require(
+    rawPersistedCareHistory.contains(where: { $0.text.contains("亲友关怀内容") }),
+    "raw care dashboard history should persist family-circle turns"
+)
+require(
+    !rawPersistedCareHistory.contains(where: { $0.text.contains("本机私密内容") }),
+    "raw care dashboard history should not store localOnly turns after session end"
+)
+require(
+    !rawPersistedCareHistory.contains(where: { $0.text.contains("可生成内容") }),
+    "raw care dashboard history should not store generationAllowed turns after session end"
+)
+
+ConversationMemoryManager.shared.resetLocalStorage()
 print("ConversationMemoryCareHistory verification passed")
