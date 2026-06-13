@@ -42,6 +42,11 @@ checks = [
         and "真实对话" in vc,
     ),
     (
+        "care dashboard should label the report as family assurance report",
+        "家庭安心报" in vc
+        and "家庭安心报" in models,
+    ),
+    (
         "report descriptor should state no raw chat content and no medical diagnosis",
         "不包含原始聊天内容" in models
         and "不是医疗诊断" in models,

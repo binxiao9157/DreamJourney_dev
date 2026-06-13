@@ -494,7 +494,7 @@ final class CareDashboardViewController: UIViewController {
         let container = makeSurface()
 
         let title = UILabel()
-        title.text = "脱敏观察报告"
+        title.text = "家庭安心报"
         title.font = .systemFont(ofSize: 18, weight: .bold)
         title.textColor = .warmPrimary
 

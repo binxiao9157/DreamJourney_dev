@@ -99,7 +99,7 @@ struct CareDashboardShareReportDescriptor: Equatable {
         let target = (trimmedName?.isEmpty == false) ? "\(trimmedName!)的" : ""
         let highlights = snapshot.riskSignalDescriptions.isEmpty ? snapshot.weeklyHighlights : snapshot.riskSignalDescriptions
         return CareDashboardShareReportDescriptor(
-            title: "\(target)脱敏关怀周报",
+            title: "\(target)家庭安心报（脱敏周报）",
             riskTitle: snapshot.riskLevel.reportTitle,
             generatedAtText: Self.dateTimeFormatter.string(from: snapshot.generatedAt),
             observationWindowText: observationWindowText(snapshot: snapshot),
