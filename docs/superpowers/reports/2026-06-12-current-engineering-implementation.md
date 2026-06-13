@@ -120,6 +120,7 @@ AI 语音陪伴
 - `Memoir/VolcEngineTTSRequestFactory.swift`
 - `Resources/web/MiniLive2.js`
 - `Resources/web/avatar_manifest.json`
+- `Resources/web/avatar_poster.png`
 
 当前实现：
 
@@ -130,6 +131,7 @@ AI 语音陪伴
 - 配置 `VolcEngineAPIKey` 和 `VolcEngineVoiceType` 后，使用 VolcEngine HTTP TTS 生成 WAV。
 - WAV 通过 `window.DreamJourneyAvatar.feedAudioBase64(...)` 传入 WebView，驱动 WASM 口型与 WebAudio 播放。
 - 启用数字人 WAV TTS 时关闭实时 SDK 内置播放器，避免双播。
+- 冷启动采用透明真人 poster 首屏稳定展示，隐藏 loading 文案和 spinner；`avatar_video_surface_ready` 后 live canvas 淡入并替换 poster，降低打开应用时的明显切换感。
 
 稳态保护：
 
@@ -514,7 +516,8 @@ bash Scripts/verify_phase2.sh
 | `FamilyFootprintIlluminationPolicyVerify` | 点亮策略。 |
 | `FamilyFootprintPosterVerify` | 海报生成、导出入口、迁徙点线/点亮区域统一坐标 bounds、region center/overlay coordinates 纳入 bounds 和长文案不尾部省略。 |
 | `FamilyFootprintFallbackVerify` | 足迹页路演/无 AMap key/地图加载失败时的“家族足迹点亮预览”、无 key 跳过 `MAMapView` 创建和加载成功后清除失败态。 |
-| `DigitalHumanAssetVerify` | 数字人资源 manifest 和 sha256。 |
+| `DigitalHumanAssetVerify` | 数字人资源 manifest 和 sha256，包含视频、gzip 数据、WASM、JS、公共贴图和冷启动 poster。 |
+| `DigitalHumanStartupRevealVerify` | 数字人冷启动首屏稳定展示：WebView 直接展示透明真人 poster、loading 文案隐藏、poster 不放入初始隐藏容器、live canvas 只在 video-ready 后淡入。 |
 | `DigitalHumanRuntimeLogVerify` | 数字人 WebAudio、系统 TTS 兜底、watchdog 收尾运行日志与 evidence report 质量 gate 口径一致，并验证严格播放审计脚本的三链路样本识别和隐私脱敏。 |
 | `DigitalHumanPlaybackPolicyVerify` | 数字人播放状态 policy：WebAudio health、SDK TTS 忽略、watchdog、系统 TTS request id 防串音、friendly fallback 文案和路演音频链路验收日志口径。 |
 | `DigitalHumanFallbackUIVerify` | 首页数字人故障恢复卡、重试/继续动作和 raw technical error 防暴露。 |

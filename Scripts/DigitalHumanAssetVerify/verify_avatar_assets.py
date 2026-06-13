@@ -27,7 +27,7 @@ def load_json(path):
 
 def iter_resources(manifest):
     resources = manifest.get("resources", {})
-    for key in ("video", "data", "wasm", "common_texture"):
+    for key in ("video", "data", "wasm", "poster", "common_texture"):
         item = resources.get(key)
         if item:
             yield key, item
@@ -113,7 +113,7 @@ def validate_manifest(manifest):
             errors.append(f"manifest: {key} must be {value}, got {manifest.get(key)}")
 
     labels = [label for label, _ in iter_resources(manifest)]
-    for label in ("video", "data", "wasm", "common_texture"):
+    for label in ("video", "data", "wasm", "poster", "common_texture"):
         if label not in labels:
             errors.append(f"manifest: missing {label} resource")
     if not manifest.get("resources", {}).get("js"):

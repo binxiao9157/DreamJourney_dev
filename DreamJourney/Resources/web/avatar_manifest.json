@@ -19,6 +19,10 @@
       "path": "DHLiveMini.wasm",
       "sha256": "7199459b6599a14190aa603d1859f9303fda004e4b78d3206907356d38094783"
     },
+    "poster": {
+      "path": "avatar_poster.png",
+      "sha256": "3a50815fd425210ce59f88f76fb40529986dfbc865323e19acb93e553bfc0713"
+    },
     "js": [
       {
         "path": "DHLiveMini.js",
@@ -30,7 +34,7 @@
       },
       {
         "path": "MiniMateLoader.js",
-        "sha256": "3158f4185895e63b0d4abe08527fc1edd4cb3896bd368ae5f877d3de0ebc20c5"
+        "sha256": "59dd71a09a50036f20f9f496c6416596cc580f0a736bb05dc4edca124a08c6d7"
       },
       {
         "path": "pako.min.js",

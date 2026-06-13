@@ -11,6 +11,7 @@
 		06F7BBC5219F555B3CF8DCDD /* UIColor+WarmTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71EF8575113A0367F332FE72 /* UIColor+WarmTheme.swift */; };
 		0E5676BC344BFB67294DA939 /* MiniMateLoader.js in Resources */ = {isa = PBXBuildFile; fileRef = AA3777B38C40C14928088B38 /* MiniMateLoader.js */; };
 		0E8E0D9A6A7A4EC2892F88A4 /* avatar_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 0E8E0D996A7A4EC2892F88A4 /* avatar_manifest.json */; };
+		A91CE000000000000000001 /* avatar_poster.png in Resources */ = {isa = PBXBuildFile; fileRef = A91CE000000000000000002 /* avatar_poster.png */; };
 		0F70ED911BFB7D4BB385430C /* TodayInHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8671DFE378573EA24A2FACC1 /* TodayInHistoryView.swift */; };
 		0FD1CC7F9A6E47179833E092 /* SafetyModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C67D21A8CDD412CB4A85883 /* SafetyModels.swift */; };
 		1074B6D9588F46B0001A61E1 /* TodayInHistoryProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF7E1F392A912E6A3B365A8C /* TodayInHistoryProvider.swift */; };
@@ -231,6 +232,7 @@
 		A79CE000000000000000002 /* AmapDistrictBoundaryProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmapDistrictBoundaryProvider.swift; sourceTree = "<group>"; };
 		A80CE000000000000000002 /* ConversationWellbeingLimiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationWellbeingLimiter.swift; sourceTree = "<group>"; };
 		A90CE000000000000000002 /* DreamJourneyBackendClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DreamJourneyBackendClient.swift; sourceTree = "<group>"; };
+		A91CE000000000000000002 /* avatar_poster.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = avatar_poster.png; sourceTree = "<group>"; };
 		A99960BA8CC38BCA98CB98F8 /* KnowledgeBaseViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeBaseViewController.swift; sourceTree = "<group>"; };
 		AA3777B38C40C14928088B38 /* MiniMateLoader.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = MiniMateLoader.js; sourceTree = "<group>"; };
 		AB6F020939B8B3A55A3A9013 /* LoginViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginViewController.swift; sourceTree = "<group>"; };
@@ -688,6 +690,7 @@
 				B918EB99B79AE43472DACB6A /* MiniLive2.js */,
 				AA3777B38C40C14928088B38 /* MiniMateLoader.js */,
 				0E8E0D996A7A4EC2892F88A4 /* avatar_manifest.json */,
+				A91CE000000000000000002 /* avatar_poster.png */,
 				4B70B14E8FFEE31DDE6BAB7B /* pako.min.js */,
 				5B1F3C5CF83899C7FC773A09 /* assets */,
 				156CBBC0D562C5D46752C0D0 /* common */,
@@ -785,6 +788,7 @@
 				94CB623B80D962CEBEA8090D /* MiniLive2.js in Resources */,
 				0E5676BC344BFB67294DA939 /* MiniMateLoader.js in Resources */,
 				0E8E0D9A6A7A4EC2892F88A4 /* avatar_manifest.json in Resources */,
+				A91CE000000000000000001 /* avatar_poster.png in Resources */,
 				7D543DD05A96F0944D9BA409 /* bs_texture_halfFace.png in Resources */,
 				BD33BBCF43D9320C927EBC62 /* combined_data.json.gz in Resources */,
 				8CE4E17850336E26E4389B8B /* pako.min.js in Resources */,

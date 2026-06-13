@@ -26,7 +26,7 @@ async function init()
             const screen = document.querySelector('#screen');
             const showUi = () => {
                 if (spinner) {
-                    spinner.style.display = 'block';
+                    spinner.style.display = 'none';
                 }
                 screen.style.display = 'block';
                 postAvatarHealth('minimate_qt_show_ui', 'qt onLoaded');

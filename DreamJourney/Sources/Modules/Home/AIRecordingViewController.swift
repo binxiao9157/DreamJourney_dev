@@ -1808,7 +1808,7 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
         layer.borderWidth = 0
 
         webView.navigationDelegate = self
-        webView.alpha = 0
+        webView.alpha = 1
         webView.isOpaque = false
         webView.backgroundColor = .clear
         webView.scrollView.isScrollEnabled = false
@@ -1827,10 +1827,12 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
     private func loadAvatarHTML() {
         guard let url = URL(string: "\(Self.avatarResourceScheme)://local/avatar.html") else {
             webView.loadHTMLString(Self.avatarHTML, baseURL: Bundle.main.resourceURL)
+            DigitalHumanPlaybackEvidenceStore.shared.appendEvent("avatar_startup_poster_visible mode=html_string")
             return
         }
         webView.load(URLRequest(url: url))
         DigitalHumanPlaybackEvidenceStore.shared.appendEvent("avatar_web_load mode=url_scheme")
+        DigitalHumanPlaybackEvidenceStore.shared.appendEvent("avatar_startup_poster_visible mode=url_scheme")
     }
 
     private func applyCurrentState() {
@@ -2089,7 +2091,7 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
       z-index: 20;
       pointer-events: none;
     }
-    #canvas_video {
+    #avatarPoster, #canvas_video {
       position: absolute;
       left: 50%;
       bottom: -8px;
@@ -2098,13 +2100,28 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
       max-height: calc(100% - 48px);
       transform: translateX(-50%);
       object-fit: contain;
+      pointer-events: none;
+      will-change: opacity;
+    }
+    #avatarPoster {
+      z-index: 20;
+      opacity: 1;
+      transition: opacity .18s ease-out;
+    }
+    #canvas_video {
       z-index: 21;
       opacity: 0;
       transition: opacity .22s ease-out;
-      will-change: opacity;
+    }
+    body[data-video-ready="true"] #avatarPoster {
+      opacity: 0;
     }
     body[data-video-ready="true"] #canvas_video {
       opacity: 1;
+    }
+    body[data-video-ready="true"] #loadingSpinner,
+    body[data-video-ready="true"] #startMessage {
+      display: none;
     }
     #canvas_gl, #background_video {
       display: none;
@@ -2183,6 +2200,7 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
     }
     #loadingSpinner {
       position: absolute;
+      display: none;
       right: 15px;
       bottom: 14px;
       z-index: 9;
@@ -2195,6 +2213,7 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
     }
     #startMessage {
       position: absolute;
+      display: none;
       left: 14px;
       bottom: 12px;
       z-index: 8;
@@ -2233,6 +2252,7 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
         <div id="loadingSpinner"></div>
         <div id="startMessage">正在加载数字人</div>
         <div id="screen"></div>
+        <img id="avatarPoster" src="avatar_poster.png" alt="" aria-hidden="true">
         <div id="screen2">
           <video id="background_video" muted playsinline loop></video>
           <canvas id="canvas_video"></canvas>
@@ -2270,7 +2290,6 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
               spinner.style.display = 'none';
             }
             if (startMessage) {
-              startMessage.textContent = '真人数字人已就绪';
               startMessage.style.display = 'none';
             }
             if (screen) {
@@ -2321,7 +2340,7 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
             }
             const startMessage = document.getElementById('startMessage');
             if (startMessage) {
-              startMessage.textContent = '正在准备真人数字人';
+              startMessage.style.display = 'none';
             }
             this.postHealth('avatar_shell_loading', detail || 'shell ready, waiting for first video frame');
           },
@@ -2448,6 +2467,19 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
           }
         };
         window.DreamJourneyAvatar = avatarRuntime;
+        const avatarPoster = document.getElementById('avatarPoster');
+        if (avatarPoster) {
+          if (avatarPoster.complete && avatarPoster.naturalWidth > 0) {
+            avatarRuntime.postHealth('avatar_startup_poster_visible', 'poster loaded from cache');
+          } else {
+            avatarPoster.addEventListener('load', function() {
+              avatarRuntime.postHealth('avatar_startup_poster_visible', 'poster loaded');
+            }, { once: true });
+            avatarPoster.addEventListener('error', function() {
+              avatarRuntime.postHealth('avatar_startup_poster_error', 'poster failed to load');
+            }, { once: true });
+          }
+        }
         avatarRuntime.markShellReady('dom ready');
         setTimeout(function() {
           window.DreamJourneyAvatar && window.DreamJourneyAvatar.markShellReady('startup timeout fallback');
