@@ -141,6 +141,9 @@ xcrun swiftc \
 echo "== KnowledgeBase deposit status UI =="
 python3 Scripts/KnowledgeBaseDepositStatusUIVerify/main.py
 
+echo "== KnowledgeBase source privacy UI =="
+python3 Scripts/KnowledgeBaseSourcePrivacyUIVerify/main.py
+
 echo "== KBLite entity quality =="
 python3 Scripts/KBLiteEntityQualityVerify/main.py
 

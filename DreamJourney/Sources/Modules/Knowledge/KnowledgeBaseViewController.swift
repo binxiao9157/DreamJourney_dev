@@ -218,6 +218,7 @@ extension KnowledgeBaseViewController: UITableViewDataSource {
         let cell = tableView.dequeueReusableCell(withIdentifier: "KBDetailCell", for: indexPath)
         cell.textLabel?.numberOfLines = 0
         cell.textLabel?.font = .systemFont(ofSize: 15)
+        cell.accessoryType = .none
 
         switch currentTab {
         case .people:
@@ -243,6 +244,7 @@ extension KnowledgeBaseViewController: UITableViewDataSource {
                 cell.textLabel?.text = "\(p.name)\(cat)"
                 cell.textLabel?.textColor = .label
                 cell.detailTextLabel?.text = p.description ?? ""
+                cell.accessoryType = .disclosureIndicator
             }
 
         case .events:
@@ -255,6 +257,7 @@ extension KnowledgeBaseViewController: UITableViewDataSource {
                 cell.textLabel?.text = "\(date)\(e.title)"
                 cell.textLabel?.textColor = .label
                 cell.detailTextLabel?.text = e.description ?? ""
+                cell.accessoryType = .disclosureIndicator
             }
 
         case .facts:
@@ -275,6 +278,7 @@ extension KnowledgeBaseViewController: UITableViewDataSource {
                 cell.textLabel?.text = "\(confidenceMarker)\(f.statement)"
                 cell.textLabel?.textColor = .label
                 cell.detailTextLabel?.text = "置信度: \(f.confidence)"
+                cell.accessoryType = .disclosureIndicator
             }
         }
 
@@ -332,8 +336,15 @@ extension KnowledgeBaseViewController: UITableViewDelegate {
             let detailVC = KBEntityDetailViewController(entity: .event(events[indexPath.row]))
             navigationController?.pushViewController(detailVC, animated: true)
 
-        case .places, .facts:
-            break // 暂不提供详情页
+        case .places:
+            guard !places.isEmpty else { return }
+            let detailVC = KBEntityDetailViewController(entity: .place(places[indexPath.row]))
+            navigationController?.pushViewController(detailVC, animated: true)
+
+        case .facts:
+            guard !facts.isEmpty else { return }
+            let detailVC = KBEntityDetailViewController(entity: .fact(facts[indexPath.row]))
+            navigationController?.pushViewController(detailVC, animated: true)
         }
     }
 }
@@ -400,7 +411,9 @@ final class KBEntityDetailViewController: UIViewController {
 
     enum Entity {
         case person(KBPerson)
+        case place(KBPlace)
         case event(KBEvent)
+        case fact(KBFact)
     }
 
     private let entity: Entity
@@ -461,8 +474,32 @@ final class KBEntityDetailViewController: UIViewController {
                 }
             }
 
-            text += "\n来源：第 \(p.sourceSessionIds.map(String.init).joined(separator: "、")) 次会话"
+            text += KBEntityDetailFormatter.auditText(
+                for: p.privacyMetadata,
+                fallbackSessionIds: p.sourceSessionIds
+            )
 
+            textView.text = text
+
+        case .place(let p):
+            title = p.name
+            var text = "【地点】\(p.name)\n"
+            if let category = p.category { text += "【类型】\(category)\n" }
+            if let desc = p.description { text += "\n\(desc)\n" }
+
+            let relatedPersons = KBLiteManager.shared.graph.people.filter {
+                p.relatedPersonIds.contains($0.id) &&
+                    !KBLiteManager.isGenericKinshipDisplayName($0.name)
+            }
+            if !relatedPersons.isEmpty {
+                text += "\n【相关人物】\n"
+                for person in relatedPersons { text += "· \(person.name)\n" }
+            }
+
+            text += KBEntityDetailFormatter.auditText(
+                for: p.privacyMetadata,
+                fallbackSessionIds: p.sourceSessionIds
+            )
             textView.text = text
 
         case .event(let e):
@@ -481,8 +518,132 @@ final class KBEntityDetailViewController: UIViewController {
                 for p in relatedPersons { text += "· \(p.name)\n" }
             }
 
-            text += "\n来源：第 \(e.sourceSessionIds.map(String.init).joined(separator: "、")) 次会话"
+            text += KBEntityDetailFormatter.auditText(
+                for: e.privacyMetadata,
+                fallbackSessionIds: e.sourceSessionIds
+            )
+            textView.text = text
+
+        case .fact(let f):
+            title = "事实"
+            var text = "【事实】\(f.statement)\n"
+            text += "【置信度】\(KBEntityDetailFormatter.confidenceText(f.confidence))\n"
+
+            let relatedPersons = KBLiteManager.shared.graph.people.filter {
+                f.relatedPersonIds.contains($0.id) &&
+                    !KBLiteManager.isGenericKinshipDisplayName($0.name)
+            }
+            if !relatedPersons.isEmpty {
+                text += "\n【相关人物】\n"
+                for person in relatedPersons { text += "· \(person.name)\n" }
+            }
+
+            let relatedPlaces = KBLiteManager.shared.graph.places.filter {
+                f.relatedPlaceIds.contains($0.id)
+            }
+            if !relatedPlaces.isEmpty {
+                text += "\n【相关地点】\n"
+                for place in relatedPlaces { text += "· \(place.name)\n" }
+            }
+
+            text += KBEntityDetailFormatter.auditText(
+                for: f.privacyMetadata,
+                fallbackSessionIds: f.sourceSessionIds
+            )
             textView.text = text
         }
+    }
+}
+
+private enum KBEntityDetailFormatter {
+    static func auditText(
+        for metadata: MemoryPrivacyMetadata,
+        fallbackSessionIds: [Int]
+    ) -> String {
+        """
+
+        【隐私范围】\(privacyText(for: metadata))
+        【来源素材】
+        \(sourceRefsText(for: metadata, fallbackSessionIds: fallbackSessionIds))
+        """
+    }
+
+    static func privacyText(for metadata: MemoryPrivacyMetadata) -> String {
+        let scopeText: String
+        switch metadata.scope {
+        case .privateOnly:
+            scopeText = "仅本人可见，不参与生成或亲友共享"
+        case .localOnly:
+            scopeText = "仅本机保存，可用于本机回声与整理"
+        case .generationAllowed:
+            scopeText = "可用于生成与数字人对话，不默认共享给亲友"
+        case .familyCircle:
+            scopeText = "亲友圈可见，用于关怀看板与家族同步"
+        }
+
+        guard metadata.scope == .familyCircle,
+              !metadata.familyVisibility.includesAllMembers else {
+            return scopeText
+        }
+        let members = metadata.familyVisibility.allowedMemberIDs.joined(separator: "、")
+        return "\(scopeText)；限定成员：\(members)"
+    }
+
+    static func sourceRefsText(
+        for metadata: MemoryPrivacyMetadata,
+        fallbackSessionIds: [Int]
+    ) -> String {
+        let refs = metadata.sourceRefs.map(sourceRefText)
+        if !refs.isEmpty {
+            return refs.map { "· \($0)" }.joined(separator: "\n")
+        }
+
+        guard !fallbackSessionIds.isEmpty else {
+            return "· 暂无可追溯来源"
+        }
+        let sessions = fallbackSessionIds.map(String.init).joined(separator: "、")
+        return "· 第 \(sessions) 次会话"
+    }
+
+    static func confidenceText(_ confidence: String) -> String {
+        switch confidence {
+        case "confirmed": return "已确认"
+        case "high": return "高可信"
+        case "medium": return "中可信"
+        case "low": return "低可信"
+        default: return confidence
+        }
+    }
+
+    private static func sourceRefText(_ ref: MemorySourceRef) -> String {
+        let title = ref.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = (title?.isEmpty == false) ? title! : ref.id
+        let date = ref.capturedAt.map { " · \(dateText($0))" } ?? ""
+
+        switch ref.kind {
+        case .conversationTurn:
+            return "对话片段：\(name)\(date)"
+        case .memoryArchiveItem:
+            return "记忆档案：\(name)\(date)"
+        case .timeMailboxLetter:
+            return "时空信箱：\(name)\(date)"
+        case .kbLiteEntity:
+            return "知识实体：\(name)\(date)"
+        case .memoir:
+            return "回忆录：\(name)\(date)"
+        case .importRecord:
+            return "导入记录：\(name)\(date)"
+        case .userAuthorization:
+            return "用户授权：\(name)\(date)"
+        case .unknown:
+            return "未知来源：\(name)\(date)"
+        }
+    }
+
+    private static func dateText(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyy.MM.dd HH:mm"
+        return formatter.string(from: date)
     }
 }
