@@ -36,6 +36,7 @@ final class TimeMailboxRepository {
 
     @discardableResult
     func createLetter(
+        id: String = UUID().uuidString,
         recipientName: String,
         title: String,
         body: String,
@@ -53,7 +54,7 @@ final class TimeMailboxRepository {
         guard boundaryAcknowledged else { throw TimeMailboxRepositoryError.boundaryNotAcknowledged }
 
         let letter = TimeMailboxLetter(
-            id: UUID().uuidString,
+            id: id,
             recipientName: cleanRecipient,
             title: cleanTitle.isEmpty ? "给\(cleanRecipient)的一封信" : cleanTitle,
             body: cleanBody,

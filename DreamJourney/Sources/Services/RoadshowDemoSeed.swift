@@ -355,6 +355,7 @@ extension RoadshowDemoSeed {
 
     private static func seedMailbox(now: Date) {
         _ = try? TimeMailboxRepository.shared.createLetter(
+            id: "roadshow_time_mailbox_grandpa_memory",
             recipientName: "爷爷",
             title: "写给爷爷的一封信",
             body: "爷爷，我今天又想起 1975 年外滩那张合影。\n我会把这份想念好好放进生活里。",

@@ -137,6 +137,12 @@ python3 Scripts/KBLiteUserLifecycleVerify/main.py
 echo "== Local test data cleanup =="
 python3 Scripts/LocalTestDataCleanupVerify/main.py
 
+echo "== Roadshow mailbox seed cleanup marker =="
+python3 Scripts/RoadshowMailboxSeedVerify/main.py
+
+echo "== Real-device no-demo state =="
+python3 Scripts/RealDeviceNoDemoStateVerify/main.py
+
 echo "== diff --check =="
 git diff --check
 git diff --cached --check
