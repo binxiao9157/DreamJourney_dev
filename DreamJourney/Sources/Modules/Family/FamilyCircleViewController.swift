@@ -150,6 +150,7 @@ final class FamilyCircleViewController: UIViewController {
 
     // MARK: - Data
     private var members: [FamilyMember] { FamilyRepository.shared.getAll() }
+    private var membersTableHeightConstraint: NSLayoutConstraint?
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -161,13 +162,14 @@ final class FamilyCircleViewController: UIViewController {
         additionalSafeAreaInsets = UIEdgeInsets(top: 0, left: 0, bottom: 56, right: 0)
         setupLayout()
         searchField.delegate = self
+        syncFamilyMembersFromBackend(showErrors: false)
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.navigationBar.isHidden = true
-        memberCountLabel.text = "\(members.count) 位成员"
-        membersTableView.reloadData()
+        updateMemberListUI()
+        syncFamilyMembersFromBackend(showErrors: false)
     }
 
     // MARK: - Layout
@@ -220,7 +222,8 @@ final class FamilyCircleViewController: UIViewController {
         }
 
         let rowHeight: CGFloat = 80
-        let tableHeight = CGFloat(members.count) * rowHeight
+        let tableHeightConstraint = membersTableView.heightAnchor.constraint(equalToConstant: CGFloat(members.count) * rowHeight)
+        membersTableHeightConstraint = tableHeightConstraint
 
         NSLayoutConstraint.activate([
             // 标题行
@@ -260,7 +263,7 @@ final class FamilyCircleViewController: UIViewController {
             membersTableView.topAnchor.constraint(equalTo: circleHeaderLabel.bottomAnchor, constant: 12),
             membersTableView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             membersTableView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            membersTableView.heightAnchor.constraint(equalToConstant: tableHeight),
+            tableHeightConstraint,
 
             // Slogan
             sloganLabel.topAnchor.constraint(equalTo: membersTableView.bottomAnchor, constant: 32),
@@ -288,8 +291,28 @@ final class FamilyCircleViewController: UIViewController {
     }
 
     @objc private func copyInviteTapped() {
-        UIPasteboard.general.string = "邀请你加入寻梦环游家族圈，下载寻梦环游App后使用手机号接受邀请：18800000001"
-        showToast("邀请邮票已复制到剪贴板", type: .success)
+        let phone = searchField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !phone.isEmpty else {
+            showToast("请先输入要邀请的手机号", type: .info)
+            searchField.becomeFirstResponder()
+            return
+        }
+
+        FamilyRepository.shared.inviteBackendMember(
+            name: "",
+            relation: "亲友",
+            phone: phone
+        ) { [weak self] result in
+            switch result {
+            case .success(let member):
+                UIPasteboard.general.string = "邀请你加入寻梦环游家族圈，请用手机号 \(phone) 登录后在亲友页接受邀请。"
+                self?.searchField.text = nil
+                self?.updateMemberListUI()
+                self?.showToast("已创建 \(member.name) 的亲友邀请", type: .success)
+            case .failure(let error):
+                self?.showToast(error.localizedDescription, type: .error)
+            }
+        }
     }
 
     @objc private func careDashboardTapped() {
@@ -343,8 +366,7 @@ final class FamilyCircleViewController: UIViewController {
         }
 
         searchField.text = nil
-        memberCountLabel.text = "\(members.count) 位成员"
-        membersTableView.reloadData()
+        updateMemberListUI()
         showToast("已接受 \(acceptedMember.name) 的亲友邀请", type: .success)
     }
 
@@ -444,11 +466,29 @@ final class FamilyCircleViewController: UIViewController {
                 self?.showToast("撤回失败，请稍后重试", type: .error)
                 return
             }
-            self?.memberCountLabel.text = "\(self?.members.count ?? 0) 位成员"
-            self?.membersTableView.reloadData()
+            self?.updateMemberListUI()
             self?.showToast("已撤回 \(member.name) 的访问权限，剩余 \(remainingVisibleCount) 位可见", type: .success)
         })
         present(alert, animated: true)
+    }
+
+    private func syncFamilyMembersFromBackend(showErrors: Bool) {
+        FamilyRepository.shared.syncFromBackend { [weak self] result in
+            switch result {
+            case .success:
+                self?.updateMemberListUI()
+            case .failure(let error):
+                if showErrors {
+                    self?.showToast(error.localizedDescription, type: .error)
+                }
+            }
+        }
+    }
+
+    private func updateMemberListUI() {
+        memberCountLabel.text = "\(members.count) 位成员"
+        membersTableHeightConstraint?.constant = CGFloat(members.count) * 80
+        membersTableView.reloadData()
     }
 
     private func normalizedPhoneForFamilyAccessUI(_ phone: String?) -> String? {

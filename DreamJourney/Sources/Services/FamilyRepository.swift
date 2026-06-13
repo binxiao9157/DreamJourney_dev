@@ -44,6 +44,77 @@ final class FamilyRepository {
         return members.first { $0.id == id }
     }
 
+    func syncFromBackend(completion: ((Result<[FamilyMember], Swift.Error>) -> Void)? = nil) {
+        guard let userID = UserManager.shared.currentUser?.id else {
+            completion?(.success(getAll()))
+            return
+        }
+        guard DreamJourneyBackendClient.shared.isConfigured else {
+            completion?(.success(getAll()))
+            return
+        }
+
+        DreamJourneyBackendClient.shared.fetchFamilyMembers(userId: userID) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success(let response):
+                    let backendMembers = response.members.compactMap { $0.toFamilyMember() }
+                    let merged = self.mergeBackendMembers(backendMembers)
+                    completion?(.success(merged))
+                case .failure(let error):
+                    completion?(.failure(error))
+                }
+            }
+        }
+    }
+
+    func inviteBackendMember(
+        name: String,
+        relation: String,
+        phone: String,
+        completion: @escaping (Result<FamilyMember, Swift.Error>) -> Void
+    ) {
+        let trimmedPhone = phone.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPhone.isEmpty else {
+            completion(.failure(FamilyRepositoryBackendError.invalidPhone))
+            return
+        }
+        guard let userID = UserManager.shared.currentUser?.id else {
+            completion(.failure(FamilyRepositoryBackendError.missingUser))
+            return
+        }
+        guard DreamJourneyBackendClient.shared.isConfigured else {
+            completion(.failure(FamilyRepositoryBackendError.missingBackendBaseURL))
+            return
+        }
+
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let displayName = trimmedName.isEmpty ? Self.defaultInviteName(for: trimmedPhone) : trimmedName
+        let trimmedRelation = relation.trimmingCharacters(in: .whitespacesAndNewlines)
+        DreamJourneyBackendClient.shared.inviteFamilyMember(
+            userId: userID,
+            name: displayName,
+            relation: trimmedRelation.isEmpty ? "亲友" : trimmedRelation,
+            phone: trimmedPhone
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success(let response):
+                    guard let member = response.member.toFamilyMember() else {
+                        completion(.failure(FamilyRepositoryBackendError.invalidBackendMember))
+                        return
+                    }
+                    _ = self.mergeBackendMembers([member])
+                    completion(.success(member))
+                case .failure(let error):
+                    completion(.failure(error))
+                }
+            }
+        }
+    }
+
     func setLocalViewerFamilyMemberID(_ memberID: String?) {
         let trimmed = memberID?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let trimmed, !trimmed.isEmpty, get(by: trimmed) != nil {
@@ -221,6 +292,33 @@ final class FamilyRepository {
         print("[FamilyRepo] 🔄 已从知识库同步 \(graph.people.count) 人 → 亲属圈 (总数: \(members.count))")
     }
 
+    @discardableResult
+    private func mergeBackendMembers(_ backendMembers: [FamilyMember]) -> [FamilyMember] {
+        for member in backendMembers {
+            if let index = members.firstIndex(where: { $0.id == member.id }) {
+                members[index] = member
+                continue
+            }
+            if let phone = normalizedPhone(member.phone),
+               let index = members.firstIndex(where: { normalizedPhone($0.phone) == phone }) {
+                members[index] = member
+                continue
+            }
+            if let index = members.firstIndex(where: { $0.name == member.name }) {
+                members[index] = member
+                continue
+            }
+            members.append(member)
+        }
+        return members
+    }
+
+    private static func defaultInviteName(for phone: String) -> String {
+        let digits = phone.filter(\.isNumber)
+        guard digits.count >= 4 else { return "亲友" }
+        return "亲友\(digits.suffix(4))"
+    }
+
     private func normalizedPhone(_ phone: String?) -> String? {
         guard let phone else { return nil }
         let digits = phone.filter(\.isNumber)
@@ -241,5 +339,25 @@ final class FamilyRepository {
             UserDefaults.standard.set(data, forKey: acceptedInvitationsKey)
         }
         UserDefaults.standard.set(Array(revokedAccessMemberIDs).sorted(), forKey: revokedAccessMemberIDsKey)
+    }
+}
+
+private enum FamilyRepositoryBackendError: LocalizedError {
+    case invalidPhone
+    case missingUser
+    case missingBackendBaseURL
+    case invalidBackendMember
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidPhone:
+            return "请输入亲友手机号"
+        case .missingUser:
+            return "请先登录后再邀请亲友"
+        case .missingBackendBaseURL:
+            return "未配置 DreamJourneyBackendBaseURL"
+        case .invalidBackendMember:
+            return "服务器亲友数据不完整"
+        }
     }
 }

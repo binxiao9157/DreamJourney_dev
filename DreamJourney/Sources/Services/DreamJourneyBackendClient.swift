@@ -117,6 +117,44 @@ final class DreamJourneyBackendClient {
         }
     }
 
+    func inviteFamilyMember(
+        userId: String,
+        name: String,
+        relation: String,
+        phone: String,
+        completion: @escaping (Result<FamilyInviteResponse, Swift.Error>) -> Void
+    ) {
+        let payload: [String: Any] = [
+            "userId": userId,
+            "name": name,
+            "relation": relation,
+            "phone": phone,
+            "isOnline": false,
+            "lastUpdated": "邀请已发送"
+        ]
+        performJSONRequest(
+            path: "family/invite",
+            method: "POST",
+            bodyObject: payload,
+            responseType: FamilyInviteResponse.self,
+            completion: completion
+        )
+    }
+
+    func fetchFamilyMembers(
+        userId: String,
+        completion: @escaping (Result<FamilyMembersResponse, Swift.Error>) -> Void
+    ) {
+        let escapedUserID = userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId
+        performJSONRequest(
+            path: "family/members/\(escapedUserID)",
+            method: "GET",
+            bodyObject: nil,
+            responseType: FamilyMembersResponse.self,
+            completion: completion
+        )
+    }
+
     func fetchDistrictPayload(keyword: String) async throws -> Data {
         guard var components = URLComponents(url: try endpointURL(path: "maps/district"), resolvingAgainstBaseURL: false) else {
             throw Error.invalidURL
@@ -269,5 +307,40 @@ extension DreamJourneyBackendClient {
         let viewerFamilyMemberID: String?
         let snapshot: CareSignalSnapshot
         let createdAt: String
+    }
+
+    struct FamilyInviteResponse: Decodable {
+        let status: String
+        let member: FamilyMemberPayload
+    }
+
+    struct FamilyMembersResponse: Decodable {
+        let userId: String
+        let members: [FamilyMemberPayload]
+    }
+
+    struct FamilyMemberPayload: Decodable {
+        let id: String
+        let name: String?
+        let displayName: String?
+        let relation: String?
+        let phone: String?
+        let isOnline: Bool?
+        let lastUpdated: String?
+        let createdAt: String?
+
+        func toFamilyMember() -> FamilyMember? {
+            let resolvedName = (name ?? displayName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !resolvedName.isEmpty else { return nil }
+            let resolvedRelation = (relation ?? "亲友").trimmingCharacters(in: .whitespacesAndNewlines)
+            return FamilyMember(
+                id: id,
+                name: resolvedName,
+                relation: resolvedRelation.isEmpty ? "亲友" : resolvedRelation,
+                phone: phone,
+                isOnline: isOnline ?? false,
+                lastUpdated: lastUpdated ?? "服务器同步"
+            )
+        }
     }
 }

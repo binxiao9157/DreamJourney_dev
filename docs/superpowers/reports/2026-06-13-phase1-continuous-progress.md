@@ -76,6 +76,18 @@
   - 页面会显示数据来源：`本机近况` 或 `服务器同步快照`。
 - 边界：不上传原始 transcript，不上传私密/localOnly 对话，只上传看板聚合结果。
 
+### 9. 亲友圈：成员 create/list 接入业务后端
+
+- `DreamJourneyBackendClient` 新增：
+  - `POST /family/invite`
+  - `GET /family/members/{userId}`
+- `FamilyRepository` 新增后端同步入口：
+  - 打开亲友页时拉取服务器成员并合并到本地列表。
+  - 输入手机号复制邀请时先在后端创建亲友成员，再生成邀请文案。
+- 去掉亲友页邀请文案里的硬编码路演手机号 `18800000001`。
+- 亲友列表高度改为随成员数量动态刷新，避免后端拉到成员后列表显示不全。
+- 当前边界：接受邀请和撤回访问仍是本地状态，后端还没有 invitation accept / revoke 状态机。
+
 ## 真机验收建议
 
 ### 记忆档案馆
@@ -111,6 +123,8 @@
 - 空数据显示“数据不足”，不会显示“状态稳定”。
 - 周报只含脱敏聚合信号，不含原始聊天内容。
 - selected-member 可见性会过滤非授权成员内容。
+- 亲友成员可从后端拉取；邀请会先写入后端 `family_members`。
+- 关怀看板快照可按 `viewerFamilyMemberID` 上传/拉取。
 
 ## 已运行验证
 
@@ -119,6 +133,7 @@
 - `TimeMailboxNotification verification passed`
 - `CareDashboard verification passed`
 - `CareDashboardBackendSync verification passed`
+- `FamilyBackendSync verification passed`
 - `DreamJourneyBackend unittest 15/15 OK`
 - `SecretConfig verification passed`
 - `LocalTestDataCleanup verification passed`
@@ -129,5 +144,5 @@
 
 ## 下一步
 
-1. 继续推进亲友真实成员/邀请/撤回状态后端化，替代本机 UserDefaults。
+1. 补后端 invitation accept / revoke 状态机，替代本机 UserDefaults 撤回状态。
 2. 补真机证据包：档案入库截图、结构化知识库截图、信箱回声截图、关怀周报导出文本。
