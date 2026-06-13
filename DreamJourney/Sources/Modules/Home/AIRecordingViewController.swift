@@ -239,6 +239,8 @@ final class AIRecordingViewController: UIViewController {
     private var isDigitalHumanSystemSpeechFallbackActive = false
     private var systemSpeechFallbackRequestID: Int?
     private var isRealtimeDialogPausedForDigitalHumanPlayback = false
+    private var pendingDialogEndReasonAfterDigitalHumanPlayback: DialogEndReason?
+    private var hasFinalizedCurrentDialogSession = false
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -1015,6 +1017,8 @@ extension AIRecordingViewController: DialogEngineDelegate {
         currentDialogPrivacyMetadata = selectedDialogPrivacyMetadata
         pendingUserText = nil
         pendingAIText = nil
+        pendingDialogEndReasonAfterDigitalHumanPlayback = nil
+        hasFinalizedCurrentDialogSession = false
         resetDigitalHumanSpeechPlayback(stopFallbackAudio: true)
         hideDigitalHumanFallbackPresentation()
         conversationWellbeingLimiter.startSession()
@@ -1145,6 +1149,15 @@ extension AIRecordingViewController: DialogEngineDelegate {
         isAwaitingDigitalHumanAudioEnd = false
         isRealtimeDialogPausedForDigitalHumanPlayback = false
         currentAssistantResponseText = nil
+        if let deferredEndReason = pendingDialogEndReasonAfterDigitalHumanPlayback {
+            pendingDialogEndReasonAfterDigitalHumanPlayback = nil
+            DDLogInfo("[DigitalHumanSpeech] dialog_end_finalizing_after_native_audio reason=\(deferredEndReason)")
+            DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
+                "dialog_end_finalizing_after_native_audio reason=\(deferredEndReason)"
+            )
+            finalizeDialogEnd(reason: deferredEndReason)
+            return
+        }
         if wasRealtimeDialogPaused {
             updateVoiceBallState(.idle)
             digitalHumanAvatarView.setState(.idle, prompt: "点麦克风继续说")
@@ -1369,6 +1382,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
         digitalHumanSpeechRequestID += 1
         isAwaitingDigitalHumanAudioEnd = false
         isRealtimeDialogPausedForDigitalHumanPlayback = false
+        pendingDialogEndReasonAfterDigitalHumanPlayback = nil
         currentAssistantResponseText = nil
         retryableDigitalHumanSpeechText = nil
     }
@@ -1435,6 +1449,8 @@ extension AIRecordingViewController: DialogEngineDelegate {
         currentDialogAllowsMemoir = false
         pendingUserText = nil
         pendingAIText = nil
+        pendingDialogEndReasonAfterDigitalHumanPlayback = nil
+        hasFinalizedCurrentDialogSession = true
         resetDigitalHumanSpeechPlayback(stopFallbackAudio: true)
         Stage1MemoryFacade.shared.discardCurrentConversationSession()
         stopSessionRecording()
@@ -1452,13 +1468,25 @@ extension AIRecordingViewController: DialogEngineDelegate {
 
     func onDialogEnded(reason: DialogEndReason) {
         if isRealtimeDialogPausedForDigitalHumanPlayback {
-            DDLogInfo("[DigitalHumanSpeech] dialog_end_ignored_for_native_audio reason=\(reason)")
+            pendingDialogEndReasonAfterDigitalHumanPlayback = reason
+            DDLogInfo("[DigitalHumanSpeech] dialog_end_deferred_for_native_audio reason=\(reason)")
             DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
-                "dialog_end_ignored_for_native_audio reason=\(reason)"
+                "dialog_end_deferred_for_native_audio reason=\(reason)"
             )
             updateVoiceBallState(.idle)
             return
         }
+
+        finalizeDialogEnd(reason: reason)
+    }
+
+    private func finalizeDialogEnd(reason: DialogEndReason) {
+        guard !hasFinalizedCurrentDialogSession else {
+            DDLogInfo("[AIRecording] dialog_end_duplicate_ignored reason=\(reason)")
+            return
+        }
+        hasFinalizedCurrentDialogSession = true
+        pendingDialogEndReasonAfterDigitalHumanPlayback = nil
 
         if case .crisis = reason {
             pendingUserText = nil
