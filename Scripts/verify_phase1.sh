@@ -255,6 +255,9 @@ python3 Scripts/KnowledgeBaseSourcePrivacyUIVerify/main.py
 echo "== KBLite entity quality =="
 python3 Scripts/KBLiteEntityQualityVerify/main.py
 
+echo "== KBLite prompt graph sanitization =="
+python3 Scripts/KBLitePromptGraphSanitizationVerify/main.py
+
 echo "== KBLite backend snapshot restore =="
 python3 Scripts/KBLiteBackendSnapshotVerify/main.py
 

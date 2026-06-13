@@ -1209,13 +1209,14 @@ final class KBLiteManager {
 
     /// 构建已有知识摘要（供 LLM prompt 使用）
     private func buildExistingSummary(surface: MemoryUseSurface = .prompt) -> String {
-        let people = graph.people.filter {
+        let sourceGraph = sanitizedGraph(for: surface)
+        let people = sourceGraph.people.filter {
             PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface) &&
                 !Self.isGenericKinshipDisplayName($0.name)
         }
-        let places = graph.places.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface) }
-        let events = graph.events.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface) }
-        let facts = graph.facts.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface) }
+        let places = sourceGraph.places.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface) }
+        let events = sourceGraph.events.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface) }
+        let facts = sourceGraph.facts.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: surface) }
 
         if people.isEmpty && places.isEmpty && events.isEmpty {
             return "（暂无已有知识）"
@@ -1575,16 +1576,20 @@ final class KBLiteManager {
     /// - Parameter query: 用户当前说的内容
     /// - Returns: 匹配的实体集合
     func search(query: String) -> KBSearchResult {
+        search(query: query, in: graph)
+    }
+
+    private func search(query: String, in sourceGraph: KBLiteGraph) -> KBSearchResult {
         guard !query.isEmpty else { return KBSearchResult() }
 
         // 尝试语义搜索（iOS 17+），失败或不可用则 fallback 关键词
         if KBLiteSemanticSearch.shared.isAvailable {
             let semantic = KBLiteSemanticSearch.shared.semanticSearch(
                 query: query,
-                people: graph.people,
-                places: graph.places,
-                events: graph.events,
-                facts: graph.facts
+                people: sourceGraph.people,
+                places: sourceGraph.places,
+                events: sourceGraph.events,
+                facts: sourceGraph.facts
             )
             if !semantic.isEmpty {
                 return semantic
@@ -1592,11 +1597,11 @@ final class KBLiteManager {
         }
 
         // Fallback: 关键词匹配
-        return keywordSearch(query: query)
+        return keywordSearch(query: query, in: sourceGraph)
     }
 
     /// 关键词检索（原始实现，作为语义搜索的 fallback）
-    private func keywordSearch(query: String) -> KBSearchResult {
+    private func keywordSearch(query: String, in sourceGraph: KBLiteGraph) -> KBSearchResult {
         var result = KBSearchResult()
 
         // 使用 NSLinguisticTagger 做中文分词
@@ -1605,7 +1610,7 @@ final class KBLiteManager {
         print("[KBLite] 🔍 检索: \"\(query)\" → 关键词: \(keywords)")
 
         // 人物匹配
-        result.people = graph.people.filter { person in
+        result.people = sourceGraph.people.filter { person in
             guard !Self.isGenericKinshipDisplayName(person.name) else { return false }
             let searchTarget = person.searchableText
             return keywords.contains { kw in
@@ -1614,7 +1619,7 @@ final class KBLiteManager {
         }
 
         // 地点匹配
-        result.places = graph.places.filter { place in
+        result.places = sourceGraph.places.filter { place in
             let searchTarget = place.searchableText
             return keywords.contains { kw in
                 searchTarget.contains(kw)
@@ -1622,7 +1627,7 @@ final class KBLiteManager {
         }
 
         // 事件匹配
-        result.events = graph.events.filter { event in
+        result.events = sourceGraph.events.filter { event in
             let searchTarget = event.searchableText + " " + event.formattedDate
             return keywords.contains { kw in
                 searchTarget.contains(kw)
@@ -1630,7 +1635,7 @@ final class KBLiteManager {
         }
 
         // 事实匹配
-        result.facts = graph.facts.filter { fact in
+        result.facts = sourceGraph.facts.filter { fact in
             keywords.contains { kw in
                 fact.statement.contains(kw)
             }
@@ -1683,10 +1688,11 @@ final class KBLiteManager {
     /// - Returns: 上下文字符串，空字符串表示无可用上下文
     func buildContextString(query: String?, maxItems: Int = 5) -> String {
         var parts: [String] = []
+        let promptGraph = sanitizedGraph(for: .prompt)
 
         // 有 query → 检索相关知识
         if let q = query, !q.trimmingCharacters(in: .whitespaces).isEmpty {
-            var result = search(query: q)
+            var result = search(query: q, in: promptGraph)
             result.people = result.people.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .prompt) }
             result.places = result.places.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .prompt) }
             result.events = result.events.filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .prompt) }
@@ -1700,7 +1706,7 @@ final class KBLiteManager {
 
                     // 附上关联事实
                     let relatedFacts = KBLitePrivacyScopePolicy.relatedFacts(
-                        in: graph,
+                        in: promptGraph,
                         relatedPersonId: p.id,
                         surface: .prompt
                     )
@@ -1744,7 +1750,7 @@ final class KBLiteManager {
 
         // 无 query 或检索结果为空 → 提供最近摘要
         if parts.isEmpty {
-            let recentPeople = graph.people
+            let recentPeople = promptGraph.people
                 .filter {
                     PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .prompt) &&
                         !Self.isGenericKinshipDisplayName($0.name)
@@ -1755,7 +1761,7 @@ final class KBLiteManager {
                 parts.append("【已知人物】您提到过：\(names)等")
             }
 
-            let recentEvents = graph.events
+            let recentEvents = promptGraph.events
                 .filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .prompt) }
                 .sorted { ($0.sourceSessionIds.last ?? 0) > ($1.sourceSessionIds.last ?? 0) }
             if !recentEvents.isEmpty {
@@ -1917,19 +1923,7 @@ final class KBLiteManager {
     func sanitizedGraph(for surface: MemoryUseSurface, familyMemberID: String? = nil) -> KBLiteGraph {
         readGraph { graph in
             var sanitized = KBLitePrivacyScopePolicy.sanitizedGraph(graph, for: surface, familyMemberID: familyMemberID)
-            let removedPeopleIDs = Set(sanitized.people.filter { Self.isGenericKinshipDisplayName($0.name) }.map(\.id))
-            guard !removedPeopleIDs.isEmpty else { return sanitized }
-            sanitized.people.removeAll { removedPeopleIDs.contains($0.id) }
-            sanitized.events = sanitized.events.map { event in
-                var event = event
-                event.participantIds = event.participantIds.filter { !removedPeopleIDs.contains($0) }
-                return event
-            }
-            sanitized.facts = sanitized.facts.map { fact in
-                var fact = fact
-                fact.relatedPersonIds = fact.relatedPersonIds.filter { !removedPeopleIDs.contains($0) }
-                return fact
-            }
+            _ = removeLegacyOrLowQualityEntities(from: &sanitized)
             return sanitized
         }
     }
@@ -2425,9 +2419,12 @@ final class KBLiteManager {
 
     /// 生成包含知识库上下文的增强开场白提示
     func buildGreetingHint() -> String {
-        if isEmpty { return "" }
+        let promptGraph = sanitizedGraph(for: .prompt)
+        if promptGraph.people.isEmpty && promptGraph.places.isEmpty && promptGraph.events.isEmpty && promptGraph.facts.isEmpty {
+            return ""
+        }
         var hints: [String] = []
-        let recentPeople = graph.people
+        let recentPeople = promptGraph.people
             .filter {
                 PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .prompt)
                     && (!$0.traits.isEmpty || $0.briefBio != nil)
@@ -2442,7 +2439,7 @@ final class KBLiteManager {
             }
             hints.append("记得：\(peopleHints.joined(separator: "、"))")
         }
-        let recentEvents = graph.events
+        let recentEvents = promptGraph.events
             .filter {
                 PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .prompt)
                     && $0.year != nil

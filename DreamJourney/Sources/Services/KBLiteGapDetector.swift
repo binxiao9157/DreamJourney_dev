@@ -50,8 +50,9 @@ final class KBLiteGapDetector {
 
     /// 检测所有知识缺口
     func detectAllGaps(surface: MemoryUseSurface? = nil) -> GapReport {
-        let sourceGraph = KBLiteManager.shared.graph
-        let graph = surface.map { KBLitePrivacyScopePolicy.sanitizedGraph(sourceGraph, for: $0) } ?? sourceGraph
+        let graph = surface.map {
+            KBLiteManager.shared.sanitizedGraph(for: $0)
+        } ?? KBLiteManager.shared.displayGraphForLocalBrowsing()
         var gaps: [KnowledgeGap] = []
 
         // 1. 人物缺口
@@ -131,8 +132,8 @@ final class KBLiteGapDetector {
     }
 
     /// 获取最重要的 N 个缺口（按优先级排序）
-    func topGaps(_ n: Int = 5) -> [KnowledgeGap] {
-        let report = detectAllGaps()
+    func topGaps(_ n: Int = 5, surface: MemoryUseSurface = .prompt) -> [KnowledgeGap] {
+        let report = detectAllGaps(surface: surface)
         return report.gaps.sorted { $0.priority < $1.priority }.prefix(n).map { $0 }
     }
 

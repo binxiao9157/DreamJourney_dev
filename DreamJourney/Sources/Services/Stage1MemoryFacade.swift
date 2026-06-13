@@ -270,7 +270,7 @@ final class Stage1MemoryFacade {
     }
 
     func topKnowledgeGaps(limit: Int = 5) -> [KBLiteGapDetector.KnowledgeGap] {
-        gapDetector.topGaps(limit)
+        gapDetector.topGaps(limit, surface: .prompt)
     }
 
     func archiveSnapshot() -> KBLiteGraph {
@@ -288,7 +288,7 @@ final class Stage1MemoryFacade {
             placesCount: graph.places.count,
             eventsCount: graph.events.count,
             factsCount: graph.facts.count,
-            topGaps: topKnowledgeGaps(limit: 5),
+            topGaps: gapDetector.topGaps(5, surface: .prompt),
             greetingHint: greetingHint()
         )
     }
