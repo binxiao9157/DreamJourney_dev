@@ -190,7 +190,12 @@ final class MemoryArchiveRepository {
 
     private func load() -> [MemoryArchiveItem] {
         guard let data = defaults.data(forKey: storageKey) else { return [] }
-        return (try? decoder.decode([MemoryArchiveItem].self, from: data)) ?? []
+        guard let decoded = try? decoder.decode([MemoryArchiveItem].self, from: data) else { return [] }
+        let cleaned = decoded.filter { !Self.isLegacySeedItem($0) }
+        if cleaned.count != decoded.count {
+            save(cleaned)
+        }
+        return cleaned
     }
 
     private func save(_ items: [MemoryArchiveItem]) {
@@ -210,5 +215,17 @@ final class MemoryArchiveRepository {
         case .personalityNote: return "性格描述"
         case .catchphrase: return "口头禅"
         }
+    }
+
+    private static func isLegacySeedItem(_ item: MemoryArchiveItem) -> Bool {
+        item.id.hasPrefix("roadshow_") ||
+            item.localPath == "roadshow_demo_photo_placeholder" ||
+            item.tags.contains("路演") ||
+            item.note.contains("路演占位") ||
+            item.note.contains("1975 年 7 月，陈树安和陈静文") ||
+            item.title == "外滩合影的背景" ||
+            item.title == "陈树安的习惯" ||
+            item.title == "慢慢来，饭要趁热吃" ||
+            item.title == "外滩老照片"
     }
 }

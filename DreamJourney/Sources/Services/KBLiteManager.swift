@@ -25,6 +25,12 @@ final class KBLiteManager {
     private let maxPlaces = 100
     private let maxEvents = 100
     private let maxFacts = 500
+    private static let genericKinshipNames: Set<String> = [
+        "爷爷", "奶奶", "外婆", "外公", "姥姥", "姥爷",
+        "爸爸", "妈妈", "父亲", "母亲", "老伴", "老公", "老婆",
+        "哥哥", "姐姐", "弟弟", "妹妹", "叔叔", "阿姨", "舅舅", "姑姑",
+        "儿子", "女儿", "孙子", "孙女", "老师", "师傅", "同学", "战友"
+    ]
 
     // MARK: - Properties
 
@@ -140,8 +146,13 @@ final class KBLiteManager {
         decoder.dateDecodingStrategy = .iso8601
         do {
             let data = try Data(contentsOf: graphFilePath)
-            let loaded = try decoder.decode(KBLiteGraph.self, from: data)
+            var loaded = try decoder.decode(KBLiteGraph.self, from: data)
+            let removedLegacySeedCount = removeLegacyOrLowQualityEntities(from: &loaded)
             graph = loaded
+            if removedLegacySeedCount > 0 {
+                save()
+                print("[KBLite] removed legacy seed entities: \(removedLegacySeedCount)")
+            }
             print("[KBLite] 📂 已加载知识库: v\(loaded.version), \(loaded.people.count)人, \(loaded.places.count)地, \(loaded.events.count)事, \(loaded.facts.count)实, 共\(loaded.sessionCount)次会话")
 
             // 后台预热语义缓存
@@ -161,6 +172,61 @@ final class KBLiteManager {
             print("[KBLite] 📦 已备份损坏文件到: \(backupPath.lastPathComponent)")
         }
     }
+
+    private func removeLegacyOrLowQualityEntities(from graph: inout KBLiteGraph) -> Int {
+        let beforeCount = graph.people.count + graph.places.count + graph.events.count + graph.facts.count
+        let roadshowPeople = Set(graph.people.filter { $0.id.hasPrefix("roadshow_") }.map(\.id))
+        let roadshowPlaces = Set(graph.places.filter { $0.id.hasPrefix("roadshow_") }.map(\.id))
+        let roadshowEvents = Set(graph.events.filter { $0.id.hasPrefix("roadshow_") }.map(\.id))
+        let genericPeople = Set(graph.people.filter(Self.isGenericKinshipOnly).map(\.id))
+        let removedPeople = roadshowPeople.union(genericPeople)
+
+        graph.people.removeAll { person in
+            person.id.hasPrefix("roadshow_") || Self.isGenericKinshipOnly(person)
+        }
+        graph.places.removeAll { place in
+            place.id.hasPrefix("roadshow_") ||
+                place.relatedPersonIds.contains(where: { removedPeople.contains($0) })
+        }
+        graph.events.removeAll { event in
+            event.id.hasPrefix("roadshow_") ||
+                event.locationId.map { roadshowPlaces.contains($0) } == true ||
+                event.participantIds.contains(where: { removedPeople.contains($0) })
+        }
+        graph.facts.removeAll { fact in
+            fact.id.hasPrefix("roadshow_") ||
+                fact.relatedPersonIds.contains(where: { removedPeople.contains($0) }) ||
+                fact.relatedEventIds.contains(where: { roadshowEvents.contains($0) })
+        }
+
+        let afterCount = graph.people.count + graph.places.count + graph.events.count + graph.facts.count
+        return beforeCount - afterCount
+    }
+
+    private static func isGenericKinshipOnly(_ person: KBPerson) -> Bool {
+        let name = normalizedEntityName(person.name)
+        guard genericKinshipNames.contains(name) else { return false }
+        return true
+    }
+
+    private static func shouldPersistPerson(
+        name: String,
+        aliases: [String],
+        traits: [String],
+        briefBio: String?
+    ) -> Bool {
+        let normalizedName = normalizedEntityName(name)
+        guard !normalizedName.isEmpty else { return false }
+        if genericKinshipNames.contains(normalizedName) {
+            return false
+        }
+        return true
+    }
+
+    private static func normalizedEntityName(_ name: String) -> String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
 
     // MARK: - Public API: Stats
 
@@ -290,36 +356,7 @@ final class KBLiteManager {
 
         var addedCount = 0
 
-        // 提取人物
-        let peopleKeywords = ["爷爷", "奶奶", "外婆", "外公", "姥姥", "姥爷",
-                              "爸爸", "妈妈", "父亲", "母亲", "老伴", "老公", "老婆",
-                              "哥哥", "姐姐", "弟弟", "妹妹", "叔叔", "阿姨", "舅舅", "姑姑",
-                              "儿子", "女儿", "孙子", "孙女", "老师", "师傅", "同学", "战友"]
-        for kw in peopleKeywords {
-            if allText.contains(kw) {
-                let existing = findMatchingPerson(
-                    name: kw,
-                    aliases: [],
-                    privacyMetadata: privacyMetadata
-                )
-                if existing == nil {
-                    let person = KBPerson(id: UUID().uuidString, name: kw, aliases: [], relation: nil,
-                                          traits: [], sourceSessionIds: [sessionId],
-                                          createdAt: Date(), updatedAt: Date(),
-                                          privacyMetadata: privacyMetadata)
-                    graph.people.append(person)
-                    addedCount += 1
-                } else {
-                    // 更新 sessionId
-                    if let idx = graph.people.firstIndex(where: { $0.id == existing!.id }) {
-                        if !graph.people[idx].sourceSessionIds.contains(sessionId) {
-                            graph.people[idx].sourceSessionIds.append(sessionId)
-                            graph.people[idx].updatedAt = Date()
-                        }
-                    }
-                }
-            }
-        }
+        // 本地快速抽取不再把“妈妈/爷爷”这类单独称谓入库；等待 LLM 抽到具体姓名或更完整人物信息。
 
         // 提取地点
         let cities = ["北京", "上海", "广州", "深圳", "杭州", "南京", "苏州",
@@ -500,6 +537,14 @@ final class KBLiteManager {
 
         // 1. 合并人物
         for ep in result.people {
+            guard Self.shouldPersistPerson(
+                name: ep.name,
+                aliases: ep.aliases,
+                traits: ep.traits,
+                briefBio: ep.briefBio
+            ) else {
+                continue
+            }
             let matched = findMatchingPerson(
                 name: ep.name,
                 aliases: ep.aliases,
@@ -945,6 +990,9 @@ final class KBLiteManager {
         for personDesc in result.detectedPeople {
             // 尝试从描述中提取名字（如 "爷爷"、"奶奶"）
             let name = extractPersonNameFromDescription(personDesc)
+            guard Self.shouldPersistPerson(name: name, aliases: [], traits: [], briefBio: nil) else {
+                continue
+            }
             let existing = findMatchingPerson(name: name, aliases: [], privacyMetadata: privacyMetadata)
             if existing == nil {
                 let person = KBPerson(

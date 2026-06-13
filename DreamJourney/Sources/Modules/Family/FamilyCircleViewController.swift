@@ -298,13 +298,12 @@ final class FamilyCircleViewController: UIViewController {
     }
 
     @objc private func familyFootprintTapped() {
-        let currentUserId = UserManager.shared.currentUser?.id ?? "user_001"
+        let currentUserId = UserManager.shared.currentUser?.id ?? ""
         let ownerName = UserManager.shared.currentUser?.nickname ?? "全家"
         let viewController = MapFootprintViewController(
             viewMode: .guest,
             ownerId: currentUserId,
-            ownerName: ownerName,
-            includeDemoExpansionOverride: true
+            ownerName: ownerName
         )
         viewController.title = "家族足迹地图"
         navigationController?.navigationBar.isHidden = false
@@ -436,7 +435,7 @@ final class FamilyCircleViewController: UIViewController {
 
         let alert = UIAlertController(
             title: "撤回 \(member.name) 的访问权限？",
-            message: "撤回后，本机演示中的当前访问者身份不会再匹配该成员，后续分享/关怀入口也会避开该成员视角。",
+            message: "撤回后，当前访问者身份不会再匹配该成员，后续分享/关怀入口也会避开该成员视角。",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))

@@ -31,19 +31,48 @@ actor AmapDistrictBoundaryProvider {
             }
 
             do {
+                let regions = try await requestRegionWithRetry(
+                    keyword: keyword,
+                    scope: scope,
+                    generation: generation,
+                    apiKey: apiKey
+                )
+                if !regions.isEmpty {
+                    cache[cacheKey] = regions
+                }
+                resolved.append(contentsOf: regions)
+            } catch {
+                continue
+            }
+        }
+        return resolved
+    }
+
+    private func requestRegionWithRetry(
+        keyword: String,
+        scope: FootprintIlluminationScope,
+        generation: FamilyFootprintGeneration,
+        apiKey: String
+    ) async throws -> [FootprintIlluminationRegion] {
+        var lastError: Error?
+        for attempt in 0..<3 {
+            do {
                 let regions = try await requestRegion(
                     keyword: keyword,
                     scope: scope,
                     generation: generation,
                     apiKey: apiKey
                 )
-                cache[cacheKey] = regions
-                resolved.append(contentsOf: regions)
+                if !regions.isEmpty || attempt == 2 {
+                    return regions
+                }
             } catch {
-                cache[cacheKey] = []
+                lastError = error
             }
+            try await Task.sleep(nanoseconds: UInt64(450_000_000 * (attempt + 1)))
         }
-        return resolved
+        if let lastError { throw lastError }
+        return []
     }
 
     private func requestRegion(
@@ -64,7 +93,7 @@ actor AmapDistrictBoundaryProvider {
         guard let url = components.url else { return [] }
 
         let payload = try await requestDistrictPayload(url: url, retryCount: 2)
-        guard payload.status == "1" else { return [] }
+        guard payload.status == "1" else { throw AmapDistrictBoundaryError.serviceUnavailable(payload.info) }
 
         return payload.districts.compactMap { district in
             Self.region(from: district, fallbackName: keyword, scope: scope, generation: generation)
@@ -104,7 +133,8 @@ actor AmapDistrictBoundaryProvider {
     ) -> FootprintIlluminationRegion? {
         let polygons = parsePolyline(district.polyline)
         guard !polygons.isEmpty else { return nil }
-        let style = style(for: scope, generation: generation)
+        let regionName = district.name ?? fallbackName
+        let style = style(for: scope, generation: generation, regionName: regionName)
         let overlays = polygons.map {
             FootprintIlluminationOverlaySpec(coordinates: $0, style: style)
         }
@@ -112,7 +142,7 @@ actor AmapDistrictBoundaryProvider {
         guard let center else { return nil }
 
         return FootprintIlluminationRegion(
-            name: displayName(district.name ?? fallbackName),
+            name: displayName(regionName),
             center: center,
             overlaySpecs: overlays,
             approximateAreaKm2: approximateAreaKm2(polygons.flatMap { $0 }),
@@ -209,10 +239,28 @@ actor AmapDistrictBoundaryProvider {
 
     private static func style(
         for scope: FootprintIlluminationScope,
-        generation: FamilyFootprintGeneration
+        generation: FamilyFootprintGeneration,
+        regionName: String
     ) -> FootprintIlluminationStyle {
-        if generation == .next {
+        switch generation {
+        case .ancestors:
+            return .ancestorFill
+        case .parents:
+            return .parentFill
+        case .current:
+            return .currentFill
+        case .next:
             return .futureFill
+        case .all:
+            if regionName.contains("绍兴") {
+                return .ancestorFill
+            }
+            if regionName.contains("浙江") {
+                return .parentFill
+            }
+            if regionName.contains("江苏") || regionName.contains("上海") || regionName.contains("广东") {
+                return .currentFill
+            }
         }
         switch scope {
         case .city: return .cityFill
@@ -231,6 +279,10 @@ actor AmapDistrictBoundaryProvider {
     private static func isMainlandDistrictKeyword(_ keyword: String) -> Bool {
         !keyword.contains("温哥华") && !keyword.contains("新加坡") && !keyword.contains("香港")
     }
+}
+
+private enum AmapDistrictBoundaryError: Error {
+    case serviceUnavailable(String?)
 }
 
 private struct AmapDistrictResponse: Decodable {

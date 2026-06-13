@@ -13,8 +13,6 @@ final class AppCoordinator: Coordinator {
     }
 
     func start() {
-        RoadshowDemoSeed.applyIfRequested()
-
         if UserManager.shared.isLoggedIn {
             showMainTab()
         } else {

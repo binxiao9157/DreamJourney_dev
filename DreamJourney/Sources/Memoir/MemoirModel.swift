@@ -69,7 +69,7 @@ struct MemoirModel: Codable, Identifiable {
          longitude: Double = 121.4737,
          keyPeople: [String] = [],
          isPrivate: Bool = false,
-         authorId: String = "user_001",
+         authorId: String = "",
          sessionId: String? = nil,
          speakerId: String? = nil,
          audioFileName: String? = nil) {

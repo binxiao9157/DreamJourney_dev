@@ -26,11 +26,6 @@ final class MemoirRepository {
 
         // 从文件加载
         loadAllFromDisk()
-
-        // 首次使用时写入 mock 数据
-        if memoirs.isEmpty {
-            seedMockData()
-        }
     }
 
     // MARK: - Public API
@@ -171,6 +166,11 @@ final class MemoirRepository {
                   let memoir = try? JSONDecoder().decode(MemoirModel.self, from: data) else {
                 continue
             }
+            if Self.isLegacySeedMemoir(memoir) {
+                try? FileManager.default.removeItem(at: fileURL)
+                DDLogInfo("[MemoirRepository] removed legacy seed memoir: \(memoir.title)")
+                continue
+            }
             memoirs.append(memoir)
         }
     }
@@ -187,44 +187,21 @@ final class MemoirRepository {
         try? FileManager.default.removeItem(at: fileURL(for: id))
     }
 
-    // MARK: - Mock 数据
-
-    private func seedMockData() {
-        let mockMemoirs: [MemoirModel] = [
-            MemoirModel(
-                title: "上海外滩的记忆",
-                prose: "1975年的夏天，外滩的江风还带着些许咸涩的味道。那时候的外滩，不似今日这般灯火辉煌，却有着一种朴素而真挚的美。外公牵着外婆的手，在黄浦江畔留下了一张黑白照片。照片里，外公穿着那件洗得发白的蓝色工装，外婆则扎着两条麻花辫，笑得眼睛弯成了月牙。\n\n那天是外公外婆的结婚纪念日，一家人特意从老城厢走到了外滩。妈妈说，那是她童年里最开心的一天，因为外公难得休息，一家三口在江边走了很久很久。外婆回忆说，那天外公报了一个数字，说等将来上海会变得很不一样，他一定要带她看看未来的外滩。\n\n如今，外滩早已换了模样，而这张照片，成了全家人最珍贵的记忆。",
-                timeDescription: "1975年7月",
-                year: 1975, month: 7,
-                location: "上海外滩",
-                latitude: 31.2397, longitude: 121.4901,
-                keyPeople: ["外公", "外婆", "妈妈"]
-            ),
-            MemoirModel(
-                title: "北京故宫之行",
-                prose: "1988年的秋天，爸爸第一次去北京出差。出发前，他在家里翻来覆去收拾行李，妈妈在旁边笑他，说又不是去见总统。可爸爸心里激动着呢——那可是北京，是他只在课本里见过的城市。\n\n到了北京，办完公务，爸爸特意请了半天假去故宫。他一个人走在红墙黄瓦之间，像个孩子一样东张西望。他在太和殿前站了很久，想着几百年前的皇帝就在这里上朝。他给妈妈买了一盒故宫的明信片，背面写道：「故宫真大，可惜你不能来看。等我挣够了钱，一定带你来。」\n\n那盒明信片，妈妈一直收在柜子里，一留就是三十多年。",
-                timeDescription: "1988年10月",
-                year: 1988, month: 10,
-                location: "北京故宫",
-                latitude: 39.9163, longitude: 116.3972,
-                keyPeople: ["爸爸", "妈妈"]
-            ),
-            MemoirModel(
-                title: "成都火锅的味道",
-                prose: "2003年的五一假期，全家人第一次去了成都。那时候的宽窄巷子还没有现在这么热闹，但街边的小馆子已经飘满了火锅的香味。\n\n奶奶是地道的广东人，一辈子习惯了清淡的口味。可那天，在全家人的怂恿下，她第一次夹起了一块毛肚放进红油锅里。涮了七上八下之后，奶奶咬了一口——先是辣，然后是麻，最后是说不出的香。她的眼睛一下子就亮了，连说了三声「好吃！」，然后又要了一盘鹅肠。\n\n妈妈后来总爱讲这个故事，说那是奶奶这辈子吃得最豪放的一次。从那以后，每次全家聚会吃火锅，大家都会笑着提起成都那次，奶奶总是红着脸说：「那不一样嘛，那是在成都。」",
-                timeDescription: "2003年5月",
-                year: 2003, month: 5,
-                location: "成都宽窄巷子",
-                latitude: 30.6654, longitude: 104.0498,
-                keyPeople: ["奶奶", "妈妈", "全家"]
-            ),
+    private static func isLegacySeedMemoir(_ memoir: MemoirModel) -> Bool {
+        let legacyPairs: Set<String> = [
+            "上海外滩的记忆|上海外滩",
+            "北京故宫之行|北京故宫",
+            "成都火锅的味道|成都宽窄巷子"
         ]
-
-        for memoir in mockMemoirs {
-            memoirs.append(memoir)
-            saveToDisk(memoir)
+        if legacyPairs.contains("\(memoir.title)|\(memoir.location)") {
+            return true
         }
+        return memoir.id.hasPrefix("roadshow_") ||
+            memoir.prose.contains("这张照片，成了全家人最珍贵的记忆") ||
+            memoir.prose.contains("那盒明信片，妈妈一直收在柜子里") ||
+            memoir.prose.contains("奶奶这辈子吃得最豪放的一次")
     }
+
 }
 
 // MARK: - Notification

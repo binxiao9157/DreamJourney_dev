@@ -260,10 +260,10 @@ extension KnowledgeBaseViewController: UITableViewDataSource {
                 let f = facts[indexPath.row]
                 let confidenceMarker: String = {
                     switch f.confidence {
-                    case "confirmed": return "✅ "
-                    case "high": return "🟢 "
-                    case "medium": return "🟡 "
-                    case "low": return "🔴 "
+                    case "confirmed": return "已确认 · "
+                    case "high": return "高可信 · "
+                    case "medium": return "中可信 · "
+                    case "low": return "低可信 · "
                     default: return ""
                     }
                 }()
@@ -363,7 +363,7 @@ final class KBStatsCell: UITableViewCell {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func configure(peopleCount: Int, placesCount: Int, eventsCount: Int, factsCount: Int, sessionCount: Int) {
-        statsLabel.text = "🧠 \(peopleCount)人 · 📍 \(placesCount)地 · 📅 \(eventsCount)事 · 📝 \(factsCount)实 · 共 \(sessionCount) 次会话"
+        statsLabel.text = "\(peopleCount) 人 · \(placesCount) 地 · \(eventsCount) 事 · \(factsCount) 实\n共 \(sessionCount) 次会话"
     }
 }
 

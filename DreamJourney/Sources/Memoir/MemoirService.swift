@@ -5,8 +5,7 @@ import CocoaLumberjack
 
 /// 核心业务层：构建 prompt → 调用 DeepSeek API → 解析 JSON → 保存回忆录
 /// 使用方式：
-///   1. 调用 MemoirService.shared.generateMemoir(dialogMessages:completion:) 传入对话上下文
-///   2. 或调用 MemoirService.shared.generateMemoirFromMock() 使用伪造数据测试
+///   调用 MemoirService.shared.generateMemoir(dialogMessages:completion:) 传入对话上下文
 final class MemoirService {
 
     static let shared = MemoirService()
@@ -141,26 +140,6 @@ final class MemoirService {
         }
     }
 
-    // MARK: - Mock Demo
-
-    /// 使用伪造的对话上下文测试 memoir 生成流程
-    /// 用于开发阶段验证，无需真实对话数据
-    func generateMemoirFromMock(completion: @escaping (Result<MemoirModel, Error>) -> Void) {
-        let mockPrivacyMetadata = MemoryPrivacyMetadata(scope: .generationAllowed)
-        let mockMessages: [DialogMessage] = [
-            DialogMessage(role: "user", text: "我今天想讲讲小时候的事。", privacyMetadata: mockPrivacyMetadata),
-            DialogMessage(role: "ai", text: "好的，您想聊聊哪段回忆呢？", privacyMetadata: mockPrivacyMetadata),
-            DialogMessage(role: "user", text: "1968年那会儿，我和你爷爷刚结婚，住在杭州西湖边上的老房子里。那时候日子虽然苦，但每天傍晚我们都会去湖边散步。", privacyMetadata: mockPrivacyMetadata),
-            DialogMessage(role: "ai", text: "西湖的黄昏一定很美。能再讲讲当时的情景吗？", privacyMetadata: mockPrivacyMetadata),
-            DialogMessage(role: "user", text: "到了秋天，湖面上的荷叶都黄了，风一吹沙沙响。你爷爷总会摘一朵给我，说'等日子好了，天天给你买花'。那时候哪有花店，路边的野花就是最好的了。", privacyMetadata: mockPrivacyMetadata),
-            DialogMessage(role: "ai", text: "这些细节太珍贵了。您爷爷后来怎么样了？", privacyMetadata: mockPrivacyMetadata),
-            DialogMessage(role: "user", text: "后来啊，他在厂里干了一辈子，退了休还是每天陪我去湖边走走。走不动了就坐长椅上看夕阳。算起来，西湖陪了我们五十多年。", privacyMetadata: mockPrivacyMetadata),
-            DialogMessage(role: "ai", text: "五十多年的相伴，西湖见证了你们的爱情。非常感人。", privacyMetadata: mockPrivacyMetadata),
-        ]
-
-        generateMemoir(dialogMessages: mockMessages, completion: completion)
-    }
-
     // MARK: - Private: Build Chat Messages
 
     /// 将对话消息转换为 DeepSeek API 所需的格式
@@ -256,7 +235,8 @@ final class MemoirService {
             location: location,
             latitude: latitude,
             longitude: longitude,
-            keyPeople: keyPeople
+            keyPeople: keyPeople,
+            authorId: UserManager.shared.currentUser?.id ?? ""
         )
     }
 
@@ -383,7 +363,8 @@ final class MemoirService {
             location: "上海",
             latitude: 31.2304,
             longitude: 121.4737,
-            keyPeople: []
+            keyPeople: [],
+            authorId: UserManager.shared.currentUser?.id ?? ""
         )
     }
 

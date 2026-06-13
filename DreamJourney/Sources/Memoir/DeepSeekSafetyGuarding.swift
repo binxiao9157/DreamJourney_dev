@@ -7,8 +7,7 @@ enum DeepSeekSafetyGuarding {
         bundle: Bundle = .main,
         httpClient: (any SafetyGuardHTTPClient)? = nil
     ) -> SafetyGuardClient {
-        if isMockAllowEnabled(arguments: arguments, environment: environment) ||
-            isRoadshowOfflineModeEnabled(arguments: arguments, environment: environment) {
+        if isMockAllowEnabled(arguments: arguments, environment: environment) {
             return SafetyGuardClient(transport: DeepSeekSafetyGuardMockAllowTransport())
         }
         if let baseURL = configuredSafetyGuardBaseURL(environment: environment, bundle: bundle) {
@@ -55,16 +54,6 @@ enum DeepSeekSafetyGuarding {
     ) -> Bool {
         arguments.contains("--use-mock-safety-guard") ||
             environment["DREAMJOURNEY_SAFETY_GUARD"]?.lowercased() == "mock_allow"
-    }
-
-    private static func isRoadshowOfflineModeEnabled(
-        arguments: [String],
-        environment: [String: String]
-    ) -> Bool {
-        let offlineValue = environment["DREAMJOURNEY_ROADSHOW_OFFLINE"]?.lowercased()
-        return arguments.contains("--roadshow-offline-mode") ||
-            offlineValue == "1" ||
-            offlineValue == "true"
     }
 
     private static func configuredSafetyGuardBaseURL(

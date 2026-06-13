@@ -44,6 +44,24 @@ struct FootprintIlluminationStyle {
         lineWidth: 1.2
     )
 
+    static let ancestorFill = FootprintIlluminationStyle(
+        fillColor: UIColor(hex: "#0B8F9C").withAlphaComponent(0.48),
+        strokeColor: UIColor(hex: "#75F4FF").withAlphaComponent(0.58),
+        lineWidth: 1.25
+    )
+
+    static let parentFill = FootprintIlluminationStyle(
+        fillColor: UIColor(hex: "#19B8C8").withAlphaComponent(0.52),
+        strokeColor: UIColor(hex: "#79F7FF").withAlphaComponent(0.64),
+        lineWidth: 1.35
+    )
+
+    static let currentFill = FootprintIlluminationStyle(
+        fillColor: UIColor(hex: "#33DFE8").withAlphaComponent(0.60),
+        strokeColor: UIColor(hex: "#A7FCFF").withAlphaComponent(0.76),
+        lineWidth: 1.45
+    )
+
     static let nationFill = FootprintIlluminationStyle(
         fillColor: UIColor(hex: "#22C7D4").withAlphaComponent(0.50),
         strokeColor: UIColor(hex: "#73F8FF").withAlphaComponent(0.64),
@@ -262,7 +280,7 @@ enum FootprintIlluminationCatalog {
                     latRadius: 0.35,
                     lonRadius: 0.42,
                     area: 8274,
-                    style: .nationFill
+                    style: .ancestorFill
                 )
             ]
         case .parents:
@@ -273,11 +291,11 @@ enum FootprintIlluminationCatalog {
                     latRadius: 1.75,
                     lonRadius: 2.20,
                     area: 105500,
-                    style: .nationFill
+                    style: .parentFill
                 )
             ]
         case .current:
-            return jiangzhehuguangRegions(style: .nationFill)
+            return jiangzhehuguangRegions(style: .currentFill)
         case .next:
             return [
                 region(
@@ -298,7 +316,7 @@ enum FootprintIlluminationCatalog {
                     latRadius: 0.35,
                     lonRadius: 0.42,
                     area: 8274,
-                    style: .cityFill
+                    style: .ancestorFill
                 ),
                 region(
                     name: "浙江",
@@ -306,9 +324,9 @@ enum FootprintIlluminationCatalog {
                     latRadius: 1.75,
                     lonRadius: 2.20,
                     area: 105500,
-                    style: .nationFill
+                    style: .parentFill
                 )
-            ] + jiangzhehuguangRegions(style: .nationFill) + [
+            ] + jiangzhehuguangRegions(style: .currentFill).filter { $0.name != "浙江" } + [
                 region(
                     name: "下一代暂定",
                     center: .init(latitude: 34.700, longitude: 112.000),

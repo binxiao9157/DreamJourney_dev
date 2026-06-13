@@ -88,7 +88,7 @@ final class DigitalHumanDiagnosticsViewController: UIViewController {
         subtitleLabel.numberOfLines = 0
 
         let noteLabel = UILabel()
-        noteLabel.text = "用于真机排障和路演前检查；不会显示 API Key、Token 或 Secret。"
+        noteLabel.text = "用于真机排障和真实联调检查；不会显示 API Key、Token 或 Secret。"
         noteLabel.font = .systemFont(ofSize: 13, weight: .regular)
         noteLabel.textColor = UIColor(red: 0.49, green: 0.42, blue: 0.35, alpha: 1)
         noteLabel.numberOfLines = 0
@@ -182,7 +182,7 @@ final class DigitalHumanDiagnosticsViewController: UIViewController {
 
     private func makeBoundaryCard() -> UIView {
         let label = UILabel()
-        label.text = "路演口径：真实语音未就绪时可切本机演示引擎；数字人口型不可用时会退回系统语音；任何状态下都不冒充亲人、不做医疗诊断。"
+        label.text = "真实验证口径：真实语音未就绪时直接暴露配置问题；数字人口型不可用时会退回系统语音；任何状态下都不冒充亲人、不做医疗诊断。"
         label.font = .systemFont(ofSize: 13, weight: .medium)
         label.textColor = UIColor(red: 0.39, green: 0.32, blue: 0.26, alpha: 1)
         label.numberOfLines = 0

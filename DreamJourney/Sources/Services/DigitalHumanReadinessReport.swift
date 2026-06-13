@@ -124,11 +124,11 @@ struct DigitalHumanReadinessReport: Equatable {
             .count
         let subtitle: String
         if dialogItem.status == .warning {
-            subtitle = "本机演示引擎 · \(readyCount)/4 项就绪"
+            subtitle = "本机测试引擎 · \(readyCount)/4 项就绪"
         } else if ttsItem.status == .ready && realtimeItem.status == .ready {
             subtitle = "真实语音链路 · \(readyCount)/4 项就绪"
         } else {
-            subtitle = "兜底可用 · \(readyCount)/4 项就绪"
+            subtitle = "降级可用 · \(readyCount)/4 项就绪"
         }
 
         return DigitalHumanReadinessReport(
@@ -206,19 +206,15 @@ struct DigitalHumanReadinessReport: Equatable {
         environment: [String: String]
     ) -> Item {
         let engineValue = environment["DREAMJOURNEY_DIALOG_ENGINE"]?.lowercased()
-        let offlineValue = environment["DREAMJOURNEY_ROADSHOW_OFFLINE"]?.lowercased()
         let usesMock = arguments.contains("--use-mock-dialog-engine") ||
-            engineValue == "mock" ||
-            arguments.contains("--roadshow-offline-mode") ||
-            offlineValue == "1" ||
-            offlineValue == "true"
+            engineValue == "mock"
 
         if usesMock {
             return Item(
                 title: "当前对话引擎",
                 status: .warning,
-                detail: "本机 mock/离线路演模式，适合稳定演示",
-                recommendation: "这是预期演示态；若要测真实语音，移除 mock/offline 启动参数。"
+                detail: "当前使用本机测试对话引擎",
+                recommendation: "真实验证请移除 mock 启动参数，并确认实时语音凭证已配置。"
             )
         }
         if realtimeItem.status == .ready {
@@ -232,8 +228,8 @@ struct DigitalHumanReadinessReport: Equatable {
         return Item(
             title: "当前对话引擎",
             status: .missing,
-            detail: "真实引擎缺凭证，建议切换 mock 或补齐实时语音配置",
-            recommendation: "路演先加 --roadshow-offline-mode；真实联调前补齐实时语音凭证。"
+            detail: "真实引擎缺凭证，无法进行端到端语音联调",
+            recommendation: "补齐实时语音凭证后再进行真机 smoke。"
         )
     }
 

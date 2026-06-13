@@ -144,7 +144,7 @@ final class AIRecordingViewController: UIViewController {
         return button
     }()
 
-    private let roadshowBannerView = RoadshowModeBannerView()
+    private let validationSpacerView = UIView()
     private let digitalHumanAvatarView = DigitalHumanAvatarView()
     private lazy var digitalHumanFallbackCard: UIView = {
         let view = UIView()
@@ -190,8 +190,8 @@ final class AIRecordingViewController: UIViewController {
         button.addTarget(self, action: #selector(continueVoiceFallbackTapped), for: .touchUpInside)
         return button
     }()
-    private var roadshowBannerTopConstraint: NSLayoutConstraint!
-    private var roadshowBannerHeightConstraint: NSLayoutConstraint!
+    private var validationSpacerTopConstraint: NSLayoutConstraint!
+    private var validationSpacerHeightConstraint: NSLayoutConstraint!
     private var messageTableTopConstraint: NSLayoutConstraint!
     private var digitalHumanFallbackHeightConstraint: NSLayoutConstraint!
 
@@ -241,8 +241,6 @@ final class AIRecordingViewController: UIViewController {
         hideKeyboardWhenTapped()
         setupLayout()
         configureDigitalHumanCallbacks()
-        configureRoadshowBannerActions()
-        updateRoadshowBanner()
         setupNotifications()
         updateVoiceBallState(.idle)
         // 预初始化 Dialog 引擎
@@ -255,7 +253,6 @@ final class AIRecordingViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        updateRoadshowBanner()
     }
 
     private func configureDigitalHumanCallbacks() {
@@ -272,15 +269,6 @@ final class AIRecordingViewController: UIViewController {
                 reason: "webview_audio_failed detail=\(DigitalHumanPlaybackEvidenceStore.sanitize(message))",
                 logReason: "webview_audio_failed: \(message)"
             )
-        }
-    }
-
-    private func configureRoadshowBannerActions() {
-        roadshowBannerView.onRouteTapped = { [weak self] in
-            self?.openRoadshowRoute()
-        }
-        roadshowBannerView.onContinueTapped = { [weak self] in
-            self?.continueRoadshowStep()
         }
     }
 
@@ -312,7 +300,8 @@ final class AIRecordingViewController: UIViewController {
         view.addSubview(titleLabel)
         view.addSubview(privacyScopeButton)
         view.addSubview(digitalHumanDiagnosticsButton)
-        view.addSubview(roadshowBannerView)
+        validationSpacerView.isHidden = true
+        view.addSubview(validationSpacerView)
         view.addSubview(digitalHumanAvatarView)
         view.addSubview(digitalHumanFallbackCard)
         view.addSubview(messageTableView)
@@ -325,7 +314,7 @@ final class AIRecordingViewController: UIViewController {
 
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        [titleLabel, privacyScopeButton, digitalHumanDiagnosticsButton, roadshowBannerView, digitalHumanAvatarView, digitalHumanFallbackCard, messageTableView, bottomDivider, bottomContainer,
+        [titleLabel, privacyScopeButton, digitalHumanDiagnosticsButton, validationSpacerView, digitalHumanAvatarView, digitalHumanFallbackCard, messageTableView, bottomDivider, bottomContainer,
          albumButton, voiceBallButton, cameraButton].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
@@ -336,8 +325,8 @@ final class AIRecordingViewController: UIViewController {
 
         // 底部操作区底部约束（动态调整避开 TabBar）
         bottomContainerBottomConstraint = bottomContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -56)
-        roadshowBannerTopConstraint = roadshowBannerView.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 0)
-        roadshowBannerHeightConstraint = roadshowBannerView.heightAnchor.constraint(equalToConstant: 0)
+        validationSpacerTopConstraint = validationSpacerView.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 0)
+        validationSpacerHeightConstraint = validationSpacerView.heightAnchor.constraint(equalToConstant: 0)
         messageTableTopConstraint = messageTableView.topAnchor.constraint(equalTo: digitalHumanFallbackCard.bottomAnchor, constant: 8)
         digitalHumanFallbackHeightConstraint = digitalHumanFallbackCard.heightAnchor.constraint(equalToConstant: 0)
 
@@ -353,12 +342,12 @@ final class AIRecordingViewController: UIViewController {
             digitalHumanDiagnosticsButton.heightAnchor.constraint(equalToConstant: 34),
             digitalHumanDiagnosticsButton.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 10),
 
-            roadshowBannerTopConstraint,
-            roadshowBannerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            roadshowBannerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            roadshowBannerHeightConstraint,
+            validationSpacerTopConstraint,
+            validationSpacerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            validationSpacerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            validationSpacerHeightConstraint,
 
-            digitalHumanAvatarView.topAnchor.constraint(equalTo: roadshowBannerView.bottomAnchor, constant: 12),
+            digitalHumanAvatarView.topAnchor.constraint(equalTo: validationSpacerView.bottomAnchor, constant: 12),
             digitalHumanAvatarView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             digitalHumanAvatarView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
             digitalHumanAvatarView.heightAnchor.constraint(equalToConstant: 218),
@@ -433,39 +422,6 @@ final class AIRecordingViewController: UIViewController {
             contentStack.trailingAnchor.constraint(equalTo: digitalHumanFallbackCard.trailingAnchor, constant: -12),
             bottom
         ])
-    }
-
-    private func updateRoadshowBanner() {
-        let status = RoadshowDemoSeed.runtimeStatus()
-        roadshowBannerView.configure(status: status, summary: RoadshowDemoRoute.completionSummary())
-        // Keep roadshow seed/route support available, but do not surface the
-        // rehearsal guide on the home screen during product validation.
-        roadshowBannerView.isHidden = true
-        roadshowBannerTopConstraint.constant = 0
-        roadshowBannerHeightConstraint.constant = 0
-        messageTableTopConstraint.constant = 8
-    }
-
-    private func openRoadshowRoute() {
-        guard RoadshowDemoSeed.runtimeStatus().isActive else { return }
-        let viewController = RoadshowDemoRouteViewController()
-        navigationController?.pushViewController(viewController, animated: true)
-    }
-
-    private func continueRoadshowStep() {
-        guard RoadshowDemoSeed.runtimeStatus().isActive else { return }
-        guard let step = RoadshowDemoRoute.nextIncompleteStep() else {
-            openRoadshowRoute()
-            return
-        }
-        if step.id == "family_share" {
-            let viewController = KBSyncViewController(autoPresentExportPicker: true)
-            viewController.title = "分享包收口"
-            navigationController?.pushViewController(viewController, animated: true)
-            return
-        }
-        tabBarController?.selectedIndex = step.targetTabIndex
-        showToast("继续：\(step.title)", type: .info)
     }
 
     // MARK: - Voice Ball State Machine
@@ -1373,7 +1329,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
     private func showVoiceServiceRecovery() {
         let presentation = DigitalHumanSpeechPlaybackPolicy.FallbackPresentation(
             title: "语音服务暂时不可用",
-            message: "本次对话已安全收尾，可以稍后重试；已保留本机演示边界，不影响查看其他功能。",
+            message: "本次对话已安全收尾，可以稍后重试；当前不会写入共享记忆，也不影响查看其他功能。",
             recoveryActionTitle: "重试数字人",
             continueActionTitle: "继续语音"
         )

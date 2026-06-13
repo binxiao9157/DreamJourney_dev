@@ -28,7 +28,7 @@ final class TabCoordinator: Coordinator {
 
         // Tab2: 寻梦环游足迹（主态）
         let mapNav = UINavigationController()
-        let currentUserId = UserManager.shared.currentUser?.id ?? "user_001"
+        let currentUserId = UserManager.shared.currentUser?.id ?? ""
         let mapVC = MapFootprintViewController(viewMode: .host, ownerId: currentUserId)
         mapVC.title = "寻梦环游足迹"
         mapNav.viewControllers = [mapVC]

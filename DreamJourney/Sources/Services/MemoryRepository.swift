@@ -5,28 +5,32 @@ final class MemoryRepository {
 
     static let shared = MemoryRepository()
     private init() {
-        seedMockData()
         loadPersistedMemories()
     }
 
     private var memories: [MemoryModel] = []
 
     // MARK: - 持久化
-    /// UserDefaults Key（仅持久化非 mock 的用户新增回忆，mock 每次启动重新 seed）
+    /// UserDefaults Key（持久化用户新增回忆）
     private static let persistKey = "dj.persistedMemories"
-    /// mock 数据 ID 前缀，用于区分是否需要持久化
-    private static let mockIdPrefix = "mem_"
 
     private func loadPersistedMemories() {
         guard let data = UserDefaults.standard.data(forKey: Self.persistKey) else {
-            print("[MemoirSync] MemoryRepository.loadPersisted: no data, mockOnly=\(memories.count)")
+            print("[MemoirSync] MemoryRepository.loadPersisted: no data")
             return
         }
         do {
             let arr = try JSONDecoder().decode([MemoryModel].self, from: data)
-            // 去重：避免与 mock 或已存在的同 ID 重复
+            let cleaned = arr.filter { !Self.isLegacySeedMemory($0) }
+            if cleaned.count != arr.count {
+                if let cleanedData = try? JSONEncoder().encode(cleaned) {
+                    UserDefaults.standard.set(cleanedData, forKey: Self.persistKey)
+                }
+                print("[MemoirSync] MemoryRepository.loadPersisted: removedLegacySeed=\(arr.count - cleaned.count)")
+            }
+            // 去重：避免与已存在的同 ID 重复
             let existing = Set(memories.map { $0.id })
-            let newOnes = arr.filter { !existing.contains($0.id) }
+            let newOnes = cleaned.filter { !existing.contains($0.id) }
             memories.insert(contentsOf: newOnes, at: 0)
             print("[MemoirSync] MemoryRepository.loadPersisted: loaded=\(newOnes.count), totalNow=\(memories.count)")
         } catch {
@@ -34,13 +38,12 @@ final class MemoryRepository {
         }
     }
 
-    /// 写盘（仅持久化非 mock 的回忆）
+    /// 写盘
     private func savePersistedMemories() {
-        let nonMock = memories.filter { !$0.id.hasPrefix(Self.mockIdPrefix) }
         do {
-            let data = try JSONEncoder().encode(nonMock)
+            let data = try JSONEncoder().encode(memories)
             UserDefaults.standard.set(data, forKey: Self.persistKey)
-            print("[MemoirSync] MemoryRepository.savePersisted: count=\(nonMock.count)")
+            print("[MemoirSync] MemoryRepository.savePersisted: count=\(memories.count)")
         } catch {
             print("[MemoirSync] MemoryRepository.savePersisted: encode error=\(error)")
         }
@@ -116,71 +119,15 @@ final class MemoryRepository {
         }
     }
 
-    // MARK: - Mock 数据
-    private func seedMockData() {
-        memories = [
-            MemoryModel(
-                id: "mem_001",
-                title: "上海 · 1975年7月",
-                subtitle: "外公结婚纪念日，全家在外滩合影",
-                location: "上海外滩",
-                year: 1975, month: 7,
-                latitude: 31.2397, longitude: 121.4901,
-                imageNames: [],
-                authorId: "user_001"
-            ),
-            MemoryModel(
-                id: "mem_002",
-                title: "北京 · 1988年10月",
-                subtitle: "爸爸第一次去北京出差，带回了故宫明信片",
-                location: "北京故宫",
-                year: 1988, month: 10,
-                latitude: 39.9163, longitude: 116.3972,
-                imageNames: [],
-                authorId: "user_001"
-            ),
-            MemoryModel(
-                id: "mem_003",
-                title: "成都 · 2003年5月",
-                subtitle: "全家旅行，第一次吃正宗火锅，妈妈辣哭了",
-                location: "成都宽窄巷子",
-                year: 2003, month: 5,
-                latitude: 30.6654, longitude: 104.0498,
-                imageNames: [],
-                authorId: "user_001"
-            ),
-            MemoryModel(
-                id: "mem_004",
-                title: "杭州 · 2015年9月",
-                subtitle: "爷爷最后一次看西湖，说这里是他心里最美的地方",
-                location: "杭州西湖",
-                year: 2015, month: 9,
-                latitude: 30.2590, longitude: 120.1532,
-                imageNames: [],
-                isPrivate: false,
-                authorId: "user_001"
-            ),
-            MemoryModel(
-                id: "mem_005",
-                title: "广州 · 2022年2月",
-                subtitle: "过年回老家，奶奶亲手做的年糕，香极了",
-                location: "广州花都",
-                year: 2022, month: 2,
-                latitude: 23.4034, longitude: 113.2197,
-                imageNames: [],
-                authorId: "user_001"
-            ),
-            MemoryModel(
-                id: "mem_006",
-                title: "南京 · 1990年3月",
-                subtitle: "第一次独自出远门，在夫子庙迷了路",
-                location: "南京夫子庙",
-                year: 1990, month: 3,
-                latitude: 32.0408, longitude: 118.7969,
-                imageNames: [],
-                isPrivate: true,
-                authorId: "user_001"
-            )
-        ]
+    private static func isLegacySeedMemory(_ memory: MemoryModel) -> Bool {
+        memory.id.hasPrefix("mem_") ||
+            memory.id.hasPrefix("roadshow_") ||
+            memory.title.contains("上海 · 1975年7月") ||
+            memory.title.contains("北京 · 1988年10月") ||
+            memory.title.contains("成都 · 2003年5月") ||
+            memory.title.contains("杭州 · 2015年9月") ||
+            memory.title.contains("广州 · 2022年2月") ||
+            memory.title.contains("南京 · 1990年3月")
     }
+
 }

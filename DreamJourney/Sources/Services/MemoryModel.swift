@@ -33,7 +33,7 @@ struct MemoryModel: Codable, Identifiable {
          imageNames: [String] = [],
          audioName: String? = nil,
          isPrivate: Bool = false,
-         authorId: String = "user_001") {
+         authorId: String = "") {
         self.id = id
         self.title = title
         self.subtitle = subtitle

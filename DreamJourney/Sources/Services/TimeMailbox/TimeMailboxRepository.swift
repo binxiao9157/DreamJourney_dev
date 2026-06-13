@@ -113,7 +113,12 @@ final class TimeMailboxRepository {
 
     private func load() -> [TimeMailboxLetter] {
         guard let data = defaults.data(forKey: storageKey) else { return [] }
-        return (try? decoder.decode([TimeMailboxLetter].self, from: data)) ?? []
+        guard let decoded = try? decoder.decode([TimeMailboxLetter].self, from: data) else { return [] }
+        let cleaned = decoded.filter { !Self.isLegacySeedLetter($0) }
+        if cleaned.count != decoded.count {
+            save(cleaned)
+        }
+        return cleaned
     }
 
     private func save(_ letters: [TimeMailboxLetter]) {
@@ -137,5 +142,11 @@ final class TimeMailboxRepository {
 
         愿这封信先替你收好今天的思念。你可以慢慢地把想说的话写下来，也可以在准备好的时候，把这份记忆带回现实生活里，交给还在身边的人一起珍藏。
         """
+    }
+
+    private static func isLegacySeedLetter(_ letter: TimeMailboxLetter) -> Bool {
+        (letter.recipientName == "爷爷" && letter.title == "写给爷爷的一封信" &&
+            letter.body.contains("1975 年外滩那张合影")) ||
+            letter.id.hasPrefix("roadshow_")
     }
 }

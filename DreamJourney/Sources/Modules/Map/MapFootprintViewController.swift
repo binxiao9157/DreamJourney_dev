@@ -22,7 +22,7 @@ final class MapFootprintViewController: UIViewController {
     private var memories: [MemoryModel] = []
     private var footprintPoints: [FamilyFootprintPoint] = []
     private var selectedGeneration: FamilyFootprintGeneration = .all
-    private var selectedIlluminationScope: FootprintIlluminationScope = .nation
+    private var selectedIlluminationScope: FootprintIlluminationScope = .city
     private var illuminatedRegionOverlays: [MAPolygon] = []
     private var illuminatedRegionStyles: [ObjectIdentifier: FootprintIlluminationStyle] = [:]
     private var illuminationRequestSerial = 0
@@ -156,40 +156,29 @@ final class MapFootprintViewController: UIViewController {
         return l
     }()
 
-    private lazy var generationControl: UISegmentedControl = {
-        let items = FamilyFootprintTimeline.displayGenerations.map(\.title)
-        let c = UISegmentedControl(items: items)
-        c.selectedSegmentIndex = 0
-        c.backgroundColor = UIColor.white.withAlphaComponent(0.9)
-        c.selectedSegmentTintColor = .warmPrimary
-        c.setTitleTextAttributes([
-            .font: UIFont.systemFont(ofSize: 13, weight: .semibold),
-            .foregroundColor: TGColors.textPrimary
-        ], for: .normal)
-        c.setTitleTextAttributes([
-            .font: UIFont.systemFont(ofSize: 13, weight: .bold),
-            .foregroundColor: UIColor.white
-        ], for: .selected)
-        c.addTarget(self, action: #selector(generationChanged), for: .valueChanged)
-        return c
-    }()
+    private var generationButtons: [UIButton] = []
 
-    private lazy var illuminationScopeControl: UISegmentedControl = {
-        let items = FootprintIlluminationScope.allCases.map(\.title)
-        let c = UISegmentedControl(items: items)
-        c.selectedSegmentIndex = FootprintIlluminationScope.allCases.firstIndex(of: selectedIlluminationScope) ?? 1
-        c.backgroundColor = UIColor.black.withAlphaComponent(0.34)
-        c.selectedSegmentTintColor = UIColor(hex: "#2ED6E3").withAlphaComponent(0.9)
-        c.setTitleTextAttributes([
-            .font: UIFont.systemFont(ofSize: 13, weight: .semibold),
-            .foregroundColor: UIColor.white.withAlphaComponent(0.82)
-        ], for: .normal)
-        c.setTitleTextAttributes([
-            .font: UIFont.systemFont(ofSize: 13, weight: .bold),
-            .foregroundColor: UIColor.black.withAlphaComponent(0.86)
-        ], for: .selected)
-        c.addTarget(self, action: #selector(illuminationScopeChanged), for: .valueChanged)
-        return c
+    private lazy var generationButtonStack: UIStackView = {
+        let stack = UIStackView()
+        stack.axis = .horizontal
+        stack.spacing = 6
+        stack.distribution = .fillEqually
+        stack.alignment = .fill
+
+        let buttons = FamilyFootprintTimeline.displayGenerations.enumerated().map { index, generation in
+            let button = UIButton(type: .system)
+            button.tag = index
+            button.layer.cornerRadius = 18
+            button.titleLabel?.font = .systemFont(ofSize: 13, weight: .bold)
+            button.setTitle(generation.title, for: .normal)
+            button.addTarget(self, action: #selector(generationButtonTapped(_:)), for: .touchUpInside)
+            button.accessibilityLabel = "查看\(generation.title)足迹"
+            button.clipsToBounds = true
+            stack.addArrangedSubview(button)
+            return button
+        }
+        generationButtons = buttons
+        return stack
     }()
 
     private lazy var journeyCard: UIView = {
@@ -392,8 +381,7 @@ final class MapFootprintViewController: UIViewController {
         view.addSubview(posterButton)
         view.addSubview(mapPlaceholderLabel)
         view.addSubview(titleLabel)
-        view.addSubview(illuminationScopeControl)
-        view.addSubview(generationControl)
+        view.addSubview(generationButtonStack)
         view.addSubview(journeyCard)
         view.addSubview(posterFallbackCard)
         statsBar.addSubview(statsLabel)
@@ -406,7 +394,7 @@ final class MapFootprintViewController: UIViewController {
 
         [fallbackIlluminationView,
          statsBar, locateButton, posterButton, statsLabel, mapPlaceholderLabel, titleLabel,
-         illuminationScopeControl, generationControl, journeyCard,
+         generationButtonStack, journeyCard,
          journeyTitleLabel, journeyBodyLabel, playbackButton,
          posterFallbackCard, posterFallbackTitleLabel, posterFallbackBodyLabel, posterFallbackButton].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
@@ -425,17 +413,12 @@ final class MapFootprintViewController: UIViewController {
             titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
             titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
 
-            illuminationScopeControl.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 12),
-            illuminationScopeControl.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            illuminationScopeControl.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            illuminationScopeControl.heightAnchor.constraint(equalToConstant: 34),
+            generationButtonStack.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 12),
+            generationButtonStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            generationButtonStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            generationButtonStack.heightAnchor.constraint(equalToConstant: 36),
 
-            generationControl.topAnchor.constraint(equalTo: illuminationScopeControl.bottomAnchor, constant: 10),
-            generationControl.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            generationControl.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            generationControl.heightAnchor.constraint(equalToConstant: 36),
-
-            journeyCard.topAnchor.constraint(equalTo: generationControl.bottomAnchor, constant: 10),
+            journeyCard.topAnchor.constraint(equalTo: generationButtonStack.bottomAnchor, constant: 10),
             journeyCard.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             journeyCard.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
             journeyCard.heightAnchor.constraint(equalToConstant: 82),
@@ -499,6 +482,7 @@ final class MapFootprintViewController: UIViewController {
             mapPlaceholderLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 32),
             mapPlaceholderLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -32),
         ])
+        updateGenerationButtonStyles()
 
         // 地图未成功创建时显示提示，并隐藏定位按钮
         if mapView == nil {
@@ -512,11 +496,7 @@ final class MapFootprintViewController: UIViewController {
 
     // MARK: - Load Memories
     private func loadMemories() {
-        var allMemories = MemoryRepository.shared.getAllByOwner(ownerId)
-        // 兜底：主态登录用户 ID 与 mock 数据 user_001 不一致时，回退使用 user_001 的演示足迹
-        if viewMode == .host && allMemories.isEmpty {
-            allMemories = MemoryRepository.shared.getAllByOwner("user_001")
-        }
+        let allMemories = MemoryRepository.shared.getAllByOwner(ownerId)
         switch viewMode {
         case .host:
             memories = allMemories   // 主态：展示全部（含私密）
@@ -586,7 +566,7 @@ final class MapFootprintViewController: UIViewController {
             return includeDemoExpansionOverride
         }
         guard viewMode == .host else { return false }
-        return RoadshowDemoSeed.runtimeStatus().isActive || memories.contains { $0.id.hasPrefix("mem_") }
+        return false
     }
 
     // MARK: - Notifications
@@ -628,22 +608,13 @@ final class MapFootprintViewController: UIViewController {
         }
     }
 
-    @objc private func generationChanged() {
+    @objc private func generationButtonTapped(_ sender: UIButton) {
         playbackTimer?.invalidate()
         playbackTimer = nil
         playbackButton.setImage(UIImage(systemName: "play.fill"), for: .normal)
         let generations = FamilyFootprintTimeline.displayGenerations
-        let index = max(0, min(generationControl.selectedSegmentIndex, generations.count - 1))
+        let index = max(0, min(sender.tag, generations.count - 1))
         applyGeneration(generations[index])
-    }
-
-    @objc private func illuminationScopeChanged() {
-        let scopes = FootprintIlluminationScope.allCases
-        let index = max(0, min(illuminationScopeControl.selectedSegmentIndex, scopes.count - 1))
-        selectedIlluminationScope = scopes[index]
-        updateStats()
-        updateIlluminationLayer()
-        addAnnotations()
     }
 
     @objc private func playbackTapped() {
@@ -737,13 +708,51 @@ final class MapFootprintViewController: UIViewController {
 
     private func applyGeneration(_ generation: FamilyFootprintGeneration) {
         selectedGeneration = generation
-        if let index = FamilyFootprintTimeline.displayGenerations.firstIndex(of: generation) {
-            generationControl.selectedSegmentIndex = index
-        }
+        updateGenerationButtonStyles()
         updateStats()
         updateJourneyCard()
         updateIlluminationLayer()
         addAnnotations()
+    }
+
+    private func updateGenerationButtonStyles() {
+        let generations = FamilyFootprintTimeline.displayGenerations
+        for (index, button) in generationButtons.enumerated() {
+            guard index < generations.count else { continue }
+            let generation = generations[index]
+            let selected = generation == selectedGeneration
+            let color = generationButtonColor(for: generation)
+
+            button.backgroundColor = selected ? color : color.withAlphaComponent(0.16)
+            button.setTitleColor(selected ? generationButtonSelectedTextColor(for: generation) : TGColors.textPrimary, for: .normal)
+            button.layer.borderWidth = selected ? 0 : 1
+            button.layer.borderColor = color.withAlphaComponent(0.46).cgColor
+            button.alpha = selected ? 1.0 : 0.92
+        }
+    }
+
+    private func generationButtonColor(for generation: FamilyFootprintGeneration) -> UIColor {
+        switch generation {
+        case .all:
+            return UIColor(hex: "#22C7D4")
+        case .ancestors:
+            return UIColor(hex: "#0B8F9C")
+        case .parents:
+            return UIColor(hex: "#19B8C8")
+        case .current:
+            return UIColor(hex: "#33DFE8")
+        case .next:
+            return UIColor(hex: "#AEB4BE")
+        }
+    }
+
+    private func generationButtonSelectedTextColor(for generation: FamilyFootprintGeneration) -> UIColor {
+        switch generation {
+        case .current, .next:
+            return UIColor.black.withAlphaComponent(0.82)
+        case .all, .ancestors, .parents:
+            return .white
+        }
     }
 
     private func updateIlluminationLayer() {
@@ -924,13 +933,23 @@ final class MapFootprintViewController: UIViewController {
 
         var completed = remoteRegions
         var existingNames = Set(remoteRegions.map { canonicalRegionName($0.name) })
-        for region in localRegions {
+        for region in localRegions where shouldAppendLocalRegion(region, generation: generation) {
             let name = canonicalRegionName(region.name)
             guard !existingNames.contains(name) else { continue }
             completed.append(region)
             existingNames.insert(name)
         }
         return completed
+    }
+
+    private func shouldAppendLocalRegion(
+        _ region: FootprintIlluminationRegion,
+        generation: FamilyFootprintGeneration
+    ) -> Bool {
+        switch generation {
+        case .all, .ancestors, .parents, .current, .next:
+            return true
+        }
     }
 
     private func canonicalRegionName(_ name: String) -> String {

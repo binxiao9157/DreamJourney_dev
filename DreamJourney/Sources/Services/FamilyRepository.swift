@@ -5,7 +5,6 @@ final class FamilyRepository {
 
     static let shared = FamilyRepository()
     private init() {
-        seedMockData()
         loadLocalAccessState()
         NotificationCenter.default.addObserver(self, selector: #selector(onKBUpdated), name: .kbLiteDidUpdate, object: nil)
         // 延迟首次同步（等知识库加载完成）
@@ -219,15 +218,6 @@ final class FamilyRepository {
         }
 
         print("[FamilyRepo] 🔄 已从知识库同步 \(graph.people.count) 人 → 亲属圈 (总数: \(members.count))")
-    }
-
-    // MARK: - Mock 数据
-    private func seedMockData() {
-        members = [
-            FamilyMember(id: "fm_001", name: "陈树安", relation: "祖父", phone: "18800000001", isOnline: false, lastUpdated: "2小时前"),
-            FamilyMember(id: "fm_002", name: "陈国梁", relation: "父亲", phone: "18800000002", isOnline: false, lastUpdated: "昨天"),
-            FamilyMember(id: "fm_003", name: "陈雅琴", relation: "母亲", phone: "18800000003", isOnline: true, lastUpdated: "刚刚")
-        ]
     }
 
     private func normalizedPhone(_ phone: String?) -> String? {
