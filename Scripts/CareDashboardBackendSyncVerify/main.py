@@ -45,6 +45,9 @@ required_vc_fragments = [
     "DreamJourneyBackendClient.shared.syncCareSnapshot",
     "DreamJourneyBackendClient.shared.fetchLatestCareSnapshot",
     "DreamJourneyBackendClient.shared.fetchCareSnapshotHistory",
+    "remoteSnapshotHistory",
+    "makeSnapshotHistoryCard",
+    "同步周报记录",
 ]
 
 required_backend_fragments = [

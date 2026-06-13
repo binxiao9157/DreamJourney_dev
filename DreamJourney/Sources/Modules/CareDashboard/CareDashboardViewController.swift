@@ -9,6 +9,7 @@ final class CareDashboardViewController: UIViewController {
     private var snapshotSourceText = "本机近况"
     private var localEligibleUserTurnCount = 0
     private var remoteSnapshotStatusText = "服务器同步：未检查"
+    private var remoteSnapshotHistory: [DreamJourneyBackendClient.CareSnapshotItem] = []
 
     private let scrollView = UIScrollView()
     private let stackView: UIStackView = {
@@ -123,6 +124,7 @@ final class CareDashboardViewController: UIViewController {
         remoteSnapshotStatusText = DreamJourneyBackendClient.shared.isConfigured
             ? "服务器同步：正在检查历史快照"
             : "服务器同步：未配置，当前仅本机分析"
+        remoteSnapshotHistory = []
         let localSnapshot = analyzer.analyze(turns: turns)
         snapshot = localSnapshot
         snapshotSourceText = "本机近况"
@@ -200,6 +202,7 @@ final class CareDashboardViewController: UIViewController {
             DispatchQueue.main.async {
                 switch result {
                 case .success(let response):
+                    self?.remoteSnapshotHistory = response.items
                     self?.setRemoteSnapshotStatus("服务器同步：已读取历史 \(response.items.count) 条")
                     if let latest = response.items.first?.snapshot {
                         self?.applyRemoteSnapshotIfUseful(
@@ -210,6 +213,7 @@ final class CareDashboardViewController: UIViewController {
                         self?.fetchLatestSnapshotFromBackend()
                     }
                 case .failure(let error):
+                    self?.remoteSnapshotHistory = []
                     self?.setRemoteSnapshotStatus("服务器同步：历史拉取失败，尝试最近快照")
                     print("[CareDashboard] 后端历史快照拉取失败: \(error.localizedDescription)")
                     self?.fetchLatestSnapshotFromBackend()
@@ -244,6 +248,9 @@ final class CareDashboardViewController: UIViewController {
 
         stackView.addArrangedSubview(makeHeader(snapshot))
         stackView.addArrangedSubview(makePrivacyNotice())
+        if !remoteSnapshotHistory.isEmpty {
+            stackView.addArrangedSubview(makeSnapshotHistoryCard(remoteSnapshotHistory))
+        }
 
         guard canShareCareReport(snapshot) else {
             stackView.addArrangedSubview(makeInsufficientDataState())
@@ -562,6 +569,45 @@ final class CareDashboardViewController: UIViewController {
             snapshot.riskSignalDescriptions.forEach { description in
                 stack.addArrangedSubview(makeBulletLabel(description))
             }
+        }
+
+        container.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 16),
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16),
+        ])
+        return container
+    }
+
+    private func makeSnapshotHistoryCard(_ items: [DreamJourneyBackendClient.CareSnapshotItem]) -> UIView {
+        let container = makeSurface()
+
+        let title = UILabel()
+        title.text = "同步周报记录"
+        title.font = .systemFont(ofSize: 18, weight: .bold)
+        title.textColor = .warmPrimary
+
+        let subtitle = UILabel()
+        subtitle.text = "服务器已保留最近 \(items.count) 次脱敏快照；仅展示风险等级、覆盖与生成时间，不展示原始聊天内容。"
+        subtitle.font = .systemFont(ofSize: 13)
+        subtitle.textColor = .warmSubtitle
+        subtitle.numberOfLines = 0
+
+        let stack = UIStackView(arrangedSubviews: [title, subtitle])
+        stack.axis = .vertical
+        stack.spacing = 10
+
+        items.prefix(3).forEach { item in
+            let snapshot = item.snapshot
+            let generatedText = CareDashboardViewController.timeFormatter.string(from: snapshot.generatedAt)
+            let coverage = snapshot.dataCoverageSummary.trimmingCharacters(in: .whitespacesAndNewlines)
+            stack.addArrangedSubview(makeBulletLabel("\(generatedText) · \(snapshot.riskLevel.displayTitle) · \(coverage.isEmpty ? "暂无覆盖说明" : coverage)"))
+        }
+        if items.count > 3 {
+            stack.addArrangedSubview(makeBulletLabel("还有 \(items.count - 3) 次历史快照，可在服务器继续追踪。"))
         }
 
         container.addSubview(stack)
