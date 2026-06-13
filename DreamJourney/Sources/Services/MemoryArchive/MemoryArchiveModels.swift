@@ -2,6 +2,7 @@ import Foundation
 
 enum MemoryArchiveItemKind: String, Codable {
     case photo
+    case screenshot
     case voiceSample
     case textNote
     case personalityNote
@@ -143,6 +144,7 @@ struct MemoryArchiveItem: Codable, Identifiable, Equatable, MemoryPrivacyScoped 
 struct MemoryArchiveSummary: Equatable {
     let totalCount: Int
     let photoCount: Int
+    let screenshotCount: Int
     let voiceSampleCount: Int
     let textCount: Int
     let analyzedPhotoCount: Int

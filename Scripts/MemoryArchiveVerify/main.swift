@@ -41,6 +41,22 @@ do {
     assertCondition(photo.privacyMetadata.scope == .generationAllowed, "photo should persist explicit generation scope")
     assertCondition(repo.summary().photoCount == 1, "summary should count photos")
 
+    let screenshot = try repo.addScreenshot(
+        localPath: "/tmp/wechat_voice_screenshot.jpg",
+        title: "",
+        note: "",
+        tags: ["聊天记录"],
+        isPrivate: false,
+        privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed),
+        now: now
+    )
+    assertCondition(screenshot.kind == .screenshot, "screenshot material should persist its own kind")
+    assertCondition(screenshot.title == "聊天截图", "blank screenshot title should use screenshot default")
+    assertCondition(screenshot.note == "从相册加入的聊天记录或语音截图素材", "blank screenshot note should explain material type")
+    assertCondition(screenshot.analysisStatus == .pending, "generation screenshot should start pending analysis")
+    assertCondition(screenshot.privacyMetadata.scope == .generationAllowed, "screenshot should persist explicit generation scope")
+    assertCondition(repo.summary().screenshotCount == 1, "summary should count screenshot materials separately")
+
     let voiceSample = try repo.addVoiceSample(
         localPath: "/tmp/grandma_voice.m4a",
         title: "外婆语音",
@@ -117,7 +133,7 @@ do {
     assertCondition(failed.analysisStatus == .failed, "photo can be marked failed")
 
     try repo.delete(id: note.id)
-    assertCondition(repo.items().count == 5, "deleted item should be removed")
+    assertCondition(repo.items().count == 6, "deleted item should be removed")
 
     do {
         _ = try repo.addText(

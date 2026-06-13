@@ -2,6 +2,31 @@ import UIKit
 import UniformTypeIdentifiers
 
 final class MemoryArchiveViewController: UIViewController {
+    private enum PendingImageMaterialKind {
+        case photo
+        case screenshot
+
+        var storageDirectoryName: String {
+            switch self {
+            case .photo: return "archive_photos"
+            case .screenshot: return "archive_screenshots"
+            }
+        }
+
+        var filePrefix: String {
+            switch self {
+            case .photo: return "archive_photo"
+            case .screenshot: return "archive_screenshot"
+            }
+        }
+
+        var saveFailureMessage: String {
+            switch self {
+            case .photo: return "照片保存失败"
+            case .screenshot: return "截图保存失败"
+            }
+        }
+    }
 
     private let repository: MemoryArchiveRepository
     private var items: [MemoryArchiveItem] = []
@@ -9,6 +34,7 @@ final class MemoryArchiveViewController: UIViewController {
     private var backendArchiveLastCheckedAt: Date?
     private var backendSyncStatusOverride: String?
     private var knowledgeDepositStatusOverride: String?
+    private var pendingImageMaterialKind: PendingImageMaterialKind = .photo
 
     private let titleLabel: UILabel = {
         let label = UILabel()
@@ -52,6 +78,7 @@ final class MemoryArchiveViewController: UIViewController {
     }()
 
     private lazy var photoButton = makeActionButton(title: "上传旧照片", iconName: "photo.on.rectangle")
+    private lazy var screenshotButton = makeActionButton(title: "导入截图/聊天记录", iconName: "text.viewfinder")
     private lazy var voiceButton = makeActionButton(title: "导入语音素材", iconName: "waveform")
     private lazy var textButton = makeActionButton(title: "添加文字/人格提示", iconName: "square.and.pencil")
     private lazy var knowledgeButton = makeActionButton(title: "结构化知识库", iconName: "brain.head.profile")
@@ -103,13 +130,14 @@ final class MemoryArchiveViewController: UIViewController {
 
     private func setupActions() {
         photoButton.addTarget(self, action: #selector(photoTapped), for: .touchUpInside)
+        screenshotButton.addTarget(self, action: #selector(screenshotTapped), for: .touchUpInside)
         voiceButton.addTarget(self, action: #selector(voiceTapped), for: .touchUpInside)
         textButton.addTarget(self, action: #selector(textTapped), for: .touchUpInside)
         knowledgeButton.addTarget(self, action: #selector(knowledgeTapped), for: .touchUpInside)
     }
 
     private func setupLayout() {
-        let actionStack = UIStackView(arrangedSubviews: [photoButton, voiceButton, textButton, knowledgeButton])
+        let actionStack = UIStackView(arrangedSubviews: [photoButton, screenshotButton, voiceButton, textButton, knowledgeButton])
         actionStack.axis = .vertical
         actionStack.spacing = 10
 
@@ -156,7 +184,7 @@ final class MemoryArchiveViewController: UIViewController {
     private func reloadData() {
         items = repository.items()
         let summary = repository.summary()
-        summaryLabel.text = "共 \(summary.totalCount) 份素材 · 照片 \(summary.photoCount) · 语音 \(summary.voiceSampleCount) · 文字 \(summary.textCount) · 已分析 \(summary.analyzedPhotoCount)"
+        summaryLabel.text = "共 \(summary.totalCount) 份素材 · 照片 \(summary.photoCount) · 截图 \(summary.screenshotCount) · 语音 \(summary.voiceSampleCount) · 文字 \(summary.textCount) · 已分析 \(summary.analyzedPhotoCount)"
         updateKnowledgeDepositStatusLabel()
         updateBackendSyncStatusLabel()
         emptyLabel.isHidden = !items.isEmpty
@@ -164,6 +192,16 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     @objc private func photoTapped() {
+        pendingImageMaterialKind = .photo
+        presentImagePicker()
+    }
+
+    @objc private func screenshotTapped() {
+        pendingImageMaterialKind = .screenshot
+        presentImagePicker()
+    }
+
+    private func presentImagePicker() {
         guard UIImagePickerController.isSourceTypeAvailable(.photoLibrary) else {
             showToast("当前设备无法访问相册", type: .error)
             return
@@ -275,12 +313,12 @@ final class MemoryArchiveViewController: UIViewController {
         return "结构化建库：已本地整理 \(total) 条"
     }
 
-    private func saveArchivePhoto(_ image: UIImage) -> String? {
+    private func saveArchiveImage(_ image: UIImage, kind: PendingImageMaterialKind) -> String? {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-        guard let archiveDir = docs?.appendingPathComponent("archive_photos") else { return nil }
+        guard let archiveDir = docs?.appendingPathComponent(kind.storageDirectoryName) else { return nil }
         try? FileManager.default.createDirectory(at: archiveDir, withIntermediateDirectories: true)
 
-        let fileName = "archive_photo_\(Int(Date().timeIntervalSince1970))_\(UUID().uuidString.prefix(8)).jpg"
+        let fileName = "\(kind.filePrefix)_\(Int(Date().timeIntervalSince1970))_\(UUID().uuidString.prefix(8)).jpg"
         let fileURL = archiveDir.appendingPathComponent(fileName)
         guard let data = image.jpegData(compressionQuality: 0.82) else { return nil }
         do {
@@ -442,47 +480,61 @@ final class MemoryArchiveViewController: UIViewController {
 
 extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+        let imageMaterialKind = pendingImageMaterialKind
         guard let image = info[.originalImage] as? UIImage,
-              let imagePath = saveArchivePhoto(image) else {
+              let imagePath = saveArchiveImage(image, kind: imageMaterialKind) else {
             picker.dismiss(animated: true)
-            showToast("照片保存失败", type: .error)
+            showToast(imageMaterialKind.saveFailureMessage, type: .error)
             return
         }
 
         picker.dismiss(animated: true) { [weak self] in
-            self?.presentPhotoPrivacyChoice(image: image, imagePath: imagePath)
+            self?.presentImagePrivacyChoice(image: image, imagePath: imagePath, kind: imageMaterialKind)
         }
     }
 
-    private func presentPhotoPrivacyChoice(image: UIImage, imagePath: String) {
+    private func presentImagePrivacyChoice(image: UIImage, imagePath: String, kind: PendingImageMaterialKind) {
+        let title: String
+        let message: String
+        switch kind {
+        case .photo:
+            title = "照片保存方式"
+            message = "私密只留在档案馆；可生成会调用图片分析；亲友可进入家庭同步。"
+        case .screenshot:
+            title = "截图保存方式"
+            message = "适合微信聊天、语音记录或老照片说明截图；可生成会尝试做图片理解并沉淀线索。"
+        }
         let alert = UIAlertController(
-            title: "照片保存方式",
-            message: "私密只留在档案馆；可生成会调用图片分析；亲友可进入家庭同步。",
+            title: title,
+            message: message,
             preferredStyle: .actionSheet
         )
         alert.addAction(UIAlertAction(title: "私密", style: .default) { [weak self] _ in
-            self?.savePickedPhoto(
+            self?.savePickedImageMaterial(
                 image,
                 imagePath: imagePath,
+                kind: kind,
                 privacyMetadata: MemoryPrivacyMetadata(scope: .privateOnly)
             )
         })
         alert.addAction(UIAlertAction(title: "本机", style: .default) { [weak self] _ in
-            self?.savePickedPhoto(
+            self?.savePickedImageMaterial(
                 image,
                 imagePath: imagePath,
+                kind: kind,
                 privacyMetadata: MemoryPrivacyMetadata(scope: .localOnly)
             )
         })
         alert.addAction(UIAlertAction(title: "可生成", style: .default) { [weak self] _ in
-            self?.savePickedPhoto(
+            self?.savePickedImageMaterial(
                 image,
                 imagePath: imagePath,
+                kind: kind,
                 privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed)
             )
         })
         alert.addAction(UIAlertAction(title: "亲友", style: .default) { [weak self] _ in
-            self?.presentPhotoFamilyVisibilityChoice(image: image, imagePath: imagePath)
+            self?.presentImageFamilyVisibilityChoice(image: image, imagePath: imagePath, kind: kind)
         })
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
         alert.popoverPresentationController?.sourceView = view
@@ -495,12 +547,13 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
         present(alert, animated: true)
     }
 
-    private func presentPhotoFamilyVisibilityChoice(image: UIImage, imagePath: String) {
+    private func presentImageFamilyVisibilityChoice(image: UIImage, imagePath: String, kind: PendingImageMaterialKind) {
         let picker = FamilyVisibilityPickerViewController()
         picker.onSelect = { [weak self] selection in
-            self?.savePickedPhoto(
+            self?.savePickedImageMaterial(
                 image,
                 imagePath: imagePath,
+                kind: kind,
                 privacyMetadata: MemoryPrivacyMetadata(
                     scope: MemoryPrivacyMigration.scopeForExplicitFamilyAuthorization(),
                     familyVisibility: selection.visibility
@@ -516,41 +569,55 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
         present(navigationController, animated: true)
     }
 
-    private func savePickedPhoto(
+    private func savePickedImageMaterial(
         _ image: UIImage,
         imagePath: String,
+        kind: PendingImageMaterialKind,
         privacyMetadata: MemoryPrivacyMetadata
     ) {
         do {
-            let item = try repository.addPhoto(
-                localPath: imagePath,
-                title: "旧照片",
-                note: "从相册加入的记忆照片",
-                tags: ["旧照片"],
-                isPrivate: privacyMetadata.scope == .privateOnly,
-                privacyMetadata: privacyMetadata
-            )
+            let item: MemoryArchiveItem
+            switch kind {
+            case .photo:
+                item = try repository.addPhoto(
+                    localPath: imagePath,
+                    title: "旧照片",
+                    note: "从相册加入的记忆照片",
+                    tags: ["旧照片"],
+                    isPrivate: privacyMetadata.scope == .privateOnly,
+                    privacyMetadata: privacyMetadata
+                )
+            case .screenshot:
+                item = try repository.addScreenshot(
+                    localPath: imagePath,
+                    title: "聊天截图",
+                    note: "从相册加入的聊天记录或语音截图素材",
+                    tags: ["截图素材", "聊天记录"],
+                    isPrivate: privacyMetadata.scope == .privateOnly,
+                    privacyMetadata: privacyMetadata
+                )
+            }
             reloadData()
             syncArchiveItemMetadataToBackend(item)
             if item.analysisStatus == .pending {
-                setKnowledgeDepositStatus("结构化建库：照片已保存，等待分析后建库")
-                showToast("照片已加入档案馆，开始分析", type: .success)
+                setKnowledgeDepositStatus("结构化建库：\(item.kind.displayName)已保存，等待分析后建库")
+                showToast("\(item.kind.displayName)已加入档案馆，开始分析", type: .success)
                 analyzePhoto(image, itemId: item.id)
             } else {
                 switch item.privacyMetadata.scope {
                 case .privateOnly:
                     setKnowledgeDepositStatus("结构化建库：私密素材仅存档案馆，不进入知识库")
                 case .familyCircle:
-                    setKnowledgeDepositStatus("结构化建库：亲友照片仅同步元数据，暂不做远端图片建库")
+                    setKnowledgeDepositStatus("结构化建库：亲友\(item.kind.displayName)仅同步元数据，暂不做远端图片建库")
                 case .localOnly:
-                    setKnowledgeDepositStatus("结构化建库：本机照片已存档，未进入生成知识库")
+                    setKnowledgeDepositStatus("结构化建库：本机\(item.kind.displayName)已存档，未进入生成知识库")
                 case .generationAllowed:
-                    setKnowledgeDepositStatus("结构化建库：照片已存档，等待后续分析")
+                    setKnowledgeDepositStatus("结构化建库：\(item.kind.displayName)已存档，等待后续分析")
                 }
-                showToast("照片已保存", type: .success)
+                showToast("\(item.kind.displayName)已保存", type: .success)
             }
         } catch {
-            showToast("照片加入失败", type: .error)
+            showToast("素材加入失败", type: .error)
         }
     }
 
@@ -1147,7 +1214,9 @@ private final class MemoryArchiveCell: UITableViewCell {
         statusLabel.text = item.statusText
         statusLabel.textColor = item.statusColor
 
-        if item.kind == .photo, let path = item.localPath, let image = UIImage(contentsOfFile: path) {
+        if (item.kind == .photo || item.kind == .screenshot),
+           let path = item.localPath,
+           let image = UIImage(contentsOfFile: path) {
             thumbnailView.image = image
             thumbnailView.tintColor = nil
             thumbnailView.backgroundColor = .clear
@@ -1214,6 +1283,7 @@ private extension MemoryArchiveItemKind {
     var displayName: String {
         switch self {
         case .photo: return "旧照片"
+        case .screenshot: return "聊天截图"
         case .voiceSample: return "语音样本"
         case .textNote: return "文字回忆"
         case .personalityNote: return "人格提示"
@@ -1224,6 +1294,7 @@ private extension MemoryArchiveItemKind {
     var iconName: String {
         switch self {
         case .photo: return "photo"
+        case .screenshot: return "text.viewfinder"
         case .voiceSample: return "waveform"
         case .textNote: return "text.alignleft"
         case .personalityNote: return "person.text.rectangle"

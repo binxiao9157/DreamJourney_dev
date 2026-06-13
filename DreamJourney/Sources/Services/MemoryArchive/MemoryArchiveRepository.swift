@@ -37,15 +37,17 @@ final class MemoryArchiveRepository {
     func summary() -> MemoryArchiveSummary {
         let all = load()
         let photoCount = all.filter { $0.kind == .photo }.count
+        let screenshotCount = all.filter { $0.kind == .screenshot }.count
         let voiceSampleCount = all.filter { $0.kind == .voiceSample }.count
         let analyzedPhotoCount = all.filter {
-            $0.kind == .photo && $0.analysisStatus == .analyzed
+            ($0.kind == .photo || $0.kind == .screenshot) && $0.analysisStatus == .analyzed
         }.count
         return MemoryArchiveSummary(
             totalCount: all.count,
             photoCount: photoCount,
+            screenshotCount: screenshotCount,
             voiceSampleCount: voiceSampleCount,
-            textCount: all.count - photoCount - voiceSampleCount,
+            textCount: all.count - photoCount - screenshotCount - voiceSampleCount,
             analyzedPhotoCount: analyzedPhotoCount
         )
     }
@@ -62,7 +64,7 @@ final class MemoryArchiveRepository {
     ) throws -> MemoryArchiveItem {
         let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard kind != .photo, kind != .voiceSample, !cleanNote.isEmpty else {
+        guard kind != .photo, kind != .screenshot, kind != .voiceSample, !cleanNote.isEmpty else {
             throw MemoryArchiveRepositoryError.invalidText
         }
         let resolvedPrivacyMetadata = privacyMetadata
@@ -155,10 +157,61 @@ final class MemoryArchiveRepository {
         privacyMetadata: MemoryPrivacyMetadata? = nil,
         now: Date = Date()
     ) throws -> MemoryArchiveItem {
+        try addImageMaterial(
+            kind: .photo,
+            localPath: localPath,
+            title: title,
+            note: note,
+            tags: tags,
+            defaultTitle: "旧照片",
+            defaultNote: "",
+            isPrivate: isPrivate,
+            privacyMetadata: privacyMetadata,
+            now: now
+        )
+    }
+
+    @discardableResult
+    func addScreenshot(
+        localPath: String,
+        title: String,
+        note: String = "",
+        tags: [String] = [],
+        isPrivate: Bool = true,
+        privacyMetadata: MemoryPrivacyMetadata? = nil,
+        now: Date = Date()
+    ) throws -> MemoryArchiveItem {
+        try addImageMaterial(
+            kind: .screenshot,
+            localPath: localPath,
+            title: title,
+            note: note,
+            tags: tags,
+            defaultTitle: "聊天截图",
+            defaultNote: "从相册加入的聊天记录或语音截图素材",
+            isPrivate: isPrivate,
+            privacyMetadata: privacyMetadata,
+            now: now
+        )
+    }
+
+    private func addImageMaterial(
+        kind: MemoryArchiveItemKind,
+        localPath: String,
+        title: String,
+        note: String,
+        tags: [String],
+        defaultTitle: String,
+        defaultNote: String,
+        isPrivate: Bool,
+        privacyMetadata: MemoryPrivacyMetadata?,
+        now: Date
+    ) throws -> MemoryArchiveItem {
         let cleanPath = localPath.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanPath.isEmpty else { throw MemoryArchiveRepositoryError.invalidPhotoPath }
 
         let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedPrivacyMetadata = privacyMetadata
             ?? MemoryPrivacyMetadata(scope: MemoryPrivacyMigration.scopeFromLegacy(isPrivate: isPrivate))
         let resolvedIsPrivate = resolvedPrivacyMetadata.scope == .privateOnly
@@ -168,9 +221,9 @@ final class MemoryArchiveRepository {
         )
         let item = MemoryArchiveItem(
             id: UUID().uuidString,
-            kind: .photo,
-            title: cleanTitle.isEmpty ? "旧照片" : cleanTitle,
-            note: note.trimmingCharacters(in: .whitespacesAndNewlines),
+            kind: kind,
+            title: cleanTitle.isEmpty ? defaultTitle : cleanTitle,
+            note: cleanNote.isEmpty ? defaultNote : cleanNote,
             localPath: cleanPath,
             createdAt: now,
             updatedAt: now,
@@ -279,6 +332,7 @@ final class MemoryArchiveRepository {
     private static func defaultTitle(for kind: MemoryArchiveItemKind) -> String {
         switch kind {
         case .photo: return "旧照片"
+        case .screenshot: return "聊天截图"
         case .voiceSample: return "语音样本"
         case .textNote: return "文字回忆"
         case .personalityNote: return "性格描述"
