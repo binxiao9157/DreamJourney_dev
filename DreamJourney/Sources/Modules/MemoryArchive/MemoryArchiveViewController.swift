@@ -545,41 +545,70 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
             return
         }
 
-        presentVoicePrivacyChoice(
+        presentVoicePersonChoice(
             title: sourceURL.deletingPathExtension().lastPathComponent,
             storedPath: storedPath
         )
     }
 
-    private func presentVoicePrivacyChoice(title: String, storedPath: String) {
+    private func presentVoicePersonChoice(title: String, storedPath: String) {
+        let alert = UIAlertController(
+            title: "这是谁的声音",
+            message: "填写具体姓名后，3 段以上语音会形成这个人的声纹档案。请不要只写“妈妈/奶奶”这类泛称。",
+            preferredStyle: .alert
+        )
+        alert.addTextField { field in
+            field.placeholder = "例如：林桂芳"
+            field.text = MemoryArchiveVoiceProfileStore.shared.profile(for: title)?.personName
+            field.clearButtonMode = .whileEditing
+        }
+        alert.addAction(UIAlertAction(title: "跳过", style: .default) { [weak self] _ in
+            self?.presentVoicePrivacyChoice(title: title, storedPath: storedPath, targetPersonName: nil)
+        })
+        alert.addAction(UIAlertAction(title: "下一步", style: .default) { [weak self, weak alert] _ in
+            let personName = alert?.textFields?.first?.text?.nilIfEmpty
+            self?.presentVoicePrivacyChoice(title: title, storedPath: storedPath, targetPersonName: personName)
+        })
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        present(alert, animated: true)
+    }
+
+    private func presentVoicePrivacyChoice(
+        title: String,
+        storedPath: String,
+        targetPersonName: String?
+    ) {
         let alert = UIAlertController(
             title: "语音素材保存方式",
-            message: "私密/本机只保留素材；可生成和亲友仅沉淀语音样本元信息，音频不会被当作文字对话共享。",
+            message: "私密/本机只保留素材；可生成会用于声纹训练和语气参考；亲友仅同步元信息，音频不会被当作文字对话共享。",
             preferredStyle: .actionSheet
         )
         alert.addAction(UIAlertAction(title: "私密", style: .default) { [weak self] _ in
             self?.savePickedVoiceSample(
                 title: title,
                 storedPath: storedPath,
-                privacyMetadata: MemoryPrivacyMetadata(scope: .privateOnly)
+                privacyMetadata: MemoryPrivacyMetadata(scope: .privateOnly),
+                targetPersonName: targetPersonName
             )
         })
         alert.addAction(UIAlertAction(title: "本机", style: .default) { [weak self] _ in
             self?.savePickedVoiceSample(
                 title: title,
                 storedPath: storedPath,
-                privacyMetadata: MemoryPrivacyMetadata(scope: .localOnly)
+                privacyMetadata: MemoryPrivacyMetadata(scope: .localOnly),
+                targetPersonName: targetPersonName
             )
         })
         alert.addAction(UIAlertAction(title: "可生成", style: .default) { [weak self] _ in
             self?.savePickedVoiceSample(
                 title: title,
                 storedPath: storedPath,
-                privacyMetadata: MemoryPrivacyMetadata(scope: MemoryPrivacyMigration.scopeForExplicitGenerationAuthorization())
+                privacyMetadata: MemoryPrivacyMetadata(scope: MemoryPrivacyMigration.scopeForExplicitGenerationAuthorization()),
+                targetPersonName: targetPersonName
             )
         })
         alert.addAction(UIAlertAction(title: "亲友", style: .default) { [weak self] _ in
-            self?.presentVoiceFamilyVisibilityChoice(title: title, storedPath: storedPath)
+            self?.presentVoiceFamilyVisibilityChoice(title: title, storedPath: storedPath, targetPersonName: targetPersonName)
         })
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
         alert.popoverPresentationController?.sourceView = view
@@ -592,7 +621,11 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
         present(alert, animated: true)
     }
 
-    private func presentVoiceFamilyVisibilityChoice(title: String, storedPath: String) {
+    private func presentVoiceFamilyVisibilityChoice(
+        title: String,
+        storedPath: String,
+        targetPersonName: String?
+    ) {
         let picker = FamilyVisibilityPickerViewController()
         picker.onSelect = { [weak self] selection in
             self?.savePickedVoiceSample(
@@ -601,7 +634,8 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
                 privacyMetadata: MemoryPrivacyMetadata(
                     scope: MemoryPrivacyMigration.scopeForExplicitFamilyAuthorization(),
                     familyVisibility: selection.visibility
-                )
+                ),
+                targetPersonName: targetPersonName
             )
         }
 
@@ -616,24 +650,36 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
     private func savePickedVoiceSample(
         title: String,
         storedPath: String,
-        privacyMetadata: MemoryPrivacyMetadata
+        privacyMetadata: MemoryPrivacyMetadata,
+        targetPersonName: String?
     ) {
         do {
-            let item = try repository.addVoiceSample(
+            var item = try repository.addVoiceSample(
                 localPath: storedPath,
                 title: title,
                 note: "导入的长辈语音样本，用于后续声纹和语气参考。",
                 tags: ["语音样本"],
                 isPrivate: privacyMetadata.scope == .privateOnly,
-                privacyMetadata: privacyMetadata
+                privacyMetadata: privacyMetadata,
+                targetPersonName: targetPersonName
             )
+            if let profile = MemoryArchiveVoiceProfileStore.shared.registerSample(
+                item,
+                targetPersonName: targetPersonName
+            ) {
+                item = try repository.attachVoiceProfile(id: item.id, voiceProfileId: profile.id)
+                handleVoiceProfileStatus(profile, latestSamplePath: storedPath)
+            } else if targetPersonName != nil {
+                setKnowledgeDepositStatus("声纹档案：请填写具体姓名，避免只用亲属称呼")
+            }
             if item.privacyMetadata.scope != .privateOnly {
                 Stage1MemoryFacade.shared.ingestArchiveVoiceSampleMetadata(
                     title: item.title,
                     note: item.note,
                     archiveItemID: item.id,
                     timestamp: item.createdAt,
-                    privacyMetadata: item.privacyMetadata
+                    privacyMetadata: item.privacyMetadata,
+                    targetPersonName: item.targetPersonName
                 ) { [weak self] addedCount in
                     DispatchQueue.main.async {
                         if addedCount == 0 {
@@ -651,6 +697,35 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
             reloadData()
         } catch {
             showToast("语音素材保存失败", type: .error)
+        }
+    }
+
+    private func handleVoiceProfileStatus(
+        _ profile: MemoryArchiveVoiceProfile,
+        latestSamplePath: String
+    ) {
+        switch profile.status {
+        case .collecting:
+            setKnowledgeDepositStatus(profile.statusMessage ?? "声纹档案：继续补充语音样本")
+        case .readyForTraining:
+            setKnowledgeDepositStatus(profile.statusMessage ?? "声纹档案：样本已足够，开始训练")
+            MemoryArchiveVoiceProfileStore.shared.startTraining(
+                profileID: profile.id,
+                sampleURL: URL(fileURLWithPath: latestSamplePath),
+                trainer: VoiceCloneServiceProfileTrainer.shared
+            ) { [weak self] result in
+                DispatchQueue.main.async {
+                    switch result {
+                    case .success(let trainedProfile):
+                        self?.setKnowledgeDepositStatus(trainedProfile.statusMessage ?? "声纹档案：音色已就绪")
+                    case .failure(let error):
+                        self?.setKnowledgeDepositStatus("声纹档案：样本已保存，训练暂未完成（\(error.localizedDescription)）")
+                    }
+                    self?.reloadData()
+                }
+            }
+        case .training, .ready, .failed, .disabled:
+            setKnowledgeDepositStatus(profile.statusMessage ?? "声纹档案：语音样本已保存")
         }
     }
 }

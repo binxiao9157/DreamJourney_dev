@@ -74,6 +74,7 @@
 		A22CE000000000000000001 /* MemoryArchiveModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22CE000000000000000004 /* MemoryArchiveModels.swift */; };
 		A22CE000000000000000002 /* MemoryArchiveRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22CE000000000000000005 /* MemoryArchiveRepository.swift */; };
 		A22CE000000000000000003 /* MemoryArchiveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22CE000000000000000006 /* MemoryArchiveViewController.swift */; };
+		A82CE000000000000000001 /* MemoryArchiveVoiceProfileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A82CE000000000000000002 /* MemoryArchiveVoiceProfileStore.swift */; };
 		A33CE000000000000000001 /* CareSignalModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A33CE000000000000000004 /* CareSignalModels.swift */; };
 		A33CE000000000000000002 /* CareSignalAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A33CE000000000000000005 /* CareSignalAnalyzer.swift */; };
 		A33CE000000000000000003 /* CareDashboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A33CE000000000000000006 /* CareDashboardViewController.swift */; };
@@ -198,6 +199,7 @@
 		A22CE000000000000000004 /* MemoryArchiveModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveModels.swift; sourceTree = "<group>"; };
 		A22CE000000000000000005 /* MemoryArchiveRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveRepository.swift; sourceTree = "<group>"; };
 		A22CE000000000000000006 /* MemoryArchiveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveViewController.swift; sourceTree = "<group>"; };
+		A82CE000000000000000002 /* MemoryArchiveVoiceProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveVoiceProfileStore.swift; sourceTree = "<group>"; };
 		A33CE000000000000000004 /* CareSignalModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CareSignalModels.swift; sourceTree = "<group>"; };
 		A33CE000000000000000005 /* CareSignalAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CareSignalAnalyzer.swift; sourceTree = "<group>"; };
 		A33CE000000000000000006 /* CareDashboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CareDashboardViewController.swift; sourceTree = "<group>"; };
@@ -549,6 +551,7 @@
 			children = (
 				A22CE000000000000000004 /* MemoryArchiveModels.swift */,
 				A22CE000000000000000005 /* MemoryArchiveRepository.swift */,
+				A82CE000000000000000002 /* MemoryArchiveVoiceProfileStore.swift */,
 			);
 			path = MemoryArchive;
 			sourceTree = "<group>";
@@ -948,6 +951,7 @@
 				A88DF4F43BC833D9433CEE7B /* MemoirTTSService.swift in Sources */,
 				A22CE000000000000000001 /* MemoryArchiveModels.swift in Sources */,
 				A22CE000000000000000002 /* MemoryArchiveRepository.swift in Sources */,
+				A82CE000000000000000001 /* MemoryArchiveVoiceProfileStore.swift in Sources */,
 				A22CE000000000000000003 /* MemoryArchiveViewController.swift in Sources */,
 				596491B3EBC0F9D31FB1C2E1 /* MemoryAnnotation.swift in Sources */,
 				179BE070081D916DE52040A2 /* MemoryAnnotationView.swift in Sources */,

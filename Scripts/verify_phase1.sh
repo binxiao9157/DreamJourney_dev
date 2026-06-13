@@ -126,6 +126,18 @@ xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
   -o /tmp/dreamjourney_kblite_archive_voice_verify
 /tmp/dreamjourney_kblite_archive_voice_verify
 
+echo "== Memory archive voice profile =="
+xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
+  DreamJourney/Sources/Services/MemoryArchive/MemoryArchiveModels.swift \
+  DreamJourney/Sources/Services/MemoryArchive/MemoryArchiveVoiceProfileStore.swift \
+  Scripts/MemoryArchiveVoiceProfileVerify/main.swift \
+  -o /tmp/dreamjourney_memory_archive_voice_profile_verify
+/tmp/dreamjourney_memory_archive_voice_profile_verify
+
+echo "== Voice clone profile persistence =="
+python3 Scripts/VoiceCloneProfilePersistenceVerify/main.py
+
 echo "== KBLite archive material metadata =="
 xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
   DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \

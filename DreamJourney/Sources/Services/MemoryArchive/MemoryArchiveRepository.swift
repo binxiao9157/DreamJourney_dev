@@ -103,6 +103,8 @@ final class MemoryArchiveRepository {
         tags: [String] = [],
         isPrivate: Bool = true,
         privacyMetadata: MemoryPrivacyMetadata? = nil,
+        targetPersonId: String? = nil,
+        targetPersonName: String? = nil,
         now: Date = Date()
     ) throws -> MemoryArchiveItem {
         let cleanPath = localPath.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -131,7 +133,10 @@ final class MemoryArchiveRepository {
             estimatedDecade: nil,
             tags: Self.cleanTags(tags),
             isPrivate: resolvedIsPrivate,
-            privacyMetadata: resolvedPrivacyMetadata
+            privacyMetadata: resolvedPrivacyMetadata,
+            targetPersonId: Self.cleanedOptional(targetPersonId),
+            targetPersonName: Self.cleanedOptional(targetPersonName),
+            voiceProfileId: nil
         )
 
         var all = load()
@@ -213,6 +218,15 @@ final class MemoryArchiveRepository {
         }
     }
 
+    @discardableResult
+    func attachVoiceProfile(id: String, voiceProfileId: String, now: Date = Date()) throws -> MemoryArchiveItem {
+        let cleanProfileId = voiceProfileId.trimmingCharacters(in: .whitespacesAndNewlines)
+        return try mutate(id: id) { item in
+            item.voiceProfileId = cleanProfileId.isEmpty ? nil : cleanProfileId
+            item.updatedAt = now
+        }
+    }
+
     func delete(id: String) throws {
         var all = load()
         guard let index = all.firstIndex(where: { $0.id == id }) else {
@@ -254,6 +268,12 @@ final class MemoryArchiveRepository {
     private static func cleanTags(_ tags: [String]) -> [String] {
         Array(Set(tags.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }))
             .sorted()
+    }
+
+    private static func cleanedOptional(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let cleaned = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleaned.isEmpty ? nil : cleaned
     }
 
     private static func defaultTitle(for kind: MemoryArchiveItemKind) -> String {

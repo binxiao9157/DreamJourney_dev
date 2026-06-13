@@ -1,0 +1,150 @@
+import Foundation
+
+private func assertCondition(_ condition: @autoclosure () -> Bool, _ message: String) {
+    guard condition() else {
+        fputs("FAIL: \(message)\n", stderr)
+        exit(1)
+    }
+}
+
+final class StubVoiceTrainer: MemoryArchiveVoiceTrainingClient {
+    private(set) var requestedSpeakerIds: [String] = []
+
+    func trainVoice(
+        audioURL: URL,
+        speakerId: String,
+        completion: @escaping (Result<String, MemoryArchiveVoiceProfileTrainingError>) -> Void
+    ) {
+        requestedSpeakerIds.append(speakerId)
+        completion(.success("\(speakerId)_ready"))
+    }
+}
+
+private func makeVoiceSample(
+    id: String,
+    title: String,
+    note: String = "导入的长辈语音样本，用于后续声纹和语气参考。",
+    localPath: String,
+    privacyMetadata: MemoryPrivacyMetadata
+) -> MemoryArchiveItem {
+    MemoryArchiveItem(
+        id: id,
+        kind: .voiceSample,
+        title: title,
+        note: note,
+        localPath: localPath,
+        createdAt: Date(timeIntervalSince1970: 1_781_000_000),
+        updatedAt: Date(timeIntervalSince1970: 1_781_000_000),
+        analysisStatus: .manual,
+        analysisSummary: nil,
+        detectedPeople: [],
+        scene: nil,
+        occasion: nil,
+        mood: nil,
+        estimatedDecade: nil,
+        tags: ["语音样本"],
+        isPrivate: false,
+        privacyMetadata: privacyMetadata.appendingSourceRef(
+            MemorySourceRef(kind: .memoryArchiveItem, id: id, title: title, capturedAt: nil)
+        )
+    )
+}
+
+let defaults = UserDefaults(suiteName: "MemoryArchiveVoiceProfileVerify")!
+defaults.removePersistentDomain(forName: "MemoryArchiveVoiceProfileVerify")
+let store = MemoryArchiveVoiceProfileStore(
+    defaults: defaults,
+    storageKey: "voiceProfiles.verify",
+    requiredSampleCount: 3
+)
+store.reset()
+
+let metadata = MemoryPrivacyMetadata(scope: .generationAllowed)
+let sample1 = makeVoiceSample(
+    id: "voice-1",
+    title: "林桂芳的第一段语音",
+    localPath: "/tmp/voice-1.m4a",
+    privacyMetadata: metadata
+)
+let sample2 = makeVoiceSample(
+    id: "voice-2",
+    title: "林桂芳的第二段语音",
+    localPath: "/tmp/voice-2.m4a",
+    privacyMetadata: metadata
+)
+let sample3 = makeVoiceSample(
+    id: "voice-3",
+    title: "林桂芳的第三段语音",
+    localPath: "/tmp/voice-3.m4a",
+    privacyMetadata: metadata
+)
+
+guard let firstProfile = store.registerSample(sample1) else {
+    fputs("FAIL: concrete person voice sample should create a voice profile\n", stderr)
+    exit(1)
+}
+assertCondition(firstProfile.personName == "林桂芳", "voice profile should bind to concrete person name")
+assertCondition(firstProfile.status == .collecting, "one sample should keep profile in collecting status")
+assertCondition(firstProfile.sampleArchiveItemIds == ["voice-1"], "profile should keep first archive sample id")
+
+_ = store.registerSample(sample2)
+guard let readyProfile = store.registerSample(sample3) else {
+    fputs("FAIL: third sample should update the same voice profile\n", stderr)
+    exit(1)
+}
+assertCondition(readyProfile.id == firstProfile.id, "samples for same person should reuse one profile")
+assertCondition(readyProfile.sampleArchiveItemIds == ["voice-1", "voice-2", "voice-3"], "profile should keep all sample ids in order")
+assertCondition(readyProfile.status == .readyForTraining, "third generation-allowed sample should make profile ready for training")
+assertCondition(readyProfile.speakerId == nil, "profile should not invent speaker id before training")
+
+let genericSample = makeVoiceSample(
+    id: "voice-generic",
+    title: "妈妈的语音样本",
+    localPath: "/tmp/voice-generic.m4a",
+    privacyMetadata: metadata
+)
+assertCondition(store.registerSample(genericSample) == nil, "generic kinship voice sample should not create a person profile")
+
+let trainer = StubVoiceTrainer()
+let semaphore = DispatchSemaphore(value: 0)
+var trainedProfile: MemoryArchiveVoiceProfile?
+var trainingError: MemoryArchiveVoiceProfileError?
+store.startTraining(
+    profileID: readyProfile.id,
+    sampleURL: URL(fileURLWithPath: "/tmp/voice-3.m4a"),
+    trainer: trainer
+) { result in
+    switch result {
+    case .success(let profile):
+        trainedProfile = profile
+    case .failure(let error):
+        trainingError = error
+    }
+    semaphore.signal()
+}
+_ = semaphore.wait(timeout: .now() + 2)
+
+assertCondition(trainingError == nil, "voice profile training should succeed with stub trainer")
+assertCondition(trainer.requestedSpeakerIds.count == 1, "training should request exactly one per-person speaker id")
+assertCondition(trainer.requestedSpeakerIds.first?.hasPrefix("DJ_") == true, "speaker id should be generated for the voice profile")
+assertCondition(trainedProfile?.personName == "林桂芳", "trained profile should still bind to the same person")
+assertCondition(trainedProfile?.status == .ready, "trained profile should be ready")
+assertCondition(trainedProfile?.speakerId == "\(trainer.requestedSpeakerIds[0])_ready", "trained speaker id should be stored on the profile")
+assertCondition(defaults.string(forKey: "dj.voiceclone.speakerId") == nil, "profile training must not write the legacy global speaker id")
+
+let secondPerson = makeVoiceSample(
+    id: "voice-chen-1",
+    title: "陈建国的语音",
+    localPath: "/tmp/voice-chen-1.m4a",
+    privacyMetadata: metadata
+)
+guard let chenProfile = store.registerSample(secondPerson) else {
+    fputs("FAIL: second concrete person should create a separate voice profile\n", stderr)
+    exit(1)
+}
+assertCondition(chenProfile.id != firstProfile.id, "different people should not share voice profiles")
+assertCondition(store.profiles().count == 2, "store should contain two concrete person profiles")
+
+store.reset()
+defaults.removePersistentDomain(forName: "MemoryArchiveVoiceProfileVerify")
+print("MemoryArchiveVoiceProfile verification passed")

@@ -89,6 +89,29 @@ assertCondition(duplicateCount == 0, "duplicate voice sample metadata should mer
 assertCondition(KBLiteManager.shared.graph.facts.count == 1, "duplicate voice sample should keep one fact")
 assertCondition(KBLiteManager.shared.graph.facts.first?.sourceSessionIds == [42, 43], "duplicate should append source session")
 
+let targetedCount = KBLiteManager.shared.ingestArchiveVoiceSampleMetadata(
+    title: "林桂芳的语音样本",
+    note: "第三段声纹样本。",
+    sessionId: 44,
+    privacyMetadata: metadata,
+    targetPersonName: "林桂芳"
+)
+guard let linkedPerson = KBLiteManager.shared.graph.people.first(where: { $0.name == "林桂芳" }) else {
+    fputs("FAIL: explicit voice sample person should create or reuse KBPerson\n", stderr)
+    exit(1)
+}
+assertCondition(targetedCount >= 1, "targeted voice sample should add catalog/person metadata")
+assertCondition(
+    KBLiteManager.shared.graph.facts.contains {
+        $0.statement.contains("林桂芳的语音样本") && $0.relatedPersonIds.contains(linkedPerson.id)
+    },
+    "targeted voice sample fact should link to explicit person"
+)
+assertCondition(
+    KBLiteManager.shared.buildContextString(query: "林桂芳的声音素材").contains("林桂芳的语音样本"),
+    "targeted voice sample should be retrievable in prompt context"
+)
+
 KBLiteManager.shared.reset()
 try? FileManager.default.removeItem(at: verifyGraph)
 print("KBLiteArchiveVoice verification passed")

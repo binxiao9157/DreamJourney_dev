@@ -414,6 +414,7 @@ final class DreamJourneyBackendClient {
         object["userId"] = userId
         object["metadataOnly"] = true
         object.removeValue(forKey: "localPath")
+        object.removeValue(forKey: "voiceProfileId")
         return object
     }
 

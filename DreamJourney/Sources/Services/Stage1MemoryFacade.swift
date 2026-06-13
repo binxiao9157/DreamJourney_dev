@@ -121,6 +121,8 @@ final class Stage1MemoryFacade {
         archiveItemID: String? = nil,
         timestamp: Date = Date(),
         privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly),
+        targetPersonName: String? = nil,
+        targetPersonId: String? = nil,
         completion: @escaping (Int) -> Void = { _ in }
     ) {
         let resolvedMetadata = privacyMetadata.appendingSourceRef(
@@ -136,7 +138,9 @@ final class Stage1MemoryFacade {
             title: title,
             note: note,
             sessionId: sessionId,
-            privacyMetadata: resolvedMetadata
+            privacyMetadata: resolvedMetadata,
+            targetPersonName: targetPersonName,
+            targetPersonId: targetPersonId
         )
         completion(addedCount)
     }

@@ -277,6 +277,27 @@
   - 档案事实保留 `memoryArchiveItem` 来源锚点。
   - prompt context 能检索到人格线索内容。
 
+### 22. 记忆档案馆：语音样本形成按人物声纹档案
+
+- 新增 `MemoryArchiveVoiceProfileStore`：
+  - 语音样本保存后可绑定具体人物姓名，3 段同一人物语音进入 `readyForTraining`。
+  - 泛称如“妈妈 / 奶奶”不会创建声纹档案，避免再次把测试泛称污染成真实人物。
+  - `speakerId` 只保存在本机人物声纹档案中，不写入 KBLite fact，也不作为档案元数据同步到业务后端。
+- 记忆档案馆导入语音流程增强：
+  - 先询问“这是谁的声音”，再选择私密 / 本机 / 可生成 / 亲友范围。
+  - 可生成范围下，样本足够后会用人物声纹 profile 发起训练；训练失败不阻塞素材归档。
+  - 亲友范围仍仅同步脱敏元数据，不把音频或声纹凭证共享给亲友链路。
+- `VoiceCloneService.trainVoice` 增加 `persistAsCurrent`：
+  - 旧回忆录兜底调用默认保持全局 speakerId 行为。
+  - 人物声纹档案训练传 `persistAsCurrent: false`，避免某位长辈音色覆盖整个 App 的全局默认音色。
+- KBLite 语音元信息增强：
+  - 无明确人物时仍只保存 catalog fact，不凭空造人。
+  - 有明确人物时创建/复用 `KBPerson`，并把语音样本 fact 写入 `relatedPersonIds`，可被后续 prompt context 检索。
+- 新增/增强验证：
+  - `Scripts/MemoryArchiveVoiceProfileVerify/main.swift`
+  - `Scripts/VoiceCloneProfilePersistenceVerify/main.py`
+  - `Scripts/KBLiteArchiveVoiceVerify/main.swift`
+
 ## 真机验收建议
 
 ### 记忆档案馆

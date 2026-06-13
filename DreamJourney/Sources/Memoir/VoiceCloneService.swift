@@ -57,10 +57,12 @@ final class VoiceCloneService {
     /// - Parameters:
     ///   - audioURL: 本地音频文件 URL（wav/mp3/m4a/aac，建议 ≥10秒，≤10MB）
     ///   - speakerId: 指定的音色 ID，为空则自动生成
+    ///   - persistAsCurrent: 是否保存为当前全局音色。人物声纹档案训练应传 false，避免覆盖全局兜底音色。
     ///   - language: 语种，0=中文（默认）
     ///   - completion: 结果回调
     func trainVoice(audioURL: URL,
                     speakerId: String? = nil,
+                    persistAsCurrent: Bool = true,
                     language: Int = 0,
                     completion: @escaping (Result<String, VoiceCloneError>) -> Void) {
 
@@ -132,7 +134,9 @@ final class VoiceCloneService {
                         let returnedSpeakerId = json["speaker_id"] as? String ?? finalSpeakerId
                         let status = json["status"] as? Int ?? 0
 
-                        self.saveSpeakerId(returnedSpeakerId)
+                        if persistAsCurrent {
+                            self.saveSpeakerId(returnedSpeakerId)
+                        }
                         DDLogInfo("[VoiceClone] 音色已提交训练: \(returnedSpeakerId), status=\(status)")
 
                         // 如果训练已完成（小概率），直接返回

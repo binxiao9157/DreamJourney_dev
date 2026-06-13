@@ -2010,7 +2010,9 @@ final class KBLiteManager {
         title rawTitle: String,
         note rawNote: String?,
         sessionId: Int,
-        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
+        privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly),
+        targetPersonName: String? = nil,
+        targetPersonId: String? = nil
     ) -> Int {
         guard privacyMetadata.scope != .privateOnly else { return 0 }
         let title = Self.normalizedQuickExtractEntity(rawTitle)
@@ -2024,6 +2026,13 @@ final class KBLiteManager {
             statement = "记忆档案馆保存语音样本《\(title)》：\(note)。"
         }
 
+        let targetPerson = upsertArchiveVoiceTargetPersonIfNeeded(
+            targetPersonName: targetPersonName,
+            targetPersonId: targetPersonId,
+            sessionId: sessionId,
+            privacyMetadata: privacyMetadata
+        )
+
         if let idx = graph.facts.firstIndex(where: {
             KBLitePrivacyScopePolicy.canMerge(existing: $0.privacyMetadata, incoming: privacyMetadata)
                 && $0.statement.contains("语音样本")
@@ -2034,6 +2043,9 @@ final class KBLiteManager {
                 fact.sourceSessionIds.append(sessionId)
             }
             fact.privacyMetadata = fact.privacyMetadata.mergingSourceRefs(from: privacyMetadata)
+            if let targetPerson, !fact.relatedPersonIds.contains(targetPerson.id) {
+                fact.relatedPersonIds.append(targetPerson.id)
+            }
             graph.facts[idx] = fact
             save()
             return 0
@@ -2045,6 +2057,7 @@ final class KBLiteManager {
                 id: UUID().uuidString,
                 statement: statement,
                 confidence: "confirmed",
+                relatedPersonIds: targetPerson.map { [$0.id] } ?? [],
                 sourceSessionIds: [sessionId],
                 privacyMetadata: privacyMetadata
             )
@@ -2052,6 +2065,38 @@ final class KBLiteManager {
         save()
         print("[KBLite] 🎙️ 语音样本元信息入库: \(title)")
         return 1
+    }
+
+    private func upsertArchiveVoiceTargetPersonIfNeeded(
+        targetPersonName: String?,
+        targetPersonId: String?,
+        sessionId: Int,
+        privacyMetadata: MemoryPrivacyMetadata
+    ) -> KBPerson? {
+        if let targetPersonId,
+           let existing = graph.people.first(where: { $0.id == targetPersonId }) {
+            return existing
+        }
+
+        guard let rawName = targetPersonName else { return nil }
+        let name = Self.normalizedQuickExtractEntity(rawName)
+        guard !name.isEmpty,
+              name.count >= 2,
+              name.count <= 6,
+              !Self.isGenericKinshipDisplayName(name),
+              !Self.genericKinshipNames.contains(where: { name.contains($0) }) else {
+            return nil
+        }
+
+        _ = upsertQuickPerson(
+            name: name,
+            relation: nil,
+            traits: ["已导入声纹语音样本"],
+            briefBio: nil,
+            sessionId: sessionId,
+            privacyMetadata: privacyMetadata
+        )
+        return findMatchingPerson(name: name, aliases: [], privacyMetadata: privacyMetadata)
     }
 
     @discardableResult

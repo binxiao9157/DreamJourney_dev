@@ -42,6 +42,9 @@ struct MemoryArchiveItem: Codable, Identifiable, Equatable, MemoryPrivacyScoped 
     var tags: [String]
     var isPrivate: Bool
     var privacyMetadata: MemoryPrivacyMetadata
+    var targetPersonId: String?
+    var targetPersonName: String?
+    var voiceProfileId: String?
 
     init(
         id: String,
@@ -60,7 +63,10 @@ struct MemoryArchiveItem: Codable, Identifiable, Equatable, MemoryPrivacyScoped 
         estimatedDecade: Int?,
         tags: [String],
         isPrivate: Bool,
-        privacyMetadata: MemoryPrivacyMetadata? = nil
+        privacyMetadata: MemoryPrivacyMetadata? = nil,
+        targetPersonId: String? = nil,
+        targetPersonName: String? = nil,
+        voiceProfileId: String? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -80,6 +86,9 @@ struct MemoryArchiveItem: Codable, Identifiable, Equatable, MemoryPrivacyScoped 
         self.isPrivate = isPrivate
         self.privacyMetadata = privacyMetadata
             ?? MemoryPrivacyMetadata(scope: MemoryPrivacyMigration.scopeFromLegacy(isPrivate: isPrivate))
+        self.targetPersonId = targetPersonId
+        self.targetPersonName = targetPersonName
+        self.voiceProfileId = voiceProfileId
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -100,6 +109,9 @@ struct MemoryArchiveItem: Codable, Identifiable, Equatable, MemoryPrivacyScoped 
         case tags
         case isPrivate
         case privacyMetadata
+        case targetPersonId
+        case targetPersonName
+        case voiceProfileId
     }
 
     init(from decoder: Decoder) throws {
@@ -122,6 +134,9 @@ struct MemoryArchiveItem: Codable, Identifiable, Equatable, MemoryPrivacyScoped 
         isPrivate = try container.decodeIfPresent(Bool.self, forKey: .isPrivate) ?? true
         privacyMetadata = try container.decodeIfPresent(MemoryPrivacyMetadata.self, forKey: .privacyMetadata)
             ?? MemoryPrivacyMetadata(scope: MemoryPrivacyMigration.scopeFromLegacy(isPrivate: isPrivate))
+        targetPersonId = try container.decodeIfPresent(String.self, forKey: .targetPersonId)
+        targetPersonName = try container.decodeIfPresent(String.self, forKey: .targetPersonName)
+        voiceProfileId = try container.decodeIfPresent(String.self, forKey: .voiceProfileId)
     }
 }
 
