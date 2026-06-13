@@ -179,6 +179,17 @@ def family_members(user_id: str) -> Dict[str, Any]:
     return {"userId": user_id, "members": store.list_family_members(user_id)}
 
 
+@app.post("/family/members/{user_id}/{member_id}/accept")
+def accept_family_member(user_id: str, member_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    phone = str(payload.get("phone") or "").strip()
+    if not phone:
+        raise HTTPException(status_code=400, detail="phone is required")
+    member = store.accept_family_member(user_id, member_id, phone=phone)
+    if member is None:
+        raise HTTPException(status_code=404, detail="family member not found or phone mismatch")
+    return {"status": "accepted", "member": member}
+
+
 @app.post("/family/members/{user_id}/{member_id}/revoke")
 def revoke_family_member(user_id: str, member_id: str) -> Dict[str, Any]:
     member = store.revoke_family_member(user_id, member_id)

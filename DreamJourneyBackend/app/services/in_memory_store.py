@@ -68,6 +68,25 @@ class InMemoryStore:
     def list_family_members(self, user_id: str) -> List[Dict[str, Any]]:
         return deepcopy(self._family_members.get(user_id, []))
 
+    def accept_family_member(self, user_id: str, member_id: str, phone: str) -> Optional[Dict[str, Any]]:
+        members = self._family_members.get(user_id, [])
+        normalized_phone = self._normalized_phone(phone)
+        for index, item in enumerate(members):
+            if item.get("id") != member_id:
+                continue
+            expected_phone = self._normalized_phone(str(item.get("phone") or ""))
+            if expected_phone and normalized_phone != expected_phone:
+                return None
+            accepted = deepcopy(item)
+            accepted["accessStatus"] = "active"
+            accepted["invitationStatus"] = "accepted"
+            accepted["isOnline"] = True
+            accepted["acceptedAt"] = self._now()
+            accepted["lastUpdated"] = "刚刚接受邀请"
+            members[index] = accepted
+            return deepcopy(accepted)
+        return None
+
     def revoke_family_member(self, user_id: str, member_id: str) -> Optional[Dict[str, Any]]:
         members = self._family_members.get(user_id, [])
         for index, item in enumerate(members):
@@ -113,3 +132,7 @@ class InMemoryStore:
     @staticmethod
     def _now() -> str:
         return datetime.now(timezone.utc).isoformat()
+
+    @staticmethod
+    def _normalized_phone(phone: str) -> str:
+        return "".join(ch for ch in phone if ch.isdigit())

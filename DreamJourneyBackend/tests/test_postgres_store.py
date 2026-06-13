@@ -177,6 +177,18 @@ class PostgresStoreTests(unittest.TestCase):
         self.assertFalse(revoked["isOnline"])
         self.assertEqual(store.list_family_members("u1")[0]["accessStatus"], "revoked")
 
+    def test_store_persists_family_member_acceptance(self):
+        connection = FakeConnection()
+        store = PostgresStore(connection_factory=lambda: connection)
+
+        member = store.add_family_member("u1", {"name": "林桂芳", "phone": "13900001111"})
+        accepted = store.accept_family_member("u1", member["id"], phone="13900001111")
+
+        self.assertEqual(accepted["accessStatus"], "active")
+        self.assertEqual(accepted["invitationStatus"], "accepted")
+        self.assertTrue(accepted["isOnline"])
+        self.assertEqual(store.list_family_members("u1")[0]["invitationStatus"], "accepted")
+
     def test_store_persists_latest_care_snapshot_by_viewer(self):
         connection = FakeConnection()
         store = PostgresStore(connection_factory=lambda: connection)

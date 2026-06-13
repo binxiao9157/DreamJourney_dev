@@ -108,6 +108,56 @@ final class FamilyRepository {
         }
     }
 
+    func acceptBackendInvitation(
+        phone: String,
+        completion: @escaping (Result<FamilyMember, Swift.Error>) -> Void
+    ) {
+        let trimmedPhone = phone.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPhone.isEmpty else {
+            completion(.failure(FamilyRepositoryBackendError.invalidPhone))
+            return
+        }
+        guard let member = members.first(where: {
+            normalizedPhone($0.phone) == normalizedPhone(trimmedPhone)
+                && !revokedAccessMemberIDs.contains($0.id)
+        }) else {
+            completion(.failure(FamilyRepositoryBackendError.invalidBackendMember))
+            return
+        }
+        guard let userID = UserManager.shared.currentUser?.id,
+              DreamJourneyBackendClient.shared.isConfigured,
+              !member.id.hasPrefix("kb_") else {
+            guard let acceptedMember = acceptLocalInvitation(phone: trimmedPhone) else {
+                completion(.failure(FamilyRepositoryBackendError.invalidBackendMember))
+                return
+            }
+            completion(.success(acceptedMember))
+            return
+        }
+
+        DreamJourneyBackendClient.shared.acceptFamilyMember(
+            userId: userID,
+            memberId: member.id,
+            phone: trimmedPhone
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success(let response):
+                    guard let acceptedMember = response.member.toFamilyMember() else {
+                        completion(.failure(FamilyRepositoryBackendError.invalidBackendMember))
+                        return
+                    }
+                    _ = self.mergeBackendMembers([acceptedMember])
+                    _ = self.acceptLocalInvitation(phone: trimmedPhone)
+                    completion(.success(acceptedMember))
+                case .failure(let error):
+                    completion(.failure(error))
+                }
+            }
+        }
+    }
+
     func inviteBackendMember(
         name: String,
         relation: String,

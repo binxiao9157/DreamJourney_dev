@@ -173,6 +173,18 @@ class StoreTests(unittest.TestCase):
         self.assertIn("revokedAt", revoked)
         self.assertEqual(store.list_family_members("u1")[0]["accessStatus"], "revoked")
 
+    def test_store_marks_family_member_accepted(self):
+        store = InMemoryStore()
+
+        member = store.add_family_member("u1", {"name": "陈岚", "phone": "13900001111"})
+        accepted = store.accept_family_member("u1", member["id"], phone="13900001111")
+
+        self.assertEqual(accepted["accessStatus"], "active")
+        self.assertEqual(accepted["invitationStatus"], "accepted")
+        self.assertTrue(accepted["isOnline"])
+        self.assertIn("acceptedAt", accepted)
+        self.assertEqual(store.list_family_members("u1")[0]["invitationStatus"], "accepted")
+
 
 class CareSnapshotAPITests(unittest.TestCase):
     def test_care_snapshot_api_saves_and_returns_latest_by_viewer(self):
@@ -218,6 +230,33 @@ class CareSnapshotAPITests(unittest.TestCase):
 
 
 class FamilyAPITests(unittest.TestCase):
+    def test_family_member_accept_api_marks_member_active(self):
+        client = TestClient(app)
+
+        created = client.post(
+            "/family/invite",
+            json={
+                "userId": "u1",
+                "name": "陈岚",
+                "relation": "女儿",
+                "phone": "13900001111",
+            },
+        )
+        member_id = created.json()["member"]["id"]
+        accepted = client.post(
+            f"/family/members/u1/{member_id}/accept",
+            json={"phone": "13900001111"},
+        )
+        listed = client.get("/family/members/u1")
+
+        self.assertEqual(created.status_code, 200)
+        self.assertEqual(accepted.status_code, 200)
+        self.assertEqual(accepted.json()["member"]["accessStatus"], "active")
+        self.assertEqual(accepted.json()["member"]["invitationStatus"], "accepted")
+        self.assertIn("acceptedAt", accepted.json()["member"])
+        listed_member = next(item for item in listed.json()["members"] if item["id"] == member_id)
+        self.assertEqual(listed_member["invitationStatus"], "accepted")
+
     def test_family_member_revoke_api_marks_member_revoked(self):
         client = TestClient(app)
 
@@ -239,7 +278,8 @@ class FamilyAPITests(unittest.TestCase):
         self.assertEqual(revoked.json()["member"]["accessStatus"], "revoked")
         self.assertEqual(revoked.json()["member"]["invitationStatus"], "revoked")
         self.assertIn("revokedAt", revoked.json()["member"])
-        self.assertEqual(listed.json()["members"][0]["accessStatus"], "revoked")
+        listed_member = next(item for item in listed.json()["members"] if item["id"] == member_id)
+        self.assertEqual(listed_member["accessStatus"], "revoked")
 
 
 if __name__ == "__main__":

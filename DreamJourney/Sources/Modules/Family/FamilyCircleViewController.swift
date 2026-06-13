@@ -344,30 +344,16 @@ final class FamilyCircleViewController: UIViewController {
             searchField.becomeFirstResponder()
             return
         }
-        guard let member = members.first(where: {
-            normalizedPhoneForFamilyAccessUI($0.phone) == normalizedPhoneForFamilyAccessUI(phone)
-                && !FamilyRepository.shared.isAccessRevoked(for: $0.id)
-        }) else {
-            showToast("未找到可接受的亲友邀请", type: .info)
-            return
+        FamilyRepository.shared.acceptBackendInvitation(phone: phone) { [weak self] result in
+            switch result {
+            case .success(let acceptedMember):
+                self?.searchField.text = nil
+                self?.updateMemberListUI()
+                self?.showToast("已接受 \(acceptedMember.name) 的亲友邀请", type: .success)
+            case .failure(let error):
+                self?.showToast(error.localizedDescription, type: .error)
+            }
         }
-
-        let invitation = FamilyAccessControlService.Invitation(
-            id: "local_invite_\(member.id)",
-            familyMemberID: member.id,
-            phone: member.phone ?? phone,
-            status: .pending,
-            createdAt: member.joinedAt
-        )
-        guard FamilyAccessControlService.acceptInvitation(invitation, phone: phone) != nil,
-              let acceptedMember = FamilyRepository.shared.acceptLocalInvitation(phone: phone) else {
-            showToast("邀请信息不匹配", type: .error)
-            return
-        }
-
-        searchField.text = nil
-        updateMemberListUI()
-        showToast("已接受 \(acceptedMember.name) 的亲友邀请", type: .success)
     }
 
     private func makeQuickActionButton(for action: FamilyCircleQuickAction) -> UIButton {
@@ -494,11 +480,6 @@ final class FamilyCircleViewController: UIViewController {
         membersTableView.reloadData()
     }
 
-    private func normalizedPhoneForFamilyAccessUI(_ phone: String?) -> String? {
-        guard let phone else { return nil }
-        let digits = phone.filter(\.isNumber)
-        return digits.isEmpty ? nil : digits
-    }
 }
 
 // MARK: - UITableViewDataSource

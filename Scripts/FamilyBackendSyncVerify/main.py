@@ -29,11 +29,14 @@ required_client_fragments = [
     "func fetchFamilyMembers",
     'path: "family/members/',
     "func revokeFamilyMember",
+    "func acceptFamilyMember",
     'path: "family/members/',
     "/revoke",
+    "/accept",
     "struct FamilyInviteResponse",
     "struct FamilyMembersResponse",
     "struct FamilyRevokeResponse",
+    "struct FamilyAcceptResponse",
     "accessStatus",
 ]
 
@@ -41,9 +44,11 @@ required_repo_fragments = [
     "func syncFromBackend",
     "func inviteBackendMember",
     "func revokeBackendAccess",
+    "func acceptBackendInvitation",
     "DreamJourneyBackendClient.shared.fetchFamilyMembers",
     "DreamJourneyBackendClient.shared.inviteFamilyMember",
     "DreamJourneyBackendClient.shared.revokeFamilyMember",
+    "DreamJourneyBackendClient.shared.acceptFamilyMember",
     "mergeBackendMembers",
 ]
 
@@ -51,26 +56,36 @@ required_vc_fragments = [
     "FamilyRepository.shared.syncFromBackend",
     "FamilyRepository.shared.inviteBackendMember",
     "FamilyRepository.shared.revokeBackendAccess",
+    "FamilyRepository.shared.acceptBackendInvitation",
     "syncFamilyMembersFromBackend",
 ]
 
 required_backend_fragments = [
     '@app.post("/family/members/{user_id}/{member_id}/revoke")',
+    '@app.post("/family/members/{user_id}/{member_id}/accept")',
     "def revoke_family_member",
+    "def accept_family_member",
     "store.revoke_family_member",
+    "store.accept_family_member",
 ]
 
 required_store_fragments = [
     "def revoke_family_member",
+    "def accept_family_member",
     '"accessStatus"',
     '"revoked"',
+    '"active"',
+    '"accepted"',
     '"revokedAt"',
+    '"acceptedAt"',
 ]
 
 required_backend_test_fragments = [
     "test_family_member_revoke_api_marks_member_revoked",
+    "test_family_member_accept_api_marks_member_active",
     "/family/members/u1/",
     "/revoke",
+    "/accept",
 ]
 
 for fragment in required_client_fragments:

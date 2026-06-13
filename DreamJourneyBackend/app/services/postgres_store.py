@@ -154,6 +154,40 @@ class PostgresStore:
     def list_family_members(self, user_id: str) -> List[Dict[str, Any]]:
         return self._list_payloads("family_members", user_id)
 
+    def accept_family_member(self, user_id: str, member_id: str, phone: str) -> Optional[Dict[str, Any]]:
+        row = self._fetchone(
+            """
+            SELECT payload FROM family_members
+            WHERE user_id = %s AND id = %s
+            """,
+            (user_id, member_id),
+        )
+        if row is None:
+            return None
+
+        item = deepcopy(row["payload"])
+        expected_phone = self._normalized_phone(str(item.get("phone") or ""))
+        if expected_phone and self._normalized_phone(phone) != expected_phone:
+            return None
+
+        item["accessStatus"] = "active"
+        item["invitationStatus"] = "accepted"
+        item["isOnline"] = True
+        item["acceptedAt"] = self._now()
+        item["lastUpdated"] = "刚刚接受邀请"
+
+        updated = self._fetchone(
+            """
+            UPDATE family_members
+            SET payload = %s
+            WHERE user_id = %s AND id = %s
+            RETURNING payload
+            """,
+            (item, user_id, member_id),
+            commit=True,
+        )
+        return None if updated is None else deepcopy(updated["payload"])
+
     def revoke_family_member(self, user_id: str, member_id: str) -> Optional[Dict[str, Any]]:
         row = self._fetchone(
             """
@@ -310,3 +344,7 @@ class PostgresStore:
     @staticmethod
     def _now() -> str:
         return datetime.now(timezone.utc).isoformat()
+
+    @staticmethod
+    def _normalized_phone(phone: str) -> str:
+        return "".join(ch for ch in phone if ch.isdigit())
