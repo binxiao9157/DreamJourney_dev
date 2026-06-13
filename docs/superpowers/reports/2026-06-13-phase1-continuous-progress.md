@@ -35,7 +35,7 @@
 
 - 新增 `TimeMailboxNotificationScheduler`。
 - 用户封存未来投递信件时，会通过 `UNUserNotificationCenter` 注册本机通知。
-- 通知只包含“有信到达”和收件人提示，不暴露信件正文。
+- 通知只包含“一封封存的信已到达”的通用提示，不暴露收件人姓名、信件正文或回声内容。
 - 打开信箱仍会刷新投递状态，通知只是提醒用户回到信箱查看。
 
 ### 5. 数字人首帧切换修复仍保留
@@ -134,7 +134,7 @@
 - 服务端新增 `sanitize_mailbox_letter_payload`：
   - 拒绝 `privateOnly` / `localOnly` 信件。
   - 允许 `generationAllowed` / `familyCircle` 的信件元数据进入自有业务后端。
-  - 强制移除完整 `body` 和 `replyText`，只保存 `bodyPreview`、标题、收件人、投递时间、状态、边界确认和隐私范围。
+  - 强制移除完整 `body`、`replyText` 和派生 `bodyPreview`，只保存标题、收件人、投递时间、状态、边界确认和隐私范围等元数据。
 - iOS `DreamJourneyBackendClient` 新增：
   - `syncMailboxLetter(userId:letter:)`
   - `fetchMailboxLetters(userId:)`
@@ -186,7 +186,7 @@
 - iOS `DigitalHumanAvatarView` 现在默认让 WKWebView 透明：
   - 只在收到 `avatar_video_surface_ready` 后，180ms 淡入真人数字人。
   - `avatar_first_frame_drawn` 仅保留为诊断事件，避免 DOM 尚未完成 video-ready 状态时过早露出 loading 壳层。
-  - 如果 2.8 秒内没有首帧，兜底显示壳层并记录 `avatar_startup_reveal_fallback`，避免黑屏式卡死。
+  - 如果 2.8 秒内没有首帧，只记录 `avatar_startup_waiting_for_video` 诊断，不再把 loading 壳层揭到用户面前，避免“先加载壳、再真人”的明显切换。
   - 启动显隐过程写入 `DigitalHumanPlaybackEvidenceStore`，真机诊断可追踪。
 - Web 资源 `MiniMateLoader.js` 不再抢先显示 `screen2`，改由首帧 ready 统一接管。
 - HTML 中 `#screen2` 默认保持隐藏，真人 canvas 仍由 `body[data-video-ready="true"]` 控制透明淡入。
@@ -233,6 +233,17 @@
   - `Scripts/KBLiteTimeMailboxVerify/main.swift`
   - `Scripts/TimeMailboxKnowledgeVerify/main.py`
 
+### 19. 本次继续推进补充：真实验收门禁与残留清理
+
+- 记忆档案馆文本/照片素材保存后，会沉淀“档案素材元信息”到 KBLite，并通过 `MemorySourceRef(kind: .memoryArchiveItem)` 保留来源锚点；不会把照片本体、音频本体或未授权正文伪装成对话。
+- KBLite 导入和多用户合并链路会清理历史路演/示例图谱残留，降低旧容器、旧分享包把 `妈妈`、示例亲友、路演照片重新带回真实测试的风险。
+- 对话记忆的用户轮次和 AI 轮次都会追加 `conversationTurn` 来源引用，结构化知识库能追踪事实来源，而不是只给出无出处实体。
+- 清理本机测试数据时会同步移除派生亲友成员，避免路演亲友残留在真实账号下继续显示。
+- 真机证据扫描新增更多 forbidden token，包含路演亲友 ID、陈岚/陈浩/陈予、外滩老照片、`roadshow_demo_photo_placeholder`。
+- 长辈关怀看板在 `insufficientData` 或 0 轮真实用户发言时不允许分享周报；页面只显示“等待真实关怀数据”，提示先用「亲友范围」完成真实对话。
+- 时空信箱本机通知不再暴露收件人姓名；后端同步继续保持 metadata-only，不包含 `body`、`replyText` 或 `bodyPreview`。
+- 数字人启动超时不再显示 loading 壳层；只有真人 video surface ready 后才淡入。
+
 ## 真机验收建议
 
 ### 记忆档案馆
@@ -267,13 +278,14 @@
 7. 如果已配置 `DreamJourneyBackendBaseURL` 并登录：
    - 选择“本机”时，页面应仍提示完整内容只保存在本机，后端不会保存该信件。
    - 选择“可生成”或“亲友”时，后端应能通过 `GET /mailbox/letters/{userId}` 查到信件元数据。
-   - 响应不应包含完整 `body` 或 `replyText`，只允许出现短 `bodyPreview`。
+   - 响应不应包含完整 `body`、`replyText` 或 `bodyPreview`。
 
 ### 长辈关怀看板
 
 当前代码已验证：
 
 - 空数据显示“数据不足”，不会显示“状态稳定”。
+- 数据不足或 0 轮真实用户发言时不能分享周报，只展示真实数据引导。
 - 周报只含脱敏聚合信号，不含原始聊天内容。
 - selected-member 可见性会过滤非授权成员内容。
 - 亲友成员可从后端拉取；邀请会先写入后端 `family_members`。
@@ -291,18 +303,24 @@
 - `TimeMailboxBackendSync verification passed`
 - `CareDashboard verification passed`
 - `CareDashboardBackendSync verification passed`
+- `CareDashboardShareReportUI verification passed`
 - `MemoryArchiveBackendSync verification passed`
 - `MemoryArchiveImageAnalysisProxy verification passed`
 - `FamilyBackendSync verification passed`
 - `FamilyInvitationCode verification passed`
 - `DigitalHumanStartupReveal verification passed`
+- `KBLiteArchiveMaterialMetadata verification passed`
+- `KBLiteImportSanitizer verification passed`
+- `ConversationTurnSourceRef verification passed`
 - `DreamJourneyBackend unittest 33/33 OK`
 - `PrivacyScope verification passed`
 - `MemoryPrivacyIntegration verification passed`
 - `LocalTestDataCleanup verification passed`
+- `FamilyLocalTestCleanup verification passed`
+- `RealDeviceNoDemoStateTokens verification passed`
 - `FastAPI smoke verification passed`
 - `git diff --check`
-- `xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -configuration Debug -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build`
+- `bash Scripts/verify_phase1.sh`，其中包含 `xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -sdk iphoneos -configuration Debug CODE_SIGNING_ALLOWED=NO build`
 
 结果：以上均通过。
 
