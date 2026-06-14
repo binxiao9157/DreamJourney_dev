@@ -425,6 +425,9 @@ xcrun swiftc \
   -o /tmp/dreamjourney_dialog_memory_grounding_verify
 /tmp/dreamjourney_dialog_memory_grounding_verify
 
+echo "== Dialog realtime final-ASR RAG =="
+python3 Scripts/DialogRealtimeRAGFinalASRVerify/main.py
+
 echo "== Dialog memory RAG payload =="
 xcrun swiftc \
   DreamJourney/Sources/Services/Safety/SafetyModels.swift \

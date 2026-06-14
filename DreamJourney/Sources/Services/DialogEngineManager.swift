@@ -862,6 +862,8 @@ extension DialogEngineManager: SpeechEngineDelegate {
                         }
                         return
                     }
+                    sendMemoryRAGIfAvailable(for: result.text)
+                    logMemoryGroundingPlan(for: result.text)
                 }
                 DispatchQueue.main.async { [weak self] in
                     self?.forwardASRResult(text: result.text, isFinal: result.isFinal)
@@ -943,6 +945,8 @@ extension DialogEngineManager: SpeechEngineDelegate {
                         }
                         return
                     }
+                    sendMemoryRAGIfAvailable(for: result.text)
+                    logMemoryGroundingPlan(for: result.text)
                 }
                 DispatchQueue.main.async { [weak self] in
                     self?.forwardASRResult(text: result.text, isFinal: result.isFinal)
