@@ -57,6 +57,9 @@ final class TimeMailboxRepository {
         let cleanBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !cleanRecipient.isEmpty else { throw TimeMailboxRepositoryError.invalidRecipient }
+        guard !Self.isGenericKinshipRecipient(cleanRecipient) else {
+            throw TimeMailboxRepositoryError.invalidRecipient
+        }
         guard !cleanBody.isEmpty else { throw TimeMailboxRepositoryError.invalidBody }
         guard boundaryAcknowledged else { throw TimeMailboxRepositoryError.boundaryNotAcknowledged }
 
@@ -145,4 +148,17 @@ final class TimeMailboxRepository {
     private static func isLegacySeedLetter(_ letter: TimeMailboxLetter) -> Bool {
         letter.id.hasPrefix("roadshow_")
     }
+
+    private static func isGenericKinshipRecipient(_ recipientName: String) -> Bool {
+        genericKinshipNames.contains(recipientName.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private static let genericKinshipNames: Set<String> = [
+        "爷爷", "奶奶", "外婆", "外公", "姥姥", "姥爷",
+        "爸爸", "妈妈", "父亲", "母亲",
+        "老伴", "老公", "老婆", "丈夫", "妻子",
+        "哥哥", "姐姐", "弟弟", "妹妹",
+        "叔叔", "阿姨", "舅舅", "姑姑",
+        "儿子", "女儿", "孙子", "孙女"
+    ]
 }

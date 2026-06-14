@@ -305,7 +305,7 @@ final class TimeMailboxViewController: UIViewController {
                 self?.syncLetterMetadataToBackend(latest)
             }
         } catch TimeMailboxRepositoryError.invalidRecipient {
-            showToast("请填写收件人", type: .info)
+            showToast("请填写具体姓名", type: .info)
         } catch TimeMailboxRepositoryError.invalidBody {
             showToast("请写下想说的话", type: .info)
         } catch TimeMailboxRepositoryError.boundaryNotAcknowledged {

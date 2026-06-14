@@ -26,7 +26,7 @@ do {
     let fallbackEcho = TimeMailboxEchoService.shared.makeEcho(
         for: TimeMailboxLetter(
             id: "echo-check",
-            recipientName: "妈妈",
+            recipientName: "林桂芳",
             title: "回声边界",
             body: "这句正文不应该被回声复述。",
             createdAt: now,
@@ -44,7 +44,7 @@ do {
     assertCondition(!fallbackEcho.replyText.contains("这句正文不应该被回声复述"), "safe fallback echo must not copy the private letter body")
 
     let letter = try repo.createLetter(
-        recipientName: "妈妈",
+        recipientName: "林桂芳",
         title: "今天很想你",
         body: "我今天路过老房子，想起你做饭的味道。",
         deliverAt: now.addingTimeInterval(60),
@@ -101,6 +101,21 @@ do {
             body: "内容",
             deliverAt: now,
             now: now,
+            boundaryAcknowledged: true,
+            privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed)
+        )
+        assertCondition(false, "generic kinship recipient should throw")
+    } catch TimeMailboxRepositoryError.invalidRecipient {
+        assertCondition(true, "generic kinship recipient throws expected error")
+    }
+
+    do {
+        _ = try repo.createLetter(
+            recipientName: "林桂芳",
+            title: "无效",
+            body: "内容",
+            deliverAt: now,
+            now: now,
             boundaryAcknowledged: false,
             privacyMetadata: MemoryPrivacyMetadata(scope: .localOnly)
         )
@@ -110,7 +125,7 @@ do {
     }
 
     let defaultLetter = try repo.createLetter(
-        recipientName: "爸爸",
+        recipientName: "陈建国",
         title: "",
         body: "默认只保存在本机。",
         deliverAt: now,
@@ -132,7 +147,7 @@ do {
     productionDefaults.removePersistentDomain(forName: "\(suiteName).productionDelay")
     let productionRepo = TimeMailboxRepository(defaults: productionDefaults, storageKey: "letters")
     let productionDefaultLetter = try productionRepo.createLetter(
-        recipientName: "妈妈",
+        recipientName: "林桂芳",
         title: "真实投递节奏",
         body: "真实路径不应像即时聊天一样立刻回信。",
         deliverAt: now,
@@ -150,7 +165,7 @@ do {
     productionDefaults.removePersistentDomain(forName: "\(suiteName).productionDelay")
 
     let realSimilarToOldSeed = try repo.createLetter(
-        recipientName: "爷爷",
+        recipientName: "陈德明",
         title: "写给爷爷的一封信",
         body: "1975 年外滩那张合影是我们家的真实记忆，不是演示数据。",
         deliverAt: now.addingTimeInterval(120),
@@ -166,7 +181,7 @@ do {
     try repo.delete(id: realSimilarToOldSeed.id)
 
     let evidenceLetter = try repo.createLetter(
-        recipientName: "妈妈",
+        recipientName: "林桂芳",
         title: "想起西湖边的小照相馆",
         body: "我今天又想起桂花糕和西湖边的小照相馆。",
         deliverAt: now.addingTimeInterval(60),
