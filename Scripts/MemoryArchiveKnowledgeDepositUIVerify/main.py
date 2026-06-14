@@ -46,6 +46,13 @@ require(
     "knowledge core card should summarize visible KBLite counts, source, privacy, and freshness",
 )
 require(
+    "MemoryArchiveBuildReadiness.build" in view
+    and "readiness.titleText" in view
+    and "readiness.detailText" in view
+    and "建库核心 ·" in view,
+    "knowledge core card should show phase-one build readiness and missing material guidance",
+)
+require(
     "updateKnowledgeDepositStatusLabel()" in view,
     "archive screen should refresh local knowledge deposit status on reload",
 )

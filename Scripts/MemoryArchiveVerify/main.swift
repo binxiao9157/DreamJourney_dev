@@ -15,6 +15,71 @@ let repo = MemoryArchiveRepository(defaults: defaults, storageKey: "archive")
 let now = Date(timeIntervalSince1970: 1_800_000_100)
 
 do {
+    let emptyReadiness = MemoryArchiveBuildReadiness.build(items: [], archiveKnowledgeSourceCount: 0)
+    assertCondition(emptyReadiness.state == .empty, "empty archive should be empty readiness")
+    assertCondition(emptyReadiness.completedStepCount == 0, "empty readiness should have no completed steps")
+    assertCondition(emptyReadiness.missingRequirements.contains("1 张可生成旧照片"), "readiness should ask for a generation-enabled photo")
+
+    let readinessSuiteName = "MemoryArchiveReadinessVerify-\(UUID().uuidString)"
+    let readinessDefaults = UserDefaults(suiteName: readinessSuiteName)!
+    readinessDefaults.removePersistentDomain(forName: readinessSuiteName)
+    let readinessRepo = MemoryArchiveRepository(defaults: readinessDefaults, storageKey: "archive")
+    _ = try readinessRepo.addPhoto(
+        localPath: "/tmp/private_photo.jpg",
+        title: "私密照片",
+        privacyMetadata: MemoryPrivacyMetadata(scope: .privateOnly),
+        now: now
+    )
+    _ = try readinessRepo.addVoiceSample(
+        localPath: "/tmp/local_voice.m4a",
+        title: "本机语音",
+        privacyMetadata: MemoryPrivacyMetadata(scope: .localOnly),
+        now: now
+    )
+    let privateOnlyReadiness = MemoryArchiveBuildReadiness.build(items: readinessRepo.items(), archiveKnowledgeSourceCount: 0)
+    assertCondition(privateOnlyReadiness.completedStepCount == 0, "private/local materials should not count toward generation readiness")
+
+    _ = try readinessRepo.addPhoto(
+        localPath: "/tmp/generation_photo.jpg",
+        title: "可生成旧照片",
+        privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed),
+        now: now
+    )
+    _ = try readinessRepo.addScreenshot(
+        localPath: "/tmp/wechat_voice_1.jpg",
+        title: "微信语音截图",
+        privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed),
+        now: now
+    )
+    _ = try readinessRepo.addVoiceSample(
+        localPath: "/tmp/generation_voice_1.m4a",
+        title: "语音样本 1",
+        privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed),
+        now: now
+    )
+    _ = try readinessRepo.addVoiceSample(
+        localPath: "/tmp/generation_voice_2.m4a",
+        title: "语音样本 2",
+        privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed),
+        now: now
+    )
+    _ = try readinessRepo.addText(
+        kind: .catchphrase,
+        title: "口头禅",
+        note: "慢慢来，饭要趁热吃。",
+        privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed),
+        now: now
+    )
+    let materialReady = MemoryArchiveBuildReadiness.build(items: readinessRepo.items(), archiveKnowledgeSourceCount: 0)
+    assertCondition(materialReady.state == .materialReady, "complete materials without structured knowledge should be materialReady")
+    assertCondition(materialReady.completedStepCount == 3, "materials should complete photo, voice evidence, and persona steps")
+    assertCondition(materialReady.missingRequirements == ["至少 1 条档案来源的结构化知识"], "material readiness should only miss structured knowledge")
+
+    let grounded = MemoryArchiveBuildReadiness.build(items: readinessRepo.items(), archiveKnowledgeSourceCount: 1)
+    assertCondition(grounded.state == .grounded, "archive source knowledge should complete grounding readiness")
+    assertCondition(grounded.completedStepCount == 4, "grounded readiness should complete all steps")
+    assertCondition(grounded.detailText.contains("最小建库已成型"), "grounded readiness should expose user-facing completion text")
+
     let note = try repo.addText(
         kind: .personalityNote,
         title: "妈妈的口头禅",

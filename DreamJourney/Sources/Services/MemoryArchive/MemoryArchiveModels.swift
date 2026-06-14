@@ -149,3 +149,101 @@ struct MemoryArchiveSummary: Equatable {
     let textCount: Int
     let analyzedPhotoCount: Int
 }
+
+enum MemoryArchiveBuildReadinessState: String, Equatable {
+    case empty
+    case collecting
+    case materialReady
+    case grounded
+}
+
+struct MemoryArchiveBuildReadiness: Equatable {
+    static let requiredPhotoCount = 1
+    static let requiredVoiceEvidenceCount = 3
+    static let requiredPersonaHintCount = 1
+    static let requiredArchiveKnowledgeSourceCount = 1
+
+    let state: MemoryArchiveBuildReadinessState
+    let completedStepCount: Int
+    let totalStepCount: Int
+    let usablePhotoCount: Int
+    let usableVoiceEvidenceCount: Int
+    let usablePersonaHintCount: Int
+    let archiveKnowledgeSourceCount: Int
+    let missingRequirements: [String]
+
+    var titleText: String {
+        "建库完成度 \(completedStepCount)/\(totalStepCount)"
+    }
+
+    var detailText: String {
+        if missingRequirements.isEmpty {
+            return "最小建库已成型：照片、语音材料、人格线索和结构化知识都已有真实来源。"
+        }
+        return "还需补充：" + missingRequirements.joined(separator: "、")
+    }
+
+    static func build(
+        items: [MemoryArchiveItem],
+        archiveKnowledgeSourceCount: Int
+    ) -> MemoryArchiveBuildReadiness {
+        let usableItems = items.filter {
+            PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .prompt)
+        }
+        let usablePhotoCount = usableItems.filter { $0.kind == .photo }.count
+        let usableVoiceEvidenceCount = usableItems.filter {
+            $0.kind == .voiceSample || $0.kind == .screenshot
+        }.count
+        let usablePersonaHintCount = usableItems.filter {
+            $0.kind == .personalityNote || $0.kind == .catchphrase
+        }.count
+
+        var completed = 0
+        var missing: [String] = []
+        if usablePhotoCount >= requiredPhotoCount {
+            completed += 1
+        } else {
+            missing.append("1 张可生成旧照片")
+        }
+        if usableVoiceEvidenceCount >= requiredVoiceEvidenceCount {
+            completed += 1
+        } else {
+            missing.append("\(requiredVoiceEvidenceCount) 份可生成语音/截图材料")
+        }
+        if usablePersonaHintCount >= requiredPersonaHintCount {
+            completed += 1
+        } else {
+            missing.append("1 条口头禅或性格描述")
+        }
+        if archiveKnowledgeSourceCount >= requiredArchiveKnowledgeSourceCount {
+            completed += 1
+        } else {
+            missing.append("至少 1 条档案来源的结构化知识")
+        }
+
+        let total = 4
+        let state: MemoryArchiveBuildReadinessState
+        if completed == 0 {
+            state = .empty
+        } else if completed == total {
+            state = .grounded
+        } else if usablePhotoCount >= requiredPhotoCount
+                    && usableVoiceEvidenceCount >= requiredVoiceEvidenceCount
+                    && usablePersonaHintCount >= requiredPersonaHintCount {
+            state = .materialReady
+        } else {
+            state = .collecting
+        }
+
+        return MemoryArchiveBuildReadiness(
+            state: state,
+            completedStepCount: completed,
+            totalStepCount: total,
+            usablePhotoCount: usablePhotoCount,
+            usableVoiceEvidenceCount: usableVoiceEvidenceCount,
+            usablePersonaHintCount: usablePersonaHintCount,
+            archiveKnowledgeSourceCount: archiveKnowledgeSourceCount,
+            missingRequirements: missing
+        )
+    }
+}

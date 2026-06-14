@@ -1394,16 +1394,21 @@ private extension MemoryArchiveViewController {
     func updateKnowledgeCoreCard() {
         let graph = KBLiteManager.shared.displayGraphForLocalBrowsing()
         let status = KBLiteDepositStatusBuilder.build(from: graph)
+        let readiness = MemoryArchiveBuildReadiness.build(
+            items: repository.items(),
+            archiveKnowledgeSourceCount: status.archiveSourceCount
+        )
+        knowledgeCoreTitleLabel.text = "建库核心 · \(readiness.titleText)"
         knowledgeCoreCountsLabel.text = "\(graph.people.count) 人 · \(graph.places.count) 地 · \(graph.events.count) 事 · \(graph.facts.count) 实"
 
         guard status.totalEntityCount > 0 else {
-            knowledgeCoreDetailLabel.text = "暂无结构化知识。保存可生成/本机/亲友素材后，会在这里显示真实沉淀结果。"
+            knowledgeCoreDetailLabel.text = "\(readiness.detailText)\n暂无结构化知识。保存可生成素材后，会在这里显示真实沉淀结果。"
             return
         }
 
         let updatedText = Self.knowledgeCoreDateFormatter.string(from: status.lastUpdated)
         let privacyText = status.privacySummary.replacingOccurrences(of: "隐私：", with: "")
-        knowledgeCoreDetailLabel.text = "\(status.sourceSummary)\n隐私：\(privacyText)\n最近更新：\(updatedText)"
+        knowledgeCoreDetailLabel.text = "\(readiness.detailText)\n\(status.sourceSummary)\n隐私：\(privacyText)\n最近更新：\(updatedText)"
     }
 
     func updateVoiceProfileStatusLabel() {
