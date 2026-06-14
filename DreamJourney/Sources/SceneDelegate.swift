@@ -4,6 +4,7 @@
 //
 
 import UIKit
+import UserNotifications
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
@@ -19,6 +20,15 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let coordinator = AppCoordinator(window: window)
         appCoordinator = coordinator
         coordinator.start()
+        if let notificationResponse = connectionOptions.notificationResponse,
+           TimeMailboxNotificationScheduler.isDeliveryNotification(userInfo: notificationResponse.notification.request.content.userInfo) {
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: .djTimeMailboxDeliveryNotificationReceived,
+                    object: notificationResponse.notification.request.content.userInfo[TimeMailboxNotificationScheduler.deliveryLetterIDUserInfoKey] as? String
+                )
+            }
+        }
         if let url = connectionOptions.urlContexts.first?.url {
             FamilyInvitationDeepLinkService.handle(url: url)
         }

@@ -119,6 +119,11 @@ final class TimeMailboxViewController: UIViewController {
         deliveryRefreshTimer = nil
     }
 
+    func refreshForNotificationDelivery() {
+        loadViewIfNeeded()
+        reloadLetters(showDeliveryToast: true)
+    }
+
     private func setupLayout() {
         [titleLabel, addButton, boundaryLabel, mailboxEvidenceStatusCard, tableView, emptyLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false

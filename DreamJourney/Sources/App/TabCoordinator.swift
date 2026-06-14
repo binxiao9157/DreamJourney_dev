@@ -9,9 +9,19 @@ final class TabCoordinator: Coordinator {
 
     let tabBarController = WarmTabBarController()
     private var familyInvitationObserver: NSObjectProtocol?
+    private var timeMailboxNotificationObserver: NSObjectProtocol?
 
     init() {
         self.navigationController = UINavigationController()
+    }
+
+    deinit {
+        if let familyInvitationObserver {
+            NotificationCenter.default.removeObserver(familyInvitationObserver)
+        }
+        if let timeMailboxNotificationObserver {
+            NotificationCenter.default.removeObserver(timeMailboxNotificationObserver)
+        }
     }
 
     func start() {
@@ -24,6 +34,13 @@ final class TabCoordinator: Coordinator {
             queue: .main
         ) { [weak self] notification in
             self?.handleFamilyInvitationDeepLinkNotification(notification)
+        }
+        timeMailboxNotificationObserver = NotificationCenter.default.addObserver(
+            forName: .djTimeMailboxDeliveryNotificationReceived,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.openTimeMailboxFromNotification()
         }
         DispatchQueue.main.async { [weak self] in
             self?.consumePendingFamilyInvitationDeepLink()
@@ -112,5 +129,15 @@ final class TabCoordinator: Coordinator {
             return
         }
         familyVC.acceptInvitationCodeFromDeepLink(code)
+    }
+
+    private func openTimeMailboxFromNotification() {
+        tabBarController.selectedIndex = 3
+        guard let mailboxNav = tabBarController.viewControllers?.dropFirst(3).first as? UINavigationController,
+              let mailboxVC = mailboxNav.viewControllers.first as? TimeMailboxViewController else {
+            return
+        }
+        mailboxNav.popToRootViewController(animated: false)
+        mailboxVC.refreshForNotificationDelivery()
     }
 }

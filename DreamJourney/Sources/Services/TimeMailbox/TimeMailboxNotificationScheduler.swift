@@ -3,8 +3,15 @@ import UserNotifications
 
 final class TimeMailboxNotificationScheduler {
     static let shared = TimeMailboxNotificationScheduler()
+    static let deliverySurface = "timeMailbox"
+    static let deliverySurfaceUserInfoKey = "surface"
+    static let deliveryLetterIDUserInfoKey = "letterID"
 
     private init() {}
+
+    static func isDeliveryNotification(userInfo: [AnyHashable: Any]) -> Bool {
+        userInfo[deliverySurfaceUserInfoKey] as? String == deliverySurface
+    }
 
     func scheduleDeliveryNotification(for letter: TimeMailboxLetter, now: Date = Date()) {
         guard letter.status == TimeMailboxDeliveryStatus.sealed, letter.deliverAt > now else {
@@ -38,8 +45,8 @@ final class TimeMailboxNotificationScheduler {
         content.body = "一封封存的信已到达。打开时空信箱查看回声边界说明。"
         content.sound = .default
         content.userInfo = [
-            "surface": "timeMailbox",
-            "letterID": letter.id
+            Self.deliverySurfaceUserInfoKey: Self.deliverySurface,
+            Self.deliveryLetterIDUserInfoKey: letter.id
         ]
 
         let dateComponents = Calendar.current.dateComponents(
@@ -62,4 +69,8 @@ final class TimeMailboxNotificationScheduler {
     private func notificationIdentifier(for letterID: String) -> String {
         "dreamjourney.timeMailbox.delivery.\(letterID)"
     }
+}
+
+extension Notification.Name {
+    static let djTimeMailboxDeliveryNotificationReceived = Notification.Name("dj.timeMailbox.delivery.notification.received")
 }

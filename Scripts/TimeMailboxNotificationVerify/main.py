@@ -5,6 +5,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 scheduler_file = ROOT / "DreamJourney/Sources/Services/TimeMailbox/TimeMailboxNotificationScheduler.swift"
 vc_file = ROOT / "DreamJourney/Sources/Modules/TimeMailbox/TimeMailboxViewController.swift"
+app_delegate_file = ROOT / "DreamJourney/Sources/AppDelegate.swift"
+scene_delegate_file = ROOT / "DreamJourney/Sources/SceneDelegate.swift"
+tab_coordinator_file = ROOT / "DreamJourney/Sources/App/TabCoordinator.swift"
 project_file = ROOT / "DreamJourney.xcodeproj/project.pbxproj"
 
 missing = []
@@ -16,6 +19,9 @@ else:
     scheduler_text = scheduler_file.read_text(encoding="utf-8")
 
 vc_text = vc_file.read_text(encoding="utf-8")
+app_delegate_text = app_delegate_file.read_text(encoding="utf-8")
+scene_delegate_text = scene_delegate_file.read_text(encoding="utf-8")
+tab_coordinator_text = tab_coordinator_file.read_text(encoding="utf-8")
 project_text = project_file.read_text(encoding="utf-8")
 
 required_scheduler_fragments = [
@@ -34,6 +40,34 @@ required_scheduler_fragments = [
 required_vc_fragments = [
     "let letter = try repository.createLetter",
     "TimeMailboxNotificationScheduler.shared.scheduleDeliveryNotification",
+    "func refreshForNotificationDelivery()",
+    "reloadLetters(showDeliveryToast: true)",
+]
+
+required_app_delegate_fragments = [
+    "import UserNotifications",
+    "UNUserNotificationCenter.current().delegate = self",
+    "extension AppDelegate: UNUserNotificationCenterDelegate",
+    "func userNotificationCenter(",
+    "didReceive response: UNNotificationResponse",
+    "TimeMailboxNotificationScheduler.isDeliveryNotification(userInfo: response.notification.request.content.userInfo)",
+    "NotificationCenter.default.post(",
+    "name: .djTimeMailboxDeliveryNotificationReceived",
+]
+
+required_tab_coordinator_fragments = [
+    "private var timeMailboxNotificationObserver: NSObjectProtocol?",
+    "forName: .djTimeMailboxDeliveryNotificationReceived",
+    "openTimeMailboxFromNotification()",
+    "tabBarController.selectedIndex = 3",
+    "refreshForNotificationDelivery()",
+]
+
+required_scene_delegate_fragments = [
+    "connectionOptions.notificationResponse",
+    "TimeMailboxNotificationScheduler.isDeliveryNotification(userInfo: notificationResponse.notification.request.content.userInfo)",
+    "NotificationCenter.default.post(",
+    "name: .djTimeMailboxDeliveryNotificationReceived",
 ]
 
 required_project_fragments = [
@@ -47,6 +81,15 @@ for fragment in required_scheduler_fragments:
 for fragment in required_vc_fragments:
     if fragment not in vc_text:
         missing.append(f"{vc_file.name}: missing {fragment!r}")
+for fragment in required_app_delegate_fragments:
+    if fragment not in app_delegate_text:
+        missing.append(f"{app_delegate_file.name}: missing {fragment!r}")
+for fragment in required_tab_coordinator_fragments:
+    if fragment not in tab_coordinator_text:
+        missing.append(f"{tab_coordinator_file.name}: missing {fragment!r}")
+for fragment in required_scene_delegate_fragments:
+    if fragment not in scene_delegate_text:
+        missing.append(f"{scene_delegate_file.name}: missing {fragment!r}")
 for fragment in required_project_fragments:
     if fragment not in project_text:
         missing.append(f"{project_file.name}: missing {fragment!r}")

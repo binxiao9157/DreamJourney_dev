@@ -7,6 +7,7 @@ import UIKit
 import SpeechEngineToB
 import AMapFoundationKit
 import MAMapKit
+import UserNotifications
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -15,6 +16,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         // 火山引擎语音 SDK 环境准备
         SpeechEngine.prepareEnvironment()
+        UNUserNotificationCenter.current().delegate = self
 
         // ⚠️ AMap3DMap 8.1.0+ 强制要求：必须在创建 MAMapView 之前调用隐私合规接口，
         //    否则 MAMapView(frame:) 会返回 nil，地图黑屏。
@@ -54,5 +56,31 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication,
                      didDiscardSceneSessions sceneSessions: Set<UISceneSession>) {
+    }
+}
+
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        if TimeMailboxNotificationScheduler.isDeliveryNotification(userInfo: response.notification.request.content.userInfo) {
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: .djTimeMailboxDeliveryNotificationReceived,
+                    object: response.notification.request.content.userInfo[TimeMailboxNotificationScheduler.deliveryLetterIDUserInfoKey] as? String
+                )
+            }
+        }
+        completionHandler()
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound])
     }
 }
