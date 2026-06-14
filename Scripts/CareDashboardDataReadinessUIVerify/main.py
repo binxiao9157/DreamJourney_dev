@@ -21,11 +21,17 @@ phase1 = PHASE1.read_text(encoding="utf-8")
 
 reload_match = re.search(r"private func reloadSnapshot\([\s\S]*?\n    \}", vc)
 reload_body = reload_match.group(0) if reload_match else ""
+view_will_appear_match = re.search(r"override func viewWillAppear\([\s\S]*?\n    \}", vc)
+view_will_appear_body = view_will_appear_match.group(0) if view_will_appear_match else ""
 insufficient_match = re.search(r"private func makeInsufficientDataState\([\s\S]*?\n    \}", vc)
 insufficient_body = insufficient_match.group(0) if insufficient_match else ""
 
 require("localEligibleUserTurnCount" in vc, "care dashboard should track local eligible family-circle user turns")
 require("remoteSnapshotStatusText" in vc, "care dashboard should track backend snapshot status for device testing")
+require(
+    "reloadSnapshot()" in view_will_appear_body,
+    "care dashboard should refresh real care data whenever the screen appears",
+)
 require(
     "localEligibleUserTurnCount = localResult.eligibleUserTurnCount" in reload_body
     and (

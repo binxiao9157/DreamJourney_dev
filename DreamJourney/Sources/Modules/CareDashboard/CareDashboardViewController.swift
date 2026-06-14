@@ -9,6 +9,7 @@ final class CareDashboardViewController: UIViewController {
     private var localEligibleUserTurnCount = 0
     private var remoteSnapshotStatusText = "服务器同步：未检查"
     private var remoteSnapshotHistory: [DreamJourneyBackendClient.CareSnapshotItem] = []
+    private var hasAppearedAfterInitialLoad = false
 
     private let scrollView = UIScrollView()
     private let stackView: UIStackView = {
@@ -49,6 +50,11 @@ final class CareDashboardViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.navigationBar.isHidden = false
+        if hasAppearedAfterInitialLoad {
+            reloadSnapshot()
+        } else {
+            hasAppearedAfterInitialLoad = true
+        }
     }
 
     private func setupNavigation() {
