@@ -17,7 +17,8 @@ required_fragments = [
     ("presentArchiveItemActions(for:", "selection should route through an item action presenter"),
     ("retryImageAnalysis(for:", "image materials should expose a retry analysis action"),
     ('UIImage(contentsOfFile: localPath)', "retry should load the archived local image file"),
-    ("analyzePhoto(image, itemId: item.id)", "retry should reuse the real photo analysis pipeline"),
+    ("analyzePhoto(image, item: item)", "retry should reuse the real photo analysis pipeline with privacy metadata"),
+    ("PrivacyScopePolicy.canUse(metadata: item.privacyMetadata, surface: .remoteExtraction)", "retry should not bypass the remote extraction privacy gate"),
     ("重新分析照片", "photo retry action should be user-facing"),
     ("重新分析截图", "screenshot retry action should be user-facing"),
     ("照片分析失败，素材已保存", "analysis failure copy should remain visible"),
@@ -45,4 +46,3 @@ if missing:
     sys.exit(1)
 
 print("MemoryArchiveImageAnalysisRetry verification passed")
-

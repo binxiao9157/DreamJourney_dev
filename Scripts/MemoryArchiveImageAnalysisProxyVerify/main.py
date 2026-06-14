@@ -29,18 +29,27 @@ required_client_fragments = [
     "func analyzeArchiveImage",
     'path: "archive/image-analysis"',
     "imageBase64",
+    "userId: String",
+    "archiveItemId: String",
+    "privacyMetadata: MemoryPrivacyMetadata",
     "KBImageAnalysisResult",
 ]
 
 required_vc_fragments = [
     "analyzePhotoViaBackendOrDirect",
     "DreamJourneyBackendClient.shared.analyzeArchiveImage",
+    "archiveItemId: item.id",
+    "privacyMetadata: item.privacyMetadata",
+    "PrivacyScopePolicy.canUse(metadata: item.privacyMetadata, surface: .remoteExtraction)",
     "DeepSeekService.shared.analyzeImage",
 ]
 
 required_backend_fragments = [
     '@app.post("/archive/image-analysis")',
     "DeepSeekImageAnalysisProxy",
+    "sanitize_image_analysis_payload",
+    "archiveItemId",
+    "privacyMetadata",
     "image_base64",
     "dryRun",
 ]
@@ -57,6 +66,8 @@ required_service_fragments = [
 required_backend_test_fragments = [
     "test_archive_image_analysis_dry_run_redacts_secret",
     "test_archive_image_analysis_requires_image_base64",
+    "test_archive_image_analysis_requires_user_and_archive_item",
+    "test_archive_image_analysis_rejects_non_generation_allowed_privacy",
     "test_archive_image_analysis_without_key_returns_unavailable",
     "test_image_analysis_parse_requires_structured_json",
     "/archive/image-analysis",

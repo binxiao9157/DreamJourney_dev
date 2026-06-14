@@ -14,6 +14,7 @@ from app.services.privacy import (
     filter_syncable_graph,
     sanitize_archive_item_payload,
     sanitize_care_snapshot_payload,
+    sanitize_image_analysis_payload,
     sanitize_mailbox_letter_payload,
 )
 from app.services.runtime_config import RuntimeConfigService
@@ -217,6 +218,17 @@ def archive_image_analysis(payload: Dict[str, Any], dryRun: bool = False) -> Dic
     image_base64 = str(payload.get("imageBase64") or "").strip()
     if not image_base64:
         raise HTTPException(status_code=400, detail="imageBase64 is required")
+    user_id = str(payload.get("userId") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=400, detail="userId is required")
+    archive_item_id = str(payload.get("archiveItemId") or "").strip()
+    if not archive_item_id:
+        raise HTTPException(status_code=400, detail="archiveItemId is required")
+
+    try:
+        safe_context = sanitize_image_analysis_payload(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
 
     proxy = DeepSeekImageAnalysisProxy(settings)
     try:
@@ -232,6 +244,11 @@ def archive_image_analysis(payload: Dict[str, Any], dryRun: bool = False) -> Dic
     return {
         "provider": "deepseek",
         "request": request,
+        "context": {
+            "userId": user_id,
+            "archiveItemId": archive_item_id,
+            "privacyMetadata": safe_context.get("privacyMetadata"),
+        },
         "note": "dryRun=true returns the redacted upstream request without calling DeepSeek.",
     }
 

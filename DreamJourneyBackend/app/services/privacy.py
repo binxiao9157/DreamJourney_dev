@@ -3,6 +3,7 @@ from typing import Any, Dict, Iterable, List
 
 
 SYNCABLE_SCOPES = {"generationAllowed", "familyCircle"}
+AI_PROCESSABLE_SCOPES = {"generationAllowed"}
 
 CARE_SNAPSHOT_SCALAR_KEYS = {
     "generatedAt",
@@ -198,6 +199,20 @@ def sanitize_archive_item_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("archive item is not syncable")
 
     item = deepcopy(payload)
+    item.pop("localPath", None)
+    item.pop("fileURL", None)
+    item.pop("absolutePath", None)
+    item["metadataOnly"] = True
+    return item
+
+
+def sanitize_image_analysis_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Return backend-safe image analysis context and reject non-AI scopes."""
+    if _scope(payload) not in AI_PROCESSABLE_SCOPES:
+        raise ValueError("archive image analysis requires generationAllowed privacy")
+
+    item = deepcopy(payload)
+    item.pop("imageBase64", None)
     item.pop("localPath", None)
     item.pop("fileURL", None)
     item.pop("absolutePath", None)

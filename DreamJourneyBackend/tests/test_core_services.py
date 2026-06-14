@@ -757,7 +757,12 @@ class ArchiveImageAnalysisAPITests(unittest.TestCase):
         response = client.post(
             "/archive/image-analysis",
             params={"dryRun": "true"},
-            json={"imageBase64": "abc123"},
+            json={
+                "userId": "archive_image_user",
+                "archiveItemId": "archive-photo-1",
+                "imageBase64": "abc123",
+                "privacyMetadata": {"scope": "generationAllowed"},
+            },
         )
 
         self.assertEqual(response.status_code, 200)
@@ -774,6 +779,41 @@ class ArchiveImageAnalysisAPITests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
 
+    def test_archive_image_analysis_requires_user_and_archive_item(self):
+        client = TestClient(app)
+        base_payload = {
+            "imageBase64": "abc123",
+            "privacyMetadata": {"scope": "generationAllowed"},
+        }
+
+        missing_user = client.post(
+            "/archive/image-analysis",
+            json={**base_payload, "archiveItemId": "archive-photo-1"},
+        )
+        missing_item = client.post(
+            "/archive/image-analysis",
+            json={**base_payload, "userId": "archive_image_user"},
+        )
+
+        self.assertEqual(missing_user.status_code, 400)
+        self.assertEqual(missing_item.status_code, 400)
+
+    def test_archive_image_analysis_rejects_non_generation_allowed_privacy(self):
+        client = TestClient(app)
+
+        for scope in ("privateOnly", "localOnly", "familyCircle"):
+            response = client.post(
+                "/archive/image-analysis",
+                params={"dryRun": "true"},
+                json={
+                    "userId": "archive_image_user",
+                    "archiveItemId": "archive-photo-1",
+                    "imageBase64": "abc123",
+                    "privacyMetadata": {"scope": scope},
+                },
+            )
+            self.assertEqual(response.status_code, 403, scope)
+
     def test_archive_image_analysis_without_key_returns_unavailable(self):
         client = TestClient(app)
         original_settings = main_module.settings
@@ -781,7 +821,12 @@ class ArchiveImageAnalysisAPITests(unittest.TestCase):
         try:
             response = client.post(
                 "/archive/image-analysis",
-                json={"imageBase64": "abc123"},
+                json={
+                    "userId": "archive_image_user",
+                    "archiveItemId": "archive-photo-1",
+                    "imageBase64": "abc123",
+                    "privacyMetadata": {"scope": "generationAllowed"},
+                },
             )
         finally:
             main_module.settings = original_settings

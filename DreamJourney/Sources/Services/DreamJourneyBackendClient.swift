@@ -75,12 +75,25 @@ final class DreamJourneyBackendClient {
 
     func analyzeArchiveImage(
         imageBase64: String,
+        userId: String,
+        archiveItemId: String,
+        privacyMetadata: MemoryPrivacyMetadata,
         completion: @escaping (Result<KBImageAnalysisResult, Swift.Error>) -> Void
     ) {
+        guard let privacyObject = Self.jsonObject(fromEncodable: privacyMetadata) else {
+            completion(.failure(Error.invalidPrivacyMetadata))
+            return
+        }
+        let payload: [String: Any] = [
+            "userId": userId,
+            "archiveItemId": archiveItemId,
+            "imageBase64": imageBase64,
+            "privacyMetadata": privacyObject
+        ]
         performJSONRequest(
             path: "archive/image-analysis",
             method: "POST",
-            bodyObject: ["imageBase64": imageBase64],
+            bodyObject: payload,
             responseType: KBImageAnalysisResult.self,
             completion: completion
         )
@@ -467,6 +480,7 @@ extension DreamJourneyBackendClient {
         case missingBaseURL
         case invalidURL
         case invalidGraphJSON
+        case invalidPrivacyMetadata
         case invalidCareSnapshot
         case archiveItemNotSyncable
         case mailboxLetterNotSyncable
@@ -481,6 +495,8 @@ extension DreamJourneyBackendClient {
                 return "DreamJourney 后端地址无效"
             case .invalidGraphJSON:
                 return "KBLite 图谱 JSON 无效"
+            case .invalidPrivacyMetadata:
+                return "隐私授权元数据无效"
             case .invalidCareSnapshot:
                 return "关怀看板快照 JSON 无效"
             case .archiveItemNotSyncable:

@@ -3,6 +3,10 @@ import UniformTypeIdentifiers
 import Vision
 
 final class MemoryArchiveViewController: UIViewController {
+    private enum ImageAnalysisGateError: Error {
+        case remoteExtractionNotAllowed
+    }
+
     private enum PendingImageMaterialKind {
         case photo
         case screenshot
@@ -367,7 +371,13 @@ final class MemoryArchiveViewController: UIViewController {
         }
     }
 
-    private func analyzePhoto(_ image: UIImage, itemId: String) {
+    private func analyzePhoto(_ image: UIImage, item: MemoryArchiveItem) {
+        guard PrivacyScopePolicy.canUse(metadata: item.privacyMetadata, surface: .remoteExtraction) else {
+            setKnowledgeDepositStatus("结构化建库：该素材未授权远程图片分析")
+            showToast("未授权远程分析", type: .info)
+            return
+        }
+
         let maxDimension: CGFloat = 1024
         let scaledImage: UIImage
         if image.size.width > maxDimension || image.size.height > maxDimension {
@@ -384,7 +394,7 @@ final class MemoryArchiveViewController: UIViewController {
         guard let imageData = scaledImage.jpegData(compressionQuality: 0.6) else { return }
         let base64 = imageData.base64EncodedString()
 
-        analyzePhotoViaBackendOrDirect(imageBase64: base64) { [weak self] result in
+        analyzePhotoViaBackendOrDirect(imageBase64: base64, item: item) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 switch result {
@@ -398,18 +408,18 @@ final class MemoryArchiveViewController: UIViewController {
                         estimatedDecade: kbAnalysis.estimatedDecade
                     )
                     do {
-                        let item = try self.repository.applyImageAnalysis(id: itemId, analysis: archiveAnalysis)
-                        self.syncArchiveItemMetadataToBackend(item)
-                        if item.privacyMetadata.scope != .privateOnly {
+                        let updatedItem = try self.repository.applyImageAnalysis(id: item.id, analysis: archiveAnalysis)
+                        self.syncArchiveItemMetadataToBackend(updatedItem)
+                        if updatedItem.privacyMetadata.scope != .privateOnly {
                             let beforeStatus = KBLiteDepositStatusBuilder.build(from: KBLiteManager.shared.graph)
                             let sessionId = ConversationMemoryManager.shared.currentMemory.sessionCount + 1
                             Stage1MemoryFacade.shared.ingestImageAnalysis(
                                 kbAnalysis,
                                 sessionId: sessionId,
-                                privacyMetadata: item.privacyMetadata,
-                                archiveItemID: item.id,
-                                archiveTitle: item.title,
-                                capturedAt: item.createdAt
+                                privacyMetadata: updatedItem.privacyMetadata,
+                                archiveItemID: updatedItem.id,
+                                archiveTitle: updatedItem.title,
+                                capturedAt: updatedItem.createdAt
                             )
                             let afterStatus = KBLiteDepositStatusBuilder.build(from: KBLiteManager.shared.graph)
                             let addedCount = max(0, afterStatus.totalEntityCount - beforeStatus.totalEntityCount)
@@ -424,7 +434,7 @@ final class MemoryArchiveViewController: UIViewController {
                         self.showToast("照片分析结果保存失败", type: .error)
                     }
                 case .failure:
-                    if let failedItem = try? self.repository.markAnalysisFailed(id: itemId) {
+                    if let failedItem = try? self.repository.markAnalysisFailed(id: item.id) {
                         self.syncArchiveItemMetadataToBackend(failedItem)
                     }
                     self.setKnowledgeDepositStatus("结构化建库：照片分析失败，素材已保存；请检查 DeepSeek 或后端配置后重试")
@@ -437,14 +447,26 @@ final class MemoryArchiveViewController: UIViewController {
 
     private func analyzePhotoViaBackendOrDirect(
         imageBase64: String,
+        item: MemoryArchiveItem,
         completion: @escaping (Result<KBImageAnalysisResult, Error>) -> Void
     ) {
+        guard PrivacyScopePolicy.canUse(metadata: item.privacyMetadata, surface: .remoteExtraction) else {
+            completion(.failure(ImageAnalysisGateError.remoteExtractionNotAllowed))
+            return
+        }
+
         guard DreamJourneyBackendClient.shared.isConfigured else {
             analyzePhotoDirectly(imageBase64: imageBase64, completion: completion)
             return
         }
 
-        DreamJourneyBackendClient.shared.analyzeArchiveImage(imageBase64: imageBase64) { result in
+        let userId = UserManager.shared.currentUser?.id ?? "default"
+        DreamJourneyBackendClient.shared.analyzeArchiveImage(
+            imageBase64: imageBase64,
+            userId: userId,
+            archiveItemId: item.id,
+            privacyMetadata: item.privacyMetadata
+        ) { result in
             switch result {
             case .success:
                 completion(result)
@@ -494,6 +516,11 @@ final class MemoryArchiveViewController: UIViewController {
 
     private func retryImageAnalysis(for item: MemoryArchiveItem) {
         guard item.kind == .photo || item.kind == .screenshot else { return }
+        guard PrivacyScopePolicy.canUse(metadata: item.privacyMetadata, surface: .remoteExtraction) else {
+            setKnowledgeDepositStatus("结构化建库：该素材未授权远程图片分析")
+            showToast("未授权远程分析", type: .info)
+            return
+        }
         guard let localPath = item.localPath,
               let image = UIImage(contentsOfFile: localPath) else {
             setKnowledgeDepositStatus("结构化建库：本地图片文件不可用，无法重新分析")
@@ -503,7 +530,7 @@ final class MemoryArchiveViewController: UIViewController {
 
         setKnowledgeDepositStatus("结构化建库：正在重新分析\(item.kind.displayName)")
         showToast("开始重新分析\(item.kind.displayName)", type: .info)
-        analyzePhoto(image, itemId: item.id)
+        analyzePhoto(image, item: item)
     }
 
     private func makeActionButton(title: String, iconName: String) -> UIButton {
@@ -662,7 +689,7 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
                     setKnowledgeDepositStatus("结构化建库：\(item.kind.displayName)已保存，等待分析后建库")
                 }
                 showToast("\(item.kind.displayName)已加入档案馆，开始分析", type: .success)
-                analyzePhoto(image, itemId: item.id)
+                analyzePhoto(image, item: item)
             } else {
                 switch item.privacyMetadata.scope {
                 case .privateOnly:
