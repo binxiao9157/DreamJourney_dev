@@ -143,6 +143,9 @@ python3 Scripts/MemoryArchiveVoiceTranscriptBackfillVerify/main.py
 echo "== MemoryArchive voice auto transcription =="
 python3 Scripts/MemoryArchiveVoiceAutoTranscriptionVerify/main.py
 
+echo "== MemoryArchive real input copy =="
+python3 Scripts/MemoryArchiveRealInputCopyVerify/main.py
+
 echo "== MemoryArchive voice profile status UI =="
 python3 Scripts/MemoryArchiveVoiceProfileStatusUIVerify/main.py
 

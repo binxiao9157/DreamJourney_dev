@@ -647,7 +647,7 @@ final class MemoryArchiveViewController: UIViewController {
             preferredStyle: .alert
         )
         alert.addTextField { field in
-            field.placeholder = "例如：1978 年在西湖边开过小照相馆"
+            field.placeholder = "填写真实转写或摘要"
             field.text = Self.existingVoiceTranscriptText(from: item)
             field.clearButtonMode = .whileEditing
         }
@@ -1070,7 +1070,7 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
             preferredStyle: .alert
         )
         alert.addTextField { field in
-            field.placeholder = "例如：林桂芳"
+            field.placeholder = "请输入具体姓名"
             field.text = MemoryArchiveVoiceProfileStore.shared.profile(for: title)?.personName
             field.clearButtonMode = .whileEditing
         }
