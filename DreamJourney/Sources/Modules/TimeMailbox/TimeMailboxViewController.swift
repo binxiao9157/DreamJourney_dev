@@ -232,7 +232,7 @@ final class TimeMailboxViewController: UIViewController {
         guard !terms.isEmpty else { return .empty }
 
         let people = graph.people
-            .filter { matches($0.searchableText, terms: terms) }
+            .filter { isEligibleEchoEvidence($0.privacyMetadata) && matches($0.searchableText, terms: terms) }
             .prefix(2)
             .map { person -> String in
                 let detail = [person.relation, person.briefBio].compactMap { $0 }.joined(separator: "，")
@@ -240,7 +240,7 @@ final class TimeMailboxViewController: UIViewController {
             }
 
         let places = graph.places
-            .filter { matches($0.searchableText, terms: terms) }
+            .filter { isEligibleEchoEvidence($0.privacyMetadata) && matches($0.searchableText, terms: terms) }
             .prefix(2)
             .map { place -> String in
                 let detail = [place.category, place.description].compactMap { $0 }.joined(separator: "，")
@@ -248,7 +248,7 @@ final class TimeMailboxViewController: UIViewController {
             }
 
         let events = graph.events
-            .filter { matches($0.searchableText, terms: terms) }
+            .filter { isEligibleEchoEvidence($0.privacyMetadata) && matches($0.searchableText, terms: terms) }
             .prefix(2)
             .map { event -> String in
                 let date = event.formattedDate
@@ -257,7 +257,7 @@ final class TimeMailboxViewController: UIViewController {
             }
 
         let facts = graph.facts
-            .filter { matches($0.statement, terms: terms) }
+            .filter { isEligibleEchoEvidence($0.privacyMetadata) && matches($0.statement, terms: terms) }
             .prefix(3)
             .map(\.statement)
 
@@ -267,6 +267,10 @@ final class TimeMailboxViewController: UIViewController {
             events: Array(events),
             facts: Array(facts)
         )
+    }
+
+    private static func isEligibleEchoEvidence(_ metadata: MemoryPrivacyMetadata) -> Bool {
+        !metadata.sourceRefs.contains { $0.kind == .timeMailboxLetter }
     }
 
     private static func evidenceTerms(for letter: TimeMailboxLetter) -> [String] {
