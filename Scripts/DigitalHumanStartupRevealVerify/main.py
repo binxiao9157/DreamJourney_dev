@@ -70,6 +70,10 @@ if not re.search(r"#loadingSpinner\s*\{[^}]*display:\s*none;", vc_text, re.S):
     missing.append(f"{vc.name}: startup spinner should be hidden while the poster is visible")
 if not re.search(r"#startMessage\s*\{[^}]*display:\s*none;", vc_text, re.S):
     missing.append(f"{vc.name}: startup loading text should be hidden while the poster is visible")
+if not re.search(r"body:not\(\[data-video-ready=\"true\"\]\)\s+#status\s*\{[^}]*opacity:\s*0;", vc_text, re.S):
+    missing.append(f"{vc.name}: startup status text should stay hidden until the avatar video surface is ready")
+if not re.search(r"body\[data-video-ready=\"true\"\]\s+#status\s*\{[^}]*opacity:\s*1;", vc_text, re.S):
+    missing.append(f"{vc.name}: startup status text should appear only after the avatar video surface is ready")
 if re.search(r"<div id=\"screen2\">\s*<video[^>]*>\s*</video>\s*<img id=\"avatarPoster\"", vc_text, re.S):
     missing.append(f"{vc.name}: avatar poster must sit outside initially hidden screen2")
 if "document.getElementById('screen2').style.display = 'block';" in mini_mate_text:

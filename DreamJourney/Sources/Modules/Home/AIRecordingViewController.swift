@@ -2230,6 +2230,14 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
       justify-content: space-between;
       gap: 12px;
       color: var(--ink);
+      opacity: 0;
+      transition: opacity .18s ease-out;
+    }
+    body:not([data-video-ready="true"]) #status {
+      opacity: 0;
+    }
+    body[data-video-ready="true"] #status {
+      opacity: 1;
     }
     #stateText {
       font-size: 15px;
