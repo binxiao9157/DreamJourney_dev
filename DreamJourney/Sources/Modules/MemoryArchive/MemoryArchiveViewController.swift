@@ -574,6 +574,9 @@ final class MemoryArchiveViewController: UIViewController {
             message: item.displayDetail,
             preferredStyle: .actionSheet
         )
+        alert.addAction(UIAlertAction(title: "查看建库证据", style: .default) { [weak self] _ in
+            self?.presentKnowledgeEvidence(for: item)
+        })
         if item.kind == .photo || item.kind == .screenshot {
             let retryTitle = item.kind == .screenshot ? "重新分析截图" : "重新分析照片"
             alert.addAction(UIAlertAction(title: retryTitle, style: .default) { [weak self] _ in
@@ -589,6 +592,51 @@ final class MemoryArchiveViewController: UIViewController {
             height: 1
         )
         present(alert, animated: true)
+    }
+
+    private func presentKnowledgeEvidence(for item: MemoryArchiveItem) {
+        let evidence = MemoryArchiveKnowledgeEvidenceBuilder.build(
+            for: item,
+            in: KBLiteManager.shared.displayGraphForLocalBrowsing()
+        )
+        let message: String
+        if evidence.totalCount == 0 {
+            message = "该素材暂未生成结构化知识。\n\n私密素材不会进入知识库；照片/截图可能需要完成分析或文字识别；语音素材需要填写转写或摘要后才会沉淀真实内容。"
+        } else {
+            message = Self.knowledgeEvidenceMessage(item: item, evidence: evidence)
+        }
+        let alert = UIAlertController(
+            title: "建库证据",
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "打开结构化知识库", style: .default) { [weak self] _ in
+            self?.knowledgeTapped()
+        })
+        alert.addAction(UIAlertAction(title: "关闭", style: .cancel))
+        present(alert, animated: true)
+    }
+
+    private static func knowledgeEvidenceMessage(
+        item: MemoryArchiveItem,
+        evidence: MemoryArchiveKnowledgeEvidence
+    ) -> String {
+        var lines = [
+            "来源：\(item.title)",
+            "命中：\(evidence.summaryText)"
+        ]
+        lines.append(contentsOf: knowledgeEvidenceSection(title: "人物", values: evidence.people))
+        lines.append(contentsOf: knowledgeEvidenceSection(title: "地点", values: evidence.places))
+        lines.append(contentsOf: knowledgeEvidenceSection(title: "事件", values: evidence.events))
+        lines.append(contentsOf: knowledgeEvidenceSection(title: "事实", values: evidence.facts))
+        return lines.joined(separator: "\n")
+    }
+
+    private static func knowledgeEvidenceSection(title: String, values: [String]) -> [String] {
+        guard !values.isEmpty else { return [] }
+        let displayValues = Array(values.prefix(6)).map { "· \($0)" }
+        let overflow = values.count > 6 ? ["· 还有 \(values.count - 6) 条，打开结构化知识库查看"] : []
+        return ["", title] + displayValues + overflow
     }
 
     private func retryImageAnalysis(for item: MemoryArchiveItem) {

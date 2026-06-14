@@ -142,6 +142,9 @@ swiftc -DMEMORY_PRIVACY_INTEGRATION_VERIFY \
 echo "== MemoryArchive knowledge deposit UI =="
 python3 Scripts/MemoryArchiveKnowledgeDepositUIVerify/main.py
 
+echo "== MemoryArchive knowledge evidence =="
+python3 Scripts/MemoryArchiveKnowledgeEvidenceVerify/main.py
+
 echo "== MemoryArchive metadata-only deposit =="
 python3 Scripts/MemoryArchiveMetadataOnlyDepositVerify/main.py
 
