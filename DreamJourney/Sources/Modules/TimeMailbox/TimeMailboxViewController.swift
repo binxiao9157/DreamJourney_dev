@@ -436,13 +436,29 @@ final class TimeMailboxViewController: UIViewController {
             DispatchQueue.main.async {
                 switch result {
                 case .success(let response):
-                    self?.updateMailboxBackendSyncStatusLabel(remoteCount: response.items.count)
+                    guard let self else { return }
+                    let remoteMetadata = response.items.compactMap { $0.timeMailboxMetadata() }
+                    let mergedCount = self.repository.mergeRemoteMetadata(remoteMetadata)
+                    if mergedCount > 0 {
+                        self.letters = self.repository.letters()
+                        self.tableView.reloadData()
+                        self.backfillMailboxKnowledgeFromRestoredLetters(remoteMetadata)
+                    }
+                    let detail = mergedCount > 0 ? "已恢复 \(mergedCount) 封服务器信件元数据" : nil
+                    self.updateMailboxBackendSyncStatusLabel(remoteCount: response.items.count, detail: detail)
                 case .failure(let error):
                     print("[TimeMailbox] 后端信箱列表拉取失败: \(error.localizedDescription)")
                     self?.updateMailboxBackendSyncStatusLabel(remoteCount: nil, detail: "暂时无法确认服务器状态")
                 }
             }
         }
+    }
+
+    private func backfillMailboxKnowledgeFromRestoredLetters(_ remoteMetadata: [TimeMailboxLetterMetadata]) {
+        let restoredIDs = Set(remoteMetadata.map(\.id))
+        letters
+            .filter { restoredIDs.contains($0.id) }
+            .forEach { Stage1MemoryFacade.shared.ingestTimeMailboxLetterMetadata($0) }
     }
 
     private func updateMailboxBackendSyncStatusLabel(remoteCount: Int? = nil, detail: String? = nil) {

@@ -143,6 +143,53 @@ do {
     )
     try repo.delete(id: defaultLetter.id)
 
+    let localSyncedLetter = try repo.createLetter(
+        id: "shared-letter",
+        recipientName: "林桂芳",
+        title: "本机正文",
+        body: "PRIVATE_BODY_SHOULD_STAY_ON_DEVICE",
+        deliverAt: now.addingTimeInterval(120),
+        now: now,
+        boundaryAcknowledged: true,
+        privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed)
+    )
+    let remoteMetadata = [
+        TimeMailboxLetterMetadata(
+            id: localSyncedLetter.id,
+            recipientName: "林桂芳",
+            title: "服务器标题更新",
+            createdAt: now.addingTimeInterval(10),
+            deliverAt: now.addingTimeInterval(180),
+            deliveredAt: nil,
+            status: .sealed,
+            boundaryAcknowledged: true,
+            privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed)
+        ),
+        TimeMailboxLetterMetadata(
+            id: "remote-only-letter",
+            recipientName: "陈建国",
+            title: "远端恢复的信",
+            createdAt: now.addingTimeInterval(20),
+            deliverAt: now.addingTimeInterval(240),
+            deliveredAt: nil,
+            status: .sealed,
+            boundaryAcknowledged: true,
+            privacyMetadata: MemoryPrivacyMetadata(scope: .familyCircle)
+        )
+    ]
+    let mergedCount = repo.mergeRemoteMetadata(remoteMetadata)
+    let mergedLetters = repo.letters()
+    let preservedLocal = mergedLetters.first(where: { $0.id == localSyncedLetter.id })
+    let restoredRemote = mergedLetters.first(where: { $0.id == "remote-only-letter" })
+    assertCondition(mergedCount == 2, "repository should accept both local update and remote metadata-only restore")
+    assertCondition(preservedLocal?.title == "服务器标题更新", "remote metadata should refresh local mailbox title")
+    assertCondition(preservedLocal?.body == "PRIVATE_BODY_SHOULD_STAY_ON_DEVICE", "remote metadata merge must preserve local-only body")
+    assertCondition(restoredRemote?.body == "", "metadata-only restored mailbox letter should not invent or sync private body")
+    assertCondition(restoredRemote?.privacyMetadata.scope == .familyCircle, "restored mailbox metadata should keep backend privacy scope")
+    assertCondition(repo.mergeRemoteMetadata(remoteMetadata) == 0, "unchanged remote metadata should not be reported as newly restored")
+    try repo.delete(id: localSyncedLetter.id)
+    try repo.delete(id: "remote-only-letter")
+
     let productionDefaults = UserDefaults(suiteName: "\(suiteName).productionDelay")!
     productionDefaults.removePersistentDomain(forName: "\(suiteName).productionDelay")
     let productionRepo = TimeMailboxRepository(defaults: productionDefaults, storageKey: "letters")

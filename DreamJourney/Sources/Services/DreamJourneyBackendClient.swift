@@ -638,6 +638,32 @@ extension DreamJourneyBackendClient {
         let metadataOnly: Bool?
         let contentRedacted: Bool?
         let updatedAt: String?
+
+        func timeMailboxMetadata() -> TimeMailboxLetterMetadata? {
+            guard let recipientName,
+                  let title,
+                  let createdAt = Self.parseDate(createdAt),
+                  let deliverAt = Self.parseDate(deliverAt) else {
+                return nil
+            }
+
+            return TimeMailboxLetterMetadata(
+                id: id,
+                recipientName: recipientName,
+                title: title,
+                createdAt: createdAt,
+                deliverAt: deliverAt,
+                deliveredAt: Self.parseDate(deliveredAt),
+                status: TimeMailboxDeliveryStatus(rawValue: status ?? "") ?? .sealed,
+                boundaryAcknowledged: boundaryAcknowledged ?? true,
+                privacyMetadata: privacyMetadata ?? MemoryPrivacyMetadata(scope: .localOnly)
+            )
+        }
+
+        private static func parseDate(_ rawValue: String?) -> Date? {
+            guard let rawValue, !rawValue.isEmpty else { return nil }
+            return ISO8601DateFormatter().date(from: rawValue)
+        }
     }
 
     struct FamilyInviteResponse: Decodable {

@@ -86,6 +86,18 @@ struct TimeMailboxLetter: Codable, Identifiable, Equatable, MemoryPrivacyScoped 
     }
 }
 
+struct TimeMailboxLetterMetadata: Equatable {
+    let id: String
+    let recipientName: String
+    let title: String
+    let createdAt: Date
+    let deliverAt: Date
+    let deliveredAt: Date?
+    let status: TimeMailboxDeliveryStatus
+    let boundaryAcknowledged: Bool
+    let privacyMetadata: MemoryPrivacyMetadata
+}
+
 struct TimeMailboxEchoEvidence: Equatable {
     var people: [String] = []
     var places: [String] = []

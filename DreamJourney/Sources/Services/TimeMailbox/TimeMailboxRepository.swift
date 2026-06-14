@@ -130,6 +130,59 @@ final class TimeMailboxRepository {
         save(all)
     }
 
+    @discardableResult
+    func mergeRemoteMetadata(_ remoteItems: [TimeMailboxLetterMetadata]) -> Int {
+        var all = load()
+        var changedCount = 0
+
+        for item in remoteItems {
+            guard let sanitized = Self.sanitizedRemoteMetadata(item) else { continue }
+
+            if let index = all.firstIndex(where: { $0.id == sanitized.id }) {
+                let existing = all[index]
+                let merged = TimeMailboxLetter(
+                    id: existing.id,
+                    recipientName: sanitized.recipientName,
+                    title: sanitized.title,
+                    body: existing.body,
+                    createdAt: sanitized.createdAt,
+                    deliverAt: sanitized.deliverAt,
+                    deliveredAt: sanitized.deliveredAt,
+                    status: sanitized.status,
+                    replyText: existing.replyText,
+                    echoMode: existing.echoMode,
+                    echoEvidenceLineCount: existing.echoEvidenceLineCount,
+                    boundaryAcknowledged: sanitized.boundaryAcknowledged,
+                    privacyMetadata: sanitized.privacyMetadata
+                )
+                if merged != existing {
+                    all[index] = merged
+                    changedCount += 1
+                }
+            } else {
+                all.append(TimeMailboxLetter(
+                    id: sanitized.id,
+                    recipientName: sanitized.recipientName,
+                    title: sanitized.title,
+                    body: "",
+                    createdAt: sanitized.createdAt,
+                    deliverAt: sanitized.deliverAt,
+                    deliveredAt: sanitized.deliveredAt,
+                    status: sanitized.status,
+                    replyText: nil,
+                    boundaryAcknowledged: sanitized.boundaryAcknowledged,
+                    privacyMetadata: sanitized.privacyMetadata
+                ))
+                changedCount += 1
+            }
+        }
+
+        if changedCount > 0 {
+            save(all)
+        }
+        return changedCount
+    }
+
     private func load() -> [TimeMailboxLetter] {
         guard let data = defaults.data(forKey: storageKey) else { return [] }
         guard let decoded = try? decoder.decode([TimeMailboxLetter].self, from: data) else { return [] }
@@ -151,6 +204,28 @@ final class TimeMailboxRepository {
 
     private static func isGenericKinshipRecipient(_ recipientName: String) -> Bool {
         genericKinshipNames.contains(recipientName.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private static func sanitizedRemoteMetadata(_ item: TimeMailboxLetterMetadata) -> TimeMailboxLetterMetadata? {
+        let cleanID = item.id.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanRecipient = item.recipientName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanTitle = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanID.isEmpty,
+              !cleanRecipient.isEmpty,
+              !isGenericKinshipRecipient(cleanRecipient) else {
+            return nil
+        }
+        return TimeMailboxLetterMetadata(
+            id: cleanID,
+            recipientName: cleanRecipient,
+            title: cleanTitle.isEmpty ? "给\(cleanRecipient)的一封信" : cleanTitle,
+            createdAt: item.createdAt,
+            deliverAt: item.deliverAt,
+            deliveredAt: item.deliveredAt,
+            status: item.status,
+            boundaryAcknowledged: item.boundaryAcknowledged,
+            privacyMetadata: item.privacyMetadata
+        )
     }
 
     private static let genericKinshipNames: Set<String> = [

@@ -47,6 +47,8 @@ required_vc_fragments = [
     "syncDeliveredLettersToBackend",
     "DreamJourneyBackendClient.shared.syncMailboxLetter",
     "DreamJourneyBackendClient.shared.fetchMailboxLetters",
+    "repository.mergeRemoteMetadata",
+    "Stage1MemoryFacade.shared.ingestTimeMailboxLetterMetadata",
 ]
 
 required_backend_fragments = [
@@ -98,6 +100,8 @@ if "TimeMailboxTrueBackendFlowVerify/main.py" not in phase1_text:
     missing.append(f"{verify_phase1.name}: missing TimeMailboxTrueBackendFlowVerify/main.py")
 if "syncLetterMetadataToBackend" in repo_text:
     missing.append(f"{repo_file.name}: backend sync should stay out of pure repository storage")
+if "func mergeRemoteMetadata" not in repo_text:
+    missing.append(f"{repo_file.name}: missing remote mailbox metadata merge")
 
 if missing:
     raise SystemExit("\n".join(missing))
