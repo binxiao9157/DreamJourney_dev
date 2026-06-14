@@ -360,6 +360,16 @@ python3 Scripts/KnowledgeBaseDepositStatusUIVerify/main.py
 echo "== Dialog knowledge deposit feedback =="
 python3 Scripts/DialogKnowledgeDepositFeedbackVerify/main.py
 
+echo "== Dialog memory RAG payload =="
+xcrun swiftc \
+  DreamJourney/Sources/Services/Safety/SafetyModels.swift \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
+  DreamJourney/Sources/Services/KBLiteModels.swift \
+  DreamJourney/Sources/Services/DialogEngineModels.swift \
+  Scripts/DialogMemoryRAGPayloadVerify/main.swift \
+  -o /tmp/dreamjourney_dialog_memory_rag_payload_verify
+/tmp/dreamjourney_dialog_memory_rag_payload_verify
+
 echo "== KBLite remote extraction evidence =="
 python3 Scripts/KBLiteRemoteExtractionEvidenceVerify/main.py
 

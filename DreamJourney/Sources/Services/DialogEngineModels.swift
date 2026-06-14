@@ -184,6 +184,11 @@ struct MemoryEvidencePack {
 
         var score = 0
         let terms = memoryTerms(from: query)
+        let specificTerms = terms.filter { isSpecificMemoryTerm($0) }
+        if !specificTerms.isEmpty,
+           !specificTerms.contains(where: { text.contains($0) }) {
+            return 0
+        }
         for term in terms where text.contains(term) {
             score += max(term.count, 1) * 2
         }
@@ -256,6 +261,16 @@ struct MemoryEvidencePack {
             }
         }
         return Array(Set(terms))
+    }
+
+    private static func isSpecificMemoryTerm(_ term: String) -> Bool {
+        let genericTerms: Set<String> = [
+            "是谁", "哪里", "哪儿", "在哪", "哪年", "什么时候", "什么", "怎么", "平时",
+            "以前", "过去", "当年", "那时候", "后来", "有没有", "记得", "还记", "我这",
+            "这里", "这个", "那个", "今天", "中午", "天气", "不错"
+        ]
+        guard term.count >= 2, !genericTerms.contains(term) else { return false }
+        return true
     }
 }
 
@@ -366,6 +381,97 @@ enum DialogMemoryGroundingPolicy {
 \(plan.instruction)
 如果没有证据支撑用户追问的事实，不要编造；请温和说明还没有记住，并邀请用户补充。
 """
+    }
+}
+
+enum DialogMemoryRAGPayloadBuilder {
+    static let maxPayloadCharacters = 4_000
+
+    static func makePayload(
+        query: String,
+        graph: KBLiteGraph,
+        maxItems: Int = 5
+    ) -> String? {
+        let pack = MemoryEvidencePack.build(query: query, graph: graph, maxItems: maxItems)
+        let plan = MemoryGroundedReplyPlanner.makePlan(pack: pack)
+        guard pack.hasEvidence else {
+            guard shouldSendNoEvidenceBoundary(for: pack.intent) else { return nil }
+            return makePayload(items: [[
+                "title": "没有匹配的家庭记忆",
+                "content": "没有检索到相关家庭记忆。\n回复边界：\(plan.instruction)"
+            ]])
+        }
+
+        let items = pack.items.map { item in
+            [
+                "title": title(for: item),
+                "content": content(for: item, plan: plan)
+            ]
+        }
+        return makePayload(items: items)
+    }
+
+    private static func makePayload(items: [[String: String]]) -> String? {
+        var trimmedItems = items
+        while !trimmedItems.isEmpty {
+            guard let externalRAG = encodeJSONStringArray(trimmedItems),
+                  let payload = encodeJSONObject(["external_rag": externalRAG]) else {
+                return nil
+            }
+            if payload.count <= maxPayloadCharacters {
+                return payload
+            }
+            trimmedItems.removeLast()
+        }
+        return nil
+    }
+
+    private static func shouldSendNoEvidenceBoundary(for intent: MemoryDialogIntent) -> Bool {
+        switch intent {
+        case .factQuestion, .memoryRecall, .storyContinuation:
+            return true
+        case .casualChat, .newMemoryCapture:
+            return false
+        }
+    }
+
+    private static func title(for item: MemoryEvidenceItem) -> String {
+        switch item.kind {
+        case .person:
+            return "家庭记忆人物"
+        case .place:
+            return "家庭记忆地点"
+        case .event:
+            return "家庭记忆事件"
+        case .fact:
+            return "家庭记忆事实"
+        }
+    }
+
+    private static func content(for item: MemoryEvidenceItem, plan: MemoryGroundedReplyPlan) -> String {
+        let raw = "\(item.text)\n回复边界：\(plan.instruction)"
+        if raw.count <= 520 {
+            return raw
+        }
+        return String(raw.prefix(520))
+    }
+
+    private static func encodeJSONStringArray(_ items: [[String: String]]) -> String? {
+        guard JSONSerialization.isValidJSONObject(items),
+              let data = try? JSONSerialization.data(withJSONObject: items),
+              let string = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        return string
+    }
+
+    private static func encodeJSONObject(_ object: [String: String]) -> String? {
+        guard JSONSerialization.isValidJSONObject(object),
+              let data = try? JSONSerialization.data(withJSONObject: object),
+              let string = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        return string
     }
 }
 

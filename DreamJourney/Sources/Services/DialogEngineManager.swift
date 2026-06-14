@@ -967,7 +967,6 @@ extension DialogEngineManager: SpeechEngineDelegate {
                 if handleSafetyIfNeeded(text: queryText) {
                     return
                 }
-                logMemoryGroundingPlan(for: queryText)
                 // 检测结束关键词
                 if let keyword = checkEndKeyword(in: queryText) {
                     print("[DialogEngine] 🛑 用户确认文本中检测到结束关键词: \(keyword)")
@@ -978,6 +977,8 @@ extension DialogEngineManager: SpeechEngineDelegate {
                     }
                     return
                 }
+                sendMemoryRAGIfAvailable(for: queryText)
+                logMemoryGroundingPlan(for: queryText)
                 DispatchQueue.main.async { [weak self] in
                     self?.forwardASRResult(text: queryText, isFinal: true)
                 }
@@ -1440,6 +1441,26 @@ extension DialogEngineManager: SpeechEngineDelegate {
         )
         if !evidencePreview.isEmpty {
             DDLogInfo("[DialogMemoryGrounding] evidencePreview=\(evidencePreview)")
+        }
+    }
+
+    private func sendMemoryRAGIfAvailable(for query: String) {
+        guard let engine = engine,
+              let payload = DialogMemoryRAGPayloadBuilder.makePayload(
+                query: query,
+                graph: Stage1MemoryFacade.shared.archiveSnapshot(),
+                maxItems: 5
+              ) else {
+            return
+        }
+
+        let result = engine.send(SEDirectiveEventChatRagText, data: payload)
+        if result == SENoError {
+            DDLogInfo("[DialogMemoryGrounding] sent ChatRAGText payloadLength=\(payload.count)")
+            print("[DialogEngine] 🧠 已发送本轮档案RAG证据 payloadLength=\(payload.count)")
+        } else {
+            DDLogWarn("[DialogMemoryGrounding] ChatRAGText send failed: \(result.rawValue)")
+            print("[DialogEngine] ⚠️ 本轮档案RAG证据发送失败: \(result.rawValue)")
         }
     }
 
