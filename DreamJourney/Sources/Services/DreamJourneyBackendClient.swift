@@ -63,6 +63,32 @@ final class DreamJourneyBackendClient {
         )
     }
 
+    func extractKnowledge(
+        userId: String,
+        transcript: String,
+        existingSummary: String,
+        privacyMetadata: MemoryPrivacyMetadata,
+        completion: @escaping (Result<KBExtractionResponse, Swift.Error>) -> Void
+    ) {
+        guard let privacyObject = Self.jsonObject(fromEncodable: privacyMetadata) else {
+            completion(.failure(Error.invalidPrivacyMetadata))
+            return
+        }
+        let payload: [String: Any] = [
+            "userId": userId,
+            "transcript": transcript,
+            "existingSummary": existingSummary,
+            "privacyMetadata": privacyObject
+        ]
+        performJSONRequest(
+            path: "kb/extract",
+            method: "POST",
+            bodyObject: payload,
+            responseType: KBExtractionResponse.self,
+            completion: completion
+        )
+    }
+
     func fetchRuntimeConfig(completion: @escaping (Result<RuntimeConfig, Swift.Error>) -> Void) {
         performJSONRequest(
             path: "config/runtime",
@@ -528,6 +554,13 @@ extension DreamJourneyBackendClient {
     struct KBSnapshotResponse: Decodable {
         let userId: String
         let graph: KBLiteGraph
+    }
+
+    struct KBExtractionResponse: Decodable {
+        let provider: String
+        let capability: String
+        let userId: String
+        let extraction: KBExtractionResult
     }
 
     struct RuntimeConfig: Decodable {

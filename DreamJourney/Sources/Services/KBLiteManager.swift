@@ -772,51 +772,166 @@ final class KBLiteManager {
             // 构造提取 prompt
             let prompt = self.buildExtractionPrompt(transcript: transcript, existingSummary: existingSummary)
 
-            // 调用 DeepSeek
-            DeepSeekService.shared.extractKnowledge(prompt: prompt) { [weak self] result in
-                guard let self = self else { return }
-                self.isExtracting = false
+            self.requestBackendExtraction(
+                transcript: transcript,
+                existingSummary: existingSummary,
+                prompt: prompt,
+                sessionId: sessionId,
+                deterministicCount: deterministicCount,
+                remotePrivacyMetadata: remotePrivacyMetadata,
+                completion: completion
+            )
+        }
+    }
 
-                switch result {
-                case .success(let extractionResult):
-                    let llmAddedCount = self.mergeExtractionResult(
-                        extractionResult,
-                        sessionId: sessionId,
-                        privacyMetadata: remotePrivacyMetadata
-                    )
-                    let addedCount = deterministicCount + llmAddedCount
-                    self.graph.sessionCount = max(self.graph.sessionCount, sessionId)
-                    self.save()
-                    print("[KBLite] ✅ 知识提取完成: 新增 \(addedCount) 实体")
-                    DispatchQueue.main.async {
-                        completion(KBLiteExtractionSummary(
-                            deterministicAddedCount: deterministicCount,
-                            llmAddedCount: llmAddedCount,
-                            didAttemptLLM: true,
-                            didSkipDueToFrequency: false,
-                            didSkipDueToNoRemoteContent: false,
-                            didSkipDueToInFlight: false,
-                            llmErrorDescription: nil
-                        ))
-                    }
+    private func requestBackendExtraction(
+        transcript: String,
+        existingSummary: String,
+        prompt: String,
+        sessionId: Int,
+        deterministicCount: Int,
+        remotePrivacyMetadata: MemoryPrivacyMetadata,
+        completion: @escaping (KBLiteExtractionSummary) -> Void
+    ) {
+#if MEMORY_PRIVACY_INTEGRATION_VERIFY
+        fallbackToLocalDeepSeekExtraction(
+            prompt: prompt,
+            sessionId: sessionId,
+            deterministicCount: deterministicCount,
+            remotePrivacyMetadata: remotePrivacyMetadata,
+            backendErrorDescription: nil,
+            completion: completion
+        )
+#else
+        guard DreamJourneyBackendClient.shared.isConfigured,
+              let userId = UserManager.shared.currentUser?.id else {
+            fallbackToLocalDeepSeekExtraction(
+                prompt: prompt,
+                sessionId: sessionId,
+                deterministicCount: deterministicCount,
+                remotePrivacyMetadata: remotePrivacyMetadata,
+                backendErrorDescription: nil,
+                completion: completion
+            )
+            return
+        }
 
-                case .failure(let error):
-                    print("[KBLite] ⚠️ LLM 提取失败: \(error.localizedDescription)，保留本地确定性沉淀")
-                    self.graph.sessionCount = max(self.graph.sessionCount, sessionId)
-                    self.save()
-                    DispatchQueue.main.async {
-                        completion(KBLiteExtractionSummary(
-                            deterministicAddedCount: deterministicCount,
-                            llmAddedCount: 0,
-                            didAttemptLLM: true,
-                            didSkipDueToFrequency: false,
-                            didSkipDueToNoRemoteContent: false,
-                            didSkipDueToInFlight: false,
-                            llmErrorDescription: error.localizedDescription
-                        ))
-                    }
-                }
+        DreamJourneyBackendClient.shared.extractKnowledge(
+            userId: userId,
+            transcript: transcript,
+            existingSummary: existingSummary,
+            privacyMetadata: remotePrivacyMetadata
+        ) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let response):
+                self.finishLLMExtraction(
+                    extractionResult: response.extraction,
+                    sessionId: sessionId,
+                    deterministicCount: deterministicCount,
+                    remotePrivacyMetadata: remotePrivacyMetadata,
+                    completion: completion
+                )
+            case .failure(let error):
+                print("[KBLite] ⚠️ 后端知识抽取失败，尝试本机 DeepSeek 兜底: \(error.localizedDescription)")
+                self.fallbackToLocalDeepSeekExtraction(
+                    prompt: prompt,
+                    sessionId: sessionId,
+                    deterministicCount: deterministicCount,
+                    remotePrivacyMetadata: remotePrivacyMetadata,
+                    backendErrorDescription: error.localizedDescription,
+                    completion: completion
+                )
             }
+        }
+#endif
+    }
+
+    private func fallbackToLocalDeepSeekExtraction(
+        prompt: String,
+        sessionId: Int,
+        deterministicCount: Int,
+        remotePrivacyMetadata: MemoryPrivacyMetadata,
+        backendErrorDescription: String?,
+        completion: @escaping (KBLiteExtractionSummary) -> Void
+    ) {
+        DeepSeekService.shared.extractKnowledge(prompt: prompt) { [weak self] result in
+            guard let self else { return }
+
+            switch result {
+            case .success(let extractionResult):
+                self.finishLLMExtraction(
+                    extractionResult: extractionResult,
+                    sessionId: sessionId,
+                    deterministicCount: deterministicCount,
+                    remotePrivacyMetadata: remotePrivacyMetadata,
+                    completion: completion
+                )
+
+            case .failure(let error):
+                let errorDescription = [backendErrorDescription, error.localizedDescription]
+                    .compactMap { $0 }
+                    .joined(separator: "；本机 DeepSeek：")
+                self.finishLLMExtractionFailure(
+                    sessionId: sessionId,
+                    deterministicCount: deterministicCount,
+                    errorDescription: errorDescription.isEmpty ? error.localizedDescription : errorDescription,
+                    completion: completion
+                )
+            }
+        }
+    }
+
+    private func finishLLMExtraction(
+        extractionResult: KBExtractionResult,
+        sessionId: Int,
+        deterministicCount: Int,
+        remotePrivacyMetadata: MemoryPrivacyMetadata,
+        completion: @escaping (KBLiteExtractionSummary) -> Void
+    ) {
+        isExtracting = false
+        let llmAddedCount = mergeExtractionResult(
+            extractionResult,
+            sessionId: sessionId,
+            privacyMetadata: remotePrivacyMetadata
+        )
+        let addedCount = deterministicCount + llmAddedCount
+        graph.sessionCount = max(graph.sessionCount, sessionId)
+        save()
+        print("[KBLite] ✅ 知识提取完成: 新增 \(addedCount) 实体")
+        DispatchQueue.main.async {
+            completion(KBLiteExtractionSummary(
+                deterministicAddedCount: deterministicCount,
+                llmAddedCount: llmAddedCount,
+                didAttemptLLM: true,
+                didSkipDueToFrequency: false,
+                didSkipDueToNoRemoteContent: false,
+                didSkipDueToInFlight: false,
+                llmErrorDescription: nil
+            ))
+        }
+    }
+
+    private func finishLLMExtractionFailure(
+        sessionId: Int,
+        deterministicCount: Int,
+        errorDescription: String,
+        completion: @escaping (KBLiteExtractionSummary) -> Void
+    ) {
+        isExtracting = false
+        print("[KBLite] ⚠️ LLM 提取失败: \(errorDescription)，保留本地确定性沉淀")
+        graph.sessionCount = max(graph.sessionCount, sessionId)
+        save()
+        DispatchQueue.main.async {
+            completion(KBLiteExtractionSummary(
+                deterministicAddedCount: deterministicCount,
+                llmAddedCount: 0,
+                didAttemptLLM: true,
+                didSkipDueToFrequency: false,
+                didSkipDueToNoRemoteContent: false,
+                didSkipDueToInFlight: false,
+                llmErrorDescription: errorDescription
+            ))
         }
     }
 

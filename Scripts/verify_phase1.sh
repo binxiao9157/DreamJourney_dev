@@ -429,6 +429,7 @@ python3 Scripts/DialogPhotoPlaceholderPrivacyVerify/main.py
 
 echo "== KBLite remote extraction evidence =="
 python3 Scripts/KBLiteRemoteExtractionEvidenceVerify/main.py
+python3 Scripts/KBLiteBackendExtractionProxyVerify/main.py
 
 echo "== KnowledgeBase source privacy UI =="
 python3 Scripts/KnowledgeBaseSourcePrivacyUIVerify/main.py

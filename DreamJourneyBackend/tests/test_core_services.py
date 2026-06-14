@@ -14,7 +14,7 @@ from app.services.store_factory import make_store
 from app.services.tokens import TokenService
 from app.services.tts import VolcTTSProxy
 from app.services.amap import AMapDistrictProxy
-from app.services.deepseek import DeepSeekImageAnalysisProxy
+from app.services.deepseek import DeepSeekImageAnalysisProxy, DeepSeekKnowledgeExtractionProxy
 
 
 class PrivacyFilteringTests(unittest.TestCase):
@@ -223,6 +223,70 @@ class TokenAndProxyTests(unittest.TestCase):
         self.assertIn("key=amap-secret", url)
         self.assertIn("keywords=", url)
         self.assertIn("%E7%BB%8D%E5%85%B4%E5%B8%82", url)
+
+    def test_knowledge_extraction_proxy_builds_redacted_deepseek_request(self):
+        settings = Settings(deepseek_api_key="deepseek-secret")
+        proxy = DeepSeekKnowledgeExtractionProxy(settings)
+
+        request = proxy.redacted_request(
+            transcript="[长辈]: 我叫陈建国，1968年住在绍兴越城区仓桥直街。",
+            existing_summary="（暂无已有知识）",
+        )
+
+        serialized = str(request)
+        self.assertEqual(request["headers"]["Authorization"], "Bearer <server-side>")
+        self.assertNotIn("deepseek-secret", serialized)
+        self.assertIn("陈建国", serialized)
+        self.assertIn("严格的 JSON", serialized)
+
+    def test_kb_extract_endpoint_rejects_non_ai_privacy_scope(self):
+        client = TestClient(app)
+
+        response = client.post(
+            "/kb/extract?dryRun=true",
+            json={
+                "userId": "u1",
+                "transcript": "[长辈]: 本机私密内容",
+                "existingSummary": "（暂无已有知识）",
+                "privacyMetadata": {"scope": "localOnly"},
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_kb_extract_endpoint_dry_run_returns_redacted_request(self):
+        client = TestClient(app)
+
+        response = client.post(
+            "/kb/extract?dryRun=true",
+            json={
+                "userId": "u1",
+                "transcript": "[长辈]: 我叫陈建国，1968年住在绍兴越城区仓桥直街。",
+                "existingSummary": "（暂无已有知识）",
+                "privacyMetadata": {
+                    "scope": "generationAllowed",
+                    "sourceRefs": [
+                        {
+                            "kind": "conversationTurn",
+                            "id": "turn-1",
+                            "title": "用户对话原文不应出现在服务端上下文",
+                        }
+                    ],
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        serialized = str(payload)
+        self.assertEqual(payload["provider"], "deepseek")
+        self.assertIn("kbExtract", payload["capability"])
+        self.assertNotIn("deepseek-secret", serialized)
+        self.assertNotIn("用户对话原文不应出现在服务端上下文", serialized)
+        self.assertEqual(
+            payload["context"]["privacyMetadata"]["sourceRefs"][0]["title"],
+            "对话来源",
+        )
 
 
 class StoreTests(unittest.TestCase):

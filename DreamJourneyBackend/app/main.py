@@ -15,8 +15,10 @@ from app.services.privacy import (
     sanitize_archive_item_payload,
     sanitize_care_snapshot_payload,
     sanitize_image_analysis_payload,
+    sanitize_knowledge_extraction_payload,
     sanitize_mailbox_letter_payload,
 )
+from app.services.deepseek import DeepSeekKnowledgeExtractionProxy
 from app.services.runtime_config import RuntimeConfigService
 from app.services.store_factory import init_store, make_store
 from app.services.tokens import TokenService
@@ -167,6 +169,55 @@ def kb_snapshot(user_id: str) -> Dict[str, Any]:
     if graph is None:
         raise HTTPException(status_code=404, detail="snapshot not found")
     return {"userId": user_id, "graph": graph}
+
+
+@app.post("/kb/extract")
+def extract_kb(payload: Dict[str, Any], dryRun: bool = False) -> Dict[str, Any]:
+    user_id = str(payload.get("userId") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=400, detail="userId is required")
+    transcript = str(payload.get("transcript") or "").strip()
+    if not transcript:
+        raise HTTPException(status_code=400, detail="transcript is required")
+    existing_summary = str(payload.get("existingSummary") or "").strip()
+
+    try:
+        safe_context = sanitize_knowledge_extraction_payload(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+
+    proxy = DeepSeekKnowledgeExtractionProxy(settings)
+    try:
+        if not dryRun:
+            extraction = proxy.request_extraction(
+                transcript=transcript,
+                existing_summary=existing_summary,
+            )
+            return {
+                "provider": "deepseek",
+                "capability": "kbExtract",
+                "userId": user_id,
+                "extraction": extraction,
+                "context": safe_context,
+            }
+        request = proxy.redacted_request(
+            transcript=transcript,
+            existing_summary=existing_summary,
+        )
+    except ValueError as exc:
+        status_code = 503 if "DEEPSEEK_API_KEY" in str(exc) else 502
+        raise HTTPException(status_code=status_code, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    return {
+        "provider": "deepseek",
+        "capability": "kbExtract",
+        "userId": user_id,
+        "request": request,
+        "context": safe_context,
+        "note": "dryRun=true returns the redacted upstream request without calling DeepSeek.",
+    }
 
 
 @app.post("/memories")
