@@ -232,7 +232,13 @@ extension KnowledgeBaseViewController: UITableViewDataSource {
                 let traits = p.traits.isEmpty ? "" : " [" + p.traits.joined(separator: " · ") + "]"
                 cell.textLabel?.text = "\(p.name)\(traits)"
                 cell.textLabel?.textColor = .label
-                cell.detailTextLabel?.text = p.briefBio ?? p.relation ?? ""
+                cell.detailTextLabel?.text = [
+                    p.briefBio ?? p.relation,
+                    KBEntityDetailFormatter.listAuditSummary(
+                        for: p.privacyMetadata,
+                        fallbackSessionIds: p.sourceSessionIds
+                    )
+                ].compactMap { $0 }.joined(separator: "\n")
                 cell.accessoryType = .disclosureIndicator
             }
 
@@ -245,7 +251,13 @@ extension KnowledgeBaseViewController: UITableViewDataSource {
                 let cat = p.category.map { " [\($0)]" } ?? ""
                 cell.textLabel?.text = "\(p.name)\(cat)"
                 cell.textLabel?.textColor = .label
-                cell.detailTextLabel?.text = p.description ?? ""
+                cell.detailTextLabel?.text = [
+                    p.description,
+                    KBEntityDetailFormatter.listAuditSummary(
+                        for: p.privacyMetadata,
+                        fallbackSessionIds: p.sourceSessionIds
+                    )
+                ].compactMap { $0 }.joined(separator: "\n")
                 cell.accessoryType = .disclosureIndicator
             }
 
@@ -258,7 +270,13 @@ extension KnowledgeBaseViewController: UITableViewDataSource {
                 let date = e.formattedDate.isEmpty ? "" : "\(e.formattedDate) · "
                 cell.textLabel?.text = "\(date)\(e.title)"
                 cell.textLabel?.textColor = .label
-                cell.detailTextLabel?.text = e.description ?? ""
+                cell.detailTextLabel?.text = [
+                    e.description,
+                    KBEntityDetailFormatter.listAuditSummary(
+                        for: e.privacyMetadata,
+                        fallbackSessionIds: e.sourceSessionIds
+                    )
+                ].compactMap { $0 }.joined(separator: "\n")
                 cell.accessoryType = .disclosureIndicator
             }
 
@@ -279,7 +297,13 @@ extension KnowledgeBaseViewController: UITableViewDataSource {
                 }()
                 cell.textLabel?.text = "\(confidenceMarker)\(f.statement)"
                 cell.textLabel?.textColor = .label
-                cell.detailTextLabel?.text = "置信度: \(f.confidence)"
+                cell.detailTextLabel?.text = [
+                    "置信度: \(KBEntityDetailFormatter.confidenceText(f.confidence))",
+                    KBEntityDetailFormatter.listAuditSummary(
+                        for: f.privacyMetadata,
+                        fallbackSessionIds: f.sourceSessionIds
+                    )
+                ].joined(separator: "\n")
                 cell.accessoryType = .disclosureIndicator
             }
         }
@@ -615,6 +639,18 @@ private enum KBEntityDetailFormatter {
         return "\(scopeText)；限定成员：\(members)"
     }
 
+    static func listAuditSummary(
+        for metadata: MemoryPrivacyMetadata,
+        fallbackSessionIds: [Int]
+    ) -> String {
+        let sourceText = compactSourceSummary(
+            for: metadata,
+            fallbackSessionIds: fallbackSessionIds
+        )
+        let permissionText = compactPrivacyText(for: metadata)
+        return "来源：\(sourceText) · 权限：\(permissionText)"
+    }
+
     static func sourceRefsText(
         for metadata: MemoryPrivacyMetadata,
         fallbackSessionIds: [Int]
@@ -629,6 +665,48 @@ private enum KBEntityDetailFormatter {
         }
         let sessions = fallbackSessionIds.map(String.init).joined(separator: "、")
         return "· 第 \(sessions) 次会话"
+    }
+
+    private static func compactSourceSummary(
+        for metadata: MemoryPrivacyMetadata,
+        fallbackSessionIds: [Int]
+    ) -> String {
+        let conversationTurnCount = metadata.sourceRefs.filter { $0.kind == .conversationTurn }.count
+        let memoryArchiveItemCount = metadata.sourceRefs.filter { $0.kind == .memoryArchiveItem }.count
+        let timeMailboxLetterCount = metadata.sourceRefs.filter { $0.kind == .timeMailboxLetter }.count
+        let importRecordCount = metadata.sourceRefs.filter { $0.kind == .importRecord || $0.kind == .kbLiteEntity }.count
+        let authorizationCount = metadata.sourceRefs.filter { $0.kind == .userAuthorization }.count
+        let unknownCount = metadata.sourceRefs.filter { $0.kind == .unknown }.count
+
+        var parts: [String] = []
+        if conversationTurnCount > 0 { parts.append("对话 \(conversationTurnCount)") }
+        if memoryArchiveItemCount > 0 { parts.append("档案 \(memoryArchiveItemCount)") }
+        if timeMailboxLetterCount > 0 { parts.append("信箱 \(timeMailboxLetterCount)") }
+        if importRecordCount > 0 { parts.append("导入 \(importRecordCount)") }
+        if authorizationCount > 0 { parts.append("授权 \(authorizationCount)") }
+        if unknownCount > 0 { parts.append("未知 \(unknownCount)") }
+        if !parts.isEmpty { return parts.joined(separator: " · ") }
+
+        if !fallbackSessionIds.isEmpty {
+            return "第 \(fallbackSessionIds.map(String.init).joined(separator: "、")) 次会话"
+        }
+        return "暂无可追溯来源"
+    }
+
+    private static func compactPrivacyText(for metadata: MemoryPrivacyMetadata) -> String {
+        switch metadata.scope {
+        case .privateOnly:
+            return "私密"
+        case .localOnly:
+            return "本机"
+        case .generationAllowed:
+            return "可生成"
+        case .familyCircle:
+            if metadata.familyVisibility.includesAllMembers {
+                return "亲友圈"
+            }
+            return "亲友圈限定"
+        }
     }
 
     static func confidenceText(_ confidence: String) -> String {

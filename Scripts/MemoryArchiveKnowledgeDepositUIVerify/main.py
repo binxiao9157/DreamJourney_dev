@@ -46,6 +46,13 @@ require(
     "knowledge core card should summarize visible KBLite counts, source, privacy, and freshness",
 )
 require(
+    "archiveKnowledgeStatusText" in view
+    and "detailLabel.text = [item.displayDetail, item.archiveKnowledgeStatusText]" in view
+    and "来源：档案素材" in view
+    and "权限：" in view,
+    "archive material rows should show whether the item is entering the knowledge base and under which authorization",
+)
+require(
     "MemoryArchiveBuildReadiness.build" in view
     and "readiness.titleText" in view
     and "readiness.detailText" in view

@@ -53,6 +53,22 @@ checks = [
         "knowledge list should use subtitle cells so extracted source context is visible before drilling into details",
     ),
     (
+        source.count("KBEntityDetailFormatter.listAuditSummary(") >= 4
+        and "来源：" in source
+        and "权限：" in source,
+        "knowledge list rows should show source and authorization summaries without requiring a detail drill-in",
+    ),
+    (
+        "conversationTurnCount" in source
+        and "memoryArchiveItemCount" in source
+        and "timeMailboxLetterCount" in source,
+        "knowledge list audit summary should count real source refs by kind",
+    ),
+    (
+        not any(icon in source for icon in ["🧠", "📍", "🗓", "📝"]),
+        "knowledge stats and rows should not use decorative emoji icons",
+    ),
+    (
         "KnowledgeBaseSourcePrivacyUIVerify" in phase1,
         "phase1 verification should include source/privacy UI coverage",
     ),

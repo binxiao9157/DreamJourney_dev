@@ -1835,7 +1835,7 @@ private final class MemoryArchiveCell: UITableViewCell {
 
     func configure(with item: MemoryArchiveItem) {
         titleLabel.text = item.title
-        detailLabel.text = item.displayDetail
+        detailLabel.text = [item.displayDetail, item.archiveKnowledgeStatusText].joined(separator: "\n")
         statusLabel.text = item.statusText
         statusLabel.textColor = item.statusColor
 
@@ -1869,7 +1869,7 @@ private final class MemoryArchiveCell: UITableViewCell {
         titleLabel.textColor = .warmPrimary
         detailLabel.font = .systemFont(ofSize: 13)
         detailLabel.textColor = .warmSubtitle
-        detailLabel.numberOfLines = 2
+        detailLabel.numberOfLines = 0
         statusLabel.font = .systemFont(ofSize: 12, weight: .medium)
 
         contentView.addSubview(surface)
@@ -1937,6 +1937,23 @@ private extension MemoryArchiveItem {
             return note
         }
         return kind.displayName
+    }
+
+    var archiveKnowledgeStatusText: String {
+        let permission: String
+        switch privacyMetadata.scope {
+        case .privateOnly:
+            permission = "私密，不进入知识库"
+        case .localOnly:
+            permission = "本机，仅本机建库"
+        case .generationAllowed:
+            permission = "可生成，可用于知识抽取"
+        case .familyCircle:
+            permission = privacyMetadata.familyVisibility.includesAllMembers
+                ? "亲友圈，可同步关怀"
+                : "亲友圈限定，可同步关怀"
+        }
+        return "来源：档案素材 · 权限：\(permission)"
     }
 
     var statusText: String {
