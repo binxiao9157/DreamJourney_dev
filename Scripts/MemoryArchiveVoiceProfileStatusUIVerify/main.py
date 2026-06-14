@@ -33,6 +33,16 @@ reload_match = re.search(r"private func reloadData\(\) \{(?P<body>[\s\S]*?)\n   
 if not reload_match or "updateVoiceProfileStatusLabel()" not in reload_match.group("body"):
     missing.append("reloadData should refresh the voice profile status line")
 
+handle_start = view.find("private func handleVoiceProfileStatus")
+handle_end = view.find("private func voiceSampleURLs", handle_start)
+handle_body = view[handle_start:handle_end] if handle_start != -1 and handle_end != -1 else ""
+if not handle_body:
+    missing.append("voice profile status handling should be implemented in a focused helper")
+elif "localizedDescription" in handle_body:
+    missing.append("voice profile training failure UI should not expose raw localizedDescription")
+if "voiceProfileTrainingFailureStatusMessage()" not in handle_body:
+    missing.append("voice profile training failure UI should use a fixed friendly status message")
+
 layout_match = re.search(r"\[(?P<body>.*?)\]\.forEach", view, re.S)
 if not layout_match:
     missing.append("archive layout should declare status label order")

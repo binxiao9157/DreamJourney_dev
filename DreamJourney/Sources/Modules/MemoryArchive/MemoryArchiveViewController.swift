@@ -1377,8 +1377,8 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
                     switch result {
                     case .success(let trainedProfile):
                         self?.setKnowledgeDepositStatus(trainedProfile.statusMessage ?? "声纹档案：音色已就绪")
-                    case .failure(let error):
-                        self?.setKnowledgeDepositStatus("声纹档案：样本已保存，训练暂未完成（\(error.localizedDescription)）")
+                    case .failure:
+                        self?.setKnowledgeDepositStatus(Self.voiceProfileTrainingFailureStatusMessage())
                     }
                     self?.reloadData()
                 }
@@ -1386,6 +1386,10 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
         case .training, .ready, .failed, .disabled:
             setKnowledgeDepositStatus(profile.statusMessage ?? "声纹档案：语音样本已保存")
         }
+    }
+
+    private static func voiceProfileTrainingFailureStatusMessage() -> String {
+        "声纹档案：样本已保存，训练暂未完成，可稍后重试"
     }
 
     private func voiceSampleURLs(
