@@ -13,7 +13,18 @@ func snapshot(
     risk: CareSignalRiskLevel,
     generatedAt: Date = Date(timeIntervalSince1970: 1_781_234_567)
 ) -> CareSignalSnapshot {
-    CareSignalSnapshot(
+    let dailyTrend = (0..<max(0, days)).map { offset in
+        CareSignalDailyTrendPoint(
+            date: generatedAt.addingTimeInterval(Double(-offset) * 86_400),
+            userTurnCount: max(1, userTurns / max(1, days)),
+            negativeEmotionMentions: 0,
+            sleepMentions: 0,
+            bodyDiscomfortMentions: 0,
+            repetitionRatio: 0,
+            signalScore: 0
+        )
+    }
+    return CareSignalSnapshot(
         generatedAt: generatedAt,
         windowStart: generatedAt.addingTimeInterval(Double(-max(0, days - 1)) * 86_400),
         windowEnd: generatedAt,
@@ -37,7 +48,7 @@ func snapshot(
         suggestions: [],
         weeklyHighlights: [],
         riskSignalDescriptions: [],
-        dailyTrend: [],
+        dailyTrend: dailyTrend,
         trendSummary: "trend"
     )
 }
@@ -52,6 +63,12 @@ let remoteNewerButThin = snapshot(
     days: 1,
     risk: .stable,
     generatedAt: Date(timeIntervalSince1970: 1_781_235_567)
+)
+let remoteMoreTurnsButNotReportReady = snapshot(
+    userTurns: 2,
+    days: 1,
+    risk: .stable,
+    generatedAt: Date(timeIntervalSince1970: 1_781_236_567)
 )
 
 require(
@@ -77,6 +94,10 @@ require(
 require(
     !CareDashboardSnapshotSelectionPolicy.shouldPreferRemote(current: localThin, remote: remoteNewerButThin),
     "should not replace local data only because remote generatedAt is newer"
+)
+require(
+    !CareDashboardSnapshotSelectionPolicy.shouldPreferRemote(current: localThin, remote: remoteMoreTurnsButNotReportReady),
+    "should not replace local sampling with remote data that is still not report-ready"
 )
 
 print("CareDashboardSnapshotSelection verification passed")

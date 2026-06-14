@@ -51,6 +51,17 @@ require(
     "share action should block export until report readiness is met",
 )
 require(
+    "真实数据采样中" in vc
+    and "家庭安心报：可生成" in vc
+    and "最低要求" in vc,
+    "real-device evidence card should expose report readiness instead of looking complete with thin data",
+)
+require(
+    "可生成周报" in vc
+    and "采样中：" in vc,
+    "remote snapshot history should label whether each snapshot is ready for a weekly report",
+)
+require(
     "CareDashboardReportReadinessVerify/main.py" in phase1,
     "phase1 verification should include care report readiness coverage",
 )

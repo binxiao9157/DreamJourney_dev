@@ -449,18 +449,24 @@ final class CareDashboardViewController: UIViewController {
 
     private func makeEvidenceStatusCard(_ snapshot: CareSignalSnapshot) -> UIView {
         let container = makeSurface()
+        let readiness = reportReadiness(for: snapshot)
 
         let titleLabel = UILabel()
-        titleLabel.text = "真实验收状态"
+        titleLabel.text = readiness.isReady ? "真实验收状态" : "真实数据采样中"
         titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
         titleLabel.textColor = .warmPrimary
 
+        let reportState = readiness.isReady
+            ? "家庭安心报：可生成"
+            : "家庭安心报：采样中，\(readiness.message)"
         let bodyLabel = UILabel()
         bodyLabel.text = [
             "本机授权发言 \(localEligibleUserTurnCount) 轮",
             "当前快照 \(snapshotSourceText)",
             "\(remoteSnapshotStatusText)",
-            "观测天数 \(snapshot.windowDayCount) 天"
+            "观测天数 \(snapshot.windowDayCount) 天",
+            reportState,
+            "最低要求 \(CareDashboardReportReadinessPolicy.minimumUserTurns) 轮亲友范围发言 / \(CareDashboardReportReadinessPolicy.minimumActiveDays) 天有效记录"
         ].joined(separator: " · ")
         bodyLabel.font = .systemFont(ofSize: 13)
         bodyLabel.textColor = .warmSubtitle
@@ -696,7 +702,7 @@ final class CareDashboardViewController: UIViewController {
         let container = makeSurface()
 
         let title = UILabel()
-        title.text = "同步周报记录"
+        title.text = "同步快照记录"
         title.font = .systemFont(ofSize: 18, weight: .bold)
         title.textColor = .warmPrimary
 
@@ -714,7 +720,9 @@ final class CareDashboardViewController: UIViewController {
             let snapshot = item.snapshot
             let generatedText = CareDashboardViewController.timeFormatter.string(from: snapshot.generatedAt)
             let coverage = snapshot.dataCoverageSummary.trimmingCharacters(in: .whitespacesAndNewlines)
-            stack.addArrangedSubview(makeBulletLabel("\(generatedText) · \(snapshot.riskLevel.displayTitle) · \(coverage.isEmpty ? "暂无覆盖说明" : coverage)"))
+            let readiness = reportReadiness(for: snapshot)
+            let readinessText = readiness.isReady ? "可生成周报" : "采样中：\(readiness.message)"
+            stack.addArrangedSubview(makeBulletLabel("\(generatedText) · \(readinessText) · \(snapshot.riskLevel.displayTitle) · \(coverage.isEmpty ? "暂无覆盖说明" : coverage)"))
         }
         if items.count > 3 {
             stack.addArrangedSubview(makeBulletLabel("还有 \(items.count - 3) 次历史快照，可在服务器继续追踪。"))

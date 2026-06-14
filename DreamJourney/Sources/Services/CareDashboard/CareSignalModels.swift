@@ -377,6 +377,9 @@ enum CareDashboardSnapshotSelectionPolicy {
         if current.userTurnCount <= 0 {
             return true
         }
+        guard CareDashboardReportReadinessPolicy.evaluate(snapshot: remote).isReady else {
+            return false
+        }
         if current.riskLevel == .insufficientData, remote.riskLevel != .insufficientData {
             return true
         }

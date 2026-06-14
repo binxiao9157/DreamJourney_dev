@@ -49,7 +49,9 @@ required_vc_fragments = [
     "DreamJourneyBackendClient.shared.fetchCareSnapshotHistory",
     "remoteSnapshotHistory",
     "makeSnapshotHistoryCard",
-    "同步周报记录",
+    "同步快照记录",
+    "可生成周报",
+    "采样中：",
 ]
 
 required_publisher_fragments = [
