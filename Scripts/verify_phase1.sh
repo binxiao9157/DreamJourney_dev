@@ -23,6 +23,7 @@ xcrun swiftc \
   DreamJourney/Sources/Services/Safety/SafetyMonitor.swift \
   DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
   DreamJourney/Sources/Services/TimeMailbox/TimeMailboxModels.swift \
+  DreamJourney/Sources/Services/TimeMailbox/TimeMailboxEchoService.swift \
   DreamJourney/Sources/Services/TimeMailbox/TimeMailboxRepository.swift \
   Scripts/TimeMailboxVerify/main.swift \
   -o /tmp/dreamjourney_time_mailbox_verify

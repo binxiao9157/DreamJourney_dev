@@ -23,6 +23,25 @@ do {
         !PrivacyScopePolicy.canUse(scope: .familyCircle, surface: .timeMailboxEcho),
         "familyCircle memories should not be used by time mailbox echo by default"
     )
+    let fallbackEcho = TimeMailboxEchoService.shared.makeEcho(
+        for: TimeMailboxLetter(
+            id: "echo-check",
+            recipientName: "妈妈",
+            title: "回声边界",
+            body: "这句正文不应该被回声复述。",
+            createdAt: now,
+            deliverAt: now.addingTimeInterval(60),
+            deliveredAt: nil,
+            status: .sealed,
+            replyText: nil,
+            boundaryAcknowledged: true
+        ),
+        evidence: .empty
+    )
+    assertCondition(fallbackEcho.mode == .safeFallbackText, "time mailbox echo should expose safe fallback mode")
+    assertCondition(fallbackEcho.evidenceLineCount == 0, "empty evidence should report zero evidence lines")
+    assertCondition(fallbackEcho.replyText.contains("暂不合成逝者声音"), "safe fallback echo should disclose no voice synthesis")
+    assertCondition(!fallbackEcho.replyText.contains("这句正文不应该被回声复述"), "safe fallback echo must not copy the private letter body")
 
     let letter = try repo.createLetter(
         recipientName: "妈妈",
@@ -44,6 +63,7 @@ do {
     assertCondition(delivered[0].status == .delivered, "due letter should become delivered")
     assertCondition(delivered[0].replyText?.contains("基于你留下的记忆") == true, "reply must carry memory-boundary wording")
     assertCondition(delivered[0].replyText?.contains("不是逝者真实回复") == true, "reply must avoid resurrection framing")
+    assertCondition(delivered[0].replyText?.contains("暂不合成逝者声音") == true, "reply should disclose safe text fallback mode")
     assertCondition(delivered[0].replyText?.contains("不会替Ta编造具体经历") == true, "reply without evidence should refuse fabrication")
     assertCondition(delivered[0].replyText?.contains("我今天路过老房子") != true, "reply must not echo the private letter body")
 

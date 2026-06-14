@@ -72,6 +72,7 @@
 		A11CE000000000000000002 /* TimeMailboxRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE000000000000000005 /* TimeMailboxRepository.swift */; };
 		A11CE000000000000000003 /* TimeMailboxViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE000000000000000006 /* TimeMailboxViewController.swift */; };
 		A11CE000000000000000009 /* TimeMailboxNotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE000000000000000010 /* TimeMailboxNotificationScheduler.swift */; };
+		A11CE000000000000000011 /* TimeMailboxEchoService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE000000000000000012 /* TimeMailboxEchoService.swift */; };
 		A22CE000000000000000001 /* MemoryArchiveModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22CE000000000000000004 /* MemoryArchiveModels.swift */; };
 		A22CE000000000000000002 /* MemoryArchiveRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22CE000000000000000005 /* MemoryArchiveRepository.swift */; };
 		A22CE000000000000000003 /* MemoryArchiveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22CE000000000000000006 /* MemoryArchiveViewController.swift */; };
@@ -200,6 +201,7 @@
 		A11CE000000000000000005 /* TimeMailboxRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeMailboxRepository.swift; sourceTree = "<group>"; };
 		A11CE000000000000000006 /* TimeMailboxViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeMailboxViewController.swift; sourceTree = "<group>"; };
 		A11CE000000000000000010 /* TimeMailboxNotificationScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeMailboxNotificationScheduler.swift; sourceTree = "<group>"; };
+		A11CE000000000000000012 /* TimeMailboxEchoService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeMailboxEchoService.swift; sourceTree = "<group>"; };
 		A22CE000000000000000004 /* MemoryArchiveModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveModels.swift; sourceTree = "<group>"; };
 		A22CE000000000000000005 /* MemoryArchiveRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveRepository.swift; sourceTree = "<group>"; };
 		A22CE000000000000000006 /* MemoryArchiveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveViewController.swift; sourceTree = "<group>"; };
@@ -540,6 +542,7 @@
 			isa = PBXGroup;
 			children = (
 				A11CE000000000000000004 /* TimeMailboxModels.swift */,
+				A11CE000000000000000012 /* TimeMailboxEchoService.swift */,
 				A11CE000000000000000005 /* TimeMailboxRepository.swift */,
 				A11CE000000000000000010 /* TimeMailboxNotificationScheduler.swift */,
 			);
@@ -998,6 +1001,7 @@
 				FE0FA33C09E4349B2A4D0028 /* TGToast.swift in Sources */,
 				4794CCC59D6ADF3F184E857A /* TabCoordinator.swift in Sources */,
 				A11CE000000000000000001 /* TimeMailboxModels.swift in Sources */,
+				A11CE000000000000000011 /* TimeMailboxEchoService.swift in Sources */,
 				A11CE000000000000000002 /* TimeMailboxRepository.swift in Sources */,
 				A11CE000000000000000009 /* TimeMailboxNotificationScheduler.swift in Sources */,
 				A11CE000000000000000003 /* TimeMailboxViewController.swift in Sources */,
