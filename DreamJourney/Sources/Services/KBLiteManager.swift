@@ -2270,6 +2270,10 @@ final class KBLiteManager {
         let recipientName = Self.normalizedQuickExtractEntity(rawRecipientName)
         let title = Self.normalizedQuickExtractEntity(rawTitle)
         guard !cleanLetterId.isEmpty, !recipientName.isEmpty else { return 0 }
+        guard !Self.isGenericKinshipDisplayName(recipientName),
+              !Self.genericKinshipNames.contains(where: { recipientName.contains($0) }) else {
+            return 0
+        }
 
         let displayTitle = title.isEmpty ? "未命名信件" : title
         let deliverText = Self.metadataDateFormatter.string(from: deliverAt)

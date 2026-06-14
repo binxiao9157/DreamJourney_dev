@@ -61,6 +61,18 @@ KBLiteManager.shared.reset()
 let createdAt = Date(timeIntervalSince1970: 1_800_000_000)
 let deliverAt = createdAt.addingTimeInterval(86_400)
 let metadata = MemoryPrivacyMetadata(scope: .generationAllowed)
+
+let genericRecipientCount = KBLiteManager.shared.ingestTimeMailboxLetterMetadata(
+    letterId: "letter-generic-mom",
+    recipientName: "妈妈",
+    title: "今天很想你",
+    deliverAt: deliverAt,
+    createdAt: createdAt,
+    privacyMetadata: metadata
+)
+assertCondition(genericRecipientCount == 0, "generic kinship mailbox recipients should not enter structured KBLite facts")
+assertCondition(KBLiteManager.shared.graph.facts.isEmpty, "generic kinship mailbox metadata should not pollute the knowledge graph")
+
 let addedCount = KBLiteManager.shared.ingestTimeMailboxLetterMetadata(
     letterId: "letter-001",
     recipientName: "林桂芳",
