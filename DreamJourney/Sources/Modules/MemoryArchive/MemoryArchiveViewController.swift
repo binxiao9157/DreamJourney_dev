@@ -66,6 +66,41 @@ final class MemoryArchiveViewController: UIViewController {
         return label
     }()
 
+    private let knowledgeCoreCard: UIView = {
+        let view = UIView()
+        view.backgroundColor = UIColor(red: 0.87, green: 0.83, blue: 0.78, alpha: 0.26)
+        view.layer.cornerRadius = 14
+        view.layer.borderWidth = 0.5
+        view.layer.borderColor = UIColor.warmDivider.cgColor
+        return view
+    }()
+
+    private let knowledgeCoreTitleLabel: UILabel = {
+        let label = UILabel()
+        label.text = "建库核心"
+        label.font = .systemFont(ofSize: 13, weight: .semibold)
+        label.textColor = .warmSubtitle
+        return label
+    }()
+
+    private let knowledgeCoreCountsLabel: UILabel = {
+        let label = UILabel()
+        label.font = .systemFont(ofSize: 18, weight: .bold)
+        label.textColor = .warmPrimary
+        label.numberOfLines = 1
+        label.adjustsFontSizeToFitWidth = true
+        label.minimumScaleFactor = 0.82
+        return label
+    }()
+
+    private let knowledgeCoreDetailLabel: UILabel = {
+        let label = UILabel()
+        label.font = .systemFont(ofSize: 12, weight: .medium)
+        label.textColor = .warmSubtitle
+        label.numberOfLines = 0
+        return label
+    }()
+
     private let knowledgeDepositStatusLabel: UILabel = {
         let label = UILabel()
         label.font = .systemFont(ofSize: 12, weight: .medium)
@@ -130,6 +165,7 @@ final class MemoryArchiveViewController: UIViewController {
         additionalSafeAreaInsets = UIEdgeInsets(top: 0, left: 0, bottom: WarmTabBarView.tabBarHeight, right: 0)
         setupActions()
         setupLayout()
+        NotificationCenter.default.addObserver(self, selector: #selector(kbLiteDidUpdate), name: .kbLiteDidUpdate, object: nil)
         reloadData()
         refreshArchiveBackendSyncStatus()
     }
@@ -153,8 +189,9 @@ final class MemoryArchiveViewController: UIViewController {
         let actionStack = UIStackView(arrangedSubviews: [photoButton, screenshotButton, voiceButton, textButton, knowledgeButton])
         actionStack.axis = .vertical
         actionStack.spacing = 10
+        setupKnowledgeCoreCard()
 
-        [titleLabel, boundaryLabel, summaryLabel, knowledgeDepositStatusLabel, voiceProfileStatusLabel, backendSyncStatusLabel, actionStack, tableView, emptyLabel].forEach {
+        [titleLabel, boundaryLabel, summaryLabel, knowledgeCoreCard, knowledgeDepositStatusLabel, voiceProfileStatusLabel, backendSyncStatusLabel, actionStack, tableView, emptyLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview($0)
         }
@@ -172,7 +209,11 @@ final class MemoryArchiveViewController: UIViewController {
             summaryLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             summaryLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
 
-            knowledgeDepositStatusLabel.topAnchor.constraint(equalTo: summaryLabel.bottomAnchor, constant: 6),
+            knowledgeCoreCard.topAnchor.constraint(equalTo: summaryLabel.bottomAnchor, constant: 10),
+            knowledgeCoreCard.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+            knowledgeCoreCard.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
+
+            knowledgeDepositStatusLabel.topAnchor.constraint(equalTo: knowledgeCoreCard.bottomAnchor, constant: 8),
             knowledgeDepositStatusLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             knowledgeDepositStatusLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
 
@@ -198,10 +239,25 @@ final class MemoryArchiveViewController: UIViewController {
         ])
     }
 
+    private func setupKnowledgeCoreCard() {
+        let stack = UIStackView(arrangedSubviews: [knowledgeCoreTitleLabel, knowledgeCoreCountsLabel, knowledgeCoreDetailLabel])
+        stack.axis = .vertical
+        stack.spacing = 5
+        knowledgeCoreCard.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: knowledgeCoreCard.topAnchor, constant: 12),
+            stack.leadingAnchor.constraint(equalTo: knowledgeCoreCard.leadingAnchor, constant: 14),
+            stack.trailingAnchor.constraint(equalTo: knowledgeCoreCard.trailingAnchor, constant: -14),
+            stack.bottomAnchor.constraint(equalTo: knowledgeCoreCard.bottomAnchor, constant: -12)
+        ])
+    }
+
     private func reloadData() {
         items = repository.items()
         let summary = repository.summary()
         summaryLabel.text = "共 \(summary.totalCount) 份素材 · 照片 \(summary.photoCount) · 截图 \(summary.screenshotCount) · 语音 \(summary.voiceSampleCount) · 文字 \(summary.textCount) · 已分析 \(summary.analyzedPhotoCount)"
+        updateKnowledgeCoreCard()
         updateKnowledgeDepositStatusLabel()
         updateVoiceProfileStatusLabel()
         updateBackendSyncStatusLabel()
@@ -252,6 +308,14 @@ final class MemoryArchiveViewController: UIViewController {
         knowledgeVC.title = "结构化知识库"
         navigationController?.navigationBar.isHidden = false
         navigationController?.pushViewController(knowledgeVC, animated: true)
+    }
+
+    @objc private func kbLiteDidUpdate() {
+        reloadData()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     private func saveTextDraft(_ draft: MemoryArchiveTextDraft) {
@@ -1160,6 +1224,21 @@ private extension MemoryArchiveViewController {
         }
     }
 
+    func updateKnowledgeCoreCard() {
+        let graph = KBLiteManager.shared.displayGraphForLocalBrowsing()
+        let status = KBLiteDepositStatusBuilder.build(from: graph)
+        knowledgeCoreCountsLabel.text = "\(graph.people.count) 人 · \(graph.places.count) 地 · \(graph.events.count) 事 · \(graph.facts.count) 实"
+
+        guard status.totalEntityCount > 0 else {
+            knowledgeCoreDetailLabel.text = "暂无结构化知识。保存可生成/本机/亲友素材后，会在这里显示真实沉淀结果。"
+            return
+        }
+
+        let updatedText = Self.knowledgeCoreDateFormatter.string(from: status.lastUpdated)
+        let privacyText = status.privacySummary.replacingOccurrences(of: "隐私：", with: "")
+        knowledgeCoreDetailLabel.text = "\(status.sourceSummary)\n隐私：\(privacyText)\n最近更新：\(updatedText)"
+    }
+
     func updateVoiceProfileStatusLabel() {
         let profiles = MemoryArchiveVoiceProfileStore.shared.profiles()
         guard !profiles.isEmpty else {
@@ -1276,6 +1355,13 @@ private extension MemoryArchiveViewController {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.dateFormat = "HH:mm"
+        return formatter
+    }
+
+    static var knowledgeCoreDateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyy.MM.dd HH:mm"
         return formatter
     }
 }

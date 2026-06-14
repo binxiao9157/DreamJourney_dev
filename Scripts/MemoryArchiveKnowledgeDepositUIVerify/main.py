@@ -31,6 +31,21 @@ require(
     "archive screen should expose a persistent local knowledge deposit status label",
 )
 require(
+    "knowledgeCoreCard" in view
+    and "knowledgeCoreCountsLabel" in view
+    and "knowledgeCoreDetailLabel" in view
+    and "updateKnowledgeCoreCard()" in view,
+    "archive screen should expose an always-visible structured knowledge core card",
+)
+require(
+    "KBLiteManager.shared.displayGraphForLocalBrowsing()" in view
+    and "KBLiteDepositStatusBuilder.build" in view
+    and "sourceSummary" in view
+    and "privacySummary" in view
+    and "最近更新" in view,
+    "knowledge core card should summarize visible KBLite counts, source, privacy, and freshness",
+)
+require(
     "updateKnowledgeDepositStatusLabel()" in view,
     "archive screen should refresh local knowledge deposit status on reload",
 )

@@ -33,12 +33,16 @@ reload_match = re.search(r"private func reloadData\(\) \{(?P<body>[\s\S]*?)\n   
 if not reload_match or "updateVoiceProfileStatusLabel()" not in reload_match.group("body"):
     missing.append("reloadData should refresh the voice profile status line")
 
-layout_order = re.search(
-    r"\[titleLabel, boundaryLabel, summaryLabel, knowledgeDepositStatusLabel, voiceProfileStatusLabel, backendSyncStatusLabel",
-    view,
-)
-if not layout_order:
-    missing.append("voice profile status should sit with the archive status lines, before backend sync")
+layout_match = re.search(r"\[(?P<body>.*?)\]\.forEach", view, re.S)
+if not layout_match:
+    missing.append("archive layout should declare status label order")
+else:
+    layout_body = layout_match.group("body")
+    knowledge_index = layout_body.find("knowledgeDepositStatusLabel")
+    voice_index = layout_body.find("voiceProfileStatusLabel")
+    backend_index = layout_body.find("backendSyncStatusLabel")
+    if not (knowledge_index != -1 and voice_index != -1 and backend_index != -1 and knowledge_index < voice_index < backend_index):
+        missing.append("voice profile status should sit after knowledge deposit status and before backend sync")
 
 if missing:
     for message in missing:
@@ -46,4 +50,3 @@ if missing:
     sys.exit(1)
 
 print("MemoryArchiveVoiceProfileStatusUI verification passed")
-
