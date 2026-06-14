@@ -185,8 +185,41 @@ python3 Scripts/DigitalHumanDialogEndDepositVerify/main.py
 echo "== DigitalHuman playback interruption =="
 python3 Scripts/DigitalHumanPlaybackInterruptVerify/main.py
 
+echo "== DigitalHuman playback policy =="
+xcrun swiftc \
+  DreamJourney/Sources/Services/Safety/SafetyGuardModels.swift \
+  DreamJourney/Sources/Services/DigitalHumanSpeechPlaybackPolicy.swift \
+  Scripts/DigitalHumanPlaybackPolicyVerify/main.swift \
+  -o /tmp/dreamjourney_digital_human_playback_policy_verify
+/tmp/dreamjourney_digital_human_playback_policy_verify
+
+echo "== DigitalHuman fallback UI =="
+python3 Scripts/DigitalHumanFallbackUIVerify/main.py
+
 echo "== DigitalHuman diagnostics gate =="
 python3 Scripts/DigitalHumanDiagnosticsGateVerify/main.py
+
+echo "== DigitalHuman diagnostics UI =="
+python3 Scripts/DigitalHumanDiagnosticsUIVerify/main.py
+
+echo "== DigitalHuman readiness =="
+xcrun swiftc \
+  DreamJourney/Sources/Services/AppConfiguration.swift \
+  DreamJourney/Sources/Memoir/VolcEngineCredentialProvider.swift \
+  DreamJourney/Sources/Services/VolcEngineRealtimeCredentialProvider.swift \
+  DreamJourney/Sources/Services/Safety/SafetyGuardModels.swift \
+  DreamJourney/Sources/Services/DigitalHumanSpeechPlaybackPolicy.swift \
+  DreamJourney/Sources/Services/DigitalHumanReadinessReport.swift \
+  Scripts/DigitalHumanReadinessVerify/main.swift \
+  -o /tmp/dreamjourney_digital_human_readiness_verify
+/tmp/dreamjourney_digital_human_readiness_verify
+
+echo "== DigitalHuman runtime log =="
+python3 Scripts/DigitalHumanRuntimeLogVerify/main.py
+
+echo "== DigitalHuman playback evidence store typecheck =="
+xcrun swiftc -typecheck \
+  DreamJourney/Sources/Services/DigitalHumanPlaybackEvidenceStore.swift
 
 echo "== Conversation wellbeing limiter =="
 xcrun swiftc \
