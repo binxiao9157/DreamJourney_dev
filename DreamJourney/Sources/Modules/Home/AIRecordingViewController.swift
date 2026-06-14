@@ -2283,37 +2283,49 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
       inset: 0;
       display: none;
     }
-    #screen2 {
-      z-index: 20;
-      pointer-events: none;
-    }
-    #avatarPoster, #canvas_video {
+    #avatarFrame {
       position: absolute;
       left: 50%;
       bottom: -8px;
       width: min(60vw, 220px);
-      height: auto;
-      max-height: calc(100% - 48px);
+      height: calc(100% - 48px);
+      max-height: 174px;
       transform: translateX(-50%);
-      object-fit: contain;
       pointer-events: none;
-      will-change: opacity;
+      z-index: 20;
+    }
+    #screen2 {
+      position: absolute;
+      inset: 0;
+      z-index: 21;
+      pointer-events: none;
+    }
+    #avatarPoster, #canvas_video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      object-position: center bottom;
+      pointer-events: none;
     }
     #avatarPoster {
       z-index: 20;
       opacity: 1;
-      transition: opacity .18s ease-out;
+      visibility: visible;
     }
     #canvas_video {
       z-index: 21;
-      opacity: 0;
-      transition: opacity .22s ease-out;
+      opacity: 1;
+      visibility: hidden;
     }
     body[data-video-ready="true"] #avatarPoster {
       opacity: 0;
+      visibility: hidden;
     }
     body[data-video-ready="true"] #canvas_video {
       opacity: 1;
+      visibility: visible;
     }
     body[data-video-ready="true"] #loadingSpinner,
     body[data-video-ready="true"] #startMessage {
@@ -2448,11 +2460,13 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
         <div id="loadingSpinner"></div>
         <div id="startMessage">正在加载数字人</div>
         <div id="screen"></div>
-        <img id="avatarPoster" src="avatar_poster.png" alt="" aria-hidden="true">
-        <div id="screen2">
-          <video id="background_video" muted playsinline loop></video>
-          <canvas id="canvas_video"></canvas>
-          <canvas id="canvas_gl"></canvas>
+        <div id="avatarFrame">
+          <img id="avatarPoster" src="avatar_poster.png" alt="" aria-hidden="true">
+          <div id="screen2">
+            <video id="background_video" muted playsinline loop></video>
+            <canvas id="canvas_video"></canvas>
+            <canvas id="canvas_gl"></canvas>
+          </div>
         </div>
       </div>
       <script>

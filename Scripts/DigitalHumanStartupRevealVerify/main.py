@@ -74,6 +74,16 @@ if not re.search(r"body:not\(\[data-video-ready=\"true\"\]\)\s+#status\s*\{[^}]*
     missing.append(f"{vc.name}: startup status text should stay hidden until the avatar video surface is ready")
 if not re.search(r"body\[data-video-ready=\"true\"\]\s+#status\s*\{[^}]*opacity:\s*1;", vc_text, re.S):
     missing.append(f"{vc.name}: startup status text should appear only after the avatar video surface is ready")
+if "#avatarFrame" not in vc_text:
+    missing.append(f"{vc.name}: startup poster and video should share one avatarFrame to prevent visible layout switching")
+if not re.search(r"#avatarFrame\s*\{[^}]*position:\s*absolute;[^}]*left:\s*50%;[^}]*bottom:\s*-8px;[^}]*transform:\s*translateX\(-50%\);", vc_text, re.S):
+    missing.append(f"{vc.name}: avatarFrame should own the shared startup position for poster and video")
+if re.search(r"body\[data-video-ready=\"true\"\]\s+#avatarPoster\s*\{[^}]*transition:", vc_text, re.S):
+    missing.append(f"{vc.name}: startup poster should not animate out; it causes a visible avatar switch on device")
+if not re.search(r"body\[data-video-ready=\"true\"\]\s+#avatarPoster\s*\{[^}]*visibility:\s*hidden;", vc_text, re.S):
+    missing.append(f"{vc.name}: startup poster should be hidden only after the video surface is ready")
+if not re.search(r"body\[data-video-ready=\"true\"\]\s+#canvas_video\s*\{[^}]*visibility:\s*visible;", vc_text, re.S):
+    missing.append(f"{vc.name}: avatar video canvas should become visible only after the video surface is ready")
 if re.search(r"<div id=\"screen2\">\s*<video[^>]*>\s*</video>\s*<img id=\"avatarPoster\"", vc_text, re.S):
     missing.append(f"{vc.name}: avatar poster must sit outside initially hidden screen2")
 if "document.getElementById('screen2').style.display = 'block';" in mini_mate_text:
