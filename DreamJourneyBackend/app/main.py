@@ -381,13 +381,30 @@ def _normalize_viewer_family_member_id(value: Any) -> Optional[str]:
     return normalized or None
 
 
-def _ensure_active_family_viewer(user_id: str, viewer_family_member_id: Optional[str]) -> None:
+def _normalized_phone(value: Any) -> str:
+    return "".join(ch for ch in str(value or "") if ch.isdigit())
+
+
+def _ensure_active_family_viewer(
+    user_id: str,
+    viewer_family_member_id: Optional[str],
+    requester_phone: Optional[str] = None,
+    require_requester_identity: bool = False,
+) -> None:
     if viewer_family_member_id is None:
         return
     for member in store.list_family_members(user_id):
         if str(member.get("id") or "") != viewer_family_member_id:
             continue
         if member.get("accessStatus") == "active" and member.get("invitationStatus") == "accepted":
+            if require_requester_identity:
+                normalized_requester_phone = _normalized_phone(requester_phone)
+                if not normalized_requester_phone:
+                    raise HTTPException(status_code=403, detail="requester identity is required")
+                normalized_member_phone = _normalized_phone(member.get("phone"))
+                if normalized_member_phone and normalized_requester_phone == normalized_member_phone:
+                    return
+                raise HTTPException(status_code=403, detail="requester is not authorized for this care snapshot")
             return
         raise HTTPException(status_code=403, detail="family member access is not active")
     raise HTTPException(status_code=403, detail="family member is not authorized")
@@ -416,9 +433,18 @@ def save_care_snapshot(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @app.get("/care/snapshots/latest/{user_id}")
-def latest_care_snapshot(user_id: str, viewerFamilyMemberID: str = None) -> Dict[str, Any]:
+def latest_care_snapshot(
+    user_id: str,
+    viewerFamilyMemberID: str = None,
+    requesterPhone: str = None,
+) -> Dict[str, Any]:
     viewer_family_member_id = _normalize_viewer_family_member_id(viewerFamilyMemberID)
-    _ensure_active_family_viewer(user_id, viewer_family_member_id)
+    _ensure_active_family_viewer(
+        user_id,
+        viewer_family_member_id,
+        requester_phone=requesterPhone,
+        require_requester_identity=True,
+    )
     item = store.get_latest_care_snapshot(
         user_id,
         viewer_family_member_id=viewer_family_member_id,
@@ -432,10 +458,16 @@ def latest_care_snapshot(user_id: str, viewerFamilyMemberID: str = None) -> Dict
 def care_snapshot_history(
     user_id: str,
     viewerFamilyMemberID: str = None,
+    requesterPhone: str = None,
     limit: int = 7,
 ) -> Dict[str, Any]:
     viewer_family_member_id = _normalize_viewer_family_member_id(viewerFamilyMemberID)
-    _ensure_active_family_viewer(user_id, viewer_family_member_id)
+    _ensure_active_family_viewer(
+        user_id,
+        viewer_family_member_id,
+        requester_phone=requesterPhone,
+        require_requester_identity=True,
+    )
     items = store.list_care_snapshots(
         user_id,
         viewer_family_member_id=viewer_family_member_id,

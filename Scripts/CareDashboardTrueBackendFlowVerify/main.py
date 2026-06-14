@@ -105,7 +105,7 @@ require(member["accessStatus"] == "pending", "new family member should start pen
 
 pending_latest = client.get(
     f"/care/snapshots/latest/{user_id}",
-    params={"viewerFamilyMemberID": member_id},
+    params={"viewerFamilyMemberID": member_id, "requesterPhone": phone},
 )
 require_status(pending_latest, 403, "pending family member should not read care snapshots")
 
@@ -141,11 +141,11 @@ require_status(save_member, 200, "member care snapshot save")
 latest_all = client.get(f"/care/snapshots/latest/{user_id}")
 latest_member = client.get(
     f"/care/snapshots/latest/{user_id}",
-    params={"viewerFamilyMemberID": member_id},
+    params={"viewerFamilyMemberID": member_id, "requesterPhone": phone},
 )
 history_member = client.get(
     f"/care/snapshots/{user_id}",
-    params={"viewerFamilyMemberID": member_id, "limit": 7},
+    params={"viewerFamilyMemberID": member_id, "requesterPhone": phone, "limit": 7},
 )
 require_status(latest_all, 200, "all-family latest care snapshot")
 require_status(latest_member, 200, "member latest care snapshot")
@@ -188,11 +188,11 @@ revoked_write = client.post(
 )
 revoked_latest = client.get(
     f"/care/snapshots/latest/{user_id}",
-    params={"viewerFamilyMemberID": member_id},
+    params={"viewerFamilyMemberID": member_id, "requesterPhone": phone},
 )
 revoked_history = client.get(
     f"/care/snapshots/{user_id}",
-    params={"viewerFamilyMemberID": member_id},
+    params={"viewerFamilyMemberID": member_id, "requesterPhone": phone},
 )
 require_status(revoked_write, 403, "revoked family member should not write care snapshot")
 require_status(revoked_latest, 403, "revoked family member should not read latest care snapshot")

@@ -219,7 +219,8 @@ final class CareDashboardViewController: UIViewController {
         }
         DreamJourneyBackendClient.shared.fetchLatestCareSnapshot(
             userId: ownerUserId,
-            viewerFamilyMemberID: viewerFamilyMemberID
+            viewerFamilyMemberID: viewerFamilyMemberID,
+            requesterPhone: requesterPhoneForCareSnapshot()
         ) { [weak self] result in
             DispatchQueue.main.async {
                 switch result {
@@ -242,6 +243,7 @@ final class CareDashboardViewController: UIViewController {
         DreamJourneyBackendClient.shared.fetchCareSnapshotHistory(
             userId: ownerUserId,
             viewerFamilyMemberID: viewerFamilyMemberID,
+            requesterPhone: requesterPhoneForCareSnapshot(),
             limit: 7
         ) { [weak self] result in
             DispatchQueue.main.async {
@@ -286,6 +288,11 @@ final class CareDashboardViewController: UIViewController {
 
     private func careOwnerUserID() -> String? {
         FamilyRepository.shared.careOwnerUserID(for: viewerFamilyMemberID)
+    }
+
+    private func requesterPhoneForCareSnapshot() -> String? {
+        guard viewerFamilyMemberID?.isEmpty == false else { return nil }
+        return UserManager.shared.currentUser?.phone
     }
 
     private func render() {

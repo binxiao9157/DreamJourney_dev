@@ -508,7 +508,7 @@ class CareSnapshotAPITests(unittest.TestCase):
         latest_all = client.get("/care/snapshots/latest/care_user_1")
         latest_daughter = client.get(
             "/care/snapshots/latest/care_user_1",
-            params={"viewerFamilyMemberID": member_id},
+            params={"viewerFamilyMemberID": member_id, "requesterPhone": "13900001111"},
         )
 
         self.assertEqual(latest_all.status_code, 200)
@@ -547,7 +547,7 @@ class CareSnapshotAPITests(unittest.TestCase):
 
         history = client.get(
             "/care/snapshots/care_history_user",
-            params={"viewerFamilyMemberID": member_id, "limit": 2},
+            params={"viewerFamilyMemberID": member_id, "requesterPhone": "13900001111", "limit": 2},
         )
         all_family_history = client.get("/care/snapshots/care_history_user", params={"limit": 10})
 
@@ -607,7 +607,7 @@ class CareSnapshotAPITests(unittest.TestCase):
         )
         active_read = client.get(
             f"/care/snapshots/latest/{user_id}",
-            params={"viewerFamilyMemberID": member_id},
+            params={"viewerFamilyMemberID": member_id, "requesterPhone": "13900001111"},
         )
 
         self.assertEqual(accepted.status_code, 200)
@@ -625,17 +625,54 @@ class CareSnapshotAPITests(unittest.TestCase):
         )
         revoked_latest = client.get(
             f"/care/snapshots/latest/{user_id}",
-            params={"viewerFamilyMemberID": member_id},
+            params={"viewerFamilyMemberID": member_id, "requesterPhone": "13900001111"},
         )
         revoked_history = client.get(
             f"/care/snapshots/{user_id}",
-            params={"viewerFamilyMemberID": member_id},
+            params={"viewerFamilyMemberID": member_id, "requesterPhone": "13900001111"},
         )
 
         self.assertEqual(revoked.status_code, 200)
         self.assertEqual(revoked_write.status_code, 403)
         self.assertEqual(revoked_latest.status_code, 403)
         self.assertEqual(revoked_history.status_code, 403)
+
+    def test_care_snapshot_member_reads_require_requester_phone(self):
+        client = TestClient(app)
+        user_id = "care_requester_user"
+        member_id = self._accept_family_member(client, user_id, phone="13900001111")
+        saved = client.post(
+            "/care/snapshots",
+            json={
+                "userId": user_id,
+                "viewerFamilyMemberID": member_id,
+                "snapshot": self._care_snapshot(summary="女儿视角"),
+            },
+        )
+        self.assertEqual(saved.status_code, 200)
+
+        missing_requester = client.get(
+            f"/care/snapshots/latest/{user_id}",
+            params={"viewerFamilyMemberID": member_id},
+        )
+        wrong_requester = client.get(
+            f"/care/snapshots/latest/{user_id}",
+            params={"viewerFamilyMemberID": member_id, "requesterPhone": "13999999999"},
+        )
+        matching_requester = client.get(
+            f"/care/snapshots/latest/{user_id}",
+            params={"viewerFamilyMemberID": member_id, "requesterPhone": "13900001111"},
+        )
+        history = client.get(
+            f"/care/snapshots/{user_id}",
+            params={"viewerFamilyMemberID": member_id, "requesterPhone": "13900001111"},
+        )
+
+        self.assertEqual(missing_requester.status_code, 403)
+        self.assertEqual(wrong_requester.status_code, 403)
+        self.assertEqual(matching_requester.status_code, 200)
+        self.assertEqual(history.status_code, 200)
+        self.assertEqual(matching_requester.json()["item"]["snapshot"]["summary"], "女儿视角")
 
     def test_care_snapshot_api_never_persists_raw_conversation_payload(self):
         client = TestClient(app)

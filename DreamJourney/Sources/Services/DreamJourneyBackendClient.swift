@@ -154,6 +154,7 @@ final class DreamJourneyBackendClient {
     func fetchLatestCareSnapshot(
         userId: String,
         viewerFamilyMemberID: String?,
+        requesterPhone: String? = nil,
         completion: @escaping (Result<CareSnapshotLatestResponse, Swift.Error>) -> Void
     ) {
         do {
@@ -161,8 +162,15 @@ final class DreamJourneyBackendClient {
             guard var components = URLComponents(url: try endpointURL(path: path), resolvingAgainstBaseURL: false) else {
                 throw Error.invalidURL
             }
+            var queryItems: [URLQueryItem] = []
             if let viewerFamilyMemberID, !viewerFamilyMemberID.isEmpty {
-                components.queryItems = [URLQueryItem(name: "viewerFamilyMemberID", value: viewerFamilyMemberID)]
+                queryItems.append(URLQueryItem(name: "viewerFamilyMemberID", value: viewerFamilyMemberID))
+            }
+            if let requesterPhone, !requesterPhone.isEmpty {
+                queryItems.append(URLQueryItem(name: "requesterPhone", value: requesterPhone))
+            }
+            if !queryItems.isEmpty {
+                components.queryItems = queryItems
             }
             guard let url = components.url else { throw Error.invalidURL }
             var request = URLRequest(url: url)
@@ -192,6 +200,7 @@ final class DreamJourneyBackendClient {
     func fetchCareSnapshotHistory(
         userId: String,
         viewerFamilyMemberID: String?,
+        requesterPhone: String? = nil,
         limit: Int = 7,
         completion: @escaping (Result<CareSnapshotHistoryResponse, Swift.Error>) -> Void
     ) {
@@ -203,6 +212,9 @@ final class DreamJourneyBackendClient {
             var queryItems = [URLQueryItem(name: "limit", value: "\(max(1, min(limit, 30)))")]
             if let viewerFamilyMemberID, !viewerFamilyMemberID.isEmpty {
                 queryItems.append(URLQueryItem(name: "viewerFamilyMemberID", value: viewerFamilyMemberID))
+            }
+            if let requesterPhone, !requesterPhone.isEmpty {
+                queryItems.append(URLQueryItem(name: "requesterPhone", value: requesterPhone))
             }
             components.queryItems = queryItems
             guard let url = components.url else { throw Error.invalidURL }

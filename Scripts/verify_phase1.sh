@@ -106,6 +106,9 @@ xcrun swiftc -D CARE_DASHBOARD_VERIFY \
 echo "== CareDashboard backend sync =="
 python3 Scripts/CareDashboardBackendSyncVerify/main.py
 
+echo "== CareDashboard requester identity =="
+python3 Scripts/CareDashboardRequesterIdentityVerify/main.py
+
 echo "== CareDashboard conversation-end publish =="
 python3 Scripts/CareDashboardSessionPublishVerify/main.py
 
