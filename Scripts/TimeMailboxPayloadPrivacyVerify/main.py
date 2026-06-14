@@ -60,6 +60,18 @@ require(
     "mailbox reader should show the original letter body only inside the local reader",
 )
 require(
+    "metadataOnlyReaderMessage(for:" in view
+    and "latest.body.isEmpty" in reader_body
+    and "这封信只有服务器元数据" in view
+    and "完整正文只在封存设备本机保存" in view,
+    "mailbox reader should not pretend metadata-only restored letters still have local body content",
+)
+require(
+    "letter.body.isEmpty" in view
+    and "服务器恢复的元数据" in view,
+    "mailbox list should label metadata-only restored letters instead of implying local body is present",
+)
+require(
     "回声边界" in reader_body and "latest.replyText" in reader_body,
     "mailbox reader should separate local original letter from bounded echo text",
 )

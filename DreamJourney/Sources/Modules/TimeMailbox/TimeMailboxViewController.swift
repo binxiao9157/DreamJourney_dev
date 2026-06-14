@@ -213,7 +213,7 @@ final class TimeMailboxViewController: UIViewController {
         deliveryRefreshTimer?.invalidate()
         deliveryRefreshTimer = nil
 
-        guard let nextDeliveryDate = letters.filter { $0.status == .sealed }.map(\.deliverAt).min() else {
+        guard let nextDeliveryDate = (letters.filter { $0.status == .sealed }).map(\.deliverAt).min() else {
             return
         }
 
@@ -360,16 +360,21 @@ final class TimeMailboxViewController: UIViewController {
 
         let latest = repository.letters().first(where: { $0.id == letter.id }) ?? letter
         syncLetterMetadataToBackend(latest)
-        let readerMessage = """
-        原信仅本机显示：
-        \(latest.body)
+        let readerMessage: String
+        if latest.body.isEmpty {
+            readerMessage = metadataOnlyReaderMessage(for: latest)
+        } else {
+            readerMessage = """
+            原信仅本机显示：
+            \(latest.body)
 
-        回声状态：
-        \(echoStatusText(for: latest))
+            回声状态：
+            \(echoStatusText(for: latest))
 
-        回声边界：
-        \(latest.replyText ?? "这封信已经到达，但回声还在整理中。")
-        """
+            回声边界：
+            \(latest.replyText ?? "这封信已经到达，但回声还在整理中。")
+            """
+        }
         let alert = UIAlertController(
             title: latest.title,
             message: readerMessage,
@@ -378,6 +383,17 @@ final class TimeMailboxViewController: UIViewController {
         alert.addAction(UIAlertAction(title: "我知道了", style: .default))
         present(alert, animated: true)
         reloadLetters()
+    }
+
+    private func metadataOnlyReaderMessage(for letter: TimeMailboxLetter) -> String {
+        """
+        这封信只有服务器元数据。
+
+        完整正文只在封存设备本机保存，当前设备不会从服务器恢复或展示信件正文。
+
+        投递状态：
+        \(echoStatusText(for: letter))
+        """
     }
 
     private func echoStatusText(for letter: TimeMailboxLetter) -> String {
@@ -889,6 +905,9 @@ private final class TimeMailboxCell: UITableViewCell {
     }
 
     private func previewText(for letter: TimeMailboxLetter) -> String {
+        if letter.body.isEmpty {
+            return "服务器恢复的元数据；完整正文只在封存设备本机保存"
+        }
         switch letter.status {
         case .sealed:
             return "正文仅本机保存，回声到达后需点开阅读"
