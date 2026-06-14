@@ -280,6 +280,15 @@ final class MemoryArchiveRepository {
         }
     }
 
+    @discardableResult
+    func attachTargetPerson(id: String, targetPersonId: String?, now: Date = Date()) throws -> MemoryArchiveItem {
+        let cleanTargetPersonId = Self.cleanedOptional(targetPersonId)
+        return try mutate(id: id) { item in
+            item.targetPersonId = cleanTargetPersonId
+            item.updatedAt = now
+        }
+    }
+
     func delete(id: String) throws {
         var all = load()
         guard let index = all.firstIndex(where: { $0.id == id }) else {

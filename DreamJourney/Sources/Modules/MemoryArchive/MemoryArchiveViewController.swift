@@ -973,9 +973,17 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
                 privacyMetadata: privacyMetadata,
                 targetPersonName: targetPersonName
             )
+            if let targetPersonID = resolveArchiveTargetPersonIDIfNeeded(
+                targetPersonName: targetPersonName,
+                privacyMetadata: item.privacyMetadata,
+                archiveItem: item
+            ) {
+                item = try repository.attachTargetPerson(id: item.id, targetPersonId: targetPersonID)
+            }
             if let profile = MemoryArchiveVoiceProfileStore.shared.registerSample(
                 item,
-                targetPersonName: targetPersonName
+                targetPersonName: targetPersonName,
+                targetPersonId: item.targetPersonId
             ) {
                 item = try repository.attachVoiceProfile(id: item.id, voiceProfileId: profile.id)
                 handleVoiceProfileStatus(profile, latestSamplePath: storedPath)
@@ -989,7 +997,8 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
                     archiveItemID: item.id,
                     timestamp: item.createdAt,
                     privacyMetadata: item.privacyMetadata,
-                    targetPersonName: item.targetPersonName
+                    targetPersonName: item.targetPersonName,
+                    targetPersonId: item.targetPersonId
                 ) { [weak self] addedCount in
                     DispatchQueue.main.async {
                         guard voiceTranscriptText == nil else {
@@ -1055,6 +1064,31 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
             return "导入的长辈语音样本，用于后续声纹和语气参考。"
         }
         return "导入的长辈语音样本，用于后续声纹和语气参考。\n语音转写/摘要：\(voiceTranscriptText)"
+    }
+
+    private func resolveArchiveTargetPersonIDIfNeeded(
+        targetPersonName: String?,
+        privacyMetadata: MemoryPrivacyMetadata,
+        archiveItem: MemoryArchiveItem
+    ) -> String? {
+        guard privacyMetadata.scope != .privateOnly else { return nil }
+        let sourceRef = MemorySourceRef(
+            kind: .memoryArchiveItem,
+            id: archiveItem.id,
+            title: archiveItem.title,
+            capturedAt: archiveItem.createdAt
+        )
+        let resolvedMetadata = privacyMetadata.appendingSourceRef(sourceRef)
+        let knowledgeSessionCount = KBLiteManager.shared.readGraph { $0.sessionCount }
+        let sessionId = max(
+            ConversationMemoryManager.shared.currentMemory.sessionCount + 1,
+            knowledgeSessionCount + 1
+        )
+        return KBLiteManager.shared.resolveArchiveTargetPersonID(
+            name: targetPersonName,
+            sessionId: sessionId,
+            privacyMetadata: resolvedMetadata
+        )
     }
 
     private func handleVoiceProfileStatus(

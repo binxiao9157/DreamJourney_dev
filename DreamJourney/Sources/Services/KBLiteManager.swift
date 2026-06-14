@@ -2203,6 +2203,25 @@ final class KBLiteManager {
         return 1
     }
 
+    func resolveArchiveTargetPersonID(
+        name targetPersonName: String?,
+        sessionId: Int,
+        privacyMetadata: MemoryPrivacyMetadata
+    ) -> String? {
+        guard privacyMetadata.scope != .privateOnly else { return nil }
+        guard let person = upsertArchiveVoiceTargetPersonIfNeeded(
+            targetPersonName: targetPersonName,
+            targetPersonId: nil,
+            sessionId: sessionId,
+            privacyMetadata: privacyMetadata
+        ) else {
+            return nil
+        }
+        graph.lastUpdated = Date()
+        save()
+        return person.id
+    }
+
     private func upsertArchiveVoiceTargetPersonIfNeeded(
         targetPersonName: String?,
         targetPersonId: String?,

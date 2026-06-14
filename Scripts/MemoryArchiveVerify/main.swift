@@ -71,6 +71,12 @@ do {
     assertCondition(voiceSample.localPath == "/tmp/grandma_voice.m4a", "voice sample local path should persist")
     assertCondition(voiceSample.privacyMetadata.scope == .generationAllowed, "voice sample should persist explicit generation scope")
     assertCondition(repo.summary().voiceSampleCount == 1, "summary should count voice samples")
+    let targetedVoiceSample = try repo.attachTargetPerson(
+        id: voiceSample.id,
+        targetPersonId: "person-linguifang",
+        now: now.addingTimeInterval(1)
+    )
+    assertCondition(targetedVoiceSample.targetPersonId == "person-linguifang", "voice sample should persist target person id")
 
     let familyPhoto = try repo.addPhoto(
         localPath: "/tmp/family_photo.jpg",

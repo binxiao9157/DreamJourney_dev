@@ -112,6 +112,19 @@ assertCondition(
     "targeted voice sample should be retrievable in prompt context"
 )
 
+let resolvedPersonID = KBLiteManager.shared.resolveArchiveTargetPersonID(
+    name: " 林桂芳 ",
+    sessionId: 45,
+    privacyMetadata: metadata
+)
+assertCondition(resolvedPersonID == linkedPerson.id, "archive person resolver should reuse existing concrete KBPerson")
+let genericPersonID = KBLiteManager.shared.resolveArchiveTargetPersonID(
+    name: "妈妈",
+    sessionId: 46,
+    privacyMetadata: metadata
+)
+assertCondition(genericPersonID == nil, "archive person resolver should reject generic kinship labels")
+
 KBLiteManager.shared.reset()
 try? FileManager.default.removeItem(at: verifyGraph)
 print("KBLiteArchiveVoice verification passed")

@@ -24,6 +24,17 @@ checks = [
         "Stage1MemoryFacade.shared.ingestArchiveVoiceSampleMetadata" in save_voice_body,
     ),
     (
+        "voice sample save flow should resolve and persist concrete target person id",
+        "resolveArchiveTargetPersonIDIfNeeded" in view
+        and "repository.attachTargetPerson" in save_voice_body
+        and "targetPersonId: item.targetPersonId" in save_voice_body,
+    ),
+    (
+        "voice profile registration should receive the same target person id",
+        "MemoryArchiveVoiceProfileStore.shared.registerSample" in save_voice_body
+        and "targetPersonId: item.targetPersonId" in save_voice_body,
+    ),
+    (
         "voice sample save flow should not rely on recordUserTurn for KBLite deposit",
         "Stage1MemoryFacade.shared.recordUserTurn" not in save_voice_body,
     ),
