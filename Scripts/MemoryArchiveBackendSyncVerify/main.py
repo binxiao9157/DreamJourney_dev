@@ -93,6 +93,25 @@ if "self.syncArchiveItemMetadataToBackend(" not in analysis_success_block:
     missing.append(f"{vc_file.name}: image analysis success should resync updated archive metadata")
 if "self.syncArchiveItemMetadataToBackend(failedItem)" not in analysis_failure_block:
     missing.append(f"{vc_file.name}: image analysis failure should resync failed archive metadata")
+
+sync_function_start = vc_text.find("func syncArchiveItemMetadataToBackend")
+sync_function_block = vc_text[
+    sync_function_start:
+    vc_text.find("static var backendSyncDateFormatter", sync_function_start)
+]
+sync_success_start = sync_function_block.find("case .success")
+sync_success_block = sync_function_block[
+    sync_success_start:
+    sync_function_block.find("case .failure", sync_success_start)
+]
+if "self?.refreshArchiveBackendSyncStatus()" not in sync_success_block:
+    missing.append(
+        f"{vc_file.name}: archive sync success should fetch server state before showing server item count"
+    )
+if "backendArchiveItemCount = max(" in sync_success_block:
+    missing.append(
+        f"{vc_file.name}: archive sync success should not use local syncable count as server-confirmed count"
+    )
 for fragment in required_privacy_fragments:
     if fragment not in privacy_text:
         missing.append(f"{privacy_file.name}: missing {fragment!r}")

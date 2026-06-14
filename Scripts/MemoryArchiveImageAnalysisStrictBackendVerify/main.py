@@ -24,9 +24,12 @@ body = match.group(0)
 required_fragments = [
     "PrivacyScopePolicy.canUse(metadata: item.privacyMetadata, surface: .remoteExtraction)",
     "guard DreamJourneyBackendClient.shared.isConfigured else",
+    "setKnowledgeDepositStatus(\"结构化建库：照片分析使用本机 DeepSeek 直连\")",
     "analyzePhotoDirectly(imageBase64: imageBase64, completion: completion)",
+    "setKnowledgeDepositStatus(\"结构化建库：照片分析使用后端代理\")",
     "DreamJourneyBackendClient.shared.analyzeArchiveImage",
     "case .failure(let error):",
+    "setKnowledgeDepositStatus(\"结构化建库：后端代理照片分析失败，不做本机兜底\")",
     "completion(.failure(error))",
 ]
 for fragment in required_fragments:

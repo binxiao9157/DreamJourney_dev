@@ -533,10 +533,12 @@ final class MemoryArchiveViewController: UIViewController {
         }
 
         guard DreamJourneyBackendClient.shared.isConfigured else {
+            setKnowledgeDepositStatus("结构化建库：照片分析使用本机 DeepSeek 直连")
             analyzePhotoDirectly(imageBase64: imageBase64, completion: completion)
             return
         }
 
+        setKnowledgeDepositStatus("结构化建库：照片分析使用后端代理")
         let userId = UserManager.shared.currentUser?.id ?? "default"
         DreamJourneyBackendClient.shared.analyzeArchiveImage(
             imageBase64: imageBase64,
@@ -549,6 +551,9 @@ final class MemoryArchiveViewController: UIViewController {
                 completion(result)
             case .failure(let error):
                 print("[MemoryArchive] 后端照片分析失败，不再本机兜底: \(error.localizedDescription)")
+                DispatchQueue.main.async { [weak self] in
+                    self?.setKnowledgeDepositStatus("结构化建库：后端代理照片分析失败，不做本机兜底")
+                }
                 completion(.failure(error))
             }
         }
@@ -1505,15 +1510,11 @@ private extension MemoryArchiveViewController {
             DispatchQueue.main.async {
                 switch result {
                 case .success:
-                    self?.backendArchiveItemCount = max(
-                        self?.backendArchiveItemCount ?? 0,
-                        self?.repository.items().filter {
-                            PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .backendSync)
-                        }.count ?? 0
-                    )
-                    self?.backendArchiveLastCheckedAt = Date()
-                    self?.backendSyncStatusOverride = nil
+                    self?.backendArchiveItemCount = nil
+                    self?.backendArchiveLastCheckedAt = nil
+                    self?.backendSyncStatusOverride = "服务器同步：已提交，正在确认服务器状态"
                     self?.updateBackendSyncStatusLabel()
+                    self?.refreshArchiveBackendSyncStatus()
                 case .failure(let error):
                     print("[MemoryArchive] backend metadata sync skipped/failed: \(error.localizedDescription)")
                     self?.backendSyncStatusOverride = "服务器同步：同步失败，本机副本已保存"
