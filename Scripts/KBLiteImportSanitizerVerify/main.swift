@@ -59,6 +59,14 @@ try? FileManager.default.removeItem(at: verifyGraph)
 
 let now = Date(timeIntervalSince1970: 1_800_345_678)
 let metadata = MemoryPrivacyMetadata(scope: .familyCircle, createdAt: now)
+let archivePhotoGenericMetadata = MemoryPrivacyMetadata(scope: .generationAllowed, createdAt: now).appendingSourceRef(
+    MemorySourceRef(
+        kind: .memoryArchiveItem,
+        id: "archive-photo-generic",
+        title: "老宅门口合影",
+        capturedAt: now
+    )
+)
 let importedGraph = KBLiteGraph(
     lastUpdated: now,
     sessionCount: 2,
@@ -246,6 +254,15 @@ let importedGraph = KBLiteGraph(
             sourceSessionIds: [2],
             createdAt: now,
             privacyMetadata: metadata
+        ),
+        KBFact(
+            id: "legacy_archive_photo_generic_fact",
+            statement: "记忆档案馆照片《老宅门口合影》分析摘要：照片里妈妈和外婆在老宅门口合影。（场景：老宅；人物：妈妈、外婆）。",
+            confidence: "confirmed",
+            relatedPersonIds: [],
+            sourceSessionIds: [3],
+            createdAt: now,
+            privacyMetadata: archivePhotoGenericMetadata
         )
     ]
 )

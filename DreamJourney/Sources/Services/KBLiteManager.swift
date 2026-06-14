@@ -518,6 +518,7 @@ final class KBLiteManager {
         graph.facts.removeAll { fact in
             fact.id.hasPrefix("roadshow_") ||
                 Self.isLegacyRoadshowSeedFact(fact) ||
+                Self.isArchivePhotoGenericKinshipFact(fact) ||
                 Self.isGenericKinshipOnlyFact(fact) ||
                 fact.relatedPersonIds.contains(where: { removedPeople.contains($0) }) ||
                 fact.relatedPlaceIds.contains(where: { removedPlaces.contains($0) }) ||
@@ -574,6 +575,16 @@ final class KBLiteManager {
         let statement = normalizedFactStatement(fact.statement)
         return statement.contains("路演占位事实不应进入真实测试知识库") ||
             statement.contains("时空信箱回声只基于保存记忆整理不代表逝者真实回复")
+    }
+
+    private static func isArchivePhotoGenericKinshipFact(_ fact: KBFact) -> Bool {
+        let statement = normalizedFactStatement(fact.statement)
+        guard statement.contains("记忆档案馆照片"),
+              statement.contains("分析摘要"),
+              fact.privacyMetadata.sourceRefs.contains(where: { $0.kind == .memoryArchiveItem }) else {
+            return false
+        }
+        return genericKinshipNames.contains { statement.contains($0) }
     }
 
     private static func shouldPersistPerson(
