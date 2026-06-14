@@ -284,6 +284,7 @@ final class CareDashboardViewController: UIViewController {
 
         stackView.addArrangedSubview(makeHeader(snapshot))
         stackView.addArrangedSubview(makePrivacyNotice())
+        stackView.addArrangedSubview(makeEvidenceStatusCard(snapshot))
         if !remoteSnapshotHistory.isEmpty {
             stackView.addArrangedSubview(makeSnapshotHistoryCard(remoteSnapshotHistory))
         }
@@ -436,6 +437,45 @@ final class CareDashboardViewController: UIViewController {
             stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
             stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
             stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16),
+        ])
+        return container
+    }
+
+    private func makeEvidenceStatusCard(_ snapshot: CareSignalSnapshot) -> UIView {
+        let container = makeSurface()
+
+        let titleLabel = UILabel()
+        titleLabel.text = "真实验收状态"
+        titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
+        titleLabel.textColor = .warmPrimary
+
+        let bodyLabel = UILabel()
+        bodyLabel.text = [
+            "本机授权发言 \(localEligibleUserTurnCount) 轮",
+            "当前快照 \(snapshotSourceText)",
+            "\(remoteSnapshotStatusText)",
+            "观测天数 \(snapshot.windowDayCount) 天"
+        ].joined(separator: " · ")
+        bodyLabel.font = .systemFont(ofSize: 13)
+        bodyLabel.textColor = .warmSubtitle
+        bodyLabel.numberOfLines = 0
+
+        let boundaryLabel = UILabel()
+        boundaryLabel.text = "只展示脱敏聚合指标，不展示原始聊天内容。"
+        boundaryLabel.font = .systemFont(ofSize: 12)
+        boundaryLabel.textColor = .warmSubtitle
+        boundaryLabel.numberOfLines = 0
+
+        let stack = UIStackView(arrangedSubviews: [titleLabel, bodyLabel, boundaryLabel])
+        stack.axis = .vertical
+        stack.spacing = 8
+        container.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 14),
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 14),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -14),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -14),
         ])
         return container
     }
