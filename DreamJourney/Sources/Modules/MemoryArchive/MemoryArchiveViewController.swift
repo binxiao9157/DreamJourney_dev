@@ -584,6 +584,9 @@ final class MemoryArchiveViewController: UIViewController {
             })
         }
         if item.kind == .voiceSample {
+            alert.addAction(UIAlertAction(title: "自动识别转写", style: .default) { [weak self] _ in
+                self?.presentVoiceAutoTranscriptionConsent(for: item)
+            })
             alert.addAction(UIAlertAction(title: "补充语音转写", style: .default) { [weak self] _ in
                 self?.presentVoiceTranscriptBackfill(for: item)
             })
@@ -597,6 +600,43 @@ final class MemoryArchiveViewController: UIViewController {
             height: 1
         )
         present(alert, animated: true)
+    }
+
+    private func presentVoiceAutoTranscriptionConsent(for item: MemoryArchiveItem) {
+        guard item.kind == .voiceSample else { return }
+        guard let localPath = item.localPath, !localPath.isEmpty else {
+            setKnowledgeDepositStatus("结构化建库：语音文件不可用，无法自动识别")
+            showToast("语音文件不可用", type: .error)
+            return
+        }
+
+        let alert = UIAlertController(
+            title: "自动识别转写",
+            message: "将读取这段音频，可能由系统语音识别服务处理音频。识别出的文字会复用当前素材的隐私范围；私密素材只回填档案，不进入知识库。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "开始识别", style: .default) { [weak self] _ in
+            self?.startVoiceAutoTranscription(for: item, localPath: localPath)
+        })
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        present(alert, animated: true)
+    }
+
+    private func startVoiceAutoTranscription(for item: MemoryArchiveItem, localPath: String) {
+        setKnowledgeDepositStatus("结构化建库：正在自动识别语音转写")
+        showToast("开始识别语音", type: .info)
+        MemoryArchiveVoiceTranscriber.shared.transcribeAudio(at: localPath) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success(let transcript):
+                    self.saveVoiceTranscriptBackfill(transcript, for: item)
+                case .failure(let error):
+                    self.setKnowledgeDepositStatus("结构化建库：语音识别失败（\(error.localizedDescription)）")
+                    self.showToast(error.localizedDescription, type: .error)
+                }
+            }
+        }
     }
 
     private func presentVoiceTranscriptBackfill(for item: MemoryArchiveItem) {
