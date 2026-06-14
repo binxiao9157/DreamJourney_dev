@@ -4,6 +4,11 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+BACKEND_PYTHON="python3"
+if [ -x "DreamJourneyBackend/.venv/bin/python" ]; then
+  BACKEND_PYTHON="DreamJourneyBackend/.venv/bin/python"
+fi
+
 echo "== SafetyMonitor =="
 xcrun swiftc \
   DreamJourney/Sources/Services/Safety/SafetyModels.swift \
@@ -37,6 +42,9 @@ python3 Scripts/TimeMailboxBackendSyncVerify/main.py
 
 echo "== TimeMailbox payload privacy =="
 python3 Scripts/TimeMailboxPayloadPrivacyVerify/main.py
+
+echo "== TimeMailbox true backend flow =="
+PYTHONPATH=DreamJourneyBackend STORE_BACKEND=memory "$BACKEND_PYTHON" Scripts/TimeMailboxTrueBackendFlowVerify/main.py
 
 echo "== TimeMailbox knowledge metadata =="
 python3 Scripts/TimeMailboxKnowledgeVerify/main.py
@@ -84,10 +92,6 @@ echo "== CareDashboard backend sync =="
 python3 Scripts/CareDashboardBackendSyncVerify/main.py
 
 echo "== CareDashboard true backend flow =="
-BACKEND_PYTHON="python3"
-if [ -x "DreamJourneyBackend/.venv/bin/python" ]; then
-  BACKEND_PYTHON="DreamJourneyBackend/.venv/bin/python"
-fi
 PYTHONPATH=DreamJourneyBackend STORE_BACKEND=memory "$BACKEND_PYTHON" Scripts/CareDashboardTrueBackendFlowVerify/main.py
 
 echo "== CareDashboard data readiness UI =="

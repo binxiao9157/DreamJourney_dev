@@ -94,6 +94,8 @@ for fragment in required_backend_test_fragments:
         missing.append(f"{backend_tests_file.name}: missing {fragment!r}")
 if "TimeMailboxBackendSyncVerify/main.py" not in phase1_text:
     missing.append(f"{verify_phase1.name}: missing TimeMailboxBackendSyncVerify/main.py")
+if "TimeMailboxTrueBackendFlowVerify/main.py" not in phase1_text:
+    missing.append(f"{verify_phase1.name}: missing TimeMailboxTrueBackendFlowVerify/main.py")
 if "syncLetterMetadataToBackend" in repo_text:
     missing.append(f"{repo_file.name}: backend sync should stay out of pure repository storage")
 
