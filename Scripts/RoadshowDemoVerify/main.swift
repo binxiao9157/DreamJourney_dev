@@ -39,6 +39,18 @@ assertCondition(envConfiguration.shouldSeed, "seed environment should enable roa
 assertCondition(envConfiguration.offlineMode, "offline environment should enable roadshow offline mode")
 assertCondition(envConfiguration.shouldReset, "reset environment should enable roadshow reset")
 
+let realAcceptanceConfiguration = RoadshowDemoSeed.launchConfiguration(
+    arguments: ["DreamJourney", "--real-acceptance", "--seed-roadshow-demo", "--roadshow-offline-mode"],
+    environment: [
+        "DREAMJOURNEY_SEED": "roadshow_demo",
+        "DREAMJOURNEY_ROADSHOW_OFFLINE": "1",
+        "DREAMJOURNEY_RESET_DEMO": "1"
+    ]
+)
+assertCondition(!realAcceptanceConfiguration.shouldSeed, "real acceptance should disable roadshow seeding")
+assertCondition(!realAcceptanceConfiguration.offlineMode, "real acceptance should disable roadshow offline mode")
+assertCondition(!realAcceptanceConfiguration.shouldReset, "real acceptance should disable roadshow reset")
+
 let runtimeDefaults = UserDefaults(suiteName: "RoadshowDemoVerify-\(UUID().uuidString)")!
 runtimeDefaults.set(true, forKey: "dreamjourney.roadshow.seeded.v1")
 let runtimeStatus = RoadshowDemoSeed.runtimeStatus(
@@ -51,6 +63,14 @@ assertCondition(runtimeStatus.offlineMode, "runtime status should expose offline
 assertCondition(runtimeStatus.hasSeededData, "runtime status should expose seeded data for UI")
 assertCondition(runtimeStatus.title.contains("路演"), "runtime status title should be roadshow-oriented")
 assertCondition(runtimeStatus.detail.contains("不复活"), "runtime status detail should include product boundary copy")
+
+let realAcceptanceRuntimeStatus = RoadshowDemoSeed.runtimeStatus(
+    arguments: ["DreamJourney", "--real-device-acceptance", "--roadshow-offline-mode"],
+    environment: ["DREAMJOURNEY_SEED": "roadshow_demo"],
+    userDefaults: runtimeDefaults
+)
+assertCondition(!realAcceptanceRuntimeStatus.isActive, "real acceptance runtime should ignore existing roadshow flags")
+assertCondition(!realAcceptanceRuntimeStatus.hasSeededData, "real acceptance runtime should hide seeded roadshow state")
 
 let viewerMemberID = package.selectedMemberIDForVisibility
 assertCondition(package.members.count >= 3, "roadshow seed should include at least 3 family members")

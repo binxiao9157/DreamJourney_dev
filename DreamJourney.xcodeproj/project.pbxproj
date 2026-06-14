@@ -101,6 +101,7 @@
 		A67CE000000000000000001 /* RoadshowDemoRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = A67CE000000000000000002 /* RoadshowDemoRoute.swift */; };
 		A68CE000000000000000001 /* RoadshowDemoRouteViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A68CE000000000000000002 /* RoadshowDemoRouteViewController.swift */; };
 		A69CE000000000000000001 /* AppConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A69CE000000000000000002 /* AppConfiguration.swift */; };
+		A93CE000000000000000001 /* RealDeviceAcceptanceGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A93CE000000000000000002 /* RealDeviceAcceptanceGate.swift */; };
 		A71CE000000000000000001 /* FamilyVisibilityPickerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A71CE000000000000000002 /* FamilyVisibilityPickerViewController.swift */; };
 		A72CE000000000000000001 /* HomeDialogPrivacyMetadataFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A72CE000000000000000002 /* HomeDialogPrivacyMetadataFactory.swift */; };
 		A73CE000000000000000001 /* FamilyAccessIdentityResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A73CE000000000000000002 /* FamilyAccessIdentityResolver.swift */; };
@@ -230,6 +231,7 @@
 		A67CE000000000000000002 /* RoadshowDemoRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadshowDemoRoute.swift; sourceTree = "<group>"; };
 		A68CE000000000000000002 /* RoadshowDemoRouteViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadshowDemoRouteViewController.swift; sourceTree = "<group>"; };
 		A69CE000000000000000002 /* AppConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfiguration.swift; sourceTree = "<group>"; };
+		A93CE000000000000000002 /* RealDeviceAcceptanceGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealDeviceAcceptanceGate.swift; sourceTree = "<group>"; };
 		A71CE000000000000000002 /* FamilyVisibilityPickerViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyVisibilityPickerViewController.swift; sourceTree = "<group>"; };
 		A72CE000000000000000002 /* HomeDialogPrivacyMetadataFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeDialogPrivacyMetadataFactory.swift; sourceTree = "<group>"; };
 		A73CE000000000000000002 /* FamilyAccessIdentityResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyAccessIdentityResolver.swift; sourceTree = "<group>"; };
@@ -379,6 +381,7 @@
 				A56CE000000000000000007 /* Privacy */,
 				D02862A4C9294AFE8E6FD396 /* Safety */,
 				A69CE000000000000000002 /* AppConfiguration.swift */,
+				A93CE000000000000000002 /* RealDeviceAcceptanceGate.swift */,
 				A72CE000000000000000002 /* HomeDialogPrivacyMetadataFactory.swift */,
 				A59CE000000000000000002 /* RoadshowDemoSeed.swift */,
 				A67CE000000000000000002 /* RoadshowDemoRoute.swift */,
@@ -981,6 +984,7 @@
 				E888BD0CCEFEF938A377A489 /* MessageCells.swift in Sources */,
 				1D6C68E038F68B262E1C025D /* MicrophonePermissionManager.swift in Sources */,
 				A69CE000000000000000001 /* AppConfiguration.swift in Sources */,
+				A93CE000000000000000001 /* RealDeviceAcceptanceGate.swift in Sources */,
 				A72CE000000000000000001 /* HomeDialogPrivacyMetadataFactory.swift in Sources */,
 				A44CE000000000000000002 /* MockDialogEngine.swift in Sources */,
 				397C1F6023E56C8E016A0D71 /* OpenAvatarChatService.swift in Sources */,

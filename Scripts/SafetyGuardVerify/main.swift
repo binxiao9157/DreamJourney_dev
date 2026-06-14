@@ -369,6 +369,26 @@ private func verifyMockAllowOverridesHTTPConfiguration() throws {
     try expect(httpClient.requests.isEmpty, "mock allow should not call configured HTTP transport")
 }
 
+private func verifyRealAcceptanceDisablesMockAllow() throws {
+    let httpClient = RecordingHTTPClient(
+        result: .success((try makeAllowResponseData(), makeHTTPURLResponse(statusCode: 200)))
+    )
+    let client = DeepSeekSafetyGuarding.makeDefaultClient(
+        arguments: ["DreamJourney", "--real-acceptance", "--use-mock-safety-guard"],
+        environment: [
+            "DREAMJOURNEY_SAFETY_GUARD": "mock_allow",
+            "DREAMJOURNEY_SAFETY_GUARD_BASE_URL": "https://guard.example.com"
+        ],
+        httpClient: httpClient
+    )
+
+    let response = client.evaluate(makeRequest(text: "普通问候"))
+
+    try expect(response.action == .allow, "real acceptance should still use configured safety guard")
+    try expect(response.reasonCode != "MOCK_ALLOW", "real acceptance must not use mock allow")
+    try expect(httpClient.requests.count == 1, "real acceptance should call configured HTTP transport instead of mock allow")
+}
+
 private func expectValue<T>(_ value: T?, _ message: String) throws -> T {
     guard let value else {
         throw VerifyFailure.failed(message)
@@ -390,7 +410,8 @@ let checks: [(String, () throws -> Void)] = [
     ("HTTP transport decode failure fail closed", verifyHTTPTransportDecodeFailureFailsClosed),
     ("configured default client uses HTTP transport", verifyDefaultClientUsesHTTPTransportWhenConfigured),
     ("bundle configured default client uses HTTP transport", verifyDefaultClientUsesBundleHTTPConfiguration),
-    ("mock allow overrides HTTP configuration", verifyMockAllowOverridesHTTPConfiguration)
+    ("mock allow overrides HTTP configuration", verifyMockAllowOverridesHTTPConfiguration),
+    ("real acceptance disables mock allow", verifyRealAcceptanceDisablesMockAllow)
 ]
 
 var passed = 0

@@ -13,11 +13,22 @@ final class DialogEngineFactory {
         arguments: [String] = ProcessInfo.processInfo.arguments,
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> DialogEngineProtocol {
+        make(type: selectedType(arguments: arguments, environment: environment))
+    }
+
+    static func selectedType(
+        arguments: [String] = ProcessInfo.processInfo.arguments,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> DialogEngineType {
+        if RealDeviceAcceptanceGate.isEnabled(arguments: arguments, environment: environment) {
+            return .volcengine
+        }
+
         if arguments.contains("--use-mock-dialog-engine") ||
             environment["DREAMJOURNEY_DIALOG_ENGINE"]?.lowercased() == "mock" {
-            return make(type: .mock)
+            return .mock
         }
-        return make(type: .volcengine)
+        return .volcengine
     }
 
     static func make(type: DialogEngineType = .volcengine) -> DialogEngineProtocol {

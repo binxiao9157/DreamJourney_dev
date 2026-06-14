@@ -85,6 +85,12 @@ let envEngine = DialogEngineFactory.makeDefault(
 )
 assertCondition(envEngine is MockDialogEngine, "environment should select MockDialogEngine")
 
+let realAcceptanceType = DialogEngineFactory.selectedType(
+    arguments: ["DreamJourney", "--real-acceptance", "--use-mock-dialog-engine"],
+    environment: ["DREAMJOURNEY_DIALOG_ENGINE": "mock"]
+)
+assertCondition(realAcceptanceType == .volcengine, "real acceptance should force the real dialog engine path")
+
 let offlineArgEngine = DialogEngineFactory.makeDefault(
     arguments: ["DreamJourney", "--roadshow-offline-mode"],
     environment: [:]

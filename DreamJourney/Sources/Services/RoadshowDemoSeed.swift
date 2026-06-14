@@ -73,6 +73,10 @@ enum RoadshowDemoSeed {
         arguments: [String] = ProcessInfo.processInfo.arguments,
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> LaunchConfiguration {
+        if RealDeviceAcceptanceGate.isEnabled(arguments: arguments, environment: environment) {
+            return LaunchConfiguration(shouldSeed: false, shouldReset: false, offlineMode: false)
+        }
+
         let seedValue = environment["DREAMJOURNEY_SEED"]?.lowercased()
         let offlineValue = environment["DREAMJOURNEY_ROADSHOW_OFFLINE"]?.lowercased()
         let resetValue = environment["DREAMJOURNEY_RESET_DEMO"]?.lowercased()
@@ -89,6 +93,15 @@ enum RoadshowDemoSeed {
         environment: [String: String] = ProcessInfo.processInfo.environment,
         userDefaults: UserDefaults = .standard
     ) -> RuntimeStatus {
+        if RealDeviceAcceptanceGate.isEnabled(arguments: arguments, environment: environment) {
+            return RuntimeStatus(
+                shouldSeed: false,
+                shouldReset: false,
+                offlineMode: false,
+                hasSeededData: false
+            )
+        }
+
         let configuration = launchConfiguration(arguments: arguments, environment: environment)
         return RuntimeStatus(
             shouldSeed: configuration.shouldSeed,

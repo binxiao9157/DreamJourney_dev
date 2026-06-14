@@ -52,7 +52,11 @@ enum DeepSeekSafetyGuarding {
         arguments: [String],
         environment: [String: String]
     ) -> Bool {
-        arguments.contains("--use-mock-safety-guard") ||
+        if RealDeviceAcceptanceGate.isEnabled(arguments: arguments, environment: environment) {
+            return false
+        }
+
+        return arguments.contains("--use-mock-safety-guard") ||
             environment["DREAMJOURNEY_SAFETY_GUARD"]?.lowercased() == "mock_allow"
     }
 

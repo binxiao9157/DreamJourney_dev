@@ -35,6 +35,7 @@ python3 Scripts/DigitalHumanFallbackUIVerify/main.py
 
 echo "== RoadshowDemoSeed =="
 xcrun swiftc -D CARE_DASHBOARD_VERIFY \
+  DreamJourney/Sources/Services/RealDeviceAcceptanceGate.swift \
   DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
   DreamJourney/Sources/Services/ConversationMemoryManager.swift \
   DreamJourney/Sources/Services/CareDashboard/CareSignalModels.swift \
@@ -46,6 +47,7 @@ xcrun swiftc -D CARE_DASHBOARD_VERIFY \
 
 echo "== RoadshowRoute =="
 xcrun swiftc -D CARE_DASHBOARD_VERIFY \
+  DreamJourney/Sources/Services/RealDeviceAcceptanceGate.swift \
   DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
   DreamJourney/Sources/Services/ConversationMemoryManager.swift \
   DreamJourney/Sources/Services/CareDashboard/CareSignalModels.swift \
@@ -70,6 +72,7 @@ python3 Scripts/RoadshowEvidencePackageVerify/main.py
 
 echo "== MockDialogEngine =="
 xcrun swiftc -D MOCK_DIALOG_VERIFY \
+  DreamJourney/Sources/Services/RealDeviceAcceptanceGate.swift \
   DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
   DreamJourney/Sources/Services/Safety/SafetyModels.swift \
   DreamJourney/Sources/Services/Safety/SafetyMonitor.swift \
@@ -104,6 +107,7 @@ xcrun swiftc \
 
 echo "== SafetyGuard =="
 xcrun swiftc \
+  DreamJourney/Sources/Services/RealDeviceAcceptanceGate.swift \
   DreamJourney/Sources/Services/AppConfiguration.swift \
   DreamJourney/Sources/Services/Safety/SafetyModels.swift \
   DreamJourney/Sources/Services/Safety/SafetyMonitor.swift \
