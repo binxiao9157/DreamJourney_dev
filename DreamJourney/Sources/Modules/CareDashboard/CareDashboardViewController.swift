@@ -146,10 +146,10 @@ final class CareDashboardViewController: UIViewController {
                 case .success:
                     self?.setRemoteSnapshotStatus("服务器同步：本机快照已上传")
                 case .failure(let error):
-                    let status = self?.isCareSnapshotAccessFailure(error) == true
-                        ? self?.careSnapshotAccessFailureMessage(for: error)
-                        : "服务器同步：上传失败，本机仍可查看"
-                    self?.setRemoteSnapshotStatus(status ?? "服务器同步：上传失败，本机仍可查看")
+                    self?.setRemoteSnapshotStatus(
+                        self?.careSnapshotPublishFailureMessage(for: error)
+                            ?? "服务器同步：上传失败，本机仍可查看"
+                    )
                     print("[CareDashboard] 后端快照同步失败: \(error.localizedDescription)")
                 }
             }
@@ -189,6 +189,27 @@ final class CareDashboardViewController: UIViewController {
             return "服务器同步：亲友权限未生效或已撤回"
         }
         return "服务器同步：暂无可用历史快照"
+    }
+
+    private func careSnapshotPublishFailureMessage(for error: Error) -> String {
+        if let publishFailure = error as? CareDashboardSnapshotPublisher.PublishFailure {
+            switch publishFailure {
+            case .noEligibleCareTurns:
+                return "服务器同步：真实关怀数据不足，暂不上传"
+            case .backendNotConfigured:
+                return "服务器同步：未配置，当前仅本机分析"
+            case .missingCurrentUser:
+                return "服务器同步：缺少当前用户身份"
+            case .missingCareOwner:
+                return "服务器同步：缺少被关怀长辈身份"
+            case .ownerMismatch:
+                return "服务器同步：仅长辈本人可上传关怀快照"
+            }
+        }
+        if isCareSnapshotAccessFailure(error) {
+            return careSnapshotAccessFailureMessage(for: error)
+        }
+        return "服务器同步：上传失败，本机仍可查看"
     }
 
     private func fetchLatestSnapshotFromBackend() {

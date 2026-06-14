@@ -26,6 +26,17 @@ require(
     "care dashboard should format backend access failures into product copy",
 )
 require(
+    "private func careSnapshotPublishFailureMessage(for error: Error) -> String" in vc,
+    "care dashboard should format local publish-preflight failures into product copy",
+)
+require(
+    "error as? CareDashboardSnapshotPublisher.PublishFailure" in vc
+    and ".backendNotConfigured" in vc
+    and ".missingCurrentUser" in vc
+    and ".ownerMismatch" in vc,
+    "care dashboard should distinguish backend-not-configured and identity mismatch publish failures",
+)
+require(
     "亲友权限未生效或已撤回" in vc,
     "care dashboard should tell testers when family access is pending or revoked",
 )
@@ -47,8 +58,8 @@ latest_body = latest_match.group(0)
 history_body = history_match.group(0)
 
 require(
-    "careSnapshotAccessFailureMessage(for: error)" in sync_body,
-    "sync failure should show access-aware status copy",
+    "careSnapshotPublishFailureMessage(for: error)" in sync_body,
+    "sync failure should show publish-preflight-aware status copy",
 )
 require(
     "careSnapshotAccessFailureMessage(for: error)" in latest_body,
