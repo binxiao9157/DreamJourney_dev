@@ -32,6 +32,12 @@ checks = [
         and "scriptedJourneySummary" not in timeline
         and "江浙沪广" not in timeline,
     ),
+    (
+        "real-device footprint timeline should not expose roadshow/demo expansion hooks",
+        "includeDemoExpansion" not in timeline
+        and "roadshowExpansionPoints" not in timeline
+        and "merge(memoryPoints:" not in timeline,
+    ),
 ]
 
 failed = [message for message, passed in checks if not passed]

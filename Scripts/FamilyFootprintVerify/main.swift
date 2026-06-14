@@ -54,7 +54,7 @@ let memories = [
     )
 ]
 
-let points = FamilyFootprintTimeline.points(from: memories, ownerName: "陈家", includeDemoExpansion: false)
+let points = FamilyFootprintTimeline.points(from: memories, ownerName: "陈家")
 require(points.first?.year == 1975, "real-only timeline should not inject roadshow origin")
 require(!points.contains { $0.location == "绍兴老宅" }, "real-only timeline should not include demo expansion")
 require(points.contains { $0.location == "温哥华" }, "next generation should include larger world point")

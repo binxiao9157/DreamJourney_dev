@@ -50,6 +50,10 @@ require(
     "mailbox list should explain that full content remains local",
 )
 require(
+    "收件人，如：妈妈" not in view and "收件人姓名，如：林桂芳" in view,
+    "mailbox composer should guide real named recipients, not generic kinship placeholders",
+)
+require(
     "latest.body" in reader_body and "原信仅本机显示" in reader_body,
     "mailbox reader should show the original letter body only inside the local reader",
 )

@@ -504,7 +504,7 @@ private final class TimeMailboxComposerViewController: UIViewController {
         return stack
     }()
 
-    private let recipientField = TimeMailboxComposerViewController.makeTextField(placeholder: "收件人，如：妈妈")
+    private let recipientField = TimeMailboxComposerViewController.makeTextField(placeholder: "收件人姓名，如：林桂芳")
     private let titleField = TimeMailboxComposerViewController.makeTextField(placeholder: "标题，如：今天很想你")
 
     private let bodyTextView: UITextView = {

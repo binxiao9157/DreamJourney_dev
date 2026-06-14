@@ -410,6 +410,15 @@ python3 Scripts/LocalTestDataCleanupVerify/main.py
 echo "== Family local test cleanup =="
 python3 Scripts/FamilyLocalTestCleanupVerify/main.py
 
+echo "== FamilyFootprint real-device timeline =="
+swiftc \
+  DreamJourney/Sources/Services/MemoryModel.swift \
+  DreamJourney/Sources/Modules/Map/FamilyFootprintTimeline.swift \
+  Scripts/FamilyFootprintVerify/main.swift \
+  -o /tmp/dreamjourney_family_footprint_verify
+/tmp/dreamjourney_family_footprint_verify
+python3 Scripts/FamilyFootprintIlluminationPolicyVerify/main.py
+
 echo "== Roadshow mailbox seed cleanup marker =="
 python3 Scripts/RoadshowMailboxSeedVerify/main.py
 

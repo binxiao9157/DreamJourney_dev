@@ -502,8 +502,7 @@ final class MapFootprintViewController: UIViewController {
         }
         footprintPoints = FamilyFootprintTimeline.points(
             from: memories,
-            ownerName: ownerName,
-            includeDemoExpansion: false
+            ownerName: ownerName
         )
         print("[MemoirSync] MapFootprintVC.loadMemories: ownerId=\(ownerId), viewMode=\(viewMode), allMemories=\(allMemories.count), memories=\(memories.count), firstId=\(memories.first?.id ?? "nil"), firstTitle=\(memories.first?.title ?? "nil")")
         updateStats()

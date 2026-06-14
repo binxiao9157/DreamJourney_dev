@@ -74,8 +74,8 @@ enum FamilyFootprintTimeline {
         .all, .ancestors, .parents, .current, .next
     ]
 
-    static func points(from memories: [MemoryModel], ownerName: String? = nil, includeDemoExpansion: Bool) -> [FamilyFootprintPoint] {
-        let memoryPoints = memories.map { memory in
+    static func points(from memories: [MemoryModel], ownerName: String? = nil) -> [FamilyFootprintPoint] {
+        memories.map { memory in
             FamilyFootprintPoint(
                 id: memory.id,
                 title: memory.title,
@@ -90,13 +90,7 @@ enum FamilyFootprintTimeline {
                 sourceMemoryId: memory.id,
                 isPrivate: memory.isPrivate
             )
-        }
-
-        guard includeDemoExpansion else {
-            return memoryPoints.sortedForTimeline()
-        }
-
-        return merge(memoryPoints: memoryPoints, demoPoints: roadshowExpansionPoints())
+        }.sortedForTimeline()
     }
 
     static func filtered(_ points: [FamilyFootprintPoint], by generation: FamilyFootprintGeneration) -> [FamilyFootprintPoint] {
@@ -193,62 +187,6 @@ enum FamilyFootprintTimeline {
             return .next
         }
         return .current
-    }
-
-    static func roadshowExpansionPoints() -> [FamilyFootprintPoint] {
-        [
-            FamilyFootprintPoint(
-                id: "roadshow_family_origin_shaoxing",
-                title: "绍兴 · 1962年2月",
-                subtitle: "陈家老宅门口的第一张全家照，家从这里被记住。",
-                location: "绍兴老宅",
-                year: 1962,
-                month: 2,
-                latitude: 30.0303,
-                longitude: 120.5802,
-                generation: .ancestors,
-                ownerName: "陈树安",
-                sourceMemoryId: nil,
-                isPrivate: false
-            ),
-            FamilyFootprintPoint(
-                id: "roadshow_family_shenzhen",
-                title: "深圳 · 2008年8月",
-                subtitle: "陈岚第一次带着项目南下，家族地图从江南走向海边。",
-                location: "深圳南山",
-                year: 2008,
-                month: 8,
-                latitude: 22.5316,
-                longitude: 113.9236,
-                generation: .current,
-                ownerName: "陈岚",
-                sourceMemoryId: nil,
-                isPrivate: false
-            ),
-            FamilyFootprintPoint(
-                id: "roadshow_family_vancouver",
-                title: "温哥华 · 2025年9月",
-                subtitle: "陈予把第一封海外明信片寄回家，世界变大但家仍有坐标。",
-                location: "温哥华",
-                year: 2025,
-                month: 9,
-                latitude: 49.2827,
-                longitude: -123.1207,
-                generation: .next,
-                ownerName: "陈予",
-                sourceMemoryId: nil,
-                isPrivate: false
-            )
-        ]
-    }
-
-    private static func merge(memoryPoints: [FamilyFootprintPoint], demoPoints: [FamilyFootprintPoint]) -> [FamilyFootprintPoint] {
-        var result = memoryPoints
-        let existingCities = Set(memoryPoints.map { normalizedCityName($0.location) })
-        for point in demoPoints where !existingCities.contains(normalizedCityName(point.location)) {
-            result.append(point)
-        }
-        return result.sortedForTimeline()
     }
 
     private static func normalizedCityName(_ location: String) -> String {

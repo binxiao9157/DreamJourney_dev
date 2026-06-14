@@ -29,12 +29,12 @@ selected_type_match = re.search(r"static func selectedType[\s\S]*?\n    \}", dia
 selected_type_body = selected_type_match.group(0) if selected_type_match else ""
 
 require(
-    "includeDemoExpansionOverride" not in map_source,
-    "footprint page should not keep a default-visible demo expansion override path",
+    "includeDemoExpansion" not in map_source,
+    "footprint page should not keep a demo expansion path in normal runtime",
 )
 require(
-    "includeDemoExpansion: false" in map_source,
-    "footprint page should explicitly request real memory points in normal runtime",
+    "FamilyFootprintTimeline.points(" in map_source,
+    "footprint page should derive points from the real memory repository",
 )
 require(
     "return .volcengine" in selected_type_body,
