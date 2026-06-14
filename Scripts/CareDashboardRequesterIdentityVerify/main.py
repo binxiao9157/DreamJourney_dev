@@ -3,10 +3,12 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "Scripts"))
+from backend_repo import backend_file
 CLIENT = ROOT / "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
 VIEW = ROOT / "DreamJourney/Sources/Modules/CareDashboard/CareDashboardViewController.swift"
-BACKEND = ROOT / "DreamJourneyBackend/app/main.py"
-TESTS = ROOT / "DreamJourneyBackend/tests/test_core_services.py"
+BACKEND = backend_file(ROOT, "app/main.py")
+TESTS = backend_file(ROOT, "tests/test_core_services.py")
 PHASE1 = ROOT / "Scripts/verify_phase1.sh"
 
 

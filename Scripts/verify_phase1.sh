@@ -5,9 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 BACKEND_PYTHON="python3"
-if [ -x "DreamJourneyBackend/.venv/bin/python" ]; then
-  BACKEND_PYTHON="DreamJourneyBackend/.venv/bin/python"
-fi
+source Scripts/backend_env.sh
 
 echo "== SafetyMonitor =="
 xcrun swiftc \
@@ -51,7 +49,7 @@ echo "== TimeMailbox payload privacy =="
 python3 Scripts/TimeMailboxPayloadPrivacyVerify/main.py
 
 echo "== TimeMailbox true backend flow =="
-PYTHONPATH=DreamJourneyBackend STORE_BACKEND=memory "$BACKEND_PYTHON" Scripts/TimeMailboxTrueBackendFlowVerify/main.py
+PYTHONPATH="$BACKEND_PYTHONPATH" STORE_BACKEND=memory "$BACKEND_PYTHON" Scripts/TimeMailboxTrueBackendFlowVerify/main.py
 
 echo "== TimeMailbox knowledge metadata =="
 python3 Scripts/TimeMailboxKnowledgeVerify/main.py
@@ -116,7 +114,7 @@ echo "== CareDashboard conversation-end publish =="
 python3 Scripts/CareDashboardSessionPublishVerify/main.py
 
 echo "== CareDashboard true backend flow =="
-PYTHONPATH=DreamJourneyBackend STORE_BACKEND=memory "$BACKEND_PYTHON" Scripts/CareDashboardTrueBackendFlowVerify/main.py
+PYTHONPATH="$BACKEND_PYTHONPATH" STORE_BACKEND=memory "$BACKEND_PYTHON" Scripts/CareDashboardTrueBackendFlowVerify/main.py
 
 echo "== CareDashboard data readiness UI =="
 python3 Scripts/CareDashboardDataReadinessUIVerify/main.py
@@ -223,10 +221,10 @@ echo "== DreamJourney authenticated backend smoke contract =="
 python3 Scripts/BackendAuthenticatedSmokeContractVerify/main.py
 
 echo "== DreamJourney authenticated backend smoke =="
-PYTHONPATH=DreamJourneyBackend STORE_BACKEND=memory "$BACKEND_PYTHON" Scripts/BackendAuthenticatedSmoke/main.py
+PYTHONPATH="$BACKEND_PYTHONPATH" STORE_BACKEND=memory "$BACKEND_PYTHON" Scripts/BackendAuthenticatedSmoke/main.py
 
 echo "== DreamJourney backend core services =="
-PYTHONPATH=DreamJourneyBackend STORE_BACKEND=memory "$BACKEND_PYTHON" -m unittest DreamJourneyBackend.tests.test_core_services
+PYTHONPATH="$BACKEND_PYTHONPATH" STORE_BACKEND=memory "$BACKEND_PYTHON" -m unittest discover -s "$DREAMJOURNEY_BACKEND_REPO/tests" -p "test_core_services.py"
 
 echo "== Family member access state =="
 xcrun swiftc \
@@ -473,7 +471,7 @@ echo "== KBLite backend snapshot restore =="
 python3 Scripts/KBLiteBackendSnapshotVerify/main.py
 
 echo "== Backend Postgres KBLite persistence =="
-PYTHONPATH=DreamJourneyBackend "$BACKEND_PYTHON" -m unittest DreamJourneyBackend.tests.test_postgres_store
+PYTHONPATH="$BACKEND_PYTHONPATH" "$BACKEND_PYTHON" -m unittest discover -s "$DREAMJOURNEY_BACKEND_REPO/tests" -p "test_postgres_store.py"
 
 echo "== KBLite user lifecycle =="
 python3 Scripts/KBLiteUserLifecycleVerify/main.py

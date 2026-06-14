@@ -193,10 +193,10 @@ owner: miao
 group: miao
 ```
 
-`.env` 已从本机私密文档部署：
+本机私密 env 备份建议放在以下位置，并保持不提交：
 
 ```text
-DreamJourneyBackend/private/server-env-filled.md
+/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/private/server-env-filled.md
 ```
 
 已部署的 key：

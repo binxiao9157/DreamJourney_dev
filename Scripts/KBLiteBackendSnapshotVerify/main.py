@@ -3,10 +3,12 @@ from pathlib import Path
 import sys
 
 root = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(root / "Scripts"))
+from backend_repo import backend_file
 client = (root / "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift").read_text()
 manager = (root / "DreamJourney/Sources/Services/KBLiteManager.swift").read_text()
 phase1 = (root / "Scripts/verify_phase1.sh").read_text()
-backend = (root / "DreamJourneyBackend/app/main.py").read_text()
+backend = (backend_file(root, "app/main.py")).read_text()
 
 checks = [
     (

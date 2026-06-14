@@ -1,6 +1,6 @@
 # 阶段1最小后端实现说明
 
-本次新增 `DreamJourneyBackend/`，用于支撑真实测试和后续云部署。
+后端工程已剥离为独立仓库：`/Users/yxj/Documents/Codex/Video/DreamJourneyBackend`，远程为 `git@github.com:binxiao9157/DreamJourneyBackend.git`。iOS 仓库通过 `DreamJourneyBackendBaseURL` 访问后端，不再内嵌后端源码。
 
 ## 已覆盖能力
 
@@ -25,7 +25,8 @@
 核心服务使用标准库 `unittest` 验证，不依赖 FastAPI 安装：
 
 ```bash
-PYTHONPATH=DreamJourneyBackend python3 -m unittest discover DreamJourneyBackend/tests
+export DREAMJOURNEY_BACKEND_REPO=${DREAMJOURNEY_BACKEND_REPO:-$HOME/Documents/Codex/Video/DreamJourneyBackend}
+PYTHONPATH="$DREAMJOURNEY_BACKEND_REPO" python3 -m unittest discover "$DREAMJOURNEY_BACKEND_REPO/tests"
 ```
 
 如果本机使用仓库虚拟环境，推荐直接运行：
@@ -37,7 +38,8 @@ bash Scripts/verify_backend.sh
 FastAPI 本机 smoke 可显式切到内存模式，避免本机未启动 Postgres 时阻塞：
 
 ```bash
-STORE_BACKEND=memory PYTHONPATH=DreamJourneyBackend python - <<'PY'
+export DREAMJOURNEY_BACKEND_REPO=${DREAMJOURNEY_BACKEND_REPO:-$HOME/Documents/Codex/Video/DreamJourneyBackend}
+STORE_BACKEND=memory PYTHONPATH="$DREAMJOURNEY_BACKEND_REPO" python - <<'PY'
 from fastapi.testclient import TestClient
 from app.main import app
 client = TestClient(app)

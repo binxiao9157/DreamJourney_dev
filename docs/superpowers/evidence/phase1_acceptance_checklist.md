@@ -15,7 +15,8 @@
 ```bash
 export DREAMJOURNEY_BACKEND_BASE_URL=https://dreamjourney-api.liftora.cn
 export DREAMJOURNEY_BACKEND_API_TOKEN=<与服务器 BACKEND_API_TOKEN 相同的值>
-PYTHONPATH=DreamJourneyBackend STORE_BACKEND=memory DreamJourneyBackend/.venv/bin/python Scripts/BackendAuthenticatedSmoke/main.py --remote
+export DREAMJOURNEY_BACKEND_REPO=${DREAMJOURNEY_BACKEND_REPO:-$HOME/Documents/Codex/Video/DreamJourneyBackend}
+PYTHONPATH="$DREAMJOURNEY_BACKEND_REPO" STORE_BACKEND=memory python3 Scripts/BackendAuthenticatedSmoke/main.py --remote
 ```
 
 完成所有 P0/P1 真机证据后，再更新 `docs/superpowers/reports/2026-06-14-phase1-full-status-and-development-plan.md`。

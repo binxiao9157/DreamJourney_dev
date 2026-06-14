@@ -5,22 +5,21 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
 PYTHON_BIN="${PYTHON:-python3}"
-if [ -x "DreamJourneyBackend/.venv/bin/python" ]; then
-  PYTHON_BIN="DreamJourneyBackend/.venv/bin/python"
-fi
+source Scripts/backend_env.sh
+PYTHON_BIN="$BACKEND_PYTHON"
 
 echo "== Backend unittest =="
-STORE_BACKEND=memory PYTHONPATH=DreamJourneyBackend "$PYTHON_BIN" -m unittest discover DreamJourneyBackend/tests
+STORE_BACKEND=memory PYTHONPATH="$BACKEND_PYTHONPATH" "$PYTHON_BIN" -m unittest discover "$DREAMJOURNEY_BACKEND_REPO/tests"
 
 echo "== Backend py_compile =="
-"$PYTHON_BIN" -m compileall -q DreamJourneyBackend/app DreamJourneyBackend/tests
+"$PYTHON_BIN" -m compileall -q "$DREAMJOURNEY_BACKEND_REPO/app" "$DREAMJOURNEY_BACKEND_REPO/tests"
 
 echo "== Backend deployment files =="
-test -f DreamJourneyBackend/Dockerfile
-test -f DreamJourneyBackend/docker-compose.yml
-test -f DreamJourneyBackend/.env.example
-test -f DreamJourneyBackend/requirements.txt
-grep -q "psycopg" DreamJourneyBackend/requirements.txt
+test -f "$DREAMJOURNEY_BACKEND_REPO/Dockerfile"
+test -f "$DREAMJOURNEY_BACKEND_REPO/docker-compose.yml"
+test -f "$DREAMJOURNEY_BACKEND_REPO/.env.example"
+test -f "$DREAMJOURNEY_BACKEND_REPO/requirements.txt"
+grep -q "psycopg" "$DREAMJOURNEY_BACKEND_REPO/requirements.txt"
 
 echo "== Backend FastAPI smoke =="
 if "$PYTHON_BIN" - <<'PY' >/dev/null 2>&1
@@ -28,7 +27,7 @@ import fastapi
 import httpx
 PY
 then
-  STORE_BACKEND=memory PYTHONPATH=DreamJourneyBackend "$PYTHON_BIN" - <<'PY'
+  STORE_BACKEND=memory PYTHONPATH="$BACKEND_PYTHONPATH" "$PYTHON_BIN" - <<'PY'
 from fastapi.testclient import TestClient
 from app.main import app
 
@@ -46,5 +45,7 @@ else
 fi
 
 echo "== Backend diff --check =="
-git diff --check -- DreamJourneyBackend docs/backend Scripts/verify_backend.sh .gitignore
-git diff --cached --check -- DreamJourneyBackend docs/backend Scripts/verify_backend.sh .gitignore
+git -C "$DREAMJOURNEY_BACKEND_REPO" diff --check
+git -C "$DREAMJOURNEY_BACKEND_REPO" diff --cached --check
+git diff --check -- docs/backend Scripts/verify_backend.sh Scripts/backend_env.sh Scripts/backend_repo.py .gitignore
+git diff --cached --check -- docs/backend Scripts/verify_backend.sh Scripts/backend_env.sh Scripts/backend_repo.py .gitignore

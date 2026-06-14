@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import sys
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "Scripts"))
+from backend_repo import backend_file
 
 client_file = ROOT / "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
 vc_file = ROOT / "DreamJourney/Sources/Modules/MemoryArchive/MemoryArchiveViewController.swift"
 ios_deepseek_file = ROOT / "DreamJourney/Sources/Memoir/DeepSeekService.swift"
-backend_main_file = ROOT / "DreamJourneyBackend/app/main.py"
-backend_service_file = ROOT / "DreamJourneyBackend/app/services/deepseek.py"
-backend_tests_file = ROOT / "DreamJourneyBackend/tests/test_core_services.py"
+backend_main_file = backend_file(ROOT, "app/main.py")
+backend_service_file = backend_file(ROOT, "app/services/deepseek.py")
+backend_tests_file = backend_file(ROOT, "tests/test_core_services.py")
 roadshow_preflight_file = ROOT / "Scripts/roadshow_device_smoke_preflight.sh"
 current_report_file = ROOT / "docs/superpowers/reports/2026-06-13-phase1-continuous-progress.md"
 verify_phase1 = ROOT / "Scripts/verify_phase1.sh"

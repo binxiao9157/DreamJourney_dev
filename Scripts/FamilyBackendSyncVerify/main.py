@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import sys
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "Scripts"))
+from backend_repo import backend_file
 
 client_file = ROOT / "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
 repo_file = ROOT / "DreamJourney/Sources/Services/FamilyRepository.swift"
 vc_file = ROOT / "DreamJourney/Sources/Modules/Family/FamilyCircleViewController.swift"
-backend_main_file = ROOT / "DreamJourneyBackend/app/main.py"
-backend_memory_store_file = ROOT / "DreamJourneyBackend/app/services/in_memory_store.py"
-backend_postgres_store_file = ROOT / "DreamJourneyBackend/app/services/postgres_store.py"
-backend_tests_file = ROOT / "DreamJourneyBackend/tests/test_core_services.py"
+backend_main_file = backend_file(ROOT, "app/main.py")
+backend_memory_store_file = backend_file(ROOT, "app/services/in_memory_store.py")
+backend_postgres_store_file = backend_file(ROOT, "app/services/postgres_store.py")
+backend_tests_file = backend_file(ROOT, "tests/test_core_services.py")
 verify_phase1 = ROOT / "Scripts/verify_phase1.sh"
 
 missing = []

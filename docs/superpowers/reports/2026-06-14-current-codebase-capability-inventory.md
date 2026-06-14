@@ -30,7 +30,7 @@
 | iOS App 主工程 | `DreamJourney/` | 真实用户登录、首页语音/数字人、记忆档案馆、结构化知识库、时空信箱、亲友、关怀看板、足迹。 |
 | iOS 业务服务层 | `DreamJourney/Sources/Services/` | 对话引擎、记忆沉淀、KBLite、隐私策略、后端客户端、数字人语音、信箱、档案、关怀、安全、用户身份。 |
 | iOS 功能模块 | `DreamJourney/Sources/Modules/` | 各 Tab 和二级页面的 UI/交互。 |
-| 后端服务 | `DreamJourneyBackend/` | FastAPI 最小业务后端，支持 Postgres/InMemory store、鉴权、第三方代理和 metadata 同步。 |
+| 后端服务 | `/Users/yxj/Documents/Codex/Video/DreamJourneyBackend` | 独立 FastAPI 后端仓库，支持 Postgres/InMemory store、鉴权、第三方代理和 metadata 同步。 |
 | 自动验证脚本 | `Scripts/` | 阶段一自动合约验证、后端 smoke、真机证据脚手架、隐私/演示状态回归。 |
 | 证据目录 | `docs/superpowers/evidence/` | 真机验收截图、录屏、日志和后端脱敏响应的归档结构。 |
 | 状态文档 | `docs/superpowers/reports/` | 阶段实现状态、开发计划、执行记录、部署说明。 |
@@ -437,7 +437,7 @@
 
 ### 13.1 接口能力
 
-当前后端 `DreamJourneyBackend/app/main.py` 提供以下主要接口：
+当前后端独立仓库的 `app/main.py` 提供以下主要接口：
 
 | 接口 | 能力 |
 | --- | --- |
@@ -470,7 +470,7 @@
 - 后端支持 `STORE_BACKEND=postgres` 和 `STORE_BACKEND=memory`。
 - Postgres store 会保存 users、kb_snapshots、memories、archive_items、mailbox_letters、family_members、care_snapshots 等数据。
 - InMemory store 用于本地单测和临时调试，进程重启丢数据。
-- `DreamJourneyBackend/tests/test_core_services.py` 和 `test_postgres_store.py` 覆盖核心服务和 Postgres store 行为。
+- 独立后端仓库的 `tests/test_core_services.py` 和 `tests/test_postgres_store.py` 覆盖核心服务和 Postgres store 行为。
 
 当前限制：
 
@@ -657,17 +657,17 @@ bash Scripts/verify_phase1.sh
 
 | 能力 | 文件 |
 | --- | --- |
-| FastAPI 入口 | `DreamJourneyBackend/app/main.py` |
-| 配置 | `DreamJourneyBackend/app/core/config.py` |
-| Postgres store | `DreamJourneyBackend/app/services/postgres_store.py` |
-| InMemory store | `DreamJourneyBackend/app/services/in_memory_store.py` |
-| 隐私清洗 | `DreamJourneyBackend/app/services/privacy.py` |
-| DeepSeek 代理 | `DreamJourneyBackend/app/services/deepseek.py` |
-| 火山 TTS 代理 | `DreamJourneyBackend/app/services/tts.py` |
-| 火山实时 token | `DreamJourneyBackend/app/services/tokens.py` |
-| 高德代理 | `DreamJourneyBackend/app/services/amap.py` |
-| 运行时配置 | `DreamJourneyBackend/app/services/runtime_config.py` |
-| 用户身份 | `DreamJourneyBackend/app/services/user_identity.py` |
+| FastAPI 入口 | `/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/app/main.py` |
+| 配置 | `/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/app/core/config.py` |
+| Postgres store | `/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/app/services/postgres_store.py` |
+| InMemory store | `/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/app/services/in_memory_store.py` |
+| 隐私清洗 | `/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/app/services/privacy.py` |
+| DeepSeek 代理 | `/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/app/services/deepseek.py` |
+| 火山 TTS 代理 | `/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/app/services/tts.py` |
+| 火山实时 token | `/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/app/services/tokens.py` |
+| 高德代理 | `/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/app/services/amap.py` |
+| 运行时配置 | `/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/app/services/runtime_config.py` |
+| 用户身份 | `/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/app/services/user_identity.py` |
 
 ### 验证与证据
 

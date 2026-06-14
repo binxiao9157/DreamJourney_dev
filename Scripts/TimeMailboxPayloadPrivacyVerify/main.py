@@ -4,10 +4,12 @@ import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "Scripts"))
+from backend_repo import backend_file
 CLIENT = ROOT / "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
 VIEW = ROOT / "DreamJourney/Sources/Modules/TimeMailbox/TimeMailboxViewController.swift"
-BACKEND_PRIVACY = ROOT / "DreamJourneyBackend/app/services/privacy.py"
-BACKEND_TESTS = ROOT / "DreamJourneyBackend/tests/test_core_services.py"
+BACKEND_PRIVACY = backend_file(ROOT, "app/services/privacy.py")
+BACKEND_TESTS = backend_file(ROOT, "tests/test_core_services.py")
 PHASE1 = ROOT / "Scripts/verify_phase1.sh"
 
 

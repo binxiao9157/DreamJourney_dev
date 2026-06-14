@@ -18,11 +18,7 @@ Pods/
 
 # Local secrets
 DreamJourney/Resources/LocalConfig.plist
-DreamJourneyBackend/.env
-DreamJourneyBackend/.venv/
-DreamJourneyBackend/__pycache__/
-DreamJourneyBackend/app/**/__pycache__/
-DreamJourneyBackend/tests/**/__pycache__/
+DreamJourneyBackend/
 
 # Swift Package Manager
 .build/

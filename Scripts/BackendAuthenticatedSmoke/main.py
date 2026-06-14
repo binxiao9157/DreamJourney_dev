@@ -11,7 +11,10 @@ import urllib.request
 from typing import Any, Dict, Iterable, Optional
 
 ROOT = Path(__file__).resolve().parents[2]
-BACKEND = ROOT / "DreamJourneyBackend"
+sys.path.insert(0, str(ROOT / "Scripts"))
+from backend_repo import resolve_backend_repo  # noqa: E402
+
+BACKEND = resolve_backend_repo(ROOT)
 SELF_TEST_TOKEN = "phase1-smoke-secret"
 
 

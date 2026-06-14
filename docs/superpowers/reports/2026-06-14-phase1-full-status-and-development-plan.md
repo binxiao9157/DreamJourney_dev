@@ -298,8 +298,8 @@ iOS 仓库路径：`/Users/yxj/.config/superpowers/worktrees/DreamJourney_dev/ph
 
 - `python3 Scripts/DigitalHumanRealtimeResumeVerify/main.py` 通过。
 - `python3 Scripts/DigitalHumanDialogEndDepositVerify/main.py`、`DigitalHumanPlaybackInterruptVerify`、`DigitalHumanRuntimeLogVerify` 通过。
-- `STORE_BACKEND=memory PYTHONPATH=DreamJourneyBackend DreamJourneyBackend/.venv/bin/python -m unittest DreamJourneyBackend.tests.test_core_services` 通过，共 43 项。
-- `STORE_BACKEND=memory PYTHONPATH=DreamJourneyBackend DreamJourneyBackend/.venv/bin/python Scripts/CareDashboardTrueBackendFlowVerify/main.py` 通过。
+- `STORE_BACKEND=memory PYTHONPATH=$DREAMJOURNEY_BACKEND_REPO python3 -m unittest discover -s $DREAMJOURNEY_BACKEND_REPO/tests -p test_core_services.py` 通过，共 43 项。
+- `STORE_BACKEND=memory PYTHONPATH=$DREAMJOURNEY_BACKEND_REPO python3 Scripts/CareDashboardTrueBackendFlowVerify/main.py` 通过。
 - `bash Scripts/verify_phase1.sh` 通过；日志：`/tmp/dreamjourney_phase1_p0p1_after_resume_fix.log`。
 - iPhoneOS 真机 Debug build 通过；日志：`/tmp/dreamjourney_p0p1_dev_true_device_build_retry.log`。
 
@@ -325,7 +325,7 @@ iOS 仓库路径：`/Users/yxj/.config/superpowers/worktrees/DreamJourney_dev/ph
 验证结果：
 
 - `python3 Scripts/BackendAuthenticatedSmokeContractVerify/main.py` 通过。
-- `PYTHONPATH=DreamJourneyBackend STORE_BACKEND=memory DreamJourneyBackend/.venv/bin/python Scripts/BackendAuthenticatedSmoke/main.py` 通过。
+- `PYTHONPATH=$DREAMJOURNEY_BACKEND_REPO STORE_BACKEND=memory python3 Scripts/BackendAuthenticatedSmoke/main.py` 通过。
 - `bash Scripts/verify_phase1.sh` 通过；日志：`/tmp/dreamjourney_phase1_backend_smoke_verify.log`。
 
 状态调整：
@@ -334,7 +334,7 @@ iOS 仓库路径：`/Users/yxj/.config/superpowers/worktrees/DreamJourney_dev/ph
 - P2 “线上 `/config/runtime` 未带 token 返回 200”仍需服务器配置 `BACKEND_API_TOKEN` 后用远端模式复验：
   - `DREAMJOURNEY_BACKEND_BASE_URL=https://dreamjourney-api.liftora.cn`
   - `DREAMJOURNEY_BACKEND_API_TOKEN=<与服务器 BACKEND_API_TOKEN 相同的值>`
-  - `PYTHONPATH=DreamJourneyBackend STORE_BACKEND=memory DreamJourneyBackend/.venv/bin/python Scripts/BackendAuthenticatedSmoke/main.py --remote`
+  - `export DREAMJOURNEY_BACKEND_REPO=/Users/yxj/Documents/Codex/Video/DreamJourneyBackend && PYTHONPATH="$DREAMJOURNEY_BACKEND_REPO" STORE_BACKEND=memory python3 Scripts/BackendAuthenticatedSmoke/main.py --remote`
 
 ## 13. 2026-06-14 阶段一真机证据脚手架更新
 

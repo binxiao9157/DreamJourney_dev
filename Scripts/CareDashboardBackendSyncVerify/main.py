@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import sys
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "Scripts"))
+from backend_repo import backend_file
 
 client_file = ROOT / "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
 vc_file = ROOT / "DreamJourney/Sources/Modules/CareDashboard/CareDashboardViewController.swift"
 publisher_file = ROOT / "DreamJourney/Sources/Services/CareDashboard/CareDashboardSnapshotPublisher.swift"
-backend_main = ROOT / "DreamJourneyBackend/app/main.py"
-backend_privacy = ROOT / "DreamJourneyBackend/app/services/privacy.py"
-backend_tests = ROOT / "DreamJourneyBackend/tests/test_core_services.py"
+backend_main = backend_file(ROOT, "app/main.py")
+backend_privacy = backend_file(ROOT, "app/services/privacy.py")
+backend_tests = backend_file(ROOT, "tests/test_core_services.py")
 
 client_text = client_file.read_text(encoding="utf-8")
 vc_text = vc_file.read_text(encoding="utf-8")

@@ -3,15 +3,17 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "Scripts"))
+from backend_repo import backend_file
 CLIENT = ROOT / "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
 CONFIG = ROOT / "DreamJourney/Sources/Services/AppConfiguration.swift"
-BACKEND_CONFIG = ROOT / "DreamJourneyBackend/app/core/config.py"
-BACKEND_MAIN = ROOT / "DreamJourneyBackend/app/main.py"
-BACKEND_IDENTITY = ROOT / "DreamJourneyBackend/app/services/user_identity.py"
-BACKEND_MEMORY_STORE = ROOT / "DreamJourneyBackend/app/services/in_memory_store.py"
-BACKEND_POSTGRES_STORE = ROOT / "DreamJourneyBackend/app/services/postgres_store.py"
-BACKEND_TESTS = ROOT / "DreamJourneyBackend/tests/test_core_services.py"
-BACKEND_POSTGRES_TESTS = ROOT / "DreamJourneyBackend/tests/test_postgres_store.py"
+BACKEND_CONFIG = backend_file(ROOT, "app/core/config.py")
+BACKEND_MAIN = backend_file(ROOT, "app/main.py")
+BACKEND_IDENTITY = backend_file(ROOT, "app/services/user_identity.py")
+BACKEND_MEMORY_STORE = backend_file(ROOT, "app/services/in_memory_store.py")
+BACKEND_POSTGRES_STORE = backend_file(ROOT, "app/services/postgres_store.py")
+BACKEND_TESTS = backend_file(ROOT, "tests/test_core_services.py")
+BACKEND_POSTGRES_TESTS = backend_file(ROOT, "tests/test_postgres_store.py")
 VERIFY = ROOT / "Scripts/verify_phase1.sh"
 
 client = CLIENT.read_text(encoding="utf-8")
