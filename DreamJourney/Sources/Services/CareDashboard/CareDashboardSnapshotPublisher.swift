@@ -22,7 +22,9 @@ final class CareDashboardSnapshotPublisher {
             from: turns,
             viewerFamilyMemberID: viewerFamilyMemberID
         )
-        let eligibleUserTurnCount = eligibleTurns.filter { $0.role.lowercased() == "user" }.count
+        let now = Date()
+        let preliminarySnapshot = analyzer.analyze(turns: eligibleTurns, now: now)
+        let eligibleUserTurnCount = preliminarySnapshot.userTurnCount
         let sourceAudit = CareSignalSourceAudit(
             authorizedScopeText: "亲友范围",
             sourceKindText: "本机授权对话",
@@ -31,7 +33,7 @@ final class CareDashboardSnapshotPublisher {
             viewerFamilyMemberID: viewerFamilyMemberID
         )
         return CareDashboardLocalSnapshot(
-            snapshot: analyzer.analyze(turns: eligibleTurns, sourceAudit: sourceAudit),
+            snapshot: analyzer.analyze(turns: eligibleTurns, now: now, sourceAudit: sourceAudit),
             eligibleUserTurnCount: eligibleUserTurnCount
         )
     }

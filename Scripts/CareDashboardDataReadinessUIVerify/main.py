@@ -34,8 +34,13 @@ require(
             "let eligibleUserTurnCount = eligibleTurns.filter" in publisher
             and "eligibleUserTurnCount: eligibleUserTurnCount" in publisher
         )
+        or (
+            "let preliminarySnapshot = analyzer.analyze" in publisher
+            and "let eligibleUserTurnCount = preliminarySnapshot.userTurnCount" in publisher
+            and "eligibleUserTurnCount: eligibleUserTurnCount" in publisher
+        )
     ),
-    "reload should compute local eligible user-turn count through the shared publisher",
+    "reload should compute local eligible user-turn count through the shared publisher using the same recent analysis window",
 )
 require(
     "remoteSnapshotStatusText = DreamJourneyBackendClient.shared.isConfigured" in reload_body
