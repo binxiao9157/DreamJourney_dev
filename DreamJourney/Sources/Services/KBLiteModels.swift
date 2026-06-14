@@ -581,6 +581,62 @@ struct KBImageAnalysisResult: Codable {
     var estimatedDecade: Int?
 }
 
+struct KBLiteArchiveBackfillMaterial {
+    enum Kind: String {
+        case photo
+        case screenshot
+        case voiceSample
+        case textNote
+        case personalityNote
+        case catchphrase
+
+        var displayName: String {
+            switch self {
+            case .photo: return "旧照片"
+            case .screenshot: return "聊天截图"
+            case .voiceSample: return "语音样本"
+            case .textNote: return "文字回忆"
+            case .personalityNote: return "人格提示"
+            case .catchphrase: return "口头禅"
+            }
+        }
+
+        var isTextLike: Bool {
+            switch self {
+            case .textNote, .personalityNote, .catchphrase:
+                return true
+            case .photo, .screenshot, .voiceSample:
+                return false
+            }
+        }
+
+        var isImageLike: Bool {
+            switch self {
+            case .photo, .screenshot:
+                return true
+            case .voiceSample, .textNote, .personalityNote, .catchphrase:
+                return false
+            }
+        }
+    }
+
+    let id: String
+    let kind: Kind
+    let title: String
+    let note: String
+    let createdAt: Date
+    let analysisStatusRawValue: String?
+    let analysisSummary: String?
+    let detectedPeople: [String]
+    let scene: String?
+    let occasion: String?
+    let mood: String?
+    let estimatedDecade: Int?
+    let privacyMetadata: MemoryPrivacyMetadata
+    let targetPersonName: String?
+    let targetPersonId: String?
+}
+
 // MARK: - Notifications
 
 extension Notification.Name {

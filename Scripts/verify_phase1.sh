@@ -346,6 +346,8 @@ python3 Scripts/DigitalHumanVoiceProfileTTSVerify/main.py
 echo "== KBLite archive material metadata =="
 xcrun swiftc -D MEMORY_PRIVACY_INTEGRATION_VERIFY \
   DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
+  DreamJourney/Sources/Services/MemoryArchive/MemoryArchiveModels.swift \
+  DreamJourney/Sources/Services/MemoryArchive/MemoryArchiveKnowledgeBackfill.swift \
   DreamJourney/Sources/Services/KBLiteModels.swift \
   DreamJourney/Sources/Services/KBLitePrivacyScopePolicy.swift \
   DreamJourney/Sources/Services/KBLiteManager.swift \

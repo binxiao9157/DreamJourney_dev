@@ -77,6 +77,7 @@
 		A22CE000000000000000002 /* MemoryArchiveRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22CE000000000000000005 /* MemoryArchiveRepository.swift */; };
 		A22CE000000000000000003 /* MemoryArchiveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22CE000000000000000006 /* MemoryArchiveViewController.swift */; };
 		A22CE000000000000000009 /* MemoryArchiveKnowledgeEvidence.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22CE000000000000000010 /* MemoryArchiveKnowledgeEvidence.swift */; };
+		A22CE000000000000000012 /* MemoryArchiveKnowledgeBackfill.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22CE000000000000000011 /* MemoryArchiveKnowledgeBackfill.swift */; };
 		A82CE000000000000000001 /* MemoryArchiveVoiceProfileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A82CE000000000000000002 /* MemoryArchiveVoiceProfileStore.swift */; };
 		A92CE000000000000000001 /* MemoryArchiveVoiceTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = A92CE000000000000000002 /* MemoryArchiveVoiceTranscriber.swift */; };
 		A33CE000000000000000001 /* CareSignalModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A33CE000000000000000004 /* CareSignalModels.swift */; };
@@ -207,6 +208,7 @@
 		A22CE000000000000000005 /* MemoryArchiveRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveRepository.swift; sourceTree = "<group>"; };
 		A22CE000000000000000006 /* MemoryArchiveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveViewController.swift; sourceTree = "<group>"; };
 		A22CE000000000000000010 /* MemoryArchiveKnowledgeEvidence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveKnowledgeEvidence.swift; sourceTree = "<group>"; };
+		A22CE000000000000000011 /* MemoryArchiveKnowledgeBackfill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveKnowledgeBackfill.swift; sourceTree = "<group>"; };
 		A82CE000000000000000002 /* MemoryArchiveVoiceProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveVoiceProfileStore.swift; sourceTree = "<group>"; };
 		A92CE000000000000000002 /* MemoryArchiveVoiceTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveVoiceTranscriber.swift; sourceTree = "<group>"; };
 		A33CE000000000000000004 /* CareSignalModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CareSignalModels.swift; sourceTree = "<group>"; };
@@ -568,6 +570,7 @@
 				A82CE000000000000000002 /* MemoryArchiveVoiceProfileStore.swift */,
 				A92CE000000000000000002 /* MemoryArchiveVoiceTranscriber.swift */,
 				A22CE000000000000000010 /* MemoryArchiveKnowledgeEvidence.swift */,
+				A22CE000000000000000011 /* MemoryArchiveKnowledgeBackfill.swift */,
 			);
 			path = MemoryArchive;
 			sourceTree = "<group>";
@@ -972,6 +975,7 @@
 				A22CE000000000000000001 /* MemoryArchiveModels.swift in Sources */,
 				A22CE000000000000000002 /* MemoryArchiveRepository.swift in Sources */,
 				A22CE000000000000000009 /* MemoryArchiveKnowledgeEvidence.swift in Sources */,
+				A22CE000000000000000012 /* MemoryArchiveKnowledgeBackfill.swift in Sources */,
 				A82CE000000000000000001 /* MemoryArchiveVoiceProfileStore.swift in Sources */,
 				A92CE000000000000000001 /* MemoryArchiveVoiceTranscriber.swift in Sources */,
 				A22CE000000000000000003 /* MemoryArchiveViewController.swift in Sources */,

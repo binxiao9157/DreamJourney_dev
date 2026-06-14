@@ -1450,10 +1450,14 @@ private extension MemoryArchiveViewController {
                 switch result {
                 case .success(let response):
                     let mergedCount = self?.repository.mergeRemoteItems(response.items) ?? 0
+                    let backfilledCount = self?.backfillKnowledgeForRestoredArchiveItems(response.items) ?? 0
                     self?.backendArchiveItemCount = response.items.count
                     self?.backendArchiveLastCheckedAt = Date()
+                    if backfilledCount > 0 {
+                        self?.setKnowledgeDepositStatus("结构化建库：已从服务器恢复档案并回填知识库 \(backfilledCount) 条")
+                    }
                     self?.backendSyncStatusOverride = nil
-                    if mergedCount > 0 {
+                    if mergedCount > 0 || backfilledCount > 0 {
                         self?.reloadData()
                     }
                 case .failure:
@@ -1461,6 +1465,12 @@ private extension MemoryArchiveViewController {
                 }
                 self?.updateBackendSyncStatusLabel()
             }
+        }
+    }
+
+    func backfillKnowledgeForRestoredArchiveItems(_ items: [MemoryArchiveItem]) -> Int {
+        items.reduce(0) { total, item in
+            total + KBLiteManager.shared.backfillRestoredArchiveItemKnowledge(item)
         }
     }
 

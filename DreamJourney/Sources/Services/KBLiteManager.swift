@@ -2218,6 +2218,95 @@ final class KBLiteManager {
     // MARK: - Public API: Archive Material Metadata
 
     @discardableResult
+    func backfillRestoredArchiveMaterialKnowledge(
+        _ material: KBLiteArchiveBackfillMaterial,
+        sessionId explicitSessionId: Int? = nil
+    ) -> Int {
+        guard material.privacyMetadata.scope != .privateOnly else { return 0 }
+        let archiveItemID = Self.normalizedQuickExtractEntity(material.id)
+        let title = Self.normalizedQuickExtractEntity(material.title)
+        guard !archiveItemID.isEmpty, !title.isEmpty else { return 0 }
+
+        let sessionId = explicitSessionId ?? max(graph.sessionCount + 1, 1)
+        let sourceRef = MemorySourceRef(
+            kind: .memoryArchiveItem,
+            id: archiveItemID,
+            title: title,
+            capturedAt: material.createdAt
+        )
+        let resolvedMetadata = Self.metadataByAppending(sourceRef: sourceRef, to: material.privacyMetadata)
+        var addedCount = 0
+        var needsSaveAfterQuickExtract = false
+
+        if material.kind.isTextLike {
+            addedCount += ingestArchiveTextMaterialMetadata(
+                archiveItemID: archiveItemID,
+                title: title,
+                note: material.note,
+                materialKind: material.kind.displayName,
+                capturedAt: material.createdAt,
+                sessionId: sessionId,
+                privacyMetadata: resolvedMetadata
+            )
+            let quickCount = quickExtractArchiveTextIfNeeded(
+                material.note,
+                timestamp: material.createdAt,
+                sessionId: sessionId,
+                privacyMetadata: resolvedMetadata
+            )
+            addedCount += quickCount
+            needsSaveAfterQuickExtract = needsSaveAfterQuickExtract || quickCount > 0
+        } else if material.kind.isImageLike {
+            if let analysis = restoredImageAnalysis(from: material) {
+                addedCount += ingestArchivePhotoAnalysisMetadata(
+                    archiveItemID: archiveItemID,
+                    title: title,
+                    analysis: analysis,
+                    capturedAt: material.createdAt,
+                    sessionId: sessionId,
+                    privacyMetadata: resolvedMetadata
+                )
+                ingestImageAnalysis(analysis, sessionId: sessionId, privacyMetadata: resolvedMetadata)
+            } else {
+                addedCount += ingestArchivePhotoMaterialMetadata(
+                    archiveItemID: archiveItemID,
+                    title: title,
+                    note: material.note,
+                    materialKind: material.kind.displayName,
+                    capturedAt: material.createdAt,
+                    sessionId: sessionId,
+                    privacyMetadata: resolvedMetadata
+                )
+            }
+        } else {
+            addedCount += ingestArchiveVoiceSampleMetadata(
+                title: title,
+                note: material.note,
+                sessionId: sessionId,
+                privacyMetadata: resolvedMetadata,
+                targetPersonName: material.targetPersonName,
+                targetPersonId: material.targetPersonId
+            )
+            let quickCount = quickExtractArchiveTextIfNeeded(
+                Self.voiceTranscriptText(from: material.note),
+                timestamp: material.createdAt,
+                sessionId: sessionId,
+                privacyMetadata: resolvedMetadata
+            )
+            addedCount += quickCount
+            needsSaveAfterQuickExtract = needsSaveAfterQuickExtract || quickCount > 0
+        }
+
+        if addedCount > 0 {
+            graph.sessionCount = max(graph.sessionCount, sessionId)
+        }
+        if needsSaveAfterQuickExtract {
+            save()
+        }
+        return addedCount
+    }
+
+    @discardableResult
     func ingestArchiveTextMaterialMetadata(
         archiveItemID rawArchiveItemID: String,
         title rawTitle: String,
@@ -2266,6 +2355,56 @@ final class KBLiteManager {
             privacyMetadata: resolvedMetadata
         )
         return metadataCount + personaCount
+    }
+
+    private func quickExtractArchiveTextIfNeeded(
+        _ rawText: String,
+        timestamp: Date,
+        sessionId: Int,
+        privacyMetadata: MemoryPrivacyMetadata
+    ) -> Int {
+        let text = Self.normalizedQuickExtractEntity(rawText)
+        guard text.count >= 4 else { return 0 }
+        return quickExtract(
+            turns: [
+                ConversationTurn(
+                    role: "user",
+                    text: text,
+                    timestamp: timestamp,
+                    privacyMetadata: privacyMetadata
+                )
+            ],
+            sessionId: sessionId,
+            privacyMetadata: privacyMetadata
+        )
+    }
+
+    private func restoredImageAnalysis(from material: KBLiteArchiveBackfillMaterial) -> KBImageAnalysisResult? {
+        guard material.analysisStatusRawValue == "analyzed" else { return nil }
+        let description = Self.normalizedQuickExtractEntity(material.analysisSummary ?? material.note)
+        let scene = Self.normalizedQuickExtractEntity(material.scene ?? "")
+        let occasion = Self.normalizedQuickExtractEntity(material.occasion ?? "")
+        let mood = Self.normalizedQuickExtractEntity(material.mood ?? "")
+        let people = material.detectedPeople.map(Self.normalizedQuickExtractEntity).filter { !$0.isEmpty }
+        guard !description.isEmpty || !scene.isEmpty || !occasion.isEmpty || !mood.isEmpty || !people.isEmpty else {
+            return nil
+        }
+        return KBImageAnalysisResult(
+            description: description.isEmpty ? "恢复的已分析档案照片。" : description,
+            detectedPeople: people,
+            scene: scene,
+            occasion: occasion,
+            mood: mood,
+            estimatedDecade: material.estimatedDecade
+        )
+    }
+
+    private static func voiceTranscriptText(from note: String) -> String {
+        let marker = "语音转写/摘要："
+        guard let range = note.range(of: marker) else {
+            return note
+        }
+        return String(note[range.upperBound...])
     }
 
     @discardableResult

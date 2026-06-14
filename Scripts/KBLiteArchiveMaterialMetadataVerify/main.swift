@@ -243,6 +243,72 @@ let privateCount = KBLiteManager.shared.ingestArchiveTextMaterialMetadata(
 )
 assertCondition(privateCount == 0, "private archive metadata should not enter KBLite")
 
+let restoredTextItem = MemoryArchiveItem(
+    id: "restored-text-1",
+    kind: .textNote,
+    title: "恢复的绍兴往事",
+    note: "我叫陈建国，1968年住在绍兴越城区仓桥直街。1978年我和妻子林桂芳在杭州西湖边开过一家小照相馆。",
+    localPath: nil,
+    createdAt: now.addingTimeInterval(30),
+    updatedAt: now.addingTimeInterval(30),
+    analysisStatus: .manual,
+    analysisSummary: nil,
+    detectedPeople: [],
+    scene: nil,
+    occasion: nil,
+    mood: nil,
+    estimatedDecade: nil,
+    tags: ["服务器恢复"],
+    isPrivate: false,
+    privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed)
+)
+let restoredTextCount = KBLiteManager.shared.backfillRestoredArchiveItemKnowledge(restoredTextItem, sessionId: 31)
+let restoredPeople = Set(KBLiteManager.shared.graph.people.map(\.name))
+let restoredPlaces = Set(KBLiteManager.shared.graph.places.map(\.name))
+let restoredFacts = KBLiteManager.shared.graph.facts.map(\.statement).joined(separator: "\n")
+assertCondition(restoredTextCount > 0, "restored archive text should backfill structured knowledge")
+assertCondition(restoredPeople.contains("陈建国"), "restored archive text should extract concrete self name")
+assertCondition(restoredPeople.contains("林桂芳"), "restored archive text should extract concrete spouse name")
+assertCondition(restoredPlaces.contains("绍兴越城区仓桥直街"), "restored archive text should extract lived address")
+assertCondition(restoredFacts.contains("开过一家小照相馆"), "restored archive text should persist explicit business fact")
+assertCondition(
+    KBLiteManager.shared.graph.people.contains {
+        $0.name == "陈建国" &&
+            $0.privacyMetadata.sourceRefs.contains(where: { $0.kind == .memoryArchiveItem && $0.id == "restored-text-1" })
+    },
+    "restored archive text people should keep archive source ref"
+)
+
+let restoredPhotoItem = MemoryArchiveItem(
+    id: "restored-photo-1",
+    kind: .photo,
+    title: "恢复的西湖老照片",
+    note: "服务器恢复的照片元数据。",
+    localPath: nil,
+    createdAt: now.addingTimeInterval(40),
+    updatedAt: now.addingTimeInterval(40),
+    analysisStatus: .analyzed,
+    analysisSummary: "西湖边一家人合影，人物包含林桂芳。",
+    detectedPeople: ["林桂芳"],
+    scene: "杭州西湖",
+    occasion: "家庭合影",
+    mood: "温暖",
+    estimatedDecade: 1970,
+    tags: ["服务器恢复", "旧照片"],
+    isPrivate: false,
+    privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed)
+)
+let restoredPhotoCount = KBLiteManager.shared.backfillRestoredArchiveItemKnowledge(restoredPhotoItem, sessionId: 32)
+assertCondition(restoredPhotoCount > 0, "restored analyzed photo should backfill image-analysis knowledge")
+assertCondition(
+    KBLiteManager.shared.graph.facts.contains {
+        $0.statement.contains("恢复的西湖老照片") &&
+            $0.statement.contains("西湖边一家人合影") &&
+            $0.privacyMetadata.sourceRefs.contains(where: { $0.kind == .memoryArchiveItem && $0.id == "restored-photo-1" })
+    },
+    "restored analyzed photo should keep archive source ref in image-analysis evidence"
+)
+
 KBLiteManager.shared.reset()
 try? FileManager.default.removeItem(at: verifyGraph)
 print("KBLiteArchiveMaterialMetadata verification passed")

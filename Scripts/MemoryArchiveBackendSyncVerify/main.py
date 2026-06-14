@@ -121,12 +121,18 @@ if "repository.mergeRemoteItems(response.items)" not in refresh_block:
     missing.append(
         f"{vc_file.name}: archive fetch success should merge backend items into the local archive repository"
     )
+if "backfillKnowledgeForRestoredArchiveItems(response.items)" not in refresh_block:
+    missing.append(
+        f"{vc_file.name}: archive fetch success should backfill restored archive items into KBLite"
+    )
 if "self?.reloadData()" not in refresh_block:
     missing.append(
         f"{vc_file.name}: archive fetch success should refresh the archive list after merging backend items"
     )
 if "mergeRemoteItems" not in repo_text:
     missing.append(f"{repo_file.name}: repository should expose remote archive metadata merge")
+if "backfillRestoredArchiveItemKnowledge" not in vc_text:
+    missing.append(f"{vc_file.name}: archive UI should expose restored archive knowledge backfill")
 for fragment in required_privacy_fragments:
     if fragment not in privacy_text:
         missing.append(f"{privacy_file.name}: missing {fragment!r}")
