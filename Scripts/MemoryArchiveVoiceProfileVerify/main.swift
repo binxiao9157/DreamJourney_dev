@@ -22,6 +22,16 @@ final class StubVoiceTrainer: MemoryArchiveVoiceTrainingClient {
     }
 }
 
+final class FailingVoiceTrainer: MemoryArchiveVoiceTrainingClient {
+    func trainVoice(
+        audioURLs: [URL],
+        speakerId: String,
+        completion: @escaping (Result<String, MemoryArchiveVoiceProfileTrainingError>) -> Void
+    ) {
+        completion(.failure(.service("invalid X-Api-App-Key: should_not_surface")))
+    }
+}
+
 private func makeVoiceSample(
     id: String,
     title: String,
@@ -176,6 +186,42 @@ assertCondition(
 assertCondition(
     mixedReadyProfile.status == .readyForTraining,
     "three generation-allowed samples should make a mixed privacy profile trainable"
+)
+
+let failingTrainer = FailingVoiceTrainer()
+let failingSemaphore = DispatchSemaphore(value: 0)
+var failedTrainingProfile: MemoryArchiveVoiceProfile?
+var failedTrainingError: MemoryArchiveVoiceProfileError?
+store.startTraining(
+    profileID: mixedReadyProfile.id,
+    sampleURLs: [
+        URL(fileURLWithPath: "/tmp/mixed-gen-1.m4a"),
+        URL(fileURLWithPath: "/tmp/mixed-gen-2.m4a"),
+        URL(fileURLWithPath: "/tmp/mixed-gen-3.m4a"),
+    ],
+    trainer: failingTrainer
+) { result in
+    switch result {
+    case .success(let profile):
+        failedTrainingProfile = profile
+    case .failure(let error):
+        failedTrainingError = error
+    }
+    failingSemaphore.signal()
+}
+_ = failingSemaphore.wait(timeout: .now() + 2)
+
+let failedProfile = store.profiles().first(where: { $0.id == mixedReadyProfile.id })
+assertCondition(failedTrainingProfile == nil, "failing trainer should not return a trained profile")
+assertCondition(failedTrainingError != nil, "failing trainer should surface a retryable training error to the caller")
+assertCondition(failedProfile?.status == .failed, "failed training should mark the profile failed")
+assertCondition(
+    failedProfile?.statusMessage == "吴梅芳声纹训练失败，可稍后重试",
+    "failed voice profile should store friendly retry copy instead of raw service errors"
+)
+assertCondition(
+    failedProfile?.statusMessage?.contains("should_not_surface") == false,
+    "failed voice profile status must not persist raw service error details"
 )
 
 let secondPerson = makeVoiceSample(

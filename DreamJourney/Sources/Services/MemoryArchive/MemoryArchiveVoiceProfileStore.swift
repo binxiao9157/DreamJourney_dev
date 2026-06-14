@@ -402,7 +402,7 @@ final class MemoryArchiveVoiceProfileStore {
                 completion(.success(updated))
             case .failure(let error):
                 updated.status = .failed
-                updated.statusMessage = "声纹训练失败：\(error.localizedDescription)"
+                updated.statusMessage = Self.statusMessage(for: updated)
                 updated.updatedAt = Date()
                 latest[latestIndex] = updated
                 self.save(latest)
