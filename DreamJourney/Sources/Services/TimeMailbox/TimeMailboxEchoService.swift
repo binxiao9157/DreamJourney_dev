@@ -24,7 +24,7 @@ final class TimeMailboxEchoService: TimeMailboxEchoGenerating {
         for letter: TimeMailboxLetter,
         evidence: TimeMailboxEchoEvidence
     ) -> TimeMailboxEchoResponse {
-        let evidenceLines = Array(evidence.lines.prefix(5))
+        let evidenceLines = Array(evidence.lines.filter(Self.isConcreteEvidenceLine).prefix(5))
         let memoryLine = "你把这份想念认真保存了下来；信件正文仍只留在本机信箱里。"
         let evidenceLine: String
         if evidenceLines.isEmpty {
@@ -54,4 +54,27 @@ final class TimeMailboxEchoService: TimeMailboxEchoGenerating {
             evidenceLineCount: evidenceLines.count
         )
     }
+
+    private static func isConcreteEvidenceLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        let genericPrefixes = genericKinshipNames.flatMap { name in
+            [
+                "人物：\(name)",
+                "地点：\(name)",
+                "事件：\(name)",
+                "事实：\(name)",
+            ]
+        }
+        return !genericPrefixes.contains { trimmed.hasPrefix($0) }
+    }
+
+    private static let genericKinshipNames: Set<String> = [
+        "爷爷", "奶奶", "外婆", "外公", "姥姥", "姥爷",
+        "爸爸", "妈妈", "父亲", "母亲",
+        "老伴", "老公", "老婆", "丈夫", "妻子",
+        "哥哥", "姐姐", "弟弟", "妹妹",
+        "叔叔", "阿姨", "舅舅", "姑姑",
+        "儿子", "女儿", "孙子", "孙女"
+    ]
 }

@@ -176,19 +176,41 @@ do {
     )
     let evidenceDelivered = repo.refreshDelivery(now: now.addingTimeInterval(61)) { _ in
         TimeMailboxEchoEvidence(
-            people: ["妈妈：喜欢做桂花糕"],
+            people: ["林桂芳：喜欢做桂花糕"],
             places: ["杭州西湖：一家人常去散步"],
             events: ["西湖边的小照相馆：1978年开过一家小店"],
-            facts: ["妈妈做的桂花糕是家里常被提起的味道"]
+            facts: ["林桂芳做的桂花糕是家里常被提起的味道"]
         )
     }
     assertCondition(evidenceDelivered.count == 1, "evidence letter should deliver")
     assertCondition(evidenceDelivered[0].id == evidenceLetter.id, "delivered evidence letter should match")
     assertCondition(evidenceDelivered[0].replyText?.contains("我能参考到的已授权记忆") == true, "reply should disclose authorized evidence")
-    assertCondition(evidenceDelivered[0].replyText?.contains("妈妈做的桂花糕") == true, "reply should include supplied evidence")
+    assertCondition(evidenceDelivered[0].replyText?.contains("林桂芳做的桂花糕") == true, "reply should include supplied concrete evidence")
     assertCondition(evidenceDelivered[0].replyText?.contains("不是逝者真实回复") == true, "evidence reply must keep boundary wording")
     assertCondition(evidenceDelivered[0].replyText?.contains("我今天又想起桂花糕") != true, "evidence reply must not echo the private letter body")
     assertCondition(evidenceDelivered[0].echoEvidenceLineCount == 4, "evidence reply should persist authorized evidence count")
+
+    let genericEvidenceEcho = TimeMailboxEchoService.shared.makeEcho(
+        for: TimeMailboxLetter(
+            id: "generic-evidence-check",
+            recipientName: "林桂芳",
+            title: "泛称证据不应进入回声",
+            body: "想起桂花糕。",
+            createdAt: now,
+            deliverAt: now.addingTimeInterval(60),
+            deliveredAt: nil,
+            status: .sealed,
+            replyText: nil,
+            boundaryAcknowledged: true
+        ),
+        evidence: TimeMailboxEchoEvidence(
+            people: ["妈妈：喜欢做桂花糕"],
+            facts: ["妈妈做的桂花糕是家里常被提起的味道"]
+        )
+    )
+    assertCondition(genericEvidenceEcho.evidenceLineCount == 0, "generic kinship evidence should not count as authorized concrete echo evidence")
+    assertCondition(!genericEvidenceEcho.replyText.contains("妈妈：喜欢做桂花糕"), "generic person evidence should not be copied into time-mailbox echo")
+    assertCondition(!genericEvidenceEcho.replyText.contains("妈妈做的桂花糕"), "generic fact evidence should not be copied into time-mailbox echo")
 
     let legacyJSON = """
     [{
