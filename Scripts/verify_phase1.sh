@@ -379,6 +379,16 @@ xcrun swiftc \
   -o /tmp/dreamjourney_dialog_end_intent_verify
 /tmp/dreamjourney_dialog_end_intent_verify
 
+echo "== Dialog memory grounding =="
+xcrun swiftc \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
+  DreamJourney/Sources/Services/Safety/SafetyModels.swift \
+  DreamJourney/Sources/Services/KBLiteModels.swift \
+  DreamJourney/Sources/Services/DialogEngineModels.swift \
+  Scripts/DialogMemoryGroundingVerify/main.swift \
+  -o /tmp/dreamjourney_dialog_memory_grounding_verify
+/tmp/dreamjourney_dialog_memory_grounding_verify
+
 echo "== Dialog memory RAG payload =="
 xcrun swiftc \
   DreamJourney/Sources/Services/Safety/SafetyModels.swift \
