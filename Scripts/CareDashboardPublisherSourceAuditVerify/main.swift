@@ -95,4 +95,30 @@ CareDashboardSnapshotPublisher().publish(
 require(didPublishCompletion, "care dashboard publish should call completion when backend publish is skipped")
 require(didReportPublishFailure, "care dashboard publish should report skipped backend publishing as a failure")
 
+let daughterOnlyScope = MemoryPrivacyMetadata(
+    scope: .familyCircle,
+    familyVisibility: .selectedMembers(["fm_daughter"])
+)
+let sonOnlyScope = MemoryPrivacyMetadata(
+    scope: .familyCircle,
+    familyVisibility: .selectedMembers(["fm_son"])
+)
+let selectedOnlyTargets = CareDashboardSnapshotPublisher().backgroundPublishTargets(from: [
+    ConversationTurn(role: "user", text: "这句话只给女儿看。", timestamp: now, privacyMetadata: daughterOnlyScope),
+    ConversationTurn(role: "user", text: "这句话只给儿子看。", timestamp: now, privacyMetadata: sonOnlyScope),
+])
+require(
+    selectedOnlyTargets == ["fm_daughter", "fm_son"],
+    "selected-member-only care turns should not publish an empty all-family snapshot"
+)
+
+let mixedTargets = CareDashboardSnapshotPublisher().backgroundPublishTargets(from: [
+    ConversationTurn(role: "user", text: "这句话全体亲友可见。", timestamp: now, privacyMetadata: familyScope),
+    ConversationTurn(role: "user", text: "这句话只给女儿看。", timestamp: now, privacyMetadata: daughterOnlyScope),
+])
+require(
+    mixedTargets == [nil, "fm_daughter"],
+    "all-family publish target should appear only when all-family visible care input exists"
+)
+
 print("CareDashboardPublisherSourceAudit verification passed")

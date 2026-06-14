@@ -20,8 +20,8 @@ phase1 = PHASE1.read_text()
 
 require("func backgroundPublishTargets(from turns: [ConversationTurn]) -> [String?]" in publisher,
         "publisher should compute all background publish targets")
-require("var targets: [String?] = [nil]" in publisher,
-        "publisher should keep the all-family snapshot target")
+require("var shouldPublishAllFamily = false" in publisher and "targets.insert(nil, at: 0)" in publisher,
+        "publisher should add the all-family snapshot target only when all-family input exists")
 require("turn.privacyMetadata.scope == .familyCircle" in publisher,
         "publisher should derive member targets only from family-circle turns")
 require("visibility.allowedMemberIDs" in publisher and "seenMemberIDs" in publisher,

@@ -84,18 +84,25 @@ final class CareDashboardSnapshotPublisher {
     }
 
     func backgroundPublishTargets(from turns: [ConversationTurn]) -> [String?] {
-        var targets: [String?] = [nil]
+        var targets: [String?] = []
+        var shouldPublishAllFamily = false
         var seenMemberIDs: Set<String> = []
 
         for turn in turns where turn.privacyMetadata.scope == .familyCircle {
             let visibility = turn.privacyMetadata.familyVisibility
-            guard !visibility.includesAllMembers else { continue }
+            guard !visibility.includesAllMembers else {
+                shouldPublishAllFamily = true
+                continue
+            }
             for memberID in visibility.allowedMemberIDs where !seenMemberIDs.contains(memberID) {
                 seenMemberIDs.insert(memberID)
                 targets.append(memberID)
             }
         }
 
+        if shouldPublishAllFamily {
+            targets.insert(nil, at: 0)
+        }
         return targets
     }
 
