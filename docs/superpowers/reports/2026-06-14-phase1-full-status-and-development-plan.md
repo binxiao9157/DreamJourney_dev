@@ -335,3 +335,30 @@ iOS 仓库路径：`/Users/yxj/.config/superpowers/worktrees/DreamJourney_dev/ph
   - `DREAMJOURNEY_BACKEND_BASE_URL=https://dreamjourney-api.liftora.cn`
   - `DREAMJOURNEY_BACKEND_API_TOKEN=<与服务器 BACKEND_API_TOKEN 相同的值>`
   - `PYTHONPATH=DreamJourneyBackend STORE_BACKEND=memory DreamJourneyBackend/.venv/bin/python Scripts/BackendAuthenticatedSmoke/main.py --remote`
+
+## 13. 2026-06-14 阶段一真机证据脚手架更新
+
+本轮补齐 P0/P1 真机验收证据包的工程化入口，避免后续截图、录屏、日志和后端响应散落在聊天或临时目录里。
+
+已完成：
+
+- 新增 `Scripts/phase1_acceptance_evidence_scaffold.py`。
+  - 默认生成/更新 `docs/superpowers/evidence` 下的阶段一验收结构。
+  - 覆盖 `phase1-memory-archive`、`phase1-digital-human-grounding`、`phase1-care-dashboard`、`phase1-time-mailbox`、`phase1-backend-smoke` 五个目录。
+  - 每个模块生成 `acceptance_checklist.md`，列出必须保存的截图、录屏、日志和后端脱敏响应。
+  - 根目录生成 `phase1_acceptance_manifest.json` 和 `phase1_acceptance_checklist.md`。
+  - 明确隐私边界：不提交原始照片、原始音频、信件正文、完整 transcript；后端样本只保留 metadata-only 脱敏响应。
+- 新增 `Scripts/Phase1AcceptanceEvidenceScaffoldVerify/main.py`。
+  - 在临时目录执行 scaffold，验证五个模块目录、根 manifest、模块 checklist 和关键验收文案。
+  - 防止证据目录结构、后端 smoke 命令或隐私边界文案漂移。
+- `Scripts/verify_phase1.sh` 已接入该 scaffold 验证。
+
+验证结果：
+
+- `python3 Scripts/Phase1AcceptanceEvidenceScaffoldVerify/main.py` 通过。
+- `bash Scripts/verify_phase1.sh` 通过；日志：`/tmp/dreamjourney_phase1_evidence_scaffold_verify.log`。
+
+状态调整：
+
+- P2-2 “阶段一证据包”从纯人工整理，调整为已有工程化脚手架。
+- P0/P1 真机验收仍未完成；下一次继续时，应把真实截图、录屏、设备日志和后端脱敏响应填入对应 evidence 目录，而不是继续新增路演或 mock 体验。

@@ -1,0 +1,78 @@
+{
+  "app": "DreamJourney",
+  "generatedBy": "Scripts/phase1_acceptance_evidence_scaffold.py",
+  "goal": "phase1_true_device_acceptance",
+  "modules": [
+    {
+      "id": "phase1-memory-archive",
+      "priority": "P0-1",
+      "requiredFiles": [
+        "screens/archive-list.png",
+        "screens/knowledge-base-after-text.png",
+        "screens/photo-analysis.png",
+        "screens/voice-profile-status.png",
+        "backend/archive-items-redacted.json",
+        "logs/memory-archive-device.log"
+      ],
+      "status": "pending_true_device_evidence",
+      "title": "记忆档案馆真实素材建库验收"
+    },
+    {
+      "id": "phase1-digital-human-grounding",
+      "priority": "P0-2",
+      "requiredFiles": [
+        "recordings/grounded-dialog-3-5-rounds.mp4",
+        "screens/known-fact-answer.png",
+        "screens/unknown-fact-boundary.png",
+        "screens/knowledge-base-after-dialog.png",
+        "logs/dialog-memory-grounding.log",
+        "diagnostics/digital_human_playback.log"
+      ],
+      "status": "pending_true_device_evidence",
+      "title": "数字人对话记忆约束真机验收"
+    },
+    {
+      "id": "phase1-care-dashboard",
+      "priority": "P1-1",
+      "requiredFiles": [
+        "screens/device-a-invite.png",
+        "screens/device-b-accept.png",
+        "screens/device-b-care-dashboard.png",
+        "screens/device-a-revoke.png",
+        "backend/latest-redacted.json",
+        "backend/history-redacted.json",
+        "backend/revoked-403.txt"
+      ],
+      "status": "pending_true_device_evidence",
+      "title": "长辈关怀看板跨设备验收"
+    },
+    {
+      "id": "phase1-time-mailbox",
+      "priority": "P1-2",
+      "requiredFiles": [
+        "screens/create-letter.png",
+        "screens/delivery-notification.png",
+        "screens/reader-boundary.png",
+        "screens/cross-device-metadata-only.png",
+        "backend/mailbox-letters-redacted.json"
+      ],
+      "status": "pending_true_device_evidence",
+      "title": "时空信箱真实信件验收"
+    },
+    {
+      "id": "phase1-backend-smoke",
+      "priority": "P2-1",
+      "requiredFiles": [
+        "health.json",
+        "runtime.json",
+        "runtime-without-token.txt",
+        "image-analysis-dry-run.json",
+        "kb-snapshot-smoke.json",
+        "authenticated-smoke.log"
+      ],
+      "status": "pending_true_device_evidence",
+      "title": "线上后端 smoke 与安全配置验收"
+    }
+  ],
+  "privacyBoundary": "不提交原始照片、原始音频、信件正文、完整 transcript；后端样本只保留 metadata-only 脱敏响应。"
+}

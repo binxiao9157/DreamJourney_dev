@@ -514,6 +514,7 @@ python3 Scripts/RealDeviceNoDemoStateVerify/main.py
 python3 Scripts/RealDeviceNoDemoStateTokensVerify/main.py
 python3 Scripts/RealDeviceRuntimeGateVerify/main.py
 python3 Scripts/RealDeviceAcceptanceVerify/main.py
+python3 Scripts/Phase1AcceptanceEvidenceScaffoldVerify/main.py
 
 echo "== diff --check =="
 git diff --check
