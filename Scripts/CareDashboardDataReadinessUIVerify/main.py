@@ -28,7 +28,13 @@ require("localEligibleUserTurnCount" in vc, "care dashboard should track local e
 require("remoteSnapshotStatusText" in vc, "care dashboard should track backend snapshot status for device testing")
 require(
     "localEligibleUserTurnCount = localResult.eligibleUserTurnCount" in reload_body
-    and "eligibleUserTurnCount: eligibleTurns.filter" in publisher,
+    and (
+        "eligibleUserTurnCount: eligibleTurns.filter" in publisher
+        or (
+            "let eligibleUserTurnCount = eligibleTurns.filter" in publisher
+            and "eligibleUserTurnCount: eligibleUserTurnCount" in publisher
+        )
+    ),
     "reload should compute local eligible user-turn count through the shared publisher",
 )
 require(

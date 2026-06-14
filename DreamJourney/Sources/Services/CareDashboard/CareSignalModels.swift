@@ -32,12 +32,48 @@ enum CareSignalRiskLevel: String, Codable, Equatable {
     case attention
 }
 
+struct CareSignalSourceAudit: Codable, Equatable {
+    let authorizedScopeText: String
+    let sourceKindText: String
+    let eligibleUserTurnCount: Int
+    let contentRedactionText: String
+    let viewerFamilyMemberID: String?
+
+    init(
+        authorizedScopeText: String,
+        sourceKindText: String,
+        eligibleUserTurnCount: Int,
+        contentRedactionText: String,
+        viewerFamilyMemberID: String? = nil
+    ) {
+        self.authorizedScopeText = authorizedScopeText
+        self.sourceKindText = sourceKindText
+        self.eligibleUserTurnCount = eligibleUserTurnCount
+        self.contentRedactionText = contentRedactionText
+        self.viewerFamilyMemberID = viewerFamilyMemberID
+    }
+
+    var displaySummary: String {
+        var parts = [
+            "授权来源 \(authorizedScopeText)",
+            "输入来源 \(sourceKindText)",
+            "可用发言 \(eligibleUserTurnCount) 轮",
+            "脱敏方式 \(contentRedactionText)",
+        ]
+        if viewerFamilyMemberID?.isEmpty == false {
+            parts.append("亲友视角已裁剪")
+        }
+        return parts.joined(separator: " · ")
+    }
+}
+
 struct CareSignalSnapshot: Codable, Equatable {
     let generatedAt: Date
     let windowStart: Date?
     let windowEnd: Date?
     let windowDayCount: Int
     let dataCoverageSummary: String
+    let sourceAudit: CareSignalSourceAudit?
     let totalTurns: Int
     let userTurnCount: Int
     let characterCount: Int
@@ -65,6 +101,7 @@ struct CareSignalSnapshot: Codable, Equatable {
         windowEnd: Date?,
         windowDayCount: Int,
         dataCoverageSummary: String,
+        sourceAudit: CareSignalSourceAudit? = nil,
         totalTurns: Int,
         userTurnCount: Int,
         characterCount: Int,
@@ -91,6 +128,7 @@ struct CareSignalSnapshot: Codable, Equatable {
         self.windowEnd = windowEnd
         self.windowDayCount = windowDayCount
         self.dataCoverageSummary = dataCoverageSummary
+        self.sourceAudit = sourceAudit
         self.totalTurns = totalTurns
         self.userTurnCount = userTurnCount
         self.characterCount = characterCount
@@ -168,6 +206,7 @@ struct CareDashboardShareReportDescriptor: Equatable {
     let generatedAtText: String
     let observationWindowText: String
     let coverageText: String
+    let sourceAuditSummary: String?
     let metricLines: [String]
     let summary: String
     let highlights: [String]
@@ -182,9 +221,11 @@ struct CareDashboardShareReportDescriptor: Equatable {
             "生成时间：\(generatedAtText)",
             "观测窗口：\(observationWindowText)",
             "数据覆盖：\(coverageText)",
-            "",
-            "脱敏指标"
         ]
+        if let sourceAuditSummary, !sourceAuditSummary.isEmpty {
+            lines.append("来源审计：\(sourceAuditSummary)")
+        }
+        lines.append(contentsOf: ["", "脱敏指标"])
         lines.append(contentsOf: metricLines.map { "- \($0)" })
         lines.append(contentsOf: ["", "观察摘要", summary])
 
@@ -215,6 +256,7 @@ struct CareDashboardShareReportDescriptor: Equatable {
             generatedAtText: Self.dateTimeFormatter.string(from: snapshot.generatedAt),
             observationWindowText: observationWindowText(snapshot: snapshot),
             coverageText: snapshot.dataCoverageSummary,
+            sourceAuditSummary: snapshot.sourceAudit?.displaySummary,
             metricLines: Self.metricLines(snapshot: snapshot),
             summary: snapshot.summary,
             highlights: highlights,
@@ -357,12 +399,29 @@ enum CareDashboardInputPolicy {
 
     private static func isCareEligibleTurn(_ turn: ConversationTurn) -> Bool {
         guard turn.role.lowercased() == "user" else { return true }
+        let trimmedText = turn.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else { return false }
+        guard !isCareNonConversationPlaceholder(trimmedText) else { return false }
         let excludedPrefixes = [
             "时空信箱写给",
             "记忆档案馆保存",
-            "记忆档案馆上传旧照片"
+            "记忆档案馆上传旧照片",
+            "记忆档案馆照片",
+            "记忆档案馆语音",
         ]
-        return !excludedPrefixes.contains { turn.text.hasPrefix($0) }
+        return !excludedPrefixes.contains { trimmedText.hasPrefix($0) }
+    }
+
+    private static func isCareNonConversationPlaceholder(_ text: String) -> Bool {
+        let placeholders = [
+            "[发送了一张照片]",
+            "发送了一张照片",
+            "[发送了图片]",
+            "发送了图片",
+            "[上传了一张照片]",
+            "上传了一张照片",
+        ]
+        return placeholders.contains(text)
     }
 }
 

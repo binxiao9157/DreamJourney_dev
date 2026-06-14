@@ -116,6 +116,9 @@ python3 Scripts/CareDashboardMemberPublishVerify/main.py
 echo "== CareDashboard live evidence UI =="
 python3 Scripts/CareDashboardLiveEvidenceUIVerify/main.py
 
+echo "== CareDashboard source audit =="
+python3 Scripts/CareDashboardSourceAuditVerify/main.py
+
 echo "== CareDashboard backend access status UI =="
 python3 Scripts/CareDashboardBackendAccessStatusUIVerify/main.py
 
@@ -197,6 +200,9 @@ xcrun swiftc \
 
 echo "== Family access control UI =="
 xcrun swift Scripts/FamilyAccessControlUIVerify/main.swift
+
+echo "== Family care owner strict =="
+python3 Scripts/FamilyCareOwnerStrictVerify/main.py
 
 echo "== Family invitation code =="
 python3 Scripts/FamilyInvitationCodeVerify/main.py

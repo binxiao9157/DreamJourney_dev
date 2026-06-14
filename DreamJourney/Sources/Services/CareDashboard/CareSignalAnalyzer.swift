@@ -12,7 +12,11 @@ final class CareSignalAnalyzer {
         return set
     }()
 
-    func analyze(turns: [CareSignalInputTurn], now: Date = Date()) -> CareSignalSnapshot {
+    func analyze(
+        turns: [CareSignalInputTurn],
+        now: Date = Date(),
+        sourceAudit: CareSignalSourceAudit? = nil
+    ) -> CareSignalSnapshot {
         let userTurns = turns
             .filter { $0.role.lowercased() == "user" }
             .map {
@@ -38,6 +42,7 @@ final class CareSignalAnalyzer {
                 windowEnd: window.end,
                 windowDayCount: window.dayCount,
                 dataCoverageSummary: dataCoverageSummary(dayCount: window.dayCount, userTurnCount: 0),
+                sourceAudit: sourceAudit,
                 totalTurns: recentTotalTurnCount,
                 userTurnCount: 0,
                 characterCount: 0,
@@ -85,6 +90,7 @@ final class CareSignalAnalyzer {
             windowEnd: window.end,
             windowDayCount: window.dayCount,
             dataCoverageSummary: dataCoverageSummary(dayCount: window.dayCount, userTurnCount: userTexts.count),
+            sourceAudit: sourceAudit,
             totalTurns: recentTotalTurnCount,
             userTurnCount: userTexts.count,
             characterCount: characterCount,

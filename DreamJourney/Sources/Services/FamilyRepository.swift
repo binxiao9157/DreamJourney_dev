@@ -317,12 +317,16 @@ final class FamilyRepository {
     }
 
     func careOwnerUserID(for viewerFamilyMemberID: String? = nil) -> String? {
-        let candidateMemberID = viewerFamilyMemberID ?? currentViewerIdentity()?.familyMemberID
+        let explicitMemberID = viewerFamilyMemberID?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let candidateMemberID = explicitMemberID?.isEmpty == false ? explicitMemberID : currentViewerIdentity()?.familyMemberID
         if let candidateMemberID,
            let member = get(by: candidateMemberID),
            member.isCareDashboardAccessible,
            let ownerUserId = normalizedOwnerUserID(member.ownerUserId) {
             return ownerUserId
+        }
+        if explicitMemberID?.isEmpty == false {
+            return nil
         }
         return UserManager.shared.currentUser?.id
     }

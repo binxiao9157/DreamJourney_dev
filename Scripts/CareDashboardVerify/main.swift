@@ -200,6 +200,7 @@ let visibleTurns = CareDashboardInputPolicy.eligibleInputTurns(
         ConversationTurn(role: "user", text: "女儿可见：最近有点孤单。", timestamp: now, privacyMetadata: daughterOnly),
         ConversationTurn(role: "user", text: "儿子可见：最近胸闷。", timestamp: now, privacyMetadata: sonOnly),
         ConversationTurn(role: "user", text: "本机内容不进看板。", timestamp: now, privacyMetadata: MemoryPrivacyMetadata(scope: .localOnly)),
+        ConversationTurn(role: "user", text: "[发送了一张照片]", timestamp: now, privacyMetadata: familyAll),
         ConversationTurn(role: "user", text: "时空信箱写给未来的我", timestamp: now, privacyMetadata: familyAll)
     ],
     viewerFamilyMemberID: "fm_daughter"
@@ -218,11 +219,13 @@ assertReportDoesNotExposeFullInput(
         "女儿可见：最近有点孤单。",
         "儿子可见：最近胸闷。",
         "本机内容不进看板。",
+        "[发送了一张照片]",
         "时空信箱写给未来的我"
     ],
     "selected-member share report should not expose raw or unauthorized sentences"
 )
 assertCondition(!daughterReport.plainText.contains("儿子可见"), "selected-member share report should not include unauthorized member sentinel")
 assertCondition(!daughterReport.plainText.contains("本机内容"), "selected-member share report should not include local-only sentinel")
+assertCondition(!daughterReport.plainText.contains("发送了一张照片"), "selected-member share report should not include non-conversation image placeholder")
 
 print("CareDashboard verification passed")

@@ -354,7 +354,13 @@ final class CareDashboardViewController: UIViewController {
         let coverageLabel = UILabel()
         let coverageSummary = snapshot.dataCoverageSummary.trimmingCharacters(in: .whitespacesAndNewlines)
         let viewerPrefix = viewerDescriptionText()
-        coverageLabel.text = "\(viewerPrefix)数据来源 \(snapshotSourceText) · 数据覆盖 \(coverageSummary.isEmpty ? "暂无覆盖说明" : coverageSummary)"
+        let sourceAuditText: String
+        if let sourceAudit = snapshot.sourceAudit, !sourceAudit.displaySummary.isEmpty {
+            sourceAuditText = " · \(sourceAudit.displaySummary)"
+        } else {
+            sourceAuditText = ""
+        }
+        coverageLabel.text = "\(viewerPrefix)数据来源 \(snapshotSourceText) · 数据覆盖 \(coverageSummary.isEmpty ? "暂无覆盖说明" : coverageSummary)\(sourceAuditText)"
         coverageLabel.font = .systemFont(ofSize: 12)
         coverageLabel.textColor = .warmSubtitle
         coverageLabel.numberOfLines = 0
@@ -459,15 +465,25 @@ final class CareDashboardViewController: UIViewController {
         let reportState = readiness.isReady
             ? "家庭安心报：可生成"
             : "家庭安心报：采样中，\(readiness.message)"
+        let sourceAuditLines: [String]
+        if let sourceAudit = snapshot.sourceAudit {
+            sourceAuditLines = [
+                "授权来源 \(sourceAudit.authorizedScopeText)",
+                "输入来源 \(sourceAudit.sourceKindText)",
+                "脱敏方式 \(sourceAudit.contentRedactionText)",
+            ]
+        } else {
+            sourceAuditLines = ["来源审计：历史快照暂无审计字段"]
+        }
         let bodyLabel = UILabel()
-        bodyLabel.text = [
+        bodyLabel.text = ([
             "本机授权发言 \(localEligibleUserTurnCount) 轮",
             "当前快照 \(snapshotSourceText)",
             "\(remoteSnapshotStatusText)",
             "观测天数 \(snapshot.windowDayCount) 天",
             reportState,
             "最低要求 \(CareDashboardReportReadinessPolicy.minimumUserTurns) 轮亲友范围发言 / \(CareDashboardReportReadinessPolicy.minimumActiveDays) 天有效记录"
-        ].joined(separator: " · ")
+        ] + sourceAuditLines).joined(separator: " · ")
         bodyLabel.font = .systemFont(ofSize: 13)
         bodyLabel.textColor = .warmSubtitle
         bodyLabel.numberOfLines = 0
