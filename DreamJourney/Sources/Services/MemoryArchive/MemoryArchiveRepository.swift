@@ -289,6 +289,20 @@ final class MemoryArchiveRepository {
         }
     }
 
+    @discardableResult
+    func updateVoiceTranscript(id: String, transcript: String, now: Date = Date()) throws -> MemoryArchiveItem {
+        let cleanTranscript = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanTranscript.isEmpty else { throw MemoryArchiveRepositoryError.invalidText }
+        guard load().contains(where: { $0.id == id && $0.kind == .voiceSample }) else {
+            throw MemoryArchiveRepositoryError.invalidVoicePath
+        }
+        return try mutate(id: id) { item in
+            item.note = Self.voiceSampleNote(from: cleanTranscript)
+            item.tags = Self.cleanTags(item.tags + ["语音转写"])
+            item.updatedAt = now
+        }
+    }
+
     func delete(id: String) throws {
         var all = load()
         guard let index = all.firstIndex(where: { $0.id == id }) else {
@@ -347,6 +361,10 @@ final class MemoryArchiveRepository {
         case .personalityNote: return "性格描述"
         case .catchphrase: return "口头禅"
         }
+    }
+
+    private static func voiceSampleNote(from transcript: String) -> String {
+        "导入的长辈语音样本，用于后续声纹和语气参考。\n语音转写/摘要：\(transcript)"
     }
 
     private static let legacyRoadshowTextSeedFingerprints: Set<String> = [

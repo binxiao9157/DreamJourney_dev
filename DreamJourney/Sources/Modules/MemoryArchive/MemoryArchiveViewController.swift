@@ -583,6 +583,11 @@ final class MemoryArchiveViewController: UIViewController {
                 self?.retryImageAnalysis(for: item)
             })
         }
+        if item.kind == .voiceSample {
+            alert.addAction(UIAlertAction(title: "补充语音转写", style: .default) { [weak self] _ in
+                self?.presentVoiceTranscriptBackfill(for: item)
+            })
+        }
         alert.addAction(UIAlertAction(title: "关闭", style: .cancel))
         alert.popoverPresentationController?.sourceView = view
         alert.popoverPresentationController?.sourceRect = CGRect(
@@ -592,6 +597,80 @@ final class MemoryArchiveViewController: UIViewController {
             height: 1
         )
         present(alert, animated: true)
+    }
+
+    private func presentVoiceTranscriptBackfill(for item: MemoryArchiveItem) {
+        guard item.kind == .voiceSample else { return }
+        let alert = UIAlertController(
+            title: "补充语音转写",
+            message: "这段语音讲了什么？填写真实转写或摘要后，会以当前语音素材为来源沉淀到结构化知识库。",
+            preferredStyle: .alert
+        )
+        alert.addTextField { field in
+            field.placeholder = "例如：1978 年在西湖边开过小照相馆"
+            field.text = Self.existingVoiceTranscriptText(from: item)
+            field.clearButtonMode = .whileEditing
+        }
+        alert.addAction(UIAlertAction(title: "保存并建库", style: .default) { [weak self, weak alert] _ in
+            guard let self else { return }
+            guard let transcript = Self.voiceTranscriptInputText(from: alert?.textFields?.first?.text) else {
+                self.showToast("请填写语音转写或摘要", type: .info)
+                return
+            }
+            self.saveVoiceTranscriptBackfill(transcript, for: item)
+        })
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        present(alert, animated: true)
+    }
+
+    private func saveVoiceTranscriptBackfill(_ transcript: String, for item: MemoryArchiveItem) {
+        do {
+            let updatedItem = try repository.updateVoiceTranscript(id: item.id, transcript: transcript)
+            syncArchiveItemMetadataToBackend(updatedItem)
+            guard updatedItem.privacyMetadata.scope != .privateOnly else {
+                setKnowledgeDepositStatus("结构化建库：私密语音转写仅保存到档案馆")
+                showToast("语音转写已保存到档案馆", type: .success)
+                reloadData()
+                return
+            }
+            setKnowledgeDepositStatus("结构化建库：正在整理语音转写")
+            Stage1MemoryFacade.shared.ingestArchiveTextMaterialDetailed(
+                Stage1MailboxMemoryInput(
+                    transcript,
+                    timestamp: updatedItem.createdAt,
+                    privacyMetadata: updatedItem.privacyMetadata
+                ),
+                archiveItemID: updatedItem.id,
+                archiveTitle: updatedItem.title,
+                archiveMaterialKind: "语音转写"
+            ) { [weak self] result in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    let textStatus = self.archiveTextDepositStatusMessage(result)
+                    self.setKnowledgeDepositStatus(
+                        textStatus.replacingOccurrences(
+                            of: "结构化建库：文字素材",
+                            with: "结构化建库：语音转写"
+                        )
+                    )
+                    if result.knowledgeAddedCount > 0 {
+                        self.showToast("语音转写已整理到知识库 \(result.knowledgeAddedCount) 条", type: .success)
+                    } else {
+                        self.showToast("语音转写已保存", type: .success)
+                    }
+                    self.reloadData()
+                }
+            }
+            reloadData()
+        } catch {
+            showToast("语音转写保存失败", type: .error)
+        }
+    }
+
+    private static func existingVoiceTranscriptText(from item: MemoryArchiveItem) -> String? {
+        let marker = "语音转写/摘要："
+        guard let range = item.note.range(of: marker) else { return nil }
+        return voiceTranscriptInputText(from: String(item.note[range.upperBound...]))
     }
 
     private func presentKnowledgeEvidence(for item: MemoryArchiveItem) {

@@ -127,6 +127,9 @@ python3 Scripts/MemoryArchiveImageAnalysisRetryVerify/main.py
 echo "== MemoryArchive voice knowledge =="
 python3 Scripts/MemoryArchiveVoiceKnowledgeVerify/main.py
 
+echo "== MemoryArchive voice transcript backfill =="
+python3 Scripts/MemoryArchiveVoiceTranscriptBackfillVerify/main.py
+
 echo "== MemoryArchive voice profile status UI =="
 python3 Scripts/MemoryArchiveVoiceProfileStatusUIVerify/main.py
 
