@@ -354,10 +354,11 @@ final class ConversationMemoryManager {
 
         // 【KBLite】触发 LLM 知识提取（异步，不阻塞 UI）
         DispatchQueue.global(qos: .utility).async {
-            KBLiteManager.shared.extractFromTranscript(
+            KBLiteManager.shared.extractFromTranscriptDetailed(
                 turns: transcriptSnapshot,
                 sessionId: sessionId
-            ) { addedCount in
+            ) { summary in
+                let addedCount = summary.totalAddedCount
                 if addedCount > 0 {
                     print("[Memory] 🧠 知识库新增 \(addedCount) 实体")
                 }
@@ -366,7 +367,12 @@ final class ConversationMemoryManager {
                     object: nil,
                     userInfo: [
                         "sessionId": sessionId,
-                        "addedCount": addedCount
+                        "addedCount": addedCount,
+                        "deterministicAddedCount": summary.deterministicAddedCount,
+                        "llmAddedCount": summary.llmAddedCount,
+                        "didAttemptLLM": summary.didAttemptLLM,
+                        "didFailLLM": summary.didFailLLM,
+                        "llmErrorDescription": summary.llmErrorDescription as Any
                     ]
                 )
             }

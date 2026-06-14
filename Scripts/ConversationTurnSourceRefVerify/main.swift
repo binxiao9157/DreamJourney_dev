@@ -17,6 +17,14 @@ final class KBLiteManager {
     ) {
         completion(0)
     }
+
+    func extractFromTranscriptDetailed(
+        turns: [ConversationTurn],
+        sessionId: Int,
+        completion: @escaping (KBLiteExtractionSummary) -> Void
+    ) {
+        completion(.empty)
+    }
 }
 
 extension Notification.Name {

@@ -743,10 +743,26 @@ final class AIRecordingViewController: UIViewController {
 
     @objc private func handleKnowledgeExtractionFinished(_ notification: Notification) {
         let addedCount = notification.userInfo?["addedCount"] as? Int ?? 0
+        let deterministicAddedCount = notification.userInfo?["deterministicAddedCount"] as? Int ?? 0
+        let llmAddedCount = notification.userInfo?["llmAddedCount"] as? Int ?? 0
+        let didAttemptLLM = notification.userInfo?["didAttemptLLM"] as? Bool ?? false
+        let didFailLLM = notification.userInfo?["didFailLLM"] as? Bool ?? false
         if addedCount > 0 {
-            showToast("结构化知识库已沉淀 \(addedCount) 条", type: .success)
+            if didFailLLM {
+                showToast("已本地沉淀 \(deterministicAddedCount) 条，远端 AI 抽取暂未完成", type: .info)
+            } else if llmAddedCount > 0 {
+                showToast("结构化知识库已沉淀 \(addedCount) 条，其中 AI 抽取 \(llmAddedCount) 条", type: .success)
+            } else if didAttemptLLM {
+                showToast("已本地沉淀 \(deterministicAddedCount) 条，AI 暂无新增线索", type: .info)
+            } else {
+                showToast("结构化知识库已本地沉淀 \(addedCount) 条", type: .success)
+            }
         } else {
-            showToast("本轮暂无可新增的结构化知识", type: .info)
+            if didFailLLM {
+                showToast("远端 AI 抽取暂未完成，本轮暂无本地新增", type: .info)
+            } else {
+                showToast("本轮暂无可新增的结构化知识", type: .info)
+            }
         }
     }
 

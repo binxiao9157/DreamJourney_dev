@@ -299,6 +299,9 @@ python3 Scripts/KnowledgeBaseDepositStatusUIVerify/main.py
 echo "== Dialog knowledge deposit feedback =="
 python3 Scripts/DialogKnowledgeDepositFeedbackVerify/main.py
 
+echo "== KBLite remote extraction evidence =="
+python3 Scripts/KBLiteRemoteExtractionEvidenceVerify/main.py
+
 echo "== KnowledgeBase source privacy UI =="
 python3 Scripts/KnowledgeBaseSourcePrivacyUIVerify/main.py
 
