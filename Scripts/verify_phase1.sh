@@ -103,6 +103,9 @@ PYTHONPATH=DreamJourneyBackend STORE_BACKEND=memory "$BACKEND_PYTHON" Scripts/Ca
 echo "== CareDashboard data readiness UI =="
 python3 Scripts/CareDashboardDataReadinessUIVerify/main.py
 
+echo "== CareDashboard report readiness =="
+python3 Scripts/CareDashboardReportReadinessVerify/main.py
+
 echo "== CareDashboard live evidence UI =="
 python3 Scripts/CareDashboardLiveEvidenceUIVerify/main.py
 

@@ -279,6 +279,48 @@ struct CareDashboardShareReportDescriptor: Equatable {
     }()
 }
 
+struct CareDashboardReportReadiness: Equatable {
+    let isReady: Bool
+    let message: String
+
+    static let ready = CareDashboardReportReadiness(
+        isReady: true,
+        message: "家庭安心报已达到最低真实数据覆盖。"
+    )
+}
+
+enum CareDashboardReportReadinessPolicy {
+    static let minimumUserTurns = 3
+    static let minimumActiveDays = 2
+
+    static func evaluate(snapshot: CareSignalSnapshot) -> CareDashboardReportReadiness {
+        guard snapshot.riskLevel != .insufficientData, snapshot.userTurnCount > 0 else {
+            return CareDashboardReportReadiness(
+                isReady: false,
+                message: "暂无真实亲友范围对话，先完成一次授权对话。"
+            )
+        }
+
+        let missingTurns = max(0, minimumUserTurns - snapshot.userTurnCount)
+        let activeDays = snapshot.dailyTrend.count
+        let missingDays = max(0, minimumActiveDays - activeDays)
+        guard missingTurns == 0, missingDays == 0 else {
+            var parts: [String] = []
+            if missingTurns > 0 {
+                parts.append("还需 \(missingTurns) 轮亲友范围发言")
+            }
+            if missingDays > 0 {
+                parts.append("还需 \(missingDays) 天有效记录")
+            }
+            return CareDashboardReportReadiness(
+                isReady: false,
+                message: parts.joined(separator: "，")
+            )
+        }
+        return .ready
+    }
+}
+
 private extension CareSignalRiskLevel {
     var reportTitle: String {
         switch self {

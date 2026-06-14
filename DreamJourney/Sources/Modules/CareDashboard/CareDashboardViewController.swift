@@ -96,8 +96,9 @@ final class CareDashboardViewController: UIViewController {
             showToast("暂无可分享的关怀周报", type: .info)
             return
         }
+        let readiness = reportReadiness(for: snapshot)
         guard canShareCareReport(snapshot) else {
-            showToast("真实关怀数据不足，先完成一次亲友范围真实对话", type: .info)
+            showToast("真实关怀数据不足；真实关怀数据还在采样，\(readiness.message)", type: .info)
             return
         }
         let descriptor = CareDashboardShareReportDescriptor.make(
@@ -281,7 +282,7 @@ final class CareDashboardViewController: UIViewController {
             stackView.addArrangedSubview(makeSnapshotHistoryCard(remoteSnapshotHistory))
         }
 
-        guard canShareCareReport(snapshot) else {
+        guard canRenderCareInsight(snapshot) else {
             stackView.addArrangedSubview(makeInsufficientDataState())
             return
         }
@@ -310,12 +311,25 @@ final class CareDashboardViewController: UIViewController {
         }
         stackView.addArrangedSubview(makeMetricGrid(metrics))
         stackView.addArrangedSubview(makeTrendCard(snapshot))
-        stackView.addArrangedSubview(makeWeeklyReport(snapshot))
+        let readiness = reportReadiness(for: snapshot)
+        if readiness.isReady {
+            stackView.addArrangedSubview(makeWeeklyReport(snapshot))
+        } else {
+            stackView.addArrangedSubview(makeReportReadinessCard(readiness))
+        }
         stackView.addArrangedSubview(makeSuggestions(snapshot.suggestions))
     }
 
     private func canShareCareReport(_ snapshot: CareSignalSnapshot) -> Bool {
+        reportReadiness(for: snapshot).isReady
+    }
+
+    private func canRenderCareInsight(_ snapshot: CareSignalSnapshot) -> Bool {
         snapshot.riskLevel != .insufficientData && snapshot.userTurnCount > 0
+    }
+
+    private func reportReadiness(for snapshot: CareSignalSnapshot) -> CareDashboardReportReadiness {
+        CareDashboardReportReadinessPolicy.evaluate(snapshot: snapshot)
     }
 
     private func makeHeader(_ snapshot: CareSignalSnapshot) -> UIView {
@@ -639,6 +653,34 @@ final class CareDashboardViewController: UIViewController {
             }
         }
 
+        container.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 16),
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16),
+        ])
+        return container
+    }
+
+    private func makeReportReadinessCard(_ readiness: CareDashboardReportReadiness) -> UIView {
+        let container = makeSurface()
+
+        let title = UILabel()
+        title.text = "家庭安心报采样中"
+        title.font = .systemFont(ofSize: 18, weight: .bold)
+        title.textColor = .warmPrimary
+
+        let body = UILabel()
+        body.text = "\(readiness.message)。当前可以先查看脱敏指标和趋势预览；达到最低覆盖后再导出家庭安心报。"
+        body.font = .systemFont(ofSize: 14)
+        body.textColor = .warmSubtitle
+        body.numberOfLines = 0
+
+        let stack = UIStackView(arrangedSubviews: [title, body])
+        stack.axis = .vertical
+        stack.spacing = 8
         container.addSubview(stack)
         stack.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
