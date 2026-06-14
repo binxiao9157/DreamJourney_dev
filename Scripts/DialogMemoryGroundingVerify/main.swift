@@ -97,10 +97,11 @@ assertCondition(
     "casual chat should not force evidence retrieval"
 )
 
+let factQuestion = "我以前住在哪里？妻子叫什么？和妻子开过照相馆吗？"
 let evidencePack = MemoryEvidencePack.build(
-    query: "我以前住在哪里？和谁开过照相馆？",
+    query: factQuestion,
     graph: graph,
-    maxItems: 4
+    maxItems: 6
 )
 assertCondition(evidencePack.intent == .factQuestion, "evidence pack should keep classified intent")
 assertCondition(evidencePack.items.count >= 3, "evidence pack should collect relevant people/place/event/facts")
@@ -138,9 +139,9 @@ assertCondition(
 )
 
 let queryContext = DialogMemoryGroundingPolicy.queryContext(
-    for: "我以前住在哪里？和谁开过照相馆？",
+    for: factQuestion,
     graph: graph,
-    maxItems: 4
+    maxItems: 6
 )
 assertCondition(queryContext.contains("【本轮记忆意图】factQuestion"), "query context should expose the memory intent")
 assertCondition(queryContext.contains("【回复计划】answerWithEvidence"), "query context should expose the reply plan")
@@ -157,5 +158,71 @@ let emptyContext = DialogMemoryGroundingPolicy.queryContext(
 assertCondition(emptyContext.contains("没有检索到相关家庭记忆"), "empty query context should explicitly say no evidence was found")
 assertCondition(emptyContext.contains("不要编造"), "empty query context should prohibit fabrication")
 assertCondition(emptyContext.contains("【回复计划】askForMissingMemory"), "empty query context should expose missing-memory plan")
+
+let genericKinshipGraph = KBLiteGraph(
+    version: 2,
+    lastUpdated: Date(timeIntervalSince1970: 1_800_000_000),
+    sessionCount: 1,
+    facts: [
+        KBFact(
+            id: "f_generic_mom_food",
+            statement: "妈妈喜欢做桂花糕。",
+            confidence: "medium",
+            sourceSessionIds: [1],
+            privacyMetadata: metadata
+        )
+    ]
+)
+let genericStartupContext = DialogMemoryGroundingPolicy.queryContext(
+    for: "",
+    graph: genericKinshipGraph,
+    maxItems: 4
+)
+assertCondition(
+    !genericStartupContext.contains("妈妈喜欢做桂花糕"),
+    "startup context should not inject generic kinship facts without a concrete person anchor"
+)
+assertCondition(
+    genericStartupContext.contains("没有检索到相关家庭记忆"),
+    "startup context should keep no-evidence boundary when only generic kinship facts exist"
+)
+
+let concretePersonGraph = KBLiteGraph(
+    version: 2,
+    lastUpdated: Date(timeIntervalSince1970: 1_800_000_000),
+    sessionCount: 1,
+    people: [
+        KBPerson(
+            id: "p_ling",
+            name: "林桂芳",
+            aliases: [],
+            relation: "妻子",
+            traits: [],
+            sourceSessionIds: [1],
+            createdAt: Date(),
+            updatedAt: Date(),
+            privacyMetadata: metadata
+        )
+    ],
+    facts: [
+        KBFact(
+            id: "f_ling_food",
+            statement: "林桂芳喜欢做桂花糕。",
+            confidence: "high",
+            relatedPersonIds: ["p_ling"],
+            sourceSessionIds: [1],
+            privacyMetadata: metadata
+        )
+    ]
+)
+let concreteStartupContext = DialogMemoryGroundingPolicy.queryContext(
+    for: "",
+    graph: concretePersonGraph,
+    maxItems: 4
+)
+assertCondition(
+    concreteStartupContext.contains("林桂芳喜欢做桂花糕"),
+    "startup context should still keep concrete person facts"
+)
 
 print("DialogMemoryGrounding verification passed")

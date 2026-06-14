@@ -442,12 +442,12 @@ final class ConversationMemoryManager {
         let cities = [
             "北京", "上海", "广州", "深圳", "杭州", "南京", "苏州",
             "成都", "重庆", "武汉", "长沙", "西安", "天津", "青岛",
+            "绍兴",
             "东北", "四川", "湖南", "湖北", "广东", "江西", "安徽", "河南", "山东",
         ]
         for city in cities {
             if text.contains(city) {
-                // 尝试提取更完整的地名
-                return extractContextAround(keyword: city, in: text, prefixLen: 2, suffixLen: 1)
+                return extractCityContext(keyword: city, in: text)
             }
         }
 
@@ -465,25 +465,110 @@ final class ConversationMemoryManager {
         return ""
     }
 
+    private func extractCityContext(keyword: String, in text: String) -> String {
+        extractContextAround(keyword: keyword, in: text, prefixLen: 0, suffixLen: 3)
+            .trimmingCharacters(
+                in: CharacterSet.whitespacesAndNewlines
+                    .union(.punctuationCharacters)
+                    .union(CharacterSet(charactersIn: "，。！？；：、“”‘’（）《》"))
+            )
+    }
+
     // MARK: - 人物提取
 
     /// 从文本中提取人物描述
     private func extractPerson(from text: String) -> String {
-        let peopleKeywords = [
-            "爷爷", "奶奶", "外婆", "外公", "姥姥", "姥爷",
-            "爸爸", "妈妈", "父亲", "母亲",
-            "老伴", "老公", "老婆", "丈夫", "妻子",
-            "哥哥", "姐姐", "弟弟", "妹妹",
-            "叔叔", "阿姨", "舅舅", "姑姑",
-            "儿子", "女儿", "孙子", "孙女",
-            "老师", "师傅", "邻居", "同学", "战友",
-        ]
-        for keyword in peopleKeywords {
-            if text.contains(keyword) {
-                return keyword
+        if let selfName = firstCapturedGroup(
+            pattern: "我(?:叫|是)([\\p{Han}]{2,4})",
+            in: text
+        ), let concreteName = Self.concretePersonName(from: selfName) {
+            return concreteName
+        }
+
+        for relation in Self.relationshipPersonPrefixes {
+            let escapedRelation = NSRegularExpression.escapedPattern(for: relation)
+            if let named = firstCapturedGroup(
+                pattern: "\(escapedRelation)(?:叫|是|名叫)([\\p{Han}]{2,4})",
+                in: text
+            ), let concreteName = Self.concretePersonName(from: named) {
+                return concreteName
+            }
+
+            if let appositive = firstCapturedGroup(
+                pattern: "\(escapedRelation)([\\p{Han}]{2,4})",
+                in: text
+            ), let concreteName = Self.concretePersonName(from: appositive) {
+                return concreteName
             }
         }
         return ""
+    }
+
+    private static let relationshipPersonPrefixes: [String] = [
+        "爷爷", "奶奶", "外婆", "外公", "姥姥", "姥爷",
+        "爸爸", "妈妈", "父亲", "母亲",
+        "老伴", "老公", "老婆", "丈夫", "妻子",
+        "哥哥", "姐姐", "弟弟", "妹妹",
+        "叔叔", "阿姨", "舅舅", "姑姑",
+        "儿子", "女儿", "孙子", "孙女",
+        "老师", "师傅", "邻居", "同学", "战友"
+    ]
+
+    private static let genericPersonWords: Set<String> = Set(relationshipPersonPrefixes)
+
+    private static let commonChineseSurnameCharacters: Set<Character> = Set(
+        "赵钱孙李周吴郑王冯陈褚卫蒋沈韩杨朱秦尤许何吕施张孔曹严华金魏陶姜戚谢邹喻柏苏潘葛范彭郎鲁韦昌马苗凤花方俞任袁柳鲍史唐费廉岑薛雷贺倪汤滕殷罗毕郝邬安常乐于时傅皮卞齐康伍余元卜顾孟平黄和穆萧尹姚邵汪祁毛戴谈宋庞熊纪舒屈祝董梁杜阮蓝闵席季麻强贾路娄危江童颜郭梅盛林刁钟徐邱骆高夏蔡田胡霍虞万卢莫房解应宗丁宣邓单杭洪包左石崔吉龚程邢裴陆荣翁荀羊惠甄曲家封牛寿通边燕冀尚农温庄晏柴瞿阎连习容向古易廖终居步满文广东殳蔚隆巩聂辛简饶曾沙养关查后游权盖益桓公欧阳上官诸葛司马"
+    )
+
+    private static let trailingNonNameCharacters: Set<Character> = Set("在和与跟把从到去于的了着过")
+
+    private static func concretePersonName(from raw: String) -> String? {
+        var name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        while let last = name.last,
+              trailingNonNameCharacters.contains(last),
+              name.count > 2 {
+            name.removeLast()
+        }
+        return looksLikeConcretePersonName(name) ? name : nil
+    }
+
+    private static func looksLikeConcretePersonName(_ raw: String) -> Bool {
+        let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (2...4).contains(name.count),
+              !genericPersonWords.contains(name),
+              name.unicodeScalars.allSatisfy(Self.isHanScalar),
+              let first = name.first,
+              commonChineseSurnameCharacters.contains(first)
+        else {
+            return false
+        }
+
+        let nonNameFragments = [
+            "喜欢", "住在", "开过", "做过", "出生", "工作",
+            "已经", "正在", "应该", "可以", "没有", "还是"
+        ]
+        return !nonNameFragments.contains { name.contains($0) }
+    }
+
+    private static func isHanScalar(_ scalar: Unicode.Scalar) -> Bool {
+        let value = scalar.value
+        return (0x4E00...0x9FFF).contains(value)
+            || (0x3400...0x4DBF).contains(value)
+            || (0x20000...0x2A6DF).contains(value)
+            || (0x2A700...0x2B73F).contains(value)
+            || (0x2B740...0x2B81F).contains(value)
+            || (0x2B820...0x2CEAF).contains(value)
+    }
+
+    private func firstCapturedGroup(pattern: String, in text: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let nsRange = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = regex.firstMatch(in: text, range: nsRange),
+              match.numberOfRanges > 1,
+              let range = Range(match.range(at: 1), in: text) else {
+            return nil
+        }
+        return String(text[range])
     }
 
     // MARK: - 事件提取

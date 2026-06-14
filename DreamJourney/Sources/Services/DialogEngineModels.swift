@@ -94,6 +94,28 @@ struct MemoryEvidenceItem: Equatable {
     let source: String
 }
 
+private enum DialogMemoryEvidenceSanitizer {
+    private static let genericKinshipNames: Set<String> = [
+        "爷爷", "奶奶", "外婆", "外公", "姥姥", "姥爷",
+        "爸爸", "妈妈", "父亲", "母亲",
+        "老伴", "老公", "老婆", "丈夫", "妻子",
+        "哥哥", "姐姐", "弟弟", "妹妹",
+        "叔叔", "阿姨", "舅舅", "姑姑",
+        "儿子", "女儿", "孙子", "孙女"
+    ]
+
+    static func isGenericKinshipName(_ name: String) -> Bool {
+        genericKinshipNames.contains(name.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    static func shouldSuppressFact(_ fact: KBFact, concretePersonIds: Set<String>) -> Bool {
+        guard genericKinshipNames.contains(where: { fact.statement.contains($0) }) else {
+            return false
+        }
+        return !fact.relatedPersonIds.contains(where: { concretePersonIds.contains($0) })
+    }
+}
+
 struct MemoryEvidencePack {
     let query: String
     let intent: MemoryDialogIntent
@@ -108,6 +130,11 @@ struct MemoryEvidencePack {
         let intent = MemoryIntentClassifier.classify(trimmedQuery)
         var scored: [(score: Int, order: Int, item: MemoryEvidenceItem)] = []
         var order = 0
+        let concretePersonIds = Set(
+            graph.people
+                .filter { !DialogMemoryEvidenceSanitizer.isGenericKinshipName($0.name) }
+                .map(\.id)
+        )
 
         func append(kind: MemoryEvidenceItem.Kind, text: String, metadata: MemoryPrivacyMetadata, source: String) {
             guard PrivacyScopePolicy.canUse(metadata: metadata, surface: .prompt) else { return }
@@ -121,6 +148,7 @@ struct MemoryEvidencePack {
         }
 
         for person in graph.people {
+            guard !DialogMemoryEvidenceSanitizer.isGenericKinshipName(person.name) else { continue }
             var text = person.name
             if let relation = person.relation, !relation.isEmpty {
                 text += "（\(relation)）"
@@ -154,6 +182,10 @@ struct MemoryEvidencePack {
         }
 
         for fact in graph.facts {
+            guard !DialogMemoryEvidenceSanitizer.shouldSuppressFact(
+                fact,
+                concretePersonIds: concretePersonIds
+            ) else { continue }
             append(kind: .fact, text: fact.statement, metadata: fact.privacyMetadata, source: fact.id)
         }
 

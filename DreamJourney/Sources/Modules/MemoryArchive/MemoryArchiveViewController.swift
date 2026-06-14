@@ -1380,7 +1380,7 @@ private extension MemoryArchiveViewController {
             return
         }
 
-        let status = KBLiteDepositStatusBuilder.build(from: KBLiteManager.shared.graph)
+        let status = KBLiteDepositStatusBuilder.build(from: KBLiteManager.shared.displayGraphForLocalBrowsing())
         if status.totalEntityCount == 0 {
             knowledgeDepositStatusLabel.text = "结构化建库：暂无已沉淀知识；保存可生成/亲友素材后会整理"
         } else if status.archiveSourceCount > 0 {
