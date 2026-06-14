@@ -20,13 +20,18 @@ missing = []
 required_vc_fragments = [
     "private var didRevealInitialAvatar = false",
     "private var initialAvatarRevealFallbackWorkItem",
+    "private let startupPosterImageView",
+    'UIImage(named: "avatar_poster")',
+    'Bundle.main.path(forResource: "avatar_poster", ofType: "png")',
     "addSubview(webView)",
+    "addSubview(startupPosterImageView)",
     "webView.alpha = 1",
     "scheduleInitialAvatarRevealFallback()",
     "revealInitialAvatarIfNeeded(reason:",
     "avatar_video_surface_ready",
     "avatar_startup_reveal",
     "avatar_startup_single_surface",
+    "avatar_startup_native_poster_visible",
     "avatar_startup_poster_visible",
     "avatar_startup_waiting_for_video",
     'body[data-video-ready="true"] #canvas_video',
@@ -52,18 +57,31 @@ else:
     setup_body = setup_match.group("body")
     web_add = setup_body.find("addSubview(webView)")
     if web_add == -1:
-        missing.append(f"{vc.name}: WebView must be the single startup avatar surface")
-    if "startupPosterImageView" in setup_body:
-        missing.append(f"{vc.name}: native startup poster overlay should not be present; it causes visible surface switching")
+        missing.append(f"{vc.name}: WebView must remain the live avatar surface")
+    poster_add = setup_body.find("addSubview(startupPosterImageView)")
+    if poster_add == -1:
+        missing.append(f"{vc.name}: native startup poster overlay must be present to avoid blank WebView first paint")
+    elif poster_add < web_add:
+        missing.append(f"{vc.name}: native startup poster must sit above the WebView until avatar video is ready")
     if "webView.alpha = 0" in setup_body:
         missing.append(f"{vc.name}: WebView must not start hidden behind a native overlay")
-if "startupPosterImageView" in vc_text:
-    missing.append(f"{vc.name}: remove native startupPosterImageView to avoid poster-to-web switching")
+if "startupPosterImageView.isHidden = false" not in setup_body:
+    missing.append(f"{vc.name}: native startup poster should be visible before the WebView first paint")
+if "startupPosterImageView.contentMode = .scaleAspectFit" not in vc_text:
+    missing.append(f"{vc.name}: native startup poster should use the same contain layout as the Web avatar")
+if "startupPosterImageView.isUserInteractionEnabled = false" not in vc_text:
+    missing.append(f"{vc.name}: native startup poster must not intercept touch events")
 reveal_match = re.search(r"private func revealInitialAvatarIfNeeded\(reason: String\) \{(?P<body>.*?)\n    \}", vc_text, re.S)
 if not reveal_match:
     missing.append(f"{vc.name}: missing revealInitialAvatarIfNeeded body")
-elif "UIView.animate" in reveal_match.group("body") or "webView.alpha" in reveal_match.group("body"):
-    missing.append(f"{vc.name}: startup reveal should be diagnostic only; do not animate between native and web surfaces")
+else:
+    reveal_body = reveal_match.group("body")
+    if "UIView.animate" in reveal_body or "webView.alpha" in reveal_body:
+        missing.append(f"{vc.name}: startup reveal should not animate or hide the WebView")
+    if "startupPosterImageView.isHidden = true" not in reveal_body:
+        missing.append(f"{vc.name}: native poster should be removed only after avatar video surface is ready")
+    if "startupPosterImageView.alpha = 0" not in reveal_body:
+        missing.append(f"{vc.name}: native poster alpha should be cleared after avatar video surface is ready")
 if "startMessage.textContent = '真人数字人已就绪';" in vc_text:
     missing.append(f"{vc.name}: should not flash ready text during avatar startup reveal")
 if not re.search(r"#loadingSpinner\s*\{[^}]*display:\s*none;", vc_text, re.S):

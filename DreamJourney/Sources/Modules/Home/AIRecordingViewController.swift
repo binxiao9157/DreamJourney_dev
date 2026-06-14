@@ -1896,6 +1896,19 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
 
     private let webView: WKWebView
     private let schemeHandler: AvatarWebResourceSchemeHandler
+    private let startupPosterImageView: UIImageView = {
+        let posterImage = UIImage(named: "avatar_poster")
+            ?? Bundle.main.path(forResource: "avatar_poster", ofType: "png").flatMap { UIImage(contentsOfFile: $0) }
+        let imageView = UIImageView(image: posterImage)
+        imageView.contentMode = .scaleAspectFit
+        imageView.backgroundColor = .clear
+        imageView.isOpaque = false
+        imageView.isHidden = false
+        imageView.alpha = 1
+        imageView.isUserInteractionEnabled = false
+        imageView.accessibilityElementsHidden = true
+        return imageView
+    }()
     private var currentState: AvatarState = .idle
     private var currentPrompt = "准备聆听家族故事"
     private var didFinishInitialLoad = false
@@ -2008,13 +2021,26 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
         webView.scrollView.contentInsetAdjustmentBehavior = .never
 
         addSubview(webView)
+        addSubview(startupPosterImageView)
         webView.translatesAutoresizingMaskIntoConstraints = false
+        startupPosterImageView.translatesAutoresizingMaskIntoConstraints = false
+        startupPosterImageView.contentMode = .scaleAspectFit
+        startupPosterImageView.isHidden = false
+        startupPosterImageView.isUserInteractionEnabled = false
+        DigitalHumanPlaybackEvidenceStore.shared.appendEvent("avatar_startup_native_poster_visible")
 
         NSLayoutConstraint.activate([
             webView.topAnchor.constraint(equalTo: topAnchor),
             webView.leadingAnchor.constraint(equalTo: leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            webView.bottomAnchor.constraint(equalTo: bottomAnchor)
+            webView.bottomAnchor.constraint(equalTo: bottomAnchor),
+
+            startupPosterImageView.centerXAnchor.constraint(equalTo: centerXAnchor),
+            startupPosterImageView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: 8),
+            startupPosterImageView.widthAnchor.constraint(equalTo: widthAnchor, multiplier: 0.60),
+            startupPosterImageView.widthAnchor.constraint(lessThanOrEqualToConstant: 220),
+            startupPosterImageView.heightAnchor.constraint(equalTo: heightAnchor, constant: -48),
+            startupPosterImageView.heightAnchor.constraint(lessThanOrEqualToConstant: 174)
         ])
     }
 
@@ -2088,6 +2114,8 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
         didRevealInitialAvatar = true
         initialAvatarRevealFallbackWorkItem?.cancel()
         initialAvatarRevealFallbackWorkItem = nil
+        startupPosterImageView.alpha = 0
+        startupPosterImageView.isHidden = true
         DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
             "avatar_startup_reveal reason=\(DigitalHumanPlaybackEvidenceStore.sanitize(reason))"
         )
