@@ -25,6 +25,8 @@ require("trainer.trainVoice(audioURLs: sampleURLs" in store, "profile training s
 require("AVMutableComposition" in store and "AVAssetExportSession" in store, "production trainer should merge multiple samples before calling single-file voice clone API")
 require("voiceSampleURLs(for: profile, latestSamplePath: latestSamplePath)" in view, "memory archive UI should resolve all stored sample paths for the profile")
 require("sampleURLs:" in view and "latestSamplePath" in view, "memory archive UI should not train only the latest file")
+require("remoteTrainingSampleArchiveItemIds" in view, "memory archive UI should prefer remote-authorized sample ids for training")
+require("profile.remoteTrainingSampleArchiveItemIds.isEmpty" in view, "memory archive UI should keep a legacy fallback for old profiles")
 require("MemoryArchiveVoiceTrainingSamplesVerify/main.py" in phase1, "phase1 verification should include voice sample batch coverage")
 
 print("MemoryArchiveVoiceTrainingSamples verification passed")

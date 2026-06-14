@@ -1072,7 +1072,10 @@ extension MemoryArchiveViewController: UIDocumentPickerDelegate {
         latestSamplePath: String
     ) -> [URL] {
         let itemsByID = Dictionary(uniqueKeysWithValues: repository.items().map { ($0.id, $0) })
-        let orderedPaths = profile.sampleArchiveItemIds.compactMap { sampleID -> String? in
+        let trainingSampleIDs = profile.remoteTrainingSampleArchiveItemIds.isEmpty
+            ? profile.sampleArchiveItemIds
+            : profile.remoteTrainingSampleArchiveItemIds
+        let orderedPaths = trainingSampleIDs.compactMap { sampleID -> String? in
             let path = itemsByID[sampleID]?.localPath?.trimmingCharacters(in: .whitespacesAndNewlines)
             return path?.isEmpty == false ? path : nil
         }

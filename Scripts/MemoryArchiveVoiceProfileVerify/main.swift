@@ -96,6 +96,7 @@ guard let readyProfile = store.registerSample(sample3) else {
 }
 assertCondition(readyProfile.id == firstProfile.id, "samples for same person should reuse one profile")
 assertCondition(readyProfile.sampleArchiveItemIds == ["voice-1", "voice-2", "voice-3"], "profile should keep all sample ids in order")
+assertCondition(readyProfile.remoteTrainingSampleArchiveItemIds == ["voice-1", "voice-2", "voice-3"], "profile should track remote-authorized training sample ids")
 assertCondition(readyProfile.status == .readyForTraining, "third generation-allowed sample should make profile ready for training")
 assertCondition(readyProfile.speakerId == nil, "profile should not invent speaker id before training")
 
@@ -147,6 +148,36 @@ assertCondition(trainedProfile?.status == .ready, "trained profile should be rea
 assertCondition(trainedProfile?.speakerId == "\(trainer.requestedSpeakerIds[0])_ready", "trained speaker id should be stored on the profile")
 assertCondition(defaults.string(forKey: "dj.voiceclone.speakerId") == nil, "profile training must not write the legacy global speaker id")
 
+let mixedPrivateSample = makeVoiceSample(
+    id: "mixed-local-1",
+    title: "吴梅芳的第一段语音",
+    localPath: "/tmp/mixed-local-1.m4a",
+    privacyMetadata: MemoryPrivacyMetadata(scope: .localOnly)
+)
+let mixedGenerationSamples = [
+    makeVoiceSample(id: "mixed-gen-1", title: "吴梅芳的第二段语音", localPath: "/tmp/mixed-gen-1.m4a", privacyMetadata: metadata),
+    makeVoiceSample(id: "mixed-gen-2", title: "吴梅芳的第三段语音", localPath: "/tmp/mixed-gen-2.m4a", privacyMetadata: metadata),
+    makeVoiceSample(id: "mixed-gen-3", title: "吴梅芳的第四段语音", localPath: "/tmp/mixed-gen-3.m4a", privacyMetadata: metadata),
+]
+_ = store.registerSample(mixedPrivateSample)
+mixedGenerationSamples.dropLast().forEach { _ = store.registerSample($0) }
+guard let mixedReadyProfile = store.registerSample(mixedGenerationSamples.last!) else {
+    fputs("FAIL: mixed privacy concrete person should keep a voice profile\n", stderr)
+    exit(1)
+}
+assertCondition(
+    mixedReadyProfile.sampleArchiveItemIds == ["mixed-local-1", "mixed-gen-1", "mixed-gen-2", "mixed-gen-3"],
+    "mixed privacy profile should keep every archive sample id for provenance"
+)
+assertCondition(
+    mixedReadyProfile.remoteTrainingSampleArchiveItemIds == ["mixed-gen-1", "mixed-gen-2", "mixed-gen-3"],
+    "mixed privacy profile should train only generation-allowed sample ids"
+)
+assertCondition(
+    mixedReadyProfile.status == .readyForTraining,
+    "three generation-allowed samples should make a mixed privacy profile trainable"
+)
+
 let secondPerson = makeVoiceSample(
     id: "voice-chen-1",
     title: "陈建国的语音",
@@ -158,7 +189,7 @@ guard let chenProfile = store.registerSample(secondPerson) else {
     exit(1)
 }
 assertCondition(chenProfile.id != firstProfile.id, "different people should not share voice profiles")
-assertCondition(store.profiles().count == 2, "store should contain two concrete person profiles")
+assertCondition(store.profiles().count == 3, "store should contain three concrete person profiles")
 
 store.reset()
 defaults.removePersistentDomain(forName: "MemoryArchiveVoiceProfileVerify")

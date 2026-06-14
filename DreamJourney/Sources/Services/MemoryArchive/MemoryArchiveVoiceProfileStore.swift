@@ -35,6 +35,7 @@ struct MemoryArchiveVoiceProfile: Codable, Identifiable, Equatable, MemoryPrivac
     var personName: String
     var personId: String?
     var sampleArchiveItemIds: [String]
+    var remoteTrainingSampleArchiveItemIds: [String]
     var requiredSampleCount: Int
     var speakerId: String?
     var status: MemoryArchiveVoiceProfileStatus
@@ -46,6 +47,76 @@ struct MemoryArchiveVoiceProfile: Codable, Identifiable, Equatable, MemoryPrivac
 
     var sampleCount: Int {
         sampleArchiveItemIds.count
+    }
+
+    var remoteTrainingSampleCount: Int {
+        remoteTrainingSampleArchiveItemIds.count
+    }
+
+    init(
+        id: String,
+        personName: String,
+        personId: String? = nil,
+        sampleArchiveItemIds: [String],
+        remoteTrainingSampleArchiveItemIds: [String] = [],
+        requiredSampleCount: Int,
+        speakerId: String? = nil,
+        status: MemoryArchiveVoiceProfileStatus,
+        statusMessage: String? = nil,
+        privacyMetadata: MemoryPrivacyMetadata,
+        createdAt: Date,
+        updatedAt: Date,
+        trainedAt: Date? = nil
+    ) {
+        self.id = id
+        self.personName = personName
+        self.personId = personId
+        self.sampleArchiveItemIds = sampleArchiveItemIds
+        self.remoteTrainingSampleArchiveItemIds = remoteTrainingSampleArchiveItemIds
+        self.requiredSampleCount = requiredSampleCount
+        self.speakerId = speakerId
+        self.status = status
+        self.statusMessage = statusMessage
+        self.privacyMetadata = privacyMetadata
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.trainedAt = trainedAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case personName
+        case personId
+        case sampleArchiveItemIds
+        case remoteTrainingSampleArchiveItemIds
+        case requiredSampleCount
+        case speakerId
+        case status
+        case statusMessage
+        case privacyMetadata
+        case createdAt
+        case updatedAt
+        case trainedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        personName = try container.decode(String.self, forKey: .personName)
+        personId = try container.decodeIfPresent(String.self, forKey: .personId)
+        sampleArchiveItemIds = try container.decode([String].self, forKey: .sampleArchiveItemIds)
+        requiredSampleCount = try container.decode(Int.self, forKey: .requiredSampleCount)
+        speakerId = try container.decodeIfPresent(String.self, forKey: .speakerId)
+        status = try container.decode(MemoryArchiveVoiceProfileStatus.self, forKey: .status)
+        statusMessage = try container.decodeIfPresent(String.self, forKey: .statusMessage)
+        privacyMetadata = try container.decode(MemoryPrivacyMetadata.self, forKey: .privacyMetadata)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        trainedAt = try container.decodeIfPresent(Date.self, forKey: .trainedAt)
+        remoteTrainingSampleArchiveItemIds = try container.decodeIfPresent(
+            [String].self,
+            forKey: .remoteTrainingSampleArchiveItemIds
+        ) ?? (PrivacyScopePolicy.canUse(metadata: privacyMetadata, surface: .remoteExtraction) ? sampleArchiveItemIds : [])
     }
 }
 
@@ -88,10 +159,11 @@ final class MemoryArchiveVoiceProfileStore {
     func readySpeakerId(matching text: String, surface: MemoryUseSurface = .remoteExtraction) -> String? {
         let normalizedText = Self.normalized(text)
         guard !normalizedText.isEmpty else { return nil }
+        guard PrivacyScopePolicy.canUse(scope: .generationAllowed, surface: surface) else { return nil }
         return profiles()
             .filter { profile in
                 profile.status == .ready
-                    && PrivacyScopePolicy.canUse(metadata: profile.privacyMetadata, surface: surface)
+                    && profile.remoteTrainingSampleCount >= profile.requiredSampleCount
                     && normalizedText.contains(profile.personName)
                     && profile.speakerId?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             }
@@ -127,6 +199,10 @@ final class MemoryArchiveVoiceProfileStore {
             if !profile.sampleArchiveItemIds.contains(item.id) {
                 profile.sampleArchiveItemIds.append(item.id)
             }
+            if Self.canUseSampleForRemoteTraining(item),
+               !profile.remoteTrainingSampleArchiveItemIds.contains(item.id) {
+                profile.remoteTrainingSampleArchiveItemIds.append(item.id)
+            }
             if profile.personId == nil {
                 profile.personId = targetPersonId
             }
@@ -144,6 +220,7 @@ final class MemoryArchiveVoiceProfileStore {
             personName: personName,
             personId: targetPersonId,
             sampleArchiveItemIds: [item.id],
+            remoteTrainingSampleArchiveItemIds: Self.canUseSampleForRemoteTraining(item) ? [item.id] : [],
             requiredSampleCount: requiredSampleCount,
             speakerId: nil,
             status: .collecting,
@@ -173,6 +250,10 @@ final class MemoryArchiveVoiceProfileStore {
         }
         var profile = all[index]
         guard profile.status == .readyForTraining || profile.status == .failed else {
+            completion(.failure(.profileNotReady))
+            return
+        }
+        guard profile.remoteTrainingSampleCount >= profile.requiredSampleCount else {
             completion(.failure(.profileNotReady))
             return
         }
@@ -238,18 +319,24 @@ final class MemoryArchiveVoiceProfileStore {
         if profile.speakerId != nil {
             return .ready
         }
-        guard PrivacyScopePolicy.canUse(metadata: profile.privacyMetadata, surface: .remoteExtraction) else {
-            return profile.sampleCount >= requiredSampleCount ? .disabled : .collecting
+        if profile.remoteTrainingSampleCount >= requiredSampleCount {
+            return .readyForTraining
         }
-        return profile.sampleCount >= requiredSampleCount ? .readyForTraining : .collecting
+        if profile.sampleCount >= requiredSampleCount && profile.remoteTrainingSampleCount == 0 {
+            return .disabled
+        }
+        return .collecting
     }
 
     private static func statusMessage(for profile: MemoryArchiveVoiceProfile) -> String {
         switch profile.status {
         case .collecting:
+            if profile.remoteTrainingSampleCount != profile.sampleCount {
+                return "\(profile.personName)可训练声纹样本 \(profile.remoteTrainingSampleCount)/\(profile.requiredSampleCount) · 总样本 \(profile.sampleCount)"
+            }
             return "\(profile.personName)声纹样本 \(profile.sampleCount)/\(profile.requiredSampleCount)"
         case .readyForTraining:
-            return "\(profile.personName)已收集 \(profile.sampleCount) 段语音，可开始训练音色"
+            return "\(profile.personName)已收集 \(profile.remoteTrainingSampleCount) 段可训练语音，可开始训练音色"
         case .training:
             return "正在训练\(profile.personName)的声纹音色"
         case .ready:
@@ -259,6 +346,10 @@ final class MemoryArchiveVoiceProfileStore {
         case .disabled:
             return "\(profile.personName)语音样本未授权远端训练，仅保留本机档案"
         }
+    }
+
+    private static func canUseSampleForRemoteTraining(_ item: MemoryArchiveItem) -> Bool {
+        PrivacyScopePolicy.canUse(metadata: item.privacyMetadata, surface: .remoteExtraction)
     }
 
     private static func proposedSpeakerId(for profile: MemoryArchiveVoiceProfile) -> String {
