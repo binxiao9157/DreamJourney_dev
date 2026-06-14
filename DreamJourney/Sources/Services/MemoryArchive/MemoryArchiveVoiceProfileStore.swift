@@ -1,6 +1,119 @@
 import Foundation
-#if !MEMORY_PRIVACY_INTEGRATION_VERIFY
+#if canImport(AVFoundation)
 import AVFoundation
+#endif
+
+struct MemoryArchiveVoiceSampleInfo: Equatable {
+    let fileSizeBytes: Int64
+    let durationSeconds: Double
+    let format: String
+}
+
+enum MemoryArchiveVoiceSampleValidationError: Error, Equatable, LocalizedError {
+    case fileMissing
+    case fileEmpty
+    case unsupportedFormat
+    case fileTooLarge
+    case noAudioTrack
+    case durationUnavailable
+    case audioTooShort
+    case copyFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .fileMissing:
+            return "语音文件不存在"
+        case .fileEmpty:
+            return "语音文件为空"
+        case .unsupportedFormat:
+            return "暂不支持该语音格式，请使用 m4a、mp3、wav 或 aac"
+        case .fileTooLarge:
+            return "语音文件超过 10MB，请先压缩或裁剪"
+        case .noAudioTrack:
+            return "未检测到有效音轨"
+        case .durationUnavailable:
+            return "无法读取语音时长"
+        case .audioTooShort:
+            return "语音太短，请导入至少 1 秒音频"
+        case .copyFailed:
+            return "语音素材导入失败"
+        }
+    }
+}
+
+struct MemoryArchiveVoiceSampleValidator {
+    let maxFileSizeBytes: Int64
+    let minimumDurationSeconds: Double
+    let allowedFormats: Set<String>
+
+    init(
+        maxFileSizeBytes: Int64 = 10 * 1024 * 1024,
+        minimumDurationSeconds: Double = 1.0,
+        allowedFormats: Set<String> = ["m4a", "mp3", "wav", "aac"]
+    ) {
+        self.maxFileSizeBytes = maxFileSizeBytes
+        self.minimumDurationSeconds = minimumDurationSeconds
+        self.allowedFormats = allowedFormats
+    }
+
+    func validate(url: URL) throws -> MemoryArchiveVoiceSampleInfo {
+        let format = url.pathExtension.lowercased()
+        guard allowedFormats.contains(format) else {
+            throw MemoryArchiveVoiceSampleValidationError.unsupportedFormat
+        }
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw MemoryArchiveVoiceSampleValidationError.fileMissing
+        }
+
+        let values = try url.resourceValues(forKeys: [.fileSizeKey])
+        let fileSizeBytes = Int64(values.fileSize ?? 0)
+        guard fileSizeBytes > 0 else {
+            throw MemoryArchiveVoiceSampleValidationError.fileEmpty
+        }
+        guard fileSizeBytes <= maxFileSizeBytes else {
+            throw MemoryArchiveVoiceSampleValidationError.fileTooLarge
+        }
+
+        #if canImport(AVFoundation)
+        let durationSeconds = try MemoryArchiveVoiceSampleMetadataLoader.loadDurationSeconds(from: url)
+        guard durationSeconds.isFinite, durationSeconds > 0 else {
+            throw MemoryArchiveVoiceSampleValidationError.durationUnavailable
+        }
+        guard durationSeconds >= minimumDurationSeconds else {
+            throw MemoryArchiveVoiceSampleValidationError.audioTooShort
+        }
+        return MemoryArchiveVoiceSampleInfo(
+            fileSizeBytes: fileSizeBytes,
+            durationSeconds: durationSeconds,
+            format: format
+        )
+        #else
+        return MemoryArchiveVoiceSampleInfo(
+            fileSizeBytes: fileSizeBytes,
+            durationSeconds: 0,
+            format: format
+        )
+        #endif
+    }
+}
+
+#if canImport(AVFoundation)
+private enum MemoryArchiveVoiceSampleMetadataLoader {
+    static func loadDurationSeconds(from url: URL) throws -> Double {
+        do {
+            let file = try AVAudioFile(forReading: url)
+            let sampleRate = file.fileFormat.sampleRate
+            guard file.length > 0, sampleRate > 0 else {
+                throw MemoryArchiveVoiceSampleValidationError.noAudioTrack
+            }
+            return Double(file.length) / sampleRate
+        } catch let error as MemoryArchiveVoiceSampleValidationError {
+            throw error
+        } catch {
+            throw MemoryArchiveVoiceSampleValidationError.noAudioTrack
+        }
+    }
+}
 #endif
 
 enum MemoryArchiveVoiceProfileStatus: String, Codable, Equatable {

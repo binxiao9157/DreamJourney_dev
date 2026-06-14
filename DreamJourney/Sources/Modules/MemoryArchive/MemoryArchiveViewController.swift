@@ -347,10 +347,18 @@ final class MemoryArchiveViewController: UIViewController {
         }
     }
 
-    private func saveArchiveVoiceSample(from sourceURL: URL) -> String? {
+    private func saveArchiveVoiceSample(
+        from sourceURL: URL
+    ) -> Result<String, MemoryArchiveVoiceSampleValidationError> {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-        guard let archiveDir = docs?.appendingPathComponent("archive_voice_samples") else { return nil }
-        try? FileManager.default.createDirectory(at: archiveDir, withIntermediateDirectories: true)
+        guard let archiveDir = docs?.appendingPathComponent("archive_voice_samples") else {
+            return .failure(.copyFailed)
+        }
+        do {
+            try FileManager.default.createDirectory(at: archiveDir, withIntermediateDirectories: true)
+        } catch {
+            return .failure(.copyFailed)
+        }
 
         let hasSecurityAccess = sourceURL.startAccessingSecurityScopedResource()
         defer {
@@ -365,9 +373,14 @@ final class MemoryArchiveViewController: UIViewController {
 
         do {
             try FileManager.default.copyItem(at: sourceURL, to: fileURL)
-            return fileURL.path
+            _ = try MemoryArchiveVoiceSampleValidator().validate(url: fileURL)
+            return .success(fileURL.path)
+        } catch let validationError as MemoryArchiveVoiceSampleValidationError {
+            try? FileManager.default.removeItem(at: fileURL)
+            return .failure(validationError)
         } catch {
-            return nil
+            try? FileManager.default.removeItem(at: fileURL)
+            return .failure(.copyFailed)
         }
     }
 
@@ -801,16 +814,22 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
 
 extension MemoryArchiveViewController: UIDocumentPickerDelegate {
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-        guard let sourceURL = urls.first,
-              let storedPath = saveArchiveVoiceSample(from: sourceURL) else {
+        guard let sourceURL = urls.first else {
             showToast("语音素材导入失败", type: .error)
             return
         }
 
-        presentVoicePersonChoice(
-            title: sourceURL.deletingPathExtension().lastPathComponent,
-            storedPath: storedPath
-        )
+        switch saveArchiveVoiceSample(from: sourceURL) {
+        case .success(let storedPath):
+            presentVoicePersonChoice(
+                title: sourceURL.deletingPathExtension().lastPathComponent,
+                storedPath: storedPath
+            )
+        case .failure(let error):
+            let message = error.localizedDescription
+            setKnowledgeDepositStatus("声纹档案：语音素材不符合要求，\(message)")
+            showToast(message, type: .error)
+        }
     }
 
     private func presentVoicePersonChoice(title: String, storedPath: String) {

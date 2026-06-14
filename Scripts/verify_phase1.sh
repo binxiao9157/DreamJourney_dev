@@ -107,6 +107,15 @@ python3 Scripts/MemoryArchiveVoiceKnowledgeVerify/main.py
 echo "== MemoryArchive voice profile status UI =="
 python3 Scripts/MemoryArchiveVoiceProfileStatusUIVerify/main.py
 
+echo "== MemoryArchive voice import audio validation =="
+swiftc -DMEMORY_PRIVACY_INTEGRATION_VERIFY \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
+  DreamJourney/Sources/Services/MemoryArchive/MemoryArchiveModels.swift \
+  DreamJourney/Sources/Services/MemoryArchive/MemoryArchiveVoiceProfileStore.swift \
+  Scripts/MemoryArchiveVoiceImportAudioValidationVerify/main.swift \
+  -o /tmp/dreamjourney_memory_archive_voice_import_audio_validation_verify
+/tmp/dreamjourney_memory_archive_voice_import_audio_validation_verify
+
 echo "== MemoryArchive knowledge deposit UI =="
 python3 Scripts/MemoryArchiveKnowledgeDepositUIVerify/main.py
 
