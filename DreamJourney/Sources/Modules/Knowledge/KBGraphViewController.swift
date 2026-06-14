@@ -97,28 +97,10 @@ final class KBGraphViewController: UIViewController {
     // MARK: - Build Graph
 
     private func buildGraph() {
-        // 确保有一个"我"节点
-        let selfId = "__self__"
         let displayGraph = KBLiteManager.shared.displayGraphForLocalBrowsing()
-        var people = displayGraph.people
+        let people = displayGraph.people
 
-        let currentUserName = UserManager.shared.currentUser?.nickname ?? "我"
-        if !people.contains(where: { $0.id == selfId }) {
-            let selfPerson = KBPerson(
-                id: selfId,
-                name: currentUserName,
-                aliases: ["我"],
-                relation: nil,
-                traits: [],
-                relatedPersonIds: people.map { $0.id },
-                sourceSessionIds: [],
-                createdAt: Date(),
-                updatedAt: Date()
-            )
-            people.insert(selfPerson, at: 0)
-        }
-
-        // 人物数 < 2（只有"我"节点），显示空态提示
+        // 人物数 < 2 时不强行补关系，避免在真实测试里制造不存在的图谱边。
         guard people.count >= 2 else {
             showEmptyState()
             return

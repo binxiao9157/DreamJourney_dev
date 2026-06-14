@@ -34,6 +34,14 @@ checks = [
         "displayGraphForLocalBrowsing" in graph_view,
     ),
     (
+        "knowledge graph should not inject a synthetic self node in real-data browsing",
+        "__self__" not in graph_view,
+    ),
+    (
+        "knowledge graph should not invent all-person relationships from the current user",
+        "relatedPersonIds: people.map" not in graph_view,
+    ),
+    (
         "knowledge graph layout should not infer relationship edges from the raw graph",
         "KBLiteManager.shared.graph.events" not in layout_engine
         and "computeLayout(for people: [KBPerson], graph: KBLiteGraph)" in layout_engine,
