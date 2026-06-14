@@ -15,7 +15,6 @@ final class MapFootprintViewController: UIViewController {
     private let viewMode: FootprintViewMode
     private let ownerId: String           // 足迹所属用户 ID
     private let ownerName: String?        // 足迹所属用户名称（客态显示用）
-    private let includeDemoExpansionOverride: Bool?
     private var mapView: MAMapView?       // 安全可选：缺 ApiKey 等场景下为 nil，避免崩溃
     private var annotations: [MemoryAnnotation] = []
     private var footprintAnnotations: [FamilyFootprintAnnotation] = []
@@ -61,13 +60,11 @@ final class MapFootprintViewController: UIViewController {
     init(
         viewMode: FootprintViewMode = .host,
         ownerId: String,
-        ownerName: String? = nil,
-        includeDemoExpansionOverride: Bool? = nil
+        ownerName: String? = nil
     ) {
         self.viewMode = viewMode
         self.ownerId = ownerId
         self.ownerName = ownerName
-        self.includeDemoExpansionOverride = includeDemoExpansionOverride
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -506,7 +503,7 @@ final class MapFootprintViewController: UIViewController {
         footprintPoints = FamilyFootprintTimeline.points(
             from: memories,
             ownerName: ownerName,
-            includeDemoExpansion: shouldIncludeDemoExpansion
+            includeDemoExpansion: false
         )
         print("[MemoirSync] MapFootprintVC.loadMemories: ownerId=\(ownerId), viewMode=\(viewMode), allMemories=\(allMemories.count), memories=\(memories.count), firstId=\(memories.first?.id ?? "nil"), firstTitle=\(memories.first?.title ?? "nil")")
         updateStats()
@@ -557,14 +554,6 @@ final class MapFootprintViewController: UIViewController {
         )
         journeyTitleLabel.text = summary.title
         journeyBodyLabel.text = "\(summary.routeText)\n\(summary.detailText) · \(summary.scaleText)"
-    }
-
-    private var shouldIncludeDemoExpansion: Bool {
-        if let includeDemoExpansionOverride {
-            return includeDemoExpansionOverride
-        }
-        guard viewMode == .host else { return false }
-        return false
     }
 
     // MARK: - Notifications
