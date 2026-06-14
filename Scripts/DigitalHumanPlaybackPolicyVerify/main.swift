@@ -109,8 +109,8 @@ assertCondition(webAudioFallback.message.contains("数字人口型暂时不可�
 let timeoutFallback = DigitalHumanSpeechPlaybackPolicy.fallbackPresentation(reason: "playback_timeout")
 assertCondition(timeoutFallback.title == "播放已自动收尾", "timeout should show automatic recovery title")
 
-let evidenceChecks = DigitalHumanSpeechPlaybackPolicy.roadshowEvidenceChecks()
-assertCondition(evidenceChecks.count == 3, "roadshow evidence should cover three playback outcomes")
+let evidenceChecks = DigitalHumanSpeechPlaybackPolicy.playbackEvidenceChecks()
+assertCondition(evidenceChecks.count == 3, "playback evidence should cover three playback outcomes")
 assertCondition(
     evidenceChecks.contains { $0.source == "native_audio" && $0.expectedLog.contains("playback_finished source=native_audio") },
     "evidence checks should include native audio finish log"

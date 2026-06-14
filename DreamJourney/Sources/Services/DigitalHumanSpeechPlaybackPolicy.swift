@@ -95,7 +95,7 @@ enum DigitalHumanSpeechPlaybackPolicy {
         )
     }
 
-    static func roadshowEvidenceChecks() -> [EvidenceCheck] {
+    static func playbackEvidenceChecks() -> [EvidenceCheck] {
         [
             EvidenceCheck(
                 title: "原生 WAV 数字人播报",

@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Digital Human Playback Evidence Store
 
-/// Persists only structured playback lifecycle markers for roadshow evidence.
+/// Persists only structured playback lifecycle markers for real-device playback verification.
 /// Do not write transcript text, API keys, voice ids, request headers, or raw service errors here.
 final class DigitalHumanPlaybackEvidenceStore {
     static let shared = DigitalHumanPlaybackEvidenceStore()

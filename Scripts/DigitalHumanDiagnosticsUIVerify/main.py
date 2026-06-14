@@ -38,7 +38,7 @@ checks = [
         "diagnostics page exposes playback evidence checklist",
         "makePlaybackEvidenceCard" in diagnostics_vc
         and "音频链路验收" in diagnostics_vc
-        and "DigitalHumanSpeechPlaybackPolicy.roadshowEvidenceChecks()" in diagnostics_vc
+        and "DigitalHumanSpeechPlaybackPolicy.playbackEvidenceChecks()" in diagnostics_vc
         and "makePlaybackEvidenceRow" in diagnostics_vc
         and "expectedLog" in diagnostics_vc,
     ),
@@ -57,7 +57,7 @@ checks = [
         "readiness report copies playback evidence into text and JSON",
         "音频链路验收" in report
         and "playbackEvidenceChecks" in report
-        and "roadshowEvidenceChecks" in report,
+        and "roadshowEvidenceChecks" not in report,
     ),
     (
         "diagnostics evidence is persisted for device preflight copy",

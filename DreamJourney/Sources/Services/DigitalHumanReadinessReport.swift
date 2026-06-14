@@ -13,7 +13,7 @@ struct DigitalHumanReadinessReport: Equatable {
             case .ready:
                 return "已就绪"
             case .warning:
-                return "可演示"
+                return "需关注"
             case .missing:
                 return "需配置"
             }
@@ -54,7 +54,7 @@ struct DigitalHumanReadinessReport: Equatable {
         lines.append(contentsOf: ["", "修复建议"])
         lines.append(contentsOf: items.map { "- \($0.title)：\($0.recommendation)" })
         lines.append(contentsOf: ["", "音频链路验收"])
-        lines.append(contentsOf: DigitalHumanSpeechPlaybackPolicy.roadshowEvidenceChecks().map { check in
+        lines.append(contentsOf: DigitalHumanSpeechPlaybackPolicy.playbackEvidenceChecks().map { check in
             "- \(check.title)：日志 \(check.expectedLog)；验收：\(check.acceptance)"
         })
         lines.append("说明：诊断文本只呈现配置状态，不包含任何 API Key、Token 或 Secret。")
@@ -88,7 +88,7 @@ struct DigitalHumanReadinessReport: Equatable {
                     "recommendation": item.recommendation
                 ]
             },
-            "playbackEvidenceChecks": DigitalHumanSpeechPlaybackPolicy.roadshowEvidenceChecks().map { check in
+            "playbackEvidenceChecks": DigitalHumanSpeechPlaybackPolicy.playbackEvidenceChecks().map { check in
                 [
                     "title": check.title,
                     "source": check.source,

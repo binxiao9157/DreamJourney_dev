@@ -149,7 +149,7 @@ final class DigitalHumanDiagnosticsViewController: UIViewController {
         introLabel.textColor = .warmSubtitle
         introLabel.numberOfLines = 0
 
-        let rows = DigitalHumanSpeechPlaybackPolicy.roadshowEvidenceChecks().map(makePlaybackEvidenceRow)
+        let rows = DigitalHumanSpeechPlaybackPolicy.playbackEvidenceChecks().map(makePlaybackEvidenceRow)
         let stack = UIStackView(arrangedSubviews: [titleLabel, introLabel] + rows)
         stack.axis = .vertical
         stack.spacing = 9
