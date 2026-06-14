@@ -39,8 +39,9 @@ final class TabCoordinator: Coordinator {
             forName: .djTimeMailboxDeliveryNotificationReceived,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
-            self?.openTimeMailboxFromNotification()
+        ) { [weak self] notification in
+            let letterID = notification.object as? String
+            self?.openTimeMailboxFromNotification(letterID: letterID)
         }
         DispatchQueue.main.async { [weak self] in
             self?.consumePendingFamilyInvitationDeepLink()
@@ -131,13 +132,13 @@ final class TabCoordinator: Coordinator {
         familyVC.acceptInvitationCodeFromDeepLink(code)
     }
 
-    private func openTimeMailboxFromNotification() {
+    private func openTimeMailboxFromNotification(letterID: String?) {
         tabBarController.selectedIndex = 3
         guard let mailboxNav = tabBarController.viewControllers?.dropFirst(3).first as? UINavigationController,
               let mailboxVC = mailboxNav.viewControllers.first as? TimeMailboxViewController else {
             return
         }
         mailboxNav.popToRootViewController(animated: false)
-        mailboxVC.refreshForNotificationDelivery()
+        mailboxVC.openLetterFromNotification(id: letterID)
     }
 }

@@ -124,6 +124,27 @@ final class TimeMailboxViewController: UIViewController {
         reloadLetters(showDeliveryToast: true)
     }
 
+    func openLetterFromNotification(id letterID: String?) {
+        loadViewIfNeeded()
+        reloadLetters(showDeliveryToast: true)
+
+        guard let letterID, !letterID.isEmpty else { return }
+        guard let row = letters.firstIndex(where: { $0.id == letterID }) else {
+            showToast("这封信暂未在本机找到", type: .info)
+            return
+        }
+
+        let indexPath = IndexPath(row: row, section: 0)
+        tableView.scrollToRow(at: indexPath, at: .middle, animated: true)
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  row < self.letters.count,
+                  self.letters[row].id == letterID else { return }
+            let letter = self.letters[row]
+            self.presentReader(for: letter)
+        }
+    }
+
     private func setupLayout() {
         [titleLabel, addButton, boundaryLabel, mailboxEvidenceStatusCard, tableView, emptyLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false

@@ -41,7 +41,9 @@ required_vc_fragments = [
     "let letter = try repository.createLetter",
     "TimeMailboxNotificationScheduler.shared.scheduleDeliveryNotification",
     "func refreshForNotificationDelivery()",
+    "func openLetterFromNotification(id letterID: String?)",
     "reloadLetters(showDeliveryToast: true)",
+    "presentReader(for: letter)",
 ]
 
 required_app_delegate_fragments = [
@@ -58,9 +60,11 @@ required_app_delegate_fragments = [
 required_tab_coordinator_fragments = [
     "private var timeMailboxNotificationObserver: NSObjectProtocol?",
     "forName: .djTimeMailboxDeliveryNotificationReceived",
-    "openTimeMailboxFromNotification()",
+    "notification in",
+    "notification.object as? String",
+    "openTimeMailboxFromNotification(letterID:",
     "tabBarController.selectedIndex = 3",
-    "refreshForNotificationDelivery()",
+    "openLetterFromNotification(id: letterID)",
 ]
 
 required_scene_delegate_fragments = [
