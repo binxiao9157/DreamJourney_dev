@@ -21,7 +21,7 @@ final class KnowledgeBaseViewController: UIViewController {
         let tv = UITableView(frame: .zero, style: .insetGrouped)
         tv.separatorStyle = .singleLine
         tv.backgroundColor = .warmBackground
-        tv.register(UITableViewCell.self, forCellReuseIdentifier: "KBDetailCell")
+        tv.register(KBDetailCell.self, forCellReuseIdentifier: "KBDetailCell")
         tv.register(KBStatsCell.self, forCellReuseIdentifier: "KBStatsCell")
         tv.dataSource = self
         tv.delegate = self
@@ -216,6 +216,10 @@ extension KnowledgeBaseViewController: UITableViewDataSource {
         let cell = tableView.dequeueReusableCell(withIdentifier: "KBDetailCell", for: indexPath)
         cell.textLabel?.numberOfLines = 0
         cell.textLabel?.font = .systemFont(ofSize: 15)
+        cell.detailTextLabel?.numberOfLines = 0
+        cell.detailTextLabel?.font = .systemFont(ofSize: 12)
+        cell.detailTextLabel?.textColor = .warmSubtitle
+        cell.detailTextLabel?.text = nil
         cell.accessoryType = .none
 
         switch currentTab {
@@ -281,6 +285,26 @@ extension KnowledgeBaseViewController: UITableViewDataSource {
         }
 
         return cell
+    }
+}
+
+final class KBDetailCell: UITableViewCell {
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: .subtitle, reuseIdentifier: reuseIdentifier)
+        backgroundColor = .clear
+        textLabel?.numberOfLines = 0
+        detailTextLabel?.numberOfLines = 0
+        detailTextLabel?.font = .systemFont(ofSize: 12)
+        detailTextLabel?.textColor = .warmSubtitle
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        textLabel?.text = nil
+        detailTextLabel?.text = nil
+        accessoryType = .none
     }
 }
 

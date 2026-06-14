@@ -47,6 +47,12 @@ checks = [
         "table selection should navigate to place and fact details",
     ),
     (
+        "final class KBDetailCell" in source
+        and "super.init(style: .subtitle" in source
+        and "detailTextLabel?.numberOfLines = 0" in source,
+        "knowledge list should use subtitle cells so extracted source context is visible before drilling into details",
+    ),
+    (
         "KnowledgeBaseSourcePrivacyUIVerify" in phase1,
         "phase1 verification should include source/privacy UI coverage",
     ),
