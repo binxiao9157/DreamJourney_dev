@@ -94,6 +94,9 @@ xcrun swiftc -D CARE_DASHBOARD_VERIFY \
 echo "== CareDashboard backend sync =="
 python3 Scripts/CareDashboardBackendSyncVerify/main.py
 
+echo "== CareDashboard conversation-end publish =="
+python3 Scripts/CareDashboardSessionPublishVerify/main.py
+
 echo "== CareDashboard true backend flow =="
 PYTHONPATH=DreamJourneyBackend STORE_BACKEND=memory "$BACKEND_PYTHON" Scripts/CareDashboardTrueBackendFlowVerify/main.py
 

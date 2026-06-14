@@ -79,6 +79,7 @@
 		A33CE000000000000000001 /* CareSignalModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A33CE000000000000000004 /* CareSignalModels.swift */; };
 		A33CE000000000000000002 /* CareSignalAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A33CE000000000000000005 /* CareSignalAnalyzer.swift */; };
 		A33CE000000000000000003 /* CareDashboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A33CE000000000000000006 /* CareDashboardViewController.swift */; };
+		A33CE000000000000000009 /* CareDashboardSnapshotPublisher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A33CE000000000000000010 /* CareDashboardSnapshotPublisher.swift */; };
 		A44CE000000000000000001 /* DialogEngineModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A44CE000000000000000003 /* DialogEngineModels.swift */; };
 		A44CE000000000000000002 /* MockDialogEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A44CE000000000000000004 /* MockDialogEngine.swift */; };
 		A55CE000000000000000001 /* SafetyGuardModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A55CE000000000000000003 /* SafetyGuardModels.swift */; };
@@ -204,6 +205,7 @@
 		A33CE000000000000000004 /* CareSignalModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CareSignalModels.swift; sourceTree = "<group>"; };
 		A33CE000000000000000005 /* CareSignalAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CareSignalAnalyzer.swift; sourceTree = "<group>"; };
 		A33CE000000000000000006 /* CareDashboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CareDashboardViewController.swift; sourceTree = "<group>"; };
+		A33CE000000000000000010 /* CareDashboardSnapshotPublisher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CareDashboardSnapshotPublisher.swift; sourceTree = "<group>"; };
 		A44CE000000000000000003 /* DialogEngineModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DialogEngineModels.swift; sourceTree = "<group>"; };
 		A44CE000000000000000004 /* MockDialogEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDialogEngine.swift; sourceTree = "<group>"; };
 		A55CE000000000000000003 /* SafetyGuardModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafetyGuardModels.swift; sourceTree = "<group>"; };
@@ -571,6 +573,7 @@
 			children = (
 				A33CE000000000000000004 /* CareSignalModels.swift */,
 				A33CE000000000000000005 /* CareSignalAnalyzer.swift */,
+				A33CE000000000000000010 /* CareDashboardSnapshotPublisher.swift */,
 			);
 			path = CareDashboard;
 			sourceTree = "<group>";
@@ -897,6 +900,7 @@
 				502F2FC9318D2718A929EFD5 /* AppCoordinator.swift in Sources */,
 				885C95FBDAA6BCEA04BEC2F6 /* AppDelegate.swift in Sources */,
 				C51AC41EC608CEC137B1340F /* AuthCoordinator.swift in Sources */,
+				A33CE000000000000000009 /* CareDashboardSnapshotPublisher.swift in Sources */,
 				A33CE000000000000000003 /* CareDashboardViewController.swift in Sources */,
 				A33CE000000000000000002 /* CareSignalAnalyzer.swift in Sources */,
 				A33CE000000000000000001 /* CareSignalModels.swift in Sources */,

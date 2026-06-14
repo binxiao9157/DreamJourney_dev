@@ -5,12 +5,14 @@ ROOT = Path(__file__).resolve().parents[2]
 
 client_file = ROOT / "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
 vc_file = ROOT / "DreamJourney/Sources/Modules/CareDashboard/CareDashboardViewController.swift"
+publisher_file = ROOT / "DreamJourney/Sources/Services/CareDashboard/CareDashboardSnapshotPublisher.swift"
 backend_main = ROOT / "DreamJourneyBackend/app/main.py"
 backend_privacy = ROOT / "DreamJourneyBackend/app/services/privacy.py"
 backend_tests = ROOT / "DreamJourneyBackend/tests/test_core_services.py"
 
 client_text = client_file.read_text(encoding="utf-8")
 vc_text = vc_file.read_text(encoding="utf-8")
+publisher_text = publisher_file.read_text(encoding="utf-8") if publisher_file.exists() else ""
 backend_text = backend_main.read_text(encoding="utf-8")
 privacy_text = backend_privacy.read_text(encoding="utf-8")
 tests_text = backend_tests.read_text(encoding="utf-8")
@@ -39,15 +41,24 @@ required_vc_fragments = [
     "applyRemoteSnapshotIfUseful",
     "getCareDashboardTranscriptHistory",
     "careOwnerUserID",
-    "ownerUserId == currentUserId",
     "snapshotSourceText",
     "CareSignalSnapshot",
-    "DreamJourneyBackendClient.shared.syncCareSnapshot",
+    "CareDashboardSnapshotPublisher.shared.makeLocalSnapshot",
+    "CareDashboardSnapshotPublisher.shared.publish",
     "DreamJourneyBackendClient.shared.fetchLatestCareSnapshot",
     "DreamJourneyBackendClient.shared.fetchCareSnapshotHistory",
     "remoteSnapshotHistory",
     "makeSnapshotHistoryCard",
     "同步周报记录",
+]
+
+required_publisher_fragments = [
+    "final class CareDashboardSnapshotPublisher",
+    "CareDashboardInputPolicy.eligibleInputTurns",
+    "CareSignalAnalyzer",
+    "publishLatestLocalSnapshotAfterConversationEnd",
+    "DreamJourneyBackendClient.shared.syncCareSnapshot",
+    "ownerUserId == currentUserId",
 ]
 
 required_backend_fragments = [
@@ -96,6 +107,9 @@ for fragment in required_client_fragments:
 for fragment in required_vc_fragments:
     if fragment not in vc_text:
         missing.append(f"{vc_file.name}: missing {fragment!r}")
+for fragment in required_publisher_fragments:
+    if fragment not in publisher_text:
+        missing.append(f"{publisher_file.name}: missing {fragment!r}")
 for fragment in required_backend_fragments:
     if fragment not in backend_text:
         missing.append(f"{backend_main.name}: missing {fragment!r}")

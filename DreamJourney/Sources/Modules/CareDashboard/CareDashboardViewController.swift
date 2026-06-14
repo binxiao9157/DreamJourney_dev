@@ -2,7 +2,6 @@ import UIKit
 
 final class CareDashboardViewController: UIViewController {
 
-    private let analyzer = CareSignalAnalyzer()
     private let viewerFamilyMemberID: String?
     private let viewerIdentitySource: FamilyAccessIdentityResolver.Source?
     private var snapshot: CareSignalSnapshot?
@@ -116,16 +115,16 @@ final class CareDashboardViewController: UIViewController {
     }
 
     private func reloadSnapshot() {
-        let turns = CareDashboardInputPolicy.eligibleInputTurns(
+        let localResult = CareDashboardSnapshotPublisher.shared.makeLocalSnapshot(
             from: ConversationMemoryManager.shared.getCareDashboardTranscriptHistory(),
             viewerFamilyMemberID: viewerFamilyMemberID
         )
-        localEligibleUserTurnCount = turns.filter { $0.role.lowercased() == "user" }.count
+        localEligibleUserTurnCount = localResult.eligibleUserTurnCount
         remoteSnapshotStatusText = DreamJourneyBackendClient.shared.isConfigured
             ? "服务器同步：正在检查历史快照"
             : "服务器同步：未配置，当前仅本机分析"
         remoteSnapshotHistory = []
-        let localSnapshot = analyzer.analyze(turns: turns)
+        let localSnapshot = localResult.snapshot
         snapshot = localSnapshot
         snapshotSourceText = "本机近况"
         render()
@@ -137,16 +136,9 @@ final class CareDashboardViewController: UIViewController {
     }
 
     private func syncSnapshotToBackend(_ snapshot: CareSignalSnapshot) {
-        guard DreamJourneyBackendClient.shared.isConfigured,
-              let currentUserId = UserManager.shared.currentUser?.id,
-              let ownerUserId = careOwnerUserID(),
-              ownerUserId == currentUserId else {
-            return
-        }
-        DreamJourneyBackendClient.shared.syncCareSnapshot(
-            userId: ownerUserId,
-            viewerFamilyMemberID: viewerFamilyMemberID,
-            snapshot: snapshot
+        CareDashboardSnapshotPublisher.shared.publish(
+            snapshot: snapshot,
+            viewerFamilyMemberID: viewerFamilyMemberID
         ) { [weak self] result in
             DispatchQueue.main.async {
                 switch result {

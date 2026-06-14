@@ -236,7 +236,10 @@ final class Stage1MemoryFacade {
     }
 
     func finishConversationSession() {
+        let previousSessionCount = conversationMemory.currentMemory.sessionCount
         conversationMemory.endSession()
+        guard conversationMemory.currentMemory.sessionCount > previousSessionCount else { return }
+        CareDashboardSnapshotPublisher.shared.publishLatestLocalSnapshotAfterConversationEnd()
     }
 
     func discardCurrentConversationSession() {
