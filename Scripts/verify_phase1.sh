@@ -40,6 +40,9 @@ python3 Scripts/TimeMailboxAutoDeliveryRefreshVerify/main.py
 echo "== TimeMailbox backend sync =="
 python3 Scripts/TimeMailboxBackendSyncVerify/main.py
 
+echo "== TimeMailbox live evidence UI =="
+python3 Scripts/TimeMailboxLiveEvidenceUIVerify/main.py
+
 echo "== TimeMailbox payload privacy =="
 python3 Scripts/TimeMailboxPayloadPrivacyVerify/main.py
 

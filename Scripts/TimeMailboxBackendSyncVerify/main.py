@@ -40,7 +40,7 @@ required_client_fragments = [
 ]
 
 required_vc_fragments = [
-    "backendSyncStatusLabel",
+    "mailboxEvidenceStatusCard",
     "refreshMailboxBackendSyncStatus",
     "updateMailboxBackendSyncStatusLabel",
     "syncLetterMetadataToBackend",

@@ -32,9 +32,35 @@ final class TimeMailboxViewController: UIViewController {
         return label
     }()
 
-    private let backendSyncStatusLabel: UILabel = {
+    private let mailboxEvidenceStatusCard: UIView = {
+        let view = UIView()
+        view.backgroundColor = .warmSurface
+        view.layer.cornerRadius = 12
+        view.layer.borderWidth = 0.5
+        view.layer.borderColor = UIColor.warmDivider.cgColor
+        return view
+    }()
+
+    private let mailboxEvidenceTitleLabel: UILabel = {
         let label = UILabel()
-        label.text = "服务器同步：未检查"
+        label.text = "真实验收状态"
+        label.font = .systemFont(ofSize: 15, weight: .semibold)
+        label.textColor = .warmPrimary
+        return label
+    }()
+
+    private let mailboxEvidenceSummaryLabel: UILabel = {
+        let label = UILabel()
+        label.text = "本机信件 0 封 · 授权元数据 0 封 · 本机私密 0 封 · 服务器同步：未检查"
+        label.font = .systemFont(ofSize: 12)
+        label.textColor = .warmSubtitle
+        label.numberOfLines = 0
+        return label
+    }()
+
+    private let mailboxEvidenceBoundaryLabel: UILabel = {
+        let label = UILabel()
+        label.text = "完整正文和回声不出端；列表只展示标题、收件人、投递时间和状态。"
         label.font = .systemFont(ofSize: 12)
         label.textColor = .warmSubtitle
         label.numberOfLines = 0
@@ -94,9 +120,13 @@ final class TimeMailboxViewController: UIViewController {
     }
 
     private func setupLayout() {
-        [titleLabel, addButton, boundaryLabel, backendSyncStatusLabel, tableView, emptyLabel].forEach {
+        [titleLabel, addButton, boundaryLabel, mailboxEvidenceStatusCard, tableView, emptyLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview($0)
+        }
+        [mailboxEvidenceTitleLabel, mailboxEvidenceSummaryLabel, mailboxEvidenceBoundaryLabel].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+            mailboxEvidenceStatusCard.addSubview($0)
         }
 
         NSLayoutConstraint.activate([
@@ -112,11 +142,24 @@ final class TimeMailboxViewController: UIViewController {
             boundaryLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             boundaryLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
 
-            backendSyncStatusLabel.topAnchor.constraint(equalTo: boundaryLabel.bottomAnchor, constant: 8),
-            backendSyncStatusLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            backendSyncStatusLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            mailboxEvidenceStatusCard.topAnchor.constraint(equalTo: boundaryLabel.bottomAnchor, constant: 10),
+            mailboxEvidenceStatusCard.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            mailboxEvidenceStatusCard.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
 
-            tableView.topAnchor.constraint(equalTo: backendSyncStatusLabel.bottomAnchor, constant: 12),
+            mailboxEvidenceTitleLabel.topAnchor.constraint(equalTo: mailboxEvidenceStatusCard.topAnchor, constant: 12),
+            mailboxEvidenceTitleLabel.leadingAnchor.constraint(equalTo: mailboxEvidenceStatusCard.leadingAnchor, constant: 14),
+            mailboxEvidenceTitleLabel.trailingAnchor.constraint(equalTo: mailboxEvidenceStatusCard.trailingAnchor, constant: -14),
+
+            mailboxEvidenceSummaryLabel.topAnchor.constraint(equalTo: mailboxEvidenceTitleLabel.bottomAnchor, constant: 6),
+            mailboxEvidenceSummaryLabel.leadingAnchor.constraint(equalTo: mailboxEvidenceTitleLabel.leadingAnchor),
+            mailboxEvidenceSummaryLabel.trailingAnchor.constraint(equalTo: mailboxEvidenceTitleLabel.trailingAnchor),
+
+            mailboxEvidenceBoundaryLabel.topAnchor.constraint(equalTo: mailboxEvidenceSummaryLabel.bottomAnchor, constant: 6),
+            mailboxEvidenceBoundaryLabel.leadingAnchor.constraint(equalTo: mailboxEvidenceTitleLabel.leadingAnchor),
+            mailboxEvidenceBoundaryLabel.trailingAnchor.constraint(equalTo: mailboxEvidenceTitleLabel.trailingAnchor),
+            mailboxEvidenceBoundaryLabel.bottomAnchor.constraint(equalTo: mailboxEvidenceStatusCard.bottomAnchor, constant: -12),
+
+            tableView.topAnchor.constraint(equalTo: mailboxEvidenceStatusCard.bottomAnchor, constant: 12),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tableView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
@@ -364,21 +407,52 @@ final class TimeMailboxViewController: UIViewController {
         }.count
         let localOnlyCount = max(0, letters.count - syncableCount)
 
+        let serverText: String
         guard DreamJourneyBackendClient.shared.isConfigured else {
-            backendSyncStatusLabel.text = "服务器同步：未配置后端；完整正文和回声仅本机保存"
+            serverText = "服务器同步：后端未配置，当前仅本机验收"
+            applyMailboxEvidenceStatus(
+                serverText: serverText,
+                syncableCount: syncableCount,
+                localOnlyCount: localOnlyCount
+            )
             return
         }
         if UserManager.shared.currentUser == nil {
-            backendSyncStatusLabel.text = detail ?? "服务器同步：登录后可同步授权信件元数据"
+            serverText = detail ?? "服务器同步：登录后可同步授权信件元数据"
+            applyMailboxEvidenceStatus(
+                serverText: serverText,
+                syncableCount: syncableCount,
+                localOnlyCount: localOnlyCount
+            )
             return
         }
         if let remoteCount {
-            backendSyncStatusLabel.text = "服务器同步：服务器已有 \(remoteCount) 封元数据 · 本机授权 \(syncableCount) 封 · 完整正文不出端"
+            serverText = "服务器同步：服务器已有 \(remoteCount) 封元数据"
         } else if let detail {
-            backendSyncStatusLabel.text = "服务器同步：\(detail) · 本机私密 \(localOnlyCount) 封"
+            serverText = "服务器同步：\(detail)"
         } else {
-            backendSyncStatusLabel.text = "服务器同步：本机授权 \(syncableCount) 封 · 本机私密 \(localOnlyCount) 封 · 完整正文不出端"
+            serverText = "服务器同步：正在检查授权信件元数据"
         }
+        applyMailboxEvidenceStatus(
+            serverText: serverText,
+            syncableCount: syncableCount,
+            localOnlyCount: localOnlyCount
+        )
+    }
+
+    private func applyMailboxEvidenceStatus(
+        serverText: String,
+        syncableCount: Int,
+        localOnlyCount: Int
+    ) {
+        mailboxEvidenceTitleLabel.text = "真实验收状态"
+        mailboxEvidenceSummaryLabel.text = [
+            "本机信件 \(letters.count) 封",
+            "授权元数据 \(syncableCount) 封",
+            "本机私密 \(localOnlyCount) 封",
+            serverText
+        ].joined(separator: " · ")
+        mailboxEvidenceBoundaryLabel.text = "完整正文和回声不出端；列表只展示标题、收件人、投递时间和状态。"
     }
 }
 
