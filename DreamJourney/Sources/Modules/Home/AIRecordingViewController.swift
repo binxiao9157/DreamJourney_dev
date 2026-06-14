@@ -31,6 +31,62 @@ enum VoiceBallState {
     case active       // 对话中：波纹动效，停止图标
 }
 
+private struct UserSpeechTurnSignal {
+    let durationSeconds: Double
+    let pauseCount: Int
+}
+
+private final class UserSpeechSignalTracker {
+    private static let pauseThresholdSeconds: TimeInterval = 1.35
+    private static let minimumTrackedDurationSeconds: TimeInterval = 0.35
+
+    private var startedAt: Date?
+    private var lastUpdateAt: Date?
+    private var lastText = ""
+    private var pauseCount = 0
+
+    func reset() {
+        startedAt = nil
+        lastUpdateAt = nil
+        lastText = ""
+        pauseCount = 0
+    }
+
+    @discardableResult
+    func observeASRUpdate(text: String, isFinal: Bool, at date: Date = Date()) -> UserSpeechTurnSignal? {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return nil }
+
+        if startedAt == nil {
+            startedAt = date
+        }
+
+        if let lastUpdateAt,
+           date.timeIntervalSince(lastUpdateAt) >= Self.pauseThresholdSeconds,
+           normalized != lastText {
+            pauseCount += 1
+        }
+
+        lastUpdateAt = date
+        lastText = normalized
+
+        guard isFinal else { return nil }
+        return finalize(at: date)
+    }
+
+    func finalizePending(at date: Date = Date()) -> UserSpeechTurnSignal? {
+        finalize(at: date)
+    }
+
+    private func finalize(at date: Date) -> UserSpeechTurnSignal? {
+        defer { reset() }
+        guard let startedAt else { return nil }
+        let duration = max(date.timeIntervalSince(startedAt), 0)
+        guard duration >= Self.minimumTrackedDurationSeconds else { return nil }
+        return UserSpeechTurnSignal(durationSeconds: duration, pauseCount: pauseCount)
+    }
+}
+
 // MARK: - AIRecordingViewController：首页 AI 智能记录
 final class AIRecordingViewController: UIViewController {
     private static var isDigitalHumanDiagnosticsEnabled: Bool {
@@ -227,6 +283,7 @@ final class AIRecordingViewController: UIViewController {
     private var currentDialogPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
     private var selectedDialogFamilyVisibility = FamilyVisibilitySelection.allMembers
     private let conversationWellbeingLimiter = ConversationWellbeingLimiter()
+    private let userSpeechSignalTracker = UserSpeechSignalTracker()
 
     // MARK: - 对话录音（用于声音复刻）
     /// 并行录音器：对话期间录制用户语音，供声音复刻训练使用
@@ -1055,6 +1112,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
         currentDialogPrivacyMetadata = selectedDialogPrivacyMetadata
         pendingUserText = nil
         pendingAIText = nil
+        userSpeechSignalTracker.reset()
         pendingDialogEndReasonAfterDigitalHumanPlayback = nil
         hasFinalizedCurrentDialogSession = false
         resetDigitalHumanSpeechPlayback(stopFallbackAudio: true)
@@ -1065,6 +1123,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
     }
 
     func onASRResult(text: String, isFinal: Bool) {
+        let speechSignal = userSpeechSignalTracker.observeASRUpdate(text: text, isFinal: isFinal)
         if isFinal {
             digitalHumanAvatarView.setState(.thinking, prompt: "正在整理")
             // 最终结果：直接显示为正式用户消息
@@ -1076,11 +1135,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
             messageTableView.reloadData()
             scrollToBottom()
             // 记录到对话记忆
-            Stage1MemoryFacade.shared.recordUserTurn(Stage1MailboxMemoryInput(
-                text,
-                emotionHint: careEmotionHint(for: text),
-                privacyMetadata: currentDialogPrivacyMetadata
-            ))
+            recordUserSpeechTurn(text, speechSignal: speechSignal)
         } else {
             // 中间结果：只记录不显示，等待最终确认
             pendingUserText = text
@@ -1142,13 +1197,20 @@ extension AIRecordingViewController: DialogEngineDelegate {
         if let text = pendingUserText, !text.isEmpty {
             messages.append(.user(text: text, timestamp: Date()))
             // 记录到对话记忆
-            Stage1MemoryFacade.shared.recordUserTurn(Stage1MailboxMemoryInput(
-                text,
-                emotionHint: careEmotionHint(for: text),
-                privacyMetadata: currentDialogPrivacyMetadata
-            ))
+            let speechSignal = userSpeechSignalTracker.finalizePending()
+            recordUserSpeechTurn(text, speechSignal: speechSignal)
             pendingUserText = nil
         }
+    }
+
+    private func recordUserSpeechTurn(_ text: String, speechSignal: UserSpeechTurnSignal?) {
+        Stage1MemoryFacade.shared.recordUserTurn(Stage1MailboxMemoryInput(
+            text,
+            speechDurationSeconds: speechSignal?.durationSeconds,
+            pauseCount: speechSignal?.pauseCount,
+            emotionHint: careEmotionHint(for: text),
+            privacyMetadata: currentDialogPrivacyMetadata
+        ))
     }
 
     private func cancelInFlightDigitalHumanPlaybackForNewAssistantResponse() {
@@ -1227,6 +1289,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
     func onError(error: Error) {
         updateVoiceBallState(.idle)
         stopSessionRecording()
+        userSpeechSignalTracker.reset()
         resetDigitalHumanSpeechPlayback(stopFallbackAudio: true)
         digitalHumanAvatarView.clearSpeechAudio()
         digitalHumanAvatarView.setState(.error, prompt: "语音服务异常")
@@ -1506,6 +1569,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
         currentDialogAllowsMemoir = false
         pendingUserText = nil
         pendingAIText = nil
+        userSpeechSignalTracker.reset()
         pendingDialogEndReasonAfterDigitalHumanPlayback = nil
         hasFinalizedCurrentDialogSession = true
         resetDigitalHumanSpeechPlayback(stopFallbackAudio: true)
@@ -1548,6 +1612,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
         if case .crisis = reason {
             pendingUserText = nil
             pendingAIText = nil
+            userSpeechSignalTracker.reset()
             currentDialogAllowsMemoir = false
             Stage1MemoryFacade.shared.discardCurrentConversationSession()
             updateVoiceBallState(.idle)
@@ -1572,6 +1637,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
         }
         // 结束会话：提取摘要并持久化
         Stage1MemoryFacade.shared.finishConversationSession()
+        userSpeechSignalTracker.reset()
         updateVoiceBallState(.idle)
         resetDigitalHumanSpeechPlayback(stopFallbackAudio: true)
         digitalHumanAvatarView.clearSpeechAudio()

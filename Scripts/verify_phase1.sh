@@ -106,6 +106,9 @@ python3 Scripts/CareDashboardDataReadinessUIVerify/main.py
 echo "== CareDashboard report readiness =="
 python3 Scripts/CareDashboardReportReadinessVerify/main.py
 
+echo "== CareDashboard speech signal =="
+python3 Scripts/CareDashboardSpeechSignalVerify/main.py
+
 echo "== CareDashboard live evidence UI =="
 python3 Scripts/CareDashboardLiveEvidenceUIVerify/main.py
 
