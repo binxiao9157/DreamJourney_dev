@@ -608,6 +608,7 @@ final class KBLiteManager {
     func extractFromTranscriptDetailed(
         turns: [ConversationTurn],
         sessionId: Int,
+        forceRemoteExtraction: Bool = false,
         completion: @escaping (KBLiteExtractionSummary) -> Void = { _ in }
     ) {
         guard !turns.isEmpty else {
@@ -623,7 +624,8 @@ final class KBLiteManager {
 
         // 提取频率控制：每 3 次会话才触发一次 LLM 提取（节省成本）
         // 第 1 次、第 10 次、以及距离上次提取超过 24 小时的会话强制执行
-        let shouldForceExtract = previouslyProcessedSessionCount == 0
+        let shouldForceExtract = forceRemoteExtraction
+            || previouslyProcessedSessionCount == 0
             || (sessionId - previouslyProcessedSessionCount >= 3)
             || (Date().timeIntervalSince(graph.lastUpdated) > 86400)
 

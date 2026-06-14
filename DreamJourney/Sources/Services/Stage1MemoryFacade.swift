@@ -169,6 +169,7 @@ final class Stage1MemoryFacade {
         knowledgeBase.extractFromTranscriptDetailed(
             turns: [turn],
             sessionId: sessionId,
+            forceRemoteExtraction: true,
             completion: { extractionSummary in
                 completion(Stage1ArchiveTextDepositResult(
                     metadataAddedCount: metadataCount,

@@ -172,6 +172,71 @@ assertCondition(
     "extractFromTranscript should mark session processed after deterministic deposit"
 )
 
+KBLiteManager.shared.reset()
+var firstFrequencySummary: KBLiteExtractionSummary?
+KBLiteManager.shared.extractFromTranscriptDetailed(
+    turns: [
+        ConversationTurn(
+            role: "user",
+            text: testText,
+            timestamp: Date(timeIntervalSince1970: 1_800_000_010),
+            privacyMetadata: metadata
+        )
+    ],
+    sessionId: 1
+) { summary in
+    firstFrequencySummary = summary
+}
+
+let firstFrequencyDeadline = Date().addingTimeInterval(2)
+while firstFrequencySummary == nil && Date() < firstFrequencyDeadline {
+    RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
+}
+assertCondition(firstFrequencySummary?.didAttemptLLM == true, "first extraction should attempt LLM")
+
+var skippedFrequencySummary: KBLiteExtractionSummary?
+KBLiteManager.shared.extractFromTranscriptDetailed(
+    turns: [
+        ConversationTurn(
+            role: "user",
+            text: "我叫赵海，1999年住在宁波老外滩。",
+            timestamp: Date(timeIntervalSince1970: 1_800_000_011),
+            privacyMetadata: metadata
+        )
+    ],
+    sessionId: 2
+) { summary in
+    skippedFrequencySummary = summary
+}
+let skippedFrequencyDeadline = Date().addingTimeInterval(2)
+while skippedFrequencySummary == nil && Date() < skippedFrequencyDeadline {
+    RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
+}
+assertCondition(skippedFrequencySummary?.didSkipDueToFrequency == true, "regular second extraction should keep frequency throttle")
+assertCondition(skippedFrequencySummary?.didAttemptLLM == false, "regular second extraction should not attempt LLM under throttle")
+
+var forcedArchiveSummary: KBLiteExtractionSummary?
+KBLiteManager.shared.extractFromTranscriptDetailed(
+    turns: [
+        ConversationTurn(
+            role: "user",
+            text: "档案补充：外婆王兰香年轻时在苏州观前街做过绣活。",
+            timestamp: Date(timeIntervalSince1970: 1_800_000_012),
+            privacyMetadata: metadata
+        )
+    ],
+    sessionId: 3,
+    forceRemoteExtraction: true
+) { summary in
+    forcedArchiveSummary = summary
+}
+let forcedArchiveDeadline = Date().addingTimeInterval(2)
+while forcedArchiveSummary == nil && Date() < forcedArchiveDeadline {
+    RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
+}
+assertCondition(forcedArchiveSummary?.didSkipDueToFrequency == false, "forced archive extraction should bypass frequency throttle")
+assertCondition(forcedArchiveSummary?.didAttemptLLM == true, "forced archive extraction should attempt LLM")
+
 let generalText = "我叫周明，1992年住在泉州鲤城区中山路。2001年我和妻子许安琪在厦门鼓浪屿开了一家茶馆。"
 KBLiteManager.shared.reset()
 let generalAddedCount = KBLiteManager.shared.verifyQuickExtract(
