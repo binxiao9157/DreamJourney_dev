@@ -491,14 +491,17 @@ final class KBLiteManager {
         let beforeCount = graph.people.count + graph.places.count + graph.events.count + graph.facts.count
         let removedPeople = Set(graph.people.filter { person in
             person.id.hasPrefix("roadshow_") ||
-                Self.isGenericKinshipOnly(person)
+                Self.isGenericKinshipOnly(person) ||
+                Self.isLegacyRoadshowSeedPerson(person)
         }.map(\.id))
         let removedPlaces = Set(graph.places.filter { place in
             place.id.hasPrefix("roadshow_") ||
+                Self.isLegacyRoadshowSeedPlace(place) ||
                 place.relatedPersonIds.contains(where: { removedPeople.contains($0) })
         }.map(\.id))
         let removedEvents = Set(graph.events.filter { event in
             event.id.hasPrefix("roadshow_") ||
+                Self.isLegacyRoadshowSeedEvent(event) ||
                 event.locationId.map { removedPlaces.contains($0) } == true ||
                 event.participantIds.contains(where: { removedPeople.contains($0) })
         }.map(\.id))
@@ -514,6 +517,7 @@ final class KBLiteManager {
         }
         graph.facts.removeAll { fact in
             fact.id.hasPrefix("roadshow_") ||
+                Self.isLegacyRoadshowSeedFact(fact) ||
                 Self.isGenericKinshipOnlyFact(fact) ||
                 fact.relatedPersonIds.contains(where: { removedPeople.contains($0) }) ||
                 fact.relatedPlaceIds.contains(where: { removedPlaces.contains($0) }) ||
@@ -543,6 +547,33 @@ final class KBLiteManager {
             return isGenericKinshipDisplayName(suffix)
         }
         return false
+    }
+
+    private static func isLegacyRoadshowSeedPerson(_ person: KBPerson) -> Bool {
+        let joinedTraits = person.traits.joined(separator: " ")
+        let bio = person.briefBio ?? ""
+        let signature = "\(person.name) \(joinedTraits) \(bio)"
+        return signature.contains("路演样例") ||
+            signature.contains("家人记忆中的温和长辈，常提醒晚辈慢慢来") ||
+            (person.name == "陈树安" && joinedTraits.contains("重视团圆") && joinedTraits.contains("说话慢")) ||
+            (person.name == "陈静文" && joinedTraits.contains("喜欢整理老照片") && person.sourceSessionIds == [1])
+    }
+
+    private static func isLegacyRoadshowSeedPlace(_ place: KBPlace) -> Bool {
+        let description = place.description ?? ""
+        return description.contains("路演样例中的家庭合影地点")
+    }
+
+    private static func isLegacyRoadshowSeedEvent(_ event: KBEvent) -> Bool {
+        let description = event.description ?? ""
+        return event.title == "外滩全家合影" &&
+            description.contains("1975 年 7 月家人在外滩留下的合影记忆")
+    }
+
+    private static func isLegacyRoadshowSeedFact(_ fact: KBFact) -> Bool {
+        let statement = normalizedFactStatement(fact.statement)
+        return statement.contains("路演占位事实不应进入真实测试知识库") ||
+            statement.contains("时空信箱回声只基于保存记忆整理不代表逝者真实回复")
     }
 
     private static func shouldPersistPerson(

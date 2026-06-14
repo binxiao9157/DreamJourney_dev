@@ -75,6 +75,18 @@ let importedGraph = KBLiteGraph(
             privacyMetadata: metadata
         ),
         KBPerson(
+            id: "legacy_seed_grandma_without_roadshow_prefix",
+            name: "陈静文",
+            aliases: [],
+            relation: "祖母",
+            traits: ["喜欢整理老照片"],
+            briefBio: "家人记忆中的温和长辈，常提醒晚辈慢慢来。",
+            sourceSessionIds: [1],
+            createdAt: now,
+            updatedAt: now,
+            privacyMetadata: metadata
+        ),
+        KBPerson(
             id: "generic_mother",
             name: "妈妈",
             aliases: [],
@@ -109,6 +121,16 @@ let importedGraph = KBLiteGraph(
             privacyMetadata: metadata
         ),
         KBPlace(
+            id: "legacy_seed_bund_without_roadshow_prefix",
+            name: "上海外滩",
+            category: "visited",
+            description: "路演样例中的家庭合影地点。",
+            relatedPersonIds: ["legacy_seed_grandma_without_roadshow_prefix"],
+            sourceSessionIds: [1],
+            createdAt: now,
+            privacyMetadata: metadata
+        ),
+        KBPlace(
             id: "real_place",
             name: "绍兴越城区仓桥直街",
             category: "lived",
@@ -127,6 +149,18 @@ let importedGraph = KBLiteGraph(
             year: 1975,
             locationId: "roadshow_place_bund",
             participantIds: ["roadshow_person_grandpa"],
+            sourceSessionIds: [1],
+            createdAt: now,
+            privacyMetadata: metadata
+        ),
+        KBEvent(
+            id: "legacy_seed_photo_without_roadshow_prefix",
+            title: "外滩全家合影",
+            description: "1975 年 7 月家人在外滩留下的合影记忆。",
+            year: 1975,
+            month: 7,
+            locationId: "legacy_seed_bund_without_roadshow_prefix",
+            participantIds: ["legacy_seed_grandma_without_roadshow_prefix"],
             sourceSessionIds: [1],
             createdAt: now,
             privacyMetadata: metadata
@@ -161,6 +195,16 @@ let importedGraph = KBLiteGraph(
             confidence: "confirmed",
             relatedPersonIds: ["roadshow_person_grandpa"],
             relatedEventIds: ["roadshow_event_bund_photo"],
+            sourceSessionIds: [1],
+            createdAt: now,
+            privacyMetadata: metadata
+        ),
+        KBFact(
+            id: "legacy_seed_boundary_without_roadshow_prefix",
+            statement: "时空信箱回声只基于保存记忆整理，不代表逝者真实回复。",
+            confidence: "confirmed",
+            relatedPersonIds: ["legacy_seed_grandma_without_roadshow_prefix"],
+            relatedEventIds: ["legacy_seed_photo_without_roadshow_prefix"],
             sourceSessionIds: [1],
             createdAt: now,
             privacyMetadata: metadata
