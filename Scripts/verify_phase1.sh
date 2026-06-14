@@ -109,6 +109,9 @@ python3 Scripts/MemoryArchiveBackendSyncVerify/main.py
 echo "== MemoryArchive image analysis proxy =="
 python3 Scripts/MemoryArchiveImageAnalysisProxyVerify/main.py
 
+echo "== MemoryArchive image analysis strict backend =="
+python3 Scripts/MemoryArchiveImageAnalysisStrictBackendVerify/main.py
+
 echo "== MemoryArchive image analysis retry =="
 python3 Scripts/MemoryArchiveImageAnalysisRetryVerify/main.py
 

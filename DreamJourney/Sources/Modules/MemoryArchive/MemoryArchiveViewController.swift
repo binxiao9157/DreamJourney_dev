@@ -484,8 +484,8 @@ final class MemoryArchiveViewController: UIViewController {
             case .success:
                 completion(result)
             case .failure(let error):
-                print("[MemoryArchive] 后端照片分析失败，回落本机 DeepSeekService: \(error.localizedDescription)")
-                self.analyzePhotoDirectly(imageBase64: imageBase64, completion: completion)
+                print("[MemoryArchive] 后端照片分析失败，不再本机兜底: \(error.localizedDescription)")
+                completion(.failure(error))
             }
         }
     }
