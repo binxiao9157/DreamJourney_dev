@@ -281,6 +281,10 @@ final class Stage1MemoryFacade {
         knowledgeBase.displayGraphForLocalBrowsing()
     }
 
+    func promptArchiveSnapshot() -> KBLiteGraph {
+        knowledgeBase.sanitizedGraph(for: .prompt)
+    }
+
     func dashboardSnapshot() -> Stage1MemoryDashboardSnapshot {
         let graph = archiveSnapshot()
         return Stage1MemoryDashboardSnapshot(

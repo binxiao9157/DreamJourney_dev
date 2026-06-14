@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[2]
 MANAGER = ROOT / "DreamJourney/Sources/Services/KBLiteManager.swift"
 GAP_DETECTOR = ROOT / "DreamJourney/Sources/Services/KBLiteGapDetector.swift"
 FACADE = ROOT / "DreamJourney/Sources/Services/Stage1MemoryFacade.swift"
+DIALOG = ROOT / "DreamJourney/Sources/Services/DialogEngineManager.swift"
 PHASE1 = ROOT / "Scripts/verify_phase1.sh"
 
 
@@ -19,6 +20,7 @@ def require(condition: bool, message: str) -> None:
 manager = MANAGER.read_text(encoding="utf-8")
 gap_detector = GAP_DETECTOR.read_text(encoding="utf-8")
 facade = FACADE.read_text(encoding="utf-8")
+dialog = DIALOG.read_text(encoding="utf-8")
 phase1 = PHASE1.read_text(encoding="utf-8")
 
 context_match = re.search(r"func buildContextString\(query:[\s\S]*?\n    // MARK: - Public API: Image Analysis", manager)
@@ -31,6 +33,14 @@ top_match = re.search(r"func topGaps\(_ n: Int = 5\)[\s\S]*?\n    \}", gap_detec
 top_body = top_match.group(0) if top_match else ""
 dashboard_match = re.search(r"func dashboardSnapshot\(\)[\s\S]*?\n    \}", facade)
 dashboard_body = dashboard_match.group(0) if dashboard_match else ""
+prompt_snapshot_match = re.search(r"func promptArchiveSnapshot\(\) -> KBLiteGraph \{[\s\S]*?\n    \}", facade)
+prompt_snapshot_body = prompt_snapshot_match.group(0) if prompt_snapshot_match else ""
+grounding_plan_match = re.search(r"private func logMemoryGroundingPlan\(for query: String\)[\s\S]*?\n    \}", dialog)
+grounding_plan_body = grounding_plan_match.group(0) if grounding_plan_match else ""
+rag_send_match = re.search(r"private func sendMemoryRAGIfAvailable\(for query: String\)[\s\S]*?\n    \}", dialog)
+rag_send_body = rag_send_match.group(0) if rag_send_match else ""
+memory_context_match = re.search(r"private func buildMemoryContext\(memory: ConversationMemory\)[\s\S]*?\n    \}", dialog)
+memory_context_body = memory_context_match.group(0) if memory_context_match else ""
 
 require(
     "private func search(query: String, in sourceGraph: KBLiteGraph)" in manager,
@@ -76,6 +86,23 @@ require(
 require(
     "gapDetector.topGaps(5, surface: .prompt)" in dashboard_body,
     "dashboard gaps should use the same cleaned prompt graph as the visible snapshot",
+)
+require(
+    "func promptArchiveSnapshot() -> KBLiteGraph" in facade
+    and "knowledgeBase.sanitizedGraph(for: .prompt)" in prompt_snapshot_body,
+    "dialog generation should have a prompt-only archive snapshot",
+)
+require(
+    "Stage1MemoryFacade.shared.promptArchiveSnapshot()" in grounding_plan_body,
+    "dialog grounding logs should use prompt-safe archive data",
+)
+require(
+    "Stage1MemoryFacade.shared.promptArchiveSnapshot()" in rag_send_body,
+    "dialog realtime RAG payload should use prompt-safe archive data",
+)
+require(
+    "Stage1MemoryFacade.shared.promptArchiveSnapshot()" in memory_context_body,
+    "dialog startup memory context should use prompt-safe archive data",
 )
 require(
     "MemoryArchiveMetadataOnlyDepositVerify/main.py" in phase1

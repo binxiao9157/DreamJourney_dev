@@ -1431,7 +1431,7 @@ extension DialogEngineManager: SpeechEngineDelegate {
     private func logMemoryGroundingPlan(for query: String) {
         let pack = MemoryEvidencePack.build(
             query: query,
-            graph: Stage1MemoryFacade.shared.archiveSnapshot(),
+            graph: Stage1MemoryFacade.shared.promptArchiveSnapshot(),
             maxItems: 5
         )
         let plan = MemoryGroundedReplyPlanner.makePlan(pack: pack)
@@ -1451,7 +1451,7 @@ extension DialogEngineManager: SpeechEngineDelegate {
         guard let engine = engine,
               let payload = DialogMemoryRAGPayloadBuilder.makePayload(
                 query: query,
-                graph: Stage1MemoryFacade.shared.archiveSnapshot(),
+                graph: Stage1MemoryFacade.shared.promptArchiveSnapshot(),
                 maxItems: 5
               ) else {
             return
@@ -1506,7 +1506,7 @@ extension DialogEngineManager: SpeechEngineDelegate {
         // 【KBLite】附加知识库上下文（累计的人物、地点、事件、事实）
         let kbContext = DialogMemoryGroundingPolicy.queryContext(
             for: "",
-            graph: Stage1MemoryFacade.shared.archiveSnapshot(),
+            graph: Stage1MemoryFacade.shared.promptArchiveSnapshot(),
             maxItems: 8
         )
         if !kbContext.isEmpty {
