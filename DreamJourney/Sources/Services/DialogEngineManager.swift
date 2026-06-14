@@ -678,8 +678,7 @@ final class DialogEngineManager: NSObject, DialogEngineProtocol {
 
     /// 检测 ASR 识别结果是否包含结束关键词
     private func checkEndKeyword(in text: String) -> String? {
-        let lowered = text.lowercased()
-        return config.endKeywords.first { lowered.contains($0) }
+        DialogEndIntentPolicy.matchedEndKeyword(in: text, candidates: config.endKeywords)
     }
 
     /// 检测危机表达并中断角色扮演链路，避免继续进入 LLM/TTS。

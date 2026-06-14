@@ -1136,6 +1136,9 @@ extension AIRecordingViewController: DialogEngineDelegate {
                 currentAssistantResponseText = nil
                 retryableDigitalHumanSpeechText = nil
                 userSpeechSignalTracker.reset()
+                if let keyword = DialogEndIntentPolicy.matchedEndKeyword(in: text) {
+                    dialogEngine.stopDialog(reason: .keyword(keyword))
+                }
                 return
             }
             digitalHumanAvatarView.setState(.thinking, prompt: "正在整理")

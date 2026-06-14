@@ -23,6 +23,10 @@ require(
     "shouldRecordAsMemoryTurn" in models,
     "DialogEndIntentPolicy should expose a memory-turn boundary policy",
 )
+require(
+    "matchedEndKeyword" in models,
+    "DialogEndIntentPolicy should expose shared end-keyword matching for UI and SDK fallback paths",
+)
 
 on_asr = re.search(
     r"func onASRResult\(text: String, isFinal: Bool\) \{(?P<body>.*?)\n    \}",
@@ -35,6 +39,14 @@ record_policy_index = on_asr_body.find("DialogEndIntentPolicy.shouldRecordAsMemo
 append_index = on_asr_body.find("messages.append(.user")
 record_index = on_asr_body.find("recordUserSpeechTurn(text")
 require(record_policy_index >= 0, "ASR final handling should check shouldRecordAsMemoryTurn")
+require(
+    "if let keyword = DialogEndIntentPolicy.matchedEndKeyword(in: text)" in on_asr_body,
+    "ASR final handling should detect standalone end commands at the page layer",
+)
+require(
+    "dialogEngine.stopDialog(reason: .keyword(keyword))" in on_asr_body,
+    "ASR final end-command handling should actively stop the dialog so session deposit runs even if the SDK omits onDialogEnded",
+)
 require(
     append_index >= 0 and record_policy_index < append_index,
     "ASR final should suppress end commands before appending a user bubble",

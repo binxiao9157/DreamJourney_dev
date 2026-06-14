@@ -24,6 +24,20 @@ enum DialogEndIntentPolicy {
         "生成家书", "写家书"
     ] + endOnlyKeywords
 
+    static func matchedEndKeyword(in text: String, candidates: [String] = endKeywords) -> String? {
+        let normalized = normalizeCommandText(text)
+        guard !normalized.isEmpty, !shouldRecordAsMemoryTurn(text) else { return nil }
+
+        return candidates.first { keyword in
+            let normalizedKeyword = normalizeCommandText(keyword)
+            guard !normalizedKeyword.isEmpty else { return false }
+            if normalized == normalizedKeyword { return true }
+
+            let wrapperBudget = normalizedKeyword.count + 6
+            return normalized.count <= wrapperBudget && normalized.contains(normalizedKeyword)
+        }
+    }
+
     static func shouldPromptMemoir(for reason: DialogEndReason) -> Bool {
         guard case .keyword(let keyword) = reason else {
             return false

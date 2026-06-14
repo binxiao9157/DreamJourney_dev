@@ -20,6 +20,14 @@ assertCondition(
     "plain conversation ending must not be recorded as a memory turn"
 )
 assertCondition(
+    DialogEndIntentPolicy.matchedEndKeyword(in: "聊完了") == "聊完了",
+    "plain conversation ending should be matched as a dialog-end command"
+)
+assertCondition(
+    DialogEndIntentPolicy.matchedEndKeyword(in: "那就聊完了吧") == "聊完了",
+    "short polite wrappers around conversation endings should be matched as dialog-end commands"
+)
+assertCondition(
     !DialogEndIntentPolicy.shouldPromptMemoir(for: .keyword("下次再聊")),
     "generic goodbye must not prompt memoir generation"
 )
@@ -36,6 +44,10 @@ assertCondition(
     "explicit memoir command should trigger the flow without polluting memory turns"
 )
 assertCondition(
+    DialogEndIntentPolicy.matchedEndKeyword(in: "请生成回忆录") == "生成回忆录",
+    "explicit memoir requests should be matched as dialog-end commands"
+)
+assertCondition(
     DialogEndIntentPolicy.shouldPromptMemoir(for: .keyword("整理回忆录")),
     "explicit memoir organization request should prompt memoir generation"
 )
@@ -46,6 +58,10 @@ assertCondition(
 assertCondition(
     DialogEndIntentPolicy.shouldRecordAsMemoryTurn("那家照相馆在1985年结束营业。"),
     "substantive memories containing an end keyword should not be suppressed"
+)
+assertCondition(
+    DialogEndIntentPolicy.matchedEndKeyword(in: "那家照相馆在1985年结束营业。") == nil,
+    "substantive memories containing an end keyword should not stop the dialog"
 )
 assertCondition(
     !DialogEndIntentPolicy.shouldPromptMemoir(for: .manual),
