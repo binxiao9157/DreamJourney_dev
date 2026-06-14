@@ -83,6 +83,13 @@ xcrun swiftc -D CARE_DASHBOARD_VERIFY \
 echo "== CareDashboard backend sync =="
 python3 Scripts/CareDashboardBackendSyncVerify/main.py
 
+echo "== CareDashboard true backend flow =="
+BACKEND_PYTHON="python3"
+if [ -x "DreamJourneyBackend/.venv/bin/python" ]; then
+  BACKEND_PYTHON="DreamJourneyBackend/.venv/bin/python"
+fi
+PYTHONPATH=DreamJourneyBackend STORE_BACKEND=memory "$BACKEND_PYTHON" Scripts/CareDashboardTrueBackendFlowVerify/main.py
+
 echo "== CareDashboard data readiness UI =="
 python3 Scripts/CareDashboardDataReadinessUIVerify/main.py
 
