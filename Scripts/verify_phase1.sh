@@ -369,6 +369,16 @@ python3 Scripts/KnowledgeBaseDepositStatusUIVerify/main.py
 echo "== Dialog knowledge deposit feedback =="
 python3 Scripts/DialogKnowledgeDepositFeedbackVerify/main.py
 
+echo "== Dialog end intent =="
+xcrun swiftc \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
+  DreamJourney/Sources/Services/Safety/SafetyModels.swift \
+  DreamJourney/Sources/Services/KBLiteModels.swift \
+  DreamJourney/Sources/Services/DialogEngineModels.swift \
+  Scripts/DialogEndIntentVerify/main.swift \
+  -o /tmp/dreamjourney_dialog_end_intent_verify
+/tmp/dreamjourney_dialog_end_intent_verify
+
 echo "== Dialog memory RAG payload =="
 xcrun swiftc \
   DreamJourney/Sources/Services/Safety/SafetyModels.swift \
