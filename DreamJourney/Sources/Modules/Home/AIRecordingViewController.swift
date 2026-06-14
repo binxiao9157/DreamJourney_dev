@@ -306,6 +306,7 @@ final class AIRecordingViewController: UIViewController {
     private var isDigitalHumanSystemSpeechFallbackActive = false
     private var systemSpeechFallbackRequestID: Int?
     private var isRealtimeDialogPausedForDigitalHumanPlayback = false
+    private var shouldResumeRealtimeDialogAfterDigitalHumanPlayback = false
     private var pendingDialogEndReasonAfterDigitalHumanPlayback: DialogEndReason?
     private var hasFinalizedCurrentDialogSession = false
 
@@ -1119,6 +1120,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
         pendingAIText = nil
         userSpeechSignalTracker.reset()
         pendingDialogEndReasonAfterDigitalHumanPlayback = nil
+        shouldResumeRealtimeDialogAfterDigitalHumanPlayback = false
         hasFinalizedCurrentDialogSession = false
         resetDigitalHumanSpeechPlayback(stopFallbackAudio: true)
         hideDigitalHumanFallbackPresentation()
@@ -1276,6 +1278,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
 
     private func finishDigitalHumanSpeechPlayback(source: String) {
         let wasRealtimeDialogPaused = isRealtimeDialogPausedForDigitalHumanPlayback
+        let shouldResumeRealtime = shouldResumeRealtimeDialogAfterDigitalHumanPlayback
         // TTS 播报结束，保持 active 状态等待用户继续说话
         DDLogInfo("[DigitalHumanSpeech] playback_finished source=\(source) requestID=\(digitalHumanSpeechRequestID)")
         DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
@@ -1293,6 +1296,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
         digitalHumanSpeechRequestID += 1
         isAwaitingDigitalHumanAudioEnd = false
         isRealtimeDialogPausedForDigitalHumanPlayback = false
+        shouldResumeRealtimeDialogAfterDigitalHumanPlayback = false
         currentAssistantResponseText = nil
         if let deferredEndReason = pendingDialogEndReasonAfterDigitalHumanPlayback {
             pendingDialogEndReasonAfterDigitalHumanPlayback = nil
@@ -1303,13 +1307,24 @@ extension AIRecordingViewController: DialogEngineDelegate {
             finalizeDialogEnd(reason: deferredEndReason)
             return
         }
-        if wasRealtimeDialogPaused {
+        let canContinue = presentConversationWellbeingDecisionIfNeeded(afterAssistantPlayback: true)
+        if shouldResumeRealtime,
+           canContinue,
+           source != "timeout",
+           voiceBallState == .active,
+           !hasFinalizedCurrentDialogSession,
+           !isCrisisInterventionActive {
+            DDLogInfo("[DigitalHumanSpeech] playback_finished_realtime_resuming source=\(source)")
+            DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
+                "playback_finished_realtime_resuming source=\(source)"
+            )
+            resumeRealtimeDialogAfterDigitalHumanPlayback()
+        } else if wasRealtimeDialogPaused {
             updateVoiceBallState(.idle)
             digitalHumanAvatarView.setState(.idle, prompt: "点麦克风继续说")
         } else {
             digitalHumanAvatarView.setState(.listening, prompt: "可以继续说")
         }
-        presentConversationWellbeingDecisionIfNeeded(afterAssistantPlayback: true)
     }
 
     func onError(error: Error) {
@@ -1410,12 +1425,29 @@ extension AIRecordingViewController: DialogEngineDelegate {
     private func pauseRealtimeDialogForDigitalHumanPlayback(requestID: Int) {
         guard dialogEngine.isDialogActive else { return }
         isRealtimeDialogPausedForDigitalHumanPlayback = true
+        shouldResumeRealtimeDialogAfterDigitalHumanPlayback = true
         stopSessionRecording()
-        DDLogInfo("[DigitalHumanSpeech] realtime_dialog_pausing requestID=\(requestID) reason=native_audio_exclusive_playback")
+        DDLogInfo("[DigitalHumanSpeech] realtime_dialog_suspending requestID=\(requestID) reason=native_audio_exclusive_playback")
         DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
-            "realtime_dialog_pausing requestID=\(requestID) reason=native_audio_exclusive_playback"
+            "realtime_dialog_suspending requestID=\(requestID) reason=native_audio_exclusive_playback"
         )
         dialogEngine.stopDialog(reason: .manual)
+    }
+
+    private func resumeRealtimeDialogAfterDigitalHumanPlayback() {
+        guard !dialogEngine.isDialogActive,
+              voiceBallState == .active,
+              !hasFinalizedCurrentDialogSession,
+              !isCrisisInterventionActive else { return }
+
+        digitalHumanAvatarView.clearSpeechAudio()
+        digitalHumanAvatarView.setState(.listening, prompt: "可以继续说")
+        dialogEngine.startDialog()
+        startSessionRecording()
+        DDLogInfo("[DigitalHumanSpeech] realtime_dialog_resumed_after_native_audio")
+        DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
+            "realtime_dialog_resumed_after_native_audio"
+        )
     }
 
     private func persistDigitalHumanNativeAudio(_ data: Data, requestID: Int) throws -> URL {
@@ -1528,6 +1560,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
         digitalHumanSpeechRequestID += 1
         isAwaitingDigitalHumanAudioEnd = false
         isRealtimeDialogPausedForDigitalHumanPlayback = false
+        shouldResumeRealtimeDialogAfterDigitalHumanPlayback = false
         pendingDialogEndReasonAfterDigitalHumanPlayback = nil
         currentAssistantResponseText = nil
         retryableDigitalHumanSpeechText = nil
@@ -1597,6 +1630,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
         pendingAIText = nil
         userSpeechSignalTracker.reset()
         pendingDialogEndReasonAfterDigitalHumanPlayback = nil
+        shouldResumeRealtimeDialogAfterDigitalHumanPlayback = false
         hasFinalizedCurrentDialogSession = true
         resetDigitalHumanSpeechPlayback(stopFallbackAudio: true)
         Stage1MemoryFacade.shared.discardCurrentConversationSession()
@@ -1615,6 +1649,13 @@ extension AIRecordingViewController: DialogEngineDelegate {
 
     func onDialogEnded(reason: DialogEndReason) {
         if isRealtimeDialogPausedForDigitalHumanPlayback {
+            if case .manual = reason, shouldResumeRealtimeDialogAfterDigitalHumanPlayback {
+                DDLogInfo("[DigitalHumanSpeech] dialog_end_deferred_for_realtime_resume reason=\(reason)")
+                DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
+                    "dialog_end_deferred_for_realtime_resume reason=\(reason)"
+                )
+                return
+            }
             pendingDialogEndReasonAfterDigitalHumanPlayback = reason
             DDLogInfo("[DigitalHumanSpeech] dialog_end_deferred_for_native_audio reason=\(reason)")
             DigitalHumanPlaybackEvidenceStore.shared.appendEvent(

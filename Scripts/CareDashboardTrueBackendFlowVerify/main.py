@@ -178,6 +178,12 @@ revoked = client.post(f"/family/members/{user_id}/{member_id}/revoke")
 require_status(revoked, 200, "family member revoke")
 require(revoked.json()["member"]["accessStatus"] == "revoked", "revoked member should lose active access")
 
+revoked_direct_accept = client.post(
+    f"/family/members/{user_id}/{member_id}/accept",
+    json={"phone": phone},
+)
+require_status(revoked_direct_accept, 404, "revoked family member should not be reaccepted directly")
+
 revoked_write = client.post(
     "/care/snapshots",
     json={

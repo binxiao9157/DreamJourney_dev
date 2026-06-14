@@ -283,3 +283,28 @@ iOS 仓库路径：`/Users/yxj/.config/superpowers/worktrees/DreamJourney_dev/ph
 3. 同步配置服务器 `BACKEND_API_TOKEN` 与 iOS `DreamJourneyBackendAPIToken`，用于 P2 authenticated smoke。
 
 补充：2026-06-14 18:19 已完成真机构建、安装和启动；Developer Disk Image 挂载问题已通过重新连接设备解除。
+
+## 11. 2026-06-14 P0/P1 自动开发更新
+
+本轮按 P0 > P1 的顺序先完成无需人工操作的功能修复和自动化验收，不再继续堆路演 UI 或足迹视觉细节。
+
+已完成修复：
+
+- 数字人原生 WAV 播放期间会暂停实时对话 SDK 以避免回声，但过去会把这次内部暂停误判成用户手动结束，导致一轮回答后不再继续聆听。本轮新增内部播放暂停标记，播放结束后自动恢复实时聆听；真正的用户手动结束仍走原结束沉淀逻辑。
+- 长辈关怀成员撤回后，`InMemoryStore.accept_family_member` 曾允许同一手机号通过直接 accept 重新变 active。本轮补齐撤回态保护，与邀请码/Postgres 行为对齐。
+- `Scripts/verify_phase1.sh` 已纳入数字人实时恢复校验和后端 core services 单测，后续回归会自动覆盖这两个缺陷。
+
+验证结果：
+
+- `python3 Scripts/DigitalHumanRealtimeResumeVerify/main.py` 通过。
+- `python3 Scripts/DigitalHumanDialogEndDepositVerify/main.py`、`DigitalHumanPlaybackInterruptVerify`、`DigitalHumanRuntimeLogVerify` 通过。
+- `STORE_BACKEND=memory PYTHONPATH=DreamJourneyBackend DreamJourneyBackend/.venv/bin/python -m unittest DreamJourneyBackend.tests.test_core_services` 通过，共 43 项。
+- `STORE_BACKEND=memory PYTHONPATH=DreamJourneyBackend DreamJourneyBackend/.venv/bin/python Scripts/CareDashboardTrueBackendFlowVerify/main.py` 通过。
+- `bash Scripts/verify_phase1.sh` 通过；日志：`/tmp/dreamjourney_phase1_p0p1_after_resume_fix.log`。
+- iPhoneOS 真机 Debug build 通过；日志：`/tmp/dreamjourney_p0p1_dev_true_device_build_retry.log`。
+
+状态调整：
+
+- P0 数字人“播放后断会话/抢停”从待开发调整为已自动修复，仍需真机用真实语音验证连续 3-5 轮。
+- P1 长辈关怀“撤回后不可继续读取/重新接受”从待开发调整为已自动修复，仍需双真机账号验证 UI 和后端 403。
+- P0 记忆档案馆真实素材建库、P0 数字人有证据才回答、P1 时空信箱 5 分钟投递，仍是下一轮人工真机验收主线。

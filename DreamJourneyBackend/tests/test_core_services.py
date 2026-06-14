@@ -1077,6 +1077,28 @@ class FamilyAPITests(unittest.TestCase):
         self.assertEqual(revoked.status_code, 200)
         self.assertEqual(accepted.status_code, 404)
 
+    def test_family_member_direct_accept_rejects_revoked_member(self):
+        client = TestClient(app)
+
+        created = client.post(
+            "/family/invite",
+            json={
+                "userId": "u_revoked_direct_accept",
+                "name": "陈岚",
+                "relation": "女儿",
+                "phone": "13900001111",
+            },
+        )
+        member = created.json()["member"]
+        revoked = client.post(f"/family/members/u_revoked_direct_accept/{member['id']}/revoke")
+        accepted = client.post(
+            f"/family/members/u_revoked_direct_accept/{member['id']}/accept",
+            json={"phone": "13900001111"},
+        )
+
+        self.assertEqual(revoked.status_code, 200)
+        self.assertEqual(accepted.status_code, 404)
+
     def test_family_member_revoke_api_marks_member_revoked(self):
         client = TestClient(app)
 

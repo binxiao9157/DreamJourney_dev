@@ -219,6 +219,9 @@ python3 Scripts/FamilyBackendSyncVerify/main.py
 echo "== DreamJourney backend auth =="
 python3 Scripts/DreamJourneyBackendAuthVerify/main.py
 
+echo "== DreamJourney backend core services =="
+PYTHONPATH=DreamJourneyBackend STORE_BACKEND=memory "$BACKEND_PYTHON" -m unittest DreamJourneyBackend.tests.test_core_services
+
 echo "== Family member access state =="
 xcrun swiftc \
   DreamJourney/Sources/Services/MemoryModel.swift \
@@ -246,6 +249,9 @@ python3 Scripts/DigitalHumanDialogEndDepositVerify/main.py
 
 echo "== DigitalHuman playback interruption =="
 python3 Scripts/DigitalHumanPlaybackInterruptVerify/main.py
+
+echo "== DigitalHuman realtime resume =="
+python3 Scripts/DigitalHumanRealtimeResumeVerify/main.py
 
 echo "== DigitalHuman playback policy =="
 xcrun swiftc \
