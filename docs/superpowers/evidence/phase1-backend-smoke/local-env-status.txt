@@ -1,0 +1,2 @@
+DREAMJOURNEY_BACKEND_BASE_URL not exported in local shell. Used deployment-doc fallback: https://www.mmdd10.tech/dreamjourney-api
+DREAMJOURNEY_BACKEND_API_TOKEN not available locally; authenticated smoke pending.

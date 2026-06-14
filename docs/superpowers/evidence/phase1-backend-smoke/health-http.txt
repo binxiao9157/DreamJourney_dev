@@ -1,0 +1,14 @@
+HTTP/1.1 200 Connection established
+
+HTTP/2 200 
+server: nginx/1.24.0 (Ubuntu)
+date: Sun, 14 Jun 2026 10:06:05 GMT
+content-type: application/json
+content-length: 94
+x-frame-options: SAMEORIGIN
+x-content-type-options: nosniff
+x-xss-protection: 1; mode=block
+referrer-policy: strict-origin-when-cross-origin
+strict-transport-security: max-age=31536000; includeSubDomains; preload
+
+{"status":"ok","service":"DreamJourney Backend","environment":"production","store":"postgres"}

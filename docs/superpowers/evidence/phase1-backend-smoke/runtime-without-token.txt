@@ -1,0 +1,14 @@
+HTTP/1.1 200 Connection established
+
+HTTP/2 200 
+server: nginx/1.24.0 (Ubuntu)
+date: Sun, 14 Jun 2026 10:06:05 GMT
+content-type: application/json
+content-length: 434
+x-frame-options: SAMEORIGIN
+x-content-type-options: nosniff
+x-xss-protection: 1; mode=block
+referrer-policy: strict-origin-when-cross-origin
+strict-transport-security: max-age=31536000; includeSubDomains; preload
+
+{"environment":"production","baseURL":"https://www.mmdd10.tech/dreamjourney-api","capabilities":{"deepseekProxy":true,"ttsProxy":true,"realtimeToken":true,"amapDistrictProxy":true,"kbSync":true,"familyCircle":true},"voice":{"voiceType":"zh_female_cancan_mars_bigtts","realtimeResourceID":"volc.speech.dialog"},"privacy":{"localOnly":"never_upload","generationAllowed":"ai_and_backend_allowed","familyCircle":"authorized_family_sync"}}
