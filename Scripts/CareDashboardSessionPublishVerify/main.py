@@ -44,6 +44,13 @@ require(
     "publisher should upload only owner-side redacted snapshots to the backend",
 )
 require(
+    "enum PublishFailure" in publisher
+    and "completion(.failure(PublishFailure.backendNotConfigured))" in publisher
+    and "completion(.failure(PublishFailure.noEligibleCareTurns))" in publisher
+    and "completion(.failure(PublishFailure.ownerMismatch))" in publisher,
+    "publisher should report skipped backend publishing through completion instead of silently returning",
+)
+require(
     "CareDashboardSnapshotPublisher.shared.publishLatestLocalSnapshotAfterConversationEnd()" in facade,
     "finishConversationSession should trigger background care snapshot publishing",
 )

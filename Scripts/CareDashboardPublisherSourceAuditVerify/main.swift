@@ -81,4 +81,18 @@ require(
     "source audit display summary should not overstate stale authorized turns"
 )
 
+var didPublishCompletion = false
+var didReportPublishFailure = false
+CareDashboardSnapshotPublisher().publish(
+    snapshot: localSnapshot.snapshot,
+    viewerFamilyMemberID: nil
+) { result in
+    didPublishCompletion = true
+    if case .failure = result {
+        didReportPublishFailure = true
+    }
+}
+require(didPublishCompletion, "care dashboard publish should call completion when backend publish is skipped")
+require(didReportPublishFailure, "care dashboard publish should report skipped backend publishing as a failure")
+
 print("CareDashboardPublisherSourceAudit verification passed")

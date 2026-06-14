@@ -8,6 +8,29 @@ struct CareDashboardLocalSnapshot {
 final class CareDashboardSnapshotPublisher {
     static let shared = CareDashboardSnapshotPublisher()
 
+    enum PublishFailure: LocalizedError, Equatable {
+        case noEligibleCareTurns
+        case backendNotConfigured
+        case missingCurrentUser
+        case missingCareOwner
+        case ownerMismatch
+
+        var errorDescription: String? {
+            switch self {
+            case .noEligibleCareTurns:
+                return "关怀快照没有可发布的真实亲友范围发言"
+            case .backendNotConfigured:
+                return "关怀快照后端未配置"
+            case .missingCurrentUser:
+                return "关怀快照缺少当前用户身份"
+            case .missingCareOwner:
+                return "关怀快照缺少被关怀长辈身份"
+            case .ownerMismatch:
+                return "关怀快照只能由被关怀长辈本人发布"
+            }
+        }
+    }
+
     private let analyzer: CareSignalAnalyzer
 
     init(analyzer: CareSignalAnalyzer = CareSignalAnalyzer()) {
@@ -81,11 +104,24 @@ final class CareDashboardSnapshotPublisher {
         viewerFamilyMemberID: String?,
         completion: @escaping (Result<DreamJourneyBackendClient.CareSnapshotResponse, Error>) -> Void = { _ in }
     ) {
-        guard snapshot.userTurnCount > 0,
-              DreamJourneyBackendClient.shared.isConfigured,
-              let currentUserId = UserManager.shared.currentUser?.id,
-              let ownerUserId = FamilyRepository.shared.careOwnerUserID(for: viewerFamilyMemberID),
-              ownerUserId == currentUserId else {
+        guard snapshot.userTurnCount > 0 else {
+            completion(.failure(PublishFailure.noEligibleCareTurns))
+            return
+        }
+        guard DreamJourneyBackendClient.shared.isConfigured else {
+            completion(.failure(PublishFailure.backendNotConfigured))
+            return
+        }
+        guard let currentUserId = UserManager.shared.currentUser?.id else {
+            completion(.failure(PublishFailure.missingCurrentUser))
+            return
+        }
+        guard let ownerUserId = FamilyRepository.shared.careOwnerUserID(for: viewerFamilyMemberID) else {
+            completion(.failure(PublishFailure.missingCareOwner))
+            return
+        }
+        guard ownerUserId == currentUserId else {
+            completion(.failure(PublishFailure.ownerMismatch))
             return
         }
         DreamJourneyBackendClient.shared.syncCareSnapshot(
