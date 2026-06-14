@@ -66,6 +66,12 @@ do {
     assertCondition(delivered[0].replyText?.contains("暂不合成逝者声音") == true, "reply should disclose safe text fallback mode")
     assertCondition(delivered[0].replyText?.contains("不会替Ta编造具体经历") == true, "reply without evidence should refuse fabrication")
     assertCondition(delivered[0].replyText?.contains("我今天路过老房子") != true, "reply must not echo the private letter body")
+    assertCondition(delivered[0].echoMode == .safeFallbackText, "delivered fallback letter should persist echo generation mode")
+    assertCondition(delivered[0].echoEvidenceLineCount == 0, "delivered fallback letter should persist zero evidence count")
+    assertCondition(
+        repo.letters().first(where: { $0.id == letter.id })?.echoEvidenceLineCount == 0,
+        "stored fallback letter should keep zero evidence count after reload"
+    )
 
     try repo.markRead(id: letter.id)
     assertCondition(repo.letters().first?.status == .read, "delivered letter should be markable as read")
@@ -182,6 +188,7 @@ do {
     assertCondition(evidenceDelivered[0].replyText?.contains("妈妈做的桂花糕") == true, "reply should include supplied evidence")
     assertCondition(evidenceDelivered[0].replyText?.contains("不是逝者真实回复") == true, "evidence reply must keep boundary wording")
     assertCondition(evidenceDelivered[0].replyText?.contains("我今天又想起桂花糕") != true, "evidence reply must not echo the private letter body")
+    assertCondition(evidenceDelivered[0].echoEvidenceLineCount == 4, "evidence reply should persist authorized evidence count")
 
     let legacyJSON = """
     [{
@@ -199,6 +206,8 @@ do {
     decoder.dateDecodingStrategy = .iso8601
     let legacyLetters = try decoder.decode([TimeMailboxLetter].self, from: legacyJSON)
     assertCondition(legacyLetters.first?.privacyMetadata.scope == .localOnly, "legacy mailbox letter should migrate to localOnly")
+    assertCondition(legacyLetters.first?.echoMode == nil, "legacy mailbox letter should decode without echo mode")
+    assertCondition(legacyLetters.first?.echoEvidenceLineCount == nil, "legacy mailbox letter should decode without evidence count")
 } catch {
     fputs("FAIL: unexpected error \(error)\n", stderr)
     exit(1)

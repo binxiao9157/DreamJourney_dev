@@ -1,6 +1,6 @@
 import Foundation
 
-enum TimeMailboxEchoGenerationMode: String, Equatable {
+enum TimeMailboxEchoGenerationMode: String, Codable, Equatable {
     case safeFallbackText
 }
 

@@ -16,6 +16,8 @@ struct TimeMailboxLetter: Codable, Identifiable, Equatable, MemoryPrivacyScoped 
     var deliveredAt: Date?
     var status: TimeMailboxDeliveryStatus
     var replyText: String?
+    var echoMode: TimeMailboxEchoGenerationMode?
+    var echoEvidenceLineCount: Int?
     var boundaryAcknowledged: Bool
     var privacyMetadata: MemoryPrivacyMetadata
 
@@ -29,6 +31,8 @@ struct TimeMailboxLetter: Codable, Identifiable, Equatable, MemoryPrivacyScoped 
         deliveredAt: Date?,
         status: TimeMailboxDeliveryStatus,
         replyText: String?,
+        echoMode: TimeMailboxEchoGenerationMode? = nil,
+        echoEvidenceLineCount: Int? = nil,
         boundaryAcknowledged: Bool,
         privacyMetadata: MemoryPrivacyMetadata = MemoryPrivacyMetadata(scope: .localOnly)
     ) {
@@ -41,6 +45,8 @@ struct TimeMailboxLetter: Codable, Identifiable, Equatable, MemoryPrivacyScoped 
         self.deliveredAt = deliveredAt
         self.status = status
         self.replyText = replyText
+        self.echoMode = echoMode
+        self.echoEvidenceLineCount = echoEvidenceLineCount
         self.boundaryAcknowledged = boundaryAcknowledged
         self.privacyMetadata = privacyMetadata
     }
@@ -55,6 +61,8 @@ struct TimeMailboxLetter: Codable, Identifiable, Equatable, MemoryPrivacyScoped 
         case deliveredAt
         case status
         case replyText
+        case echoMode
+        case echoEvidenceLineCount
         case boundaryAcknowledged
         case privacyMetadata
     }
@@ -70,6 +78,8 @@ struct TimeMailboxLetter: Codable, Identifiable, Equatable, MemoryPrivacyScoped 
         deliveredAt = try container.decodeIfPresent(Date.self, forKey: .deliveredAt)
         status = try container.decode(TimeMailboxDeliveryStatus.self, forKey: .status)
         replyText = try container.decodeIfPresent(String.self, forKey: .replyText)
+        echoMode = try container.decodeIfPresent(TimeMailboxEchoGenerationMode.self, forKey: .echoMode)
+        echoEvidenceLineCount = try container.decodeIfPresent(Int.self, forKey: .echoEvidenceLineCount)
         boundaryAcknowledged = try container.decodeIfPresent(Bool.self, forKey: .boundaryAcknowledged) ?? false
         privacyMetadata = try container.decodeIfPresent(MemoryPrivacyMetadata.self, forKey: .privacyMetadata)
             ?? MemoryPrivacyMetadata(scope: .localOnly)

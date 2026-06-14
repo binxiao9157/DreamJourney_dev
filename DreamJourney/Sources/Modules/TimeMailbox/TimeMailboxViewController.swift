@@ -334,6 +334,9 @@ final class TimeMailboxViewController: UIViewController {
         原信仅本机显示：
         \(latest.body)
 
+        回声状态：
+        \(echoStatusText(for: latest))
+
         回声边界：
         \(latest.replyText ?? "这封信已经到达，但回声还在整理中。")
         """
@@ -345,6 +348,17 @@ final class TimeMailboxViewController: UIViewController {
         alert.addAction(UIAlertAction(title: "我知道了", style: .default))
         present(alert, animated: true)
         reloadLetters()
+    }
+
+    private func echoStatusText(for letter: TimeMailboxLetter) -> String {
+        guard letter.status != .sealed else {
+            return "尚未投递，未生成回声。"
+        }
+        let count = letter.echoEvidenceLineCount ?? 0
+        if count <= 0 {
+            return "无授权记忆，仅安全回声。"
+        }
+        return "引用 \(count) 条授权记忆生成安全文本回声。"
     }
 
     private func syncDeliveredLettersToBackend(_ deliveredLetters: [TimeMailboxLetter]) {
@@ -759,12 +773,12 @@ private final class TimeMailboxCell: UITableViewCell {
     required init?(coder: NSCoder) { fatalError() }
 
     func configure(with letter: TimeMailboxLetter) {
-        statusLabel.text = statusText(for: letter.status)
+        statusLabel.text = statusText(for: letter)
         statusLabel.textColor = statusColor(for: letter.status)
         titleLabel.text = letter.title
         recipientLabel.text = "写给 \(letter.recipientName)"
         dateLabel.text = "投递 \(Self.formatter.string(from: letter.deliverAt))"
-        previewLabel.text = "正文仅本机保存，回声到达后需点开阅读"
+        previewLabel.text = previewText(for: letter)
     }
 
     private func setupView() {
@@ -819,11 +833,24 @@ private final class TimeMailboxCell: UITableViewCell {
         ])
     }
 
-    private func statusText(for status: TimeMailboxDeliveryStatus) -> String {
-        switch status {
+    private func statusText(for letter: TimeMailboxLetter) -> String {
+        switch letter.status {
         case .sealed: return "等待中"
-        case .delivered: return "可阅读"
+        case .delivered:
+            return (letter.echoEvidenceLineCount ?? 0) > 0 ? "可阅读" : "安全回声"
         case .read: return "已读"
+        }
+    }
+
+    private func previewText(for letter: TimeMailboxLetter) -> String {
+        switch letter.status {
+        case .sealed:
+            return "正文仅本机保存，回声到达后需点开阅读"
+        case .delivered, .read:
+            let count = letter.echoEvidenceLineCount ?? 0
+            return count > 0
+                ? "已引用 \(count) 条授权记忆；正文和回声仍仅本机阅读"
+                : "无授权记忆，仅安全回声；正文和回声仍仅本机阅读"
         }
     }
 

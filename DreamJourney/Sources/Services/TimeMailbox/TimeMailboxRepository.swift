@@ -96,6 +96,8 @@ final class TimeMailboxRepository {
             let evidence = evidenceProvider?(all[index]) ?? .empty
             let echo = echoService.makeEcho(for: all[index], evidence: evidence)
             all[index].replyText = echo.replyText
+            all[index].echoMode = echo.mode
+            all[index].echoEvidenceLineCount = echo.evidenceLineCount
             delivered.append(all[index])
         }
 

@@ -34,9 +34,19 @@ required_status_fragments = [
     "本机私密 \\(localOnlyCount) 封",
     "完整正文和回声不出端",
     "服务器同步",
+    "无授权记忆，仅安全回声",
+    "引用 \\(count) 条授权记忆",
+    "回声状态",
 ]
 for fragment in required_status_fragments:
     require(fragment in vc, f"live evidence status missing {fragment!r}")
+
+require(
+    "private func echoStatusText(for letter: TimeMailboxLetter)" in vc
+    and "echoStatusText(for: latest)" in vc
+    and "statusText(for letter: TimeMailboxLetter)" in vc,
+    "mailbox UI should derive visible echo status from persisted evidence metadata",
+)
 
 require(
     "private let backendSyncStatusLabel" not in vc,

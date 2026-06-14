@@ -46,7 +46,9 @@ require(
     "mailbox list cells must not display letter body or echo text",
 )
 require(
-    "正文仅本机保存" in cell_config or "完整正文不出端" in cell_config,
+    "previewText(for: letter)" in cell_config
+    and "正文仅本机保存" in view
+    and "正文和回声仍仅本机阅读" in view,
     "mailbox list should explain that full content remains local",
 )
 require(
