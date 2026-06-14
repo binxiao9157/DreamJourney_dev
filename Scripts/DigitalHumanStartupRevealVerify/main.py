@@ -22,8 +22,10 @@ required_vc_fragments = [
     "private var initialAvatarRevealFallbackWorkItem",
     "private let startupPosterImageView",
     'UIImage(named: "avatar_poster")',
+    "addSubview(webView)",
     "addSubview(startupPosterImageView)",
-    "webView.alpha = 1",
+    "webView.alpha = 0",
+    "startupPosterImageView.alpha = 1",
     "startupPosterImageView.alpha = 0",
     "scheduleInitialAvatarRevealFallback()",
     "revealInitialAvatarIfNeeded(reason:",
@@ -47,8 +49,17 @@ if not poster.exists() or poster.stat().st_size <= 0:
     missing.append(f"{poster.name}: missing transparent startup poster")
 if "avatar_poster.png in Resources" not in xcodeproj_text:
     missing.append(f"{xcodeproj.name}: missing avatar_poster.png resource entry")
-if "webView.alpha = 0" in vc_text:
-    missing.append(f"{vc.name}: webView should be visible immediately with the stable poster, not blank until live canvas")
+setup_match = re.search(r"private func setupView\(\) \{(?P<body>.*?)\n    \}", vc_text, re.S)
+if not setup_match:
+    missing.append(f"{vc.name}: missing setupView body")
+else:
+    setup_body = setup_match.group("body")
+    web_add = setup_body.find("addSubview(webView)")
+    poster_add = setup_body.find("addSubview(startupPosterImageView)")
+    if web_add == -1 or poster_add == -1 or not web_add < poster_add:
+        missing.append(f"{vc.name}: startup poster must be added above the WebView to cover cold-load transitions")
+    if "webView.alpha = 1" in setup_body:
+        missing.append(f"{vc.name}: WebView must start hidden behind the stable poster until the live avatar frame is ready")
 if "startMessage.textContent = '真人数字人已就绪';" in vc_text:
     missing.append(f"{vc.name}: should not flash ready text during avatar startup reveal")
 if not re.search(r"#loadingSpinner\s*\{[^}]*display:\s*none;", vc_text, re.S):

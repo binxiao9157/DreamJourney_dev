@@ -1900,15 +1900,17 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
         layer.borderColor = UIColor.clear.cgColor
         layer.borderWidth = 0
 
+        startupPosterImageView.alpha = 1
+        startupPosterImageView.isHidden = false
         webView.navigationDelegate = self
-        webView.alpha = 1
+        webView.alpha = 0
         webView.isOpaque = false
         webView.backgroundColor = .clear
         webView.scrollView.isScrollEnabled = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
 
-        addSubview(startupPosterImageView)
         addSubview(webView)
+        addSubview(startupPosterImageView)
         startupPosterImageView.translatesAutoresizingMaskIntoConstraints = false
         webView.translatesAutoresizingMaskIntoConstraints = false
 
