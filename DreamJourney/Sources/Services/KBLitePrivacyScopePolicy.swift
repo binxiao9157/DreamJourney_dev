@@ -139,6 +139,7 @@ enum KBLitePrivacyScopePolicy {
         case .backendSync, .familySync, .export, .widget:
             return true
         case .remoteExtraction,
+             .conversation,
              .prompt,
              .memoirGeneration,
              .timeMailboxEcho,

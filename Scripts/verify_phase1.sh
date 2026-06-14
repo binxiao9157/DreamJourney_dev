@@ -379,6 +379,9 @@ xcrun swiftc \
   -o /tmp/dreamjourney_dialog_memory_rag_payload_verify
 /tmp/dreamjourney_dialog_memory_rag_payload_verify
 
+echo "== Dialog photo placeholder privacy =="
+python3 Scripts/DialogPhotoPlaceholderPrivacyVerify/main.py
+
 echo "== KBLite remote extraction evidence =="
 python3 Scripts/KBLiteRemoteExtractionEvidenceVerify/main.py
 

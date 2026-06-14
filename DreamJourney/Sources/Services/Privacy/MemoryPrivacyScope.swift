@@ -8,6 +8,7 @@ public enum MemoryPrivacyScope: String, Codable, CaseIterable, Hashable {
 }
 
 public enum MemoryUseSurface: String, Codable, CaseIterable, Hashable {
+    case conversation
     case remoteExtraction
     case prompt
     case memoirGeneration
@@ -170,7 +171,8 @@ public enum PrivacyScopePolicy {
             return false
         case .localOnly:
             switch surface {
-            case .timeMailboxEcho:
+            case .conversation,
+                 .timeMailboxEcho:
                 return true
             case .remoteExtraction,
                  .prompt,
@@ -184,7 +186,7 @@ public enum PrivacyScopePolicy {
             }
         case .generationAllowed:
             switch surface {
-            case .remoteExtraction, .prompt, .memoirGeneration, .timeMailboxEcho, .backendSync:
+            case .conversation, .remoteExtraction, .prompt, .memoirGeneration, .timeMailboxEcho, .backendSync:
                 return true
             case .export,
                  .widget,
@@ -194,7 +196,7 @@ public enum PrivacyScopePolicy {
             }
         case .familyCircle:
             switch surface {
-            case .careDashboard, .familySync, .backendSync:
+            case .conversation, .careDashboard, .familySync, .backendSync:
                 return true
             case .remoteExtraction,
                  .prompt,

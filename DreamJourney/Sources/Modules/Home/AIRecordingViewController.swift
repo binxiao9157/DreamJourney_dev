@@ -914,24 +914,29 @@ extension AIRecordingViewController: UIImagePickerControllerDelegate, UINavigati
         messageTableView.reloadData()
         scrollToBottom()
 
-        // 记录到对话记忆
-        let privacyMetadata = selectedDialogPrivacyMetadata
+        // 照片素材可按用户选择授权分析；聊天占位只用于本机 UI，不作为亲友近况或可生成记忆。
+        let photoMaterialMetadata = selectedDialogPrivacyMetadata
+        let conversationPlaceholderMetadata = MemoryPrivacyMetadata(
+            scope: .localOnly,
+            createdBySurface: .conversation,
+            createdAt: Date()
+        )
         Stage1MemoryFacade.shared.recordUserTurn(Stage1MailboxMemoryInput(
             "[发送了一张照片]",
-            privacyMetadata: privacyMetadata
+            privacyMetadata: conversationPlaceholderMetadata
         ))
         Stage1MemoryFacade.shared.recordAssistantTurn(Stage1MailboxMemoryInput(
             "照片收到了！能不能跟我说说这张照片背后的故事？",
-            privacyMetadata: privacyMetadata
+            privacyMetadata: conversationPlaceholderMetadata
         ))
 
         // 【KBLite】异步分析图片
-        if PrivacyScopePolicy.canUse(metadata: privacyMetadata, surface: .remoteExtraction) {
+        if PrivacyScopePolicy.canUse(metadata: photoMaterialMetadata, surface: .remoteExtraction) {
             analyzeUploadedPhoto(
                 image,
                 aiMessageIndex: aiMessageIndex,
                 imagePath: imagePath,
-                privacyMetadata: privacyMetadata
+                privacyMetadata: photoMaterialMetadata
             )
         }
     }
