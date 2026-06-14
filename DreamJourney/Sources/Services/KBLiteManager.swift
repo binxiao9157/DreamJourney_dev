@@ -1088,7 +1088,13 @@ final class KBLiteManager {
         privacyMetadata: MemoryPrivacyMetadata
     ) -> Int {
         var addedCount = 0
-        for name in regexMatches(pattern: "我叫([\\u4e00-\\u9fa5]{2,4}?)(?:在|和|，|。|,|\\s|$)", in: text).compactMap({ $0.first }) {
+        let selfNames = regexMatches(
+            pattern: "我叫([\\u4e00-\\u9fa5]{2,4}?)(?:在|和|，|。|,|\\s|$)",
+            in: text
+        ).compactMap { $0.first }
+        var spouseNames: [String] = []
+
+        for name in selfNames {
             addedCount += upsertQuickPerson(
                 name: name,
                 relation: "本人",
@@ -1116,6 +1122,14 @@ final class KBLiteManager {
                     sessionId: sessionId,
                     privacyMetadata: privacyMetadata
                 )
+                if item.relation == "妻子" || item.relation == "丈夫" || item.relation == "老伴" {
+                    spouseNames.append(name)
+                }
+            }
+        }
+        for selfName in selfNames {
+            for spouseName in spouseNames {
+                linkQuickPeople(named: selfName, and: spouseName, privacyMetadata: privacyMetadata)
             }
         }
         return addedCount
@@ -1299,6 +1313,30 @@ final class KBLiteManager {
             )
         )
         return 1
+    }
+
+    private func linkQuickPeople(
+        named firstRawName: String,
+        and secondRawName: String,
+        privacyMetadata: MemoryPrivacyMetadata
+    ) {
+        let firstName = Self.normalizedQuickExtractEntity(firstRawName)
+        let secondName = Self.normalizedQuickExtractEntity(secondRawName)
+        guard firstName != secondName,
+              let first = findMatchingPerson(name: firstName, aliases: [], privacyMetadata: privacyMetadata),
+              let second = findMatchingPerson(name: secondName, aliases: [], privacyMetadata: privacyMetadata),
+              let firstIndex = graph.people.firstIndex(where: { $0.id == first.id }),
+              let secondIndex = graph.people.firstIndex(where: { $0.id == second.id })
+        else {
+            return
+        }
+
+        if !graph.people[firstIndex].relatedPersonIds.contains(second.id) {
+            graph.people[firstIndex].relatedPersonIds.append(second.id)
+        }
+        if !graph.people[secondIndex].relatedPersonIds.contains(first.id) {
+            graph.people[secondIndex].relatedPersonIds.append(first.id)
+        }
     }
 
     private func extractPlacePhrases(from text: String) -> [(name: String, category: String?, description: String?)] {

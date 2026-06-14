@@ -83,10 +83,17 @@ let peopleNames = Set(graph.people.map(\.name))
 let placeNames = Set(graph.places.map(\.name))
 let eventTitles = Set(graph.events.map(\.title))
 let factText = graph.facts.map(\.statement).joined(separator: "\n")
+let selfPerson = graph.people.first { $0.name == "陈建国" }
+let spousePerson = graph.people.first { $0.name == "林桂芳" }
 
 assertCondition(addedCount >= 8, "quick extract should add concrete people, places, events and facts")
 assertCondition(peopleNames.contains("陈建国"), "should extract self name 陈建国")
 assertCondition(peopleNames.contains("林桂芳"), "should extract spouse name 林桂芳")
+assertCondition(
+    selfPerson?.relatedPersonIds.contains(spousePerson?.id ?? "") == true &&
+        spousePerson?.relatedPersonIds.contains(selfPerson?.id ?? "") == true,
+    "self and spouse extracted from one sentence should be linked for family graph browsing"
+)
 assertCondition(placeNames.contains("绍兴"), "should extract city 绍兴")
 assertCondition(placeNames.contains("绍兴越城区仓桥直街"), "should extract full lived address")
 assertCondition(placeNames.contains("杭州西湖边") || placeNames.contains("西湖边"), "should extract work location around 西湖边")
