@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import re
 import sys
 from pathlib import Path
 
@@ -44,6 +45,25 @@ require(
 require(
     "saveVoiceTranscriptBackfill(transcript, for: item)" in view,
     "auto transcription should reuse voice transcript backfill deposit path",
+)
+require(
+    "voiceTranscriptionFailurePresentation(for:" in view,
+    "auto transcription failure should use a friendly presentation helper",
+)
+transcription_body = re.search(
+    r"private func startVoiceAutoTranscription\(for item: MemoryArchiveItem, localPath: String\) \{(?P<body>[\s\S]*?)\n    \}",
+    view,
+)
+require(transcription_body is not None, "auto transcription start helper should be present")
+body = transcription_body.group("body")
+require(
+    "voiceTranscriptionFailurePresentation(for: error)" in body,
+    "auto transcription failure should route through friendly presentation",
+)
+require(
+    "showToast(error.localizedDescription" not in body
+    and "语音识别失败（\\(error.localizedDescription)）" not in body,
+    "auto transcription failure should not expose raw localizedDescription in status or toast",
 )
 require(
     "NSSpeechRecognitionUsageDescription" in info,

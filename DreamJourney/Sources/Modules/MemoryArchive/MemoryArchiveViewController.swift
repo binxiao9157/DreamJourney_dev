@@ -637,10 +637,38 @@ final class MemoryArchiveViewController: UIViewController {
                 case .success(let transcript):
                     self.saveVoiceTranscriptBackfill(transcript, for: item)
                 case .failure(let error):
-                    self.setKnowledgeDepositStatus("结构化建库：语音识别失败（\(error.localizedDescription)）")
-                    self.showToast(error.localizedDescription, type: .error)
+                    let presentation = Self.voiceTranscriptionFailurePresentation(for: error)
+                    self.setKnowledgeDepositStatus(presentation.status)
+                    self.showToast(presentation.toast, type: .info)
                 }
             }
+        }
+    }
+
+    private static func voiceTranscriptionFailurePresentation(
+        for error: MemoryArchiveVoiceTranscriptionError
+    ) -> (status: String, toast: String) {
+        switch error {
+        case .recognizerUnavailable:
+            return (
+                "结构化建库：当前设备暂不可用语音识别，可稍后重试或手动补充转写",
+                "语音识别暂不可用"
+            )
+        case .notAuthorized, .denied, .restricted:
+            return (
+                "结构化建库：需要允许语音识别权限，或手动补充转写",
+                "请允许语音识别或手动补充"
+            )
+        case .emptyResult:
+            return (
+                "结构化建库：这段语音未识别到清晰文字，可手动补充转写",
+                "未识别到清晰文字"
+            )
+        case .failed:
+            return (
+                "结构化建库：语音识别没有完成，可稍后重试或手动补充转写",
+                "语音识别未完成"
+            )
         }
     }
 
