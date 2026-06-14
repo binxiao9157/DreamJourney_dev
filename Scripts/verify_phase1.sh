@@ -142,6 +142,9 @@ python3 Scripts/CareDashboardBackendAccessStatusUIVerify/main.py
 echo "== CareDashboard share report UI =="
 python3 Scripts/CareDashboardShareReportUIVerify/main.py
 
+echo "== CareDashboard no duplicate metrics =="
+python3 Scripts/CareDashboardNoDuplicateMetricsVerify/main.py
+
 echo "== MemoryArchive backend sync =="
 python3 Scripts/MemoryArchiveBackendSyncVerify/main.py
 
