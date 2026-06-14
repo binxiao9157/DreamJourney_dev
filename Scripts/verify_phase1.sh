@@ -314,6 +314,9 @@ python3 Scripts/KBLitePromptGraphSanitizationVerify/main.py
 echo "== KBLite backend snapshot restore =="
 python3 Scripts/KBLiteBackendSnapshotVerify/main.py
 
+echo "== Backend Postgres KBLite persistence =="
+PYTHONPATH=DreamJourneyBackend "$BACKEND_PYTHON" -m unittest DreamJourneyBackend.tests.test_postgres_store
+
 echo "== KBLite user lifecycle =="
 python3 Scripts/KBLiteUserLifecycleVerify/main.py
 
