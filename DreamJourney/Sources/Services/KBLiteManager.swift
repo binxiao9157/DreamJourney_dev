@@ -505,6 +505,10 @@ final class KBLiteManager {
                 event.locationId.map { removedPlaces.contains($0) } == true ||
                 event.participantIds.contains(where: { removedPeople.contains($0) })
         }.map(\.id))
+        let visiblePersonNames = Set(graph.people
+            .filter { !removedPeople.contains($0.id) }
+            .map { Self.normalizedEntityName($0.name) }
+            .filter { !$0.isEmpty })
 
         graph.people.removeAll { person in
             removedPeople.contains(person.id)
@@ -520,6 +524,7 @@ final class KBLiteManager {
                 Self.isLegacyRoadshowSeedFact(fact) ||
                 Self.isArchivePhotoGenericKinshipFact(fact) ||
                 Self.isGenericKinshipOnlyFact(fact) ||
+                Self.isUnresolvedGenericKinshipFact(fact, visiblePersonNames: visiblePersonNames) ||
                 fact.relatedPersonIds.contains(where: { removedPeople.contains($0) }) ||
                 fact.relatedPlaceIds.contains(where: { removedPlaces.contains($0) }) ||
                 fact.relatedEventIds.contains(where: { removedEvents.contains($0) })
@@ -548,6 +553,21 @@ final class KBLiteManager {
             return isGenericKinshipDisplayName(suffix)
         }
         return false
+    }
+
+    private static func isUnresolvedGenericKinshipFact(
+        _ fact: KBFact,
+        visiblePersonNames: Set<String>
+    ) -> Bool {
+        let statement = normalizedFactStatement(fact.statement)
+        guard !statement.isEmpty,
+              fact.relatedPersonIds.isEmpty,
+              genericKinshipNames.contains(where: { statement.contains($0) }) else {
+            return false
+        }
+        return !visiblePersonNames.contains { personName in
+            statement.contains(normalizedFactStatement(personName))
+        }
     }
 
     private static func isLegacyRoadshowSeedPerson(_ person: KBPerson) -> Bool {

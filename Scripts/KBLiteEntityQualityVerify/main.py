@@ -52,6 +52,10 @@ checks = [
         "KBLite should hide isolated bare kinship facts from local browsing",
         "isGenericKinshipOnlyFact" in source,
     ),
+    (
+        "KBLite should hide unresolved generic kinship facts from local browsing/imports",
+        "isUnresolvedGenericKinshipFact" in source,
+    ),
 ]
 
 failed = [message for message, passed in checks if not passed]

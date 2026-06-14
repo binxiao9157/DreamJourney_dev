@@ -284,10 +284,9 @@ assertCondition(
 assertCondition(
     Set(graph.facts.map(\.statement)) == Set([
         "陈建国1968年住在绍兴越城区仓桥直街。",
-        "陈建国2001年参加过一次产品路演。",
-        "妈妈喜欢做桂花糕。"
+        "陈建国2001年参加过一次产品路演。"
     ]),
-    "import should remove roadshow/generic placeholder facts without deleting real user stories"
+    "import should remove roadshow/generic kinship facts without deleting real user stories"
 )
 
 KBLiteManager.shared.writeGraph { graph in
@@ -307,10 +306,9 @@ assertCondition(
 assertCondition(
     Set(displayGraph.facts.map(\.statement)) == Set([
         "陈建国1968年住在绍兴越城区仓桥直街。",
-        "陈建国2001年参加过一次产品路演。",
-        "妈妈喜欢做桂花糕。"
+        "陈建国2001年参加过一次产品路演。"
     ]),
-    "display graph should hide roadshow/generic placeholder facts without deleting real user facts"
+    "display graph should hide roadshow/generic kinship facts without deleting real user facts"
 )
 
 KBLiteManager.shared.reset()
