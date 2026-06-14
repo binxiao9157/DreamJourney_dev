@@ -493,34 +493,33 @@ struct KBLiteExtractionSummary: Equatable {
 enum KBLiteDepositStatusBuilder {
     static func build(from graph: KBLiteGraph) -> KBLiteDepositStatus {
         let metadatas = graph.allPrivacyMetadata
-        var sourceCounts: [MemorySourceKind: Int] = [:]
+        var sourceIDsByKind: [MemorySourceKind: Set<String>] = [:]
         var untaggedCount = 0
         var privacyCounts: [MemoryPrivacyScope: Int] = [:]
 
         for metadata in metadatas {
             privacyCounts[metadata.scope, default: 0] += 1
 
-            let sourceKinds = Set(metadata.sourceRefs.map(\.kind))
-            if sourceKinds.isEmpty {
+            if metadata.sourceRefs.isEmpty {
                 untaggedCount += 1
             } else {
-                for kind in sourceKinds {
-                    sourceCounts[kind, default: 0] += 1
+                for sourceRef in metadata.sourceRefs {
+                    sourceIDsByKind[sourceRef.kind, default: []].insert(sourceRef.id)
                 }
             }
         }
 
         let importedCount =
-            (sourceCounts[.importRecord] ?? 0) +
-            (sourceCounts[.kbLiteEntity] ?? 0)
+            (sourceIDsByKind[.importRecord]?.count ?? 0) +
+            (sourceIDsByKind[.kbLiteEntity]?.count ?? 0)
 
         return KBLiteDepositStatus(
             totalEntityCount: metadatas.count,
             sessionCount: graph.sessionCount,
             lastUpdated: graph.lastUpdated,
-            conversationSourceCount: sourceCounts[.conversationTurn] ?? 0,
-            archiveSourceCount: sourceCounts[.memoryArchiveItem] ?? 0,
-            mailboxSourceCount: sourceCounts[.timeMailboxLetter] ?? 0,
+            conversationSourceCount: sourceIDsByKind[.conversationTurn]?.count ?? 0,
+            archiveSourceCount: sourceIDsByKind[.memoryArchiveItem]?.count ?? 0,
+            mailboxSourceCount: sourceIDsByKind[.timeMailboxLetter]?.count ?? 0,
             importedSourceCount: importedCount,
             untaggedSourceCount: untaggedCount,
             localOnlyCount: privacyCounts[.localOnly] ?? 0,

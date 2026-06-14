@@ -64,6 +64,14 @@ let graph = KBLiteGraph(
     ],
     facts: [
         KBFact(
+            id: "archive-f1",
+            statement: "西湖老照片记录了一次家庭合影",
+            confidence: "confirmed",
+            sourceSessionIds: [2],
+            createdAt: now,
+            privacyMetadata: archiveMetadata
+        ),
+        KBFact(
             id: "f1",
             statement: "写给孙女的信将在未来投递",
             confidence: "confirmed",
@@ -84,20 +92,20 @@ let graph = KBLiteGraph(
 
 let status = KBLiteDepositStatusBuilder.build(from: graph)
 
-require(status.totalEntityCount == 4, "should count all knowledge entities")
+require(status.totalEntityCount == 5, "should count all knowledge entities")
 require(status.sessionCount == 3, "should expose processed session count")
 require(status.conversationSourceCount == 1, "should count conversation source refs")
-require(status.archiveSourceCount == 1, "should count archive source refs")
+require(status.archiveSourceCount == 1, "should count unique archive source refs rather than archive-derived entities")
 require(status.mailboxSourceCount == 1, "should count mailbox source refs")
 require(status.untaggedSourceCount == 1, "should count untagged legacy entities")
 require(status.generationAllowedCount == 1, "should count generationAllowed entities")
-require(status.familyCircleCount == 1, "should count familyCircle entities")
+require(status.familyCircleCount == 2, "should count familyCircle entities")
 require(status.localOnlyCount == 2, "should count localOnly entities")
 require(status.sourceSummary.contains("对话 1"), "source summary should mention conversation")
 require(status.sourceSummary.contains("档案 1"), "source summary should mention archive")
 require(status.sourceSummary.contains("信箱 1"), "source summary should mention mailbox")
 require(status.privacySummary.contains("本机 2"), "privacy summary should mention localOnly")
 require(status.privacySummary.contains("可生成 1"), "privacy summary should mention generationAllowed")
-require(status.privacySummary.contains("亲友 1"), "privacy summary should mention familyCircle")
+require(status.privacySummary.contains("亲友 2"), "privacy summary should mention familyCircle")
 
 print("KBLiteDepositStatus verification passed")
