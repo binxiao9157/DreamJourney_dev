@@ -112,6 +112,21 @@ if "backendArchiveItemCount = max(" in sync_success_block:
     missing.append(
         f"{vc_file.name}: archive sync success should not use local syncable count as server-confirmed count"
     )
+refresh_start = vc_text.find("func refreshArchiveBackendSyncStatus")
+refresh_block = vc_text[
+    refresh_start:
+    vc_text.find("func updateBackendSyncStatusLabel", refresh_start)
+] if refresh_start >= 0 else ""
+if "repository.mergeRemoteItems(response.items)" not in refresh_block:
+    missing.append(
+        f"{vc_file.name}: archive fetch success should merge backend items into the local archive repository"
+    )
+if "self?.reloadData()" not in refresh_block:
+    missing.append(
+        f"{vc_file.name}: archive fetch success should refresh the archive list after merging backend items"
+    )
+if "mergeRemoteItems" not in repo_text:
+    missing.append(f"{repo_file.name}: repository should expose remote archive metadata merge")
 for fragment in required_privacy_fragments:
     if fragment not in privacy_text:
         missing.append(f"{privacy_file.name}: missing {fragment!r}")

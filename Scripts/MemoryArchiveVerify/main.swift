@@ -215,6 +215,56 @@ do {
     )
     assertCondition(familyNote.privacyMetadata.scope == .familyCircle, "text should persist explicit family scope")
 
+    let backendUpdatedPhoto = MemoryArchiveItem(
+        id: photo.id,
+        kind: .photo,
+        title: "老房子照片",
+        note: "服务器补齐的分析摘要",
+        localPath: nil,
+        createdAt: photo.createdAt,
+        updatedAt: now.addingTimeInterval(20),
+        analysisStatus: .analyzed,
+        analysisSummary: "服务器恢复：一家人在老房子门口合影。",
+        detectedPeople: ["林桂芳"],
+        scene: "老房子",
+        occasion: "家庭合影",
+        mood: "温暖",
+        estimatedDecade: 1980,
+        tags: ["旧照片", "服务器恢复"],
+        isPrivate: false,
+        privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed)
+    )
+    let backendOnlyNote = MemoryArchiveItem(
+        id: "backend-note-1",
+        kind: .textNote,
+        title: "服务器恢复文字",
+        note: "从后端恢复的档案元数据。",
+        localPath: nil,
+        createdAt: now.addingTimeInterval(21),
+        updatedAt: now.addingTimeInterval(21),
+        analysisStatus: .manual,
+        analysisSummary: nil,
+        detectedPeople: [],
+        scene: nil,
+        occasion: nil,
+        mood: nil,
+        estimatedDecade: nil,
+        tags: ["服务器恢复"],
+        isPrivate: false,
+        privacyMetadata: MemoryPrivacyMetadata(scope: .generationAllowed)
+    )
+    let mergedRemoteCount = repo.mergeRemoteItems([backendUpdatedPhoto, backendOnlyNote])
+    let mergedItems = repo.items()
+    let mergedPhoto = mergedItems.first { $0.id == photo.id }
+    assertCondition(mergedRemoteCount == 2, "remote merge should count one update and one insert")
+    assertCondition(mergedPhoto?.localPath == "/tmp/old_photo.jpg", "remote metadata merge must preserve existing local photo path")
+    assertCondition(mergedPhoto?.analysisStatus == .analyzed, "remote metadata merge should apply newer analysis state")
+    assertCondition(mergedPhoto?.analysisSummary?.contains("服务器恢复") == true, "remote metadata merge should apply newer analysis summary")
+    assertCondition(
+        mergedItems.contains(where: { $0.id == "backend-note-1" && $0.localPath == nil }),
+        "remote-only archive metadata should become visible in the local archive list"
+    )
+
     let realRoadshowArchive = try repo.addText(
         kind: .textNote,
         title: "外滩老照片",
@@ -293,7 +343,7 @@ do {
     assertCondition(failed.analysisStatus == .failed, "photo can be marked failed")
 
     try repo.delete(id: note.id)
-    assertCondition(repo.items().count == 6, "deleted item should be removed")
+    assertCondition(repo.items().count == 7, "deleted item should be removed while preserving backend-restored metadata")
 
     do {
         _ = try repo.addText(

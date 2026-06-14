@@ -1449,9 +1449,13 @@ private extension MemoryArchiveViewController {
             DispatchQueue.main.async {
                 switch result {
                 case .success(let response):
+                    let mergedCount = self?.repository.mergeRemoteItems(response.items) ?? 0
                     self?.backendArchiveItemCount = response.items.count
                     self?.backendArchiveLastCheckedAt = Date()
                     self?.backendSyncStatusOverride = nil
+                    if mergedCount > 0 {
+                        self?.reloadData()
+                    }
                 case .failure:
                     self?.backendSyncStatusOverride = "服务器同步：暂时无法确认，素材已保留在本机"
                 }

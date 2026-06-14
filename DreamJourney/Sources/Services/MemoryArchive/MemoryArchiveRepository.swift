@@ -312,6 +312,33 @@ final class MemoryArchiveRepository {
         save(all)
     }
 
+    @discardableResult
+    func mergeRemoteItems(_ remoteItems: [MemoryArchiveItem]) -> Int {
+        var all = load()
+        var changedCount = 0
+
+        for remoteItem in remoteItems {
+            guard PrivacyScopePolicy.canUse(metadata: remoteItem.privacyMetadata, surface: .backendSync) else {
+                continue
+            }
+
+            if let index = all.firstIndex(where: { $0.id == remoteItem.id }) {
+                let existing = all[index]
+                guard remoteItem.updatedAt >= existing.updatedAt else { continue }
+                all[index] = Self.mergedRemoteItem(remoteItem, preservingLocalStateFrom: existing)
+                changedCount += 1
+            } else {
+                all.append(Self.remoteVisibleItem(remoteItem))
+                changedCount += 1
+            }
+        }
+
+        if changedCount > 0 {
+            save(all)
+        }
+        return changedCount
+    }
+
     private func mutate(
         id: String,
         update: (inout MemoryArchiveItem) -> Void
@@ -365,6 +392,30 @@ final class MemoryArchiveRepository {
 
     private static func voiceSampleNote(from transcript: String) -> String {
         "导入的长辈语音样本，用于后续声纹和语气参考。\n语音转写/摘要：\(transcript)"
+    }
+
+    private static func mergedRemoteItem(
+        _ remoteItem: MemoryArchiveItem,
+        preservingLocalStateFrom existing: MemoryArchiveItem
+    ) -> MemoryArchiveItem {
+        var item = remoteVisibleItem(remoteItem)
+        item.localPath = existing.localPath
+        item.voiceProfileId = existing.voiceProfileId
+        if item.targetPersonId == nil {
+            item.targetPersonId = existing.targetPersonId
+        }
+        if item.targetPersonName == nil {
+            item.targetPersonName = existing.targetPersonName
+        }
+        return item
+    }
+
+    private static func remoteVisibleItem(_ remoteItem: MemoryArchiveItem) -> MemoryArchiveItem {
+        var item = remoteItem
+        item.localPath = nil
+        item.voiceProfileId = nil
+        item.tags = cleanTags(item.tags)
+        return item
     }
 
     private static let legacyRoadshowTextSeedFingerprints: Set<String> = [
