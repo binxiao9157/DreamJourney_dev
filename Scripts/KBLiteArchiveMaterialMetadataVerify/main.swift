@@ -173,6 +173,45 @@ assertCondition(
     "archive photo fact should keep source ref and analysis summary"
 )
 
+let genericPhotoMetadata = MemoryPrivacyMetadata(scope: .generationAllowed).appendingSourceRef(
+    MemorySourceRef(
+        kind: .memoryArchiveItem,
+        id: "archive-photo-generic-kinship",
+        title: "老宅门口合影",
+        capturedAt: now
+    )
+)
+let genericPhotoCount = KBLiteManager.shared.ingestArchivePhotoAnalysisMetadata(
+    archiveItemID: "archive-photo-generic-kinship",
+    title: "老宅门口合影",
+    analysis: KBImageAnalysisResult(
+        description: "照片里妈妈和外婆在老宅门口合影。",
+        detectedPeople: ["妈妈", "外婆"],
+        scene: "老宅",
+        occasion: "家庭合影",
+        mood: "温馨",
+        estimatedDecade: 1990
+    ),
+    capturedAt: now,
+    sessionId: 17,
+    privacyMetadata: genericPhotoMetadata
+)
+assertCondition(genericPhotoCount == 1, "generic kinship photo analysis should still keep archive source metadata")
+guard let genericPhotoFact = KBLiteManager.shared.graph.facts.first(where: {
+    $0.privacyMetadata.sourceRefs.contains(where: { $0.kind == .memoryArchiveItem && $0.id == "archive-photo-generic-kinship" })
+}) else {
+    fputs("FAIL: generic kinship photo analysis should create a source-scoped metadata fact\n", stderr)
+    exit(1)
+}
+assertCondition(
+    !genericPhotoFact.statement.contains("妈妈") && !genericPhotoFact.statement.contains("外婆"),
+    "generic kinship names from photo analysis should not enter structured KBLite facts"
+)
+assertCondition(
+    !KBLiteManager.shared.graph.people.contains(where: { $0.name == "妈妈" || $0.name == "外婆" }),
+    "generic kinship names from photo analysis should not create structured people"
+)
+
 let rawPhotoCount = KBLiteManager.shared.ingestArchivePhotoMaterialMetadata(
     archiveItemID: "archive-photo-raw-1",
     title: "老宅门口照片",

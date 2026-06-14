@@ -1895,10 +1895,7 @@ final class KBLiteManager {
 
     /// 从图片人物描述中提取可能的姓名
     private func extractPersonNameFromDescription(_ desc: String) -> String {
-        let normalized = Self.normalizedQuickExtractEntity(desc)
-        guard !Self.isGenericKinshipDisplayName(normalized) else { return "" }
-        guard !Self.genericKinshipNames.contains(where: { normalized.contains($0) }) else { return "" }
-        return normalized.count <= 6 ? normalized : String(normalized.prefix(6))
+        Self.concretePhotoAnalysisPersonName(from: desc)
     }
 
     // MARK: - Boundary Protection
@@ -2108,7 +2105,7 @@ final class KBLiteManager {
             capturedAt: capturedAt
         )
         let resolvedMetadata = Self.metadataByAppending(sourceRef: sourceRef, to: privacyMetadata)
-        let summary = Self.metadataSummary(analysis.description)
+        let summary = Self.structuredPhotoMetadataSummary(analysis.description)
         var details = [String]()
         if !analysis.scene.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             details.append("场景：\(Self.metadataSummary(analysis.scene))")
@@ -2116,8 +2113,9 @@ final class KBLiteManager {
         if let decade = analysis.estimatedDecade {
             details.append("年代：\(decade)年代")
         }
-        if !analysis.detectedPeople.isEmpty {
-            details.append("人物：\(analysis.detectedPeople.prefix(5).joined(separator: "、"))")
+        let concretePeople = Self.concretePhotoAnalysisPeople(analysis.detectedPeople)
+        if !concretePeople.isEmpty {
+            details.append("人物：\(concretePeople.prefix(5).joined(separator: "、"))")
         }
         let suffix = details.isEmpty ? "" : "（\(details.joined(separator: "；"))）"
         let statement = "记忆档案馆照片《\(title)》分析摘要：\(summary)\(suffix)。"
@@ -2441,6 +2439,52 @@ final class KBLiteManager {
         guard trimmed.count > maxLength else { return trimmed }
         let endIndex = trimmed.index(trimmed.startIndex, offsetBy: maxLength)
         return String(trimmed[..<endIndex]) + "..."
+    }
+
+    private static func structuredPhotoMetadataSummary(_ value: String, maxLength: Int = 120) -> String {
+        var summary = metadataSummary(value, maxLength: maxLength)
+        for kinship in genericKinshipNames.sorted(by: { $0.count > $1.count }) {
+            summary = summary.replacingOccurrences(
+                of: kinship,
+                with: structuredGenericPersonReplacement(for: kinship)
+            )
+        }
+        let duplicatePatterns = [
+            "家人和家人": "家人",
+            "家人与家人": "家人",
+            "家人、家人": "家人",
+            "相关人物和相关人物": "相关人物",
+            "相关人物与相关人物": "相关人物",
+            "相关人物、相关人物": "相关人物"
+        ]
+        for pattern in duplicatePatterns {
+            while summary.contains(pattern.key) {
+                summary = summary.replacingOccurrences(of: pattern.key, with: pattern.value)
+            }
+        }
+        return normalizedQuickExtractEntity(summary)
+    }
+
+    private static func structuredGenericPersonReplacement(for value: String) -> String {
+        let nonFamilyRoles: Set<String> = ["老师", "师傅", "同学", "战友"]
+        return nonFamilyRoles.contains(value) ? "相关人物" : "家人"
+    }
+
+    private static func concretePhotoAnalysisPeople(_ values: [String]) -> [String] {
+        var names: [String] = []
+        for value in values {
+            let name = concretePhotoAnalysisPersonName(from: value)
+            guard !name.isEmpty, !names.contains(name) else { continue }
+            names.append(name)
+        }
+        return names
+    }
+
+    private static func concretePhotoAnalysisPersonName(from value: String) -> String {
+        let normalized = normalizedQuickExtractEntity(value)
+        guard !isGenericKinshipDisplayName(normalized) else { return "" }
+        guard !genericKinshipNames.contains(where: { normalized.contains($0) }) else { return "" }
+        return normalized.count <= 6 ? normalized : String(normalized.prefix(6))
     }
 
     private static func isPersonaMaterialKind(_ materialKind: String) -> Bool {
