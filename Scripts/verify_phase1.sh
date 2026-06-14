@@ -177,6 +177,14 @@ python3 Scripts/MemoryArchiveKnowledgeDepositUIVerify/main.py
 
 echo "== MemoryArchive knowledge evidence =="
 python3 Scripts/MemoryArchiveKnowledgeEvidenceVerify/main.py
+xcrun swiftc \
+  DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \
+  DreamJourney/Sources/Services/KBLiteModels.swift \
+  DreamJourney/Sources/Services/MemoryArchive/MemoryArchiveModels.swift \
+  DreamJourney/Sources/Services/MemoryArchive/MemoryArchiveKnowledgeEvidence.swift \
+  Scripts/MemoryArchiveKnowledgeEvidenceBehaviorVerify/main.swift \
+  -o /tmp/dreamjourney_memory_archive_knowledge_evidence_behavior_verify
+/tmp/dreamjourney_memory_archive_knowledge_evidence_behavior_verify
 
 echo "== MemoryArchive metadata-only deposit =="
 python3 Scripts/MemoryArchiveMetadataOnlyDepositVerify/main.py

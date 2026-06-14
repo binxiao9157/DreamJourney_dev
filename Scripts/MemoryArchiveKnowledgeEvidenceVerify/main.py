@@ -38,6 +38,11 @@ require(
     "evidence should group generated entities by KBLite category",
 )
 require(
+    "isArchiveMetadataOnlyFact" in evidence
+    and '!isArchiveMetadataOnlyFact($0.statement)' in evidence,
+    "evidence builder should not present archive save-only metadata facts as structured knowledge",
+)
+require(
     "查看建库证据" in vc
     and "presentKnowledgeEvidence(for: item)" in vc,
     "archive item action sheet should expose a knowledge evidence entry",
@@ -55,6 +60,10 @@ require(
 require(
     "MemoryArchiveKnowledgeEvidenceVerify/main.py" in phase1,
     "phase1 verification should include archive knowledge evidence coverage",
+)
+require(
+    "MemoryArchiveKnowledgeEvidenceBehaviorVerify/main.swift" in phase1,
+    "phase1 verification should include behavior coverage for archive evidence filtering",
 )
 
 print("MemoryArchiveKnowledgeEvidence verification passed")

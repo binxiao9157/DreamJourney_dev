@@ -32,6 +32,7 @@ enum MemoryArchiveKnowledgeEvidenceBuilder {
                 .sorted(),
             facts: graph.facts
                 .filter { matchesSourceRef($0.privacyMetadata, item: item) }
+                .filter { !isArchiveMetadataOnlyFact($0.statement) }
                 .map { $0.statement }
                 .sorted()
         )
@@ -41,5 +42,9 @@ enum MemoryArchiveKnowledgeEvidenceBuilder {
         metadata.sourceRefs.contains { sourceRef in
             sourceRef.kind == .memoryArchiveItem && sourceRef.id == item.id
         }
+    }
+
+    private static func isArchiveMetadataOnlyFact(_ statement: String) -> Bool {
+        statement.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("记忆档案馆保存")
     }
 }
