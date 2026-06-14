@@ -51,6 +51,11 @@ required_vc_fragments = [
     "Stage1MemoryFacade.shared.ingestTimeMailboxLetterMetadata",
 ]
 
+remote_merge_block = ""
+remote_merge_start = vc_text.find("let mergedCount = self.repository.mergeRemoteMetadata(remoteMetadata)")
+if remote_merge_start >= 0:
+    remote_merge_block = vc_text[remote_merge_start:vc_text.find("self.updateMailboxBackendSyncStatusLabel", remote_merge_start)]
+
 required_backend_fragments = [
     '@app.post("/mailbox/letters")',
     '@app.get("/mailbox/letters/{user_id}")',
@@ -81,6 +86,10 @@ for fragment in required_client_fragments:
 for fragment in required_vc_fragments:
     if fragment not in vc_text:
         missing.append(f"{vc_file.name}: missing {fragment!r}")
+if "emptyLabel.isHidden = !self.letters.isEmpty" not in remote_merge_block:
+    missing.append(f"{vc_file.name}: remote metadata restore should update the empty state")
+if "self.scheduleNextDeliveryRefresh()" not in remote_merge_block:
+    missing.append(f"{vc_file.name}: remote metadata restore should reschedule local delivery refresh")
 for fragment in required_backend_fragments:
     if fragment not in backend_main_text and fragment != "sanitize_mailbox_letter_payload":
         missing.append(f"{backend_main_file.name}: missing {fragment!r}")

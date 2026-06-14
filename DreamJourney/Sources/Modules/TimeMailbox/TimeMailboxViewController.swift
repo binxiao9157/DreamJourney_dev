@@ -457,6 +457,8 @@ final class TimeMailboxViewController: UIViewController {
                     let mergedCount = self.repository.mergeRemoteMetadata(remoteMetadata)
                     if mergedCount > 0 {
                         self.letters = self.repository.letters()
+                        self.emptyLabel.isHidden = !self.letters.isEmpty
+                        self.scheduleNextDeliveryRefresh()
                         self.tableView.reloadData()
                         self.backfillMailboxKnowledgeFromRestoredLetters(remoteMetadata)
                     }
