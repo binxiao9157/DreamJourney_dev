@@ -219,6 +219,12 @@ python3 Scripts/FamilyBackendSyncVerify/main.py
 echo "== DreamJourney backend auth =="
 python3 Scripts/DreamJourneyBackendAuthVerify/main.py
 
+echo "== DreamJourney authenticated backend smoke contract =="
+python3 Scripts/BackendAuthenticatedSmokeContractVerify/main.py
+
+echo "== DreamJourney authenticated backend smoke =="
+PYTHONPATH=DreamJourneyBackend STORE_BACKEND=memory "$BACKEND_PYTHON" Scripts/BackendAuthenticatedSmoke/main.py
+
 echo "== DreamJourney backend core services =="
 PYTHONPATH=DreamJourneyBackend STORE_BACKEND=memory "$BACKEND_PYTHON" -m unittest DreamJourneyBackend.tests.test_core_services
 

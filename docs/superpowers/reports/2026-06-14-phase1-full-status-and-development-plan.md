@@ -308,3 +308,30 @@ iOS 仓库路径：`/Users/yxj/.config/superpowers/worktrees/DreamJourney_dev/ph
 - P0 数字人“播放后断会话/抢停”从待开发调整为已自动修复，仍需真机用真实语音验证连续 3-5 轮。
 - P1 长辈关怀“撤回后不可继续读取/重新接受”从待开发调整为已自动修复，仍需双真机账号验证 UI 和后端 403。
 - P0 记忆档案馆真实素材建库、P0 数字人有证据才回答、P1 时空信箱 5 分钟投递，仍是下一轮人工真机验收主线。
+
+## 12. 2026-06-14 后端鉴权 Smoke 自动化更新
+
+本轮继续推进无需人工真机操作的验收支撑项，针对 P2 中“线上后端 smoke 与安全配置验收”补齐自动化入口。
+
+已完成：
+
+- 新增 `Scripts/BackendAuthenticatedSmoke/main.py`。
+  - 默认自测 FastAPI 本地行为：`/health` 公开，`/config/runtime` 在 `BACKEND_API_TOKEN` 配置后未带 token 返回 401，Bearer 与 `X-DreamJourney-API-Token` 均可通过。
+  - 远端模式支持 `DREAMJOURNEY_BACKEND_BASE_URL` + `DREAMJOURNEY_BACKEND_API_TOKEN`，可验证 `/health`、`/config/runtime`、`/archive/image-analysis?dryRun=true`、`/kb/sync`、`/kb/snapshot`。
+  - 对 runtime、dryRun、snapshot 响应做 secret marker 检查，防止 token/key 泄露。
+- 新增 `Scripts/BackendAuthenticatedSmokeContractVerify/main.py`，防止 smoke 能力或总验证入口被误删。
+- `Scripts/verify_phase1.sh` 已接入 authenticated backend smoke contract 与本地 smoke。
+
+验证结果：
+
+- `python3 Scripts/BackendAuthenticatedSmokeContractVerify/main.py` 通过。
+- `PYTHONPATH=DreamJourneyBackend STORE_BACKEND=memory DreamJourneyBackend/.venv/bin/python Scripts/BackendAuthenticatedSmoke/main.py` 通过。
+- `bash Scripts/verify_phase1.sh` 通过；日志：`/tmp/dreamjourney_phase1_backend_smoke_verify.log`。
+
+状态调整：
+
+- P2 “后端鉴权 smoke 缺自动入口”已完成。
+- P2 “线上 `/config/runtime` 未带 token 返回 200”仍需服务器配置 `BACKEND_API_TOKEN` 后用远端模式复验：
+  - `DREAMJOURNEY_BACKEND_BASE_URL=https://dreamjourney-api.liftora.cn`
+  - `DREAMJOURNEY_BACKEND_API_TOKEN=<与服务器 BACKEND_API_TOKEN 相同的值>`
+  - `PYTHONPATH=DreamJourneyBackend STORE_BACKEND=memory DreamJourneyBackend/.venv/bin/python Scripts/BackendAuthenticatedSmoke/main.py --remote`
