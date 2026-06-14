@@ -24,11 +24,22 @@ final class DialogEngineFactory {
             return .volcengine
         }
 
-        if arguments.contains("--use-mock-dialog-engine") ||
-            environment["DREAMJOURNEY_DIALOG_ENGINE"]?.lowercased() == "mock" {
+        if canUseMockDialogEngine(arguments: arguments, environment: environment) {
             return .mock
         }
         return .volcengine
+    }
+
+    private static func canUseMockDialogEngine(
+        arguments: [String],
+        environment: [String: String]
+    ) -> Bool {
+        #if targetEnvironment(simulator) || MOCK_DIALOG_VERIFY
+        return arguments.contains("--use-mock-dialog-engine") ||
+            environment["DREAMJOURNEY_DIALOG_ENGINE"]?.lowercased() == "mock"
+        #else
+        return false
+        #endif
     }
 
     static func make(type: DialogEngineType = .volcengine) -> DialogEngineProtocol {

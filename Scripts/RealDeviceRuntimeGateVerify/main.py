@@ -41,9 +41,19 @@ require(
     "dialog engine default should be the real VolcEngine path",
 )
 require(
-    "--use-mock-dialog-engine" in selected_type_body
-    and "DREAMJOURNEY_DIALOG_ENGINE" in selected_type_body,
+    "--use-mock-dialog-engine" in dialog_factory
+    and "DREAMJOURNEY_DIALOG_ENGINE" in dialog_factory,
     "mock dialog engine should remain opt-in by launch arg or env only",
+)
+require(
+    "canUseMockDialogEngine(arguments: arguments, environment: environment)" in selected_type_body,
+    "dialog engine selection should route mock checks through the real-device-safe mock helper",
+)
+require(
+    "private static func canUseMockDialogEngine" in dialog_factory
+    and "#if targetEnvironment(simulator) || MOCK_DIALOG_VERIFY" in dialog_factory
+    and "return false" in dialog_factory,
+    "mock dialog engine flags should be ignored by default in physical-device builds",
 )
 require(
     "RealDeviceAcceptanceGate.isEnabled" in selected_type_body
