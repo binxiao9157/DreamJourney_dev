@@ -9,10 +9,6 @@ final class KBGraphNode: UIView {
     // MARK: - Constants
 
     static let diameter: CGFloat = 60.0
-    static let selfDiameter: CGFloat = 70.0
-
-    /// 用于标识"我"节点的特殊 ID
-    static let selfNodeId = "__self__"
 
     // MARK: - Properties
 
@@ -62,9 +58,7 @@ final class KBGraphNode: UIView {
 
     init(person: KBPerson) {
         self.person = person
-        let isSelf = person.id == Self.selfNodeId
-        let d = isSelf ? Self.selfDiameter : Self.diameter
-        super.init(frame: CGRect(x: 0, y: 0, width: d, height: d + 30))
+        super.init(frame: CGRect(x: 0, y: 0, width: Self.diameter, height: Self.diameter + 30))
         setupUI()
         configure()
     }
@@ -74,8 +68,7 @@ final class KBGraphNode: UIView {
     // MARK: - Setup
 
     private func setupUI() {
-        let isSelf = person.id == Self.selfNodeId
-        let d = isSelf ? Self.selfDiameter : Self.diameter
+        let d = Self.diameter
 
         // 圆形节点
         circleView.layer.cornerRadius = d / 2.0
@@ -127,12 +120,7 @@ final class KBGraphNode: UIView {
         nameLabel.text = person.name
         relationLabel.text = person.relation ?? ""
 
-        // 背景色：__self__ 节点使用金色，其他按关系分类
-        if person.id == Self.selfNodeId {
-            circleView.backgroundColor = UIColor(red: 0.85, green: 0.65, blue: 0.13, alpha: 1.0) // 金色
-        } else {
-            circleView.backgroundColor = colorForRelation(person.relation)
-        }
+        circleView.backgroundColor = colorForRelation(person.relation)
     }
 
     // MARK: - Selection

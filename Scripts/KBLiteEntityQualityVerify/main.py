@@ -7,6 +7,7 @@ source = Path("DreamJourney/Sources/Services/KBLiteManager.swift").read_text()
 knowledge_view = Path("DreamJourney/Sources/Modules/Knowledge/KnowledgeBaseViewController.swift").read_text()
 graph_view = Path("DreamJourney/Sources/Modules/Knowledge/KBGraphViewController.swift").read_text()
 layout_engine = Path("DreamJourney/Sources/Modules/Knowledge/KBGraphLayoutEngine.swift").read_text()
+graph_node = Path("DreamJourney/Sources/Modules/Knowledge/KBGraphNode.swift").read_text()
 facade = Path("DreamJourney/Sources/Services/Stage1MemoryFacade.swift").read_text()
 
 checks = [
@@ -36,6 +37,14 @@ checks = [
     (
         "knowledge graph should not inject a synthetic self node in real-data browsing",
         "__self__" not in graph_view,
+    ),
+    (
+        "knowledge graph layout should not keep legacy synthetic self-node positioning",
+        "__self__" not in layout_engine and "selfId" not in layout_engine,
+    ),
+    (
+        "knowledge graph node view should not keep legacy synthetic self-node styling",
+        "__self__" not in graph_node and "selfNodeId" not in graph_node,
     ),
     (
         "knowledge graph should not invent all-person relationships from the current user",
