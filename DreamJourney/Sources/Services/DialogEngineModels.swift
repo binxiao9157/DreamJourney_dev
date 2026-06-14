@@ -119,6 +119,7 @@ struct MemoryEvidenceItem: Equatable {
     let text: String
     let confidence: Int
     let source: String
+    let sourceTitle: String?
 }
 
 private enum DialogMemoryEvidenceSanitizer {
@@ -169,7 +170,13 @@ struct MemoryEvidencePack {
             guard !normalized.isEmpty else { return }
             let score = relevanceScore(query: trimmedQuery, text: normalized, intent: intent, kind: kind)
             guard trimmedQuery.isEmpty || score > 0 else { return }
-            let item = MemoryEvidenceItem(kind: kind, text: normalized, confidence: score, source: source)
+            let item = MemoryEvidenceItem(
+                kind: kind,
+                text: normalized,
+                confidence: score,
+                source: source,
+                sourceTitle: evidenceSourceTitle(from: metadata)
+            )
             scored.append((score, order, item))
             order += 1
         }
@@ -300,6 +307,26 @@ struct MemoryEvidencePack {
         }
 
         return score
+    }
+
+    private static func evidenceSourceTitle(from metadata: MemoryPrivacyMetadata) -> String? {
+        let preferredKinds: [MemorySourceKind] = [
+            .memoryArchiveItem,
+            .timeMailboxLetter,
+            .conversationTurn,
+            .memoir,
+            .importRecord
+        ]
+        for kind in preferredKinds {
+            if let title = metadata.sourceRefs.first(where: { $0.kind == kind })?.title?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+               !title.isEmpty {
+                return title
+            }
+        }
+        return metadata.sourceRefs
+            .compactMap { $0.title?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty }
     }
 
     private static func memoryTerms(from text: String) -> [String] {
@@ -508,7 +535,8 @@ enum DialogMemoryRAGPayloadBuilder {
     }
 
     private static func content(for item: MemoryEvidenceItem, plan: MemoryGroundedReplyPlan) -> String {
-        let raw = "\(item.text)\n回复边界：\(plan.instruction)"
+        let sourceLine = item.sourceTitle.map { "\n证据来源：\($0)" } ?? ""
+        let raw = "\(item.text)\(sourceLine)\n回复边界：\(plan.instruction)"
         if raw.count <= 520 {
             return raw
         }

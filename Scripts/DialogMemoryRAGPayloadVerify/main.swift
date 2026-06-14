@@ -8,7 +8,18 @@ func assertCondition(_ condition: @autoclosure () -> Bool, _ message: String) {
 }
 
 let now = Date(timeIntervalSince1970: 1_800_000_200)
-let promptMetadata = MemoryPrivacyMetadata(scope: .generationAllowed, createdAt: now)
+let promptMetadata = MemoryPrivacyMetadata(
+    scope: .generationAllowed,
+    sourceRefs: [
+        MemorySourceRef(
+            kind: .memoryArchiveItem,
+            id: "archive-restored-shaoxing",
+            title: "恢复的绍兴往事",
+            capturedAt: now
+        )
+    ],
+    createdAt: now
+)
 let privateMetadata = MemoryPrivacyMetadata(scope: .privateOnly, createdAt: now)
 
 let graph = KBLiteGraph(
@@ -60,6 +71,7 @@ guard let payload = DialogMemoryRAGPayloadBuilder.makePayload(
 assertCondition(payload.contains("external_rag"), "payload should use official external_rag field")
 assertCondition(payload.count <= DialogMemoryRAGPayloadBuilder.maxPayloadCharacters, "payload should stay within realtime RAG size budget")
 assertCondition(payload.contains("慢慢来"), "payload should include query-specific persona evidence")
+assertCondition(payload.contains("恢复的绍兴往事"), "payload should include the archive evidence source title for traceability")
 assertCondition(!payload.contains("私密家庭记录"), "payload must not include private-only evidence")
 
 guard let data = payload.data(using: .utf8),
