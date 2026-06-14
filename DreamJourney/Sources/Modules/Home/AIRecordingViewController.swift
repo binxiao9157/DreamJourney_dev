@@ -1802,14 +1802,6 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
         case error
     }
 
-    private let startupPosterImageView: UIImageView = {
-        let imageView = UIImageView(image: UIImage(named: "avatar_poster"))
-        imageView.contentMode = .scaleAspectFit
-        imageView.backgroundColor = .clear
-        imageView.isUserInteractionEnabled = false
-        imageView.alpha = 1
-        return imageView
-    }()
     private let webView: WKWebView
     private let schemeHandler: AvatarWebResourceSchemeHandler
     private var currentState: AvatarState = .idle
@@ -1916,30 +1908,17 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
         layer.borderColor = UIColor.clear.cgColor
         layer.borderWidth = 0
 
-        startupPosterImageView.alpha = 1
-        startupPosterImageView.isHidden = false
         webView.navigationDelegate = self
-        webView.alpha = 0
+        webView.alpha = 1
         webView.isOpaque = false
         webView.backgroundColor = .clear
         webView.scrollView.isScrollEnabled = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
 
         addSubview(webView)
-        addSubview(startupPosterImageView)
-        startupPosterImageView.translatesAutoresizingMaskIntoConstraints = false
         webView.translatesAutoresizingMaskIntoConstraints = false
 
-        let posterWidth = startupPosterImageView.widthAnchor.constraint(equalTo: widthAnchor, multiplier: 0.60)
-        posterWidth.priority = UILayoutPriority(999)
         NSLayoutConstraint.activate([
-            startupPosterImageView.centerXAnchor.constraint(equalTo: centerXAnchor),
-            startupPosterImageView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: 8),
-            posterWidth,
-            startupPosterImageView.widthAnchor.constraint(lessThanOrEqualToConstant: 220),
-            startupPosterImageView.heightAnchor.constraint(equalTo: startupPosterImageView.widthAnchor, multiplier: 974.0 / 720.0),
-            startupPosterImageView.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, constant: -48),
-
             webView.topAnchor.constraint(equalTo: topAnchor),
             webView.leadingAnchor.constraint(equalTo: leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: trailingAnchor),
@@ -1950,12 +1929,12 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
     private func loadAvatarHTML() {
         guard let url = URL(string: "\(Self.avatarResourceScheme)://local/avatar.html") else {
             webView.loadHTMLString(Self.avatarHTML, baseURL: Bundle.main.resourceURL)
-            DigitalHumanPlaybackEvidenceStore.shared.appendEvent("avatar_startup_poster_visible mode=html_string")
+            DigitalHumanPlaybackEvidenceStore.shared.appendEvent("avatar_startup_single_surface mode=html_string")
             return
         }
         webView.load(URLRequest(url: url))
         DigitalHumanPlaybackEvidenceStore.shared.appendEvent("avatar_web_load mode=url_scheme")
-        DigitalHumanPlaybackEvidenceStore.shared.appendEvent("avatar_startup_poster_visible mode=url_scheme")
+        DigitalHumanPlaybackEvidenceStore.shared.appendEvent("avatar_startup_single_surface mode=url_scheme")
     }
 
     private func applyCurrentState() {
@@ -2020,12 +1999,6 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
         DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
             "avatar_startup_reveal reason=\(DigitalHumanPlaybackEvidenceStore.sanitize(reason))"
         )
-        UIView.animate(withDuration: 0.18, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
-            self.webView.alpha = 1
-            self.startupPosterImageView.alpha = 0
-        } completion: { _ in
-            self.startupPosterImageView.isHidden = true
-        }
     }
 
     private static func jsonStringLiteral(_ value: String) -> String {

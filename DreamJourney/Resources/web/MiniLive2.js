@@ -404,7 +404,10 @@ const characterDropdown = document.getElementById('characterDropdown');
 if (characterDropdown) {
     characterDropdown.addEventListener('change', async function() {
         isPaused = true;
-        document.getElementById('startMessage').style.display = 'block';
+        const startMessage = document.getElementById('startMessage');
+        if (startMessage) {
+            startMessage.style.display = 'none';
+        }
         asset_dir = this.value;
         console.log('Selected character:', asset_dir);
         await videoProcessor.init(asset_dir + "/01.mp4", asset_dir + "/combined_data.json.gz");
