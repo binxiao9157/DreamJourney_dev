@@ -1014,9 +1014,9 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let request = VNRecognizeTextRequest { [weak self] request, error in
-                if let error {
+                if error != nil {
                     DispatchQueue.main.async {
-                        self?.setKnowledgeDepositStatus("结构化建库：截图文字识别失败（\(error.localizedDescription)）")
+                        self?.setKnowledgeDepositStatus(Self.screenshotOCRFailureStatusMessage())
                     }
                     return
                 }
@@ -1065,10 +1065,14 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
                 try handler.perform([request])
             } catch {
                 DispatchQueue.main.async {
-                    self?.setKnowledgeDepositStatus("结构化建库：截图文字识别失败（\(error.localizedDescription)）")
+                    self?.setKnowledgeDepositStatus(Self.screenshotOCRFailureStatusMessage())
                 }
             }
         }
+    }
+
+    private static func screenshotOCRFailureStatusMessage() -> String {
+        "结构化建库：截图已保存，文字识别未完成，可稍后重试或手动补充"
     }
 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {

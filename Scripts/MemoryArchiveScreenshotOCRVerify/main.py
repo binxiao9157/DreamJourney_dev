@@ -17,8 +17,9 @@ def require(condition: bool, message: str) -> None:
 view = VIEW.read_text(encoding="utf-8")
 phase1 = PHASE1.read_text(encoding="utf-8")
 
-ocr_match = re.search(r"private func extractScreenshotTextForKnowledge\([\s\S]*?\n    \}", view)
-ocr_body = ocr_match.group(0) if ocr_match else ""
+ocr_start = view.find("private func extractScreenshotTextForKnowledge")
+ocr_end = view.find("func imagePickerControllerDidCancel", ocr_start)
+ocr_body = view[ocr_start:ocr_end] if ocr_start != -1 and ocr_end != -1 else ""
 save_match = re.search(r"private func savePickedImageMaterial\([\s\S]*?\n    \}", view)
 save_body = save_match.group(0) if save_match else ""
 
@@ -33,6 +34,11 @@ require('"zh-Hans"' in ocr_body and '"zh-Hant"' in ocr_body and '"en-US"' in ocr
 require("ingestArchiveTextMaterialDetailed" in ocr_body, "recognized screenshot text should enter the archive text material pipeline")
 require('archiveMaterialKind: "截图文字"' in ocr_body, "screenshot OCR should be labeled as screenshot text in KBLite")
 require("archiveTextDepositStatusMessage" in ocr_body, "OCR deposit should reuse the archive text deposit status formatter")
+require("screenshotOCRFailureStatusMessage()" in ocr_body, "OCR failures should use a friendly fixed status message")
+require(
+    "截图文字识别失败（\\(error.localizedDescription)）" not in ocr_body,
+    "OCR failure should not expose raw localizedDescription in knowledge status",
+)
 require("extractScreenshotTextForKnowledge(from: image, item: item)" in save_body, "saving a screenshot should trigger OCR after archive insertion")
 require("MemoryArchiveScreenshotOCRVerify/main.py" in phase1, "phase1 verification should include screenshot OCR coverage")
 
