@@ -492,6 +492,8 @@ private struct TimeMailboxDraft {
 }
 
 private final class TimeMailboxComposerViewController: UIViewController {
+    private static let shortestDeliveryDelay: TimeInterval = TimeMailboxRepository.defaultMinimumDeliveryDelay
+
     var onSeal: ((TimeMailboxDraft) -> Void)?
 
     private let scrollView = UIScrollView()
@@ -518,7 +520,7 @@ private final class TimeMailboxComposerViewController: UIViewController {
     }()
 
     private let deliveryControl: UISegmentedControl = {
-        let control = UISegmentedControl(items: ["1 分钟", "明日", "一周"])
+        let control = UISegmentedControl(items: ["5 分钟", "明日", "一周"])
         control.selectedSegmentIndex = 0
         control.selectedSegmentTintColor = .warmAccent
         control.setTitleTextAttributes([.foregroundColor: UIColor.white], for: .selected)
@@ -683,7 +685,7 @@ private final class TimeMailboxComposerViewController: UIViewController {
         case 2:
             deliverAt = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date().addingTimeInterval(604_800)
         default:
-            deliverAt = Date().addingTimeInterval(60)
+            deliverAt = Date().addingTimeInterval(Self.shortestDeliveryDelay)
         }
 
         onSeal?(

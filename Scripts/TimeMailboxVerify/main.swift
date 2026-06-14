@@ -11,7 +11,7 @@ private let suiteName = "TimeMailboxVerify"
 let defaults = UserDefaults(suiteName: suiteName)!
 defaults.removePersistentDomain(forName: suiteName)
 
-let repo = TimeMailboxRepository(defaults: defaults, storageKey: "letters")
+let repo = TimeMailboxRepository(defaults: defaults, storageKey: "letters", minimumDeliveryDelay: 60)
 let now = Date(timeIntervalSince1970: 1_800_000_000)
 
 do {
@@ -101,6 +101,27 @@ do {
         "clamped mailbox letter should not deliver one second after sealing"
     )
     try repo.delete(id: defaultLetter.id)
+
+    let productionDefaults = UserDefaults(suiteName: "\(suiteName).productionDelay")!
+    productionDefaults.removePersistentDomain(forName: "\(suiteName).productionDelay")
+    let productionRepo = TimeMailboxRepository(defaults: productionDefaults, storageKey: "letters")
+    let productionDefaultLetter = try productionRepo.createLetter(
+        recipientName: "妈妈",
+        title: "真实投递节奏",
+        body: "真实路径不应像即时聊天一样立刻回信。",
+        deliverAt: now,
+        now: now,
+        boundaryAcknowledged: true
+    )
+    assertCondition(
+        productionDefaultLetter.deliverAt.timeIntervalSince(now) >= TimeMailboxRepository.defaultMinimumDeliveryDelay,
+        "production repository should clamp immediate mailbox letters to the default five-minute delay"
+    )
+    assertCondition(
+        productionRepo.refreshDelivery(now: now.addingTimeInterval(61)).isEmpty,
+        "production mailbox letter should not deliver after the old one-minute roadshow shortcut"
+    )
+    productionDefaults.removePersistentDomain(forName: "\(suiteName).productionDelay")
 
     let realSimilarToOldSeed = try repo.createLetter(
         recipientName: "爷爷",

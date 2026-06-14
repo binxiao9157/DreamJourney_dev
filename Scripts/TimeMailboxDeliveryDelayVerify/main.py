@@ -28,16 +28,17 @@ seal_body = seal_match.group(1) if seal_match else ""
 require(composer, "composer view controller block should be readable")
 require("立即" not in composer, "time mailbox must not offer immediate delivery")
 require(
-    'UISegmentedControl(items: ["1 分钟", "明日", "一周"])' in composer,
-    "delivery choices should start at 1 minute and avoid instant-chat framing",
+    'UISegmentedControl(items: ["5 分钟", "明日", "一周"])' in composer,
+    "delivery choices should start at 5 minutes and avoid instant-chat framing",
 )
 require(
     re.search(r"deliverAt\s*=\s*Date\(\)(?!\.)", seal_body) is None,
     "seal flow must not create immediately due letters",
 )
 require(
-    "Date().addingTimeInterval(60)" in seal_body,
-    "shortest real-device verification path should still use a delayed 1-minute delivery",
+    "TimeMailboxRepository.defaultMinimumDeliveryDelay" in composer
+    and "Date().addingTimeInterval(Self.shortestDeliveryDelay)" in seal_body,
+    "shortest real-device path should use the production five-minute delivery delay",
 )
 require(
     "TimeMailboxDeliveryDelayVerify/main.py" in phase1,

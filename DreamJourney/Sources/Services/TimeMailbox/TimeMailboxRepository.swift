@@ -9,19 +9,22 @@ enum TimeMailboxRepositoryError: Error, Equatable {
 
 final class TimeMailboxRepository {
     static let shared = TimeMailboxRepository()
-    private static let minimumDeliveryDelay: TimeInterval = 60
+    static let defaultMinimumDeliveryDelay: TimeInterval = 5 * 60
 
     private let defaults: UserDefaults
     private let storageKey: String
+    private let minimumDeliveryDelay: TimeInterval
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
     init(
         defaults: UserDefaults = .standard,
-        storageKey: String = "dreamjourney.timeMailbox.letters"
+        storageKey: String = "dreamjourney.timeMailbox.letters",
+        minimumDeliveryDelay: TimeInterval = TimeMailboxRepository.defaultMinimumDeliveryDelay
     ) {
         self.defaults = defaults
         self.storageKey = storageKey
+        self.minimumDeliveryDelay = minimumDeliveryDelay
         encoder.dateEncodingStrategy = .iso8601
         decoder.dateDecodingStrategy = .iso8601
     }
@@ -54,7 +57,7 @@ final class TimeMailboxRepository {
         guard !cleanBody.isEmpty else { throw TimeMailboxRepositoryError.invalidBody }
         guard boundaryAcknowledged else { throw TimeMailboxRepositoryError.boundaryNotAcknowledged }
 
-        let minimumDeliverAt = now.addingTimeInterval(Self.minimumDeliveryDelay)
+        let minimumDeliverAt = now.addingTimeInterval(minimumDeliveryDelay)
         let letter = TimeMailboxLetter(
             id: id,
             recipientName: cleanRecipient,
