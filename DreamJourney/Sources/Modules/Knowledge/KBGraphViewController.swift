@@ -22,6 +22,9 @@ final class KBGraphViewController: UIViewController {
     /// 当前被长按拖拽的节点
     private weak var draggingNode: KBGraphNode?
 
+    /// 空态约束，重建图谱前需要撤销，避免重复激活约束。
+    private var emptyStateConstraints: [NSLayoutConstraint] = []
+
     /// 画布内容视图
     private let canvasView = UIView()
 
@@ -60,12 +63,21 @@ final class KBGraphViewController: UIViewController {
         view.backgroundColor = .warmBackground
         setupScrollView()
         setupGestures()
+        NotificationCenter.default.addObserver(self, selector: #selector(onKBUpdated), name: .kbLiteDidUpdate, object: nil)
         buildGraph()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         centerCanvas()
+    }
+
+    @objc private func onKBUpdated() {
+        rebuildGraph()
     }
 
     // MARK: - Setup
@@ -95,6 +107,32 @@ final class KBGraphViewController: UIViewController {
     }
 
     // MARK: - Build Graph
+
+    private func rebuildGraph() {
+        clearGraphViews()
+        buildGraph()
+        view.setNeedsLayout()
+    }
+
+    private func clearGraphViews() {
+        nodeViews.values.forEach { $0.removeFromSuperview() }
+        nodeViews.removeAll()
+        edges.forEach {
+            $0.shapeLayer.removeFromSuperlayer()
+            $0.labelLayer?.removeFromSuperlayer()
+        }
+        edges.removeAll()
+        nodePositions.removeAll()
+        draggingNode = nil
+
+        emptyStateConstraints.forEach { $0.isActive = false }
+        emptyStateConstraints.removeAll()
+        emptyLabel.removeFromSuperview()
+
+        scrollView.isHidden = false
+        canvasView.frame = .zero
+        scrollView.contentSize = .zero
+    }
 
     private func buildGraph() {
         let displayGraph = KBLiteManager.shared.displayGraphForLocalBrowsing()
@@ -217,12 +255,13 @@ final class KBGraphViewController: UIViewController {
     private func showEmptyState() {
         scrollView.isHidden = true
         view.addSubview(emptyLabel)
-        NSLayoutConstraint.activate([
+        emptyStateConstraints = [
             emptyLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             emptyLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
             emptyLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
             emptyLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40),
-        ])
+        ]
+        NSLayoutConstraint.activate(emptyStateConstraints)
     }
 
     // MARK: - Gestures
