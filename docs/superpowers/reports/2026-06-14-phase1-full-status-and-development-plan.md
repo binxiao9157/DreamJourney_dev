@@ -273,11 +273,13 @@ iOS 仓库路径：`/Users/yxj/.config/superpowers/worktrees/DreamJourney_dev/ph
 - `Scripts/verify_phase1.sh` 自动基线通过，iPhoneOS Debug build 成功。
 - 线上 `/health` smoke 通过，返回 production + postgres。
 - 发现线上 `/config/runtime` 未带 token 也返回 200，标记为 P2 后端鉴权配置缺口。
-- 探测真机可见，但 Xcode 真机构建被 Developer Disk Image 挂载失败阻塞。
+- 初次探测真机可见，但 Xcode 真机构建被 Developer Disk Image 挂载失败阻塞；设备重新连接后已解除。
 - 修正验收计划：时空信箱当前最短投递延迟为 5 分钟。
 
 当前恢复入口调整为：
 
-1. 先解决真机 Developer Disk Image 挂载问题。
-2. 再配置服务器 `BACKEND_API_TOKEN` 与 iOS `DreamJourneyBackendAPIToken`。
-3. 之后继续执行 P0-1 记忆档案馆真实素材建库验收。
+1. 先执行 P0-1 记忆档案馆真实素材建库验收。
+2. 再执行 P0-2 数字人对话记忆约束验收。
+3. 同步配置服务器 `BACKEND_API_TOKEN` 与 iOS `DreamJourneyBackendAPIToken`，用于 P2 authenticated smoke。
+
+补充：2026-06-14 18:19 已完成真机构建、安装和启动；Developer Disk Image 挂载问题已通过重新连接设备解除。

@@ -2,7 +2,7 @@
 
 执行计划：`docs/superpowers/plans/2026-06-14-phase1-true-device-acceptance.md`  
 执行方式：主控 agent + 3 个只读审计 agent  
-当前结论：代码侧具备进入 P0/P1 真机验收的基础；本轮已完成自动基线、后端非敏感 smoke、真机可用性探测和多模块审计。真机安装被 Developer Disk Image 挂载问题阻塞，尚未完成手工真机验收。
+当前结论：代码侧具备进入 P0/P1 真机验收的基础；本轮已完成自动基线、后端非敏感 smoke、真机可用性探测和多模块审计。2026-06-14 18:19 已完成真机构建、安装和启动；下一步进入 P0 手工真机验收。
 
 ## 1. 本轮已执行
 
@@ -102,7 +102,7 @@ P2 缺口：
 iPhone ... available (paired) ... iPhone 17
 ```
 
-但真机 Debug 构建失败：
+首次真机 Debug 构建失败：
 
 ```text
 xcodebuild: error: Timed out waiting for all destinations matching the provided destination specifier to become available
@@ -110,6 +110,20 @@ The developer disk image could not be mounted on this device.
 ```
 
 结论：当前不是代码编译错误，而是 Xcode/设备 Developer Disk Image 挂载问题。真机安装和 P0/P1 手工验收需要先解决该设备环境问题。
+
+2026-06-14 18:18 设备重新连接后复测：
+
+- `xcrun xctrace list devices` 已显示 `iPhone (26.6) (00008150-001402D60A04401C)`，不再是 offline。
+- `xcrun devicectl list devices` 显示 `connected`。
+- `xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -configuration Debug -destination 'platform=iOS,id=00008150-001402D60A04401C' build` 通过。
+- `xcrun devicectl device install app --device B7887DD8-3561-5F2A-8D62-A3FEACDC80D9 .../DreamJourney.app` 通过。
+- `xcrun devicectl device process launch --device B7887DD8-3561-5F2A-8D62-A3FEACDC80D9 com.yxj.dreamjourney.app` 通过。
+
+证据日志：
+
+- `/tmp/dreamjourney_true_device_build_retry.log`
+- `/tmp/dreamjourney_true_device_install.log`
+- `/tmp/dreamjourney_true_device_launch.log`
 
 ## 2. 本轮修正
 
@@ -125,16 +139,14 @@ The developer disk image could not be mounted on this device.
 | 长辈关怀 | 自动验证通过，后端权限链路具备。 | 需要两台真机或两个真实账号做邀请/撤回验收。 |
 | 时空信箱 | 自动验证通过，metadata-only 代码具备。 | 按 5 分钟最短延迟执行真实投递验收。 |
 | 后端 smoke | `/health` 正常，Postgres 正常。 | 配置 `BACKEND_API_TOKEN` 后补 authenticated smoke。 |
-| 真机安装 | 设备可见但 DDI 挂载失败。 | 先解决 Xcode/设备环境，再继续 P0 真机手工验收。 |
+| 真机安装 | 已完成真机构建、安装、启动。 | 继续 P0 真机手工验收。 |
 
 ## 4. 后续执行顺序
 
-1. 解决真机 Developer Disk Image 挂载问题。
-2. 配置服务器 `BACKEND_API_TOKEN` 与 iOS `DreamJourneyBackendAPIToken`。
-3. 重新运行后端 authenticated smoke。
-4. 执行 P0-1 记忆档案馆真实素材建库验收。
-5. 执行 P0-2 数字人对话记忆约束验收。
-6. 执行 P1-1 关怀看板跨设备验收。
-7. 执行 P1-2 时空信箱真实信件验收。
-8. 汇总阶段一证据包。
-
+1. 执行 P0-1 记忆档案馆真实素材建库验收。
+2. 执行 P0-2 数字人对话记忆约束验收。
+3. 配置服务器 `BACKEND_API_TOKEN` 与 iOS `DreamJourneyBackendAPIToken`。
+4. 重新运行后端 authenticated smoke。
+5. 执行 P1-1 关怀看板跨设备验收。
+6. 执行 P1-2 时空信箱真实信件验收。
+7. 汇总阶段一证据包。
