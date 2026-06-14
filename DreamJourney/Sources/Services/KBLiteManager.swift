@@ -622,7 +622,11 @@ final class KBLiteManager {
     }
 
     private static func normalizedEntityName(_ name: String) -> String {
-        name.trimmingCharacters(in: .whitespacesAndNewlines)
+        name
+            .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters))
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+            .replacingOccurrences(of: "\t", with: "")
     }
 
     private static func normalizedFactStatement(_ statement: String) -> String {

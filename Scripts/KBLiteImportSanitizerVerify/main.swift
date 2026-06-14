@@ -106,6 +106,17 @@ let importedGraph = KBLiteGraph(
             privacyMetadata: metadata
         ),
         KBPerson(
+            id: "generic_mother_punctuated",
+            name: "妈妈：",
+            aliases: [],
+            relation: "母亲",
+            traits: [],
+            sourceSessionIds: [1],
+            createdAt: now,
+            updatedAt: now,
+            privacyMetadata: metadata
+        ),
+        KBPerson(
             id: "real_person",
             name: "陈建国",
             aliases: [],
