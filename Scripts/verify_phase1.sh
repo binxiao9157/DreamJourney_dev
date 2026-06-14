@@ -210,6 +210,9 @@ python3 Scripts/FamilyInvitationCodeVerify/main.py
 echo "== DigitalHuman startup reveal =="
 python3 Scripts/DigitalHumanStartupRevealVerify/main.py
 
+echo "== DigitalHuman asset =="
+python3 Scripts/DigitalHumanAssetVerify/verify_avatar_assets.py
+
 echo "== DigitalHuman dialog-end deposit =="
 python3 Scripts/DigitalHumanDialogEndDepositVerify/main.py
 
