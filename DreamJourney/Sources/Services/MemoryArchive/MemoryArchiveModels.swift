@@ -190,10 +190,8 @@ struct MemoryArchiveBuildReadiness: Equatable {
         let usableItems = items.filter {
             PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .prompt)
         }
-        let usablePhotoCount = usableItems.filter { $0.kind == .photo }.count
-        let usableVoiceEvidenceCount = usableItems.filter {
-            $0.kind == .voiceSample || $0.kind == .screenshot
-        }.count
+        let usablePhotoCount = usableItems.filter(hasUsablePhotoEvidence).count
+        let usableVoiceEvidenceCount = usableItems.filter(hasUsableVoiceOrScreenshotEvidence).count
         let usablePersonaHintCount = usableItems.filter {
             $0.kind == .personalityNote || $0.kind == .catchphrase
         }.count
@@ -203,12 +201,12 @@ struct MemoryArchiveBuildReadiness: Equatable {
         if usablePhotoCount >= requiredPhotoCount {
             completed += 1
         } else {
-            missing.append("1 张可生成旧照片")
+            missing.append("1 张已分析的可生成旧照片")
         }
         if usableVoiceEvidenceCount >= requiredVoiceEvidenceCount {
             completed += 1
         } else {
-            missing.append("\(requiredVoiceEvidenceCount) 份可生成语音/截图材料")
+            missing.append("\(requiredVoiceEvidenceCount) 份有真实转写或分析的可生成语音/截图材料")
         }
         if usablePersonaHintCount >= requiredPersonaHintCount {
             completed += 1
@@ -245,5 +243,46 @@ struct MemoryArchiveBuildReadiness: Equatable {
             archiveKnowledgeSourceCount: archiveKnowledgeSourceCount,
             missingRequirements: missing
         )
+    }
+
+    private static func hasUsablePhotoEvidence(_ item: MemoryArchiveItem) -> Bool {
+        guard item.kind == .photo,
+              item.analysisStatus == .analyzed else {
+            return false
+        }
+        return hasText(item.analysisSummary) ||
+            !item.detectedPeople.isEmpty ||
+            hasText(item.scene) ||
+            hasText(item.occasion) ||
+            hasText(item.mood) ||
+            item.estimatedDecade != nil
+    }
+
+    private static func hasUsableVoiceOrScreenshotEvidence(_ item: MemoryArchiveItem) -> Bool {
+        switch item.kind {
+        case .voiceSample:
+            return voiceTranscriptText(in: item.note) != nil
+        case .screenshot:
+            guard item.analysisStatus == .analyzed else { return false }
+            return hasText(item.analysisSummary) ||
+                !item.detectedPeople.isEmpty ||
+                hasText(item.scene) ||
+                hasText(item.occasion) ||
+                hasText(item.mood)
+        case .photo, .textNote, .personalityNote, .catchphrase:
+            return false
+        }
+    }
+
+    private static func voiceTranscriptText(in note: String) -> String? {
+        guard let range = note.range(of: "语音转写/摘要：") else {
+            return nil
+        }
+        let text = note[range.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
+    }
+
+    private static func hasText(_ value: String?) -> Bool {
+        value?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
     }
 }
