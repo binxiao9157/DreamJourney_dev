@@ -1390,7 +1390,7 @@ private extension MemoryArchiveViewController {
             knowledgeDepositStatusLabel.text = "结构化建库：暂无已沉淀知识；保存可生成/亲友素材后会整理"
         } else if status.archiveSourceCount > 0 {
             let privacyText = status.privacySummary.replacingOccurrences(of: "隐私：", with: "")
-            knowledgeDepositStatusLabel.text = "结构化建库：档案 \(status.archiveSourceCount) 条 · 全库 \(status.totalEntityCount) 条 · \(privacyText)"
+            knowledgeDepositStatusLabel.text = "结构化建库：档案来源 \(status.archiveSourceCount) 条 · 结构化 \(status.archiveStructuredKnowledgeSourceCount) 条 · 全库 \(status.totalEntityCount) 条 · \(privacyText)"
         } else {
             knowledgeDepositStatusLabel.text = "结构化建库：全库 \(status.totalEntityCount) 条，尚无档案来源"
         }
@@ -1401,7 +1401,7 @@ private extension MemoryArchiveViewController {
         let status = KBLiteDepositStatusBuilder.build(from: graph)
         let readiness = MemoryArchiveBuildReadiness.build(
             items: repository.items(),
-            archiveKnowledgeSourceCount: status.archiveSourceCount
+            archiveKnowledgeSourceCount: status.archiveStructuredKnowledgeSourceCount
         )
         knowledgeCoreTitleLabel.text = "建库核心 · \(readiness.titleText)"
         knowledgeCoreCountsLabel.text = "\(graph.people.count) 人 · \(graph.places.count) 地 · \(graph.events.count) 事 · \(graph.facts.count) 实"

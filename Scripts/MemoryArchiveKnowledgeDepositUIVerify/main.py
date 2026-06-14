@@ -60,6 +60,11 @@ require(
     "knowledge core card should show phase-one build readiness and missing material guidance",
 )
 require(
+    "archiveKnowledgeSourceCount: status.archiveStructuredKnowledgeSourceCount" in view
+    and "档案来源 \\(status.archiveSourceCount) 条 · 结构化 \\(status.archiveStructuredKnowledgeSourceCount) 条" in view,
+    "knowledge core readiness should use structured archive knowledge, while status text may still expose metadata-only archive sources",
+)
+require(
     "updateKnowledgeDepositStatusLabel()" in view,
     "archive screen should refresh local knowledge deposit status on reload",
 )

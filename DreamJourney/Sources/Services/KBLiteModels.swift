@@ -426,6 +426,7 @@ struct KBLiteDepositStatus: Equatable {
     let lastUpdated: Date
     let conversationSourceCount: Int
     let archiveSourceCount: Int
+    let archiveStructuredKnowledgeSourceCount: Int
     let mailboxSourceCount: Int
     let importedSourceCount: Int
     let untaggedSourceCount: Int
@@ -438,6 +439,7 @@ struct KBLiteDepositStatus: Equatable {
         var parts = [
             "对话 \(conversationSourceCount)",
             "档案 \(archiveSourceCount)",
+            "档案结构化 \(archiveStructuredKnowledgeSourceCount)",
             "信箱 \(mailboxSourceCount)"
         ]
         if importedSourceCount > 0 {
@@ -494,6 +496,7 @@ enum KBLiteDepositStatusBuilder {
     static func build(from graph: KBLiteGraph) -> KBLiteDepositStatus {
         let metadatas = graph.allPrivacyMetadata
         var sourceIDsByKind: [MemorySourceKind: Set<String>] = [:]
+        var archiveStructuredSourceIDs = Set<String>()
         var untaggedCount = 0
         var privacyCounts: [MemoryPrivacyScope: Int] = [:]
 
@@ -508,6 +511,19 @@ enum KBLiteDepositStatusBuilder {
                 }
             }
         }
+        graph.people.forEach { entity in
+            collectArchiveStructuredSourceIDs(from: entity.privacyMetadata, into: &archiveStructuredSourceIDs)
+        }
+        graph.places.forEach { entity in
+            collectArchiveStructuredSourceIDs(from: entity.privacyMetadata, into: &archiveStructuredSourceIDs)
+        }
+        graph.events.forEach { entity in
+            collectArchiveStructuredSourceIDs(from: entity.privacyMetadata, into: &archiveStructuredSourceIDs)
+        }
+        graph.facts.forEach { fact in
+            guard !isArchiveMetadataOnlyFact(fact.statement) else { return }
+            collectArchiveStructuredSourceIDs(from: fact.privacyMetadata, into: &archiveStructuredSourceIDs)
+        }
 
         let importedCount =
             (sourceIDsByKind[.importRecord]?.count ?? 0) +
@@ -519,6 +535,7 @@ enum KBLiteDepositStatusBuilder {
             lastUpdated: graph.lastUpdated,
             conversationSourceCount: sourceIDsByKind[.conversationTurn]?.count ?? 0,
             archiveSourceCount: sourceIDsByKind[.memoryArchiveItem]?.count ?? 0,
+            archiveStructuredKnowledgeSourceCount: archiveStructuredSourceIDs.count,
             mailboxSourceCount: sourceIDsByKind[.timeMailboxLetter]?.count ?? 0,
             importedSourceCount: importedCount,
             untaggedSourceCount: untaggedCount,
@@ -527,6 +544,20 @@ enum KBLiteDepositStatusBuilder {
             familyCircleCount: privacyCounts[.familyCircle] ?? 0,
             privateOnlyCount: privacyCounts[.privateOnly] ?? 0
         )
+    }
+
+    private static func collectArchiveStructuredSourceIDs(
+        from metadata: MemoryPrivacyMetadata,
+        into sourceIDs: inout Set<String>
+    ) {
+        for sourceRef in metadata.sourceRefs where sourceRef.kind == .memoryArchiveItem {
+            sourceIDs.insert(sourceRef.id)
+        }
+    }
+
+    private static func isArchiveMetadataOnlyFact(_ statement: String) -> Bool {
+        let text = statement.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.hasPrefix("记忆档案馆保存")
     }
 }
 
