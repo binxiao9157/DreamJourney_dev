@@ -401,6 +401,9 @@ xcrun swiftc \
   -o /tmp/dreamjourney_dialog_end_intent_verify
 /tmp/dreamjourney_dialog_end_intent_verify
 
+echo "== Dialog end command memory boundary =="
+python3 Scripts/DialogEndCommandMemoryBoundaryVerify/main.py
+
 echo "== Dialog memory grounding =="
 xcrun swiftc \
   DreamJourney/Sources/Services/Privacy/MemoryPrivacyScope.swift \

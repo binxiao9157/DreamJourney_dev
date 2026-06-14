@@ -1130,6 +1130,14 @@ extension AIRecordingViewController: DialogEngineDelegate {
     func onASRResult(text: String, isFinal: Bool) {
         let speechSignal = userSpeechSignalTracker.observeASRUpdate(text: text, isFinal: isFinal)
         if isFinal {
+            guard DialogEndIntentPolicy.shouldRecordAsMemoryTurn(text) else {
+                DDLogInfo("[AIRecording] end_command_memory_turn_suppressed textChars=\(text.count)")
+                pendingUserText = nil
+                currentAssistantResponseText = nil
+                retryableDigitalHumanSpeechText = nil
+                userSpeechSignalTracker.reset()
+                return
+            }
             digitalHumanAvatarView.setState(.thinking, prompt: "正在整理")
             // 最终结果：直接显示为正式用户消息
             pendingUserText = nil
@@ -1200,6 +1208,12 @@ extension AIRecordingViewController: DialogEngineDelegate {
     /// 将待确认的用户文本发布为正式消息
     private func flushPendingUserText() {
         if let text = pendingUserText, !text.isEmpty {
+            guard DialogEndIntentPolicy.shouldRecordAsMemoryTurn(text) else {
+                DDLogInfo("[AIRecording] pending_end_command_memory_turn_suppressed textChars=\(text.count)")
+                pendingUserText = nil
+                userSpeechSignalTracker.reset()
+                return
+            }
             messages.append(.user(text: text, timestamp: Date()))
             // 记录到对话记忆
             let speechSignal = userSpeechSignalTracker.finalizePending()
@@ -1209,6 +1223,10 @@ extension AIRecordingViewController: DialogEngineDelegate {
     }
 
     private func recordUserSpeechTurn(_ text: String, speechSignal: UserSpeechTurnSignal?) {
+        guard DialogEndIntentPolicy.shouldRecordAsMemoryTurn(text) else {
+            DDLogInfo("[AIRecording] direct_end_command_memory_turn_suppressed textChars=\(text.count)")
+            return
+        }
         Stage1MemoryFacade.shared.recordUserTurn(Stage1MailboxMemoryInput(
             text,
             speechDurationSeconds: speechSignal?.durationSeconds,

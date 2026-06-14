@@ -30,6 +30,33 @@ enum DialogEndIntentPolicy {
         }
         return memoirRequestKeywords.contains { keyword.contains($0) || $0.contains(keyword) }
     }
+
+    static func shouldRecordAsMemoryTurn(_ text: String) -> Bool {
+        let normalized = normalizeCommandText(text)
+        guard !normalized.isEmpty else { return false }
+
+        let controlKeywords = memoirRequestKeywords + endOnlyKeywords + ["生成家书", "写家书"]
+        let isStandaloneControl = controlKeywords.contains { keyword in
+            let normalizedKeyword = normalizeCommandText(keyword)
+            guard !normalizedKeyword.isEmpty else { return false }
+            if normalized == normalizedKeyword { return true }
+
+            // Allow short polite wrappers such as “那就聊完了吧” or “请生成回忆录”.
+            let wrapperBudget = normalizedKeyword.count + 6
+            return normalized.count <= wrapperBudget && normalized.contains(normalizedKeyword)
+        }
+        return !isStandaloneControl
+    }
+
+    private static func normalizeCommandText(_ text: String) -> String {
+        let removable = CharacterSet.whitespacesAndNewlines
+            .union(.punctuationCharacters)
+            .union(CharacterSet(charactersIn: "，。！？、；：,.!?;:~～「」『』“”‘’（）()【】[]"))
+        return text
+            .components(separatedBy: removable)
+            .joined()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }
 
 enum MemoryDialogIntent: String {
