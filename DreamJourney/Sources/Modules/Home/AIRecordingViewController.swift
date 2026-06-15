@@ -1334,7 +1334,8 @@ extension AIRecordingViewController: DialogEngineDelegate {
         resetDigitalHumanSpeechPlayback(stopFallbackAudio: true)
         digitalHumanAvatarView.clearSpeechAudio()
         digitalHumanAvatarView.setState(.error, prompt: "语音服务异常")
-        showVoiceServiceRecovery()
+        let reason = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        showVoiceServiceRecovery(reason: reason)
     }
 
     private func synthesizeDigitalHumanSpeechIfNeeded(_ text: String) {
@@ -1590,15 +1591,29 @@ extension AIRecordingViewController: DialogEngineDelegate {
         })
     }
 
-    private func showVoiceServiceRecovery() {
+    private func showVoiceServiceRecovery(reason: String? = nil) {
+        let message = compactVoiceServiceError(reason)
+            ?? "本次对话已安全收尾，可以稍后重试；当前不会写入共享记忆，也不影响查看其他功能。"
         let presentation = DigitalHumanSpeechPlaybackPolicy.FallbackPresentation(
             title: "语音服务暂时不可用",
-            message: "本次对话已安全收尾，可以稍后重试；当前不会写入共享记忆，也不影响查看其他功能。",
+            message: message,
             recoveryActionTitle: "重试数字人",
             continueActionTitle: "继续语音"
         )
         showDigitalHumanFallbackPresentation(presentation)
-        showToast("语音服务暂时不可用，可稍后重试", type: .info)
+        showToast(message, type: .info)
+    }
+
+    private func compactVoiceServiceError(_ reason: String?) -> String? {
+        guard var text = reason?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else {
+            return nil
+        }
+        text = text.replacingOccurrences(of: "\n", with: " ")
+        if text.count > 120 {
+            text = String(text.prefix(117)) + "..."
+        }
+        return text
     }
 
     @objc private func retryDigitalHumanTapped() {

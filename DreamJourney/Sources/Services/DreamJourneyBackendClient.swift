@@ -99,6 +99,19 @@ final class DreamJourneyBackendClient {
         )
     }
 
+    func fetchRealtimeVoiceConfig(
+        userId: String,
+        completion: @escaping (Result<VolcEngineRealtimeRemoteConfig, Swift.Error>) -> Void
+    ) {
+        performJSONRequest(
+            path: "voice/realtime-token",
+            method: "POST",
+            bodyObject: ["userId": userId],
+            responseType: VolcEngineRealtimeRemoteConfig.self,
+            completion: completion
+        )
+    }
+
     func analyzeArchiveImage(
         imageBase64: String,
         userId: String,

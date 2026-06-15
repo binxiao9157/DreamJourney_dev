@@ -418,11 +418,12 @@ curl -X POST 'https://www.mmdd10.tech/dreamjourney-api/tts?dryRun=true' \
 
 ```bash
 curl -X POST https://www.mmdd10.tech/dreamjourney-api/voice/realtime-token \
+  -H "Authorization: Bearer ${BACKEND_API_TOKEN}" \
   -H 'Content-Type: application/json' \
   -d '{"userId":"user_9157"}'
 ```
 
-当前返回 `authMode=legacy`，说明 AppID / AppKey / AppToken 已生效。
+当前返回 `authMode=legacy` 且包含 `appID`、`appKey`、`appToken`、`resourceID`、`address`、`uri`，说明后端可以向 iOS 下发实时语音运行配置。该接口会暴露 SDK 启动所需凭证，必须启用 `BACKEND_API_TOKEN`，并在 iOS 侧配置同值的 `DreamJourneyBackendAPIToken`。
 
 ## 9. 更新部署
 

@@ -58,6 +58,29 @@ let appIDAndTokenOnly = VolcEngineRealtimeCredentialProvider.credentials(
 )
 expect(appIDAndTokenOnly?.authMode == .legacy(appID: "app-id", appKey: fixedRealtimeAppKey, token: "token"), "legacy realtime dialog should not require console Secret Key as VolcEngineAppKey")
 
+let backendLegacyPayload = """
+{
+  "authMode": "legacy",
+  "appID": "remote-app-id",
+  "appKey": "PlgvMymc7f3tQnJ6",
+  "appToken": "remote-token",
+  "address": "wss://remote.example.com",
+  "uri": "/remote/dialogue",
+  "resourceID": "remote.resource",
+  "uid": "remote-user"
+}
+""".data(using: .utf8)!
+let backendLegacyConfig = try JSONDecoder().decode(VolcEngineRealtimeRemoteConfig.self, from: backendLegacyPayload)
+let backendLegacyCredentials = backendLegacyConfig.credentials(defaultUID: "fallback-user")
+expect(
+    backendLegacyCredentials?.authMode == .legacy(appID: "remote-app-id", appKey: fixedRealtimeAppKey, token: "remote-token"),
+    "backend legacy payload maps to usable realtime credentials"
+)
+expect(backendLegacyCredentials?.address == "wss://remote.example.com", "backend payload can override address")
+expect(backendLegacyCredentials?.uri == "/remote/dialogue", "backend payload can override uri")
+expect(backendLegacyCredentials?.resourceID == "remote.resource", "backend payload can override resource id")
+expect(backendLegacyCredentials?.uid == "remote-user", "backend payload can override uid")
+
 let missing = VolcEngineRealtimeCredentialProvider.credentials(
     from: [
         "VolcEngineRealtimeAPIKey": "YOUR_REALTIME_KEY",

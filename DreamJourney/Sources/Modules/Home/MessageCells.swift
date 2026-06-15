@@ -69,9 +69,6 @@ final class TGMessageCell: UITableViewCell {
         contentView.addSubview(bubbleView)
         bubbleView.addSubview(messageLabel)
         contentView.addSubview(timeLabel)
-        [bubbleView, messageLabel, avatarView, timeLabel].forEach {
-            $0.translatesAutoresizingMaskIntoConstraints = false
-        }
     }
 
     required init?(coder: NSCoder) { fatalError() }

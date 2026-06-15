@@ -1,6 +1,6 @@
 # 真机验证 API 配置清单
 
-本文档列出真机验证或路演联调时需要配置的真实 key、endpoint 与本地演示开关。不要把真实密钥提交到仓库；当前仓库内 `Info.plist` 只保留占位符，真机本地值建议放到未提交的 `DreamJourney/Resources/LocalConfig.plist`，或通过 Xcode Scheme 环境变量注入。
+本文档列出真机验证需要配置的 endpoint、token 与本地兜底 key。不要把真实密钥提交到仓库；当前仓库内 `Info.plist` 只保留占位符，真机本地值建议放到未提交的 `DreamJourney/Resources/LocalConfig.plist`，或通过 Xcode Scheme 环境变量注入。
 
 ## 推荐配置方式
 
@@ -12,23 +12,34 @@
 
 提交前会由 `Scripts/SecretConfigVerify/main.py` 检查：敏感 key 不能以真实值出现在 `Info.plist`，`LocalConfig.plist` 必须被 git ignore，且仓库文本不能出现明显 token 形态。
 
-## 必配项
+## 新机真机必配项
+
+新电脑、新真机优先走业务后端下发实时语音运行配置，不需要在每台开发机重复配置火山实时语音三件套。
 
 | 配置项 | 读取位置 | 用途 | 备注 |
 | --- | --- | --- | --- |
+| `DreamJourneyBackendBaseURL` | Scheme env / `LocalConfig.plist` / `Info.plist` fallback | DreamJourney 自有业务后端入口 | 当前可用入口为 `https://www.mmdd10.tech/dreamjourney-api`；正式域名 `https://dreamjourney-api.liftora.cn` 放行后再切换。 |
+| `DreamJourneyBackendAPIToken` | Scheme env / `LocalConfig.plist` | 后端接口鉴权 | 如果服务器启用了 `BACKEND_API_TOKEN`，iOS 必须配置同值 token；实时语音配置接口 `/voice/realtime-token` 也依赖它。 |
 | `AMapAPIKey` | Scheme env / `LocalConfig.plist` / `Info.plist` placeholder | 足迹地图、高德 SDK 初始化 | 仅展示地图链路时需要；未配置会跳过 SDK key 注入并导致地图不可用。 |
-| `DeepSeekAPIKey` | Scheme env / `LocalConfig.plist` / `Info.plist` placeholder | 回忆录生成、知识抽取、图片分析、DeepSeek chat | 远端生成主线需要。 |
+| `DeepSeekAPIKey` | 后端 `.env` 优先；Scheme env / `LocalConfig.plist` 仅本地兜底 | 回忆录生成、知识抽取、图片分析、DeepSeek chat | 真实测试优先走 DreamJourney 后端代理；不要为了新机验证把 DeepSeek key 写入仓库。 |
 | `DeepSeekAPIBaseURL` | Scheme env / `LocalConfig.plist` / `Info.plist` placeholder | DeepSeek chat completions endpoint | 默认 `https://api.deepseek.com/v1/chat/completions`；如走代理或兼容服务再替换。 |
-| `VolcEngineAPIKey` | Scheme env / `LocalConfig.plist` / `Info.plist` placeholder | 新版豆包语音 API Key，用于声音复刻、回忆录 TTS、数字人 WAV TTS 等 HTTP API Key 接入链路 | 新版控制台优先配置这一项；HTTP TTS 使用 `/api/v1/tts` + `x-api-key`。实时 Dialog 若未配置专用凭证，会把它作为实验性 `X-Api-Key` 兜底。 |
-| `VolcEngineRealtimeAPIKey` | Scheme env / `LocalConfig.plist` / `Info.plist` placeholder | 新版实时对话 SDK 专用 API Key | 可选；仅在控制台/文档明确给出实时 Dialog API Key 时配置。当前端到端实时对话官方文档仍出现 `X-Api-App-ID`、`X-Api-Access-Key` 与固定 `X-Api-App-Key`，所以真机联调时更建议优先补齐下方旧式三件套。 |
-| `VolcEngineRealtimeResourceID` | Scheme env / `LocalConfig.plist` / `Info.plist` placeholder | 实时对话 SDK resource id | 默认 `volc.speech.dialog`；如控制台给出不同资源 ID，以控制台为准。 |
-| `VolcEngineRealtimeAddress` | Scheme env / `LocalConfig.plist` / `Info.plist` placeholder | 实时对话 SDK websocket address | 默认 `wss://openspeech.bytedance.com`。 |
-| `VolcEngineRealtimeURI` | Scheme env / `LocalConfig.plist` / `Info.plist` placeholder | 实时对话 SDK URI | 默认 `/api/v3/realtime/dialogue`。 |
-| `VolcEngineVoiceType` | Scheme env / `LocalConfig.plist` / `Info.plist` placeholder | 新版豆包语音 TTS 的 voice/speaker id | 对应 `/api/v1/tts` 请求体中的 `audio.voice_type`；当前真机配置为 `zh_female_cancan_mars_bigtts`。如果 app 内声音复刻已有 `speakerId`，会优先使用回忆录/本地训练音色。 |
+| `VolcEngineAPIKey` | 后端 `.env` 优先；Scheme env / `LocalConfig.plist` 仅本地兜底 | 新版豆包语音 API Key，用于声音复刻、回忆录 TTS、数字人 WAV TTS 等 HTTP API Key 接入链路 | 真实测试优先放在后端；本地配置仅用于后端不可用时的开发兜底。 |
+| `VolcEngineVoiceType` | 后端 `.env` 优先；Scheme env / `LocalConfig.plist` 仅本地兜底 | 新版豆包语音 TTS 的 voice/speaker id | 对应 `/api/v1/tts` 请求体中的 `audio.voice_type`；当前真机配置为 `zh_female_cancan_mars_bigtts`。如果 app 内声音复刻已有 `speakerId`，会优先使用回忆录/本地训练音色。 |
+
+## 本地兜底项
+
+以下项不是新机真机必配。只有当 `DreamJourneyBackendBaseURL` 不可用、后端未部署 `/voice/realtime-token`，或需要离线开发排障时，才需要在本机 `LocalConfig.plist` / Scheme env 配置。
+
+| 配置项 | 读取位置 | 用途 | 备注 |
+| --- | --- | --- | --- |
+| `VolcEngineRealtimeAPIKey` | Scheme env / `LocalConfig.plist` / `Info.plist` placeholder | 新版实时对话 SDK 专用 API Key | 可选；仅在控制台/文档明确给出实时 Dialog API Key 时配置。 |
+| `VolcEngineRealtimeResourceID` | Scheme env / `LocalConfig.plist` / `Info.plist` placeholder | 实时对话 SDK resource id | 默认 `volc.speech.dialog`；后端下发成功时以后端为准。 |
+| `VolcEngineRealtimeAddress` | Scheme env / `LocalConfig.plist` / `Info.plist` placeholder | 实时对话 SDK websocket address | 默认 `wss://openspeech.bytedance.com`；后端下发成功时以后端为准。 |
+| `VolcEngineRealtimeURI` | Scheme env / `LocalConfig.plist` / `Info.plist` placeholder | 实时对话 SDK URI | 默认 `/api/v3/realtime/dialogue`；后端下发成功时以后端为准。 |
 | `VoiceCloneAPIKey` | Scheme env / `LocalConfig.plist` / `Info.plist` placeholder | 声音克隆、个性化 TTS 的旧兜底 key | 兼容旧配置；配置了 `VolcEngineAPIKey` 时优先使用新版 key。 |
-| `VolcEngineAppID` | Scheme env / `LocalConfig.plist` / `Info.plist` placeholder | 火山端到端实时 Dialog 的 App ID | 官方实时对话链路对应 `X-Api-App-ID`；完整配置旧式三件套后，会优先于通用 `VolcEngineAPIKey`。 |
-| `VolcEngineAppKey` | Scheme env / `LocalConfig.plist` / `Info.plist` placeholder | 火山端到端实时 Dialog 的 App Key | 官方实时对话链路对应 `X-Api-App-Key`；部分文档示例为固定值，实际以控制台/开通资源为准，不要填新版 API Key。 |
-| `VolcEngineAppToken` | Scheme env / `LocalConfig.plist` / `Info.plist` placeholder | 火山端到端实时 Dialog 的 Access Key/Token | 官方实时对话链路对应 `X-Api-Access-Key`；不要填新版 API Key。 |
+| `VolcEngineAppID` | Scheme env / `LocalConfig.plist` / `Info.plist` placeholder | 火山端到端实时 Dialog 的 App ID | 官方实时对话链路对应 `X-Api-App-ID`；后端下发成功时无需本地配置。 |
+| `VolcEngineAppKey` | Scheme env / `LocalConfig.plist` / `Info.plist` placeholder | 火山端到端实时 Dialog 的 App Key | 当前实时 Dialog 固定值为 `PlgvMymc7f3tQnJ6`；后端下发成功时无需本地配置。 |
+| `VolcEngineAppToken` | Scheme env / `LocalConfig.plist` / `Info.plist` placeholder | 火山端到端实时 Dialog 的 Access Key/Token | 官方实时对话链路对应 `X-Api-Access-Key`；后端下发成功时无需本地配置。 |
 
 ## Safety Guard
 

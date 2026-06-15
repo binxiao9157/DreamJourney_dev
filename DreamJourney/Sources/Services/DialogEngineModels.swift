@@ -388,6 +388,97 @@ struct MemoryGroundedReplyPlan {
     let evidenceLines: [String]
 }
 
+private struct DialogCurrentSpeakerIdentity {
+    let name: String
+    let relation: String
+    let aliases: [String]
+
+    var displayName: String {
+        "\(name)（\(relation)）"
+    }
+}
+
+private enum DialogCurrentSpeakerIdentityResolver {
+    private static let selfRelations: Set<String> = [
+        "本人", "自己", "我", "当前用户", "用户本人", "长辈本人", "讲述者", "受访者"
+    ]
+
+    static func resolve(in graph: KBLiteGraph) -> DialogCurrentSpeakerIdentity? {
+        let promptPeople = graph.people
+            .filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .prompt) }
+
+        let candidates = promptPeople
+            .filter { person in
+                guard let relation = person.relation?
+                    .trimmingCharacters(in: .whitespacesAndNewlines),
+                    !relation.isEmpty
+                else {
+                    return false
+                }
+                return selfRelations.contains(relation)
+            }
+            .sorted { lhs, rhs in
+                (lhs.sourceSessionIds.last ?? 0) > (rhs.sourceSessionIds.last ?? 0)
+            }
+
+        if let person = candidates.first,
+           let relation = person.relation?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !person.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return DialogCurrentSpeakerIdentity(
+                name: person.name.trimmingCharacters(in: .whitespacesAndNewlines),
+                relation: relation,
+                aliases: person.aliases
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+            )
+        }
+
+        if let selfIntroName = explicitSelfIntroName(in: graph) {
+            let matchedPerson = promptPeople.first { person in
+                person.name == selfIntroName || person.aliases.contains(selfIntroName)
+            }
+            return DialogCurrentSpeakerIdentity(
+                name: selfIntroName,
+                relation: "本人",
+                aliases: matchedPerson?.aliases
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty } ?? []
+            )
+        }
+
+        return nil
+    }
+
+    private static func explicitSelfIntroName(in graph: KBLiteGraph) -> String? {
+        let promptFacts = graph.facts
+            .filter { PrivacyScopePolicy.canUse(metadata: $0.privacyMetadata, surface: .prompt) }
+            .sorted { lhs, rhs in
+                (lhs.sourceSessionIds.last ?? 0) > (rhs.sourceSessionIds.last ?? 0)
+            }
+
+        for fact in promptFacts {
+            if let name = extractNameAfterWoJiao(from: fact.statement),
+               !DialogMemoryEvidenceSanitizer.isGenericKinshipName(name) {
+                return name
+            }
+        }
+        return nil
+    }
+
+    private static func extractNameAfterWoJiao(from text: String) -> String? {
+        let pattern = #"我叫([\u4e00-\u9fa5]{2,4})(?:，|。|,|\.|\s|$)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+        guard let match = regex.firstMatch(in: text, range: range),
+              match.numberOfRanges >= 2
+        else {
+            return nil
+        }
+        return nsText.substring(with: match.range(at: 1))
+    }
+}
+
 enum MemoryGroundedReplyPlanner {
     static func makePlan(pack: MemoryEvidencePack) -> MemoryGroundedReplyPlan {
         let evidenceLines = pack.items.map { item in
@@ -452,16 +543,52 @@ enum DialogMemoryGroundingPolicy {
 3. 如果用户问到人生事实但【已知家庭记忆】没有记录，要说：“我这里还没有记住这段，可以跟我讲讲吗？”然后只追问一个具体问题。
 4. 引用已知事实时，用“我记得您说过……”或“您之前提到……”自然表达，不要逐条朗读档案。
 5. 可以温暖陪聊，但事实性内容必须以已知记忆为边界。
+6. 如果【当前说话人身份】标记了“本人”，你正在和这个人本人对话，必须用“您/你”称呼这位用户，不要用第三人称。
+"""
+    }
+
+    static func currentSpeakerIdentityContext(graph: KBLiteGraph) -> String {
+        guard let identity = DialogCurrentSpeakerIdentityResolver.resolve(in: graph) else {
+            return ""
+        }
+
+        let aliasLine: String
+        if identity.aliases.isEmpty {
+            aliasLine = ""
+        } else {
+            aliasLine = "\n- 其他称呼：\(identity.aliases.joined(separator: "、"))。"
+        }
+
+        return """
+
+【当前说话人身份】
+- 当前正在对话的长辈/用户：\(identity.displayName)。
+- 称呼视角：你是在和\(identity.name)本人说话；直接对话时，把\(identity.name)称作“您”或“你”。
+- 禁止第三人称：不要把\(identity.name)说成“他”“\(identity.name)”“这位用户”；除非用户主动要求写档案摘要。\(aliasLine)
+"""
+    }
+
+    static func currentSpeakerIdentityRAGContent(graph: KBLiteGraph) -> String? {
+        guard let identity = DialogCurrentSpeakerIdentityResolver.resolve(in: graph) else {
+            return nil
+        }
+
+        return """
+当前说话人身份：\(identity.displayName)。
+称呼视角：你正在和\(identity.name)本人对话，必须把\(identity.name)称作“您”或“你”。
+禁止第三人称：不要把\(identity.name)说成“他”“\(identity.name)”“这位用户”；回答\(identity.name)的经历时，要说“您之前提到……”。
 """
     }
 
     static func queryContext(for query: String, graph: KBLiteGraph, maxItems: Int = 5) -> String {
         let pack = MemoryEvidencePack.build(query: query, graph: graph, maxItems: maxItems)
         let plan = MemoryGroundedReplyPlanner.makePlan(pack: pack)
+        let identityContext = currentSpeakerIdentityContext(graph: graph)
 
         if plan.evidenceLines.isEmpty {
             return """
 
+\(identityContext)
 【本轮记忆意图】\(pack.intent.rawValue)
 【回复计划】\(plan.mode.rawValue)
 【本轮已知家庭记忆】
@@ -473,6 +600,7 @@ enum DialogMemoryGroundingPolicy {
 
         return """
 
+\(identityContext)
 【本轮记忆意图】\(pack.intent.rawValue)
 【回复计划】\(plan.mode.rawValue)
 【本轮已知家庭记忆】
@@ -494,7 +622,14 @@ enum DialogMemoryRAGPayloadBuilder {
     ) -> String? {
         let pack = MemoryEvidencePack.build(query: query, graph: graph, maxItems: maxItems)
         let plan = MemoryGroundedReplyPlanner.makePlan(pack: pack)
+        let identityContent = DialogMemoryGroundingPolicy.currentSpeakerIdentityRAGContent(graph: graph)
         guard pack.hasEvidence else {
+            if let identityContent {
+                return makePayload(items: [[
+                    "title": "当前说话人身份",
+                    "content": identityContent
+                ]])
+            }
             guard shouldSendNoEvidenceBoundary(for: pack.intent) else { return nil }
             return makePayload(items: [[
                 "title": "没有匹配的家庭记忆",
@@ -502,12 +637,19 @@ enum DialogMemoryRAGPayloadBuilder {
             ]])
         }
 
-        let items = pack.items.map { item in
+        var items: [[String: String]] = []
+        if let identityContent {
+            items.append([
+                "title": "当前说话人身份",
+                "content": identityContent
+            ])
+        }
+        items.append(contentsOf: pack.items.map { item in
             [
                 "title": title(for: item),
                 "content": content(for: item, plan: plan)
             ]
-        }
+        })
         return makePayload(items: items)
     }
 

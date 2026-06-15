@@ -143,12 +143,82 @@ let queryContext = DialogMemoryGroundingPolicy.queryContext(
     graph: graph,
     maxItems: 6
 )
+assertCondition(queryContext.contains("【当前说话人身份】"), "query context should expose the current speaker identity")
+assertCondition(queryContext.contains("陈建国（本人）"), "query context should bind the self person as the current user")
+assertCondition(queryContext.contains("把陈建国称作“您”或“你”"), "query context should force second-person wording for the bound user")
+assertCondition(queryContext.contains("不要把陈建国说成“他”"), "query context should prohibit third-person wording for the bound user")
 assertCondition(queryContext.contains("【本轮记忆意图】factQuestion"), "query context should expose the memory intent")
 assertCondition(queryContext.contains("【回复计划】answerWithEvidence"), "query context should expose the reply plan")
 assertCondition(queryContext.contains("1968年住在绍兴越城区仓桥直街"), "query context should include relevant lived fact")
 assertCondition(queryContext.contains("林桂芳"), "query context should include relevant person")
 assertCondition(queryContext.contains("开过一家小照相馆"), "query context should include relevant event/fact")
 assertCondition(queryContext.contains("如果没有证据"), "query context should repeat unknown-answer rule")
+
+let selfAwareRAGPayload = DialogMemoryRAGPayloadBuilder.makePayload(
+    query: factQuestion,
+    graph: graph,
+    maxItems: 6
+)
+assertCondition(selfAwareRAGPayload?.contains("当前说话人身份") == true, "RAG payload should carry speaker identity")
+assertCondition(selfAwareRAGPayload?.contains("陈建国（本人）") == true, "RAG payload should carry self identity evidence")
+assertCondition(selfAwareRAGPayload?.contains("不要把陈建国说成") == true, "RAG payload should carry third-person prohibition")
+
+let casualSelfContext = DialogMemoryGroundingPolicy.queryContext(
+    for: "你好。",
+    graph: graph,
+    maxItems: 6
+)
+assertCondition(
+    casualSelfContext.contains("陈建国（本人）"),
+    "casual query context should still bind the current user identity"
+)
+
+let casualSelfRAGPayload = DialogMemoryRAGPayloadBuilder.makePayload(
+    query: "你好。",
+    graph: graph,
+    maxItems: 6
+)
+assertCondition(
+    casualSelfRAGPayload?.contains("陈建国（本人）") == true,
+    "casual RAG payload should still carry current user identity"
+)
+
+let legacySelfIntroGraph = KBLiteGraph(
+    version: 2,
+    lastUpdated: Date(timeIntervalSince1970: 1_800_000_000),
+    sessionCount: 1,
+    people: [
+        KBPerson(
+            id: "p_legacy_self",
+            name: "陈建国",
+            aliases: [],
+            relation: nil,
+            traits: [],
+            sourceSessionIds: [1],
+            createdAt: Date(),
+            updatedAt: Date(),
+            privacyMetadata: metadata
+        )
+    ],
+    facts: [
+        KBFact(
+            id: "f_legacy_self_intro",
+            statement: "我叫陈建国，1968年住在绍兴越城区仓桥直街。",
+            confidence: "high",
+            relatedPersonIds: ["p_legacy_self"],
+            sourceSessionIds: [1],
+            privacyMetadata: metadata
+        )
+    ]
+)
+assertCondition(
+    DialogMemoryGroundingPolicy.queryContext(
+        for: "你好。",
+        graph: legacySelfIntroGraph,
+        maxItems: 4
+    ).contains("陈建国（本人）"),
+    "legacy self-introduction fact should still bind current user identity"
+)
 
 let emptyContext = DialogMemoryGroundingPolicy.queryContext(
     for: "我年轻时候去过巴黎吗？",

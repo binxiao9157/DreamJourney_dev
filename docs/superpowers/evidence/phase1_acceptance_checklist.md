@@ -4,6 +4,7 @@
 
 ## 模块
 
+- [ ] 阶段一真机模块测试操作手册：`phase1_true_device_manual_test_steps.md`
 - [ ] P0-1 记忆档案馆真实素材建库验收：`phase1-memory-archive/acceptance_checklist.md`
 - [ ] P0-2 数字人对话记忆约束真机验收：`phase1-digital-human-grounding/acceptance_checklist.md`
 - [ ] P1-1 长辈关怀看板跨设备验收：`phase1-care-dashboard/acceptance_checklist.md`

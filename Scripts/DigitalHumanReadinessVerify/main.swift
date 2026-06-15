@@ -60,6 +60,18 @@ expect(legacy.copyableText.contains("旧式三件套模式"), "legacy auth mode 
 expect(legacy.copyableText.contains("secret-app-key") == false, "legacy app key is hidden")
 expect(legacy.copyableText.contains("secret-access-token") == false, "legacy token is hidden")
 
+let backendRealtime = DigitalHumanReadinessReport.make(
+    infoDictionary: [
+        "VolcEngineVoiceType": "zh_female_cancan_mars_bigtts",
+        "DreamJourneyBackendBaseURL": "https://www.mmdd10.tech/dreamjourney-api"
+    ],
+    arguments: [],
+    environment: [:]
+)
+expect(backendRealtime.primaryStatus == .warning, "backend realtime config path is surfaced as attention instead of missing")
+expect(backendRealtime.copyableText.contains("后端下发"), "backend realtime diagnostic explains remote config path")
+expect(backendRealtime.copyableText.contains("DreamJourneyBackendAPIToken"), "backend realtime diagnostic names backend token requirement")
+
 let mock = DigitalHumanReadinessReport.make(
     infoDictionary: [
         "VolcEngineAPIKey": "YOUR_VOLCENGINE_API_KEY",

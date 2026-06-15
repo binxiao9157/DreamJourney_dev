@@ -30,6 +30,55 @@ struct VolcEngineRealtimeCredentials: Equatable {
     }
 }
 
+struct VolcEngineRealtimeRemoteConfig: Decodable, Equatable {
+    let authMode: String
+    let address: String?
+    let uri: String?
+    let resourceID: String?
+    let uid: String?
+    let apiKey: String?
+    let appID: String?
+    let appKey: String?
+    let appToken: String?
+
+    func credentials(defaultUID: String) -> VolcEngineRealtimeCredentials? {
+        var info: [String: Any] = [:]
+        func put(_ key: String, _ value: String?) {
+            guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !trimmed.isEmpty else {
+                return
+            }
+            info[key] = trimmed
+        }
+        put(VolcEngineRealtimeCredentialProvider.resourceIDName, resourceID)
+        put(VolcEngineRealtimeCredentialProvider.addressName, address)
+        put(VolcEngineRealtimeCredentialProvider.uriName, uri)
+
+        switch authMode.lowercased() {
+        case "legacy":
+            put(VolcEngineRealtimeCredentialProvider.appIDName, appID)
+            put(
+                VolcEngineRealtimeCredentialProvider.appKeyName,
+                appKey ?? VolcEngineRealtimeCredentialProvider.fixedRealtimeDialogAppKey
+            )
+            put(VolcEngineRealtimeCredentialProvider.appTokenName, appToken)
+        case "api_key", "apikey", "api-key":
+            put(VolcEngineRealtimeCredentialProvider.realtimeAPIKeyName, apiKey)
+        default:
+            put(VolcEngineRealtimeCredentialProvider.realtimeAPIKeyName, apiKey)
+            put(VolcEngineRealtimeCredentialProvider.appIDName, appID)
+            put(VolcEngineRealtimeCredentialProvider.appKeyName, appKey)
+            put(VolcEngineRealtimeCredentialProvider.appTokenName, appToken)
+        }
+
+        let resolvedUID = uid?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return VolcEngineRealtimeCredentialProvider.credentials(
+            from: info,
+            defaultUID: resolvedUID?.isEmpty == false ? resolvedUID! : defaultUID
+        )
+    }
+}
+
 enum VolcEngineRealtimeCredentialProvider {
     static let fixedRealtimeDialogAppKey = "PlgvMymc7f3tQnJ6"
     static let realtimeAPIKeyName = "VolcEngineRealtimeAPIKey"

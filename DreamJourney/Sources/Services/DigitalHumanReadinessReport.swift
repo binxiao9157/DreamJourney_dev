@@ -176,6 +176,14 @@ struct DigitalHumanReadinessReport: Equatable {
 
     private static func makeRealtimeItem(infoDictionary: [String: Any]) -> Item {
         guard let credentials = VolcEngineRealtimeCredentialProvider.credentials(from: infoDictionary) else {
+            if hasRemoteBackendForDevice(infoDictionary: infoDictionary) {
+                return Item(
+                    title: "实时语音对话",
+                    status: .warning,
+                    detail: "本地未配置实时语音凭证；启动时会优先尝试从 DreamJourney 后端下发",
+                    recommendation: "确认 DreamJourneyBackendBaseURL 可访问；如服务器启用 BACKEND_API_TOKEN，iOS 需配置同值 DreamJourneyBackendAPIToken。"
+                )
+            }
             return Item(
                 title: "实时语音对话",
                 status: .missing,
@@ -225,6 +233,14 @@ struct DigitalHumanReadinessReport: Equatable {
                 recommendation: "保持网络可用，开始真机语音 smoke。"
             )
         }
+        if realtimeItem.status == .warning {
+            return Item(
+                title: "当前对话引擎",
+                status: .warning,
+                detail: "将尝试使用后端下发的火山实时对话配置",
+                recommendation: "保持网络可用；如果出现 401，请补充 DreamJourneyBackendAPIToken。"
+            )
+        }
         return Item(
             title: "当前对话引擎",
             status: .missing,
@@ -258,6 +274,15 @@ struct DigitalHumanReadinessReport: Equatable {
             detail: "已配置真机可访问的业务后端地址",
             recommendation: "可验证 runtime、KBLite 同步、高德代理和实时语音配置接口。"
         )
+    }
+
+    private static func hasRemoteBackendForDevice(infoDictionary: [String: Any]) -> Bool {
+        guard let configuredURL = validString(infoDictionary["DreamJourneyBackendBaseURL"] as? String) else {
+            return false
+        }
+        let lowercased = configuredURL.lowercased()
+        guard lowercased.hasPrefix("https://") else { return false }
+        return !lowercased.contains("localhost") && !lowercased.contains("127.0.0.1")
     }
 
     private static func validString(_ value: String?) -> String? {

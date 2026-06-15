@@ -34,6 +34,10 @@ final class DialogEngineManager: NSObject, DialogEngineProtocol {
     private var recentSystemGreetingText: String?
     private var recentSystemGreetingSentAt: Date?
     private let systemGreetingEchoFilterWindow: TimeInterval = 30
+    /// 最近一次助手回复。真机上 TTS 播放结束事件可能早于 ASR 回声结果，不能只依赖 isAISpeaking。
+    private var recentAssistantEchoText: String?
+    private var recentAssistantEchoSentAt: Date?
+    private let assistantEchoFilterWindow: TimeInterval = 18
 
     // MARK: - Configuration
 
@@ -165,6 +169,8 @@ final class DialogEngineManager: NSObject, DialogEngineProtocol {
 
     private var engine: SpeechEngine?
     private var isSettingUp = false
+    private var hasAttemptedBackendRealtimeCredentials = false
+    private var pendingStartAfterSetup = false
 
     /// 静音超时计时器
     private var silenceTimer: Timer?
@@ -184,7 +190,7 @@ final class DialogEngineManager: NSObject, DialogEngineProtocol {
 
     private override init() {
         super.init()
-        applyRealtimeCredentials()
+        applyLocalRealtimeCredentials()
     }
 
     // MARK: - Public API
@@ -211,6 +217,7 @@ final class DialogEngineManager: NSObject, DialogEngineProtocol {
     func setup() {
         guard !isEngineReady else {
             DDLogInfo("[DialogEngine] 引擎已就绪，跳过重复初始化")
+            startPendingDialogIfNeeded()
             return
         }
 
@@ -221,6 +228,15 @@ final class DialogEngineManager: NSObject, DialogEngineProtocol {
 
         isSettingUp = true
 
+        if shouldFetchBackendRealtimeCredentials {
+            fetchBackendRealtimeCredentialsAndSetup()
+            return
+        }
+
+        finishSetupWithCurrentCredentials()
+    }
+
+    private func finishSetupWithCurrentCredentials() {
         guard config.hasUsableCredentials else {
             isSettingUp = false
             DDLogError("[DialogEngine] 实时语音凭证未配置")
@@ -254,6 +270,7 @@ final class DialogEngineManager: NSObject, DialogEngineProtocol {
             self.isEngineReady = true
             print("[DialogEngine] ✅ 引擎初始化成功")
             DDLogInfo("[DialogEngine] 引擎初始化成功")
+            startPendingDialogIfNeeded()
         } else {
             print("[DialogEngine] ❌ 引擎初始化失败: \(result.rawValue)")
             DDLogError("[DialogEngine] 引擎初始化失败: \(result.rawValue)")
@@ -270,10 +287,11 @@ final class DialogEngineManager: NSObject, DialogEngineProtocol {
         // 引擎未就绪时先初始化
         guard isEngineReady, let engine = engine else {
             DDLogInfo("[DialogEngine] 引擎未就绪，先初始化")
+            pendingStartAfterSetup = true
             setup()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                guard let self = self, self.isEngineReady else { return }
-                self.performStartDialog()
+                guard let self = self, self.isEngineReady, self.pendingStartAfterSetup else { return }
+                self.startPendingDialogIfNeeded()
             }
             return
         }
@@ -542,7 +560,35 @@ final class DialogEngineManager: NSObject, DialogEngineProtocol {
         #endif
     }
 
-    private func applyRealtimeCredentials() {
+    private var shouldFetchBackendRealtimeCredentials: Bool {
+        !hasAttemptedBackendRealtimeCredentials && DreamJourneyBackendClient.shared.isConfigured
+    }
+
+    private func fetchBackendRealtimeCredentialsAndSetup() {
+        hasAttemptedBackendRealtimeCredentials = true
+        let userID = config.uid
+        DDLogInfo("[DialogEngine] 尝试从 DreamJourney 后端获取实时语音配置")
+        DreamJourneyBackendClient.shared.fetchRealtimeVoiceConfig(userId: userID) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success(let remoteConfig):
+                    if let credentials = remoteConfig.credentials(defaultUID: userID) {
+                        self.apply(credentials: credentials)
+                        DDLogInfo("[DialogEngine] 已应用后端实时语音配置")
+                    } else {
+                        DDLogWarn("[DialogEngine] 后端实时语音配置不完整，改用本地配置")
+                    }
+                case .failure(let error):
+                    DDLogWarn("[DialogEngine] 获取后端实时语音配置失败，改用本地配置: \(error.localizedDescription)")
+                }
+
+                self.finishSetupWithCurrentCredentials()
+            }
+        }
+    }
+
+    private func applyLocalRealtimeCredentials() {
         guard let credentials = VolcEngineRealtimeCredentialProvider.credentials(
             from: AppConfiguration.mergedInfoDictionary(),
             defaultUID: config.uid
@@ -550,10 +596,18 @@ final class DialogEngineManager: NSObject, DialogEngineProtocol {
             return
         }
 
+        apply(credentials: credentials)
+    }
+
+    private func apply(credentials: VolcEngineRealtimeCredentials) {
         config.resourceID = credentials.resourceID
         config.address = credentials.address
         config.uri = credentials.uri
         config.uid = credentials.uid
+        config.apiKey = ""
+        config.appID = ""
+        config.appKey = ""
+        config.token = ""
 
         switch credentials.authMode {
         case .apiKey(let apiKey):
@@ -563,6 +617,12 @@ final class DialogEngineManager: NSObject, DialogEngineProtocol {
             config.appKey = appKey
             config.token = token
         }
+    }
+
+    private func startPendingDialogIfNeeded() {
+        guard pendingStartAfterSetup, isEngineReady else { return }
+        pendingStartAfterSetup = false
+        performStartDialog()
     }
 
     private func realtimeRequestHeadersJSON() -> String? {
@@ -1011,12 +1071,14 @@ extension DialogEngineManager: SpeechEngineDelegate {
                     let finalText = chatBuffer
                     chatBuffer = ""
                     deliveredAssistantFinalText = finalText
+                    rememberAssistantEchoText(finalText)
                     DispatchQueue.main.async { [weak self] in
                         self?.delegate?.onAssistantFinalText(text: finalText)
                     }
                 } else {
                     // 没有 streaming，TTS 是唯一的文本来源
                     deliveredAssistantFinalText = text
+                    rememberAssistantEchoText(text)
                     DispatchQueue.main.async { [weak self] in
                         self?.delegate?.onTTSStarted(text: text)
                     }
@@ -1081,6 +1143,7 @@ extension DialogEngineManager: SpeechEngineDelegate {
                 }
                 chatBuffer = ""
                 deliveredAssistantFinalText = finalText
+                rememberAssistantEchoText(finalText)
                 DispatchQueue.main.async { [weak self] in
                     self?.delegate?.onAssistantFinalText(text: finalText)
                 }
@@ -1300,9 +1363,9 @@ extension DialogEngineManager: SpeechEngineDelegate {
     }
 
     private func forwardASRResult(text: String, isFinal: Bool) {
-        guard !shouldSuppressSystemGreetingEcho(text) else {
-            DDLogInfo("[DialogEngine] Suppressed system greeting echo from ASR")
-            print("[DialogEngine] 🔇 已过滤系统开场白回声: \(text)")
+        guard !shouldSuppressPlaybackEcho(text) else {
+            DDLogInfo("[DialogEngine] Suppressed playback echo from ASR forwarding")
+            print("[DialogEngine] 🔇 已过滤播报回声: \(text)")
             return
         }
         delegate?.onASRResult(text: text, isFinal: isFinal)
@@ -1325,7 +1388,11 @@ extension DialogEngineManager: SpeechEngineDelegate {
     }
 
     private func shouldSuppressAssistantEcho(_ text: String) -> Bool {
-        let assistantText = deliveredAssistantFinalText ?? chatBuffer
+        let assistantText = recentAssistantEchoText ?? deliveredAssistantFinalText ?? chatBuffer
+        if let sentAt = recentAssistantEchoSentAt,
+           Date().timeIntervalSince(sentAt) > assistantEchoFilterWindow {
+            return false
+        }
         let normalizedText = normalizeForEchoComparison(text)
         let normalizedAssistant = normalizeForEchoComparison(assistantText)
         guard normalizedText.count >= 8, normalizedAssistant.count >= 8 else {
@@ -1335,6 +1402,13 @@ extension DialogEngineManager: SpeechEngineDelegate {
         return normalizedText == normalizedAssistant ||
             normalizedText.contains(normalizedAssistant) ||
             normalizedAssistant.contains(normalizedText)
+    }
+
+    private func rememberAssistantEchoText(_ text: String) {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return }
+        recentAssistantEchoText = normalized
+        recentAssistantEchoSentAt = Date()
     }
 
     private func shouldSuppressSystemGreetingEcho(_ text: String) -> Bool {

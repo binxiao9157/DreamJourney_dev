@@ -441,6 +441,9 @@ xcrun swiftc \
 echo "== Dialog realtime final-ASR RAG =="
 python3 Scripts/DialogRealtimeRAGFinalASRVerify/main.py
 
+echo "== Dialog assistant echo suppression =="
+python3 Scripts/DialogAssistantEchoSuppressionVerify/main.py
+
 echo "== Dialog memory RAG payload =="
 xcrun swiftc \
   DreamJourney/Sources/Services/Safety/SafetyModels.swift \
@@ -513,6 +516,9 @@ python3 Scripts/RealDeviceNoDemoStateTokensVerify/main.py
 python3 Scripts/RealDeviceRuntimeGateVerify/main.py
 python3 Scripts/RealDeviceAcceptanceVerify/main.py
 python3 Scripts/Phase1AcceptanceEvidenceScaffoldVerify/main.py
+
+echo "== Home message cell layout =="
+python3 Scripts/HomeMessageCellLayoutVerify/main.py
 
 echo "== diff --check =="
 git diff --check
