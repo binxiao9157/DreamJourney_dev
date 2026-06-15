@@ -129,7 +129,9 @@ AI 语音陪伴
 - 对话状态映射到数字人：聆听、整理、讲述、错误。
 - Chat final text 触发数字人播报，避免依赖单一 TTS started 事件。
 - 配置 `VolcEngineAPIKey` 和 `VolcEngineVoiceType` 后，使用 VolcEngine HTTP TTS 生成 WAV。
-- WAV 通过 `window.DreamJourneyAvatar.feedAudioBase64(...)` 传入 WebView，驱动 WASM 口型与 WebAudio 播放。
+- WAV 由原生 `AVAudioPlayer` 播放真实声音；同一份 WAV 通过 `window.DreamJourneyAvatar.bufferAudioBase64ForLipSync(...)` 传入 WebView，供 DHLiveMini WASM 做口型/节奏输入，不在 WebAudio 中二次播放。
+- `DigitalHumanSpeechEnvelope` 从同一份 WAV 解析能量包络，并把包络传给 `DreamJourneyMiniLive.playForDuration(...)`，让真人视频按音频强弱播放、暂停和调速，实现音频能量级节奏同步。
+- DH_live/MatesX retarget 已进入 `calibration` PoC：默认读取 `Module._updateBlendShape(...)` 的嘴部系数和区域数据，并上报 `avatar_retarget_calibration`，但不直接绘制 3D 嘴部贴片；只有显式切到 `overlay` 模式才尝试绘制，并带黑块/alpha/区域安全抑制。
 - 启用数字人 WAV TTS 时关闭实时 SDK 内置播放器，避免双播。
 - 冷启动采用透明真人 poster 首屏稳定展示，隐藏 loading 文案和 spinner；`avatar_video_surface_ready` 后 live canvas 淡入并替换 poster，降低打开应用时的明显切换感。
 
@@ -148,7 +150,8 @@ AI 语音陪伴
 
 当前限制：
 
-- 仍需真机确认 WAV 真实出声、口型同步、WebAudio 首次播放权限和断网降级。
+- 当前已实现声音与人物动作的能量级节奏同步，仍不是逐音素/viseme 级真口型同步。
+- 仍需真机确认 WAV 真实出声、透明绿幕稳定性、DH_live retarget 校准数据是否随音频变化、断网降级和长轮次恢复。
 - Manifest 只校验资源存在、sha256、gzip JSON 和 frame count，不校验视频编码和 WebGL 运行时性能。
 
 ### 4.3 Stage1 记忆与隐私模型
@@ -533,6 +536,9 @@ bash Scripts/verify_phase2.sh
 | `DigitalHumanFallbackUIVerify` | 首页数字人故障恢复卡、重试/继续动作和 raw technical error 防暴露。 |
 | `DigitalHumanReadinessVerify` | 数字人真机诊断模型，覆盖 modern/legacy/mock/missing 状态、修复建议、音频链路验收清单、JSON 证据和 API Key/Token 脱敏。 |
 | `DigitalHumanDiagnosticsUIVerify` | 首页诊断入口、sheet 展示、音频链路验收卡、复制文本/JSON 脱敏诊断和不展示密钥文案。 |
+| `DigitalHumanSpeechEnvelopeVerify` | WAV PCM16 解析、时长读取、静音/有声段能量包络和 JS 数组输出。 |
+| `DigitalHumanSpeechEnvelopeIntegrationVerify` | 原生播放、WebView 缓冲、能量包络传递和 `MiniLive2.js` 节奏调制链路静态 gate。 |
+| `DigitalHumanRetargetCalibrationVerify` | DH_live/MatesX retarget 校准模式、透明抠像统计、贴片安全抑制和阶段一验证接入。 |
 | `BuildWarningCleanupVerify` | 锁住 `TGToast` 的 iOS 15+ keyWindow 写法、`Copy LocalConfig.plist` build phase output marker 和 preflight 诊断证据提示。 |
 
 最近确认通过：
@@ -594,8 +600,9 @@ bash Scripts/verify_phase2.sh
 ```text
 [DigitalHumanSpeech] assistant_final
 [DigitalHumanSpeech] wav_synth_success
-[DigitalHuman] { type: audio_buffered, ... }
-[DigitalHuman] { type: audio_ended, ... }
+[DigitalHuman] { type: lip_audio_buffered, ... }
+[DigitalHuman] { type: avatar_chroma_key_stats, ... }
+[DigitalHuman] { type: avatar_retarget_calibration, ... }
 [DigitalHumanSpeech] wav_synth_failed ... fallback=systemTTS
 [DigitalHumanSpeech] playback_finished source=web_audio|system_tts|timeout
 ```

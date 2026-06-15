@@ -254,6 +254,10 @@
 
 - App 内有数字人 WebView/资源加载、启动 ready 门禁、fallback UI、诊断 UI、运行日志和播放证据日志。
 - `DigitalHumanSpeechService` 调用火山 TTS 合成 16kHz mono PCM16 WAV，用于 DHLiveMini 的口型音频输入。
+- 数字人真实出声由原生 `AVAudioPlayer` 负责，同一份 WAV 会同时缓冲给 WebView 的 DHLiveMini WASM，避免 WebAudio 和 Native 双播。
+- `DigitalHumanSpeechEnvelope` 会从同一段 WAV 解析音频能量包络，`MiniLive2.js` 根据包络调制真人视频播放、暂停和速率，实现音频能量级节奏同步。
+- DH_live/MatesX retarget 已进入 `calibration` PoC：默认运行 `Module._updateBlendShape(...)` 并上报嘴部系数、人脸区域和绿幕透明统计，但不直接绘制高风险 3D 嘴部贴片。
+- Retarget 贴片绘制被限制在显式 `overlay` 模式，并带黑块比例、alpha 和区域边界安全抑制，避免再次出现黑色嘴块覆盖真人画面。
 - `DigitalHumanSpeechPlaybackPolicy` 对 TTS 输入做安全策略。
 - 播放期间会暂停实时对话 SDK，播放结束后自动恢复聆听，避免一轮回答后断会话。
 - TTS 失败时存在系统 TTS fallback 和日志。
@@ -267,10 +271,14 @@
 - `Scripts/DigitalHumanRealtimeResumeVerify/main.py`
 - `Scripts/DigitalHumanRuntimeLogVerify/main.py`
 - `Scripts/DigitalHumanReadinessVerify/main.swift`
+- `Scripts/DigitalHumanSpeechEnvelopeVerify/main.swift`
+- `Scripts/DigitalHumanSpeechEnvelopeIntegrationVerify/main.py`
+- `Scripts/DigitalHumanRetargetCalibrationVerify/main.py`
 
 当前限制：
 
-- “真人数字人透明悬浮、口型与文字/音频同步”仍需要真机观察，代码层只能保证资源、播放、暂停恢复和日志合约。
+- 当前已经具备“声音时长 + 能量包络”级节奏同步，但还不是逐音素/viseme 级真口型同步。
+- “真人数字人透明悬浮、绿幕抠像、DH_live retarget 贴片可视化”仍需要真机观察；默认校准模式不会绘制贴片，只上报数据。
 - 当前数字人仍保留开源/历史资源兼容层，真实人物资产质量和最终视觉效果不是后端能力能解决的问题。
 
 ## 7. 时空信箱能力

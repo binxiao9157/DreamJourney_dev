@@ -142,3 +142,88 @@ bash Scripts/verify_phase2.sh
 ```
 
 结果：阶段2脚本通过，iPhoneOS Debug build 通过。`TGToast.swift` 已迁移到 `connectedScenes` / `UIWindowScene` 获取 key window，`Copy LocalConfig.plist` build phase 已增加 output marker，并由 `BuildWarningCleanupVerify` 锁定回归。
+
+## 2026-06-15 音视频节奏同步与 DH_live/MatesX 校准 PoC
+
+本轮把数字人音视频能力拆成两层推进：
+
+1. 先保证可验收的中期效果：嘴部/人物动作跟声音节奏一致。
+2. 再开启 DH_live/MatesX 口型 retarget 数据链路，但默认只做校准观测，不直接把高风险 3D 嘴部贴片画到真人脸上。
+
+### 当前音频播放与节奏同步链路
+
+当前真实声音由 iOS 原生 `AVAudioPlayer` 播放，不再依赖 WebAudio 作为唯一出声路径。WebView 数字人层拿到同一段 WAV 做口型/节奏输入：
+
+- `DigitalHumanSpeechService` 生成 Base64 WAV。
+- `AIRecordingViewController.startDigitalHumanNativeAudio(...)` 解码同一份 WAV。
+- `DigitalHumanSpeechEnvelope` 从 WAV PCM16 数据中解析 20fps 左右的能量包络。
+- `DigitalHumanAvatarView.bufferSpeechAudioBase64(...)` 调用 Web 侧 `bufferAudioBase64ForLipSync(...)`，只把同源 WAV 传给 `Module._setAudioBuffer`，不在 WebAudio 里再次播放，避免双播。
+- `DigitalHumanAvatarView.playSpeechEnvelope(duration:prompt:envelope:)` 把原生播放器时长和能量包络传给 `DreamJourneyAvatar.playSpeechEnvelope(durationSeconds, energyEnvelope)`。
+- `MiniLive2.js` 的 `DreamJourneyMiniLive.playForDuration(durationSeconds, energyEnvelope)` 根据能量包络调制真人视频播放、暂停和 `playbackRate`。
+
+这个阶段的能力边界是“音频能量级同步”：有声段动作更明显，停顿段会减弱或停住，整体跟随同一段 TTS WAV 的播放时长。它不是逐音素/viseme 级真口型同步，不能保证每个字母、声母、韵母对应不同嘴型。
+
+### DH_live/MatesX 校准模式
+
+为继续验证 DH_live/MatesX 路线，当前默认把 `CONFIG.faceRetargetEnabled` 打开，但把 `CONFIG.faceRetargetMode` 固定为 `calibration`：
+
+- `off`：完全关闭 retarget 链路。
+- `calibration`：运行 DH_live 的 `Module._updateBlendShape(...)`，上报嘴部系数和人脸区域，但不绘制 3D 嘴部贴片。
+- `overlay`：尝试绘制嘴部贴片，仅用于后续手动校准；绘制前会检查区域大小、边界、黑块比例和 alpha，有异常就触发安全抑制。
+
+默认选择 `calibration` 的原因是：之前直接启用贴片时出现黑块遮嘴、坐标错位和视觉突兀。本轮先收集 DH_live 的真实数据证据，确认音频驱动和人脸定位是否稳定，再决定是否进入 `overlay` 调参。
+
+### 新增运行时健康事件
+
+真机日志重点看这些事件：
+
+```text
+[DigitalHuman] { type: lip_audio_buffered, ... }
+[DigitalHuman] { type: avatar_chroma_key_stats, ... }
+[DigitalHuman] { type: avatar_retarget_calibration, ... }
+[DigitalHuman] { type: retarget_overlay_suppressed, ... }
+[DigitalHuman] { type: avatar_retarget_mode_changed, ... }
+[DigitalHuman] { type: avatar_retarget_overlay_drawn, ... }
+```
+
+字段判断口径：
+
+- `lip_audio_buffered`：同一段 WAV 已传给 DHLiveMini WASM。若没有出现，说明音频没有进入 DH_live 引擎。
+- `avatar_chroma_key_stats`：透明抠像采样。应看到画面既有透明样本，也有不透明人物样本；如果长期全不透明或全透明，说明绿幕参数或画布绘制有问题。
+- `avatar_retarget_calibration.bsMax / bsMean`：DH_live 嘴部 blendshape 变化。说话时数值应随音频变化；如果一直为 0 或固定值，说明 `_setAudioBuffer -> _updateBlendShape` 链路没有真正驱动起来。
+- `avatar_retarget_calibration.rect / rectAreaRatio`：人脸/嘴部区域定位。若区域过大、越界或跳动明显，说明贴片坐标不能直接启用。
+- `retarget_overlay_suppressed`：安全抑制生效。`calibration_mode` 是预期行为；`suspicious_overlay_pixels` 表示贴片像素仍有黑块或 alpha 异常。
+- `avatar_retarget_overlay_drawn`：只有切到 `overlay` 且安全检查通过时出现。
+
+### 真机验收方式
+
+1. 安装当前分支。
+2. 打开首页，确认真人透明数字人首屏没有绿色背景、黑色嘴块或卡通兜底脸。
+3. 点麦克风，让数字人播报一段 8-15 秒回答。
+4. 观察声音与人物动作：声音停顿时人物动作应明显减弱或停住，回答结束后动作停止。
+5. 从控制台或播放日志中查：
+   - `lip_audio_buffered`
+   - `avatar_chroma_key_stats`
+   - `avatar_retarget_calibration`
+   - `playback_finished source=...`
+6. 暂不要求出现 `avatar_retarget_overlay_drawn`。当前默认不绘制贴片，避免影响观感。
+
+### 下一步分支
+
+如果真机日志显示：
+
+- `lip_audio_buffered` 出现，且 `bsMax/bsMean` 随说话变化：说明 DH_live 音频驱动链路可用，下一步进入 `overlay` 模式做贴片区域、纹理 alpha、黑块抑制和坐标校准。
+- `lip_audio_buffered` 出现，但 `bsMax/bsMean` 长期不变：重点排查 `Module._setAudioBuffer` 的 WAV 格式、采样率、WASM 音频消费时机。
+- `avatar_chroma_key_stats` 显示透明/不透明样本异常：优先调绿幕 `similarity / smoothness / spill`，不进入贴片校准。
+- `overlay` 一启用就被 `suspicious_overlay_pixels` 抑制：说明当前贴片输出仍有黑块或 alpha 异常，需要先修 DH_live 贴片纹理/混合方式。
+
+新增验证：
+
+```bash
+python3 Scripts/DigitalHumanRetargetCalibrationVerify/main.py
+xcrun swiftc DreamJourney/Sources/Services/DigitalHumanSpeechEnvelope.swift Scripts/DigitalHumanSpeechEnvelopeVerify/main.swift -o /tmp/dreamjourney_digital_human_speech_envelope_verify
+/tmp/dreamjourney_digital_human_speech_envelope_verify
+python3 Scripts/DigitalHumanSpeechEnvelopeIntegrationVerify/main.py
+```
+
+这些脚本已接入 `Scripts/verify_phase1.sh` 的数字人验证区块。
