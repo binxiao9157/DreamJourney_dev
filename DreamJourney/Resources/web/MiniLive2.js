@@ -41,6 +41,10 @@ let didReportFirstVideoFrame = false;
 let avatarVideoReady = false;
 let avatarVideoShouldPlay = false;
 let avatarSpeechTimer = null;
+let avatarSpeechEnvelope = [];
+let avatarSpeechEnvelopeStartedAt = 0;
+let avatarSpeechEnvelopeDuration = 0;
+let avatarSpeechEnvelopeRAF = null;
 
 class VideoProcessor {
     constructor() {
@@ -192,21 +196,73 @@ class VideoProcessor {
 
 function pauseAvatarVideo(reason) {
     avatarVideoShouldPlay = false;
+    stopAvatarSpeechEnvelope();
     clearTimeout(avatarSpeechTimer);
     videoProcessor.pause();
     postAvatarHealth('avatar_video_paused', reason || 'paused');
 }
 
-function playAvatarVideoForSpeech(durationSeconds) {
+function stopAvatarSpeechEnvelope() {
+    if (avatarSpeechEnvelopeRAF) {
+        cancelAnimationFrame(avatarSpeechEnvelopeRAF);
+        avatarSpeechEnvelopeRAF = null;
+    }
+    avatarSpeechEnvelope = [];
+    avatarSpeechEnvelopeStartedAt = 0;
+    avatarSpeechEnvelopeDuration = 0;
+    if (videoProcessor.video) {
+        videoProcessor.video.playbackRate = 1;
+    }
+}
+
+function updateAvatarSpeechEnvelope() {
+    if (!avatarVideoShouldPlay || !videoProcessor.video || avatarSpeechEnvelope.length === 0 || avatarSpeechEnvelopeDuration <= 0) {
+        avatarSpeechEnvelopeRAF = null;
+        return;
+    }
+
+    const elapsed = (performance.now() - avatarSpeechEnvelopeStartedAt) / 1000;
+    if (elapsed >= avatarSpeechEnvelopeDuration) {
+        avatarSpeechEnvelopeRAF = null;
+        return;
+    }
+
+    const progress = Math.max(0, Math.min(0.999, elapsed / avatarSpeechEnvelopeDuration));
+    const sampleIndex = Math.min(avatarSpeechEnvelope.length - 1, Math.floor(progress * avatarSpeechEnvelope.length));
+    const energy = Math.max(0, Math.min(1, Number(avatarSpeechEnvelope[sampleIndex] || 0)));
+    const shouldMove = energy > 0.08;
+
+    if (shouldMove) {
+        videoProcessor.video.playbackRate = 0.72 + energy * 0.95;
+        if (videoProcessor.video.paused) {
+            videoProcessor.play();
+        }
+    } else if (!videoProcessor.video.paused) {
+        videoProcessor.pause();
+    }
+
+    avatarSpeechEnvelopeRAF = requestAnimationFrame(updateAvatarSpeechEnvelope);
+}
+
+function playAvatarVideoForSpeech(durationSeconds, energyEnvelope) {
     avatarVideoShouldPlay = true;
+    stopAvatarSpeechEnvelope();
     clearTimeout(avatarSpeechTimer);
     videoProcessor.seekToStart();
     videoProcessor.play();
     const duration = Math.max(600, Math.min(Number(durationSeconds || 2) * 1000, 60000));
+    avatarSpeechEnvelopeDuration = duration / 1000;
+    avatarSpeechEnvelopeStartedAt = performance.now();
+    avatarSpeechEnvelope = Array.isArray(energyEnvelope)
+        ? energyEnvelope.map(value => Number(value)).filter(value => Number.isFinite(value))
+        : [];
+    if (avatarSpeechEnvelope.length > 0) {
+        avatarSpeechEnvelopeRAF = requestAnimationFrame(updateAvatarSpeechEnvelope);
+    }
     avatarSpeechTimer = setTimeout(() => {
         pauseAvatarVideo('speech_duration_elapsed');
     }, duration);
-    postAvatarHealth('avatar_video_speech_started', { duration });
+    postAvatarHealth('avatar_video_speech_started', { duration, envelopeSamples: avatarSpeechEnvelope.length });
 }
 
 window.DreamJourneyMiniLive = {
@@ -215,12 +271,12 @@ window.DreamJourneyMiniLive = {
             pauseAvatarVideo('state_' + (state || 'idle'));
         }
     },
-    playForDuration: function(durationSeconds) {
+    playForDuration: function(durationSeconds, energyEnvelope) {
         if (!avatarVideoReady) {
             postAvatarHealth('avatar_video_speech_deferred', durationSeconds || 0);
             return;
         }
-        playAvatarVideoForSpeech(durationSeconds);
+        playAvatarVideoForSpeech(durationSeconds, energyEnvelope);
     },
     pause: function(reason) {
         if (avatarVideoReady) {

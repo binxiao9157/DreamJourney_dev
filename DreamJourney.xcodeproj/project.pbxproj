@@ -26,6 +26,7 @@
 		A79CE000000000000000001 /* AmapDistrictBoundaryProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A79CE000000000000000002 /* AmapDistrictBoundaryProvider.swift */; };
 		A90CE000000000000000001 /* DreamJourneyBackendClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A90CE000000000000000002 /* DreamJourneyBackendClient.swift */; };
 		A75CE000000000000000001 /* DigitalHumanSpeechPlaybackPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A75CE000000000000000002 /* DigitalHumanSpeechPlaybackPolicy.swift */; };
+		A94CE000000000000000001 /* DigitalHumanSpeechEnvelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = A94CE000000000000000002 /* DigitalHumanSpeechEnvelope.swift */; };
 		36A64D01C09B4A8497BEAE01 /* DigitalHumanSpeechService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36A64D00C09B4A8497BEAE01 /* DigitalHumanSpeechService.swift */; };
 		397C1F6023E56C8E016A0D71 /* OpenAvatarChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF3727699437781613AA5CB5 /* OpenAvatarChatService.swift */; };
 		39AA8CDBD51067C54985F46B /* SharedModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6AC678D507A1494FFBFDAA0 /* SharedModels.swift */; };
@@ -263,6 +264,7 @@
 		CCCEC476950937337FC59A5C /* Pods-DreamJourney.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DreamJourney.debug.xcconfig"; path = "Target Support Files/Pods-DreamJourney/Pods-DreamJourney.debug.xcconfig"; sourceTree = "<group>"; };
 		D4566C37A3A020CABC4D249A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A75CE000000000000000002 /* DigitalHumanSpeechPlaybackPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanSpeechPlaybackPolicy.swift; sourceTree = "<group>"; };
+		A94CE000000000000000002 /* DigitalHumanSpeechEnvelope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanSpeechEnvelope.swift; sourceTree = "<group>"; };
 		36A64D00C09B4A8497BEAE01 /* DigitalHumanSpeechService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanSpeechService.swift; sourceTree = "<group>"; };
 		D4C24A29B21F6E3786F14398 /* MapFootprintViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapFootprintViewController.swift; sourceTree = "<group>"; };
 		D6AC678D507A1494FFBFDAA0 /* SharedModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedModels.swift; sourceTree = "<group>"; };
@@ -356,6 +358,7 @@
 				A76CE000000000000000002 /* DigitalHumanReadinessReport.swift */,
 				A78CE000000000000000002 /* DigitalHumanPlaybackEvidenceStore.swift */,
 				A75CE000000000000000002 /* DigitalHumanSpeechPlaybackPolicy.swift */,
+				A94CE000000000000000002 /* DigitalHumanSpeechEnvelope.swift */,
 				36A64D00C09B4A8497BEAE01 /* DigitalHumanSpeechService.swift */,
 				A90CE000000000000000002 /* DreamJourneyBackendClient.swift */,
 				F33318C49AAF44499CE6ADC5 /* DialogEngineFactory.swift */,
@@ -926,6 +929,7 @@
 				A78CE000000000000000001 /* DigitalHumanPlaybackEvidenceStore.swift in Sources */,
 				A76CE000000000000000001 /* DigitalHumanReadinessReport.swift in Sources */,
 				A75CE000000000000000001 /* DigitalHumanSpeechPlaybackPolicy.swift in Sources */,
+				A94CE000000000000000001 /* DigitalHumanSpeechEnvelope.swift in Sources */,
 				36A64D01C09B4A8497BEAE01 /* DigitalHumanSpeechService.swift in Sources */,
 				EB8C6638C1D5E34AC579873D /* Coordinator.swift in Sources */,
 				F90DDD2F07DD62057280F6B1 /* DeepSeekService.swift in Sources */,

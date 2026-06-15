@@ -265,6 +265,14 @@ xcrun swiftc \
   -o /tmp/dreamjourney_digital_human_playback_policy_verify
 /tmp/dreamjourney_digital_human_playback_policy_verify
 
+echo "== DigitalHuman speech envelope =="
+xcrun swiftc \
+  DreamJourney/Sources/Services/DigitalHumanSpeechEnvelope.swift \
+  Scripts/DigitalHumanSpeechEnvelopeVerify/main.swift \
+  -o /tmp/dreamjourney_digital_human_speech_envelope_verify
+/tmp/dreamjourney_digital_human_speech_envelope_verify
+python3 Scripts/DigitalHumanSpeechEnvelopeIntegrationVerify/main.py
+
 echo "== DigitalHuman fallback UI =="
 python3 Scripts/DigitalHumanFallbackUIVerify/main.py
 

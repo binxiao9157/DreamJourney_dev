@@ -1413,7 +1413,9 @@ extension AIRecordingViewController: DialogEngineDelegate {
             DigitalHumanPlaybackEvidenceStore.shared.appendEvent(
                 "native_audio_started requestID=\(requestID) duration=\(String(format: "%.2f", player.duration)) bytes=\(wavData.count)"
             )
-            digitalHumanAvatarView.playSpeechEnvelope(duration: player.duration, prompt: text)
+            let envelope = DigitalHumanSpeechEnvelope.make(fromWAVData: wavData)
+            digitalHumanAvatarView.bufferSpeechAudioBase64(base64Wav)
+            digitalHumanAvatarView.playSpeechEnvelope(duration: player.duration, prompt: text, envelope: envelope)
         } catch {
             handleDigitalHumanPlaybackFailure(
                 reason: "native_audio_error",
@@ -1971,6 +1973,8 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
     private var didRevealInitialAvatar = false
     private var initialAvatarRevealFallbackWorkItem: DispatchWorkItem?
     private var pendingSpeechDuration: TimeInterval?
+    private var pendingSpeechEnvelope: DigitalHumanSpeechEnvelope?
+    private var pendingSpeechAudioBase64: String?
     var onAudioPlaybackEnded: (() -> Void)?
     var onAudioPlaybackFailed: ((String) -> Void)?
 
@@ -2015,6 +2019,8 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
         currentState = state
         if state != .speaking {
             pendingSpeechDuration = nil
+            pendingSpeechEnvelope = nil
+            pendingSpeechAudioBase64 = nil
         }
         if let prompt, !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             currentPrompt = prompt
@@ -2027,20 +2033,30 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
         playSpeechEnvelope(duration: estimatedSeconds, prompt: text)
     }
 
-    func playSpeechEnvelope(duration: TimeInterval, prompt: String? = nil) {
+    func playSpeechEnvelope(duration: TimeInterval, prompt: String? = nil, envelope: DigitalHumanSpeechEnvelope? = nil) {
         if let prompt, !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             currentPrompt = prompt
         }
         currentState = .speaking
         pendingSpeechDuration = duration
+        pendingSpeechEnvelope = envelope
         guard didFinishInitialLoad else { return }
         let promptJSON = Self.jsonStringLiteral(currentPrompt)
+        let envelopeLiteral = envelope?.javascriptArrayLiteral() ?? "null"
         let script = """
         if (window.DreamJourneyAvatar) {
           window.DreamJourneyAvatar.setState('speaking', \(promptJSON));
-          window.DreamJourneyAvatar.playSpeechEnvelope(\(duration));
+          window.DreamJourneyAvatar.playSpeechEnvelope(\(duration), \(envelopeLiteral));
         }
         """
+        webView.evaluateJavaScript(script, completionHandler: nil)
+    }
+
+    func bufferSpeechAudioBase64(_ base64: String) {
+        pendingSpeechAudioBase64 = base64
+        guard didFinishInitialLoad else { return }
+        let audioJSON = Self.jsonStringLiteral(base64)
+        let script = "window.DreamJourneyAvatar && window.DreamJourneyAvatar.bufferAudioBase64ForLipSync(\(audioJSON));"
         webView.evaluateJavaScript(script, completionHandler: nil)
     }
 
@@ -2057,6 +2073,8 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
 
     func clearSpeechAudio() {
         pendingSpeechDuration = nil
+        pendingSpeechEnvelope = nil
+        pendingSpeechAudioBase64 = nil
         guard didFinishInitialLoad else { return }
         let script = "window.DreamJourneyAvatar && window.DreamJourneyAvatar.clearAudio();"
         webView.evaluateJavaScript(script, completionHandler: nil)
@@ -2117,7 +2135,13 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
         let script = "window.DreamJourneyAvatar && window.DreamJourneyAvatar.setState('\(currentState.rawValue)', \(promptJSON));"
         webView.evaluateJavaScript(script, completionHandler: nil)
         if currentState == .speaking, let pendingSpeechDuration {
-            let speechScript = "window.DreamJourneyAvatar && window.DreamJourneyAvatar.playSpeechEnvelope(\(pendingSpeechDuration));"
+            if let pendingSpeechAudioBase64 {
+                let audioJSON = Self.jsonStringLiteral(pendingSpeechAudioBase64)
+                let bufferScript = "window.DreamJourneyAvatar && window.DreamJourneyAvatar.bufferAudioBase64ForLipSync(\(audioJSON));"
+                webView.evaluateJavaScript(bufferScript, completionHandler: nil)
+            }
+            let envelopeLiteral = pendingSpeechEnvelope?.javascriptArrayLiteral() ?? "null"
+            let speechScript = "window.DreamJourneyAvatar && window.DreamJourneyAvatar.playSpeechEnvelope(\(pendingSpeechDuration), \(envelopeLiteral));"
             webView.evaluateJavaScript(speechScript, completionHandler: nil)
         }
     }
@@ -2564,6 +2588,7 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
           isPlayingAudio: false,
           isVideoReady: false,
           pendingSpeechDuration: null,
+          pendingSpeechEnvelope: null,
           speechTimer: null,
           postHealth: function(type, detail) {
             try {
@@ -2598,7 +2623,7 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
             this.hideFallbackAvatar();
             this.postHealth('avatar_video_surface_ready', detail || 'video surface ready');
             if (document.body.dataset.state === 'speaking' && this.pendingSpeechDuration) {
-              window.DreamJourneyMiniLive && window.DreamJourneyMiniLive.playForDuration(this.pendingSpeechDuration);
+              window.DreamJourneyMiniLive && window.DreamJourneyMiniLive.playForDuration(this.pendingSpeechDuration, this.pendingSpeechEnvelope);
             } else {
               window.DreamJourneyMiniLive && window.DreamJourneyMiniLive.pause('video_ready_idle');
             }
@@ -2654,23 +2679,48 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
             document.getElementById('prompt').textContent = prompt || '准备聆听家族故事';
             if (state !== 'speaking') {
               this.pendingSpeechDuration = null;
+              this.pendingSpeechEnvelope = null;
               window.DreamJourneyMiniLive && window.DreamJourneyMiniLive.pause('state_' + (state || 'idle'));
             }
           },
-          playSpeechEnvelope: function(durationSeconds) {
+          playSpeechEnvelope: function(durationSeconds, energyEnvelope) {
             clearTimeout(this.speechTimer);
             document.body.dataset.state = 'speaking';
             const duration = Math.max(600, Math.min(Number(durationSeconds || 2) * 1000, 60000));
             this.pendingSpeechDuration = duration / 1000;
-            window.DreamJourneyMiniLive && window.DreamJourneyMiniLive.playForDuration(this.pendingSpeechDuration);
+            this.pendingSpeechEnvelope = Array.isArray(energyEnvelope) ? energyEnvelope : null;
+            window.DreamJourneyMiniLive && window.DreamJourneyMiniLive.playForDuration(this.pendingSpeechDuration, this.pendingSpeechEnvelope);
             this.speechTimer = setTimeout(() => {
               if (document.body.dataset.state === 'speaking') {
                 this.setState('listening', '可以继续说');
                 this.pendingSpeechDuration = null;
+                this.pendingSpeechEnvelope = null;
                 window.DreamJourneyMiniLive && window.DreamJourneyMiniLive.pause('speech_envelope_ended');
                 this.postHealth('speech_envelope_ended', duration);
               }
             }, duration);
+          },
+          bufferAudioBase64ForLipSync: function(base64Audio) {
+            if (!base64Audio) {
+              this.postHealth('lip_audio_ignored', 'empty base64');
+              return false;
+            }
+            try {
+              const bytes = this.base64ToUint8Array(base64Audio);
+              if (window.Module && Module._malloc && Module._setAudioBuffer && Module.HEAPU8) {
+                const ptr = Module._malloc(bytes.byteLength);
+                Module.HEAPU8.set(bytes, ptr);
+                Module._setAudioBuffer(ptr, bytes.byteLength);
+                Module._free(ptr);
+                this.postHealth('lip_audio_buffered', bytes.byteLength);
+                return true;
+              }
+              this.postHealth('lip_audio_module_unavailable', 'Module audio api unavailable');
+              return false;
+            } catch (error) {
+              this.postHealth('lip_audio_error', String(error && error.message ? error.message : error));
+              return false;
+            }
           },
           feedAudioBase64: function(base64Audio) {
             if (!base64Audio) {
@@ -2717,6 +2767,7 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
                   this.playNextAudio();
                 } else {
                   this.pendingSpeechDuration = null;
+                  this.pendingSpeechEnvelope = null;
                   window.DreamJourneyMiniLive && window.DreamJourneyMiniLive.pause('audio_ended');
                   this.postHealth('audio_ended', audioBuffer.duration);
                 }
@@ -2751,6 +2802,7 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
               Module._clearAudio();
             }
             this.pendingSpeechDuration = null;
+            this.pendingSpeechEnvelope = null;
             window.DreamJourneyMiniLive && window.DreamJourneyMiniLive.pause('clear_audio');
             this.setState('idle', '准备聆听家族故事');
           },
