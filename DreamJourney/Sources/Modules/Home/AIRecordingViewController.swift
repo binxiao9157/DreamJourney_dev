@@ -2855,7 +2855,8 @@ private final class DigitalHumanAvatarView: UIView, WKNavigationDelegate, WKScri
       <script>
         if (window.CONFIG) {
           CONFIG.chromaKeyEnabled = true;
-          CONFIG.faceRetargetEnabled = false;
+          CONFIG.faceRetargetEnabled = true;
+          CONFIG.faceRetargetMode = 'calibration';
           CONFIG.videoSrc = '01.mp4';
           CONFIG.dataSrc = 'combined_data.json.gz';
           CONFIG.showFPS = false;

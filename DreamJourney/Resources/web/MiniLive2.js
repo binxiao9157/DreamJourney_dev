@@ -3,6 +3,7 @@ let CONFIG = {
     showFPS: false,              // 是否显示 FPS
     chromaKeyEnabled: true,     // iOS App 内以绿幕抠像输出透明悬浮真人层
     faceRetargetEnabled: false, // DHLive 3D 口型贴片在当前素材上会错位，路演版先禁用黑框叠加
+    faceRetargetMode: "off",    // off | calibration | overlay；校准模式只读口型参数，不绘制风险贴片
     backgroundVideoSrc: "background/bg.mp4",  // 背景视频路径（开启绿幕扣除时使用）
     videoSrc: "01.mp4",                       // 默认视频文件路径
     dataSrc: "combined_data.json.gz",         // 默认数据文件路径
@@ -45,6 +46,10 @@ let avatarSpeechEnvelope = [];
 let avatarSpeechEnvelopeStartedAt = 0;
 let avatarSpeechEnvelopeDuration = 0;
 let avatarSpeechEnvelopeRAF = null;
+let lastChromaKeyStatsReportAt = 0;
+let lastRetargetCalibrationReportAt = 0;
+let didReportRetargetOverlaySuppressed = false;
+let didReportRetargetOverlayDrawn = false;
 
 class VideoProcessor {
     constructor() {
@@ -282,6 +287,17 @@ window.DreamJourneyMiniLive = {
         if (avatarVideoReady) {
             pauseAvatarVideo(reason || 'native_pause');
         }
+    },
+    setRetargetMode: function(mode) {
+        const normalized = ['off', 'calibration', 'overlay'].includes(mode) ? mode : 'off';
+        CONFIG.faceRetargetMode = normalized;
+        CONFIG.faceRetargetEnabled = normalized !== 'off';
+        didReportRetargetOverlaySuppressed = false;
+        didReportRetargetOverlayDrawn = false;
+        postAvatarHealth('avatar_retarget_mode_changed', {
+            mode: CONFIG.faceRetargetMode,
+            enabled: CONFIG.faceRetargetEnabled
+        });
     }
 };
 
@@ -449,6 +465,51 @@ function processChromaKey(foregroundSource) {
     chromaKeyGl.drawArrays(chromaKeyGl.TRIANGLE_STRIP, 0, 4);
     
     return chromaKeyCanvas;
+}
+
+function sampleCanvasAlphaStats(canvas) {
+    const width = canvas.width || 0;
+    const height = canvas.height || 0;
+    if (!width || !height) {
+        return { width, height, samples: 0, transparent: 0, opaque: 0, averageAlpha: 0 };
+    }
+
+    const sampleCanvas = document.createElement('canvas');
+    sampleCanvas.width = width;
+    sampleCanvas.height = height;
+    const sampleCtx = sampleCanvas.getContext('2d', { willReadFrequently: true });
+    sampleCtx.drawImage(canvas, 0, 0, width, height);
+
+    const points = [
+        [0.08, 0.08], [0.5, 0.08], [0.92, 0.08],
+        [0.08, 0.5], [0.5, 0.5], [0.92, 0.5],
+        [0.08, 0.92], [0.5, 0.92], [0.92, 0.92]
+    ];
+    let transparent = 0;
+    let opaque = 0;
+    let alphaTotal = 0;
+
+    points.forEach(([xRatio, yRatio]) => {
+        const x = Math.max(0, Math.min(width - 1, Math.floor(width * xRatio)));
+        const y = Math.max(0, Math.min(height - 1, Math.floor(height * yRatio)));
+        const alpha = sampleCtx.getImageData(x, y, 1, 1).data[3];
+        alphaTotal += alpha;
+        if (alpha <= 24) {
+            transparent += 1;
+        }
+        if (alpha >= 180) {
+            opaque += 1;
+        }
+    });
+
+    return {
+        width,
+        height,
+        samples: points.length,
+        transparent,
+        opaque,
+        averageAlpha: Math.round(alphaTotal / points.length)
+    };
 }
 
 let asset_dir = "assets";
@@ -897,6 +958,14 @@ async function processVideoFrames() {
         } else {
             ctx_video.drawImage(lockedFrameCanvas, 0, 0, canvas_video.width, canvas_video.height);
         }
+        if (CONFIG.chromaKeyEnabled && currentTime - lastChromaKeyStatsReportAt > 2000) {
+            lastChromaKeyStatsReportAt = currentTime;
+            try {
+                postAvatarHealth('avatar_chroma_key_stats', sampleCanvasAlphaStats(canvas_video));
+            } catch (error) {
+                postAvatarHealth('avatar_chroma_key_stats_error', String(error && error.message ? error.message : error));
+            }
+        }
         if (!didReportFirstVideoFrame) {
             didReportFirstVideoFrame = true;
             avatarVideoReady = true;
@@ -964,6 +1033,16 @@ async function processDataSet(currentDataSetIndex) {
         // 如果暂停，直接返回，不处理帧
         return;
     }
+    if (!Array.isArray(dataSets) || dataSets.length === 0) {
+        return;
+    }
+    if (currentDataSetIndex < 0 || currentDataSetIndex >= dataSets.length) {
+        postAvatarHealth('avatar_retarget_frame_out_of_range', {
+            currentDataSetIndex,
+            dataSets: dataSets.length
+        });
+        return;
+    }
     const dataSet = dataSets[currentDataSetIndex];
     const rect = dataSet.rect;
 
@@ -975,6 +1054,41 @@ async function processDataSet(currentDataSetIndex) {
     const subPoints = currentpoints.slice(16);
     Module._updateBlendShape(bsPtr, 12 * 4);
     const bsArray = new Float32Array(Module.HEAPU8.buffer, bsPtr, 12);
+
+    const rectWidth = Math.max(0, rect[2] - rect[0]);
+    const rectHeight = Math.max(0, rect[3] - rect[1]);
+    const rectAreaRatio = canvas_video.width > 0 && canvas_video.height > 0
+        ? (rectWidth * rectHeight) / (canvas_video.width * canvas_video.height)
+        : 0;
+    const bsValues = Array.from(bsArray);
+    const bsMax = bsValues.reduce((max, value) => Math.max(max, Math.abs(Number(value) || 0)), 0);
+    const bsMean = bsValues.reduce((sum, value) => sum + Math.abs(Number(value) || 0), 0) / Math.max(1, bsValues.length);
+    const drawOverlay = shouldDrawRetargetOverlay(rect, rectAreaRatio);
+    const now = performance.now();
+
+    if (!drawOverlay) {
+        if (now - lastRetargetCalibrationReportAt > 900) {
+            lastRetargetCalibrationReportAt = now;
+            postAvatarHealth('avatar_retarget_calibration', {
+                mode: CONFIG.faceRetargetMode,
+                currentDataSetIndex,
+                rect: rect.slice(0, 4),
+                rectAreaRatio: Number(rectAreaRatio.toFixed(4)),
+                bsMax: Number(bsMax.toFixed(4)),
+                bsMean: Number(bsMean.toFixed(4)),
+                overlay: false
+            });
+        }
+        if (CONFIG.faceRetargetMode !== 'off' && !didReportRetargetOverlaySuppressed) {
+            didReportRetargetOverlaySuppressed = true;
+            postAvatarHealth('retarget_overlay_suppressed', {
+                reason: CONFIG.faceRetargetMode === 'overlay' ? 'invalid_rect_or_area' : 'calibration_mode',
+                mode: CONFIG.faceRetargetMode,
+                rectAreaRatio: Number(rectAreaRatio.toFixed(4))
+            });
+        }
+        return;
+    }
 
     render(matrix, subPoints, bsArray);
     // console.log("bsArray", bsArray);
@@ -990,6 +1104,70 @@ async function processDataSet(currentDataSetIndex) {
     const result = Module.HEAPU8.subarray(imageDataPtr, imageDataPtr + imageData.data.length);
     imageData.data.set(result);
 
+    const overlayStats = analyzeRetargetOverlay(imageData);
+    if (overlayStats.blackOpaqueRatio > 0.32 || overlayStats.visibleAlphaRatio < 0.08) {
+        if (!didReportRetargetOverlaySuppressed) {
+            didReportRetargetOverlaySuppressed = true;
+            postAvatarHealth('retarget_overlay_suppressed', {
+                reason: 'suspicious_overlay_pixels',
+                mode: CONFIG.faceRetargetMode,
+                blackOpaqueRatio: Number(overlayStats.blackOpaqueRatio.toFixed(4)),
+                visibleAlphaRatio: Number(overlayStats.visibleAlphaRatio.toFixed(4))
+            });
+        }
+        return;
+    }
+
     resizedCtx.putImageData(imageData, 0, 0);
     ctx_video.drawImage(resizedCanvas, 0, 0, model_size, model_size, rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]);
+    if (!didReportRetargetOverlayDrawn) {
+        didReportRetargetOverlayDrawn = true;
+        postAvatarHealth('avatar_retarget_overlay_drawn', {
+            currentDataSetIndex,
+            rectAreaRatio: Number(rectAreaRatio.toFixed(4)),
+            bsMax: Number(bsMax.toFixed(4)),
+            visibleAlphaRatio: Number(overlayStats.visibleAlphaRatio.toFixed(4))
+        });
+    }
+}
+
+function shouldDrawRetargetOverlay(rect, rectAreaRatio) {
+    if (CONFIG.faceRetargetMode !== 'overlay') {
+        return false;
+    }
+    if (!Array.isArray(rect) || rect.length < 4) {
+        return false;
+    }
+    const withinCanvas = rect[0] >= 0
+        && rect[1] >= 0
+        && rect[2] <= canvas_video.width
+        && rect[3] <= canvas_video.height
+        && rect[2] > rect[0]
+        && rect[3] > rect[1];
+    return withinCanvas && rectAreaRatio > 0.004 && rectAreaRatio < 0.48;
+}
+
+function analyzeRetargetOverlay(imageData) {
+    const data = imageData.data;
+    let visibleAlpha = 0;
+    let blackOpaque = 0;
+    const pixels = Math.max(1, data.length / 4);
+
+    for (let offset = 0; offset < data.length; offset += 4) {
+        const r = data[offset];
+        const g = data[offset + 1];
+        const b = data[offset + 2];
+        const a = data[offset + 3];
+        if (a > 32) {
+            visibleAlpha += 1;
+        }
+        if (a > 180 && r < 36 && g < 36 && b < 36) {
+            blackOpaque += 1;
+        }
+    }
+
+    return {
+        visibleAlphaRatio: visibleAlpha / pixels,
+        blackOpaqueRatio: blackOpaque / pixels
+    };
 }

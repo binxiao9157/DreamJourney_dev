@@ -273,6 +273,9 @@ xcrun swiftc \
 /tmp/dreamjourney_digital_human_speech_envelope_verify
 python3 Scripts/DigitalHumanSpeechEnvelopeIntegrationVerify/main.py
 
+echo "== DigitalHuman retarget calibration PoC =="
+python3 Scripts/DigitalHumanRetargetCalibrationVerify/main.py
+
 echo "== DigitalHuman fallback UI =="
 python3 Scripts/DigitalHumanFallbackUIVerify/main.py
 
