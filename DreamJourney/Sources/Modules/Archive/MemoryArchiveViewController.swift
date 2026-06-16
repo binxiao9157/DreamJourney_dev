@@ -581,6 +581,10 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     @objc private func personaCardTapped() {
+        guard FeatureFlagService.shared.isEnabled(.personaSettings) else {
+            showToast("人格设定将在后续开放", type: .info)
+            return
+        }
         navigationController?.pushViewController(KnowledgeBaseViewController(), animated: true)
     }
 

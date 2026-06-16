@@ -4,6 +4,7 @@ enum DJFeature: String, CaseIterable {
     case echoTextInput
     case echoImageInput
     case timeLetters
+    case personaSettings
     case archiveAudioUpload
     case familyManagement
     case familySpace
