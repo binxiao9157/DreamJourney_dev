@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		28D8501C781E7E8F03B1C87B /* FeatureFlagService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 392F026F981C3221600209E7 /* FeatureFlagService.swift */; };
+		36CF52237589B0C4691394E6 /* DJComponentFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D8F3BB4380923E82E24664 /* DJComponentFactory.swift */; };
+		56155288BF68EFE839397BB1 /* DreamJourneyBackendClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF8F1D6D1A0C1160E11C410B /* DreamJourneyBackendClient.swift */; };
+		8525A06805EC0F2C59676EBE /* DJDesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9721373237BB9D8AB345E0CA /* DJDesignTokens.swift */; };
+		8AF14552DA0909806567A566 /* DigitalHumanContextStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94415377646F176602419BD4 /* DigitalHumanContextStore.swift */; };
 		04FA5845CC27422438AE44DA /* WarmTabBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B274A4971D76C1D3BFEE4E9A /* WarmTabBarController.swift */; };
 		06F7BBC5219F555B3CF8DCDD /* UIColor+WarmTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71EF8575113A0367F332FE72 /* UIColor+WarmTheme.swift */; };
 		0E5676BC344BFB67294DA939 /* MiniMateLoader.js in Resources */ = {isa = PBXBuildFile; fileRef = AA3777B38C40C14928088B38 /* MiniMateLoader.js */; };
@@ -85,6 +90,11 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		392F026F981C3221600209E7 /* FeatureFlagService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlagService.swift; sourceTree = "<group>"; };
+		47D8F3BB4380923E82E24664 /* DJComponentFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DJComponentFactory.swift; sourceTree = "<group>"; };
+		94415377646F176602419BD4 /* DigitalHumanContextStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanContextStore.swift; sourceTree = "<group>"; };
+		9721373237BB9D8AB345E0CA /* DJDesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DJDesignTokens.swift; sourceTree = "<group>"; };
+		EF8F1D6D1A0C1160E11C410B /* DreamJourneyBackendClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DreamJourneyBackendClient.swift; sourceTree = "<group>"; };
 		00898E98E95E3808561BEB51 /* MemoirTTSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirTTSService.swift; sourceTree = "<group>"; };
 		04D035B5F78F66A15EB0C01A /* Main.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = Main.storyboard; sourceTree = "<group>"; };
 		0616F4B34725AE4D0BCCA4D9 /* KBLiteSemanticSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLiteSemanticSearch.swift; sourceTree = "<group>"; };
@@ -225,6 +235,7 @@
 			children = (
 				97D922D4C28AF76D7CB85DFF /* ConversationMemoryManager.swift */,
 				9B3A23A2BA7FD3D92A7BC975 /* DialogEngineManager.swift */,
+				EF8F1D6D1A0C1160E11C410B /* DreamJourneyBackendClient.swift */,
 				5B20338C4C40695560A52B81 /* FamilyRepository.swift */,
 				5628E3908BA5F87F7FC6373B /* KBLiteGapDetector.swift */,
 				576656BFF57471DCF9B231CB /* KBLiteManager.swift */,
@@ -277,6 +288,15 @@
 			path = Theme;
 			sourceTree = "<group>";
 		};
+		3C044494D00600C370C00C8D /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				47D8F3BB4380923E82E24664 /* DJComponentFactory.swift */,
+				9721373237BB9D8AB345E0CA /* DJDesignTokens.swift */,
+			);
+			path = DesignSystem;
+			sourceTree = "<group>";
+		};
 		43C21E05558EE05B32A77B17 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -304,6 +324,7 @@
 				5ABDBC7F0000C4386BB6B2C5 /* ViewController.swift */,
 				A353AEB5FE48C1961C1D7DF3 /* App */,
 				8567BB0E0F370030BBDBC660 /* Common */,
+				3C044494D00600C370C00C8D /* DesignSystem */,
 				0B70C2227D6F7A33398AA861 /* Memoir */,
 				AB18646F8DCCE6FC3C260F60 /* Modules */,
 				1284930C7834D5F172D2148F /* Services */,
@@ -392,6 +413,8 @@
 				165FB245CE23B3EF2C90C799 /* AppCoordinator.swift */,
 				8D7A1AAB6E1338AE2A2C4F75 /* AuthCoordinator.swift */,
 				F6C5E6FFF33ED30F772F732A /* Coordinator.swift */,
+				94415377646F176602419BD4 /* DigitalHumanContextStore.swift */,
+				392F026F981C3221600209E7 /* FeatureFlagService.swift */,
 				91B8B6D2AAE645AB04030C27 /* TabCoordinator.swift */,
 			);
 			path = App;
@@ -656,10 +679,15 @@
 				EB8C6638C1D5E34AC579873D /* Coordinator.swift in Sources */,
 				F90DDD2F07DD62057280F6B1 /* DeepSeekService.swift in Sources */,
 				7FE1A54F9280057AA970D224 /* DialogEngineManager.swift in Sources */,
+				8AF14552DA0909806567A566 /* DigitalHumanContextStore.swift in Sources */,
+				56155288BF68EFE839397BB1 /* DreamJourneyBackendClient.swift in Sources */,
 				C4F36E09ECE184DE75C4D276 /* FamilyCircleViewController.swift in Sources */,
 				89C5568D19D2A39E9AEEFBF3 /* FamilyRepository.swift in Sources */,
+				28D8501C781E7E8F03B1C87B /* FeatureFlagService.swift in Sources */,
 				9D62718D2F007D0949BE1701 /* FootprintNotificationBanner.swift in Sources */,
 				9A84BB0966C1478900AA56A3 /* HomeHeaderView.swift in Sources */,
+				36CF52237589B0C4691394E6 /* DJComponentFactory.swift in Sources */,
+				8525A06805EC0F2C59676EBE /* DJDesignTokens.swift in Sources */,
 				344DFB2063508315CC912EF7 /* KBExportPreviewViewController.swift in Sources */,
 				B5FB43CD45DAE4D507651704 /* KBGraphEdge.swift in Sources */,
 				6EBD2DD7A7870798CA2B63E9 /* KBGraphLayoutEngine.swift in Sources */,
