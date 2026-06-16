@@ -12,6 +12,13 @@ final class MemoryArchiveViewController: UIViewController {
     private let summaryLabel = UILabel()
     private let progressLabel = UILabel()
 
+    private var creationOptions: [MemoryArchiveCreationOption] {
+        MemoryArchiveCreationOption.availableOptions(
+            isAudioUploadEnabled: FeatureFlagService.shared.isEnabled(.archiveAudioUpload),
+            isTimeLettersEnabled: FeatureFlagService.shared.isEnabled(.timeLetters)
+        )
+    }
+
     private static let itemDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
@@ -321,7 +328,14 @@ final class MemoryArchiveViewController: UIViewController {
         titleLabel.textColor = DJDesignTokens.Color.textPrimary
         titleLabel.numberOfLines = 0
 
-        let statusLabel = makeBadge(text: item.kind.displayName)
+        let statusStack = UIStackView()
+        statusStack.spacing = 6
+        statusStack.alignment = .center
+
+        let kindBadge = makeBadge(text: item.kind.displayName)
+        let analysisBadge = makeStatusBadge(text: item.analysisStatus.displayName)
+        statusStack.addArrangedSubview(kindBadge)
+        statusStack.addArrangedSubview(analysisBadge)
 
         let noteLabel = UILabel()
         noteLabel.text = item.note
@@ -335,14 +349,14 @@ final class MemoryArchiveViewController: UIViewController {
         dateLabel.textColor = DJDesignTokens.Color.textTertiary
 
         card.addSubview(stack)
-        [stack, iconContainer, textStack, topLine, titleLabel, statusLabel, noteLabel, dateLabel].forEach {
+        [stack, iconContainer, textStack, topLine, titleLabel, statusStack, kindBadge, analysisBadge, noteLabel, dateLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
 
         topLine.addArrangedSubview(titleLabel)
-        topLine.addArrangedSubview(statusLabel)
+        topLine.addArrangedSubview(statusStack)
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        statusLabel.setContentHuggingPriority(.required, for: .horizontal)
+        statusStack.setContentHuggingPriority(.required, for: .horizontal)
 
         textStack.addArrangedSubview(topLine)
         textStack.addArrangedSubview(noteLabel)
@@ -441,30 +455,16 @@ final class MemoryArchiveViewController: UIViewController {
         return label
     }
 
+    private func makeStatusBadge(text: String) -> UILabel {
+        let label = makeBadge(text: text)
+        label.textColor = DJDesignTokens.Color.textSecondary
+        label.backgroundColor = DJDesignTokens.Color.surfaceContainer
+        return label
+    }
+
     @objc private func archiveNewMemoryTapped(_ sender: UIButton) {
-        let sheet = UIAlertController(title: "封存新记忆", message: nil, preferredStyle: .actionSheet)
-
-        sheet.addAction(UIAlertAction(title: "添加文字描述", style: .default) { [weak self] _ in
-            self?.presentTextEntry(kind: .text)
-        })
-
-        sheet.addAction(UIAlertAction(title: "选择照片", style: .default) { [weak self] _ in
-            self?.presentPhotoPicker()
-        })
-
-        if FeatureFlagService.shared.isEnabled(.timeLetters) {
-            sheet.addAction(UIAlertAction(title: "录入时间信件", style: .default) { [weak self] _ in
-                self?.presentTextEntry(kind: .timeLetter)
-            })
-        }
-
-        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-
-        if let popover = sheet.popoverPresentationController {
-            popover.sourceView = sender
-            popover.sourceRect = sender.bounds
-        }
-
+        let sheet = MemoryArchiveCreationSheetViewController(options: creationOptions)
+        sheet.delegate = self
         present(sheet, animated: true)
     }
 
@@ -587,6 +587,27 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
     }
 }
 
+extension MemoryArchiveViewController: MemoryArchiveCreationSheetViewControllerDelegate {
+    func memoryArchiveCreationSheet(
+        _ viewController: MemoryArchiveCreationSheetViewController,
+        didSelect option: MemoryArchiveCreationOption
+    ) {
+        switch option.archiveKind {
+        case .text:
+            presentTextEntry(kind: .text)
+        case .photo:
+            presentPhotoPicker()
+        case .audio:
+            showToast("语音素材录入将在后续开放", type: .info)
+        case .timeLetter:
+            guard FeatureFlagService.shared.isEnabled(.timeLetters) else { return }
+            presentTextEntry(kind: .timeLetter)
+        case .video:
+            showToast("视频素材录入将在后续开放", type: .info)
+        }
+    }
+}
+
 private enum ArchiveImageSaveError: LocalizedError {
     case jpegEncodingFailed
 
@@ -635,6 +656,21 @@ private extension MemoryArchiveItemKind {
             return "text.alignleft"
         case .timeLetter:
             return "envelope"
+        }
+    }
+}
+
+private extension MemoryArchiveAnalysisStatus {
+    var displayName: String {
+        switch self {
+        case .manual:
+            return "已归档"
+        case .pending:
+            return "待分析"
+        case .analyzed:
+            return "已分析"
+        case .failed:
+            return "分析失败"
         }
     }
 }

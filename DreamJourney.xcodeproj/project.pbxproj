@@ -15,6 +15,8 @@
 		A1A000000000000000000001 /* MemoryArchiveItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000001 /* MemoryArchiveItem.swift */; };
 		A1A000000000000000000002 /* MemoryArchiveRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000002 /* MemoryArchiveRepository.swift */; };
 		A1A000000000000000000003 /* MemoryArchiveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000003 /* MemoryArchiveViewController.swift */; };
+		A1A000000000000000000008 /* MemoryArchiveCreationOption.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000008 /* MemoryArchiveCreationOption.swift */; };
+		A1A000000000000000000009 /* MemoryArchiveCreationSheetViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000009 /* MemoryArchiveCreationSheetViewController.swift */; };
 		A1A000000000000000000004 /* EchoViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000004 /* EchoViewModel.swift */; };
 		A1A000000000000000000005 /* EchoViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000005 /* EchoViewController.swift */; };
 		A1A000000000000000000006 /* ProfileCareModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000006 /* ProfileCareModels.swift */; };
@@ -105,6 +107,8 @@
 		B1B000000000000000000001 /* MemoryArchiveItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveItem.swift; sourceTree = "<group>"; };
 		B1B000000000000000000002 /* MemoryArchiveRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveRepository.swift; sourceTree = "<group>"; };
 		B1B000000000000000000003 /* MemoryArchiveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveViewController.swift; sourceTree = "<group>"; };
+		B1B000000000000000000008 /* MemoryArchiveCreationOption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveCreationOption.swift; sourceTree = "<group>"; };
+		B1B000000000000000000009 /* MemoryArchiveCreationSheetViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveCreationSheetViewController.swift; sourceTree = "<group>"; };
 		B1B000000000000000000004 /* EchoViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EchoViewModel.swift; sourceTree = "<group>"; };
 		B1B000000000000000000005 /* EchoViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EchoViewController.swift; sourceTree = "<group>"; };
 		B1B000000000000000000006 /* ProfileCareModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileCareModels.swift; sourceTree = "<group>"; };
@@ -369,6 +373,8 @@
 			isa = PBXGroup;
 			children = (
 				B1B000000000000000000001 /* MemoryArchiveItem.swift */,
+				B1B000000000000000000008 /* MemoryArchiveCreationOption.swift */,
+				B1B000000000000000000009 /* MemoryArchiveCreationSheetViewController.swift */,
 				B1B000000000000000000002 /* MemoryArchiveRepository.swift */,
 				B1B000000000000000000003 /* MemoryArchiveViewController.swift */,
 			);
@@ -762,6 +768,8 @@
 				596491B3EBC0F9D31FB1C2E1 /* MemoryAnnotation.swift in Sources */,
 				179BE070081D916DE52040A2 /* MemoryAnnotationView.swift in Sources */,
 				A1A000000000000000000001 /* MemoryArchiveItem.swift in Sources */,
+				A1A000000000000000000008 /* MemoryArchiveCreationOption.swift in Sources */,
+				A1A000000000000000000009 /* MemoryArchiveCreationSheetViewController.swift in Sources */,
 				A1A000000000000000000002 /* MemoryArchiveRepository.swift in Sources */,
 				A1A000000000000000000003 /* MemoryArchiveViewController.swift in Sources */,
 				52B3383F8F4517669DA70A7B /* MemoryDetailViewController.swift in Sources */,

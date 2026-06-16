@@ -28,7 +28,13 @@ struct MemoryArchiveItem: Codable, Identifiable {
     var detectedPeople: [String]
     var tags: [String]
 
-    init(kind: MemoryArchiveItemKind, title: String, note: String, localPath: String? = nil) {
+    init(
+        kind: MemoryArchiveItemKind,
+        title: String,
+        note: String,
+        localPath: String? = nil,
+        analysisStatus: MemoryArchiveAnalysisStatus = .pending
+    ) {
         self.id = UUID().uuidString
         self.kind = kind
         self.title = title
@@ -36,7 +42,7 @@ struct MemoryArchiveItem: Codable, Identifiable {
         self.localPath = localPath
         self.createdAt = Date()
         self.updatedAt = Date()
-        self.analysisStatus = .manual
+        self.analysisStatus = analysisStatus
         self.analysisSummary = nil
         self.detectedPeople = []
         self.tags = []
