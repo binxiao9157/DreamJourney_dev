@@ -378,6 +378,7 @@ extension EchoViewController: DialogEngineDelegate {
 }
 
 private final class EchoScenicParkView: UIView {
+    private let backgroundImageLayer = CALayer()
     private let skyLayer = CAGradientLayer()
     private let meadowLayer = CAShapeLayer()
     private let pathLayer = CAShapeLayer()
@@ -389,6 +390,8 @@ private final class EchoScenicParkView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         isUserInteractionEnabled = false
+        clipsToBounds = true
+        layer.addSublayer(backgroundImageLayer)
         layer.addSublayer(skyLayer)
         layer.addSublayer(lightLayer)
         layer.addSublayer(treeBackLayer)
@@ -405,6 +408,7 @@ private final class EchoScenicParkView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        backgroundImageLayer.frame = bounds
         skyLayer.frame = bounds
         overlayLayer.frame = bounds
 
@@ -458,6 +462,16 @@ private final class EchoScenicParkView: UIView {
     }
 
     private func configureLayers() {
+        let backgroundImage = UIImage(named: "echo_park_background")
+        backgroundImageLayer.contents = backgroundImage?.cgImage
+        backgroundImageLayer.contentsGravity = .resizeAspectFill
+        backgroundImageLayer.isHidden = backgroundImage == nil
+
+        let shouldUseVectorFallback = backgroundImage == nil
+        [skyLayer, lightLayer, treeBackLayer, meadowLayer, pathLayer, treeFrontLayer].forEach {
+            $0.isHidden = !shouldUseVectorFallback
+        }
+
         skyLayer.colors = [
             UIColor(hex: "#fff9f0").cgColor,
             UIColor(hex: "#f7dfbd").cgColor,
@@ -474,9 +488,9 @@ private final class EchoScenicParkView: UIView {
         pathLayer.fillColor = UIColor(hex: "#e8cfa8").withAlphaComponent(0.9).cgColor
 
         overlayLayer.colors = [
-            UIColor.white.withAlphaComponent(0.12).cgColor,
-            UIColor(hex: "#fff9f0").withAlphaComponent(0.34).cgColor,
-            UIColor(hex: "#fff9f0").withAlphaComponent(0.82).cgColor
+            UIColor.clear.cgColor,
+            UIColor(hex: "#fff9f0").withAlphaComponent(backgroundImage == nil ? 0.34 : 0.12).cgColor,
+            UIColor(hex: "#fff9f0").withAlphaComponent(backgroundImage == nil ? 0.82 : 0.72).cgColor
         ]
         overlayLayer.locations = [0, 0.58, 1]
         overlayLayer.startPoint = CGPoint(x: 0.5, y: 0)
