@@ -307,12 +307,15 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     private func makeArchiveItemRow(_ item: MemoryArchiveItem) -> UIView {
+        let control = MemoryArchiveItemRowControl(item: item)
+        control.addTarget(self, action: #selector(archiveItemTapped(_:)), for: .touchUpInside)
+
         let card = DJComponentFactory.cardView(radius: DJDesignTokens.Radius.medium)
         let stack = UIStackView()
         stack.alignment = .top
         stack.spacing = 12
 
-        let iconContainer = makeIconContainer(iconName: item.kind.iconName, tintColor: DJDesignTokens.Color.textSecondary)
+        let iconContainer = makeIconContainer(iconName: item.kind.archiveIconName, tintColor: DJDesignTokens.Color.textSecondary)
 
         let textStack = UIStackView()
         textStack.axis = .vertical
@@ -332,8 +335,8 @@ final class MemoryArchiveViewController: UIViewController {
         statusStack.spacing = 6
         statusStack.alignment = .center
 
-        let kindBadge = makeBadge(text: item.kind.displayName)
-        let analysisBadge = makeStatusBadge(text: item.analysisStatus.displayName)
+        let kindBadge = makeBadge(text: item.kind.archiveDisplayName)
+        let analysisBadge = makeStatusBadge(text: item.analysisStatus.archiveDisplayName)
         statusStack.addArrangedSubview(kindBadge)
         statusStack.addArrangedSubview(analysisBadge)
 
@@ -348,8 +351,9 @@ final class MemoryArchiveViewController: UIViewController {
         dateLabel.font = DJDesignTokens.Font.label(11)
         dateLabel.textColor = DJDesignTokens.Color.textTertiary
 
+        control.addSubview(card)
         card.addSubview(stack)
-        [stack, iconContainer, textStack, topLine, titleLabel, statusStack, kindBadge, analysisBadge, noteLabel, dateLabel].forEach {
+        [card, stack, iconContainer, textStack, topLine, titleLabel, statusStack, kindBadge, analysisBadge, noteLabel, dateLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
 
@@ -366,6 +370,11 @@ final class MemoryArchiveViewController: UIViewController {
         stack.addArrangedSubview(textStack)
 
         NSLayoutConstraint.activate([
+            card.topAnchor.constraint(equalTo: control.topAnchor),
+            card.leadingAnchor.constraint(equalTo: control.leadingAnchor),
+            card.trailingAnchor.constraint(equalTo: control.trailingAnchor),
+            card.bottomAnchor.constraint(equalTo: control.bottomAnchor),
+
             iconContainer.widthAnchor.constraint(equalToConstant: 40),
             iconContainer.heightAnchor.constraint(equalToConstant: 40),
             stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 14),
@@ -374,7 +383,9 @@ final class MemoryArchiveViewController: UIViewController {
             stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -14),
         ])
 
-        return card
+        control.accessibilityTraits = .button
+        control.accessibilityLabel = "\(item.title)，\(item.kind.archiveDisplayName)，\(item.analysisStatus.archiveDisplayName)"
+        return control
     }
 
     private func makeEmptyStateCard() -> UIView {
@@ -468,6 +479,13 @@ final class MemoryArchiveViewController: UIViewController {
         present(sheet, animated: true)
     }
 
+    @objc private func archiveItemTapped(_ sender: MemoryArchiveItemRowControl) {
+        navigationController?.pushViewController(
+            MemoryArchiveDetailViewController(item: sender.item),
+            animated: true
+        )
+    }
+
     @objc private func selectPhotoTapped() {
         presentPhotoPicker()
     }
@@ -508,11 +526,9 @@ final class MemoryArchiveViewController: UIViewController {
                 return
             }
 
-            let item = MemoryArchiveItem(
-                kind: kind,
-                title: isTimeLetter ? "时间信件" : "文字记忆",
-                note: rawText
-            )
+            let item = isTimeLetter
+                ? MemoryArchiveItemFactory.makeTimeLetter(note: rawText)
+                : MemoryArchiveItemFactory.makeTextItem(note: rawText)
             self.repository.add(item)
             self.refreshContent()
             self.showToast("已封存", type: .success)
@@ -568,12 +584,7 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
 
         do {
             let fileURL = try saveImageToArchive(image)
-            let item = MemoryArchiveItem(
-                kind: .photo,
-                title: "相册影像",
-                note: "从相册封存的一张照片",
-                localPath: fileURL.path
-            )
+            let item = MemoryArchiveItemFactory.makePhotoItem(localPath: fileURL.path)
             repository.add(item)
             refreshContent()
             showToast("照片已封存", type: .success)
@@ -628,50 +639,17 @@ private extension UIStackView {
     }
 }
 
-private extension MemoryArchiveItemKind {
-    var displayName: String {
-        switch self {
-        case .photo:
-            return "相册"
-        case .video:
-            return "视频"
-        case .audio:
-            return "语音"
-        case .text:
-            return "文字"
-        case .timeLetter:
-            return "信件"
-        }
+private final class MemoryArchiveItemRowControl: UIControl {
+    let item: MemoryArchiveItem
+
+    init(item: MemoryArchiveItem) {
+        self.item = item
+        super.init(frame: .zero)
+        isAccessibilityElement = true
     }
 
-    var iconName: String {
-        switch self {
-        case .photo:
-            return "photo"
-        case .video:
-            return "video"
-        case .audio:
-            return "waveform"
-        case .text:
-            return "text.alignleft"
-        case .timeLetter:
-            return "envelope"
-        }
-    }
-}
-
-private extension MemoryArchiveAnalysisStatus {
-    var displayName: String {
-        switch self {
-        case .manual:
-            return "已归档"
-        case .pending:
-            return "待分析"
-        case .analyzed:
-            return "已分析"
-        case .failed:
-            return "分析失败"
-        }
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 }
 
