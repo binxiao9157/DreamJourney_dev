@@ -5,28 +5,16 @@ final class EchoViewController: UIViewController {
 
     private let scenicView = EchoScenicParkView()
 
-    private let titleLabel: UILabel = {
-        let label = UILabel()
-        label.text = "回响"
-        label.font = DJDesignTokens.Font.display(30)
-        label.textColor = DJDesignTokens.Color.textPrimary
-        label.numberOfLines = 1
-        return label
-    }()
-
-    private let subtitleLabel: UILabel = {
-        let label = UILabel()
-        label.text = "把想说的话，留给正在靠近的人"
-        label.font = DJDesignTokens.Font.body(14)
-        label.textColor = DJDesignTokens.Color.textSecondary
-        label.numberOfLines = 0
-        return label
-    }()
-
     private let quoteBubble: UIView = {
         let view = UIView()
-        view.backgroundColor = DJDesignTokens.Color.surface.withAlphaComponent(0.92)
-        view.layer.cornerRadius = DJDesignTokens.Radius.medium
+        view.backgroundColor = UIColor(hex: "#FEFEF9").withAlphaComponent(0.92)
+        view.layer.cornerRadius = 22
+        view.layer.maskedCorners = [
+            .layerMinXMinYCorner,
+            .layerMaxXMinYCorner,
+            .layerMaxXMaxYCorner,
+            .layerMinXMaxYCorner
+        ]
         view.layer.borderWidth = 1
         view.layer.borderColor = DJDesignTokens.Color.divider.withAlphaComponent(0.55).cgColor
         DJDesignTokens.applySoftShadow(to: view)
@@ -35,28 +23,20 @@ final class EchoViewController: UIViewController {
 
     private let quoteLabel: UILabel = {
         let label = UILabel()
-        label.text = "坐在这里，慢慢说，我一直听着。"
-        label.font = DJDesignTokens.Font.title(17)
-        label.textColor = DJDesignTokens.Color.textPrimary
+        label.text = "我一直都在，风吹过树叶的声音就是我的回答。"
+        label.font = DJDesignTokens.Font.body(16)
+        label.textColor = DJDesignTokens.Color.textSecondary
         label.numberOfLines = 0
-        label.textAlignment = .center
         return label
     }()
 
-    private let transcriptScrollView: UIScrollView = {
-        let scrollView = UIScrollView()
-        scrollView.showsVerticalScrollIndicator = false
-        scrollView.alwaysBounceVertical = false
-        scrollView.backgroundColor = .clear
-        return scrollView
-    }()
-
-    private let transcriptStack: UIStackView = {
-        let stack = UIStackView()
-        stack.axis = .vertical
-        stack.alignment = .fill
-        stack.spacing = 10
-        return stack
+    private let timestampLabel: UILabel = {
+        let label = UILabel()
+        label.text = "刚才"
+        label.font = DJDesignTokens.Font.label(12)
+        label.textColor = DJDesignTokens.Color.textTertiary.withAlphaComponent(0.68)
+        label.numberOfLines = 1
+        return label
     }()
 
     private let statusLabel: UILabel = {
@@ -73,11 +53,11 @@ final class EchoViewController: UIViewController {
         let button = UIButton(type: .custom)
         button.backgroundColor = DJDesignTokens.Color.accent
         button.tintColor = .white
-        button.layer.cornerRadius = 48
+        button.layer.cornerRadius = 28
         button.layer.shadowColor = DJDesignTokens.Color.accentDeep.cgColor
         button.layer.shadowOpacity = 0.24
-        button.layer.shadowOffset = CGSize(width: 0, height: 14)
-        button.layer.shadowRadius = 22
+        button.layer.shadowOffset = CGSize(width: 0, height: 10)
+        button.layer.shadowRadius = 18
         button.addTarget(self, action: #selector(micTapped), for: .touchUpInside)
         button.accessibilityLabel = "开始语音"
         return button
@@ -86,7 +66,7 @@ final class EchoViewController: UIViewController {
     private let micRingView: UIView = {
         let view = UIView()
         view.backgroundColor = DJDesignTokens.Color.accent.withAlphaComponent(0.16)
-        view.layer.cornerRadius = 62
+        view.layer.cornerRadius = 38
         view.isUserInteractionEnabled = false
         return view
     }()
@@ -139,7 +119,7 @@ final class EchoViewController: UIViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         let safeBottom = Self.systemBottomSafeInset
-        micButtonBottomConstraint?.constant = -(WarmTabBarView.tabBarHeight + safeBottom + 24)
+        micButtonBottomConstraint?.constant = -(WarmTabBarView.tabBarHeight + safeBottom + 28)
     }
 
     private static var systemBottomSafeInset: CGFloat {
@@ -152,25 +132,18 @@ final class EchoViewController: UIViewController {
 
     private func setupLayout() {
         view.addSubview(scenicView)
-        view.addSubview(titleLabel)
-        view.addSubview(subtitleLabel)
         view.addSubview(quoteBubble)
-        view.addSubview(transcriptScrollView)
-        view.addSubview(statusLabel)
         view.addSubview(micRingView)
         view.addSubview(micButton)
 
         quoteBubble.addSubview(quoteLabel)
-        transcriptScrollView.addSubview(transcriptStack)
+        quoteBubble.addSubview(timestampLabel)
 
         [
             scenicView,
-            titleLabel,
-            subtitleLabel,
             quoteBubble,
             quoteLabel,
-            transcriptScrollView,
-            transcriptStack,
+            timestampLabel,
             statusLabel,
             micRingView,
             micButton
@@ -178,11 +151,9 @@ final class EchoViewController: UIViewController {
 
         let micBottomConstraint = micButton.bottomAnchor.constraint(
             equalTo: view.bottomAnchor,
-            constant: -(WarmTabBarView.tabBarHeight + 24)
+            constant: -(WarmTabBarView.tabBarHeight + 28)
         )
         micButtonBottomConstraint = micBottomConstraint
-        let transcriptHeightConstraint = transcriptScrollView.heightAnchor.constraint(equalToConstant: 158)
-        transcriptHeightConstraint.priority = .defaultHigh
 
         NSLayoutConstraint.activate([
             scenicView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -190,49 +161,29 @@ final class EchoViewController: UIViewController {
             scenicView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scenicView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
-            titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 18),
-            titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
-            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
-
-            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 6),
-            subtitleLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
-            subtitleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
-
-            quoteBubble.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 26),
             quoteBubble.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
-            quoteBubble.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
+            quoteBubble.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
+            quoteBubble.bottomAnchor.constraint(equalTo: micRingView.topAnchor, constant: -44),
+            quoteBubble.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.85),
 
-            quoteLabel.topAnchor.constraint(equalTo: quoteBubble.topAnchor, constant: 18),
-            quoteLabel.leadingAnchor.constraint(equalTo: quoteBubble.leadingAnchor, constant: 18),
-            quoteLabel.trailingAnchor.constraint(equalTo: quoteBubble.trailingAnchor, constant: -18),
-            quoteLabel.bottomAnchor.constraint(equalTo: quoteBubble.bottomAnchor, constant: -18),
+            quoteLabel.topAnchor.constraint(equalTo: quoteBubble.topAnchor, constant: 16),
+            quoteLabel.leadingAnchor.constraint(equalTo: quoteBubble.leadingAnchor, constant: 16),
+            quoteLabel.trailingAnchor.constraint(equalTo: quoteBubble.trailingAnchor, constant: -16),
 
-            transcriptScrollView.topAnchor.constraint(equalTo: quoteBubble.bottomAnchor, constant: 22),
-            transcriptScrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
-            transcriptScrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
-            transcriptHeightConstraint,
-            transcriptScrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 96),
-            transcriptScrollView.bottomAnchor.constraint(lessThanOrEqualTo: statusLabel.topAnchor, constant: -20),
-
-            transcriptStack.topAnchor.constraint(equalTo: transcriptScrollView.contentLayoutGuide.topAnchor),
-            transcriptStack.leadingAnchor.constraint(equalTo: transcriptScrollView.contentLayoutGuide.leadingAnchor),
-            transcriptStack.trailingAnchor.constraint(equalTo: transcriptScrollView.contentLayoutGuide.trailingAnchor),
-            transcriptStack.bottomAnchor.constraint(equalTo: transcriptScrollView.contentLayoutGuide.bottomAnchor),
-            transcriptStack.widthAnchor.constraint(equalTo: transcriptScrollView.frameLayoutGuide.widthAnchor),
+            timestampLabel.topAnchor.constraint(equalTo: quoteLabel.bottomAnchor, constant: 8),
+            timestampLabel.leadingAnchor.constraint(equalTo: quoteLabel.leadingAnchor),
+            timestampLabel.trailingAnchor.constraint(lessThanOrEqualTo: quoteLabel.trailingAnchor),
+            timestampLabel.bottomAnchor.constraint(equalTo: quoteBubble.bottomAnchor, constant: -14),
 
             micButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             micBottomConstraint,
-            micButton.widthAnchor.constraint(equalToConstant: 96),
-            micButton.heightAnchor.constraint(equalToConstant: 96),
+            micButton.widthAnchor.constraint(equalToConstant: 56),
+            micButton.heightAnchor.constraint(equalToConstant: 56),
 
             micRingView.centerXAnchor.constraint(equalTo: micButton.centerXAnchor),
             micRingView.centerYAnchor.constraint(equalTo: micButton.centerYAnchor),
-            micRingView.widthAnchor.constraint(equalToConstant: 124),
-            micRingView.heightAnchor.constraint(equalToConstant: 124),
-
-            statusLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
-            statusLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
-            statusLabel.bottomAnchor.constraint(equalTo: micRingView.topAnchor, constant: -16)
+            micRingView.widthAnchor.constraint(equalToConstant: 76),
+            micRingView.heightAnchor.constraint(equalToConstant: 76)
         ])
     }
 
@@ -252,7 +203,7 @@ final class EchoViewController: UIViewController {
 
     private func seedTranscriptPreview() {
         transcriptEntries = [
-            (text: "今天想从哪段记忆开始？", isUser: false)
+            (text: "我一直都在，风吹过树叶的声音就是我的回答。", isUser: false)
         ]
         reloadTranscriptPreview()
     }
@@ -266,21 +217,11 @@ final class EchoViewController: UIViewController {
     }
 
     private func reloadTranscriptPreview() {
-        transcriptStack.arrangedSubviews.forEach { view in
-            transcriptStack.removeArrangedSubview(view)
-            view.removeFromSuperview()
+        guard let latestEntry = transcriptEntries.last else {
+            return
         }
-
-        transcriptEntries.forEach { entry in
-            transcriptStack.addArrangedSubview(EchoTranscriptBubbleView(text: entry.text, isUser: entry.isUser))
-        }
-
-        view.layoutIfNeeded()
-        let bottomOffset = CGPoint(
-            x: 0,
-            y: max(0, transcriptScrollView.contentSize.height - transcriptScrollView.bounds.height)
-        )
-        transcriptScrollView.setContentOffset(bottomOffset, animated: true)
+        quoteLabel.text = latestEntry.text
+        timestampLabel.text = "刚才"
     }
 
     private func render(state: EchoInteractionState) {
@@ -312,7 +253,7 @@ final class EchoViewController: UIViewController {
     }
 
     private func configureMicButton(systemName: String, backgroundColor: UIColor, isEnabled: Bool) {
-        let config = UIImage.SymbolConfiguration(pointSize: 34, weight: .semibold)
+        let config = UIImage.SymbolConfiguration(pointSize: 28, weight: .semibold)
         micButton.setImage(UIImage(systemName: systemName, withConfiguration: config), for: .normal)
         micButton.backgroundColor = backgroundColor
         micButton.tintColor = .white
@@ -433,60 +374,6 @@ extension EchoViewController: DialogEngineDelegate {
             ConversationMemoryManager.shared.endSession()
             self.viewModel.resetToIdle()
         }
-    }
-}
-
-private final class EchoTranscriptBubbleView: UIView {
-    private let bubbleView = UIView()
-    private let label = UILabel()
-    private let isUser: Bool
-
-    init(text: String, isUser: Bool) {
-        self.isUser = isUser
-        super.init(frame: .zero)
-        setup(text: text)
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    private func setup(text: String) {
-        bubbleView.backgroundColor = isUser
-            ? DJDesignTokens.Color.accentDeep.withAlphaComponent(0.9)
-            : DJDesignTokens.Color.surface.withAlphaComponent(0.9)
-        bubbleView.layer.cornerRadius = DJDesignTokens.Radius.medium
-        bubbleView.layer.borderWidth = isUser ? 0 : 1
-        bubbleView.layer.borderColor = DJDesignTokens.Color.divider.withAlphaComponent(0.45).cgColor
-
-        label.text = text
-        label.font = DJDesignTokens.Font.body(14)
-        label.textColor = isUser ? .white : DJDesignTokens.Color.textPrimary
-        label.numberOfLines = 2
-        label.lineBreakMode = .byTruncatingTail
-
-        addSubview(bubbleView)
-        bubbleView.addSubview(label)
-        bubbleView.translatesAutoresizingMaskIntoConstraints = false
-        label.translatesAutoresizingMaskIntoConstraints = false
-
-        let leading = bubbleView.leadingAnchor.constraint(equalTo: leadingAnchor)
-        let trailing = bubbleView.trailingAnchor.constraint(equalTo: trailingAnchor)
-        leading.priority = isUser ? .defaultLow : .required
-        trailing.priority = isUser ? .required : .defaultLow
-
-        NSLayoutConstraint.activate([
-            bubbleView.topAnchor.constraint(equalTo: topAnchor),
-            bubbleView.bottomAnchor.constraint(equalTo: bottomAnchor),
-            leading,
-            trailing,
-            bubbleView.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.78),
-
-            label.topAnchor.constraint(equalTo: bubbleView.topAnchor, constant: 12),
-            label.leadingAnchor.constraint(equalTo: bubbleView.leadingAnchor, constant: 14),
-            label.trailingAnchor.constraint(equalTo: bubbleView.trailingAnchor, constant: -14),
-            label.bottomAnchor.constraint(equalTo: bubbleView.bottomAnchor, constant: -12)
-        ])
     }
 }
 

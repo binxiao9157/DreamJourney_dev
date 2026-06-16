@@ -6,7 +6,6 @@ final class ProfileViewController: UIViewController {
 
     private var careSnapshot: ProfileCareSnapshot?
     private let featureFlags: FeatureFlagService
-    private let privacyText = "仅展示关怀信号，不展示聊天原文"
 
     private let scrollView = UIScrollView()
     private let contentStack = UIStackView()
@@ -52,10 +51,10 @@ final class ProfileViewController: UIViewController {
 
         contentStack.axis = .vertical
         contentStack.alignment = .fill
-        contentStack.spacing = 16
+        contentStack.spacing = 18
         contentStack.isLayoutMarginsRelativeArrangement = true
         contentStack.directionalLayoutMargins = NSDirectionalEdgeInsets(
-            top: 24,
+            top: 34,
             leading: DJDesignTokens.Spacing.page,
             bottom: 32,
             trailing: DJDesignTokens.Spacing.page
@@ -81,21 +80,11 @@ final class ProfileViewController: UIViewController {
     }
 
     private func buildContent() {
-        let titleLabel = makeLabel(
-            text: "我的",
-            font: DJDesignTokens.Font.display(30),
-            color: DJDesignTokens.Color.textPrimary
-        )
-        contentStack.addArrangedSubview(titleLabel)
-        contentStack.setCustomSpacing(18, after: titleLabel)
-
-        contentStack.addArrangedSubview(makePersonaCard())
+        let personaView = makePersonaCard()
+        contentStack.addArrangedSubview(personaView)
+        contentStack.setCustomSpacing(28, after: personaView)
 
         if featureFlags.isEnabled(.careDashboard) {
-            let sectionLabel = DJComponentFactory.sectionLabel("长辈关怀")
-            sectionLabel.font = DJDesignTokens.Font.title(18)
-            sectionLabel.textColor = DJDesignTokens.Color.textSecondary
-            contentStack.addArrangedSubview(sectionLabel)
             contentStack.addArrangedSubview(makeCareCard(snapshot: careSnapshot))
         }
 
@@ -133,144 +122,127 @@ final class ProfileViewController: UIViewController {
     }
 
     private func makePersonaCard() -> UIView {
-        let card = DJComponentFactory.cardView(radius: DJDesignTokens.Radius.extraLarge)
+        let container = UIView()
 
         let avatarContainer = UIView()
-        avatarContainer.backgroundColor = DJDesignTokens.Color.surfaceLow
-        avatarContainer.layer.cornerRadius = 28
-        avatarContainer.layer.borderWidth = 1
+        avatarContainer.backgroundColor = DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.55)
+        avatarContainer.layer.cornerRadius = 32
+        avatarContainer.layer.borderWidth = 2
         avatarContainer.layer.borderColor = DJDesignTokens.Color.divider.cgColor
+        DJDesignTokens.applySoftShadow(to: avatarContainer)
 
         let avatarImageView = UIImageView()
-        let avatarConfig = UIImage.SymbolConfiguration(pointSize: 25, weight: .regular)
-        avatarImageView.image = UIImage(systemName: "person.fill", withConfiguration: avatarConfig)
+        let avatarConfig = UIImage.SymbolConfiguration(pointSize: 32, weight: .light)
+        avatarImageView.image = UIImage(systemName: "face.smiling", withConfiguration: avatarConfig)
         avatarImageView.tintColor = DJDesignTokens.Color.accentDeep
         avatarImageView.contentMode = .scaleAspectFit
 
+        let statusDot = UIView()
+        statusDot.backgroundColor = DJDesignTokens.Color.accent
+        statusDot.layer.cornerRadius = 7
+        statusDot.layer.borderWidth = 2
+        statusDot.layer.borderColor = DJDesignTokens.Color.surface.cgColor
+
         let titleLabel = makeLabel(
             text: "外面世界很美好",
-            font: DJDesignTokens.Font.title(22),
+            font: DJDesignTokens.Font.title(20),
             color: DJDesignTokens.Color.textPrimary
         )
+        titleLabel.textAlignment = .center
 
         let subtitleLabel = makeLabel(
-            text: "愿今天也有被记住的温暖",
-            font: DJDesignTokens.Font.body(14),
-            color: DJDesignTokens.Color.textSecondary
+            text: "今天又是阳光灿烂的一天",
+            font: DJDesignTokens.Font.label(12),
+            color: DJDesignTokens.Color.textTertiary
         )
+        subtitleLabel.textAlignment = .center
 
-        let pillLabel = makePill(text: "寻梦陪伴")
-
-        let textStack = UIStackView(arrangedSubviews: [pillLabel, titleLabel, subtitleLabel])
+        let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
         textStack.axis = .vertical
-        textStack.alignment = .leading
-        textStack.spacing = 6
+        textStack.alignment = .center
+        textStack.spacing = 5
 
-        let rowStack = UIStackView(arrangedSubviews: [avatarContainer, textStack])
-        rowStack.axis = .horizontal
-        rowStack.alignment = .center
-        rowStack.spacing = 14
+        let stack = UIStackView(arrangedSubviews: [avatarContainer, textStack])
+        stack.axis = .vertical
+        stack.alignment = .center
+        stack.spacing = 10
 
-        card.addSubview(rowStack)
+        container.addSubview(stack)
         avatarContainer.addSubview(avatarImageView)
-        rowStack.translatesAutoresizingMaskIntoConstraints = false
+        avatarContainer.addSubview(statusDot)
+        stack.translatesAutoresizingMaskIntoConstraints = false
         avatarContainer.translatesAutoresizingMaskIntoConstraints = false
         avatarImageView.translatesAutoresizingMaskIntoConstraints = false
+        statusDot.translatesAutoresizingMaskIntoConstraints = false
 
         NSLayoutConstraint.activate([
-            rowStack.topAnchor.constraint(equalTo: card.topAnchor, constant: 18),
-            rowStack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 18),
-            rowStack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -18),
-            rowStack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -18),
+            stack.topAnchor.constraint(equalTo: container.topAnchor),
+            stack.leadingAnchor.constraint(greaterThanOrEqualTo: container.leadingAnchor),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor),
+            stack.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor),
 
-            avatarContainer.widthAnchor.constraint(equalToConstant: 56),
-            avatarContainer.heightAnchor.constraint(equalToConstant: 56),
+            avatarContainer.widthAnchor.constraint(equalToConstant: 64),
+            avatarContainer.heightAnchor.constraint(equalToConstant: 64),
 
             avatarImageView.centerXAnchor.constraint(equalTo: avatarContainer.centerXAnchor),
             avatarImageView.centerYAnchor.constraint(equalTo: avatarContainer.centerYAnchor),
-            avatarImageView.widthAnchor.constraint(equalToConstant: 30),
-            avatarImageView.heightAnchor.constraint(equalToConstant: 30),
+            avatarImageView.widthAnchor.constraint(equalToConstant: 34),
+            avatarImageView.heightAnchor.constraint(equalToConstant: 34),
+
+            statusDot.trailingAnchor.constraint(equalTo: avatarContainer.trailingAnchor, constant: -2),
+            statusDot.bottomAnchor.constraint(equalTo: avatarContainer.bottomAnchor, constant: -2),
+            statusDot.widthAnchor.constraint(equalToConstant: 14),
+            statusDot.heightAnchor.constraint(equalToConstant: 14),
         ])
 
-        return card
+        return container
     }
 
     private func makeCareCard(snapshot: ProfileCareSnapshot?) -> UIView {
         let card = DJComponentFactory.cardView(radius: DJDesignTokens.Radius.large)
 
         let titleLabel = makeLabel(
-            text: snapshot?.moodTitle ?? "心境追踪",
+            text: "心境追踪",
             font: DJDesignTokens.Font.title(20),
             color: DJDesignTokens.Color.textPrimary
         )
-        let statusPill = makePill(text: snapshot?.moodStatus ?? "待同步")
+        let iconView = UIImageView()
+        let iconConfig = UIImage.SymbolConfiguration(pointSize: 18, weight: .regular)
+        iconView.image = UIImage(systemName: "drop", withConfiguration: iconConfig)
+        iconView.tintColor = DJDesignTokens.Color.accentDeep
+        iconView.contentMode = .scaleAspectFit
 
-        let headerStack = UIStackView(arrangedSubviews: [titleLabel, UIView(), statusPill])
+        let titleStack = UIStackView(arrangedSubviews: [iconView, titleLabel])
+        titleStack.axis = .horizontal
+        titleStack.alignment = .center
+        titleStack.spacing = 8
+
+        let statusPill = makePill(text: snapshot?.moodStatus ?? "平稳")
+
+        let headerStack = UIStackView(arrangedSubviews: [titleStack, UIView(), statusPill])
         headerStack.axis = .horizontal
         headerStack.alignment = .center
         headerStack.spacing = 12
 
-        let privacyLabel = makeLabel(
-            text: privacyText,
-            font: DJDesignTokens.Font.body(13),
-            color: DJDesignTokens.Color.textTertiary
-        )
+        let meterView = ProfileSignalBarView(value: snapshot?.emotionalIndex ?? 0.8)
+        let doctorRow = makeDoctorRow()
 
-        var arrangedSubviews: [UIView] = [headerStack, privacyLabel]
-        if let snapshot {
-            let statusLabel = makeLabel(
-                text: "当前关怀信号",
-                font: DJDesignTokens.Font.label(12),
-                color: DJDesignTokens.Color.textSecondary
-            )
-            let meterView = ProfileSignalBarView(value: snapshot.emotionalIndex)
-
-            let signalStack = UIStackView(arrangedSubviews: [statusLabel, meterView])
-            signalStack.axis = .vertical
-            signalStack.spacing = 8
-
-            let metrics = [
-                ProfileCareMetric(
-                    title: "情绪信号",
-                    value: snapshot.emotionalIndex,
-                    status: ProfileCareCopy.signalPercent(snapshot.emotionalIndex)
-                ),
-                ProfileCareMetric(
-                    title: "认知互动",
-                    value: snapshot.cognitiveIndex,
-                    status: ProfileCareCopy.signalPercent(snapshot.cognitiveIndex)
-                ),
-                ProfileCareMetric(
-                    title: "睡眠节律",
-                    value: 0,
-                    status: snapshot.sleepStatus
-                ),
-                ProfileCareMetric(
-                    title: "陪伴需求",
-                    value: snapshot.lonelinessIndex,
-                    status: ProfileCareCopy.signalPercent(snapshot.lonelinessIndex)
-                ),
-            ]
-
-            arrangedSubviews.append(signalStack)
-            arrangedSubviews.append(makeMetricsGrid(metrics))
-            arrangedSubviews.append(makeReminderView(text: snapshot.riskReminder))
-            arrangedSubviews.append(makeDoctorRow())
-        } else {
-            arrangedSubviews.append(makeCareEmptyState())
-        }
-
-        let stack = UIStackView(arrangedSubviews: arrangedSubviews)
+        let stack = UIStackView(arrangedSubviews: [headerStack, meterView, doctorRow])
         stack.axis = .vertical
-        stack.spacing = 14
+        stack.spacing = 16
 
         card.addSubview(stack)
+        iconView.translatesAutoresizingMaskIntoConstraints = false
         stack.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: DJDesignTokens.Spacing.card),
-            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: DJDesignTokens.Spacing.card),
-            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -DJDesignTokens.Spacing.card),
-            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -DJDesignTokens.Spacing.card),
+            iconView.widthAnchor.constraint(equalToConstant: 20),
+            iconView.heightAnchor.constraint(equalToConstant: 20),
+
+            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 20),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16),
         ])
 
         return card
@@ -311,152 +283,6 @@ final class ProfileViewController: UIViewController {
         ])
 
         return card
-    }
-
-    private func makeMetricsGrid(_ metrics: [ProfileCareMetric]) -> UIView {
-        let firstRow = UIStackView(arrangedSubviews: metrics.prefix(2).map(makeMetricView))
-        firstRow.axis = .horizontal
-        firstRow.distribution = .fillEqually
-        firstRow.spacing = 10
-
-        let secondRow = UIStackView(arrangedSubviews: metrics.dropFirst(2).map(makeMetricView))
-        secondRow.axis = .horizontal
-        secondRow.distribution = .fillEqually
-        secondRow.spacing = 10
-
-        let stack = UIStackView(arrangedSubviews: [firstRow, secondRow])
-        stack.axis = .vertical
-        stack.spacing = 10
-        return stack
-    }
-
-    private func makeCareEmptyState() -> UIView {
-        let container = UIView()
-        container.backgroundColor = DJDesignTokens.Color.surfaceLow
-        container.layer.cornerRadius = DJDesignTokens.Radius.medium
-
-        let iconView = UIImageView()
-        let config = UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
-        iconView.image = UIImage(systemName: "clock.arrow.circlepath", withConfiguration: config)
-        iconView.tintColor = DJDesignTokens.Color.accentDeep
-        iconView.contentMode = .scaleAspectFit
-
-        let titleLabel = makeLabel(
-            text: "关怀信号正在同步",
-            font: DJDesignTokens.Font.title(16),
-            color: DJDesignTokens.Color.textPrimary
-        )
-        let bodyLabel = makeLabel(
-            text: "连接真实数据后，将展示趋势信号与关怀建议。",
-            font: DJDesignTokens.Font.body(13),
-            color: DJDesignTokens.Color.textSecondary
-        )
-
-        let labelStack = UIStackView(arrangedSubviews: [titleLabel, bodyLabel])
-        labelStack.axis = .vertical
-        labelStack.spacing = 4
-
-        let rowStack = UIStackView(arrangedSubviews: [iconView, labelStack])
-        rowStack.axis = .horizontal
-        rowStack.alignment = .top
-        rowStack.spacing = 10
-
-        container.addSubview(rowStack)
-        rowStack.translatesAutoresizingMaskIntoConstraints = false
-        iconView.translatesAutoresizingMaskIntoConstraints = false
-
-        NSLayoutConstraint.activate([
-            rowStack.topAnchor.constraint(equalTo: container.topAnchor, constant: 14),
-            rowStack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 14),
-            rowStack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -14),
-            rowStack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -14),
-
-            iconView.widthAnchor.constraint(equalToConstant: 22),
-            iconView.heightAnchor.constraint(equalToConstant: 22),
-        ])
-
-        return container
-    }
-
-    private func makeMetricView(metric: ProfileCareMetric) -> UIView {
-        let container = UIView()
-        container.backgroundColor = DJDesignTokens.Color.surfaceLow
-        container.layer.cornerRadius = DJDesignTokens.Radius.medium
-
-        let titleLabel = makeLabel(
-            text: metric.title,
-            font: DJDesignTokens.Font.body(13),
-            color: DJDesignTokens.Color.textTertiary
-        )
-        let statusLabel = makeLabel(
-            text: metric.status,
-            font: DJDesignTokens.Font.title(18),
-            color: DJDesignTokens.Color.textPrimary
-        )
-
-        let stack = UIStackView(arrangedSubviews: [titleLabel, statusLabel])
-        stack.axis = .vertical
-        stack.spacing = 4
-
-        container.addSubview(stack)
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
-            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
-            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
-            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12),
-            container.heightAnchor.constraint(greaterThanOrEqualToConstant: 72),
-        ])
-
-        return container
-    }
-
-    private func makeReminderView(text: String) -> UIView {
-        let container = UIView()
-        container.backgroundColor = DJDesignTokens.Color.surfaceContainer
-        container.layer.cornerRadius = DJDesignTokens.Radius.medium
-
-        let iconView = UIImageView()
-        let config = UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
-        iconView.image = UIImage(systemName: "bell.badge", withConfiguration: config)
-        iconView.tintColor = DJDesignTokens.Color.accentDeep
-        iconView.contentMode = .scaleAspectFit
-
-        let titleLabel = makeLabel(
-            text: "风险提醒",
-            font: DJDesignTokens.Font.label(12),
-            color: DJDesignTokens.Color.accentDeep
-        )
-        let bodyLabel = makeLabel(
-            text: text,
-            font: DJDesignTokens.Font.body(14),
-            color: DJDesignTokens.Color.textSecondary
-        )
-
-        let labelStack = UIStackView(arrangedSubviews: [titleLabel, bodyLabel])
-        labelStack.axis = .vertical
-        labelStack.spacing = 3
-
-        let rowStack = UIStackView(arrangedSubviews: [iconView, labelStack])
-        rowStack.axis = .horizontal
-        rowStack.alignment = .top
-        rowStack.spacing = 10
-
-        container.addSubview(rowStack)
-        rowStack.translatesAutoresizingMaskIntoConstraints = false
-        iconView.translatesAutoresizingMaskIntoConstraints = false
-
-        NSLayoutConstraint.activate([
-            rowStack.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
-            rowStack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
-            rowStack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
-            rowStack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12),
-
-            iconView.widthAnchor.constraint(equalToConstant: 18),
-            iconView.heightAnchor.constraint(equalToConstant: 18),
-        ])
-
-        return container
     }
 
     private func makeDoctorRow() -> UIView {
@@ -622,15 +448,15 @@ private enum ProfileRowAction {
     var iconName: String {
         switch self {
         case .profileSettings:
-            return "person.text.rectangle"
+            return "chevron.right"
         case .familyManagement:
-            return "person.2"
+            return "chevron.right"
         case .legalCenter:
-            return "doc.text"
+            return "chevron.right"
         case .logout:
             return "rectangle.portrait.and.arrow.right"
         case .accountDeletion:
-            return "person.crop.circle.badge.xmark"
+            return "trash"
         }
     }
 
@@ -643,24 +469,14 @@ private enum ProfileRowAction {
         }
     }
 
-    var showsChevron: Bool {
-        switch self {
-        case .logout:
-            return false
-        case .profileSettings, .familyManagement, .legalCenter, .accountDeletion:
-            return true
-        }
-    }
 }
 
 private final class ProfileActionRow: UIControl {
 
     let action: ProfileRowAction
 
-    private let iconContainer = UIView()
-    private let iconView = UIImageView()
     private let titleLabel = UILabel()
-    private let chevronView = UIImageView()
+    private let trailingIconView = UIImageView()
     private let dividerView = UIView()
 
     init(action: ProfileRowAction, isLast: Bool) {
@@ -683,61 +499,38 @@ private final class ProfileActionRow: UIControl {
         accessibilityTraits = .button
         accessibilityLabel = action.title
 
-        iconContainer.backgroundColor = action.isDestructive
-            ? DJDesignTokens.Color.danger.withAlphaComponent(0.08)
-            : DJDesignTokens.Color.surfaceLow
-        iconContainer.layer.cornerRadius = 17
-
-        let iconConfig = UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)
-        iconView.image = UIImage(systemName: action.iconName, withConfiguration: iconConfig)
-        iconView.tintColor = action.isDestructive
-            ? DJDesignTokens.Color.danger
-            : DJDesignTokens.Color.accentDeep
-        iconView.contentMode = .scaleAspectFit
-
         titleLabel.text = action.title
         titleLabel.font = DJDesignTokens.Font.body(15)
         titleLabel.textColor = action.isDestructive
             ? DJDesignTokens.Color.danger
             : DJDesignTokens.Color.textPrimary
 
-        let chevronConfig = UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
-        chevronView.image = UIImage(systemName: "chevron.right", withConfiguration: chevronConfig)
-        chevronView.tintColor = DJDesignTokens.Color.textTertiary
-        chevronView.contentMode = .scaleAspectFit
-        chevronView.isHidden = !action.showsChevron
+        let trailingConfig = UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
+        trailingIconView.image = UIImage(systemName: action.iconName, withConfiguration: trailingConfig)
+        trailingIconView.tintColor = action.isDestructive
+            ? DJDesignTokens.Color.danger.withAlphaComponent(0.72)
+            : DJDesignTokens.Color.textTertiary
+        trailingIconView.contentMode = .scaleAspectFit
 
         dividerView.backgroundColor = DJDesignTokens.Color.divider.withAlphaComponent(0.6)
         dividerView.isHidden = isLast
 
-        [iconContainer, titleLabel, chevronView, dividerView].forEach {
+        [titleLabel, trailingIconView, dividerView].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             addSubview($0)
         }
-        iconContainer.addSubview(iconView)
-        iconView.translatesAutoresizingMaskIntoConstraints = false
 
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(greaterThanOrEqualToConstant: 58),
+            heightAnchor.constraint(greaterThanOrEqualToConstant: 56),
 
-            iconContainer.leadingAnchor.constraint(equalTo: leadingAnchor),
-            iconContainer.centerYAnchor.constraint(equalTo: centerYAnchor),
-            iconContainer.widthAnchor.constraint(equalToConstant: 34),
-            iconContainer.heightAnchor.constraint(equalToConstant: 34),
-
-            iconView.centerXAnchor.constraint(equalTo: iconContainer.centerXAnchor),
-            iconView.centerYAnchor.constraint(equalTo: iconContainer.centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: 18),
-            iconView.heightAnchor.constraint(equalToConstant: 18),
-
-            titleLabel.leadingAnchor.constraint(equalTo: iconContainer.trailingAnchor, constant: 12),
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
             titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: chevronView.leadingAnchor, constant: -8),
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingIconView.leadingAnchor, constant: -8),
 
-            chevronView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            chevronView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            chevronView.widthAnchor.constraint(equalToConstant: 14),
-            chevronView.heightAnchor.constraint(equalToConstant: 14),
+            trailingIconView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            trailingIconView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            trailingIconView.widthAnchor.constraint(equalToConstant: 18),
+            trailingIconView.heightAnchor.constraint(equalToConstant: 18),
 
             dividerView.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             dividerView.trailingAnchor.constraint(equalTo: trailingAnchor),
@@ -750,9 +543,8 @@ private final class ProfileActionRow: UIControl {
 private final class ProfileSignalBarView: UIView {
 
     private let value: CGFloat
-    private let trackView = UIView()
-    private let fillView = UIView()
-    private let thumbView = UIView()
+    private let waveLayer = CAShapeLayer()
+    private let thumbLayer = CAShapeLayer()
 
     init(value: Double) {
         self.value = min(max(CGFloat(value), 0.08), 0.96)
@@ -766,40 +558,38 @@ private final class ProfileSignalBarView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        trackView.layer.cornerRadius = trackView.bounds.height / 2
-        fillView.layer.cornerRadius = fillView.bounds.height / 2
-        thumbView.layer.cornerRadius = thumbView.bounds.height / 2
+        let inset: CGFloat = 8
+        let width = max(bounds.width - inset * 2, 1)
+        let centerY = bounds.midY
+        let path = UIBezierPath()
+        path.move(to: CGPoint(x: inset, y: centerY))
+        path.addCurve(
+            to: CGPoint(x: bounds.maxX - inset, y: centerY),
+            controlPoint1: CGPoint(x: inset + width * 0.28, y: centerY - 8),
+            controlPoint2: CGPoint(x: inset + width * 0.62, y: centerY + 8)
+        )
+        waveLayer.path = path.cgPath
+
+        let thumbX = inset + width * value
+        thumbLayer.path = UIBezierPath(
+            ovalIn: CGRect(x: thumbX - 4, y: centerY - 4, width: 8, height: 8)
+        ).cgPath
     }
 
     private func setupView() {
-        trackView.backgroundColor = DJDesignTokens.Color.surfaceContainer
-        fillView.backgroundColor = DJDesignTokens.Color.accent
-        thumbView.backgroundColor = DJDesignTokens.Color.surface
-        thumbView.layer.borderWidth = 3
-        thumbView.layer.borderColor = DJDesignTokens.Color.accent.cgColor
+        backgroundColor = .clear
+        waveLayer.fillColor = UIColor.clear.cgColor
+        waveLayer.strokeColor = DJDesignTokens.Color.divider.cgColor
+        waveLayer.lineWidth = 2
+        waveLayer.lineCap = .round
 
-        [trackView, fillView, thumbView].forEach {
-            $0.translatesAutoresizingMaskIntoConstraints = false
-            addSubview($0)
-        }
+        thumbLayer.fillColor = DJDesignTokens.Color.accent.withAlphaComponent(0.72).cgColor
+
+        layer.addSublayer(waveLayer)
+        layer.addSublayer(thumbLayer)
 
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: 24),
-
-            trackView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            trackView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            trackView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            trackView.heightAnchor.constraint(equalToConstant: 8),
-
-            fillView.leadingAnchor.constraint(equalTo: trackView.leadingAnchor),
-            fillView.centerYAnchor.constraint(equalTo: trackView.centerYAnchor),
-            fillView.heightAnchor.constraint(equalTo: trackView.heightAnchor),
-            fillView.widthAnchor.constraint(equalTo: trackView.widthAnchor, multiplier: value),
-
-            thumbView.centerXAnchor.constraint(equalTo: fillView.trailingAnchor),
-            thumbView.centerYAnchor.constraint(equalTo: trackView.centerYAnchor),
-            thumbView.widthAnchor.constraint(equalToConstant: 18),
-            thumbView.heightAnchor.constraint(equalToConstant: 18),
+            heightAnchor.constraint(equalToConstant: 64),
         ])
     }
 }
