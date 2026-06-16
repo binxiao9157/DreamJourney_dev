@@ -20,6 +20,7 @@ final class FeatureFlagService {
     private static let defaultEnabled: Set<DJFeature> = [
         .familyManagement,
         .legalCenter,
+        .accountDeletion,
         .careDashboard,
     ]
 

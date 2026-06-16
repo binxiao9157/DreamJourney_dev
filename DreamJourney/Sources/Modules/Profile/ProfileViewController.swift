@@ -392,7 +392,10 @@ final class ProfileViewController: UIViewController {
         case .logout:
             UserManager.shared.logout()
         case .accountDeletion:
-            showUnavailableAlert()
+            showUnavailableAlert(
+                title: "注销账户暂未开放",
+                message: "账号注销需要完整确认与合规流程，后续版本会提供。"
+            )
         }
     }
 
