@@ -56,7 +56,7 @@ final class MemoryArchiveViewController: UIViewController {
         scrollView.verticalScrollIndicatorInsets.bottom = DJDesignTokens.Spacing.tabBarHeight + DJDesignTokens.Spacing.page
 
         mainStack.axis = .vertical
-        mainStack.spacing = DJDesignTokens.Spacing.card
+        mainStack.spacing = DJDesignTokens.Spacing.page
         mainStack.layoutMargins = UIEdgeInsets(
             top: DJDesignTokens.Spacing.page,
             left: DJDesignTokens.Spacing.page,
@@ -66,7 +66,7 @@ final class MemoryArchiveViewController: UIViewController {
         mainStack.isLayoutMarginsRelativeArrangement = true
 
         featureCardsStack.axis = .vertical
-        featureCardsStack.spacing = 12
+        featureCardsStack.spacing = 0
 
         listStack.axis = .vertical
         listStack.spacing = 12
@@ -97,12 +97,15 @@ final class MemoryArchiveViewController: UIViewController {
             mainStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
         ])
 
-        mainStack.addArrangedSubview(makeHeader())
-        mainStack.addArrangedSubview(makePrimaryCTA())
-        mainStack.addArrangedSubview(makeSummaryCard())
+        let header = makeHeader()
+        mainStack.addArrangedSubview(header)
         mainStack.addArrangedSubview(featureCardsStack)
-        mainStack.addArrangedSubview(makeSectionHeader(title: "时间胶囊", subtitle: "按时间保存那些值得回看的片段"))
+        mainStack.addArrangedSubview(makePrimaryCTA())
+        mainStack.addArrangedSubview(makeTimelineHeader())
         mainStack.addArrangedSubview(listStack)
+        mainStack.setCustomSpacing(DJDesignTokens.Spacing.section, after: header)
+        mainStack.setCustomSpacing(DJDesignTokens.Spacing.section, after: featureCardsStack)
+        mainStack.setCustomSpacing(DJDesignTokens.Spacing.section, after: listStack)
     }
 
     private func refreshContent() {
@@ -117,32 +120,7 @@ final class MemoryArchiveViewController: UIViewController {
     private func reloadFeatureCards(summary: (total: Int, photos: Int, audio: Int, text: Int)) {
         featureCardsStack.removeAllArrangedSubviews()
 
-        featureCardsStack.addArrangedSubview(makeFeatureCard(
-            iconName: "photo.on.rectangle.angled",
-            title: "相册影像",
-            detail: "已收纳 \(summary.photos) 张照片",
-            action: #selector(selectPhotoTapped)
-        ))
-        featureCardsStack.addArrangedSubview(makeFeatureCard(
-            iconName: "waveform",
-            title: "语音档案",
-            detail: "已沉淀 \(summary.audio) 段声音素材",
-            action: nil
-        ))
-        featureCardsStack.addArrangedSubview(makeFeatureCard(
-            iconName: "person.text.rectangle",
-            title: "人格设定",
-            detail: "管理称呼、关系与偏好线索",
-            action: #selector(personaCardTapped)
-        ))
-        if FeatureFlagService.shared.isEnabled(.timeLetters) {
-            featureCardsStack.addArrangedSubview(makeFeatureCard(
-                iconName: "map",
-                title: "时光足迹",
-                detail: "按地点回看已开放的记忆片段",
-                action: #selector(mapFootprintTapped)
-            ))
-        }
+        featureCardsStack.addArrangedSubview(makeFeatureGrid(summary: summary))
     }
 
     private func reloadArchiveList() {
@@ -166,12 +144,12 @@ final class MemoryArchiveViewController: UIViewController {
 
         let titleLabel = UILabel()
         titleLabel.text = "记忆档案馆"
-        titleLabel.font = DJDesignTokens.Font.display(34)
+        titleLabel.font = DJDesignTokens.Font.display(40)
         titleLabel.textColor = DJDesignTokens.Color.textPrimary
         titleLabel.numberOfLines = 0
 
         let subtitleLabel = UILabel()
-        subtitleLabel.text = "整理、回顾与珍藏那些不愿遗忘的片段"
+        subtitleLabel.text = "在此处整理、回顾与珍藏那些不愿遗忘的片段。"
         subtitleLabel.font = DJDesignTokens.Font.body(16)
         subtitleLabel.textColor = DJDesignTokens.Color.textSecondary
         subtitleLabel.numberOfLines = 0
@@ -181,14 +159,70 @@ final class MemoryArchiveViewController: UIViewController {
         return stack
     }
 
-    private func makePrimaryCTA() -> UIButton {
-        let button = DJComponentFactory.primaryButton(
-            title: "封存新记忆",
-            target: self,
-            action: #selector(archiveNewMemoryTapped(_:))
-        )
-        button.heightAnchor.constraint(equalToConstant: 52).isActive = true
-        return button
+    private func makePrimaryCTA() -> UIControl {
+        let control = UIControl()
+        control.backgroundColor = DJDesignTokens.Color.accent
+        control.layer.cornerRadius = DJDesignTokens.Radius.extraLarge
+        control.addTarget(self, action: #selector(archiveNewMemoryTapped(_:)), for: .touchUpInside)
+        DJDesignTokens.applySoftShadow(to: control)
+
+        let iconContainer = UIView()
+        iconContainer.backgroundColor = UIColor.white.withAlphaComponent(0.2)
+        iconContainer.layer.cornerRadius = 32
+        iconContainer.isUserInteractionEnabled = false
+
+        let iconView = UIImageView(image: UIImage(systemName: "plus"))
+        iconView.tintColor = DJDesignTokens.Color.accentDeep
+        iconView.contentMode = .scaleAspectFit
+
+        let titleLabel = UILabel()
+        titleLabel.text = "封存新记忆"
+        titleLabel.font = DJDesignTokens.Font.title(20)
+        titleLabel.textColor = DJDesignTokens.Color.accentDeep
+        titleLabel.textAlignment = .center
+
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = "文字、图片或声音"
+        subtitleLabel.font = DJDesignTokens.Font.body(16)
+        subtitleLabel.textColor = DJDesignTokens.Color.accentDeep.withAlphaComponent(0.78)
+        subtitleLabel.textAlignment = .center
+
+        let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
+        textStack.axis = .vertical
+        textStack.alignment = .center
+        textStack.spacing = 4
+        textStack.isUserInteractionEnabled = false
+
+        let stack = UIStackView(arrangedSubviews: [iconContainer, textStack])
+        stack.axis = .vertical
+        stack.alignment = .center
+        stack.spacing = 14
+        stack.isUserInteractionEnabled = false
+
+        control.addSubview(stack)
+        iconContainer.addSubview(iconView)
+        [stack, iconContainer, iconView].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
+
+        NSLayoutConstraint.activate([
+            control.heightAnchor.constraint(equalToConstant: 160),
+
+            stack.centerXAnchor.constraint(equalTo: control.centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: control.centerYAnchor),
+            stack.leadingAnchor.constraint(greaterThanOrEqualTo: control.leadingAnchor, constant: 24),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: control.trailingAnchor, constant: -24),
+
+            iconContainer.widthAnchor.constraint(equalToConstant: 64),
+            iconContainer.heightAnchor.constraint(equalToConstant: 64),
+
+            iconView.centerXAnchor.constraint(equalTo: iconContainer.centerXAnchor),
+            iconView.centerYAnchor.constraint(equalTo: iconContainer.centerYAnchor),
+            iconView.widthAnchor.constraint(equalToConstant: 30),
+            iconView.heightAnchor.constraint(equalToConstant: 30),
+        ])
+
+        control.accessibilityTraits = .button
+        control.accessibilityLabel = "封存新记忆，文字、图片或声音"
+        return control
     }
 
     private func makeSummaryCard() -> UIView {
@@ -229,81 +263,133 @@ final class MemoryArchiveViewController: UIViewController {
         return card
     }
 
-    private func makeSectionHeader(title: String, subtitle: String) -> UIView {
+    private func makeTimelineHeader() -> UIView {
         let stack = UIStackView()
-        stack.axis = .vertical
-        stack.spacing = 4
+        stack.alignment = .center
+        stack.spacing = 12
 
-        let titleLabel = DJComponentFactory.sectionLabel(title)
+        let titleLabel = DJComponentFactory.sectionLabel("时间胶囊")
+        titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        let subtitleLabel = UILabel()
-        subtitleLabel.text = subtitle
-        subtitleLabel.font = DJDesignTokens.Font.body(13)
-        subtitleLabel.textColor = DJDesignTokens.Color.textTertiary
-        subtitleLabel.numberOfLines = 0
+        let sortButton = UIButton(type: .system)
+        sortButton.setTitle("按时间排序", for: .normal)
+        sortButton.titleLabel?.font = DJDesignTokens.Font.label(12)
+        sortButton.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
+        sortButton.setImage(UIImage(systemName: "arrow.up.arrow.down"), for: .normal)
+        sortButton.tintColor = DJDesignTokens.Color.accentDeep
+        sortButton.semanticContentAttribute = .forceRightToLeft
+        sortButton.contentHorizontalAlignment = .trailing
 
         stack.addArrangedSubview(titleLabel)
-        stack.addArrangedSubview(subtitleLabel)
+        stack.addArrangedSubview(sortButton)
         return stack
     }
 
-    private func makeFeatureCard(iconName: String, title: String, detail: String, action: Selector?) -> UIView {
-        let card = DJComponentFactory.cardView(radius: DJDesignTokens.Radius.medium)
-        let stack = UIStackView()
-        stack.alignment = .center
-        stack.spacing = 14
+    private func makeFeatureGrid(summary: (total: Int, photos: Int, audio: Int, text: Int)) -> UIView {
+        let photoCard = makeFeatureTile(
+            iconName: "photo.on.rectangle.angled",
+            title: "相册影像",
+            detail: "\(summary.photos) 个瞬间",
+            isLarge: true,
+            action: #selector(selectPhotoTapped)
+        )
 
-        let iconContainer = makeIconContainer(iconName: iconName, tintColor: DJDesignTokens.Color.accent)
+        let voiceCard = makeFeatureTile(
+            iconName: "waveform",
+            title: "语音档案",
+            detail: nil,
+            isLarge: false,
+            action: nil
+        )
 
-        let textStack = UIStackView()
-        textStack.axis = .vertical
-        textStack.spacing = 4
+        let personaCard = makeFeatureTile(
+            iconName: "slider.horizontal.3",
+            title: "人格设定",
+            detail: nil,
+            isLarge: false,
+            action: #selector(personaCardTapped)
+        )
+
+        let rightColumn = UIStackView(arrangedSubviews: [voiceCard, personaCard])
+        rightColumn.axis = .vertical
+        rightColumn.spacing = 16
+        rightColumn.distribution = .fillEqually
+
+        let grid = UIStackView(arrangedSubviews: [photoCard, rightColumn])
+        grid.axis = .horizontal
+        grid.spacing = 16
+        grid.distribution = .fillEqually
+
+        NSLayoutConstraint.activate([
+            photoCard.heightAnchor.constraint(equalToConstant: 148),
+        ])
+
+        return grid
+    }
+
+    private func makeFeatureTile(
+        iconName: String,
+        title: String,
+        detail: String?,
+        isLarge: Bool,
+        action: Selector?
+    ) -> UIControl {
+        let control = UIControl()
+        control.backgroundColor = DJDesignTokens.Color.surface
+        control.layer.cornerRadius = DJDesignTokens.Radius.large
+        control.layer.borderWidth = 1
+        control.layer.borderColor = DJDesignTokens.Color.divider.withAlphaComponent(0.48).cgColor
+        control.addTarget(self, action: action ?? #selector(disabledFeatureTapped), for: .touchUpInside)
+        DJDesignTokens.applySoftShadow(to: control)
+
+        let iconContainer = makeIconContainer(iconName: iconName, tintColor: DJDesignTokens.Color.accentDeep)
+        iconContainer.backgroundColor = isLarge
+            ? DJDesignTokens.Color.surfaceContainer
+            : DJDesignTokens.Color.surfaceLow
 
         let titleLabel = UILabel()
         titleLabel.text = title
-        titleLabel.font = DJDesignTokens.Font.title(17)
+        titleLabel.font = isLarge ? DJDesignTokens.Font.title(20) : DJDesignTokens.Font.title(16)
         titleLabel.textColor = DJDesignTokens.Color.textPrimary
         titleLabel.numberOfLines = 1
+        titleLabel.adjustsFontSizeToFitWidth = true
+        titleLabel.minimumScaleFactor = 0.82
 
-        let detailLabel = UILabel()
-        detailLabel.text = detail
-        detailLabel.font = DJDesignTokens.Font.body(13)
-        detailLabel.textColor = DJDesignTokens.Color.textSecondary
-        detailLabel.numberOfLines = 0
+        let textStack = UIStackView(arrangedSubviews: [titleLabel])
+        textStack.axis = .vertical
+        textStack.spacing = 4
 
-        let chevron = UIImageView(image: UIImage(systemName: "chevron.right"))
-        chevron.tintColor = action == nil ? DJDesignTokens.Color.divider : DJDesignTokens.Color.textTertiary
-        chevron.setContentHuggingPriority(.required, for: .horizontal)
-
-        card.addSubview(stack)
-        [stack, iconContainer, textStack, titleLabel, detailLabel, chevron].forEach {
-            $0.translatesAutoresizingMaskIntoConstraints = false
+        if let detail {
+            let detailLabel = UILabel()
+            detailLabel.text = detail
+            detailLabel.font = DJDesignTokens.Font.label(12)
+            detailLabel.textColor = DJDesignTokens.Color.textSecondary
+            detailLabel.numberOfLines = 1
+            textStack.addArrangedSubview(detailLabel)
         }
 
-        textStack.addArrangedSubview(titleLabel)
-        textStack.addArrangedSubview(detailLabel)
+        let stack = UIStackView(arrangedSubviews: [iconContainer, textStack])
+        stack.axis = isLarge ? .vertical : .horizontal
+        stack.alignment = isLarge ? .leading : .center
+        stack.spacing = isLarge ? 18 : 12
+        stack.isUserInteractionEnabled = false
 
-        stack.addArrangedSubview(iconContainer)
-        stack.addArrangedSubview(textStack)
-        stack.addArrangedSubview(chevron)
+        control.addSubview(stack)
+        [stack, iconContainer].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
 
         NSLayoutConstraint.activate([
-            iconContainer.widthAnchor.constraint(equalToConstant: 44),
-            iconContainer.heightAnchor.constraint(equalToConstant: 44),
-            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
-            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
-            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
-            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16),
+            iconContainer.widthAnchor.constraint(equalToConstant: isLarge ? 40 : 32),
+            iconContainer.heightAnchor.constraint(equalToConstant: isLarge ? 40 : 32),
+
+            stack.topAnchor.constraint(equalTo: control.topAnchor, constant: isLarge ? 20 : 16),
+            stack.leadingAnchor.constraint(equalTo: control.leadingAnchor, constant: isLarge ? 20 : 14),
+            stack.trailingAnchor.constraint(equalTo: control.trailingAnchor, constant: isLarge ? -20 : -14),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: control.bottomAnchor, constant: isLarge ? -20 : -16),
         ])
 
-        if let action = action {
-            card.isAccessibilityElement = true
-            card.accessibilityTraits = .button
-            card.accessibilityLabel = title
-            card.addGestureRecognizer(UITapGestureRecognizer(target: self, action: action))
-        }
-
-        return card
+        control.accessibilityTraits = .button
+        control.accessibilityLabel = detail == nil ? title : "\(title)，\(detail ?? "")"
+        return control
     }
 
     private func makeArchiveItemRow(_ item: MemoryArchiveItem) -> UIView {
@@ -473,10 +559,14 @@ final class MemoryArchiveViewController: UIViewController {
         return label
     }
 
-    @objc private func archiveNewMemoryTapped(_ sender: UIButton) {
+    @objc private func archiveNewMemoryTapped(_ sender: UIControl) {
         let sheet = MemoryArchiveCreationSheetViewController(options: creationOptions)
         sheet.delegate = self
         present(sheet, animated: true)
+    }
+
+    @objc private func disabledFeatureTapped() {
+        showToast("该入口将在后续开放", type: .info)
     }
 
     @objc private func archiveItemTapped(_ sender: MemoryArchiveItemRowControl) {

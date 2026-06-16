@@ -30,13 +30,14 @@ final class WarmTabBarController: UITabBarController {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        // 动态更新 WarmTabBar 的高度（适配 Safe Area）
         let safeBottom = view.safeAreaInsets.bottom
-        let barHeight: CGFloat = WarmTabBarView.tabBarHeight + safeBottom
+        let horizontalInset: CGFloat = DJDesignTokens.Spacing.page
+        let bottomInset: CGFloat = 16 + safeBottom
+        let barHeight: CGFloat = WarmTabBarView.tabBarHeight
         warmTabBar.frame = CGRect(
-            x: 0,
-            y: view.bounds.height - barHeight,
-            width: view.bounds.width,
+            x: horizontalInset,
+            y: view.bounds.height - bottomInset - barHeight,
+            width: view.bounds.width - horizontalInset * 2,
             height: barHeight
         )
         warmTabBar.safeBottom = safeBottom
@@ -86,11 +87,12 @@ final class WarmTabBarView: UIView {
     }
 
     static let defaultItems: [TabItem] = [
-        TabItem(iconName: "archivebox", iconNameFill: "archivebox.fill", title: "记忆档案"),
-        TabItem(iconName: "mic", iconNameFill: "mic.fill", title: "回响"),
+        TabItem(iconName: "folder", iconNameFill: "folder.fill", title: "记忆档案"),
+        TabItem(iconName: "building.columns", iconNameFill: "building.columns.fill", title: "回响"),
         TabItem(iconName: "person", iconNameFill: "person.fill", title: "我的"),
     ]
 
+    private let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialLight))
     private let items: [TabItem]
     private var buttons: [UIButton] = []
     private var selectedCircles: [UIView] = []
@@ -112,19 +114,21 @@ final class WarmTabBarView: UIView {
 
     // MARK: - Setup
     private func setupView() {
-        backgroundColor = .warmBackground
+        backgroundColor = .clear
+        layer.cornerRadius = Self.tabBarHeight / 2
+        layer.borderWidth = 1
+        layer.borderColor = DJDesignTokens.Color.divider.withAlphaComponent(0.32).cgColor
+        layer.shadowColor = UIColor(hex: "#8C7B6D").cgColor
+        layer.shadowOpacity = 0.10
+        layer.shadowOffset = CGSize(width: 0, height: -10)
+        layer.shadowRadius = 40
 
-        // 顶部 0.5px 分割线
-        let divider = UIView()
-        divider.backgroundColor = .warmDivider
-        divider.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(divider)
-        NSLayoutConstraint.activate([
-            divider.topAnchor.constraint(equalTo: topAnchor),
-            divider.leadingAnchor.constraint(equalTo: leadingAnchor),
-            divider.trailingAnchor.constraint(equalTo: trailingAnchor),
-            divider.heightAnchor.constraint(equalToConstant: 0.5),
-        ])
+        blurView.frame = bounds
+        blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        blurView.backgroundColor = DJDesignTokens.Color.background.withAlphaComponent(0.38)
+        blurView.layer.cornerRadius = Self.tabBarHeight / 2
+        blurView.layer.masksToBounds = true
+        addSubview(blurView)
 
         // 创建三个 Tab 按钮
         for (index, item) in items.enumerated() {
@@ -161,7 +165,7 @@ final class WarmTabBarView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         let tabWidth = bounds.width / CGFloat(items.count)
-        let tabAreaHeight = Self.tabBarHeight
+        let tabAreaHeight = bounds.height
 
         for (index, btn) in buttons.enumerated() {
             let x = tabWidth * CGFloat(index)
@@ -200,13 +204,13 @@ final class WarmTabBarView: UIView {
         btn.subviews.forEach { if $0 is UILabel || $0 is UIImageView { $0.removeFromSuperview() } }
 
         let iconName = isSelected ? item.iconNameFill : item.iconName
-        let iconColor: UIColor = isSelected ? .warmAccent : .warmSubtitle
-        let titleColor: UIColor = isSelected ? .warmAccent : .warmSubtitle
+        let iconColor: UIColor = isSelected ? DJDesignTokens.Color.accentDeep : DJDesignTokens.Color.textTertiary.withAlphaComponent(0.65)
+        let titleColor: UIColor = isSelected ? DJDesignTokens.Color.accentDeep : DJDesignTokens.Color.textTertiary.withAlphaComponent(0.65)
         let titleFont: UIFont = isSelected
-            ? .systemFont(ofSize: 12, weight: .semibold)
-            : .systemFont(ofSize: 12, weight: .regular)
+            ? DJDesignTokens.Font.label(11)
+            : DJDesignTokens.Font.body(11)
 
-        let config = UIImage.SymbolConfiguration(pointSize: 18, weight: isSelected ? .semibold : .regular)
+        let config = UIImage.SymbolConfiguration(pointSize: 20, weight: isSelected ? .semibold : .regular)
         let iconImage = UIImage(systemName: iconName, withConfiguration: config)
 
         let iconView = UIImageView(image: iconImage)
@@ -226,9 +230,9 @@ final class WarmTabBarView: UIView {
 
         NSLayoutConstraint.activate([
             iconView.centerXAnchor.constraint(equalTo: btn.centerXAnchor),
-            iconView.centerYAnchor.constraint(equalTo: btn.centerYAnchor, constant: -8),
-            iconView.widthAnchor.constraint(equalToConstant: 22),
-            iconView.heightAnchor.constraint(equalToConstant: 22),
+            iconView.centerYAnchor.constraint(equalTo: btn.centerYAnchor, constant: -9),
+            iconView.widthAnchor.constraint(equalToConstant: 21),
+            iconView.heightAnchor.constraint(equalToConstant: 21),
 
             titleLabel.centerXAnchor.constraint(equalTo: btn.centerXAnchor),
             titleLabel.topAnchor.constraint(equalTo: iconView.bottomAnchor, constant: 2),

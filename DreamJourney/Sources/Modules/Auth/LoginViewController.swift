@@ -8,7 +8,7 @@ final class LoginViewController: UIViewController {
     private let titleLabel: UILabel = {
         let label = UILabel()
         label.text = "寻梦环游"
-        label.font = DJDesignTokens.Font.display(30)
+        label.font = DJDesignTokens.Font.display(40)
         label.textColor = DJDesignTokens.Color.accentDeep
         label.textAlignment = .center
         return label
@@ -17,35 +17,7 @@ final class LoginViewController: UIViewController {
     private let subtitleLabel: UILabel = {
         let label = UILabel()
         label.text = "在时空中，留下你的身影"
-        label.font = DJDesignTokens.Font.body(13)
-        label.textColor = DJDesignTokens.Color.textTertiary
-        label.textAlignment = .center
-        return label
-    }()
-
-    private let modeContainer: UIView = {
-        let view = UIView()
-        view.backgroundColor = DJDesignTokens.Color.surfaceContainer
-        view.layer.cornerRadius = DJDesignTokens.Radius.pill
-        return view
-    }()
-
-    private let phoneModeLabel: UILabel = {
-        let label = UILabel()
-        label.text = "手机号"
-        label.font = DJDesignTokens.Font.label(13)
-        label.textColor = DJDesignTokens.Color.textSecondary
-        label.textAlignment = .center
-        label.backgroundColor = DJDesignTokens.Color.surface
-        label.layer.cornerRadius = 17
-        label.layer.masksToBounds = true
-        return label
-    }()
-
-    private let passwordModeLabel: UILabel = {
-        let label = UILabel()
-        label.text = "时光账号"
-        label.font = DJDesignTokens.Font.label(13)
+        label.font = DJDesignTokens.Font.body(16)
         label.textColor = DJDesignTokens.Color.textTertiary
         label.textAlignment = .center
         return label
@@ -88,6 +60,7 @@ final class LoginViewController: UIViewController {
 
     private lazy var loginButton: UIButton = {
         let button = DJComponentFactory.primaryButton(title: "登录", target: self, action: #selector(loginTapped))
+        button.layer.cornerRadius = 27
         button.isEnabled = false
         button.alpha = 0.55
         return button
@@ -125,9 +98,6 @@ final class LoginViewController: UIViewController {
         configureFieldContainer(phoneFieldContainer, icon: phoneIcon, textField: phoneField)
         configureFieldContainer(passwordFieldContainer, icon: passwordIcon, textField: passwordField)
 
-        modeContainer.addSubview(phoneModeLabel)
-        modeContainer.addSubview(passwordModeLabel)
-
         let registerStack = UIStackView(arrangedSubviews: [registerPrefixLabel, registerButton])
         registerStack.axis = .horizontal
         registerStack.alignment = .center
@@ -136,7 +106,6 @@ final class LoginViewController: UIViewController {
         [
             titleLabel,
             subtitleLabel,
-            modeContainer,
             phoneFieldContainer,
             passwordFieldContainer,
             forgotButton,
@@ -147,12 +116,8 @@ final class LoginViewController: UIViewController {
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
 
-        [phoneModeLabel, passwordModeLabel].forEach {
-            $0.translatesAutoresizingMaskIntoConstraints = false
-        }
-
         NSLayoutConstraint.activate([
-            titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 94),
+            titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 112),
             titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
             titleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
 
@@ -160,30 +125,15 @@ final class LoginViewController: UIViewController {
             subtitleLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             subtitleLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
 
-            modeContainer.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 46),
-            modeContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 30),
-            modeContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -30),
-            modeContainer.heightAnchor.constraint(equalToConstant: 42),
-
-            phoneModeLabel.leadingAnchor.constraint(equalTo: modeContainer.leadingAnchor, constant: 4),
-            phoneModeLabel.topAnchor.constraint(equalTo: modeContainer.topAnchor, constant: 4),
-            phoneModeLabel.bottomAnchor.constraint(equalTo: modeContainer.bottomAnchor, constant: -4),
-            phoneModeLabel.widthAnchor.constraint(equalTo: modeContainer.widthAnchor, multiplier: 0.5, constant: -4),
-
-            passwordModeLabel.trailingAnchor.constraint(equalTo: modeContainer.trailingAnchor, constant: -4),
-            passwordModeLabel.topAnchor.constraint(equalTo: modeContainer.topAnchor, constant: 4),
-            passwordModeLabel.bottomAnchor.constraint(equalTo: modeContainer.bottomAnchor, constant: -4),
-            passwordModeLabel.leadingAnchor.constraint(equalTo: phoneModeLabel.trailingAnchor, constant: 4),
-
-            phoneFieldContainer.topAnchor.constraint(equalTo: modeContainer.bottomAnchor, constant: 22),
-            phoneFieldContainer.leadingAnchor.constraint(equalTo: modeContainer.leadingAnchor),
-            phoneFieldContainer.trailingAnchor.constraint(equalTo: modeContainer.trailingAnchor),
-            phoneFieldContainer.heightAnchor.constraint(equalToConstant: 48),
+            phoneFieldContainer.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 64),
+            phoneFieldContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 30),
+            phoneFieldContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -30),
+            phoneFieldContainer.heightAnchor.constraint(equalToConstant: 56),
 
             passwordFieldContainer.topAnchor.constraint(equalTo: phoneFieldContainer.bottomAnchor, constant: 12),
             passwordFieldContainer.leadingAnchor.constraint(equalTo: phoneFieldContainer.leadingAnchor),
             passwordFieldContainer.trailingAnchor.constraint(equalTo: phoneFieldContainer.trailingAnchor),
-            passwordFieldContainer.heightAnchor.constraint(equalToConstant: 48),
+            passwordFieldContainer.heightAnchor.constraint(equalToConstant: 56),
 
             forgotButton.topAnchor.constraint(equalTo: passwordFieldContainer.bottomAnchor, constant: 10),
             forgotButton.trailingAnchor.constraint(equalTo: passwordFieldContainer.trailingAnchor),
@@ -191,16 +141,16 @@ final class LoginViewController: UIViewController {
             loginButton.topAnchor.constraint(equalTo: forgotButton.bottomAnchor, constant: 20),
             loginButton.leadingAnchor.constraint(equalTo: phoneFieldContainer.leadingAnchor),
             loginButton.trailingAnchor.constraint(equalTo: phoneFieldContainer.trailingAnchor),
-            loginButton.heightAnchor.constraint(equalToConstant: 48),
+            loginButton.heightAnchor.constraint(equalToConstant: 54),
 
-            registerStack.topAnchor.constraint(equalTo: loginButton.bottomAnchor, constant: 20),
+            registerStack.topAnchor.constraint(equalTo: loginButton.bottomAnchor, constant: 28),
             registerStack.centerXAnchor.constraint(equalTo: view.centerXAnchor),
         ])
     }
 
     private func configureFieldContainer(_ container: UIView, icon: UIImageView, textField: UITextField) {
         container.backgroundColor = DJDesignTokens.Color.surfaceLow
-        container.layer.cornerRadius = DJDesignTokens.Radius.medium
+        container.layer.cornerRadius = 28
         container.layer.borderWidth = 1
         container.layer.borderColor = UIColor.clear.cgColor
 
