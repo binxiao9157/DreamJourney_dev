@@ -4,7 +4,7 @@ final class ProfileViewController: UIViewController {
 
     var didRequestLogout: (() -> Void)?
 
-    private let careSnapshot: ProfileCareSnapshot?
+    private var careSnapshot: ProfileCareSnapshot?
     private let featureFlags: FeatureFlagService
     private let privacyText = "仅展示关怀信号，不展示聊天原文"
 
@@ -36,6 +36,7 @@ final class ProfileViewController: UIViewController {
         )
         configureScrollView()
         buildContent()
+        loadCareSnapshot()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -100,6 +101,35 @@ final class ProfileViewController: UIViewController {
 
         contentStack.addArrangedSubview(makeSettingsCard())
         contentStack.addArrangedSubview(makeBottomSpacer())
+    }
+
+    private func rebuildContent() {
+        contentStack.arrangedSubviews.forEach { view in
+            contentStack.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+        buildContent()
+    }
+
+    private func loadCareSnapshot() {
+        guard featureFlags.isEnabled(.careDashboard),
+              let userId = UserManager.shared.currentUser?.id else {
+            return
+        }
+
+        DreamJourneyBackendClient.shared.latestCareSnapshot(userId: userId) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let json):
+                guard let snapshot = ProfileCareSnapshot(json: json) else {
+                    return
+                }
+                careSnapshot = snapshot
+                rebuildContent()
+            case .failure(let error):
+                print("[Profile] care snapshot sync failed: \(error.localizedDescription)")
+            }
+        }
     }
 
     private func makePersonaCard() -> UIView {
