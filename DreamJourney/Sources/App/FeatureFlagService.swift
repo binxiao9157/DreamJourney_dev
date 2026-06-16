@@ -6,6 +6,7 @@ enum DJFeature: String, CaseIterable {
     case timeLetters
     case archiveAudioUpload
     case familyManagement
+    case familySpace
     case legalCenter
     case accountDeletion
     case careDashboard

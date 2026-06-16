@@ -401,8 +401,11 @@ final class ProfileViewController: UIViewController {
     }
 
     private func openFamilyManagement() {
-        guard featureFlags.isEnabled(.familyManagement) else {
-            showUnavailableAlert()
+        guard featureFlags.isEnabled(.familySpace) else {
+            showUnavailableAlert(
+                title: "家人管理暂未开放",
+                message: "当前版本先保留入口，完整家人空间会在后续版本开放。"
+            )
             return
         }
 
@@ -412,10 +415,13 @@ final class ProfileViewController: UIViewController {
         navigationController?.pushViewController(viewController, animated: true)
     }
 
-    private func showUnavailableAlert() {
+    private func showUnavailableAlert(
+        title: String = "暂未开放",
+        message: String = "该功能正在完善中"
+    ) {
         let alert = UIAlertController(
-            title: "暂未开放",
-            message: "该功能正在完善中",
+            title: title,
+            message: message,
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "知道了", style: .default))
