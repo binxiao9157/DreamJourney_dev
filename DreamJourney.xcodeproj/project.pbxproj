@@ -12,6 +12,13 @@
 		56155288BF68EFE839397BB1 /* DreamJourneyBackendClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF8F1D6D1A0C1160E11C410B /* DreamJourneyBackendClient.swift */; };
 		8525A06805EC0F2C59676EBE /* DJDesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9721373237BB9D8AB345E0CA /* DJDesignTokens.swift */; };
 		8AF14552DA0909806567A566 /* DigitalHumanContextStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94415377646F176602419BD4 /* DigitalHumanContextStore.swift */; };
+		A1A000000000000000000001 /* MemoryArchiveItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000001 /* MemoryArchiveItem.swift */; };
+		A1A000000000000000000002 /* MemoryArchiveRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000002 /* MemoryArchiveRepository.swift */; };
+		A1A000000000000000000003 /* MemoryArchiveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000003 /* MemoryArchiveViewController.swift */; };
+		A1A000000000000000000004 /* EchoViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000004 /* EchoViewModel.swift */; };
+		A1A000000000000000000005 /* EchoViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000005 /* EchoViewController.swift */; };
+		A1A000000000000000000006 /* ProfileCareModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000006 /* ProfileCareModels.swift */; };
+		A1A000000000000000000007 /* ProfileViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000007 /* ProfileViewController.swift */; };
 		04FA5845CC27422438AE44DA /* WarmTabBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B274A4971D76C1D3BFEE4E9A /* WarmTabBarController.swift */; };
 		06F7BBC5219F555B3CF8DCDD /* UIColor+WarmTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71EF8575113A0367F332FE72 /* UIColor+WarmTheme.swift */; };
 		0E5676BC344BFB67294DA939 /* MiniMateLoader.js in Resources */ = {isa = PBXBuildFile; fileRef = AA3777B38C40C14928088B38 /* MiniMateLoader.js */; };
@@ -95,6 +102,13 @@
 		94415377646F176602419BD4 /* DigitalHumanContextStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanContextStore.swift; sourceTree = "<group>"; };
 		9721373237BB9D8AB345E0CA /* DJDesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DJDesignTokens.swift; sourceTree = "<group>"; };
 		EF8F1D6D1A0C1160E11C410B /* DreamJourneyBackendClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DreamJourneyBackendClient.swift; sourceTree = "<group>"; };
+		B1B000000000000000000001 /* MemoryArchiveItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveItem.swift; sourceTree = "<group>"; };
+		B1B000000000000000000002 /* MemoryArchiveRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveRepository.swift; sourceTree = "<group>"; };
+		B1B000000000000000000003 /* MemoryArchiveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveViewController.swift; sourceTree = "<group>"; };
+		B1B000000000000000000004 /* EchoViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EchoViewModel.swift; sourceTree = "<group>"; };
+		B1B000000000000000000005 /* EchoViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EchoViewController.swift; sourceTree = "<group>"; };
+		B1B000000000000000000006 /* ProfileCareModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileCareModels.swift; sourceTree = "<group>"; };
+		B1B000000000000000000007 /* ProfileViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewController.swift; sourceTree = "<group>"; };
 		00898E98E95E3808561BEB51 /* MemoirTTSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirTTSService.swift; sourceTree = "<group>"; };
 		04D035B5F78F66A15EB0C01A /* Main.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = Main.storyboard; sourceTree = "<group>"; };
 		0616F4B34725AE4D0BCCA4D9 /* KBLiteSemanticSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLiteSemanticSearch.swift; sourceTree = "<group>"; };
@@ -351,6 +365,34 @@
 			path = Auth;
 			sourceTree = "<group>";
 		};
+		69A100000000000000000001 /* Archive */ = {
+			isa = PBXGroup;
+			children = (
+				B1B000000000000000000001 /* MemoryArchiveItem.swift */,
+				B1B000000000000000000002 /* MemoryArchiveRepository.swift */,
+				B1B000000000000000000003 /* MemoryArchiveViewController.swift */,
+			);
+			path = Archive;
+			sourceTree = "<group>";
+		};
+		69A100000000000000000002 /* Echo */ = {
+			isa = PBXGroup;
+			children = (
+				B1B000000000000000000004 /* EchoViewModel.swift */,
+				B1B000000000000000000005 /* EchoViewController.swift */,
+			);
+			path = Echo;
+			sourceTree = "<group>";
+		};
+		69A100000000000000000003 /* Profile */ = {
+			isa = PBXGroup;
+			children = (
+				B1B000000000000000000006 /* ProfileCareModels.swift */,
+				B1B000000000000000000007 /* ProfileViewController.swift */,
+			);
+			path = Profile;
+			sourceTree = "<group>";
+		};
 		697A85CBA95E64BD34FC210E /* DreamJourneyWidget */ = {
 			isa = PBXGroup;
 			children = (
@@ -423,12 +465,15 @@
 		AB18646F8DCCE6FC3C260F60 /* Modules */ = {
 			isa = PBXGroup;
 			children = (
+				69A100000000000000000001 /* Archive */,
 				695791B864C8D566043825CE /* Auth */,
+				69A100000000000000000002 /* Echo */,
 				6D7389191CC91FC0D5B9F427 /* Family */,
 				50CAE6F5337E5B6CA13DDD7A /* Home */,
 				B31A3C6EE15574E651C20B65 /* Knowledge */,
 				052E7A6BA81C0A676BE77B9B /* Map */,
 				B384D0334A87D3FC74DEB2E9 /* Memory */,
+				69A100000000000000000003 /* Profile */,
 			);
 			path = Modules;
 			sourceTree = "<group>";
@@ -688,6 +733,8 @@
 				9A84BB0966C1478900AA56A3 /* HomeHeaderView.swift in Sources */,
 				36CF52237589B0C4691394E6 /* DJComponentFactory.swift in Sources */,
 				8525A06805EC0F2C59676EBE /* DJDesignTokens.swift in Sources */,
+				A1A000000000000000000005 /* EchoViewController.swift in Sources */,
+				A1A000000000000000000004 /* EchoViewModel.swift in Sources */,
 				344DFB2063508315CC912EF7 /* KBExportPreviewViewController.swift in Sources */,
 				B5FB43CD45DAE4D507651704 /* KBGraphEdge.swift in Sources */,
 				6EBD2DD7A7870798CA2B63E9 /* KBGraphLayoutEngine.swift in Sources */,
@@ -714,6 +761,9 @@
 				A88DF4F43BC833D9433CEE7B /* MemoirTTSService.swift in Sources */,
 				596491B3EBC0F9D31FB1C2E1 /* MemoryAnnotation.swift in Sources */,
 				179BE070081D916DE52040A2 /* MemoryAnnotationView.swift in Sources */,
+				A1A000000000000000000001 /* MemoryArchiveItem.swift in Sources */,
+				A1A000000000000000000002 /* MemoryArchiveRepository.swift in Sources */,
+				A1A000000000000000000003 /* MemoryArchiveViewController.swift in Sources */,
 				52B3383F8F4517669DA70A7B /* MemoryDetailViewController.swift in Sources */,
 				FEF405C138F6D1A6B57DD767 /* MemoryEditViewController.swift in Sources */,
 				8D3329C01B2DE3980D08E92E /* MemoryModel.swift in Sources */,
@@ -721,6 +771,8 @@
 				E888BD0CCEFEF938A377A489 /* MessageCells.swift in Sources */,
 				1D6C68E038F68B262E1C025D /* MicrophonePermissionManager.swift in Sources */,
 				397C1F6023E56C8E016A0D71 /* OpenAvatarChatService.swift in Sources */,
+				A1A000000000000000000006 /* ProfileCareModels.swift in Sources */,
+				A1A000000000000000000007 /* ProfileViewController.swift in Sources */,
 				7BD7AD6BC3423E10E98379EF /* SceneDelegate.swift in Sources */,
 				FE8668AF8032B5ED0673C7D2 /* TGButton.swift in Sources */,
 				3CEEFF183F1AD8F50F31189E /* TGColors.swift in Sources */,

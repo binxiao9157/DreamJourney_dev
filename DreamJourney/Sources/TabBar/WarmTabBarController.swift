@@ -5,7 +5,16 @@ import UIKit
 final class WarmTabBarController: UITabBarController {
 
     // MARK: - Properties
-    private let warmTabBar = WarmTabBarView()
+    private let warmTabBar: WarmTabBarView
+
+    init(items: [WarmTabBarView.TabItem] = WarmTabBarView.defaultItems) {
+        self.warmTabBar = WarmTabBarView(items: items)
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -23,7 +32,7 @@ final class WarmTabBarController: UITabBarController {
         super.viewDidLayoutSubviews()
         // 动态更新 WarmTabBar 的高度（适配 Safe Area）
         let safeBottom = view.safeAreaInsets.bottom
-        let barHeight: CGFloat = 56 + safeBottom
+        let barHeight: CGFloat = WarmTabBarView.tabBarHeight + safeBottom
         warmTabBar.frame = CGRect(
             x: 0,
             y: view.bounds.height - barHeight,
@@ -64,11 +73,11 @@ final class WarmTabBarController: UITabBarController {
 }
 
 // MARK: - WarmTabBarView
-// 自定义 TabBar 视图：三个 Tab 按钮 + 深棕/米白配色
+// 自定义 TabBar 视图：注入式 Tab 按钮 + 深棕/米白配色
 final class WarmTabBarView: UIView {
 
     /// WarmTabBar 内容区域固定高度（不含 home indicator）
-    static let tabBarHeight: CGFloat = 56
+    static let tabBarHeight: CGFloat = DJDesignTokens.Spacing.tabBarHeight
 
     struct TabItem {
         let iconName: String        // SF Symbol 名称（未选态）
@@ -76,13 +85,13 @@ final class WarmTabBarView: UIView {
         let title: String
     }
 
-    private let items: [TabItem] = [
-        TabItem(iconName: "mic", iconNameFill: "mic.fill", title: "回忆"),
-        TabItem(iconName: "book", iconNameFill: "book.fill", title: "足迹"),
-        TabItem(iconName: "person.2", iconNameFill: "person.2.fill", title: "亲友"),
-        TabItem(iconName: "brain", iconNameFill: "brain.head.profile.fill", title: "知识"),
+    static let defaultItems: [TabItem] = [
+        TabItem(iconName: "archivebox", iconNameFill: "archivebox.fill", title: "记忆档案"),
+        TabItem(iconName: "mic", iconNameFill: "mic.fill", title: "回响"),
+        TabItem(iconName: "person", iconNameFill: "person.fill", title: "我的"),
     ]
 
+    private let items: [TabItem]
     private var buttons: [UIButton] = []
     private var selectedCircles: [UIView] = []
     var onTabSelected: ((Int) -> Void)?
@@ -93,8 +102,9 @@ final class WarmTabBarView: UIView {
     }
 
     // MARK: - Init
-    override init(frame: CGRect) {
-        super.init(frame: frame)
+    init(items: [TabItem] = WarmTabBarView.defaultItems) {
+        self.items = items
+        super.init(frame: .zero)
         setupView()
     }
 
@@ -151,7 +161,7 @@ final class WarmTabBarView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         let tabWidth = bounds.width / CGFloat(items.count)
-        let tabAreaHeight: CGFloat = 56
+        let tabAreaHeight = Self.tabBarHeight
 
         for (index, btn) in buttons.enumerated() {
             let x = tabWidth * CGFloat(index)

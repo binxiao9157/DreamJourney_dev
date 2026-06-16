@@ -1,0 +1,75 @@
+import Foundation
+
+enum EchoInteractionState {
+    case idle
+    case listening
+    case waitingReply(minutes: Int)
+    case speaking
+    case error(String)
+}
+
+final class EchoViewModel {
+    private let contextStore: DigitalHumanContextStore
+    private let memoryManager: ConversationMemoryManager
+
+    private(set) var context: DigitalHumanContext
+    private(set) var state: EchoInteractionState = .idle
+
+    var onStateChange: ((EchoInteractionState) -> Void)?
+    var onTranscriptAppend: ((String, Bool) -> Void)?
+
+    init(
+        contextStore: DigitalHumanContextStore = .shared,
+        memoryManager: ConversationMemoryManager = .shared
+    ) {
+        self.contextStore = contextStore
+        self.memoryManager = memoryManager
+        self.context = contextStore.current
+    }
+
+    func beginVoiceInteraction() {
+        context = contextStore.current
+        updateState(.listening)
+    }
+
+    func finishUserVoice(text: String) {
+        let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedText.isEmpty else {
+            updateState(.error("刚才没有听清，可以再说一次"))
+            return
+        }
+
+        memoryManager.recordUserTurn(text: normalizedText)
+        onTranscriptAppend?(normalizedText, true)
+
+        let wait = Self.replyDelayMinutes(for: memoryManager.currentMemory.sessionCount)
+        updateState(.waitingReply(minutes: wait))
+    }
+
+    func receiveAIReply(_ text: String) {
+        let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedText.isEmpty else { return }
+
+        memoryManager.recordAITurn(text: normalizedText)
+        onTranscriptAppend?(normalizedText, false)
+        updateState(.speaking)
+    }
+
+    func resetToIdle() {
+        updateState(.idle)
+    }
+
+    func fail(_ message: String) {
+        updateState(.error(message))
+    }
+
+    static func replyDelayMinutes(for sessionCount: Int) -> Int {
+        let options = [5, 10, 30]
+        return options[max(0, sessionCount) % options.count]
+    }
+
+    private func updateState(_ newState: EchoInteractionState) {
+        state = newState
+        onStateChange?(newState)
+    }
+}

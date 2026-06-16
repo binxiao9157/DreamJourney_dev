@@ -1,6 +1,6 @@
 import UIKit
 
-// MARK: - TabCoordinator：3-Tab 主界面
+// MARK: - TabCoordinator：PRD 3-Tab 主界面
 final class TabCoordinator: Coordinator {
 
     var navigationController: UINavigationController
@@ -19,55 +19,33 @@ final class TabCoordinator: Coordinator {
     }
 
     private func setupTabs() {
-        // Tab1: 对话记录
-        let homeNav = UINavigationController()
-        let homeVC = AIRecordingViewController()
-        homeVC.title = "对话记录"
-        homeNav.viewControllers = [homeVC]
-        homeNav.navigationBar.tintColor = .warmPrimary
+        let archiveNav = UINavigationController(rootViewController: MemoryArchiveViewController())
+        archiveNav.navigationBar.tintColor = DJDesignTokens.Color.textPrimary
 
-        // Tab2: 寻梦环游足迹（主态）
-        let mapNav = UINavigationController()
-        let currentUserId = UserManager.shared.currentUser?.id ?? "user_001"
-        let mapVC = MapFootprintViewController(viewMode: .host, ownerId: currentUserId)
-        mapVC.title = "寻梦环游足迹"
-        mapNav.viewControllers = [mapVC]
-        mapNav.navigationBar.tintColor = .warmPrimary
+        let echoNav = UINavigationController(rootViewController: EchoViewController())
+        echoNav.navigationBar.tintColor = DJDesignTokens.Color.textPrimary
 
-        // Tab3: 亲属圈
-        let familyNav = UINavigationController()
-        let familyVC = FamilyCircleViewController()
-        familyVC.title = "亲属圈"
-        familyNav.viewControllers = [familyVC]
-        familyNav.navigationBar.tintColor = .warmPrimary
-
-        // 注入退出登录回调
-        familyVC.didRequestLogout = { [weak self] in
+        let profileVC = ProfileViewController()
+        profileVC.didRequestLogout = { [weak self] in
             self?.didRequestLogout?()
         }
+        let profileNav = UINavigationController(rootViewController: profileVC)
+        profileNav.navigationBar.tintColor = DJDesignTokens.Color.textPrimary
 
-        // Tab4: 知识库（KBLite）
-        let kbNav = UINavigationController()
-        let kbVC = KnowledgeBaseViewController()
-        kbVC.title = "知识库"
-        kbNav.viewControllers = [kbVC]
-        kbNav.navigationBar.tintColor = .warmPrimary
-
-        tabBarController.viewControllers = [homeNav, mapNav, familyNav, kbNav]
+        tabBarController.viewControllers = [archiveNav, echoNav, profileNav]
+        tabBarController.selectedIndex = 1
     }
 
     private func configureAppearance() {
-        // Warm Vintage: 使用自定义 WarmTabBarController，系统 appearance 已无需配置
-        // NavigationBar 全局样式：深棕色标题
         let navAppearance = UINavigationBarAppearance()
         navAppearance.configureWithOpaqueBackground()
-        navAppearance.backgroundColor = .warmBackground
+        navAppearance.backgroundColor = DJDesignTokens.Color.background
         navAppearance.titleTextAttributes = [
-            .foregroundColor: UIColor.warmPrimary,
+            .foregroundColor: DJDesignTokens.Color.textPrimary,
             .font: UIFont.systemFont(ofSize: 17, weight: .semibold)
         ]
         UINavigationBar.appearance().standardAppearance = navAppearance
         UINavigationBar.appearance().scrollEdgeAppearance = navAppearance
-        UINavigationBar.appearance().tintColor = .warmPrimary
+        UINavigationBar.appearance().tintColor = DJDesignTokens.Color.textPrimary
     }
 }
