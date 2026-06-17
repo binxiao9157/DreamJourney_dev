@@ -50,7 +50,8 @@ assertContains(profile, "makeCareSyncCaption(snapshot:", "care dashboard should 
 assertContains(profile, "case .profileSettings:\n            showProfileSettings()", "profile settings row should push a real page")
 assertContains(profile, "case .legalCenter:\n            showLegalCenter()", "legal center row should push a real page")
 assertContains(profile, "case .familyManagement:\n            openFamilyManagement()", "family row should remain routed through guarded family flow")
-assertContains(profile, "case .accountDeletion:\n            showUnavailableAlert(", "account deletion should remain unavailable by default")
+assertContains(profile, "case .accountDeletion:\n            showAccountDeletionConfirmation()", "account deletion should use a safe confirmation shell")
+assertContains(profile, "deleteAction.isEnabled = false", "account deletion destructive action should remain disabled")
 
 assertContains(settings, "final class ProfileSettingsViewController", "settings page view controller")
 assertContains(settings, "hidesBottomBarWhenPushed = true", "settings page should hide floating tabbar when pushed")

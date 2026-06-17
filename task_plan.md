@@ -5,7 +5,7 @@
 - **Goal:** 按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态
 - **Mode:** Execute
 - **Phase:** Implementation
-- **Task:** docs/plans/task_04_p1-profile-family-and-safety-flows.md
+- **Task:** docs/plans/task_05_review-and-release-qa.md
 - **Blockers:** None
 
 ## Key Decisions
@@ -15,7 +15,8 @@
 - Task 1 closed: PRD continuation gap map is recorded in `docs/superpowers/status/2026-06-18-prd-continuation-gap-map.md`.
 - Task 2 closed: persona-scoped archive storage/backend/context contract is implemented and guarded.
 - Task 3 closed: real-device/backend acceptance readiness is documented and guarded; true backend/device execution still waits for user-provided environment.
-- Current P1 target: profile family and safety flows behind release gates.
+- Task 4 closed: hidden family/persona switcher, profile safety shells, and care visibility gates are implemented and guarded.
+- Current target: review and release QA.
 
 ## Scope
 

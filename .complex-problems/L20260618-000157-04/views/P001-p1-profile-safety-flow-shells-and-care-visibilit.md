@@ -1,13 +1,13 @@
 # P001: P1 Profile safety flow shells and care visibility
 
-Status: followup
+Status: done
 Parent: P000
 Root: P000
 Source Ticket: none (none)
 Source Check: C000
 Package: problems/P000/children/P001
 Body: problems/P000/children/P001/README.md
-Ticket(s): none
+Ticket(s): T001
 
 ## Problem
 Task 4 的 family/persona switcher 已完成，但 profile safety flows 仍缺少最小可验收闭环：
@@ -30,13 +30,16 @@ Task 4 的 family/persona switcher 已完成，但 profile safety flows 仍缺�
 - none
 
 ## Results
-- none
+- R001
 
 ## Latest Check
-none
+C001
 
 ## Bodies
 - Problem: problems/P000/children/P001/README.md
+- Ticket T001: problems/P000/children/P001/tickets/T001.md
+- Result R001: problems/P000/children/P001/results/R001.md
+- Check C001: problems/P000/children/P001/checks/C001.md
 
 ## Follow-ups
 - none

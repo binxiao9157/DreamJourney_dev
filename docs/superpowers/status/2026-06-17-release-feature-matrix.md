@@ -54,6 +54,15 @@ These items must not appear in the public release surface yet.
 | Profile care | `立即通话` | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` only. |
 | Profile settings | Password change | Not exposed until an implemented credential flow exists. |
 
+## Hidden Safety Shells
+
+These flows have hidden safety shells only. They are not public release features.
+
+| Area | Safety boundary | Evidence |
+| --- | --- | --- |
+| 账号注销 | Hidden destructive confirmation shell only; it does not execute deletion until compliance, data export, cooling-off, and final confirmation are defined. | `ProfileViewController.showAccountDeletionConfirmation`, `profile-safety-flow-check.swift`. |
+| 医生联系 | Hidden safety notice only; it is non-emergency, not medical diagnosis, and the real contact contract is not connected. | `ProfileViewController.showDoctorContactSafetyNotice`, `profile-safety-flow-check.swift`. |
+
 ## Internal QA Launch Arguments
 
 Hidden UI branches may be exposed for visual or interaction QA only with explicit launch arguments:
@@ -74,6 +83,7 @@ swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/
 swift tmp/visual-qa/prd-stitch-ui/release-like-hidden-entries-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/profile-release-gating-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/profile-family-persona-switcher-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/profile-safety-flow-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/final-visual-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 

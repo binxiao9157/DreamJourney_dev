@@ -46,16 +46,16 @@
       "updated_at": "2026-06-17T16:27:07+00:00"
     },
     {
-      "active_count": 2,
+      "active_count": 0,
       "blocked_count": 0,
       "ledger_id": "L20260618-000157-04",
       "path": "L20260618-000157-04",
       "root_id": "P000",
       "schema_version": 6,
-      "status": "doing",
+      "status": "done",
       "title": "P1 profile family and safety flows",
-      "updated_at": "2026-06-17T16:37:01+00:00"
+      "updated_at": "2026-06-17T16:44:24+00:00"
     }
   ],
-  "updated_at": "2026-06-17T16:37:15+00:00"
+  "updated_at": "2026-06-17T16:44:35+00:00"
 }

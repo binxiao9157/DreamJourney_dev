@@ -33,11 +33,11 @@
     "docs/plans/task_04_p1-profile-family-and-safety-flows.md": {
       "ledger_id": "L20260618-000157-04",
       "ledger_path": ".complex-problems/L20260618-000157-04",
-      "next_action": "create-solution-ticket",
-      "status": "next",
+      "next_action": "none",
+      "status": "complete",
       "task_file": "docs/plans/task_04_p1-profile-family-and-safety-flows.md",
       "title": "P1 profile family and safety flows",
-      "updated_at": "2026-06-18T00:37:15+08:00"
+      "updated_at": "2026-06-18T00:44:35+08:00"
     },
     "docs/plans/task_05_review-and-release-qa.md": {
       "ledger_id": "L20260618-000157-05",
@@ -49,5 +49,5 @@
       "updated_at": "2026-06-18T00:01:57+08:00"
     }
   },
-  "updated_at": "2026-06-18T00:37:15+08:00"
+  "updated_at": "2026-06-18T00:44:35+08:00"
 }

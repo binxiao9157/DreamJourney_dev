@@ -136,7 +136,7 @@ final class ProfileViewController: UIViewController {
         contentStack.addArrangedSubview(personaView)
         contentStack.setCustomSpacing(ProfileLayout.afterPersonaSpacing, after: personaView)
 
-        if featureFlags.isEnabled(.careDashboard) {
+        if shouldShowCareDashboard(context: personaContext) {
             contentStack.addArrangedSubview(makeCareCard(snapshot: careSnapshot))
         }
 
@@ -167,12 +167,17 @@ final class ProfileViewController: UIViewController {
         } else {
             personaContext = DigitalHumanContextStore.shared.current
         }
+        careSnapshot = nil
         rebuildContent()
+        loadCareSnapshot()
     }
 
     private func loadCareSnapshot() {
-        guard featureFlags.isEnabled(.careDashboard),
-              let userId = UserManager.shared.currentUser?.id else {
+        let trimmedOwnerId = personaContext.ownerId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fallbackUserId = UserManager.shared.currentUser?.id
+        let careUserId = trimmedOwnerId.isEmpty ? fallbackUserId : trimmedOwnerId
+        guard shouldShowCareDashboard(context: personaContext),
+              let userId = careUserId else {
             return
         }
 
@@ -273,6 +278,16 @@ final class ProfileViewController: UIViewController {
         ])
 
         return container
+    }
+
+    private func shouldShowCareDashboard(context: DigitalHumanContext) -> Bool {
+        guard featureFlags.isEnabled(.careDashboard) else {
+            return false
+        }
+        if context.isSelfAssistant {
+            return true
+        }
+        return context.mode == .star
     }
 
     private func makePersonaTitle(context: DigitalHumanContext) -> String {
@@ -514,10 +529,7 @@ final class ProfileViewController: UIViewController {
         case .logout:
             UserManager.shared.logout()
         case .accountDeletion:
-            showUnavailableAlert(
-                title: "注销账户暂未开放",
-                message: "账号注销需要完整确认与合规流程，后续版本会提供。"
-            )
+            showAccountDeletionConfirmation()
         }
     }
 
@@ -532,7 +544,30 @@ final class ProfileViewController: UIViewController {
     }
 
     @objc private func doctorCallTapped() {
-        showUnavailableAlert()
+        showDoctorContactSafetyNotice()
+    }
+
+    private func showAccountDeletionConfirmation() {
+        let alert = UIAlertController(
+            title: "注销账户确认",
+            message: "当前版本不会执行删除。账号注销需要完整确认与合规流程，包括身份校验、数据导出、冷静期和最终确认。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        let deleteAction = UIAlertAction(title: "提交注销申请（未开放）", style: .destructive)
+        deleteAction.isEnabled = false
+        alert.addAction(deleteAction)
+        present(alert, animated: true)
+    }
+
+    private func showDoctorContactSafetyNotice() {
+        let alert = UIAlertController(
+            title: "关怀联系暂未接入",
+            message: "该入口仅用于非紧急关怀，不是医疗诊断；真实联系契约未接入。如遇紧急情况，请立即联系当地急救服务。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "知道了", style: .default))
+        present(alert, animated: true)
     }
 
     private func openFamilyManagement() {

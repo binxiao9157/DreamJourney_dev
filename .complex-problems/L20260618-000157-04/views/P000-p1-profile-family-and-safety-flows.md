@@ -1,6 +1,6 @@
 # P000: P1 profile family and safety flows
 
-Status: followup
+Status: done
 Parent: none
 Root: P000
 Source Ticket: none (none)
@@ -28,13 +28,14 @@ Task context:
 - R000
 
 ## Latest Check
-C000
+C002
 
 ## Bodies
 - Problem: problems/P000/README.md
 - Ticket T000: problems/P000/tickets/T000.md
 - Result R000: problems/P000/results/R000.md
 - Check C000: problems/P000/checks/C000.md
+- Check C002: problems/P000/checks/C002.md
 
 ## Follow-ups
 - P001: P1 Profile safety flow shells and care visibility
