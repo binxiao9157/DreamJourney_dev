@@ -5,7 +5,7 @@
 - **Goal:** 按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态
 - **Mode:** Execute
 - **Phase:** Implementation
-- **Task:** docs/plans/task_03_p0-real-device-and-backend-acceptance-readiness.md
+- **Task:** docs/plans/task_04_p1-profile-family-and-safety-flows.md
 - **Blockers:** None
 
 ## Key Decisions
@@ -14,7 +14,8 @@
 - Recursive Closure ledgers are task-level closure engines under `.complex-problems/`.
 - Task 1 closed: PRD continuation gap map is recorded in `docs/superpowers/status/2026-06-18-prd-continuation-gap-map.md`.
 - Task 2 closed: persona-scoped archive storage/backend/context contract is implemented and guarded.
-- Current P0 target: real-device and backend acceptance readiness.
+- Task 3 closed: real-device/backend acceptance readiness is documented and guarded; true backend/device execution still waits for user-provided environment.
+- Current P1 target: profile family and safety flows behind release gates.
 
 ## Scope
 

@@ -32,6 +32,7 @@ The app should preserve future routes for family space, elder care, sunlight/sil
 | 设置/我的 | Profile root, personal settings, legal center, logout, care dashboard fallback and backend parsing. | `ProfileViewController`, `ProfileSettingsViewController`, `ProfileLegalViewController`, Group 4 review. |
 | 长辈关怀 | Care signal model parses aggregate backend data without raw chat transcript exposure and falls back safely when offline. | `ProfileCareModels`, `DreamJourneyBackendClient.latestCareSnapshot`. |
 | Backend client | Local/dev backend base URL and optional token config; archive, KB, family, care endpoint wrappers. | `DreamJourneyBackendClient`, backend env smoke docs. |
+| Persona-scoped core loop | Archive storage, backend archive list payloads, sync payloads, and Echo archive context now resolve from the selected digital-human owner while preserving the default self assistant. | `DigitalHumanContextStore`, `MemoryArchiveRepository`, `persona-scoped-archive-context-check.swift`, archive-to-echo smoke. |
 | Release gates | Incomplete/high-risk branches are hidden by default and guarded by feature flags or UIQA-only launch arguments. | `FeatureFlagService`, release feature matrix. |
 | QA harness | Reusable archive-to-echo smoke and static guards exist; large generated QA artifacts remain local-only. | `tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh`, submit inventory. |
 
@@ -39,10 +40,8 @@ The app should preserve future routes for family space, elder care, sunlight/sil
 
 | Priority | Gap | Why It Matters | Current Boundary |
 | --- | --- | --- | --- |
-| P0 | Persona-scoped archive and echo context | PRD says switching to a family member or self must switch archive database and echo persona. Current archive storage and backend calls are scoped to login user, not selected digital-human/persona context. | `DigitalHumanContextStore` exists but is thin; `MemoryArchiveRepository` uses `currentUserId`. |
-| P0 | Durable current-persona contract | Echo, Archive, Profile, and backend need a shared stable context id/display copy so data does not bleed between `自己 AI 助手` and `家人数字人`. | `DigitalHumanContext` stores one context but has no notification, fallback display name, or repository owner binding. |
-| P0 | Real-device acceptance checklist for microphone/photo/voice SDK | PRD core input is voice and archive supports photo/audio. Simulator proves contract only; true acceptance requires device steps and privacy behavior. | Privacy strings and simulator stubs exist; device checklist is not yet consolidated. |
-| P0 | Non-local backend verification contract | Archive/care/family/KB endpoints exist, but staging/prod base URL, token injection, persistence, and error recovery need a repeatable acceptance path. | Local FastAPI/memory-store evidence exists; real environment depends on key/server. |
+| P0 | Real-device acceptance checklist for microphone/photo/voice SDK | PRD core input is voice and archive supports photo/audio. Simulator proves contract only; true acceptance requires device steps and privacy behavior. | Readiness doc added in `2026-06-18-device-backend-acceptance-readiness.md`; 真实验收待用户提供后端环境和真机. |
+| P0 | Non-local backend verification contract | Archive/care/family/KB endpoints exist, but staging/prod base URL, token injection, persistence, and error recovery need a repeatable acceptance path. | Backend smoke script and static guards exist; `2026-06-18-device-backend-acceptance-readiness.md` defines runbook; real environment depends on key/server. |
 | P1 | Family management/persona switching UI | PRD requires switching family members and self. Public route is hidden because the current `FamilyCircleViewController` is legacy and not wired to persona context. | `familyManagement`/`familySpace` are hidden. |
 | P1 | 星辰/阳光/静默 business state | PRD says mode name is not displayed on Echo, but star relatives enable psychological guidance and mood tracking. | Internal enum exists; UI does not yet derive care visibility or copy from selected mode. |
 | P1 | Account deletion flow | PRD lists account cancellation. Current branch correctly hides/blocks it because legal confirmation and destructive state handling are not implemented. | `accountDeletion` hidden by default and alert-only. |
@@ -56,19 +55,23 @@ The app should preserve future routes for family space, elder care, sunlight/sil
 ### P0
 
 1. **Persona-scoped archive and echo context**
+   - Status: completed in `d3e5e4a feat: scope archive context by persona`.
    - Add stable selected-owner resolution to `DigitalHumanContextStore`.
    - Scope `MemoryArchiveRepository` storage, context snapshots, backend archive list/post payloads, and Echo prompt context to the selected digital-human owner.
    - Add a static guard proving repository no longer uses only the login user for archive storage/context.
 
 2. **PRD core loop regression**
+   - Status: green after persona scoping.
    - Keep `run-archive-to-echo-smoke.sh` green after persona scoping.
    - Ensure default self assistant still works without family setup.
 
 3. **True-device acceptance package**
+   - Status: readiness package added in `docs/superpowers/status/2026-06-18-device-backend-acceptance-readiness.md`; true-device execution still requires user device/signing.
    - Consolidate microphone/photo/audio and voice SDK manual acceptance steps.
    - Separate simulator proof from real-device acceptance.
 
 4. **Backend environment acceptance package**
+   - Status: readiness package added in `docs/superpowers/status/2026-06-18-device-backend-acceptance-readiness.md`; real backend execution still requires user-provided URL/token.
    - Document required base URL/token config and expected archive/care smoke outcomes.
    - Keep local fallback copy and auth-token behavior covered.
 
@@ -96,21 +99,22 @@ The app should preserve future routes for family space, elder care, sunlight/sil
 2. Continue compacting UI spacing and typography differences.
 3. Prepare future family space, silent/star transition, and digital inheritance docs.
 
-## Next Selected Target
+## Current Selected Target
 
-Proceed with **P0 persona-scoped archive and echo context**.
+Proceed with **P0 true-device and backend acceptance readiness**.
 
 Reason:
 
-- It is directly in the PRD core path: family/self switching must change archive and echo context.
-- It improves persistence/privacy by preventing selected-family data bleed.
-- It does not require new server keys, certificates, or real-device operations.
-- It gives later family management UI a stable contract without exposing the UI publicly yet.
+- It protects the PRD core path from being called finished before real backend and true-device evidence exists.
+- It consolidates the commands and artifacts needed when the user later provides backend URL/token or a physical device.
+- It does not require exposing hidden family/account/developer branches.
+- It keeps simulator proof separate from real-device acceptance, which is important for honest release readiness.
 
 ## Verification Commands For Next Target
 
 ```bash
 swift tmp/visual-qa/prd-stitch-ui/persona-scoped-archive-context-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/device-backend-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh
 swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev

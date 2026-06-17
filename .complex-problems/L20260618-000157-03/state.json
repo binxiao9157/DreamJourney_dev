@@ -1,11 +1,55 @@
 {
-  "checks": {},
+  "checks": {
+    "C000": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/checks/C000.md",
+      "created_at": "2026-06-17T16:27:07+00:00",
+      "criteria_map": [
+        "文档覆盖真机验收、后端验收、阻塞条件、执行步骤和验收产物：满足。",
+        "文档明确 `DREAMJOURNEY_BACKEND_BASE_URL`、`DREAMJOURNEY_BACKEND_API_TOKEN`、`Backend.local.xcconfig`、`run-backend-env-smoke.sh`、`run-archive-to-echo-smoke.sh`：满足，并由新 guard 检查。",
+        "文档明确真实 token 不提交，且不能声明真机已验收：满足，并由新 guard 检查。",
+        "静态检查脚本验证隐私声明、后端配置忽略规则、后端 smoke token 要求和核心 QA 脚本：满足。",
+        "PRD 缺口图引用该验收就绪说明：满足。"
+      ],
+      "evidence": [
+        "验收说明已新增：`docs/superpowers/status/2026-06-18-device-backend-acceptance-readiness.md`。",
+        "静态 guard 已新增并通过：`tmp/visual-qa/prd-stitch-ui/device-backend-readiness-check.swift`。",
+        "PRD 缺口图已引用验收就绪说明，并写明真实验收待用户提供后端环境和真机。",
+        "既有后端 build config guard、backend env smoke guard、提交清单检查、`git diff --check` 和 Debug 模拟器构建均通过。"
+      ],
+      "execution_map": [
+        "先写 guard 并运行 RED，确认文档缺失会失败。",
+        "补验收说明和 PRD 缺口图后运行 GREEN。",
+        "发现 guard 中引用旧 smoke 参数后，按当前真实脚本修正为 `DJRunArchiveToEchoSmoke`。",
+        "完成后跑相关静态检查、提交清单、whitespace 检查和 Debug 构建。"
+      ],
+      "followup_problem_id": null,
+      "id": "C000",
+      "problem_id": "P000",
+      "residual_risk": [
+        "真实后端 smoke 仍需用户提供后端 URL/token 后执行。",
+        "真机验收仍需用户提供设备、签名和设备操作后执行。",
+        "Pods/Kingfisher Swift 6 warning 仍存在，但不是本任务新增，且 Debug 构建通过。"
+      ],
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "RED 阶段证明 guard 能抓住验收说明缺失。",
+        "GREEN 阶段额外覆盖旧脚本参数漂移，避免检查脚本脱离当前真实 harness。",
+        "后端 token 为空强制失败的脚本逻辑被 guard 检查，降低误把无鉴权环境当作真实验收的风险。"
+      ],
+      "summary": "判定成功。原问题要求的是“真机与后端验收就绪”，不是替代用户完成真实后端或真机验收。结果 R000 已提供文档、静态 guard、PRD 缺口图更新和验证证据，并明确保留真实环境依赖边界。"
+    }
+  },
   "counters": {
-    "check": 0,
-    "event": 1,
+    "check": 1,
+    "event": 12,
     "problem": 1,
-    "result": 0,
-    "ticket": 0
+    "result": 1,
+    "ticket": 1
   },
   "created_at": "2026-06-17T16:01:57+00:00",
   "effort": "medium",
@@ -14,7 +58,9 @@
   "problems": {
     "P000": {
       "body_path": "problems/P000/README.md",
-      "check_ids": [],
+      "check_ids": [
+        "C000"
+      ],
       "created_at": "2026-06-17T16:01:57+00:00",
       "created_from_check_id": null,
       "created_from_ticket_id": null,
@@ -24,23 +70,99 @@
       "id": "P000",
       "package_path": "problems/P000",
       "parent_id": null,
-      "result_ids": [],
+      "result_ids": [
+        "R000"
+      ],
       "root_id": "P000",
-      "status": "todo",
+      "status": "done",
       "subproblem_ids": [],
       "success_criteria": [
         "Recursive ledger reaches `next_action=none` or the task explicitly records why no ledger is needed.",
         "Implementation satisfies this task's context and scope.",
         "Verification evidence is recorded in recursive result/check bodies and summarized in `progress.md`."
       ],
-      "ticket_ids": [],
+      "ticket_ids": [
+        "T000"
+      ],
       "title": "P0 real-device and backend acceptance readiness",
-      "updated_at": "2026-06-17T16:01:57+00:00"
+      "updated_at": "2026-06-17T16:27:07+00:00"
     }
   },
-  "results": {},
+  "results": {
+    "R000": {
+      "artifacts": [
+        "验收说明：`docs/superpowers/status/2026-06-18-device-backend-acceptance-readiness.md`",
+        "静态 guard：`tmp/visual-qa/prd-stitch-ui/device-backend-readiness-check.swift`",
+        "PRD 缺口图：`docs/superpowers/status/2026-06-18-prd-continuation-gap-map.md`",
+        "构建日志：`tmp/visual-qa/prd-stitch-ui/device-backend-readiness/20260618-current/build-debug.log`"
+      ],
+      "body_path": "problems/P000/results/R000.md",
+      "created_at": "2026-06-17T16:26:38+00:00",
+      "done": [
+        "新增 `docs/superpowers/status/2026-06-18-device-backend-acceptance-readiness.md`，覆盖真机验收、后端验收、阻塞条件、配置方式、运行命令、预期产物和验收边界。",
+        "新增 `tmp/visual-qa/prd-stitch-ui/device-backend-readiness-check.swift`，检查验收文档、Info.plist 隐私权限、后端配置注入、真实 token 忽略规则、后端 smoke 和档案到回响 smoke。",
+        "更新 `docs/superpowers/status/2026-06-18-prd-continuation-gap-map.md`，补充 persona scoping 完成状态，并引用真机/后端验收就绪文档。",
+        "按当前真实 `run-archive-to-echo-smoke.sh` 调整 guard，检查 `DJRunArchiveToEchoSmoke` 自运行 harness，而不是旧的种子参数。"
+      ],
+      "id": "R000",
+      "known_gaps": [
+        "真实后端 smoke 尚未执行，因为需要用户提供真实 `DREAMJOURNEY_BACKEND_BASE_URL` 和 `DREAMJOURNEY_BACKEND_API_TOKEN`。",
+        "真机验收尚未执行，因为需要用户提供真机、签名和设备操作。",
+        "构建日志中仍有 Pods/Kingfisher 的 Swift 6 空格 warning，非本任务新增，也不影响本轮构建通过。"
+      ],
+      "problem_id": "P000",
+      "root_id": "P000",
+      "summary": "已完成真机与后端验收就绪包：新增验收说明、静态 guard，并更新 PRD 缺口图，将当前状态明确为“验收就绪”，而不是“真实后端已验收”或“真机已验收”。",
+      "ticket_id": "T000",
+      "verification": [
+        "RED: `swift tmp/visual-qa/prd-stitch-ui/device-backend-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev` 在验收说明缺失时失败，失败点为 `Device/backend acceptance readiness doc should exist`。",
+        "GREEN: `swift tmp/visual-qa/prd-stitch-ui/device-backend-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev` 通过。",
+        "GREEN: `swift tmp/visual-qa/prd-stitch-ui/backend-build-config-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev` 通过。",
+        "GREEN: `swift tmp/visual-qa/prd-stitch-ui/backend-env-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev` 通过。",
+        "GREEN: `swift tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev` 通过。",
+        "GREEN: `git diff --check` 通过。",
+        "GREEN: `xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath tmp/visual-qa/prd-stitch-ui/device-backend-readiness/20260618-current/DerivedData CODE_SIGNING_ALLOWED=NO build` 通过。"
+      ]
+    }
+  },
   "root_id": "P000",
   "schema_version": 6,
-  "tickets": {},
-  "updated_at": "2026-06-17T16:01:57+00:00"
+  "tickets": {
+    "T000": {
+      "acceptance_criteria": [
+        "`docs/superpowers/status/2026-06-18-device-backend-acceptance-readiness.md` 存在，并覆盖真机验收、后端验收、阻塞条件、执行步骤和验收产物。",
+        "文档明确 `DREAMJOURNEY_BACKEND_BASE_URL`、`DREAMJOURNEY_BACKEND_API_TOKEN`、`Backend.local.xcconfig`、`run-backend-env-smoke.sh`、`run-archive-to-echo-smoke.sh` 的使用方式。",
+        "文档明确真实 token 不得提交，且当前缺真实后端/真机时只能声明“验收就绪”，不能声明“真机已验收”。",
+        "静态检查脚本能验证 Info.plist 隐私声明、后端配置忽略规则、后端 smoke token 要求和核心 QA 脚本存在。",
+        "PRD 缺口图引用该验收就绪说明。"
+      ],
+      "assumptions": [
+        "当前分支继续以 `run-archive-to-echo-smoke.sh` 作为档案到回响核心闭环回归。",
+        "真实后端 base URL 和 token 不应写入仓库。",
+        "暂不公开家庭/persona 切换、账号注销、医生联系等未完全闭环功能。"
+      ],
+      "body_path": "problems/P000/tickets/T000.md",
+      "classification": "one_go",
+      "classification_reason": "范围限定为验收就绪说明、静态检查脚本和 PRD 缺口图引用；不改运行时代码，不依赖真实后端或真机即可完成自动验证。",
+      "created_at": "2026-06-17T16:22:16+00:00",
+      "id": "T000",
+      "problem_definition": "PRD 的核心闭环已经具备模拟器级别的档案到回响验证，但真实验收还缺少一个稳定、可重复的就绪包来区分三类事情：\n\n- 可以由当前工程自动证明的配置与脚本合约。\n- 必须在真实后端环境运行的接口、鉴权、同步和回退验收。\n- 必须在真机上完成的麦克风、照片、语音权限和系统行为验收。\n\n如果继续只依赖模拟器截图或本地后端，容易把环境缺口误写成实现完成，也容易在后续 Stitch UI 或 PRD 逻辑更新后重复遗漏同一批检查。",
+      "problem_id": "P000",
+      "proposed_solution": "新增一份 P0 验收就绪说明，并配套一个轻量静态检查脚本：\n\n- 文档明确真机验收、后端验收、阻塞条件、执行命令和产物路径。\n- 文档要求真实密钥只通过 `DreamJourney/Config/Backend.local.xcconfig` 或运行时环境变量注入，不提交真实 token。\n- 检查脚本验证隐私权限、后端 build setting、`Backend.local.xcconfig` 忽略规则、后端 smoke 脚本强制 token、核心闭环脚本存在。\n- 更新 PRD 缺口图，把 Task 3 标记为“就绪包完成，真实验收待环境/真机”而不是“已完成真机验收”。\n- 不修改用户可见 UI，不触碰后端真实地址，不引入破坏兼容的数据迁移。",
+      "result_ids": [
+        "R000"
+      ],
+      "risks": [
+        "如果后续后端接口字段变化，文档和 smoke 脚本需要同步更新。",
+        "真机验收依赖 Apple 开发者签名、设备、系统权限弹窗和真实语音能力，不能由当前模拟器自动替代。",
+        "如果用户提供的后端 token 权限不足，后端 smoke 会失败，但这属于环境或权限问题，需要单独定位。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "P0 真机与后端验收就绪包",
+      "updated_at": "2026-06-17T16:26:38+00:00",
+      "verification_plan": "- 先运行新增静态检查脚本并确认在文档缺失时失败。\n- 补齐文档和 PRD 缺口图后重新运行新增静态检查脚本。\n- 运行既有后端配置检查：\n  - `swift tmp/visual-qa/prd-stitch-ui/backend-build-config-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`\n  - `swift tmp/visual-qa/prd-stitch-ui/backend-env-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`\n- 运行提交清单检查：\n  - `swift tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`\n- 运行 `git diff --check`。\n- 本任务只改文档和检查脚本，不要求 iOS 重新构建；真实后端 smoke 和真机验收在用户提供环境后执行。"
+    }
+  },
+  "updated_at": "2026-06-17T16:27:07+00:00"
 }
