@@ -2,17 +2,6 @@
   "active_ledger_id": "L20260618-000157-05",
   "ledgers": [
     {
-      "active_count": 1,
-      "blocked_count": 0,
-      "ledger_id": "L20260618-000157-05",
-      "path": "L20260618-000157-05",
-      "root_id": "P000",
-      "schema_version": 6,
-      "status": "doing",
-      "title": "Review and release QA",
-      "updated_at": "2026-06-17T16:01:57+00:00"
-    },
-    {
       "active_count": 0,
       "blocked_count": 0,
       "ledger_id": "L20260618-000157-01",
@@ -55,7 +44,18 @@
       "status": "done",
       "title": "P1 profile family and safety flows",
       "updated_at": "2026-06-17T16:44:24+00:00"
+    },
+    {
+      "active_count": 0,
+      "blocked_count": 0,
+      "ledger_id": "L20260618-000157-05",
+      "path": "L20260618-000157-05",
+      "root_id": "P000",
+      "schema_version": 6,
+      "status": "done",
+      "title": "Review and release QA",
+      "updated_at": "2026-06-17T16:50:21+00:00"
     }
   ],
-  "updated_at": "2026-06-17T16:44:35+00:00"
+  "updated_at": "2026-06-17T16:50:38+00:00"
 }

@@ -6,14 +6,17 @@ Run durable guards, simulator smoke, staged commits, and PRD review before branc
 
 ## Scope
 
-- Planned files: To be confirmed before execution.
+- Planned files:
+  - `docs/superpowers/status/2026-06-18-release-qa-handoff.md`
+  - `.closure-lodestar/`
+  - `.complex-problems/L20260618-000157-05/`
 
 ## Steps
 
-- [ ] Initialize or link recursive ledger for this task.
-- [ ] Follow recursive `ledger.py next` until the task problem is closed.
-- [ ] Sync recursive checkpoint to `progress.md`.
-- [ ] Run task-level verification and record evidence.
+- [x] Initialize or link recursive ledger for this task.
+- [x] Follow recursive `ledger.py next` until the task problem is closed.
+- [x] Sync recursive checkpoint to `progress.md`.
+- [x] Run task-level verification and record evidence.
 
 ## Success Criteria
 
@@ -23,5 +26,6 @@ Run durable guards, simulator smoke, staged commits, and PRD review before branc
 
 ## Recursive Ledger
 
-- Ledger ID: pending
-- Dashboard: pending
+- Ledger ID: `L20260618-000157-05`
+- Dashboard: `.complex-problems/L20260618-000157-05/views/INDEX.md`
+- Current next action: none; task closed.

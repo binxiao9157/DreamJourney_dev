@@ -1,11 +1,57 @@
 {
-  "checks": {},
+  "checks": {
+    "C000": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/checks/C000.md",
+      "created_at": "2026-06-17T16:50:21+00:00",
+      "criteria_map": [
+        "Core simulator smoke passed：满足。",
+        "Static guards passed：满足。",
+        "`git diff --check` passed：满足。",
+        "iOS Debug build passed：满足。",
+        "Handoff doc records commands/artifacts/risks：满足。",
+        "No generated screenshot/log/DerivedData intended for commit：由 submit inventory 与 staged-file checks继续保证。"
+      ],
+      "evidence": [
+        "多组 static guards 通过。",
+        "`run-archive-to-echo-smoke.sh` 通过，结果为 `completed=true`、`containsArchiveContext=true`、`availableItemCount=1`。",
+        "`git diff --check` 通过。",
+        "Debug simulator build 通过。",
+        "Handoff 文档存在：`docs/superpowers/status/2026-06-18-release-qa-handoff.md`。"
+      ],
+      "execution_map": [
+        "先跑 release/profile/persona/backend/readiness static guards。",
+        "再跑 archive-to-echo simulator smoke。",
+        "再跑普通 Debug build。",
+        "最后写 handoff 文档并记录 result。"
+      ],
+      "followup_problem_id": null,
+      "id": "C000",
+      "problem_id": "P000",
+      "residual_risk": [
+        "Real backend smoke 需要用户提供真实 URL/token。",
+        "True-device acceptance 需要用户提供设备、签名和设备操作。",
+        "第三方/资产 warning 仍存在，但构建通过。"
+      ],
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "Core smoke 真实启动 UIQA app 并验证 archive context 进入 Echo prompt。",
+        "Backend readiness guards 强制区分真实 backend acceptance 与本地 readiness。",
+        "Handoff 明确列出 hidden features，避免把未完成高风险入口当作 public release。"
+      ],
+      "summary": "判定成功。Task 5 要求的是 release QA 收敛包：静态 guard、核心 simulator smoke、Debug 构建和 handoff 文档均已完成。真实后端和真机验收被正确记录为外部条件，而不是伪装为已通过。"
+    }
+  },
   "counters": {
-    "check": 0,
-    "event": 1,
+    "check": 1,
+    "event": 12,
     "problem": 1,
-    "result": 0,
-    "ticket": 0
+    "result": 1,
+    "ticket": 1
   },
   "created_at": "2026-06-17T16:01:57+00:00",
   "effort": "medium",
@@ -14,7 +60,9 @@
   "problems": {
     "P000": {
       "body_path": "problems/P000/README.md",
-      "check_ids": [],
+      "check_ids": [
+        "C000"
+      ],
       "created_at": "2026-06-17T16:01:57+00:00",
       "created_from_check_id": null,
       "created_from_ticket_id": null,
@@ -24,23 +72,107 @@
       "id": "P000",
       "package_path": "problems/P000",
       "parent_id": null,
-      "result_ids": [],
+      "result_ids": [
+        "R000"
+      ],
       "root_id": "P000",
-      "status": "todo",
+      "status": "done",
       "subproblem_ids": [],
       "success_criteria": [
         "Recursive ledger reaches `next_action=none` or the task explicitly records why no ledger is needed.",
         "Implementation satisfies this task's context and scope.",
         "Verification evidence is recorded in recursive result/check bodies and summarized in `progress.md`."
       ],
-      "ticket_ids": [],
+      "ticket_ids": [
+        "T000"
+      ],
       "title": "Review and release QA",
-      "updated_at": "2026-06-17T16:01:57+00:00"
+      "updated_at": "2026-06-17T16:50:21+00:00"
     }
   },
-  "results": {},
+  "results": {
+    "R000": {
+      "artifacts": [
+        "Handoff: `docs/superpowers/status/2026-06-18-release-qa-handoff.md`",
+        "Smoke result: `tmp/visual-qa/prd-stitch-ui/archive-to-echo-smoke/20260618-release-qa-handoff/archive-to-echo-smoke-result.json`",
+        "Smoke screenshot: `tmp/visual-qa/prd-stitch-ui/archive-to-echo-smoke/20260618-release-qa-handoff/01-archive-to-echo-completed.png`",
+        "Debug build log: `tmp/visual-qa/prd-stitch-ui/release-qa-handoff/20260618-current/build-debug.log`"
+      ],
+      "body_path": "problems/P000/results/R000.md",
+      "created_at": "2026-06-17T16:49:53+00:00",
+      "done": [
+        "跑完 release/profile/backend/persona/readiness 相关静态 guard。",
+        "跑完 `run-archive-to-echo-smoke.sh`，核心闭环通过。",
+        "跑完普通 Debug 模拟器构建。",
+        "新增 `docs/superpowers/status/2026-06-18-release-qa-handoff.md`，记录提交范围、验证命令、产物路径、外部验收边界和剩余风险。"
+      ],
+      "id": "R000",
+      "known_gaps": [
+        "Real backend smoke was not run because no user-provided backend URL/token is available in this session.",
+        "True-device acceptance was not run because it requires signing/device operation.",
+        "Existing third-party/asset warnings remain, but builds passed."
+      ],
+      "problem_id": "P000",
+      "root_id": "P000",
+      "summary": "已完成 release QA 收敛：关键静态 guard、核心 archive-to-echo simulator smoke、`git diff --check` 和 Debug 构建均通过，并新增 release QA handoff 文档。",
+      "ticket_id": "T000",
+      "verification": [
+        "GREEN: `release-feature-matrix-check.swift`",
+        "GREEN: `profile-family-persona-switcher-check.swift`",
+        "GREEN: `profile-safety-flow-check.swift`",
+        "GREEN: `group4-profile-care-check.swift`",
+        "GREEN: `persona-scoped-archive-context-check.swift`",
+        "GREEN: `device-backend-readiness-check.swift`",
+        "GREEN: `backend-build-config-check.swift`",
+        "GREEN: `backend-env-smoke-check.swift`",
+        "GREEN: `submit-slice-inventory-check.swift`",
+        "GREEN: `RUN_ID=20260618-release-qa-handoff tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh`",
+        "GREEN: `git diff --check`",
+        "GREEN: Debug simulator build"
+      ]
+    }
+  },
   "root_id": "P000",
   "schema_version": 6,
-  "tickets": {},
-  "updated_at": "2026-06-17T16:01:57+00:00"
+  "tickets": {
+    "T000": {
+      "acceptance_criteria": [
+        "`run-archive-to-echo-smoke.sh` 通过，并产出 `archive-to-echo-smoke-result.json` 与截图。",
+        "所有本阶段相关 static guards 通过。",
+        "`git diff --check` 通过。",
+        "iOS Debug build 通过。",
+        "新增 `docs/superpowers/status/2026-06-18-release-qa-handoff.md`，列出验证命令、结果、产物路径、剩余风险和下一步。",
+        "Task 5 ledger 达到 `next_action=none`。",
+        "不提交临时截图、build log、DerivedData 或 Stitch cache。"
+      ],
+      "assumptions": [
+        "Current PRD core loop remains `记忆档案 -> 回响 -> 心境/关怀` with incomplete branches hidden.",
+        "Stitch visual source of truth remains current canvas + `htmlCode`; simulator screenshots are supporting evidence only.",
+        "Generated QA artifacts stay local unless they are machine-readable result summaries intentionally committed."
+      ],
+      "body_path": "problems/P000/tickets/T000.md",
+      "classification": "one_go",
+      "classification_reason": "QA 收敛包范围明确：运行既有 guards/smoke/build 并写 handoff 文档；若真实后端或真机缺环境则记录边界。",
+      "created_at": "2026-06-17T16:47:17+00:00",
+      "id": "T000",
+      "problem_definition": "当前分支已经完成 P0/P1 多个闭环，但还需要一个 release QA 收敛包来回答：\n\n- 当前 PRD 核心闭环是否仍通过。\n- 默认发布态是否仍隐藏未完成/高风险功能。\n- 真机/真实后端还缺哪些用户提供条件。\n- 本分支有哪些提交、验证产物和剩余风险。\n\n不能只依赖零散 build log 或口头说明；需要可复跑命令、机器检查和一份明确 handoff 文档。",
+      "problem_id": "P000",
+      "proposed_solution": "- 运行当前分支的 durable static guards：\n  - release feature matrix\n  - profile family persona switcher\n  - profile safety flows\n  - group4 profile/care\n  - persona-scoped archive context\n  - device/backend readiness\n  - backend build/env smoke contract guards\n  - submit slice inventory\n- 运行核心闭环 simulator smoke：`run-archive-to-echo-smoke.sh`。\n- 运行 `git diff --check` 和 iOS Debug build。\n- 新增 release QA handoff 文档，记录：\n  - 最新提交范围。\n  - 已验证命令。\n  - smoke 结果路径和截图路径。\n  - 真机/后端待用户提供条件。\n  - PRD/UI 仍未公开的功能边界。\n- 如果某个检查失败，先修复当前分支问题；如果需要用户提供真实后端 token 或真机操作，则记录为阻塞边界，不伪装通过。",
+      "result_ids": [
+        "R000"
+      ],
+      "risks": [
+        "Simulator smoke may take time and may expose environment-specific simulator issues.",
+        "Real backend smoke cannot run without user-provided backend URL/token.",
+        "True-device acceptance cannot run without user device/signing.",
+        "Existing third-party warnings may remain; they should be recorded if build succeeds."
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "Review And Release QA 收敛包",
+      "updated_at": "2026-06-17T16:49:53+00:00",
+      "verification_plan": "Run:\n\n```bash\nswift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev\nswift tmp/visual-qa/prd-stitch-ui/profile-family-persona-switcher-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev\nswift tmp/visual-qa/prd-stitch-ui/profile-safety-flow-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev\nswift tmp/visual-qa/prd-stitch-ui/group4-profile-care-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev\nswift tmp/visual-qa/prd-stitch-ui/persona-scoped-archive-context-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev\nswift tmp/visual-qa/prd-stitch-ui/device-backend-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev\nswift tmp/visual-qa/prd-stitch-ui/backend-build-config-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev\nswift tmp/visual-qa/prd-stitch-ui/backend-env-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev\nswift tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev\ntmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh\ngit diff --check\nxcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build\n```"
+    }
+  },
+  "updated_at": "2026-06-17T16:50:21+00:00"
 }

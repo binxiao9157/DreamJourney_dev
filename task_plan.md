@@ -5,8 +5,8 @@
 - **Goal:** 按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态
 - **Mode:** Execute
 - **Phase:** Implementation
-- **Task:** docs/plans/task_05_review-and-release-qa.md
-- **Blockers:** None
+- **Task:** external backend/device acceptance or next Stitch update
+- **Blockers:** real backend URL/token and true-device signing/operation for final acceptance
 
 ## Key Decisions
 
@@ -16,7 +16,8 @@
 - Task 2 closed: persona-scoped archive storage/backend/context contract is implemented and guarded.
 - Task 3 closed: real-device/backend acceptance readiness is documented and guarded; true backend/device execution still waits for user-provided environment.
 - Task 4 closed: hidden family/persona switcher, profile safety shells, and care visibility gates are implemented and guarded.
-- Current target: review and release QA.
+- Task 5 closed: release QA handoff is documented and simulator/static QA passed.
+- Current target: wait for user-provided real backend/device acceptance inputs, or continue after the next Stitch UI/PRD update.
 
 ## Scope
 

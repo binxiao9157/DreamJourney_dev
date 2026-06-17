@@ -42,12 +42,12 @@
     "docs/plans/task_05_review-and-release-qa.md": {
       "ledger_id": "L20260618-000157-05",
       "ledger_path": ".complex-problems/L20260618-000157-05",
-      "next_action": "create-solution-ticket",
-      "status": "next",
+      "next_action": "none",
+      "status": "complete",
       "task_file": "docs/plans/task_05_review-and-release-qa.md",
       "title": "Review and release QA",
-      "updated_at": "2026-06-18T00:01:57+08:00"
+      "updated_at": "2026-06-18T00:50:38+08:00"
     }
   },
-  "updated_at": "2026-06-18T00:44:35+08:00"
+  "updated_at": "2026-06-18T00:50:38+08:00"
 }
