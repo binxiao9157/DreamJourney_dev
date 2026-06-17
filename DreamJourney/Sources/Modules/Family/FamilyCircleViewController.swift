@@ -1,5 +1,55 @@
 import UIKit
 
+private enum FamilyPersonaOption {
+    case selfAssistant
+    case familyMember(FamilyMember)
+
+    var displayName: String {
+        switch self {
+        case .selfAssistant:
+            return "AI 助手"
+        case .familyMember(let member):
+            return member.name
+        }
+    }
+
+    var relationLabel: String {
+        switch self {
+        case .selfAssistant:
+            return "自己"
+        case .familyMember(let member):
+            return member.relation
+        }
+    }
+
+    var lastUpdated: String {
+        switch self {
+        case .selfAssistant:
+            return "当前回响对象"
+        case .familyMember(let member):
+            return member.lastUpdated
+        }
+    }
+
+    var isOnline: Bool {
+        switch self {
+        case .selfAssistant:
+            return true
+        case .familyMember(let member):
+            return member.isOnline
+        }
+    }
+
+    var accessibilitySuffix: String {
+        switch self {
+        case .selfAssistant:
+            return "self"
+        case .familyMember(let member):
+            return member.id
+        }
+    }
+}
+
 // MARK: - FamilyCircleViewController：亲友页
 final class FamilyCircleViewController: UIViewController {
 
@@ -8,7 +58,7 @@ final class FamilyCircleViewController: UIViewController {
     // MARK: - UI：顶部标题行
     private let titleLabel: UILabel = {
         let l = UILabel()
-        l.text = "亲友"
+        l.text = "选择数字人"
         l.font = .systemFont(ofSize: 28, weight: .bold)
         l.textColor = UIColor(red: 0.15, green: 0.12, blue: 0.10, alpha: 1.0)
         return l
@@ -27,7 +77,7 @@ final class FamilyCircleViewController: UIViewController {
     // MARK: - UI：邀请区
     private let inviteSectionLabel: UILabel = {
         let l = UILabel()
-        l.text = "邀请新成员"
+        l.text = "隐藏态家人空间"
         l.font = .systemFont(ofSize: 13, weight: .regular)
         l.textColor = UIColor(white: 0.55, alpha: 1.0)
         return l
@@ -103,7 +153,7 @@ final class FamilyCircleViewController: UIViewController {
     // MARK: - UI：亲友圈列表
     private let circleHeaderLabel: UILabel = {
         let l = UILabel()
-        l.text = "我的亲友圈"
+        l.text = "回响对象"
         l.font = .systemFont(ofSize: 18, weight: .bold)
         l.textColor = UIColor(red: 0.15, green: 0.12, blue: 0.10, alpha: 1.0)
         return l
@@ -140,6 +190,9 @@ final class FamilyCircleViewController: UIViewController {
 
     // MARK: - Data
     private var members: [FamilyMember] { FamilyRepository.shared.getAll() }
+    private var personaOptions: [FamilyPersonaOption] {
+        [.selfAssistant] + members.map { .familyMember($0) }
+    }
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -155,7 +208,7 @@ final class FamilyCircleViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        memberCountLabel.text = "\(members.count) 位成员"
+        memberCountLabel.text = "\(personaOptions.count) 位可切换对象"
         membersTableView.reloadData()
     }
 
@@ -209,7 +262,7 @@ final class FamilyCircleViewController: UIViewController {
         }
 
         let rowHeight: CGFloat = 80
-        let tableHeight = CGFloat(members.count) * rowHeight
+        let tableHeight = CGFloat(personaOptions.count) * rowHeight
 
         NSLayoutConstraint.activate([
             // 标题行
@@ -265,17 +318,42 @@ final class FamilyCircleViewController: UIViewController {
         UIPasteboard.general.string = "邀请你加入寻梦环游家族圈，下载寻梦环游App后使用此邀请码：DJ-2025"
         showToast("邀请邮票已复制到剪贴板", type: .success)
     }
+
+    private func selectPersona(option: FamilyPersonaOption) {
+        guard let user = UserManager.shared.currentUser else {
+            showToast("请先登录后再切换回响对象", type: .info)
+            return
+        }
+
+        switch option {
+        case .selfAssistant:
+            DigitalHumanContextStore.shared.current = DigitalHumanContext.defaultContext(userId: user.id)
+            showToast("已切换到自己 AI 助手", type: .success)
+        case .familyMember(let member):
+            DigitalHumanContextStore.shared.current = DigitalHumanContext(
+                viewerUserId: user.id,
+                ownerId: member.id,
+                displayName: member.name,
+                relation: member.relation,
+                mode: .star,
+                isSelfAssistant: false
+            )
+            showToast("已切换到 \(member.name) 的回响", type: .success)
+        }
+
+        navigationController?.popViewController(animated: true)
+    }
 }
 
 // MARK: - UITableViewDataSource
 extension FamilyCircleViewController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return members.count
+        return personaOptions.count
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "FriendMemberCell", for: indexPath) as! FriendMemberCell
-        cell.configure(with: members[indexPath.row], isLast: indexPath.row == members.count - 1)
+        cell.configure(with: personaOptions[indexPath.row], isLast: indexPath.row == personaOptions.count - 1)
         return cell
     }
 }
@@ -286,8 +364,7 @@ extension FamilyCircleViewController: UITableViewDelegate {
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        let member = members[indexPath.row]
-        showToast("查看 \(member.name) 的足迹", type: .info)
+        selectPersona(option: personaOptions[indexPath.row])
     }
 }
 
@@ -370,7 +447,7 @@ final class FriendMemberCell: UITableViewCell {
     // MARK: 查看足迹按钮
     private let footprintButton: UIButton = {
         let b = UIButton(type: .system)
-        b.setTitle("查看足迹", for: .normal)
+        b.setTitle("切换", for: .normal)
         b.setTitleColor(UIColor(red: 0.30, green: 0.25, blue: 0.20, alpha: 1.0), for: .normal)
         b.titleLabel?.font = .systemFont(ofSize: 13, weight: .regular)
         b.backgroundColor = .white
@@ -472,22 +549,24 @@ final class FriendMemberCell: UITableViewCell {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    func configure(with member: FamilyMember, isLast: Bool) {
+    fileprivate func configure(with option: FamilyPersonaOption, isLast: Bool) {
         // 头像首字
-        avatarInitialLabel.text = String(member.name.prefix(1))
+        avatarInitialLabel.text = String(option.displayName.prefix(1))
 
         // 在线状态圆点颜色
-        onlineDot.backgroundColor = member.isOnline
+        onlineDot.backgroundColor = option.isOnline
             ? UIColor(red: 0.20, green: 0.75, blue: 0.30, alpha: 1.0)
             : UIColor(white: 0.75, alpha: 1.0)
 
-        nameLabel.text = member.name
+        nameLabel.text = option.displayName
 
         // 关系标签内边距
-        let padding = "  \(member.relation)  "
+        let padding = "  \(option.relationLabel)  "
         relationLabel.text = padding
 
-        lastUpdatedLabel.text = "上次更新: \(member.lastUpdated)"
+        lastUpdatedLabel.text = "状态: \(option.lastUpdated)"
+        accessibilityIdentifier = "familyPersonaOption.\(option.accessibilitySuffix)"
+        accessibilityLabel = "切换到\(option.displayName)"
 
         // 最后一行不显示分割线
         divider.isHidden = isLast

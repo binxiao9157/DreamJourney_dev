@@ -97,7 +97,8 @@ func classify(_ path: String) -> String? {
         return "3-archive-core-creation"
     }
 
-    if hasPrefix(path, "DreamJourney/Sources/Modules/Profile/") {
+    if hasPrefix(path, "DreamJourney/Sources/Modules/Profile/")
+        || hasPrefix(path, "DreamJourney/Sources/Modules/Family/") {
         return "4-profile-care-settings-legal"
     }
 

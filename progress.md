@@ -48,3 +48,12 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `none`
 - Counts: 1/1 problems done, 0 blocked, 1/1 tickets done
 - Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+
+## Recursive Closure Checkpoint - 2026-06-18T00:37:15+08:00
+
+- Ledger: `L20260618-000157-04`
+- Lodestar task: `docs/plans/task_04_p1-profile-family-and-safety-flows.md`
+- Root: `P000` / followup
+- Next action: `create-solution-ticket`
+- Counts: 0/2 problems done, 0 blocked, 1/1 tickets done
+- Next instruction: create solution ticket for follow-up `P001` profile safety flow shells and care visibility.

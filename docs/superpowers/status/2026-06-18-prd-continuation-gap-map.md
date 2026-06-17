@@ -42,7 +42,7 @@ The app should preserve future routes for family space, elder care, sunlight/sil
 | --- | --- | --- | --- |
 | P0 | Real-device acceptance checklist for microphone/photo/voice SDK | PRD core input is voice and archive supports photo/audio. Simulator proves contract only; true acceptance requires device steps and privacy behavior. | Readiness doc added in `2026-06-18-device-backend-acceptance-readiness.md`; 真实验收待用户提供后端环境和真机. |
 | P0 | Non-local backend verification contract | Archive/care/family/KB endpoints exist, but staging/prod base URL, token injection, persistence, and error recovery need a repeatable acceptance path. | Backend smoke script and static guards exist; `2026-06-18-device-backend-acceptance-readiness.md` defines runbook; real environment depends on key/server. |
-| P1 | Family management/persona switching UI | PRD requires switching family members and self. Public route is hidden because the current `FamilyCircleViewController` is legacy and not wired to persona context. | `familyManagement`/`familySpace` are hidden. |
+| P1 | Family management/persona switching UI | PRD requires switching family members and self. Hidden route now writes `DigitalHumanContextStore`; public family management is still not ready. | `familyManagement`/`familySpace` are hidden; status doc: `2026-06-18-profile-family-persona-switcher.md`. |
 | P1 | 星辰/阳光/静默 business state | PRD says mode name is not displayed on Echo, but star relatives enable psychological guidance and mood tracking. | Internal enum exists; UI does not yet derive care visibility or copy from selected mode. |
 | P1 | Account deletion flow | PRD lists account cancellation. Current branch correctly hides/blocks it because legal confirmation and destructive state handling are not implemented. | `accountDeletion` hidden by default and alert-only. |
 | P1 | Doctor contact / intervention flow | PRD describes L3/L4 intervention. Current app shows doctor identity and hides call action by default. | `careDoctorContact` hidden; no real call/escalation contract. |
@@ -78,6 +78,7 @@ The app should preserve future routes for family space, elder care, sunlight/sil
 ### P1
 
 1. **Family/persona management behind flag**
+   - Status: hidden persona switcher implemented in `docs/superpowers/status/2026-06-18-profile-family-persona-switcher.md`; public family management still gated.
    - Build a small release-gated persona switcher that uses existing `FamilyRepository` data and writes `DigitalHumanContextStore`.
    - Keep it hidden until product confirms public exposure.
 

@@ -26,6 +26,7 @@ final class ProfileViewController: UIViewController {
     var didRequestLogout: (() -> Void)?
 
     private var careSnapshot: ProfileCareSnapshot?
+    private var personaContext: DigitalHumanContext
     private let featureFlags: FeatureFlagService
 
     private let scrollView = UIScrollView()
@@ -54,6 +55,7 @@ final class ProfileViewController: UIViewController {
         featureFlags: FeatureFlagService = .shared
     ) {
         self.careSnapshot = careSnapshot
+        self.personaContext = DigitalHumanContextStore.shared.current
         self.featureFlags = featureFlags
         super.init(nibName: nil, bundle: nil)
     }
@@ -66,9 +68,14 @@ final class ProfileViewController: UIViewController {
         super.viewDidLoad()
         title = "我的"
         view.backgroundColor = DJDesignTokens.Color.background
+        observeDigitalHumanContext()
         configureScrollView()
         buildContent()
         loadCareSnapshot()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -145,6 +152,24 @@ final class ProfileViewController: UIViewController {
         buildContent()
     }
 
+    private func observeDigitalHumanContext() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(digitalHumanContextDidChange(_:)),
+            name: .djDigitalHumanContextDidChange,
+            object: nil
+        )
+    }
+
+    @objc private func digitalHumanContextDidChange(_ notification: Notification) {
+        if let context = notification.object as? DigitalHumanContext {
+            personaContext = context
+        } else {
+            personaContext = DigitalHumanContextStore.shared.current
+        }
+        rebuildContent()
+    }
+
     private func loadCareSnapshot() {
         guard featureFlags.isEnabled(.careDashboard),
               let userId = UserManager.shared.currentUser?.id else {
@@ -192,15 +217,17 @@ final class ProfileViewController: UIViewController {
         statusDot.layer.borderWidth = 2
         statusDot.layer.borderColor = DJDesignTokens.Color.surface.cgColor
 
+        let context = personaContext
+
         let titleLabel = makeLabel(
-            text: "外面世界很美好",
+            text: makePersonaTitle(context: context),
             font: DJDesignTokens.Font.title(ProfileLayout.personaTitleFontSize),
             color: DJDesignTokens.Color.textPrimary
         )
         titleLabel.textAlignment = .center
 
         let subtitleLabel = makeLabel(
-            text: "今天又是阳光灿烂的一天",
+            text: makePersonaSubtitle(context: context),
             font: DJDesignTokens.Font.label(ProfileLayout.personaSubtitleFontSize),
             color: DJDesignTokens.Color.textTertiary
         )
@@ -246,6 +273,24 @@ final class ProfileViewController: UIViewController {
         ])
 
         return container
+    }
+
+    private func makePersonaTitle(context: DigitalHumanContext) -> String {
+        if context.isSelfAssistant {
+            return "外面世界很美好"
+        }
+        return context.resolvedDisplayName
+    }
+
+    private func makePersonaSubtitle(context: DigitalHumanContext) -> String {
+        if context.isSelfAssistant {
+            return "今天又是阳光灿烂的一天"
+        }
+        if let relation = context.relation,
+           !relation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "\(relation)的回响已连接"
+        }
+        return "家人数字人的回响已连接"
     }
 
     private func makeCareCard(snapshot: ProfileCareSnapshot?) -> UIView {

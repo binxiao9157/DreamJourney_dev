@@ -1,11 +1,36 @@
 {
-  "checks": {},
+  "checks": {
+    "C000": {
+      "blocking_gaps": [
+        "账号注销仍是隐藏态占位 alert，没有 destructive confirmation shell 或合规边界说明。",
+        "`立即通话` 仍是隐藏态占位 alert，没有安全说明、非紧急提示或实际联系契约边界。",
+        "心境追踪仍只按 `careDashboard` feature flag 显示，没有结合 selected persona/mode 做可见性判断。",
+        "上述缺口属于 Task 4 原始范围，不能因 family/persona switcher 完成而把整个 Task 4 判成功。"
+      ],
+      "body_path": "problems/P000/checks/C000.md",
+      "created_at": "2026-06-17T16:37:01+00:00",
+      "criteria_map": [],
+      "evidence": [],
+      "execution_map": [],
+      "followup_problem_id": "P001",
+      "id": "C000",
+      "problem_id": "P000",
+      "residual_risk": [],
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "not_success",
+      "stress_test": [],
+      "summary": "判定 not_success。结果 R000 已经完成隐藏态 family/persona switcher，并且该子闭环有验证证据；但原始 Task 4 范围还包含 account deletion confirmation、doctor contact safety、care visibility 等 safety flows，当前结果没有覆盖这些剩余 P1 缺口。"
+    }
+  },
   "counters": {
-    "check": 0,
-    "event": 1,
-    "problem": 1,
-    "result": 0,
-    "ticket": 0
+    "check": 1,
+    "event": 12,
+    "problem": 2,
+    "result": 1,
+    "ticket": 1
   },
   "created_at": "2026-06-17T16:01:57+00:00",
   "effort": "medium",
@@ -14,33 +39,152 @@
   "problems": {
     "P000": {
       "body_path": "problems/P000/README.md",
-      "check_ids": [],
+      "check_ids": [
+        "C000"
+      ],
       "created_at": "2026-06-17T16:01:57+00:00",
       "created_from_check_id": null,
       "created_from_ticket_id": null,
       "created_from_ticket_mode": null,
       "description": "Close the Lodestar task represented by `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/plans/task_04_p1-profile-family-and-safety-flows.md` using recursive problem, ticket, result, and check state.\n\nTask context:\n\n# P1 profile family and safety flows",
-      "followup_ids": [],
+      "followup_ids": [
+        "P001"
+      ],
       "id": "P000",
       "package_path": "problems/P000",
       "parent_id": null,
-      "result_ids": [],
+      "result_ids": [
+        "R000"
+      ],
       "root_id": "P000",
-      "status": "todo",
-      "subproblem_ids": [],
+      "status": "followup",
+      "subproblem_ids": [
+        "P001"
+      ],
       "success_criteria": [
         "Recursive ledger reaches `next_action=none` or the task explicitly records why no ledger is needed.",
         "Implementation satisfies this task's context and scope.",
         "Verification evidence is recorded in recursive result/check bodies and summarized in `progress.md`."
       ],
-      "ticket_ids": [],
+      "ticket_ids": [
+        "T000"
+      ],
       "title": "P1 profile family and safety flows",
-      "updated_at": "2026-06-17T16:01:57+00:00"
+      "updated_at": "2026-06-17T16:37:01+00:00"
+    },
+    "P001": {
+      "body_path": "problems/P000/children/P001/README.md",
+      "check_ids": [],
+      "created_at": "2026-06-17T16:37:01+00:00",
+      "created_from_check_id": "C000",
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Task 4 的 family/persona switcher 已完成，但 profile safety flows 仍缺少最小可验收闭环：\n\n- 账号注销仍是占位 alert，没有 destructive confirmation shell 或明确的合规边界。\n- 医生联系仍是占位 alert，没有安全说明、非紧急提示或联系契约边界。\n- 心境追踪仍只按 feature flag 显示，没有结合 selected persona/mode 做可见性判断。\n\n这些功能仍必须保持隐藏或安全降级，不能直接对默认发布态开放。",
+      "followup_ids": [],
+      "id": "P001",
+      "package_path": "problems/P000/children/P001",
+      "parent_id": "P000",
+      "result_ids": [],
+      "root_id": "P000",
+      "status": "followup",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "默认 release flags 仍不公开 `accountDeletion`、`careDoctorContact`、`familyManagement`、`familySpace`。",
+        "账号注销在隐藏态下显示 destructive confirmation shell，但最终删除动作仍不可执行，且文案说明需要完整合规流程。",
+        "医生联系在隐藏态下显示安全说明，强调非紧急、非医疗诊断，并保留未接入真实联系契约的边界。",
+        "心境追踪可见性通过一个明确 helper 结合 `careDashboard` 与 selected persona/mode 判断；默认 self 状态仍保持当前 Stitch/profile 视觉。",
+        "新增或更新静态 guard，覆盖上述 release gate、安全文案和 care visibility 合约。",
+        "相关 guard、`git diff --check` 和 iOS Debug 构建通过。"
+      ],
+      "ticket_ids": [],
+      "title": "P1 Profile safety flow shells and care visibility",
+      "updated_at": "2026-06-17T16:37:01+00:00"
     }
   },
-  "results": {},
+  "results": {
+    "R000": {
+      "artifacts": [
+        "Guard: `tmp/visual-qa/prd-stitch-ui/profile-family-persona-switcher-check.swift`",
+        "Status doc: `docs/superpowers/status/2026-06-18-profile-family-persona-switcher.md`",
+        "Build log: `tmp/visual-qa/prd-stitch-ui/profile-family-persona-switcher/20260618-current/build-debug.log`"
+      ],
+      "body_path": "problems/P000/results/R000.md",
+      "created_at": "2026-06-17T16:36:11+00:00",
+      "done": [
+        "`ProfileViewController` 监听 `.djDigitalHumanContextDidChange` 并重建内容。",
+        "Profile persona card 默认 self 状态继续显示 Stitch 文案 `外面世界很美好` / `今天又是阳光灿烂的一天`，非 self persona 才显示家人数字人文案。",
+        "`FamilyCircleViewController` 改为隐藏态 persona switcher：",
+        "包含 `AI 助手` self option。",
+        "使用 `FamilyRepository.shared.getAll()` 作为 family option。",
+        "点击 self 写入 `DigitalHumanContext.defaultContext(userId:)`。",
+        "点击 family member 写入 `DigitalHumanContextStore.shared.current`，包含 viewer、owner、displayName、relation、`.star` 和 `isSelfAssistant = false`。",
+        "新增 `profile-family-persona-switcher-check.swift` 静态 guard。",
+        "更新 release feature matrix、PRD gap map 和本轮状态文档。",
+        "更新提交清单分类，将 `DreamJourney/Sources/Modules/Family/` 纳入 profile/family/safety 分组。"
+      ],
+      "id": "R000",
+      "known_gaps": [
+        "Public family management remains hidden and is not ready for release.",
+        "Family invite, access control, member deletion, and backend family sync acceptance are not included.",
+        "`.star` is the default family persona mode for now; full sunlight/star/silent mode management remains a later P1/P2 task.",
+        "Build log still contains existing third-party/asset warnings unrelated to this slice."
+      ],
+      "problem_id": "P000",
+      "root_id": "P000",
+      "summary": "已把隐藏态 `家人管理` 路由从占位推进为可用的 persona switcher。默认发布态仍不公开 family/persona 管理；只有显式开启 `familyManagement` 与 `familySpace` 后，才能进入选择 self/family 数字人的隐藏页面。",
+      "ticket_id": "T000",
+      "verification": [
+        "RED: `swift tmp/visual-qa/prd-stitch-ui/profile-family-persona-switcher-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev` 在实现前失败，失败点为 Profile 未监听 `.djDigitalHumanContextDidChange`。",
+        "GREEN: `swift tmp/visual-qa/prd-stitch-ui/profile-family-persona-switcher-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev` 通过。",
+        "GREEN: `swift tmp/visual-qa/prd-stitch-ui/group4-profile-care-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev` 通过。",
+        "GREEN: `swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev` 通过。",
+        "GREEN: `swift tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev` 通过。",
+        "GREEN: `git diff --check` 通过。",
+        "GREEN after one compile fix: `xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath tmp/visual-qa/prd-stitch-ui/profile-family-persona-switcher/20260618-current/DerivedData CODE_SIGNING_ALLOWED=NO build` 通过。"
+      ]
+    }
+  },
   "root_id": "P000",
   "schema_version": 6,
-  "tickets": {},
-  "updated_at": "2026-06-17T16:01:57+00:00"
+  "tickets": {
+    "T000": {
+      "acceptance_criteria": [
+        "默认 release flags 不包含 `familyManagement`、`familySpace`、`accountDeletion`、`careDoctorContact`。",
+        "`家人管理` 仍只能通过 `DJEnableProfileHiddenBranches` 或 feature flags 暴露。",
+        "`familySpace` 未开启时，`家人管理` 仍展示未开放安全提示。",
+        "`familySpace` 开启后，进入可选择 self/family persona 的隐藏态页面。",
+        "选择 self 会恢复默认 `AI 助手` context。",
+        "选择 family member 会写入 `DigitalHumanContextStore`，并带上 `viewerUserId`、`ownerId`、`displayName`、`relation`、`.star`、`isSelfAssistant = false`。",
+        "Profile persona 卡片会响应 `djDigitalHumanContextDidChange`，但默认 self 状态不破坏当前 Stitch 视觉。",
+        "新增或更新 guard 文档/脚本覆盖以上合约。"
+      ],
+      "assumptions": [
+        "`FamilyRepository.shared.getAll()` 可作为隐藏态 persona 列表的数据源。",
+        "family persona 默认使用 `.star` 模式，后续星辰/阳光/静默完整业务状态再单独推进。",
+        "当前默认 self 视觉继续以 Stitch 画布为准，不为了显示 `AI 助手` 改掉默认 profile 首屏文案。"
+      ],
+      "body_path": "problems/P000/tickets/T000.md",
+      "classification": "one_go",
+      "classification_reason": "隐藏态 persona switcher 范围明确，只触达 Profile/Family 路由和静态 guard；默认发布态保持隐藏，可在同一轮完成验证。",
+      "created_at": "2026-06-17T16:30:25+00:00",
+      "id": "T000",
+      "problem_definition": "P0 已经完成 selected persona 对档案存储、后端 payload 和回响上下文的作用域隔离，但 Profile 里的 `家人管理` 仍停留在隐藏占位/旧 FamilyCircle 路由：\n\n- 默认发布态正确隐藏 `家人管理`。\n- QA 或后续发布打开 `familyManagement` / `familySpace` 后，页面没有把 FamilyRepository 的家人成员写入 `DigitalHumanContextStore`。\n- 因此 P0 的 persona-scoped 数据契约还缺少一个可用的 UI 入口，无法形成“选择家人数字人 -> 档案/回响切到该 persona”的闭环。\n\n本任务不公开家庭空间，不实现邀请/权限/家庭协作全量功能，只做隐藏 flag 后的 persona 切换最小闭环。",
+      "problem_id": "P000",
+      "proposed_solution": "实现一个小范围、release-gated 的 persona switcher：\n\n- 保持 `familyManagement`、`familySpace` 默认隐藏。\n- 在 `familyManagement` 可见但 `familySpace` 未开启时，继续展示安全占位提示。\n- 在 `familyManagement` 与 `familySpace` 均开启时，进入隐藏态 family/persona 页面。\n- 页面提供“自己 AI 助手”与 `FamilyRepository.shared.getAll()` 成员列表。\n- 点击自己写入 `DigitalHumanContext.defaultContext(userId:)`。\n- 点击家人成员写入 `DigitalHumanContext(viewerUserId: currentUser.id, ownerId: member.id, displayName: member.name, relation: member.relation, mode: .star, isSelfAssistant: false)`。\n- `ProfileViewController` 监听 `djDigitalHumanContextDidChange`，默认视觉保持 Stitch 对齐；当选中非 self persona 时，persona 卡片文案反映当前家人数字人。\n- 补静态 guard 验证默认隐藏、隐藏态入口、context 写入、通知刷新与 FamilyRepository 数据使用。",
+      "result_ids": [
+        "R000"
+      ],
+      "risks": [
+        "旧 `FamilyCircleViewController` 视觉与当前 Stitch 不完全一致，因此必须保持隐藏，不进入默认发布态。",
+        "家庭邀请、权限、成员管理、删除成员不在本任务范围，避免误公开半成品。",
+        "选择 family persona 后的真实后端数据仍依赖后端环境；本任务只保证本地 context 和 UI 路由。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "P1 隐藏态家人 Persona 切换闭环",
+      "updated_at": "2026-06-17T16:36:11+00:00",
+      "verification_plan": "- 先新增 `tmp/visual-qa/prd-stitch-ui/profile-family-persona-switcher-check.swift`，运行并确认在实现前失败。\n- 实现隐藏态 persona switcher 和 Profile 刷新逻辑。\n- 运行：\n  - `swift tmp/visual-qa/prd-stitch-ui/profile-family-persona-switcher-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`\n  - `swift tmp/visual-qa/prd-stitch-ui/group4-profile-care-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`\n  - `swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`\n  - `swift tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`\n  - `git diff --check`\n- 跑 iOS Debug 模拟器构建。\n- 如果 UI 变化较明显，再跑隐藏态模拟器烟测截图；默认发布态视觉不应变化。"
+    }
+  },
+  "updated_at": "2026-06-17T16:37:01+00:00"
 }
