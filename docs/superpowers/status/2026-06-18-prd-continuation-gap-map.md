@@ -1,0 +1,130 @@
+# PRD Continuation Gap Map
+
+Date: 2026-06-18
+
+Branch: `feature/prd-stitch-ui-adaptation`
+
+Baseline commit: `0f64248 feat: adapt PRD Stitch UI flows`
+
+Project path: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev`
+
+## Source Of Truth
+
+- Product: latest attached `《寻梦环游 产品PRD V1.0》(1).md`.
+- Visual: current Stitch canvas first, Stitch `htmlCode` second.
+- Auxiliary visual evidence: MCP screenshots and simulator screenshots only.
+- Code baseline: current UIKit implementation after the PRD/Stitch UI adaptation commit.
+
+## PRD Core Goal
+
+First-stage MVP should make `记忆档案馆 -> 生成/沉淀数字人格素材 -> 回响语音交互 -> 等待回信/情绪反馈 -> 心境追踪/关怀` a real, repeatable loop.
+
+The app should preserve future routes for family space, elder care, sunlight/silent/star mode, and digital inheritance without exposing incomplete or unsafe branches in the public surface.
+
+## Current Implemented Capability
+
+| PRD Area | Current State | Evidence |
+| --- | --- | --- |
+| App shell | Implemented as `记忆档案 / 回响 / 我的`; old public tabs are removed from the default shell. | `TabCoordinator`, `WarmTabBarController`, Group 2 review. |
+| Login | Stitch-aligned light login while keeping existing callback login flow. | `LoginViewController`, final visual QA docs. |
+| 回响 | Voice-first interaction, archive-context indicator, delayed reply state, and prompt injection from archive context. Text/image inputs stay hidden. | `EchoViewController`, `EchoViewModel`, `DialogEngineManager`, archive-to-echo smoke. |
+| 记忆档案馆 | Text/photo creation, local persistence, local analysis states, detail page, timeline cards, hidden audio/time-letter/persona branches. | `MemoryArchive*`, Group 3 review. |
+| 设置/我的 | Profile root, personal settings, legal center, logout, care dashboard fallback and backend parsing. | `ProfileViewController`, `ProfileSettingsViewController`, `ProfileLegalViewController`, Group 4 review. |
+| 长辈关怀 | Care signal model parses aggregate backend data without raw chat transcript exposure and falls back safely when offline. | `ProfileCareModels`, `DreamJourneyBackendClient.latestCareSnapshot`. |
+| Backend client | Local/dev backend base URL and optional token config; archive, KB, family, care endpoint wrappers. | `DreamJourneyBackendClient`, backend env smoke docs. |
+| Release gates | Incomplete/high-risk branches are hidden by default and guarded by feature flags or UIQA-only launch arguments. | `FeatureFlagService`, release feature matrix. |
+| QA harness | Reusable archive-to-echo smoke and static guards exist; large generated QA artifacts remain local-only. | `tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh`, submit inventory. |
+
+## Key Remaining Gaps
+
+| Priority | Gap | Why It Matters | Current Boundary |
+| --- | --- | --- | --- |
+| P0 | Persona-scoped archive and echo context | PRD says switching to a family member or self must switch archive database and echo persona. Current archive storage and backend calls are scoped to login user, not selected digital-human/persona context. | `DigitalHumanContextStore` exists but is thin; `MemoryArchiveRepository` uses `currentUserId`. |
+| P0 | Durable current-persona contract | Echo, Archive, Profile, and backend need a shared stable context id/display copy so data does not bleed between `自己 AI 助手` and `家人数字人`. | `DigitalHumanContext` stores one context but has no notification, fallback display name, or repository owner binding. |
+| P0 | Real-device acceptance checklist for microphone/photo/voice SDK | PRD core input is voice and archive supports photo/audio. Simulator proves contract only; true acceptance requires device steps and privacy behavior. | Privacy strings and simulator stubs exist; device checklist is not yet consolidated. |
+| P0 | Non-local backend verification contract | Archive/care/family/KB endpoints exist, but staging/prod base URL, token injection, persistence, and error recovery need a repeatable acceptance path. | Local FastAPI/memory-store evidence exists; real environment depends on key/server. |
+| P1 | Family management/persona switching UI | PRD requires switching family members and self. Public route is hidden because the current `FamilyCircleViewController` is legacy and not wired to persona context. | `familyManagement`/`familySpace` are hidden. |
+| P1 | 星辰/阳光/静默 business state | PRD says mode name is not displayed on Echo, but star relatives enable psychological guidance and mood tracking. | Internal enum exists; UI does not yet derive care visibility or copy from selected mode. |
+| P1 | Account deletion flow | PRD lists account cancellation. Current branch correctly hides/blocks it because legal confirmation and destructive state handling are not implemented. | `accountDeletion` hidden by default and alert-only. |
+| P1 | Doctor contact / intervention flow | PRD describes L3/L4 intervention. Current app shows doctor identity and hides call action by default. | `careDoctorContact` hidden; no real call/escalation contract. |
+| P1 | Audio/time-letter/video archive release readiness | PRD supports photos, video, recordings, text, and time letters. Text/photo are public; audio/time-letter are hidden; video is not available. | Feature flags keep unfinished routes hidden. |
+| P2 | Visual refinements after Stitch updates | Current UI aligns to the last canvas, but Stitch is still changing. | Must rerun final visual QA after updates. |
+| P2 | Broader digital inheritance lifecycle | Silent/star transition, family confirmation, and inheritance policies are core innovation but not MVP-complete. | Needs product/security/legal decisions. |
+
+## P0 / P1 / P2 Task Breakdown
+
+### P0
+
+1. **Persona-scoped archive and echo context**
+   - Add stable selected-owner resolution to `DigitalHumanContextStore`.
+   - Scope `MemoryArchiveRepository` storage, context snapshots, backend archive list/post payloads, and Echo prompt context to the selected digital-human owner.
+   - Add a static guard proving repository no longer uses only the login user for archive storage/context.
+
+2. **PRD core loop regression**
+   - Keep `run-archive-to-echo-smoke.sh` green after persona scoping.
+   - Ensure default self assistant still works without family setup.
+
+3. **True-device acceptance package**
+   - Consolidate microphone/photo/audio and voice SDK manual acceptance steps.
+   - Separate simulator proof from real-device acceptance.
+
+4. **Backend environment acceptance package**
+   - Document required base URL/token config and expected archive/care smoke outcomes.
+   - Keep local fallback copy and auth-token behavior covered.
+
+### P1
+
+1. **Family/persona management behind flag**
+   - Build a small release-gated persona switcher that uses existing `FamilyRepository` data and writes `DigitalHumanContextStore`.
+   - Keep it hidden until product confirms public exposure.
+
+2. **Mode-aware care visibility**
+   - Show `心境追踪` only when selected persona/mode requires it, while preserving the current release fallback until mode switching exists.
+
+3. **Account deletion confirmation**
+   - Replace placeholder with a destructive confirmation shell only after data deletion contract is defined.
+
+4. **Doctor contact safety**
+   - Replace placeholder with safe escalation copy or real contact contract after backend/product confirmation.
+
+5. **Archive media expansion**
+   - Promote audio/time-letter/video only when each has real persistence, permissions, and QA.
+
+### P2
+
+1. Refresh visual QA after each Stitch canvas/htmlCode update.
+2. Continue compacting UI spacing and typography differences.
+3. Prepare future family space, silent/star transition, and digital inheritance docs.
+
+## Next Selected Target
+
+Proceed with **P0 persona-scoped archive and echo context**.
+
+Reason:
+
+- It is directly in the PRD core path: family/self switching must change archive and echo context.
+- It improves persistence/privacy by preventing selected-family data bleed.
+- It does not require new server keys, certificates, or real-device operations.
+- It gives later family management UI a stable contract without exposing the UI publicly yet.
+
+## Verification Commands For Next Target
+
+```bash
+swift tmp/visual-qa/prd-stitch-ui/persona-scoped-archive-context-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh
+swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+git diff --check
+```
+
+iOS build is required before committing the implementation slice.
+
+## Stop Conditions
+
+Ask the user only if the next step needs:
+
+- a real backend base URL/token beyond local fallback,
+- Apple signing/team/certificate changes,
+- physical device operation,
+- a product decision to publicly expose family management, account deletion, doctor contact, or star/silent mode transitions,
+- destructive data migration or deletion.

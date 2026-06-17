@@ -7,6 +7,7 @@ build/
 DerivedData/
 tmp/**/DerivedData*/
 DreamJourney/Config/Backend.local.xcconfig
+.complex-problems/**/state.json.lock
 *.xcuserstate
 xcuserdata/
 *.moved-aside

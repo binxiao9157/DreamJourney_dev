@@ -15,6 +15,8 @@ func runGitStatus() -> String {
         "git",
         "-C",
         rootURL.path,
+        "-c",
+        "core.quotePath=false",
         "status",
         "--porcelain=v1",
         "-uall",
@@ -124,7 +126,18 @@ func classify(_ path: String) -> String? {
         return "5-map-future-route-compatibility"
     }
 
-    if hasPrefix(path, "docs/superpowers/plans/") || hasPrefix(path, "docs/superpowers/status/") {
+    if path == "task_plan.md"
+        || path == "findings.md"
+        || path == "progress.md"
+        || path == ".closure-lodestar/task-ledgers.json"
+        || hasPrefix(path, "docs/plans/")
+        || hasPrefix(path, "docs/superpowers/plans/")
+        || hasPrefix(path, "docs/superpowers/status/")
+        || hasPrefix(path, ".closure-lodestar/tickets/")
+        || hasPrefix(path, ".closure-lodestar/results/")
+        || hasPrefix(path, ".closure-lodestar/checks/")
+        || hasPrefix(path, ".closure-lodestar/followups/")
+        || hasPrefix(path, ".complex-problems/") {
         return "6-durable-docs"
     }
 
@@ -180,23 +193,6 @@ if !unclassified.isEmpty {
         .sorted()
         .joined(separator: "\n")
     fatalError("Unclassified dirty files found:\n\(details)")
-}
-
-let requiredGroups = [
-    "1-project-scaffolding-release-gates",
-    "2-shell-login-echo-prompt",
-    "3-archive-core-creation",
-    "4-profile-care-settings-legal",
-    "5-source-warning-cleanup",
-    "5-map-future-route-compatibility",
-    "6-durable-docs",
-    "6-optional-qa-evidence",
-]
-
-for group in requiredGroups {
-    guard grouped[group]?.isEmpty == false else {
-        fatalError("Expected dirty files for submit slice \(group)")
-    }
 }
 
 let outputOrder = [

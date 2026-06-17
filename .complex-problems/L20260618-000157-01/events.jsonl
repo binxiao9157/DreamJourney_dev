@@ -1,0 +1,26 @@
+{"at": "2026-06-17T16:01:57+00:00", "id": "E000", "payload": {"ledger_id": "L20260618-000157-01", "root_id": "P000", "title": "PRD gap map and priority ledger"}, "root_id": "P000", "type": "ledger_initialized"}
+{"at": "2026-06-17T16:03:29+00:00", "id": "E001", "payload": {"problem_id": "P000", "ticket_id": "T000", "title": "PRD 缺口与优先级台账"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-06-17T16:03:29+00:00", "id": "E002", "payload": {"from": "created", "id": "T000", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-06-17T16:03:48+00:00", "id": "E003", "payload": {"from": "defined", "id": "T000", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-06-17T16:03:48+00:00", "id": "E004", "payload": {"classification": "one_go", "reason": "本 ticket 的产物是一份 PRD 缺口与优先级台账，输入和验收标准明确，可在一次执行中完成并用现有 inventory 与 diff 检查验证。", "ticket_id": "T000"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-06-17T16:06:23+00:00", "id": "E005", "payload": {"from": "todo", "id": "P000", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-06-17T16:06:23+00:00", "id": "E006", "payload": {"from": "classified", "id": "T000", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-06-17T16:06:23+00:00", "id": "E007", "payload": {"from": "executing", "id": "T000", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-06-17T16:06:23+00:00", "id": "E008", "payload": {"result_id": "R000", "ticket_id": "T000"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-06-17T16:07:08+00:00", "id": "E009", "payload": {"from": "doing", "id": "P000", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-06-17T16:07:08+00:00", "id": "E010", "payload": {"from": "checking", "id": "P000", "to": "followup"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-06-17T16:07:08+00:00", "id": "E011", "payload": {"check_id": "C000", "followup_id": "P001", "problem_id": "P000", "status": "not_success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-06-17T16:07:34+00:00", "id": "E012", "payload": {"problem_id": "P001", "ticket_id": "T001", "title": "分类 Closure result 文件"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-06-17T16:07:34+00:00", "id": "E013", "payload": {"from": "created", "id": "T001", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-06-17T16:07:43+00:00", "id": "E014", "payload": {"from": "defined", "id": "T001", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-06-17T16:07:43+00:00", "id": "E015", "payload": {"classification": "one_go", "reason": "只需把一个 Closure Lodestar 持久结果目录加入现有 durable docs 分类，改动小且可用 inventory 与 diff 检查立即验证。", "ticket_id": "T001"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-06-17T16:08:40+00:00", "id": "E016", "payload": {"from": "followup", "id": "P001", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-06-17T16:08:40+00:00", "id": "E017", "payload": {"from": "classified", "id": "T001", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-06-17T16:08:40+00:00", "id": "E018", "payload": {"from": "executing", "id": "T001", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-06-17T16:08:40+00:00", "id": "E019", "payload": {"result_id": "R001", "ticket_id": "T001"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-06-17T16:08:57+00:00", "id": "E020", "payload": {"from": "doing", "id": "P001", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-06-17T16:08:57+00:00", "id": "E021", "payload": {"from": "checking", "id": "P001", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-06-17T16:08:57+00:00", "id": "E022", "payload": {"check_id": "C001", "followup_id": null, "problem_id": "P001", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-06-17T16:09:26+00:00", "id": "E023", "payload": {"from": "followup", "id": "P000", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-06-17T16:09:26+00:00", "id": "E024", "payload": {"from": "checking", "id": "P000", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-06-17T16:09:26+00:00", "id": "E025", "payload": {"check_id": "C002", "followup_id": null, "problem_id": "P000", "status": "success"}, "root_id": "P000", "type": "check_recorded"}

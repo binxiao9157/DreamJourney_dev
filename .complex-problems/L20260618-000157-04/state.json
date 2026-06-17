@@ -1,0 +1,46 @@
+{
+  "checks": {},
+  "counters": {
+    "check": 0,
+    "event": 1,
+    "problem": 1,
+    "result": 0,
+    "ticket": 0
+  },
+  "created_at": "2026-06-17T16:01:57+00:00",
+  "effort": "medium",
+  "language": "zh",
+  "ledger_id": "L20260618-000157-04",
+  "problems": {
+    "P000": {
+      "body_path": "problems/P000/README.md",
+      "check_ids": [],
+      "created_at": "2026-06-17T16:01:57+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Close the Lodestar task represented by `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/plans/task_04_p1-profile-family-and-safety-flows.md` using recursive problem, ticket, result, and check state.\n\nTask context:\n\n# P1 profile family and safety flows",
+      "followup_ids": [],
+      "id": "P000",
+      "package_path": "problems/P000",
+      "parent_id": null,
+      "result_ids": [],
+      "root_id": "P000",
+      "status": "todo",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "Recursive ledger reaches `next_action=none` or the task explicitly records why no ledger is needed.",
+        "Implementation satisfies this task's context and scope.",
+        "Verification evidence is recorded in recursive result/check bodies and summarized in `progress.md`."
+      ],
+      "ticket_ids": [],
+      "title": "P1 profile family and safety flows",
+      "updated_at": "2026-06-17T16:01:57+00:00"
+    }
+  },
+  "results": {},
+  "root_id": "P000",
+  "schema_version": 6,
+  "tickets": {},
+  "updated_at": "2026-06-17T16:01:57+00:00"
+}

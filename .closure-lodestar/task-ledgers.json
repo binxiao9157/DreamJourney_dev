@@ -1,0 +1,53 @@
+{
+  "created_at": "2026-06-18T00:01:51+08:00",
+  "goal": "按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态",
+  "schema_version": 1,
+  "tasks": {
+    "docs/plans/task_01_prd-gap-map-and-priority-ledger.md": {
+      "ledger_id": "L20260618-000157-01",
+      "ledger_path": ".complex-problems/L20260618-000157-01",
+      "next_action": "none",
+      "status": "complete",
+      "task_file": "docs/plans/task_01_prd-gap-map-and-priority-ledger.md",
+      "title": "PRD gap map and priority ledger",
+      "updated_at": "2026-06-18T00:09:48+08:00"
+    },
+    "docs/plans/task_02_p0-persona-scoped-archive-and-echo-context.md": {
+      "ledger_id": "L20260618-000157-02",
+      "ledger_path": ".complex-problems/L20260618-000157-02",
+      "next_action": "create-solution-ticket",
+      "status": "next",
+      "task_file": "docs/plans/task_02_p0-persona-scoped-archive-and-echo-context.md",
+      "title": "P0 persona-scoped archive and echo context",
+      "updated_at": "2026-06-18T00:01:57+08:00"
+    },
+    "docs/plans/task_03_p0-real-device-and-backend-acceptance-readiness.md": {
+      "ledger_id": "L20260618-000157-03",
+      "ledger_path": ".complex-problems/L20260618-000157-03",
+      "next_action": "create-solution-ticket",
+      "status": "next",
+      "task_file": "docs/plans/task_03_p0-real-device-and-backend-acceptance-readiness.md",
+      "title": "P0 real-device and backend acceptance readiness",
+      "updated_at": "2026-06-18T00:01:57+08:00"
+    },
+    "docs/plans/task_04_p1-profile-family-and-safety-flows.md": {
+      "ledger_id": "L20260618-000157-04",
+      "ledger_path": ".complex-problems/L20260618-000157-04",
+      "next_action": "create-solution-ticket",
+      "status": "next",
+      "task_file": "docs/plans/task_04_p1-profile-family-and-safety-flows.md",
+      "title": "P1 profile family and safety flows",
+      "updated_at": "2026-06-18T00:01:57+08:00"
+    },
+    "docs/plans/task_05_review-and-release-qa.md": {
+      "ledger_id": "L20260618-000157-05",
+      "ledger_path": ".complex-problems/L20260618-000157-05",
+      "next_action": "create-solution-ticket",
+      "status": "next",
+      "task_file": "docs/plans/task_05_review-and-release-qa.md",
+      "title": "Review and release QA",
+      "updated_at": "2026-06-18T00:01:57+08:00"
+    }
+  },
+  "updated_at": "2026-06-18T00:09:48+08:00"
+}

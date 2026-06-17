@@ -1,0 +1,61 @@
+{
+  "active_ledger_id": "L20260618-000157-05",
+  "ledgers": [
+    {
+      "active_count": 1,
+      "blocked_count": 0,
+      "ledger_id": "L20260618-000157-02",
+      "path": "L20260618-000157-02",
+      "root_id": "P000",
+      "schema_version": 6,
+      "status": "doing",
+      "title": "P0 persona-scoped archive and echo context",
+      "updated_at": "2026-06-17T16:01:57+00:00"
+    },
+    {
+      "active_count": 1,
+      "blocked_count": 0,
+      "ledger_id": "L20260618-000157-03",
+      "path": "L20260618-000157-03",
+      "root_id": "P000",
+      "schema_version": 6,
+      "status": "doing",
+      "title": "P0 real-device and backend acceptance readiness",
+      "updated_at": "2026-06-17T16:01:57+00:00"
+    },
+    {
+      "active_count": 1,
+      "blocked_count": 0,
+      "ledger_id": "L20260618-000157-04",
+      "path": "L20260618-000157-04",
+      "root_id": "P000",
+      "schema_version": 6,
+      "status": "doing",
+      "title": "P1 profile family and safety flows",
+      "updated_at": "2026-06-17T16:01:57+00:00"
+    },
+    {
+      "active_count": 1,
+      "blocked_count": 0,
+      "ledger_id": "L20260618-000157-05",
+      "path": "L20260618-000157-05",
+      "root_id": "P000",
+      "schema_version": 6,
+      "status": "doing",
+      "title": "Review and release QA",
+      "updated_at": "2026-06-17T16:01:57+00:00"
+    },
+    {
+      "active_count": 0,
+      "blocked_count": 0,
+      "ledger_id": "L20260618-000157-01",
+      "path": "L20260618-000157-01",
+      "root_id": "P000",
+      "schema_version": 6,
+      "status": "done",
+      "title": "PRD gap map and priority ledger",
+      "updated_at": "2026-06-17T16:09:26+00:00"
+    }
+  ],
+  "updated_at": "2026-06-17T16:09:38+00:00"
+}
