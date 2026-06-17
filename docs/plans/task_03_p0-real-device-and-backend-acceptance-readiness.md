@@ -23,5 +23,5 @@ Harden microphone/photo/backend configuration, privacy, and QA instructions for 
 
 ## Recursive Ledger
 
-- Ledger ID: pending
-- Dashboard: pending
+- Ledger ID: `L20260618-000157-03`
+- Dashboard: `.complex-problems/L20260618-000157-03/views/INDEX.md`

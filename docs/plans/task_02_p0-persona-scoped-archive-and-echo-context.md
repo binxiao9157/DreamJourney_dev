@@ -10,10 +10,10 @@ Ensure selected digital-human/persona context scopes archive storage, backend ar
 
 ## Steps
 
-- [ ] Initialize or link recursive ledger for this task.
-- [ ] Follow recursive `ledger.py next` until the task problem is closed.
-- [ ] Sync recursive checkpoint to `progress.md`.
-- [ ] Run task-level verification and record evidence.
+- [x] Initialize or link recursive ledger for this task.
+- [x] Follow recursive `ledger.py next` until the task problem is closed.
+- [x] Sync recursive checkpoint to `progress.md`.
+- [x] Run task-level verification and record evidence.
 
 ## Success Criteria
 

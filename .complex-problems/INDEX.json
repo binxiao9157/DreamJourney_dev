@@ -4,17 +4,6 @@
     {
       "active_count": 1,
       "blocked_count": 0,
-      "ledger_id": "L20260618-000157-02",
-      "path": "L20260618-000157-02",
-      "root_id": "P000",
-      "schema_version": 6,
-      "status": "doing",
-      "title": "P0 persona-scoped archive and echo context",
-      "updated_at": "2026-06-17T16:01:57+00:00"
-    },
-    {
-      "active_count": 1,
-      "blocked_count": 0,
       "ledger_id": "L20260618-000157-03",
       "path": "L20260618-000157-03",
       "root_id": "P000",
@@ -55,7 +44,18 @@
       "status": "done",
       "title": "PRD gap map and priority ledger",
       "updated_at": "2026-06-17T16:09:26+00:00"
+    },
+    {
+      "active_count": 0,
+      "blocked_count": 0,
+      "ledger_id": "L20260618-000157-02",
+      "path": "L20260618-000157-02",
+      "root_id": "P000",
+      "schema_version": 6,
+      "status": "done",
+      "title": "P0 persona-scoped archive and echo context",
+      "updated_at": "2026-06-17T16:17:45+00:00"
     }
   ],
-  "updated_at": "2026-06-17T16:09:38+00:00"
+  "updated_at": "2026-06-17T16:17:54+00:00"
 }

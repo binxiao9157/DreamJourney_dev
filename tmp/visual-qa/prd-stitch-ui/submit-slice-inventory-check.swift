@@ -80,6 +80,7 @@ func classify(_ path: String) -> String? {
     }
 
     let group2: Set<String> = [
+        "DreamJourney/Sources/App/DigitalHumanContextStore.swift",
         "DreamJourney/Sources/TabBar/WarmTabBarController.swift",
         "DreamJourney/Sources/Modules/Auth/LoginViewController.swift",
         "DreamJourney/Sources/Modules/Echo/EchoViewController.swift",

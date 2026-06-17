@@ -119,7 +119,7 @@ final class MemoryArchiveRepository {
     }
 
     func refreshFromBackend(completion: ((Result<[MemoryArchiveItem], Error>) -> Void)? = nil) {
-        DreamJourneyBackendClient.shared.listArchiveItems(userId: currentUserId) { [weak self] result in
+        DreamJourneyBackendClient.shared.listArchiveItems(userId: currentArchiveOwnerId) { [weak self] result in
             guard let self else { return }
             switch result {
             case .success(let object):
@@ -138,8 +138,14 @@ final class MemoryArchiveRepository {
         UserManager.shared.currentUser?.id ?? "user_001"
     }
 
+    private var currentArchiveOwnerId: String {
+        let ownerId = DigitalHumanContextStore.shared.current.ownerId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return ownerId.isEmpty ? currentUserId : ownerId
+    }
+
     private var storageKey: String {
-        "\(baseKey).\(currentUserId)"
+        "\(baseKey).\(currentArchiveOwnerId)"
     }
 
     private func save(_ items: [MemoryArchiveItem]) {
@@ -150,8 +156,11 @@ final class MemoryArchiveRepository {
     }
 
     private func syncToBackend(_ item: MemoryArchiveItem) {
+        let ownerId = currentArchiveOwnerId
         let payload: [String: Any] = [
-            "userId": currentUserId,
+            "userId": ownerId,
+            "viewerUserId": currentUserId,
+            "ownerId": currentArchiveOwnerId,
             "id": item.id,
             "kind": item.kind.rawValue,
             "title": item.title,

@@ -1,1 +1,12 @@
 {"at": "2026-06-17T16:01:57+00:00", "id": "E000", "payload": {"ledger_id": "L20260618-000157-02", "root_id": "P000", "title": "P0 persona-scoped archive and echo context"}, "root_id": "P000", "type": "ledger_initialized"}
+{"at": "2026-06-17T16:12:57+00:00", "id": "E001", "payload": {"problem_id": "P000", "ticket_id": "T000", "title": "P0 数字人上下文隔离档案与回响"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-06-17T16:12:57+00:00", "id": "E002", "payload": {"from": "created", "id": "T000", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-06-17T16:13:07+00:00", "id": "E003", "payload": {"from": "defined", "id": "T000", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-06-17T16:13:07+00:00", "id": "E004", "payload": {"classification": "one_go", "reason": "范围集中在 selected digital-human owner 对 archive storage/backend/context 的绑定，验证脚本明确且可通过现有 smoke 回归，适合一次有界执行。", "ticket_id": "T000"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-06-17T16:17:04+00:00", "id": "E005", "payload": {"from": "todo", "id": "P000", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-06-17T16:17:04+00:00", "id": "E006", "payload": {"from": "classified", "id": "T000", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-06-17T16:17:04+00:00", "id": "E007", "payload": {"from": "executing", "id": "T000", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-06-17T16:17:04+00:00", "id": "E008", "payload": {"result_id": "R000", "ticket_id": "T000"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-06-17T16:17:45+00:00", "id": "E009", "payload": {"from": "doing", "id": "P000", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-06-17T16:17:45+00:00", "id": "E010", "payload": {"from": "checking", "id": "P000", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-06-17T16:17:45+00:00", "id": "E011", "payload": {"check_id": "C000", "followup_id": null, "problem_id": "P000", "status": "success"}, "root_id": "P000", "type": "check_recorded"}

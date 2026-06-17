@@ -1,11 +1,58 @@
 {
-  "checks": {},
+  "checks": {
+    "C000": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/checks/C000.md",
+      "created_at": "2026-06-17T16:17:45+00:00",
+      "criteria_map": [
+        "默认 self assistant 仍使用当前登录用户作为 owner：`DigitalHumanContext.defaultContext(userId:)` 设置 `viewerUserId` 和 `ownerId` 为当前 user id。",
+        "family/other owner 可作用于 archive storage/backend/context：`MemoryArchiveRepository.currentArchiveOwnerId` 来自 `DigitalHumanContextStore.shared.current.ownerId`。",
+        "Backend payload 包含 viewer 与 owner：`syncToBackend` 写入 `viewerUserId` 和 `ownerId`。",
+        "Echo 不暴露内部模式名：本任务未改变 Echo UI 的 mode 展示面，release matrix 仍通过。",
+        "新 guard 证明源码合同：`persona-scoped-archive-context-check.swift` 通过。",
+        "release gating 不变：`release-feature-matrix-check.swift` 通过。"
+      ],
+      "evidence": [
+        "`persona-scoped-archive-context-check.swift` 通过。",
+        "`release-feature-matrix-check.swift` 通过。",
+        "`submit-slice-inventory-check.swift` 通过。",
+        "`git diff --check` 通过。",
+        "iOS Debug Simulator build 日志包含 `** BUILD SUCCEEDED **`。",
+        "Archive-to-Echo smoke result 为 `completed=true` 且 `containsArchiveContext=true`。"
+      ],
+      "execution_map": [
+        "先写 RED guard，确认实现前失败在缺少 `viewerUserId`。",
+        "修改 `DigitalHumanContextStore.swift`。",
+        "修改 `MemoryArchiveRepository.swift`。",
+        "修复 guard 自身的 macOS 15 deprecation warning。",
+        "补充 P0 QA report。",
+        "运行构建与核心 smoke。"
+      ],
+      "followup_problem_id": null,
+      "id": "C000",
+      "problem_id": "P000",
+      "residual_risk": [
+        "真实 family/persona switcher UI 尚未公开实现，后续 P1 才会写入非默认 owner。",
+        "后端仍需验证 `viewerUserId`/`ownerId` 的鉴权与持久化合同。",
+        "真机麦克风、照片和语音 SDK 验收仍属后续 P0 readiness。"
+      ],
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "核心 smoke 在默认 self assistant 路径下仍能 seed archive、进入 Echo、注入 archive context，证明 owner-scope 没有破坏当前 MVP 主链路。"
+      ],
+      "summary": "P0 数字人/persona owner 作用域任务已完成。Archive 本地存储、Archive 后端 fetch/sync payload、Echo archive prompt context 的源头现在都围绕 selected `DigitalHumanContext.ownerId` 工作，默认 self assistant 路径仍通过核心 smoke。"
+    }
+  },
   "counters": {
-    "check": 0,
-    "event": 1,
+    "check": 1,
+    "event": 12,
     "problem": 1,
-    "result": 0,
-    "ticket": 0
+    "result": 1,
+    "ticket": 1
   },
   "created_at": "2026-06-17T16:01:57+00:00",
   "effort": "medium",
@@ -14,7 +61,9 @@
   "problems": {
     "P000": {
       "body_path": "problems/P000/README.md",
-      "check_ids": [],
+      "check_ids": [
+        "C000"
+      ],
       "created_at": "2026-06-17T16:01:57+00:00",
       "created_from_check_id": null,
       "created_from_ticket_id": null,
@@ -24,23 +73,103 @@
       "id": "P000",
       "package_path": "problems/P000",
       "parent_id": null,
-      "result_ids": [],
+      "result_ids": [
+        "R000"
+      ],
       "root_id": "P000",
-      "status": "todo",
+      "status": "done",
       "subproblem_ids": [],
       "success_criteria": [
         "Recursive ledger reaches `next_action=none` or the task explicitly records why no ledger is needed.",
         "Implementation satisfies this task's context and scope.",
         "Verification evidence is recorded in recursive result/check bodies and summarized in `progress.md`."
       ],
-      "ticket_ids": [],
+      "ticket_ids": [
+        "T000"
+      ],
       "title": "P0 persona-scoped archive and echo context",
-      "updated_at": "2026-06-17T16:01:57+00:00"
+      "updated_at": "2026-06-17T16:17:45+00:00"
     }
   },
-  "results": {},
+  "results": {
+    "R000": {
+      "artifacts": [
+        "`tmp/visual-qa/prd-stitch-ui/persona-scoped-archive-context-check.swift`",
+        "`tmp/visual-qa/prd-stitch-ui/persona-scoped-archive-context/20260618-current/report.md`",
+        "`tmp/visual-qa/prd-stitch-ui/persona-scoped-archive-context/20260618-current/build-debug.log`",
+        "`tmp/visual-qa/prd-stitch-ui/archive-to-echo-smoke/20260618-001554/archive-to-echo-smoke-result.json`"
+      ],
+      "body_path": "problems/P000/results/R000.md",
+      "created_at": "2026-06-17T16:17:04+00:00",
+      "done": [
+        "新增 `persona-scoped-archive-context-check.swift`，并按 TDD 先验证现状失败。",
+        "`DigitalHumanContext` 增加 `viewerUserId`、`resolvedDisplayName`、`normalizedForCurrentViewer`。",
+        "`DigitalHumanContextStore.current` 兼容旧 self context，同时允许当前登录 viewer 选择不同 owner。",
+        "`DigitalHumanContextStore` 在 context 变更后发送 `djDigitalHumanContextDidChange`。",
+        "`MemoryArchiveRepository` 增加 `currentArchiveOwnerId`，storage key 改为 selected owner scope。",
+        "`refreshFromBackend` 使用 selected owner id。",
+        "`syncToBackend` payload 同时带 `viewerUserId` 与 `ownerId`。",
+        "新增 P0 QA report。"
+      ],
+      "id": "R000",
+      "known_gaps": [
+        "还没有公开 family/persona switcher UI；这是 P1 任务，当前只建立底层 owner-scope 合同。",
+        "真实后端仍需验证如何授权 `viewerUserId` 访问 `ownerId` 的 archive；当前 payload 已为该合同预留字段。",
+        "真机麦克风/照片/语音 SDK 验收仍在后续 P0 readiness 任务。"
+      ],
+      "problem_id": "P000",
+      "root_id": "P000",
+      "summary": "已完成 P0 数字人/persona owner 作用域改造：当前选中的 `DigitalHumanContext.ownerId` 现在会驱动 archive 本地存储、archive 后端拉取、archive 后端同步 payload，并让 Echo 继续通过 repository snapshot 获取当前 owner 的档案上下文。",
+      "ticket_id": "T000",
+      "verification": [
+        "RED: `persona-scoped-archive-context-check.swift` 在实现前失败，缺少 `viewerUserId`。",
+        "GREEN: `swift tmp/visual-qa/prd-stitch-ui/persona-scoped-archive-context-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev` 通过。",
+        "`swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev` 通过。",
+        "`swift tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev` 通过。",
+        "`git diff --check` 通过。",
+        "iOS Debug Simulator build 通过，日志：`tmp/visual-qa/prd-stitch-ui/persona-scoped-archive-context/20260618-current/build-debug.log`。",
+        "Archive-to-Echo smoke 通过，结果：`tmp/visual-qa/prd-stitch-ui/archive-to-echo-smoke/20260618-001554/archive-to-echo-smoke-result.json`。"
+      ]
+    }
+  },
   "root_id": "P000",
   "schema_version": 6,
-  "tickets": {},
-  "updated_at": "2026-06-17T16:01:57+00:00"
+  "tickets": {
+    "T000": {
+      "acceptance_criteria": [
+        "默认 self assistant 仍使用当前登录用户作为 owner，兼容旧数据路径。",
+        "当 `DigitalHumanContextStore.current.ownerId` 指向家人/其他数字人时，archive storage key、context snapshot 和 backend archive path 使用该 owner。",
+        "Backend archive payload 同时包含 `viewerUserId` 和 `ownerId`，避免后端只看到模糊 user id。",
+        "Echo prompt context 间接受益于 repository owner scope，不需要暴露星辰/阳光模式名到回响 UI。",
+        "新增 guard 能证明上述源码合同。",
+        "现有 release gating 不变：family management 仍不公开，text/photo archive 默认仍公开，隐藏分支仍隐藏。"
+      ],
+      "assumptions": [
+        "Public family-management UI remains hidden until a later P1 task.",
+        "Current selected owner is trusted local client state until a real backend family/persona authorization contract is available.",
+        "This task does not implement account deletion, doctor contact, or public star/silent mode controls."
+      ],
+      "body_path": "problems/P000/tickets/T000.md",
+      "classification": "one_go",
+      "classification_reason": "范围集中在 selected digital-human owner 对 archive storage/backend/context 的绑定，验证脚本明确且可通过现有 smoke 回归，适合一次有界执行。",
+      "created_at": "2026-06-17T16:12:57+00:00",
+      "id": "T000",
+      "problem_definition": "PRD 要求切换到家人数字人或自己 AI 助手时，记忆档案页面、回响页面和后台专属档案数据库都调用对应的人。当前实现已有 `DigitalHumanContextStore`，但 `MemoryArchiveRepository` 的本地存储、上下文快照和后端 archive 请求仍按登录用户 `currentUserId` 绑定，存在未来家人切换后档案/回响数据串用的风险。",
+      "problem_id": "P000",
+      "proposed_solution": "先新增静态 guard `tmp/visual-qa/prd-stitch-ui/persona-scoped-archive-context-check.swift`，验证仓库必须使用 selected digital-human owner，而不是只用登录用户。确认 guard 在现状失败后，修改：\n\n- `DigitalHumanContextStore.swift`：补充 viewer/user 归属、默认显示名、owner 选择通知和安全 fallback。\n- `MemoryArchiveRepository.swift`：本地 storage key、context snapshot、backend list/post payload 改为 selected owner scope，并保留 `viewerUserId` 用于后端权限/审计。\n- `EchoViewModel.swift`：继续从 repository 读取当前 owner 的 archive context，并在开始语音交互时刷新 selected context。",
+      "result_ids": [
+        "R000"
+      ],
+      "risks": [
+        "Backend endpoint names still use `userId`; this task will pass selected owner id through the existing path for compatibility and add explicit payload fields for backend evolution.",
+        "Existing local data under the old self-user key is preserved only for default self assistant. Family/persona-specific data starts using the selected owner key."
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "P0 数字人上下文隔离档案与回响",
+      "updated_at": "2026-06-17T16:17:04+00:00",
+      "verification_plan": "Red:\n\n```bash\nswift tmp/visual-qa/prd-stitch-ui/persona-scoped-archive-context-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev\n```\n\nExpected before implementation: fail because repository still uses only `currentUserId` for storage/backend archive scope.\n\nGreen:\n\n```bash\nswift tmp/visual-qa/prd-stitch-ui/persona-scoped-archive-context-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev\nswift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev\ntmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh\ngit diff --check\n```\n\nThen run an iOS Debug simulator build before committing the P0 slice."
+    }
+  },
+  "updated_at": "2026-06-17T16:17:45+00:00"
 }
