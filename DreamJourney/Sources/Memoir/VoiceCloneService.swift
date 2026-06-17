@@ -98,7 +98,7 @@ final class VoiceCloneService {
         let format = audioFormat(from: audioURL)
 
         // 构建请求体
-        var body: [String: Any] = [
+        let body: [String: Any] = [
             "speaker_id": finalSpeakerId,
             "audio": [
                 "data": base64Audio,

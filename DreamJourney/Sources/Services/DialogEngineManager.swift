@@ -1,4 +1,124 @@
 import Foundation
+
+#if DEBUG || UI_QA_SIMULATOR
+struct DialogPromptDebugSnapshot {
+    let prompt: String
+    let containsArchiveContext: Bool
+    let recordedAt: Date
+}
+
+enum DialogPromptDebugRecorder {
+    private(set) static var lastSnapshot: DialogPromptDebugSnapshot?
+
+    static func record(prompt: String, recordedAt: Date = Date()) {
+        lastSnapshot = DialogPromptDebugSnapshot(
+            prompt: prompt,
+            containsArchiveContext: prompt.contains("【记忆档案馆素材线索】"),
+            recordedAt: recordedAt
+        )
+    }
+
+    static func reset() {
+        lastSnapshot = nil
+    }
+}
+#endif
+
+#if UI_QA_SIMULATOR && targetEnvironment(simulator)
+
+enum DialogEndReason {
+    case manual
+    case keyword(String)
+    case silenceTimeout
+    case serverEnded
+}
+
+protocol DialogEngineDelegate: AnyObject {
+    func onDialogStarted()
+    func onASRResult(text: String, isFinal: Bool)
+    func onTTSStarted(text: String)
+    func onTTSFinished()
+    func onChatStreaming(text: String)
+    func onError(error: Error)
+    func onDialogEnded(reason: DialogEndReason)
+}
+
+final class DialogEngineManager: NSObject {
+    static let shared = DialogEngineManager()
+
+    weak var delegate: DialogEngineDelegate?
+    private(set) var isEngineReady = false
+    private(set) var isDialogActive = false
+    var currentTopic: String?
+
+    private override init() {
+        super.init()
+    }
+
+    func configure(token: String) {}
+    func interruptAI() {}
+
+    func setup() {
+        isEngineReady = true
+    }
+
+    func startDialog() {
+        recordUIQAPromptSnapshot()
+        isDialogActive = true
+        delegate?.onDialogStarted()
+    }
+
+    func stopDialog() {
+        guard isDialogActive else { return }
+        isDialogActive = false
+        delegate?.onDialogEnded(reason: .manual)
+    }
+
+    func destroyEngine() {
+        isEngineReady = false
+        isDialogActive = false
+        delegate = nil
+    }
+
+    private func recordUIQAPromptSnapshot() {
+        var prompt = "【UI QA 回响 Prompt】\n请以温和、自然的方式回应长辈。"
+        let archiveSnapshot = MemoryArchiveRepository.shared.contextSnapshot()
+        let archiveContext = archiveSnapshot.promptSection
+        if !archiveContext.isEmpty {
+            prompt += archiveContext
+        }
+
+        DialogPromptDebugRecorder.record(prompt: prompt)
+        let snapshot = DialogPromptDebugRecorder.lastSnapshot
+        print(
+            "[UI_QA] Echo archive prompt containsArchiveContext=\(snapshot?.containsArchiveContext == true) " +
+            "available=\(archiveSnapshot.availableItemCount) " +
+            "entries=\(archiveSnapshot.debugSummary())"
+        )
+    }
+}
+
+enum DialogEngineError: LocalizedError {
+    case initFailed(code: Int)
+    case startFailed(code: Int)
+    case audioSessionFailed
+    case sdkError(code: Int, message: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .initFailed(let code):
+            return "语音引擎初始化失败 (错误码: \(code))"
+        case .startFailed(let code):
+            return "语音对话启动失败 (错误码: \(code))"
+        case .audioSessionFailed:
+            return "音频配置失败，请重试"
+        case .sdkError(_, let message):
+            return "语音服务异常: \(message)"
+        }
+    }
+}
+#else
+import Foundation
 import AVFoundation
 import CocoaLumberjack
 import SpeechEngineToB
@@ -586,6 +706,14 @@ final class DialogEngineManager: NSObject {
                 fullPrompt += buildMemoryContext(memory: memory)
                 print("[DialogEngine] 🧠 已注入记忆上下文 (第\(memory.sessionCount + 1)次对话)")
             }
+            let archiveContext = buildArchiveContext()
+            if !archiveContext.isEmpty {
+                fullPrompt += archiveContext
+                print("[DialogEngine] 🗂️ 已注入记忆档案馆素材")
+            }
+            #if DEBUG || UI_QA_SIMULATOR
+            DialogPromptDebugRecorder.record(prompt: fullPrompt)
+            #endif
             // 正确写入 dialog 子字典的 system_role（而非 dialogConfig 顶层）
             if var dialog = dialogConfig["dialog"] as? [String: Any] {
                 dialog["system_role"] = fullPrompt
@@ -1254,6 +1382,10 @@ extension DialogEngineManager: SpeechEngineDelegate {
 
         return context
     }
+
+    private func buildArchiveContext() -> String {
+        MemoryArchiveRepository.shared.contextSnapshot().promptSection
+    }
 }
 
 // MARK: - Error
@@ -1277,3 +1409,4 @@ enum DialogEngineError: LocalizedError {
         }
     }
 }
+#endif

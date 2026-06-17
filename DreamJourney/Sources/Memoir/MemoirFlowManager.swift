@@ -37,11 +37,17 @@ final class MemoirFlowManager {
         viewController.view.viewWithTag(999_777)?.removeFromSuperview()
 
         let button = UIButton(type: .system)
+        var title = AttributedString("生成回忆录")
+        title.font = .systemFont(ofSize: 16, weight: .semibold)
+        let symbolConfiguration = UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold)
+        var configuration = UIButton.Configuration.plain()
+        configuration.attributedTitle = title
+        configuration.image = UIImage(systemName: "book.fill", withConfiguration: symbolConfiguration)
+        configuration.imagePadding = 8
+        configuration.baseForegroundColor = .white
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 20, bottom: 12, trailing: 20)
+        button.configuration = configuration
         button.tag = 999_777
-        button.setTitle("  生成回忆录", for: .normal)
-        button.setImage(UIImage(systemName: "book.fill"), for: .normal)
-        button.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
-        button.setTitleColor(.white, for: .normal)
         button.tintColor = .white
         button.backgroundColor = UIColor.warmDeep
         button.layer.cornerRadius = 24
@@ -49,7 +55,6 @@ final class MemoirFlowManager {
         button.layer.shadowOpacity = 0.15
         button.layer.shadowOffset = CGSize(width: 0, height: 4)
         button.layer.shadowRadius = 8
-        button.contentEdgeInsets = UIEdgeInsets(top: 12, left: 20, bottom: 12, right: 20)
         button.sizeToFit()
         button.frame.size.width = max(button.frame.width + 40, 180)
         button.frame.size.height = 48
@@ -241,7 +246,7 @@ final class MemoirFlowManager {
         // B. 无 speakerId 但有录音 → 先训练
         if let recordingURL = recordingURL {
             DDLogInfo("[MemoirFlow] 无 speakerId，使用录音开始声音复刻训练")
-            VoiceCloneService.shared.trainVoice(audioURL: recordingURL) { [weak self] result in
+            VoiceCloneService.shared.trainVoice(audioURL: recordingURL) { result in
                 switch result {
                 case .success(let speakerId):
                     DDLogInfo("[MemoirFlow] 声音复刻训练成功: \(speakerId)")
@@ -268,18 +273,18 @@ final class MemoirFlowManager {
         viewController.navigationController?.pushViewController(detailVC, animated: true)
     }
 
-    /// 回忆录生成成功后：在首页显示引导横幅（不跳转 Tab）
+    /// 回忆录生成成功后：在当前上下文显示引导横幅（不切换 Tab）
     private func showMemoirReadyBanner(in viewController: UIViewController, memoirTitle: String) {
         let targetView: UIView = viewController.view.window?.rootViewController?.view ?? viewController.view
         let banner = FootprintNotificationBanner()
-        banner.configure(message: "回忆录「\(memoirTitle)」已保存到足迹")
+        banner.configure(message: "回忆录「\(memoirTitle)」已保存")
         banner.onDetailTapped = { [weak viewController] in
-            // 点击「查看详情」→ 在足迹 Tab 的 NavigationController 内 push 详情页
             guard let memoir = MemoirRepository.shared.getAll().first(where: { $0.title == memoirTitle }) else { return }
-            if let tabBar = viewController?.tabBarController,
-               let mapNav = tabBar.viewControllers?[1] as? UINavigationController {
-                let detailVC = MemoirDetailViewController(memoir: memoir)
-                mapNav.pushViewController(detailVC, animated: true)
+            let detailVC = MemoirDetailViewController(memoir: memoir)
+            if let navigationController = viewController?.navigationController {
+                navigationController.pushViewController(detailVC, animated: true)
+            } else if let viewController {
+                viewController.present(UINavigationController(rootViewController: detailVC), animated: true)
             }
         }
         banner.show(in: targetView, topOffset: 60)

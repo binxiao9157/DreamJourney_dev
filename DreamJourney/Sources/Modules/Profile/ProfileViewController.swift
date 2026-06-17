@@ -1,5 +1,26 @@
 import UIKit
 
+private enum ProfileLayout {
+    static let contentTopMargin: CGFloat = 18
+    static let contentBottomMargin: CGFloat = 28
+    static let contentStackSpacing: CGFloat = 16
+    static let afterPersonaSpacing: CGFloat = 16
+    static let personaTopPadding: CGFloat = 0
+    static let personaBottomPadding: CGFloat = 12
+    static let personaAvatarSize: CGFloat = 56
+    static let personaAvatarIconSize: CGFloat = 30
+    static let personaStatusDotSize: CGFloat = 13
+    static let personaStackSpacing: CGFloat = 6
+    static let personaTextSpacing: CGFloat = 3
+    static let personaTitleFontSize: CGFloat = 18
+    static let personaSubtitleFontSize: CGFloat = 11
+    static let careCardPadding: CGFloat = 16
+    static let careStackSpacing: CGFloat = 10
+    static let careTitleFontSize: CGFloat = 18
+    static let careSignalHeight: CGFloat = 44
+    static let settingsRowMinHeight: CGFloat = 56
+}
+
 final class ProfileViewController: UIViewController {
 
     var didRequestLogout: (() -> Void)?
@@ -9,6 +30,24 @@ final class ProfileViewController: UIViewController {
 
     private let scrollView = UIScrollView()
     private let contentStack = UIStackView()
+
+    private var isProfileHiddenBranchesEnabled: Bool {
+        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        return ProcessInfo.processInfo.arguments.contains("DJEnableProfileHiddenBranches")
+        #else
+        return false
+        #endif
+    }
+
+    private var isCareDoctorContactVisible: Bool {
+        isProfileHiddenBranchesEnabled || featureFlags.isEnabled(.careDoctorContact)
+    }
+
+    private static let warmTabBarFloatingBottomInset: CGFloat = 16
+
+    private static func profileScrollBottomInset(safeAreaBottomInset: CGFloat) -> CGFloat {
+        DJDesignTokens.Spacing.tabBarHeight + warmTabBarFloatingBottomInset + safeAreaBottomInset + DJDesignTokens.Spacing.page
+    }
 
     init(
         careSnapshot: ProfileCareSnapshot? = nil,
@@ -27,12 +66,6 @@ final class ProfileViewController: UIViewController {
         super.viewDidLoad()
         title = "我的"
         view.backgroundColor = DJDesignTokens.Color.background
-        additionalSafeAreaInsets = UIEdgeInsets(
-            top: 0,
-            left: 0,
-            bottom: DJDesignTokens.Spacing.tabBarHeight,
-            right: 0
-        )
         configureScrollView()
         buildContent()
         loadCareSnapshot()
@@ -43,20 +76,26 @@ final class ProfileViewController: UIViewController {
         navigationController?.setNavigationBarHidden(true, animated: animated)
     }
 
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        updateProfileScrollInsets()
+    }
+
     private func configureScrollView() {
         scrollView.backgroundColor = .clear
         scrollView.alwaysBounceVertical = true
         scrollView.showsVerticalScrollIndicator = false
-        scrollView.contentInsetAdjustmentBehavior = .automatic
+        scrollView.contentInsetAdjustmentBehavior = .never
+        updateProfileScrollInsets()
 
         contentStack.axis = .vertical
         contentStack.alignment = .fill
-        contentStack.spacing = 18
+        contentStack.spacing = ProfileLayout.contentStackSpacing
         contentStack.isLayoutMarginsRelativeArrangement = true
         contentStack.directionalLayoutMargins = NSDirectionalEdgeInsets(
-            top: 34,
+            top: ProfileLayout.contentTopMargin,
             leading: DJDesignTokens.Spacing.page,
-            bottom: 32,
+            bottom: ProfileLayout.contentBottomMargin,
             trailing: DJDesignTokens.Spacing.page
         )
 
@@ -79,10 +118,16 @@ final class ProfileViewController: UIViewController {
         ])
     }
 
+    private func updateProfileScrollInsets() {
+        let bottomInset = Self.profileScrollBottomInset(safeAreaBottomInset: view.safeAreaInsets.bottom)
+        scrollView.contentInset.bottom = bottomInset
+        scrollView.verticalScrollIndicatorInsets.bottom = bottomInset
+    }
+
     private func buildContent() {
         let personaView = makePersonaCard()
         contentStack.addArrangedSubview(personaView)
-        contentStack.setCustomSpacing(28, after: personaView)
+        contentStack.setCustomSpacing(ProfileLayout.afterPersonaSpacing, after: personaView)
 
         if featureFlags.isEnabled(.careDashboard) {
             contentStack.addArrangedSubview(makeCareCard(snapshot: careSnapshot))
@@ -111,12 +156,16 @@ final class ProfileViewController: UIViewController {
             switch result {
             case .success(let json):
                 guard let snapshot = ProfileCareSnapshot(json: json) else {
+                    careSnapshot = .offlineFallback()
+                    rebuildContent()
                     return
                 }
                 careSnapshot = snapshot
                 rebuildContent()
             case .failure(let error):
                 print("[Profile] care snapshot sync failed: \(error.localizedDescription)")
+                careSnapshot = .offlineFallback()
+                rebuildContent()
             }
         }
     }
@@ -126,33 +175,33 @@ final class ProfileViewController: UIViewController {
 
         let avatarContainer = UIView()
         avatarContainer.backgroundColor = DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.55)
-        avatarContainer.layer.cornerRadius = 32
+        avatarContainer.layer.cornerRadius = ProfileLayout.personaAvatarSize / 2
         avatarContainer.layer.borderWidth = 2
         avatarContainer.layer.borderColor = DJDesignTokens.Color.divider.cgColor
         DJDesignTokens.applySoftShadow(to: avatarContainer)
 
         let avatarImageView = UIImageView()
-        let avatarConfig = UIImage.SymbolConfiguration(pointSize: 32, weight: .light)
+        let avatarConfig = UIImage.SymbolConfiguration(pointSize: ProfileLayout.personaAvatarIconSize, weight: .light)
         avatarImageView.image = UIImage(systemName: "face.smiling", withConfiguration: avatarConfig)
         avatarImageView.tintColor = DJDesignTokens.Color.accentDeep
         avatarImageView.contentMode = .scaleAspectFit
 
         let statusDot = UIView()
         statusDot.backgroundColor = DJDesignTokens.Color.accent
-        statusDot.layer.cornerRadius = 7
+        statusDot.layer.cornerRadius = ProfileLayout.personaStatusDotSize / 2
         statusDot.layer.borderWidth = 2
         statusDot.layer.borderColor = DJDesignTokens.Color.surface.cgColor
 
         let titleLabel = makeLabel(
             text: "外面世界很美好",
-            font: DJDesignTokens.Font.title(20),
+            font: DJDesignTokens.Font.title(ProfileLayout.personaTitleFontSize),
             color: DJDesignTokens.Color.textPrimary
         )
         titleLabel.textAlignment = .center
 
         let subtitleLabel = makeLabel(
             text: "今天又是阳光灿烂的一天",
-            font: DJDesignTokens.Font.label(12),
+            font: DJDesignTokens.Font.label(ProfileLayout.personaSubtitleFontSize),
             color: DJDesignTokens.Color.textTertiary
         )
         subtitleLabel.textAlignment = .center
@@ -160,12 +209,12 @@ final class ProfileViewController: UIViewController {
         let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
         textStack.axis = .vertical
         textStack.alignment = .center
-        textStack.spacing = 5
+        textStack.spacing = ProfileLayout.personaTextSpacing
 
         let stack = UIStackView(arrangedSubviews: [avatarContainer, textStack])
         stack.axis = .vertical
         stack.alignment = .center
-        stack.spacing = 10
+        stack.spacing = ProfileLayout.personaStackSpacing
 
         container.addSubview(stack)
         avatarContainer.addSubview(avatarImageView)
@@ -176,41 +225,41 @@ final class ProfileViewController: UIViewController {
         statusDot.translatesAutoresizingMaskIntoConstraints = false
 
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: container.topAnchor),
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: ProfileLayout.personaTopPadding),
             stack.leadingAnchor.constraint(greaterThanOrEqualTo: container.leadingAnchor),
             stack.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor),
             stack.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -ProfileLayout.personaBottomPadding),
 
-            avatarContainer.widthAnchor.constraint(equalToConstant: 64),
-            avatarContainer.heightAnchor.constraint(equalToConstant: 64),
+            avatarContainer.widthAnchor.constraint(equalToConstant: ProfileLayout.personaAvatarSize),
+            avatarContainer.heightAnchor.constraint(equalToConstant: ProfileLayout.personaAvatarSize),
 
             avatarImageView.centerXAnchor.constraint(equalTo: avatarContainer.centerXAnchor),
             avatarImageView.centerYAnchor.constraint(equalTo: avatarContainer.centerYAnchor),
-            avatarImageView.widthAnchor.constraint(equalToConstant: 34),
-            avatarImageView.heightAnchor.constraint(equalToConstant: 34),
+            avatarImageView.widthAnchor.constraint(equalToConstant: ProfileLayout.personaAvatarIconSize + 2),
+            avatarImageView.heightAnchor.constraint(equalToConstant: ProfileLayout.personaAvatarIconSize + 2),
 
             statusDot.trailingAnchor.constraint(equalTo: avatarContainer.trailingAnchor, constant: -2),
             statusDot.bottomAnchor.constraint(equalTo: avatarContainer.bottomAnchor, constant: -2),
-            statusDot.widthAnchor.constraint(equalToConstant: 14),
-            statusDot.heightAnchor.constraint(equalToConstant: 14),
+            statusDot.widthAnchor.constraint(equalToConstant: ProfileLayout.personaStatusDotSize),
+            statusDot.heightAnchor.constraint(equalToConstant: ProfileLayout.personaStatusDotSize),
         ])
 
         return container
     }
 
     private func makeCareCard(snapshot: ProfileCareSnapshot?) -> UIView {
-        let card = DJComponentFactory.cardView(radius: DJDesignTokens.Radius.large)
+        let card = makeProfileCard()
 
         let titleLabel = makeLabel(
             text: "心境追踪",
-            font: DJDesignTokens.Font.title(20),
+            font: DJDesignTokens.Font.title(ProfileLayout.careTitleFontSize),
             color: DJDesignTokens.Color.textPrimary
         )
         let iconView = UIImageView()
         let iconConfig = UIImage.SymbolConfiguration(pointSize: 18, weight: .regular)
         iconView.image = UIImage(systemName: "drop", withConfiguration: iconConfig)
-        iconView.tintColor = DJDesignTokens.Color.accentDeep
+        iconView.tintColor = DJDesignTokens.Color.textSecondary
         iconView.contentMode = .scaleAspectFit
 
         let titleStack = UIStackView(arrangedSubviews: [iconView, titleLabel])
@@ -225,12 +274,13 @@ final class ProfileViewController: UIViewController {
         headerStack.alignment = .center
         headerStack.spacing = 12
 
-        let meterView = ProfileSignalBarView(value: snapshot?.emotionalIndex ?? 0.8)
+        let meterView = ProfileSignalBarView(value: snapshot?.emotionalIndex ?? 0.8, height: ProfileLayout.careSignalHeight)
         let doctorRow = makeDoctorRow()
+        let syncCaption = makeCareSyncCaption(snapshot: snapshot)
 
-        let stack = UIStackView(arrangedSubviews: [headerStack, meterView, doctorRow])
+        let stack = UIStackView(arrangedSubviews: [headerStack, meterView, doctorRow, syncCaption])
         stack.axis = .vertical
-        stack.spacing = 16
+        stack.spacing = ProfileLayout.careStackSpacing
 
         card.addSubview(stack)
         iconView.translatesAutoresizingMaskIntoConstraints = false
@@ -239,29 +289,30 @@ final class ProfileViewController: UIViewController {
             iconView.widthAnchor.constraint(equalToConstant: 20),
             iconView.heightAnchor.constraint(equalToConstant: 20),
 
-            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 20),
-            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
-            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
-            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16),
+            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: ProfileLayout.careCardPadding),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: ProfileLayout.careCardPadding),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -ProfileLayout.careCardPadding),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -ProfileLayout.careCardPadding),
         ])
 
         return card
     }
 
-    private func makeSettingsCard() -> UIView {
-        let card = DJComponentFactory.cardView(radius: DJDesignTokens.Radius.large)
+    private func makeCareSyncCaption(snapshot: ProfileCareSnapshot?) -> UILabel {
+        let label = makeLabel(
+            text: snapshot?.syncCaption ?? "关怀数据同步后会更新状态。",
+            font: DJDesignTokens.Font.body(12),
+            color: DJDesignTokens.Color.textTertiary
+        )
+        label.numberOfLines = 0
+        label.accessibilityIdentifier = "profileCareSyncCaption"
+        return label
+    }
 
-        var rows: [ProfileRowAction] = [.profileSettings]
-        if featureFlags.isEnabled(.familyManagement) {
-            rows.append(.familyManagement)
-        }
-        if featureFlags.isEnabled(.legalCenter) {
-            rows.append(.legalCenter)
-        }
-        rows.append(.logout)
-        if featureFlags.isEnabled(.accountDeletion) {
-            rows.append(.accountDeletion)
-        }
+    private func makeSettingsCard() -> UIView {
+        let card = makeProfileCard()
+
+        let rows = makeSettingsRows()
 
         let stack = UIStackView()
         stack.axis = .vertical
@@ -276,88 +327,114 @@ final class ProfileViewController: UIViewController {
         card.addSubview(stack)
         stack.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 8),
+            stack.topAnchor.constraint(equalTo: card.topAnchor),
             stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: DJDesignTokens.Spacing.card),
             stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -DJDesignTokens.Spacing.card),
-            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -8),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor),
         ])
 
         return card
     }
 
+    private func makeSettingsRows() -> [ProfileRowAction] {
+        var rows: [ProfileRowAction] = []
+        if isProfileHiddenBranchesEnabled || featureFlags.isEnabled(.profileSettings) {
+            rows.append(.profileSettings)
+        }
+        if isProfileHiddenBranchesEnabled || featureFlags.isEnabled(.familyManagement) {
+            rows.append(.familyManagement)
+        }
+        if isProfileHiddenBranchesEnabled || featureFlags.isEnabled(.legalCenter) {
+            rows.append(.legalCenter)
+        }
+        rows.append(.logout)
+        if isProfileHiddenBranchesEnabled || featureFlags.isEnabled(.accountDeletion) {
+            rows.append(.accountDeletion)
+        }
+        return rows
+    }
+
     private func makeDoctorRow() -> UIView {
         let container = UIView()
-        container.backgroundColor = DJDesignTokens.Color.surfaceLow
-        container.layer.cornerRadius = DJDesignTokens.Radius.medium
+
+        let divider = UIView()
+        divider.backgroundColor = DJDesignTokens.Color.divider.withAlphaComponent(0.28)
 
         let avatar = UIView()
-        avatar.backgroundColor = DJDesignTokens.Color.surface
-        avatar.layer.cornerRadius = 19
+        avatar.backgroundColor = DJDesignTokens.Color.surfaceLow
+        avatar.layer.cornerRadius = 16
 
         let avatarIcon = UIImageView()
         let avatarConfig = UIImage.SymbolConfiguration(pointSize: 18, weight: .regular)
-        avatarIcon.image = UIImage(systemName: "stethoscope", withConfiguration: avatarConfig)
-        avatarIcon.tintColor = DJDesignTokens.Color.accentDeep
+        avatarIcon.image = UIImage(systemName: "person", withConfiguration: avatarConfig)
+        avatarIcon.tintColor = DJDesignTokens.Color.textSecondary
         avatarIcon.contentMode = .scaleAspectFit
 
         let nameLabel = makeLabel(
             text: "李医生",
-            font: DJDesignTokens.Font.title(16),
+            font: DJDesignTokens.Font.label(13),
             color: DJDesignTokens.Color.textPrimary
         )
-        let roleLabel = makeLabel(
-            text: "关怀建议",
-            font: DJDesignTokens.Font.body(12),
-            color: DJDesignTokens.Color.textTertiary
-        )
-        let labelStack = UIStackView(arrangedSubviews: [nameLabel, roleLabel])
-        labelStack.axis = .vertical
-        labelStack.spacing = 2
 
-        let callButton = UIButton(type: .system)
-        callButton.setTitle("立即通话", for: .normal)
-        callButton.setTitleColor(.white, for: .normal)
-        callButton.titleLabel?.font = DJDesignTokens.Font.label(14)
-        callButton.backgroundColor = DJDesignTokens.Color.accent
-        callButton.layer.cornerRadius = 18
-        callButton.contentEdgeInsets = UIEdgeInsets(top: 9, left: 14, bottom: 9, right: 14)
-        callButton.addTarget(self, action: #selector(doctorCallTapped), for: .touchUpInside)
+        var rowViews: [UIView] = [avatar, nameLabel, UIView()]
+        if isCareDoctorContactVisible {
+            let callButton = UIButton(type: .system)
+            callButton.setTitle("立即通话", for: .normal)
+            callButton.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
+            callButton.titleLabel?.font = DJDesignTokens.Font.label(13)
+            callButton.addTarget(self, action: #selector(doctorCallTapped), for: .touchUpInside)
+            rowViews.append(callButton)
+        }
 
-        let rowStack = UIStackView(arrangedSubviews: [avatar, labelStack, UIView(), callButton])
+        let rowStack = UIStackView(arrangedSubviews: rowViews)
         rowStack.axis = .horizontal
         rowStack.alignment = .center
-        rowStack.spacing = 10
+        rowStack.spacing = 8
 
+        container.addSubview(divider)
         container.addSubview(rowStack)
         avatar.addSubview(avatarIcon)
+        divider.translatesAutoresizingMaskIntoConstraints = false
         rowStack.translatesAutoresizingMaskIntoConstraints = false
         avatar.translatesAutoresizingMaskIntoConstraints = false
         avatarIcon.translatesAutoresizingMaskIntoConstraints = false
 
         NSLayoutConstraint.activate([
-            rowStack.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
-            rowStack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
-            rowStack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
-            rowStack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12),
+            divider.topAnchor.constraint(equalTo: container.topAnchor),
+            divider.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            divider.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            divider.heightAnchor.constraint(equalToConstant: 0.5),
 
-            avatar.widthAnchor.constraint(equalToConstant: 38),
-            avatar.heightAnchor.constraint(equalToConstant: 38),
+            rowStack.topAnchor.constraint(equalTo: divider.bottomAnchor, constant: 12),
+            rowStack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            rowStack.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            rowStack.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+
+            avatar.widthAnchor.constraint(equalToConstant: 32),
+            avatar.heightAnchor.constraint(equalToConstant: 32),
 
             avatarIcon.centerXAnchor.constraint(equalTo: avatar.centerXAnchor),
             avatarIcon.centerYAnchor.constraint(equalTo: avatar.centerYAnchor),
-            avatarIcon.widthAnchor.constraint(equalToConstant: 22),
-            avatarIcon.heightAnchor.constraint(equalToConstant: 22),
+            avatarIcon.widthAnchor.constraint(equalToConstant: 18),
+            avatarIcon.heightAnchor.constraint(equalToConstant: 18),
         ])
 
         return container
+    }
+
+    private func makeProfileCard() -> UIView {
+        let card = DJComponentFactory.cardView(radius: DJDesignTokens.Radius.large)
+        card.layer.borderWidth = 1
+        card.layer.borderColor = DJDesignTokens.Color.divider.withAlphaComponent(0.50).cgColor
+        return card
     }
 
     private func makePill(text: String) -> UILabel {
         let label = PaddingLabel(insets: UIEdgeInsets(top: 5, left: 10, bottom: 5, right: 10))
         label.text = text
         label.font = DJDesignTokens.Font.label(12)
-        label.textColor = DJDesignTokens.Color.accentDeep
-        label.backgroundColor = DJDesignTokens.Color.surfaceContainer
+        label.textColor = DJDesignTokens.Color.textSecondary
+        label.backgroundColor = DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.55)
         label.layer.cornerRadius = 12
         label.layer.masksToBounds = true
         label.setContentHuggingPriority(.required, for: .horizontal)
@@ -384,11 +461,11 @@ final class ProfileViewController: UIViewController {
     @objc private func settingRowTapped(_ sender: ProfileActionRow) {
         switch sender.action {
         case .profileSettings:
-            showUnavailableAlert()
+            showProfileSettings()
         case .familyManagement:
             openFamilyManagement()
         case .legalCenter:
-            showUnavailableAlert()
+            showLegalCenter()
         case .logout:
             UserManager.shared.logout()
         case .accountDeletion:
@@ -397,6 +474,16 @@ final class ProfileViewController: UIViewController {
                 message: "账号注销需要完整确认与合规流程，后续版本会提供。"
             )
         }
+    }
+
+    private func showProfileSettings() {
+        let viewController = ProfileSettingsViewController()
+        navigationController?.pushViewController(viewController, animated: true)
+    }
+
+    private func showLegalCenter() {
+        let viewController = ProfileLegalViewController()
+        navigationController?.pushViewController(viewController, animated: true)
     }
 
     @objc private func doctorCallTapped() {
@@ -509,7 +596,7 @@ private final class ProfileActionRow: UIControl {
         accessibilityLabel = action.title
 
         titleLabel.text = action.title
-        titleLabel.font = DJDesignTokens.Font.body(15)
+        titleLabel.font = DJDesignTokens.Font.body(16)
         titleLabel.textColor = action.isDestructive
             ? DJDesignTokens.Color.danger
             : DJDesignTokens.Color.textPrimary
@@ -530,7 +617,7 @@ private final class ProfileActionRow: UIControl {
         }
 
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(greaterThanOrEqualToConstant: 56),
+            heightAnchor.constraint(greaterThanOrEqualToConstant: ProfileLayout.settingsRowMinHeight),
 
             titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
             titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -552,11 +639,13 @@ private final class ProfileActionRow: UIControl {
 private final class ProfileSignalBarView: UIView {
 
     private let value: CGFloat
+    private let preferredHeight: CGFloat
     private let waveLayer = CAShapeLayer()
     private let thumbLayer = CAShapeLayer()
 
-    init(value: Double) {
+    init(value: Double, height: CGFloat = ProfileLayout.careSignalHeight) {
         self.value = min(max(CGFloat(value), 0.08), 0.96)
+        self.preferredHeight = height
         super.init(frame: .zero)
         setupView()
     }
@@ -588,17 +677,17 @@ private final class ProfileSignalBarView: UIView {
     private func setupView() {
         backgroundColor = .clear
         waveLayer.fillColor = UIColor.clear.cgColor
-        waveLayer.strokeColor = DJDesignTokens.Color.divider.cgColor
+        waveLayer.strokeColor = DJDesignTokens.Color.textTertiary.withAlphaComponent(0.48).cgColor
         waveLayer.lineWidth = 2
         waveLayer.lineCap = .round
 
-        thumbLayer.fillColor = DJDesignTokens.Color.accent.withAlphaComponent(0.72).cgColor
+        thumbLayer.fillColor = DJDesignTokens.Color.accentDeep.withAlphaComponent(0.62).cgColor
 
         layer.addSublayer(waveLayer)
         layer.addSublayer(thumbLayer)
 
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: 64),
+            heightAnchor.constraint(equalToConstant: preferredHeight),
         ])
     }
 }

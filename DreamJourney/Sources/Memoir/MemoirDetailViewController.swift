@@ -211,15 +211,23 @@ final class MemoirDetailViewController: UIViewController {
     /// 生成朗读按钮（无音频时显示）
     private lazy var generateAudioButton: UIButton = {
         let b = UIButton(type: .system)
-        b.setTitle("生成朗读", for: .normal)
-        b.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
-        b.setTitleColor(.white, for: .normal)
-        b.backgroundColor = UIColor(hex: "#3D2B1F")
+        b.configuration = Self.generateAudioButtonConfiguration(title: "生成朗读")
         b.layer.cornerRadius = 8
-        b.contentEdgeInsets = UIEdgeInsets(top: 8, left: 16, bottom: 8, right: 16)
         b.addTarget(self, action: #selector(generateAudioTapped), for: .touchUpInside)
         return b
     }()
+
+    private static func generateAudioButtonConfiguration(title: String) -> UIButton.Configuration {
+        var attributedTitle = AttributedString(title)
+        attributedTitle.font = .systemFont(ofSize: 15, weight: .medium)
+        var configuration = UIButton.Configuration.plain()
+        configuration.attributedTitle = attributedTitle
+        configuration.baseForegroundColor = .white
+        configuration.background.backgroundColor = UIColor(hex: "#3D2B1F")
+        configuration.background.cornerRadius = 8
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16)
+        return configuration
+    }
 
     // MARK: - Init
 
@@ -483,7 +491,6 @@ final class MemoirDetailViewController: UIViewController {
     // MARK: - 音频播放卡片状态
 
     private func updateAudioCardState() {
-        let hasAudio = memoir.audioFileName != nil
         let hasAudioFile = MemoirTTSService.shared.getAudioURL(for: memoir.id) != nil
         let canPlay = hasAudioFile
 
@@ -504,6 +511,7 @@ final class MemoirDetailViewController: UIViewController {
             progressSlider.isHidden = true
             timeDisplayLabel.isHidden = true
             generateAudioButton.isHidden = false
+            generateAudioButton.configuration = Self.generateAudioButtonConfiguration(title: "生成朗读")
         } else {
             // 没有声音复刻：显示降级提示
             playButton.isHidden = true
@@ -513,7 +521,7 @@ final class MemoirDetailViewController: UIViewController {
             generateAudioButton.isHidden = false
 
             audioStatusLabel.text = "完成声音复刻后可生成朗读"
-            generateAudioButton.setTitle("用系统语音朗读", for: .normal)
+            generateAudioButton.configuration = Self.generateAudioButtonConfiguration(title: "用系统语音朗读")
         }
     }
 
@@ -876,4 +884,3 @@ extension MemoirDetailViewController: UITextViewDelegate {
         updateProseCharCount()
     }
 }
-

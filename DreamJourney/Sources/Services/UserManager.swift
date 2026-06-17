@@ -25,6 +25,15 @@ final class UserManager {
         NotificationCenter.default.post(name: .djUserDidLogin, object: nil)
     }
 
+    func updateProfile(nickname: String) {
+        guard var user = currentUser else { return }
+        let trimmedNickname = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+        user.nickname = trimmedNickname.isEmpty ? "寻梦环游用户" : trimmedNickname
+        currentUser = user
+        saveToDefaults()
+        NotificationCenter.default.post(name: .djUserDidUpdate, object: nil)
+    }
+
     // MARK: - 退出登录
     func logout() {
         currentUser = nil
@@ -52,5 +61,6 @@ final class UserManager {
 extension Notification.Name {
     static let djUserDidLogin  = Notification.Name("dj.user.didLogin")
     static let djUserDidLogout = Notification.Name("dj.user.didLogout")
+    static let djUserDidUpdate = Notification.Name("dj.user.didUpdate")
     static let djNewMemoryCreated = Notification.Name("dj.memory.newCreated")
 }

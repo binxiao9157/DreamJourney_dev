@@ -219,12 +219,6 @@ final class ConversationMemoryManager {
 
     /// 从文本中提取时间描述
     private func extractTime(from text: String) -> String {
-        // 精确的时间表达
-        let exactTimePatterns = [
-            // 年份
-            (pattern: "(\\d{4})年", type: "year"),
-        ]
-
         // 检查精确年份
         if let regex = try? NSRegularExpression(pattern: "(\\d{3,4})年"),
            let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) {

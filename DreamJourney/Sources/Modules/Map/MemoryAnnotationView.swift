@@ -1,3 +1,4 @@
+#if !(UI_QA_SIMULATOR && targetEnvironment(simulator))
 import UIKit
 import MAMapKit
 
@@ -281,3 +282,4 @@ final class MemoryAnnotationView: MAAnnotationView {
         layer.zPosition = 0
     }
 }
+#endif

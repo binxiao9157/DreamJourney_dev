@@ -1,3 +1,70 @@
+#if UI_QA_SIMULATOR && targetEnvironment(simulator)
+import UIKit
+
+// MARK: - 足迹页面访问模式
+enum FootprintViewMode {
+    case host
+    case guest
+}
+
+final class MapFootprintViewController: UIViewController {
+    private let viewMode: FootprintViewMode
+    private let ownerName: String?
+
+    init(viewMode: FootprintViewMode = .host, ownerId: String, ownerName: String? = nil) {
+        self.viewMode = viewMode
+        self.ownerName = ownerName
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError()
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .warmBackground
+        setupPlaceholder()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        switch viewMode {
+        case .host:
+            navigationController?.setNavigationBarHidden(true, animated: animated)
+        case .guest:
+            navigationController?.setNavigationBarHidden(false, animated: animated)
+            title = "\(ownerName ?? "亲属")的足迹"
+        }
+    }
+
+    private func setupPlaceholder() {
+        let titleLabel = UILabel()
+        titleLabel.text = "足迹"
+        titleLabel.font = .systemFont(ofSize: 28, weight: .bold)
+        titleLabel.textColor = .warmPrimary
+
+        let messageLabel = UILabel()
+        messageLabel.text = "模拟器视觉 QA 暂不加载地图 SDK"
+        messageLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        messageLabel.textColor = TGColors.textSecondary
+        messageLabel.textAlignment = .center
+
+        let stack = UIStackView(arrangedSubviews: [titleLabel, messageLabel])
+        stack.axis = .vertical
+        stack.spacing = 20
+        stack.alignment = .center
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(stack)
+
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            stack.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+        ])
+    }
+}
+#else
 import UIKit
 import MAMapKit
 import AMapFoundationKit
@@ -430,3 +497,4 @@ extension MapFootprintViewController: MAMapViewDelegate {
         navigationController?.pushViewController(detailVC, animated: true)
     }
 }
+#endif

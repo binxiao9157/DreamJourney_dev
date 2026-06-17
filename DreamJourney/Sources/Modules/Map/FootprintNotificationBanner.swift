@@ -24,13 +24,16 @@ final class FootprintNotificationBanner: UIView {
 
     private let detailButton: UIButton = {
         let b = UIButton(type: .system)
-        b.setTitle("查看详情", for: .normal)
-        b.setTitleColor(.white, for: .normal)
-        b.titleLabel?.font = .systemFont(ofSize: 13, weight: .medium)
+        var title = AttributedString("查看详情")
+        title.font = .systemFont(ofSize: 13, weight: .medium)
+        var configuration = UIButton.Configuration.plain()
+        configuration.attributedTitle = title
+        configuration.baseForegroundColor = .white
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 5, leading: 12, bottom: 5, trailing: 12)
+        b.configuration = configuration
         b.backgroundColor = UIColor.white.withAlphaComponent(0.2)
         b.layer.cornerRadius = 10
         b.layer.masksToBounds = true
-        b.contentEdgeInsets = UIEdgeInsets(top: 5, left: 12, bottom: 5, right: 12)
         return b
     }()
 

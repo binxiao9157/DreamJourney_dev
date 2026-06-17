@@ -63,4 +63,33 @@ post_install do |installer|
       end
     end
   end
+
+  # UI QA on Simulator: SpeechEngineToB and AMap ship device-only binaries in
+  # the current Pod set. The app uses UI_QA_SIMULATOR stubs for those surfaces,
+  # so simulator linking must omit their device-only libraries/frameworks.
+  simulator_ldflags = 'OTHER_LDFLAGS[sdk=iphonesimulator*] = -ObjC -l"c++" -l"icucore" -l"swiftCoreGraphics" -l"z" -framework "AVFoundation" -framework "Accelerate" -framework "Alamofire" -framework "AudioToolbox" -framework "CFNetwork" -framework "CocoaLumberjack" -framework "Combine" -framework "CoreGraphics" -framework "CoreLocation" -framework "CoreTelephony" -framework "CoreText" -framework "Foundation" -framework "GLKit" -framework "IQKeyboardCore" -framework "IQKeyboardManagerSwift" -framework "IQKeyboardNotification" -framework "IQTextInputViewNotification" -framework "JavaScriptCore" -framework "KeychainAccess" -framework "Kingfisher" -framework "MJRefresh" -framework "MetalPerformanceShaders" -framework "Moya" -framework "OpenGLES" -framework "QuartzCore" -framework "Security" -framework "SnapKit" -framework "SocketRocket" -framework "SwiftyJSON" -framework "SystemConfiguration" -framework "UIKit" -weak_framework "Combine" -weak_framework "SwiftUI"'
+  simulator_library_paths = 'LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*] = "${TOOLCHAIN_DIR}/usr/lib/swift/${PLATFORM_NAME}" /usr/lib/swift $(SDKROOT)/usr/lib/swift'
+  simulator_swift_conditions = 'SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*] = $(inherited) UI_QA_SIMULATOR'
+
+  ['debug', 'release'].each do |configuration|
+    xcconfig_path = File.join(
+      __dir__,
+      'Pods',
+      'Target Support Files',
+      'Pods-DreamJourney',
+      "Pods-DreamJourney.#{configuration}.xcconfig"
+    )
+    next unless File.exist?(xcconfig_path)
+
+    lines = File.readlines(xcconfig_path, chomp: true)
+    lines.reject! do |line|
+      line.start_with?('OTHER_LDFLAGS[sdk=iphonesimulator*]') ||
+        line.start_with?('LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]') ||
+        line.start_with?('SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*]')
+    end
+
+    insert_at = lines.index { |line| line.start_with?('OTHER_LDFLAGS =') } || lines.length - 1
+    lines.insert(insert_at + 1, simulator_library_paths, simulator_ldflags, simulator_swift_conditions)
+    File.write(xcconfig_path, "#{lines.join("\n")}\n")
+  end
 end

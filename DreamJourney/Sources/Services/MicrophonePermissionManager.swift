@@ -11,6 +11,9 @@ final class MicrophonePermissionManager {
     /// 请求麦克风权限
     /// - Parameter completion: 回调结果（true=已授权）
     func requestPermission(completion: @escaping (Bool) -> Void) {
+        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        completion(true)
+        #else
         let status = AVAudioSession.sharedInstance().recordPermission
 
         switch status {
@@ -27,11 +30,16 @@ final class MicrophonePermissionManager {
         @unknown default:
             completion(false)
         }
+        #endif
     }
 
     /// 检查当前是否有麦克风权限
     var isAuthorized: Bool {
+        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        return true
+        #else
         return AVAudioSession.sharedInstance().recordPermission == .granted
+        #endif
     }
 
     /// 显示权限被拒绝的引导弹窗

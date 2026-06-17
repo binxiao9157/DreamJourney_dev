@@ -8,27 +8,44 @@ enum EchoInteractionState {
     case error(String)
 }
 
+struct EchoArchiveContextStatus: Equatable {
+    let totalItemCount: Int
+    let availableItemCount: Int
+
+    static let empty = EchoArchiveContextStatus(totalItemCount: 0, availableItemCount: 0)
+
+    var hasAvailableContext: Bool {
+        availableItemCount > 0
+    }
+}
+
 final class EchoViewModel {
     private let contextStore: DigitalHumanContextStore
     private let memoryManager: ConversationMemoryManager
+    private let archiveContextStatusProvider: () -> EchoArchiveContextStatus
 
     private(set) var context: DigitalHumanContext
+    private(set) var archiveContextStatus: EchoArchiveContextStatus = .empty
     private(set) var state: EchoInteractionState = .idle
 
     var onStateChange: ((EchoInteractionState) -> Void)?
     var onTranscriptAppend: ((String, Bool) -> Void)?
+    var onArchiveContextStatusChange: ((EchoArchiveContextStatus) -> Void)?
 
     init(
         contextStore: DigitalHumanContextStore = .shared,
-        memoryManager: ConversationMemoryManager = .shared
+        memoryManager: ConversationMemoryManager = .shared,
+        archiveContextStatusProvider: @escaping () -> EchoArchiveContextStatus = EchoViewModel.currentArchiveContextStatus
     ) {
         self.contextStore = contextStore
         self.memoryManager = memoryManager
+        self.archiveContextStatusProvider = archiveContextStatusProvider
         self.context = contextStore.current
     }
 
     func beginVoiceInteraction() {
         context = contextStore.current
+        refreshArchiveContextStatus()
         updateState(.listening)
     }
 
@@ -39,6 +56,7 @@ final class EchoViewModel {
             return
         }
 
+        refreshArchiveContextStatus()
         memoryManager.recordUserTurn(text: normalizedText)
         onTranscriptAppend?(normalizedText, true)
 
@@ -66,6 +84,19 @@ final class EchoViewModel {
     static func replyDelayMinutes(for sessionCount: Int) -> Int {
         let options = [5, 10, 30]
         return options[max(0, sessionCount) % options.count]
+    }
+
+    private static func currentArchiveContextStatus() -> EchoArchiveContextStatus {
+        let snapshot = MemoryArchiveRepository.shared.contextSnapshot()
+        return EchoArchiveContextStatus(
+            totalItemCount: snapshot.totalItemCount,
+            availableItemCount: snapshot.availableItemCount
+        )
+    }
+
+    func refreshArchiveContextStatus() {
+        archiveContextStatus = archiveContextStatusProvider()
+        onArchiveContextStatusChange?(archiveContextStatus)
     }
 
     private func updateState(_ newState: EchoInteractionState) {

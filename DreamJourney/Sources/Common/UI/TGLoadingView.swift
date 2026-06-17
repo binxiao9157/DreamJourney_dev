@@ -5,13 +5,20 @@ final class TGLoadingView {
 
     private static var loadingView: UIView?
 
+    private static var keyWindow: UIWindow? {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first { $0.isKeyWindow }
+    }
+
     // MARK: - 全屏转圈加载
     static func show(in view: UIView? = nil) {
         DispatchQueue.main.async {
             let target: UIView
             if let view = view {
                 target = view
-            } else if let window = UIApplication.shared.windows.first(where: { $0.isKeyWindow }) {
+            } else if let window = keyWindow {
                 target = window
             } else { return }
 
@@ -48,7 +55,7 @@ final class TGLoadingView {
             let target: UIView
             if let view = view {
                 target = view
-            } else if let window = UIApplication.shared.windows.first(where: { $0.isKeyWindow }) {
+            } else if let window = keyWindow {
                 target = window
             } else { return }
             target.viewWithTag(9901)?.removeFromSuperview()

@@ -5,6 +5,8 @@
 # Xcode
 build/
 DerivedData/
+tmp/**/DerivedData*/
+DreamJourney/Config/Backend.local.xcconfig
 *.xcuserstate
 xcuserdata/
 *.moved-aside

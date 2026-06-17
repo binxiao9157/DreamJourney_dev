@@ -155,7 +155,6 @@ final class MemoryDetailViewController: UIViewController {
         b.tintColor = TGColors.textSecondary
         let cfg = UIImage.SymbolConfiguration(pointSize: 18, weight: .regular)
         b.setImage(UIImage(systemName: "bubble.right", withConfiguration: cfg), for: .normal)
-        b.imageEdgeInsets = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 6)
         b.isUserInteractionEnabled = false
         return b
     }()
@@ -310,10 +309,6 @@ final class MemoryDetailViewController: UIViewController {
             // 分割线
             interactionDivider.heightAnchor.constraint(equalToConstant: 0.5),
         ])
-
-        // 互动按钮内边距
-        likeButton.contentEdgeInsets = .zero
-        commentCountButton.contentEdgeInsets = .zero
     }
 
     // MARK: - Setup Data

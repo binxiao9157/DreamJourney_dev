@@ -1,3 +1,4 @@
+#if !(UI_QA_SIMULATOR && targetEnvironment(simulator))
 import Foundation
 import MAMapKit
 
@@ -13,3 +14,4 @@ class MemoryAnnotation: MAPointAnnotation {
         subtitle = memory.subtitle
     }
 }
+#endif

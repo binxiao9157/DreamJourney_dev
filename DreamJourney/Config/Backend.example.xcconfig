@@ -1,0 +1,8 @@
+// Copy to Backend.local.xcconfig for local/manual release builds.
+// Keep Backend.local.xcconfig out of git.
+//
+// CLI example:
+// xcodebuild ... DREAMJOURNEY_BACKEND_BASE_URL=https://api.example.com DREAMJOURNEY_BACKEND_API_TOKEN=<secret>
+
+DREAMJOURNEY_BACKEND_BASE_URL = http://127.0.0.1:3100
+DREAMJOURNEY_BACKEND_API_TOKEN = YOUR_DREAMJOURNEY_BACKEND_API_TOKEN

@@ -1,5 +1,18 @@
 import Foundation
 
+struct MemoryArchiveItemPresentation {
+    let title: String
+    let note: String
+    let kindLabel: String
+    let statusLabel: String
+    let previewTitle: String
+    let previewSubtitle: String
+    let previewIconName: String
+    let metadataSummary: String?
+    let originalContentTitle: String
+    let accessibilityLabel: String
+}
+
 extension MemoryArchiveItemKind {
     var archiveDisplayName: String {
         switch self {
@@ -44,5 +57,184 @@ extension MemoryArchiveAnalysisStatus {
         case .failed:
             return "分析失败"
         }
+    }
+}
+
+extension MemoryArchiveItem {
+    var archivePresentation: MemoryArchiveItemPresentation {
+        let previewTitle = archiveDetailFeatureTitle
+        return MemoryArchiveItemPresentation(
+            title: title,
+            note: note,
+            kindLabel: kind.archiveDisplayName,
+            statusLabel: analysisStatus.archiveDisplayName,
+            previewTitle: previewTitle,
+            previewSubtitle: archiveDetailFeatureSubtitle,
+            previewIconName: archiveDetailFeatureIconName,
+            metadataSummary: archiveListMetadataSummary,
+            originalContentTitle: archiveOriginalContentTitle,
+            accessibilityLabel: "\(title)，\(previewTitle)，\(analysisStatus.archiveDisplayName)"
+        )
+    }
+
+    var archiveDetailFeatureTitle: String {
+        switch kind {
+        case .photo:
+            return "照片影像"
+        case .audio:
+            return "声音片段"
+        case .text:
+            return "文字内容"
+        case .timeLetter:
+            return "写给未来的信"
+        case .video:
+            return "视频片段"
+        }
+    }
+
+    var archiveDetailFeatureSubtitle: String {
+        switch kind {
+        case .photo:
+            return archiveListMetadataSummary ?? "封存可回看的影像线索"
+        case .audio:
+            return archiveListMetadataSummary ?? "记录语气、称呼与情绪线索"
+        case .text:
+            return archiveListMetadataSummary ?? "手动录入的生活细节"
+        case .timeLetter:
+            return "已封存，未来回看时作为情感线索"
+        case .video:
+            return archiveListMetadataSummary ?? "封存动态影像线索"
+        }
+    }
+
+    var archiveDetailFeatureIconName: String {
+        switch kind {
+        case .photo:
+            return "photo.on.rectangle"
+        case .audio:
+            return "waveform.circle"
+        case .text:
+            return "note.text"
+        case .timeLetter:
+            return "envelope.open"
+        case .video:
+            return "video"
+        }
+    }
+
+    var archiveOriginalContentTitle: String {
+        switch kind {
+        case .photo:
+            return "照片说明"
+        case .audio:
+            return "声音说明"
+        case .text:
+            return "文字内容"
+        case .timeLetter:
+            return "信件内容"
+        case .video:
+            return "原始内容"
+        }
+    }
+
+    var archiveListMetadataSummary: String? {
+        switch kind {
+        case .photo:
+            return joinedMetadataParts([
+                metadataSourceDisplayName,
+                metadataFileTypeDisplayName,
+                localPath == nil ? nil : "本地已保存",
+            ])
+        case .audio:
+            return joinedMetadataParts([
+                metadataDurationText,
+                metadataSourceDisplayName,
+                localPath == nil ? nil : "本地已保存",
+            ])
+        case .text, .timeLetter:
+            return joinedMetadataParts([
+                metadataCharacterCountDisplayName,
+                metadataSourceDisplayName,
+            ])
+        case .video:
+            return metadataSourceDisplayName
+        }
+    }
+
+    var archiveDetailMetadataRows: [(title: String, value: String)] {
+        var rows: [(String, String)] = [
+            ("素材类型", kind.archiveDisplayName),
+            ("采集来源", metadataSourceDisplayName ?? "手动录入"),
+            ("分析状态", analysisStatus.archiveDisplayName),
+        ]
+
+        switch kind {
+        case .photo:
+            rows.append(("文件类型", metadataFileTypeDisplayName ?? "图片"))
+            rows.append(("文件状态", localPath == nil ? "未保存本地文件" : "本地已保存"))
+        case .audio:
+            rows.append(("语音时长", metadataDurationText ?? "已封存"))
+            rows.append(("文件类型", metadataFileTypeDisplayName ?? "音频"))
+            rows.append(("文件状态", localPath == nil ? "未保存本地文件" : "本地已保存"))
+        case .text:
+            rows.append(("字数", metadataCharacterCountDisplayName ?? "\(note.count) 字"))
+        case .timeLetter:
+            rows.append(("字数", metadataCharacterCountDisplayName ?? "\(note.count) 字"))
+            rows.append(("信件状态", metadata["deliveryState"] == "sealed" ? "已封存" : "已保存"))
+        case .video:
+            rows.append(("文件状态", localPath == nil ? "未保存本地文件" : "本地已保存"))
+        }
+
+        return rows
+    }
+
+    private var metadataSourceDisplayName: String? {
+        switch metadata["source"] {
+        case "manual_text":
+            return "手动录入"
+        case "photo_library":
+            return "相册导入"
+        case "sample_photo":
+            return "样张封存"
+        case "manual_audio":
+            return "现场录音"
+        case let source? where !source.isEmpty:
+            return source
+        default:
+            return nil
+        }
+    }
+
+    private var metadataFileTypeDisplayName: String? {
+        guard let fileType = metadata["fileType"], !fileType.isEmpty else { return nil }
+        return fileType.uppercased()
+    }
+
+    private var metadataCharacterCountDisplayName: String? {
+        guard let characterCount = metadata["characterCount"], !characterCount.isEmpty else { return nil }
+        return "\(characterCount) 字"
+    }
+
+    private var metadataDurationText: String? {
+        if let durationText = metadata["durationText"], !durationText.isEmpty {
+            return durationText
+        }
+
+        return tags.first { tag in
+            let parts = tag.split(separator: ":")
+            guard parts.count == 2,
+                  parts.allSatisfy({ $0.count == 2 }) else {
+                return false
+            }
+            return parts.joined().allSatisfy(\.isNumber)
+        }
+    }
+
+    private func joinedMetadataParts(_ parts: [String?]) -> String? {
+        let displayParts = parts.compactMap { value -> String? in
+            guard let value, !value.isEmpty else { return nil }
+            return value
+        }
+        return displayParts.isEmpty ? nil : displayParts.joined(separator: " · ")
     }
 }

@@ -7,23 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		28D8501C781E7E8F03B1C87B /* FeatureFlagService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 392F026F981C3221600209E7 /* FeatureFlagService.swift */; };
-		36CF52237589B0C4691394E6 /* DJComponentFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D8F3BB4380923E82E24664 /* DJComponentFactory.swift */; };
-		56155288BF68EFE839397BB1 /* DreamJourneyBackendClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF8F1D6D1A0C1160E11C410B /* DreamJourneyBackendClient.swift */; };
-		8525A06805EC0F2C59676EBE /* DJDesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9721373237BB9D8AB345E0CA /* DJDesignTokens.swift */; };
-		8AF14552DA0909806567A566 /* DigitalHumanContextStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94415377646F176602419BD4 /* DigitalHumanContextStore.swift */; };
-		A1A000000000000000000001 /* MemoryArchiveItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000001 /* MemoryArchiveItem.swift */; };
-		A1A000000000000000000002 /* MemoryArchiveRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000002 /* MemoryArchiveRepository.swift */; };
-		A1A000000000000000000003 /* MemoryArchiveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000003 /* MemoryArchiveViewController.swift */; };
-		A1A000000000000000000008 /* MemoryArchiveCreationOption.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000008 /* MemoryArchiveCreationOption.swift */; };
-		A1A000000000000000000009 /* MemoryArchiveCreationSheetViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000009 /* MemoryArchiveCreationSheetViewController.swift */; };
-		A1A000000000000000000010 /* MemoryArchiveDetailViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000010 /* MemoryArchiveDetailViewController.swift */; };
-		A1A000000000000000000011 /* MemoryArchiveDisplayMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000011 /* MemoryArchiveDisplayMetadata.swift */; };
-		A1A000000000000000000012 /* MemoryArchiveItemFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000012 /* MemoryArchiveItemFactory.swift */; };
-		A1A000000000000000000004 /* EchoViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000004 /* EchoViewModel.swift */; };
-		A1A000000000000000000005 /* EchoViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000005 /* EchoViewController.swift */; };
-		A1A000000000000000000006 /* ProfileCareModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000006 /* ProfileCareModels.swift */; };
-		A1A000000000000000000007 /* ProfileViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000007 /* ProfileViewController.swift */; };
 		04FA5845CC27422438AE44DA /* WarmTabBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B274A4971D76C1D3BFEE4E9A /* WarmTabBarController.swift */; };
 		06F7BBC5219F555B3CF8DCDD /* UIColor+WarmTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71EF8575113A0367F332FE72 /* UIColor+WarmTheme.swift */; };
 		0E5676BC344BFB67294DA939 /* MiniMateLoader.js in Resources */ = {isa = PBXBuildFile; fileRef = AA3777B38C40C14928088B38 /* MiniMateLoader.js */; };
@@ -32,8 +15,10 @@
 		179BE070081D916DE52040A2 /* MemoryAnnotationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89B794AF9178933332C22526 /* MemoryAnnotationView.swift */; };
 		1D6C68E038F68B262E1C025D /* MicrophonePermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CCF5FAEB2B1690C0FB7E56E /* MicrophonePermissionManager.swift */; };
 		27EE981CBDE11D52F4E65EFE /* WarmMemoryAnnotationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE368D9CDFA77A1F03C66806 /* WarmMemoryAnnotationView.swift */; };
+		28D8501C781E7E8F03B1C87B /* FeatureFlagService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 392F026F981C3221600209E7 /* FeatureFlagService.swift */; };
 		328F094BD6DC27B02845187F /* MemoirAudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E34D9D2B8943EBBDECBC489 /* MemoirAudioPlayer.swift */; };
 		344DFB2063508315CC912EF7 /* KBExportPreviewViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66A439914BFCD681134DAF8A /* KBExportPreviewViewController.swift */; };
+		36CF52237589B0C4691394E6 /* DJComponentFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D8F3BB4380923E82E24664 /* DJComponentFactory.swift */; };
 		397C1F6023E56C8E016A0D71 /* OpenAvatarChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF3727699437781613AA5CB5 /* OpenAvatarChatService.swift */; };
 		39AA8CDBD51067C54985F46B /* SharedModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6AC678D507A1494FFBFDAA0 /* SharedModels.swift */; };
 		3AC3C0D2430B572CCADC9995 /* MemoirFlowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DB287D9E73E12EEAE5656E6 /* MemoirFlowManager.swift */; };
@@ -46,6 +31,7 @@
 		51E5260630E2B3EB0C6D96F1 /* TGLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4571331D3ED0551FB8C8DE7 /* TGLoadingView.swift */; };
 		52B3383F8F4517669DA70A7B /* MemoryDetailViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 830FF3B188863CA5E93ACA26 /* MemoryDetailViewController.swift */; };
 		55D3EB0986C561C7F208E19A /* MemoirModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07B6BA3BDEF61B3A339E10DD /* MemoirModel.swift */; };
+		56155288BF68EFE839397BB1 /* DreamJourneyBackendClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF8F1D6D1A0C1160E11C410B /* DreamJourneyBackendClient.swift */; };
 		56272F68DA6D144F29C65952 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 41B3D2BD9BE7DFE0AABF34F1 /* Assets.xcassets */; };
 		596491B3EBC0F9D31FB1C2E1 /* MemoryAnnotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89ABFCBCF51B9FD6CEB5799F /* MemoryAnnotation.swift */; };
 		5B5ABAB79A4B0C533DF4E21C /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = DEB0707389E5BC6A57EAB3BD /* LaunchScreen.storyboard */; };
@@ -60,10 +46,12 @@
 		813B7A93279A0D98C91B3276 /* DreamJourneyWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D151E9314D78EB40CF2EE48 /* DreamJourneyWidget.swift */; };
 		824FE84FF055277FD802AE21 /* KBLiteSemanticSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0616F4B34725AE4D0BCCA4D9 /* KBLiteSemanticSearch.swift */; };
 		84655D19F7C25DFB64698F6B /* KBGraphViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 939BB4DA6D4456E9F95F60DD /* KBGraphViewController.swift */; };
+		8525A06805EC0F2C59676EBE /* DJDesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9721373237BB9D8AB345E0CA /* DJDesignTokens.swift */; };
 		8635AA9D8CE8E081376A1C0C /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 04D035B5F78F66A15EB0C01A /* Main.storyboard */; };
 		885C95FBDAA6BCEA04BEC2F6 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 912061891274737BC5D94274 /* AppDelegate.swift */; };
 		896769650B9A953A6C0B6F19 /* KBSyncViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98DD9E92DD052BF00C55A0CB /* KBSyncViewController.swift */; };
 		89C5568D19D2A39E9AEEFBF3 /* FamilyRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B20338C4C40695560A52B81 /* FamilyRepository.swift */; };
+		8AF14552DA0909806567A566 /* DigitalHumanContextStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94415377646F176602419BD4 /* DigitalHumanContextStore.swift */; };
 		8C9B58C4A5C3BD5EF09847E6 /* Pods_DreamJourney.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6F92F68CA0C355AE2B34198A /* Pods_DreamJourney.framework */; };
 		8CE4E17850336E26E4389B8B /* pako.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 4B70B14E8FFEE31DDE6BAB7B /* pako.min.js */; };
 		8D3329C01B2DE3980D08E92E /* MemoryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EC2B6D3AE2C256785CCE388 /* MemoryModel.swift */; };
@@ -73,6 +61,23 @@
 		9556FBFB1282023279D8720D /* MemoirRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 520A85AB37898C097F761313 /* MemoirRepository.swift */; };
 		9A84BB0966C1478900AA56A3 /* HomeHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA5EF2310BF928C7F4BFADD7 /* HomeHeaderView.swift */; };
 		9D62718D2F007D0949BE1701 /* FootprintNotificationBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F284177749BB05238EC8575 /* FootprintNotificationBanner.swift */; };
+		A1A000000000000000000001 /* MemoryArchiveItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000001 /* MemoryArchiveItem.swift */; };
+		A1A000000000000000000002 /* MemoryArchiveRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000002 /* MemoryArchiveRepository.swift */; };
+		A1A000000000000000000003 /* MemoryArchiveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000003 /* MemoryArchiveViewController.swift */; };
+		A1A000000000000000000004 /* EchoViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000004 /* EchoViewModel.swift */; };
+		A1A000000000000000000005 /* EchoViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000005 /* EchoViewController.swift */; };
+		A1A000000000000000000006 /* ProfileCareModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000006 /* ProfileCareModels.swift */; };
+		A1A000000000000000000007 /* ProfileViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000007 /* ProfileViewController.swift */; };
+		A1A000000000000000000008 /* MemoryArchiveCreationOption.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000008 /* MemoryArchiveCreationOption.swift */; };
+		A1A000000000000000000009 /* MemoryArchiveCreationSheetViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000009 /* MemoryArchiveCreationSheetViewController.swift */; };
+		A1A000000000000000000010 /* MemoryArchiveDetailViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000010 /* MemoryArchiveDetailViewController.swift */; };
+		A1A000000000000000000011 /* MemoryArchiveDisplayMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000011 /* MemoryArchiveDisplayMetadata.swift */; };
+		A1A000000000000000000012 /* MemoryArchiveItemFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000012 /* MemoryArchiveItemFactory.swift */; };
+		A1A000000000000000000013 /* MemoryArchivePhotoEntryViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000013 /* MemoryArchivePhotoEntryViewController.swift */; };
+		A1A000000000000000000014 /* MemoryArchiveTextEntryViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000014 /* MemoryArchiveTextEntryViewController.swift */; };
+		A1A000000000000000000015 /* MemoryArchiveAudioRecorderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000015 /* MemoryArchiveAudioRecorderViewController.swift */; };
+		A1A000000000000000000016 /* ProfileLegalViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000016 /* ProfileLegalViewController.swift */; };
+		A1A000000000000000000017 /* ProfileSettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000017 /* ProfileSettingsViewController.swift */; };
 		A45E9D7E5541F7288DD4141D /* ConversationMemoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97D922D4C28AF76D7CB85DFF /* ConversationMemoryManager.swift */; };
 		A52FFB266D8D9FC320182A0A /* MemoryRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BCB52701683AE3FAFABA6F /* MemoryRepository.swift */; };
 		A88DF4F43BC833D9433CEE7B /* MemoirTTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00898E98E95E3808561BEB51 /* MemoirTTSService.swift */; };
@@ -102,27 +107,10 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		392F026F981C3221600209E7 /* FeatureFlagService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlagService.swift; sourceTree = "<group>"; };
-		47D8F3BB4380923E82E24664 /* DJComponentFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DJComponentFactory.swift; sourceTree = "<group>"; };
-		94415377646F176602419BD4 /* DigitalHumanContextStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanContextStore.swift; sourceTree = "<group>"; };
-		9721373237BB9D8AB345E0CA /* DJDesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DJDesignTokens.swift; sourceTree = "<group>"; };
-		EF8F1D6D1A0C1160E11C410B /* DreamJourneyBackendClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DreamJourneyBackendClient.swift; sourceTree = "<group>"; };
-		B1B000000000000000000001 /* MemoryArchiveItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveItem.swift; sourceTree = "<group>"; };
-		B1B000000000000000000002 /* MemoryArchiveRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveRepository.swift; sourceTree = "<group>"; };
-		B1B000000000000000000003 /* MemoryArchiveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveViewController.swift; sourceTree = "<group>"; };
-		B1B000000000000000000008 /* MemoryArchiveCreationOption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveCreationOption.swift; sourceTree = "<group>"; };
-		B1B000000000000000000009 /* MemoryArchiveCreationSheetViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveCreationSheetViewController.swift; sourceTree = "<group>"; };
-		B1B000000000000000000010 /* MemoryArchiveDetailViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveDetailViewController.swift; sourceTree = "<group>"; };
-		B1B000000000000000000011 /* MemoryArchiveDisplayMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveDisplayMetadata.swift; sourceTree = "<group>"; };
-		B1B000000000000000000012 /* MemoryArchiveItemFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveItemFactory.swift; sourceTree = "<group>"; };
-		B1B000000000000000000004 /* EchoViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EchoViewModel.swift; sourceTree = "<group>"; };
-		B1B000000000000000000005 /* EchoViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EchoViewController.swift; sourceTree = "<group>"; };
-		B1B000000000000000000006 /* ProfileCareModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileCareModels.swift; sourceTree = "<group>"; };
-		B1B000000000000000000007 /* ProfileViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewController.swift; sourceTree = "<group>"; };
 		00898E98E95E3808561BEB51 /* MemoirTTSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirTTSService.swift; sourceTree = "<group>"; };
 		04D035B5F78F66A15EB0C01A /* Main.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = Main.storyboard; sourceTree = "<group>"; };
 		0616F4B34725AE4D0BCCA4D9 /* KBLiteSemanticSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLiteSemanticSearch.swift; sourceTree = "<group>"; };
-		06E17BD90B489ADAD5BB3B17 /* DreamJourney.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = DreamJourney.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		06E17BD90B489ADAD5BB3B17 /* DreamJourney.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DreamJourney.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		07B6BA3BDEF61B3A339E10DD /* MemoirModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirModel.swift; sourceTree = "<group>"; };
 		0E34D9D2B8943EBBDECBC489 /* MemoirAudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirAudioPlayer.swift; sourceTree = "<group>"; };
 		101D4CAEA6C25FCE0B7B8C8A /* BridgingHeader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BridgingHeader.h; sourceTree = "<group>"; };
@@ -131,14 +119,16 @@
 		1EC2B6D3AE2C256785CCE388 /* MemoryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryModel.swift; sourceTree = "<group>"; };
 		2A0648C7E87957BF18381DE1 /* DHLiveMini.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = DHLiveMini.js; sourceTree = "<group>"; };
 		33790F6FDDECF7ADE231C869 /* VoiceCloneService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceCloneService.swift; sourceTree = "<group>"; };
+		392F026F981C3221600209E7 /* FeatureFlagService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlagService.swift; sourceTree = "<group>"; };
 		3CCF5FAEB2B1690C0FB7E56E /* MicrophonePermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophonePermissionManager.swift; sourceTree = "<group>"; };
 		41B3D2BD9BE7DFE0AABF34F1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		47D8F3BB4380923E82E24664 /* DJComponentFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DJComponentFactory.swift; sourceTree = "<group>"; };
 		4B70B14E8FFEE31DDE6BAB7B /* pako.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = pako.min.js; sourceTree = "<group>"; };
 		520A85AB37898C097F761313 /* MemoirRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirRepository.swift; sourceTree = "<group>"; };
 		5628E3908BA5F87F7FC6373B /* KBLiteGapDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLiteGapDetector.swift; sourceTree = "<group>"; };
 		56ED8B99EE2B18AC4D06CC30 /* MemoryEditViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryEditViewController.swift; sourceTree = "<group>"; };
 		576656BFF57471DCF9B231CB /* KBLiteManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLiteManager.swift; sourceTree = "<group>"; };
-		57FC3EFBF8FAC9ABFA05E1C8 /* 01.mp4 */ = {isa = PBXFileReference; path = 01.mp4; sourceTree = "<group>"; };
+		57FC3EFBF8FAC9ABFA05E1C8 /* 01.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = 01.mp4; sourceTree = "<group>"; };
 		5ABDBC7F0000C4386BB6B2C5 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		5B20338C4C40695560A52B81 /* FamilyRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyRepository.swift; sourceTree = "<group>"; };
 		5DB287D9E73E12EEAE5656E6 /* MemoirFlowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirFlowManager.swift; sourceTree = "<group>"; };
@@ -163,6 +153,8 @@
 		912061891274737BC5D94274 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		91B8B6D2AAE645AB04030C27 /* TabCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabCoordinator.swift; sourceTree = "<group>"; };
 		939BB4DA6D4456E9F95F60DD /* KBGraphViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBGraphViewController.swift; sourceTree = "<group>"; };
+		94415377646F176602419BD4 /* DigitalHumanContextStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanContextStore.swift; sourceTree = "<group>"; };
+		9721373237BB9D8AB345E0CA /* DJDesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DJDesignTokens.swift; sourceTree = "<group>"; };
 		97D922D4C28AF76D7CB85DFF /* ConversationMemoryManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationMemoryManager.swift; sourceTree = "<group>"; };
 		97DC22CAC741ACB9DFED60AC /* MemoirDetailViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirDetailViewController.swift; sourceTree = "<group>"; };
 		97F0549E026517813C1A6DF1 /* KBGraphLayoutEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBGraphLayoutEngine.swift; sourceTree = "<group>"; };
@@ -175,12 +167,29 @@
 		AA3777B38C40C14928088B38 /* MiniMateLoader.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = MiniMateLoader.js; sourceTree = "<group>"; };
 		AB6F020939B8B3A55A3A9013 /* LoginViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginViewController.swift; sourceTree = "<group>"; };
 		AE23737BEAD63674ABA24223 /* MemoirGenerationCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirGenerationCard.swift; sourceTree = "<group>"; };
+		B1B000000000000000000001 /* MemoryArchiveItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveItem.swift; sourceTree = "<group>"; };
+		B1B000000000000000000002 /* MemoryArchiveRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveRepository.swift; sourceTree = "<group>"; };
+		B1B000000000000000000003 /* MemoryArchiveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveViewController.swift; sourceTree = "<group>"; };
+		B1B000000000000000000004 /* EchoViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EchoViewModel.swift; sourceTree = "<group>"; };
+		B1B000000000000000000005 /* EchoViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EchoViewController.swift; sourceTree = "<group>"; };
+		B1B000000000000000000006 /* ProfileCareModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileCareModels.swift; sourceTree = "<group>"; };
+		B1B000000000000000000007 /* ProfileViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewController.swift; sourceTree = "<group>"; };
+		B1B000000000000000000008 /* MemoryArchiveCreationOption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveCreationOption.swift; sourceTree = "<group>"; };
+		B1B000000000000000000009 /* MemoryArchiveCreationSheetViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveCreationSheetViewController.swift; sourceTree = "<group>"; };
+		B1B000000000000000000010 /* MemoryArchiveDetailViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveDetailViewController.swift; sourceTree = "<group>"; };
+		B1B000000000000000000011 /* MemoryArchiveDisplayMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveDisplayMetadata.swift; sourceTree = "<group>"; };
+		B1B000000000000000000012 /* MemoryArchiveItemFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveItemFactory.swift; sourceTree = "<group>"; };
+		B1B000000000000000000013 /* MemoryArchivePhotoEntryViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchivePhotoEntryViewController.swift; sourceTree = "<group>"; };
+		B1B000000000000000000014 /* MemoryArchiveTextEntryViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveTextEntryViewController.swift; sourceTree = "<group>"; };
+		B1B000000000000000000015 /* MemoryArchiveAudioRecorderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveAudioRecorderViewController.swift; sourceTree = "<group>"; };
+		B1B000000000000000000016 /* ProfileLegalViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileLegalViewController.swift; sourceTree = "<group>"; };
+		B1B000000000000000000017 /* ProfileSettingsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileSettingsViewController.swift; sourceTree = "<group>"; };
 		B1BA39C954DE93A9C6B92546 /* FamilyCircleViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyCircleViewController.swift; sourceTree = "<group>"; };
 		B274A4971D76C1D3BFEE4E9A /* WarmTabBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WarmTabBarController.swift; sourceTree = "<group>"; };
 		B2BCB52701683AE3FAFABA6F /* MemoryRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryRepository.swift; sourceTree = "<group>"; };
 		B918EB99B79AE43472DACB6A /* MiniLive2.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = MiniLive2.js; sourceTree = "<group>"; };
 		BBD239A6242EDA949C562EF3 /* combined_data.json.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; path = combined_data.json.gz; sourceTree = "<group>"; };
-		BD7318F07FAEE0966045F115 /* DHLiveMini.wasm */ = {isa = PBXFileReference; path = DHLiveMini.wasm; sourceTree = "<group>"; };
+		BD7318F07FAEE0966045F115 /* DHLiveMini.wasm */ = {isa = PBXFileReference; lastKnownFileType = file; path = DHLiveMini.wasm; sourceTree = "<group>"; };
 		BFEC7EA9CB8D7181EFC70161 /* MemoirService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirService.swift; sourceTree = "<group>"; };
 		C0BBE3B2755905EC665443B5 /* UIViewController+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIViewController+Extensions.swift"; sourceTree = "<group>"; };
 		C31B66E6C099EABF318FC693 /* DreamJourneyWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = DreamJourneyWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -197,6 +206,7 @@
 		EA5EF2310BF928C7F4BFADD7 /* HomeHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeHeaderView.swift; sourceTree = "<group>"; };
 		EA7025362579F4B59C5376E8 /* KBLitePDFExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLitePDFExporter.swift; sourceTree = "<group>"; };
 		EE368D9CDFA77A1F03C66806 /* WarmMemoryAnnotationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WarmMemoryAnnotationView.swift; sourceTree = "<group>"; };
+		EF8F1D6D1A0C1160E11C410B /* DreamJourneyBackendClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DreamJourneyBackendClient.swift; sourceTree = "<group>"; };
 		F000C9191CDE42D8FB0D946A /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		F6C5E6FFF33ED30F772F732A /* Coordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Coordinator.swift; sourceTree = "<group>"; };
 		FF7E1F392A912E6A3B365A8C /* TodayInHistoryProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayInHistoryProvider.swift; sourceTree = "<group>"; };
@@ -375,6 +385,18 @@
 			path = Auth;
 			sourceTree = "<group>";
 		};
+		697A85CBA95E64BD34FC210E /* DreamJourneyWidget */ = {
+			isa = PBXGroup;
+			children = (
+				6D151E9314D78EB40CF2EE48 /* DreamJourneyWidget.swift */,
+				D6AC678D507A1494FFBFDAA0 /* SharedModels.swift */,
+				82D71FC48ADC02F8BCBED835 /* TodayInHistoryEntry.swift */,
+				FF7E1F392A912E6A3B365A8C /* TodayInHistoryProvider.swift */,
+				8671DFE378573EA24A2FACC1 /* TodayInHistoryView.swift */,
+			);
+			path = DreamJourneyWidget;
+			sourceTree = "<group>";
+		};
 		69A100000000000000000001 /* Archive */ = {
 			isa = PBXGroup;
 			children = (
@@ -384,6 +406,9 @@
 				B1B000000000000000000010 /* MemoryArchiveDetailViewController.swift */,
 				B1B000000000000000000011 /* MemoryArchiveDisplayMetadata.swift */,
 				B1B000000000000000000012 /* MemoryArchiveItemFactory.swift */,
+				B1B000000000000000000013 /* MemoryArchivePhotoEntryViewController.swift */,
+				B1B000000000000000000014 /* MemoryArchiveTextEntryViewController.swift */,
+				B1B000000000000000000015 /* MemoryArchiveAudioRecorderViewController.swift */,
 				B1B000000000000000000002 /* MemoryArchiveRepository.swift */,
 				B1B000000000000000000003 /* MemoryArchiveViewController.swift */,
 			);
@@ -404,20 +429,10 @@
 			children = (
 				B1B000000000000000000006 /* ProfileCareModels.swift */,
 				B1B000000000000000000007 /* ProfileViewController.swift */,
+				B1B000000000000000000016 /* ProfileLegalViewController.swift */,
+				B1B000000000000000000017 /* ProfileSettingsViewController.swift */,
 			);
 			path = Profile;
-			sourceTree = "<group>";
-		};
-		697A85CBA95E64BD34FC210E /* DreamJourneyWidget */ = {
-			isa = PBXGroup;
-			children = (
-				6D151E9314D78EB40CF2EE48 /* DreamJourneyWidget.swift */,
-				D6AC678D507A1494FFBFDAA0 /* SharedModels.swift */,
-				82D71FC48ADC02F8BCBED835 /* TodayInHistoryEntry.swift */,
-				FF7E1F392A912E6A3B365A8C /* TodayInHistoryProvider.swift */,
-				8671DFE378573EA24A2FACC1 /* TodayInHistoryView.swift */,
-			);
-			path = DreamJourneyWidget;
 			sourceTree = "<group>";
 		};
 		6D7389191CC91FC0D5B9F427 /* Family */ = {
@@ -443,7 +458,6 @@
 				CCCEC476950937337FC59A5C /* Pods-DreamJourney.debug.xcconfig */,
 				16DC1997EF2F7459C92D09EF /* Pods-DreamJourney.release.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -782,6 +796,9 @@
 				A1A000000000000000000010 /* MemoryArchiveDetailViewController.swift in Sources */,
 				A1A000000000000000000011 /* MemoryArchiveDisplayMetadata.swift in Sources */,
 				A1A000000000000000000012 /* MemoryArchiveItemFactory.swift in Sources */,
+				A1A000000000000000000013 /* MemoryArchivePhotoEntryViewController.swift in Sources */,
+				A1A000000000000000000014 /* MemoryArchiveTextEntryViewController.swift in Sources */,
+				A1A000000000000000000015 /* MemoryArchiveAudioRecorderViewController.swift in Sources */,
 				A1A000000000000000000002 /* MemoryArchiveRepository.swift in Sources */,
 				A1A000000000000000000003 /* MemoryArchiveViewController.swift in Sources */,
 				52B3383F8F4517669DA70A7B /* MemoryDetailViewController.swift in Sources */,
@@ -793,6 +810,8 @@
 				397C1F6023E56C8E016A0D71 /* OpenAvatarChatService.swift in Sources */,
 				A1A000000000000000000006 /* ProfileCareModels.swift in Sources */,
 				A1A000000000000000000007 /* ProfileViewController.swift in Sources */,
+				A1A000000000000000000016 /* ProfileLegalViewController.swift in Sources */,
+				A1A000000000000000000017 /* ProfileSettingsViewController.swift in Sources */,
 				7BD7AD6BC3423E10E98379EF /* SceneDelegate.swift in Sources */,
 				FE8668AF8032B5ED0673C7D2 /* TGButton.swift in Sources */,
 				3CEEFF183F1AD8F50F31189E /* TGColors.swift in Sources */,
@@ -898,13 +917,16 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 2BTR77V3R8;
+				DREAMJOURNEY_BACKEND_API_TOKEN = YOUR_DREAMJOURNEY_BACKEND_API_TOKEN;
+				DREAMJOURNEY_BACKEND_BASE_URL = "http://127.0.0.1:3100";
 				INFOPLIST_FILE = DreamJourney/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.dreamjourney.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yxj.dreamjourney.app;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -938,13 +960,16 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 2BTR77V3R8;
+				DREAMJOURNEY_BACKEND_API_TOKEN = YOUR_DREAMJOURNEY_BACKEND_API_TOKEN;
+				DREAMJOURNEY_BACKEND_BASE_URL = "http://127.0.0.1:3100";
 				INFOPLIST_FILE = DreamJourney/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.dreamjourney.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yxj.dreamjourney.app;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				TARGETED_DEVICE_FAMILY = "1,2";

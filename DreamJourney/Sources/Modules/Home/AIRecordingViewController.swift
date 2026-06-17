@@ -214,19 +214,19 @@ final class AIRecordingViewController: UIViewController {
             bottomContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             bottomContainerBottomConstraint,
             bottomContainer.heightAnchor.constraint(equalToConstant: 110),
-            
+
             // 语音球（中央）
             voiceBallButton.widthAnchor.constraint(equalToConstant: ballSize),
             voiceBallButton.heightAnchor.constraint(equalToConstant: ballSize),
             voiceBallButton.centerXAnchor.constraint(equalTo: bottomContainer.centerXAnchor),
             voiceBallButton.centerYAnchor.constraint(equalTo: bottomContainer.centerYAnchor, constant: -4),
-            
+
             // 左侧相册按鈕
             albumButton.widthAnchor.constraint(equalToConstant: sideSize),
             albumButton.heightAnchor.constraint(equalToConstant: sideSize),
             albumButton.centerYAnchor.constraint(equalTo: voiceBallButton.centerYAnchor),
             albumButton.trailingAnchor.constraint(equalTo: voiceBallButton.leadingAnchor, constant: -44),
-            
+
             // 右侧拍照按鈕
             cameraButton.widthAnchor.constraint(equalToConstant: sideSize),
             cameraButton.heightAnchor.constraint(equalToConstant: sideSize),
@@ -705,7 +705,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
         updateVoiceBallState(.idle)
 
         switch reason {
-        case .keyword(let kw):
+        case .keyword:
             showToast("寻梦环游已经记住您说的了，下次再聊～", type: .success)
         case .silenceTimeout:
             showToast("您好像有事忙，寻梦环游先告辞啦～", type: .info)

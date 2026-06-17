@@ -2,7 +2,7 @@ import UIKit
 
 // MARK: - WarmTabBarController
 // Warm Vintage 自定义 TabBar，隐藏系统 TabBar，使用自定义 WarmTabBarView
-final class WarmTabBarController: UITabBarController {
+final class WarmTabBarController: UITabBarController, UINavigationControllerDelegate {
 
     // MARK: - Properties
     private let warmTabBar: WarmTabBarView
@@ -20,7 +20,7 @@ final class WarmTabBarController: UITabBarController {
     override func viewDidLoad() {
         super.viewDidLoad()
         // 隐藏系统 TabBar
-        tabBar.isHidden = true
+        suppressSystemTabBar()
         // ⚠️ 不在此处统一设置 additionalSafeAreaInsets.bottom：
         // 当 child 是 UINavigationController 嵌 VC 时，这里的设置传播到孙级 VC 时机不稳定，
         // 会导致首次进入 child VC 的 safeArea bottom 为 0，UI 被 TabBar 遮挡。
@@ -30,6 +30,8 @@ final class WarmTabBarController: UITabBarController {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        suppressSystemTabBar()
+        attachNavigationDelegatesIfNeeded()
         let safeBottom = view.safeAreaInsets.bottom
         let horizontalInset: CGFloat = DJDesignTokens.Spacing.page
         let bottomInset: CGFloat = 16 + safeBottom
@@ -40,17 +42,18 @@ final class WarmTabBarController: UITabBarController {
             width: view.bounds.width - horizontalInset * 2,
             height: barHeight
         )
-        warmTabBar.safeBottom = safeBottom
         // ⚠️ 关键：UITabBarController 切换 child VC 时会把 child view 加到顶层，
         // 必须每次布局后把自定义 TabBar 提到最前，否则按钮会被 child 遮挡导致点击无效。
-        view.bringSubviewToFront(warmTabBar)
+        updateWarmTabBarVisibility()
     }
 
     // MARK: - UITabBarControllerDelegate
     // 切换 tab 后立即把自定义 TabBar 提到最前（双保险）
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        view.bringSubviewToFront(warmTabBar)
+        suppressSystemTabBar()
+        attachNavigationDelegatesIfNeeded()
+        updateWarmTabBarVisibility()
     }
 
     // MARK: - Setup
@@ -61,14 +64,89 @@ final class WarmTabBarController: UITabBarController {
             self.selectedIndex = index
             self.warmTabBar.updateSelection(index)
             // 切换后强制把 TabBar 提到最前（child VC view 会被 UIKit 重新加到顶层）
-            self.view.bringSubviewToFront(self.warmTabBar)
+            self.updateWarmTabBarVisibility()
         }
     }
 
     // MARK: - Override selectedIndex
     override var selectedIndex: Int {
         didSet {
+            suppressSystemTabBar()
             warmTabBar.updateSelection(selectedIndex)
+            updateWarmTabBarVisibility()
+        }
+    }
+
+    private func suppressSystemTabBar() {
+        let appearance = UITabBarAppearance()
+        appearance.configureWithTransparentBackground()
+        tabBar.standardAppearance = appearance
+        tabBar.scrollEdgeAppearance = appearance
+        tabBar.isHidden = true
+        tabBar.alpha = 0
+        tabBar.isUserInteractionEnabled = false
+        tabBar.accessibilityElementsHidden = true
+        tabBar.subviews.forEach { subview in
+            subview.isHidden = true
+            subview.alpha = 0
+            subview.isUserInteractionEnabled = false
+            subview.accessibilityElementsHidden = true
+        }
+    }
+
+    // MARK: - UINavigationControllerDelegate
+    func navigationController(
+        _ navigationController: UINavigationController,
+        willShow viewController: UIViewController,
+        animated: Bool
+    ) {
+        guard navigationController === selectedViewController else { return }
+        updateWarmTabBarVisibility(for: viewController, animated: animated)
+    }
+
+    func navigationController(
+        _ navigationController: UINavigationController,
+        didShow viewController: UIViewController,
+        animated: Bool
+    ) {
+        guard navigationController === selectedViewController else { return }
+        updateWarmTabBarVisibility(for: viewController, animated: false)
+    }
+
+    private func attachNavigationDelegatesIfNeeded() {
+        viewControllers?
+            .compactMap { $0 as? UINavigationController }
+            .forEach { navigationController in
+                if navigationController.delegate == nil || navigationController.delegate === self {
+                    navigationController.delegate = self
+                }
+            }
+    }
+
+    private func updateWarmTabBarVisibility(for viewController: UIViewController? = nil, animated: Bool = false) {
+        let selectedNavigationController = selectedViewController as? UINavigationController
+        let activeViewController = viewController
+            ?? selectedNavigationController?.topViewController
+            ?? selectedViewController
+        let shouldHide = activeViewController?.hidesBottomBarWhenPushed == true
+            && (selectedNavigationController?.viewControllers.count ?? 1) > 1
+
+        let changes = { [weak self] in
+            guard let self = self else { return }
+            self.warmTabBar.alpha = shouldHide ? 0 : 1
+            self.warmTabBar.isHidden = shouldHide
+            if !shouldHide {
+                self.view.bringSubviewToFront(self.warmTabBar)
+            }
+        }
+
+        if animated {
+            if !shouldHide {
+                warmTabBar.isHidden = false
+            }
+            UIView.animate(withDuration: 0.18, animations: changes)
+        } else {
+            changes()
         }
     }
 }
@@ -98,11 +176,6 @@ final class WarmTabBarView: UIView {
     private var selectedCircles: [UIView] = []
     var onTabSelected: ((Int) -> Void)?
 
-    /// 动态 safe area 底部高度，供 layoutSubviews 使用
-    var safeBottom: CGFloat = 0 {
-        didSet { setNeedsLayout() }
-    }
-
     // MARK: - Init
     init(items: [TabItem] = WarmTabBarView.defaultItems) {
         self.items = items
@@ -119,9 +192,10 @@ final class WarmTabBarView: UIView {
         layer.borderWidth = 1
         layer.borderColor = DJDesignTokens.Color.divider.withAlphaComponent(0.32).cgColor
         layer.shadowColor = UIColor(hex: "#8C7B6D").cgColor
-        layer.shadowOpacity = 0.10
-        layer.shadowOffset = CGSize(width: 0, height: -10)
-        layer.shadowRadius = 40
+        layer.shadowOpacity = 0.055
+        layer.shadowOffset = CGSize(width: 0, height: 4)
+        layer.shadowRadius = 14
+        clipsToBounds = false
 
         blurView.frame = bounds
         blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -164,6 +238,8 @@ final class WarmTabBarView: UIView {
     // MARK: - Layout
     override func layoutSubviews() {
         super.layoutSubviews()
+        updateShadowPath()
+
         let tabWidth = bounds.width / CGFloat(items.count)
         let tabAreaHeight = bounds.height
 
@@ -182,6 +258,10 @@ final class WarmTabBarView: UIView {
             )
             circle.layer.cornerRadius = circleSize / 2
         }
+    }
+
+    private func updateShadowPath() {
+        layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: Self.tabBarHeight / 2).cgPath
     }
 
     // MARK: - Update Selection
@@ -206,11 +286,9 @@ final class WarmTabBarView: UIView {
         let iconName = isSelected ? item.iconNameFill : item.iconName
         let iconColor: UIColor = isSelected ? DJDesignTokens.Color.accentDeep : DJDesignTokens.Color.textTertiary.withAlphaComponent(0.65)
         let titleColor: UIColor = isSelected ? DJDesignTokens.Color.accentDeep : DJDesignTokens.Color.textTertiary.withAlphaComponent(0.65)
-        let titleFont: UIFont = isSelected
-            ? DJDesignTokens.Font.label(11)
-            : DJDesignTokens.Font.body(11)
+        let titleFont: UIFont = DJDesignTokens.Font.label(12)
 
-        let config = UIImage.SymbolConfiguration(pointSize: 20, weight: isSelected ? .semibold : .regular)
+        let config = UIImage.SymbolConfiguration(pointSize: 22, weight: isSelected ? .semibold : .regular)
         let iconImage = UIImage(systemName: iconName, withConfiguration: config)
 
         let iconView = UIImageView(image: iconImage)
@@ -230,12 +308,12 @@ final class WarmTabBarView: UIView {
 
         NSLayoutConstraint.activate([
             iconView.centerXAnchor.constraint(equalTo: btn.centerXAnchor),
-            iconView.centerYAnchor.constraint(equalTo: btn.centerYAnchor, constant: -9),
-            iconView.widthAnchor.constraint(equalToConstant: 21),
-            iconView.heightAnchor.constraint(equalToConstant: 21),
+            iconView.centerYAnchor.constraint(equalTo: btn.centerYAnchor, constant: -10),
+            iconView.widthAnchor.constraint(equalToConstant: 23),
+            iconView.heightAnchor.constraint(equalToConstant: 23),
 
             titleLabel.centerXAnchor.constraint(equalTo: btn.centerXAnchor),
-            titleLabel.topAnchor.constraint(equalTo: iconView.bottomAnchor, constant: 2),
+            titleLabel.topAnchor.constraint(equalTo: iconView.bottomAnchor, constant: 3),
         ])
     }
 

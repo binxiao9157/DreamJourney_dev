@@ -6,7 +6,7 @@ import CocoaLumberjack
 // MARK: - 回忆录 TTS 朗读服务
 
 /// 使用火山引擎大模型 TTS V3 + 声音复刻音色，将回忆录散文合成为语音
-/// 
+///
 /// 流程：
 /// 1. 检查 speaker_id 是否就绪
 /// 2. 调用 TTS V3 单向流式接口，传入 speaker_id + 文本
@@ -247,7 +247,6 @@ final class MemoirTTSService {
             return
         }
 
-        let synthesizer = AVSpeechSynthesizer()
         let utterance = AVSpeechUtterance(string: memoir.prose)
         utterance.voice = AVSpeechSynthesisVoice(language: "zh-CN")
         utterance.rate = AVSpeechUtteranceMinimumSpeechRate + 0.1  // 稍慢

@@ -8,7 +8,7 @@ final class EchoViewController: UIViewController {
     private let quoteBubble: UIView = {
         let view = UIView()
         view.backgroundColor = UIColor(hex: "#FEFEF9").withAlphaComponent(0.92)
-        view.layer.cornerRadius = 22
+        view.layer.cornerRadius = 18
         view.layer.maskedCorners = [
             .layerMinXMinYCorner,
             .layerMaxXMinYCorner,
@@ -16,15 +16,15 @@ final class EchoViewController: UIViewController {
             .layerMinXMaxYCorner
         ]
         view.layer.borderWidth = 1
-        view.layer.borderColor = DJDesignTokens.Color.divider.withAlphaComponent(0.55).cgColor
+        view.layer.borderColor = DJDesignTokens.Color.divider.withAlphaComponent(0.18).cgColor
         DJDesignTokens.applySoftShadow(to: view)
         return view
     }()
 
     private let quoteLabel: UILabel = {
         let label = UILabel()
-        label.text = "我一直都在，风吹过树叶的声音就是我的回答。"
-        label.font = DJDesignTokens.Font.body(16)
+        label.text = "\"我一直都在，风吹过树叶的声音就是我的回答。\""
+        label.font = DJDesignTokens.Font.body(17)
         label.textColor = DJDesignTokens.Color.textSecondary
         label.numberOfLines = 0
         return label
@@ -33,25 +33,63 @@ final class EchoViewController: UIViewController {
     private let timestampLabel: UILabel = {
         let label = UILabel()
         label.text = "刚才"
-        label.font = DJDesignTokens.Font.label(12)
-        label.textColor = DJDesignTokens.Color.textTertiary.withAlphaComponent(0.68)
+        label.font = DJDesignTokens.Font.label(13)
+        label.textColor = DJDesignTokens.Color.textSecondary.withAlphaComponent(0.60)
         label.numberOfLines = 1
         return label
     }()
 
-    private let statusLabel: UILabel = {
+    private let archiveContextStatusView: UIView = {
+        let archiveContextStatusView = UIView()
+        archiveContextStatusView.backgroundColor = UIColor(hex: "#FEFEF9").withAlphaComponent(0.9)
+        archiveContextStatusView.layer.cornerRadius = 16
+        archiveContextStatusView.layer.borderWidth = 1
+        archiveContextStatusView.layer.borderColor = DJDesignTokens.Color.accentDeep.withAlphaComponent(0.16).cgColor
+        archiveContextStatusView.isHidden = true
+        archiveContextStatusView.alpha = 0
+        archiveContextStatusView.isAccessibilityElement = false
+        DJDesignTokens.applySoftShadow(to: archiveContextStatusView)
+        return archiveContextStatusView
+    }()
+
+    private let archiveContextStatusLabel: UILabel = {
+        let label = UILabel()
+        label.text = "档案线索正在参与回响"
+        label.font = DJDesignTokens.Font.label(13)
+        label.textColor = DJDesignTokens.Color.accentDeep
+        label.numberOfLines = 1
+        label.accessibilityIdentifier = "echoArchiveContextStatus"
+        label.accessibilityLabel = "档案线索正在参与回响"
+        return label
+    }()
+
+    private let voiceStatusView: UIView = {
+        let view = UIView()
+        view.backgroundColor = UIColor(hex: "#FEFEF9").withAlphaComponent(0.84)
+        view.layer.cornerRadius = 16
+        view.layer.borderWidth = 1
+        view.layer.borderColor = DJDesignTokens.Color.divider.withAlphaComponent(0.16).cgColor
+        view.clipsToBounds = true
+        view.isHidden = true
+        view.alpha = 0
+        DJDesignTokens.applySoftShadow(to: view)
+        return view
+    }()
+
+    private let voiceStatusLabel: UILabel = {
         let label = UILabel()
         label.text = "轻点话筒，慢慢说给我听"
-        label.font = DJDesignTokens.Font.body(15)
+        label.font = DJDesignTokens.Font.label(13)
         label.textColor = DJDesignTokens.Color.textSecondary
         label.textAlignment = .center
-        label.numberOfLines = 0
+        label.numberOfLines = 1
+        label.accessibilityIdentifier = "echoVoiceStatus"
         return label
     }()
 
     private lazy var micButton: UIButton = {
         let button = UIButton(type: .custom)
-        button.backgroundColor = DJDesignTokens.Color.accent
+        button.backgroundColor = DJDesignTokens.Color.accentDeep
         button.tintColor = .white
         button.layer.cornerRadius = 28
         button.layer.shadowColor = DJDesignTokens.Color.accentDeep.cgColor
@@ -65,13 +103,15 @@ final class EchoViewController: UIViewController {
 
     private let micRingView: UIView = {
         let view = UIView()
-        view.backgroundColor = DJDesignTokens.Color.accent.withAlphaComponent(0.16)
+        view.backgroundColor = DJDesignTokens.Color.accentDeep.withAlphaComponent(0.12)
         view.layer.cornerRadius = 38
+        view.alpha = 0
         view.isUserInteractionEnabled = false
         return view
     }()
 
     private var micButtonBottomConstraint: NSLayoutConstraint?
+    private var voiceStatusHeightConstraint: NSLayoutConstraint?
     private var currentState: EchoInteractionState = .idle
     private var transcriptEntries: [(text: String, isUser: Bool)] = []
     private var pendingAIText: String?
@@ -93,6 +133,7 @@ final class EchoViewController: UIViewController {
         bindViewModel()
         seedTranscriptPreview()
         render(state: .idle)
+        renderArchiveContextStatus(viewModel.archiveContextStatus)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -101,6 +142,7 @@ final class EchoViewController: UIViewController {
         if !DialogEngineManager.shared.isEngineReady {
             DialogEngineManager.shared.setup()
         }
+        viewModel.refreshArchiveContextStatus()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -132,19 +174,26 @@ final class EchoViewController: UIViewController {
 
     private func setupLayout() {
         view.addSubview(scenicView)
+        view.addSubview(archiveContextStatusView)
         view.addSubview(quoteBubble)
+        view.addSubview(timestampLabel)
+        view.addSubview(voiceStatusView)
         view.addSubview(micRingView)
         view.addSubview(micButton)
 
+        archiveContextStatusView.addSubview(archiveContextStatusLabel)
         quoteBubble.addSubview(quoteLabel)
-        quoteBubble.addSubview(timestampLabel)
+        voiceStatusView.addSubview(voiceStatusLabel)
 
         [
             scenicView,
+            archiveContextStatusView,
+            archiveContextStatusLabel,
             quoteBubble,
             quoteLabel,
             timestampLabel,
-            statusLabel,
+            voiceStatusView,
+            voiceStatusLabel,
             micRingView,
             micButton
         ].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
@@ -154,6 +203,8 @@ final class EchoViewController: UIViewController {
             constant: -(WarmTabBarView.tabBarHeight + 28)
         )
         micButtonBottomConstraint = micBottomConstraint
+        let voiceStatusHeight = voiceStatusView.heightAnchor.constraint(equalToConstant: 0)
+        voiceStatusHeightConstraint = voiceStatusHeight
 
         NSLayoutConstraint.activate([
             scenicView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -163,17 +214,37 @@ final class EchoViewController: UIViewController {
 
             quoteBubble.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
             quoteBubble.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
-            quoteBubble.bottomAnchor.constraint(equalTo: micRingView.topAnchor, constant: -44),
-            quoteBubble.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.85),
+            quoteBubble.bottomAnchor.constraint(equalTo: voiceStatusView.topAnchor, constant: -12),
+            quoteBubble.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.74),
+
+            archiveContextStatusView.leadingAnchor.constraint(equalTo: quoteBubble.leadingAnchor),
+            archiveContextStatusView.bottomAnchor.constraint(equalTo: quoteBubble.topAnchor, constant: -12),
+            archiveContextStatusView.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
+            archiveContextStatusView.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.78),
+
+            archiveContextStatusLabel.topAnchor.constraint(equalTo: archiveContextStatusView.topAnchor, constant: 8),
+            archiveContextStatusLabel.leadingAnchor.constraint(equalTo: archiveContextStatusView.leadingAnchor, constant: 14),
+            archiveContextStatusLabel.trailingAnchor.constraint(equalTo: archiveContextStatusView.trailingAnchor, constant: -14),
+            archiveContextStatusLabel.bottomAnchor.constraint(equalTo: archiveContextStatusView.bottomAnchor, constant: -8),
 
             quoteLabel.topAnchor.constraint(equalTo: quoteBubble.topAnchor, constant: 16),
             quoteLabel.leadingAnchor.constraint(equalTo: quoteBubble.leadingAnchor, constant: 16),
             quoteLabel.trailingAnchor.constraint(equalTo: quoteBubble.trailingAnchor, constant: -16),
+            quoteLabel.bottomAnchor.constraint(equalTo: quoteBubble.bottomAnchor, constant: -16),
 
-            timestampLabel.topAnchor.constraint(equalTo: quoteLabel.bottomAnchor, constant: 8),
-            timestampLabel.leadingAnchor.constraint(equalTo: quoteLabel.leadingAnchor),
-            timestampLabel.trailingAnchor.constraint(lessThanOrEqualTo: quoteLabel.trailingAnchor),
-            timestampLabel.bottomAnchor.constraint(equalTo: quoteBubble.bottomAnchor, constant: -14),
+            timestampLabel.topAnchor.constraint(equalTo: quoteBubble.bottomAnchor, constant: 8),
+            timestampLabel.leadingAnchor.constraint(equalTo: quoteBubble.leadingAnchor, constant: 4),
+            timestampLabel.trailingAnchor.constraint(lessThanOrEqualTo: quoteBubble.trailingAnchor),
+
+            voiceStatusView.centerXAnchor.constraint(equalTo: micButton.centerXAnchor),
+            voiceStatusView.bottomAnchor.constraint(equalTo: micButton.topAnchor, constant: -8),
+            voiceStatusView.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
+            voiceStatusView.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
+            voiceStatusHeight,
+
+            voiceStatusLabel.centerYAnchor.constraint(equalTo: voiceStatusView.centerYAnchor),
+            voiceStatusLabel.leadingAnchor.constraint(equalTo: voiceStatusView.leadingAnchor, constant: 16),
+            voiceStatusLabel.trailingAnchor.constraint(equalTo: voiceStatusView.trailingAnchor, constant: -16),
 
             micButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             micBottomConstraint,
@@ -199,11 +270,17 @@ final class EchoViewController: UIViewController {
                 self?.appendTranscript(text: text, isUser: isUser)
             }
         }
+
+        viewModel.onArchiveContextStatusChange = { [weak self] status in
+            DispatchQueue.main.async {
+                self?.renderArchiveContextStatus(status)
+            }
+        }
     }
 
     private func seedTranscriptPreview() {
         transcriptEntries = [
-            (text: "我一直都在，风吹过树叶的声音就是我的回答。", isUser: false)
+            (text: "\"我一直都在，风吹过树叶的声音就是我的回答。\"", isUser: false)
         ]
         reloadTranscriptPreview()
     }
@@ -229,37 +306,91 @@ final class EchoViewController: UIViewController {
 
         switch state {
         case .idle:
-            statusLabel.text = "轻点话筒，慢慢说给我听"
-            configureMicButton(systemName: "mic.fill", backgroundColor: DJDesignTokens.Color.accent, isEnabled: true)
+            renderVoiceStatus(text: nil, isVisible: false)
+            configureMicButton(
+                systemName: "mic.fill",
+                backgroundColor: DJDesignTokens.Color.accentDeep,
+                isEnabled: true,
+                accessibilityLabel: "开始语音"
+            )
             setMicPulse(active: false)
         case .listening:
-            statusLabel.text = "我在听，您慢慢说"
-            configureMicButton(systemName: "stop.fill", backgroundColor: DJDesignTokens.Color.accentDeep, isEnabled: true)
+            renderVoiceStatus(text: "我在听，您慢慢说", isVisible: true)
+            configureMicButton(
+                systemName: "stop.fill",
+                backgroundColor: DJDesignTokens.Color.accentDeep,
+                isEnabled: true,
+                accessibilityLabel: "停止语音"
+            )
             setMicPulse(active: true)
         case .waitingReply(let minutes):
-            statusLabel.text = "回信会晚一点抵达，约 \(minutes) 分钟后再听"
-            configureMicButton(systemName: "hourglass", backgroundColor: DJDesignTokens.Color.surfaceContainer, isEnabled: false)
-            micButton.tintColor = DJDesignTokens.Color.textSecondary
+            renderVoiceStatus(text: "约 \(minutes) 分钟后再听", isVisible: true)
+            configureMicButton(
+                systemName: "hourglass",
+                backgroundColor: DJDesignTokens.Color.surfaceContainer,
+                isEnabled: false,
+                accessibilityLabel: "约 \(minutes) 分钟后再听"
+            )
             setMicPulse(active: false)
         case .speaking:
-            statusLabel.text = "回响正在抵达"
-            configureMicButton(systemName: "waveform", backgroundColor: DJDesignTokens.Color.accent, isEnabled: false)
+            renderVoiceStatus(text: "回响正在抵达", isVisible: true)
+            configureMicButton(
+                systemName: "waveform",
+                backgroundColor: DJDesignTokens.Color.accentDeep,
+                isEnabled: false,
+                accessibilityLabel: "回响正在抵达"
+            )
             setMicPulse(active: true)
         case .error(let message):
-            statusLabel.text = message
-            configureMicButton(systemName: "mic.fill", backgroundColor: DJDesignTokens.Color.accent, isEnabled: true)
+            renderVoiceStatus(text: message, isVisible: true)
+            configureMicButton(
+                systemName: "mic.fill",
+                backgroundColor: DJDesignTokens.Color.accentDeep,
+                isEnabled: true,
+                accessibilityLabel: "重新开始语音"
+            )
             setMicPulse(active: false)
         }
     }
 
-    private func configureMicButton(systemName: String, backgroundColor: UIColor, isEnabled: Bool) {
+    private func renderVoiceStatus(text: String?, isVisible: Bool) {
+        voiceStatusLabel.text = text
+        voiceStatusLabel.accessibilityLabel = text
+        voiceStatusHeightConstraint?.constant = isVisible ? 32 : 0
+        voiceStatusView.isHidden = !isVisible
+        voiceStatusView.alpha = isVisible ? 1 : 0
+    }
+
+    private func renderArchiveContextStatus(_ status: EchoArchiveContextStatus) {
+        archiveContextStatusView.isHidden = !status.hasAvailableContext
+        archiveContextStatusView.alpha = status.hasAvailableContext ? 1 : 0
+        guard status.hasAvailableContext else { return }
+
+        let text: String
+        if status.availableItemCount > 1 {
+            text = "\(status.availableItemCount) 条档案线索正在参与回响"
+        } else {
+            text = "档案线索正在参与回响"
+        }
+        archiveContextStatusLabel.text = text
+        archiveContextStatusLabel.accessibilityLabel = text
+    }
+
+    private func configureMicButton(
+        systemName: String,
+        backgroundColor: UIColor,
+        isEnabled: Bool,
+        accessibilityLabel: String
+    ) {
         let config = UIImage.SymbolConfiguration(pointSize: 28, weight: .semibold)
         micButton.setImage(UIImage(systemName: systemName, withConfiguration: config), for: .normal)
         micButton.backgroundColor = backgroundColor
-        micButton.tintColor = .white
+        micButton.tintColor = isEnabled || backgroundColor == DJDesignTokens.Color.accentDeep
+            ? .white
+            : DJDesignTokens.Color.textSecondary
         micButton.isEnabled = isEnabled
         micButton.alpha = isEnabled ? 1 : 0.86
-        micButton.accessibilityLabel = isEnabled ? "开始语音" : statusLabel.text
+        micButton.accessibilityLabel = accessibilityLabel
     }
 
     private func setMicPulse(active: Bool) {
@@ -267,10 +398,11 @@ final class EchoViewController: UIViewController {
 
         guard active else {
             micRingView.transform = .identity
-            micRingView.alpha = 1
+            micRingView.alpha = 0
             return
         }
 
+        micRingView.alpha = 1
         let pulse = CABasicAnimation(keyPath: "transform.scale")
         pulse.fromValue = 0.92
         pulse.toValue = 1.08
@@ -376,6 +508,29 @@ extension EchoViewController: DialogEngineDelegate {
         }
     }
 }
+
+#if UI_QA_SIMULATOR && targetEnvironment(simulator)
+extension EchoViewController {
+    func runUIQAMicrophoneSmoke() {
+        micTapped()
+    }
+
+    func runUIQAEchoVoiceStatePreview() {
+        viewModel.beginVoiceInteraction()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            self?.viewModel.finishUserVoice(text: "我想听爸爸小时候的故事")
+        }
+    }
+
+    func runUIQAEchoListeningStatePreview() {
+        viewModel.beginVoiceInteraction()
+    }
+
+    func runUIQAEchoSpeakingStatePreview() {
+        viewModel.receiveAIReply("我在这里，慢慢听你说。")
+    }
+}
+#endif
 
 private final class EchoScenicParkView: UIView {
     private let backgroundImageLayer = CALayer()

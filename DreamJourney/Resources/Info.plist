@@ -22,12 +22,14 @@
 	<string>1.0.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
-	<key>DeepSeekAPIKey</key>
-	<string>YOUR_DEEPSEEK_API_KEY</string>
 	<key>DeepSeekAPIBaseURL</key>
 	<string>https://api.deepseek.com/v1/chat/completions</string>
+	<key>DeepSeekAPIKey</key>
+	<string>YOUR_DEEPSEEK_API_KEY</string>
 	<key>DreamJourneyBackendBaseURL</key>
-	<string>http://127.0.0.1:3100</string>
+	<string>$(DREAMJOURNEY_BACKEND_BASE_URL)</string>
+	<key>DreamJourneyBackendAPIToken</key>
+	<string>$(DREAMJOURNEY_BACKEND_API_TOKEN)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>

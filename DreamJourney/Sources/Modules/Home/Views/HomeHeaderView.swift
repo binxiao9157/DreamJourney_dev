@@ -58,13 +58,16 @@ final class HomeHeaderView: UIView {
     /// 右上角"切换账号"半透明胶囊按钮
     let switchAccountButton: UIButton = {
         let b = UIButton(type: .system)
-        b.setTitle("切换账号", for: .normal)
-        b.setTitleColor(.white, for: .normal)
-        b.titleLabel?.font = .systemFont(ofSize: 12, weight: .medium)
+        var title = AttributedString("切换账号")
+        title.font = .systemFont(ofSize: 12, weight: .medium)
+        var configuration = UIButton.Configuration.plain()
+        configuration.attributedTitle = title
+        configuration.baseForegroundColor = .white
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10)
+        b.configuration = configuration
         b.backgroundColor = UIColor.black.withAlphaComponent(0.25)
         b.layer.cornerRadius = 12
         b.layer.masksToBounds = true
-        b.contentEdgeInsets = UIEdgeInsets(top: 4, left: 10, bottom: 4, right: 10)
         return b
     }()
 

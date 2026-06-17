@@ -7,7 +7,14 @@ final class LoginViewController: UIViewController {
 
     private let titleLabel: UILabel = {
         let label = UILabel()
-        label.text = "寻梦环游"
+        label.attributedText = NSAttributedString(
+            string: "寻梦环游",
+            attributes: [
+                .kern: 4.0,
+                .font: DJDesignTokens.Font.display(40),
+                .foregroundColor: DJDesignTokens.Color.accentDeep,
+            ]
+        )
         label.font = DJDesignTokens.Font.display(40)
         label.textColor = DJDesignTokens.Color.accentDeep
         label.textAlignment = .center
@@ -18,7 +25,7 @@ final class LoginViewController: UIViewController {
         let label = UILabel()
         label.text = "在时空中，留下你的身影"
         label.font = DJDesignTokens.Font.body(16)
-        label.textColor = DJDesignTokens.Color.textTertiary
+        label.textColor = DJDesignTokens.Color.textSecondary.withAlphaComponent(0.62)
         label.textAlignment = .center
         return label
     }()
@@ -27,8 +34,11 @@ final class LoginViewController: UIViewController {
     private let phoneIcon = UIImageView(image: UIImage(systemName: "iphone"))
     private let phoneField: UITextField = {
         let field = UITextField()
-        field.placeholder = "手机号"
-        field.font = DJDesignTokens.Font.body(15)
+        field.attributedPlaceholder = NSAttributedString(
+            string: "手机号",
+            attributes: [.foregroundColor: DJDesignTokens.Color.textSecondary.withAlphaComponent(0.42)]
+        )
+        field.font = DJDesignTokens.Font.body(16)
         field.textColor = DJDesignTokens.Color.textPrimary
         field.keyboardType = .numberPad
         field.returnKeyType = .next
@@ -40,8 +50,11 @@ final class LoginViewController: UIViewController {
     private let passwordIcon = UIImageView(image: UIImage(systemName: "lock"))
     private let passwordField: UITextField = {
         let field = UITextField()
-        field.placeholder = "密码"
-        field.font = DJDesignTokens.Font.body(15)
+        field.attributedPlaceholder = NSAttributedString(
+            string: "密码",
+            attributes: [.foregroundColor: DJDesignTokens.Color.textSecondary.withAlphaComponent(0.42)]
+        )
+        field.font = DJDesignTokens.Font.body(16)
         field.textColor = DJDesignTokens.Color.textPrimary
         field.isSecureTextEntry = true
         field.returnKeyType = .done
@@ -52,32 +65,36 @@ final class LoginViewController: UIViewController {
     private lazy var forgotButton: UIButton = {
         let button = UIButton(type: .system)
         button.setTitle("忘记密码？", for: .normal)
-        button.titleLabel?.font = DJDesignTokens.Font.label(12)
-        button.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
+        button.titleLabel?.font = DJDesignTokens.Font.label(13)
+        button.setTitleColor(DJDesignTokens.Color.accentDeep.withAlphaComponent(0.8), for: .normal)
         button.addTarget(self, action: #selector(forgotTapped), for: .touchUpInside)
         return button
     }()
 
     private lazy var loginButton: UIButton = {
         let button = DJComponentFactory.primaryButton(title: "登录", target: self, action: #selector(loginTapped))
-        button.layer.cornerRadius = 27
-        button.isEnabled = false
-        button.alpha = 0.55
+        button.titleLabel?.font = DJDesignTokens.Font.label(16)
+        button.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
+        button.layer.cornerRadius = 28.5
+        button.layer.shadowColor = DJDesignTokens.Color.accent.cgColor
+        button.layer.shadowOpacity = 0.22
+        button.layer.shadowOffset = CGSize(width: 0, height: 8)
+        button.layer.shadowRadius = 24
         return button
     }()
 
     private let registerPrefixLabel: UILabel = {
         let label = UILabel()
         label.text = "还没有账号？"
-        label.font = DJDesignTokens.Font.body(13)
-        label.textColor = DJDesignTokens.Color.textTertiary
+        label.font = DJDesignTokens.Font.body(16)
+        label.textColor = DJDesignTokens.Color.textSecondary.withAlphaComponent(0.62)
         return label
     }()
 
     private lazy var registerButton: UIButton = {
         let button = UIButton(type: .system)
         button.setTitle("立即注册", for: .normal)
-        button.titleLabel?.font = DJDesignTokens.Font.label(13)
+        button.titleLabel?.font = DJDesignTokens.Font.label(16)
         button.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
         button.addTarget(self, action: #selector(registerTapped), for: .touchUpInside)
         return button
@@ -117,7 +134,7 @@ final class LoginViewController: UIViewController {
         }
 
         NSLayoutConstraint.activate([
-            titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 112),
+            titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 80),
             titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
             titleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
 
@@ -126,8 +143,8 @@ final class LoginViewController: UIViewController {
             subtitleLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
 
             phoneFieldContainer.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 64),
-            phoneFieldContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 30),
-            phoneFieldContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -30),
+            phoneFieldContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
+            phoneFieldContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
             phoneFieldContainer.heightAnchor.constraint(equalToConstant: 56),
 
             passwordFieldContainer.topAnchor.constraint(equalTo: phoneFieldContainer.bottomAnchor, constant: 12),
@@ -135,13 +152,13 @@ final class LoginViewController: UIViewController {
             passwordFieldContainer.trailingAnchor.constraint(equalTo: phoneFieldContainer.trailingAnchor),
             passwordFieldContainer.heightAnchor.constraint(equalToConstant: 56),
 
-            forgotButton.topAnchor.constraint(equalTo: passwordFieldContainer.bottomAnchor, constant: 10),
+            forgotButton.topAnchor.constraint(equalTo: passwordFieldContainer.bottomAnchor, constant: 18),
             forgotButton.trailingAnchor.constraint(equalTo: passwordFieldContainer.trailingAnchor),
 
             loginButton.topAnchor.constraint(equalTo: forgotButton.bottomAnchor, constant: 20),
             loginButton.leadingAnchor.constraint(equalTo: phoneFieldContainer.leadingAnchor),
             loginButton.trailingAnchor.constraint(equalTo: phoneFieldContainer.trailingAnchor),
-            loginButton.heightAnchor.constraint(equalToConstant: 54),
+            loginButton.heightAnchor.constraint(equalToConstant: 57),
 
             registerStack.topAnchor.constraint(equalTo: loginButton.bottomAnchor, constant: 28),
             registerStack.centerXAnchor.constraint(equalTo: view.centerXAnchor),
@@ -149,7 +166,7 @@ final class LoginViewController: UIViewController {
     }
 
     private func configureFieldContainer(_ container: UIView, icon: UIImageView, textField: UITextField) {
-        container.backgroundColor = DJDesignTokens.Color.surfaceLow
+        container.backgroundColor = DJDesignTokens.Color.surfaceContainer
         container.layer.cornerRadius = 28
         container.layer.borderWidth = 1
         container.layer.borderColor = UIColor.clear.cgColor
@@ -165,8 +182,8 @@ final class LoginViewController: UIViewController {
         NSLayoutConstraint.activate([
             icon.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
             icon.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            icon.widthAnchor.constraint(equalToConstant: 18),
-            icon.heightAnchor.constraint(equalToConstant: 18),
+            icon.widthAnchor.constraint(equalToConstant: 20),
+            icon.heightAnchor.constraint(equalToConstant: 20),
 
             textField.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 10),
             textField.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
@@ -195,9 +212,7 @@ final class LoginViewController: UIViewController {
         }
         phoneField.text = formatted
 
-        let canLogin = rawPhone.count == 11
-        loginButton.isEnabled = canLogin
-        loginButton.alpha = canLogin ? 1 : 0.55
+        loginButton.isEnabled = true
     }
 
     @objc private func forgotTapped() {

@@ -33,7 +33,7 @@ struct MemoryArchiveCreationOption: Equatable {
 
     private static let text = MemoryArchiveCreationOption(
         kind: .text,
-        title: "写下片段",
+        title: "添加文字描述",
         subtitle: "记录一句话、一段场景，或一个重要细节。",
         iconName: "text.alignleft",
         isAvailable: true
@@ -57,7 +57,7 @@ struct MemoryArchiveCreationOption: Equatable {
 
     private static let timeLetter = MemoryArchiveCreationOption(
         kind: .timeLetter,
-        title: "时间信件",
+        title: "录入时间信件",
         subtitle: "写给未来某一天的自己或家人。",
         iconName: "envelope",
         isAvailable: true

@@ -17,11 +17,18 @@ final class TGToast {
 
     private static var currentToast: UIView?
 
+    private static var keyWindow: UIWindow? {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first { $0.isKeyWindow }
+    }
+
     static func show(type: ToastType = .info, message: String) {
         DispatchQueue.main.async {
             currentToast?.removeFromSuperview()
 
-            guard let window = UIApplication.shared.windows.first(where: { $0.isKeyWindow }) else { return }
+            guard let window = keyWindow else { return }
 
             let config = configFor(type: type)
             let container = makeContainer(config: config, message: message)

@@ -19,14 +19,26 @@ final class DreamJourneyBackendClient {
     }
 
     private static let defaultBaseURL = "http://127.0.0.1:3100"
+    private static let placeholderBaseURL = "$(DREAMJOURNEY_BACKEND_BASE_URL)"
+    private static let placeholderAPIToken = "YOUR_DREAMJOURNEY_BACKEND_API_TOKEN"
+    private static let placeholderAPITokenBuildSetting = "$(DREAMJOURNEY_BACKEND_API_TOKEN)"
 
     private let baseURL: String
+    private let apiToken: String?
 
     private init() {
         let configured = Bundle.main.object(forInfoDictionaryKey: "DreamJourneyBackendBaseURL") as? String
         let raw = configured?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let resolved = raw?.isEmpty == false ? raw! : Self.defaultBaseURL
+        let resolved = raw?.isEmpty == false && raw != Self.placeholderBaseURL ? raw! : Self.defaultBaseURL
         self.baseURL = resolved.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+
+        let configuredToken = Bundle.main.object(forInfoDictionaryKey: "DreamJourneyBackendAPIToken") as? String
+        let token = configuredToken?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let token, !token.isEmpty, token != Self.placeholderAPIToken, token != Self.placeholderAPITokenBuildSetting {
+            self.apiToken = token
+        } else {
+            self.apiToken = nil
+        }
     }
 
     func postArchiveItem(_ payload: [String: Any], completion: @escaping (Result<[String: Any], Error>) -> Void) {
@@ -56,7 +68,7 @@ final class DreamJourneyBackendClient {
         completion: @escaping (Result<[String: Any], Error>) -> Void
     ) {
         let url = "\(baseURL)\(path)"
-        AF.request(url, method: method, parameters: payload, encoding: JSONEncoding.default)
+        AF.request(url, method: method, parameters: payload, encoding: JSONEncoding.default, headers: authHeaders)
             .validate(statusCode: 200..<300)
             .responseData(queue: .global(qos: .utility)) { response in
                 switch response.result {
@@ -83,6 +95,11 @@ final class DreamJourneyBackendClient {
                     }
                 }
             }
+    }
+
+    private var authHeaders: HTTPHeaders? {
+        guard let apiToken else { return nil }
+        return ["Authorization": "Bearer \(apiToken)"]
     }
 
     private func pathComponent(_ value: String) -> String {
