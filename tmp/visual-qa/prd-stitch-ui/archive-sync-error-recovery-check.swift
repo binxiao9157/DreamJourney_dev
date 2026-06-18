@@ -16,8 +16,17 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
     }
 }
 
+func assertNotContains(_ haystack: String, _ needle: String, _ message: String) {
+    guard !haystack.contains(needle) else {
+        fatalError("\(message): unexpected \(needle)")
+    }
+}
+
 let item = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveItem.swift")
 let repository = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift")
+let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
+let projectYml = read("project.yml")
+let xcodeProject = read("DreamJourney.xcodeproj/project.pbxproj")
 let display = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveDisplayMetadata.swift")
 let archiveView = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift")
 let releaseRegression = read("tmp/visual-qa/prd-stitch-ui/run-release-regression.sh")
@@ -42,8 +51,10 @@ for phrase in [
 
 for phrase in [
     "syncPendingPublicArchiveItemsToBackend",
+    "ArchiveRepositoryError.backendNotConfigured",
     "markBackendSyncState",
     "sanitizeBackendSyncError",
+    "DreamJourneyBackendClient.shared.isArchiveSyncConfigured",
     "updatingBackendSyncState(.pending",
     "updatingBackendSyncState(.synced",
     "updatingBackendSyncState(.failed",
@@ -55,9 +66,50 @@ for phrase in [
 }
 
 assertContains(
+    backendClient,
+    "var isArchiveSyncConfigured",
+    "backend client should expose an explicit archive sync configuration gate"
+)
+assertContains(
+    backendClient,
+    "var isCareSnapshotConfigured",
+    "backend client should expose an explicit care snapshot configuration gate"
+)
+assertNotContains(
+    backendClient,
+    "hasExplicitBaseURL || apiToken != nil",
+    "backend configuration gates should not treat token-only local defaults as ready"
+)
+assertNotContains(
+    projectYml,
+    "DREAMJOURNEY_BACKEND_BASE_URL: http://127.0.0.1:3100",
+    "default project settings should not point public builds at an unavailable local backend"
+)
+assertNotContains(
+    xcodeProject,
+    "DREAMJOURNEY_BACKEND_BASE_URL = \"http://127.0.0.1:3100\";",
+    "default Xcode settings should not point public builds at an unavailable local backend"
+)
+
+assertContains(
     archiveView,
     "repository.syncPendingPublicArchiveItemsToBackend()",
     "archive view should retry unsynced public items before remote refresh"
+)
+assertContains(
+    archiveView,
+    "DreamJourneyBackendClient.shared.isArchiveSyncConfigured",
+    "archive view should only refresh remote archive when backend is explicitly configured"
+)
+assertContains(
+    archiveView,
+    "retryPendingPublicArchiveSyncIfNeeded()",
+    "archive view should retry failed public archive sync in the default public surface"
+)
+assertContains(
+    archiveView,
+    "viewWillAppear",
+    "archive view should retry pending sync when the user returns to archive"
 )
 assertContains(
     archiveView,

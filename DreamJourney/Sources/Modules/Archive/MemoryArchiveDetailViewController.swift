@@ -23,7 +23,7 @@ private enum ArchiveDetailLayout {
 }
 
 final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDelegate {
-    private static let analysisDisclaimerText = "AI 分析为主，后端辅助处理；我们不会人为查看你的记忆内容。"
+    private static let analysisDisclaimerText = "基于照片说明和本地规则整理；后端仅同步元数据，我们不会人为查看你的记忆内容。"
 
     private var item: MemoryArchiveItem
     private let repository: MemoryArchiveRepository

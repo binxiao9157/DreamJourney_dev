@@ -28,23 +28,31 @@ final class DreamJourneyBackendClient {
     private let hasExplicitBaseURL: Bool
 
     var isProfileSyncConfigured: Bool {
-        hasExplicitBaseURL || apiToken != nil
+        hasExplicitBaseURL
     }
 
     var isLoginSyncConfigured: Bool {
-        hasExplicitBaseURL || apiToken != nil
+        hasExplicitBaseURL
+    }
+
+    var isArchiveSyncConfigured: Bool {
+        hasExplicitBaseURL
+    }
+
+    var isCareSnapshotConfigured: Bool {
+        hasExplicitBaseURL
     }
 
     var isEchoDelayedReplyPushConfigured: Bool {
-        hasExplicitBaseURL || apiToken != nil
+        hasExplicitBaseURL
     }
 
     var isPushDeviceTokenRegistrationConfigured: Bool {
-        hasExplicitBaseURL || apiToken != nil
+        hasExplicitBaseURL
     }
 
     var isPasswordChangeConfigured: Bool {
-        hasExplicitBaseURL || apiToken != nil
+        hasExplicitBaseURL
     }
 
     private init() {

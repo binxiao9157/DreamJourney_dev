@@ -46,8 +46,11 @@ for phrase in [
 
 assertContains(profile, "ProfileCareSnapshot.loadingPlaceholder()", "Profile should show an explicit loading state")
 assertContains(profile, "ProfileCareSnapshot.emptyFallback()", "Profile should show an explicit empty state")
-assertContains(profile, "ProfileCareSnapshot.failedFallback()", "Profile should show an explicit failed state")
+assertContains(careModels, "static func failedFallback()", "Care model should keep an explicit failed state for diagnostic surfaces")
 assertContains(profile, "ProfileCareSnapshot.staleFallback()", "Profile should show an explicit stale state")
+assertContains(profile, "DreamJourneyBackendClient.shared.isCareSnapshotConfigured", "Profile should only fetch care snapshots when backend is explicitly configured")
+assertContains(profile, "careSnapshot = .offlineFallback()", "Profile should degrade backend errors to the local-safe offline state by default")
+assertContains(profile, "care snapshot sync unavailable", "Profile should log care backend unavailability without presenting it as a hard user failure")
 assertContains(careDashboard, "makeDataStateCard", "Care dashboard should expose state-specific public copy")
 assertContains(careDashboard, "关怀升级准备中", "Care dashboard should expose MVP placeholder")
 assertContains(careDashboard, "不会拨打电话或发送消息", "Placeholder must not imply real intervention")

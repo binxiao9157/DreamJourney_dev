@@ -36,7 +36,7 @@ final class MemoryArchivePhotoEntryViewController: UIViewController {
         titleLabel.numberOfLines = 0
 
         let subtitleLabel = UILabel()
-        subtitleLabel.text = "从相册挑选一张照片，封存人物、地点和物件线索。"
+        subtitleLabel.text = "照片本身先保存在本地，后续可补充说明来形成线索，例如人物、地点和场景。"
         subtitleLabel.font = DJDesignTokens.Font.body(15)
         subtitleLabel.textColor = DJDesignTokens.Color.textSecondary
         subtitleLabel.numberOfLines = 0

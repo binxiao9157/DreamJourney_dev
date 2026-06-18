@@ -148,9 +148,11 @@ enum ProfileCareSnapshotCheck {
         assertEqual(failed.syncCaption, "关怀信号加载失败，请稍后重试。", "failed caption")
 
         assertContains(profileSource, "DreamJourneyBackendClient.shared.latestCareSnapshot", "profile should fetch care signal snapshot through backend client")
+        assertContains(profileSource, "DreamJourneyBackendClient.shared.isCareSnapshotConfigured", "profile should only fetch care signal snapshot when backend is explicitly configured")
         assertContains(profileSource, "ProfileCareSnapshot(json: json)", "profile should parse backend payload through care snapshot model")
         assertContains(profileSource, "careSnapshot = ProfileCareSnapshot.emptyFallback()", "profile should use an explicit empty state when backend returns no usable care payload")
-        assertContains(profileSource, "careSnapshot = ProfileCareSnapshot.failedFallback()", "profile should use an explicit failed state when care backend is unavailable")
+        assertContains(profileSource, "careSnapshot = .offlineFallback()", "profile should degrade backend failures to the local-safe offline state")
+        assertContains(profileSource, "care snapshot sync unavailable", "profile should log care backend unavailability")
         assertContains(profileSource, "ProfileCareSnapshot.loadingPlaceholder()", "profile should use an explicit loading state before care backend returns")
         assertContains(profileSource, "makeCareSyncCaption(snapshot:", "profile should render care sync state without raw chat content")
         assertNotContains(profileSource, "ConversationMemoryManager.shared.currentTranscript", "profile must not render raw conversation transcript")
@@ -164,6 +166,9 @@ enum ProfileCareSnapshotCheck {
         assertNotContains(careModelSource, "transcript", "care model should not expose raw transcript fields")
         assertNotContains(careModelSource, "rawMessages", "care model should not expose raw message fields")
         assertContains(careModelSource, "boundedDoubleValue", "care model should clamp numeric signal fields")
+        let backendClientPath = "\(root)/DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
+        let backendClientSource = (try? String(contentsOfFile: backendClientPath, encoding: .utf8)) ?? ""
+        assertContains(backendClientSource, "var isCareSnapshotConfigured", "backend client should expose care snapshot configuration state")
 
         assertContains(legalSource, "不展示聊天原文", "legal copy should promise no raw chat display")
         assertContains(legalSource, "不是医疗诊断", "legal copy should avoid medical diagnosis claims")

@@ -146,6 +146,7 @@ final class MemoryArchiveViewController: UIViewController {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(true, animated: animated)
         refreshContent()
+        retryPendingPublicArchiveSyncIfNeeded()
         refreshRemoteArchiveIfNeeded()
     }
 
@@ -237,6 +238,7 @@ final class MemoryArchiveViewController: UIViewController {
 
     private func refreshRemoteArchiveIfNeeded() {
         guard FeatureFlagService.shared.isEnabled(.archiveRemoteFetch),
+              DreamJourneyBackendClient.shared.isArchiveSyncConfigured,
               !isRefreshingFromBackend else {
             return
         }
@@ -257,8 +259,12 @@ final class MemoryArchiveViewController: UIViewController {
         }
     }
 
+    private func retryPendingPublicArchiveSyncIfNeeded() {
+        repository.syncPendingPublicArchiveItemsToBackend()
+    }
+
     private func configureAnalysisPrivacyDisclaimerLabel() {
-        analysisPrivacyDisclaimerLabel.text = "AI 分析为主，后端辅助处理；我们不会人为查看你的记忆内容。"
+        analysisPrivacyDisclaimerLabel.text = "基于照片说明和本地规则整理；后端仅同步元数据，我们不会人为查看你的记忆内容。"
         analysisPrivacyDisclaimerLabel.font = DJDesignTokens.Font.label(12)
         analysisPrivacyDisclaimerLabel.textColor = DJDesignTokens.Color.textTertiary
         analysisPrivacyDisclaimerLabel.backgroundColor = DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.58)

@@ -181,6 +181,12 @@ final class ProfileViewController: UIViewController {
             return
         }
 
+        guard DreamJourneyBackendClient.shared.isCareSnapshotConfigured else {
+            careSnapshot = .offlineFallback()
+            rebuildContent()
+            return
+        }
+
         careSnapshot = .loadingPlaceholder()
         rebuildContent()
 
@@ -196,8 +202,8 @@ final class ProfileViewController: UIViewController {
                 careSnapshot = snapshot
                 rebuildContent()
             case .failure(let error):
-                print("[Profile] care snapshot sync failed: \(error.localizedDescription)")
-                careSnapshot = ProfileCareSnapshot.failedFallback()
+                print("[Profile] care snapshot sync unavailable: \(error.localizedDescription)")
+                careSnapshot = .offlineFallback()
                 rebuildContent()
             }
         }

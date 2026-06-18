@@ -20,6 +20,8 @@ func assertContains(_ source: String, _ needle: String, _ message: String) {
 
 let detail = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveDetailViewController.swift")
 let item = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveItem.swift")
+let archiveView = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift")
+let photoEntry = read("DreamJourney/Sources/Modules/Archive/MemoryArchivePhotoEntryViewController.swift")
 
 assertContains(detail, "static let analysisHeroIconSize: CGFloat = 42", "analysis state should have an explicit hero icon size")
 assertContains(detail, "static let analysisSummaryInset: CGFloat = 16", "analysis summary panel should use explicit inset")
@@ -33,6 +35,10 @@ assertContains(detail, "makeInsightSection(title: \"标签\", iconName: \"tag\",
 assertContains(detail, "makeInsightSection(title: \"人物线索\", iconName: \"person.2\", values: item.detectedPeople", "analysis card should render people as insights")
 assertContains(detail, "analysisStatusLabel.text = item.analysisStatus == .analyzed ? \"已生成\" : \"待生成\"", "analysis header should expose clear generated state")
 assertContains(detail, "summaryContainer.backgroundColor = isAnalyzed", "summary panel should visually differentiate analyzed state")
+assertContains(detail, "基于照片说明和本地规则整理", "archive detail should not overclaim visual AI analysis for local photo items")
+assertContains(archiveView, "基于照片说明和本地规则整理", "archive root should disclose local-rule archive analysis")
+assertContains(photoEntry, "照片本身先保存在本地", "photo entry should disclose that photo selection does not automatically identify people or places")
+assertContains(photoEntry, "后续可补充说明来形成线索", "photo entry should steer users toward adding descriptions for richer analysis")
 
 assertContains(item, "metadata[\"analysisSource\"] = \"local_rule\"", "local analysis should preserve source metadata")
 assertContains(item, "metadata[\"analysisUpdatedAt\"]", "local analysis should preserve update timestamp")

@@ -89,7 +89,10 @@ final class MemoryArchiveRepository {
 
     func add(_ item: MemoryArchiveItem, syncToBackend shouldSyncToBackend: Bool = true) {
         let ownedItem = item.assigningOwnerIfNeeded(currentUserId)
-        let itemForStorage = shouldSyncToBackend && ownedItem.isPublicBackendSyncEligible
+        let shouldAttemptBackendSync = shouldSyncToBackend
+            && ownedItem.isPublicBackendSyncEligible
+            && DreamJourneyBackendClient.shared.isArchiveSyncConfigured
+        let itemForStorage = shouldAttemptBackendSync
             ? ownedItem.updatingBackendSyncState(.pending)
             : ownedItem
         var items = allItems()
@@ -103,7 +106,10 @@ final class MemoryArchiveRepository {
     @discardableResult
     func update(_ item: MemoryArchiveItem, syncToBackend shouldSyncToBackend: Bool = true) -> Bool {
         let ownedItem = item.assigningOwnerIfNeeded(currentUserId)
-        let itemForStorage = shouldSyncToBackend && ownedItem.isPublicBackendSyncEligible
+        let shouldAttemptBackendSync = shouldSyncToBackend
+            && ownedItem.isPublicBackendSyncEligible
+            && DreamJourneyBackendClient.shared.isArchiveSyncConfigured
+        let itemForStorage = shouldAttemptBackendSync
             ? ownedItem.updatingBackendSyncState(.pending)
             : ownedItem
         var items = allItems()
@@ -119,6 +125,10 @@ final class MemoryArchiveRepository {
     }
 
     func syncPendingPublicArchiveItemsToBackend() {
+        guard DreamJourneyBackendClient.shared.isArchiveSyncConfigured else {
+            return
+        }
+
         var items = allItems()
         var retryItems: [MemoryArchiveItem] = []
         var didUpdateItems = false
@@ -168,6 +178,11 @@ final class MemoryArchiveRepository {
     }
 
     func refreshFromBackend(completion: ((Result<[MemoryArchiveItem], Error>) -> Void)? = nil) {
+        guard DreamJourneyBackendClient.shared.isArchiveSyncConfigured else {
+            completion?(.failure(ArchiveRepositoryError.backendNotConfigured))
+            return
+        }
+
         DreamJourneyBackendClient.shared.listArchiveItems(userId: currentArchiveOwnerId) { [weak self] result in
             guard let self else { return }
             switch result {
@@ -218,6 +233,10 @@ final class MemoryArchiveRepository {
     }
 
     private func syncToBackend(_ item: MemoryArchiveItem) {
+        guard DreamJourneyBackendClient.shared.isArchiveSyncConfigured else {
+            return
+        }
+
         let archiveVisibilityContext = currentArchiveVisibilityContext
         let ownerId = archiveVisibilityContext.ownerId
         let payload: [String: Any] = [
@@ -355,6 +374,17 @@ final class MemoryArchiveRepository {
         }
 
         return itemsById.values.sorted { $0.createdAt > $1.createdAt }
+    }
+}
+
+private enum ArchiveRepositoryError: LocalizedError {
+    case backendNotConfigured
+
+    var errorDescription: String? {
+        switch self {
+        case .backendNotConfigured:
+            return "后端地址未配置"
+        }
     }
 }
 

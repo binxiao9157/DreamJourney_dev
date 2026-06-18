@@ -21,10 +21,13 @@ let archive = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveViewContro
 let releaseQA = read("tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift")
 let releaseRegression = read("tmp/visual-qa/prd-stitch-ui/run-release-regression.sh")
 
-assertContains(detail, "AI 分析为主，后端辅助处理", "Archive detail should disclose backend + AI assisted analysis")
+assertContains(detail, "基于照片说明和本地规则整理", "Archive detail should disclose local-rule analysis instead of overclaiming visual AI")
+assertContains(detail, "后端仅同步元数据", "Archive detail should disclose metadata-only backend sync")
 assertContains(detail, "archive-analysis-disclaimer-label", "Archive detail disclaimer should be stable for QA")
 assertContains(detail, "makeAnalysisDisclaimerLabel", "Archive detail should keep disclaimer rendering centralized")
 assertContains(archive, "不会人为查看你的记忆内容", "Archive public copy should clarify privacy boundary")
+assertContains(archive, "基于照片说明和本地规则整理", "Archive public copy should clarify local-rule analysis")
+assertContains(archive, "后端仅同步元数据", "Archive public copy should clarify metadata-only backend sync")
 assertContains(archive, "archive-analysis-privacy-disclaimer", "Archive public privacy copy should be stable for QA")
 assertContains(archive, "override func textRect(forBounds bounds: CGRect", "Archive padded disclaimer should support multiline text")
 
