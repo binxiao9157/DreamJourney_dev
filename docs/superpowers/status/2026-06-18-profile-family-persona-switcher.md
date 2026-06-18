@@ -46,6 +46,13 @@ The family/persona route requires:
 
 If `familySpace` is not enabled, `家人管理` continues to show the safe unavailable alert.
 
+The family/persona release boundary is now centralized in `ProfileFamilyPersonaReleaseReadiness`:
+
+- default release: `家人管理` row is hidden
+- `familyManagement` only: safe row may appear, but the persona switcher still does not open
+- `familySpace` or `DJEnableProfileHiddenBranches`: hidden persona switcher may open for QA
+- unavailable copy stays `家人管理暂未开放`
+
 ## What Is Not Done
 
 - Public family management release.
@@ -59,6 +66,8 @@ Run:
 
 ```bash
 swift tmp/visual-qa/prd-stitch-ui/profile-family-persona-switcher-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/profile-family-persona-release-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+tmp/visual-qa/prd-stitch-ui/run-profile-family-persona-release-smoke.sh
 swift tmp/visual-qa/prd-stitch-ui/group4-profile-care-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev

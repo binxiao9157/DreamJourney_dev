@@ -42,6 +42,7 @@ func extractDefaultEnabledFeatures(from flags: String) -> Set<String> {
 
 let flags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let profile = read("DreamJourney/Sources/Modules/Profile/ProfileViewController.swift")
+let profileReadiness = read("DreamJourney/Sources/Modules/Profile/ProfileFamilyPersonaReleaseReadiness.swift")
 let family = read("DreamJourney/Sources/Modules/Family/FamilyCircleViewController.swift")
 let contextStore = read("DreamJourney/Sources/App/DigitalHumanContextStore.swift")
 let repository = read("DreamJourney/Sources/Services/FamilyRepository.swift")
@@ -55,11 +56,14 @@ for hidden in ["familyManagement", "familySpace", "accountDeletion", "careDoctor
     }
 }
 
-assertContains(profile, "DJEnableProfileHiddenBranches", "profile hidden branches should require explicit UIQA launch argument")
+assertContains(profileReadiness, "DJEnableProfileHiddenBranches", "profile hidden branches should require explicit UIQA launch argument")
+assertContains(profile, "ProfileFamilyPersonaReleaseReadiness.hiddenBranchesLaunchArgument", "profile should read hidden branches from the release readiness contract")
+assertContains(profile, "ProfileFamilyPersonaReleaseReadiness.isFamilyManagementRowVisible", "family row should use the release readiness visibility contract")
+assertContains(profile, "ProfileFamilyPersonaReleaseReadiness.canOpenFamilyPersonaSwitcher", "family route should use the release readiness route contract")
 assertContains(profile, "featureFlags.isEnabled(.familyManagement)", "family row should stay feature-gated")
 assertContains(profile, "featureFlags.isEnabled(.familySpace)", "family route should stay behind familySpace")
-assertContains(profile, "isProfileHiddenBranchesEnabled || featureFlags.isEnabled(.familySpace)", "UIQA hidden profile launch argument should open the hidden family route")
-assertContains(profile, "家人管理暂未开放", "family route should retain safe unavailable copy")
+assertContains(profile, "ProfileFamilyPersonaReleaseReadiness.unavailableTitle", "family route should retain safe unavailable title through the release readiness contract")
+assertContains(profileReadiness, "家人管理暂未开放", "family release readiness contract should retain safe unavailable copy")
 assertContains(profile, ".djDigitalHumanContextDidChange", "profile should observe selected persona changes")
 assertContains(profile, "makePersonaTitle(context:", "profile should derive persona title from context")
 assertContains(profile, "makePersonaSubtitle(context:", "profile should derive persona subtitle from context")

@@ -34,7 +34,7 @@ The app should preserve future routes for family space, elder care, sunlight/sil
 | Backend client | Local/dev backend base URL and optional token config; archive, KB, family, care endpoint wrappers. | `DreamJourneyBackendClient`, backend env smoke docs. |
 | Persona-scoped core loop | Archive storage, backend archive list payloads, sync payloads, and Echo archive context now resolve from the selected digital-human owner while preserving the default self assistant. | `DigitalHumanContextStore`, `MemoryArchiveRepository`, `persona-scoped-archive-context-check.swift`, archive-to-echo smoke. |
 | Release gates | Incomplete/high-risk branches are hidden by default and guarded by feature flags or UIQA-only launch arguments. | `FeatureFlagService`, release feature matrix. |
-| QA harness | Reusable archive-to-echo smoke, archive media entries smoke, and static guards exist; large generated QA artifacts remain local-only. | `tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh`, `tmp/visual-qa/prd-stitch-ui/run-archive-media-entries-smoke.sh`, submit inventory. |
+| QA harness | Reusable archive-to-echo smoke, archive media entries smoke, family/persona release smoke, and static guards exist; large generated QA artifacts remain local-only. | `tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh`, `tmp/visual-qa/prd-stitch-ui/run-archive-media-entries-smoke.sh`, `tmp/visual-qa/prd-stitch-ui/run-profile-family-persona-release-smoke.sh`, submit inventory. |
 
 ## Key Remaining Gaps
 
@@ -78,7 +78,7 @@ The app should preserve future routes for family space, elder care, sunlight/sil
 ### P1
 
 1. **Family/persona management behind flag**
-   - Status: hidden persona switcher implemented in `docs/superpowers/status/2026-06-18-profile-family-persona-switcher.md`; public family management still gated.
+   - Status: hidden persona switcher and release readiness smoke implemented in `docs/superpowers/status/2026-06-18-profile-family-persona-switcher.md`; public family management still gated.
    - Build a small release-gated persona switcher that uses existing `FamilyRepository` data and writes `DigitalHumanContextStore`.
    - Keep it hidden until product confirms public exposure.
 

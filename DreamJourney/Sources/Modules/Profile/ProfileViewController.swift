@@ -34,7 +34,7 @@ final class ProfileViewController: UIViewController {
 
     private var isProfileHiddenBranchesEnabled: Bool {
         #if UI_QA_SIMULATOR && targetEnvironment(simulator)
-        return ProcessInfo.processInfo.arguments.contains("DJEnableProfileHiddenBranches")
+        return ProcessInfo.processInfo.arguments.contains(ProfileFamilyPersonaReleaseReadiness.hiddenBranchesLaunchArgument)
         #else
         return false
         #endif
@@ -423,7 +423,10 @@ final class ProfileViewController: UIViewController {
         if isProfileHiddenBranchesEnabled || featureFlags.isEnabled(.profileSettings) {
             rows.append(.profileSettings)
         }
-        if isProfileHiddenBranchesEnabled || featureFlags.isEnabled(.familyManagement) {
+        if ProfileFamilyPersonaReleaseReadiness.isFamilyManagementRowVisible(
+            isFamilyManagementEnabled: featureFlags.isEnabled(.familyManagement),
+            isHiddenBranchesEnabled: isProfileHiddenBranchesEnabled
+        ) {
             rows.append(.familyManagement)
         }
         if isProfileHiddenBranchesEnabled || featureFlags.isEnabled(.legalCenter) {
@@ -610,10 +613,13 @@ final class ProfileViewController: UIViewController {
     }
 
     private func openFamilyManagement() {
-        guard isProfileHiddenBranchesEnabled || featureFlags.isEnabled(.familySpace) else {
+        guard ProfileFamilyPersonaReleaseReadiness.canOpenFamilyPersonaSwitcher(
+            isFamilySpaceEnabled: featureFlags.isEnabled(.familySpace),
+            isHiddenBranchesEnabled: isProfileHiddenBranchesEnabled
+        ) else {
             showUnavailableAlert(
-                title: "家人管理暂未开放",
-                message: "当前版本先保留入口，完整家人空间会在后续版本开放。"
+                title: ProfileFamilyPersonaReleaseReadiness.unavailableTitle,
+                message: ProfileFamilyPersonaReleaseReadiness.unavailableMessage
             )
             return
         }

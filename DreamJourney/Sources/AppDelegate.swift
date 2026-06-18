@@ -56,7 +56,13 @@ private extension AppDelegate {
             FeatureFlagService.shared.set(.archiveRemoteFetch, enabled: true)
             print("[UI_QA] Archive remote fetch enabled")
         }
-        if arguments.contains("DJRunArchiveMediaEntriesSmoke") {
+        if arguments.contains("DJRunProfileFamilyPersonaReleaseSmoke") {
+            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+            FeatureFlagService.shared.resetToDefaults()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.runProfileFamilyPersonaReleaseSmoke()
+            }
+        } else if arguments.contains("DJRunArchiveMediaEntriesSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
@@ -93,6 +99,79 @@ private extension AppDelegate {
         } else if arguments.contains("DJSeedPendingArchiveAnalysis") {
             seedPendingArchiveAnalysisContext()
         }
+    }
+
+    func runProfileFamilyPersonaReleaseSmoke() {
+        let releaseRowVisible = ProfileFamilyPersonaReleaseReadiness.isFamilyManagementRowVisible(
+            isFamilyManagementEnabled: false,
+            isHiddenBranchesEnabled: false
+        )
+        let familyManagementOnlyRowVisible = ProfileFamilyPersonaReleaseReadiness.isFamilyManagementRowVisible(
+            isFamilyManagementEnabled: true,
+            isHiddenBranchesEnabled: false
+        )
+        let familyManagementOnlyCanOpenSwitcher = ProfileFamilyPersonaReleaseReadiness.canOpenFamilyPersonaSwitcher(
+            isFamilySpaceEnabled: false,
+            isHiddenBranchesEnabled: false
+        )
+        let familySpaceCanOpenSwitcher = ProfileFamilyPersonaReleaseReadiness.canOpenFamilyPersonaSwitcher(
+            isFamilySpaceEnabled: true,
+            isHiddenBranchesEnabled: false
+        )
+        let hiddenBranchesCanOpenSwitcher = ProfileFamilyPersonaReleaseReadiness.canOpenFamilyPersonaSwitcher(
+            isFamilySpaceEnabled: false,
+            isHiddenBranchesEnabled: true
+        )
+        let familyMembers = FamilyRepository.shared.getAll()
+        let selfContext = DigitalHumanContext.defaultContext(userId: UserManager.shared.currentUser?.id ?? "user_9999")
+        let firstFamilyMember = familyMembers.first
+        let profileTabSelected = selectProfileTabForFamilyPersonaSmoke()
+        let completed = releaseRowVisible == false
+            && familyManagementOnlyRowVisible
+            && familyManagementOnlyCanOpenSwitcher == false
+            && familySpaceCanOpenSwitcher
+            && hiddenBranchesCanOpenSwitcher
+            && selfContext.isSelfAssistant
+            && profileTabSelected
+            && !familyMembers.isEmpty
+
+        writeProfileFamilyPersonaReleaseSmokeResult(
+            completed: completed,
+            releaseRowVisible: releaseRowVisible,
+            familyManagementOnlyRowVisible: familyManagementOnlyRowVisible,
+            familyManagementOnlyCanOpenSwitcher: familyManagementOnlyCanOpenSwitcher,
+            familySpaceCanOpenSwitcher: familySpaceCanOpenSwitcher,
+            hiddenBranchesCanOpenSwitcher: hiddenBranchesCanOpenSwitcher,
+            familyMemberCount: familyMembers.count,
+            firstFamilyMemberMode: firstFamilyMember?.digitalHumanMode.rawValue ?? "missing",
+            profileTabSelected: profileTabSelected
+        )
+        print(
+            "[UI_QA] ProfileFamilyPersonaReleaseSmoke completed " +
+            "releaseRowVisible=\(releaseRowVisible) " +
+            "familyManagementOnlyCanOpenSwitcher=\(familyManagementOnlyCanOpenSwitcher) " +
+            "hiddenBranchesCanOpenSwitcher=\(hiddenBranchesCanOpenSwitcher) " +
+            "profileTabSelected=\(profileTabSelected) " +
+            "familyMemberCount=\(familyMembers.count)"
+        )
+    }
+
+    func selectProfileTabForFamilyPersonaSmoke() -> Bool {
+        guard let tabBarController = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController as? WarmTabBarController,
+              let viewControllers = tabBarController.viewControllers,
+              viewControllers.indices.contains(2) else {
+            return false
+        }
+
+        if let profileNavigationController = viewControllers[2] as? UINavigationController {
+            profileNavigationController.popToRootViewController(animated: false)
+        }
+        tabBarController.selectedIndex = 2
+        return true
     }
 
     func runArchiveMediaEntriesSmoke() {
@@ -366,6 +445,45 @@ private extension AppDelegate {
             try data.write(to: resultURL, options: [.atomic])
         } catch {
             print("[UI_QA] ArchiveToEchoSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    func writeProfileFamilyPersonaReleaseSmokeResult(
+        completed: Bool,
+        releaseRowVisible: Bool,
+        familyManagementOnlyRowVisible: Bool,
+        familyManagementOnlyCanOpenSwitcher: Bool,
+        familySpaceCanOpenSwitcher: Bool,
+        hiddenBranchesCanOpenSwitcher: Bool,
+        familyMemberCount: Int,
+        firstFamilyMemberMode: String,
+        profileTabSelected: Bool
+    ) {
+        let result: [String: Any] = [
+            "completed": completed,
+            "releaseRowVisible": releaseRowVisible,
+            "familyManagementOnlyRowVisible": familyManagementOnlyRowVisible,
+            "familyManagementOnlyCanOpenSwitcher": familyManagementOnlyCanOpenSwitcher,
+            "familySpaceCanOpenSwitcher": familySpaceCanOpenSwitcher,
+            "hiddenBranchesCanOpenSwitcher": hiddenBranchesCanOpenSwitcher,
+            "familyMemberCount": familyMemberCount,
+            "firstFamilyMemberMode": firstFamilyMemberMode,
+            "profileTabSelected": profileTabSelected,
+            "hiddenBranchesArgument": ProfileFamilyPersonaReleaseReadiness.hiddenBranchesLaunchArgument,
+            "unavailableTitle": ProfileFamilyPersonaReleaseReadiness.unavailableTitle
+        ]
+
+        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
+              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("[UI_QA] ProfileFamilyPersonaReleaseSmoke failed reason=resultEncoding")
+            return
+        }
+
+        let resultURL = documentsURL.appendingPathComponent("profile-family-persona-release-smoke-result.json")
+        do {
+            try data.write(to: resultURL, options: [.atomic])
+        } catch {
+            print("[UI_QA] ProfileFamilyPersonaReleaseSmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
     }
 
