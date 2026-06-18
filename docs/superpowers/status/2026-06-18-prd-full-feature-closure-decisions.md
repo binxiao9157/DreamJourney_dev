@@ -1,262 +1,262 @@
-# PRD Full Feature Closure Decisions
+# PRD 全功能闭环决策清单
 
-Date: 2026-06-18
+日期：2026-06-18
 
-Branch: `feature/prd-stitch-ui-adaptation`
+分支：`feature/prd-stitch-ui-adaptation`
 
-## Purpose
+## 文档目标
 
-This document turns the current PRD coverage and release feature matrix into a product-decision checklist for the full DreamJourney feature loop.
+这份文档把当前 PRD 覆盖矩阵和发布功能矩阵整理成一份面向产品决策的清单，用来判断 DreamJourney 要达到“产品全功能闭环”还缺什么，以及哪些内容必须先由 PRD / 产品明确后才能开放。
 
-Goal:
+目标闭环：
 
 ```text
 登录 / 注册 -> 记忆档案 -> 回响 -> 我的 / 心境追踪 / 长辈关怀 -> 家庭协作与安全闭环
 ```
 
-The current app is already a simulator-validated MVP candidate for the core loop, but it is not yet a full PRD completion state. The remaining work splits into:
+当前 App 已经可以视为“模拟器验证过的 MVP 候选版本”，核心链路已经跑通，但还不是完整 PRD 完成态。后续工作分为四类：
 
-1. Public features that are already visible but not fully complete.
-2. PRD features that exist only as hidden candidates or safety shells.
-3. Product / PRD decisions that must be made before engineering should expose the feature.
-4. External acceptance gates such as true-device, signing, microphone, photo library, and production voice quality.
+1. 已经公开，但还没完全补齐的功能。
+2. PRD 中存在，但当前只作为隐藏候选或安全壳存在的功能。
+3. 必须先由 PRD / 产品明确，工程才能开放的功能。
+4. 需要真机、签名、麦克风、相册、生产语音质量等外部验收的能力。
 
-## Source Of Truth
+## 信息来源
 
-- Product: latest attached `《寻梦环游 产品PRD V1.0》(1).md`.
-- Visual: current Stitch canvas and downloaded `htmlCode`.
-- Code: current UIKit implementation in `/Users/yxj/Documents/Codex/Video/DreamJourney_dev`.
-- Release policy: `docs/superpowers/status/2026-06-17-release-feature-matrix.md`.
-- Coverage policy: `docs/superpowers/status/2026-06-18-prd-coverage-matrix.md`.
-- MCP screenshots are auxiliary evidence only.
+- 产品依据：最新附件 `《寻梦环游 产品PRD V1.0》(1).md`。
+- 视觉依据：当前 Stitch 画布和导出的 `htmlCode`。
+- 工程依据：`/Users/yxj/Documents/Codex/Video/DreamJourney_dev` 当前 UIKit 实现。
+- 发布边界：`docs/superpowers/status/2026-06-17-release-feature-matrix.md`。
+- PRD 覆盖：`docs/superpowers/status/2026-06-18-prd-coverage-matrix.md`。
+- MCP screenshot 只作为辅助证据，不能单独作为最终视觉依据。
 
-## Current Public MVP Surface
+## 当前公开 MVP 功能面
 
-These are visible by default and should continue toward full completion:
+这些内容默认可见，后续应该继续补齐到完整可验收状态：
 
-| Area | Current public state | Remaining gap |
+| 模块 | 当前公开状态 | 剩余缺口 |
 | --- | --- | --- |
-| App shell | `记忆档案`, `回响`, `我的` | Keep stable unless Stitch / PRD explicitly changes IA. |
-| Login | Light Stitch-aligned login form | Final auth error handling, account recovery, production backend behavior. |
-| Archive text/photo | `添加文字描述`, `选择照片`, timeline list | True-device photo permission, backend persistence, media privacy copy. |
-| Echo voice | Voice-first `开始语音` flow | True-device microphone acceptance, production voice SDK quality, 2-3 round reply policy. |
-| Profile settings | Avatar display, nickname edit, masked phone, save confirmation | Avatar edit/upload, password or account-security scope, backend persistence. |
-| Legal center | AI, privacy, care, emergency, ethics copy | Legal review and product approval. |
-| Mind / care dashboard | Aggregate `心境追踪` / `长辈关怀` signals | Thresholds, alert severity, backend source, family-facing privacy policy. |
+| App 主框架 | `记忆档案`、`回响`、`我的` 三个 Tab | 除非 Stitch / PRD 明确调整信息架构，否则保持稳定。 |
+| 登录 | 已适配 Stitch 浅色登录界面 | 生产环境登录错误处理、账号找回、真实后端异常状态。 |
+| 档案文字 / 照片 | `添加文字描述`、`选择照片`、时间线列表 | 真机相册权限、后端持久化、媒体隐私说明。 |
+| 回响语音 | 以 `开始语音` 为核心的语音交互 | 真机麦克风验收、生产语音 SDK 质量、2-3 轮后等待回信策略。 |
+| 个人资料 | 头像展示、昵称编辑、手机号脱敏、保存确认 | 头像编辑/上传、密码或账号安全范围、后端持久化。 |
+| 法律法规 | AI、隐私、关怀、紧急情况、数字人伦理说明 | 法务审阅和产品确认。 |
+| 心境追踪 / 长辈关怀 | 聚合关怀信号和看板 | 指标阈值、风险等级、真实后端来源、家属可见范围。 |
 
-## Public Features Still Not Fully Implemented
+## 已公开但还没完整实现的功能
 
-These are already public or should remain public for MVP, so they are the safest next engineering targets.
+这些功能已经公开或应继续保留在公开 MVP 中，是最安全的下一批工程目标。
 
-### 1. Echo 2-3 Round Waiting Reply
+### 1. 回响 2-3 轮后等待回信
 
-Current status: partially implemented.
+当前状态：部分实现。
 
-Needs engineering:
+工程需要补齐：
 
-- Define deterministic state transitions in `EchoViewModel`.
-- Cover idle, listening, waiting, replied, and failure states.
-- Add regression checks for the 2-3 round wait behavior.
+- 在 `EchoViewModel` 中定义稳定的状态流转。
+- 覆盖空闲、聆听中、等待回信、已回信、失败等状态。
+- 增加 2-3 轮等待回信行为的回归检查。
 
-Needs PRD decision:
+需要 PRD / 产品决策：
 
-- Whether "2-3 rounds" means user turns, assistant turns, or complete exchanges.
-- Exact wait trigger: after the second round, after the third round, or adaptive.
-- Expected wait duration and copy.
-- Whether waiting reply requires push notification, local notification, or in-app-only state.
-- Whether this feature is part of public MVP or a later emotional pacing layer.
+- “2-3 轮”到底指用户发言轮、AI 回复轮，还是一次完整对话交换。
+- 等待触发点是在第 2 轮后、第 3 轮后，还是根据情绪/内容自适应。
+- 等待时长和界面文案。
+- 等待回信是否需要推送通知、本地通知，还是仅限 App 内状态。
+- 该能力属于公开 MVP，还是后续情感节奏层能力。
 
-### 2. Profile Settings Completion
+### 2. 个人资料管理
 
-Current status: partially implemented.
+当前状态：部分实现。
 
-Needs engineering:
+工程需要补齐：
 
-- Avatar edit/upload or keep avatar read-only.
-- Persist nickname/avatar changes to backend when available.
-- Decide whether phone number is editable, read-only, or managed by auth provider.
-- Add validation and recovery states for failed save.
+- 明确头像是可编辑/可上传，还是只读展示。
+- 昵称、头像等资料需要接入后端持久化。
+- 明确手机号是否可编辑，还是由认证系统托管。
+- 增加保存失败、网络异常、校验失败的恢复状态。
 
-Needs PRD decision:
+需要 PRD / 产品决策：
 
-- Whether password change is required in-app for full PRD.
-- Whether profile is personal-only or family/persona-aware.
-- Whether avatar is user profile avatar, digital human avatar, or both.
-- What fields are required for MVP versus full account center.
+- 完整 PRD 是否要求 App 内修改密码。
+- 个人资料是只面向用户本人，还是和家庭成员 / 数字人人格有关。
+- 头像代表用户头像、数字人头像，还是两者都需要。
+- MVP 和完整账号中心分别需要哪些字段。
 
-### 3. Archive Photo/Text Production Readiness
+### 3. 档案文字 / 照片生产可用性
 
-Current status: implemented, public.
+当前状态：已公开。
 
-Needs engineering:
+工程需要补齐：
 
-- True-device photo library permission acceptance.
-- Backend persistence verification for uploaded archive items.
-- Error recovery for failed upload/sync.
-- Privacy copy around family-visible media.
+- 真机相册权限验收。
+- 上传档案项的后端持久化验收。
+- 上传/同步失败后的错误恢复。
+- 家庭可见媒体的隐私说明。
 
-Needs PRD decision:
+需要 PRD / 产品决策：
 
-- Whether archive media is private by default or shareable with family.
-- Retention and deletion policy for uploaded memory items.
-- Whether media analysis is local-only, backend-assisted, or AI-assisted.
+- 档案媒体默认是完全私密，还是可分享给家人。
+- 上传记忆的保留和删除策略。
+- 媒体分析是本地完成、后端辅助，还是 AI 辅助。
 
-### 4. Mind Tracking / Elder Care Aggregate
+### 4. 心境追踪 / 长辈关怀聚合看板
 
-Current status: implemented aggregate/fallback, public.
+当前状态：已实现聚合 / fallback 版本，默认公开。
 
-Needs engineering:
+工程需要补齐：
 
-- Real backend persistence and retrieval for care metrics.
-- Clear empty, loading, stale-data, and failed-data states.
-- Regression for public aggregate visibility without exposing private chat content.
+- 关怀指标的真实后端持久化和读取。
+- 空数据、加载中、数据过期、加载失败状态。
+- 保证公开看板只展示聚合信号，不暴露私密聊天内容。
 
-Needs PRD decision:
+需要 PRD / 产品决策：
 
-- Exact metric definitions: mood, cognition, sleep, loneliness, risk.
-- Alert thresholds and severity labels.
-- Family visibility rules.
-- Whether children see only aggregate signals or also trend explanations.
-- Whether doctor/intervention escalation belongs in the first full release.
+- 心境、认知、睡眠、孤独、风险等指标的定义。
+- 风险阈值和等级文案。
+- 家属可见规则。
+- 子女只能看聚合信号，还是可以看趋势解释。
+- 医生联系 / 干预升级是否进入第一版完整发布。
 
-## Hidden PRD Features That Need Product Decision Before Opening
+## 需要产品决策后才能开放的隐藏 PRD 功能
 
-These should not be exposed by default until the decision items are resolved.
+下面这些功能在产品决策明确前不能默认开放。
 
-| Feature | Current state | Current gate | PRD decision required before public |
+| 功能 | 当前状态 | 当前开关 | 公开前必须明确的 PRD / 产品决策 |
 | --- | --- | --- | --- |
-| 语音档案 / archive audio upload | Hidden candidate, QA branch exists | `DJFeature.archiveAudioUpload` or `DJEnableArchiveHiddenBranches` | Is audio archive part of public full release? Recording length, transcription, storage, privacy, true-device mic acceptance. |
-| 时间信件 | Hidden candidate, QA branch exists | `DJFeature.timeLetters` or `DJEnableArchiveHiddenBranches` | Delivery timing, edit/cancel rules, notification policy, recipient rules, failure/retry behavior. |
-| 档案视频 | Not implemented | No implemented public gate yet | Whether video is in full PRD scope; size limits, compression, preview, backend storage, privacy. |
-| 人格设定 | Hidden candidate | `DJFeature.personaSettings` or `DJEnableArchiveHiddenBranches` | Who can edit persona, what fields exist, AI safety boundaries, audit/revert behavior. |
-| 家人管理 | Hidden candidate | `DJFeature.familyManagement` or `DJEnableProfileHiddenBranches` | Invite model, roles, permissions, consent, backend membership contract, family data visibility. |
-| 账号注销执行 | Hidden safety shell only | `DJFeature.accountDeletion` or `DJEnableProfileHiddenBranches` | Compliance policy, data export, cooling-off period, final confirmation, backend deletion contract. |
-| 医生联系 / 干预执行 | Hidden safety shell only | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | Whether real provider/contact exists, emergency disclaimers, escalation ownership, backend submission. |
-| 关怀升级草稿发送 | Local draft shell only | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | Whether draft becomes sendable, who receives it, review/edit rules, clinical/legal wording. |
-| 阳光 / 星辰 / 静默 生命周期切换 | Hidden local QA control | Hidden family rows / local context | Whether users can switch modes, who is authorized, recovery rules, visible copy. |
-| 数字人继承生命周期 | Hidden boundary only | Lifecycle checks only | Trigger policy, death/inactivity proof, family/legal consent, audit trail, rollback policy. |
-| Echo 文字 / 图片输入 | Not publicly wired | `DJFeature.echoTextInput`, `DJFeature.echoImageInput` | Whether Echo remains voice-first or becomes multimodal; UI impact and safety policy. |
+| 语音档案 / 档案录音 | 隐藏候选，已有 QA 分支 | `DJFeature.archiveAudioUpload` 或 `DJEnableArchiveHiddenBranches` | 是否进入完整公开版本；录音时长；是否转写；存储策略；隐私策略；真机麦克风验收。 |
+| 时间信件 | 隐藏候选，已有 QA 分支 | `DJFeature.timeLetters` 或 `DJEnableArchiveHiddenBranches` | 投递时间规则；编辑/取消规则；通知策略；收件人规则；失败重试。 |
+| 档案视频 | 未实现 | 暂无完整公开开关 | 是否纳入完整 PRD；大小限制；压缩策略；预览方式；后端存储；隐私策略。 |
+| 人格设定 | 隐藏候选 | `DJFeature.personaSettings` 或 `DJEnableArchiveHiddenBranches` | 谁可以编辑人格；字段范围；AI 安全边界；审计和回滚。 |
+| 家人管理 | 隐藏候选 | `DJFeature.familyManagement` 或 `DJEnableProfileHiddenBranches` | 邀请模型；家庭角色；权限；同意机制；后端成员关系；家庭数据可见范围。 |
+| 账号注销执行 | 只有隐藏安全壳 | `DJFeature.accountDeletion` 或 `DJEnableProfileHiddenBranches` | 合规策略；数据导出；冷静期；最终确认；后端删除合同。 |
+| 医生联系 / 干预执行 | 只有隐藏安全壳 | `DJFeature.careDoctorContact` 或 `DJEnableProfileHiddenBranches` | 是否存在真实服务方；紧急免责声明；干预责任边界；后端提交合同。 |
+| 关怀升级草稿发送 | 只有本地草稿壳 | `DJFeature.careDoctorContact` 或 `DJEnableProfileHiddenBranches` | 草稿是否可发送；发送给谁；发送前是否需要编辑/确认；医疗/法律文案。 |
+| 阳光 / 星辰 / 静默生命周期切换 | 隐藏本地 QA 控制 | 隐藏家庭分支 / 本地上下文 | 用户是否可见；谁能切换；误切换如何恢复；界面文案。 |
+| 数字人继承生命周期 | 只有隐藏边界 | 生命周期检查脚本 | 触发条件；逝世/长期未活动证明；家属/法律同意；审计记录；撤回机制。 |
+| Echo 文字 / 图片输入 | 未公开接入 | `DJFeature.echoTextInput`、`DJFeature.echoImageInput` | Echo 是否坚持语音优先，还是转为多模态；UI 结构和安全策略。 |
 
-## Full Feature Closure Phases
+## 全功能闭环阶段规划
 
-### Phase A: Public MVP Completion
+### 阶段 A：公开 MVP 补全
 
-Target: make the already-public experience complete enough for real testing.
+目标：先把已经公开的体验补到真实可测试、可验收。
 
-Recommended order:
+建议顺序：
 
-1. Echo 2-3 round waiting reply.
-2. Profile settings completion.
-3. Archive text/photo production readiness.
-4. Care dashboard aggregate backend hardening.
-5. True-device microphone/photo acceptance.
+1. 回响 2-3 轮等待回信。
+2. 个人资料管理补全。
+3. 档案文字 / 照片生产可用性。
+4. 关怀聚合看板后端强化。
+5. 真机麦克风 / 相册权限验收。
 
-No new hidden PRD feature should be exposed in this phase.
+本阶段不开放新的隐藏 PRD 功能。
 
-### Phase B: Media Archive Expansion
+### 阶段 B：档案媒体扩展
 
-Target: expand archive beyond text/photo after PRD decisions.
+目标：在 PRD 决策明确后，把档案从文字/照片扩展到更多媒体。
 
-Candidate order:
+候选顺序：
 
-1. 语音档案.
-2. 时间信件.
-3. 视频档案.
+1. 语音档案。
+2. 时间信件。
+3. 视频档案。
 
-Required product decisions:
+需要先明确：
 
-- Media privacy and retention.
-- Backend storage and sync policy.
-- True-device permission and error states.
-- Whether these entries feed Echo immediately or only after analysis.
+- 媒体隐私和保留策略。
+- 后端存储和同步策略。
+- 真机权限和异常状态。
+- 这些档案是否立即进入回响上下文，还是必须先分析。
 
-### Phase C: Family / Care Expansion
+### 阶段 C：家庭 / 关怀扩展
 
-Target: turn `我的 / 长辈关怀` into a real family collaboration loop.
+目标：让 `我的 / 长辈关怀` 形成真实家庭协作闭环。
 
-Candidate order:
+候选顺序：
 
-1. 家人管理.
-2. Family permission model.
-3. Care dashboard thresholds and alerts.
-4. 关怀升级草稿 promotion.
-5. Real doctor/contact/intervention execution only after compliance.
+1. 家人管理。
+2. 家庭权限模型。
+3. 关怀指标阈值和提醒。
+4. 关怀升级草稿转正。
+5. 医生联系 / 干预执行必须在合规后再开放。
 
-Required product decisions:
+需要先明确：
 
-- Family roles.
-- Consent model.
-- What children can see.
-- What remains private between user and digital human.
-- Whether emergency or medical-adjacent features are in product scope.
+- 家庭角色。
+- 同意机制。
+- 子女可以看到什么。
+- 哪些内容必须保留在用户和数字人之间。
+- 医疗或紧急干预是否属于产品范围。
 
-### Phase D: Digital Human Lifecycle
+### 阶段 D：数字人生命周期
 
-Target: complete the high-risk "digital human lifecycle" side of the PRD.
+目标：补齐 PRD 中高风险的数字人生命周期能力。
 
-Candidate order:
+候选顺序：
 
-1. Persona settings.
-2. Lifecycle mode policy.
-3. Inheritance trigger and consent model.
-4. Legal/audit backend contract.
+1. 人格设定。
+2. 生命周期模式策略。
+3. 继承触发和同意机制。
+4. 法律/审计后端合同。
 
-Required product decisions:
+需要先明确：
 
-- Whether lifecycle modes are visible to users.
-- Who controls mode transitions.
-- What evidence triggers inheritance state.
-- How to recover from mistakes.
-- What legal copy must be accepted.
+- 生命周期模式是否对用户可见。
+- 谁能控制状态切换。
+- 什么证据触发继承状态。
+- 错误触发如何恢复。
+- 必须接受哪些法律文案。
 
-## Product Decisions Needed
+## 需要产品明确的关键决策
 
-These are the highest-impact PRD decisions that block full feature closure.
+这些是阻塞“产品全功能闭环”的核心 PRD 决策点。
 
-| Decision | Blocks | Recommended owner |
+| 决策点 | 阻塞内容 | 建议负责人 |
 | --- | --- | --- |
-| Echo waiting reply policy | 2-3 round waiting reply, voice pacing QA | Product |
-| Voice-first vs multimodal Echo | Echo text/image input, UI structure | Product + Design |
-| Archive media release scope | Audio, video, time letters | Product |
-| Media privacy and retention | Archive upload, family visibility, deletion | Product + Legal |
-| Profile account center scope | Avatar, password, phone, account security | Product + Backend |
-| Family roles and permissions | 家人管理, family dashboard, persona switching | Product + Backend |
-| Care metric definitions and thresholds | 心境追踪, 长辈关怀, alerts | Product |
-| Doctor/contact escalation policy | 立即通话, 干预执行, 关怀升级草稿 | Product + Legal |
-| Account deletion compliance | 账号注销执行 | Legal + Backend |
-| Digital human lifecycle policy | 阳光/星辰/静默, 继承生命周期 | Product + Legal |
-| True-device acceptance scope | Microphone, photo library, notification, signing | Product + QA |
+| 回响等待回信策略 | 2-3 轮等待回信、语音节奏验收 | 产品 |
+| Echo 语音优先还是多模态 | Echo 文字/图片输入、整体 UI 结构 | 产品 + 设计 |
+| 档案媒体开放范围 | 语音、视频、时间信件 | 产品 |
+| 媒体隐私与保留策略 | 档案上传、家庭可见、删除 | 产品 + 法务 |
+| 账号中心范围 | 头像、密码、手机号、账号安全 | 产品 + 后端 |
+| 家庭角色和权限 | 家人管理、家庭看板、人格切换 | 产品 + 后端 |
+| 关怀指标和阈值 | 心境追踪、长辈关怀、风险提醒 | 产品 |
+| 医生联系 / 干预升级策略 | 立即通话、干预执行、关怀升级草稿 | 产品 + 法务 |
+| 账号注销合规策略 | 账号注销执行 | 法务 + 后端 |
+| 数字人生命周期策略 | 阳光/星辰/静默、继承生命周期 | 产品 + 法务 |
+| 真机验收范围 | 麦克风、相册、通知、签名 | 产品 + QA |
 
-## Engineering Guardrails
+## 工程护栏
 
-- Keep hidden candidates behind feature flags until the relevant PRD decision is made.
-- Do not expose new tabs or rename `我的` unless current Stitch canvas and PRD explicitly require it.
-- Treat `长辈关怀` as content under `我的`, not as the third tab.
-- For every newly opened feature, add a static guard or simulator smoke before exposing it by default.
-- After any UI or release-scope change, run:
+- 隐藏候选功能必须继续放在 feature flag 后面，直到对应 PRD 决策明确。
+- 不要新增 Tab，也不要把 `我的` 改名，除非当前 Stitch 画布和 PRD 明确要求。
+- `长辈关怀` 是 `我的` 里的内容，不是第三个 Tab。
+- 每开放一个新功能，都要先补静态检查或模拟器烟测。
+- 每次 UI 或发布范围变化后，运行：
 
 ```bash
 RUN_ID=<run-id> tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
 ```
 
-## Definition Of Full Feature Closure
+## 全功能闭环完成标准
 
-The product can be treated as full PRD closure only when all of the following are true:
+只有满足以下条件，才能认为产品达到完整 PRD 闭环：
 
-1. Every PRD row is either implemented and public, or explicitly descoped in PRD.
-2. Hidden candidates have product decisions and promotion criteria.
-3. Public UI matches current Stitch canvas and `htmlCode`.
-4. Backend persistence works for archive, care, profile, and family flows.
-5. Risky flows have legal/product-approved copy and confirmation states.
-6. True-device microphone, photo library, notification, and signing acceptance pass.
-7. Release regression passes with the selected public feature set.
+1. 每个 PRD 条目要么已经实现并公开，要么被 PRD 明确移出范围。
+2. 隐藏候选功能都有明确产品决策和开放标准。
+3. 公开 UI 与当前 Stitch 画布和 `htmlCode` 对齐。
+4. 档案、关怀、个人资料、家庭相关数据具备后端持久化。
+5. 高风险流程具备产品/法务认可的文案和确认状态。
+6. 真机麦克风、相册、通知和签名验收通过。
+7. 选择后的公开功能集可以通过一键 release regression。
 
-## Recommended Next Product-Engineering Target
+## 推荐的下一步产品工程目标
 
-Start with public features that are already visible:
+优先从已经公开的功能继续补：
 
-1. Echo 2-3 round waiting reply policy and implementation.
-2. Profile settings completion.
-3. Archive text/photo true-device and backend persistence.
+1. 回响 2-3 轮等待回信策略和实现。
+2. 个人资料管理补全。
+3. 档案文字 / 照片的真机和后端持久化。
 
-After that, choose one hidden candidate to promote. The lowest-risk promotion is likely `语音档案`; the highest-risk promotions are `账号注销执行`, `医生联系 / 干预执行`, and `数字人继承生命周期`.
+之后再选择一个隐藏候选转公开。低风险候选大概率是 `语音档案`；最高风险候选是 `账号注销执行`、`医生联系 / 干预执行` 和 `数字人继承生命周期`。
