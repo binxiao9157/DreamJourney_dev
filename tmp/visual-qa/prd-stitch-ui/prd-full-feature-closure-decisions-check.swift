@@ -40,6 +40,8 @@ assertContains(decisions, "等待时长5-10分钟随机", "decision doc should s
 assertContains(decisions, "推送通知和本地通知和app内状态都需要", "decision doc should sync Echo notification requirement")
 assertContains(decisions, "属于公开MVP", "decision doc should mark Echo waiting reply as public MVP")
 assertContains(decisions, "要求app内修改密码", "decision doc should sync account security requirement")
+assertContains(decisions, "本地后端 `/auth/password` 合同已补", "decision doc should record local password backend contract")
+assertContains(decisions, "仍需登录密码参与、线上部署、安全审查和真机验收", "decision doc should not overclaim password release readiness")
 assertContains(decisions, "只面向于用户本人", "decision doc should scope profile to the account user")
 assertContains(decisions, "头像、名称、性别、地区、手机号", "decision doc should sync account center fields")
 assertContains(decisions, "所有客户端档案页面的内容都是一样的", "decision doc should sync family digital-human archive visibility")

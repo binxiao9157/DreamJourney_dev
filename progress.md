@@ -142,3 +142,10 @@ Update this file after every recursive state-changing command bundle and before 
 - Completed: `backend-postgres-persistence-check.py` now verifies active, missing/empty, invalid/failed, and stale care snapshot boundaries and emits `careActiveRiskLevel`, `careMissingStatus`, `careInvalidStatus`, and `careStaleWindowEnd`.
 - Guard: `care-snapshot-backend-state-fixtures-check.swift` and `release-like-backend-acceptance-check.swift` require the new care-state evidence in the runner and docs.
 - Boundary: this is a backend acceptance contract update, not a product decision for final care thresholds. The selected backend should be redeployed/rerun before these fields count as selected-environment evidence.
+
+## Implementation Checkpoint - 2026-06-18T20:02:00+0800
+
+- Task: add local backend password-change contract while keeping the iOS password route hidden.
+- Completed: backend `/auth/login` can initialize/verify PBKDF2 password credentials when a password is provided, and `/auth/password` changes the credential only after old-password verification.
+- Guard: backend `PasswordAPITests` cover credential initialization, wrong-password rejection, password change, old-password invalidation, and unconfigured credential rejection. iOS PRD/backend matrix guards now record `/auth/password` as local backend present but not release-public.
+- Boundary: password change remains behind feature flags until login password participation, selected-environment deployment, security review, and true-device acceptance are complete.

@@ -46,11 +46,12 @@ for rowLabel in [
 }
 
 for state in [
-    "backend route missing",
     "backend route present locally",
+    "selected-environment deployment and auth login parity needed",
     "deployment/APNs/device token needed",
     "backend accepts and persists nickname/gender/region/avatar metadata",
-    "backend/security needed",
+    "backend now hashes password credentials and requires old-password verification",
+    "auth/login password parity",
     "backend field migration needed",
     "backend accepted, release-like gate now requires active / empty / stale / failed fixture evidence",
     "careActiveRiskLevel",
@@ -69,6 +70,7 @@ assertContains(client, "requestJSON(path: \"/care/snapshots/latest/\\(pathCompon
 assertContains(userManager, "DreamJourneyBackendClient.shared.updateProfile", "Profile update should use the dedicated backend contract")
 
 assertContains(backendMain, "@app.post(\"/auth/login\")", "backend should expose auth login")
+assertContains(backendMain, "@app.post(\"/auth/password\")", "backend should expose password change")
 assertContains(backendMain, "@app.post(\"/profile\")", "backend should expose profile update")
 assertContains(backendMain, "@app.get(\"/profile/{user_id}\")", "backend should expose profile read")
 assertContains(backendMain, "@app.post(\"/echo/delayed-replies\")", "backend should expose echo delayed reply schedule")

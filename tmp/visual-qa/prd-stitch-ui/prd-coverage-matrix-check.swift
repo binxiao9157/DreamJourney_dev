@@ -53,7 +53,7 @@ let requiredRows = [
     "| 档案录音 | hidden candidate | no | archive media smoke | true-device audio acceptance |",
     "| 档案文字描述 | implemented | yes | archive smoke | maintain |",
     "| 时间信件 | hidden candidate | no | archive media smoke | delivery policy |",
-    "| 个人资料管理 | implemented for profile fields with local `/profile` backend contract; password change hidden shell | yes for profile fields; no for password change | `ProfileSettingsViewController`, `ProfilePasswordChangeViewController`, backend `ProfileAPITests` | deploy `/profile`, backend `/auth/password` implementation, auth/security review, true-device acceptance |",
+    "| 个人资料管理 | implemented for profile fields with local `/profile` backend contract; password change hidden shell plus local `/auth/password` backend contract | yes for profile fields; no for password change | `ProfileSettingsViewController`, `ProfilePasswordChangeViewController`, backend `ProfileAPITests`, backend `PasswordAPITests` | deploy `/profile` and `/auth/password`, finish login password participation, auth/security review, true-device acceptance |",
     "| 心境追踪 | implemented fallback and data states | yes | Profile care checks, care data states check | lifecycle policy |",
     "| 家人管理 | hidden candidate | no | family persona smoke | product exposure decision |",
     "| 法律法规 | implemented | yes | `ProfileLegalViewController` | legal review |",
@@ -103,6 +103,8 @@ assertContains(coverage, "the old third-turn default policy has been superseded"
 assertContains(coverage, "in-app state, local notification, and push notification are all required", "coverage matrix should document updated Echo notification scope")
 assertContains(coverage, "name/gender/region validation", "coverage matrix should document updated profile scope")
 assertContains(coverage, "password change hidden shell", "coverage matrix should document password shell state")
+assertContains(coverage, "PasswordAPITests", "coverage matrix should document local password backend tests")
+assertContains(coverage, "login password participation", "coverage matrix should keep password login parity open")
 assertContains(coverage, "`profile-password-change-check.swift`", "coverage matrix should reference password shell guard")
 assertContains(coverage, "后端合同闭环", "coverage matrix should include backend contract closure row")
 assertContains(coverage, "2026-06-18-backend-contract-gap-matrix.md", "coverage matrix should reference backend contract gap matrix")
