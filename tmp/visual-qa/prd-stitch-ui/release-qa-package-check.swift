@@ -102,6 +102,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-18-echo-waiting-reply-policy.md",
     "docs/superpowers/status/2026-06-18-profile-settings-save-state.md",
     "docs/superpowers/status/2026-06-18-profile-care-data-states.md",
+    "docs/superpowers/status/2026-06-18-profile-care-intervention-placeholder.md",
 ]
 
 for doc in requiredDocs {

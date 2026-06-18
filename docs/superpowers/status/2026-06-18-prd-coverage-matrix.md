@@ -89,10 +89,10 @@ The PRD items below are intentionally not public MVP features yet. They may have
 | video upload | not implemented; PRD scope and media backend contract still required | no | video upload |
 | persona settings | QA-only archive/profile-adjacent branch; ownership and prompt-safety policy still required | no | persona settings |
 | family management public release | QA-only profile branch; invitation, permission, and membership backend are not public | no | family management public release |
-| care dashboard expansion | aggregate care dashboard is public; intervention/contact expansion is not | aggregate only | care dashboard expansion |
+| care dashboard expansion | aggregate care dashboard and non-executing `关怀升级准备中` placeholder are public; intervention/contact execution is not | aggregate + placeholder only | care dashboard expansion |
 | account deletion execution | hidden safety shell only; destructive deletion is not connected | no | account deletion execution |
-| doctor contact / intervention execution | hidden safety shell only; no real call, provider, or intervention submission | no | doctor contact / intervention execution |
-| care escalation draft | local draft shell only; backend submission and clinical/legal review still required | no | care escalation draft |
+| doctor contact / intervention execution | public placeholder plus hidden safety shell only; no real call, provider, or intervention submission | no | doctor contact / intervention execution |
+| care escalation draft | public placeholder is informational only; hidden local draft shell exists, backend submission and clinical/legal review still required | no | care escalation draft |
 | sunlight/star/silent lifecycle transition controls | hidden local QA controls only; lifecycle policy is not public | no | sunlight/star/silent lifecycle transition controls |
 | digital inheritance lifecycle | hidden boundary only; inheritance trigger and legal consent model are not public | no | digital inheritance lifecycle |
 

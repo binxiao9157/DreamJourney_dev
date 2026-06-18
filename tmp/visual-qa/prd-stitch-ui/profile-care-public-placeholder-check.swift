@@ -49,7 +49,13 @@ assertContains(profile, "ProfileCareSnapshot.emptyFallback()", "Profile should s
 assertContains(profile, "ProfileCareSnapshot.failedFallback()", "Profile should show an explicit failed state")
 assertContains(profile, "ProfileCareSnapshot.staleFallback()", "Profile should show an explicit stale state")
 assertContains(careDashboard, "makeDataStateCard", "Care dashboard should expose state-specific public copy")
+assertContains(careDashboard, "关怀升级准备中", "Care dashboard should expose MVP placeholder")
+assertContains(careDashboard, "不会拨打电话或发送消息", "Placeholder must not imply real intervention")
 assertNotContains(careDashboard, "立即通话", "Public care state placeholder must not expose direct call")
+assertNotContains(careDashboard, "tel://", "Public care placeholder must not dial")
+assertNotContains(careDashboard, "sms://", "Public care placeholder must not send messages")
+assertNotContains(careDashboard, "DreamJourneyBackendClient", "Public care placeholder must not submit backend escalation")
+assertNotContains(careDashboard, "submitCareEscalation", "Public care placeholder must not submit escalation")
 
 assertContains(releaseRegression, "profile-care-public-placeholder-check.swift", "Release regression should run care public placeholder guard")
 assertContains(releaseQA, "profile-care-public-placeholder-check.swift", "Release QA package should include care public placeholder guard")

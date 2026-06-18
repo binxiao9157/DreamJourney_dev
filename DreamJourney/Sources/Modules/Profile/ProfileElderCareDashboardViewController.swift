@@ -82,6 +82,7 @@ final class ProfileElderCareDashboardViewController: UIViewController {
         }
         contentStack.addArrangedSubview(makeMetricGrid())
         contentStack.addArrangedSubview(makeRiskCard())
+        contentStack.addArrangedSubview(makeEscalationPlaceholderCard())
         contentStack.addArrangedSubview(makePrivacyCard())
     }
 
@@ -310,6 +311,39 @@ final class ProfileElderCareDashboardViewController: UIViewController {
         let stack = UIStackView(arrangedSubviews: [titleLabel, bodyLabel, noteLabel])
         stack.axis = .vertical
         stack.spacing = 10
+
+        card.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16),
+        ])
+
+        return card
+    }
+
+    private func makeEscalationPlaceholderCard() -> UIView {
+        let card = makeCard()
+        card.accessibilityIdentifier = "elderCareEscalationPlaceholderCard"
+        card.backgroundColor = DJDesignTokens.Color.surfaceLow
+
+        let titleLabel = makeLabel(
+            text: "关怀升级准备中",
+            font: DJDesignTokens.Font.title(17),
+            color: DJDesignTokens.Color.textPrimary
+        )
+        let bodyLabel = makeLabel(
+            text: "当前仅提供聚合信号与趋势解释，不会拨打电话或发送消息。",
+            font: DJDesignTokens.Font.body(14),
+            color: DJDesignTokens.Color.textSecondary
+        )
+        bodyLabel.lineSpacing = 4
+
+        let stack = UIStackView(arrangedSubviews: [titleLabel, bodyLabel])
+        stack.axis = .vertical
+        stack.spacing = 8
 
         card.addSubview(stack)
         stack.translatesAutoresizingMaskIntoConstraints = false
