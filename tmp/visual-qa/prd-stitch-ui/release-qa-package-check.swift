@@ -93,6 +93,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-17-group5-map-compatibility-review.md",
     "docs/superpowers/status/2026-06-17-group6-release-qa-package-review.md",
     "docs/superpowers/status/2026-06-17-submit-slice-inventory.md",
+    "docs/superpowers/status/2026-06-18-prd-coverage-matrix.md",
 ]
 
 for doc in requiredDocs {
@@ -197,6 +198,7 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/group5-map-compatibility-check.swift",
     "tmp/visual-qa/prd-stitch-ui/profile-scroll-inset-check.swift",
     "tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/prd-coverage-matrix-check.swift",
     "tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift",
     "tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift",
 ]
