@@ -4,6 +4,9 @@ private enum ArchiveLayout {
     static let contentTopMargin: CGFloat = 8
     static let contentBottomMargin: CGFloat = 32
     static let contentStackSpacing: CGFloat = 18
+    static let headerStackSpacing: CGFloat = 6
+    static let headerTitleFontSize: CGFloat = 32
+    static let headerSubtitleFontSize: CGFloat = 14
     static let afterHeaderSpacing: CGFloat = 24
     static let afterFeatureGridSpacing: CGFloat = 8
     static let afterRemoteCaptionSpacing: CGFloat = 24
@@ -300,17 +303,17 @@ final class MemoryArchiveViewController: UIViewController {
     private func makeHeader() -> UIView {
         let stack = UIStackView()
         stack.axis = .vertical
-        stack.spacing = 8
+        stack.spacing = ArchiveLayout.headerStackSpacing
 
         let titleLabel = UILabel()
         titleLabel.text = "记忆档案馆"
-        titleLabel.font = DJDesignTokens.Font.display(40)
+        titleLabel.font = DJDesignTokens.Font.display(ArchiveLayout.headerTitleFontSize)
         titleLabel.textColor = DJDesignTokens.Color.textPrimary
         titleLabel.numberOfLines = 0
 
         let subtitleLabel = UILabel()
         subtitleLabel.text = "在此处整理、回顾与珍藏那些不愿遗忘的片段。"
-        subtitleLabel.font = DJDesignTokens.Font.body(16)
+        subtitleLabel.font = DJDesignTokens.Font.body(ArchiveLayout.headerSubtitleFontSize)
         subtitleLabel.textColor = DJDesignTokens.Color.textSecondary
         subtitleLabel.numberOfLines = 0
 

@@ -338,7 +338,7 @@ git commit -m "test: require backend in release handoff mode"
 - Test:
   - `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/tmp/visual-qa/prd-stitch-ui/run-release-regression.sh`
 
-- [ ] **Step 1: Capture current public screenshots**
+- [x] **Step 1: Capture current public screenshots**
 
 Run the existing release state or final visual QA smoke, saving screenshots under:
 
@@ -354,7 +354,7 @@ Expected screenshots:
 03-profile-default.png
 ```
 
-- [ ] **Step 2: Compare against Stitch authority**
+- [x] **Step 2: Compare against Stitch authority**
 
 Use current Stitch canvas + downloaded `htmlCode`, not MCP screenshot alone. Record differences in:
 
@@ -370,7 +370,7 @@ Required headings:
 ## Hidden Features Not Exposed
 ```
 
-- [ ] **Step 3: Fix one visual issue only**
+- [x] **Step 3: Fix one visual issue only**
 
 Choose the highest-impact low-risk issue, such as:
 
@@ -381,7 +381,7 @@ Choose the highest-impact low-risk issue, such as:
 
 Do not rename tabs, expose hidden buttons, or replace Echo variants in this task.
 
-- [ ] **Step 4: Run simulator smoke**
+- [x] **Step 4: Run simulator smoke**
 
 Run:
 
@@ -391,7 +391,7 @@ RUN_ID=20260618-public-mvp-polish tmp/visual-qa/prd-stitch-ui/run-release-regres
 
 Expected: regression passes or fails with a concrete visual/functional reason to fix.
 
-- [ ] **Step 5: Build**
+- [x] **Step 5: Build**
 
 Run:
 
@@ -401,7 +401,7 @@ xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -configurati
 
 Expected: `** BUILD SUCCEEDED **`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Run:
 
@@ -566,7 +566,7 @@ git commit -m "docs: record true-device acceptance"
 
 ## Recommended Next Task
 
-Tasks 2 and 3 are complete. Start with **Task 4: Public MVP UI Polish Pass** if no physical device/signing is ready.
+Tasks 2, 3, and 4 are complete. Start with **Task 5: Hidden Candidate Release Matrix** if no physical device/signing is ready.
 
 Start with **Task 1: True-Device Readiness Checklist** if you want to prepare for device acceptance before more UI work.
 
