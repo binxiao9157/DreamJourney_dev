@@ -36,8 +36,8 @@ Head at creation: `790f029 docs: add prd ui continuation plan`
 ## External Acceptance Boundary
 
 - 本地 FastAPI 后端 smoke：accepted
-- release-like FastAPI/Postgres 后端验收：not accepted
-- 线上/公网后端验收：not accepted
+- release-like FastAPI/Postgres 后端验收：accepted
+- 线上/公网后端验收：accepted for simulator release-like scope
 - 真机验收：not accepted
 - 语音 SDK 生产质量验收：not accepted
 - App Store / TestFlight 签名链路验收：not accepted
@@ -74,8 +74,8 @@ Hidden or blocked by default:
 
 ## Blockers
 
-- 需要 Docker/Postgres runtime or deployed FastAPI/Postgres URL/token before release-like backend acceptance can run.
-- 需要确认线上/公网后端 URL/token before remote backend acceptance can run.
+- release-like FastAPI/Postgres and simulator remote-backend acceptance passed with `20260618-deployed-postgres-acceptance-after-deploy`.
+- 需要部署后端最新代码并 rerun `run-release-like-backend-acceptance.sh` after future backend changes.
 - 需要真机、签名和设备操作 before true-device acceptance can run.
 - 需要产品/合规确认 before account deletion, doctor contact, intervention, and inheritance flows can execute.
 - 需要明确发布范围 before audio, time-letter, video, and public family management can move from hidden candidate to public feature.
@@ -88,11 +88,11 @@ The current app is a simulator-validated MVP candidate for the core loop:
 记忆档案 -> 回响 -> 心境追踪 / 关怀
 ```
 
-It is not yet a fully accepted real-device or real-backend release candidate.
+It is not yet a fully accepted real-device release candidate.
 
 The safest next implementation work is still:
 
 1. refresh final Stitch visual QA,
 2. add one-command release regression,
 3. harden hidden candidates one feature at a time,
-4. run real backend and true-device acceptance when external conditions exist.
+4. run true-device acceptance when signing and device conditions exist.

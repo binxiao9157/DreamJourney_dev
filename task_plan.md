@@ -5,8 +5,8 @@
 - **Goal:** 按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态
 - **Mode:** Execute
 - **Phase:** Implementation
-- **Task:** continue non-device PRD function development; latest slice is deployed Postgres backend acceptance retry
-- **Blockers:** deployed backend needs the current Postgres rollback-on-exception fix deployed/restarted; true-device signing/operation still required for final acceptance
+- **Task:** continue non-device PRD function development; latest slice is deployed Postgres backend acceptance
+- **Blockers:** true-device signing/operation still required for final acceptance; product/design decision still needed for newest Stitch Echo variants and `长辈关怀`/`我的` IA
 
 ## Key Decisions
 
@@ -18,7 +18,7 @@
 - Task 4 closed: hidden family/persona switcher, profile safety shells, and care visibility gates are implemented and guarded.
 - Task 5 closed: release QA handoff is documented and simulator/static QA passed.
 - Post-review continuation: `长辈关怀` aggregate child dashboard, hidden `阳光 / 星辰 / 静默` mode management, Echo/Profile lifecycle effects, hidden profile care escalation draft, care escalation draft-only backend boundary smoke, archive media release readiness contract, archive media entries smoke harness, family/persona release readiness smoke, App-side backend family acceptance hardening, PRD coverage matrix, phase 0 backend alignment with the existing `DreamJourneyBackend`, release-like backend acceptance harness, one-command release regression, and final Stitch visual refresh are complete without true-device execution.
-- Current target after this slice: deploy/restart the public `DreamJourneyBackend` with the current rollback-on-exception fix, then rerun release-like FastAPI/Postgres acceptance; after write paths pass, revisit the newest Stitch Echo variants plus `长辈关怀`/`我的` information architecture decision.
+- Current target after this slice: release-like FastAPI/Postgres backend acceptance passed with run `20260618-deployed-postgres-acceptance-after-deploy`; next target is either true-device acceptance prep or product/design decision for the newest Stitch Echo variants plus `长辈关怀`/`我的` information architecture.
 
 ## Scope
 

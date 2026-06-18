@@ -8,9 +8,9 @@ Backend branch: `main`
 
 ## Status
 
-Status: not accepted
+Status: accepted
 
-The acceptance harness is defined, and the deployed FastAPI/Postgres environment has now been located through the private backend access document. The deployed FastAPI/Postgres health check is reachable and reports `store=postgres`, but the release-like write path is not accepted because deployed JSONB write endpoints currently return HTTP 500.
+The deployed FastAPI/Postgres environment is accepted for the simulator release-like backend path after deploying and restarting the backend with the Postgres rollback-on-exception fix.
 
 Confirmed local environment facts:
 
@@ -23,11 +23,12 @@ Confirmed local environment facts:
 
 Confirmed deployed environment facts:
 
+- deployed FastAPI/Postgres health check is reachable.
 - `/health`: reachable at `https://dreamjourney-api.liftora.cn/health`.
 - `/health` store: `postgres`.
-- `POST /archive/items`: HTTP 500.
-- `POST /auth/login`: HTTP 500.
-- `POST /kb/sync`: HTTP 500.
+- `POST /archive/items`: accepted in release-like persistence and iOS smoke.
+- `POST /auth/login`: accepted in backend token/integration contract.
+- `POST /kb/sync`: accepted in release-like persistence and iOS smoke.
 - Backend token document found locally with token configured; token value is intentionally omitted from reports.
 
 Root cause narrowed during the deployed retry:
@@ -35,8 +36,40 @@ Root cause narrowed during the deployed retry:
 - An earlier deployed run reached `postgres-persistence-verify.json` with `completed=true` for marker `20260618-deployed-postgres-acceptance`.
 - A later repeated run reused the same marker and triggered a duplicate write path.
 - After that failure, deployed JSONB write endpoints returned HTTP 500 for unrelated fresh requests.
-- Local `PostgresStore` did not rollback failed DB operations before this pass, which can leave a long-lived psycopg connection in an aborted transaction state.
-- Local backend now has a regression test and fix for rollback-on-exception; the deployed service still needs that backend update and a process restart before release-like acceptance can pass.
+- Local `PostgresStore` did not rollback failed DB operations before this pass, which can leave a long-lived psycopg connection in an aborted transaction state, effectively an aborted DB connection for later requests.
+- Local backend now has a regression test and fix for rollback-on-exception.
+- After deploying/restarting that backend update, the release-like backend acceptance run passed.
+
+## Accepted Run
+
+Run ID:
+
+```text
+20260618-deployed-postgres-acceptance-after-deploy
+```
+
+Evidence directory:
+
+```text
+tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-deployed-postgres-acceptance-after-deploy/
+```
+
+Result highlights:
+
+- `postgres-persistence-seed.json`: `completed=true`, `store=postgres`, `mode=seed`.
+- `postgres-persistence-verify.json`: `completed=true`, `store=postgres`, `mode=verify`.
+- `backend-env-smoke-result.json`: `completed=true`.
+- App-side backend smoke confirmed:
+  - `archiveRefreshSucceeded=true`
+  - `containsBackendContractPhoto=true`
+  - `careMoodStatus=需关注`
+  - `familyRefreshSucceeded=true`
+  - `containsBackendFamilyMember=true`
+- Screenshot:
+
+```text
+tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-deployed-postgres-acceptance-after-deploy/ios-backend-env-smoke/20260618-deployed-postgres-acceptance-after-deploy/01-backend-env-profile.png
+```
 
 ## Target
 
@@ -104,15 +137,15 @@ Local backend verification is run with `BACKEND_API_TOKEN` cleared so deployed c
 ## Acceptance Boundary
 
 - 本地 FastAPI memory-store smoke：accepted
-- release-like FastAPI/Postgres 后端验收：not accepted; deployed write endpoints return HTTP 500 until backend rollback fix is deployed/restarted
-- 线上/公网后端验收：not accepted; health passes, JSONB write path currently fails
+- release-like FastAPI/Postgres 后端验收：accepted
+- 线上/公网后端验收：accepted for simulator release-like scope
 - 真机验收：not accepted
 
-Do not mark the PRD backend target complete until `run-release-like-backend-acceptance.sh` passes against a Postgres-backed FastAPI environment.
+Do not mark the PRD fully complete until true-device acceptance also passes. The backend release-like simulator gate is accepted.
 
 ## Next Step
 
-Deploy or restart the public backend with the current `DreamJourneyBackend` code, including the Postgres rollback-on-exception fix, then rerun:
+For backend regressions, rerun:
 
 ```bash
 BACKEND_BASE_URL=https://dreamjourney-api.liftora.cn \
@@ -120,10 +153,4 @@ BACKEND_API_TOKEN='<server token from private access doc>' \
 tmp/visual-qa/prd-stitch-ui/run-release-like-backend-acceptance.sh
 ```
 
-If the latest backend is already deployed, inspect the server logs for the HTTP 500 raised by:
-
-- `POST /auth/login`
-- `POST /kb/sync`
-- `POST /archive/items`
-
-The local current backend code contains Postgres `Jsonb` parameter adaptation, rolls back failed DB operations, and passes the backend verification suite. The next check is whether the deployed service is running this backend revision and has been restarted to clear any aborted DB connection.
+The local current backend code contains Postgres `Jsonb` parameter adaptation, rolls back failed DB operations, and passes the backend verification suite.

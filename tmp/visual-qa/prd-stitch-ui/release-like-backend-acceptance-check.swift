@@ -77,7 +77,7 @@ for phrase in [
 }
 
 for phrase in [
-    "Status: not accepted",
+    "Status: accepted",
     "Docker/Postgres runtime is not available on this machine",
     "deployed FastAPI/Postgres health check is reachable",
     "POST /archive/items",
@@ -86,6 +86,9 @@ for phrase in [
     "HTTP 500",
     "rollback-on-exception",
     "aborted DB connection",
+    "20260618-deployed-postgres-acceptance-after-deploy",
+    "release-like FastAPI/Postgres 后端验收：accepted",
+    "线上/公网后端验收：accepted for simulator release-like scope",
     "run-release-like-backend-acceptance.sh",
     "backend-postgres-persistence-check.py",
     "BACKEND_BASE_URL",
