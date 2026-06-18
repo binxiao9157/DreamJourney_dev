@@ -25,6 +25,26 @@ append_report() {
   printf '%s\n' "$*" >> "$REPORT_FILE"
 }
 
+load_local_xcconfig() {
+  local file="$1"
+  [[ -f "$file" ]] || return 0
+
+  while IFS= read -r line; do
+    line="${line%%//*}"
+    [[ "$line" == *"="* ]] || continue
+
+    local name="${line%%=*}"
+    local value="${line#*=}"
+    name="$(printf '%s' "$name" | xargs)"
+    value="$(printf '%s' "$value" | xargs)"
+    [[ -n "$name" && -n "$value" ]] || continue
+
+    if [[ -z "${!name:-}" ]]; then
+      export "$name=$value"
+    fi
+  done < "$file"
+}
+
 fail() {
   append_report
   append_report "Status: blocked"
@@ -49,6 +69,9 @@ require_env() {
 
 write_report_header
 cd "$ROOT_DIR"
+
+load_local_xcconfig "DreamJourney/Config/Backend.local.xcconfig"
+load_local_xcconfig "DreamJourney/Config/VoiceSDK.local.xcconfig"
 
 append_report "## Required Environment"
 require_env "DREAMJOURNEY_BACKEND_BASE_URL"

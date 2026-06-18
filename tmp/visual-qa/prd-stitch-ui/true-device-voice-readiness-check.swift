@@ -102,6 +102,10 @@ for required in [
 }
 
 for required in [
+    "load_local_xcconfig",
+    "DreamJourney/Config/Backend.local.xcconfig",
+    "DreamJourney/Config/VoiceSDK.local.xcconfig",
+    "xcodebuild -showdestinations",
     "xcrun xctrace list devices",
     "No online physical iPhone/iPad detected",
     "VOLCENGINE_APP_ID",

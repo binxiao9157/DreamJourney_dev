@@ -46,7 +46,7 @@ Rules:
 
 - `DreamJourney/Config/Backend.example.xcconfig` 只保留示例值和占位 token。
 - `DreamJourney/Config/Backend.local.xcconfig` 已在 `.gitignore` 中忽略。
-- `DREAMJOURNEY_BACKEND_BASE_URL` 和 `DREAMJOURNEY_BACKEND_API_TOKEN` 也可以通过 smoke 脚本环境变量传入。
+- `run-true-device-voice-preflight.sh` 会自动读取 `DreamJourney/Config/Backend.local.xcconfig`；`DREAMJOURNEY_BACKEND_BASE_URL` 和 `DREAMJOURNEY_BACKEND_API_TOKEN` 也可以通过 smoke 脚本环境变量覆盖。
 - `DREAMJOURNEY_BACKEND_API_TOKEN` 为空时，`run-backend-env-smoke.sh` 必须失败，避免误用无鉴权环境。
 
 生产语音 SDK 配置同样只能通过本地配置、环境变量或 xcodebuild build setting 注入，不要把真实 key 提交。
@@ -64,6 +64,7 @@ Rules:
 
 - `DreamJourney/Config/VoiceSDK.example.xcconfig` 只保留示例占位值。
 - `DreamJourney/Config/VoiceSDK.local.xcconfig` 已在 `.gitignore` 中忽略。
+- `run-true-device-voice-preflight.sh` 会自动读取 `DreamJourney/Config/VoiceSDK.local.xcconfig`；`VOLCENGINE_APP_ID`、`VOLCENGINE_APP_KEY`、`VOLCENGINE_APP_TOKEN` 也可以通过环境变量覆盖。
 - `VolcEngineAppID`、`VolcEngineAppKey` 和 `VolcEngineAppToken` 在 `Info.plist` 中通过 `$(VOLCENGINE_APP_ID)`、`$(VOLCENGINE_APP_KEY)`、`$(VOLCENGINE_APP_TOKEN)` 解析。
 - `DialogEngineManager` 会在生产语音 SDK 配置缺失或仍为占位值时提前失败，不继续启动 `SpeechEngineToB`。
 
@@ -133,6 +134,7 @@ Expected preflight behavior:
 Current 2026-06-18 evidence:
 
 - Device detection smoke: `tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260618-device-detection-smoke/report.md`
+- Local config preflight: `tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260618-local-config-preflight/report.md`
 - Device source: `xcodebuild -showdestinations`
 - Device destination: `id=00008150-001402D60A04401C`
 - iPhoneOS no-sign compile: passed, log at `tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260618-ios-device-compile-nosign/ios-device-nosign-build.log`
