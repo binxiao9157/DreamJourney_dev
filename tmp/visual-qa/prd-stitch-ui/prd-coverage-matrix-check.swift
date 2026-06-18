@@ -94,9 +94,11 @@ for phrase in [
 }
 
 assertContains(coverage, "本地 FastAPI 后端 smoke：accepted", "coverage matrix should mark local FastAPI backend smoke as accepted")
+assertContains(coverage, "release-like FastAPI/Postgres 后端验收：not accepted", "coverage matrix should mark release-like Postgres backend as not accepted")
 assertContains(coverage, "线上/公网后端验收：not accepted", "coverage matrix should mark remote backend as not accepted")
 assertContains(coverage, "真机验收：not accepted", "coverage matrix should mark true-device as not accepted")
 assertContains(coverage, "No hidden PRD feature is public by default", "coverage matrix should preserve release gating policy")
+assertContains(coverage, "需要 Docker/Postgres runtime or deployed FastAPI/Postgres URL/token", "coverage matrix should call out release-like backend blocker")
 assertContains(coverage, "需要确认线上/公网后端 URL/token", "coverage matrix should call out remote backend blocker")
 assertContains(coverage, "需要真机、签名和设备操作", "coverage matrix should call out device blocker")
 

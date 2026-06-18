@@ -95,6 +95,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-17-submit-slice-inventory.md",
     "docs/superpowers/status/2026-06-18-prd-coverage-matrix.md",
     "docs/superpowers/status/2026-06-18-phase0-backend-alignment.md",
+    "docs/superpowers/status/2026-06-18-release-like-backend-acceptance.md",
 ]
 
 for doc in requiredDocs {
@@ -171,6 +172,7 @@ for screenshot in [
 let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh",
     "tmp/visual-qa/prd-stitch-ui/run-backend-env-smoke.sh",
+    "tmp/visual-qa/prd-stitch-ui/run-release-like-backend-acceptance.sh",
     "tmp/visual-qa/prd-stitch-ui/final-visual-qa-package-check.swift",
     "tmp/visual-qa/prd-stitch-ui/group1-scaffolding-check.swift",
     "tmp/visual-qa/prd-stitch-ui/group1-source-review-check.swift",
@@ -190,6 +192,8 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/backend-build-config-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-family-acceptance-check.swift",
     "tmp/visual-qa/prd-stitch-ui/phase0-backend-alignment-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/backend-postgres-persistence-check.py",
+    "tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-fallback-ui-check.swift",
     "tmp/visual-qa/prd-stitch-ui/group4-profile-care-check.swift",
     "tmp/visual-qa/prd-stitch-ui/profile-care-snapshot-check.swift",

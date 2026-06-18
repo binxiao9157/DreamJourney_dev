@@ -36,6 +36,7 @@ Head at creation: `790f029 docs: add prd ui continuation plan`
 ## External Acceptance Boundary
 
 - 本地 FastAPI 后端 smoke：accepted
+- release-like FastAPI/Postgres 后端验收：not accepted
 - 线上/公网后端验收：not accepted
 - 真机验收：not accepted
 - 语音 SDK 生产质量验收：not accepted
@@ -73,6 +74,7 @@ Hidden or blocked by default:
 
 ## Blockers
 
+- 需要 Docker/Postgres runtime or deployed FastAPI/Postgres URL/token before release-like backend acceptance can run.
 - 需要确认线上/公网后端 URL/token before remote backend acceptance can run.
 - 需要真机、签名和设备操作 before true-device acceptance can run.
 - 需要产品/合规确认 before account deletion, doctor contact, intervention, and inheritance flows can execute.

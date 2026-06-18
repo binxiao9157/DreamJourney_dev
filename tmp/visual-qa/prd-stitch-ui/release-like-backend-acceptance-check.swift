@@ -1,0 +1,102 @@
+import Foundation
+
+let root = URL(fileURLWithPath: CommandLine.arguments.dropFirst().first ?? FileManager.default.currentDirectoryPath)
+let fileManager = FileManager.default
+
+func read(_ relativePath: String) -> String {
+    let url = root.appendingPathComponent(relativePath)
+    guard let content = try? String(contentsOf: url, encoding: .utf8) else {
+        fatalError("Unable to read \(url.path)")
+    }
+    return content
+}
+
+func assertFileExists(_ relativePath: String, _ message: String) {
+    let url = root.appendingPathComponent(relativePath)
+    guard fileManager.fileExists(atPath: url.path) else {
+        fatalError("\(message): missing \(relativePath)")
+    }
+}
+
+func assertContains(_ haystack: String, _ needle: String, _ message: String) {
+    guard haystack.contains(needle) else {
+        fatalError("\(message): missing \(needle)")
+    }
+}
+
+assertFileExists(
+    "tmp/visual-qa/prd-stitch-ui/run-release-like-backend-acceptance.sh",
+    "release-like backend acceptance runner"
+)
+assertFileExists(
+    "tmp/visual-qa/prd-stitch-ui/backend-postgres-persistence-check.py",
+    "Postgres persistence contract check"
+)
+assertFileExists(
+    "docs/superpowers/status/2026-06-18-release-like-backend-acceptance.md",
+    "release-like backend acceptance status doc"
+)
+
+let runner = read("tmp/visual-qa/prd-stitch-ui/run-release-like-backend-acceptance.sh")
+let persistence = read("tmp/visual-qa/prd-stitch-ui/backend-postgres-persistence-check.py")
+let status = read("docs/superpowers/status/2026-06-18-release-like-backend-acceptance.md")
+let releasePackage = read("tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift")
+
+for phrase in [
+    "BACKEND_BASE_URL",
+    "BACKEND_API_TOKEN",
+    "DreamJourneyBackend",
+    "docker compose up -d --build",
+    "store\") != \"postgres\"",
+    "backend-postgres-persistence-check.py",
+    "run-backend-env-smoke.sh",
+    "RELEASE_LIKE_RESTART_COMMAND",
+    "ios-backend-env-smoke",
+] {
+    assertContains(runner, phrase, "runner should include \(phrase)")
+}
+
+for phrase in [
+    "release-like backend must use Postgres",
+    "/archive/items",
+    "/kb/sync",
+    "/family/invite",
+    "/care/snapshots",
+    "metadataOnly",
+    "contentRedacted",
+    "localPath",
+    "seed",
+    "verify",
+] {
+    assertContains(persistence, phrase, "persistence check should include \(phrase)")
+}
+
+for phrase in [
+    "Status: not accepted",
+    "Docker/Postgres runtime is not available on this machine",
+    "run-release-like-backend-acceptance.sh",
+    "backend-postgres-persistence-check.py",
+    "BACKEND_BASE_URL",
+    "BACKEND_API_TOKEN",
+    "真机验收：not accepted",
+] {
+    assertContains(status, phrase, "status doc should include \(phrase)")
+}
+
+assertContains(
+    releasePackage,
+    "docs/superpowers/status/2026-06-18-release-like-backend-acceptance.md",
+    "release QA package should include release-like backend status doc"
+)
+assertContains(
+    releasePackage,
+    "tmp/visual-qa/prd-stitch-ui/run-release-like-backend-acceptance.sh",
+    "release QA package should include release-like backend runner"
+)
+assertContains(
+    releasePackage,
+    "tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance-check.swift",
+    "release QA package should include release-like backend guard"
+)
+
+print("Release-like backend acceptance checks passed")
