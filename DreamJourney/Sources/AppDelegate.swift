@@ -367,6 +367,8 @@ private extension AppDelegate {
                 writeBackendEnvSmokeResult(
                     archiveRefreshSucceeded: false,
                     careSnapshot: nil,
+                    familyRefreshSucceeded: false,
+                    backendFamilyMembers: [],
                     failureReason: "missingRootTab"
                 )
                 print("[UI_QA] BackendEnvSmoke failed reason=missingRootTab")
@@ -401,22 +403,42 @@ private extension AppDelegate {
                     careSnapshot = nil
                 }
 
-                DispatchQueue.main.async {
-                    if let tabBarController,
-                       let viewControllers = tabBarController.viewControllers,
-                       viewControllers.count > 2 {
-                        tabBarController.selectedIndex = 2
+                FamilyRepository.shared.refreshFromBackend(userId: userId) { familyResult in
+                    let familyRefreshSucceeded: Bool
+                    let backendFamilyMembers: [FamilyMember]
+                    let resolvedFailureReason: String?
+                    switch familyResult {
+                    case .success(let members):
+                        familyRefreshSucceeded = true
+                        backendFamilyMembers = members
+                        resolvedFailureReason = failureReason
+                    case .failure(let error):
+                        familyRefreshSucceeded = false
+                        backendFamilyMembers = []
+                        resolvedFailureReason = failureReason ?? error.localizedDescription
                     }
-                    self?.writeBackendEnvSmokeResult(
-                        archiveRefreshSucceeded: archiveRefreshSucceeded,
-                        careSnapshot: careSnapshot,
-                        failureReason: failureReason
-                    )
-                    print(
-                        "[UI_QA] BackendEnvSmoke completed " +
-                        "archiveRefreshSucceeded=\(archiveRefreshSucceeded) " +
-                        "careMoodStatus=\(careSnapshot?.moodStatus ?? "missing")"
-                    )
+
+                    DispatchQueue.main.async {
+                        if let tabBarController,
+                           let viewControllers = tabBarController.viewControllers,
+                           viewControllers.count > 2 {
+                            tabBarController.selectedIndex = 2
+                        }
+                        self?.writeBackendEnvSmokeResult(
+                            archiveRefreshSucceeded: archiveRefreshSucceeded,
+                            careSnapshot: careSnapshot,
+                            familyRefreshSucceeded: familyRefreshSucceeded,
+                            backendFamilyMembers: backendFamilyMembers,
+                            failureReason: resolvedFailureReason
+                        )
+                        print(
+                            "[UI_QA] BackendEnvSmoke completed " +
+                            "archiveRefreshSucceeded=\(archiveRefreshSucceeded) " +
+                            "careMoodStatus=\(careSnapshot?.moodStatus ?? "missing") " +
+                            "familyRefreshSucceeded=\(familyRefreshSucceeded) " +
+                            "backendFamilyMemberCount=\(backendFamilyMembers.count)"
+                        )
+                    }
                 }
             }
         }
@@ -520,11 +542,16 @@ private extension AppDelegate {
     func writeBackendEnvSmokeResult(
         archiveRefreshSucceeded: Bool,
         careSnapshot: ProfileCareSnapshot?,
+        familyRefreshSucceeded: Bool,
+        backendFamilyMembers: [FamilyMember],
         failureReason: String?
     ) {
         let archiveItems = MemoryArchiveRepository.shared.allItems()
         let archiveSnapshot = MemoryArchiveRepository.shared.contextSnapshot()
         let archiveTitles = archiveItems.map(\.title)
+        let familyMembers = FamilyRepository.shared.getAll()
+        let familyMemberNames = familyMembers.map(\.name)
+        let containsBackendFamilyMember = familyMemberNames.contains("Daughter")
         let containsBackendContractPhoto = archiveItems.contains { item in
             item.title == "Backend Contract Photo"
                 || item.tags.contains("backend-contract")
@@ -535,6 +562,8 @@ private extension AppDelegate {
             && containsBackendContractPhoto
             && careSnapshot != nil
             && careSnapshot?.moodStatus == "需关注"
+            && familyRefreshSucceeded
+            && containsBackendFamilyMember
 
         var result: [String: Any] = [
             "completed": completed,
@@ -546,6 +575,11 @@ private extension AppDelegate {
             "careMoodStatus": careSnapshot?.moodStatus ?? "missing",
             "careSyncCaption": careSnapshot?.syncCaption ?? "missing",
             "containsCareSuggestion": containsCareSuggestion,
+            "familyRefreshSucceeded": familyRefreshSucceeded,
+            "backendFamilyMemberCount": backendFamilyMembers.count,
+            "familyMemberCount": familyMembers.count,
+            "containsBackendFamilyMember": containsBackendFamilyMember,
+            "familyMemberNames": familyMemberNames,
         ]
         if let failureReason {
             result["failureReason"] = failureReason

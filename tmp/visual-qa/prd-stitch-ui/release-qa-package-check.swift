@@ -186,6 +186,7 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/backend-auth-token-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-auth-token-contract-check.py",
     "tmp/visual-qa/prd-stitch-ui/backend-build-config-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/backend-family-acceptance-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-fallback-ui-check.swift",
     "tmp/visual-qa/prd-stitch-ui/group4-profile-care-check.swift",
     "tmp/visual-qa/prd-stitch-ui/profile-care-snapshot-check.swift",

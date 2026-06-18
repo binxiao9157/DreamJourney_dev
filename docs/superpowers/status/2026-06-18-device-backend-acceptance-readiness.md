@@ -64,12 +64,16 @@ Expected behavior:
   - `archiveRefreshSucceeded = true`
   - `containsBackendContractPhoto = true`
   - `careMoodStatus = 需关注`
+  - `familyRefreshSucceeded = true`
+  - `containsBackendFamilyMember = true`
+  - `backendFamilyMemberCount >= 1`
 
 If this fails:
 
 - 401/403 优先检查 `DREAMJOURNEY_BACKEND_API_TOKEN`。
 - 连接错误优先检查 `DREAMJOURNEY_BACKEND_BASE_URL`、证书、网络和服务进程。
 - 字段缺失优先检查后端契约是否与当前 `DreamJourneyBackendClient` 保持一致。
+- family 断言失败优先检查 `/family/invite`、`/family/members/{userId}/{memberId}/accept` 和 `/family/members/{userId}` 是否返回 active/accepted 成员。
 
 ## True Device Acceptance
 
@@ -131,6 +135,7 @@ cd /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/device-backend-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/backend-build-config-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/backend-env-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/backend-family-acceptance-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 ```

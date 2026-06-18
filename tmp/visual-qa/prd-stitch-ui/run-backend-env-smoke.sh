@@ -158,6 +158,9 @@ checks = {
     "archiveRefreshSucceeded": result.get("archiveRefreshSucceeded") is True,
     "containsBackendContractPhoto": result.get("containsBackendContractPhoto") is True,
     "careMoodStatus": result.get("careMoodStatus") == "需关注",
+    "familyRefreshSucceeded": result.get("familyRefreshSucceeded") is True,
+    "containsBackendFamilyMember": result.get("containsBackendFamilyMember") is True,
+    "backendFamilyMemberCount": result.get("backendFamilyMemberCount", 0) >= 1,
 }
 failed = [name for name, passed in checks.items() if not passed]
 if failed:
@@ -260,8 +263,10 @@ Bundle ID: \`$BUNDLE_ID\`
 - Runs \`backend-integration-contract-check.py\` for \`$USER_ID\`.
 - Builds the iOS app with \`DREAMJOURNEY_BACKEND_BASE_URL="\$BACKEND_BASE_URL"\` and \`DREAMJOURNEY_BACKEND_API_TOKEN="\$BACKEND_API_TOKEN"\`.
 - Launches \`DJSeedEchoArchiveContext\`, \`DJEnableArchiveRemoteFetch\`, and \`DJRunBackendEnvSmoke\`.
-- Verifies app-side archive/profile backend results through \`backend-env-smoke-result.json\`.
+- Verifies app-side archive/profile/family backend results through \`backend-env-smoke-result.json\`.
 - Captures merged archive store summary in \`app-archive-store-summary.json\`.
+
+Family member count and seeded backend family member evidence are validated in \`backend-env-smoke-result.json\`.
 
 Expected UI identifiers covered by this route:
 

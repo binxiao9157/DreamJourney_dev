@@ -43,6 +43,9 @@ assertContains(script, "DJEnableArchiveRemoteFetch", "script should enable hidde
 assertContains(script, "DJRunBackendEnvSmoke", "script should launch the app-side backend smoke harness")
 assertContains(script, "archiveRemoteSyncStatus", "script should wait for archive remote sync status")
 assertContains(script, "profileCareSyncCaption", "script should verify profile care sync caption")
+assertContains(script, "\"familyRefreshSucceeded\"", "script should verify app-side family refresh")
+assertContains(script, "\"containsBackendFamilyMember\"", "script should verify seeded backend family member")
+assertContains(script, "\"backendFamilyMemberCount\"", "script should verify backend family count")
 assertContains(script, "app-archive-store-summary.json", "script should capture merged archive store summary")
 assertContains(script, "backend-env-smoke-result.json", "script should write machine-readable result")
 assertContains(script, "report.md", "script should write a human-readable report")
@@ -53,6 +56,12 @@ assertContains(appDelegate, "DJRunBackendEnvSmoke", "app should expose an app-si
 assertContains(appDelegate, "runBackendEnvSmoke()", "app should run backend archive/profile smoke from the UIQA harness")
 assertContains(appDelegate, "writeBackendEnvSmokeResult", "app should write a pollable backend smoke result")
 assertContains(appDelegate, "backend-env-smoke-result.json", "app should use a stable backend smoke result filename")
+assertContains(appDelegate, "FamilyRepository.shared.refreshFromBackend(userId: userId)", "app should exercise family backend from the UIQA harness")
+assertContains(appDelegate, "backendFamilyMemberCount", "app backend smoke result should include family count")
+assertContains(appDelegate, "containsBackendFamilyMember", "app backend smoke result should include seeded family member")
+
+let familyAcceptanceCheck = read("tmp/visual-qa/prd-stitch-ui/backend-family-acceptance-check.swift")
+assertContains(familyAcceptanceCheck, "familyRefreshSucceeded", "backend family acceptance guard should verify family refresh")
 
 let packageCheck = read("tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift")
 assertContains(

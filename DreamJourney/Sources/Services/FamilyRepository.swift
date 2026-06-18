@@ -46,6 +46,19 @@ final class FamilyRepository {
         persistModeOverrides()
     }
 
+    func refreshFromBackend(userId: String, completion: ((Result<[FamilyMember], Error>) -> Void)? = nil) {
+        DreamJourneyBackendClient.shared.listFamilyMembers(userId: userId) { [weak self] result in
+            switch result {
+            case .success(let object):
+                let remoteMembers = Self.familyMembers(from: object)
+                self?.mergeRemoteMembers(remoteMembers)
+                completion?(.success(remoteMembers))
+            case .failure(let error):
+                completion?(.failure(error))
+            }
+        }
+    }
+
     // MARK: - KBLite 同步：从知识库中提取人物 → 亲属圈
 
     /// 供外部按需调用的公开同步方法
@@ -139,6 +152,74 @@ final class FamilyRepository {
         var updated = member
         updated.digitalHumanMode = mode
         return updated
+    }
+
+    private func mergeRemoteMembers(_ remoteMembers: [FamilyMember]) {
+        for remoteMember in remoteMembers {
+            let updatedMember = applyModeOverride(to: remoteMember)
+            if let index = members.firstIndex(where: { $0.id == updatedMember.id }) {
+                members[index] = updatedMember
+            } else if let index = members.firstIndex(where: {
+                $0.name == updatedMember.name && $0.relation == updatedMember.relation
+            }) {
+                members[index] = updatedMember
+            } else {
+                members.append(updatedMember)
+            }
+        }
+    }
+
+    private static func familyMembers(from object: [String: Any]) -> [FamilyMember] {
+        let candidates: [[String: Any]]
+        if let members = object["members"] as? [[String: Any]] {
+            candidates = members
+        } else if let items = object["items"] as? [[String: Any]] {
+            candidates = items
+        } else if let data = object["data"] as? [String: Any] {
+            return familyMembers(from: data)
+        } else if let item = object["item"] as? [String: Any] {
+            return familyMembers(from: item)
+        } else {
+            candidates = []
+        }
+
+        return candidates.compactMap(familyMember(from:))
+    }
+
+    private static func familyMember(from object: [String: Any]) -> FamilyMember? {
+        if let accessStatus = stringValue(in: object, for: "accessStatus")?.lowercased(),
+           !["active", "accepted"].contains(accessStatus) {
+            return nil
+        }
+        guard let id = stringValue(in: object, for: "id"),
+              let name = stringValue(in: object, for: "name") else {
+            return nil
+        }
+
+        return FamilyMember(
+            id: id,
+            name: name,
+            relation: stringValue(in: object, for: "relation") ?? "亲属",
+            phone: stringValue(in: object, for: "phone"),
+            isOnline: stringValue(in: object, for: "accessStatus")?.lowercased() == "active",
+            lastUpdated: stringValue(in: object, for: "lastUpdated")
+                ?? stringValue(in: object, for: "updatedAt")
+                ?? stringValue(in: object, for: "acceptedAt")
+                ?? "后端已同步",
+            digitalHumanMode: .sunlight
+        )
+    }
+
+    private static func stringValue(in object: [String: Any], for key: String) -> String? {
+        guard let value = object[key] else { return nil }
+        if let string = value as? String {
+            let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        if let number = value as? NSNumber {
+            return number.stringValue
+        }
+        return nil
     }
 
     private func loadModeOverrides() {
