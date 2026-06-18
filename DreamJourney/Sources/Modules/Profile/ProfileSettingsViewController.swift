@@ -11,19 +11,23 @@ final class ProfileSettingsViewController: UIViewController {
         case invalid(String)
     }
 
-    private enum NicknameValidationResult {
-        case valid(String)
+    private enum AccountProfileValidationResult {
+        case valid(name: String, gender: String?, region: String?)
         case invalid(String)
     }
 
     private let scrollView = UIScrollView()
     private let contentStack = UIStackView()
-    private let nicknameField = UITextField()
+    private let nameField = UITextField()
+    private let genderField = UITextField()
+    private let regionField = UITextField()
     private let phoneValueLabel = UILabel()
     private let statusLabel = UILabel()
     private let avatarEditButton = UIButton(type: .system)
     private let saveButton = UIButton(type: .system)
-    private let maxNicknameLength = 24
+    private let maxNameLength = 24
+    private let maxRegionLength = 32
+    private let allowedGenderValues = ["男", "女", "不便透露"]
 
     init() {
         super.init(nibName: nil, bundle: nil)
@@ -183,10 +187,32 @@ final class ProfileSettingsViewController: UIViewController {
         card.layer.borderWidth = 1
         card.layer.borderColor = DJDesignTokens.Color.divider.withAlphaComponent(0.5).cgColor
 
-        let nicknameRow = makeInputRow(title: "昵称", textField: nicknameField)
+        let nameRow = makeInputRow(
+            title: "名称",
+            textField: nameField,
+            accessibilityIdentifier: "profile-settings-name-field"
+        )
+        let genderRow = makeInputRow(
+            title: "性别",
+            textField: genderField,
+            accessibilityIdentifier: "profile-settings-gender-field"
+        )
+        let regionRow = makeInputRow(
+            title: "地区",
+            textField: regionField,
+            accessibilityIdentifier: "profile-settings-region-field"
+        )
         let phoneRow = makeReadonlyRow(title: "手机号", valueLabel: phoneValueLabel)
 
-        let stack = UIStackView(arrangedSubviews: [nicknameRow, makeDivider(), phoneRow])
+        let stack = UIStackView(arrangedSubviews: [
+            nameRow,
+            makeDivider(),
+            genderRow,
+            makeDivider(),
+            regionRow,
+            makeDivider(),
+            phoneRow
+        ])
         stack.axis = .vertical
         stack.spacing = 0
 
@@ -202,7 +228,7 @@ final class ProfileSettingsViewController: UIViewController {
         return card
     }
 
-    private func makeInputRow(title: String, textField: UITextField) -> UIView {
+    private func makeInputRow(title: String, textField: UITextField, accessibilityIdentifier: String) -> UIView {
         let container = UIView()
         let titleLabel = makeLabel(
             text: title,
@@ -216,8 +242,8 @@ final class ProfileSettingsViewController: UIViewController {
         textField.clearButtonMode = .whileEditing
         textField.returnKeyType = .done
         textField.delegate = self
-        textField.accessibilityIdentifier = "profile-settings-nickname-field"
-        textField.addTarget(self, action: #selector(nicknameDidChange), for: .editingChanged)
+        textField.accessibilityIdentifier = accessibilityIdentifier
+        textField.addTarget(self, action: #selector(profileFieldDidChange), for: .editingChanged)
 
         container.addSubview(titleLabel)
         container.addSubview(textField)
@@ -248,6 +274,8 @@ final class ProfileSettingsViewController: UIViewController {
         valueLabel.font = DJDesignTokens.Font.body(15)
         valueLabel.textColor = DJDesignTokens.Color.textTertiary
         valueLabel.textAlignment = .right
+        valueLabel.accessibilityIdentifier = "profile-settings-phone-value"
+        phoneValueLabel.isUserInteractionEnabled = false
 
         container.addSubview(titleLabel)
         container.addSubview(valueLabel)
@@ -285,17 +313,19 @@ final class ProfileSettingsViewController: UIViewController {
 
     private func loadUser() {
         let user = UserManager.shared.currentUser
-        nicknameField.text = user?.nickname ?? "寻梦环游用户"
+        nameField.text = user?.nickname ?? "寻梦环游用户"
+        genderField.text = user?.gender ?? ""
+        regionField.text = user?.region ?? ""
         phoneValueLabel.text = user?.maskedPhone ?? "未登录"
     }
 
     @objc private func saveTapped() {
-        nicknameField.resignFirstResponder()
+        [nameField, genderField, regionField].forEach { $0.resignFirstResponder() }
 
-        switch validateNickname(nicknameField.text) {
-        case .valid(let nickname):
+        switch validateProfile(name: nameField.text, gender: genderField.text, region: regionField.text) {
+        case .valid(let name, let gender, let region):
             renderSaveState(.saving)
-            UserManager.shared.saveProfile(nickname: nickname) { [weak self] result in
+            UserManager.shared.saveProfile(nickname: name, gender: gender, region: region) { [weak self] result in
                 guard let self else { return }
                 self.loadUser()
                 switch result {
@@ -312,15 +342,29 @@ final class ProfileSettingsViewController: UIViewController {
         }
     }
 
-    private func validateNickname(_ rawValue: String?) -> NicknameValidationResult {
-        let nickname = (rawValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !nickname.isEmpty else {
-            return .invalid("昵称不能为空")
+    private func validateProfile(name rawName: String?, gender rawGender: String?, region rawRegion: String?) -> AccountProfileValidationResult {
+        let name = (rawName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let gender = normalizedOptionalField(rawGender)
+        let region = normalizedOptionalField(rawRegion)
+
+        guard !name.isEmpty else {
+            return .invalid("名称不能为空")
         }
-        guard nickname.count <= maxNicknameLength else {
-            return .invalid("昵称不能超过24个字")
+        guard name.count <= maxNameLength else {
+            return .invalid("名称不能超过24个字")
         }
-        return .valid(nickname)
+        if let gender, !allowedGenderValues.contains(gender) {
+            return .invalid("性别仅支持：男、女、不便透露")
+        }
+        if let region, region.count > maxRegionLength {
+            return .invalid("地区不能超过32个字")
+        }
+        return .valid(name: name, gender: gender, region: region)
+    }
+
+    private func normalizedOptionalField(_ rawValue: String?) -> String? {
+        let value = (rawValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
     }
 
     private func renderSaveState(_ state: ProfileSaveState) {
@@ -358,7 +402,7 @@ final class ProfileSettingsViewController: UIViewController {
         }
     }
 
-    @objc private func nicknameDidChange() {
+    @objc private func profileFieldDidChange() {
         renderSaveState(.idle)
     }
 
@@ -384,12 +428,15 @@ extension ProfileSettingsViewController: UITextFieldDelegate {
         shouldChangeCharactersIn range: NSRange,
         replacementString string: String
     ) -> Bool {
-        guard textField === nicknameField else { return true }
         let current = textField.text ?? ""
         guard let textRange = Range(range, in: current) else { return true }
         let nextValue = current.replacingCharacters(in: textRange, with: string)
-        guard nextValue.count <= maxNicknameLength else {
-            renderSaveState(.invalid("昵称不能超过24个字"))
+        if textField === nameField, nextValue.count > maxNameLength {
+            renderSaveState(.invalid("名称不能超过24个字"))
+            return false
+        }
+        if textField === regionField, nextValue.count > maxRegionLength {
+            renderSaveState(.invalid("地区不能超过32个字"))
             return false
         }
         return true

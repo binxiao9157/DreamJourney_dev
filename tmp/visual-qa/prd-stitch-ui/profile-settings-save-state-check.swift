@@ -47,16 +47,16 @@ for copy in [
     "已保存",
     "保存失败",
     "网络异常，已先保存到本机",
-    "昵称不能为空",
-    "昵称不能超过24个字",
+    "名称不能为空",
+    "名称不能超过24个字",
 ] {
     assertContains(settings, copy, "profile settings save-state copy should exist")
 }
 
 assertContains(settings, "private let statusLabel = UILabel()", "settings should use inline save status instead of only modal alerts")
 assertContains(settings, "renderSaveState", "settings should centralize save-state rendering")
-assertContains(settings, "validateNickname", "settings should validate nickname before saving")
-assertContains(settings, "maxNicknameLength = 24", "settings should cap nickname length")
+assertContains(settings, "validateProfile", "settings should validate account profile before saving")
+assertContains(settings, "maxNameLength = 24", "settings should cap name length")
 assertContains(settings, "UserManager.shared.saveProfile", "settings should use the backend-ready profile save API")
 assertNotContains(settings, "UIAlertController(title: \"已保存\"", "save success should not rely on a blocking alert")
 

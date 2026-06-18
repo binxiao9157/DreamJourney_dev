@@ -114,6 +114,7 @@ for guard in \
   release-like-backend-acceptance-check.swift \
   backend-env-smoke-check.swift \
   profile-settings-save-state-check.swift \
+  profile-account-fields-check.swift \
   final-visual-qa-package-check.swift \
   release-qa-package-check.swift
 do

@@ -207,6 +207,7 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/backend-fallback-ui-check.swift",
     "tmp/visual-qa/prd-stitch-ui/group4-profile-care-check.swift",
     "tmp/visual-qa/prd-stitch-ui/profile-settings-save-state-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/profile-account-fields-check.swift",
     "tmp/visual-qa/prd-stitch-ui/profile-care-snapshot-check.swift",
     "tmp/visual-qa/prd-stitch-ui/profile-care-escalation-contract-check.swift",
     "tmp/visual-qa/prd-stitch-ui/profile-care-escalation-backend-boundary-check.swift",
