@@ -127,6 +127,12 @@ let finalVisualReport = read("tmp/visual-qa/prd-stitch-ui/final-visual-qa/202606
 assertContains(finalVisualReport, "Login page is light/cream, not black.", "legacy black-login regression should stay documented")
 assertContains(finalVisualReport, "Bottom nav labels are `记忆档案`, `回响`, `我的`.", "tab labels should stay documented")
 
+let profileIAContract = read("docs/superpowers/status/2026-06-18-profile-ia-contract.md")
+assertContains(profileIAContract, "`我的` remains the third public tab", "Profile IA contract should preserve the third tab decision")
+assertContains(profileIAContract, "`长辈关怀` aggregate card or child dashboard entry", "Profile IA contract should carry care under Profile")
+assertContains(profileIAContract, "not a tab replacement", "Profile IA contract should prevent care tab rename drift")
+assertContains(profileIAContract, "Current Stitch canvas + downloaded `htmlCode`", "Profile IA contract should preserve Stitch evidence rules")
+
 let latestSmoke = latestDirectoryName(in: "tmp/visual-qa/prd-stitch-ui/archive-to-echo-smoke")
 let latestSmokeBase = "tmp/visual-qa/prd-stitch-ui/archive-to-echo-smoke/\(latestSmoke)"
 assertFileExists("\(latestSmokeBase)/01-archive-to-echo-completed.png", minBytes: 16_384, "latest archive-to-echo screenshot")

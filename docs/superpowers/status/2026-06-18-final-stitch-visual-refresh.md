@@ -67,7 +67,7 @@ Captured files:
 | Profile default release | Pass for current MVP | Default release keeps `个人资料设置`, `法律法规`, and `退出登录`; hidden PRD branches remain non-public. |
 | Profile hidden QA | Pass | `立即通话`, `家人管理`, and `注销账户` remain available only under `DJEnableProfileHiddenBranches`; bottom tabbar does not cover `注销账户`. |
 | Echo | Needs product/design decision | Stitch now has multiple Echo variants and no single `时空对话 - 悬浮导航版` public screen in `list_screens`. Current app still uses the previous scenic voice-first Echo. |
-| Profile/Care IA | Needs product/design decision | Current Stitch title for the profile-like hidden instance is `长辈关怀 - 悬浮导航版`, while the app public tab remains `我的`. Do not rename or restructure without product confirmation. |
+| Profile/Care IA | Confirmed | `我的` remains the third public tab and carries settings/account/legal/care entries. `长辈关怀` is treated as Profile/Care content, not as a tab replacement. |
 
 ## Verification
 
@@ -91,9 +91,11 @@ Result:
 
 No app UI code was changed in this pass.
 
-The current implementation remains acceptable for the current MVP release shell, but the newest Stitch canvas introduces a product/design decision point:
+The current implementation remains acceptable for the current MVP release shell. Product confirmation after this pass:
 
-- Whether Echo should stay as the existing scenic voice-first screen or move toward one of the new Stitch variants.
-- Whether `我的` should remain the third public tab or shift toward a public `长辈关怀` tab/surface.
+- `我的` remains the third public tab.
+- `我的` carries settings/account/legal/care entries.
+- `长辈关怀` is Profile/Care content or a child dashboard entry, not a tab rename.
+- Echo variants in MCP remain candidates only until one is explicitly selected from current Stitch canvas + `htmlCode`.
 
-Until that decision is made, keep the current PRD release gating intact.
+Keep the current PRD release gating intact and do not expose hidden Profile/Care branches by default.
