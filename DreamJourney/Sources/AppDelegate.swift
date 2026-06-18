@@ -73,6 +73,11 @@ private extension AppDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 self?.runArchiveMediaEntriesSmoke()
             }
+        } else if arguments.contains("DJRunEchoDelayedReplyNotificationSmoke") {
+            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.runEchoDelayedReplyNotificationSmoke()
+            }
         } else if arguments.contains("DJRunBackendEnvSmoke") {
             seedEchoArchiveContext()
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
@@ -144,6 +149,50 @@ private extension AppDelegate {
             "backendContractConnected=\(payload["backendContractConnected"] as? Bool ?? true) " +
             "willContactThirdParty=\(payload["willContactThirdParty"] as? Bool ?? true) " +
             "profileTabSelected=\(profileTabSelected)"
+        )
+    }
+
+    func runEchoDelayedReplyNotificationSmoke() {
+        EchoDelayedReplyStore.shared.clear()
+
+        let viewModel = EchoViewModel()
+        for turn in 1..<EchoReplyPacingPolicy.waitAfterUserTurnCount {
+            viewModel.beginVoiceInteraction()
+            viewModel.finishUserVoice(text: "第 \(turn) 次想起爸爸小时候的故事")
+            viewModel.receiveAIReply("我在听，慢慢说。")
+        }
+        viewModel.beginVoiceInteraction()
+        viewModel.finishUserVoice(text: "第十次想起这件事")
+
+        let delayedReply = viewModel.pendingDelayedReply
+        let storedReply = EchoDelayedReplyStore.shared.load()
+        let delayMinutesInRange = delayedReply.map {
+            EchoReplyPacingPolicy.replyDelayMinuteRange.contains($0.minutes)
+        } ?? false
+        let storedDelayedReply = delayedReply != nil
+            && storedReply?.id == delayedReply?.id
+            && storedReply?.userTurnCount == delayedReply?.userTurnCount
+            && storedReply?.trigger == delayedReply?.trigger
+        let localNotificationContractPresent =
+            EchoDelayedReplyNotificationScheduler.notificationIdentifier == "dj.echo.delayedReply"
+        let completed = viewModel.isWaitingForDelayedReply
+            && delayMinutesInRange
+            && storedDelayedReply
+            && localNotificationContractPresent
+
+        writeEchoDelayedReplyNotificationSmokeResult(
+            completed: completed,
+            delayMinutesInRange: delayMinutesInRange,
+            storedDelayedReply: storedDelayedReply,
+            localNotificationContractPresent: localNotificationContractPresent,
+            delayedReplyId: delayedReply?.id ?? "missing",
+            trigger: delayedReply?.trigger.rawValue ?? "missing"
+        )
+        print(
+            "[UI_QA] EchoDelayedReplyNotificationSmoke completed " +
+            "delayMinutesInRange=\(delayMinutesInRange) " +
+            "storedDelayedReply=\(storedDelayedReply) " +
+            "localNotificationContractPresent=\(localNotificationContractPresent)"
         )
     }
 
@@ -623,6 +672,37 @@ private extension AppDelegate {
             try data.write(to: resultURL, options: [.atomic])
         } catch {
             print("[UI_QA] ArchiveMediaEntriesSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    func writeEchoDelayedReplyNotificationSmokeResult(
+        completed: Bool,
+        delayMinutesInRange: Bool,
+        storedDelayedReply: Bool,
+        localNotificationContractPresent: Bool,
+        delayedReplyId: String,
+        trigger: String
+    ) {
+        let result: [String: Any] = [
+            "completed": completed,
+            "delayMinutesInRange": delayMinutesInRange,
+            "storedDelayedReply": storedDelayedReply,
+            "localNotificationContractPresent": localNotificationContractPresent,
+            "delayedReplyId": delayedReplyId,
+            "trigger": trigger,
+        ]
+
+        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
+              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("[UI_QA] EchoDelayedReplyNotificationSmoke failed reason=resultEncoding")
+            return
+        }
+
+        let resultURL = documentsURL.appendingPathComponent("echo-delayed-reply-notification-smoke-result.json")
+        do {
+            try data.write(to: resultURL, options: [.atomic])
+        } catch {
+            print("[UI_QA] EchoDelayedReplyNotificationSmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
     }
 

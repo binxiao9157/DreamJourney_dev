@@ -133,7 +133,9 @@ final class EchoViewController: UIViewController {
         setupLayout()
         bindViewModel()
         seedTranscriptPreview()
-        render(state: .idle)
+        if !viewModel.restoreStoredDelayedReplyIfAvailable() {
+            render(state: .idle)
+        }
         renderArchiveContextStatus(viewModel.archiveContextStatus)
     }
 
@@ -478,6 +480,34 @@ final class EchoViewController: UIViewController {
         isStoppingForDelayedReply = true
         DialogEngineManager.shared.stopDialog()
     }
+
+    private func scheduleDelayedReplyNotificationIfNeeded() {
+        guard let delayedReply = viewModel.pendingDelayedReply else {
+            return
+        }
+
+        EchoDelayedReplyNotificationScheduler.shared.requestAuthorizationIfNeeded { granted in
+            guard granted else { return }
+            EchoDelayedReplyNotificationScheduler.shared.schedule(delayedReply) { error in
+                if let error {
+                    print("[Echo] delayed reply local notification failed: \(error.localizedDescription)")
+                }
+            }
+        }
+
+        guard DreamJourneyBackendClient.shared.isEchoDelayedReplyPushConfigured,
+              let userId = UserManager.shared.currentUser?.id else {
+            return
+        }
+        DreamJourneyBackendClient.shared.scheduleEchoDelayedReplyPush(
+            userId: userId,
+            delayedReply: delayedReply
+        ) { result in
+            if case .failure(let error) = result {
+                print("[Echo] delayed reply push contract failed: \(error.localizedDescription)")
+            }
+        }
+    }
 }
 
 extension EchoViewController: DialogEngineDelegate {
@@ -493,6 +523,7 @@ extension EchoViewController: DialogEngineDelegate {
             guard let self = self else { return }
             self.viewModel.finishUserVoice(text: text)
             if self.viewModel.isWaitingForDelayedReply {
+                self.scheduleDelayedReplyNotificationIfNeeded()
                 self.beginDelayedReplyWait()
             }
         }

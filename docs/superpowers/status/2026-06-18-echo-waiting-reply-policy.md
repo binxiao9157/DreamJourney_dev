@@ -17,6 +17,10 @@
 - 情绪/内容存在问题时，可通过 `shouldTriggerEarlyWait(for:)` 提前进入等待回信。
 - 等待时长约束为 5-10 分钟。
 - 进入等待回信后，停止当前语音引擎回调并保留等待 UI，不继续播即时回复。
+- `EchoDelayedReplyStore` 会持久化等待回信快照，包含 scheduledAt、deliverAt、minutes、userTurnCount 和触发原因。
+- App 冷启动/页面重建时，如果等待回信尚未到达，会恢复 `waitingReply` App 内状态。
+- `EchoDelayedReplyNotificationScheduler` 使用本地通知合同 `dj.echo.delayedReply`，通知文案为 `回信到了，回来听听这段回响。`。
+- `DreamJourneyBackendClient.scheduleEchoDelayedReplyPush` 定义推送通知后端合同：`POST /echo/delayed-replies`。
 - `resetToIdle()` 会清空本轮语音会话计数。
 
 ## UI 状态
@@ -42,10 +46,16 @@
 - 推送通知和本地通知和app内状态都需要。
 - 属于公开MVP。
 
+推送通知后端合同：
+
+- Endpoint: `POST /echo/delayed-replies`
+- Payload: `userId`、`delayedReplyId`、`deliverAt`、`minutes`、`trigger`
+- 当前 iOS 侧为 backend-ready client；请求失败不影响 App 内等待状态和本地通知兜底。
+- APNs、device token 注册、服务端定时投递与真机通知到达仍是后端/真机验收门。
+
 仍需工程继续补齐：
 
-- 本地通知调度与权限策略。
-- 推送通知后端/APNs 合同。
+- 服务端 `/echo/delayed-replies` 的持久化、调度队列与 APNs 投递实现。
 - 真机麦克风与通知验收。
 
 ## 验证
@@ -54,12 +64,20 @@
 
 ```bash
 swift tmp/visual-qa/prd-stitch-ui/echo-waiting-reply-policy-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-notification-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-push-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 本轮模拟器截图：
 
 ```text
 tmp/visual-qa/prd-stitch-ui/prd-decision-echo-policy/20260618-current/01-echo-waiting-reply-ten-round.png
+```
+
+等待回信持久化/本地通知 smoke：
+
+```bash
+RUN_ID=20260618-echo-delayed-reply-notification tmp/visual-qa/prd-stitch-ui/run-echo-delayed-reply-notification-smoke.sh
 ```
 
 release regression 需要覆盖该检查：

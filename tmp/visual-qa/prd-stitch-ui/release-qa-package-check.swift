@@ -176,6 +176,7 @@ for screenshot in [
 
 let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh",
+    "tmp/visual-qa/prd-stitch-ui/run-echo-delayed-reply-notification-smoke.sh",
     "tmp/visual-qa/prd-stitch-ui/run-release-regression.sh",
     "tmp/visual-qa/prd-stitch-ui/run-backend-env-smoke.sh",
     "tmp/visual-qa/prd-stitch-ui/run-release-like-backend-acceptance.sh",
@@ -187,6 +188,8 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/digital-human-mode-lifecycle-check.swift",
     "tmp/visual-qa/prd-stitch-ui/echo-voice-state-visual-check.swift",
     "tmp/visual-qa/prd-stitch-ui/echo-waiting-reply-policy-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-notification-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-push-contract-check.swift",
     "tmp/visual-qa/prd-stitch-ui/group3-archive-core-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-compact-stitch-layout-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-timeline-detail-stitch-check.swift",

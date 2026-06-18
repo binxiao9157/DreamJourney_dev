@@ -16,6 +16,7 @@ STATIC_LOG_DIR="$OUTPUT_DIR/static-guards"
 
 RUN_STANDARD_BUILD="${RUN_STANDARD_BUILD:-1}"
 RUN_SIMULATOR_SMOKE="${RUN_SIMULATOR_SMOKE:-1}"
+RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE="${RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE:-1}"
 RUN_BACKEND_ENV_SMOKE="${RUN_BACKEND_ENV_SMOKE:-0}"
 RELEASE_HANDOFF_MODE="${RELEASE_HANDOFF_MODE:-0}"
 if [[ "$RELEASE_HANDOFF_MODE" == "1" ]]; then
@@ -48,6 +49,7 @@ Run ID: \`$RUN_ID\`
 
 - Standard iOS build: \`$RUN_STANDARD_BUILD\`
 - Archive -> Echo simulator smoke: \`$RUN_SIMULATOR_SMOKE\`
+- Echo delayed reply notification smoke: \`$RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE\`
 - Backend environment smoke: \`$RUN_BACKEND_ENV_SMOKE\`
 - Release handoff mode: \`$RELEASE_HANDOFF_MODE\`
 - Release-like FastAPI/Postgres backend: \`$RUN_RELEASE_LIKE_BACKEND\`
@@ -59,6 +61,7 @@ Run ID: \`$RUN_ID\`
 - Static PRD/UI/release guard scripts.
 - iOS Debug simulator build, unless \`RUN_STANDARD_BUILD=0\`.
 - Core Archive -> Echo simulator smoke, unless \`RUN_SIMULATOR_SMOKE=0\`.
+- Echo delayed reply persistence/local-notification smoke, unless \`RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE=0\`.
 - Optional backend environment smoke when \`RUN_BACKEND_ENV_SMOKE=1\` and backend URL/token are configured.
 - Optional release-like Postgres backend acceptance when \`RUN_RELEASE_LIKE_BACKEND=1\`.
 - Release handoff mode sets \`RUN_RELEASE_LIKE_BACKEND=1\` unless explicitly overridden.
@@ -74,6 +77,7 @@ append_report_footer() {
 - Static guard logs: \`static-guards/\`
 - Standard build log: \`build-debug.log\`
 - Archive -> Echo smoke: \`archive-to-echo-smoke/$RUN_ID/\`
+- Echo delayed reply notification smoke: \`echo-delayed-reply-notification-smoke/$RUN_ID/\`
 - Backend env smoke: \`backend-env-smoke/$RUN_ID/\`
 - Release-like backend acceptance: \`release-like-backend/$RUN_ID/\`
 
@@ -104,6 +108,8 @@ for guard in \
   prd-coverage-matrix-check.swift \
   prd-full-feature-closure-decisions-check.swift \
   echo-waiting-reply-policy-check.swift \
+  echo-delayed-reply-notification-check.swift \
+  echo-delayed-reply-push-contract-check.swift \
   phase0-backend-alignment-check.swift \
   release-like-backend-acceptance-check.swift \
   backend-env-smoke-check.swift \
@@ -146,6 +152,16 @@ if [[ "$RUN_SIMULATOR_SMOKE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/archive-to-echo-smoke/$RUN_ID"
   echo "Skipped by RUN_SIMULATOR_SMOKE=0" > "$OUTPUT_DIR/archive-to-echo-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/echo-delayed-reply-notification-smoke" \
+  DERIVED_DATA_PATH="$OUTPUT_DIR/DerivedDataEchoDelayedReplyNotificationSmoke" \
+  "$SCRIPT_DIR/run-echo-delayed-reply-notification-smoke.sh"
+else
+  mkdir -p "$OUTPUT_DIR/echo-delayed-reply-notification-smoke/$RUN_ID"
+  echo "Skipped by RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE=0" > "$OUTPUT_DIR/echo-delayed-reply-notification-smoke/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_BACKEND_ENV_SMOKE" == "1" ]]; then

@@ -25,7 +25,17 @@ struct EchoReplyPacingPolicy {
     ]
 
     static func shouldWaitForReply(afterUserTurnCount userTurnCount: Int, userText: String) -> Bool {
-        userTurnCount >= waitAfterUserTurnCount || shouldTriggerEarlyWait(for: userText)
+        triggerForWait(afterUserTurnCount: userTurnCount, userText: userText) != nil
+    }
+
+    static func triggerForWait(afterUserTurnCount userTurnCount: Int, userText: String) -> EchoDelayedReplyTrigger? {
+        if shouldTriggerEarlyWait(for: userText) {
+            return .contentSignal
+        }
+        if userTurnCount >= waitAfterUserTurnCount {
+            return .tenRoundBaseline
+        }
+        return nil
     }
 
     static func shouldTriggerEarlyWait(for userText: String) -> Bool {
@@ -90,6 +100,7 @@ final class EchoViewModel {
     private(set) var context: DigitalHumanContext
     private(set) var archiveContextStatus: EchoArchiveContextStatus = .empty
     private(set) var state: EchoInteractionState = .idle
+    private(set) var pendingDelayedReply: EchoDelayedReply?
     private var currentSessionUserTurnCount = 0
 
     var onStateChange: ((EchoInteractionState) -> Void)?
@@ -134,10 +145,24 @@ final class EchoViewModel {
         if EchoReplyPacingPolicy.shouldWaitForReply(
             afterUserTurnCount: currentSessionUserTurnCount,
             userText: normalizedText
+        ), let waitTrigger = EchoReplyPacingPolicy.triggerForWait(
+            afterUserTurnCount: currentSessionUserTurnCount,
+            userText: normalizedText
         ) {
             let wait = EchoReplyPacingPolicy.replyDelayMinutes(
                 forCompletedSessionCount: memoryManager.currentMemory.sessionCount
             )
+            let now = Date()
+            let delayedReply = EchoDelayedReply(
+                id: UUID().uuidString,
+                scheduledAt: now,
+                deliverAt: now.addingTimeInterval(TimeInterval(wait * 60)),
+                minutes: wait,
+                userTurnCount: currentSessionUserTurnCount,
+                trigger: waitTrigger
+            )
+            pendingDelayedReply = delayedReply
+            _ = EchoDelayedReplyStore.shared.save(delayedReply)
             updateState(.waitingReply(minutes: wait))
             return
         }
@@ -155,11 +180,15 @@ final class EchoViewModel {
     }
 
     func markReplyDelivered() {
+        pendingDelayedReply = nil
+        EchoDelayedReplyStore.shared.clear()
         updateState(.replied)
     }
 
     func resetToIdle() {
         currentSessionUserTurnCount = 0
+        pendingDelayedReply = nil
+        EchoDelayedReplyStore.shared.clear()
         updateState(.idle)
     }
 
@@ -188,6 +217,24 @@ final class EchoViewModel {
             mode: context.mode
         )
         onArchiveContextStatusChange?(archiveContextStatus)
+    }
+
+    @discardableResult
+    func restoreStoredDelayedReplyIfAvailable(now: Date = Date()) -> Bool {
+        guard let delayedReply = EchoDelayedReplyStore.shared.load() else {
+            return false
+        }
+
+        if delayedReply.deliverAt <= now {
+            pendingDelayedReply = nil
+            EchoDelayedReplyStore.shared.clear()
+            return false
+        }
+
+        pendingDelayedReply = delayedReply
+        let remainingMinutes = max(1, Int(ceil(delayedReply.deliverAt.timeIntervalSince(now) / 60)))
+        updateState(.waitingReply(minutes: remainingMinutes))
+        return true
     }
 
     private func updateState(_ newState: EchoInteractionState) {

@@ -31,6 +31,10 @@ final class DreamJourneyBackendClient {
         hasExplicitBaseURL || apiToken != nil
     }
 
+    var isEchoDelayedReplyPushConfigured: Bool {
+        hasExplicitBaseURL || apiToken != nil
+    }
+
     private init() {
         let configured = Bundle.main.object(forInfoDictionaryKey: "DreamJourneyBackendBaseURL") as? String
         let raw = configured?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -69,6 +73,21 @@ final class DreamJourneyBackendClient {
 
     func latestCareSnapshot(userId: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
         requestJSON(path: "/care/snapshots/latest/\(pathComponent(userId))", method: .get, payload: nil, completion: completion)
+    }
+
+    func scheduleEchoDelayedReplyPush(
+        userId: String,
+        delayedReply: EchoDelayedReply,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        let payload: [String: Any] = [
+            "userId": userId,
+            "delayedReplyId": delayedReply.id,
+            "deliverAt": ISO8601DateFormatter().string(from: delayedReply.deliverAt),
+            "minutes": delayedReply.minutes,
+            "trigger": delayedReply.trigger.rawValue,
+        ]
+        requestJSON(path: "/echo/delayed-replies", method: .post, payload: payload, completion: completion)
     }
 
     private func requestJSON(
