@@ -23,6 +23,8 @@ private enum ArchiveDetailLayout {
 }
 
 final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDelegate {
+    private static let analysisDisclaimerText = "AI 分析为主，后端辅助处理；我们不会人为查看你的记忆内容。"
+
     private var item: MemoryArchiveItem
     private let repository: MemoryArchiveRepository
     private let scrollView = UIScrollView()
@@ -627,6 +629,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         card.addSubview(stack)
         stack.translatesAutoresizingMaskIntoConstraints = false
         stack.addArrangedSubview(makeAnalysisHeader())
+        stack.addArrangedSubview(makeAnalysisDisclaimerLabel())
         stack.addArrangedSubview(makeAnalysisSummaryPanel(summary: summaryText, isAnalyzed: isAnalyzed))
         stack.addArrangedSubview(makeInsightSection(title: "标签", iconName: "tag", values: item.tags, emptyText: "暂无标签"))
         stack.addArrangedSubview(makeInsightSection(title: "人物线索", iconName: "person.2", values: item.detectedPeople, emptyText: item.analysisStatus == .pending ? "等待识别" : "暂无人物线索"))
@@ -691,6 +694,16 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         ])
 
         return headerStack
+    }
+
+    private func makeAnalysisDisclaimerLabel() -> UILabel {
+        let label = UILabel()
+        label.text = Self.analysisDisclaimerText
+        label.font = DJDesignTokens.Font.label(12)
+        label.textColor = DJDesignTokens.Color.textTertiary
+        label.numberOfLines = 0
+        label.accessibilityIdentifier = "archive-analysis-disclaimer-label"
+        return label
     }
 
     private func makeAnalysisSummaryPanel(summary: String, isAnalyzed: Bool) -> UIView {

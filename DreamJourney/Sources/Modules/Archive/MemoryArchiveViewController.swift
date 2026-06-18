@@ -55,6 +55,7 @@ final class MemoryArchiveViewController: UIViewController {
     private let summaryLabel = UILabel()
     private let progressLabel = UILabel()
     private let remoteSyncCaptionLabel = PaddingLabel(horizontalInset: 12, verticalInset: 8)
+    private let analysisPrivacyDisclaimerLabel = PaddingLabel(horizontalInset: 12, verticalInset: 8)
     private var isRefreshingFromBackend = false
 
     private var creationOptions: [MemoryArchiveCreationOption] {
@@ -197,15 +198,18 @@ final class MemoryArchiveViewController: UIViewController {
         ])
 
         let header = makeHeader()
+        configureAnalysisPrivacyDisclaimerLabel()
         configureRemoteSyncCaptionLabel()
         mainStack.addArrangedSubview(header)
         mainStack.addArrangedSubview(featureCardsStack)
+        mainStack.addArrangedSubview(analysisPrivacyDisclaimerLabel)
         mainStack.addArrangedSubview(remoteSyncCaptionLabel)
         mainStack.addArrangedSubview(makePrimaryCTA())
         mainStack.addArrangedSubview(makeTimelineHeader())
         mainStack.addArrangedSubview(listStack)
         mainStack.setCustomSpacing(ArchiveLayout.afterHeaderSpacing, after: header)
         mainStack.setCustomSpacing(ArchiveLayout.afterFeatureGridSpacing, after: featureCardsStack)
+        mainStack.setCustomSpacing(ArchiveLayout.afterFeatureGridSpacing, after: analysisPrivacyDisclaimerLabel)
         mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: remoteSyncCaptionLabel)
         mainStack.setCustomSpacing(ArchiveLayout.afterListSpacing, after: listStack)
     }
@@ -244,6 +248,19 @@ final class MemoryArchiveViewController: UIViewController {
                 setArchiveRemoteSyncStatus(.fallback)
             }
         }
+    }
+
+    private func configureAnalysisPrivacyDisclaimerLabel() {
+        analysisPrivacyDisclaimerLabel.text = "AI 分析为主，后端辅助处理；我们不会人为查看你的记忆内容。"
+        analysisPrivacyDisclaimerLabel.font = DJDesignTokens.Font.label(12)
+        analysisPrivacyDisclaimerLabel.textColor = DJDesignTokens.Color.textTertiary
+        analysisPrivacyDisclaimerLabel.backgroundColor = DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.58)
+        analysisPrivacyDisclaimerLabel.layer.cornerRadius = 14
+        analysisPrivacyDisclaimerLabel.layer.masksToBounds = true
+        analysisPrivacyDisclaimerLabel.numberOfLines = 0
+        analysisPrivacyDisclaimerLabel.lineBreakMode = .byWordWrapping
+        analysisPrivacyDisclaimerLabel.accessibilityIdentifier = "archive-analysis-privacy-disclaimer"
+        analysisPrivacyDisclaimerLabel.accessibilityLabel = analysisPrivacyDisclaimerLabel.text
     }
 
     private func configureRemoteSyncCaptionLabel() {
@@ -1768,6 +1785,23 @@ private final class PaddingLabel: UILabel {
             right: horizontalInset
         )
         super.drawText(in: rect.inset(by: insets))
+    }
+
+    override func textRect(forBounds bounds: CGRect, limitedToNumberOfLines numberOfLines: Int) -> CGRect {
+        let insets = UIEdgeInsets(
+            top: verticalInset,
+            left: horizontalInset,
+            bottom: verticalInset,
+            right: horizontalInset
+        )
+        let insetBounds = bounds.inset(by: insets)
+        let textRect = super.textRect(forBounds: insetBounds, limitedToNumberOfLines: numberOfLines)
+        return textRect.inset(by: UIEdgeInsets(
+            top: -verticalInset,
+            left: -horizontalInset,
+            bottom: -verticalInset,
+            right: -horizontalInset
+        ))
     }
 
     override var intrinsicContentSize: CGSize {

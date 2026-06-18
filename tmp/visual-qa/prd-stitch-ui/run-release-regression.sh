@@ -117,6 +117,7 @@ for guard in \
   profile-account-fields-check.swift \
   profile-password-change-check.swift \
   archive-ownership-visibility-check.swift \
+  archive-analysis-disclaimer-check.swift \
   final-visual-qa-package-check.swift \
   release-qa-package-check.swift
 do
