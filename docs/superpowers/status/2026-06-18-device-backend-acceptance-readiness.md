@@ -8,13 +8,18 @@ Scope: PRD P0 真机验收与后端验收就绪包。
 
 ## Status
 
-当前状态是 **验收就绪**，不是“真机已验收”或“真实后端已验收”。
+当前状态是 **真机验收就绪**，并且 **公网后端模拟器 release-like 验收已通过**。
+
+这不是“真机已验收”，也不是 APNs 真机通知已验收。
 
 原因：
 
 - 当前工程已经具备模拟器核心闭环、后端配置注入、token 合约检查、后端环境 smoke 脚本和静态 guard。
-- 真实验收待用户提供后端环境和真机，包括真实 `DREAMJOURNEY_BACKEND_BASE_URL`、`DREAMJOURNEY_BACKEND_API_TOKEN`、Apple 签名/设备操作和系统权限弹窗确认。
-- 在真实后端和真机未执行前，不能声明真机已验收，也不能声明线上后端已验收。
+- 部署后的 FastAPI/Postgres 后端已经通过 release-like 模拟器验收，包括 archive/care/family、push-token、delayed-reply persistence，以及 `POST /echo/delayed-replies/dispatch-due` 服务端待投递合同。
+- 已接受的部署后端验收 run：`20260618-deployed-echo-dispatch-contract-accepted-211732`。
+- 该 run 验证了 `echoDelayedReplyDispatchState=readyForProvider` 和 `echoDelayedReplyProviderDeliveryAttempted=false`，但没有声明 APNs provider delivery 或真机通知到达。
+- 真机验收仍待用户提供 Apple 签名/设备操作和系统权限弹窗确认。
+- 在真机未执行前，不能声明真机已验收；在 APNs provider delivery 未执行前，不能声明远程推送通知完整验收。
 
 ## Source Of Truth
 
@@ -44,7 +49,12 @@ Rules:
 
 ## Backend Acceptance
 
-用户提供真实后端后，执行：
+当前选定部署后端已经通过 release-like simulator scope。证据见：
+
+- `docs/superpowers/status/2026-06-18-release-like-backend-acceptance.md`
+- `tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-deployed-echo-dispatch-contract-accepted-211732/`
+
+后续如果后端重新部署、合同字段变化，或要切换另一个后端环境，再执行：
 
 ```bash
 cd /Users/yxj/Documents/Codex/Video/DreamJourney_dev
@@ -74,6 +84,8 @@ If this fails:
 - 连接错误优先检查 `DREAMJOURNEY_BACKEND_BASE_URL`、证书、网络和服务进程。
 - 字段缺失优先检查后端契约是否与当前 `DreamJourneyBackendClient` 保持一致。
 - family 断言失败优先检查 `/family/invite`、`/family/members/{userId}/{memberId}/accept` 和 `/family/members/{userId}` 是否返回 active/accepted 成员。
+- dispatch 断言失败优先检查 `/echo/delayed-replies/dispatch-due` 是否部署到当前公网后端路由表。
+- APNs provider delivery 和真机通知到达不由该 simulator smoke 证明，需要单独真机验收。
 
 ## True Device Acceptance
 
@@ -152,7 +164,7 @@ These prove:
 
 需要停下来找用户的情况：
 
-- 用户提供真实 `DREAMJOURNEY_BACKEND_BASE_URL` 和 `DREAMJOURNEY_BACKEND_API_TOKEN` 之前，不能跑真实后端验收。
+- 要切换新的真实 `DREAMJOURNEY_BACKEND_BASE_URL` / `DREAMJOURNEY_BACKEND_API_TOKEN`，或当前部署后端无法访问。
 - 用户提供真机、Apple 开发者签名、证书或设备操作之前，不能跑真机验收。
 - 如果后端契约需要改字段、迁移数据或删除数据，需要用户确认产品/兼容性取舍。
 - 如果要公开家庭管理、账号注销、医生联系、星辰/静默/阳光模式入口，需要用户确认发布边界。
@@ -161,10 +173,14 @@ These prove:
 
 This document closes the readiness gap only.
 
+It does close:
+
+- 当前选定公网后端的 simulator release-like 验收记录归档。
+
 It does not close:
 
-- 真实后端已验收。
 - 真机已验收。
+- APNs provider delivery / 真机通知到达。
 - 语音 SDK 生产质量已验收。
 - 家庭/persona 管理公开发布。
 - 账号注销、医生联系或数字继承完整生命周期。

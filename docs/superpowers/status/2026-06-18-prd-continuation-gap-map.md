@@ -40,8 +40,8 @@ The app should preserve future routes for family space, elder care, sunlight/sil
 
 | Priority | Gap | Why It Matters | Current Boundary |
 | --- | --- | --- | --- |
-| P0 | Real-device acceptance checklist for microphone/photo/voice SDK | PRD core input is voice and archive supports photo/audio. Simulator proves contract only; true acceptance requires device steps and privacy behavior. | Readiness doc added in `2026-06-18-device-backend-acceptance-readiness.md`; 真实验收待用户提供后端环境和真机. |
-| P0 | Non-local backend verification contract | Archive/care/family/KB endpoints exist, but staging/prod base URL, token injection, persistence, and error recovery need a repeatable acceptance path. | Backend smoke script and static guards exist; App-side smoke now validates archive/care/family; `2026-06-18-device-backend-acceptance-readiness.md` defines runbook; real environment depends on key/server. |
+| P0 | Real-device acceptance checklist for microphone/photo/voice SDK | PRD core input is voice and archive supports photo/audio. Simulator proves contract only; true acceptance requires device steps and privacy behavior. | Readiness doc added in `2026-06-18-device-backend-acceptance-readiness.md`; 公网后端 release-like scope accepted, but true-device acceptance still requires device/signing. |
+| P0 | Non-local backend verification contract | Archive/care/family/KB endpoints exist; deployed backend persistence and error recovery need to stay repeatable after redeploys. | Selected deployed FastAPI/Postgres backend accepted through `20260618-deployed-echo-dispatch-contract-accepted-211732`; rerun backend smoke after backend contract or deployment changes. |
 | P1 | Family management/persona switching UI | PRD requires switching family members and self. Hidden route now writes `DigitalHumanContextStore`; public family management is still not ready. | `familyManagement`/`familySpace` are hidden; status doc: `2026-06-18-profile-family-persona-switcher.md`. |
 | P1 | 星辰/阳光/静默 business state | PRD says mode name is not displayed on Echo, but star relatives enable psychological guidance and mood tracking. | Hidden per-family mode management persists `sunlight/star/silent`; Echo/Profile now apply mode boundaries without exposing internal mode names. Public lifecycle policy remains pending. |
 | P1 | Account deletion flow | PRD lists account cancellation. Hidden destructive confirmation shell now exists without executing deletion. | `accountDeletion` hidden by default; status doc: `2026-06-18-profile-safety-flows.md`. |
@@ -71,7 +71,7 @@ The app should preserve future routes for family space, elder care, sunlight/sil
    - Separate simulator proof from real-device acceptance.
 
 4. **Backend environment acceptance package**
-   - Status: readiness package added in `docs/superpowers/status/2026-06-18-device-backend-acceptance-readiness.md`; App-side archive/care/family smoke contract is guarded by `backend-family-acceptance-check.swift`; real backend execution still requires user-provided URL/token.
+   - Status: selected deployed FastAPI/Postgres backend accepted through `20260618-deployed-echo-dispatch-contract-accepted-211732`; readiness package kept in `docs/superpowers/status/2026-06-18-device-backend-acceptance-readiness.md`; App-side archive/care/family smoke contract is guarded by `backend-family-acceptance-check.swift`.
    - Document required base URL/token config and expected archive/care/family smoke outcomes.
    - Keep local fallback copy and auth-token behavior covered.
 
@@ -107,12 +107,12 @@ The app should preserve future routes for family space, elder care, sunlight/sil
 
 ## Current Selected Target
 
-Proceed with **P0 true-device and backend acceptance readiness**.
+Proceed with **true-device acceptance preparation only when signing/device conditions exist**. Until then, continue hidden candidates or UI polish one feature at a time.
 
 Reason:
 
-- It protects the PRD core path from being called finished before real backend and true-device evidence exists.
-- It consolidates the commands and artifacts needed when the user later provides backend URL/token or a physical device.
+- It protects the PRD core path from being called finished before true-device evidence exists.
+- It keeps deployed backend simulator evidence separate from APNs provider delivery and true-device notification arrival.
 - It does not require exposing hidden family/account/developer branches.
 - It keeps simulator proof separate from real-device acceptance, which is important for honest release readiness.
 

@@ -62,9 +62,14 @@ for required in [
     "后端验收",
     "阻塞条件",
     "验收就绪",
-    "用户提供",
+    "公网后端模拟器 release-like 验收已通过",
+    "不是 APNs 真机通知已验收",
     "不要把真实 token 提交",
     "不能声明真机已验收",
+    "20260618-deployed-echo-dispatch-contract-accepted-211732",
+    "echoDelayedReplyDispatchState=readyForProvider",
+    "echoDelayedReplyProviderDeliveryAttempted=false",
+    "APNs provider delivery",
     "DREAMJOURNEY_BACKEND_BASE_URL",
     "DREAMJOURNEY_BACKEND_API_TOKEN",
     "Backend.local.xcconfig",
@@ -90,8 +95,8 @@ assertContains(
 )
 assertContains(
     gapMap,
-    "真实验收待用户提供后端环境和真机",
-    "Gap map should clearly separate readiness from real backend/device acceptance"
+    "公网后端 release-like scope accepted",
+    "Gap map should clearly separate deployed backend simulator acceptance from true-device acceptance"
 )
 
 for required in [
