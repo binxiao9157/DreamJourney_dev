@@ -112,9 +112,12 @@ struct FamilyMember: Codable, Identifiable {
     var isOnline: Bool
     /// 最近更新描述，如“2小时前”“昨天”“刚刚”
     var lastUpdated: String
+    /// 数字人生命周期状态：默认阳光，只有星辰状态启用心境追踪。
+    var digitalHumanMode: DigitalHumanMode
 
     init(id: String = UUID().uuidString, name: String, relation: String,
-         phone: String? = nil, isOnline: Bool = false, lastUpdated: String = "未知") {
+         phone: String? = nil, isOnline: Bool = false, lastUpdated: String = "未知",
+         digitalHumanMode: DigitalHumanMode = .sunlight) {
         self.id = id
         self.name = name
         self.relation = relation
@@ -123,6 +126,32 @@ struct FamilyMember: Codable, Identifiable {
         self.joinedAt = Date()
         self.isOnline = isOnline
         self.lastUpdated = lastUpdated
+        self.digitalHumanMode = digitalHumanMode
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case relation
+        case phone
+        case avatarName
+        case joinedAt
+        case isOnline
+        case lastUpdated
+        case digitalHumanMode
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        relation = try container.decode(String.self, forKey: .relation)
+        phone = try container.decodeIfPresent(String.self, forKey: .phone)
+        avatarName = try container.decodeIfPresent(String.self, forKey: .avatarName)
+        joinedAt = try container.decodeIfPresent(Date.self, forKey: .joinedAt) ?? Date()
+        isOnline = try container.decodeIfPresent(Bool.self, forKey: .isOnline) ?? false
+        lastUpdated = try container.decodeIfPresent(String.self, forKey: .lastUpdated) ?? "未知"
+        digitalHumanMode = try container.decodeIfPresent(DigitalHumanMode.self, forKey: .digitalHumanMode) ?? .sunlight
     }
 }
 

@@ -5,6 +5,7 @@ final class FamilyRepository {
 
     static let shared = FamilyRepository()
     private init() {
+        loadModeOverrides()
         seedMockData()
         NotificationCenter.default.addObserver(self, selector: #selector(onKBUpdated), name: .kbLiteDidUpdate, object: nil)
         // 延迟首次同步（等知识库加载完成）
@@ -18,6 +19,8 @@ final class FamilyRepository {
     }
 
     private var members: [FamilyMember] = []
+    private var modeOverrides: [String: DigitalHumanMode] = [:]
+    private let modeOverridesKey = "dj.family.digitalHumanModeOverrides"
 
     func getAll() -> [FamilyMember] { return members }
 
@@ -34,6 +37,13 @@ final class FamilyRepository {
 
     func get(by id: String) -> FamilyMember? {
         return members.first { $0.id == id }
+    }
+
+    func updateMode(memberId: String, mode: DigitalHumanMode) {
+        guard let index = members.firstIndex(where: { $0.id == memberId }) else { return }
+        members[index].digitalHumanMode = mode
+        modeOverrides[memberId] = mode
+        persistModeOverrides()
     }
 
     // MARK: - KBLite 同步：从知识库中提取人物 → 亲属圈
@@ -102,13 +112,13 @@ final class FamilyRepository {
                 lastUpdated = "未知"
             }
 
-            let member = FamilyMember(
+            let member = applyModeOverride(to: FamilyMember(
                 id: "kb_\(person.id.prefix(8))",
                 name: person.name,
                 relation: relation,
                 isOnline: isRecent,
                 lastUpdated: lastUpdated
-            )
+            ))
             members.append(member)
         }
 
@@ -121,6 +131,30 @@ final class FamilyRepository {
             FamilyMember(id: "fm_001", name: "林静文", relation: "祖母",  phone: nil, isOnline: false, lastUpdated: "2小时前"),
             FamilyMember(id: "fm_002", name: "张国强", relation: "父亲",  phone: nil, isOnline: false, lastUpdated: "昨天"),
             FamilyMember(id: "fm_003", name: "周美芳", relation: "母亲",  phone: nil, isOnline: true,  lastUpdated: "刚刚")
-        ]
+        ].map(applyModeOverride(to:))
+    }
+
+    private func applyModeOverride(to member: FamilyMember) -> FamilyMember {
+        guard let mode = modeOverrides[member.id] else { return member }
+        var updated = member
+        updated.digitalHumanMode = mode
+        return updated
+    }
+
+    private func loadModeOverrides() {
+        guard let rawValues = UserDefaults.standard.dictionary(forKey: modeOverridesKey) as? [String: String] else {
+            modeOverrides = [:]
+            return
+        }
+        modeOverrides = rawValues.reduce(into: [:]) { result, pair in
+            if let mode = DigitalHumanMode(rawValue: pair.value) {
+                result[pair.key] = mode
+            }
+        }
+    }
+
+    private func persistModeOverrides() {
+        let rawValues = modeOverrides.mapValues(\.rawValue)
+        UserDefaults.standard.set(rawValues, forKey: modeOverridesKey)
     }
 }

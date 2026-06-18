@@ -31,6 +31,19 @@ private enum FamilyPersonaOption {
         }
     }
 
+    var digitalHumanMode: DigitalHumanMode {
+        switch self {
+        case .selfAssistant:
+            return .sunlight
+        case .familyMember(let member):
+            return member.digitalHumanMode
+        }
+    }
+
+    var modeLabel: String {
+        digitalHumanMode.displayName
+    }
+
     var isOnline: Bool {
         switch self {
         case .selfAssistant:
@@ -335,13 +348,32 @@ final class FamilyCircleViewController: UIViewController {
                 ownerId: member.id,
                 displayName: member.name,
                 relation: member.relation,
-                mode: .star,
+                mode: member.digitalHumanMode,
                 isSelfAssistant: false
             )
             showToast("已切换到 \(member.name) 的回响", type: .success)
         }
 
         navigationController?.popViewController(animated: true)
+    }
+
+    private func setMode(_ mode: DigitalHumanMode, for member: FamilyMember) {
+        FamilyRepository.shared.updateMode(memberId: member.id, mode: mode)
+
+        if let user = UserManager.shared.currentUser,
+           DigitalHumanContextStore.shared.current.ownerId == member.id {
+            DigitalHumanContextStore.shared.current = DigitalHumanContext(
+                viewerUserId: user.id,
+                ownerId: member.id,
+                displayName: member.name,
+                relation: member.relation,
+                mode: mode,
+                isSelfAssistant: false
+            )
+        }
+
+        membersTableView.reloadData()
+        showToast("已标记为\(mode.displayName)状态", type: .success)
     }
 }
 
@@ -365,6 +397,25 @@ extension FamilyCircleViewController: UITableViewDelegate {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         selectPersona(option: personaOptions[indexPath.row])
+    }
+
+    func tableView(_ tableView: UITableView,
+                   contextMenuConfigurationForRowAt indexPath: IndexPath,
+                   point: CGPoint) -> UIContextMenuConfiguration? {
+        guard case .familyMember(let member) = personaOptions[indexPath.row] else { return nil }
+
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+            let modes: [DigitalHumanMode] = [.sunlight, .star, .silent]
+            let actions = modes.map { mode in
+                UIAction(
+                    title: "\(mode.displayName) - \(mode.selectionDescription)",
+                    state: member.digitalHumanMode == mode ? .on : .off
+                ) { _ in
+                    self?.setMode(mode, for: member)
+                }
+            }
+            return UIMenu(title: "标记数字人状态", children: actions)
+        }
     }
 }
 
@@ -437,6 +488,17 @@ final class FriendMemberCell: UITableViewCell {
         return l
     }()
 
+    private let modeLabel: UILabel = {
+        let l = UILabel()
+        l.font = .systemFont(ofSize: 11, weight: .medium)
+        l.textColor = UIColor(red: 0.42, green: 0.35, blue: 0.24, alpha: 1.0)
+        l.backgroundColor = UIColor(red: 0.96, green: 0.92, blue: 0.84, alpha: 1.0)
+        l.layer.cornerRadius = 8
+        l.layer.masksToBounds = true
+        l.textAlignment = .center
+        return l
+    }()
+
     private let lastUpdatedLabel: UILabel = {
         let l = UILabel()
         l.font = .systemFont(ofSize: 13)
@@ -488,14 +550,19 @@ final class FriendMemberCell: UITableViewCell {
         contentView.addSubview(avatarContainer)
         contentView.addSubview(nameLabel)
         contentView.addSubview(relationLabel)
+        contentView.addSubview(modeLabel)
         contentView.addSubview(lastUpdatedLabel)
         contentView.addSubview(footprintButton)
         contentView.addSubview(divider)
 
         [avatarContainer, avatarView, onlineDot, avatarInitialLabel,
-         nameLabel, relationLabel, lastUpdatedLabel, footprintButton, divider].forEach {
+         nameLabel, relationLabel, modeLabel, lastUpdatedLabel, footprintButton, divider].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
+
+        nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        relationLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        modeLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         NSLayoutConstraint.activate([
             // 头像容器
@@ -528,6 +595,12 @@ final class FriendMemberCell: UITableViewCell {
             relationLabel.leadingAnchor.constraint(equalTo: nameLabel.trailingAnchor, constant: 6),
             relationLabel.centerYAnchor.constraint(equalTo: nameLabel.centerYAnchor),
             relationLabel.heightAnchor.constraint(equalToConstant: 18),
+
+            // 状态胶囊
+            modeLabel.leadingAnchor.constraint(equalTo: relationLabel.trailingAnchor, constant: 6),
+            modeLabel.centerYAnchor.constraint(equalTo: relationLabel.centerYAnchor),
+            modeLabel.trailingAnchor.constraint(lessThanOrEqualTo: footprintButton.leadingAnchor, constant: -8),
+            modeLabel.heightAnchor.constraint(equalToConstant: 18),
 
             // 上次更新
             lastUpdatedLabel.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
@@ -563,10 +636,11 @@ final class FriendMemberCell: UITableViewCell {
         // 关系标签内边距
         let padding = "  \(option.relationLabel)  "
         relationLabel.text = padding
+        modeLabel.text = "  \(option.modeLabel)  "
 
         lastUpdatedLabel.text = "状态: \(option.lastUpdated)"
         accessibilityIdentifier = "familyPersonaOption.\(option.accessibilitySuffix)"
-        accessibilityLabel = "切换到\(option.displayName)"
+        accessibilityLabel = "切换到\(option.displayName)，\(option.modeLabel)状态"
 
         // 最后一行不显示分割线
         divider.isHidden = isLast
@@ -577,6 +651,7 @@ final class FriendMemberCell: UITableViewCell {
         avatarInitialLabel.text = nil
         nameLabel.text = nil
         relationLabel.text = nil
+        modeLabel.text = nil
         lastUpdatedLabel.text = nil
         divider.isHidden = false
     }

@@ -97,8 +97,13 @@ func classify(_ path: String) -> String? {
         return "3-archive-core-creation"
     }
 
+    let group4Services: Set<String> = [
+        "DreamJourney/Sources/Services/FamilyRepository.swift",
+        "DreamJourney/Sources/Services/MemoryModel.swift",
+    ]
     if hasPrefix(path, "DreamJourney/Sources/Modules/Profile/")
-        || hasPrefix(path, "DreamJourney/Sources/Modules/Family/") {
+        || hasPrefix(path, "DreamJourney/Sources/Modules/Family/")
+        || group4Services.contains(path) {
         return "4-profile-care-settings-legal"
     }
 

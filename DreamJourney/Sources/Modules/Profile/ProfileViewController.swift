@@ -584,7 +584,7 @@ final class ProfileViewController: UIViewController {
     }
 
     private func openFamilyManagement() {
-        guard featureFlags.isEnabled(.familySpace) else {
+        guard isProfileHiddenBranchesEnabled || featureFlags.isEnabled(.familySpace) else {
             showUnavailableAlert(
                 title: "家人管理暂未开放",
                 message: "当前版本先保留入口，完整家人空间会在后续版本开放。"

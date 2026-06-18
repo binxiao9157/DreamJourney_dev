@@ -4,6 +4,28 @@ enum DigitalHumanMode: String, Codable {
     case sunlight
     case star
     case silent
+
+    var displayName: String {
+        switch self {
+        case .sunlight:
+            return "阳光"
+        case .star:
+            return "星辰"
+        case .silent:
+            return "静默"
+        }
+    }
+
+    var selectionDescription: String {
+        switch self {
+        case .sunlight:
+            return "普通陪伴，不展示心境追踪"
+        case .star:
+            return "启用心理引导和心境追踪"
+        case .silent:
+            return "长期失联观察态，不公开展示"
+        }
+    }
 }
 
 struct DigitalHumanContext: Codable {
