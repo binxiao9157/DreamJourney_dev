@@ -81,6 +81,13 @@ for phrase in [
     "avatarName",
     "profileNickname",
     "profileRegion",
+    "careActiveRiskLevel",
+    "careMissingStatus",
+    "careInvalidStatus",
+    "careStaleWindowEnd",
+    "missing_user",
+    "invalid care snapshot should be rejected",
+    "stale care snapshot should preserve stale window",
     "seed",
     "verify",
 ] {

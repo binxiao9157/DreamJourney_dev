@@ -242,6 +242,7 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/backend-postgres-persistence-check.py",
     "tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-contract-gap-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/care-snapshot-backend-state-fixtures-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-fallback-ui-check.swift",
     "tmp/visual-qa/prd-stitch-ui/group4-profile-care-check.swift",
     "tmp/visual-qa/prd-stitch-ui/profile-settings-save-state-check.swift",

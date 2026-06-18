@@ -52,7 +52,11 @@ for state in [
     "backend accepts and persists nickname/gender/region/avatar metadata",
     "backend/security needed",
     "backend field migration needed",
-    "backend accepted, state variants needed",
+    "backend accepted, release-like gate now requires active / empty / stale / failed fixture evidence",
+    "careActiveRiskLevel",
+    "careMissingStatus",
+    "careInvalidStatus",
+    "careStaleWindowEnd",
 ] {
     assertContains(matrix, state, "backend contract matrix should record \(state)")
 }

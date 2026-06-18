@@ -24,6 +24,9 @@ EVENT_ID = f"event_release_like_{MARKER}"
 PHONE = "13900008888"
 PROFILE_NICKNAME = f"ReleaseLike Profile {MARKER}"
 PROFILE_REGION = f"ReleaseLike Region {MARKER[-12:]}"
+MISSING_CARE_USER_ID = f"{USER_ID}_missing_user"
+STALE_CARE_USER_ID = f"{USER_ID}_stale_care"
+STALE_CARE_WINDOW_END = "2026-05-01T00:00:00Z"
 
 
 def request_json(method, path, payload=None, params=None, expected=200):
@@ -45,6 +48,8 @@ def request_json(method, path, payload=None, params=None, expected=200):
             status = response.status
     except urllib.error.HTTPError as error:
         body = error.read().decode("utf-8", errors="replace")
+        if error.code == expected:
+            return json.loads(body) if body else {}
         raise AssertionError(f"{method} {path} expected {expected}, got {error.code}: {body}") from error
     except urllib.error.URLError as error:
         raise AssertionError(f"{method} {path} failed: {error}") from error
@@ -92,6 +97,57 @@ def health_check():
     assert_equal(health.get("status"), "ok", "health status")
     assert_equal(health.get("store"), "postgres", "release-like backend must use Postgres")
     return health
+
+
+def make_care_snapshot(
+    *,
+    summary,
+    risk_level="watch",
+    generated_at="2026-06-18T09:02:00Z",
+    window_start="2026-06-11T00:00:00Z",
+    window_end="2026-06-18T00:00:00Z",
+):
+    return {
+        "generatedAt": generated_at,
+        "windowStart": window_start,
+        "windowEnd": window_end,
+        "windowDayCount": 7,
+        "dataCoverageSummary": "Release-like aggregate context is sufficient.",
+        "totalTurns": 16,
+        "userTurnCount": 10,
+        "characterCount": 520,
+        "uniqueTokenCount": 98,
+        "lexicalDiversity": 0.73,
+        "negativeEmotionMentions": 1,
+        "sleepMentions": 2,
+        "bodyDiscomfortMentions": 0,
+        "repetitionRatio": 0.22,
+        "averageWordsPerMinute": 89.5,
+        "slowSpeechTurnCount": 0,
+        "longPauseTurnCount": 1,
+        "emotionVolatilityScore": 0.31,
+        "riskLevel": risk_level,
+        "summary": summary,
+        "trendSummary": "A short family check-in is recommended today.",
+        "suggestions": ["Call today."],
+        "weeklyHighlights": ["Shared one positive memory."],
+        "riskSignalDescriptions": ["Sleep topic appeared twice."],
+        "dailyTrend": [
+            {
+                "date": window_end[:10],
+                "userTurnCount": 10,
+                "negativeEmotionMentions": 1,
+                "sleepMentions": 2,
+                "bodyDiscomfortMentions": 0,
+                "repetitionRatio": 0.22,
+                "averageWordsPerMinute": 89.5,
+                "slowSpeechTurnCount": 0,
+                "longPauseTurnCount": 1,
+                "emotionVolatilityScore": 0.31,
+                "signalScore": 0.66,
+            }
+        ],
+    }
 
 
 def seed():
@@ -173,49 +229,19 @@ def seed():
     family_accepted = request_json("POST", f"/family/members/{USER_ID}/{FAMILY_ID}/accept", {"phone": PHONE})
     assert_equal(family_accepted.get("status"), "accepted", "family accept status")
 
-    care_snapshot = {
-        "generatedAt": "2026-06-18T09:02:00Z",
-        "windowStart": "2026-06-11T00:00:00Z",
-        "windowEnd": "2026-06-18T00:00:00Z",
-        "windowDayCount": 7,
-        "dataCoverageSummary": "Release-like aggregate context is sufficient.",
-        "totalTurns": 16,
-        "userTurnCount": 10,
-        "characterCount": 520,
-        "uniqueTokenCount": 98,
-        "lexicalDiversity": 0.73,
-        "negativeEmotionMentions": 1,
-        "sleepMentions": 2,
-        "bodyDiscomfortMentions": 0,
-        "repetitionRatio": 0.22,
-        "averageWordsPerMinute": 89.5,
-        "slowSpeechTurnCount": 0,
-        "longPauseTurnCount": 1,
-        "emotionVolatilityScore": 0.31,
-        "riskLevel": "watch",
-        "summary": f"Release-like care marker {MARKER}",
-        "trendSummary": "A short family check-in is recommended today.",
-        "suggestions": ["Call today."],
-        "weeklyHighlights": ["Shared one positive memory."],
-        "riskSignalDescriptions": ["Sleep topic appeared twice."],
-        "dailyTrend": [
-            {
-                "date": "2026-06-18",
-                "userTurnCount": 10,
-                "negativeEmotionMentions": 1,
-                "sleepMentions": 2,
-                "bodyDiscomfortMentions": 0,
-                "repetitionRatio": 0.22,
-                "averageWordsPerMinute": 89.5,
-                "slowSpeechTurnCount": 0,
-                "longPauseTurnCount": 1,
-                "emotionVolatilityScore": 0.31,
-                "signalScore": 0.66,
-            }
-        ],
-    }
+    care_snapshot = make_care_snapshot(summary=f"Release-like care marker {MARKER}")
     care_created = request_json("POST", "/care/snapshots", {"userId": USER_ID, "snapshot": care_snapshot})
     assert_equal(care_created.get("status"), "saved", "care snapshot create status")
+
+    stale_snapshot = make_care_snapshot(
+        summary=f"Release-like stale care marker {MARKER}",
+        risk_level="stable",
+        generated_at="2026-05-01T08:00:00Z",
+        window_start="2026-04-24T00:00:00Z",
+        window_end=STALE_CARE_WINDOW_END,
+    )
+    stale_created = request_json("POST", "/care/snapshots", {"userId": STALE_CARE_USER_ID, "snapshot": stale_snapshot})
+    assert_equal(stale_created.get("status"), "saved", "stale care snapshot create status")
 
 
 def verify():
@@ -253,6 +279,29 @@ def verify():
     assert_equal(latest_snapshot.get("metadataOnly"), True, "care snapshot should be metadata-only")
     assert_equal(latest_snapshot.get("contentRedacted"), True, "care snapshot should be content-redacted")
 
+    missing_care = request_json("GET", f"/care/snapshots/latest/{MISSING_CARE_USER_ID}", expected=404)
+    assert_equal(missing_care.get("detail"), "care snapshot not found", "missing_user should map to empty care state")
+
+    invalid_care = request_json(
+        "POST",
+        "/care/snapshots",
+        {"userId": f"{USER_ID}_invalid_care", "snapshot": {"riskLevel": "stable", "summary": "字段不足"}},
+        expected=400,
+    )
+    assert_true(
+        "missing required care snapshot fields" in str(invalid_care.get("detail") or ""),
+        "invalid care snapshot should be rejected",
+    )
+
+    stale_care = request_json("GET", f"/care/snapshots/latest/{STALE_CARE_USER_ID}")
+    stale_snapshot = ((stale_care.get("item") or {}).get("snapshot") or {})
+    assert_equal(
+        stale_snapshot.get("windowEnd"),
+        STALE_CARE_WINDOW_END,
+        "stale care snapshot should preserve stale window",
+    )
+    assert_equal(stale_snapshot.get("riskLevel"), "stable", "stale care risk level should persist")
+
     return {
         "profileNickname": profile.get("nickname"),
         "profileRegion": profile.get("region"),
@@ -261,6 +310,10 @@ def verify():
         "archiveDigitalHumanId": listed_archive.get("digitalHumanId"),
         "familyMemberCount": len(family_list.get("members", [])),
         "careRiskLevel": latest_snapshot.get("riskLevel"),
+        "careActiveRiskLevel": latest_snapshot.get("riskLevel"),
+        "careMissingStatus": missing_care.get("detail"),
+        "careInvalidStatus": invalid_care.get("detail"),
+        "careStaleWindowEnd": stale_snapshot.get("windowEnd"),
     }
 
 

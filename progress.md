@@ -135,3 +135,10 @@ Update this file after every recursive state-changing command bundle and before 
 - Completed: `backend-postgres-persistence-check.py` now seeds and verifies profile nickname, gender, region, and avatar metadata through `POST /profile` and `GET /profile/{user_id}`.
 - Guard: `release-like-backend-acceptance-check.swift` now requires `/profile` coverage in the runner and status doc.
 - Boundary: selected-environment acceptance still requires deploying the latest backend route before running handoff mode against the public backend.
+
+## Implementation Checkpoint - 2026-06-18T19:45:00+0800
+
+- Task: add care snapshot state fixtures to release-like backend acceptance.
+- Completed: `backend-postgres-persistence-check.py` now verifies active, missing/empty, invalid/failed, and stale care snapshot boundaries and emits `careActiveRiskLevel`, `careMissingStatus`, `careInvalidStatus`, and `careStaleWindowEnd`.
+- Guard: `care-snapshot-backend-state-fixtures-check.swift` and `release-like-backend-acceptance-check.swift` require the new care-state evidence in the runner and docs.
+- Boundary: this is a backend acceptance contract update, not a product decision for final care thresholds. The selected backend should be redeployed/rerun before these fields count as selected-environment evidence.

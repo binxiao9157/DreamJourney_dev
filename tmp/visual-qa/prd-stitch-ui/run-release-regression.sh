@@ -116,6 +116,7 @@ for guard in \
   release-like-backend-acceptance-check.swift \
   backend-env-smoke-check.swift \
   backend-contract-gap-check.swift \
+  care-snapshot-backend-state-fixtures-check.swift \
   profile-settings-save-state-check.swift \
   profile-account-fields-check.swift \
   profile-password-change-check.swift \

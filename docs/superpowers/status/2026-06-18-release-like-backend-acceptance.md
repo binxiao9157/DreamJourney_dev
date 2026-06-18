@@ -37,6 +37,14 @@ Profile contract update after the accepted deployed run:
 - `GET /profile/{user_id}`: now covered by the release-like persistence runner in local code.
 - The accepted deployed run above predates the `/profile` backend route. Deploy the latest backend before using this route as selected-environment evidence.
 
+Care snapshot state fixture update after the accepted deployed run:
+
+- `careActiveRiskLevel`: now covered by the release-like persistence runner in local code.
+- `careMissingStatus`: now covered by the release-like persistence runner in local code and maps a missing user to the public empty state boundary.
+- `careInvalidStatus`: now covered by the release-like persistence runner in local code and maps rejected malformed payloads to the public failed-state boundary.
+- `careStaleWindowEnd`: now covered by the release-like persistence runner in local code and preserves an old care window for stale-state handling.
+- The accepted deployed run above predates this active / empty / stale / failed fixture gate. Rerun the selected backend before using these care-state fields as selected-environment evidence.
+
 Root cause narrowed during the deployed retry:
 
 - An earlier deployed run reached `postgres-persistence-verify.json` with `completed=true` for marker `20260618-deployed-postgres-acceptance`.
@@ -133,7 +141,8 @@ The persistence contract covers:
 - Archive persona visibility fields: `personaScope=family` and `digitalHumanId=family_default`;
 - KB sync/snapshot persistence;
 - Family invite/accept/list persistence;
-- Care snapshot latest persistence with metadata-only/content-redacted guarantees.
+- Care snapshot latest persistence with metadata-only/content-redacted guarantees;
+- Care snapshot active / empty / stale / failed fixture evidence through `careActiveRiskLevel`, `careMissingStatus`, `careInvalidStatus`, and `careStaleWindowEnd`.
 
 The runner also keeps the two user scopes separate:
 
@@ -179,3 +188,5 @@ tmp/visual-qa/prd-stitch-ui/run-release-like-backend-acceptance.sh
 ```
 
 The local current backend code contains Postgres `Jsonb` parameter adaptation, rolls back failed DB operations, and passes the backend verification suite.
+
+After this document update, the local release-like runner also guards care snapshot state fixtures. The next deployed acceptance run should verify `careActiveRiskLevel`, `careMissingStatus`, `careInvalidStatus`, and `careStaleWindowEnd` in `postgres-persistence-verify.json`.
