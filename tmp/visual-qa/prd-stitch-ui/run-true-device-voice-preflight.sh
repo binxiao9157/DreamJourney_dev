@@ -30,7 +30,8 @@ load_local_xcconfig() {
   [[ -f "$file" ]] || return 0
 
   while IFS= read -r line; do
-    line="${line%%//*}"
+    line="$(printf '%s' "$line" | xargs)"
+    [[ "$line" == //* || "$line" == \#* ]] && continue
     [[ "$line" == *"="* ]] || continue
 
     local name="${line%%=*}"

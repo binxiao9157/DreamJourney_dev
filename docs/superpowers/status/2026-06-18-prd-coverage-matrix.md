@@ -52,7 +52,7 @@ Archive sync note: 档案文字 / 照片同步失败恢复 is implemented for pu
 - 真机验收：partially accepted; signed build, install, launch, and process evidence passed; permission prompts, archive photo picker, voice conversation, foreground/background, and screenshot evidence remain open
 - 语音 SDK 生产质量验收：partially accepted; true-device SDK initialization passed, full ASR/TTS conversation quality and recovery evidence remain required
 - App Store / TestFlight 签名链路验收：not accepted; local development install passed, distribution signing is separate
-- APNs provider delivery / 真机通知到达：not accepted; true-device console currently reports missing `aps-environment` entitlement
+- APNs provider delivery / 真机通知到达：not accepted; app now skips APNs registration when `aps-environment` is absent so Personal Team builds no longer emit a system registration failure, verified by true-device run `20260618-apns-gated-registration-launch`. Paid-Team Push capability, APNs token return, backend registration, provider delivery, and true-device notification arrival still need acceptance
 
 These are not product failures. They are external acceptance gates that require user-provided environment or physical-device operation.
 

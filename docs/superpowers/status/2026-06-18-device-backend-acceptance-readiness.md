@@ -22,7 +22,7 @@ Scope: PRD P0 真机验收与后端验收就绪包。
 - 本轮已修复本机签名 profile 缺失问题，完成真机 signed build、安装和启动。
 - 真机 console 证据显示端侧 `SpeechEngineToB` SDK 初始化成功，`DialogEngine` 返回 `initEngine = 0`。
 - 生产语音 SDK 质量验收仍待人工触发麦克风权限、完成至少一轮 ASR/TTS 对话、前后台切换，并采集错误恢复证据。
-- APNs 注册在真机 console 中失败，原因是缺少 `aps-environment` entitlement；在补齐推送能力前，不能声明远程通知到达已验收。
+- APNs 注册曾在真机 console 中失败，原因是缺少 `aps-environment` entitlement；当前工程已改为运行时检测 entitlement，Personal Team 构建会跳过 APNs 注册以避免系统失败。`DreamJourney/DreamJourney.entitlements` 已保留为付费开发者 Team 开启 Push Notifications 后的配置入口。
 
 ## Source Of Truth
 
@@ -144,7 +144,10 @@ Current 2026-06-18 evidence:
 - Installed app: `com.yxj.dreamjourney.app`, version `1.0.0`, bundle version `1`
 - Running process: `DreamJourney.app/DreamJourney`, PID `6846` in `processes.json`
 - Console launch evidence: `console-output.log` includes `SpeechEngineToB` SDK initialization and `[DialogEngine] ✅ 引擎初始化成功`
-- APNs current blocker: `console-output.log` includes `remote notification registration failed: 未找到应用程序的“aps-environment”的授权字符串`
+- APNs entitlement status: `DreamJourney/DreamJourney.entitlements` declares `aps-environment=development`, but the default Personal Team build does not force `CODE_SIGN_ENTITLEMENTS` because Apple personal development teams do not support Push Notifications capability.
+- APNs current behavior: `AppDelegate` checks the embedded provisioning profile for `aps-environment`; if missing, it logs `APNs entitlement missing; skip remote notification registration` and does not call `registerForRemoteNotifications()`.
+- APNs gated-registration evidence: `tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260618-apns-gated-registration-launch/console-output.log` contains the skip log and no longer contains the previous system failure `remote notification registration failed: 未找到应用程序的“aps-environment”的授权字符串`.
+- APNs remaining acceptance: use a paid Apple Developer Team / profile with Push Notifications enabled, build with `DreamJourney/DreamJourney.entitlements`, confirm APNs returns a device token, then verify backend token registration and provider delivery.
 
 Required privacy keys in `DreamJourney/Resources/Info.plist`:
 

@@ -212,6 +212,7 @@
 		C9115FEF531F2DA00EDE4969 /* bs_texture_halfFace.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = bs_texture_halfFace.png; sourceTree = "<group>"; };
 		CCCEC476950937337FC59A5C /* Pods-DreamJourney.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DreamJourney.debug.xcconfig"; path = "Target Support Files/Pods-DreamJourney/Pods-DreamJourney.debug.xcconfig"; sourceTree = "<group>"; };
 		D4566C37A3A020CABC4D249A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		D1D000000000000000000202 /* DreamJourney.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DreamJourney.entitlements; sourceTree = "<group>"; };
 		D4C24A29B21F6E3786F14398 /* MapFootprintViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapFootprintViewController.swift; sourceTree = "<group>"; };
 		D6AC678D507A1494FFBFDAA0 /* SharedModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedModels.swift; sourceTree = "<group>"; };
 		DEB0707389E5BC6A57EAB3BD /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
@@ -577,6 +578,7 @@
 			isa = PBXGroup;
 			children = (
 				41B3D2BD9BE7DFE0AABF34F1 /* Assets.xcassets */,
+				D1D000000000000000000202 /* DreamJourney.entitlements */,
 				0EF4341D967D06AAD14B81E4 /* Resources */,
 				55AC4B70337CF0A2927D0196 /* Sources */,
 			);

@@ -105,6 +105,7 @@ for required in [
     "load_local_xcconfig",
     "DreamJourney/Config/Backend.local.xcconfig",
     "DreamJourney/Config/VoiceSDK.local.xcconfig",
+    "[[ \"$line\" == //* || \"$line\" == \\#* ]] && continue",
     "xcodebuild -showdestinations",
     "xcrun xctrace list devices",
     "No online physical iPhone/iPad detected",

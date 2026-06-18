@@ -68,8 +68,21 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         guard DreamJourneyBackendClient.shared.isPushDeviceTokenRegistrationConfigured else {
             return
         }
+        guard hasAPNsEntitlement else {
+            print("[PushDeviceToken] APNs entitlement missing; skip remote notification registration")
+            return
+        }
         application.registerForRemoteNotifications()
         syncStoredPushDeviceTokenIfPossible()
+    }
+
+    private var hasAPNsEntitlement: Bool {
+        guard let path = Bundle.main.path(forResource: "embedded", ofType: "mobileprovision"),
+              let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+              let profile = String(data: data, encoding: .isoLatin1) else {
+            return false
+        }
+        return profile.contains("<key>aps-environment</key>")
     }
 
     @objc private func handleUserDidLoginForPushDeviceToken() {
