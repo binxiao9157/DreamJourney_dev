@@ -3,9 +3,24 @@ import Foundation
 enum EchoInteractionState {
     case idle
     case listening
+    case thinking
     case waitingReply(minutes: Int)
     case speaking
+    case replied
     case error(String)
+}
+
+struct EchoReplyPacingPolicy {
+    static let waitAfterUserTurnCount = 3
+
+    static func shouldWaitForReply(afterUserTurnCount userTurnCount: Int) -> Bool {
+        userTurnCount >= waitAfterUserTurnCount
+    }
+
+    static func replyDelayMinutes(forCompletedSessionCount sessionCount: Int) -> Int {
+        let options = [5, 10, 30]
+        return options[max(0, sessionCount) % options.count]
+    }
 }
 
 struct EchoArchiveContextStatus: Equatable {
@@ -58,10 +73,17 @@ final class EchoViewModel {
     private(set) var context: DigitalHumanContext
     private(set) var archiveContextStatus: EchoArchiveContextStatus = .empty
     private(set) var state: EchoInteractionState = .idle
+    private var currentSessionUserTurnCount = 0
 
     var onStateChange: ((EchoInteractionState) -> Void)?
     var onTranscriptAppend: ((String, Bool) -> Void)?
     var onArchiveContextStatusChange: ((EchoArchiveContextStatus) -> Void)?
+    var isWaitingForDelayedReply: Bool {
+        if case .waitingReply = state {
+            return true
+        }
+        return false
+    }
 
     init(
         contextStore: DigitalHumanContextStore = .shared,
@@ -90,9 +112,17 @@ final class EchoViewModel {
         refreshArchiveContextStatus()
         memoryManager.recordUserTurn(text: normalizedText)
         onTranscriptAppend?(normalizedText, true)
+        currentSessionUserTurnCount += 1
 
-        let wait = Self.replyDelayMinutes(for: memoryManager.currentMemory.sessionCount)
-        updateState(.waitingReply(minutes: wait))
+        if EchoReplyPacingPolicy.shouldWaitForReply(afterUserTurnCount: currentSessionUserTurnCount) {
+            let wait = EchoReplyPacingPolicy.replyDelayMinutes(
+                forCompletedSessionCount: memoryManager.currentMemory.sessionCount
+            )
+            updateState(.waitingReply(minutes: wait))
+            return
+        }
+
+        updateState(.thinking)
     }
 
     func receiveAIReply(_ text: String) {
@@ -104,7 +134,12 @@ final class EchoViewModel {
         updateState(.speaking)
     }
 
+    func markReplyDelivered() {
+        updateState(.replied)
+    }
+
     func resetToIdle() {
+        currentSessionUserTurnCount = 0
         updateState(.idle)
     }
 
@@ -113,8 +148,7 @@ final class EchoViewModel {
     }
 
     static func replyDelayMinutes(for sessionCount: Int) -> Int {
-        let options = [5, 10, 30]
-        return options[max(0, sessionCount) % options.count]
+        EchoReplyPacingPolicy.replyDelayMinutes(forCompletedSessionCount: sessionCount)
     }
 
     private static func currentArchiveContextStatus() -> EchoArchiveContextStatus {

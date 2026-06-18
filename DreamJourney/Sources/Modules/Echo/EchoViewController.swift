@@ -115,6 +115,7 @@ final class EchoViewController: UIViewController {
     private var currentState: EchoInteractionState = .idle
     private var transcriptEntries: [(text: String, isUser: Bool)] = []
     private var pendingAIText: String?
+    private var isStoppingForDelayedReply = false
 
     init(viewModel: EchoViewModel = EchoViewModel()) {
         self.viewModel = viewModel
@@ -323,6 +324,15 @@ final class EchoViewController: UIViewController {
                 accessibilityLabel: "停止语音"
             )
             setMicPulse(active: true)
+        case .thinking:
+            renderVoiceStatus(text: "我在想一想", isVisible: true)
+            configureMicButton(
+                systemName: "ellipsis",
+                backgroundColor: DJDesignTokens.Color.surfaceContainer,
+                isEnabled: false,
+                accessibilityLabel: "我在想一想"
+            )
+            setMicPulse(active: false)
         case .waitingReply(let minutes):
             renderVoiceStatus(text: "约 \(minutes) 分钟后再听", isVisible: true)
             configureMicButton(
@@ -341,6 +351,15 @@ final class EchoViewController: UIViewController {
                 accessibilityLabel: "回响正在抵达"
             )
             setMicPulse(active: true)
+        case .replied:
+            renderVoiceStatus(text: "回信已抵达", isVisible: true)
+            configureMicButton(
+                systemName: "checkmark",
+                backgroundColor: DJDesignTokens.Color.accentDeep,
+                isEnabled: false,
+                accessibilityLabel: "回信已抵达"
+            )
+            setMicPulse(active: false)
         case .error(let message):
             renderVoiceStatus(text: message, isVisible: true)
             configureMicButton(
@@ -452,6 +471,13 @@ final class EchoViewController: UIViewController {
         viewModel.receiveAIReply(aiText)
         pendingAIText = nil
     }
+
+    private func beginDelayedReplyWait() {
+        pendingAIText = nil
+        guard DialogEngineManager.shared.isDialogActive else { return }
+        isStoppingForDelayedReply = true
+        DialogEngineManager.shared.stopDialog()
+    }
 }
 
 extension EchoViewController: DialogEngineDelegate {
@@ -464,11 +490,16 @@ extension EchoViewController: DialogEngineDelegate {
     func onASRResult(text: String, isFinal: Bool) {
         guard isFinal else { return }
         DispatchQueue.main.async { [weak self] in
-            self?.viewModel.finishUserVoice(text: text)
+            guard let self = self else { return }
+            self.viewModel.finishUserVoice(text: text)
+            if self.viewModel.isWaitingForDelayedReply {
+                self.beginDelayedReplyWait()
+            }
         }
     }
 
     func onTTSStarted(text: String) {
+        guard !viewModel.isWaitingForDelayedReply else { return }
         pendingAIText = nil
         DispatchQueue.main.async { [weak self] in
             self?.viewModel.receiveAIReply(text)
@@ -478,15 +509,21 @@ extension EchoViewController: DialogEngineDelegate {
     func onTTSFinished() {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
-            if DialogEngineManager.shared.isDialogActive {
-                self.viewModel.beginVoiceInteraction()
-            } else {
-                self.viewModel.resetToIdle()
+            guard !self.viewModel.isWaitingForDelayedReply else { return }
+            self.viewModel.markReplyDelivered()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                guard let self = self else { return }
+                if DialogEngineManager.shared.isDialogActive {
+                    self.viewModel.beginVoiceInteraction()
+                } else {
+                    self.viewModel.resetToIdle()
+                }
             }
         }
     }
 
     func onChatStreaming(text: String) {
+        guard !viewModel.isWaitingForDelayedReply else { return }
         pendingAIText = text
     }
 
@@ -499,6 +536,11 @@ extension EchoViewController: DialogEngineDelegate {
     func onDialogEnded(reason: DialogEndReason) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
+            if self.isStoppingForDelayedReply {
+                self.isStoppingForDelayedReply = false
+                ConversationMemoryManager.shared.endSession()
+                return
+            }
             self.flushPendingAIReplyIfNeeded()
             ConversationMemoryManager.shared.endSession()
             self.viewModel.resetToIdle()
@@ -514,8 +556,15 @@ extension EchoViewController {
 
     func runUIQAEchoVoiceStatePreview() {
         viewModel.beginVoiceInteraction()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-            self?.viewModel.finishUserVoice(text: "我想听爸爸小时候的故事")
+        viewModel.finishUserVoice(text: "第一次想起爸爸小时候的故事")
+        viewModel.receiveAIReply("我在听，慢慢说。")
+        viewModel.beginVoiceInteraction()
+        viewModel.finishUserVoice(text: "第二次想起这件事")
+        viewModel.receiveAIReply("这些记忆很珍贵。")
+        viewModel.beginVoiceInteraction()
+        viewModel.finishUserVoice(text: "第三次想起这件事")
+        if viewModel.isWaitingForDelayedReply {
+            beginDelayedReplyWait()
         }
     }
 

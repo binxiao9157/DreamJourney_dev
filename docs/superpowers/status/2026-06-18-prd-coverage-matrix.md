@@ -18,7 +18,7 @@ Head at creation: `790f029 docs: add prd ui continuation plan`
 | PRD requirement | Current status | Public? | Evidence | Next action |
 | --- | --- | --- | --- | --- |
 | 回响语音输入 | implemented | yes | `EchoViewController`, archive-to-echo smoke | true-device microphone acceptance |
-| 2-3轮后等待回信 | partially implemented | yes | `EchoViewModel` | tune delay policy after product review |
+| 2-3轮后等待回信 | implemented default policy | yes | `EchoViewModel`, echo waiting reply policy check | product review and true-device voice acceptance |
 | 档案照片 | implemented | yes | Archive photo entry smoke | true-device photo acceptance |
 | 档案视频 | not implemented | no | release matrix | define video upload scope |
 | 档案录音 | hidden candidate | no | archive media smoke | true-device audio acceptance |

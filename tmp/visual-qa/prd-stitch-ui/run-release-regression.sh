@@ -102,6 +102,7 @@ run_step "Python QA scripts compile" "$STATIC_LOG_DIR/python-qa-compile.log" \
 for guard in \
   release-feature-matrix-check.swift \
   prd-coverage-matrix-check.swift \
+  echo-waiting-reply-policy-check.swift \
   phase0-backend-alignment-check.swift \
   release-like-backend-acceptance-check.swift \
   backend-env-smoke-check.swift \
