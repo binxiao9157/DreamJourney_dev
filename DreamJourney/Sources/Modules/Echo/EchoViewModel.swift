@@ -2,6 +2,7 @@ import Foundation
 
 enum EchoInteractionState {
     case idle
+    case starting
     case listening
     case thinking
     case waitingReply(minutes: Int)
@@ -122,6 +123,12 @@ final class EchoViewModel {
         self.memoryManager = memoryManager
         self.archiveContextStatusProvider = archiveContextStatusProvider
         self.context = contextStore.current
+    }
+
+    func prepareVoiceInteraction() {
+        context = contextStore.current
+        refreshArchiveContextStatus()
+        updateState(.starting)
     }
 
     func beginVoiceInteraction() {

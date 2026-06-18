@@ -16,7 +16,14 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
     }
 }
 
+func assertNotContains(_ haystack: String, _ needle: String, _ message: String) {
+    guard !haystack.contains(needle) else {
+        fatalError("\(message): unexpected \(needle)")
+    }
+}
+
 let echoView = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
+let echoViewModel = read("DreamJourney/Sources/Modules/Echo/EchoViewModel.swift")
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
 let releasePackageCheck = read("tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift")
 
@@ -26,7 +33,12 @@ assertContains(echoView, "private var voiceStatusHeightConstraint", "echo state 
 assertContains(echoView, "label.accessibilityIdentifier = \"echoVoiceStatus\"", "voice state should be stable for UI QA")
 assertContains(echoView, "private func renderVoiceStatus", "echo should isolate voice state rendering")
 assertContains(echoView, "voiceStatusHeightConstraint?.constant = isVisible ? 32 : 0", "voice state should collapse without shifting default Stitch layout")
+assertNotContains(echoView, "timestampLabel", "echo quote bubble should not render the stray timestamp under the bubble")
+assertContains(echoViewModel, "case starting", "echo state machine should distinguish startup from active listening")
+assertContains(echoViewModel, "func prepareVoiceInteraction()", "echo should expose a pre-start state before the SDK confirms listening")
+assertContains(echoView, "viewModel.prepareVoiceInteraction()", "echo should not render listening before DialogEngine confirms start")
 assertContains(echoView, "renderVoiceStatus(text: nil, isVisible: false)", "idle state should hide the voice status capsule")
+assertContains(echoView, "renderVoiceStatus(text: \"正在准备麦克风\", isVisible: true)", "starting state should show a preparing status before listening")
 assertContains(echoView, "renderVoiceStatus(text: \"我在听，您慢慢说\", isVisible: true)", "listening state should show a gentle visible status")
 assertContains(echoView, "renderVoiceStatus(text: \"先去窗边走走，约 \\(minutes) 分钟后我再回信\", isVisible: true)", "waiting state should show the delayed reply state")
 assertContains(echoView, "renderVoiceStatus(text: \"回响正在抵达\", isVisible: true)", "speaking state should show the echo arriving state")

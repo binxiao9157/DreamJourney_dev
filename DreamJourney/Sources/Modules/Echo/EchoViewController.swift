@@ -30,15 +30,6 @@ final class EchoViewController: UIViewController {
         return label
     }()
 
-    private let timestampLabel: UILabel = {
-        let label = UILabel()
-        label.text = "刚才"
-        label.font = DJDesignTokens.Font.label(13)
-        label.textColor = DJDesignTokens.Color.textSecondary.withAlphaComponent(0.60)
-        label.numberOfLines = 1
-        return label
-    }()
-
     private let archiveContextStatusView: UIView = {
         let archiveContextStatusView = UIView()
         archiveContextStatusView.backgroundColor = UIColor(hex: "#FEFEF9").withAlphaComponent(0.9)
@@ -179,7 +170,6 @@ final class EchoViewController: UIViewController {
         view.addSubview(scenicView)
         view.addSubview(archiveContextStatusView)
         view.addSubview(quoteBubble)
-        view.addSubview(timestampLabel)
         view.addSubview(voiceStatusView)
         view.addSubview(micRingView)
         view.addSubview(micButton)
@@ -194,7 +184,6 @@ final class EchoViewController: UIViewController {
             archiveContextStatusLabel,
             quoteBubble,
             quoteLabel,
-            timestampLabel,
             voiceStatusView,
             voiceStatusLabel,
             micRingView,
@@ -234,10 +223,6 @@ final class EchoViewController: UIViewController {
             quoteLabel.leadingAnchor.constraint(equalTo: quoteBubble.leadingAnchor, constant: 16),
             quoteLabel.trailingAnchor.constraint(equalTo: quoteBubble.trailingAnchor, constant: -16),
             quoteLabel.bottomAnchor.constraint(equalTo: quoteBubble.bottomAnchor, constant: -16),
-
-            timestampLabel.topAnchor.constraint(equalTo: quoteBubble.bottomAnchor, constant: 8),
-            timestampLabel.leadingAnchor.constraint(equalTo: quoteBubble.leadingAnchor, constant: 4),
-            timestampLabel.trailingAnchor.constraint(lessThanOrEqualTo: quoteBubble.trailingAnchor),
 
             voiceStatusView.centerXAnchor.constraint(equalTo: micButton.centerXAnchor),
             voiceStatusView.bottomAnchor.constraint(equalTo: micButton.topAnchor, constant: -8),
@@ -301,7 +286,6 @@ final class EchoViewController: UIViewController {
             return
         }
         quoteLabel.text = latestEntry.text
-        timestampLabel.text = "刚才"
     }
 
     private func render(state: EchoInteractionState) {
@@ -315,6 +299,15 @@ final class EchoViewController: UIViewController {
                 backgroundColor: DJDesignTokens.Color.accentDeep,
                 isEnabled: true,
                 accessibilityLabel: "开始语音"
+            )
+            setMicPulse(active: false)
+        case .starting:
+            renderVoiceStatus(text: "正在准备麦克风", isVisible: true)
+            configureMicButton(
+                systemName: "mic.fill",
+                backgroundColor: DJDesignTokens.Color.surfaceContainer,
+                isEnabled: false,
+                accessibilityLabel: "正在准备麦克风"
             )
             setMicPulse(active: false)
         case .listening:
@@ -451,7 +444,7 @@ final class EchoViewController: UIViewController {
                 }
                 DialogEngineManager.shared.delegate = self
                 self.pendingAIText = nil
-                self.viewModel.beginVoiceInteraction()
+                self.viewModel.prepareVoiceInteraction()
                 DialogEngineManager.shared.startDialog()
             }
         }
