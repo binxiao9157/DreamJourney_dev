@@ -34,7 +34,7 @@ The app should preserve future routes for family space, elder care, sunlight/sil
 | Backend client | Local/dev backend base URL and optional token config; archive, KB, family, care endpoint wrappers. | `DreamJourneyBackendClient`, backend env smoke docs. |
 | Persona-scoped core loop | Archive storage, backend archive list payloads, sync payloads, and Echo archive context now resolve from the selected digital-human owner while preserving the default self assistant. | `DigitalHumanContextStore`, `MemoryArchiveRepository`, `persona-scoped-archive-context-check.swift`, archive-to-echo smoke. |
 | Release gates | Incomplete/high-risk branches are hidden by default and guarded by feature flags or UIQA-only launch arguments. | `FeatureFlagService`, release feature matrix. |
-| QA harness | Reusable archive-to-echo smoke and static guards exist; large generated QA artifacts remain local-only. | `tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh`, submit inventory. |
+| QA harness | Reusable archive-to-echo smoke, archive media entries smoke, and static guards exist; large generated QA artifacts remain local-only. | `tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh`, `tmp/visual-qa/prd-stitch-ui/run-archive-media-entries-smoke.sh`, submit inventory. |
 
 ## Key Remaining Gaps
 
@@ -95,7 +95,7 @@ The app should preserve future routes for family space, elder care, sunlight/sil
    - Replace the disabled draft-send action with a real contact contract only after backend/product/legal confirmation.
 
 5. **Archive media expansion**
-   - Status: release readiness contract added in `docs/superpowers/status/2026-06-18-archive-media-release-readiness.md`.
+   - Status: release readiness contract and repeatable media entries smoke added in `docs/superpowers/status/2026-06-18-archive-media-release-readiness.md`.
    - Promote audio/time-letter/video only when each has real persistence, permissions, and QA.
    - Current boundary: text/photo public, audio/time-letter hidden behind `DJEnableArchiveHiddenBranches` or feature flags, video unavailable.
 

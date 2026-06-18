@@ -56,7 +56,13 @@ private extension AppDelegate {
             FeatureFlagService.shared.set(.archiveRemoteFetch, enabled: true)
             print("[UI_QA] Archive remote fetch enabled")
         }
-        if arguments.contains("DJRunBackendEnvSmoke") {
+        if arguments.contains("DJRunArchiveMediaEntriesSmoke") {
+            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+            FeatureFlagService.shared.resetToDefaults()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.runArchiveMediaEntriesSmoke()
+            }
+        } else if arguments.contains("DJRunBackendEnvSmoke") {
             seedEchoArchiveContext()
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.runBackendEnvSmoke()
@@ -87,6 +93,59 @@ private extension AppDelegate {
         } else if arguments.contains("DJSeedPendingArchiveAnalysis") {
             seedPendingArchiveAnalysisContext()
         }
+    }
+
+    func runArchiveMediaEntriesSmoke() {
+        let releaseOptionTitles = archiveCreationOptionTitles(isHiddenBranchesEnabled: false)
+        let hiddenOptionTitles = archiveCreationOptionTitles(isHiddenBranchesEnabled: true)
+        let expectedReleaseOptionTitles = ["添加文字描述", "选择照片"]
+        let expectedHiddenOptionTitles = ["添加文字描述", "选择照片", "录入语音", "录入时间信件"]
+        let videoVisible = MemoryArchiveMediaReleaseReadiness.isCreationVisible(
+            for: .video,
+            isAudioUploadEnabled: true,
+            isTimeLettersEnabled: true,
+            isHiddenBranchesEnabled: true
+        )
+        let audioRequiresMicrophonePermission = MemoryArchiveMediaReleaseReadiness
+            .capability(for: .audio)
+            .requiresMicrophonePermission
+        let completed = releaseOptionTitles == expectedReleaseOptionTitles
+            && hiddenOptionTitles == expectedHiddenOptionTitles
+            && videoVisible == false
+            && audioRequiresMicrophonePermission
+
+        writeArchiveMediaEntriesSmokeResult(
+            completed: completed,
+            releaseOptionTitles: releaseOptionTitles,
+            hiddenOptionTitles: hiddenOptionTitles,
+            videoVisible: videoVisible,
+            audioRequiresMicrophonePermission: audioRequiresMicrophonePermission
+        )
+        print(
+            "[UI_QA] ArchiveMediaEntriesSmoke completed " +
+            "release=\(releaseOptionTitles.joined(separator: "|")) " +
+            "hidden=\(hiddenOptionTitles.joined(separator: "|")) " +
+            "videoVisible=\(videoVisible)"
+        )
+    }
+
+    func archiveCreationOptionTitles(isHiddenBranchesEnabled: Bool) -> [String] {
+        let audioVisible = MemoryArchiveMediaReleaseReadiness.isCreationVisible(
+            for: .audio,
+            isAudioUploadEnabled: FeatureFlagService.shared.isEnabled(.archiveAudioUpload),
+            isTimeLettersEnabled: FeatureFlagService.shared.isEnabled(.timeLetters),
+            isHiddenBranchesEnabled: isHiddenBranchesEnabled
+        )
+        let timeLetterVisible = MemoryArchiveMediaReleaseReadiness.isCreationVisible(
+            for: .timeLetter,
+            isAudioUploadEnabled: FeatureFlagService.shared.isEnabled(.archiveAudioUpload),
+            isTimeLettersEnabled: FeatureFlagService.shared.isEnabled(.timeLetters),
+            isHiddenBranchesEnabled: isHiddenBranchesEnabled
+        )
+        return MemoryArchiveCreationOption.availableOptions(
+            isAudioUploadEnabled: audioVisible,
+            isTimeLettersEnabled: timeLetterVisible
+        ).map(\.title)
     }
 
     enum EchoVoiceStatePreviewTarget {
@@ -307,6 +366,36 @@ private extension AppDelegate {
             try data.write(to: resultURL, options: [.atomic])
         } catch {
             print("[UI_QA] ArchiveToEchoSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    func writeArchiveMediaEntriesSmokeResult(
+        completed: Bool,
+        releaseOptionTitles: [String],
+        hiddenOptionTitles: [String],
+        videoVisible: Bool,
+        audioRequiresMicrophonePermission: Bool
+    ) {
+        let result: [String: Any] = [
+            "completed": completed,
+            "releaseOptionTitles": releaseOptionTitles,
+            "hiddenOptionTitles": hiddenOptionTitles,
+            "videoVisible": videoVisible,
+            "audioRequiresMicrophonePermission": audioRequiresMicrophonePermission,
+            "hiddenBranchesArgument": MemoryArchiveMediaReleaseReadiness.hiddenBranchesLaunchArgument
+        ]
+
+        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
+              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("[UI_QA] ArchiveMediaEntriesSmoke failed reason=resultEncoding")
+            return
+        }
+
+        let resultURL = documentsURL.appendingPathComponent("archive-media-entries-smoke-result.json")
+        do {
+            try data.write(to: resultURL, options: [.atomic])
+        } catch {
+            print("[UI_QA] ArchiveMediaEntriesSmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
     }
 

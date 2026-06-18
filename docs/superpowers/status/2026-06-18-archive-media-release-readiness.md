@@ -28,5 +28,14 @@ Run after changes to archive creation, media persistence, feature flags, or rele
 
 ```bash
 swift tmp/visual-qa/prd-stitch-ui/archive-media-release-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/archive-media-entries-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+tmp/visual-qa/prd-stitch-ui/run-archive-media-entries-smoke.sh
 swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
+
+`run-archive-media-entries-smoke.sh` builds the UIQA simulator app, resets persisted feature flags, and checks the creation option matrix:
+
+- release mode: `添加文字描述`, `选择照片`
+- hidden QA mode: `添加文字描述`, `选择照片`, `录入语音`, `录入时间信件`
+- video remains unavailable
+- audio keeps the microphone-permission boundary
