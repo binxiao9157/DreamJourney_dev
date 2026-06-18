@@ -499,6 +499,30 @@ final class EchoViewController: UIViewController {
               let userId = UserManager.shared.currentUser?.id else {
             return
         }
+
+        let tokenStore = PushDeviceTokenStore.shared
+        if tokenStore.registration(for: userId) == nil,
+           DreamJourneyBackendClient.shared.isPushDeviceTokenRegistrationConfigured,
+           let deviceToken = tokenStore.loadDeviceToken() {
+            DreamJourneyBackendClient.shared.registerPushDeviceToken(
+                userId: userId,
+                deviceToken: deviceToken,
+                environment: PushDeviceTokenEnvironment.current,
+                deviceId: UIDevice.current.identifierForVendor?.uuidString ?? "ios-device"
+            ) { [weak self] result in
+                if case .success(let object) = result,
+                   let item = object["item"] as? [String: Any],
+                   let registration = PushDeviceTokenRegistration(json: item) {
+                    _ = tokenStore.saveRegistration(registration)
+                }
+                self?.submitDelayedReplyPush(userId: userId, delayedReply: delayedReply)
+            }
+        } else {
+            submitDelayedReplyPush(userId: userId, delayedReply: delayedReply)
+        }
+    }
+
+    private func submitDelayedReplyPush(userId: String, delayedReply: EchoDelayedReply) {
         DreamJourneyBackendClient.shared.scheduleEchoDelayedReplyPush(
             userId: userId,
             delayedReply: delayedReply

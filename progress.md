@@ -186,3 +186,68 @@ Update this file after every recursive state-changing command bundle and before 
 - Test update: `backend-postgres-persistence-check.py` now uses profile nickname/region values within backend validation limits; `release-like-backend-acceptance-check.swift` guards the shorter test payload and latest R2 evidence.
 - Evidence: `tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-selected-backend-latest-contracts-after-deploy-r2/`, including screenshot `ios-backend-env-smoke/20260618-selected-backend-latest-contracts-after-deploy-r2/01-backend-env-profile.png`.
 - Boundary: true-device microphone/photo/notification acceptance and APNs/device-token delivery remain open.
+
+## Checkpoint - 2026-06-18 20:30 CST
+
+- Task: advance Echo delayed-reply push readiness after deployed backend acceptance by adding the missing device-token registration contract.
+- Completed: iOS now has `PushDeviceTokenStore`, AppDelegate APNs token callbacks, backend token registration through `POST /devices/push-token`, and delayed reply scheduling that can include a registered `deviceTokenId`.
+- Backend: `DreamJourneyBackend` now exposes `/devices/push-token`, persists sanitized push-token metadata for memory/Postgres stores, and keeps raw device tokens out of API responses and delayed-reply payloads.
+- QA: `backend-postgres-persistence-check.py` now registers a push token, schedules an Echo delayed reply with `deviceTokenId`, and verifies persistence without raw token leakage.
+- Boundary: APNs provider delivery, service-side scheduled dispatch, selected deployed backend rerun after deployment, and true-device notification arrival remain open.
+
+## Checkpoint - 2026-06-18 20:38 CST
+
+- Task: rerun selected deployed backend acceptance after the server deployment notice, using the new push-token contract.
+- Result: blocked on deployed route parity. Local backend verification passed (`Ran 69 tests`, py_compile, deployment files, FastAPI smoke, diff check), deployed health was reachable with `store=postgres`, and the unique-marker seed reached the push-token step.
+- Failure: deployed `POST /devices/push-token` returned HTTP `404` in run `20260618-deployed-push-device-token-contract-203820`.
+- Evidence: `tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-deployed-push-device-token-contract-203820/`.
+- Root cause: local backend code contains the new route and tests, but the selected deployed backend still does not expose it. This is deployment drift for the new push-token contract, not the earlier rollback-on-exception/500 issue.
+- Boundary: remote Echo push readiness remains blocked until `/devices/push-token` is deployed and `run-release-like-backend-acceptance.sh` passes with `echoDelayedReplyDeviceTokenId`.
+
+## Closure Lodestar Recovery - 2026-06-18T20:22:00+08:00
+
+- Goal: 按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态
+- Mode: Execute
+- Phase: Implementation
+- Task: continue non-device PRD function development; latest slice is deployed Postgres backend acceptance
+- Blockers: true-device signing/operation still required for final acceptance; newest Stitch Echo variants still need explicit selection before replacing the current public Echo surface
+
+### docs/plans/task_01_prd-gap-map-and-priority-ledger.md
+- Ledger: `.complex-problems/L20260618-000157-01`
+- Root: PRD gap map and priority ledger
+- Next action: `none`
+- Problems: 2/2 done, 0 blocked
+- Validate: ok
+
+### docs/plans/task_02_p0-persona-scoped-archive-and-echo-context.md
+- Ledger: `.complex-problems/L20260618-000157-02`
+- Root: P0 persona-scoped archive and echo context
+- Next action: `none`
+- Problems: 1/1 done, 0 blocked
+- Validate: ok
+
+### docs/plans/task_03_p0-real-device-and-backend-acceptance-readiness.md
+- Ledger: `.complex-problems/L20260618-000157-03`
+- Root: P0 real-device and backend acceptance readiness
+- Next action: `none`
+- Problems: 1/1 done, 0 blocked
+- Validate: ok
+
+### docs/plans/task_04_p1-profile-family-and-safety-flows.md
+- Ledger: `.complex-problems/L20260618-000157-04`
+- Root: P1 profile family and safety flows
+- Next action: `none`
+- Problems: 2/2 done, 0 blocked
+- Validate: ok
+
+### docs/plans/task_05_review-and-release-qa.md
+- Ledger: `.complex-problems/L20260618-000157-05`
+- Root: Review and release QA
+- Next action: `none`
+- Problems: 1/1 done, 0 blocked
+- Validate: ok
+
+### Resume Protocol
+1. If a ledger has a non-`none` next action, run `ledger.py next` and perform exactly that action.
+2. After each recursive state change, run `sync_recursive_to_lodestar.py`.
+3. If all mapped ledgers report `next_action=none`, run Lodestar Review before final delivery.

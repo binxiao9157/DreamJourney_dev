@@ -85,7 +85,12 @@ xcodebuild \
   EXCLUDED_ARCHS='' \
   ARCHS=arm64 \
   ONLY_ACTIVE_ARCH=NO \
-  build > "$BUILD_LOG"
+  build 2>&1 | python3 -c 'import sys
+token = sys.argv[1]
+replacement = "<redacted-backend-token>"
+for line in sys.stdin:
+    sys.stdout.write(line.replace(token, replacement) if token else line)
+' "$BACKEND_API_TOKEN" > "$BUILD_LOG"
 
 APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION-iphonesimulator/DreamJourney.app"
 [[ -d "$APP_PATH" ]] || fail "Built app not found: $APP_PATH"

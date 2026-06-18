@@ -29,6 +29,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             AMapServices.shared().apiKey = apiKey
         }
         #endif
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleUserDidLoginForPushDeviceToken),
+            name: .djUserDidLogin,
+            object: nil
+        )
+        configurePushDeviceTokenRegistration(application)
         #if UI_QA_SIMULATOR && targetEnvironment(simulator)
         configureUIQASmokeHarnessIfNeeded()
         #endif
@@ -45,6 +52,55 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication,
                      didDiscardSceneSessions sceneSessions: Set<UISceneSession>) {
+    }
+
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        let token = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
+        PushDeviceTokenStore.shared.saveDeviceToken(token)
+        syncStoredPushDeviceTokenIfPossible()
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        print("[PushDeviceToken] remote notification registration failed: \(error.localizedDescription)")
+    }
+
+    private func configurePushDeviceTokenRegistration(_ application: UIApplication) {
+        guard DreamJourneyBackendClient.shared.isPushDeviceTokenRegistrationConfigured else {
+            return
+        }
+        application.registerForRemoteNotifications()
+        syncStoredPushDeviceTokenIfPossible()
+    }
+
+    @objc private func handleUserDidLoginForPushDeviceToken() {
+        syncStoredPushDeviceTokenIfPossible()
+    }
+
+    private func syncStoredPushDeviceTokenIfPossible() {
+        guard DreamJourneyBackendClient.shared.isPushDeviceTokenRegistrationConfigured,
+              let userId = UserManager.shared.currentUser?.id,
+              let deviceToken = PushDeviceTokenStore.shared.loadDeviceToken() else {
+            return
+        }
+
+        let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? "ios-device"
+        DreamJourneyBackendClient.shared.registerPushDeviceToken(
+            userId: userId,
+            deviceToken: deviceToken,
+            environment: PushDeviceTokenEnvironment.current,
+            deviceId: deviceId
+        ) { result in
+            switch result {
+            case .success(let object):
+                guard let item = object["item"] as? [String: Any],
+                      let registration = PushDeviceTokenRegistration(json: item) else {
+                    return
+                }
+                _ = PushDeviceTokenStore.shared.saveRegistration(registration)
+            case .failure(let error):
+                print("[PushDeviceToken] backend registration failed: \(error.localizedDescription)")
+            }
+        }
     }
 }
 

@@ -140,6 +140,41 @@ Required recovery:
 
 Recovery status: completed by `20260618-selected-backend-latest-contracts-after-deploy-r2`.
 
+## Latest Deployed Push Token Contract Attempt
+
+Run ID:
+
+```text
+20260618-deployed-push-device-token-contract-203820
+```
+
+Evidence directory:
+
+```text
+tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-deployed-push-device-token-contract-203820/
+```
+
+Status: blocked.
+
+Observed result:
+
+- Local backend verification passed first: backend unittest reported `Ran 69 tests` and `OK`, backend py_compile passed, deployment-file checks passed, FastAPI smoke passed, and backend diff check passed.
+- The deployed backend health endpoint was reachable and still reported `store=postgres`.
+- The unique-marker seed reached the new push-token contract and stopped at `POST /devices/push-token`.
+- The deployed backend returned HTTP `404` with `{"detail":"Not Found"}` for `POST /devices/push-token`.
+
+Root cause:
+
+- Local backend code contains the new `POST /devices/push-token` route and local tests cover raw-token non-disclosure plus delayed reply `deviceTokenId`.
+- The selected deployed backend still does not expose that route.
+- This is deployment drift for the new push-token contract, not the earlier rollback-on-exception/500 issue.
+
+Required recovery:
+
+1. Deploy the backend branch that includes the `POST /devices/push-token` route.
+2. Rerun `run-release-like-backend-acceptance.sh` with the private deployed backend URL/token.
+3. Treat remote Echo push readiness as blocked until `postgres-persistence-verify.json` includes `echoDelayedReplyDeviceTokenId` and `echoDelayedReplyPushProviderState=pending`.
+
 ## Latest Selected Backend Accepted Run
 
 Run ID:
@@ -283,3 +318,5 @@ tmp/visual-qa/prd-stitch-ui/run-release-like-backend-acceptance.sh
 The local current backend code contains Postgres `Jsonb` parameter adaptation, rolls back failed DB operations, and passes the backend verification suite.
 
 The latest selected backend acceptance run `20260618-selected-backend-latest-contracts-after-deploy-r2` verified `passwordChangeStatus`, `passwordOldLoginStatus`, `passwordNewLoginConfigured`, `careActiveRiskLevel`, `careMissingStatus`, `careInvalidStatus`, and `careStaleWindowEnd` in `postgres-persistence-verify.json`.
+
+After this run, the local backend/iOS contract added `POST /devices/push-token` and delayed reply `deviceTokenId` coverage. Deploy the new backend code, then rerun the same selected-backend acceptance command so the deployed evidence includes push token registration before claiming remote Echo push readiness.

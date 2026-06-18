@@ -20,6 +20,7 @@
 - `EchoDelayedReplyStore` 会持久化等待回信快照，包含 scheduledAt、deliverAt、minutes、userTurnCount 和触发原因。
 - App 冷启动/页面重建时，如果等待回信尚未到达，会恢复 `waitingReply` App 内状态。
 - `EchoDelayedReplyNotificationScheduler` 使用本地通知合同 `dj.echo.delayedReply`，通知文案为 `回信到了，回来听听这段回响。`。
+- `PushDeviceTokenStore` 会持久化 APNs token 注册结果；AppDelegate 在系统返回 token 后通过后端注册并保存 `deviceTokenId`。
 - `DreamJourneyBackendClient.scheduleEchoDelayedReplyPush` 定义推送通知后端合同：`POST /echo/delayed-replies`。
 - `resetToIdle()` 会清空本轮语音会话计数。
 
@@ -48,16 +49,19 @@
 
 推送通知后端合同：
 
+- Device token endpoint: `POST /devices/push-token`
+- Device token payload: `userId`、`deviceToken`、`platform=ios`、`environment`、`deviceId`
+- Device token response: `status=registered`，并回传不含原始 token 的 `deviceTokenId`、`deviceTokenHash`、`platform`、`environment`、`deliveryProviderState`。
 - Endpoint: `POST /echo/delayed-replies`
-- Payload: `userId`、`delayedReplyId`、`deliverAt`、`minutes`、`trigger`
+- Payload: `userId`、`delayedReplyId`、`deliverAt`、`minutes`、`trigger`，如果真机已完成 token 注册则附带 `deviceTokenId`
 - Response: `status=scheduled`，并回传包含 `delayedReplyId`、`deliverAt`、`minutes`、`trigger`、`deliveryState` 的 `item`。
-- 当前 iOS 侧为 backend-ready client；后端代码已补 `POST /echo/delayed-replies` 和 `GET /echo/delayed-replies/{userId}` 的接收/持久化合同。
+- 当前 iOS 侧为 backend-ready client；后端代码已补 `POST /devices/push-token`、`POST /echo/delayed-replies` 和 `GET /echo/delayed-replies/{userId}` 的接收/持久化合同。
 - 请求失败不影响 App 内等待状态和本地通知兜底。
-- 部署环境 route parity、APNs、device token 注册、服务端定时投递与真机通知到达仍是后端/真机验收门。
+- 部署环境 route parity、APNs provider 配置、服务端定时投递与真机通知到达仍是后端/真机验收门。
 
 仍需工程继续补齐：
 
-- 部署服务端 `/echo/delayed-replies` 持久化合同。
+- 部署服务端 `/devices/push-token` 与 `/echo/delayed-replies` 持久化合同。
 - 调度队列与 APNs 投递实现。
 - 真机麦克风与通知验收。
 

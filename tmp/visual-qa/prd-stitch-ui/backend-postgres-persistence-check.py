@@ -31,6 +31,10 @@ AUTH_NEW_PASSWORD = f"New-{MARKER[-12:]}-Pass9"
 MISSING_CARE_USER_ID = f"{USER_ID}_missing_user"
 STALE_CARE_USER_ID = f"{USER_ID}_stale_care"
 STALE_CARE_WINDOW_END = "2026-05-01T00:00:00Z"
+PUSH_DEVICE_TOKEN = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+PUSH_DEVICE_ID = f"ios-release-like-{MARKER[-12:]}"
+DELAYED_REPLY_ID = f"echo_delayed_release_like_{MARKER}"
+DELAYED_DELIVER_AT = "2026-06-18T12:05:00Z"
 
 
 def request_json(method, path, payload=None, params=None, expected=200):
@@ -194,6 +198,41 @@ def seed():
     assert_equal(saved_profile.get("gender"), "不便透露", "profile gender should echo from save")
     assert_equal(saved_profile.get("region"), PROFILE_REGION, "profile region should echo from save")
 
+    push_registered = request_json(
+        "POST",
+        "/devices/push-token",
+        {
+            "userId": USER_ID,
+            "deviceToken": PUSH_DEVICE_TOKEN,
+            "platform": "ios",
+            "environment": "sandbox",
+            "deviceId": PUSH_DEVICE_ID,
+        },
+    )
+    assert_equal(push_registered.get("status"), "registered", "push device token register status")
+    push_item = push_registered.get("item") or {}
+    assert_true(push_item.get("deviceTokenId"), "push token registration should return deviceTokenId")
+    assert_equal(push_item.get("deliveryProviderState"), "pending", "push token provider state should be pending")
+    assert_not_in_mapping(push_item, "deviceToken", "push token response must not expose raw deviceToken")
+    assert_true(PUSH_DEVICE_TOKEN not in json.dumps(push_registered), "push token response must not include raw token")
+
+    delayed_reply = request_json(
+        "POST",
+        "/echo/delayed-replies",
+        {
+            "userId": USER_ID,
+            "delayedReplyId": DELAYED_REPLY_ID,
+            "deliverAt": DELAYED_DELIVER_AT,
+            "minutes": 7,
+            "trigger": "tenRoundBaseline",
+            "deviceTokenId": push_item.get("deviceTokenId"),
+        },
+    )
+    assert_equal(delayed_reply.get("status"), "scheduled", "echo delayed reply status")
+    delayed_item = delayed_reply.get("item") or {}
+    assert_equal(delayed_item.get("deviceTokenId"), push_item.get("deviceTokenId"), "delayed reply should reference deviceTokenId")
+    assert_true(PUSH_DEVICE_TOKEN not in json.dumps(delayed_reply), "delayed reply response must not include raw token")
+
     archive_payload = {
         "userId": USER_ID,
         "viewerUserId": f"viewer_{MARKER}",
@@ -303,6 +342,17 @@ def verify():
     assert_equal(profile.get("region"), PROFILE_REGION, "profile region should persist")
     assert_equal(profile.get("avatarName"), "person.crop.circle.fill", "profile avatar metadata should persist")
 
+    delayed_reply_list = request_json("GET", f"/echo/delayed-replies/{USER_ID}")
+    listed_delayed_reply = next(
+        (item for item in delayed_reply_list.get("items", []) if item.get("delayedReplyId") == DELAYED_REPLY_ID),
+        None,
+    )
+    assert_true(listed_delayed_reply is not None, "delayed reply list should contain release-like marker item")
+    assert_equal(listed_delayed_reply.get("deliveryState"), "scheduled", "delayed reply delivery state should persist")
+    assert_equal(listed_delayed_reply.get("pushProviderState"), "pending", "delayed reply push provider state should persist")
+    assert_true(listed_delayed_reply.get("deviceTokenId"), "delayed reply should persist deviceTokenId")
+    assert_true(PUSH_DEVICE_TOKEN not in json.dumps(delayed_reply_list), "delayed reply list must not expose raw device token")
+
     archive_list = request_json("GET", f"/archive/items/{USER_ID}")
     listed_archive = next((item for item in archive_list.get("items", []) if item.get("id") == ARCHIVE_ID), None)
     assert_true(listed_archive is not None, "archive list should contain release-like marker item")
@@ -359,6 +409,9 @@ def verify():
         "passwordUserId": new_password_user.get("id"),
         "profileNickname": profile.get("nickname"),
         "profileRegion": profile.get("region"),
+        "echoDelayedReplyState": listed_delayed_reply.get("deliveryState"),
+        "echoDelayedReplyPushProviderState": listed_delayed_reply.get("pushProviderState"),
+        "echoDelayedReplyDeviceTokenId": listed_delayed_reply.get("deviceTokenId"),
         "archiveItemCount": len(archive_list.get("items", [])),
         "archivePersonaScope": listed_archive.get("personaScope"),
         "archiveDigitalHumanId": listed_archive.get("digitalHumanId"),

@@ -38,6 +38,8 @@ assertContains(script, "backend-auth-token-contract-check.py", "script should ve
 assertContains(script, "backend-integration-contract-check.py", "script should verify backend integration contract")
 assertContains(script, "DREAMJOURNEY_BACKEND_BASE_URL=\"$BACKEND_BASE_URL\"", "script should inject backend base URL into iOS build")
 assertContains(script, "DREAMJOURNEY_BACKEND_API_TOKEN=\"$BACKEND_API_TOKEN\"", "script should inject backend token into iOS build")
+assertContains(script, "line.replace(token, replacement)", "script should redact backend token from build logs")
+assertContains(script, "<redacted-backend-token>", "script should use a stable backend token redaction marker")
 assertContains(script, "DJSeedEchoArchiveContext", "script should seed archive context for UIQA")
 assertContains(script, "DJEnableArchiveRemoteFetch", "script should enable hidden remote fetch only inside UIQA")
 assertContains(script, "DJRunBackendEnvSmoke", "script should launch the app-side backend smoke harness")

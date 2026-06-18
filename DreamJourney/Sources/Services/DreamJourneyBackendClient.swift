@@ -39,6 +39,10 @@ final class DreamJourneyBackendClient {
         hasExplicitBaseURL || apiToken != nil
     }
 
+    var isPushDeviceTokenRegistrationConfigured: Bool {
+        hasExplicitBaseURL || apiToken != nil
+    }
+
     var isPasswordChangeConfigured: Bool {
         hasExplicitBaseURL || apiToken != nil
     }
@@ -139,18 +143,39 @@ final class DreamJourneyBackendClient {
         requestJSON(path: "/care/snapshots/latest/\(pathComponent(userId))", method: .get, payload: nil, completion: completion)
     }
 
+    func registerPushDeviceToken(
+        userId: String,
+        deviceToken: String,
+        environment: String,
+        deviceId: String,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        let payload: [String: Any] = [
+            "userId": userId,
+            "deviceToken": deviceToken,
+            "platform": "ios",
+            "environment": environment,
+            "deviceId": deviceId,
+        ]
+        requestJSON(path: "/devices/push-token", method: .post, payload: payload, completion: completion)
+    }
+
     func scheduleEchoDelayedReplyPush(
         userId: String,
         delayedReply: EchoDelayedReply,
         completion: @escaping (Result<[String: Any], Error>) -> Void
     ) {
-        let payload: [String: Any] = [
+        var payload: [String: Any] = [
             "userId": userId,
             "delayedReplyId": delayedReply.id,
             "deliverAt": ISO8601DateFormatter().string(from: delayedReply.deliverAt),
             "minutes": delayedReply.minutes,
             "trigger": delayedReply.trigger.rawValue,
         ]
+        if let registration = PushDeviceTokenStore.shared.registration(for: userId) {
+            let registeredDeviceTokenPayload: [String: Any] = ["deviceTokenId": registration.deviceTokenId]
+            payload.merge(registeredDeviceTokenPayload) { _, new in new }
+        }
         requestJSON(path: "/echo/delayed-replies", method: .post, payload: payload, completion: completion)
     }
 

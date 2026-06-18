@@ -47,7 +47,7 @@ assertContains(coverage, "| PRD requirement | Current status | Public? | Evidenc
 
 let requiredRows = [
     "| 回响语音输入 | implemented | yes | `EchoViewController`, archive-to-echo smoke | true-device microphone acceptance |",
-    "| 2-3轮后等待回信 | implemented ten-round/adaptive policy with persisted in-app state, local notification, and backend-ready push contract | yes | `EchoViewModel`, `EchoDelayedReplyStore`, `EchoDelayedReplyNotificationScheduler`, echo delayed reply notification/push checks | deploy `/echo/delayed-replies`, APNs/device-token delivery, true-device voice/notification acceptance |",
+    "| 2-3轮后等待回信 | implemented ten-round/adaptive policy with persisted in-app state, local notification, device-token registration contract, and backend-ready push contract | yes | `EchoViewModel`, `EchoDelayedReplyStore`, `EchoDelayedReplyNotificationScheduler`, `PushDeviceTokenStore`, echo delayed reply notification/push checks | deploy `/devices/push-token` and `/echo/delayed-replies`, APNs provider delivery, true-device voice/notification acceptance |",
     "| 档案照片 | implemented | yes | Archive photo entry smoke | true-device photo acceptance |",
     "| 档案视频 | not implemented | no | release matrix | define video upload scope |",
     "| 档案录音 | hidden candidate | no | archive media smoke | true-device audio acceptance |",
@@ -70,7 +70,7 @@ for row in requiredRows {
 let requiredStatuses = [
     "implemented",
     "partially implemented",
-    "implemented ten-round/adaptive policy with persisted in-app state, local notification, and backend-ready push contract",
+    "implemented ten-round/adaptive policy with persisted in-app state, local notification, device-token registration contract, and backend-ready push contract",
     "hidden candidate",
     "hidden blocked shell",
     "hidden boundary",
@@ -100,8 +100,8 @@ assertContains(coverage, "release-like FastAPI/Postgres 后端验收：accepted"
 assertContains(coverage, "线上/公网后端验收：accepted for simulator release-like scope", "coverage matrix should mark simulator remote backend as accepted")
 assertContains(coverage, "真机验收：not accepted", "coverage matrix should mark true-device as not accepted")
 assertContains(coverage, "the old third-turn default policy has been superseded", "coverage matrix should document superseded Echo policy")
-assertContains(coverage, "In-app state, local notification, and backend-ready push contract are implemented", "coverage matrix should document implemented Echo notification scope")
-assertContains(coverage, "Deployment route parity, APNs/device-token delivery, and true-device notification acceptance remain open", "coverage matrix should preserve external Echo notification gates")
+assertContains(coverage, "In-app state, local notification, device-token registration contract, and backend-ready push contract are implemented", "coverage matrix should document implemented Echo notification scope")
+assertContains(coverage, "Deployment route parity, APNs provider delivery, and true-device notification acceptance remain open", "coverage matrix should preserve external Echo notification gates")
 assertContains(coverage, "name/gender/region validation", "coverage matrix should document updated profile scope")
 assertContains(coverage, "Password change hidden shell", "coverage matrix should document password shell state")
 assertContains(coverage, "PasswordAPITests", "coverage matrix should document local password backend tests")
@@ -113,6 +113,7 @@ assertContains(coverage, "后端合同闭环", "coverage matrix should include b
 assertContains(coverage, "2026-06-18-backend-contract-gap-matrix.md", "coverage matrix should reference backend contract gap matrix")
 assertContains(coverage, "backend-contract-gap-check.swift", "coverage matrix should reference backend contract guard")
 assertContains(coverage, "/echo/delayed-replies", "coverage matrix should call out echo delayed reply backend gap")
+assertContains(coverage, "/devices/push-token", "coverage matrix should call out push device token backend gap")
 assertContains(coverage, "/profile", "coverage matrix should call out profile backend gap")
 assertContains(coverage, "/auth/password", "coverage matrix should call out password backend gap")
 assertContains(coverage, "No hidden PRD feature is public by default", "coverage matrix should preserve release gating policy")
