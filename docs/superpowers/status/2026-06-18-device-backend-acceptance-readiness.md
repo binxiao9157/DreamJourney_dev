@@ -8,7 +8,7 @@ Scope: PRD P0 真机验收与后端验收就绪包。
 
 ## Status
 
-当前状态是 **真机验收前置就绪到编译层**，并且 **公网后端模拟器 release-like 验收已通过**。
+当前状态是 **真机安装/启动已通过，权限与完整语音对话仍待人工验收**，并且 **公网后端模拟器 release-like 验收已通过**。
 
 这不是“真机已验收”，也不是 APNs 真机通知已验收，也不是生产语音 SDK 质量已验收。
 
@@ -19,9 +19,10 @@ Scope: PRD P0 真机验收与后端验收就绪包。
 - 已接受的部署后端验收 run：`20260618-deployed-echo-dispatch-contract-accepted-211732`。
 - 该 run 验证了 `echoDelayedReplyDispatchState=readyForProvider` 和 `echoDelayedReplyProviderDeliveryAttempted=false`，但没有声明 APNs provider delivery 或真机通知到达。
 - 真机已可被 Xcode 识别为 `platform:iOS` 设备；iPhoneOS 不签名编译已通过。
-- 当前真机安装/运行被无效 Apple Development 签名证书拦截，仍待用户刷新证书或切换有效 Team/证书。
-- 生产语音 SDK 运行验收仍待真实 VolcEngine 配置注入当前构建环境，并在真机采集麦克风、ASR、TTS、前后台切换和 SDK 错误证据。
-- 在真机未执行前，不能声明真机已验收；在 APNs provider delivery 未执行前，不能声明远程推送通知完整验收。
+- 本轮已修复本机签名 profile 缺失问题，完成真机 signed build、安装和启动。
+- 真机 console 证据显示端侧 `SpeechEngineToB` SDK 初始化成功，`DialogEngine` 返回 `initEngine = 0`。
+- 生产语音 SDK 质量验收仍待人工触发麦克风权限、完成至少一轮 ASR/TTS 对话、前后台切换，并采集错误恢复证据。
+- APNs 注册在真机 console 中失败，原因是缺少 `aps-environment` entitlement；在补齐推送能力前，不能声明远程通知到达已验收。
 
 ## Source Of Truth
 
@@ -138,7 +139,12 @@ Current 2026-06-18 evidence:
 - Device source: `xcodebuild -showdestinations`
 - Device destination: `id=00008150-001402D60A04401C`
 - iPhoneOS no-sign compile: passed, log at `tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260618-ios-device-compile-nosign/ios-device-nosign-build.log`
-- Signed physical-device build: blocked by invalid signing certificate `Apple Development: xbnjupt@163.com (BLVP6JU3M3)`, log at `tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260618-device-build-smoke/device-build.log`
+- Signed physical-device build: passed after restoring the missing local provisioning profile file; report at `tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260618-true-device-preflight-after-profile-copy/report.md`
+- True-device install and launch: passed, evidence under `tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260618-true-device-install-launch/`
+- Installed app: `com.yxj.dreamjourney.app`, version `1.0.0`, bundle version `1`
+- Running process: `DreamJourney.app/DreamJourney`, PID `6846` in `processes.json`
+- Console launch evidence: `console-output.log` includes `SpeechEngineToB` SDK initialization and `[DialogEngine] ✅ 引擎初始化成功`
+- APNs current blocker: `console-output.log` includes `remote notification registration failed: 未找到应用程序的“aps-environment”的授权字符串`
 
 Required privacy keys in `DreamJourney/Resources/Info.plist`:
 
