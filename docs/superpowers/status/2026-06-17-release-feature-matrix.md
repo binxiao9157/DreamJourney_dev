@@ -55,6 +55,24 @@ These items must not appear in the public release surface yet.
 | Profile care | `立即通话` | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` only. |
 | Profile settings | Password change | Not exposed until an implemented credential flow exists. |
 
+## Hidden Candidate Release Decisions
+
+No hidden PRD feature is public by default. These candidates may be available in QA-only branches or as safety shells, but they are not part of the default public MVP until the promotion criteria below are met.
+
+| Feature | Current gate | Public in MVP | Needed before public | Test evidence |
+| --- | --- | --- | --- | --- |
+| archive audio upload | `DJFeature.archiveAudioUpload` or `DJEnableArchiveHiddenBranches` | no | true-device recording acceptance, storage/privacy copy, backend media policy | `archive-media-entries-smoke-check.swift`, release regression |
+| time letters | `DJFeature.timeLetters` or `DJEnableArchiveHiddenBranches` | no | delivery/scheduling policy, reminder semantics, true-device notification decision | `archive-media-entries-smoke-check.swift`, release regression |
+| video upload | no implemented public gate yet | no | PRD scope, picker/compression/storage/backend policy | PRD coverage matrix only |
+| persona settings | `DJFeature.personaSettings` or `DJEnableArchiveHiddenBranches` | no | product copy, profile ownership model, prompt safety review | `release-feature-matrix-check.swift` |
+| family management public release | `DJFeature.familyManagement` or `DJEnableProfileHiddenBranches` | no | invitation/permission model, backend membership contract, privacy copy | `profile-family-persona-switcher-check.swift` |
+| care dashboard expansion | aggregate `DJFeature.careDashboard` is public; intervention/contact expansion stays behind `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | aggregate only | family-facing copy, alert thresholds, backend persistence, true-device acceptance | `elder-care-dashboard-check.swift`, backend acceptance |
+| account deletion execution | `DJFeature.accountDeletion` or `DJEnableProfileHiddenBranches` safety shell only | no | compliance policy, cooling-off period, backend deletion/export contract | `profile-safety-flow-check.swift` |
+| doctor contact / intervention execution | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | no | real escalation provider, emergency disclaimers, backend submission contract | `profile-care-escalation-contract-check.swift`, `profile-care-escalation-backend-boundary-check.swift` |
+| care escalation draft | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` local draft shell only | no | product decision to promote draft, backend submit contract, clinical/legal review | `profile-care-escalation-contract-check.swift`, `run-profile-care-escalation-boundary-smoke.sh` |
+| sunlight/star/silent lifecycle transition controls | hidden family rows / local QA context only | no | product/legal policy for lifecycle transitions, consent copy, recovery rules | `digital-human-mode-management-check.swift`, `digital-human-mode-lifecycle-check.swift` |
+| digital inheritance lifecycle | hidden lifecycle boundary only | no | inheritance trigger policy, family/legal consent, backend audit contract | `digital-human-mode-lifecycle-check.swift`, PRD coverage matrix |
+
 ## Hidden Safety Shells
 
 These flows have hidden safety shells only. They are not public release features.

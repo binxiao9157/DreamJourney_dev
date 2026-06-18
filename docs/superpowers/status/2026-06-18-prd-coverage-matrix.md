@@ -72,6 +72,26 @@ Hidden or blocked by default:
 - sunlight/star/silent lifecycle transition controls
 - digital inheritance lifecycle
 
+## Hidden Candidate Release Matrix
+
+Detailed release decisions live in `docs/superpowers/status/2026-06-17-release-feature-matrix.md`.
+
+The PRD items below are intentionally not public MVP features yet. They may have partial implementation, QA-only UI, local safety shells, or backend contract drafts, but they still require explicit promotion before appearing in default release mode.
+
+| Hidden PRD candidate | Release interpretation | Public in MVP | Release matrix row |
+| --- | --- | --- | --- |
+| archive audio upload | QA-only archive media branch; true-device recording and media policy still required | no | archive audio upload |
+| time letters | QA-only archive creation branch; delivery and scheduling semantics still required | no | time letters |
+| video upload | not implemented; PRD scope and media backend contract still required | no | video upload |
+| persona settings | QA-only archive/profile-adjacent branch; ownership and prompt-safety policy still required | no | persona settings |
+| family management public release | QA-only profile branch; invitation, permission, and membership backend are not public | no | family management public release |
+| care dashboard expansion | aggregate care dashboard is public; intervention/contact expansion is not | aggregate only | care dashboard expansion |
+| account deletion execution | hidden safety shell only; destructive deletion is not connected | no | account deletion execution |
+| doctor contact / intervention execution | hidden safety shell only; no real call, provider, or intervention submission | no | doctor contact / intervention execution |
+| care escalation draft | local draft shell only; backend submission and clinical/legal review still required | no | care escalation draft |
+| sunlight/star/silent lifecycle transition controls | hidden local QA controls only; lifecycle policy is not public | no | sunlight/star/silent lifecycle transition controls |
+| digital inheritance lifecycle | hidden boundary only; inheritance trigger and legal consent model are not public | no | digital inheritance lifecycle |
+
 ## Blockers
 
 - release-like FastAPI/Postgres and simulator remote-backend acceptance passed with `20260618-deployed-postgres-acceptance-after-deploy`.

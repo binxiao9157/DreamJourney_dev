@@ -420,8 +420,9 @@ git commit -m "ui: polish public MVP surfaces"
 - Modify: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/superpowers/status/2026-06-17-release-feature-matrix.md`
 - Modify: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/superpowers/status/2026-06-18-prd-coverage-matrix.md`
 - Test: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift`
+- Test: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/tmp/visual-qa/prd-stitch-ui/prd-coverage-matrix-check.swift`
 
-- [ ] **Step 1: Audit hidden features**
+- [x] **Step 1: Audit hidden features**
 
 Check and list:
 
@@ -431,13 +432,15 @@ time letters
 video upload
 persona settings
 family management public release
+care dashboard expansion
 account deletion execution
 doctor contact / intervention execution
+care escalation draft
 sunlight/star/silent lifecycle transition controls
 digital inheritance lifecycle
 ```
 
-- [ ] **Step 2: Add release decision columns**
+- [x] **Step 2: Add release decision columns**
 
 In release matrix, add columns:
 
@@ -445,7 +448,7 @@ In release matrix, add columns:
 | Feature | Current gate | Public in MVP | Needed before public | Test evidence |
 ```
 
-- [ ] **Step 3: Update guard**
+- [x] **Step 3: Update guard**
 
 Assert these public rules:
 
@@ -455,7 +458,7 @@ assertContains(matrix, "Public in MVP", "matrix should include public MVP decisi
 assertContains(matrix, "No hidden PRD feature is public by default", "matrix should preserve gating policy")
 ```
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run:
 
@@ -467,7 +470,7 @@ git diff --check
 
 Expected: all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Run:
 
@@ -566,11 +569,11 @@ git commit -m "docs: record true-device acceptance"
 
 ## Recommended Next Task
 
-Tasks 2, 3, and 4 are complete. Start with **Task 5: Hidden Candidate Release Matrix** if no physical device/signing is ready.
+Tasks 2, 3, 4, and 5 are complete. Start with **Task 6: True-Device Acceptance Execution** when physical device/signing is ready.
 
 Start with **Task 1: True-Device Readiness Checklist** if you want to prepare for device acceptance before more UI work.
 
-Start with **Task 3: Release-Like Regression Should Require Backend Pass** if you want the QA package to enforce the backend gate automatically for release handoff.
+If physical device/signing is still unavailable, continue hidden candidates one at a time and keep them behind the release matrix gates until explicitly promoted.
 
 ## Self-Review
 

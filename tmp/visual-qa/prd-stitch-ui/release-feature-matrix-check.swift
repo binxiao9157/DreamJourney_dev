@@ -125,3 +125,25 @@ for label in ["记忆档案", "回响", "我的", "添加文字描述", "选择�
 for label in ["录入语音", "录入时间信件", "家人管理", "注销账户", "立即通话"] {
     assertContains(matrix, label, "release matrix must document hidden label \(label)")
 }
+
+assertContains(matrix, "## Hidden Candidate Release Decisions", "release matrix should include hidden candidate decision table")
+assertContains(matrix, "| Feature | Current gate | Public in MVP | Needed before public | Test evidence |", "release matrix should include hidden candidate decision columns")
+assertContains(matrix, "No hidden PRD feature is public by default", "release matrix should preserve hidden-by-default policy")
+
+let hiddenDecisionRows = [
+    "| archive audio upload | `DJFeature.archiveAudioUpload` or `DJEnableArchiveHiddenBranches` | no | true-device recording acceptance, storage/privacy copy, backend media policy | `archive-media-entries-smoke-check.swift`, release regression |",
+    "| time letters | `DJFeature.timeLetters` or `DJEnableArchiveHiddenBranches` | no | delivery/scheduling policy, reminder semantics, true-device notification decision | `archive-media-entries-smoke-check.swift`, release regression |",
+    "| video upload | no implemented public gate yet | no | PRD scope, picker/compression/storage/backend policy | PRD coverage matrix only |",
+    "| persona settings | `DJFeature.personaSettings` or `DJEnableArchiveHiddenBranches` | no | product copy, profile ownership model, prompt safety review | `release-feature-matrix-check.swift` |",
+    "| family management public release | `DJFeature.familyManagement` or `DJEnableProfileHiddenBranches` | no | invitation/permission model, backend membership contract, privacy copy | `profile-family-persona-switcher-check.swift` |",
+    "| care dashboard expansion | aggregate `DJFeature.careDashboard` is public; intervention/contact expansion stays behind `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | aggregate only | family-facing copy, alert thresholds, backend persistence, true-device acceptance | `elder-care-dashboard-check.swift`, backend acceptance |",
+    "| account deletion execution | `DJFeature.accountDeletion` or `DJEnableProfileHiddenBranches` safety shell only | no | compliance policy, cooling-off period, backend deletion/export contract | `profile-safety-flow-check.swift` |",
+    "| doctor contact / intervention execution | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | no | real escalation provider, emergency disclaimers, backend submission contract | `profile-care-escalation-contract-check.swift`, `profile-care-escalation-backend-boundary-check.swift` |",
+    "| care escalation draft | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` local draft shell only | no | product decision to promote draft, backend submit contract, clinical/legal review | `profile-care-escalation-contract-check.swift`, `run-profile-care-escalation-boundary-smoke.sh` |",
+    "| sunlight/star/silent lifecycle transition controls | hidden family rows / local QA context only | no | product/legal policy for lifecycle transitions, consent copy, recovery rules | `digital-human-mode-management-check.swift`, `digital-human-mode-lifecycle-check.swift` |",
+    "| digital inheritance lifecycle | hidden lifecycle boundary only | no | inheritance trigger policy, family/legal consent, backend audit contract | `digital-human-mode-lifecycle-check.swift`, PRD coverage matrix |",
+]
+
+for row in hiddenDecisionRows {
+    assertContains(matrix, row, "release matrix should include hidden candidate decision row")
+}
