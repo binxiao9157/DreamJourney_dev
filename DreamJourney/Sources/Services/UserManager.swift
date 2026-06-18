@@ -19,9 +19,9 @@ final class UserManager {
     var isLoggedIn: Bool { currentUser != nil }
 
     // MARK: - 登录
-    func login(phone: String, nickname: String) {
+    func login(phone: String, nickname: String, id: String? = nil) {
         let user = UserModel(
-            id: "user_\(phone.suffix(4))",
+            id: id ?? "user_\(phone.suffix(4))",
             nickname: nickname.isEmpty ? "寻梦环游用户" : nickname,
             phone: phone,
             avatarName: "person.circle.fill"

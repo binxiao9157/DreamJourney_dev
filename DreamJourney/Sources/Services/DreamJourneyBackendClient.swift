@@ -31,6 +31,10 @@ final class DreamJourneyBackendClient {
         hasExplicitBaseURL || apiToken != nil
     }
 
+    var isLoginSyncConfigured: Bool {
+        hasExplicitBaseURL || apiToken != nil
+    }
+
     var isEchoDelayedReplyPushConfigured: Bool {
         hasExplicitBaseURL || apiToken != nil
     }
@@ -71,8 +75,17 @@ final class DreamJourneyBackendClient {
         postArchiveItem(scopedPayload, completion: completion)
     }
 
-    func upsertUser(phone: String, nickname: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
-        requestJSON(path: "/auth/login", method: .post, payload: ["phone": phone, "nickname": nickname], completion: completion)
+    func upsertUser(
+        phone: String,
+        nickname: String,
+        password: String? = nil,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        var payload: [String: Any] = ["phone": phone, "nickname": nickname]
+        if let password, !password.isEmpty {
+            payload["password"] = password
+        }
+        requestJSON(path: "/auth/login", method: .post, payload: payload, completion: completion)
     }
 
     func updateProfile(

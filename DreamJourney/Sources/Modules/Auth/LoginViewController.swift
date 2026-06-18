@@ -101,6 +101,7 @@ final class LoginViewController: UIViewController {
     }()
 
     private var rawPhone = ""
+    private var isLoginInProgress = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -222,15 +223,75 @@ final class LoginViewController: UIViewController {
     }
 
     @objc private func registerTapped() {
-        let alert = UIAlertController(title: "暂未开放", message: "当前版本可直接使用手机号登录。", preferredStyle: .alert)
+        let alert = UIAlertController(title: "暂未开放", message: "当前版本可使用手机号和密码登录。", preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "知道了", style: .default))
         present(alert, animated: true)
     }
 
     @objc private func loginTapped() {
-        guard rawPhone.count == 11 else { return }
-        UserManager.shared.login(phone: rawPhone, nickname: "")
+        guard !isLoginInProgress else { return }
+        guard rawPhone.count == 11 else {
+            showLoginAlert(title: "手机号不完整", message: "请输入 11 位手机号。")
+            phoneField.becomeFirstResponder()
+            return
+        }
+
+        let password = normalizedPassword()
+        guard !password.isEmpty else {
+            showLoginAlert(title: "密码不能为空", message: "请输入登录密码。")
+            passwordField.becomeFirstResponder()
+            return
+        }
+        guard password.count >= 8 else {
+            showLoginAlert(title: "密码至少 8 位", message: "请检查后重新输入。")
+            passwordField.becomeFirstResponder()
+            return
+        }
+
+        guard DreamJourneyBackendClient.shared.isLoginSyncConfigured else {
+            UserManager.shared.login(phone: rawPhone, nickname: "")
+            didLogin?()
+            return
+        }
+
+        setLoginInProgress(true)
+        DreamJourneyBackendClient.shared.upsertUser(phone: rawPhone, nickname: "", password: password) { [weak self] result in
+            guard let self else { return }
+            self.setLoginInProgress(false)
+            switch result {
+            case .success(let response):
+                self.handleBackendLoginSuccess(response, phone: self.rawPhone)
+            case .failure(let error):
+                self.showLoginAlert(title: "登录失败", message: error.localizedDescription)
+            }
+        }
+    }
+
+    private func normalizedPassword() -> String {
+        (passwordField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func handleBackendLoginSuccess(_ response: [String: Any], phone: String) {
+        guard let user = response["user"] as? [String: Any] else {
+            showLoginAlert(title: "登录失败", message: "后端返回的用户数据不可用。")
+            return
+        }
+        let userId = user["id"] as? String
+        let nickname = (user["nickname"] as? String) ?? ""
+        UserManager.shared.login(phone: phone, nickname: nickname, id: userId)
         didLogin?()
+    }
+
+    private func setLoginInProgress(_ inProgress: Bool) {
+        isLoginInProgress = inProgress
+        loginButton.isEnabled = !inProgress
+        loginButton.setTitle(inProgress ? "登录中..." : "登录", for: .normal)
+    }
+
+    private func showLoginAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "知道了", style: .default))
+        present(alert, animated: true)
     }
 }
 

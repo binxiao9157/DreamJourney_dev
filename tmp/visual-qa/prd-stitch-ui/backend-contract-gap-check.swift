@@ -47,11 +47,12 @@ for rowLabel in [
 
 for state in [
     "backend route present locally",
-    "selected-environment deployment and auth login parity needed",
+    "selected-environment deployment and auth acceptance needed",
     "deployment/APNs/device token needed",
     "backend accepts and persists nickname/gender/region/avatar metadata",
     "backend now hashes password credentials and requires old-password verification",
-    "auth/login password parity",
+    "iOS login password participation is implemented through `/auth/login`",
+    "selected-environment login/password acceptance",
     "backend field migration needed",
     "backend accepted, release-like gate now requires active / empty / stale / failed fixture evidence",
     "careActiveRiskLevel",
@@ -64,6 +65,8 @@ for state in [
 
 assertContains(client, "requestJSON(path: \"/echo/delayed-replies\"", "iOS client should define echo delayed reply endpoint")
 assertContains(client, "requestJSON(path: \"/profile\"", "iOS client should define profile endpoint")
+assertContains(client, "var isLoginSyncConfigured", "iOS client should expose login backend configuration")
+assertContains(client, "payload[\"password\"] = password", "iOS client should include password in auth payload")
 assertContains(client, "path: \"/auth/password\"", "iOS client should define password endpoint")
 assertContains(client, "requestJSON(path: \"/archive/items\"", "iOS client should define archive create endpoint")
 assertContains(client, "requestJSON(path: \"/care/snapshots/latest/\\(pathComponent(userId))\"", "iOS client should define care latest endpoint")

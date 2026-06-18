@@ -148,7 +148,7 @@ Update this file after every recursive state-changing command bundle and before 
 - Task: add local backend password-change contract while keeping the iOS password route hidden.
 - Completed: backend `/auth/login` can initialize/verify PBKDF2 password credentials when a password is provided, and `/auth/password` changes the credential only after old-password verification.
 - Guard: backend `PasswordAPITests` cover credential initialization, wrong-password rejection, password change, old-password invalidation, and unconfigured credential rejection. iOS PRD/backend matrix guards now record `/auth/password` as local backend present but not release-public.
-- Boundary: password change remains behind feature flags until login password participation, selected-environment deployment, security review, and true-device acceptance are complete.
+- Boundary: password change remains behind feature flags until selected-environment deployment, login/password acceptance, security review, and true-device acceptance are complete.
 
 ## Implementation Checkpoint - 2026-06-18T20:08:00+0800
 
@@ -156,3 +156,10 @@ Update this file after every recursive state-changing command bundle and before 
 - Completed: `backend-postgres-persistence-check.py` now initializes a unique password credential through `/auth/login`, changes it through `/auth/password`, verifies the old password is rejected, and verifies the new password can log in with `passwordConfigured=true`.
 - Guard: `release-like-backend-acceptance-check.swift` now requires `passwordChangeStatus`, `passwordOldLoginStatus`, and `passwordNewLoginConfigured` in the runner and status doc.
 - Boundary: this adds local runner coverage only; selected-environment evidence still requires deploying the latest backend and rerunning release-like acceptance. The iOS password change entry remains hidden in public release mode.
+
+## Implementation Checkpoint - 2026-06-18T20:20:00+0800
+
+- Task: make the visible login password field participate in the iOS auth contract.
+- Completed: `LoginViewController` now validates non-empty / 8+ character passwords, sends the password to `/auth/login` when backend auth is configured, preserves local fallback login when no backend auth config is present, and stores the backend returned user id on success.
+- Guard: `login-password-contract-check.swift` is now included in release regression and the release QA package.
+- Boundary: password change remains hidden; selected-environment login/password acceptance, auth/security review, and true-device acceptance remain open.
