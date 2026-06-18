@@ -328,7 +328,7 @@ final class ProfileViewController: UIViewController {
     private func makeCareCard(snapshot: ProfileCareSnapshot?) -> UIView {
         let card = makeProfileCard()
         card.accessibilityIdentifier = "profileCareDashboardCard"
-        card.isAccessibilityElement = true
+        card.isAccessibilityElement = !isCareDoctorContactVisible
         card.accessibilityTraits = .button
         card.accessibilityLabel = "心境追踪，查看长辈关怀看板"
         card.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(showElderCareDashboard)))
@@ -464,6 +464,8 @@ final class ProfileViewController: UIViewController {
             callButton.setTitle("立即通话", for: .normal)
             callButton.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
             callButton.titleLabel?.font = DJDesignTokens.Font.label(13)
+            callButton.accessibilityIdentifier = "profileDoctorContactButton"
+            callButton.accessibilityLabel = "生成关怀升级草稿"
             callButton.addTarget(self, action: #selector(doctorCallTapped), for: .touchUpInside)
             rowViews.append(callButton)
         }
@@ -591,11 +593,18 @@ final class ProfileViewController: UIViewController {
     }
 
     private func showDoctorContactSafetyNotice() {
+        let draft = ProfileCareEscalationDraft.make(
+            snapshot: careSnapshot ?? .offlineFallback(),
+            personaDisplayName: personaContext.displayName
+        )
         let alert = UIAlertController(
             title: "关怀联系暂未接入",
-            message: "该入口仅用于非紧急关怀，不是医疗诊断；真实联系契约未接入。如遇紧急情况，请立即联系当地急救服务。",
+            message: draft.alertMessage,
             preferredStyle: .alert
         )
+        let sendAction = UIAlertAction(title: "发送关怀升级草稿（未开放）", style: .default)
+        sendAction.isEnabled = false
+        alert.addAction(sendAction)
         alert.addAction(UIAlertAction(title: "知道了", style: .default))
         present(alert, animated: true)
     }

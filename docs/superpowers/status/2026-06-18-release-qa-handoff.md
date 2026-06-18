@@ -32,6 +32,7 @@ This does not mean true-device or real-backend acceptance has passed. Those stil
 swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/profile-family-persona-switcher-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/profile-safety-flow-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/profile-care-escalation-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/group4-profile-care-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/persona-scoped-archive-context-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/device-backend-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
@@ -74,7 +75,7 @@ tmp/visual-qa/prd-stitch-ui/release-qa-handoff/20260618-current/build-debug.log
 - `记忆档案 -> 回响` simulator core loop passes.
 - Persona-scoped archive/echo context is implemented.
 - Hidden family persona switcher writes `DigitalHumanContextStore`.
-- Profile safety shells exist for account deletion and doctor contact without executing destructive or external actions.
+- Profile safety shells exist for account deletion and doctor contact without executing destructive or external actions; doctor contact now creates a local `关怀升级草稿`.
 - Care visibility is centralized through a selected-context helper.
 - Real-device/backend readiness runbook exists.
 
@@ -84,7 +85,7 @@ These remain hidden by default:
 
 - Family management / family space public release.
 - Account deletion execution.
-- Doctor call / intervention execution.
+- Doctor call / intervention execution; only the hidden local `关怀升级草稿` is available.
 - Audio archive, time letters, remote fetch, local analysis debug controls.
 - Full sunlight/star/silent mode management.
 - Digital inheritance lifecycle.

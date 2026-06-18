@@ -62,7 +62,7 @@ These flows have hidden safety shells only. They are not public release features
 | Area | Safety boundary | Evidence |
 | --- | --- | --- |
 | 账号注销 | Hidden destructive confirmation shell only; it does not execute deletion until compliance, data export, cooling-off, and final confirmation are defined. | `ProfileViewController.showAccountDeletionConfirmation`, `profile-safety-flow-check.swift`. |
-| 医生联系 | Hidden safety notice only; it is non-emergency, not medical diagnosis, and the real contact contract is not connected. | `ProfileViewController.showDoctorContactSafetyNotice`, `profile-safety-flow-check.swift`. |
+| 医生联系 | Hidden safety notice with a local `关怀升级草稿`; it is non-emergency, not medical diagnosis, does not call, does not upload, and the real contact contract is not connected. | `ProfileViewController.showDoctorContactSafetyNotice`, `profile-safety-flow-check.swift`, `profile-care-escalation-contract-check.swift`. |
 
 ## Internal QA Launch Arguments
 
@@ -87,6 +87,7 @@ swift tmp/visual-qa/prd-stitch-ui/profile-family-persona-switcher-check.swift /U
 swift tmp/visual-qa/prd-stitch-ui/digital-human-mode-management-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/digital-human-mode-lifecycle-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/profile-safety-flow-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/profile-care-escalation-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/elder-care-dashboard-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/final-visual-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```

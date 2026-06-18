@@ -165,6 +165,53 @@ struct ProfileCareMetric {
     }
 }
 
+struct ProfileCareEscalationDraft {
+    let personaDisplayName: String
+    let riskSummary: String
+    let nonEmergencyNotice: String
+    let medicalBoundary: String
+    let contractState: String
+
+    static func make(snapshot: ProfileCareSnapshot, personaDisplayName: String) -> ProfileCareEscalationDraft {
+        let displayName = personaDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let personaDisplayName = displayName.isEmpty ? "当前回响对象" : displayName
+        let status = snapshot.moodStatus.trimmingCharacters(in: .whitespacesAndNewlines)
+        let reminder = snapshot.riskReminder.trimmingCharacters(in: .whitespacesAndNewlines)
+        let riskSummary: String
+        if snapshot.isStale {
+            riskSummary = "关怀数据暂未同步，当前只能生成本地安全草稿。"
+        } else if !status.isEmpty, !reminder.isEmpty {
+            riskSummary = "\(status)：\(reminder)"
+        } else if !reminder.isEmpty {
+            riskSummary = reminder
+        } else if !status.isEmpty {
+            riskSummary = status
+        } else {
+            riskSummary = "暂无明确风险提醒。"
+        }
+
+        return ProfileCareEscalationDraft(
+            personaDisplayName: personaDisplayName,
+            riskSummary: riskSummary,
+            nonEmergencyNotice: "非紧急关怀草稿，仅用于家属或后续关怀服务接入前的人工确认。",
+            medicalBoundary: "不是医疗诊断，不能替代心理医生、精神科医生或急救服务。",
+            contractState: "真实联系契约未接入，当前不会拨打电话、发送消息或上传给第三方。"
+        )
+    }
+
+    var alertMessage: String {
+        """
+        关怀升级草稿
+        对象：\(personaDisplayName)
+        状态摘要：\(riskSummary)
+
+        \(nonEmergencyNotice)
+        \(medicalBoundary)
+        \(contractState)
+        """
+    }
+}
+
 enum ProfileCareCopy {
     static func signalPercent(_ value: Double) -> String {
         "\(Int((min(max(value, 0), 1) * 100).rounded()))%"

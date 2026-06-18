@@ -55,6 +55,7 @@ func functionBody(named name: String, in source: String) -> String {
 
 let flags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let profile = read("DreamJourney/Sources/Modules/Profile/ProfileViewController.swift")
+let careModels = read("DreamJourney/Sources/Modules/Profile/ProfileCareModels.swift")
 let releaseMatrix = read("docs/superpowers/status/2026-06-17-release-feature-matrix.md")
 
 let expectedDefaults: Set<String> = [
@@ -96,11 +97,13 @@ assertNotContains(deletionBody, "DreamJourneyBackendClient", "account deletion s
 assertContains(profile, "showDoctorContactSafetyNotice()", "doctor contact should use safety notice")
 assertContains(profile, "private func showDoctorContactSafetyNotice()", "doctor contact safety notice should have a dedicated function")
 let doctorBody = functionBody(named: "showDoctorContactSafetyNotice()", in: profile)
+let doctorContractSource = doctorBody + careModels
 assertContains(doctorBody, "关怀联系暂未接入", "doctor safety notice should have explicit title")
-assertContains(doctorBody, "非紧急", "doctor safety notice should say non-emergency")
-assertContains(doctorBody, "不是医疗诊断", "doctor safety notice should include medical boundary")
-assertContains(doctorBody, "急救服务", "doctor safety notice should point to emergency services")
-assertContains(doctorBody, "真实联系契约未接入", "doctor safety notice should say real contact contract is not connected")
+assertContains(doctorContractSource, "ProfileCareEscalationDraft", "doctor safety notice should use structured escalation draft")
+assertContains(doctorContractSource, "非紧急", "doctor safety notice should say non-emergency")
+assertContains(doctorContractSource, "不是医疗诊断", "doctor safety notice should include medical boundary")
+assertContains(doctorContractSource, "急救服务", "doctor safety notice should point to emergency services")
+assertContains(doctorContractSource, "真实联系契约未接入", "doctor safety notice should say real contact contract is not connected")
 assertNotContains(doctorBody, "tel://", "doctor safety notice should not launch a phone call")
 
 assertContains(releaseMatrix, "账号注销", "release matrix should document account deletion boundary")

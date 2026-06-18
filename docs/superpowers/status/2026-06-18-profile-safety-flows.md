@@ -15,7 +15,7 @@ This slice adds safety shells for hidden profile risk flows and makes care dashb
 - Default self assistant still shows `心境追踪`, preserving the current Stitch/profile surface.
 - Non-self family persona shows `心境追踪` only when `context.mode == .star`.
 - Hidden `注销账户` now opens `showAccountDeletionConfirmation()`.
-- Hidden `立即通话` now opens `showDoctorContactSafetyNotice()`.
+- Hidden `立即通话` now opens `showDoctorContactSafetyNotice()` and renders a local `关怀升级草稿`.
 
 ## Release Boundary
 
@@ -52,6 +52,7 @@ The doctor contact shell is intentionally non-executing:
 - It says the app is not medical diagnosis.
 - It points emergency cases to local emergency services.
 - It says the real contact contract is not connected.
+- It structures the current persona and care summary into a local draft for future handoff.
 - It does not launch a phone call.
 
 ## Verification
@@ -60,6 +61,7 @@ Run:
 
 ```bash
 swift tmp/visual-qa/prd-stitch-ui/profile-safety-flow-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/profile-care-escalation-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/profile-family-persona-switcher-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/group4-profile-care-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
