@@ -347,10 +347,18 @@ private extension AppDelegate {
         let releaseOptionTitles = archiveCreationOptionTitles(isHiddenBranchesEnabled: false)
         let hiddenOptionTitles = archiveCreationOptionTitles(isHiddenBranchesEnabled: true)
         let expectedReleaseOptionTitles = ["添加文字描述", "选择照片"]
-        let expectedHiddenOptionTitles = ["添加文字描述", "选择照片", "录入语音", "录入时间信件"]
-        let videoVisible = MemoryArchiveMediaReleaseReadiness.isCreationVisible(
+        let expectedHiddenOptionTitles = ["添加文字描述", "选择照片", "录入语音", "录入视频片段", "录入时间信件"]
+        let releaseVideoVisible = MemoryArchiveMediaReleaseReadiness.isCreationVisible(
+            for: .video,
+            isAudioUploadEnabled: false,
+            isVideoUploadEnabled: false,
+            isTimeLettersEnabled: false,
+            isHiddenBranchesEnabled: false
+        )
+        let hiddenVideoVisible = MemoryArchiveMediaReleaseReadiness.isCreationVisible(
             for: .video,
             isAudioUploadEnabled: true,
+            isVideoUploadEnabled: true,
             isTimeLettersEnabled: true,
             isHiddenBranchesEnabled: true
         )
@@ -359,21 +367,24 @@ private extension AppDelegate {
             .requiresMicrophonePermission
         let completed = releaseOptionTitles == expectedReleaseOptionTitles
             && hiddenOptionTitles == expectedHiddenOptionTitles
-            && videoVisible == false
+            && releaseVideoVisible == false
+            && hiddenVideoVisible
             && audioRequiresMicrophonePermission
 
         writeArchiveMediaEntriesSmokeResult(
             completed: completed,
             releaseOptionTitles: releaseOptionTitles,
             hiddenOptionTitles: hiddenOptionTitles,
-            videoVisible: videoVisible,
+            releaseVideoVisible: releaseVideoVisible,
+            hiddenVideoVisible: hiddenVideoVisible,
             audioRequiresMicrophonePermission: audioRequiresMicrophonePermission
         )
         print(
             "[UI_QA] ArchiveMediaEntriesSmoke completed " +
             "release=\(releaseOptionTitles.joined(separator: "|")) " +
             "hidden=\(hiddenOptionTitles.joined(separator: "|")) " +
-            "videoVisible=\(videoVisible)"
+            "releaseVideoVisible=\(releaseVideoVisible) " +
+            "hiddenVideoVisible=\(hiddenVideoVisible)"
         )
     }
 
@@ -381,17 +392,27 @@ private extension AppDelegate {
         let audioVisible = MemoryArchiveMediaReleaseReadiness.isCreationVisible(
             for: .audio,
             isAudioUploadEnabled: FeatureFlagService.shared.isEnabled(.archiveAudioUpload),
+            isVideoUploadEnabled: FeatureFlagService.shared.isEnabled(.archiveVideoUpload),
+            isTimeLettersEnabled: FeatureFlagService.shared.isEnabled(.timeLetters),
+            isHiddenBranchesEnabled: isHiddenBranchesEnabled
+        )
+        let videoVisible = MemoryArchiveMediaReleaseReadiness.isCreationVisible(
+            for: .video,
+            isAudioUploadEnabled: FeatureFlagService.shared.isEnabled(.archiveAudioUpload),
+            isVideoUploadEnabled: FeatureFlagService.shared.isEnabled(.archiveVideoUpload),
             isTimeLettersEnabled: FeatureFlagService.shared.isEnabled(.timeLetters),
             isHiddenBranchesEnabled: isHiddenBranchesEnabled
         )
         let timeLetterVisible = MemoryArchiveMediaReleaseReadiness.isCreationVisible(
             for: .timeLetter,
             isAudioUploadEnabled: FeatureFlagService.shared.isEnabled(.archiveAudioUpload),
+            isVideoUploadEnabled: FeatureFlagService.shared.isEnabled(.archiveVideoUpload),
             isTimeLettersEnabled: FeatureFlagService.shared.isEnabled(.timeLetters),
             isHiddenBranchesEnabled: isHiddenBranchesEnabled
         )
         return MemoryArchiveCreationOption.availableOptions(
             isAudioUploadEnabled: audioVisible,
+            isVideoUploadEnabled: videoVisible,
             isTimeLettersEnabled: timeLetterVisible
         ).map(\.title)
     }
@@ -705,14 +726,16 @@ private extension AppDelegate {
         completed: Bool,
         releaseOptionTitles: [String],
         hiddenOptionTitles: [String],
-        videoVisible: Bool,
+        releaseVideoVisible: Bool,
+        hiddenVideoVisible: Bool,
         audioRequiresMicrophonePermission: Bool
     ) {
         let result: [String: Any] = [
             "completed": completed,
             "releaseOptionTitles": releaseOptionTitles,
             "hiddenOptionTitles": hiddenOptionTitles,
-            "videoVisible": videoVisible,
+            "releaseVideoVisible": releaseVideoVisible,
+            "hiddenVideoVisible": hiddenVideoVisible,
             "audioRequiresMicrophonePermission": audioRequiresMicrophonePermission,
             "hiddenBranchesArgument": MemoryArchiveMediaReleaseReadiness.hiddenBranchesLaunchArgument
         ]

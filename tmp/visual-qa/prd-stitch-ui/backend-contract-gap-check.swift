@@ -48,10 +48,11 @@ for rowLabel in [
 }
 
 for state in [
-    "backend route present locally and release-like script covered",
+    "selected release backend accepted",
+    "20260618-deployed-push-device-token-contract-rerun-205018",
     "raw device tokens are not returned by API responses",
-    "backend route present locally",
-    "selected deployed backend rerun still required",
+    "echoDelayedReplyDeviceTokenId",
+    "echoDelayedReplyPushProviderState=pending",
     "selected-environment password acceptance passed",
     "APNs delivery",
     "selected release backend accepts and persists nickname/gender/region/avatar metadata",

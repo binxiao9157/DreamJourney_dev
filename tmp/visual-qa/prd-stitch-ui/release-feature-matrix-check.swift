@@ -62,6 +62,7 @@ let hiddenByDefault: Set<String> = [
     "timeLetters",
     "personaSettings",
     "archiveAudioUpload",
+    "archiveVideoUpload",
     "archiveRemoteFetch",
     "archiveLocalAnalysis",
     "familyManagement",
@@ -91,6 +92,7 @@ assertContains(readiness, "DJEnableArchiveHiddenBranches", "archive hidden branc
 assertContains(archive, "MemoryArchiveMediaReleaseReadiness.hiddenBranchesLaunchArgument", "archive screen must use shared hidden branch launch argument")
 assertContains(archive, "MemoryArchiveMediaReleaseReadiness.isCreationVisible", "archive hidden creation branches must use media readiness contract")
 assertContains(archive, "FeatureFlagService.shared.isEnabled(.archiveAudioUpload)", "archive audio branch must be release gated")
+assertContains(archive, "FeatureFlagService.shared.isEnabled(.archiveVideoUpload)", "archive video branch must be release gated")
 assertContains(archive, "FeatureFlagService.shared.isEnabled(.archiveRemoteFetch)", "archive remote fetch must be release gated")
 assertContains(archive, "FeatureFlagService.shared.isEnabled(.timeLetters)", "time-letter branch must be release gated")
 assertContains(archive, "FeatureFlagService.shared.isEnabled(.personaSettings)", "persona branch must be release gated")
@@ -129,6 +131,7 @@ for label in ["记忆档案", "回响", "我的", "添加文字描述", "选择�
 for label in ["录入语音", "录入时间信件", "家人管理", "注销账户", "修改密码", "立即通话"] {
     assertContains(matrix, label, "release matrix must document hidden label \(label)")
 }
+assertContains(matrix, "录入视频片段", "release matrix must document hidden video label")
 
 assertContains(matrix, "## Hidden Candidate Release Decisions", "release matrix should include hidden candidate decision table")
 assertContains(matrix, "| Feature | Current gate | Public in MVP | Needed before public | Test evidence |", "release matrix should include hidden candidate decision columns")
@@ -137,7 +140,7 @@ assertContains(matrix, "No hidden PRD feature is public by default", "release ma
 let hiddenDecisionRows = [
     "| archive audio upload | `DJFeature.archiveAudioUpload` or `DJEnableArchiveHiddenBranches` | no | true-device recording acceptance, storage/privacy copy, backend media policy | `archive-media-entries-smoke-check.swift`, release regression |",
     "| time letters | `DJFeature.timeLetters` or `DJEnableArchiveHiddenBranches` | no | delivery/scheduling policy, reminder semantics, true-device notification decision | `archive-media-entries-smoke-check.swift`, release regression |",
-    "| video upload | no implemented public gate yet | no | PRD scope, picker/compression/storage/backend policy | PRD coverage matrix only |",
+    "| video upload | `DJFeature.archiveVideoUpload` or `DJEnableArchiveHiddenBranches` shell only | no | PRD scope, picker/compression/storage/backend policy, true-device video picker acceptance | `archive-media-entries-smoke-check.swift`, `archive-media-release-readiness-check.swift`, release regression |",
     "| persona settings | `DJFeature.personaSettings` or `DJEnableArchiveHiddenBranches` | no | product copy, profile ownership model, prompt safety review | `release-feature-matrix-check.swift` |",
     "| family management public release | `DJFeature.familyManagement` or `DJEnableProfileHiddenBranches` | no | invitation/permission model, backend membership contract, privacy copy | `profile-family-persona-switcher-check.swift` |",
     "| care dashboard expansion | aggregate `DJFeature.careDashboard` and non-executing `关怀升级准备中` placeholder are public; intervention/contact execution stays behind `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | aggregate + placeholder only | family-facing copy, alert thresholds, backend persistence, true-device acceptance | `elder-care-dashboard-check.swift`, `profile-care-public-placeholder-check.swift`, backend acceptance |",

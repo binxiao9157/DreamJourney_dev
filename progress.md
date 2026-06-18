@@ -204,7 +204,63 @@ Update this file after every recursive state-changing command bundle and before 
 - Root cause: local backend code contains the new route and tests, but the selected deployed backend still does not expose it. This is deployment drift for the new push-token contract, not the earlier rollback-on-exception/500 issue.
 - Boundary: remote Echo push readiness remains blocked until `/devices/push-token` is deployed and `run-release-like-backend-acceptance.sh` passes with `echoDelayedReplyDeviceTokenId`.
 
+## Checkpoint - 2026-06-18 20:50 CST
+
+- Task: rerun selected deployed backend acceptance after the latest server deployment.
+- Result: accepted. Run `20260618-deployed-push-device-token-contract-rerun-205018` passed local backend verification, deployed health with `store=postgres`, Postgres seed/verify, and iOS backend-env smoke.
+- Evidence: `tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-deployed-push-device-token-contract-rerun-205018/`, including screenshot `ios-backend-env-smoke/20260618-deployed-push-device-token-contract-rerun-205018/01-backend-env-profile.png`.
+- Verified: `postgres-persistence-verify.json` includes `echoDelayedReplyDeviceTokenId`, `echoDelayedReplyPushProviderState=pending`, `passwordChangeStatus=changed`, `archivePersonaScope=family`, `archiveDigitalHumanId=family_default`, and `careActiveRiskLevel=watch`.
+- Boundary: deployed route parity is recovered; APNs provider delivery, service-side scheduled dispatch, and true-device notification arrival remain open.
+
 ## Closure Lodestar Recovery - 2026-06-18T20:22:00+08:00
+
+- Goal: 按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态
+- Mode: Execute
+- Phase: Implementation
+- Task: continue non-device PRD function development; latest slice is deployed Postgres backend acceptance
+- Blockers: true-device signing/operation still required for final acceptance; newest Stitch Echo variants still need explicit selection before replacing the current public Echo surface
+
+### docs/plans/task_01_prd-gap-map-and-priority-ledger.md
+- Ledger: `.complex-problems/L20260618-000157-01`
+- Root: PRD gap map and priority ledger
+- Next action: `none`
+- Problems: 2/2 done, 0 blocked
+- Validate: ok
+
+### docs/plans/task_02_p0-persona-scoped-archive-and-echo-context.md
+- Ledger: `.complex-problems/L20260618-000157-02`
+- Root: P0 persona-scoped archive and echo context
+- Next action: `none`
+- Problems: 1/1 done, 0 blocked
+- Validate: ok
+
+### docs/plans/task_03_p0-real-device-and-backend-acceptance-readiness.md
+- Ledger: `.complex-problems/L20260618-000157-03`
+- Root: P0 real-device and backend acceptance readiness
+- Next action: `none`
+- Problems: 1/1 done, 0 blocked
+- Validate: ok
+
+### docs/plans/task_04_p1-profile-family-and-safety-flows.md
+- Ledger: `.complex-problems/L20260618-000157-04`
+- Root: P1 profile family and safety flows
+- Next action: `none`
+- Problems: 2/2 done, 0 blocked
+- Validate: ok
+
+### docs/plans/task_05_review-and-release-qa.md
+- Ledger: `.complex-problems/L20260618-000157-05`
+- Root: Review and release QA
+- Next action: `none`
+- Problems: 1/1 done, 0 blocked
+- Validate: ok
+
+### Resume Protocol
+1. If a ledger has a non-`none` next action, run `ledger.py next` and perform exactly that action.
+2. After each recursive state change, run `sync_recursive_to_lodestar.py`.
+3. If all mapped ledgers report `next_action=none`, run Lodestar Review before final delivery.
+
+## Closure Lodestar Recovery - 2026-06-18T20:43:25+08:00
 
 - Goal: 按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态
 - Mode: Execute

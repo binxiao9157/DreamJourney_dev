@@ -116,8 +116,9 @@ echo
 
 grep -Eq '"completed"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Smoke did not complete."
 grep -Eq '"releaseOptionTitles"[[:space:]]*:[[:space:]]*\["添加文字描述","选择照片"\]' "$RESULT_FILE" || fail "Release options changed."
-grep -Eq '"hiddenOptionTitles"[[:space:]]*:[[:space:]]*\["添加文字描述","选择照片","录入语音","录入时间信件"\]' "$RESULT_FILE" || fail "Hidden options changed."
-grep -Eq '"videoVisible"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Video should remain unavailable."
+grep -Eq '"hiddenOptionTitles"[[:space:]]*:[[:space:]]*\["添加文字描述","选择照片","录入语音","录入视频片段","录入时间信件"\]' "$RESULT_FILE" || fail "Hidden options changed."
+grep -Eq '"releaseVideoVisible"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Video should stay hidden in release mode."
+grep -Eq '"hiddenVideoVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Video should be available only in hidden QA mode."
 grep -Eq '"audioRequiresMicrophonePermission"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Audio should keep microphone permission boundary."
 grep -Eq '"hiddenBranchesArgument"[[:space:]]*:[[:space:]]*"DJEnableArchiveHiddenBranches"' "$RESULT_FILE" || fail "Hidden launch argument changed."
 

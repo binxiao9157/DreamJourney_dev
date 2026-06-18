@@ -44,6 +44,7 @@ These items must not appear in the public release surface yet.
 | Echo | Text input | `DJFeature.echoTextInput`; no public control. |
 | Echo | Image input | `DJFeature.echoImageInput`; no public control. |
 | Archive | Audio upload / `录入语音` | `DJFeature.archiveAudioUpload` or `DJEnableArchiveHiddenBranches` only. |
+| Archive | Video upload / `录入视频片段` | `DJFeature.archiveVideoUpload` or `DJEnableArchiveHiddenBranches` shell only. |
 | Archive | Time-letter creation / `录入时间信件` | `DJFeature.timeLetters` or `DJEnableArchiveHiddenBranches` only. |
 | Archive | Persona settings / `人格设定` | `DJFeature.personaSettings` or `DJEnableArchiveHiddenBranches` only. |
 | Archive backend | Remote archive fetch | `DJFeature.archiveRemoteFetch` only; default public app stays local-first. |
@@ -63,7 +64,7 @@ No hidden PRD feature is public by default. These candidates may be available in
 | --- | --- | --- | --- | --- |
 | archive audio upload | `DJFeature.archiveAudioUpload` or `DJEnableArchiveHiddenBranches` | no | true-device recording acceptance, storage/privacy copy, backend media policy | `archive-media-entries-smoke-check.swift`, release regression |
 | time letters | `DJFeature.timeLetters` or `DJEnableArchiveHiddenBranches` | no | delivery/scheduling policy, reminder semantics, true-device notification decision | `archive-media-entries-smoke-check.swift`, release regression |
-| video upload | no implemented public gate yet | no | PRD scope, picker/compression/storage/backend policy | PRD coverage matrix only |
+| video upload | `DJFeature.archiveVideoUpload` or `DJEnableArchiveHiddenBranches` shell only | no | PRD scope, picker/compression/storage/backend policy, true-device video picker acceptance | `archive-media-entries-smoke-check.swift`, `archive-media-release-readiness-check.swift`, release regression |
 | persona settings | `DJFeature.personaSettings` or `DJEnableArchiveHiddenBranches` | no | product copy, profile ownership model, prompt safety review | `release-feature-matrix-check.swift` |
 | family management public release | `DJFeature.familyManagement` or `DJEnableProfileHiddenBranches` | no | invitation/permission model, backend membership contract, privacy copy | `profile-family-persona-switcher-check.swift` |
 | care dashboard expansion | aggregate `DJFeature.careDashboard` and non-executing `关怀升级准备中` placeholder are public; intervention/contact execution stays behind `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | aggregate + placeholder only | family-facing copy, alert thresholds, backend persistence, true-device acceptance | `elder-care-dashboard-check.swift`, `profile-care-public-placeholder-check.swift`, backend acceptance |

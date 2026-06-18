@@ -61,12 +61,17 @@ final class MemoryArchiveViewController: UIViewController {
     private var creationOptions: [MemoryArchiveCreationOption] {
         MemoryArchiveCreationOption.availableOptions(
             isAudioUploadEnabled: isArchiveAudioCreationEnabled,
+            isVideoUploadEnabled: isArchiveVideoCreationEnabled,
             isTimeLettersEnabled: isTimeLetterCreationEnabled
         )
     }
 
     private var isArchiveAudioCreationEnabled: Bool {
         isArchiveCreationVisible(for: .audio)
+    }
+
+    private var isArchiveVideoCreationEnabled: Bool {
+        isArchiveCreationVisible(for: .video)
     }
 
     private var isTimeLetterCreationEnabled: Bool {
@@ -94,6 +99,7 @@ final class MemoryArchiveViewController: UIViewController {
         MemoryArchiveMediaReleaseReadiness.isCreationVisible(
             for: kind,
             isAudioUploadEnabled: FeatureFlagService.shared.isEnabled(.archiveAudioUpload),
+            isVideoUploadEnabled: FeatureFlagService.shared.isEnabled(.archiveVideoUpload),
             isTimeLettersEnabled: FeatureFlagService.shared.isEnabled(.timeLetters),
             isHiddenBranchesEnabled: isUIQAArchiveHiddenBranchesEnabled
         )
@@ -409,6 +415,9 @@ final class MemoryArchiveViewController: UIViewController {
         var inputs = ["文字", "图片"]
         if isArchiveAudioCreationEnabled {
             inputs.append("声音")
+        }
+        if isArchiveVideoCreationEnabled {
+            inputs.append("视频")
         }
         if isTimeLetterCreationEnabled {
             inputs.append("时间信件")
@@ -1600,6 +1609,11 @@ final class MemoryArchiveViewController: UIViewController {
         present(entryViewController, animated: true)
     }
 
+    private func presentVideoEntry() {
+        let entryViewController = MemoryArchiveVideoEntryViewController()
+        present(entryViewController, animated: true)
+    }
+
     private func presentPhotoEntry() {
         let entryViewController = MemoryArchivePhotoEntryViewController()
         entryViewController.onChoosePhoto = { [weak self] in
@@ -1717,7 +1731,11 @@ extension MemoryArchiveViewController: MemoryArchiveCreationSheetViewControllerD
             guard isTimeLetterCreationEnabled else { return }
             presentTextEntry(kind: .timeLetter)
         case .video:
-            showToast(MemoryArchiveMediaReleaseReadiness.unavailableCopy(for: .video), type: .info)
+            guard isArchiveVideoCreationEnabled else {
+                showToast(MemoryArchiveMediaReleaseReadiness.unavailableCopy(for: .video), type: .info)
+                return
+            }
+            presentVideoEntry()
         }
     }
 }

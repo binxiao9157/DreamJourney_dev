@@ -35,7 +35,11 @@ enum MemoryArchiveMediaReleaseReadiness {
                 reason: "等待投递策略、提醒策略和家属可见性策略确认后再公开。"
             )
         case .video:
-            return .unavailable(reason: "视频素材录入将在后续开放")
+            return .hiddenReady(
+                feature: .archiveVideoUpload,
+                qaLaunchArgument: hiddenBranchesLaunchArgument,
+                reason: "等待视频选择、压缩、缩略图、存储和后端媒体策略确认后再公开。"
+            )
         }
     }
 
@@ -82,9 +86,9 @@ enum MemoryArchiveMediaReleaseReadiness {
                 kind: kind,
                 title: "视频片段",
                 stage: stage(for: kind),
-                persistence: "not_available",
+                persistence: "shell_only",
                 requiresMicrophonePermission: false,
-                releaseCopy: "视频素材录入将在后续开放"
+                releaseCopy: "视频片段暂为隐藏候选入口"
             )
         }
     }
@@ -92,6 +96,7 @@ enum MemoryArchiveMediaReleaseReadiness {
     static func isCreationVisible(
         for kind: MemoryArchiveItemKind,
         isAudioUploadEnabled: Bool,
+        isVideoUploadEnabled: Bool,
         isTimeLettersEnabled: Bool,
         isHiddenBranchesEnabled: Bool
     ) -> Bool {
@@ -104,6 +109,8 @@ enum MemoryArchiveMediaReleaseReadiness {
                 return isAudioUploadEnabled || isHiddenBranchesEnabled
             case .timeLetters:
                 return isTimeLettersEnabled || isHiddenBranchesEnabled
+            case .archiveVideoUpload:
+                return isVideoUploadEnabled || isHiddenBranchesEnabled
             default:
                 return false
             }

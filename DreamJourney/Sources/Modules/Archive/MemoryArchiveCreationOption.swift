@@ -13,6 +13,7 @@ struct MemoryArchiveCreationOption: Equatable {
 
     static func availableOptions(
         isAudioUploadEnabled: Bool,
+        isVideoUploadEnabled: Bool,
         isTimeLettersEnabled: Bool
     ) -> [MemoryArchiveCreationOption] {
         var options: [MemoryArchiveCreationOption] = [
@@ -22,6 +23,10 @@ struct MemoryArchiveCreationOption: Equatable {
 
         if isAudioUploadEnabled {
             options.append(.audio)
+        }
+
+        if isVideoUploadEnabled {
+            options.append(.video)
         }
 
         if isTimeLettersEnabled {
@@ -52,6 +57,14 @@ struct MemoryArchiveCreationOption: Equatable {
         title: "录入语音",
         subtitle: "补充声音素材，让回响更接近真实语气。",
         iconName: "waveform",
+        isAvailable: true
+    )
+
+    private static let video = MemoryArchiveCreationOption(
+        kind: .video,
+        title: "录入视频片段",
+        subtitle: "预留动态影像素材，等待压缩、缩略图和存储策略确认。",
+        iconName: "video",
         isAvailable: true
     )
 

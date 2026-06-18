@@ -9,8 +9,8 @@ Branch: `feature/prd-stitch-ui-adaptation`
 This slice keeps the current Stitch-aligned archive UI stable while making PRD media boundaries explicit in code:
 
 - Public archive creation remains `添加文字描述` and `选择照片`.
-- Hidden QA/development archive creation remains `录入语音` and `录入时间信件`.
-- Video is still not available and must not appear in creation options.
+- Hidden QA/development archive creation remains `录入语音`, `录入视频片段`, and `录入时间信件`.
+- Video is a hidden candidate shell only; it must not appear in default public release creation options.
 
 ## Release Boundary
 
@@ -19,8 +19,8 @@ This slice keeps the current Stitch-aligned archive UI stable while making PRD m
 | Text archive | Public | None | `local_user_defaults` | Feeds archive timeline and Echo context. |
 | Photo archive | Public | None | `local_file` | Feeds archive timeline and Echo context. |
 | Audio archive | Hidden ready | `archiveAudioUpload` or `DJEnableArchiveHiddenBranches` | `local_file` | Requires microphone permission and true-device permission recovery QA before public release. |
+| Video | Hidden ready | `archiveVideoUpload` or `DJEnableArchiveHiddenBranches` | `shell_only` | Shell only: no picker, no upload, no archive item until picker/compression/storage/backend policy is accepted. |
 | Time letter | Hidden ready | `timeLetters` or `DJEnableArchiveHiddenBranches` | `local_user_defaults` | Needs delivery/reminder/family visibility product rules before public release. |
-| Video | Unavailable | Not exposed | `not_available` | Copy remains `视频素材录入将在后续开放`. |
 
 ## Verification
 
@@ -36,6 +36,6 @@ swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/
 `run-archive-media-entries-smoke.sh` builds the UIQA simulator app, resets persisted feature flags, and checks the creation option matrix:
 
 - release mode: `添加文字描述`, `选择照片`
-- hidden QA mode: `添加文字描述`, `选择照片`, `录入语音`, `录入时间信件`
-- video remains unavailable
+- hidden QA mode: `添加文字描述`, `选择照片`, `录入语音`, `录入视频片段`, `录入时间信件`
+- video remains hidden from release mode and is available only as a hidden shell in QA mode
 - audio keeps the microphone-permission boundary

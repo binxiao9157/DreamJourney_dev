@@ -7,6 +7,7 @@ enum DJFeature: String, CaseIterable {
     case profileSettings
     case personaSettings
     case archiveAudioUpload
+    case archiveVideoUpload
     case archiveRemoteFetch
     case archiveLocalAnalysis
     case familyManagement

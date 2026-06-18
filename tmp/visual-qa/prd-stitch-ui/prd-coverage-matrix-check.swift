@@ -47,9 +47,9 @@ assertContains(coverage, "| PRD requirement | Current status | Public? | Evidenc
 
 let requiredRows = [
     "| 回响语音输入 | implemented | yes | `EchoViewController`, archive-to-echo smoke | true-device microphone acceptance |",
-    "| 2-3轮后等待回信 | implemented ten-round/adaptive policy with persisted in-app state, local notification, device-token registration contract, and backend-ready push contract | yes | `EchoViewModel`, `EchoDelayedReplyStore`, `EchoDelayedReplyNotificationScheduler`, `PushDeviceTokenStore`, echo delayed reply notification/push checks | deploy `/devices/push-token` and `/echo/delayed-replies`, APNs provider delivery, true-device voice/notification acceptance |",
+    "| 2-3轮后等待回信 | implemented ten-round/adaptive policy with persisted in-app state, local notification, deployed backend device-token registration, and deployed backend delayed-reply persistence | yes | `EchoViewModel`, `EchoDelayedReplyStore`, `EchoDelayedReplyNotificationScheduler`, `PushDeviceTokenStore`, echo delayed reply notification/push checks, deployed run `20260618-deployed-push-device-token-contract-rerun-205018` | APNs provider delivery, scheduled dispatch worker, true-device voice/notification acceptance |",
     "| 档案照片 | implemented | yes | Archive photo entry smoke | true-device photo acceptance |",
-    "| 档案视频 | not implemented | no | release matrix | define video upload scope |",
+    "| 档案视频 | hidden candidate shell | no | archive media readiness guard, release matrix | picker/compression/storage/backend policy, true-device video picker acceptance |",
     "| 档案录音 | hidden candidate | no | archive media smoke | true-device audio acceptance |",
     "| 档案文字描述 | implemented | yes | archive smoke | maintain |",
     "| 时间信件 | hidden candidate | no | archive media smoke | delivery policy |",
@@ -70,11 +70,11 @@ for row in requiredRows {
 let requiredStatuses = [
     "implemented",
     "partially implemented",
-    "implemented ten-round/adaptive policy with persisted in-app state, local notification, device-token registration contract, and backend-ready push contract",
+    "implemented ten-round/adaptive policy with persisted in-app state, local notification, deployed backend device-token registration, and deployed backend delayed-reply persistence",
     "hidden candidate",
+    "hidden candidate shell",
     "hidden blocked shell",
     "hidden boundary",
-    "not implemented",
     "implemented aggregate",
     "implemented aggregate with loading/empty/stale/failed states",
     "implemented fallback",
@@ -100,8 +100,9 @@ assertContains(coverage, "release-like FastAPI/Postgres 后端验收：accepted"
 assertContains(coverage, "线上/公网后端验收：accepted for simulator release-like scope", "coverage matrix should mark simulator remote backend as accepted")
 assertContains(coverage, "真机验收：not accepted", "coverage matrix should mark true-device as not accepted")
 assertContains(coverage, "the old third-turn default policy has been superseded", "coverage matrix should document superseded Echo policy")
-assertContains(coverage, "In-app state, local notification, device-token registration contract, and backend-ready push contract are implemented", "coverage matrix should document implemented Echo notification scope")
-assertContains(coverage, "Deployment route parity, APNs provider delivery, and true-device notification acceptance remain open", "coverage matrix should preserve external Echo notification gates")
+assertContains(coverage, "In-app state, local notification, device-token registration, and delayed-reply backend persistence are implemented", "coverage matrix should document implemented Echo notification scope")
+assertContains(coverage, "20260618-deployed-push-device-token-contract-rerun-205018", "coverage matrix should record latest deployed push token acceptance")
+assertContains(coverage, "APNs provider delivery, service-side scheduled dispatch, and true-device notification acceptance remain open", "coverage matrix should preserve external Echo notification gates")
 assertContains(coverage, "name/gender/region validation", "coverage matrix should document updated profile scope")
 assertContains(coverage, "Password change hidden shell", "coverage matrix should document password shell state")
 assertContains(coverage, "PasswordAPITests", "coverage matrix should document local password backend tests")
@@ -120,11 +121,14 @@ assertContains(coverage, "No hidden PRD feature is public by default", "coverage
 assertContains(coverage, "## Hidden Candidate Release Matrix", "coverage matrix should link hidden candidates to release matrix")
 assertContains(coverage, "docs/superpowers/status/2026-06-17-release-feature-matrix.md", "coverage matrix should reference release feature matrix")
 assertContains(coverage, "archive audio upload", "coverage matrix should name archive audio candidate")
+assertContains(coverage, "video upload", "coverage matrix should name archive video candidate")
+assertContains(coverage, "hidden shell only; PRD scope and media backend contract still required", "coverage matrix should document video shell boundary")
 assertContains(coverage, "family management public release", "coverage matrix should name family management candidate")
 assertContains(coverage, "care escalation draft", "coverage matrix should name care escalation draft candidate")
 assertContains(coverage, "digital inheritance lifecycle", "coverage matrix should name digital inheritance candidate")
 assertContains(coverage, "20260618-deployed-postgres-acceptance-after-deploy", "coverage matrix should record accepted backend run")
 assertContains(coverage, "20260618-selected-backend-latest-contracts-after-deploy-r2", "coverage matrix should record latest accepted backend run")
+assertContains(coverage, "deployed push-token registration and delayed-reply `deviceTokenId` persistence are accepted", "coverage matrix should record recovered deployed push route parity")
 assertContains(coverage, "后续如有后端合同变化，需要 rerun `run-release-like-backend-acceptance.sh`", "coverage matrix should require backend reruns after backend changes")
 assertContains(coverage, "需要真机、签名和设备操作", "coverage matrix should call out device blocker")
 

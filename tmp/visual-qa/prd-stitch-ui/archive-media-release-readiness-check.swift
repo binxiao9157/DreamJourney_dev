@@ -26,6 +26,7 @@ let readiness = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveMediaRel
 let archive = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift")
 let options = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveCreationOption.swift")
 let audio = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveAudioRecorderViewController.swift")
+let video = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveVideoEntryViewController.swift")
 let factory = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveItemFactory.swift")
 let flags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let project = read("DreamJourney.xcodeproj/project.pbxproj")
@@ -39,29 +40,41 @@ assertContains(readiness, "case .timeLetter:", "time-letter readiness must be ex
 assertContains(readiness, "case .video:", "video readiness must be explicit")
 assertContains(readiness, "feature: .archiveAudioUpload", "audio must stay behind archiveAudioUpload")
 assertContains(readiness, "feature: .timeLetters", "time-letter must stay behind timeLetters")
+assertContains(readiness, "feature: .archiveVideoUpload", "video must stay behind archiveVideoUpload")
 assertContains(readiness, "requiresMicrophonePermission: true", "audio readiness must preserve microphone permission boundary")
 assertContains(readiness, "local_file", "audio/photo readiness must document local file persistence")
 assertContains(readiness, "local_user_defaults", "text/time-letter readiness must document local user defaults persistence")
-assertContains(readiness, "视频素材录入将在后续开放", "video must remain unavailable with explicit copy")
+assertContains(readiness, "等待视频选择、压缩、缩略图、存储和后端媒体策略确认后再公开。", "video must keep explicit hidden-candidate release boundary")
+assertContains(readiness, "视频片段暂为隐藏候选入口", "video must keep non-public release copy")
 
 assertContains(archive, "MemoryArchiveMediaReleaseReadiness.isCreationVisible", "archive screen must use readiness contract for hidden creation visibility")
 assertContains(archive, "MemoryArchiveMediaReleaseReadiness.hiddenBranchesLaunchArgument", "archive screen must use the shared hidden launch argument")
 assertContains(options, "var options: [MemoryArchiveCreationOption] = [\n            .text,\n            .photo,\n        ]", "creation options must default to text/photo only")
-assertNotContains(options, "options.append(.video)", "video must not appear in creation options")
+assertContains(options, "isVideoUploadEnabled", "creation options must accept a video hidden-candidate gate")
+assertContains(options, "options.append(.video)", "video may appear only when the hidden-candidate gate is enabled")
 
 assertContains(audio, "MicrophonePermissionManager.shared.requestPermission", "audio creation must request microphone permission before recording")
 assertContains(audio, "archive-audio", "audio recording must stay in the local archive audio directory")
+assertContains(video, "final class MemoryArchiveVideoEntryViewController", "video hidden shell should exist")
+assertContains(video, "视频素材暂为隐藏候选入口", "video shell must declare hidden candidate boundary")
+assertContains(video, "当前不会打开相册、不会上传视频，也不会生成真实档案记录。", "video shell must not imply a real upload flow")
+assertContains(video, "archive-video-entry-shell", "video shell should have stable QA identifier")
+assertNotContains(video, "UIImagePickerController", "video shell must not open media picker yet")
+assertNotContains(video, "MemoryArchiveItemFactory", "video shell must not create archive items yet")
 assertContains(factory, "\"storage\": \"local_file\"", "media files must declare local file persistence")
 assertContains(factory, "\"storage\": \"local_user_defaults\"", "manual text/time-letter records must declare local user defaults persistence")
 
-for hiddenFeature in ["archiveAudioUpload", "timeLetters"] {
+for hiddenFeature in ["archiveAudioUpload", "archiveVideoUpload", "timeLetters"] {
     assertContains(flags, "case \(hiddenFeature)", "feature flag must declare \(hiddenFeature)")
 }
 assertContains(flags, "private static let defaultEnabled: Set<DJFeature> = [\n        .careDashboard,\n        .profileSettings,\n        .legalCenter,\n    ]", "audio and time-letter flags must stay out of default release flags")
 
 assertContains(project, "MemoryArchiveMediaReleaseReadiness.swift", "readiness contract must be added to the Xcode target")
+assertContains(project, "MemoryArchiveVideoEntryViewController.swift in Sources", "video shell must be added to the Xcode target")
 
 assertContains(status, "Audio archive", "status doc must include audio readiness")
 assertContains(status, "Time letter", "status doc must include time-letter readiness")
 assertContains(status, "Video", "status doc must include video boundary")
+assertContains(status, "Hidden ready", "status doc must mark video as hidden ready")
+assertContains(status, "archiveVideoUpload", "status doc must document video feature gate")
 assertContains(status, "DJEnableArchiveHiddenBranches", "status doc must document hidden QA launch argument")

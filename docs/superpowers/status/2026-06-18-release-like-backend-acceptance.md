@@ -140,7 +140,34 @@ Required recovery:
 
 Recovery status: completed by `20260618-selected-backend-latest-contracts-after-deploy-r2`.
 
-## Latest Deployed Push Token Contract Attempt
+## Latest Deployed Push Token Contract Accepted Run
+
+Run ID:
+
+```text
+20260618-deployed-push-device-token-contract-rerun-205018
+```
+
+Evidence directory:
+
+```text
+tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-deployed-push-device-token-contract-rerun-205018/
+```
+
+Status: accepted.
+
+Verified result:
+
+- Local backend verification passed first: backend unittest reported `Ran 69 tests` and `OK`, backend py_compile passed, deployment-file checks passed, FastAPI smoke passed, and backend diff check passed.
+- The deployed backend health endpoint was reachable and reported `store=postgres`.
+- Postgres seed and verify both completed for profile/password/archive/care plus push token registration.
+- `postgres-persistence-verify.json` includes `echoDelayedReplyDeviceTokenId` and `echoDelayedReplyPushProviderState=pending`.
+- iOS backend-env smoke completed against the deployed backend and saved screenshot `tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-deployed-push-device-token-contract-rerun-205018/ios-backend-env-smoke/20260618-deployed-push-device-token-contract-rerun-205018/01-backend-env-profile.png`.
+- The private backend token was checked against the new evidence directory with `token_hits=0`.
+
+Recovery status: completed for deployed route parity. APNs provider delivery, service-side scheduled dispatch, and true-device notification arrival remain external gates.
+
+## Historical Deployed Push Token Contract Attempt
 
 Run ID:
 
@@ -169,11 +196,11 @@ Root cause:
 - The selected deployed backend still does not expose that route.
 - This is deployment drift for the new push-token contract, not the earlier rollback-on-exception/500 issue.
 
-Required recovery:
+Recovery performed:
 
-1. Deploy the backend branch that includes the `POST /devices/push-token` route.
-2. Rerun `run-release-like-backend-acceptance.sh` with the private deployed backend URL/token.
-3. Treat remote Echo push readiness as blocked until `postgres-persistence-verify.json` includes `echoDelayedReplyDeviceTokenId` and `echoDelayedReplyPushProviderState=pending`.
+1. Deployed the backend branch that includes the `POST /devices/push-token` route.
+2. Reran `run-release-like-backend-acceptance.sh` with the private deployed backend URL/token.
+3. New accepted run `20260618-deployed-push-device-token-contract-rerun-205018` verifies `echoDelayedReplyDeviceTokenId` and `echoDelayedReplyPushProviderState=pending`.
 
 ## Latest Selected Backend Accepted Run
 
@@ -319,4 +346,4 @@ The local current backend code contains Postgres `Jsonb` parameter adaptation, r
 
 The latest selected backend acceptance run `20260618-selected-backend-latest-contracts-after-deploy-r2` verified `passwordChangeStatus`, `passwordOldLoginStatus`, `passwordNewLoginConfigured`, `careActiveRiskLevel`, `careMissingStatus`, `careInvalidStatus`, and `careStaleWindowEnd` in `postgres-persistence-verify.json`.
 
-After this run, the local backend/iOS contract added `POST /devices/push-token` and delayed reply `deviceTokenId` coverage. Deploy the new backend code, then rerun the same selected-backend acceptance command so the deployed evidence includes push token registration before claiming remote Echo push readiness.
+After this run, the local backend/iOS contract added `POST /devices/push-token` and delayed reply `deviceTokenId` coverage. The latest deployed acceptance run `20260618-deployed-push-device-token-contract-rerun-205018` now includes push token registration and delayed reply `deviceTokenId` persistence. Keep APNs provider delivery, service-side scheduled dispatch, and true-device notification arrival as separate gates before claiming complete remote push delivery.
