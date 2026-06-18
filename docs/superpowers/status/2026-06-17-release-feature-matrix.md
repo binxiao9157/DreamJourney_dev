@@ -62,7 +62,7 @@ These flows have hidden safety shells only. They are not public release features
 | Area | Safety boundary | Evidence |
 | --- | --- | --- |
 | 账号注销 | Hidden destructive confirmation shell only; it does not execute deletion until compliance, data export, cooling-off, and final confirmation are defined. | `ProfileViewController.showAccountDeletionConfirmation`, `profile-safety-flow-check.swift`. |
-| 医生联系 | Hidden safety notice with a local `关怀升级草稿`; it is non-emergency, not medical diagnosis, does not call, does not upload, and the real contact contract is not connected. | `ProfileViewController.showDoctorContactSafetyNotice`, `profile-safety-flow-check.swift`, `profile-care-escalation-contract-check.swift`. |
+| 医生联系 | Hidden safety notice with a local `关怀升级草稿`; it is non-emergency, not medical diagnosis, does not call, does not upload, and the real contact contract is not connected. A backend candidate payload exists only as `draftOnly` contract evidence and is not submitted anywhere. | `ProfileViewController.showDoctorContactSafetyNotice`, `profile-safety-flow-check.swift`, `profile-care-escalation-contract-check.swift`, `profile-care-escalation-backend-boundary-check.swift`, `run-profile-care-escalation-boundary-smoke.sh`. |
 
 ## Internal QA Launch Arguments
 

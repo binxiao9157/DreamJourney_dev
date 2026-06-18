@@ -191,6 +191,8 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/group4-profile-care-check.swift",
     "tmp/visual-qa/prd-stitch-ui/profile-care-snapshot-check.swift",
     "tmp/visual-qa/prd-stitch-ui/profile-care-escalation-contract-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/profile-care-escalation-backend-boundary-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/run-profile-care-escalation-boundary-smoke.sh",
     "tmp/visual-qa/prd-stitch-ui/profile-compact-stitch-layout-check.swift",
     "tmp/visual-qa/prd-stitch-ui/group5-map-compatibility-check.swift",
     "tmp/visual-qa/prd-stitch-ui/profile-scroll-inset-check.swift",

@@ -5,7 +5,7 @@
 - **Goal:** 按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态
 - **Mode:** Execute
 - **Phase:** Implementation
-- **Task:** continue non-device PRD function development; latest slice is backend family acceptance hardening
+- **Task:** continue non-device PRD function development; latest slice is care escalation backend boundary smoke
 - **Blockers:** real backend URL/token and true-device signing/operation for final acceptance
 
 ## Key Decisions
@@ -17,8 +17,8 @@
 - Task 3 closed: real-device/backend acceptance readiness is documented and guarded; true backend/device execution still waits for user-provided environment.
 - Task 4 closed: hidden family/persona switcher, profile safety shells, and care visibility gates are implemented and guarded.
 - Task 5 closed: release QA handoff is documented and simulator/static QA passed.
-- Post-review continuation: `长辈关怀` aggregate child dashboard, hidden `阳光 / 星辰 / 静默` mode management, Echo/Profile lifecycle effects, hidden profile care escalation draft, archive media release readiness contract, archive media entries smoke harness, family/persona release readiness smoke, and App-side backend family acceptance hardening are complete without true-device execution.
-- Current target after this slice: continue PRD function development that does not require real backend/device, especially care escalation backend contract boundaries or final release visual QA refresh, then rerun simulator/static QA.
+- Post-review continuation: `长辈关怀` aggregate child dashboard, hidden `阳光 / 星辰 / 静默` mode management, Echo/Profile lifecycle effects, hidden profile care escalation draft, care escalation draft-only backend boundary smoke, archive media release readiness contract, archive media entries smoke harness, family/persona release readiness smoke, and App-side backend family acceptance hardening are complete without true-device execution.
+- Current target after this slice: continue PRD function development that does not require real backend/device, especially final release visual QA refresh or remaining release-gated account lifecycle contracts, then rerun simulator/static QA.
 
 ## Scope
 

@@ -56,7 +56,12 @@ private extension AppDelegate {
             FeatureFlagService.shared.set(.archiveRemoteFetch, enabled: true)
             print("[UI_QA] Archive remote fetch enabled")
         }
-        if arguments.contains("DJRunProfileFamilyPersonaReleaseSmoke") {
+        if arguments.contains("DJRunProfileCareEscalationBoundarySmoke") {
+            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.runProfileCareEscalationBoundarySmoke()
+            }
+        } else if arguments.contains("DJRunProfileFamilyPersonaReleaseSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
@@ -99,6 +104,65 @@ private extension AppDelegate {
         } else if arguments.contains("DJSeedPendingArchiveAnalysis") {
             seedPendingArchiveAnalysisContext()
         }
+    }
+
+    func runProfileCareEscalationBoundarySmoke() {
+        let userId = UserManager.shared.currentUser?.id ?? "user_9999"
+        let context = DigitalHumanContext.defaultContext(userId: userId)
+        let snapshot = ProfileCareSnapshot(
+            moodTitle: "心境追踪",
+            moodStatus: "需关注",
+            emotionalIndex: 0.64,
+            cognitiveIndex: 0.75,
+            sleepStatus: "睡眠线索 2 条",
+            lonelinessIndex: 0.2,
+            riskReminder: "Call today."
+        )
+        let draft = ProfileCareEscalationDraft.make(
+            snapshot: snapshot,
+            personaDisplayName: context.displayName
+        )
+        let payload = draft.backendCandidatePayload(viewerUserId: userId, personaOwnerId: context.ownerId)
+        let profileTabSelected = selectProfileTabForCareEscalationSmoke()
+        let completed = (payload["schemaVersion"] as? String) == "profileCareEscalationDraft.v1"
+            && (payload["deliveryState"] as? String) == "draftOnly"
+            && (payload["requiresHumanReview"] as? Bool) == true
+            && (payload["backendContractConnected"] as? Bool) == false
+            && (payload["willContactThirdParty"] as? Bool) == false
+            && (payload["allowsEmergencyUse"] as? Bool) == false
+            && (payload["containsRawTranscript"] as? Bool) == false
+            && profileTabSelected
+
+        writeProfileCareEscalationBoundarySmokeResult(
+            completed: completed,
+            payload: payload,
+            profileTabSelected: profileTabSelected
+        )
+        print(
+            "[UI_QA] ProfileCareEscalationBoundarySmoke completed " +
+            "deliveryState=\(payload["deliveryState"] as? String ?? "missing") " +
+            "backendContractConnected=\(payload["backendContractConnected"] as? Bool ?? true) " +
+            "willContactThirdParty=\(payload["willContactThirdParty"] as? Bool ?? true) " +
+            "profileTabSelected=\(profileTabSelected)"
+        )
+    }
+
+    func selectProfileTabForCareEscalationSmoke() -> Bool {
+        guard let tabBarController = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController as? WarmTabBarController,
+              let viewControllers = tabBarController.viewControllers,
+              viewControllers.indices.contains(2) else {
+            return false
+        }
+
+        if let profileNavigationController = viewControllers[2] as? UINavigationController {
+            profileNavigationController.popToRootViewController(animated: false)
+        }
+        tabBarController.selectedIndex = 2
+        return true
     }
 
     func runProfileFamilyPersonaReleaseSmoke() {
@@ -467,6 +531,29 @@ private extension AppDelegate {
             try data.write(to: resultURL, options: [.atomic])
         } catch {
             print("[UI_QA] ArchiveToEchoSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    func writeProfileCareEscalationBoundarySmokeResult(
+        completed: Bool,
+        payload: [String: Any],
+        profileTabSelected: Bool
+    ) {
+        var result = payload
+        result["completed"] = completed
+        result["profileTabSelected"] = profileTabSelected
+
+        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
+              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("[UI_QA] ProfileCareEscalationBoundarySmoke failed reason=resultEncoding")
+            return
+        }
+
+        let resultURL = documentsURL.appendingPathComponent("profile-care-escalation-boundary-smoke-result.json")
+        do {
+            try data.write(to: resultURL, options: [.atomic])
+        } catch {
+            print("[UI_QA] ProfileCareEscalationBoundarySmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
     }
 

@@ -210,6 +210,25 @@ struct ProfileCareEscalationDraft {
         \(contractState)
         """
     }
+
+    func backendCandidatePayload(viewerUserId: String, personaOwnerId: String) -> [String: Any] {
+        [
+            "schemaVersion": "profileCareEscalationDraft.v1",
+            "deliveryState": "draftOnly",
+            "viewerUserId": viewerUserId,
+            "personaOwnerId": personaOwnerId,
+            "personaDisplayName": personaDisplayName,
+            "riskSummary": riskSummary,
+            "nonEmergencyNotice": nonEmergencyNotice,
+            "medicalBoundary": medicalBoundary,
+            "contractState": contractState,
+            "requiresHumanReview": true,
+            "backendContractConnected": false,
+            "willContactThirdParty": false,
+            "allowsEmergencyUse": false,
+            "containsRawTranscript": false,
+        ]
+    }
 }
 
 enum ProfileCareCopy {

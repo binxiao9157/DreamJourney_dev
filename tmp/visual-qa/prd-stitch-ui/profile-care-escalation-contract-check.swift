@@ -49,6 +49,11 @@ assertContains(careModels, "let medicalBoundary: String", "draft should explicit
 assertContains(careModels, "let contractState: String", "draft should state real contact contract status")
 assertContains(careModels, "static func make(snapshot: ProfileCareSnapshot, personaDisplayName: String)", "draft should be built from care snapshot and selected persona display name")
 assertContains(careModels, "var alertMessage: String", "draft should render a safe hidden-alert message")
+assertContains(careModels, "backendCandidatePayload(viewerUserId:", "draft should expose a backend candidate payload")
+assertContains(careModels, "\"deliveryState\": \"draftOnly\"", "backend candidate payload should remain draft-only")
+assertContains(careModels, "\"backendContractConnected\": false", "backend candidate payload should state backend contact is disconnected")
+assertContains(careModels, "\"willContactThirdParty\": false", "backend candidate payload must not contact third parties")
+assertContains(careModels, "\"containsRawTranscript\": false", "backend candidate payload must not contain raw transcript")
 
 let doctorBody = functionBody(named: "showDoctorContactSafetyNotice()", in: profile)
 let doctorContractSource = doctorBody + careModels
