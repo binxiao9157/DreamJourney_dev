@@ -96,6 +96,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-18-prd-coverage-matrix.md",
     "docs/superpowers/status/2026-06-18-phase0-backend-alignment.md",
     "docs/superpowers/status/2026-06-18-release-like-backend-acceptance.md",
+    "docs/superpowers/status/2026-06-18-one-command-release-regression.md",
 ]
 
 for doc in requiredDocs {
@@ -171,6 +172,7 @@ for screenshot in [
 
 let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh",
+    "tmp/visual-qa/prd-stitch-ui/run-release-regression.sh",
     "tmp/visual-qa/prd-stitch-ui/run-backend-env-smoke.sh",
     "tmp/visual-qa/prd-stitch-ui/run-release-like-backend-acceptance.sh",
     "tmp/visual-qa/prd-stitch-ui/final-visual-qa-package-check.swift",
@@ -205,6 +207,7 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/profile-scroll-inset-check.swift",
     "tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift",
     "tmp/visual-qa/prd-stitch-ui/prd-coverage-matrix-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/release-regression-check.swift",
     "tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift",
     "tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift",
 ]
