@@ -152,6 +152,7 @@ for handoffGuard in [
     "prd-full-feature-closure-decisions-check.swift",
     "echo-delayed-reply-notification-check.swift",
     "echo-delayed-reply-push-contract-check.swift",
+    "echo-delayed-reply-dispatch-contract-check.swift",
     "profile-account-fields-check.swift",
     "archive-ownership-visibility-check.swift",
     "profile-care-public-placeholder-check.swift",
@@ -212,6 +213,7 @@ for screenshot in [
 let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh",
     "tmp/visual-qa/prd-stitch-ui/run-echo-delayed-reply-notification-smoke.sh",
+    "tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-dispatch-contract-check.swift",
     "tmp/visual-qa/prd-stitch-ui/run-release-regression.sh",
     "tmp/visual-qa/prd-stitch-ui/run-backend-env-smoke.sh",
     "tmp/visual-qa/prd-stitch-ui/run-release-like-backend-acceptance.sh",

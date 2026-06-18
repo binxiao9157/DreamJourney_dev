@@ -35,6 +35,7 @@ PUSH_DEVICE_TOKEN = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789a
 PUSH_DEVICE_ID = f"ios-release-like-{MARKER[-12:]}"
 DELAYED_REPLY_ID = f"echo_delayed_release_like_{MARKER}"
 DELAYED_DELIVER_AT = "2026-06-18T12:05:00Z"
+DELAYED_DISPATCH_AT = "2026-06-18T12:06:00Z"
 
 
 def request_json(method, path, payload=None, params=None, expected=200):
@@ -233,6 +234,30 @@ def seed():
     assert_equal(delayed_item.get("deviceTokenId"), push_item.get("deviceTokenId"), "delayed reply should reference deviceTokenId")
     assert_true(PUSH_DEVICE_TOKEN not in json.dumps(delayed_reply), "delayed reply response must not include raw token")
 
+    delayed_dispatch = request_json(
+        "POST",
+        "/echo/delayed-replies/dispatch-due",
+        {
+            "now": DELAYED_DISPATCH_AT,
+            "limit": 10,
+        },
+    )
+    assert_equal(delayed_dispatch.get("status"), "queued", "echo delayed reply dispatch status")
+    assert_equal(delayed_dispatch.get("itemCount"), 1, "echo delayed reply dispatch should queue one due item")
+    assert_equal(
+        delayed_dispatch.get("providerDeliveryAttempted"),
+        False,
+        "dispatch contract must not claim APNs provider delivery",
+    )
+    dispatched_item = (delayed_dispatch.get("items") or [{}])[0]
+    assert_equal(
+        dispatched_item.get("deliveryState"),
+        "readyForProvider",
+        "dispatched delayed reply should be ready for provider",
+    )
+    assert_equal(dispatched_item.get("pushProviderState"), "queued", "dispatched delayed reply should be queued for provider")
+    assert_true(PUSH_DEVICE_TOKEN not in json.dumps(delayed_dispatch), "dispatch response must not include raw token")
+
     archive_payload = {
         "userId": USER_ID,
         "viewerUserId": f"viewer_{MARKER}",
@@ -348,8 +373,18 @@ def verify():
         None,
     )
     assert_true(listed_delayed_reply is not None, "delayed reply list should contain release-like marker item")
-    assert_equal(listed_delayed_reply.get("deliveryState"), "scheduled", "delayed reply delivery state should persist")
-    assert_equal(listed_delayed_reply.get("pushProviderState"), "pending", "delayed reply push provider state should persist")
+    assert_equal(listed_delayed_reply.get("deliveryState"), "readyForProvider", "delayed reply dispatch state should persist")
+    assert_equal(listed_delayed_reply.get("pushProviderState"), "queued", "delayed reply push provider state should persist")
+    assert_equal(
+        listed_delayed_reply.get("dispatchAttemptedAt"),
+        DELAYED_DISPATCH_AT,
+        "delayed reply dispatch attempt time should persist",
+    )
+    assert_equal(
+        listed_delayed_reply.get("providerDeliveryAttempted"),
+        False,
+        "delayed reply must not claim APNs provider delivery",
+    )
     assert_true(listed_delayed_reply.get("deviceTokenId"), "delayed reply should persist deviceTokenId")
     assert_true(PUSH_DEVICE_TOKEN not in json.dumps(delayed_reply_list), "delayed reply list must not expose raw device token")
 
@@ -410,8 +445,10 @@ def verify():
         "profileNickname": profile.get("nickname"),
         "profileRegion": profile.get("region"),
         "echoDelayedReplyState": listed_delayed_reply.get("deliveryState"),
+        "echoDelayedReplyDispatchState": listed_delayed_reply.get("deliveryState"),
         "echoDelayedReplyPushProviderState": listed_delayed_reply.get("pushProviderState"),
         "echoDelayedReplyDeviceTokenId": listed_delayed_reply.get("deviceTokenId"),
+        "echoDelayedReplyProviderDeliveryAttempted": listed_delayed_reply.get("providerDeliveryAttempted"),
         "archiveItemCount": len(archive_list.get("items", [])),
         "archivePersonaScope": listed_archive.get("personaScope"),
         "archiveDigitalHumanId": listed_archive.get("digitalHumanId"),

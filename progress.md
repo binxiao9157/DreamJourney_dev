@@ -218,6 +218,14 @@ Update this file after every recursive state-changing command bundle and before 
 - Mode: Execute
 - Phase: Implementation
 - Task: continue non-device PRD function development; latest slice is deployed Postgres backend acceptance
+
+## Checkpoint - 2026-06-18 21:12 CST
+
+- Task: add Echo delayed-reply dispatch-due backend contract and update deployed backend acceptance gate.
+- Completed locally: backend now exposes `POST /echo/delayed-replies/dispatch-due`; memory and Postgres stores can mark due scheduled replies as `readyForProvider` / `queued`, record `dispatchAttemptedAt`, and keep `providerDeliveryAttempted=false`.
+- Guard: `echo-delayed-reply-dispatch-contract-check.swift` is wired into release regression and the release QA package; `backend-postgres-persistence-check.py` now seeds and verifies the dispatch-due state transition.
+- Deployed result: run `20260618-deployed-echo-dispatch-contract-210536` is blocked because the selected server returned HTTP 405 for `POST /echo/delayed-replies/dispatch-due`.
+- Boundary: this is deployment drift for the new static route; APNs provider delivery and true-device notification arrival remain separate gates.
 - Blockers: true-device signing/operation still required for final acceptance; newest Stitch Echo variants still need explicit selection before replacing the current public Echo surface
 
 ### docs/plans/task_01_prd-gap-map-and-priority-ledger.md

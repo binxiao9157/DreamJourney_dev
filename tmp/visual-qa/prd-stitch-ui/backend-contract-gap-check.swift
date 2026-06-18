@@ -27,6 +27,7 @@ let releaseQA = read("tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift
 for endpoint in [
     "/devices/push-token",
     "/echo/delayed-replies",
+    "/echo/delayed-replies/dispatch-due",
     "/profile",
     "/auth/login",
     "/auth/password",
@@ -39,6 +40,7 @@ for endpoint in [
 for rowLabel in [
     "Push device token registration",
     "Echo delayed reply push",
+    "Echo delayed reply dispatch",
     "Profile update",
     "Password change",
     "Archive ownership",
@@ -53,6 +55,10 @@ for state in [
     "raw device tokens are not returned by API responses",
     "echoDelayedReplyDeviceTokenId",
     "echoDelayedReplyPushProviderState=pending",
+    "readyForProvider",
+    "service-side due sweep",
+    "deployed run `20260618-deployed-echo-dispatch-contract-210536` blocked with HTTP 405",
+    "selected release backend acceptance is still required after deploying this route",
     "selected-environment password acceptance passed",
     "APNs delivery",
     "selected release backend accepts and persists nickname/gender/region/avatar metadata",
@@ -83,6 +89,7 @@ assertContains(backendMain, "@app.post(\"/profile\")", "backend should expose pr
 assertContains(backendMain, "@app.get(\"/profile/{user_id}\")", "backend should expose profile read")
 assertContains(backendMain, "@app.post(\"/devices/push-token\")", "backend should expose push device token registration")
 assertContains(backendMain, "@app.post(\"/echo/delayed-replies\")", "backend should expose echo delayed reply schedule")
+assertContains(backendMain, "@app.post(\"/echo/delayed-replies/dispatch-due\")", "backend should expose echo delayed reply dispatch-due")
 assertContains(backendMain, "@app.get(\"/echo/delayed-replies/{user_id}\")", "backend should expose echo delayed reply list")
 assertContains(backendMain, "@app.post(\"/archive/items\")", "backend should expose archive item create")
 assertContains(backendMain, "@app.get(\"/archive/items/{user_id}\")", "backend should expose archive item list")

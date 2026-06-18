@@ -112,6 +112,7 @@ for guard in \
   echo-waiting-reply-policy-check.swift \
   echo-delayed-reply-notification-check.swift \
   echo-delayed-reply-push-contract-check.swift \
+  echo-delayed-reply-dispatch-contract-check.swift \
   phase0-backend-alignment-check.swift \
   release-like-backend-acceptance-check.swift \
   backend-env-smoke-check.swift \

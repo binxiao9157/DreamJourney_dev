@@ -55,14 +55,18 @@
 - Endpoint: `POST /echo/delayed-replies`
 - Payload: `userId`、`delayedReplyId`、`deliverAt`、`minutes`、`trigger`，如果真机已完成 token 注册则附带 `deviceTokenId`
 - Response: `status=scheduled`，并回传包含 `delayedReplyId`、`deliverAt`、`minutes`、`trigger`、`deliveryState` 的 `item`。
-- 当前 iOS 侧为 backend-ready client；后端代码已补 `POST /devices/push-token`、`POST /echo/delayed-replies` 和 `GET /echo/delayed-replies/{userId}` 的接收/持久化合同。
+- Dispatch endpoint: `POST /echo/delayed-replies/dispatch-due`
+- Dispatch payload: `now`、`limit`
+- Dispatch response: `status=queued`，并把到期条目推进到 `deliveryState=readyForProvider`、`pushProviderState=queued`、`dispatchAttemptedAt=<now>`、`providerDeliveryAttempted=false`。
+- 当前 iOS 侧为 backend-ready client；后端代码已补 `POST /devices/push-token`、`POST /echo/delayed-replies`、`GET /echo/delayed-replies/{userId}` 和 `POST /echo/delayed-replies/dispatch-due` 的接收/持久化合同。
 - 请求失败不影响 App 内等待状态和本地通知兜底。
-- 部署环境 route parity、APNs provider 配置、服务端定时投递与真机通知到达仍是后端/真机验收门。
+- `POST /echo/delayed-replies/dispatch-due` 是服务端 due sweep 合同，只证明后端把到期回信排入 provider 队列；APNs provider delivery remains an external gate。
+- 部署环境 route parity、APNs provider 配置、provider 实际投递与真机通知到达仍是后端/真机验收门。
 
 仍需工程继续补齐：
 
-- 部署服务端 `/devices/push-token` 与 `/echo/delayed-replies` 持久化合同。
-- 调度队列与 APNs 投递实现。
+- 将 `POST /echo/delayed-replies/dispatch-due` 部署到选定后端环境，并 rerun release-like backend acceptance。
+- APNs provider 投递实现。
 - 真机麦克风与通知验收。
 
 ## 验证
@@ -73,6 +77,7 @@
 swift tmp/visual-qa/prd-stitch-ui/echo-waiting-reply-policy-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-notification-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-push-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-dispatch-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 本轮模拟器截图：

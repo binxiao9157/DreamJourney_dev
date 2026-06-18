@@ -47,7 +47,7 @@ assertContains(coverage, "| PRD requirement | Current status | Public? | Evidenc
 
 let requiredRows = [
     "| 回响语音输入 | implemented | yes | `EchoViewController`, archive-to-echo smoke | true-device microphone acceptance |",
-    "| 2-3轮后等待回信 | implemented ten-round/adaptive policy with persisted in-app state, local notification, deployed backend device-token registration, and deployed backend delayed-reply persistence | yes | `EchoViewModel`, `EchoDelayedReplyStore`, `EchoDelayedReplyNotificationScheduler`, `PushDeviceTokenStore`, echo delayed reply notification/push checks, deployed run `20260618-deployed-push-device-token-contract-rerun-205018` | APNs provider delivery, scheduled dispatch worker, true-device voice/notification acceptance |",
+    "| 2-3轮后等待回信 | implemented ten-round/adaptive policy with persisted in-app state, local notification, deployed backend device-token registration, deployed backend delayed-reply persistence, and local backend dispatch-due contract | yes | `EchoViewModel`, `EchoDelayedReplyStore`, `EchoDelayedReplyNotificationScheduler`, `PushDeviceTokenStore`, echo delayed reply notification/push/dispatch checks, deployed run `20260618-deployed-push-device-token-contract-rerun-205018`, blocked dispatch run `20260618-deployed-echo-dispatch-contract-210536` | deploy dispatch-due route, rerun release-like backend acceptance, APNs provider delivery, true-device voice/notification acceptance |",
     "| 档案照片 | implemented | yes | Archive photo entry smoke | true-device photo acceptance |",
     "| 档案视频 | hidden candidate shell | no | archive media readiness guard, release matrix | picker/compression/storage/backend policy, true-device video picker acceptance |",
     "| 档案录音 | hidden candidate | no | archive media smoke | true-device audio acceptance |",
@@ -70,7 +70,7 @@ for row in requiredRows {
 let requiredStatuses = [
     "implemented",
     "partially implemented",
-    "implemented ten-round/adaptive policy with persisted in-app state, local notification, deployed backend device-token registration, and deployed backend delayed-reply persistence",
+    "implemented ten-round/adaptive policy with persisted in-app state, local notification, deployed backend device-token registration, deployed backend delayed-reply persistence, and local backend dispatch-due contract",
     "hidden candidate",
     "hidden candidate shell",
     "hidden blocked shell",
@@ -100,9 +100,11 @@ assertContains(coverage, "release-like FastAPI/Postgres 后端验收：accepted"
 assertContains(coverage, "线上/公网后端验收：accepted for simulator release-like scope", "coverage matrix should mark simulator remote backend as accepted")
 assertContains(coverage, "真机验收：not accepted", "coverage matrix should mark true-device as not accepted")
 assertContains(coverage, "the old third-turn default policy has been superseded", "coverage matrix should document superseded Echo policy")
-assertContains(coverage, "In-app state, local notification, device-token registration, and delayed-reply backend persistence are implemented", "coverage matrix should document implemented Echo notification scope")
+assertContains(coverage, "In-app state, local notification, device-token registration, delayed-reply backend persistence, and the local `POST /echo/delayed-replies/dispatch-due` ready-for-provider contract are implemented", "coverage matrix should document implemented Echo notification scope")
 assertContains(coverage, "20260618-deployed-push-device-token-contract-rerun-205018", "coverage matrix should record latest deployed push token acceptance")
-assertContains(coverage, "APNs provider delivery, service-side scheduled dispatch, and true-device notification acceptance remain open", "coverage matrix should preserve external Echo notification gates")
+assertContains(coverage, "20260618-deployed-echo-dispatch-contract-210536", "coverage matrix should record blocked deployed dispatch acceptance")
+assertContains(coverage, "deployed dispatch acceptance run `20260618-deployed-echo-dispatch-contract-210536` is blocked by HTTP 405", "coverage matrix should preserve dispatch deployment drift evidence")
+assertContains(coverage, "APNs provider delivery, deployed service-side scheduled dispatch acceptance, and true-device notification acceptance remain open", "coverage matrix should preserve external Echo notification gates")
 assertContains(coverage, "name/gender/region validation", "coverage matrix should document updated profile scope")
 assertContains(coverage, "Password change hidden shell", "coverage matrix should document password shell state")
 assertContains(coverage, "PasswordAPITests", "coverage matrix should document local password backend tests")
@@ -114,6 +116,7 @@ assertContains(coverage, "后端合同闭环", "coverage matrix should include b
 assertContains(coverage, "2026-06-18-backend-contract-gap-matrix.md", "coverage matrix should reference backend contract gap matrix")
 assertContains(coverage, "backend-contract-gap-check.swift", "coverage matrix should reference backend contract guard")
 assertContains(coverage, "/echo/delayed-replies", "coverage matrix should call out echo delayed reply backend gap")
+assertContains(coverage, "/echo/delayed-replies/dispatch-due", "coverage matrix should call out echo delayed reply dispatch backend gap")
 assertContains(coverage, "/devices/push-token", "coverage matrix should call out push device token backend gap")
 assertContains(coverage, "/profile", "coverage matrix should call out profile backend gap")
 assertContains(coverage, "/auth/password", "coverage matrix should call out password backend gap")
@@ -129,6 +132,7 @@ assertContains(coverage, "digital inheritance lifecycle", "coverage matrix shoul
 assertContains(coverage, "20260618-deployed-postgres-acceptance-after-deploy", "coverage matrix should record accepted backend run")
 assertContains(coverage, "20260618-selected-backend-latest-contracts-after-deploy-r2", "coverage matrix should record latest accepted backend run")
 assertContains(coverage, "deployed push-token registration and delayed-reply `deviceTokenId` persistence are accepted", "coverage matrix should record recovered deployed push route parity")
+assertContains(coverage, "dispatch-due route deployment", "coverage matrix should keep dispatch-due route deployment as a blocker")
 assertContains(coverage, "后续如有后端合同变化，需要 rerun `run-release-like-backend-acceptance.sh`", "coverage matrix should require backend reruns after backend changes")
 assertContains(coverage, "需要真机、签名和设备操作", "coverage matrix should call out device blocker")
 

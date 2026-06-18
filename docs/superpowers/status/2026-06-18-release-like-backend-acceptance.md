@@ -8,9 +8,11 @@ Backend branch: `main`
 
 ## Status
 
-Status: accepted for the latest selected deployed simulator release-like scope.
+Status: accepted for the latest selected deployed simulator release-like scope through push-token and delayed-reply scheduling; blocked for the newer delayed-reply dispatch-due contract.
 
 The deployed FastAPI/Postgres environment is accepted for the simulator release-like backend path after deploying and restarting the backend with the Postgres rollback-on-exception fix.
+
+The newest local backend contract adds `POST /echo/delayed-replies/dispatch-due`. The deployed verification run `20260618-deployed-echo-dispatch-contract-210536` is blocked because the selected server returned HTTP 405 for that POST route.
 
 The latest selected backend rerun on 2026-06-18 passed after deploying the backend contract branch through `1ff8b78 feat: add password change backend contract`.
 The earlier password-contract drift run is retained below as superseded diagnostic evidence.
@@ -167,6 +169,41 @@ Verified result:
 
 Recovery status: completed for deployed route parity. APNs provider delivery, service-side scheduled dispatch, and true-device notification arrival remain external gates.
 
+## Latest Deployed Echo Dispatch Contract Attempt
+
+Run ID:
+
+```text
+20260618-deployed-echo-dispatch-contract-210536
+```
+
+Evidence directory:
+
+```text
+tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-deployed-echo-dispatch-contract-210536/
+```
+
+Status: blocked.
+
+Observed result:
+
+- Local backend verification passed first: backend unittest reported `Ran 71 tests` and `OK`, backend py_compile passed, deployment-file checks passed, FastAPI smoke passed, and backend diff check passed.
+- The deployed backend health endpoint was reachable and reported `store=postgres`.
+- The release-like seed reached the new delayed-reply dispatch contract and stopped at `POST /echo/delayed-replies/dispatch-due`.
+- The deployed backend returned HTTP `405` with `{"detail":"Method Not Allowed"}` for `POST /echo/delayed-replies/dispatch-due`.
+
+Root cause:
+
+- Local backend code contains the new static `POST /echo/delayed-replies/dispatch-due` route and local tests cover service-side due sweep state transitions.
+- The selected deployed backend still behaves like a route set without that static POST route, so the dynamic delayed-reply route rejects POST with 405.
+- This is deployment drift for the dispatch-due contract, not an iOS implementation failure and not APNs provider delivery evidence.
+
+Required recovery:
+
+1. Deploy the backend branch that includes `POST /echo/delayed-replies/dispatch-due`.
+2. Rerun `run-release-like-backend-acceptance.sh` with the private deployed backend URL/token.
+3. Treat service-side scheduled dispatch as selected-environment evidence only after `postgres-persistence-verify.json` includes `echoDelayedReplyDispatchState=readyForProvider` and `echoDelayedReplyProviderDeliveryAttempted=false`.
+
 ## Historical Deployed Push Token Contract Attempt
 
 Run ID:
@@ -292,6 +329,8 @@ The persistence contract covers:
 
 - Profile save/read persistence for nickname, gender, region, and avatar metadata;
 - Password credential initialization and password change persistence through `passwordChangeStatus`, `passwordOldLoginStatus`, and `passwordNewLoginConfigured`;
+- Push token registration plus delayed-reply scheduling through `echoDelayedReplyDeviceTokenId` and `echoDelayedReplyPushProviderState`;
+- Delayed-reply due dispatch through `POST /echo/delayed-replies/dispatch-due`, `echoDelayedReplyDispatchState=readyForProvider`, and `echoDelayedReplyProviderDeliveryAttempted=false`; currently blocked on deployed route parity by run `20260618-deployed-echo-dispatch-contract-210536`;
 - Archive item creation/listing and local path stripping;
 - Archive persona visibility fields: `personaScope=family` and `digitalHumanId=family_default`;
 - KB sync/snapshot persistence;
@@ -313,7 +352,7 @@ Local backend verification is run with `BACKEND_API_TOKEN` cleared so deployed c
 - 线上/公网后端验收：accepted for simulator release-like scope
 - 真机验收：not accepted
 
-Do not mark the PRD fully complete until true-device acceptance also passes. The backend release-like simulator gate is accepted.
+Do not mark the PRD fully complete until true-device acceptance also passes. The backend release-like simulator gate is accepted for earlier contracts, but delayed-reply dispatch-due remains blocked on deployed route parity.
 
 ## Latest Archive Visibility Contract Run
 
@@ -346,4 +385,4 @@ The local current backend code contains Postgres `Jsonb` parameter adaptation, r
 
 The latest selected backend acceptance run `20260618-selected-backend-latest-contracts-after-deploy-r2` verified `passwordChangeStatus`, `passwordOldLoginStatus`, `passwordNewLoginConfigured`, `careActiveRiskLevel`, `careMissingStatus`, `careInvalidStatus`, and `careStaleWindowEnd` in `postgres-persistence-verify.json`.
 
-After this run, the local backend/iOS contract added `POST /devices/push-token` and delayed reply `deviceTokenId` coverage. The latest deployed acceptance run `20260618-deployed-push-device-token-contract-rerun-205018` now includes push token registration and delayed reply `deviceTokenId` persistence. Keep APNs provider delivery, service-side scheduled dispatch, and true-device notification arrival as separate gates before claiming complete remote push delivery.
+After this run, the local backend/iOS contract added `POST /devices/push-token` and delayed reply `deviceTokenId` coverage. The latest deployed acceptance run `20260618-deployed-push-device-token-contract-rerun-205018` now includes push token registration and delayed reply `deviceTokenId` persistence. A later dispatch-due acceptance attempt `20260618-deployed-echo-dispatch-contract-210536` is blocked with HTTP 405 for `POST /echo/delayed-replies/dispatch-due`; deploy that route and rerun before claiming service-side scheduled dispatch acceptance. Keep APNs provider delivery and true-device notification arrival as separate gates before claiming complete remote push delivery.
