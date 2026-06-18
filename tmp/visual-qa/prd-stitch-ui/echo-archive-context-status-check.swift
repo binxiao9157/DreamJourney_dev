@@ -2,6 +2,8 @@ import Foundation
 
 enum DigitalHumanMode: String, Codable {
     case sunlight
+    case star
+    case silent
 }
 
 struct DigitalHumanContext: Codable {
@@ -86,11 +88,20 @@ enum EchoArchiveContextStatusCheck {
         assertEqual(viewModel.archiveContextStatus.totalItemCount, 4, "begin refreshes total count")
         assertEqual(viewModel.archiveContextStatus.availableItemCount, 2, "begin refreshes available count")
         assertTrue(viewModel.archiveContextStatus.hasAvailableContext, "begin exposes available archive context")
+        assertTrue(viewModel.archiveContextStatus.shouldShowArchiveContextIndicator, "sunlight mode shows archive context indicator")
 
         providedStatus = EchoArchiveContextStatus(totalItemCount: 5, availableItemCount: 3)
         viewModel.finishUserVoice(text: "  想听爸爸小时候的故事  ")
 
         assertEqual(viewModel.archiveContextStatus.totalItemCount, 5, "finish refreshes total count")
         assertEqual(viewModel.archiveContextStatus.availableItemCount, 3, "finish refreshes available count")
+
+        DigitalHumanContextStore.shared.current.mode = .star
+        viewModel.refreshArchiveContextStatus()
+        assertTrue(viewModel.archiveContextStatus.indicatorText?.contains("关怀线索") == true, "star mode uses care context copy")
+
+        DigitalHumanContextStore.shared.current.mode = .silent
+        viewModel.refreshArchiveContextStatus()
+        assertTrue(!viewModel.archiveContextStatus.shouldShowArchiveContextIndicator, "silent mode hides archive context indicator")
     }
 }

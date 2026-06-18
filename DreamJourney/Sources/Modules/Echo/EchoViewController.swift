@@ -362,15 +362,12 @@ final class EchoViewController: UIViewController {
     }
 
     private func renderArchiveContextStatus(_ status: EchoArchiveContextStatus) {
-        archiveContextStatusView.isHidden = !status.hasAvailableContext
-        archiveContextStatusView.alpha = status.hasAvailableContext ? 1 : 0
-        guard status.hasAvailableContext else { return }
-
-        let text: String
-        if status.availableItemCount > 1 {
-            text = "\(status.availableItemCount) 条档案线索正在参与回响"
-        } else {
-            text = "档案线索正在参与回响"
+        archiveContextStatusView.isHidden = !status.shouldShowArchiveContextIndicator
+        archiveContextStatusView.alpha = status.shouldShowArchiveContextIndicator ? 1 : 0
+        guard let text = status.indicatorText else {
+            archiveContextStatusLabel.text = nil
+            archiveContextStatusLabel.accessibilityLabel = nil
+            return
         }
         archiveContextStatusLabel.text = text
         archiveContextStatusLabel.accessibilityLabel = text

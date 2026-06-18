@@ -11,11 +11,42 @@ enum EchoInteractionState {
 struct EchoArchiveContextStatus: Equatable {
     let totalItemCount: Int
     let availableItemCount: Int
+    let mode: DigitalHumanMode
+
+    init(
+        totalItemCount: Int,
+        availableItemCount: Int,
+        mode: DigitalHumanMode = .sunlight
+    ) {
+        self.totalItemCount = totalItemCount
+        self.availableItemCount = availableItemCount
+        self.mode = mode
+    }
 
     static let empty = EchoArchiveContextStatus(totalItemCount: 0, availableItemCount: 0)
 
     var hasAvailableContext: Bool {
         availableItemCount > 0
+    }
+
+    var shouldShowArchiveContextIndicator: Bool {
+        hasAvailableContext && mode != .silent
+    }
+
+    var indicatorText: String? {
+        guard shouldShowArchiveContextIndicator else { return nil }
+        switch mode {
+        case .star:
+            return availableItemCount > 1
+                ? "\(availableItemCount) 条关怀线索正在参与回响"
+                : "关怀线索正在参与回响"
+        case .sunlight:
+            return availableItemCount > 1
+                ? "\(availableItemCount) 条档案线索正在参与回响"
+                : "档案线索正在参与回响"
+        case .silent:
+            return nil
+        }
     }
 }
 
@@ -95,7 +126,13 @@ final class EchoViewModel {
     }
 
     func refreshArchiveContextStatus() {
-        archiveContextStatus = archiveContextStatusProvider()
+        context = contextStore.current
+        let providedStatus = archiveContextStatusProvider()
+        archiveContextStatus = EchoArchiveContextStatus(
+            totalItemCount: providedStatus.totalItemCount,
+            availableItemCount: providedStatus.availableItemCount,
+            mode: context.mode
+        )
         onArchiveContextStatusChange?(archiveContextStatus)
     }
 

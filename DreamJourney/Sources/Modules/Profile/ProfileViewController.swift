@@ -202,6 +202,7 @@ final class ProfileViewController: UIViewController {
 
     private func makePersonaCard() -> UIView {
         let container = UIView()
+        let context = personaContext
 
         let avatarContainer = UIView()
         avatarContainer.backgroundColor = DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.55)
@@ -217,12 +218,10 @@ final class ProfileViewController: UIViewController {
         avatarImageView.contentMode = .scaleAspectFit
 
         let statusDot = UIView()
-        statusDot.backgroundColor = DJDesignTokens.Color.accent
+        statusDot.backgroundColor = personaStatusColor(context: context)
         statusDot.layer.cornerRadius = ProfileLayout.personaStatusDotSize / 2
         statusDot.layer.borderWidth = 2
         statusDot.layer.borderColor = DJDesignTokens.Color.surface.cgColor
-
-        let context = personaContext
 
         let titleLabel = makeLabel(
             text: makePersonaTitle(context: context),
@@ -301,11 +300,29 @@ final class ProfileViewController: UIViewController {
         if context.isSelfAssistant {
             return "今天又是阳光灿烂的一天"
         }
+        if context.mode == .silent {
+            return "这份回响暂不公开展示"
+        }
         if let relation = context.relation,
            !relation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return "\(relation)的回响已连接"
         }
         return "家人数字人的回响已连接"
+    }
+
+    private func personaStatusColor(context: DigitalHumanContext) -> UIColor {
+        if context.isSelfAssistant {
+            return DJDesignTokens.Color.accent
+        }
+
+        switch context.mode {
+        case .sunlight:
+            return DJDesignTokens.Color.accent
+        case .star:
+            return DJDesignTokens.Color.accentDeep
+        case .silent:
+            return DJDesignTokens.Color.textTertiary.withAlphaComponent(0.66)
+        }
     }
 
     private func makeCareCard(snapshot: ProfileCareSnapshot?) -> UIView {

@@ -30,7 +30,8 @@ assertContains(echoView, "label.accessibilityIdentifier = \"echoArchiveContextSt
 assertContains(echoView, "viewModel.onArchiveContextStatusChange", "echo screen should bind archive context status changes")
 assertContains(echoView, "viewModel.refreshArchiveContextStatus()", "echo screen should refresh archive context on appearance")
 assertContains(echoView, "private func renderArchiveContextStatus", "echo screen should isolate indicator rendering")
-assertContains(echoView, "archiveContextStatusView.isHidden = !status.hasAvailableContext", "indicator should stay hidden when no archive context is available")
+assertContains(echoView, "archiveContextStatusView.isHidden = !status.shouldShowArchiveContextIndicator", "indicator should stay hidden when no archive context is available or mode suppresses display")
+assertContains(echoView, "status.indicatorText", "indicator copy should come from mode-aware status")
 assertContains(echoView, "档案线索正在参与回响", "indicator copy should explicitly connect archive context to echo")
 assertContains(echoView, "archiveContextStatusView.bottomAnchor.constraint(equalTo: quoteBubble.topAnchor", "indicator should live near the bottom echo conversation area without changing the tab bar")
 

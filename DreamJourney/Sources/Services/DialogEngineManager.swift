@@ -24,6 +24,46 @@ enum DialogPromptDebugRecorder {
 }
 #endif
 
+private func shouldExposePersonalContext(for context: DigitalHumanContext) -> Bool {
+    context.mode != .silent
+}
+
+private func shouldExposeArchiveContext(for context: DigitalHumanContext) -> Bool {
+    shouldExposePersonalContext(for: context)
+}
+
+private func buildDigitalHumanModePolicy(context: DigitalHumanContext) -> String {
+    switch context.mode {
+    case .sunlight:
+        return """
+
+
+        【当前回响边界】
+        - 当前对象用于日常陪伴与记忆整理，语气保持自然、温和、不过度心理化。
+        - 不要在对话中说出内部状态名称，也不要解释系统如何分类对象。
+        """
+    case .star:
+        return """
+
+
+        【关怀回应边界】
+        - 当前对象需要更谨慎的陪伴式回应；可以温和关注情绪、睡眠、孤独感和风险信号。
+        - 这不是医疗诊断，也不能替代心理医生、精神科医生或急救服务。
+        - 遇到强烈痛苦、危险表达或自伤风险时，先共情、降低追问强度，并建议联系身边家人或当地紧急服务。
+        - 不要在对话中说出内部状态名称，也不要解释系统如何分类对象。
+        """
+    case .silent:
+        return """
+
+
+        【非公开展示边界】
+        - 当前对象处于不公开展示边界，只保留最克制的陪伴回应。
+        - 不主动引用档案素材、亲属线索或可能暴露隐私的历史内容。
+        - 不要在对话中说出内部状态名称，也不要解释系统如何分类对象。
+        """
+    }
+}
+
 #if UI_QA_SIMULATOR && targetEnvironment(simulator)
 
 enum DialogEndReason {
@@ -82,9 +122,11 @@ final class DialogEngineManager: NSObject {
 
     private func recordUIQAPromptSnapshot() {
         var prompt = "【UI QA 回响 Prompt】\n请以温和、自然的方式回应长辈。"
+        let context = DigitalHumanContextStore.shared.current
+        prompt += buildDigitalHumanModePolicy(context: context)
         let archiveSnapshot = MemoryArchiveRepository.shared.contextSnapshot()
         let archiveContext = archiveSnapshot.promptSection
-        if !archiveContext.isEmpty {
+        if shouldExposePersonalContext(for: context), !archiveContext.isEmpty {
             prompt += archiveContext
         }
 
@@ -700,16 +742,20 @@ final class DialogEngineManager: NSObject {
             ]
         if !config.systemPrompt.isEmpty {
             var fullPrompt = config.systemPrompt
-            // 注入跨会话记忆上下文
-            let memory = ConversationMemoryManager.shared.currentMemory
-            if memory.sessionCount > 0 {
-                fullPrompt += buildMemoryContext(memory: memory)
-                print("[DialogEngine] 🧠 已注入记忆上下文 (第\(memory.sessionCount + 1)次对话)")
-            }
-            let archiveContext = buildArchiveContext()
-            if !archiveContext.isEmpty {
-                fullPrompt += archiveContext
-                print("[DialogEngine] 🗂️ 已注入记忆档案馆素材")
+            let context = DigitalHumanContextStore.shared.current
+            fullPrompt += buildDigitalHumanModePolicy(context: context)
+            if shouldExposePersonalContext(for: context) {
+                // 注入跨会话记忆上下文
+                let memory = ConversationMemoryManager.shared.currentMemory
+                if memory.sessionCount > 0 {
+                    fullPrompt += buildMemoryContext(memory: memory)
+                    print("[DialogEngine] 🧠 已注入记忆上下文 (第\(memory.sessionCount + 1)次对话)")
+                }
+                let archiveContext = buildArchiveContext()
+                if !archiveContext.isEmpty {
+                    fullPrompt += archiveContext
+                    print("[DialogEngine] 🗂️ 已注入记忆档案馆素材")
+                }
             }
             #if DEBUG || UI_QA_SIMULATOR
             DialogPromptDebugRecorder.record(prompt: fullPrompt)
@@ -1243,10 +1289,12 @@ extension DialogEngineManager: SpeechEngineDelegate {
         guard let engine = engine else { return }
 
         let memory = ConversationMemoryManager.shared.currentMemory
+        let context = DigitalHumanContextStore.shared.current
+        let shouldUseContextualGreeting = shouldExposePersonalContext(for: context)
         let greeting: String
 
         // 判断是否有有意义的上下文（四维度摘要至少1个维度）
-        let hasContext = memory.sessionCount > 0 && memory.lastSummary.hasAnyDimension
+        let hasContext = shouldUseContextualGreeting && memory.sessionCount > 0 && memory.lastSummary.hasAnyDimension
 
         if hasContext {
             // 有历史记忆 → 上下文关联开场白
@@ -1384,6 +1432,8 @@ extension DialogEngineManager: SpeechEngineDelegate {
     }
 
     private func buildArchiveContext() -> String {
+        let context = DigitalHumanContextStore.shared.current
+        guard shouldExposeArchiveContext(for: context) else { return "" }
         MemoryArchiveRepository.shared.contextSnapshot().promptSection
     }
 }

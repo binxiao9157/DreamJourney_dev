@@ -174,6 +174,7 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/group1-source-review-check.swift",
     "tmp/visual-qa/prd-stitch-ui/group2-shell-echo-check.swift",
     "tmp/visual-qa/prd-stitch-ui/echo-archive-context-indicator-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/digital-human-mode-lifecycle-check.swift",
     "tmp/visual-qa/prd-stitch-ui/echo-voice-state-visual-check.swift",
     "tmp/visual-qa/prd-stitch-ui/group3-archive-core-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-compact-stitch-layout-check.swift",
