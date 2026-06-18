@@ -36,6 +36,16 @@ final class UserManager {
     }
 
     func saveProfile(nickname: String, completion: @escaping (UserProfileSaveResult) -> Void) {
+        saveProfile(
+            nickname: nickname,
+            gender: currentUser?.gender,
+            region: currentUser?.region,
+            avatarName: currentUser?.avatarName,
+            completion: completion
+        )
+    }
+
+    func saveProfile(nickname: String, gender: String?, region: String?, avatarName: String? = nil, completion: @escaping (UserProfileSaveResult) -> Void) {
         let trimmedNickname = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedNickname.isEmpty else {
             completion(.failed("昵称不能为空"))
@@ -47,6 +57,11 @@ final class UserManager {
             return
         }
         user.nickname = trimmedNickname
+        user.gender = normalizedProfileField(gender)
+        user.region = normalizedProfileField(region)
+        if avatarName != nil {
+            user.avatarName = normalizedProfileField(avatarName)
+        }
         currentUser = user
         guard saveToDefaults() else {
             completion(.failed("本地保存失败，请稍后再试"))
@@ -67,6 +82,12 @@ final class UserManager {
                 completion(.savedWithRemoteWarning(error.localizedDescription))
             }
         }
+    }
+
+    private func normalizedProfileField(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedValue.isEmpty ? nil : trimmedValue
     }
 
     private func updateProfileLocally(nickname: String) -> Bool {

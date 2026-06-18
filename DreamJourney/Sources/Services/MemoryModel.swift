@@ -86,6 +86,24 @@ struct UserModel: Codable {
     var nickname: String
     var phone: String           // 明文手机号（本地存储）
     var avatarName: String?     // 系统 SF Symbol 名称作为头像占位
+    var gender: String?
+    var region: String?
+
+    init(
+        id: String,
+        nickname: String,
+        phone: String,
+        avatarName: String? = nil,
+        gender: String? = nil,
+        region: String? = nil
+    ) {
+        self.id = id
+        self.nickname = nickname
+        self.phone = phone
+        self.avatarName = avatarName
+        self.gender = gender
+        self.region = region
+    }
 
     var maskedPhone: String {
         guard phone.count >= 11 else { return phone }
