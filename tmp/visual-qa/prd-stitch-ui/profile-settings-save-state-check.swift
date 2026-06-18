@@ -75,11 +75,14 @@ assertContains(userManager, "enum UserProfileSaveResult", "UserManager should ex
 assertContains(userManager, "case saved", "UserManager save result should include saved")
 assertContains(userManager, "case savedWithRemoteWarning", "UserManager save result should include local fallback warning")
 assertContains(userManager, "case failed", "UserManager save result should include failure")
-assertContains(userManager, "func saveProfile(nickname: String", "UserManager should own nickname persistence and backend fallback")
-assertContains(userManager, "DreamJourneyBackendClient.shared.upsertUser", "UserManager should use existing backend auth/user upsert when available")
+assertContains(userManager, "func saveProfile(nickname: String", "UserManager should own profile persistence and backend fallback")
+assertContains(userManager, "DreamJourneyBackendClient.shared.updateProfile", "UserManager should use the dedicated profile backend contract when available")
+assertContains(userManager, "gender: user.gender", "UserManager should sync gender when available")
+assertContains(userManager, "region: user.region", "UserManager should sync region when available")
+assertContains(userManager, "avatarName: user.avatarName", "UserManager should sync avatar metadata when available")
 
-assertContains(backendClient, "func upsertUser(phone: String, nickname: String", "backend client should expose existing /auth/login user upsert")
-assertContains(backendClient, "path: \"/auth/login\"", "profile sync should reuse existing backend endpoint")
+assertContains(backendClient, "func updateProfile(", "backend client should expose dedicated profile update")
+assertContains(backendClient, "requestJSON(path: \"/profile\"", "profile sync should use the dedicated backend endpoint")
 assertContains(backendClient, "var isProfileSyncConfigured", "backend client should expose whether remote profile sync should run")
 
 assertContains(releasePackage, "tmp/visual-qa/prd-stitch-ui/profile-settings-save-state-check.swift", "release QA package should include profile save-state guard")

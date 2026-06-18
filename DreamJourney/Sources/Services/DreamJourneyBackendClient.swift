@@ -75,6 +75,27 @@ final class DreamJourneyBackendClient {
         requestJSON(path: "/auth/login", method: .post, payload: ["phone": phone, "nickname": nickname], completion: completion)
     }
 
+    func updateProfile(
+        userId: String,
+        nickname: String,
+        gender: String?,
+        region: String?,
+        avatarName: String?,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        var payload: [String: Any] = ["userId": userId, "nickname": nickname]
+        if let gender {
+            payload["gender"] = gender
+        }
+        if let region {
+            payload["region"] = region
+        }
+        if let avatarName {
+            payload["avatarName"] = avatarName
+        }
+        requestJSON(path: "/profile", method: .post, payload: payload, completion: completion)
+    }
+
     func changePassword(
         userId: String,
         oldPassword: String,

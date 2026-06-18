@@ -18,6 +18,7 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
 
 let userModel = read("DreamJourney/Sources/Services/MemoryModel.swift")
 let userManager = read("DreamJourney/Sources/Services/UserManager.swift")
+let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let profileSettings = read("DreamJourney/Sources/Modules/Profile/ProfileSettingsViewController.swift")
 let releasePackage = read("tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift")
 let releaseRegression = read("tmp/visual-qa/prd-stitch-ui/run-release-regression.sh")
@@ -33,7 +34,18 @@ assertContains(userManager, "user.gender = normalizedProfileField(gender)", "Use
 assertContains(userManager, "user.region = normalizedProfileField(region)", "UserManager should persist region")
 assertContains(userManager, "func normalizedProfileField", "UserManager should normalize optional profile fields")
 assertContains(userManager, "func saveProfile(nickname: String, completion:", "Legacy nickname-only save path should stay compatible")
-assertContains(userManager, "DreamJourneyBackendClient.shared.upsertUser", "Profile sync fallback should keep existing backend behavior")
+assertContains(userManager, "DreamJourneyBackendClient.shared.updateProfile", "Profile sync should use the dedicated backend profile contract")
+assertContains(userManager, "gender: user.gender", "Profile sync should include gender")
+assertContains(userManager, "region: user.region", "Profile sync should include region")
+assertContains(userManager, "avatarName: user.avatarName", "Profile sync should include avatar metadata")
+
+assertContains(backendClient, "func updateProfile(", "Backend client should expose a profile update contract")
+assertContains(backendClient, "requestJSON(path: \"/profile\"", "Backend client should post profile metadata to /profile")
+assertContains(backendClient, "\"userId\": userId", "Profile payload should include userId")
+assertContains(backendClient, "\"nickname\": nickname", "Profile payload should include nickname")
+assertContains(backendClient, "payload[\"gender\"] = gender", "Profile payload should include gender when present")
+assertContains(backendClient, "payload[\"region\"] = region", "Profile payload should include region when present")
+assertContains(backendClient, "payload[\"avatarName\"] = avatarName", "Profile payload should include avatar metadata when present")
 
 assertContains(profileSettings, "名称", "Profile settings should expose name field")
 assertContains(profileSettings, "性别", "Profile settings should expose gender field")

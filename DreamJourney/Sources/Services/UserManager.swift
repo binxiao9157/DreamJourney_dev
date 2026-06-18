@@ -74,7 +74,13 @@ final class UserManager {
             return
         }
 
-        DreamJourneyBackendClient.shared.upsertUser(phone: user.phone, nickname: trimmedNickname) { result in
+        DreamJourneyBackendClient.shared.updateProfile(
+            userId: user.id,
+            nickname: trimmedNickname,
+            gender: user.gender,
+            region: user.region,
+            avatarName: user.avatarName
+        ) { result in
             switch result {
             case .success:
                 completion(.saved)

@@ -49,7 +49,7 @@ for state in [
     "backend route missing",
     "backend route present locally",
     "deployment/APNs/device token needed",
-    "backend needed or /auth/login fallback",
+    "backend accepts and persists nickname/gender/region/avatar metadata",
     "backend/security needed",
     "backend field migration needed",
     "backend accepted, state variants needed",
@@ -58,12 +58,15 @@ for state in [
 }
 
 assertContains(client, "requestJSON(path: \"/echo/delayed-replies\"", "iOS client should define echo delayed reply endpoint")
+assertContains(client, "requestJSON(path: \"/profile\"", "iOS client should define profile endpoint")
 assertContains(client, "path: \"/auth/password\"", "iOS client should define password endpoint")
 assertContains(client, "requestJSON(path: \"/archive/items\"", "iOS client should define archive create endpoint")
 assertContains(client, "requestJSON(path: \"/care/snapshots/latest/\\(pathComponent(userId))\"", "iOS client should define care latest endpoint")
-assertContains(userManager, "DreamJourneyBackendClient.shared.upsertUser", "Profile update should document auth login fallback")
+assertContains(userManager, "DreamJourneyBackendClient.shared.updateProfile", "Profile update should use the dedicated backend contract")
 
 assertContains(backendMain, "@app.post(\"/auth/login\")", "backend should expose auth login")
+assertContains(backendMain, "@app.post(\"/profile\")", "backend should expose profile update")
+assertContains(backendMain, "@app.get(\"/profile/{user_id}\")", "backend should expose profile read")
 assertContains(backendMain, "@app.post(\"/echo/delayed-replies\")", "backend should expose echo delayed reply schedule")
 assertContains(backendMain, "@app.get(\"/echo/delayed-replies/{user_id}\")", "backend should expose echo delayed reply list")
 assertContains(backendMain, "@app.post(\"/archive/items\")", "backend should expose archive item create")
