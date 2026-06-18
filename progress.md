@@ -163,3 +163,11 @@ Update this file after every recursive state-changing command bundle and before 
 - Completed: `LoginViewController` now validates non-empty / 8+ character passwords, sends the password to `/auth/login` when backend auth is configured, preserves local fallback login when no backend auth config is present, and stores the backend returned user id on success.
 - Guard: `login-password-contract-check.swift` is now included in release regression and the release QA package.
 - Boundary: password change remains hidden; selected-environment login/password acceptance, auth/security review, and true-device acceptance remain open.
+
+## Implementation Checkpoint - 2026-06-18T20:36:00+0800
+
+- Task: rerun selected deployed backend acceptance against the latest password/profile/care/archive contract runner.
+- Result: blocked before iOS backend-env smoke. Local backend verification passed (`Ran 66 tests`, py_compile, deployment files, FastAPI smoke, diff check), but the deployed `POST /auth/login` response did not include `passwordConfigured`, and focused probing showed deployed `POST /auth/password` returns HTTP `404`.
+- Evidence: `tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-selected-backend-latest-contracts/`.
+- Root cause: selected deployed backend is behind local backend commit `1ff8b78 feat: add password change backend contract`; this is deployment drift, not an iOS auth implementation failure.
+- Boundary: latest selected-environment backend evidence is not accepted for password-contract fields until the backend is redeployed and the release-like acceptance runner passes.

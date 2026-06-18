@@ -8,9 +8,12 @@ Backend branch: `main`
 
 ## Status
 
-Status: accepted
+Status: accepted for the previously deployed simulator release-like scope; latest PRD contract rerun is blocked by deployed backend drift.
 
 The deployed FastAPI/Postgres environment is accepted for the simulator release-like backend path after deploying and restarting the backend with the Postgres rollback-on-exception fix.
+
+The latest rerun on 2026-06-18 shows the selected deployed backend has not yet picked up the local password-contract backend commits on `feature/archive-persona-visibility-contract`.
+The rerun should not be used as completed evidence for `/auth/password` or `passwordConfigured` until the backend is redeployed from the latest contract branch.
 
 Confirmed local environment facts:
 
@@ -42,7 +45,8 @@ Password change contract update after the accepted deployed run:
 - `POST /auth/password`: now covered by the release-like persistence runner in local code.
 - `POST /auth/login`: now covered for password credential initialization, old-password rejection after change, and new-password login after change.
 - The runner now emits `passwordChangeStatus`, `passwordOldLoginStatus`, and `passwordNewLoginConfigured` in `postgres-persistence-verify.json`.
-- The accepted deployed run above predates this password gate. Deploy the latest backend and rerun selected-environment acceptance before treating `/auth/password` as selected-backend evidence.
+- The accepted deployed run above predates this password gate. A selected-environment rerun on `20260618-selected-backend-latest-contracts` confirmed the deployed backend still lacks this gate: `/auth/login` returned no `passwordConfigured` field and `/auth/password` returned HTTP `404`.
+- Deploy the latest backend and rerun selected-environment acceptance before treating `/auth/password` as selected-backend evidence.
 - The iOS password change entry remains hidden until login password participation, security review, and true-device acceptance are complete.
 
 Care snapshot state fixture update after the accepted deployed run:
@@ -92,6 +96,45 @@ Result highlights:
 ```text
 tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-deployed-postgres-acceptance-after-deploy/ios-backend-env-smoke/20260618-deployed-postgres-acceptance-after-deploy/01-backend-env-profile.png
 ```
+
+## Latest Selected Backend Rerun
+
+Run ID:
+
+```text
+20260618-selected-backend-latest-contracts
+```
+
+Status:
+
+```text
+blocked
+```
+
+Evidence directory:
+
+```text
+tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-selected-backend-latest-contracts/
+```
+
+Observed result:
+
+- Local backend verification passed first: backend unittest reported `Ran 66 tests` and `OK`, backend py_compile passed, deployment-file checks passed, FastAPI smoke passed, and backend diff check passed.
+- The deployed backend health endpoint still reported `store=postgres`.
+- The release-like seed stopped at the password credential check because deployed `POST /auth/login` returned a `user` without `passwordConfigured`.
+- A focused deployed probe showed `POST /auth/password` returns HTTP `404`.
+
+Root cause:
+
+- Local backend branch `feature/archive-persona-visibility-contract` contains `1ff8b78 feat: add password change backend contract`.
+- The selected deployed backend still behaves like an older route set: `POST /auth/login` has only `id`, `nickname`, `phone`, and `updatedAt` in `user`, and the `/auth/password` route is absent.
+- This is deployment drift, not an iOS implementation failure.
+
+Required recovery:
+
+1. Deploy the latest backend contract branch, including commits through `1ff8b78`.
+2. Rerun `run-release-like-backend-acceptance.sh` with the private deployed backend URL/token.
+3. Treat the password fields as selected-environment evidence only after `postgres-persistence-verify.json` includes `passwordChangeStatus`, `passwordOldLoginStatus`, and `passwordNewLoginConfigured`.
 
 ## Target
 
