@@ -97,6 +97,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-18-phase0-backend-alignment.md",
     "docs/superpowers/status/2026-06-18-release-like-backend-acceptance.md",
     "docs/superpowers/status/2026-06-18-one-command-release-regression.md",
+    "docs/superpowers/status/2026-06-18-final-stitch-visual-refresh.md",
 ]
 
 for doc in requiredDocs {
