@@ -22,6 +22,8 @@ FAMILY_ID = f"family_release_like_{MARKER}"
 PERSON_ID = f"person_release_like_{MARKER}"
 EVENT_ID = f"event_release_like_{MARKER}"
 PHONE = "13900008888"
+PROFILE_NICKNAME = f"ReleaseLike Profile {MARKER}"
+PROFILE_REGION = f"ReleaseLike Region {MARKER[-12:]}"
 
 
 def request_json(method, path, payload=None, params=None, expected=200):
@@ -93,6 +95,20 @@ def health_check():
 
 
 def seed():
+    profile_payload = {
+        "userId": USER_ID,
+        "nickname": PROFILE_NICKNAME,
+        "gender": "不便透露",
+        "region": PROFILE_REGION,
+        "avatarName": "person.crop.circle.fill",
+    }
+    profile_saved = request_json("POST", "/profile", profile_payload)
+    assert_equal(profile_saved.get("status"), "saved", "profile save status")
+    saved_profile = profile_saved.get("profile") or {}
+    assert_equal(saved_profile.get("nickname"), PROFILE_NICKNAME, "profile nickname should echo from save")
+    assert_equal(saved_profile.get("gender"), "不便透露", "profile gender should echo from save")
+    assert_equal(saved_profile.get("region"), PROFILE_REGION, "profile region should echo from save")
+
     archive_payload = {
         "userId": USER_ID,
         "viewerUserId": f"viewer_{MARKER}",
@@ -203,6 +219,14 @@ def seed():
 
 
 def verify():
+    loaded_profile = request_json("GET", f"/profile/{USER_ID}")
+    profile = loaded_profile.get("profile") or {}
+    assert_equal(profile.get("userId"), USER_ID, "profile user id should persist")
+    assert_equal(profile.get("nickname"), PROFILE_NICKNAME, "profile nickname should persist")
+    assert_equal(profile.get("gender"), "不便透露", "profile gender should persist")
+    assert_equal(profile.get("region"), PROFILE_REGION, "profile region should persist")
+    assert_equal(profile.get("avatarName"), "person.crop.circle.fill", "profile avatar metadata should persist")
+
     archive_list = request_json("GET", f"/archive/items/{USER_ID}")
     listed_archive = next((item for item in archive_list.get("items", []) if item.get("id") == ARCHIVE_ID), None)
     assert_true(listed_archive is not None, "archive list should contain release-like marker item")
@@ -230,6 +254,8 @@ def verify():
     assert_equal(latest_snapshot.get("contentRedacted"), True, "care snapshot should be content-redacted")
 
     return {
+        "profileNickname": profile.get("nickname"),
+        "profileRegion": profile.get("region"),
         "archiveItemCount": len(archive_list.get("items", [])),
         "archivePersonaScope": listed_archive.get("personaScope"),
         "archiveDigitalHumanId": listed_archive.get("digitalHumanId"),

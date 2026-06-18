@@ -31,6 +31,12 @@ Confirmed deployed environment facts:
 - `POST /kb/sync`: accepted in release-like persistence and iOS smoke.
 - Backend token document found locally with token configured; token value is intentionally omitted from reports.
 
+Profile contract update after the accepted deployed run:
+
+- `POST /profile`: now covered by the release-like persistence runner in local code.
+- `GET /profile/{user_id}`: now covered by the release-like persistence runner in local code.
+- The accepted deployed run above predates the `/profile` backend route. Deploy the latest backend before using this route as selected-environment evidence.
+
 Root cause narrowed during the deployed retry:
 
 - An earlier deployed run reached `postgres-persistence-verify.json` with `completed=true` for marker `20260618-deployed-postgres-acceptance`.
@@ -122,6 +128,7 @@ RELEASE_LIKE_RESTART_COMMAND='<restart command>'
 
 The persistence contract covers:
 
+- Profile save/read persistence for nickname, gender, region, and avatar metadata;
 - Archive item creation/listing and local path stripping;
 - Archive persona visibility fields: `personaScope=family` and `digitalHumanId=family_default`;
 - KB sync/snapshot persistence;

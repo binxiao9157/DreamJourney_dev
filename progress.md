@@ -128,3 +128,10 @@ Update this file after every recursive state-changing command bundle and before 
 - Completed: backend `POST /profile` and `GET /profile/{user_id}` now persist nickname, gender, region, and avatar metadata; iOS profile save now syncs via `/profile` while preserving local-first save warnings.
 - Evidence: backend `verify_backend.sh` passed with 63 tests; release regression `20260618-profile-backend-contract-r3` passed static guards, iOS Debug simulator build, Archive -> Echo smoke, and Echo delayed reply notification smoke.
 - Next: deploy `/profile` to the selected backend environment and run release-like backend acceptance; `/auth/password` remains hidden until security design and backend implementation are ready.
+
+## Implementation Checkpoint - 2026-06-18T19:38:36+0800
+
+- Task: add `/profile` to release-like backend persistence acceptance.
+- Completed: `backend-postgres-persistence-check.py` now seeds and verifies profile nickname, gender, region, and avatar metadata through `POST /profile` and `GET /profile/{user_id}`.
+- Guard: `release-like-backend-acceptance-check.swift` now requires `/profile` coverage in the runner and status doc.
+- Boundary: selected-environment acceptance still requires deploying the latest backend route before running handoff mode against the public backend.
