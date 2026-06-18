@@ -95,6 +95,11 @@ def health_check():
 def seed():
     archive_payload = {
         "userId": USER_ID,
+        "viewerUserId": f"viewer_{MARKER}",
+        "ownerId": f"elder_{MARKER}",
+        "ownerUserId": f"viewer_{MARKER}",
+        "personaScope": "family",
+        "digitalHumanId": "family_default",
         "id": ARCHIVE_ID,
         "kind": "photo",
         "title": f"Release-like Postgres Photo {MARKER}",
@@ -202,6 +207,8 @@ def verify():
     listed_archive = next((item for item in archive_list.get("items", []) if item.get("id") == ARCHIVE_ID), None)
     assert_true(listed_archive is not None, "archive list should contain release-like marker item")
     assert_equal((listed_archive.get("metadata") or {}).get("marker"), MARKER, "archive marker should persist")
+    assert_equal(listed_archive.get("personaScope"), "family", "archive persona scope should persist")
+    assert_equal(listed_archive.get("digitalHumanId"), "family_default", "archive digital human id should persist")
     assert_not_in_mapping(listed_archive, "localPath", "archive list must not expose localPath")
 
     kb_snapshot = request_json("GET", f"/kb/snapshot/{USER_ID}")
@@ -224,6 +231,8 @@ def verify():
 
     return {
         "archiveItemCount": len(archive_list.get("items", [])),
+        "archivePersonaScope": listed_archive.get("personaScope"),
+        "archiveDigitalHumanId": listed_archive.get("digitalHumanId"),
         "familyMemberCount": len(family_list.get("members", [])),
         "careRiskLevel": latest_snapshot.get("riskLevel"),
     }

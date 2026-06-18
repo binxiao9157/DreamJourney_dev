@@ -70,6 +70,9 @@ for phrase in [
     "metadataOnly",
     "contentRedacted",
     "localPath",
+    "personaScope",
+    "digitalHumanId",
+    "family_default",
     "seed",
     "verify",
 ] {

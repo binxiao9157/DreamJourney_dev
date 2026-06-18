@@ -123,6 +123,7 @@ RELEASE_LIKE_RESTART_COMMAND='<restart command>'
 The persistence contract covers:
 
 - Archive item creation/listing and local path stripping;
+- Archive persona visibility fields: `personaScope=family` and `digitalHumanId=family_default`;
 - KB sync/snapshot persistence;
 - Family invite/accept/list persistence;
 - Care snapshot latest persistence with metadata-only/content-redacted guarantees.
@@ -142,6 +143,23 @@ Local backend verification is run with `BACKEND_API_TOKEN` cleared so deployed c
 - 真机验收：not accepted
 
 Do not mark the PRD fully complete until true-device acceptance also passes. The backend release-like simulator gate is accepted.
+
+## Latest Archive Visibility Contract Run
+
+Run ID: `20260618-archive-persona-contract`
+
+Evidence:
+
+- `tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-archive-persona-contract/postgres-persistence-verify.json`
+- `tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-archive-persona-contract/ios-backend-env-smoke/20260618-archive-persona-contract/backend-env-smoke-result.json`
+- `tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-archive-persona-contract/ios-backend-env-smoke/20260618-archive-persona-contract/01-backend-env-profile.png`
+
+Verified:
+
+- `/archive/items` accepts the archive visibility payload.
+- Postgres persistence verify returns `archivePersonaScope=family`.
+- Postgres persistence verify returns `archiveDigitalHumanId=family_default`.
+- The same deployed backend still passes the iOS backend environment smoke.
 
 ## Next Step
 
