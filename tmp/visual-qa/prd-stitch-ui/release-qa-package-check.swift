@@ -101,6 +101,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-18-final-stitch-visual-refresh.md",
     "docs/superpowers/status/2026-06-18-echo-waiting-reply-policy.md",
     "docs/superpowers/status/2026-06-18-profile-settings-save-state.md",
+    "docs/superpowers/status/2026-06-18-profile-care-data-states.md",
 ]
 
 for doc in requiredDocs {
@@ -211,6 +212,7 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/profile-settings-save-state-check.swift",
     "tmp/visual-qa/prd-stitch-ui/profile-account-fields-check.swift",
     "tmp/visual-qa/prd-stitch-ui/profile-password-change-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/profile-care-public-placeholder-check.swift",
     "tmp/visual-qa/prd-stitch-ui/profile-care-snapshot-check.swift",
     "tmp/visual-qa/prd-stitch-ui/profile-care-escalation-contract-check.swift",
     "tmp/visual-qa/prd-stitch-ui/profile-care-escalation-backend-boundary-check.swift",

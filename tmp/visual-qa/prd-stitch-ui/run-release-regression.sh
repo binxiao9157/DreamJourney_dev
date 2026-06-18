@@ -116,6 +116,7 @@ for guard in \
   profile-settings-save-state-check.swift \
   profile-account-fields-check.swift \
   profile-password-change-check.swift \
+  profile-care-public-placeholder-check.swift \
   archive-ownership-visibility-check.swift \
   archive-analysis-disclaimer-check.swift \
   final-visual-qa-package-check.swift \

@@ -77,6 +77,9 @@ final class ProfileElderCareDashboardViewController: UIViewController {
         contentStack.setCustomSpacing(22, after: contentStack.arrangedSubviews.last!)
 
         contentStack.addArrangedSubview(makeSummaryCard())
+        if let dataStateCard = makeDataStateCard(snapshot.dataState) {
+            contentStack.addArrangedSubview(dataStateCard)
+        }
         contentStack.addArrangedSubview(makeMetricGrid())
         contentStack.addArrangedSubview(makeRiskCard())
         contentStack.addArrangedSubview(makePrivacyCard())
@@ -150,6 +153,62 @@ final class ProfileElderCareDashboardViewController: UIViewController {
             stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
             stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16),
         ])
+        return card
+    }
+
+    private func makeDataStateCard(_ state: ProfileCareDataState) -> UIView? {
+        let title: String
+        let message: String
+
+        switch state {
+        case .available:
+            return nil
+        case .loading:
+            title = "正在同步关怀信号"
+            message = state.message
+        case .empty:
+            title = "暂无可用关怀信号"
+            message = state.message
+        case .stale:
+            title = "数据可能不是最新"
+            message = state.message
+        case .failed:
+            title = "关怀信号加载失败"
+            message = state.message
+        }
+
+        return makeStateCard(title: title, message: message)
+    }
+
+    private func makeStateCard(title: String, message: String) -> UIView {
+        let card = makeCard()
+        card.backgroundColor = DJDesignTokens.Color.surfaceLow
+
+        let titleLabel = makeLabel(
+            text: title,
+            font: DJDesignTokens.Font.title(16),
+            color: DJDesignTokens.Color.textPrimary
+        )
+        let bodyLabel = makeLabel(
+            text: message,
+            font: DJDesignTokens.Font.body(13),
+            color: DJDesignTokens.Color.textSecondary
+        )
+        bodyLabel.lineSpacing = 3
+
+        let stack = UIStackView(arrangedSubviews: [titleLabel, bodyLabel])
+        stack.axis = .vertical
+        stack.spacing = 8
+
+        card.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 14),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -14),
+        ])
+
         return card
     }
 

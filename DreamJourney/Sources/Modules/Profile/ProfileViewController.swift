@@ -181,12 +181,15 @@ final class ProfileViewController: UIViewController {
             return
         }
 
+        careSnapshot = .loadingPlaceholder()
+        rebuildContent()
+
         DreamJourneyBackendClient.shared.latestCareSnapshot(userId: userId) { [weak self] result in
             guard let self else { return }
             switch result {
             case .success(let json):
                 guard let snapshot = ProfileCareSnapshot(json: json) else {
-                    careSnapshot = .offlineFallback()
+                    careSnapshot = ProfileCareSnapshot.emptyFallback()
                     rebuildContent()
                     return
                 }
@@ -194,7 +197,7 @@ final class ProfileViewController: UIViewController {
                 rebuildContent()
             case .failure(let error):
                 print("[Profile] care snapshot sync failed: \(error.localizedDescription)")
-                careSnapshot = .offlineFallback()
+                careSnapshot = ProfileCareSnapshot.failedFallback()
                 rebuildContent()
             }
         }
@@ -326,6 +329,7 @@ final class ProfileViewController: UIViewController {
     }
 
     private func makeCareCard(snapshot: ProfileCareSnapshot?) -> UIView {
+        let displaySnapshot = snapshot ?? ProfileCareSnapshot.loadingPlaceholder()
         let card = makeProfileCard()
         card.accessibilityIdentifier = "profileCareDashboardCard"
         card.isAccessibilityElement = !isCareDoctorContactVisible
@@ -349,16 +353,16 @@ final class ProfileViewController: UIViewController {
         titleStack.alignment = .center
         titleStack.spacing = 8
 
-        let statusPill = makePill(text: snapshot?.moodStatus ?? "平稳")
+        let statusPill = makePill(text: displaySnapshot.moodStatus)
 
         let headerStack = UIStackView(arrangedSubviews: [titleStack, UIView(), statusPill])
         headerStack.axis = .horizontal
         headerStack.alignment = .center
         headerStack.spacing = 12
 
-        let meterView = ProfileSignalBarView(value: snapshot?.emotionalIndex ?? 0.8, height: ProfileLayout.careSignalHeight)
+        let meterView = ProfileSignalBarView(value: displaySnapshot.emotionalIndex, height: ProfileLayout.careSignalHeight)
         let doctorRow = makeDoctorRow()
-        let syncCaption = makeCareSyncCaption(snapshot: snapshot)
+        let syncCaption = makeCareSyncCaption(snapshot: displaySnapshot)
 
         let stack = UIStackView(arrangedSubviews: [headerStack, meterView, doctorRow, syncCaption])
         stack.axis = .vertical
@@ -572,7 +576,7 @@ final class ProfileViewController: UIViewController {
 
     @objc private func showElderCareDashboard() {
         let viewController = ProfileElderCareDashboardViewController(
-            snapshot: careSnapshot ?? .offlineFallback(),
+            snapshot: careSnapshot ?? ProfileCareSnapshot.loadingPlaceholder(),
             context: personaContext
         )
         navigationController?.pushViewController(viewController, animated: true)
@@ -597,7 +601,7 @@ final class ProfileViewController: UIViewController {
 
     private func showDoctorContactSafetyNotice() {
         let draft = ProfileCareEscalationDraft.make(
-            snapshot: careSnapshot ?? .offlineFallback(),
+            snapshot: careSnapshot ?? ProfileCareSnapshot.staleFallback(),
             personaDisplayName: personaContext.displayName
         )
         let alert = UIAlertController(

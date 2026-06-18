@@ -1,5 +1,43 @@
 import Foundation
 
+enum ProfileCareDataState {
+    case available
+    case loading
+    case empty
+    case stale
+    case failed
+
+    var title: String {
+        switch self {
+        case .available:
+            return "关怀信号已同步"
+        case .loading:
+            return "正在同步关怀信号"
+        case .empty:
+            return "暂无可用关怀信号"
+        case .stale:
+            return "数据可能不是最新"
+        case .failed:
+            return "关怀信号加载失败"
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .available:
+            return "关怀信号已同步。"
+        case .loading:
+            return "正在同步关怀信号，稍后会更新聚合结果。"
+        case .empty:
+            return "暂无可用关怀信号，后续有足够数据后会自动更新。"
+        case .stale:
+            return "数据可能不是最新，当前展示本地安全状态。"
+        case .failed:
+            return "关怀信号加载失败，请稍后重试。"
+        }
+    }
+}
+
 struct ProfileCareSnapshot {
     var moodTitle: String
     var moodStatus: String
@@ -9,6 +47,7 @@ struct ProfileCareSnapshot {
     var lonelinessIndex: Double
     var riskReminder: String
     var isStale: Bool
+    var dataState: ProfileCareDataState
 
     init(
         moodTitle: String,
@@ -18,7 +57,8 @@ struct ProfileCareSnapshot {
         sleepStatus: String,
         lonelinessIndex: Double,
         riskReminder: String,
-        isStale: Bool = false
+        isStale: Bool = false,
+        dataState: ProfileCareDataState = .available
     ) {
         self.moodTitle = moodTitle
         self.moodStatus = moodStatus
@@ -28,6 +68,7 @@ struct ProfileCareSnapshot {
         self.lonelinessIndex = lonelinessIndex
         self.riskReminder = riskReminder
         self.isStale = isStale
+        self.dataState = dataState
     }
 
     init?(json: [String: Any]) {
@@ -45,7 +86,46 @@ struct ProfileCareSnapshot {
         )
     }
 
-    static func offlineFallback() -> ProfileCareSnapshot {
+    static func loadingPlaceholder() -> ProfileCareSnapshot {
+        ProfileCareSnapshot(
+            moodTitle: "心境追踪",
+            moodStatus: "同步中",
+            emotionalIndex: 0.5,
+            cognitiveIndex: 0.5,
+            sleepStatus: "正在同步",
+            lonelinessIndex: 0.5,
+            riskReminder: ProfileCareDataState.loading.message,
+            dataState: .loading
+        )
+    }
+
+    static func emptyFallback() -> ProfileCareSnapshot {
+        ProfileCareSnapshot(
+            moodTitle: "心境追踪",
+            moodStatus: "暂无数据",
+            emotionalIndex: 0.5,
+            cognitiveIndex: 0.5,
+            sleepStatus: "暂无数据",
+            lonelinessIndex: 0.5,
+            riskReminder: ProfileCareDataState.empty.message,
+            dataState: .empty
+        )
+    }
+
+    static func failedFallback() -> ProfileCareSnapshot {
+        ProfileCareSnapshot(
+            moodTitle: "心境追踪",
+            moodStatus: "加载失败",
+            emotionalIndex: 0.5,
+            cognitiveIndex: 0.5,
+            sleepStatus: "暂不可用",
+            lonelinessIndex: 0.5,
+            riskReminder: ProfileCareDataState.failed.message,
+            dataState: .failed
+        )
+    }
+
+    static func staleFallback() -> ProfileCareSnapshot {
         ProfileCareSnapshot(
             moodTitle: "心境追踪",
             moodStatus: "待同步",
@@ -54,15 +134,24 @@ struct ProfileCareSnapshot {
             sleepStatus: "待同步",
             lonelinessIndex: 0.5,
             riskReminder: "关怀数据暂未同步，当前显示本地安全状态。",
-            isStale: true
+            isStale: true,
+            dataState: .stale
         )
     }
 
+    static func offlineFallback() -> ProfileCareSnapshot {
+        staleFallback()
+    }
+
     var syncCaption: String {
-        if isStale {
+        switch dataState {
+        case .available:
+            return riskReminder
+        case .loading, .empty, .failed:
+            return dataState.message
+        case .stale:
             return "关怀数据暂未同步，当前显示本地安全状态。"
         }
-        return riskReminder
     }
 
     private static func payloadObject(from json: [String: Any]) -> [String: Any]? {

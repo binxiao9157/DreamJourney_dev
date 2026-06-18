@@ -67,6 +67,7 @@ enum ProfileCareSnapshotCheck {
         assertEqual(direct.lonelinessIndex, 0.42, "string loneliness index should parse")
         assertEqual(direct.riskReminder, "建议今天主动问候一次", "risk reminder")
         assertTrue(direct.isStale == false, "direct backend snapshot should not be stale")
+        assertTrue(direct.dataState == .available, "direct backend snapshot should be available")
         assertEqual(direct.syncCaption, "建议今天主动问候一次", "direct sync caption should use risk reminder")
 
         let nested = ProfileCareSnapshot(json: [
@@ -131,15 +132,35 @@ enum ProfileCareSnapshotCheck {
         assertEqual(fallback.moodStatus, "待同步", "fallback status")
         assertEqual(fallback.emotionalIndex, 0.5, "fallback emotional index")
         assertTrue(fallback.isStale, "fallback should be stale")
+        assertTrue(fallback.dataState == .stale, "fallback should use stale data state")
         assertEqual(fallback.syncCaption, "关怀数据暂未同步，当前显示本地安全状态。", "fallback caption")
+
+        let loading = ProfileCareSnapshot.loadingPlaceholder()
+        assertTrue(loading.dataState == .loading, "loading placeholder state")
+        assertEqual(loading.syncCaption, "正在同步关怀信号，稍后会更新聚合结果。", "loading caption")
+
+        let empty = ProfileCareSnapshot.emptyFallback()
+        assertTrue(empty.dataState == .empty, "empty fallback state")
+        assertEqual(empty.syncCaption, "暂无可用关怀信号，后续有足够数据后会自动更新。", "empty caption")
+
+        let failed = ProfileCareSnapshot.failedFallback()
+        assertTrue(failed.dataState == .failed, "failed fallback state")
+        assertEqual(failed.syncCaption, "关怀信号加载失败，请稍后重试。", "failed caption")
 
         assertContains(profileSource, "DreamJourneyBackendClient.shared.latestCareSnapshot", "profile should fetch care signal snapshot through backend client")
         assertContains(profileSource, "ProfileCareSnapshot(json: json)", "profile should parse backend payload through care snapshot model")
-        assertContains(profileSource, "careSnapshot = .offlineFallback()", "profile should use a safe fallback when care backend is unavailable")
+        assertContains(profileSource, "careSnapshot = ProfileCareSnapshot.emptyFallback()", "profile should use an explicit empty state when backend returns no usable care payload")
+        assertContains(profileSource, "careSnapshot = ProfileCareSnapshot.failedFallback()", "profile should use an explicit failed state when care backend is unavailable")
+        assertContains(profileSource, "ProfileCareSnapshot.loadingPlaceholder()", "profile should use an explicit loading state before care backend returns")
         assertContains(profileSource, "makeCareSyncCaption(snapshot:", "profile should render care sync state without raw chat content")
         assertNotContains(profileSource, "ConversationMemoryManager.shared.currentTranscript", "profile must not render raw conversation transcript")
         assertNotContains(profileSource, "DialogMessage", "profile must not render raw dialog messages")
 
+        assertContains(careModelSource, "enum ProfileCareDataState", "care model should define public care data states")
+        assertContains(careModelSource, "正在同步关怀信号", "care model should include loading state copy")
+        assertContains(careModelSource, "暂无可用关怀信号", "care model should include empty state copy")
+        assertContains(careModelSource, "数据可能不是最新", "care model should include stale state copy")
+        assertContains(careModelSource, "关怀信号加载失败", "care model should include failed state copy")
         assertNotContains(careModelSource, "transcript", "care model should not expose raw transcript fields")
         assertNotContains(careModelSource, "rawMessages", "care model should not expose raw message fields")
         assertContains(careModelSource, "boundedDoubleValue", "care model should clamp numeric signal fields")

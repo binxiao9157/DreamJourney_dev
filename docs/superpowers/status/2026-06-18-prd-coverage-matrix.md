@@ -25,12 +25,12 @@ Head at creation: `790f029 docs: add prd ui continuation plan`
 | 档案文字描述 | implemented | yes | archive smoke | maintain |
 | 时间信件 | hidden candidate | no | archive media smoke | delivery policy |
 | 个人资料管理 | partially implemented; password change hidden shell | yes for profile fields; no for password change | `ProfileSettingsViewController`, `ProfilePasswordChangeViewController` | backend `/auth/password` implementation, auth/security review, true-device acceptance |
-| 心境追踪 | implemented fallback | yes | Profile care checks | lifecycle policy |
+| 心境追踪 | implemented fallback and data states | yes | Profile care checks, care data states check | lifecycle policy |
 | 家人管理 | hidden candidate | no | family persona smoke | product exposure decision |
 | 法律法规 | implemented | yes | `ProfileLegalViewController` | legal review |
 | 账号退出 | implemented | yes | `ProfileViewController` | maintain |
 | 账号注销 | hidden blocked shell | no | safety check | compliance/backend contract |
-| 长辈关怀 | implemented aggregate | yes | elder dashboard check | real backend acceptance |
+| 长辈关怀 | implemented aggregate with loading/empty/stale/failed states | yes | elder dashboard check, profile care public placeholder check | real backend acceptance |
 | 生死转换机制 | hidden boundary | no | mode lifecycle checks | product/legal policy |
 
 Echo waiting reply note: the old third-turn default policy has been superseded. PRD now says one user speech plus one AI reply counts as one round; the default should wait after 10 rounds; emotion/content signals can trigger earlier; delay should be 5-10 minutes; and in-app state, local notification, and push notification are all required.
