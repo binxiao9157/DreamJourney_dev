@@ -16,7 +16,10 @@ enum MemoryArchiveAnalysisStatus: String, Codable {
 }
 
 struct MemoryArchiveItem: Codable, Identifiable {
+    static let legacyOwnerUserId = "legacy_unassigned"
+
     let id: String
+    let ownerUserId: String
     var kind: MemoryArchiveItemKind
     var title: String
     var note: String
@@ -31,6 +34,7 @@ struct MemoryArchiveItem: Codable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case id
+        case ownerUserId
         case kind
         case title
         case note
@@ -49,6 +53,7 @@ struct MemoryArchiveItem: Codable, Identifiable {
         title: String,
         note: String,
         localPath: String? = nil,
+        ownerUserId: String = MemoryArchiveItem.legacyOwnerUserId,
         analysisStatus: MemoryArchiveAnalysisStatus = .pending,
         analysisSummary: String? = nil,
         detectedPeople: [String] = [],
@@ -56,6 +61,7 @@ struct MemoryArchiveItem: Codable, Identifiable {
         metadata: [String: String] = [:]
     ) {
         self.id = UUID().uuidString
+        self.ownerUserId = ownerUserId
         self.kind = kind
         self.title = title
         self.note = note
@@ -75,6 +81,7 @@ struct MemoryArchiveItem: Codable, Identifiable {
         title: String,
         note: String,
         localPath: String? = nil,
+        ownerUserId: String = MemoryArchiveItem.legacyOwnerUserId,
         createdAt: Date,
         updatedAt: Date,
         analysisStatus: MemoryArchiveAnalysisStatus,
@@ -84,6 +91,7 @@ struct MemoryArchiveItem: Codable, Identifiable {
         metadata: [String: String] = [:]
     ) {
         self.id = id
+        self.ownerUserId = ownerUserId
         self.kind = kind
         self.title = title
         self.note = note
@@ -121,6 +129,10 @@ struct MemoryArchiveItem: Codable, Identifiable {
             title: Self.stringValue(object["title"]) ?? kind.remoteDefaultTitle,
             note: Self.stringValue(object["note"]) ?? "",
             localPath: Self.stringValue(object["localPath"]),
+            ownerUserId: Self.stringValue(object["ownerUserId"])
+                ?? Self.stringValue(object["uploadedByUserId"])
+                ?? Self.stringValue(object["uploaderUserId"])
+                ?? Self.legacyOwnerUserId,
             createdAt: createdAt,
             updatedAt: updatedAt,
             analysisStatus: status,
@@ -134,6 +146,7 @@ struct MemoryArchiveItem: Codable, Identifiable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
+        ownerUserId = try container.decodeIfPresent(String.self, forKey: .ownerUserId) ?? Self.legacyOwnerUserId
         kind = try container.decode(MemoryArchiveItemKind.self, forKey: .kind)
         title = try container.decode(String.self, forKey: .title)
         note = try container.decode(String.self, forKey: .note)
@@ -150,6 +163,7 @@ struct MemoryArchiveItem: Codable, Identifiable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
+        try container.encode(ownerUserId, forKey: .ownerUserId)
         try container.encode(kind, forKey: .kind)
         try container.encode(title, forKey: .title)
         try container.encode(note, forKey: .note)
@@ -281,6 +295,39 @@ private extension MemoryArchiveItem {
 }
 
 extension MemoryArchiveItem {
+    func canManage(by userId: String) -> Bool {
+        let normalizedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedUserId.isEmpty,
+              ownerUserId != Self.legacyOwnerUserId else {
+            return false
+        }
+        return ownerUserId == normalizedUserId
+    }
+
+    func assigningOwnerIfNeeded(_ ownerUserId: String) -> MemoryArchiveItem {
+        let normalizedOwnerUserId = ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedOwnerUserId.isEmpty,
+              self.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || self.ownerUserId == Self.legacyOwnerUserId else {
+            return self
+        }
+
+        return MemoryArchiveItem(
+            id: id,
+            kind: kind,
+            title: title,
+            note: note,
+            localPath: localPath,
+            ownerUserId: normalizedOwnerUserId,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            analysisStatus: analysisStatus,
+            analysisSummary: analysisSummary,
+            detectedPeople: detectedPeople,
+            tags: tags,
+            metadata: metadata
+        )
+    }
+
     mutating func applyLocalAnalysisResult(now: Date = Date()) {
         analysisStatus = .analyzed
         analysisSummary = localAnalysisSummary

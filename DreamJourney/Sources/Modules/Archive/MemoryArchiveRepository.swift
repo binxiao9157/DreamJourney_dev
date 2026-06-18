@@ -64,31 +64,41 @@ final class MemoryArchiveRepository {
 
     func allItems() -> [MemoryArchiveItem] {
         guard let data = UserDefaults.standard.data(forKey: storageKey),
-              let items = try? JSONDecoder().decode([MemoryArchiveItem].self, from: data) else {
+              let decodedItems = try? JSONDecoder().decode([MemoryArchiveItem].self, from: data) else {
             return []
+        }
+        let needsOwnerMigration = decodedItems.contains { item in
+            item.ownerUserId == MemoryArchiveItem.legacyOwnerUserId
+                || item.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        let items = assignOwnerIfNeededForCurrentUser(decodedItems)
+        if needsOwnerMigration {
+            save(items)
         }
         return items.sorted { $0.createdAt > $1.createdAt }
     }
 
     func add(_ item: MemoryArchiveItem, syncToBackend shouldSyncToBackend: Bool = true) {
+        let ownedItem = item.assigningOwnerIfNeeded(currentUserId)
         var items = allItems()
-        items.insert(item, at: 0)
+        items.insert(ownedItem, at: 0)
         save(items)
         if shouldSyncToBackend {
-            syncToBackend(item)
+            syncToBackend(ownedItem)
         }
     }
 
     @discardableResult
     func update(_ item: MemoryArchiveItem, syncToBackend shouldSyncToBackend: Bool = true) -> Bool {
+        let ownedItem = item.assigningOwnerIfNeeded(currentUserId)
         var items = allItems()
-        guard let index = items.firstIndex(where: { $0.id == item.id }) else {
+        guard let index = items.firstIndex(where: { $0.id == ownedItem.id }) else {
             return false
         }
-        items[index] = item
+        items[index] = ownedItem
         save(items)
         if shouldSyncToBackend {
-            syncToBackend(item)
+            syncToBackend(ownedItem)
         }
         return true
     }
@@ -123,7 +133,7 @@ final class MemoryArchiveRepository {
             guard let self else { return }
             switch result {
             case .success(let object):
-                let remoteItems = Self.archiveItems(from: object)
+                let remoteItems = assignOwnerIfNeededForCurrentUser(Self.archiveItems(from: object))
                 let mergedItems = mergeRemoteItems(remoteItems)
                 save(mergedItems)
                 completion?(.success(mergedItems.sorted { $0.createdAt > $1.createdAt }))
@@ -162,6 +172,7 @@ final class MemoryArchiveRepository {
             "viewerUserId": currentUserId,
             "ownerId": currentArchiveOwnerId,
             "id": item.id,
+            "ownerUserId": item.ownerUserId,
             "kind": item.kind.rawValue,
             "title": item.title,
             "note": item.note,
@@ -195,6 +206,10 @@ final class MemoryArchiveRepository {
         }
 
         return []
+    }
+
+    private func assignOwnerIfNeededForCurrentUser(_ items: [MemoryArchiveItem]) -> [MemoryArchiveItem] {
+        items.map { $0.assigningOwnerIfNeeded(currentUserId) }
     }
 
     private static func rawArchiveItemObjects(from value: Any?) -> [[String: Any]]? {

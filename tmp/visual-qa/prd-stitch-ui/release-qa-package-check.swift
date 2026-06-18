@@ -196,6 +196,7 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/archive-analysis-state-stitch-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-remote-fetch-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-remote-json-behavior-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/archive-ownership-visibility-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-integration-contract-check.py",
     "tmp/visual-qa/prd-stitch-ui/backend-auth-token-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-auth-token-contract-check.py",

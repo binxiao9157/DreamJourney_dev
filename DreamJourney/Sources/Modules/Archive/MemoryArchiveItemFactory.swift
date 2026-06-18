@@ -11,6 +11,7 @@ enum MemoryArchiveItemFactory {
             kind: .text,
             title: "文字记忆",
             note: note,
+            ownerUserId: currentUploaderUserId,
             analysisStatus: .manual,
             analysisSummary: "这是一段手动封存的文字片段，可作为后续回响生成的语义线索。",
             tags: ["文字片段"],
@@ -23,6 +24,7 @@ enum MemoryArchiveItemFactory {
             kind: .timeLetter,
             title: "时间信件",
             note: note,
+            ownerUserId: currentUploaderUserId,
             analysisStatus: .manual,
             analysisSummary: "这封信会作为未来回看与生成回响时的情感线索。",
             tags: ["时间信件"],
@@ -38,6 +40,7 @@ enum MemoryArchiveItemFactory {
             title: "相册影像",
             note: "从相册封存的一张照片",
             localPath: localPath,
+            ownerUserId: currentUploaderUserId,
             analysisStatus: .pending,
             analysisSummary: "照片已保存，等待后续图像分析提取人物、地点与场景线索。",
             tags: ["相册影像"],
@@ -59,6 +62,7 @@ enum MemoryArchiveItemFactory {
             title: "语音档案",
             note: trimmedNote.isEmpty ? "录入了一段 \(durationText) 的声音记忆。" : trimmedNote,
             localPath: localPath,
+            ownerUserId: currentUploaderUserId,
             analysisStatus: .manual,
             analysisSummary: "这段声音已封存，可作为之后回响生成时的语气、称呼与情绪线索。",
             tags: ["语音档案", durationText],
@@ -71,6 +75,10 @@ enum MemoryArchiveItemFactory {
                 "storage": "local_file",
             ]
         )
+    }
+
+    private static var currentUploaderUserId: String {
+        UserManager.shared.currentUser?.id ?? MemoryArchiveItem.legacyOwnerUserId
     }
 
     private static func textMetadata(contentKind: String, note: String) -> [String: String] {

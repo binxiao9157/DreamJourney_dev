@@ -110,7 +110,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     }
 
     private func configureNavigationActions() {
-        guard shouldShowLocalAnalysisAction else {
+        guard shouldShowLocalAnalysisAction && canManageCurrentArchiveItem else {
             navigationItem.rightBarButtonItem = nil
             return
         }
@@ -122,6 +122,10 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
             action: #selector(analyzeArchiveItemTapped)
         )
         navigationItem.rightBarButtonItem?.accessibilityLabel = "生成本地分析"
+    }
+
+    private var canManageCurrentArchiveItem: Bool {
+        item.canManage(by: UserManager.shared.currentUser?.id ?? "")
     }
 
     private var shouldShowLocalAnalysisAction: Bool {
