@@ -24,6 +24,10 @@ EVENT_ID = f"event_release_like_{MARKER}"
 PHONE = "13900008888"
 PROFILE_NICKNAME = f"ReleaseLike Profile {MARKER}"
 PROFILE_REGION = f"ReleaseLike Region {MARKER[-12:]}"
+AUTH_PHONE = f"release_like_password_{MARKER}"
+AUTH_NICKNAME = f"ReleaseLike Password {MARKER[-12:]}"
+AUTH_OLD_PASSWORD = f"Old-{MARKER[-12:]}-Pass9"
+AUTH_NEW_PASSWORD = f"New-{MARKER[-12:]}-Pass9"
 MISSING_CARE_USER_ID = f"{USER_ID}_missing_user"
 STALE_CARE_USER_ID = f"{USER_ID}_stale_care"
 STALE_CARE_WINDOW_END = "2026-05-01T00:00:00Z"
@@ -150,7 +154,32 @@ def make_care_snapshot(
     }
 
 
+def make_auth_login_payload(password):
+    return {
+        "phone": AUTH_PHONE,
+        "nickname": AUTH_NICKNAME,
+        "password": password,
+    }
+
+
 def seed():
+    auth_created = request_json("POST", "/auth/login", make_auth_login_payload(AUTH_OLD_PASSWORD))
+    auth_user = auth_created.get("user") or {}
+    assert_true(auth_user.get("id"), "password login should return a user id")
+    assert_equal(auth_user.get("passwordConfigured"), True, "passwordConfigured should be true after credential init")
+
+    password_changed = request_json(
+        "POST",
+        "/auth/password",
+        {
+            "userId": auth_user.get("id"),
+            "oldPassword": AUTH_OLD_PASSWORD,
+            "newPassword": AUTH_NEW_PASSWORD,
+        },
+    )
+    assert_equal(password_changed.get("status"), "changed", "password change status")
+    assert_equal(password_changed.get("userId"), auth_user.get("id"), "password change should preserve user id")
+
     profile_payload = {
         "userId": USER_ID,
         "nickname": PROFILE_NICKNAME,
@@ -245,6 +274,27 @@ def seed():
 
 
 def verify():
+    old_password_login = request_json(
+        "POST",
+        "/auth/login",
+        make_auth_login_payload(AUTH_OLD_PASSWORD),
+        expected=401,
+    )
+    assert_equal(
+        old_password_login.get("detail"),
+        "invalid password",
+        "old password should be rejected after password change",
+    )
+
+    new_password_login = request_json("POST", "/auth/login", make_auth_login_payload(AUTH_NEW_PASSWORD))
+    new_password_user = new_password_login.get("user") or {}
+    assert_true(new_password_user.get("id"), "new password login should return a user id")
+    assert_equal(
+        new_password_user.get("passwordConfigured"),
+        True,
+        "new password should login after password change",
+    )
+
     loaded_profile = request_json("GET", f"/profile/{USER_ID}")
     profile = loaded_profile.get("profile") or {}
     assert_equal(profile.get("userId"), USER_ID, "profile user id should persist")
@@ -303,6 +353,10 @@ def verify():
     assert_equal(stale_snapshot.get("riskLevel"), "stable", "stale care risk level should persist")
 
     return {
+        "passwordChangeStatus": "changed",
+        "passwordOldLoginStatus": old_password_login.get("detail"),
+        "passwordNewLoginConfigured": new_password_user.get("passwordConfigured"),
+        "passwordUserId": new_password_user.get("id"),
         "profileNickname": profile.get("nickname"),
         "profileRegion": profile.get("region"),
         "archiveItemCount": len(archive_list.get("items", [])),

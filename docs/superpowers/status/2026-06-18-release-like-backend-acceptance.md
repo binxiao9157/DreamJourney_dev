@@ -37,6 +37,14 @@ Profile contract update after the accepted deployed run:
 - `GET /profile/{user_id}`: now covered by the release-like persistence runner in local code.
 - The accepted deployed run above predates the `/profile` backend route. Deploy the latest backend before using this route as selected-environment evidence.
 
+Password change contract update after the accepted deployed run:
+
+- `POST /auth/password`: now covered by the release-like persistence runner in local code.
+- `POST /auth/login`: now covered for password credential initialization, old-password rejection after change, and new-password login after change.
+- The runner now emits `passwordChangeStatus`, `passwordOldLoginStatus`, and `passwordNewLoginConfigured` in `postgres-persistence-verify.json`.
+- The accepted deployed run above predates this password gate. Deploy the latest backend and rerun selected-environment acceptance before treating `/auth/password` as selected-backend evidence.
+- The iOS password change entry remains hidden until login password participation, security review, and true-device acceptance are complete.
+
 Care snapshot state fixture update after the accepted deployed run:
 
 - `careActiveRiskLevel`: now covered by the release-like persistence runner in local code.
@@ -137,6 +145,7 @@ RELEASE_LIKE_RESTART_COMMAND='<restart command>'
 The persistence contract covers:
 
 - Profile save/read persistence for nickname, gender, region, and avatar metadata;
+- Password credential initialization and password change persistence through `passwordChangeStatus`, `passwordOldLoginStatus`, and `passwordNewLoginConfigured`;
 - Archive item creation/listing and local path stripping;
 - Archive persona visibility fields: `personaScope=family` and `digitalHumanId=family_default`;
 - KB sync/snapshot persistence;
@@ -189,4 +198,4 @@ tmp/visual-qa/prd-stitch-ui/run-release-like-backend-acceptance.sh
 
 The local current backend code contains Postgres `Jsonb` parameter adaptation, rolls back failed DB operations, and passes the backend verification suite.
 
-After this document update, the local release-like runner also guards care snapshot state fixtures. The next deployed acceptance run should verify `careActiveRiskLevel`, `careMissingStatus`, `careInvalidStatus`, and `careStaleWindowEnd` in `postgres-persistence-verify.json`.
+After this document update, the local release-like runner also guards password change and care snapshot state fixtures. The next deployed acceptance run should verify `passwordChangeStatus`, `passwordOldLoginStatus`, `passwordNewLoginConfigured`, `careActiveRiskLevel`, `careMissingStatus`, `careInvalidStatus`, and `careStaleWindowEnd` in `postgres-persistence-verify.json`.
