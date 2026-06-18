@@ -21,9 +21,23 @@ The default run covers:
 - standard iOS Debug simulator build;
 - Archive -> Echo simulator smoke.
 
+## Release Handoff Mode
+
+Use this when backend credentials are available and the build is being prepared for broader handoff:
+
+```bash
+RELEASE_HANDOFF_MODE=1 \
+BACKEND_BASE_URL=https://dreamjourney-api.liftora.cn \
+BACKEND_API_TOKEN='<server token from private access doc>' \
+RUN_ID=20260618-release-handoff \
+tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+```
+
+This forces release-like FastAPI/Postgres acceptance to run as part of the one-command package. For local dry runs without a backend, keep `RELEASE_HANDOFF_MODE=0` or explicitly set `RUN_RELEASE_LIKE_BACKEND=0`.
+
 ## Optional Release-like Backends
 
-Postgres release-like backend remains optional in this runner because the current machine has no Docker/Postgres runtime.
+Postgres release-like backend remains optional in the default runner because not every machine has backend credentials or Docker/Postgres runtime.
 
 Enable it only when the environment is available:
 

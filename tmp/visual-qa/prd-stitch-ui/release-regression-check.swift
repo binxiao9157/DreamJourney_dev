@@ -35,6 +35,7 @@ for phrase in [
     "RUN_STANDARD_BUILD",
     "RUN_SIMULATOR_SMOKE",
     "RUN_BACKEND_ENV_SMOKE",
+    "RELEASE_HANDOFF_MODE",
     "RUN_RELEASE_LIKE_BACKEND",
     "./scripts/verify_backend.sh",
     "backend-postgres-persistence-check.py",
@@ -59,6 +60,8 @@ for phrase in [
     "run-release-regression.sh",
     "Archive -> Echo",
     "RUN_RELEASE_LIKE_BACKEND=1",
+    "Release Handoff Mode",
+    "RELEASE_HANDOFF_MODE=1",
     "Postgres release-like backend remains optional",
 ] {
     assertContains(status, phrase, "status doc should include \(phrase)")

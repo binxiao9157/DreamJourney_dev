@@ -17,7 +17,12 @@ STATIC_LOG_DIR="$OUTPUT_DIR/static-guards"
 RUN_STANDARD_BUILD="${RUN_STANDARD_BUILD:-1}"
 RUN_SIMULATOR_SMOKE="${RUN_SIMULATOR_SMOKE:-1}"
 RUN_BACKEND_ENV_SMOKE="${RUN_BACKEND_ENV_SMOKE:-0}"
-RUN_RELEASE_LIKE_BACKEND="${RUN_RELEASE_LIKE_BACKEND:-0}"
+RELEASE_HANDOFF_MODE="${RELEASE_HANDOFF_MODE:-0}"
+if [[ "$RELEASE_HANDOFF_MODE" == "1" ]]; then
+  RUN_RELEASE_LIKE_BACKEND="${RUN_RELEASE_LIKE_BACKEND:-1}"
+else
+  RUN_RELEASE_LIKE_BACKEND="${RUN_RELEASE_LIKE_BACKEND:-0}"
+fi
 
 mkdir -p "$STATIC_LOG_DIR"
 touch "$COMMAND_LOG"
@@ -44,6 +49,7 @@ Run ID: \`$RUN_ID\`
 - Standard iOS build: \`$RUN_STANDARD_BUILD\`
 - Archive -> Echo simulator smoke: \`$RUN_SIMULATOR_SMOKE\`
 - Backend environment smoke: \`$RUN_BACKEND_ENV_SMOKE\`
+- Release handoff mode: \`$RELEASE_HANDOFF_MODE\`
 - Release-like FastAPI/Postgres backend: \`$RUN_RELEASE_LIKE_BACKEND\`
 - Backend root: \`$BACKEND_ROOT\`
 
@@ -55,6 +61,7 @@ Run ID: \`$RUN_ID\`
 - Core Archive -> Echo simulator smoke, unless \`RUN_SIMULATOR_SMOKE=0\`.
 - Optional backend environment smoke when \`RUN_BACKEND_ENV_SMOKE=1\` and backend URL/token are configured.
 - Optional release-like Postgres backend acceptance when \`RUN_RELEASE_LIKE_BACKEND=1\`.
+- Release handoff mode sets \`RUN_RELEASE_LIKE_BACKEND=1\` unless explicitly overridden.
 
 EOF
 }

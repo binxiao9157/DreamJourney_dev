@@ -272,4 +272,9 @@ assertSmokeResultSucceeded("\(latestSmokeBase)/archive-to-echo-smoke-result.json
 let gitignore = read(".gitignore")
 assertContains(gitignore, "tmp/**/DerivedData*", "gitignore should exclude generated DerivedData")
 
+let releaseRegressionRunner = read("tmp/visual-qa/prd-stitch-ui/run-release-regression.sh")
+let releaseRegressionDoc = read("docs/superpowers/status/2026-06-18-one-command-release-regression.md")
+assertContains(releaseRegressionRunner, "RELEASE_HANDOFF_MODE", "release regression should support backend-required handoff mode")
+assertContains(releaseRegressionDoc, "Release Handoff Mode", "release regression docs should include handoff mode")
+
 print("Release QA package checks passed with latest smoke \(latestSmoke)")

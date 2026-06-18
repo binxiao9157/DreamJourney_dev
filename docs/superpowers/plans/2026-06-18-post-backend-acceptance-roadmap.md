@@ -243,7 +243,7 @@ git commit -m "docs: add Profile IA contract"
 - Modify: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/superpowers/status/2026-06-18-one-command-release-regression.md`
 - Test: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift`
 
-- [ ] **Step 1: Inspect current regression flags**
+- [x] **Step 1: Inspect current regression flags**
 
 Run:
 
@@ -253,7 +253,7 @@ sed -n '1,230p' tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
 
 Expected: confirm `RUN_RELEASE_LIKE_BACKEND` exists and defaults to optional.
 
-- [ ] **Step 2: Add release handoff mode**
+- [x] **Step 2: Add release handoff mode**
 
 In `run-release-regression.sh`, add:
 
@@ -265,7 +265,7 @@ fi
 
 Place this after default flag initialization and before executing checks.
 
-- [ ] **Step 3: Document command**
+- [x] **Step 3: Document command**
 
 In `2026-06-18-one-command-release-regression.md`, add:
 
@@ -285,7 +285,7 @@ tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
 This forces release-like FastAPI/Postgres acceptance to run as part of the one-command package.
 ```
 
-- [ ] **Step 4: Update package guard**
+- [x] **Step 4: Update package guard**
 
 In `release-qa-package-check.swift`, assert:
 
@@ -293,7 +293,7 @@ In `release-qa-package-check.swift`, assert:
 assertContains(runner, "RELEASE_HANDOFF_MODE", "release regression should support backend-required handoff mode")
 ```
 
-- [ ] **Step 5: Verify without backend**
+- [x] **Step 5: Verify without backend**
 
 Run:
 
@@ -303,7 +303,7 @@ RUN_ID=20260618-regression-no-backend RUN_RELEASE_LIKE_BACKEND=0 tmp/visual-qa/p
 
 Expected: release-like backend acceptance is skipped by explicit flag, other checks pass.
 
-- [ ] **Step 6: Verify package guard**
+- [x] **Step 6: Verify package guard**
 
 Run:
 
@@ -314,7 +314,7 @@ git diff --check
 
 Expected: both pass.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Run:
 
@@ -566,7 +566,7 @@ git commit -m "docs: record true-device acceptance"
 
 ## Recommended Next Task
 
-Task 2 is complete. Start with **Task 3: Release-Like Regression Should Require Backend Pass** if no physical device/signing is ready.
+Tasks 2 and 3 are complete. Start with **Task 4: Public MVP UI Polish Pass** if no physical device/signing is ready.
 
 Start with **Task 1: True-Device Readiness Checklist** if you want to prepare for device acceptance before more UI work.
 
