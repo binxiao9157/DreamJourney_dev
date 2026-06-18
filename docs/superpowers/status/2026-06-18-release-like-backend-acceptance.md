@@ -10,15 +10,33 @@ Backend branch: `main`
 
 Status: not accepted
 
-The acceptance harness is now defined, but this machine cannot execute the Postgres run yet because Docker/Postgres runtime is not available on this machine.
+The acceptance harness is defined, and the deployed FastAPI/Postgres environment has now been located through the private backend access document. The deployed FastAPI/Postgres health check is reachable and reports `store=postgres`, but the release-like write path is not accepted because deployed JSONB write endpoints currently return HTTP 500.
 
 Confirmed local environment facts:
 
+- Docker/Postgres runtime is not available on this machine.
 - `docker`: not installed.
 - `psql`: not installed.
 - `postgres`: not installed.
 - local TCP `5432`: not listening.
 - local FastAPI memory-store smoke remains accepted from phase 0.
+
+Confirmed deployed environment facts:
+
+- `/health`: reachable at `https://dreamjourney-api.liftora.cn/health`.
+- `/health` store: `postgres`.
+- `POST /archive/items`: HTTP 500.
+- `POST /auth/login`: HTTP 500.
+- `POST /kb/sync`: HTTP 500.
+- Backend token document found locally with token configured; token value is intentionally omitted from reports.
+
+Root cause narrowed during the deployed retry:
+
+- An earlier deployed run reached `postgres-persistence-verify.json` with `completed=true` for marker `20260618-deployed-postgres-acceptance`.
+- A later repeated run reused the same marker and triggered a duplicate write path.
+- After that failure, deployed JSONB write endpoints returned HTTP 500 for unrelated fresh requests.
+- Local `PostgresStore` did not rollback failed DB operations before this pass, which can leave a long-lived psycopg connection in an aborted transaction state.
+- Local backend now has a regression test and fix for rollback-on-exception; the deployed service still needs that backend update and a process restart before release-like acceptance can pass.
 
 ## Target
 
@@ -76,20 +94,36 @@ The persistence contract covers:
 - Family invite/accept/list persistence;
 - Care snapshot latest persistence with metadata-only/content-redacted guarantees.
 
+The runner also keeps the two user scopes separate:
+
+- Postgres persistence contract uses a unique `release_like_*` user ID per run.
+- iOS backend environment smoke uses `user_9999`, matching the UIQA app harness seeded by `DJRunBackendEnvSmoke`.
+
+Local backend verification is run with `BACKEND_API_TOKEN` cleared so deployed credentials do not force local memory-store TestClient requests through token authentication.
+
 ## Acceptance Boundary
 
 - 本地 FastAPI memory-store smoke：accepted
-- release-like FastAPI/Postgres 后端验收：not accepted
-- 线上/公网后端验收：not accepted
+- release-like FastAPI/Postgres 后端验收：not accepted; deployed write endpoints return HTTP 500 until backend rollback fix is deployed/restarted
+- 线上/公网后端验收：not accepted; health passes, JSONB write path currently fails
 - 真机验收：not accepted
 
 Do not mark the PRD backend target complete until `run-release-like-backend-acceptance.sh` passes against a Postgres-backed FastAPI environment.
 
 ## Next Step
 
-Provide one of the two runtime options:
+Deploy or restart the public backend with the current `DreamJourneyBackend` code, including the Postgres rollback-on-exception fix, then rerun:
 
-1. install/start Docker so the local `DreamJourneyBackend` compose stack can run, or
-2. provide a deployed FastAPI/Postgres `BACKEND_BASE_URL` and matching `BACKEND_API_TOKEN`.
+```bash
+BACKEND_BASE_URL=https://dreamjourney-api.liftora.cn \
+BACKEND_API_TOKEN='<server token from private access doc>' \
+tmp/visual-qa/prd-stitch-ui/run-release-like-backend-acceptance.sh
+```
 
-After that, run the primary command above and attach the generated `report.md`, `postgres-persistence-verify.json`, and iOS smoke screenshot.
+If the latest backend is already deployed, inspect the server logs for the HTTP 500 raised by:
+
+- `POST /auth/login`
+- `POST /kb/sync`
+- `POST /archive/items`
+
+The local current backend code contains Postgres `Jsonb` parameter adaptation, rolls back failed DB operations, and passes the backend verification suite. The next check is whether the deployed service is running this backend revision and has been restarted to clear any aborted DB connection.

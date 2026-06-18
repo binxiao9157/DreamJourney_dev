@@ -9,6 +9,7 @@ BACKEND_ROOT="${BACKEND_ROOT:-$WORKSPACE_ROOT/DreamJourneyBackend}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d-%H%M%S)-release-like-backend}"
 MARKER="${MARKER:-$RUN_ID}"
 USER_ID="${USER_ID:-release_like_${RUN_ID//[^A-Za-z0-9]/_}}"
+IOS_USER_ID="${IOS_USER_ID:-user_9999}"
 BACKEND_BASE_URL="${BACKEND_BASE_URL:-}"
 BACKEND_API_TOKEN="${BACKEND_API_TOKEN:-}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-$ROOT_DIR/tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance}"
@@ -164,7 +165,7 @@ fi
 
 echo "[release-like-backend] Running backend verify script..."
 if [[ -d "$BACKEND_ROOT" ]]; then
-  (cd "$BACKEND_ROOT" && ./scripts/verify_backend.sh)
+  (cd "$BACKEND_ROOT" && BACKEND_API_TOKEN= ./scripts/verify_backend.sh)
 fi
 
 echo "[release-like-backend] Seeding Postgres persistence contract..."
@@ -187,7 +188,7 @@ python3 "$SCRIPT_DIR/backend-postgres-persistence-check.py" \
 echo "[release-like-backend] Running iOS backend environment smoke..."
 BACKEND_BASE_URL="$BACKEND_BASE_URL" \
 BACKEND_API_TOKEN="$BACKEND_API_TOKEN" \
-USER_ID="$USER_ID" \
+USER_ID="$IOS_USER_ID" \
 RUN_ID="$RUN_ID" \
 OUTPUT_ROOT="$IOS_SMOKE_ROOT" \
 "$SCRIPT_DIR/run-backend-env-smoke.sh"
@@ -207,6 +208,8 @@ Status: passed
 - Store requirement: Postgres
 - Local compose used: \`$USED_COMPOSE\`
 - Local .env created by this run: \`$LOCAL_ENV_CREATED\`
+- Persistence user ID: \`$USER_ID\`
+- iOS smoke user ID: \`$IOS_USER_ID\`
 
 ## Scope
 

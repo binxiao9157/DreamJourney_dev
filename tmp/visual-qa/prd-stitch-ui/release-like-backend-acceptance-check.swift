@@ -52,6 +52,11 @@ for phrase in [
     "run-backend-env-smoke.sh",
     "RELEASE_LIKE_RESTART_COMMAND",
     "ios-backend-env-smoke",
+    "BACKEND_API_TOKEN= ./scripts/verify_backend.sh",
+    "IOS_USER_ID",
+    "USER_ID=\"$IOS_USER_ID\"",
+    "Persistence user ID",
+    "iOS smoke user ID",
 ] {
     assertContains(runner, phrase, "runner should include \(phrase)")
 }
@@ -74,6 +79,13 @@ for phrase in [
 for phrase in [
     "Status: not accepted",
     "Docker/Postgres runtime is not available on this machine",
+    "deployed FastAPI/Postgres health check is reachable",
+    "POST /archive/items",
+    "POST /auth/login",
+    "POST /kb/sync",
+    "HTTP 500",
+    "rollback-on-exception",
+    "aborted DB connection",
     "run-release-like-backend-acceptance.sh",
     "backend-postgres-persistence-check.py",
     "BACKEND_BASE_URL",
