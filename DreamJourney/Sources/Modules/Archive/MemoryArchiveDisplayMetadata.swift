@@ -144,6 +144,7 @@ extension MemoryArchiveItem {
                 metadataSourceDisplayName,
                 metadataFileTypeDisplayName,
                 localPath == nil ? nil : "本地已保存",
+                archiveBackendSyncDisplayName,
             ])
         case .audio:
             return joinedMetadataParts([
@@ -151,7 +152,13 @@ extension MemoryArchiveItem {
                 metadataSourceDisplayName,
                 localPath == nil ? nil : "本地已保存",
             ])
-        case .text, .timeLetter:
+        case .text:
+            return joinedMetadataParts([
+                metadataCharacterCountDisplayName,
+                metadataSourceDisplayName,
+                archiveBackendSyncDisplayName,
+            ])
+        case .timeLetter:
             return joinedMetadataParts([
                 metadataCharacterCountDisplayName,
                 metadataSourceDisplayName,
@@ -172,12 +179,18 @@ extension MemoryArchiveItem {
         case .photo:
             rows.append(("文件类型", metadataFileTypeDisplayName ?? "图片"))
             rows.append(("文件状态", localPath == nil ? "未保存本地文件" : "本地已保存"))
+            if let archiveBackendSyncDisplayName {
+                rows.append(("云端状态", archiveBackendSyncDisplayName))
+            }
         case .audio:
             rows.append(("语音时长", metadataDurationText ?? "已封存"))
             rows.append(("文件类型", metadataFileTypeDisplayName ?? "音频"))
             rows.append(("文件状态", localPath == nil ? "未保存本地文件" : "本地已保存"))
         case .text:
             rows.append(("字数", metadataCharacterCountDisplayName ?? "\(note.count) 字"))
+            if let archiveBackendSyncDisplayName {
+                rows.append(("云端状态", archiveBackendSyncDisplayName))
+            }
         case .timeLetter:
             rows.append(("字数", metadataCharacterCountDisplayName ?? "\(note.count) 字"))
             rows.append(("信件状态", metadata["deliveryState"] == "sealed" ? "已封存" : "已保存"))
@@ -186,6 +199,22 @@ extension MemoryArchiveItem {
         }
 
         return rows
+    }
+
+    var archiveBackendSyncDisplayName: String? {
+        guard isPublicBackendSyncEligible,
+              metadata[Self.backendSyncStateMetadataKey] != nil else {
+            return nil
+        }
+
+        switch backendSyncState {
+        case .pending:
+            return "待同步云端"
+        case .synced:
+            return "云端已同步"
+        case .failed:
+            return "同步失败，可稍后重试"
+        }
     }
 
     private var metadataSourceDisplayName: String? {

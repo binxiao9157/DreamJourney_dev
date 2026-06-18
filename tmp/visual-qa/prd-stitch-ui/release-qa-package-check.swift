@@ -110,6 +110,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-18-profile-settings-save-state.md",
     "docs/superpowers/status/2026-06-18-profile-care-data-states.md",
     "docs/superpowers/status/2026-06-18-profile-care-intervention-placeholder.md",
+    "docs/superpowers/status/2026-06-18-archive-sync-error-recovery.md",
 ]
 
 for doc in requiredDocs {
@@ -235,6 +236,7 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/archive-remote-json-behavior-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-ownership-visibility-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-analysis-disclaimer-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/archive-sync-error-recovery-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-integration-contract-check.py",
     "tmp/visual-qa/prd-stitch-ui/backend-auth-token-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-auth-token-contract-check.py",

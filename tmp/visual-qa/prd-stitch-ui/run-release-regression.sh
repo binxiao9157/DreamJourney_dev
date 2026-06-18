@@ -125,6 +125,7 @@ for guard in \
   profile-care-public-placeholder-check.swift \
   archive-ownership-visibility-check.swift \
   archive-analysis-disclaimer-check.swift \
+  archive-sync-error-recovery-check.swift \
   final-visual-qa-package-check.swift \
   release-qa-package-check.swift
 do

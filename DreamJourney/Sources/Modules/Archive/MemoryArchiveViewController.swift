@@ -242,6 +242,7 @@ final class MemoryArchiveViewController: UIViewController {
         }
 
         isRefreshingFromBackend = true
+        repository.syncPendingPublicArchiveItemsToBackend()
         setArchiveRemoteSyncStatus(.syncing)
         repository.refreshFromBackend { [weak self] result in
             guard let self else { return }
@@ -292,7 +293,7 @@ final class MemoryArchiveViewController: UIViewController {
             remoteSyncCaptionLabel.text = "已同步远端档案"
             remoteSyncCaptionLabel.isHidden = false
         case .fallback:
-            remoteSyncCaptionLabel.text = "远端暂不可用，已保留本地档案"
+            remoteSyncCaptionLabel.text = "远端暂不可用，已保留本地档案，可稍后自动重试"
             remoteSyncCaptionLabel.isHidden = false
         }
         remoteSyncCaptionLabel.accessibilityLabel = remoteSyncCaptionLabel.text

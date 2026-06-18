@@ -15,6 +15,12 @@ enum MemoryArchiveAnalysisStatus: String, Codable {
     case failed
 }
 
+enum ArchiveBackendSyncState: String, Codable {
+    case pending
+    case synced
+    case failed
+}
+
 struct MemoryArchiveItem: Codable, Identifiable {
     static let legacyOwnerUserId = "legacy_unassigned"
 
@@ -123,6 +129,12 @@ struct MemoryArchiveItem: Codable, Identifiable {
             status = .pending
         }
 
+        var metadata = Self.stringDictionary(object["metadata"])
+        if (kind == .photo || kind == .text),
+           metadata[Self.backendSyncStateMetadataKey] == nil {
+            metadata[Self.backendSyncStateMetadataKey] = ArchiveBackendSyncState.synced.rawValue
+        }
+
         self.init(
             id: id,
             kind: kind,
@@ -139,7 +151,7 @@ struct MemoryArchiveItem: Codable, Identifiable {
             analysisSummary: Self.stringValue(object["analysisSummary"]),
             detectedPeople: Self.stringArray(object["detectedPeople"]),
             tags: Self.stringArray(object["tags"]),
-            metadata: Self.stringDictionary(object["metadata"])
+            metadata: metadata
         )
     }
 
@@ -295,6 +307,38 @@ private extension MemoryArchiveItem {
 }
 
 extension MemoryArchiveItem {
+    static let backendSyncStateMetadataKey = "backendSyncState"
+    static let backendSyncErrorMetadataKey = "backendSyncError"
+    static let backendSyncAttemptedAtMetadataKey = "backendSyncAttemptedAt"
+
+    var backendSyncState: ArchiveBackendSyncState {
+        guard let rawValue = metadata[Self.backendSyncStateMetadataKey],
+              let state = ArchiveBackendSyncState(rawValue: rawValue) else {
+            return .pending
+        }
+        return state
+    }
+
+    var isPublicBackendSyncEligible: Bool {
+        kind == .photo || kind == .text
+    }
+
+    func updatingBackendSyncState(
+        _ state: ArchiveBackendSyncState,
+        error: String? = nil,
+        attemptedAt: Date = Date()
+    ) -> MemoryArchiveItem {
+        var updatedItem = self
+        updatedItem.metadata[Self.backendSyncStateMetadataKey] = state.rawValue
+        updatedItem.metadata[Self.backendSyncAttemptedAtMetadataKey] = "\(Int(attemptedAt.timeIntervalSince1970))"
+        if let error, !error.isEmpty {
+            updatedItem.metadata[Self.backendSyncErrorMetadataKey] = error
+        } else {
+            updatedItem.metadata.removeValue(forKey: Self.backendSyncErrorMetadataKey)
+        }
+        return updatedItem
+    }
+
     func canManage(by userId: String) -> Bool {
         let normalizedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedUserId.isEmpty,

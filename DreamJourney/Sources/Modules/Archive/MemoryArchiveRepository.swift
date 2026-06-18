@@ -89,27 +89,57 @@ final class MemoryArchiveRepository {
 
     func add(_ item: MemoryArchiveItem, syncToBackend shouldSyncToBackend: Bool = true) {
         let ownedItem = item.assigningOwnerIfNeeded(currentUserId)
+        let itemForStorage = shouldSyncToBackend && ownedItem.isPublicBackendSyncEligible
+            ? ownedItem.updatingBackendSyncState(.pending)
+            : ownedItem
         var items = allItems()
-        items.insert(ownedItem, at: 0)
+        items.insert(itemForStorage, at: 0)
         save(items)
         if shouldSyncToBackend {
-            syncToBackend(ownedItem)
+            syncToBackend(itemForStorage)
         }
     }
 
     @discardableResult
     func update(_ item: MemoryArchiveItem, syncToBackend shouldSyncToBackend: Bool = true) -> Bool {
         let ownedItem = item.assigningOwnerIfNeeded(currentUserId)
+        let itemForStorage = shouldSyncToBackend && ownedItem.isPublicBackendSyncEligible
+            ? ownedItem.updatingBackendSyncState(.pending)
+            : ownedItem
         var items = allItems()
-        guard let index = items.firstIndex(where: { $0.id == ownedItem.id }) else {
+        guard let index = items.firstIndex(where: { $0.id == itemForStorage.id }) else {
             return false
         }
-        items[index] = ownedItem
+        items[index] = itemForStorage
         save(items)
         if shouldSyncToBackend {
-            syncToBackend(ownedItem)
+            syncToBackend(itemForStorage)
         }
         return true
+    }
+
+    func syncPendingPublicArchiveItemsToBackend() {
+        var items = allItems()
+        var retryItems: [MemoryArchiveItem] = []
+        var didUpdateItems = false
+
+        for index in items.indices {
+            let item = items[index]
+            guard item.isPublicBackendSyncEligible,
+                  item.backendSyncState != .synced else {
+                continue
+            }
+
+            let retryItem = item.updatingBackendSyncState(.pending)
+            items[index] = retryItem
+            retryItems.append(retryItem)
+            didUpdateItems = true
+        }
+
+        if didUpdateItems {
+            save(items)
+        }
+        retryItems.forEach(syncToBackend)
     }
 
     func summary() -> (total: Int, photos: Int, audio: Int, text: Int) {
@@ -204,17 +234,66 @@ final class MemoryArchiveRepository {
             "analysisStatus": item.analysisStatus.rawValue,
             "tags": item.tags,
             "detectedPeople": item.detectedPeople,
-            "metadata": item.metadata,
+            "metadata": metadataForBackend(item),
         ]
         DreamJourneyBackendClient.shared.postArchiveItem(
             payload,
             personaScope: archiveVisibilityContext.personaScope,
             digitalHumanId: archiveVisibilityContext.digitalHumanId
-        ) { result in
-            if case .failure(let error) = result {
+        ) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success:
+                markBackendSyncState(item.id, state: .synced)
+            case .failure(let error):
                 print("[Archive] backend sync failed: \(error.localizedDescription)")
+                markBackendSyncState(
+                    item.id,
+                    state: .failed,
+                    error: sanitizeBackendSyncError(error)
+                )
             }
         }
+    }
+
+    private func markBackendSyncState(
+        _ itemId: String,
+        state: ArchiveBackendSyncState,
+        error: String? = nil
+    ) {
+        var items = allItems()
+        guard let index = items.firstIndex(where: { $0.id == itemId }),
+              items[index].isPublicBackendSyncEligible else {
+            return
+        }
+
+        switch state {
+        case .pending:
+            items[index] = items[index].updatingBackendSyncState(.pending)
+        case .synced:
+            items[index] = items[index].updatingBackendSyncState(.synced)
+        case .failed:
+            items[index] = items[index].updatingBackendSyncState(.failed, error: error)
+        }
+        save(items)
+    }
+
+    private func metadataForBackend(_ item: MemoryArchiveItem) -> [String: String] {
+        var metadata = item.metadata
+        metadata.removeValue(forKey: MemoryArchiveItem.backendSyncStateMetadataKey)
+        metadata.removeValue(forKey: MemoryArchiveItem.backendSyncErrorMetadataKey)
+        metadata.removeValue(forKey: MemoryArchiveItem.backendSyncAttemptedAtMetadataKey)
+        return metadata
+    }
+
+    private func sanitizeBackendSyncError(_ error: Error) -> String {
+        let normalized = error.localizedDescription
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else {
+            return "网络异常"
+        }
+        return String(normalized.prefix(80))
     }
 
     private static func archiveItems(from object: [String: Any]) -> [MemoryArchiveItem] {

@@ -48,10 +48,10 @@ assertContains(coverage, "| PRD requirement | Current status | Public? | Evidenc
 let requiredRows = [
     "| 回响语音输入 | implemented | yes | `EchoViewController`, archive-to-echo smoke | true-device microphone acceptance |",
     "| 2-3轮后等待回信 | implemented ten-round/adaptive policy with persisted in-app state, local notification, deployed backend device-token registration, deployed backend delayed-reply persistence, and deployed backend dispatch-due contract | yes | `EchoViewModel`, `EchoDelayedReplyStore`, `EchoDelayedReplyNotificationScheduler`, `PushDeviceTokenStore`, echo delayed reply notification/push/dispatch checks, deployed run `20260618-deployed-push-device-token-contract-rerun-205018`, accepted dispatch run `20260618-deployed-echo-dispatch-contract-accepted-211732` | APNs provider delivery, true-device voice/notification acceptance |",
-    "| 档案照片 | implemented | yes | Archive photo entry smoke | true-device photo acceptance |",
+    "| 档案照片 | implemented with sync error recovery | yes | Archive photo entry smoke, `archive-sync-error-recovery-check.swift` | true-device photo acceptance |",
     "| 档案视频 | hidden candidate shell | no | archive media readiness guard, release matrix | picker/compression/storage/backend policy, true-device video picker acceptance |",
     "| 档案录音 | hidden candidate | no | archive media smoke | true-device audio acceptance |",
-    "| 档案文字描述 | implemented | yes | archive smoke | maintain |",
+    "| 档案文字描述 | implemented with sync error recovery | yes | archive smoke, `archive-sync-error-recovery-check.swift` | maintain |",
     "| 时间信件 | hidden candidate | no | archive media smoke | delivery policy |",
     "| 个人资料管理 | implemented for profile fields and login password participation with selected-backend `/profile`, `/auth/login`, and `/auth/password` acceptance; password change UI remains hidden | yes for profile fields and login; no for password change | `LoginViewController`, `ProfileSettingsViewController`, `ProfilePasswordChangeViewController`, `login-password-contract-check.swift`, backend `ProfileAPITests`, backend `PasswordAPITests`, release-like backend run `20260618-selected-backend-latest-contracts-after-deploy-r2` | auth/security review, true-device acceptance, explicit password-change public release decision |",
     "| 心境追踪 | implemented fallback and data states | yes | Profile care checks, care data states check | lifecycle policy |",
@@ -118,6 +118,10 @@ assertContains(coverage, "`profile-password-change-check.swift`", "coverage matr
 assertContains(coverage, "后端合同闭环", "coverage matrix should include backend contract closure row")
 assertContains(coverage, "2026-06-18-backend-contract-gap-matrix.md", "coverage matrix should reference backend contract gap matrix")
 assertContains(coverage, "backend-contract-gap-check.swift", "coverage matrix should reference backend contract guard")
+assertContains(coverage, "档案文字 / 照片同步失败恢复", "coverage matrix should document archive text/photo sync recovery")
+assertContains(coverage, "archive-sync-error-recovery-check.swift", "coverage matrix should reference archive sync recovery guard")
+assertContains(coverage, "item metadata tracks `pending` / `synced` / `failed`", "coverage matrix should document archive backend sync states")
+assertContains(coverage, "Hidden audio, time-letter, and video candidates remain outside default public sync recovery", "coverage matrix should keep hidden media outside public sync recovery")
 assertContains(coverage, "/echo/delayed-replies", "coverage matrix should call out echo delayed reply backend gap")
 assertContains(coverage, "/echo/delayed-replies/dispatch-due", "coverage matrix should call out echo delayed reply dispatch backend gap")
 assertContains(coverage, "/devices/push-token", "coverage matrix should call out push device token backend gap")
