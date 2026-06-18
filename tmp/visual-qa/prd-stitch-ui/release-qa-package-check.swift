@@ -27,6 +27,12 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
     }
 }
 
+func assertNotContains(_ haystack: String, _ needle: String, _ message: String) {
+    guard !haystack.contains(needle) else {
+        fatalError("\(message): unexpected \(needle)")
+    }
+}
+
 func latestDirectoryName(in relativePath: String) -> String {
     let directoryURL = url(relativePath)
     guard let contents = try? fileManager.contentsOfDirectory(
@@ -136,6 +142,32 @@ assertContains(matrix, "Hidden By Default", "release matrix should list hidden b
 assertContains(matrix, "DJFeature.archiveRemoteFetch", "release matrix should document remote archive fetch as hidden")
 assertContains(matrix, "DJEnableArchiveHiddenBranches", "release matrix should document archive hidden QA arg")
 assertContains(matrix, "DJEnableProfileHiddenBranches", "release matrix should document profile hidden QA arg")
+
+let releaseRegression = read("tmp/visual-qa/prd-stitch-ui/run-release-regression.sh")
+let oneCommandRegression = read("docs/superpowers/status/2026-06-18-one-command-release-regression.md")
+assertContains(releaseRegression, "Release handoff mode forces release-like backend acceptance", "release handoff mode should document forced backend acceptance")
+assertContains(releaseRegression, "RUN_RELEASE_LIKE_BACKEND=1", "release handoff mode should force release-like backend acceptance")
+assertContains(releaseRegression, "BACKEND_API_TOKEN= BACKEND_BASE_URL= ./scripts/verify_backend.sh", "backend verify should not inherit deployed backend credentials")
+for handoffGuard in [
+    "prd-full-feature-closure-decisions-check.swift",
+    "echo-delayed-reply-notification-check.swift",
+    "echo-delayed-reply-push-contract-check.swift",
+    "profile-account-fields-check.swift",
+    "archive-ownership-visibility-check.swift",
+    "profile-care-public-placeholder-check.swift",
+    "release-like-backend-acceptance-check.swift",
+] {
+    assertContains(releaseRegression, handoffGuard, "release regression should run handoff guard \(handoffGuard)")
+}
+assertContains(oneCommandRegression, "cannot be disabled by RUN_RELEASE_LIKE_BACKEND=0", "handoff docs should forbid disabling backend acceptance")
+assertContains(oneCommandRegression, "PRD decision guard", "handoff docs should list PRD decision guard")
+assertContains(oneCommandRegression, "Echo notification guard", "handoff docs should list Echo notification guard")
+assertContains(oneCommandRegression, "Profile account fields guard", "handoff docs should list Profile account fields guard")
+assertContains(oneCommandRegression, "Archive ownership guard", "handoff docs should list Archive ownership guard")
+assertContains(oneCommandRegression, "Care placeholder guard", "handoff docs should list Care placeholder guard")
+assertContains(oneCommandRegression, "Release-like backend acceptance", "handoff docs should list release-like backend acceptance")
+assertNotContains(oneCommandRegression, "explicitly set `RUN_RELEASE_LIKE_BACKEND=0`", "handoff docs must not suggest bypassing backend acceptance")
+assertNotContains(oneCommandRegression, "unless explicitly overridden", "handoff docs must not suggest backend acceptance can be overridden")
 
 let gapAudit = read("docs/superpowers/status/2026-06-17-prd-stitch-ui-gap-audit.md")
 assertContains(gapAudit, "Old routes / map", "gap audit should classify old map routes")

@@ -20,6 +20,7 @@ The default run covers:
 - `git diff --check` for iOS and backend worktrees;
 - standard iOS Debug simulator build;
 - Archive -> Echo simulator smoke.
+- Echo delayed reply persistence/local-notification smoke.
 
 ## Release Handoff Mode
 
@@ -33,7 +34,16 @@ RUN_ID=20260618-release-handoff \
 tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
 ```
 
-This forces release-like FastAPI/Postgres acceptance to run as part of the one-command package. For local dry runs without a backend, keep `RELEASE_HANDOFF_MODE=0` or explicitly set `RUN_RELEASE_LIKE_BACKEND=0`.
+This forces release-like FastAPI/Postgres acceptance to run as part of the one-command package and cannot be disabled by RUN_RELEASE_LIKE_BACKEND=0. For local dry runs without a backend, keep `RELEASE_HANDOFF_MODE=0`.
+
+Release handoff mode must include these gates:
+
+- PRD decision guard: `prd-full-feature-closure-decisions-check.swift`
+- Echo notification guard: `echo-delayed-reply-notification-check.swift` and `echo-delayed-reply-push-contract-check.swift`
+- Profile account fields guard: `profile-account-fields-check.swift`
+- Archive ownership guard: `archive-ownership-visibility-check.swift`
+- Care placeholder guard: `profile-care-public-placeholder-check.swift`
+- Release-like backend acceptance: `run-release-like-backend-acceptance.sh`
 
 ## Optional Release-like Backends
 
@@ -57,6 +67,6 @@ tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
 
 ## Notes
 
-- The runner is a regression harness, not a claim that true-device or Postgres acceptance has passed.
-- It intentionally keeps Postgres and deployed backend checks opt-in until the runtime exists.
+- The runner is a regression harness, not a claim that true-device acceptance has passed.
+- It intentionally keeps Postgres and deployed backend checks opt-in for default local runs, but `RELEASE_HANDOFF_MODE=1` makes release-like backend acceptance mandatory.
 - The runner writes a `report.md`, command logs, build log, and smoke evidence under `tmp/visual-qa/prd-stitch-ui/release-regression/<run-id>/`.

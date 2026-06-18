@@ -20,7 +20,9 @@ RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE="${RUN_ECHO_DELAYED_REPLY_NOTIFICATION
 RUN_BACKEND_ENV_SMOKE="${RUN_BACKEND_ENV_SMOKE:-0}"
 RELEASE_HANDOFF_MODE="${RELEASE_HANDOFF_MODE:-0}"
 if [[ "$RELEASE_HANDOFF_MODE" == "1" ]]; then
-  RUN_RELEASE_LIKE_BACKEND="${RUN_RELEASE_LIKE_BACKEND:-1}"
+  # Release handoff mode forces release-like backend acceptance; do not allow
+  # RUN_RELEASE_LIKE_BACKEND=0 to bypass the handoff backend gate.
+  RUN_RELEASE_LIKE_BACKEND=1
 else
   RUN_RELEASE_LIKE_BACKEND="${RUN_RELEASE_LIKE_BACKEND:-0}"
 fi
@@ -64,7 +66,7 @@ Run ID: \`$RUN_ID\`
 - Echo delayed reply persistence/local-notification smoke, unless \`RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE=0\`.
 - Optional backend environment smoke when \`RUN_BACKEND_ENV_SMOKE=1\` and backend URL/token are configured.
 - Optional release-like Postgres backend acceptance when \`RUN_RELEASE_LIKE_BACKEND=1\`.
-- Release handoff mode sets \`RUN_RELEASE_LIKE_BACKEND=1\` unless explicitly overridden.
+- Release handoff mode forces release-like backend acceptance and cannot be disabled by \`RUN_RELEASE_LIKE_BACKEND=0\`.
 
 EOF
 }
@@ -92,7 +94,7 @@ if [[ -d "$BACKEND_ROOT" ]]; then
   run_step \
     "Backend verify" \
     "$STATIC_LOG_DIR/backend-verify.log" \
-    bash -lc "cd '$BACKEND_ROOT' && ./scripts/verify_backend.sh"
+    bash -lc "cd '$BACKEND_ROOT' && BACKEND_API_TOKEN= BACKEND_BASE_URL= ./scripts/verify_backend.sh"
 else
   echo "Backend repo missing at $BACKEND_ROOT; skipping backend verify." | tee "$STATIC_LOG_DIR/backend-verify.log"
 fi
