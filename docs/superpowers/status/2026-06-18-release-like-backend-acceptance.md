@@ -8,12 +8,12 @@ Backend branch: `main`
 
 ## Status
 
-Status: accepted for the previously deployed simulator release-like scope; latest PRD contract rerun is blocked by deployed backend drift.
+Status: accepted for the latest selected deployed simulator release-like scope.
 
 The deployed FastAPI/Postgres environment is accepted for the simulator release-like backend path after deploying and restarting the backend with the Postgres rollback-on-exception fix.
 
-The latest rerun on 2026-06-18 shows the selected deployed backend has not yet picked up the local password-contract backend commits on `feature/archive-persona-visibility-contract`.
-The rerun should not be used as completed evidence for `/auth/password` or `passwordConfigured` until the backend is redeployed from the latest contract branch.
+The latest selected backend rerun on 2026-06-18 passed after deploying the backend contract branch through `1ff8b78 feat: add password change backend contract`.
+The earlier password-contract drift run is retained below as superseded diagnostic evidence.
 
 Confirmed local environment facts:
 
@@ -31,23 +31,25 @@ Confirmed deployed environment facts:
 - `/health` store: `postgres`.
 - `POST /archive/items`: accepted in release-like persistence and iOS smoke.
 - `POST /auth/login`: accepted in backend token/integration contract.
+- `POST /auth/password`: accepted in release-like persistence.
+- `POST /profile` and `GET /profile/{user_id}`: accepted in release-like persistence.
 - `POST /kb/sync`: accepted in release-like persistence and iOS smoke.
+- `POST /care/snapshots` and `GET /care/snapshots/latest/{user_id}`: accepted for active / empty / stale / failed fixture evidence.
 - Backend token document found locally with token configured; token value is intentionally omitted from reports.
 
 Profile contract update after the accepted deployed run:
 
 - `POST /profile`: now covered by the release-like persistence runner in local code.
 - `GET /profile/{user_id}`: now covered by the release-like persistence runner in local code.
-- The accepted deployed run above predates the `/profile` backend route. Deploy the latest backend before using this route as selected-environment evidence.
+- The latest selected backend run `20260618-selected-backend-latest-contracts-after-deploy-r2` accepts and persists nickname, gender, region, and avatar metadata.
 
 Password change contract update after the accepted deployed run:
 
 - `POST /auth/password`: now covered by the release-like persistence runner in local code.
 - `POST /auth/login`: now covered for password credential initialization, old-password rejection after change, and new-password login after change.
 - The runner now emits `passwordChangeStatus`, `passwordOldLoginStatus`, and `passwordNewLoginConfigured` in `postgres-persistence-verify.json`.
-- The accepted deployed run above predates this password gate. A selected-environment rerun on `20260618-selected-backend-latest-contracts` confirmed the deployed backend still lacks this gate: `/auth/login` returned no `passwordConfigured` field and `/auth/password` returned HTTP `404`.
-- Deploy the latest backend and rerun selected-environment acceptance before treating `/auth/password` as selected-backend evidence.
-- The iOS password change entry remains hidden until login password participation, security review, and true-device acceptance are complete.
+- The latest selected backend run `20260618-selected-backend-latest-contracts-after-deploy-r2` verified `passwordChangeStatus=changed`, `passwordOldLoginStatus=invalid password`, and `passwordNewLoginConfigured=true`.
+- The iOS password change entry remains hidden until auth/security review, true-device acceptance, and explicit public-release promotion are complete.
 
 Care snapshot state fixture update after the accepted deployed run:
 
@@ -55,7 +57,7 @@ Care snapshot state fixture update after the accepted deployed run:
 - `careMissingStatus`: now covered by the release-like persistence runner in local code and maps a missing user to the public empty state boundary.
 - `careInvalidStatus`: now covered by the release-like persistence runner in local code and maps rejected malformed payloads to the public failed-state boundary.
 - `careStaleWindowEnd`: now covered by the release-like persistence runner in local code and preserves an old care window for stale-state handling.
-- The accepted deployed run above predates this active / empty / stale / failed fixture gate. Rerun the selected backend before using these care-state fields as selected-environment evidence.
+- The latest selected backend run `20260618-selected-backend-latest-contracts-after-deploy-r2` verified these care-state fields against the deployed Postgres backend.
 
 Root cause narrowed during the deployed retry:
 
@@ -97,7 +99,7 @@ Result highlights:
 tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-deployed-postgres-acceptance-after-deploy/ios-backend-env-smoke/20260618-deployed-postgres-acceptance-after-deploy/01-backend-env-profile.png
 ```
 
-## Latest Selected Backend Rerun
+## Superseded Selected Backend Drift Run
 
 Run ID:
 
@@ -135,6 +137,45 @@ Required recovery:
 1. Deploy the latest backend contract branch, including commits through `1ff8b78`.
 2. Rerun `run-release-like-backend-acceptance.sh` with the private deployed backend URL/token.
 3. Treat the password fields as selected-environment evidence only after `postgres-persistence-verify.json` includes `passwordChangeStatus`, `passwordOldLoginStatus`, and `passwordNewLoginConfigured`.
+
+Recovery status: completed by `20260618-selected-backend-latest-contracts-after-deploy-r2`.
+
+## Latest Selected Backend Accepted Run
+
+Run ID:
+
+```text
+20260618-selected-backend-latest-contracts-after-deploy-r2
+```
+
+Evidence directory:
+
+```text
+tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-selected-backend-latest-contracts-after-deploy-r2/
+```
+
+Result highlights:
+
+- Local backend verification passed first: backend unittest reported `Ran 66 tests` and `OK`, backend py_compile passed, deployment-file checks passed, FastAPI smoke passed, and backend diff check passed.
+- `postgres-persistence-seed.json`: `completed=true`, `store=postgres`, `mode=seed`.
+- `postgres-persistence-verify.json`: `completed=true`, `store=postgres`, `mode=verify`.
+- `passwordChangeStatus=changed`.
+- `passwordOldLoginStatus=invalid password`.
+- `passwordNewLoginConfigured=true`.
+- `profileNickname=RL Profile er-deploy-r2`.
+- `profileRegion=RL Region er-deploy-r2`.
+- `archivePersonaScope=family`.
+- `archiveDigitalHumanId=family_default`.
+- `careActiveRiskLevel=watch`.
+- `careMissingStatus=care snapshot not found`.
+- `careStaleWindowEnd=2026-05-01T00:00:00Z`.
+- App-side backend smoke confirmed `completed=true`, `archiveRefreshSucceeded=true`, `containsBackendContractPhoto=true`, `familyRefreshSucceeded=true`, `containsBackendFamilyMember=true`, and `careMoodStatus=需关注`.
+
+Screenshot:
+
+```text
+tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-selected-backend-latest-contracts-after-deploy-r2/ios-backend-env-smoke/20260618-selected-backend-latest-contracts-after-deploy-r2/01-backend-env-profile.png
+```
 
 ## Target
 
@@ -241,4 +282,4 @@ tmp/visual-qa/prd-stitch-ui/run-release-like-backend-acceptance.sh
 
 The local current backend code contains Postgres `Jsonb` parameter adaptation, rolls back failed DB operations, and passes the backend verification suite.
 
-After this document update, the local release-like runner also guards password change and care snapshot state fixtures. The next deployed acceptance run should verify `passwordChangeStatus`, `passwordOldLoginStatus`, `passwordNewLoginConfigured`, `careActiveRiskLevel`, `careMissingStatus`, `careInvalidStatus`, and `careStaleWindowEnd` in `postgres-persistence-verify.json`.
+The latest selected backend acceptance run `20260618-selected-backend-latest-contracts-after-deploy-r2` verified `passwordChangeStatus`, `passwordOldLoginStatus`, `passwordNewLoginConfigured`, `careActiveRiskLevel`, `careMissingStatus`, `careInvalidStatus`, and `careStaleWindowEnd` in `postgres-persistence-verify.json`.

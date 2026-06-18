@@ -171,3 +171,18 @@ Update this file after every recursive state-changing command bundle and before 
 - Evidence: `tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-selected-backend-latest-contracts/`.
 - Root cause: selected deployed backend is behind local backend commit `1ff8b78 feat: add password change backend contract`; this is deployment drift, not an iOS auth implementation failure.
 - Boundary: latest selected-environment backend evidence is not accepted for password-contract fields until the backend is redeployed and the release-like acceptance runner passes.
+
+## Implementation Checkpoint - 2026-06-18T20:50:00+0800
+
+- Task: prevent duplicate Echo delayed-reply work by aligning the PRD coverage matrix with the current implementation.
+- Completed: `2026-06-18-prd-coverage-matrix.md` now records that Echo waiting reply has persisted in-app state, local notification, and backend-ready push contract implemented; only deployed route parity, APNs/device-token delivery, and true-device notification acceptance remain open.
+- Guard: `prd-coverage-matrix-check.swift` now requires the updated Echo row and external-gate wording.
+- Boundary: no runtime code changed in this slice.
+
+## Implementation Checkpoint - 2026-06-18T21:00:00+0800
+
+- Task: rerun selected deployed backend acceptance after server deployment and update release evidence.
+- Completed: release-like backend acceptance passed with run `20260618-selected-backend-latest-contracts-after-deploy-r2`; evidence covers password change, old-password rejection, new-password login, profile save/read, archive `personaScope` / `digitalHumanId`, care active/missing/invalid/stale fixture states, and iOS backend-env smoke.
+- Test update: `backend-postgres-persistence-check.py` now uses profile nickname/region values within backend validation limits; `release-like-backend-acceptance-check.swift` guards the shorter test payload and latest R2 evidence.
+- Evidence: `tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-selected-backend-latest-contracts-after-deploy-r2/`, including screenshot `ios-backend-env-smoke/20260618-selected-backend-latest-contracts-after-deploy-r2/01-backend-env-profile.png`.
+- Boundary: true-device microphone/photo/notification acceptance and APNs/device-token delivery remain open.

@@ -47,14 +47,13 @@ for rowLabel in [
 
 for state in [
     "backend route present locally",
-    "selected-environment deployment and auth acceptance needed",
+    "selected-environment password acceptance passed",
     "deployment/APNs/device token needed",
-    "backend accepts and persists nickname/gender/region/avatar metadata",
+    "selected release backend accepts and persists nickname/gender/region/avatar metadata",
     "backend now hashes password credentials and requires old-password verification",
     "iOS login password participation is implemented through `/auth/login`",
-    "selected-environment login/password acceptance",
-    "backend field migration needed",
-    "backend accepted, release-like gate now requires active / empty / stale / failed fixture evidence",
+    "selected release backend accepts and returns `personaScope` / `digitalHumanId`",
+    "selected release backend accepted active / empty / stale / failed fixture evidence",
     "careActiveRiskLevel",
     "careMissingStatus",
     "careInvalidStatus",
