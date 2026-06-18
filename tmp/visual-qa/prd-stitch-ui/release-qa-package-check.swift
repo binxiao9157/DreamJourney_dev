@@ -94,6 +94,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-17-group6-release-qa-package-review.md",
     "docs/superpowers/status/2026-06-17-submit-slice-inventory.md",
     "docs/superpowers/status/2026-06-18-prd-coverage-matrix.md",
+    "docs/superpowers/status/2026-06-18-phase0-backend-alignment.md",
 ]
 
 for doc in requiredDocs {
@@ -188,6 +189,7 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/backend-auth-token-contract-check.py",
     "tmp/visual-qa/prd-stitch-ui/backend-build-config-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-family-acceptance-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/phase0-backend-alignment-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-fallback-ui-check.swift",
     "tmp/visual-qa/prd-stitch-ui/group4-profile-care-check.swift",
     "tmp/visual-qa/prd-stitch-ui/profile-care-snapshot-check.swift",

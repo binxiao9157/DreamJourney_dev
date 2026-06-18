@@ -93,10 +93,11 @@ for phrase in [
     assertNotContains(coverage, phrase, "coverage matrix must not overclaim external acceptance")
 }
 
-assertContains(coverage, "真实后端验收：not accepted", "coverage matrix should mark real backend as not accepted")
+assertContains(coverage, "本地 FastAPI 后端 smoke：accepted", "coverage matrix should mark local FastAPI backend smoke as accepted")
+assertContains(coverage, "线上/公网后端验收：not accepted", "coverage matrix should mark remote backend as not accepted")
 assertContains(coverage, "真机验收：not accepted", "coverage matrix should mark true-device as not accepted")
 assertContains(coverage, "No hidden PRD feature is public by default", "coverage matrix should preserve release gating policy")
-assertContains(coverage, "需要用户提供真实后端 URL/token", "coverage matrix should call out backend blocker")
+assertContains(coverage, "需要确认线上/公网后端 URL/token", "coverage matrix should call out remote backend blocker")
 assertContains(coverage, "需要真机、签名和设备操作", "coverage matrix should call out device blocker")
 
 assertContains(releasePackage, "tmp/visual-qa/prd-stitch-ui/prd-coverage-matrix-check.swift", "release QA package should include PRD coverage guard")

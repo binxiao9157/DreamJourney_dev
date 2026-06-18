@@ -35,7 +35,8 @@ Head at creation: `790f029 docs: add prd ui continuation plan`
 
 ## External Acceptance Boundary
 
-- 真实后端验收：not accepted
+- 本地 FastAPI 后端 smoke：accepted
+- 线上/公网后端验收：not accepted
 - 真机验收：not accepted
 - 语音 SDK 生产质量验收：not accepted
 - App Store / TestFlight 签名链路验收：not accepted
@@ -72,7 +73,7 @@ Hidden or blocked by default:
 
 ## Blockers
 
-- 需要用户提供真实后端 URL/token before real backend acceptance can run.
+- 需要确认线上/公网后端 URL/token before remote backend acceptance can run.
 - 需要真机、签名和设备操作 before true-device acceptance can run.
 - 需要产品/合规确认 before account deletion, doctor contact, intervention, and inheritance flows can execute.
 - 需要明确发布范围 before audio, time-letter, video, and public family management can move from hidden candidate to public feature.
