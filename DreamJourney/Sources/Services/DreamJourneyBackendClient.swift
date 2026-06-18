@@ -59,6 +59,18 @@ final class DreamJourneyBackendClient {
         requestJSON(path: "/archive/items", method: .post, payload: payload, completion: completion)
     }
 
+    func postArchiveItem(
+        _ payload: [String: Any],
+        personaScope: String,
+        digitalHumanId: String,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        var scopedPayload = payload
+        scopedPayload["personaScope"] = personaScope
+        scopedPayload["digitalHumanId"] = digitalHumanId
+        postArchiveItem(scopedPayload, completion: completion)
+    }
+
     func upsertUser(phone: String, nickname: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
         requestJSON(path: "/auth/login", method: .post, payload: ["phone": phone, "nickname": nickname], completion: completion)
     }

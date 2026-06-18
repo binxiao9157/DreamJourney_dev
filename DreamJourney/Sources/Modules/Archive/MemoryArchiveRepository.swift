@@ -54,11 +54,20 @@ struct MemoryArchiveContextSnapshot {
     #endif
 }
 
+private struct ArchiveVisibilityContext {
+    let ownerId: String
+    let personaScope: String
+    let digitalHumanId: String
+}
+
 final class MemoryArchiveRepository {
     static let shared = MemoryArchiveRepository()
 
     private let baseKey = "dj.memoryArchive.items"
     private let isoFormatter = ISO8601DateFormatter()
+    private static let personalPersonaScope = "personal"
+    private static let familyPersonaScope = "family"
+    private static let defaultFamilyDigitalHumanId = "family_default"
 
     private init() {}
 
@@ -149,9 +158,22 @@ final class MemoryArchiveRepository {
     }
 
     private var currentArchiveOwnerId: String {
-        let ownerId = DigitalHumanContextStore.shared.current.ownerId
+        currentArchiveVisibilityContext.ownerId
+    }
+
+    private var currentArchiveVisibilityContext: ArchiveVisibilityContext {
+        let context = DigitalHumanContextStore.shared.current
+        let ownerId = context.ownerId
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        return ownerId.isEmpty ? currentUserId : ownerId
+        let resolvedOwnerId = ownerId.isEmpty ? currentUserId : ownerId
+        let personaScope = context.isSelfAssistant ? Self.personalPersonaScope : Self.familyPersonaScope
+        let digitalHumanId = context.isSelfAssistant ? resolvedOwnerId : Self.defaultFamilyDigitalHumanId
+
+        return ArchiveVisibilityContext(
+            ownerId: resolvedOwnerId,
+            personaScope: personaScope,
+            digitalHumanId: digitalHumanId
+        )
     }
 
     private var storageKey: String {
@@ -166,11 +188,12 @@ final class MemoryArchiveRepository {
     }
 
     private func syncToBackend(_ item: MemoryArchiveItem) {
-        let ownerId = currentArchiveOwnerId
+        let archiveVisibilityContext = currentArchiveVisibilityContext
+        let ownerId = archiveVisibilityContext.ownerId
         let payload: [String: Any] = [
             "userId": ownerId,
             "viewerUserId": currentUserId,
-            "ownerId": currentArchiveOwnerId,
+            "ownerId": ownerId,
             "id": item.id,
             "ownerUserId": item.ownerUserId,
             "kind": item.kind.rawValue,
@@ -183,7 +206,11 @@ final class MemoryArchiveRepository {
             "detectedPeople": item.detectedPeople,
             "metadata": item.metadata,
         ]
-        DreamJourneyBackendClient.shared.postArchiveItem(payload) { result in
+        DreamJourneyBackendClient.shared.postArchiveItem(
+            payload,
+            personaScope: archiveVisibilityContext.personaScope,
+            digitalHumanId: archiveVisibilityContext.digitalHumanId
+        ) { result in
             if case .failure(let error) = result {
                 print("[Archive] backend sync failed: \(error.localizedDescription)")
             }

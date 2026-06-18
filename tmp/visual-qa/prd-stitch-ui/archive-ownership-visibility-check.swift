@@ -19,6 +19,7 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
 let item = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveItem.swift")
 let factory = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveItemFactory.swift")
 let repository = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift")
+let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let detail = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveDetailViewController.swift")
 let releaseQA = read("tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift")
 let releaseRegression = read("tmp/visual-qa/prd-stitch-ui/run-release-regression.sh")
@@ -34,6 +35,15 @@ assertContains(factory, "ownerUserId: currentUploaderUserId", "Archive factory s
 
 assertContains(repository, "assignOwnerIfNeededForCurrentUser", "Archive repository should migrate legacy local owners")
 assertContains(repository, "\"ownerUserId\": item.ownerUserId", "Archive backend sync should include uploader ownership")
+assertContains(repository, "ArchiveVisibilityContext", "Archive repository should centralize persona visibility contract")
+assertContains(repository, "currentArchiveVisibilityContext", "Archive repository should resolve current persona visibility")
+assertContains(repository, "archiveVisibilityContext.personaScope", "Archive sync should distinguish personal/family visibility")
+assertContains(repository, "archiveVisibilityContext.digitalHumanId", "Archive sync should scope items by digital human")
+
+assertContains(backendClient, "personaScope: String", "Backend archive sync should accept persona scope")
+assertContains(backendClient, "digitalHumanId: String", "Backend archive sync should accept digital human id")
+assertContains(backendClient, "scopedPayload[\"personaScope\"] = personaScope", "Backend client should add persona scope to archive payload")
+assertContains(backendClient, "scopedPayload[\"digitalHumanId\"] = digitalHumanId", "Backend client should add digital human id to archive payload")
 
 assertContains(detail, "canManageCurrentArchiveItem", "Archive detail should centralize management visibility")
 assertContains(detail, "item.canManage(by: UserManager.shared.currentUser?.id ?? \"\")", "Archive detail management should depend on current user ownership")
