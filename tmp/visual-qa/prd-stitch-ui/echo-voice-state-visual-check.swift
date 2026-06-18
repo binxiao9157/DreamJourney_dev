@@ -28,7 +28,7 @@ assertContains(echoView, "private func renderVoiceStatus", "echo should isolate 
 assertContains(echoView, "voiceStatusHeightConstraint?.constant = isVisible ? 32 : 0", "voice state should collapse without shifting default Stitch layout")
 assertContains(echoView, "renderVoiceStatus(text: nil, isVisible: false)", "idle state should hide the voice status capsule")
 assertContains(echoView, "renderVoiceStatus(text: \"我在听，您慢慢说\", isVisible: true)", "listening state should show a gentle visible status")
-assertContains(echoView, "renderVoiceStatus(text: \"约 \\(minutes) 分钟后再听\", isVisible: true)", "waiting state should show the delayed reply state")
+assertContains(echoView, "renderVoiceStatus(text: \"先去窗边走走，约 \\(minutes) 分钟后我再回信\", isVisible: true)", "waiting state should show the delayed reply state")
 assertContains(echoView, "renderVoiceStatus(text: \"回响正在抵达\", isVisible: true)", "speaking state should show the echo arriving state")
 assertContains(echoView, "voiceStatusView.bottomAnchor.constraint(equalTo: micButton.topAnchor", "voice status should sit between the quote bubble and mic button")
 assertContains(echoView, "quoteBubble.bottomAnchor.constraint(equalTo: voiceStatusView.topAnchor", "quote bubble should move up only when voice status is expanded")

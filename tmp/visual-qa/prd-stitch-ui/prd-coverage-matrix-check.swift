@@ -47,13 +47,13 @@ assertContains(coverage, "| PRD requirement | Current status | Public? | Evidenc
 
 let requiredRows = [
     "| 回响语音输入 | implemented | yes | `EchoViewController`, archive-to-echo smoke | true-device microphone acceptance |",
-    "| 2-3轮后等待回信 | implemented default policy | yes | `EchoViewModel`, echo waiting reply policy check | product review and true-device voice acceptance |",
+    "| 2-3轮后等待回信 | implemented ten-round base; PRD updated to ten-round/adaptive policy | yes | `EchoViewModel`, echo waiting reply policy check | local notification, push notification, and true-device voice acceptance |",
     "| 档案照片 | implemented | yes | Archive photo entry smoke | true-device photo acceptance |",
     "| 档案视频 | not implemented | no | release matrix | define video upload scope |",
     "| 档案录音 | hidden candidate | no | archive media smoke | true-device audio acceptance |",
     "| 档案文字描述 | implemented | yes | archive smoke | maintain |",
     "| 时间信件 | hidden candidate | no | archive media smoke | delivery policy |",
-    "| 个人资料管理 | partially implemented | yes | `ProfileSettingsViewController` | avatar/password scope |",
+    "| 个人资料管理 | partially implemented | yes | `ProfileSettingsViewController` | avatar/name/gender/region/phone plus password change backend contract |",
     "| 心境追踪 | implemented fallback | yes | Profile care checks | lifecycle policy |",
     "| 家人管理 | hidden candidate | no | family persona smoke | product exposure decision |",
     "| 法律法规 | implemented | yes | `ProfileLegalViewController` | legal review |",
@@ -70,7 +70,7 @@ for row in requiredRows {
 let requiredStatuses = [
     "implemented",
     "partially implemented",
-    "implemented default policy",
+    "implemented ten-round base",
     "hidden candidate",
     "hidden blocked shell",
     "hidden boundary",
@@ -97,6 +97,9 @@ assertContains(coverage, "本地 FastAPI 后端 smoke：accepted", "coverage mat
 assertContains(coverage, "release-like FastAPI/Postgres 后端验收：accepted", "coverage matrix should mark release-like Postgres backend as accepted")
 assertContains(coverage, "线上/公网后端验收：accepted for simulator release-like scope", "coverage matrix should mark simulator remote backend as accepted")
 assertContains(coverage, "真机验收：not accepted", "coverage matrix should mark true-device as not accepted")
+assertContains(coverage, "the old third-turn default policy has been superseded", "coverage matrix should document superseded Echo policy")
+assertContains(coverage, "in-app state, local notification, and push notification are all required", "coverage matrix should document updated Echo notification scope")
+assertContains(coverage, "avatar, name, gender, region, phone, and in-app password change", "coverage matrix should document updated profile scope")
 assertContains(coverage, "No hidden PRD feature is public by default", "coverage matrix should preserve release gating policy")
 assertContains(coverage, "## Hidden Candidate Release Matrix", "coverage matrix should link hidden candidates to release matrix")
 assertContains(coverage, "docs/superpowers/status/2026-06-17-release-feature-matrix.md", "coverage matrix should reference release feature matrix")

@@ -11,15 +11,32 @@ enum EchoInteractionState {
 }
 
 struct EchoReplyPacingPolicy {
-    static let waitAfterUserTurnCount = 3
+    static let waitAfterUserTurnCount = 10
+    static let replyDelayMinuteRange = 5...10
+    private static let earlyWaitSignalKeywords = [
+        "睡不着",
+        "焦虑",
+        "很难过",
+        "害怕",
+        "孤单",
+        "撑不住",
+        "快崩溃",
+        "一直哭",
+    ]
 
-    static func shouldWaitForReply(afterUserTurnCount userTurnCount: Int) -> Bool {
-        userTurnCount >= waitAfterUserTurnCount
+    static func shouldWaitForReply(afterUserTurnCount userTurnCount: Int, userText: String) -> Bool {
+        userTurnCount >= waitAfterUserTurnCount || shouldTriggerEarlyWait(for: userText)
+    }
+
+    static func shouldTriggerEarlyWait(for userText: String) -> Bool {
+        let normalizedText = userText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedText.isEmpty else { return false }
+        return earlyWaitSignalKeywords.contains { normalizedText.contains($0) }
     }
 
     static func replyDelayMinutes(forCompletedSessionCount sessionCount: Int) -> Int {
-        let options = [5, 10, 30]
-        return options[max(0, sessionCount) % options.count]
+        let offset = max(0, sessionCount) % 6
+        return replyDelayMinuteRange.lowerBound + offset
     }
 }
 
@@ -114,7 +131,10 @@ final class EchoViewModel {
         onTranscriptAppend?(normalizedText, true)
         currentSessionUserTurnCount += 1
 
-        if EchoReplyPacingPolicy.shouldWaitForReply(afterUserTurnCount: currentSessionUserTurnCount) {
+        if EchoReplyPacingPolicy.shouldWaitForReply(
+            afterUserTurnCount: currentSessionUserTurnCount,
+            userText: normalizedText
+        ) {
             let wait = EchoReplyPacingPolicy.replyDelayMinutes(
                 forCompletedSessionCount: memoryManager.currentMemory.sessionCount
             )

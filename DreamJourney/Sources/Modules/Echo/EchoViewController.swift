@@ -334,12 +334,12 @@ final class EchoViewController: UIViewController {
             )
             setMicPulse(active: false)
         case .waitingReply(let minutes):
-            renderVoiceStatus(text: "约 \(minutes) 分钟后再听", isVisible: true)
+            renderVoiceStatus(text: "先去窗边走走，约 \(minutes) 分钟后我再回信", isVisible: true)
             configureMicButton(
                 systemName: "hourglass",
                 backgroundColor: DJDesignTokens.Color.surfaceContainer,
                 isEnabled: false,
-                accessibilityLabel: "约 \(minutes) 分钟后再听"
+                accessibilityLabel: "先去窗边走走，约 \(minutes) 分钟后我再回信"
             )
             setMicPulse(active: false)
         case .speaking:
@@ -555,14 +555,13 @@ extension EchoViewController {
     }
 
     func runUIQAEchoVoiceStatePreview() {
+        for turn in 1..<EchoReplyPacingPolicy.waitAfterUserTurnCount {
+            viewModel.beginVoiceInteraction()
+            viewModel.finishUserVoice(text: "第 \(turn) 次想起爸爸小时候的故事")
+            viewModel.receiveAIReply("我在听，慢慢说。")
+        }
         viewModel.beginVoiceInteraction()
-        viewModel.finishUserVoice(text: "第一次想起爸爸小时候的故事")
-        viewModel.receiveAIReply("我在听，慢慢说。")
-        viewModel.beginVoiceInteraction()
-        viewModel.finishUserVoice(text: "第二次想起这件事")
-        viewModel.receiveAIReply("这些记忆很珍贵。")
-        viewModel.beginVoiceInteraction()
-        viewModel.finishUserVoice(text: "第三次想起这件事")
+        viewModel.finishUserVoice(text: "第十次想起这件事")
         if viewModel.isWaitingForDelayedReply {
             beginDelayedReplyWait()
         }

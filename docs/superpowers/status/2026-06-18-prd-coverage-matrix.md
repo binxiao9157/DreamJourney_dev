@@ -18,13 +18,13 @@ Head at creation: `790f029 docs: add prd ui continuation plan`
 | PRD requirement | Current status | Public? | Evidence | Next action |
 | --- | --- | --- | --- | --- |
 | 回响语音输入 | implemented | yes | `EchoViewController`, archive-to-echo smoke | true-device microphone acceptance |
-| 2-3轮后等待回信 | implemented default policy | yes | `EchoViewModel`, echo waiting reply policy check | product review and true-device voice acceptance |
+| 2-3轮后等待回信 | implemented ten-round base; PRD updated to ten-round/adaptive policy | yes | `EchoViewModel`, echo waiting reply policy check | local notification, push notification, and true-device voice acceptance |
 | 档案照片 | implemented | yes | Archive photo entry smoke | true-device photo acceptance |
 | 档案视频 | not implemented | no | release matrix | define video upload scope |
 | 档案录音 | hidden candidate | no | archive media smoke | true-device audio acceptance |
 | 档案文字描述 | implemented | yes | archive smoke | maintain |
 | 时间信件 | hidden candidate | no | archive media smoke | delivery policy |
-| 个人资料管理 | partially implemented | yes | `ProfileSettingsViewController` | avatar/password scope |
+| 个人资料管理 | partially implemented | yes | `ProfileSettingsViewController` | avatar/name/gender/region/phone plus password change backend contract |
 | 心境追踪 | implemented fallback | yes | Profile care checks | lifecycle policy |
 | 家人管理 | hidden candidate | no | family persona smoke | product exposure decision |
 | 法律法规 | implemented | yes | `ProfileLegalViewController` | legal review |
@@ -33,7 +33,9 @@ Head at creation: `790f029 docs: add prd ui continuation plan`
 | 长辈关怀 | implemented aggregate | yes | elder dashboard check | real backend acceptance |
 | 生死转换机制 | hidden boundary | no | mode lifecycle checks | product/legal policy |
 
-Profile settings note: nickname validation, inline save states, local persistence, and backend-ready sync fallback are covered by `profile-settings-save-state-check.swift`. The row remains `partially implemented` because avatar upload, password change, and final account-center scope still require product/backend/security decisions.
+Echo waiting reply note: the old third-turn default policy has been superseded. PRD now says one user speech plus one AI reply counts as one round; the default should wait after 10 rounds; emotion/content signals can trigger earlier; delay should be 5-10 minutes; and in-app state, local notification, and push notification are all required.
+
+Profile settings note: nickname validation, inline save states, local persistence, and backend-ready sync fallback are covered by `profile-settings-save-state-check.swift`. The row remains `partially implemented` because the updated PRD now requires avatar, name, gender, region, phone, and in-app password change, with final backend/security contracts still needed.
 
 ## External Acceptance Boundary
 
