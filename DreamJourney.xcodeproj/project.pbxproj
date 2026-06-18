@@ -78,6 +78,7 @@
 		A1A000000000000000000015 /* MemoryArchiveAudioRecorderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000015 /* MemoryArchiveAudioRecorderViewController.swift */; };
 		A1A000000000000000000016 /* ProfileLegalViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000016 /* ProfileLegalViewController.swift */; };
 		A1A000000000000000000017 /* ProfileSettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000017 /* ProfileSettingsViewController.swift */; };
+		A1A000000000000000000018 /* ProfileElderCareDashboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000018 /* ProfileElderCareDashboardViewController.swift */; };
 		A45E9D7E5541F7288DD4141D /* ConversationMemoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97D922D4C28AF76D7CB85DFF /* ConversationMemoryManager.swift */; };
 		A52FFB266D8D9FC320182A0A /* MemoryRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BCB52701683AE3FAFABA6F /* MemoryRepository.swift */; };
 		A88DF4F43BC833D9433CEE7B /* MemoirTTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00898E98E95E3808561BEB51 /* MemoirTTSService.swift */; };
@@ -184,6 +185,7 @@
 		B1B000000000000000000015 /* MemoryArchiveAudioRecorderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveAudioRecorderViewController.swift; sourceTree = "<group>"; };
 		B1B000000000000000000016 /* ProfileLegalViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileLegalViewController.swift; sourceTree = "<group>"; };
 		B1B000000000000000000017 /* ProfileSettingsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileSettingsViewController.swift; sourceTree = "<group>"; };
+		B1B000000000000000000018 /* ProfileElderCareDashboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileElderCareDashboardViewController.swift; sourceTree = "<group>"; };
 		B1BA39C954DE93A9C6B92546 /* FamilyCircleViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyCircleViewController.swift; sourceTree = "<group>"; };
 		B274A4971D76C1D3BFEE4E9A /* WarmTabBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WarmTabBarController.swift; sourceTree = "<group>"; };
 		B2BCB52701683AE3FAFABA6F /* MemoryRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryRepository.swift; sourceTree = "<group>"; };
@@ -431,6 +433,7 @@
 				B1B000000000000000000007 /* ProfileViewController.swift */,
 				B1B000000000000000000016 /* ProfileLegalViewController.swift */,
 				B1B000000000000000000017 /* ProfileSettingsViewController.swift */,
+				B1B000000000000000000018 /* ProfileElderCareDashboardViewController.swift */,
 			);
 			path = Profile;
 			sourceTree = "<group>";
@@ -812,6 +815,7 @@
 				A1A000000000000000000007 /* ProfileViewController.swift in Sources */,
 				A1A000000000000000000016 /* ProfileLegalViewController.swift in Sources */,
 				A1A000000000000000000017 /* ProfileSettingsViewController.swift in Sources */,
+				A1A000000000000000000018 /* ProfileElderCareDashboardViewController.swift in Sources */,
 				7BD7AD6BC3423E10E98379EF /* SceneDelegate.swift in Sources */,
 				FE8668AF8032B5ED0673C7D2 /* TGButton.swift in Sources */,
 				3CEEFF183F1AD8F50F31189E /* TGColors.swift in Sources */,

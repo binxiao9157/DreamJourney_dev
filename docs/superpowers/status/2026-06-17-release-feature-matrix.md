@@ -22,7 +22,7 @@ These items are available without hidden-branch launch arguments and without man
 | Archive overview | `记忆档案馆`, `相册影像`, `封存新记忆`, timeline list | `MemoryArchiveViewController` renders the archive home. |
 | Archive creation | Text and photo only: `添加文字描述`, `选择照片` | `MemoryArchiveCreationOption.availableOptions` always starts with `.text`, `.photo`. |
 | Echo | Voice-first interaction: `开始语音` | `EchoViewController` exposes mic interaction, not text/image input controls. |
-| Profile care | Persona card, `心境追踪`, doctor identity row without call action | `DJFeature.careDashboard` is enabled by default; `careDoctorContact` is not. |
+| Profile care | Persona card, `心境追踪`, aggregate `长辈关怀` child dashboard, doctor identity row without call action | `DJFeature.careDashboard` is enabled by default; `careDoctorContact` is not. |
 | Profile settings | `个人资料设置`, `法律法规`, `退出登录` | `DJFeature.profileSettings` and `DJFeature.legalCenter` are enabled by default; logout is always appended. |
 | Profile settings page | Avatar display, nickname editing, masked phone, save confirmation | `ProfileSettingsViewController`. |
 | Legal center | AI assistance, psychological boundary, privacy/data, ethics, emergency guidance | `ProfileLegalViewController`. |
@@ -84,6 +84,7 @@ swift tmp/visual-qa/prd-stitch-ui/release-like-hidden-entries-check.swift /Users
 swift tmp/visual-qa/prd-stitch-ui/profile-release-gating-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/profile-family-persona-switcher-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/profile-safety-flow-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/elder-care-dashboard-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/final-visual-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 

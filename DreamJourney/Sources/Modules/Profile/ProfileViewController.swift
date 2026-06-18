@@ -310,6 +310,11 @@ final class ProfileViewController: UIViewController {
 
     private func makeCareCard(snapshot: ProfileCareSnapshot?) -> UIView {
         let card = makeProfileCard()
+        card.accessibilityIdentifier = "profileCareDashboardCard"
+        card.isAccessibilityElement = true
+        card.accessibilityTraits = .button
+        card.accessibilityLabel = "心境追踪，查看长辈关怀看板"
+        card.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(showElderCareDashboard)))
 
         let titleLabel = makeLabel(
             text: "心境追踪",
@@ -540,6 +545,14 @@ final class ProfileViewController: UIViewController {
 
     private func showLegalCenter() {
         let viewController = ProfileLegalViewController()
+        navigationController?.pushViewController(viewController, animated: true)
+    }
+
+    @objc private func showElderCareDashboard() {
+        let viewController = ProfileElderCareDashboardViewController(
+            snapshot: careSnapshot ?? .offlineFallback(),
+            context: personaContext
+        )
         navigationController?.pushViewController(viewController, animated: true)
     }
 
