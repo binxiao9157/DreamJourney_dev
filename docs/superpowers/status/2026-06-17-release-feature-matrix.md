@@ -24,7 +24,7 @@ These items are available without hidden-branch launch arguments and without man
 | Echo | Voice-first interaction: `开始语音` | `EchoViewController` exposes mic interaction, not text/image input controls. |
 | Profile care | Persona card, `心境追踪`, aggregate `长辈关怀` child dashboard, doctor identity row without call action | `DJFeature.careDashboard` is enabled by default; `careDoctorContact` is not. |
 | Profile settings | `个人资料设置`, `法律法规`, `退出登录` | `DJFeature.profileSettings` and `DJFeature.legalCenter` are enabled by default; logout is always appended. |
-| Profile settings page | Avatar display, nickname editing, masked phone, save confirmation | `ProfileSettingsViewController`. |
+| Profile settings page | Avatar display, nickname editing, masked phone, inline save states, local nickname persistence, backend-ready sync fallback | `ProfileSettingsViewController`; `profile-settings-save-state-check.swift`. |
 | Legal center | AI assistance, psychological boundary, privacy/data, ethics, emergency guidance | `ProfileLegalViewController`. |
 
 Default enabled feature flags must remain exactly:

@@ -33,6 +33,8 @@ Head at creation: `790f029 docs: add prd ui continuation plan`
 | 长辈关怀 | implemented aggregate | yes | elder dashboard check | real backend acceptance |
 | 生死转换机制 | hidden boundary | no | mode lifecycle checks | product/legal policy |
 
+Profile settings note: nickname validation, inline save states, local persistence, and backend-ready sync fallback are covered by `profile-settings-save-state-check.swift`. The row remains `partially implemented` because avatar upload, password change, and final account-center scope still require product/backend/security decisions.
+
 ## External Acceptance Boundary
 
 - 本地 FastAPI 后端 smoke：accepted

@@ -25,12 +25,18 @@ final class DreamJourneyBackendClient {
 
     private let baseURL: String
     private let apiToken: String?
+    private let hasExplicitBaseURL: Bool
+
+    var isProfileSyncConfigured: Bool {
+        hasExplicitBaseURL || apiToken != nil
+    }
 
     private init() {
         let configured = Bundle.main.object(forInfoDictionaryKey: "DreamJourneyBackendBaseURL") as? String
         let raw = configured?.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolved = raw?.isEmpty == false && raw != Self.placeholderBaseURL ? raw! : Self.defaultBaseURL
         self.baseURL = resolved.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        self.hasExplicitBaseURL = raw?.isEmpty == false && raw != Self.placeholderBaseURL
 
         let configuredToken = Bundle.main.object(forInfoDictionaryKey: "DreamJourneyBackendAPIToken") as? String
         let token = configuredToken?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -43,6 +49,10 @@ final class DreamJourneyBackendClient {
 
     func postArchiveItem(_ payload: [String: Any], completion: @escaping (Result<[String: Any], Error>) -> Void) {
         requestJSON(path: "/archive/items", method: .post, payload: payload, completion: completion)
+    }
+
+    func upsertUser(phone: String, nickname: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
+        requestJSON(path: "/auth/login", method: .post, payload: ["phone": phone, "nickname": nickname], completion: completion)
     }
 
     func listArchiveItems(userId: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {

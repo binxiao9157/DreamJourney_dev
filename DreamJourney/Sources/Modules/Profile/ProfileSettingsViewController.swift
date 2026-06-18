@@ -2,11 +2,28 @@ import UIKit
 
 final class ProfileSettingsViewController: UIViewController {
 
+    private enum ProfileSaveState {
+        case idle
+        case saving
+        case saved
+        case failed(String)
+        case networkUnavailable
+        case invalid(String)
+    }
+
+    private enum NicknameValidationResult {
+        case valid(String)
+        case invalid(String)
+    }
+
     private let scrollView = UIScrollView()
     private let contentStack = UIStackView()
     private let nicknameField = UITextField()
     private let phoneValueLabel = UILabel()
+    private let statusLabel = UILabel()
+    private let avatarEditButton = UIButton(type: .system)
     private let saveButton = UIButton(type: .system)
+    private let maxNicknameLength = 24
 
     init() {
         super.init(nibName: nil, bundle: nil)
@@ -24,6 +41,7 @@ final class ProfileSettingsViewController: UIViewController {
         configureScrollView()
         buildContent()
         loadUser()
+        renderSaveState(.idle)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -74,13 +92,20 @@ final class ProfileSettingsViewController: UIViewController {
     private func buildContent() {
         contentStack.addArrangedSubview(makeHeader())
         contentStack.addArrangedSubview(makeEditableCard())
+        contentStack.addArrangedSubview(statusLabel)
         contentStack.addArrangedSubview(saveButton)
+
+        statusLabel.font = DJDesignTokens.Font.body(13)
+        statusLabel.numberOfLines = 0
+        statusLabel.isHidden = true
+        statusLabel.accessibilityIdentifier = "profile-settings-save-status"
 
         saveButton.setTitle("保存", for: .normal)
         saveButton.titleLabel?.font = DJDesignTokens.Font.label(15)
         saveButton.setTitleColor(.white, for: .normal)
         saveButton.backgroundColor = DJDesignTokens.Color.accent
         saveButton.layer.cornerRadius = 22
+        saveButton.accessibilityIdentifier = "profile-settings-save-button"
         saveButton.addTarget(self, action: #selector(saveTapped), for: .touchUpInside)
         saveButton.heightAnchor.constraint(equalToConstant: 48).isActive = true
     }
@@ -108,14 +133,21 @@ final class ProfileSettingsViewController: UIViewController {
             color: DJDesignTokens.Color.textPrimary
         )
         let subtitleLabel = makeLabel(
-            text: "当前版本先展示系统头像，后续开放上传与更换。",
+            text: "当前版本仅展示系统头像，暂不开放相册选择。",
             font: DJDesignTokens.Font.body(13),
             color: DJDesignTokens.Color.textSecondary
         )
 
-        let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
+        avatarEditButton.setTitle("头像上传暂未开放", for: .normal)
+        avatarEditButton.titleLabel?.font = DJDesignTokens.Font.label(13)
+        avatarEditButton.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
+        avatarEditButton.contentHorizontalAlignment = .left
+        avatarEditButton.accessibilityIdentifier = "profile-settings-avatar-placeholder"
+        avatarEditButton.addTarget(self, action: #selector(showAvatarPlaceholder), for: .touchUpInside)
+
+        let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel, avatarEditButton])
         textStack.axis = .vertical
-        textStack.spacing = 4
+        textStack.spacing = 6
 
         let stack = UIStackView(arrangedSubviews: [avatarContainer, textStack])
         stack.axis = .horizontal
@@ -184,6 +216,8 @@ final class ProfileSettingsViewController: UIViewController {
         textField.clearButtonMode = .whileEditing
         textField.returnKeyType = .done
         textField.delegate = self
+        textField.accessibilityIdentifier = "profile-settings-nickname-field"
+        textField.addTarget(self, action: #selector(nicknameDidChange), for: .editingChanged)
 
         container.addSubview(titleLabel)
         container.addSubview(textField)
@@ -256,11 +290,84 @@ final class ProfileSettingsViewController: UIViewController {
     }
 
     @objc private func saveTapped() {
-        UserManager.shared.updateProfile(nickname: nicknameField.text ?? "")
         nicknameField.resignFirstResponder()
-        loadUser()
 
-        let alert = UIAlertController(title: "已保存", message: "个人资料已更新。", preferredStyle: .alert)
+        switch validateNickname(nicknameField.text) {
+        case .valid(let nickname):
+            renderSaveState(.saving)
+            UserManager.shared.saveProfile(nickname: nickname) { [weak self] result in
+                guard let self else { return }
+                self.loadUser()
+                switch result {
+                case .saved:
+                    self.renderSaveState(.saved)
+                case .savedWithRemoteWarning:
+                    self.renderSaveState(.networkUnavailable)
+                case .failed(let message):
+                    self.renderSaveState(.failed(message))
+                }
+            }
+        case .invalid(let message):
+            renderSaveState(.invalid(message))
+        }
+    }
+
+    private func validateNickname(_ rawValue: String?) -> NicknameValidationResult {
+        let nickname = (rawValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !nickname.isEmpty else {
+            return .invalid("昵称不能为空")
+        }
+        guard nickname.count <= maxNicknameLength else {
+            return .invalid("昵称不能超过24个字")
+        }
+        return .valid(nickname)
+    }
+
+    private func renderSaveState(_ state: ProfileSaveState) {
+        saveButton.isEnabled = true
+        saveButton.alpha = 1
+        saveButton.setTitle("保存", for: .normal)
+
+        switch state {
+        case .idle:
+            statusLabel.isHidden = true
+            statusLabel.text = nil
+        case .saving:
+            saveButton.isEnabled = false
+            saveButton.alpha = 0.68
+            saveButton.setTitle("保存中...", for: .normal)
+            statusLabel.isHidden = false
+            statusLabel.text = "保存中..."
+            statusLabel.textColor = DJDesignTokens.Color.textSecondary
+        case .saved:
+            statusLabel.isHidden = false
+            statusLabel.text = "已保存"
+            statusLabel.textColor = DJDesignTokens.Color.accentDeep
+        case .failed(let message):
+            statusLabel.isHidden = false
+            statusLabel.text = "保存失败：\(message)"
+            statusLabel.textColor = DJDesignTokens.Color.danger
+        case .networkUnavailable:
+            statusLabel.isHidden = false
+            statusLabel.text = "网络异常，已先保存到本机"
+            statusLabel.textColor = DJDesignTokens.Color.accent
+        case .invalid(let message):
+            statusLabel.isHidden = false
+            statusLabel.text = message
+            statusLabel.textColor = DJDesignTokens.Color.danger
+        }
+    }
+
+    @objc private func nicknameDidChange() {
+        renderSaveState(.idle)
+    }
+
+    @objc private func showAvatarPlaceholder() {
+        let alert = UIAlertController(
+            title: "头像上传暂未开放",
+            message: "当前版本仅展示系统头像，暂不开放相册选择。",
+            preferredStyle: .alert
+        )
         alert.addAction(UIAlertAction(title: "知道了", style: .default))
         present(alert, animated: true)
     }
@@ -269,6 +376,22 @@ final class ProfileSettingsViewController: UIViewController {
 extension ProfileSettingsViewController: UITextFieldDelegate {
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
         textField.resignFirstResponder()
+        return true
+    }
+
+    func textField(
+        _ textField: UITextField,
+        shouldChangeCharactersIn range: NSRange,
+        replacementString string: String
+    ) -> Bool {
+        guard textField === nicknameField else { return true }
+        let current = textField.text ?? ""
+        guard let textRange = Range(range, in: current) else { return true }
+        let nextValue = current.replacingCharacters(in: textRange, with: string)
+        guard nextValue.count <= maxNicknameLength else {
+            renderSaveState(.invalid("昵称不能超过24个字"))
+            return false
+        }
         return true
     }
 }

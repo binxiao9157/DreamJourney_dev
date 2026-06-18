@@ -44,7 +44,7 @@ assertContains(settings, "昵称", "nickname field")
 assertContains(settings, "头像", "avatar display")
 assertContains(settings, "手机号", "phone display")
 assertContains(settings, "保存", "save action")
-assertContains(settings, "UserManager.shared.updateProfile(nickname:", "settings page should persist through UserManager")
+assertContains(settings, "UserManager.shared.saveProfile(nickname:", "settings page should persist through UserManager")
 assertNotContains(settings, "密码", "password entry should remain hidden until implemented")
 
 assertContains(project, "ProfileSettingsViewController.swift in Sources", "settings page added to app target")

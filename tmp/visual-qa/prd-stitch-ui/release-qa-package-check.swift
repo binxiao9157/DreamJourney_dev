@@ -99,6 +99,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-18-one-command-release-regression.md",
     "docs/superpowers/status/2026-06-18-final-stitch-visual-refresh.md",
     "docs/superpowers/status/2026-06-18-echo-waiting-reply-policy.md",
+    "docs/superpowers/status/2026-06-18-profile-settings-save-state.md",
 ]
 
 for doc in requiredDocs {
@@ -201,6 +202,7 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-fallback-ui-check.swift",
     "tmp/visual-qa/prd-stitch-ui/group4-profile-care-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/profile-settings-save-state-check.swift",
     "tmp/visual-qa/prd-stitch-ui/profile-care-snapshot-check.swift",
     "tmp/visual-qa/prd-stitch-ui/profile-care-escalation-contract-check.swift",
     "tmp/visual-qa/prd-stitch-ui/profile-care-escalation-backend-boundary-check.swift",

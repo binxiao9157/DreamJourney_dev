@@ -106,6 +106,7 @@ for guard in \
   phase0-backend-alignment-check.swift \
   release-like-backend-acceptance-check.swift \
   backend-env-smoke-check.swift \
+  profile-settings-save-state-check.swift \
   final-visual-qa-package-check.swift \
   release-qa-package-check.swift
 do

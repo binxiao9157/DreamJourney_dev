@@ -1,5 +1,11 @@
 import Foundation
 
+enum UserProfileSaveResult {
+    case saved
+    case savedWithRemoteWarning(String)
+    case failed(String)
+}
+
 // MARK: - UserManager 单例：管理登录态
 final class UserManager {
 
@@ -21,17 +27,56 @@ final class UserManager {
             avatarName: "person.circle.fill"
         )
         currentUser = user
-        saveToDefaults()
+        _ = saveToDefaults()
         NotificationCenter.default.post(name: .djUserDidLogin, object: nil)
     }
 
     func updateProfile(nickname: String) {
-        guard var user = currentUser else { return }
+        _ = updateProfileLocally(nickname: nickname)
+    }
+
+    func saveProfile(nickname: String, completion: @escaping (UserProfileSaveResult) -> Void) {
+        let trimmedNickname = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedNickname.isEmpty else {
+            completion(.failed("昵称不能为空"))
+            return
+        }
+
+        guard var user = currentUser else {
+            completion(.failed("请先登录后再保存"))
+            return
+        }
+        user.nickname = trimmedNickname
+        currentUser = user
+        guard saveToDefaults() else {
+            completion(.failed("本地保存失败，请稍后再试"))
+            return
+        }
+        NotificationCenter.default.post(name: .djUserDidUpdate, object: nil)
+
+        guard DreamJourneyBackendClient.shared.isProfileSyncConfigured else {
+            completion(.saved)
+            return
+        }
+
+        DreamJourneyBackendClient.shared.upsertUser(phone: user.phone, nickname: trimmedNickname) { result in
+            switch result {
+            case .success:
+                completion(.saved)
+            case .failure(let error):
+                completion(.savedWithRemoteWarning(error.localizedDescription))
+            }
+        }
+    }
+
+    private func updateProfileLocally(nickname: String) -> Bool {
+        guard var user = currentUser else { return false }
         let trimmedNickname = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
         user.nickname = trimmedNickname.isEmpty ? "寻梦环游用户" : trimmedNickname
         currentUser = user
-        saveToDefaults()
+        guard saveToDefaults() else { return false }
         NotificationCenter.default.post(name: .djUserDidUpdate, object: nil)
+        return true
     }
 
     // MARK: - 退出登录
@@ -43,11 +88,13 @@ final class UserManager {
     }
 
     // MARK: - 持久化
-    private func saveToDefaults() {
+    @discardableResult
+    private func saveToDefaults() -> Bool {
         guard let user = currentUser,
-              let data = try? JSONEncoder().encode(user) else { return }
+              let data = try? JSONEncoder().encode(user) else { return false }
         UserDefaults.standard.set(data, forKey: kUserKey)
         UserDefaults.standard.set(true, forKey: kLoggedInKey)
+        return true
     }
 
     private func loadFromDefaults() {
