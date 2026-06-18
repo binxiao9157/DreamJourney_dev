@@ -46,7 +46,7 @@ assertContains(coverage, "MCP screenshots are auxiliary", "coverage matrix shoul
 assertContains(coverage, "| PRD requirement | Current status | Public? | Evidence | Next action |", "coverage matrix should use the required table")
 
 let requiredRows = [
-    "| 回响语音输入 | implemented | yes | `EchoViewController`, archive-to-echo smoke | true-device microphone acceptance |",
+    "| 回响语音输入 | implemented with production voice SDK configuration gate | yes | `EchoViewController`, `DialogEngineManager`, archive-to-echo smoke, `true-device-voice-readiness-check.swift`, `run-true-device-voice-preflight.sh` | true-device microphone/speech recognition acceptance, production voice SDK quality acceptance |",
     "| 2-3轮后等待回信 | implemented ten-round/adaptive policy with persisted in-app state, local notification, deployed backend device-token registration, deployed backend delayed-reply persistence, and deployed backend dispatch-due contract | yes | `EchoViewModel`, `EchoDelayedReplyStore`, `EchoDelayedReplyNotificationScheduler`, `PushDeviceTokenStore`, echo delayed reply notification/push/dispatch checks, deployed run `20260618-deployed-push-device-token-contract-rerun-205018`, accepted dispatch run `20260618-deployed-echo-dispatch-contract-accepted-211732` | APNs provider delivery, true-device voice/notification acceptance |",
     "| 档案照片 | implemented with sync error recovery | yes | Archive photo entry smoke, `archive-sync-error-recovery-check.swift` | true-device photo acceptance |",
     "| 档案视频 | hidden candidate shell | no | archive media readiness guard, release matrix | picker/compression/storage/backend policy, true-device video picker acceptance |",
@@ -69,6 +69,7 @@ for row in requiredRows {
 
 let requiredStatuses = [
     "implemented",
+    "implemented with production voice SDK configuration gate",
     "partially implemented",
     "implemented ten-round/adaptive policy with persisted in-app state, local notification, deployed backend device-token registration, deployed backend delayed-reply persistence, and deployed backend dispatch-due contract",
     "hidden candidate",
@@ -99,6 +100,9 @@ assertContains(coverage, "本地 FastAPI 后端 smoke：accepted", "coverage mat
 assertContains(coverage, "release-like FastAPI/Postgres 后端验收：accepted", "coverage matrix should mark release-like Postgres backend as accepted")
 assertContains(coverage, "线上/公网后端验收：accepted for simulator release-like scope", "coverage matrix should mark simulator remote backend as accepted")
 assertContains(coverage, "真机验收：not accepted", "coverage matrix should mark true-device as not accepted")
+assertContains(coverage, "生产语音 SDK key now resolves through build settings", "coverage matrix should document production voice SDK config injection")
+assertContains(coverage, "run-true-device-voice-preflight.sh", "coverage matrix should reference true-device voice preflight")
+assertContains(coverage, "production voice quality is still not accepted", "coverage matrix should preserve production voice quality external gate")
 assertContains(coverage, "the old third-turn default policy has been superseded", "coverage matrix should document superseded Echo policy")
 assertContains(coverage, "In-app state, local notification, device-token registration, delayed-reply backend persistence, and the `POST /echo/delayed-replies/dispatch-due` ready-for-provider contract are implemented", "coverage matrix should document implemented Echo notification scope")
 assertContains(coverage, "20260618-deployed-push-device-token-contract-rerun-205018", "coverage matrix should record latest deployed push token acceptance")

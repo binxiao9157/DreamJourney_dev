@@ -8,9 +8,9 @@ Scope: PRD P0 真机验收与后端验收就绪包。
 
 ## Status
 
-当前状态是 **真机验收就绪**，并且 **公网后端模拟器 release-like 验收已通过**。
+当前状态是 **真机验收前置就绪到编译层**，并且 **公网后端模拟器 release-like 验收已通过**。
 
-这不是“真机已验收”，也不是 APNs 真机通知已验收。
+这不是“真机已验收”，也不是 APNs 真机通知已验收，也不是生产语音 SDK 质量已验收。
 
 原因：
 
@@ -18,7 +18,9 @@ Scope: PRD P0 真机验收与后端验收就绪包。
 - 部署后的 FastAPI/Postgres 后端已经通过 release-like 模拟器验收，包括 archive/care/family、push-token、delayed-reply persistence，以及 `POST /echo/delayed-replies/dispatch-due` 服务端待投递合同。
 - 已接受的部署后端验收 run：`20260618-deployed-echo-dispatch-contract-accepted-211732`。
 - 该 run 验证了 `echoDelayedReplyDispatchState=readyForProvider` 和 `echoDelayedReplyProviderDeliveryAttempted=false`，但没有声明 APNs provider delivery 或真机通知到达。
-- 真机验收仍待用户提供 Apple 签名/设备操作和系统权限弹窗确认。
+- 真机已可被 Xcode 识别为 `platform:iOS` 设备；iPhoneOS 不签名编译已通过。
+- 当前真机安装/运行被无效 Apple Development 签名证书拦截，仍待用户刷新证书或切换有效 Team/证书。
+- 生产语音 SDK 运行验收仍待真实 VolcEngine 配置注入当前构建环境，并在真机采集麦克风、ASR、TTS、前后台切换和 SDK 错误证据。
 - 在真机未执行前，不能声明真机已验收；在 APNs provider delivery 未执行前，不能声明远程推送通知完整验收。
 
 ## Source Of Truth
@@ -28,7 +30,7 @@ Scope: PRD P0 真机验收与后端验收就绪包。
 - Core simulator regression: `tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh`。
 - Backend environment regression: `tmp/visual-qa/prd-stitch-ui/run-backend-env-smoke.sh`。
 
-## Backend Configuration
+## Backend And Voice Configuration
 
 真实后端配置只能通过本地配置或环境变量注入，不要把真实 token 提交。
 
@@ -46,6 +48,24 @@ Rules:
 - `DreamJourney/Config/Backend.local.xcconfig` 已在 `.gitignore` 中忽略。
 - `DREAMJOURNEY_BACKEND_BASE_URL` 和 `DREAMJOURNEY_BACKEND_API_TOKEN` 也可以通过 smoke 脚本环境变量传入。
 - `DREAMJOURNEY_BACKEND_API_TOKEN` 为空时，`run-backend-env-smoke.sh` 必须失败，避免误用无鉴权环境。
+
+生产语音 SDK 配置同样只能通过本地配置、环境变量或 xcodebuild build setting 注入，不要把真实 key 提交。
+
+Recommended local file:
+
+```xcconfig
+// DreamJourney/Config/VoiceSDK.local.xcconfig
+VOLCENGINE_APP_ID = your-real-volcengine-app-id
+VOLCENGINE_APP_KEY = your-real-volcengine-app-key
+VOLCENGINE_APP_TOKEN = your-real-volcengine-app-token
+```
+
+Rules:
+
+- `DreamJourney/Config/VoiceSDK.example.xcconfig` 只保留示例占位值。
+- `DreamJourney/Config/VoiceSDK.local.xcconfig` 已在 `.gitignore` 中忽略。
+- `VolcEngineAppID`、`VolcEngineAppKey` 和 `VolcEngineAppToken` 在 `Info.plist` 中通过 `$(VOLCENGINE_APP_ID)`、`$(VOLCENGINE_APP_KEY)`、`$(VOLCENGINE_APP_TOKEN)` 解析。
+- `DialogEngineManager` 会在生产语音 SDK 配置缺失或仍为占位值时提前失败，不继续启动 `SpeechEngineToB`。
 
 ## Backend Acceptance
 
@@ -90,6 +110,33 @@ If this fails:
 ## True Device Acceptance
 
 真机验收必须由用户提供设备和签名条件后执行，模拟器不能替代。
+
+Preflight command:
+
+```bash
+cd /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+DREAMJOURNEY_BACKEND_BASE_URL="https://your-backend.example.com" \
+DREAMJOURNEY_BACKEND_API_TOKEN="your-real-token" \
+VOLCENGINE_APP_ID="your-real-volcengine-app-id" \
+VOLCENGINE_APP_KEY="your-real-volcengine-app-key" \
+VOLCENGINE_APP_TOKEN="your-real-volcengine-app-token" \
+tmp/visual-qa/prd-stitch-ui/run-true-device-voice-preflight.sh
+```
+
+Expected preflight behavior:
+
+- 在线物理 iPhone/iPad 可被 `xcodebuild -showdestinations` 发现；脚本同时保存 `devicectl` 和 `xctrace` 结果作为辅助诊断。
+- 后端 URL/token 和生产语音 SDK key 均已设置且不是占位值。
+- `NSMicrophoneUsageDescription`、`NSSpeechRecognitionUsageDescription`、`NSPhotoLibraryUsageDescription`、`NSCameraUsageDescription` 均存在。
+- 可选真机构建通过，并生成 `tmp/visual-qa/prd-stitch-ui/true-device-acceptance/<run-id>/report.md`。
+
+Current 2026-06-18 evidence:
+
+- Device detection smoke: `tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260618-device-detection-smoke/report.md`
+- Device source: `xcodebuild -showdestinations`
+- Device destination: `id=00008150-001402D60A04401C`
+- iPhoneOS no-sign compile: passed, log at `tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260618-ios-device-compile-nosign/ios-device-nosign-build.log`
+- Signed physical-device build: blocked by invalid signing certificate `Apple Development: xbnjupt@163.com (BLVP6JU3M3)`, log at `tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260618-device-build-smoke/device-build.log`
 
 Required privacy keys in `DreamJourney/Resources/Info.plist`:
 
@@ -148,6 +195,7 @@ swift tmp/visual-qa/prd-stitch-ui/device-backend-readiness-check.swift /Users/yx
 swift tmp/visual-qa/prd-stitch-ui/backend-build-config-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/backend-env-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/backend-family-acceptance-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/true-device-voice-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 ```
@@ -156,6 +204,7 @@ These prove:
 
 - 本地真实 token 不会被提交。
 - 后端 URL/token 通过 build setting 或环境变量注入。
+- 生产语音 SDK key 通过 build setting 或环境变量注入。
 - 关键隐私权限声明仍在。
 - 后端 smoke 和档案到回响核心 smoke 仍可被发现。
 - PRD 验收状态不会被误写为“真机已完成”。
@@ -165,6 +214,7 @@ These prove:
 需要停下来找用户的情况：
 
 - 要切换新的真实 `DREAMJOURNEY_BACKEND_BASE_URL` / `DREAMJOURNEY_BACKEND_API_TOKEN`，或当前部署后端无法访问。
+- 要执行生产语音 SDK 验收但缺少 `VOLCENGINE_APP_ID` / `VOLCENGINE_APP_KEY` / `VOLCENGINE_APP_TOKEN`。
 - 用户提供真机、Apple 开发者签名、证书或设备操作之前，不能跑真机验收。
 - 如果后端契约需要改字段、迁移数据或删除数据，需要用户确认产品/兼容性取舍。
 - 如果要公开家庭管理、账号注销、医生联系、星辰/静默/阳光模式入口，需要用户确认发布边界。

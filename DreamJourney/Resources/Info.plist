@@ -85,10 +85,10 @@
 	<key>VoiceCloneAPIKey</key>
 	<string>YOUR_VOICECLONE_API_KEY</string>
 	<key>VolcEngineAppID</key>
-	<string>YOUR_VOLCENGINE_APP_ID</string>
+	<string>$(VOLCENGINE_APP_ID)</string>
 	<key>VolcEngineAppKey</key>
-	<string>YOUR_VOLCENGINE_APP_KEY</string>
+	<string>$(VOLCENGINE_APP_KEY)</string>
 	<key>VolcEngineAppToken</key>
-	<string>YOUR_VOLCENGINE_APP_TOKEN</string>
+	<string>$(VOLCENGINE_APP_TOKEN)</string>
 </dict>
 </plist>

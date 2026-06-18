@@ -1,0 +1,7 @@
+// Copy to VoiceSDK.local.xcconfig for local true-device or release builds.
+// Keep VoiceSDK.local.xcconfig out of git.
+// You may also pass these as xcodebuild build settings or environment variables.
+
+VOLCENGINE_APP_ID = YOUR_VOLCENGINE_APP_ID
+VOLCENGINE_APP_KEY = YOUR_VOLCENGINE_APP_KEY
+VOLCENGINE_APP_TOKEN = YOUR_VOLCENGINE_APP_TOKEN

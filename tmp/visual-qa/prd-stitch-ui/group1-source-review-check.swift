@@ -37,11 +37,15 @@ for placeholder in [
     "YOUR_AMAP_KEY",
     "YOUR_DEEPSEEK_API_KEY",
     "YOUR_VOICECLONE_API_KEY",
-    "YOUR_VOLCENGINE_APP_ID",
-    "YOUR_VOLCENGINE_APP_KEY",
-    "YOUR_VOLCENGINE_APP_TOKEN",
 ] {
     assertContains(plist, placeholder, "Info.plist should keep placeholder \(placeholder)")
+}
+for buildSetting in [
+    "$(VOLCENGINE_APP_ID)",
+    "$(VOLCENGINE_APP_KEY)",
+    "$(VOLCENGINE_APP_TOKEN)",
+] {
+    assertContains(plist, buildSetting, "Info.plist should inject voice SDK config through build setting \(buildSetting)")
 }
 assertContains(plist, "<key>DreamJourneyBackendBaseURL</key>", "backend base URL key")
 assertContains(plist, "<string>$(DREAMJOURNEY_BACKEND_BASE_URL)</string>", "backend URL should resolve from build setting")
@@ -87,5 +91,8 @@ for source in [
 }
 assertContains(project, "DREAMJOURNEY_BACKEND_BASE_URL = \"http://127.0.0.1:3100\";", "backend base URL build setting should default to local")
 assertContains(project, "DREAMJOURNEY_BACKEND_API_TOKEN = YOUR_DREAMJOURNEY_BACKEND_API_TOKEN;", "backend token build setting should stay placeholder")
+assertContains(project, "VOLCENGINE_APP_ID = YOUR_VOLCENGINE_APP_ID;", "VolcEngine app id build setting should default to placeholder")
+assertContains(project, "VOLCENGINE_APP_KEY = YOUR_VOLCENGINE_APP_KEY;", "VolcEngine app key build setting should default to placeholder")
+assertContains(project, "VOLCENGINE_APP_TOKEN = YOUR_VOLCENGINE_APP_TOKEN;", "VolcEngine token build setting should default to placeholder")
 
 print("Group 1 source review checks passed")

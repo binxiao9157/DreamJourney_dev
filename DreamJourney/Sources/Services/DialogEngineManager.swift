@@ -141,6 +141,7 @@ final class DialogEngineManager: NSObject {
 }
 
 enum DialogEngineError: LocalizedError {
+    case productionConfigurationMissing
     case initFailed(code: Int)
     case startFailed(code: Int)
     case audioSessionFailed
@@ -148,6 +149,8 @@ enum DialogEngineError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
+        case .productionConfigurationMissing:
+            return "生产语音服务尚未完成配置，请先注入火山语音 AppID、AppKey 和 Token"
         case .initFailed(let code):
             return "语音引擎初始化失败 (错误码: \(code))"
         case .startFailed(let code):
@@ -326,6 +329,24 @@ final class DialogEngineManager: NSObject {
 
         /// 静音超时时长（秒），无语音输入超过此时间自动结束对话
         var silenceTimeoutSeconds: TimeInterval = 60
+
+        var isProductionReady: Bool {
+            Self.isConfiguredValue(appID) &&
+                Self.isConfiguredValue(appKey) &&
+                Self.isConfiguredValue(token)
+        }
+
+        private static func isConfiguredValue(_ value: String) -> Bool {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return false }
+            guard !trimmed.hasPrefix("$(") else { return false }
+            let placeholders = [
+                "YOUR_VOLCENGINE_APP_ID",
+                "YOUR_VOLCENGINE_APP_KEY",
+                "YOUR_VOLCENGINE_APP_TOKEN",
+            ]
+            return !placeholders.contains(trimmed)
+        }
     }
 
     /// 当前配置
@@ -395,6 +416,14 @@ final class DialogEngineManager: NSObject {
         }
 
         isSettingUp = true
+
+        guard config.isProductionReady else {
+            print("[DialogEngine] ❌ 生产语音 SDK 配置缺失或仍为占位值")
+            DDLogError("[DialogEngine] 生产语音 SDK 配置缺失或仍为占位值")
+            isSettingUp = false
+            delegate?.onError(error: DialogEngineError.productionConfigurationMissing)
+            return
+        }
 
         // 准备环境（首次调用）
         SpeechEngine.prepareEnvironment()
@@ -1434,13 +1463,14 @@ extension DialogEngineManager: SpeechEngineDelegate {
     private func buildArchiveContext() -> String {
         let context = DigitalHumanContextStore.shared.current
         guard shouldExposeArchiveContext(for: context) else { return "" }
-        MemoryArchiveRepository.shared.contextSnapshot().promptSection
+        return MemoryArchiveRepository.shared.contextSnapshot().promptSection
     }
 }
 
 // MARK: - Error
 
 enum DialogEngineError: LocalizedError {
+    case productionConfigurationMissing
     case initFailed(code: Int)
     case startFailed(code: Int)
     case audioSessionFailed
@@ -1448,6 +1478,8 @@ enum DialogEngineError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
+        case .productionConfigurationMissing:
+            return "生产语音服务尚未完成配置，请先注入火山语音 AppID、AppKey 和 Token"
         case .initFailed(let code):
             return "语音引擎初始化失败 (错误码: \(code))"
         case .startFailed(let code):
