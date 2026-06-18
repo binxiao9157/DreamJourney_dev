@@ -13,6 +13,7 @@ enum DJFeature: String, CaseIterable {
     case familySpace
     case legalCenter
     case accountDeletion
+    case accountPasswordChange
     case careDashboard
     case careDoctorContact
 }

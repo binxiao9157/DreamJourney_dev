@@ -53,7 +53,7 @@ let requiredRows = [
     "| 档案录音 | hidden candidate | no | archive media smoke | true-device audio acceptance |",
     "| 档案文字描述 | implemented | yes | archive smoke | maintain |",
     "| 时间信件 | hidden candidate | no | archive media smoke | delivery policy |",
-    "| 个人资料管理 | partially implemented | yes | `ProfileSettingsViewController` | avatar/name/gender/region/phone plus password change backend contract |",
+    "| 个人资料管理 | partially implemented; password change hidden shell | yes for profile fields; no for password change | `ProfileSettingsViewController`, `ProfilePasswordChangeViewController` | backend `/auth/password` implementation, auth/security review, true-device acceptance |",
     "| 心境追踪 | implemented fallback | yes | Profile care checks | lifecycle policy |",
     "| 家人管理 | hidden candidate | no | family persona smoke | product exposure decision |",
     "| 法律法规 | implemented | yes | `ProfileLegalViewController` | legal review |",
@@ -99,7 +99,9 @@ assertContains(coverage, "线上/公网后端验收：accepted for simulator rel
 assertContains(coverage, "真机验收：not accepted", "coverage matrix should mark true-device as not accepted")
 assertContains(coverage, "the old third-turn default policy has been superseded", "coverage matrix should document superseded Echo policy")
 assertContains(coverage, "in-app state, local notification, and push notification are all required", "coverage matrix should document updated Echo notification scope")
-assertContains(coverage, "avatar, name, gender, region, phone, and in-app password change", "coverage matrix should document updated profile scope")
+assertContains(coverage, "name/gender/region validation", "coverage matrix should document updated profile scope")
+assertContains(coverage, "password change hidden shell", "coverage matrix should document password shell state")
+assertContains(coverage, "`profile-password-change-check.swift`", "coverage matrix should reference password shell guard")
 assertContains(coverage, "No hidden PRD feature is public by default", "coverage matrix should preserve release gating policy")
 assertContains(coverage, "## Hidden Candidate Release Matrix", "coverage matrix should link hidden candidates to release matrix")
 assertContains(coverage, "docs/superpowers/status/2026-06-17-release-feature-matrix.md", "coverage matrix should reference release feature matrix")

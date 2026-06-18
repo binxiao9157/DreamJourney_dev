@@ -25,11 +25,28 @@ final class ProfileSettingsViewController: UIViewController {
     private let statusLabel = UILabel()
     private let avatarEditButton = UIButton(type: .system)
     private let saveButton = UIButton(type: .system)
+    private let featureFlags: FeatureFlagService
     private let maxNameLength = 24
     private let maxRegionLength = 32
     private let allowedGenderValues = ["男", "女", "不便透露"]
 
-    init() {
+    private var isProfileHiddenBranchesEnabled: Bool {
+        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        return ProcessInfo.processInfo.arguments.contains(ProfileFamilyPersonaReleaseReadiness.hiddenBranchesLaunchArgument)
+        #else
+        return false
+        #endif
+    }
+
+    private var isPasswordChangeVisible: Bool {
+        ProfileFamilyPersonaReleaseReadiness.isPasswordChangeVisible(
+            isPasswordChangeEnabled: featureFlags.isEnabled(.accountPasswordChange),
+            isHiddenBranchesEnabled: isProfileHiddenBranchesEnabled
+        )
+    }
+
+    init(featureFlags: FeatureFlagService = .shared) {
+        self.featureFlags = featureFlags
         super.init(nibName: nil, bundle: nil)
         hidesBottomBarWhenPushed = true
     }
@@ -96,6 +113,9 @@ final class ProfileSettingsViewController: UIViewController {
     private func buildContent() {
         contentStack.addArrangedSubview(makeHeader())
         contentStack.addArrangedSubview(makeEditableCard())
+        if isPasswordChangeVisible {
+            contentStack.addArrangedSubview(makeSecurityCard())
+        }
         contentStack.addArrangedSubview(statusLabel)
         contentStack.addArrangedSubview(saveButton)
 
@@ -177,6 +197,55 @@ final class ProfileSettingsViewController: UIViewController {
             avatarImageView.centerYAnchor.constraint(equalTo: avatarContainer.centerYAnchor),
             avatarImageView.widthAnchor.constraint(equalToConstant: 38),
             avatarImageView.heightAnchor.constraint(equalToConstant: 38),
+        ])
+
+        return card
+    }
+
+    private func makeSecurityCard() -> UIView {
+        let card = DJComponentFactory.cardView(radius: DJDesignTokens.Radius.large)
+        card.layer.borderWidth = 1
+        card.layer.borderColor = DJDesignTokens.Color.divider.withAlphaComponent(0.5).cgColor
+
+        let button = UIControl()
+        button.isAccessibilityElement = true
+        button.accessibilityIdentifier = "profile-settings-password-change-row"
+        button.accessibilityLabel = "修改密码"
+        button.accessibilityTraits = .button
+        button.addTarget(self, action: #selector(passwordChangeTapped), for: .touchUpInside)
+
+        let titleLabel = makeLabel(
+            text: "修改密码",
+            font: DJDesignTokens.Font.body(15),
+            color: DJDesignTokens.Color.textPrimary
+        )
+
+        let chevron = UIImageView(image: UIImage(systemName: "chevron.right"))
+        chevron.tintColor = DJDesignTokens.Color.textTertiary
+        chevron.contentMode = .scaleAspectFit
+
+        button.addSubview(titleLabel)
+        button.addSubview(chevron)
+        card.addSubview(button)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        chevron.translatesAutoresizingMaskIntoConstraints = false
+
+        NSLayoutConstraint.activate([
+            button.topAnchor.constraint(equalTo: card.topAnchor),
+            button.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
+            button.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            button.bottomAnchor.constraint(equalTo: card.bottomAnchor),
+            button.heightAnchor.constraint(greaterThanOrEqualToConstant: 58),
+
+            titleLabel.leadingAnchor.constraint(equalTo: button.leadingAnchor),
+            titleLabel.centerYAnchor.constraint(equalTo: button.centerYAnchor),
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: chevron.leadingAnchor, constant: -12),
+
+            chevron.trailingAnchor.constraint(equalTo: button.trailingAnchor),
+            chevron.centerYAnchor.constraint(equalTo: button.centerYAnchor),
+            chevron.widthAnchor.constraint(equalToConstant: 14),
+            chevron.heightAnchor.constraint(equalToConstant: 14),
         ])
 
         return card
@@ -414,6 +483,10 @@ final class ProfileSettingsViewController: UIViewController {
         )
         alert.addAction(UIAlertAction(title: "知道了", style: .default))
         present(alert, animated: true)
+    }
+
+    @objc private func passwordChangeTapped() {
+        navigationController?.pushViewController(ProfilePasswordChangeViewController(), animated: true)
     }
 }
 

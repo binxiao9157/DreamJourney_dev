@@ -24,7 +24,7 @@ Head at creation: `790f029 docs: add prd ui continuation plan`
 | 档案录音 | hidden candidate | no | archive media smoke | true-device audio acceptance |
 | 档案文字描述 | implemented | yes | archive smoke | maintain |
 | 时间信件 | hidden candidate | no | archive media smoke | delivery policy |
-| 个人资料管理 | partially implemented | yes | `ProfileSettingsViewController` | avatar/name/gender/region/phone plus password change backend contract |
+| 个人资料管理 | partially implemented; password change hidden shell | yes for profile fields; no for password change | `ProfileSettingsViewController`, `ProfilePasswordChangeViewController` | backend `/auth/password` implementation, auth/security review, true-device acceptance |
 | 心境追踪 | implemented fallback | yes | Profile care checks | lifecycle policy |
 | 家人管理 | hidden candidate | no | family persona smoke | product exposure decision |
 | 法律法规 | implemented | yes | `ProfileLegalViewController` | legal review |
@@ -35,7 +35,7 @@ Head at creation: `790f029 docs: add prd ui continuation plan`
 
 Echo waiting reply note: the old third-turn default policy has been superseded. PRD now says one user speech plus one AI reply counts as one round; the default should wait after 10 rounds; emotion/content signals can trigger earlier; delay should be 5-10 minutes; and in-app state, local notification, and push notification are all required.
 
-Profile settings note: nickname validation, inline save states, local persistence, and backend-ready sync fallback are covered by `profile-settings-save-state-check.swift`. The row remains `partially implemented` because the updated PRD now requires avatar, name, gender, region, phone, and in-app password change, with final backend/security contracts still needed.
+Profile settings note: name/gender/region validation, inline save states, local persistence, and backend-ready sync fallback are covered by `profile-settings-save-state-check.swift` and `profile-account-fields-check.swift`. Password change hidden shell and the iOS `/auth/password` client contract are covered by `profile-password-change-check.swift`; it remains hidden until backend/security and true-device acceptance are complete.
 
 ## External Acceptance Boundary
 

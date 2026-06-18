@@ -67,6 +67,7 @@ let hiddenByDefault: Set<String> = [
     "familyManagement",
     "familySpace",
     "accountDeletion",
+    "accountPasswordChange",
     "careDoctorContact",
 ]
 
@@ -112,7 +113,10 @@ assertContains(profile, "rows.append(.logout)", "logout should remain a stable p
 
 assertContains(settings, "ProfileSettingsViewController", "profile settings page must exist")
 assertContains(settings, "保存", "profile settings page must provide save action")
-assertNotContains(settings, "密码", "password change must stay hidden")
+assertContains(profileReadiness, "isPasswordChangeVisible", "password change must use release readiness visibility contract")
+assertContains(settings, "isPasswordChangeVisible", "password change must use an explicit visibility gate")
+assertContains(settings, "featureFlags.isEnabled(.accountPasswordChange)", "password change must be feature gated")
+assertContains(settings, "ProfileFamilyPersonaReleaseReadiness.hiddenBranchesLaunchArgument", "password change hidden branch should use shared launch argument")
 
 assertContains(legal, "ProfileLegalViewController", "legal center page must exist")
 assertContains(legal, "AI 辅助说明", "legal center must cover AI assistance")
@@ -122,7 +126,7 @@ for label in ["记忆档案", "回响", "我的", "添加文字描述", "选择�
     assertContains(matrix, label, "release matrix must document public label \(label)")
 }
 
-for label in ["录入语音", "录入时间信件", "家人管理", "注销账户", "立即通话"] {
+for label in ["录入语音", "录入时间信件", "家人管理", "注销账户", "修改密码", "立即通话"] {
     assertContains(matrix, label, "release matrix must document hidden label \(label)")
 }
 
@@ -138,6 +142,7 @@ let hiddenDecisionRows = [
     "| family management public release | `DJFeature.familyManagement` or `DJEnableProfileHiddenBranches` | no | invitation/permission model, backend membership contract, privacy copy | `profile-family-persona-switcher-check.swift` |",
     "| care dashboard expansion | aggregate `DJFeature.careDashboard` is public; intervention/contact expansion stays behind `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | aggregate only | family-facing copy, alert thresholds, backend persistence, true-device acceptance | `elder-care-dashboard-check.swift`, backend acceptance |",
     "| account deletion execution | `DJFeature.accountDeletion` or `DJEnableProfileHiddenBranches` safety shell only | no | compliance policy, cooling-off period, backend deletion/export contract | `profile-safety-flow-check.swift` |",
+    "| account password change | `DJFeature.accountPasswordChange` or `DJEnableProfileHiddenBranches` | no | backend `/auth/password` implementation, auth/security review, true-device acceptance | `profile-password-change-check.swift`, release regression |",
     "| doctor contact / intervention execution | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | no | real escalation provider, emergency disclaimers, backend submission contract | `profile-care-escalation-contract-check.swift`, `profile-care-escalation-backend-boundary-check.swift` |",
     "| care escalation draft | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` local draft shell only | no | product decision to promote draft, backend submit contract, clinical/legal review | `profile-care-escalation-contract-check.swift`, `run-profile-care-escalation-boundary-smoke.sh` |",
     "| sunlight/star/silent lifecycle transition controls | hidden family rows / local QA context only | no | product/legal policy for lifecycle transitions, consent copy, recovery rules | `digital-human-mode-management-check.swift`, `digital-human-mode-lifecycle-check.swift` |",

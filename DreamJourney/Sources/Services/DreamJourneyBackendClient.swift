@@ -35,6 +35,10 @@ final class DreamJourneyBackendClient {
         hasExplicitBaseURL || apiToken != nil
     }
 
+    var isPasswordChangeConfigured: Bool {
+        hasExplicitBaseURL || apiToken != nil
+    }
+
     private init() {
         let configured = Bundle.main.object(forInfoDictionaryKey: "DreamJourneyBackendBaseURL") as? String
         let raw = configured?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -57,6 +61,20 @@ final class DreamJourneyBackendClient {
 
     func upsertUser(phone: String, nickname: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
         requestJSON(path: "/auth/login", method: .post, payload: ["phone": phone, "nickname": nickname], completion: completion)
+    }
+
+    func changePassword(
+        userId: String,
+        oldPassword: String,
+        newPassword: String,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        requestJSON(
+            path: "/auth/password",
+            method: .post,
+            payload: ["userId": userId, "oldPassword": oldPassword, "newPassword": newPassword],
+            completion: completion
+        )
     }
 
     func listArchiveItems(userId: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {

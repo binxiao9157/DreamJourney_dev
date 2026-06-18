@@ -38,6 +38,17 @@ enum ProfileFamilyPersonaReleaseReadiness {
         releaseCopy: unavailableTitle
     )
 
+    static let passwordChangeCapability = Capability(
+        title: "修改密码",
+        feature: .accountPasswordChange,
+        stage: .hiddenReady(
+            feature: .accountPasswordChange,
+            qaLaunchArgument: hiddenBranchesLaunchArgument,
+            reason: "App 内修改密码已建立页面壳层和后端合同，但默认发布态不展示，避免在真实认证、安全审计和后端接口验收前误承诺。"
+        ),
+        releaseCopy: "当前环境暂不支持修改密码"
+    )
+
     static func isFamilyManagementRowVisible(
         isFamilyManagementEnabled: Bool,
         isHiddenBranchesEnabled: Bool
@@ -50,5 +61,12 @@ enum ProfileFamilyPersonaReleaseReadiness {
         isHiddenBranchesEnabled: Bool
     ) -> Bool {
         isHiddenBranchesEnabled || isFamilySpaceEnabled
+    }
+
+    static func isPasswordChangeVisible(
+        isPasswordChangeEnabled: Bool,
+        isHiddenBranchesEnabled: Bool
+    ) -> Bool {
+        isHiddenBranchesEnabled || isPasswordChangeEnabled
     }
 }
