@@ -50,12 +50,15 @@
 
 - Endpoint: `POST /echo/delayed-replies`
 - Payload: `userId`、`delayedReplyId`、`deliverAt`、`minutes`、`trigger`
-- 当前 iOS 侧为 backend-ready client；请求失败不影响 App 内等待状态和本地通知兜底。
-- APNs、device token 注册、服务端定时投递与真机通知到达仍是后端/真机验收门。
+- Response: `status=scheduled`，并回传包含 `delayedReplyId`、`deliverAt`、`minutes`、`trigger`、`deliveryState` 的 `item`。
+- 当前 iOS 侧为 backend-ready client；后端代码已补 `POST /echo/delayed-replies` 和 `GET /echo/delayed-replies/{userId}` 的接收/持久化合同。
+- 请求失败不影响 App 内等待状态和本地通知兜底。
+- 部署环境 route parity、APNs、device token 注册、服务端定时投递与真机通知到达仍是后端/真机验收门。
 
 仍需工程继续补齐：
 
-- 服务端 `/echo/delayed-replies` 的持久化、调度队列与 APNs 投递实现。
+- 部署服务端 `/echo/delayed-replies` 持久化合同。
+- 调度队列与 APNs 投递实现。
 - 真机麦克风与通知验收。
 
 ## 验证

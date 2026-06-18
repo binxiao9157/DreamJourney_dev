@@ -38,7 +38,7 @@ Echo waiting reply note: the old third-turn default policy has been superseded. 
 
 Profile settings note: name/gender/region validation, inline save states, local persistence, and backend-ready sync fallback are covered by `profile-settings-save-state-check.swift` and `profile-account-fields-check.swift`. Password change hidden shell and the iOS `/auth/password` client contract are covered by `profile-password-change-check.swift`; it remains hidden until backend/security and true-device acceptance are complete.
 
-Backend contract note: iOS/backend parity is tracked in `docs/superpowers/status/2026-06-18-backend-contract-gap-matrix.md`. Current confirmed gaps include `/echo/delayed-replies`, `/profile`, and `/auth/password`; archive ownership and care snapshots have local/backend support but still need selected-environment deployment parity and richer state fixtures before full PRD completion.
+Backend contract note: iOS/backend parity is tracked in `docs/superpowers/status/2026-06-18-backend-contract-gap-matrix.md`. Current confirmed gaps include `/profile` and `/auth/password`; `/echo/delayed-replies` is implemented in backend code but still needs selected-environment deployment parity, APNs/device token delivery, and true-device notification acceptance. Archive ownership and care snapshots have local/backend support but still need selected-environment deployment parity and richer state fixtures before full PRD completion.
 
 ## External Acceptance Boundary
 

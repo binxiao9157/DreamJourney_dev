@@ -47,7 +47,8 @@ for rowLabel in [
 
 for state in [
     "backend route missing",
-    "backend/API token/APNs needed",
+    "backend route present locally",
+    "deployment/APNs/device token needed",
     "backend needed or /auth/login fallback",
     "backend/security needed",
     "backend field migration needed",
@@ -63,6 +64,8 @@ assertContains(client, "requestJSON(path: \"/care/snapshots/latest/\\(pathCompon
 assertContains(userManager, "DreamJourneyBackendClient.shared.upsertUser", "Profile update should document auth login fallback")
 
 assertContains(backendMain, "@app.post(\"/auth/login\")", "backend should expose auth login")
+assertContains(backendMain, "@app.post(\"/echo/delayed-replies\")", "backend should expose echo delayed reply schedule")
+assertContains(backendMain, "@app.get(\"/echo/delayed-replies/{user_id}\")", "backend should expose echo delayed reply list")
 assertContains(backendMain, "@app.post(\"/archive/items\")", "backend should expose archive item create")
 assertContains(backendMain, "@app.get(\"/archive/items/{user_id}\")", "backend should expose archive item list")
 assertContains(backendMain, "@app.get(\"/care/snapshots/latest/{user_id}\")", "backend should expose latest care snapshot")
