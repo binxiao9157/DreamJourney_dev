@@ -113,6 +113,7 @@ for guard in \
   phase0-backend-alignment-check.swift \
   release-like-backend-acceptance-check.swift \
   backend-env-smoke-check.swift \
+  backend-contract-gap-check.swift \
   profile-settings-save-state-check.swift \
   profile-account-fields-check.swift \
   profile-password-change-check.swift \

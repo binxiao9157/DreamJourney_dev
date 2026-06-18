@@ -31,11 +31,14 @@ Head at creation: `790f029 docs: add prd ui continuation plan`
 | 账号退出 | implemented | yes | `ProfileViewController` | maintain |
 | 账号注销 | hidden blocked shell | no | safety check | compliance/backend contract |
 | 长辈关怀 | implemented aggregate with loading/empty/stale/failed states | yes | elder dashboard check, profile care public placeholder check | real backend acceptance |
+| 后端合同闭环 | partially implemented; contract gaps pinned | mixed | `2026-06-18-backend-contract-gap-matrix.md`, `backend-contract-gap-check.swift` | implement missing backend routes or keep backend-ready features hidden |
 | 生死转换机制 | hidden boundary | no | mode lifecycle checks | product/legal policy |
 
 Echo waiting reply note: the old third-turn default policy has been superseded. PRD now says one user speech plus one AI reply counts as one round; the default should wait after 10 rounds; emotion/content signals can trigger earlier; delay should be 5-10 minutes; and in-app state, local notification, and push notification are all required.
 
 Profile settings note: name/gender/region validation, inline save states, local persistence, and backend-ready sync fallback are covered by `profile-settings-save-state-check.swift` and `profile-account-fields-check.swift`. Password change hidden shell and the iOS `/auth/password` client contract are covered by `profile-password-change-check.swift`; it remains hidden until backend/security and true-device acceptance are complete.
+
+Backend contract note: iOS/backend parity is tracked in `docs/superpowers/status/2026-06-18-backend-contract-gap-matrix.md`. Current confirmed gaps include `/echo/delayed-replies`, `/profile`, and `/auth/password`; archive ownership and care snapshots have local/backend support but still need selected-environment deployment parity and richer state fixtures before full PRD completion.
 
 ## External Acceptance Boundary
 
