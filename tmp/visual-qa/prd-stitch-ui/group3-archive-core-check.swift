@@ -32,6 +32,7 @@ func assertOrder(_ haystack: String, _ first: String, _ second: String, _ messag
 
 let options = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveCreationOption.swift")
 let archive = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift")
+let readiness = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveMediaReleaseReadiness.swift")
 let repository = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift")
 let item = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveItem.swift")
 let factory = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveItemFactory.swift")
@@ -46,7 +47,9 @@ assertContains(options, "var options: [MemoryArchiveCreationOption] = [\n       
 assertContains(options, "if isAudioUploadEnabled {\n            options.append(.audio)\n        }", "audio branch should require an explicit option flag")
 assertContains(options, "if isTimeLettersEnabled {\n            options.append(.timeLetter)\n        }", "time-letter branch should require an explicit option flag")
 
-assertContains(archive, "DJEnableArchiveHiddenBranches", "archive hidden branches need explicit UIQA launch argument")
+assertContains(readiness, "DJEnableArchiveHiddenBranches", "archive hidden branches need explicit UIQA launch argument")
+assertContains(archive, "MemoryArchiveMediaReleaseReadiness.hiddenBranchesLaunchArgument", "archive screen must use shared hidden branch launch argument")
+assertContains(archive, "MemoryArchiveMediaReleaseReadiness.isCreationVisible", "archive screen must use media release readiness contract")
 assertContains(archive, "FeatureFlagService.shared.isEnabled(.archiveAudioUpload)", "audio creation must be release gated")
 assertContains(archive, "FeatureFlagService.shared.isEnabled(.archiveRemoteFetch)", "remote archive fetch must be release gated")
 assertContains(archive, "FeatureFlagService.shared.isEnabled(.timeLetters)", "time-letter creation must be release gated")
@@ -57,7 +60,7 @@ assertContains(archive, "let secondaryTiles = makeSecondaryFeatureTiles()", "sec
 assertContains(archive, "guard !secondaryTiles.isEmpty else", "public archive grid should work without hidden secondary tiles")
 assertContains(archive, "case .audio:\n            guard isArchiveAudioCreationEnabled", "audio sheet route should be guarded")
 assertContains(archive, "case .timeLetter:\n            guard isTimeLetterCreationEnabled", "time-letter sheet route should be guarded")
-assertContains(archive, "case .video:\n            showToast(\"视频素材录入将在后续开放\"", "video route should stay unavailable")
+assertContains(archive, "case .video:\n            showToast(MemoryArchiveMediaReleaseReadiness.unavailableCopy(for: .video)", "video route should stay unavailable")
 
 assertContains(factory, "static func makeTextItem(note: String)", "text item factory")
 assertContains(factory, "static func makeTimeLetter(note: String)", "time-letter item factory")
@@ -114,3 +117,4 @@ assertContains(infoPlist, "寻梦环游需要使用麦克风来记录您的语�
 assertContains(project, "MemoryArchiveTextEntryViewController.swift in Sources", "text entry file should be in target")
 assertContains(project, "MemoryArchivePhotoEntryViewController.swift in Sources", "photo entry file should be in target")
 assertContains(project, "MemoryArchiveAudioRecorderViewController.swift in Sources", "audio recorder file should be in target")
+assertContains(project, "MemoryArchiveMediaReleaseReadiness.swift in Sources", "media readiness file should be in target")

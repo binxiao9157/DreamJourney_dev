@@ -41,6 +41,7 @@ func extractDefaultEnabledFeatures(from flags: String) -> Set<String> {
 
 let flags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let archive = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift")
+let readiness = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveMediaReleaseReadiness.swift")
 let archiveOptions = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveCreationOption.swift")
 let echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
 let profile = read("DreamJourney/Sources/Modules/Profile/ProfileViewController.swift")
@@ -84,7 +85,9 @@ for feature in hiddenByDefault {
 }
 
 assertContains(archiveOptions, "var options: [MemoryArchiveCreationOption] = [\n            .text,\n            .photo,\n        ]", "archive creation must default to text/photo only")
-assertContains(archive, "DJEnableArchiveHiddenBranches", "archive hidden branches need explicit QA launch argument")
+assertContains(readiness, "DJEnableArchiveHiddenBranches", "archive hidden branches need explicit QA launch argument")
+assertContains(archive, "MemoryArchiveMediaReleaseReadiness.hiddenBranchesLaunchArgument", "archive screen must use shared hidden branch launch argument")
+assertContains(archive, "MemoryArchiveMediaReleaseReadiness.isCreationVisible", "archive hidden creation branches must use media readiness contract")
 assertContains(archive, "FeatureFlagService.shared.isEnabled(.archiveAudioUpload)", "archive audio branch must be release gated")
 assertContains(archive, "FeatureFlagService.shared.isEnabled(.archiveRemoteFetch)", "archive remote fetch must be release gated")
 assertContains(archive, "FeatureFlagService.shared.isEnabled(.timeLetters)", "time-letter branch must be release gated")

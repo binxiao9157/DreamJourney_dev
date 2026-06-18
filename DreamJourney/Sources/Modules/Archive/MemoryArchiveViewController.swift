@@ -62,21 +62,11 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     private var isArchiveAudioCreationEnabled: Bool {
-        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
-        if isUIQAArchiveHiddenBranchesEnabled {
-            return true
-        }
-        #endif
-        return FeatureFlagService.shared.isEnabled(.archiveAudioUpload)
+        isArchiveCreationVisible(for: .audio)
     }
 
     private var isTimeLetterCreationEnabled: Bool {
-        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
-        if isUIQAArchiveHiddenBranchesEnabled {
-            return true
-        }
-        #endif
-        return FeatureFlagService.shared.isEnabled(.timeLetters)
+        isArchiveCreationVisible(for: .timeLetter)
     }
 
     private var isPersonaSettingsVisible: Bool {
@@ -90,10 +80,19 @@ final class MemoryArchiveViewController: UIViewController {
 
     private var isUIQAArchiveHiddenBranchesEnabled: Bool {
         #if UI_QA_SIMULATOR && targetEnvironment(simulator)
-        return ProcessInfo.processInfo.arguments.contains("DJEnableArchiveHiddenBranches")
+        return ProcessInfo.processInfo.arguments.contains(MemoryArchiveMediaReleaseReadiness.hiddenBranchesLaunchArgument)
         #else
         return false
         #endif
+    }
+
+    private func isArchiveCreationVisible(for kind: MemoryArchiveItemKind) -> Bool {
+        MemoryArchiveMediaReleaseReadiness.isCreationVisible(
+            for: kind,
+            isAudioUploadEnabled: FeatureFlagService.shared.isEnabled(.archiveAudioUpload),
+            isTimeLettersEnabled: FeatureFlagService.shared.isEnabled(.timeLetters),
+            isHiddenBranchesEnabled: isUIQAArchiveHiddenBranchesEnabled
+        )
     }
 
     private static let itemDateFormatter: DateFormatter = {
@@ -1690,7 +1689,7 @@ extension MemoryArchiveViewController: MemoryArchiveCreationSheetViewControllerD
             presentPhotoEntry()
         case .audio:
             guard isArchiveAudioCreationEnabled else {
-                showToast("语音素材录入将在后续开放", type: .info)
+                showToast(MemoryArchiveMediaReleaseReadiness.unavailableCopy(for: .audio), type: .info)
                 return
             }
             presentAudioEntry()
@@ -1698,7 +1697,7 @@ extension MemoryArchiveViewController: MemoryArchiveCreationSheetViewControllerD
             guard isTimeLetterCreationEnabled else { return }
             presentTextEntry(kind: .timeLetter)
         case .video:
-            showToast("视频素材录入将在后续开放", type: .info)
+            showToast(MemoryArchiveMediaReleaseReadiness.unavailableCopy(for: .video), type: .info)
         }
     }
 }

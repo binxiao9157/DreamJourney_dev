@@ -46,7 +46,7 @@ The app should preserve future routes for family space, elder care, sunlight/sil
 | P1 | 星辰/阳光/静默 business state | PRD says mode name is not displayed on Echo, but star relatives enable psychological guidance and mood tracking. | Hidden per-family mode management persists `sunlight/star/silent`; Echo/Profile now apply mode boundaries without exposing internal mode names. Public lifecycle policy remains pending. |
 | P1 | Account deletion flow | PRD lists account cancellation. Hidden destructive confirmation shell now exists without executing deletion. | `accountDeletion` hidden by default; status doc: `2026-06-18-profile-safety-flows.md`. |
 | P1 | Doctor contact / intervention flow | PRD describes L3/L4 intervention. Hidden safety notice now builds a local `关怀升级草稿` without dialing, uploading, or claiming medical support. | `careDoctorContact` hidden by default; real call/escalation service contract still pending. Status doc: `2026-06-18-profile-care-escalation-contract.md`. |
-| P1 | Audio/time-letter/video archive release readiness | PRD supports photos, video, recordings, text, and time letters. Text/photo are public; audio/time-letter are hidden; video is not available. | Feature flags keep unfinished routes hidden. |
+| P1 | Audio/time-letter/video archive release readiness | PRD supports photos, video, recordings, text, and time letters. Text/photo are public; audio/time-letter are hidden; video is not available. | Code contract added in `2026-06-18-archive-media-release-readiness.md`; audio/time-letter remain hidden until true-device permission/playback and product delivery rules are accepted. |
 | P2 | Visual refinements after Stitch updates | Current UI aligns to the last canvas, but Stitch is still changing. | Must rerun final visual QA after updates. |
 | P2 | Broader digital inheritance lifecycle | Silent/star transition, family confirmation, and inheritance policies are core innovation but not MVP-complete. | Needs product/security/legal decisions. |
 
@@ -95,7 +95,9 @@ The app should preserve future routes for family space, elder care, sunlight/sil
    - Replace the disabled draft-send action with a real contact contract only after backend/product/legal confirmation.
 
 5. **Archive media expansion**
+   - Status: release readiness contract added in `docs/superpowers/status/2026-06-18-archive-media-release-readiness.md`.
    - Promote audio/time-letter/video only when each has real persistence, permissions, and QA.
+   - Current boundary: text/photo public, audio/time-letter hidden behind `DJEnableArchiveHiddenBranches` or feature flags, video unavailable.
 
 ### P2
 

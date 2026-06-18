@@ -23,8 +23,11 @@ func assertNotContains(_ haystack: String, _ needle: String, _ message: String) 
 }
 
 let archive = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift")
+let readiness = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveMediaReleaseReadiness.swift")
 
-assertContains(archive, "DJEnableArchiveHiddenBranches", "QA-only hidden branch launch argument")
+assertContains(readiness, "DJEnableArchiveHiddenBranches", "QA-only hidden branch launch argument")
+assertContains(archive, "MemoryArchiveMediaReleaseReadiness.hiddenBranchesLaunchArgument", "archive hidden branch gate should use shared launch argument")
+assertContains(archive, "MemoryArchiveMediaReleaseReadiness.isCreationVisible", "archive hidden entries should use media readiness contract")
 assertContains(archive, "isUIQAArchiveHiddenBranchesEnabled", "explicit QA hidden branch gate")
 assertContains(archive, "FeatureFlagService.shared.isEnabled(.archiveAudioUpload)", "release audio flag")
 assertContains(archive, "FeatureFlagService.shared.isEnabled(.archiveRemoteFetch)", "release remote fetch flag")
