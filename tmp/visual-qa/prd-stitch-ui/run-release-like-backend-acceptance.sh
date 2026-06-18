@@ -15,8 +15,12 @@ BACKEND_API_TOKEN="${BACKEND_API_TOKEN:-}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-$ROOT_DIR/tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance}"
 OUTPUT_DIR="$OUTPUT_ROOT/$RUN_ID"
 SEED_RESULT="$OUTPUT_DIR/postgres-persistence-seed.json"
+SEED_LOG="$OUTPUT_DIR/postgres-persistence-seed.log"
 VERIFY_RESULT="$OUTPUT_DIR/postgres-persistence-verify.json"
+VERIFY_LOG="$OUTPUT_DIR/postgres-persistence-verify.log"
 IOS_SMOKE_ROOT="$OUTPUT_DIR/ios-backend-env-smoke"
+IOS_SMOKE_LOG="$OUTPUT_DIR/ios-backend-env-smoke.log"
+BACKEND_VERIFY_LOG="$OUTPUT_DIR/backend-verify.log"
 REPORT_PATH="$OUTPUT_DIR/report.md"
 LOCAL_ENV_CREATED=0
 USED_COMPOSE=0
@@ -165,33 +169,41 @@ fi
 
 echo "[release-like-backend] Running backend verify script..."
 if [[ -d "$BACKEND_ROOT" ]]; then
-  (cd "$BACKEND_ROOT" && BACKEND_API_TOKEN= ./scripts/verify_backend.sh)
+  if ! (cd "$BACKEND_ROOT" && BACKEND_API_TOKEN= ./scripts/verify_backend.sh) > "$BACKEND_VERIFY_LOG" 2>&1; then
+    fail "Backend verify script failed. See \`backend-verify.log\`."
+  fi
 fi
 
 echo "[release-like-backend] Seeding Postgres persistence contract..."
-python3 "$SCRIPT_DIR/backend-postgres-persistence-check.py" \
-  "$BACKEND_BASE_URL" \
-  "$USER_ID" \
-  "$BACKEND_API_TOKEN" \
-  "$MARKER" \
-  seed > "$SEED_RESULT"
+if ! python3 "$SCRIPT_DIR/backend-postgres-persistence-check.py" \
+    "$BACKEND_BASE_URL" \
+    "$USER_ID" \
+    "$BACKEND_API_TOKEN" \
+    "$MARKER" \
+    seed > "$SEED_RESULT" 2> "$SEED_LOG"; then
+  fail "Postgres persistence seed contract failed. See \`postgres-persistence-seed.log\`."
+fi
 
 echo "[release-like-backend] Restarting/verifying backend persistence boundary..."
 restart_backend_for_persistence_check
-python3 "$SCRIPT_DIR/backend-postgres-persistence-check.py" \
-  "$BACKEND_BASE_URL" \
-  "$USER_ID" \
-  "$BACKEND_API_TOKEN" \
-  "$MARKER" \
-  verify > "$VERIFY_RESULT"
+if ! python3 "$SCRIPT_DIR/backend-postgres-persistence-check.py" \
+    "$BACKEND_BASE_URL" \
+    "$USER_ID" \
+    "$BACKEND_API_TOKEN" \
+    "$MARKER" \
+    verify > "$VERIFY_RESULT" 2> "$VERIFY_LOG"; then
+  fail "Postgres persistence verify contract failed. See \`postgres-persistence-verify.log\`."
+fi
 
 echo "[release-like-backend] Running iOS backend environment smoke..."
-BACKEND_BASE_URL="$BACKEND_BASE_URL" \
-BACKEND_API_TOKEN="$BACKEND_API_TOKEN" \
-USER_ID="$IOS_USER_ID" \
-RUN_ID="$RUN_ID" \
-OUTPUT_ROOT="$IOS_SMOKE_ROOT" \
-"$SCRIPT_DIR/run-backend-env-smoke.sh"
+if ! BACKEND_BASE_URL="$BACKEND_BASE_URL" \
+    BACKEND_API_TOKEN="$BACKEND_API_TOKEN" \
+    USER_ID="$IOS_USER_ID" \
+    RUN_ID="$RUN_ID" \
+    OUTPUT_ROOT="$IOS_SMOKE_ROOT" \
+    "$SCRIPT_DIR/run-backend-env-smoke.sh" > "$IOS_SMOKE_LOG" 2>&1; then
+  fail "iOS backend environment smoke failed. See \`ios-backend-env-smoke.log\`."
+fi
 
 cat > "$REPORT_PATH" <<EOF
 # Release-like Backend Acceptance
@@ -223,7 +235,9 @@ Status: passed
 
 - Seed result: \`postgres-persistence-seed.json\`
 - Verify result: \`postgres-persistence-verify.json\`
+- Backend verify log: \`backend-verify.log\`
 - iOS backend smoke directory: \`ios-backend-env-smoke/$RUN_ID\`
+- iOS backend smoke log: \`ios-backend-env-smoke.log\`
 
 EOF
 

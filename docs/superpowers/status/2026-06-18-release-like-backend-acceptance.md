@@ -8,11 +8,11 @@ Backend branch: `main`
 
 ## Status
 
-Status: accepted for the latest selected deployed simulator release-like scope through push-token and delayed-reply scheduling; blocked for the newer delayed-reply dispatch-due contract.
+Status: accepted for the latest selected deployed simulator release-like scope through push-token, delayed-reply scheduling, and delayed-reply dispatch-due.
 
 The deployed FastAPI/Postgres environment is accepted for the simulator release-like backend path after deploying and restarting the backend with the Postgres rollback-on-exception fix.
 
-The newest local backend contract adds `POST /echo/delayed-replies/dispatch-due`. The deployed verification run `20260618-deployed-echo-dispatch-contract-210536` is blocked because the selected server returned HTTP 405 for that POST route.
+The newest local backend contract adds `POST /echo/delayed-replies/dispatch-due`. After redeploying the backend, deployed verification run `20260618-deployed-echo-dispatch-contract-accepted-211732` passed: the selected server OpenAPI route table includes the dispatch-due static POST path, the route returns `status=queued`, and release-like Postgres verify records `echoDelayedReplyDispatchState=readyForProvider` with `echoDelayedReplyProviderDeliveryAttempted=false`.
 
 The latest selected backend rerun on 2026-06-18 passed after deploying the backend contract branch through `1ff8b78 feat: add password change backend contract`.
 The earlier password-contract drift run is retained below as superseded diagnostic evidence.
@@ -37,6 +37,9 @@ Confirmed deployed environment facts:
 - `POST /profile` and `GET /profile/{user_id}`: accepted in release-like persistence.
 - `POST /kb/sync`: accepted in release-like persistence and iOS smoke.
 - `POST /care/snapshots` and `GET /care/snapshots/latest/{user_id}`: accepted for active / empty / stale / failed fixture evidence.
+- `POST /devices/push-token`: accepted in release-like persistence.
+- `POST /echo/delayed-replies`: accepted in release-like persistence.
+- `POST /echo/delayed-replies/dispatch-due`: accepted in release-like persistence after redeploy.
 - Backend token document found locally with token configured; token value is intentionally omitted from reports.
 
 Profile contract update after the accepted deployed run:
@@ -169,7 +172,70 @@ Verified result:
 
 Recovery status: completed for deployed route parity. APNs provider delivery, service-side scheduled dispatch, and true-device notification arrival remain external gates.
 
-## Latest Deployed Echo Dispatch Contract Attempt
+## Latest Deployed Echo Dispatch Contract Accepted Run
+
+Run ID:
+
+```text
+20260618-deployed-echo-dispatch-contract-accepted-211732
+```
+
+Evidence directory:
+
+```text
+tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-deployed-echo-dispatch-contract-accepted-211732/
+```
+
+Status: accepted.
+
+Verified result:
+
+- Token-authenticated route probe confirmed `/echo/delayed-replies/dispatch-due` is present in the selected server OpenAPI route table.
+- Focused `POST /echo/delayed-replies/dispatch-due` probe returned HTTP `200`, `status=queued`, and `itemCount=1`.
+- Local backend verification passed first through `backend-verify.log`; backend unittest reported `Ran 71 tests` and `OK`.
+- The deployed backend health endpoint was reachable and reported `store=postgres`.
+- `postgres-persistence-seed.json`: `completed=true`, `mode=seed`.
+- `postgres-persistence-verify.json`: `completed=true`, `mode=verify`, `echoDelayedReplyDispatchState=readyForProvider`, and `echoDelayedReplyProviderDeliveryAttempted=false`.
+- `backend-env-smoke-result.json`: `completed=true`, `archiveRefreshSucceeded=true`, `containsBackendContractPhoto=true`, `familyRefreshSucceeded=true`, and `containsBackendFamilyMember=true`.
+- Screenshot:
+
+```text
+tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-deployed-echo-dispatch-contract-accepted-211732/ios-backend-env-smoke/20260618-deployed-echo-dispatch-contract-accepted-211732/01-backend-env-profile.png
+```
+
+Recovery status: completed for deployed dispatch-due route parity. APNs provider delivery and true-device notification arrival remain separate external gates.
+
+## Recovered Deployed Echo Dispatch Contract Attempt
+
+Run ID:
+
+```text
+20260618-deployed-echo-dispatch-contract-rerun-report-211438
+```
+
+Evidence directory:
+
+```text
+tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-deployed-echo-dispatch-contract-rerun-report-211438/
+```
+
+Status: blocked, superseded by accepted run `20260618-deployed-echo-dispatch-contract-accepted-211732`.
+
+Observed result:
+
+- Local backend verification passed first through `backend-verify.log`; backend unittest reported `Ran 71 tests` and `OK`.
+- The deployed backend health endpoint was reachable and reported `store=postgres`.
+- The improved release-like runner now writes a blocked `report.md` even when the Postgres seed contract fails.
+- The seed stopped at `POST /echo/delayed-replies/dispatch-due` with HTTP `405` and `{"detail":"Method Not Allowed"}`.
+- A token-authenticated `/openapi.json` route probe on the same deployed server lists:
+  - `/devices/push-token`: `POST`
+  - `/echo/delayed-replies`: `POST`
+  - `/echo/delayed-replies/{user_id}`: `GET`
+- The route probe does not list `/echo/delayed-replies/dispatch-due`, confirming deployed route-table drift rather than an iOS or request-payload issue.
+
+Recovery status: recovered by redeploy and accepted run `20260618-deployed-echo-dispatch-contract-accepted-211732`.
+
+## Historical Deployed Echo Dispatch Contract Attempt
 
 Run ID:
 
@@ -183,7 +249,7 @@ Evidence directory:
 tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance/20260618-deployed-echo-dispatch-contract-210536/
 ```
 
-Status: blocked.
+Status: blocked, superseded by accepted run `20260618-deployed-echo-dispatch-contract-accepted-211732`.
 
 Observed result:
 
@@ -198,11 +264,11 @@ Root cause:
 - The selected deployed backend still behaves like a route set without that static POST route, so the dynamic delayed-reply route rejects POST with 405.
 - This is deployment drift for the dispatch-due contract, not an iOS implementation failure and not APNs provider delivery evidence.
 
-Required recovery:
+Recovery performed:
 
-1. Deploy the backend branch that includes `POST /echo/delayed-replies/dispatch-due`.
-2. Rerun `run-release-like-backend-acceptance.sh` with the private deployed backend URL/token.
-3. Treat service-side scheduled dispatch as selected-environment evidence only after `postgres-persistence-verify.json` includes `echoDelayedReplyDispatchState=readyForProvider` and `echoDelayedReplyProviderDeliveryAttempted=false`.
+1. Redeployed the backend branch that includes `POST /echo/delayed-replies/dispatch-due`.
+2. Reran `run-release-like-backend-acceptance.sh` with the private deployed backend URL/token.
+3. Accepted service-side scheduled dispatch evidence after `postgres-persistence-verify.json` included `echoDelayedReplyDispatchState=readyForProvider` and `echoDelayedReplyProviderDeliveryAttempted=false`.
 
 ## Historical Deployed Push Token Contract Attempt
 
@@ -330,7 +396,7 @@ The persistence contract covers:
 - Profile save/read persistence for nickname, gender, region, and avatar metadata;
 - Password credential initialization and password change persistence through `passwordChangeStatus`, `passwordOldLoginStatus`, and `passwordNewLoginConfigured`;
 - Push token registration plus delayed-reply scheduling through `echoDelayedReplyDeviceTokenId` and `echoDelayedReplyPushProviderState`;
-- Delayed-reply due dispatch through `POST /echo/delayed-replies/dispatch-due`, `echoDelayedReplyDispatchState=readyForProvider`, and `echoDelayedReplyProviderDeliveryAttempted=false`; currently blocked on deployed route parity by run `20260618-deployed-echo-dispatch-contract-210536`;
+- Delayed-reply due dispatch through `POST /echo/delayed-replies/dispatch-due`, `echoDelayedReplyDispatchState=readyForProvider`, and `echoDelayedReplyProviderDeliveryAttempted=false`; accepted on deployed route parity by run `20260618-deployed-echo-dispatch-contract-accepted-211732`;
 - Archive item creation/listing and local path stripping;
 - Archive persona visibility fields: `personaScope=family` and `digitalHumanId=family_default`;
 - KB sync/snapshot persistence;
@@ -352,7 +418,7 @@ Local backend verification is run with `BACKEND_API_TOKEN` cleared so deployed c
 - 线上/公网后端验收：accepted for simulator release-like scope
 - 真机验收：not accepted
 
-Do not mark the PRD fully complete until true-device acceptance also passes. The backend release-like simulator gate is accepted for earlier contracts, but delayed-reply dispatch-due remains blocked on deployed route parity.
+Do not mark the PRD fully complete until true-device acceptance also passes. The backend release-like simulator gate is accepted through delayed-reply dispatch-due, but APNs provider delivery and true-device notification arrival remain external gates.
 
 ## Latest Archive Visibility Contract Run
 
@@ -385,4 +451,4 @@ The local current backend code contains Postgres `Jsonb` parameter adaptation, r
 
 The latest selected backend acceptance run `20260618-selected-backend-latest-contracts-after-deploy-r2` verified `passwordChangeStatus`, `passwordOldLoginStatus`, `passwordNewLoginConfigured`, `careActiveRiskLevel`, `careMissingStatus`, `careInvalidStatus`, and `careStaleWindowEnd` in `postgres-persistence-verify.json`.
 
-After this run, the local backend/iOS contract added `POST /devices/push-token` and delayed reply `deviceTokenId` coverage. The latest deployed acceptance run `20260618-deployed-push-device-token-contract-rerun-205018` now includes push token registration and delayed reply `deviceTokenId` persistence. A later dispatch-due acceptance attempt `20260618-deployed-echo-dispatch-contract-210536` is blocked with HTTP 405 for `POST /echo/delayed-replies/dispatch-due`; deploy that route and rerun before claiming service-side scheduled dispatch acceptance. Keep APNs provider delivery and true-device notification arrival as separate gates before claiming complete remote push delivery.
+After this run, the local backend/iOS contract added `POST /devices/push-token` and delayed reply `deviceTokenId` coverage. Deployed acceptance run `20260618-deployed-push-device-token-contract-rerun-205018` includes push token registration and delayed reply `deviceTokenId` persistence. Later dispatch-due acceptance attempts `20260618-deployed-echo-dispatch-contract-210536` and `20260618-deployed-echo-dispatch-contract-rerun-report-211438` were blocked with HTTP 405 for `POST /echo/delayed-replies/dispatch-due`; redeploying the backend recovered route parity, and run `20260618-deployed-echo-dispatch-contract-accepted-211732` now accepts service-side scheduled dispatch with `echoDelayedReplyDispatchState=readyForProvider` and `echoDelayedReplyProviderDeliveryAttempted=false`. Keep APNs provider delivery and true-device notification arrival as separate gates before claiming complete remote push delivery.

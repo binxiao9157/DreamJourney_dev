@@ -72,9 +72,10 @@ for phrase in [
 }
 
 assertContains(backendMatrix, "Echo delayed reply dispatch", "backend matrix should track delayed reply dispatch")
-assertContains(backendMatrix, "deployed run `20260618-deployed-echo-dispatch-contract-210536` blocked with HTTP 405", "backend matrix should record deployed dispatch drift")
-assertContains(coverage, "local backend dispatch-due contract", "PRD coverage should record local dispatch-due contract")
-assertContains(coverage, "deploy dispatch-due route", "PRD coverage should keep deploy dispatch-due as next action")
-assertContains(coverage, "20260618-deployed-echo-dispatch-contract-210536", "PRD coverage should track blocked dispatch deployed run")
+assertContains(backendMatrix, "accepted on selected release-like backend by run `20260618-deployed-echo-dispatch-contract-accepted-211732`", "backend matrix should record accepted deployed dispatch route parity")
+assertContains(backendMatrix, "were blocked with HTTP 405 before redeploy", "backend matrix should preserve recovered dispatch drift")
+assertContains(coverage, "deployed backend dispatch-due contract", "PRD coverage should record deployed dispatch-due contract")
+assertContains(coverage, "20260618-deployed-echo-dispatch-contract-accepted-211732", "PRD coverage should track accepted dispatch deployed run")
+assertContains(coverage, "APNs provider delivery and true-device notification acceptance remain open", "PRD coverage should keep APNs and true-device gates open")
 
 print("Echo delayed reply dispatch contract checks passed")
