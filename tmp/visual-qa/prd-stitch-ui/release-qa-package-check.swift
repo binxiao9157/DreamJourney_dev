@@ -117,6 +117,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-18-archive-sync-error-recovery.md",
     "docs/superpowers/status/2026-06-19-archive-analysis-backend-contract.md",
     "docs/superpowers/status/2026-06-19-archive-image-analysis-live-chain.md",
+    "docs/superpowers/status/2026-06-19-backend-archive-image-analysis-smoke.md",
 ]
 
 for doc in requiredDocs {
@@ -154,6 +155,7 @@ let releaseRegression = read("tmp/visual-qa/prd-stitch-ui/run-release-regression
 let oneCommandRegression = read("docs/superpowers/status/2026-06-18-one-command-release-regression.md")
 assertContains(releaseRegression, "Release handoff mode forces release-like backend acceptance", "release handoff mode should document forced backend acceptance")
 assertContains(releaseRegression, "RUN_RELEASE_LIKE_BACKEND=1", "release handoff mode should force release-like backend acceptance")
+assertContains(releaseRegression, "RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE", "release regression should expose deployed archive image-analysis smoke")
 assertContains(releaseRegression, "BACKEND_API_TOKEN= BACKEND_BASE_URL= ./scripts/verify_backend.sh", "backend verify should not inherit deployed backend credentials")
 for handoffGuard in [
     "prd-full-feature-closure-decisions-check.swift",
@@ -172,6 +174,7 @@ for handoffGuard in [
     "archive-analysis-insights-contract-check.swift",
     "archive-analysis-backend-payload-contract-check.swift",
     "archive-image-analysis-live-chain-check.swift",
+    "backend-archive-image-analysis-smoke-check.swift",
     "voice-clone-shell-contract-check.swift",
     "profile-care-public-placeholder-check.swift",
     "release-like-backend-acceptance-check.swift",
@@ -253,6 +256,9 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/archive-analysis-insights-contract-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-analysis-backend-payload-contract-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-image-analysis-live-chain-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/backend-archive-image-analysis-smoke-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/backend-archive-image-analysis-smoke.py",
+    "tmp/visual-qa/prd-stitch-ui/run-backend-archive-image-analysis-smoke.sh",
     "tmp/visual-qa/prd-stitch-ui/voice-clone-shell-contract-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-integration-contract-check.py",
     "tmp/visual-qa/prd-stitch-ui/backend-auth-token-check.swift",
