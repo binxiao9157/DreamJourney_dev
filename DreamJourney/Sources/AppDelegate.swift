@@ -1089,6 +1089,14 @@ private extension AppDelegate {
                 note: "UIQA 隐藏分支录入的一段语音档案",
                 transcriptText: "这是一段用于验证转写字段的 mock 文本"
             )
+            let audioTranscriptionFailedItem = MemoryArchiveItemFactory.makeAudioItem(
+                localPath: audioURL.path,
+                duration: 1.2,
+                note: "这段语音用于验证转写失败后的回响说明兜底。",
+                transcriptionStatus: .failed,
+                analysisStatus: .retryable,
+                uploadStatus: .uploaded
+            )
             let videoURL = try makeUIQAArchiveMockVideoFile()
             let thumbnailURL = try makeUIQAArchiveMockThumbnailFile()
             let videoSize = (try FileManager.default.attributesOfItem(atPath: videoURL.path)[.size] as? NSNumber)?
@@ -1099,7 +1107,15 @@ private extension AppDelegate {
                 fileSizeBytes: videoSize,
                 note: "UIQA 隐藏分支生成的 mock 视频档案"
             )
+            let videoPlaceholderItem = MemoryArchiveItemFactory.makeVideoItem(
+                localPath: videoURL.path,
+                fileSizeBytes: videoSize,
+                note: "UIQA 隐藏分支生成的无缩略图 mock 视频档案",
+                analysisStatus: .failed,
+                uploadStatus: .failed
+            ).markingMediaUploadFailed("mock upload rejected")
             var draftLetter = MemoryArchiveItemFactory.makeTimeLetterDraft(note: "写给未来的一封草稿")
+            let emptyDraftLetter = MemoryArchiveItemFactory.makeTimeLetterDraft(note: "")
             let deletedDraftLetter = MemoryArchiveItemFactory.makeTimeLetterDraft(note: "这封草稿会被删除")
             var sealedDraftLetter = MemoryArchiveItemFactory.makeTimeLetterDraft(note: "这封草稿会被封存")
             let sealedLetter = MemoryArchiveItemFactory.makeTimeLetter(note: "写给未来的一封封存信")
@@ -1177,16 +1193,52 @@ private extension AppDelegate {
                 item: videoItem
             ) && archiveDetailViewContainsText("重新上传", item: videoItem)
                 && archiveDetailViewContainsIdentifier("archive-hidden-media-retry-copy", item: videoItem)
+            let audioDetailEmptyStateVisible = mediaDetailEmptyStateVisible
+                && archiveDetailViewContainsText("媒体文件待补充", item: emptyAudioItem)
+            let audioDetailTranscriptionFailedStateVisible = archiveDetailViewContainsIdentifier(
+                "archive-audio-transcription-state",
+                item: audioTranscriptionFailedItem
+            ) && archiveDetailViewContainsText("转写失败，可重试", item: audioTranscriptionFailedItem)
+            let audioDetailTranscriptionRetryVisible = archiveDetailViewContainsIdentifier(
+                "archive-audio-transcription-retry-copy",
+                item: audioTranscriptionFailedItem
+            )
+            let videoDetailThumbnailPlaceholderVisible = archiveDetailViewContainsIdentifier(
+                "archive-video-media-placeholder",
+                item: videoPlaceholderItem
+            )
+            let videoDetailFailedStateVisible = mediaDetailFailedStateVisible
+                && archiveDetailViewContainsIdentifier("archive-video-analysis-state", item: videoItem)
+            let videoDetailRetryActionVisible = mediaDetailRetryActionVisible
             let timeLetterDraftActionsVisible = archiveDetailViewContainsIdentifier(
                 "archive-time-letter-draft-state",
                 item: draftLetter
             ) && archiveDetailViewContainsIdentifier("archive-time-letter-edit-draft", item: draftLetter)
                 && archiveDetailViewContainsIdentifier("archive-time-letter-seal-draft", item: draftLetter)
                 && archiveDetailViewContainsIdentifier("archive-time-letter-delete-draft", item: draftLetter)
+            let timeLetterDraftDetailVisible = timeLetterDraftActionsVisible
+                && archiveDetailViewContainsText("草稿未封存", item: draftLetter)
             let timeLetterSealedStateVisible = archiveDetailViewContainsIdentifier(
                 "archive-time-letter-sealed-state",
                 item: sealedDraftLetter
             ) && archiveDetailViewContainsText("投递策略待产品决策", item: sealedDraftLetter)
+            let timeLetterSealedDetailVisible = timeLetterSealedStateVisible
+            let timeLetterEmptyBodyVisible = archiveDetailViewContainsIdentifier(
+                "archive-time-letter-empty-body",
+                item: emptyDraftLetter
+            )
+            let detailSnapshots = writeArchiveHiddenShellDetailSnapshots(
+                audioEmptyItem: emptyAudioItem,
+                audioTranscriptionFailedItem: audioTranscriptionFailedItem,
+                videoFailedItem: videoPlaceholderItem,
+                timeLetterDraftItem: draftLetter,
+                timeLetterSealedItem: sealedDraftLetter
+            )
+            let audioEmptyDetailSnapshotWritten = detailSnapshots["audioEmptyDetailSnapshotWritten"] == true
+            let audioTranscriptionFailedDetailSnapshotWritten = detailSnapshots["audioTranscriptionFailedDetailSnapshotWritten"] == true
+            let videoFailedDetailSnapshotWritten = detailSnapshots["videoFailedDetailSnapshotWritten"] == true
+            let timeLetterDraftDetailSnapshotWritten = detailSnapshots["timeLetterDraftDetailSnapshotWritten"] == true
+            let timeLetterSealedDetailSnapshotWritten = detailSnapshots["timeLetterSealedDetailSnapshotWritten"] == true
 
             let completed = releaseOptionsHidden
                 && releaseHiddenEntryPointsBlocked
@@ -1208,8 +1260,22 @@ private extension AppDelegate {
                 && mediaDetailEmptyStateVisible
                 && mediaDetailFailedStateVisible
                 && mediaDetailRetryActionVisible
+                && audioDetailEmptyStateVisible
+                && audioDetailTranscriptionFailedStateVisible
+                && audioDetailTranscriptionRetryVisible
+                && videoDetailThumbnailPlaceholderVisible
+                && videoDetailFailedStateVisible
+                && videoDetailRetryActionVisible
                 && timeLetterDraftActionsVisible
                 && timeLetterSealedStateVisible
+                && timeLetterDraftDetailVisible
+                && timeLetterSealedDetailVisible
+                && timeLetterEmptyBodyVisible
+                && audioEmptyDetailSnapshotWritten
+                && audioTranscriptionFailedDetailSnapshotWritten
+                && videoFailedDetailSnapshotWritten
+                && timeLetterDraftDetailSnapshotWritten
+                && timeLetterSealedDetailSnapshotWritten
 
             tabBarController.selectedIndex = 0
             writeArchiveHiddenShellSmokeResult(
@@ -1233,8 +1299,22 @@ private extension AppDelegate {
                 mediaDetailEmptyStateVisible: mediaDetailEmptyStateVisible,
                 mediaDetailFailedStateVisible: mediaDetailFailedStateVisible,
                 mediaDetailRetryActionVisible: mediaDetailRetryActionVisible,
+                audioDetailEmptyStateVisible: audioDetailEmptyStateVisible,
+                audioDetailTranscriptionFailedStateVisible: audioDetailTranscriptionFailedStateVisible,
+                audioDetailTranscriptionRetryVisible: audioDetailTranscriptionRetryVisible,
+                videoDetailThumbnailPlaceholderVisible: videoDetailThumbnailPlaceholderVisible,
+                videoDetailFailedStateVisible: videoDetailFailedStateVisible,
+                videoDetailRetryActionVisible: videoDetailRetryActionVisible,
                 timeLetterDraftActionsVisible: timeLetterDraftActionsVisible,
                 timeLetterSealedStateVisible: timeLetterSealedStateVisible,
+                timeLetterDraftDetailVisible: timeLetterDraftDetailVisible,
+                timeLetterSealedDetailVisible: timeLetterSealedDetailVisible,
+                timeLetterEmptyBodyVisible: timeLetterEmptyBodyVisible,
+                audioEmptyDetailSnapshotWritten: audioEmptyDetailSnapshotWritten,
+                audioTranscriptionFailedDetailSnapshotWritten: audioTranscriptionFailedDetailSnapshotWritten,
+                videoFailedDetailSnapshotWritten: videoFailedDetailSnapshotWritten,
+                timeLetterDraftDetailSnapshotWritten: timeLetterDraftDetailSnapshotWritten,
+                timeLetterSealedDetailSnapshotWritten: timeLetterSealedDetailSnapshotWritten,
                 releaseHiddenEntryPointsBlocked: releaseHiddenEntryPointsBlocked,
                 failureReason: nil
             )
@@ -1247,7 +1327,8 @@ private extension AppDelegate {
                 "timeLetterSealedRestored=\(timeLetterSealedRestored) " +
                 "mediaUploadUploaded=\(mediaUploadUploaded) " +
                 "mediaUploadFailed=\(mediaUploadFailed) " +
-                "mediaDetailFailedStateVisible=\(mediaDetailFailedStateVisible)"
+                "mediaDetailFailedStateVisible=\(mediaDetailFailedStateVisible) " +
+                "videoDetailThumbnailPlaceholderVisible=\(videoDetailThumbnailPlaceholderVisible)"
             )
         } catch {
             writeArchiveHiddenShellSmokeResult(
@@ -1318,6 +1399,67 @@ private extension AppDelegate {
             return true
         }
         return view.subviews.contains { viewTreeContainsText(text, in: $0) }
+    }
+
+    func writeArchiveHiddenShellDetailSnapshots(
+        audioEmptyItem: MemoryArchiveItem,
+        audioTranscriptionFailedItem: MemoryArchiveItem,
+        videoFailedItem: MemoryArchiveItem,
+        timeLetterDraftItem: MemoryArchiveItem,
+        timeLetterSealedItem: MemoryArchiveItem
+    ) -> [String: Bool] {
+        [
+            "audioEmptyDetailSnapshotWritten": renderArchiveDetailSnapshot(
+                fileName: "archive-hidden-audio-empty-detail.png",
+                item: audioEmptyItem
+            ),
+            "audioTranscriptionFailedDetailSnapshotWritten": renderArchiveDetailSnapshot(
+                fileName: "archive-hidden-audio-transcription-failed-detail.png",
+                item: audioTranscriptionFailedItem
+            ),
+            "videoFailedDetailSnapshotWritten": renderArchiveDetailSnapshot(
+                fileName: "archive-hidden-video-failed-detail.png",
+                item: videoFailedItem
+            ),
+            "timeLetterDraftDetailSnapshotWritten": renderArchiveDetailSnapshot(
+                fileName: "archive-hidden-time-letter-draft-detail.png",
+                item: timeLetterDraftItem
+            ),
+            "timeLetterSealedDetailSnapshotWritten": renderArchiveDetailSnapshot(
+                fileName: "archive-hidden-time-letter-sealed-detail.png",
+                item: timeLetterSealedItem
+            ),
+        ]
+    }
+
+    func renderArchiveDetailSnapshot(fileName: String, item: MemoryArchiveItem) -> Bool {
+        let detailViewController = MemoryArchiveDetailViewController(item: item)
+        detailViewController.loadViewIfNeeded()
+        guard let view = detailViewController.viewIfLoaded,
+              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return false
+        }
+
+        view.frame = CGRect(x: 0, y: 0, width: 393, height: 852)
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
+
+        let renderer = UIGraphicsImageRenderer(bounds: view.bounds)
+        let image = renderer.image { _ in
+            view.drawHierarchy(in: view.bounds, afterScreenUpdates: true)
+        }
+        guard let data = image.pngData() else {
+            return false
+        }
+
+        let outputURL = documentsURL.appendingPathComponent(fileName)
+        do {
+            try data.write(to: outputURL, options: [.atomic])
+            return true
+        } catch {
+            print("[UI_QA] ArchiveHiddenShellSmoke snapshotWrite failed file=\(fileName) error=\(error.localizedDescription)")
+            return false
+        }
     }
 
     func makeUIQAArchiveAudioFile() throws -> URL {
@@ -2072,8 +2214,22 @@ private extension AppDelegate {
         mediaDetailEmptyStateVisible: Bool,
         mediaDetailFailedStateVisible: Bool,
         mediaDetailRetryActionVisible: Bool,
+        audioDetailEmptyStateVisible: Bool = false,
+        audioDetailTranscriptionFailedStateVisible: Bool = false,
+        audioDetailTranscriptionRetryVisible: Bool = false,
+        videoDetailThumbnailPlaceholderVisible: Bool = false,
+        videoDetailFailedStateVisible: Bool = false,
+        videoDetailRetryActionVisible: Bool = false,
         timeLetterDraftActionsVisible: Bool,
         timeLetterSealedStateVisible: Bool,
+        timeLetterDraftDetailVisible: Bool = false,
+        timeLetterSealedDetailVisible: Bool = false,
+        timeLetterEmptyBodyVisible: Bool = false,
+        audioEmptyDetailSnapshotWritten: Bool = false,
+        audioTranscriptionFailedDetailSnapshotWritten: Bool = false,
+        videoFailedDetailSnapshotWritten: Bool = false,
+        timeLetterDraftDetailSnapshotWritten: Bool = false,
+        timeLetterSealedDetailSnapshotWritten: Bool = false,
         releaseHiddenEntryPointsBlocked: Bool,
         failureReason: String?
     ) {
@@ -2098,8 +2254,22 @@ private extension AppDelegate {
             "mediaDetailEmptyStateVisible": mediaDetailEmptyStateVisible,
             "mediaDetailFailedStateVisible": mediaDetailFailedStateVisible,
             "mediaDetailRetryActionVisible": mediaDetailRetryActionVisible,
+            "audioDetailEmptyStateVisible": audioDetailEmptyStateVisible,
+            "audioDetailTranscriptionFailedStateVisible": audioDetailTranscriptionFailedStateVisible,
+            "audioDetailTranscriptionRetryVisible": audioDetailTranscriptionRetryVisible,
+            "videoDetailThumbnailPlaceholderVisible": videoDetailThumbnailPlaceholderVisible,
+            "videoDetailFailedStateVisible": videoDetailFailedStateVisible,
+            "videoDetailRetryActionVisible": videoDetailRetryActionVisible,
             "timeLetterDraftActionsVisible": timeLetterDraftActionsVisible,
             "timeLetterSealedStateVisible": timeLetterSealedStateVisible,
+            "timeLetterDraftDetailVisible": timeLetterDraftDetailVisible,
+            "timeLetterSealedDetailVisible": timeLetterSealedDetailVisible,
+            "timeLetterEmptyBodyVisible": timeLetterEmptyBodyVisible,
+            "audioEmptyDetailSnapshotWritten": audioEmptyDetailSnapshotWritten,
+            "audioTranscriptionFailedDetailSnapshotWritten": audioTranscriptionFailedDetailSnapshotWritten,
+            "videoFailedDetailSnapshotWritten": videoFailedDetailSnapshotWritten,
+            "timeLetterDraftDetailSnapshotWritten": timeLetterDraftDetailSnapshotWritten,
+            "timeLetterSealedDetailSnapshotWritten": timeLetterSealedDetailSnapshotWritten,
             "releaseHiddenEntryPointsBlocked": releaseHiddenEntryPointsBlocked,
             "hiddenBranchesArgument": MemoryArchiveMediaReleaseReadiness.hiddenBranchesLaunchArgument
         ]

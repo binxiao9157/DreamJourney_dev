@@ -19,6 +19,13 @@ SCREENSHOT_PATH="$OUTPUT_DIR/01-archive-hidden-shell.png"
 RESULT_COPY_PATH="$OUTPUT_DIR/archive-hidden-shell-smoke-result.json"
 COMPLETION_PATTERN="ArchiveHiddenShellSmoke completed"
 LOG_WAIT_TIMEOUT="${LOG_WAIT_TIMEOUT:-45}"
+DETAIL_SNAPSHOT_FILES=(
+  "archive-hidden-audio-empty-detail.png"
+  "archive-hidden-audio-transcription-failed-detail.png"
+  "archive-hidden-video-failed-detail.png"
+  "archive-hidden-time-letter-draft-detail.png"
+  "archive-hidden-time-letter-sealed-detail.png"
+)
 
 mkdir -p "$OUTPUT_DIR"
 cd "$ROOT_DIR"
@@ -117,6 +124,12 @@ cp "$RESULT_FILE" "$RESULT_COPY_PATH"
 cat "$RESULT_FILE"
 echo
 
+for snapshot_file in "${DETAIL_SNAPSHOT_FILES[@]}"; do
+  snapshot_source="$DATA_CONTAINER/Documents/$snapshot_file"
+  [[ -s "$snapshot_source" ]] || fail "Expected detail snapshot was not written: $snapshot_file"
+  cp "$snapshot_source" "$OUTPUT_DIR/$snapshot_file"
+done
+
 grep -Eq '"completed"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Smoke did not complete."
 grep -Eq '"releaseOptionsHidden"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Hidden archive branches must stay hidden in release mode."
 grep -Eq '"hiddenOptionsVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Hidden archive branches should be visible in hidden QA mode."
@@ -135,8 +148,22 @@ grep -Eq '"timeLetterDraftSealed"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" |
 grep -Eq '"mediaDetailEmptyStateVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Hidden audio empty detail state should be visible."
 grep -Eq '"mediaDetailFailedStateVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Hidden media failed detail state should be visible."
 grep -Eq '"mediaDetailRetryActionVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Hidden media retry detail action should be visible."
+grep -Eq '"audioDetailEmptyStateVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Audio empty detail state should be visible."
+grep -Eq '"audioDetailTranscriptionFailedStateVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Audio transcription failed state should be visible."
+grep -Eq '"audioDetailTranscriptionRetryVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Audio transcription retry copy should be visible."
+grep -Eq '"videoDetailThumbnailPlaceholderVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Video thumbnail placeholder should be visible."
+grep -Eq '"videoDetailFailedStateVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Video failed detail state should be visible."
+grep -Eq '"videoDetailRetryActionVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Video retry action should be visible."
 grep -Eq '"timeLetterDraftActionsVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter draft detail actions should be visible."
 grep -Eq '"timeLetterSealedStateVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter sealed detail state should be visible."
+grep -Eq '"timeLetterDraftDetailVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter draft detail state should be visible."
+grep -Eq '"timeLetterSealedDetailVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter sealed detail state should be visible."
+grep -Eq '"timeLetterEmptyBodyVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter empty body state should be visible."
+grep -Eq '"audioEmptyDetailSnapshotWritten"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Audio empty detail snapshot should be written."
+grep -Eq '"audioTranscriptionFailedDetailSnapshotWritten"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Audio transcription failed detail snapshot should be written."
+grep -Eq '"videoFailedDetailSnapshotWritten"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Video failed detail snapshot should be written."
+grep -Eq '"timeLetterDraftDetailSnapshotWritten"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter draft detail snapshot should be written."
+grep -Eq '"timeLetterSealedDetailSnapshotWritten"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter sealed detail snapshot should be written."
 grep -Eq '"releaseHiddenEntryPointsBlocked"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Release mode should keep hidden media/time-letter entry points blocked."
 grep -Eq '"hiddenBranchesArgument"[[:space:]]*:[[:space:]]*"DJEnableArchiveHiddenBranches"' "$RESULT_FILE" || fail "Hidden archive launch argument changed."
 

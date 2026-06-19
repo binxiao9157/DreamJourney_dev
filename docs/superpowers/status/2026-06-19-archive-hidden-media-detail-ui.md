@@ -50,6 +50,16 @@ swift tmp/visual-qa/prd-stitch-ui/archive-hidden-media-detail-ui-check.swift /Us
 RUN_ID=20260619-hidden-media-detail-ui tmp/visual-qa/prd-stitch-ui/run-archive-hidden-shell-smoke.sh
 ```
 
+该 smoke 会在结果目录额外保存详情页快照：
+
+- `archive-hidden-audio-empty-detail.png`
+- `archive-hidden-audio-transcription-failed-detail.png`
+- `archive-hidden-video-failed-detail.png`
+- `archive-hidden-time-letter-draft-detail.png`
+- `archive-hidden-time-letter-sealed-detail.png`
+
+这些截图分别覆盖语音空态、语音转写失败/重试、视频缩略图占位/失败/重试、时间信件草稿态、时间信件封存态。
+
 Release regression 可用：
 
 ```bash
