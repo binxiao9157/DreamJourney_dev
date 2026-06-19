@@ -212,6 +212,7 @@ for guard in \
   true-device-archive-audio-acceptance-check.swift \
   archive-media-backend-contract-check.swift \
   archive-media-upload-intent-contract-check.swift \
+  archive-media-provider-switch-contract-check.swift \
   archive-hidden-media-timeletter-shell-check.swift \
   archive-hidden-media-backend-upload-lifecycle-check.swift \
   archive-time-letter-backend-lifecycle-check.swift \

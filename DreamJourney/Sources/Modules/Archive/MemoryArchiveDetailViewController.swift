@@ -758,6 +758,13 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         providerLabel.numberOfLines = 0
         providerLabel.accessibilityIdentifier = "archive-hidden-media-runtime-provider"
 
+        let uploadModeLabel = UILabel()
+        uploadModeLabel.text = "\(capability.providerModeDisplayText) · \(capability.uploadExecutionDisplayText)"
+        uploadModeLabel.font = DJDesignTokens.Font.body(13)
+        uploadModeLabel.textColor = DJDesignTokens.Color.textSecondary
+        uploadModeLabel.numberOfLines = 0
+        uploadModeLabel.accessibilityIdentifier = "archive-hidden-media-runtime-upload-mode"
+
         let supportedKindText = capability.supports(kind: item.kind)
             ? "\(item.kind.archiveDisplayName) 支持元数据同步"
             : "\(item.kind.archiveDisplayName) 暂不支持元数据同步"
@@ -769,12 +776,13 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         limitLabel.accessibilityIdentifier = "archive-hidden-media-runtime-limit"
 
         card.addSubview(stack)
-        [stack, titleLabel, stateLabel, providerLabel, limitLabel].forEach {
+        [stack, titleLabel, stateLabel, providerLabel, uploadModeLabel, limitLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
         stack.addArrangedSubview(titleLabel)
         stack.addArrangedSubview(stateLabel)
         stack.addArrangedSubview(providerLabel)
+        stack.addArrangedSubview(uploadModeLabel)
         stack.addArrangedSubview(limitLabel)
 
         NSLayoutConstraint.activate([
@@ -1588,6 +1596,10 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
             markMediaUploadFailure("后端暂不支持该媒体类型")
             return
         }
+        guard !effectiveArchiveMediaRuntimeCapability.requiresClientUpload else {
+            markMediaUploadFailure("真实对象存储上传尚未开放")
+            return
+        }
         guard let payload = repository.archiveMediaUploadIntentPayload(for: item) else {
             markMediaUploadFailure("媒体上传参数不完整")
             return
@@ -1603,6 +1615,10 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
             isRequestingMediaUploadIntent = false
             switch result {
             case .success(let intent):
+                guard !intent.requiresClientUpload else {
+                    markMediaUploadFailure("真实对象存储上传尚未开放")
+                    return
+                }
                 item = item.markingMediaUploadUploaded(intent: intent)
                 _ = repository.update(item, syncToBackend: false)
                 reloadContent()

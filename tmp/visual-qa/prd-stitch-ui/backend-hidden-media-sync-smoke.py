@@ -97,6 +97,13 @@ def upload_intent(archive_item_id: str, kind: str, file_name: str, content_type:
     assert_equal(intent.get("archiveItemId"), archive_item_id, "upload intent archiveItemId")
     assert_equal(intent.get("kind"), kind, "upload intent kind")
     assert_equal(intent.get("storageProvider"), "mockObjectStorage", "upload intent provider")
+    assert_equal(intent.get("providerDisplayName"), "Mock Object Storage", "upload intent provider display name")
+    assert_equal(intent.get("providerMode"), "mock", "upload intent provider mode")
+    assert_equal(intent.get("requiresClientUpload"), False, "upload intent should not require client file PUT")
+    assert_equal(intent.get("uploadURLScheme"), "mock", "upload intent URL scheme")
+    assert_equal(intent.get("realProviderReady"), False, "upload intent real provider readiness")
+    assert_equal(intent.get("providerSwitchContractVersion"), 1, "upload intent provider switch version")
+    assert_equal(intent.get("clientUploadAction"), "metadataOnly", "upload intent client upload action")
     assert_true(intent.get("objectKey"), "upload intent objectKey should be present")
     assert_true(str(intent.get("uploadURL", "")).startswith("mock://"), "upload intent should stay mock://")
     return intent
@@ -137,6 +144,18 @@ def assert_backend_media_privacy(item: Dict[str, Any], metadata_keys: List[str])
 
 def main() -> Dict[str, Any]:
     health = request_json("GET", "/health", auth=False)
+    runtime = request_json("GET", "/config/runtime")
+    runtime_archive = runtime.get("archive")
+    if not isinstance(runtime_archive, dict):
+        raise AssertionError("runtime config missing archive object")
+    assert_equal(runtime_archive.get("storageProvider"), "mockObjectStorage", "runtime archive provider")
+    assert_equal(runtime_archive.get("providerDisplayName"), "Mock Object Storage", "runtime archive provider display name")
+    assert_equal(runtime_archive.get("providerMode"), "mock", "runtime archive provider mode")
+    assert_equal(runtime_archive.get("requiresClientUpload"), False, "runtime archive should not require client file PUT")
+    assert_equal(runtime_archive.get("uploadURLScheme"), "mock", "runtime archive upload URL scheme")
+    assert_equal(runtime_archive.get("realProviderReady"), False, "runtime archive real provider readiness")
+    assert_equal(runtime_archive.get("providerSwitchContractVersion"), 1, "runtime archive provider switch version")
+    assert_equal(runtime_archive.get("clientUploadAction"), "metadataOnly", "runtime archive client upload action")
     now = datetime.now(timezone.utc).isoformat()
     audio_id = f"hidden_audio_{MARKER}"
     video_id = f"hidden_video_{MARKER}"
@@ -268,15 +287,22 @@ def main() -> Dict[str, Any]:
     return {
         "completed": True,
         "health": health,
+        "runtimeArchive": runtime_archive,
         "userId": USER_ID,
         "marker": MARKER,
         "createdIds": [audio_id, video_id, letter_id],
         "audioUploadIntent": {
             "storageProvider": audio_intent["storageProvider"],
+            "providerMode": audio_intent["providerMode"],
+            "requiresClientUpload": audio_intent["requiresClientUpload"],
+            "uploadURLScheme": audio_intent["uploadURLScheme"],
             "objectKey": audio_intent["objectKey"],
         },
         "videoUploadIntent": {
             "storageProvider": video_intent["storageProvider"],
+            "providerMode": video_intent["providerMode"],
+            "requiresClientUpload": video_intent["requiresClientUpload"],
+            "uploadURLScheme": video_intent["uploadURLScheme"],
             "objectKey": video_intent["objectKey"],
         },
         "listedAudio": listed_audio,

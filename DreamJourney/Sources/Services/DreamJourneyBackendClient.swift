@@ -37,6 +37,13 @@ struct ArchiveMediaRuntimeCapability {
     let uploadIntentAvailable: Bool
     let uploadIntentEndpoint: String
     let storageProvider: String
+    let providerDisplayName: String
+    let providerMode: String
+    let requiresClientUpload: Bool
+    let uploadURLScheme: String
+    let realProviderReady: Bool
+    let providerSwitchContractVersion: Int
+    let clientUploadAction: String
     let supportedMediaKinds: [String]
     let audioFileSizeLimitMB: Int
     let videoFileSizeLimitMB: Int
@@ -47,7 +54,21 @@ struct ArchiveMediaRuntimeCapability {
     }
 
     var providerDisplayText: String {
-        "\(storageProvider) · \(uploadIntentEndpoint)"
+        "\(providerDisplayName) · \(storageProvider) · \(uploadIntentEndpoint)"
+    }
+
+    var providerModeDisplayText: String {
+        if providerMode == "mock" || clientUploadAction == "metadataOnly" {
+            return "Mock 模式，仅同步媒体元数据"
+        }
+        if realProviderReady {
+            return "真实对象存储已接入"
+        }
+        return "真实对象存储待接入"
+    }
+
+    var uploadExecutionDisplayText: String {
+        requiresClientUpload ? "需要客户端执行文件 PUT" : "暂不执行真实文件 PUT"
     }
 
     func supports(kind: MemoryArchiveItemKind) -> Bool {
@@ -70,6 +91,13 @@ struct ArchiveMediaRuntimeCapability {
             uploadIntentAvailable: isBackendConfigured,
             uploadIntentEndpoint: MemoryArchiveMediaReleaseReadiness.mediaUploadIntentEndpoint,
             storageProvider: "mockObjectStorage",
+            providerDisplayName: "Mock Object Storage",
+            providerMode: "mock",
+            requiresClientUpload: false,
+            uploadURLScheme: "mock",
+            realProviderReady: false,
+            providerSwitchContractVersion: 1,
+            clientUploadAction: "metadataOnly",
             supportedMediaKinds: [
                 MemoryArchiveItemKind.audio.rawValue,
                 MemoryArchiveItemKind.video.rawValue,
@@ -84,6 +112,13 @@ struct ArchiveMediaRuntimeCapability {
         uploadIntentAvailable: Bool,
         uploadIntentEndpoint: String,
         storageProvider: String,
+        providerDisplayName: String,
+        providerMode: String,
+        requiresClientUpload: Bool,
+        uploadURLScheme: String,
+        realProviderReady: Bool,
+        providerSwitchContractVersion: Int,
+        clientUploadAction: String,
         supportedMediaKinds: [String],
         audioFileSizeLimitMB: Int,
         videoFileSizeLimitMB: Int,
@@ -92,6 +127,13 @@ struct ArchiveMediaRuntimeCapability {
         self.uploadIntentAvailable = uploadIntentAvailable
         self.uploadIntentEndpoint = uploadIntentEndpoint
         self.storageProvider = storageProvider
+        self.providerDisplayName = providerDisplayName
+        self.providerMode = providerMode
+        self.requiresClientUpload = requiresClientUpload
+        self.uploadURLScheme = uploadURLScheme
+        self.realProviderReady = realProviderReady
+        self.providerSwitchContractVersion = providerSwitchContractVersion
+        self.clientUploadAction = clientUploadAction
         self.supportedMediaKinds = supportedMediaKinds
         self.audioFileSizeLimitMB = audioFileSizeLimitMB
         self.videoFileSizeLimitMB = videoFileSizeLimitMB
@@ -103,6 +145,13 @@ struct ArchiveMediaRuntimeCapability {
         uploadIntentEndpoint = json?["uploadIntentEndpoint"] as? String
             ?? MemoryArchiveMediaReleaseReadiness.mediaUploadIntentEndpoint
         storageProvider = json?["storageProvider"] as? String ?? "unknown"
+        providerDisplayName = json?["providerDisplayName"] as? String ?? storageProvider
+        providerMode = json?["providerMode"] as? String ?? "unknown"
+        requiresClientUpload = json?["requiresClientUpload"] as? Bool ?? true
+        uploadURLScheme = json?["uploadURLScheme"] as? String ?? "unknown"
+        realProviderReady = json?["realProviderReady"] as? Bool ?? false
+        providerSwitchContractVersion = Self.intValue(json?["providerSwitchContractVersion"]) ?? 1
+        clientUploadAction = json?["clientUploadAction"] as? String ?? "unknown"
         supportedMediaKinds = json?["supportedMediaKinds"] as? [String] ?? []
         audioFileSizeLimitMB = Self.intValue(json?["audioFileSizeLimitMB"])
             ?? MemoryArchiveMediaReleaseReadiness.audioFileSizeLimitMB
@@ -200,6 +249,13 @@ struct ArchiveMediaUploadIntent {
     let archiveItemId: String
     let kind: String
     let storageProvider: String
+    let providerDisplayName: String
+    let providerMode: String
+    let requiresClientUpload: Bool
+    let uploadURLScheme: String
+    let realProviderReady: Bool
+    let providerSwitchContractVersion: Int
+    let clientUploadAction: String
     let objectKey: String
     let uploadURL: String
     let expiresAt: Date
@@ -214,6 +270,8 @@ struct ArchiveMediaUploadIntent {
               let archiveItemId = json["archiveItemId"] as? String,
               let kind = json["kind"] as? String,
               let storageProvider = json["storageProvider"] as? String,
+              let providerDisplayName = json["providerDisplayName"] as? String,
+              let providerMode = json["providerMode"] as? String,
               let objectKey = json["objectKey"] as? String,
               let uploadURL = json["uploadURL"] as? String,
               let expiresAtValue = json["expiresAt"] as? String,
@@ -228,6 +286,13 @@ struct ArchiveMediaUploadIntent {
         self.archiveItemId = archiveItemId
         self.kind = kind
         self.storageProvider = storageProvider
+        self.providerDisplayName = providerDisplayName
+        self.providerMode = providerMode
+        self.requiresClientUpload = json["requiresClientUpload"] as? Bool ?? true
+        self.uploadURLScheme = json["uploadURLScheme"] as? String ?? "unknown"
+        self.realProviderReady = json["realProviderReady"] as? Bool ?? false
+        self.providerSwitchContractVersion = Self.intValue(json["providerSwitchContractVersion"]) ?? 1
+        self.clientUploadAction = json["clientUploadAction"] as? String ?? "unknown"
         self.objectKey = objectKey
         self.uploadURL = uploadURL
         self.expiresAt = expiresAt
@@ -250,6 +315,19 @@ struct ArchiveMediaUploadIntent {
         }
         if let string = value as? String {
             return Int64(string)
+        }
+        return nil
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.intValue
+        }
+        if let value = value as? String {
+            return Int(value)
         }
         return nil
     }

@@ -1138,6 +1138,13 @@ private extension AppDelegate {
                 "archiveItemId": audioItem.id,
                 "kind": MemoryArchiveItemKind.audio.rawValue,
                 "storageProvider": "mockObjectStorage",
+                "providerDisplayName": "Mock Object Storage",
+                "providerMode": "mock",
+                "requiresClientUpload": false,
+                "uploadURLScheme": "mock",
+                "realProviderReady": false,
+                "providerSwitchContractVersion": 1,
+                "clientUploadAction": "metadataOnly",
                 "objectKey": "archive/audio/\(audioItem.id)/uiqa.m4a",
                 "uploadURL": "mock://archive-media/audio/\(audioItem.id)",
                 "expiresAt": expiresAt,
@@ -1228,6 +1235,14 @@ private extension AppDelegate {
                 "archive-hidden-media-runtime-limit",
                 item: videoItem
             ) && archiveDetailViewContainsText("视频上限 200MB", item: videoItem)
+            let hiddenMediaRuntimeUploadModeVisible = archiveDetailViewContainsIdentifier(
+                "archive-hidden-media-runtime-upload-mode",
+                item: videoItem
+            )
+            let hiddenMediaRuntimeMockCopyVisible = archiveDetailViewContainsText(
+                "Mock 模式，仅同步媒体元数据",
+                item: videoItem
+            ) && archiveDetailViewContainsText("暂不执行真实文件 PUT", item: videoItem)
             let timeLetterDraftActionsVisible = archiveDetailViewContainsIdentifier(
                 "archive-time-letter-draft-state",
                 item: draftLetter
@@ -1287,6 +1302,8 @@ private extension AppDelegate {
                 && hiddenMediaRuntimeCardVisible
                 && hiddenMediaRuntimeProviderVisible
                 && hiddenMediaRuntimeLimitVisible
+                && hiddenMediaRuntimeUploadModeVisible
+                && hiddenMediaRuntimeMockCopyVisible
                 && timeLetterDraftActionsVisible
                 && timeLetterSealedStateVisible
                 && timeLetterDraftDetailVisible
@@ -1329,6 +1346,8 @@ private extension AppDelegate {
                 hiddenMediaRuntimeCardVisible: hiddenMediaRuntimeCardVisible,
                 hiddenMediaRuntimeProviderVisible: hiddenMediaRuntimeProviderVisible,
                 hiddenMediaRuntimeLimitVisible: hiddenMediaRuntimeLimitVisible,
+                hiddenMediaRuntimeUploadModeVisible: hiddenMediaRuntimeUploadModeVisible,
+                hiddenMediaRuntimeMockCopyVisible: hiddenMediaRuntimeMockCopyVisible,
                 timeLetterDraftActionsVisible: timeLetterDraftActionsVisible,
                 timeLetterSealedStateVisible: timeLetterSealedStateVisible,
                 timeLetterDraftDetailVisible: timeLetterDraftDetailVisible,
@@ -2354,6 +2373,8 @@ private extension AppDelegate {
         hiddenMediaRuntimeCardVisible: Bool = false,
         hiddenMediaRuntimeProviderVisible: Bool = false,
         hiddenMediaRuntimeLimitVisible: Bool = false,
+        hiddenMediaRuntimeUploadModeVisible: Bool = false,
+        hiddenMediaRuntimeMockCopyVisible: Bool = false,
         timeLetterDraftActionsVisible: Bool,
         timeLetterSealedStateVisible: Bool,
         timeLetterDraftDetailVisible: Bool = false,
@@ -2397,6 +2418,8 @@ private extension AppDelegate {
             "hiddenMediaRuntimeCardVisible": hiddenMediaRuntimeCardVisible,
             "hiddenMediaRuntimeProviderVisible": hiddenMediaRuntimeProviderVisible,
             "hiddenMediaRuntimeLimitVisible": hiddenMediaRuntimeLimitVisible,
+            "hiddenMediaRuntimeUploadModeVisible": hiddenMediaRuntimeUploadModeVisible,
+            "hiddenMediaRuntimeMockCopyVisible": hiddenMediaRuntimeMockCopyVisible,
             "timeLetterDraftActionsVisible": timeLetterDraftActionsVisible,
             "timeLetterSealedStateVisible": timeLetterSealedStateVisible,
             "timeLetterDraftDetailVisible": timeLetterDraftDetailVisible,

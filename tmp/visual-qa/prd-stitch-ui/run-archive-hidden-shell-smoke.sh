@@ -157,6 +157,8 @@ grep -Eq '"videoDetailRetryActionVisible"[[:space:]]*:[[:space:]]*true' "$RESULT
 grep -Eq '"hiddenMediaRuntimeCardVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Hidden media runtime capability card should be visible."
 grep -Eq '"hiddenMediaRuntimeProviderVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Hidden media runtime provider should be visible."
 grep -Eq '"hiddenMediaRuntimeLimitVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Hidden media runtime file-size limit should be visible."
+grep -Eq '"hiddenMediaRuntimeUploadModeVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Hidden media runtime upload mode should be visible."
+grep -Eq '"hiddenMediaRuntimeMockCopyVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Hidden media runtime mock provider copy should be visible."
 grep -Eq '"timeLetterDraftActionsVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter draft detail actions should be visible."
 grep -Eq '"timeLetterSealedStateVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter sealed detail state should be visible."
 grep -Eq '"timeLetterDraftDetailVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter draft detail state should be visible."

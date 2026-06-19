@@ -81,6 +81,8 @@ for key in [
     "videoDetailThumbnailPlaceholderVisible",
     "videoDetailFailedStateVisible",
     "videoDetailRetryActionVisible",
+    "hiddenMediaRuntimeUploadModeVisible",
+    "hiddenMediaRuntimeMockCopyVisible",
     "timeLetterDraftDetailVisible",
     "timeLetterSealedDetailVisible",
     "timeLetterEmptyBodyVisible",
@@ -96,6 +98,7 @@ for name in required_snapshots:
 listed_audio = backend.get("listedAudio") or {}
 listed_video = backend.get("listedVideo") or {}
 listed_letter = backend.get("listedTimeLetter") or {}
+runtime_archive = backend.get("runtimeArchive") or {}
 audio_metadata = listed_audio.get("metadata") or {}
 video_metadata = listed_video.get("metadata") or {}
 letter_metadata = listed_letter.get("metadata") or {}
@@ -106,6 +109,8 @@ if listed_video.get("kind") != "video" or video_metadata.get("uploadStatus") != 
     raise SystemExit("Backend video archive contract is incomplete")
 if listed_letter.get("kind") != "timeLetter" or letter_metadata.get("deliveryDecisionRequired") != "true":
     raise SystemExit("Backend time-letter archive contract is incomplete")
+if runtime_archive.get("storageProvider") != "mockObjectStorage" or runtime_archive.get("requiresClientUpload") is not False:
+    raise SystemExit("Backend runtime provider switch contract is incomplete")
 
 created_ids = backend.get("createdIds") or []
 health = backend.get("health") or {}
@@ -137,6 +142,8 @@ report += f"""
 ## Contract Summary
 
 - Backend store: `{health.get("store")}`
+- Runtime provider mode: `{runtime_archive.get("providerMode")}`
+- Runtime requires client upload: `{runtime_archive.get("requiresClientUpload")}`
 - Created IDs: `{created_ids}`
 - Audio uploadStatus: `{audio_metadata.get("uploadStatus")}`
 - Video uploadStatus: `{video_metadata.get("uploadStatus")}`

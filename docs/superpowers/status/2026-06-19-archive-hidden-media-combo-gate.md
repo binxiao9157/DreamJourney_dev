@@ -47,6 +47,20 @@ tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
 
 隐藏媒体详情页不再只依赖本地 mock 状态判断能力；audio/video 详情会读取 `/config/runtime.archive`，并展示 `storageProvider`、`supportedMediaKinds`、`audioFileSizeLimitMB` / `videoFileSizeLimitMB` 和 `uploadIntentTTLSeconds`。读取失败时显示本地合同兜底，但仍保留后端能力卡，避免用户把“mock 状态”误解为真实后端能力。
 
+## Provider switch contract
+
+当前上传 provider 固定为 `mockObjectStorage`，合同含义是“仅同步媒体元数据”，不会执行真实对象存储文件 PUT。后端 `/config/runtime.archive` 和 `/archive/media/upload-intent` 需要同时暴露以下字段，用于未来从 mock provider 切到真实对象存储 provider 时保持客户端语义稳定：
+
+- `providerDisplayName`
+- `providerMode`
+- `requiresClientUpload`
+- `uploadURLScheme`
+- `realProviderReady`
+- `providerSwitchContractVersion`
+- `clientUploadAction`
+
+iOS hidden media 详情页展示 provider switch contract 文案：`Mock 模式，仅同步媒体元数据`、`暂不执行真实文件 PUT`。如果未来后端返回 `requiresClientUpload=true`，当前客户端不会把媒体误标为已上传，而是显示 `真实对象存储上传尚未开放`，等真实 PUT 链路实现后再放开。
+
 ## 依赖
 
 - 模拟器可用。

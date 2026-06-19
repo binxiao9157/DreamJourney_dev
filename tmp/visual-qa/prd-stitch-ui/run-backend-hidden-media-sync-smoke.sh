@@ -127,6 +127,7 @@ with open(result_path, "r", encoding="utf-8") as handle:
     result = json.load(handle)
 
 health = result.get("health") or {}
+runtime_archive = result.get("runtimeArchive") or {}
 audio = result.get("listedAudio") or {}
 video = result.get("listedVideo") or {}
 letter = result.get("listedTimeLetter") or {}
@@ -146,11 +147,15 @@ Status: passed
 - Backend API token: configured, value intentionally omitted
 - User ID: `{user_id}`
 - Backend store: `{health.get("store")}`
+- Runtime media provider: `{runtime_archive.get("storageProvider")}`
+- Runtime provider mode: `{runtime_archive.get("providerMode")}`
+- Runtime requires client upload: `{runtime_archive.get("requiresClientUpload")}`
 
 ## Scope
 
 - Mock audio payload -> `/archive/media/upload-intent` -> `/archive/items` -> `GET /archive/items/{{userId}}`
 - Mock video payload -> `/archive/media/upload-intent` -> `/archive/items` -> `GET /archive/items/{{userId}}`
+- `/config/runtime.archive` provider switch contract for mockObjectStorage vs future object storage provider.
 - Time-letter sealed payload -> `/archive/items` -> `GET /archive/items/{{userId}}`
 - Verifies field roundtrip for upload object metadata, transcript, thumbnail object key, and delivery metadata.
 - Verifies privacy filtering for local/raw media paths before payloads are treated as backend-visible contracts.
