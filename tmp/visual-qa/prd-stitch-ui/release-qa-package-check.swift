@@ -124,6 +124,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-19-archive-failed-analysis-retry-smoke.md",
     "docs/superpowers/status/2026-06-19-profile-care-state-smoke.md",
     "docs/superpowers/status/2026-06-19-profile-care-backend-state-smoke.md",
+    "docs/superpowers/status/2026-06-19-time-letter-backend-lifecycle.md",
 ]
 
 for doc in requiredDocs {
@@ -166,6 +167,7 @@ assertContains(releaseRegression, "RUN_PUBLIC_MVP_REGRESSION forces RUN_P0_ARCHI
 assertContains(releaseRegression, "RUN_P0_ARCHIVE_ECHO_REGRESSION", "release regression should expose public MVP Archive -> Echo P0 gate")
 assertContains(releaseRegression, "RUN_P0_ARCHIVE_ECHO_REGRESSION forces RUN_SIMULATOR_SMOKE", "Archive -> Echo P0 gate should force the core simulator smoke")
 assertContains(releaseRegression, "RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE", "release regression should expose deployed archive image-analysis smoke")
+assertContains(releaseRegression, "RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE", "release regression should expose deployed time-letter lifecycle smoke")
 assertContains(releaseRegression, "RUN_P0_PROFILE_CARE_REGRESSION", "release regression should expose public MVP Profile care P0 gate")
 assertContains(releaseRegression, "RUN_P0_PROFILE_CARE_REGRESSION forces RUN_PROFILE_CARE_STATE_SMOKE and RUN_PROFILE_CARE_BACKEND_STATE_SMOKE", "Profile care P0 gate should force local and deployed backend care smokes")
 assertContains(releaseRegression, "BACKEND_API_TOKEN= BACKEND_BASE_URL= ./scripts/verify_backend.sh", "backend verify should not inherit deployed backend credentials")
@@ -184,6 +186,7 @@ for handoffGuard in [
     "archive-media-backend-contract-check.swift",
     "archive-media-upload-intent-contract-check.swift",
     "archive-hidden-media-timeletter-shell-check.swift",
+    "archive-time-letter-backend-lifecycle-check.swift",
     "archive-analysis-insights-contract-check.swift",
     "archive-analysis-backend-payload-contract-check.swift",
     "archive-context-snapshot-check.swift",
@@ -282,10 +285,13 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/archive-media-upload-intent-contract-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-hidden-media-timeletter-shell-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-hidden-media-backend-upload-lifecycle-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/archive-time-letter-backend-lifecycle-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-hidden-media-detail-ui-check.swift",
     "tmp/visual-qa/prd-stitch-ui/run-archive-hidden-shell-smoke.sh",
     "tmp/visual-qa/prd-stitch-ui/backend-hidden-media-sync-smoke.py",
     "tmp/visual-qa/prd-stitch-ui/run-backend-hidden-media-sync-smoke.sh",
+    "tmp/visual-qa/prd-stitch-ui/backend-time-letter-lifecycle-smoke.py",
+    "tmp/visual-qa/prd-stitch-ui/run-backend-time-letter-lifecycle-smoke.sh",
     "tmp/visual-qa/prd-stitch-ui/archive-analysis-insights-contract-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-analysis-backend-payload-contract-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-context-snapshot-check.swift",

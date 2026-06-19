@@ -649,6 +649,13 @@ extension MemoryArchiveItem {
         if let fileSizeLimitMB = metadata[Self.mediaFileSizeLimitMBMetadataKey], !fileSizeLimitMB.isEmpty {
             payload["fileSizeLimitMB"] = fileSizeLimitMB
         }
+        if kind == .timeLetter {
+            let deliveryState = metadata["deliveryState"] ?? (isTimeLetterDraft ? "draft" : "sealed")
+            payload["deliveryState"] = deliveryState
+            payload["timeLetterStatus"] = metadata["timeLetterStatus"] ?? deliveryState
+            payload["deliveryPolicy"] = metadata["deliveryPolicy"] ?? "pending_product_decision"
+            payload["metadataOnly"] = true
+        }
         return payload
     }
 

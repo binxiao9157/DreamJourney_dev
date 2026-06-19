@@ -246,6 +246,15 @@ final class DreamJourneyBackendClient {
         requestJSON(path: "/archive/items", method: .post, payload: payload, completion: completion)
     }
 
+    func deleteArchiveItem(
+        userId: String,
+        itemId: String,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        let path = "/archive/items/\(pathComponent(userId))/\(pathComponent(itemId))"
+        requestJSON(path: path, method: .delete, payload: nil, completion: completion)
+    }
+
     func fetchRuntimeConfig(completion: @escaping (Result<BackendRuntimeConfig, Error>) -> Void) {
         requestJSON(path: "/config/runtime", method: .get, payload: nil) { result in
             completion(result.map(BackendRuntimeConfig.init(json:)))
