@@ -52,6 +52,7 @@ let matrix = read("docs/superpowers/status/2026-06-17-release-feature-matrix.md"
 
 let expectedDefaults: Set<String> = [
     "careDashboard",
+    "personaSettings",
     "profileSettings",
     "legalCenter",
 ]
@@ -60,7 +61,6 @@ let hiddenByDefault: Set<String> = [
     "echoTextInput",
     "echoImageInput",
     "timeLetters",
-    "personaSettings",
     "archiveAudioUpload",
     "archiveVideoUpload",
     "archiveRemoteFetch",
@@ -97,6 +97,9 @@ assertContains(archive, "FeatureFlagService.shared.isEnabled(.archiveRemoteFetch
 assertContains(archive, "FeatureFlagService.shared.isEnabled(.timeLetters)", "time-letter branch must be release gated")
 assertContains(archive, "FeatureFlagService.shared.isEnabled(.personaSettings)", "persona branch must be release gated")
 assertContains(archive, "var inputs = [\"文字\", \"图片\"]", "archive CTA subtitle must start from public inputs")
+assertContains(archive, "action: #selector(photoCardTapped)", "archive photo feature card should not duplicate photo creation")
+assertContains(archive, "applyArchiveKindFilter(.audio)", "archive voice feature card should open the voice archive category")
+assertContains(archive, "navigationController?.pushViewController(KnowledgeBaseViewController(), animated: true)", "archive persona card should open persona settings")
 
 assertContains(echo, "accessibilityLabel = \"开始语音\"", "echo must expose voice-first public control")
 assertNotContains(echo, "FeatureFlagService.shared.isEnabled(.echoTextInput)", "echo text input should not be publicly wired yet")
@@ -127,6 +130,9 @@ assertContains(legal, "紧急情况", "legal center must cover emergency guidanc
 for label in ["记忆档案", "回响", "我的", "添加文字描述", "选择照片", "个人资料设置", "法律法规", "退出登录"] {
     assertContains(matrix, label, "release matrix must document public label \(label)")
 }
+for label in ["语音档案", "人格设定"] {
+    assertContains(matrix, label, "release matrix must document PRD archive feature-card label \(label)")
+}
 
 for label in ["录入语音", "录入时间信件", "家人管理", "注销账户", "修改密码", "立即通话"] {
     assertContains(matrix, label, "release matrix must document hidden label \(label)")
@@ -141,7 +147,6 @@ let hiddenDecisionRows = [
     "| archive audio upload | `DJFeature.archiveAudioUpload` or `DJEnableArchiveHiddenBranches` | no | true-device recording acceptance, storage/privacy copy, backend media policy | `archive-media-entries-smoke-check.swift`, release regression |",
     "| time letters | `DJFeature.timeLetters` or `DJEnableArchiveHiddenBranches` | no | delivery/scheduling policy, reminder semantics, true-device notification decision | `archive-media-entries-smoke-check.swift`, release regression |",
     "| video upload | `DJFeature.archiveVideoUpload` or `DJEnableArchiveHiddenBranches` shell only | no | PRD scope, picker/compression/storage/backend policy, true-device video picker acceptance | `archive-media-entries-smoke-check.swift`, `archive-media-release-readiness-check.swift`, release regression |",
-    "| persona settings | `DJFeature.personaSettings` or `DJEnableArchiveHiddenBranches` | no | product copy, profile ownership model, prompt safety review | `release-feature-matrix-check.swift` |",
     "| family management public release | `DJFeature.familyManagement` or `DJEnableProfileHiddenBranches` | no | invitation/permission model, backend membership contract, privacy copy | `profile-family-persona-switcher-check.swift` |",
     "| care dashboard expansion | aggregate `DJFeature.careDashboard` and non-executing `关怀升级准备中` placeholder are public; intervention/contact execution stays behind `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | aggregate + placeholder only | family-facing copy, alert thresholds, backend persistence, true-device acceptance | `elder-care-dashboard-check.swift`, `profile-care-public-placeholder-check.swift`, backend acceptance |",
     "| account deletion execution | `DJFeature.accountDeletion` or `DJEnableProfileHiddenBranches` safety shell only | no | compliance policy, cooling-off period, backend deletion/export contract | `profile-safety-flow-check.swift` |",

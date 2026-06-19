@@ -43,6 +43,74 @@ private enum ArchiveLayout {
     static let timelineBadgeSpacing: CGFloat = 6
 }
 
+private enum ArchiveKindFilter {
+    case photo
+    case audio
+    case text
+    case timeLetter
+    case video
+
+    var kind: MemoryArchiveItemKind {
+        switch self {
+        case .photo:
+            return .photo
+        case .audio:
+            return .audio
+        case .text:
+            return .text
+        case .timeLetter:
+            return .timeLetter
+        case .video:
+            return .video
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .photo:
+            return "相册影像"
+        case .audio:
+            return "语音档案"
+        case .text:
+            return "文字记忆"
+        case .timeLetter:
+            return "时间信件"
+        case .video:
+            return "视频片段"
+        }
+    }
+
+    var emptyTitle: String {
+        switch self {
+        case .photo:
+            return "还没有相册影像"
+        case .audio:
+            return "还没有语音档案"
+        case .text:
+            return "还没有文字记忆"
+        case .timeLetter:
+            return "还没有时间信件"
+        case .video:
+            return "还没有视频片段"
+        }
+    }
+
+    var emptyDetail: String {
+        switch self {
+        case .photo:
+            return "点按封存新记忆，再选择照片。"
+        case .audio:
+            return "语音档案入口已就位，录音创建会在真机录音验收后开放。"
+        case .text:
+            return "点按封存新记忆，写下一段文字描述。"
+        case .timeLetter:
+            return "时间信件仍在确认投递和提醒策略。"
+        case .video:
+            return "视频片段仍在确认压缩、缩略图和存储策略。"
+        }
+    }
+}
+
 final class MemoryArchiveViewController: UIViewController {
     private let repository: MemoryArchiveRepository
 
@@ -51,12 +119,14 @@ final class MemoryArchiveViewController: UIViewController {
     private let mainStack = UIStackView()
     private let featureCardsStack = UIStackView()
     private let listStack = UIStackView()
+    private let archiveFilterButton = UIButton(type: .system)
 
     private let summaryLabel = UILabel()
     private let progressLabel = UILabel()
     private let remoteSyncCaptionLabel = PaddingLabel(horizontalInset: 12, verticalInset: 8)
     private let analysisPrivacyDisclaimerLabel = PaddingLabel(horizontalInset: 12, verticalInset: 8)
     private var isRefreshingFromBackend = false
+    private var activeKindFilter: ArchiveKindFilter?
 
     private var creationOptions: [MemoryArchiveCreationOption] {
         MemoryArchiveCreationOption.availableOptions(
@@ -207,17 +277,20 @@ final class MemoryArchiveViewController: UIViewController {
         let header = makeHeader()
         configureAnalysisPrivacyDisclaimerLabel()
         configureRemoteSyncCaptionLabel()
+        configureArchiveFilterButton()
         mainStack.addArrangedSubview(header)
         mainStack.addArrangedSubview(featureCardsStack)
         mainStack.addArrangedSubview(analysisPrivacyDisclaimerLabel)
         mainStack.addArrangedSubview(remoteSyncCaptionLabel)
         mainStack.addArrangedSubview(makePrimaryCTA())
         mainStack.addArrangedSubview(makeTimelineHeader())
+        mainStack.addArrangedSubview(archiveFilterButton)
         mainStack.addArrangedSubview(listStack)
         mainStack.setCustomSpacing(ArchiveLayout.afterHeaderSpacing, after: header)
         mainStack.setCustomSpacing(ArchiveLayout.afterFeatureGridSpacing, after: featureCardsStack)
         mainStack.setCustomSpacing(ArchiveLayout.afterFeatureGridSpacing, after: analysisPrivacyDisclaimerLabel)
         mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: remoteSyncCaptionLabel)
+        mainStack.setCustomSpacing(8, after: archiveFilterButton)
         mainStack.setCustomSpacing(ArchiveLayout.afterListSpacing, after: listStack)
     }
 
@@ -233,6 +306,7 @@ final class MemoryArchiveViewController: UIViewController {
         progressLabel.text = "档案素材和每一次回响对话，都会补足称呼、关系、偏好与生活线索，让数字人格更接近真实的表达方式。"
 
         reloadFeatureCards(summary: summary)
+        updateArchiveFilterButton()
         reloadArchiveList()
     }
 
@@ -287,6 +361,32 @@ final class MemoryArchiveViewController: UIViewController {
         remoteSyncCaptionLabel.isHidden = true
     }
 
+    private func configureArchiveFilterButton() {
+        archiveFilterButton.titleLabel?.font = DJDesignTokens.Font.label(12)
+        archiveFilterButton.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
+        archiveFilterButton.backgroundColor = DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.72)
+        archiveFilterButton.layer.cornerRadius = 14
+        archiveFilterButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
+        archiveFilterButton.contentHorizontalAlignment = .leading
+        archiveFilterButton.accessibilityIdentifier = "archiveKindFilter"
+        archiveFilterButton.isHidden = true
+        archiveFilterButton.addTarget(self, action: #selector(clearArchiveKindFilterTapped), for: .touchUpInside)
+    }
+
+    private func updateArchiveFilterButton() {
+        guard let activeKindFilter else {
+            archiveFilterButton.setTitle(nil, for: .normal)
+            archiveFilterButton.accessibilityLabel = nil
+            archiveFilterButton.isHidden = true
+            return
+        }
+
+        let title = "正在查看：\(activeKindFilter.title) · 查看全部"
+        archiveFilterButton.setTitle(title, for: .normal)
+        archiveFilterButton.accessibilityLabel = title
+        archiveFilterButton.isHidden = false
+    }
+
     private func setArchiveRemoteSyncStatus(_ status: ArchiveRemoteSyncStatus) {
         switch status {
         case .idle:
@@ -313,14 +413,24 @@ final class MemoryArchiveViewController: UIViewController {
 
     private func reloadArchiveList() {
         listStack.removeAllArrangedSubviews()
-        let items = repository.allItems()
+        let allItems = repository.allItems()
+        let items: [MemoryArchiveItem]
+        if let activeKindFilter {
+            items = allItems.filter { $0.kind == activeKindFilter.kind }
+        } else {
+            items = allItems
+        }
 
         if items.isEmpty {
             #if UI_QA_SIMULATOR && targetEnvironment(simulator)
-            listStack.addArrangedSubview(makeStitchPhotoMemoryCard())
-            listStack.addArrangedSubview(makeStitchAudioMemoryCard())
+            if activeKindFilter == nil {
+                listStack.addArrangedSubview(makeStitchPhotoMemoryCard())
+                listStack.addArrangedSubview(makeStitchAudioMemoryCard())
+            } else {
+                listStack.addArrangedSubview(makeEmptyStateCard(filter: activeKindFilter))
+            }
             #else
-            listStack.addArrangedSubview(makeEmptyStateCard())
+            listStack.addArrangedSubview(makeEmptyStateCard(filter: activeKindFilter))
             #endif
             return
         }
@@ -504,10 +614,10 @@ final class MemoryArchiveViewController: UIViewController {
             title: "相册影像",
             detail: photoDetail,
             isLarge: true,
-            action: #selector(selectPhotoTapped)
+            action: #selector(photoCardTapped)
         )
 
-        let secondaryTiles = makeSecondaryFeatureTiles()
+        let secondaryTiles = makeSecondaryFeatureTiles(summary: summary)
         guard !secondaryTiles.isEmpty else {
             NSLayoutConstraint.activate([
                 photoCard.heightAnchor.constraint(equalToConstant: ArchiveLayout.featureGridHeight),
@@ -532,24 +642,22 @@ final class MemoryArchiveViewController: UIViewController {
         return grid
     }
 
-    private func makeSecondaryFeatureTiles() -> [UIView] {
+    private func makeSecondaryFeatureTiles(summary: (total: Int, photos: Int, audio: Int, text: Int)) -> [UIView] {
         var tiles: [UIView] = []
 
-        if isArchiveAudioCreationEnabled {
-            tiles.append(makeFeatureTile(
-                iconName: "waveform",
-                title: "语音档案",
-                detail: nil,
-                isLarge: false,
-                action: #selector(audioCardTapped)
-            ))
-        }
+        tiles.append(makeFeatureTile(
+            iconName: "waveform",
+            title: "语音档案",
+            detail: "\(summary.audio) 段声音",
+            isLarge: false,
+            action: #selector(audioCardTapped)
+        ))
 
         if isPersonaSettingsVisible {
             tiles.append(makeFeatureTile(
                 iconName: "slider.horizontal.3",
                 title: "人格设定",
-                detail: nil,
+                detail: "称呼偏好",
                 isLarge: false,
                 action: #selector(personaCardTapped)
             ))
@@ -1407,7 +1515,7 @@ final class MemoryArchiveViewController: UIViewController {
         return card
     }
 
-    private func makeEmptyStateCard() -> UIView {
+    private func makeEmptyStateCard(filter: ArchiveKindFilter? = nil) -> UIView {
         let card = DJComponentFactory.cardView(radius: DJDesignTokens.Radius.medium)
         let stack = UIStackView()
         stack.axis = .vertical
@@ -1419,13 +1527,13 @@ final class MemoryArchiveViewController: UIViewController {
         iconView.contentMode = .scaleAspectFit
 
         let titleLabel = UILabel()
-        titleLabel.text = "还没有封存的记忆"
+        titleLabel.text = filter?.emptyTitle ?? "还没有封存的记忆"
         titleLabel.font = DJDesignTokens.Font.title(16)
         titleLabel.textColor = DJDesignTokens.Color.textPrimary
         titleLabel.textAlignment = .center
 
         let detailLabel = UILabel()
-        detailLabel.text = "先写下一段文字，或从相册选择一张照片。"
+        detailLabel.text = filter?.emptyDetail ?? "先写下一段文字，或从相册选择一张照片。"
         detailLabel.font = DJDesignTokens.Font.body(13)
         detailLabel.textColor = DJDesignTokens.Color.textSecondary
         detailLabel.numberOfLines = 0
@@ -1554,16 +1662,16 @@ final class MemoryArchiveViewController: UIViewController {
         )
     }
 
+    @objc private func photoCardTapped() {
+        applyArchiveKindFilter(.photo)
+    }
+
     @objc private func selectPhotoTapped() {
         presentPhotoEntry()
     }
 
     @objc private func audioCardTapped() {
-        guard isArchiveAudioCreationEnabled else {
-            showToast("语音素材录入将在后续开放", type: .info)
-            return
-        }
-        presentAudioEntry()
+        applyArchiveKindFilter(.audio)
     }
 
     @objc private func personaCardTapped() {
@@ -1572,6 +1680,26 @@ final class MemoryArchiveViewController: UIViewController {
             return
         }
         navigationController?.pushViewController(KnowledgeBaseViewController(), animated: true)
+    }
+
+    @objc private func clearArchiveKindFilterTapped() {
+        activeKindFilter = nil
+        refreshContent()
+    }
+
+    private func applyArchiveKindFilter(_ filter: ArchiveKindFilter) {
+        activeKindFilter = filter
+        refreshContent()
+        scrollToArchiveList()
+    }
+
+    private func scrollToArchiveList() {
+        view.layoutIfNeeded()
+        let targetRect = listStack.convert(listStack.bounds, to: scrollView)
+        scrollView.scrollRectToVisible(
+            targetRect.insetBy(dx: 0, dy: -24),
+            animated: true
+        )
     }
 
     @objc private func mapFootprintTapped() {

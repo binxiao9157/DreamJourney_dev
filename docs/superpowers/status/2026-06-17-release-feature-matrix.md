@@ -19,8 +19,9 @@ These items are available without hidden-branch launch arguments and without man
 | --- | --- | --- |
 | App shell | `记忆档案`, `回响`, `我的` | `TabCoordinator` builds the 3-tab PRD shell. |
 | Login | Stitch-aligned light login form | `LoginViewController` keeps existing auth callback behavior. |
-| Archive overview | `记忆档案馆`, `相册影像`, `封存新记忆`, timeline list | `MemoryArchiveViewController` renders the archive home. |
+| Archive overview | `记忆档案馆`, `相册影像`, `语音档案`, `人格设定`, `封存新记忆`, timeline list | `MemoryArchiveViewController` renders the PRD archive home. Feature cards are category/capability entries; `封存新记忆` remains the creation entry. |
 | Archive creation | Text and photo only: `添加文字描述`, `选择照片` | `MemoryArchiveCreationOption.availableOptions` always starts with `.text`, `.photo`. |
+| Archive persona | `人格设定` opens the persona/knowledge settings surface | `DJFeature.personaSettings` is enabled by default. |
 | Echo | Voice-first interaction: `开始语音` | `EchoViewController` exposes mic interaction, not text/image input controls. |
 | Profile care | Persona card, `心境追踪`, aggregate `长辈关怀` child dashboard, loading/empty/stale/failed care states, non-executing `关怀升级准备中` placeholder, doctor identity row without call action | `DJFeature.careDashboard` is enabled by default; `careDoctorContact` is not. |
 | Profile settings | `个人资料设置`, `法律法规`, `退出登录` | `DJFeature.profileSettings` and `DJFeature.legalCenter` are enabled by default; logout is always appended. |
@@ -31,6 +32,7 @@ Default enabled feature flags must remain exactly:
 
 ```text
 careDashboard
+personaSettings
 profileSettings
 legalCenter
 ```
@@ -46,7 +48,6 @@ These items must not appear in the public release surface yet.
 | Archive | Audio upload / `录入语音` | `DJFeature.archiveAudioUpload` or `DJEnableArchiveHiddenBranches` only. |
 | Archive | Video upload / `录入视频片段` | `DJFeature.archiveVideoUpload` or `DJEnableArchiveHiddenBranches` shell only. |
 | Archive | Time-letter creation / `录入时间信件` | `DJFeature.timeLetters` or `DJEnableArchiveHiddenBranches` only. |
-| Archive | Persona settings / `人格设定` | `DJFeature.personaSettings` or `DJEnableArchiveHiddenBranches` only. |
 | Archive backend | Remote archive fetch | `DJFeature.archiveRemoteFetch` only; default public app stays local-first. |
 | Archive detail | Local analysis debug controls | `DJFeature.archiveLocalAnalysis`, debug/UIQA only. |
 | Profile | `家人管理` | `DJFeature.familyManagement` or `DJEnableProfileHiddenBranches` only. |
@@ -65,7 +66,6 @@ No hidden PRD feature is public by default. These candidates may be available in
 | archive audio upload | `DJFeature.archiveAudioUpload` or `DJEnableArchiveHiddenBranches` | no | true-device recording acceptance, storage/privacy copy, backend media policy | `archive-media-entries-smoke-check.swift`, release regression |
 | time letters | `DJFeature.timeLetters` or `DJEnableArchiveHiddenBranches` | no | delivery/scheduling policy, reminder semantics, true-device notification decision | `archive-media-entries-smoke-check.swift`, release regression |
 | video upload | `DJFeature.archiveVideoUpload` or `DJEnableArchiveHiddenBranches` shell only | no | PRD scope, picker/compression/storage/backend policy, true-device video picker acceptance | `archive-media-entries-smoke-check.swift`, `archive-media-release-readiness-check.swift`, release regression |
-| persona settings | `DJFeature.personaSettings` or `DJEnableArchiveHiddenBranches` | no | product copy, profile ownership model, prompt safety review | `release-feature-matrix-check.swift` |
 | family management public release | `DJFeature.familyManagement` or `DJEnableProfileHiddenBranches` | no | invitation/permission model, backend membership contract, privacy copy | `profile-family-persona-switcher-check.swift` |
 | care dashboard expansion | aggregate `DJFeature.careDashboard` and non-executing `关怀升级准备中` placeholder are public; intervention/contact execution stays behind `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | aggregate + placeholder only | family-facing copy, alert thresholds, backend persistence, true-device acceptance | `elder-care-dashboard-check.swift`, `profile-care-public-placeholder-check.swift`, backend acceptance |
 | account deletion execution | `DJFeature.accountDeletion` or `DJEnableProfileHiddenBranches` safety shell only | no | compliance policy, cooling-off period, backend deletion/export contract | `profile-safety-flow-check.swift` |

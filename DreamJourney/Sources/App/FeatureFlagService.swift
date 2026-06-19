@@ -24,9 +24,10 @@ final class FeatureFlagService {
 
     private static let storageKey = "dj.featureFlags.enabled"
     private static let storageVersionKey = "dj.featureFlags.schemaVersion"
-    private static let currentStorageVersion = 2
+    private static let currentStorageVersion = 3
     private static let defaultEnabled: Set<DJFeature> = [
         .careDashboard,
+        .personaSettings,
         .profileSettings,
         .legalCenter,
     ]
