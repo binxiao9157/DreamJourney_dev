@@ -173,6 +173,39 @@ True-device evidence to save:
 - 照片选择到档案沉淀再到回响上下文的截图。
 - 控制台或设备日志中与权限、录音、照片选择相关的错误摘要。
 
+## Archive Audio True-Device Acceptance
+
+语音档案真机前置验收使用专用脚本，不和回响语音对话验收混在一起：
+
+```bash
+cd /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+RUN_ID=20260619-archive-audio-true-device-preflight \
+tmp/visual-qa/prd-stitch-ui/run-true-device-archive-audio-preflight.sh
+```
+
+该脚本会保存 `xcodebuild-destinations.txt`、`devicectl-devices.txt`、`xctrace-devices.txt` 和 `report.md`，并在在线真机可用时执行 Debug device build。设备离线、未解锁、未信任或 Xcode 无法发现物理设备时，脚本必须写出 blocked report，不允许声明通过。
+
+人工验收仍要使用 hidden QA 入口 `DJEnableArchiveHiddenBranches`，确认：
+
+- 记忆档案 -> 封存新记忆 -> 录入语音。
+- 首次麦克风授权、拒绝、从系统设置重新授权均可恢复。
+- 保存后的语音档案可进入详情播放路由。
+- 前后台切换后列表、详情和本地音频文件不丢。
+- 录音质量需要人工记录，包含清晰度、音量、噪声、截断和播放失败。
+
+需要保存截图：
+
+- `01-audio-permission-allow.png`
+- `02-audio-permission-deny.png`
+- `03-audio-permission-recover.png`
+- `04-audio-created.png`
+- `05-audio-detail-playback.png`
+- `06-audio-after-background-foreground.png`
+
+对应状态文档：
+
+- `docs/superpowers/status/2026-06-19-true-device-archive-audio-acceptance.md`
+
 ## Simulator Core Regression
 
 每次 Stitch UI、档案逻辑或回响逻辑更新后，先跑核心闭环回归：
@@ -207,6 +240,7 @@ swift tmp/visual-qa/prd-stitch-ui/backend-build-config-check.swift /Users/yxj/Do
 swift tmp/visual-qa/prd-stitch-ui/backend-env-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/backend-family-acceptance-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/true-device-voice-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/true-device-archive-audio-acceptance-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 ```
