@@ -169,6 +169,10 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
             contentStack.addArrangedSubview(mediaCard)
         }
 
+        if let hiddenMediaStateCard = makeHiddenMediaStateCard() {
+            contentStack.addArrangedSubview(hiddenMediaStateCard)
+        }
+
         contentStack.addArrangedSubview(makeMetadataCard())
         contentStack.addArrangedSubview(makePrimaryContentCard())
         contentStack.addArrangedSubview(makeAnalysisCard())
@@ -236,6 +240,8 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
             return makePhotoMediaCard()
         case .audio:
             return makeAudioMediaCard()
+        case .video:
+            return makeVideoMediaCard()
         default:
             return nil
         }
@@ -341,8 +347,6 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     }
 
     private func makeAudioMediaCard() -> UIView? {
-        guard item.localPath != nil else { return nil }
-
         let presentation = item.archivePresentation
         let card = makeDetailCard(radius: DJDesignTokens.Radius.large)
         let stack = UIStackView()
@@ -357,9 +361,14 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         playButton.backgroundColor = DJDesignTokens.Color.accent
         playButton.tintColor = DJDesignTokens.Color.accentDeep
         playButton.layer.cornerRadius = 24
-        playButton.setImage(UIImage(systemName: "play.fill"), for: .normal)
+        playButton.setImage(UIImage(systemName: item.localPath == nil ? "waveform.slash" : "play.fill"), for: .normal)
+        playButton.isEnabled = item.localPath != nil
+        playButton.alpha = item.localPath == nil ? 0.68 : 1
+        playButton.accessibilityIdentifier = item.localPath == nil
+            ? "archive-audio-media-placeholder"
+            : "archive-audio-play-button"
         playButton.addTarget(self, action: #selector(playAudioTapped), for: .touchUpInside)
-        audioPlayButton = playButton
+        audioPlayButton = item.localPath == nil ? nil : playButton
 
         let titleStack = UIStackView()
         titleStack.axis = .vertical
@@ -422,6 +431,257 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         ])
 
         return card
+    }
+
+    private func makeVideoMediaCard() -> UIView? {
+        let presentation = item.archivePresentation
+        let card = makeDetailCard(radius: DJDesignTokens.Radius.extraLarge)
+        card.clipsToBounds = true
+        card.accessibilityIdentifier = "archive-video-media-card"
+
+        let mediaContainer = UIView()
+        mediaContainer.backgroundColor = DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.86)
+        mediaContainer.clipsToBounds = true
+        mediaContainer.layer.cornerRadius = DJDesignTokens.Radius.large
+
+        let thumbnailImage = item.metadata[MemoryArchiveItem.mediaThumbnailPathMetadataKey]
+            .flatMap { UIImage(contentsOfFile: $0) }
+        let hasThumbnail = thumbnailImage != nil
+        let hasLocalVideo = item.localPath?.isEmpty == false
+
+        let imageView = UIImageView(image: thumbnailImage)
+        imageView.contentMode = .scaleAspectFill
+        imageView.clipsToBounds = true
+        imageView.isHidden = !hasThumbnail
+        imageView.accessibilityIdentifier = "archive-video-thumbnail-image"
+
+        let placeholderIcon = UIImageView(image: UIImage(systemName: hasLocalVideo ? "video" : "video.slash"))
+        placeholderIcon.contentMode = .scaleAspectFit
+        placeholderIcon.tintColor = DJDesignTokens.Color.accentDeep.withAlphaComponent(0.42)
+        placeholderIcon.isHidden = hasThumbnail
+        placeholderIcon.accessibilityIdentifier = "archive-video-media-placeholder"
+
+        let overlayView = UIView()
+        overlayView.backgroundColor = hasThumbnail
+            ? UIColor.black.withAlphaComponent(0.24)
+            : DJDesignTokens.Color.surface.withAlphaComponent(0.76)
+
+        let textStack = UIStackView()
+        textStack.axis = .vertical
+        textStack.spacing = 7
+
+        let titleLabel = UILabel()
+        titleLabel.text = hasLocalVideo ? presentation.previewTitle : "视频待补充"
+        titleLabel.font = DJDesignTokens.Font.title(19)
+        titleLabel.textColor = hasThumbnail ? .white : DJDesignTokens.Color.textPrimary
+        titleLabel.numberOfLines = 0
+
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = hasLocalVideo
+            ? presentation.previewSubtitle
+            : "当前只有视频档案说明，补回本地视频后再继续上传与分析。"
+        subtitleLabel.font = DJDesignTokens.Font.body(13)
+        subtitleLabel.textColor = hasThumbnail
+            ? UIColor.white.withAlphaComponent(0.84)
+            : DJDesignTokens.Color.textSecondary
+        subtitleLabel.numberOfLines = 0
+
+        let badge = makeBadge(
+            text: presentation.kindLabel,
+            textColor: hasThumbnail ? .white : DJDesignTokens.Color.accentDeep,
+            backgroundColor: hasThumbnail
+                ? UIColor.white.withAlphaComponent(0.18)
+                : DJDesignTokens.Color.surfaceLow
+        )
+
+        card.addSubview(mediaContainer)
+        mediaContainer.addSubview(imageView)
+        mediaContainer.addSubview(placeholderIcon)
+        mediaContainer.addSubview(overlayView)
+        mediaContainer.addSubview(textStack)
+        mediaContainer.addSubview(badge)
+        textStack.addArrangedSubview(titleLabel)
+        textStack.addArrangedSubview(subtitleLabel)
+
+        [mediaContainer, imageView, placeholderIcon, overlayView, textStack, titleLabel, subtitleLabel, badge].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
+
+        NSLayoutConstraint.activate([
+            mediaContainer.topAnchor.constraint(equalTo: card.topAnchor, constant: ArchiveDetailLayout.photoMediaInset),
+            mediaContainer.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: ArchiveDetailLayout.photoMediaInset),
+            mediaContainer.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -ArchiveDetailLayout.photoMediaInset),
+            mediaContainer.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -ArchiveDetailLayout.photoMediaInset),
+            mediaContainer.heightAnchor.constraint(equalTo: mediaContainer.widthAnchor, multiplier: 0.58),
+
+            imageView.topAnchor.constraint(equalTo: mediaContainer.topAnchor),
+            imageView.leadingAnchor.constraint(equalTo: mediaContainer.leadingAnchor),
+            imageView.trailingAnchor.constraint(equalTo: mediaContainer.trailingAnchor),
+            imageView.bottomAnchor.constraint(equalTo: mediaContainer.bottomAnchor),
+
+            placeholderIcon.centerXAnchor.constraint(equalTo: mediaContainer.centerXAnchor),
+            placeholderIcon.centerYAnchor.constraint(equalTo: mediaContainer.centerYAnchor, constant: -20),
+            placeholderIcon.widthAnchor.constraint(equalToConstant: 68),
+            placeholderIcon.heightAnchor.constraint(equalToConstant: 68),
+
+            overlayView.leadingAnchor.constraint(equalTo: mediaContainer.leadingAnchor),
+            overlayView.trailingAnchor.constraint(equalTo: mediaContainer.trailingAnchor),
+            overlayView.bottomAnchor.constraint(equalTo: mediaContainer.bottomAnchor),
+            overlayView.heightAnchor.constraint(equalTo: mediaContainer.heightAnchor, multiplier: 0.52),
+
+            badge.topAnchor.constraint(equalTo: mediaContainer.topAnchor, constant: 14),
+            badge.leadingAnchor.constraint(equalTo: mediaContainer.leadingAnchor, constant: 14),
+
+            textStack.leadingAnchor.constraint(equalTo: mediaContainer.leadingAnchor, constant: 16),
+            textStack.trailingAnchor.constraint(equalTo: mediaContainer.trailingAnchor, constant: -16),
+            textStack.bottomAnchor.constraint(equalTo: mediaContainer.bottomAnchor, constant: -18),
+        ])
+
+        return card
+    }
+
+    private func makeHiddenMediaStateCard() -> UIView? {
+        guard item.kind == .audio || item.kind == .video else {
+            return nil
+        }
+
+        let card = makeDetailCard(radius: DJDesignTokens.Radius.large)
+        card.accessibilityIdentifier = "archive-hidden-media-state-card"
+
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 12
+
+        let headerStack = UIStackView()
+        headerStack.alignment = .center
+        headerStack.spacing = 12
+
+        let stateIcon = makeIconContainer(iconName: hiddenMediaStateIconName)
+        stateIcon.backgroundColor = hiddenMediaStateTint.withAlphaComponent(0.14)
+
+        let titleStack = UIStackView()
+        titleStack.axis = .vertical
+        titleStack.spacing = 4
+
+        let titleLabel = UILabel()
+        titleLabel.text = hiddenMediaStateTitle
+        titleLabel.font = DJDesignTokens.Font.title(17)
+        titleLabel.textColor = DJDesignTokens.Color.textPrimary
+        titleLabel.numberOfLines = 0
+        titleLabel.accessibilityIdentifier = hiddenMediaStateIdentifier
+
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = hiddenMediaStateSubtitle
+        subtitleLabel.font = DJDesignTokens.Font.body(13)
+        subtitleLabel.textColor = DJDesignTokens.Color.textSecondary
+        subtitleLabel.numberOfLines = 0
+
+        titleStack.addArrangedSubview(titleLabel)
+        titleStack.addArrangedSubview(subtitleLabel)
+        headerStack.addArrangedSubview(stateIcon)
+        headerStack.addArrangedSubview(titleStack)
+        stack.addArrangedSubview(headerStack)
+
+        if item.metadata[MemoryArchiveItem.mediaUploadStatusMetadataKey] == ArchiveMediaUploadStatus.failed.rawValue {
+            let retryLabel = UILabel()
+            retryLabel.text = "可使用“重新上传”按钮重试；当前不会执行真实对象存储 PUT。"
+            retryLabel.font = DJDesignTokens.Font.label(12)
+            retryLabel.textColor = DJDesignTokens.Color.textTertiary
+            retryLabel.numberOfLines = 0
+            retryLabel.accessibilityIdentifier = "archive-hidden-media-retry-copy"
+            stack.addArrangedSubview(retryLabel)
+        }
+
+        card.addSubview(stack)
+        [stack, headerStack, stateIcon, titleStack, titleLabel, subtitleLabel].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
+
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 18),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 18),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -18),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -18),
+
+            stateIcon.widthAnchor.constraint(equalToConstant: 42),
+            stateIcon.heightAnchor.constraint(equalToConstant: 42),
+        ])
+
+        return card
+    }
+
+    private var hiddenMediaStateIdentifier: String {
+        if item.localPath?.isEmpty != false {
+            return "archive-hidden-media-empty-state"
+        }
+        switch item.metadata[MemoryArchiveItem.mediaUploadStatusMetadataKey] {
+        case ArchiveMediaUploadStatus.failed.rawValue:
+            return "archive-hidden-media-failed-state"
+        case ArchiveMediaUploadStatus.uploaded.rawValue:
+            return "archive-hidden-media-uploaded-state"
+        default:
+            return "archive-hidden-media-local-state"
+        }
+    }
+
+    private var hiddenMediaStateTitle: String {
+        if item.localPath?.isEmpty != false {
+            return "媒体文件待补充"
+        }
+        switch item.metadata[MemoryArchiveItem.mediaUploadStatusMetadataKey] {
+        case ArchiveMediaUploadStatus.pending.rawValue:
+            return "媒体元数据上传中"
+        case ArchiveMediaUploadStatus.uploaded.rawValue:
+            return "媒体元数据已同步"
+        case ArchiveMediaUploadStatus.failed.rawValue:
+            return "上传失败，可重新同步"
+        default:
+            return "媒体文件仅保存在本地"
+        }
+    }
+
+    private var hiddenMediaStateSubtitle: String {
+        if item.localPath?.isEmpty != false {
+            return "当前只有档案说明，补回本地文件后再同步媒体元数据。"
+        }
+        switch item.metadata[MemoryArchiveItem.mediaUploadStatusMetadataKey] {
+        case ArchiveMediaUploadStatus.pending.rawValue:
+            return "正在请求后端上传合同，请保持当前页面。"
+        case ArchiveMediaUploadStatus.uploaded.rawValue:
+            return "已登记对象存储 key，后续可接真实文件上传。"
+        case ArchiveMediaUploadStatus.failed.rawValue:
+            let reason = item.metadata[MemoryArchiveItem.mediaUploadErrorMetadataKey] ?? "上传失败"
+            return "最近一次同步未完成：\(reason)"
+        default:
+            return "本地文件已保存，当前公开版本不会自动上传媒体内容。"
+        }
+    }
+
+    private var hiddenMediaStateIconName: String {
+        if item.localPath?.isEmpty != false {
+            return "externaldrive.badge.questionmark"
+        }
+        switch item.metadata[MemoryArchiveItem.mediaUploadStatusMetadataKey] {
+        case ArchiveMediaUploadStatus.uploaded.rawValue:
+            return "checkmark.icloud"
+        case ArchiveMediaUploadStatus.failed.rawValue:
+            return "exclamationmark.icloud"
+        case ArchiveMediaUploadStatus.pending.rawValue:
+            return "arrow.triangle.2.circlepath.icloud"
+        default:
+            return "externaldrive"
+        }
+    }
+
+    private var hiddenMediaStateTint: UIColor {
+        switch item.metadata[MemoryArchiveItem.mediaUploadStatusMetadataKey] {
+        case ArchiveMediaUploadStatus.failed.rawValue:
+            return DJDesignTokens.Color.danger
+        case ArchiveMediaUploadStatus.uploaded.rawValue:
+            return UIColor.systemGreen
+        default:
+            return DJDesignTokens.Color.accentDeep
+        }
     }
 
     private func makeWaveformView() -> UIView {
@@ -498,10 +758,15 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         accentLine.layer.cornerRadius = 2
 
         let bodyLabel = UILabel()
-        bodyLabel.text = presentation.note
+        bodyLabel.text = item.kind == .timeLetter && presentation.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "这封信还没有内容，可继续编辑草稿。"
+            : presentation.note
         bodyLabel.font = DJDesignTokens.Font.body(17)
         bodyLabel.textColor = DJDesignTokens.Color.textSecondary
         bodyLabel.numberOfLines = 0
+        if item.kind == .timeLetter && presentation.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            bodyLabel.accessibilityIdentifier = "archive-time-letter-empty-body"
+        }
 
         card.addSubview(stack)
         headerStack.addArrangedSubview(iconContainer)
@@ -511,6 +776,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         stack.addArrangedSubview(headerStack)
         stack.addArrangedSubview(bodyContainer)
         if item.kind == .timeLetter {
+            stack.addArrangedSubview(makeTimeLetterStateCard())
             stack.addArrangedSubview(makeTimeLetterLifecycleActions())
         }
 
@@ -539,6 +805,48 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         ])
 
         return card
+    }
+
+    private func makeTimeLetterStateCard() -> UIView {
+        let stateCard = UIView()
+        stateCard.backgroundColor = DJDesignTokens.Color.surface.withAlphaComponent(0.78)
+        stateCard.layer.cornerRadius = DJDesignTokens.Radius.large
+        stateCard.accessibilityIdentifier = "archive-time-letter-state-card"
+
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 5
+
+        let titleLabel = UILabel()
+        titleLabel.text = item.isTimeLetterDraft ? "草稿未封存" : "投递策略待产品决策"
+        titleLabel.font = DJDesignTokens.Font.title(15)
+        titleLabel.textColor = DJDesignTokens.Color.textPrimary
+        titleLabel.numberOfLines = 0
+        titleLabel.accessibilityIdentifier = item.isTimeLetterDraft
+            ? "archive-time-letter-draft-state"
+            : "archive-time-letter-sealed-state"
+
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = item.isTimeLetterDraft
+            ? "当前只保存在本地草稿箱，可继续编辑、删除或封存。"
+            : "已封存为回响线索；真实投递、通知和收件人规则暂不开放。"
+        subtitleLabel.font = DJDesignTokens.Font.body(13)
+        subtitleLabel.textColor = DJDesignTokens.Color.textSecondary
+        subtitleLabel.numberOfLines = 0
+
+        stateCard.addSubview(stack)
+        stack.addArrangedSubview(titleLabel)
+        stack.addArrangedSubview(subtitleLabel)
+        [stack, titleLabel, subtitleLabel].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
+
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: stateCard.topAnchor, constant: 14),
+            stack.leadingAnchor.constraint(equalTo: stateCard.leadingAnchor, constant: 14),
+            stack.trailingAnchor.constraint(equalTo: stateCard.trailingAnchor, constant: -14),
+            stack.bottomAnchor.constraint(equalTo: stateCard.bottomAnchor, constant: -14),
+        ])
+
+        return stateCard
     }
 
     private func makeTimeLetterLifecycleActions() -> UIView {

@@ -282,6 +282,7 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/archive-media-upload-intent-contract-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-hidden-media-timeletter-shell-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-hidden-media-backend-upload-lifecycle-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/archive-hidden-media-detail-ui-check.swift",
     "tmp/visual-qa/prd-stitch-ui/run-archive-hidden-shell-smoke.sh",
     "tmp/visual-qa/prd-stitch-ui/backend-hidden-media-sync-smoke.py",
     "tmp/visual-qa/prd-stitch-ui/run-backend-hidden-media-sync-smoke.sh",

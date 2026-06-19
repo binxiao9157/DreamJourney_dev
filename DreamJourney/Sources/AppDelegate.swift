@@ -1037,6 +1037,12 @@ private extension AppDelegate {
                     timeLetterDraftEdited: false,
                     timeLetterDraftDeleted: false,
                     timeLetterDraftSealed: false,
+                    mediaDetailEmptyStateVisible: false,
+                    mediaDetailFailedStateVisible: false,
+                    mediaDetailRetryActionVisible: false,
+                    timeLetterDraftActionsVisible: false,
+                    timeLetterSealedStateVisible: false,
+                    releaseHiddenEntryPointsBlocked: false,
                     failureReason: "missingRootTab"
                 )
                 print("[UI_QA] ArchiveHiddenShellSmoke failed reason=missingRootTab")
@@ -1055,10 +1061,27 @@ private extension AppDelegate {
             let releaseOptionsHidden = !releaseOptionTitles.contains("录入语音")
                 && !releaseOptionTitles.contains("录入视频片段")
                 && !releaseOptionTitles.contains("录入时间信件")
+            let releaseHiddenEntryPointsBlocked = releaseOptionsHidden
+                && !releaseOptionTitles.contains("生成测试视频档案")
             let hiddenOptionsVisible = hiddenOptionTitles.contains("录入语音")
                 && hiddenOptionTitles.contains("录入视频片段")
                 && hiddenOptionTitles.contains("录入时间信件")
 
+            let emptyAudioItem = MemoryArchiveItem(
+                kind: .audio,
+                title: "语音档案",
+                note: "缺少本地音频文件的 UIQA 空态。",
+                ownerUserId: "user_9999",
+                analysisStatus: .manual,
+                analysisSummary: "仅保留说明，等待补回本地音频文件。",
+                tags: ["语音档案"],
+                metadata: [
+                    "source": "manual_audio",
+                    "contentKind": "audio",
+                    MemoryArchiveItem.mediaUploadStatusMetadataKey: ArchiveMediaUploadStatus.localOnly.rawValue,
+                    MemoryArchiveItem.mediaTranscriptionStatusMetadataKey: ArchiveMediaTranscriptionStatus.notRequested.rawValue,
+                ]
+            )
             let audioURL = try makeUIQAArchiveAudioFile()
             var audioItem = MemoryArchiveItemFactory.makeAudioItem(
                 localPath: audioURL.path,
@@ -1141,8 +1164,32 @@ private extension AppDelegate {
             let timeLetterDraftDeleted = didRemoveDeletedDraft && restoredDeletedDraft == nil
             let timeLetterSealedRestored = restoredSealed?.metadata["deliveryState"] == "sealed"
                 && restoredSealed?.metadata["deliveryPolicy"] == "pending_product_decision"
+            let mediaDetailEmptyStateVisible = archiveDetailViewContainsIdentifier(
+                "archive-hidden-media-empty-state",
+                item: emptyAudioItem
+            )
+            let mediaDetailFailedStateVisible = archiveDetailViewContainsIdentifier(
+                "archive-hidden-media-failed-state",
+                item: videoItem
+            ) && archiveDetailViewContainsText("上传失败，可重新同步", item: videoItem)
+            let mediaDetailRetryActionVisible = archiveDetailViewContainsIdentifier(
+                "archive-media-upload-intent-button",
+                item: videoItem
+            ) && archiveDetailViewContainsText("重新上传", item: videoItem)
+                && archiveDetailViewContainsIdentifier("archive-hidden-media-retry-copy", item: videoItem)
+            let timeLetterDraftActionsVisible = archiveDetailViewContainsIdentifier(
+                "archive-time-letter-draft-state",
+                item: draftLetter
+            ) && archiveDetailViewContainsIdentifier("archive-time-letter-edit-draft", item: draftLetter)
+                && archiveDetailViewContainsIdentifier("archive-time-letter-seal-draft", item: draftLetter)
+                && archiveDetailViewContainsIdentifier("archive-time-letter-delete-draft", item: draftLetter)
+            let timeLetterSealedStateVisible = archiveDetailViewContainsIdentifier(
+                "archive-time-letter-sealed-state",
+                item: sealedDraftLetter
+            ) && archiveDetailViewContainsText("投递策略待产品决策", item: sealedDraftLetter)
 
             let completed = releaseOptionsHidden
+                && releaseHiddenEntryPointsBlocked
                 && hiddenOptionsVisible
                 && restoredAudio != nil
                 && restoredVideo != nil
@@ -1158,6 +1205,11 @@ private extension AppDelegate {
                 && timeLetterDraftEdited
                 && timeLetterDraftDeleted
                 && timeLetterDraftSealed
+                && mediaDetailEmptyStateVisible
+                && mediaDetailFailedStateVisible
+                && mediaDetailRetryActionVisible
+                && timeLetterDraftActionsVisible
+                && timeLetterSealedStateVisible
 
             tabBarController.selectedIndex = 0
             writeArchiveHiddenShellSmokeResult(
@@ -1178,6 +1230,12 @@ private extension AppDelegate {
                 timeLetterDraftEdited: timeLetterDraftEdited,
                 timeLetterDraftDeleted: timeLetterDraftDeleted,
                 timeLetterDraftSealed: timeLetterDraftSealed,
+                mediaDetailEmptyStateVisible: mediaDetailEmptyStateVisible,
+                mediaDetailFailedStateVisible: mediaDetailFailedStateVisible,
+                mediaDetailRetryActionVisible: mediaDetailRetryActionVisible,
+                timeLetterDraftActionsVisible: timeLetterDraftActionsVisible,
+                timeLetterSealedStateVisible: timeLetterSealedStateVisible,
+                releaseHiddenEntryPointsBlocked: releaseHiddenEntryPointsBlocked,
                 failureReason: nil
             )
             print(
@@ -1188,7 +1246,8 @@ private extension AppDelegate {
                 "timeLetterDraftRestored=\(timeLetterDraftRestored) " +
                 "timeLetterSealedRestored=\(timeLetterSealedRestored) " +
                 "mediaUploadUploaded=\(mediaUploadUploaded) " +
-                "mediaUploadFailed=\(mediaUploadFailed)"
+                "mediaUploadFailed=\(mediaUploadFailed) " +
+                "mediaDetailFailedStateVisible=\(mediaDetailFailedStateVisible)"
             )
         } catch {
             writeArchiveHiddenShellSmokeResult(
@@ -1209,10 +1268,56 @@ private extension AppDelegate {
                 timeLetterDraftEdited: false,
                 timeLetterDraftDeleted: false,
                 timeLetterDraftSealed: false,
+                mediaDetailEmptyStateVisible: false,
+                mediaDetailFailedStateVisible: false,
+                mediaDetailRetryActionVisible: false,
+                timeLetterDraftActionsVisible: false,
+                timeLetterSealedStateVisible: false,
+                releaseHiddenEntryPointsBlocked: false,
                 failureReason: error.localizedDescription
             )
             print("[UI_QA] ArchiveHiddenShellSmoke failed reason=\(error.localizedDescription)")
         }
+    }
+
+    func archiveDetailViewContainsIdentifier(_ identifier: String, item: MemoryArchiveItem) -> Bool {
+        let detailViewController = MemoryArchiveDetailViewController(item: item)
+        detailViewController.loadViewIfNeeded()
+        guard let view = detailViewController.viewIfLoaded else {
+            return false
+        }
+        return viewTreeContainsIdentifier(identifier, in: view)
+    }
+
+    func archiveDetailViewContainsText(_ text: String, item: MemoryArchiveItem) -> Bool {
+        let detailViewController = MemoryArchiveDetailViewController(item: item)
+        detailViewController.loadViewIfNeeded()
+        guard let view = detailViewController.viewIfLoaded else {
+            return false
+        }
+        return viewTreeContainsText(text, in: view)
+    }
+
+    func viewTreeContainsIdentifier(_ identifier: String, in view: UIView) -> Bool {
+        if view.accessibilityIdentifier == identifier {
+            return true
+        }
+        return view.subviews.contains { viewTreeContainsIdentifier(identifier, in: $0) }
+    }
+
+    func viewTreeContainsText(_ text: String, in view: UIView) -> Bool {
+        if let label = view as? UILabel,
+           label.text?.contains(text) == true {
+            return true
+        }
+        if let button = view as? UIButton,
+           button.title(for: .normal)?.contains(text) == true {
+            return true
+        }
+        if view.accessibilityLabel?.contains(text) == true {
+            return true
+        }
+        return view.subviews.contains { viewTreeContainsText(text, in: $0) }
     }
 
     func makeUIQAArchiveAudioFile() throws -> URL {
@@ -1964,6 +2069,12 @@ private extension AppDelegate {
         timeLetterDraftEdited: Bool,
         timeLetterDraftDeleted: Bool,
         timeLetterDraftSealed: Bool,
+        mediaDetailEmptyStateVisible: Bool,
+        mediaDetailFailedStateVisible: Bool,
+        mediaDetailRetryActionVisible: Bool,
+        timeLetterDraftActionsVisible: Bool,
+        timeLetterSealedStateVisible: Bool,
+        releaseHiddenEntryPointsBlocked: Bool,
         failureReason: String?
     ) {
         var result: [String: Any] = [
@@ -1984,6 +2095,12 @@ private extension AppDelegate {
             "timeLetterDraftEdited": timeLetterDraftEdited,
             "timeLetterDraftDeleted": timeLetterDraftDeleted,
             "timeLetterDraftSealed": timeLetterDraftSealed,
+            "mediaDetailEmptyStateVisible": mediaDetailEmptyStateVisible,
+            "mediaDetailFailedStateVisible": mediaDetailFailedStateVisible,
+            "mediaDetailRetryActionVisible": mediaDetailRetryActionVisible,
+            "timeLetterDraftActionsVisible": timeLetterDraftActionsVisible,
+            "timeLetterSealedStateVisible": timeLetterSealedStateVisible,
+            "releaseHiddenEntryPointsBlocked": releaseHiddenEntryPointsBlocked,
             "hiddenBranchesArgument": MemoryArchiveMediaReleaseReadiness.hiddenBranchesLaunchArgument
         ]
         if let failureReason {

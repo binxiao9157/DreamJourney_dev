@@ -197,6 +197,7 @@ for guard in \
   archive-media-upload-intent-contract-check.swift \
   archive-hidden-media-timeletter-shell-check.swift \
   archive-hidden-media-backend-upload-lifecycle-check.swift \
+  archive-hidden-media-detail-ui-check.swift \
   archive-analysis-insights-contract-check.swift \
   archive-analysis-backend-payload-contract-check.swift \
   archive-image-analysis-live-chain-check.swift \

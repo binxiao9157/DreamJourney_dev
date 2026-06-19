@@ -132,6 +132,12 @@ grep -Eq '"timeLetterSealedRestored"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE
 grep -Eq '"timeLetterDraftEdited"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter draft edit should persist."
 grep -Eq '"timeLetterDraftDeleted"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter draft delete should persist."
 grep -Eq '"timeLetterDraftSealed"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter draft seal should persist."
+grep -Eq '"mediaDetailEmptyStateVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Hidden audio empty detail state should be visible."
+grep -Eq '"mediaDetailFailedStateVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Hidden media failed detail state should be visible."
+grep -Eq '"mediaDetailRetryActionVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Hidden media retry detail action should be visible."
+grep -Eq '"timeLetterDraftActionsVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter draft detail actions should be visible."
+grep -Eq '"timeLetterSealedStateVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter sealed detail state should be visible."
+grep -Eq '"releaseHiddenEntryPointsBlocked"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Release mode should keep hidden media/time-letter entry points blocked."
 grep -Eq '"hiddenBranchesArgument"[[:space:]]*:[[:space:]]*"DJEnableArchiveHiddenBranches"' "$RESULT_FILE" || fail "Hidden archive launch argument changed."
 
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null
