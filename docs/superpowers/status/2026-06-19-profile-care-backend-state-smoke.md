@@ -16,6 +16,7 @@
 - missing user 通过真实后端 404 映射到 iOS empty 状态。
 - invalid care snapshot 通过真实后端 400 验证 failed 边界不会被错误持久化。
 - iOS Profile 卡片和长辈关怀看板都必须显示一致状态。
+- `重新同步` 按钮必须可点击，并从 stale 状态重新请求真实后端，刷新到 active/available 状态。
 
 ## 状态模型
 
@@ -48,6 +49,13 @@ tmp/visual-qa/prd-stitch-ui/run-profile-care-backend-state-smoke.sh
 - `build.log`
 - `runtime.log`
 - `oslog.log`
+
+`profile-care-backend-state-smoke-result.json` 的 `retry` 对象必须包含：
+
+- `retryActionFired=true`
+- `retryInitialState=profileCareStateStale`
+- `retryFinalState=profileCareStateAvailable`
+- `retryRequestCountAdvanced=true`
 
 ## Release Regression
 

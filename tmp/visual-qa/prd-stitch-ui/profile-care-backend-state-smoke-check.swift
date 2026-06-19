@@ -61,11 +61,17 @@ for phrase in [
 for phrase in [
     "ProfileCareBackendStateSmokeCase",
     "runUIQAProfileCareBackendStateSmoke",
+    "runUIQAProfileCareBackendRetrySmoke",
     "DreamJourneyBackendClient.shared.latestCareSnapshot",
     "careSnapshotFallback(for: error)",
     "expectedState",
     "profileState",
     "backendErrorFallback",
+    "profileCareRetryButton",
+    "sendActions(for: .touchUpInside)",
+    "retryActionFired",
+    "retryInitialState",
+    "retryFinalState",
 ] {
     assertContains(profileView, phrase, "ProfileViewController should render deployed backend care state fixture \(phrase)")
 }
@@ -101,6 +107,9 @@ for phrase in [
     "profileCareStateAvailable",
     "profileCareStateEmpty",
     "profileCareStateStale",
+    "retryActionFired",
+    "retryInitialState",
+    "retryFinalState",
 ] {
     assertContains(smokeScript, phrase, "profile care backend state smoke script should include \(phrase)")
 }
@@ -135,6 +144,7 @@ for phrase in [
     "真实后端",
     "active / empty / stale",
     "failed",
+    "重新同步",
     "profile-care-backend-state-smoke-result.json",
 ] {
     assertContains(statusDoc, phrase, "status doc should describe backend care state smoke \(phrase)")

@@ -270,6 +270,20 @@ for name, (expected_state, expected_source) in expected.items():
             raise SystemExit(f"{name} retry title mismatch: {state}")
 if result.get("failedStateCoveredByLocalSmoke") is not True:
     raise SystemExit(f"failed-state fallback should remain covered by local smoke: {result}")
+
+retry = result.get("retry") or {}
+if retry.get("retryActionFired") is not True:
+    raise SystemExit(f"retry action should fire through profileCareRetryButton: {result}")
+if retry.get("retryButtonVisible") is not True:
+    raise SystemExit(f"retry button should be visible before retry: {result}")
+if retry.get("retryInitialState") != "profileCareStateStale":
+    raise SystemExit(f"retry should start from stale state: {result}")
+if retry.get("retryFinalState") != "profileCareStateAvailable":
+    raise SystemExit(f"retry should refresh to available state: {result}")
+if retry.get("retryRequestCountAdvanced") is not True:
+    raise SystemExit(f"retry should trigger a new backend request: {result}")
+if retry.get("retryRequestedUserId") != fixture.get("activeUserId"):
+    raise SystemExit(f"retry should request the active fixture user: {result} fixture={fixture}")
 PY
 
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null

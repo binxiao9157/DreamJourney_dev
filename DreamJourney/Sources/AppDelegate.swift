@@ -405,7 +405,7 @@ private extension AppDelegate {
                 }
                 return source == "backend"
             }
-            let completed = DreamJourneyBackendClient.shared.isCareSnapshotConfigured
+            let stateContractsCompleted = DreamJourneyBackendClient.shared.isCareSnapshotConfigured
                 && profileTabSelected
                 && states.count == cases.count
                 && actualStates == expectedStates
@@ -413,19 +413,32 @@ private extension AppDelegate {
                 && retryContractsValid
                 && sourceContractsValid
 
-            self?.writeProfileCareBackendStateSmokeResult(
-                completed: completed,
-                states: states,
-                profileTabSelected: profileTabSelected,
-                backendConfigured: DreamJourneyBackendClient.shared.isCareSnapshotConfigured,
-                failureReason: completed ? nil : "backendStateContractMismatch"
-            )
-            print(
-                "[UI_QA] ProfileCareBackendStateSmoke completed " +
-                "completed=\(completed) " +
-                "profileStates=\(actualStates.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: "|")) " +
-                "dashboardStates=\(dashboardStates.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: "|"))"
-            )
+            profileViewController.runUIQAProfileCareBackendRetrySmoke(retryUserId: activeUserId) { retry in
+                let retryCompleted = (retry["retryActionFired"] as? Bool) == true
+                    && (retry["retryButtonVisible"] as? Bool) == true
+                    && (retry["retryRequestCountAdvanced"] as? Bool) == true
+                    && (retry["retryInitialState"] as? String) == ProfileCareDataState.stale.accessibilityIdentifier
+                    && (retry["retryFinalState"] as? String) == ProfileCareDataState.available.accessibilityIdentifier
+                    && (retry["retryRequestedUserId"] as? String) == activeUserId
+                let completed = stateContractsCompleted && retryCompleted
+
+                self?.writeProfileCareBackendStateSmokeResult(
+                    completed: completed,
+                    states: states,
+                    retry: retry,
+                    profileTabSelected: profileTabSelected,
+                    backendConfigured: DreamJourneyBackendClient.shared.isCareSnapshotConfigured,
+                    failureReason: completed ? nil : "backendStateOrRetryContractMismatch"
+                )
+                print(
+                    "[UI_QA] ProfileCareBackendStateSmoke completed " +
+                    "completed=\(completed) " +
+                    "retryActionFired=\(retry["retryActionFired"] as? Bool ?? false) " +
+                    "retryFinalState=\(retry["retryFinalState"] as? String ?? "missing") " +
+                    "profileStates=\(actualStates.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: "|")) " +
+                    "dashboardStates=\(dashboardStates.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: "|"))"
+                )
+            }
         }
     }
 
@@ -1417,6 +1430,7 @@ private extension AppDelegate {
     func writeProfileCareBackendStateSmokeResult(
         completed: Bool,
         states: [[String: Any]],
+        retry: [String: Any]? = nil,
         profileTabSelected: Bool,
         backendConfigured: Bool,
         failureReason: String? = nil
@@ -1433,6 +1447,9 @@ private extension AppDelegate {
             ],
             "failedStateCoveredByLocalSmoke": true,
         ]
+        if let retry {
+            result["retry"] = retry
+        }
         if let failureReason {
             result["failureReason"] = failureReason
         }

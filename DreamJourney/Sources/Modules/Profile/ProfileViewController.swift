@@ -26,11 +26,14 @@ final class ProfileViewController: UIViewController {
     var didRequestLogout: (() -> Void)?
 
     private var careSnapshot: ProfileCareSnapshot?
+    private var careSnapshotLoadCount = 0
+    private var careSnapshotLastUserId: String?
     private var personaContext: DigitalHumanContext
     private let featureFlags: FeatureFlagService
 
     private let scrollView = UIScrollView()
     private let contentStack = UIStackView()
+    private weak var careRetryButton: UIButton?
 
     private var isProfileHiddenBranchesEnabled: Bool {
         #if UI_QA_SIMULATOR && targetEnvironment(simulator)
@@ -187,6 +190,8 @@ final class ProfileViewController: UIViewController {
               let userId = careUserId else {
             return
         }
+        careSnapshotLoadCount += 1
+        careSnapshotLastUserId = userId
 
         guard DreamJourneyBackendClient.shared.isCareSnapshotConfigured else {
             careSnapshot = .offlineFallback()
@@ -427,6 +432,7 @@ final class ProfileViewController: UIViewController {
         button.accessibilityIdentifier = "profileCareRetryButton"
         button.accessibilityLabel = "重试同步心境追踪"
         button.addTarget(self, action: #selector(retryCareSnapshotTapped), for: .touchUpInside)
+        careRetryButton = button
         return button
     }
 
@@ -833,6 +839,43 @@ extension ProfileViewController {
         }
 
         runNext(index: 0)
+    }
+
+    func runUIQAProfileCareBackendRetrySmoke(
+        retryUserId: String,
+        completion: @escaping ([String: Any]) -> Void
+    ) {
+        personaContext = DigitalHumanContext.defaultContext(userId: retryUserId)
+        setUIQACareSnapshot(.staleFallback())
+
+        let initialLoadCount = careSnapshotLoadCount
+        let initialState = careSnapshot?.dataState.accessibilityIdentifier ?? "missing"
+        let retryButtonVisible = careRetryButton?.window != nil && careRetryButton?.isHidden == false
+        let retryButtonEnabled = careRetryButton?.isEnabled == true
+
+        if retryButtonEnabled {
+            careRetryButton?.sendActions(for: .touchUpInside)
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.5) { [weak self] in
+            guard let self else { return }
+            let finalState = careSnapshot?.dataState.accessibilityIdentifier ?? "missing"
+            let result: [String: Any] = [
+                "retryActionFired": retryButtonEnabled,
+                "retryButtonVisible": retryButtonVisible,
+                "retryButtonEnabled": retryButtonEnabled,
+                "retryInitialState": initialState,
+                "retryFinalState": finalState,
+                "retryFinalMoodStatus": careSnapshot?.moodStatus ?? "",
+                "retryFinalSyncCaption": careSnapshot?.syncCaption ?? "",
+                "retryRequestCountAdvanced": careSnapshotLoadCount > initialLoadCount,
+                "retryInitialLoadCount": initialLoadCount,
+                "retryFinalLoadCount": careSnapshotLoadCount,
+                "retryRequestedUserId": careSnapshotLastUserId ?? "",
+                "retryExpectedUserId": retryUserId,
+            ]
+            completion(result)
+        }
     }
 }
 #endif
