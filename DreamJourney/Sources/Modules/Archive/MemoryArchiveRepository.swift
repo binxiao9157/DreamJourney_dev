@@ -383,14 +383,19 @@ private extension MemoryArchiveItem {
         switch analysisStatus {
         case .analyzed, .manual:
             return true
-        case .pending, .failed:
+        case .pending:
             return false
+        case .failed:
+            return !Self.normalizedContextText(note).isEmpty
         }
     }
 
     var archiveContextEntry: MemoryArchiveContextEntry {
         let normalizedNote = Self.normalizedContextText(note)
-        let normalizedSummary = Self.normalizedContextText(analysisSummary ?? note)
+        let normalizedSummary = analysisStatus == .failed
+            ? normalizedNote
+            : Self.normalizedContextText(analysisSummary ?? note)
+        let allowsContextClues = analysisStatus.allowsArchiveContextClues
 
         return MemoryArchiveContextEntry(
             id: id,
@@ -398,10 +403,10 @@ private extension MemoryArchiveItem {
             kindLabel: kind.archiveDisplayName,
             summary: normalizedSummary,
             note: normalizedNote.isEmpty ? nil : normalizedNote,
-            people: detectedPeople,
-            locations: detectedLocationClues,
-            scenes: detectedSceneClues,
-            tags: tags,
+            people: allowsContextClues ? detectedPeople : [],
+            locations: allowsContextClues ? detectedLocationClues : [],
+            scenes: allowsContextClues ? detectedSceneClues : [],
+            tags: allowsContextClues ? tags : [],
             createdAt: createdAt
         )
     }
@@ -411,5 +416,16 @@ private extension MemoryArchiveItem {
             .split(whereSeparator: \.isWhitespace)
             .joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+private extension MemoryArchiveAnalysisStatus {
+    var allowsArchiveContextClues: Bool {
+        switch self {
+        case .analyzed, .manual:
+            return true
+        case .pending, .failed:
+            return false
+        }
     }
 }

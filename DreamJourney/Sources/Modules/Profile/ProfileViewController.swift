@@ -210,10 +210,18 @@ final class ProfileViewController: UIViewController {
                 rebuildContent()
             case .failure(let error):
                 print("[Profile] care snapshot sync unavailable: \(error.localizedDescription)")
-                careSnapshot = .offlineFallback()
+                careSnapshot = careSnapshotFallback(for: error)
                 rebuildContent()
             }
         }
+    }
+
+    private func careSnapshotFallback(for error: Error) -> ProfileCareSnapshot {
+        let description = error.localizedDescription.lowercased()
+        if description.contains("404") || description.contains("not found") {
+            return .emptyFallback()
+        }
+        return .failedFallback()
     }
 
     private func makePersonaCard() -> UIView {
@@ -380,6 +388,9 @@ final class ProfileViewController: UIViewController {
         let stack = UIStackView(arrangedSubviews: [headerStack, meterView, doctorRow, syncCaption])
         stack.axis = .vertical
         stack.spacing = ProfileLayout.careStackSpacing
+        if displaySnapshot.dataState.isRetryable {
+            stack.addArrangedSubview(makeCareRetryButton())
+        }
 
         card.addSubview(stack)
         iconView.translatesAutoresizingMaskIntoConstraints = false
@@ -397,6 +408,22 @@ final class ProfileViewController: UIViewController {
         return card
     }
 
+    private func makeCareRetryButton() -> UIButton {
+        let button = UIButton(type: .system)
+        button.setTitle("重试同步", for: .normal)
+        button.setImage(UIImage(systemName: "arrow.clockwise"), for: .normal)
+        button.tintColor = DJDesignTokens.Color.accentDeep
+        button.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
+        button.titleLabel?.font = DJDesignTokens.Font.label(13)
+        button.backgroundColor = DJDesignTokens.Color.accent.withAlphaComponent(0.16)
+        button.layer.cornerRadius = DJDesignTokens.Radius.medium
+        button.contentEdgeInsets = UIEdgeInsets(top: 9, left: 12, bottom: 9, right: 12)
+        button.accessibilityIdentifier = "profileCareRetryButton"
+        button.accessibilityLabel = "重试同步心境追踪"
+        button.addTarget(self, action: #selector(retryCareSnapshotTapped), for: .touchUpInside)
+        return button
+    }
+
     private func makeCareSyncCaption(snapshot: ProfileCareSnapshot?) -> UILabel {
         let label = makeLabel(
             text: snapshot?.syncCaption ?? "关怀数据同步后会更新状态。",
@@ -406,6 +433,11 @@ final class ProfileViewController: UIViewController {
         label.numberOfLines = 0
         label.accessibilityIdentifier = "profileCareSyncCaption"
         return label
+    }
+
+    @objc private func retryCareSnapshotTapped(_ sender: UIButton) {
+        sender.isEnabled = false
+        loadCareSnapshot()
     }
 
     private func makeSettingsCard() -> UIView {

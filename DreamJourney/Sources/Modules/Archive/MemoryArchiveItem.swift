@@ -562,7 +562,7 @@ extension MemoryArchiveItem {
 
     mutating func markAnalysisFailed(reason: String, now: Date = Date()) {
         analysisStatus = .failed
-        analysisSummary = "分析失败，可稍后重试。"
+        analysisSummary = "AI 分析暂不可用，可稍后重试。"
         metadata[Self.analysisFailureReasonMetadataKey] = reason.trimmingCharacters(in: .whitespacesAndNewlines)
         metadata[Self.analysisRetryableMetadataKey] = "true"
         updatedAt = now
@@ -596,6 +596,10 @@ extension MemoryArchiveItem {
         if analysisStatus == .analyzed {
             metadata.removeValue(forKey: Self.analysisFailureReasonMetadataKey)
             metadata.removeValue(forKey: Self.analysisRetryableMetadataKey)
+        } else if analysisStatus == .failed,
+                  Self.stringValue(result["analysisSummary"]) == nil,
+                  Self.stringValue(result["description"]) == nil {
+            analysisSummary = "AI 分析暂不可用，可稍后重试。"
         }
         updatedAt = now
     }

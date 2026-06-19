@@ -125,6 +125,22 @@ enum ProfileCareSnapshotCheck {
         assertEqual(backendAggregate.sleepStatus, "睡眠线索 2 条", "backend sleep status")
         assertEqual(backendAggregate.riskReminder, "今天可以主动打个电话。", "backend first suggestion")
 
+        let staleAggregate = ProfileCareSnapshot(json: [
+            "item": [
+                "snapshot": [
+                    "riskLevel": "stable",
+                    "summary": "旧窗口数据。",
+                    "windowEnd": "2026-05-01T00:00:00Z",
+                ],
+            ],
+        ])
+
+        guard let staleAggregate else {
+            fatalError("stale aggregate care snapshot should parse")
+        }
+        assertTrue(staleAggregate.isStale, "stale backend window should mark snapshot stale")
+        assertTrue(staleAggregate.dataState == .stale, "stale backend window should use stale data state")
+
         let missing = ProfileCareSnapshot(json: ["data": ["irrelevant": true]])
         assertTrue(missing == nil, "care snapshot should reject payloads without signal fields")
 
@@ -137,21 +153,26 @@ enum ProfileCareSnapshotCheck {
 
         let loading = ProfileCareSnapshot.loadingPlaceholder()
         assertTrue(loading.dataState == .loading, "loading placeholder state")
+        assertTrue(loading.dataState.isRetryable == false, "loading state should not show manual retry")
         assertEqual(loading.syncCaption, "正在同步关怀信号，稍后会更新聚合结果。", "loading caption")
 
         let empty = ProfileCareSnapshot.emptyFallback()
         assertTrue(empty.dataState == .empty, "empty fallback state")
+        assertTrue(empty.dataState.isRetryable, "empty state should allow retry")
         assertEqual(empty.syncCaption, "暂无可用关怀信号，后续有足够数据后会自动更新。", "empty caption")
 
         let failed = ProfileCareSnapshot.failedFallback()
         assertTrue(failed.dataState == .failed, "failed fallback state")
+        assertTrue(failed.dataState.isRetryable, "failed state should allow retry")
         assertEqual(failed.syncCaption, "关怀信号加载失败，请稍后重试。", "failed caption")
 
         assertContains(profileSource, "DreamJourneyBackendClient.shared.latestCareSnapshot", "profile should fetch care signal snapshot through backend client")
         assertContains(profileSource, "DreamJourneyBackendClient.shared.isCareSnapshotConfigured", "profile should only fetch care signal snapshot when backend is explicitly configured")
         assertContains(profileSource, "ProfileCareSnapshot(json: json)", "profile should parse backend payload through care snapshot model")
         assertContains(profileSource, "careSnapshot = ProfileCareSnapshot.emptyFallback()", "profile should use an explicit empty state when backend returns no usable care payload")
-        assertContains(profileSource, "careSnapshot = .offlineFallback()", "profile should degrade backend failures to the local-safe offline state")
+        assertContains(profileSource, "careSnapshotFallback(for: error)", "profile should classify backend failures into empty or failed state")
+        assertContains(profileSource, "return .failedFallback()", "profile should map backend failures to explicit failed state")
+        assertContains(profileSource, "makeCareRetryButton()", "profile should expose retry for retryable care states")
         assertContains(profileSource, "care snapshot sync unavailable", "profile should log care backend unavailability")
         assertContains(profileSource, "ProfileCareSnapshot.loadingPlaceholder()", "profile should use an explicit loading state before care backend returns")
         assertContains(profileSource, "makeCareSyncCaption(snapshot:", "profile should render care sync state without raw chat content")
@@ -172,5 +193,6 @@ enum ProfileCareSnapshotCheck {
 
         assertContains(legalSource, "不展示聊天原文", "legal copy should promise no raw chat display")
         assertContains(legalSource, "不是医疗诊断", "legal copy should avoid medical diagnosis claims")
+        print("Profile care snapshot checks passed")
     }
 }

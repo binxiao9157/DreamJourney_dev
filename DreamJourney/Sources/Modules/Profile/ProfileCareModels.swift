@@ -36,6 +36,15 @@ enum ProfileCareDataState {
             return "关怀信号加载失败，请稍后重试。"
         }
     }
+
+    var isRetryable: Bool {
+        switch self {
+        case .empty, .stale, .failed:
+            return true
+        case .available, .loading:
+            return false
+        }
+    }
 }
 
 struct ProfileCareSnapshot {
@@ -74,6 +83,10 @@ struct ProfileCareSnapshot {
     init?(json: [String: Any]) {
         let source = ProfileCareSnapshot.payloadObject(from: json)
         guard let source else { return nil }
+        let isStale = source.boolValue(for: "isStale")
+            ?? source.boolValue(for: "stale")
+            ?? Self.isStaleWindowEnd(source.stringValue(for: "windowEnd"))
+        let dataState = Self.dataState(from: source, isStale: isStale)
 
         self.init(
             moodTitle: source.stringValue(for: "moodTitle") ?? "心境追踪",
@@ -82,7 +95,9 @@ struct ProfileCareSnapshot {
             cognitiveIndex: source.boundedDoubleValue(for: "cognitiveIndex") ?? 0,
             sleepStatus: source.stringValue(for: "sleepStatus") ?? "待同步",
             lonelinessIndex: source.boundedDoubleValue(for: "lonelinessIndex") ?? 0,
-            riskReminder: source.stringValue(for: "riskReminder") ?? "暂无风险提醒"
+            riskReminder: source.stringValue(for: "riskReminder") ?? "暂无风险提醒",
+            isStale: isStale,
+            dataState: dataState
         )
     }
 
@@ -201,7 +216,48 @@ struct ProfileCareSnapshot {
                 ?? source.stringValue(for: "trendSummary")
                 ?? source.stringValue(for: "summary")
                 ?? "关怀数据已同步。",
+            "windowEnd": source.stringValue(for: "windowEnd") ?? "",
+            "dataState": source.stringValue(for: "dataState") ?? "",
+            "isStale": source.boolValue(for: "isStale")
+                ?? source.boolValue(for: "stale")
+                ?? isStaleWindowEnd(source.stringValue(for: "windowEnd")),
         ]
+    }
+
+    private static func dataState(from source: [String: Any], isStale: Bool) -> ProfileCareDataState {
+        if let rawState = source.stringValue(for: "dataState")?.lowercased() {
+            switch rawState {
+            case "available", "active", "synced":
+                return isStale ? .stale : .available
+            case "loading", "pending":
+                return .loading
+            case "empty", "none", "insufficientdata", "insufficient_data":
+                return .empty
+            case "stale", "expired":
+                return .stale
+            case "failed", "error":
+                return .failed
+            default:
+                break
+            }
+        }
+
+        let riskLevel = source.stringValue(for: "riskLevel")?
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
+            .lowercased()
+        if riskLevel == "insufficientdata" || riskLevel == "empty" {
+            return .empty
+        }
+        return isStale ? .stale : .available
+    }
+
+    private static func isStaleWindowEnd(_ windowEnd: String?) -> Bool {
+        guard let windowEnd,
+              let date = ISO8601DateFormatter().date(from: windowEnd) else {
+            return false
+        }
+        return date < Date().addingTimeInterval(-36 * 60 * 60)
     }
 
     private static func statusText(for riskLevel: String) -> String {
@@ -355,6 +411,27 @@ private extension Dictionary where Key == String, Value == Any {
         }
         guard let doubleValue else { return nil }
         return Swift.min(Swift.max(doubleValue, 0), 1)
+    }
+
+    func boolValue(for key: String) -> Bool? {
+        guard let value = self[key] else { return nil }
+        if let bool = value as? Bool {
+            return bool
+        }
+        if let number = value as? NSNumber {
+            return number.boolValue
+        }
+        if let string = value as? String {
+            switch string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "true", "1", "yes", "y":
+                return true
+            case "false", "0", "no", "n":
+                return false
+            default:
+                return nil
+            }
+        }
+        return nil
     }
 
     func integerValue(for key: String) -> Int? {

@@ -110,6 +110,12 @@ run_step "Python QA scripts compile" "$STATIC_LOG_DIR/python-qa-compile.log" \
     "$SCRIPT_DIR/backend-postgres-persistence-check.py" \
     "$SCRIPT_DIR/backend-archive-image-analysis-smoke.py"
 
+run_step "Swift model guard profile-care-snapshot-check" "$STATIC_LOG_DIR/profile-care-snapshot-check.log" \
+  bash -lc "swiftc -parse-as-library '$ROOT_DIR/DreamJourney/Sources/Modules/Profile/ProfileCareModels.swift' '$SCRIPT_DIR/profile-care-snapshot-check.swift' -o '$STATIC_LOG_DIR/profile-care-snapshot-check' && '$STATIC_LOG_DIR/profile-care-snapshot-check' '$ROOT_DIR'"
+
+run_step "Swift model guard archive-context-snapshot-check" "$STATIC_LOG_DIR/archive-context-snapshot-check.log" \
+  bash -lc "swiftc -parse-as-library '$SCRIPT_DIR/archive-context-snapshot-check.swift' '$ROOT_DIR/DreamJourney/Sources/App/FeatureFlagService.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveItem.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveItemFactory.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveDisplayMetadata.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveMediaReleaseReadiness.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift' -o '$STATIC_LOG_DIR/archive-context-snapshot-check' && '$STATIC_LOG_DIR/archive-context-snapshot-check'"
+
 for guard in \
   release-feature-matrix-check.swift \
   prd-coverage-matrix-check.swift \
@@ -143,6 +149,7 @@ for guard in \
   archive-analysis-backend-payload-contract-check.swift \
   archive-image-analysis-live-chain-check.swift \
   backend-archive-image-analysis-smoke-check.swift \
+  p0-archive-analysis-care-retry-check.swift \
   voice-clone-shell-contract-check.swift \
   final-visual-qa-package-check.swift \
   release-qa-package-check.swift

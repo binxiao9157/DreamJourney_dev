@@ -42,7 +42,7 @@ for required in [
     "makeAnalysisRetryButton",
     "analysisStatusLabel.text = analysisStatusDisplayText",
     "analysisStatusDisplayText",
-    "分析失败，可稍后重试",
+    "AI 分析暂不可用，可稍后重试",
     "重新分析",
 ] {
     assertContains(detail, required, "archive detail should render AI analysis insight UI \(required)")

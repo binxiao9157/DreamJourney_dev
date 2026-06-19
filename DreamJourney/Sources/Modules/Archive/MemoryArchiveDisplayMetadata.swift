@@ -181,6 +181,9 @@ extension MemoryArchiveItem {
             ("采集来源", metadataSourceDisplayName ?? "手动录入"),
             ("分析状态", analysisStatus.archiveDisplayName),
         ]
+        if let archiveAnalysisAvailabilityDisplayName {
+            rows.append(("AI 分析", archiveAnalysisAvailabilityDisplayName))
+        }
 
         switch kind {
         case .photo:
@@ -229,7 +232,24 @@ extension MemoryArchiveItem {
         case .synced:
             return "云端已同步"
         case .failed:
+            if analysisStatus == .failed,
+               metadata[Self.backendSyncErrorMetadataKey] == nil {
+                return "云端已同步"
+            }
             return "同步失败，可稍后重试"
+        }
+    }
+
+    var archiveAnalysisAvailabilityDisplayName: String? {
+        switch analysisStatus {
+        case .manual:
+            return nil
+        case .pending:
+            return "AI 分析等待中"
+        case .analyzed:
+            return "AI 分析已生成"
+        case .failed:
+            return analysisRetryableForBackend ? "AI 分析暂不可用，可稍后重试" : "AI 分析失败"
         }
     }
 

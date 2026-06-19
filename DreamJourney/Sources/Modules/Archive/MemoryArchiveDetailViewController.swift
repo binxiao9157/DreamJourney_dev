@@ -31,6 +31,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     private let contentStack = UIStackView()
     private var audioPlayer: AVAudioPlayer?
     private weak var audioPlayButton: UIButton?
+    private var isRetryingRemoteAnalysis = false
 
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -652,7 +653,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     private var defaultAnalysisSummaryText: String {
         switch item.analysisStatus {
         case .failed:
-            return "分析失败，可稍后重试。"
+            return "AI 分析暂不可用，可稍后重试。"
         case .manual, .pending, .analyzed:
             return "生成本地分析后，会整理出可用于后续回响的人物、地点、场景和生活线索。"
         }
@@ -674,7 +675,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         case .analyzed:
             return "已整理为回响上下文"
         case .failed:
-            return "可重新整理线索"
+            return "云端已同步，可稍后重新分析"
         case .manual, .pending:
             return "生成后补全回响上下文"
         }
@@ -734,7 +735,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
 
     private func makeAnalysisRetryButton() -> UIButton {
         let button = UIButton(type: .system)
-        button.setTitle("重新分析", for: .normal)
+        button.setTitle(isRetryingRemoteAnalysis ? "重新分析中..." : "重新分析", for: .normal)
         button.setImage(UIImage(systemName: "arrow.clockwise"), for: .normal)
         button.tintColor = DJDesignTokens.Color.accentDeep
         button.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
@@ -742,6 +743,8 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         button.backgroundColor = DJDesignTokens.Color.accent.withAlphaComponent(0.18)
         button.layer.cornerRadius = DJDesignTokens.Radius.medium
         button.contentEdgeInsets = UIEdgeInsets(top: 10, left: 14, bottom: 10, right: 14)
+        button.isEnabled = !isRetryingRemoteAnalysis
+        button.alpha = isRetryingRemoteAnalysis ? 0.72 : 1
         button.accessibilityIdentifier = "archive-analysis-retry-button"
         button.accessibilityLabel = "重新分析"
         button.addTarget(self, action: #selector(retryAnalysisTapped), for: .touchUpInside)
@@ -925,7 +928,72 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     }
 
     @objc private func retryAnalysisTapped() {
-        analyzeArchiveItemTapped()
+        requestRemoteImageAnalysisRetry()
+    }
+
+    private func requestRemoteImageAnalysisRetry() {
+        guard item.kind == .photo else {
+            showToast("该素材暂不支持云端重新分析", type: .info)
+            return
+        }
+        guard DreamJourneyBackendClient.shared.isArchiveImageAnalysisConfigured else {
+            showToast("AI 分析暂不可用，可稍后重试", type: .error)
+            return
+        }
+        guard let localPath = item.localPath,
+              let image = UIImage(contentsOfFile: localPath),
+              let imageBase64 = imageBase64ForRemoteArchiveAnalysis(image) else {
+            showToast("缺少原始照片，无法重新分析", type: .error)
+            return
+        }
+
+        isRetryingRemoteAnalysis = true
+        item.retryLocalAnalysis()
+        _ = repository.update(item, syncToBackend: false)
+        reloadContent()
+        configureNavigationActions()
+
+        DreamJourneyBackendClient.shared.requestArchiveImageAnalysis(
+            userId: currentArchiveAnalysisUserId,
+            archiveItemId: item.id,
+            imageBase64: imageBase64
+        ) { [weak self] result in
+            guard let self else { return }
+            isRetryingRemoteAnalysis = false
+            switch result {
+            case .success(let object):
+                item.applyRemoteImageAnalysisResult(object)
+                _ = repository.update(item, syncToBackend: shouldSyncArchiveUpdateToBackend)
+                reloadContent()
+                configureNavigationActions()
+                if item.analysisStatus == .failed {
+                    showToast("AI 分析暂不可用，可稍后重试", type: .error)
+                } else {
+                    showToast("已重新生成图像分析", type: .success)
+                }
+            case .failure(let error):
+                item.markAnalysisFailed(reason: archiveAnalysisFailureReason(error))
+                _ = repository.update(item, syncToBackend: shouldSyncArchiveUpdateToBackend)
+                reloadContent()
+                configureNavigationActions()
+                showToast("AI 分析暂不可用，可稍后重试", type: .error)
+            }
+        }
+    }
+
+    private var currentArchiveAnalysisUserId: String {
+        UserManager.shared.currentUser?.id ?? "user_001"
+    }
+
+    private func imageBase64ForRemoteArchiveAnalysis(_ image: UIImage) -> String? {
+        image.jpegData(compressionQuality: 0.72)?.base64EncodedString()
+    }
+
+    private func archiveAnalysisFailureReason(_ error: Error) -> String {
+        let normalized = error.localizedDescription
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? "backend_image_analysis_failed" : String(normalized.prefix(80))
     }
 
     @objc private func playAudioTapped() {

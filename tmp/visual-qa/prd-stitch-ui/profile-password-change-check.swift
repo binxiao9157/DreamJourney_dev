@@ -35,7 +35,7 @@ let releaseMatrix = read("docs/superpowers/status/2026-06-17-release-feature-mat
 let coverageMatrix = read("docs/superpowers/status/2026-06-18-prd-coverage-matrix.md")
 
 assertContains(flags, "case accountPasswordChange", "Feature flag should declare hidden password change gate")
-assertContains(flags, "private static let defaultEnabled: Set<DJFeature> = [\n        .careDashboard,\n        .profileSettings,\n        .legalCenter,\n    ]", "Password change must stay out of default release flags")
+assertNotContains(flags, ".accountPasswordChange,", "Password change must stay out of default release flags")
 
 assertContains(readiness, "passwordChangeCapability", "Profile readiness should document password change capability")
 assertContains(readiness, "title: \"修改密码\"", "Password change capability should use product copy")

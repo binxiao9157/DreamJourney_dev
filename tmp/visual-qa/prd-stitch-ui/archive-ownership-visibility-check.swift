@@ -34,7 +34,7 @@ assertContains(factory, "private static var currentUploaderUserId: String", "Arc
 assertContains(factory, "ownerUserId: currentUploaderUserId", "Archive factory should assign uploader ownership")
 
 assertContains(repository, "assignOwnerIfNeededForCurrentUser", "Archive repository should migrate legacy local owners")
-assertContains(repository, "\"ownerUserId\": item.ownerUserId", "Archive backend sync should include uploader ownership")
+assertContains(item, "\"ownerUserId\": ownerUserId", "Archive backend sync should include uploader ownership")
 assertContains(repository, "ArchiveVisibilityContext", "Archive repository should centralize persona visibility contract")
 assertContains(repository, "currentArchiveVisibilityContext", "Archive repository should resolve current persona visibility")
 assertContains(repository, "archiveVisibilityContext.personaScope", "Archive sync should distinguish personal/family visibility")

@@ -118,6 +118,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-19-archive-analysis-backend-contract.md",
     "docs/superpowers/status/2026-06-19-archive-image-analysis-live-chain.md",
     "docs/superpowers/status/2026-06-19-backend-archive-image-analysis-smoke.md",
+    "docs/superpowers/status/2026-06-19-p0-archive-analysis-care-retry.md",
 ]
 
 for doc in requiredDocs {
@@ -173,10 +174,13 @@ for handoffGuard in [
     "archive-media-upload-intent-contract-check.swift",
     "archive-analysis-insights-contract-check.swift",
     "archive-analysis-backend-payload-contract-check.swift",
+    "archive-context-snapshot-check.swift",
     "archive-image-analysis-live-chain-check.swift",
     "backend-archive-image-analysis-smoke-check.swift",
+    "p0-archive-analysis-care-retry-check.swift",
     "voice-clone-shell-contract-check.swift",
     "profile-care-public-placeholder-check.swift",
+    "profile-care-snapshot-check.swift",
     "release-like-backend-acceptance-check.swift",
 ] {
     assertContains(releaseRegression, handoffGuard, "release regression should run handoff guard \(handoffGuard)")
@@ -255,8 +259,10 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/archive-media-upload-intent-contract-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-analysis-insights-contract-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-analysis-backend-payload-contract-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/archive-context-snapshot-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-image-analysis-live-chain-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-archive-image-analysis-smoke-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/p0-archive-analysis-care-retry-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-archive-image-analysis-smoke.py",
     "tmp/visual-qa/prd-stitch-ui/run-backend-archive-image-analysis-smoke.sh",
     "tmp/visual-qa/prd-stitch-ui/voice-clone-shell-contract-check.swift",
