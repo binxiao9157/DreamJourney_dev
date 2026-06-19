@@ -215,6 +215,7 @@ for guard in \
   archive-audio-ia-release-check.swift \
   archive-audio-lifecycle-smoke-check.swift \
   true-device-archive-audio-acceptance-check.swift \
+  true-device-acceptance-evidence-package-check.swift \
   archive-media-backend-contract-check.swift \
   archive-media-upload-intent-contract-check.swift \
   archive-media-provider-switch-contract-check.swift \

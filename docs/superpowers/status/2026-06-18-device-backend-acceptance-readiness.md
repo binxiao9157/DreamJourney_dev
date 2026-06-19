@@ -112,6 +112,7 @@ If this fails:
 ## True Device Acceptance
 
 真机验收必须由用户提供设备和签名条件后执行，模拟器不能替代。
+本阶段已把真机验收证据包格式固定下来：回响语音验收和语音档案验收都必须生成 `evidence-manifest.md`，并按固定截图、日志、人工记录文件收敛证据。证据包覆盖麦克风、相册、语音识别、前后台、播放路由、截图和日志，但证据包本身不代表真机验收通过。
 
 Preflight command:
 
@@ -131,6 +132,7 @@ Expected preflight behavior:
 - 后端 URL/token 和生产语音 SDK key 均已设置且不是占位值。
 - `NSMicrophoneUsageDescription`、`NSSpeechRecognitionUsageDescription`、`NSPhotoLibraryUsageDescription`、`NSCameraUsageDescription` 均存在。
 - 可选真机构建通过，并生成 `tmp/visual-qa/prd-stitch-ui/true-device-acceptance/<run-id>/report.md`。
+- 同一 run 目录必须生成 `evidence-manifest.md`、`manual-qa-notes.md` 和 `console-output.log`，用于记录截图、日志、播放路由与前后台恢复证据。
 
 Current 2026-06-18 evidence:
 
@@ -172,6 +174,7 @@ True-device evidence to save:
 - 回响权限允许/拒绝/恢复三组截图。
 - 照片选择到档案沉淀再到回响上下文的截图。
 - 控制台或设备日志中与权限、录音、照片选择相关的错误摘要。
+- `manual-qa-notes.md` 中必须记录麦克风、相册、语音识别、前后台、播放路由、截图和日志是否齐全。
 
 ## Archive Audio True-Device Acceptance
 
@@ -184,6 +187,7 @@ tmp/visual-qa/prd-stitch-ui/run-true-device-archive-audio-preflight.sh
 ```
 
 该脚本会保存 `xcodebuild-destinations.txt`、`devicectl-devices.txt`、`xctrace-devices.txt` 和 `report.md`，并在在线真机可用时执行 Debug device build。设备离线、未解锁、未信任或 Xcode 无法发现物理设备时，脚本必须写出 blocked report，不允许声明通过。
+同一 run 目录还会生成 `evidence-manifest.md`、`audio-quality-notes.md`、`playback-route-notes.md` 和 `background-foreground-notes.md`，用来固定录音质量、播放路由、前后台恢复和截图证据格式。
 
 人工验收仍要使用 hidden QA 入口 `DJEnableArchiveHiddenBranches`，确认：
 
@@ -241,6 +245,7 @@ swift tmp/visual-qa/prd-stitch-ui/backend-env-smoke-check.swift /Users/yxj/Docum
 swift tmp/visual-qa/prd-stitch-ui/backend-family-acceptance-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/true-device-voice-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/true-device-archive-audio-acceptance-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/true-device-acceptance-evidence-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 ```

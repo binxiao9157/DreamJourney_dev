@@ -7,6 +7,9 @@ RUN_ID="${RUN_ID:-$(date +%Y%m%d-%H%M%S-true-device-voice-preflight)}"
 OUTPUT_DIR="$ROOT_DIR/tmp/visual-qa/prd-stitch-ui/true-device-acceptance/$RUN_ID"
 REPORT_FILE="$OUTPUT_DIR/report.md"
 BUILD_LOG="$OUTPUT_DIR/device-build.log"
+CONSOLE_LOG="$OUTPUT_DIR/console-output.log"
+EVIDENCE_MANIFEST="$OUTPUT_DIR/evidence-manifest.md"
+MANUAL_QA_NOTES="$OUTPUT_DIR/manual-qa-notes.md"
 
 mkdir -p "$OUTPUT_DIR"
 
@@ -23,6 +26,41 @@ write_report_header() {
 
 append_report() {
   printf '%s\n' "$*" >> "$REPORT_FILE"
+}
+
+write_evidence_manifest() {
+  touch "$CONSOLE_LOG" "$MANUAL_QA_NOTES"
+  {
+    echo "# True Device Voice Evidence Manifest"
+    echo
+    echo "Run ID: \`$RUN_ID\`"
+    echo
+    echo "## Required Artifacts"
+    echo
+    echo "- \`report.md\`: preflight/build status and manual checklist."
+    echo "- \`device-build.log\`: true-device xcodebuild output when \`RUN_DEVICE_BUILD=1\`."
+    echo "- \`xcodebuild-destinations.txt\`: Xcode destination discovery output."
+    echo "- \`devicectl-devices.txt\`: devicectl discovery output."
+    echo "- \`xctrace-devices.txt\`: xctrace discovery output."
+    echo "- \`console-output.log\`: device console excerpts for permissions, ASR/TTS, playback route, and failures."
+    echo "- \`manual-qa-notes.md\`: tester notes for device/iOS version, account, build configuration, 播放路由, 前后台, and residual issues."
+    echo
+    echo "## Required Screenshots"
+    echo
+    echo "- \`01-photo-permission-allow.png\`: 相册 permission allow or limited-library recovery state."
+    echo "- \`02-photo-created-archive.png\`: imported photo persisted as archive item."
+    echo "- \`03-photo-echo-context.png\`: photo archive available in Echo context."
+    echo "- \`04-microphone-permission-allow.png\`: 麦克风 permission allow state."
+    echo "- \`05-speech-permission-allow.png\`: 语音识别 permission allow state."
+    echo "- \`06-echo-listening.png\`: Echo listening state on device."
+    echo "- \`07-echo-tts-playback.png\`: Echo reply playback with route noted."
+    echo "- \`08-background-before.png\`: state before app goes to background."
+    echo "- \`09-foreground-restored.png\`: foreground restoration with Echo/archive state preserved."
+    echo
+    echo "## Acceptance Boundary"
+    echo
+    echo "This package proves evidence shape only. It does not declare production voice SDK quality, APNs delivery, or true-device pass until every screenshot, log, and manual note is populated."
+  } > "$EVIDENCE_MANIFEST"
 }
 
 load_local_xcconfig() {
@@ -69,6 +107,7 @@ require_env() {
 }
 
 write_report_header
+write_evidence_manifest
 cd "$ROOT_DIR"
 
 load_local_xcconfig "DreamJourney/Config/Backend.local.xcconfig"
@@ -194,13 +233,18 @@ fi
 
 append_report
 append_report "## Manual True-Device Flow To Run After Preflight"
+append_report
+append_report "- Evidence manifest: \`$EVIDENCE_MANIFEST\`"
+append_report "- Manual QA notes: \`$MANUAL_QA_NOTES\`"
+append_report "- Console log target: \`$CONSOLE_LOG\`"
 append_report "1. Launch the built app on the device."
 append_report "2. Login/Register -> 记忆档案 -> create text archive."
 append_report "3. 记忆档案 -> 选择照片 -> grant/deny/recover photo permission -> verify archive appears in 回响 context."
 append_report "4. 回响 -> tap 开始语音 -> grant/deny/recover microphone and speech recognition permissions."
 append_report "5. Complete at least one voice turn and capture ASR/TTS logs."
-append_report "6. Background and foreground the app, then verify Echo state and archive persistence remain stable."
-append_report "7. Save screenshots and device console excerpts under this run directory."
+append_report "6. Verify 播放路由 during TTS playback and note receiver/speaker/Bluetooth behavior."
+append_report "7. Background and foreground the app, then verify Echo state and archive persistence remain stable."
+append_report "8. Save screenshots and device console excerpts under this run directory."
 append_report
 append_report "Status: preflight passed"
 

@@ -7,6 +7,10 @@ RUN_ID="${RUN_ID:-$(date +%Y%m%d-%H%M%S-true-device-archive-audio-preflight)}"
 OUTPUT_DIR="$ROOT_DIR/tmp/visual-qa/prd-stitch-ui/true-device-acceptance/$RUN_ID"
 REPORT_FILE="$OUTPUT_DIR/report.md"
 BUILD_LOG="$OUTPUT_DIR/device-build.log"
+EVIDENCE_MANIFEST="$OUTPUT_DIR/evidence-manifest.md"
+AUDIO_QUALITY_NOTES="$OUTPUT_DIR/audio-quality-notes.md"
+PLAYBACK_ROUTE_NOTES="$OUTPUT_DIR/playback-route-notes.md"
+BACKGROUND_FOREGROUND_NOTES="$OUTPUT_DIR/background-foreground-notes.md"
 
 mkdir -p "$OUTPUT_DIR"
 
@@ -23,6 +27,39 @@ write_report_header() {
 
 append_report() {
   printf '%s\n' "$*" >> "$REPORT_FILE"
+}
+
+write_evidence_manifest() {
+  touch "$AUDIO_QUALITY_NOTES" "$PLAYBACK_ROUTE_NOTES" "$BACKGROUND_FOREGROUND_NOTES"
+  {
+    echo "# True Device Archive Audio Evidence Manifest"
+    echo
+    echo "Run ID: \`$RUN_ID\`"
+    echo
+    echo "## Required Artifacts"
+    echo
+    echo "- \`report.md\`: preflight/build status and manual checklist."
+    echo "- \`device-build.log\`: true-device xcodebuild output when \`RUN_DEVICE_BUILD=1\`."
+    echo "- \`xcodebuild-destinations.txt\`: Xcode destination discovery output."
+    echo "- \`devicectl-devices.txt\`: devicectl discovery output."
+    echo "- \`xctrace-devices.txt\`: xctrace discovery output."
+    echo "- \`audio-quality-notes.md\`: 录音质量 notes for clarity, volume, noise, truncation, and playback failures."
+    echo "- \`playback-route-notes.md\`: 播放路由 notes for receiver/speaker/Bluetooth and pause/resume behavior."
+    echo "- \`background-foreground-notes.md\`: 前后台 notes for file persistence, list restoration, and detail restoration."
+    echo
+    echo "## Required Screenshots"
+    echo
+    echo "- \`01-audio-permission-allow.png\`: first microphone permission allow path."
+    echo "- \`02-audio-permission-deny.png\`: microphone denial recovery state."
+    echo "- \`03-audio-permission-recover.png\`: Settings re-authorization recovery path."
+    echo "- \`04-audio-created.png\`: saved audio archive item in list/detail."
+    echo "- \`05-audio-detail-playback.png\`: detail playback route and playback state."
+    echo "- \`06-audio-after-background-foreground.png\`: audio item restored after background/foreground."
+    echo
+    echo "## Acceptance Boundary"
+    echo
+    echo "This package proves evidence shape only. It does not declare true-device archive audio pass until screenshots and notes are populated on a physical device."
+  } > "$EVIDENCE_MANIFEST"
 }
 
 load_local_xcconfig() {
@@ -71,6 +108,7 @@ env_state() {
 }
 
 write_report_header
+write_evidence_manifest
 cd "$ROOT_DIR"
 
 load_local_xcconfig "DreamJourney/Config/Backend.local.xcconfig"
@@ -199,6 +237,11 @@ fi
 
 append_report
 append_report "## Manual True-Device Archive Audio Flow"
+append_report
+append_report "- Evidence manifest: \`$EVIDENCE_MANIFEST\`"
+append_report "- Audio quality notes: \`$AUDIO_QUALITY_NOTES\`"
+append_report "- Playback route notes: \`$PLAYBACK_ROUTE_NOTES\`"
+append_report "- Background/foreground notes: \`$BACKGROUND_FOREGROUND_NOTES\`"
 append_report
 append_report "Launch with hidden archive QA enabled, for example via scheme launch argument \`DJEnableArchiveHiddenBranches\`, then run:"
 append_report
