@@ -151,9 +151,11 @@ assertContains(releaseRegression, "RUN_RELEASE_LIKE_BACKEND=1", "release handoff
 assertContains(releaseRegression, "BACKEND_API_TOKEN= BACKEND_BASE_URL= ./scripts/verify_backend.sh", "backend verify should not inherit deployed backend credentials")
 for handoffGuard in [
     "prd-full-feature-closure-decisions-check.swift",
+    "echo-state-machine-runtime-check.swift",
     "echo-delayed-reply-notification-check.swift",
     "echo-delayed-reply-push-contract-check.swift",
     "echo-delayed-reply-dispatch-contract-check.swift",
+    "backend-voice-runtime-contract-check.swift",
     "profile-account-fields-check.swift",
     "archive-ownership-visibility-check.swift",
     "profile-care-public-placeholder-check.swift",
@@ -225,6 +227,7 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/echo-archive-context-indicator-check.swift",
     "tmp/visual-qa/prd-stitch-ui/digital-human-mode-lifecycle-check.swift",
     "tmp/visual-qa/prd-stitch-ui/echo-voice-state-visual-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/echo-state-machine-runtime-check.swift",
     "tmp/visual-qa/prd-stitch-ui/echo-waiting-reply-policy-check.swift",
     "tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-notification-check.swift",
     "tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-push-contract-check.swift",
@@ -244,6 +247,7 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/backend-build-config-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-family-acceptance-check.swift",
     "tmp/visual-qa/prd-stitch-ui/phase0-backend-alignment-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/backend-voice-runtime-contract-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-postgres-persistence-check.py",
     "tmp/visual-qa/prd-stitch-ui/release-like-backend-acceptance-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-contract-gap-check.swift",

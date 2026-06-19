@@ -1,6 +1,65 @@
 import Foundation
 import Alamofire
 
+struct BackendRuntimeConfig {
+    let realtimeTokenAvailable: Bool
+    let voiceRuntimeConfigEndpoint: String?
+    let fallbackMode: String?
+
+    init(json: [String: Any]) {
+        let capabilities = json["capabilities"] as? [String: Any]
+        let voice = json["voice"] as? [String: Any]
+        let fallback = voice?["fallback"] as? [String: Any]
+        realtimeTokenAvailable = capabilities?["realtimeToken"] as? Bool ?? false
+        voiceRuntimeConfigEndpoint = voice?["runtimeConfigEndpoint"] as? String
+        fallbackMode = fallback?["mode"] as? String
+    }
+}
+
+struct RealtimeVoiceRuntimeConfig {
+    let authMode: String
+    let address: String
+    let uri: String
+    let resourceID: String
+    let appID: String?
+    let appKey: String?
+    let appToken: String?
+    let uid: String
+    let expiresInSeconds: Int
+    let expiresAt: Date
+    let fallbackMode: String?
+
+    var isExpired: Bool {
+        expiresAt <= Date()
+    }
+
+    init?(json: [String: Any]) {
+        guard let authMode = json["authMode"] as? String,
+              let address = json["address"] as? String,
+              let uri = json["uri"] as? String,
+              let resourceID = json["resourceID"] as? String,
+              let uid = json["uid"] as? String,
+              let expiresInSeconds = json["expiresInSeconds"] as? Int,
+              let expiresAtValue = json["expiresAt"] as? String,
+              let expiresAt = ISO8601DateFormatter().date(from: expiresAtValue) else {
+            return nil
+        }
+
+        self.authMode = authMode
+        self.address = address
+        self.uri = uri
+        self.resourceID = resourceID
+        self.appID = json["appID"] as? String
+        self.appKey = json["appKey"] as? String
+        self.appToken = json["appToken"] as? String
+        self.uid = uid
+        self.expiresInSeconds = expiresInSeconds
+        self.expiresAt = expiresAt
+        let fallback = json["fallback"] as? [String: Any]
+        self.fallbackMode = fallback?["mode"] as? String
+    }
+}
+
 final class DreamJourneyBackendClient {
     static let shared = DreamJourneyBackendClient()
 
@@ -55,6 +114,10 @@ final class DreamJourneyBackendClient {
         hasExplicitBaseURL
     }
 
+    var isRealtimeVoiceConfigConfigured: Bool {
+        hasExplicitBaseURL
+    }
+
     private init() {
         let configured = Bundle.main.object(forInfoDictionaryKey: "DreamJourneyBackendBaseURL") as? String
         let raw = configured?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -73,6 +136,30 @@ final class DreamJourneyBackendClient {
 
     func postArchiveItem(_ payload: [String: Any], completion: @escaping (Result<[String: Any], Error>) -> Void) {
         requestJSON(path: "/archive/items", method: .post, payload: payload, completion: completion)
+    }
+
+    func fetchRuntimeConfig(completion: @escaping (Result<BackendRuntimeConfig, Error>) -> Void) {
+        requestJSON(path: "/config/runtime", method: .get, payload: nil) { result in
+            completion(result.map(BackendRuntimeConfig.init(json:)))
+        }
+    }
+
+    func fetchRealtimeVoiceConfig(
+        userId: String,
+        completion: @escaping (Result<RealtimeVoiceRuntimeConfig, Error>) -> Void
+    ) {
+        requestJSON(path: "/voice/realtime-token", method: .post, payload: ["userId": userId]) { result in
+            switch result {
+            case .success(let object):
+                guard let runtimeConfig = RealtimeVoiceRuntimeConfig(json: object) else {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                completion(.success(runtimeConfig))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
     }
 
     func postArchiveItem(

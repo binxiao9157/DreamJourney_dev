@@ -96,6 +96,7 @@ final class DialogEngineManager: NSObject {
     }
 
     func configure(token: String) {}
+    func configure(runtimeConfig: RealtimeVoiceRuntimeConfig) -> Bool { true }
     func interruptAI() {}
 
     func setup() {
@@ -336,7 +337,7 @@ final class DialogEngineManager: NSObject {
                 Self.isConfiguredValue(token)
         }
 
-        private static func isConfiguredValue(_ value: String) -> Bool {
+        static func isConfiguredValue(_ value: String) -> Bool {
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return false }
             guard !trimmed.hasPrefix("$(") else { return false }
@@ -388,6 +389,42 @@ final class DialogEngineManager: NSObject {
     /// 配置 Token（由业务层获取后注入）
     func configure(token: String) {
         config.token = token
+    }
+
+    /// 应用后端下发的实时语音运行配置。当前 SpeechEngineToB 封装只支持
+    /// legacy appID/appKey/appToken 模式；其他 authMode 保留给后续 SDK 适配。
+    @discardableResult
+    func configure(runtimeConfig: RealtimeVoiceRuntimeConfig) -> Bool {
+        guard runtimeConfig.authMode == "legacy",
+              runtimeConfig.expiresAt > Date(),
+              let appID = runtimeConfig.appID?.trimmingCharacters(in: .whitespacesAndNewlines),
+              let appKey = runtimeConfig.appKey?.trimmingCharacters(in: .whitespacesAndNewlines),
+              let appToken = runtimeConfig.appToken?.trimmingCharacters(in: .whitespacesAndNewlines),
+              Config.isConfiguredValue(appID),
+              Config.isConfiguredValue(appKey),
+              Config.isConfiguredValue(appToken) else {
+            DDLogWarn("[DialogEngine] 后端语音运行配置不可用，回落本地配置")
+            return false
+        }
+
+        if isDialogActive {
+            DDLogWarn("[DialogEngine] 对话进行中，跳过后端运行配置切换")
+            return false
+        }
+
+        if isEngineReady {
+            destroyEngine()
+        }
+
+        config.appID = appID
+        config.appKey = appKey
+        config.token = appToken
+        config.uid = runtimeConfig.uid
+        config.address = runtimeConfig.address
+        config.uri = runtimeConfig.uri
+        config.resourceID = runtimeConfig.resourceID
+        DDLogInfo("[DialogEngine] 已应用后端语音运行配置 fallback=\(runtimeConfig.fallbackMode ?? "none")")
+        return true
     }
 
     /// 客户端主动打断 AI 回复（仅在 AI 正在播报时生效）

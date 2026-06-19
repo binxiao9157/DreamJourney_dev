@@ -109,11 +109,13 @@ for guard in \
   release-feature-matrix-check.swift \
   prd-coverage-matrix-check.swift \
   prd-full-feature-closure-decisions-check.swift \
+  echo-state-machine-runtime-check.swift \
   echo-waiting-reply-policy-check.swift \
   echo-delayed-reply-notification-check.swift \
   echo-delayed-reply-push-contract-check.swift \
   echo-delayed-reply-dispatch-contract-check.swift \
   phase0-backend-alignment-check.swift \
+  backend-voice-runtime-contract-check.swift \
   release-like-backend-acceptance-check.swift \
   backend-env-smoke-check.swift \
   backend-contract-gap-check.swift \

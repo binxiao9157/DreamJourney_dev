@@ -133,7 +133,8 @@ final class EchoViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         DialogEngineManager.shared.delegate = self
-        if !DialogEngineManager.shared.isEngineReady {
+        if !DialogEngineManager.shared.isEngineReady,
+           !DreamJourneyBackendClient.shared.isRealtimeVoiceConfigConfigured {
             DialogEngineManager.shared.setup()
         }
         viewModel.refreshArchiveContextStatus()
@@ -428,6 +429,9 @@ final class EchoViewController: UIViewController {
         switch currentState {
         case .listening:
             stopVoiceCapture()
+        case .error:
+            viewModel.retryAfterError()
+            startVoiceCapture()
         default:
             startVoiceCapture()
         }
@@ -445,9 +449,38 @@ final class EchoViewController: UIViewController {
                 DialogEngineManager.shared.delegate = self
                 self.pendingAIText = nil
                 self.viewModel.prepareVoiceInteraction()
-                DialogEngineManager.shared.startDialog()
+                self.configureVoiceRuntimeThenStart()
             }
         }
+    }
+
+    private func configureVoiceRuntimeThenStart() {
+        guard DreamJourneyBackendClient.shared.isRealtimeVoiceConfigConfigured else {
+            startDialogWithLocalVoiceFallback()
+            return
+        }
+
+        let userId = UserManager.shared.currentUser?.id
+            ?? UIDevice.current.identifierForVendor?.uuidString
+            ?? "anonymous-ios-user"
+        DreamJourneyBackendClient.shared.fetchRealtimeVoiceConfig(userId: userId) { [weak self] result in
+            guard let self = self else { return }
+            switch result {
+            case .success(let runtimeConfig):
+                if DialogEngineManager.shared.configure(runtimeConfig: runtimeConfig) {
+                    DialogEngineManager.shared.startDialog()
+                } else {
+                    self.startDialogWithLocalVoiceFallback()
+                }
+            case .failure(let error):
+                print("[Echo] backend voice runtime config failed, fallback to local build settings: \(error.localizedDescription)")
+                self.startDialogWithLocalVoiceFallback()
+            }
+        }
+    }
+
+    private func startDialogWithLocalVoiceFallback() {
+        DialogEngineManager.shared.startDialog()
     }
 
     private func stopVoiceCapture() {

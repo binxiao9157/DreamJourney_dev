@@ -203,6 +203,17 @@ final class EchoViewModel {
         updateState(.error(message))
     }
 
+    func retryAfterError() {
+        guard case .error = state else { return }
+        updateState(.idle)
+    }
+
+    func markStoredDelayedReplyArrived(_ delayedReply: EchoDelayedReply) {
+        pendingDelayedReply = nil
+        EchoDelayedReplyStore.shared.clear()
+        updateState(.replied)
+    }
+
     static func replyDelayMinutes(for sessionCount: Int) -> Int {
         EchoReplyPacingPolicy.replyDelayMinutes(forCompletedSessionCount: sessionCount)
     }
@@ -233,9 +244,8 @@ final class EchoViewModel {
         }
 
         if delayedReply.deliverAt <= now {
-            pendingDelayedReply = nil
-            EchoDelayedReplyStore.shared.clear()
-            return false
+            markStoredDelayedReplyArrived(delayedReply)
+            return true
         }
 
         pendingDelayedReply = delayedReply
