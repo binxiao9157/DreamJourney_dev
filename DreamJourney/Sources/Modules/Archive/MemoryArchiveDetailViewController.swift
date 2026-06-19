@@ -72,6 +72,11 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         refreshArchiveMediaRuntimeCapabilityIfNeeded()
     }
 
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        showPreviousLevelNavigationIfNeeded(animated: animated)
+    }
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         updateDetailScrollInsets()

@@ -23,6 +23,11 @@ final class ProfileVoiceCloneShellViewController: UIViewController {
         setupLayout()
     }
 
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        showPreviousLevelNavigationIfNeeded(animated: animated)
+    }
+
     private func setupLayout() {
         scrollView.backgroundColor = .clear
         scrollView.alwaysBounceVertical = true

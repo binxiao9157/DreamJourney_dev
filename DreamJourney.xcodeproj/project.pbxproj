@@ -630,6 +630,7 @@
 				BE15FA31F4ACF2193B267454 /* Frameworks */,
 				A5D68B9D0372FD4EFAAE195A /* [CP] Embed Pods Frameworks */,
 				E3A5D35B643EA409B9B966A7 /* [CP] Copy Pods Resources */,
+				D6A2B4C75A9D4F1D9F0A1C7B /* Apply LocalConfig.plist */,
 			);
 			buildRules = (
 			);
@@ -753,6 +754,28 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-DreamJourney/Pods-DreamJourney-resources.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		D6A2B4C75A9D4F1D9F0A1C7B /* Apply LocalConfig.plist */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/DreamJourney/Resources/LocalConfig.plist",
+				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
+			);
+			name = "Apply LocalConfig.plist";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\nLOCAL_CONFIG=\"${SRCROOT}/DreamJourney/Resources/LocalConfig.plist\"\nINFO_PLIST=\"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\nif [ ! -f \"$LOCAL_CONFIG\" ]; then\n  echo \"[LocalConfig] skipped: local config file not found\"\n  exit 0\nfi\nif [ ! -f \"$INFO_PLIST\" ]; then\n  echo \"[LocalConfig] skipped: built Info.plist not found\"\n  exit 0\nfi\nLOCAL_CONFIG_PATH=\"$LOCAL_CONFIG\" INFO_PLIST_PATH=\"$INFO_PLIST\" /usr/bin/python3 <<'PY'\nimport os\nimport plistlib\nfrom pathlib import Path\nlocal_path = Path(os.environ[\"LOCAL_CONFIG_PATH\"])\ninfo_path = Path(os.environ[\"INFO_PLIST_PATH\"])\nwith local_path.open(\"rb\") as local_file:\n    local = plistlib.load(local_file)\nwith info_path.open(\"rb\") as info_file:\n    info = plistlib.load(info_file)\nfor key, value in local.items():\n    info[key] = value\nwith info_path.open(\"wb\") as info_file:\n    plistlib.dump(info, info_file)\nprint(\"[LocalConfig] applied keys: \" + \", \".join(sorted(local.keys())))\nPY\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -955,7 +978,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 2BTR77V3R8;
+				DEVELOPMENT_TEAM = D68L29NBC2;
 				DREAMJOURNEY_BACKEND_API_TOKEN = YOUR_DREAMJOURNEY_BACKEND_API_TOKEN;
 				DREAMJOURNEY_BACKEND_BASE_URL = "";
 				VOLCENGINE_APP_ID = YOUR_VOLCENGINE_APP_ID;
@@ -967,7 +990,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.yxj.dreamjourney.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gaominge.dreamjourney.app;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -1001,7 +1024,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 2BTR77V3R8;
+				DEVELOPMENT_TEAM = D68L29NBC2;
 				DREAMJOURNEY_BACKEND_API_TOKEN = YOUR_DREAMJOURNEY_BACKEND_API_TOKEN;
 				DREAMJOURNEY_BACKEND_BASE_URL = "";
 				VOLCENGINE_APP_ID = YOUR_VOLCENGINE_APP_ID;
@@ -1013,7 +1036,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.yxj.dreamjourney.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gaominge.dreamjourney.app;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				TARGETED_DEVICE_FAMILY = "1,2";

@@ -59,6 +59,7 @@ final class KnowledgeBaseViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        showPreviousLevelNavigationIfNeeded(animated: animated)
         tableView.reloadData()
     }
 

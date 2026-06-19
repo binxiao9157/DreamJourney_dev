@@ -63,6 +63,11 @@ final class KBGraphViewController: UIViewController {
         buildGraph()
     }
 
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        showPreviousLevelNavigationIfNeeded(animated: animated)
+    }
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         centerCanvas()

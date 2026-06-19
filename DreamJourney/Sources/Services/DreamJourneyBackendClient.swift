@@ -1,6 +1,21 @@
 import Foundation
 import Alamofire
 
+private enum BackendDateParser {
+    private static let fractionalISO8601Formatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let standardISO8601Formatter = ISO8601DateFormatter()
+
+    static func date(from value: String) -> Date? {
+        fractionalISO8601Formatter.date(from: value)
+            ?? standardISO8601Formatter.date(from: value)
+    }
+}
+
 struct ArchiveImageAnalysisRuntimeCapability {
     let enabled: Bool
     let endpoint: String
@@ -225,7 +240,7 @@ struct RealtimeVoiceRuntimeConfig {
               let uid = json["uid"] as? String,
               let expiresInSeconds = json["expiresInSeconds"] as? Int,
               let expiresAtValue = json["expiresAt"] as? String,
-              let expiresAt = ISO8601DateFormatter().date(from: expiresAtValue) else {
+              let expiresAt = BackendDateParser.date(from: expiresAtValue) else {
             return nil
         }
 
@@ -275,7 +290,7 @@ struct ArchiveMediaUploadIntent {
               let objectKey = json["objectKey"] as? String,
               let uploadURL = json["uploadURL"] as? String,
               let expiresAtValue = json["expiresAt"] as? String,
-              let expiresAt = ISO8601DateFormatter().date(from: expiresAtValue),
+              let expiresAt = BackendDateParser.date(from: expiresAtValue),
               let expiresInSeconds = json["expiresInSeconds"] as? Int,
               let personaScope = json["personaScope"] as? String,
               let digitalHumanId = json["digitalHumanId"] as? String else {

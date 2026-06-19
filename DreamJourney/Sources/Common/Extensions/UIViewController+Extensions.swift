@@ -19,6 +19,46 @@ extension UIViewController {
         view.endEditing(true)
     }
 
+    // 从隐藏导航栏的一级页 push 进入时，恢复返回上一级入口
+    @discardableResult
+    func showPreviousLevelNavigationIfNeeded(animated: Bool) -> Bool {
+        guard canReturnToPreviousLevel else { return false }
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+        navigationController?.navigationBar.prefersLargeTitles = false
+
+        guard navigationItem.leftBarButtonItem == nil else { return true }
+        let config = UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
+        let item = UIBarButtonItem(
+            image: UIImage(systemName: "chevron.left", withConfiguration: config),
+            style: .plain,
+            target: self,
+            action: #selector(handlePreviousLevelNavigation)
+        )
+        item.tintColor = UIColor(red: 0.15, green: 0.12, blue: 0.10, alpha: 1.0)
+        item.accessibilityLabel = "返回上一级"
+        navigationItem.leftBarButtonItem = item
+        return true
+    }
+
+    private var canReturnToPreviousLevel: Bool {
+        if let nav = navigationController,
+           let first = nav.viewControllers.first,
+           first !== self {
+            return true
+        }
+        return presentingViewController != nil || navigationController?.presentingViewController != nil
+    }
+
+    @objc private func handlePreviousLevelNavigation() {
+        if let nav = navigationController,
+           let first = nav.viewControllers.first,
+           first !== self {
+            nav.popViewController(animated: true)
+            return
+        }
+        dismiss(animated: true)
+    }
+
     // 设置导航栏透明
     func setNavigationBarTransparent(_ transparent: Bool) {
         if transparent {

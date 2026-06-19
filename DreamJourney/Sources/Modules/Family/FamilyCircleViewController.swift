@@ -222,6 +222,9 @@ final class FamilyCircleViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        if !showPreviousLevelNavigationIfNeeded(animated: animated) {
+            navigationController?.setNavigationBarHidden(true, animated: animated)
+        }
         updateMemberListUI()
         FamilyRepository.shared.refreshFromBackend(userId: UserManager.shared.currentUser?.id ?? "user_001") { [weak self] result in
             guard case .success = result else { return }
