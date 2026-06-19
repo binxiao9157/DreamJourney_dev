@@ -253,7 +253,7 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
         MicrophonePermissionManager.shared.requestPermission { [weak self] granted in
             guard let self else { return }
             guard granted else {
-                MicrophonePermissionManager.shared.showPermissionDeniedAlert(on: self)
+                self.handleMicrophonePermissionDenied()
                 return
             }
             self.startRecording()
@@ -360,6 +360,27 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
         saveButton.isEnabled = hasRecording
         saveButton.alpha = hasRecording ? 1 : 0.55
     }
+
+    private func handleMicrophonePermissionDenied(shouldPresentAlert: Bool = true) {
+        finishRecordingIfNeeded()
+        updateState(isRecording: false)
+        statusLabel.text = "录音需要麦克风权限，可在系统设置开启后再试"
+        updateSaveButton()
+        if shouldPresentAlert {
+            MicrophonePermissionManager.shared.showPermissionDeniedAlert(on: self)
+        }
+    }
+
+    #if DEBUG || UI_QA_SIMULATOR
+    func runUIQAPermissionDeniedRecoverySmoke() -> Bool {
+        handleMicrophonePermissionDenied(shouldPresentAlert: false)
+        return recorder == nil
+            && audioURL == nil
+            && recordedDuration == 0
+            && !saveButton.isEnabled
+            && statusLabel.text == "录音需要麦克风权限，可在系统设置开启后再试"
+    }
+    #endif
 
     private func makeAudioFileURL() throws -> URL {
         let documentsURL = try FileManager.default.url(

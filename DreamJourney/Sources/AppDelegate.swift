@@ -3,6 +3,7 @@
 //  DreamJourney
 //
 
+import AVFoundation
 import UIKit
 import UserNotifications
 #if !(UI_QA_SIMULATOR && targetEnvironment(simulator))
@@ -142,6 +143,12 @@ private extension AppDelegate {
             FeatureFlagService.shared.resetToDefaults()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 self?.runArchiveMediaEntriesSmoke()
+            }
+        } else if arguments.contains("DJRunArchiveAudioLifecycleSmoke") {
+            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+            FeatureFlagService.shared.resetToDefaults()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.runArchiveAudioLifecycleSmoke()
             }
         } else if arguments.contains("DJRunEchoDelayedReplyNotificationSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
@@ -568,6 +575,179 @@ private extension AppDelegate {
         ).map(\.title)
     }
 
+    func runArchiveAudioLifecycleSmoke(retryCount: Int = 0) {
+        guard let tabBarController = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController as? WarmTabBarController else {
+            guard retryCount < 20 else {
+                writeArchiveAudioLifecycleSmokeResult(
+                    completed: false,
+                    permissionDeniedRecoveryReady: false,
+                    releaseAudioCreationVisible: false,
+                    hiddenAudioCreationVisible: false,
+                    audioFileExists: false,
+                    restoredAudioItem: false,
+                    restoredAudioItemCount: 0,
+                    summaryAudioCount: 0,
+                    contextIncludesAudio: false,
+                    detailViewLoaded: false,
+                    detailPlaybackLoadable: false,
+                    failureReason: "missingRootTab"
+                )
+                print("[UI_QA] ArchiveAudioLifecycleSmoke failed reason=missingRootTab")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                self?.runArchiveAudioLifecycleSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+
+        do {
+            UserDefaults.standard.removeObject(forKey: "dj.memoryArchive.items.user_9999")
+            let releaseAudioCreationVisible = MemoryArchiveMediaReleaseReadiness.isCreationVisible(
+                for: .audio,
+                isAudioUploadEnabled: FeatureFlagService.shared.isEnabled(.archiveAudioUpload),
+                isVideoUploadEnabled: FeatureFlagService.shared.isEnabled(.archiveVideoUpload),
+                isTimeLettersEnabled: FeatureFlagService.shared.isEnabled(.timeLetters),
+                isHiddenBranchesEnabled: false
+            )
+            let hiddenAudioCreationVisible = MemoryArchiveMediaReleaseReadiness.isCreationVisible(
+                for: .audio,
+                isAudioUploadEnabled: FeatureFlagService.shared.isEnabled(.archiveAudioUpload),
+                isVideoUploadEnabled: FeatureFlagService.shared.isEnabled(.archiveVideoUpload),
+                isTimeLettersEnabled: FeatureFlagService.shared.isEnabled(.timeLetters),
+                isHiddenBranchesEnabled: true
+            )
+            let audioURL = try makeUIQAArchiveAudioFile()
+            let audioFileExists = FileManager.default.fileExists(atPath: audioURL.path)
+            let audioItem = MemoryArchiveItemFactory.makeAudioItem(
+                localPath: audioURL.path,
+                duration: 1.2,
+                note: "UIQA 隐藏分支录入的一段语音档案"
+            )
+            MemoryArchiveRepository.shared.add(audioItem, syncToBackend: false)
+
+            let restoredItems = MemoryArchiveRepository.shared.allItems()
+            let restoredAudioItem = restoredItems.first {
+                $0.id == audioItem.id
+                    && $0.kind == .audio
+                    && $0.localPath == audioURL.path
+            }
+            let summary = MemoryArchiveRepository.shared.summary()
+            let contextSnapshot = MemoryArchiveRepository.shared.contextSnapshot()
+            let contextIncludesAudio = contextSnapshot.entries.contains {
+                $0.id == audioItem.id && $0.kindLabel == MemoryArchiveItemKind.audio.archiveDisplayName
+            }
+
+            let detailViewLoaded: Bool
+            if let restoredAudioItem {
+                let detailViewController = MemoryArchiveDetailViewController(item: restoredAudioItem)
+                detailViewController.loadViewIfNeeded()
+                detailViewLoaded = detailViewController.viewIfLoaded != nil
+            } else {
+                detailViewLoaded = false
+            }
+
+            let playbackPlayer = try? AVAudioPlayer(contentsOf: audioURL)
+            let detailPlaybackLoadable = playbackPlayer?.prepareToPlay() == true
+                && (playbackPlayer?.duration ?? 0) > 0
+
+            let recorderViewController = MemoryArchiveAudioRecorderViewController()
+            recorderViewController.loadViewIfNeeded()
+            let permissionDeniedRecoveryReady = recorderViewController.runUIQAPermissionDeniedRecoverySmoke()
+
+            let completed = permissionDeniedRecoveryReady
+                && !releaseAudioCreationVisible
+                && hiddenAudioCreationVisible
+                && audioFileExists
+                && restoredAudioItem != nil
+                && summary.audio == 1
+                && contextIncludesAudio
+                && detailViewLoaded
+                && detailPlaybackLoadable
+
+            tabBarController.selectedIndex = 0
+            writeArchiveAudioLifecycleSmokeResult(
+                completed: completed,
+                permissionDeniedRecoveryReady: permissionDeniedRecoveryReady,
+                releaseAudioCreationVisible: releaseAudioCreationVisible,
+                hiddenAudioCreationVisible: hiddenAudioCreationVisible,
+                audioFileExists: audioFileExists,
+                restoredAudioItem: restoredAudioItem != nil,
+                restoredAudioItemCount: restoredItems.filter { $0.kind == .audio }.count,
+                summaryAudioCount: summary.audio,
+                contextIncludesAudio: contextIncludesAudio,
+                detailViewLoaded: detailViewLoaded,
+                detailPlaybackLoadable: detailPlaybackLoadable,
+                failureReason: nil
+            )
+            print(
+                "[UI_QA] ArchiveAudioLifecycleSmoke completed " +
+                "permissionDeniedRecoveryReady=\(permissionDeniedRecoveryReady) " +
+                "hiddenAudioCreationVisible=\(hiddenAudioCreationVisible) " +
+                "audioFileExists=\(audioFileExists) " +
+                "restoredAudioItem=\(restoredAudioItem != nil) " +
+                "detailPlaybackLoadable=\(detailPlaybackLoadable)"
+            )
+        } catch {
+            writeArchiveAudioLifecycleSmokeResult(
+                completed: false,
+                permissionDeniedRecoveryReady: false,
+                releaseAudioCreationVisible: false,
+                hiddenAudioCreationVisible: false,
+                audioFileExists: false,
+                restoredAudioItem: false,
+                restoredAudioItemCount: 0,
+                summaryAudioCount: 0,
+                contextIncludesAudio: false,
+                detailViewLoaded: false,
+                detailPlaybackLoadable: false,
+                failureReason: error.localizedDescription
+            )
+            print("[UI_QA] ArchiveAudioLifecycleSmoke failed reason=\(error.localizedDescription)")
+        }
+    }
+
+    func makeUIQAArchiveAudioFile() throws -> URL {
+        let documentsURL = try FileManager.default.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let directoryURL = documentsURL.appendingPathComponent("archive-audio", isDirectory: true)
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        let fileURL = directoryURL.appendingPathComponent("uiqa-audio-lifecycle.m4a")
+        try? FileManager.default.removeItem(at: fileURL)
+
+        let settings: [String: Any] = [
+            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+            AVSampleRateKey: 44_100,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue,
+        ]
+        let file = try AVAudioFile(forWriting: fileURL, settings: settings)
+        guard let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1),
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 44_100) else {
+            throw NSError(
+                domain: "DreamJourney.UIQA.AudioLifecycle",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Unable to create audio buffer"]
+            )
+        }
+        buffer.frameLength = 44_100
+        if let channel = buffer.floatChannelData?.pointee {
+            for frame in 0..<Int(buffer.frameLength) {
+                channel[frame] = frame % 200 < 100 ? 0.10 : -0.10
+            }
+        }
+        try file.write(from: buffer)
+        return fileURL
+    }
+
     enum EchoVoiceStatePreviewTarget {
         case listening
         case waitingReply
@@ -902,6 +1082,52 @@ private extension AppDelegate {
             try data.write(to: resultURL, options: [.atomic])
         } catch {
             print("[UI_QA] ArchiveMediaEntriesSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    func writeArchiveAudioLifecycleSmokeResult(
+        completed: Bool,
+        permissionDeniedRecoveryReady: Bool,
+        releaseAudioCreationVisible: Bool,
+        hiddenAudioCreationVisible: Bool,
+        audioFileExists: Bool,
+        restoredAudioItem: Bool,
+        restoredAudioItemCount: Int,
+        summaryAudioCount: Int,
+        contextIncludesAudio: Bool,
+        detailViewLoaded: Bool,
+        detailPlaybackLoadable: Bool,
+        failureReason: String?
+    ) {
+        var result: [String: Any] = [
+            "completed": completed,
+            "permissionDeniedRecoveryReady": permissionDeniedRecoveryReady,
+            "releaseAudioCreationVisible": releaseAudioCreationVisible,
+            "hiddenAudioCreationVisible": hiddenAudioCreationVisible,
+            "audioFileExists": audioFileExists,
+            "restoredAudioItem": restoredAudioItem,
+            "restoredAudioItemCount": restoredAudioItemCount,
+            "summaryAudioCount": summaryAudioCount,
+            "contextIncludesAudio": contextIncludesAudio,
+            "detailViewLoaded": detailViewLoaded,
+            "detailPlaybackLoadable": detailPlaybackLoadable,
+            "hiddenBranchesArgument": MemoryArchiveMediaReleaseReadiness.hiddenBranchesLaunchArgument
+        ]
+        if let failureReason {
+            result["failureReason"] = failureReason
+        }
+
+        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
+              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("[UI_QA] ArchiveAudioLifecycleSmoke failed reason=resultEncoding")
+            return
+        }
+
+        let resultURL = documentsURL.appendingPathComponent("archive-audio-lifecycle-smoke-result.json")
+        do {
+            try data.write(to: resultURL, options: [.atomic])
+        } catch {
+            print("[UI_QA] ArchiveAudioLifecycleSmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
     }
 

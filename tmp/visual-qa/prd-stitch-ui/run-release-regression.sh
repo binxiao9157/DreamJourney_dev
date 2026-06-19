@@ -130,6 +130,7 @@ for guard in \
   archive-sync-error-recovery-check.swift \
   archive-feature-card-ia-check.swift \
   archive-audio-ia-release-check.swift \
+  archive-audio-lifecycle-smoke-check.swift \
   final-visual-qa-package-check.swift \
   release-qa-package-check.swift
 do

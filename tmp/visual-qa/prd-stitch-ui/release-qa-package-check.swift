@@ -159,6 +159,7 @@ for handoffGuard in [
     "profile-account-fields-check.swift",
     "archive-ownership-visibility-check.swift",
     "archive-audio-ia-release-check.swift",
+    "archive-audio-lifecycle-smoke-check.swift",
     "profile-care-public-placeholder-check.swift",
     "release-like-backend-acceptance-check.swift",
 ] {
@@ -243,6 +244,8 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/archive-sync-error-recovery-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-feature-card-ia-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-audio-ia-release-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/archive-audio-lifecycle-smoke-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/run-archive-audio-lifecycle-smoke.sh",
     "tmp/visual-qa/prd-stitch-ui/backend-integration-contract-check.py",
     "tmp/visual-qa/prd-stitch-ui/backend-auth-token-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-auth-token-contract-check.py",
