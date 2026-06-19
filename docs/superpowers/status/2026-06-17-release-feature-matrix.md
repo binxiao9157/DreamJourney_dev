@@ -53,6 +53,7 @@ These items must not appear in the public release surface yet.
 | Profile | `家人管理` | `DJFeature.familyManagement` or `DJEnableProfileHiddenBranches` only. |
 | Profile | Hidden family persona switcher | `DJFeature.familySpace` or `DJEnableProfileHiddenBranches` for QA only; switches self/family `DigitalHumanContext`, still not public family management. |
 | Profile / Echo | Hidden `阳光 / 星辰 / 静默` mode management | Hidden family rows expose a QA context menu only; mode is persisted locally, drives care visibility, changes Echo context/prompt boundaries, and keeps internal mode names out of visible Echo copy. |
+| Backend / Profile | Hidden family digital-human backend contract | `family-digital-human-hidden-contract-check.swift` guards mock persistence for `personaScope`, `digitalHumanId`, and `阳光 / 星辰 / 静默` without exposing public family management. |
 | Profile | `注销账户` | `DJFeature.accountDeletion` or `DJEnableProfileHiddenBranches` only. |
 | Profile settings | `修改密码` | `DJFeature.accountPasswordChange` or `DJEnableProfileHiddenBranches` only. |
 | Profile | `声音克隆` | `DJFeature.voiceCloneShell` or `DJEnableProfileHiddenBranches` safety shell only. |

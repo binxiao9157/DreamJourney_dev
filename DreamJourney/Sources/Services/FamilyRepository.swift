@@ -206,8 +206,30 @@ final class FamilyRepository {
                 ?? stringValue(in: object, for: "updatedAt")
                 ?? stringValue(in: object, for: "acceptedAt")
                 ?? "后端已同步",
-            digitalHumanMode: .sunlight
+            personaScope: stringValue(in: object, for: "personaScope") ?? "family",
+            digitalHumanId: stringValue(in: object, for: "digitalHumanId") ?? id,
+            digitalHumanMode: digitalHumanMode(from: object) ?? .sunlight,
+            familyPersonaContractVersion: intValue(in: object, for: "familyPersonaContractVersion") ?? 1,
+            backendContractMode: stringValue(in: object, for: "backendContractMode"),
+            defaultReleaseVisible: boolValue(in: object, for: "defaultReleaseVisible") ?? false
         )
+    }
+
+    private static func digitalHumanMode(from object: [String: Any]) -> DigitalHumanMode? {
+        if let rawMode = stringValue(in: object, for: "digitalHumanMode"),
+           let mode = DigitalHumanMode(rawValue: rawMode) {
+            return mode
+        }
+        switch stringValue(in: object, for: "digitalHumanModeLabel") {
+        case "阳光":
+            return .sunlight
+        case "星辰":
+            return .star
+        case "静默":
+            return .silent
+        default:
+            return nil
+        }
     }
 
     private static func stringValue(in object: [String: Any], for key: String) -> String? {
@@ -218,6 +240,41 @@ final class FamilyRepository {
         }
         if let number = value as? NSNumber {
             return number.stringValue
+        }
+        return nil
+    }
+
+    private static func intValue(in object: [String: Any], for key: String) -> Int? {
+        guard let value = object[key] else { return nil }
+        if let int = value as? Int {
+            return int
+        }
+        if let number = value as? NSNumber {
+            return number.intValue
+        }
+        if let string = value as? String {
+            return Int(string)
+        }
+        return nil
+    }
+
+    private static func boolValue(in object: [String: Any], for key: String) -> Bool? {
+        guard let value = object[key] else { return nil }
+        if let bool = value as? Bool {
+            return bool
+        }
+        if let number = value as? NSNumber {
+            return number.boolValue
+        }
+        if let string = value as? String {
+            switch string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "true", "1", "yes":
+                return true
+            case "false", "0", "no":
+                return false
+            default:
+                return nil
+            }
         }
         return nil
     }

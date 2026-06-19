@@ -130,12 +130,26 @@ struct FamilyMember: Codable, Identifiable {
     var isOnline: Bool
     /// 最近更新描述，如“2小时前”“昨天”“刚刚”
     var lastUpdated: String
+    /// 家庭数字人后端合同字段；默认隐藏，不代表公开入口可见。
+    var personaScope: String
+    var digitalHumanId: String
     /// 数字人生命周期状态：默认阳光，只有星辰状态启用心境追踪。
     var digitalHumanMode: DigitalHumanMode
+    var familyPersonaContractVersion: Int
+    var backendContractMode: String?
+    var defaultReleaseVisible: Bool
+
+    var digitalHumanModeLabel: String {
+        digitalHumanMode.displayName
+    }
 
     init(id: String = UUID().uuidString, name: String, relation: String,
          phone: String? = nil, isOnline: Bool = false, lastUpdated: String = "未知",
-         digitalHumanMode: DigitalHumanMode = .sunlight) {
+         personaScope: String = "family", digitalHumanId: String? = nil,
+         digitalHumanMode: DigitalHumanMode = .sunlight,
+         familyPersonaContractVersion: Int = 1,
+         backendContractMode: String? = nil,
+         defaultReleaseVisible: Bool = false) {
         self.id = id
         self.name = name
         self.relation = relation
@@ -144,7 +158,12 @@ struct FamilyMember: Codable, Identifiable {
         self.joinedAt = Date()
         self.isOnline = isOnline
         self.lastUpdated = lastUpdated
+        self.personaScope = personaScope
+        self.digitalHumanId = digitalHumanId ?? id
         self.digitalHumanMode = digitalHumanMode
+        self.familyPersonaContractVersion = familyPersonaContractVersion
+        self.backendContractMode = backendContractMode
+        self.defaultReleaseVisible = defaultReleaseVisible
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -156,7 +175,12 @@ struct FamilyMember: Codable, Identifiable {
         case joinedAt
         case isOnline
         case lastUpdated
+        case personaScope
+        case digitalHumanId
         case digitalHumanMode
+        case familyPersonaContractVersion
+        case backendContractMode
+        case defaultReleaseVisible
     }
 
     init(from decoder: Decoder) throws {
@@ -169,7 +193,12 @@ struct FamilyMember: Codable, Identifiable {
         joinedAt = try container.decodeIfPresent(Date.self, forKey: .joinedAt) ?? Date()
         isOnline = try container.decodeIfPresent(Bool.self, forKey: .isOnline) ?? false
         lastUpdated = try container.decodeIfPresent(String.self, forKey: .lastUpdated) ?? "未知"
+        personaScope = try container.decodeIfPresent(String.self, forKey: .personaScope) ?? "family"
+        digitalHumanId = try container.decodeIfPresent(String.self, forKey: .digitalHumanId) ?? id
         digitalHumanMode = try container.decodeIfPresent(DigitalHumanMode.self, forKey: .digitalHumanMode) ?? .sunlight
+        familyPersonaContractVersion = try container.decodeIfPresent(Int.self, forKey: .familyPersonaContractVersion) ?? 1
+        backendContractMode = try container.decodeIfPresent(String.self, forKey: .backendContractMode)
+        defaultReleaseVisible = try container.decodeIfPresent(Bool.self, forKey: .defaultReleaseVisible) ?? false
     }
 }
 

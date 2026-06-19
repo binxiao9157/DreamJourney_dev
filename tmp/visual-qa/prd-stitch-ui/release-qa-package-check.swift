@@ -128,6 +128,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-19-archive-media-echo-context-polish.md",
     "docs/superpowers/status/2026-06-19-archive-hidden-media-combo-gate.md",
     "docs/superpowers/status/2026-06-19-voice-clone-backend-contract.md",
+    "docs/superpowers/status/2026-06-19-family-digital-human-hidden-contract.md",
 ]
 
 for doc in requiredDocs {
@@ -205,6 +206,7 @@ for handoffGuard in [
     "profile-care-backend-state-smoke-check.swift",
     "voice-clone-shell-contract-check.swift",
     "voice-clone-backend-contract-check.swift",
+    "family-digital-human-hidden-contract-check.swift",
     "profile-care-public-placeholder-check.swift",
     "profile-care-snapshot-check.swift",
     "release-like-backend-acceptance-check.swift",
@@ -323,6 +325,7 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/run-backend-archive-image-analysis-smoke.sh",
     "tmp/visual-qa/prd-stitch-ui/voice-clone-shell-contract-check.swift",
     "tmp/visual-qa/prd-stitch-ui/voice-clone-backend-contract-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/family-digital-human-hidden-contract-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-integration-contract-check.py",
     "tmp/visual-qa/prd-stitch-ui/backend-auth-token-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-auth-token-contract-check.py",

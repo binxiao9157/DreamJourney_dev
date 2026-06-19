@@ -230,6 +230,7 @@ for guard in \
   archive-failed-analysis-retry-smoke-check.swift \
   profile-care-state-smoke-check.swift \
   profile-care-backend-state-smoke-check.swift \
+  family-digital-human-hidden-contract-check.swift \
   voice-clone-shell-contract-check.swift \
   voice-clone-backend-contract-check.swift \
   final-visual-qa-package-check.swift \
