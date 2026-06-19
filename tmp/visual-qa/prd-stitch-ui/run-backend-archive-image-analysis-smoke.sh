@@ -132,6 +132,7 @@ with open(result_path, "r", encoding="utf-8") as handle:
 
 analysis = result.get("analysis_result") or {}
 listed = result.get("listed_item") or {}
+runtime_capability = result.get("runtime_archive_image_analysis") or {}
 
 def count(name):
     value = listed.get(name)
@@ -150,6 +151,7 @@ Status: passed
 - User ID: `{user_id}`
 - Image fixture: `{image_path}`
 - Backend store: `{(result.get("health") or {}).get("store")}`
+- Archive image-analysis runtime: provider=`{runtime_capability.get("provider")}`, supportsVision=`{runtime_capability.get("supportsVision")}`, fallbackMode=`{runtime_capability.get("fallbackMode")}`
 
 ## Scope
 

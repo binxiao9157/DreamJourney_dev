@@ -132,7 +132,36 @@ def assert_deployed_contract_preflight(image_base64: str) -> Dict[str, Any]:
             raise AssertionError(f"deployed backend contract is stale: responseContract missing {key}")
     return {
         "provider": dry_run.get("provider"),
+        "capability": dry_run.get("capability"),
         "responseContractKeys": sorted(response_contract.keys()),
+    }
+
+
+def assert_runtime_archive_image_analysis_contract() -> Dict[str, Any]:
+    config = request_json("GET", "/config/runtime", timeout=20)
+    capability = config.get("archiveImageAnalysis")
+    if not isinstance(capability, dict):
+        raise AssertionError("deployed backend contract is stale: archiveImageAnalysis runtime capability is missing")
+    if capability.get("endpoint") != "/archive/image-analysis":
+        raise AssertionError("archiveImageAnalysis endpoint should be /archive/image-analysis")
+    if capability.get("provider") != "deepseek/text-only":
+        raise AssertionError("archiveImageAnalysis provider should be deepseek/text-only until a vision provider is configured")
+    if capability.get("supportsVision") is not False:
+        raise AssertionError("archiveImageAnalysis supportsVision should be false for deepseek/text-only")
+    if capability.get("fallbackMode") != "retryableFailure":
+        raise AssertionError("archiveImageAnalysis fallbackMode should be retryableFailure")
+    expected_statuses = ["pending", "analyzing", "analyzed", "failed", "retryable"]
+    if capability.get("statuses") != expected_statuses:
+        raise AssertionError(f"archiveImageAnalysis statuses changed: {capability.get('statuses')!r}")
+    capabilities = config.get("capabilities") or {}
+    if capabilities.get("archiveImageAnalysis") != capability.get("enabled"):
+        raise AssertionError("capabilities.archiveImageAnalysis should match archiveImageAnalysis.enabled")
+    return {
+        "enabled": capability.get("enabled"),
+        "provider": capability.get("provider"),
+        "supportsVision": capability.get("supportsVision"),
+        "fallbackMode": capability.get("fallbackMode"),
+        "statuses": capability.get("statuses"),
     }
 
 
@@ -233,6 +262,7 @@ def find_item(items: List[Dict[str, Any]], item_id: str) -> Dict[str, Any]:
 health = request_json("GET", "/health", auth=False, timeout=10)
 assert_equal(health.get("status"), "ok", "health status")
 assert_equal(health.get("store"), "postgres", "deployed backend must use Postgres")
+runtime_archive_image_analysis = assert_runtime_archive_image_analysis_contract()
 
 image_base64 = read_image_base64(IMAGE_PATH)
 contract_preflight = assert_deployed_contract_preflight(image_base64)
@@ -285,6 +315,7 @@ result = {
     "completed": True,
     "baseUrl": BASE_URL,
     "health": health,
+    "runtime_archive_image_analysis": runtime_archive_image_analysis,
     "userId": USER_ID,
     "archiveItemId": ARCHIVE_ID,
     "imageFixture": str(IMAGE_PATH.relative_to(APP_ROOT)) if IMAGE_PATH.is_relative_to(APP_ROOT) else str(IMAGE_PATH),

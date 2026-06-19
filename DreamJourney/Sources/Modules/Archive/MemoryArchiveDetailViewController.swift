@@ -656,7 +656,9 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         switch item.analysisStatus {
         case .failed:
             return "AI 分析暂不可用，可稍后重试。"
-        case .manual, .pending, .analyzed:
+        case .retryable:
+            return "AI 分析暂不可用，可稍后重试。"
+        case .manual, .pending, .analyzing, .analyzed:
             return "生成本地分析后，会整理出可用于后续回响的人物、地点、场景和生活线索。"
         }
     }
@@ -667,6 +669,10 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
             return "已生成"
         case .failed:
             return "分析失败"
+        case .retryable:
+            return "可重试"
+        case .analyzing:
+            return "分析中"
         case .manual, .pending:
             return "待生成"
         }
@@ -678,6 +684,10 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
             return "已整理为回响上下文"
         case .failed:
             return "云端已同步，可稍后重新分析"
+        case .retryable:
+            return "云端已同步，可稍后重新分析"
+        case .analyzing:
+            return "正在整理回响上下文"
         case .manual, .pending:
             return "生成后补全回响上下文"
         }

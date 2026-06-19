@@ -385,7 +385,11 @@ private extension MemoryArchiveItem {
             return true
         case .pending:
             return false
+        case .analyzing:
+            return false
         case .failed:
+            return !Self.normalizedContextText(note).isEmpty
+        case .retryable:
             return !Self.normalizedContextText(note).isEmpty
         }
     }
@@ -424,7 +428,13 @@ private extension MemoryArchiveAnalysisStatus {
         switch self {
         case .analyzed, .manual:
             return true
-        case .pending, .failed:
+        case .pending:
+            return false
+        case .analyzing:
+            return false
+        case .failed:
+            return false
+        case .retryable:
             return false
         }
     }

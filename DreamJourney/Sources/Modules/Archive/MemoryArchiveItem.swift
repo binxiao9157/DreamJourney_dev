@@ -11,8 +11,29 @@ enum MemoryArchiveItemKind: String, Codable {
 enum MemoryArchiveAnalysisStatus: String, Codable {
     case manual
     case pending
+    case analyzing
     case analyzed
     case failed
+    case retryable
+}
+
+extension MemoryArchiveAnalysisStatus {
+    var isRetryableFailureLike: Bool {
+        switch self {
+        case .manual:
+            return false
+        case .pending:
+            return false
+        case .analyzing:
+            return false
+        case .analyzed:
+            return false
+        case .failed:
+            return true
+        case .retryable:
+            return true
+        }
+    }
 }
 
 enum ArchiveBackendSyncState: String, Codable {
@@ -258,10 +279,14 @@ private extension MemoryArchiveAnalysisStatus {
             self = .manual
         case "pending":
             self = .pending
+        case "analyzing", "analysing":
+            self = .analyzing
         case "analyzed", "analysed":
             self = .analyzed
         case "failed":
             self = .failed
+        case "retryable":
+            self = .retryable
         default:
             return nil
         }
@@ -406,7 +431,7 @@ extension MemoryArchiveItem {
            let parsedRetryable = Self.boolValue(retryable) {
             return parsedRetryable
         }
-        return analysisStatus == .failed
+        return analysisStatus.isRetryableFailureLike
     }
 
     func updatingBackendSyncState(
@@ -596,7 +621,7 @@ extension MemoryArchiveItem {
         if analysisStatus == .analyzed {
             metadata.removeValue(forKey: Self.analysisFailureReasonMetadataKey)
             metadata.removeValue(forKey: Self.analysisRetryableMetadataKey)
-        } else if analysisStatus == .failed,
+        } else if analysisStatus.isRetryableFailureLike,
                   Self.stringValue(result["analysisSummary"]) == nil,
                   Self.stringValue(result["description"]) == nil {
             analysisSummary = "AI 分析暂不可用，可稍后重试。"

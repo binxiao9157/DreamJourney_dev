@@ -1,23 +1,58 @@
 import Foundation
 import Alamofire
 
+struct ArchiveImageAnalysisRuntimeCapability {
+    let enabled: Bool
+    let endpoint: String
+    let provider: String
+    let supportsVision: Bool
+    let fallbackMode: String
+    let statuses: [String]
+
+    var canRunVisionAnalysis: Bool {
+        enabled && supportsVision
+    }
+
+    var availabilityDisplayText: String {
+        if canRunVisionAnalysis {
+            return "AI 图像分析可用"
+        }
+        if enabled && fallbackMode == "retryableFailure" {
+            return "AI 分析暂不可用，可稍后重试"
+        }
+        return "AI 分析暂不可用"
+    }
+
+    init(json: [String: Any]?) {
+        enabled = json?["enabled"] as? Bool ?? false
+        endpoint = json?["endpoint"] as? String ?? "/archive/image-analysis"
+        provider = json?["provider"] as? String ?? "unknown"
+        supportsVision = json?["supportsVision"] as? Bool ?? false
+        fallbackMode = json?["fallbackMode"] as? String ?? "retryableFailure"
+        statuses = json?["statuses"] as? [String] ?? []
+    }
+}
+
 struct BackendRuntimeConfig {
     let realtimeTokenAvailable: Bool
     let voiceRuntimeConfigEndpoint: String?
     let fallbackMode: String?
     let archiveMediaUploadIntentAvailable: Bool
     let archiveMediaUploadIntentEndpoint: String?
+    let archiveImageAnalysis: ArchiveImageAnalysisRuntimeCapability
 
     init(json: [String: Any]) {
         let capabilities = json["capabilities"] as? [String: Any]
         let voice = json["voice"] as? [String: Any]
         let fallback = voice?["fallback"] as? [String: Any]
         let archive = json["archive"] as? [String: Any]
+        let archiveImageAnalysis = json["archiveImageAnalysis"] as? [String: Any]
         realtimeTokenAvailable = capabilities?["realtimeToken"] as? Bool ?? false
         voiceRuntimeConfigEndpoint = voice?["runtimeConfigEndpoint"] as? String
         fallbackMode = fallback?["mode"] as? String
         archiveMediaUploadIntentAvailable = capabilities?["archiveMediaUploadIntent"] as? Bool ?? false
         archiveMediaUploadIntentEndpoint = archive?["uploadIntentEndpoint"] as? String
+        self.archiveImageAnalysis = ArchiveImageAnalysisRuntimeCapability(json: archiveImageAnalysis)
     }
 }
 

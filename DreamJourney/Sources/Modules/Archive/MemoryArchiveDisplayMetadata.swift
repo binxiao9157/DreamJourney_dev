@@ -52,10 +52,14 @@ extension MemoryArchiveAnalysisStatus {
             return "已归档"
         case .pending:
             return "待分析"
+        case .analyzing:
+            return "分析中"
         case .analyzed:
             return "已分析"
         case .failed:
             return "分析失败"
+        case .retryable:
+            return "可重试"
         }
     }
 }
@@ -232,7 +236,7 @@ extension MemoryArchiveItem {
         case .synced:
             return "云端已同步"
         case .failed:
-            if analysisStatus == .failed,
+            if analysisStatus.isRetryableFailureLike,
                metadata[Self.backendSyncErrorMetadataKey] == nil {
                 return "云端已同步"
             }
@@ -246,10 +250,14 @@ extension MemoryArchiveItem {
             return nil
         case .pending:
             return "AI 分析等待中"
+        case .analyzing:
+            return "AI 分析中"
         case .analyzed:
             return "AI 分析已生成"
         case .failed:
             return analysisRetryableForBackend ? "AI 分析暂不可用，可稍后重试" : "AI 分析失败"
+        case .retryable:
+            return "AI 分析暂不可用，可稍后重试"
         }
     }
 
