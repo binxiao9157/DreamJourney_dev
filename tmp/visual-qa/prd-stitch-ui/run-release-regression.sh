@@ -109,6 +109,7 @@ Run ID: \`$RUN_ID\`
 - Optional deployed backend time-letter lifecycle smoke when \`RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE=1\`; this verifies draft edit, seal, upsert, and delete metadata contracts.
 - Optional archive detail failed-analysis retry UIQA smoke when \`RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE=1\`.
 - Optional hidden media/time-letter shell UIQA smoke when \`RUN_ARCHIVE_HIDDEN_SHELL_SMOKE=1\`.
+- Media Echo context polish guard is documented in \`2026-06-19-archive-media-echo-context-polish.md\`.
 - Optional P0 Profile care regression gate when \`RUN_P0_PROFILE_CARE_REGRESSION=1\`; this forces both local empty/stale/failed UIQA and deployed backend active/empty/stale/failed-retry UIQA.
 - Optional Profile care empty/stale/failed state UIQA smoke when \`RUN_PROFILE_CARE_STATE_SMOKE=1\`.
 - Optional deployed backend Profile care active/empty/stale UIQA smoke when \`RUN_PROFILE_CARE_BACKEND_STATE_SMOKE=1\`.
@@ -204,6 +205,7 @@ for guard in \
   archive-hidden-media-backend-upload-lifecycle-check.swift \
   archive-time-letter-backend-lifecycle-check.swift \
   archive-hidden-media-detail-ui-check.swift \
+  archive-media-echo-context-polish-check.swift \
   archive-analysis-insights-contract-check.swift \
   archive-analysis-backend-payload-contract-check.swift \
   archive-image-analysis-live-chain-check.swift \

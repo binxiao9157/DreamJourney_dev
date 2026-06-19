@@ -92,7 +92,7 @@ extension MemoryArchiveItem {
         case .timeLetter:
             return "写给未来的信"
         case .video:
-            return "视频片段"
+            return "动态影像"
         }
     }
 
@@ -171,8 +171,11 @@ extension MemoryArchiveItem {
             ])
         case .video:
             return joinedMetadataParts([
+                "动态影像",
                 metadataSourceDisplayName,
                 metadataUploadStatusDisplayName,
+                metadataFileSizeDisplayName,
+                videoAnalysisStatusDisplayName,
                 metadataThumbnailDisplayName,
                 metadataFileSizeLimitDisplayName,
             ])
@@ -228,11 +231,13 @@ extension MemoryArchiveItem {
             }
         case .video:
             rows.append(("文件状态", localPath == nil ? "未保存本地文件" : "本地已保存"))
+            rows.append(("文件大小", metadataFileSizeDisplayName ?? "未知"))
             rows.append(("上传状态", metadataUploadStatusDisplayName ?? "本地待上传"))
             if let metadataUploadErrorDisplayName {
                 rows.append(("上传错误", metadataUploadErrorDisplayName))
             }
             rows.append(("缩略图", metadataThumbnailDisplayName ?? "待生成"))
+            rows.append(("视频分析", videoAnalysisStatusDisplayName ?? analysisStatus.archiveDisplayName))
             rows.append(("文件上限", metadataFileSizeLimitDisplayName ?? "\(MemoryArchiveMediaReleaseReadiness.videoFileSizeLimitMB)MB"))
             rows.append(("云端合同", metadata["backendStorageContract"] ?? MemoryArchiveMediaReleaseReadiness.backendMediaStorageContract))
         }
@@ -346,26 +351,16 @@ extension MemoryArchiveItem {
     }
 
     private var metadataTranscriptionStatusDisplayName: String? {
-        switch metadata[MemoryArchiveItem.mediaTranscriptionStatusMetadataKey] {
-        case ArchiveMediaTranscriptionStatus.notRequested.rawValue:
-            return "未转写"
-        case ArchiveMediaTranscriptionStatus.pending.rawValue:
-            return "转写中"
-        case ArchiveMediaTranscriptionStatus.completed.rawValue:
-            return "已转写"
-        case ArchiveMediaTranscriptionStatus.failed.rawValue:
-            return "转写失败"
+        switch audioTranscriptionStatusDisplayName {
+        case "转写失败，可重试":
+            return "转写失败，可重试"
         default:
-            return nil
+            return audioTranscriptionStatusDisplayName
         }
     }
 
     private var metadataTranscriptText: String? {
-        guard let transcriptText = metadata[MemoryArchiveItem.mediaTranscriptTextMetadataKey],
-              !transcriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return nil
-        }
-        return transcriptText
+        metadataTranscriptTextForDisplay
     }
 
     private var metadataThumbnailDisplayName: String? {

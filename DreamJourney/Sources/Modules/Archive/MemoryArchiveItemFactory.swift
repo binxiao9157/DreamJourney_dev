@@ -68,16 +68,18 @@ enum MemoryArchiveItemFactory {
         localPath: String,
         duration: TimeInterval,
         note: String,
-        transcriptText: String? = nil
+        transcriptText: String? = nil,
+        transcriptionStatus: ArchiveMediaTranscriptionStatus = .notRequested,
+        analysisStatus: MemoryArchiveAnalysisStatus = .manual,
+        uploadStatus: ArchiveMediaUploadStatus = .localOnly
     ) -> MemoryArchiveItem {
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedTranscript = transcriptText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let durationText = formatDuration(duration)
         let durationSeconds = max(1, Int(duration.rounded()))
-        let uploadStatus = ArchiveMediaUploadStatus.localOnly.rawValue
-        let transcriptionStatus = trimmedTranscript.isEmpty
-            ? ArchiveMediaTranscriptionStatus.notRequested.rawValue
-            : ArchiveMediaTranscriptionStatus.completed.rawValue
+        let resolvedTranscriptionStatus = transcriptionStatus == .notRequested && !trimmedTranscript.isEmpty
+            ? ArchiveMediaTranscriptionStatus.completed
+            : transcriptionStatus
         var metadata: [String: String] = [
             "source": "manual_audio",
             "contentKind": "audio",
@@ -85,8 +87,8 @@ enum MemoryArchiveItemFactory {
             "durationSeconds": "\(durationSeconds)",
             "fileType": fileExtension(from: localPath),
             "storage": "local_file",
-            MemoryArchiveItem.mediaUploadStatusMetadataKey: uploadStatus,
-            MemoryArchiveItem.mediaTranscriptionStatusMetadataKey: transcriptionStatus,
+            MemoryArchiveItem.mediaUploadStatusMetadataKey: uploadStatus.rawValue,
+            MemoryArchiveItem.mediaTranscriptionStatusMetadataKey: resolvedTranscriptionStatus.rawValue,
             MemoryArchiveItem.mediaFileSizeLimitMBMetadataKey: "\(MemoryArchiveMediaReleaseReadiness.audioFileSizeLimitMB)",
             "backendStorageContract": MemoryArchiveMediaReleaseReadiness.backendMediaStorageContract,
             "transcriptLanguage": "zh-CN",
@@ -104,7 +106,7 @@ enum MemoryArchiveItemFactory {
             note: trimmedNote.isEmpty ? "录入了一段 \(durationText) 的声音记忆。" : trimmedNote,
             localPath: localPath,
             ownerUserId: currentUploaderUserId,
-            analysisStatus: .manual,
+            analysisStatus: analysisStatus,
             analysisSummary: "这段声音已封存，可作为之后回响生成时的语气、称呼与情绪线索。",
             tags: ["语音档案", durationText],
             metadata: metadata
@@ -115,7 +117,9 @@ enum MemoryArchiveItemFactory {
         localPath: String,
         thumbnailPath: String? = nil,
         fileSizeBytes: Int64? = nil,
-        note: String = ""
+        note: String = "",
+        analysisStatus: MemoryArchiveAnalysisStatus = .pending,
+        uploadStatus: ArchiveMediaUploadStatus = .localOnly
     ) -> MemoryArchiveItem {
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
         var metadata: [String: String] = [
@@ -123,7 +127,7 @@ enum MemoryArchiveItemFactory {
             "contentKind": "video",
             "fileType": fileExtension(from: localPath),
             "storage": "local_file",
-            MemoryArchiveItem.mediaUploadStatusMetadataKey: ArchiveMediaUploadStatus.localOnly.rawValue,
+            MemoryArchiveItem.mediaUploadStatusMetadataKey: uploadStatus.rawValue,
             MemoryArchiveItem.mediaFileSizeLimitMBMetadataKey: "\(MemoryArchiveMediaReleaseReadiness.videoFileSizeLimitMB)",
             "backendStorageContract": MemoryArchiveMediaReleaseReadiness.backendMediaStorageContract,
         ]
@@ -145,7 +149,7 @@ enum MemoryArchiveItemFactory {
             note: trimmedNote.isEmpty ? "封存了一段等待分析的视频片段。" : trimmedNote,
             localPath: localPath,
             ownerUserId: currentUploaderUserId,
-            analysisStatus: .pending,
+            analysisStatus: analysisStatus,
             analysisSummary: "视频已保存，等待后续提取动态场景、人物与时间线索。",
             tags: ["视频片段"],
             metadata: metadata

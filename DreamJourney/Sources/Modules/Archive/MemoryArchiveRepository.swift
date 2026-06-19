@@ -411,32 +411,44 @@ private enum ArchiveRepositoryError: LocalizedError {
 
 private extension MemoryArchiveItem {
     var isAvailableForArchiveContext: Bool {
+        guard !isTimeLetterDraft else { return false }
+        guard let contextText = echoContextText,
+              !contextText.isEmpty else {
+            return false
+        }
         switch analysisStatus {
         case .analyzed, .manual:
             return true
         case .pending:
-            return false
+            switch kind {
+            case .audio:
+                return true
+            case .video:
+                return true
+            case .timeLetter:
+                return false
+            case .photo, .text:
+                return false
+            }
         case .analyzing:
             return false
         case .failed:
-            return !Self.normalizedContextText(note).isEmpty
+            return true
         case .retryable:
-            return !Self.normalizedContextText(note).isEmpty
+            return true
         }
     }
 
     var archiveContextEntry: MemoryArchiveContextEntry {
-        let normalizedNote = Self.normalizedContextText(note)
-        let normalizedSummary = analysisStatus == .failed
-            ? normalizedNote
-            : Self.normalizedContextText(analysisSummary ?? note)
-        let allowsContextClues = analysisStatus.allowsArchiveContextClues
+        let contextText = echoContextText ?? ""
+        let normalizedNote = MemoryArchiveItem.normalizedArchiveText(note)
+        let allowsContextClues = echoContextAllowsClues
 
         return MemoryArchiveContextEntry(
             id: id,
-            title: Self.normalizedContextText(title),
+            title: MemoryArchiveItem.normalizedArchiveText(title),
             kindLabel: kind.archiveDisplayName,
-            summary: normalizedSummary,
+            summary: contextText,
             note: normalizedNote.isEmpty ? nil : normalizedNote,
             people: allowsContextClues ? detectedPeople : [],
             locations: allowsContextClues ? detectedLocationClues : [],
@@ -447,10 +459,7 @@ private extension MemoryArchiveItem {
     }
 
     static func normalizedContextText(_ text: String) -> String {
-        text
-            .split(whereSeparator: \.isWhitespace)
-            .joined(separator: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        MemoryArchiveItem.normalizedArchiveText(text)
     }
 }
 

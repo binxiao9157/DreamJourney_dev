@@ -406,6 +406,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         stack.addArrangedSubview(headerStack)
         stack.addArrangedSubview(waveformView)
         stack.addArrangedSubview(trackView)
+        stack.addArrangedSubview(makeAudioTranscriptCard())
 
         [stack, headerStack, playButton, titleStack, titleLabel, durationLabel, waveformView, trackView, progressView].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
@@ -431,6 +432,72 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         ])
 
         return card
+    }
+
+    private func makeAudioTranscriptCard() -> UIView {
+        let transcriptCard = UIView()
+        transcriptCard.backgroundColor = DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.62)
+        transcriptCard.layer.cornerRadius = DJDesignTokens.Radius.large
+        transcriptCard.accessibilityIdentifier = "archive-audio-transcript-card"
+
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 8
+
+        let statusLabel = makeBadge(
+            text: item.audioTranscriptionStatusDisplayName ?? "未转写",
+            textColor: item.metadata[MemoryArchiveItem.mediaTranscriptionStatusMetadataKey] == ArchiveMediaTranscriptionStatus.failed.rawValue
+                ? DJDesignTokens.Color.danger
+                : DJDesignTokens.Color.accentDeep,
+            backgroundColor: item.metadata[MemoryArchiveItem.mediaTranscriptionStatusMetadataKey] == ArchiveMediaTranscriptionStatus.failed.rawValue
+                ? DJDesignTokens.Color.danger.withAlphaComponent(0.12)
+                : DJDesignTokens.Color.accent.withAlphaComponent(0.16)
+        )
+        statusLabel.accessibilityIdentifier = "archive-audio-transcription-state"
+
+        let transcriptLabel = UILabel()
+        transcriptLabel.text = audioTranscriptDisplayText
+        transcriptLabel.font = DJDesignTokens.Font.body(14)
+        transcriptLabel.textColor = DJDesignTokens.Color.textSecondary
+        transcriptLabel.numberOfLines = 0
+
+        transcriptCard.addSubview(stack)
+        stack.addArrangedSubview(statusLabel)
+        stack.addArrangedSubview(transcriptLabel)
+
+        if item.metadata[MemoryArchiveItem.mediaTranscriptionStatusMetadataKey] == ArchiveMediaTranscriptionStatus.failed.rawValue {
+            let retryLabel = UILabel()
+            retryLabel.text = "转写失败，可重试；当前可继续使用声音说明进入回响上下文。"
+            retryLabel.font = DJDesignTokens.Font.label(12)
+            retryLabel.textColor = DJDesignTokens.Color.textTertiary
+            retryLabel.numberOfLines = 0
+            retryLabel.accessibilityIdentifier = "archive-audio-transcription-retry-copy"
+            stack.addArrangedSubview(retryLabel)
+        }
+
+        [stack, statusLabel, transcriptLabel].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: transcriptCard.topAnchor, constant: 14),
+            stack.leadingAnchor.constraint(equalTo: transcriptCard.leadingAnchor, constant: 14),
+            stack.trailingAnchor.constraint(equalTo: transcriptCard.trailingAnchor, constant: -14),
+            stack.bottomAnchor.constraint(equalTo: transcriptCard.bottomAnchor, constant: -14),
+        ])
+
+        return transcriptCard
+    }
+
+    private var audioTranscriptDisplayText: String {
+        if let transcriptText = item.metadataTranscriptTextForDisplay {
+            return transcriptText
+        }
+        switch item.metadata[MemoryArchiveItem.mediaTranscriptionStatusMetadataKey] {
+        case ArchiveMediaTranscriptionStatus.pending.rawValue:
+            return "正在等待转写结果，完成后会优先作为回响上下文。"
+        case ArchiveMediaTranscriptionStatus.failed.rawValue:
+            return "没有可用转写文本，回响会优先使用你填写的声音说明。"
+        default:
+            return "暂未生成转写文本，回响会使用声音说明，不会注入空转写。"
+        }
     }
 
     private func makeVideoMediaCard() -> UIView? {
@@ -502,6 +569,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         mediaContainer.addSubview(badge)
         textStack.addArrangedSubview(titleLabel)
         textStack.addArrangedSubview(subtitleLabel)
+        textStack.addArrangedSubview(makeVideoMediaMetaStrip())
 
         [mediaContainer, imageView, placeholderIcon, overlayView, textStack, titleLabel, subtitleLabel, badge].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
@@ -538,6 +606,42 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         ])
 
         return card
+    }
+
+    private func makeVideoMediaMetaStrip() -> UIView {
+        let stack = UIStackView()
+        stack.axis = .horizontal
+        stack.spacing = 8
+        stack.alignment = .leading
+        stack.accessibilityIdentifier = "archive-video-meta-strip"
+
+        let fileSizeBadge = makeBadge(
+            text: item.metadataFileSizeDisplayName ?? "文件大小未知",
+            textColor: DJDesignTokens.Color.textSecondary,
+            backgroundColor: DJDesignTokens.Color.surface.withAlphaComponent(0.72)
+        )
+        fileSizeBadge.accessibilityIdentifier = "archive-video-file-size"
+
+        let analysisBadge = makeBadge(
+            text: item.videoAnalysisStatusDisplayName ?? item.analysisStatus.archiveDisplayName,
+            textColor: item.analysisStatus.isRetryableFailureLike ? DJDesignTokens.Color.danger : DJDesignTokens.Color.accentDeep,
+            backgroundColor: item.analysisStatus.isRetryableFailureLike
+                ? DJDesignTokens.Color.danger.withAlphaComponent(0.12)
+                : DJDesignTokens.Color.accent.withAlphaComponent(0.18)
+        )
+        analysisBadge.accessibilityIdentifier = "archive-video-analysis-state"
+
+        let thumbnailBadge = makeBadge(
+            text: item.metadata["thumbnailStatus"] == "failed" ? "缩略图失败" : "缩略图占位",
+            textColor: DJDesignTokens.Color.textSecondary,
+            backgroundColor: DJDesignTokens.Color.surface.withAlphaComponent(0.72)
+        )
+
+        stack.addArrangedSubview(fileSizeBadge)
+        stack.addArrangedSubview(analysisBadge)
+        stack.addArrangedSubview(thumbnailBadge)
+        stack.addArrangedSubview(UIView())
+        return stack
     }
 
     private func makeHiddenMediaStateCard() -> UIView? {
@@ -589,6 +693,9 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
             retryLabel.textColor = DJDesignTokens.Color.textTertiary
             retryLabel.numberOfLines = 0
             retryLabel.accessibilityIdentifier = "archive-hidden-media-retry-copy"
+            if item.kind == .video {
+                retryLabel.accessibilityLabel = "mock 视频失败/重试"
+            }
             stack.addArrangedSubview(retryLabel)
         }
 

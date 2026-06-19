@@ -73,8 +73,8 @@ assertContains(
     "Echo archive context should distinguish failed analysis from usable clue fields"
 )
 assertContains(
-    archiveRepository,
-    "case .failed:\n            return !Self.normalizedContextText(note).isEmpty",
+    archiveItem,
+    "if analysisStatus.isRetryableFailureLike {\n                return normalizedNote.isEmpty ? nil : normalizedNote",
     "Echo archive context should still use user-written notes from failed analysis items"
 )
 assertContains(

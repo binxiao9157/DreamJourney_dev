@@ -498,6 +498,116 @@ extension MemoryArchiveItem {
         return analysisStatus.isRetryableFailureLike
     }
 
+    var metadataTranscriptTextForDisplay: String? {
+        guard let transcriptText = metadata[Self.mediaTranscriptTextMetadataKey]?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !transcriptText.isEmpty else {
+            return nil
+        }
+        return transcriptText
+    }
+
+    var metadataFileSizeDisplayName: String? {
+        guard let fileSizeText = metadata[Self.mediaFileSizeBytesMetadataKey]?.trimmingCharacters(in: .whitespacesAndNewlines),
+              let fileSizeBytes = Int64(fileSizeText),
+              fileSizeBytes > 0 else {
+            return nil
+        }
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useKB, .useMB, .useGB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: fileSizeBytes)
+    }
+
+    var videoAnalysisStatusDisplayName: String? {
+        guard kind == .video else { return nil }
+        switch analysisStatus {
+        case .manual:
+            return "手动说明"
+        case .pending:
+            return "等待视频分析"
+        case .analyzing:
+            return "视频分析中"
+        case .analyzed:
+            return "视频分析已生成"
+        case .failed:
+            return analysisRetryableForBackend ? "视频分析失败，可重试" : "视频分析失败"
+        case .retryable:
+            return "视频分析失败，可重试"
+        }
+    }
+
+    var audioTranscriptionStatusDisplayName: String? {
+        guard kind == .audio else { return nil }
+        switch metadata[Self.mediaTranscriptionStatusMetadataKey] {
+        case ArchiveMediaTranscriptionStatus.notRequested.rawValue:
+            return "未转写"
+        case ArchiveMediaTranscriptionStatus.pending.rawValue:
+            return "转写中"
+        case ArchiveMediaTranscriptionStatus.completed.rawValue:
+            return "已转写"
+        case ArchiveMediaTranscriptionStatus.failed.rawValue:
+            return "转写失败，可重试"
+        default:
+            return nil
+        }
+    }
+
+    var isSealedTimeLetter: Bool {
+        kind == .timeLetter && metadata["deliveryState"] == "sealed"
+    }
+
+    var echoContextText: String? {
+        let normalizedNote = Self.normalizedArchiveText(note)
+        switch kind {
+        case .audio:
+            return metadataTranscriptTextForDisplay ?? (normalizedNote.isEmpty ? nil : normalizedNote)
+        case .video:
+            if analysisStatus == .analyzed {
+                let normalizedSummary = Self.normalizedArchiveText(analysisSummary ?? "")
+                if !normalizedSummary.isEmpty {
+                    return normalizedSummary
+                }
+            }
+            return normalizedNote.isEmpty ? nil : normalizedNote
+        case .timeLetter:
+            guard isSealedTimeLetter else { return nil }
+            if analysisStatus.isRetryableFailureLike {
+                return normalizedNote.isEmpty ? nil : normalizedNote
+            }
+            let normalizedSummary = Self.normalizedArchiveText(analysisSummary ?? "")
+            return normalizedSummary.isEmpty ? (normalizedNote.isEmpty ? nil : normalizedNote) : normalizedSummary
+        case .photo, .text:
+            if analysisStatus.isRetryableFailureLike {
+                return normalizedNote.isEmpty ? nil : normalizedNote
+            }
+            let normalizedSummary = Self.normalizedArchiveText(analysisSummary ?? "")
+            return normalizedSummary.isEmpty ? (normalizedNote.isEmpty ? nil : normalizedNote) : normalizedSummary
+        }
+    }
+
+    var echoContextAllowsClues: Bool {
+        let statusAllowsClues: Bool
+        switch analysisStatus {
+        case .analyzed, .manual:
+            statusAllowsClues = true
+        case .pending, .analyzing, .failed, .retryable:
+            statusAllowsClues = false
+        }
+        guard statusAllowsClues else {
+            return false
+        }
+        switch kind {
+        case .video:
+            return analysisStatus == .analyzed
+        case .audio:
+            return metadataTranscriptTextForDisplay != nil || analysisStatus == .analyzed
+        case .timeLetter:
+            return isSealedTimeLetter
+        case .photo, .text:
+            return true
+        }
+    }
+
     func updatingBackendSyncState(
         _ state: ArchiveBackendSyncState,
         error: String? = nil,
@@ -903,6 +1013,13 @@ extension MemoryArchiveItem {
             .components(separatedBy: CharacterSet(charactersIn: "、,|"))
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+    }
+
+    static func normalizedArchiveText(_ text: String) -> String {
+        text
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private mutating func storeMetadataList(_ values: [String], forKey key: String) {

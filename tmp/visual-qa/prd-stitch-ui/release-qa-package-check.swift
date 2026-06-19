@@ -125,6 +125,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-19-profile-care-state-smoke.md",
     "docs/superpowers/status/2026-06-19-profile-care-backend-state-smoke.md",
     "docs/superpowers/status/2026-06-19-time-letter-backend-lifecycle.md",
+    "docs/superpowers/status/2026-06-19-archive-media-echo-context-polish.md",
 ]
 
 for doc in requiredDocs {
@@ -188,6 +189,7 @@ for handoffGuard in [
     "archive-hidden-media-timeletter-shell-check.swift",
     "archive-time-letter-backend-lifecycle-check.swift",
     "archive-analysis-insights-contract-check.swift",
+    "archive-media-echo-context-polish-check.swift",
     "archive-analysis-backend-payload-contract-check.swift",
     "archive-context-snapshot-check.swift",
     "archive-image-analysis-live-chain-check.swift",
@@ -287,6 +289,7 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/archive-hidden-media-backend-upload-lifecycle-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-time-letter-backend-lifecycle-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-hidden-media-detail-ui-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/archive-media-echo-context-polish-check.swift",
     "tmp/visual-qa/prd-stitch-ui/run-archive-hidden-shell-smoke.sh",
     "tmp/visual-qa/prd-stitch-ui/backend-hidden-media-sync-smoke.py",
     "tmp/visual-qa/prd-stitch-ui/run-backend-hidden-media-sync-smoke.sh",
