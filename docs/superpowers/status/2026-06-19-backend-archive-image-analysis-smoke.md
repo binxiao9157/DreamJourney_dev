@@ -49,6 +49,41 @@ tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
 
 ## 当前证据
 
+### 2026-06-19 Provider Fallback 部署后验收通过
+
+Run ID: `20260619-backend-archive-image-analysis-provider-fallback`
+
+结果：passed。
+
+已确认：
+
+- `/health` 返回 `store=postgres`。
+- `/archive/image-analysis` 在当前 DeepSeek 图片输入不可用时返回可持久化失败合同。
+- `/archive/items` 成功保存同一条相册影像分析结果。
+- `GET /archive/items/{userId}` 能重新读出同一条数据。
+
+读回关键字段：
+
+- `analysisStatus=failed`
+- `analysisFailureReason=provider_unavailable`
+- `analysisRetryable=true`
+- `detectedPeople=[]`
+- `detectedLocations=[]`
+- `detectedScenes=[]`
+- `metadata.source=album_import`
+- `metadata.smokeMarker=20260619-backend-archive-image-analysis-provider-fallback`
+
+产物：
+
+- `tmp/visual-qa/prd-stitch-ui/backend-archive-image-analysis-smoke/20260619-backend-archive-image-analysis-provider-fallback/report.md`
+- `tmp/visual-qa/prd-stitch-ui/backend-archive-image-analysis-smoke/20260619-backend-archive-image-analysis-provider-fallback/backend-archive-image-analysis-smoke-result.json`
+
+结论：
+
+- “相册导入 -> /archive/image-analysis -> /archive/items -> GET /archive/items” 的失败/可重试持久化闭环已通过部署后端验收。
+- 公开 MVP 可以基于该状态显示“分析失败，可稍后重试”，避免误显示为云端同步失败。
+- 真正的人物/地点/场景线索仍需切换到明确支持视觉输入的 provider 后再做 full analysis 验收。
+
 ### 2026-06-19 Provider 不可用降级合同
 
 后端已按产品降级策略调整：
