@@ -4,6 +4,8 @@ Date: 2026-06-17
 
 Branch: `feature/prd-stitch-ui-adaptation`
 
+Last synced: 2026-06-19, after hidden family/voice UIQA, time-letter delivery policy, video hidden readiness, true-device evidence package, and production voice SDK readiness boundary commits.
+
 Source of truth:
 
 - Visual target: current Stitch canvas, then `htmlCode`.
@@ -22,7 +24,7 @@ These items are available without hidden-branch launch arguments and without man
 | Archive overview | `记忆档案馆`, `相册影像`, `语音档案`, `人格设定`, `封存新记忆`, timeline list | `MemoryArchiveViewController` renders the PRD archive home. Feature cards are category/capability entries; `封存新记忆` remains the creation entry. |
 | Archive creation | Text and photo only: `添加文字描述`, `选择照片` | `MemoryArchiveCreationOption.availableOptions` always starts with `.text`, `.photo`. |
 | Archive persona | `人格设定` opens the persona/knowledge settings surface | `DJFeature.personaSettings` is enabled by default. |
-| Echo | Voice-first interaction: `开始语音` | `EchoViewController` exposes mic interaction, not text/image input controls. |
+| Echo | Voice-first interaction: `开始语音` | `EchoViewController` exposes mic interaction, not text/image input controls. `VoiceSDKReadinessSummary` keeps mock ASR/TTS, backend token fallback, and production SDK readiness separate. |
 | Profile care | Persona card, `心境追踪`, aggregate `长辈关怀` child dashboard, loading/empty/stale/failed care states, non-executing `关怀升级准备中` placeholder, doctor identity row without call action | `DJFeature.careDashboard` is enabled by default; `careDoctorContact` is not. |
 | Profile settings | `个人资料设置`, `法律法规`, `退出登录` | `DJFeature.profileSettings` and `DJFeature.legalCenter` are enabled by default; logout is always appended. |
 | Profile settings page | Avatar display, name/gender/region editing, masked phone, inline save states, local profile persistence, backend-ready sync fallback | `ProfileSettingsViewController`; `profile-settings-save-state-check.swift`, `profile-account-fields-check.swift`. |
@@ -45,6 +47,7 @@ These items must not appear in the public release surface yet.
 | --- | --- | --- |
 | Echo | Text input | `DJFeature.echoTextInput`; no public control. |
 | Echo | Image input | `DJFeature.echoImageInput`; no public control. |
+| Echo / QA | Voice SDK readiness preview | `DJShowVoiceSDKReadinessPreview` only; hidden UIQA shows readiness boundary and must not appear in public release. |
 | Archive | Audio upload / `录入语音` | `DJFeature.archiveAudioUpload` or `DJEnableArchiveHiddenBranches` only. |
 | Archive | Video upload / `录入视频片段` | `DJFeature.archiveVideoUpload` or `DJEnableArchiveHiddenBranches` mock-file shell only. |
 | Archive | Time-letter creation / `录入时间信件` | `DJFeature.timeLetters` or `DJEnableArchiveHiddenBranches` only. |
@@ -62,20 +65,30 @@ These items must not appear in the public release surface yet.
 | Profile | `声音克隆` | `DJFeature.voiceCloneShell` or `DJEnableProfileHiddenBranches` safety shell only. |
 | Profile care | `立即通话` | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` only. |
 
+## 2026-06-19 Completed Hidden/Acceptance Guards
+
+These are now implemented as guarded contracts or QA evidence packages. They do not expand the default public release surface:
+
+- Hidden Family / Voice UIQA Consumer Gate: backend-derived `digitalHumanMode`, `familyPersonaContractVersion`, `voiceProfileId`, and `sampleStatus` are parsed and consumed in hidden QA.
+- 时间信件 Delivery Policy Shell: draft/sealed time letters persist explicit non-delivery policy until product delivery rules are decided.
+- 视频档案 Hidden Readiness: mock video cards/details show thumbnail placeholder, file size, upload status, failed/retry analysis state, and runtime media capability.
+- 真机验收包强化: true-device voice and archive-audio preflight scripts now generate evidence manifests, screenshot names, logs, and manual QA notes.
+- 生产语音 SDK readiness 边界: mock ASR/TTS, backend token fallback, production SDK needs true-device QA, and future verified state are explicitly separated.
+
 ## Hidden Candidate Release Decisions
 
 No hidden PRD feature is public by default. These candidates may be available in QA-only branches or as safety shells, but they are not part of the default public MVP until the promotion criteria below are met.
 
 | Feature | Current gate | Public in MVP | Needed before public | Test evidence |
 | --- | --- | --- | --- | --- |
-| archive audio upload | `DJFeature.archiveAudioUpload` or `DJEnableArchiveHiddenBranches` | no | true-device recording acceptance, storage/privacy copy, backend media policy | `archive-media-entries-smoke-check.swift`, release regression |
-| time letters | `DJFeature.timeLetters` or `DJEnableArchiveHiddenBranches` | no | delivery/scheduling policy, reminder semantics, true-device notification decision | `archive-media-entries-smoke-check.swift`, release regression |
-| video upload | `DJFeature.archiveVideoUpload` or `DJEnableArchiveHiddenBranches` mock-file shell only | no | PRD scope, picker/compression/storage/backend policy, true-device video picker acceptance | `archive-media-entries-smoke-check.swift`, `archive-media-release-readiness-check.swift`, `archive-hidden-media-timeletter-shell-check.swift`, release regression |
-| family management public release | `DJFeature.familyManagement` or `DJEnableProfileHiddenBranches` | no | invitation/permission model, backend membership contract, privacy copy | `profile-family-persona-switcher-check.swift` |
+| archive audio upload | `DJFeature.archiveAudioUpload` or `DJEnableArchiveHiddenBranches` | no | true-device recording acceptance, storage/privacy copy, backend media policy | `archive-audio-lifecycle-smoke-check.swift`, `archive-audio-ia-release-check.swift`, `true-device-archive-audio-acceptance-check.swift`, `true-device-acceptance-evidence-package-check.swift`, release regression |
+| time letters | `DJFeature.timeLetters` or `DJEnableArchiveHiddenBranches` | no | product delivery/scheduling policy, reminder semantics, recipient rules, true-device notification decision if promoted | `archive-hidden-media-timeletter-shell-check.swift`, `archive-time-letter-backend-lifecycle-check.swift`, `time-letter-delivery-policy-shell-check.swift`, release regression |
+| video upload | `DJFeature.archiveVideoUpload` or `DJEnableArchiveHiddenBranches` mock-file shell only | no | PRD public scope, real picker/compression/storage/backend provider policy, true-device video picker acceptance | `archive-video-hidden-readiness-check.swift`, `archive-hidden-media-detail-ui-check.swift`, `archive-hidden-media-combo-gate-check.swift`, `archive-media-upload-intent-contract-check.swift`, `archive-media-provider-switch-contract-check.swift`, release regression |
+| family management public release | `DJFeature.familyManagement` or `DJEnableProfileHiddenBranches` | no | invitation/permission model, backend membership contract, consent UX, privacy copy | `profile-family-persona-switcher-check.swift`, `family-digital-human-hidden-contract-check.swift`, `backend-family-voice-contract-smoke-check.swift`, `ios-family-voice-consumer-contract-check.swift`, `ios-family-voice-hidden-uiqa-smoke-check.swift` |
 | care dashboard expansion | aggregate `DJFeature.careDashboard` and non-executing `关怀升级准备中` placeholder are public; intervention/contact execution stays behind `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | aggregate + placeholder only | family-facing copy, alert thresholds, backend persistence, true-device acceptance | `elder-care-dashboard-check.swift`, `profile-care-public-placeholder-check.swift`, backend acceptance |
 | account deletion execution | `DJFeature.accountDeletion` or `DJEnableProfileHiddenBranches` safety shell only | no | compliance policy, cooling-off period, backend deletion/export contract | `profile-safety-flow-check.swift` |
 | account password change | `DJFeature.accountPasswordChange` or `DJEnableProfileHiddenBranches` | no | backend `/auth/password` implementation, auth/security review, true-device acceptance | `profile-password-change-check.swift`, release regression |
-| voice clone shell | `DJFeature.voiceCloneShell` or `DJEnableProfileHiddenBranches` | no | explicit authorization, voice sample quality policy, voiceProfileId lifecycle, deletion/disable backend contract, compliance review | `voice-clone-shell-contract-check.swift`, `voice-clone-backend-contract-check.swift`, release regression |
+| voice clone shell | `DJFeature.voiceCloneShell` or `DJEnableProfileHiddenBranches` | no | explicit authorization, voice sample quality policy, voiceProfileId lifecycle, deletion/disable backend contract, compliance review, production provider acceptance | `voice-clone-shell-contract-check.swift`, `voice-clone-backend-contract-check.swift`, `backend-family-voice-contract-smoke-check.swift`, `ios-family-voice-consumer-contract-check.swift`, release regression |
 | doctor contact / intervention execution | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | no | real escalation provider, emergency disclaimers, backend submission contract | `profile-care-escalation-contract-check.swift`, `profile-care-escalation-backend-boundary-check.swift` |
 | care escalation draft | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` local draft shell only | no | product decision to promote draft, backend submit contract, clinical/legal review | `profile-care-escalation-contract-check.swift`, `run-profile-care-escalation-boundary-smoke.sh` |
 | sunlight/star/silent lifecycle transition controls | hidden family rows / local QA context only | no | product/legal policy for lifecycle transitions, consent copy, recovery rules | `digital-human-mode-management-check.swift`, `digital-human-mode-lifecycle-check.swift` |
@@ -118,8 +131,12 @@ swift tmp/visual-qa/prd-stitch-ui/elder-care-dashboard-check.swift /Users/yxj/Do
 swift tmp/visual-qa/prd-stitch-ui/profile-care-public-placeholder-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/voice-clone-shell-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/voice-clone-backend-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/voice-sdk-readiness-boundary-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/ios-family-voice-consumer-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/ios-family-voice-hidden-uiqa-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/time-letter-delivery-policy-shell-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/archive-video-hidden-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/true-device-acceptance-evidence-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/final-visual-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
@@ -144,3 +161,29 @@ Hidden features can be moved into the public matrix only after all of the follow
 3. The user action has a real implemented flow, not only a placeholder alert.
 4. Risky flows have copy and confirmation states, especially account deletion, family access, emergency guidance, and doctor contact.
 5. A static check or simulator smoke protects the newly visible path.
+
+## Remaining Gates By Type
+
+Public MVP gates:
+
+- True-device Echo voice, photo archive, foreground/background, playback route, screenshots, and logs.
+- Production voice SDK ASR/TTS quality and recovery evidence.
+- Final Stitch visual QA after each design update.
+
+Hidden gates:
+
+- Audio/video/time-letter real media behavior and delivery rules.
+- Family management public UI and permission flow.
+- Voice clone production provider and consent-quality policy.
+
+External gates:
+
+- APNs provider delivery and true-device notification arrival.
+- Paid Apple Developer Team capability if push is promoted.
+- Real object-storage provider for media upload.
+
+Product/compliance gates:
+
+- Account deletion/export/cooling-off.
+- Doctor contact or intervention execution.
+- Digital inheritance and lifecycle transitions.

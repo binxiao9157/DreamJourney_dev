@@ -146,15 +146,39 @@ assertContains(matrix, "录入视频片段", "release matrix must document hidde
 assertContains(matrix, "## Hidden Candidate Release Decisions", "release matrix should include hidden candidate decision table")
 assertContains(matrix, "| Feature | Current gate | Public in MVP | Needed before public | Test evidence |", "release matrix should include hidden candidate decision columns")
 assertContains(matrix, "No hidden PRD feature is public by default", "release matrix should preserve hidden-by-default policy")
+assertContains(matrix, "Last synced: 2026-06-19", "release matrix should include Phase 0 sync timestamp")
+assertContains(matrix, "Voice SDK readiness preview", "release matrix should document hidden voice SDK readiness preview")
+assertContains(matrix, "DJShowVoiceSDKReadinessPreview", "release matrix should document hidden readiness launch arg")
+assertContains(matrix, "## 2026-06-19 Completed Hidden/Acceptance Guards", "release matrix should document recently completed guards")
+
+for phrase in [
+    "Hidden Family / Voice UIQA Consumer Gate",
+    "时间信件 Delivery Policy Shell",
+    "视频档案 Hidden Readiness",
+    "真机验收包强化",
+    "生产语音 SDK readiness 边界",
+    "voice-sdk-readiness-boundary-check.swift",
+    "time-letter-delivery-policy-shell-check.swift",
+    "archive-video-hidden-readiness-check.swift",
+    "true-device-acceptance-evidence-package-check.swift",
+    "Remaining Gates By Type",
+    "Public MVP gates",
+    "Hidden gates",
+    "External gates",
+    "Product/compliance gates",
+] {
+    assertContains(matrix, phrase, "release matrix should include synced task or gate classification \(phrase)")
+}
 
 let hiddenDecisionRows = [
-    "| archive audio upload | `DJFeature.archiveAudioUpload` or `DJEnableArchiveHiddenBranches` | no | true-device recording acceptance, storage/privacy copy, backend media policy | `archive-media-entries-smoke-check.swift`, release regression |",
-    "| time letters | `DJFeature.timeLetters` or `DJEnableArchiveHiddenBranches` | no | delivery/scheduling policy, reminder semantics, true-device notification decision | `archive-media-entries-smoke-check.swift`, release regression |",
-    "| video upload | `DJFeature.archiveVideoUpload` or `DJEnableArchiveHiddenBranches` mock-file shell only | no | PRD scope, picker/compression/storage/backend policy, true-device video picker acceptance | `archive-media-entries-smoke-check.swift`, `archive-media-release-readiness-check.swift`, `archive-hidden-media-timeletter-shell-check.swift`, release regression |",
-    "| family management public release | `DJFeature.familyManagement` or `DJEnableProfileHiddenBranches` | no | invitation/permission model, backend membership contract, privacy copy | `profile-family-persona-switcher-check.swift` |",
+    "| archive audio upload | `DJFeature.archiveAudioUpload` or `DJEnableArchiveHiddenBranches` | no | true-device recording acceptance, storage/privacy copy, backend media policy | `archive-audio-lifecycle-smoke-check.swift`, `archive-audio-ia-release-check.swift`, `true-device-archive-audio-acceptance-check.swift`, `true-device-acceptance-evidence-package-check.swift`, release regression |",
+    "| time letters | `DJFeature.timeLetters` or `DJEnableArchiveHiddenBranches` | no | product delivery/scheduling policy, reminder semantics, recipient rules, true-device notification decision if promoted | `archive-hidden-media-timeletter-shell-check.swift`, `archive-time-letter-backend-lifecycle-check.swift`, `time-letter-delivery-policy-shell-check.swift`, release regression |",
+    "| video upload | `DJFeature.archiveVideoUpload` or `DJEnableArchiveHiddenBranches` mock-file shell only | no | PRD public scope, real picker/compression/storage/backend provider policy, true-device video picker acceptance | `archive-video-hidden-readiness-check.swift`, `archive-hidden-media-detail-ui-check.swift`, `archive-hidden-media-combo-gate-check.swift`, `archive-media-upload-intent-contract-check.swift`, `archive-media-provider-switch-contract-check.swift`, release regression |",
+    "| family management public release | `DJFeature.familyManagement` or `DJEnableProfileHiddenBranches` | no | invitation/permission model, backend membership contract, consent UX, privacy copy | `profile-family-persona-switcher-check.swift`, `family-digital-human-hidden-contract-check.swift`, `backend-family-voice-contract-smoke-check.swift`, `ios-family-voice-consumer-contract-check.swift`, `ios-family-voice-hidden-uiqa-smoke-check.swift` |",
     "| care dashboard expansion | aggregate `DJFeature.careDashboard` and non-executing `关怀升级准备中` placeholder are public; intervention/contact execution stays behind `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | aggregate + placeholder only | family-facing copy, alert thresholds, backend persistence, true-device acceptance | `elder-care-dashboard-check.swift`, `profile-care-public-placeholder-check.swift`, backend acceptance |",
     "| account deletion execution | `DJFeature.accountDeletion` or `DJEnableProfileHiddenBranches` safety shell only | no | compliance policy, cooling-off period, backend deletion/export contract | `profile-safety-flow-check.swift` |",
     "| account password change | `DJFeature.accountPasswordChange` or `DJEnableProfileHiddenBranches` | no | backend `/auth/password` implementation, auth/security review, true-device acceptance | `profile-password-change-check.swift`, release regression |",
+    "| voice clone shell | `DJFeature.voiceCloneShell` or `DJEnableProfileHiddenBranches` | no | explicit authorization, voice sample quality policy, voiceProfileId lifecycle, deletion/disable backend contract, compliance review, production provider acceptance | `voice-clone-shell-contract-check.swift`, `voice-clone-backend-contract-check.swift`, `backend-family-voice-contract-smoke-check.swift`, `ios-family-voice-consumer-contract-check.swift`, release regression |",
     "| doctor contact / intervention execution | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | no | real escalation provider, emergency disclaimers, backend submission contract | `profile-care-escalation-contract-check.swift`, `profile-care-escalation-backend-boundary-check.swift` |",
     "| care escalation draft | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` local draft shell only | no | product decision to promote draft, backend submit contract, clinical/legal review | `profile-care-escalation-contract-check.swift`, `run-profile-care-escalation-boundary-smoke.sh` |",
     "| sunlight/star/silent lifecycle transition controls | hidden family rows / local QA context only | no | product/legal policy for lifecycle transitions, consent copy, recovery rules | `digital-human-mode-management-check.swift`, `digital-human-mode-lifecycle-check.swift` |",

@@ -6,6 +6,8 @@ Branch: `feature/prd-stitch-ui-adaptation`
 
 Head at creation: `790f029 docs: add prd ui continuation plan`
 
+Last synced: 2026-06-19, after commits `9269113`, `a6f820b`, `67844c8`, `f798801`, and `ba12d48`.
+
 ## Source of truth
 
 - Product: latest attached `《寻梦环游 产品PRD V1.0》(1).md`.
@@ -17,22 +19,33 @@ Head at creation: `790f029 docs: add prd ui continuation plan`
 
 | PRD requirement | Current status | Public? | Evidence | Next action |
 | --- | --- | --- | --- | --- |
-| 回响语音输入 | implemented with production voice SDK configuration gate | yes | `EchoViewController`, `DialogEngineManager`, archive-to-echo smoke, `true-device-voice-readiness-check.swift`, `run-true-device-voice-preflight.sh` | true-device microphone/speech recognition acceptance, production voice SDK quality acceptance |
+| 回响语音输入 | implemented with production voice SDK configuration gate and explicit readiness boundary | yes | `EchoViewController`, `DialogEngineManager`, `VoiceSDKReadinessSummary`, archive-to-echo smoke, `true-device-voice-readiness-check.swift`, `voice-sdk-readiness-boundary-check.swift`, `run-true-device-voice-preflight.sh`, `docs/superpowers/status/2026-06-19-production-voice-sdk-readiness-boundary.md` | 外部验收：populate true-device voice evidence package, then accept production SDK ASR/TTS quality |
 | 2-3轮后等待回信 | implemented ten-round/adaptive policy with persisted in-app state, local notification, deployed backend device-token registration, deployed backend delayed-reply persistence, and deployed backend dispatch-due contract | yes | `EchoViewModel`, `EchoDelayedReplyStore`, `EchoDelayedReplyNotificationScheduler`, `PushDeviceTokenStore`, echo delayed reply notification/push/dispatch checks, deployed run `20260618-deployed-push-device-token-contract-rerun-205018`, accepted dispatch run `20260618-deployed-echo-dispatch-contract-accepted-211732` | APNs provider delivery, true-device voice/notification acceptance |
 | 档案照片 | implemented with sync error recovery | yes | Archive photo entry smoke, `archive-sync-error-recovery-check.swift` | true-device photo acceptance |
-| 档案视频 | hidden candidate shell | no | archive media readiness guard, release matrix | picker/compression/storage/backend policy, true-device video picker acceptance |
-| 档案录音 | hidden candidate | no | archive media smoke | true-device audio acceptance |
+| 档案视频 | hidden readiness shell implemented with mock detail/list state, thumbnail placeholder, upload/analysis failed/retry states, runtime media capability, upload intent, and backend hidden-media sync gate | hidden | `archive-video-hidden-readiness-check.swift`, `archive-hidden-media-detail-ui-check.swift`, `archive-hidden-media-combo-gate-check.swift`, `archive-media-upload-intent-contract-check.swift`, `archive-media-provider-switch-contract-check.swift`, `docs/superpowers/status/2026-06-19-archive-video-hidden-readiness.md` | 产品决策 + 外部验收：decide public scope, then implement real picker/compression/object-storage provider and true-device video picker acceptance |
+| 档案录音 | hidden candidate with non-true-device lifecycle, backend media contract, upload intent, transcription/status shell, Echo context rules, and true-device evidence package prepared | hidden | `archive-audio-lifecycle-smoke-check.swift`, `archive-audio-ia-release-check.swift`, `archive-media-backend-contract-check.swift`, `archive-media-echo-context-polish-check.swift`, `true-device-archive-audio-acceptance-check.swift`, `true-device-acceptance-evidence-package-check.swift` | 外部验收：run physical-device recording, permission recovery, playback route, audio quality, and foreground/background evidence package |
 | 档案文字描述 | implemented with sync error recovery | yes | archive smoke, `archive-sync-error-recovery-check.swift` | maintain |
-| 时间信件 | hidden candidate | no | archive media smoke | delivery policy |
+| 时间信件 | hidden candidate with local draft/seal lifecycle, backend metadata lifecycle, and explicit non-delivery policy shell | hidden | `archive-hidden-media-timeletter-shell-check.swift`, `archive-time-letter-backend-lifecycle-check.swift`, `time-letter-delivery-policy-shell-check.swift`, `docs/superpowers/status/2026-06-19-time-letter-delivery-policy-shell.md` | 产品决策：delivery timing, notification/reminder semantics, recipient rules, cancel/edit rules before public release |
 | 个人资料管理 | implemented for profile fields and login password participation with selected-backend `/profile`, `/auth/login`, and `/auth/password` acceptance; password change UI remains hidden | yes for profile fields and login; no for password change | `LoginViewController`, `ProfileSettingsViewController`, `ProfilePasswordChangeViewController`, `login-password-contract-check.swift`, backend `ProfileAPITests`, backend `PasswordAPITests`, release-like backend run `20260618-selected-backend-latest-contracts-after-deploy-r2` | auth/security review, true-device acceptance, explicit password-change public release decision |
 | 心境追踪 | implemented fallback and data states | yes | Profile care checks, care data states check | lifecycle policy |
-| 家人管理 | hidden candidate | no | family persona smoke | product exposure decision |
+| 家人管理 | hidden candidate with family digital-human backend contract, deployed family/voice smoke, typed iOS consumer, and hidden UIQA consumer for `digitalHumanMode`, `familyPersonaContractVersion`, `voiceProfileId`, `sampleStatus` | hidden | `family-digital-human-hidden-contract-check.swift`, `backend-family-voice-contract-smoke-check.swift`, `ios-family-voice-consumer-contract-check.swift`, `ios-family-voice-hidden-uiqa-smoke-check.swift`, `docs/superpowers/status/2026-06-19-ios-family-voice-hidden-uiqa.md` | 产品决策：public invitation, consent, permissions, role model, and family privacy copy |
 | 法律法规 | implemented | yes | `ProfileLegalViewController` | legal review |
 | 账号退出 | implemented | yes | `ProfileViewController` | maintain |
 | 账号注销 | hidden blocked shell | no | safety check | compliance/backend contract |
 | 长辈关怀 | implemented aggregate with loading/empty/stale/failed states | yes | elder dashboard check, profile care public placeholder check | real backend acceptance |
 | 后端合同闭环 | partially implemented; contract gaps pinned | mixed | `2026-06-18-backend-contract-gap-matrix.md`, `backend-contract-gap-check.swift` | implement missing backend routes or keep backend-ready features hidden |
 | 生死转换机制 | hidden boundary | no | mode lifecycle checks | product/legal policy |
+| 声音克隆 | hidden safety shell with backend lifecycle contract and iOS family/voice consumer evidence | hidden | `voice-clone-shell-contract-check.swift`, `voice-clone-backend-contract-check.swift`, `backend-family-voice-contract-smoke-check.swift`, `ios-family-voice-consumer-contract-check.swift` | 产品/合规决策：authorization, sample quality, voiceProfile lifecycle, disable/delete policy, production voice-clone provider acceptance |
+
+## 2026-06-19 Phase 0 Sync Notes
+
+The following items were completed after the original matrix was created and should no longer be treated as unimplemented engineering gaps:
+
+- Hidden Family / Voice UIQA Consumer Gate: iOS now consumes backend-derived `digitalHumanMode`, `familyPersonaContractVersion`, `voiceProfileId`, and `sampleStatus` in hidden QA while public release keeps family/voice entry points hidden.
+- 时间信件 Delivery Policy Shell: draft/sealed states persist non-delivery metadata and explicitly stay `not_delivering` / `waiting_product_decision` until product delivery rules are decided.
+- 视频档案 Hidden Readiness: mock video detail/list state, thumbnail placeholder, file size, upload status, failed/retry analysis UI, runtime capability, and hidden media combo gate are implemented.
+- 真机验收包强化: true-device voice and archive-audio scripts now produce fixed evidence manifests, screenshot names, logs, and manual QA notes.
+- 生产语音 SDK readiness 边界: `VoiceSDKReadinessSummary` prevents mock ASR/TTS, backend-token fallback, and SDK initialization from being mistaken for production voice completion.
 
 Echo waiting reply note: PRD updated to ten-round/adaptive policy; the old third-turn default policy has been superseded. PRD now says one user speech plus one AI reply counts as one round; the default waits after 10 rounds; emotion/content signals can trigger earlier; delay is 5-10 minutes. In-app state, local notification, device-token registration, delayed-reply backend persistence, and the `POST /echo/delayed-replies/dispatch-due` ready-for-provider contract are implemented through `EchoDelayedReplyStore`, `EchoDelayedReplyNotificationScheduler`, `PushDeviceTokenStore`, `DreamJourneyBackendClient.registerPushDeviceToken`, `DreamJourneyBackendClient.scheduleEchoDelayedReplyPush`, and backend `mark_due_echo_delayed_replies_for_dispatch`. Deployed backend acceptance run `20260618-deployed-push-device-token-contract-rerun-205018` verified `echoDelayedReplyDeviceTokenId` and `echoDelayedReplyPushProviderState=pending`; deployed dispatch acceptance run `20260618-deployed-echo-dispatch-contract-accepted-211732` verified `echoDelayedReplyDispatchState=readyForProvider` and `echoDelayedReplyProviderDeliveryAttempted=false`. Earlier dispatch attempts `20260618-deployed-echo-dispatch-contract-210536` and `20260618-deployed-echo-dispatch-contract-rerun-report-211438` were blocked by HTTP 405 before the backend redeploy and are retained as recovered deployment-drift evidence. APNs provider delivery and true-device notification acceptance remain open.
 
@@ -40,7 +53,7 @@ Profile settings note: name/gender/region validation, inline save states, local 
 
 Backend contract note: iOS/backend parity is tracked in `docs/superpowers/status/2026-06-18-backend-contract-gap-matrix.md`. `/profile`, `/auth/login`, `/auth/password`, archive persona visibility fields, care snapshot state fixtures, `/devices/push-token`, delayed reply `deviceTokenId` persistence, and `/echo/delayed-replies/dispatch-due` are accepted on the selected release-like backend with runs `20260618-selected-backend-latest-contracts-after-deploy-r2`, `20260618-deployed-push-device-token-contract-rerun-205018`, and `20260618-deployed-echo-dispatch-contract-accepted-211732`. `/auth/password` still needs security review before public exposure. Earlier deployed runs `20260618-deployed-echo-dispatch-contract-210536` and `20260618-deployed-echo-dispatch-contract-rerun-report-211438` returned HTTP 405 for dispatch-due before the latest backend redeploy and are retained as recovered deployment-drift evidence. `/echo/delayed-replies` still needs APNs provider delivery and true-device notification acceptance before remote push can be called complete.
 
-Production voice SDK note: 生产语音 SDK key now resolves through build settings (`VOLCENGINE_APP_ID`, `VOLCENGINE_APP_KEY`, `VOLCENGINE_APP_TOKEN`) instead of hard-coded plist placeholders. `DialogEngineManager` fails early when production credentials are missing or still placeholders, and `run-true-device-voice-preflight.sh` is the entrypoint before true-device voice acceptance. On 2026-06-18, iPhoneOS no-sign compile, signed physical-device build, install, and launch passed on the connected iPhone after restoring the missing local provisioning profile file. True-device console output shows `SpeechEngineToB` SDK initialization and `[DialogEngine] ✅ 引擎初始化成功`. Production voice quality is still not accepted until a human-operated device run captures microphone permission, ASR, TTS, foreground/background, and SDK error-recovery evidence.
+Production voice SDK note: 生产语音 SDK key now resolves through build settings (`VOLCENGINE_APP_ID`, `VOLCENGINE_APP_KEY`, `VOLCENGINE_APP_TOKEN`) instead of hard-coded plist placeholders. `DialogEngineManager` fails early when production credentials are missing or still placeholders, and `run-true-device-voice-preflight.sh` is the entrypoint before true-device voice acceptance. On 2026-06-18, iPhoneOS no-sign compile, signed physical-device build, install, and launch passed on the connected iPhone after restoring the missing local provisioning profile file. True-device console output shows `SpeechEngineToB` SDK initialization and `[DialogEngine] ✅ 引擎初始化成功`. `VoiceSDKReadinessSummary` now separates `mockASRTTS`, `backendTokenFallback`, `productionSDKNeedsTrueDeviceQA`, and future `productionSDKVerified`; production voice quality is still not accepted until a human-operated device run captures microphone permission, ASR, TTS, playback route, foreground/background, and SDK error-recovery evidence.
 
 Archive sync note: 档案文字 / 照片同步失败恢复 is implemented for public MVP text/photo archive items. Local saves are retained when backend writes fail, item metadata tracks `pending` / `synced` / `failed`, the archive list and detail surfaces show the cloud state, and the hidden remote-fetch QA path retries failed or pending public items before the next remote refresh. Hidden audio, time-letter, and video candidates remain outside default public sync recovery.
 
@@ -49,8 +62,8 @@ Archive sync note: 档案文字 / 照片同步失败恢复 is implemented for pu
 - 本地 FastAPI 后端 smoke：accepted
 - release-like FastAPI/Postgres 后端验收：accepted
 - 线上/公网后端验收：accepted for simulator release-like scope
-- 真机验收：partially accepted; signed build, install, launch, and process evidence passed; permission prompts, archive photo picker, voice conversation, foreground/background, and screenshot evidence remain open
-- 语音 SDK 生产质量验收：partially accepted; true-device SDK initialization passed, full ASR/TTS conversation quality and recovery evidence remain required
+- 真机验收：partially accepted; signed build, install, launch, and process evidence passed; true-device evidence package format is fixed, but permission prompts, archive photo picker, voice conversation, foreground/background, playback route, logs, and screenshot evidence remain open
+- 语音 SDK 生产质量验收：partially accepted; true-device SDK initialization passed and readiness boundary is guarded, but full ASR/TTS conversation quality and recovery evidence remain required
 - App Store / TestFlight 签名链路验收：not accepted; local development install passed, distribution signing is separate
 - APNs provider delivery / 真机通知到达：not accepted; app now skips APNs registration when `aps-environment` is absent so Personal Team builds no longer emit a system registration failure, verified by true-device run `20260618-apns-gated-registration-launch`. Paid-Team Push capability, APNs token return, backend registration, provider delivery, and true-device notification arrival still need acceptance
 
@@ -83,6 +96,34 @@ Hidden or blocked by default:
 - doctor contact / intervention execution
 - sunlight/star/silent lifecycle transition controls
 - digital inheritance lifecycle
+
+## Remaining Work By Decision Type
+
+Public MVP engineering remains:
+
+- Populate true-device evidence for Echo voice, photo archive import, foreground/background recovery, and care/profile sanity checks.
+- Run production voice SDK ASR/TTS quality acceptance on a physical device.
+- Keep public archive text/photo, Echo, profile, legal, and care regression gates green after any Stitch UI refresh.
+
+Hidden engineering remains:
+
+- Audio/video/time-letter real-media and delivery behavior should stay behind hidden flags until promoted.
+- Family management, voice clone, password change, doctor contact, account deletion, and lifecycle controls stay hidden or safety-shell only.
+
+External acceptance remains:
+
+- APNs provider delivery and true-device notification arrival.
+- Paid Apple Developer Team / distribution signing chain if push or TestFlight release is required.
+- Real object-storage provider for media upload if video/audio are promoted.
+
+Product / compliance decisions remain:
+
+- Time-letter delivery rules and recipient semantics.
+- Family invitation, consent, role, and visibility model.
+- Voice clone authorization and quality policy.
+- Doctor/intervention provider responsibility and emergency copy.
+- Account deletion/export/cooling-off policy.
+- Digital inheritance trigger, proof, consent, audit, and recovery policy.
 
 ## Hidden Candidate Release Matrix
 

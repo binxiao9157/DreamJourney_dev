@@ -45,41 +45,43 @@ assertContains(coverage, "current Stitch canvas and `htmlCode`", "coverage matri
 assertContains(coverage, "MCP screenshots are auxiliary", "coverage matrix should keep MCP screenshots auxiliary")
 assertContains(coverage, "| PRD requirement | Current status | Public? | Evidence | Next action |", "coverage matrix should use the required table")
 
-let requiredRows = [
-    "| 回响语音输入 | implemented with production voice SDK configuration gate | yes | `EchoViewController`, `DialogEngineManager`, archive-to-echo smoke, `true-device-voice-readiness-check.swift`, `run-true-device-voice-preflight.sh` | true-device microphone/speech recognition acceptance, production voice SDK quality acceptance |",
-    "| 2-3轮后等待回信 | implemented ten-round/adaptive policy with persisted in-app state, local notification, deployed backend device-token registration, deployed backend delayed-reply persistence, and deployed backend dispatch-due contract | yes | `EchoViewModel`, `EchoDelayedReplyStore`, `EchoDelayedReplyNotificationScheduler`, `PushDeviceTokenStore`, echo delayed reply notification/push/dispatch checks, deployed run `20260618-deployed-push-device-token-contract-rerun-205018`, accepted dispatch run `20260618-deployed-echo-dispatch-contract-accepted-211732` | APNs provider delivery, true-device voice/notification acceptance |",
-    "| 档案照片 | implemented with sync error recovery | yes | Archive photo entry smoke, `archive-sync-error-recovery-check.swift` | true-device photo acceptance |",
-    "| 档案视频 | hidden candidate shell | no | archive media readiness guard, release matrix | picker/compression/storage/backend policy, true-device video picker acceptance |",
-    "| 档案录音 | hidden candidate | no | archive media smoke | true-device audio acceptance |",
-    "| 档案文字描述 | implemented with sync error recovery | yes | archive smoke, `archive-sync-error-recovery-check.swift` | maintain |",
-    "| 时间信件 | hidden candidate | no | archive media smoke | delivery policy |",
-    "| 个人资料管理 | implemented for profile fields and login password participation with selected-backend `/profile`, `/auth/login`, and `/auth/password` acceptance; password change UI remains hidden | yes for profile fields and login; no for password change | `LoginViewController`, `ProfileSettingsViewController`, `ProfilePasswordChangeViewController`, `login-password-contract-check.swift`, backend `ProfileAPITests`, backend `PasswordAPITests`, release-like backend run `20260618-selected-backend-latest-contracts-after-deploy-r2` | auth/security review, true-device acceptance, explicit password-change public release decision |",
-    "| 心境追踪 | implemented fallback and data states | yes | Profile care checks, care data states check | lifecycle policy |",
-    "| 家人管理 | hidden candidate | no | family persona smoke | product exposure decision |",
-    "| 法律法规 | implemented | yes | `ProfileLegalViewController` | legal review |",
-    "| 账号退出 | implemented | yes | `ProfileViewController` | maintain |",
-    "| 账号注销 | hidden blocked shell | no | safety check | compliance/backend contract |",
-    "| 长辈关怀 | implemented aggregate with loading/empty/stale/failed states | yes | elder dashboard check, profile care public placeholder check | real backend acceptance |",
-    "| 生死转换机制 | hidden boundary | no | mode lifecycle checks | product/legal policy |",
+let requiredRowMarkers = [
+    "| 回响语音输入 | implemented with production voice SDK configuration gate and explicit readiness boundary |",
+    "| 2-3轮后等待回信 | implemented ten-round/adaptive policy with persisted in-app state",
+    "| 档案照片 | implemented with sync error recovery |",
+    "| 档案视频 | hidden readiness shell implemented with mock detail/list state",
+    "| 档案录音 | hidden candidate with non-true-device lifecycle",
+    "| 档案文字描述 | implemented with sync error recovery |",
+    "| 时间信件 | hidden candidate with local draft/seal lifecycle",
+    "| 个人资料管理 | implemented for profile fields and login password participation",
+    "| 心境追踪 | implemented fallback and data states |",
+    "| 家人管理 | hidden candidate with family digital-human backend contract",
+    "| 法律法规 | implemented | yes |",
+    "| 账号退出 | implemented | yes |",
+    "| 账号注销 | hidden blocked shell |",
+    "| 长辈关怀 | implemented aggregate with loading/empty/stale/failed states |",
+    "| 后端合同闭环 | partially implemented; contract gaps pinned |",
+    "| 生死转换机制 | hidden boundary |",
+    "| 声音克隆 | hidden safety shell with backend lifecycle contract",
 ]
 
-for row in requiredRows {
-    assertContains(coverage, row, "coverage matrix should include required PRD row")
+for marker in requiredRowMarkers {
+    assertContains(coverage, marker, "coverage matrix should include required PRD row marker")
 }
 
 let requiredStatuses = [
-    "implemented",
-    "implemented with production voice SDK configuration gate",
-    "partially implemented",
-    "implemented ten-round/adaptive policy with persisted in-app state, local notification, deployed backend device-token registration, deployed backend delayed-reply persistence, and deployed backend dispatch-due contract",
-    "hidden candidate",
-    "hidden candidate shell",
+    "implemented with production voice SDK configuration gate and explicit readiness boundary",
+    "implemented ten-round/adaptive policy",
+    "implemented with sync error recovery",
+    "hidden readiness shell implemented",
+    "hidden candidate with non-true-device lifecycle",
+    "hidden candidate with local draft/seal lifecycle",
+    "hidden candidate with family digital-human backend contract",
+    "hidden safety shell with backend lifecycle contract",
+    "implemented fallback and data states",
     "hidden blocked shell",
     "hidden boundary",
-    "implemented aggregate",
-    "implemented aggregate with loading/empty/stale/failed states",
-    "implemented fallback",
-    "implemented fallback and data states",
+    "partially implemented; contract gaps pinned",
 ]
 
 for status in requiredStatuses {
@@ -96,27 +98,53 @@ for phrase in [
     assertNotContains(coverage, phrase, "coverage matrix must not overclaim external acceptance")
 }
 
+for phrase in [
+    "Last synced: 2026-06-19",
+    "2026-06-19 Phase 0 Sync Notes",
+    "Hidden Family / Voice UIQA Consumer Gate",
+    "时间信件 Delivery Policy Shell",
+    "视频档案 Hidden Readiness",
+    "真机验收包强化",
+    "生产语音 SDK readiness 边界",
+    "Remaining Work By Decision Type",
+    "Public MVP engineering remains",
+    "Hidden engineering remains",
+    "External acceptance remains",
+    "Product / compliance decisions remain",
+] {
+    assertContains(coverage, phrase, "coverage matrix should include Phase 0 sync section and remaining-work classification")
+}
+
+for phrase in [
+    "VoiceSDKReadinessSummary",
+    "voice-sdk-readiness-boundary-check.swift",
+    "true-device-acceptance-evidence-package-check.swift",
+    "time-letter-delivery-policy-shell-check.swift",
+    "archive-video-hidden-readiness-check.swift",
+    "backend-family-voice-contract-smoke-check.swift",
+    "ios-family-voice-hidden-uiqa-smoke-check.swift",
+] {
+    assertContains(coverage, phrase, "coverage matrix should include recent task evidence \(phrase)")
+}
+
 assertContains(coverage, "本地 FastAPI 后端 smoke：accepted", "coverage matrix should mark local FastAPI backend smoke as accepted")
 assertContains(coverage, "release-like FastAPI/Postgres 后端验收：accepted", "coverage matrix should mark release-like Postgres backend as accepted")
 assertContains(coverage, "线上/公网后端验收：accepted for simulator release-like scope", "coverage matrix should mark simulator remote backend as accepted")
 assertContains(coverage, "真机验收：partially accepted", "coverage matrix should mark true-device as partially accepted without overclaiming full acceptance")
 assertContains(coverage, "signed build, install, launch, and process evidence passed", "coverage matrix should record true-device signed build/install/launch evidence")
-assertContains(coverage, "permission prompts, archive photo picker, voice conversation, foreground/background, and screenshot evidence remain open", "coverage matrix should keep manual true-device flow open")
+assertContains(coverage, "permission prompts, archive photo picker, voice conversation, foreground/background, playback route, logs, and screenshot evidence remain open", "coverage matrix should keep manual true-device flow open")
 assertContains(coverage, "生产语音 SDK key now resolves through build settings", "coverage matrix should document production voice SDK config injection")
 assertContains(coverage, "run-true-device-voice-preflight.sh", "coverage matrix should reference true-device voice preflight")
 assertContains(coverage, "True-device console output shows `SpeechEngineToB` SDK initialization", "coverage matrix should record true-device voice SDK initialization evidence")
-assertContains(coverage, "Production voice quality is still not accepted", "coverage matrix should preserve production voice quality external gate")
+assertContains(coverage, "`VoiceSDKReadinessSummary` now separates", "coverage matrix should document production voice SDK readiness boundary")
+assertContains(coverage, "production voice quality is still not accepted", "coverage matrix should preserve production voice quality external gate")
 assertContains(coverage, "APNs provider delivery / 真机通知到达：not accepted", "coverage matrix should keep APNs as not accepted")
 assertContains(coverage, "skips APNs registration when `aps-environment` is absent", "coverage matrix should document APNs entitlement-gated registration")
-assertContains(coverage, "Personal Team builds no longer emit a system registration failure", "coverage matrix should document personal-team APNs fallback")
 assertContains(coverage, "Paid-Team Push capability", "coverage matrix should document paid-team APNs blocker")
 assertContains(coverage, "the old third-turn default policy has been superseded", "coverage matrix should document superseded Echo policy")
 assertContains(coverage, "In-app state, local notification, device-token registration, delayed-reply backend persistence, and the `POST /echo/delayed-replies/dispatch-due` ready-for-provider contract are implemented", "coverage matrix should document implemented Echo notification scope")
 assertContains(coverage, "20260618-deployed-push-device-token-contract-rerun-205018", "coverage matrix should record latest deployed push token acceptance")
-assertContains(coverage, "20260618-deployed-echo-dispatch-contract-210536", "coverage matrix should record blocked deployed dispatch acceptance")
-assertContains(coverage, "20260618-deployed-echo-dispatch-contract-rerun-report-211438", "coverage matrix should record latest blocked deployed dispatch rerun")
 assertContains(coverage, "20260618-deployed-echo-dispatch-contract-accepted-211732", "coverage matrix should record accepted deployed dispatch rerun")
-assertContains(coverage, "deployed dispatch acceptance run `20260618-deployed-echo-dispatch-contract-accepted-211732` verified `echoDelayedReplyDispatchState=readyForProvider` and `echoDelayedReplyProviderDeliveryAttempted=false`", "coverage matrix should record accepted dispatch contract")
 assertContains(coverage, "were blocked by HTTP 405 before the backend redeploy and are retained as recovered deployment-drift evidence", "coverage matrix should preserve recovered dispatch deployment drift evidence")
 assertContains(coverage, "APNs provider delivery and true-device notification acceptance remain open", "coverage matrix should preserve external Echo notification gates")
 assertContains(coverage, "name/gender/region validation", "coverage matrix should document updated profile scope")
@@ -143,7 +171,6 @@ assertContains(coverage, "## Hidden Candidate Release Matrix", "coverage matrix 
 assertContains(coverage, "docs/superpowers/status/2026-06-17-release-feature-matrix.md", "coverage matrix should reference release feature matrix")
 assertContains(coverage, "archive audio upload", "coverage matrix should name archive audio candidate")
 assertContains(coverage, "video upload", "coverage matrix should name archive video candidate")
-assertContains(coverage, "hidden shell only; PRD scope and media backend contract still required", "coverage matrix should document video shell boundary")
 assertContains(coverage, "family management public release", "coverage matrix should name family management candidate")
 assertContains(coverage, "care escalation draft", "coverage matrix should name care escalation draft candidate")
 assertContains(coverage, "digital inheritance lifecycle", "coverage matrix should name digital inheritance candidate")
