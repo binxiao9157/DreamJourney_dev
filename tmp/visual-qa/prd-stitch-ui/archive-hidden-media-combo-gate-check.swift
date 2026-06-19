@@ -20,6 +20,7 @@ let runner = read("tmp/visual-qa/prd-stitch-ui/run-archive-hidden-media-combo-ga
 let releaseRegression = read("tmp/visual-qa/prd-stitch-ui/run-release-regression.sh")
 let releaseQA = read("tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift")
 let statusDoc = read("docs/superpowers/status/2026-06-19-archive-hidden-media-combo-gate.md")
+let oneCommandReleaseDoc = read("docs/superpowers/status/2026-06-18-one-command-release-regression.md")
 
 for required in [
     "run-archive-hidden-shell-smoke.sh",
@@ -38,6 +39,8 @@ for required in [
     "RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE",
     "run-archive-hidden-media-combo-gate.sh",
     "archive-hidden-media-combo-gate",
+    "Release handoff mode forces hidden media combo gate",
+    "RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE=1",
 ] {
     assertContains(releaseRegression, required, "release regression should expose combo gate \(required)")
 }
@@ -59,6 +62,21 @@ assertContains(
     statusDoc,
     "真实后端 hidden media sync smoke",
     "status doc should document deployed backend half"
+)
+assertContains(
+    statusDoc,
+    "Release handoff 常态 gate",
+    "status doc should document combo gate as a release handoff gate"
+)
+assertContains(
+    oneCommandReleaseDoc,
+    "Hidden media combo gate",
+    "one-command release docs should list hidden media combo gate"
+)
+assertContains(
+    oneCommandReleaseDoc,
+    "RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE=1",
+    "one-command release docs should show hidden media combo gate is forced during handoff"
 )
 
 print("Archive hidden media combo gate checks passed")

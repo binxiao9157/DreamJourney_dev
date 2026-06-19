@@ -52,6 +52,9 @@ if [[ "$RELEASE_HANDOFF_MODE" == "1" ]]; then
   # Release handoff mode forces release-like backend acceptance; do not allow
   # RUN_RELEASE_LIKE_BACKEND=0 to bypass the handoff backend gate.
   RUN_RELEASE_LIKE_BACKEND=1
+  # Release handoff mode forces hidden media combo gate so mock audio/video
+  # detail states and deployed /archive/items field persistence stay aligned.
+  RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE=1
 else
   RUN_RELEASE_LIKE_BACKEND="${RUN_RELEASE_LIKE_BACKEND:-0}"
 fi
@@ -120,7 +123,7 @@ Run ID: \`$RUN_ID\`
 - Optional Profile care empty/stale/failed state UIQA smoke when \`RUN_PROFILE_CARE_STATE_SMOKE=1\`.
 - Optional deployed backend Profile care active/empty/stale UIQA smoke when \`RUN_PROFILE_CARE_BACKEND_STATE_SMOKE=1\`.
 - Optional release-like Postgres backend acceptance when \`RUN_RELEASE_LIKE_BACKEND=1\`.
-- Release handoff mode forces release-like backend acceptance and cannot be disabled by \`RUN_RELEASE_LIKE_BACKEND=0\`.
+- Release handoff mode forces release-like backend acceptance and hidden media combo gate; release-like backend acceptance cannot be disabled by \`RUN_RELEASE_LIKE_BACKEND=0\`.
 
 EOF
 }
