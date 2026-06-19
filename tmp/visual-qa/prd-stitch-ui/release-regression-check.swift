@@ -33,6 +33,8 @@ let releasePackage = read("tmp/visual-qa/prd-stitch-ui/release-qa-package-check.
 
 for phrase in [
     "RUN_STANDARD_BUILD",
+    "RUN_PUBLIC_MVP_REGRESSION",
+    "RUN_PUBLIC_MVP_REGRESSION forces RUN_P0_ARCHIVE_ECHO_REGRESSION and RUN_P0_PROFILE_CARE_REGRESSION",
     "RUN_SIMULATOR_SMOKE",
     "RUN_P0_ARCHIVE_ECHO_REGRESSION",
     "RUN_P0_ARCHIVE_ECHO_REGRESSION forces RUN_SIMULATOR_SMOKE",
@@ -64,6 +66,9 @@ for phrase in [
 for phrase in [
     "one-command release regression",
     "run-release-regression.sh",
+    "Public MVP Minimal Regression Gate",
+    "RUN_PUBLIC_MVP_REGRESSION=1",
+    "forces both P0 Archive -> Echo and P0 Profile Care gates",
     "Archive -> Echo",
     "P0 Archive -> Echo Regression Gate",
     "RUN_P0_ARCHIVE_ECHO_REGRESSION=1",

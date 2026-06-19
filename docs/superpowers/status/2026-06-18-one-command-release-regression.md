@@ -22,6 +22,23 @@ The default run covers:
 - Archive -> Echo simulator smoke.
 - Echo delayed reply persistence/local-notification smoke.
 
+## Public MVP Minimal Regression Gate
+
+Use this as the recommended minimum public MVP handoff package when backend credentials are available:
+
+```bash
+RUN_PUBLIC_MVP_REGRESSION=1 \
+RUN_ID=20260619-public-mvp \
+tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+```
+
+`RUN_PUBLIC_MVP_REGRESSION=1` forces both P0 Archive -> Echo and P0 Profile Care gates:
+
+- `RUN_P0_ARCHIVE_ECHO_REGRESSION=1`
+- `RUN_P0_PROFILE_CARE_REGRESSION=1`
+
+This package covers the two public MVP loops that must not regress during UI/PRD iteration: `记忆档案 -> 回响` and `我的 -> 心境追踪 / 长辈关怀`.
+
 ## P0 Archive -> Echo Regression Gate
 
 Use this when validating the public MVP `记忆档案 -> 回响` loop after UI, archive, Echo, or release packaging changes:
@@ -79,6 +96,8 @@ Release handoff mode must include these gates:
 For public MVP archive handoff, add `RUN_P0_ARCHIVE_ECHO_REGRESSION=1` to the release handoff command so archive seed, analysis, and Echo context run in the same package.
 
 For public MVP care handoff, add `RUN_P0_PROFILE_CARE_REGRESSION=1` to the release handoff command so care state local UIQA and deployed backend failure-retry UIQA run in the same package.
+
+For the normal public MVP handoff path, prefer `RUN_PUBLIC_MVP_REGRESSION=1` instead of toggling the two P0 gates separately.
 
 ## Optional Release-like Backends
 

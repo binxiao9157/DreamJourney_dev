@@ -15,13 +15,9 @@ BUILD_LOG="$OUTPUT_DIR/build-debug.log"
 STATIC_LOG_DIR="$OUTPUT_DIR/static-guards"
 
 RUN_STANDARD_BUILD="${RUN_STANDARD_BUILD:-1}"
+RUN_PUBLIC_MVP_REGRESSION="${RUN_PUBLIC_MVP_REGRESSION:-0}"
 RUN_SIMULATOR_SMOKE="${RUN_SIMULATOR_SMOKE:-1}"
 RUN_P0_ARCHIVE_ECHO_REGRESSION="${RUN_P0_ARCHIVE_ECHO_REGRESSION:-0}"
-if [[ "$RUN_P0_ARCHIVE_ECHO_REGRESSION" == "1" ]]; then
-  # RUN_P0_ARCHIVE_ECHO_REGRESSION forces RUN_SIMULATOR_SMOKE so the public
-  # MVP archive-to-echo loop cannot be skipped by a narrow release subset.
-  RUN_SIMULATOR_SMOKE=1
-fi
 RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE="${RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE:-1}"
 RUN_BACKEND_ENV_SMOKE="${RUN_BACKEND_ENV_SMOKE:-0}"
 RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE="${RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE:-0}"
@@ -29,6 +25,17 @@ RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE="${RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMO
 RUN_P0_PROFILE_CARE_REGRESSION="${RUN_P0_PROFILE_CARE_REGRESSION:-0}"
 RUN_PROFILE_CARE_STATE_SMOKE="${RUN_PROFILE_CARE_STATE_SMOKE:-0}"
 RUN_PROFILE_CARE_BACKEND_STATE_SMOKE="${RUN_PROFILE_CARE_BACKEND_STATE_SMOKE:-0}"
+if [[ "$RUN_PUBLIC_MVP_REGRESSION" == "1" ]]; then
+  # RUN_PUBLIC_MVP_REGRESSION forces RUN_P0_ARCHIVE_ECHO_REGRESSION and RUN_P0_PROFILE_CARE_REGRESSION
+  # so the public MVP minimum acceptance package covers both primary loops.
+  RUN_P0_ARCHIVE_ECHO_REGRESSION=1
+  RUN_P0_PROFILE_CARE_REGRESSION=1
+fi
+if [[ "$RUN_P0_ARCHIVE_ECHO_REGRESSION" == "1" ]]; then
+  # RUN_P0_ARCHIVE_ECHO_REGRESSION forces RUN_SIMULATOR_SMOKE so the public
+  # MVP archive-to-echo loop cannot be skipped by a narrow release subset.
+  RUN_SIMULATOR_SMOKE=1
+fi
 if [[ "$RUN_P0_PROFILE_CARE_REGRESSION" == "1" ]]; then
   # RUN_P0_PROFILE_CARE_REGRESSION forces RUN_PROFILE_CARE_STATE_SMOKE and RUN_PROFILE_CARE_BACKEND_STATE_SMOKE
   # so public MVP care regression cannot accidentally run only half of the gate.
@@ -67,6 +74,7 @@ Run ID: \`$RUN_ID\`
 ## Configuration
 
 - Standard iOS build: \`$RUN_STANDARD_BUILD\`
+- Public MVP minimum regression: \`$RUN_PUBLIC_MVP_REGRESSION\`
 - P0 Archive -> Echo regression gate: \`$RUN_P0_ARCHIVE_ECHO_REGRESSION\`
 - Archive -> Echo simulator smoke: \`$RUN_SIMULATOR_SMOKE\`
 - Echo delayed reply notification smoke: \`$RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE\`
@@ -85,6 +93,7 @@ Run ID: \`$RUN_ID\`
 - Backend unit/FastAPI smoke, if the sibling backend repo is present.
 - Static PRD/UI/release guard scripts.
 - iOS Debug simulator build, unless \`RUN_STANDARD_BUILD=0\`.
+- Optional public MVP minimum regression when \`RUN_PUBLIC_MVP_REGRESSION=1\`; this forces both P0 Archive -> Echo and P0 Profile Care gates.
 - Optional P0 Archive -> Echo regression gate when \`RUN_P0_ARCHIVE_ECHO_REGRESSION=1\`; this forces the core archive seed -> analysis -> Echo context UIQA smoke.
 - Core Archive -> Echo simulator smoke, unless \`RUN_SIMULATOR_SMOKE=0\`.
 - Echo delayed reply persistence/local-notification smoke, unless \`RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE=0\`.
@@ -107,6 +116,7 @@ append_report_footer() {
 - Command log: \`commands.log\`
 - Static guard logs: \`static-guards/\`
 - Standard build log: \`build-debug.log\`
+- Public MVP minimum regression: \`archive-to-echo-smoke/$RUN_ID/\`, \`profile-care-state-smoke/$RUN_ID/\`, and \`profile-care-backend-state-smoke/$RUN_ID/\`
 - P0 Archive -> Echo regression gate: \`archive-to-echo-smoke/$RUN_ID/\`
 - Archive -> Echo smoke: \`archive-to-echo-smoke/$RUN_ID/\`
 - Echo delayed reply notification smoke: \`echo-delayed-reply-notification-smoke/$RUN_ID/\`
