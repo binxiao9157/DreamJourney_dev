@@ -86,6 +86,22 @@ tmp/visual-qa/prd-stitch-ui/run-true-device-archive-audio-preflight.sh
 
 生产语音 SDK 质量、APNs provider delivery 和真机通知到达仍是独立验收项。
 
+## 近期真机问题状态
+
+截至 2026-06-19，真机测试已暴露并收敛以下问题：
+
+| 问题 | 根因 | 当前状态 | 后续边界 |
+| --- | --- | --- | --- |
+| APNs 注册失败 | Personal Team / 当前 provisioning profile 缺少 `aps-environment` entitlement | 已通过 entitlement gate 收敛，缺少能力时受控跳过 APNs 注册 | 真实 APNs token、provider delivery 和真机通知到达仍需付费开发者账号与 Push capability |
+| 回响提示生产语音服务未配置 | 真机包使用默认占位 build settings，`Info.plist` 内仍是 `YOUR_VOLCENGINE_*` | 已用私密 xcconfig 重新构建真机 Debug 包并确认配置已注入 | 仍需真机验证麦克风、ASR/TTS 质量、播放路由、前后台恢复 |
+| 封存相册详情看不到旧照片 | 档案保存旧 app 数据容器绝对路径，覆盖安装后容器 UUID 改变 | 已通过 `17cd86e fix: recover archive local media paths` 修复，并在真机上确认路径自动迁移 | 仍需补完整相册权限、真实导入、截图和人工 notes |
+
+详细问题记录：
+
+```text
+docs/superpowers/status/2026-06-19-true-device-test-issues.md
+```
+
 ## 门禁
 
 新增静态检查：
