@@ -576,6 +576,30 @@ extension MemoryArchiveItem {
         updatedAt = now
     }
 
+    mutating func applyRemoteImageAnalysisResult(_ result: [String: Any], now: Date = Date()) {
+        if let statusRaw = Self.stringValue(result["analysisStatus"]),
+           let remoteStatus = MemoryArchiveAnalysisStatus(remoteRawValue: statusRaw) {
+            analysisStatus = remoteStatus
+        } else {
+            analysisStatus = .analyzed
+        }
+
+        if let summary = Self.stringValue(result["analysisSummary"])
+            ?? Self.stringValue(result["description"]) {
+            analysisSummary = summary
+        }
+        detectedPeople = Self.mergingUnique(detectedPeople, with: Self.stringArray(result["detectedPeople"]))
+        tags = Self.mergingUnique(tags, with: Self.stringArray(result["tags"]))
+        metadata = Self.metadataFromRemoteAnalysisContract(result, baseMetadata: metadata)
+        metadata["analysisSource"] = "backend_image_analysis"
+        metadata["analysisUpdatedAt"] = "\(Int(now.timeIntervalSince1970))"
+        if analysisStatus == .analyzed {
+            metadata.removeValue(forKey: Self.analysisFailureReasonMetadataKey)
+            metadata.removeValue(forKey: Self.analysisRetryableMetadataKey)
+        }
+        updatedAt = now
+    }
+
     private var localAnalysisSummary: String {
         switch kind {
         case .photo:

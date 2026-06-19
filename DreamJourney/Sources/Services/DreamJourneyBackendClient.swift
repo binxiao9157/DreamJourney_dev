@@ -187,6 +187,10 @@ final class DreamJourneyBackendClient {
         hasExplicitBaseURL
     }
 
+    var isArchiveImageAnalysisConfigured: Bool {
+        hasExplicitBaseURL
+    }
+
     private init() {
         let configured = Bundle.main.object(forInfoDictionaryKey: "DreamJourneyBackendBaseURL") as? String
         let raw = configured?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -248,6 +252,21 @@ final class DreamJourneyBackendClient {
                 completion(.failure(error))
             }
         }
+    }
+
+    func requestArchiveImageAnalysis(
+        userId: String,
+        archiveItemId: String,
+        imageBase64: String,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        let payload: [String: Any] = [
+            "userId": userId,
+            "archiveItemId": archiveItemId,
+            "imageBase64": imageBase64,
+            "privacyMetadata": ["scope": "generationAllowed"],
+        ]
+        requestJSON(path: "/archive/image-analysis", method: .post, payload: payload, completion: completion)
     }
 
     func postArchiveItem(

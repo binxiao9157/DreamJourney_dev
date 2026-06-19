@@ -136,6 +136,7 @@ for guard in \
   archive-media-upload-intent-contract-check.swift \
   archive-analysis-insights-contract-check.swift \
   archive-analysis-backend-payload-contract-check.swift \
+  archive-image-analysis-live-chain-check.swift \
   voice-clone-shell-contract-check.swift \
   final-visual-qa-package-check.swift \
   release-qa-package-check.swift

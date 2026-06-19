@@ -1792,14 +1792,69 @@ final class MemoryArchiveViewController: UIViewController {
         return fileURL
     }
 
+    private func imageBase64ForArchiveAnalysis(_ image: UIImage) -> String? {
+        image.jpegData(compressionQuality: 0.72)?.base64EncodedString()
+    }
+
+    private func savePhotoArchiveItem(_ item: MemoryArchiveItem, image: UIImage, successMessage: String) {
+        repository.add(item)
+        refreshContent()
+        showToast(successMessage, type: .success)
+        analyzePhotoArchiveItemIfPossible(item, image: image)
+    }
+
+    private func analyzePhotoArchiveItemIfPossible(_ item: MemoryArchiveItem, image: UIImage) {
+        guard DreamJourneyBackendClient.shared.isArchiveImageAnalysisConfigured else {
+            return
+        }
+        guard let imageBase64 = imageBase64ForArchiveAnalysis(image) else {
+            var updatedItem = item
+            updatedItem.markAnalysisFailed(reason: "image_encoding_failed")
+            repository.update(updatedItem, syncToBackend: true)
+            refreshContent()
+            showToast("照片分析失败，可稍后重试", type: .error)
+            return
+        }
+
+        DreamJourneyBackendClient.shared.requestArchiveImageAnalysis(
+            userId: currentArchiveAnalysisUserId,
+            archiveItemId: item.id,
+            imageBase64: imageBase64
+        ) { [weak self] result in
+            guard let self else { return }
+            var updatedItem = item
+            switch result {
+            case .success(let object):
+                updatedItem.applyRemoteImageAnalysisResult(object)
+                repository.update(updatedItem, syncToBackend: true)
+                refreshContent()
+                showToast("已生成图像分析", type: .success)
+            case .failure(let error):
+                updatedItem.markAnalysisFailed(reason: archiveAnalysisFailureReason(error))
+                repository.update(updatedItem, syncToBackend: true)
+                refreshContent()
+                showToast("照片分析失败，可稍后重试", type: .error)
+            }
+        }
+    }
+
+    private var currentArchiveAnalysisUserId: String {
+        UserManager.shared.currentUser?.id ?? "user_001"
+    }
+
+    private func archiveAnalysisFailureReason(_ error: Error) -> String {
+        let normalized = error.localizedDescription
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? "backend_image_analysis_failed" : String(normalized.prefix(80))
+    }
+
     private func saveSamplePhotoToArchive() {
         let image = UIImage(named: "default_memory_1") ?? makeFallbackArchiveImage()
         do {
             let fileURL = try saveImageToArchive(image)
             let item = MemoryArchiveItemFactory.makePhotoItem(localPath: fileURL.path, source: .samplePhoto)
-            repository.add(item)
-            refreshContent()
-            showToast("照片已封存", type: .success)
+            savePhotoArchiveItem(item, image: image, successMessage: "照片已封存")
         } catch {
             showToast("照片保存失败", type: .error)
         }
@@ -1833,9 +1888,7 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
         do {
             let fileURL = try saveImageToArchive(image)
             let item = MemoryArchiveItemFactory.makePhotoItem(localPath: fileURL.path)
-            repository.add(item)
-            refreshContent()
-            showToast("照片已封存", type: .success)
+            savePhotoArchiveItem(item, image: image, successMessage: "照片已封存")
         } catch {
             showToast("照片保存失败", type: .error)
         }

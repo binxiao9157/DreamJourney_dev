@@ -116,6 +116,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-18-profile-care-intervention-placeholder.md",
     "docs/superpowers/status/2026-06-18-archive-sync-error-recovery.md",
     "docs/superpowers/status/2026-06-19-archive-analysis-backend-contract.md",
+    "docs/superpowers/status/2026-06-19-archive-image-analysis-live-chain.md",
 ]
 
 for doc in requiredDocs {
@@ -170,6 +171,7 @@ for handoffGuard in [
     "archive-media-upload-intent-contract-check.swift",
     "archive-analysis-insights-contract-check.swift",
     "archive-analysis-backend-payload-contract-check.swift",
+    "archive-image-analysis-live-chain-check.swift",
     "voice-clone-shell-contract-check.swift",
     "profile-care-public-placeholder-check.swift",
     "release-like-backend-acceptance-check.swift",
@@ -250,6 +252,7 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/archive-media-upload-intent-contract-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-analysis-insights-contract-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-analysis-backend-payload-contract-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/archive-image-analysis-live-chain-check.swift",
     "tmp/visual-qa/prd-stitch-ui/voice-clone-shell-contract-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-integration-contract-check.py",
     "tmp/visual-qa/prd-stitch-ui/backend-auth-token-check.swift",
