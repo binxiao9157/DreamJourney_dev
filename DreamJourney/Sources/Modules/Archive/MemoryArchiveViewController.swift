@@ -758,7 +758,7 @@ final class MemoryArchiveViewController: UIViewController {
         imageContainer.backgroundColor = DJDesignTokens.Color.surfaceContainer
         imageContainer.clipsToBounds = true
 
-        let image = item.localPath.flatMap { UIImage(contentsOfFile: $0) }
+        let image = item.resolvedLocalFilePath.flatMap { UIImage(contentsOfFile: $0) }
         let hasImage = image != nil
         let imageView = UIImageView(image: image)
         imageView.contentMode = .scaleAspectFill
@@ -1222,7 +1222,7 @@ final class MemoryArchiveViewController: UIViewController {
 
         switch item.kind {
         case .photo:
-            let image = item.localPath.flatMap { UIImage(contentsOfFile: $0) }
+            let image = item.resolvedLocalFilePath.flatMap { UIImage(contentsOfFile: $0) }
             if let image {
                 let imageView = UIImageView(image: image)
                 imageView.contentMode = .scaleAspectFill
@@ -1259,7 +1259,7 @@ final class MemoryArchiveViewController: UIViewController {
                 waveform.heightAnchor.constraint(equalToConstant: 34),
             ])
         case .video:
-            if let thumbnailPath = item.metadata[MemoryArchiveItem.mediaThumbnailPathMetadataKey],
+            if let thumbnailPath = item.resolvedThumbnailPath,
                let image = UIImage(contentsOfFile: thumbnailPath) {
                 let imageView = UIImageView(image: image)
                 imageView.contentMode = .scaleAspectFill

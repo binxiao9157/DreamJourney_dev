@@ -256,7 +256,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
 
     private func makePhotoMediaCard() -> UIView {
         let presentation = item.archivePresentation
-        let image = item.localPath.flatMap { UIImage(contentsOfFile: $0) }
+        let image = item.resolvedLocalFilePath.flatMap { UIImage(contentsOfFile: $0) }
         let hasImage = image != nil
         let card = makeDetailCard(radius: DJDesignTokens.Radius.extraLarge)
         card.clipsToBounds = true
@@ -368,14 +368,15 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         playButton.backgroundColor = DJDesignTokens.Color.accent
         playButton.tintColor = DJDesignTokens.Color.accentDeep
         playButton.layer.cornerRadius = 24
-        playButton.setImage(UIImage(systemName: item.localPath == nil ? "waveform.slash" : "play.fill"), for: .normal)
-        playButton.isEnabled = item.localPath != nil
-        playButton.alpha = item.localPath == nil ? 0.68 : 1
-        playButton.accessibilityIdentifier = item.localPath == nil
-            ? "archive-audio-media-placeholder"
-            : "archive-audio-play-button"
+        let hasPlayableAudio = item.hasResolvedLocalFile
+        playButton.setImage(UIImage(systemName: hasPlayableAudio ? "play.fill" : "waveform.slash"), for: .normal)
+        playButton.isEnabled = hasPlayableAudio
+        playButton.alpha = hasPlayableAudio ? 1 : 0.68
+        playButton.accessibilityIdentifier = hasPlayableAudio
+            ? "archive-audio-play-button"
+            : "archive-audio-media-placeholder"
         playButton.addTarget(self, action: #selector(playAudioTapped), for: .touchUpInside)
-        audioPlayButton = item.localPath == nil ? nil : playButton
+        audioPlayButton = hasPlayableAudio ? playButton : nil
 
         let titleStack = UIStackView()
         titleStack.axis = .vertical
@@ -518,10 +519,10 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         mediaContainer.clipsToBounds = true
         mediaContainer.layer.cornerRadius = DJDesignTokens.Radius.large
 
-        let thumbnailImage = item.metadata[MemoryArchiveItem.mediaThumbnailPathMetadataKey]
+        let thumbnailImage = item.resolvedThumbnailPath
             .flatMap { UIImage(contentsOfFile: $0) }
         let hasThumbnail = thumbnailImage != nil
-        let hasLocalVideo = item.localPath?.isEmpty == false
+        let hasLocalVideo = item.hasResolvedLocalFile
 
         let imageView = UIImageView(image: thumbnailImage)
         imageView.contentMode = .scaleAspectFill
@@ -803,7 +804,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     }
 
     private var hiddenMediaStateIdentifier: String {
-        if item.localPath?.isEmpty != false {
+        if !item.hasResolvedLocalFile {
             return "archive-hidden-media-empty-state"
         }
         switch item.metadata[MemoryArchiveItem.mediaUploadStatusMetadataKey] {
@@ -817,7 +818,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     }
 
     private var hiddenMediaStateTitle: String {
-        if item.localPath?.isEmpty != false {
+        if !item.hasResolvedLocalFile {
             return "媒体文件待补充"
         }
         switch item.metadata[MemoryArchiveItem.mediaUploadStatusMetadataKey] {
@@ -833,7 +834,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     }
 
     private var hiddenMediaStateSubtitle: String {
-        if item.localPath?.isEmpty != false {
+        if !item.hasResolvedLocalFile {
             return "当前只有档案说明，补回本地文件后再同步媒体元数据。"
         }
         switch item.metadata[MemoryArchiveItem.mediaUploadStatusMetadataKey] {
@@ -850,7 +851,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     }
 
     private var hiddenMediaStateIconName: String {
-        if item.localPath?.isEmpty != false {
+        if !item.hasResolvedLocalFile {
             return "externaldrive.badge.questionmark"
         }
         switch item.metadata[MemoryArchiveItem.mediaUploadStatusMetadataKey] {
@@ -1727,7 +1728,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     }
 
     private func requestRemoteImageAnalysisRetryAfterRuntimeCheck() {
-        guard let localPath = item.localPath,
+        guard let localPath = item.resolvedLocalFilePath,
               let image = UIImage(contentsOfFile: localPath),
               let imageBase64 = imageBase64ForRemoteArchiveAnalysis(image) else {
             showToast("缺少原始照片，无法重新分析", type: .error)
@@ -1796,7 +1797,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     }
 
     @objc private func playAudioTapped() {
-        guard let localPath = item.localPath else { return }
+        guard let localPath = item.resolvedLocalFilePath else { return }
         if audioPlayer?.isPlaying == true {
             audioPlayer?.pause()
             audioPlayButton?.setImage(UIImage(systemName: "play.fill"), for: .normal)
@@ -1822,7 +1823,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     }
 
     private func audioDurationText() -> String {
-        guard let localPath = item.localPath,
+        guard let localPath = item.resolvedLocalFilePath,
               let player = try? AVAudioPlayer(contentsOf: URL(fileURLWithPath: localPath)) else {
             return "已封存"
         }

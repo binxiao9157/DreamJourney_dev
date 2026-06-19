@@ -212,6 +212,7 @@ for guard in \
   archive-ownership-visibility-check.swift \
   archive-analysis-disclaimer-check.swift \
   archive-sync-error-recovery-check.swift \
+  archive-local-file-path-recovery-check.swift \
   archive-feature-card-ia-check.swift \
   archive-audio-ia-release-check.swift \
   archive-audio-lifecycle-smoke-check.swift \

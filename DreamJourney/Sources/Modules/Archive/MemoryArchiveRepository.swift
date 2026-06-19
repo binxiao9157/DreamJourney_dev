@@ -88,8 +88,12 @@ final class MemoryArchiveRepository {
             item.ownerUserId == MemoryArchiveItem.legacyOwnerUserId
                 || item.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
-        let items = assignOwnerIfNeededForCurrentUser(decodedItems)
-        if needsOwnerMigration {
+        let ownedItems = assignOwnerIfNeededForCurrentUser(decodedItems)
+        let items = ownedItems.map { $0.updatingRecoveredLocalPathIfNeeded() }
+        let needsLocalPathRecovery = zip(ownedItems, items).contains { original, recovered in
+            original.localPath != recovered.localPath || original.metadata != recovered.metadata
+        }
+        if needsOwnerMigration || needsLocalPathRecovery {
             save(items)
         }
         return items.sorted { $0.createdAt > $1.createdAt }

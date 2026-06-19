@@ -147,7 +147,7 @@ extension MemoryArchiveItem {
             return joinedMetadataParts([
                 metadataSourceDisplayName,
                 metadataFileTypeDisplayName,
-                localPath == nil ? nil : "本地已保存",
+                hasResolvedLocalFile ? "本地已保存" : nil,
                 archiveBackendSyncDisplayName,
             ])
         case .audio:
@@ -156,7 +156,7 @@ extension MemoryArchiveItem {
                 metadataSourceDisplayName,
                 metadataUploadStatusDisplayName,
                 metadataTranscriptionStatusDisplayName,
-                localPath == nil ? nil : "本地已保存",
+                hasResolvedLocalFile ? "本地已保存" : nil,
             ])
         case .text:
             return joinedMetadataParts([
@@ -195,14 +195,14 @@ extension MemoryArchiveItem {
         switch kind {
         case .photo:
             rows.append(("文件类型", metadataFileTypeDisplayName ?? "图片"))
-            rows.append(("文件状态", localPath == nil ? "未保存本地文件" : "本地已保存"))
+            rows.append(("文件状态", hasResolvedLocalFile ? "本地已保存" : "未保存本地文件"))
             if let archiveBackendSyncDisplayName {
                 rows.append(("云端状态", archiveBackendSyncDisplayName))
             }
         case .audio:
             rows.append(("语音时长", metadataDurationText ?? "已封存"))
             rows.append(("文件类型", metadataFileTypeDisplayName ?? "音频"))
-            rows.append(("文件状态", localPath == nil ? "未保存本地文件" : "本地已保存"))
+            rows.append(("文件状态", hasResolvedLocalFile ? "本地已保存" : "未保存本地文件"))
             rows.append(("上传状态", metadataUploadStatusDisplayName ?? "本地待上传"))
             if let metadataUploadErrorDisplayName {
                 rows.append(("上传错误", metadataUploadErrorDisplayName))
@@ -235,7 +235,7 @@ extension MemoryArchiveItem {
                 rows.append(("通知状态", "未调度通知"))
             }
         case .video:
-            rows.append(("文件状态", localPath == nil ? "未保存本地文件" : "本地已保存"))
+            rows.append(("文件状态", hasResolvedLocalFile ? "本地已保存" : "未保存本地文件"))
             rows.append(("文件大小", metadataFileSizeDisplayName ?? "未知"))
             rows.append(("上传状态", metadataUploadStatusDisplayName ?? "本地待上传"))
             if let metadataUploadErrorDisplayName {

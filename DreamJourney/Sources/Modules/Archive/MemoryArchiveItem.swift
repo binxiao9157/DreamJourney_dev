@@ -434,11 +434,97 @@ extension MemoryArchiveItem {
     }
 
     var isMediaUploadIntentEligible: Bool {
-        (kind == .audio || kind == .video) && localPath?.isEmpty == false
+        (kind == .audio || kind == .video) && resolvedLocalFilePath?.isEmpty == false
+    }
+
+    var resolvedLocalFilePath: String? {
+        Self.resolvedLocalFilePath(localPath, candidateDirectoryNames: archiveLocalDirectoryNames)
+    }
+
+    var hasResolvedLocalFile: Bool {
+        resolvedLocalFilePath != nil
+    }
+
+    var resolvedThumbnailPath: String? {
+        Self.resolvedLocalFilePath(
+            metadata[Self.mediaThumbnailPathMetadataKey],
+            candidateDirectoryNames: ["archive-video-thumbnails"]
+        )
+    }
+
+    var needsLocalPathRecovery: Bool {
+        guard let localPath,
+              let resolvedLocalFilePath else {
+            return false
+        }
+        return localPath != resolvedLocalFilePath
+    }
+
+    func updatingRecoveredLocalPathIfNeeded() -> MemoryArchiveItem {
+        var recovered = self
+        if let resolvedLocalFilePath,
+           localPath != resolvedLocalFilePath {
+            recovered.localPath = resolvedLocalFilePath
+        }
+        if let resolvedThumbnailPath,
+           metadata[Self.mediaThumbnailPathMetadataKey] != resolvedThumbnailPath {
+            recovered.metadata[Self.mediaThumbnailPathMetadataKey] = resolvedThumbnailPath
+        }
+        return recovered
+    }
+
+    private var archiveLocalDirectoryNames: [String] {
+        switch kind {
+        case .photo:
+            return ["archive-images"]
+        case .audio:
+            return ["archive-audio"]
+        case .video:
+            return ["archive-video", "archive-video-thumbnails"]
+        case .text, .timeLetter:
+            return []
+        }
+    }
+
+    private static func resolvedLocalFilePath(
+        _ path: String?,
+        candidateDirectoryNames: [String]
+    ) -> String? {
+        guard let path,
+              !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+
+        if FileManager.default.fileExists(atPath: path) {
+            return path
+        }
+
+        let fileName = URL(fileURLWithPath: path).lastPathComponent
+        guard !fileName.isEmpty,
+              !candidateDirectoryNames.isEmpty,
+              let documentsURL = try? FileManager.default.url(
+                for: .documentDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: false
+              ) else {
+            return nil
+        }
+
+        for directoryName in candidateDirectoryNames {
+            let candidate = documentsURL
+                .appendingPathComponent(directoryName, isDirectory: true)
+                .appendingPathComponent(fileName)
+            if FileManager.default.fileExists(atPath: candidate.path) {
+                return candidate.path
+            }
+        }
+
+        return nil
     }
 
     var mediaUploadContentType: String? {
-        guard let localPath else { return nil }
+        guard let localPath = resolvedLocalFilePath else { return nil }
         let fileExtension = URL(fileURLWithPath: localPath).pathExtension.lowercased()
         switch kind {
         case .audio:
@@ -465,7 +551,7 @@ extension MemoryArchiveItem {
     }
 
     var mediaUploadFileName: String? {
-        guard let localPath else { return nil }
+        guard let localPath = resolvedLocalFilePath else { return nil }
         let fileName = URL(fileURLWithPath: localPath).lastPathComponent
         return fileName.isEmpty ? nil : fileName
     }
@@ -475,7 +561,7 @@ extension MemoryArchiveItem {
            let value = Int64(rawValue) {
             return value
         }
-        guard let localPath,
+        guard let localPath = resolvedLocalFilePath,
               let attributes = try? FileManager.default.attributesOfItem(atPath: localPath),
               let size = attributes[.size] as? NSNumber else {
             return nil
