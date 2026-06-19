@@ -100,9 +100,19 @@ def assert_time_letter_contract(item: Dict[str, Any], note: str, delivery_state:
     assert_equal(item.get("note"), note, "timeLetter note")
     assert_equal(item.get("deliveryState"), delivery_state, "timeLetter deliveryState")
     assert_equal(item.get("deliveryPolicy"), "pending_product_decision", "timeLetter deliveryPolicy")
+    assert_equal(item.get("deliveryExecutionState"), "not_delivering", "timeLetter deliveryExecutionState")
+    assert_equal(item.get("deliveryDecisionState"), "waiting_product_decision", "timeLetter deliveryDecisionState")
+    assert_equal(item.get("deliveryScheduleState"), "not_scheduled", "timeLetter deliveryScheduleState")
+    assert_equal(item.get("deliveryProviderState"), "disabled_until_product_decision", "timeLetter deliveryProviderState")
+    assert_equal(item.get("deliveryNotificationScheduled"), "false", "timeLetter deliveryNotificationScheduled")
     assert_equal(metadata.get("deliveryState"), delivery_state, "metadata deliveryState")
     assert_equal(metadata.get("timeLetterStatus"), delivery_state, "metadata timeLetterStatus")
     assert_equal(metadata.get("deliveryDecisionRequired"), "true", "delivery decision flag")
+    assert_equal(metadata.get("deliveryExecutionState"), "not_delivering", "metadata deliveryExecutionState")
+    assert_equal(metadata.get("deliveryDecisionState"), "waiting_product_decision", "metadata deliveryDecisionState")
+    assert_equal(metadata.get("deliveryScheduleState"), "not_scheduled", "metadata deliveryScheduleState")
+    assert_equal(metadata.get("deliveryProviderState"), "disabled_until_product_decision", "metadata deliveryProviderState")
+    assert_equal(metadata.get("deliveryNotificationScheduled"), "false", "metadata deliveryNotificationScheduled")
     assert_equal(item.get("metadataOnly"), True, "metadataOnly")
     assert_not_in("localPath", metadata, "timeLetter metadata should strip local paths")
 
@@ -123,12 +133,22 @@ def payload_for(item_id: str, note: str, delivery_state: str, now: str) -> Dict[
         "deliveryState": delivery_state,
         "timeLetterStatus": delivery_state,
         "deliveryPolicy": "pending_product_decision",
+        "deliveryExecutionState": "not_delivering",
+        "deliveryDecisionState": "waiting_product_decision",
+        "deliveryScheduleState": "not_scheduled",
+        "deliveryProviderState": "disabled_until_product_decision",
+        "deliveryNotificationScheduled": "false",
         "metadata": {
             "contentKind": "time_letter",
             "deliveryState": delivery_state,
             "timeLetterStatus": delivery_state,
             "deliveryPolicy": "pending_product_decision",
             "deliveryDecisionRequired": "true",
+            "deliveryExecutionState": "not_delivering",
+            "deliveryDecisionState": "waiting_product_decision",
+            "deliveryScheduleState": "not_scheduled",
+            "deliveryProviderState": "disabled_until_product_decision",
+            "deliveryNotificationScheduled": "false",
             "localPath": "/private/var/mobile/time-letter-draft.txt",
         },
         "personaScope": "personal",

@@ -179,6 +179,11 @@ enum MemoryArchiveItemFactory {
             "timeLetterStatus": timeLetterStatus,
             "deliveryPolicy": "pending_product_decision",
             "deliveryDecisionRequired": "true",
+            "deliveryExecutionState": "not_delivering",
+            "deliveryDecisionState": "waiting_product_decision",
+            "deliveryScheduleState": "not_scheduled",
+            "deliveryProviderState": "disabled_until_product_decision",
+            "deliveryNotificationScheduled": "false",
         ]) { current, _ in current }
     }
 

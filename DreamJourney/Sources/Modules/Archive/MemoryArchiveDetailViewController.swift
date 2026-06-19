@@ -1020,8 +1020,8 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
 
         let subtitleLabel = UILabel()
         subtitleLabel.text = item.isTimeLetterDraft
-            ? "当前只保存在本地草稿箱，可继续编辑、删除或封存。"
-            : "已封存为回响线索；真实投递、通知和收件人规则暂不开放。"
+            ? "当前只保存在本地草稿箱，可继续编辑、删除或封存；不会调度本地通知或 APNs。"
+            : "已封存为回响线索；暂不投递，等待产品决策，不会调度本地通知或 APNs。"
         subtitleLabel.font = DJDesignTokens.Font.body(13)
         subtitleLabel.textColor = DJDesignTokens.Color.textSecondary
         subtitleLabel.numberOfLines = 0
@@ -1029,6 +1029,20 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         stateCard.addSubview(stack)
         stack.addArrangedSubview(titleLabel)
         stack.addArrangedSubview(subtitleLabel)
+        if item.isTimeLetterDeliveryDisabledUntilProductDecision {
+            stack.addArrangedSubview(makeTimeLetterPolicyLabel(
+                text: "暂不投递",
+                identifier: "archive-time-letter-delivery-disabled-state"
+            ))
+            stack.addArrangedSubview(makeTimeLetterPolicyLabel(
+                text: "等待产品决策",
+                identifier: "archive-time-letter-product-decision-state"
+            ))
+            stack.addArrangedSubview(makeTimeLetterPolicyLabel(
+                text: "未调度通知",
+                identifier: "archive-time-letter-notification-not-scheduled-state"
+            ))
+        }
         [stack, titleLabel, subtitleLabel].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
 
         NSLayoutConstraint.activate([
@@ -1039,6 +1053,19 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         ])
 
         return stateCard
+    }
+
+    private func makeTimeLetterPolicyLabel(text: String, identifier: String) -> UILabel {
+        let label = UILabel()
+        label.text = text
+        label.font = DJDesignTokens.Font.label(12)
+        label.textColor = DJDesignTokens.Color.accentDeep
+        label.backgroundColor = DJDesignTokens.Color.accent.withAlphaComponent(0.16)
+        label.layer.cornerRadius = DJDesignTokens.Radius.small
+        label.layer.masksToBounds = true
+        label.textAlignment = .center
+        label.accessibilityIdentifier = identifier
+        return label
     }
 
     private func makeTimeLetterLifecycleActions() -> UIView {

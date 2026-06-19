@@ -415,6 +415,11 @@ extension MemoryArchiveItem {
     static let analysisRetryableMetadataKey = "analysisRetryable"
     static let analysisProviderMetadataKey = "analysisProvider"
     static let analysisFallbackModeMetadataKey = "analysisFallbackMode"
+    static let timeLetterDeliveryExecutionStateMetadataKey = "deliveryExecutionState"
+    static let timeLetterDeliveryDecisionStateMetadataKey = "deliveryDecisionState"
+    static let timeLetterDeliveryScheduleStateMetadataKey = "deliveryScheduleState"
+    static let timeLetterDeliveryProviderStateMetadataKey = "deliveryProviderState"
+    static let timeLetterNotificationScheduledMetadataKey = "deliveryNotificationScheduled"
 
     var backendSyncState: ArchiveBackendSyncState {
         guard let rawValue = metadata[Self.backendSyncStateMetadataKey],
@@ -480,6 +485,35 @@ extension MemoryArchiveItem {
 
     var isTimeLetterDraft: Bool {
         kind == .timeLetter && metadata["deliveryState"] == "draft"
+    }
+
+    var timeLetterDeliveryExecutionState: String {
+        metadata[Self.timeLetterDeliveryExecutionStateMetadataKey] ?? "not_delivering"
+    }
+
+    var timeLetterDeliveryDecisionState: String {
+        metadata[Self.timeLetterDeliveryDecisionStateMetadataKey] ?? "waiting_product_decision"
+    }
+
+    var timeLetterDeliveryScheduleState: String {
+        metadata[Self.timeLetterDeliveryScheduleStateMetadataKey] ?? "not_scheduled"
+    }
+
+    var timeLetterDeliveryProviderState: String {
+        metadata[Self.timeLetterDeliveryProviderStateMetadataKey] ?? "disabled_until_product_decision"
+    }
+
+    var timeLetterNotificationScheduled: Bool {
+        metadata[Self.timeLetterNotificationScheduledMetadataKey] == "true"
+    }
+
+    var isTimeLetterDeliveryDisabledUntilProductDecision: Bool {
+        kind == .timeLetter
+            && timeLetterDeliveryExecutionState == "not_delivering"
+            && timeLetterDeliveryDecisionState == "waiting_product_decision"
+            && timeLetterDeliveryScheduleState == "not_scheduled"
+            && timeLetterDeliveryProviderState == "disabled_until_product_decision"
+            && !timeLetterNotificationScheduled
     }
 
     var detectedLocationClues: [String] {
@@ -684,6 +718,13 @@ extension MemoryArchiveItem {
         updatedItem.metadata["timeLetterStatus"] = "draft"
         updatedItem.metadata["deliveryPolicy"] = "pending_product_decision"
         updatedItem.metadata["deliveryDecisionRequired"] = "true"
+        [
+            "deliveryExecutionState": "not_delivering",
+            "deliveryDecisionState": "waiting_product_decision",
+            "deliveryScheduleState": "not_scheduled",
+            "deliveryProviderState": "disabled_until_product_decision",
+            "deliveryNotificationScheduled": "false",
+        ].forEach { updatedItem.metadata[$0.key] = $0.value }
         updatedItem.metadata["characterCount"] = "\(trimmedNote.count)"
         updatedItem.updatedAt = now
         return updatedItem
@@ -702,6 +743,13 @@ extension MemoryArchiveItem {
         updatedItem.metadata["timeLetterStatus"] = "sealed"
         updatedItem.metadata["deliveryPolicy"] = "pending_product_decision"
         updatedItem.metadata["deliveryDecisionRequired"] = "true"
+        [
+            "deliveryExecutionState": "not_delivering",
+            "deliveryDecisionState": "waiting_product_decision",
+            "deliveryScheduleState": "not_scheduled",
+            "deliveryProviderState": "disabled_until_product_decision",
+            "deliveryNotificationScheduled": "false",
+        ].forEach { updatedItem.metadata[$0.key] = $0.value }
         updatedItem.updatedAt = now
         return updatedItem
     }
@@ -764,6 +812,11 @@ extension MemoryArchiveItem {
             payload["deliveryState"] = deliveryState
             payload["timeLetterStatus"] = metadata["timeLetterStatus"] ?? deliveryState
             payload["deliveryPolicy"] = metadata["deliveryPolicy"] ?? "pending_product_decision"
+            payload["deliveryExecutionState"] = timeLetterDeliveryExecutionState
+            payload["deliveryDecisionState"] = timeLetterDeliveryDecisionState
+            payload["deliveryScheduleState"] = timeLetterDeliveryScheduleState
+            payload["deliveryProviderState"] = timeLetterDeliveryProviderState
+            payload["deliveryNotificationScheduled"] = timeLetterNotificationScheduled
             payload["metadataOnly"] = true
         }
         return payload

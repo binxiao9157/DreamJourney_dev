@@ -1270,6 +1270,22 @@ private extension AppDelegate {
             let timeLetterDraftDeleted = didRemoveDeletedDraft && restoredDeletedDraft == nil
             let timeLetterSealedRestored = restoredSealed?.metadata["deliveryState"] == "sealed"
                 && restoredSealed?.metadata["deliveryPolicy"] == "pending_product_decision"
+            let timeLetterDraftDeliveryPolicyPersisted = restoredDraft?.isTimeLetterDeliveryDisabledUntilProductDecision == true
+            let timeLetterSealedDeliveryPolicyPersisted = restoredSealedDraft?.isTimeLetterDeliveryDisabledUntilProductDecision == true
+                && restoredSealed?.isTimeLetterDeliveryDisabledUntilProductDecision == true
+            let timeLetterBackendPayload = sealedDraftLetter.archiveBackendPayload(
+                userId: "user_9999",
+                viewerUserId: "user_9999",
+                ownerId: "user_9999",
+                personaScope: "personal",
+                digitalHumanId: "user_9999"
+            )
+            let timeLetterBackendPayloadNonDelivering =
+                (timeLetterBackendPayload["deliveryExecutionState"] as? String) == "not_delivering"
+                && (timeLetterBackendPayload["deliveryDecisionState"] as? String) == "waiting_product_decision"
+                && (timeLetterBackendPayload["deliveryScheduleState"] as? String) == "not_scheduled"
+                && (timeLetterBackendPayload["deliveryProviderState"] as? String) == "disabled_until_product_decision"
+                && (timeLetterBackendPayload["deliveryNotificationScheduled"] as? Bool) == false
             let mediaDetailEmptyStateVisible = archiveDetailViewContainsIdentifier(
                 "archive-hidden-media-empty-state",
                 item: emptyAudioItem
@@ -1333,6 +1349,18 @@ private extension AppDelegate {
                 item: sealedDraftLetter
             ) && archiveDetailViewContainsText("投递策略待产品决策", item: sealedDraftLetter)
             let timeLetterSealedDetailVisible = timeLetterSealedStateVisible
+            let timeLetterDeliveryPolicyVisible = archiveDetailViewContainsIdentifier(
+                "archive-time-letter-delivery-disabled-state",
+                item: sealedDraftLetter
+            ) && archiveDetailViewContainsIdentifier(
+                "archive-time-letter-product-decision-state",
+                item: sealedDraftLetter
+            ) && archiveDetailViewContainsIdentifier(
+                "archive-time-letter-notification-not-scheduled-state",
+                item: sealedDraftLetter
+            ) && archiveDetailViewContainsText("暂不投递", item: sealedDraftLetter)
+                && archiveDetailViewContainsText("等待产品决策", item: sealedDraftLetter)
+                && archiveDetailViewContainsText("不会调度本地通知或 APNs", item: sealedDraftLetter)
             let timeLetterEmptyBodyVisible = archiveDetailViewContainsIdentifier(
                 "archive-time-letter-empty-body",
                 item: emptyDraftLetter
@@ -1367,6 +1395,9 @@ private extension AppDelegate {
                 && timeLetterDraftEdited
                 && timeLetterDraftDeleted
                 && timeLetterDraftSealed
+                && timeLetterDraftDeliveryPolicyPersisted
+                && timeLetterSealedDeliveryPolicyPersisted
+                && timeLetterBackendPayloadNonDelivering
                 && mediaDetailEmptyStateVisible
                 && mediaDetailFailedStateVisible
                 && mediaDetailRetryActionVisible
@@ -1385,6 +1416,7 @@ private extension AppDelegate {
                 && timeLetterSealedStateVisible
                 && timeLetterDraftDetailVisible
                 && timeLetterSealedDetailVisible
+                && timeLetterDeliveryPolicyVisible
                 && timeLetterEmptyBodyVisible
                 && audioEmptyDetailSnapshotWritten
                 && audioTranscriptionFailedDetailSnapshotWritten
@@ -1411,6 +1443,9 @@ private extension AppDelegate {
                 timeLetterDraftEdited: timeLetterDraftEdited,
                 timeLetterDraftDeleted: timeLetterDraftDeleted,
                 timeLetterDraftSealed: timeLetterDraftSealed,
+                timeLetterDraftDeliveryPolicyPersisted: timeLetterDraftDeliveryPolicyPersisted,
+                timeLetterSealedDeliveryPolicyPersisted: timeLetterSealedDeliveryPolicyPersisted,
+                timeLetterBackendPayloadNonDelivering: timeLetterBackendPayloadNonDelivering,
                 mediaDetailEmptyStateVisible: mediaDetailEmptyStateVisible,
                 mediaDetailFailedStateVisible: mediaDetailFailedStateVisible,
                 mediaDetailRetryActionVisible: mediaDetailRetryActionVisible,
@@ -1429,6 +1464,7 @@ private extension AppDelegate {
                 timeLetterSealedStateVisible: timeLetterSealedStateVisible,
                 timeLetterDraftDetailVisible: timeLetterDraftDetailVisible,
                 timeLetterSealedDetailVisible: timeLetterSealedDetailVisible,
+                timeLetterDeliveryPolicyVisible: timeLetterDeliveryPolicyVisible,
                 timeLetterEmptyBodyVisible: timeLetterEmptyBodyVisible,
                 audioEmptyDetailSnapshotWritten: audioEmptyDetailSnapshotWritten,
                 audioTranscriptionFailedDetailSnapshotWritten: audioTranscriptionFailedDetailSnapshotWritten,
@@ -2460,6 +2496,9 @@ private extension AppDelegate {
         timeLetterDraftEdited: Bool,
         timeLetterDraftDeleted: Bool,
         timeLetterDraftSealed: Bool,
+        timeLetterDraftDeliveryPolicyPersisted: Bool = false,
+        timeLetterSealedDeliveryPolicyPersisted: Bool = false,
+        timeLetterBackendPayloadNonDelivering: Bool = false,
         mediaDetailEmptyStateVisible: Bool,
         mediaDetailFailedStateVisible: Bool,
         mediaDetailRetryActionVisible: Bool,
@@ -2478,6 +2517,7 @@ private extension AppDelegate {
         timeLetterSealedStateVisible: Bool,
         timeLetterDraftDetailVisible: Bool = false,
         timeLetterSealedDetailVisible: Bool = false,
+        timeLetterDeliveryPolicyVisible: Bool = false,
         timeLetterEmptyBodyVisible: Bool = false,
         audioEmptyDetailSnapshotWritten: Bool = false,
         audioTranscriptionFailedDetailSnapshotWritten: Bool = false,
@@ -2505,6 +2545,9 @@ private extension AppDelegate {
             "timeLetterDraftEdited": timeLetterDraftEdited,
             "timeLetterDraftDeleted": timeLetterDraftDeleted,
             "timeLetterDraftSealed": timeLetterDraftSealed,
+            "timeLetterDraftDeliveryPolicyPersisted": timeLetterDraftDeliveryPolicyPersisted,
+            "timeLetterSealedDeliveryPolicyPersisted": timeLetterSealedDeliveryPolicyPersisted,
+            "timeLetterBackendPayloadNonDelivering": timeLetterBackendPayloadNonDelivering,
             "mediaDetailEmptyStateVisible": mediaDetailEmptyStateVisible,
             "mediaDetailFailedStateVisible": mediaDetailFailedStateVisible,
             "mediaDetailRetryActionVisible": mediaDetailRetryActionVisible,
@@ -2523,6 +2566,7 @@ private extension AppDelegate {
             "timeLetterSealedStateVisible": timeLetterSealedStateVisible,
             "timeLetterDraftDetailVisible": timeLetterDraftDetailVisible,
             "timeLetterSealedDetailVisible": timeLetterSealedDetailVisible,
+            "timeLetterDeliveryPolicyVisible": timeLetterDeliveryPolicyVisible,
             "timeLetterEmptyBodyVisible": timeLetterEmptyBodyVisible,
             "audioEmptyDetailSnapshotWritten": audioEmptyDetailSnapshotWritten,
             "audioTranscriptionFailedDetailSnapshotWritten": audioTranscriptionFailedDetailSnapshotWritten,

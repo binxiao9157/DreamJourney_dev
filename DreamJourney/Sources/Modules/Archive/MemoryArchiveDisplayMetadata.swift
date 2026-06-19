@@ -229,6 +229,11 @@ extension MemoryArchiveItem {
             if metadata["deliveryPolicy"] == "pending_product_decision" {
                 rows.append(("投递策略", "产品决策后开放"))
             }
+            if isTimeLetterDeliveryDisabledUntilProductDecision {
+                rows.append(("投递状态", "暂不投递"))
+                rows.append(("决策状态", "等待产品决策"))
+                rows.append(("通知状态", "未调度通知"))
+            }
         case .video:
             rows.append(("文件状态", localPath == nil ? "未保存本地文件" : "本地已保存"))
             rows.append(("文件大小", metadataFileSizeDisplayName ?? "未知"))

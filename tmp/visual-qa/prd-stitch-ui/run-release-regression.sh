@@ -219,6 +219,7 @@ for guard in \
   archive-media-upload-intent-contract-check.swift \
   archive-media-provider-switch-contract-check.swift \
   archive-hidden-media-timeletter-shell-check.swift \
+  time-letter-delivery-policy-shell-check.swift \
   archive-hidden-media-backend-upload-lifecycle-check.swift \
   archive-time-letter-backend-lifecycle-check.swift \
   archive-hidden-media-detail-ui-check.swift \
