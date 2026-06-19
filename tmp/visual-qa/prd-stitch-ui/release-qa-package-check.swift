@@ -131,6 +131,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-19-family-digital-human-hidden-contract.md",
     "docs/superpowers/status/2026-06-19-backend-family-voice-contract-smoke.md",
     "docs/superpowers/status/2026-06-19-ios-family-voice-consumer-contract.md",
+    "docs/superpowers/status/2026-06-19-ios-family-voice-hidden-uiqa.md",
 ]
 
 for doc in requiredDocs {
@@ -211,6 +212,7 @@ for handoffGuard in [
     "family-digital-human-hidden-contract-check.swift",
     "backend-family-voice-contract-smoke-check.swift",
     "ios-family-voice-consumer-contract-check.swift",
+    "ios-family-voice-hidden-uiqa-smoke-check.swift",
     "profile-care-public-placeholder-check.swift",
     "profile-care-snapshot-check.swift",
     "release-like-backend-acceptance-check.swift",
@@ -332,6 +334,7 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/family-digital-human-hidden-contract-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-family-voice-contract-smoke-check.swift",
     "tmp/visual-qa/prd-stitch-ui/ios-family-voice-consumer-contract-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/ios-family-voice-hidden-uiqa-smoke-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-family-voice-contract-smoke.py",
     "tmp/visual-qa/prd-stitch-ui/run-backend-family-voice-contract-smoke.sh",
     "tmp/visual-qa/prd-stitch-ui/backend-integration-contract-check.py",

@@ -445,6 +445,10 @@ final class DreamJourneyBackendClient {
         hasExplicitBaseURL
     }
 
+    var isVoiceCloneProfileConfigured: Bool {
+        hasExplicitBaseURL
+    }
+
     var isArchiveMediaUploadIntentConfigured: Bool {
         hasExplicitBaseURL
     }

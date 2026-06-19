@@ -86,13 +86,30 @@ final class ProfileVoiceCloneShellViewController: UIViewController {
         let statusStack = UIStackView()
         statusStack.axis = .vertical
         statusStack.spacing = 10
-        statusStack.addArrangedSubview(makeInfoRow(title: "声音样本状态", value: snapshot.sampleStatus.displayText))
-        statusStack.addArrangedSubview(makeInfoRow(title: "voiceProfileId", value: snapshot.voiceProfileId))
-        statusStack.addArrangedSubview(makeInfoRow(title: "providerMode", value: snapshot.providerMode))
-        statusStack.addArrangedSubview(makeInfoRow(title: "合同版本", value: "\(snapshot.contractVersion)"))
+        statusStack.addArrangedSubview(makeInfoRow(
+            title: "声音样本状态",
+            value: snapshot.sampleStatus.displayText,
+            accessibilityIdentifier: "profileVoiceCloneSampleStatusValue"
+        ))
+        statusStack.addArrangedSubview(makeInfoRow(
+            title: "voiceProfileId",
+            value: snapshot.voiceProfileId,
+            accessibilityIdentifier: "profileVoiceCloneProfileIdValue"
+        ))
+        statusStack.addArrangedSubview(makeInfoRow(
+            title: "providerMode",
+            value: snapshot.providerMode,
+            accessibilityIdentifier: "profileVoiceCloneProviderModeValue"
+        ))
+        statusStack.addArrangedSubview(makeInfoRow(
+            title: "合同版本",
+            value: "\(snapshot.contractVersion)",
+            accessibilityIdentifier: "profileVoiceCloneContractVersionValue"
+        ))
         statusStack.addArrangedSubview(makeInfoRow(
             title: "默认发布态",
-            value: snapshot.defaultReleaseVisible ? "默认可见" : "默认隐藏"
+            value: snapshot.defaultReleaseVisible ? "默认可见" : "默认隐藏",
+            accessibilityIdentifier: "profileVoiceCloneDefaultReleaseValue"
         ))
 
         card.addSubview(stack)
@@ -163,7 +180,11 @@ final class ProfileVoiceCloneShellViewController: UIViewController {
         return card
     }
 
-    private func makeInfoRow(title: String, value: String) -> UIView {
+    private func makeInfoRow(
+        title: String,
+        value: String,
+        accessibilityIdentifier: String? = nil
+    ) -> UIView {
         let row = UIStackView()
         row.alignment = .firstBaseline
         row.spacing = 12
@@ -181,6 +202,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController {
             color: DJDesignTokens.Color.textSecondary
         )
         valueLabel.textAlignment = .right
+        valueLabel.accessibilityIdentifier = accessibilityIdentifier
 
         row.addArrangedSubview(titleLabel)
         row.addArrangedSubview(valueLabel)

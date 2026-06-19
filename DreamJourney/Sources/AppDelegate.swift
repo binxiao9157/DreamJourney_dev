@@ -756,9 +756,28 @@ private extension AppDelegate {
             isFamilySpaceEnabled: false,
             isHiddenBranchesEnabled: true
         )
+        let backendFamilyMember = makeProfileFamilyVoiceBackendDerivedFamilyMember()
+        if let backendFamilyMember {
+            FamilyRepository.shared.add(backendFamilyMember)
+        }
+        let backendVoiceProfile = makeProfileFamilyVoiceBackendVoiceProfile()
+        let backendVoiceSnapshot = backendVoiceProfile.map {
+            VoiceCloneService.shared.voiceCloneShellSnapshot(from: $0)
+        }
+        let backendVoiceShellRendered: Bool
+        if let backendVoiceSnapshot {
+            let voiceShell = ProfileVoiceCloneShellViewController(snapshot: backendVoiceSnapshot)
+            voiceShell.loadViewIfNeeded()
+            backendVoiceShellRendered = voiceShell.view.accessibilityIdentifier == "profile-voice-clone-shell"
+        } else {
+            backendVoiceShellRendered = false
+        }
         let familyMembers = FamilyRepository.shared.getAll()
         let selfContext = DigitalHumanContext.defaultContext(userId: UserManager.shared.currentUser?.id ?? "user_9999")
-        let firstFamilyMember = familyMembers.first
+        let backendFamilyRenderedInRepository = backendFamilyMember.map { member in
+            familyMembers.contains { $0.id == member.id }
+        } ?? false
+        let firstFamilyMember = backendFamilyMember ?? familyMembers.first
         let profileTabSelected = selectProfileTabForFamilyPersonaSmoke()
         let completed = releaseRowVisible == false
             && familyManagementOnlyRowVisible
@@ -768,6 +787,13 @@ private extension AppDelegate {
             && selfContext.isSelfAssistant
             && profileTabSelected
             && !familyMembers.isEmpty
+            && backendFamilyRenderedInRepository
+            && firstFamilyMember?.digitalHumanMode == .star
+            && firstFamilyMember?.familyPersonaContractVersion == 1
+            && backendVoiceSnapshot?.voiceProfileId == "voice_profile_uiqa_backend"
+            && backendVoiceSnapshot?.sampleStatus == .pending
+            && backendVoiceSnapshot?.providerMode == "mockContract"
+            && backendVoiceShellRendered
 
         writeProfileFamilyPersonaReleaseSmokeResult(
             completed: completed,
@@ -778,6 +804,17 @@ private extension AppDelegate {
             hiddenBranchesCanOpenSwitcher: hiddenBranchesCanOpenSwitcher,
             familyMemberCount: familyMembers.count,
             firstFamilyMemberMode: firstFamilyMember?.digitalHumanMode.rawValue ?? "missing",
+            backendFamilyDigitalHumanMode: backendFamilyMember?.digitalHumanMode.rawValue ?? "missing",
+            backendFamilyDigitalHumanModeLabel: backendFamilyMember?.digitalHumanModeLabel ?? "missing",
+            backendFamilyPersonaContractVersion: backendFamilyMember?.familyPersonaContractVersion ?? -1,
+            backendFamilyContractMode: backendFamilyMember?.backendContractMode ?? "missing",
+            backendFamilyDefaultReleaseVisible: backendFamilyMember?.defaultReleaseVisible ?? true,
+            backendFamilyRenderedInRepository: backendFamilyRenderedInRepository,
+            backendVoiceProfileId: backendVoiceSnapshot?.voiceProfileId ?? "missing",
+            backendVoiceSampleStatus: backendVoiceSnapshot?.sampleStatus.rawValue ?? "missing",
+            backendVoiceProviderMode: backendVoiceSnapshot?.providerMode ?? "missing",
+            backendVoiceDefaultReleaseVisible: backendVoiceSnapshot?.defaultReleaseVisible ?? true,
+            backendVoiceShellRendered: backendVoiceShellRendered,
             profileTabSelected: profileTabSelected
         )
         print(
@@ -786,8 +823,48 @@ private extension AppDelegate {
             "familyManagementOnlyCanOpenSwitcher=\(familyManagementOnlyCanOpenSwitcher) " +
             "hiddenBranchesCanOpenSwitcher=\(hiddenBranchesCanOpenSwitcher) " +
             "profileTabSelected=\(profileTabSelected) " +
-            "familyMemberCount=\(familyMembers.count)"
+            "familyMemberCount=\(familyMembers.count) " +
+            "backendFamilyDigitalHumanMode=\(backendFamilyMember?.digitalHumanMode.rawValue ?? "missing") " +
+            "backendVoiceProfileId=\(backendVoiceSnapshot?.voiceProfileId ?? "missing")"
         )
+    }
+
+    func makeProfileFamilyVoiceBackendDerivedFamilyMember() -> FamilyMember? {
+        FamilyMember.fromBackendJSON([
+            "id": "family_uiqa_backend_star",
+            "name": "星辰测试家人",
+            "relation": "家人",
+            "phone": "13900001111",
+            "accessStatus": "active",
+            "lastUpdated": "后端已同步",
+            "personaScope": "family",
+            "digitalHumanId": "digital_human_uiqa_star",
+            "digitalHumanMode": "star",
+            "digitalHumanModeLabel": "星辰",
+            "backendContractMode": "mockFamilyPersona",
+            "familyPersonaContractVersion": 1,
+            "defaultReleaseVisible": false,
+        ])
+    }
+
+    func makeProfileFamilyVoiceBackendVoiceProfile() -> VoiceCloneProfileContract? {
+        VoiceCloneProfileContract(json: [
+            "voiceProfileId": "voice_profile_uiqa_backend",
+            "sampleStatus": "pending",
+            "authorizationConfirmed": true,
+            "authorizationVersion": "voice-clone-consent-v1",
+            "authorizationCopy": "声音克隆必须由用户主动授权，仅使用用户确认提交的声音样本。",
+            "providerMode": "mockContract",
+            "realCloneProviderReady": false,
+            "qualityAcceptanceRequired": true,
+            "isEnabled": false,
+            "defaultReleaseVisible": false,
+            "contractVersion": 1,
+            "disableContract": "后端禁用 voiceProfileId 的合成权限。",
+            "deleteContract": "后端删除样本、训练产物和授权记录。",
+            "personaScope": "family",
+            "digitalHumanId": "digital_human_uiqa_star",
+        ])
     }
 
     func selectProfileTabForFamilyPersonaSmoke() -> Bool {
@@ -2235,6 +2312,17 @@ private extension AppDelegate {
         hiddenBranchesCanOpenSwitcher: Bool,
         familyMemberCount: Int,
         firstFamilyMemberMode: String,
+        backendFamilyDigitalHumanMode: String,
+        backendFamilyDigitalHumanModeLabel: String,
+        backendFamilyPersonaContractVersion: Int,
+        backendFamilyContractMode: String,
+        backendFamilyDefaultReleaseVisible: Bool,
+        backendFamilyRenderedInRepository: Bool,
+        backendVoiceProfileId: String,
+        backendVoiceSampleStatus: String,
+        backendVoiceProviderMode: String,
+        backendVoiceDefaultReleaseVisible: Bool,
+        backendVoiceShellRendered: Bool,
         profileTabSelected: Bool
     ) {
         let result: [String: Any] = [
@@ -2246,6 +2334,17 @@ private extension AppDelegate {
             "hiddenBranchesCanOpenSwitcher": hiddenBranchesCanOpenSwitcher,
             "familyMemberCount": familyMemberCount,
             "firstFamilyMemberMode": firstFamilyMemberMode,
+            "backendFamilyDigitalHumanMode": backendFamilyDigitalHumanMode,
+            "backendFamilyDigitalHumanModeLabel": backendFamilyDigitalHumanModeLabel,
+            "backendFamilyPersonaContractVersion": backendFamilyPersonaContractVersion,
+            "backendFamilyContractMode": backendFamilyContractMode,
+            "backendFamilyDefaultReleaseVisible": backendFamilyDefaultReleaseVisible,
+            "backendFamilyRenderedInRepository": backendFamilyRenderedInRepository,
+            "backendVoiceProfileId": backendVoiceProfileId,
+            "backendVoiceSampleStatus": backendVoiceSampleStatus,
+            "backendVoiceProviderMode": backendVoiceProviderMode,
+            "backendVoiceDefaultReleaseVisible": backendVoiceDefaultReleaseVisible,
+            "backendVoiceShellRendered": backendVoiceShellRendered,
             "profileTabSelected": profileTabSelected,
             "hiddenBranchesArgument": ProfileFamilyPersonaReleaseReadiness.hiddenBranchesLaunchArgument,
             "unavailableTitle": ProfileFamilyPersonaReleaseReadiness.unavailableTitle

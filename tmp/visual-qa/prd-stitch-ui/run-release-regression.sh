@@ -238,6 +238,7 @@ for guard in \
   family-digital-human-hidden-contract-check.swift \
   backend-family-voice-contract-smoke-check.swift \
   ios-family-voice-consumer-contract-check.swift \
+  ios-family-voice-hidden-uiqa-smoke-check.swift \
   voice-clone-shell-contract-check.swift \
   voice-clone-backend-contract-check.swift \
   final-visual-qa-package-check.swift \

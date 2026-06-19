@@ -56,6 +56,7 @@ These items must not appear in the public release surface yet.
 | Backend / Profile | Hidden family digital-human backend contract | `family-digital-human-hidden-contract-check.swift` guards mock persistence for `personaScope`, `digitalHumanId`, and `阳光 / 星辰 / 静默` without exposing public family management. |
 | Backend / Profile | Deployed family + voice contract smoke | `backend-family-voice-contract-smoke-check.swift` guards the deployed `family digital-human` three-state contract and `voice profile lifecycle`; run with `RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE=1` after backend redeploy. |
 | iOS / Profile | Family + voice deployed contract consumer | `ios-family-voice-consumer-contract-check.swift` guards typed iOS parsing for `digitalHumanMode`, `familyPersonaContractVersion`, and backend `voiceProfileId/sampleStatus` snapshots without opening public entry points. |
+| iOS / Profile UIQA | Hidden family + voice UIQA consumer | `ios-family-voice-hidden-uiqa-smoke-check.swift` guards hidden UIQA consumption of backend-derived family/voice fields while public release keeps family and voice entry points hidden. |
 | Profile | `注销账户` | `DJFeature.accountDeletion` or `DJEnableProfileHiddenBranches` only. |
 | Profile settings | `修改密码` | `DJFeature.accountPasswordChange` or `DJEnableProfileHiddenBranches` only. |
 | Profile | `声音克隆` | `DJFeature.voiceCloneShell` or `DJEnableProfileHiddenBranches` safety shell only. |
@@ -118,6 +119,7 @@ swift tmp/visual-qa/prd-stitch-ui/profile-care-public-placeholder-check.swift /U
 swift tmp/visual-qa/prd-stitch-ui/voice-clone-shell-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/voice-clone-backend-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/ios-family-voice-consumer-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/ios-family-voice-hidden-uiqa-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/final-visual-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 

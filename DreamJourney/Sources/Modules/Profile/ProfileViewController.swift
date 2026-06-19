@@ -649,7 +649,33 @@ final class ProfileViewController: UIViewController {
             )
             return
         }
-        navigationController?.pushViewController(ProfileVoiceCloneShellViewController(), animated: true)
+        loadBackendVoiceCloneSnapshot { [weak self] snapshot in
+            let viewController = ProfileVoiceCloneShellViewController(snapshot: snapshot)
+            self?.navigationController?.pushViewController(viewController, animated: true)
+        }
+    }
+
+    private func loadBackendVoiceCloneSnapshot(
+        completion: @escaping (VoiceCloneProfileSnapshot) -> Void
+    ) {
+        guard DreamJourneyBackendClient.shared.isVoiceCloneProfileConfigured,
+              let userId = UserManager.shared.currentUser?.id else {
+            completion(VoiceCloneService.shared.voiceCloneShellSnapshot())
+            return
+        }
+
+        DreamJourneyBackendClient.shared.fetchVoiceCloneProfiles(userId: userId) { result in
+            switch result {
+            case .success(let profiles):
+                if let profile = profiles.first(where: { $0.sampleStatus != .deleted }) ?? profiles.first {
+                    completion(VoiceCloneService.shared.voiceCloneShellSnapshot(from: profile))
+                } else {
+                    completion(VoiceCloneService.shared.voiceCloneShellSnapshot())
+                }
+            case .failure:
+                completion(VoiceCloneService.shared.voiceCloneShellSnapshot())
+            }
+        }
     }
 
     @objc private func showElderCareDashboard() {

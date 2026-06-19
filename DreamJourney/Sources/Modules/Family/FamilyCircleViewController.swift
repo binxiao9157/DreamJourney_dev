@@ -206,6 +206,7 @@ final class FamilyCircleViewController: UIViewController {
     private var personaOptions: [FamilyPersonaOption] {
         [.selfAssistant] + members.map { .familyMember($0) }
     }
+    private var tableHeightConstraint: NSLayoutConstraint?
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -221,8 +222,11 @@ final class FamilyCircleViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        memberCountLabel.text = "\(personaOptions.count) 位可切换对象"
-        membersTableView.reloadData()
+        updateMemberListUI()
+        FamilyRepository.shared.refreshFromBackend(userId: UserManager.shared.currentUser?.id ?? "user_001") { [weak self] result in
+            guard case .success = result else { return }
+            self?.updateMemberListUI()
+        }
     }
 
     // MARK: - Layout
@@ -274,8 +278,7 @@ final class FamilyCircleViewController: UIViewController {
             content.addSubview($0)
         }
 
-        let rowHeight: CGFloat = 80
-        let tableHeight = CGFloat(personaOptions.count) * rowHeight
+        tableHeightConstraint = membersTableView.heightAnchor.constraint(equalToConstant: tableHeight)
 
         NSLayoutConstraint.activate([
             // 标题行
@@ -311,7 +314,7 @@ final class FamilyCircleViewController: UIViewController {
             membersTableView.topAnchor.constraint(equalTo: circleHeaderLabel.bottomAnchor, constant: 12),
             membersTableView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             membersTableView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            membersTableView.heightAnchor.constraint(equalToConstant: tableHeight),
+            tableHeightConstraint!,
 
             // Slogan
             sloganLabel.topAnchor.constraint(equalTo: membersTableView.bottomAnchor, constant: 32),
@@ -319,6 +322,17 @@ final class FamilyCircleViewController: UIViewController {
             sloganLabel.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -32),
             sloganLabel.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -40),
         ])
+    }
+
+    private var tableHeight: CGFloat {
+        CGFloat(personaOptions.count) * 80
+    }
+
+    private func updateMemberListUI() {
+        memberCountLabel.text = "\(personaOptions.count) 位可切换对象"
+        tableHeightConstraint?.constant = tableHeight
+        membersTableView.reloadData()
+        view.layoutIfNeeded()
     }
 
     // MARK: - Actions
