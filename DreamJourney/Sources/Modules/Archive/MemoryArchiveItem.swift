@@ -144,6 +144,7 @@ struct MemoryArchiveItem: Codable, Identifiable {
         }
 
         var metadata = Self.stringDictionary(object["metadata"])
+        metadata = Self.metadataFromRemoteAnalysisContract(object, baseMetadata: metadata)
         if (kind == .photo || kind == .text),
            metadata[Self.backendSyncStateMetadataKey] == nil {
             metadata[Self.backendSyncStateMetadataKey] = ArchiveBackendSyncState.synced.rawValue
@@ -308,6 +309,27 @@ private extension MemoryArchiveItem {
         return array.compactMap(stringValue)
     }
 
+    static func boolValue(_ value: Any?) -> Bool? {
+        switch value {
+        case let bool as Bool:
+            return bool
+        case let number as NSNumber:
+            return number.boolValue
+        case let string as String:
+            let normalized = string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            switch normalized {
+            case "true", "1", "yes", "y":
+                return true
+            case "false", "0", "no", "n":
+                return false
+            default:
+                return nil
+            }
+        default:
+            return nil
+        }
+    }
+
     static func stringDictionary(_ value: Any?) -> [String: String] {
         guard let dictionary = value as? [String: Any] else {
             return [:]
@@ -317,6 +339,30 @@ private extension MemoryArchiveItem {
                 result[pair.key] = string
             }
         }
+    }
+
+    static func metadataFromRemoteAnalysisContract(
+        _ object: [String: Any],
+        baseMetadata: [String: String]
+    ) -> [String: String] {
+        var metadata = baseMetadata
+        mergeRemoteMetadataList(object["detectedLocations"], forKey: Self.analysisLocationCluesMetadataKey, into: &metadata)
+        mergeRemoteMetadataList(object["detectedScenes"], forKey: Self.analysisSceneCluesMetadataKey, into: &metadata)
+        if let failureReason = Self.stringValue(object["analysisFailureReason"]) {
+            metadata[Self.analysisFailureReasonMetadataKey] = failureReason
+        }
+        if let isRetryable = Self.boolValue(object["analysisRetryable"]) {
+            metadata[Self.analysisRetryableMetadataKey] = isRetryable ? "true" : "false"
+        }
+        return metadata
+    }
+
+    static func mergeRemoteMetadataList(_ value: Any?, forKey key: String, into metadata: inout [String: String]) {
+        let values = stringArray(value)
+        guard !values.isEmpty else {
+            return
+        }
+        metadata[key] = values.joined(separator: "、")
     }
 }
 
@@ -333,6 +379,7 @@ extension MemoryArchiveItem {
     static let analysisLocationCluesMetadataKey = "analysisLocationClues"
     static let analysisSceneCluesMetadataKey = "analysisSceneClues"
     static let analysisFailureReasonMetadataKey = "analysisFailureReason"
+    static let analysisRetryableMetadataKey = "analysisRetryable"
 
     var backendSyncState: ArchiveBackendSyncState {
         guard let rawValue = metadata[Self.backendSyncStateMetadataKey],
@@ -352,6 +399,14 @@ extension MemoryArchiveItem {
 
     var detectedSceneClues: [String] {
         Self.metadataList(metadata[Self.analysisSceneCluesMetadataKey])
+    }
+
+    var analysisRetryableForBackend: Bool {
+        if let retryable = metadata[Self.analysisRetryableMetadataKey],
+           let parsedRetryable = Self.boolValue(retryable) {
+            return parsedRetryable
+        }
+        return analysisStatus == .failed
     }
 
     func updatingBackendSyncState(
@@ -406,6 +461,8 @@ extension MemoryArchiveItem {
             "detectedLocations": detectedLocationClues,
             "detectedScenes": detectedSceneClues,
             "metadata": metadataForBackendContract,
+            "analysisFailureReason": metadata[Self.analysisFailureReasonMetadataKey] ?? "",
+            "analysisRetryable": analysisRetryableForBackend,
             "personaScope": personaScope,
             "digitalHumanId": digitalHumanId,
         ]
@@ -497,6 +554,7 @@ extension MemoryArchiveItem {
         metadata["analysisSource"] = "local_rule"
         metadata["analysisUpdatedAt"] = "\(Int(now.timeIntervalSince1970))"
         metadata.removeValue(forKey: Self.analysisFailureReasonMetadataKey)
+        metadata.removeValue(forKey: Self.analysisRetryableMetadataKey)
         storeMetadataList(extractLocationClues(), forKey: Self.analysisLocationCluesMetadataKey)
         storeMetadataList(extractSceneClues(), forKey: Self.analysisSceneCluesMetadataKey)
         updatedAt = now
@@ -506,6 +564,7 @@ extension MemoryArchiveItem {
         analysisStatus = .failed
         analysisSummary = "分析失败，可稍后重试。"
         metadata[Self.analysisFailureReasonMetadataKey] = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        metadata[Self.analysisRetryableMetadataKey] = "true"
         updatedAt = now
     }
 
@@ -513,6 +572,7 @@ extension MemoryArchiveItem {
         analysisStatus = .pending
         analysisSummary = "正在重新整理人物、地点与场景线索。"
         metadata.removeValue(forKey: Self.analysisFailureReasonMetadataKey)
+        metadata.removeValue(forKey: Self.analysisRetryableMetadataKey)
         updatedAt = now
     }
 

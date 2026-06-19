@@ -7,6 +7,8 @@ struct MemoryArchiveContextEntry {
     let summary: String
     let note: String?
     let people: [String]
+    let locations: [String]
+    let scenes: [String]
     let tags: [String]
     let createdAt: Date
 }
@@ -30,6 +32,12 @@ struct MemoryArchiveContextSnapshot {
             }
             if !entry.people.isEmpty {
                 parts.append("  人物线索：\(entry.people.joined(separator: "、"))")
+            }
+            if !entry.locations.isEmpty {
+                parts.append("  地点线索：\(entry.locations.joined(separator: "、"))")
+            }
+            if !entry.scenes.isEmpty {
+                parts.append("  场景线索：\(entry.scenes.joined(separator: "、"))")
             }
             if !entry.tags.isEmpty {
                 parts.append("  标签：\(entry.tags.joined(separator: "、"))")
@@ -391,6 +399,8 @@ private extension MemoryArchiveItem {
             summary: normalizedSummary,
             note: normalizedNote.isEmpty ? nil : normalizedNote,
             people: detectedPeople,
+            locations: detectedLocationClues,
+            scenes: detectedSceneClues,
             tags: tags,
             createdAt: createdAt
         )
