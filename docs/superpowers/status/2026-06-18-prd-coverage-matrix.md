@@ -35,7 +35,7 @@ Last synced: 2026-06-19, after commits `9269113`, `a6f820b`, `67844c8`, `f798801
 | 长辈关怀 | implemented aggregate with loading/empty/stale/failed states | yes | elder dashboard check, profile care public placeholder check | real backend acceptance |
 | 后端合同闭环 | partially implemented; contract gaps pinned | mixed | `2026-06-18-backend-contract-gap-matrix.md`, `backend-contract-gap-check.swift` | implement missing backend routes or keep backend-ready features hidden |
 | 生死转换机制 | hidden boundary | no | mode lifecycle checks | product/legal policy |
-| 声音克隆 | hidden safety shell with backend lifecycle contract and iOS family/voice consumer evidence | hidden | `voice-clone-shell-contract-check.swift`, `voice-clone-backend-contract-check.swift`, `backend-family-voice-contract-smoke-check.swift`, `ios-family-voice-consumer-contract-check.swift` | 产品/合规决策：authorization, sample quality, voiceProfile lifecycle, disable/delete policy, production voice-clone provider acceptance |
+| 声音克隆 | hidden safety shell with backend lifecycle contract, iOS family/voice consumer evidence, and VolcEngine Voice Clone V3 backend provider proxy | hidden | `voice-clone-shell-contract-check.swift`, `voice-clone-backend-contract-check.swift`, `backend-family-voice-contract-smoke-check.swift`, `ios-family-voice-consumer-contract-check.swift`, `2026-06-19-volcengine-voice-clone-v3-provider.md` | 产品/合规决策：authorization UI, sample quality, real voice sample QA, TTS synthesis proxy migration, disable/delete provider-side verification |
 
 ## 2026-06-19 Phase 0 Sync Notes
 

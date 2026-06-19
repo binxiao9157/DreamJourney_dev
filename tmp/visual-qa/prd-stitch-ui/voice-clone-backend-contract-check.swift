@@ -17,7 +17,16 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
     }
 }
 
+func assertNotContains(_ haystack: String, _ needle: String, _ message: String) {
+    guard !haystack.contains(needle) else {
+        fatalError("\(message): unexpected \(needle)")
+    }
+}
+
 let backendMain = read("app/main.py", in: backendRoot)
+let backendConfig = read("app/core/config.py", in: backendRoot)
+let backendRuntime = read("app/services/runtime_config.py", in: backendRoot)
+let backendProvider = read("app/services/voice_clone.py", in: backendRoot)
 let backendMemoryStore = read("app/services/in_memory_store.py", in: backendRoot)
 let backendPostgresStore = read("app/services/postgres_store.py", in: backendRoot)
 let backendTests = read("tests/test_core_services.py", in: backendRoot)
@@ -35,8 +44,10 @@ for required in [
     "@app.post(\"/voice/profiles\")",
     "@app.get(\"/voice/profiles/{user_id}\")",
     "@app.post(\"/voice/profiles/{user_id}/{voice_profile_id}/disable\")",
+    "@app.post(\"/voice/profiles/{user_id}/{voice_profile_id}/refresh\")",
     "@app.delete(\"/voice/profiles/{user_id}/{voice_profile_id}\")",
     "_sanitize_voice_profile_payload",
+    "VoiceCloneProviderFactory(settings).make()",
     "authorizationConfirmed",
     "voiceProfileId",
     "sampleStatus",
@@ -44,6 +55,37 @@ for required in [
     "deleteContract",
 ] {
     assertContains(backendMain, required, "backend should expose voice clone profile contract \(required)")
+}
+
+for required in [
+    "volcengine_voice_clone_api_key",
+    "VOLCENGINE_VOICE_CLONE_API_KEY",
+    "VOLCENGINE_VOICE_CLONE_TRAIN_URL",
+    "VOLCENGINE_VOICE_CLONE_QUERY_URL",
+    "https://openspeech.bytedance.com/api/v3/tts/voice_clone",
+    "https://openspeech.bytedance.com/api/v3/tts/get_voice",
+] {
+    assertContains(backendConfig, required, "backend config should expose voice clone V3 env \(required)")
+}
+
+for required in [
+    "VolcEngineVoiceCloneV3Provider",
+    "settings.volcengine_voice_clone_train_url",
+    "settings.volcengine_voice_clone_query_url",
+    "X-Api-Key",
+    "build_training_request",
+    "build_query_request",
+] {
+    assertContains(backendProvider, required, "backend provider should proxy VolcEngine V3 \(required)")
+}
+
+for required in [
+    "\"voiceClone\"",
+    "\"provider\": voice_clone_provider.provider_mode",
+    "\"trainEndpoint\": \"/voice/profiles\"",
+    "\"queryEndpoint\": \"/voice/profiles/{user_id}/{voice_profile_id}/refresh\"",
+] {
+    assertContains(backendRuntime, required, "runtime config should expose voice clone capability \(required)")
 }
 
 for required in [
@@ -92,6 +134,7 @@ for required in [
     "let deleteContract: String",
     "saveVoiceCloneProfile(",
     "fetchVoiceCloneProfiles(",
+    "refreshVoiceCloneProfile(",
     "disableVoiceCloneProfile(",
     "deleteVoiceCloneProfile(",
 ] {
@@ -101,8 +144,18 @@ for required in [
 for required in [
     "backendContractEndpoint",
     "/voice/profiles",
+    "DreamJourneyBackendClient.shared.saveVoiceCloneProfile",
+    "DreamJourneyBackendClient.shared.refreshVoiceCloneProfile",
 ] {
     assertContains(voiceService, required, "voice clone shell service should document backend contract \(required)")
+}
+
+for forbidden in [
+    "https://openspeech.bytedance.com/api/v3/tts/voice_clone",
+    "https://openspeech.bytedance.com/api/v3/tts/get_voice",
+    "X-Api-Key",
+] {
+    assertNotContains(voiceService, forbidden, "iOS VoiceCloneService must not call VolcEngine directly \(forbidden)")
 }
 
 assertContains(backendReadme, "POST /voice/profiles", "backend README should list voice profile endpoint")

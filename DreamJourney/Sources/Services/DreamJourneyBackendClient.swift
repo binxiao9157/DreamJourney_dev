@@ -599,6 +599,27 @@ final class DreamJourneyBackendClient {
         }
     }
 
+    func refreshVoiceCloneProfile(
+        userId: String,
+        profileId voiceProfileId: String,
+        completion: @escaping (Result<VoiceCloneProfileContract, Error>) -> Void
+    ) {
+        let path = "/voice/profiles/\(pathComponent(userId))/\(pathComponent(voiceProfileId))/refresh"
+        requestJSON(path: path, method: .post, payload: nil) { result in
+            switch result {
+            case .success(let object):
+                guard let profileJSON = object["profile"] as? [String: Any],
+                      let profile = VoiceCloneProfileContract(json: profileJSON) else {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                completion(.success(profile))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func deleteVoiceCloneProfile(
         userId: String,
         profileId voiceProfileId: String,

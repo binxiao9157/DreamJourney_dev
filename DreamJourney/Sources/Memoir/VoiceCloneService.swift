@@ -1,5 +1,4 @@
 import Foundation
-import Alamofire
 import CocoaLumberjack
 
 enum VoiceCloneSampleStatus: String, Codable {
@@ -76,28 +75,17 @@ struct VoiceCloneProfileSnapshot {
     }
 }
 
-// MARK: - 声音复刻服务（火山引擎 Voice Clone V3）
+// MARK: - 声音复刻服务（后端代理火山引擎 Voice Clone V3）
 
-/// 封装火山引擎声音复刻 API：
-/// 1. 上传音频训练音色 → 获得 speaker_id
-/// 2. 查询训练状态
-/// 3. 训练成功后 speaker_id 可用于大模型 TTS 合成
+/// 封装 DreamJourney 后端声音复刻合同：
+/// 1. iOS 只提交授权后的声音样本给后端
+/// 2. 后端持有火山引擎声音复刻 API Key 并代理训练/查询
+/// 3. 训练成功后 voiceProfileId/speaker_id 可用于后端代理合成
 final class VoiceCloneService {
 
     static let shared = VoiceCloneService()
 
     // MARK: - 配置
-
-    /// 火山引擎声音复刻 API Key
-    /// 获取方式：火山引擎控制台 → 语音技术 → 声音复刻 → API Key 管理
-    private static let placeholderAPIKey = "YOUR_VOICECLONE_API_KEY"
-
-    private var apiKey: String
-
-    /// 训练 API
-    private let cloneURL = "https://openspeech.bytedance.com/api/v3/tts/voice_clone"
-    /// 状态查询 API
-    private let queryURL = "https://openspeech.bytedance.com/api/v3/tts/get_voice"
 
     /// 当前用户的 speaker_id（持久化到 UserDefaults）
     private let speakerIdKey = "dj.voiceclone.speakerId"
@@ -120,15 +108,7 @@ final class VoiceCloneService {
 
     // MARK: - Init
 
-    private init() {
-        // 优先从 Info.plist 读取，其次用硬编码
-        if let key = Bundle.main.infoDictionary?["VoiceCloneAPIKey"] as? String,
-           !key.isEmpty, key != Self.placeholderAPIKey {
-            apiKey = key
-        } else {
-            apiKey = Self.placeholderAPIKey
-        }
-    }
+    private init() {}
 
     // MARK: - 公开 API
 
@@ -196,7 +176,7 @@ final class VoiceCloneService {
                     language: Int = 0,
                     completion: @escaping (Result<String, VoiceCloneError>) -> Void) {
 
-        guard apiKey != Self.placeholderAPIKey else {
+        guard DreamJourneyBackendClient.shared.isVoiceCloneProfileConfigured else {
             completion(.failure(.apiKeyMissing))
             return
         }
@@ -220,77 +200,50 @@ final class VoiceCloneService {
         // 确定音频格式
         let format = audioFormat(from: audioURL)
 
-        // 构建请求体
-        let body: [String: Any] = [
-            "speaker_id": finalSpeakerId,
-            "audio": [
-                "data": base64Audio,
-                "format": format
-            ],
+        let userId = UserManager.shared.currentUser?.id ?? "default"
+        let payload: [String: Any] = [
+            "userId": userId,
+            "voiceProfileId": finalSpeakerId,
+            "sampleStatus": VoiceCloneSampleStatus.pending.rawValue,
+            "sampleCount": 1,
+            "authorizationConfirmed": true,
+            "authorizationVersion": "voice-clone-consent-v1",
+            "authorizationText": Self.authorizationCopy,
+            "personaScope": "personal",
+            "digitalHumanId": userId,
+            "audioBase64": base64Audio,
+            "audioFormat": format,
             "language": language,
-            "extra_params": [
-                "enable_audio_denoise": true
-            ] as [String: Any]
+            "privacyMetadata": ["scope": "generationAllowed"],
         ]
 
-        // 如果有提示文本可传入（可选，提高复刻质量）
-        // body["audio"]["text"] = "用户念的文本"
-
-        let headers: HTTPHeaders = [
-            "Content-Type": "application/json",
-            "X-Api-Key": apiKey,
-            "X-Api-Request-Id": UUID().uuidString
-        ]
-
-        DDLogInfo("[VoiceClone] 开始训练音色: \(finalSpeakerId), 音频大小: \(audioData.count) bytes")
-
-        AF.request(cloneURL, method: .post, parameters: body, encoding: JSONEncoding.default, headers: headers)
-            .validate(statusCode: 200..<300)
-            .responseData { [weak self] response in
-                switch response.result {
-                case .success(let data):
-                    guard let self = self else { return }
-                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                        DDLogInfo("[VoiceClone] 训练响应: \(json)")
-
-                        // 检查是否有错误码
-                        if let code = json["code"] as? Int, code != 0 {
-                            let msg = json["message"] as? String ?? "未知错误"
-                            completion(.failure(.trainingFailed(code: code, message: msg)))
-                            return
-                        }
-
-                        // 成功
-                        let returnedSpeakerId = json["speaker_id"] as? String ?? finalSpeakerId
-                        let status = json["status"] as? Int ?? 0
-
-                        self.saveSpeakerId(returnedSpeakerId)
-                        DDLogInfo("[VoiceClone] 音色已提交训练: \(returnedSpeakerId), status=\(status)")
-
-                        // 如果训练已完成（小概率），直接返回
-                        if status == 2 || status == 4 {
-                            self.saveSampleStatus(.ready)
-                            completion(.success(returnedSpeakerId))
-                        } else {
-                            // 开始轮询状态
-                            self.startPollingStatus(speakerId: returnedSpeakerId, completion: completion)
-                        }
-                    } else {
-                        completion(.failure(.invalidResponse))
-                    }
-
-                case .failure(let error):
-                    DDLogError("[VoiceClone] 训练请求失败: \(error.localizedDescription)")
-                    completion(.failure(.networkError(error.localizedDescription)))
+        DDLogInfo("[VoiceClone] 通过后端提交音色训练: \(finalSpeakerId), 音频大小: \(audioData.count) bytes")
+        DreamJourneyBackendClient.shared.saveVoiceCloneProfile(payload: payload) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let profile):
+                self.saveSpeakerId(profile.voiceProfileId)
+                self.saveSampleStatus(profile.sampleStatus)
+                DDLogInfo("[VoiceClone] 后端已接收音色训练: \(profile.voiceProfileId), status=\(profile.sampleStatus.rawValue)")
+                if profile.sampleStatus == .ready {
+                    completion(.success(profile.voiceProfileId))
+                } else if profile.sampleStatus == .failed {
+                    completion(.failure(.trainingFailed(code: 3, message: "音色训练失败")))
+                } else {
+                    self.startPollingStatus(speakerId: profile.voiceProfileId, completion: completion)
                 }
+            case .failure(let error):
+                DDLogError("[VoiceClone] 后端训练请求失败: \(error.localizedDescription)")
+                completion(.failure(.networkError(error.localizedDescription)))
             }
+        }
     }
 
     /// 查询声音复刻训练状态
     func queryStatus(speakerId: String? = nil,
                      completion: @escaping (Result<VoiceCloneStatus, VoiceCloneError>) -> Void) {
 
-        guard apiKey != Self.placeholderAPIKey else {
+        guard DreamJourneyBackendClient.shared.isVoiceCloneProfileConfigured else {
             completion(.failure(.apiKeyMissing))
             return
         }
@@ -301,32 +254,33 @@ final class VoiceCloneService {
             return
         }
 
-        let body: [String: Any] = ["speaker_id": sid]
-        let headers: HTTPHeaders = [
-            "Content-Type": "application/json",
-            "X-Api-Key": apiKey,
-            "X-Api-Request-Id": UUID().uuidString
-        ]
-
-        AF.request(queryURL, method: .post, parameters: body, encoding: JSONEncoding.default, headers: headers)
-            .validate(statusCode: 200..<300)
-            .responseData { response in
-                switch response.result {
-                case .success(let data):
-                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                        let status = json["status"] as? Int ?? 0
-                        let cloneStatus = VoiceCloneStatus(rawValue: status) ?? .notFound
-                        DDLogInfo("[VoiceClone] 查询状态: speakerId=\(sid), status=\(status)")
-                        completion(.success(cloneStatus))
-                    } else {
-                        completion(.failure(.invalidResponse))
-                    }
-
-                case .failure(let error):
-                    DDLogError("[VoiceClone] 查询失败: \(error.localizedDescription)")
-                    completion(.failure(.networkError(error.localizedDescription)))
-                }
+        let userId = UserManager.shared.currentUser?.id ?? "default"
+        DreamJourneyBackendClient.shared.refreshVoiceCloneProfile(userId: userId, profileId: sid) { [weak self] result in
+            switch result {
+            case .success(let profile):
+                self?.saveSampleStatus(profile.sampleStatus)
+                DDLogInfo("[VoiceClone] 后端查询状态: speakerId=\(sid), status=\(profile.sampleStatus.rawValue)")
+                completion(.success(Self.cloneStatus(from: profile.sampleStatus)))
+            case .failure(let error):
+                DDLogError("[VoiceClone] 后端查询失败: \(error.localizedDescription)")
+                completion(.failure(.networkError(error.localizedDescription)))
             }
+        }
+    }
+
+    private static func cloneStatus(from sampleStatus: VoiceCloneSampleStatus) -> VoiceCloneStatus {
+        switch sampleStatus {
+        case .notProvided, .deleted:
+            return .notFound
+        case .pending:
+            return .training
+        case .ready:
+            return .success
+        case .disabled:
+            return .active
+        case .failed:
+            return .failed
+        }
     }
 
     /// 检查当前音色是否已就绪（可用）
@@ -500,7 +454,7 @@ enum VoiceCloneError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .apiKeyMissing:
-            return "声音复刻 API Key 未配置，请在 Info.plist 中设置 VoiceCloneAPIKey"
+            return "声音复刻后端未配置，请先在服务器环境变量中配置火山声音复刻凭证"
         case .speakerIdNotFound:
             return "未找到声音复刻音色 ID"
         case .audioReadFailed:
