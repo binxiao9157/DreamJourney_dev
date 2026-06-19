@@ -27,6 +27,7 @@ let backendMain = read("app/main.py", in: backendRoot)
 let backendConfig = read("app/core/config.py", in: backendRoot)
 let backendRuntime = read("app/services/runtime_config.py", in: backendRoot)
 let backendProvider = read("app/services/voice_clone.py", in: backendRoot)
+let backendTTS = read("app/services/tts.py", in: backendRoot)
 let backendMemoryStore = read("app/services/in_memory_store.py", in: backendRoot)
 let backendPostgresStore = read("app/services/postgres_store.py", in: backendRoot)
 let backendTests = read("tests/test_core_services.py", in: backendRoot)
@@ -35,6 +36,7 @@ let backendReadme = read("README.md", in: backendRoot)
 
 let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let voiceService = read("DreamJourney/Sources/Memoir/VoiceCloneService.swift")
+let memoirTTSService = read("DreamJourney/Sources/Memoir/MemoirTTSService.swift")
 let releaseRegression = read("tmp/visual-qa/prd-stitch-ui/run-release-regression.sh")
 let releaseQA = read("tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift")
 let shellGuard = read("tmp/visual-qa/prd-stitch-ui/voice-clone-shell-contract-check.swift")
@@ -46,8 +48,10 @@ for required in [
     "@app.post(\"/voice/profiles/{user_id}/{voice_profile_id}/disable\")",
     "@app.post(\"/voice/profiles/{user_id}/{voice_profile_id}/refresh\")",
     "@app.delete(\"/voice/profiles/{user_id}/{voice_profile_id}\")",
+    "@app.post(\"/voice/synthesis\")",
     "_sanitize_voice_profile_payload",
     "VoiceCloneProviderFactory(settings).make()",
+    "VoiceCloneTTSProviderFactory(settings).make()",
     "authorizationConfirmed",
     "voiceProfileId",
     "sampleStatus",
@@ -62,8 +66,11 @@ for required in [
     "VOLCENGINE_VOICE_CLONE_API_KEY",
     "VOLCENGINE_VOICE_CLONE_TRAIN_URL",
     "VOLCENGINE_VOICE_CLONE_QUERY_URL",
+    "VOLCENGINE_VOICE_CLONE_TTS_URL",
+    "VOLCENGINE_VOICE_CLONE_TTS_RESOURCE_ID",
     "https://openspeech.bytedance.com/api/v3/tts/voice_clone",
     "https://openspeech.bytedance.com/api/v3/tts/get_voice",
+    "https://openspeech.bytedance.com/api/v3/tts/unidirectional",
 ] {
     assertContains(backendConfig, required, "backend config should expose voice clone V3 env \(required)")
 }
@@ -80,10 +87,22 @@ for required in [
 }
 
 for required in [
+    "VolcVoiceCloneTTSProxy",
+    "settings.volcengine_voice_clone_tts_url",
+    "settings.volcengine_voice_clone_tts_resource_id",
+    "build_synthesis_request",
+    "parse_chunked_audio_response",
+    "X-Api-Resource-Id",
+] {
+    assertContains(backendTTS, required, "backend TTS should proxy cloned voice synthesis \(required)")
+}
+
+for required in [
     "\"voiceClone\"",
     "\"provider\": voice_clone_provider.provider_mode",
     "\"trainEndpoint\": \"/voice/profiles\"",
     "\"queryEndpoint\": \"/voice/profiles/{user_id}/{voice_profile_id}/refresh\"",
+    "\"synthesisEndpoint\": \"/voice/synthesis\"",
 ] {
     assertContains(backendRuntime, required, "runtime config should expose voice clone capability \(required)")
 }
@@ -135,6 +154,7 @@ for required in [
     "saveVoiceCloneProfile(",
     "fetchVoiceCloneProfiles(",
     "refreshVoiceCloneProfile(",
+    "requestVoiceCloneSynthesis(",
     "disableVoiceCloneProfile(",
     "deleteVoiceCloneProfile(",
 ] {
@@ -158,7 +178,23 @@ for forbidden in [
     assertNotContains(voiceService, forbidden, "iOS VoiceCloneService must not call VolcEngine directly \(forbidden)")
 }
 
+for required in [
+    "DreamJourneyBackendClient.shared.requestVoiceCloneSynthesis",
+    "synthesis.audioData",
+] {
+    assertContains(memoirTTSService, required, "MemoirTTSService should use backend synthesis \(required)")
+}
+
+for forbidden in [
+    "VoiceCloneAPIKey",
+    "https://openspeech.bytedance.com/api/v3/tts/unidirectional",
+    "X-Api-Key",
+] {
+    assertNotContains(memoirTTSService, forbidden, "MemoirTTSService must not call VolcEngine directly \(forbidden)")
+}
+
 assertContains(backendReadme, "POST /voice/profiles", "backend README should list voice profile endpoint")
+assertContains(backendReadme, "POST /voice/synthesis", "backend README should list voice synthesis endpoint")
 assertContains(releaseRegression, "voice-clone-backend-contract-check.swift", "release regression should run voice clone backend guard")
 assertContains(releaseQA, "voice-clone-backend-contract-check.swift", "release QA package should include voice clone backend guard")
 assertContains(shellGuard, "voice-clone-backend-contract-check.swift", "voice shell guard should point to backend contract guard")

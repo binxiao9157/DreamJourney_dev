@@ -402,6 +402,45 @@ struct VoiceCloneProfileContract {
     }
 }
 
+struct VoiceCloneSynthesisResult {
+    let voiceProfileId: String
+    let providerMode: String
+    let audioBase64: String
+    let audioFormat: String
+    let byteCount: Int
+
+    init?(json: [String: Any]) {
+        guard let voiceProfileId = json["voiceProfileId"] as? String,
+              let audioJSON = json["audio"] as? [String: Any],
+              let audioBase64 = audioJSON["data"] as? String,
+              let audioFormat = audioJSON["format"] as? String else {
+            return nil
+        }
+        self.voiceProfileId = voiceProfileId
+        self.providerMode = json["providerMode"] as? String ?? "unknown"
+        self.audioBase64 = audioBase64
+        self.audioFormat = audioFormat
+        self.byteCount = Self.intValue(audioJSON["byteCount"]) ?? 0
+    }
+
+    var audioData: Data? {
+        Data(base64Encoded: audioBase64)
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.intValue
+        }
+        if let value = value as? String {
+            return Int(value)
+        }
+        return nil
+    }
+}
+
 final class DreamJourneyBackendClient {
     static let shared = DreamJourneyBackendClient()
 
@@ -461,6 +500,10 @@ final class DreamJourneyBackendClient {
     }
 
     var isVoiceCloneProfileConfigured: Bool {
+        hasExplicitBaseURL
+    }
+
+    var isVoiceCloneSynthesisConfigured: Bool {
         hasExplicitBaseURL
     }
 
@@ -614,6 +657,39 @@ final class DreamJourneyBackendClient {
                     return
                 }
                 completion(.success(profile))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func requestVoiceCloneSynthesis(
+        userId: String,
+        voiceProfileId: String,
+        text: String,
+        audioFormat: String = "mp3",
+        sampleRate: Int = 24000,
+        speechRate: Int = -10,
+        loudnessRate: Int = 10,
+        completion: @escaping (Result<VoiceCloneSynthesisResult, Error>) -> Void
+    ) {
+        let payload: [String: Any] = [
+            "userId": userId,
+            "voiceProfileId": voiceProfileId,
+            "text": text,
+            "format": audioFormat,
+            "sampleRate": sampleRate,
+            "speechRate": speechRate,
+            "loudnessRate": loudnessRate,
+        ]
+        requestJSON(path: "/voice/synthesis", method: .post, payload: payload) { result in
+            switch result {
+            case .success(let object):
+                guard let synthesis = VoiceCloneSynthesisResult(json: object) else {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                completion(.success(synthesis))
             case .failure(let error):
                 completion(.failure(error))
             }
