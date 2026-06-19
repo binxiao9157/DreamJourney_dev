@@ -31,6 +31,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     private let contentStack = UIStackView()
     private var audioPlayer: AVAudioPlayer?
     private weak var audioPlayButton: UIButton?
+    private weak var analysisRetryButton: UIButton?
     private var isRetryingRemoteAnalysis = false
 
     private static let dateFormatter: DateFormatter = {
@@ -152,6 +153,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         audioPlayer?.stop()
         audioPlayer = nil
         audioPlayButton = nil
+        analysisRetryButton = nil
 
         contentStack.arrangedSubviews.forEach { view in
             contentStack.removeArrangedSubview(view)
@@ -748,6 +750,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         button.accessibilityIdentifier = "archive-analysis-retry-button"
         button.accessibilityLabel = "重新分析"
         button.addTarget(self, action: #selector(retryAnalysisTapped), for: .touchUpInside)
+        analysisRetryButton = button
         return button
     }
 
@@ -1036,6 +1039,43 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
 extension MemoryArchiveDetailViewController {
     func runUIQALocalAnalysisSmoke() {
         analyzeArchiveItemTapped()
+    }
+
+    func runUIQAArchiveFailedAnalysisRetrySmoke(completion: @escaping ([String: Any]) -> Void) {
+        view.layoutIfNeeded()
+        let retryButtonVisible = analysisRetryButton?.window != nil && analysisRetryButton?.isHidden == false
+        let retryButtonEnabled = analysisRetryButton?.isEnabled == true
+        let initialAnalysisStatus = item.analysisStatus.rawValue
+        let initialAnalysisText = item.archiveAnalysisAvailabilityDisplayName ?? "missing"
+        let initialCloudText = item.archiveBackendSyncDisplayName ?? "missing"
+
+        if retryButtonEnabled {
+            analysisRetryButton?.sendActions(for: .touchUpInside)
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.5) { [weak self] in
+            guard let self else { return }
+            let result: [String: Any] = [
+                "retryButtonVisible": retryButtonVisible,
+                "retryButtonEnabled": retryButtonEnabled,
+                "retryActionFired": retryButtonEnabled,
+                "backendConfigured": DreamJourneyBackendClient.shared.isArchiveImageAnalysisConfigured,
+                "initialAnalysisStatus": initialAnalysisStatus,
+                "finalAnalysisStatus": item.analysisStatus.rawValue,
+                "initialAnalysisStateText": initialAnalysisText,
+                "finalAnalysisStateText": item.archiveAnalysisAvailabilityDisplayName ?? "missing",
+                "initialCloudStateText": initialCloudText,
+                "finalCloudStateText": item.archiveBackendSyncDisplayName ?? "missing",
+                "analysisRetryable": item.analysisRetryableForBackend,
+                "analysisSummary": item.analysisSummary ?? "",
+                "analysisFailureReason": item.metadata[MemoryArchiveItem.analysisFailureReasonMetadataKey] ?? "",
+                "detectedPeopleCount": item.detectedPeople.count,
+                "detectedLocationCount": item.detectedLocationClues.count,
+                "detectedSceneCount": item.detectedSceneClues.count,
+                "tagCount": item.tags.count,
+            ]
+            completion(result)
+        }
     }
 }
 #endif

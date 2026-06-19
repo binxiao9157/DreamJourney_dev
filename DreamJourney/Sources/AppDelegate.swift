@@ -150,6 +150,13 @@ private extension AppDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 self?.runArchiveAudioLifecycleSmoke()
             }
+        } else if arguments.contains("DJRunArchiveFailedAnalysisRetrySmoke") {
+            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+            FeatureFlagService.shared.resetToDefaults()
+            seedFailedArchiveAnalysisRetryContext()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.runArchiveFailedAnalysisRetrySmoke()
+            }
         } else if arguments.contains("DJRunEchoDelayedReplyNotificationSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
@@ -750,6 +757,35 @@ private extension AppDelegate {
         return fileURL
     }
 
+    func makeUIQAArchiveFailedAnalysisImageFile() throws -> URL {
+        let documentsURL = try FileManager.default.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let directoryURL = documentsURL.appendingPathComponent("archive-images", isDirectory: true)
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        let fileURL = directoryURL.appendingPathComponent("uiqa-failed-analysis-retry.jpg")
+
+        let fallbackImage = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64)).image { context in
+            DJDesignTokens.Color.surfaceContainer.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 64, height: 64))
+            DJDesignTokens.Color.accentDeep.setFill()
+            context.fill(CGRect(x: 12, y: 12, width: 40, height: 40))
+        }
+        let image = UIImage(named: "default_memory_1") ?? fallbackImage
+        guard let data = image.jpegData(compressionQuality: 0.72) else {
+            throw NSError(
+                domain: "DreamJourney.UIQA.ArchiveFailedAnalysisRetry",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Unable to encode UIQA image"]
+            )
+        }
+        try data.write(to: fileURL, options: [.atomic])
+        return fileURL
+    }
+
     enum EchoVoiceStatePreviewTarget {
         case listening
         case waitingReply
@@ -803,6 +839,28 @@ private extension AppDelegate {
 
         let snapshot = MemoryArchiveRepository.shared.contextSnapshot()
         print("[UI_QA] Seeded archive analysis insights available=\(snapshot.availableItemCount)")
+    }
+
+    func seedFailedArchiveAnalysisRetryContext() {
+        UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+        UserDefaults.standard.removeObject(forKey: "dj.memoryArchive.items.user_9999")
+
+        do {
+            let imageURL = try makeUIQAArchiveFailedAnalysisImageFile()
+            var failedItem = MemoryArchiveItemFactory.makePhotoItem(localPath: imageURL.path)
+            failedItem = failedItem.updatingBackendSyncState(
+                .synced,
+                attemptedAt: Date(timeIntervalSince1970: 1_800_000_012)
+            )
+            failedItem.markAnalysisFailed(
+                reason: "provider_unavailable",
+                now: Date(timeIntervalSince1970: 1_800_000_013)
+            )
+            MemoryArchiveRepository.shared.add(failedItem, syncToBackend: false)
+            print("[UI_QA] Seeded failed archive analysis retry item id=\(failedItem.id)")
+        } catch {
+            print("[UI_QA] ArchiveFailedAnalysisRetrySmoke failed reason=seedImage error=\(error.localizedDescription)")
+        }
     }
 
     func runArchiveToEchoSmoke(retryCount: Int = 0) {
@@ -860,6 +918,74 @@ private extension AppDelegate {
                         "entries=\(entries)"
                     )
                 }
+            }
+        }
+    }
+
+    func runArchiveFailedAnalysisRetrySmoke(retryCount: Int = 0) {
+        guard let tabBarController = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController as? WarmTabBarController else {
+            guard retryCount < 20 else {
+                print("[UI_QA] ArchiveFailedAnalysisRetrySmoke failed reason=missingRootTab")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                self?.runArchiveFailedAnalysisRetrySmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+
+        guard let viewControllers = tabBarController.viewControllers,
+              let archiveNavigationController = viewControllers.first as? UINavigationController,
+              let item = MemoryArchiveRepository.shared.allItems().first(where: { $0.analysisStatus == .failed }) else {
+            print("[UI_QA] ArchiveFailedAnalysisRetrySmoke failed reason=missingFailedArchiveItem")
+            return
+        }
+
+        tabBarController.selectedIndex = 0
+        let detailViewController = MemoryArchiveDetailViewController(item: item)
+        archiveNavigationController.pushViewController(detailViewController, animated: false)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
+            detailViewController.runUIQAArchiveFailedAnalysisRetrySmoke { payload in
+                guard let self else { return }
+                let storedItem = MemoryArchiveRepository.shared.allItems().first(where: { $0.id == item.id })
+                var result = payload
+                result["storedFinalAnalysisStatus"] = storedItem?.analysisStatus.rawValue ?? "missing"
+                result["storedAnalysisRetryable"] = storedItem?.analysisRetryableForBackend ?? false
+                result["storedCloudStateText"] = storedItem?.archiveBackendSyncDisplayName ?? "missing"
+
+                let initialStatus = result["initialAnalysisStatus"] as? String
+                let finalStatus = result["finalAnalysisStatus"] as? String
+                let retryButtonVisible = result["retryButtonVisible"] as? Bool == true
+                let retryActionFired = result["retryActionFired"] as? Bool == true
+                let backendConfigured = result["backendConfigured"] as? Bool == true
+                let storedFinalStatus = result["storedFinalAnalysisStatus"] as? String
+                let storedCloudStateText = result["storedCloudStateText"] as? String
+                let retryable = result["analysisRetryable"] as? Bool == true
+                let finalStatusIsAccepted = finalStatus == "failed" || finalStatus == "analyzed"
+                let finalContractIsAccepted = finalStatus == "analyzed" || retryable
+                let completed = retryButtonVisible
+                    && retryActionFired
+                    && backendConfigured
+                    && initialStatus == "failed"
+                    && finalStatusIsAccepted
+                    && finalContractIsAccepted
+                    && storedFinalStatus == finalStatus
+                    && storedCloudStateText == "云端已同步"
+
+                result["completed"] = completed
+                self.writeArchiveFailedAnalysisRetrySmokeResult(result)
+                print(
+                    "[UI_QA] ArchiveFailedAnalysisRetrySmoke completed " +
+                    "completed=\(completed) " +
+                    "initial=\(initialStatus ?? "missing") " +
+                    "final=\(finalStatus ?? "missing") " +
+                    "backendConfigured=\(backendConfigured)"
+                )
             }
         }
     }
@@ -1015,6 +1141,21 @@ private extension AppDelegate {
             try data.write(to: resultURL, options: [.atomic])
         } catch {
             print("[UI_QA] ArchiveToEchoSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    func writeArchiveFailedAnalysisRetrySmokeResult(_ result: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
+              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("[UI_QA] ArchiveFailedAnalysisRetrySmoke failed reason=resultEncoding")
+            return
+        }
+
+        let resultURL = documentsURL.appendingPathComponent("archive-failed-analysis-retry-smoke-result.json")
+        do {
+            try data.write(to: resultURL, options: [.atomic])
+        } catch {
+            print("[UI_QA] ArchiveFailedAnalysisRetrySmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
     }
 

@@ -19,6 +19,7 @@ RUN_SIMULATOR_SMOKE="${RUN_SIMULATOR_SMOKE:-1}"
 RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE="${RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE:-1}"
 RUN_BACKEND_ENV_SMOKE="${RUN_BACKEND_ENV_SMOKE:-0}"
 RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE="${RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE:-0}"
+RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE="${RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE:-0}"
 RELEASE_HANDOFF_MODE="${RELEASE_HANDOFF_MODE:-0}"
 if [[ "$RELEASE_HANDOFF_MODE" == "1" ]]; then
   # Release handoff mode forces release-like backend acceptance; do not allow
@@ -55,6 +56,7 @@ Run ID: \`$RUN_ID\`
 - Echo delayed reply notification smoke: \`$RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE\`
 - Backend environment smoke: \`$RUN_BACKEND_ENV_SMOKE\`
 - Backend archive image-analysis smoke: \`$RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE\`
+- Archive failed analysis retry UIQA smoke: \`$RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE\`
 - Release handoff mode: \`$RELEASE_HANDOFF_MODE\`
 - Release-like FastAPI/Postgres backend: \`$RUN_RELEASE_LIKE_BACKEND\`
 - Backend root: \`$BACKEND_ROOT\`
@@ -68,6 +70,7 @@ Run ID: \`$RUN_ID\`
 - Echo delayed reply persistence/local-notification smoke, unless \`RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE=0\`.
 - Optional backend environment smoke when \`RUN_BACKEND_ENV_SMOKE=1\` and backend URL/token are configured.
 - Optional deployed backend archive image-analysis smoke when \`RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE=1\`.
+- Optional archive detail failed-analysis retry UIQA smoke when \`RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE=1\`.
 - Optional release-like Postgres backend acceptance when \`RUN_RELEASE_LIKE_BACKEND=1\`.
 - Release handoff mode forces release-like backend acceptance and cannot be disabled by \`RUN_RELEASE_LIKE_BACKEND=0\`.
 
@@ -85,6 +88,7 @@ append_report_footer() {
 - Echo delayed reply notification smoke: \`echo-delayed-reply-notification-smoke/$RUN_ID/\`
 - Backend env smoke: \`backend-env-smoke/$RUN_ID/\`
 - Backend archive image-analysis smoke: \`backend-archive-image-analysis-smoke/$RUN_ID/\`
+- Archive failed analysis retry UIQA smoke: \`archive-failed-analysis-retry-smoke/$RUN_ID/\`
 - Release-like backend acceptance: \`release-like-backend/$RUN_ID/\`
 
 EOF
@@ -150,6 +154,7 @@ for guard in \
   archive-image-analysis-live-chain-check.swift \
   backend-archive-image-analysis-smoke-check.swift \
   p0-archive-analysis-care-retry-check.swift \
+  archive-failed-analysis-retry-smoke-check.swift \
   voice-clone-shell-contract-check.swift \
   final-visual-qa-package-check.swift \
   release-qa-package-check.swift
@@ -225,6 +230,16 @@ if [[ "$RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/backend-archive-image-analysis-smoke/$RUN_ID"
   echo "Skipped by RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE=0" > "$OUTPUT_DIR/backend-archive-image-analysis-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/archive-failed-analysis-retry-smoke" \
+  DERIVED_DATA_PATH="$OUTPUT_DIR/DerivedDataArchiveFailedAnalysisRetrySmoke" \
+  "$SCRIPT_DIR/run-archive-failed-analysis-retry-smoke.sh"
+else
+  mkdir -p "$OUTPUT_DIR/archive-failed-analysis-retry-smoke/$RUN_ID"
+  echo "Skipped by RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE=0" > "$OUTPUT_DIR/archive-failed-analysis-retry-smoke/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_RELEASE_LIKE_BACKEND" == "1" ]]; then
