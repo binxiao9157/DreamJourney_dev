@@ -49,6 +49,48 @@ tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
 
 ## 当前证据
 
+### 2026-06-19 重新部署后验证
+
+Run ID: `20260619-backend-archive-image-analysis-after-deploy`
+
+结果：blocked。
+
+已确认：
+
+- `DreamJourneyBackend/main`、`origin/main` 和服务器声明版本均为 `782a92b`。
+- `POST /archive/image-analysis?dryRun=true` 已返回 `responseContract`。
+- `responseContract` 包含 `analysisStatus`、`analysisSummary`、`detectedPeople`、`detectedLocations`、`detectedScenes`、`tags`、`analysisFailureReason`、`analysisRetryable`。
+- 失败边界已经从“部署旧版本”推进到“真实 provider 调用”。
+
+失败点：
+
+- `POST /archive/image-analysis` 返回 502。
+- 后端捕获到 DeepSeek 上游 `400 Bad Request`。
+- dryRun 看到当前部署请求：
+  - upstream URL: `https://api.deepseek.com/v1/chat/completions`
+  - model: `DeepSeek-V4-Flash`
+  - user message content: `text + image_url` 数组
+
+对照 DeepSeek 官方文档：
+
+- Chat Completion API 是 `/chat/completions`。
+- 模型枚举是 `deepseek-v4-flash` / `deepseek-v4-pro`。
+- user message `content` 合同是文本字符串。
+- Models & Pricing 也只标记 DeepSeek V4 Flash/Pro 的 Chat/Text 能力，没有明确视觉输入能力。
+
+结论：
+
+- 后端部署合同已更新，但当前 DeepSeek provider 请求仍不满足官方 chat completion 合同。
+- 真实“相册导入 -> 图像分析 -> 持久化 -> 重新拉取线索”闭环还不能验收通过。
+- 下一步需要切换到明确支持视觉输入的 provider，或把 `/archive/image-analysis` 改为 provider 不可用时返回可持久化的失败/重试合同，再另行规划真实视觉分析 provider。
+
+产物：
+
+- `tmp/visual-qa/prd-stitch-ui/backend-archive-image-analysis-smoke/20260619-backend-archive-image-analysis-after-deploy/report.md`
+- `tmp/visual-qa/prd-stitch-ui/backend-archive-image-analysis-smoke/20260619-backend-archive-image-analysis-after-deploy/backend-archive-image-analysis-smoke.log`
+
+### 2026-06-19 重新部署前验证
+
 Run ID: `20260619-backend-archive-image-analysis-smoke-preflight`
 
 结果：blocked。
@@ -71,7 +113,7 @@ Run ID: `20260619-backend-archive-image-analysis-smoke-preflight`
 1. 部署版本未包含当前本地后端 archive analysis insight contract，因此无法证明 `detectedPeople`、`detectedLocations`、`detectedScenes`、`analysisFailureReason`、`analysisRetryable` 的部署合同。
 2. DeepSeek 官方 chat completion 文档当前描述的接口是 `/chat/completions`，模型名是 `deepseek-v4-flash` / `deepseek-v4-pro`，user message content 是文本字符串；当前部署请求使用图片 `image_url` 数组，存在 provider 合同不匹配风险。
 
-下一步：
+当时下一步：
 
 1. 先把本地后端 `main` 的 4 个提交推送并重新部署服务器。
 2. 部署后重跑：
