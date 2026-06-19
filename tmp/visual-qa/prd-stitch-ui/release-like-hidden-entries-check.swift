@@ -34,6 +34,6 @@ assertContains(archive, "FeatureFlagService.shared.isEnabled(.archiveRemoteFetch
 assertContains(archive, "FeatureFlagService.shared.isEnabled(.timeLetters)", "release time-letter flag")
 assertContains(archive, "FeatureFlagService.shared.isEnabled(.personaSettings)", "release persona flag")
 assertContains(archive, "makeArchiveCTASubtitle()", "dynamic archive CTA subtitle")
-assertContains(archive, "let secondaryTiles = makeSecondaryFeatureTiles()", "feature tiles are release-filtered")
+assertContains(archive, "let secondaryTiles = makeSecondaryFeatureTiles(summary: summary)", "feature tiles are release-filtered")
 assertContains(archive, "guard !secondaryTiles.isEmpty else", "photo tile can stand alone when hidden entries are disabled")
 assertNotContains(archive, "#if UI_QA_SIMULATOR && targetEnvironment(simulator)\n        return true", "UIQA must not expose hidden entries by default")

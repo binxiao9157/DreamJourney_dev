@@ -251,6 +251,12 @@ private extension AppDelegate {
                 delayMinutesInRange: delayMinutesInRange,
                 storedDelayedReply: storedDelayedReply,
                 localNotificationContractPresent: localNotificationContractPresent,
+                restoredWaitingState: false,
+                restoredWaitingMinutes: 0,
+                restoredWaitingMinutesInRange: false,
+                restoredDelayedReplyIdMatched: false,
+                expiredDelayedReplyArrived: false,
+                expiredDelayedReplyCleared: false,
                 pendingNotificationScheduleSucceeded: false,
                 pendingNotificationMatched: false,
                 pendingNotificationIdentifierMatched: false,
@@ -264,6 +270,42 @@ private extension AppDelegate {
             return
         }
 
+        let restoreViewModel = EchoViewModel()
+        let restoredWaitingState = restoreViewModel.restoreStoredDelayedReplyIfAvailable(
+            now: delayedReply.scheduledAt.addingTimeInterval(60)
+        ) && restoreViewModel.isWaitingForDelayedReply
+        let restoredWaitingMinutes: Int
+        if case .waitingReply(let minutes) = restoreViewModel.state {
+            restoredWaitingMinutes = minutes
+        } else {
+            restoredWaitingMinutes = 0
+        }
+        let restoredWaitingMinutesInRange = restoredWaitingMinutes > 0
+            && restoredWaitingMinutes <= delayedReply.minutes
+        let restoredDelayedReplyIdMatched = restoreViewModel.pendingDelayedReply?.id == delayedReply.id
+
+        let expiredDelayedReply = EchoDelayedReply(
+            id: "expired-\(delayedReply.id)",
+            scheduledAt: delayedReply.scheduledAt.addingTimeInterval(-600),
+            deliverAt: delayedReply.scheduledAt.addingTimeInterval(-60),
+            minutes: delayedReply.minutes,
+            userTurnCount: delayedReply.userTurnCount,
+            trigger: delayedReply.trigger
+        )
+        _ = EchoDelayedReplyStore.shared.save(expiredDelayedReply)
+        let expiredViewModel = EchoViewModel()
+        let expiredDelayedReplyHandled = expiredViewModel.restoreStoredDelayedReplyIfAvailable(
+            now: delayedReply.scheduledAt
+        )
+        let expiredDelayedReplyArrived: Bool
+        if case .replied = expiredViewModel.state {
+            expiredDelayedReplyArrived = expiredDelayedReplyHandled
+        } else {
+            expiredDelayedReplyArrived = false
+        }
+        let expiredDelayedReplyCleared = EchoDelayedReplyStore.shared.load() == nil
+        _ = EchoDelayedReplyStore.shared.save(delayedReply)
+
         let authorizationOptions: UNAuthorizationOptions = [.alert, .sound, .badge, .provisional]
         UNUserNotificationCenter.current().requestAuthorization(options: authorizationOptions) { [weak self] granted, _ in
             guard granted else {
@@ -272,6 +314,12 @@ private extension AppDelegate {
                     delayMinutesInRange: delayMinutesInRange,
                     storedDelayedReply: storedDelayedReply,
                     localNotificationContractPresent: localNotificationContractPresent,
+                    restoredWaitingState: restoredWaitingState,
+                    restoredWaitingMinutes: restoredWaitingMinutes,
+                    restoredWaitingMinutesInRange: restoredWaitingMinutesInRange,
+                    restoredDelayedReplyIdMatched: restoredDelayedReplyIdMatched,
+                    expiredDelayedReplyArrived: expiredDelayedReplyArrived,
+                    expiredDelayedReplyCleared: expiredDelayedReplyCleared,
                     pendingNotificationScheduleSucceeded: false,
                     pendingNotificationMatched: false,
                     pendingNotificationIdentifierMatched: false,
@@ -312,6 +360,11 @@ private extension AppDelegate {
                             && delayMinutesInRange
                             && storedDelayedReply
                             && localNotificationContractPresent
+                            && restoredWaitingState
+                            && restoredWaitingMinutesInRange
+                            && restoredDelayedReplyIdMatched
+                            && expiredDelayedReplyArrived
+                            && expiredDelayedReplyCleared
                             && pendingNotificationScheduleSucceeded
                             && pendingNotificationMatched
 
@@ -320,6 +373,12 @@ private extension AppDelegate {
                             delayMinutesInRange: delayMinutesInRange,
                             storedDelayedReply: storedDelayedReply,
                             localNotificationContractPresent: localNotificationContractPresent,
+                            restoredWaitingState: restoredWaitingState,
+                            restoredWaitingMinutes: restoredWaitingMinutes,
+                            restoredWaitingMinutesInRange: restoredWaitingMinutesInRange,
+                            restoredDelayedReplyIdMatched: restoredDelayedReplyIdMatched,
+                            expiredDelayedReplyArrived: expiredDelayedReplyArrived,
+                            expiredDelayedReplyCleared: expiredDelayedReplyCleared,
                             pendingNotificationScheduleSucceeded: pendingNotificationScheduleSucceeded,
                             pendingNotificationMatched: pendingNotificationMatched,
                             pendingNotificationIdentifierMatched: pendingNotificationIdentifierMatched,
@@ -334,6 +393,8 @@ private extension AppDelegate {
                             "delayMinutesInRange=\(delayMinutesInRange) " +
                             "storedDelayedReply=\(storedDelayedReply) " +
                             "localNotificationContractPresent=\(localNotificationContractPresent) " +
+                            "restoredWaitingState=\(restoredWaitingState) " +
+                            "expiredDelayedReplyArrived=\(expiredDelayedReplyArrived) " +
                             "pendingNotificationMatched=\(pendingNotificationMatched)"
                         )
                     }
@@ -849,6 +910,12 @@ private extension AppDelegate {
         delayMinutesInRange: Bool,
         storedDelayedReply: Bool,
         localNotificationContractPresent: Bool,
+        restoredWaitingState: Bool,
+        restoredWaitingMinutes: Int,
+        restoredWaitingMinutesInRange: Bool,
+        restoredDelayedReplyIdMatched: Bool,
+        expiredDelayedReplyArrived: Bool,
+        expiredDelayedReplyCleared: Bool,
         pendingNotificationScheduleSucceeded: Bool,
         pendingNotificationMatched: Bool,
         pendingNotificationIdentifierMatched: Bool,
@@ -863,6 +930,12 @@ private extension AppDelegate {
             "delayMinutesInRange": delayMinutesInRange,
             "storedDelayedReply": storedDelayedReply,
             "localNotificationContractPresent": localNotificationContractPresent,
+            "restoredWaitingState": restoredWaitingState,
+            "restoredWaitingMinutes": restoredWaitingMinutes,
+            "restoredWaitingMinutesInRange": restoredWaitingMinutesInRange,
+            "restoredDelayedReplyIdMatched": restoredDelayedReplyIdMatched,
+            "expiredDelayedReplyArrived": expiredDelayedReplyArrived,
+            "expiredDelayedReplyCleared": expiredDelayedReplyCleared,
             "pendingNotificationScheduleSucceeded": pendingNotificationScheduleSucceeded,
             "pendingNotificationMatched": pendingNotificationMatched,
             "pendingNotificationIdentifierMatched": pendingNotificationIdentifierMatched,
