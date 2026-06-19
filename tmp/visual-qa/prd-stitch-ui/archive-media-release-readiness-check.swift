@@ -22,6 +22,14 @@ func assertNotContains(_ haystack: String, _ needle: String, _ message: String) 
     }
 }
 
+func substringBetween(_ source: String, start: String, end: String) -> String {
+    guard let startRange = source.range(of: start),
+          let endRange = source[startRange.upperBound...].range(of: end) else {
+        fatalError("Unable to find substring between \(start) and \(end)")
+    }
+    return String(source[startRange.upperBound..<endRange.lowerBound])
+}
+
 let readiness = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveMediaReleaseReadiness.swift")
 let archive = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift")
 let options = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveCreationOption.swift")
@@ -67,7 +75,14 @@ assertContains(factory, "\"storage\": \"local_user_defaults\"", "manual text/tim
 for hiddenFeature in ["archiveAudioUpload", "archiveVideoUpload", "timeLetters"] {
     assertContains(flags, "case \(hiddenFeature)", "feature flag must declare \(hiddenFeature)")
 }
-assertContains(flags, "private static let defaultEnabled: Set<DJFeature> = [\n        .careDashboard,\n        .profileSettings,\n        .legalCenter,\n    ]", "audio and time-letter flags must stay out of default release flags")
+let defaultEnabledBlock = substringBetween(
+    flags,
+    start: "private static let defaultEnabled: Set<DJFeature> = [",
+    end: "]"
+)
+for hiddenFeature in [".archiveAudioUpload", ".archiveVideoUpload", ".timeLetters"] {
+    assertNotContains(defaultEnabledBlock, hiddenFeature, "media flags must stay out of default release flags")
+}
 
 assertContains(project, "MemoryArchiveMediaReleaseReadiness.swift", "readiness contract must be added to the Xcode target")
 assertContains(project, "MemoryArchiveVideoEntryViewController.swift in Sources", "video shell must be added to the Xcode target")

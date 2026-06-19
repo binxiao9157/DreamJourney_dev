@@ -17,6 +17,8 @@ enum MemoryArchiveMediaReleaseReadiness {
     }
 
     static let hiddenBranchesLaunchArgument = "DJEnableArchiveHiddenBranches"
+    static let videoFileSizeLimitMB = 200
+    static let backendMediaStorageContract = "metadata_only_object_storage"
 
     private static func stage(for kind: MemoryArchiveItemKind) -> Stage {
         switch kind {

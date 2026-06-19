@@ -150,6 +150,8 @@ extension MemoryArchiveItem {
             return joinedMetadataParts([
                 metadataDurationText,
                 metadataSourceDisplayName,
+                metadataUploadStatusDisplayName,
+                metadataTranscriptionStatusDisplayName,
                 localPath == nil ? nil : "本地已保存",
             ])
         case .text:
@@ -164,7 +166,12 @@ extension MemoryArchiveItem {
                 metadataSourceDisplayName,
             ])
         case .video:
-            return metadataSourceDisplayName
+            return joinedMetadataParts([
+                metadataSourceDisplayName,
+                metadataUploadStatusDisplayName,
+                metadataThumbnailDisplayName,
+                metadataFileSizeLimitDisplayName,
+            ])
         }
     }
 
@@ -186,6 +193,11 @@ extension MemoryArchiveItem {
             rows.append(("语音时长", metadataDurationText ?? "已封存"))
             rows.append(("文件类型", metadataFileTypeDisplayName ?? "音频"))
             rows.append(("文件状态", localPath == nil ? "未保存本地文件" : "本地已保存"))
+            rows.append(("上传状态", metadataUploadStatusDisplayName ?? "本地待上传"))
+            rows.append(("转写状态", metadataTranscriptionStatusDisplayName ?? "未转写"))
+            if let transcriptText = metadataTranscriptText {
+                rows.append(("转写结果", transcriptText))
+            }
         case .text:
             rows.append(("字数", metadataCharacterCountDisplayName ?? "\(note.count) 字"))
             if let archiveBackendSyncDisplayName {
@@ -196,6 +208,10 @@ extension MemoryArchiveItem {
             rows.append(("信件状态", metadata["deliveryState"] == "sealed" ? "已封存" : "已保存"))
         case .video:
             rows.append(("文件状态", localPath == nil ? "未保存本地文件" : "本地已保存"))
+            rows.append(("上传状态", metadataUploadStatusDisplayName ?? "本地待上传"))
+            rows.append(("缩略图", metadataThumbnailDisplayName ?? "待生成"))
+            rows.append(("文件上限", metadataFileSizeLimitDisplayName ?? "\(MemoryArchiveMediaReleaseReadiness.videoFileSizeLimitMB)MB"))
+            rows.append(("云端合同", metadata["backendStorageContract"] ?? MemoryArchiveMediaReleaseReadiness.backendMediaStorageContract))
         }
 
         return rows
@@ -227,6 +243,8 @@ extension MemoryArchiveItem {
             return "样张封存"
         case "manual_audio":
             return "现场录音"
+        case "manual_video":
+            return "视频导入"
         case let source? where !source.isEmpty:
             return source
         default:
@@ -257,6 +275,71 @@ extension MemoryArchiveItem {
             }
             return parts.joined().allSatisfy(\.isNumber)
         }
+    }
+
+    private var metadataUploadStatusDisplayName: String? {
+        switch metadata[MemoryArchiveItem.mediaUploadStatusMetadataKey] {
+        case ArchiveMediaUploadStatus.localOnly.rawValue:
+            return "本地待上传"
+        case ArchiveMediaUploadStatus.pending.rawValue:
+            return "等待上传"
+        case ArchiveMediaUploadStatus.uploaded.rawValue:
+            return "已上传"
+        case ArchiveMediaUploadStatus.failed.rawValue:
+            return "上传失败"
+        default:
+            return nil
+        }
+    }
+
+    private var metadataTranscriptionStatusDisplayName: String? {
+        switch metadata[MemoryArchiveItem.mediaTranscriptionStatusMetadataKey] {
+        case ArchiveMediaTranscriptionStatus.notRequested.rawValue:
+            return "未转写"
+        case ArchiveMediaTranscriptionStatus.pending.rawValue:
+            return "转写中"
+        case ArchiveMediaTranscriptionStatus.completed.rawValue:
+            return "已转写"
+        case ArchiveMediaTranscriptionStatus.failed.rawValue:
+            return "转写失败"
+        default:
+            return nil
+        }
+    }
+
+    private var metadataTranscriptText: String? {
+        guard let transcriptText = metadata[MemoryArchiveItem.mediaTranscriptTextMetadataKey],
+              !transcriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return transcriptText
+    }
+
+    private var metadataThumbnailDisplayName: String? {
+        if metadata["thumbnailObjectKey"]?.isEmpty == false {
+            return "云端缩略图已登记"
+        }
+        if metadata[MemoryArchiveItem.mediaThumbnailPathMetadataKey]?.isEmpty == false {
+            return "本地缩略图已生成"
+        }
+        switch metadata["thumbnailStatus"] {
+        case "generated":
+            return "缩略图已生成"
+        case "pending":
+            return "待生成"
+        case "failed":
+            return "生成失败"
+        default:
+            return nil
+        }
+    }
+
+    private var metadataFileSizeLimitDisplayName: String? {
+        guard let limit = metadata[MemoryArchiveItem.mediaFileSizeLimitMBMetadataKey],
+              !limit.isEmpty else {
+            return nil
+        }
+        return "\(limit)MB"
     }
 
     private func joinedMetadataParts(_ parts: [String?]) -> String? {

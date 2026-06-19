@@ -53,10 +53,35 @@ enum MemoryArchiveItemFactory {
         )
     }
 
-    static func makeAudioItem(localPath: String, duration: TimeInterval, note: String) -> MemoryArchiveItem {
+    static func makeAudioItem(
+        localPath: String,
+        duration: TimeInterval,
+        note: String,
+        transcriptText: String? = nil
+    ) -> MemoryArchiveItem {
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedTranscript = transcriptText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let durationText = formatDuration(duration)
         let durationSeconds = max(1, Int(duration.rounded()))
+        let uploadStatus = ArchiveMediaUploadStatus.localOnly.rawValue
+        let transcriptionStatus = trimmedTranscript.isEmpty
+            ? ArchiveMediaTranscriptionStatus.notRequested.rawValue
+            : ArchiveMediaTranscriptionStatus.completed.rawValue
+        var metadata: [String: String] = [
+            "source": "manual_audio",
+            "contentKind": "audio",
+            "durationText": durationText,
+            "durationSeconds": "\(durationSeconds)",
+            "fileType": fileExtension(from: localPath),
+            "storage": "local_file",
+            MemoryArchiveItem.mediaUploadStatusMetadataKey: uploadStatus,
+            MemoryArchiveItem.mediaTranscriptionStatusMetadataKey: transcriptionStatus,
+            "transcriptLanguage": "zh-CN",
+        ]
+        if !trimmedTranscript.isEmpty {
+            metadata[MemoryArchiveItem.mediaTranscriptTextMetadataKey] = trimmedTranscript
+        }
+
         return MemoryArchiveItem(
             kind: .audio,
             title: "语音档案",
@@ -66,14 +91,48 @@ enum MemoryArchiveItemFactory {
             analysisStatus: .manual,
             analysisSummary: "这段声音已封存，可作为之后回响生成时的语气、称呼与情绪线索。",
             tags: ["语音档案", durationText],
-            metadata: [
-                "source": "manual_audio",
-                "contentKind": "audio",
-                "durationText": durationText,
-                "durationSeconds": "\(durationSeconds)",
-                "fileType": fileExtension(from: localPath),
-                "storage": "local_file",
-            ]
+            metadata: metadata
+        )
+    }
+
+    static func makeVideoItem(
+        localPath: String,
+        thumbnailPath: String? = nil,
+        fileSizeBytes: Int64? = nil,
+        note: String = ""
+    ) -> MemoryArchiveItem {
+        let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        var metadata: [String: String] = [
+            "source": "manual_video",
+            "contentKind": "video",
+            "fileType": fileExtension(from: localPath),
+            "storage": "local_file",
+            MemoryArchiveItem.mediaUploadStatusMetadataKey: ArchiveMediaUploadStatus.localOnly.rawValue,
+            MemoryArchiveItem.mediaFileSizeLimitMBMetadataKey: "\(MemoryArchiveMediaReleaseReadiness.videoFileSizeLimitMB)",
+            "backendStorageContract": MemoryArchiveMediaReleaseReadiness.backendMediaStorageContract,
+        ]
+        if let fileSizeBytes {
+            metadata[MemoryArchiveItem.mediaFileSizeBytesMetadataKey] = "\(fileSizeBytes)"
+        }
+        if let thumbnailPath, !thumbnailPath.isEmpty {
+            metadata[MemoryArchiveItem.mediaThumbnailPathMetadataKey] = thumbnailPath
+            metadata["thumbnailFileType"] = fileExtension(from: thumbnailPath)
+            metadata["thumbnailStorage"] = "local_file"
+            metadata["thumbnailStatus"] = "generated"
+        } else {
+            metadata["thumbnailStatus"] = "pending"
+        }
+
+        return MemoryArchiveItem(
+            kind: .video,
+            title: "视频片段",
+            note: trimmedNote.isEmpty ? "封存了一段等待分析的视频片段。" : trimmedNote,
+            localPath: localPath,
+            ownerUserId: currentUploaderUserId,
+            analysisStatus: .pending,
+            analysisSummary: "视频已保存，等待后续提取动态场景、人物与时间线索。",
+            tags: ["视频片段"],
+            metadata: metadata
         )
     }
 

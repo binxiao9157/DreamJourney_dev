@@ -21,6 +21,20 @@ enum ArchiveBackendSyncState: String, Codable {
     case failed
 }
 
+enum ArchiveMediaUploadStatus: String, Codable {
+    case localOnly
+    case pending
+    case uploaded
+    case failed
+}
+
+enum ArchiveMediaTranscriptionStatus: String, Codable {
+    case notRequested
+    case pending
+    case completed
+    case failed
+}
+
 struct MemoryArchiveItem: Codable, Identifiable {
     static let legacyOwnerUserId = "legacy_unassigned"
 
@@ -310,6 +324,12 @@ extension MemoryArchiveItem {
     static let backendSyncStateMetadataKey = "backendSyncState"
     static let backendSyncErrorMetadataKey = "backendSyncError"
     static let backendSyncAttemptedAtMetadataKey = "backendSyncAttemptedAt"
+    static let mediaUploadStatusMetadataKey = "uploadStatus"
+    static let mediaTranscriptionStatusMetadataKey = "transcriptionStatus"
+    static let mediaTranscriptTextMetadataKey = "transcriptText"
+    static let mediaThumbnailPathMetadataKey = "thumbnailPath"
+    static let mediaFileSizeBytesMetadataKey = "fileSizeBytes"
+    static let mediaFileSizeLimitMBMetadataKey = "fileSizeLimitMB"
 
     var backendSyncState: ArchiveBackendSyncState {
         guard let rawValue = metadata[Self.backendSyncStateMetadataKey],
@@ -346,6 +366,68 @@ extension MemoryArchiveItem {
             return false
         }
         return ownerUserId == normalizedUserId
+    }
+
+    func archiveBackendPayload(
+        userId: String,
+        viewerUserId: String,
+        ownerId: String,
+        personaScope: String,
+        digitalHumanId: String,
+        isoFormatter: ISO8601DateFormatter = ISO8601DateFormatter()
+    ) -> [String: Any] {
+        var payload: [String: Any] = [
+            "userId": userId,
+            "viewerUserId": viewerUserId,
+            "ownerId": ownerId,
+            "id": id,
+            "ownerUserId": ownerUserId,
+            "uploadedByUserId": ownerUserId,
+            "uploaderUserId": ownerUserId,
+            "kind": kind.rawValue,
+            "title": title,
+            "note": note,
+            "createdAt": isoFormatter.string(from: createdAt),
+            "updatedAt": isoFormatter.string(from: updatedAt),
+            "analysisStatus": analysisStatus.rawValue,
+            "tags": tags,
+            "detectedPeople": detectedPeople,
+            "metadata": metadataForBackendContract,
+            "personaScope": personaScope,
+            "digitalHumanId": digitalHumanId,
+        ]
+        if let analysisSummary, !analysisSummary.isEmpty {
+            payload["analysisSummary"] = analysisSummary
+        }
+        if let transcriptText = metadata[Self.mediaTranscriptTextMetadataKey], !transcriptText.isEmpty {
+            payload["transcriptText"] = transcriptText
+        }
+        if let fileSizeBytes = metadata[Self.mediaFileSizeBytesMetadataKey], !fileSizeBytes.isEmpty {
+            payload["fileSizeBytes"] = fileSizeBytes
+        }
+        if let fileSizeLimitMB = metadata[Self.mediaFileSizeLimitMBMetadataKey], !fileSizeLimitMB.isEmpty {
+            payload["fileSizeLimitMB"] = fileSizeLimitMB
+        }
+        return payload
+    }
+
+    private var metadataForBackendContract: [String: String] {
+        var backendMetadata = metadata
+        [
+            Self.backendSyncStateMetadataKey,
+            Self.backendSyncErrorMetadataKey,
+            Self.backendSyncAttemptedAtMetadataKey,
+            Self.mediaThumbnailPathMetadataKey,
+            "localPath",
+            "fileURL",
+            "absolutePath",
+            "rawAudioURL",
+            "rawVideoURL",
+            "localThumbnailPath",
+        ].forEach {
+            backendMetadata.removeValue(forKey: $0)
+        }
+        return backendMetadata
     }
 
     func assigningOwnerIfNeeded(_ ownerUserId: String) -> MemoryArchiveItem {

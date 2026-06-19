@@ -65,13 +65,13 @@ final class MemoryArchiveVideoEntryViewController: UIViewController {
         iconView.contentMode = .scaleAspectFit
 
         let statusLabel = UILabel()
-        statusLabel.text = "准备中"
+        statusLabel.text = "分析状态：\(MemoryArchiveAnalysisStatus.pending.archiveDisplayName)"
         statusLabel.font = DJDesignTokens.Font.title(18)
         statusLabel.textColor = DJDesignTokens.Color.textPrimary
         statusLabel.textAlignment = .center
 
         let detailLabel = UILabel()
-        detailLabel.text = "当前不会打开相册、不会上传视频，也不会生成真实档案记录。"
+        detailLabel.text = "当前不会打开相册、不会上传视频，也不会生成真实档案记录。单个视频上限 \(MemoryArchiveMediaReleaseReadiness.videoFileSizeLimitMB)MB，缩略图字段和上传状态仅作为合同预留。"
         detailLabel.font = DJDesignTokens.Font.body(14)
         detailLabel.textColor = DJDesignTokens.Color.textSecondary
         detailLabel.textAlignment = .center
@@ -83,7 +83,7 @@ final class MemoryArchiveVideoEntryViewController: UIViewController {
         cardStack.spacing = 14
 
         let helperLabel = UILabel()
-        helperLabel.text = "公开视频能力需要完成真机视频选择、压缩、缩略图、隐私文案和后端媒体策略验收。"
+        helperLabel.text = "后端存储合同：\(MemoryArchiveMediaReleaseReadiness.backendMediaStorageContract)。公开视频能力需要完成真机视频选择、压缩、缩略图、隐私文案和后端媒体策略验收。"
         helperLabel.font = DJDesignTokens.Font.label(12)
         helperLabel.textColor = DJDesignTokens.Color.textTertiary
         helperLabel.numberOfLines = 0

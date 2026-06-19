@@ -239,26 +239,16 @@ final class MemoryArchiveRepository {
 
         let archiveVisibilityContext = currentArchiveVisibilityContext
         let ownerId = archiveVisibilityContext.ownerId
-        let payload: [String: Any] = [
-            "userId": ownerId,
-            "viewerUserId": currentUserId,
-            "ownerId": ownerId,
-            "id": item.id,
-            "ownerUserId": item.ownerUserId,
-            "kind": item.kind.rawValue,
-            "title": item.title,
-            "note": item.note,
-            "createdAt": isoFormatter.string(from: item.createdAt),
-            "updatedAt": isoFormatter.string(from: item.updatedAt),
-            "analysisStatus": item.analysisStatus.rawValue,
-            "tags": item.tags,
-            "detectedPeople": item.detectedPeople,
-            "metadata": metadataForBackend(item),
-        ]
-        DreamJourneyBackendClient.shared.postArchiveItem(
-            payload,
+        let payload = item.archiveBackendPayload(
+            userId: ownerId,
+            viewerUserId: currentUserId,
+            ownerId: ownerId,
             personaScope: archiveVisibilityContext.personaScope,
-            digitalHumanId: archiveVisibilityContext.digitalHumanId
+            digitalHumanId: archiveVisibilityContext.digitalHumanId,
+            isoFormatter: isoFormatter
+        )
+        DreamJourneyBackendClient.shared.postArchiveItem(
+            payload
         ) { [weak self] result in
             guard let self else { return }
             switch result {
@@ -295,14 +285,6 @@ final class MemoryArchiveRepository {
             items[index] = items[index].updatingBackendSyncState(.failed, error: error)
         }
         save(items)
-    }
-
-    private func metadataForBackend(_ item: MemoryArchiveItem) -> [String: String] {
-        var metadata = item.metadata
-        metadata.removeValue(forKey: MemoryArchiveItem.backendSyncStateMetadataKey)
-        metadata.removeValue(forKey: MemoryArchiveItem.backendSyncErrorMetadataKey)
-        metadata.removeValue(forKey: MemoryArchiveItem.backendSyncAttemptedAtMetadataKey)
-        return metadata
     }
 
     private func sanitizeBackendSyncError(_ error: Error) -> String {
