@@ -962,6 +962,10 @@ final class MemoryArchiveViewController: UIViewController {
         metadataLabel.textColor = DJDesignTokens.Color.textTertiary
         metadataLabel.numberOfLines = 1
         metadataLabel.isHidden = presentation.metadataSummary == nil
+        if item.kind == .video {
+            control.accessibilityIdentifier = "archive-video-timeline-card"
+            metadataLabel.accessibilityIdentifier = "archive-video-timeline-metadata"
+        }
 
         let dateLabel = UILabel()
         dateLabel.text = Self.itemDateFormatter.string(from: item.createdAt)
@@ -1254,7 +1258,36 @@ final class MemoryArchiveViewController: UIViewController {
                 waveform.centerYAnchor.constraint(equalTo: container.centerYAnchor),
                 waveform.heightAnchor.constraint(equalToConstant: 34),
             ])
-        case .text, .timeLetter, .video:
+        case .video:
+            if let thumbnailPath = item.metadata[MemoryArchiveItem.mediaThumbnailPathMetadataKey],
+               let image = UIImage(contentsOfFile: thumbnailPath) {
+                let imageView = UIImageView(image: image)
+                imageView.contentMode = .scaleAspectFill
+                imageView.clipsToBounds = true
+                imageView.accessibilityIdentifier = "archive-video-timeline-thumbnail"
+                container.addSubview(imageView)
+                imageView.translatesAutoresizingMaskIntoConstraints = false
+                NSLayoutConstraint.activate([
+                    imageView.topAnchor.constraint(equalTo: container.topAnchor),
+                    imageView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                    imageView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+                    imageView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+                ])
+            } else {
+                let iconView = UIImageView(image: UIImage(systemName: presentation.previewIconName))
+                iconView.tintColor = DJDesignTokens.Color.accentDeep
+                iconView.contentMode = .scaleAspectFit
+                iconView.accessibilityIdentifier = "archive-video-timeline-placeholder"
+                container.addSubview(iconView)
+                iconView.translatesAutoresizingMaskIntoConstraints = false
+                NSLayoutConstraint.activate([
+                    iconView.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+                    iconView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+                    iconView.widthAnchor.constraint(equalToConstant: 25),
+                    iconView.heightAnchor.constraint(equalToConstant: 25),
+                ])
+            }
+        case .text, .timeLetter:
             let iconView = UIImageView(image: UIImage(systemName: presentation.previewIconName))
             iconView.tintColor = DJDesignTokens.Color.accentDeep
             iconView.contentMode = .scaleAspectFit

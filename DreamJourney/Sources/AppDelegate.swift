@@ -1203,7 +1203,7 @@ private extension AppDelegate {
             var sealedDraftLetter = MemoryArchiveItemFactory.makeTimeLetterDraft(note: "这封草稿会被封存")
             let sealedLetter = MemoryArchiveItemFactory.makeTimeLetter(note: "写给未来的一封封存信")
 
-            for item in [audioItem, videoItem, draftLetter, deletedDraftLetter, sealedDraftLetter, sealedLetter] {
+            for item in [audioItem, videoItem, videoPlaceholderItem, draftLetter, deletedDraftLetter, sealedDraftLetter, sealedLetter] {
                 MemoryArchiveRepository.shared.add(item, syncToBackend: false)
             }
 
@@ -1316,6 +1316,8 @@ private extension AppDelegate {
             let videoDetailFailedStateVisible = mediaDetailFailedStateVisible
                 && archiveDetailViewContainsIdentifier("archive-video-analysis-state", item: videoItem)
             let videoDetailRetryActionVisible = mediaDetailRetryActionVisible
+            let videoTimelineThumbnailVisible = archiveHomeViewContainsIdentifier("archive-video-timeline-thumbnail")
+            let videoTimelinePlaceholderVisible = archiveHomeViewContainsIdentifier("archive-video-timeline-placeholder")
             let hiddenMediaRuntimeCardVisible = archiveDetailViewContainsIdentifier(
                 "archive-hidden-media-runtime-card",
                 item: videoItem
@@ -1407,6 +1409,8 @@ private extension AppDelegate {
                 && videoDetailThumbnailPlaceholderVisible
                 && videoDetailFailedStateVisible
                 && videoDetailRetryActionVisible
+                && videoTimelineThumbnailVisible
+                && videoTimelinePlaceholderVisible
                 && hiddenMediaRuntimeCardVisible
                 && hiddenMediaRuntimeProviderVisible
                 && hiddenMediaRuntimeLimitVisible
@@ -1455,6 +1459,8 @@ private extension AppDelegate {
                 videoDetailThumbnailPlaceholderVisible: videoDetailThumbnailPlaceholderVisible,
                 videoDetailFailedStateVisible: videoDetailFailedStateVisible,
                 videoDetailRetryActionVisible: videoDetailRetryActionVisible,
+                videoTimelineThumbnailVisible: videoTimelineThumbnailVisible,
+                videoTimelinePlaceholderVisible: videoTimelinePlaceholderVisible,
                 hiddenMediaRuntimeCardVisible: hiddenMediaRuntimeCardVisible,
                 hiddenMediaRuntimeProviderVisible: hiddenMediaRuntimeProviderVisible,
                 hiddenMediaRuntimeLimitVisible: hiddenMediaRuntimeLimitVisible,
@@ -1533,6 +1539,15 @@ private extension AppDelegate {
             return false
         }
         return viewTreeContainsText(text, in: view)
+    }
+
+    func archiveHomeViewContainsIdentifier(_ identifier: String) -> Bool {
+        let archiveViewController = MemoryArchiveViewController(repository: .shared)
+        archiveViewController.loadViewIfNeeded()
+        guard let view = archiveViewController.viewIfLoaded else {
+            return false
+        }
+        return viewTreeContainsIdentifier(identifier, in: view)
     }
 
     func viewTreeContainsIdentifier(_ identifier: String, in view: UIView) -> Bool {
@@ -2508,6 +2523,8 @@ private extension AppDelegate {
         videoDetailThumbnailPlaceholderVisible: Bool = false,
         videoDetailFailedStateVisible: Bool = false,
         videoDetailRetryActionVisible: Bool = false,
+        videoTimelineThumbnailVisible: Bool = false,
+        videoTimelinePlaceholderVisible: Bool = false,
         hiddenMediaRuntimeCardVisible: Bool = false,
         hiddenMediaRuntimeProviderVisible: Bool = false,
         hiddenMediaRuntimeLimitVisible: Bool = false,
@@ -2557,6 +2574,8 @@ private extension AppDelegate {
             "videoDetailThumbnailPlaceholderVisible": videoDetailThumbnailPlaceholderVisible,
             "videoDetailFailedStateVisible": videoDetailFailedStateVisible,
             "videoDetailRetryActionVisible": videoDetailRetryActionVisible,
+            "videoTimelineThumbnailVisible": videoTimelineThumbnailVisible,
+            "videoTimelinePlaceholderVisible": videoTimelinePlaceholderVisible,
             "hiddenMediaRuntimeCardVisible": hiddenMediaRuntimeCardVisible,
             "hiddenMediaRuntimeProviderVisible": hiddenMediaRuntimeProviderVisible,
             "hiddenMediaRuntimeLimitVisible": hiddenMediaRuntimeLimitVisible,
