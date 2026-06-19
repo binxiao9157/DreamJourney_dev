@@ -78,6 +78,17 @@ assertContains(appDelegate, "writeEchoDelayedReplyNotificationSmokeResult", "App
 assertContains(appDelegate, "\"delayMinutesInRange\"", "Echo notification smoke should report delay range")
 assertContains(appDelegate, "\"storedDelayedReply\"", "Echo notification smoke should report stored delayed reply")
 assertContains(appDelegate, "\"localNotificationContractPresent\"", "Echo notification smoke should report local notification contract")
+assertContains(appDelegate, "EchoDelayedReplyNotificationScheduler.shared.schedule", "Echo notification smoke should actually schedule a local notification")
+assertContains(appDelegate, "UNUserNotificationCenter.current().getPendingNotificationRequests", "Echo notification smoke should query pending local notification requests")
+assertContains(appDelegate, "pendingNotificationMatched", "Echo notification smoke should report whether a pending request exists")
+assertContains(appDelegate, "pendingNotificationIdentifierMatched", "Echo notification smoke should verify the pending request identifier")
+assertContains(appDelegate, "pendingNotificationTriggerMatched", "Echo notification smoke should verify the pending request trigger")
+assertContains(appDelegate, "pendingNotificationUserInfoMatched", "Echo notification smoke should verify pending request userInfo")
+assertContains(appDelegate, "pendingNotificationCount", "Echo notification smoke should report pending request count")
+
+let smokeScript = read("tmp/visual-qa/prd-stitch-ui/run-echo-delayed-reply-notification-smoke.sh")
+assertContains(smokeScript, "\"pendingNotificationMatched\"", "Echo notification smoke script should assert pending request existence")
+assertContains(smokeScript, "\"pendingNotificationUserInfoMatched\"", "Echo notification smoke script should assert pending request userInfo")
 
 assertContains(project, "EchoDelayedReplyStore.swift in Sources", "Echo delayed reply store should be in the Xcode target")
 assertContains(project, "EchoDelayedReplyNotificationScheduler.swift in Sources", "Echo delayed reply scheduler should be in the Xcode target")

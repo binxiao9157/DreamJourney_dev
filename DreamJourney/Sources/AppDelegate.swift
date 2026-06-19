@@ -4,6 +4,7 @@
 //
 
 import UIKit
+import UserNotifications
 #if !(UI_QA_SIMULATOR && targetEnvironment(simulator))
 import SpeechEngineToB
 import AMapFoundationKit
@@ -244,25 +245,101 @@ private extension AppDelegate {
             && storedReply?.trigger == delayedReply?.trigger
         let localNotificationContractPresent =
             EchoDelayedReplyNotificationScheduler.notificationIdentifier == "dj.echo.delayedReply"
-        let completed = viewModel.isWaitingForDelayedReply
-            && delayMinutesInRange
-            && storedDelayedReply
-            && localNotificationContractPresent
+        guard let delayedReply else {
+            writeEchoDelayedReplyNotificationSmokeResult(
+                completed: false,
+                delayMinutesInRange: delayMinutesInRange,
+                storedDelayedReply: storedDelayedReply,
+                localNotificationContractPresent: localNotificationContractPresent,
+                pendingNotificationScheduleSucceeded: false,
+                pendingNotificationMatched: false,
+                pendingNotificationIdentifierMatched: false,
+                pendingNotificationTriggerMatched: false,
+                pendingNotificationUserInfoMatched: false,
+                pendingNotificationCount: 0,
+                delayedReplyId: "missing",
+                trigger: "missing"
+            )
+            print("[UI_QA] EchoDelayedReplyNotificationSmoke failed reason=missingDelayedReply")
+            return
+        }
 
-        writeEchoDelayedReplyNotificationSmokeResult(
-            completed: completed,
-            delayMinutesInRange: delayMinutesInRange,
-            storedDelayedReply: storedDelayedReply,
-            localNotificationContractPresent: localNotificationContractPresent,
-            delayedReplyId: delayedReply?.id ?? "missing",
-            trigger: delayedReply?.trigger.rawValue ?? "missing"
-        )
-        print(
-            "[UI_QA] EchoDelayedReplyNotificationSmoke completed " +
-            "delayMinutesInRange=\(delayMinutesInRange) " +
-            "storedDelayedReply=\(storedDelayedReply) " +
-            "localNotificationContractPresent=\(localNotificationContractPresent)"
-        )
+        let authorizationOptions: UNAuthorizationOptions = [.alert, .sound, .badge, .provisional]
+        UNUserNotificationCenter.current().requestAuthorization(options: authorizationOptions) { [weak self] granted, _ in
+            guard granted else {
+                self?.writeEchoDelayedReplyNotificationSmokeResult(
+                    completed: false,
+                    delayMinutesInRange: delayMinutesInRange,
+                    storedDelayedReply: storedDelayedReply,
+                    localNotificationContractPresent: localNotificationContractPresent,
+                    pendingNotificationScheduleSucceeded: false,
+                    pendingNotificationMatched: false,
+                    pendingNotificationIdentifierMatched: false,
+                    pendingNotificationTriggerMatched: false,
+                    pendingNotificationUserInfoMatched: false,
+                    pendingNotificationCount: 0,
+                    delayedReplyId: delayedReply.id,
+                    trigger: delayedReply.trigger.rawValue
+                )
+                print("[UI_QA] EchoDelayedReplyNotificationSmoke failed reason=notificationAuthorizationDenied")
+                return
+            }
+
+            EchoDelayedReplyNotificationScheduler.shared.schedule(delayedReply) { scheduleError in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+                        let pendingRequest = requests.first {
+                            $0.identifier == EchoDelayedReplyNotificationScheduler.notificationIdentifier
+                        }
+                        let pendingNotificationIdentifierMatched = pendingRequest?.identifier
+                            == EchoDelayedReplyNotificationScheduler.notificationIdentifier
+                        let pendingNotificationTriggerMatched: Bool
+                        if let trigger = pendingRequest?.trigger as? UNTimeIntervalNotificationTrigger {
+                            pendingNotificationTriggerMatched = !trigger.repeats
+                                && trigger.timeInterval > 0
+                        } else {
+                            pendingNotificationTriggerMatched = false
+                        }
+                        let pendingNotificationUserInfoMatched = pendingRequest?.content.userInfo["type"] as? String
+                            == "echoDelayedReply"
+                            && pendingRequest?.content.userInfo["delayedReplyId"] as? String == delayedReply.id
+                            && pendingRequest?.content.userInfo["trigger"] as? String == delayedReply.trigger.rawValue
+                        let pendingNotificationMatched = pendingNotificationIdentifierMatched
+                            && pendingNotificationTriggerMatched
+                            && pendingNotificationUserInfoMatched
+                        let pendingNotificationScheduleSucceeded = scheduleError == nil
+                        let completed = viewModel.isWaitingForDelayedReply
+                            && delayMinutesInRange
+                            && storedDelayedReply
+                            && localNotificationContractPresent
+                            && pendingNotificationScheduleSucceeded
+                            && pendingNotificationMatched
+
+                        self?.writeEchoDelayedReplyNotificationSmokeResult(
+                            completed: completed,
+                            delayMinutesInRange: delayMinutesInRange,
+                            storedDelayedReply: storedDelayedReply,
+                            localNotificationContractPresent: localNotificationContractPresent,
+                            pendingNotificationScheduleSucceeded: pendingNotificationScheduleSucceeded,
+                            pendingNotificationMatched: pendingNotificationMatched,
+                            pendingNotificationIdentifierMatched: pendingNotificationIdentifierMatched,
+                            pendingNotificationTriggerMatched: pendingNotificationTriggerMatched,
+                            pendingNotificationUserInfoMatched: pendingNotificationUserInfoMatched,
+                            pendingNotificationCount: requests.count,
+                            delayedReplyId: delayedReply.id,
+                            trigger: delayedReply.trigger.rawValue
+                        )
+                        print(
+                            "[UI_QA] EchoDelayedReplyNotificationSmoke completed " +
+                            "delayMinutesInRange=\(delayMinutesInRange) " +
+                            "storedDelayedReply=\(storedDelayedReply) " +
+                            "localNotificationContractPresent=\(localNotificationContractPresent) " +
+                            "pendingNotificationMatched=\(pendingNotificationMatched)"
+                        )
+                    }
+                }
+            }
+        }
     }
 
     func selectProfileTabForCareEscalationSmoke() -> Bool {
@@ -772,6 +849,12 @@ private extension AppDelegate {
         delayMinutesInRange: Bool,
         storedDelayedReply: Bool,
         localNotificationContractPresent: Bool,
+        pendingNotificationScheduleSucceeded: Bool,
+        pendingNotificationMatched: Bool,
+        pendingNotificationIdentifierMatched: Bool,
+        pendingNotificationTriggerMatched: Bool,
+        pendingNotificationUserInfoMatched: Bool,
+        pendingNotificationCount: Int,
         delayedReplyId: String,
         trigger: String
     ) {
@@ -780,6 +863,12 @@ private extension AppDelegate {
             "delayMinutesInRange": delayMinutesInRange,
             "storedDelayedReply": storedDelayedReply,
             "localNotificationContractPresent": localNotificationContractPresent,
+            "pendingNotificationScheduleSucceeded": pendingNotificationScheduleSucceeded,
+            "pendingNotificationMatched": pendingNotificationMatched,
+            "pendingNotificationIdentifierMatched": pendingNotificationIdentifierMatched,
+            "pendingNotificationTriggerMatched": pendingNotificationTriggerMatched,
+            "pendingNotificationUserInfoMatched": pendingNotificationUserInfoMatched,
+            "pendingNotificationCount": pendingNotificationCount,
             "delayedReplyId": delayedReplyId,
             "trigger": trigger,
         ]

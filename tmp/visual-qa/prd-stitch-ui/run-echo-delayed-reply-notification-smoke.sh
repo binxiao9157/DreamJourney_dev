@@ -118,6 +118,10 @@ grep -Eq '"completed"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Smok
 grep -Eq '"delayMinutesInRange"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Delay minutes should stay within PRD range."
 grep -Eq '"storedDelayedReply"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Delayed reply should be persisted."
 grep -Eq '"localNotificationContractPresent"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Local notification contract changed."
+grep -Eq '"pendingNotificationMatched"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Pending local notification request should exist."
+grep -Eq '"pendingNotificationIdentifierMatched"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Pending local notification identifier should match."
+grep -Eq '"pendingNotificationTriggerMatched"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Pending local notification trigger should match."
+grep -Eq '"pendingNotificationUserInfoMatched"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Pending local notification userInfo should match delayed reply."
 grep -Eq '"trigger"[[:space:]]*:[[:space:]]*"tenRoundBaseline"' "$RESULT_FILE" || fail "Ten-round baseline trigger should be persisted."
 
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null
