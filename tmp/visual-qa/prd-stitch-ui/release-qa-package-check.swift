@@ -290,6 +290,7 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/archive-hidden-media-backend-upload-lifecycle-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-time-letter-backend-lifecycle-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-hidden-media-detail-ui-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/archive-hidden-media-runtime-ui-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-hidden-media-combo-gate-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-media-echo-context-polish-check.swift",
     "tmp/visual-qa/prd-stitch-ui/run-archive-media-echo-context-smoke.sh",

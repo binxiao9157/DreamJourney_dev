@@ -35,6 +35,9 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     private weak var mediaUploadIntentButton: UIButton?
     private var isRetryingRemoteAnalysis = false
     private var isRequestingMediaUploadIntent = false
+    private var archiveMediaRuntimeCapability: ArchiveMediaRuntimeCapability?
+    private var archiveMediaRuntimeErrorText: String?
+    private var didRequestArchiveMediaRuntimeCapability = false
 
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -66,6 +69,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         view.backgroundColor = DJDesignTokens.Color.background
         setupLayout()
         configureNavigationActions()
+        refreshArchiveMediaRuntimeCapabilityIfNeeded()
     }
 
     override func viewDidLayoutSubviews() {
@@ -171,6 +175,9 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
 
         if let hiddenMediaStateCard = makeHiddenMediaStateCard() {
             contentStack.addArrangedSubview(hiddenMediaStateCard)
+        }
+        if let runtimeCapabilityCard = makeArchiveMediaRuntimeCapabilityCard() {
+            contentStack.addArrangedSubview(runtimeCapabilityCard)
         }
 
         contentStack.addArrangedSubview(makeMetadataCard())
@@ -715,6 +722,76 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         ])
 
         return card
+    }
+
+    private func makeArchiveMediaRuntimeCapabilityCard() -> UIView? {
+        guard item.kind == .audio || item.kind == .video else {
+            return nil
+        }
+
+        let capability = effectiveArchiveMediaRuntimeCapability
+        let card = makeDetailCard(radius: DJDesignTokens.Radius.large)
+        card.accessibilityIdentifier = "archive-hidden-media-runtime-card"
+
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 12
+
+        let titleLabel = UILabel()
+        titleLabel.text = "后端媒体能力"
+        titleLabel.font = DJDesignTokens.Font.title(16)
+        titleLabel.textColor = DJDesignTokens.Color.textPrimary
+
+        let stateLabel = makeBadge(
+            text: archiveMediaRuntimeErrorText ?? capability.availabilityDisplayText,
+            textColor: capability.uploadIntentAvailable ? DJDesignTokens.Color.accentDeep : DJDesignTokens.Color.danger,
+            backgroundColor: capability.uploadIntentAvailable
+                ? DJDesignTokens.Color.accent.withAlphaComponent(0.16)
+                : DJDesignTokens.Color.danger.withAlphaComponent(0.12)
+        )
+        stateLabel.accessibilityIdentifier = "archive-hidden-media-runtime-state"
+
+        let providerLabel = UILabel()
+        providerLabel.text = capability.providerDisplayText
+        providerLabel.font = DJDesignTokens.Font.body(13)
+        providerLabel.textColor = DJDesignTokens.Color.textSecondary
+        providerLabel.numberOfLines = 0
+        providerLabel.accessibilityIdentifier = "archive-hidden-media-runtime-provider"
+
+        let supportedKindText = capability.supports(kind: item.kind)
+            ? "\(item.kind.archiveDisplayName) 支持元数据同步"
+            : "\(item.kind.archiveDisplayName) 暂不支持元数据同步"
+        let limitLabel = UILabel()
+        limitLabel.text = "\(supportedKindText) · \(capability.fileSizeLimitDisplayText(for: item.kind)) · 有效期 \(capability.uploadIntentTTLSeconds) 秒"
+        limitLabel.font = DJDesignTokens.Font.label(12)
+        limitLabel.textColor = DJDesignTokens.Color.textTertiary
+        limitLabel.numberOfLines = 0
+        limitLabel.accessibilityIdentifier = "archive-hidden-media-runtime-limit"
+
+        card.addSubview(stack)
+        [stack, titleLabel, stateLabel, providerLabel, limitLabel].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
+        stack.addArrangedSubview(titleLabel)
+        stack.addArrangedSubview(stateLabel)
+        stack.addArrangedSubview(providerLabel)
+        stack.addArrangedSubview(limitLabel)
+
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 18),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 18),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -18),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -18),
+        ])
+
+        return card
+    }
+
+    private var effectiveArchiveMediaRuntimeCapability: ArchiveMediaRuntimeCapability {
+        archiveMediaRuntimeCapability
+            ?? ArchiveMediaRuntimeCapability.localFallback(
+                isBackendConfigured: DreamJourneyBackendClient.shared.isArchiveMediaUploadIntentConfigured
+            )
     }
 
     private var hiddenMediaStateIdentifier: String {
@@ -1506,6 +1583,11 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
             markMediaUploadFailure("后端未配置")
             return
         }
+        guard effectiveArchiveMediaRuntimeCapability.uploadIntentAvailable,
+              effectiveArchiveMediaRuntimeCapability.supports(kind: item.kind) else {
+            markMediaUploadFailure("后端暂不支持该媒体类型")
+            return
+        }
         guard let payload = repository.archiveMediaUploadIntentPayload(for: item) else {
             markMediaUploadFailure("媒体上传参数不完整")
             return
@@ -1537,6 +1619,35 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         _ = repository.update(item, syncToBackend: false)
         reloadContent()
         showToast("上传失败，可重试", type: .error)
+    }
+
+    private func refreshArchiveMediaRuntimeCapabilityIfNeeded() {
+        guard item.kind == .audio || item.kind == .video else {
+            return
+        }
+        guard !didRequestArchiveMediaRuntimeCapability else {
+            return
+        }
+        didRequestArchiveMediaRuntimeCapability = true
+        guard DreamJourneyBackendClient.shared.isArchiveMediaUploadIntentConfigured else {
+            archiveMediaRuntimeCapability = ArchiveMediaRuntimeCapability.localFallback(isBackendConfigured: false)
+            archiveMediaRuntimeErrorText = "后端媒体同步未配置"
+            reloadContent()
+            return
+        }
+
+        DreamJourneyBackendClient.shared.fetchArchiveMediaRuntimeCapability { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let capability):
+                archiveMediaRuntimeCapability = capability
+                archiveMediaRuntimeErrorText = nil
+            case .failure:
+                archiveMediaRuntimeCapability = ArchiveMediaRuntimeCapability.localFallback(isBackendConfigured: true)
+                archiveMediaRuntimeErrorText = "后端能力读取失败，使用本地合同"
+            }
+            reloadContent()
+        }
     }
 
     @objc private func retryAnalysisTapped() {

@@ -1216,6 +1216,18 @@ private extension AppDelegate {
             let videoDetailFailedStateVisible = mediaDetailFailedStateVisible
                 && archiveDetailViewContainsIdentifier("archive-video-analysis-state", item: videoItem)
             let videoDetailRetryActionVisible = mediaDetailRetryActionVisible
+            let hiddenMediaRuntimeCardVisible = archiveDetailViewContainsIdentifier(
+                "archive-hidden-media-runtime-card",
+                item: videoItem
+            )
+            let hiddenMediaRuntimeProviderVisible = archiveDetailViewContainsIdentifier(
+                "archive-hidden-media-runtime-provider",
+                item: videoItem
+            ) && archiveDetailViewContainsText("mockObjectStorage", item: videoItem)
+            let hiddenMediaRuntimeLimitVisible = archiveDetailViewContainsIdentifier(
+                "archive-hidden-media-runtime-limit",
+                item: videoItem
+            ) && archiveDetailViewContainsText("视频上限 200MB", item: videoItem)
             let timeLetterDraftActionsVisible = archiveDetailViewContainsIdentifier(
                 "archive-time-letter-draft-state",
                 item: draftLetter
@@ -1272,6 +1284,9 @@ private extension AppDelegate {
                 && videoDetailThumbnailPlaceholderVisible
                 && videoDetailFailedStateVisible
                 && videoDetailRetryActionVisible
+                && hiddenMediaRuntimeCardVisible
+                && hiddenMediaRuntimeProviderVisible
+                && hiddenMediaRuntimeLimitVisible
                 && timeLetterDraftActionsVisible
                 && timeLetterSealedStateVisible
                 && timeLetterDraftDetailVisible
@@ -1311,6 +1326,9 @@ private extension AppDelegate {
                 videoDetailThumbnailPlaceholderVisible: videoDetailThumbnailPlaceholderVisible,
                 videoDetailFailedStateVisible: videoDetailFailedStateVisible,
                 videoDetailRetryActionVisible: videoDetailRetryActionVisible,
+                hiddenMediaRuntimeCardVisible: hiddenMediaRuntimeCardVisible,
+                hiddenMediaRuntimeProviderVisible: hiddenMediaRuntimeProviderVisible,
+                hiddenMediaRuntimeLimitVisible: hiddenMediaRuntimeLimitVisible,
                 timeLetterDraftActionsVisible: timeLetterDraftActionsVisible,
                 timeLetterSealedStateVisible: timeLetterSealedStateVisible,
                 timeLetterDraftDetailVisible: timeLetterDraftDetailVisible,
@@ -2333,6 +2351,9 @@ private extension AppDelegate {
         videoDetailThumbnailPlaceholderVisible: Bool = false,
         videoDetailFailedStateVisible: Bool = false,
         videoDetailRetryActionVisible: Bool = false,
+        hiddenMediaRuntimeCardVisible: Bool = false,
+        hiddenMediaRuntimeProviderVisible: Bool = false,
+        hiddenMediaRuntimeLimitVisible: Bool = false,
         timeLetterDraftActionsVisible: Bool,
         timeLetterSealedStateVisible: Bool,
         timeLetterDraftDetailVisible: Bool = false,
@@ -2373,6 +2394,9 @@ private extension AppDelegate {
             "videoDetailThumbnailPlaceholderVisible": videoDetailThumbnailPlaceholderVisible,
             "videoDetailFailedStateVisible": videoDetailFailedStateVisible,
             "videoDetailRetryActionVisible": videoDetailRetryActionVisible,
+            "hiddenMediaRuntimeCardVisible": hiddenMediaRuntimeCardVisible,
+            "hiddenMediaRuntimeProviderVisible": hiddenMediaRuntimeProviderVisible,
+            "hiddenMediaRuntimeLimitVisible": hiddenMediaRuntimeLimitVisible,
             "timeLetterDraftActionsVisible": timeLetterDraftActionsVisible,
             "timeLetterSealedStateVisible": timeLetterSealedStateVisible,
             "timeLetterDraftDetailVisible": timeLetterDraftDetailVisible,

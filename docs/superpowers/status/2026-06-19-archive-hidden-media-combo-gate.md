@@ -13,6 +13,7 @@
   - 语音转写失败/重试
   - 视频缩略图占位
   - 视频上传失败/重试
+  - archiveMedia runtime capability 能力卡：provider、支持类型、文件大小限制
   - 时间信件草稿、空内容、封存态
 - 真实后端 hidden media sync smoke：
   - `/archive/media/upload-intent`
@@ -43,6 +44,8 @@ tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
 ```
 
 `RELEASE_HANDOFF_MODE=1` 会强制设置 `RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE=1`，用于持续守住视频/语音详情 UIQA 状态和 `/archive/items` 持久化字段的一致性。
+
+隐藏媒体详情页不再只依赖本地 mock 状态判断能力；audio/video 详情会读取 `/config/runtime.archive`，并展示 `storageProvider`、`supportedMediaKinds`、`audioFileSizeLimitMB` / `videoFileSizeLimitMB` 和 `uploadIntentTTLSeconds`。读取失败时显示本地合同兜底，但仍保留后端能力卡，避免用户把“mock 状态”误解为真实后端能力。
 
 ## 依赖
 

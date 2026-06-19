@@ -216,6 +216,7 @@ for guard in \
   archive-hidden-media-backend-upload-lifecycle-check.swift \
   archive-time-letter-backend-lifecycle-check.swift \
   archive-hidden-media-detail-ui-check.swift \
+  archive-hidden-media-runtime-ui-check.swift \
   archive-hidden-media-combo-gate-check.swift \
   archive-media-echo-context-polish-check.swift \
   archive-analysis-insights-contract-check.swift \

@@ -33,12 +33,106 @@ struct ArchiveImageAnalysisRuntimeCapability {
     }
 }
 
+struct ArchiveMediaRuntimeCapability {
+    let uploadIntentAvailable: Bool
+    let uploadIntentEndpoint: String
+    let storageProvider: String
+    let supportedMediaKinds: [String]
+    let audioFileSizeLimitMB: Int
+    let videoFileSizeLimitMB: Int
+    let uploadIntentTTLSeconds: Int
+
+    var availabilityDisplayText: String {
+        uploadIntentAvailable ? "后端媒体同步可用" : "后端媒体同步未配置"
+    }
+
+    var providerDisplayText: String {
+        "\(storageProvider) · \(uploadIntentEndpoint)"
+    }
+
+    func supports(kind: MemoryArchiveItemKind) -> Bool {
+        supportedMediaKinds.contains(kind.rawValue)
+    }
+
+    func fileSizeLimitDisplayText(for kind: MemoryArchiveItemKind) -> String {
+        switch kind {
+        case .audio:
+            return "音频上限 \(audioFileSizeLimitMB)MB"
+        case .video:
+            return "视频上限 \(videoFileSizeLimitMB)MB"
+        default:
+            return "该类型暂不支持媒体上传"
+        }
+    }
+
+    static func localFallback(isBackendConfigured: Bool) -> ArchiveMediaRuntimeCapability {
+        ArchiveMediaRuntimeCapability(
+            uploadIntentAvailable: isBackendConfigured,
+            uploadIntentEndpoint: MemoryArchiveMediaReleaseReadiness.mediaUploadIntentEndpoint,
+            storageProvider: "mockObjectStorage",
+            supportedMediaKinds: [
+                MemoryArchiveItemKind.audio.rawValue,
+                MemoryArchiveItemKind.video.rawValue,
+            ],
+            audioFileSizeLimitMB: MemoryArchiveMediaReleaseReadiness.audioFileSizeLimitMB,
+            videoFileSizeLimitMB: MemoryArchiveMediaReleaseReadiness.videoFileSizeLimitMB,
+            uploadIntentTTLSeconds: MemoryArchiveMediaReleaseReadiness.uploadIntentTTLSeconds
+        )
+    }
+
+    init(
+        uploadIntentAvailable: Bool,
+        uploadIntentEndpoint: String,
+        storageProvider: String,
+        supportedMediaKinds: [String],
+        audioFileSizeLimitMB: Int,
+        videoFileSizeLimitMB: Int,
+        uploadIntentTTLSeconds: Int
+    ) {
+        self.uploadIntentAvailable = uploadIntentAvailable
+        self.uploadIntentEndpoint = uploadIntentEndpoint
+        self.storageProvider = storageProvider
+        self.supportedMediaKinds = supportedMediaKinds
+        self.audioFileSizeLimitMB = audioFileSizeLimitMB
+        self.videoFileSizeLimitMB = videoFileSizeLimitMB
+        self.uploadIntentTTLSeconds = uploadIntentTTLSeconds
+    }
+
+    init(json: [String: Any]?, capabilities: [String: Any]?) {
+        uploadIntentAvailable = capabilities?["archiveMediaUploadIntent"] as? Bool ?? false
+        uploadIntentEndpoint = json?["uploadIntentEndpoint"] as? String
+            ?? MemoryArchiveMediaReleaseReadiness.mediaUploadIntentEndpoint
+        storageProvider = json?["storageProvider"] as? String ?? "unknown"
+        supportedMediaKinds = json?["supportedMediaKinds"] as? [String] ?? []
+        audioFileSizeLimitMB = Self.intValue(json?["audioFileSizeLimitMB"])
+            ?? MemoryArchiveMediaReleaseReadiness.audioFileSizeLimitMB
+        videoFileSizeLimitMB = Self.intValue(json?["videoFileSizeLimitMB"])
+            ?? MemoryArchiveMediaReleaseReadiness.videoFileSizeLimitMB
+        uploadIntentTTLSeconds = Self.intValue(json?["uploadIntentTTLSeconds"])
+            ?? MemoryArchiveMediaReleaseReadiness.uploadIntentTTLSeconds
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.intValue
+        }
+        if let value = value as? String {
+            return Int(value)
+        }
+        return nil
+    }
+}
+
 struct BackendRuntimeConfig {
     let realtimeTokenAvailable: Bool
     let voiceRuntimeConfigEndpoint: String?
     let fallbackMode: String?
     let archiveMediaUploadIntentAvailable: Bool
     let archiveMediaUploadIntentEndpoint: String?
+    let archiveMedia: ArchiveMediaRuntimeCapability
     let archiveImageAnalysis: ArchiveImageAnalysisRuntimeCapability
 
     init(json: [String: Any]) {
@@ -52,6 +146,7 @@ struct BackendRuntimeConfig {
         fallbackMode = fallback?["mode"] as? String
         archiveMediaUploadIntentAvailable = capabilities?["archiveMediaUploadIntent"] as? Bool ?? false
         archiveMediaUploadIntentEndpoint = archive?["uploadIntentEndpoint"] as? String
+        self.archiveMedia = ArchiveMediaRuntimeCapability(json: archive, capabilities: capabilities)
         self.archiveImageAnalysis = ArchiveImageAnalysisRuntimeCapability(json: archiveImageAnalysis)
     }
 }
@@ -266,6 +361,14 @@ final class DreamJourneyBackendClient {
     ) {
         fetchRuntimeConfig { result in
             completion(result.map(\.archiveImageAnalysis))
+        }
+    }
+
+    func fetchArchiveMediaRuntimeCapability(
+        completion: @escaping (Result<ArchiveMediaRuntimeCapability, Error>) -> Void
+    ) {
+        fetchRuntimeConfig { result in
+            completion(result.map(\.archiveMedia))
         }
     }
 
