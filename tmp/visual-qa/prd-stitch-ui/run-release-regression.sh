@@ -190,6 +190,7 @@ for guard in \
   archive-analysis-backend-payload-contract-check.swift \
   archive-image-analysis-live-chain-check.swift \
   archive-image-analysis-runtime-contract-check.swift \
+  archive-image-analysis-runtime-ui-check.swift \
   backend-archive-image-analysis-smoke-check.swift \
   p0-archive-analysis-care-retry-check.swift \
   archive-failed-analysis-retry-smoke-check.swift \

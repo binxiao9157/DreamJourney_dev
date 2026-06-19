@@ -376,6 +376,9 @@ private extension MemoryArchiveItem {
         if let failureReason = Self.stringValue(object["analysisFailureReason"]) {
             metadata[Self.analysisFailureReasonMetadataKey] = failureReason
         }
+        if let provider = Self.stringValue(object["provider"]) {
+            metadata[Self.analysisProviderMetadataKey] = provider
+        }
         if let isRetryable = Self.boolValue(object["analysisRetryable"]) {
             metadata[Self.analysisRetryableMetadataKey] = isRetryable ? "true" : "false"
         }
@@ -405,6 +408,8 @@ extension MemoryArchiveItem {
     static let analysisSceneCluesMetadataKey = "analysisSceneClues"
     static let analysisFailureReasonMetadataKey = "analysisFailureReason"
     static let analysisRetryableMetadataKey = "analysisRetryable"
+    static let analysisProviderMetadataKey = "analysisProvider"
+    static let analysisFallbackModeMetadataKey = "analysisFallbackMode"
 
     var backendSyncState: ArchiveBackendSyncState {
         guard let rawValue = metadata[Self.backendSyncStateMetadataKey],
@@ -593,11 +598,31 @@ extension MemoryArchiveItem {
         updatedAt = now
     }
 
+    mutating func markAnalysisUnavailableFromRuntime(
+        provider: String,
+        fallbackMode: String,
+        message: String,
+        reason: String = "provider_unavailable",
+        now: Date = Date()
+    ) {
+        analysisStatus = .failed
+        analysisSummary = message
+        metadata[Self.analysisFailureReasonMetadataKey] = reason
+        metadata[Self.analysisRetryableMetadataKey] = "true"
+        metadata[Self.analysisProviderMetadataKey] = provider
+        metadata[Self.analysisFallbackModeMetadataKey] = fallbackMode
+        metadata["analysisSource"] = "backend_runtime_config"
+        metadata["analysisUpdatedAt"] = "\(Int(now.timeIntervalSince1970))"
+        updatedAt = now
+    }
+
     mutating func retryLocalAnalysis(now: Date = Date()) {
         analysisStatus = .pending
         analysisSummary = "正在重新整理人物、地点与场景线索。"
         metadata.removeValue(forKey: Self.analysisFailureReasonMetadataKey)
         metadata.removeValue(forKey: Self.analysisRetryableMetadataKey)
+        metadata.removeValue(forKey: Self.analysisProviderMetadataKey)
+        metadata.removeValue(forKey: Self.analysisFallbackModeMetadataKey)
         updatedAt = now
     }
 

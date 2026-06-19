@@ -252,6 +252,14 @@ final class DreamJourneyBackendClient {
         }
     }
 
+    func fetchArchiveImageAnalysisRuntimeCapability(
+        completion: @escaping (Result<ArchiveImageAnalysisRuntimeCapability, Error>) -> Void
+    ) {
+        fetchRuntimeConfig { result in
+            completion(result.map(\.archiveImageAnalysis))
+        }
+    }
+
     func fetchRealtimeVoiceConfig(
         userId: String,
         completion: @escaping (Result<RealtimeVoiceRuntimeConfig, Error>) -> Void

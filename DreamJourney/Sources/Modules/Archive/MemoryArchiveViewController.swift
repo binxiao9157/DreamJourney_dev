@@ -1807,6 +1807,23 @@ final class MemoryArchiveViewController: UIViewController {
         guard DreamJourneyBackendClient.shared.isArchiveImageAnalysisConfigured else {
             return
         }
+
+        DreamJourneyBackendClient.shared.fetchArchiveImageAnalysisRuntimeCapability { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let capability):
+                guard capability.canRunVisionAnalysis else {
+                    markArchiveImageAnalysisUnavailable(item, capability: capability)
+                    return
+                }
+                requestRemoteArchiveImageAnalysis(item, image: image)
+            case .failure(let error):
+                markArchiveImageAnalysisFailed(item, reason: archiveAnalysisFailureReason(error))
+            }
+        }
+    }
+
+    private func requestRemoteArchiveImageAnalysis(_ item: MemoryArchiveItem, image: UIImage) {
         guard let imageBase64 = imageBase64ForArchiveAnalysis(image) else {
             var updatedItem = item
             updatedItem.markAnalysisFailed(reason: "image_encoding_failed")
@@ -1828,14 +1845,38 @@ final class MemoryArchiveViewController: UIViewController {
                 updatedItem.applyRemoteImageAnalysisResult(object)
                 repository.update(updatedItem, syncToBackend: true)
                 refreshContent()
-                showToast("已生成图像分析", type: .success)
+                if updatedItem.analysisStatus.isRetryableFailureLike {
+                    showToast("AI 分析暂不可用，可稍后重试", type: .error)
+                } else {
+                    showToast("已生成图像分析", type: .success)
+                }
             case .failure(let error):
-                updatedItem.markAnalysisFailed(reason: archiveAnalysisFailureReason(error))
-                repository.update(updatedItem, syncToBackend: true)
-                refreshContent()
-                showToast("照片分析失败，可稍后重试", type: .error)
+                markArchiveImageAnalysisFailed(item, reason: archiveAnalysisFailureReason(error))
             }
         }
+    }
+
+    private func markArchiveImageAnalysisUnavailable(
+        _ item: MemoryArchiveItem,
+        capability: ArchiveImageAnalysisRuntimeCapability
+    ) {
+        var updatedItem = item
+        updatedItem.markAnalysisUnavailableFromRuntime(
+            provider: capability.provider,
+            fallbackMode: capability.fallbackMode,
+            message: capability.availabilityDisplayText
+        )
+        repository.update(updatedItem, syncToBackend: true)
+        refreshContent()
+        showToast(capability.availabilityDisplayText, type: .error)
+    }
+
+    private func markArchiveImageAnalysisFailed(_ item: MemoryArchiveItem, reason: String) {
+        var updatedItem = item
+        updatedItem.markAnalysisFailed(reason: reason)
+        repository.update(updatedItem, syncToBackend: true)
+        refreshContent()
+        showToast("AI 分析暂不可用，可稍后重试", type: .error)
     }
 
     private var currentArchiveAnalysisUserId: String {

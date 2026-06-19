@@ -953,6 +953,27 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
             showToast("AI 分析暂不可用，可稍后重试", type: .error)
             return
         }
+
+        DreamJourneyBackendClient.shared.fetchArchiveImageAnalysisRuntimeCapability { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let capability):
+                guard capability.canRunVisionAnalysis else {
+                    markArchiveImageAnalysisUnavailable(capability: capability)
+                    return
+                }
+                requestRemoteImageAnalysisRetryAfterRuntimeCheck()
+            case .failure(let error):
+                item.markAnalysisFailed(reason: archiveAnalysisFailureReason(error))
+                _ = repository.update(item, syncToBackend: shouldSyncArchiveUpdateToBackend)
+                reloadContent()
+                configureNavigationActions()
+                showToast("AI 分析暂不可用，可稍后重试", type: .error)
+            }
+        }
+    }
+
+    private func requestRemoteImageAnalysisRetryAfterRuntimeCheck() {
         guard let localPath = item.localPath,
               let image = UIImage(contentsOfFile: localPath),
               let imageBase64 = imageBase64ForRemoteArchiveAnalysis(image) else {
@@ -979,7 +1000,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
                 _ = repository.update(item, syncToBackend: shouldSyncArchiveUpdateToBackend)
                 reloadContent()
                 configureNavigationActions()
-                if item.analysisStatus == .failed {
+                if item.analysisStatus.isRetryableFailureLike {
                     showToast("AI 分析暂不可用，可稍后重试", type: .error)
                 } else {
                     showToast("已重新生成图像分析", type: .success)
@@ -992,6 +1013,18 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
                 showToast("AI 分析暂不可用，可稍后重试", type: .error)
             }
         }
+    }
+
+    private func markArchiveImageAnalysisUnavailable(capability: ArchiveImageAnalysisRuntimeCapability) {
+        item.markAnalysisUnavailableFromRuntime(
+            provider: capability.provider,
+            fallbackMode: capability.fallbackMode,
+            message: capability.availabilityDisplayText
+        )
+        _ = repository.update(item, syncToBackend: shouldSyncArchiveUpdateToBackend)
+        reloadContent()
+        configureNavigationActions()
+        showToast(capability.availabilityDisplayText, type: .error)
     }
 
     private var currentArchiveAnalysisUserId: String {
