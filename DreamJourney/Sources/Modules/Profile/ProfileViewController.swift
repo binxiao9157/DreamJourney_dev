@@ -356,6 +356,8 @@ final class ProfileViewController: UIViewController {
         card.isAccessibilityElement = !isCareDoctorContactVisible
         card.accessibilityTraits = .button
         card.accessibilityLabel = "心境追踪，查看长辈关怀看板"
+        card.accessibilityValue = displaySnapshot.dataState.accessibilityIdentifier
+        card.accessibilityHint = "profileCareStateCard"
         card.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(showElderCareDashboard)))
 
         let titleLabel = makeLabel(
@@ -388,8 +390,8 @@ final class ProfileViewController: UIViewController {
         let stack = UIStackView(arrangedSubviews: [headerStack, meterView, doctorRow, syncCaption])
         stack.axis = .vertical
         stack.spacing = ProfileLayout.careStackSpacing
-        if displaySnapshot.dataState.isRetryable {
-            stack.addArrangedSubview(makeCareRetryButton())
+        if let actionTitle = displaySnapshot.dataState.actionTitle {
+            stack.addArrangedSubview(makeCareRetryButton(title: actionTitle))
         }
 
         card.addSubview(stack)
@@ -409,8 +411,12 @@ final class ProfileViewController: UIViewController {
     }
 
     private func makeCareRetryButton() -> UIButton {
+        makeCareRetryButton(title: "重试同步")
+    }
+
+    private func makeCareRetryButton(title: String) -> UIButton {
         let button = UIButton(type: .system)
-        button.setTitle("重试同步", for: .normal)
+        button.setTitle(title, for: .normal)
         button.setImage(UIImage(systemName: "arrow.clockwise"), for: .normal)
         button.tintColor = DJDesignTokens.Color.accentDeep
         button.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
@@ -708,6 +714,45 @@ final class ProfileViewController: UIViewController {
         present(alert, animated: true)
     }
 }
+
+#if UI_QA_SIMULATOR && targetEnvironment(simulator)
+extension ProfileViewController {
+    func setUIQACareSnapshot(_ snapshot: ProfileCareSnapshot) {
+        careSnapshot = snapshot
+        rebuildContent()
+        view.layoutIfNeeded()
+    }
+
+    func runUIQAProfileCareStateSmoke() -> [[String: Any]] {
+        let snapshots: [ProfileCareSnapshot] = [
+            .emptyFallback(),
+            .staleFallback(),
+            .failedFallback(),
+        ]
+
+        return snapshots.map { snapshot in
+            setUIQACareSnapshot(snapshot)
+
+            let dashboardViewController = ProfileElderCareDashboardViewController(
+                snapshot: snapshot,
+                context: personaContext
+            )
+            dashboardViewController.loadViewIfNeeded()
+            let dashboardResult = dashboardViewController.runUIQACareDashboardStateSmoke()
+
+            return [
+                "profileState": snapshot.dataState.accessibilityIdentifier,
+                "profileMoodStatus": snapshot.moodStatus,
+                "profileSyncCaption": snapshot.syncCaption,
+                "profileRetryActionTitle": snapshot.dataState.actionTitle ?? "",
+                "profileCareStateCard": true,
+                "profileRetryVisible": snapshot.dataState.isRetryable,
+                "dashboard": dashboardResult,
+            ]
+        }
+    }
+}
+#endif
 
 private enum ProfileRowAction {
     case profileSettings

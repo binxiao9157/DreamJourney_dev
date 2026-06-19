@@ -127,7 +127,13 @@ private extension AppDelegate {
             FeatureFlagService.shared.set(.archiveRemoteFetch, enabled: true)
             print("[UI_QA] Archive remote fetch enabled")
         }
-        if arguments.contains("DJRunProfileCareEscalationBoundarySmoke") {
+        if arguments.contains("DJRunProfileCareStateSmoke") {
+            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+            FeatureFlagService.shared.resetToDefaults()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.runProfileCareStateSmoke()
+            }
+        } else if arguments.contains("DJRunProfileCareEscalationBoundarySmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 self?.runProfileCareEscalationBoundarySmoke()
@@ -235,6 +241,67 @@ private extension AppDelegate {
             "backendContractConnected=\(payload["backendContractConnected"] as? Bool ?? true) " +
             "willContactThirdParty=\(payload["willContactThirdParty"] as? Bool ?? true) " +
             "profileTabSelected=\(profileTabSelected)"
+        )
+    }
+
+    func runProfileCareStateSmoke() {
+        guard let tabBarController = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController as? WarmTabBarController,
+              let viewControllers = tabBarController.viewControllers,
+              viewControllers.indices.contains(2),
+              let profileNavigationController = viewControllers[2] as? UINavigationController,
+              let profileViewController = profileNavigationController.viewControllers.first as? ProfileViewController else {
+            writeProfileCareStateSmokeResult(
+                completed: false,
+                states: [],
+                profileTabSelected: false,
+                failureReason: "missingProfileRoot"
+            )
+            print("[UI_QA] ProfileCareStateSmoke failed reason=missingProfileRoot")
+            return
+        }
+
+        profileNavigationController.popToRootViewController(animated: false)
+        tabBarController.selectedIndex = 2
+        profileViewController.loadViewIfNeeded()
+
+        let states = profileViewController.runUIQAProfileCareStateSmoke()
+        let expectedStates = Set([
+            ProfileCareSnapshot.emptyFallback().dataState.accessibilityIdentifier,
+            ProfileCareSnapshot.staleFallback().dataState.accessibilityIdentifier,
+            ProfileCareSnapshot.failedFallback().dataState.accessibilityIdentifier,
+        ])
+        let profileStates = Set(states.compactMap { $0["profileState"] as? String })
+        let dashboardStates = Set(states.compactMap {
+            ($0["dashboard"] as? [String: Any])?["dashboardState"] as? String
+        })
+        let allRetryActionsVisible = states.allSatisfy {
+            ($0["profileRetryVisible"] as? Bool) == true
+                && ($0["profileRetryActionTitle"] as? String) == "重新同步"
+                && (($0["dashboard"] as? [String: Any])?["dashboardActionTitle"] as? String) == "重新同步"
+        }
+        let allDashboardCardsVisible = states.allSatisfy {
+            (($0["dashboard"] as? [String: Any])?["dashboardHasStateCard"] as? Bool) == true
+        }
+        let completed = profileStates == expectedStates
+            && dashboardStates == expectedStates
+            && allRetryActionsVisible
+            && allDashboardCardsVisible
+
+        writeProfileCareStateSmokeResult(
+            completed: completed,
+            states: states,
+            profileTabSelected: tabBarController.selectedIndex == 2,
+            failureReason: completed ? nil : "stateContractMismatch"
+        )
+        print(
+            "[UI_QA] ProfileCareStateSmoke completed " +
+            "completed=\(completed) " +
+            "profileStates=\(profileStates.sorted().joined(separator: "|")) " +
+            "dashboardStates=\(dashboardStates.sorted().joined(separator: "|"))"
         )
     }
 
@@ -1179,6 +1246,40 @@ private extension AppDelegate {
             try data.write(to: resultURL, options: [.atomic])
         } catch {
             print("[UI_QA] ProfileCareEscalationBoundarySmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    func writeProfileCareStateSmokeResult(
+        completed: Bool,
+        states: [[String: Any]],
+        profileTabSelected: Bool,
+        failureReason: String? = nil
+    ) {
+        var result: [String: Any] = [
+            "completed": completed,
+            "profileTabSelected": profileTabSelected,
+            "states": states,
+            "expectedStates": [
+                ProfileCareSnapshot.emptyFallback().dataState.accessibilityIdentifier,
+                ProfileCareSnapshot.staleFallback().dataState.accessibilityIdentifier,
+                ProfileCareSnapshot.failedFallback().dataState.accessibilityIdentifier,
+            ],
+        ]
+        if let failureReason {
+            result["failureReason"] = failureReason
+        }
+
+        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
+              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("[UI_QA] ProfileCareStateSmoke failed reason=resultEncoding")
+            return
+        }
+
+        let resultURL = documentsURL.appendingPathComponent("profile-care-state-smoke-result.json")
+        do {
+            try data.write(to: resultURL, options: [.atomic])
+        } catch {
+            print("[UI_QA] ProfileCareStateSmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
     }
 

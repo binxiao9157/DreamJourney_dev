@@ -45,6 +45,25 @@ enum ProfileCareDataState {
             return false
         }
     }
+
+    var actionTitle: String? {
+        isRetryable ? "重新同步" : nil
+    }
+
+    var accessibilityIdentifier: String {
+        switch self {
+        case .available:
+            return "profileCareStateAvailable"
+        case .loading:
+            return "profileCareStateLoading"
+        case .empty:
+            return "profileCareStateEmpty"
+        case .stale:
+            return "profileCareStateStale"
+        case .failed:
+            return "profileCareStateFailed"
+        }
+    }
 }
 
 struct ProfileCareSnapshot {

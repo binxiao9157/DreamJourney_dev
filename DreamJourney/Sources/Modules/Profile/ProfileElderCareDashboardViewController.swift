@@ -178,12 +178,13 @@ final class ProfileElderCareDashboardViewController: UIViewController {
             message = state.message
         }
 
-        return makeStateCard(title: title, message: message)
+        return makeStateCard(state: state, title: title, message: message)
     }
 
     private func makeStateCard(title: String, message: String) -> UIView {
         let card = makeCard()
         card.backgroundColor = DJDesignTokens.Color.surfaceLow
+        card.accessibilityIdentifier = "profileCareStateCard"
 
         let titleLabel = makeLabel(
             text: title,
@@ -210,6 +211,14 @@ final class ProfileElderCareDashboardViewController: UIViewController {
             stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -14),
         ])
 
+        return card
+    }
+
+    private func makeStateCard(state: ProfileCareDataState, title: String, message: String) -> UIView {
+        let card = makeStateCard(title: title, message: message)
+        card.accessibilityIdentifier = state.accessibilityIdentifier
+        card.accessibilityLabel = "profileCareStateCard"
+        card.accessibilityValue = state.actionTitle ?? ""
         return card
     }
 
@@ -418,6 +427,23 @@ final class ProfileElderCareDashboardViewController: UIViewController {
         return label
     }
 }
+
+#if UI_QA_SIMULATOR && targetEnvironment(simulator)
+extension ProfileElderCareDashboardViewController {
+    func runUIQACareDashboardStateSmoke() -> [String: Any] {
+        view.layoutIfNeeded()
+        return [
+            "dashboardState": snapshot.dataState.accessibilityIdentifier,
+            "dashboardTitle": snapshot.dataState.title,
+            "dashboardMessage": snapshot.dataState.message,
+            "dashboardActionTitle": snapshot.dataState.actionTitle ?? "",
+            "dashboardHasStateCard": snapshot.dataState != .available,
+            "dashboardRetryable": snapshot.dataState.isRetryable,
+            "dashboardMoodStatus": snapshot.moodStatus,
+        ]
+    }
+}
+#endif
 
 private final class CareDashboardPaddingLabel: UILabel {
     private let insets: UIEdgeInsets

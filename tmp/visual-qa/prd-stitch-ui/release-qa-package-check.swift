@@ -120,6 +120,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-19-backend-archive-image-analysis-smoke.md",
     "docs/superpowers/status/2026-06-19-p0-archive-analysis-care-retry.md",
     "docs/superpowers/status/2026-06-19-archive-failed-analysis-retry-smoke.md",
+    "docs/superpowers/status/2026-06-19-profile-care-state-smoke.md",
 ]
 
 for doc in requiredDocs {
@@ -180,6 +181,7 @@ for handoffGuard in [
     "backend-archive-image-analysis-smoke-check.swift",
     "p0-archive-analysis-care-retry-check.swift",
     "archive-failed-analysis-retry-smoke-check.swift",
+    "profile-care-state-smoke-check.swift",
     "voice-clone-shell-contract-check.swift",
     "profile-care-public-placeholder-check.swift",
     "profile-care-snapshot-check.swift",
@@ -267,6 +269,8 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/p0-archive-analysis-care-retry-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-failed-analysis-retry-smoke-check.swift",
     "tmp/visual-qa/prd-stitch-ui/run-archive-failed-analysis-retry-smoke.sh",
+    "tmp/visual-qa/prd-stitch-ui/profile-care-state-smoke-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/run-profile-care-state-smoke.sh",
     "tmp/visual-qa/prd-stitch-ui/backend-archive-image-analysis-smoke.py",
     "tmp/visual-qa/prd-stitch-ui/run-backend-archive-image-analysis-smoke.sh",
     "tmp/visual-qa/prd-stitch-ui/voice-clone-shell-contract-check.swift",
