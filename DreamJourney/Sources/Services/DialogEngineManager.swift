@@ -64,6 +64,70 @@ private func buildDigitalHumanModePolicy(context: DigitalHumanContext) -> String
     }
 }
 
+enum VoiceSDKReadinessState: String {
+    case mockASRTTS
+    case backendTokenFallback
+    case productionSDKNeedsTrueDeviceQA
+    case productionSDKVerified
+}
+
+struct VoiceSDKReadinessSummary {
+    let state: VoiceSDKReadinessState
+    let title: String
+    let detail: String
+    let allowsProductionClosureClaim: Bool
+
+    static func current(
+        backendRuntimeConfigured: Bool,
+        backendRuntimeTokenApplied: Bool,
+        localConfigReady: Bool,
+        productionVoiceSDKQualityVerified: Bool,
+        isUIQAMock: Bool = isRunningUIQAMock
+    ) -> VoiceSDKReadinessSummary {
+        if isUIQAMock {
+            return VoiceSDKReadinessSummary(
+                state: .mockASRTTS,
+                title: "UIQA mock ASR/TTS，仅验证状态机",
+                detail: "模拟器只证明回响状态、等待回信和 UI 合同，不证明真实语音识别或播放质量。",
+                allowsProductionClosureClaim: false
+            )
+        }
+
+        guard backendRuntimeConfigured, backendRuntimeTokenApplied else {
+            return VoiceSDKReadinessSummary(
+                state: .backendTokenFallback,
+                title: "后端 token 不可用，使用本地语音配置",
+                detail: "可继续验证本地配置和错误恢复，但不能声明后端 token 链路或生产语音闭环完成。",
+                allowsProductionClosureClaim: false
+            )
+        }
+
+        guard localConfigReady, productionVoiceSDKQualityVerified else {
+            return VoiceSDKReadinessSummary(
+                state: .productionSDKNeedsTrueDeviceQA,
+                title: "生产语音待真机验收",
+                detail: "后端 token 和本地配置已可用，仍需真机完成麦克风、ASR、TTS、播放路由、前后台和日志证据。",
+                allowsProductionClosureClaim: false
+            )
+        }
+
+        return VoiceSDKReadinessSummary(
+            state: .productionSDKVerified,
+            title: "生产语音已通过真机验收",
+            detail: "只有真机证据包齐全且无阻塞问题时才允许使用该状态。",
+            allowsProductionClosureClaim: true
+        )
+    }
+
+    private static var isRunningUIQAMock: Bool {
+        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        return true
+        #else
+        return false
+        #endif
+    }
+}
+
 #if UI_QA_SIMULATOR && targetEnvironment(simulator)
 
 enum DialogEndReason {
@@ -90,6 +154,7 @@ final class DialogEngineManager: NSObject {
     private(set) var isEngineReady = false
     private(set) var isDialogActive = false
     var currentTopic: String?
+    var currentConfigurationIsProductionReady: Bool { false }
 
     private override init() {
         super.init()
@@ -352,6 +417,7 @@ final class DialogEngineManager: NSObject {
 
     /// 当前配置
     var config = Config()
+    var currentConfigurationIsProductionReady: Bool { config.isProductionReady }
 
     // MARK: - Private
 

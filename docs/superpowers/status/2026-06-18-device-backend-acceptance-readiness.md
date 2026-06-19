@@ -22,6 +22,7 @@ Scope: PRD P0 真机验收与后端验收就绪包。
 - 本轮已修复本机签名 profile 缺失问题，完成真机 signed build、安装和启动。
 - 真机 console 证据显示端侧 `SpeechEngineToB` SDK 初始化成功，`DialogEngine` 返回 `initEngine = 0`。
 - 生产语音 SDK 质量验收仍待人工触发麦克风权限、完成至少一轮 ASR/TTS 对话、前后台切换，并采集错误恢复证据。
+- 语音链路 readiness 已分层：mock ASR/TTS 只证明状态机；后端 token fallback 只证明降级可控；生产 SDK readiness 必须依赖真机验收证据包。当前不声明生产语音闭环完成。
 - APNs 注册曾在真机 console 中失败，原因是缺少 `aps-environment` entitlement；当前工程已改为运行时检测 entitlement，Personal Team 构建会跳过 APNs 注册以避免系统失败。`DreamJourney/DreamJourney.entitlements` 已保留为付费开发者 Team 开启 Push Notifications 后的配置入口。
 
 ## Source Of Truth
@@ -68,6 +69,7 @@ Rules:
 - `run-true-device-voice-preflight.sh` 会自动读取 `DreamJourney/Config/VoiceSDK.local.xcconfig`；`VOLCENGINE_APP_ID`、`VOLCENGINE_APP_KEY`、`VOLCENGINE_APP_TOKEN` 也可以通过环境变量覆盖。
 - `VolcEngineAppID`、`VolcEngineAppKey` 和 `VolcEngineAppToken` 在 `Info.plist` 中通过 `$(VOLCENGINE_APP_ID)`、`$(VOLCENGINE_APP_KEY)`、`$(VOLCENGINE_APP_TOKEN)` 解析。
 - `DialogEngineManager` 会在生产语音 SDK 配置缺失或仍为占位值时提前失败，不继续启动 `SpeechEngineToB`。
+- `VoiceSDKReadinessSummary` 明确区分 mock ASR/TTS、后端 token fallback、生产 SDK readiness 和已通过真机验收。未完成真机麦克风、ASR、TTS、播放路由、前后台和日志证据前，不允许把状态标为生产语音闭环完成。
 
 ## Backend Acceptance
 
@@ -244,6 +246,7 @@ swift tmp/visual-qa/prd-stitch-ui/backend-build-config-check.swift /Users/yxj/Do
 swift tmp/visual-qa/prd-stitch-ui/backend-env-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/backend-family-acceptance-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/true-device-voice-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/voice-sdk-readiness-boundary-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/true-device-archive-audio-acceptance-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/true-device-acceptance-evidence-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev

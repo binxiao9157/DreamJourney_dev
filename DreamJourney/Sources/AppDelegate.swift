@@ -213,6 +213,11 @@ private extension AppDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.showEchoVoiceStatePreview(targetState: .speaking)
             }
+        } else if arguments.contains("DJShowVoiceSDKReadinessPreview") {
+            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.showVoiceSDKReadinessPreview()
+            }
         } else if arguments.contains("DJShowEchoVoiceStatePreview") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
@@ -2079,6 +2084,35 @@ private extension AppDelegate {
             echoViewController.runUIQAEchoSpeakingStatePreview()
             print("[UI_QA] EchoVoiceStatePreview showing speaking state")
         }
+    }
+
+    func showVoiceSDKReadinessPreview(retryCount: Int = 0) {
+        guard let tabBarController = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController as? WarmTabBarController else {
+            guard retryCount < 20 else {
+                print("[UI_QA] VoiceSDKReadinessPreview failed reason=missingRootTab")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                self?.showVoiceSDKReadinessPreview(retryCount: retryCount + 1)
+            }
+            return
+        }
+
+        guard let viewControllers = tabBarController.viewControllers,
+              viewControllers.count > 1,
+              let echoNavigationController = viewControllers[1] as? UINavigationController,
+              let echoViewController = echoNavigationController.viewControllers.first as? EchoViewController else {
+            print("[UI_QA] VoiceSDKReadinessPreview failed reason=missingEcho")
+            return
+        }
+
+        tabBarController.selectedIndex = 1
+        echoViewController.runUIQAVoiceSDKReadinessPreview()
+        print("[UI_QA] VoiceSDKReadinessPreview showing readiness boundary")
     }
 
     func runBackendEnvSmoke(retryCount: Int = 0) {

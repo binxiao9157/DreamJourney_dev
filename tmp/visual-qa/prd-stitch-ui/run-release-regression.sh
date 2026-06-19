@@ -199,6 +199,7 @@ for guard in \
   echo-delayed-reply-dispatch-contract-check.swift \
   phase0-backend-alignment-check.swift \
   backend-voice-runtime-contract-check.swift \
+  voice-sdk-readiness-boundary-check.swift \
   release-like-backend-acceptance-check.swift \
   backend-env-smoke-check.swift \
   backend-contract-gap-check.swift \

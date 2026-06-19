@@ -107,6 +107,8 @@ final class EchoViewController: UIViewController {
     private var transcriptEntries: [(text: String, isUser: Bool)] = []
     private var pendingAIText: String?
     private var isStoppingForDelayedReply = false
+    private var showsVoiceSDKReadinessPreview = false
+    private var backendRuntimeTokenApplied = false
 
     init(viewModel: EchoViewModel = EchoViewModel()) {
         self.viewModel = viewModel
@@ -368,9 +370,14 @@ final class EchoViewController: UIViewController {
         }
     }
 
-    private func renderVoiceStatus(text: String?, isVisible: Bool) {
+    private func renderVoiceStatus(
+        text: String?,
+        isVisible: Bool,
+        accessibilityIdentifier: String = "echoVoiceStatus"
+    ) {
         voiceStatusLabel.text = text
         voiceStatusLabel.accessibilityLabel = text
+        voiceStatusLabel.accessibilityIdentifier = accessibilityIdentifier
         voiceStatusHeightConstraint?.constant = isVisible ? 32 : 0
         voiceStatusView.isHidden = !isVisible
         voiceStatusView.alpha = isVisible ? 1 : 0
@@ -456,6 +463,8 @@ final class EchoViewController: UIViewController {
 
     private func configureVoiceRuntimeThenStart() {
         guard DreamJourneyBackendClient.shared.isRealtimeVoiceConfigConfigured else {
+            backendRuntimeTokenApplied = false
+            renderVoiceSDKReadinessPreviewIfNeeded()
             startDialogWithLocalVoiceFallback()
             return
         }
@@ -468,12 +477,18 @@ final class EchoViewController: UIViewController {
             switch result {
             case .success(let runtimeConfig):
                 if DialogEngineManager.shared.configure(runtimeConfig: runtimeConfig) {
+                    self.backendRuntimeTokenApplied = true
+                    self.renderVoiceSDKReadinessPreviewIfNeeded()
                     DialogEngineManager.shared.startDialog()
                 } else {
+                    self.backendRuntimeTokenApplied = false
+                    self.renderVoiceSDKReadinessPreviewIfNeeded()
                     self.startDialogWithLocalVoiceFallback()
                 }
             case .failure(let error):
                 print("[Echo] backend voice runtime config failed, fallback to local build settings: \(error.localizedDescription)")
+                self.backendRuntimeTokenApplied = false
+                self.renderVoiceSDKReadinessPreviewIfNeeded()
                 self.startDialogWithLocalVoiceFallback()
             }
         }
@@ -481,6 +496,25 @@ final class EchoViewController: UIViewController {
 
     private func startDialogWithLocalVoiceFallback() {
         DialogEngineManager.shared.startDialog()
+    }
+
+    private func currentVoiceSDKReadinessSummary() -> VoiceSDKReadinessSummary {
+        VoiceSDKReadinessSummary.current(
+            backendRuntimeConfigured: DreamJourneyBackendClient.shared.isRealtimeVoiceConfigConfigured,
+            backendRuntimeTokenApplied: backendRuntimeTokenApplied,
+            localConfigReady: DialogEngineManager.shared.currentConfigurationIsProductionReady,
+            productionVoiceSDKQualityVerified: false
+        )
+    }
+
+    private func renderVoiceSDKReadinessPreviewIfNeeded() {
+        guard showsVoiceSDKReadinessPreview else { return }
+        let summary = currentVoiceSDKReadinessSummary()
+        renderVoiceStatus(
+            text: summary.title,
+            isVisible: true,
+            accessibilityIdentifier: "echoVoiceSDKReadinessStatus"
+        )
     }
 
     private func stopVoiceCapture() {
@@ -654,6 +688,11 @@ extension EchoViewController {
 
     func runUIQAEchoSpeakingStatePreview() {
         viewModel.receiveAIReply("我在这里，慢慢听你说。")
+    }
+
+    func runUIQAVoiceSDKReadinessPreview() {
+        showsVoiceSDKReadinessPreview = true
+        renderVoiceSDKReadinessPreviewIfNeeded()
     }
 }
 #endif
