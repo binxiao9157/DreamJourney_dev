@@ -70,6 +70,14 @@ enum ProfileFamilyPersonaReleaseReadiness {
     }
 
     static func canOpenFamilyPersonaSwitcher(
+        isFamilyManagementEnabled: Bool,
+        isFamilySpaceEnabled: Bool,
+        isHiddenBranchesEnabled: Bool
+    ) -> Bool {
+        isHiddenBranchesEnabled || isFamilyManagementEnabled || isFamilySpaceEnabled
+    }
+
+    static func canOpenFamilyPersonaSwitcher(
         isFamilySpaceEnabled: Bool,
         isHiddenBranchesEnabled: Bool
     ) -> Bool {

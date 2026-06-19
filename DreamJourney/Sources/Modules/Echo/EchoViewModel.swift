@@ -127,12 +127,14 @@ final class EchoViewModel {
 
     func prepareVoiceInteraction() {
         context = contextStore.current
+        memoryManager.refreshForCurrentContext()
         refreshArchiveContextStatus()
         updateState(.starting)
     }
 
     func beginVoiceInteraction() {
         context = contextStore.current
+        memoryManager.refreshForCurrentContext()
         refreshArchiveContextStatus()
         updateState(.listening)
     }
@@ -144,6 +146,7 @@ final class EchoViewModel {
             return
         }
 
+        memoryManager.refreshForCurrentContext()
         refreshArchiveContextStatus()
         memoryManager.recordUserTurn(text: normalizedText)
         onTranscriptAppend?(normalizedText, true)
@@ -181,6 +184,7 @@ final class EchoViewModel {
         let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedText.isEmpty else { return }
 
+        memoryManager.refreshForCurrentContext()
         memoryManager.recordAITurn(text: normalizedText)
         onTranscriptAppend?(normalizedText, false)
         updateState(.speaking)
@@ -228,6 +232,7 @@ final class EchoViewModel {
 
     func refreshArchiveContextStatus() {
         context = contextStore.current
+        memoryManager.refreshForCurrentContext()
         let providedStatus = archiveContextStatusProvider()
         archiveContextStatus = EchoArchiveContextStatus(
             totalItemCount: providedStatus.totalItemCount,

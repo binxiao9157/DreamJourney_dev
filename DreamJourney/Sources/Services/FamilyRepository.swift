@@ -24,15 +24,24 @@ final class FamilyRepository {
 
     func getAll() -> [FamilyMember] { return members }
 
+    var hasStarModeMember: Bool {
+        members.contains { $0.digitalHumanMode == .star }
+    }
+
     func add(_ member: FamilyMember) {
         // 去重
         if !members.contains(where: { $0.name == member.name }) {
             members.append(member)
+            notifyMembersChanged()
         }
     }
 
     func remove(id: String) {
+        let originalCount = members.count
         members.removeAll { $0.id == id }
+        if members.count != originalCount {
+            notifyMembersChanged()
+        }
     }
 
     func get(by id: String) -> FamilyMember? {
@@ -44,6 +53,7 @@ final class FamilyRepository {
         members[index].digitalHumanMode = mode
         modeOverrides[memberId] = mode
         persistModeOverrides()
+        notifyMembersChanged()
     }
 
     func refreshFromBackend(userId: String, completion: ((Result<[FamilyMember], Error>) -> Void)? = nil) {
@@ -69,6 +79,7 @@ final class FamilyRepository {
     private func syncFromKnowledgeBase() {
         let graph = KBLiteManager.shared.graph
         guard !graph.people.isEmpty else { return }
+        var didAppendMember = false
 
         // 常见关系映射
         let relationKeywords: [(keyword: String, relation: String)] = [
@@ -132,9 +143,13 @@ final class FamilyRepository {
                 lastUpdated: lastUpdated
             ))
             members.append(member)
+            didAppendMember = true
         }
 
         print("[FamilyRepo] 🔄 已从知识库同步 \(graph.people.count) 人 → 亲属圈 (总数: \(members.count))")
+        if didAppendMember {
+            notifyMembersChanged()
+        }
     }
 
     // MARK: - Mock 数据
@@ -154,17 +169,24 @@ final class FamilyRepository {
     }
 
     private func mergeRemoteMembers(_ remoteMembers: [FamilyMember]) {
+        var didChangeMembers = false
         for remoteMember in remoteMembers {
             let updatedMember = applyModeOverride(to: remoteMember)
             if let index = members.firstIndex(where: { $0.id == updatedMember.id }) {
                 members[index] = updatedMember
+                didChangeMembers = true
             } else if let index = members.firstIndex(where: {
                 $0.name == updatedMember.name && $0.relation == updatedMember.relation
             }) {
                 members[index] = updatedMember
+                didChangeMembers = true
             } else {
                 members.append(updatedMember)
+                didChangeMembers = true
             }
+        }
+        if didChangeMembers {
+            notifyMembersChanged()
         }
     }
 
@@ -184,4 +206,14 @@ final class FamilyRepository {
         let rawValues = modeOverrides.mapValues(\.rawValue)
         UserDefaults.standard.set(rawValues, forKey: modeOverridesKey)
     }
+
+    private func notifyMembersChanged() {
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .djFamilyMembersDidChange, object: self.members)
+        }
+    }
+}
+
+extension Notification.Name {
+    static let djFamilyMembersDidChange = Notification.Name("dj.family.membersDidChange")
 }

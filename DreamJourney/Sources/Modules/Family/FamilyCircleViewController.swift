@@ -1,5 +1,9 @@
 import UIKit
 
+private enum FamilyCircleLayout {
+    static let rowHeight: CGFloat = 96
+}
+
 private enum FamilyPersonaOption {
     case selfAssistant
     case familyMember(FamilyMember)
@@ -40,8 +44,16 @@ private enum FamilyPersonaOption {
         }
     }
 
-    var modeLabel: String {
-        digitalHumanMode.displayName
+    var opensDetail: Bool {
+        if case .familyMember = self { return true }
+        return false
+    }
+
+    var usesSubtleCareTint: Bool {
+        if case .familyMember = self, digitalHumanMode == .star {
+            return true
+        }
+        return false
     }
 
     var isOnline: Bool {
@@ -90,7 +102,7 @@ final class FamilyCircleViewController: UIViewController {
     // MARK: - UI：邀请区
     private let inviteSectionLabel: UILabel = {
         let l = UILabel()
-        l.text = "隐藏态家人空间"
+        l.text = "家人管理"
         l.font = .systemFont(ofSize: 13, weight: .regular)
         l.textColor = UIColor(white: 0.55, alpha: 1.0)
         return l
@@ -166,7 +178,7 @@ final class FamilyCircleViewController: UIViewController {
     // MARK: - UI：亲友圈列表
     private let circleHeaderLabel: UILabel = {
         let l = UILabel()
-        l.text = "回响对象"
+        l.text = "回响对象与状态"
         l.font = .systemFont(ofSize: 18, weight: .bold)
         l.textColor = UIColor(red: 0.15, green: 0.12, blue: 0.10, alpha: 1.0)
         return l
@@ -328,14 +340,24 @@ final class FamilyCircleViewController: UIViewController {
     }
 
     private var tableHeight: CGFloat {
-        CGFloat(personaOptions.count) * 80
+        CGFloat(personaOptions.count) * FamilyCircleLayout.rowHeight
     }
 
     private func updateMemberListUI() {
-        memberCountLabel.text = "\(personaOptions.count) 位可切换对象"
+        memberCountLabel.text = "\(personaOptions.count) 位"
         tableHeightConstraint?.constant = tableHeight
         membersTableView.reloadData()
         view.layoutIfNeeded()
+    }
+
+    private func isCurrentPersona(_ option: FamilyPersonaOption) -> Bool {
+        let current = DigitalHumanContextStore.shared.current
+        switch option {
+        case .selfAssistant:
+            return current.isSelfAssistant
+        case .familyMember(let member):
+            return !current.isSelfAssistant && current.ownerId == member.id
+        }
     }
 
     // MARK: - Actions
@@ -374,6 +396,17 @@ final class FamilyCircleViewController: UIViewController {
         navigationController?.popViewController(animated: true)
     }
 
+    private func openMemberDetail(member: FamilyMember) {
+        let detail = FamilyMemberDetailViewController(member: member)
+        detail.onSelectPersona = { [weak self] refreshedMember in
+            self?.selectPersona(option: .familyMember(refreshedMember))
+        }
+        detail.onModeChange = { [weak self] member, mode in
+            self?.setMode(mode, for: member)
+        }
+        navigationController?.pushViewController(detail, animated: true)
+    }
+
     private func setMode(_ mode: DigitalHumanMode, for member: FamilyMember) {
         FamilyRepository.shared.updateMode(memberId: member.id, mode: mode)
 
@@ -390,7 +423,6 @@ final class FamilyCircleViewController: UIViewController {
         }
 
         membersTableView.reloadData()
-        showToast("已标记为\(mode.displayName)状态", type: .success)
     }
 }
 
@@ -402,37 +434,315 @@ extension FamilyCircleViewController: UITableViewDataSource {
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "FriendMemberCell", for: indexPath) as! FriendMemberCell
-        cell.configure(with: personaOptions[indexPath.row], isLast: indexPath.row == personaOptions.count - 1)
+        let option = personaOptions[indexPath.row]
+        cell.configure(
+            with: option,
+            isCurrent: isCurrentPersona(option),
+            isLast: indexPath.row == personaOptions.count - 1
+        )
         return cell
     }
 }
 
 // MARK: - UITableViewDelegate
 extension FamilyCircleViewController: UITableViewDelegate {
-    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat { 80 }
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        FamilyCircleLayout.rowHeight
+    }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        selectPersona(option: personaOptions[indexPath.row])
+        let option = personaOptions[indexPath.row]
+        switch option {
+        case .selfAssistant:
+            selectPersona(option: option)
+        case .familyMember(let member):
+            openMemberDetail(member: member)
+        }
+    }
+}
+
+// MARK: - FamilyMemberDetailViewController：家人管理详情
+final class FamilyMemberDetailViewController: UIViewController {
+
+    var onModeChange: ((FamilyMember, DigitalHumanMode) -> Void)?
+    var onSelectPersona: ((FamilyMember) -> Void)?
+
+    private var member: FamilyMember
+
+    private let avatarView: UIView = {
+        let v = UIView()
+        v.backgroundColor = UIColor(red: 0.92, green: 0.88, blue: 0.80, alpha: 1.0)
+        v.layer.cornerRadius = 34
+        v.layer.masksToBounds = true
+        return v
+    }()
+
+    private let avatarInitialLabel: UILabel = {
+        let label = UILabel()
+        label.font = .systemFont(ofSize: 24, weight: .semibold)
+        label.textColor = UIColor(red: 0.35, green: 0.28, blue: 0.20, alpha: 1.0)
+        label.textAlignment = .center
+        return label
+    }()
+
+    private let nameLabel: UILabel = {
+        let label = UILabel()
+        label.font = .systemFont(ofSize: 24, weight: .bold)
+        label.textColor = UIColor(red: 0.15, green: 0.12, blue: 0.10, alpha: 1.0)
+        return label
+    }()
+
+    private let relationLabel: UILabel = {
+        let label = UILabel()
+        label.font = .systemFont(ofSize: 14, weight: .medium)
+        label.textColor = UIColor(white: 0.48, alpha: 1.0)
+        return label
+    }()
+
+    private let updatedLabel: UILabel = {
+        let label = UILabel()
+        label.font = .systemFont(ofSize: 13)
+        label.textColor = UIColor(white: 0.58, alpha: 1.0)
+        return label
+    }()
+
+    private lazy var selectButton: UIButton = {
+        var configuration = UIButton.Configuration.filled()
+        configuration.image = UIImage(systemName: "person.crop.circle.badge.checkmark")
+        configuration.imagePadding = 8
+        configuration.cornerStyle = .capsule
+        configuration.baseBackgroundColor = .warmAccent
+        configuration.baseForegroundColor = .white
+        let button = UIButton(configuration: configuration)
+        button.addTarget(self, action: #selector(selectPersonaTapped), for: .touchUpInside)
+        return button
+    }()
+
+    private let boundarySection: UIView = {
+        let view = UIView()
+        view.backgroundColor = UIColor.white.withAlphaComponent(0.84)
+        view.layer.cornerRadius = 18
+        view.layer.borderWidth = 0.5
+        view.layer.borderColor = UIColor(white: 0.88, alpha: 1.0).cgColor
+        return view
+    }()
+
+    private let boundaryIconView: UIImageView = {
+        let imageView = UIImageView()
+        imageView.image = UIImage(systemName: "moon.stars.fill")
+        imageView.tintColor = UIColor(red: 0.45, green: 0.39, blue: 0.32, alpha: 1.0)
+        imageView.contentMode = .scaleAspectFit
+        return imageView
+    }()
+
+    private let boundaryTitleLabel: UILabel = {
+        let label = UILabel()
+        label.text = "星辰陪伴"
+        label.font = .systemFont(ofSize: 17, weight: .semibold)
+        label.textColor = UIColor(red: 0.15, green: 0.12, blue: 0.10, alpha: 1.0)
+        return label
+    }()
+
+    private let boundaryDescriptionLabel: UILabel = {
+        let label = UILabel()
+        label.font = .systemFont(ofSize: 13)
+        label.textColor = UIColor(white: 0.48, alpha: 1.0)
+        label.numberOfLines = 0
+        label.text = "开启后会展示心境追踪，并在与该家人或自己 AI 助手互动时使用更谨慎的陪伴边界。"
+        return label
+    }()
+
+    private lazy var starSwitch: UISwitch = {
+        let toggle = UISwitch()
+        toggle.onTintColor = .warmAccent
+        toggle.addTarget(self, action: #selector(starSwitchChanged(_:)), for: .valueChanged)
+        return toggle
+    }()
+
+    private let irreversibleNoticeLabel: UILabel = {
+        let label = UILabel()
+        label.font = .systemFont(ofSize: 12)
+        label.textColor = UIColor(white: 0.56, alpha: 1.0)
+        label.numberOfLines = 0
+        label.text = "状态可关闭；家人创建后不可删除。请在确认陪伴关系和家人知情的前提下调整。"
+        return label
+    }()
+
+    init(member: FamilyMember) {
+        self.member = member
+        super.init(nibName: nil, bundle: nil)
     }
 
-    func tableView(_ tableView: UITableView,
-                   contextMenuConfigurationForRowAt indexPath: IndexPath,
-                   point: CGPoint) -> UIContextMenuConfiguration? {
-        guard case .familyMember(let member) = personaOptions[indexPath.row] else { return nil }
+    required init?(coder: NSCoder) { fatalError() }
 
-        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
-            let modes: [DigitalHumanMode] = [.sunlight, .star, .silent]
-            let actions = modes.map { mode in
-                UIAction(
-                    title: "\(mode.displayName) - \(mode.selectionDescription)",
-                    state: member.digitalHumanMode == mode ? .on : .off
-                ) { _ in
-                    self?.setMode(mode, for: member)
-                }
-            }
-            return UIMenu(title: "标记数字人状态", children: actions)
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "家人管理"
+        view.backgroundColor = .warmBackground
+        setupLayout()
+        updateContent()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        showPreviousLevelNavigationIfNeeded(animated: animated)
+        if let refreshedMember = FamilyRepository.shared.get(by: member.id) {
+            member = refreshedMember
+            updateContent()
         }
+    }
+
+    private func setupLayout() {
+        let scrollView = UIScrollView()
+        scrollView.alwaysBounceVertical = true
+        view.addSubview(scrollView)
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+
+        let content = UIView()
+        scrollView.addSubview(content)
+        content.translatesAutoresizingMaskIntoConstraints = false
+
+        avatarView.addSubview(avatarInitialLabel)
+        boundarySection.addSubview(boundaryIconView)
+        boundarySection.addSubview(boundaryTitleLabel)
+        boundarySection.addSubview(boundaryDescriptionLabel)
+        boundarySection.addSubview(starSwitch)
+        boundarySection.addSubview(irreversibleNoticeLabel)
+
+        [avatarView, nameLabel, relationLabel, updatedLabel, selectButton, boundarySection].forEach {
+            content.addSubview($0)
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
+        [avatarInitialLabel, boundaryIconView, boundaryTitleLabel, boundaryDescriptionLabel,
+         starSwitch, irreversibleNoticeLabel].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
+
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            content.topAnchor.constraint(equalTo: scrollView.topAnchor),
+            content.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+            content.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+            content.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
+
+            avatarView.topAnchor.constraint(equalTo: content.topAnchor, constant: 24),
+            avatarView.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
+            avatarView.widthAnchor.constraint(equalToConstant: 68),
+            avatarView.heightAnchor.constraint(equalToConstant: 68),
+
+            avatarInitialLabel.centerXAnchor.constraint(equalTo: avatarView.centerXAnchor),
+            avatarInitialLabel.centerYAnchor.constraint(equalTo: avatarView.centerYAnchor),
+            avatarInitialLabel.widthAnchor.constraint(equalTo: avatarView.widthAnchor),
+            avatarInitialLabel.heightAnchor.constraint(equalTo: avatarView.heightAnchor),
+
+            nameLabel.leadingAnchor.constraint(equalTo: avatarView.trailingAnchor, constant: 16),
+            nameLabel.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -24),
+            nameLabel.topAnchor.constraint(equalTo: avatarView.topAnchor, constant: 5),
+
+            relationLabel.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
+            relationLabel.trailingAnchor.constraint(equalTo: nameLabel.trailingAnchor),
+            relationLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 6),
+
+            updatedLabel.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
+            updatedLabel.trailingAnchor.constraint(equalTo: nameLabel.trailingAnchor),
+            updatedLabel.topAnchor.constraint(equalTo: relationLabel.bottomAnchor, constant: 5),
+
+            selectButton.topAnchor.constraint(equalTo: avatarView.bottomAnchor, constant: 28),
+            selectButton.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
+            selectButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -24),
+            selectButton.heightAnchor.constraint(equalToConstant: 48),
+
+            boundarySection.topAnchor.constraint(equalTo: selectButton.bottomAnchor, constant: 20),
+            boundarySection.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
+            boundarySection.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
+            boundarySection.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -40),
+
+            boundaryIconView.topAnchor.constraint(equalTo: boundarySection.topAnchor, constant: 20),
+            boundaryIconView.leadingAnchor.constraint(equalTo: boundarySection.leadingAnchor, constant: 18),
+            boundaryIconView.widthAnchor.constraint(equalToConstant: 24),
+            boundaryIconView.heightAnchor.constraint(equalToConstant: 24),
+
+            boundaryTitleLabel.leadingAnchor.constraint(equalTo: boundaryIconView.trailingAnchor, constant: 12),
+            boundaryTitleLabel.centerYAnchor.constraint(equalTo: boundaryIconView.centerYAnchor),
+            boundaryTitleLabel.trailingAnchor.constraint(lessThanOrEqualTo: starSwitch.leadingAnchor, constant: -12),
+
+            starSwitch.trailingAnchor.constraint(equalTo: boundarySection.trailingAnchor, constant: -18),
+            starSwitch.centerYAnchor.constraint(equalTo: boundaryIconView.centerYAnchor),
+
+            boundaryDescriptionLabel.topAnchor.constraint(equalTo: boundaryIconView.bottomAnchor, constant: 16),
+            boundaryDescriptionLabel.leadingAnchor.constraint(equalTo: boundarySection.leadingAnchor, constant: 18),
+            boundaryDescriptionLabel.trailingAnchor.constraint(equalTo: boundarySection.trailingAnchor, constant: -18),
+
+            irreversibleNoticeLabel.topAnchor.constraint(equalTo: boundaryDescriptionLabel.bottomAnchor, constant: 14),
+            irreversibleNoticeLabel.leadingAnchor.constraint(equalTo: boundaryDescriptionLabel.leadingAnchor),
+            irreversibleNoticeLabel.trailingAnchor.constraint(equalTo: boundaryDescriptionLabel.trailingAnchor),
+            irreversibleNoticeLabel.bottomAnchor.constraint(equalTo: boundarySection.bottomAnchor, constant: -18),
+        ])
+    }
+
+    private func updateContent() {
+        avatarInitialLabel.text = String(member.name.prefix(1))
+        nameLabel.text = member.name
+        relationLabel.text = member.relation
+        updatedLabel.text = "最近更新: \(member.lastUpdated)"
+        let isCurrent = DigitalHumanContextStore.shared.current.ownerId == member.id
+            && !DigitalHumanContextStore.shared.current.isSelfAssistant
+        selectButton.configuration?.title = isCurrent ? "当前回响对象" : "设为当前回响对象"
+        selectButton.isEnabled = !isCurrent
+        selectButton.configuration?.baseBackgroundColor = isCurrent
+            ? UIColor.warmAccent.withAlphaComponent(0.36)
+            : .warmAccent
+        starSwitch.setOn(member.digitalHumanMode == .star, animated: false)
+        boundarySection.backgroundColor = member.digitalHumanMode == .star
+            ? UIColor(red: 0.86, green: 0.84, blue: 0.78, alpha: 0.58)
+            : UIColor.white.withAlphaComponent(0.84)
+        view.accessibilityIdentifier = "familyMemberDetail.\(member.id)"
+        starSwitch.accessibilityIdentifier = "familyMemberStarSwitch.\(member.id)"
+    }
+
+    @objc private func selectPersonaTapped() {
+        onSelectPersona?(member)
+    }
+
+    @objc private func starSwitchChanged(_ sender: UISwitch) {
+        if sender.isOn {
+            guard member.digitalHumanMode != .star else { return }
+            sender.setOn(false, animated: true)
+            showEnableStarConfirmation()
+        } else if member.digitalHumanMode == .star {
+            applyMode(.sunlight)
+        }
+    }
+
+    private func showEnableStarConfirmation() {
+        let alert = UIAlertController(
+            title: "确认开启星辰陪伴？",
+            message: "这会让系统在该家人的回响中呈现心境追踪，并在切回自己 AI 助手时同步展示。请确认这是经过慎重考虑的陪伴设置。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "再想想", style: .cancel) { [weak self] _ in
+            self?.starSwitch.setOn(false, animated: true)
+        })
+        let confirm = UIAlertAction(title: "确认开启", style: .default) { [weak self] _ in
+            self?.applyMode(.star)
+        }
+        confirm.accessibilityIdentifier = "familyMemberConfirmEnableStar"
+        alert.addAction(confirm)
+        present(alert, animated: true)
+    }
+
+    private func applyMode(_ mode: DigitalHumanMode) {
+        member.digitalHumanMode = mode
+        onModeChange?(member, mode)
+        updateContent()
+        let message = mode == .star ? "已开启星辰陪伴" : "已关闭星辰陪伴"
+        showToast(message, type: .success)
     }
 }
 
@@ -452,6 +762,13 @@ extension FamilyCircleViewController: UITextFieldDelegate {
 
 // MARK: - FriendMemberCell：亲友列表行
 final class FriendMemberCell: UITableViewCell {
+
+    private let rowTintView: UIView = {
+        let v = UIView()
+        v.layer.cornerRadius = 18
+        v.layer.masksToBounds = true
+        return v
+    }()
 
     // MARK: 头像容器（带在线状态圆点）
     private let avatarContainer: UIView = {
@@ -505,17 +822,6 @@ final class FriendMemberCell: UITableViewCell {
         return l
     }()
 
-    private let modeLabel: UILabel = {
-        let l = UILabel()
-        l.font = .systemFont(ofSize: 11, weight: .medium)
-        l.textColor = UIColor(red: 0.42, green: 0.35, blue: 0.24, alpha: 1.0)
-        l.backgroundColor = UIColor(red: 0.96, green: 0.92, blue: 0.84, alpha: 1.0)
-        l.layer.cornerRadius = 8
-        l.layer.masksToBounds = true
-        l.textAlignment = .center
-        return l
-    }()
-
     private let lastUpdatedLabel: UILabel = {
         let l = UILabel()
         l.font = .systemFont(ofSize: 13)
@@ -560,6 +866,7 @@ final class FriendMemberCell: UITableViewCell {
         backgroundColor = .clear
         selectionStyle = .none
 
+        contentView.addSubview(rowTintView)
         avatarContainer.addSubview(avatarView)
         avatarContainer.addSubview(onlineDot)
         avatarView.addSubview(avatarInitialLabel)
@@ -567,21 +874,24 @@ final class FriendMemberCell: UITableViewCell {
         contentView.addSubview(avatarContainer)
         contentView.addSubview(nameLabel)
         contentView.addSubview(relationLabel)
-        contentView.addSubview(modeLabel)
         contentView.addSubview(lastUpdatedLabel)
         contentView.addSubview(footprintButton)
         contentView.addSubview(divider)
 
-        [avatarContainer, avatarView, onlineDot, avatarInitialLabel,
-         nameLabel, relationLabel, modeLabel, lastUpdatedLabel, footprintButton, divider].forEach {
+        [rowTintView, avatarContainer, avatarView, onlineDot, avatarInitialLabel,
+         nameLabel, relationLabel, lastUpdatedLabel, footprintButton, divider].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
 
         nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         relationLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-        modeLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         NSLayoutConstraint.activate([
+            rowTintView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 5),
+            rowTintView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 10),
+            rowTintView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -10),
+            rowTintView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -5),
+
             // 头像容器
             avatarContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             avatarContainer.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
@@ -606,27 +916,23 @@ final class FriendMemberCell: UITableViewCell {
 
             // 姓名
             nameLabel.leadingAnchor.constraint(equalTo: avatarContainer.trailingAnchor, constant: 12),
-            nameLabel.topAnchor.constraint(equalTo: avatarContainer.topAnchor, constant: 8),
+            nameLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 10),
 
             // 关系胶囊
             relationLabel.leadingAnchor.constraint(equalTo: nameLabel.trailingAnchor, constant: 6),
             relationLabel.centerYAnchor.constraint(equalTo: nameLabel.centerYAnchor),
             relationLabel.heightAnchor.constraint(equalToConstant: 18),
-
-            // 状态胶囊
-            modeLabel.leadingAnchor.constraint(equalTo: relationLabel.trailingAnchor, constant: 6),
-            modeLabel.centerYAnchor.constraint(equalTo: relationLabel.centerYAnchor),
-            modeLabel.trailingAnchor.constraint(lessThanOrEqualTo: footprintButton.leadingAnchor, constant: -8),
-            modeLabel.heightAnchor.constraint(equalToConstant: 18),
+            relationLabel.trailingAnchor.constraint(lessThanOrEqualTo: footprintButton.leadingAnchor, constant: -8),
 
             // 上次更新
             lastUpdatedLabel.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
             lastUpdatedLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 4),
+            lastUpdatedLabel.trailingAnchor.constraint(lessThanOrEqualTo: footprintButton.leadingAnchor, constant: -12),
 
             // 查看足迹按钮
             footprintButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
             footprintButton.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            footprintButton.widthAnchor.constraint(equalToConstant: 88),
+            footprintButton.widthAnchor.constraint(equalToConstant: 78),
             footprintButton.heightAnchor.constraint(equalToConstant: 30),
 
             // 分割线
@@ -639,7 +945,11 @@ final class FriendMemberCell: UITableViewCell {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    fileprivate func configure(with option: FamilyPersonaOption, isLast: Bool) {
+    fileprivate func configure(
+        with option: FamilyPersonaOption,
+        isCurrent: Bool,
+        isLast: Bool
+    ) {
         // 头像首字
         avatarInitialLabel.text = String(option.displayName.prefix(1))
 
@@ -653,11 +963,33 @@ final class FriendMemberCell: UITableViewCell {
         // 关系标签内边距
         let padding = "  \(option.relationLabel)  "
         relationLabel.text = padding
-        modeLabel.text = "  \(option.modeLabel)  "
 
-        lastUpdatedLabel.text = "状态: \(option.lastUpdated)"
+        lastUpdatedLabel.text = option.opensDetail ? "最近更新: \(option.lastUpdated)" : option.lastUpdated
         accessibilityIdentifier = "familyPersonaOption.\(option.accessibilitySuffix)"
-        accessibilityLabel = "切换到\(option.displayName)，\(option.modeLabel)状态"
+        if isCurrent {
+            accessibilityLabel = "当前回响对象，\(option.displayName)"
+        } else if option.opensDetail {
+            accessibilityLabel = "进入\(option.displayName)的家人管理"
+        } else {
+            accessibilityLabel = "切换到\(option.displayName)"
+        }
+
+        if isCurrent {
+            footprintButton.setTitle("当前", for: .normal)
+        } else {
+            footprintButton.setTitle(option.opensDetail ? "管理" : "切换", for: .normal)
+        }
+        footprintButton.backgroundColor = isCurrent
+            ? UIColor.warmAccent.withAlphaComponent(0.14)
+            : .white
+        footprintButton.setTitleColor(
+            isCurrent ? .warmAccent : UIColor(red: 0.30, green: 0.25, blue: 0.20, alpha: 1.0),
+            for: .normal
+        )
+
+        rowTintView.backgroundColor = option.usesSubtleCareTint
+            ? UIColor(red: 0.62, green: 0.57, blue: 0.49, alpha: 0.14)
+            : .clear
 
         // 最后一行不显示分割线
         divider.isHidden = isLast
@@ -665,11 +997,14 @@ final class FriendMemberCell: UITableViewCell {
 
     override func prepareForReuse() {
         super.prepareForReuse()
+        rowTintView.backgroundColor = .clear
         avatarInitialLabel.text = nil
         nameLabel.text = nil
         relationLabel.text = nil
-        modeLabel.text = nil
         lastUpdatedLabel.text = nil
+        footprintButton.setTitle("切换", for: .normal)
+        footprintButton.backgroundColor = .white
+        footprintButton.setTitleColor(UIColor(red: 0.30, green: 0.25, blue: 0.20, alpha: 1.0), for: .normal)
         divider.isHidden = false
     }
 }

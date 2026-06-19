@@ -170,6 +170,12 @@ final class ProfileViewController: UIViewController {
             name: .djDigitalHumanContextDidChange,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(familyMembersDidChange),
+            name: .djFamilyMembersDidChange,
+            object: nil
+        )
     }
 
     @objc private func digitalHumanContextDidChange(_ notification: Notification) {
@@ -181,6 +187,41 @@ final class ProfileViewController: UIViewController {
         careSnapshot = nil
         rebuildContent()
         loadCareSnapshot()
+    }
+
+    @objc private func familyMembersDidChange() {
+        if refreshSelectedFamilyContextFromRepositoryIfNeeded() {
+            return
+        }
+        careSnapshot = nil
+        rebuildContent()
+        loadCareSnapshot()
+    }
+
+    private func refreshSelectedFamilyContextFromRepositoryIfNeeded() -> Bool {
+        guard !personaContext.isSelfAssistant,
+              let user = UserManager.shared.currentUser,
+              let member = FamilyRepository.shared.get(by: personaContext.ownerId) else {
+            return false
+        }
+
+        let refreshedContext = DigitalHumanContext(
+            viewerUserId: user.id,
+            ownerId: member.id,
+            displayName: member.name,
+            relation: member.relation,
+            mode: member.digitalHumanMode,
+            isSelfAssistant: false
+        )
+
+        guard refreshedContext.displayName != personaContext.displayName
+            || refreshedContext.relation != personaContext.relation
+            || refreshedContext.mode != personaContext.mode else {
+            return false
+        }
+
+        DigitalHumanContextStore.shared.current = refreshedContext
+        return true
     }
 
     private func loadCareSnapshot() {
@@ -313,7 +354,8 @@ final class ProfileViewController: UIViewController {
     }
 
     private func shouldShowCareDashboard(context: DigitalHumanContext) -> Bool {
-        guard featureFlags.isEnabled(.careDashboard) else {
+        guard featureFlags.isEnabled(.careDashboard),
+              FamilyRepository.shared.hasStarModeMember else {
             return false
         }
         if context.isSelfAssistant {
@@ -489,10 +531,7 @@ final class ProfileViewController: UIViewController {
         if isProfileHiddenBranchesEnabled || featureFlags.isEnabled(.profileSettings) {
             rows.append(.profileSettings)
         }
-        if ProfileFamilyPersonaReleaseReadiness.isFamilyManagementRowVisible(
-            isFamilyManagementEnabled: featureFlags.isEnabled(.familyManagement),
-            isHiddenBranchesEnabled: isProfileHiddenBranchesEnabled
-        ) {
+        if featureFlags.isEnabled(.familyManagement) || isProfileHiddenBranchesEnabled {
             rows.append(.familyManagement)
         }
         if isVoiceCloneShellVisible {
@@ -721,17 +760,6 @@ final class ProfileViewController: UIViewController {
     }
 
     private func openFamilyManagement() {
-        guard ProfileFamilyPersonaReleaseReadiness.canOpenFamilyPersonaSwitcher(
-            isFamilySpaceEnabled: featureFlags.isEnabled(.familySpace),
-            isHiddenBranchesEnabled: isProfileHiddenBranchesEnabled
-        ) else {
-            showUnavailableAlert(
-                title: ProfileFamilyPersonaReleaseReadiness.unavailableTitle,
-                message: ProfileFamilyPersonaReleaseReadiness.unavailableMessage
-            )
-            return
-        }
-
         let viewController = FamilyCircleViewController()
         viewController.title = "家人管理"
         viewController.didRequestLogout = didRequestLogout

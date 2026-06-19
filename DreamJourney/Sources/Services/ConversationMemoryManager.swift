@@ -105,7 +105,7 @@ struct ConversationMemory: Codable {
 final class ConversationMemoryManager {
 
     static let shared = ConversationMemoryManager()
-    private init() { load() }
+    private init() { loadForCurrentScope() }
 
     // MARK: - Public
 
@@ -114,6 +114,16 @@ final class ConversationMemoryManager {
 
     /// 当前会话的临时对话记录
     private var currentTranscript: [ConversationTurn] = []
+    private var loadedScopeId = ""
+
+    func refreshForCurrentContext() {
+        let scopeId = currentMemoryScopeId
+        guard scopeId != loadedScopeId else { return }
+        if !currentTranscript.isEmpty {
+            endSession()
+        }
+        load(scopeId: scopeId)
+    }
 
     /// 获取当前会话的对话记录（用于回忆录生成等）
     func getCurrentTranscript() -> [ConversationTurn] {
@@ -365,9 +375,43 @@ final class ConversationMemoryManager {
 
     // MARK: - 持久化
 
+    private var currentMemoryScopeId: String {
+        let userId = UserManager.shared.currentUser?.id ?? "user_001"
+        let context = DigitalHumanContextStore.shared.current
+        if context.isSelfAssistant {
+            return sanitizedScopeId("personal_\(userId)")
+        }
+        let ownerId = context.ownerId.trimmingCharacters(in: .whitespacesAndNewlines)
+        return sanitizedScopeId("family_\(ownerId.isEmpty ? userId : ownerId)")
+    }
+
+    private func sanitizedScopeId(_ value: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_-"))
+        let scalars = value.unicodeScalars.map { allowed.contains($0) ? Character(String($0)) : Character("_") }
+        let sanitized = String(scalars).trimmingCharacters(in: CharacterSet(charactersIn: "_-"))
+        return sanitized.isEmpty ? "personal_user_001" : sanitized
+    }
+
+    private var documentsDirectory: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+    }
+
+    private var legacyFilePath: URL {
+        documentsDirectory.appendingPathComponent("conversation_memory.json")
+    }
+
+    private func filePath(for scopeId: String) -> URL {
+        documentsDirectory.appendingPathComponent("conversation_memory_\(scopeId).json")
+    }
+
+    private func loadForCurrentScope() {
+        load(scopeId: currentMemoryScopeId)
+    }
+
     private var filePath: URL {
+        let scopeId = loadedScopeId.isEmpty ? currentMemoryScopeId : loadedScopeId
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        return docs.appendingPathComponent("conversation_memory.json")
+        return docs.appendingPathComponent("conversation_memory_\(scopeId).json")
     }
 
     private func save() {
@@ -378,15 +422,22 @@ final class ConversationMemoryManager {
         try? data.write(to: filePath)
     }
 
-    private func load() {
-        guard FileManager.default.fileExists(atPath: filePath.path) else { return }
+    private func load(scopeId: String) {
+        loadedScopeId = scopeId
+        currentMemory = ConversationMemory()
+        let scopedFilePath = filePath(for: scopeId)
+        let fallbackPath = scopeId.hasPrefix("personal_") ? legacyFilePath : scopedFilePath
+        let pathToLoad = FileManager.default.fileExists(atPath: scopedFilePath.path)
+            ? scopedFilePath
+            : fallbackPath
+        guard FileManager.default.fileExists(atPath: pathToLoad.path) else { return }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        guard let data = try? Data(contentsOf: filePath),
+        guard let data = try? Data(contentsOf: pathToLoad),
               let memory = try? decoder.decode(ConversationMemory.self, from: data) else { return }
         currentMemory = memory
         let s = memory.lastSummary
-        print("[Memory] 📂 已加载历史记忆 (第\(memory.sessionCount)次)")
+        print("[Memory] 📂 已加载历史记忆 scope=\(scopeId) (第\(memory.sessionCount)次)")
         print("[Memory]   时间: \(s.time), 地点: \(s.place), 人物: \(s.person), 事件: \(s.event)")
     }
 }
