@@ -35,6 +35,8 @@ for phrase in [
     "RUN_STANDARD_BUILD",
     "RUN_SIMULATOR_SMOKE",
     "RUN_BACKEND_ENV_SMOKE",
+    "RUN_P0_PROFILE_CARE_REGRESSION",
+    "RUN_P0_PROFILE_CARE_REGRESSION forces RUN_PROFILE_CARE_STATE_SMOKE and RUN_PROFILE_CARE_BACKEND_STATE_SMOKE",
     "RELEASE_HANDOFF_MODE",
     "RUN_RELEASE_LIKE_BACKEND",
     "./scripts/verify_backend.sh",
@@ -50,6 +52,8 @@ for phrase in [
     "xcodebuild",
     "run-archive-to-echo-smoke.sh",
     "run-backend-env-smoke.sh",
+    "run-profile-care-state-smoke.sh",
+    "run-profile-care-backend-state-smoke.sh",
     "run-release-like-backend-acceptance.sh",
 ] {
     assertContains(runner, phrase, "runner should include \(phrase)")
@@ -62,6 +66,10 @@ for phrase in [
     "RUN_RELEASE_LIKE_BACKEND=1",
     "Release Handoff Mode",
     "RELEASE_HANDOFF_MODE=1",
+    "P0 Profile Care Regression Gate",
+    "RUN_P0_PROFILE_CARE_REGRESSION=1",
+    "local empty / stale / failed UIQA",
+    "deployed backend active / empty / stale / failed-retry UIQA",
     "Postgres release-like backend remains optional",
 ] {
     assertContains(status, phrase, "status doc should include \(phrase)")

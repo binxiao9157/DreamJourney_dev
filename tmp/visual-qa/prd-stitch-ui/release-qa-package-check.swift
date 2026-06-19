@@ -160,6 +160,8 @@ let oneCommandRegression = read("docs/superpowers/status/2026-06-18-one-command-
 assertContains(releaseRegression, "Release handoff mode forces release-like backend acceptance", "release handoff mode should document forced backend acceptance")
 assertContains(releaseRegression, "RUN_RELEASE_LIKE_BACKEND=1", "release handoff mode should force release-like backend acceptance")
 assertContains(releaseRegression, "RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE", "release regression should expose deployed archive image-analysis smoke")
+assertContains(releaseRegression, "RUN_P0_PROFILE_CARE_REGRESSION", "release regression should expose public MVP Profile care P0 gate")
+assertContains(releaseRegression, "RUN_P0_PROFILE_CARE_REGRESSION forces RUN_PROFILE_CARE_STATE_SMOKE and RUN_PROFILE_CARE_BACKEND_STATE_SMOKE", "Profile care P0 gate should force local and deployed backend care smokes")
 assertContains(releaseRegression, "BACKEND_API_TOKEN= BACKEND_BASE_URL= ./scripts/verify_backend.sh", "backend verify should not inherit deployed backend credentials")
 for handoffGuard in [
     "prd-full-feature-closure-decisions-check.swift",
@@ -198,6 +200,8 @@ assertContains(oneCommandRegression, "Profile account fields guard", "handoff do
 assertContains(oneCommandRegression, "Archive ownership guard", "handoff docs should list Archive ownership guard")
 assertContains(oneCommandRegression, "Care placeholder guard", "handoff docs should list Care placeholder guard")
 assertContains(oneCommandRegression, "Release-like backend acceptance", "handoff docs should list release-like backend acceptance")
+assertContains(oneCommandRegression, "P0 Profile Care Regression Gate", "handoff docs should document the public MVP Profile care P0 gate")
+assertContains(oneCommandRegression, "RUN_P0_PROFILE_CARE_REGRESSION=1", "handoff docs should show how to enable the Profile care P0 gate")
 assertNotContains(oneCommandRegression, "explicitly set `RUN_RELEASE_LIKE_BACKEND=0`", "handoff docs must not suggest bypassing backend acceptance")
 assertNotContains(oneCommandRegression, "unless explicitly overridden", "handoff docs must not suggest backend acceptance can be overridden")
 

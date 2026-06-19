@@ -36,12 +36,14 @@ tmp/visual-qa/prd-stitch-ui/run-profile-care-state-smoke.sh
 
 - 静态 guard：`tmp/visual-qa/prd-stitch-ui/profile-care-state-smoke-check.swift`
 - release regression 默认只跑静态 guard。
-- 如需跑模拟器交互 smoke：
+- 如需跑公开 MVP 关怀/心境追踪 P0 回归门，使用统一开关：
 
 ```bash
-RUN_PROFILE_CARE_STATE_SMOKE=1 \
+RUN_P0_PROFILE_CARE_REGRESSION=1 \
 tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
 ```
+
+该开关会同时跑本地 empty / stale / failed UIQA，以及真实后端 active / empty / stale / failed-retry UIQA。只需要单独跑本地状态 smoke 时，仍可使用 `RUN_PROFILE_CARE_STATE_SMOKE=1`。
 
 ## 边界
 
