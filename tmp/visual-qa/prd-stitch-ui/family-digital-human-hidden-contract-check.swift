@@ -21,6 +21,7 @@ let backendMain = read("app/main.py", in: backendRoot)
 let backendTests = read("tests/test_core_services.py", in: backendRoot)
 let backendPostgresTests = read("tests/test_postgres_store.py", in: backendRoot)
 let familyModel = read("DreamJourney/Sources/Services/MemoryModel.swift")
+let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let familyRepository = read("DreamJourney/Sources/Services/FamilyRepository.swift")
 let releaseRegression = read("tmp/visual-qa/prd-stitch-ui/run-release-regression.sh")
 let releaseQA = read("tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift")
@@ -62,18 +63,25 @@ for required in [
     "var familyPersonaContractVersion: Int",
     "var backendContractMode: String?",
     "var defaultReleaseVisible: Bool",
+    "static func fromBackendJSON(_ object: [String: Any]) -> FamilyMember?",
+    "digitalHumanMode(from: object)",
 ] {
     assertContains(familyModel, required, "iOS FamilyMember should model backend contract \(required)")
 }
 
 for required in [
-    "digitalHumanMode(from: object)",
-    "digitalHumanModeLabel",
-    "familyPersonaContractVersion",
-    "backendContractMode",
-    "defaultReleaseVisible",
+    "func fetchFamilyMembers(",
+    "completion: @escaping (Result<[FamilyMember], Error>) -> Void",
+    "FamilyMember.fromBackendJSON",
 ] {
-    assertContains(familyRepository, required, "iOS FamilyRepository should parse backend contract \(required)")
+    assertContains(backendClient, required, "iOS backend client should parse typed family contract \(required)")
+}
+
+for required in [
+    "DreamJourneyBackendClient.shared.fetchFamilyMembers",
+    "mergeRemoteMembers(remoteMembers)",
+] {
+    assertContains(familyRepository, required, "iOS FamilyRepository should consume typed family contract \(required)")
 }
 
 assertContains(releaseRegression, "family-digital-human-hidden-contract-check.swift", "release regression should run family digital-human guard")

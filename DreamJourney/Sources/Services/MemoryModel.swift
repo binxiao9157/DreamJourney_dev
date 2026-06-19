@@ -200,6 +200,99 @@ struct FamilyMember: Codable, Identifiable {
         backendContractMode = try container.decodeIfPresent(String.self, forKey: .backendContractMode)
         defaultReleaseVisible = try container.decodeIfPresent(Bool.self, forKey: .defaultReleaseVisible) ?? false
     }
+
+    static func fromBackendJSON(_ object: [String: Any]) -> FamilyMember? {
+        if let accessStatus = stringValue(in: object, for: "accessStatus")?.lowercased(),
+           !["active", "accepted"].contains(accessStatus) {
+            return nil
+        }
+        guard let id = stringValue(in: object, for: "id"),
+              let name = stringValue(in: object, for: "name") else {
+            return nil
+        }
+
+        return FamilyMember(
+            id: id,
+            name: name,
+            relation: stringValue(in: object, for: "relation") ?? "亲属",
+            phone: stringValue(in: object, for: "phone"),
+            isOnline: stringValue(in: object, for: "accessStatus")?.lowercased() == "active",
+            lastUpdated: stringValue(in: object, for: "lastUpdated")
+                ?? stringValue(in: object, for: "updatedAt")
+                ?? stringValue(in: object, for: "acceptedAt")
+                ?? "后端已同步",
+            personaScope: stringValue(in: object, for: "personaScope") ?? "family",
+            digitalHumanId: stringValue(in: object, for: "digitalHumanId") ?? id,
+            digitalHumanMode: digitalHumanMode(from: object) ?? .sunlight,
+            familyPersonaContractVersion: intValue(in: object, for: "familyPersonaContractVersion") ?? 1,
+            backendContractMode: stringValue(in: object, for: "backendContractMode"),
+            defaultReleaseVisible: boolValue(in: object, for: "defaultReleaseVisible") ?? false
+        )
+    }
+
+    private static func digitalHumanMode(from object: [String: Any]) -> DigitalHumanMode? {
+        if let rawMode = stringValue(in: object, for: "digitalHumanMode"),
+           let mode = DigitalHumanMode(rawValue: rawMode) {
+            return mode
+        }
+        switch stringValue(in: object, for: "digitalHumanModeLabel") {
+        case "阳光":
+            return .sunlight
+        case "星辰":
+            return .star
+        case "静默":
+            return .silent
+        default:
+            return nil
+        }
+    }
+
+    private static func stringValue(in object: [String: Any], for key: String) -> String? {
+        guard let value = object[key] else { return nil }
+        if let string = value as? String {
+            let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        if let number = value as? NSNumber {
+            return number.stringValue
+        }
+        return nil
+    }
+
+    private static func intValue(in object: [String: Any], for key: String) -> Int? {
+        guard let value = object[key] else { return nil }
+        if let int = value as? Int {
+            return int
+        }
+        if let number = value as? NSNumber {
+            return number.intValue
+        }
+        if let string = value as? String {
+            return Int(string)
+        }
+        return nil
+    }
+
+    private static func boolValue(in object: [String: Any], for key: String) -> Bool? {
+        guard let value = object[key] else { return nil }
+        if let bool = value as? Bool {
+            return bool
+        }
+        if let number = value as? NSNumber {
+            return number.boolValue
+        }
+        if let string = value as? String {
+            switch string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "true", "1", "yes":
+                return true
+            case "false", "0", "no":
+                return false
+            default:
+                return nil
+            }
+        }
+        return nil
+    }
 }
 
 // MARK: - 点赞模型

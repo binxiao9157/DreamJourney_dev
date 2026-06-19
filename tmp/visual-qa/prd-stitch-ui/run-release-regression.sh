@@ -237,6 +237,7 @@ for guard in \
   profile-care-backend-state-smoke-check.swift \
   family-digital-human-hidden-contract-check.swift \
   backend-family-voice-contract-smoke-check.swift \
+  ios-family-voice-consumer-contract-check.swift \
   voice-clone-shell-contract-check.swift \
   voice-clone-backend-contract-check.swift \
   final-visual-qa-package-check.swift \

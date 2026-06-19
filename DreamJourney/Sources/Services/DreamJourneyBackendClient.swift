@@ -707,6 +707,24 @@ final class DreamJourneyBackendClient {
         requestJSON(path: "/family/members/\(pathComponent(userId))", method: .get, payload: nil, completion: completion)
     }
 
+    func fetchFamilyMembers(
+        userId: String,
+        completion: @escaping (Result<[FamilyMember], Error>) -> Void
+    ) {
+        listFamilyMembers(userId: userId) { result in
+            switch result {
+            case .success(let object):
+                guard let members = Self.familyMembers(from: object) else {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                completion(.success(members))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func latestCareSnapshot(userId: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
         requestJSON(path: "/care/snapshots/latest/\(pathComponent(userId))", method: .get, payload: nil, completion: completion)
     }
@@ -792,5 +810,22 @@ final class DreamJourneyBackendClient {
         var allowed = CharacterSet.urlPathAllowed
         allowed.remove(charactersIn: "/?#[]@!$&'()*+,;=")
         return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+    }
+
+    private static func familyMembers(from object: [String: Any]) -> [FamilyMember]? {
+        let candidates: [[String: Any]]
+        if let members = object["members"] as? [[String: Any]] {
+            candidates = members
+        } else if let items = object["items"] as? [[String: Any]] {
+            candidates = items
+        } else if let data = object["data"] as? [String: Any] {
+            return familyMembers(from: data)
+        } else if let item = object["item"] as? [String: Any] {
+            candidates = [item]
+        } else {
+            return nil
+        }
+
+        return candidates.compactMap(FamilyMember.fromBackendJSON)
     }
 }

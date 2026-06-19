@@ -35,6 +35,45 @@ struct VoiceCloneProfileSnapshot {
     let isEnabled: Bool
     let disableContract: String
     let deleteContract: String
+    let providerMode: String
+    let contractVersion: Int
+    let defaultReleaseVisible: Bool
+
+    init(
+        voiceProfileId: String,
+        sampleStatus: VoiceCloneSampleStatus,
+        authorizationCopy: String,
+        isEnabled: Bool,
+        disableContract: String,
+        deleteContract: String,
+        providerMode: String = "localFallback",
+        contractVersion: Int = 1,
+        defaultReleaseVisible: Bool = false
+    ) {
+        self.voiceProfileId = voiceProfileId
+        self.sampleStatus = sampleStatus
+        self.authorizationCopy = authorizationCopy
+        self.isEnabled = isEnabled
+        self.disableContract = disableContract
+        self.deleteContract = deleteContract
+        self.providerMode = providerMode
+        self.contractVersion = contractVersion
+        self.defaultReleaseVisible = defaultReleaseVisible
+    }
+
+    init(backendContract: VoiceCloneProfileContract) {
+        self.init(
+            voiceProfileId: backendContract.voiceProfileId,
+            sampleStatus: backendContract.sampleStatus,
+            authorizationCopy: backendContract.authorizationCopy,
+            isEnabled: backendContract.isEnabled,
+            disableContract: backendContract.disableContract,
+            deleteContract: backendContract.deleteContract,
+            providerMode: backendContract.providerMode,
+            contractVersion: backendContract.contractVersion,
+            defaultReleaseVisible: backendContract.defaultReleaseVisible
+        )
+    }
 }
 
 // MARK: - 声音复刻服务（火山引擎 Voice Clone V3）
@@ -111,6 +150,10 @@ final class VoiceCloneService {
             disableContract: Self.disableContract,
             deleteContract: Self.deleteContract
         )
+    }
+
+    func voiceCloneShellSnapshot(from backendContract: VoiceCloneProfileContract) -> VoiceCloneProfileSnapshot {
+        VoiceCloneProfileSnapshot(backendContract: backendContract)
     }
 
     @discardableResult

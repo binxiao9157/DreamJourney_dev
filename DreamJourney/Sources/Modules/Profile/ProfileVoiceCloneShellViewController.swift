@@ -88,6 +88,12 @@ final class ProfileVoiceCloneShellViewController: UIViewController {
         statusStack.spacing = 10
         statusStack.addArrangedSubview(makeInfoRow(title: "声音样本状态", value: snapshot.sampleStatus.displayText))
         statusStack.addArrangedSubview(makeInfoRow(title: "voiceProfileId", value: snapshot.voiceProfileId))
+        statusStack.addArrangedSubview(makeInfoRow(title: "providerMode", value: snapshot.providerMode))
+        statusStack.addArrangedSubview(makeInfoRow(title: "合同版本", value: "\(snapshot.contractVersion)"))
+        statusStack.addArrangedSubview(makeInfoRow(
+            title: "默认发布态",
+            value: snapshot.defaultReleaseVisible ? "默认可见" : "默认隐藏"
+        ))
 
         card.addSubview(stack)
         [stack, iconView, titleLabel, subtitleLabel, statusStack].forEach {
