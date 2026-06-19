@@ -25,6 +25,7 @@ RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE="${RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE:-0}"
 RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE="${RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE:-0}"
 RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE="${RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE:-0}"
 RUN_ARCHIVE_HIDDEN_SHELL_SMOKE="${RUN_ARCHIVE_HIDDEN_SHELL_SMOKE:-0}"
+RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE="${RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE:-0}"
 RUN_P0_PROFILE_CARE_REGRESSION="${RUN_P0_PROFILE_CARE_REGRESSION:-0}"
 RUN_PROFILE_CARE_STATE_SMOKE="${RUN_PROFILE_CARE_STATE_SMOKE:-0}"
 RUN_PROFILE_CARE_BACKEND_STATE_SMOKE="${RUN_PROFILE_CARE_BACKEND_STATE_SMOKE:-0}"
@@ -87,6 +88,7 @@ Run ID: \`$RUN_ID\`
 - Backend time-letter lifecycle smoke: \`$RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE\`
 - Archive failed analysis retry UIQA smoke: \`$RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE\`
 - Archive hidden media/time-letter shell UIQA smoke: \`$RUN_ARCHIVE_HIDDEN_SHELL_SMOKE\`
+- Archive hidden media combo gate: \`$RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE\`
 - P0 Profile care regression gate: \`$RUN_P0_PROFILE_CARE_REGRESSION\`
 - Profile care state UIQA smoke: \`$RUN_PROFILE_CARE_STATE_SMOKE\`
 - Profile care deployed backend state UIQA smoke: \`$RUN_PROFILE_CARE_BACKEND_STATE_SMOKE\`
@@ -109,6 +111,7 @@ Run ID: \`$RUN_ID\`
 - Optional deployed backend time-letter lifecycle smoke when \`RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE=1\`; this verifies draft edit, seal, upsert, and delete metadata contracts.
 - Optional archive detail failed-analysis retry UIQA smoke when \`RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE=1\`.
 - Optional hidden media/time-letter shell UIQA smoke when \`RUN_ARCHIVE_HIDDEN_SHELL_SMOKE=1\`.
+- Optional hidden media combo gate when \`RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE=1\`; this runs the hidden media detail UIQA smoke and deployed backend hidden media sync smoke under one run-id.
 - Media Echo context polish guard is documented in \`2026-06-19-archive-media-echo-context-polish.md\`.
 - Optional P0 Profile care regression gate when \`RUN_P0_PROFILE_CARE_REGRESSION=1\`; this forces both local empty/stale/failed UIQA and deployed backend active/empty/stale/failed-retry UIQA.
 - Optional Profile care empty/stale/failed state UIQA smoke when \`RUN_PROFILE_CARE_STATE_SMOKE=1\`.
@@ -136,6 +139,7 @@ append_report_footer() {
 - Backend time-letter lifecycle smoke: \`backend-time-letter-lifecycle-smoke/$RUN_ID/\`
 - Archive failed analysis retry UIQA smoke: \`archive-failed-analysis-retry-smoke/$RUN_ID/\`
 - Archive hidden media/time-letter shell UIQA smoke: \`archive-hidden-shell-smoke/$RUN_ID/\`
+- Archive hidden media combo gate: \`archive-hidden-media-combo-gate/$RUN_ID/\`
 - P0 Profile care regression gate: \`profile-care-state-smoke/$RUN_ID/\` and \`profile-care-backend-state-smoke/$RUN_ID/\`
 - Profile care state UIQA smoke: \`profile-care-state-smoke/$RUN_ID/\`
 - Profile care deployed backend state UIQA smoke: \`profile-care-backend-state-smoke/$RUN_ID/\`
@@ -205,6 +209,7 @@ for guard in \
   archive-hidden-media-backend-upload-lifecycle-check.swift \
   archive-time-letter-backend-lifecycle-check.swift \
   archive-hidden-media-detail-ui-check.swift \
+  archive-hidden-media-combo-gate-check.swift \
   archive-media-echo-context-polish-check.swift \
   archive-analysis-insights-contract-check.swift \
   archive-analysis-backend-payload-contract-check.swift \
@@ -329,6 +334,16 @@ if [[ "$RUN_ARCHIVE_HIDDEN_SHELL_SMOKE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/archive-hidden-shell-smoke/$RUN_ID"
   echo "Skipped by RUN_ARCHIVE_HIDDEN_SHELL_SMOKE=0" > "$OUTPUT_DIR/archive-hidden-shell-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/archive-hidden-media-combo-gate" \
+  DERIVED_DATA_PATH="$OUTPUT_DIR/DerivedDataArchiveHiddenMediaComboGate" \
+  "$SCRIPT_DIR/run-archive-hidden-media-combo-gate.sh"
+else
+  mkdir -p "$OUTPUT_DIR/archive-hidden-media-combo-gate/$RUN_ID"
+  echo "Skipped by RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE=0" > "$OUTPUT_DIR/archive-hidden-media-combo-gate/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_PROFILE_CARE_STATE_SMOKE" == "1" ]]; then

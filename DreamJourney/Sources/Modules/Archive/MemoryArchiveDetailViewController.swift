@@ -529,9 +529,9 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         placeholderIcon.accessibilityIdentifier = "archive-video-media-placeholder"
 
         let overlayView = UIView()
-        overlayView.backgroundColor = hasThumbnail
-            ? UIColor.black.withAlphaComponent(0.24)
-            : DJDesignTokens.Color.surface.withAlphaComponent(0.76)
+        overlayView.backgroundColor = UIColor.black.withAlphaComponent(0.24)
+        overlayView.isHidden = !hasThumbnail
+        overlayView.accessibilityIdentifier = "archive-video-thumbnail-overlay"
 
         let textStack = UIStackView()
         textStack.axis = .vertical

@@ -126,6 +126,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-19-profile-care-backend-state-smoke.md",
     "docs/superpowers/status/2026-06-19-time-letter-backend-lifecycle.md",
     "docs/superpowers/status/2026-06-19-archive-media-echo-context-polish.md",
+    "docs/superpowers/status/2026-06-19-archive-hidden-media-combo-gate.md",
 ]
 
 for doc in requiredDocs {
@@ -289,8 +290,10 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/archive-hidden-media-backend-upload-lifecycle-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-time-letter-backend-lifecycle-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-hidden-media-detail-ui-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/archive-hidden-media-combo-gate-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-media-echo-context-polish-check.swift",
     "tmp/visual-qa/prd-stitch-ui/run-archive-hidden-shell-smoke.sh",
+    "tmp/visual-qa/prd-stitch-ui/run-archive-hidden-media-combo-gate.sh",
     "tmp/visual-qa/prd-stitch-ui/backend-hidden-media-sync-smoke.py",
     "tmp/visual-qa/prd-stitch-ui/run-backend-hidden-media-sync-smoke.sh",
     "tmp/visual-qa/prd-stitch-ui/backend-time-letter-lifecycle-smoke.py",

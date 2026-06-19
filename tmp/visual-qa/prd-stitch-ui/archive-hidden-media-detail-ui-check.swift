@@ -44,7 +44,9 @@ for required in [
     "makeVideoMediaCard",
     "archive-video-media-card",
     "archive-video-thumbnail-image",
+    "archive-video-thumbnail-overlay",
     "archive-video-media-placeholder",
+    "overlayView.isHidden = !hasThumbnail",
     "视频待补充",
 ] {
     assertContains(detail, required, "video detail shell should expose \(required)")
