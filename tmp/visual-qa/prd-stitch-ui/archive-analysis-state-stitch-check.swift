@@ -33,7 +33,8 @@ assertContains(detail, "let isAnalyzed = item.analysisStatus == .analyzed", "ana
 assertContains(detail, "makeAnalysisSummaryPanel(summary: summaryText, isAnalyzed: isAnalyzed)", "analysis card should route summary through the panel")
 assertContains(detail, "makeInsightSection(title: \"标签\", iconName: \"tag\", values: item.tags", "analysis card should render tags as insights")
 assertContains(detail, "makeInsightSection(title: \"人物线索\", iconName: \"person.2\", values: item.detectedPeople", "analysis card should render people as insights")
-assertContains(detail, "analysisStatusLabel.text = item.analysisStatus == .analyzed ? \"已生成\" : \"待生成\"", "analysis header should expose clear generated state")
+assertContains(detail, "analysisStatusLabel.text = analysisStatusDisplayText", "analysis header should expose clear generated/failed/pending state")
+assertContains(detail, "case .failed:\n            return \"分析失败\"", "analysis header should expose failed state")
 assertContains(detail, "summaryContainer.backgroundColor = isAnalyzed", "summary panel should visually differentiate analyzed state")
 assertContains(detail, "基于照片说明和本地规则整理", "archive detail should not overclaim visual AI analysis for local photo items")
 assertContains(archiveView, "基于照片说明和本地规则整理", "archive root should disclose local-rule archive analysis")
@@ -42,5 +43,7 @@ assertContains(photoEntry, "后续可补充说明来形成线索", "photo entry 
 
 assertContains(item, "metadata[\"analysisSource\"] = \"local_rule\"", "local analysis should preserve source metadata")
 assertContains(item, "metadata[\"analysisUpdatedAt\"]", "local analysis should preserve update timestamp")
+assertContains(item, "analysisLocationCluesMetadataKey", "local analysis should preserve location clues")
+assertContains(item, "analysisSceneCluesMetadataKey", "local analysis should preserve scene clues")
 
 print("Archive analysis state Stitch checks passed")

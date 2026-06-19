@@ -44,6 +44,13 @@ final class ProfileViewController: UIViewController {
         isProfileHiddenBranchesEnabled || featureFlags.isEnabled(.careDoctorContact)
     }
 
+    private var isVoiceCloneShellVisible: Bool {
+        ProfileFamilyPersonaReleaseReadiness.isVoiceCloneVisible(
+            isVoiceCloneEnabled: featureFlags.isEnabled(.voiceCloneShell),
+            isHiddenBranchesEnabled: isProfileHiddenBranchesEnabled
+        )
+    }
+
     private static let warmTabBarFloatingBottomInset: CGFloat = 16
 
     private static func profileScrollBottomInset(safeAreaBottomInset: CGFloat) -> CGFloat {
@@ -439,6 +446,9 @@ final class ProfileViewController: UIViewController {
         ) {
             rows.append(.familyManagement)
         }
+        if isVoiceCloneShellVisible {
+            rows.append(.voiceClone)
+        }
         if isProfileHiddenBranchesEnabled || featureFlags.isEnabled(.legalCenter) {
             rows.append(.legalCenter)
         }
@@ -561,6 +571,8 @@ final class ProfileViewController: UIViewController {
             showProfileSettings()
         case .familyManagement:
             openFamilyManagement()
+        case .voiceClone:
+            showVoiceCloneShell()
         case .legalCenter:
             showLegalCenter()
         case .logout:
@@ -578,6 +590,17 @@ final class ProfileViewController: UIViewController {
     private func showLegalCenter() {
         let viewController = ProfileLegalViewController()
         navigationController?.pushViewController(viewController, animated: true)
+    }
+
+    private func showVoiceCloneShell() {
+        guard isVoiceCloneShellVisible else {
+            showUnavailableAlert(
+                title: ProfileFamilyPersonaReleaseReadiness.voiceCloneUnavailableTitle,
+                message: ProfileFamilyPersonaReleaseReadiness.voiceCloneUnavailableMessage
+            )
+            return
+        }
+        navigationController?.pushViewController(ProfileVoiceCloneShellViewController(), animated: true)
     }
 
     @objc private func showElderCareDashboard() {
@@ -657,6 +680,7 @@ final class ProfileViewController: UIViewController {
 private enum ProfileRowAction {
     case profileSettings
     case familyManagement
+    case voiceClone
     case legalCenter
     case logout
     case accountDeletion
@@ -667,6 +691,8 @@ private enum ProfileRowAction {
             return "个人资料设置"
         case .familyManagement:
             return "家人管理"
+        case .voiceClone:
+            return "声音克隆"
         case .legalCenter:
             return "法律法规"
         case .logout:
@@ -682,6 +708,8 @@ private enum ProfileRowAction {
             return "chevron.right"
         case .familyManagement:
             return "chevron.right"
+        case .voiceClone:
+            return "waveform.badge.mic"
         case .legalCenter:
             return "chevron.right"
         case .logout:
@@ -695,7 +723,7 @@ private enum ProfileRowAction {
         switch self {
         case .accountDeletion:
             return true
-        case .profileSettings, .familyManagement, .legalCenter, .logout:
+        case .profileSettings, .familyManagement, .voiceClone, .legalCenter, .logout:
             return false
         }
     }

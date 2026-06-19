@@ -330,6 +330,9 @@ extension MemoryArchiveItem {
     static let mediaThumbnailPathMetadataKey = "thumbnailPath"
     static let mediaFileSizeBytesMetadataKey = "fileSizeBytes"
     static let mediaFileSizeLimitMBMetadataKey = "fileSizeLimitMB"
+    static let analysisLocationCluesMetadataKey = "analysisLocationClues"
+    static let analysisSceneCluesMetadataKey = "analysisSceneClues"
+    static let analysisFailureReasonMetadataKey = "analysisFailureReason"
 
     var backendSyncState: ArchiveBackendSyncState {
         guard let rawValue = metadata[Self.backendSyncStateMetadataKey],
@@ -341,6 +344,14 @@ extension MemoryArchiveItem {
 
     var isPublicBackendSyncEligible: Bool {
         kind == .photo || kind == .text
+    }
+
+    var detectedLocationClues: [String] {
+        Self.metadataList(metadata[Self.analysisLocationCluesMetadataKey])
+    }
+
+    var detectedSceneClues: [String] {
+        Self.metadataList(metadata[Self.analysisSceneCluesMetadataKey])
     }
 
     func updatingBackendSyncState(
@@ -392,6 +403,8 @@ extension MemoryArchiveItem {
             "analysisStatus": analysisStatus.rawValue,
             "tags": tags,
             "detectedPeople": detectedPeople,
+            "detectedLocations": detectedLocationClues,
+            "detectedScenes": detectedSceneClues,
             "metadata": metadataForBackendContract,
             "personaScope": personaScope,
             "digitalHumanId": digitalHumanId,
@@ -483,6 +496,23 @@ extension MemoryArchiveItem {
         tags = Self.mergingUnique(tags, with: localAnalysisTags)
         metadata["analysisSource"] = "local_rule"
         metadata["analysisUpdatedAt"] = "\(Int(now.timeIntervalSince1970))"
+        metadata.removeValue(forKey: Self.analysisFailureReasonMetadataKey)
+        storeMetadataList(extractLocationClues(), forKey: Self.analysisLocationCluesMetadataKey)
+        storeMetadataList(extractSceneClues(), forKey: Self.analysisSceneCluesMetadataKey)
+        updatedAt = now
+    }
+
+    mutating func markAnalysisFailed(reason: String, now: Date = Date()) {
+        analysisStatus = .failed
+        analysisSummary = "分析失败，可稍后重试。"
+        metadata[Self.analysisFailureReasonMetadataKey] = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        updatedAt = now
+    }
+
+    mutating func retryLocalAnalysis(now: Date = Date()) {
+        analysisStatus = .pending
+        analysisSummary = "正在重新整理人物、地点与场景线索。"
+        metadata.removeValue(forKey: Self.analysisFailureReasonMetadataKey)
         updatedAt = now
     }
 
@@ -537,10 +567,64 @@ extension MemoryArchiveItem {
         return candidates.filter { content.contains($0) }
     }
 
+    private func extractLocationClues() -> [String] {
+        let content = "\(title)\n\(note)"
+        let candidates = [
+            "上海",
+            "外滩",
+            "老家",
+            "院子",
+            "庭院",
+            "公园",
+            "学校",
+            "医院",
+            "厨房",
+            "成都",
+            "杭州",
+            "北京",
+        ]
+        return candidates.filter { content.contains($0) }
+    }
+
+    private func extractSceneClues() -> [String] {
+        let content = "\(title)\n\(note)"
+        let candidates = [
+            "合影",
+            "聚会",
+            "生日",
+            "春节",
+            "旅行",
+            "散步",
+            "吃饭",
+            "聊天",
+            "老照片",
+            "相册",
+            "录音",
+        ]
+        return candidates.filter { content.contains($0) }
+    }
+
     private static func mergingUnique(_ base: [String], with additions: [String]) -> [String] {
         additions.reduce(into: base) { result, value in
             guard !value.isEmpty, !result.contains(value) else { return }
             result.append(value)
+        }
+    }
+
+    private static func metadataList(_ rawValue: String?) -> [String] {
+        guard let rawValue, !rawValue.isEmpty else { return [] }
+        return rawValue
+            .components(separatedBy: CharacterSet(charactersIn: "、,|"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private mutating func storeMetadataList(_ values: [String], forKey key: String) {
+        let uniqueValues = Self.mergingUnique([], with: values)
+        if uniqueValues.isEmpty {
+            metadata.removeValue(forKey: key)
+        } else {
+            metadata[key] = uniqueValues.joined(separator: "、")
         }
     }
 }

@@ -183,6 +183,8 @@ private extension AppDelegate {
             }
         } else if arguments.contains("DJSeedEchoArchiveContext") {
             seedEchoArchiveContext()
+        } else if arguments.contains("DJSeedArchiveAnalysisInsights") {
+            seedArchiveAnalysisInsightsContext()
         } else if arguments.contains("DJSeedPendingArchiveAnalysis") {
             seedPendingArchiveAnalysisContext()
         }
@@ -776,6 +778,31 @@ private extension AppDelegate {
 
         let snapshot = MemoryArchiveRepository.shared.contextSnapshot()
         print("[UI_QA] Seeded pending archive analysis available=\(snapshot.availableItemCount)")
+    }
+
+    func seedArchiveAnalysisInsightsContext() {
+        UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+        UserDefaults.standard.removeObject(forKey: "dj.memoryArchive.items.user_9999")
+
+        var analyzedItem = MemoryArchiveItemFactory.makePhotoItem(localPath: "/tmp/uiqa-analysis-insights-photo.jpg")
+        analyzedItem.title = "外滩家庭合影"
+        analyzedItem.note = "奶奶和爸爸在上海外滩散步，翻看老照片时聊起春节聚会。"
+        analyzedItem.applyLocalAnalysisResult(now: Date(timeIntervalSince1970: 1_800_000_010))
+        print(
+            "[UI_QA] Seeded archive insights locations=\(analyzedItem.detectedLocationClues.joined(separator: "|")) " +
+            "scenes=\(analyzedItem.detectedSceneClues.joined(separator: "|"))"
+        )
+
+        var failedItem = MemoryArchiveItemFactory.makePhotoItem(localPath: "/tmp/uiqa-analysis-failed-photo.jpg")
+        failedItem.title = "等待重试的照片"
+        failedItem.note = "这张照片用于验证分析失败/重试状态。"
+        failedItem.markAnalysisFailed(reason: "mock analysis timeout", now: Date(timeIntervalSince1970: 1_800_000_011))
+
+        MemoryArchiveRepository.shared.add(analyzedItem, syncToBackend: false)
+        MemoryArchiveRepository.shared.add(failedItem, syncToBackend: false)
+
+        let snapshot = MemoryArchiveRepository.shared.contextSnapshot()
+        print("[UI_QA] Seeded archive analysis insights available=\(snapshot.availableItemCount)")
     }
 
     func runArchiveToEchoSmoke(retryCount: Int = 0) {

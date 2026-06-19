@@ -15,6 +15,8 @@ enum ProfileFamilyPersonaReleaseReadiness {
     static let hiddenBranchesLaunchArgument = "DJEnableProfileHiddenBranches"
     static let unavailableTitle = "家人管理暂未开放"
     static let unavailableMessage = "当前版本先保留入口，完整家人空间会在后续版本开放。"
+    static let voiceCloneUnavailableTitle = "声音克隆暂未开放"
+    static let voiceCloneUnavailableMessage = "当前版本先保留声音授权、voiceProfileId、样本状态和删除/禁用合同，真实声音克隆需要完成授权、样本质量和合规验收后开放。"
 
     static let familyManagementCapability = Capability(
         title: "家人管理",
@@ -49,6 +51,17 @@ enum ProfileFamilyPersonaReleaseReadiness {
         releaseCopy: "当前环境暂不支持修改密码"
     )
 
+    static let voiceCloneCapability = Capability(
+        title: "声音克隆",
+        feature: .voiceCloneShell,
+        stage: .hiddenReady(
+            feature: .voiceCloneShell,
+            qaLaunchArgument: hiddenBranchesLaunchArgument,
+            reason: "默认发布态不展示声音克隆，避免在授权、样本质量、voiceProfileId 删除/禁用合同和合规验收前误承诺。"
+        ),
+        releaseCopy: voiceCloneUnavailableTitle
+    )
+
     static func isFamilyManagementRowVisible(
         isFamilyManagementEnabled: Bool,
         isHiddenBranchesEnabled: Bool
@@ -68,5 +81,12 @@ enum ProfileFamilyPersonaReleaseReadiness {
         isHiddenBranchesEnabled: Bool
     ) -> Bool {
         isHiddenBranchesEnabled || isPasswordChangeEnabled
+    }
+
+    static func isVoiceCloneVisible(
+        isVoiceCloneEnabled: Bool,
+        isHiddenBranchesEnabled: Bool
+    ) -> Bool {
+        isHiddenBranchesEnabled || isVoiceCloneEnabled
     }
 }

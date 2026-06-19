@@ -2,6 +2,41 @@ import Foundation
 import Alamofire
 import CocoaLumberjack
 
+enum VoiceCloneSampleStatus: String, Codable {
+    case notProvided
+    case pending
+    case ready
+    case disabled
+    case deleted
+    case failed
+
+    var displayText: String {
+        switch self {
+        case .notProvided:
+            return "未提供声音样本"
+        case .pending:
+            return "样本待审核"
+        case .ready:
+            return "样本可用"
+        case .disabled:
+            return "样本已禁用"
+        case .deleted:
+            return "样本已删除"
+        case .failed:
+            return "样本处理失败"
+        }
+    }
+}
+
+struct VoiceCloneProfileSnapshot {
+    let voiceProfileId: String
+    let sampleStatus: VoiceCloneSampleStatus
+    let authorizationCopy: String
+    let isEnabled: Bool
+    let disableContract: String
+    let deleteContract: String
+}
+
 // MARK: - 声音复刻服务（火山引擎 Voice Clone V3）
 
 /// 封装火山引擎声音复刻 API：
@@ -27,6 +62,11 @@ final class VoiceCloneService {
 
     /// 当前用户的 speaker_id（持久化到 UserDefaults）
     private let speakerIdKey = "dj.voiceclone.speakerId"
+    private let sampleStatusKey = "dj.voiceclone.sampleStatus"
+    private static let emptyVoiceProfileId = "voiceProfileId_not_created"
+    private static let authorizationCopy = "声音克隆必须由用户主动授权，仅使用用户确认提交的声音样本；未完成授权和样本质量验收前不会公开训练或合成功能。"
+    private static let disableContract = "disableVoiceProfile(profileId:) 只更新本地禁用状态，真实后端接入后应撤销该 voiceProfileId 的合成权限。"
+    private static let deleteContract = "deleteVoiceProfile(profileId:) 只清理本地 voiceProfileId，真实后端接入后应删除样本、训练产物和关联授权记录。"
 
     /// 训练轮询定时器
     private var pollTimer: Timer?
@@ -57,9 +97,48 @@ final class VoiceCloneService {
         return UserDefaults.standard.string(forKey: speakerIdKey)
     }
 
+    func voiceCloneShellSnapshot() -> VoiceCloneProfileSnapshot {
+        let storedStatus = UserDefaults.standard.string(forKey: sampleStatusKey)
+            .flatMap(VoiceCloneSampleStatus.init(rawValue:))
+        let profileId = currentSpeakerId ?? Self.emptyVoiceProfileId
+        let sampleStatus = storedStatus ?? (currentSpeakerId == nil ? .notProvided : .pending)
+        return VoiceCloneProfileSnapshot(
+            voiceProfileId: profileId,
+            sampleStatus: sampleStatus,
+            authorizationCopy: Self.authorizationCopy,
+            isEnabled: sampleStatus == .ready,
+            disableContract: Self.disableContract,
+            deleteContract: Self.deleteContract
+        )
+    }
+
+    @discardableResult
+    func disableVoiceProfile(profileId: String) -> VoiceCloneProfileSnapshot {
+        guard !profileId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return voiceCloneShellSnapshot()
+        }
+        UserDefaults.standard.set(VoiceCloneSampleStatus.disabled.rawValue, forKey: sampleStatusKey)
+        return voiceCloneShellSnapshot()
+    }
+
+    @discardableResult
+    func deleteVoiceProfile(profileId: String) -> VoiceCloneProfileSnapshot {
+        guard !profileId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return voiceCloneShellSnapshot()
+        }
+        UserDefaults.standard.removeObject(forKey: speakerIdKey)
+        UserDefaults.standard.set(VoiceCloneSampleStatus.deleted.rawValue, forKey: sampleStatusKey)
+        return voiceCloneShellSnapshot()
+    }
+
     /// 保存 speaker_id
     private func saveSpeakerId(_ id: String) {
         UserDefaults.standard.set(id, forKey: speakerIdKey)
+        UserDefaults.standard.set(VoiceCloneSampleStatus.pending.rawValue, forKey: sampleStatusKey)
+    }
+
+    private func saveSampleStatus(_ status: VoiceCloneSampleStatus) {
+        UserDefaults.standard.set(status.rawValue, forKey: sampleStatusKey)
     }
 
     /// 上传音频训练声音复刻
@@ -146,6 +225,7 @@ final class VoiceCloneService {
 
                         // 如果训练已完成（小概率），直接返回
                         if status == 2 || status == 4 {
+                            self.saveSampleStatus(.ready)
                             completion(.success(returnedSpeakerId))
                         } else {
                             // 开始轮询状态
@@ -299,6 +379,7 @@ final class VoiceCloneService {
                     switch status {
                     case .success, .active:
                         DDLogInfo("[VoiceClone] 音色训练完成: \(speakerId)")
+                        self.saveSampleStatus(.ready)
                         DispatchQueue.main.async {
                             timer.invalidate()
                             self.pollTimer = nil

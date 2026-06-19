@@ -163,6 +163,8 @@ for handoffGuard in [
     "true-device-archive-audio-acceptance-check.swift",
     "archive-media-backend-contract-check.swift",
     "archive-media-upload-intent-contract-check.swift",
+    "archive-analysis-insights-contract-check.swift",
+    "voice-clone-shell-contract-check.swift",
     "profile-care-public-placeholder-check.swift",
     "release-like-backend-acceptance-check.swift",
 ] {
@@ -253,6 +255,8 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/run-true-device-archive-audio-preflight.sh",
     "tmp/visual-qa/prd-stitch-ui/archive-media-backend-contract-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-media-upload-intent-contract-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/archive-analysis-insights-contract-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/voice-clone-shell-contract-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-integration-contract-check.py",
     "tmp/visual-qa/prd-stitch-ui/backend-auth-token-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-auth-token-contract-check.py",

@@ -70,6 +70,7 @@ let hiddenByDefault: Set<String> = [
     "accountDeletion",
     "accountPasswordChange",
     "careDoctorContact",
+    "voiceCloneShell",
 ]
 
 let defaults = extractDefaultEnabledFeatures(from: flags)
@@ -112,9 +113,12 @@ assertContains(profile, "ProfileFamilyPersonaReleaseReadiness.canOpenFamilyPerso
 assertContains(profile, "featureFlags.isEnabled(.profileSettings)", "profile settings row must be feature gated")
 assertContains(profile, "featureFlags.isEnabled(.legalCenter)", "legal center row must be feature gated")
 assertContains(profile, "featureFlags.isEnabled(.familyManagement)", "family management row must be feature gated")
+assertContains(profile, "featureFlags.isEnabled(.voiceCloneShell)", "voice clone shell row must be feature gated")
 assertContains(profile, "featureFlags.isEnabled(.accountDeletion)", "account deletion row must be feature gated")
 assertContains(profile, "isCareDoctorContactVisible", "doctor contact must use an explicit visibility gate")
 assertContains(profile, "rows.append(.logout)", "logout should remain a stable public action")
+assertContains(profileReadiness, "voiceCloneCapability", "voice clone shell should have a hidden readiness capability")
+assertContains(profileReadiness, "isVoiceCloneVisible", "voice clone shell should use release readiness visibility contract")
 
 assertContains(settings, "ProfileSettingsViewController", "profile settings page must exist")
 assertContains(settings, "保存", "profile settings page must provide save action")

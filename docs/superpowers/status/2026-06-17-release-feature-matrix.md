@@ -55,6 +55,7 @@ These items must not appear in the public release surface yet.
 | Profile / Echo | Hidden `阳光 / 星辰 / 静默` mode management | Hidden family rows expose a QA context menu only; mode is persisted locally, drives care visibility, changes Echo context/prompt boundaries, and keeps internal mode names out of visible Echo copy. |
 | Profile | `注销账户` | `DJFeature.accountDeletion` or `DJEnableProfileHiddenBranches` only. |
 | Profile settings | `修改密码` | `DJFeature.accountPasswordChange` or `DJEnableProfileHiddenBranches` only. |
+| Profile | `声音克隆` | `DJFeature.voiceCloneShell` or `DJEnableProfileHiddenBranches` safety shell only. |
 | Profile care | `立即通话` | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` only. |
 
 ## Hidden Candidate Release Decisions
@@ -70,6 +71,7 @@ No hidden PRD feature is public by default. These candidates may be available in
 | care dashboard expansion | aggregate `DJFeature.careDashboard` and non-executing `关怀升级准备中` placeholder are public; intervention/contact execution stays behind `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | aggregate + placeholder only | family-facing copy, alert thresholds, backend persistence, true-device acceptance | `elder-care-dashboard-check.swift`, `profile-care-public-placeholder-check.swift`, backend acceptance |
 | account deletion execution | `DJFeature.accountDeletion` or `DJEnableProfileHiddenBranches` safety shell only | no | compliance policy, cooling-off period, backend deletion/export contract | `profile-safety-flow-check.swift` |
 | account password change | `DJFeature.accountPasswordChange` or `DJEnableProfileHiddenBranches` | no | backend `/auth/password` implementation, auth/security review, true-device acceptance | `profile-password-change-check.swift`, release regression |
+| voice clone shell | `DJFeature.voiceCloneShell` or `DJEnableProfileHiddenBranches` | no | explicit authorization, voice sample quality policy, voiceProfileId lifecycle, deletion/disable backend contract, compliance review | `voice-clone-shell-contract-check.swift`, release regression |
 | doctor contact / intervention execution | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | no | real escalation provider, emergency disclaimers, backend submission contract | `profile-care-escalation-contract-check.swift`, `profile-care-escalation-backend-boundary-check.swift` |
 | care escalation draft | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` local draft shell only | no | product decision to promote draft, backend submit contract, clinical/legal review | `profile-care-escalation-contract-check.swift`, `run-profile-care-escalation-boundary-smoke.sh` |
 | sunlight/star/silent lifecycle transition controls | hidden family rows / local QA context only | no | product/legal policy for lifecycle transitions, consent copy, recovery rules | `digital-human-mode-management-check.swift`, `digital-human-mode-lifecycle-check.swift` |
@@ -110,6 +112,7 @@ swift tmp/visual-qa/prd-stitch-ui/profile-safety-flow-check.swift /Users/yxj/Doc
 swift tmp/visual-qa/prd-stitch-ui/profile-care-escalation-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/elder-care-dashboard-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/profile-care-public-placeholder-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/voice-clone-shell-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/final-visual-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
