@@ -127,7 +127,13 @@ private extension AppDelegate {
             FeatureFlagService.shared.set(.archiveRemoteFetch, enabled: true)
             print("[UI_QA] Archive remote fetch enabled")
         }
-        if arguments.contains("DJRunProfileCareBackendStateSmoke") {
+        if arguments.contains("DJRunProfileCareBackendFailureRetrySmoke") {
+            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+            FeatureFlagService.shared.resetToDefaults()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.runProfileCareBackendFailureRetrySmoke()
+            }
+        } else if arguments.contains("DJRunProfileCareBackendStateSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
@@ -441,6 +447,73 @@ private extension AppDelegate {
                     "dashboardStates=\(dashboardStates.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: "|"))"
                 )
             }
+        }
+    }
+
+    func runProfileCareBackendFailureRetrySmoke() {
+        guard let tabBarController = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController as? WarmTabBarController,
+              let viewControllers = tabBarController.viewControllers,
+              viewControllers.indices.contains(2),
+              let profileNavigationController = viewControllers[2] as? UINavigationController,
+              let profileViewController = profileNavigationController.viewControllers.first as? ProfileViewController else {
+            writeProfileCareBackendFailureRetrySmokeResult(
+                completed: false,
+                retry: [:],
+                profileTabSelected: false,
+                backendConfigured: DreamJourneyBackendClient.shared.isCareSnapshotConfigured,
+                failureReason: "missingProfileRoot"
+            )
+            print("[UI_QA] ProfileCareBackendFailureRetrySmoke failed reason=missingProfileRoot")
+            return
+        }
+
+        guard let retryUserId = uiqaArgumentValue(prefix: "DJCareFailureRetryUserId=") else {
+            writeProfileCareBackendFailureRetrySmokeResult(
+                completed: false,
+                retry: [:],
+                profileTabSelected: false,
+                backendConfigured: DreamJourneyBackendClient.shared.isCareSnapshotConfigured,
+                failureReason: "missingCareFailureRetryUserId"
+            )
+            print("[UI_QA] ProfileCareBackendFailureRetrySmoke failed reason=missingCareFailureRetryUserId")
+            return
+        }
+
+        profileNavigationController.popToRootViewController(animated: false)
+        tabBarController.selectedIndex = 2
+        profileViewController.loadViewIfNeeded()
+
+        profileViewController.runUIQAProfileCareBackendFailureRetrySmoke(retryUserId: retryUserId) { [weak self] retry in
+            let profileTabSelected = tabBarController.selectedIndex == 2
+            let completed = DreamJourneyBackendClient.shared.isCareSnapshotConfigured
+                && profileTabSelected
+                && (retry["retryActionFired"] as? Bool) == true
+                && (retry["retryButtonVisible"] as? Bool) == true
+                && (retry["retryRequestCountAdvanced"] as? Bool) == true
+                && (retry["retryFailureInitialState"] as? String) == ProfileCareDataState.failed.accessibilityIdentifier
+                && (retry["retryIntermediateState"] as? String) == ProfileCareDataState.loading.accessibilityIdentifier
+                && ((retry["retryIntermediateSyncCaption"] as? String) ?? "").contains("正在重新同步关怀信号")
+                && (retry["retryFailureFinalState"] as? String) == ProfileCareDataState.failed.accessibilityIdentifier
+                && (retry["retryFailureFinalRetryVisible"] as? Bool) == true
+                && (retry["retryRequestedUserId"] as? String) == retryUserId
+
+            self?.writeProfileCareBackendFailureRetrySmokeResult(
+                completed: completed,
+                retry: retry,
+                profileTabSelected: profileTabSelected,
+                backendConfigured: DreamJourneyBackendClient.shared.isCareSnapshotConfigured,
+                failureReason: completed ? nil : "backendFailureRetryContractMismatch"
+            )
+            print(
+                "[UI_QA] ProfileCareBackendFailureRetrySmoke completed " +
+                "completed=\(completed) " +
+                "retryFailureFinalState=\(retry["retryFailureFinalState"] as? String ?? "missing") " +
+                "retryFailureFinalRetryVisible=\(retry["retryFailureFinalRetryVisible"] as? Bool ?? false)"
+            )
         }
     }
 
@@ -1467,6 +1540,38 @@ private extension AppDelegate {
             try data.write(to: resultURL, options: [.atomic])
         } catch {
             print("[UI_QA] ProfileCareBackendStateSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    func writeProfileCareBackendFailureRetrySmokeResult(
+        completed: Bool,
+        retry: [String: Any],
+        profileTabSelected: Bool,
+        backendConfigured: Bool,
+        failureReason: String? = nil
+    ) {
+        var result: [String: Any] = [
+            "completed": completed,
+            "backendConfigured": backendConfigured,
+            "profileTabSelected": profileTabSelected,
+            "retry": retry,
+            "expectedFailureState": ProfileCareDataState.failed.accessibilityIdentifier,
+        ]
+        if let failureReason {
+            result["failureReason"] = failureReason
+        }
+
+        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
+              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("[UI_QA] ProfileCareBackendFailureRetrySmoke failed reason=resultEncoding")
+            return
+        }
+
+        let resultURL = documentsURL.appendingPathComponent("profile-care-backend-failure-retry-smoke-result.json")
+        do {
+            try data.write(to: resultURL, options: [.atomic])
+        } catch {
+            print("[UI_QA] ProfileCareBackendFailureRetrySmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
     }
 

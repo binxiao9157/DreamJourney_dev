@@ -11,6 +11,7 @@ CONFIGURATION="${CONFIGURATION:-Debug}"
 SIMULATOR_NAME="${SIMULATOR_NAME:-iPhone 16}"
 SWIFT_ACTIVE_COMPILATION_CONDITIONS='DEBUG UI_QA_SIMULATOR'
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT_DIR/tmp/visual-qa/prd-stitch-ui/DerivedDataProfileCareBackendStateSmoke}"
+FAILURE_DERIVED_DATA_PATH="${FAILURE_DERIVED_DATA_PATH:-${DERIVED_DATA_PATH}Failure}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-$ROOT_DIR/tmp/visual-qa/prd-stitch-ui/profile-care-backend-state-smoke}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 MARKER="${MARKER:-$RUN_ID}"
@@ -19,12 +20,19 @@ OUTPUT_DIR="$OUTPUT_ROOT/$RUN_ID"
 BUILD_LOG="$OUTPUT_DIR/build.log"
 RUNTIME_LOG="$OUTPUT_DIR/runtime.log"
 OS_LOG="$OUTPUT_DIR/oslog.log"
+FAILURE_BUILD_LOG="$OUTPUT_DIR/failure-retry-build.log"
+FAILURE_RUNTIME_LOG="$OUTPUT_DIR/failure-retry-runtime.log"
+FAILURE_OS_LOG="$OUTPUT_DIR/failure-retry-oslog.log"
 FIXTURE_RESULT="$OUTPUT_DIR/backend-care-state-uiqa-fixtures-result.json"
 FIXTURE_LOG="$OUTPUT_DIR/backend-care-state-uiqa-fixtures.log"
 SCREENSHOT_PATH="$OUTPUT_DIR/01-profile-care-backend-state-smoke.png"
+FAILURE_SCREENSHOT_PATH="$OUTPUT_DIR/02-profile-care-backend-failure-retry.png"
 RESULT_COPY_PATH="$OUTPUT_DIR/profile-care-backend-state-smoke-result.json"
+FAILURE_RESULT_COPY_PATH="$OUTPUT_DIR/profile-care-backend-failure-retry-smoke-result.json"
 PRIVATE_XCCONFIG="$OUTPUT_DIR/backend-private.xcconfig"
+INVALID_PRIVATE_XCCONFIG="$OUTPUT_DIR/backend-invalid-token.xcconfig"
 COMPLETION_PATTERN="ProfileCareBackendStateSmoke completed"
+FAILURE_COMPLETION_PATTERN="ProfileCareBackendFailureRetrySmoke completed"
 LOG_WAIT_TIMEOUT="${LOG_WAIT_TIMEOUT:-90}"
 
 mkdir -p "$OUTPUT_DIR"
@@ -39,7 +47,7 @@ cleanup() {
   if [[ -n "$OSLOG_PID" ]]; then
     kill "$OSLOG_PID" >/dev/null 2>&1 || true
   fi
-  rm -f "$PRIVATE_XCCONFIG"
+  rm -f "$PRIVATE_XCCONFIG" "$INVALID_PRIVATE_XCCONFIG"
 }
 trap cleanup EXIT
 
@@ -56,6 +64,14 @@ fail() {
   if [[ -f "$OS_LOG" ]]; then
     echo "[profile-care-backend-state-smoke] os log tail:" >&2
     tail -80 "$OS_LOG" >&2 || true
+  fi
+  if [[ -f "$FAILURE_RUNTIME_LOG" ]]; then
+    echo "[profile-care-backend-state-smoke] failure retry runtime log tail:" >&2
+    tail -80 "$FAILURE_RUNTIME_LOG" >&2 || true
+  fi
+  if [[ -f "$FAILURE_OS_LOG" ]]; then
+    echo "[profile-care-backend-state-smoke] failure retry os log tail:" >&2
+    tail -80 "$FAILURE_OS_LOG" >&2 || true
   fi
   exit 1
 }
@@ -151,6 +167,21 @@ Path(path).write_text(
 )
 PY
 chmod 600 "$PRIVATE_XCCONFIG"
+
+python3 - "$INVALID_PRIVATE_XCCONFIG" "$BACKEND_BASE_URL" "$BACKEND_API_TOKEN" <<'PY'
+import sys
+from pathlib import Path
+
+path, base_url, token = sys.argv[1:4]
+escaped_base_url = base_url.replace("//", "/$()/")
+invalid_token = f"{token}-invalid-uiqa"
+Path(path).write_text(
+    "DREAMJOURNEY_BACKEND_BASE_URL = " + escaped_base_url + "\n"
+    "DREAMJOURNEY_BACKEND_API_TOKEN = " + invalid_token + "\n",
+    encoding="utf-8",
+)
+PY
+chmod 600 "$INVALID_PRIVATE_XCCONFIG"
 
 booted_simulator_udid() {
   xcrun simctl list devices booted | awk -F '[()]' '/Booted/ { print $2; exit }'
@@ -292,6 +323,112 @@ PY
 
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null
 xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
+if [[ -n "$CONSOLE_PID" ]]; then
+  kill "$CONSOLE_PID" >/dev/null 2>&1 || true
+  CONSOLE_PID=""
+fi
+if [[ -n "$OSLOG_PID" ]]; then
+  kill "$OSLOG_PID" >/dev/null 2>&1 || true
+  OSLOG_PID=""
+fi
+
+echo "[profile-care-backend-state-smoke] Building UIQA app with invalid backend token for failure retry..."
+xcodebuild \
+  -workspace DreamJourney.xcworkspace \
+  -scheme "$SCHEME" \
+  -configuration "$CONFIGURATION" \
+  -sdk iphonesimulator \
+  -destination 'generic/platform=iOS Simulator' \
+  -derivedDataPath "$FAILURE_DERIVED_DATA_PATH" \
+  -xcconfig "$INVALID_PRIVATE_XCCONFIG" \
+  CODE_SIGNING_ALLOWED=NO \
+  SWIFT_ACTIVE_COMPILATION_CONDITIONS="$SWIFT_ACTIVE_COMPILATION_CONDITIONS" \
+  EXCLUDED_ARCHS='' \
+  ARCHS=arm64 \
+  ONLY_ACTIVE_ARCH=NO \
+  build > "$FAILURE_BUILD_LOG" 2>&1
+
+FAILURE_APP_PATH="$FAILURE_DERIVED_DATA_PATH/Build/Products/$CONFIGURATION-iphonesimulator/DreamJourney.app"
+[[ -d "$FAILURE_APP_PATH" ]] || fail "Built failure retry app not found: $FAILURE_APP_PATH"
+
+BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$FAILURE_APP_PATH/Info.plist")"
+[[ -n "$BUNDLE_ID" ]] || fail "Unable to read bundle id from $FAILURE_APP_PATH"
+
+echo "[profile-care-backend-state-smoke] Installing invalid-token app for failure retry on $SIMULATOR_UDID..."
+xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
+xcrun simctl uninstall "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
+xcrun simctl install "$SIMULATOR_UDID" "$FAILURE_APP_PATH"
+xcrun simctl spawn "$SIMULATOR_UDID" defaults delete "$BUNDLE_ID" >/dev/null 2>&1 || true
+FAILURE_DATA_CONTAINER="$(xcrun simctl get_app_container "$SIMULATOR_UDID" "$BUNDLE_ID" data)"
+FAILURE_RESULT_FILE="$FAILURE_DATA_CONTAINER/Documents/profile-care-backend-failure-retry-smoke-result.json"
+rm -f "$FAILURE_RESULT_FILE"
+
+touch "$FAILURE_RUNTIME_LOG" "$FAILURE_OS_LOG"
+xcrun simctl spawn "$SIMULATOR_UDID" log stream \
+  --style compact \
+  --level debug \
+  --predicate 'process == "DreamJourney"' > "$FAILURE_OS_LOG" 2>&1 &
+OSLOG_PID="$!"
+sleep 1
+
+echo "[profile-care-backend-state-smoke] Launching failure retry harness..."
+xcrun simctl launch --console "$SIMULATOR_UDID" "$BUNDLE_ID" \
+  DJUITestBypassLogin \
+  DJRunProfileCareBackendFailureRetrySmoke \
+  "DJCareFailureRetryUserId=$ACTIVE_USER_ID" > "$FAILURE_RUNTIME_LOG" 2>&1 &
+CONSOLE_PID="$!"
+
+deadline=$((SECONDS + LOG_WAIT_TIMEOUT))
+while [[ ! -s "$FAILURE_RESULT_FILE" ]] && ! grep -q "$FAILURE_COMPLETION_PATTERN" "$FAILURE_RUNTIME_LOG" "$FAILURE_OS_LOG" 2>/dev/null; do
+  if (( SECONDS >= deadline )); then
+    fail "Timed out waiting for $FAILURE_COMPLETION_PATTERN"
+  fi
+  sleep 1
+done
+
+[[ -s "$FAILURE_RESULT_FILE" ]] || fail "App did not write profile-care-backend-failure-retry-smoke-result.json"
+cp "$FAILURE_RESULT_FILE" "$FAILURE_RESULT_COPY_PATH"
+
+python3 - "$FAILURE_RESULT_COPY_PATH" "$FIXTURE_RESULT" <<'PY'
+import json
+import sys
+
+result_path, fixture_path = sys.argv[1:3]
+with open(result_path, "r", encoding="utf-8") as handle:
+    result = json.load(handle)
+with open(fixture_path, "r", encoding="utf-8") as handle:
+    fixture = json.load(handle)
+
+if result.get("completed") is not True:
+    raise SystemExit(f"profile care backend failure retry smoke did not complete: {result}")
+if result.get("backendConfigured") is not True:
+    raise SystemExit(f"backend should be configured even with invalid token: {result}")
+if result.get("profileTabSelected") is not True:
+    raise SystemExit(f"profile tab should be selected: {result}")
+
+retry = result.get("retry") or {}
+if retry.get("retryActionFired") is not True:
+    raise SystemExit(f"failure retry action should fire through profileCareRetryButton: {result}")
+if retry.get("retryButtonVisible") is not True:
+    raise SystemExit(f"failure retry button should be visible before tap: {result}")
+if retry.get("retryFailureInitialState") != "profileCareStateFailed":
+    raise SystemExit(f"failure retry should start from failed state: {result}")
+if retry.get("retryIntermediateState") != "profileCareStateLoading":
+    raise SystemExit(f"failure retry should show loading state immediately after tap: {result}")
+if "正在重新同步关怀信号" not in str(retry.get("retryIntermediateSyncCaption") or ""):
+    raise SystemExit(f"failure retry should show explicit resync caption: {result}")
+if retry.get("retryFailureFinalState") != "profileCareStateFailed":
+    raise SystemExit(f"failure retry should return to failed state after backend still fails: {result}")
+if retry.get("retryFailureFinalRetryVisible") is not True:
+    raise SystemExit(f"failure retry should keep retry entry visible after backend still fails: {result}")
+if retry.get("retryRequestCountAdvanced") is not True:
+    raise SystemExit(f"failure retry should trigger a new backend request: {result}")
+if retry.get("retryRequestedUserId") != fixture.get("activeUserId"):
+    raise SystemExit(f"failure retry should request the active fixture user: {result} fixture={fixture}")
+PY
+
+xcrun simctl io "$SIMULATOR_UDID" screenshot "$FAILURE_SCREENSHOT_PATH" >/dev/null
+xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
 
 echo "[profile-care-backend-state-smoke] Fixture result: $FIXTURE_RESULT"
 echo "[profile-care-backend-state-smoke] Build log: $BUILD_LOG"
@@ -299,3 +436,8 @@ echo "[profile-care-backend-state-smoke] Runtime log: $RUNTIME_LOG"
 echo "[profile-care-backend-state-smoke] OS log: $OS_LOG"
 echo "[profile-care-backend-state-smoke] Result: $RESULT_COPY_PATH"
 echo "[profile-care-backend-state-smoke] Screenshot: $SCREENSHOT_PATH"
+echo "[profile-care-backend-state-smoke] Failure retry build log: $FAILURE_BUILD_LOG"
+echo "[profile-care-backend-state-smoke] Failure retry runtime log: $FAILURE_RUNTIME_LOG"
+echo "[profile-care-backend-state-smoke] Failure retry OS log: $FAILURE_OS_LOG"
+echo "[profile-care-backend-state-smoke] Failure retry result: $FAILURE_RESULT_COPY_PATH"
+echo "[profile-care-backend-state-smoke] Failure retry screenshot: $FAILURE_SCREENSHOT_PATH"

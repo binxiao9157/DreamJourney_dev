@@ -49,12 +49,17 @@ let statusDoc = read("docs/superpowers/status/2026-06-19-profile-care-backend-st
 
 for phrase in [
     "DJRunProfileCareBackendStateSmoke",
+    "DJRunProfileCareBackendFailureRetrySmoke",
     "runProfileCareBackendStateSmoke",
+    "runProfileCareBackendFailureRetrySmoke",
     "writeProfileCareBackendStateSmokeResult",
+    "writeProfileCareBackendFailureRetrySmokeResult",
     "profile-care-backend-state-smoke-result.json",
+    "profile-care-backend-failure-retry-smoke-result.json",
     "DJCareActiveUserId=",
     "DJCareEmptyUserId=",
     "DJCareStaleUserId=",
+    "DJCareFailureRetryUserId=",
 ] {
     assertContains(appDelegate, phrase, "AppDelegate should wire deployed backend care state smoke \(phrase)")
 }
@@ -70,6 +75,7 @@ for phrase in [
     "ProfileCareBackendStateSmokeCase",
     "runUIQAProfileCareBackendStateSmoke",
     "runUIQAProfileCareBackendRetrySmoke",
+    "runUIQAProfileCareBackendFailureRetrySmoke",
     "isCareSnapshotRetrying",
     "DreamJourneyBackendClient.shared.latestCareSnapshot",
     "careSnapshotFallback(for: error)",
@@ -83,6 +89,9 @@ for phrase in [
     "retryIntermediateSyncCaption",
     "retryInitialState",
     "retryFinalState",
+    "retryFailureInitialState",
+    "retryFailureFinalState",
+    "retryFailureFinalRetryVisible",
 ] {
     assertContains(profileView, phrase, "ProfileViewController should render deployed backend care state fixture \(phrase)")
 }
@@ -118,11 +127,15 @@ for phrase in [
     "profileCareStateAvailable",
     "profileCareStateEmpty",
     "profileCareStateStale",
+    "profileCareStateFailed",
     "retryActionFired",
     "retryIntermediateState",
     "retryIntermediateSyncCaption",
     "retryInitialState",
     "retryFinalState",
+    "DJRunProfileCareBackendFailureRetrySmoke",
+    "profile-care-backend-failure-retry-smoke-result.json",
+    "backend-invalid-token.xcconfig",
 ] {
     assertContains(smokeScript, phrase, "profile care backend state smoke script should include \(phrase)")
 }
@@ -159,7 +172,9 @@ for phrase in [
     "failed",
     "重新同步",
     "正在重新同步关怀信号",
+    "失败态重试失败",
     "profile-care-backend-state-smoke-result.json",
+    "profile-care-backend-failure-retry-smoke-result.json",
 ] {
     assertContains(statusDoc, phrase, "status doc should describe backend care state smoke \(phrase)")
 }

@@ -886,6 +886,53 @@ extension ProfileViewController {
             completion(result)
         }
     }
+
+    func runUIQAProfileCareBackendFailureRetrySmoke(
+        retryUserId: String,
+        completion: @escaping ([String: Any]) -> Void
+    ) {
+        personaContext = DigitalHumanContext.defaultContext(userId: retryUserId)
+        setUIQACareSnapshot(.failedFallback())
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            guard let self else { return }
+            let initialLoadCount = careSnapshotLoadCount
+            let initialState = careSnapshot?.dataState.accessibilityIdentifier ?? "missing"
+            let retryButtonVisible = careRetryButton?.window != nil && careRetryButton?.isHidden == false
+            let retryButtonEnabled = careRetryButton?.isEnabled == true
+
+            if retryButtonEnabled {
+                careRetryButton?.sendActions(for: .touchUpInside)
+            }
+            let intermediateState = careSnapshot?.dataState.accessibilityIdentifier ?? "missing"
+            let intermediateCaption = careSnapshot?.syncCaption ?? ""
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5.5) { [weak self] in
+                guard let self else { return }
+                let finalState = careSnapshot?.dataState.accessibilityIdentifier ?? "missing"
+                let finalRetryVisible = careRetryButton?.window != nil && careRetryButton?.isHidden == false
+                let result: [String: Any] = [
+                    "retryActionFired": retryButtonEnabled,
+                    "retryButtonVisible": retryButtonVisible,
+                    "retryButtonEnabled": retryButtonEnabled,
+                    "retryFailureInitialState": initialState,
+                    "retryIntermediateState": intermediateState,
+                    "retryIntermediateSyncCaption": intermediateCaption,
+                    "retryFailureFinalState": finalState,
+                    "retryFailureFinalMoodStatus": careSnapshot?.moodStatus ?? "",
+                    "retryFailureFinalSyncCaption": careSnapshot?.syncCaption ?? "",
+                    "retryFailureFinalRetryVisible": finalRetryVisible,
+                    "retryFailureFinalRetryEnabled": careRetryButton?.isEnabled == true,
+                    "retryRequestCountAdvanced": careSnapshotLoadCount > initialLoadCount,
+                    "retryInitialLoadCount": initialLoadCount,
+                    "retryFinalLoadCount": careSnapshotLoadCount,
+                    "retryRequestedUserId": careSnapshotLastUserId ?? "",
+                    "retryExpectedUserId": retryUserId,
+                ]
+                completion(result)
+            }
+        }
+    }
 }
 #endif
 
