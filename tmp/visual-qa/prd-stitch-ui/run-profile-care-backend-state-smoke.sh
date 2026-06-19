@@ -278,6 +278,10 @@ if retry.get("retryButtonVisible") is not True:
     raise SystemExit(f"retry button should be visible before retry: {result}")
 if retry.get("retryInitialState") != "profileCareStateStale":
     raise SystemExit(f"retry should start from stale state: {result}")
+if retry.get("retryIntermediateState") != "profileCareStateLoading":
+    raise SystemExit(f"retry should show loading state immediately after tap: {result}")
+if "正在重新同步关怀信号" not in str(retry.get("retryIntermediateSyncCaption") or ""):
+    raise SystemExit(f"retry should show an explicit resync caption: {result}")
 if retry.get("retryFinalState") != "profileCareStateAvailable":
     raise SystemExit(f"retry should refresh to available state: {result}")
 if retry.get("retryRequestCountAdvanced") is not True:

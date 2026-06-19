@@ -28,6 +28,7 @@ final class ProfileViewController: UIViewController {
     private var careSnapshot: ProfileCareSnapshot?
     private var careSnapshotLoadCount = 0
     private var careSnapshotLastUserId: String?
+    private var isCareSnapshotRetrying = false
     private var personaContext: DigitalHumanContext
     private let featureFlags: FeatureFlagService
 
@@ -188,22 +189,25 @@ final class ProfileViewController: UIViewController {
         let careUserId = trimmedOwnerId.isEmpty ? fallbackUserId : trimmedOwnerId
         guard shouldShowCareDashboard(context: personaContext),
               let userId = careUserId else {
+            isCareSnapshotRetrying = false
             return
         }
         careSnapshotLoadCount += 1
         careSnapshotLastUserId = userId
 
         guard DreamJourneyBackendClient.shared.isCareSnapshotConfigured else {
+            isCareSnapshotRetrying = false
             careSnapshot = .offlineFallback()
             rebuildContent()
             return
         }
 
-        careSnapshot = .loadingPlaceholder()
+        careSnapshot = isCareSnapshotRetrying ? .retryingPlaceholder() : .loadingPlaceholder()
         rebuildContent()
 
         DreamJourneyBackendClient.shared.latestCareSnapshot(userId: userId) { [weak self] result in
             guard let self else { return }
+            isCareSnapshotRetrying = false
             switch result {
             case .success(let json):
                 guard let snapshot = ProfileCareSnapshot(json: json) else {
@@ -449,6 +453,7 @@ final class ProfileViewController: UIViewController {
 
     @objc private func retryCareSnapshotTapped(_ sender: UIButton) {
         sender.isEnabled = false
+        isCareSnapshotRetrying = true
         loadCareSnapshot()
     }
 
@@ -856,6 +861,8 @@ extension ProfileViewController {
         if retryButtonEnabled {
             careRetryButton?.sendActions(for: .touchUpInside)
         }
+        let intermediateState = careSnapshot?.dataState.accessibilityIdentifier ?? "missing"
+        let intermediateCaption = careSnapshot?.syncCaption ?? ""
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 5.5) { [weak self] in
             guard let self else { return }
@@ -865,6 +872,8 @@ extension ProfileViewController {
                 "retryButtonVisible": retryButtonVisible,
                 "retryButtonEnabled": retryButtonEnabled,
                 "retryInitialState": initialState,
+                "retryIntermediateState": intermediateState,
+                "retryIntermediateSyncCaption": intermediateCaption,
                 "retryFinalState": finalState,
                 "retryFinalMoodStatus": careSnapshot?.moodStatus ?? "",
                 "retryFinalSyncCaption": careSnapshot?.syncCaption ?? "",

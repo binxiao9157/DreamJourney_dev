@@ -133,6 +133,19 @@ struct ProfileCareSnapshot {
         )
     }
 
+    static func retryingPlaceholder() -> ProfileCareSnapshot {
+        ProfileCareSnapshot(
+            moodTitle: "心境追踪",
+            moodStatus: "重新同步中",
+            emotionalIndex: 0.5,
+            cognitiveIndex: 0.5,
+            sleepStatus: "正在重新同步",
+            lonelinessIndex: 0.5,
+            riskReminder: "正在重新同步关怀信号，请稍候。",
+            dataState: .loading
+        )
+    }
+
     static func emptyFallback() -> ProfileCareSnapshot {
         ProfileCareSnapshot(
             moodTitle: "心境追踪",
@@ -181,7 +194,9 @@ struct ProfileCareSnapshot {
         switch dataState {
         case .available:
             return riskReminder
-        case .loading, .empty, .failed:
+        case .loading:
+            return riskReminder
+        case .empty, .failed:
             return dataState.message
         case .stale:
             return "关怀数据暂未同步，当前显示本地安全状态。"

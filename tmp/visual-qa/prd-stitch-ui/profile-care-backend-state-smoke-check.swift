@@ -24,6 +24,7 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
 }
 
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let careModels = read("DreamJourney/Sources/Modules/Profile/ProfileCareModels.swift")
 let profileView = read("DreamJourney/Sources/Modules/Profile/ProfileViewController.swift")
 let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let releaseRegression = read("tmp/visual-qa/prd-stitch-ui/run-release-regression.sh")
@@ -59,9 +60,17 @@ for phrase in [
 }
 
 for phrase in [
+    "static func retryingPlaceholder()",
+    "正在重新同步关怀信号",
+] {
+    assertContains(careModels, phrase, "ProfileCareModels should expose retrying placeholder \(phrase)")
+}
+
+for phrase in [
     "ProfileCareBackendStateSmokeCase",
     "runUIQAProfileCareBackendStateSmoke",
     "runUIQAProfileCareBackendRetrySmoke",
+    "isCareSnapshotRetrying",
     "DreamJourneyBackendClient.shared.latestCareSnapshot",
     "careSnapshotFallback(for: error)",
     "expectedState",
@@ -70,6 +79,8 @@ for phrase in [
     "profileCareRetryButton",
     "sendActions(for: .touchUpInside)",
     "retryActionFired",
+    "retryIntermediateState",
+    "retryIntermediateSyncCaption",
     "retryInitialState",
     "retryFinalState",
 ] {
@@ -108,6 +119,8 @@ for phrase in [
     "profileCareStateEmpty",
     "profileCareStateStale",
     "retryActionFired",
+    "retryIntermediateState",
+    "retryIntermediateSyncCaption",
     "retryInitialState",
     "retryFinalState",
 ] {
@@ -145,6 +158,7 @@ for phrase in [
     "active / empty / stale",
     "failed",
     "重新同步",
+    "正在重新同步关怀信号",
     "profile-care-backend-state-smoke-result.json",
 ] {
     assertContains(statusDoc, phrase, "status doc should describe backend care state smoke \(phrase)")

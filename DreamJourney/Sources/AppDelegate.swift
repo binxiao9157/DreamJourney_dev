@@ -418,6 +418,8 @@ private extension AppDelegate {
                     && (retry["retryButtonVisible"] as? Bool) == true
                     && (retry["retryRequestCountAdvanced"] as? Bool) == true
                     && (retry["retryInitialState"] as? String) == ProfileCareDataState.stale.accessibilityIdentifier
+                    && (retry["retryIntermediateState"] as? String) == ProfileCareDataState.loading.accessibilityIdentifier
+                    && ((retry["retryIntermediateSyncCaption"] as? String) ?? "").contains("正在重新同步关怀信号")
                     && (retry["retryFinalState"] as? String) == ProfileCareDataState.available.accessibilityIdentifier
                     && (retry["retryRequestedUserId"] as? String) == activeUserId
                 let completed = stateContractsCompleted && retryCompleted
