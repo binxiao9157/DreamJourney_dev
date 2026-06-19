@@ -208,8 +208,13 @@ final class MemoryArchiveViewController: UIViewController {
         super.viewDidLoad()
         title = nil
         view.backgroundColor = DJDesignTokens.Color.background
+        observeDigitalHumanContext()
         setupLayout()
         refreshContent()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -298,6 +303,22 @@ final class MemoryArchiveViewController: UIViewController {
         let bottomInset = Self.archiveListBottomInset(safeAreaBottomInset: view.safeAreaInsets.bottom)
         scrollView.contentInset.bottom = bottomInset
         scrollView.verticalScrollIndicatorInsets.bottom = bottomInset
+    }
+
+    private func observeDigitalHumanContext() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(digitalHumanContextDidChange),
+            name: .djDigitalHumanContextDidChange,
+            object: nil
+        )
+    }
+
+    @objc private func digitalHumanContextDidChange() {
+        activeKindFilter = nil
+        refreshContent()
+        retryPendingPublicArchiveSyncIfNeeded()
+        refreshRemoteArchiveIfNeeded()
     }
 
     private func refreshContent() {

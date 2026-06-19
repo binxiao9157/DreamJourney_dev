@@ -1390,6 +1390,11 @@ extension DialogEngineManager: SpeechEngineDelegate {
         if let msg = json["message"] as? String { return msg }
         if let msg = json["error"] as? String { return msg }
         if let msg = json["msg"] as? String { return msg }
+        if let error = json["err_msg"] as? [String: Any] {
+            if let msg = error["message"] as? String { return msg }
+            if let msg = error["error"] as? String { return msg }
+            if let msg = error["msg"] as? String { return msg }
+        }
         return "未知错误 (\(json))"
     }
 

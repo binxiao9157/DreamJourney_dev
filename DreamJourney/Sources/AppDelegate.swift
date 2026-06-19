@@ -127,6 +127,9 @@ private extension AppDelegate {
             FeatureFlagService.shared.set(.archiveRemoteFetch, enabled: true)
             print("[UI_QA] Archive remote fetch enabled")
         }
+        if arguments.contains(where: { $0.hasPrefix("DJRunProfileCare") }) {
+            seedUIQAStarCareFamilyMember()
+        }
         if arguments.contains("DJRunProfileCareBackendFailureRetrySmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
@@ -740,6 +743,18 @@ private extension AppDelegate {
             .flatMap { $0.isEmpty ? nil : $0 }
     }
 
+    func seedUIQAStarCareFamilyMember() {
+        FamilyRepository.shared.add(FamilyMember(
+            id: "uiqa_star_care_family",
+            name: "星辰关怀家人",
+            relation: "家人",
+            isOnline: true,
+            lastUpdated: "UI QA 已准备",
+            digitalHumanMode: .star,
+            backendContractMode: "uiqaStarCare"
+        ))
+    }
+
     func runProfileFamilyPersonaReleaseSmoke() {
         let releaseRowVisible = ProfileFamilyPersonaReleaseReadiness.isFamilyManagementRowVisible(
             isFamilyManagementEnabled: false,
@@ -750,6 +765,7 @@ private extension AppDelegate {
             isHiddenBranchesEnabled: false
         )
         let familyManagementOnlyCanOpenSwitcher = ProfileFamilyPersonaReleaseReadiness.canOpenFamilyPersonaSwitcher(
+            isFamilyManagementEnabled: true,
             isFamilySpaceEnabled: false,
             isHiddenBranchesEnabled: false
         )
@@ -786,7 +802,7 @@ private extension AppDelegate {
         let profileTabSelected = selectProfileTabForFamilyPersonaSmoke()
         let completed = releaseRowVisible == false
             && familyManagementOnlyRowVisible
-            && familyManagementOnlyCanOpenSwitcher == false
+            && familyManagementOnlyCanOpenSwitcher
             && familySpaceCanOpenSwitcher
             && hiddenBranchesCanOpenSwitcher
             && selfContext.isSelfAssistant

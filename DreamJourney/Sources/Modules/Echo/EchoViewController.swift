@@ -5,6 +5,47 @@ final class EchoViewController: UIViewController {
 
     private let scenicView = EchoScenicParkView()
 
+    private let personaBadgeView: UIView = {
+        let view = UIView()
+        view.backgroundColor = UIColor(hex: "#FEFEF9").withAlphaComponent(0.9)
+        view.layer.cornerRadius = 22
+        view.layer.borderWidth = 1
+        view.layer.borderColor = DJDesignTokens.Color.divider.withAlphaComponent(0.18).cgColor
+        DJDesignTokens.applySoftShadow(to: view)
+        return view
+    }()
+
+    private let personaAvatarView: UIView = {
+        let view = UIView()
+        view.backgroundColor = DJDesignTokens.Color.accent.withAlphaComponent(0.14)
+        view.layer.cornerRadius = 20
+        view.layer.masksToBounds = true
+        return view
+    }()
+
+    private let personaIconView: UIImageView = {
+        let imageView = UIImageView()
+        imageView.tintColor = DJDesignTokens.Color.accentDeep
+        imageView.contentMode = .scaleAspectFit
+        return imageView
+    }()
+
+    private let personaNameLabel: UILabel = {
+        let label = UILabel()
+        label.font = DJDesignTokens.Font.title(15)
+        label.textColor = DJDesignTokens.Color.textPrimary
+        label.numberOfLines = 1
+        return label
+    }()
+
+    private let personaSubtitleLabel: UILabel = {
+        let label = UILabel()
+        label.font = DJDesignTokens.Font.label(11)
+        label.textColor = DJDesignTokens.Color.textTertiary
+        label.numberOfLines = 1
+        return label
+    }()
+
     private let quoteBubble: UIView = {
         let view = UIView()
         view.backgroundColor = UIColor(hex: "#FEFEF9").withAlphaComponent(0.92)
@@ -123,13 +164,19 @@ final class EchoViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = DJDesignTokens.Color.background
         navigationController?.setNavigationBarHidden(true, animated: false)
+        observeDigitalHumanContext()
         setupLayout()
         bindViewModel()
+        updatePersonaBadge()
         seedTranscriptPreview()
         if !viewModel.restoreStoredDelayedReplyIfAvailable() {
             render(state: .idle)
         }
         renderArchiveContextStatus(viewModel.archiveContextStatus)
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -140,6 +187,8 @@ final class EchoViewController: UIViewController {
             DialogEngineManager.shared.setup()
         }
         viewModel.refreshArchiveContextStatus()
+        updatePersonaBadge()
+        refreshTranscriptPreviewForCurrentContextIfIdle()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -171,18 +220,31 @@ final class EchoViewController: UIViewController {
 
     private func setupLayout() {
         view.addSubview(scenicView)
+        view.addSubview(personaBadgeView)
         view.addSubview(archiveContextStatusView)
         view.addSubview(quoteBubble)
         view.addSubview(voiceStatusView)
         view.addSubview(micRingView)
         view.addSubview(micButton)
 
+        let personaTextStack = UIStackView(arrangedSubviews: [personaNameLabel, personaSubtitleLabel])
+        personaTextStack.axis = .vertical
+        personaTextStack.alignment = .leading
+        personaTextStack.spacing = 2
+
+        personaBadgeView.addSubview(personaAvatarView)
+        personaBadgeView.addSubview(personaTextStack)
+        personaAvatarView.addSubview(personaIconView)
         archiveContextStatusView.addSubview(archiveContextStatusLabel)
         quoteBubble.addSubview(quoteLabel)
         voiceStatusView.addSubview(voiceStatusLabel)
 
         [
             scenicView,
+            personaBadgeView,
+            personaAvatarView,
+            personaIconView,
+            personaTextStack,
             archiveContextStatusView,
             archiveContextStatusLabel,
             quoteBubble,
@@ -206,6 +268,26 @@ final class EchoViewController: UIViewController {
             scenicView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scenicView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scenicView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            personaBadgeView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 18),
+            personaBadgeView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
+            personaBadgeView.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
+            personaBadgeView.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.78),
+
+            personaAvatarView.topAnchor.constraint(equalTo: personaBadgeView.topAnchor, constant: 8),
+            personaAvatarView.leadingAnchor.constraint(equalTo: personaBadgeView.leadingAnchor, constant: 8),
+            personaAvatarView.bottomAnchor.constraint(equalTo: personaBadgeView.bottomAnchor, constant: -8),
+            personaAvatarView.widthAnchor.constraint(equalToConstant: 40),
+            personaAvatarView.heightAnchor.constraint(equalToConstant: 40),
+
+            personaIconView.centerXAnchor.constraint(equalTo: personaAvatarView.centerXAnchor),
+            personaIconView.centerYAnchor.constraint(equalTo: personaAvatarView.centerYAnchor),
+            personaIconView.widthAnchor.constraint(equalToConstant: 22),
+            personaIconView.heightAnchor.constraint(equalToConstant: 22),
+
+            personaTextStack.leadingAnchor.constraint(equalTo: personaAvatarView.trailingAnchor, constant: 10),
+            personaTextStack.centerYAnchor.constraint(equalTo: personaAvatarView.centerYAnchor),
+            personaTextStack.trailingAnchor.constraint(equalTo: personaBadgeView.trailingAnchor, constant: -14),
 
             quoteBubble.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
             quoteBubble.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
@@ -269,11 +351,63 @@ final class EchoViewController: UIViewController {
         }
     }
 
+    private func observeDigitalHumanContext() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(digitalHumanContextDidChange),
+            name: .djDigitalHumanContextDidChange,
+            object: nil
+        )
+    }
+
+    @objc private func digitalHumanContextDidChange() {
+        viewModel.refreshArchiveContextStatus()
+        updatePersonaBadge()
+        refreshTranscriptPreviewForCurrentContextIfIdle()
+    }
+
+    private func updatePersonaBadge() {
+        let context = DigitalHumanContextStore.shared.current
+        let iconName = context.isSelfAssistant ? "sparkles" : "person.crop.circle.fill"
+        let iconConfig = UIImage.SymbolConfiguration(pointSize: 22, weight: .semibold)
+        personaIconView.image = UIImage(systemName: iconName, withConfiguration: iconConfig)
+        personaAvatarView.backgroundColor = context.isSelfAssistant
+            ? DJDesignTokens.Color.accent.withAlphaComponent(0.14)
+            : DJDesignTokens.Color.accentDeep.withAlphaComponent(0.12)
+        personaNameLabel.text = context.isSelfAssistant ? "自己 · AI 助手" : context.resolvedDisplayName
+        personaSubtitleLabel.text = makePersonaBadgeSubtitle(context: context)
+        personaBadgeView.accessibilityLabel = "\(personaNameLabel.text ?? "")，\(personaSubtitleLabel.text ?? "")"
+    }
+
+    private func makePersonaBadgeSubtitle(context: DigitalHumanContext) -> String {
+        if context.isSelfAssistant {
+            return "沉淀自己的个人数据库"
+        }
+        if let relation = context.relation?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !relation.isEmpty {
+            return "\(relation)的数字人回响"
+        }
+        return "家人数字人回响"
+    }
+
     private func seedTranscriptPreview() {
         transcriptEntries = [
-            (text: "\"我一直都在，风吹过树叶的声音就是我的回答。\"", isUser: false)
+            (text: makeContextualOpeningLine(), isUser: false)
         ]
         reloadTranscriptPreview()
+    }
+
+    private func refreshTranscriptPreviewForCurrentContextIfIdle() {
+        guard case .idle = currentState else { return }
+        seedTranscriptPreview()
+    }
+
+    private func makeContextualOpeningLine() -> String {
+        let context = DigitalHumanContextStore.shared.current
+        if context.isSelfAssistant {
+            return "\"我是你的 AI 助手，会陪你把自己的故事慢慢讲出来。\""
+        }
+        return "\"\(context.resolvedDisplayName)的回响已连接，想听你继续说说我们的故事。\""
     }
 
     private func appendTranscript(text: String, isUser: Bool) {
