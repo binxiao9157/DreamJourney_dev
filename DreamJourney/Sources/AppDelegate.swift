@@ -168,6 +168,12 @@ private extension AppDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 self?.runArchiveAudioLifecycleSmoke()
             }
+        } else if arguments.contains("DJRunArchiveHiddenShellSmoke") {
+            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+            FeatureFlagService.shared.resetToDefaults()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.runArchiveHiddenShellSmoke()
+            }
         } else if arguments.contains("DJRunArchiveFailedAnalysisRetrySmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
@@ -1006,6 +1012,143 @@ private extension AppDelegate {
         }
     }
 
+    func runArchiveHiddenShellSmoke(retryCount: Int = 0) {
+        guard let tabBarController = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController as? WarmTabBarController else {
+            guard retryCount < 20 else {
+                writeArchiveHiddenShellSmokeResult(
+                    completed: false,
+                    releaseOptionsHidden: false,
+                    hiddenOptionsVisible: false,
+                    audioRestored: false,
+                    videoRestored: false,
+                    timeLetterDraftRestored: false,
+                    timeLetterSealedRestored: false,
+                    audioTranscriptPersisted: false,
+                    audioUploadStatusPersisted: false,
+                    videoThumbnailPersisted: false,
+                    videoUploadStatusPersisted: false,
+                    videoAnalysisPending: false,
+                    failureReason: "missingRootTab"
+                )
+                print("[UI_QA] ArchiveHiddenShellSmoke failed reason=missingRootTab")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                self?.runArchiveHiddenShellSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+
+        do {
+            UserDefaults.standard.removeObject(forKey: "dj.memoryArchive.items.user_9999")
+            let releaseOptionTitles = archiveCreationOptionTitles(isHiddenBranchesEnabled: false)
+            let hiddenOptionTitles = archiveCreationOptionTitles(isHiddenBranchesEnabled: true)
+            let releaseOptionsHidden = !releaseOptionTitles.contains("录入语音")
+                && !releaseOptionTitles.contains("录入视频片段")
+                && !releaseOptionTitles.contains("录入时间信件")
+            let hiddenOptionsVisible = hiddenOptionTitles.contains("录入语音")
+                && hiddenOptionTitles.contains("录入视频片段")
+                && hiddenOptionTitles.contains("录入时间信件")
+
+            let audioURL = try makeUIQAArchiveAudioFile()
+            let audioItem = MemoryArchiveItemFactory.makeAudioItem(
+                localPath: audioURL.path,
+                duration: 1.2,
+                note: "UIQA 隐藏分支录入的一段语音档案",
+                transcriptText: "这是一段用于验证转写字段的 mock 文本"
+            )
+            let videoURL = try makeUIQAArchiveMockVideoFile()
+            let thumbnailURL = try makeUIQAArchiveMockThumbnailFile()
+            let videoSize = (try FileManager.default.attributesOfItem(atPath: videoURL.path)[.size] as? NSNumber)?
+                .int64Value ?? 0
+            let videoItem = MemoryArchiveItemFactory.makeVideoItem(
+                localPath: videoURL.path,
+                thumbnailPath: thumbnailURL.path,
+                fileSizeBytes: videoSize,
+                note: "UIQA 隐藏分支生成的 mock 视频档案"
+            )
+            let draftLetter = MemoryArchiveItemFactory.makeTimeLetterDraft(note: "写给未来的一封草稿")
+            let sealedLetter = MemoryArchiveItemFactory.makeTimeLetter(note: "写给未来的一封封存信")
+
+            for item in [audioItem, videoItem, draftLetter, sealedLetter] {
+                MemoryArchiveRepository.shared.add(item, syncToBackend: false)
+            }
+
+            let restoredItems = MemoryArchiveRepository.shared.allItems()
+            let restoredAudio = restoredItems.first { $0.id == audioItem.id }
+            let restoredVideo = restoredItems.first { $0.id == videoItem.id }
+            let restoredDraft = restoredItems.first { $0.id == draftLetter.id }
+            let restoredSealed = restoredItems.first { $0.id == sealedLetter.id }
+            let audioTranscriptPersisted = restoredAudio?.metadata[MemoryArchiveItem.mediaTranscriptTextMetadataKey] == "这是一段用于验证转写字段的 mock 文本"
+            let audioUploadStatusPersisted = restoredAudio?.metadata[MemoryArchiveItem.mediaUploadStatusMetadataKey] == ArchiveMediaUploadStatus.localOnly.rawValue
+            let videoThumbnailPersisted = restoredVideo?.metadata[MemoryArchiveItem.mediaThumbnailPathMetadataKey] == thumbnailURL.path
+            let videoUploadStatusPersisted = restoredVideo?.metadata[MemoryArchiveItem.mediaUploadStatusMetadataKey] == ArchiveMediaUploadStatus.localOnly.rawValue
+            let videoAnalysisPending = restoredVideo?.analysisStatus == .pending
+            let timeLetterDraftRestored = restoredDraft?.metadata["deliveryState"] == "draft"
+                && restoredDraft?.metadata["timeLetterStatus"] == "draft"
+            let timeLetterSealedRestored = restoredSealed?.metadata["deliveryState"] == "sealed"
+                && restoredSealed?.metadata["deliveryPolicy"] == "pending_product_decision"
+
+            let completed = releaseOptionsHidden
+                && hiddenOptionsVisible
+                && restoredAudio != nil
+                && restoredVideo != nil
+                && timeLetterDraftRestored
+                && timeLetterSealedRestored
+                && audioTranscriptPersisted
+                && audioUploadStatusPersisted
+                && videoThumbnailPersisted
+                && videoUploadStatusPersisted
+                && videoAnalysisPending
+
+            tabBarController.selectedIndex = 0
+            writeArchiveHiddenShellSmokeResult(
+                completed: completed,
+                releaseOptionsHidden: releaseOptionsHidden,
+                hiddenOptionsVisible: hiddenOptionsVisible,
+                audioRestored: restoredAudio != nil,
+                videoRestored: restoredVideo != nil,
+                timeLetterDraftRestored: timeLetterDraftRestored,
+                timeLetterSealedRestored: timeLetterSealedRestored,
+                audioTranscriptPersisted: audioTranscriptPersisted,
+                audioUploadStatusPersisted: audioUploadStatusPersisted,
+                videoThumbnailPersisted: videoThumbnailPersisted,
+                videoUploadStatusPersisted: videoUploadStatusPersisted,
+                videoAnalysisPending: videoAnalysisPending,
+                failureReason: nil
+            )
+            print(
+                "[UI_QA] ArchiveHiddenShellSmoke completed " +
+                "hiddenOptionsVisible=\(hiddenOptionsVisible) " +
+                "audioRestored=\(restoredAudio != nil) " +
+                "videoRestored=\(restoredVideo != nil) " +
+                "timeLetterDraftRestored=\(timeLetterDraftRestored) " +
+                "timeLetterSealedRestored=\(timeLetterSealedRestored)"
+            )
+        } catch {
+            writeArchiveHiddenShellSmokeResult(
+                completed: false,
+                releaseOptionsHidden: false,
+                hiddenOptionsVisible: false,
+                audioRestored: false,
+                videoRestored: false,
+                timeLetterDraftRestored: false,
+                timeLetterSealedRestored: false,
+                audioTranscriptPersisted: false,
+                audioUploadStatusPersisted: false,
+                videoThumbnailPersisted: false,
+                videoUploadStatusPersisted: false,
+                videoAnalysisPending: false,
+                failureReason: error.localizedDescription
+            )
+            print("[UI_QA] ArchiveHiddenShellSmoke failed reason=\(error.localizedDescription)")
+        }
+    }
+
     func makeUIQAArchiveAudioFile() throws -> URL {
         let documentsURL = try FileManager.default.url(
             for: .documentDirectory,
@@ -1040,6 +1183,51 @@ private extension AppDelegate {
             }
         }
         try file.write(from: buffer)
+        return fileURL
+    }
+
+    func makeUIQAArchiveMockVideoFile() throws -> URL {
+        let documentsURL = try FileManager.default.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let directoryURL = documentsURL.appendingPathComponent("archive-video", isDirectory: true)
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        let fileURL = directoryURL.appendingPathComponent("uiqa-hidden-shell-video.mov")
+        try? FileManager.default.removeItem(at: fileURL)
+        let data = Data("DreamJourney hidden shell mock video placeholder".utf8)
+        try data.write(to: fileURL, options: [.atomic])
+        return fileURL
+    }
+
+    func makeUIQAArchiveMockThumbnailFile() throws -> URL {
+        let documentsURL = try FileManager.default.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let directoryURL = documentsURL.appendingPathComponent("archive-video-thumbnails", isDirectory: true)
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        let fileURL = directoryURL.appendingPathComponent("uiqa-hidden-shell-video.jpg")
+        try? FileManager.default.removeItem(at: fileURL)
+
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 160, height: 96)).image { context in
+            DJDesignTokens.Color.surfaceContainer.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 160, height: 96))
+            DJDesignTokens.Color.accentDeep.setFill()
+            context.fill(CGRect(x: 56, y: 28, width: 48, height: 40))
+        }
+        guard let data = image.jpegData(compressionQuality: 0.72) else {
+            throw NSError(
+                domain: "DreamJourney.UIQA.ArchiveHiddenShell",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Unable to encode mock video thumbnail"]
+            )
+        }
+        try data.write(to: fileURL, options: [.atomic])
         return fileURL
     }
 
@@ -1689,6 +1877,54 @@ private extension AppDelegate {
             try data.write(to: resultURL, options: [.atomic])
         } catch {
             print("[UI_QA] ArchiveAudioLifecycleSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    func writeArchiveHiddenShellSmokeResult(
+        completed: Bool,
+        releaseOptionsHidden: Bool,
+        hiddenOptionsVisible: Bool,
+        audioRestored: Bool,
+        videoRestored: Bool,
+        timeLetterDraftRestored: Bool,
+        timeLetterSealedRestored: Bool,
+        audioTranscriptPersisted: Bool,
+        audioUploadStatusPersisted: Bool,
+        videoThumbnailPersisted: Bool,
+        videoUploadStatusPersisted: Bool,
+        videoAnalysisPending: Bool,
+        failureReason: String?
+    ) {
+        var result: [String: Any] = [
+            "completed": completed,
+            "releaseOptionsHidden": releaseOptionsHidden,
+            "hiddenOptionsVisible": hiddenOptionsVisible,
+            "audioRestored": audioRestored,
+            "videoRestored": videoRestored,
+            "timeLetterDraftRestored": timeLetterDraftRestored,
+            "timeLetterSealedRestored": timeLetterSealedRestored,
+            "audioTranscriptPersisted": audioTranscriptPersisted,
+            "audioUploadStatusPersisted": audioUploadStatusPersisted,
+            "videoThumbnailPersisted": videoThumbnailPersisted,
+            "videoUploadStatusPersisted": videoUploadStatusPersisted,
+            "videoAnalysisPending": videoAnalysisPending,
+            "hiddenBranchesArgument": MemoryArchiveMediaReleaseReadiness.hiddenBranchesLaunchArgument
+        ]
+        if let failureReason {
+            result["failureReason"] = failureReason
+        }
+
+        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
+              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("[UI_QA] ArchiveHiddenShellSmoke failed reason=resultEncoding")
+            return
+        }
+
+        let resultURL = documentsURL.appendingPathComponent("archive-hidden-shell-smoke-result.json")
+        do {
+            try data.write(to: resultURL, options: [.atomic])
+        } catch {
+            print("[UI_QA] ArchiveHiddenShellSmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
     }
 

@@ -19,6 +19,19 @@ enum MemoryArchiveItemFactory {
         )
     }
 
+    static func makeTimeLetterDraft(note: String) -> MemoryArchiveItem {
+        MemoryArchiveItem(
+            kind: .timeLetter,
+            title: "时间信件草稿",
+            note: note,
+            ownerUserId: currentUploaderUserId,
+            analysisStatus: .manual,
+            analysisSummary: "这封信暂存为草稿，不会触发真实通知或投递。",
+            tags: ["时间信件", "草稿"],
+            metadata: timeLetterMetadata(note: note, deliveryState: "draft", timeLetterStatus: "draft")
+        )
+    }
+
     static func makeTimeLetter(note: String) -> MemoryArchiveItem {
         MemoryArchiveItem(
             kind: .timeLetter,
@@ -28,9 +41,7 @@ enum MemoryArchiveItemFactory {
             analysisStatus: .manual,
             analysisSummary: "这封信会作为未来回看与生成回响时的情感线索。",
             tags: ["时间信件"],
-            metadata: textMetadata(contentKind: "time_letter", note: note).merging([
-                "deliveryState": "sealed",
-            ]) { current, _ in current }
+            metadata: timeLetterMetadata(note: note, deliveryState: "sealed", timeLetterStatus: "sealed")
         )
     }
 
@@ -76,8 +87,13 @@ enum MemoryArchiveItemFactory {
             "storage": "local_file",
             MemoryArchiveItem.mediaUploadStatusMetadataKey: uploadStatus,
             MemoryArchiveItem.mediaTranscriptionStatusMetadataKey: transcriptionStatus,
+            MemoryArchiveItem.mediaFileSizeLimitMBMetadataKey: "\(MemoryArchiveMediaReleaseReadiness.audioFileSizeLimitMB)",
+            "backendStorageContract": MemoryArchiveMediaReleaseReadiness.backendMediaStorageContract,
             "transcriptLanguage": "zh-CN",
         ]
+        if let fileSizeBytes = localFileSizeBytes(at: localPath) {
+            metadata[MemoryArchiveItem.mediaFileSizeBytesMetadataKey] = "\(fileSizeBytes)"
+        }
         if !trimmedTranscript.isEmpty {
             metadata[MemoryArchiveItem.mediaTranscriptTextMetadataKey] = trimmedTranscript
         }
@@ -149,9 +165,30 @@ enum MemoryArchiveItemFactory {
         ]
     }
 
+    private static func timeLetterMetadata(
+        note: String,
+        deliveryState: String,
+        timeLetterStatus: String
+    ) -> [String: String] {
+        textMetadata(contentKind: "time_letter", note: note).merging([
+            "deliveryState": deliveryState,
+            "timeLetterStatus": timeLetterStatus,
+            "deliveryPolicy": "pending_product_decision",
+            "deliveryDecisionRequired": "true",
+        ]) { current, _ in current }
+    }
+
     private static func fileExtension(from localPath: String) -> String {
         let fileExtension = URL(fileURLWithPath: localPath).pathExtension.lowercased()
         return fileExtension.isEmpty ? "unknown" : fileExtension
+    }
+
+    private static func localFileSizeBytes(at localPath: String) -> Int64? {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: localPath),
+              let size = attributes[.size] as? NSNumber else {
+            return nil
+        }
+        return size.int64Value
     }
 
     private static func formatDuration(_ duration: TimeInterval) -> String {

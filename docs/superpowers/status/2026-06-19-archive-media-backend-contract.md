@@ -47,12 +47,15 @@ iOS 侧新增视频 item factory 合同：
 - `analysisStatus`
 - `backendStorageContract = metadata_only_object_storage`
 
-视频入口仍是 hidden candidate。`MemoryArchiveVideoEntryViewController` 只展示：
+视频入口仍是 hidden candidate。`MemoryArchiveVideoEntryViewController` 支持隐藏 QA 生成 mock 视频档案，用于验证：
 
 - 分析状态 UI。
 - 文件大小限制配置。
-- 缩略图字段预留。
+- 缩略图字段。
+- 本地 mock 文件恢复。
 - 后端 metadata-only 存储合同。
+
+它仍不会打开系统视频选择、不会做真实压缩、不会真实上传视频。
 
 它不会打开相册、不会生成真实视频档案、不会上传文件。
 

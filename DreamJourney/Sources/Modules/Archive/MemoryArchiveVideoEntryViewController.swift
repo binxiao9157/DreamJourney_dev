@@ -1,6 +1,8 @@
 import UIKit
 
 final class MemoryArchiveVideoEntryViewController: UIViewController {
+    var onCreateMockVideoArchive: (() -> Void)?
+
     init() {
         super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .pageSheet
@@ -71,13 +73,22 @@ final class MemoryArchiveVideoEntryViewController: UIViewController {
         statusLabel.textAlignment = .center
 
         let detailLabel = UILabel()
-        detailLabel.text = "当前不会打开相册、不会上传视频，也不会生成真实档案记录。单个视频上限 \(MemoryArchiveMediaReleaseReadiness.videoFileSizeLimitMB)MB，缩略图字段和上传状态仅作为合同预留。"
+        detailLabel.text = "当前不会打开系统视频选择、不会上传视频；隐藏 QA 可生成 mock 视频档案，用来验证缩略图、上传状态和分析状态合同。单个视频上限 \(MemoryArchiveMediaReleaseReadiness.videoFileSizeLimitMB)MB。"
         detailLabel.font = DJDesignTokens.Font.body(14)
         detailLabel.textColor = DJDesignTokens.Color.textSecondary
         detailLabel.textAlignment = .center
         detailLabel.numberOfLines = 0
 
-        let cardStack = UIStackView(arrangedSubviews: [iconContainer, statusLabel, detailLabel])
+        let generateButton = UIButton(type: .system)
+        generateButton.setTitle("生成测试视频档案", for: .normal)
+        generateButton.titleLabel?.font = DJDesignTokens.Font.label(15)
+        generateButton.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
+        generateButton.backgroundColor = DJDesignTokens.Color.surfaceContainer
+        generateButton.layer.cornerRadius = 24
+        generateButton.accessibilityIdentifier = "archive-video-entry-generate-mock"
+        generateButton.addTarget(self, action: #selector(generateMockVideoArchiveTapped), for: .touchUpInside)
+
+        let cardStack = UIStackView(arrangedSubviews: [iconContainer, statusLabel, detailLabel, generateButton])
         cardStack.axis = .vertical
         cardStack.alignment = .center
         cardStack.spacing = 14
@@ -119,6 +130,7 @@ final class MemoryArchiveVideoEntryViewController: UIViewController {
             iconView,
             statusLabel,
             detailLabel,
+            generateButton,
             helperLabel,
         ].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
 
@@ -140,6 +152,10 @@ final class MemoryArchiveVideoEntryViewController: UIViewController {
             iconView.centerYAnchor.constraint(equalTo: iconContainer.centerYAnchor),
             iconView.widthAnchor.constraint(equalToConstant: 28),
             iconView.heightAnchor.constraint(equalToConstant: 28),
+
+            generateButton.heightAnchor.constraint(equalToConstant: 48),
+            generateButton.leadingAnchor.constraint(greaterThanOrEqualTo: cardStack.leadingAnchor),
+            generateButton.trailingAnchor.constraint(lessThanOrEqualTo: cardStack.trailingAnchor),
         ])
 
         view.accessibilityIdentifier = "archive-video-entry-shell"
@@ -149,5 +165,12 @@ final class MemoryArchiveVideoEntryViewController: UIViewController {
 
     @objc private func closeTapped() {
         dismiss(animated: true)
+    }
+
+    @objc private func generateMockVideoArchiveTapped() {
+        let handler = onCreateMockVideoArchive
+        dismiss(animated: true) {
+            handler?()
+        }
     }
 }

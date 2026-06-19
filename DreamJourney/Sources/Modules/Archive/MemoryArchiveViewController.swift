@@ -1725,6 +1725,15 @@ final class MemoryArchiveViewController: UIViewController {
             self.refreshContent()
             self.showToast("已封存", type: .success)
         }
+        if isTimeLetter {
+            entryViewController.onSaveDraft = { [weak self] rawText in
+                guard let self else { return }
+                let item = MemoryArchiveItemFactory.makeTimeLetterDraft(note: rawText)
+                self.repository.add(item)
+                self.refreshContent()
+                self.showToast("草稿已保存", type: .success)
+            }
+        }
         present(entryViewController, animated: true)
     }
 
@@ -1746,7 +1755,59 @@ final class MemoryArchiveViewController: UIViewController {
 
     private func presentVideoEntry() {
         let entryViewController = MemoryArchiveVideoEntryViewController()
+        entryViewController.onCreateMockVideoArchive = { [weak self] in
+            guard let self else { return }
+            do {
+                let item = try self.makeHiddenQAMockVideoArchiveItem()
+                self.repository.add(item)
+                self.refreshContent()
+                self.showToast("测试视频档案已生成", type: .success)
+            } catch {
+                self.showToast("测试视频档案生成失败", type: .error)
+            }
+        }
         present(entryViewController, animated: true)
+    }
+
+    private func makeHiddenQAMockVideoArchiveItem() throws -> MemoryArchiveItem {
+        let documentsURL = try FileManager.default.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let videoDirectoryURL = documentsURL.appendingPathComponent("archive-video", isDirectory: true)
+        let thumbnailDirectoryURL = documentsURL.appendingPathComponent("archive-video-thumbnails", isDirectory: true)
+        try FileManager.default.createDirectory(at: videoDirectoryURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: thumbnailDirectoryURL, withIntermediateDirectories: true)
+
+        let identifier = UUID().uuidString
+        let videoURL = videoDirectoryURL.appendingPathComponent("hidden-qa-\(identifier).mov")
+        let thumbnailURL = thumbnailDirectoryURL.appendingPathComponent("hidden-qa-\(identifier).jpg")
+        let mockVideoData = Data("DreamJourney hidden QA mock video placeholder".utf8)
+        try mockVideoData.write(to: videoURL, options: [.atomic])
+
+        let thumbnailImage = UIGraphicsImageRenderer(size: CGSize(width: 160, height: 96)).image { context in
+            DJDesignTokens.Color.surfaceContainer.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 160, height: 96))
+            DJDesignTokens.Color.accentDeep.setFill()
+            context.fill(CGRect(x: 56, y: 28, width: 48, height: 40))
+        }
+        guard let thumbnailData = thumbnailImage.jpegData(compressionQuality: 0.72) else {
+            throw NSError(
+                domain: "DreamJourney.Archive.VideoShell",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Unable to encode mock thumbnail"]
+            )
+        }
+        try thumbnailData.write(to: thumbnailURL, options: [.atomic])
+
+        return MemoryArchiveItemFactory.makeVideoItem(
+            localPath: videoURL.path,
+            thumbnailPath: thumbnailURL.path,
+            fileSizeBytes: Int64(mockVideoData.count),
+            note: "隐藏 QA 生成的 mock 视频档案。"
+        )
     }
 
     private func presentPhotoEntry() {

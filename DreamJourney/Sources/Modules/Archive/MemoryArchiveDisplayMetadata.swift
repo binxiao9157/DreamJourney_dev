@@ -212,7 +212,17 @@ extension MemoryArchiveItem {
             }
         case .timeLetter:
             rows.append(("字数", metadataCharacterCountDisplayName ?? "\(note.count) 字"))
-            rows.append(("信件状态", metadata["deliveryState"] == "sealed" ? "已封存" : "已保存"))
+            switch metadata["deliveryState"] {
+            case "draft":
+                rows.append(("信件状态", "草稿"))
+            case "sealed":
+                rows.append(("信件状态", "已封存"))
+            default:
+                rows.append(("信件状态", "已保存"))
+            }
+            if metadata["deliveryPolicy"] == "pending_product_decision" {
+                rows.append(("投递策略", "产品决策后开放"))
+            }
         case .video:
             rows.append(("文件状态", localPath == nil ? "未保存本地文件" : "本地已保存"))
             rows.append(("上传状态", metadataUploadStatusDisplayName ?? "本地待上传"))

@@ -54,6 +54,7 @@ assertContains(readiness, "local_file", "audio/photo readiness must document loc
 assertContains(readiness, "local_user_defaults", "text/time-letter readiness must document local user defaults persistence")
 assertContains(readiness, "等待视频选择、压缩、缩略图、存储和后端媒体策略确认后再公开。", "video must keep explicit hidden-candidate release boundary")
 assertContains(readiness, "视频片段暂为隐藏候选入口", "video must keep non-public release copy")
+assertContains(readiness, "local_mock_file", "video hidden QA shell should document mock-file persistence")
 
 assertContains(archive, "MemoryArchiveMediaReleaseReadiness.isCreationVisible", "archive screen must use readiness contract for hidden creation visibility")
 assertContains(archive, "MemoryArchiveMediaReleaseReadiness.hiddenBranchesLaunchArgument", "archive screen must use the shared hidden launch argument")
@@ -65,10 +66,10 @@ assertContains(audio, "MicrophonePermissionManager.shared.requestPermission", "a
 assertContains(audio, "archive-audio", "audio recording must stay in the local archive audio directory")
 assertContains(video, "final class MemoryArchiveVideoEntryViewController", "video hidden shell should exist")
 assertContains(video, "视频素材暂为隐藏候选入口", "video shell must declare hidden candidate boundary")
-assertContains(video, "当前不会打开相册、不会上传视频，也不会生成真实档案记录。", "video shell must not imply a real upload flow")
+assertContains(video, "不会打开系统视频选择、不会上传视频", "video shell must not imply a real picker/upload flow")
+assertContains(video, "生成测试视频档案", "video shell should expose hidden QA mock creation")
 assertContains(video, "archive-video-entry-shell", "video shell should have stable QA identifier")
 assertNotContains(video, "UIImagePickerController", "video shell must not open media picker yet")
-assertNotContains(video, "MemoryArchiveItemFactory", "video shell must not create archive items yet")
 assertContains(factory, "\"storage\": \"local_file\"", "media files must declare local file persistence")
 assertContains(factory, "\"storage\": \"local_user_defaults\"", "manual text/time-letter records must declare local user defaults persistence")
 

@@ -2,15 +2,27 @@ import UIKit
 
 final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDelegate {
     var onSave: ((String) -> Void)?
+    var onSaveDraft: ((String) -> Void)?
 
     private let kind: MemoryArchiveItemKind
     private let textView = UITextView()
     private let placeholderLabel = UILabel()
     private lazy var saveButton = DJComponentFactory.primaryButton(
-        title: "保存到档案馆",
+        title: isTimeLetter ? "封存时间信件" : "保存到档案馆",
         target: self,
         action: #selector(saveTapped)
     )
+    private lazy var draftButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setTitle("保存草稿", for: .normal)
+        button.titleLabel?.font = DJDesignTokens.Font.label(15)
+        button.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
+        button.backgroundColor = DJDesignTokens.Color.surfaceContainer
+        button.layer.cornerRadius = 24
+        button.accessibilityIdentifier = "time-letter-draft-button"
+        button.addTarget(self, action: #selector(saveDraftTapped), for: .touchUpInside)
+        return button
+    }()
 
     private var isTimeLetter: Bool {
         kind == .timeLetter
@@ -51,7 +63,7 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
 
         let subtitleLabel = UILabel()
         subtitleLabel.text = isTimeLetter
-            ? "写给未来某一天的自己或家人，这会成为之后回响里的情感线索。"
+            ? "写给未来某一天的自己或家人。当前只支持草稿与封存，不会触发真实通知或投递。"
             : "写下一段想封存的片段，人物、地点、称呼和生活细节都可以。"
         subtitleLabel.font = DJDesignTokens.Font.body(15)
         subtitleLabel.textColor = DJDesignTokens.Color.textSecondary
@@ -92,12 +104,20 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
         saveButton.layer.cornerRadius = 28
 
         let helperLabel = UILabel()
-        helperLabel.text = "仅保存你主动录入的内容，不会展示聊天原文。"
+        helperLabel.text = isTimeLetter
+            ? "仅保存你主动录入的内容；投递时间、收件人和提醒策略等待产品决策后开放。"
+            : "仅保存你主动录入的内容，不会展示聊天原文。"
         helperLabel.font = DJDesignTokens.Font.label(12)
         helperLabel.textColor = DJDesignTokens.Color.textTertiary
         helperLabel.numberOfLines = 0
 
-        let contentStack = UIStackView(arrangedSubviews: [headerStack, subtitleLabel, inputCard, helperLabel, saveButton])
+        var arrangedSubviews: [UIView] = [headerStack, subtitleLabel, inputCard, helperLabel]
+        if isTimeLetter {
+            arrangedSubviews.append(draftButton)
+        }
+        arrangedSubviews.append(saveButton)
+
+        let contentStack = UIStackView(arrangedSubviews: arrangedSubviews)
         contentStack.axis = .vertical
         contentStack.spacing = 16
         contentStack.isLayoutMarginsRelativeArrangement = true
@@ -111,7 +131,7 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
         view.addSubview(contentStack)
         inputCard.addSubview(textView)
         textView.addSubview(placeholderLabel)
-        [contentStack, headerStack, titleLabel, cancelButton, inputCard, textView, placeholderLabel, saveButton].forEach {
+        [contentStack, headerStack, titleLabel, cancelButton, inputCard, textView, placeholderLabel, draftButton, saveButton].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
 
@@ -131,6 +151,7 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
             placeholderLabel.topAnchor.constraint(equalTo: textView.topAnchor, constant: 18),
             placeholderLabel.leadingAnchor.constraint(equalTo: textView.leadingAnchor, constant: 14),
 
+            draftButton.heightAnchor.constraint(equalToConstant: 48),
             saveButton.heightAnchor.constraint(equalToConstant: 56),
         ])
     }
@@ -144,6 +165,8 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
         let hasText = !textView.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         saveButton.isEnabled = hasText
         saveButton.alpha = hasText ? 1 : 0.55
+        draftButton.isEnabled = hasText
+        draftButton.alpha = hasText ? 1 : 0.55
     }
 
     @objc private func cancelTapped() {
@@ -151,14 +174,21 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
     }
 
     @objc private func saveTapped() {
+        save(with: onSave)
+    }
+
+    @objc private func saveDraftTapped() {
+        save(with: onSaveDraft)
+    }
+
+    private func save(with handler: ((String) -> Void)?) {
         let rawText = textView.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !rawText.isEmpty else {
             updateSaveButton()
             return
         }
-        let onSave = onSave
         dismiss(animated: true) {
-            onSave?(rawText)
+            handler?(rawText)
         }
     }
 }

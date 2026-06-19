@@ -22,6 +22,7 @@ RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE="${RUN_ECHO_DELAYED_REPLY_NOTIFICATION
 RUN_BACKEND_ENV_SMOKE="${RUN_BACKEND_ENV_SMOKE:-0}"
 RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE="${RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE:-0}"
 RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE="${RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE:-0}"
+RUN_ARCHIVE_HIDDEN_SHELL_SMOKE="${RUN_ARCHIVE_HIDDEN_SHELL_SMOKE:-0}"
 RUN_P0_PROFILE_CARE_REGRESSION="${RUN_P0_PROFILE_CARE_REGRESSION:-0}"
 RUN_PROFILE_CARE_STATE_SMOKE="${RUN_PROFILE_CARE_STATE_SMOKE:-0}"
 RUN_PROFILE_CARE_BACKEND_STATE_SMOKE="${RUN_PROFILE_CARE_BACKEND_STATE_SMOKE:-0}"
@@ -81,6 +82,7 @@ Run ID: \`$RUN_ID\`
 - Backend environment smoke: \`$RUN_BACKEND_ENV_SMOKE\`
 - Backend archive image-analysis smoke: \`$RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE\`
 - Archive failed analysis retry UIQA smoke: \`$RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE\`
+- Archive hidden media/time-letter shell UIQA smoke: \`$RUN_ARCHIVE_HIDDEN_SHELL_SMOKE\`
 - P0 Profile care regression gate: \`$RUN_P0_PROFILE_CARE_REGRESSION\`
 - Profile care state UIQA smoke: \`$RUN_PROFILE_CARE_STATE_SMOKE\`
 - Profile care deployed backend state UIQA smoke: \`$RUN_PROFILE_CARE_BACKEND_STATE_SMOKE\`
@@ -100,6 +102,7 @@ Run ID: \`$RUN_ID\`
 - Optional backend environment smoke when \`RUN_BACKEND_ENV_SMOKE=1\` and backend URL/token are configured.
 - Optional deployed backend archive image-analysis smoke when \`RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE=1\`.
 - Optional archive detail failed-analysis retry UIQA smoke when \`RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE=1\`.
+- Optional hidden media/time-letter shell UIQA smoke when \`RUN_ARCHIVE_HIDDEN_SHELL_SMOKE=1\`.
 - Optional P0 Profile care regression gate when \`RUN_P0_PROFILE_CARE_REGRESSION=1\`; this forces both local empty/stale/failed UIQA and deployed backend active/empty/stale/failed-retry UIQA.
 - Optional Profile care empty/stale/failed state UIQA smoke when \`RUN_PROFILE_CARE_STATE_SMOKE=1\`.
 - Optional deployed backend Profile care active/empty/stale UIQA smoke when \`RUN_PROFILE_CARE_BACKEND_STATE_SMOKE=1\`.
@@ -123,6 +126,7 @@ append_report_footer() {
 - Backend env smoke: \`backend-env-smoke/$RUN_ID/\`
 - Backend archive image-analysis smoke: \`backend-archive-image-analysis-smoke/$RUN_ID/\`
 - Archive failed analysis retry UIQA smoke: \`archive-failed-analysis-retry-smoke/$RUN_ID/\`
+- Archive hidden media/time-letter shell UIQA smoke: \`archive-hidden-shell-smoke/$RUN_ID/\`
 - P0 Profile care regression gate: \`profile-care-state-smoke/$RUN_ID/\` and \`profile-care-backend-state-smoke/$RUN_ID/\`
 - Profile care state UIQA smoke: \`profile-care-state-smoke/$RUN_ID/\`
 - Profile care deployed backend state UIQA smoke: \`profile-care-backend-state-smoke/$RUN_ID/\`
@@ -186,6 +190,7 @@ for guard in \
   true-device-archive-audio-acceptance-check.swift \
   archive-media-backend-contract-check.swift \
   archive-media-upload-intent-contract-check.swift \
+  archive-hidden-media-timeletter-shell-check.swift \
   archive-analysis-insights-contract-check.swift \
   archive-analysis-backend-payload-contract-check.swift \
   archive-image-analysis-live-chain-check.swift \
@@ -281,6 +286,16 @@ if [[ "$RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/archive-failed-analysis-retry-smoke/$RUN_ID"
   echo "Skipped by RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE=0" > "$OUTPUT_DIR/archive-failed-analysis-retry-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_ARCHIVE_HIDDEN_SHELL_SMOKE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/archive-hidden-shell-smoke" \
+  DERIVED_DATA_PATH="$OUTPUT_DIR/DerivedDataArchiveHiddenShellSmoke" \
+  "$SCRIPT_DIR/run-archive-hidden-shell-smoke.sh"
+else
+  mkdir -p "$OUTPUT_DIR/archive-hidden-shell-smoke/$RUN_ID"
+  echo "Skipped by RUN_ARCHIVE_HIDDEN_SHELL_SMOKE=0" > "$OUTPUT_DIR/archive-hidden-shell-smoke/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_PROFILE_CARE_STATE_SMOKE" == "1" ]]; then

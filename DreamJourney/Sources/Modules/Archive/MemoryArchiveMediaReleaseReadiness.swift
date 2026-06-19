@@ -91,7 +91,7 @@ enum MemoryArchiveMediaReleaseReadiness {
                 kind: kind,
                 title: "视频片段",
                 stage: stage(for: kind),
-                persistence: "shell_only",
+                persistence: "local_mock_file",
                 requiresMicrophonePermission: false,
                 releaseCopy: "视频片段暂为隐藏候选入口"
             )
