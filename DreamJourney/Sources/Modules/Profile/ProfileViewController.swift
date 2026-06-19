@@ -716,6 +716,12 @@ final class ProfileViewController: UIViewController {
 }
 
 #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+struct ProfileCareBackendStateSmokeCase {
+    let name: String
+    let userId: String
+    let expectedState: String
+}
+
 extension ProfileViewController {
     func setUIQACareSnapshot(_ snapshot: ProfileCareSnapshot) {
         careSnapshot = snapshot
@@ -750,6 +756,83 @@ extension ProfileViewController {
                 "dashboard": dashboardResult,
             ]
         }
+    }
+
+    func runUIQAProfileCareBackendStateSmoke(
+        cases: [ProfileCareBackendStateSmokeCase],
+        completion: @escaping ([[String: Any]]) -> Void
+    ) {
+        var states: [[String: Any]] = []
+
+        func runNext(index: Int) {
+            guard index < cases.count else {
+                completion(states)
+                return
+            }
+
+            let smokeCase = cases[index]
+            DreamJourneyBackendClient.shared.latestCareSnapshot(userId: smokeCase.userId) { [weak self] result in
+                guard let self else {
+                    states.append([
+                        "name": smokeCase.name,
+                        "userId": smokeCase.userId,
+                        "expectedState": smokeCase.expectedState,
+                        "profileState": "missingProfileViewController",
+                        "source": "missingProfileViewController",
+                    ])
+                    runNext(index: index + 1)
+                    return
+                }
+
+                let snapshot: ProfileCareSnapshot
+                let source: String
+                let rawRiskLevel: String
+                let errorDescription: String
+
+                switch result {
+                case .success(let object):
+                    snapshot = ProfileCareSnapshot(json: object) ?? .emptyFallback()
+                    source = "backend"
+                    let item = object["item"] as? [String: Any]
+                    let rawSnapshot = item?["snapshot"] as? [String: Any]
+                    rawRiskLevel = rawSnapshot?["riskLevel"] as? String ?? ""
+                    errorDescription = ""
+                case .failure(let error):
+                    snapshot = careSnapshotFallback(for: error)
+                    source = "backendErrorFallback"
+                    rawRiskLevel = ""
+                    errorDescription = error.localizedDescription
+                }
+
+                setUIQACareSnapshot(snapshot)
+
+                let dashboardViewController = ProfileElderCareDashboardViewController(
+                    snapshot: snapshot,
+                    context: personaContext
+                )
+                dashboardViewController.loadViewIfNeeded()
+                let dashboardResult = dashboardViewController.runUIQACareDashboardStateSmoke()
+
+                states.append([
+                    "name": smokeCase.name,
+                    "userId": smokeCase.userId,
+                    "expectedState": smokeCase.expectedState,
+                    "profileState": snapshot.dataState.accessibilityIdentifier,
+                    "profileMoodStatus": snapshot.moodStatus,
+                    "profileSyncCaption": snapshot.syncCaption,
+                    "profileRetryActionTitle": snapshot.dataState.actionTitle ?? "",
+                    "profileRetryVisible": snapshot.dataState.isRetryable,
+                    "rawRiskLevel": rawRiskLevel,
+                    "source": source,
+                    "errorDescription": errorDescription,
+                    "dashboard": dashboardResult,
+                ])
+
+                runNext(index: index + 1)
+            }
+        }
+
+        runNext(index: 0)
     }
 }
 #endif

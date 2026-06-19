@@ -127,7 +127,13 @@ private extension AppDelegate {
             FeatureFlagService.shared.set(.archiveRemoteFetch, enabled: true)
             print("[UI_QA] Archive remote fetch enabled")
         }
-        if arguments.contains("DJRunProfileCareStateSmoke") {
+        if arguments.contains("DJRunProfileCareBackendStateSmoke") {
+            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+            FeatureFlagService.shared.resetToDefaults()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.runProfileCareBackendStateSmoke()
+            }
+        } else if arguments.contains("DJRunProfileCareStateSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
@@ -303,6 +309,124 @@ private extension AppDelegate {
             "profileStates=\(profileStates.sorted().joined(separator: "|")) " +
             "dashboardStates=\(dashboardStates.sorted().joined(separator: "|"))"
         )
+    }
+
+    func runProfileCareBackendStateSmoke() {
+        guard let tabBarController = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController as? WarmTabBarController,
+              let viewControllers = tabBarController.viewControllers,
+              viewControllers.indices.contains(2),
+              let profileNavigationController = viewControllers[2] as? UINavigationController,
+              let profileViewController = profileNavigationController.viewControllers.first as? ProfileViewController else {
+            writeProfileCareBackendStateSmokeResult(
+                completed: false,
+                states: [],
+                profileTabSelected: false,
+                backendConfigured: DreamJourneyBackendClient.shared.isCareSnapshotConfigured,
+                failureReason: "missingProfileRoot"
+            )
+            print("[UI_QA] ProfileCareBackendStateSmoke failed reason=missingProfileRoot")
+            return
+        }
+
+        guard let activeUserId = uiqaArgumentValue(prefix: "DJCareActiveUserId="),
+              let emptyUserId = uiqaArgumentValue(prefix: "DJCareEmptyUserId="),
+              let staleUserId = uiqaArgumentValue(prefix: "DJCareStaleUserId=") else {
+            writeProfileCareBackendStateSmokeResult(
+                completed: false,
+                states: [],
+                profileTabSelected: false,
+                backendConfigured: DreamJourneyBackendClient.shared.isCareSnapshotConfigured,
+                failureReason: "missingCareUserIds"
+            )
+            print("[UI_QA] ProfileCareBackendStateSmoke failed reason=missingCareUserIds")
+            return
+        }
+
+        profileNavigationController.popToRootViewController(animated: false)
+        tabBarController.selectedIndex = 2
+        profileViewController.loadViewIfNeeded()
+
+        let cases = [
+            ProfileCareBackendStateSmokeCase(
+                name: "active",
+                userId: activeUserId,
+                expectedState: ProfileCareDataState.available.accessibilityIdentifier
+            ),
+            ProfileCareBackendStateSmokeCase(
+                name: "empty",
+                userId: emptyUserId,
+                expectedState: ProfileCareDataState.empty.accessibilityIdentifier
+            ),
+            ProfileCareBackendStateSmokeCase(
+                name: "stale",
+                userId: staleUserId,
+                expectedState: ProfileCareDataState.stale.accessibilityIdentifier
+            ),
+        ]
+
+        profileViewController.runUIQAProfileCareBackendStateSmoke(cases: cases) { [weak self] states in
+            let profileTabSelected = tabBarController.selectedIndex == 2
+            let expectedStates = Dictionary(uniqueKeysWithValues: cases.map { ($0.name, $0.expectedState) })
+            let actualStates = Dictionary(uniqueKeysWithValues: states.compactMap { state -> (String, String)? in
+                guard let name = state["name"] as? String,
+                      let profileState = state["profileState"] as? String else {
+                    return nil
+                }
+                return (name, profileState)
+            })
+            let dashboardStates = Dictionary(uniqueKeysWithValues: states.compactMap { state -> (String, String)? in
+                guard let name = state["name"] as? String,
+                      let dashboard = state["dashboard"] as? [String: Any],
+                      let dashboardState = dashboard["dashboardState"] as? String else {
+                    return nil
+                }
+                return (name, dashboardState)
+            })
+            let retryContractsValid = states.allSatisfy { state in
+                let name = state["name"] as? String
+                let retryVisible = state["profileRetryVisible"] as? Bool
+                let retryTitle = state["profileRetryActionTitle"] as? String
+                if name == "active" {
+                    return retryVisible == false && retryTitle == ""
+                }
+                return retryVisible == true && retryTitle == "重新同步"
+            }
+            let sourceContractsValid = states.allSatisfy { state in
+                guard let name = state["name"] as? String,
+                      let source = state["source"] as? String else {
+                    return false
+                }
+                if name == "empty" {
+                    return source == "backendErrorFallback"
+                }
+                return source == "backend"
+            }
+            let completed = DreamJourneyBackendClient.shared.isCareSnapshotConfigured
+                && profileTabSelected
+                && states.count == cases.count
+                && actualStates == expectedStates
+                && dashboardStates == expectedStates
+                && retryContractsValid
+                && sourceContractsValid
+
+            self?.writeProfileCareBackendStateSmokeResult(
+                completed: completed,
+                states: states,
+                profileTabSelected: profileTabSelected,
+                backendConfigured: DreamJourneyBackendClient.shared.isCareSnapshotConfigured,
+                failureReason: completed ? nil : "backendStateContractMismatch"
+            )
+            print(
+                "[UI_QA] ProfileCareBackendStateSmoke completed " +
+                "completed=\(completed) " +
+                "profileStates=\(actualStates.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: "|")) " +
+                "dashboardStates=\(dashboardStates.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: "|"))"
+            )
+        }
     }
 
     func runEchoDelayedReplyNotificationSmoke() {
@@ -502,6 +626,13 @@ private extension AppDelegate {
         }
         tabBarController.selectedIndex = 2
         return true
+    }
+
+    func uiqaArgumentValue(prefix: String) -> String? {
+        ProcessInfo.processInfo.arguments
+            .first(where: { $0.hasPrefix(prefix) })
+            .map { String($0.dropFirst(prefix.count)) }
+            .flatMap { $0.isEmpty ? nil : $0 }
     }
 
     func runProfileFamilyPersonaReleaseSmoke() {
@@ -1280,6 +1411,43 @@ private extension AppDelegate {
             try data.write(to: resultURL, options: [.atomic])
         } catch {
             print("[UI_QA] ProfileCareStateSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    func writeProfileCareBackendStateSmokeResult(
+        completed: Bool,
+        states: [[String: Any]],
+        profileTabSelected: Bool,
+        backendConfigured: Bool,
+        failureReason: String? = nil
+    ) {
+        var result: [String: Any] = [
+            "completed": completed,
+            "backendConfigured": backendConfigured,
+            "profileTabSelected": profileTabSelected,
+            "states": states,
+            "expectedStates": [
+                "active": ProfileCareDataState.available.accessibilityIdentifier,
+                "empty": ProfileCareDataState.empty.accessibilityIdentifier,
+                "stale": ProfileCareDataState.stale.accessibilityIdentifier,
+            ],
+            "failedStateCoveredByLocalSmoke": true,
+        ]
+        if let failureReason {
+            result["failureReason"] = failureReason
+        }
+
+        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
+              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("[UI_QA] ProfileCareBackendStateSmoke failed reason=resultEncoding")
+            return
+        }
+
+        let resultURL = documentsURL.appendingPathComponent("profile-care-backend-state-smoke-result.json")
+        do {
+            try data.write(to: resultURL, options: [.atomic])
+        } catch {
+            print("[UI_QA] ProfileCareBackendStateSmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
     }
 
