@@ -333,6 +333,60 @@ struct ArchiveMediaUploadIntent {
     }
 }
 
+struct VoiceCloneProfileContract {
+    let voiceProfileId: String
+    let sampleStatus: VoiceCloneSampleStatus
+    let authorizationConfirmed: Bool
+    let authorizationVersion: String
+    let authorizationCopy: String
+    let providerMode: String
+    let realCloneProviderReady: Bool
+    let qualityAcceptanceRequired: Bool
+    let isEnabled: Bool
+    let defaultReleaseVisible: Bool
+    let contractVersion: Int
+    let disableContract: String
+    let deleteContract: String
+    let personaScope: String
+    let digitalHumanId: String
+
+    init?(json: [String: Any]) {
+        guard let voiceProfileId = json["voiceProfileId"] as? String,
+              let statusRaw = json["sampleStatus"] as? String,
+              let sampleStatus = VoiceCloneSampleStatus(rawValue: statusRaw) else {
+            return nil
+        }
+        self.voiceProfileId = voiceProfileId
+        self.sampleStatus = sampleStatus
+        self.authorizationConfirmed = json["authorizationConfirmed"] as? Bool ?? false
+        self.authorizationVersion = json["authorizationVersion"] as? String ?? "voice-clone-consent-v1"
+        self.authorizationCopy = json["authorizationCopy"] as? String ?? ""
+        self.providerMode = json["providerMode"] as? String ?? "mockContract"
+        self.realCloneProviderReady = json["realCloneProviderReady"] as? Bool ?? false
+        self.qualityAcceptanceRequired = json["qualityAcceptanceRequired"] as? Bool ?? true
+        self.isEnabled = json["isEnabled"] as? Bool ?? false
+        self.defaultReleaseVisible = json["defaultReleaseVisible"] as? Bool ?? false
+        self.contractVersion = Self.intValue(json["contractVersion"]) ?? 1
+        self.disableContract = json["disableContract"] as? String ?? ""
+        self.deleteContract = json["deleteContract"] as? String ?? ""
+        self.personaScope = json["personaScope"] as? String ?? "personal"
+        self.digitalHumanId = json["digitalHumanId"] as? String ?? ""
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.intValue
+        }
+        if let value = value as? String {
+            return Int(value)
+        }
+        return nil
+    }
+}
+
 final class DreamJourneyBackendClient {
     static let shared = DreamJourneyBackendClient()
 
@@ -462,6 +516,85 @@ final class DreamJourneyBackendClient {
                     return
                 }
                 completion(.success(runtimeConfig))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func saveVoiceCloneProfile(
+        payload: [String: Any],
+        completion: @escaping (Result<VoiceCloneProfileContract, Error>) -> Void
+    ) {
+        requestJSON(path: "/voice/profiles", method: .post, payload: payload) { result in
+            switch result {
+            case .success(let object):
+                guard let profileJSON = object["profile"] as? [String: Any],
+                      let profile = VoiceCloneProfileContract(json: profileJSON) else {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                completion(.success(profile))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func fetchVoiceCloneProfiles(
+        userId: String,
+        completion: @escaping (Result<[VoiceCloneProfileContract], Error>) -> Void
+    ) {
+        requestJSON(path: "/voice/profiles/\(pathComponent(userId))", method: .get, payload: nil) { result in
+            switch result {
+            case .success(let object):
+                guard let profileJSONArray = object["profiles"] as? [[String: Any]] else {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                completion(.success(profileJSONArray.compactMap(VoiceCloneProfileContract.init(json:))))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func disableVoiceCloneProfile(
+        userId: String,
+        profileId voiceProfileId: String,
+        completion: @escaping (Result<VoiceCloneProfileContract, Error>) -> Void
+    ) {
+        let path = "/voice/profiles/\(pathComponent(userId))/\(pathComponent(voiceProfileId))/disable"
+        requestJSON(path: path, method: .post, payload: nil) { result in
+            switch result {
+            case .success(let object):
+                guard let profileJSON = object["profile"] as? [String: Any],
+                      let profile = VoiceCloneProfileContract(json: profileJSON) else {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                completion(.success(profile))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func deleteVoiceCloneProfile(
+        userId: String,
+        profileId voiceProfileId: String,
+        completion: @escaping (Result<VoiceCloneProfileContract, Error>) -> Void
+    ) {
+        let path = "/voice/profiles/\(pathComponent(userId))/\(pathComponent(voiceProfileId))"
+        requestJSON(path: path, method: .delete, payload: nil) { result in
+            switch result {
+            case .success(let object):
+                guard let profileJSON = object["profile"] as? [String: Any],
+                      let profile = VoiceCloneProfileContract(json: profileJSON) else {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                completion(.success(profile))
             case .failure(let error):
                 completion(.failure(error))
             }

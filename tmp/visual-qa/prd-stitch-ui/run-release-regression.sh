@@ -231,6 +231,7 @@ for guard in \
   profile-care-state-smoke-check.swift \
   profile-care-backend-state-smoke-check.swift \
   voice-clone-shell-contract-check.swift \
+  voice-clone-backend-contract-check.swift \
   final-visual-qa-package-check.swift \
   release-qa-package-check.swift
 do

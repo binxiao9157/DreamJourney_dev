@@ -88,9 +88,19 @@ assertContains(
     "release regression should run voice clone shell guard"
 )
 assertContains(
+    releaseRegression,
+    "voice-clone-backend-contract-check.swift",
+    "release regression should run voice clone backend guard"
+)
+assertContains(
     releaseQA,
     "voice-clone-shell-contract-check.swift",
     "release QA package should include voice clone shell guard"
+)
+assertContains(
+    releaseQA,
+    "voice-clone-backend-contract-check.swift",
+    "release QA package should include voice clone backend guard"
 )
 
 print("Voice clone shell contract guard passed")

@@ -64,6 +64,7 @@ final class VoiceCloneService {
     private let speakerIdKey = "dj.voiceclone.speakerId"
     private let sampleStatusKey = "dj.voiceclone.sampleStatus"
     private static let emptyVoiceProfileId = "voiceProfileId_not_created"
+    static let backendContractEndpoint = "/voice/profiles"
     private static let authorizationCopy = "声音克隆必须由用户主动授权，仅使用用户确认提交的声音样本；未完成授权和样本质量验收前不会公开训练或合成功能。"
     private static let disableContract = "disableVoiceProfile(profileId:) 只更新本地禁用状态，真实后端接入后应撤销该 voiceProfileId 的合成权限。"
     private static let deleteContract = "deleteVoiceProfile(profileId:) 只清理本地 voiceProfileId，真实后端接入后应删除样本、训练产物和关联授权记录。"
