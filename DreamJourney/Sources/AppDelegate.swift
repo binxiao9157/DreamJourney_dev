@@ -197,6 +197,12 @@ private extension AppDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.runArchiveToEchoSmoke()
             }
+        } else if arguments.contains("DJRunArchiveMediaEchoContextSmoke") {
+            DialogPromptDebugRecorder.reset()
+            seedArchiveMediaEchoContext()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.runArchiveMediaEchoContextSmoke()
+            }
         } else if arguments.contains("DJShowEchoListeningStatePreview") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
@@ -1603,6 +1609,40 @@ private extension AppDelegate {
         print("[UI_QA] Seeded pending archive analysis available=\(snapshot.availableItemCount)")
     }
 
+    func seedArchiveMediaEchoContext() {
+        UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+        UserDefaults.standard.removeObject(forKey: "dj.memoryArchive.items.user_9999")
+
+        let audioItem = MemoryArchiveItemFactory.makeAudioItem(
+            localPath: "/tmp/uiqa-media-context-audio.m4a",
+            duration: 9,
+            note: "这段语音说明不应覆盖已转写文本",
+            transcriptText: "妈妈在厨房讲起桂花糕的声音"
+        )
+
+        var videoItem = MemoryArchiveItemFactory.makeVideoItem(
+            localPath: "/tmp/uiqa-media-context-video.mov",
+            note: "视频里记录了院子里的桂花树",
+            analysisStatus: .pending
+        )
+        videoItem.detectedPeople = ["不应注入视频人物"]
+        videoItem.tags = ["不应注入视频标签"]
+        videoItem.metadata[MemoryArchiveItem.analysisLocationCluesMetadataKey] = "不应注入视频地点"
+        videoItem.metadata[MemoryArchiveItem.analysisSceneCluesMetadataKey] = "不应注入视频场景"
+
+        let draftLetter = MemoryArchiveItemFactory.makeTimeLetterDraft(note: "这封草稿不应进入回响上下文")
+        var sealedLetter = MemoryArchiveItemFactory.makeTimeLetter(note: "这封封存信可以进入回响上下文")
+        sealedLetter.analysisSummary = "封存信内容：这封封存信可以进入回响上下文"
+
+        MemoryArchiveRepository.shared.add(audioItem, syncToBackend: false)
+        MemoryArchiveRepository.shared.add(videoItem, syncToBackend: false)
+        MemoryArchiveRepository.shared.add(draftLetter, syncToBackend: false)
+        MemoryArchiveRepository.shared.add(sealedLetter, syncToBackend: false)
+
+        let snapshot = MemoryArchiveRepository.shared.contextSnapshot(limit: 10)
+        print("[UI_QA] Seeded archive media echo context available=\(snapshot.availableItemCount)")
+    }
+
     func seedArchiveAnalysisInsightsContext() {
         UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
         UserDefaults.standard.removeObject(forKey: "dj.memoryArchive.items.user_9999")
@@ -1705,6 +1745,64 @@ private extension AppDelegate {
                         "entries=\(entries)"
                     )
                 }
+            }
+        }
+    }
+
+    func runArchiveMediaEchoContextSmoke(retryCount: Int = 0) {
+        guard let tabBarController = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController as? WarmTabBarController else {
+            guard retryCount < 20 else {
+                print("[UI_QA] ArchiveMediaEchoContextSmoke failed reason=missingRootTab")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                self?.runArchiveMediaEchoContextSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+
+        guard let viewControllers = tabBarController.viewControllers,
+              viewControllers.count > 1,
+              let echoNavigationController = viewControllers[1] as? UINavigationController,
+              let echoViewController = echoNavigationController.viewControllers.first as? EchoViewController else {
+            print("[UI_QA] ArchiveMediaEchoContextSmoke failed reason=missingSmokeDependencies")
+            return
+        }
+
+        tabBarController.selectedIndex = 1
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            echoViewController.runUIQAMicrophoneSmoke()
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+                let archiveSnapshot = MemoryArchiveRepository.shared.contextSnapshot(limit: 10)
+                let prompt = DialogPromptDebugRecorder.lastSnapshot?.prompt ?? ""
+                let entries = archiveSnapshot.debugSummary()
+                let result: [String: Any] = [
+                    "completed": true,
+                    "containsArchiveContext": prompt.contains("【记忆档案馆素材线索】"),
+                    "availableItemCount": archiveSnapshot.availableItemCount,
+                    "entries": entries,
+                    "audioTranscriptInjected": prompt.contains("妈妈在厨房讲起桂花糕的声音"),
+                    "audioNoteFallbackExcludedWhenTranscriptExists": !prompt.contains("这段语音说明不应覆盖已转写文本"),
+                    "audioLocalPathExcluded": !prompt.contains("/tmp/uiqa-media-context-audio.m4a"),
+                    "videoPendingNoteInjected": prompt.contains("视频里记录了院子里的桂花树"),
+                    "videoPendingCluesExcluded": !prompt.contains("不应注入视频人物")
+                        && !prompt.contains("不应注入视频标签")
+                        && !prompt.contains("不应注入视频地点")
+                        && !prompt.contains("不应注入视频场景"),
+                    "videoLocalPathExcluded": !prompt.contains("/tmp/uiqa-media-context-video.mov"),
+                    "timeLetterDraftExcluded": !prompt.contains("这封草稿不应进入回响上下文"),
+                    "timeLetterSealedIncluded": prompt.contains("封存信内容：这封封存信可以进入回响上下文"),
+                ]
+                self.writeArchiveMediaEchoContextSmokeResult(result)
+                print(
+                    "[UI_QA] ArchiveMediaEchoContextSmoke completed " +
+                    "available=\(archiveSnapshot.availableItemCount) entries=\(entries)"
+                )
             }
         }
     }
@@ -1928,6 +2026,21 @@ private extension AppDelegate {
             try data.write(to: resultURL, options: [.atomic])
         } catch {
             print("[UI_QA] ArchiveToEchoSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    func writeArchiveMediaEchoContextSmokeResult(_ result: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
+              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("[UI_QA] ArchiveMediaEchoContextSmoke failed reason=resultEncoding")
+            return
+        }
+
+        let resultURL = documentsURL.appendingPathComponent("archive-media-echo-context-smoke-result.json")
+        do {
+            try data.write(to: resultURL, options: [.atomic])
+        } catch {
+            print("[UI_QA] ArchiveMediaEchoContextSmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
     }
 

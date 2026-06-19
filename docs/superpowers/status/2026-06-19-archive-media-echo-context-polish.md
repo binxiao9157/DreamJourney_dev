@@ -17,6 +17,27 @@ swift tmp/visual-qa/prd-stitch-ui/archive-media-echo-context-polish-check.swift 
   /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
+模拟器 Archive -> Echo media context smoke：
+
+```bash
+RUN_ID=20260619-archive-media-echo-context-smoke \
+tmp/visual-qa/prd-stitch-ui/run-archive-media-echo-context-smoke.sh
+```
+
+该 smoke 在 UIQA 环境下种入 fake audio、pending video、draft timeLetter、sealed timeLetter，并验证：
+
+- 音频优先注入转写文本，不注入本地路径。
+- 视频 pending 时只注入用户说明，不注入人物、地点、场景、标签线索。
+- 时间信件草稿不进入 Echo。
+- 时间信件封存后可进入 Echo。
+
+Release regression 可选开关：
+
+```bash
+RUN_ARCHIVE_MEDIA_ECHO_CONTEXT_SMOKE=1 \
+tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+```
+
 ## 暂不覆盖
 
 - 真实视频选择、压缩、缩略图生成。

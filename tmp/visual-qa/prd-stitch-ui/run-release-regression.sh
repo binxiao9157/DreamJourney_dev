@@ -26,6 +26,7 @@ RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE="${RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMO
 RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE="${RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE:-0}"
 RUN_ARCHIVE_HIDDEN_SHELL_SMOKE="${RUN_ARCHIVE_HIDDEN_SHELL_SMOKE:-0}"
 RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE="${RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE:-0}"
+RUN_ARCHIVE_MEDIA_ECHO_CONTEXT_SMOKE="${RUN_ARCHIVE_MEDIA_ECHO_CONTEXT_SMOKE:-0}"
 RUN_P0_PROFILE_CARE_REGRESSION="${RUN_P0_PROFILE_CARE_REGRESSION:-0}"
 RUN_PROFILE_CARE_STATE_SMOKE="${RUN_PROFILE_CARE_STATE_SMOKE:-0}"
 RUN_PROFILE_CARE_BACKEND_STATE_SMOKE="${RUN_PROFILE_CARE_BACKEND_STATE_SMOKE:-0}"
@@ -89,6 +90,7 @@ Run ID: \`$RUN_ID\`
 - Archive failed analysis retry UIQA smoke: \`$RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE\`
 - Archive hidden media/time-letter shell UIQA smoke: \`$RUN_ARCHIVE_HIDDEN_SHELL_SMOKE\`
 - Archive hidden media combo gate: \`$RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE\`
+- Archive media -> Echo context smoke: \`$RUN_ARCHIVE_MEDIA_ECHO_CONTEXT_SMOKE\`
 - P0 Profile care regression gate: \`$RUN_P0_PROFILE_CARE_REGRESSION\`
 - Profile care state UIQA smoke: \`$RUN_PROFILE_CARE_STATE_SMOKE\`
 - Profile care deployed backend state UIQA smoke: \`$RUN_PROFILE_CARE_BACKEND_STATE_SMOKE\`
@@ -112,6 +114,7 @@ Run ID: \`$RUN_ID\`
 - Optional archive detail failed-analysis retry UIQA smoke when \`RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE=1\`.
 - Optional hidden media/time-letter shell UIQA smoke when \`RUN_ARCHIVE_HIDDEN_SHELL_SMOKE=1\`.
 - Optional hidden media combo gate when \`RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE=1\`; this runs the hidden media detail UIQA smoke and deployed backend hidden media sync smoke under one run-id.
+- Optional archive media -> Echo context smoke when \`RUN_ARCHIVE_MEDIA_ECHO_CONTEXT_SMOKE=1\`; this verifies fake audio, pending video, and sealed/draft time-letter prompt injection rules.
 - Media Echo context polish guard is documented in \`2026-06-19-archive-media-echo-context-polish.md\`.
 - Optional P0 Profile care regression gate when \`RUN_P0_PROFILE_CARE_REGRESSION=1\`; this forces both local empty/stale/failed UIQA and deployed backend active/empty/stale/failed-retry UIQA.
 - Optional Profile care empty/stale/failed state UIQA smoke when \`RUN_PROFILE_CARE_STATE_SMOKE=1\`.
@@ -140,6 +143,7 @@ append_report_footer() {
 - Archive failed analysis retry UIQA smoke: \`archive-failed-analysis-retry-smoke/$RUN_ID/\`
 - Archive hidden media/time-letter shell UIQA smoke: \`archive-hidden-shell-smoke/$RUN_ID/\`
 - Archive hidden media combo gate: \`archive-hidden-media-combo-gate/$RUN_ID/\`
+- Archive media -> Echo context smoke: \`archive-media-echo-context-smoke/$RUN_ID/\`
 - P0 Profile care regression gate: \`profile-care-state-smoke/$RUN_ID/\` and \`profile-care-backend-state-smoke/$RUN_ID/\`
 - Profile care state UIQA smoke: \`profile-care-state-smoke/$RUN_ID/\`
 - Profile care deployed backend state UIQA smoke: \`profile-care-backend-state-smoke/$RUN_ID/\`
@@ -344,6 +348,16 @@ if [[ "$RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/archive-hidden-media-combo-gate/$RUN_ID"
   echo "Skipped by RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE=0" > "$OUTPUT_DIR/archive-hidden-media-combo-gate/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_ARCHIVE_MEDIA_ECHO_CONTEXT_SMOKE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/archive-media-echo-context-smoke" \
+  DERIVED_DATA_PATH="$OUTPUT_DIR/DerivedDataArchiveMediaEchoContextSmoke" \
+  "$SCRIPT_DIR/run-archive-media-echo-context-smoke.sh"
+else
+  mkdir -p "$OUTPUT_DIR/archive-media-echo-context-smoke/$RUN_ID"
+  echo "Skipped by RUN_ARCHIVE_MEDIA_ECHO_CONTEXT_SMOKE=0" > "$OUTPUT_DIR/archive-media-echo-context-smoke/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_PROFILE_CARE_STATE_SMOKE" == "1" ]]; then

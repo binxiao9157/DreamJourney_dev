@@ -292,6 +292,7 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/archive-hidden-media-detail-ui-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-hidden-media-combo-gate-check.swift",
     "tmp/visual-qa/prd-stitch-ui/archive-media-echo-context-polish-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/run-archive-media-echo-context-smoke.sh",
     "tmp/visual-qa/prd-stitch-ui/run-archive-hidden-shell-smoke.sh",
     "tmp/visual-qa/prd-stitch-ui/run-archive-hidden-media-combo-gate.sh",
     "tmp/visual-qa/prd-stitch-ui/backend-hidden-media-sync-smoke.py",

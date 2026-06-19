@@ -443,13 +443,19 @@ private extension MemoryArchiveItem {
         let contextText = echoContextText ?? ""
         let normalizedNote = MemoryArchiveItem.normalizedArchiveText(note)
         let allowsContextClues = echoContextAllowsClues
+        let contextNote: String?
+        if kind == .audio && metadataTranscriptTextForDisplay != nil {
+            contextNote = nil
+        } else {
+            contextNote = normalizedNote.isEmpty ? nil : normalizedNote
+        }
 
         return MemoryArchiveContextEntry(
             id: id,
             title: MemoryArchiveItem.normalizedArchiveText(title),
             kindLabel: kind.archiveDisplayName,
             summary: contextText,
-            note: normalizedNote.isEmpty ? nil : normalizedNote,
+            note: contextNote,
             people: allowsContextClues ? detectedPeople : [],
             locations: allowsContextClues ? detectedLocationClues : [],
             scenes: allowsContextClues ? detectedSceneClues : [],
