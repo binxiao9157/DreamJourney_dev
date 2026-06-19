@@ -133,6 +133,7 @@ for guard in \
   archive-audio-lifecycle-smoke-check.swift \
   true-device-archive-audio-acceptance-check.swift \
   archive-media-backend-contract-check.swift \
+  archive-media-upload-intent-contract-check.swift \
   final-visual-qa-package-check.swift \
   release-qa-package-check.swift
 do

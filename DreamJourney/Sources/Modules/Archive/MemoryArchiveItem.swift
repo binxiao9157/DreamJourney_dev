@@ -411,6 +411,28 @@ extension MemoryArchiveItem {
         return payload
     }
 
+    func archiveMediaUploadIntentPayload(
+        userId: String,
+        personaScope: String,
+        digitalHumanId: String,
+        fileName: String,
+        contentType: String,
+        fileSizeBytes: Int64
+    ) -> [String: Any] {
+        [
+            "userId": userId,
+            "archiveItemId": id,
+            "kind": kind.rawValue,
+            "fileName": fileName,
+            "contentType": contentType,
+            "fileSizeBytes": fileSizeBytes,
+            "personaScope": personaScope,
+            "digitalHumanId": digitalHumanId,
+            "ownerUserId": ownerUserId,
+            "privacyMetadata": ["scope": "generationAllowed"],
+        ]
+    }
+
     private var metadataForBackendContract: [String: String] {
         var backendMetadata = metadata
         [

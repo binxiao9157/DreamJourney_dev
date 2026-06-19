@@ -5,14 +5,19 @@ struct BackendRuntimeConfig {
     let realtimeTokenAvailable: Bool
     let voiceRuntimeConfigEndpoint: String?
     let fallbackMode: String?
+    let archiveMediaUploadIntentAvailable: Bool
+    let archiveMediaUploadIntentEndpoint: String?
 
     init(json: [String: Any]) {
         let capabilities = json["capabilities"] as? [String: Any]
         let voice = json["voice"] as? [String: Any]
         let fallback = voice?["fallback"] as? [String: Any]
+        let archive = json["archive"] as? [String: Any]
         realtimeTokenAvailable = capabilities?["realtimeToken"] as? Bool ?? false
         voiceRuntimeConfigEndpoint = voice?["runtimeConfigEndpoint"] as? String
         fallbackMode = fallback?["mode"] as? String
+        archiveMediaUploadIntentAvailable = capabilities?["archiveMediaUploadIntent"] as? Bool ?? false
+        archiveMediaUploadIntentEndpoint = archive?["uploadIntentEndpoint"] as? String
     }
 }
 
@@ -57,6 +62,66 @@ struct RealtimeVoiceRuntimeConfig {
         self.expiresAt = expiresAt
         let fallback = json["fallback"] as? [String: Any]
         self.fallbackMode = fallback?["mode"] as? String
+    }
+}
+
+struct ArchiveMediaUploadIntent {
+    let uploadIntentId: String
+    let archiveItemId: String
+    let kind: String
+    let storageProvider: String
+    let objectKey: String
+    let uploadURL: String
+    let expiresAt: Date
+    let expiresInSeconds: Int
+    let maxFileSizeBytes: Int64
+    let requiredHeaders: [String: String]
+    let personaScope: String
+    let digitalHumanId: String
+
+    init?(json: [String: Any]) {
+        guard let uploadIntentId = json["uploadIntentId"] as? String,
+              let archiveItemId = json["archiveItemId"] as? String,
+              let kind = json["kind"] as? String,
+              let storageProvider = json["storageProvider"] as? String,
+              let objectKey = json["objectKey"] as? String,
+              let uploadURL = json["uploadURL"] as? String,
+              let expiresAtValue = json["expiresAt"] as? String,
+              let expiresAt = ISO8601DateFormatter().date(from: expiresAtValue),
+              let expiresInSeconds = json["expiresInSeconds"] as? Int,
+              let personaScope = json["personaScope"] as? String,
+              let digitalHumanId = json["digitalHumanId"] as? String else {
+            return nil
+        }
+
+        self.uploadIntentId = uploadIntentId
+        self.archiveItemId = archiveItemId
+        self.kind = kind
+        self.storageProvider = storageProvider
+        self.objectKey = objectKey
+        self.uploadURL = uploadURL
+        self.expiresAt = expiresAt
+        self.expiresInSeconds = expiresInSeconds
+        self.maxFileSizeBytes = Self.int64Value(json["maxFileSizeBytes"]) ?? 0
+        self.requiredHeaders = json["requiredHeaders"] as? [String: String] ?? [:]
+        self.personaScope = personaScope
+        self.digitalHumanId = digitalHumanId
+    }
+
+    private static func int64Value(_ value: Any?) -> Int64? {
+        if let int = value as? Int {
+            return Int64(int)
+        }
+        if let int64 = value as? Int64 {
+            return int64
+        }
+        if let number = value as? NSNumber {
+            return number.int64Value
+        }
+        if let string = value as? String {
+            return Int64(string)
+        }
+        return nil
     }
 }
 
@@ -118,6 +183,10 @@ final class DreamJourneyBackendClient {
         hasExplicitBaseURL
     }
 
+    var isArchiveMediaUploadIntentConfigured: Bool {
+        hasExplicitBaseURL
+    }
+
     private init() {
         let configured = Bundle.main.object(forInfoDictionaryKey: "DreamJourneyBackendBaseURL") as? String
         let raw = configured?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -156,6 +225,25 @@ final class DreamJourneyBackendClient {
                     return
                 }
                 completion(.success(runtimeConfig))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func requestArchiveMediaUploadIntent(
+        payload: [String: Any],
+        completion: @escaping (Result<ArchiveMediaUploadIntent, Error>) -> Void
+    ) {
+        requestJSON(path: "/archive/media/upload-intent", method: .post, payload: payload) { result in
+            switch result {
+            case .success(let object):
+                guard let intentJSON = object["uploadIntent"] as? [String: Any],
+                      let intent = ArchiveMediaUploadIntent(json: intentJSON) else {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                completion(.success(intent))
             case .failure(let error):
                 completion(.failure(error))
             }

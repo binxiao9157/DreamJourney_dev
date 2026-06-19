@@ -17,6 +17,9 @@ enum MemoryArchiveMediaReleaseReadiness {
     }
 
     static let hiddenBranchesLaunchArgument = "DJEnableArchiveHiddenBranches"
+    static let mediaUploadIntentEndpoint = "/archive/media/upload-intent"
+    static let uploadIntentTTLSeconds = 900
+    static let audioFileSizeLimitMB = 50
     static let videoFileSizeLimitMB = 200
     static let backendMediaStorageContract = "metadata_only_object_storage"
 
