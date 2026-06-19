@@ -154,6 +154,33 @@ def normalize_analysis_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def assert_analysis_contract(analysis: Dict[str, Any]) -> str:
+    status = analysis["analysisStatus"]
+    if status == "analyzed":
+        assert_true(
+            analysis["analysisSummary"]
+            or analysis["detectedPeople"]
+            or analysis["detectedLocations"]
+            or analysis["detectedScenes"]
+            or analysis["tags"],
+            "image analysis should return a summary or displayable clues",
+        )
+        assert_equal(analysis["analysisFailureReason"], "", "successful image analysis failure reason")
+        assert_equal(analysis["analysisRetryable"], False, "successful image analysis retry flag")
+        return "analyzed"
+
+    if status == "failed":
+        assert_true(analysis["analysisFailureReason"], "failed image analysis should include analysisFailureReason")
+        assert_equal(analysis["analysisRetryable"], True, "failed image analysis should be retryable")
+        if analysis["analysisFailureReason"] != "provider_unavailable":
+            raise AssertionError(
+                "failed image analysis should use provider_unavailable until a real visual provider is configured"
+            )
+        return "failed_retryable_provider_unavailable"
+
+    raise AssertionError(f"image analysis status should be analyzed or failed, got {status!r}")
+
+
 def make_archive_payload(analysis: Dict[str, Any]) -> Dict[str, Any]:
     now = datetime.now(timezone.utc).isoformat()
     return {
@@ -222,17 +249,7 @@ analysis_request = {
 analysis_result = normalize_analysis_payload(
     request_json("POST", "/archive/image-analysis", analysis_request, timeout=120)
 )
-assert_equal(analysis_result["analysisStatus"], "analyzed", "image analysis status")
-assert_true(
-    analysis_result["analysisSummary"]
-    or analysis_result["detectedPeople"]
-    or analysis_result["detectedLocations"]
-    or analysis_result["detectedScenes"]
-    or analysis_result["tags"],
-    "image analysis should return a summary or displayable clues",
-)
-assert_equal(analysis_result["analysisFailureReason"], "", "successful image analysis failure reason")
-assert_equal(analysis_result["analysisRetryable"], False, "successful image analysis retry flag")
+analysis_contract_mode = assert_analysis_contract(analysis_result)
 
 archive_payload = make_archive_payload(analysis_result)
 saved_response = request_json("POST", "/archive/items", archive_payload, timeout=20)
@@ -272,6 +289,7 @@ result = {
     "archiveItemId": ARCHIVE_ID,
     "imageFixture": str(IMAGE_PATH.relative_to(APP_ROOT)) if IMAGE_PATH.is_relative_to(APP_ROOT) else str(IMAGE_PATH),
     "contract_preflight": contract_preflight,
+    "analysis_contract_mode": analysis_contract_mode,
     "analysis_result": analysis_result,
     "persisted_item": {
         "id": persisted_item.get("id"),

@@ -49,6 +49,38 @@ tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
 
 ## 当前证据
 
+### 2026-06-19 Provider 不可用降级合同
+
+后端已按产品降级策略调整：
+
+- 当 `/archive/image-analysis` 的真实 provider 不可用、缺少 key、上游 400/5xx、返回非 JSON 等异常发生时，不再返回 HTTP 502/503。
+- 非 `dryRun` 请求返回可持久化的失败合同：
+  - `analysisStatus=failed`
+  - `analysisFailureReason=provider_unavailable`
+  - `analysisRetryable=true`
+  - `detectedPeople=[]`
+  - `detectedLocations=[]`
+  - `detectedScenes=[]`
+  - `tags=[]`
+- 参数缺失、隐私范围不允许等产品/权限错误仍保持 400/403。
+
+Smoke 脚本已同步更新：
+
+- `analyzed`：继续要求摘要或可展示线索。
+- `failed + provider_unavailable + retryable`：继续写入 `/archive/items`，再通过 `GET /archive/items/{userId}` 验证 read-after-write。
+
+部署后重跑：
+
+```bash
+RUN_ID=20260619-backend-archive-image-analysis-provider-fallback \
+tmp/visual-qa/prd-stitch-ui/run-backend-archive-image-analysis-smoke.sh
+```
+
+预期：
+
+- 在当前 DeepSeek 不支持图片输入的前提下，smoke 应通过“失败/可重试状态持久化”闭环。
+- 真正的人物/地点/场景线索仍需要切到明确支持视觉输入的 provider 后再验收。
+
 ### 2026-06-19 重新部署后验证
 
 Run ID: `20260619-backend-archive-image-analysis-after-deploy`
@@ -82,7 +114,7 @@ Run ID: `20260619-backend-archive-image-analysis-after-deploy`
 
 - 后端部署合同已更新，但当前 DeepSeek provider 请求仍不满足官方 chat completion 合同。
 - 真实“相册导入 -> 图像分析 -> 持久化 -> 重新拉取线索”闭环还不能验收通过。
-- 下一步需要切换到明确支持视觉输入的 provider，或把 `/archive/image-analysis` 改为 provider 不可用时返回可持久化的失败/重试合同，再另行规划真实视觉分析 provider。
+- 下一步需要部署 provider 不可用降级合同；真实视觉线索仍需要切换到明确支持视觉输入的 provider。
 
 产物：
 

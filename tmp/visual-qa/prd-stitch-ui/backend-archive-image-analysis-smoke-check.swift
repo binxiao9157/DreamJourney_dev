@@ -75,6 +75,8 @@ for required in [
 }
 assertContains(pythonContent, "default_memory_1.imageset/memory.jpg", "Python smoke should use the app memory asset as album-import input")
 assertContains(pythonContent, "assert_deployed_contract_preflight", "Python smoke should fail fast when deployed backend contract is stale")
+assertContains(pythonContent, "assert_analysis_contract", "Python smoke should validate analyzed or failed retryable analysis contracts")
+assertContains(pythonContent, "provider_unavailable", "Python smoke should accept provider unavailable as a retryable persisted analysis failure")
 assertContains(pythonContent, "analysis_result", "Python smoke should preserve the image-analysis result")
 assertContains(pythonContent, "persisted_item", "Python smoke should validate the saved archive item")
 assertContains(pythonContent, "listed_item", "Python smoke should verify read-after-write archive listing")
