@@ -1032,6 +1032,11 @@ private extension AppDelegate {
                     videoThumbnailPersisted: false,
                     videoUploadStatusPersisted: false,
                     videoAnalysisPending: false,
+                    mediaUploadUploaded: false,
+                    mediaUploadFailed: false,
+                    timeLetterDraftEdited: false,
+                    timeLetterDraftDeleted: false,
+                    timeLetterDraftSealed: false,
                     failureReason: "missingRootTab"
                 )
                 print("[UI_QA] ArchiveHiddenShellSmoke failed reason=missingRootTab")
@@ -1055,7 +1060,7 @@ private extension AppDelegate {
                 && hiddenOptionTitles.contains("录入时间信件")
 
             let audioURL = try makeUIQAArchiveAudioFile()
-            let audioItem = MemoryArchiveItemFactory.makeAudioItem(
+            var audioItem = MemoryArchiveItemFactory.makeAudioItem(
                 localPath: audioURL.path,
                 duration: 1.2,
                 note: "UIQA 隐藏分支录入的一段语音档案",
@@ -1065,31 +1070,75 @@ private extension AppDelegate {
             let thumbnailURL = try makeUIQAArchiveMockThumbnailFile()
             let videoSize = (try FileManager.default.attributesOfItem(atPath: videoURL.path)[.size] as? NSNumber)?
                 .int64Value ?? 0
-            let videoItem = MemoryArchiveItemFactory.makeVideoItem(
+            var videoItem = MemoryArchiveItemFactory.makeVideoItem(
                 localPath: videoURL.path,
                 thumbnailPath: thumbnailURL.path,
                 fileSizeBytes: videoSize,
                 note: "UIQA 隐藏分支生成的 mock 视频档案"
             )
-            let draftLetter = MemoryArchiveItemFactory.makeTimeLetterDraft(note: "写给未来的一封草稿")
+            var draftLetter = MemoryArchiveItemFactory.makeTimeLetterDraft(note: "写给未来的一封草稿")
+            let deletedDraftLetter = MemoryArchiveItemFactory.makeTimeLetterDraft(note: "这封草稿会被删除")
+            var sealedDraftLetter = MemoryArchiveItemFactory.makeTimeLetterDraft(note: "这封草稿会被封存")
             let sealedLetter = MemoryArchiveItemFactory.makeTimeLetter(note: "写给未来的一封封存信")
 
-            for item in [audioItem, videoItem, draftLetter, sealedLetter] {
+            for item in [audioItem, videoItem, draftLetter, deletedDraftLetter, sealedDraftLetter, sealedLetter] {
                 MemoryArchiveRepository.shared.add(item, syncToBackend: false)
             }
+
+            let expiresAt = ISO8601DateFormatter().string(
+                from: Date().addingTimeInterval(TimeInterval(MemoryArchiveMediaReleaseReadiness.uploadIntentTTLSeconds))
+            )
+            let audioIntent = ArchiveMediaUploadIntent(json: [
+                "uploadIntentId": "uiqa_audio_upload_intent",
+                "archiveItemId": audioItem.id,
+                "kind": MemoryArchiveItemKind.audio.rawValue,
+                "storageProvider": "mockObjectStorage",
+                "objectKey": "archive/audio/\(audioItem.id)/uiqa.m4a",
+                "uploadURL": "mock://archive-media/audio/\(audioItem.id)",
+                "expiresAt": expiresAt,
+                "expiresInSeconds": MemoryArchiveMediaReleaseReadiness.uploadIntentTTLSeconds,
+                "maxFileSizeBytes": MemoryArchiveMediaReleaseReadiness.audioFileSizeLimitMB * 1024 * 1024,
+                "requiredHeaders": ["Content-Type": "audio/mp4"],
+                "personaScope": "personal",
+                "digitalHumanId": "user_9999",
+            ])!
+            audioItem = audioItem
+                .markingMediaUploadPending()
+                .markingMediaUploadUploaded(intent: audioIntent)
+            videoItem = videoItem
+                .markingMediaUploadPending()
+                .markingMediaUploadFailed("mock upload rejected")
+            draftLetter = draftLetter.updatingTimeLetterDraft(note: "写给未来的一封已编辑草稿")
+            sealedDraftLetter = sealedDraftLetter.sealingTimeLetterDraft()
+
+            _ = MemoryArchiveRepository.shared.update(audioItem, syncToBackend: false)
+            _ = MemoryArchiveRepository.shared.update(videoItem, syncToBackend: false)
+            _ = MemoryArchiveRepository.shared.update(draftLetter, syncToBackend: false)
+            _ = MemoryArchiveRepository.shared.update(sealedDraftLetter, syncToBackend: false)
+            let didRemoveDeletedDraft = MemoryArchiveRepository.shared.remove(id: deletedDraftLetter.id)
 
             let restoredItems = MemoryArchiveRepository.shared.allItems()
             let restoredAudio = restoredItems.first { $0.id == audioItem.id }
             let restoredVideo = restoredItems.first { $0.id == videoItem.id }
             let restoredDraft = restoredItems.first { $0.id == draftLetter.id }
+            let restoredDeletedDraft = restoredItems.first { $0.id == deletedDraftLetter.id }
+            let restoredSealedDraft = restoredItems.first { $0.id == sealedDraftLetter.id }
             let restoredSealed = restoredItems.first { $0.id == sealedLetter.id }
             let audioTranscriptPersisted = restoredAudio?.metadata[MemoryArchiveItem.mediaTranscriptTextMetadataKey] == "这是一段用于验证转写字段的 mock 文本"
-            let audioUploadStatusPersisted = restoredAudio?.metadata[MemoryArchiveItem.mediaUploadStatusMetadataKey] == ArchiveMediaUploadStatus.localOnly.rawValue
+            let audioUploadStatusPersisted = restoredAudio?.metadata[MemoryArchiveItem.mediaUploadStatusMetadataKey] == ArchiveMediaUploadStatus.uploaded.rawValue
             let videoThumbnailPersisted = restoredVideo?.metadata[MemoryArchiveItem.mediaThumbnailPathMetadataKey] == thumbnailURL.path
-            let videoUploadStatusPersisted = restoredVideo?.metadata[MemoryArchiveItem.mediaUploadStatusMetadataKey] == ArchiveMediaUploadStatus.localOnly.rawValue
+            let videoUploadStatusPersisted = restoredVideo?.metadata[MemoryArchiveItem.mediaUploadStatusMetadataKey] == ArchiveMediaUploadStatus.failed.rawValue
             let videoAnalysisPending = restoredVideo?.analysisStatus == .pending
+            let mediaUploadUploaded = restoredAudio?.metadata[MemoryArchiveItem.mediaObjectKeyMetadataKey] == audioIntent.objectKey
+                && restoredAudio?.metadata[MemoryArchiveItem.mediaUploadIntentIdMetadataKey] == audioIntent.uploadIntentId
+            let mediaUploadFailed = restoredVideo?.metadata[MemoryArchiveItem.mediaUploadErrorMetadataKey] == "mock upload rejected"
             let timeLetterDraftRestored = restoredDraft?.metadata["deliveryState"] == "draft"
                 && restoredDraft?.metadata["timeLetterStatus"] == "draft"
+            let timeLetterDraftEdited = restoredDraft?.note == "写给未来的一封已编辑草稿"
+                && restoredDraft?.metadata["characterCount"] == "\(restoredDraft?.note.count ?? 0)"
+            let timeLetterDraftSealed = restoredSealedDraft?.metadata["deliveryState"] == "sealed"
+                && restoredSealedDraft?.metadata["timeLetterStatus"] == "sealed"
+            let timeLetterDraftDeleted = didRemoveDeletedDraft && restoredDeletedDraft == nil
             let timeLetterSealedRestored = restoredSealed?.metadata["deliveryState"] == "sealed"
                 && restoredSealed?.metadata["deliveryPolicy"] == "pending_product_decision"
 
@@ -1104,6 +1153,11 @@ private extension AppDelegate {
                 && videoThumbnailPersisted
                 && videoUploadStatusPersisted
                 && videoAnalysisPending
+                && mediaUploadUploaded
+                && mediaUploadFailed
+                && timeLetterDraftEdited
+                && timeLetterDraftDeleted
+                && timeLetterDraftSealed
 
             tabBarController.selectedIndex = 0
             writeArchiveHiddenShellSmokeResult(
@@ -1119,6 +1173,11 @@ private extension AppDelegate {
                 videoThumbnailPersisted: videoThumbnailPersisted,
                 videoUploadStatusPersisted: videoUploadStatusPersisted,
                 videoAnalysisPending: videoAnalysisPending,
+                mediaUploadUploaded: mediaUploadUploaded,
+                mediaUploadFailed: mediaUploadFailed,
+                timeLetterDraftEdited: timeLetterDraftEdited,
+                timeLetterDraftDeleted: timeLetterDraftDeleted,
+                timeLetterDraftSealed: timeLetterDraftSealed,
                 failureReason: nil
             )
             print(
@@ -1127,7 +1186,9 @@ private extension AppDelegate {
                 "audioRestored=\(restoredAudio != nil) " +
                 "videoRestored=\(restoredVideo != nil) " +
                 "timeLetterDraftRestored=\(timeLetterDraftRestored) " +
-                "timeLetterSealedRestored=\(timeLetterSealedRestored)"
+                "timeLetterSealedRestored=\(timeLetterSealedRestored) " +
+                "mediaUploadUploaded=\(mediaUploadUploaded) " +
+                "mediaUploadFailed=\(mediaUploadFailed)"
             )
         } catch {
             writeArchiveHiddenShellSmokeResult(
@@ -1143,6 +1204,11 @@ private extension AppDelegate {
                 videoThumbnailPersisted: false,
                 videoUploadStatusPersisted: false,
                 videoAnalysisPending: false,
+                mediaUploadUploaded: false,
+                mediaUploadFailed: false,
+                timeLetterDraftEdited: false,
+                timeLetterDraftDeleted: false,
+                timeLetterDraftSealed: false,
                 failureReason: error.localizedDescription
             )
             print("[UI_QA] ArchiveHiddenShellSmoke failed reason=\(error.localizedDescription)")
@@ -1893,6 +1959,11 @@ private extension AppDelegate {
         videoThumbnailPersisted: Bool,
         videoUploadStatusPersisted: Bool,
         videoAnalysisPending: Bool,
+        mediaUploadUploaded: Bool,
+        mediaUploadFailed: Bool,
+        timeLetterDraftEdited: Bool,
+        timeLetterDraftDeleted: Bool,
+        timeLetterDraftSealed: Bool,
         failureReason: String?
     ) {
         var result: [String: Any] = [
@@ -1908,6 +1979,11 @@ private extension AppDelegate {
             "videoThumbnailPersisted": videoThumbnailPersisted,
             "videoUploadStatusPersisted": videoUploadStatusPersisted,
             "videoAnalysisPending": videoAnalysisPending,
+            "mediaUploadUploaded": mediaUploadUploaded,
+            "mediaUploadFailed": mediaUploadFailed,
+            "timeLetterDraftEdited": timeLetterDraftEdited,
+            "timeLetterDraftDeleted": timeLetterDraftDeleted,
+            "timeLetterDraftSealed": timeLetterDraftSealed,
             "hiddenBranchesArgument": MemoryArchiveMediaReleaseReadiness.hiddenBranchesLaunchArgument
         ]
         if let failureReason {

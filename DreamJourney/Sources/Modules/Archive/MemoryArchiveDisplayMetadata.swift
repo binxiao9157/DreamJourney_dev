@@ -201,6 +201,9 @@ extension MemoryArchiveItem {
             rows.append(("文件类型", metadataFileTypeDisplayName ?? "音频"))
             rows.append(("文件状态", localPath == nil ? "未保存本地文件" : "本地已保存"))
             rows.append(("上传状态", metadataUploadStatusDisplayName ?? "本地待上传"))
+            if let metadataUploadErrorDisplayName {
+                rows.append(("上传错误", metadataUploadErrorDisplayName))
+            }
             rows.append(("转写状态", metadataTranscriptionStatusDisplayName ?? "未转写"))
             if let transcriptText = metadataTranscriptText {
                 rows.append(("转写结果", transcriptText))
@@ -226,6 +229,9 @@ extension MemoryArchiveItem {
         case .video:
             rows.append(("文件状态", localPath == nil ? "未保存本地文件" : "本地已保存"))
             rows.append(("上传状态", metadataUploadStatusDisplayName ?? "本地待上传"))
+            if let metadataUploadErrorDisplayName {
+                rows.append(("上传错误", metadataUploadErrorDisplayName))
+            }
             rows.append(("缩略图", metadataThumbnailDisplayName ?? "待生成"))
             rows.append(("文件上限", metadataFileSizeLimitDisplayName ?? "\(MemoryArchiveMediaReleaseReadiness.videoFileSizeLimitMB)MB"))
             rows.append(("云端合同", metadata["backendStorageContract"] ?? MemoryArchiveMediaReleaseReadiness.backendMediaStorageContract))
@@ -320,7 +326,7 @@ extension MemoryArchiveItem {
         case ArchiveMediaUploadStatus.localOnly.rawValue:
             return "本地待上传"
         case ArchiveMediaUploadStatus.pending.rawValue:
-            return "等待上传"
+            return "上传中"
         case ArchiveMediaUploadStatus.uploaded.rawValue:
             return "已上传"
         case ArchiveMediaUploadStatus.failed.rawValue:
@@ -328,6 +334,15 @@ extension MemoryArchiveItem {
         default:
             return nil
         }
+    }
+
+    private var metadataUploadErrorDisplayName: String? {
+        guard metadata[MemoryArchiveItem.mediaUploadStatusMetadataKey] == ArchiveMediaUploadStatus.failed.rawValue,
+              let error = metadata[MemoryArchiveItem.mediaUploadErrorMetadataKey],
+              !error.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return error
     }
 
     private var metadataTranscriptionStatusDisplayName: String? {

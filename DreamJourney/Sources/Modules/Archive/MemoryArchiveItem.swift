@@ -404,6 +404,11 @@ extension MemoryArchiveItem {
     static let mediaThumbnailPathMetadataKey = "thumbnailPath"
     static let mediaFileSizeBytesMetadataKey = "fileSizeBytes"
     static let mediaFileSizeLimitMBMetadataKey = "fileSizeLimitMB"
+    static let mediaUploadIntentIdMetadataKey = "uploadIntentId"
+    static let mediaObjectKeyMetadataKey = "objectKey"
+    static let mediaUploadProviderMetadataKey = "uploadProvider"
+    static let mediaUploadURLMetadataKey = "uploadURL"
+    static let mediaUploadErrorMetadataKey = "uploadError"
     static let analysisLocationCluesMetadataKey = "analysisLocationClues"
     static let analysisSceneCluesMetadataKey = "analysisSceneClues"
     static let analysisFailureReasonMetadataKey = "analysisFailureReason"
@@ -421,6 +426,60 @@ extension MemoryArchiveItem {
 
     var isPublicBackendSyncEligible: Bool {
         kind == .photo || kind == .text
+    }
+
+    var isMediaUploadIntentEligible: Bool {
+        (kind == .audio || kind == .video) && localPath?.isEmpty == false
+    }
+
+    var mediaUploadContentType: String? {
+        guard let localPath else { return nil }
+        let fileExtension = URL(fileURLWithPath: localPath).pathExtension.lowercased()
+        switch kind {
+        case .audio:
+            switch fileExtension {
+            case "m4a":
+                return "audio/mp4"
+            case "wav":
+                return "audio/wav"
+            default:
+                return "audio/mpeg"
+            }
+        case .video:
+            switch fileExtension {
+            case "mov":
+                return "video/quicktime"
+            case "mp4", "m4v":
+                return "video/mp4"
+            default:
+                return "video/mp4"
+            }
+        case .photo, .text, .timeLetter:
+            return nil
+        }
+    }
+
+    var mediaUploadFileName: String? {
+        guard let localPath else { return nil }
+        let fileName = URL(fileURLWithPath: localPath).lastPathComponent
+        return fileName.isEmpty ? nil : fileName
+    }
+
+    var mediaUploadFileSizeBytes: Int64? {
+        if let rawValue = metadata[Self.mediaFileSizeBytesMetadataKey],
+           let value = Int64(rawValue) {
+            return value
+        }
+        guard let localPath,
+              let attributes = try? FileManager.default.attributesOfItem(atPath: localPath),
+              let size = attributes[.size] as? NSNumber else {
+            return nil
+        }
+        return size.int64Value
+    }
+
+    var isTimeLetterDraft: Bool {
+        kind == .timeLetter && metadata["deliveryState"] == "draft"
     }
 
     var detectedLocationClues: [String] {
@@ -452,6 +511,88 @@ extension MemoryArchiveItem {
         } else {
             updatedItem.metadata.removeValue(forKey: Self.backendSyncErrorMetadataKey)
         }
+        return updatedItem
+    }
+
+    func markingMediaUploadPending() -> MemoryArchiveItem {
+        markingMediaUploadPending(now: Date())
+    }
+
+    func markingMediaUploadPending(now: Date) -> MemoryArchiveItem {
+        var updatedItem = self
+        updatedItem.metadata[Self.mediaUploadStatusMetadataKey] = ArchiveMediaUploadStatus.pending.rawValue
+        updatedItem.metadata.removeValue(forKey: Self.mediaUploadErrorMetadataKey)
+        updatedItem.metadata["mediaUploadAttemptedAt"] = "\(Int(now.timeIntervalSince1970))"
+        updatedItem.updatedAt = now
+        return updatedItem
+    }
+
+    func markingMediaUploadUploaded(intent: ArchiveMediaUploadIntent) -> MemoryArchiveItem {
+        markingMediaUploadUploaded(intent: intent, now: Date())
+    }
+
+    func markingMediaUploadUploaded(intent: ArchiveMediaUploadIntent, now: Date) -> MemoryArchiveItem {
+        var updatedItem = self
+        updatedItem.metadata[Self.mediaUploadStatusMetadataKey] = ArchiveMediaUploadStatus.uploaded.rawValue
+        updatedItem.metadata[Self.mediaUploadIntentIdMetadataKey] = intent.uploadIntentId
+        updatedItem.metadata[Self.mediaObjectKeyMetadataKey] = intent.objectKey
+        updatedItem.metadata[Self.mediaUploadProviderMetadataKey] = intent.storageProvider
+        updatedItem.metadata[Self.mediaUploadURLMetadataKey] = intent.uploadURL
+        updatedItem.metadata.removeValue(forKey: Self.mediaUploadErrorMetadataKey)
+        updatedItem.metadata["mediaUploadCompletedAt"] = "\(Int(now.timeIntervalSince1970))"
+        updatedItem.updatedAt = now
+        return updatedItem
+    }
+
+    func markingMediaUploadFailed(_ error: String) -> MemoryArchiveItem {
+        markingMediaUploadFailed(error, now: Date())
+    }
+
+    func markingMediaUploadFailed(_ error: String, now: Date) -> MemoryArchiveItem {
+        var updatedItem = self
+        let normalizedError = error.trimmingCharacters(in: .whitespacesAndNewlines)
+        updatedItem.metadata[Self.mediaUploadStatusMetadataKey] = ArchiveMediaUploadStatus.failed.rawValue
+        updatedItem.metadata[Self.mediaUploadErrorMetadataKey] = String(
+            (normalizedError.isEmpty ? "上传失败" : normalizedError).prefix(80)
+        )
+        updatedItem.metadata["mediaUploadAttemptedAt"] = "\(Int(now.timeIntervalSince1970))"
+        updatedItem.updatedAt = now
+        return updatedItem
+    }
+
+    func updatingTimeLetterDraft(note: String) -> MemoryArchiveItem {
+        updatingTimeLetterDraft(note: note, now: Date())
+    }
+
+    func updatingTimeLetterDraft(note: String, now: Date) -> MemoryArchiveItem {
+        var updatedItem = self
+        let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        updatedItem.note = trimmedNote
+        updatedItem.title = "时间信件草稿"
+        updatedItem.analysisSummary = "这封信暂存为草稿，不会触发真实通知或投递。"
+        updatedItem.metadata["deliveryState"] = "draft"
+        updatedItem.metadata["timeLetterStatus"] = "draft"
+        updatedItem.metadata["deliveryPolicy"] = "pending_product_decision"
+        updatedItem.metadata["deliveryDecisionRequired"] = "true"
+        updatedItem.metadata["characterCount"] = "\(trimmedNote.count)"
+        updatedItem.updatedAt = now
+        return updatedItem
+    }
+
+    func sealingTimeLetterDraft() -> MemoryArchiveItem {
+        sealingTimeLetterDraft(now: Date())
+    }
+
+    func sealingTimeLetterDraft(now: Date) -> MemoryArchiveItem {
+        var updatedItem = self
+        updatedItem.title = "时间信件"
+        updatedItem.analysisSummary = "这封信会作为未来回看与生成回响时的情感线索。"
+        updatedItem.tags = Self.mergingUnique(updatedItem.tags.filter { $0 != "草稿" }, with: ["时间信件"])
+        updatedItem.metadata["deliveryState"] = "sealed"
+        updatedItem.metadata["timeLetterStatus"] = "sealed"
+        updatedItem.metadata["deliveryPolicy"] = "pending_product_decision"
+        updatedItem.metadata["deliveryDecisionRequired"] = "true"
+        updatedItem.updatedAt = now
         return updatedItem
     }
 

@@ -160,6 +160,37 @@ final class MemoryArchiveRepository {
         retryItems.forEach(syncToBackend)
     }
 
+    func archiveMediaUploadIntentPayload(for item: MemoryArchiveItem) -> [String: Any]? {
+        guard item.isMediaUploadIntentEligible,
+              let fileName = item.mediaUploadFileName,
+              let contentType = item.mediaUploadContentType,
+              let fileSizeBytes = item.mediaUploadFileSizeBytes else {
+            return nil
+        }
+
+        let archiveVisibilityContext = currentArchiveVisibilityContext
+        return item.archiveMediaUploadIntentPayload(
+            userId: archiveVisibilityContext.ownerId,
+            personaScope: archiveVisibilityContext.personaScope,
+            digitalHumanId: archiveVisibilityContext.digitalHumanId,
+            fileName: fileName,
+            contentType: contentType,
+            fileSizeBytes: fileSizeBytes
+        )
+    }
+
+    @discardableResult
+    func remove(id: String) -> Bool {
+        var items = allItems()
+        let originalCount = items.count
+        items.removeAll { $0.id == id }
+        guard items.count != originalCount else {
+            return false
+        }
+        save(items)
+        return true
+    }
+
     func summary() -> (total: Int, photos: Int, audio: Int, text: Int) {
         let items = allItems()
         return (

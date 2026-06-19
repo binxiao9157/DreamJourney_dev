@@ -31,6 +31,13 @@ final class DreamJourneyBackendClient {
     }
 }
 
+struct ArchiveMediaUploadIntent {
+    let uploadIntentId: String
+    let objectKey: String
+    let storageProvider: String
+    let uploadURL: String
+}
+
 struct DigitalHumanContext {
     let ownerId: String
     let isSelfAssistant: Bool

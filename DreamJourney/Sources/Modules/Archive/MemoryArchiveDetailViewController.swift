@@ -32,7 +32,9 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     private var audioPlayer: AVAudioPlayer?
     private weak var audioPlayButton: UIButton?
     private weak var analysisRetryButton: UIButton?
+    private weak var mediaUploadIntentButton: UIButton?
     private var isRetryingRemoteAnalysis = false
+    private var isRequestingMediaUploadIntent = false
 
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -154,6 +156,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         audioPlayer = nil
         audioPlayButton = nil
         analysisRetryButton = nil
+        mediaUploadIntentButton = nil
 
         contentStack.arrangedSubviews.forEach { view in
             contentStack.removeArrangedSubview(view)
@@ -507,6 +510,9 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         bodyContainer.addSubview(bodyLabel)
         stack.addArrangedSubview(headerStack)
         stack.addArrangedSubview(bodyContainer)
+        if item.kind == .timeLetter {
+            stack.addArrangedSubview(makeTimeLetterLifecycleActions())
+        }
 
         [stack, headerStack, iconContainer, titleStack, titleLabel, subtitleLabel, bodyContainer, accentLine, bodyLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
@@ -533,6 +539,58 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         ])
 
         return card
+    }
+
+    private func makeTimeLetterLifecycleActions() -> UIView {
+        let stack = UIStackView()
+        stack.axis = .horizontal
+        stack.spacing = 10
+        stack.distribution = .fillEqually
+
+        if item.isTimeLetterDraft {
+            stack.addArrangedSubview(makeLifecycleButton(
+                title: "编辑草稿",
+                identifier: "archive-time-letter-edit-draft",
+                action: #selector(editTimeLetterDraftTapped)
+            ))
+            stack.addArrangedSubview(makeLifecycleButton(
+                title: "封存草稿",
+                identifier: "archive-time-letter-seal-draft",
+                action: #selector(sealTimeLetterDraftTapped)
+            ))
+            stack.addArrangedSubview(makeLifecycleButton(
+                title: "删除草稿",
+                identifier: "archive-time-letter-delete-draft",
+                action: #selector(deleteTimeLetterDraftTapped)
+            ))
+        } else {
+            let sealedLabel = UILabel()
+            sealedLabel.text = "已封存，等待投递策略产品决策后开放。"
+            sealedLabel.font = DJDesignTokens.Font.label(12)
+            sealedLabel.textColor = DJDesignTokens.Color.textTertiary
+            sealedLabel.numberOfLines = 0
+            sealedLabel.accessibilityIdentifier = "archive-time-letter-sealed-state"
+            stack.addArrangedSubview(sealedLabel)
+        }
+
+        return stack
+    }
+
+    private func makeLifecycleButton(
+        title: String,
+        identifier: String,
+        action: Selector
+    ) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setTitle(title, for: .normal)
+        button.titleLabel?.font = DJDesignTokens.Font.label(12)
+        button.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
+        button.backgroundColor = DJDesignTokens.Color.surface
+        button.layer.cornerRadius = DJDesignTokens.Radius.medium
+        button.contentEdgeInsets = UIEdgeInsets(top: 9, left: 10, bottom: 9, right: 10)
+        button.accessibilityIdentifier = identifier
+        button.addTarget(self, action: action, for: .touchUpInside)
+        return button
     }
 
     private func makeTextCard(title: String, body: String) -> UIView {
@@ -577,6 +635,9 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         item.archiveDetailMetadataRows.forEach { row in
             stack.addArrangedSubview(makeMetadataRow(title: row.title, value: row.value))
         }
+        if item.isMediaUploadIntentEligible {
+            stack.addArrangedSubview(makeMediaUploadIntentButton())
+        }
 
         card.addSubview(stack)
         [stack, titleLabel].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
@@ -589,6 +650,39 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         ])
 
         return card
+    }
+
+    private func makeMediaUploadIntentButton() -> UIButton {
+        let button = UIButton(type: .system)
+        button.setTitle(mediaUploadIntentButtonTitle, for: .normal)
+        button.setImage(UIImage(systemName: "arrow.up.doc"), for: .normal)
+        button.tintColor = DJDesignTokens.Color.accentDeep
+        button.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
+        button.titleLabel?.font = DJDesignTokens.Font.label(13)
+        button.backgroundColor = DJDesignTokens.Color.accent.withAlphaComponent(0.18)
+        button.layer.cornerRadius = DJDesignTokens.Radius.medium
+        button.contentEdgeInsets = UIEdgeInsets(top: 10, left: 14, bottom: 10, right: 14)
+        button.isEnabled = !isRequestingMediaUploadIntent
+        button.alpha = isRequestingMediaUploadIntent ? 0.72 : 1
+        button.accessibilityIdentifier = "archive-media-upload-intent-button"
+        button.accessibilityLabel = mediaUploadIntentButtonTitle
+        button.addTarget(self, action: #selector(requestMediaUploadIntentTapped), for: .touchUpInside)
+        mediaUploadIntentButton = button
+        return button
+    }
+
+    private var mediaUploadIntentButtonTitle: String {
+        if isRequestingMediaUploadIntent {
+            return "上传中..."
+        }
+        switch item.metadata[MemoryArchiveItem.mediaUploadStatusMetadataKey] {
+        case ArchiveMediaUploadStatus.failed.rawValue:
+            return "重新上传"
+        case ArchiveMediaUploadStatus.uploaded.rawValue:
+            return "重新同步媒体元数据"
+        default:
+            return "同步媒体元数据"
+        }
     }
 
     private func makeMetadataRow(title: String, value: String) -> UIView {
@@ -938,6 +1032,96 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         reloadContent()
         configureNavigationActions()
         showToast(didPersist ? "已生成本地分析" : "已生成本地分析预览", type: .success)
+    }
+
+    @objc private func editTimeLetterDraftTapped() {
+        guard item.isTimeLetterDraft else { return }
+        let alert = UIAlertController(title: "编辑时间信件草稿", message: nil, preferredStyle: .alert)
+        alert.addTextField { [item] textField in
+            textField.text = item.note
+            textField.placeholder = "这封信想说什么？"
+            textField.clearButtonMode = .whileEditing
+        }
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "保存", style: .default) { [weak self, weak alert] _ in
+            guard let self,
+                  let text = alert?.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !text.isEmpty else {
+                self?.showToast("草稿内容不能为空", type: .error)
+                return
+            }
+            item = item.updatingTimeLetterDraft(note: text)
+            _ = repository.update(item, syncToBackend: false)
+            reloadContent()
+            showToast("草稿已更新", type: .success)
+        })
+        present(alert, animated: true)
+    }
+
+    @objc private func sealTimeLetterDraftTapped() {
+        guard item.isTimeLetterDraft else { return }
+        item = item.sealingTimeLetterDraft()
+        _ = repository.update(item, syncToBackend: false)
+        reloadContent()
+        showToast("时间信件已封存", type: .success)
+    }
+
+    @objc private func deleteTimeLetterDraftTapped() {
+        guard item.isTimeLetterDraft else { return }
+        let alert = UIAlertController(
+            title: "删除时间信件草稿？",
+            message: "删除后不会触发投递，也不会同步到后端。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "删除草稿", style: .destructive) { [weak self] _ in
+            guard let self else { return }
+            _ = repository.remove(id: item.id)
+            navigationController?.popViewController(animated: true)
+        })
+        present(alert, animated: true)
+    }
+
+    @objc private func requestMediaUploadIntentTapped() {
+        guard item.isMediaUploadIntentEligible else {
+            markMediaUploadFailure("缺少本地媒体文件")
+            return
+        }
+        guard DreamJourneyBackendClient.shared.isArchiveMediaUploadIntentConfigured else {
+            markMediaUploadFailure("后端未配置")
+            return
+        }
+        guard let payload = repository.archiveMediaUploadIntentPayload(for: item) else {
+            markMediaUploadFailure("媒体上传参数不完整")
+            return
+        }
+
+        isRequestingMediaUploadIntent = true
+        item = item.markingMediaUploadPending()
+        _ = repository.update(item, syncToBackend: false)
+        reloadContent()
+
+        DreamJourneyBackendClient.shared.requestArchiveMediaUploadIntent(payload: payload) { [weak self] result in
+            guard let self else { return }
+            isRequestingMediaUploadIntent = false
+            switch result {
+            case .success(let intent):
+                item = item.markingMediaUploadUploaded(intent: intent)
+                _ = repository.update(item, syncToBackend: false)
+                reloadContent()
+                showToast("媒体元数据已同步", type: .success)
+            case .failure(let error):
+                markMediaUploadFailure(error.localizedDescription)
+            }
+        }
+    }
+
+    private func markMediaUploadFailure(_ reason: String) {
+        isRequestingMediaUploadIntent = false
+        item = item.markingMediaUploadFailed(reason.isEmpty ? "上传失败" : reason)
+        _ = repository.update(item, syncToBackend: false)
+        reloadContent()
+        showToast("上传失败，可重试", type: .error)
     }
 
     @objc private func retryAnalysisTapped() {

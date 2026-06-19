@@ -125,8 +125,13 @@ grep -Eq '"audioTranscriptPersisted"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE
 grep -Eq '"videoRestored"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Video shell item should restore from local storage."
 grep -Eq '"videoThumbnailPersisted"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Video thumbnail field should persist."
 grep -Eq '"videoAnalysisPending"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Video shell should stay in pending analysis state."
+grep -Eq '"mediaUploadUploaded"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Audio mock upload should reach uploaded state."
+grep -Eq '"mediaUploadFailed"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Video mock upload should retain failed state for retry."
 grep -Eq '"timeLetterDraftRestored"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter draft should restore."
 grep -Eq '"timeLetterSealedRestored"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter sealed state should restore."
+grep -Eq '"timeLetterDraftEdited"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter draft edit should persist."
+grep -Eq '"timeLetterDraftDeleted"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter draft delete should persist."
+grep -Eq '"timeLetterDraftSealed"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter draft seal should persist."
 grep -Eq '"hiddenBranchesArgument"[[:space:]]*:[[:space:]]*"DJEnableArchiveHiddenBranches"' "$RESULT_FILE" || fail "Hidden archive launch argument changed."
 
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null
