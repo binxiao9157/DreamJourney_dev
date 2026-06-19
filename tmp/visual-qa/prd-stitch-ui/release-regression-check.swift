@@ -34,6 +34,8 @@ let releasePackage = read("tmp/visual-qa/prd-stitch-ui/release-qa-package-check.
 for phrase in [
     "RUN_STANDARD_BUILD",
     "RUN_SIMULATOR_SMOKE",
+    "RUN_P0_ARCHIVE_ECHO_REGRESSION",
+    "RUN_P0_ARCHIVE_ECHO_REGRESSION forces RUN_SIMULATOR_SMOKE",
     "RUN_BACKEND_ENV_SMOKE",
     "RUN_P0_PROFILE_CARE_REGRESSION",
     "RUN_P0_PROFILE_CARE_REGRESSION forces RUN_PROFILE_CARE_STATE_SMOKE and RUN_PROFILE_CARE_BACKEND_STATE_SMOKE",
@@ -63,6 +65,9 @@ for phrase in [
     "one-command release regression",
     "run-release-regression.sh",
     "Archive -> Echo",
+    "P0 Archive -> Echo Regression Gate",
+    "RUN_P0_ARCHIVE_ECHO_REGRESSION=1",
+    "archive seed -> analysis -> Echo context",
     "RUN_RELEASE_LIKE_BACKEND=1",
     "Release Handoff Mode",
     "RELEASE_HANDOFF_MODE=1",

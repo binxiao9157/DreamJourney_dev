@@ -22,6 +22,20 @@ The default run covers:
 - Archive -> Echo simulator smoke.
 - Echo delayed reply persistence/local-notification smoke.
 
+## P0 Archive -> Echo Regression Gate
+
+Use this when validating the public MVP `记忆档案 -> 回响` loop after UI, archive, Echo, or release packaging changes:
+
+```bash
+RUN_P0_ARCHIVE_ECHO_REGRESSION=1 \
+RUN_ID=20260619-p0-archive-echo \
+tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+```
+
+`RUN_P0_ARCHIVE_ECHO_REGRESSION=1` forces `RUN_SIMULATOR_SMOKE=1`, even if a narrow release subset sets `RUN_SIMULATOR_SMOKE=0`.
+
+The gate covers archive seed -> analysis -> Echo context: it installs a clean simulator app, creates a public MVP archive item, verifies Echo receives archive context, and saves the result JSON plus screenshot evidence.
+
 ## P0 Profile Care Regression Gate
 
 Use this when validating the public MVP `我的 -> 心境追踪 / 长辈关怀` loop after UI, backend, or release packaging changes:
@@ -61,6 +75,8 @@ Release handoff mode must include these gates:
 - Archive ownership guard: `archive-ownership-visibility-check.swift`
 - Care placeholder guard: `profile-care-public-placeholder-check.swift`
 - Release-like backend acceptance: `run-release-like-backend-acceptance.sh`
+
+For public MVP archive handoff, add `RUN_P0_ARCHIVE_ECHO_REGRESSION=1` to the release handoff command so archive seed, analysis, and Echo context run in the same package.
 
 For public MVP care handoff, add `RUN_P0_PROFILE_CARE_REGRESSION=1` to the release handoff command so care state local UIQA and deployed backend failure-retry UIQA run in the same package.
 
