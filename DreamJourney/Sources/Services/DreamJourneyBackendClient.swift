@@ -355,6 +355,8 @@ struct VoiceCloneProfileContract {
     let authorizationVersion: String
     let authorizationCopy: String
     let providerMode: String
+    let providerStatus: String
+    let providerMessage: String
     let realCloneProviderReady: Bool
     let qualityAcceptanceRequired: Bool
     let isEnabled: Bool
@@ -377,6 +379,8 @@ struct VoiceCloneProfileContract {
         self.authorizationVersion = json["authorizationVersion"] as? String ?? "voice-clone-consent-v1"
         self.authorizationCopy = json["authorizationCopy"] as? String ?? ""
         self.providerMode = json["providerMode"] as? String ?? "mockContract"
+        self.providerStatus = json["providerStatus"] as? String ?? ""
+        self.providerMessage = json["providerMessage"] as? String ?? ""
         self.realCloneProviderReady = json["realCloneProviderReady"] as? Bool ?? false
         self.qualityAcceptanceRequired = json["qualityAcceptanceRequired"] as? Bool ?? true
         self.isEnabled = json["isEnabled"] as? Bool ?? false

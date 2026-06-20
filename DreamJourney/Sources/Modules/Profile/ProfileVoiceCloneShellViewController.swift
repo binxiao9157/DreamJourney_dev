@@ -541,12 +541,19 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         case .ready:
             return "后续回响可使用这份音色，仍可随时禁用或删除。"
         case .failed:
+            if let providerMessage = providerFailureMessage(for: snapshot) {
+                return "训练未完成：\(providerMessage)"
+            }
             return "这次样本未能完成训练，可以换一段更清晰的音频重试。"
         case .disabled:
             return "当前音色不会再用于合成，可重新提交样本恢复。"
         case .deleted:
             return "音色和本地记录已清理，可以重新授权创建。"
         }
+    }
+
+    private func providerFailureMessage(for snapshot: VoiceCloneProfileSnapshot) -> String? {
+        snapshot.providerFailureDisplayText
     }
 
     private func voiceAvailabilityText(for snapshot: VoiceCloneProfileSnapshot) -> String {

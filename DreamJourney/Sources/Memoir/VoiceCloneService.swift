@@ -35,6 +35,8 @@ struct VoiceCloneProfileSnapshot {
     let disableContract: String
     let deleteContract: String
     let providerMode: String
+    let providerStatus: String
+    let providerMessage: String
     let contractVersion: Int
     let defaultReleaseVisible: Bool
 
@@ -46,6 +48,8 @@ struct VoiceCloneProfileSnapshot {
         disableContract: String,
         deleteContract: String,
         providerMode: String = "localFallback",
+        providerStatus: String = "",
+        providerMessage: String = "",
         contractVersion: Int = 1,
         defaultReleaseVisible: Bool = true
     ) {
@@ -56,6 +60,8 @@ struct VoiceCloneProfileSnapshot {
         self.disableContract = disableContract
         self.deleteContract = deleteContract
         self.providerMode = providerMode
+        self.providerStatus = providerStatus
+        self.providerMessage = providerMessage
         self.contractVersion = contractVersion
         self.defaultReleaseVisible = defaultReleaseVisible
     }
@@ -69,9 +75,22 @@ struct VoiceCloneProfileSnapshot {
             disableContract: backendContract.disableContract,
             deleteContract: backendContract.deleteContract,
             providerMode: backendContract.providerMode,
+            providerStatus: backendContract.providerStatus,
+            providerMessage: backendContract.providerMessage,
             contractVersion: backendContract.contractVersion,
             defaultReleaseVisible: backendContract.defaultReleaseVisible
         )
+    }
+
+    var providerFailureDisplayText: String? {
+        let trimmed = providerMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return nil
+        }
+        if trimmed.localizedCaseInsensitiveContains("Invalid X-Api-Key") {
+            return "服务器火山音色复刻 API Key 无效，请更新后端配置后重试。"
+        }
+        return trimmed
     }
 }
 
@@ -265,8 +284,9 @@ final class VoiceCloneService {
 
         let base64Audio = audioData.base64EncodedString()
 
-        // 确定 speaker_id
-        let finalSpeakerId = speakerId ?? currentSpeakerId ?? "S_\(UUID().uuidString.prefix(8))"
+        // 失败/删除/禁用后的重试不能复用旧 speakerId，否则 provider 侧可能继续命中
+        // 已经失败或归属错误的音色资源，导致 resource mismatch 一直存在。
+        let finalSpeakerId = speakerId ?? reusableSpeakerIdForTraining() ?? Self.makeSpeakerId()
 
         // 确定音频格式
         let format = audioFormat(from: audioURL)
@@ -300,7 +320,7 @@ final class VoiceCloneService {
                 if profile.sampleStatus == .ready {
                     completion(.success(profile.voiceProfileId))
                 } else if profile.sampleStatus == .failed {
-                    completion(.failure(.trainingFailed(code: 3, message: "音色训练失败")))
+                    completion(.failure(.trainingFailed(code: 3, message: Self.trainingFailureMessage(from: profile.providerMessage))))
                 } else {
                     self.startPollingStatus(speakerId: profile.voiceProfileId, completion: completion)
                 }
@@ -353,6 +373,38 @@ final class VoiceCloneService {
         case .failed:
             return .failed
         }
+    }
+
+    private func reusableSpeakerIdForTraining() -> String? {
+        guard let speakerId = currentSpeakerId?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !speakerId.isEmpty else {
+            return nil
+        }
+        let storedStatus = UserDefaults.standard.string(forKey: sampleStatusKey)
+            .flatMap(VoiceCloneSampleStatus.init(rawValue:))
+        switch storedStatus {
+        case .failed, .deleted, .disabled:
+            return nil
+        case .notProvided, .none:
+            return nil
+        case .pending, .ready:
+            return speakerId
+        }
+    }
+
+    private static func makeSpeakerId() -> String {
+        "S_\(UUID().uuidString.prefix(8))"
+    }
+
+    private static func trainingFailureMessage(from providerMessage: String) -> String {
+        let trimmed = providerMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return "音色训练失败"
+        }
+        if trimmed.localizedCaseInsensitiveContains("Invalid X-Api-Key") {
+            return "服务器火山音色复刻 API Key 无效，请更新后端配置后重试。"
+        }
+        return trimmed
     }
 
     /// 检查当前音色是否已就绪（可用）

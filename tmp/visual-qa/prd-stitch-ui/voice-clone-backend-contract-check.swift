@@ -66,6 +66,7 @@ for required in [
     "VOLCENGINE_VOICE_CLONE_API_KEY",
     "VOLCENGINE_VOICE_CLONE_TRAIN_URL",
     "VOLCENGINE_VOICE_CLONE_QUERY_URL",
+    "VOLCENGINE_VOICE_CLONE_RESOURCE_ID",
     "VOLCENGINE_VOICE_CLONE_TTS_URL",
     "VOLCENGINE_VOICE_CLONE_TTS_RESOURCE_ID",
     "https://openspeech.bytedance.com/api/v3/tts/voice_clone",
@@ -79,7 +80,11 @@ for required in [
     "VolcEngineVoiceCloneV3Provider",
     "settings.volcengine_voice_clone_train_url",
     "settings.volcengine_voice_clone_query_url",
+    "settings.volcengine_voice_clone_resource_id",
     "X-Api-Key",
+    "X-Api-Resource-Id",
+    "\"speaker_id\": \"custom_speaker_id\"",
+    "\"custom_speaker_id\": voice_profile_id",
     "build_training_request",
     "build_query_request",
 ] {
@@ -134,6 +139,7 @@ for forbidden in [
 for required in [
     "VoiceCloneProfileAPITests",
     "test_voice_clone_profile_contract_requires_authorization_and_persists_lifecycle",
+    "test_voice_clone_profile_persists_provider_failure_message",
 ] {
     assertContains(backendTests, required, "backend tests should cover voice clone API \(required)")
 }
@@ -148,6 +154,8 @@ for required in [
     "struct VoiceCloneProfileContract",
     "let voiceProfileId: String",
     "let sampleStatus: VoiceCloneSampleStatus",
+    "let providerStatus: String",
+    "let providerMessage: String",
     "let authorizationConfirmed: Bool",
     "let disableContract: String",
     "let deleteContract: String",
@@ -173,10 +181,10 @@ for required in [
 for forbidden in [
     "https://openspeech.bytedance.com/api/v3/tts/voice_clone",
     "https://openspeech.bytedance.com/api/v3/tts/get_voice",
-    "X-Api-Key",
 ] {
     assertNotContains(voiceService, forbidden, "iOS VoiceCloneService must not call VolcEngine directly \(forbidden)")
 }
+assertNotContains(voiceService, "\"X-Api-Key\":", "iOS VoiceCloneService must not send VolcEngine API headers directly")
 
 for required in [
     "DreamJourneyBackendClient.shared.requestVoiceCloneSynthesis",
