@@ -4,6 +4,7 @@ final class EchoViewController: UIViewController {
     private let viewModel: EchoViewModel
 
     private let scenicView = EchoScenicParkView()
+    private var digitalHumanLivePanelView: DigitalHumanLivePanelView?
 
     private let personaBadgeView: UIView = {
         let view = UIView()
@@ -151,6 +152,13 @@ final class EchoViewController: UIViewController {
     private var showsVoiceSDKReadinessPreview = false
     private var backendRuntimeTokenApplied = false
 
+    private var shouldShowDigitalHumanLivePanel: Bool {
+        let arguments = ProcessInfo.processInfo.arguments
+        let requested = arguments.contains("DJShowDigitalHumanLivePanel")
+            || arguments.contains("DJRunDigitalHumanLivePanelSmoke")
+        return requested && FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel)
+    }
+
     init(viewModel: EchoViewModel = EchoViewModel()) {
         self.viewModel = viewModel
         super.init(nibName: nil, bundle: nil)
@@ -200,6 +208,7 @@ final class EchoViewController: UIViewController {
                 ConversationMemoryManager.shared.endSession()
                 viewModel.resetToIdle()
             }
+            digitalHumanLivePanelView?.stopSimulatedAudioLevels()
             DialogEngineManager.shared.delegate = nil
         }
     }
@@ -219,9 +228,16 @@ final class EchoViewController: UIViewController {
     }
 
     private func setupLayout() {
+        if shouldShowDigitalHumanLivePanel {
+            digitalHumanLivePanelView = DigitalHumanLivePanelView()
+        }
+
         view.addSubview(scenicView)
         view.addSubview(personaBadgeView)
         view.addSubview(archiveContextStatusView)
+        if let digitalHumanLivePanelView {
+            view.addSubview(digitalHumanLivePanelView)
+        }
         view.addSubview(quoteBubble)
         view.addSubview(voiceStatusView)
         view.addSubview(micRingView)
@@ -254,6 +270,7 @@ final class EchoViewController: UIViewController {
             micRingView,
             micButton
         ].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
+        digitalHumanLivePanelView?.translatesAutoresizingMaskIntoConstraints = false
 
         let micBottomConstraint = micButton.bottomAnchor.constraint(
             equalTo: view.bottomAnchor,
@@ -329,6 +346,15 @@ final class EchoViewController: UIViewController {
             micRingView.widthAnchor.constraint(equalToConstant: 76),
             micRingView.heightAnchor.constraint(equalToConstant: 76)
         ])
+
+        if let digitalHumanLivePanelView {
+            NSLayoutConstraint.activate([
+                digitalHumanLivePanelView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                digitalHumanLivePanelView.topAnchor.constraint(equalTo: personaBadgeView.bottomAnchor, constant: 14),
+                digitalHumanLivePanelView.widthAnchor.constraint(equalToConstant: 190),
+                digitalHumanLivePanelView.heightAnchor.constraint(equalTo: digitalHumanLivePanelView.widthAnchor)
+            ])
+        }
     }
 
     private func bindViewModel() {
@@ -377,6 +403,10 @@ final class EchoViewController: UIViewController {
         personaNameLabel.text = context.isSelfAssistant ? "自己 · AI 助手" : context.resolvedDisplayName
         personaSubtitleLabel.text = makePersonaBadgeSubtitle(context: context)
         personaBadgeView.accessibilityLabel = "\(personaNameLabel.text ?? "")，\(personaSubtitleLabel.text ?? "")"
+        digitalHumanLivePanelView?.setPersona(
+            name: personaNameLabel.text ?? context.resolvedDisplayName,
+            subtitle: personaSubtitleLabel.text ?? ""
+        )
     }
 
     private func makePersonaBadgeSubtitle(context: DigitalHumanContext) -> String {
@@ -427,6 +457,7 @@ final class EchoViewController: UIViewController {
 
     private func render(state: EchoInteractionState) {
         currentState = state
+        renderDigitalHumanLivePanel(for: state)
 
         switch state {
         case .idle:
@@ -502,6 +533,23 @@ final class EchoViewController: UIViewController {
             )
             setMicPulse(active: false)
         }
+    }
+
+    private func renderDigitalHumanLivePanel(for state: EchoInteractionState) {
+        let liveState: DigitalHumanLiveInteractionState
+        switch state {
+        case .idle:
+            liveState = .idle
+        case .starting, .listening:
+            liveState = .listening
+        case .thinking, .waitingReply:
+            liveState = .thinking
+        case .speaking, .replied:
+            liveState = .speaking
+        case .error:
+            liveState = .failed
+        }
+        digitalHumanLivePanelView?.setInteractionState(liveState)
     }
 
     private func renderVoiceStatus(
@@ -827,6 +875,48 @@ extension EchoViewController {
     func runUIQAVoiceSDKReadinessPreview() {
         showsVoiceSDKReadinessPreview = true
         renderVoiceSDKReadinessPreviewIfNeeded()
+    }
+
+    func runUIQADigitalHumanLivePanelSmoke(completion: @escaping ([String: Any]) -> Void) {
+        guard let panel = digitalHumanLivePanelView else {
+            completion([
+                "completed": false,
+                "panelVisible": false,
+                "failureReason": "digitalHumanLivePanelNotCreated"
+            ])
+            return
+        }
+
+        updatePersonaBadge()
+        viewModel.beginVoiceInteraction()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            self?.render(state: .thinking)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
+            self?.viewModel.receiveAIReply("我在这里，慢慢听你说。")
+            self?.digitalHumanLivePanelView?.startSimulatedAudioLevels()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.45) { [weak self] in
+            panel.snapshot { snapshot in
+                let audioLevel = snapshot?.audioLevel ?? 0
+                let panelReady = snapshot?.ready == true
+                let speaking = snapshot?.stateName == DigitalHumanLiveInteractionState.speaking.rawValue
+                completion([
+                    "completed": panelReady && speaking && audioLevel > 0,
+                    "panelVisible": !panel.isHidden && panel.alpha > 0,
+                    "panelReady": panelReady,
+                    "rendererReady": snapshot?.rendererReady ?? false,
+                    "panelFailed": snapshot?.failed ?? panel.didFail,
+                    "stateName": snapshot?.stateName ?? "missing",
+                    "audioLevel": audioLevel,
+                    "personaName": snapshot?.personaName ?? "",
+                    "personaSubtitle": snapshot?.personaSubtitle ?? "",
+                    "voiceStatusText": self?.voiceStatusLabel.text ?? "",
+                    "quoteText": self?.quoteLabel.text ?? ""
+                ])
+            }
+        }
     }
 }
 #endif

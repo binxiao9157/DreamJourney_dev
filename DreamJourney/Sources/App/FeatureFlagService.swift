@@ -18,6 +18,7 @@ enum DJFeature: String, CaseIterable {
     case careDashboard
     case careDoctorContact
     case voiceCloneShell
+    case digitalHumanLivePanel
 }
 
 final class FeatureFlagService {

@@ -127,10 +127,20 @@ private extension AppDelegate {
             FeatureFlagService.shared.set(.archiveRemoteFetch, enabled: true)
             print("[UI_QA] Archive remote fetch enabled")
         }
+        if arguments.contains("DJShowDigitalHumanLivePanel")
+            || arguments.contains("DJRunDigitalHumanLivePanelSmoke") {
+            FeatureFlagService.shared.set(.digitalHumanLivePanel, enabled: true)
+            print("[UI_QA] Digital human live panel enabled")
+        }
         if arguments.contains(where: { $0.hasPrefix("DJRunProfileCare") }) {
             seedUIQAStarCareFamilyMember()
         }
-        if arguments.contains("DJRunProfileCareBackendFailureRetrySmoke") {
+        if arguments.contains("DJRunDigitalHumanLivePanelSmoke") {
+            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.runDigitalHumanLivePanelSmoke()
+            }
+        } else if arguments.contains("DJRunProfileCareBackendFailureRetrySmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
@@ -2131,6 +2141,52 @@ private extension AppDelegate {
         print("[UI_QA] VoiceSDKReadinessPreview showing readiness boundary")
     }
 
+    func runDigitalHumanLivePanelSmoke(retryCount: Int = 0) {
+        guard let tabBarController = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController as? WarmTabBarController else {
+            guard retryCount < 20 else {
+                print("[UI_QA] DigitalHumanLivePanelSmoke failed reason=missingRootTab")
+                writeDigitalHumanLivePanelSmokeResult([
+                    "completed": false,
+                    "failureReason": "missingRootTab"
+                ])
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                self?.runDigitalHumanLivePanelSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+
+        guard let viewControllers = tabBarController.viewControllers,
+              viewControllers.count > 1,
+              let echoNavigationController = viewControllers[1] as? UINavigationController,
+              let echoViewController = echoNavigationController.viewControllers.first as? EchoViewController else {
+            print("[UI_QA] DigitalHumanLivePanelSmoke failed reason=missingEcho")
+            writeDigitalHumanLivePanelSmokeResult([
+                "completed": false,
+                "failureReason": "missingEcho"
+            ])
+            return
+        }
+
+        tabBarController.selectedIndex = 1
+        echoViewController.runUIQADigitalHumanLivePanelSmoke { [weak self] payload in
+            var result = payload
+            result["selectedTabIndex"] = tabBarController.selectedIndex
+            self?.writeDigitalHumanLivePanelSmokeResult(result)
+            print(
+                "[UI_QA] DigitalHumanLivePanelSmoke completed " +
+                "completed=\(result["completed"] as? Bool == true) " +
+                "state=\(result["stateName"] as? String ?? "missing") " +
+                "panelReady=\(result["panelReady"] as? Bool == true)"
+            )
+        }
+    }
+
     func runBackendEnvSmoke(retryCount: Int = 0) {
         guard let tabBarController = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
@@ -2715,6 +2771,21 @@ private extension AppDelegate {
             try data.write(to: resultURL, options: [.atomic])
         } catch {
             print("[UI_QA] EchoDelayedReplyNotificationSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    func writeDigitalHumanLivePanelSmokeResult(_ result: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
+              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("[UI_QA] DigitalHumanLivePanelSmoke failed reason=resultEncoding")
+            return
+        }
+
+        let resultURL = documentsURL.appendingPathComponent("digital-human-live-panel-smoke-result.json")
+        do {
+            try data.write(to: resultURL, options: [.atomic])
+        } catch {
+            print("[UI_QA] DigitalHumanLivePanelSmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
     }
 
