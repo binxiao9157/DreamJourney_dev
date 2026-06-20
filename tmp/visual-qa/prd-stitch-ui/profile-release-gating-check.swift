@@ -22,14 +22,39 @@ func assertNotContains(_ haystack: String, _ needle: String, _ message: String) 
     }
 }
 
+func extractDefaultEnabledFeatures(from flags: String) -> Set<String> {
+    let marker = "private static let defaultEnabled: Set<DJFeature> = ["
+    guard let start = flags.range(of: marker)?.upperBound,
+          let end = flags[start...].range(of: "]")?.lowerBound else {
+        fatalError("Unable to find FeatureFlagService.defaultEnabled")
+    }
+    let body = flags[start..<end]
+    let pattern = "\\.([A-Za-z0-9_]+)"
+    let regex = try! NSRegularExpression(pattern: pattern)
+    let nsRange = NSRange(body.startIndex..<body.endIndex, in: body)
+    return Set(regex.matches(in: String(body), range: nsRange).compactMap { match in
+        guard let range = Range(match.range(at: 1), in: body) else { return nil }
+        return String(body[range])
+    })
+}
+
 let flags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let profile = read("DreamJourney/Sources/Modules/Profile/ProfileViewController.swift")
 let profileReadiness = read("DreamJourney/Sources/Modules/Profile/ProfileFamilyPersonaReleaseReadiness.swift")
 
 assertContains(flags, "case profileSettings", "profile settings must be independently gateable")
 assertContains(flags, "case careDoctorContact", "doctor contact must be independently gateable")
-assertContains(flags, "private static let defaultEnabled: Set<DJFeature> = [\n        .careDashboard,\n        .profileSettings,\n        .legalCenter,\n    ]", "care dashboard, profile settings, and legal center should be visible by default")
-assertNotContains(flags, ".familyManagement,\n        .legalCenter,\n        .accountDeletion", "placeholder profile flows must not be enabled by default")
+let defaultEnabled = extractDefaultEnabledFeatures(from: flags)
+for requiredDefault in ["careDashboard", "familyManagement", "familySpace", "profileSettings", "legalCenter", "voiceCloneShell"] {
+    guard defaultEnabled.contains(requiredDefault) else {
+        fatalError("\(requiredDefault) should be visible by default")
+    }
+}
+for hiddenDefault in ["accountDeletion", "accountPasswordChange", "careDoctorContact"] {
+    guard !defaultEnabled.contains(hiddenDefault) else {
+        fatalError("\(hiddenDefault) must not be enabled by default")
+    }
+}
 
 assertContains(profileReadiness, "DJEnableProfileHiddenBranches", "QA-only profile hidden branch launch argument")
 assertContains(profile, "ProfileFamilyPersonaReleaseReadiness.hiddenBranchesLaunchArgument", "profile should consume shared hidden branch launch argument")

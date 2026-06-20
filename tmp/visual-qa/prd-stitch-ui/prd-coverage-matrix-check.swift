@@ -55,14 +55,14 @@ let requiredRowMarkers = [
     "| 时间信件 | hidden candidate with local draft/seal lifecycle",
     "| 个人资料管理 | implemented for profile fields and login password participation",
     "| 心境追踪 | implemented fallback and data states |",
-    "| 家人管理 | hidden candidate with family digital-human backend contract",
+    "| 家人管理 | implemented public profile entry with family digital-human backend contract",
     "| 法律法规 | implemented | yes |",
     "| 账号退出 | implemented | yes |",
     "| 账号注销 | hidden blocked shell |",
     "| 长辈关怀 | implemented aggregate with loading/empty/stale/failed states |",
     "| 后端合同闭环 | partially implemented; contract gaps pinned |",
     "| 生死转换机制 | hidden boundary |",
-    "| 声音克隆 | hidden safety shell with backend lifecycle contract",
+    "| 声音克隆 | public foundation with backend lifecycle contract",
 ]
 
 for marker in requiredRowMarkers {
@@ -76,8 +76,8 @@ let requiredStatuses = [
     "hidden readiness shell implemented",
     "hidden candidate with non-true-device lifecycle",
     "hidden candidate with local draft/seal lifecycle",
-    "hidden candidate with family digital-human backend contract",
-    "hidden safety shell with backend lifecycle contract",
+    "implemented public profile entry with family digital-human backend contract",
+    "public foundation with backend lifecycle contract",
     "implemented fallback and data states",
     "hidden blocked shell",
     "hidden boundary",
@@ -99,7 +99,7 @@ for phrase in [
 }
 
 for phrase in [
-    "Last synced: 2026-06-19",
+    "Last synced: 2026-06-20",
     "2026-06-19 Phase 0 Sync Notes",
     "Hidden Family / Voice UIQA Consumer Gate",
     "时间信件 Delivery Policy Shell",
@@ -166,12 +166,12 @@ assertContains(coverage, "/echo/delayed-replies/dispatch-due", "coverage matrix 
 assertContains(coverage, "/devices/push-token", "coverage matrix should call out push device token backend gap")
 assertContains(coverage, "/profile", "coverage matrix should call out profile backend gap")
 assertContains(coverage, "/auth/password", "coverage matrix should call out password backend gap")
-assertContains(coverage, "No hidden PRD feature is public by default", "coverage matrix should preserve release gating policy")
+assertContains(coverage, "No remaining hidden PRD feature is public by default", "coverage matrix should preserve release gating policy")
 assertContains(coverage, "## Hidden Candidate Release Matrix", "coverage matrix should link hidden candidates to release matrix")
 assertContains(coverage, "docs/superpowers/status/2026-06-17-release-feature-matrix.md", "coverage matrix should reference release feature matrix")
 assertContains(coverage, "archive audio upload", "coverage matrix should name archive audio candidate")
 assertContains(coverage, "video upload", "coverage matrix should name archive video candidate")
-assertContains(coverage, "family management public release", "coverage matrix should name family management candidate")
+assertContains(coverage, "family advanced lifecycle controls", "coverage matrix should name family advanced lifecycle candidate")
 assertContains(coverage, "care escalation draft", "coverage matrix should name care escalation draft candidate")
 assertContains(coverage, "digital inheritance lifecycle", "coverage matrix should name digital inheritance candidate")
 assertContains(coverage, "20260618-deployed-postgres-acceptance-after-deploy", "coverage matrix should record accepted backend run")

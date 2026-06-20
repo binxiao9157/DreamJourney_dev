@@ -1,9 +1,26 @@
 import UIKit
+import UniformTypeIdentifiers
 
-final class ProfileVoiceCloneShellViewController: UIViewController {
-    private let snapshot: VoiceCloneProfileSnapshot
+final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPickerDelegate {
+    private var snapshot: VoiceCloneProfileSnapshot
     private let scrollView = UIScrollView()
     private let contentStack = UIStackView()
+    private let authorizationSwitch = UISwitch()
+
+    private weak var sampleStatusValueLabel: UILabel?
+    private weak var profileIdValueLabel: UILabel?
+    private weak var providerModeValueLabel: UILabel?
+    private weak var contractVersionValueLabel: UILabel?
+    private weak var entryStatusValueLabel: UILabel?
+    private weak var feedbackLabel: UILabel?
+    private weak var submitButton: UIButton?
+    private weak var refreshButton: UIButton?
+    private weak var disableButton: UIButton?
+    private weak var deleteButton: UIButton?
+
+    private var isBusy = false {
+        didSet { updateActionAvailability() }
+    }
 
     init(snapshot: VoiceCloneProfileSnapshot = VoiceCloneService.shared.voiceCloneShellSnapshot()) {
         self.snapshot = snapshot
@@ -17,10 +34,11 @@ final class ProfileVoiceCloneShellViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "声音克隆"
+        title = "音色复刻"
         view.backgroundColor = DJDesignTokens.Color.background
         view.accessibilityIdentifier = "profile-voice-clone-shell"
         setupLayout()
+        applySnapshot(snapshot, feedback: "先确认授权，再选择本人音频样本提交训练。")
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -77,13 +95,13 @@ final class ProfileVoiceCloneShellViewController: UIViewController {
         iconView.contentMode = .scaleAspectFit
 
         let titleLabel = makeLabel(
-            text: "声音克隆",
+            text: "音色复刻",
             font: DJDesignTokens.Font.title(22),
             color: DJDesignTokens.Color.textPrimary
         )
 
         let subtitleLabel = makeLabel(
-            text: "此功能默认隐藏。公开前需要完成授权、声音样本质量、删除/禁用合同和合规验收。",
+            text: "提交本人授权的音频样本，由后端代理训练音色；iOS 不保存火山语音密钥。",
             font: DJDesignTokens.Font.body(14),
             color: DJDesignTokens.Color.textSecondary
         )
@@ -91,31 +109,44 @@ final class ProfileVoiceCloneShellViewController: UIViewController {
         let statusStack = UIStackView()
         statusStack.axis = .vertical
         statusStack.spacing = 10
-        statusStack.addArrangedSubview(makeInfoRow(
+
+        let sampleRow = makeInfoRow(
             title: "声音样本状态",
             value: snapshot.sampleStatus.displayText,
             accessibilityIdentifier: "profileVoiceCloneSampleStatusValue"
-        ))
-        statusStack.addArrangedSubview(makeInfoRow(
+        ) { [weak self] label in
+            self?.sampleStatusValueLabel = label
+        }
+        let profileRow = makeInfoRow(
             title: "voiceProfileId",
             value: snapshot.voiceProfileId,
             accessibilityIdentifier: "profileVoiceCloneProfileIdValue"
-        ))
-        statusStack.addArrangedSubview(makeInfoRow(
+        ) { [weak self] label in
+            self?.profileIdValueLabel = label
+        }
+        let providerRow = makeInfoRow(
             title: "providerMode",
             value: snapshot.providerMode,
             accessibilityIdentifier: "profileVoiceCloneProviderModeValue"
-        ))
-        statusStack.addArrangedSubview(makeInfoRow(
+        ) { [weak self] label in
+            self?.providerModeValueLabel = label
+        }
+        let versionRow = makeInfoRow(
             title: "合同版本",
             value: "\(snapshot.contractVersion)",
             accessibilityIdentifier: "profileVoiceCloneContractVersionValue"
-        ))
-        statusStack.addArrangedSubview(makeInfoRow(
-            title: "默认发布态",
-            value: snapshot.defaultReleaseVisible ? "默认可见" : "默认隐藏",
-            accessibilityIdentifier: "profileVoiceCloneDefaultReleaseValue"
-        ))
+        ) { [weak self] label in
+            self?.contractVersionValueLabel = label
+        }
+        let entryRow = makeInfoRow(
+            title: "入口状态",
+            value: "公开可见，需授权训练",
+            accessibilityIdentifier: "profileVoiceCloneEntryStatusValue"
+        ) { [weak self] label in
+            self?.entryStatusValueLabel = label
+        }
+
+        [sampleRow, profileRow, providerRow, versionRow, entryRow].forEach(statusStack.addArrangedSubview)
 
         card.addSubview(stack)
         [stack, iconView, titleLabel, subtitleLabel, statusStack].forEach {
@@ -146,6 +177,25 @@ final class ProfileVoiceCloneShellViewController: UIViewController {
 
         stack.addArrangedSubview(makeSectionTitle("授权说明"))
         stack.addArrangedSubview(makeBody(snapshot.authorizationCopy))
+
+        let authorizationRow = UIStackView()
+        authorizationRow.axis = .horizontal
+        authorizationRow.alignment = .center
+        authorizationRow.spacing = 12
+
+        let authorizationLabel = makeLabel(
+            text: "我确认本人授权，并同意仅用于寻梦环游音色复刻。",
+            font: DJDesignTokens.Font.label(14),
+            color: DJDesignTokens.Color.textPrimary
+        )
+        authorizationSwitch.accessibilityIdentifier = "profileVoiceCloneAuthorizeSwitch"
+        authorizationSwitch.addTarget(self, action: #selector(authorizationChanged), for: .valueChanged)
+        authorizationRow.addArrangedSubview(authorizationLabel)
+        authorizationRow.addArrangedSubview(authorizationSwitch)
+        authorizationLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        authorizationSwitch.setContentHuggingPriority(.required, for: .horizontal)
+
+        stack.addArrangedSubview(authorizationRow)
         stack.addArrangedSubview(makeSectionTitle("删除/禁用合同"))
         stack.addArrangedSubview(makeBody(snapshot.disableContract))
         stack.addArrangedSubview(makeBody(snapshot.deleteContract))
@@ -168,10 +218,35 @@ final class ProfileVoiceCloneShellViewController: UIViewController {
         stack.axis = .vertical
         stack.spacing = 12
 
-        let disableButton = makeDisabledActionButton(title: "禁用声音样本（未开放）")
-        let deleteButton = makeDisabledActionButton(title: "删除声音样本（未开放）")
-        stack.addArrangedSubview(disableButton)
-        stack.addArrangedSubview(deleteButton)
+        let feedback = makeLabel(
+            text: "",
+            font: DJDesignTokens.Font.body(13),
+            color: DJDesignTokens.Color.textSecondary
+        )
+        feedback.accessibilityIdentifier = "profileVoiceCloneFeedbackLabel"
+        feedbackLabel = feedback
+
+        let submit = makeActionButton(title: "选择音频样本并提交", style: .primary)
+        submit.accessibilityIdentifier = "profileVoiceCloneSubmitButton"
+        submit.addTarget(self, action: #selector(submitSampleTapped), for: .touchUpInside)
+        submitButton = submit
+
+        let refresh = makeActionButton(title: "刷新训练状态", style: .secondary)
+        refresh.accessibilityIdentifier = "profileVoiceCloneRefreshButton"
+        refresh.addTarget(self, action: #selector(refreshStatusTapped), for: .touchUpInside)
+        refreshButton = refresh
+
+        let disable = makeActionButton(title: "禁用音色", style: .secondary)
+        disable.accessibilityIdentifier = "profileVoiceCloneDisableButton"
+        disable.addTarget(self, action: #selector(disableVoiceTapped), for: .touchUpInside)
+        disableButton = disable
+
+        let delete = makeActionButton(title: "删除音色", style: .destructive)
+        delete.accessibilityIdentifier = "profileVoiceCloneDeleteButton"
+        delete.addTarget(self, action: #selector(deleteVoiceTapped), for: .touchUpInside)
+        deleteButton = delete
+
+        [feedback, submit, refresh, disable, delete].forEach(stack.addArrangedSubview)
 
         card.addSubview(stack)
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -185,10 +260,218 @@ final class ProfileVoiceCloneShellViewController: UIViewController {
         return card
     }
 
+    @objc private func authorizationChanged() {
+        feedbackLabel?.text = authorizationSwitch.isOn
+            ? "已确认授权，可以选择音频样本提交训练。"
+            : "勾选授权后才能提交声音样本。"
+        updateActionAvailability()
+    }
+
+    @objc private func submitSampleTapped() {
+        guard authorizationSwitch.isOn else {
+            feedbackLabel?.text = "请先确认本人授权。"
+            return
+        }
+
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.audio], asCopy: true)
+        picker.delegate = self
+        picker.allowsMultipleSelection = false
+        present(picker, animated: true)
+    }
+
+    @objc private func refreshStatusTapped() {
+        guard hasVoiceProfile else {
+            feedbackLabel?.text = "还没有可刷新的 voiceProfileId。"
+            return
+        }
+        setBusyFeedback("正在刷新训练状态...")
+        VoiceCloneService.shared.queryStatus(speakerId: snapshot.voiceProfileId) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success:
+                    self.reloadBackendSnapshot(feedback: "训练状态已刷新。")
+                case .failure(let error):
+                    self.finishBusy(feedback: error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    @objc private func disableVoiceTapped() {
+        confirmDestructive(
+            title: "禁用音色",
+            message: "禁用后该音色将不能继续用于后端合成，可重新提交样本恢复。",
+            actionTitle: "禁用"
+        ) { [weak self] in
+            self?.performDisableVoice()
+        }
+    }
+
+    @objc private func deleteVoiceTapped() {
+        confirmDestructive(
+            title: "删除音色",
+            message: "删除会清理后端样本、训练产物和本地 voiceProfileId。此操作不可恢复。",
+            actionTitle: "删除"
+        ) { [weak self] in
+            self?.performDeleteVoice()
+        }
+    }
+
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let audioURL = urls.first else { return }
+        let didAccess = audioURL.startAccessingSecurityScopedResource()
+        defer {
+            if didAccess {
+                audioURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        setBusyFeedback("已选择音频样本，正在提交后端训练...")
+        VoiceCloneService.shared.trainVoice(
+            audioURL: audioURL,
+            authorizationConfirmed: authorizationSwitch.isOn,
+            onProfileAccepted: { [weak self] snapshot in
+                DispatchQueue.main.async {
+                    self?.applySnapshot(snapshot, feedback: "后端已接收声音样本，训练中；可稍后刷新状态。")
+                }
+            }
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success(let profileId):
+                    self.reloadBackendSnapshot(feedback: "音色训练已完成：\(profileId)")
+                case .failure(let error):
+                    self.finishBusy(feedback: error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        feedbackLabel?.text = "已取消选择音频样本。"
+    }
+
+    private func performDisableVoice() {
+        guard hasVoiceProfile else {
+            feedbackLabel?.text = "还没有可禁用的 voiceProfileId。"
+            return
+        }
+        setBusyFeedback("正在禁用音色...")
+        VoiceCloneService.shared.disableVoiceProfileRemote(profileId: snapshot.voiceProfileId) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success(let snapshot):
+                    self.applySnapshot(snapshot, feedback: "音色已禁用。")
+                case .failure(let error):
+                    self.finishBusy(feedback: error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    private func performDeleteVoice() {
+        guard hasVoiceProfile else {
+            feedbackLabel?.text = "还没有可删除的 voiceProfileId。"
+            return
+        }
+        setBusyFeedback("正在删除音色...")
+        VoiceCloneService.shared.deleteVoiceProfileRemote(profileId: snapshot.voiceProfileId) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success(let snapshot):
+                    self.applySnapshot(snapshot, feedback: "音色已删除。")
+                case .failure(let error):
+                    self.finishBusy(feedback: error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    private func reloadBackendSnapshot(feedback: String) {
+        guard DreamJourneyBackendClient.shared.isVoiceCloneProfileConfigured,
+              let userId = UserManager.shared.currentUser?.id else {
+            finishBusy(feedback: "后端语音服务尚未配置，无法刷新音色状态。")
+            return
+        }
+
+        DreamJourneyBackendClient.shared.fetchVoiceCloneProfiles(userId: userId) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success(let profiles):
+                    let currentProfileId = self.snapshot.voiceProfileId
+                    let selectedProfile = profiles.first(where: { $0.voiceProfileId == currentProfileId })
+                        ?? profiles.first(where: { $0.sampleStatus != .deleted })
+                        ?? profiles.first
+                    if let selectedProfile {
+                        self.applySnapshot(VoiceCloneProfileSnapshot(backendContract: selectedProfile), feedback: feedback)
+                    } else {
+                        self.applySnapshot(VoiceCloneService.shared.voiceCloneShellSnapshot(), feedback: feedback)
+                    }
+                case .failure(let error):
+                    self.finishBusy(feedback: "刷新失败：\(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func applySnapshot(_ snapshot: VoiceCloneProfileSnapshot, feedback: String? = nil) {
+        self.snapshot = snapshot
+        sampleStatusValueLabel?.text = snapshot.sampleStatus.displayText
+        profileIdValueLabel?.text = snapshot.voiceProfileId
+        providerModeValueLabel?.text = snapshot.providerMode
+        contractVersionValueLabel?.text = "\(snapshot.contractVersion)"
+        entryStatusValueLabel?.text = "公开可见，需授权训练"
+        if let feedback {
+            feedbackLabel?.text = feedback
+        }
+        isBusy = false
+        updateActionAvailability()
+    }
+
+    private func setBusyFeedback(_ text: String) {
+        isBusy = true
+        feedbackLabel?.text = text
+    }
+
+    private func finishBusy(feedback: String) {
+        isBusy = false
+        feedbackLabel?.text = feedback
+    }
+
+    private var hasVoiceProfile: Bool {
+        let profileId = snapshot.voiceProfileId.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !profileId.isEmpty && profileId != "voiceProfileId_not_created"
+    }
+
+    private func updateActionAvailability() {
+        submitButton?.isEnabled = !isBusy && authorizationSwitch.isOn
+        refreshButton?.isEnabled = !isBusy && hasVoiceProfile && snapshot.sampleStatus != .deleted && snapshot.sampleStatus != .disabled
+        disableButton?.isEnabled = !isBusy && hasVoiceProfile && snapshot.sampleStatus != .disabled && snapshot.sampleStatus != .deleted
+        deleteButton?.isEnabled = !isBusy && hasVoiceProfile && snapshot.sampleStatus != .deleted
+    }
+
+    private func confirmDestructive(
+        title: String,
+        message: String,
+        actionTitle: String,
+        handler: @escaping () -> Void
+    ) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: actionTitle, style: .destructive) { _ in handler() })
+        present(alert, animated: true)
+    }
+
     private func makeInfoRow(
         title: String,
         value: String,
-        accessibilityIdentifier: String? = nil
+        accessibilityIdentifier: String? = nil,
+        valueLabelHandler: ((UILabel) -> Void)? = nil
     ) -> UIView {
         let row = UIStackView()
         row.alignment = .firstBaseline
@@ -208,6 +491,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController {
         )
         valueLabel.textAlignment = .right
         valueLabel.accessibilityIdentifier = accessibilityIdentifier
+        valueLabelHandler?(valueLabel)
 
         row.addArrangedSubview(titleLabel)
         row.addArrangedSubview(valueLabel)
@@ -230,15 +514,31 @@ final class ProfileVoiceCloneShellViewController: UIViewController {
         )
     }
 
-    private func makeDisabledActionButton(title: String) -> UIButton {
+    private enum ActionButtonStyle {
+        case primary
+        case secondary
+        case destructive
+    }
+
+    private func makeActionButton(title: String, style: ActionButtonStyle) -> UIButton {
         let button = UIButton(type: .system)
         button.setTitle(title, for: .normal)
         button.titleLabel?.font = DJDesignTokens.Font.label(14)
-        button.setTitleColor(DJDesignTokens.Color.textTertiary, for: .disabled)
-        button.backgroundColor = DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.72)
         button.layer.cornerRadius = DJDesignTokens.Radius.medium
         button.contentEdgeInsets = UIEdgeInsets(top: 12, left: 14, bottom: 12, right: 14)
-        button.isEnabled = false
+
+        switch style {
+        case .primary:
+            button.setTitleColor(.white, for: .normal)
+            button.backgroundColor = DJDesignTokens.Color.accent
+        case .secondary:
+            button.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
+            button.backgroundColor = DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.78)
+        case .destructive:
+            button.setTitleColor(DJDesignTokens.Color.danger, for: .normal)
+            button.backgroundColor = DJDesignTokens.Color.danger.withAlphaComponent(0.10)
+        }
+        button.setTitleColor(DJDesignTokens.Color.textTertiary, for: .disabled)
         return button
     }
 

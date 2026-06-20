@@ -2,6 +2,7 @@ import Foundation
 
 enum ProfileFamilyPersonaReleaseReadiness {
     enum Stage: Equatable {
+        case publicReady(reason: String)
         case hiddenReady(feature: DJFeature, qaLaunchArgument: String, reason: String)
     }
 
@@ -15,8 +16,8 @@ enum ProfileFamilyPersonaReleaseReadiness {
     static let hiddenBranchesLaunchArgument = "DJEnableProfileHiddenBranches"
     static let unavailableTitle = "家人管理暂未开放"
     static let unavailableMessage = "当前版本先保留入口，完整家人空间会在后续版本开放。"
-    static let voiceCloneUnavailableTitle = "声音克隆暂未开放"
-    static let voiceCloneUnavailableMessage = "当前版本先保留声音授权、voiceProfileId、样本状态和删除/禁用合同，真实声音克隆需要完成授权、样本质量和合规验收后开放。"
+    static let voiceCloneUnavailableTitle = "音色复刻暂不可用"
+    static let voiceCloneUnavailableMessage = "当前环境未完成后端语音服务配置；音色复刻入口已公开，但训练、查询、禁用和删除都必须通过后端代理执行。"
 
     static let familyManagementCapability = Capability(
         title: "家人管理",
@@ -52,14 +53,12 @@ enum ProfileFamilyPersonaReleaseReadiness {
     )
 
     static let voiceCloneCapability = Capability(
-        title: "声音克隆",
+        title: "音色复刻",
         feature: .voiceCloneShell,
-        stage: .hiddenReady(
-            feature: .voiceCloneShell,
-            qaLaunchArgument: hiddenBranchesLaunchArgument,
-            reason: "默认发布态不展示声音克隆，避免在授权、样本质量、voiceProfileId 删除/禁用合同和合规验收前误承诺。"
+        stage: .publicReady(
+            reason: "音色复刻已按产品决策公开；入口默认可见，但必须先完成用户授权，训练、查询、合成、禁用和删除均通过后端代理，voiceProfileId 由后端返回和管理，不在 iOS 暴露火山密钥。"
         ),
-        releaseCopy: voiceCloneUnavailableTitle
+        releaseCopy: "需授权后提交样本"
     )
 
     static func isFamilyManagementRowVisible(

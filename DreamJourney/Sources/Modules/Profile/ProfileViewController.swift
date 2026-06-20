@@ -531,7 +531,10 @@ final class ProfileViewController: UIViewController {
         if isProfileHiddenBranchesEnabled || featureFlags.isEnabled(.profileSettings) {
             rows.append(.profileSettings)
         }
-        if featureFlags.isEnabled(.familyManagement) || isProfileHiddenBranchesEnabled {
+        if ProfileFamilyPersonaReleaseReadiness.isFamilyManagementRowVisible(
+            isFamilyManagementEnabled: featureFlags.isEnabled(.familyManagement),
+            isHiddenBranchesEnabled: isProfileHiddenBranchesEnabled
+        ) {
             rows.append(.familyManagement)
         }
         if isVoiceCloneShellVisible {
@@ -760,6 +763,18 @@ final class ProfileViewController: UIViewController {
     }
 
     private func openFamilyManagement() {
+        guard ProfileFamilyPersonaReleaseReadiness.canOpenFamilyPersonaSwitcher(
+            isFamilyManagementEnabled: featureFlags.isEnabled(.familyManagement),
+            isFamilySpaceEnabled: featureFlags.isEnabled(.familySpace),
+            isHiddenBranchesEnabled: isProfileHiddenBranchesEnabled
+        ) else {
+            showUnavailableAlert(
+                title: ProfileFamilyPersonaReleaseReadiness.unavailableTitle,
+                message: ProfileFamilyPersonaReleaseReadiness.unavailableMessage
+            )
+            return
+        }
+
         let viewController = FamilyCircleViewController()
         viewController.title = "家人管理"
         viewController.didRequestLogout = didRequestLogout
@@ -1005,7 +1020,7 @@ private enum ProfileRowAction {
         case .familyManagement:
             return "家人管理"
         case .voiceClone:
-            return "声音克隆"
+            return "音色复刻"
         case .legalCenter:
             return "法律法规"
         case .logout:

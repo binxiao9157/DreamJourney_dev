@@ -74,9 +74,10 @@ for required in [
 for required in [
     "snapshot.providerMode",
     "snapshot.contractVersion",
-    "snapshot.defaultReleaseVisible",
+    "profileVoiceCloneEntryStatusValue",
+    "公开可见，需授权训练",
 ] {
-    assertContains(voiceShell, required, "Voice clone shell should render backend-derived hidden contract field \(required)")
+    assertContains(voiceShell, required, "Voice clone shell should render backend-derived public contract field \(required)")
 }
 
 assertContains(

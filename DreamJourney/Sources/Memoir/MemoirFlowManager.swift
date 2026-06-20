@@ -243,20 +243,10 @@ final class MemoirFlowManager {
             return
         }
 
-        // B. 无 speakerId 但有录音 → 先训练
+        // B. 无 speakerId 但有录音 → 不自动训练
         if let recordingURL = recordingURL {
-            DDLogInfo("[MemoirFlow] 无 speakerId，使用录音开始声音复刻训练")
-            VoiceCloneService.shared.trainVoice(audioURL: recordingURL) { result in
-                switch result {
-                case .success(let speakerId):
-                    DDLogInfo("[MemoirFlow] 声音复刻训练成功: \(speakerId)")
-                    // 训练完成，开始合成
-                    completion(speakerId)
-                case .failure(let error):
-                    DDLogWarn("[MemoirFlow] 声音复刻训练失败: \(error.localizedDescription)，跳过音频合成")
-                    completion(nil)
-                }
-            }
+            DDLogInfo("[MemoirFlow] 无已授权 speakerId，普通录音不自动用于音色复刻训练: \(recordingURL.lastPathComponent)")
+            completion(nil)
             return
         }
 

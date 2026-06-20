@@ -27,23 +27,27 @@ let readiness = read("DreamJourney/Sources/Modules/Profile/ProfileFamilyPersonaR
 let profile = read("DreamJourney/Sources/Modules/Profile/ProfileViewController.swift")
 let voiceService = read("DreamJourney/Sources/Memoir/VoiceCloneService.swift")
 let shell = read("DreamJourney/Sources/Modules/Profile/ProfileVoiceCloneShellViewController.swift")
+let memoirFlow = read("DreamJourney/Sources/Memoir/MemoirFlowManager.swift")
 let project = read("DreamJourney.xcodeproj/project.pbxproj")
 let releaseRegression = read("tmp/visual-qa/prd-stitch-ui/run-release-regression.sh")
 let releaseQA = read("tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift")
 
 assertContains(flags, "case voiceCloneShell", "voice clone shell should be feature flagged")
-assertNotContains(flags, ".voiceCloneShell,", "voice clone shell must not be default enabled")
+assertContains(flags, ".voiceCloneShell,", "voice clone should be default enabled after public product decision")
+assertContains(flags, "currentStorageVersion = 5", "feature flag schema should migrate existing installs to public voice clone default")
 
 for required in [
     "voiceCloneCapability",
-    "title: \"声音克隆\"",
+    "title: \"音色复刻\"",
     "feature: .voiceCloneShell",
     "voiceProfileId",
-    "默认发布态不展示声音克隆",
+    "publicReady",
     "isVoiceCloneVisible(",
 ] {
-    assertContains(readiness, required, "profile readiness should define hidden voice clone capability \(required)")
+    assertContains(readiness, required, "profile readiness should define public voice clone capability \(required)")
 }
+assertNotContains(readiness, "声音克隆暂未开放", "public voice clone copy should not say unavailable")
+assertNotContains(readiness, "默认发布态不展示声音克隆", "public voice clone capability should not remain hidden")
 
 for required in [
     "isVoiceCloneShellVisible",
@@ -61,25 +65,45 @@ for required in [
     "let voiceProfileId: String",
     "authorizationCopy",
     "voiceCloneShellSnapshot()",
-    "disableVoiceProfile(profileId:",
-    "deleteVoiceProfile(profileId:",
+    "authorizationConfirmed: Bool",
+    "authorizationRequired",
+    "\"authorizationConfirmed\": authorizationConfirmed",
+    "disableVoiceProfileRemote(",
+    "deleteVoiceProfileRemote(",
+    "DreamJourneyBackendClient.shared.disableVoiceCloneProfile",
+    "DreamJourneyBackendClient.shared.deleteVoiceCloneProfile",
 ] {
-    assertContains(voiceService, required, "voice clone service should expose product shell contract \(required)")
+    assertContains(voiceService, required, "voice clone service should expose public backend-backed contract \(required)")
 }
+assertNotContains(voiceService, "\"authorizationConfirmed\": true", "voice clone service must not forge authorization")
+assertContains(voiceService, "case .disabled:\n            return .notFound", "disabled voice profile must not be treated as ready")
+assertNotContains(memoirFlow, "trainVoice(audioURL: recordingURL)", "memoir flow must not auto-train voice clone from ordinary recording")
 
 for required in [
     "final class ProfileVoiceCloneShellViewController",
-    "声音克隆",
+    "音色复刻",
+    "UIDocumentPickerDelegate",
     "授权说明",
+    "authorizationSwitch",
+    "我确认本人授权",
     "声音样本状态",
     "voiceProfileId",
     "删除/禁用合同",
-    "禁用声音样本（未开放）",
-    "删除声音样本（未开放）",
+    "选择音频样本并提交",
+    "刷新训练状态",
+    "禁用音色",
+    "删除音色",
+    "VoiceCloneService.shared.trainVoice",
+    "authorizationConfirmed: authorizationSwitch.isOn",
+    "onProfileAccepted",
+    "VoiceCloneService.shared.disableVoiceProfileRemote",
+    "VoiceCloneService.shared.deleteVoiceProfileRemote",
     "profile-voice-clone-shell",
 ] {
-    assertContains(shell, required, "voice clone shell should render hidden product surface \(required)")
+    assertContains(shell, required, "voice clone shell should render public basic feature surface \(required)")
 }
+assertNotContains(shell, "未开放", "public voice clone shell should not render unavailable disabled actions")
+assertNotContains(shell, "默认隐藏", "public voice clone shell should not claim default hidden")
 
 assertContains(project, "ProfileVoiceCloneShellViewController.swift in Sources", "voice clone shell should be in Xcode target")
 assertContains(

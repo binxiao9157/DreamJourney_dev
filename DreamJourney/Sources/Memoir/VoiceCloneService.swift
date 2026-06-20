@@ -47,7 +47,7 @@ struct VoiceCloneProfileSnapshot {
         deleteContract: String,
         providerMode: String = "localFallback",
         contractVersion: Int = 1,
-        defaultReleaseVisible: Bool = false
+        defaultReleaseVisible: Bool = true
     ) {
         self.voiceProfileId = voiceProfileId
         self.sampleStatus = sampleStatus
@@ -92,9 +92,9 @@ final class VoiceCloneService {
     private let sampleStatusKey = "dj.voiceclone.sampleStatus"
     private static let emptyVoiceProfileId = "voiceProfileId_not_created"
     static let backendContractEndpoint = "/voice/profiles"
-    private static let authorizationCopy = "声音克隆必须由用户主动授权，仅使用用户确认提交的声音样本；未完成授权和样本质量验收前不会公开训练或合成功能。"
-    private static let disableContract = "disableVoiceProfile(profileId:) 只更新本地禁用状态，真实后端接入后应撤销该 voiceProfileId 的合成权限。"
-    private static let deleteContract = "deleteVoiceProfile(profileId:) 只清理本地 voiceProfileId，真实后端接入后应删除样本、训练产物和关联授权记录。"
+    private static let authorizationCopy = "音色复刻必须由用户主动授权，仅使用用户确认提交的声音样本；训练、查询、合成、禁用和删除都通过 DreamJourney 后端代理执行，iOS 不保存火山语音密钥。"
+    private static let disableContract = "禁用音色会调用后端撤销该 voiceProfileId 的合成权限，并在本地记录样本已禁用。"
+    private static let deleteContract = "删除音色会调用后端删除样本、训练产物和关联授权记录，并清理本地 voiceProfileId。"
 
     /// 训练轮询定时器
     private var pollTimer: Timer?
@@ -155,6 +155,64 @@ final class VoiceCloneService {
         return voiceCloneShellSnapshot()
     }
 
+    func disableVoiceProfileRemote(
+        profileId: String,
+        completion: @escaping (Result<VoiceCloneProfileSnapshot, VoiceCloneError>) -> Void
+    ) {
+        guard DreamJourneyBackendClient.shared.isVoiceCloneProfileConfigured else {
+            completion(.failure(.apiKeyMissing))
+            return
+        }
+
+        let trimmedProfileId = profileId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedProfileId.isEmpty, trimmedProfileId != Self.emptyVoiceProfileId else {
+            completion(.failure(.speakerIdNotFound))
+            return
+        }
+
+        let userId = UserManager.shared.currentUser?.id ?? "default"
+        DreamJourneyBackendClient.shared.disableVoiceCloneProfile(userId: userId, profileId: trimmedProfileId) { [weak self] result in
+            switch result {
+            case .success(let profile):
+                self?.saveSpeakerId(profile.voiceProfileId)
+                self?.saveSampleStatus(profile.sampleStatus)
+                completion(.success(VoiceCloneProfileSnapshot(backendContract: profile)))
+            case .failure(let error):
+                DDLogError("[VoiceClone] 后端禁用失败: \(error.localizedDescription)")
+                completion(.failure(.networkError(error.localizedDescription)))
+            }
+        }
+    }
+
+    func deleteVoiceProfileRemote(
+        profileId: String,
+        completion: @escaping (Result<VoiceCloneProfileSnapshot, VoiceCloneError>) -> Void
+    ) {
+        guard DreamJourneyBackendClient.shared.isVoiceCloneProfileConfigured else {
+            completion(.failure(.apiKeyMissing))
+            return
+        }
+
+        let trimmedProfileId = profileId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedProfileId.isEmpty, trimmedProfileId != Self.emptyVoiceProfileId else {
+            completion(.failure(.speakerIdNotFound))
+            return
+        }
+
+        let userId = UserManager.shared.currentUser?.id ?? "default"
+        DreamJourneyBackendClient.shared.deleteVoiceCloneProfile(userId: userId, profileId: trimmedProfileId) { [weak self] result in
+            switch result {
+            case .success(let profile):
+                self?.clearStoredSpeakerId()
+                self?.saveSampleStatus(profile.sampleStatus)
+                completion(.success(VoiceCloneProfileSnapshot(backendContract: profile)))
+            case .failure(let error):
+                DDLogError("[VoiceClone] 后端删除失败: \(error.localizedDescription)")
+                completion(.failure(.networkError(error.localizedDescription)))
+            }
+        }
+    }
+
     /// 保存 speaker_id
     private func saveSpeakerId(_ id: String) {
         UserDefaults.standard.set(id, forKey: speakerIdKey)
@@ -165,16 +223,29 @@ final class VoiceCloneService {
         UserDefaults.standard.set(status.rawValue, forKey: sampleStatusKey)
     }
 
+    private func clearStoredSpeakerId() {
+        UserDefaults.standard.removeObject(forKey: speakerIdKey)
+    }
+
     /// 上传音频训练声音复刻
     /// - Parameters:
     ///   - audioURL: 本地音频文件 URL（wav/mp3/m4a/aac，建议 ≥10秒，≤10MB）
     ///   - speakerId: 指定的音色 ID，为空则自动生成
     ///   - language: 语种，0=中文（默认）
+    ///   - authorizationConfirmed: 用户已主动确认本人授权
+    ///   - onProfileAccepted: 后端接收 pending/ready profile 后的即时回调，用于 UI 回显 voiceProfileId
     ///   - completion: 结果回调
     func trainVoice(audioURL: URL,
                     speakerId: String? = nil,
                     language: Int = 0,
+                    authorizationConfirmed: Bool,
+                    onProfileAccepted: ((VoiceCloneProfileSnapshot) -> Void)? = nil,
                     completion: @escaping (Result<String, VoiceCloneError>) -> Void) {
+
+        guard authorizationConfirmed else {
+            completion(.failure(.authorizationRequired))
+            return
+        }
 
         guard DreamJourneyBackendClient.shared.isVoiceCloneProfileConfigured else {
             completion(.failure(.apiKeyMissing))
@@ -206,7 +277,7 @@ final class VoiceCloneService {
             "voiceProfileId": finalSpeakerId,
             "sampleStatus": VoiceCloneSampleStatus.pending.rawValue,
             "sampleCount": 1,
-            "authorizationConfirmed": true,
+            "authorizationConfirmed": authorizationConfirmed,
             "authorizationVersion": "voice-clone-consent-v1",
             "authorizationText": Self.authorizationCopy,
             "personaScope": "personal",
@@ -225,6 +296,7 @@ final class VoiceCloneService {
                 self.saveSpeakerId(profile.voiceProfileId)
                 self.saveSampleStatus(profile.sampleStatus)
                 DDLogInfo("[VoiceClone] 后端已接收音色训练: \(profile.voiceProfileId), status=\(profile.sampleStatus.rawValue)")
+                onProfileAccepted?(VoiceCloneProfileSnapshot(backendContract: profile))
                 if profile.sampleStatus == .ready {
                     completion(.success(profile.voiceProfileId))
                 } else if profile.sampleStatus == .failed {
@@ -277,7 +349,7 @@ final class VoiceCloneService {
         case .ready:
             return .success
         case .disabled:
-            return .active
+            return .notFound
         case .failed:
             return .failed
         }
@@ -443,6 +515,7 @@ final class VoiceCloneService {
 
 enum VoiceCloneError: LocalizedError {
     case apiKeyMissing
+    case authorizationRequired
     case speakerIdNotFound
     case audioReadFailed
     case audioTooLarge          // > 10MB
@@ -455,6 +528,8 @@ enum VoiceCloneError: LocalizedError {
         switch self {
         case .apiKeyMissing:
             return "声音复刻后端未配置，请先在服务器环境变量中配置火山声音复刻凭证"
+        case .authorizationRequired:
+            return "请先确认本人授权后再提交声音样本"
         case .speakerIdNotFound:
             return "未找到声音复刻音色 ID"
         case .audioReadFailed:

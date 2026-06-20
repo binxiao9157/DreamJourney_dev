@@ -78,9 +78,11 @@ for required in [
 for required in [
     "profileVoiceCloneProviderModeValue",
     "profileVoiceCloneSampleStatusValue",
-    "profileVoiceCloneDefaultReleaseValue",
+    "profileVoiceCloneEntryStatusValue",
+    "profileVoiceCloneSubmitButton",
+    "profileVoiceCloneRefreshButton",
 ] {
-    assertContains(voiceShell, required, "voice clone shell should expose backend-derived fields for hidden UIQA \(required)")
+    assertContains(voiceShell, required, "voice clone shell should expose backend-derived fields and public actions for UIQA \(required)")
 }
 
 assertContains(readiness, "hiddenBranchesLaunchArgument", "hidden profile branch gate must remain explicit")
@@ -90,7 +92,7 @@ assertContains(releaseRegression, "ios-family-voice-hidden-uiqa-smoke-check.swif
 assertContains(releaseQA, "ios-family-voice-hidden-uiqa-smoke-check.swift", "release QA package should include hidden family/voice UIQA guard")
 assertContains(releaseMatrix, "ios-family-voice-hidden-uiqa-smoke-check.swift", "release matrix should document hidden family/voice UIQA guard")
 assertContains(statusDoc, "Hidden Family / Voice UIQA", "status doc should describe hidden family/voice UIQA")
-assertContains(statusDoc, "不开放公开入口", "status doc should preserve public release boundary")
+assertContains(statusDoc, "voice clone entry has since been promoted", "status doc should document updated public voice clone boundary")
 
 assertNotContains(profileController, ".voiceCloneShell,", "voice clone shell must not be added to default feature flags from profile code")
 

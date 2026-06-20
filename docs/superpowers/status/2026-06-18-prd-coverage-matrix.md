@@ -6,7 +6,7 @@ Branch: `feature/prd-stitch-ui-adaptation`
 
 Head at creation: `790f029 docs: add prd ui continuation plan`
 
-Last synced: 2026-06-19, after commits `9269113`, `a6f820b`, `67844c8`, `f798801`, and `ba12d48`.
+Last synced: 2026-06-20, after the product decision to expose the audio voice-clone foundation as a public profile feature.
 
 ## Source of truth
 
@@ -28,20 +28,20 @@ Last synced: 2026-06-19, after commits `9269113`, `a6f820b`, `67844c8`, `f798801
 | 时间信件 | hidden candidate with local draft/seal lifecycle, backend metadata lifecycle, and explicit non-delivery policy shell | hidden | `archive-hidden-media-timeletter-shell-check.swift`, `archive-time-letter-backend-lifecycle-check.swift`, `time-letter-delivery-policy-shell-check.swift`, `docs/superpowers/status/2026-06-19-time-letter-delivery-policy-shell.md` | 产品决策：delivery timing, notification/reminder semantics, recipient rules, cancel/edit rules before public release |
 | 个人资料管理 | implemented for profile fields and login password participation with selected-backend `/profile`, `/auth/login`, and `/auth/password` acceptance; password change UI remains hidden | yes for profile fields and login; no for password change | `LoginViewController`, `ProfileSettingsViewController`, `ProfilePasswordChangeViewController`, `login-password-contract-check.swift`, backend `ProfileAPITests`, backend `PasswordAPITests`, release-like backend run `20260618-selected-backend-latest-contracts-after-deploy-r2` | auth/security review, true-device acceptance, explicit password-change public release decision |
 | 心境追踪 | implemented fallback and data states | yes | Profile care checks, care data states check | lifecycle policy |
-| 家人管理 | hidden candidate with family digital-human backend contract, deployed family/voice smoke, typed iOS consumer, and hidden UIQA consumer for `digitalHumanMode`, `familyPersonaContractVersion`, `voiceProfileId`, `sampleStatus` | hidden | `family-digital-human-hidden-contract-check.swift`, `backend-family-voice-contract-smoke-check.swift`, `ios-family-voice-consumer-contract-check.swift`, `ios-family-voice-hidden-uiqa-smoke-check.swift`, `docs/superpowers/status/2026-06-19-ios-family-voice-hidden-uiqa.md` | 产品决策：public invitation, consent, permissions, role model, and family privacy copy |
+| 家人管理 | implemented public profile entry with family digital-human backend contract, deployed family/voice smoke, typed iOS consumer, and UIQA consumer for `digitalHumanMode`, `familyPersonaContractVersion`, `voiceProfileId`, `sampleStatus` | yes for profile entry; advanced lifecycle hidden | `family-digital-human-hidden-contract-check.swift`, `backend-family-voice-contract-smoke-check.swift`, `ios-family-voice-consumer-contract-check.swift`, `ios-family-voice-hidden-uiqa-smoke-check.swift`, `docs/superpowers/status/2026-06-19-ios-family-voice-hidden-uiqa.md` | 产品决策：advanced lifecycle transition policy, consent copy, recovery rules |
 | 法律法规 | implemented | yes | `ProfileLegalViewController` | legal review |
 | 账号退出 | implemented | yes | `ProfileViewController` | maintain |
 | 账号注销 | hidden blocked shell | no | safety check | compliance/backend contract |
 | 长辈关怀 | implemented aggregate with loading/empty/stale/failed states | yes | elder dashboard check, profile care public placeholder check | real backend acceptance |
 | 后端合同闭环 | partially implemented; contract gaps pinned | mixed | `2026-06-18-backend-contract-gap-matrix.md`, `backend-contract-gap-check.swift` | implement missing backend routes or keep backend-ready features hidden |
 | 生死转换机制 | hidden boundary | no | mode lifecycle checks | product/legal policy |
-| 声音克隆 | hidden safety shell with backend lifecycle contract, iOS family/voice consumer evidence, VolcEngine Voice Clone V3 backend provider proxy, and backend-proxied cloned-voice TTS synthesis | hidden | `voice-clone-shell-contract-check.swift`, `voice-clone-backend-contract-check.swift`, `backend-family-voice-contract-smoke-check.swift`, `ios-family-voice-consumer-contract-check.swift`, `2026-06-19-volcengine-voice-clone-v3-provider.md` | 产品/合规决策：authorization UI, sample quality, real voice sample QA, real trained-voice synthesis acceptance, disable/delete provider-side verification |
+| 声音克隆 | public foundation with backend lifecycle contract, explicit authorization, audio sample submission, status refresh, disable/delete actions, VolcEngine Voice Clone V3 backend provider proxy, and backend-proxied cloned-voice TTS synthesis | yes for foundation; production quality external | `ProfileVoiceCloneShellViewController`, `VoiceCloneService`, `voice-clone-shell-contract-check.swift`, `voice-clone-backend-contract-check.swift`, `backend-family-voice-contract-smoke-check.swift`, `ios-family-voice-consumer-contract-check.swift`, `2026-06-19-volcengine-voice-clone-v3-provider.md` | 外部/合规验收：sample quality policy, real voice sample QA, real trained-voice synthesis acceptance, provider-side disable/delete verification, consent audit |
 
 ## 2026-06-19 Phase 0 Sync Notes
 
 The following items were completed after the original matrix was created and should no longer be treated as unimplemented engineering gaps:
 
-- Hidden Family / Voice UIQA Consumer Gate: iOS now consumes backend-derived `digitalHumanMode`, `familyPersonaContractVersion`, `voiceProfileId`, and `sampleStatus` in hidden QA while public release keeps family/voice entry points hidden.
+- Hidden Family / Voice UIQA Consumer Gate: iOS consumes backend-derived `digitalHumanMode`, `familyPersonaContractVersion`, `voiceProfileId`, and `sampleStatus`; the voice clone entry has since been promoted to a public foundation while advanced family/voice QA evidence remains useful.
 - 时间信件 Delivery Policy Shell: draft/sealed states persist non-delivery metadata and explicitly stay `not_delivering` / `waiting_product_decision` until product delivery rules are decided.
 - 视频档案 Hidden Readiness: mock video detail/list state, thumbnail placeholder, file size, upload status, failed/retry analysis UI, runtime capability, and hidden media combo gate are implemented.
 - 真机验收包强化: true-device voice and archive-audio scripts now produce fixed evidence manifests, screenshot names, logs, and manual QA notes.
@@ -71,7 +71,7 @@ These are not product failures. They are external acceptance gates that require 
 
 ## Release Gating Policy
 
-No hidden PRD feature is public by default.
+No remaining hidden PRD feature is public by default.
 
 Default public surface remains:
 
@@ -91,7 +91,7 @@ Hidden or blocked by default:
 - time letters
 - video upload
 - persona settings
-- family management public release
+- family advanced lifecycle controls
 - account deletion execution
 - doctor contact / intervention execution
 - sunlight/star/silent lifecycle transition controls
@@ -108,7 +108,7 @@ Public MVP engineering remains:
 Hidden engineering remains:
 
 - Audio/video/time-letter real-media and delivery behavior should stay behind hidden flags until promoted.
-- Family management, voice clone, password change, doctor contact, account deletion, and lifecycle controls stay hidden or safety-shell only.
+- Audio/video/time-letter real-media behavior, password change, doctor contact, account deletion, and lifecycle controls stay hidden or safety-shell only.
 
 External acceptance remains:
 
@@ -137,7 +137,7 @@ The PRD items below are intentionally not public MVP features yet. They may have
 | time letters | QA-only archive creation branch; delivery and scheduling semantics still required | no | time letters |
 | video upload | hidden shell only; PRD scope and media backend contract still required | no | video upload |
 | persona settings | QA-only archive/profile-adjacent branch; ownership and prompt-safety policy still required | no | persona settings |
-| family management public release | QA-only profile branch; invitation, permission, and membership backend are not public | no | family management public release |
+| family advanced lifecycle controls | advanced family lifecycle transition controls remain QA/local-policy only | no | family advanced lifecycle controls |
 | care dashboard expansion | aggregate care dashboard and non-executing `关怀升级准备中` placeholder are public; intervention/contact execution is not | aggregate + placeholder only | care dashboard expansion |
 | account deletion execution | hidden safety shell only; destructive deletion is not connected | no | account deletion execution |
 | doctor contact / intervention execution | public placeholder plus hidden safety shell only; no real call, provider, or intervention submission | no | doctor contact / intervention execution |
