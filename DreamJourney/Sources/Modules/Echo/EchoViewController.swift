@@ -582,8 +582,33 @@ final class EchoViewController: UIViewController {
     @discardableResult
     private func startUIQAMockVisemeTimeline() -> Bool {
         guard shouldShowDigitalHumanLivePanel else { return false }
-        digitalHumanLivePanelView?.setVisemeTimeline(.makeUIQAMockProviderTimeline())
+        guard let synthesis = makeUIQAMockSynthesisResultWithVisemeTimeline(),
+              let event = synthesis.lipSyncPlaybackEvent else {
+            digitalHumanLivePanelView?.setMouthShape("neutral", intensity: 0, source: .providerVisemeTimeline)
+            return false
+        }
+        digitalHumanLivePanelView?.applyPlaybackEvent(event)
         return true
+    }
+
+    private func makeUIQAMockSynthesisResultWithVisemeTimeline() -> VoiceCloneSynthesisResult? {
+        let timeline = DigitalHumanLipSyncTimeline.makeUIQAMockProviderTimeline()
+        guard let timelineData = try? JSONEncoder().encode(timeline),
+              let timelineJSON = try? JSONSerialization.jsonObject(with: timelineData) as? [String: Any] else {
+            return nil
+        }
+
+        return VoiceCloneSynthesisResult(json: [
+            "voiceProfileId": "S_mock_digital_human_viseme",
+            "providerMode": "mockProviderVisemeTimeline",
+            "visemeTimeline": timelineJSON,
+            "audio": [
+                "encoding": "base64",
+                "format": "mp3",
+                "data": "TU9DS19BVURJTw==",
+                "byteCount": 10
+            ]
+        ])
     }
 
     private func renderVoiceStatus(

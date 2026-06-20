@@ -179,6 +179,8 @@ assertContains(releaseRegression, "RUN_P0_ARCHIVE_ECHO_REGRESSION", "release reg
 assertContains(releaseRegression, "RUN_P0_ARCHIVE_ECHO_REGRESSION forces RUN_SIMULATOR_SMOKE", "Archive -> Echo P0 gate should force the core simulator smoke")
 assertContains(releaseRegression, "RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE", "release regression should expose deployed archive image-analysis smoke")
 assertContains(releaseRegression, "RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE", "release regression should expose deployed time-letter lifecycle smoke")
+assertContains(releaseRegression, "RUN_DIGITAL_HUMAN_TTS_VISEME_GATE", "release regression should expose optional digital-human TTS/viseme gate")
+assertContains(releaseRegression, "run-digital-human-tts-viseme-gate.sh", "release regression should call digital-human TTS/viseme gate")
 assertContains(releaseRegression, "RUN_P0_PROFILE_CARE_REGRESSION", "release regression should expose public MVP Profile care P0 gate")
 assertContains(releaseRegression, "RUN_P0_PROFILE_CARE_REGRESSION forces RUN_PROFILE_CARE_STATE_SMOKE and RUN_PROFILE_CARE_BACKEND_STATE_SMOKE", "Profile care P0 gate should force local and deployed backend care smokes")
 assertContains(releaseRegression, "BACKEND_API_TOKEN= BACKEND_BASE_URL= ./scripts/verify_backend.sh", "backend verify should not inherit deployed backend credentials")
@@ -220,6 +222,9 @@ for handoffGuard in [
     "voice-clone-backend-contract-check.swift",
     "family-digital-human-hidden-contract-check.swift",
     "backend-family-voice-contract-smoke-check.swift",
+    "voice-synthesis-viseme-contract-check.swift",
+    "digital-human-live-panel-check.swift",
+    "digital-human-tts-viseme-gate-check.swift",
     "ios-family-voice-consumer-contract-check.swift",
     "ios-family-voice-hidden-uiqa-smoke-check.swift",
     "profile-care-public-placeholder-check.swift",
@@ -350,6 +355,12 @@ let requiredScripts = [
     "tmp/visual-qa/prd-stitch-ui/ios-family-voice-hidden-uiqa-smoke-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-family-voice-contract-smoke.py",
     "tmp/visual-qa/prd-stitch-ui/run-backend-family-voice-contract-smoke.sh",
+    "tmp/visual-qa/prd-stitch-ui/voice-synthesis-viseme-contract-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-check.swift",
+    "tmp/visual-qa/prd-stitch-ui/backend-voice-synthesis-viseme-smoke.py",
+    "tmp/visual-qa/prd-stitch-ui/run-backend-voice-synthesis-viseme-smoke.sh",
+    "tmp/visual-qa/prd-stitch-ui/run-digital-human-tts-viseme-gate.sh",
+    "tmp/visual-qa/prd-stitch-ui/digital-human-tts-viseme-gate-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-integration-contract-check.py",
     "tmp/visual-qa/prd-stitch-ui/backend-auth-token-check.swift",
     "tmp/visual-qa/prd-stitch-ui/backend-auth-token-contract-check.py",

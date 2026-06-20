@@ -33,6 +33,7 @@ let backendPostgresStore = read("app/services/postgres_store.py", in: backendRoo
 let backendTests = read("tests/test_core_services.py", in: backendRoot)
 let backendPostgresTests = read("tests/test_postgres_store.py", in: backendRoot)
 let backendReadme = read("README.md", in: backendRoot)
+let backendKeySeparationDoc = read("docs/backend/2026-06-20-volcengine-voice-clone-key-separation.md", in: backendRoot)
 
 let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let voiceService = read("DreamJourney/Sources/Memoir/VoiceCloneService.swift")
@@ -66,41 +67,50 @@ for required in [
     "VOLCENGINE_VOICE_CLONE_API_KEY",
     "VOLCENGINE_VOICE_CLONE_TRAIN_URL",
     "VOLCENGINE_VOICE_CLONE_QUERY_URL",
-    "VOLCENGINE_VOICE_CLONE_RESOURCE_ID",
+    "VOLCENGINE_VOICE_CLONE_SPEAKER_ID_MODE",
+    "VOLCENGINE_VOICE_CLONE_SPEAKER_ID",
+    "VOLCENGINE_VOICE_CLONE_TTS_API_KEY",
     "VOLCENGINE_VOICE_CLONE_TTS_URL",
-    "VOLCENGINE_VOICE_CLONE_TTS_RESOURCE_ID",
+    "VOLCENGINE_VOICE_CLONE_TTS_CLUSTER",
     "https://openspeech.bytedance.com/api/v3/tts/voice_clone",
     "https://openspeech.bytedance.com/api/v3/tts/get_voice",
-    "https://openspeech.bytedance.com/api/v3/tts/unidirectional",
+    "https://openspeech.bytedance.com/api/v1/tts",
 ] {
-    assertContains(backendConfig, required, "backend config should expose voice clone V3 env \(required)")
+    assertContains(backendConfig, required, "backend config should expose current voice clone env \(required)")
 }
 
 for required in [
     "VolcEngineVoiceCloneV3Provider",
     "settings.volcengine_voice_clone_train_url",
     "settings.volcengine_voice_clone_query_url",
-    "settings.volcengine_voice_clone_resource_id",
     "X-Api-Key",
-    "X-Api-Resource-Id",
+    "X-Api-Request-Id",
     "\"speaker_id\": \"custom_speaker_id\"",
     "\"custom_speaker_id\": voice_profile_id",
+    "volcengine_voice_clone_speaker_id_mode",
+    "VOLCENGINE_VOICE_CLONE_SPEAKER_ID",
     "build_training_request",
     "build_query_request",
 ] {
     assertContains(backendProvider, required, "backend provider should proxy VolcEngine V3 \(required)")
 }
+assertNotContains(backendProvider, "X-Api-Resource-Id", "voice clone training/query should not send deprecated resource header")
 
 for required in [
     "VolcVoiceCloneTTSProxy",
+    "settings.volcengine_voice_clone_tts_api_key",
     "settings.volcengine_voice_clone_tts_url",
-    "settings.volcengine_voice_clone_tts_resource_id",
+    "settings.volcengine_voice_clone_tts_cluster",
+    "\"x-api-key\": api_key",
+    "\"voice_type\": voice_profile_id",
     "build_synthesis_request",
+    "parse_tts_response",
     "parse_chunked_audio_response",
-    "X-Api-Resource-Id",
+    "parse_viseme_timeline",
 ] {
     assertContains(backendTTS, required, "backend TTS should proxy cloned voice synthesis \(required)")
 }
+assertNotContains(backendTTS, "X-Api-Resource-Id", "voice clone TTS should not send deprecated resource header")
 
 for required in [
     "\"voiceClone\"",
@@ -203,6 +213,8 @@ for forbidden in [
 
 assertContains(backendReadme, "POST /voice/profiles", "backend README should list voice profile endpoint")
 assertContains(backendReadme, "POST /voice/synthesis", "backend README should list voice synthesis endpoint")
+assertContains(backendKeySeparationDoc, "VOLCENGINE_VOICE_CLONE_TTS_API_KEY", "backend docs should document dedicated synthesis key")
+assertContains(backendKeySeparationDoc, "不要在当前链路里给声音复刻训练、查询或 `/api/v1/tts` 合成请求强行追加 `X-Api-Resource-Id`", "backend docs should forbid deprecated resource header")
 assertContains(releaseRegression, "voice-clone-backend-contract-check.swift", "release regression should run voice clone backend guard")
 assertContains(releaseQA, "voice-clone-backend-contract-check.swift", "release QA package should include voice clone backend guard")
 assertContains(shellGuard, "voice-clone-backend-contract-check.swift", "voice shell guard should point to backend contract guard")
