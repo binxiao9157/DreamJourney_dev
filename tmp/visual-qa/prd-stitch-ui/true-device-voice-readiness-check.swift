@@ -71,6 +71,20 @@ assertContains(
     "DreamJourney/Config/VoiceSDK.local.xcconfig",
     "Local voice SDK config should stay ignored"
 )
+assertContains(
+    gitignore,
+    "DreamJourney/Config/*.local.xcconfig",
+    "All local xcconfig files, including signing overrides, should stay ignored"
+)
+
+for required in [
+    "DreamJourney/Config/YXJ.local.xcconfig",
+    "-xcconfig",
+    "DREAMJOURNEY_DEVELOPMENT_TEAM",
+    "DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER",
+] {
+    assertContains(preflightScript, required, "True-device voice preflight should apply local signing override \(required)")
+}
 
 for required in [
     "VOLCENGINE_APP_ID = YOUR_VOLCENGINE_APP_ID",

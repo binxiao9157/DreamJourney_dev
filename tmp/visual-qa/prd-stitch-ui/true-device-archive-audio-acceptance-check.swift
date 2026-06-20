@@ -45,6 +45,10 @@ let detail = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveDetailViewC
 for required in [
     "load_local_xcconfig",
     "DreamJourney/Config/VoiceSDK.local.xcconfig",
+    "DreamJourney/Config/YXJ.local.xcconfig",
+    "-xcconfig",
+    "DREAMJOURNEY_DEVELOPMENT_TEAM",
+    "DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER",
     "xcodebuild -showdestinations",
     "xcrun devicectl list devices",
     "xcrun xctrace list devices",

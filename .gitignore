@@ -8,6 +8,7 @@ DerivedData/
 tmp/**/DerivedData*/
 DreamJourney/Config/Backend.local.xcconfig
 DreamJourney/Config/VoiceSDK.local.xcconfig
+DreamJourney/Config/*.local.xcconfig
 .complex-problems/**/state.json.lock
 *.xcuserstate
 xcuserdata/

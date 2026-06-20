@@ -113,6 +113,7 @@ cd "$ROOT_DIR"
 
 load_local_xcconfig "DreamJourney/Config/Backend.local.xcconfig"
 load_local_xcconfig "DreamJourney/Config/VoiceSDK.local.xcconfig"
+load_local_xcconfig "DreamJourney/Config/YXJ.local.xcconfig"
 
 append_report "## Optional Local Configuration"
 append_report
@@ -205,16 +206,33 @@ if [[ "$RUN_DEVICE_BUILD" == "1" ]]; then
   append_report
   append_report "## Device Build"
 
+  XCODEBUILD_XCCONFIG_ARGS=()
+  if [[ -f "DreamJourney/Config/YXJ.local.xcconfig" ]]; then
+    XCODEBUILD_XCCONFIG_ARGS=(-xcconfig "DreamJourney/Config/YXJ.local.xcconfig")
+    append_report "- Local signing xcconfig: \`DreamJourney/Config/YXJ.local.xcconfig\`"
+  fi
+
   BUILD_SETTINGS=()
-  for name in DREAMJOURNEY_BACKEND_BASE_URL DREAMJOURNEY_BACKEND_API_TOKEN VOLCENGINE_APP_ID VOLCENGINE_APP_KEY VOLCENGINE_APP_TOKEN; do
-    if [[ -n "${!name:-}" ]]; then
-      BUILD_SETTINGS+=("$name=${!name}")
-    fi
-  done
+  if [[ ${#XCODEBUILD_XCCONFIG_ARGS[@]} -eq 0 ]]; then
+    for name in \
+      DREAMJOURNEY_BACKEND_BASE_URL \
+      DREAMJOURNEY_BACKEND_API_TOKEN \
+      VOLCENGINE_APP_ID \
+      VOLCENGINE_APP_KEY \
+      VOLCENGINE_APP_TOKEN \
+      DREAMJOURNEY_DEVELOPMENT_TEAM \
+      DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER \
+      CODE_SIGN_STYLE; do
+      if [[ -n "${!name:-}" ]]; then
+        BUILD_SETTINGS+=("$name=${!name}")
+      fi
+    done
+  fi
 
   set +e
   xcodebuild \
     -workspace DreamJourney.xcworkspace \
+    "${XCODEBUILD_XCCONFIG_ARGS[@]}" \
     -scheme DreamJourney \
     -configuration Debug \
     -destination "id=$DEVICE_ID" \
