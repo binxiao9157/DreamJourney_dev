@@ -36,6 +36,35 @@ struct DigitalHumanLipSyncTimeline: Codable {
         self.duration = max(duration, lastFrameTime + 0.12)
     }
 
+    init?(json: [String: Any]) {
+        guard let rawFrames = json["frames"] as? [[String: Any]] else {
+            return nil
+        }
+
+        let frames = rawFrames.compactMap { frameJSON -> DigitalHumanLipSyncFrame? in
+            guard let timeOffset = Self.doubleValue(frameJSON["timeOffset"]) else {
+                return nil
+            }
+            let mouthShape = frameJSON["mouthShape"] as? String
+                ?? frameJSON["viseme"] as? String
+                ?? "neutral"
+            let intensity = Self.doubleValue(frameJSON["intensity"]) ?? 0
+            return DigitalHumanLipSyncFrame(
+                timeOffset: timeOffset,
+                mouthShape: mouthShape,
+                intensity: intensity
+            )
+        }
+        guard !frames.isEmpty else {
+            return nil
+        }
+
+        let rawSource = json["source"] as? String
+        let source = rawSource.flatMap(DigitalHumanPlaybackSource.init(rawValue:)) ?? .providerVisemeTimeline
+        let duration = Self.doubleValue(json["duration"]) ?? Self.doubleValue(json["durationSeconds"]) ?? 0
+        self.init(source: source, duration: duration, frames: frames)
+    }
+
     func javaScriptLiteral() throws -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -62,6 +91,22 @@ struct DigitalHumanLipSyncTimeline: Codable {
                 DigitalHumanLipSyncFrame(timeOffset: 1.92, mouthShape: "neutral", intensity: 0.18)
             ]
         )
+    }
+
+    private static func doubleValue(_ value: Any?) -> Double? {
+        if let value = value as? Double {
+            return value
+        }
+        if let value = value as? Int {
+            return Double(value)
+        }
+        if let value = value as? NSNumber {
+            return value.doubleValue
+        }
+        if let value = value as? String {
+            return Double(value)
+        }
+        return nil
     }
 }
 

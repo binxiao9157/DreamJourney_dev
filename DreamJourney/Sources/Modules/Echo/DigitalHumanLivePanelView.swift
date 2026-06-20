@@ -107,6 +107,19 @@ final class DigitalHumanLivePanelView: UIView {
         evaluate("window.DreamJourneyDigitalHuman && window.DreamJourneyDigitalHuman.setVisemeTimeline(\(payload))")
     }
 
+    func applyPlaybackEvent(_ event: DigitalHumanPlaybackEvent) {
+        switch event {
+        case .audioLevel(let level, let source):
+            setAudioLevel(level, source: Self.audioLevelSource(from: source))
+        case .visemeTimeline(let timeline):
+            setVisemeTimeline(timeline)
+        case .stopped:
+            setInteractionState(.stopped)
+        case .failed:
+            setInteractionState(.failed)
+        }
+    }
+
     func setPersona(name: String, subtitle: String) {
         let encodedName = Self.javaScriptStringLiteral(name)
         let encodedSubtitle = Self.javaScriptStringLiteral(subtitle)
@@ -226,6 +239,17 @@ final class DigitalHumanLivePanelView: UIView {
             return "\"\""
         }
         return String(encoded.dropFirst().dropLast())
+    }
+
+    private static func audioLevelSource(from source: DigitalHumanPlaybackSource) -> DigitalHumanAudioLevelSource {
+        switch source {
+        case .avAudioPlayerMetering:
+            return .avAudioPlayerMetering
+        case .sdkTTSPlaybackFallback:
+            return .sdkTTSPlaybackFallback
+        case .providerVisemeTimeline:
+            return .providerVisemeTimeline
+        }
     }
 }
 

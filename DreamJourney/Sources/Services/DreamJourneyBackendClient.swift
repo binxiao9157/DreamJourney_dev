@@ -412,6 +412,7 @@ struct VoiceCloneSynthesisResult {
     let audioBase64: String
     let audioFormat: String
     let byteCount: Int
+    let visemeTimeline: DigitalHumanLipSyncTimeline?
 
     init?(json: [String: Any]) {
         guard let voiceProfileId = json["voiceProfileId"] as? String,
@@ -425,10 +426,22 @@ struct VoiceCloneSynthesisResult {
         self.audioBase64 = audioBase64
         self.audioFormat = audioFormat
         self.byteCount = Self.intValue(audioJSON["byteCount"]) ?? 0
+        if let visemeTimelineJSON = json["visemeTimeline"] as? [String: Any] {
+            self.visemeTimeline = DigitalHumanLipSyncTimeline(json: visemeTimelineJSON)
+        } else {
+            self.visemeTimeline = nil
+        }
     }
 
     var audioData: Data? {
         Data(base64Encoded: audioBase64)
+    }
+
+    var lipSyncPlaybackEvent: DigitalHumanPlaybackEvent? {
+        guard let visemeTimeline else {
+            return nil
+        }
+        return .visemeTimeline(visemeTimeline)
     }
 
     private static func intValue(_ value: Any?) -> Int? {
