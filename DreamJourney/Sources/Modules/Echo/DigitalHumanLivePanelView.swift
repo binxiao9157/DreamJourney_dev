@@ -18,6 +18,9 @@ struct DigitalHumanLivePanelSnapshot {
     let audioLevel: Double
     let personaName: String
     let personaSubtitle: String
+    let hasRealDigitalHumanAsset: Bool
+    let assetVideoReady: Bool
+    let hasFallbackAvatar: Bool
 
     init(object: [String: Any]) {
         ready = object["ready"] as? Bool ?? false
@@ -27,6 +30,9 @@ struct DigitalHumanLivePanelSnapshot {
         audioLevel = object["audioLevel"] as? Double ?? 0
         personaName = object["personaName"] as? String ?? ""
         personaSubtitle = object["personaSubtitle"] as? String ?? ""
+        hasRealDigitalHumanAsset = object["hasRealDigitalHumanAsset"] as? Bool ?? false
+        assetVideoReady = object["assetVideoReady"] as? Bool ?? false
+        hasFallbackAvatar = object["hasFallbackAvatar"] as? Bool ?? true
     }
 }
 
@@ -120,7 +126,10 @@ final class DigitalHumanLivePanelView: UIView {
                     "stateName": DigitalHumanLiveInteractionState.failed.rawValue,
                     "audioLevel": 0,
                     "personaName": "",
-                    "personaSubtitle": ""
+                    "personaSubtitle": "",
+                    "hasRealDigitalHumanAsset": false,
+                    "assetVideoReady": false,
+                    "hasFallbackAvatar": false
                 ]))
                 return
             }

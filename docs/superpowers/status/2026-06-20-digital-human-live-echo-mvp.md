@@ -9,7 +9,7 @@ The feature is not public by default. It is only visible when `DJFeature.digital
 ## Implemented
 
 - `DigitalHumanLivePanelView` loads `DigitalHumanLive.html` from the app bundle.
-- `DigitalHumanLive.html` wraps the existing `DHLiveMini.js`, `DHLiveMini.wasm`, `MiniLive2.js`, `MiniMateLoader.js`, `pako.min.js`, and existing media assets.
+- `DigitalHumanLive.html` wraps the existing `DHLiveMini.js`, `DHLiveMini.wasm`, `MiniLive2.js`, `MiniMateLoader.js`, `pako.min.js`, and the bundled real digital-human media asset `01.mp4`.
 - Echo maps state into the panel:
   - idle -> `idle`
   - starting/listening -> `listening`
@@ -17,7 +17,7 @@ The feature is not public by default. It is only visible when `DJFeature.digital
   - speaking/replied -> `speaking`
   - error -> `failed`
 - Simulated audio amplitude drives the MVP mouth movement while listening/speaking.
-- Fallback avatar remains available even if the vendor renderer fails.
+- The fake fallback avatar has been removed. QA must prove that the bundled real digital-human video asset is ready, or the feature should degrade back to ordinary Echo.
 - UIQA launch arg `DJRunDigitalHumanLivePanelSmoke` opens Echo, shows the panel, drives state to speaking, writes result JSON, and captures a screenshot.
 
 ## Verification
@@ -31,27 +31,32 @@ git diff --check
 
 Result: passed.
 
+The static check also guards against reintroducing fake avatar markup and verifies that the HTML/renderer paths match Xcode's flattened app-bundle resource layout.
+
 Simulator smoke:
 
 ```bash
-RUN_ID=20260620-digital-human-live-panel tmp/visual-qa/prd-stitch-ui/run-digital-human-live-panel-smoke.sh
+RUN_ID=20260620-digital-human-real-asset-r4 tmp/visual-qa/prd-stitch-ui/run-digital-human-live-panel-smoke.sh
 ```
 
 Result: passed.
 
 Evidence:
 
-- Result JSON: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-live-panel/digital-human-live-panel-smoke-result.json`
-- Screenshot: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-live-panel/01-digital-human-live-panel.png`
-- Build log: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-live-panel/build.log`
-- Runtime log: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-live-panel/runtime.log`
-- OS log: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-live-panel/oslog.log`
+- Result JSON: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-real-asset-r4/digital-human-live-panel-smoke-result.json`
+- Screenshot: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-real-asset-r4/01-digital-human-live-panel.png`
+- Build log: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-real-asset-r4/build.log`
+- Runtime log: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-real-asset-r4/runtime.log`
+- OS log: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-real-asset-r4/oslog.log`
 
 Smoke result highlights:
 
 - `completed=true`
 - `panelVisible=true`
 - `panelReady=true`
+- `hasRealDigitalHumanAsset=true`
+- `assetVideoReady=true`
+- `hasFallbackAvatar=false`
 - `stateName=speaking`
 - `audioLevel=0.63310296587799986`
 

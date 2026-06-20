@@ -3,8 +3,8 @@ let CONFIG = {
     showFPS: false,              // 是否显示 FPS
     chromaKeyEnabled: true,     // 是否开启绿幕扣除
     backgroundVideoSrc: "background/bg.mp4",  // 背景视频路径（开启绿幕扣除时使用）
-    videoSrc: "assets/01.mp4",                // 默认视频文件路径
-    dataSrc: "assets/combined_data.json.gz",   // 默认数据文件路径
+    videoSrc: "01.mp4",                // 默认视频文件路径
+    dataSrc: "combined_data.json.gz",   // 默认数据文件路径
     // 绿幕抠图参数配置
     chromaKey: {
         keyColor: { r: 0.0, g: 1.0, b: 0.0 },  // 要抠除的颜色（默认绿色）

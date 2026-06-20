@@ -29,7 +29,7 @@
 
 - [ ] Create a standalone HTML wrapper that loads `pako.min.js`, `DHLiveMini.js`, `MiniLive2.js`, and `MiniMateLoader.js`.
 - [ ] Add a defensive `window.DreamJourneyDigitalHuman` API with `setState`, `setAudioLevel`, `setPersona`, and `snapshot`.
-- [ ] Include an always-visible lightweight fallback layer so the smoke can prove state and amplitude even if the vendor renderer fails.
+- [x] Remove the fake fallback avatar. The panel must render a bundled real digital-human video asset (`01.mp4`) or report degradation back to ordinary Echo.
 - [ ] Add the HTML file to Xcode resources.
 
 ### Task 3: iOS Panel View
@@ -38,7 +38,7 @@
 - Create: `DreamJourney/Sources/Modules/Echo/DigitalHumanLivePanelView.swift`
 - Modify: `DreamJourney.xcodeproj/project.pbxproj`
 
-- [ ] Implement `DigitalHumanLivePanelView` with `WKWebView`, load-state callbacks, fallback hiding, and JS helpers.
+- [x] Implement `DigitalHumanLivePanelView` with `WKWebView`, load-state callbacks, real-asset readiness reporting, and JS helpers.
 - [ ] Add methods `setInteractionState(_:)`, `setAudioLevel(_:)`, `setPersona(name:subtitle:)`, `startSimulatedAudioLevels()`, `stopSimulatedAudioLevels()`, and `snapshot(completion:)`.
 - [ ] Keep all state changes on the main queue.
 

@@ -17,7 +17,17 @@ async function init()
                         containerElements: [screen],
                     }
                 });
-            await newVideoTask();
+            try {
+                await newVideoTask();
+                window.DreamJourneyDigitalHuman?.markRendererReady?.({
+                    videoSrc: CONFIG.videoSrc,
+                    dataSrc: CONFIG.dataSrc
+                });
+            } catch (error) {
+                console.error('[DreamJourneyDigitalHuman] real asset renderer failed', error);
+                window.DreamJourneyDigitalHuman?.markFailed?.(error?.message || 'real asset renderer failed');
+                throw error;
+            }
             document.getElementById('screen2').style.display = 'block';
 }
 

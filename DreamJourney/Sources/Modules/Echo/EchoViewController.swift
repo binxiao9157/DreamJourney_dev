@@ -897,16 +897,28 @@ extension EchoViewController {
             self?.viewModel.receiveAIReply("我在这里，慢慢听你说。")
             self?.digitalHumanLivePanelView?.startSimulatedAudioLevels()
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.45) { [weak self] in
-            panel.snapshot { snapshot in
+        func finishWhenRealAssetReady(attemptsRemaining: Int) {
+            panel.snapshot { [weak self] snapshot in
                 let audioLevel = snapshot?.audioLevel ?? 0
                 let panelReady = snapshot?.ready == true
+                let hasRealDigitalHumanAsset = snapshot?.hasRealDigitalHumanAsset == true
+                let assetVideoReady = snapshot?.assetVideoReady == true
+                let hasFallbackAvatar = snapshot?.hasFallbackAvatar == true
                 let speaking = snapshot?.stateName == DigitalHumanLiveInteractionState.speaking.rawValue
+                if panelReady && hasRealDigitalHumanAsset && !hasFallbackAvatar && !assetVideoReady && attemptsRemaining > 0 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        finishWhenRealAssetReady(attemptsRemaining: attemptsRemaining - 1)
+                    }
+                    return
+                }
                 completion([
-                    "completed": panelReady && speaking && audioLevel > 0,
+                    "completed": panelReady && speaking && audioLevel > 0 && hasRealDigitalHumanAsset && assetVideoReady && !hasFallbackAvatar,
                     "panelVisible": !panel.isHidden && panel.alpha > 0,
                     "panelReady": panelReady,
                     "rendererReady": snapshot?.rendererReady ?? false,
+                    "hasRealDigitalHumanAsset": hasRealDigitalHumanAsset,
+                    "assetVideoReady": assetVideoReady,
+                    "hasFallbackAvatar": hasFallbackAvatar,
                     "panelFailed": snapshot?.failed ?? panel.didFail,
                     "stateName": snapshot?.stateName ?? "missing",
                     "audioLevel": audioLevel,
@@ -916,6 +928,9 @@ extension EchoViewController {
                     "quoteText": self?.quoteLabel.text ?? ""
                 ])
             }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.45) {
+            finishWhenRealAssetReady(attemptsRemaining: 14)
         }
     }
 }

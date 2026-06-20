@@ -118,6 +118,9 @@ echo
 grep -Eq '"completed"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Smoke did not complete."
 grep -Eq '"panelVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Panel should be visible in QA smoke."
 grep -Eq '"panelReady"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Panel web bridge should be ready."
+grep -Eq '"hasRealDigitalHumanAsset"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Smoke must use the bundled real digital human asset."
+grep -Eq '"assetVideoReady"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Real digital human video asset should be ready."
+grep -Eq '"hasFallbackAvatar"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Fake fallback avatar must not be rendered."
 grep -Eq '"stateName"[[:space:]]*:[[:space:]]*"speaking"' "$RESULT_FILE" || fail "Panel should reach speaking state."
 grep -Eq '"audioLevel"[[:space:]]*:[[:space:]]*0\.[1-9]' "$RESULT_FILE" || fail "Simulated audio level should drive mouth movement."
 

@@ -27,6 +27,7 @@ let echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
 let project = read("DreamJourney.xcodeproj/project.pbxproj")
 let webHTML = read("DreamJourney/Resources/web/DigitalHumanLive.html")
+let miniLive = read("DreamJourney/Resources/web/MiniLive2.js")
 
 assertContains(featureFlags, "case digitalHumanLivePanel", "Digital human live panel should have an explicit feature flag")
 assertNotContains(
@@ -57,5 +58,26 @@ assertContains(webHTML, "setAudioLevel", "HTML bridge should accept audio level"
 assertContains(webHTML, "snapshot", "HTML bridge should expose snapshot")
 assertContains(webHTML, "MiniLive2.js", "HTML wrapper should load existing renderer script")
 assertContains(webHTML, "DHLiveMini.js", "HTML wrapper should load existing wasm loader script")
+assertContains(webHTML, "01.mp4", "HTML wrapper should declare the bundled real digital human video asset")
+assertContains(webHTML, "combined_data.json.gz", "HTML wrapper should declare the bundled real digital human motion data")
+assertContains(miniLive, "videoSrc: \"01.mp4\"", "Renderer config should match Xcode's flattened app bundle resource path")
+assertContains(miniLive, "dataSrc: \"combined_data.json.gz\"", "Renderer motion config should match Xcode's flattened app bundle resource path")
+assertContains(webHTML, "hasRealDigitalHumanAsset", "HTML snapshot should report that the real digital human asset is available")
+assertNotContains(webHTML, "fallbackAvatar", "HTML wrapper must not render a fake fallback avatar")
+assertNotContains(webHTML, "class=\"head\"", "HTML wrapper must not draw a fake avatar head")
+assertNotContains(webHTML, "class=\"mouth\"", "HTML wrapper must not draw fake mouth graphics")
+
+let realAssetFiles = [
+    "DreamJourney/Resources/web/assets/01.mp4",
+    "DreamJourney/Resources/web/assets/combined_data.json.gz",
+    "DreamJourney/Resources/web/common/bs_texture_halfFace.png"
+]
+
+for relativePath in realAssetFiles {
+    let url = root.appendingPathComponent(relativePath)
+    guard FileManager.default.fileExists(atPath: url.path) else {
+        fatalError("Real digital human asset is missing: \(relativePath)")
+    }
+}
 
 print("Digital human live panel checks passed")
