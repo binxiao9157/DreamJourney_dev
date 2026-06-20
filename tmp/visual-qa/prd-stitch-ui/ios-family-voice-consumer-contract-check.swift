@@ -72,13 +72,24 @@ for required in [
 }
 
 for required in [
-    "snapshot.providerMode",
-    "snapshot.contractVersion",
+    "profileVoiceCloneStatusTitle",
+    "profileVoiceCloneStatusCaption",
     "profileVoiceCloneEntryStatusValue",
-    "公开可见，需授权训练",
+    "profileVoiceCloneAuthorizationHint",
+    "可用于回响",
 ] {
-    assertContains(voiceShell, required, "Voice clone shell should render backend-derived public contract field \(required)")
+    assertContains(voiceShell, required, "Voice clone shell should render user-facing backend-derived status \(required)")
 }
+assertNotContains(
+    voiceShell,
+    "profileVoiceCloneProviderModeValue",
+    "Voice clone shell should not render backend provider as user-facing UI"
+)
+assertNotContains(
+    voiceShell,
+    "profileVoiceCloneContractVersionValue",
+    "Voice clone shell should not render backend contract version as user-facing UI"
+)
 
 assertContains(
     releaseRegression,

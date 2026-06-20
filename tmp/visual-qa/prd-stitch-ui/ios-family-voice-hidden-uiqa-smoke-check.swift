@@ -76,14 +76,21 @@ for required in [
 }
 
 for required in [
-    "profileVoiceCloneProviderModeValue",
+    "profileVoiceCloneStatusTitle",
+    "profileVoiceCloneStatusCaption",
     "profileVoiceCloneSampleStatusValue",
     "profileVoiceCloneEntryStatusValue",
+    "profileVoiceCloneAuthorizationHint",
     "profileVoiceCloneSubmitButton",
     "profileVoiceCloneRefreshButton",
 ] {
     assertContains(voiceShell, required, "voice clone shell should expose backend-derived fields and public actions for UIQA \(required)")
 }
+assertNotContains(
+    voiceShell,
+    "profileVoiceCloneProviderModeValue",
+    "voice clone UIQA should not depend on visible backend provider mode"
+)
 
 assertContains(readiness, "hiddenBranchesLaunchArgument", "hidden profile branch gate must remain explicit")
 assertContains(releaseScript, "\"backendFamilyDigitalHumanMode\"", "family/persona smoke runner should grep backend family mode")

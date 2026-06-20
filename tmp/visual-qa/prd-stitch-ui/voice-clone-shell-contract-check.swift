@@ -83,12 +83,16 @@ for required in [
     "final class ProfileVoiceCloneShellViewController",
     "音色复刻",
     "UIDocumentPickerDelegate",
-    "授权说明",
+    "profileVoiceCloneStatusTitle",
+    "profileVoiceCloneStatusCaption",
+    "还没有创建音色",
+    "授权与样本",
     "authorizationSwitch",
     "我确认本人授权",
-    "声音样本状态",
-    "voiceProfileId",
-    "删除/禁用合同",
+    "profileVoiceCloneAuthorizationHint",
+    "样本状态",
+    "可用状态",
+    "训练与管理",
     "选择音频样本并提交",
     "刷新训练状态",
     "禁用音色",
@@ -104,6 +108,12 @@ for required in [
 }
 assertNotContains(shell, "未开放", "public voice clone shell should not render unavailable disabled actions")
 assertNotContains(shell, "默认隐藏", "public voice clone shell should not claim default hidden")
+assertNotContains(shell, "profileVoiceCloneProfileIdValue", "voice profile id should not be a visible user-facing field")
+assertNotContains(shell, "profileVoiceCloneProviderModeValue", "provider mode should not be a visible user-facing field")
+assertNotContains(shell, "profileVoiceCloneContractVersionValue", "contract version should not be a visible user-facing field")
+assertNotContains(shell, "providerMode", "provider mode should stay out of user-facing voice clone UI")
+assertNotContains(shell, "合同版本", "contract version should stay out of user-facing voice clone UI")
+assertNotContains(shell, "删除/禁用合同", "contract language should stay out of user-facing voice clone UI")
 
 assertContains(project, "ProfileVoiceCloneShellViewController.swift in Sources", "voice clone shell should be in Xcode target")
 assertContains(

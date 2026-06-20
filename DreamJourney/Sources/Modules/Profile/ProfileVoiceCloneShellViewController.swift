@@ -7,11 +7,11 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     private let contentStack = UIStackView()
     private let authorizationSwitch = UISwitch()
 
+    private weak var statusTitleLabel: UILabel?
+    private weak var statusCaptionLabel: UILabel?
     private weak var sampleStatusValueLabel: UILabel?
-    private weak var profileIdValueLabel: UILabel?
-    private weak var providerModeValueLabel: UILabel?
-    private weak var contractVersionValueLabel: UILabel?
-    private weak var entryStatusValueLabel: UILabel?
+    private weak var voiceAvailabilityLabel: UILabel?
+    private weak var authorizationHintLabel: UILabel?
     private weak var feedbackLabel: UILabel?
     private weak var submitButton: UIButton?
     private weak var refreshButton: UIButton?
@@ -80,7 +80,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         ])
 
         contentStack.addArrangedSubview(makeHeroCard())
-        contentStack.addArrangedSubview(makeContractCard())
+        contentStack.addArrangedSubview(makeAuthorizationCard())
         contentStack.addArrangedSubview(makeActionCard())
     }
 
@@ -88,11 +88,29 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         let card = makeCard()
         let stack = UIStackView()
         stack.axis = .vertical
-        stack.spacing = 14
+        stack.spacing = 18
+
+        let headerStack = UIStackView()
+        headerStack.axis = .horizontal
+        headerStack.alignment = .center
+        headerStack.spacing = 14
+
+        let iconContainer = UIView()
+        iconContainer.backgroundColor = DJDesignTokens.Color.accent.withAlphaComponent(0.14)
+        iconContainer.layer.cornerRadius = 24
+        iconContainer.layer.masksToBounds = true
 
         let iconView = UIImageView(image: UIImage(systemName: "waveform.badge.mic"))
         iconView.tintColor = DJDesignTokens.Color.accentDeep
         iconView.contentMode = .scaleAspectFit
+        iconContainer.addSubview(iconView)
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            iconView.centerXAnchor.constraint(equalTo: iconContainer.centerXAnchor),
+            iconView.centerYAnchor.constraint(equalTo: iconContainer.centerYAnchor),
+            iconView.widthAnchor.constraint(equalToConstant: 25),
+            iconView.heightAnchor.constraint(equalToConstant: 25),
+        ])
 
         let titleLabel = makeLabel(
             text: "音色复刻",
@@ -101,65 +119,82 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         )
 
         let subtitleLabel = makeLabel(
-            text: "提交本人授权的音频样本，由后端代理训练音色；iOS 不保存火山语音密钥。",
+            text: "用一段本人授权的声音样本，生成可用于回响的专属音色。",
             font: DJDesignTokens.Font.body(14),
             color: DJDesignTokens.Color.textSecondary
         )
 
+        let textStack = UIStackView()
+        textStack.axis = .vertical
+        textStack.spacing = 4
+        textStack.addArrangedSubview(titleLabel)
+        textStack.addArrangedSubview(subtitleLabel)
+
+        headerStack.addArrangedSubview(iconContainer)
+        headerStack.addArrangedSubview(textStack)
+        iconContainer.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            iconContainer.widthAnchor.constraint(equalToConstant: 48),
+            iconContainer.heightAnchor.constraint(equalToConstant: 48),
+        ])
+
+        let statusContainer = UIView()
+        statusContainer.backgroundColor = DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.70)
+        statusContainer.layer.cornerRadius = DJDesignTokens.Radius.medium
+        statusContainer.layer.masksToBounds = true
+
         let statusStack = UIStackView()
         statusStack.axis = .vertical
-        statusStack.spacing = 10
+        statusStack.spacing = 8
+        statusContainer.addSubview(statusStack)
+        statusStack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            statusStack.topAnchor.constraint(equalTo: statusContainer.topAnchor, constant: 14),
+            statusStack.leadingAnchor.constraint(equalTo: statusContainer.leadingAnchor, constant: 14),
+            statusStack.trailingAnchor.constraint(equalTo: statusContainer.trailingAnchor, constant: -14),
+            statusStack.bottomAnchor.constraint(equalTo: statusContainer.bottomAnchor, constant: -14),
+        ])
+
+        let statusTitle = makeLabel(
+            text: voiceStatusTitle(for: snapshot),
+            font: DJDesignTokens.Font.title(18),
+            color: DJDesignTokens.Color.textPrimary
+        )
+        statusTitle.accessibilityIdentifier = "profileVoiceCloneStatusTitle"
+        statusTitleLabel = statusTitle
+
+        let statusCaption = makeLabel(
+            text: voiceStatusCaption(for: snapshot),
+            font: DJDesignTokens.Font.body(13),
+            color: DJDesignTokens.Color.textSecondary
+        )
+        statusCaption.accessibilityIdentifier = "profileVoiceCloneStatusCaption"
+        statusCaptionLabel = statusCaption
 
         let sampleRow = makeInfoRow(
-            title: "声音样本状态",
+            title: "样本状态",
             value: snapshot.sampleStatus.displayText,
             accessibilityIdentifier: "profileVoiceCloneSampleStatusValue"
         ) { [weak self] label in
             self?.sampleStatusValueLabel = label
         }
-        let profileRow = makeInfoRow(
-            title: "voiceProfileId",
-            value: snapshot.voiceProfileId,
-            accessibilityIdentifier: "profileVoiceCloneProfileIdValue"
-        ) { [weak self] label in
-            self?.profileIdValueLabel = label
-        }
-        let providerRow = makeInfoRow(
-            title: "providerMode",
-            value: snapshot.providerMode,
-            accessibilityIdentifier: "profileVoiceCloneProviderModeValue"
-        ) { [weak self] label in
-            self?.providerModeValueLabel = label
-        }
-        let versionRow = makeInfoRow(
-            title: "合同版本",
-            value: "\(snapshot.contractVersion)",
-            accessibilityIdentifier: "profileVoiceCloneContractVersionValue"
-        ) { [weak self] label in
-            self?.contractVersionValueLabel = label
-        }
-        let entryRow = makeInfoRow(
-            title: "入口状态",
-            value: "公开可见，需授权训练",
+
+        let availabilityRow = makeInfoRow(
+            title: "可用状态",
+            value: voiceAvailabilityText(for: snapshot),
             accessibilityIdentifier: "profileVoiceCloneEntryStatusValue"
         ) { [weak self] label in
-            self?.entryStatusValueLabel = label
+            self?.voiceAvailabilityLabel = label
         }
 
-        [sampleRow, profileRow, providerRow, versionRow, entryRow].forEach(statusStack.addArrangedSubview)
+        [statusTitle, statusCaption, sampleRow, availabilityRow].forEach(statusStack.addArrangedSubview)
 
         card.addSubview(stack)
-        [stack, iconView, titleLabel, subtitleLabel, statusStack].forEach {
-            $0.translatesAutoresizingMaskIntoConstraints = false
-        }
-        stack.addArrangedSubview(iconView)
-        stack.addArrangedSubview(titleLabel)
-        stack.addArrangedSubview(subtitleLabel)
-        stack.addArrangedSubview(statusStack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.addArrangedSubview(headerStack)
+        stack.addArrangedSubview(statusContainer)
 
         NSLayoutConstraint.activate([
-            iconView.widthAnchor.constraint(equalToConstant: 38),
-            iconView.heightAnchor.constraint(equalToConstant: 38),
             stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 18),
             stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 18),
             stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -18),
@@ -169,14 +204,14 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         return card
     }
 
-    private func makeContractCard() -> UIView {
+    private func makeAuthorizationCard() -> UIView {
         let card = makeCard()
         let stack = UIStackView()
         stack.axis = .vertical
         stack.spacing = 12
 
-        stack.addArrangedSubview(makeSectionTitle("授权说明"))
-        stack.addArrangedSubview(makeBody(snapshot.authorizationCopy))
+        stack.addArrangedSubview(makeSectionTitle("授权与样本"))
+        stack.addArrangedSubview(makeBody("只使用你主动选择的音频样本训练音色。训练、查询、合成、禁用和删除都由后端代理处理。"))
 
         let authorizationRow = UIStackView()
         authorizationRow.axis = .horizontal
@@ -195,10 +230,16 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         authorizationLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         authorizationSwitch.setContentHuggingPriority(.required, for: .horizontal)
 
+        let authorizationHint = makeLabel(
+            text: "确认授权后才能提交声音样本。",
+            font: DJDesignTokens.Font.body(13),
+            color: DJDesignTokens.Color.textTertiary
+        )
+        authorizationHint.accessibilityIdentifier = "profileVoiceCloneAuthorizationHint"
+        authorizationHintLabel = authorizationHint
+
         stack.addArrangedSubview(authorizationRow)
-        stack.addArrangedSubview(makeSectionTitle("删除/禁用合同"))
-        stack.addArrangedSubview(makeBody(snapshot.disableContract))
-        stack.addArrangedSubview(makeBody(snapshot.deleteContract))
+        stack.addArrangedSubview(authorizationHint)
 
         card.addSubview(stack)
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -217,6 +258,8 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         let stack = UIStackView()
         stack.axis = .vertical
         stack.spacing = 12
+
+        stack.addArrangedSubview(makeSectionTitle("训练与管理"))
 
         let feedback = makeLabel(
             text: "",
@@ -261,9 +304,11 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     }
 
     @objc private func authorizationChanged() {
-        feedbackLabel?.text = authorizationSwitch.isOn
+        let message = authorizationSwitch.isOn
             ? "已确认授权，可以选择音频样本提交训练。"
-            : "勾选授权后才能提交声音样本。"
+            : "确认授权后才能提交声音样本。"
+        authorizationHintLabel?.text = message
+        feedbackLabel?.text = message
         updateActionAvailability()
     }
 
@@ -281,7 +326,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
 
     @objc private func refreshStatusTapped() {
         guard hasVoiceProfile else {
-            feedbackLabel?.text = "还没有可刷新的 voiceProfileId。"
+            feedbackLabel?.text = "还没有可刷新的音色。"
             return
         }
         setBusyFeedback("正在刷新训练状态...")
@@ -311,7 +356,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     @objc private func deleteVoiceTapped() {
         confirmDestructive(
             title: "删除音色",
-            message: "删除会清理后端样本、训练产物和本地 voiceProfileId。此操作不可恢复。",
+            message: "删除会清理后端样本、训练产物和本地记录。此操作不可恢复。",
             actionTitle: "删除"
         ) { [weak self] in
             self?.performDeleteVoice()
@@ -340,8 +385,8 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
             DispatchQueue.main.async {
                 guard let self else { return }
                 switch result {
-                case .success(let profileId):
-                    self.reloadBackendSnapshot(feedback: "音色训练已完成：\(profileId)")
+                case .success:
+                    self.reloadBackendSnapshot(feedback: "音色训练已完成，可以用于后续回响。")
                 case .failure(let error):
                     self.finishBusy(feedback: error.localizedDescription)
                 }
@@ -355,7 +400,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
 
     private func performDisableVoice() {
         guard hasVoiceProfile else {
-            feedbackLabel?.text = "还没有可禁用的 voiceProfileId。"
+            feedbackLabel?.text = "还没有可禁用的音色。"
             return
         }
         setBusyFeedback("正在禁用音色...")
@@ -374,7 +419,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
 
     private func performDeleteVoice() {
         guard hasVoiceProfile else {
-            feedbackLabel?.text = "还没有可删除的 voiceProfileId。"
+            feedbackLabel?.text = "还没有可删除的音色。"
             return
         }
         setBusyFeedback("正在删除音色...")
@@ -421,11 +466,10 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
 
     private func applySnapshot(_ snapshot: VoiceCloneProfileSnapshot, feedback: String? = nil) {
         self.snapshot = snapshot
+        statusTitleLabel?.text = voiceStatusTitle(for: snapshot)
+        statusCaptionLabel?.text = voiceStatusCaption(for: snapshot)
         sampleStatusValueLabel?.text = snapshot.sampleStatus.displayText
-        profileIdValueLabel?.text = snapshot.voiceProfileId
-        providerModeValueLabel?.text = snapshot.providerMode
-        contractVersionValueLabel?.text = "\(snapshot.contractVersion)"
-        entryStatusValueLabel?.text = "公开可见，需授权训练"
+        voiceAvailabilityLabel?.text = voiceAvailabilityText(for: snapshot)
         if let feedback {
             feedbackLabel?.text = feedback
         }
@@ -453,6 +497,10 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         refreshButton?.isEnabled = !isBusy && hasVoiceProfile && snapshot.sampleStatus != .deleted && snapshot.sampleStatus != .disabled
         disableButton?.isEnabled = !isBusy && hasVoiceProfile && snapshot.sampleStatus != .disabled && snapshot.sampleStatus != .deleted
         deleteButton?.isEnabled = !isBusy && hasVoiceProfile && snapshot.sampleStatus != .deleted
+        [refreshButton, disableButton, deleteButton].forEach { button in
+            button?.isHidden = !hasVoiceProfile
+        }
+        updateButtonAppearance()
     }
 
     private func confirmDestructive(
@@ -465,6 +513,57 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
         alert.addAction(UIAlertAction(title: actionTitle, style: .destructive) { _ in handler() })
         present(alert, animated: true)
+    }
+
+    private func voiceStatusTitle(for snapshot: VoiceCloneProfileSnapshot) -> String {
+        switch snapshot.sampleStatus {
+        case .notProvided:
+            return "还没有创建音色"
+        case .pending:
+            return "样本已提交"
+        case .ready:
+            return "音色已可使用"
+        case .failed:
+            return "训练失败，可重新提交"
+        case .disabled:
+            return "音色已禁用"
+        case .deleted:
+            return "音色已删除"
+        }
+    }
+
+    private func voiceStatusCaption(for snapshot: VoiceCloneProfileSnapshot) -> String {
+        switch snapshot.sampleStatus {
+        case .notProvided:
+            return "确认授权后，选择一段清晰的本人音频样本开始训练。"
+        case .pending:
+            return "后端已接收样本，稍后刷新即可查看训练结果。"
+        case .ready:
+            return "后续回响可使用这份音色，仍可随时禁用或删除。"
+        case .failed:
+            return "这次样本未能完成训练，可以换一段更清晰的音频重试。"
+        case .disabled:
+            return "当前音色不会再用于合成，可重新提交样本恢复。"
+        case .deleted:
+            return "音色和本地记录已清理，可以重新授权创建。"
+        }
+    }
+
+    private func voiceAvailabilityText(for snapshot: VoiceCloneProfileSnapshot) -> String {
+        switch snapshot.sampleStatus {
+        case .ready:
+            return "可用于回响"
+        case .pending:
+            return "训练中"
+        case .failed:
+            return "待重试"
+        case .disabled:
+            return "已暂停"
+        case .deleted:
+            return "已删除"
+        case .notProvided:
+            return "待创建"
+        }
     }
 
     private func makeInfoRow(
@@ -526,6 +625,16 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         button.titleLabel?.font = DJDesignTokens.Font.label(14)
         button.layer.cornerRadius = DJDesignTokens.Radius.medium
         button.contentEdgeInsets = UIEdgeInsets(top: 12, left: 14, bottom: 12, right: 14)
+        button.tag = {
+            switch style {
+            case .primary:
+                return 1
+            case .secondary:
+                return 2
+            case .destructive:
+                return 3
+            }
+        }()
 
         switch style {
         case .primary:
@@ -540,6 +649,37 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         }
         button.setTitleColor(DJDesignTokens.Color.textTertiary, for: .disabled)
         return button
+    }
+
+    private func updateButtonAppearance() {
+        [submitButton, refreshButton, disableButton, deleteButton].forEach { button in
+            guard let button else { return }
+            switch button.tag {
+            case 1:
+                button.backgroundColor = button.isEnabled
+                    ? DJDesignTokens.Color.accent
+                    : DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.88)
+                button.setTitleColor(button.isEnabled ? .white : DJDesignTokens.Color.textTertiary, for: .normal)
+            case 2:
+                button.backgroundColor = button.isEnabled
+                    ? DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.78)
+                    : DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.52)
+                button.setTitleColor(
+                    button.isEnabled ? DJDesignTokens.Color.accentDeep : DJDesignTokens.Color.textTertiary,
+                    for: .normal
+                )
+            case 3:
+                button.backgroundColor = button.isEnabled
+                    ? DJDesignTokens.Color.danger.withAlphaComponent(0.10)
+                    : DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.52)
+                button.setTitleColor(
+                    button.isEnabled ? DJDesignTokens.Color.danger : DJDesignTokens.Color.textTertiary,
+                    for: .normal
+                )
+            default:
+                break
+            }
+        }
     }
 
     private func makeCard() -> UIView {

@@ -13,7 +13,8 @@ Branch: `feature/prd-stitch-ui-adaptation`
 ## Implemented Scope
 
 - `我的` 页面公开显示 `音色复刻` 入口。
-- 音色复刻页展示授权说明、样本状态、`voiceProfileId`、provider mode、合同版本和公开入口状态。
+- 音色复刻页已按 Product Design pass 收敛为用户可理解的三块信息：当前音色状态、授权与样本、训练与管理。
+- `voiceProfileId`、provider mode 和合同版本仍由后端合同/静态检查覆盖，但不再作为用户可见字段展示。
 - 用户必须先确认本人授权，才可选择音频样本提交训练。
 - iOS 通过后端代理提交训练，不直连火山音色复刻 API，也不保存火山密钥。
 - 支持刷新训练状态。
@@ -22,7 +23,7 @@ Branch: `feature/prd-stitch-ui-adaptation`
 - `trainVoice` 必须由调用方显式传入 `authorizationConfirmed`，不会由 service 默认伪造授权。
 - `MemoirFlowManager` 不再用普通录音自动发起音色复刻训练；只有已有授权 `voiceProfileId` 时才等待音色就绪。
 - 禁用音色后不再被 `isVoiceReady` 判定为可用于 TTS。
-- 后端接收 pending profile 后，UI 会立即回显 `voiceProfileId`，不等训练最终完成。
+- 后端接收 pending profile 后，UI 会立即转译为“样本已提交/训练中”状态，不等训练最终完成。
 - 发布矩阵和 PRD 覆盖矩阵已更新为公开基础功能口径。
 
 ## Still Not Claimed Complete
@@ -56,8 +57,8 @@ xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -configurati
 - `git diff --check` passed.
 - Standard simulator build passed.
 - Arm64 simulator build passed and was installed on the booted simulator.
-- Simulator smoke confirmed `我的 -> 音色复刻` is visible and the detail page shows authorization, status, submit, refresh, disable, and delete controls.
-- Screenshot: `tmp/visual-qa/prd-stitch-ui/voice-clone-public-foundation-smoke/profile-voice-clone-public-detail.png`.
+- Simulator smoke confirmed `我的 -> 音色复刻` is visible and the detail page shows authorization, user-facing status, submit, refresh, disable, and delete controls.
+- Screenshot: `tmp/visual-qa/prd-stitch-ui/voice-clone-public-foundation-smoke/profile-voice-clone-public-detail-rerun.jpg`.
 - Backend repo had no code changes. Local backend voice-profile tests could not run in the current shell because `fastapi`, `psycopg`, and `pytest` are not installed; existing backend contract is still guarded by iOS static checks and previous backend tests.
 
 后续如修改 `FeatureFlagService`、`ProfileViewController`、`ProfileVoiceCloneShellViewController`、`VoiceCloneService` 或 `/voice/profiles` 合同，需要重新运行上述检查，并补真机音频样本验收记录。
