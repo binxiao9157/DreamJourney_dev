@@ -30,6 +30,7 @@ let webHTML = read("DreamJourney/Resources/web/DigitalHumanLive.html")
 let miniLive = read("DreamJourney/Resources/web/MiniLive2.js")
 let panelView = read("DreamJourney/Sources/Modules/Echo/DigitalHumanLivePanelView.swift")
 let audioMeter = read("DreamJourney/Sources/Modules/Echo/DigitalHumanAudioLevelMeter.swift")
+let lipSyncTimeline = read("DreamJourney/Sources/Modules/Echo/DigitalHumanLipSyncTimeline.swift")
 
 assertContains(featureFlags, "case digitalHumanLivePanel", "Digital human live panel should have an explicit feature flag")
 assertNotContains(
@@ -48,6 +49,8 @@ assertContains(echo, "digitalHumanAudioLevelMeter", "Echo should own a digital h
 assertContains(echo, "startSDKTTSPlaybackFallback", "Echo should connect SDK TTS started events to the panel without claiming player metering")
 assertContains(echo, "stopDigitalHumanAudioLevelMetering", "Echo should stop panel metering when TTS finishes")
 assertContains(echo, "startUIQAMeteredPlayback", "Echo smoke should drive real AVAudioPlayer metering")
+assertContains(echo, "startUIQAMockVisemeTimeline", "Echo smoke should drive mock provider viseme timeline")
+assertContains(echo, "DJDigitalHumanLipSyncProviderVisemeTimeline", "Echo smoke should expose provider timeline QA mode")
 assertNotContains(echo, "startSimulatedAudioLevels", "Echo must not drive mouth movement with simulated amplitude")
 assertNotContains(echo, "stopSimulatedAudioLevels", "Echo must not depend on simulated audio timers")
 
@@ -58,11 +61,17 @@ assertContains(appDelegate, "runDigitalHumanLivePanelSmoke", "AppDelegate should
 assertContains(project, "DigitalHumanLive.html in Resources", "Digital human HTML wrapper should be bundled")
 assertContains(project, "DigitalHumanLivePanelView.swift", "Digital human panel Swift source should be in target")
 assertContains(project, "DigitalHumanAudioLevelMeter.swift in Sources", "Digital human audio meter should be compiled into the app target")
+assertContains(project, "DigitalHumanLipSyncTimeline.swift in Sources", "Digital human lip-sync timeline contract should be compiled into the app target")
 
 assertContains(webHTML, "window.DreamJourneyDigitalHuman", "HTML wrapper should expose a stable bridge")
 assertContains(webHTML, "setState", "HTML bridge should accept state")
 assertContains(webHTML, "setAudioLevel", "HTML bridge should accept audio level")
+assertContains(webHTML, "setVisemeTimeline", "HTML bridge should accept provider viseme timelines")
+assertContains(webHTML, "setMouthShape", "HTML bridge should accept direct mouth shape updates")
 assertContains(webHTML, "audioLevelSource", "HTML snapshot should report the audio level source")
+assertContains(webHTML, "lipSyncSource", "HTML snapshot should report the lip-sync source")
+assertContains(webHTML, "currentMouthShape", "HTML snapshot should report the current mouth shape")
+assertContains(webHTML, "lipSyncFrameCount", "HTML snapshot should report timeline frame count")
 assertContains(webHTML, "snapshot", "HTML bridge should expose snapshot")
 assertContains(webHTML, "MiniLive2.js", "HTML wrapper should load existing renderer script")
 assertContains(webHTML, "DHLiveMini.js", "HTML wrapper should load existing wasm loader script")
@@ -76,6 +85,11 @@ assertNotContains(webHTML, "class=\"head\"", "HTML wrapper must not draw a fake 
 assertNotContains(webHTML, "class=\"mouth\"", "HTML wrapper must not draw fake mouth graphics")
 
 assertContains(panelView, "audioLevelSource", "Panel snapshot should carry audio level source")
+assertContains(panelView, "lipSyncSource", "Panel snapshot should carry lip-sync source")
+assertContains(panelView, "currentMouthShape", "Panel snapshot should carry current mouth shape")
+assertContains(panelView, "lipSyncFrameCount", "Panel snapshot should carry timeline frame count")
+assertContains(panelView, "setVisemeTimeline", "Panel should forward provider viseme timelines")
+assertContains(panelView, "setMouthShape", "Panel should forward direct mouth shape updates")
 assertNotContains(panelView, "startSimulatedAudioLevels", "Panel view must not own simulated audio amplitude")
 assertNotContains(panelView, "simulatedAudioTimer", "Panel view must not keep simulated audio timers")
 
@@ -85,6 +99,15 @@ assertContains(audioMeter, "averagePower", "Audio meter should read player avera
 assertContains(audioMeter, "avAudioPlayerMetering", "Audio meter should label real player metering source")
 assertContains(audioMeter, "sdkTTSPlaybackFallback", "Audio meter should label SDK fallback separately")
 assertContains(audioMeter, "makeUIQAMeteringProbeAudioURL", "Audio meter should provide deterministic UIQA metered audio")
+
+assertContains(lipSyncTimeline, "struct DigitalHumanLipSyncFrame", "Lip-sync contract should define frames")
+assertContains(lipSyncTimeline, "struct DigitalHumanLipSyncTimeline", "Lip-sync contract should define timelines")
+assertContains(lipSyncTimeline, "enum DigitalHumanPlaybackEvent", "Lip-sync contract should define playback events")
+assertContains(lipSyncTimeline, "case avAudioPlayerMetering", "Lip-sync contract should support player metering source")
+assertContains(lipSyncTimeline, "case sdkTTSPlaybackFallback", "Lip-sync contract should support SDK fallback source")
+assertContains(lipSyncTimeline, "case providerVisemeTimeline", "Lip-sync contract should support provider viseme timelines")
+assertContains(lipSyncTimeline, "makeUIQAMockProviderTimeline", "Lip-sync contract should provide deterministic mock timeline")
+assertContains(lipSyncTimeline, "javaScriptLiteral", "Lip-sync timeline should safely serialize for the Web bridge")
 
 let realAssetFiles = [
     "DreamJourney/Resources/web/assets/01.mp4",

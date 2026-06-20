@@ -5,6 +5,7 @@ enum DigitalHumanAudioLevelSource: String {
     case idle
     case avAudioPlayerMetering
     case sdkTTSPlaybackFallback
+    case providerVisemeTimeline
     case unavailable
 }
 

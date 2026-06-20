@@ -19,6 +19,7 @@ SCREENSHOT_PATH="$OUTPUT_DIR/01-digital-human-live-panel.png"
 RESULT_COPY_PATH="$OUTPUT_DIR/digital-human-live-panel-smoke-result.json"
 COMPLETION_PATTERN="DigitalHumanLivePanelSmoke completed"
 LOG_WAIT_TIMEOUT="${LOG_WAIT_TIMEOUT:-60}"
+DIGITAL_HUMAN_LIPSYNC_MODE="${DIGITAL_HUMAN_LIPSYNC_MODE:-avAudioPlayerMetering}"
 
 mkdir -p "$OUTPUT_DIR"
 cd "$ROOT_DIR"
@@ -98,8 +99,12 @@ OSLOG_PID="$!"
 sleep 1
 
 echo "[digital-human-live-panel-smoke] Launching auto-run harness..."
+LAUNCH_ARGS=(DJRunDigitalHumanLivePanelSmoke)
+if [[ "$DIGITAL_HUMAN_LIPSYNC_MODE" == "providerVisemeTimeline" ]]; then
+  LAUNCH_ARGS+=(DJDigitalHumanLipSyncProviderVisemeTimeline)
+fi
 xcrun simctl launch --console "$SIMULATOR_UDID" "$BUNDLE_ID" \
-  DJRunDigitalHumanLivePanelSmoke > "$RUNTIME_LOG" 2>&1 &
+  "${LAUNCH_ARGS[@]}" > "$RUNTIME_LOG" 2>&1 &
 CONSOLE_PID="$!"
 
 deadline=$((SECONDS + LOG_WAIT_TIMEOUT))
@@ -122,9 +127,17 @@ grep -Eq '"hasRealDigitalHumanAsset"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE
 grep -Eq '"assetVideoReady"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Real digital human video asset should be ready."
 grep -Eq '"hasFallbackAvatar"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Fake fallback avatar must not be rendered."
 grep -Eq '"stateName"[[:space:]]*:[[:space:]]*"speaking"' "$RESULT_FILE" || fail "Panel should reach speaking state."
-grep -Eq '"audioLevel"[[:space:]]*:[[:space:]]*0\.[1-9]' "$RESULT_FILE" || fail "Metered audio level should drive mouth movement."
-grep -Eq '"audioLevelSource"[[:space:]]*:[[:space:]]*"avAudioPlayerMetering"' "$RESULT_FILE" || fail "Mouth level should be driven by AVAudioPlayer metering in UIQA."
-grep -Eq '"meteringSampleCount"[[:space:]]*:[[:space:]]*[1-9]' "$RESULT_FILE" || fail "UIQA should collect player metering samples."
+grep -Eq '"audioLevel"[[:space:]]*:[[:space:]]*0\.[1-9]' "$RESULT_FILE" || fail "Audio/lip-sync level should drive mouth movement."
+if [[ "$DIGITAL_HUMAN_LIPSYNC_MODE" == "providerVisemeTimeline" ]]; then
+  grep -Eq '"lipSyncMode"[[:space:]]*:[[:space:]]*"providerVisemeTimeline"' "$RESULT_FILE" || fail "Smoke should run provider viseme timeline mode."
+  grep -Eq '"audioLevelSource"[[:space:]]*:[[:space:]]*"providerVisemeTimeline"' "$RESULT_FILE" || fail "Mouth level should be driven by provider viseme timeline in UIQA."
+  grep -Eq '"lipSyncSource"[[:space:]]*:[[:space:]]*"providerVisemeTimeline"' "$RESULT_FILE" || fail "Lip-sync source should report provider viseme timeline."
+  grep -Eq '"lipSyncFrameCount"[[:space:]]*:[[:space:]]*[1-9]' "$RESULT_FILE" || fail "Provider timeline should contain frames."
+  grep -Eq '"currentMouthShape"[[:space:]]*:[[:space:]]*"(aa|oh|ee|open)"' "$RESULT_FILE" || fail "Provider timeline should advance mouth shape."
+else
+  grep -Eq '"audioLevelSource"[[:space:]]*:[[:space:]]*"avAudioPlayerMetering"' "$RESULT_FILE" || fail "Mouth level should be driven by AVAudioPlayer metering in UIQA."
+  grep -Eq '"meteringSampleCount"[[:space:]]*:[[:space:]]*[1-9]' "$RESULT_FILE" || fail "UIQA should collect player metering samples."
+fi
 
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null
 xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true

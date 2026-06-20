@@ -22,6 +22,9 @@ struct DigitalHumanLivePanelSnapshot {
     let assetVideoReady: Bool
     let hasFallbackAvatar: Bool
     let audioLevelSource: String
+    let lipSyncSource: String
+    let currentMouthShape: String
+    let lipSyncFrameCount: Int
 
     init(object: [String: Any]) {
         ready = object["ready"] as? Bool ?? false
@@ -30,6 +33,9 @@ struct DigitalHumanLivePanelSnapshot {
         stateName = object["stateName"] as? String ?? "unknown"
         audioLevel = object["audioLevel"] as? Double ?? 0
         audioLevelSource = object["audioLevelSource"] as? String ?? DigitalHumanAudioLevelSource.idle.rawValue
+        lipSyncSource = object["lipSyncSource"] as? String ?? DigitalHumanAudioLevelSource.idle.rawValue
+        currentMouthShape = object["currentMouthShape"] as? String ?? "neutral"
+        lipSyncFrameCount = object["lipSyncFrameCount"] as? Int ?? 0
         personaName = object["personaName"] as? String ?? ""
         personaSubtitle = object["personaSubtitle"] as? String ?? ""
         hasRealDigitalHumanAsset = object["hasRealDigitalHumanAsset"] as? Bool ?? false
@@ -83,6 +89,24 @@ final class DigitalHumanLivePanelView: UIView {
         evaluate("window.DreamJourneyDigitalHuman && window.DreamJourneyDigitalHuman.setAudioLevel(\(clamped), '\(source.rawValue)')")
     }
 
+    func setMouthShape(
+        _ mouthShape: String,
+        intensity: Double,
+        source: DigitalHumanPlaybackSource = .providerVisemeTimeline
+    ) {
+        let encodedMouthShape = Self.javaScriptStringLiteral(mouthShape)
+        let clampedIntensity = max(0, min(1, intensity))
+        evaluate("window.DreamJourneyDigitalHuman && window.DreamJourneyDigitalHuman.setMouthShape(\(encodedMouthShape), \(clampedIntensity), '\(source.rawValue)')")
+    }
+
+    func setVisemeTimeline(_ timeline: DigitalHumanLipSyncTimeline) {
+        guard let payload = try? timeline.javaScriptLiteral() else {
+            setMouthShape("neutral", intensity: 0, source: .providerVisemeTimeline)
+            return
+        }
+        evaluate("window.DreamJourneyDigitalHuman && window.DreamJourneyDigitalHuman.setVisemeTimeline(\(payload))")
+    }
+
     func setPersona(name: String, subtitle: String) {
         let encodedName = Self.javaScriptStringLiteral(name)
         let encodedSubtitle = Self.javaScriptStringLiteral(subtitle)
@@ -99,6 +123,9 @@ final class DigitalHumanLivePanelView: UIView {
                     "stateName": DigitalHumanLiveInteractionState.failed.rawValue,
                     "audioLevel": 0,
                     "audioLevelSource": DigitalHumanAudioLevelSource.unavailable.rawValue,
+                    "lipSyncSource": DigitalHumanAudioLevelSource.unavailable.rawValue,
+                    "currentMouthShape": "neutral",
+                    "lipSyncFrameCount": 0,
                     "personaName": "",
                     "personaSubtitle": "",
                     "hasRealDigitalHumanAsset": false,

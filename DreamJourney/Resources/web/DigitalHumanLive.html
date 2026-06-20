@@ -145,6 +145,8 @@
       const body = document.body;
       const stateLabel = document.getElementById('stateLabel');
       const personaLabel = document.getElementById('personaLabel');
+      const canvasVideo = document.getElementById('canvas_video');
+      const canvasGL = document.getElementById('canvas_gl');
       const assetVideoSrc = document.querySelector('meta[name="dreamjourney-digital-human-video"]').content;
       const assetDataSrc = document.querySelector('meta[name="dreamjourney-digital-human-motion"]').content;
       const labels = {
@@ -162,6 +164,10 @@
         stateName: 'idle',
         audioLevel: 0,
         audioLevelSource: 'idle',
+        lipSyncSource: 'idle',
+        currentMouthShape: 'neutral',
+        lipSyncFrameCount: 0,
+        lipSyncAnimationHandle: null,
         personaName: '寻梦环游',
         personaSubtitle: '',
         assetVideoReady: false,
@@ -179,9 +185,62 @@
       function applyState() {
         body.dataset.state = state.stateName;
         root.style.setProperty('--level', String(state.audioLevel));
+        const lift = (-1.8 * state.audioLevel).toFixed(2);
+        const scale = (1 + state.audioLevel * 0.012).toFixed(4);
+        const transform = 'translateY(' + lift + 'px) scale(' + scale + ')';
+        if (canvasVideo) {
+          canvasVideo.style.transform = transform;
+        }
+        if (canvasGL) {
+          canvasGL.style.transform = transform;
+        }
         stateLabel.textContent = labels[state.stateName] || labels.idle;
         const subtitle = state.personaSubtitle ? ' · ' + state.personaSubtitle : '';
         personaLabel.textContent = state.personaName + subtitle;
+      }
+
+      function stopVisemeTimeline() {
+        if (state.lipSyncAnimationHandle !== null) {
+          cancelAnimationFrame(state.lipSyncAnimationHandle);
+          state.lipSyncAnimationHandle = null;
+        }
+      }
+
+      function normalizedMouthShape(value) {
+        const shape = String(value || 'neutral').trim();
+        return shape.length > 0 ? shape : 'neutral';
+      }
+
+      function applyMouthShape(mouthShape, intensity, source) {
+        const resolvedSource = String(source || 'providerVisemeTimeline');
+        state.currentMouthShape = normalizedMouthShape(mouthShape);
+        state.audioLevel = clampLevel(intensity);
+        state.audioLevelSource = resolvedSource;
+        state.lipSyncSource = resolvedSource;
+        applyState();
+      }
+
+      function normalizedTimeline(timeline) {
+        const source = String(timeline && timeline.source || 'providerVisemeTimeline');
+        const frames = Array.isArray(timeline && timeline.frames) ? timeline.frames : [];
+        const normalizedFrames = frames
+          .map(function (frame) {
+            return {
+              timeOffset: Math.max(0, Number(frame.timeOffset) || 0),
+              mouthShape: normalizedMouthShape(frame.mouthShape),
+              intensity: clampLevel(frame.intensity)
+            };
+          })
+          .sort(function (left, right) {
+            return left.timeOffset - right.timeOffset;
+          });
+        const lastFrameTime = normalizedFrames.length > 0 ? normalizedFrames[normalizedFrames.length - 1].timeOffset : 0;
+        const duration = Math.max(Number(timeline && timeline.duration) || 0, lastFrameTime + 0.12);
+        return {
+          source: source,
+          duration: duration,
+          frames: normalizedFrames
+        };
       }
 
       function drawChromaKeyFrame(video, canvas, context) {
@@ -252,15 +311,55 @@
         setState: function (stateName) {
           state.stateName = labels[stateName] ? stateName : 'idle';
           if (state.stateName === 'idle' || state.stateName === 'stopped' || state.stateName === 'failed') {
+            stopVisemeTimeline();
             state.audioLevel = 0;
             state.audioLevelSource = 'idle';
+            state.lipSyncSource = 'idle';
+            state.currentMouthShape = 'neutral';
           }
           applyState();
         },
         setAudioLevel: function (level, source) {
+          stopVisemeTimeline();
           state.audioLevel = clampLevel(level);
           state.audioLevelSource = String(source || 'unavailable');
+          state.lipSyncSource = state.audioLevelSource;
+          state.currentMouthShape = state.audioLevel > 0.5 ? 'open' : 'neutral';
           applyState();
+        },
+        setMouthShape: function (mouthShape, intensity, source) {
+          stopVisemeTimeline();
+          applyMouthShape(mouthShape, intensity, source);
+        },
+        setVisemeTimeline: function (timeline) {
+          stopVisemeTimeline();
+          const normalized = normalizedTimeline(timeline || {});
+          state.lipSyncSource = normalized.source;
+          state.audioLevelSource = normalized.source;
+          state.lipSyncFrameCount = normalized.frames.length;
+          if (normalized.frames.length === 0) {
+            applyMouthShape('neutral', 0, normalized.source);
+            return;
+          }
+          const startedAt = performance.now();
+          const tick = function (now) {
+            const elapsed = (now - startedAt) / 1000;
+            let activeFrame = normalized.frames[0];
+            for (let index = 0; index < normalized.frames.length; index += 1) {
+              if (normalized.frames[index].timeOffset <= elapsed) {
+                activeFrame = normalized.frames[index];
+              } else {
+                break;
+              }
+            }
+            applyMouthShape(activeFrame.mouthShape, activeFrame.intensity, normalized.source);
+            if (elapsed <= normalized.duration) {
+              state.lipSyncAnimationHandle = requestAnimationFrame(tick);
+            } else {
+              state.lipSyncAnimationHandle = null;
+            }
+          };
+          state.lipSyncAnimationHandle = requestAnimationFrame(tick);
         },
         setPersona: function (name, subtitle) {
           state.personaName = String(name || '寻梦环游');
@@ -286,6 +385,9 @@
             stateName: state.stateName,
             audioLevel: state.audioLevel,
             audioLevelSource: state.audioLevelSource,
+            lipSyncSource: state.lipSyncSource,
+            currentMouthShape: state.currentMouthShape,
+            lipSyncFrameCount: state.lipSyncFrameCount,
             personaName: state.personaName,
             personaSubtitle: state.personaSubtitle,
             hasRealDigitalHumanAsset: true,

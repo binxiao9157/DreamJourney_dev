@@ -22,6 +22,12 @@ The feature is not public by default. It is only visible when `DJFeature.digital
 - `DigitalHumanAudioLevelMeter` supports `AVAudioPlayer` metering via `averagePower(forChannel:)`.
 - UIQA uses deterministic local `AVAudioPlayer` playback to prove mouth/dynamic movement follows measured playback loudness, not a simulated timer.
 - The production SDK TTS path is explicitly reported as `sdkTTSPlaybackFallback` until the speech SDK exposes audio frames, player-level metering, or provider phoneme/viseme timing.
+- `DigitalHumanLipSyncTimeline` defines the future provider contract:
+  - `DigitalHumanLipSyncFrame`: `timeOffset`, `mouthShape`, `intensity`.
+  - `DigitalHumanLipSyncTimeline`: source, duration, ordered frames, and safe JSON serialization for the Web bridge.
+  - `DigitalHumanPlaybackEvent`: typed events for audio-level, provider timeline, stopped, and failed states.
+- `DigitalHumanLive.html` exposes `setVisemeTimeline(...)` and `setMouthShape(...)`. The panel snapshot reports `lipSyncSource`, `currentMouthShape`, and `lipSyncFrameCount`.
+- UIQA can run `DIGITAL_HUMAN_LIPSYNC_MODE=providerVisemeTimeline` to verify a mock provider timeline advances mouth shape without waiting for a real provider.
 - The fake fallback avatar has been removed. QA must prove that the bundled real digital-human video asset is ready, or the feature should degrade back to ordinary Echo.
 - UIQA launch arg `DJRunDigitalHumanLivePanelSmoke` opens Echo, shows the panel, drives state to speaking, plays a local metered probe audio file, writes result JSON, and captures a screenshot.
 
@@ -43,6 +49,8 @@ Simulator smoke:
 ```bash
 RUN_ID=20260620-digital-human-real-asset-r4 tmp/visual-qa/prd-stitch-ui/run-digital-human-live-panel-smoke.sh
 RUN_ID=20260620-digital-human-tts-metering tmp/visual-qa/prd-stitch-ui/run-digital-human-live-panel-smoke.sh
+DIGITAL_HUMAN_LIPSYNC_MODE=providerVisemeTimeline RUN_ID=20260620-digital-human-provider-viseme-timeline tmp/visual-qa/prd-stitch-ui/run-digital-human-live-panel-smoke.sh
+RUN_ID=20260620-digital-human-metering-after-viseme tmp/visual-qa/prd-stitch-ui/run-digital-human-live-panel-smoke.sh
 ```
 
 Result: passed.
@@ -59,6 +67,10 @@ Evidence:
 - Metered build log: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-tts-metering/build.log`
 - Metered runtime log: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-tts-metering/runtime.log`
 - Metered OS log: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-tts-metering/oslog.log`
+- Provider timeline result JSON: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-provider-viseme-timeline/digital-human-live-panel-smoke-result.json`
+- Provider timeline screenshot: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-provider-viseme-timeline/01-digital-human-live-panel.png`
+- Metering-after-viseme result JSON: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-metering-after-viseme/digital-human-live-panel-smoke-result.json`
+- Metering-after-viseme screenshot: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-metering-after-viseme/01-digital-human-live-panel.png`
 
 Smoke result highlights:
 
@@ -72,6 +84,11 @@ Smoke result highlights:
 - `audioLevel=0.63310296587799986`
 - `audioLevelSource=avAudioPlayerMetering`
 - `meteringSampleCount=7`
+- Provider timeline mode:
+  - `audioLevelSource=providerVisemeTimeline`
+  - `lipSyncSource=providerVisemeTimeline`
+  - `currentMouthShape=aa`
+  - `lipSyncFrameCount=9`
 
 Device SDK build:
 
@@ -94,11 +111,11 @@ True-device install/launch status:
 
 ## Current Boundary
 
-This proves an audio-reactive digital human preview and a real `AVAudioPlayer` metering bridge for QA-controlled playback. It does not prove final provider-level phoneme lip sync.
+This proves an audio-reactive digital human preview, a real `AVAudioPlayer` metering bridge for QA-controlled playback, and a provider viseme timeline contract that can drive mouth-shape state from timestamped frames. It does not prove final provider-level phoneme lip sync quality.
 
 Still not claimed:
 
-- Real provider phoneme/viseme lip sync.
+- Real provider phoneme/viseme timeline delivery.
 - Speech SDK internal TTS audio frame metering. Current SDK callbacks only provide `onTTSStarted` / `onTTSFinished`, so the production SDK path is `sdkTTSPlaybackFallback`.
 - Production voice SDK quality.
 - True-device visual/performance pass.

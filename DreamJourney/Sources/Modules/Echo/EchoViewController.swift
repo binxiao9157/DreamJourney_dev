@@ -579,6 +579,13 @@ final class EchoViewController: UIViewController {
         }
     }
 
+    @discardableResult
+    private func startUIQAMockVisemeTimeline() -> Bool {
+        guard shouldShowDigitalHumanLivePanel else { return false }
+        digitalHumanLivePanelView?.setVisemeTimeline(.makeUIQAMockProviderTimeline())
+        return true
+    }
+
     private func renderVoiceStatus(
         text: String?,
         isVisible: Bool,
@@ -920,24 +927,39 @@ extension EchoViewController {
 
         updatePersonaBadge()
         viewModel.beginVoiceInteraction()
+        let usesProviderVisemeTimeline = ProcessInfo.processInfo.arguments.contains("DJDigitalHumanLipSyncProviderVisemeTimeline")
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
             self?.render(state: .thinking)
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
             self?.viewModel.receiveAIReply("我在这里，慢慢听你说。")
-            _ = self?.startUIQAMeteredPlayback()
+            if usesProviderVisemeTimeline {
+                _ = self?.startUIQAMockVisemeTimeline()
+            } else {
+                _ = self?.startUIQAMeteredPlayback()
+            }
         }
         func finishWhenRealAssetReady(attemptsRemaining: Int) {
             panel.snapshot { [weak self] snapshot in
                 let audioLevel = snapshot?.audioLevel ?? 0
                 let audioLevelSource = snapshot?.audioLevelSource ?? ""
+                let lipSyncSource = snapshot?.lipSyncSource ?? ""
+                let currentMouthShape = snapshot?.currentMouthShape ?? ""
+                let lipSyncFrameCount = snapshot?.lipSyncFrameCount ?? 0
                 let panelReady = snapshot?.ready == true
                 let hasRealDigitalHumanAsset = snapshot?.hasRealDigitalHumanAsset == true
                 let assetVideoReady = snapshot?.assetVideoReady == true
                 let hasFallbackAvatar = snapshot?.hasFallbackAvatar == true
                 let speaking = snapshot?.stateName == DigitalHumanLiveInteractionState.speaking.rawValue
                 let meteringSampleCount = self?.digitalHumanAudioLevelMeter?.meteringSampleCount ?? 0
+                let lipSyncReady = usesProviderVisemeTimeline
+                    ? audioLevelSource == DigitalHumanPlaybackSource.providerVisemeTimeline.rawValue
+                        && lipSyncSource == DigitalHumanPlaybackSource.providerVisemeTimeline.rawValue
+                        && lipSyncFrameCount > 0
+                        && currentMouthShape != "neutral"
+                    : audioLevelSource == DigitalHumanAudioLevelSource.avAudioPlayerMetering.rawValue
+                        && meteringSampleCount > 0
                 if panelReady && hasRealDigitalHumanAsset && !hasFallbackAvatar && !assetVideoReady && attemptsRemaining > 0 {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                         finishWhenRealAssetReady(attemptsRemaining: attemptsRemaining - 1)
@@ -945,7 +967,7 @@ extension EchoViewController {
                     return
                 }
                 completion([
-                    "completed": panelReady && speaking && audioLevel > 0 && audioLevelSource == DigitalHumanAudioLevelSource.avAudioPlayerMetering.rawValue && meteringSampleCount > 0 && hasRealDigitalHumanAsset && assetVideoReady && !hasFallbackAvatar,
+                    "completed": panelReady && speaking && audioLevel > 0 && lipSyncReady && hasRealDigitalHumanAsset && assetVideoReady && !hasFallbackAvatar,
                     "panelVisible": !panel.isHidden && panel.alpha > 0,
                     "panelReady": panelReady,
                     "rendererReady": snapshot?.rendererReady ?? false,
@@ -956,6 +978,10 @@ extension EchoViewController {
                     "stateName": snapshot?.stateName ?? "missing",
                     "audioLevel": audioLevel,
                     "audioLevelSource": audioLevelSource,
+                    "lipSyncMode": usesProviderVisemeTimeline ? "providerVisemeTimeline" : "avAudioPlayerMetering",
+                    "lipSyncSource": lipSyncSource,
+                    "currentMouthShape": currentMouthShape,
+                    "lipSyncFrameCount": lipSyncFrameCount,
                     "meteringSampleCount": meteringSampleCount,
                     "personaName": snapshot?.personaName ?? "",
                     "personaSubtitle": snapshot?.personaSubtitle ?? "",
