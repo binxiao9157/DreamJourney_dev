@@ -79,6 +79,7 @@
 		A1A000000000000000000044 /* MemoryArchiveVideoEntryViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000044 /* MemoryArchiveVideoEntryViewController.swift */; };
 		A1A000000000000000000039 /* MemoryArchiveMediaReleaseReadiness.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000039 /* MemoryArchiveMediaReleaseReadiness.swift */; };
 		A1A000000000000000000046 /* DigitalHumanLivePanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000046 /* DigitalHumanLivePanelView.swift */; };
+		A1A000000000000000000047 /* DigitalHumanAudioLevelMeter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000047 /* DigitalHumanAudioLevelMeter.swift */; };
 		A1A000000000000000000016 /* ProfileLegalViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000016 /* ProfileLegalViewController.swift */; };
 		A1A000000000000000000017 /* ProfileSettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000017 /* ProfileSettingsViewController.swift */; };
 		A1A000000000000000000018 /* ProfileElderCareDashboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000018 /* ProfileElderCareDashboardViewController.swift */; };
@@ -196,6 +197,7 @@
 		B1B000000000000000000044 /* MemoryArchiveVideoEntryViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveVideoEntryViewController.swift; sourceTree = "<group>"; };
 		B1B000000000000000000039 /* MemoryArchiveMediaReleaseReadiness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveMediaReleaseReadiness.swift; sourceTree = "<group>"; };
 		B1B000000000000000000046 /* DigitalHumanLivePanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanLivePanelView.swift; sourceTree = "<group>"; };
+		B1B000000000000000000047 /* DigitalHumanAudioLevelMeter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanAudioLevelMeter.swift; sourceTree = "<group>"; };
 		B1B000000000000000000016 /* ProfileLegalViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileLegalViewController.swift; sourceTree = "<group>"; };
 		B1B000000000000000000017 /* ProfileSettingsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileSettingsViewController.swift; sourceTree = "<group>"; };
 		B1B000000000000000000018 /* ProfileElderCareDashboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileElderCareDashboardViewController.swift; sourceTree = "<group>"; };
@@ -446,6 +448,7 @@
 		69A100000000000000000002 /* Echo */ = {
 			isa = PBXGroup;
 			children = (
+				B1B000000000000000000047 /* DigitalHumanAudioLevelMeter.swift */,
 				B1B000000000000000000046 /* DigitalHumanLivePanelView.swift */,
 				B1B000000000000000000004 /* EchoViewModel.swift */,
 				B1B000000000000000000005 /* EchoViewController.swift */,
@@ -824,6 +827,7 @@
 				9A84BB0966C1478900AA56A3 /* HomeHeaderView.swift in Sources */,
 				36CF52237589B0C4691394E6 /* DJComponentFactory.swift in Sources */,
 				8525A06805EC0F2C59676EBE /* DJDesignTokens.swift in Sources */,
+				A1A000000000000000000047 /* DigitalHumanAudioLevelMeter.swift in Sources */,
 				A1A000000000000000000046 /* DigitalHumanLivePanelView.swift in Sources */,
 				A1A000000000000000000005 /* EchoViewController.swift in Sources */,
 				A1A000000000000000000004 /* EchoViewModel.swift in Sources */,

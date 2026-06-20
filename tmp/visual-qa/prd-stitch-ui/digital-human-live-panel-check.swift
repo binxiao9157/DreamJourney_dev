@@ -28,6 +28,8 @@ let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
 let project = read("DreamJourney.xcodeproj/project.pbxproj")
 let webHTML = read("DreamJourney/Resources/web/DigitalHumanLive.html")
 let miniLive = read("DreamJourney/Resources/web/MiniLive2.js")
+let panelView = read("DreamJourney/Sources/Modules/Echo/DigitalHumanLivePanelView.swift")
+let audioMeter = read("DreamJourney/Sources/Modules/Echo/DigitalHumanAudioLevelMeter.swift")
 
 assertContains(featureFlags, "case digitalHumanLivePanel", "Digital human live panel should have an explicit feature flag")
 assertNotContains(
@@ -42,8 +44,12 @@ assertContains(echo, "DJRunDigitalHumanLivePanelSmoke", "Echo should support smo
 assertContains(echo, "FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel)", "Echo should require the feature flag")
 assertContains(echo, "runUIQADigitalHumanLivePanelSmoke", "Echo should expose UIQA smoke driver")
 assertContains(echo, "setInteractionState", "Echo should forward state to digital human panel")
-assertContains(echo, "startSimulatedAudioLevels", "Echo smoke should drive simulated mouth amplitude")
-assertContains(echo, "stopSimulatedAudioLevels", "Echo should stop simulated mouth amplitude")
+assertContains(echo, "digitalHumanAudioLevelMeter", "Echo should own a digital human audio level meter")
+assertContains(echo, "startSDKTTSPlaybackFallback", "Echo should connect SDK TTS started events to the panel without claiming player metering")
+assertContains(echo, "stopDigitalHumanAudioLevelMetering", "Echo should stop panel metering when TTS finishes")
+assertContains(echo, "startUIQAMeteredPlayback", "Echo smoke should drive real AVAudioPlayer metering")
+assertNotContains(echo, "startSimulatedAudioLevels", "Echo must not drive mouth movement with simulated amplitude")
+assertNotContains(echo, "stopSimulatedAudioLevels", "Echo must not depend on simulated audio timers")
 
 assertContains(appDelegate, "DJRunDigitalHumanLivePanelSmoke", "AppDelegate should wire the smoke launch argument")
 assertContains(appDelegate, "FeatureFlagService.shared.set(.digitalHumanLivePanel, enabled: true)", "Smoke should enable flag only in QA path")
@@ -51,10 +57,12 @@ assertContains(appDelegate, "runDigitalHumanLivePanelSmoke", "AppDelegate should
 
 assertContains(project, "DigitalHumanLive.html in Resources", "Digital human HTML wrapper should be bundled")
 assertContains(project, "DigitalHumanLivePanelView.swift", "Digital human panel Swift source should be in target")
+assertContains(project, "DigitalHumanAudioLevelMeter.swift in Sources", "Digital human audio meter should be compiled into the app target")
 
 assertContains(webHTML, "window.DreamJourneyDigitalHuman", "HTML wrapper should expose a stable bridge")
 assertContains(webHTML, "setState", "HTML bridge should accept state")
 assertContains(webHTML, "setAudioLevel", "HTML bridge should accept audio level")
+assertContains(webHTML, "audioLevelSource", "HTML snapshot should report the audio level source")
 assertContains(webHTML, "snapshot", "HTML bridge should expose snapshot")
 assertContains(webHTML, "MiniLive2.js", "HTML wrapper should load existing renderer script")
 assertContains(webHTML, "DHLiveMini.js", "HTML wrapper should load existing wasm loader script")
@@ -66,6 +74,17 @@ assertContains(webHTML, "hasRealDigitalHumanAsset", "HTML snapshot should report
 assertNotContains(webHTML, "fallbackAvatar", "HTML wrapper must not render a fake fallback avatar")
 assertNotContains(webHTML, "class=\"head\"", "HTML wrapper must not draw a fake avatar head")
 assertNotContains(webHTML, "class=\"mouth\"", "HTML wrapper must not draw fake mouth graphics")
+
+assertContains(panelView, "audioLevelSource", "Panel snapshot should carry audio level source")
+assertNotContains(panelView, "startSimulatedAudioLevels", "Panel view must not own simulated audio amplitude")
+assertNotContains(panelView, "simulatedAudioTimer", "Panel view must not keep simulated audio timers")
+
+assertContains(audioMeter, "AVAudioPlayer", "Audio meter should use AVAudioPlayer for real playback metering")
+assertContains(audioMeter, "isMeteringEnabled = true", "Audio meter should enable AVAudioPlayer metering")
+assertContains(audioMeter, "averagePower", "Audio meter should read player average power")
+assertContains(audioMeter, "avAudioPlayerMetering", "Audio meter should label real player metering source")
+assertContains(audioMeter, "sdkTTSPlaybackFallback", "Audio meter should label SDK fallback separately")
+assertContains(audioMeter, "makeUIQAMeteringProbeAudioURL", "Audio meter should provide deterministic UIQA metered audio")
 
 let realAssetFiles = [
     "DreamJourney/Resources/web/assets/01.mp4",

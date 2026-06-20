@@ -122,7 +122,9 @@ grep -Eq '"hasRealDigitalHumanAsset"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE
 grep -Eq '"assetVideoReady"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Real digital human video asset should be ready."
 grep -Eq '"hasFallbackAvatar"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Fake fallback avatar must not be rendered."
 grep -Eq '"stateName"[[:space:]]*:[[:space:]]*"speaking"' "$RESULT_FILE" || fail "Panel should reach speaking state."
-grep -Eq '"audioLevel"[[:space:]]*:[[:space:]]*0\.[1-9]' "$RESULT_FILE" || fail "Simulated audio level should drive mouth movement."
+grep -Eq '"audioLevel"[[:space:]]*:[[:space:]]*0\.[1-9]' "$RESULT_FILE" || fail "Metered audio level should drive mouth movement."
+grep -Eq '"audioLevelSource"[[:space:]]*:[[:space:]]*"avAudioPlayerMetering"' "$RESULT_FILE" || fail "Mouth level should be driven by AVAudioPlayer metering in UIQA."
+grep -Eq '"meteringSampleCount"[[:space:]]*:[[:space:]]*[1-9]' "$RESULT_FILE" || fail "UIQA should collect player metering samples."
 
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null
 xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true

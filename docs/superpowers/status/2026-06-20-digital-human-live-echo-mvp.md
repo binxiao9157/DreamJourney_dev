@@ -2,7 +2,7 @@
 
 ## Summary
 
-This update adds a hidden QA-only digital human live panel inside Echo. It renders through `WKWebView` using the bundled Web assets and exposes a small Swift-to-JavaScript bridge for Echo state and simulated mouth amplitude.
+This update adds a hidden QA-only digital human live panel inside Echo. It renders through `WKWebView` using the bundled Web assets and exposes a Swift-to-JavaScript bridge for Echo state, TTS playback lifecycle, and audio-level-driven digital human motion.
 
 The feature is not public by default. It is only visible when `DJFeature.digitalHumanLivePanel` is enabled and the app is launched with `DJShowDigitalHumanLivePanel` or `DJRunDigitalHumanLivePanelSmoke`.
 
@@ -16,9 +16,14 @@ The feature is not public by default. It is only visible when `DJFeature.digital
   - thinking/waitingReply -> `thinking`
   - speaking/replied -> `speaking`
   - error -> `failed`
-- Simulated audio amplitude drives the MVP mouth movement while listening/speaking.
+- `EchoViewController` connects real Echo TTS lifecycle events to the panel:
+  - `onTTSStarted` enters speaking and starts the SDK TTS playback fallback level source.
+  - `onTTSFinished`, `onError`, and dialog end stop panel audio metering and reset the level.
+- `DigitalHumanAudioLevelMeter` supports `AVAudioPlayer` metering via `averagePower(forChannel:)`.
+- UIQA uses deterministic local `AVAudioPlayer` playback to prove mouth/dynamic movement follows measured playback loudness, not a simulated timer.
+- The production SDK TTS path is explicitly reported as `sdkTTSPlaybackFallback` until the speech SDK exposes audio frames, player-level metering, or provider phoneme/viseme timing.
 - The fake fallback avatar has been removed. QA must prove that the bundled real digital-human video asset is ready, or the feature should degrade back to ordinary Echo.
-- UIQA launch arg `DJRunDigitalHumanLivePanelSmoke` opens Echo, shows the panel, drives state to speaking, writes result JSON, and captures a screenshot.
+- UIQA launch arg `DJRunDigitalHumanLivePanelSmoke` opens Echo, shows the panel, drives state to speaking, plays a local metered probe audio file, writes result JSON, and captures a screenshot.
 
 ## Verification
 
@@ -37,6 +42,7 @@ Simulator smoke:
 
 ```bash
 RUN_ID=20260620-digital-human-real-asset-r4 tmp/visual-qa/prd-stitch-ui/run-digital-human-live-panel-smoke.sh
+RUN_ID=20260620-digital-human-tts-metering tmp/visual-qa/prd-stitch-ui/run-digital-human-live-panel-smoke.sh
 ```
 
 Result: passed.
@@ -48,6 +54,11 @@ Evidence:
 - Build log: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-real-asset-r4/build.log`
 - Runtime log: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-real-asset-r4/runtime.log`
 - OS log: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-real-asset-r4/oslog.log`
+- Metered result JSON: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-tts-metering/digital-human-live-panel-smoke-result.json`
+- Metered screenshot: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-tts-metering/01-digital-human-live-panel.png`
+- Metered build log: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-tts-metering/build.log`
+- Metered runtime log: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-tts-metering/runtime.log`
+- Metered OS log: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-smoke/20260620-digital-human-tts-metering/oslog.log`
 
 Smoke result highlights:
 
@@ -59,6 +70,8 @@ Smoke result highlights:
 - `hasFallbackAvatar=false`
 - `stateName=speaking`
 - `audioLevel=0.63310296587799986`
+- `audioLevelSource=avAudioPlayerMetering`
+- `meteringSampleCount=7`
 
 Device SDK build:
 
@@ -81,15 +94,15 @@ True-device install/launch status:
 
 ## Current Boundary
 
-This proves an audio-reactive digital human preview, not final phoneme-level lip sync.
+This proves an audio-reactive digital human preview and a real `AVAudioPlayer` metering bridge for QA-controlled playback. It does not prove final provider-level phoneme lip sync.
 
 Still not claimed:
 
 - Real provider phoneme/viseme lip sync.
-- Real TTS playback metering sync.
+- Speech SDK internal TTS audio frame metering. Current SDK callbacks only provide `onTTSStarted` / `onTTSFinished`, so the production SDK path is `sdkTTSPlaybackFallback`.
 - Production voice SDK quality.
 - True-device visual/performance pass.
 
 ## Next Step
 
-When the iPhone appears online, rerun a device install/launch smoke with `DJShowDigitalHumanLivePanel` and capture a device screenshot/log. After that, the next development step is replacing simulated amplitude with actual TTS/SDK playback metering.
+When the iPhone appears online, rerun a device install/launch smoke with `DJShowDigitalHumanLivePanel` and capture a device screenshot/log. The next technical step for finer sync is provider-level phoneme/viseme timing or SDK audio frame callbacks; without that API, the app must not claim production phoneme-level lip sync.

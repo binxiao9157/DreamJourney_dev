@@ -161,6 +161,7 @@
         failed: false,
         stateName: 'idle',
         audioLevel: 0,
+        audioLevelSource: 'idle',
         personaName: '寻梦环游',
         personaSubtitle: '',
         assetVideoReady: false,
@@ -252,11 +253,13 @@
           state.stateName = labels[stateName] ? stateName : 'idle';
           if (state.stateName === 'idle' || state.stateName === 'stopped' || state.stateName === 'failed') {
             state.audioLevel = 0;
+            state.audioLevelSource = 'idle';
           }
           applyState();
         },
-        setAudioLevel: function (level) {
+        setAudioLevel: function (level, source) {
           state.audioLevel = clampLevel(level);
+          state.audioLevelSource = String(source || 'unavailable');
           applyState();
         },
         setPersona: function (name, subtitle) {
@@ -282,6 +285,7 @@
             failed: state.failed,
             stateName: state.stateName,
             audioLevel: state.audioLevel,
+            audioLevelSource: state.audioLevelSource,
             personaName: state.personaName,
             personaSubtitle: state.personaSubtitle,
             hasRealDigitalHumanAsset: true,

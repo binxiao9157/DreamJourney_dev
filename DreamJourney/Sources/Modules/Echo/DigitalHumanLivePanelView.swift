@@ -21,6 +21,7 @@ struct DigitalHumanLivePanelSnapshot {
     let hasRealDigitalHumanAsset: Bool
     let assetVideoReady: Bool
     let hasFallbackAvatar: Bool
+    let audioLevelSource: String
 
     init(object: [String: Any]) {
         ready = object["ready"] as? Bool ?? false
@@ -28,6 +29,7 @@ struct DigitalHumanLivePanelSnapshot {
         failed = object["failed"] as? Bool ?? false
         stateName = object["stateName"] as? String ?? "unknown"
         audioLevel = object["audioLevel"] as? Double ?? 0
+        audioLevelSource = object["audioLevelSource"] as? String ?? DigitalHumanAudioLevelSource.idle.rawValue
         personaName = object["personaName"] as? String ?? ""
         personaSubtitle = object["personaSubtitle"] as? String ?? ""
         hasRealDigitalHumanAsset = object["hasRealDigitalHumanAsset"] as? Bool ?? false
@@ -50,8 +52,6 @@ final class DigitalHumanLivePanelView: UIView {
     }()
 
     private var pendingScripts: [String] = []
-    private var simulatedAudioTimer: Timer?
-    private var simulatedPhase: Double = 0
     private(set) var isReady = false
     private(set) var didFail = false
 
@@ -71,49 +71,22 @@ final class DigitalHumanLivePanelView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    deinit {
-        stopSimulatedAudioLevels()
-    }
-
     func setInteractionState(_ state: DigitalHumanLiveInteractionState) {
         evaluate("window.DreamJourneyDigitalHuman && window.DreamJourneyDigitalHuman.setState('\(state.rawValue)')")
-        if state == .speaking || state == .listening {
-            startSimulatedAudioLevels()
-        } else {
-            stopSimulatedAudioLevels()
-            setAudioLevel(0)
+        if state == .idle || state == .stopped || state == .failed {
+            setAudioLevel(0, source: .idle)
         }
     }
 
-    func setAudioLevel(_ level: Double) {
+    func setAudioLevel(_ level: Double, source: DigitalHumanAudioLevelSource = .idle) {
         let clamped = max(0, min(1, level))
-        evaluate("window.DreamJourneyDigitalHuman && window.DreamJourneyDigitalHuman.setAudioLevel(\(clamped))")
+        evaluate("window.DreamJourneyDigitalHuman && window.DreamJourneyDigitalHuman.setAudioLevel(\(clamped), '\(source.rawValue)')")
     }
 
     func setPersona(name: String, subtitle: String) {
         let encodedName = Self.javaScriptStringLiteral(name)
         let encodedSubtitle = Self.javaScriptStringLiteral(subtitle)
         evaluate("window.DreamJourneyDigitalHuman && window.DreamJourneyDigitalHuman.setPersona(\(encodedName), \(encodedSubtitle))")
-    }
-
-    func startSimulatedAudioLevels() {
-        guard simulatedAudioTimer == nil else { return }
-        simulatedAudioTimer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            self.simulatedPhase += 0.48
-            let wave = (sin(self.simulatedPhase) + 1) / 2
-            let level = 0.18 + wave * 0.72
-            self.setAudioLevel(level)
-        }
-        if let timer = simulatedAudioTimer {
-            RunLoop.main.add(timer, forMode: .common)
-        }
-    }
-
-    func stopSimulatedAudioLevels() {
-        simulatedAudioTimer?.invalidate()
-        simulatedAudioTimer = nil
-        simulatedPhase = 0
     }
 
     func snapshot(completion: @escaping (DigitalHumanLivePanelSnapshot?) -> Void) {
@@ -125,6 +98,7 @@ final class DigitalHumanLivePanelView: UIView {
                     "failed": true,
                     "stateName": DigitalHumanLiveInteractionState.failed.rawValue,
                     "audioLevel": 0,
+                    "audioLevelSource": DigitalHumanAudioLevelSource.unavailable.rawValue,
                     "personaName": "",
                     "personaSubtitle": "",
                     "hasRealDigitalHumanAsset": false,

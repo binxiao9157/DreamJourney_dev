@@ -5,6 +5,7 @@ final class EchoViewController: UIViewController {
 
     private let scenicView = EchoScenicParkView()
     private var digitalHumanLivePanelView: DigitalHumanLivePanelView?
+    private var digitalHumanAudioLevelMeter: DigitalHumanAudioLevelMeter?
 
     private let personaBadgeView: UIView = {
         let view = UIView()
@@ -208,7 +209,7 @@ final class EchoViewController: UIViewController {
                 ConversationMemoryManager.shared.endSession()
                 viewModel.resetToIdle()
             }
-            digitalHumanLivePanelView?.stopSimulatedAudioLevels()
+            stopDigitalHumanAudioLevelMetering()
             DialogEngineManager.shared.delegate = nil
         }
     }
@@ -229,7 +230,9 @@ final class EchoViewController: UIViewController {
 
     private func setupLayout() {
         if shouldShowDigitalHumanLivePanel {
-            digitalHumanLivePanelView = DigitalHumanLivePanelView()
+            let digitalHumanLivePanelView = DigitalHumanLivePanelView()
+            self.digitalHumanLivePanelView = digitalHumanLivePanelView
+            digitalHumanAudioLevelMeter = DigitalHumanAudioLevelMeter(panelView: digitalHumanLivePanelView)
         }
 
         view.addSubview(scenicView)
@@ -550,6 +553,30 @@ final class EchoViewController: UIViewController {
             liveState = .failed
         }
         digitalHumanLivePanelView?.setInteractionState(liveState)
+        if liveState == .idle || liveState == .stopped || liveState == .failed {
+            stopDigitalHumanAudioLevelMetering()
+        }
+    }
+
+    private func startSDKTTSPlaybackFallback() {
+        guard shouldShowDigitalHumanLivePanel else { return }
+        digitalHumanAudioLevelMeter?.startSDKTTSPlaybackFallback()
+    }
+
+    private func stopDigitalHumanAudioLevelMetering(resetLevel: Bool = true) {
+        digitalHumanAudioLevelMeter?.stop(resetLevel: resetLevel)
+    }
+
+    @discardableResult
+    private func startUIQAMeteredPlayback() -> Bool {
+        guard shouldShowDigitalHumanLivePanel else { return false }
+        do {
+            try digitalHumanAudioLevelMeter?.startUIQAMeteredPlayback()
+            return true
+        } catch {
+            print("[Echo] digital human UIQA metered playback failed: \(error.localizedDescription)")
+            return false
+        }
     }
 
     private func renderVoiceStatus(
@@ -800,6 +827,7 @@ extension EchoViewController: DialogEngineDelegate {
         pendingAIText = nil
         DispatchQueue.main.async { [weak self] in
             self?.viewModel.receiveAIReply(text)
+            self?.startSDKTTSPlaybackFallback()
         }
     }
 
@@ -807,6 +835,7 @@ extension EchoViewController: DialogEngineDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             guard !self.viewModel.isWaitingForDelayedReply else { return }
+            self.stopDigitalHumanAudioLevelMetering()
             self.viewModel.markReplyDelivered()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
                 guard let self = self else { return }
@@ -826,6 +855,7 @@ extension EchoViewController: DialogEngineDelegate {
 
     func onError(error: Error) {
         DispatchQueue.main.async { [weak self] in
+            self?.stopDigitalHumanAudioLevelMetering()
             self?.viewModel.fail(error.localizedDescription)
         }
     }
@@ -840,6 +870,7 @@ extension EchoViewController: DialogEngineDelegate {
             }
             self.flushPendingAIReplyIfNeeded()
             ConversationMemoryManager.shared.endSession()
+            self.stopDigitalHumanAudioLevelMetering()
             self.viewModel.resetToIdle()
         }
     }
@@ -895,16 +926,18 @@ extension EchoViewController {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
             self?.viewModel.receiveAIReply("我在这里，慢慢听你说。")
-            self?.digitalHumanLivePanelView?.startSimulatedAudioLevels()
+            _ = self?.startUIQAMeteredPlayback()
         }
         func finishWhenRealAssetReady(attemptsRemaining: Int) {
             panel.snapshot { [weak self] snapshot in
                 let audioLevel = snapshot?.audioLevel ?? 0
+                let audioLevelSource = snapshot?.audioLevelSource ?? ""
                 let panelReady = snapshot?.ready == true
                 let hasRealDigitalHumanAsset = snapshot?.hasRealDigitalHumanAsset == true
                 let assetVideoReady = snapshot?.assetVideoReady == true
                 let hasFallbackAvatar = snapshot?.hasFallbackAvatar == true
                 let speaking = snapshot?.stateName == DigitalHumanLiveInteractionState.speaking.rawValue
+                let meteringSampleCount = self?.digitalHumanAudioLevelMeter?.meteringSampleCount ?? 0
                 if panelReady && hasRealDigitalHumanAsset && !hasFallbackAvatar && !assetVideoReady && attemptsRemaining > 0 {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                         finishWhenRealAssetReady(attemptsRemaining: attemptsRemaining - 1)
@@ -912,7 +945,7 @@ extension EchoViewController {
                     return
                 }
                 completion([
-                    "completed": panelReady && speaking && audioLevel > 0 && hasRealDigitalHumanAsset && assetVideoReady && !hasFallbackAvatar,
+                    "completed": panelReady && speaking && audioLevel > 0 && audioLevelSource == DigitalHumanAudioLevelSource.avAudioPlayerMetering.rawValue && meteringSampleCount > 0 && hasRealDigitalHumanAsset && assetVideoReady && !hasFallbackAvatar,
                     "panelVisible": !panel.isHidden && panel.alpha > 0,
                     "panelReady": panelReady,
                     "rendererReady": snapshot?.rendererReady ?? false,
@@ -922,6 +955,8 @@ extension EchoViewController {
                     "panelFailed": snapshot?.failed ?? panel.didFail,
                     "stateName": snapshot?.stateName ?? "missing",
                     "audioLevel": audioLevel,
+                    "audioLevelSource": audioLevelSource,
+                    "meteringSampleCount": meteringSampleCount,
                     "personaName": snapshot?.personaName ?? "",
                     "personaSubtitle": snapshot?.personaSubtitle ?? "",
                     "voiceStatusText": self?.voiceStatusLabel.text ?? "",
