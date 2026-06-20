@@ -11,6 +11,27 @@ import CocoaLumberjack
 /// 2. 调用 DreamJourney 后端 `/voice/synthesis`，传入 speaker_id + 文本
 /// 3. 后端代理火山 TTS V3 并返回 base64 音频
 /// 4. 保存到 ApplicationSupport/memoir_audio/{memoirId}.mp3
+
+struct MemoirTTSCacheEntry: Codable {
+    let memoirId: String
+    let audioFileURL: URL
+    let voiceProfileId: String
+    let textHash: String
+    let audioFormat: String
+    let visemeTimeline: DigitalHumanLipSyncTimeline?
+    let createdAt: Date
+    let providerMode: String
+}
+
+struct MemoirTTSCacheResult {
+    let audioFileURL: URL
+    let cacheEntry: MemoirTTSCacheEntry
+
+    var visemeTimeline: DigitalHumanLipSyncTimeline? {
+        cacheEntry.visemeTimeline
+    }
+}
+
 final class MemoirTTSService {
 
     static let shared = MemoirTTSService()
@@ -19,6 +40,8 @@ final class MemoirTTSService {
 
     /// 音频存储目录
     private let audioDirectory: URL
+    /// TTS 合成元数据缓存目录
+    private let cacheDirectory: URL
 
     // MARK: - 合成状态
 
@@ -29,7 +52,9 @@ final class MemoirTTSService {
     private init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         audioDirectory = appSupport.appendingPathComponent("memoir_audio", isDirectory: true)
+        cacheDirectory = appSupport.appendingPathComponent("memoir_tts_cache", isDirectory: true)
         try? FileManager.default.createDirectory(at: audioDirectory, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
     }
 
     // MARK: - 公开 API
@@ -82,6 +107,9 @@ final class MemoirTTSService {
 
     /// 获取已合成的音频文件 URL
     func getAudioURL(for memoirId: String) -> URL? {
+        if let cached = getCachedSynthesis(for: memoirId) {
+            return cached.audioFileURL
+        }
         let mp3Path = audioDirectory.appendingPathComponent("\(memoirId).mp3")
         let m4aPath = audioDirectory.appendingPathComponent("\(memoirId).m4a")
         if FileManager.default.fileExists(atPath: mp3Path.path) { return mp3Path }
@@ -89,12 +117,33 @@ final class MemoirTTSService {
         return nil
     }
 
+    /// 获取已缓存的 TTS 合成结果，包含本地音频和口型时间线。
+    func getCachedSynthesis(for memoirId: String) -> MemoirTTSCacheResult? {
+        guard let entry = loadCacheEntry(for: memoirId),
+              FileManager.default.fileExists(atPath: entry.audioFileURL.path) else {
+            return nil
+        }
+        return MemoirTTSCacheResult(audioFileURL: entry.audioFileURL, cacheEntry: entry)
+    }
+
+    /// 获取已缓存的 TTS 合成结果，并验证当前文本仍匹配缓存。
+    func getCachedSynthesis(for memoir: MemoirModel) -> MemoirTTSCacheResult? {
+        guard let result = getCachedSynthesis(for: memoir.id),
+              result.cacheEntry.textHash == Self.textHash(for: memoir.prose) else {
+            return nil
+        }
+        return result
+    }
+
     /// 删除已合成的音频文件
     func deleteAudio(for memoirId: String) {
-        let mp3Path = audioDirectory.appendingPathComponent("\(memoirId).mp3")
-        let m4aPath = audioDirectory.appendingPathComponent("\(memoirId).m4a")
-        try? FileManager.default.removeItem(at: mp3Path)
-        try? FileManager.default.removeItem(at: m4aPath)
+        if let cached = loadCacheEntry(for: memoirId) {
+            try? FileManager.default.removeItem(at: cached.audioFileURL)
+        }
+        for audioFormat in ["mp3", "m4a", "aac", "wav"] {
+            try? FileManager.default.removeItem(at: audioFileURL(for: memoirId, audioFormat: audioFormat))
+        }
+        try? FileManager.default.removeItem(at: cacheFileURL(for: memoirId))
     }
 
     // MARK: - 内部实现
@@ -104,8 +153,6 @@ final class MemoirTTSService {
                                    speed: Int,
                                    volume: Int,
                                    completion: @escaping (Result<URL, TTSError>) -> Void) {
-
-        let outputPath = audioDirectory.appendingPathComponent("\(memoir.id).mp3")
 
         DDLogInfo("[MemoirTTS] 通过后端合成: memoirId=\(memoir.id), speakerId=\(speakerId), 文本长度=\(memoir.prose.count)")
         DreamJourneyBackendClient.shared.requestVoiceCloneSynthesis(
@@ -126,9 +173,22 @@ final class MemoirTTSService {
                     completion(.failure(.synthesisFailed("合成音频解码失败")))
                     return
                 }
+                let audioFormat = Self.normalizedAudioFormat(synthesis.audioFormat)
+                let outputPath = self.audioFileURL(for: memoir.id, audioFormat: audioFormat)
                 do {
                     try audioData.write(to: outputPath, options: .atomic)
-                    DDLogInfo("[MemoirTTS] 合成完成: \(outputPath.path), 大小=\(audioData.count) bytes")
+                    let cacheEntry = MemoirTTSCacheEntry(
+                        memoirId: memoir.id,
+                        audioFileURL: outputPath,
+                        voiceProfileId: synthesis.voiceProfileId,
+                        textHash: Self.textHash(for: memoir.prose),
+                        audioFormat: audioFormat,
+                        visemeTimeline: synthesis.visemeTimeline,
+                        createdAt: Date(),
+                        providerMode: synthesis.providerMode
+                    )
+                    try self.saveCacheEntry(cacheEntry)
+                    DDLogInfo("[MemoirTTS] 合成完成: \(outputPath.path), 大小=\(audioData.count) bytes, timeline=\(synthesis.visemeTimeline?.frames.count ?? 0)")
                     completion(.success(outputPath))
                 } catch {
                     DDLogError("[MemoirTTS] 写入文件失败: \(error.localizedDescription)")
@@ -136,10 +196,55 @@ final class MemoirTTSService {
                 }
             case .failure(let error):
                 DDLogError("[MemoirTTS] 后端合成请求失败: \(error.localizedDescription)")
-                try? FileManager.default.removeItem(at: outputPath)
+                self.deleteAudio(for: memoir.id)
                 completion(.failure(.networkError(error.localizedDescription)))
             }
         }
+    }
+
+    private func audioFileURL(for memoirId: String, audioFormat: String) -> URL {
+        audioDirectory.appendingPathComponent("\(memoirId).\(Self.normalizedAudioFormat(audioFormat))")
+    }
+
+    private func cacheFileURL(for memoirId: String) -> URL {
+        cacheDirectory.appendingPathComponent("\(memoirId).json")
+    }
+
+    private func saveCacheEntry(_ entry: MemoirTTSCacheEntry) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(entry)
+        try data.write(to: cacheFileURL(for: entry.memoirId), options: .atomic)
+    }
+
+    private func loadCacheEntry(for memoirId: String) -> MemoirTTSCacheEntry? {
+        let fileURL = cacheFileURL(for: memoirId)
+        guard let data = try? Data(contentsOf: fileURL) else {
+            return nil
+        }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try? decoder.decode(MemoirTTSCacheEntry.self, from: data)
+    }
+
+    private static func normalizedAudioFormat(_ value: String) -> String {
+        let format = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        switch format {
+        case "m4a", "aac", "wav":
+            return format
+        default:
+            return "mp3"
+        }
+    }
+
+    private static func textHash(for text: String) -> String {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in text.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x100000001b3
+        }
+        return String(format: "%016llx", hash)
     }
 
     // MARK: - 降级方案：系统 TTS

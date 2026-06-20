@@ -248,6 +248,7 @@ for guard in \
   family-digital-human-hidden-contract-check.swift \
   backend-family-voice-contract-smoke-check.swift \
   voice-synthesis-viseme-contract-check.swift \
+  memoir-tts-cache-contract-check.swift \
   digital-human-live-panel-check.swift \
   digital-human-tts-viseme-gate-check.swift \
   ios-family-voice-consumer-contract-check.swift \
