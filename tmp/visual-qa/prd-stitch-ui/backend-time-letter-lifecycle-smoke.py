@@ -6,7 +6,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -92,32 +92,59 @@ def matching_items(item_id: str) -> List[Dict[str, Any]]:
     return [item for item in list_archive_items() if item.get("id") == item_id]
 
 
-def assert_time_letter_contract(item: Dict[str, Any], note: str, delivery_state: str) -> None:
+def assert_time_letter_contract(
+    item: Dict[str, Any],
+    note: str,
+    delivery_state: str,
+    open_at: str,
+    recipients: List[Dict[str, str]],
+    sealed_at: Optional[str],
+) -> None:
     metadata = item.get("metadata") or {}
     if not isinstance(metadata, dict):
         raise AssertionError("timeLetter metadata should be an object")
     assert_equal(item.get("kind"), "timeLetter", "timeLetter kind")
     assert_equal(item.get("note"), note, "timeLetter note")
     assert_equal(item.get("deliveryState"), delivery_state, "timeLetter deliveryState")
-    assert_equal(item.get("deliveryPolicy"), "pending_product_decision", "timeLetter deliveryPolicy")
-    assert_equal(item.get("deliveryExecutionState"), "not_delivering", "timeLetter deliveryExecutionState")
-    assert_equal(item.get("deliveryDecisionState"), "waiting_product_decision", "timeLetter deliveryDecisionState")
-    assert_equal(item.get("deliveryScheduleState"), "not_scheduled", "timeLetter deliveryScheduleState")
-    assert_equal(item.get("deliveryProviderState"), "disabled_until_product_decision", "timeLetter deliveryProviderState")
-    assert_equal(item.get("deliveryNotificationScheduled"), "false", "timeLetter deliveryNotificationScheduled")
+    assert_equal(item.get("openAt"), open_at, "timeLetter openAt")
+    assert_equal(item.get("recipients"), recipients, "timeLetter recipients")
     assert_equal(metadata.get("deliveryState"), delivery_state, "metadata deliveryState")
     assert_equal(metadata.get("timeLetterStatus"), delivery_state, "metadata timeLetterStatus")
-    assert_equal(metadata.get("deliveryDecisionRequired"), "true", "delivery decision flag")
-    assert_equal(metadata.get("deliveryExecutionState"), "not_delivering", "metadata deliveryExecutionState")
-    assert_equal(metadata.get("deliveryDecisionState"), "waiting_product_decision", "metadata deliveryDecisionState")
-    assert_equal(metadata.get("deliveryScheduleState"), "not_scheduled", "metadata deliveryScheduleState")
-    assert_equal(metadata.get("deliveryProviderState"), "disabled_until_product_decision", "metadata deliveryProviderState")
-    assert_equal(metadata.get("deliveryNotificationScheduled"), "false", "metadata deliveryNotificationScheduled")
+    assert_equal(metadata.get("openAt"), open_at, "metadata openAt")
+    assert_equal(metadata.get("recipientIds"), "|".join(recipient["id"] for recipient in recipients), "metadata recipientIds")
+    assert_equal(metadata.get("recipientNames"), "、".join(recipient["name"] for recipient in recipients), "metadata recipientNames")
     assert_equal(item.get("metadataOnly"), True, "metadataOnly")
     assert_not_in("localPath", metadata, "timeLetter metadata should strip local paths")
 
+    if delivery_state == "draft":
+        assert_equal(item.get("deliveryPolicy"), "draft", "draft deliveryPolicy")
+        assert_equal(item.get("deliveryStatus"), "draft", "draft deliveryStatus")
+        assert_equal(item.get("deliveryNotificationScheduled"), False, "draft notification")
+        assert_equal(metadata.get("deliveryPolicy"), "draft", "metadata draft deliveryPolicy")
+        assert_equal(metadata.get("deliveryStatus"), "draft", "metadata draft deliveryStatus")
+    else:
+        assert_equal(item.get("deliveryPolicy"), "scheduled_local_and_in_app", "sealed deliveryPolicy")
+        assert_equal(item.get("sealedAt"), sealed_at, "sealedAt")
+        assert_equal(item.get("deliveryStatus"), "scheduled", "sealed deliveryStatus")
+        assert_equal(item.get("deliveryNotificationScheduled"), True, "sealed notification")
+        assert_equal(metadata.get("deliveryPolicy"), "scheduled_local_and_in_app", "metadata sealed deliveryPolicy")
+        assert_equal(metadata.get("sealedAt"), sealed_at, "metadata sealedAt")
+        assert_equal(metadata.get("deliveryStatus"), "scheduled", "metadata sealed deliveryStatus")
+        assert_equal(metadata.get("deliveryProviderState"), "local_notification_and_in_app", "metadata provider state")
 
-def payload_for(item_id: str, note: str, delivery_state: str, now: str) -> Dict[str, Any]:
+
+def payload_for(
+    item_id: str,
+    note: str,
+    delivery_state: str,
+    now: str,
+    open_at: str,
+    recipients: List[Dict[str, str]],
+    sealed_at: Optional[str] = None,
+) -> Dict[str, Any]:
+    is_sealed = delivery_state == "sealed"
+    recipient_ids = "|".join(recipient["id"] for recipient in recipients)
+    recipient_names = "、".join(recipient["name"] for recipient in recipients)
     return {
         "userId": USER_ID,
         "ownerUserId": USER_ID,
@@ -132,24 +159,33 @@ def payload_for(item_id: str, note: str, delivery_state: str, now: str) -> Dict[
         "analysisStatus": "manual",
         "deliveryState": delivery_state,
         "timeLetterStatus": delivery_state,
-        "deliveryPolicy": "pending_product_decision",
-        "deliveryExecutionState": "not_delivering",
-        "deliveryDecisionState": "waiting_product_decision",
-        "deliveryScheduleState": "not_scheduled",
-        "deliveryProviderState": "disabled_until_product_decision",
-        "deliveryNotificationScheduled": "false",
+        "deliveryPolicy": "scheduled_local_and_in_app" if is_sealed else "draft",
+        "openAt": open_at,
+        "recipients": recipients,
+        "sealedAt": sealed_at or "",
+        "deliveryStatus": "scheduled" if is_sealed else "draft",
+        "deliveryExecutionState": "scheduled" if is_sealed else "draft",
+        "deliveryDecisionState": "confirmed" if is_sealed else "draft",
+        "deliveryScheduleState": "scheduled" if is_sealed else "not_scheduled",
+        "deliveryProviderState": "local_notification_and_in_app" if is_sealed else "not_scheduled",
+        "deliveryNotificationScheduled": is_sealed,
         "metadata": {
             "contentKind": "time_letter",
             "deliveryState": delivery_state,
             "timeLetterStatus": delivery_state,
-            "deliveryPolicy": "pending_product_decision",
-            "deliveryDecisionRequired": "true",
-            "deliveryExecutionState": "not_delivering",
-            "deliveryDecisionState": "waiting_product_decision",
-            "deliveryScheduleState": "not_scheduled",
-            "deliveryProviderState": "disabled_until_product_decision",
-            "deliveryNotificationScheduled": "false",
-            "localPath": "/private/var/mobile/time-letter-draft.txt",
+            "deliveryPolicy": "scheduled_local_and_in_app" if is_sealed else "draft",
+            "openAt": open_at,
+            "recipientIds": recipient_ids,
+            "recipientNames": recipient_names,
+            "sealedAt": sealed_at or "",
+            "deliveryStatus": "scheduled" if is_sealed else "draft",
+            "deliveryExecutionState": "scheduled" if is_sealed else "draft",
+            "deliveryDecisionState": "confirmed" if is_sealed else "draft",
+            "deliveryScheduleState": "scheduled" if is_sealed else "not_scheduled",
+            "deliveryProviderState": "local_notification_and_in_app" if is_sealed else "not_scheduled",
+            "deliveryNotificationScheduled": "true" if is_sealed else "false",
+            "imageAttachmentCount": "1",
+            "localPath": "/private/var/mobile/time-letter-draft.jpg",
         },
         "personaScope": "personal",
         "digitalHumanId": USER_ID,
@@ -159,46 +195,61 @@ def payload_for(item_id: str, note: str, delivery_state: str, now: str) -> Dict[
 
 def main() -> Dict[str, Any]:
     health = request_json("GET", "/health", auth=False)
-    now = datetime.now(timezone.utc).isoformat()
-    item_id = f"hidden_time_letter_lifecycle_{MARKER}"
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
+    open_at = (now_dt + timedelta(days=3)).isoformat()
+    sealed_at = (now_dt + timedelta(minutes=1)).isoformat()
+    recipients = [
+        {"id": "self", "name": "我", "type": "self"},
+        {"id": "family-001", "name": "林静文", "type": "family"},
+    ]
+    draft_item_id = f"time_letter_draft_delete_{MARKER}"
+    sealed_item_id = f"time_letter_sealed_{MARKER}"
 
-    # POST draft timeLetter, edit the same id, seal it, then delete it.
-    created = post_archive(payload_for(item_id, "第一版草稿", "draft", now))
-    edited = post_archive(payload_for(item_id, "第二版草稿", "draft", now))
-    sealed = post_archive(payload_for(item_id, "已经封存的正文", "sealed", now))
+    created = post_archive(payload_for(draft_item_id, "第一版草稿", "draft", now, open_at, recipients))
+    edited = post_archive(payload_for(draft_item_id, "第二版草稿", "draft", now, open_at, recipients))
+    assert_time_letter_contract(created, "第一版草稿", "draft", open_at, recipients, None)
+    assert_time_letter_contract(edited, "第二版草稿", "draft", open_at, recipients, None)
 
-    listed_after_seal = matching_items(item_id)
-    assert_equal(len(listed_after_seal), 1, "timeLetter upsert should keep exactly one backend row")
-    listed = listed_after_seal[0]
-    for item, note, state in [
-        (created, "第一版草稿", "draft"),
-        (edited, "第二版草稿", "draft"),
-        (sealed, "已经封存的正文", "sealed"),
-        (listed, "已经封存的正文", "sealed"),
-    ]:
-        assert_time_letter_contract(item, note, state)
-
-    delete_response = request_json(
+    draft_delete_response = request_json(
         "DELETE",
-        f"/archive/items/{urllib.parse.quote(USER_ID)}/{urllib.parse.quote(item_id)}",
+        f"/archive/items/{urllib.parse.quote(USER_ID)}/{urllib.parse.quote(draft_item_id)}",
     )
-    assert_equal(delete_response.get("status"), "deleted", "delete status")
-    assert_equal(delete_response.get("id"), item_id, "delete id")
-    listed_after_delete = matching_items(item_id)
-    assert_equal(len(listed_after_delete), 0, "timeLetter delete should remove backend row")
+    assert_equal(draft_delete_response.get("status"), "deleted", "draft delete status")
+    assert_equal(len(matching_items(draft_item_id)), 0, "draft delete should remove backend row")
+
+    post_archive(payload_for(sealed_item_id, "封存前草稿", "draft", now, open_at, recipients))
+    sealed = post_archive(
+        payload_for(sealed_item_id, "已经封存的正文", "sealed", now, open_at, recipients, sealed_at)
+    )
+    listed_after_seal = matching_items(sealed_item_id)
+    assert_equal(len(listed_after_seal), 1, "sealed timeLetter upsert should keep exactly one backend row")
+    listed = listed_after_seal[0]
+    assert_time_letter_contract(sealed, "已经封存的正文", "sealed", open_at, recipients, sealed_at)
+    assert_time_letter_contract(listed, "已经封存的正文", "sealed", open_at, recipients, sealed_at)
+
+    sealed_delete_response = request_json(
+        "DELETE",
+        f"/archive/items/{urllib.parse.quote(USER_ID)}/{urllib.parse.quote(sealed_item_id)}",
+        expected=409,
+    )
+    assert_equal(sealed_delete_response.get("detail"), "sealed timeLetter cannot be deleted", "sealed delete detail")
+    assert_equal(len(matching_items(sealed_item_id)), 1, "sealed timeLetter delete should be rejected")
 
     return {
         "completed": True,
         "health": health,
         "userId": USER_ID,
         "marker": MARKER,
-        "itemId": item_id,
+        "draftItemId": draft_item_id,
+        "sealedItemId": sealed_item_id,
         "created": created,
         "edited": edited,
+        "draftDeleteResponse": draft_delete_response,
         "sealed": sealed,
         "listedAfterSeal": listed,
-        "deleteResponse": delete_response,
-        "listedAfterDeleteCount": len(listed_after_delete),
+        "sealedDeleteResponse": sealed_delete_response,
+        "listedAfterSealedDeleteCount": len(matching_items(sealed_item_id)),
     }
 
 

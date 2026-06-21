@@ -47,7 +47,7 @@ assertContains(readiness, "case .audio:", "audio readiness must be explicit")
 assertContains(readiness, "case .timeLetter:", "time-letter readiness must be explicit")
 assertContains(readiness, "case .video:", "video readiness must be explicit")
 assertContains(readiness, "feature: .archiveAudioUpload", "audio must stay behind archiveAudioUpload")
-assertContains(readiness, "feature: .timeLetters", "time-letter must stay behind timeLetters")
+assertContains(readiness, "时间信件录入已作为公开档案入口。", "time-letter must be documented as public")
 assertContains(readiness, "feature: .archiveVideoUpload", "video must stay behind archiveVideoUpload")
 assertContains(readiness, "requiresMicrophonePermission: true", "audio readiness must preserve microphone permission boundary")
 assertContains(readiness, "local_file", "audio/photo readiness must document local file persistence")
@@ -81,9 +81,10 @@ let defaultEnabledBlock = substringBetween(
     start: "private static let defaultEnabled: Set<DJFeature> = [",
     end: "]"
 )
-for hiddenFeature in [".archiveAudioUpload", ".archiveVideoUpload", ".timeLetters"] {
+for hiddenFeature in [".archiveAudioUpload", ".archiveVideoUpload"] {
     assertNotContains(defaultEnabledBlock, hiddenFeature, "media flags must stay out of default release flags")
 }
+assertContains(defaultEnabledBlock, ".timeLetters", "time-letter should be default public after product decision")
 
 assertContains(project, "MemoryArchiveMediaReleaseReadiness.swift", "readiness contract must be added to the Xcode target")
 assertContains(project, "MemoryArchiveVideoEntryViewController.swift in Sources", "video shell must be added to the Xcode target")

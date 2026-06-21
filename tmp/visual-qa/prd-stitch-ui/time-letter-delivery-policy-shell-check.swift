@@ -22,121 +22,141 @@ func assertNotContains(_ haystack: String, _ needle: String, _ message: String) 
     }
 }
 
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let item = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveItem.swift")
 let factory = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveItemFactory.swift")
-let display = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveDisplayMetadata.swift")
+let repository = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift")
+let entry = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveTextEntryViewController.swift")
+let archiveRoot = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift")
 let detail = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveDetailViewController.swift")
-let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
-let hiddenShellRunner = read("tmp/visual-qa/prd-stitch-ui/run-archive-hidden-shell-smoke.sh")
+let display = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveDisplayMetadata.swift")
 let backendSmoke = read("tmp/visual-qa/prd-stitch-ui/backend-time-letter-lifecycle-smoke.py")
 let releaseRegression = read("tmp/visual-qa/prd-stitch-ui/run-release-regression.sh")
-let releaseQA = read("tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift")
-let statusDoc = read("docs/superpowers/status/2026-06-19-time-letter-delivery-policy-shell.md")
+let statusDoc = read("docs/superpowers/status/2026-06-21-time-letter-public-delivery.md")
 
 for required in [
-    "timeLetterDeliveryExecutionStateMetadataKey",
-    "timeLetterDeliveryDecisionStateMetadataKey",
-    "timeLetterDeliveryScheduleStateMetadataKey",
-    "timeLetterDeliveryProviderStateMetadataKey",
-    "timeLetterNotificationScheduledMetadataKey",
-    "isTimeLetterDeliveryDisabledUntilProductDecision",
+    "private static let currentStorageVersion = 7",
+    ".timeLetters",
+] {
+    assertContains(featureFlags, required, "time-letter should be public by default \(required)")
+}
+
+for required in [
+    "timeLetterOpenAtMetadataKey",
+    "timeLetterRecipientIdsMetadataKey",
+    "timeLetterRecipientNamesMetadataKey",
+    "timeLetterSealedAtMetadataKey",
+    "timeLetterDeliveryStatusMetadataKey",
     "archiveBackendPayload",
-    "payload[\"deliveryExecutionState\"]",
-    "payload[\"deliveryDecisionState\"]",
-    "payload[\"deliveryScheduleState\"]",
-    "payload[\"deliveryProviderState\"]",
-    "payload[\"deliveryNotificationScheduled\"]",
+    "payload[\"openAt\"]",
+    "payload[\"recipients\"]",
+    "payload[\"sealedAt\"]",
+    "payload[\"deliveryStatus\"]",
+    "scheduled_local_and_in_app",
+    "local_notification_and_in_app",
 ] {
-    assertContains(item, required, "time-letter item should pin non-delivery policy contract \(required)")
+    assertContains(item, required, "time-letter model should pin public delivery contract \(required)")
 }
 
 for required in [
-    "\"deliveryExecutionState\": \"not_delivering\"",
-    "\"deliveryDecisionState\": \"waiting_product_decision\"",
-    "\"deliveryScheduleState\": \"not_scheduled\"",
-    "\"deliveryProviderState\": \"disabled_until_product_decision\"",
-    "\"deliveryNotificationScheduled\": \"false\"",
+    "makeTimeLetterDraft(",
+    "makeTimeLetter(",
+    "openAt: Date",
+    "recipients: [TimeLetterRecipientSelection]",
+    "imageLocalPath: String?",
+    "scheduled_local_and_in_app",
 ] {
-    assertContains(factory, required, "time-letter factory should emit non-delivery metadata \(required)")
-    assertContains(item, required, "time-letter lifecycle updates should preserve non-delivery metadata \(required)")
+    assertContains(factory, required, "time-letter factory should create public delivery metadata \(required)")
 }
 
 for required in [
-    "(\"投递状态\", \"暂不投递\")",
-    "(\"决策状态\", \"等待产品决策\")",
-    "(\"通知状态\", \"未调度通知\")",
+    "TimeLetterReminderScheduler",
+    "UNUserNotificationCenter.current()",
+    "UNNotificationRequest",
+    "dueTimeLetters",
+    "if items.contains(where: { $0.id == id && $0.isSealedTimeLetter })",
 ] {
-    assertContains(display, required, "time-letter metadata rows should expose delivery boundary \(required)")
+    assertContains(repository, required, "time-letter repository should schedule and protect sealed letters \(required)")
 }
 
 for required in [
-    "archive-time-letter-delivery-disabled-state",
-    "archive-time-letter-product-decision-state",
-    "archive-time-letter-notification-not-scheduled-state",
-    "暂不投递",
-    "等待产品决策",
-    "不会调度本地通知或 APNs",
+    "TimeLetterEntryPayload",
+    "UIDatePicker",
+    "FamilyRepository.shared.getAll()",
+    "UIImagePickerController",
+    "time-letter-open-at-picker",
+    "time-letter-image-picker-button",
+    "封存后会按打开时间提醒本人和收件人。",
 ] {
-    assertContains(detail, required, "time-letter detail UI should expose delivery policy shell \(required)")
-}
-
-for forbidden in [
-    "UNUserNotificationCenter.current().add",
-    "EchoDelayedReplyNotificationScheduler",
-    "registerForRemoteNotifications",
-] {
-    assertNotContains(detail, forbidden, "time-letter detail must not schedule notification delivery")
+    assertContains(entry, required, "time-letter entry UI should expose text/image/time/recipient controls \(required)")
 }
 
 for required in [
-    "timeLetterDraftDeliveryPolicyPersisted",
-    "timeLetterSealedDeliveryPolicyPersisted",
-    "timeLetterBackendPayloadNonDelivering",
-    "timeLetterDeliveryPolicyVisible",
-    "archive-time-letter-delivery-disabled-state",
-    "archive-time-letter-product-decision-state",
+    "archive-time-letter-in-app-reminder",
+    "dueTimeLetters()",
+    "timeLetterReminderTapped",
+    "onSaveTimeLetter",
+    "onSaveDraftTimeLetter",
 ] {
-    assertContains(appDelegate, required, "hidden shell UIQA should verify time-letter delivery policy \(required)")
+    assertContains(archiveRoot, required, "archive root should create and surface in-app time-letter reminders \(required)")
 }
 
 for required in [
-    "\"timeLetterDraftDeliveryPolicyPersisted\"",
-    "\"timeLetterSealedDeliveryPolicyPersisted\"",
-    "\"timeLetterBackendPayloadNonDelivering\"",
-    "\"timeLetterDeliveryPolicyVisible\"",
+    "已封存，不可删除或修改",
+    "本地通知 + 应用内提醒",
+    "这封信已封存，等待打开时间到来。",
+    "MemoryArchiveTextEntryViewController(",
+    "sealingTimeLetter(",
+    "archive-time-letter-notification-state",
 ] {
-    assertContains(hiddenShellRunner, required, "hidden shell runner should assert delivery policy \(required)")
+    assertContains(detail, required, "time-letter detail should show sealed lock and reminder state \(required)")
 }
 
 for required in [
-    "\"deliveryExecutionState\": \"not_delivering\"",
-    "\"deliveryDecisionState\": \"waiting_product_decision\"",
-    "\"deliveryScheduleState\": \"not_scheduled\"",
-    "\"deliveryProviderState\": \"disabled_until_product_decision\"",
-    "\"deliveryNotificationScheduled\": \"false\"",
+    "if kind == .timeLetter",
+    "(\"信件状态\", \"已封存\")",
+    "(\"打开时间\", openAt)",
+    "(\"收件人\", metadataTimeLetterRecipientsDisplayName ?? \"我\")",
+    "(\"提醒\", metadataTimeLetterDeliveryStatusDisplayName ?? \"草稿\")",
 ] {
-    assertContains(backendSmoke, required, "backend time-letter smoke should send delivery policy \(required)")
+    assertContains(display, required, "time-letter metadata should show only user-facing schedule fields \(required)")
+}
+
+for required in [
+    "\"openAt\"",
+    "\"recipients\"",
+    "\"sealedAt\"",
+    "\"deliveryStatus\"",
+    "sealed timeLetter cannot be deleted",
+] {
+    assertContains(backendSmoke, required, "backend time-letter smoke should verify public delivery fields \(required)")
 }
 
 assertContains(
     releaseRegression,
     "time-letter-delivery-policy-shell-check.swift",
-    "release regression should run delivery policy shell guard"
-)
-assertContains(
-    releaseQA,
-    "time-letter-delivery-policy-shell-check.swift",
-    "release QA package should include delivery policy shell guard"
+    "release regression should run time-letter public delivery guard"
 )
 
-for required in [
-    "时间信件 Delivery Policy Shell",
-    "暂不投递",
+for forbidden in [
     "等待产品决策",
-    "不做真实通知/投递",
-    "RUN_ARCHIVE_HIDDEN_SHELL_SMOKE",
+    "pending_product_decision",
+    "disabled_until_product_decision",
+    "不会调度本地通知或 APNs",
+    "暂不支持视频和音频",
 ] {
-    assertContains(statusDoc, required, "status doc should document time-letter delivery policy shell \(required)")
+    assertNotContains(entry, forbidden, "entry UI should not expose old non-delivery copy")
+    assertNotContains(detail, forbidden, "detail UI should not expose old non-delivery copy")
 }
 
-print("Time-letter delivery policy shell checks passed")
+for required in [
+    "时间信件公开投递闭环",
+    "openAt",
+    "recipients",
+    "sealedAt",
+    "deliveryStatus",
+] {
+    assertContains(statusDoc, required, "status doc should document public time-letter delivery \(required)")
+}
+
+print("Time-letter public delivery checks passed")

@@ -52,23 +52,23 @@ let matrix = read("docs/superpowers/status/2026-06-17-release-feature-matrix.md"
 
 let expectedDefaults: Set<String> = [
     "careDashboard",
+    "accountDeletion",
     "familyManagement",
     "familySpace",
     "personaSettings",
     "profileSettings",
     "legalCenter",
+    "timeLetters",
     "voiceCloneShell",
 ]
 
 let hiddenByDefault: Set<String> = [
     "echoTextInput",
     "echoImageInput",
-    "timeLetters",
     "archiveAudioUpload",
     "archiveVideoUpload",
     "archiveRemoteFetch",
     "archiveLocalAnalysis",
-    "accountDeletion",
     "accountPasswordChange",
     "careDoctorContact",
 ]
@@ -132,29 +132,31 @@ assertContains(legal, "ProfileLegalViewController", "legal center page must exis
 assertContains(legal, "AI 辅助说明", "legal center must cover AI assistance")
 assertContains(legal, "紧急情况", "legal center must cover emergency guidance")
 
-for label in ["记忆档案", "回响", "我的", "添加文字描述", "选择照片", "个人资料设置", "法律法规", "退出登录"] {
+for label in ["记忆档案", "回响", "我的", "添加文字描述", "选择照片", "录入时间信件", "个人资料设置", "法律法规", "退出登录", "注销账户"] {
     assertContains(matrix, label, "release matrix must document public label \(label)")
 }
 for label in ["语音档案", "人格设定"] {
     assertContains(matrix, label, "release matrix must document PRD archive feature-card label \(label)")
 }
 
-for label in ["录入语音", "录入时间信件", "注销账户", "修改密码", "立即通话"] {
+for label in ["录入语音", "修改密码", "立即通话"] {
     assertContains(matrix, label, "release matrix must document hidden label \(label)")
 }
 assertContains(matrix, "录入视频片段", "release matrix must document hidden video label")
+assertContains(matrix, "账号注销", "release matrix must document public account deletion policy")
+assertContains(matrix, "手机号邀请", "release matrix must document public family phone invite policy")
 
 assertContains(matrix, "## Hidden Candidate Release Decisions", "release matrix should include hidden candidate decision table")
 assertContains(matrix, "| Feature | Current gate | Public in MVP | Needed before public | Test evidence |", "release matrix should include hidden candidate decision columns")
 assertContains(matrix, "No remaining hidden PRD feature is public by default", "release matrix should preserve hidden-by-default policy")
-assertContains(matrix, "Last synced: 2026-06-20", "release matrix should include current sync timestamp")
+assertContains(matrix, "Last synced: 2026-06-21", "release matrix should include current sync timestamp")
 assertContains(matrix, "Voice SDK readiness preview", "release matrix should document hidden voice SDK readiness preview")
 assertContains(matrix, "DJShowVoiceSDKReadinessPreview", "release matrix should document hidden readiness launch arg")
 assertContains(matrix, "## 2026-06-19 Completed Hidden/Acceptance Guards", "release matrix should document recently completed guards")
 
 for phrase in [
     "Hidden Family / Voice UIQA Consumer Gate",
-    "时间信件 Delivery Policy Shell",
+    "时间信件公开投递闭环",
     "视频档案 Hidden Readiness",
     "真机验收包强化",
     "生产语音 SDK readiness 边界",
@@ -173,11 +175,9 @@ for phrase in [
 
 let hiddenDecisionRows = [
     "| archive audio upload | `DJFeature.archiveAudioUpload` or `DJEnableArchiveHiddenBranches` | no | true-device recording acceptance, storage/privacy copy, backend media policy | `archive-audio-lifecycle-smoke-check.swift`, `archive-audio-ia-release-check.swift`, `true-device-archive-audio-acceptance-check.swift`, `true-device-acceptance-evidence-package-check.swift`, release regression |",
-    "| time letters | `DJFeature.timeLetters` or `DJEnableArchiveHiddenBranches` | no | product delivery/scheduling policy, reminder semantics, recipient rules, true-device notification decision if promoted | `archive-hidden-media-timeletter-shell-check.swift`, `archive-time-letter-backend-lifecycle-check.swift`, `time-letter-delivery-policy-shell-check.swift`, release regression |",
     "| video upload | `DJFeature.archiveVideoUpload` or `DJEnableArchiveHiddenBranches` mock-file shell only | no | PRD public scope, real picker/compression/storage/backend provider policy, true-device video picker acceptance | `archive-video-hidden-readiness-check.swift`, `archive-hidden-media-detail-ui-check.swift`, `archive-hidden-media-combo-gate-check.swift`, `archive-media-upload-intent-contract-check.swift`, `archive-media-provider-switch-contract-check.swift`, release regression |",
-    "| family advanced lifecycle controls | hidden family rows / local QA context only | no | product/legal policy for lifecycle transitions, consent copy, recovery rules | `digital-human-mode-management-check.swift`, `digital-human-mode-lifecycle-check.swift` |",
+    "| family advanced lifecycle controls | base phone invite is public; hidden family rows / local QA context only cover advanced lifecycle | no | product/legal policy for exit/unlink/lifecycle transitions, consent copy, recovery rules | `digital-human-mode-management-check.swift`, `digital-human-mode-lifecycle-check.swift` |",
     "| care dashboard expansion | aggregate `DJFeature.careDashboard` and non-executing `关怀升级准备中` placeholder are public; intervention/contact execution stays behind `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | aggregate + placeholder only | family-facing copy, alert thresholds, backend persistence, true-device acceptance | `elder-care-dashboard-check.swift`, `profile-care-public-placeholder-check.swift`, backend acceptance |",
-    "| account deletion execution | `DJFeature.accountDeletion` or `DJEnableProfileHiddenBranches` safety shell only | no | compliance policy, cooling-off period, backend deletion/export contract | `profile-safety-flow-check.swift` |",
     "| account password change | `DJFeature.accountPasswordChange` or `DJEnableProfileHiddenBranches` | no | backend `/auth/password` implementation, auth/security review, true-device acceptance | `profile-password-change-check.swift`, release regression |",
     "| doctor contact / intervention execution | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | no | real escalation provider, emergency disclaimers, backend submission contract | `profile-care-escalation-contract-check.swift`, `profile-care-escalation-backend-boundary-check.swift` |",
     "| care escalation draft | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` local draft shell only | no | product decision to promote draft, backend submit contract, clinical/legal review | `profile-care-escalation-contract-check.swift`, `run-profile-care-escalation-boundary-smoke.sh` |",

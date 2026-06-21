@@ -58,7 +58,8 @@ for required in [
     "archive-time-letter-draft-state",
     "草稿未封存",
     "archive-time-letter-sealed-state",
-    "投递策略待产品决策",
+    "已封存，不可删除或修改",
+    "本地通知 + 应用内提醒",
     "archive-time-letter-empty-body",
 ] {
     assertContains(detail, required, "time-letter detail should expose \(required)")
@@ -122,6 +123,7 @@ for required in [
     "archive-hidden-time-letter-sealed-detail.png",
     "\"timeLetterDraftActionsVisible\"",
     "\"timeLetterSealedStateVisible\"",
+    "\"timeLetterReminderPolicyVisible\"",
     "\"releaseHiddenEntryPointsBlocked\"",
 ] {
     assertContains(hiddenShellRunner, required, "hidden shell runner should assert \(required)")

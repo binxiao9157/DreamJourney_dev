@@ -31,7 +31,7 @@ private enum FamilyPersonaOption {
         case .selfAssistant:
             return "当前回响对象"
         case .familyMember(let member):
-            return member.lastUpdated
+            return member.isAcceptedFamilyMember ? member.lastUpdated : member.familyInvitationDisplayName
         }
     }
 
@@ -61,7 +61,16 @@ private enum FamilyPersonaOption {
         case .selfAssistant:
             return true
         case .familyMember(let member):
-            return member.isOnline
+            return member.isAcceptedFamilyMember && member.isOnline
+        }
+    }
+
+    var isSelectable: Bool {
+        switch self {
+        case .selfAssistant:
+            return true
+        case .familyMember(let member):
+            return member.isAcceptedFamilyMember
         }
     }
 
@@ -129,7 +138,7 @@ final class FamilyCircleViewController: UIViewController {
 
     private let searchField: UITextField = {
         let f = UITextField()
-        f.placeholder = "搜索手机号添加家人..."
+        f.placeholder = "输入手机号邀请家人"
         f.font = .systemFont(ofSize: 15)
         f.textColor = UIColor(red: 0.15, green: 0.12, blue: 0.10, alpha: 1.0)
         f.returnKeyType = .search
@@ -138,7 +147,7 @@ final class FamilyCircleViewController: UIViewController {
         return f
     }()
 
-    /// 复制邀请邮票按钮
+    /// 手机号邀请按钮
     private lazy var inviteButton: UIButton = {
         let b = UIButton(type: .system)
         b.backgroundColor = .white
@@ -149,12 +158,12 @@ final class FamilyCircleViewController: UIViewController {
 
         // 图标 + 文字竖向排列（用 UIStackView 构建内容）
         let stampConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .regular)
-        let stampIcon = UIImageView(image: UIImage(systemName: "checkmark.seal", withConfiguration: stampConfig))
+        let stampIcon = UIImageView(image: UIImage(systemName: "paperplane", withConfiguration: stampConfig))
         stampIcon.tintColor = .warmAccent
         stampIcon.contentMode = .scaleAspectFit
 
         let label = UILabel()
-        label.text = "复制邀请邮票"
+        label.text = "发送手机号邀请"
         label.font = .systemFont(ofSize: 14, weight: .medium)
         label.textColor = .warmAccent
         label.textAlignment = .center
@@ -367,8 +376,7 @@ final class FamilyCircleViewController: UIViewController {
     }
 
     @objc private func copyInviteTapped() {
-        UIPasteboard.general.string = "邀请你加入寻梦环游家族圈，下载寻梦环游App后使用此邀请码：DJ-2025"
-        showToast("邀请邮票已复制到剪贴板", type: .success)
+        presentFamilyInviteSheet(prefilledPhone: searchField.text)
     }
 
     private func selectPersona(option: FamilyPersonaOption) {
@@ -382,6 +390,10 @@ final class FamilyCircleViewController: UIViewController {
             DigitalHumanContextStore.shared.current = DigitalHumanContext.defaultContext(userId: user.id)
             showToast("已切换到自己 AI 助手", type: .success)
         case .familyMember(let member):
+            guard member.isAcceptedFamilyMember else {
+                showToast(member.familyInvitationDisplayName, type: member.invitationStatus == "failed" ? .error : .info)
+                return
+            }
             DigitalHumanContextStore.shared.current = DigitalHumanContext(
                 viewerUserId: user.id,
                 ownerId: member.id,
@@ -458,6 +470,71 @@ extension FamilyCircleViewController: UITableViewDelegate {
             selectPersona(option: option)
         case .familyMember(let member):
             openMemberDetail(member: member)
+        }
+    }
+
+    private func presentFamilyInviteSheet(prefilledPhone: String?) {
+        let alert = UIAlertController(
+            title: "邀请家人",
+            message: "通过手机号发送邀请。家人加入后不可删除；退出或解除关系暂未开放。",
+            preferredStyle: .alert
+        )
+        alert.addTextField { textField in
+            textField.placeholder = "手机号"
+            textField.keyboardType = .phonePad
+            textField.text = prefilledPhone?.trimmingCharacters(in: .whitespacesAndNewlines)
+            textField.accessibilityIdentifier = "familyInvitePhoneField"
+        }
+        alert.addTextField { textField in
+            textField.placeholder = "称呼，例如 陈岚"
+            textField.accessibilityIdentifier = "familyInviteNameField"
+        }
+        alert.addTextField { textField in
+            textField.placeholder = "关系，例如 女儿"
+            textField.text = "家人"
+            textField.accessibilityIdentifier = "familyInviteRelationField"
+        }
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "发送邀请", style: .default) { [weak self, weak alert] _ in
+            guard let self else { return }
+            let phone = alert?.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let fields = alert?.textFields ?? []
+            let name = fields.indices.contains(1) ? fields[1].text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" : ""
+            let relation = fields.indices.contains(2) ? fields[2].text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" : ""
+            inviteFamilyMember(
+                phone: phone,
+                name: name.isEmpty ? "家人 \(phone.suffix(4))" : name,
+                relation: relation.isEmpty ? "家人" : relation
+            )
+        })
+        present(alert, animated: true)
+    }
+
+    private func inviteFamilyMember(phone: String, name: String, relation: String) {
+        let digits = phone.filter(\.isNumber)
+        guard digits.count >= 11 else {
+            showToast("请输入有效手机号", type: .error)
+            return
+        }
+        guard let userId = UserManager.shared.currentUser?.id else {
+            showToast("请先登录后再邀请家人", type: .info)
+            return
+        }
+        showToast("正在发送邀请", type: .info)
+        FamilyRepository.shared.inviteByPhone(
+            userId: userId,
+            phone: digits,
+            name: name,
+            relation: relation
+        ) { [weak self] result in
+            self?.searchField.text = nil
+            self?.updateMemberListUI()
+            switch result {
+            case .success:
+                self?.showToast("邀请已发送，等待家人加入", type: .success)
+            case .failure:
+                self?.showToast("邀请失败，可稍后重试", type: .error)
+            }
         }
     }
 }
@@ -693,8 +770,10 @@ final class FamilyMemberDetailViewController: UIViewController {
         updatedLabel.text = "最近更新: \(member.lastUpdated)"
         let isCurrent = DigitalHumanContextStore.shared.current.ownerId == member.id
             && !DigitalHumanContextStore.shared.current.isSelfAssistant
-        selectButton.configuration?.title = isCurrent ? "当前回响对象" : "设为当前回响对象"
-        selectButton.isEnabled = !isCurrent
+        selectButton.configuration?.title = member.isAcceptedFamilyMember
+            ? (isCurrent ? "当前回响对象" : "设为当前回响对象")
+            : member.familyInvitationDisplayName
+        selectButton.isEnabled = member.isAcceptedFamilyMember && !isCurrent
         selectButton.configuration?.baseBackgroundColor = isCurrent
             ? UIColor.warmAccent.withAlphaComponent(0.36)
             : .warmAccent
@@ -753,7 +832,7 @@ extension FamilyCircleViewController: UITextFieldDelegate {
         if phone.isEmpty {
             showToast("请输入手机号", type: .info)
         } else {
-            showToast("正在搜索 \(phone)…", type: .info)
+            presentFamilyInviteSheet(prefilledPhone: phone)
         }
         textField.resignFirstResponder()
         return true
@@ -976,14 +1055,16 @@ final class FriendMemberCell: UITableViewCell {
 
         if isCurrent {
             footprintButton.setTitle("当前", for: .normal)
+        } else if !option.isSelectable {
+            footprintButton.setTitle(option.lastUpdated, for: .normal)
         } else {
             footprintButton.setTitle(option.opensDetail ? "管理" : "切换", for: .normal)
         }
         footprintButton.backgroundColor = isCurrent
             ? UIColor.warmAccent.withAlphaComponent(0.14)
-            : .white
+            : (option.isSelectable ? .white : UIColor.warmAccent.withAlphaComponent(0.10))
         footprintButton.setTitleColor(
-            isCurrent ? .warmAccent : UIColor(red: 0.30, green: 0.25, blue: 0.20, alpha: 1.0),
+            isCurrent || !option.isSelectable ? .warmAccent : UIColor(red: 0.30, green: 0.25, blue: 0.20, alpha: 1.0),
             for: .normal
         )
 

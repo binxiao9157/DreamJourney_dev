@@ -1,4 +1,5 @@
 import Foundation
+import UserNotifications
 
 struct MemoryArchiveContextEntry {
     let id: String
@@ -110,6 +111,7 @@ final class MemoryArchiveRepository {
         var items = allItems()
         items.insert(itemForStorage, at: 0)
         save(items)
+        scheduleTimeLetterReminderIfNeeded(itemForStorage)
         if shouldSyncToBackend {
             syncToBackend(itemForStorage)
         }
@@ -130,6 +132,7 @@ final class MemoryArchiveRepository {
         }
         items[index] = itemForStorage
         save(items)
+        scheduleTimeLetterReminderIfNeeded(itemForStorage)
         if shouldSyncToBackend {
             syncToBackend(itemForStorage)
         }
@@ -186,6 +189,9 @@ final class MemoryArchiveRepository {
     @discardableResult
     func remove(id: String) -> Bool {
         var items = allItems()
+        if items.contains(where: { $0.id == id && $0.isSealedTimeLetter }) {
+            return false
+        }
         let originalCount = items.count
         items.removeAll { $0.id == id }
         guard items.count != originalCount else {
@@ -203,6 +209,18 @@ final class MemoryArchiveRepository {
             audio: items.filter { $0.kind == .audio }.count,
             text: items.filter { $0.kind == .text || $0.kind == .timeLetter }.count
         )
+    }
+
+    func dueTimeLetters(now: Date = Date()) -> [MemoryArchiveItem] {
+        allItems()
+            .filter { item in
+                guard item.isSealedTimeLetter,
+                      let openAt = item.timeLetterOpenAt else {
+                    return false
+                }
+                return openAt <= now
+            }
+            .sorted { ($0.timeLetterOpenAt ?? $0.createdAt) > ($1.timeLetterOpenAt ?? $1.createdAt) }
     }
 
     func contextSnapshot(limit: Int = 6) -> MemoryArchiveContextSnapshot {
@@ -308,6 +326,11 @@ final class MemoryArchiveRepository {
         }
     }
 
+    private func scheduleTimeLetterReminderIfNeeded(_ item: MemoryArchiveItem) {
+        guard item.isSealedTimeLetter else { return }
+        TimeLetterReminderScheduler.shared.scheduleIfNeeded(item)
+    }
+
     private func markBackendSyncState(
         _ itemId: String,
         state: ArchiveBackendSyncState,
@@ -409,6 +432,53 @@ private enum ArchiveRepositoryError: LocalizedError {
         switch self {
         case .backendNotConfigured:
             return "后端地址未配置"
+        }
+    }
+}
+
+final class TimeLetterReminderScheduler {
+    static let shared = TimeLetterReminderScheduler()
+
+    private let notificationCenter = UNUserNotificationCenter.current()
+
+    private init() {}
+
+    func scheduleIfNeeded(_ item: MemoryArchiveItem) {
+        guard item.isSealedTimeLetter,
+              let openAt = item.timeLetterOpenAt else {
+            return
+        }
+        let identifier = "time-letter-\(item.id)"
+        notificationCenter.requestAuthorization(options: [.alert, .badge, .sound]) { [weak self] granted, _ in
+            guard granted else { return }
+            self?.notificationCenter.removePendingNotificationRequests(withIdentifiers: [identifier])
+
+            let content = UNMutableNotificationContent()
+            content.title = "时间信件已到打开时间"
+            let recipientText = item.timeLetterRecipientNames.isEmpty
+                ? "你"
+                : item.timeLetterRecipientNames.joined(separator: "、")
+            content.body = "你封存给 \(recipientText) 的时间信件可以打开了。"
+            content.sound = .default
+            content.userInfo = [
+                "archiveItemId": item.id,
+                "kind": "timeLetter",
+                "deliveryStatus": item.timeLetterDeliveryStatus,
+            ]
+
+            let trigger: UNNotificationTrigger
+            if openAt <= Date() {
+                trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+            } else {
+                let dateComponents = Calendar.current.dateComponents(
+                    [.year, .month, .day, .hour, .minute, .second],
+                    from: openAt
+                )
+                trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
+            }
+
+            let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+            self?.notificationCenter.add(request)
         }
     }
 }

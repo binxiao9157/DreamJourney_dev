@@ -34,11 +34,7 @@ enum MemoryArchiveMediaReleaseReadiness {
                 reason: "等待真机麦克风、权限拒绝恢复和音频播放验收后再公开。"
             )
         case .timeLetter:
-            return .hiddenReady(
-                feature: .timeLetters,
-                qaLaunchArgument: hiddenBranchesLaunchArgument,
-                reason: "等待投递策略、提醒策略和家属可见性策略确认后再公开。"
-            )
+            return .publicRelease
         case .video:
             return .hiddenReady(
                 feature: .archiveVideoUpload,
@@ -84,7 +80,7 @@ enum MemoryArchiveMediaReleaseReadiness {
                 stage: stage(for: kind),
                 persistence: "local_user_defaults",
                 requiresMicrophonePermission: false,
-                releaseCopy: "时间信件录入将在后续开放"
+                releaseCopy: "时间信件录入已作为公开档案入口。"
             )
         case .video:
             return Capability(

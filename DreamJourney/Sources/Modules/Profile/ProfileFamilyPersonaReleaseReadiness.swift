@@ -22,23 +22,19 @@ enum ProfileFamilyPersonaReleaseReadiness {
     static let familyManagementCapability = Capability(
         title: "家人管理",
         feature: .familyManagement,
-        stage: .hiddenReady(
-            feature: .familyManagement,
-            qaLaunchArgument: hiddenBranchesLaunchArgument,
-            reason: "默认发布态不展示家人管理，避免误承诺邀请、权限、成员管理和家族空间能力。"
+        stage: .publicReady(
+            reason: "家人管理已按最新 PRD 公开基础能力：通过手机号邀请，展示邀请中、已加入、失败状态；成员不可删除，退出或解除关系暂未开放。"
         ),
-        releaseCopy: unavailableTitle
+        releaseCopy: "手机号邀请家人"
     )
 
     static let familySpaceCapability = Capability(
         title: "数字人切换",
         feature: .familySpace,
-        stage: .hiddenReady(
-            feature: .familySpace,
-            qaLaunchArgument: hiddenBranchesLaunchArgument,
-            reason: "人格切换已可用于内部 QA，但公开前仍需要家人授权、访问控制和真机验收。"
+        stage: .publicReady(
+            reason: "基础家人空间随家人管理公开；高级生命周期、解除关系和继承规则仍不开放。"
         ),
-        releaseCopy: unavailableTitle
+        releaseCopy: "家人空间"
     )
 
     static let passwordChangeCapability = Capability(

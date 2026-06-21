@@ -104,7 +104,7 @@ private enum ArchiveKindFilter {
         case .text:
             return "点按封存新记忆，写下一段文字描述。"
         case .timeLetter:
-            return "时间信件仍在确认投递和提醒策略。"
+            return "点按封存新记忆，选择时间信件，写给未来的自己或家人。"
         case .video:
             return "视频片段仍在确认压缩、缩略图和存储策略。"
         }
@@ -125,6 +125,7 @@ final class MemoryArchiveViewController: UIViewController {
     private let progressLabel = UILabel()
     private let remoteSyncCaptionLabel = PaddingLabel(horizontalInset: 12, verticalInset: 8)
     private let analysisPrivacyDisclaimerLabel = PaddingLabel(horizontalInset: 12, verticalInset: 8)
+    private let timeLetterReminderButton = UIButton(type: .system)
     private var isRefreshingFromBackend = false
     private var activeKindFilter: ArchiveKindFilter?
 
@@ -282,11 +283,13 @@ final class MemoryArchiveViewController: UIViewController {
         let header = makeHeader()
         configureAnalysisPrivacyDisclaimerLabel()
         configureRemoteSyncCaptionLabel()
+        configureTimeLetterReminderButton()
         configureArchiveFilterButton()
         mainStack.addArrangedSubview(header)
         mainStack.addArrangedSubview(featureCardsStack)
         mainStack.addArrangedSubview(analysisPrivacyDisclaimerLabel)
         mainStack.addArrangedSubview(remoteSyncCaptionLabel)
+        mainStack.addArrangedSubview(timeLetterReminderButton)
         mainStack.addArrangedSubview(makePrimaryCTA())
         mainStack.addArrangedSubview(makeTimelineHeader())
         mainStack.addArrangedSubview(archiveFilterButton)
@@ -294,7 +297,8 @@ final class MemoryArchiveViewController: UIViewController {
         mainStack.setCustomSpacing(ArchiveLayout.afterHeaderSpacing, after: header)
         mainStack.setCustomSpacing(ArchiveLayout.afterFeatureGridSpacing, after: featureCardsStack)
         mainStack.setCustomSpacing(ArchiveLayout.afterFeatureGridSpacing, after: analysisPrivacyDisclaimerLabel)
-        mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: remoteSyncCaptionLabel)
+        mainStack.setCustomSpacing(8, after: remoteSyncCaptionLabel)
+        mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: timeLetterReminderButton)
         mainStack.setCustomSpacing(8, after: archiveFilterButton)
         mainStack.setCustomSpacing(ArchiveLayout.afterListSpacing, after: listStack)
     }
@@ -327,6 +331,7 @@ final class MemoryArchiveViewController: UIViewController {
         progressLabel.text = "档案素材和每一次回响对话，都会补足称呼、关系、偏好与生活线索，让数字人格更接近真实的表达方式。"
 
         reloadFeatureCards(summary: summary)
+        updateTimeLetterReminderButton()
         updateArchiveFilterButton()
         reloadArchiveList()
     }
@@ -382,6 +387,18 @@ final class MemoryArchiveViewController: UIViewController {
         remoteSyncCaptionLabel.isHidden = true
     }
 
+    private func configureTimeLetterReminderButton() {
+        timeLetterReminderButton.titleLabel?.font = DJDesignTokens.Font.label(12)
+        timeLetterReminderButton.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
+        timeLetterReminderButton.backgroundColor = DJDesignTokens.Color.accent.withAlphaComponent(0.16)
+        timeLetterReminderButton.layer.cornerRadius = 14
+        timeLetterReminderButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
+        timeLetterReminderButton.contentHorizontalAlignment = .leading
+        timeLetterReminderButton.accessibilityIdentifier = "archive-time-letter-in-app-reminder"
+        timeLetterReminderButton.isHidden = true
+        timeLetterReminderButton.addTarget(self, action: #selector(timeLetterReminderTapped), for: .touchUpInside)
+    }
+
     private func configureArchiveFilterButton() {
         archiveFilterButton.titleLabel?.font = DJDesignTokens.Font.label(12)
         archiveFilterButton.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
@@ -424,6 +441,21 @@ final class MemoryArchiveViewController: UIViewController {
             remoteSyncCaptionLabel.isHidden = false
         }
         remoteSyncCaptionLabel.accessibilityLabel = remoteSyncCaptionLabel.text
+    }
+
+    private func updateTimeLetterReminderButton() {
+        let dueLetters = repository.dueTimeLetters()
+        guard !dueLetters.isEmpty else {
+            timeLetterReminderButton.setTitle(nil, for: .normal)
+            timeLetterReminderButton.accessibilityLabel = nil
+            timeLetterReminderButton.isHidden = true
+            return
+        }
+
+        let title = "\(dueLetters.count) 封时间信件已到打开时间 · 查看"
+        timeLetterReminderButton.setTitle(title, for: .normal)
+        timeLetterReminderButton.accessibilityLabel = title
+        timeLetterReminderButton.isHidden = false
     }
 
     private func reloadFeatureCards(summary: (total: Int, photos: Int, audio: Int, text: Int)) {
@@ -1308,7 +1340,35 @@ final class MemoryArchiveViewController: UIViewController {
                     iconView.heightAnchor.constraint(equalToConstant: 25),
                 ])
             }
-        case .text, .timeLetter:
+        case .timeLetter:
+            if let imagePath = item.resolvedLocalFilePath,
+               let image = UIImage(contentsOfFile: imagePath) {
+                let imageView = UIImageView(image: image)
+                imageView.contentMode = .scaleAspectFill
+                imageView.clipsToBounds = true
+                imageView.accessibilityIdentifier = "archive-time-letter-timeline-image"
+                container.addSubview(imageView)
+                imageView.translatesAutoresizingMaskIntoConstraints = false
+                NSLayoutConstraint.activate([
+                    imageView.topAnchor.constraint(equalTo: container.topAnchor),
+                    imageView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                    imageView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+                    imageView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+                ])
+            } else {
+                let iconView = UIImageView(image: UIImage(systemName: presentation.previewIconName))
+                iconView.tintColor = DJDesignTokens.Color.accentDeep
+                iconView.contentMode = .scaleAspectFit
+                container.addSubview(iconView)
+                iconView.translatesAutoresizingMaskIntoConstraints = false
+                NSLayoutConstraint.activate([
+                    iconView.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+                    iconView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+                    iconView.widthAnchor.constraint(equalToConstant: 25),
+                    iconView.heightAnchor.constraint(equalToConstant: 25),
+                ])
+            }
+        case .text:
             let iconView = UIImageView(image: UIImage(systemName: presentation.previewIconName))
             iconView.tintColor = DJDesignTokens.Color.accentDeep
             iconView.contentMode = .scaleAspectFit
@@ -1741,6 +1801,10 @@ final class MemoryArchiveViewController: UIViewController {
         refreshContent()
     }
 
+    @objc private func timeLetterReminderTapped() {
+        applyArchiveKindFilter(.timeLetter)
+    }
+
     private func applyArchiveKindFilter(_ filter: ArchiveKindFilter) {
         activeKindFilter = filter
         refreshContent()
@@ -1770,22 +1834,38 @@ final class MemoryArchiveViewController: UIViewController {
     private func presentTextEntry(kind: MemoryArchiveItemKind) {
         let isTimeLetter = kind == .timeLetter
         let entryViewController = MemoryArchiveTextEntryViewController(kind: kind)
-        entryViewController.onSave = { [weak self] rawText in
-            guard let self else { return }
-            let item = isTimeLetter
-                ? MemoryArchiveItemFactory.makeTimeLetter(note: rawText)
-                : MemoryArchiveItemFactory.makeTextItem(note: rawText)
-            self.repository.add(item)
-            self.refreshContent()
-            self.showToast("已封存", type: .success)
-        }
         if isTimeLetter {
-            entryViewController.onSaveDraft = { [weak self] rawText in
+            entryViewController.onSaveTimeLetter = { [weak self] payload in
                 guard let self else { return }
-                let item = MemoryArchiveItemFactory.makeTimeLetterDraft(note: rawText)
+                let item = MemoryArchiveItemFactory.makeTimeLetter(
+                    note: payload.note,
+                    openAt: payload.openAt,
+                    recipients: payload.recipients,
+                    imageLocalPath: payload.imageLocalPath
+                )
                 self.repository.add(item)
                 self.refreshContent()
-                self.showToast("草稿已保存", type: .success)
+                self.showToast("时间信件已封存", type: .success)
+            }
+            entryViewController.onSaveDraftTimeLetter = { [weak self] payload in
+                guard let self else { return }
+                let item = MemoryArchiveItemFactory.makeTimeLetterDraft(
+                    note: payload.note,
+                    openAt: payload.openAt,
+                    recipients: payload.recipients,
+                    imageLocalPath: payload.imageLocalPath
+                )
+                self.repository.add(item)
+                self.refreshContent()
+                self.showToast("时间信件草稿已保存", type: .success)
+            }
+        } else {
+            entryViewController.onSave = { [weak self] rawText in
+                guard let self else { return }
+                let item = MemoryArchiveItemFactory.makeTextItem(note: rawText)
+                self.repository.add(item)
+                self.refreshContent()
+                self.showToast("已封存", type: .success)
             }
         }
         present(entryViewController, animated: true)

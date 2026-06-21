@@ -65,13 +65,20 @@ extension MemoryArchiveAnalysisStatus {
 }
 
 extension MemoryArchiveItem {
+    private static let archiveTimeLetterDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyy年M月d日 HH:mm"
+        return formatter
+    }()
+
     var archivePresentation: MemoryArchiveItemPresentation {
         let previewTitle = archiveDetailFeatureTitle
         return MemoryArchiveItemPresentation(
             title: title,
             note: note,
             kindLabel: kind.archiveDisplayName,
-            statusLabel: analysisStatus.archiveDisplayName,
+            statusLabel: archiveHeaderStatusLabel,
             previewTitle: previewTitle,
             previewSubtitle: archiveDetailFeatureSubtitle,
             previewIconName: archiveDetailFeatureIconName,
@@ -105,7 +112,16 @@ extension MemoryArchiveItem {
         case .text:
             return archiveListMetadataSummary ?? "手动录入的生活细节"
         case .timeLetter:
-            return "已封存，未来回看时作为情感线索"
+            if isTimeLetterDraft {
+                return "草稿可继续调整，封存后不可修改"
+            }
+            if isTimeLetterDue {
+                return "已到打开时间，可以回看这封信"
+            }
+            if let openAt = metadataTimeLetterOpenAtDisplayName {
+                return "等待 \(openAt) 打开"
+            }
+            return "已封存，等待未来打开"
         case .video:
             return archiveListMetadataSummary ?? "封存动态影像线索"
         }
@@ -166,8 +182,9 @@ extension MemoryArchiveItem {
             ])
         case .timeLetter:
             return joinedMetadataParts([
-                metadataCharacterCountDisplayName,
-                metadataSourceDisplayName,
+                metadataTimeLetterOpenAtDisplayName,
+                metadataTimeLetterRecipientsDisplayName,
+                metadataTimeLetterDeliveryStatusDisplayName,
             ])
         case .video:
             return joinedMetadataParts([
@@ -183,6 +200,24 @@ extension MemoryArchiveItem {
     }
 
     var archiveDetailMetadataRows: [(title: String, value: String)] {
+        if kind == .timeLetter {
+            var rows: [(String, String)] = []
+            switch metadata["deliveryState"] {
+            case "draft":
+                rows.append(("信件状态", "草稿"))
+            case "sealed":
+                rows.append(("信件状态", "已封存"))
+            default:
+                rows.append(("信件状态", "已保存"))
+            }
+            if let openAt = metadataTimeLetterOpenAtDisplayName {
+                rows.append(("打开时间", openAt))
+            }
+            rows.append(("收件人", metadataTimeLetterRecipientsDisplayName ?? "我"))
+            rows.append(("提醒", metadataTimeLetterDeliveryStatusDisplayName ?? "草稿"))
+            return rows
+        }
+
         var rows: [(String, String)] = [
             ("素材类型", kind.archiveDisplayName),
             ("采集来源", metadataSourceDisplayName ?? "手动录入"),
@@ -217,23 +252,7 @@ extension MemoryArchiveItem {
                 rows.append(("云端状态", archiveBackendSyncDisplayName))
             }
         case .timeLetter:
-            rows.append(("字数", metadataCharacterCountDisplayName ?? "\(note.count) 字"))
-            switch metadata["deliveryState"] {
-            case "draft":
-                rows.append(("信件状态", "草稿"))
-            case "sealed":
-                rows.append(("信件状态", "已封存"))
-            default:
-                rows.append(("信件状态", "已保存"))
-            }
-            if metadata["deliveryPolicy"] == "pending_product_decision" {
-                rows.append(("投递策略", "产品决策后开放"))
-            }
-            if isTimeLetterDeliveryDisabledUntilProductDecision {
-                rows.append(("投递状态", "暂不投递"))
-                rows.append(("决策状态", "等待产品决策"))
-                rows.append(("通知状态", "未调度通知"))
-            }
+            break
         case .video:
             rows.append(("文件状态", hasResolvedLocalFile ? "本地已保存" : "未保存本地文件"))
             rows.append(("文件大小", metadataFileSizeDisplayName ?? "未知"))
@@ -314,6 +333,50 @@ extension MemoryArchiveItem {
     private var metadataCharacterCountDisplayName: String? {
         guard let characterCount = metadata["characterCount"], !characterCount.isEmpty else { return nil }
         return "\(characterCount) 字"
+    }
+
+    private var archiveHeaderStatusLabel: String {
+        guard kind == .timeLetter else {
+            return analysisStatus.archiveDisplayName
+        }
+        if isTimeLetterDraft {
+            return "草稿"
+        }
+        if isTimeLetterDue {
+            return "可打开"
+        }
+        return "已封存"
+    }
+
+    private var metadataTimeLetterOpenAtDisplayName: String? {
+        guard let openAt = timeLetterOpenAt else { return nil }
+        return Self.archiveTimeLetterDateFormatter.string(from: openAt)
+    }
+
+    private var metadataTimeLetterRecipientsDisplayName: String? {
+        let names = timeLetterRecipientNames
+        guard !names.isEmpty else { return nil }
+        return names.joined(separator: "、")
+    }
+
+    private var metadataTimeLetterDeliveryStatusDisplayName: String? {
+        guard kind == .timeLetter else { return nil }
+        if isTimeLetterDraft {
+            return "草稿未封存"
+        }
+        if isTimeLetterDue {
+            return "已到打开时间"
+        }
+        switch timeLetterDeliveryStatus {
+        case "scheduled":
+            return "已调度提醒"
+        case "ready":
+            return "已到打开时间"
+        case "delivered":
+            return "已提醒"
+        default:
+            return "已封存"
+        }
     }
 
     private var metadataDurationText: String? {

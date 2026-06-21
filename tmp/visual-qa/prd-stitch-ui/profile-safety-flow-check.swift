@@ -57,18 +57,25 @@ let flags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let profile = read("DreamJourney/Sources/Modules/Profile/ProfileViewController.swift")
 let careModels = read("DreamJourney/Sources/Modules/Profile/ProfileCareModels.swift")
 let releaseMatrix = read("docs/superpowers/status/2026-06-17-release-feature-matrix.md")
+let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 
 let expectedDefaults: Set<String> = [
     "careDashboard",
+    "familyManagement",
+    "familySpace",
     "profileSettings",
     "legalCenter",
+    "personaSettings",
+    "timeLetters",
+    "voiceCloneShell",
+    "accountDeletion",
 ]
 let defaults = extractDefaultEnabledFeatures(from: flags)
 guard defaults == expectedDefaults else {
     fatalError("Default release flags changed. Expected \(expectedDefaults.sorted()), got \(defaults.sorted())")
 }
 
-for hidden in ["accountDeletion", "careDoctorContact", "familyManagement", "familySpace"] {
+for hidden in ["careDoctorContact", "accountPasswordChange"] {
     guard !defaults.contains(hidden) else {
         fatalError("\(hidden) must stay hidden by default")
     }
@@ -84,15 +91,20 @@ assertContains(profile, "guard shouldShowCareDashboard(context: personaContext)"
 assertContains(profile, "showAccountDeletionConfirmation()", "account deletion action should use confirmation shell")
 assertContains(profile, "private func showAccountDeletionConfirmation()", "account deletion confirmation should have a dedicated function")
 let deletionBody = functionBody(named: "showAccountDeletionConfirmation()", in: profile)
-assertContains(deletionBody, "注销账户确认", "account deletion shell should have explicit title")
-assertContains(deletionBody, "不会执行删除", "account deletion shell should state no deletion happens")
-assertContains(deletionBody, "完整确认与合规流程", "account deletion shell should mention compliance flow")
+assertContains(deletionBody, "注销账户", "account deletion shell should have explicit title")
+assertContains(deletionBody, "不支持数据导出", "account deletion shell should state no data export")
+assertContains(deletionBody, "保留 30 天", "account deletion shell should state 30-day retention")
+assertContains(deletionBody, "恢复机会只有 1 次", "account deletion shell should state one restore chance")
 assertContains(deletionBody, "UIAlertAction(title: \"取消\", style: .cancel)", "account deletion shell should allow cancel")
-assertContains(deletionBody, "UIAlertAction(title: \"提交注销申请（未开放）\", style: .destructive)", "account deletion shell should use destructive disabled action")
-assertContains(deletionBody, "deleteAction.isEnabled = false", "account deletion destructive action should stay disabled")
-assertNotContains(deletionBody, "UserManager.shared.logout()", "account deletion shell must not log out as deletion")
+assertContains(deletionBody, "UIAlertAction(title: \"我已了解，继续\", style: .destructive)", "account deletion first confirmation should be destructive")
+assertContains(profile, "private func showFinalAccountDeletionConfirmation(user:", "account deletion should require a second confirmation")
+assertContains(profile, "UIAlertAction(title: \"确认注销账户\", style: .destructive)", "account deletion second confirmation should be destructive")
+assertContains(profile, "private func submitAccountDeletion(user:", "account deletion should submit through explicit backend function")
+assertContains(backendClient, "softDeleteAccount(", "account deletion should call backend soft-delete contract")
+assertContains(backendClient, "\"firstConfirmation\": true", "account deletion backend payload should include first confirmation")
+assertContains(backendClient, "\"secondConfirmation\": true", "account deletion backend payload should include second confirmation")
+assertContains(profile, "UserManager.shared.logout()", "account deletion should log out after backend soft delete succeeds")
 assertNotContains(deletionBody, "UserDefaults.standard.remove", "account deletion shell must not delete local data")
-assertNotContains(deletionBody, "DreamJourneyBackendClient", "account deletion shell must not call backend deletion")
 
 assertContains(profile, "showDoctorContactSafetyNotice()", "doctor contact should use safety notice")
 assertContains(profile, "private func showDoctorContactSafetyNotice()", "doctor contact safety notice should have a dedicated function")

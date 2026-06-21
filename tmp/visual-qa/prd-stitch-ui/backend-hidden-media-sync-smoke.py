@@ -229,24 +229,42 @@ def main() -> Dict[str, Any]:
         "digitalHumanId": USER_ID,
         "privacyMetadata": {"scope": "generationAllowed"},
     }
+    open_at = now
     letter_payload = {
         "userId": USER_ID,
         "ownerUserId": USER_ID,
         "id": letter_id,
         "kind": "timeLetter",
         "title": "时间信件",
-        "note": "这是一封已封存但不投递的时间信件。",
+        "note": "这是一封已封存并等待提醒的时间信件。",
         "createdAt": now,
         "updatedAt": now,
         "analysisStatus": "manual",
         "deliveryState": "sealed",
-        "deliveryPolicy": "pending_product_decision",
+        "deliveryPolicy": "scheduled_local_and_in_app",
+        "openAt": open_at,
+        "recipients": [
+            {"id": "self", "name": "我", "type": "self"},
+            {"id": "family_001", "name": "家人", "type": "family"},
+        ],
+        "sealedAt": now,
+        "deliveryStatus": "scheduled",
+        "deliveryNotificationScheduled": True,
         "metadata": {
             "contentKind": "time_letter",
             "deliveryState": "sealed",
             "timeLetterStatus": "sealed",
-            "deliveryPolicy": "pending_product_decision",
-            "deliveryDecisionRequired": "true",
+            "deliveryPolicy": "scheduled_local_and_in_app",
+            "openAt": open_at,
+            "recipientIds": "self|family_001",
+            "recipientNames": "我、家人",
+            "sealedAt": now,
+            "deliveryStatus": "scheduled",
+            "deliveryExecutionState": "scheduled",
+            "deliveryDecisionState": "confirmed",
+            "deliveryScheduleState": "scheduled",
+            "deliveryProviderState": "local_notification_and_in_app",
+            "deliveryNotificationScheduled": "true",
             "localPath": "/private/var/mobile/time-letter.txt",
         },
         "personaScope": "personal",
@@ -280,8 +298,11 @@ def main() -> Dict[str, Any]:
     for item in [created_letter, listed_letter]:
         assert_equal(item.get("kind"), "timeLetter", "timeLetter kind")
         assert_equal(item.get("deliveryState"), "sealed", "timeLetter delivery state")
-        assert_equal(item.get("deliveryPolicy"), "pending_product_decision", "timeLetter delivery policy")
-        assert_equal((item.get("metadata") or {}).get("deliveryDecisionRequired"), "true", "timeLetter delivery decision flag")
+        assert_equal(item.get("deliveryPolicy"), "scheduled_local_and_in_app", "timeLetter delivery policy")
+        assert_equal(item.get("openAt"), open_at, "timeLetter openAt")
+        assert_equal(item.get("deliveryStatus"), "scheduled", "timeLetter delivery status")
+        assert_equal(item.get("deliveryNotificationScheduled"), True, "timeLetter notification scheduled")
+        assert_equal((item.get("metadata") or {}).get("deliveryProviderState"), "local_notification_and_in_app", "timeLetter provider state")
         assert_backend_media_privacy(item, ["localPath"])
 
     return {

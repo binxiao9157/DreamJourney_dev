@@ -170,7 +170,9 @@ Status: passed
 - Video uploadStatus: `{video_metadata.get("uploadStatus")}`
 - Video thumbnailObjectKey present: `{bool(video.get("thumbnailObjectKey"))}`
 - Time-letter deliveryState: `{letter.get("deliveryState")}`
-- Time-letter deliveryDecisionRequired: `{letter_metadata.get("deliveryDecisionRequired")}`
+- Time-letter deliveryPolicy: `{letter.get("deliveryPolicy")}`
+- Time-letter deliveryStatus: `{letter.get("deliveryStatus")}`
+- Time-letter provider state: `{letter_metadata.get("deliveryProviderState")}`
 
 """
 with open(report_path, "w", encoding="utf-8") as handle:

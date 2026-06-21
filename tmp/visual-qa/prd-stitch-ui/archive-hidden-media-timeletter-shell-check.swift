@@ -33,33 +33,39 @@ let readiness = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveMediaRel
 let releaseRegression = read("tmp/visual-qa/prd-stitch-ui/run-release-regression.sh")
 let releaseQA = read("tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift")
 let mediaReadinessGuard = read("tmp/visual-qa/prd-stitch-ui/archive-media-release-readiness-check.swift")
-let statusDoc = read("docs/superpowers/status/2026-06-19-archive-hidden-media-timeletter-shell.md")
+let hiddenStatusDoc = read("docs/superpowers/status/2026-06-19-archive-hidden-media-timeletter-shell.md")
+let timeLetterStatusDoc = read("docs/superpowers/status/2026-06-21-time-letter-public-delivery.md")
 let backendTests = read("tests/test_core_services.py", in: backendRoot)
 
 for required in [
-    "static func makeTimeLetterDraft(note: String)",
-    "deliveryState: \"draft\", timeLetterStatus: \"draft\"",
-    "\"deliveryPolicy\": \"pending_product_decision\"",
-    "deliveryState: \"sealed\", timeLetterStatus: \"sealed\"",
-    "\"deliveryDecisionRequired\": \"true\"",
+    "static func makeTimeLetterDraft(",
+    "static func makeTimeLetter(",
+    "openAt: Date",
+    "recipients: [TimeLetterRecipientSelection]",
+    "imageLocalPath: String?",
+    "scheduled_local_and_in_app",
 ] {
-    assertContains(factory, required, "time-letter factory should expose draft/sealed shell contract \(required)")
+    assertContains(factory, required, "time-letter factory should expose public draft/sealed contract \(required)")
 }
 
 for required in [
-    "var onSaveDraft: ((String) -> Void)?",
+    "var onSaveDraftTimeLetter",
+    "var onSaveTimeLetter",
+    "TimeLetterEntryPayload",
+    "UIDatePicker",
+    "UIImagePickerController",
     "保存草稿",
     "封存时间信件",
-    "不会触发真实通知或投递",
     "time-letter-draft-button",
 ] {
-    assertContains(textEntry, required, "time-letter entry should expose local draft/seal UI \(required)")
+    assertContains(textEntry, required, "time-letter entry should expose public draft/seal UI \(required)")
 }
 
 for required in [
-    "entryViewController.onSaveDraft",
+    "entryViewController.onSaveDraftTimeLetter",
+    "entryViewController.onSaveTimeLetter",
     "MemoryArchiveItemFactory.makeTimeLetterDraft",
-    "MemoryArchiveItemFactory.makeTimeLetter(note:",
+    "MemoryArchiveItemFactory.makeTimeLetter(",
     "entryViewController.onCreateMockVideoArchive",
     "makeHiddenQAMockVideoArchiveItem",
     "MemoryArchiveItemFactory.makeVideoItem",
@@ -89,12 +95,13 @@ for required in [
 
 for required in [
     "信件状态",
-    "投递策略",
-    "产品决策后开放",
+    "打开时间",
+    "收件人",
+    "提醒",
     "草稿",
     "已封存",
 ] {
-    assertContains(display, required, "archive detail should display time-letter shell metadata \(required)")
+    assertContains(display, required, "archive detail should display time-letter public metadata \(required)")
 }
 
 assertContains(readiness, "persistence: \"local_mock_file\"", "video readiness should document mock-file persistence")
@@ -127,19 +134,19 @@ assertContains(
     "release QA package should include hidden shell guard"
 )
 assertContains(
-    statusDoc,
+    hiddenStatusDoc,
     "语音档案非真机部分",
     "status doc should document hidden audio shell scope"
 )
 assertContains(
-    statusDoc,
+    hiddenStatusDoc,
     "视频档案非真机部分",
     "status doc should document hidden video shell scope"
 )
 assertContains(
-    statusDoc,
-    "时间信件壳层",
-    "status doc should document hidden time-letter shell scope"
+    timeLetterStatusDoc,
+    "时间信件公开投递闭环",
+    "status doc should document public time-letter scope"
 )
 assertContains(
     backendTests,
@@ -148,8 +155,8 @@ assertContains(
 )
 assertContains(
     backendTests,
-    "pending_product_decision",
-    "backend time-letter shell contract should stay non-delivery until product decision"
+    "sealed timeLetter cannot be deleted",
+    "backend time-letter shell contract should reject sealed deletion"
 )
 
 print("Archive hidden media/time-letter shell checks passed")

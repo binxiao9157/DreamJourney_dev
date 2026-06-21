@@ -19,29 +19,57 @@ enum MemoryArchiveItemFactory {
         )
     }
 
-    static func makeTimeLetterDraft(note: String) -> MemoryArchiveItem {
+    static func makeTimeLetterDraft(
+        note: String,
+        openAt: Date = defaultTimeLetterOpenAt,
+        recipients: [TimeLetterRecipientSelection] = [TimeLetterRecipientSelection(id: "self", name: "我")],
+        imageLocalPath: String? = nil
+    ) -> MemoryArchiveItem {
         MemoryArchiveItem(
             kind: .timeLetter,
             title: "时间信件草稿",
             note: note,
+            localPath: imageLocalPath,
             ownerUserId: currentUploaderUserId,
             analysisStatus: .manual,
-            analysisSummary: "这封信暂存为草稿，不会触发真实通知或投递。",
+            analysisSummary: "这封信暂存为草稿，可继续编辑打开时间、收件人和图片附件。",
             tags: ["时间信件", "草稿"],
-            metadata: timeLetterMetadata(note: note, deliveryState: "draft", timeLetterStatus: "draft")
+            metadata: timeLetterMetadata(
+                note: note,
+                deliveryState: "draft",
+                timeLetterStatus: "draft",
+                openAt: openAt,
+                recipients: recipients,
+                imageLocalPath: imageLocalPath,
+                sealedAt: nil
+            )
         )
     }
 
-    static func makeTimeLetter(note: String) -> MemoryArchiveItem {
+    static func makeTimeLetter(
+        note: String,
+        openAt: Date = defaultTimeLetterOpenAt,
+        recipients: [TimeLetterRecipientSelection] = [TimeLetterRecipientSelection(id: "self", name: "我")],
+        imageLocalPath: String? = nil
+    ) -> MemoryArchiveItem {
         MemoryArchiveItem(
             kind: .timeLetter,
             title: "时间信件",
             note: note,
+            localPath: imageLocalPath,
             ownerUserId: currentUploaderUserId,
             analysisStatus: .manual,
-            analysisSummary: "这封信会作为未来回看与生成回响时的情感线索。",
+            analysisSummary: "这封信已封存，到达打开时间后会提醒本人和收件人查看。",
             tags: ["时间信件"],
-            metadata: timeLetterMetadata(note: note, deliveryState: "sealed", timeLetterStatus: "sealed")
+            metadata: timeLetterMetadata(
+                note: note,
+                deliveryState: "sealed",
+                timeLetterStatus: "sealed",
+                openAt: openAt,
+                recipients: recipients,
+                imageLocalPath: imageLocalPath,
+                sealedAt: Date()
+            )
         )
     }
 
@@ -160,6 +188,10 @@ enum MemoryArchiveItemFactory {
         UserManager.shared.currentUser?.id ?? MemoryArchiveItem.legacyOwnerUserId
     }
 
+    private static var defaultTimeLetterOpenAt: Date {
+        Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+    }
+
     private static func textMetadata(contentKind: String, note: String) -> [String: String] {
         [
             "source": "manual_text",
@@ -172,19 +204,35 @@ enum MemoryArchiveItemFactory {
     private static func timeLetterMetadata(
         note: String,
         deliveryState: String,
-        timeLetterStatus: String
+        timeLetterStatus: String,
+        openAt: Date,
+        recipients: [TimeLetterRecipientSelection],
+        imageLocalPath: String?,
+        sealedAt: Date?
     ) -> [String: String] {
-        textMetadata(contentKind: "time_letter", note: note).merging([
+        let isSealed = deliveryState == "sealed"
+        var metadata = textMetadata(contentKind: "time_letter", note: note).merging([
             "deliveryState": deliveryState,
             "timeLetterStatus": timeLetterStatus,
-            "deliveryPolicy": "pending_product_decision",
-            "deliveryDecisionRequired": "true",
-            "deliveryExecutionState": "not_delivering",
-            "deliveryDecisionState": "waiting_product_decision",
-            "deliveryScheduleState": "not_scheduled",
-            "deliveryProviderState": "disabled_until_product_decision",
-            "deliveryNotificationScheduled": "false",
+            "deliveryPolicy": isSealed ? "scheduled_local_and_in_app" : "draft",
+            "deliveryExecutionState": isSealed ? (openAt <= Date() ? "ready" : "scheduled") : "draft",
+            "deliveryDecisionState": isSealed ? "confirmed" : "draft",
+            "deliveryScheduleState": isSealed ? "scheduled" : "not_scheduled",
+            "deliveryProviderState": isSealed ? "local_notification_and_in_app" : "not_scheduled",
+            "deliveryNotificationScheduled": isSealed ? "true" : "false",
+            MemoryArchiveItem.timeLetterOpenAtMetadataKey: ISO8601DateFormatter().string(from: openAt),
+            MemoryArchiveItem.timeLetterRecipientIdsMetadataKey: recipients.map(\.id).joined(separator: "|"),
+            MemoryArchiveItem.timeLetterRecipientNamesMetadataKey: recipients.map(\.name).joined(separator: "、"),
+            MemoryArchiveItem.timeLetterDeliveryStatusMetadataKey: isSealed ? (openAt <= Date() ? "ready" : "scheduled") : "draft",
+            MemoryArchiveItem.timeLetterImageAttachmentCountMetadataKey: imageLocalPath?.isEmpty == false ? "1" : "0",
         ]) { current, _ in current }
+        if let sealedAt {
+            metadata[MemoryArchiveItem.timeLetterSealedAtMetadataKey] = ISO8601DateFormatter().string(from: sealedAt)
+        }
+        if let imageLocalPath, !imageLocalPath.isEmpty {
+            metadata[MemoryArchiveItem.timeLetterImageLocalPathMetadataKey] = imageLocalPath
+        }
+        return metadata
     }
 
     private static func fileExtension(from localPath: String) -> String {

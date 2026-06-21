@@ -37,11 +37,7 @@ final class FamilyRepository {
     }
 
     func remove(id: String) {
-        let originalCount = members.count
-        members.removeAll { $0.id == id }
-        if members.count != originalCount {
-            notifyMembersChanged()
-        }
+        // PRD: 家庭成员通过手机号邀请后不可删除；退出/解除关系未明确，暂不实现。
     }
 
     func get(by id: String) -> FamilyMember? {
@@ -64,6 +60,41 @@ final class FamilyRepository {
                 completion?(.success(remoteMembers))
             case .failure(let error):
                 completion?(.failure(error))
+            }
+        }
+    }
+
+    func inviteByPhone(
+        userId: String,
+        phone: String,
+        name: String,
+        relation: String,
+        completion: @escaping (Result<FamilyMember, Error>) -> Void
+    ) {
+        DreamJourneyBackendClient.shared.inviteFamilyMember(
+            userId: userId,
+            name: name,
+            relation: relation,
+            phone: phone
+        ) { [weak self] result in
+            switch result {
+            case .success(let member):
+                self?.upsert(member)
+                completion(.success(member))
+            case .failure(let error):
+                let failedMember = FamilyMember(
+                    id: "family_invite_failed_\(UUID().uuidString)",
+                    name: name,
+                    relation: relation,
+                    phone: phone,
+                    isOnline: false,
+                    lastUpdated: "邀请失败",
+                    accessStatus: "failed",
+                    invitationStatus: "failed",
+                    invitationError: error.localizedDescription
+                )
+                self?.upsert(failedMember)
+                completion(.failure(error))
             }
         }
     }
@@ -188,6 +219,19 @@ final class FamilyRepository {
         if didChangeMembers {
             notifyMembersChanged()
         }
+    }
+
+    private func upsert(_ member: FamilyMember) {
+        let updatedMember = applyModeOverride(to: member)
+        if let index = members.firstIndex(where: { $0.id == updatedMember.id }) {
+            members[index] = updatedMember
+        } else if let phone = updatedMember.phone,
+                  let index = members.firstIndex(where: { $0.phone == phone && !$0.isAcceptedFamilyMember }) {
+            members[index] = updatedMember
+        } else {
+            members.append(updatedMember)
+        }
+        notifyMembersChanged()
     }
 
     private func loadModeOverrides() {

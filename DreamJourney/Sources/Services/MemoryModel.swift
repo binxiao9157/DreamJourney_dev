@@ -138,9 +138,28 @@ struct FamilyMember: Codable, Identifiable {
     var familyPersonaContractVersion: Int
     var backendContractMode: String?
     var defaultReleaseVisible: Bool
+    var accessStatus: String
+    var invitationStatus: String
+    var invitationURL: String?
+    var invitationCode: String?
+    var invitationError: String?
 
     var digitalHumanModeLabel: String {
         digitalHumanMode.displayName
+    }
+
+    var isAcceptedFamilyMember: Bool {
+        accessStatus.lowercased() == "active" && invitationStatus.lowercased() == "accepted"
+    }
+
+    var familyInvitationDisplayName: String {
+        if isAcceptedFamilyMember {
+            return "已加入"
+        }
+        if invitationStatus.lowercased() == "failed" || accessStatus.lowercased() == "failed" {
+            return "邀请失败"
+        }
+        return "邀请中"
     }
 
     init(id: String = UUID().uuidString, name: String, relation: String,
@@ -149,7 +168,12 @@ struct FamilyMember: Codable, Identifiable {
          digitalHumanMode: DigitalHumanMode = .sunlight,
          familyPersonaContractVersion: Int = 1,
          backendContractMode: String? = nil,
-         defaultReleaseVisible: Bool = false) {
+         defaultReleaseVisible: Bool = false,
+         accessStatus: String = "active",
+         invitationStatus: String = "accepted",
+         invitationURL: String? = nil,
+         invitationCode: String? = nil,
+         invitationError: String? = nil) {
         self.id = id
         self.name = name
         self.relation = relation
@@ -164,6 +188,11 @@ struct FamilyMember: Codable, Identifiable {
         self.familyPersonaContractVersion = familyPersonaContractVersion
         self.backendContractMode = backendContractMode
         self.defaultReleaseVisible = defaultReleaseVisible
+        self.accessStatus = accessStatus
+        self.invitationStatus = invitationStatus
+        self.invitationURL = invitationURL
+        self.invitationCode = invitationCode
+        self.invitationError = invitationError
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -181,6 +210,11 @@ struct FamilyMember: Codable, Identifiable {
         case familyPersonaContractVersion
         case backendContractMode
         case defaultReleaseVisible
+        case accessStatus
+        case invitationStatus
+        case invitationURL
+        case invitationCode
+        case invitationError
     }
 
     init(from decoder: Decoder) throws {
@@ -199,13 +233,14 @@ struct FamilyMember: Codable, Identifiable {
         familyPersonaContractVersion = try container.decodeIfPresent(Int.self, forKey: .familyPersonaContractVersion) ?? 1
         backendContractMode = try container.decodeIfPresent(String.self, forKey: .backendContractMode)
         defaultReleaseVisible = try container.decodeIfPresent(Bool.self, forKey: .defaultReleaseVisible) ?? false
+        accessStatus = try container.decodeIfPresent(String.self, forKey: .accessStatus) ?? "active"
+        invitationStatus = try container.decodeIfPresent(String.self, forKey: .invitationStatus) ?? "accepted"
+        invitationURL = try container.decodeIfPresent(String.self, forKey: .invitationURL)
+        invitationCode = try container.decodeIfPresent(String.self, forKey: .invitationCode)
+        invitationError = try container.decodeIfPresent(String.self, forKey: .invitationError)
     }
 
     static func fromBackendJSON(_ object: [String: Any]) -> FamilyMember? {
-        if let accessStatus = stringValue(in: object, for: "accessStatus")?.lowercased(),
-           !["active", "accepted"].contains(accessStatus) {
-            return nil
-        }
         guard let id = stringValue(in: object, for: "id"),
               let name = stringValue(in: object, for: "name") else {
             return nil
@@ -226,7 +261,12 @@ struct FamilyMember: Codable, Identifiable {
             digitalHumanMode: digitalHumanMode(from: object) ?? .sunlight,
             familyPersonaContractVersion: intValue(in: object, for: "familyPersonaContractVersion") ?? 1,
             backendContractMode: stringValue(in: object, for: "backendContractMode"),
-            defaultReleaseVisible: boolValue(in: object, for: "defaultReleaseVisible") ?? false
+            defaultReleaseVisible: boolValue(in: object, for: "defaultReleaseVisible") ?? false,
+            accessStatus: stringValue(in: object, for: "accessStatus") ?? "pending",
+            invitationStatus: stringValue(in: object, for: "invitationStatus") ?? "pending",
+            invitationURL: stringValue(in: object, for: "invitationURL"),
+            invitationCode: stringValue(in: object, for: "invitationCode"),
+            invitationError: stringValue(in: object, for: "invitationError")
         )
     }
 

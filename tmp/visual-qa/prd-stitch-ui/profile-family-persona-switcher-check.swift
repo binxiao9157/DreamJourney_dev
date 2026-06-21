@@ -50,7 +50,12 @@ let model = read("DreamJourney/Sources/Services/MemoryModel.swift")
 let releaseMatrix = read("docs/superpowers/status/2026-06-17-release-feature-matrix.md")
 
 let defaults = extractDefaultEnabledFeatures(from: flags)
-for hidden in ["familyManagement", "familySpace", "accountDeletion", "careDoctorContact"] {
+for visible in ["familyManagement", "familySpace", "accountDeletion"] {
+    guard defaults.contains(visible) else {
+        fatalError("\(visible) should be public by default after latest PRD decision")
+    }
+}
+for hidden in ["careDoctorContact", "accountPasswordChange"] {
     guard !defaults.contains(hidden) else {
         fatalError("\(hidden) must stay hidden by default")
     }
@@ -62,8 +67,9 @@ assertContains(profile, "ProfileFamilyPersonaReleaseReadiness.isFamilyManagement
 assertContains(profile, "ProfileFamilyPersonaReleaseReadiness.canOpenFamilyPersonaSwitcher", "family route should use the release readiness route contract")
 assertContains(profile, "featureFlags.isEnabled(.familyManagement)", "family row should stay feature-gated")
 assertContains(profile, "featureFlags.isEnabled(.familySpace)", "family route should stay behind familySpace")
-assertContains(profile, "ProfileFamilyPersonaReleaseReadiness.unavailableTitle", "family route should retain safe unavailable title through the release readiness contract")
-assertContains(profileReadiness, "家人管理暂未开放", "family release readiness contract should retain safe unavailable copy")
+assertContains(profileReadiness, "stage: .publicReady", "family release readiness contract should mark the foundation public")
+assertContains(profileReadiness, "通过手机号邀请", "family release readiness contract should document phone invite rule")
+assertContains(profileReadiness, "成员不可删除", "family release readiness contract should document no-delete rule")
 assertContains(profile, ".djDigitalHumanContextDidChange", "profile should observe selected persona changes")
 assertContains(profile, "makePersonaTitle(context:", "profile should derive persona title from context")
 assertContains(profile, "makePersonaSubtitle(context:", "profile should derive persona subtitle from context")
@@ -85,7 +91,7 @@ assertNotContains(family, "mode: .star", "family persona must not force every fa
 assertContains(family, "isSelfAssistant: false", "family persona should not be marked as self assistant")
 assertContains(family, "selectPersona(option:", "family table selection should call persona selection")
 assertContains(family, "accessibilityIdentifier = \"familyPersonaOption", "family options should be inspectable in UIQA")
-assertContains(family, "contextMenuConfigurationForRowAt", "family options should expose hidden mode management through a context menu")
+assertContains(family, "openMemberDetail(member:", "family options should expose mode management through member detail")
 assertContains(family, "setMode(", "family options should update persisted mode without exposing a release entry")
 assertNotContains(family, "查看 \\(member.name) 的足迹", "old family row tap should not remain as the primary action")
 

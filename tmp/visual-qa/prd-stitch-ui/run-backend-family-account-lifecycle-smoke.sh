@@ -6,19 +6,19 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 WORKSPACE_ROOT="$(cd "$ROOT_DIR/.." && pwd)"
 BACKEND_ROOT="${BACKEND_ROOT:-$WORKSPACE_ROOT/DreamJourneyBackend}"
 
-RUN_ID="${RUN_ID:-$(date +%Y%m%d-%H%M%S)-backend-time-letter-lifecycle}"
+RUN_ID="${RUN_ID:-$(date +%Y%m%d-%H%M%S)-backend-family-account-lifecycle}"
 MARKER="${MARKER:-$RUN_ID}"
-USER_ID="${USER_ID:-time_letter_lifecycle_${RUN_ID//[^A-Za-z0-9]/_}}"
-OUTPUT_ROOT="${OUTPUT_ROOT:-$ROOT_DIR/tmp/visual-qa/prd-stitch-ui/backend-time-letter-lifecycle-smoke}"
+PHONE="${PHONE:-1398$(date +%H%M%S%N | cut -c1-7)}"
+OUTPUT_ROOT="${OUTPUT_ROOT:-$ROOT_DIR/tmp/visual-qa/prd-stitch-ui/backend-family-account-lifecycle-smoke}"
 OUTPUT_DIR="$OUTPUT_ROOT/$RUN_ID"
-RESULT_PATH="$OUTPUT_DIR/backend-time-letter-lifecycle-smoke-result.json"
-LOG_PATH="$OUTPUT_DIR/backend-time-letter-lifecycle-smoke.log"
+RESULT_PATH="$OUTPUT_DIR/backend-family-account-lifecycle-smoke-result.json"
+LOG_PATH="$OUTPUT_DIR/backend-family-account-lifecycle-smoke.log"
 REPORT_PATH="$OUTPUT_DIR/report.md"
 
 mkdir -p "$OUTPUT_DIR"
 
 log() {
-  echo "[BACKEND_TIME_LETTER_LIFECYCLE_SMOKE] $*"
+  echo "[BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE] $*"
 }
 
 fail() {
@@ -28,7 +28,7 @@ fail() {
     token_status="configured, value intentionally omitted"
   fi
   cat > "$REPORT_PATH" <<EOF
-# Backend Time Letter Lifecycle Smoke
+# Backend Family / Account Lifecycle Smoke
 
 Run ID: \`$RUN_ID\`
 
@@ -41,15 +41,15 @@ Reason: $reason
 - Backend root: \`$BACKEND_ROOT\`
 - Backend base URL: \`${BACKEND_BASE_URL:-not configured}\`
 - Backend API token: $token_status
-- User ID: \`$USER_ID\`
+- Phone: \`$PHONE\`
 
 ## Evidence
 
-- Result JSON: \`backend-time-letter-lifecycle-smoke-result.json\`
-- Log: \`backend-time-letter-lifecycle-smoke.log\`
+- Result JSON: \`backend-family-account-lifecycle-smoke-result.json\`
+- Log: \`backend-family-account-lifecycle-smoke.log\`
 
 EOF
-  echo "[BACKEND_TIME_LETTER_LIFECYCLE_SMOKE] $reason" >&2
+  echo "[BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE] $reason" >&2
   if [[ -s "$LOG_PATH" ]]; then
     tail -80 "$LOG_PATH" >&2 || true
   fi
@@ -108,73 +108,44 @@ BACKEND_API_TOKEN="${BACKEND_API_TOKEN:-$DOC_API_TOKEN}"
 [[ -n "$BACKEND_BASE_URL" ]] || fail "BACKEND_BASE_URL is required. Export it or provide deployed-backend-access.md."
 [[ -n "$BACKEND_API_TOKEN" ]] || fail "BACKEND_API_TOKEN is required. Export it or provide deployed-backend-access.md."
 
-log "Running time-letter lifecycle smoke against $BACKEND_BASE_URL..."
+log "Running deployed backend family/account lifecycle smoke against $BACKEND_BASE_URL..."
 if ! BACKEND_BASE_URL="$BACKEND_BASE_URL" \
     BACKEND_API_TOKEN="$BACKEND_API_TOKEN" \
-    python3 "$SCRIPT_DIR/backend-time-letter-lifecycle-smoke.py" \
+    python3 "$SCRIPT_DIR/backend-family-account-lifecycle-smoke.py" \
       "$ROOT_DIR" \
-      "$USER_ID" \
+      "$PHONE" \
       "$MARKER" > "$RESULT_PATH" 2> "$LOG_PATH"; then
-  fail "Backend time-letter lifecycle smoke failed. See backend-time-letter-lifecycle-smoke.log."
+  fail "Backend family/account lifecycle smoke failed. See backend-family-account-lifecycle-smoke.log."
 fi
 
-python3 - "$RESULT_PATH" "$REPORT_PATH" "$RUN_ID" "$BACKEND_BASE_URL" "$USER_ID" <<'PY'
-import json
-import sys
+cat > "$REPORT_PATH" <<EOF
+# Backend Family / Account Lifecycle Smoke
 
-result_path, report_path, run_id, base_url, user_id = sys.argv[1:6]
-with open(result_path, "r", encoding="utf-8") as handle:
-    result = json.load(handle)
-
-sealed = result.get("listedAfterSeal") or {}
-draft_delete_response = result.get("draftDeleteResponse") or {}
-sealed_delete_response = result.get("sealedDeleteResponse") or {}
-metadata = sealed.get("metadata") or {}
-health = result.get("health") or {}
-
-report = f"""# Backend Time Letter Lifecycle Smoke
-
-Run ID: `{run_id}`
+Run ID: \`$RUN_ID\`
 
 Status: passed
 
 ## Environment
 
-- Backend base URL: `{base_url}`
+- Backend root: \`$BACKEND_ROOT\`
+- Backend base URL: \`$BACKEND_BASE_URL\`
 - Backend API token: configured, value intentionally omitted
-- User ID: `{user_id}`
-- Health store: `{health.get("store", "unknown")}`
+- Phone: \`$PHONE\`
 
-## Contract
+## Coverage
 
-- POST draft timeLetter metadata to `/archive/items`.
-- POST edited draft with the same `id`; backend must update instead of duplicating.
-- DELETE draft `/archive/items/{{userId}}/{{itemId}}`; backend must remove the draft row.
-- POST sealed state with the same `id`; backend must preserve exactly one latest row.
-- DELETE sealed `/archive/items/{{userId}}/{{itemId}}`; backend must reject with 409.
-
-## Result
-
-- Draft item ID: `{result.get("draftItemId")}`
-- Sealed item ID: `{result.get("sealedItemId")}`
-- Listed after seal deliveryState: `{sealed.get("deliveryState")}`
-- Listed after seal timeLetterStatus: `{metadata.get("timeLetterStatus")}`
-- Open at: `{sealed.get("openAt")}`
-- Recipients: `{sealed.get("recipients")}`
-- Delivery status: `{sealed.get("deliveryStatus")}`
-- Draft delete status: `{draft_delete_response.get("status")}`
-- Sealed delete detail: `{sealed_delete_response.get("detail")}`
-- Listed after sealed delete count: `{result.get("listedAfterSealedDeleteCount")}`
+- \`/family/invite\` creates a phone invitation in \`pending\` state.
+- \`/family/members/{userId}/{memberId}/revoke\` returns 409 because family removal is not supported.
+- \`/auth/delete\` requires two confirmations and returns soft-delete metadata.
+- Same-phone \`/auth/login\` restores once inside the 30-day window.
+- A second restore is rejected by the one-time recovery rule.
 
 ## Evidence
 
-- Result JSON: `backend-time-letter-lifecycle-smoke-result.json`
-- Log: `backend-time-letter-lifecycle-smoke.log`
+- Result JSON: \`backend-family-account-lifecycle-smoke-result.json\`
+- Log: \`backend-family-account-lifecycle-smoke.log\`
 
-"""
+EOF
 
-with open(report_path, "w", encoding="utf-8") as handle:
-    handle.write(report)
-PY
-
+cat "$RESULT_PATH"
 log "Report: $REPORT_PATH"

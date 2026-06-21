@@ -733,16 +733,53 @@ final class ProfileViewController: UIViewController {
     }
 
     private func showAccountDeletionConfirmation() {
+        guard let user = UserManager.shared.currentUser else {
+            showToast("请先登录后再注销账户", type: .info)
+            return
+        }
         let alert = UIAlertController(
-            title: "注销账户确认",
-            message: "当前版本不会执行删除。账号注销需要完整确认与合规流程，包括身份校验、数据导出、冷静期和最终确认。",
+            title: "注销账户",
+            message: "注销后不支持数据导出。你的数据会保留 30 天；30 天内用同手机号重新注册可恢复数据，恢复机会只有 1 次。超过 30 天后将不可逆删除。",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
-        let deleteAction = UIAlertAction(title: "提交注销申请（未开放）", style: .destructive)
-        deleteAction.isEnabled = false
+        let deleteAction = UIAlertAction(title: "我已了解，继续", style: .destructive) { [weak self] _ in
+            self?.showFinalAccountDeletionConfirmation(user: user)
+        }
         alert.addAction(deleteAction)
         present(alert, animated: true)
+    }
+
+    private func showFinalAccountDeletionConfirmation(user: UserModel) {
+        let alert = UIAlertController(
+            title: "再次确认注销",
+            message: "提交后会立即退出当前账号，并进入 30 天恢复期。请确认你已经理解：不支持数据导出，恢复机会只有 1 次。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "确认注销账户", style: .destructive) { [weak self] _ in
+            self?.submitAccountDeletion(user: user)
+        })
+        present(alert, animated: true)
+    }
+
+    private func submitAccountDeletion(user: UserModel) {
+        guard DreamJourneyBackendClient.shared.isAccountDeletionConfigured else {
+            showToast("后端账号服务未配置，暂时无法注销", type: .error)
+            return
+        }
+        DreamJourneyBackendClient.shared.softDeleteAccount(
+            userId: user.id,
+            phone: user.phone
+        ) { [weak self] result in
+            switch result {
+            case .success:
+                UserManager.shared.logout()
+                self?.didRequestLogout?()
+            case .failure(let error):
+                self?.showToast("注销失败：\(error.localizedDescription)", type: .error)
+            }
+        }
     }
 
     private func showDoctorContactSafetyNotice() {

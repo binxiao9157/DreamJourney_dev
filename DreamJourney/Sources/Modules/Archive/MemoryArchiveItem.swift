@@ -1,5 +1,10 @@
 import Foundation
 
+struct TimeLetterRecipientSelection: Equatable {
+    let id: String
+    let name: String
+}
+
 enum MemoryArchiveItemKind: String, Codable {
     case photo
     case video
@@ -166,7 +171,8 @@ struct MemoryArchiveItem: Codable, Identifiable {
 
         var metadata = Self.stringDictionary(object["metadata"])
         metadata = Self.metadataFromRemoteAnalysisContract(object, baseMetadata: metadata)
-        if (kind == .photo || kind == .text),
+        metadata = Self.metadataFromRemoteTimeLetterContract(object, baseMetadata: metadata)
+        if (kind == .photo || kind == .text || kind == .timeLetter),
            metadata[Self.backendSyncStateMetadataKey] == nil {
             metadata[Self.backendSyncStateMetadataKey] = ArchiveBackendSyncState.synced.rawValue
         }
@@ -392,6 +398,43 @@ private extension MemoryArchiveItem {
         }
         metadata[key] = values.joined(separator: "、")
     }
+
+    static func metadataFromRemoteTimeLetterContract(
+        _ object: [String: Any],
+        baseMetadata: [String: String]
+    ) -> [String: String] {
+        var metadata = baseMetadata
+        for (remoteKey, metadataKey) in [
+            ("deliveryState", "deliveryState"),
+            ("timeLetterStatus", "timeLetterStatus"),
+            ("deliveryPolicy", "deliveryPolicy"),
+            ("openAt", MemoryArchiveItem.timeLetterOpenAtMetadataKey),
+            ("sealedAt", MemoryArchiveItem.timeLetterSealedAtMetadataKey),
+            ("deliveryStatus", MemoryArchiveItem.timeLetterDeliveryStatusMetadataKey),
+            ("deliveryExecutionState", MemoryArchiveItem.timeLetterDeliveryExecutionStateMetadataKey),
+            ("deliveryDecisionState", MemoryArchiveItem.timeLetterDeliveryDecisionStateMetadataKey),
+            ("deliveryScheduleState", MemoryArchiveItem.timeLetterDeliveryScheduleStateMetadataKey),
+            ("deliveryProviderState", MemoryArchiveItem.timeLetterDeliveryProviderStateMetadataKey),
+        ] {
+            if let value = stringValue(object[remoteKey]) {
+                metadata[metadataKey] = value
+            }
+        }
+        if let notificationScheduled = boolValue(object["deliveryNotificationScheduled"]) {
+            metadata[MemoryArchiveItem.timeLetterNotificationScheduledMetadataKey] = notificationScheduled ? "true" : "false"
+        }
+        if let recipients = object["recipients"] as? [[String: Any]] {
+            let ids = recipients.compactMap { stringValue($0["id"]) }
+            let names = recipients.compactMap { stringValue($0["name"]) }
+            if !ids.isEmpty {
+                metadata[MemoryArchiveItem.timeLetterRecipientIdsMetadataKey] = ids.joined(separator: "|")
+            }
+            if !names.isEmpty {
+                metadata[MemoryArchiveItem.timeLetterRecipientNamesMetadataKey] = names.joined(separator: "、")
+            }
+        }
+        return metadata
+    }
 }
 
 extension MemoryArchiveItem {
@@ -420,6 +463,13 @@ extension MemoryArchiveItem {
     static let timeLetterDeliveryScheduleStateMetadataKey = "deliveryScheduleState"
     static let timeLetterDeliveryProviderStateMetadataKey = "deliveryProviderState"
     static let timeLetterNotificationScheduledMetadataKey = "deliveryNotificationScheduled"
+    static let timeLetterOpenAtMetadataKey = "openAt"
+    static let timeLetterRecipientIdsMetadataKey = "recipientIds"
+    static let timeLetterRecipientNamesMetadataKey = "recipientNames"
+    static let timeLetterSealedAtMetadataKey = "sealedAt"
+    static let timeLetterDeliveryStatusMetadataKey = "deliveryStatus"
+    static let timeLetterImageAttachmentCountMetadataKey = "imageAttachmentCount"
+    static let timeLetterImageLocalPathMetadataKey = "imageLocalPath"
 
     var backendSyncState: ArchiveBackendSyncState {
         guard let rawValue = metadata[Self.backendSyncStateMetadataKey],
@@ -430,7 +480,7 @@ extension MemoryArchiveItem {
     }
 
     var isPublicBackendSyncEligible: Bool {
-        kind == .photo || kind == .text
+        kind == .photo || kind == .text || kind == .timeLetter
     }
 
     var isMediaUploadIntentEligible: Bool {
@@ -481,7 +531,9 @@ extension MemoryArchiveItem {
             return ["archive-audio"]
         case .video:
             return ["archive-video", "archive-video-thumbnails"]
-        case .text, .timeLetter:
+        case .timeLetter:
+            return ["archive-time-letter-images"]
+        case .text:
             return []
         }
     }
@@ -573,20 +625,63 @@ extension MemoryArchiveItem {
         kind == .timeLetter && metadata["deliveryState"] == "draft"
     }
 
+    var timeLetterOpenAt: Date? {
+        Self.dateValue(metadata[Self.timeLetterOpenAtMetadataKey])
+    }
+
+    var timeLetterSealedAt: Date? {
+        Self.dateValue(metadata[Self.timeLetterSealedAtMetadataKey])
+    }
+
+    var timeLetterRecipientIds: [String] {
+        Self.metadataList(metadata[Self.timeLetterRecipientIdsMetadataKey], separator: "|")
+    }
+
+    var timeLetterRecipientNames: [String] {
+        Self.metadataList(metadata[Self.timeLetterRecipientNamesMetadataKey])
+    }
+
+    var timeLetterRecipients: [TimeLetterRecipientSelection] {
+        let ids = timeLetterRecipientIds
+        let names = timeLetterRecipientNames
+        guard !ids.isEmpty else {
+            return [TimeLetterRecipientSelection(id: "self", name: "我")]
+        }
+        return ids.enumerated().map { index, id in
+            let name = index < names.count ? names[index] : id
+            return TimeLetterRecipientSelection(id: id, name: name)
+        }
+    }
+
+    var timeLetterDeliveryStatus: String {
+        if isTimeLetterDue {
+            return "ready"
+        }
+        return metadata[Self.timeLetterDeliveryStatusMetadataKey] ?? (isTimeLetterDraft ? "draft" : "scheduled")
+    }
+
+    var isTimeLetterDue: Bool {
+        guard isSealedTimeLetter,
+              let openAt = timeLetterOpenAt else {
+            return false
+        }
+        return openAt <= Date()
+    }
+
     var timeLetterDeliveryExecutionState: String {
-        metadata[Self.timeLetterDeliveryExecutionStateMetadataKey] ?? "not_delivering"
+        metadata[Self.timeLetterDeliveryExecutionStateMetadataKey] ?? (isTimeLetterDraft ? "draft" : "scheduled")
     }
 
     var timeLetterDeliveryDecisionState: String {
-        metadata[Self.timeLetterDeliveryDecisionStateMetadataKey] ?? "waiting_product_decision"
+        metadata[Self.timeLetterDeliveryDecisionStateMetadataKey] ?? (isTimeLetterDraft ? "draft" : "confirmed")
     }
 
     var timeLetterDeliveryScheduleState: String {
-        metadata[Self.timeLetterDeliveryScheduleStateMetadataKey] ?? "not_scheduled"
+        metadata[Self.timeLetterDeliveryScheduleStateMetadataKey] ?? (isTimeLetterDraft ? "not_scheduled" : "scheduled")
     }
 
     var timeLetterDeliveryProviderState: String {
-        metadata[Self.timeLetterDeliveryProviderStateMetadataKey] ?? "disabled_until_product_decision"
+        metadata[Self.timeLetterDeliveryProviderStateMetadataKey] ?? (isTimeLetterDraft ? "not_scheduled" : "local_notification_and_in_app")
     }
 
     var timeLetterNotificationScheduled: Bool {
@@ -594,12 +689,7 @@ extension MemoryArchiveItem {
     }
 
     var isTimeLetterDeliveryDisabledUntilProductDecision: Bool {
-        kind == .timeLetter
-            && timeLetterDeliveryExecutionState == "not_delivering"
-            && timeLetterDeliveryDecisionState == "waiting_product_decision"
-            && timeLetterDeliveryScheduleState == "not_scheduled"
-            && timeLetterDeliveryProviderState == "disabled_until_product_decision"
-            && !timeLetterNotificationScheduled
+        false
     }
 
     var detectedLocationClues: [String] {
@@ -791,26 +881,58 @@ extension MemoryArchiveItem {
     }
 
     func updatingTimeLetterDraft(note: String) -> MemoryArchiveItem {
-        updatingTimeLetterDraft(note: note, now: Date())
+        updatingTimeLetterDraft(
+            note: note,
+            openAt: timeLetterOpenAt ?? Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date(),
+            recipients: timeLetterRecipients,
+            imageLocalPath: localPath,
+            now: Date()
+        )
     }
 
     func updatingTimeLetterDraft(note: String, now: Date) -> MemoryArchiveItem {
+        updatingTimeLetterDraft(
+            note: note,
+            openAt: timeLetterOpenAt ?? Calendar.current.date(byAdding: .day, value: 1, to: now) ?? now,
+            recipients: timeLetterRecipients,
+            imageLocalPath: localPath,
+            now: now
+        )
+    }
+
+    func updatingTimeLetterDraft(
+        note: String,
+        openAt: Date,
+        recipients: [TimeLetterRecipientSelection],
+        imageLocalPath: String?,
+        now: Date = Date()
+    ) -> MemoryArchiveItem {
         var updatedItem = self
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
         updatedItem.note = trimmedNote
         updatedItem.title = "时间信件草稿"
-        updatedItem.analysisSummary = "这封信暂存为草稿，不会触发真实通知或投递。"
+        updatedItem.localPath = imageLocalPath
+        updatedItem.analysisSummary = "这封信暂存为草稿，可继续编辑打开时间、收件人和图片附件。"
         updatedItem.metadata["deliveryState"] = "draft"
         updatedItem.metadata["timeLetterStatus"] = "draft"
-        updatedItem.metadata["deliveryPolicy"] = "pending_product_decision"
-        updatedItem.metadata["deliveryDecisionRequired"] = "true"
-        [
-            "deliveryExecutionState": "not_delivering",
-            "deliveryDecisionState": "waiting_product_decision",
-            "deliveryScheduleState": "not_scheduled",
-            "deliveryProviderState": "disabled_until_product_decision",
-            "deliveryNotificationScheduled": "false",
-        ].forEach { updatedItem.metadata[$0.key] = $0.value }
+        updatedItem.metadata["deliveryPolicy"] = "draft"
+        updatedItem.metadata[Self.timeLetterOpenAtMetadataKey] = Self.isoString(from: openAt)
+        updatedItem.metadata[Self.timeLetterRecipientIdsMetadataKey] = recipients.map(\.id).joined(separator: "|")
+        updatedItem.metadata[Self.timeLetterRecipientNamesMetadataKey] = recipients.map(\.name).joined(separator: "、")
+        updatedItem.metadata[Self.timeLetterDeliveryStatusMetadataKey] = "draft"
+        updatedItem.metadata[Self.timeLetterDeliveryExecutionStateMetadataKey] = "draft"
+        updatedItem.metadata[Self.timeLetterDeliveryDecisionStateMetadataKey] = "draft"
+        updatedItem.metadata[Self.timeLetterDeliveryScheduleStateMetadataKey] = "not_scheduled"
+        updatedItem.metadata[Self.timeLetterDeliveryProviderStateMetadataKey] = "not_scheduled"
+        updatedItem.metadata[Self.timeLetterNotificationScheduledMetadataKey] = "false"
+        updatedItem.metadata.removeValue(forKey: Self.timeLetterSealedAtMetadataKey)
+        if let imageLocalPath, !imageLocalPath.isEmpty {
+            updatedItem.metadata[Self.timeLetterImageLocalPathMetadataKey] = imageLocalPath
+            updatedItem.metadata[Self.timeLetterImageAttachmentCountMetadataKey] = "1"
+        } else {
+            updatedItem.metadata.removeValue(forKey: Self.timeLetterImageLocalPathMetadataKey)
+            updatedItem.metadata[Self.timeLetterImageAttachmentCountMetadataKey] = "0"
+        }
         updatedItem.metadata["characterCount"] = "\(trimmedNote.count)"
         updatedItem.updatedAt = now
         return updatedItem
@@ -821,21 +943,45 @@ extension MemoryArchiveItem {
     }
 
     func sealingTimeLetterDraft(now: Date) -> MemoryArchiveItem {
+        sealingTimeLetter(
+            openAt: timeLetterOpenAt ?? Calendar.current.date(byAdding: .day, value: 1, to: now) ?? now,
+            recipients: timeLetterRecipients,
+            imageLocalPath: localPath,
+            now: now
+        )
+    }
+
+    func sealingTimeLetter(
+        openAt: Date,
+        recipients: [TimeLetterRecipientSelection],
+        imageLocalPath: String?,
+        now: Date = Date()
+    ) -> MemoryArchiveItem {
         var updatedItem = self
         updatedItem.title = "时间信件"
-        updatedItem.analysisSummary = "这封信会作为未来回看与生成回响时的情感线索。"
+        updatedItem.localPath = imageLocalPath
+        updatedItem.analysisSummary = "这封信已封存，到达打开时间后会提醒本人和收件人查看。"
         updatedItem.tags = Self.mergingUnique(updatedItem.tags.filter { $0 != "草稿" }, with: ["时间信件"])
         updatedItem.metadata["deliveryState"] = "sealed"
         updatedItem.metadata["timeLetterStatus"] = "sealed"
-        updatedItem.metadata["deliveryPolicy"] = "pending_product_decision"
-        updatedItem.metadata["deliveryDecisionRequired"] = "true"
-        [
-            "deliveryExecutionState": "not_delivering",
-            "deliveryDecisionState": "waiting_product_decision",
-            "deliveryScheduleState": "not_scheduled",
-            "deliveryProviderState": "disabled_until_product_decision",
-            "deliveryNotificationScheduled": "false",
-        ].forEach { updatedItem.metadata[$0.key] = $0.value }
+        updatedItem.metadata["deliveryPolicy"] = "scheduled_local_and_in_app"
+        updatedItem.metadata[Self.timeLetterOpenAtMetadataKey] = Self.isoString(from: openAt)
+        updatedItem.metadata[Self.timeLetterRecipientIdsMetadataKey] = recipients.map(\.id).joined(separator: "|")
+        updatedItem.metadata[Self.timeLetterRecipientNamesMetadataKey] = recipients.map(\.name).joined(separator: "、")
+        updatedItem.metadata[Self.timeLetterSealedAtMetadataKey] = Self.isoString(from: now)
+        updatedItem.metadata[Self.timeLetterDeliveryStatusMetadataKey] = openAt <= now ? "ready" : "scheduled"
+        updatedItem.metadata[Self.timeLetterDeliveryExecutionStateMetadataKey] = openAt <= now ? "ready" : "scheduled"
+        updatedItem.metadata[Self.timeLetterDeliveryDecisionStateMetadataKey] = "confirmed"
+        updatedItem.metadata[Self.timeLetterDeliveryScheduleStateMetadataKey] = "scheduled"
+        updatedItem.metadata[Self.timeLetterDeliveryProviderStateMetadataKey] = "local_notification_and_in_app"
+        updatedItem.metadata[Self.timeLetterNotificationScheduledMetadataKey] = "true"
+        if let imageLocalPath, !imageLocalPath.isEmpty {
+            updatedItem.metadata[Self.timeLetterImageLocalPathMetadataKey] = imageLocalPath
+            updatedItem.metadata[Self.timeLetterImageAttachmentCountMetadataKey] = "1"
+        } else {
+            updatedItem.metadata.removeValue(forKey: Self.timeLetterImageLocalPathMetadataKey)
+            updatedItem.metadata[Self.timeLetterImageAttachmentCountMetadataKey] = "0"
+        }
         updatedItem.updatedAt = now
         return updatedItem
     }
@@ -897,7 +1043,17 @@ extension MemoryArchiveItem {
             let deliveryState = metadata["deliveryState"] ?? (isTimeLetterDraft ? "draft" : "sealed")
             payload["deliveryState"] = deliveryState
             payload["timeLetterStatus"] = metadata["timeLetterStatus"] ?? deliveryState
-            payload["deliveryPolicy"] = metadata["deliveryPolicy"] ?? "pending_product_decision"
+            payload["deliveryPolicy"] = metadata["deliveryPolicy"] ?? (isTimeLetterDraft ? "draft" : "scheduled_local_and_in_app")
+            payload["openAt"] = metadata[Self.timeLetterOpenAtMetadataKey] ?? ""
+            payload["recipients"] = timeLetterRecipients.map {
+                [
+                    "id": $0.id,
+                    "name": $0.name,
+                    "type": $0.id == "self" ? "self" : "family",
+                ]
+            }
+            payload["sealedAt"] = metadata[Self.timeLetterSealedAtMetadataKey] ?? ""
+            payload["deliveryStatus"] = timeLetterDeliveryStatus
             payload["deliveryExecutionState"] = timeLetterDeliveryExecutionState
             payload["deliveryDecisionState"] = timeLetterDeliveryDecisionState
             payload["deliveryScheduleState"] = timeLetterDeliveryScheduleState
@@ -937,6 +1093,7 @@ extension MemoryArchiveItem {
             Self.backendSyncErrorMetadataKey,
             Self.backendSyncAttemptedAtMetadataKey,
             Self.mediaThumbnailPathMetadataKey,
+            Self.timeLetterImageLocalPathMetadataKey,
             "localPath",
             "fileURL",
             "absolutePath",
@@ -1146,12 +1303,18 @@ extension MemoryArchiveItem {
         }
     }
 
-    private static func metadataList(_ rawValue: String?) -> [String] {
+    private static func metadataList(_ rawValue: String?, separator: String? = nil) -> [String] {
         guard let rawValue, !rawValue.isEmpty else { return [] }
-        return rawValue
-            .components(separatedBy: CharacterSet(charactersIn: "、,|"))
+        let components = separator.map {
+            rawValue.components(separatedBy: $0)
+        } ?? rawValue.components(separatedBy: CharacterSet(charactersIn: "、,|"))
+        return components
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+    }
+
+    private static func isoString(from date: Date) -> String {
+        ISO8601DateFormatter().string(from: date)
     }
 
     static func normalizedArchiveText(_ text: String) -> String {

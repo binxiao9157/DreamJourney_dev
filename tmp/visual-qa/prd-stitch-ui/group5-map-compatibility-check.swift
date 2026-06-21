@@ -56,7 +56,7 @@ let infoPlist = read("DreamJourney/Resources/Info.plist")
 let project = read("DreamJourney.xcodeproj/project.pbxproj")
 
 let defaults = extractDefaultEnabledFeatures(from: flags)
-for feature in ["timeLetters", "archiveAudioUpload", "personaSettings", "familyManagement"] {
+for feature in ["archiveAudioUpload"] {
     guard !defaults.contains(feature) else {
         fatalError("\(feature) must remain hidden by default")
     }
@@ -75,7 +75,7 @@ for legacyLabel in ["足迹", "亲友", "知识", "往日记念", "时光回响"
     assertNotContains(warmTabBar, "title: \"\(legacyLabel)\"", "custom tabbar must not expose old label \(legacyLabel)")
 }
 
-assertContains(archiveOptions, "if isTimeLettersEnabled {\n            options.append(.timeLetter)\n        }", "time-letter creation should be opt-in")
+assertContains(archiveOptions, "if isTimeLettersEnabled {\n            options.append(.timeLetter)\n        }", "time-letter creation should remain flag-controlled for rollback")
 assertContains(archive, "FeatureFlagService.shared.isEnabled(.timeLetters)", "time-letter feature should be release gated")
 assertContains(readiness, "DJEnableArchiveHiddenBranches", "archive hidden branches should require explicit UIQA launch argument")
 assertContains(archive, "MemoryArchiveMediaReleaseReadiness.hiddenBranchesLaunchArgument", "archive hidden branch gate should use shared launch argument")
@@ -111,7 +111,7 @@ assertContains(aiRecording, "showToast(\"寻梦环游已经记住您说的了，
 assertNotContains(aiRecording, "case .keyword(let kw):", "legacy recording keyword end should not bind an unused kw value")
 assertContains(memoirTTS, "DDLogInfo(\"[MemoirTTS] 使用系统TTS降级播放（无法导出文件）\")", "system TTS fallback should remain explicit about no file export")
 assertNotContains(memoirTTS, "let synthesizer = AVSpeechSynthesizer()", "system TTS fallback should not create an unused synthesizer")
-assertContains(voiceClone, "let body: [String: Any] = [\n            \"speaker_id\": finalSpeakerId", "voice clone request body should be immutable")
-assertNotContains(voiceClone, "var body: [String: Any] = [", "voice clone request body should not use an unused var")
+assertContains(voiceClone, "let payload: [String: Any] = [\n            \"userId\": userId,\n            \"voiceProfileId\": finalSpeakerId", "voice clone backend payload should be immutable")
+assertNotContains(voiceClone, "var payload: [String: Any] = [", "voice clone request payload should not use an unused var")
 
 print("Group 5 map/future route compatibility checks passed")

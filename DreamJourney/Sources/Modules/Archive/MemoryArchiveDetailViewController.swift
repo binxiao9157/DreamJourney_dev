@@ -254,6 +254,8 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
             return makeAudioMediaCard()
         case .video:
             return makeVideoMediaCard()
+        case .timeLetter:
+            return item.resolvedLocalFilePath == nil ? nil : makePhotoMediaCard()
         default:
             return nil
         }
@@ -956,13 +958,18 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         accentLine.layer.cornerRadius = 2
 
         let bodyLabel = UILabel()
-        bodyLabel.text = item.kind == .timeLetter && presentation.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "这封信还没有内容，可继续编辑草稿。"
-            : presentation.note
+        let trimmedNote = presentation.note.trimmingCharacters(in: .whitespacesAndNewlines)
+        if item.kind == .timeLetter && trimmedNote.isEmpty {
+            bodyLabel.text = item.isTimeLetterDraft
+                ? "这封信还没有内容，可继续编辑草稿。"
+                : "这封信已封存，等待打开时间到来。"
+        } else {
+            bodyLabel.text = presentation.note
+        }
         bodyLabel.font = DJDesignTokens.Font.body(17)
         bodyLabel.textColor = DJDesignTokens.Color.textSecondary
         bodyLabel.numberOfLines = 0
-        if item.kind == .timeLetter && presentation.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if item.kind == .timeLetter && trimmedNote.isEmpty {
             bodyLabel.accessibilityIdentifier = "archive-time-letter-empty-body"
         }
 
@@ -975,7 +982,9 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         stack.addArrangedSubview(bodyContainer)
         if item.kind == .timeLetter {
             stack.addArrangedSubview(makeTimeLetterStateCard())
-            stack.addArrangedSubview(makeTimeLetterLifecycleActions())
+            if item.isTimeLetterDraft {
+                stack.addArrangedSubview(makeTimeLetterLifecycleActions())
+            }
         }
 
         [stack, headerStack, iconContainer, titleStack, titleLabel, subtitleLabel, bodyContainer, accentLine, bodyLabel].forEach {
@@ -1007,16 +1016,16 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
 
     private func makeTimeLetterStateCard() -> UIView {
         let stateCard = UIView()
-        stateCard.backgroundColor = DJDesignTokens.Color.surface.withAlphaComponent(0.78)
+        stateCard.backgroundColor = DJDesignTokens.Color.surface.withAlphaComponent(0.74)
         stateCard.layer.cornerRadius = DJDesignTokens.Radius.large
         stateCard.accessibilityIdentifier = "archive-time-letter-state-card"
 
         let stack = UIStackView()
         stack.axis = .vertical
-        stack.spacing = 5
+        stack.spacing = 10
 
         let titleLabel = UILabel()
-        titleLabel.text = item.isTimeLetterDraft ? "草稿未封存" : "投递策略待产品决策"
+        titleLabel.text = timeLetterPrimaryStatusText
         titleLabel.font = DJDesignTokens.Font.title(15)
         titleLabel.textColor = DJDesignTokens.Color.textPrimary
         titleLabel.numberOfLines = 0
@@ -1025,9 +1034,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
             : "archive-time-letter-sealed-state"
 
         let subtitleLabel = UILabel()
-        subtitleLabel.text = item.isTimeLetterDraft
-            ? "当前只保存在本地草稿箱，可继续编辑、删除或封存；不会调度本地通知或 APNs。"
-            : "已封存为回响线索；暂不投递，等待产品决策，不会调度本地通知或 APNs。"
+        subtitleLabel.text = timeLetterSecondaryStatusText
         subtitleLabel.font = DJDesignTokens.Font.body(13)
         subtitleLabel.textColor = DJDesignTokens.Color.textSecondary
         subtitleLabel.numberOfLines = 0
@@ -1035,20 +1042,20 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         stateCard.addSubview(stack)
         stack.addArrangedSubview(titleLabel)
         stack.addArrangedSubview(subtitleLabel)
-        if item.isTimeLetterDeliveryDisabledUntilProductDecision {
-            stack.addArrangedSubview(makeTimeLetterPolicyLabel(
-                text: "暂不投递",
-                identifier: "archive-time-letter-delivery-disabled-state"
-            ))
-            stack.addArrangedSubview(makeTimeLetterPolicyLabel(
-                text: "等待产品决策",
-                identifier: "archive-time-letter-product-decision-state"
-            ))
-            stack.addArrangedSubview(makeTimeLetterPolicyLabel(
-                text: "未调度通知",
-                identifier: "archive-time-letter-notification-not-scheduled-state"
-            ))
-        }
+        stack.addArrangedSubview(makeTimeLetterPolicyLabel(
+            text: "打开：\(timeLetterOpenAtText)",
+            identifier: "archive-time-letter-delivery-state"
+        ))
+        stack.addArrangedSubview(makeTimeLetterPolicyLabel(
+            text: item.isTimeLetterDraft ? "封存前可继续编辑" : "已封存，不可删除或修改",
+            identifier: "archive-time-letter-lock-state"
+        ))
+        stack.addArrangedSubview(makeTimeLetterPolicyLabel(
+            text: item.isTimeLetterDraft
+                ? "封存后安排提醒"
+                : (item.timeLetterNotificationScheduled ? "本地通知 + 应用内提醒" : "提醒待安排"),
+            identifier: "archive-time-letter-notification-state"
+        ))
         [stack, titleLabel, subtitleLabel].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
 
         NSLayoutConstraint.activate([
@@ -1061,8 +1068,32 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         return stateCard
     }
 
+    private var timeLetterOpenAtText: String {
+        item.timeLetterOpenAt.map(Self.dateFormatter.string(from:)) ?? "未设置"
+    }
+
+    private var timeLetterRecipientText: String {
+        item.timeLetterRecipientNames.isEmpty
+            ? "我"
+            : item.timeLetterRecipientNames.joined(separator: "、")
+    }
+
+    private var timeLetterPrimaryStatusText: String {
+        if item.isTimeLetterDraft {
+            return "草稿未封存"
+        }
+        return item.isTimeLetterDue ? "已到打开时间" : "等待未来打开"
+    }
+
+    private var timeLetterSecondaryStatusText: String {
+        if item.isTimeLetterDraft {
+            return "写好后再封存。封存后，这封信会进入等待状态。"
+        }
+        return "收件人：\(timeLetterRecipientText)。到期后提醒本人和收件人回看。"
+    }
+
     private func makeTimeLetterPolicyLabel(text: String, identifier: String) -> UILabel {
-        let label = UILabel()
+        let label = DetailPaddingLabel(horizontalInset: 10, verticalInset: 6)
         label.text = text
         label.font = DJDesignTokens.Font.label(12)
         label.textColor = DJDesignTokens.Color.accentDeep
@@ -1096,14 +1127,6 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
                 identifier: "archive-time-letter-delete-draft",
                 action: #selector(deleteTimeLetterDraftTapped)
             ))
-        } else {
-            let sealedLabel = UILabel()
-            sealedLabel.text = "已封存，等待投递策略产品决策后开放。"
-            sealedLabel.font = DJDesignTokens.Font.label(12)
-            sealedLabel.textColor = DJDesignTokens.Color.textTertiary
-            sealedLabel.numberOfLines = 0
-            sealedLabel.accessibilityIdentifier = "archive-time-letter-sealed-state"
-            stack.addArrangedSubview(sealedLabel)
         }
 
         return stack
@@ -1162,7 +1185,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         stack.axis = .vertical
         stack.spacing = 14
 
-        let titleLabel = DJComponentFactory.sectionLabel("档案信息")
+        let titleLabel = DJComponentFactory.sectionLabel(item.kind == .timeLetter ? "开启安排" : "档案信息")
         stack.addArrangedSubview(titleLabel)
 
         item.archiveDetailMetadataRows.forEach { row in
@@ -1569,32 +1592,46 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
 
     @objc private func editTimeLetterDraftTapped() {
         guard item.isTimeLetterDraft else { return }
-        let alert = UIAlertController(title: "编辑时间信件草稿", message: nil, preferredStyle: .alert)
-        alert.addTextField { [item] textField in
-            textField.text = item.note
-            textField.placeholder = "这封信想说什么？"
-            textField.clearButtonMode = .whileEditing
-        }
-        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
-        alert.addAction(UIAlertAction(title: "保存", style: .default) { [weak self, weak alert] _ in
-            guard let self,
-                  let text = alert?.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !text.isEmpty else {
-                self?.showToast("草稿内容不能为空", type: .error)
-                return
-            }
-            item = item.updatingTimeLetterDraft(note: text)
-            _ = repository.update(item, syncToBackend: false)
+        let payload = TimeLetterEntryPayload(
+            note: item.note,
+            openAt: item.timeLetterOpenAt ?? Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date(),
+            recipients: item.timeLetterRecipients,
+            imageLocalPath: item.localPath
+        )
+        let entryViewController = MemoryArchiveTextEntryViewController(
+            kind: .timeLetter,
+            initialTimeLetterPayload: payload
+        )
+        entryViewController.onSaveDraftTimeLetter = { [weak self] payload in
+            guard let self else { return }
+            item = item.updatingTimeLetterDraft(
+                note: payload.note,
+                openAt: payload.openAt,
+                recipients: payload.recipients,
+                imageLocalPath: payload.imageLocalPath
+            )
+            _ = repository.update(item)
             reloadContent()
             showToast("草稿已更新", type: .success)
-        })
-        present(alert, animated: true)
+        }
+        entryViewController.onSaveTimeLetter = { [weak self] payload in
+            guard let self else { return }
+            item = item.sealingTimeLetter(
+                openAt: payload.openAt,
+                recipients: payload.recipients,
+                imageLocalPath: payload.imageLocalPath
+            )
+            _ = repository.update(item)
+            reloadContent()
+            showToast("时间信件已封存", type: .success)
+        }
+        present(entryViewController, animated: true)
     }
 
     @objc private func sealTimeLetterDraftTapped() {
         guard item.isTimeLetterDraft else { return }
         item = item.sealingTimeLetterDraft()
-        _ = repository.update(item, syncToBackend: false)
+        _ = repository.update(item)
         reloadContent()
         showToast("时间信件已封存", type: .success)
     }

@@ -107,7 +107,12 @@ if listed_audio.get("kind") != "audio" or audio_metadata.get("uploadStatus") != 
     raise SystemExit("Backend audio archive contract is incomplete")
 if listed_video.get("kind") != "video" or video_metadata.get("uploadStatus") != "uploaded":
     raise SystemExit("Backend video archive contract is incomplete")
-if listed_letter.get("kind") != "timeLetter" or letter_metadata.get("deliveryDecisionRequired") != "true":
+if (
+    listed_letter.get("kind") != "timeLetter"
+    or listed_letter.get("deliveryPolicy") != "scheduled_local_and_in_app"
+    or listed_letter.get("deliveryStatus") != "scheduled"
+    or letter_metadata.get("deliveryProviderState") != "local_notification_and_in_app"
+):
     raise SystemExit("Backend time-letter archive contract is incomplete")
 if runtime_archive.get("storageProvider") != "mockObjectStorage" or runtime_archive.get("requiresClientUpload") is not False:
     raise SystemExit("Backend runtime provider switch contract is incomplete")
@@ -147,7 +152,9 @@ report += f"""
 - Created IDs: `{created_ids}`
 - Audio uploadStatus: `{audio_metadata.get("uploadStatus")}`
 - Video uploadStatus: `{video_metadata.get("uploadStatus")}`
-- Time-letter deliveryDecisionRequired: `{letter_metadata.get("deliveryDecisionRequired")}`
+- Time-letter delivery policy: `{listed_letter.get("deliveryPolicy")}`
+- Time-letter delivery status: `{listed_letter.get("deliveryStatus")}`
+- Time-letter provider state: `{letter_metadata.get("deliveryProviderState")}`
 
 """
 

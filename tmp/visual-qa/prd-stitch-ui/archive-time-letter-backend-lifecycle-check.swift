@@ -28,10 +28,12 @@ let backendSmoke = read("tmp/visual-qa/prd-stitch-ui/backend-time-letter-lifecyc
 let backendSmokeRunner = read("tmp/visual-qa/prd-stitch-ui/run-backend-time-letter-lifecycle-smoke.sh")
 let releaseRegression = read("tmp/visual-qa/prd-stitch-ui/run-release-regression.sh")
 let releaseQA = read("tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift")
-let statusDoc = read("docs/superpowers/status/2026-06-19-time-letter-backend-lifecycle.md")
+let statusDoc = read("docs/superpowers/status/2026-06-21-time-letter-public-delivery.md")
 
 for required in [
     "@app.delete(\"/archive/items/{user_id}/{item_id}\")",
+    "_is_sealed_time_letter",
+    "sealed timeLetter cannot be deleted",
     "store.delete_archive_item(user_id, item_id)",
     "\"status\": \"deleted\"",
 ] {
@@ -56,6 +58,7 @@ for required in [
 for required in [
     "test_archive_items_api_upserts_time_letter_draft_and_sealed_contract",
     "test_archive_items_api_deletes_time_letter_by_user_and_id",
+    "test_archive_items_api_rejects_sealed_time_letter_delete",
 ] {
     assertContains(backendApiTests, required, "backend API tests should pin timeLetter lifecycle \(required)")
 }
@@ -77,14 +80,19 @@ for required in [
     "payload[\"deliveryState\"]",
     "payload[\"timeLetterStatus\"]",
     "payload[\"deliveryPolicy\"]",
+    "payload[\"openAt\"]",
+    "payload[\"recipients\"]",
+    "payload[\"sealedAt\"]",
+    "payload[\"deliveryStatus\"]",
 ] {
     assertContains(item, required, "archive backend payload should include timeLetter lifecycle fields \(required)")
 }
 
 for required in [
-    "POST draft timeLetter",
-    "DELETE",
-    "len(listed_after_seal), 1",
+    "draft_delete_response",
+    "sealed_delete_response",
+    "sealed timeLetter cannot be deleted",
+    "listed_after_seal",
     "metadataOnly",
 ] {
     assertContains(backendSmoke, required, "backend timeLetter smoke should verify \(required)")
@@ -105,9 +113,10 @@ assertContains(
 )
 
 for required in [
-    "时间信件后端草稿/封存合同 smoke",
+    "时间信件公开投递闭环",
     "/archive/items",
-    "DELETE /archive/items/{userId}/{itemId}",
+    "封存后不可删除",
+    "deliveryStatus",
     "RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE",
 ] {
     assertContains(statusDoc, required, "status doc should document timeLetter backend lifecycle \(required)")

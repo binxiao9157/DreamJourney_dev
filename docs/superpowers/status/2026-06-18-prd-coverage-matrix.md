@@ -6,7 +6,7 @@ Branch: `feature/prd-stitch-ui-adaptation`
 
 Head at creation: `790f029 docs: add prd ui continuation plan`
 
-Last synced: 2026-06-20, after the product decision to expose the audio voice-clone foundation as a public profile feature.
+Last synced: 2026-06-21, after the product decision to expose family phone invitation and account soft deletion.
 
 ## Source of truth
 
@@ -25,13 +25,13 @@ Last synced: 2026-06-20, after the product decision to expose the audio voice-cl
 | 档案视频 | hidden readiness shell implemented with mock detail/list state, thumbnail placeholder, upload/analysis failed/retry states, runtime media capability, upload intent, and backend hidden-media sync gate | hidden | `archive-video-hidden-readiness-check.swift`, `archive-hidden-media-detail-ui-check.swift`, `archive-hidden-media-combo-gate-check.swift`, `archive-media-upload-intent-contract-check.swift`, `archive-media-provider-switch-contract-check.swift`, `docs/superpowers/status/2026-06-19-archive-video-hidden-readiness.md` | 产品决策 + 外部验收：decide public scope, then implement real picker/compression/object-storage provider and true-device video picker acceptance |
 | 档案录音 | hidden candidate with non-true-device lifecycle, backend media contract, upload intent, transcription/status shell, Echo context rules, and true-device evidence package prepared | hidden | `archive-audio-lifecycle-smoke-check.swift`, `archive-audio-ia-release-check.swift`, `archive-media-backend-contract-check.swift`, `archive-media-echo-context-polish-check.swift`, `true-device-archive-audio-acceptance-check.swift`, `true-device-acceptance-evidence-package-check.swift` | 外部验收：run physical-device recording, permission recovery, playback route, audio quality, and foreground/background evidence package |
 | 档案文字描述 | implemented with sync error recovery | yes | archive smoke, `archive-sync-error-recovery-check.swift` | maintain |
-| 时间信件 | hidden candidate with local draft/seal lifecycle, backend metadata lifecycle, and explicit non-delivery policy shell | hidden | `archive-hidden-media-timeletter-shell-check.swift`, `archive-time-letter-backend-lifecycle-check.swift`, `time-letter-delivery-policy-shell-check.swift`, `docs/superpowers/status/2026-06-19-time-letter-delivery-policy-shell.md` | 产品决策：delivery timing, notification/reminder semantics, recipient rules, cancel/edit rules before public release |
+| 时间信件 | public delivery foundation implemented with text + image creation, open time, family/self recipients, draft/edit/seal/detail UI, sealed delete protection, local notification scheduling, in-app reminder entry, and backend metadata lifecycle | yes | `archive-hidden-media-timeletter-shell-check.swift`, `archive-time-letter-backend-lifecycle-check.swift`, `time-letter-delivery-policy-shell-check.swift`, `docs/superpowers/status/2026-06-21-time-letter-public-delivery.md` | 外部验收：true-device local notification arrival, cross-account recipient reminder delivery, APNs/provider notification evidence |
 | 个人资料管理 | implemented for profile fields and login password participation with selected-backend `/profile`, `/auth/login`, and `/auth/password` acceptance; password change UI remains hidden | yes for profile fields and login; no for password change | `LoginViewController`, `ProfileSettingsViewController`, `ProfilePasswordChangeViewController`, `login-password-contract-check.swift`, backend `ProfileAPITests`, backend `PasswordAPITests`, release-like backend run `20260618-selected-backend-latest-contracts-after-deploy-r2` | auth/security review, true-device acceptance, explicit password-change public release decision |
 | 心境追踪 | implemented fallback and data states | yes | Profile care checks, care data states check | lifecycle policy |
-| 家人管理 | implemented public profile entry with family digital-human backend contract, deployed family/voice smoke, typed iOS consumer, and UIQA consumer for `digitalHumanMode`, `familyPersonaContractVersion`, `voiceProfileId`, `sampleStatus` | yes for profile entry; advanced lifecycle hidden | `family-digital-human-hidden-contract-check.swift`, `backend-family-voice-contract-smoke-check.swift`, `ios-family-voice-consumer-contract-check.swift`, `ios-family-voice-hidden-uiqa-smoke-check.swift`, `docs/superpowers/status/2026-06-19-ios-family-voice-hidden-uiqa.md` | 产品决策：advanced lifecycle transition policy, consent copy, recovery rules |
+| 家人管理 | implemented public phone invitation foundation with invitation pending/joined/failed states, no delete operation, family digital-human backend contract, deployed family/voice smoke, typed iOS consumer, and UIQA consumer for `digitalHumanMode`, `familyPersonaContractVersion`, `voiceProfileId`, `sampleStatus` | yes for phone invite/profile entry; exit/unlink/advanced lifecycle hidden | `FamilyCircleViewController`, `FamilyRepository.inviteByPhone`, `/family/invite`, blocked `/family/members/{user}/{member}/revoke`, `family-digital-human-hidden-contract-check.swift`, `backend-family-voice-contract-smoke-check.swift`, `ios-family-voice-consumer-contract-check.swift`, `ios-family-voice-hidden-uiqa-smoke-check.swift`, `profile-family-account-lifecycle-check.swift` | 产品决策：exit/unlink relationship policy, advanced lifecycle transition policy, consent copy, recovery rules |
 | 法律法规 | implemented | yes | `ProfileLegalViewController` | legal review |
 | 账号退出 | implemented | yes | `ProfileViewController` | maintain |
-| 账号注销 | hidden blocked shell | no | safety check | compliance/backend contract |
+| 账号注销 | implemented public soft-delete foundation with two confirmations, no data export, 30-day retention, same-phone restore within 30 days, one restore opportunity, and purge-expired contract | yes for soft-delete contract; production purge operations/legal review external | `ProfileViewController.showAccountDeletionConfirmation`, `DreamJourneyBackendClient.softDeleteAccount`, backend `AccountDeletionAPITests`, `/auth/delete`, `/auth/restore`, `/auth/purge-expired-deletions`, `profile-family-account-lifecycle-check.swift`, `backend-family-account-lifecycle-smoke.py` | 外部/合规验收：deploy backend, run deployed smoke, confirm production purge schedule and customer support restore policy |
 | 长辈关怀 | implemented aggregate with loading/empty/stale/failed states | yes | elder dashboard check, profile care public placeholder check | real backend acceptance |
 | 后端合同闭环 | partially implemented; contract gaps pinned | mixed | `2026-06-18-backend-contract-gap-matrix.md`, `backend-contract-gap-check.swift` | implement missing backend routes or keep backend-ready features hidden |
 | 生死转换机制 | hidden boundary | no | mode lifecycle checks | product/legal policy |
@@ -42,10 +42,12 @@ Last synced: 2026-06-20, after the product decision to expose the audio voice-cl
 The following items were completed after the original matrix was created and should no longer be treated as unimplemented engineering gaps:
 
 - Hidden Family / Voice UIQA Consumer Gate: iOS consumes backend-derived `digitalHumanMode`, `familyPersonaContractVersion`, `voiceProfileId`, and `sampleStatus`; the voice clone entry has since been promoted to a public foundation while advanced family/voice QA evidence remains useful.
-- 时间信件 Delivery Policy Shell: draft/sealed states persist non-delivery metadata and explicitly stay `not_delivering` / `waiting_product_decision` until product delivery rules are decided.
+- 时间信件公开投递闭环: draft/sealed states now persist `openAt` / `recipients` / `sealedAt` / `deliveryStatus`, schedule local + in-app reminders, and reject deletion after sealing.
 - 视频档案 Hidden Readiness: mock video detail/list state, thumbnail placeholder, file size, upload status, failed/retry analysis UI, runtime capability, and hidden media combo gate are implemented.
 - 真机验收包强化: true-device voice and archive-audio scripts now produce fixed evidence manifests, screenshot names, logs, and manual QA notes.
 - 生产语音 SDK readiness 边界: `VoiceSDKReadinessSummary` prevents mock ASR/TTS, backend-token fallback, and SDK initialization from being mistaken for production voice completion.
+- 家庭成员规则: phone invite is now the public foundation; pending/accepted/failed states are modeled, selected-recipient lists use accepted family members only, and the public backend revoke route returns 409 because deleting family members is not supported by PRD.
+- 账号注销规则: two-step iOS confirmation and backend soft-delete/restore/purge contract are implemented with `deletedAt`, `purgeAfter`, `restoreDeadline`, `restoreCount <= 1`, no data export, and 30-day restore window.
 
 Echo waiting reply note: PRD updated to ten-round/adaptive policy; the old third-turn default policy has been superseded. PRD now says one user speech plus one AI reply counts as one round; the default waits after 10 rounds; emotion/content signals can trigger earlier; delay is 5-10 minutes. In-app state, local notification, device-token registration, delayed-reply backend persistence, and the `POST /echo/delayed-replies/dispatch-due` ready-for-provider contract are implemented through `EchoDelayedReplyStore`, `EchoDelayedReplyNotificationScheduler`, `PushDeviceTokenStore`, `DreamJourneyBackendClient.registerPushDeviceToken`, `DreamJourneyBackendClient.scheduleEchoDelayedReplyPush`, and backend `mark_due_echo_delayed_replies_for_dispatch`. Deployed backend acceptance run `20260618-deployed-push-device-token-contract-rerun-205018` verified `echoDelayedReplyDeviceTokenId` and `echoDelayedReplyPushProviderState=pending`; deployed dispatch acceptance run `20260618-deployed-echo-dispatch-contract-accepted-211732` verified `echoDelayedReplyDispatchState=readyForProvider` and `echoDelayedReplyProviderDeliveryAttempted=false`. Earlier dispatch attempts `20260618-deployed-echo-dispatch-contract-210536` and `20260618-deployed-echo-dispatch-contract-rerun-report-211438` were blocked by HTTP 405 before the backend redeploy and are retained as recovered deployment-drift evidence. APNs provider delivery and true-device notification acceptance remain open.
 
@@ -71,7 +73,7 @@ These are not product failures. They are external acceptance gates that require 
 
 ## Release Gating Policy
 
-No remaining hidden PRD feature is public by default.
+No remaining hidden PRD feature is public by default. Family phone invitation, time-letter foundation, voice-clone foundation, and account soft deletion are public after explicit PRD decisions.
 
 Default public surface remains:
 
@@ -81,6 +83,8 @@ Default public surface remains:
 - text/photo archive creation
 - voice-first Echo
 - profile settings
+- family phone invitation
+- account soft deletion
 - legal center
 - logout
 - aggregate `心境追踪` / `长辈关怀`
@@ -88,11 +92,8 @@ Default public surface remains:
 Hidden or blocked by default:
 
 - archive audio upload
-- time letters
 - video upload
-- persona settings
 - family advanced lifecycle controls
-- account deletion execution
 - doctor contact / intervention execution
 - sunlight/star/silent lifecycle transition controls
 - digital inheritance lifecycle
@@ -107,8 +108,8 @@ Public MVP engineering remains:
 
 Hidden engineering remains:
 
-- Audio/video/time-letter real-media and delivery behavior should stay behind hidden flags until promoted.
-- Audio/video/time-letter real-media behavior, password change, doctor contact, account deletion, and lifecycle controls stay hidden or safety-shell only.
+- Audio/video real-media behavior should stay behind hidden flags until promoted.
+- Audio/video real-media behavior, password change, doctor contact, and lifecycle controls stay hidden or safety-shell only.
 
 External acceptance remains:
 
@@ -134,12 +135,10 @@ The PRD items below are intentionally not public MVP features yet. They may have
 | Hidden PRD candidate | Release interpretation | Public in MVP | Release matrix row |
 | --- | --- | --- | --- |
 | archive audio upload | QA-only archive media branch; true-device recording and media policy still required | no | archive audio upload |
-| time letters | QA-only archive creation branch; delivery and scheduling semantics still required | no | time letters |
 | video upload | hidden shell only; PRD scope and media backend contract still required | no | video upload |
 | persona settings | QA-only archive/profile-adjacent branch; ownership and prompt-safety policy still required | no | persona settings |
-| family advanced lifecycle controls | advanced family lifecycle transition controls remain QA/local-policy only | no | family advanced lifecycle controls |
+| family advanced lifecycle controls | phone invite foundation is public; exit/unlink and advanced lifecycle transition controls remain QA/local-policy only | no | family advanced lifecycle controls |
 | care dashboard expansion | aggregate care dashboard and non-executing `关怀升级准备中` placeholder are public; intervention/contact execution is not | aggregate + placeholder only | care dashboard expansion |
-| account deletion execution | hidden safety shell only; destructive deletion is not connected | no | account deletion execution |
 | doctor contact / intervention execution | public placeholder plus hidden safety shell only; no real call, provider, or intervention submission | no | doctor contact / intervention execution |
 | care escalation draft | public placeholder is informational only; hidden local draft shell exists, backend submission and clinical/legal review still required | no | care escalation draft |
 | sunlight/star/silent lifecycle transition controls | hidden local QA controls only; lifecycle policy is not public | no | sunlight/star/silent lifecycle transition controls |
@@ -150,7 +149,7 @@ The PRD items below are intentionally not public MVP features yet. They may have
 - release-like FastAPI/Postgres and simulator remote-backend acceptance passed with `20260618-deployed-postgres-acceptance-after-deploy`, latest selected contract run `20260618-selected-backend-latest-contracts-after-deploy-r2`, and latest deployed push-token contract run `20260618-deployed-push-device-token-contract-rerun-205018`.
 - 后续如有后端合同变化，需要 rerun `run-release-like-backend-acceptance.sh`; deployed push-token registration, delayed-reply `deviceTokenId` persistence, and dispatch-due route parity are accepted by `20260618-deployed-echo-dispatch-contract-accepted-211732`. APNs provider delivery and true-device notification arrival remain external gates.
 - 需要真机、签名和设备操作 before true-device acceptance can run.
-- 需要产品/合规确认 before account deletion, doctor contact, intervention, and inheritance flows can execute.
+- 需要产品/合规确认 before production purge operations, doctor contact, intervention, and inheritance flows can execute.
 - 需要明确发布范围 before audio, time-letter, video, and public family management can move from hidden candidate to public feature.
 
 ## Current Interpretation

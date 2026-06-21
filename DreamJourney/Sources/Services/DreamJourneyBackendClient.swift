@@ -512,6 +512,10 @@ final class DreamJourneyBackendClient {
         hasExplicitBaseURL
     }
 
+    var isAccountDeletionConfigured: Bool {
+        hasExplicitBaseURL
+    }
+
     var isRealtimeVoiceConfigConfigured: Bool {
         hasExplicitBaseURL
     }
@@ -828,6 +832,36 @@ final class DreamJourneyBackendClient {
         )
     }
 
+    func softDeleteAccount(
+        userId: String,
+        phone: String,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        requestJSON(
+            path: "/auth/delete",
+            method: .post,
+            payload: [
+                "userId": userId,
+                "phone": phone,
+                "firstConfirmation": true,
+                "secondConfirmation": true,
+            ],
+            completion: completion
+        )
+    }
+
+    func restoreAccount(
+        phone: String,
+        nickname: String? = nil,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        var payload: [String: Any] = ["phone": phone]
+        if let nickname, !nickname.isEmpty {
+            payload["nickname"] = nickname
+        }
+        requestJSON(path: "/auth/restore", method: .post, payload: payload, completion: completion)
+    }
+
     func listArchiveItems(userId: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
         requestJSON(path: "/archive/items/\(pathComponent(userId))", method: .get, payload: nil, completion: completion)
     }
@@ -838,6 +872,37 @@ final class DreamJourneyBackendClient {
 
     func listFamilyMembers(userId: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
         requestJSON(path: "/family/members/\(pathComponent(userId))", method: .get, payload: nil, completion: completion)
+    }
+
+    func inviteFamilyMember(
+        userId: String,
+        name: String,
+        relation: String,
+        phone: String,
+        completion: @escaping (Result<FamilyMember, Error>) -> Void
+    ) {
+        requestJSON(
+            path: "/family/invite",
+            method: .post,
+            payload: [
+                "userId": userId,
+                "name": name,
+                "relation": relation,
+                "phone": phone,
+            ]
+        ) { result in
+            switch result {
+            case .success(let object):
+                guard let memberJSON = object["member"] as? [String: Any],
+                      let member = FamilyMember.fromBackendJSON(memberJSON) else {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                completion(.success(member))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
     }
 
     func fetchFamilyMembers(

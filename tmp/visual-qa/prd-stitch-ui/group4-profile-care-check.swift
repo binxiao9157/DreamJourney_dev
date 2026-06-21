@@ -28,10 +28,13 @@ let profileReadiness = read("DreamJourney/Sources/Modules/Profile/ProfileFamilyP
 let settings = read("DreamJourney/Sources/Modules/Profile/ProfileSettingsViewController.swift")
 let legal = read("DreamJourney/Sources/Modules/Profile/ProfileLegalViewController.swift")
 let userManager = read("DreamJourney/Sources/Services/UserManager.swift")
+let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let project = read("DreamJourney.xcodeproj/project.pbxproj")
 
-assertContains(flags, "private static let defaultEnabled: Set<DJFeature> = [\n        .careDashboard,\n        .profileSettings,\n        .legalCenter,\n    ]", "profile release defaults should stay narrow")
-assertNotContains(flags, ".familyManagement,\n        .legalCenter,\n        .accountDeletion", "unfinished profile flows must not be enabled by default")
+for requiredDefault in [".careDashboard", ".familyManagement", ".familySpace", ".profileSettings", ".legalCenter", ".accountDeletion"] {
+    assertContains(flags, requiredDefault, "profile release defaults should include latest public PRD feature \(requiredDefault)")
+}
+assertNotContains(flags, ".accountPasswordChange,\n        .careDoctorContact", "unfinished password/contact flows must not be enabled by default")
 
 assertContains(profile, "private static func profileScrollBottomInset(safeAreaBottomInset: CGFloat) -> CGFloat", "profile root should reserve bottom scroll space for floating tabbar")
 assertContains(profile, "scrollView.contentInsetAdjustmentBehavior = .never", "profile root should not rely on inherited safe area timing")
@@ -53,16 +56,22 @@ assertContains(profile, "case .profileSettings:\n            showProfileSettings
 assertContains(profile, "case .legalCenter:\n            showLegalCenter()", "legal center row should push a real page")
 assertContains(profile, "case .familyManagement:\n            openFamilyManagement()", "family row should remain routed through guarded family flow")
 assertContains(profile, "case .accountDeletion:\n            showAccountDeletionConfirmation()", "account deletion should use a safe confirmation shell")
-assertContains(profile, "deleteAction.isEnabled = false", "account deletion destructive action should remain disabled")
+assertContains(profile, "showFinalAccountDeletionConfirmation(user:", "account deletion should require a second confirmation")
+assertContains(profile, "submitAccountDeletion(user:", "account deletion should submit through an explicit function")
+assertContains(profile, "恢复机会只有 1 次", "account deletion copy should explain one restore opportunity")
+assertContains(backendClient, "softDeleteAccount(", "account deletion should call backend soft-delete contract")
+assertContains(backendClient, "\"firstConfirmation\": true", "account deletion backend payload should include first confirmation")
+assertContains(backendClient, "\"secondConfirmation\": true", "account deletion backend payload should include second confirmation")
 
 assertContains(settings, "final class ProfileSettingsViewController", "settings page view controller")
 assertContains(settings, "hidesBottomBarWhenPushed = true", "settings page should hide floating tabbar when pushed")
 assertContains(settings, "title = \"个人资料设置\"", "settings page title")
-assertContains(settings, "昵称", "settings nickname row")
+assertContains(settings, "名称", "settings name row")
 assertContains(settings, "头像", "settings avatar row")
 assertContains(settings, "手机号", "settings phone row")
-assertContains(settings, "UserManager.shared.updateProfile(nickname:", "settings should persist through UserManager")
-assertNotContains(settings, "密码", "password change should stay hidden")
+assertContains(settings, "UserManager.shared.saveProfile(nickname:", "settings should persist through UserManager")
+assertContains(settings, "isPasswordChangeVisible", "password change should stay behind an explicit visibility gate")
+assertContains(settings, "profile-settings-password-change-row", "password change hidden row should remain inspectable in QA")
 
 assertContains(legal, "final class ProfileLegalViewController", "legal page view controller")
 assertContains(legal, "hidesBottomBarWhenPushed = true", "legal page should hide floating tabbar when pushed")
