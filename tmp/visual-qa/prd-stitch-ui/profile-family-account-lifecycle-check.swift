@@ -44,7 +44,7 @@ let backendTests = backend("tests/test_core_services.py")
 let releaseRegression = app("tmp/visual-qa/prd-stitch-ui/run-release-regression.sh")
 
 for required in [
-    "private static let currentStorageVersion = 7",
+    "private static let currentStorageVersion = 8",
     ".accountDeletion",
 ] {
     assertContains(flags, required, "account deletion should be default-enabled after PRD clarification \(required)")

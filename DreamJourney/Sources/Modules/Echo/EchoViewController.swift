@@ -97,6 +97,37 @@ final class EchoViewController: UIViewController {
         return label
     }()
 
+    private let digitalHumanStatusView: UIView = {
+        let view = UIView()
+        view.backgroundColor = UIColor(hex: "#FEFEF9").withAlphaComponent(0.88)
+        view.layer.cornerRadius = 16
+        view.layer.borderWidth = 1
+        view.layer.borderColor = DJDesignTokens.Color.divider.withAlphaComponent(0.16).cgColor
+        view.clipsToBounds = true
+        DJDesignTokens.applySoftShadow(to: view)
+        return view
+    }()
+
+    private let digitalHumanStatusTitleLabel: UILabel = {
+        let label = UILabel()
+        label.text = "数字人回响"
+        label.font = DJDesignTokens.Font.title(13)
+        label.textColor = DJDesignTokens.Color.textPrimary
+        label.numberOfLines = 1
+        label.accessibilityIdentifier = "echoDigitalHumanStatusTitle"
+        return label
+    }()
+
+    private let digitalHumanStatusDetailLabel: UILabel = {
+        let label = UILabel()
+        label.text = "素材已授权，无法加载时自动回到普通回响"
+        label.font = DJDesignTokens.Font.label(11)
+        label.textColor = DJDesignTokens.Color.textTertiary
+        label.numberOfLines = 1
+        label.accessibilityIdentifier = "echoDigitalHumanStatusDetail"
+        return label
+    }()
+
     private let voiceStatusView: UIView = {
         let view = UIView()
         view.backgroundColor = UIColor(hex: "#FEFEF9").withAlphaComponent(0.84)
@@ -155,9 +186,9 @@ final class EchoViewController: UIViewController {
 
     private var shouldShowDigitalHumanLivePanel: Bool {
         let arguments = ProcessInfo.processInfo.arguments
-        let requested = arguments.contains("DJShowDigitalHumanLivePanel")
+        _ = arguments.contains("DJShowDigitalHumanLivePanel")
             || arguments.contains("DJRunDigitalHumanLivePanelSmoke")
-        return requested && FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel)
+        return FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel)
     }
 
     init(viewModel: EchoViewModel = EchoViewModel()) {
@@ -240,6 +271,7 @@ final class EchoViewController: UIViewController {
         view.addSubview(archiveContextStatusView)
         if let digitalHumanLivePanelView {
             view.addSubview(digitalHumanLivePanelView)
+            view.addSubview(digitalHumanStatusView)
         }
         view.addSubview(quoteBubble)
         view.addSubview(voiceStatusView)
@@ -255,6 +287,14 @@ final class EchoViewController: UIViewController {
         personaBadgeView.addSubview(personaTextStack)
         personaAvatarView.addSubview(personaIconView)
         archiveContextStatusView.addSubview(archiveContextStatusLabel)
+        let digitalHumanStatusStack = UIStackView(arrangedSubviews: [
+            digitalHumanStatusTitleLabel,
+            digitalHumanStatusDetailLabel
+        ])
+        digitalHumanStatusStack.axis = .vertical
+        digitalHumanStatusStack.alignment = .center
+        digitalHumanStatusStack.spacing = 2
+        digitalHumanStatusView.addSubview(digitalHumanStatusStack)
         quoteBubble.addSubview(quoteLabel)
         voiceStatusView.addSubview(voiceStatusLabel)
 
@@ -266,6 +306,10 @@ final class EchoViewController: UIViewController {
             personaTextStack,
             archiveContextStatusView,
             archiveContextStatusLabel,
+            digitalHumanStatusView,
+            digitalHumanStatusTitleLabel,
+            digitalHumanStatusDetailLabel,
+            digitalHumanStatusStack,
             quoteBubble,
             quoteLabel,
             voiceStatusView,
@@ -355,7 +399,15 @@ final class EchoViewController: UIViewController {
                 digitalHumanLivePanelView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
                 digitalHumanLivePanelView.topAnchor.constraint(equalTo: personaBadgeView.bottomAnchor, constant: 14),
                 digitalHumanLivePanelView.widthAnchor.constraint(equalToConstant: 190),
-                digitalHumanLivePanelView.heightAnchor.constraint(equalTo: digitalHumanLivePanelView.widthAnchor)
+                digitalHumanLivePanelView.heightAnchor.constraint(equalTo: digitalHumanLivePanelView.widthAnchor),
+
+                digitalHumanStatusView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                digitalHumanStatusView.topAnchor.constraint(equalTo: digitalHumanLivePanelView.bottomAnchor, constant: 8),
+                digitalHumanStatusView.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.78),
+                digitalHumanStatusStack.topAnchor.constraint(equalTo: digitalHumanStatusView.topAnchor, constant: 8),
+                digitalHumanStatusStack.leadingAnchor.constraint(equalTo: digitalHumanStatusView.leadingAnchor, constant: 14),
+                digitalHumanStatusStack.trailingAnchor.constraint(equalTo: digitalHumanStatusView.trailingAnchor, constant: -14),
+                digitalHumanStatusStack.bottomAnchor.constraint(equalTo: digitalHumanStatusView.bottomAnchor, constant: -8)
             ])
         }
     }
@@ -561,6 +613,21 @@ final class EchoViewController: UIViewController {
     private func startSDKTTSPlaybackFallback() {
         guard shouldShowDigitalHumanLivePanel else { return }
         digitalHumanAudioLevelMeter?.startSDKTTSPlaybackFallback()
+    }
+
+    private func cachedLipSyncTimelineForEchoReply(_ text: String) -> DigitalHumanLipSyncTimeline? {
+        guard shouldShowDigitalHumanLivePanel else { return nil }
+        return MemoirTTSService.shared.getCachedLipSyncTimeline(forText: text)
+    }
+
+    @discardableResult
+    private func applyCachedLipSyncTimelineForEchoReply(_ text: String) -> Bool {
+        guard let timeline = cachedLipSyncTimelineForEchoReply(text) else {
+            return false
+        }
+        stopDigitalHumanAudioLevelMetering(resetLevel: false)
+        digitalHumanLivePanelView?.applyPlaybackEvent(.visemeTimeline(timeline))
+        return true
     }
 
     private func stopDigitalHumanAudioLevelMetering(resetLevel: Bool = true) {
@@ -859,7 +926,9 @@ extension EchoViewController: DialogEngineDelegate {
         pendingAIText = nil
         DispatchQueue.main.async { [weak self] in
             self?.viewModel.receiveAIReply(text)
-            self?.startSDKTTSPlaybackFallback()
+            if self?.applyCachedLipSyncTimelineForEchoReply(text) != true {
+                self?.startSDKTTSPlaybackFallback()
+            }
         }
     }
 

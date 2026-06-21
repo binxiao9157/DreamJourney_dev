@@ -2,13 +2,15 @@
 
 ## Summary
 
-This update adds a hidden QA-only digital human live panel inside Echo. It renders through `WKWebView` using the bundled Web assets and exposes a Swift-to-JavaScript bridge for Echo state, TTS playback lifecycle, and audio-level-driven digital human motion.
+This update adds a public digital human live panel inside Echo. It renders through `WKWebView` using the bundled Web assets and exposes a Swift-to-JavaScript bridge for Echo state, TTS playback lifecycle, and audio-level-driven digital human motion.
 
-The feature is not public by default. It is only visible when `DJFeature.digitalHumanLivePanel` is enabled and the app is launched with `DJShowDigitalHumanLivePanel` or `DJRunDigitalHumanLivePanelSmoke`.
+The feature is public by default through `DJFeature.digitalHumanLivePanel`. Legacy launch arguments `DJShowDigitalHumanLivePanel` and `DJRunDigitalHumanLivePanelSmoke` remain as QA compatibility paths, but they are no longer required for the public Echo surface.
 
 ## Implemented
 
 - `DigitalHumanLivePanelView` loads `DigitalHumanLive.html` from the app bundle.
+- Echo shows a compact public status pill: `数字人回响` and `素材已授权，无法加载时自动回到普通回响`.
+- `MemoirTTSService.getCachedLipSyncTimeline(forText:)` exposes text-matched cached provider timelines. Echo tries this timeline first for TTS reply text, then falls back to SDK/player metering when no matching cache exists.
 - `DigitalHumanLive.html` wraps the existing `DHLiveMini.js`, `DHLiveMini.wasm`, `MiniLive2.js`, `MiniMateLoader.js`, `pako.min.js`, and the bundled real digital-human media asset `01.mp4`.
 - Echo maps state into the panel:
   - idle -> `idle`
@@ -111,7 +113,7 @@ True-device install/launch status:
 
 ## Current Boundary
 
-This proves an audio-reactive digital human preview, a real `AVAudioPlayer` metering bridge for QA-controlled playback, and a provider viseme timeline contract that can drive mouth-shape state from timestamped frames. It does not prove final provider-level phoneme lip sync quality.
+This proves a public audio-reactive digital human panel, a real `AVAudioPlayer` metering bridge for QA-controlled playback, a cached Memoir TTS timeline priority path, and a provider viseme timeline contract that can drive mouth-shape state from timestamped frames. It does not prove final provider-level phoneme lip sync quality.
 
 Still not claimed:
 

@@ -53,7 +53,7 @@ assertContains(plist, "<key>DreamJourneyBackendAPIToken</key>", "backend API tok
 assertContains(plist, "<string>$(DREAMJOURNEY_BACKEND_API_TOKEN)</string>", "backend API token should resolve from build setting")
 
 assertContains(flags, "private static let storageVersionKey = \"dj.featureFlags.schemaVersion\"", "feature flag storage should be versioned")
-assertContains(flags, "private static let currentStorageVersion = 7", "feature flag storage version")
+assertContains(flags, "private static let currentStorageVersion = 8", "feature flag storage version")
 assertContains(flags, "let storedVersion = UserDefaults.standard.integer(forKey: Self.storageVersionKey)", "feature flags should read stored version")
 assertContains(flags, "storedVersion == Self.currentStorageVersion", "feature flags should only trust matching-version storage")
 assertContains(flags, "self.enabled = Self.defaultEnabled\n            persist()", "old flag storage should reset to current defaults")

@@ -35,7 +35,7 @@ let releaseRegression = read("tmp/visual-qa/prd-stitch-ui/run-release-regression
 let statusDoc = read("docs/superpowers/status/2026-06-21-time-letter-public-delivery.md")
 
 for required in [
-    "private static let currentStorageVersion = 7",
+    "private static let currentStorageVersion = 8",
     ".timeLetters",
 ] {
     assertContains(featureFlags, required, "time-letter should be public by default \(required)")

@@ -4,7 +4,7 @@ Date: 2026-06-17
 
 Branch: `feature/prd-stitch-ui-adaptation`
 
-Last synced: 2026-06-21, after the product decision to expose family phone invitation and account soft deletion while keeping high-risk media, password change, advanced family lifecycle, and intervention flows hidden.
+Last synced: 2026-06-21, after the product decision to expose family phone invitation, account soft deletion, and the Echo digital-human live panel while keeping high-risk media, password change, advanced family lifecycle, and intervention flows hidden.
 
 Source of truth:
 
@@ -24,7 +24,7 @@ These items are available without hidden-branch launch arguments and without man
 | Archive overview | `记忆档案馆`, `相册影像`, `语音档案`, `人格设定`, `封存新记忆`, timeline list | `MemoryArchiveViewController` renders the PRD archive home. Feature cards are category/capability entries; `封存新记忆` remains the creation entry. |
 | Archive creation | Text, photo, and time letter: `添加文字描述`, `选择照片`, `录入时间信件` | `MemoryArchiveCreationOption.availableOptions` starts with `.text`, `.photo` and adds `.timeLetter` when default `DJFeature.timeLetters` is enabled. |
 | Archive persona | `人格设定` opens the persona/knowledge settings surface | `DJFeature.personaSettings` is enabled by default. |
-| Echo | Voice-first interaction: `开始语音` | `EchoViewController` exposes mic interaction, not text/image input controls. `VoiceSDKReadinessSummary` keeps mock ASR/TTS, backend token fallback, and production SDK readiness separate. |
+| Echo | Voice-first interaction: `开始语音`; Digital human live panel: `数字人回响` | `EchoViewController` exposes mic interaction, not text/image input controls. `DJFeature.digitalHumanLivePanel` is enabled by default; the panel uses authorized bundled digital-human assets, explains fallback to ordinary Echo, and prefers cached Memoir TTS `visemeTimeline` before SDK/player fallback. `VoiceSDKReadinessSummary` keeps mock ASR/TTS, backend token fallback, and production SDK readiness separate. |
 | Profile care | Persona card, `心境追踪`, aggregate `长辈关怀` child dashboard, loading/empty/stale/failed care states, non-executing `关怀升级准备中` placeholder, doctor identity row without call action | `DJFeature.careDashboard` is enabled by default; `careDoctorContact` is not. |
 | Profile settings | `个人资料设置`, `家人管理`, `音色复刻`, `法律法规`, `退出登录`, `注销账户` | `DJFeature.profileSettings`, `DJFeature.familyManagement`, `DJFeature.familySpace`, `DJFeature.voiceCloneShell`, `DJFeature.legalCenter`, and `DJFeature.accountDeletion` are enabled by default; logout is always appended. |
 | Family management | 手机号邀请家人；邀请中、已加入、失败状态；不提供删除家人操作 | `FamilyCircleViewController`, `FamilyRepository.inviteByPhone`, `/family/invite`, `/family/members/{user}/{member}/revoke` returns 409. |
@@ -38,6 +38,7 @@ Default enabled feature flags must remain exactly:
 ```text
 careDashboard
 accountDeletion
+digitalHumanLivePanel
 familyManagement
 familySpace
 personaSettings
@@ -73,6 +74,7 @@ These items must not appear in the public release surface yet.
 These are now implemented as guarded contracts or QA evidence packages. They do not expand the default public release surface:
 
 - Hidden Family / Voice UIQA Consumer Gate: backend-derived `digitalHumanMode`, `familyPersonaContractVersion`, `voiceProfileId`, and `sampleStatus` are parsed and consumed in hidden QA.
+- Digital human live panel: `数字人回响` is now public in Echo by default; `digital-human-live-panel-check.swift` guards public visibility, authorized-asset/fallback copy, and Memoir TTS `visemeTimeline` priority, while `digital-human-tts-viseme-gate-check.swift` keeps the optional provider-timeline QA gate.
 - 时间信件公开投递闭环: draft/sealed time letters persist `openAt` / `recipients` / `sealedAt` / `deliveryStatus`; sealed letters reject deletion and schedule local + in-app reminders.
 - 视频档案 Hidden Readiness: mock video cards/details show thumbnail placeholder, file size, upload status, failed/retry analysis state, and runtime media capability.
 - 真机验收包强化: true-device voice and archive-audio preflight scripts now generate evidence manifests, screenshot names, logs, and manual QA notes.
@@ -132,6 +134,8 @@ swift tmp/visual-qa/prd-stitch-ui/profile-care-public-placeholder-check.swift /U
 swift tmp/visual-qa/prd-stitch-ui/voice-clone-shell-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/voice-clone-backend-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/voice-sdk-readiness-boundary-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift tmp/visual-qa/prd-stitch-ui/digital-human-tts-viseme-gate-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/ios-family-voice-consumer-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/ios-family-voice-hidden-uiqa-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift tmp/visual-qa/prd-stitch-ui/time-letter-delivery-policy-shell-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev

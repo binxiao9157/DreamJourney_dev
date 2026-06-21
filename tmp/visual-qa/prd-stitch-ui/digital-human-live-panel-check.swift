@@ -31,16 +31,19 @@ let miniLive = read("DreamJourney/Resources/web/MiniLive2.js")
 let panelView = read("DreamJourney/Sources/Modules/Echo/DigitalHumanLivePanelView.swift")
 let audioMeter = read("DreamJourney/Sources/Modules/Echo/DigitalHumanAudioLevelMeter.swift")
 let lipSyncTimeline = read("DreamJourney/Sources/Modules/Echo/DigitalHumanLipSyncTimeline.swift")
+let memoirTTS = read("DreamJourney/Sources/Memoir/MemoirTTSService.swift")
 
 assertContains(featureFlags, "case digitalHumanLivePanel", "Digital human live panel should have an explicit feature flag")
-assertNotContains(
-    featureFlags,
-    ".digitalHumanLivePanel,\n    ]",
-    "Digital human live panel must not be default-enabled"
-)
+assertContains(featureFlags, ".digitalHumanLivePanel,", "Digital human live panel should be enabled in the default public release")
 
 assertContains(echo, "DigitalHumanLivePanelView", "Echo should own the live panel view")
-assertContains(echo, "DJShowDigitalHumanLivePanel", "Echo should gate the panel behind QA launch argument")
+assertContains(echo, "return FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel)", "Echo should show the digital human panel from the public feature flag, not from QA-only launch args")
+assertContains(echo, "数字人回响", "Echo should expose a public digital-human entry/status label")
+assertContains(echo, "素材已授权", "Echo should explain digital-human asset authorization")
+assertContains(echo, "自动回到普通回响", "Echo should explain fallback to ordinary Echo when the renderer is unavailable")
+assertContains(echo, "cachedLipSyncTimelineForEchoReply", "Echo should prefer cached real TTS viseme timeline before playback fallback")
+assertContains(echo, "MemoirTTSService.shared.getCachedLipSyncTimeline", "Echo should consume MemoirTTSService cached viseme timelines")
+assertContains(echo, "DJShowDigitalHumanLivePanel", "Echo should keep legacy QA launch argument compatibility")
 assertContains(echo, "DJRunDigitalHumanLivePanelSmoke", "Echo should support smoke launch argument")
 assertContains(echo, "FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel)", "Echo should require the feature flag")
 assertContains(echo, "runUIQADigitalHumanLivePanelSmoke", "Echo should expose UIQA smoke driver")
@@ -51,6 +54,7 @@ assertContains(echo, "stopDigitalHumanAudioLevelMetering", "Echo should stop pan
 assertContains(echo, "startUIQAMeteredPlayback", "Echo smoke should drive real AVAudioPlayer metering")
 assertContains(echo, "startUIQAMockVisemeTimeline", "Echo smoke should drive mock provider viseme timeline")
 assertContains(echo, "DJDigitalHumanLipSyncProviderVisemeTimeline", "Echo smoke should expose provider timeline QA mode")
+assertNotContains(echo, "return requested && FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel)", "Digital human panel must not remain QA-only")
 assertNotContains(echo, "startSimulatedAudioLevels", "Echo must not drive mouth movement with simulated amplitude")
 assertNotContains(echo, "stopSimulatedAudioLevels", "Echo must not depend on simulated audio timers")
 
@@ -108,6 +112,9 @@ assertContains(lipSyncTimeline, "case sdkTTSPlaybackFallback", "Lip-sync contrac
 assertContains(lipSyncTimeline, "case providerVisemeTimeline", "Lip-sync contract should support provider viseme timelines")
 assertContains(lipSyncTimeline, "makeUIQAMockProviderTimeline", "Lip-sync contract should provide deterministic mock timeline")
 assertContains(lipSyncTimeline, "javaScriptLiteral", "Lip-sync timeline should safely serialize for the Web bridge")
+
+assertContains(memoirTTS, "func getCachedLipSyncTimeline(forText text: String)", "Memoir TTS cache should expose text-matched viseme timelines for public Echo digital human playback")
+assertContains(memoirTTS, "textHash(for: text)", "Memoir TTS cache lookup should match cached timelines by text hash")
 
 let realAssetFiles = [
     "DreamJourney/Resources/web/assets/01.mp4",

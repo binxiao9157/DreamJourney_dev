@@ -135,6 +135,43 @@ final class MemoirTTSService {
         return result
     }
 
+    /// 获取与当前文本匹配的口型时间线。Echo 的数字人优先使用真实 TTS timeline，
+    /// 找不到同文本缓存时再降级到播放器音量/SDK fallback。
+    func getCachedLipSyncTimeline(forText text: String) -> DigitalHumanLipSyncTimeline? {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else {
+            return nil
+        }
+
+        let expectedTextHash = Self.textHash(for: text)
+        guard let cacheFiles = try? FileManager.default.contentsOfDirectory(
+            at: cacheDirectory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else {
+            return nil
+        }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return cacheFiles
+            .compactMap { fileURL -> MemoirTTSCacheEntry? in
+                guard fileURL.pathExtension == "json",
+                      let data = try? Data(contentsOf: fileURL) else {
+                    return nil
+                }
+                return try? decoder.decode(MemoirTTSCacheEntry.self, from: data)
+            }
+            .filter { entry in
+                entry.textHash == expectedTextHash
+                    && entry.visemeTimeline?.frames.isEmpty == false
+                    && FileManager.default.fileExists(atPath: entry.audioFileURL.path)
+            }
+            .sorted { $0.createdAt > $1.createdAt }
+            .first?
+            .visemeTimeline
+    }
+
     /// 删除已合成的音频文件
     func deleteAudio(for memoirId: String) {
         if let cached = loadCacheEntry(for: memoirId) {
