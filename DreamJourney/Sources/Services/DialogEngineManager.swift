@@ -421,6 +421,8 @@ final class DialogEngineManager: NSObject {
 
     // MARK: - Private
 
+    private static let defaultTTSSpeaker = "zh_male_yunzhou_jupiter_bigtts"
+
     private var engine: SpeechEngine?
     private var isSettingUp = false
 
@@ -843,10 +845,11 @@ final class DialogEngineManager: NSObject {
 
         // 构建 StartEngine 配置 JSON
         let systemRole = buildSystemRole()
+        let ttsSpeaker = resolvedTTSSpeaker()
 
         var dialogConfig: [String: Any] = [
             "tts": [
-                "speaker": "zh_male_yunzhou_jupiter_bigtts",  // 云舟-清爽沉稳男声
+                "speaker": ttsSpeaker,
                 "audio_config": [
                     "speech_rate": -20,      // 慢20%，适老化
                     "loudness_rate": 10       // 大声10%，适老化
@@ -912,6 +915,7 @@ final class DialogEngineManager: NSObject {
 
         // TTS 语速配置（适老慢速）
         startConfig["tts"] = [
+            "speaker": ttsSpeaker,
             "speech_rate": config.speechRate
         ]
 
@@ -936,6 +940,15 @@ final class DialogEngineManager: NSObject {
         }
 
         print("[DialogEngine] ⏳ 引擎启动中，等待回调...")
+    }
+
+    private func resolvedTTSSpeaker() -> String {
+        guard let speakerId = VoiceCloneService.shared.currentUsableSpeakerId else {
+            DDLogInfo("[DialogEngine] 使用默认 TTS speaker: \(Self.defaultTTSSpeaker)")
+            return Self.defaultTTSSpeaker
+        }
+        DDLogInfo("[DialogEngine] 使用声音复刻 TTS speaker: \(speakerId)")
+        return speakerId
     }
 
     // MARK: - 关键词检测

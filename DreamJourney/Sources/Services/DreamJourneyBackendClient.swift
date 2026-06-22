@@ -464,6 +464,7 @@ final class DreamJourneyBackendClient {
     enum ClientError: LocalizedError {
         case invalidJSONResponse
         case unsupportedJSONRoot
+        case backendError(statusCode: Int?, detail: String)
 
         var errorDescription: String? {
             switch self {
@@ -471,6 +472,11 @@ final class DreamJourneyBackendClient {
                 return "后端返回的数据不是有效 JSON"
             case .unsupportedJSONRoot:
                 return "后端返回的 JSON 根节点不是对象"
+            case .backendError(let statusCode, let detail):
+                if let statusCode {
+                    return "后端请求失败（\(statusCode)）：\(detail)"
+                }
+                return "后端请求失败：\(detail)"
             }
         }
     }
@@ -992,11 +998,48 @@ final class DreamJourneyBackendClient {
                         }
                     }
                 case .failure(let error):
+                    let statusCode = response.response?.statusCode
+                    if let backendMessage = Self.backendErrorMessage(from: response.data) {
+                        DispatchQueue.main.async {
+                            completion(.failure(ClientError.backendError(statusCode: statusCode, detail: backendMessage)))
+                        }
+                        return
+                    }
                     DispatchQueue.main.async {
-                        completion(.failure(error))
+                        if let statusCode {
+                            completion(.failure(ClientError.backendError(statusCode: statusCode, detail: error.localizedDescription)))
+                        } else {
+                            completion(.failure(error))
+                        }
                     }
                 }
             }
+    }
+
+    private static func backendErrorMessage(from data: Data?) -> String? {
+        guard let data, !data.isEmpty else { return nil }
+
+        if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let detail = object["detail"] as? String, !detail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return detail
+            }
+            if let message = object["message"] as? String, !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return message
+            }
+            if let error = object["error"] as? String, !error.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return error
+            }
+            if let detail = object["detail"] {
+                return String(describing: detail)
+            }
+        }
+
+        guard let text = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else {
+            return nil
+        }
+        return String(text.prefix(240))
     }
 
     private var authHeaders: HTTPHeaders? {

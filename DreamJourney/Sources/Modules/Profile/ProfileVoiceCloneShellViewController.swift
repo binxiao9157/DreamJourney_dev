@@ -465,6 +465,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     }
 
     private func applySnapshot(_ snapshot: VoiceCloneProfileSnapshot, feedback: String? = nil) {
+        VoiceCloneService.shared.persistSnapshot(snapshot)
         self.snapshot = snapshot
         statusTitleLabel?.text = voiceStatusTitle(for: snapshot)
         statusCaptionLabel?.text = voiceStatusCaption(for: snapshot)

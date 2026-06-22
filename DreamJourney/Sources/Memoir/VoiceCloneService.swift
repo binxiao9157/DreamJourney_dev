@@ -90,6 +90,10 @@ struct VoiceCloneProfileSnapshot {
         if trimmed.localizedCaseInsensitiveContains("Invalid X-Api-Key") {
             return "服务器火山音色复刻 API Key 无效，请更新后端配置后重试。"
         }
+        if trimmed.localizedCaseInsensitiveContains("resource not granted")
+            || trimmed.localizedCaseInsensitiveContains("volc.megatts.timbre") {
+            return "火山声音复刻资源未授权。请在服务器确认音色模式：预付费/免费音色需配置 consoleSpeakerId 和控制台生成的 S_ 音色 ID；后付费自定义音色需开通 volc.megatts.timbre 资源权限。"
+        }
         return trimmed
     }
 }
@@ -136,6 +140,16 @@ final class VoiceCloneService {
         return UserDefaults.standard.string(forKey: speakerIdKey)
     }
 
+    var currentUsableSpeakerId: String? {
+        let snapshot = voiceCloneShellSnapshot()
+        guard snapshot.isEnabled,
+              snapshot.sampleStatus == .ready,
+              let speakerId = normalizedVoiceProfileId(snapshot.voiceProfileId) else {
+            return nil
+        }
+        return speakerId
+    }
+
     func voiceCloneShellSnapshot() -> VoiceCloneProfileSnapshot {
         let storedStatus = UserDefaults.standard.string(forKey: sampleStatusKey)
             .flatMap(VoiceCloneSampleStatus.init(rawValue:))
@@ -153,6 +167,17 @@ final class VoiceCloneService {
 
     func voiceCloneShellSnapshot(from backendContract: VoiceCloneProfileContract) -> VoiceCloneProfileSnapshot {
         VoiceCloneProfileSnapshot(backendContract: backendContract)
+    }
+
+    func persistSnapshot(_ snapshot: VoiceCloneProfileSnapshot) {
+        if let speakerId = normalizedVoiceProfileId(snapshot.voiceProfileId),
+           snapshot.sampleStatus != .notProvided,
+           snapshot.sampleStatus != .deleted {
+            UserDefaults.standard.set(speakerId, forKey: speakerIdKey)
+        } else if snapshot.sampleStatus == .notProvided || snapshot.sampleStatus == .deleted {
+            clearStoredSpeakerId()
+        }
+        saveSampleStatus(snapshot.sampleStatus)
     }
 
     @discardableResult
@@ -246,6 +271,15 @@ final class VoiceCloneService {
         UserDefaults.standard.removeObject(forKey: speakerIdKey)
     }
 
+    private func normalizedVoiceProfileId(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != Self.emptyVoiceProfileId else {
+            return nil
+        }
+        return trimmed
+    }
+
     /// 上传音频训练声音复刻
     /// - Parameters:
     ///   - audioURL: 本地音频文件 URL（wav/mp3/m4a/aac，建议 ≥10秒，≤10MB）
@@ -277,6 +311,11 @@ final class VoiceCloneService {
             return
         }
 
+        guard !audioData.isEmpty else {
+            completion(.failure(.audioReadFailed))
+            return
+        }
+
         guard audioData.count <= 10 * 1024 * 1024 else {
             completion(.failure(.audioTooLarge))
             return
@@ -289,7 +328,10 @@ final class VoiceCloneService {
         let finalSpeakerId = speakerId ?? reusableSpeakerIdForTraining() ?? Self.makeSpeakerId()
 
         // 确定音频格式
-        let format = audioFormat(from: audioURL)
+        guard let format = audioFormat(from: audioURL) else {
+            completion(.failure(.unsupportedAudioFormat))
+            return
+        }
 
         let userId = UserManager.shared.currentUser?.id ?? "default"
         let payload: [String: Any] = [
@@ -403,6 +445,10 @@ final class VoiceCloneService {
         }
         if trimmed.localizedCaseInsensitiveContains("Invalid X-Api-Key") {
             return "服务器火山音色复刻 API Key 无效，请更新后端配置后重试。"
+        }
+        if trimmed.localizedCaseInsensitiveContains("resource not granted")
+            || trimmed.localizedCaseInsensitiveContains("volc.megatts.timbre") {
+            return "火山声音复刻资源未授权。请在服务器确认音色模式：预付费/免费音色需配置 consoleSpeakerId 和控制台生成的 S_ 音色 ID；后付费自定义音色需开通 volc.megatts.timbre 资源权限。"
         }
         return trimmed
     }
@@ -549,16 +595,14 @@ final class VoiceCloneService {
     // MARK: - 工具方法
 
     /// 从文件 URL 推断音频格式
-    private func audioFormat(from url: URL) -> String {
+    private func audioFormat(from url: URL) -> String? {
         let ext = url.pathExtension.lowercased()
         switch ext {
         case "wav": return "wav"
         case "mp3": return "mp3"
         case "m4a": return "m4a"
         case "aac": return "aac"
-        case "ogg": return "ogg"
-        case "pcm": return "pcm"
-        default: return "wav"
+        default: return nil
         }
     }
 }
@@ -570,6 +614,7 @@ enum VoiceCloneError: LocalizedError {
     case authorizationRequired
     case speakerIdNotFound
     case audioReadFailed
+    case unsupportedAudioFormat
     case audioTooLarge          // > 10MB
     case networkError(String)
     case invalidResponse
@@ -585,9 +630,11 @@ enum VoiceCloneError: LocalizedError {
         case .speakerIdNotFound:
             return "未找到声音复刻音色 ID"
         case .audioReadFailed:
-            return "音频文件读取失败"
+            return "音频文件读取失败，请确认文件已下载到本机后重试"
+        case .unsupportedAudioFormat:
+            return "暂只支持 wav、mp3、m4a、aac 音频样本"
         case .audioTooLarge:
-            return "音频文件过大（最大 10MB）"
+            return "音频文件过大（最大 10MB），请剪裁或压缩后重试"
         case .networkError(let msg):
             return "网络错误: \(msg)"
         case .invalidResponse:
