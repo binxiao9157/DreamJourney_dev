@@ -2,14 +2,14 @@
 
 ## Summary
 
-This update adds a public digital human live panel inside Echo. It renders through `WKWebView` using the bundled Web assets and exposes a Swift-to-JavaScript bridge for Echo state, TTS playback lifecycle, and audio-level-driven digital human motion.
+This update adds a digital human live panel inside Echo. It renders through `WKWebView` using the bundled Web assets and exposes a Swift-to-JavaScript bridge for Echo state, TTS playback lifecycle, and audio-level-driven digital human motion.
 
-The feature is public by default through `DJFeature.digitalHumanLivePanel`. Legacy launch arguments `DJShowDigitalHumanLivePanel` and `DJRunDigitalHumanLivePanelSmoke` remain as QA compatibility paths, but they are no longer required for the public Echo surface.
+2026-06-23 update: the panel is hidden in the default release state again. `DJFeature.digitalHumanLivePanel` is no longer included in `FeatureFlagService.defaultEnabled`, and the feature flag schema was bumped to reset existing local defaults. QA can still open the panel with `DJShowDigitalHumanLivePanel` or `DJRunDigitalHumanLivePanelSmoke`.
 
 ## Implemented
 
 - `DigitalHumanLivePanelView` loads `DigitalHumanLive.html` from the app bundle.
-- Echo shows a compact public status pill: `数字人回响` and `素材已授权，无法加载时自动回到普通回响`.
+- Echo shows the compact status pill `数字人回响` only when `DJFeature.digitalHumanLivePanel` is enabled by QA/feature flag.
 - `MemoirTTSService.getCachedLipSyncTimeline(forText:)` exposes text-matched cached provider timelines. Echo tries this timeline first for TTS reply text, then falls back to SDK/player metering when no matching cache exists.
 - `DigitalHumanLive.html` wraps the existing `DHLiveMini.js`, `DHLiveMini.wasm`, `MiniLive2.js`, `MiniMateLoader.js`, `pako.min.js`, and the bundled real digital-human media asset `01.mp4`.
 - Echo maps state into the panel:
