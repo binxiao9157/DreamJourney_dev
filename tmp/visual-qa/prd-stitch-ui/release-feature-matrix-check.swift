@@ -53,7 +53,6 @@ let matrix = read("docs/superpowers/status/2026-06-17-release-feature-matrix.md"
 let expectedDefaults: Set<String> = [
     "careDashboard",
     "accountDeletion",
-    "digitalHumanLivePanel",
     "familyManagement",
     "familySpace",
     "personaSettings",
@@ -72,6 +71,7 @@ let hiddenByDefault: Set<String> = [
     "archiveLocalAnalysis",
     "accountPasswordChange",
     "careDoctorContact",
+    "digitalHumanLivePanel",
 ]
 
 let defaults = extractDefaultEnabledFeatures(from: flags)
@@ -104,9 +104,10 @@ assertContains(archive, "applyArchiveKindFilter(.audio)", "archive voice feature
 assertContains(archive, "navigationController?.pushViewController(KnowledgeBaseViewController(), animated: true)", "archive persona card should open persona settings")
 
 assertContains(echo, "accessibilityLabel = \"开始语音\"", "echo must expose voice-first public control")
-assertContains(echo, "数字人回响", "echo must expose the public digital-human visual layer")
+assertContains(echo, "数字人回响", "echo must preserve the hidden digital-human visual layer copy")
 assertContains(echo, "自动回到普通回响", "echo must document digital-human failure fallback")
 assertContains(echo, "MemoirTTSService.shared.getCachedLipSyncTimeline", "echo must prefer cached TTS viseme timelines for the public digital-human panel")
+assertContains(echo, "return FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel)", "echo digital-human panel must remain behind the feature flag")
 assertNotContains(echo, "FeatureFlagService.shared.isEnabled(.echoTextInput)", "echo text input should not be publicly wired yet")
 assertNotContains(echo, "FeatureFlagService.shared.isEnabled(.echoImageInput)", "echo image input should not be publicly wired yet")
 
@@ -136,14 +137,14 @@ assertContains(legal, "ProfileLegalViewController", "legal center page must exis
 assertContains(legal, "AI 辅助说明", "legal center must cover AI assistance")
 assertContains(legal, "紧急情况", "legal center must cover emergency guidance")
 
-for label in ["记忆档案", "回响", "我的", "数字人回响", "添加文字描述", "选择照片", "录入时间信件", "个人资料设置", "法律法规", "退出登录", "注销账户"] {
+for label in ["记忆档案", "回响", "我的", "添加文字描述", "选择照片", "录入时间信件", "个人资料设置", "法律法规", "退出登录", "注销账户"] {
     assertContains(matrix, label, "release matrix must document public label \(label)")
 }
 for label in ["语音档案", "人格设定"] {
     assertContains(matrix, label, "release matrix must document PRD archive feature-card label \(label)")
 }
 
-for label in ["录入语音", "修改密码", "立即通话"] {
+for label in ["数字人回响", "录入语音", "修改密码", "立即通话"] {
     assertContains(matrix, label, "release matrix must document hidden label \(label)")
 }
 assertContains(matrix, "录入视频片段", "release matrix must document hidden video label")
@@ -153,10 +154,11 @@ assertContains(matrix, "手机号邀请", "release matrix must document public f
 assertContains(matrix, "## Hidden Candidate Release Decisions", "release matrix should include hidden candidate decision table")
 assertContains(matrix, "| Feature | Current gate | Public in MVP | Needed before public | Test evidence |", "release matrix should include hidden candidate decision columns")
 assertContains(matrix, "No remaining hidden PRD feature is public by default", "release matrix should preserve hidden-by-default policy")
-assertContains(matrix, "Last synced: 2026-06-21", "release matrix should include current sync timestamp")
+assertContains(matrix, "Last synced: 2026-06-25", "release matrix should include current sync timestamp")
 assertContains(matrix, "Voice SDK readiness preview", "release matrix should document hidden voice SDK readiness preview")
 assertContains(matrix, "DJShowVoiceSDKReadinessPreview", "release matrix should document hidden readiness launch arg")
-assertContains(matrix, "Digital human live panel", "release matrix should document the public digital human live panel")
+assertContains(matrix, "Digital human live panel", "release matrix should document the hidden digital human live panel")
+assertContains(matrix, "not enabled by default", "release matrix should document digital-human hidden-by-default policy")
 assertContains(matrix, "digital-human-live-panel-check.swift", "release matrix should document digital-human public release guard")
 assertContains(matrix, "digital-human-tts-viseme-gate-check.swift", "release matrix should document digital-human TTS/viseme guard")
 assertContains(matrix, "## 2026-06-19 Completed Hidden/Acceptance Guards", "release matrix should document recently completed guards")

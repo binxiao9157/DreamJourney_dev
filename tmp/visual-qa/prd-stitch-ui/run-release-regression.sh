@@ -25,7 +25,9 @@ RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE="${RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE:-0}"
 RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE="${RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE:-0}"
 RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE="${RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE:-0}"
 RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE="${RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE:-0}"
+RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE="${RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE:-0}"
 RUN_DIGITAL_HUMAN_TTS_VISEME_GATE="${RUN_DIGITAL_HUMAN_TTS_VISEME_GATE:-0}"
+RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE="${RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE:-0}"
 RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE="${RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE:-0}"
 RUN_ARCHIVE_HIDDEN_SHELL_SMOKE="${RUN_ARCHIVE_HIDDEN_SHELL_SMOKE:-0}"
 RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE="${RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE:-0}"
@@ -95,7 +97,9 @@ Run ID: \`$RUN_ID\`
 - Backend time-letter lifecycle smoke: \`$RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE\`
 - Backend family/voice contract smoke: \`$RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE\`
 - Backend family/account lifecycle smoke: \`$RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE\`
+- Backend digital-human session smoke: \`$RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE\`
 - Digital human TTS/viseme combo gate: \`$RUN_DIGITAL_HUMAN_TTS_VISEME_GATE\`
+- Digital human runtime stub gate: \`$RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE\`
 - Archive failed analysis retry UIQA smoke: \`$RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE\`
 - Archive hidden media/time-letter shell UIQA smoke: \`$RUN_ARCHIVE_HIDDEN_SHELL_SMOKE\`
 - Archive hidden media combo gate: \`$RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE\`
@@ -122,7 +126,9 @@ Run ID: \`$RUN_ID\`
 - Optional deployed backend time-letter lifecycle smoke when \`RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE=1\`; this verifies draft edit, seal, upsert, and delete metadata contracts.
 - Optional deployed backend family/voice contract smoke when \`RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE=1\`; this verifies hidden family digital-human modes and voice profile lifecycle contracts.
 - Optional deployed backend family/account lifecycle smoke when \`RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE=1\`; this verifies phone invitation, blocked family removal, account soft delete, one-time restore, and no-export retention policy.
+- Optional deployed backend digital-human session smoke when \`RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE=1\`; this verifies \`/config/runtime.digitalHuman\` and \`/digital-human/sessions\` have switched to Tencent \`cloudRender\` with backend-issued appkey/accesstoken and asset/project identity.
 - Optional digital-human TTS/viseme combo gate when \`RUN_DIGITAL_HUMAN_TTS_VISEME_GATE=1\`; this verifies backend mock synthesis \`visemeTimeline\`, iOS provider timeline UIQA, and \`AVAudioPlayer\` metering fallback UIQA.
+- Optional digital-human runtime stub gate when \`RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE=1\`; this verifies backend \`/digital-human/sessions\`, iOS \`TencentDigitalHumanRuntimeStub\`, and \`AudioOnlyDigitalHumanRuntime\` fallback without connecting the real Tencent SDK.
 - Optional archive detail failed-analysis retry UIQA smoke when \`RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE=1\`.
 - Optional hidden media/time-letter shell UIQA smoke when \`RUN_ARCHIVE_HIDDEN_SHELL_SMOKE=1\`.
 - Optional hidden media combo gate when \`RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE=1\`; this runs the hidden media detail UIQA smoke and deployed backend hidden media sync smoke under one run-id.
@@ -154,7 +160,9 @@ append_report_footer() {
 - Backend time-letter lifecycle smoke: \`backend-time-letter-lifecycle-smoke/$RUN_ID/\`
 - Backend family/voice contract smoke: \`backend-family-voice-contract-smoke/$RUN_ID/\`
 - Backend family/account lifecycle smoke: \`backend-family-account-lifecycle-smoke/$RUN_ID/\`
+- Backend digital-human session smoke: \`backend-digital-human-session-smoke/$RUN_ID/\`
 - Digital human TTS/viseme combo gate: \`digital-human-tts-viseme-gate/$RUN_ID/\`
+- Digital human runtime stub gate: \`digital-human-runtime-stub-smoke/$RUN_ID/\`
 - Archive failed analysis retry UIQA smoke: \`archive-failed-analysis-retry-smoke/$RUN_ID/\`
 - Archive hidden media/time-letter shell UIQA smoke: \`archive-hidden-shell-smoke/$RUN_ID/\`
 - Archive hidden media combo gate: \`archive-hidden-media-combo-gate/$RUN_ID/\`
@@ -190,6 +198,7 @@ run_step "Python QA scripts compile" "$STATIC_LOG_DIR/python-qa-compile.log" \
     "$SCRIPT_DIR/backend-time-letter-lifecycle-smoke.py" \
     "$SCRIPT_DIR/backend-family-voice-contract-smoke.py" \
     "$SCRIPT_DIR/backend-family-account-lifecycle-smoke.py" \
+    "$SCRIPT_DIR/backend-digital-human-session-smoke.py" \
     "$SCRIPT_DIR/backend-voice-synthesis-viseme-smoke.py"
 
 run_step "Swift model guard profile-care-snapshot-check" "$STATIC_LOG_DIR/profile-care-snapshot-check.log" \
@@ -252,10 +261,17 @@ for guard in \
   profile-care-backend-state-smoke-check.swift \
   family-digital-human-hidden-contract-check.swift \
   backend-family-voice-contract-smoke-check.swift \
+  backend-digital-human-session-smoke-check.swift \
   profile-family-account-lifecycle-check.swift \
   voice-synthesis-viseme-contract-check.swift \
   memoir-tts-cache-contract-check.swift \
   digital-human-live-panel-check.swift \
+  digital-human-runtime-abstraction-check.swift \
+  digital-human-session-client-check.swift \
+  tencent-digital-human-sdk-handoff-check.swift \
+  tencent-digital-human-trtc-compat-check.swift \
+  tencent-digital-human-sdk-binary-check.swift \
+  tencent-digital-human-cloud-runtime-smoke.swift \
   digital-human-tts-viseme-gate-check.swift \
   ios-family-voice-consumer-contract-check.swift \
   ios-family-voice-hidden-uiqa-smoke-check.swift \
@@ -373,6 +389,15 @@ else
   echo "Skipped by RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE=0" > "$OUTPUT_DIR/backend-family-account-lifecycle-smoke/$RUN_ID/skipped.txt"
 fi
 
+if [[ "$RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/backend-digital-human-session-smoke" \
+  "$SCRIPT_DIR/run-backend-digital-human-session-smoke.sh"
+else
+  mkdir -p "$OUTPUT_DIR/backend-digital-human-session-smoke/$RUN_ID"
+  echo "Skipped by RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE=0" > "$OUTPUT_DIR/backend-digital-human-session-smoke/$RUN_ID/skipped.txt"
+fi
+
 if [[ "$RUN_DIGITAL_HUMAN_TTS_VISEME_GATE" == "1" ]]; then
   RUN_ID="$RUN_ID" \
   OUTPUT_ROOT="$OUTPUT_DIR/digital-human-tts-viseme-gate" \
@@ -380,6 +405,16 @@ if [[ "$RUN_DIGITAL_HUMAN_TTS_VISEME_GATE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/digital-human-tts-viseme-gate/$RUN_ID"
   echo "Skipped by RUN_DIGITAL_HUMAN_TTS_VISEME_GATE=0" > "$OUTPUT_DIR/digital-human-tts-viseme-gate/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/digital-human-runtime-stub-smoke" \
+  DERIVED_DATA_PATH="$OUTPUT_DIR/DerivedDataDigitalHumanRuntimeStubSmoke" \
+  "$SCRIPT_DIR/run-digital-human-runtime-stub-smoke.sh"
+else
+  mkdir -p "$OUTPUT_DIR/digital-human-runtime-stub-smoke/$RUN_ID"
+  echo "Skipped by RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE=0" > "$OUTPUT_DIR/digital-human-runtime-stub-smoke/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE" == "1" ]]; then

@@ -198,6 +198,7 @@ struct BackendRuntimeConfig {
     let archiveMediaUploadIntentEndpoint: String?
     let archiveMedia: ArchiveMediaRuntimeCapability
     let archiveImageAnalysis: ArchiveImageAnalysisRuntimeCapability
+    let digitalHuman: DigitalHumanRuntimeCapability
 
     init(json: [String: Any]) {
         let capabilities = json["capabilities"] as? [String: Any]
@@ -205,6 +206,7 @@ struct BackendRuntimeConfig {
         let fallback = voice?["fallback"] as? [String: Any]
         let archive = json["archive"] as? [String: Any]
         let archiveImageAnalysis = json["archiveImageAnalysis"] as? [String: Any]
+        let digitalHuman = json["digitalHuman"] as? [String: Any]
         realtimeTokenAvailable = capabilities?["realtimeToken"] as? Bool ?? false
         voiceRuntimeConfigEndpoint = voice?["runtimeConfigEndpoint"] as? String
         fallbackMode = fallback?["mode"] as? String
@@ -212,6 +214,190 @@ struct BackendRuntimeConfig {
         archiveMediaUploadIntentEndpoint = archive?["uploadIntentEndpoint"] as? String
         self.archiveMedia = ArchiveMediaRuntimeCapability(json: archive, capabilities: capabilities)
         self.archiveImageAnalysis = ArchiveImageAnalysisRuntimeCapability(json: archiveImageAnalysis)
+        self.digitalHuman = DigitalHumanRuntimeCapability(json: digitalHuman, capabilities: capabilities)
+    }
+}
+
+struct DigitalHumanRuntimeCapability {
+    let enabled: Bool
+    let provider: String
+    let providerMode: String
+    let realProviderReady: Bool
+    let sdkProvider: String
+    let sdkAuthMode: String
+    let sdkAdapterLinked: Bool
+    let sdkReadinessMessage: String
+    let requiredServerEnv: [String]
+    let requiredAssetEnv: [String]
+    let optionalASREnv: [String]
+    let providerFieldAliases: [String]
+    let sessionEndpoint: String
+    let driveModes: [String]
+    let fallbackMode: String
+    let defaultReleaseVisible: Bool
+    let requiresBackendIssuedCredential: Bool
+    let contractVersion: Int
+
+    var canCreateMockSession: Bool {
+        enabled && provider == "tencent" && providerMode == "mockContract"
+    }
+
+    init(json: [String: Any]?, capabilities: [String: Any]?) {
+        enabled = capabilities?["digitalHumanSession"] as? Bool ?? json?["enabled"] as? Bool ?? false
+        provider = json?["provider"] as? String ?? "unknown"
+        providerMode = json?["providerMode"] as? String ?? "unknown"
+        realProviderReady = json?["realProviderReady"] as? Bool ?? false
+        sdkProvider = json?["sdkProvider"] as? String ?? ""
+        sdkAuthMode = json?["sdkAuthMode"] as? String ?? ""
+        sdkAdapterLinked = json?["sdkAdapterLinked"] as? Bool ?? false
+        sdkReadinessMessage = json?["sdkReadinessMessage"] as? String ?? ""
+        requiredServerEnv = json?["requiredServerEnv"] as? [String] ?? []
+        requiredAssetEnv = json?["requiredAssetEnv"] as? [String] ?? []
+        optionalASREnv = json?["optionalASREnv"] as? [String] ?? []
+        providerFieldAliases = json?["providerFieldAliases"] as? [String] ?? []
+        sessionEndpoint = json?["sessionEndpoint"] as? String ?? "/digital-human/sessions"
+        driveModes = json?["driveModes"] as? [String] ?? []
+        fallbackMode = json?["fallbackMode"] as? String ?? "audioOnly"
+        defaultReleaseVisible = json?["defaultReleaseVisible"] as? Bool ?? false
+        requiresBackendIssuedCredential = json?["requiresBackendIssuedCredential"] as? Bool ?? true
+        contractVersion = Self.intValue(json?["contractVersion"]) ?? 1
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.intValue
+        }
+        if let value = value as? String {
+            return Int(value)
+        }
+        return nil
+    }
+}
+
+struct DigitalHumanSessionPolicy {
+    let allowInterrupt: Bool
+    let maxDurationSeconds: Int
+    let proactiveSpeechAllowed: Bool
+
+    init(json: [String: Any]?) {
+        allowInterrupt = json?["allowInterrupt"] as? Bool ?? false
+        maxDurationSeconds = Self.intValue(json?["maxDurationSeconds"]) ?? 0
+        proactiveSpeechAllowed = json?["proactiveSpeechAllowed"] as? Bool ?? false
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.intValue
+        }
+        if let value = value as? String {
+            return Int(value)
+        }
+        return nil
+    }
+}
+
+struct DigitalHumanSessionCredential {
+    let mode: String
+    let expiresAt: Date?
+    let appKey: String?
+    let accessToken: String?
+
+    init(json: [String: Any]?) {
+        mode = json?["mode"] as? String ?? "unknown"
+        appKey = json?["appkey"] as? String ?? json?["appKey"] as? String
+        accessToken = json?["accesstoken"] as? String ?? json?["accessToken"] as? String
+        if let expiresAtValue = json?["expiresAt"] as? String {
+            expiresAt = BackendDateParser.date(from: expiresAtValue)
+        } else {
+            expiresAt = nil
+        }
+    }
+}
+
+struct DigitalHumanSessionContract {
+    let sessionId: String
+    let provider: String
+    let providerMode: String
+    let personaId: String
+    let scene: String
+    let deviceId: String
+    let lifecycleMode: DigitalHumanMode
+    let lifecycleModeLabel: String
+    let assetKey: String?
+    let providerAssetId: String?
+    let providerProjectId: String?
+    let driveMode: String
+    let alphaEnabled: Bool
+    let smartActionEnabled: Bool
+    let sessionPolicy: DigitalHumanSessionPolicy
+    let credential: DigitalHumanSessionCredential
+    let fallbackMode: String
+    let fallbackReason: String
+    let contractVersion: Int
+
+    init?(json: [String: Any]) {
+        guard let sessionId = json["sessionId"] as? String,
+              let provider = json["provider"] as? String,
+              let providerMode = json["providerMode"] as? String,
+              let personaId = json["personaId"] as? String,
+              let scene = json["scene"] as? String,
+              let lifecycleModeRaw = json["lifecycleMode"] as? String,
+              let lifecycleMode = DigitalHumanMode(rawValue: lifecycleModeRaw),
+              let driveMode = json["driveMode"] as? String else {
+            return nil
+        }
+        self.sessionId = sessionId
+        self.provider = provider
+        self.providerMode = providerMode
+        self.personaId = personaId
+        self.scene = scene
+        self.deviceId = json["deviceId"] as? String ?? ""
+        self.lifecycleMode = lifecycleMode
+        self.lifecycleModeLabel = json["lifecycleModeLabel"] as? String ?? lifecycleMode.displayName
+        self.assetKey = json["assetKey"] as? String
+        self.providerAssetId = json["providerAssetId"] as? String
+        self.providerProjectId = json["providerProjectId"] as? String ?? json["virtualmanProjectId"] as? String
+        self.driveMode = driveMode
+        self.alphaEnabled = json["alphaEnabled"] as? Bool ?? false
+        self.smartActionEnabled = json["smartActionEnabled"] as? Bool ?? false
+        self.sessionPolicy = DigitalHumanSessionPolicy(json: json["sessionPolicy"] as? [String: Any])
+        self.credential = DigitalHumanSessionCredential(json: json["credential"] as? [String: Any])
+        let fallback = json["fallback"] as? [String: Any]
+        self.fallbackMode = fallback?["mode"] as? String ?? "audioOnly"
+        self.fallbackReason = fallback?["reason"] as? String ?? ""
+        self.contractVersion = Self.intValue(json["contractVersion"]) ?? 1
+    }
+
+    func toDigitalHumanProfile(displayName: String) -> DigitalHumanProfile {
+        DigitalHumanProfile(
+            provider: provider,
+            personaId: personaId,
+            displayName: displayName,
+            lifecycleMode: lifecycleMode,
+            driveMode: driveMode,
+            alphaEnabled: alphaEnabled,
+            smartActionEnabled: smartActionEnabled,
+            assetKey: assetKey
+        )
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.intValue
+        }
+        if let value = value as? String {
+            return Int(value)
+        }
+        return nil
     }
 }
 
@@ -590,6 +776,43 @@ final class DreamJourneyBackendClient {
     ) {
         fetchRuntimeConfig { result in
             completion(result.map(\.archiveMedia))
+        }
+    }
+
+    func fetchDigitalHumanRuntimeCapability(
+        completion: @escaping (Result<DigitalHumanRuntimeCapability, Error>) -> Void
+    ) {
+        fetchRuntimeConfig { result in
+            completion(result.map(\.digitalHuman))
+        }
+    }
+
+    func createDigitalHumanSession(
+        userId: String,
+        personaId: String,
+        scene: String,
+        deviceId: String,
+        lifecycleMode: DigitalHumanMode,
+        completion: @escaping (Result<DigitalHumanSessionContract, Error>) -> Void
+    ) {
+        let payload: [String: Any] = [
+            "userId": userId,
+            "personaId": personaId,
+            "scene": scene,
+            "deviceId": deviceId,
+            "lifecycleMode": lifecycleMode.rawValue,
+        ]
+        requestJSON(path: "/digital-human/sessions", method: .post, payload: payload) { result in
+            switch result {
+            case .success(let object):
+                guard let contract = DigitalHumanSessionContract(json: object) else {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                completion(.success(contract))
+            case .failure(let error):
+                completion(.failure(error))
+            }
         }
     }
 

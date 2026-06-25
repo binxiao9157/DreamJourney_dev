@@ -17,6 +17,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        TencentVirtualmanSDKBridge.registerFactory()
+
         // 火山引擎语音 SDK 环境准备
         #if !(UI_QA_SIMULATOR && targetEnvironment(simulator))
         SpeechEngine.prepareEnvironment()
@@ -139,6 +141,11 @@ private extension AppDelegate {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.runDigitalHumanLivePanelSmoke()
+            }
+        } else if arguments.contains("DJRunDigitalHumanRuntimeStubSmoke") {
+            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.runDigitalHumanRuntimeStubSmoke()
             }
         } else if arguments.contains("DJRunProfileCareBackendFailureRetrySmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
@@ -2196,6 +2203,52 @@ private extension AppDelegate {
         }
     }
 
+    func runDigitalHumanRuntimeStubSmoke(retryCount: Int = 0) {
+        guard let tabBarController = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController as? WarmTabBarController else {
+            guard retryCount < 20 else {
+                print("[UI_QA] DigitalHumanRuntimeStubSmoke failed reason=missingRootTab")
+                writeDigitalHumanRuntimeStubSmokeResult([
+                    "completed": false,
+                    "failureReason": "missingRootTab"
+                ])
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                self?.runDigitalHumanRuntimeStubSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+
+        guard let viewControllers = tabBarController.viewControllers,
+              viewControllers.count > 1,
+              let echoNavigationController = viewControllers[1] as? UINavigationController,
+              let echoViewController = echoNavigationController.viewControllers.first as? EchoViewController else {
+            print("[UI_QA] DigitalHumanRuntimeStubSmoke failed reason=missingEcho")
+            writeDigitalHumanRuntimeStubSmokeResult([
+                "completed": false,
+                "failureReason": "missingEcho"
+            ])
+            return
+        }
+
+        tabBarController.selectedIndex = 1
+        echoViewController.runUIQADigitalHumanRuntimeStubSmoke { [weak self] payload in
+            var result = payload
+            result["selectedTabIndex"] = tabBarController.selectedIndex
+            self?.writeDigitalHumanRuntimeStubSmokeResult(result)
+            print(
+                "[UI_QA] DigitalHumanRuntimeStubSmoke completed " +
+                "completed=\(result["completed"] as? Bool == true) " +
+                "provider=\(result["provider"] as? String ?? "missing") " +
+                "fallback=\(result["fallbackMode"] as? String ?? "missing")"
+            )
+        }
+    }
+
     func runBackendEnvSmoke(retryCount: Int = 0) {
         guard let tabBarController = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
@@ -2795,6 +2848,21 @@ private extension AppDelegate {
             try data.write(to: resultURL, options: [.atomic])
         } catch {
             print("[UI_QA] DigitalHumanLivePanelSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    func writeDigitalHumanRuntimeStubSmokeResult(_ result: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
+              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("[UI_QA] DigitalHumanRuntimeStubSmoke failed reason=resultEncoding")
+            return
+        }
+
+        let resultURL = documentsURL.appendingPathComponent("digital-human-runtime-stub-smoke-result.json")
+        do {
+            try data.write(to: resultURL, options: [.atomic])
+        } catch {
+            print("[UI_QA] DigitalHumanRuntimeStubSmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
     }
 

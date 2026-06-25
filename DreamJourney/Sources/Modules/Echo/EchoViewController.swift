@@ -6,6 +6,7 @@ final class EchoViewController: UIViewController {
     private let scenicView = EchoScenicParkView()
     private var digitalHumanLivePanelView: DigitalHumanLivePanelView?
     private var digitalHumanAudioLevelMeter: DigitalHumanAudioLevelMeter?
+    private var digitalHumanRuntime: DigitalHumanRuntime?
 
     private let personaBadgeView: UIView = {
         let view = UIView()
@@ -1086,6 +1087,70 @@ extension EchoViewController {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.45) {
             finishWhenRealAssetReady(attemptsRemaining: 14)
+        }
+    }
+
+    func runUIQADigitalHumanRuntimeStubSmoke(completion: @escaping ([String: Any]) -> Void) {
+        let context = DigitalHumanContextStore.shared.current
+        let userId = UserManager.shared.currentUser?.id ?? context.viewerUserId ?? "user_9999"
+        DreamJourneyBackendClient.shared.createDigitalHumanSession(
+            userId: userId,
+            personaId: context.ownerId,
+            scene: "echo",
+            deviceId: "ios-uiqa-simulator",
+            lifecycleMode: context.mode
+        ) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let contract):
+                let profile = contract.toDigitalHumanProfile(displayName: context.resolvedDisplayName)
+                let runtimeSelection = DigitalHumanRuntimeFactory.makeRuntime(for: contract)
+                let runtime = runtimeSelection.runtime
+                self.digitalHumanRuntime = runtime
+                do {
+                    try runtime.configure(profile)
+                    try runtime.open()
+                    try runtime.sendTextChunk("我在这里。", requestID: contract.sessionId, sequence: 1, isFinal: false)
+                    let speakingState = runtime.state
+                    try runtime.sendTextChunk("", requestID: contract.sessionId, sequence: 2, isFinal: true)
+
+                    let audioOnlyRuntime = AudioOnlyDigitalHumanRuntime()
+                    try audioOnlyRuntime.configure(profile)
+                    try audioOnlyRuntime.open()
+
+                    completion([
+                        "completed": true,
+                        "provider": contract.provider,
+                        "providerMode": contract.providerMode,
+                        "sessionId": contract.sessionId,
+                        "driveMode": contract.driveMode,
+                        "runtimeProvider": runtimeSelection.selectedProvider,
+                        "runtimeProviderMode": runtimeSelection.selectedMode,
+                        "runtimeFactoryFallbackReason": runtimeSelection.fallbackReason ?? "",
+                        "runtimeIsRealSDKBacked": runtimeSelection.isRealSDKBacked,
+                        "runtimeStateAfterFinal": "\(runtime.state)",
+                        "runtimeSpeakingState": "\(speakingState)",
+                        "audioOnlyFallbackState": "\(audioOnlyRuntime.state)",
+                        "fallbackMode": contract.fallbackMode,
+                        "allowInterrupt": contract.sessionPolicy.allowInterrupt,
+                        "proactiveSpeechAllowed": contract.sessionPolicy.proactiveSpeechAllowed,
+                        "credentialMode": contract.credential.mode,
+                        "defaultReleaseVisible": FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel),
+                    ])
+                } catch {
+                    completion([
+                        "completed": false,
+                        "failureReason": "runtimeError",
+                        "error": error.localizedDescription,
+                    ])
+                }
+            case .failure(let error):
+                completion([
+                    "completed": false,
+                    "failureReason": "backendSessionError",
+                    "error": error.localizedDescription,
+                ])
+            }
         }
     }
 }

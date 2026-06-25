@@ -34,11 +34,11 @@ let lipSyncTimeline = read("DreamJourney/Sources/Modules/Echo/DigitalHumanLipSyn
 let memoirTTS = read("DreamJourney/Sources/Memoir/MemoirTTSService.swift")
 
 assertContains(featureFlags, "case digitalHumanLivePanel", "Digital human live panel should have an explicit feature flag")
-assertContains(featureFlags, ".digitalHumanLivePanel,", "Digital human live panel should be enabled in the default public release")
+assertNotContains(featureFlags, ".digitalHumanLivePanel,", "Digital human live panel should remain hidden in the default public release")
 
 assertContains(echo, "DigitalHumanLivePanelView", "Echo should own the live panel view")
-assertContains(echo, "return FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel)", "Echo should show the digital human panel from the public feature flag, not from QA-only launch args")
-assertContains(echo, "数字人回响", "Echo should expose a public digital-human entry/status label")
+assertContains(echo, "return FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel)", "Echo should show the digital human panel only from the explicit feature flag")
+assertContains(echo, "数字人回响", "Echo should preserve hidden digital-human entry/status label copy")
 assertContains(echo, "素材已授权", "Echo should explain digital-human asset authorization")
 assertContains(echo, "自动回到普通回响", "Echo should explain fallback to ordinary Echo when the renderer is unavailable")
 assertContains(echo, "cachedLipSyncTimelineForEchoReply", "Echo should prefer cached real TTS viseme timeline before playback fallback")
@@ -54,7 +54,7 @@ assertContains(echo, "stopDigitalHumanAudioLevelMetering", "Echo should stop pan
 assertContains(echo, "startUIQAMeteredPlayback", "Echo smoke should drive real AVAudioPlayer metering")
 assertContains(echo, "startUIQAMockVisemeTimeline", "Echo smoke should drive mock provider viseme timeline")
 assertContains(echo, "DJDigitalHumanLipSyncProviderVisemeTimeline", "Echo smoke should expose provider timeline QA mode")
-assertNotContains(echo, "return requested && FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel)", "Digital human panel must not remain QA-only")
+assertContains(echo, "DJShowDigitalHumanLivePanel", "Digital human panel should keep QA launch argument compatibility")
 assertNotContains(echo, "startSimulatedAudioLevels", "Echo must not drive mouth movement with simulated amplitude")
 assertNotContains(echo, "stopSimulatedAudioLevels", "Echo must not depend on simulated audio timers")
 

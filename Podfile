@@ -28,6 +28,9 @@ target 'DreamJourney' do
   # ===== 语音对话 SDK =====
   pod 'SpeechEngineToB', '0.0.14.6.1-bugfix'
 
+  # ===== 腾讯云数智人 SDK 依赖 =====
+  pod 'TXLiteAVSDK_TRTC', :podspec => 'https://liteav.sdk.qcloud.com/pod/liteavsdkspec/customer/TXLiteAVSDK_TRTC_shuziren_13.0.20262.podspec'
+
   # ===== 工具 =====
   pod 'SwiftyJSON', '~> 5.0'
   pod 'CocoaLumberjack/Swift', '~> 3.8'
