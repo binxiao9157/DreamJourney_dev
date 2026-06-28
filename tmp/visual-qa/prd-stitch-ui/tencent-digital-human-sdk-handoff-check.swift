@@ -60,6 +60,6 @@ require(client.contains("assetKey"), "client must parse backend asset key")
 
 require(project.contains("TencentDigitalHumanSDKBridge.swift in Sources"), "SDK bridge must be compiled into the app target")
 require(project.contains("TencentDigitalHumanCloudRuntime.swift in Sources"), "cloud runtime must be compiled into the app target")
-require(releaseMatrix.contains("digitalHumanLivePanel") && releaseMatrix.contains("hidden"), "release matrix must keep digital human hidden until explicit release")
+require(releaseMatrix.contains("digitalHumanLivePanel") && releaseMatrix.contains("public"), "release matrix must document the public Tencent digital human release state")
 
 print("tencent-digital-human-sdk-handoff-check passed")

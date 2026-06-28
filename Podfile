@@ -27,8 +27,11 @@ target 'DreamJourney' do
 
   # ===== 语音对话 SDK =====
   pod 'SpeechEngineToB', '0.0.14.6.1-bugfix'
-
-  # ===== 腾讯云数智人 SDK 依赖 =====
+  # 腾讯数智人 SDK 的 Swift interface 直接 import TXLiteAVSDK_TRTC。
+  # App 源码不直接 import 或控制 TRTC；这里只保留 SDK 编译依赖。
+  # TXLiteAVSDK_TRTC is compile-time only for the app target: VirtualmanStreamSDK
+  # already contains those runtime classes, so post_install strips the app-level
+  # TXLiteAVSDK_TRTC linker flag to avoid duplicate Objective-C classes on device.
   pod 'TXLiteAVSDK_TRTC', :podspec => 'https://liteav.sdk.qcloud.com/pod/liteavsdkspec/customer/TXLiteAVSDK_TRTC_shuziren_13.0.20262.podspec'
 
   # ===== 工具 =====
@@ -74,6 +77,19 @@ post_install do |installer|
   simulator_library_paths = 'LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*] = "${TOOLCHAIN_DIR}/usr/lib/swift/${PLATFORM_NAME}" /usr/lib/swift $(SDKROOT)/usr/lib/swift'
   simulator_swift_conditions = 'SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*] = $(inherited) UI_QA_SIMULATOR'
 
+  def stripTencentDigitalHumanRuntimeLinkage(xcconfig_path)
+    return unless File.exist?(xcconfig_path)
+
+    lines = File.readlines(xcconfig_path, chomp: true)
+    lines.map! do |line|
+      next line unless line.start_with?('OTHER_LDFLAGS =')
+
+      line
+        .gsub(' -framework "TXLiteAVSDK_TRTC"', '')
+    end
+    File.write(xcconfig_path, "#{lines.join("\n")}\n")
+  end
+
   ['debug', 'release'].each do |configuration|
     xcconfig_path = File.join(
       __dir__,
@@ -94,5 +110,6 @@ post_install do |installer|
     insert_at = lines.index { |line| line.start_with?('OTHER_LDFLAGS =') } || lines.length - 1
     lines.insert(insert_at + 1, simulator_library_paths, simulator_ldflags, simulator_swift_conditions)
     File.write(xcconfig_path, "#{lines.join("\n")}\n")
+    stripTencentDigitalHumanRuntimeLinkage(xcconfig_path)
   end
 end

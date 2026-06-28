@@ -203,7 +203,7 @@ grep -Eq '"runtimeStateAfterFinal"[[:space:]]*:[[:space:]]*"ready"' "$RESULT_FIL
 grep -Eq '"allowInterrupt"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Session policy should allow interrupt."
 grep -Eq '"proactiveSpeechAllowed"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Session policy should disallow proactive speech."
 grep -Eq '"credentialMode"[[:space:]]*:[[:space:]]*"backend-issued-mock"' "$RESULT_FILE" || fail "Credential mode should be backend-issued-mock."
-grep -Eq '"defaultReleaseVisible"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Digital human panel must remain hidden by default."
+grep -Eq '"defaultReleaseVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Digital human panel must be visible by default."
 
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null
 xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true

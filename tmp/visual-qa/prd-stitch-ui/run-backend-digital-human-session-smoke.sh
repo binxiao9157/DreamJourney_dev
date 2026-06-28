@@ -149,7 +149,7 @@ Status: passed
 - Session credential contains appkey/accesstoken, but the evidence redacts raw values.
 - Session includes `providerAssetId` or `providerProjectId`.
 - `silent` lifecycle mode is rejected before render session creation.
-- Public release remains hidden through `defaultReleaseVisible=false`.
+- Public release exposes the Tencent digital-human panel through `defaultReleaseVisible=true`; provider failure must still degrade to ordinary Echo.
 
 ## Evidence
 

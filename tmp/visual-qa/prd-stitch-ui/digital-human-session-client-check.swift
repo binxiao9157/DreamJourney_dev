@@ -61,7 +61,7 @@ require(appDelegate.contains("digital-human-runtime-stub-smoke-result.json"), "Q
 
 require(runtimeStubSmoke.contains("DJRunDigitalHumanRuntimeStubSmoke"), "runtime stub smoke must launch the QA harness")
 require(runtimeStubSmoke.contains("STORE_BACKEND=memory"), "runtime stub smoke must start an isolated memory backend")
-require(runtimeStubSmoke.contains("defaultReleaseVisible"), "runtime stub smoke must assert public default hidden state")
+require(runtimeStubSmoke.contains("defaultReleaseVisible"), "runtime stub smoke must assert public default visible state")
 require(runtimeStubSmoke.contains("runtimeIsRealSDKBacked"), "runtime stub smoke must assert SDK is not falsely marked real")
 require(runtimeStubSmoke.contains("runtimeFactoryFallbackReason"), "runtime stub smoke must assert factory fallback reason")
 require(runtimeStubSmoke.contains("audioOnlyFallbackState"), "runtime stub smoke must assert audio-only fallback")

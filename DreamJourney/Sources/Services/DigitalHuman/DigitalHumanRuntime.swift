@@ -52,6 +52,7 @@ protocol DigitalHumanRuntime: AnyObject {
     var contentView: UIView { get }
     var state: DigitalHumanSessionState { get }
     var profile: DigitalHumanProfile? { get }
+    var onStateChange: ((DigitalHumanSessionState) -> Void)? { get set }
 
     func configure(_ profile: DigitalHumanProfile) throws
     func open() throws

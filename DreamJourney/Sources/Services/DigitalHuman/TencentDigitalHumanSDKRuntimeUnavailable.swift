@@ -5,7 +5,10 @@ final class TencentDigitalHumanSDKRuntimeUnavailable: DigitalHumanRuntime {
     static let unavailableReason = "Tencent SDK adapter is not linked in the current iOS build; TencentDigitalHumanSDKBridgeFactory returned no bridge."
 
     let contentView: UIView
-    private(set) var state: DigitalHumanSessionState = .idle
+    var onStateChange: ((DigitalHumanSessionState) -> Void)?
+    private(set) var state: DigitalHumanSessionState = .idle {
+        didSet { onStateChange?(state) }
+    }
     private(set) var profile: DigitalHumanProfile?
 
     init(contentView: UIView = UIView()) {

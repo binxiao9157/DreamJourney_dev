@@ -143,6 +143,7 @@
     (function () {
       const root = document.documentElement;
       const body = document.body;
+      const stage = document.getElementById('stage');
       const stateLabel = document.getElementById('stateLabel');
       const personaLabel = document.getElementById('personaLabel');
       const canvasVideo = document.getElementById('canvas_video');
@@ -171,7 +172,8 @@
         personaName: '寻梦环游',
         personaSubtitle: '',
         assetVideoReady: false,
-        realAssetPreviewStarted: false
+        realAssetPreviewStarted: false,
+        providerMode: false
       };
 
       function clampLevel(value) {
@@ -184,6 +186,9 @@
 
       function applyState() {
         body.dataset.state = state.stateName;
+        if (stage) {
+          stage.style.display = state.providerMode ? 'none' : '';
+        }
         root.style.setProperty('--level', String(state.audioLevel));
         const lift = (-1.8 * state.audioLevel).toFixed(2);
         const scale = (1 + state.audioLevel * 0.012).toFixed(4);
@@ -266,6 +271,9 @@
       }
 
       function startRealAssetPreview() {
+        if (state.providerMode) {
+          return;
+        }
         if (state.realAssetPreviewStarted) {
           return;
         }
@@ -366,6 +374,35 @@
           state.personaSubtitle = String(subtitle || '');
           applyState();
         },
+        setProviderMode: function (enabled) {
+          state.providerMode = Boolean(enabled);
+          if (state.providerMode) {
+            stopVisemeTimeline();
+            state.audioLevel = 0;
+            state.audioLevelSource = 'providerView';
+            state.lipSyncSource = 'providerView';
+            state.currentMouthShape = 'neutral';
+            const video = document.getElementById('real_asset_video');
+            if (video) {
+              video.pause();
+            }
+            if (canvasVideo) {
+              const context = canvasVideo.getContext('2d');
+              if (context) {
+                context.clearRect(0, 0, canvasVideo.width, canvasVideo.height);
+              }
+            }
+            if (canvasGL) {
+              const context = canvasGL.getContext('2d');
+              if (context) {
+                context.clearRect(0, 0, canvasGL.width, canvasGL.height);
+              }
+            }
+          } else {
+            startRealAssetPreview();
+          }
+          applyState();
+        },
         markRendererReady: function () {
           state.rendererReady = true;
           state.assetVideoReady = true;
@@ -390,8 +427,8 @@
             lipSyncFrameCount: state.lipSyncFrameCount,
             personaName: state.personaName,
             personaSubtitle: state.personaSubtitle,
-            hasRealDigitalHumanAsset: true,
-            assetVideoReady: state.assetVideoReady,
+            hasRealDigitalHumanAsset: !state.providerMode,
+            assetVideoReady: !state.providerMode && state.assetVideoReady,
             assetVideoSrc: assetVideoSrc,
             assetDataSrc: assetDataSrc,
             hasFallbackAvatar: false

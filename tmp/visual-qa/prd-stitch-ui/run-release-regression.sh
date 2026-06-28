@@ -269,6 +269,7 @@ for guard in \
   digital-human-runtime-abstraction-check.swift \
   digital-human-session-client-check.swift \
   tencent-digital-human-sdk-handoff-check.swift \
+  tencent-digital-human-audio-owner-stop-semantics-check.swift \
   tencent-digital-human-trtc-compat-check.swift \
   tencent-digital-human-sdk-binary-check.swift \
   tencent-digital-human-cloud-runtime-smoke.swift \

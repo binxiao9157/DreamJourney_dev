@@ -60,6 +60,8 @@ final class DigitalHumanLivePanelView: UIView {
     private var pendingScripts: [String] = []
     private(set) var isReady = false
     private(set) var didFail = false
+    private var hostedProviderView: UIView?
+    private var providerModeEnabled = false
 
     override init(frame: CGRect) {
         let configuration = WKWebViewConfiguration()
@@ -124,6 +126,41 @@ final class DigitalHumanLivePanelView: UIView {
         let encodedName = Self.javaScriptStringLiteral(name)
         let encodedSubtitle = Self.javaScriptStringLiteral(subtitle)
         evaluate("window.DreamJourneyDigitalHuman && window.DreamJourneyDigitalHuman.setPersona(\(encodedName), \(encodedSubtitle))")
+    }
+
+    func hostProviderView(_ providerView: UIView) {
+        hostedProviderView?.removeFromSuperview()
+        hostedProviderView = providerView
+        providerView.accessibilityIdentifier = "digitalHumanLiveProviderView"
+        providerView.translatesAutoresizingMaskIntoConstraints = false
+        providerView.backgroundColor = .clear
+        providerView.isOpaque = false
+        setProviderModeEnabled(true)
+        webView.isHidden = true
+        webView.alpha = 0
+        webView.isUserInteractionEnabled = false
+        fallbackLabel.isHidden = true
+        addSubview(providerView)
+        NSLayoutConstraint.activate([
+            providerView.topAnchor.constraint(equalTo: topAnchor),
+            providerView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            providerView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            providerView.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
+    }
+
+    func removeHostedProviderView() {
+        hostedProviderView?.removeFromSuperview()
+        hostedProviderView = nil
+        setProviderModeEnabled(false)
+        webView.isHidden = false
+        webView.alpha = 1
+        webView.isUserInteractionEnabled = true
+    }
+
+    private func setProviderModeEnabled(_ enabled: Bool) {
+        providerModeEnabled = enabled
+        evaluate("window.DreamJourneyDigitalHuman && window.DreamJourneyDigitalHuman.setProviderMode(\(enabled ? "true" : "false"))")
     }
 
     func snapshot(completion: @escaping (DigitalHumanLivePanelSnapshot?) -> Void) {
@@ -257,6 +294,9 @@ extension DigitalHumanLivePanelView: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         isReady = true
         fallbackLabel.isHidden = true
+        if providerModeEnabled {
+            setProviderModeEnabled(true)
+        }
         flushPendingScripts()
     }
 

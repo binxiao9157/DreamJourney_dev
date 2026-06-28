@@ -4,7 +4,7 @@ Date: 2026-06-17
 
 Branch: `feature/prd-stitch-ui-adaptation`
 
-Last synced: 2026-06-25, after the product decision to keep the Echo digital-human live panel hidden by default while preserving the Tencent replacement runtime foundation, family phone invitation, account soft deletion, time letters, and voice clone public foundations.
+Last synced: 2026-06-28, after the product decision to make the Tencent Echo digital-human live panel public by default while preserving ordinary Echo fallback, family phone invitation, account soft deletion, time letters, and voice clone public foundations.
 
 Source of truth:
 
@@ -24,7 +24,7 @@ These items are available without hidden-branch launch arguments and without man
 | Archive overview | `记忆档案馆`, `相册影像`, `语音档案`, `人格设定`, `封存新记忆`, timeline list | `MemoryArchiveViewController` renders the PRD archive home. Feature cards are category/capability entries; `封存新记忆` remains the creation entry. |
 | Archive creation | Text, photo, and time letter: `添加文字描述`, `选择照片`, `录入时间信件` | `MemoryArchiveCreationOption.availableOptions` starts with `.text`, `.photo` and adds `.timeLetter` when default `DJFeature.timeLetters` is enabled. |
 | Archive persona | `人格设定` opens the persona/knowledge settings surface | `DJFeature.personaSettings` is enabled by default. |
-| Echo | Voice-first interaction: `开始语音` | `EchoViewController` exposes mic interaction, not text/image input controls. `DJFeature.digitalHumanLivePanel` is not enabled by default; QA can enable the hidden panel with the feature flag / smoke launch path. The panel keeps authorized bundled digital-human assets, explains fallback to ordinary Echo, and prefers cached Memoir TTS `visemeTimeline` before SDK/player fallback. `VoiceSDKReadinessSummary` keeps mock ASR/TTS, backend token fallback, and production SDK readiness separate. |
+| Echo | Voice-first interaction + Tencent digital human live panel: `开始语音`, `数字人回响` | `EchoViewController` exposes mic interaction, not text/image input controls. `DJFeature.digitalHumanLivePanel` is enabled by default; `DJDisableDigitalHumanLivePanel` can suppress it only for QA isolation. The panel uses the backend-issued Tencent cloud-render session when available, explains fallback to ordinary Echo, and prefers cached Memoir TTS `visemeTimeline` before SDK/player fallback. `VoiceSDKReadinessSummary` keeps mock ASR/TTS, backend token fallback, and production SDK readiness separate. |
 | Profile care | Persona card, `心境追踪`, aggregate `长辈关怀` child dashboard, loading/empty/stale/failed care states, non-executing `关怀升级准备中` placeholder, doctor identity row without call action | `DJFeature.careDashboard` is enabled by default; `careDoctorContact` is not. |
 | Profile settings | `个人资料设置`, `家人管理`, `音色复刻`, `法律法规`, `退出登录`, `注销账户` | `DJFeature.profileSettings`, `DJFeature.familyManagement`, `DJFeature.familySpace`, `DJFeature.voiceCloneShell`, `DJFeature.legalCenter`, and `DJFeature.accountDeletion` are enabled by default; logout is always appended. |
 | Family management | 手机号邀请家人；邀请中、已加入、失败状态；不提供删除家人操作 | `FamilyCircleViewController`, `FamilyRepository.inviteByPhone`, `/family/invite`, `/family/members/{user}/{member}/revoke` returns 409. |
@@ -45,6 +45,7 @@ profileSettings
 timeLetters
 legalCenter
 voiceCloneShell
+digitalHumanLivePanel
 ```
 
 ## Hidden By Default
@@ -55,7 +56,6 @@ These items must not appear in the public release surface yet.
 | --- | --- | --- |
 | Echo | Text input | `DJFeature.echoTextInput`; no public control. |
 | Echo | Image input | `DJFeature.echoImageInput`; no public control. |
-| Echo | Digital human live panel / `数字人回响` | `DJFeature.digitalHumanLivePanel`, `DJShowDigitalHumanLivePanel`, or `DJRunDigitalHumanLivePanelSmoke` only; not enabled by default while Tencent provider replacement is still in foundation phase. |
 | Echo / QA | Voice SDK readiness preview | `DJShowVoiceSDKReadinessPreview` only; hidden UIQA shows readiness boundary and must not appear in public release. |
 | Archive | Audio upload / `录入语音` | `DJFeature.archiveAudioUpload` or `DJEnableArchiveHiddenBranches` only. |
 | Archive | Video upload / `录入视频片段` | `DJFeature.archiveVideoUpload` or `DJEnableArchiveHiddenBranches` mock-file shell only. |
@@ -74,7 +74,7 @@ These items must not appear in the public release surface yet.
 These are now implemented as guarded contracts or QA evidence packages. They do not expand the default public release surface:
 
 - Hidden Family / Voice UIQA Consumer Gate: backend-derived `digitalHumanMode`, `familyPersonaContractVersion`, `voiceProfileId`, and `sampleStatus` are parsed and consumed in hidden QA.
-- Digital human live panel: `数字人回响` is hidden by default again; `digital-human-live-panel-check.swift` guards feature-flag visibility, authorized-asset/fallback copy, and Memoir TTS `visemeTimeline` priority, while `digital-human-tts-viseme-gate-check.swift` and `digital-human-session-client-check.swift` keep optional provider-timeline and Tencent-runtime QA gates.
+- Digital human live panel: `数字人回响` is public by default; `digital-human-live-panel-check.swift` guards default visibility, explicit QA disable, authorized-asset/fallback copy, Tencent cloud-render handoff, and Memoir TTS `visemeTimeline` priority, while `digital-human-tts-viseme-gate-check.swift` and `digital-human-session-client-check.swift` keep optional provider-timeline and Tencent-runtime QA gates.
 - 时间信件公开投递闭环: draft/sealed time letters persist `openAt` / `recipients` / `sealedAt` / `deliveryStatus`; sealed letters reject deletion and schedule local + in-app reminders.
 - 视频档案 Hidden Readiness: mock video cards/details show thumbnail placeholder, file size, upload status, failed/retry analysis state, and runtime media capability.
 - 真机验收包强化: true-device voice and archive-audio preflight scripts now generate evidence manifests, screenshot names, logs, and manual QA notes.

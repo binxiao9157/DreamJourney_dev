@@ -155,6 +155,7 @@ final class DialogEngineManager: NSObject {
     private(set) var isDialogActive = false
     var currentTopic: String?
     var currentConfigurationIsProductionReady: Bool { false }
+    private(set) var isLocalTTSPlaybackEnabled = true
 
     private override init() {
         super.init()
@@ -163,12 +164,17 @@ final class DialogEngineManager: NSObject {
     func configure(token: String) {}
     func configure(runtimeConfig: RealtimeVoiceRuntimeConfig) -> Bool { true }
     func interruptAI() {}
+    @discardableResult
+    func setLocalTTSPlaybackEnabled(_ enabled: Bool) -> Bool {
+        isLocalTTSPlaybackEnabled = enabled
+        return true
+    }
 
     func setup() {
         isEngineReady = true
     }
 
-    func startDialog() {
+    func startDialog(sendsGreeting: Bool = true) {
         recordUIQAPromptSnapshot()
         isDialogActive = true
         delegate?.onDialogStarted()
@@ -283,6 +289,7 @@ final class DialogEngineManager: NSObject {
     private(set) var isEnding = false
     /// 当前话题（由业务层设置，注入到 system_role 末尾）
     var currentTopic: String?
+    private var suppressGreetingForNextStart = false
 
     // MARK: - Configuration
 
@@ -459,6 +466,26 @@ final class DialogEngineManager: NSObject {
         config.token = token
     }
 
+    @discardableResult
+    func setLocalTTSPlaybackEnabled(_ enabled: Bool) -> Bool {
+        guard config.enablePlayer != enabled else {
+            return true
+        }
+        guard !isDialogActive else {
+            DDLogWarn("[DialogEngine] 对话进行中，跳过本地 TTS 播放开关切换")
+            return false
+        }
+
+        config.enablePlayer = enabled
+        print("[DialogEngine] local TTS playback \(enabled ? "enabled" : "disabled")")
+        DDLogInfo("[DialogEngine] 本地 TTS 播放已\(enabled ? "开启" : "关闭")")
+
+        if isEngineReady {
+            destroyEngine()
+        }
+        return true
+    }
+
     /// 应用后端下发的实时语音运行配置。当前 SpeechEngineToB 封装只支持
     /// legacy appID/appKey/appToken 模式；其他 authMode 保留给后续 SDK 适配。
     @discardableResult
@@ -565,7 +592,8 @@ final class DialogEngineManager: NSObject {
     }
 
     /// 开始语音对话
-    func startDialog() {
+    func startDialog(sendsGreeting: Bool = true) {
+        suppressGreetingForNextStart = !sendsGreeting
         // 引擎未就绪时先初始化
         guard isEngineReady, let engine = engine else {
             DDLogInfo("[DialogEngine] 引擎未就绪，先初始化")
@@ -608,7 +636,7 @@ final class DialogEngineManager: NSObject {
         isDialogActive = false
         isAISpeaking = false
         isEnding = false
-        restoreAudioSession()
+        restoreAudioSessionIfNeeded()
 
         switch reason {
         case .keyword(let kw):
@@ -656,27 +684,47 @@ final class DialogEngineManager: NSObject {
         isDialogActive = false
         isAISpeaking = false
         isEnding = false
-        restoreAudioSession()
+        restoreAudioSessionIfNeeded()
         DDLogInfo("[DialogEngine] 引擎已销毁")
     }
 
     // MARK: - Audio Session 管理
 
+    private var shouldLetExternalTTSOwnAudioSession: Bool {
+        !config.enablePlayer
+    }
+
     /// 配置音频会话为录音+播放模式
     private func configureAudioSession() {
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(
-                .playAndRecord,
-                mode: .voiceChat,
-                options: [.defaultToSpeaker, .allowBluetooth]
-            )
+            if session.category != .playAndRecord || session.mode != .voiceChat {
+                try session.setCategory(
+                    .playAndRecord,
+                    mode: .voiceChat,
+                    options: [.defaultToSpeaker, .allowBluetooth]
+                )
+            }
             try session.setActive(true)
-            DDLogInfo("[DialogEngine] AudioSession 配置为 playAndRecord + voiceChat")
+            if shouldLetExternalTTSOwnAudioSession {
+                DDLogInfo("[DialogEngine] AudioSession 配置为 playAndRecord + voiceChat，腾讯数字人远端音频接管播放")
+                print("[DialogEngine] AudioSession active for external digital-human TTS playback")
+            } else {
+                DDLogInfo("[DialogEngine] AudioSession 配置为 playAndRecord + voiceChat")
+            }
         } catch {
             DDLogError("[DialogEngine] AudioSession 配置失败: \(error.localizedDescription)")
             delegate?.onError(error: DialogEngineError.audioSessionFailed)
         }
+    }
+
+    private func restoreAudioSessionIfNeeded() {
+        guard !shouldLetExternalTTSOwnAudioSession else {
+            DDLogInfo("[DialogEngine] 跳过 AudioSession 恢复：外部数字人 TTS 仍可能在播放")
+            print("[DialogEngine] skip AudioSession restore; external digital-human TTS owns playback")
+            return
+        }
+        restoreAudioSession()
     }
 
     /// 恢复音频会话为默认播放模式
@@ -813,8 +861,19 @@ final class DialogEngineManager: NSObject {
         // AEC 回声消除
         engine.setBoolParam(config.enableAEC, forKey: SE_PARAMS_KEY_ENABLE_AEC_BOOL)
 
-        // 启用内置播放器
+        // 启用内置播放器。数字人接管声音时，SpeechEngine 只负责 ASR/对话文本，
+        // 不创建播放器，也不抢腾讯云渲染的远端音频会话。
         engine.setBoolParam(config.enablePlayer, forKey: SE_PARAMS_KEY_DIALOG_ENABLE_PLAYER_BOOL)
+        engine.setBoolParam(!config.enablePlayer, forKey: SE_PARAMS_KEY_PREVENT_PLAYER_CREATION_BOOL)
+        engine.setBoolParam(!config.enablePlayer, forKey: SE_PARAMS_KEY_FULLLINK_DISABLE_TTS_BOOL)
+        engine.setBoolParam(false, forKey: SE_PARAMS_KEY_RESET_AUDIOSESSION_BOOL)
+        engine.setBoolParam(false, forKey: SE_PARAMS_KEY_RESTART_AUDIOSESSION_BOOL)
+        engine.setBoolParam(config.enablePlayer, forKey: SE_PARAMS_KEY_RESUME_OTHERS_INTERRUPTED_PLAYBACK_BOOL)
+        print(
+            "[DialogEngine] local player config enablePlayer=\(config.enablePlayer), " +
+            "preventPlayerCreation=\(!config.enablePlayer), " +
+            "fullLinkDisableTTS=\(!config.enablePlayer)"
+        )
 
         // 音量回调
         engine.setBoolParam(true, forKey: SE_PARAMS_KEY_ENABLE_GET_VOLUME_BOOL)
@@ -848,13 +907,6 @@ final class DialogEngineManager: NSObject {
         let ttsSpeaker = resolvedTTSSpeaker()
 
         var dialogConfig: [String: Any] = [
-            "tts": [
-                "speaker": ttsSpeaker,
-                "audio_config": [
-                    "speech_rate": -20,      // 慢20%，适老化
-                    "loudness_rate": 10       // 大声10%，适老化
-                ]
-            ],
             "asr": [
                 "audio_info": [
                     "format": "pcm",
@@ -875,6 +927,17 @@ final class DialogEngineManager: NSObject {
                 ]
             ]
             ]
+        if config.enablePlayer {
+            dialogConfig["tts"] = [
+                "speaker": ttsSpeaker,
+                "audio_config": [
+                    "speech_rate": -20,      // 慢20%，适老化
+                    "loudness_rate": 10       // 大声10%，适老化
+                ]
+            ]
+        } else {
+            print("[DialogEngine] Tencent audio owner active; StartEngine omits Fire TTS config")
+        }
         if !config.systemPrompt.isEmpty {
             var fullPrompt = config.systemPrompt
             let context = DigitalHumanContextStore.shared.current
@@ -913,11 +976,14 @@ final class DialogEngineManager: NSObject {
             ]
         }
 
-        // TTS 语速配置（适老慢速）
-        startConfig["tts"] = [
-            "speaker": ttsSpeaker,
-            "speech_rate": config.speechRate
-        ]
+        // TTS 语速配置（适老慢速）。腾讯数智人接管声音时不请求火山 TTS 音频，
+        // 只保留 Chat 文本结果，再交给 Tencent cloud render 播放和驱动口型。
+        if config.enablePlayer {
+            startConfig["tts"] = [
+                "speaker": ttsSpeaker,
+                "speech_rate": config.speechRate
+            ]
+        }
 
         let configJSON: String
         if let jsonData = try? JSONSerialization.data(withJSONObject: startConfig),
@@ -934,7 +1000,7 @@ final class DialogEngineManager: NSObject {
 
         if startResult != SENoError {
             DDLogError("[DialogEngine] StartEngine 失败: \(startResult.rawValue)")
-            restoreAudioSession()
+            restoreAudioSessionIfNeeded()
             delegate?.onError(error: DialogEngineError.startFailed(code: Int(startResult.rawValue)))
             return
         }
@@ -1012,7 +1078,7 @@ extension DialogEngineManager: SpeechEngineDelegate {
             print("[DialogEngine] ❌ 连接失败: \(msg)")
             DDLogError("[DialogEngine] 连接失败: \(msg)")
             isDialogActive = false
-            restoreAudioSession()
+            restoreAudioSessionIfNeeded()
             DispatchQueue.main.async { [weak self] in
                 self?.delegate?.onError(error: DialogEngineError.sdkError(code: Int(type.rawValue), message: msg))
             }
@@ -1192,6 +1258,10 @@ extension DialogEngineManager: SpeechEngineDelegate {
 
         // MARK: TTS Events
         case SEEventTTSSentenceStart:
+            guard config.enablePlayer else {
+                print("[DialogEngine] skipped Fire TTS sentence start; Tencent owns audible playback")
+                return
+            }
             // TTS 句子开始 - 标记 AI 正在播报
             isAISpeaking = true
             // AI 说话时也重置静音计时器（AI 播报期间不应触发超时）
@@ -1213,7 +1283,25 @@ extension DialogEngineManager: SpeechEngineDelegate {
                 chatBuffer = ""
             }
 
+        case SEEventTTSSentenceEnd:
+            guard config.enablePlayer else {
+                print("[DialogEngine] skipped Fire TTS sentence end; Tencent owns audible playback")
+                return
+            }
+            // 部分 SpeechEngine 版本在 SentenceStart 只给空文本，完整文本出现在
+            // SentenceEnd。数字人主音频模式依赖这里的文本转交给腾讯云渲染。
+            if let text = parseTTSText(from: data), !text.isEmpty {
+                chatBuffer = ""
+                DispatchQueue.main.async { [weak self] in
+                    self?.delegate?.onTTSStarted(text: text)
+                }
+            }
+
         case SEEventTTSEnded:
+            guard config.enablePlayer else {
+                print("[DialogEngine] skipped Fire TTS ended; Tencent owns audible playback")
+                return
+            }
             isAISpeaking = false
             DDLogInfo("[DialogEngine] TTS 播放结束")
             DispatchQueue.main.async { [weak self] in
@@ -1221,6 +1309,10 @@ extension DialogEngineManager: SpeechEngineDelegate {
             }
 
         case SEPlayerFinishPlayAudio:
+            guard config.enablePlayer else {
+                print("[DialogEngine] skipped Fire player finish; Tencent owns audible playback")
+                return
+            }
             isAISpeaking = false
             DDLogInfo("[DialogEngine] 播放器播放完毕")
             DispatchQueue.main.async { [weak self] in
@@ -1437,6 +1529,12 @@ extension DialogEngineManager: SpeechEngineDelegate {
     /// 会话建立后发送开场白（有历史时用上下文关联，否则随机）
     private func sendGreetingIfNeeded() {
         guard let engine = engine else { return }
+        guard !suppressGreetingForNextStart else {
+            suppressGreetingForNextStart = false
+            print("[DialogEngine] skipped greeting for resumed digital-human listening")
+            DDLogInfo("[DialogEngine] 恢复数字人监听，跳过开场白")
+            return
+        }
 
         let memory = ConversationMemoryManager.shared.currentMemory
         let context = DigitalHumanContextStore.shared.current

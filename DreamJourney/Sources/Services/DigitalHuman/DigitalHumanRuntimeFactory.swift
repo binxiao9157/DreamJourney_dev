@@ -10,6 +10,11 @@ struct DigitalHumanRuntimeSelection {
 }
 
 final class DigitalHumanRuntimeFactory {
+    private static let realTencentProviderModes: Set<String> = [
+        "tencentSDK",
+        "cloudRender",
+    ]
+
     private init() {}
 
     static func makeRuntime(
@@ -28,9 +33,20 @@ final class DigitalHumanRuntimeFactory {
         }
 
         if contract.provider == "tencent",
-           contract.providerMode == "tencentSDK",
-           capability?.sdkAdapterLinked == true,
-           capability?.realProviderReady == true {
+           realTencentProviderModes.contains(contract.providerMode) {
+            if let capability,
+               capability.sdkAdapterLinked == false || capability.realProviderReady == false {
+                return DigitalHumanRuntimeSelection(
+                    runtime: AudioOnlyDigitalHumanRuntime(contentView: contentView),
+                    selectedProvider: contract.provider,
+                    selectedMode: contract.providerMode,
+                    fallbackReason: capability.sdkReadinessMessage.isEmpty
+                        ? "Tencent SDK runtime capability is not ready."
+                        : capability.sdkReadinessMessage,
+                    isRealSDKBacked: false
+                )
+            }
+
             if let bridge = TencentDigitalHumanSDKBridgeFactory.shared.makeBridge(contentView: contentView) {
                 return DigitalHumanRuntimeSelection(
                     runtime: TencentDigitalHumanCloudRuntime(

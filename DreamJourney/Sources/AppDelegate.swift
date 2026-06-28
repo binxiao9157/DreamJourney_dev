@@ -18,6 +18,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         TencentVirtualmanSDKBridge.registerFactory()
+        configureLaunchArgumentFeatureFlagsIfNeeded()
 
         // 火山引擎语音 SDK 环境准备
         #if !(UI_QA_SIMULATOR && targetEnvironment(simulator))
@@ -89,6 +90,19 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return profile.contains("<key>aps-environment</key>")
     }
 
+    private func configureLaunchArgumentFeatureFlagsIfNeeded() {
+        #if DEBUG || UI_QA_SIMULATOR
+        let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("DJShowDigitalHumanLivePanel")
+            || arguments.contains("DJRunDigitalHumanLivePanelSmoke")
+            || arguments.contains("DJRunTencentDigitalHumanTextDriveSmoke")
+            || arguments.contains("DJRunDigitalHumanRuntimeStubSmoke") {
+            FeatureFlagService.shared.enableForCurrentLaunch(.digitalHumanLivePanel)
+            print("[QA] Digital human live panel enabled by launch argument")
+        }
+        #endif
+    }
+
     @objc private func handleUserDidLoginForPushDeviceToken() {
         syncStoredPushDeviceTokenIfPossible()
     }
@@ -131,7 +145,7 @@ private extension AppDelegate {
         }
         if arguments.contains("DJShowDigitalHumanLivePanel")
             || arguments.contains("DJRunDigitalHumanLivePanelSmoke") {
-            FeatureFlagService.shared.set(.digitalHumanLivePanel, enabled: true)
+            FeatureFlagService.shared.enableForCurrentLaunch(.digitalHumanLivePanel)
             print("[UI_QA] Digital human live panel enabled")
         }
         if arguments.contains(where: { $0.hasPrefix("DJRunProfileCare") }) {

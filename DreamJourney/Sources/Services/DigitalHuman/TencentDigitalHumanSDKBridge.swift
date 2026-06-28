@@ -23,14 +23,24 @@ struct TencentDigitalHumanSDKConfiguration: Equatable {
 
 protocol TencentDigitalHumanSDKBridge: AnyObject {
     var contentView: UIView { get }
+    var eventHandler: ((TencentDigitalHumanSDKBridgeEvent) -> Void)? { get set }
 
     func configure(_ configuration: TencentDigitalHumanSDKConfiguration, profile: DigitalHumanProfile) throws
     func openByAsset(completion: @escaping (Result<String, Error>) -> Void)
     func openByProject(completion: @escaping (Result<String, Error>) -> Void)
     func sendText(_ text: String, requestID: String, sequence: Int, isFinal: Bool) throws
     func sendPCM(_ data: Data, requestID: String, sequence: Int, isFinal: Bool) throws
+    func setRemoteAudioMuted(_ muted: Bool)
     func interrupt()
     func close()
+}
+
+enum TencentDigitalHumanSDKBridgeEvent: Equatable {
+    case webSocketOpen
+    case textStart(requestID: String?)
+    case textOver(requestID: String?)
+    case error(code: Int32, message: String)
+    case closed
 }
 
 enum TencentDigitalHumanSDKBridgeError: Error, Equatable {

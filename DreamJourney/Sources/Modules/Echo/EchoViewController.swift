@@ -1,3 +1,4 @@
+import AVFoundation
 import UIKit
 
 final class EchoViewController: UIViewController {
@@ -181,15 +182,38 @@ final class EchoViewController: UIViewController {
     private var currentState: EchoInteractionState = .idle
     private var transcriptEntries: [(text: String, isUser: Bool)] = []
     private var pendingAIText: String?
+    private var digitalHumanReplyPrewarmWorkItem: DispatchWorkItem?
+    private var digitalHumanProviderTextOverTimeoutWorkItem: DispatchWorkItem?
+    private var lastDigitalHumanReplyTextSent: String?
+    private var activeTencentDigitalHumanRequestID: String?
+    private var pendingTencentDigitalHumanReplyText: String?
+    private var currentEchoTurnID: String?
+    private var hasRunTencentDigitalHumanTextDriveSmoke = false
     private var isStoppingForDelayedReply = false
+    private var isStoppingVoiceCaptureManually = false
+    private var isPausingDialogForTencentDigitalHumanSpeech = false
+    private var shouldResumeDialogAfterTencentDigitalHumanSpeech = false
     private var showsVoiceSDKReadinessPreview = false
     private var backendRuntimeTokenApplied = false
+    private var hasRequestedCloudDigitalHumanRuntime = false
+    private static let digitalHumanReplyPrewarmShortDelay: TimeInterval = 0
+    private static let digitalHumanReplyPrewarmDebounceDelay: TimeInterval = 0.24
+    private static let tencentDigitalHumanTextOverTimeout: TimeInterval = 30
+    private static let tencentDigitalHumanDialogResumeDelay: TimeInterval = 2.6
 
     private var shouldShowDigitalHumanLivePanel: Bool {
         let arguments = ProcessInfo.processInfo.arguments
-        _ = arguments.contains("DJShowDigitalHumanLivePanel")
-            || arguments.contains("DJRunDigitalHumanLivePanelSmoke")
+        if arguments.contains("DJDisableDigitalHumanLivePanel") {
+            return false
+        }
         return FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel)
+            || arguments.contains("DJShowDigitalHumanLivePanel")
+            || arguments.contains("DJRunDigitalHumanLivePanelSmoke")
+            || arguments.contains("DJRunTencentDigitalHumanTextDriveSmoke")
+    }
+
+    private var shouldRunTencentDigitalHumanTextDriveSmoke: Bool {
+        ProcessInfo.processInfo.arguments.contains("DJRunTencentDigitalHumanTextDriveSmoke")
     }
 
     init(viewModel: EchoViewModel = EchoViewModel()) {
@@ -223,6 +247,9 @@ final class EchoViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         DialogEngineManager.shared.delegate = self
+        if shouldShowDigitalHumanLivePanel {
+            DialogEngineManager.shared.setLocalTTSPlaybackEnabled(false)
+        }
         if !DialogEngineManager.shared.isEngineReady,
            !DreamJourneyBackendClient.shared.isRealtimeVoiceConfigConfigured {
             DialogEngineManager.shared.setup()
@@ -232,16 +259,28 @@ final class EchoViewController: UIViewController {
         refreshTranscriptPreviewForCurrentContextIfIdle()
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        prepareCloudDigitalHumanRuntimeIfNeeded()
+    }
+
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         if DialogEngineManager.shared.delegate === self {
             if DialogEngineManager.shared.isDialogActive {
+                interruptDigitalHumanPlayback(reason: "viewWillDisappear")
                 DialogEngineManager.shared.stopDialog()
                 flushPendingAIReplyIfNeeded()
                 ConversationMemoryManager.shared.endSession()
                 viewModel.resetToIdle()
             }
             stopDigitalHumanAudioLevelMetering()
+            resetDigitalHumanReplyDispatchState()
+            DialogEngineManager.shared.setLocalTTSPlaybackEnabled(true)
+            digitalHumanRuntime?.interrupt()
+            digitalHumanRuntime?.close()
+            digitalHumanRuntime = nil
+            hasRequestedCloudDigitalHumanRuntime = false
             DialogEngineManager.shared.delegate = nil
         }
     }
@@ -564,10 +603,10 @@ final class EchoViewController: UIViewController {
         case .speaking:
             renderVoiceStatus(text: "回响正在抵达", isVisible: true)
             configureMicButton(
-                systemName: "waveform",
+                systemName: "stop.fill",
                 backgroundColor: DJDesignTokens.Color.accentDeep,
-                isEnabled: false,
-                accessibilityLabel: "回响正在抵达"
+                isEnabled: true,
+                accessibilityLabel: "停止回响"
             )
             setMicPulse(active: true)
         case .replied:
@@ -633,6 +672,407 @@ final class EchoViewController: UIViewController {
 
     private func stopDigitalHumanAudioLevelMetering(resetLevel: Bool = true) {
         digitalHumanAudioLevelMeter?.stop(resetLevel: resetLevel)
+    }
+
+    private var tencentCloudRenderProvidesAudibleTTS: Bool {
+        // Digital-human mode has a single audio owner: Tencent cloud render.
+        // Ordinary Echo keeps the existing local Volcengine TTS path.
+        return true
+    }
+
+    private var tencentDigitalHumanProviderCanOwnAudio: Bool {
+        guard let digitalHumanRuntime,
+              digitalHumanRuntime is TencentDigitalHumanCloudRuntime,
+              digitalHumanRuntime.profile != nil else {
+            return false
+        }
+        switch digitalHumanRuntime.state {
+        case .ready, .buffering, .speaking:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private var tencentDigitalHumanAudioRouteReserved: Bool {
+        guard shouldShowDigitalHumanLivePanel,
+              let digitalHumanRuntime,
+              digitalHumanRuntime is TencentDigitalHumanCloudRuntime,
+              digitalHumanRuntime.profile != nil,
+              tencentCloudRenderProvidesAudibleTTS else {
+            return false
+        }
+        switch digitalHumanRuntime.state {
+        case .preparing, .connecting, .ready, .buffering, .speaking:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private var routeEchoAudioThroughDigitalHuman: Bool {
+        guard shouldShowDigitalHumanLivePanel,
+              tencentDigitalHumanAudioRouteReserved,
+              tencentCloudRenderProvidesAudibleTTS else {
+            return false
+        }
+        return true
+    }
+
+    private var shouldDriveTencentVisualLipSync: Bool {
+        guard shouldShowDigitalHumanLivePanel,
+              let digitalHumanRuntime,
+              digitalHumanRuntime is TencentDigitalHumanCloudRuntime,
+              digitalHumanRuntime.profile != nil else {
+            return false
+        }
+        return true
+    }
+
+    private var shouldDispatchEchoReplyToTencentProvider: Bool {
+        routeEchoAudioThroughDigitalHuman && tencentDigitalHumanProviderCanOwnAudio
+    }
+
+    private func applyEchoAudioRoutePolicy() {
+        let shouldRouteThroughDigitalHuman = routeEchoAudioThroughDigitalHuman
+        if shouldRouteThroughDigitalHuman {
+            DialogEngineManager.shared.setLocalTTSPlaybackEnabled(false)
+            digitalHumanStatusDetailLabel.text = "腾讯数智人负责声音与口型同步"
+            print("[TencentDigitalHuman] echo audio route=tencentDigitalHuman")
+        } else {
+            if !tencentDigitalHumanAudioRouteReserved {
+                DialogEngineManager.shared.setLocalTTSPlaybackEnabled(true)
+            }
+            if shouldShowDigitalHumanLivePanel,
+               let digitalHumanRuntime,
+               digitalHumanRuntime is TencentDigitalHumanCloudRuntime,
+               digitalHumanRuntime.profile != nil {
+                digitalHumanStatusDetailLabel.text = "数字人暂未接管声音，已回到普通回响"
+            }
+            print("[TencentDigitalHuman] echo audio route=volcengineLocalTTS")
+        }
+    }
+
+    private func prepareCloudDigitalHumanRuntimeIfNeeded() {
+        guard shouldShowDigitalHumanLivePanel,
+              digitalHumanRuntime == nil,
+              hasRequestedCloudDigitalHumanRuntime == false else {
+            return
+        }
+        hasRequestedCloudDigitalHumanRuntime = true
+        digitalHumanStatusDetailLabel.text = "正在连接腾讯数智人"
+
+        DreamJourneyBackendClient.shared.fetchDigitalHumanRuntimeCapability { [weak self] result in
+            switch result {
+            case .success(let capability):
+                self?.createCloudDigitalHumanSession(capability: capability)
+            case .failure(let error):
+                DispatchQueue.main.async {
+                    self?.digitalHumanStatusDetailLabel.text = "数字人配置读取失败，已回到普通回响"
+                    self?.digitalHumanLivePanelView?.removeHostedProviderView()
+                    self?.applyEchoAudioRoutePolicy()
+                    print("[TencentDigitalHuman] runtime capability failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func createCloudDigitalHumanSession(capability: DigitalHumanRuntimeCapability) {
+        let context = DigitalHumanContextStore.shared.current
+        let userId = UserManager.shared.currentUser?.id ?? context.viewerUserId ?? "ios-device-qa"
+        let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? "ios-device"
+        DreamJourneyBackendClient.shared.createDigitalHumanSession(
+            userId: userId,
+            personaId: context.ownerId,
+            scene: "echo",
+            deviceId: deviceId,
+            lifecycleMode: context.mode
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                self?.handleCloudDigitalHumanSession(result, capability: capability)
+            }
+        }
+    }
+
+    private func handleCloudDigitalHumanSession(
+        _ result: Result<DigitalHumanSessionContract, Error>,
+        capability: DigitalHumanRuntimeCapability
+    ) {
+        switch result {
+        case .success(let contract):
+            let context = DigitalHumanContextStore.shared.current
+            let profile = contract.toDigitalHumanProfile(displayName: context.resolvedDisplayName)
+            let runtimeSelection = DigitalHumanRuntimeFactory.makeRuntime(
+                for: contract,
+                capability: capability
+            )
+            let runtime = runtimeSelection.runtime
+            digitalHumanRuntime = runtime
+            bindDigitalHumanRuntimeState(runtime)
+
+            guard runtimeSelection.isRealSDKBacked else {
+                digitalHumanStatusDetailLabel.text = "腾讯 SDK 暂不可用，已回到普通回响"
+                digitalHumanLivePanelView?.removeHostedProviderView()
+                applyEchoAudioRoutePolicy()
+                print("[TencentDigitalHuman] fallback=\(runtimeSelection.fallbackReason ?? "unknown")")
+                return
+            }
+
+            digitalHumanLivePanelView?.hostProviderView(runtime.contentView)
+            do {
+                try runtime.configure(profile)
+                applyEchoAudioRoutePolicy()
+                try runtime.open()
+                digitalHumanStatusDetailLabel.text = "腾讯云渲染连接中"
+                applyEchoAudioRoutePolicy()
+            } catch {
+                digitalHumanStatusDetailLabel.text = "腾讯数智人打开失败，已回到普通回响"
+                digitalHumanLivePanelView?.removeHostedProviderView()
+                applyEchoAudioRoutePolicy()
+                print("[TencentDigitalHuman] open failed: \(error.localizedDescription)")
+            }
+        case .failure(let error):
+            digitalHumanStatusDetailLabel.text = "数字人会话创建失败，已回到普通回响"
+            digitalHumanLivePanelView?.removeHostedProviderView()
+            applyEchoAudioRoutePolicy()
+            print("[TencentDigitalHuman] session failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func normalizedDigitalHumanReplyText(_ text: String) -> String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func digitalHumanReplyLooksComplete(_ text: String) -> Bool {
+        guard let lastCharacter = text.last else { return false }
+        return ["。", "！", "？", ".", "!", "?"].contains(String(lastCharacter))
+    }
+
+    private func scheduleDigitalHumanReplyPrewarm(_ text: String) {
+        let normalizedText = normalizedDigitalHumanReplyText(text)
+        guard shouldShowDigitalHumanLivePanel,
+              shouldDispatchEchoReplyToTencentProvider,
+              !viewModel.isWaitingForDelayedReply,
+              !normalizedText.isEmpty else {
+            return
+        }
+
+        cancelDigitalHumanReplyPrewarm()
+        let delay = digitalHumanReplyLooksComplete(normalizedText)
+            ? Self.digitalHumanReplyPrewarmShortDelay
+            : Self.digitalHumanReplyPrewarmDebounceDelay
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.digitalHumanReplyPrewarmWorkItem = nil
+            self.sendEchoReplyToDigitalHumanRuntimeIfReady(normalizedText, source: "chatStreamingPrewarm")
+        }
+        digitalHumanReplyPrewarmWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+        print("[TencentDigitalHuman] scheduled reply prewarm source=chatStreamingPrewarm delay=\(String(format: "%.2f", delay)) textLength=\(normalizedText.count)")
+    }
+
+    private func cancelDigitalHumanReplyPrewarm() {
+        digitalHumanReplyPrewarmWorkItem?.cancel()
+        digitalHumanReplyPrewarmWorkItem = nil
+    }
+
+    private func resetDigitalHumanReplyDispatchState() {
+        cancelDigitalHumanReplyPrewarm()
+        cancelTencentDigitalHumanTextOverTimeout()
+        lastDigitalHumanReplyTextSent = nil
+        activeTencentDigitalHumanRequestID = nil
+        pendingTencentDigitalHumanReplyText = nil
+        currentEchoTurnID = nil
+        isPausingDialogForTencentDigitalHumanSpeech = false
+        shouldResumeDialogAfterTencentDigitalHumanSpeech = false
+    }
+
+    private func prepareAudioSessionForTencentProviderPlayback(preserveRecordingCategory: Bool) {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            if session.category != .playAndRecord || session.mode != .voiceChat {
+                try session.setCategory(
+                    .playAndRecord,
+                    mode: .voiceChat,
+                    options: [.defaultToSpeaker, .allowBluetooth]
+                )
+            }
+            try session.setActive(true)
+            print(
+                "[TencentDigitalHuman] AVAudioSession prepared for provider playback " +
+                "preserveRecordingCategory=\(preserveRecordingCategory) category=playAndRecord"
+            )
+        } catch {
+            print("[TencentDigitalHuman] AVAudioSession provider playback prepare failed: \(error.localizedDescription)")
+        }
+    }
+
+    @discardableResult
+    private func pauseDialogEngineForTencentProviderSpeechIfNeeded() -> Bool {
+        guard routeEchoAudioThroughDigitalHuman,
+              DialogEngineManager.shared.isDialogActive else {
+            return false
+        }
+        isPausingDialogForTencentDigitalHumanSpeech = true
+        shouldResumeDialogAfterTencentDigitalHumanSpeech = true
+        DialogEngineManager.shared.stopDialog()
+        print("[TencentDigitalHuman] paused DialogEngine before provider speech")
+        return true
+    }
+
+    @discardableResult
+    private func resumeDialogEngineAfterTencentProviderSpeechIfNeeded(reason: String) -> Bool {
+        guard shouldResumeDialogAfterTencentDigitalHumanSpeech else {
+            return false
+        }
+        shouldResumeDialogAfterTencentDigitalHumanSpeech = false
+        guard shouldShowDigitalHumanLivePanel,
+              view.window != nil else {
+            return true
+        }
+        DialogEngineManager.shared.delegate = self
+        if DialogEngineManager.shared.isDialogActive {
+            DialogEngineManager.shared.stopDialog()
+        }
+        viewModel.resetToIdle()
+        print("[TencentDigitalHuman] finished provider speech without DialogEngine auto-resume reason=\(reason)")
+        return true
+    }
+
+    private func sendEchoReplyToDigitalHumanRuntimeIfReady(_ text: String, source: String) {
+        let normalizedText = normalizedDigitalHumanReplyText(text)
+        guard shouldShowDigitalHumanLivePanel,
+              shouldDispatchEchoReplyToTencentProvider,
+              let digitalHumanRuntime,
+              digitalHumanRuntime.profile != nil,
+              !normalizedText.isEmpty else {
+            return
+        }
+        guard lastDigitalHumanReplyTextSent != normalizedText else {
+            print("[TencentDigitalHuman] skipped duplicate reply text source=\(source) textLength=\(normalizedText.count)")
+            return
+        }
+        if let activeTencentDigitalHumanRequestID {
+            print(
+                "[TencentDigitalHuman] skipped new request while provider is speaking " +
+                "source=\(source) activeRequestID=\(activeTencentDigitalHumanRequestID) " +
+                "newLength=\(normalizedText.count)"
+            )
+            return
+        }
+        do {
+            let requestID = makeTencentDigitalHumanRequestID()
+            let turnID = ensureCurrentEchoTurnID()
+            let pausedDialogEngine = pauseDialogEngineForTencentProviderSpeechIfNeeded()
+            prepareAudioSessionForTencentProviderPlayback(preserveRecordingCategory: pausedDialogEngine)
+            try digitalHumanRuntime.sendTextChunk(normalizedText, requestID: requestID, sequence: 1, isFinal: true)
+            activeTencentDigitalHumanRequestID = requestID
+            lastDigitalHumanReplyTextSent = normalizedText
+            if routeEchoAudioThroughDigitalHuman {
+                pendingTencentDigitalHumanReplyText = normalizedText
+            }
+            scheduleTencentDigitalHumanTextOverTimeout(requestID: requestID, source: source)
+            print("[TencentDigitalHuman] sent reply text turnID=\(turnID) source=\(source) requestID=\(requestID) textLength=\(normalizedText.count)")
+        } catch {
+            resumeDialogEngineAfterTencentProviderSpeechIfNeeded(reason: "sendTextFailed")
+            print("[TencentDigitalHuman] send text failed source=\(source): \(error.localizedDescription)")
+        }
+    }
+
+    private func ensureCurrentEchoTurnID() -> String {
+        if let currentEchoTurnID {
+            return currentEchoTurnID
+        }
+        let turnID = makeTencentDigitalHumanRequestID()
+        currentEchoTurnID = turnID
+        return turnID
+    }
+
+    private func makeTencentDigitalHumanRequestID() -> String {
+        UUID().uuidString.replacingOccurrences(of: "-", with: "")
+    }
+
+    private func scheduleTencentDigitalHumanTextOverTimeout(requestID: String, source: String) {
+        cancelTencentDigitalHumanTextOverTimeout()
+        let turnID = ensureCurrentEchoTurnID()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.handleTencentDigitalHumanTextOverTimeout(requestID: requestID)
+        }
+        digitalHumanProviderTextOverTimeoutWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.tencentDigitalHumanTextOverTimeout,
+            execute: workItem
+        )
+        print(
+            "[TencentDigitalHuman] scheduled TextOver timeout " +
+            "turnID=\(turnID) source=\(source) requestID=\(requestID) " +
+            "timeout=\(Self.tencentDigitalHumanTextOverTimeout)"
+        )
+    }
+
+    private func cancelTencentDigitalHumanTextOverTimeout() {
+        digitalHumanProviderTextOverTimeoutWorkItem?.cancel()
+        digitalHumanProviderTextOverTimeoutWorkItem = nil
+    }
+
+    private func handleTencentDigitalHumanTextOverTimeout(requestID: String) {
+        guard activeTencentDigitalHumanRequestID == requestID else {
+            print(
+                "[TencentDigitalHuman] ignored stale TextOver timeout " +
+                "turnID=\(currentEchoTurnID ?? "unknown") requestID=\(requestID) " +
+                "activeRequestID=\(activeTencentDigitalHumanRequestID ?? "none")"
+            )
+            return
+        }
+
+        cancelTencentDigitalHumanTextOverTimeout()
+        let turnID = currentEchoTurnID ?? "unknown"
+        activeTencentDigitalHumanRequestID = nil
+        pendingTencentDigitalHumanReplyText = nil
+        stopDigitalHumanAudioLevelMetering()
+        digitalHumanRuntime?.interrupt()
+        viewModel.markReplyDelivered()
+        print("[TencentDigitalHuman] TextOver timeout turnID=\(turnID) requestID=\(requestID); recovered Echo state")
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.tencentDigitalHumanDialogResumeDelay) { [weak self] in
+            guard let self else { return }
+            if self.resumeDialogEngineAfterTencentProviderSpeechIfNeeded(reason: "providerTextOverTimeout") {
+                return
+            }
+            if DialogEngineManager.shared.isDialogActive {
+                self.viewModel.beginVoiceInteraction()
+            } else {
+                self.viewModel.resetToIdle()
+            }
+        }
+    }
+
+    private func interruptDigitalHumanPlayback(reason: String) {
+        cancelDigitalHumanReplyPrewarm()
+        cancelTencentDigitalHumanTextOverTimeout()
+        activeTencentDigitalHumanRequestID = nil
+        pendingTencentDigitalHumanReplyText = nil
+        shouldResumeDialogAfterTencentDigitalHumanSpeech = false
+        isPausingDialogForTencentDigitalHumanSpeech = false
+        digitalHumanRuntime?.interrupt()
+        stopDigitalHumanAudioLevelMetering()
+        print("[TencentDigitalHuman] interrupted provider playback turnID=\(currentEchoTurnID ?? "unknown") reason=\(reason)")
+    }
+
+    private var hasTencentDigitalHumanProviderSpeechInFlight: Bool {
+        activeTencentDigitalHumanRequestID != nil || pendingTencentDigitalHumanReplyText != nil
+    }
+
+    private func preserveTencentProviderSessionAfterLocalDialogStop(reason: String) {
+        cancelDigitalHumanReplyPrewarm()
+        shouldResumeDialogAfterTencentDigitalHumanSpeech = false
+        isPausingDialogForTencentDigitalHumanSpeech = false
+        stopDigitalHumanAudioLevelMetering()
+        print(
+            "[TencentDigitalHuman] preserved provider session after local dialog stop " +
+            "turnID=\(currentEchoTurnID ?? "unknown") reason=\(reason) " +
+            "providerSpeechInFlight=\(hasTencentDigitalHumanProviderSpeechInFlight)"
+        )
     }
 
     @discardableResult
@@ -743,7 +1183,7 @@ final class EchoViewController: UIViewController {
 
     @objc private func micTapped() {
         switch currentState {
-        case .listening:
+        case .listening, .thinking, .speaking:
             stopVoiceCapture()
         case .error:
             viewModel.retryAfterError()
@@ -764,10 +1204,129 @@ final class EchoViewController: UIViewController {
                 }
                 DialogEngineManager.shared.delegate = self
                 self.pendingAIText = nil
+                self.resetDigitalHumanReplyDispatchState()
                 self.viewModel.prepareVoiceInteraction()
-                self.configureVoiceRuntimeThenStart()
+                if self.prepareTencentProviderForUserCaptureIfNeeded() {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+                        self?.configureVoiceRuntimeThenStart()
+                    }
+                } else {
+                    self.configureVoiceRuntimeThenStart()
+                }
             }
         }
+    }
+
+    private func bindDigitalHumanRuntimeState(_ runtime: DigitalHumanRuntime) {
+        runtime.onStateChange = { [weak self, weak runtime] state in
+            DispatchQueue.main.async {
+                guard let self,
+                      runtime === self.digitalHumanRuntime else {
+                    return
+                }
+                self.handleDigitalHumanRuntimeStateChange(state)
+            }
+        }
+    }
+
+    private func handleDigitalHumanRuntimeStateChange(_ state: DigitalHumanSessionState) {
+        switch state {
+        case .speaking:
+            digitalHumanLivePanelView?.setInteractionState(.speaking)
+            if case .speaking = currentState {
+                renderVoiceStatus(text: "腾讯数智人正在回响", isVisible: true)
+            }
+        case .ready:
+            applyEchoAudioRoutePolicy()
+            completeTencentDigitalHumanReplyIfNeeded()
+            runTencentDigitalHumanTextDriveSmokeIfNeeded(trigger: "runtimeReady")
+        case .interrupting, .closed:
+            stopDigitalHumanAudioLevelMetering()
+        case .failed(let code):
+            degradeTencentDigitalHumanRoute(reason: code)
+        default:
+            break
+        }
+    }
+
+    @discardableResult
+    private func prepareTencentProviderForUserCaptureIfNeeded() -> Bool {
+        guard tencentDigitalHumanAudioRouteReserved,
+              let digitalHumanRuntime,
+              digitalHumanRuntime is TencentDigitalHumanCloudRuntime else {
+            return false
+        }
+
+        cancelDigitalHumanReplyPrewarm()
+        cancelTencentDigitalHumanTextOverTimeout()
+        activeTencentDigitalHumanRequestID = nil
+        pendingTencentDigitalHumanReplyText = nil
+        shouldResumeDialogAfterTencentDigitalHumanSpeech = false
+        isPausingDialogForTencentDigitalHumanSpeech = false
+        stopDigitalHumanAudioLevelMetering()
+        (digitalHumanRuntime as? TencentDigitalHumanCloudRuntime)?.setRemoteAudioMuted(true)
+        digitalHumanRuntime.interrupt()
+        print("[TencentDigitalHuman] muted provider audio before user capture; provider view preserved")
+        return true
+    }
+
+    private func degradeTencentDigitalHumanRoute(reason: String) {
+        cancelDigitalHumanReplyPrewarm()
+        cancelTencentDigitalHumanTextOverTimeout()
+        activeTencentDigitalHumanRequestID = nil
+        pendingTencentDigitalHumanReplyText = nil
+        lastDigitalHumanReplyTextSent = nil
+        stopDigitalHumanAudioLevelMetering()
+
+        let failedRuntime = digitalHumanRuntime
+        digitalHumanRuntime = nil
+        digitalHumanLivePanelView?.removeHostedProviderView()
+        digitalHumanStatusDetailLabel.text = "数字人声音暂不可用，已回到普通回响"
+        DialogEngineManager.shared.setLocalTTSPlaybackEnabled(true)
+        failedRuntime?.close()
+        print("[TencentDigitalHuman] route fallback after runtime failure turnID=\(currentEchoTurnID ?? "unknown"): \(reason)")
+    }
+
+    private func completeTencentDigitalHumanReplyIfNeeded() {
+        guard routeEchoAudioThroughDigitalHuman,
+              activeTencentDigitalHumanRequestID != nil || pendingTencentDigitalHumanReplyText != nil else {
+            return
+        }
+
+        let completedRequestID = activeTencentDigitalHumanRequestID ?? "unknown"
+        let completedTurnID = currentEchoTurnID ?? "unknown"
+        cancelTencentDigitalHumanTextOverTimeout()
+        activeTencentDigitalHumanRequestID = nil
+        pendingTencentDigitalHumanReplyText = nil
+        stopDigitalHumanAudioLevelMetering()
+        viewModel.markReplyDelivered()
+        print("[TencentDigitalHuman] TextOver completed turnID=\(completedTurnID) requestID=\(completedRequestID)")
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.tencentDigitalHumanDialogResumeDelay) { [weak self] in
+            guard let self else { return }
+            if self.resumeDialogEngineAfterTencentProviderSpeechIfNeeded(reason: "providerTextOver") {
+                return
+            }
+            if DialogEngineManager.shared.isDialogActive {
+                self.viewModel.beginVoiceInteraction()
+            } else {
+                self.viewModel.resetToIdle()
+            }
+        }
+    }
+
+    private func runTencentDigitalHumanTextDriveSmokeIfNeeded(trigger: String) {
+        guard shouldRunTencentDigitalHumanTextDriveSmoke,
+              !hasRunTencentDigitalHumanTextDriveSmoke,
+              routeEchoAudioThroughDigitalHuman,
+              digitalHumanRuntime?.profile != nil,
+              activeTencentDigitalHumanRequestID == nil else {
+            return
+        }
+        hasRunTencentDigitalHumanTextDriveSmoke = true
+        let text = "真机数字人文本驱动测试。请用腾讯数智人说出这句话。"
+        viewModel.receiveAIReply(text)
+        sendEchoReplyToDigitalHumanRuntimeIfReady(text, source: "trueDeviceTextDriveSmoke")
+        print("[TencentDigitalHuman][QA] true device text-drive smoke triggered by \(trigger)")
     }
 
     private func configureVoiceRuntimeThenStart() {
@@ -788,7 +1347,10 @@ final class EchoViewController: UIViewController {
                 if DialogEngineManager.shared.configure(runtimeConfig: runtimeConfig) {
                     self.backendRuntimeTokenApplied = true
                     self.renderVoiceSDKReadinessPreviewIfNeeded()
-                    DialogEngineManager.shared.startDialog()
+                    self.applyEchoAudioRoutePolicy()
+                    DialogEngineManager.shared.startDialog(
+                        sendsGreeting: !self.routeEchoAudioThroughDigitalHuman
+                    )
                 } else {
                     self.backendRuntimeTokenApplied = false
                     self.renderVoiceSDKReadinessPreviewIfNeeded()
@@ -804,7 +1366,10 @@ final class EchoViewController: UIViewController {
     }
 
     private func startDialogWithLocalVoiceFallback() {
-        DialogEngineManager.shared.startDialog()
+        applyEchoAudioRoutePolicy()
+        DialogEngineManager.shared.startDialog(
+            sendsGreeting: !routeEchoAudioThroughDigitalHuman
+        )
     }
 
     private func currentVoiceSDKReadinessSummary() -> VoiceSDKReadinessSummary {
@@ -827,9 +1392,15 @@ final class EchoViewController: UIViewController {
     }
 
     private func stopVoiceCapture() {
+        isStoppingVoiceCaptureManually = true
+        preserveTencentProviderSessionAfterLocalDialogStop(reason: "userStop")
         if DialogEngineManager.shared.isDialogActive {
             DialogEngineManager.shared.stopDialog()
         } else {
+            isStoppingVoiceCaptureManually = false
+            if !hasTencentDigitalHumanProviderSpeechInFlight {
+                resetDigitalHumanReplyDispatchState()
+            }
             viewModel.resetToIdle()
         }
     }
@@ -845,6 +1416,8 @@ final class EchoViewController: UIViewController {
 
     private func beginDelayedReplyWait() {
         pendingAIText = nil
+        resetDigitalHumanReplyDispatchState()
+        preserveTencentProviderSessionAfterLocalDialogStop(reason: "delayedReplyWait")
         guard DialogEngineManager.shared.isDialogActive else { return }
         isStoppingForDelayedReply = true
         DialogEngineManager.shared.stopDialog()
@@ -906,6 +1479,7 @@ final class EchoViewController: UIViewController {
 extension EchoViewController: DialogEngineDelegate {
     func onDialogStarted() {
         DispatchQueue.main.async { [weak self] in
+            self?.resetDigitalHumanReplyDispatchState()
             self?.viewModel.beginVoiceInteraction()
         }
     }
@@ -914,6 +1488,13 @@ extension EchoViewController: DialogEngineDelegate {
         guard isFinal else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
+            if self.routeEchoAudioThroughDigitalHuman,
+               self.activeTencentDigitalHumanRequestID != nil || self.pendingTencentDigitalHumanReplyText != nil {
+                self.preserveTencentProviderSessionAfterLocalDialogStop(reason: "userSpeechFinal")
+            }
+            self.resetDigitalHumanReplyDispatchState()
+            self.currentEchoTurnID = self.makeTencentDigitalHumanRequestID()
+            print("[TencentDigitalHuman] user turn started turnID=\(self.currentEchoTurnID ?? "unknown")")
             self.viewModel.finishUserVoice(text: text)
             if self.viewModel.isWaitingForDelayedReply {
                 self.scheduleDelayedReplyNotificationIfNeeded()
@@ -926,9 +1507,18 @@ extension EchoViewController: DialogEngineDelegate {
         guard !viewModel.isWaitingForDelayedReply else { return }
         pendingAIText = nil
         DispatchQueue.main.async { [weak self] in
-            self?.viewModel.receiveAIReply(text)
-            if self?.applyCachedLipSyncTimelineForEchoReply(text) != true {
-                self?.startSDKTTSPlaybackFallback()
+            guard let self else { return }
+            self.cancelDigitalHumanReplyPrewarm()
+            self.viewModel.receiveAIReply(text)
+            if self.shouldDispatchEchoReplyToTencentProvider {
+                self.sendEchoReplyToDigitalHumanRuntimeIfReady(text, source: "ttsStartedFallback")
+            }
+            if self.routeEchoAudioThroughDigitalHuman {
+                print("[TencentDigitalHuman] skipped SDK TTS fallback; Tencent cloud render owns audio/lip-sync")
+                return
+            }
+            if self.applyCachedLipSyncTimelineForEchoReply(text) != true {
+                self.startSDKTTSPlaybackFallback()
             }
         }
     }
@@ -937,6 +1527,11 @@ extension EchoViewController: DialogEngineDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             guard !self.viewModel.isWaitingForDelayedReply else { return }
+            if self.routeEchoAudioThroughDigitalHuman,
+               (self.activeTencentDigitalHumanRequestID != nil || self.pendingTencentDigitalHumanReplyText != nil) {
+                print("[TencentDigitalHuman] waiting for provider TextOver before finishing Echo reply")
+                return
+            }
             self.stopDigitalHumanAudioLevelMetering()
             self.viewModel.markReplyDelivered()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
@@ -951,13 +1546,33 @@ extension EchoViewController: DialogEngineDelegate {
     }
 
     func onChatStreaming(text: String) {
-        guard !viewModel.isWaitingForDelayedReply else { return }
-        pendingAIText = text
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  !self.viewModel.isWaitingForDelayedReply else {
+                return
+            }
+            self.pendingAIText = text
+            if self.shouldDispatchEchoReplyToTencentProvider {
+                if self.routeEchoAudioThroughDigitalHuman {
+                    self.cancelDigitalHumanReplyPrewarm()
+                    print("[TencentDigitalHuman] skipped streaming prewarm; waiting for complete TTS sentence text")
+                    return
+                }
+                self.scheduleDigitalHumanReplyPrewarm(text)
+            } else {
+                self.cancelDigitalHumanReplyPrewarm()
+            }
+        }
     }
 
     func onError(error: Error) {
         DispatchQueue.main.async { [weak self] in
             self?.stopDigitalHumanAudioLevelMetering()
+            if self?.hasTencentDigitalHumanProviderSpeechInFlight == true {
+                self?.preserveTencentProviderSessionAfterLocalDialogStop(reason: "dialogError")
+            } else {
+                self?.resetDigitalHumanReplyDispatchState()
+            }
             self?.viewModel.fail(error.localizedDescription)
         }
     }
@@ -965,14 +1580,35 @@ extension EchoViewController: DialogEngineDelegate {
     func onDialogEnded(reason: DialogEndReason) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
+            if self.isPausingDialogForTencentDigitalHumanSpeech {
+                self.isPausingDialogForTencentDigitalHumanSpeech = false
+                print("[TencentDigitalHuman] DialogEngine paused for provider speech")
+                return
+            }
             if self.isStoppingForDelayedReply {
                 self.isStoppingForDelayedReply = false
                 ConversationMemoryManager.shared.endSession()
                 return
             }
+            if self.isStoppingVoiceCaptureManually {
+                self.isStoppingVoiceCaptureManually = false
+                self.flushPendingAIReplyIfNeeded()
+                ConversationMemoryManager.shared.endSession()
+                self.preserveTencentProviderSessionAfterLocalDialogStop(reason: "dialogEndedAfterUserStop")
+                if !self.hasTencentDigitalHumanProviderSpeechInFlight {
+                    self.resetDigitalHumanReplyDispatchState()
+                }
+                self.viewModel.resetToIdle()
+                return
+            }
             self.flushPendingAIReplyIfNeeded()
             ConversationMemoryManager.shared.endSession()
             self.stopDigitalHumanAudioLevelMetering()
+            if self.hasTencentDigitalHumanProviderSpeechInFlight {
+                self.preserveTencentProviderSessionAfterLocalDialogStop(reason: "dialogEnded")
+            } else {
+                self.resetDigitalHumanReplyDispatchState()
+            }
             self.viewModel.resetToIdle()
         }
     }

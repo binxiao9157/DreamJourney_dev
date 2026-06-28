@@ -26,7 +26,7 @@ final class FeatureFlagService {
 
     private static let storageKey = "dj.featureFlags.enabled"
     private static let storageVersionKey = "dj.featureFlags.schemaVersion"
-    private static let currentStorageVersion = 9
+    private static let currentStorageVersion = 10
     private static let defaultEnabled: Set<DJFeature> = [
         .careDashboard,
         .familyManagement,
@@ -37,15 +37,19 @@ final class FeatureFlagService {
         .timeLetters,
         .voiceCloneShell,
         .accountDeletion,
+        .digitalHumanLivePanel,
     ]
+    private static let nonPersistentFeatures: Set<DJFeature> = []
 
     private var enabled: Set<DJFeature>
+    private var transientEnabled: Set<DJFeature> = []
 
     private init() {
         let storedVersion = UserDefaults.standard.integer(forKey: Self.storageVersionKey)
         if storedVersion == Self.currentStorageVersion,
            let rawValues = UserDefaults.standard.array(forKey: Self.storageKey) as? [String] {
-            self.enabled = Set(rawValues.compactMap(DJFeature.init(rawValue:)))
+            self.enabled = Set(rawValues.compactMap(DJFeature.init(rawValue:))).subtracting(Self.nonPersistentFeatures)
+            persist()
         } else {
             self.enabled = Self.defaultEnabled
             persist()
@@ -53,10 +57,21 @@ final class FeatureFlagService {
     }
 
     func isEnabled(_ feature: DJFeature) -> Bool {
-        enabled.contains(feature)
+        enabled.contains(feature) || transientEnabled.contains(feature)
     }
 
     func set(_ feature: DJFeature, enabled isEnabled: Bool) {
+        if Self.nonPersistentFeatures.contains(feature) {
+            enabled.remove(feature)
+            if isEnabled {
+                transientEnabled.insert(feature)
+            } else {
+                transientEnabled.remove(feature)
+            }
+            persist()
+            return
+        }
+
         if isEnabled {
             enabled.insert(feature)
         } else {
@@ -65,8 +80,13 @@ final class FeatureFlagService {
         persist()
     }
 
+    func enableForCurrentLaunch(_ feature: DJFeature) {
+        transientEnabled.insert(feature)
+    }
+
     func resetToDefaults() {
         enabled = Self.defaultEnabled
+        transientEnabled.removeAll()
         persist()
     }
 

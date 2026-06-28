@@ -135,7 +135,7 @@ Downloaded package SHA-256:
 - `/digital-human/sessions` 返回 `credential.appkey` / `credential.accesstoken`
 - `/digital-human/sessions` 返回 `providerAssetId` 或 `providerProjectId`
 - `silent` lifecycle mode 不创建渲染 session
-- 公开 release 仍保持 `defaultReleaseVisible=false`
+- 公开 release 现在保持 `defaultReleaseVisible=true`，数字人失败时必须降级普通 Echo
 
 最近验证：
 

@@ -1,13 +1,16 @@
 import Foundation
 import UIKit
-import VirtualmanStreamSDK
 import TXLiteAVSDK_TRTC
+import VirtualmanStreamSDK
 
 final class TencentVirtualmanSDKBridge: NSObject, TencentDigitalHumanSDKBridge {
     let contentView: UIView
+    var eventHandler: ((TencentDigitalHumanSDKBridgeEvent) -> Void)?
 
     private let virtualman: Virtualman
     private var configuration: TencentDigitalHumanSDKConfiguration?
+    private var remoteAudioUserIds = Set<String>()
+    private var isRemoteAudioMuted = false
 
     override init() {
         let virtualman = Virtualman(frame: .zero)
@@ -77,19 +80,30 @@ final class TencentVirtualmanSDKBridge: NSObject, TencentDigitalHumanSDKBridge {
     }
 
     func sendText(_ text: String, requestID: String, sequence: Int, isFinal: Bool) throws {
-        guard !text.isEmpty else {
+        guard !text.isEmpty || isFinal else {
             return
         }
 
-        if sequence <= 1 && isFinal {
-            let accepted = virtualman.chat(ChatParams(text: text, isNewChat: true))
-            if !accepted {
-                throw Self.providerError(code: 3, message: "Tencent chat text was rejected")
+        if isFinal, !text.isEmpty {
+            let accepted = virtualman.sendText(TextParams(text: text, reqId: requestID))
+            print(
+                "[TencentDigitalHuman] sendText requestID=\(requestID) " +
+                "accepted=\(accepted) textLength=\(text.count)"
+            )
+            guard accepted else {
+                throw Self.providerError(code: 5, message: "Tencent text was rejected")
             }
             return
         }
 
-        virtualman.sendStreamText(StreamTextParams(reqId: requestID, text: text, seq: sequence, isFinal: isFinal))
+        let accepted = virtualman.sendStreamText(StreamTextParams(reqId: requestID, text: text, seq: sequence, isFinal: isFinal))
+        print(
+            "[TencentDigitalHuman] sendStreamText requestID=\(requestID) " +
+            "accepted=\(accepted) sequence=\(sequence) isFinal=\(isFinal) textLength=\(text.count)"
+        )
+        guard accepted else {
+            throw Self.providerError(code: 5, message: "Tencent stream text was rejected")
+        }
     }
 
     func sendPCM(_ data: Data, requestID: String, sequence: Int, isFinal: Bool) throws {
@@ -100,11 +114,29 @@ final class TencentVirtualmanSDKBridge: NSObject, TencentDigitalHumanSDKBridge {
         }
     }
 
+    func setRemoteAudioMuted(_ muted: Bool) {
+        isRemoteAudioMuted = muted
+        let trtc = TRTCCloud.sharedInstance()
+        let userIds = remoteAudioUserIds.sorted()
+        if userIds.isEmpty {
+            trtc.muteAllRemoteAudio(muted)
+        } else {
+            for userId in userIds {
+                trtc.muteRemoteAudio(userId, mute: muted)
+            }
+        }
+        print(
+            "[TencentDigitalHuman] TRTC remote audio muted=\(muted) " +
+            "userIds=\(userIds.isEmpty ? "all" : userIds.joined(separator: ","))"
+        )
+    }
+
     func interrupt() {
         _ = virtualman.stop()
     }
 
     func close() {
+        _ = virtualman.stop()
         virtualman.close()
     }
 
@@ -119,6 +151,7 @@ final class TencentVirtualmanSDKBridge: NSObject, TencentDigitalHumanSDKBridge {
 
 extension TencentVirtualmanSDKBridge: VirtualmanDelegate {
     func onRecvSEIMsg(_ userId: String, message: Data) {
+        rememberRemoteAudioUserId(userId)
         #if DEBUG
         guard message.count > 16 else { return }
         let jsonData = message.subdata(in: 16..<message.count)
@@ -129,40 +162,80 @@ extension TencentVirtualmanSDKBridge: VirtualmanDelegate {
     }
 
     func onFirstVideoFrame(_ userId: String, streamType: Int32, width: Int32, height: Int32) {
+        rememberRemoteAudioUserId(userId)
         #if DEBUG
         print("[TencentDigitalHuman] first video frame userId=\(userId), streamType=\(streamType), size=\(width)x\(height)")
         #endif
     }
 
     func onError(_ errCode: Int32, errMsg: String?) {
+        eventHandler?(.error(code: errCode, message: errMsg ?? "unknown"))
         #if DEBUG
         print("[TencentDigitalHuman] TRTC error code=\(errCode), message=\(errMsg ?? "unknown")")
         #endif
+    }
+
+    private func rememberRemoteAudioUserId(_ userId: String) {
+        let normalized = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return }
+        let inserted = remoteAudioUserIds.insert(normalized).inserted
+        guard inserted, isRemoteAudioMuted else { return }
+        TRTCCloud.sharedInstance().muteRemoteAudio(normalized, mute: true)
+        print("[TencentDigitalHuman] TRTC remote audio mute applied to new userId=\(normalized)")
     }
 }
 
 extension TencentVirtualmanSDKBridge: VirtualmanWsDelegate {
     func onWsOpen() {
+        eventHandler?(.webSocketOpen)
         #if DEBUG
         print("[TencentDigitalHuman] WebSocket opened")
         #endif
     }
 
     func onWsMessage(_ text: String) {
+        emitBridgeEventIfNeeded(from: text)
+
         #if DEBUG
         print("[TencentDigitalHuman] WebSocket message received: \(text)")
         #endif
     }
 
     func onWsClosed(code: UInt16, reason: String) {
+        eventHandler?(.closed)
         #if DEBUG
         print("[TencentDigitalHuman] WebSocket closed code=\(code), reason=\(reason)")
         #endif
     }
 
     func onWsFailure(_ error: Error?) {
+        eventHandler?(.error(code: -1, message: error?.localizedDescription ?? "unknown"))
         #if DEBUG
         print("[TencentDigitalHuman] WebSocket failed: \(error?.localizedDescription ?? "unknown")")
         #endif
+    }
+
+    private func emitBridgeEventIfNeeded(from text: String) {
+        guard let data = text.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let payload = object["Payload"] as? [String: Any] else {
+            return
+        }
+
+        let requestID = payload["ReqId"] as? String
+        if let errorCode = payload["ErrorCode"] as? Int,
+           errorCode != 0 {
+            eventHandler?(.error(code: Int32(errorCode), message: payload["ErrorMsg"] as? String ?? "unknown"))
+            return
+        }
+
+        switch payload["SpeakStatus"] as? String {
+        case "TextStart":
+            eventHandler?(.textStart(requestID: requestID))
+        case "TextOver":
+            eventHandler?(.textOver(requestID: requestID))
+        default:
+            break
+        }
     }
 }
