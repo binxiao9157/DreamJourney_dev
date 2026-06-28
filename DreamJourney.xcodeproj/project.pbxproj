@@ -89,6 +89,7 @@
 		A1A000000000000000000046 /* DigitalHumanLivePanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000046 /* DigitalHumanLivePanelView.swift */; };
 		A1A000000000000000000047 /* DigitalHumanAudioLevelMeter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000047 /* DigitalHumanAudioLevelMeter.swift */; };
 		A1A000000000000000000048 /* DigitalHumanLipSyncTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000048 /* DigitalHumanLipSyncTimeline.swift */; };
+		A1A000000000000000000049 /* DigitalHumanConversationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000049 /* DigitalHumanConversationCoordinator.swift */; };
 		A45E9D7E5541F7288DD4141D /* ConversationMemoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97D922D4C28AF76D7CB85DFF /* ConversationMemoryManager.swift */; };
 		A52FFB266D8D9FC320182A0A /* MemoryRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BCB52701683AE3FAFABA6F /* MemoryRepository.swift */; };
 		A88DF4F43BC833D9433CEE7B /* MemoirTTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00898E98E95E3808561BEB51 /* MemoirTTSService.swift */; };
@@ -232,6 +233,7 @@
 		B1B000000000000000000046 /* DigitalHumanLivePanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanLivePanelView.swift; sourceTree = "<group>"; };
 		B1B000000000000000000047 /* DigitalHumanAudioLevelMeter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanAudioLevelMeter.swift; sourceTree = "<group>"; };
 		B1B000000000000000000048 /* DigitalHumanLipSyncTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanLipSyncTimeline.swift; sourceTree = "<group>"; };
+		B1B000000000000000000049 /* DigitalHumanConversationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanConversationCoordinator.swift; sourceTree = "<group>"; };
 		B1BA39C954DE93A9C6B92546 /* FamilyCircleViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyCircleViewController.swift; sourceTree = "<group>"; };
 		B274A4971D76C1D3BFEE4E9A /* WarmTabBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WarmTabBarController.swift; sourceTree = "<group>"; };
 		B2BCB52701683AE3FAFABA6F /* MemoryRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryRepository.swift; sourceTree = "<group>"; };
@@ -488,6 +490,7 @@
 			children = (
 				B1B000000000000000000047 /* DigitalHumanAudioLevelMeter.swift */,
 				B1B000000000000000000048 /* DigitalHumanLipSyncTimeline.swift */,
+				B1B000000000000000000049 /* DigitalHumanConversationCoordinator.swift */,
 				B1B000000000000000000046 /* DigitalHumanLivePanelView.swift */,
 				B1B000000000000000000004 /* EchoViewModel.swift */,
 				B1B000000000000000000005 /* EchoViewController.swift */,
@@ -891,6 +894,7 @@
 				D3A000000000000000000010 /* TencentVirtualmanSDKBridge.swift in Sources */,
 				A1A000000000000000000047 /* DigitalHumanAudioLevelMeter.swift in Sources */,
 				A1A000000000000000000048 /* DigitalHumanLipSyncTimeline.swift in Sources */,
+				A1A000000000000000000049 /* DigitalHumanConversationCoordinator.swift in Sources */,
 				A1A000000000000000000046 /* DigitalHumanLivePanelView.swift in Sources */,
 				D3A000000000000000000003 /* TencentDigitalHumanRuntimeStub.swift in Sources */,
 				A1A000000000000000000005 /* EchoViewController.swift in Sources */,

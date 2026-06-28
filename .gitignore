@@ -5,6 +5,7 @@
 # Xcode
 build/
 DerivedData/
+tmp/
 tmp/**/DerivedData*/
 DreamJourney/Config/Backend.local.xcconfig
 DreamJourney/Config/VoiceSDK.local.xcconfig
