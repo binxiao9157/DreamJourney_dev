@@ -38,7 +38,7 @@ This update adds a digital human live panel inside Echo. It renders through `WKW
 Static checks:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-check.swift
+swift Scripts/QA/prd-stitch-ui/digital-human-live-panel-check.swift
 git diff --check
 ```
 
@@ -49,10 +49,10 @@ The static check also guards against reintroducing fake avatar markup and verifi
 Simulator smoke:
 
 ```bash
-RUN_ID=20260620-digital-human-real-asset-r4 tmp/visual-qa/prd-stitch-ui/run-digital-human-live-panel-smoke.sh
-RUN_ID=20260620-digital-human-tts-metering tmp/visual-qa/prd-stitch-ui/run-digital-human-live-panel-smoke.sh
-DIGITAL_HUMAN_LIPSYNC_MODE=providerVisemeTimeline RUN_ID=20260620-digital-human-provider-viseme-timeline tmp/visual-qa/prd-stitch-ui/run-digital-human-live-panel-smoke.sh
-RUN_ID=20260620-digital-human-metering-after-viseme tmp/visual-qa/prd-stitch-ui/run-digital-human-live-panel-smoke.sh
+RUN_ID=20260620-digital-human-real-asset-r4 Scripts/QA/prd-stitch-ui/run-digital-human-live-panel-smoke.sh
+RUN_ID=20260620-digital-human-tts-metering Scripts/QA/prd-stitch-ui/run-digital-human-live-panel-smoke.sh
+DIGITAL_HUMAN_LIPSYNC_MODE=providerVisemeTimeline RUN_ID=20260620-digital-human-provider-viseme-timeline Scripts/QA/prd-stitch-ui/run-digital-human-live-panel-smoke.sh
+RUN_ID=20260620-digital-human-metering-after-viseme Scripts/QA/prd-stitch-ui/run-digital-human-live-panel-smoke.sh
 ```
 
 Result: passed.

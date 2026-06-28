@@ -356,7 +356,7 @@ The target environment must be one of:
 Primary command:
 
 ```bash
-tmp/visual-qa/prd-stitch-ui/run-release-like-backend-acceptance.sh
+Scripts/QA/prd-stitch-ui/run-release-like-backend-acceptance.sh
 ```
 
 External backend command:
@@ -364,14 +364,14 @@ External backend command:
 ```bash
 BACKEND_BASE_URL=https://example.com/dreamjourney-api \
 BACKEND_API_TOKEN='<server token>' \
-tmp/visual-qa/prd-stitch-ui/run-release-like-backend-acceptance.sh
+Scripts/QA/prd-stitch-ui/run-release-like-backend-acceptance.sh
 ```
 
 Local compose command:
 
 ```bash
 BACKEND_ROOT=/Users/yxj/Documents/Codex/Video/DreamJourneyBackend \
-tmp/visual-qa/prd-stitch-ui/run-release-like-backend-acceptance.sh
+Scripts/QA/prd-stitch-ui/run-release-like-backend-acceptance.sh
 ```
 
 If an external backend can be restarted from the local shell, add:
@@ -444,7 +444,7 @@ For backend regressions, rerun:
 ```bash
 BACKEND_BASE_URL=https://dreamjourney-api.liftora.cn \
 BACKEND_API_TOKEN='<server token from private access doc>' \
-tmp/visual-qa/prd-stitch-ui/run-release-like-backend-acceptance.sh
+Scripts/QA/prd-stitch-ui/run-release-like-backend-acceptance.sh
 ```
 
 The local current backend code contains Postgres `Jsonb` parameter adaptation, rolls back failed DB operations, and passes the backend verification suite.

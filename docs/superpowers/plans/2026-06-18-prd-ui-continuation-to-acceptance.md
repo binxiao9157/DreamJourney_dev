@@ -24,16 +24,16 @@
 
 | Area | Current state | Evidence |
 | --- | --- | --- |
-| App shell | Public shell is `记忆档案 / 回响 / 我的`; old route shell is no longer public. | `DreamJourney/Sources/App/TabCoordinator.swift`, `DreamJourney/Sources/TabBar/WarmTabBarController.swift`, `tmp/visual-qa/prd-stitch-ui/group2-shell-echo-check.swift` |
+| App shell | Public shell is `记忆档案 / 回响 / 我的`; old route shell is no longer public. | `DreamJourney/Sources/App/TabCoordinator.swift`, `DreamJourney/Sources/TabBar/WarmTabBarController.swift`, `Scripts/QA/prd-stitch-ui/group2-shell-echo-check.swift` |
 | Design system | Stitch cream/orange UI has central tokens and shared component helpers. | `DreamJourney/Sources/DesignSystem/DJDesignTokens.swift`, `DreamJourney/Sources/DesignSystem/DJComponentFactory.swift` |
 | Login | Light Stitch login is implemented while preserving current login callback flow. | `DreamJourney/Sources/Modules/Auth/LoginViewController.swift` |
-| Archive | Public text/photo creation, local persistence, local analysis state, detail view, timeline cards, and archive-to-echo context are implemented. Audio/time-letter/persona branches remain hidden. | `DreamJourney/Sources/Modules/Archive/`, `tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh` |
-| Echo | Voice-first scenic screen, archive-context prompt injection, waiting/listening UI states, and mode-boundary copy are implemented. Text/image inputs remain hidden. | `DreamJourney/Sources/Modules/Echo/`, `tmp/visual-qa/prd-stitch-ui/echo-voice-state-visual-check.swift` |
-| Persona scope | Selected self/family owner scopes archive storage, backend payloads, and Echo archive context. | `DreamJourney/Sources/App/DigitalHumanContextStore.swift`, `tmp/visual-qa/prd-stitch-ui/persona-scoped-archive-context-check.swift` |
-| Profile | Profile root, settings, legal center, logout, care dashboard, elder care child dashboard, hidden family/persona switcher, hidden account deletion shell, and hidden care escalation draft exist. | `DreamJourney/Sources/Modules/Profile/`, `tmp/visual-qa/prd-stitch-ui/group4-profile-care-check.swift` |
-| Backend | Configurable backend base URL/token, archive/care/family wrappers, local fallback behavior, and backend smoke harness exist. Real environment acceptance still requires credentials/server. | `DreamJourney/Sources/Services/DreamJourneyBackendClient.swift`, `tmp/visual-qa/prd-stitch-ui/run-backend-env-smoke.sh` |
+| Archive | Public text/photo creation, local persistence, local analysis state, detail view, timeline cards, and archive-to-echo context are implemented. Audio/time-letter/persona branches remain hidden. | `DreamJourney/Sources/Modules/Archive/`, `Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh` |
+| Echo | Voice-first scenic screen, archive-context prompt injection, waiting/listening UI states, and mode-boundary copy are implemented. Text/image inputs remain hidden. | `DreamJourney/Sources/Modules/Echo/`, `Scripts/QA/prd-stitch-ui/echo-voice-state-visual-check.swift` |
+| Persona scope | Selected self/family owner scopes archive storage, backend payloads, and Echo archive context. | `DreamJourney/Sources/App/DigitalHumanContextStore.swift`, `Scripts/QA/prd-stitch-ui/persona-scoped-archive-context-check.swift` |
+| Profile | Profile root, settings, legal center, logout, care dashboard, elder care child dashboard, hidden family/persona switcher, hidden account deletion shell, and hidden care escalation draft exist. | `DreamJourney/Sources/Modules/Profile/`, `Scripts/QA/prd-stitch-ui/group4-profile-care-check.swift` |
+| Backend | Configurable backend base URL/token, archive/care/family wrappers, local fallback behavior, and backend smoke harness exist. Real environment acceptance still requires credentials/server. | `DreamJourney/Sources/Services/DreamJourneyBackendClient.swift`, `Scripts/QA/prd-stitch-ui/run-backend-env-smoke.sh` |
 | Release gates | Default enabled flags remain `careDashboard`, `profileSettings`, `legalCenter`; high-risk and unfinished flows are hidden. | `DreamJourney/Sources/App/FeatureFlagService.swift`, `docs/superpowers/status/2026-06-17-release-feature-matrix.md` |
-| QA | Static guards and simulator smokes cover core loop, archive media boundary, family persona boundary, care escalation boundary, release matrix, and submit inventory. | `tmp/visual-qa/prd-stitch-ui/*.swift`, `tmp/visual-qa/prd-stitch-ui/run-*.sh` |
+| QA | Static guards and simulator smokes cover core loop, archive media boundary, family persona boundary, care escalation boundary, release matrix, and submit inventory. | `Scripts/QA/prd-stitch-ui/*.swift`, `Scripts/QA/prd-stitch-ui/run-*.sh` |
 
 ## Completion Assessment
 
@@ -82,15 +82,15 @@ Durable docs to update as work proceeds:
 
 Reusable QA entry points:
 
-- `tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh`
-- `tmp/visual-qa/prd-stitch-ui/run-backend-env-smoke.sh`
-- `tmp/visual-qa/prd-stitch-ui/run-archive-media-entries-smoke.sh`
-- `tmp/visual-qa/prd-stitch-ui/run-profile-family-persona-release-smoke.sh`
-- `tmp/visual-qa/prd-stitch-ui/run-profile-care-escalation-boundary-smoke.sh`
-- `tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift`
-- `tmp/visual-qa/prd-stitch-ui/final-visual-qa-package-check.swift`
-- `tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift`
-- `tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift`
+- `Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh`
+- `Scripts/QA/prd-stitch-ui/run-backend-env-smoke.sh`
+- `Scripts/QA/prd-stitch-ui/run-archive-media-entries-smoke.sh`
+- `Scripts/QA/prd-stitch-ui/run-profile-family-persona-release-smoke.sh`
+- `Scripts/QA/prd-stitch-ui/run-profile-care-escalation-boundary-smoke.sh`
+- `Scripts/QA/prd-stitch-ui/release-feature-matrix-check.swift`
+- `Scripts/QA/prd-stitch-ui/final-visual-qa-package-check.swift`
+- `Scripts/QA/prd-stitch-ui/release-qa-package-check.swift`
+- `Scripts/QA/prd-stitch-ui/submit-slice-inventory-check.swift`
 
 ---
 
@@ -232,10 +232,10 @@ Run:
 
 ```bash
 cd /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/final-visual-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/profile-scroll-inset-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/warm-tabbar-single-layer-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/final-visual-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-scroll-inset-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/warm-tabbar-single-layer-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 ```
 
@@ -282,14 +282,14 @@ git commit -m "fix: refresh stitch visual alignment"
 
 **Files:**
 
-- Create: `tmp/visual-qa/prd-stitch-ui/run-release-regression-suite.sh`
-- Create: `tmp/visual-qa/prd-stitch-ui/release-regression-suite-check.swift`
-- Modify: `tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift`
+- Create: `Scripts/QA/prd-stitch-ui/run-release-regression-suite.sh`
+- Create: `Scripts/QA/prd-stitch-ui/release-regression-suite-check.swift`
+- Modify: `Scripts/QA/prd-stitch-ui/release-qa-package-check.swift`
 - Modify: `docs/superpowers/status/2026-06-18-release-qa-handoff.md`
 
 - [ ] **Step 1: Write the static guard first**
 
-Create `tmp/visual-qa/prd-stitch-ui/release-regression-suite-check.swift` with these assertions:
+Create `Scripts/QA/prd-stitch-ui/release-regression-suite-check.swift` with these assertions:
 
 ```swift
 import Foundation
@@ -317,9 +317,9 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
     }
 }
 
-exists("tmp/visual-qa/prd-stitch-ui/run-release-regression-suite.sh")
+exists("Scripts/QA/prd-stitch-ui/run-release-regression-suite.sh")
 
-let script = read("tmp/visual-qa/prd-stitch-ui/run-release-regression-suite.sh")
+let script = read("Scripts/QA/prd-stitch-ui/run-release-regression-suite.sh")
 for command in [
     "release-feature-matrix-check.swift",
     "profile-safety-flow-check.swift",
@@ -340,7 +340,7 @@ assertContains(script, "RUN_ID=", "suite should create a stable run id")
 assertContains(script, "set -euo pipefail", "suite should fail fast")
 assertContains(script, "CODE_SIGNING_ALLOWED=NO", "suite should build without device signing")
 
-let package = read("tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift")
+let package = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
 assertContains(package, "run-release-regression-suite.sh", "release QA package should require the suite")
 assertContains(package, "release-regression-suite-check.swift", "release QA package should require the suite guard")
 
@@ -352,14 +352,14 @@ print("Release regression suite checks passed")
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/release-regression-suite-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-regression-suite-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 Expected: fails because the script and package wiring do not exist yet.
 
 - [ ] **Step 3: Create the runner script**
 
-Create `tmp/visual-qa/prd-stitch-ui/run-release-regression-suite.sh`:
+Create `Scripts/QA/prd-stitch-ui/run-release-regression-suite.sh`:
 
 ```bash
 #!/usr/bin/env bash
@@ -374,19 +374,19 @@ mkdir -p "$OUT_DIR"
 
 echo "[release-regression] run id: $RUN_ID"
 
-swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift "$ROOT_DIR"
-swift tmp/visual-qa/prd-stitch-ui/profile-safety-flow-check.swift "$ROOT_DIR"
-swift tmp/visual-qa/prd-stitch-ui/profile-care-escalation-contract-check.swift "$ROOT_DIR"
-swift tmp/visual-qa/prd-stitch-ui/profile-care-escalation-backend-boundary-check.swift "$ROOT_DIR"
-swift tmp/visual-qa/prd-stitch-ui/profile-family-persona-release-readiness-check.swift "$ROOT_DIR"
-swift tmp/visual-qa/prd-stitch-ui/archive-media-release-readiness-check.swift "$ROOT_DIR"
-swift tmp/visual-qa/prd-stitch-ui/persona-scoped-archive-context-check.swift "$ROOT_DIR"
-swift tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift "$ROOT_DIR"
-swift tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift "$ROOT_DIR"
+swift Scripts/QA/prd-stitch-ui/release-feature-matrix-check.swift "$ROOT_DIR"
+swift Scripts/QA/prd-stitch-ui/profile-safety-flow-check.swift "$ROOT_DIR"
+swift Scripts/QA/prd-stitch-ui/profile-care-escalation-contract-check.swift "$ROOT_DIR"
+swift Scripts/QA/prd-stitch-ui/profile-care-escalation-backend-boundary-check.swift "$ROOT_DIR"
+swift Scripts/QA/prd-stitch-ui/profile-family-persona-release-readiness-check.swift "$ROOT_DIR"
+swift Scripts/QA/prd-stitch-ui/archive-media-release-readiness-check.swift "$ROOT_DIR"
+swift Scripts/QA/prd-stitch-ui/persona-scoped-archive-context-check.swift "$ROOT_DIR"
+swift Scripts/QA/prd-stitch-ui/release-qa-package-check.swift "$ROOT_DIR"
+swift Scripts/QA/prd-stitch-ui/submit-slice-inventory-check.swift "$ROOT_DIR"
 
-RUN_ID="$RUN_ID-archive" tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh
-RUN_ID="$RUN_ID-family" tmp/visual-qa/prd-stitch-ui/run-profile-family-persona-release-smoke.sh
-RUN_ID="$RUN_ID-care" tmp/visual-qa/prd-stitch-ui/run-profile-care-escalation-boundary-smoke.sh
+RUN_ID="$RUN_ID-archive" Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh
+RUN_ID="$RUN_ID-family" Scripts/QA/prd-stitch-ui/run-profile-family-persona-release-smoke.sh
+RUN_ID="$RUN_ID-care" Scripts/QA/prd-stitch-ui/run-profile-care-escalation-boundary-smoke.sh
 
 git diff --check
 
@@ -428,16 +428,16 @@ echo "[release-regression] report: $OUT_DIR/report.md"
 Then run:
 
 ```bash
-chmod +x tmp/visual-qa/prd-stitch-ui/run-release-regression-suite.sh
+chmod +x Scripts/QA/prd-stitch-ui/run-release-regression-suite.sh
 ```
 
 - [ ] **Step 4: Wire the runner into package checks**
 
-Modify `tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift` so `requiredScripts` includes:
+Modify `Scripts/QA/prd-stitch-ui/release-qa-package-check.swift` so `requiredScripts` includes:
 
 ```swift
-"tmp/visual-qa/prd-stitch-ui/run-release-regression-suite.sh",
-"tmp/visual-qa/prd-stitch-ui/release-regression-suite-check.swift",
+"Scripts/QA/prd-stitch-ui/run-release-regression-suite.sh",
+"Scripts/QA/prd-stitch-ui/release-regression-suite-check.swift",
 ```
 
 - [ ] **Step 5: Update the release handoff doc**
@@ -451,7 +451,7 @@ After Stitch UI, archive, Echo, Profile, family/persona, care, backend config, o
 
 ```bash
 cd /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-RUN_ID=YYYYMMDD-purpose tmp/visual-qa/prd-stitch-ui/run-release-regression-suite.sh
+RUN_ID=YYYYMMDD-purpose Scripts/QA/prd-stitch-ui/run-release-regression-suite.sh
 ```
 
 This suite is simulator/static evidence only. It does not replace true-device acceptance or real-backend acceptance.
@@ -462,8 +462,8 @@ This suite is simulator/static evidence only. It does not replace true-device ac
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/release-regression-suite-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-regression-suite-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 ```
 
@@ -474,7 +474,7 @@ Expected: all commands exit 0.
 Run:
 
 ```bash
-RUN_ID=YYYYMMDD-release-regression tmp/visual-qa/prd-stitch-ui/run-release-regression-suite.sh
+RUN_ID=YYYYMMDD-release-regression Scripts/QA/prd-stitch-ui/run-release-regression-suite.sh
 ```
 
 Expected:
@@ -490,9 +490,9 @@ Run:
 
 ```bash
 git add \
-  tmp/visual-qa/prd-stitch-ui/run-release-regression-suite.sh \
-  tmp/visual-qa/prd-stitch-ui/release-regression-suite-check.swift \
-  tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift \
+  Scripts/QA/prd-stitch-ui/run-release-regression-suite.sh \
+  Scripts/QA/prd-stitch-ui/release-regression-suite-check.swift \
+  Scripts/QA/prd-stitch-ui/release-qa-package-check.swift \
   docs/superpowers/status/2026-06-18-release-qa-handoff.md
 git commit -m "test: add release regression suite"
 ```
@@ -506,9 +506,9 @@ git commit -m "test: add release regression suite"
 - Read: `docs/superpowers/status/2026-06-18-device-backend-acceptance-readiness.md`
 - Read: `DreamJourney/Config/Backend.example.xcconfig`
 - Read: `.gitignore`
-- Read: `tmp/visual-qa/prd-stitch-ui/run-backend-env-smoke.sh`
+- Read: `Scripts/QA/prd-stitch-ui/run-backend-env-smoke.sh`
 - Modify if backend contract differs: `DreamJourney/Sources/Services/DreamJourneyBackendClient.swift`
-- Modify if backend contract differs: `tmp/visual-qa/prd-stitch-ui/backend-family-acceptance-check.swift`
+- Modify if backend contract differs: `Scripts/QA/prd-stitch-ui/backend-family-acceptance-check.swift`
 - Modify: `docs/superpowers/status/YYYY-MM-DD-real-backend-acceptance.md`
 
 - [ ] **Step 1: Confirm credentials are available outside git**
@@ -540,7 +540,7 @@ Run:
 BACKEND_BASE_URL="$BACKEND_BASE_URL" \
 BACKEND_API_TOKEN="$BACKEND_API_TOKEN" \
 RUN_ID=YYYYMMDD-real-backend \
-tmp/visual-qa/prd-stitch-ui/run-backend-env-smoke.sh
+Scripts/QA/prd-stitch-ui/run-backend-env-smoke.sh
 ```
 
 Expected result JSON:
@@ -604,9 +604,9 @@ Do not include token values.
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/backend-env-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/backend-family-acceptance-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/backend-env-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/backend-family-acceptance-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 xcodebuild \
   -workspace DreamJourney.xcworkspace \
@@ -626,7 +626,7 @@ Expected: all commands exit 0 and build succeeds.
 Run:
 
 ```bash
-git add DreamJourney/Sources/Services/DreamJourneyBackendClient.swift tmp/visual-qa/prd-stitch-ui/backend-family-acceptance-check.swift docs/superpowers/status/YYYY-MM-DD-real-backend-acceptance.md
+git add DreamJourney/Sources/Services/DreamJourneyBackendClient.swift Scripts/QA/prd-stitch-ui/backend-family-acceptance-check.swift docs/superpowers/status/YYYY-MM-DD-real-backend-acceptance.md
 git commit -m "test: record real backend acceptance"
 ```
 
@@ -741,8 +741,8 @@ Head:
 Run:
 
 ```bash
-tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh
-swift tmp/visual-qa/prd-stitch-ui/device-backend-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh
+swift Scripts/QA/prd-stitch-ui/device-backend-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 ```
 
@@ -775,8 +775,8 @@ P1 work fills PRD functionality that is currently hidden or only partially imple
 - Modify: `DreamJourney/Sources/Modules/Archive/MemoryArchiveAudioRecorderViewController.swift`
 - Modify: `DreamJourney/Sources/Modules/Archive/MemoryArchiveItemFactory.swift`
 - Modify: `DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift`
-- Modify: `tmp/visual-qa/prd-stitch-ui/archive-media-release-readiness-check.swift`
-- Modify: `tmp/visual-qa/prd-stitch-ui/run-archive-media-entries-smoke.sh`
+- Modify: `Scripts/QA/prd-stitch-ui/archive-media-release-readiness-check.swift`
+- Modify: `Scripts/QA/prd-stitch-ui/run-archive-media-entries-smoke.sh`
 - Modify: `docs/superpowers/status/YYYY-MM-DD-archive-media-promotion.md`
 
 - [ ] **Step 1: Preserve default hidden policy**
@@ -784,14 +784,14 @@ P1 work fills PRD functionality that is currently hidden or only partially imple
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 Expected: public archive creation exposes text/photo only.
 
 - [ ] **Step 2: Add or tighten static assertions**
 
-Update `tmp/visual-qa/prd-stitch-ui/archive-media-release-readiness-check.swift` so it asserts:
+Update `Scripts/QA/prd-stitch-ui/archive-media-release-readiness-check.swift` so it asserts:
 
 - audio item has local persistence metadata;
 - time-letter item has delivery/opening metadata;
@@ -804,7 +804,7 @@ Update `tmp/visual-qa/prd-stitch-ui/archive-media-release-readiness-check.swift`
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/archive-media-release-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/archive-media-release-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 Expected: fails if the new assertions are not implemented.
@@ -840,7 +840,7 @@ Expected: metadata is stored with `MemoryArchiveItem` and visible in detail UI o
 Run:
 
 ```bash
-RUN_ID=YYYYMMDD-archive-media tmp/visual-qa/prd-stitch-ui/run-archive-media-entries-smoke.sh
+RUN_ID=YYYYMMDD-archive-media Scripts/QA/prd-stitch-ui/run-archive-media-entries-smoke.sh
 ```
 
 Expected result JSON:
@@ -860,8 +860,8 @@ Expected result JSON:
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/archive-media-release-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/archive-media-release-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 xcodebuild \
   -workspace DreamJourney.xcworkspace \
@@ -881,7 +881,7 @@ Expected: all commands exit 0 and build succeeds.
 Run:
 
 ```bash
-git add DreamJourney/Sources/Modules/Archive tmp/visual-qa/prd-stitch-ui/archive-media-release-readiness-check.swift tmp/visual-qa/prd-stitch-ui/run-archive-media-entries-smoke.sh docs/superpowers/status/YYYY-MM-DD-archive-media-promotion.md
+git add DreamJourney/Sources/Modules/Archive Scripts/QA/prd-stitch-ui/archive-media-release-readiness-check.swift Scripts/QA/prd-stitch-ui/run-archive-media-entries-smoke.sh docs/superpowers/status/YYYY-MM-DD-archive-media-promotion.md
 git commit -m "feat: harden hidden archive media readiness"
 ```
 
@@ -894,8 +894,8 @@ git commit -m "feat: harden hidden archive media readiness"
 - Modify: `DreamJourney/Sources/Modules/Profile/ProfileViewController.swift`
 - Modify: `DreamJourney/Sources/Services/FamilyRepository.swift`
 - Modify: `DreamJourney/Sources/App/DigitalHumanContextStore.swift`
-- Modify: `tmp/visual-qa/prd-stitch-ui/profile-family-persona-switcher-check.swift`
-- Modify: `tmp/visual-qa/prd-stitch-ui/run-profile-family-persona-release-smoke.sh`
+- Modify: `Scripts/QA/prd-stitch-ui/profile-family-persona-switcher-check.swift`
+- Modify: `Scripts/QA/prd-stitch-ui/run-profile-family-persona-release-smoke.sh`
 - Create: `docs/superpowers/status/YYYY-MM-DD-family-management-release-candidate.md`
 
 - [ ] **Step 1: Confirm hidden public boundary**
@@ -903,8 +903,8 @@ git commit -m "feat: harden hidden archive media readiness"
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/profile-family-persona-switcher-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-family-persona-switcher-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 Expected: default profile does not expose `家人管理`, but UIQA hidden branch can switch persona context.
@@ -924,7 +924,7 @@ Extend `profile-family-persona-switcher-check.swift` to assert:
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/profile-family-persona-switcher-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-family-persona-switcher-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 Expected: fails until the candidate contract is implemented.
@@ -949,7 +949,7 @@ Disallowed implementation:
 Run:
 
 ```bash
-RUN_ID=YYYYMMDD-family-candidate tmp/visual-qa/prd-stitch-ui/run-profile-family-persona-release-smoke.sh
+RUN_ID=YYYYMMDD-family-candidate Scripts/QA/prd-stitch-ui/run-profile-family-persona-release-smoke.sh
 ```
 
 Expected: result JSON has `completed = true` and `profileTabSelected = true`.
@@ -959,10 +959,10 @@ Expected: result JSON has `completed = true` and `profileTabSelected = true`.
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/profile-family-persona-switcher-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/profile-family-persona-release-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/persona-scoped-archive-context-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-family-persona-switcher-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-family-persona-release-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/persona-scoped-archive-context-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 xcodebuild \
   -workspace DreamJourney.xcworkspace \
@@ -982,7 +982,7 @@ Expected: all commands exit 0 and build succeeds.
 Run:
 
 ```bash
-git add DreamJourney/Sources/Modules/Profile DreamJourney/Sources/Services/FamilyRepository.swift DreamJourney/Sources/App/DigitalHumanContextStore.swift tmp/visual-qa/prd-stitch-ui/profile-family-persona-switcher-check.swift tmp/visual-qa/prd-stitch-ui/run-profile-family-persona-release-smoke.sh docs/superpowers/status/YYYY-MM-DD-family-management-release-candidate.md
+git add DreamJourney/Sources/Modules/Profile DreamJourney/Sources/Services/FamilyRepository.swift DreamJourney/Sources/App/DigitalHumanContextStore.swift Scripts/QA/prd-stitch-ui/profile-family-persona-switcher-check.swift Scripts/QA/prd-stitch-ui/run-profile-family-persona-release-smoke.sh docs/superpowers/status/YYYY-MM-DD-family-management-release-candidate.md
 git commit -m "feat: harden hidden family management candidate"
 ```
 
@@ -996,7 +996,7 @@ git commit -m "feat: harden hidden family management candidate"
 - Modify: `DreamJourney/Sources/Modules/Echo/EchoViewModel.swift`
 - Modify: `DreamJourney/Sources/Modules/Profile/ProfileCareModels.swift`
 - Modify: `DreamJourney/Sources/Modules/Profile/ProfileViewController.swift`
-- Modify: `tmp/visual-qa/prd-stitch-ui/digital-human-mode-lifecycle-check.swift`
+- Modify: `Scripts/QA/prd-stitch-ui/digital-human-mode-lifecycle-check.swift`
 - Modify: `docs/superpowers/status/2026-06-18-digital-human-mode-lifecycle.md`
 
 - [ ] **Step 1: Expand lifecycle guard**
@@ -1014,7 +1014,7 @@ Update `digital-human-mode-lifecycle-check.swift` to require:
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/digital-human-mode-lifecycle-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/digital-human-mode-lifecycle-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 Expected: fails if any new lifecycle assertion is missing.
@@ -1040,9 +1040,9 @@ Expected:
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/digital-human-mode-lifecycle-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/profile-safety-flow-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/group4-profile-care-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/digital-human-mode-lifecycle-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-safety-flow-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/group4-profile-care-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 ```
 
@@ -1062,7 +1062,7 @@ xcodebuild \
   -derivedDataPath tmp/visual-qa/prd-stitch-ui/digital-human-mode-lifecycle/YYYYMMDD/DerivedData \
   CODE_SIGNING_ALLOWED=NO \
   build
-git add DreamJourney/Sources/App/DigitalHumanContextStore.swift DreamJourney/Sources/Modules/Echo/EchoViewModel.swift DreamJourney/Sources/Modules/Profile tmp/visual-qa/prd-stitch-ui/digital-human-mode-lifecycle-check.swift docs/superpowers/status/2026-06-18-digital-human-mode-lifecycle.md
+git add DreamJourney/Sources/App/DigitalHumanContextStore.swift DreamJourney/Sources/Modules/Echo/EchoViewModel.swift DreamJourney/Sources/Modules/Profile Scripts/QA/prd-stitch-ui/digital-human-mode-lifecycle-check.swift docs/superpowers/status/2026-06-18-digital-human-mode-lifecycle.md
 git commit -m "feat: guard digital human lifecycle policy"
 ```
 
@@ -1074,8 +1074,8 @@ git commit -m "feat: guard digital human lifecycle policy"
 
 - Modify: `DreamJourney/Sources/Modules/Profile/ProfileViewController.swift`
 - Create: `DreamJourney/Sources/Modules/Profile/ProfileAccountDeletionContract.swift`
-- Modify: `tmp/visual-qa/prd-stitch-ui/profile-safety-flow-check.swift`
-- Create: `tmp/visual-qa/prd-stitch-ui/profile-account-deletion-boundary-check.swift`
+- Modify: `Scripts/QA/prd-stitch-ui/profile-safety-flow-check.swift`
+- Create: `Scripts/QA/prd-stitch-ui/profile-account-deletion-boundary-check.swift`
 - Create: `docs/superpowers/status/YYYY-MM-DD-account-deletion-boundary.md`
 
 - [ ] **Step 1: Create failing static guard**
@@ -1093,7 +1093,7 @@ git commit -m "feat: guard digital human lifecycle policy"
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/profile-account-deletion-boundary-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-account-deletion-boundary-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 Expected: fails until the contract file and wiring exist.
@@ -1130,9 +1130,9 @@ Expected visible hidden-branch copy:
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/profile-account-deletion-boundary-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/profile-safety-flow-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-account-deletion-boundary-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-safety-flow-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 xcodebuild \
   -workspace DreamJourney.xcworkspace \
@@ -1152,7 +1152,7 @@ Expected: all commands exit 0 and build succeeds.
 Run:
 
 ```bash
-git add DreamJourney/Sources/Modules/Profile tmp/visual-qa/prd-stitch-ui/profile-account-deletion-boundary-check.swift tmp/visual-qa/prd-stitch-ui/profile-safety-flow-check.swift docs/superpowers/status/YYYY-MM-DD-account-deletion-boundary.md
+git add DreamJourney/Sources/Modules/Profile Scripts/QA/prd-stitch-ui/profile-account-deletion-boundary-check.swift Scripts/QA/prd-stitch-ui/profile-safety-flow-check.swift docs/superpowers/status/YYYY-MM-DD-account-deletion-boundary.md
 git commit -m "feat: add account deletion boundary contract"
 ```
 
@@ -1164,8 +1164,8 @@ git commit -m "feat: add account deletion boundary contract"
 
 - Modify: `DreamJourney/Sources/Modules/Profile/ProfileCareModels.swift`
 - Modify: `DreamJourney/Sources/Modules/Profile/ProfileViewController.swift`
-- Modify: `tmp/visual-qa/prd-stitch-ui/profile-care-escalation-backend-boundary-check.swift`
-- Modify: `tmp/visual-qa/prd-stitch-ui/run-profile-care-escalation-boundary-smoke.sh`
+- Modify: `Scripts/QA/prd-stitch-ui/profile-care-escalation-backend-boundary-check.swift`
+- Modify: `Scripts/QA/prd-stitch-ui/run-profile-care-escalation-boundary-smoke.sh`
 - Create: `docs/superpowers/status/YYYY-MM-DD-care-escalation-backend-contract.md`
 
 - [ ] **Step 1: Extend contract assertions**
@@ -1186,7 +1186,7 @@ Update `profile-care-escalation-backend-boundary-check.swift` so payload asserti
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/profile-care-escalation-backend-boundary-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-care-escalation-backend-boundary-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 Expected: fails if the richer contract is missing.
@@ -1228,9 +1228,9 @@ Do not claim diagnosis or emergency detection.
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/profile-care-escalation-backend-boundary-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-RUN_ID=YYYYMMDD-care-contract tmp/visual-qa/prd-stitch-ui/run-profile-care-escalation-boundary-smoke.sh
-swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-care-escalation-backend-boundary-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+RUN_ID=YYYYMMDD-care-contract Scripts/QA/prd-stitch-ui/run-profile-care-escalation-boundary-smoke.sh
+swift Scripts/QA/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 xcodebuild \
   -workspace DreamJourney.xcworkspace \
@@ -1250,7 +1250,7 @@ Expected: all commands exit 0 and build succeeds.
 Run:
 
 ```bash
-git add DreamJourney/Sources/Modules/Profile tmp/visual-qa/prd-stitch-ui/profile-care-escalation-backend-boundary-check.swift tmp/visual-qa/prd-stitch-ui/run-profile-care-escalation-boundary-smoke.sh docs/superpowers/status/YYYY-MM-DD-care-escalation-backend-contract.md
+git add DreamJourney/Sources/Modules/Profile Scripts/QA/prd-stitch-ui/profile-care-escalation-backend-boundary-check.swift Scripts/QA/prd-stitch-ui/run-profile-care-escalation-boundary-smoke.sh docs/superpowers/status/YYYY-MM-DD-care-escalation-backend-contract.md
 git commit -m "feat: extend care escalation backend contract"
 ```
 
@@ -1267,8 +1267,8 @@ P2 work improves maintainability and prepares future PRD stages. Do this after P
 **Files:**
 
 - Create: `docs/superpowers/status/YYYY-MM-DD-prd-coverage-matrix.md`
-- Create: `tmp/visual-qa/prd-stitch-ui/prd-coverage-matrix-check.swift`
-- Modify: `tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift`
+- Create: `Scripts/QA/prd-stitch-ui/prd-coverage-matrix-check.swift`
+- Modify: `Scripts/QA/prd-stitch-ui/release-qa-package-check.swift`
 
 - [ ] **Step 1: Create matrix doc**
 
@@ -1303,8 +1303,8 @@ The doc must include these rows:
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/prd-coverage-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/prd-coverage-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 ```
 
@@ -1315,7 +1315,7 @@ Expected: all commands exit 0.
 Run:
 
 ```bash
-git add docs/superpowers/status/YYYY-MM-DD-prd-coverage-matrix.md tmp/visual-qa/prd-stitch-ui/prd-coverage-matrix-check.swift tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift
+git add docs/superpowers/status/YYYY-MM-DD-prd-coverage-matrix.md Scripts/QA/prd-stitch-ui/prd-coverage-matrix-check.swift Scripts/QA/prd-stitch-ui/release-qa-package-check.swift
 git commit -m "docs: add prd coverage matrix"
 ```
 
@@ -1327,7 +1327,7 @@ git commit -m "docs: add prd coverage matrix"
 
 - Read: `docs/superpowers/status/2026-06-17-source-warning-cleanup.md`
 - Modify only files listed by warning logs and `source-warning-cleanup-check.swift`
-- Modify: `tmp/visual-qa/prd-stitch-ui/source-warning-cleanup-check.swift`
+- Modify: `Scripts/QA/prd-stitch-ui/source-warning-cleanup-check.swift`
 - Create: `docs/superpowers/status/YYYY-MM-DD-source-warning-cleanup-batch.md`
 
 - [ ] **Step 1: Capture warnings**
@@ -1369,7 +1369,7 @@ Disallowed warning classes:
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/source-warning-cleanup-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/source-warning-cleanup-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 xcodebuild \
   -workspace DreamJourney.xcworkspace \
@@ -1389,7 +1389,7 @@ Expected: build succeeds; no new app-source warning of the fixed class remains.
 Run:
 
 ```bash
-git add DreamJourney/Sources tmp/visual-qa/prd-stitch-ui/source-warning-cleanup-check.swift docs/superpowers/status/YYYY-MM-DD-source-warning-cleanup-batch.md
+git add DreamJourney/Sources Scripts/QA/prd-stitch-ui/source-warning-cleanup-check.swift docs/superpowers/status/YYYY-MM-DD-source-warning-cleanup-batch.md
 git commit -m "chore: clean low risk source warnings"
 ```
 
@@ -1401,23 +1401,23 @@ Run this gate when P0 is complete and before asking the user to push or true-dev
 
 ```bash
 cd /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/release-like-hidden-entries-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/profile-release-gating-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/profile-safety-flow-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/profile-care-escalation-backend-boundary-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/profile-family-persona-release-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/archive-media-release-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/persona-scoped-archive-context-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/device-backend-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/backend-build-config-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/backend-env-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/final-visual-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-RUN_ID=YYYYMMDD-rc-archive tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh
-RUN_ID=YYYYMMDD-rc-family tmp/visual-qa/prd-stitch-ui/run-profile-family-persona-release-smoke.sh
-RUN_ID=YYYYMMDD-rc-care tmp/visual-qa/prd-stitch-ui/run-profile-care-escalation-boundary-smoke.sh
+swift Scripts/QA/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-like-hidden-entries-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-release-gating-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-safety-flow-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-care-escalation-backend-boundary-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-family-persona-release-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/archive-media-release-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/persona-scoped-archive-context-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/device-backend-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/backend-build-config-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/backend-env-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/final-visual-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+RUN_ID=YYYYMMDD-rc-archive Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh
+RUN_ID=YYYYMMDD-rc-family Scripts/QA/prd-stitch-ui/run-profile-family-persona-release-smoke.sh
+RUN_ID=YYYYMMDD-rc-care Scripts/QA/prd-stitch-ui/run-profile-care-escalation-boundary-smoke.sh
 git diff --check
 xcodebuild \
   -workspace DreamJourney.xcworkspace \

@@ -45,8 +45,8 @@ The bottom navigation overlap came from two layers being present at runtime:
 ## Guard Scripts
 
 ```text
-tmp/visual-qa/prd-stitch-ui/warm-tabbar-single-layer-check.swift
-tmp/visual-qa/prd-stitch-ui/group2-shell-echo-check.swift
+Scripts/QA/prd-stitch-ui/warm-tabbar-single-layer-check.swift
+Scripts/QA/prd-stitch-ui/group2-shell-echo-check.swift
 ```
 
 ## QA Evidence

@@ -26,21 +26,21 @@
 
 ```bash
 RUN_ID=20260619-hidden-media-combo-gate \
-tmp/visual-qa/prd-stitch-ui/run-archive-hidden-media-combo-gate.sh
+Scripts/QA/prd-stitch-ui/run-archive-hidden-media-combo-gate.sh
 ```
 
 Release regression 可选开关：
 
 ```bash
 RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE=1 \
-tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 Release handoff 常态 gate：
 
 ```bash
 RELEASE_HANDOFF_MODE=1 \
-tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 `RELEASE_HANDOFF_MODE=1` 会强制设置 `RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE=1`，用于持续守住视频/语音详情 UIQA 状态和 `/archive/items` 持久化字段的一致性。

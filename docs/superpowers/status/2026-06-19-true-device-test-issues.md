@@ -118,18 +118,18 @@
 新增回归门：
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/archive-local-file-path-recovery-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/archive-local-file-path-recovery-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 该检查已接入：
 
-- `tmp/visual-qa/prd-stitch-ui/run-release-regression.sh`
-- `tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift`
+- `Scripts/QA/prd-stitch-ui/run-release-regression.sh`
+- `Scripts/QA/prd-stitch-ui/release-qa-package-check.swift`
 
 证据：
 
 - 真机构建/安装/启动：`tmp/visual-qa/prd-stitch-ui/true-device-build/20260619-photo-path-debug/`
-- 新增 guard：`tmp/visual-qa/prd-stitch-ui/archive-local-file-path-recovery-check.swift`
+- 新增 guard：`Scripts/QA/prd-stitch-ui/archive-local-file-path-recovery-check.swift`
 
 ## 当前真机验收边界
 

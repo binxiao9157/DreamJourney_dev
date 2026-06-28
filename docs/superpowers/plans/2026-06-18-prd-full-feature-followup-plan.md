@@ -47,9 +47,9 @@ Echo notification slice:
 - Create: `DreamJourney/Sources/Services/EchoDelayedReplyStore.swift`
 - Create: `DreamJourney/Sources/Services/EchoDelayedReplyNotificationScheduler.swift`
 - Modify: `DreamJourney/Sources/AppDelegate.swift`
-- Create: `tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-notification-check.swift`
-- Modify: `tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift`
-- Modify: `tmp/visual-qa/prd-stitch-ui/run-release-regression.sh`
+- Create: `Scripts/QA/prd-stitch-ui/echo-delayed-reply-notification-check.swift`
+- Modify: `Scripts/QA/prd-stitch-ui/release-qa-package-check.swift`
+- Modify: `Scripts/QA/prd-stitch-ui/run-release-regression.sh`
 - Update: `docs/superpowers/status/2026-06-18-echo-waiting-reply-policy.md`
 
 Profile/account slice:
@@ -59,8 +59,8 @@ Profile/account slice:
 - Modify: `DreamJourney/Sources/Services/DreamJourneyBackendClient.swift`
 - Modify: `DreamJourney/Sources/Modules/Profile/ProfileSettingsViewController.swift`
 - Create: `DreamJourney/Sources/Modules/Profile/ProfilePasswordChangeViewController.swift`
-- Create: `tmp/visual-qa/prd-stitch-ui/profile-account-fields-check.swift`
-- Create: `tmp/visual-qa/prd-stitch-ui/profile-password-change-check.swift`
+- Create: `Scripts/QA/prd-stitch-ui/profile-account-fields-check.swift`
+- Create: `Scripts/QA/prd-stitch-ui/profile-password-change-check.swift`
 - Update: `docs/superpowers/status/2026-06-18-profile-settings-save-state.md`
 
 Archive production slice:
@@ -71,22 +71,22 @@ Archive production slice:
 - Modify: `DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift`
 - Modify: `DreamJourney/Sources/Modules/Archive/MemoryArchiveDetailViewController.swift`
 - Modify: `DreamJourney/Sources/Services/DreamJourneyBackendClient.swift`
-- Create: `tmp/visual-qa/prd-stitch-ui/archive-ownership-visibility-check.swift`
-- Create: `tmp/visual-qa/prd-stitch-ui/archive-analysis-disclaimer-check.swift`
+- Create: `Scripts/QA/prd-stitch-ui/archive-ownership-visibility-check.swift`
+- Create: `Scripts/QA/prd-stitch-ui/archive-analysis-disclaimer-check.swift`
 
 Care dashboard slice:
 
 - Modify: `DreamJourney/Sources/Modules/Profile/ProfileCareModels.swift`
 - Modify: `DreamJourney/Sources/Modules/Profile/ProfileElderCareDashboardViewController.swift`
 - Modify: `DreamJourney/Sources/Services/DreamJourneyBackendClient.swift`
-- Create: `tmp/visual-qa/prd-stitch-ui/profile-care-public-placeholder-check.swift`
+- Create: `Scripts/QA/prd-stitch-ui/profile-care-public-placeholder-check.swift`
 
 Release/QA slice:
 
 - Modify: `docs/superpowers/status/2026-06-18-prd-coverage-matrix.md`
 - Modify: `docs/superpowers/status/2026-06-17-release-feature-matrix.md`
-- Modify: `tmp/visual-qa/prd-stitch-ui/run-release-regression.sh`
-- Modify: `tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift`
+- Modify: `Scripts/QA/prd-stitch-ui/run-release-regression.sh`
+- Modify: `Scripts/QA/prd-stitch-ui/release-qa-package-check.swift`
 
 ---
 
@@ -108,7 +108,7 @@ Product basis:
 
 - Create: `DreamJourney/Sources/Services/EchoDelayedReplyStore.swift`
 - Modify: `DreamJourney/Sources/Modules/Echo/EchoViewModel.swift`
-- Test: `tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-notification-check.swift`
+- Test: `Scripts/QA/prd-stitch-ui/echo-delayed-reply-notification-check.swift`
 
 - [ ] **Step 1: Write failing static guard**
 
@@ -125,7 +125,7 @@ assertContains(echoStore, "trigger: EchoDelayedReplyTrigger", "Echo delayed repl
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-notification-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/echo-delayed-reply-notification-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 Expected: FAIL because the store does not exist.
@@ -168,7 +168,7 @@ When `finishUserVoice(text:)` enters `.waitingReply(minutes:)`, create and save 
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-notification-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/echo-delayed-reply-notification-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 Expected: PASS.
@@ -176,7 +176,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add DreamJourney/Sources/Services/EchoDelayedReplyStore.swift DreamJourney/Sources/Modules/Echo/EchoViewModel.swift tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-notification-check.swift
+git add DreamJourney/Sources/Services/EchoDelayedReplyStore.swift DreamJourney/Sources/Modules/Echo/EchoViewModel.swift Scripts/QA/prd-stitch-ui/echo-delayed-reply-notification-check.swift
 git commit -m "feat: persist Echo delayed reply state"
 ```
 
@@ -187,7 +187,7 @@ git commit -m "feat: persist Echo delayed reply state"
 - Create: `DreamJourney/Sources/Services/EchoDelayedReplyNotificationScheduler.swift`
 - Modify: `DreamJourney/Sources/Modules/Echo/EchoViewController.swift`
 - Modify: `DreamJourney/Sources/AppDelegate.swift`
-- Test: `tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-notification-check.swift`
+- Test: `Scripts/QA/prd-stitch-ui/echo-delayed-reply-notification-check.swift`
 
 - [ ] **Step 1: Extend guard**
 
@@ -249,14 +249,14 @@ It should write JSON with:
 - [ ] **Step 5: Run checks**
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-notification-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-RUN_ID=20260618-echo-delayed-reply-notification tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+swift Scripts/QA/prd-stitch-ui/echo-delayed-reply-notification-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+RUN_ID=20260618-echo-delayed-reply-notification Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add DreamJourney/Sources/Services/EchoDelayedReplyNotificationScheduler.swift DreamJourney/Sources/Modules/Echo/EchoViewController.swift DreamJourney/Sources/AppDelegate.swift tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-notification-check.swift
+git add DreamJourney/Sources/Services/EchoDelayedReplyNotificationScheduler.swift DreamJourney/Sources/Modules/Echo/EchoViewController.swift DreamJourney/Sources/AppDelegate.swift Scripts/QA/prd-stitch-ui/echo-delayed-reply-notification-check.swift
 git commit -m "feat: schedule Echo delayed reply notifications"
 ```
 
@@ -265,7 +265,7 @@ git commit -m "feat: schedule Echo delayed reply notifications"
 **Files:**
 
 - Modify: `DreamJourney/Sources/Services/DreamJourneyBackendClient.swift`
-- Create: `tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-push-contract-check.swift`
+- Create: `Scripts/QA/prd-stitch-ui/echo-delayed-reply-push-contract-check.swift`
 - Update: `docs/superpowers/status/2026-06-18-echo-waiting-reply-policy.md`
 
 - [ ] **Step 1: Add failing guard**
@@ -307,14 +307,14 @@ State that push is backend-ready but production APNs/device token validation rem
 - [ ] **Step 4: Validate**
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-push-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/echo-delayed-reply-push-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 ```
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add DreamJourney/Sources/Services/DreamJourneyBackendClient.swift tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-push-contract-check.swift docs/superpowers/status/2026-06-18-echo-waiting-reply-policy.md
+git add DreamJourney/Sources/Services/DreamJourneyBackendClient.swift Scripts/QA/prd-stitch-ui/echo-delayed-reply-push-contract-check.swift docs/superpowers/status/2026-06-18-echo-waiting-reply-policy.md
 git commit -m "feat: add Echo delayed reply push contract"
 ```
 
@@ -337,7 +337,7 @@ Product basis:
 
 - Modify: `DreamJourney/Sources/Services/MemoryModel.swift`
 - Modify: `DreamJourney/Sources/Services/UserManager.swift`
-- Test: `tmp/visual-qa/prd-stitch-ui/profile-account-fields-check.swift`
+- Test: `Scripts/QA/prd-stitch-ui/profile-account-fields-check.swift`
 
 - [ ] **Step 1: Write failing guard**
 
@@ -361,14 +361,14 @@ Preserve existing nickname validation, add gender/region persistence, and keep b
 - [ ] **Step 4: Validate**
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/profile-account-fields-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/profile-settings-save-state-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-account-fields-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-settings-save-state-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add DreamJourney/Sources/Services/UserManager.swift DreamJourney/Sources/Services/MemoryModel.swift tmp/visual-qa/prd-stitch-ui/profile-account-fields-check.swift
+git add DreamJourney/Sources/Services/UserManager.swift DreamJourney/Sources/Services/MemoryModel.swift Scripts/QA/prd-stitch-ui/profile-account-fields-check.swift
 git commit -m "feat: persist full account profile fields"
 ```
 
@@ -377,7 +377,7 @@ git commit -m "feat: persist full account profile fields"
 **Files:**
 
 - Modify: `DreamJourney/Sources/Modules/Profile/ProfileSettingsViewController.swift`
-- Test: `tmp/visual-qa/prd-stitch-ui/profile-account-fields-check.swift`
+- Test: `Scripts/QA/prd-stitch-ui/profile-account-fields-check.swift`
 
 - [ ] **Step 1: Extend guard**
 
@@ -425,9 +425,9 @@ tmp/visual-qa/prd-stitch-ui/profile-account-fields/<run-id>/01-profile-account-f
 - [ ] **Step 5: Validate and commit**
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/profile-account-fields-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-RUN_ID=20260618-profile-account-fields tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
-git add DreamJourney/Sources/Modules/Profile/ProfileSettingsViewController.swift tmp/visual-qa/prd-stitch-ui/profile-account-fields-check.swift
+swift Scripts/QA/prd-stitch-ui/profile-account-fields-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+RUN_ID=20260618-profile-account-fields Scripts/QA/prd-stitch-ui/run-release-regression.sh
+git add DreamJourney/Sources/Modules/Profile/ProfileSettingsViewController.swift Scripts/QA/prd-stitch-ui/profile-account-fields-check.swift
 git commit -m "feat: expose account profile fields"
 ```
 
@@ -438,7 +438,7 @@ git commit -m "feat: expose account profile fields"
 - Create: `DreamJourney/Sources/Modules/Profile/ProfilePasswordChangeViewController.swift`
 - Modify: `DreamJourney/Sources/Modules/Profile/ProfileSettingsViewController.swift`
 - Modify: `DreamJourney/Sources/Services/DreamJourneyBackendClient.swift`
-- Test: `tmp/visual-qa/prd-stitch-ui/profile-password-change-check.swift`
+- Test: `Scripts/QA/prd-stitch-ui/profile-password-change-check.swift`
 
 - [ ] **Step 1: Add failing guard**
 
@@ -492,14 +492,14 @@ Validation:
 - [ ] **Step 4: Verify**
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/profile-password-change-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-password-change-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath tmp/visual-qa/prd-stitch-ui/profile-password-change/DerivedData CODE_SIGNING_ALLOWED=NO build
 ```
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add DreamJourney/Sources/Modules/Profile/ProfilePasswordChangeViewController.swift DreamJourney/Sources/Modules/Profile/ProfileSettingsViewController.swift DreamJourney/Sources/Services/DreamJourneyBackendClient.swift tmp/visual-qa/prd-stitch-ui/profile-password-change-check.swift
+git add DreamJourney/Sources/Modules/Profile/ProfilePasswordChangeViewController.swift DreamJourney/Sources/Modules/Profile/ProfileSettingsViewController.swift DreamJourney/Sources/Services/DreamJourneyBackendClient.swift Scripts/QA/prd-stitch-ui/profile-password-change-check.swift
 git commit -m "feat: add account password change flow"
 ```
 
@@ -522,7 +522,7 @@ Product basis:
 - Modify: `DreamJourney/Sources/Modules/Archive/MemoryArchiveItem.swift`
 - Modify: `DreamJourney/Sources/Modules/Archive/MemoryArchiveItemFactory.swift`
 - Modify: `DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift`
-- Test: `tmp/visual-qa/prd-stitch-ui/archive-ownership-visibility-check.swift`
+- Test: `Scripts/QA/prd-stitch-ui/archive-ownership-visibility-check.swift`
 
 - [ ] **Step 1: Add failing guard**
 
@@ -549,9 +549,9 @@ item.canManage(by: UserManager.shared.currentUser?.id ?? "")
 - [ ] **Step 4: Validate and commit**
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/archive-ownership-visibility-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-RUN_ID=20260618-archive-ownership tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
-git add DreamJourney/Sources/Modules/Archive/MemoryArchiveItem.swift DreamJourney/Sources/Modules/Archive/MemoryArchiveItemFactory.swift DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift tmp/visual-qa/prd-stitch-ui/archive-ownership-visibility-check.swift
+swift Scripts/QA/prd-stitch-ui/archive-ownership-visibility-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+RUN_ID=20260618-archive-ownership Scripts/QA/prd-stitch-ui/run-release-regression.sh
+git add DreamJourney/Sources/Modules/Archive/MemoryArchiveItem.swift DreamJourney/Sources/Modules/Archive/MemoryArchiveItemFactory.swift DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift Scripts/QA/prd-stitch-ui/archive-ownership-visibility-check.swift
 git commit -m "feat: track archive item ownership"
 ```
 
@@ -561,7 +561,7 @@ git commit -m "feat: track archive item ownership"
 
 - Modify: `DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift`
 - Modify: `DreamJourney/Sources/Services/DreamJourneyBackendClient.swift`
-- Test: `tmp/visual-qa/prd-stitch-ui/archive-ownership-visibility-check.swift`
+- Test: `Scripts/QA/prd-stitch-ui/archive-ownership-visibility-check.swift`
 
 - [ ] **Step 1: Add backend payload fields**
 
@@ -591,7 +591,7 @@ Do not add a new tab. Family digital-human context remains internal/profile-scop
 - [ ] **Step 4: Validate and commit**
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/archive-ownership-visibility-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/archive-ownership-visibility-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 git commit -m "feat: add archive family visibility contract"
 ```
@@ -602,7 +602,7 @@ git commit -m "feat: add archive family visibility contract"
 
 - Modify: `DreamJourney/Sources/Modules/Archive/MemoryArchiveDetailViewController.swift`
 - Modify: `DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift`
-- Test: `tmp/visual-qa/prd-stitch-ui/archive-analysis-disclaimer-check.swift`
+- Test: `Scripts/QA/prd-stitch-ui/archive-analysis-disclaimer-check.swift`
 
 - [ ] **Step 1: Add failing guard**
 
@@ -632,8 +632,8 @@ tmp/visual-qa/prd-stitch-ui/archive-analysis-disclaimer/<run-id>/01-archive-anal
 - [ ] **Step 4: Validate and commit**
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/archive-analysis-disclaimer-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-RUN_ID=20260618-archive-analysis-disclaimer tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+swift Scripts/QA/prd-stitch-ui/archive-analysis-disclaimer-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+RUN_ID=20260618-archive-analysis-disclaimer Scripts/QA/prd-stitch-ui/run-release-regression.sh
 git commit -m "feat: disclose archive analysis assistance"
 ```
 
@@ -656,7 +656,7 @@ Product basis:
 
 - Modify: `DreamJourney/Sources/Modules/Profile/ProfileCareModels.swift`
 - Modify: `DreamJourney/Sources/Modules/Profile/ProfileElderCareDashboardViewController.swift`
-- Test: `tmp/visual-qa/prd-stitch-ui/profile-care-public-placeholder-check.swift`
+- Test: `Scripts/QA/prd-stitch-ui/profile-care-public-placeholder-check.swift`
 
 - [ ] **Step 1: Add failing guard**
 
@@ -684,7 +684,7 @@ Render:
 - [ ] **Step 3: Validate and commit**
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/profile-care-public-placeholder-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-care-public-placeholder-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git commit -m "feat: add care dashboard data states"
 ```
 
@@ -694,7 +694,7 @@ git commit -m "feat: add care dashboard data states"
 
 - Modify: `DreamJourney/Sources/Modules/Profile/ProfileElderCareDashboardViewController.swift`
 - Modify: `docs/superpowers/status/2026-06-17-release-feature-matrix.md`
-- Test: `tmp/visual-qa/prd-stitch-ui/profile-care-public-placeholder-check.swift`
+- Test: `Scripts/QA/prd-stitch-ui/profile-care-public-placeholder-check.swift`
 
 - [ ] **Step 1: Add guard**
 
@@ -720,8 +720,8 @@ Keep `careDoctorContact` hidden for real contact.
 - [ ] **Step 3: Validate and commit**
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/profile-care-public-placeholder-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-RUN_ID=20260618-care-placeholder tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+swift Scripts/QA/prd-stitch-ui/profile-care-public-placeholder-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+RUN_ID=20260618-care-placeholder Scripts/QA/prd-stitch-ui/run-release-regression.sh
 git commit -m "feat: add care intervention placeholder"
 ```
 
@@ -737,7 +737,7 @@ Priority: P1.
 
 - Modify: `docs/superpowers/status/2026-06-18-prd-coverage-matrix.md`
 - Create: `docs/superpowers/status/2026-06-18-backend-contract-gap-matrix.md`
-- Create: `tmp/visual-qa/prd-stitch-ui/backend-contract-gap-check.swift`
+- Create: `Scripts/QA/prd-stitch-ui/backend-contract-gap-check.swift`
 
 - [ ] **Step 1: Add matrix rows**
 
@@ -758,8 +758,8 @@ Require each endpoint string and each state in the matrix.
 - [ ] **Step 3: Validate**
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/backend-contract-gap-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-RUN_ID=20260618-backend-contract-gap tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+swift Scripts/QA/prd-stitch-ui/backend-contract-gap-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+RUN_ID=20260618-backend-contract-gap Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 - [ ] **Step 4: Commit**
@@ -772,8 +772,8 @@ git commit -m "docs: add backend contract gap matrix"
 
 **Files:**
 
-- Modify: `tmp/visual-qa/prd-stitch-ui/run-release-regression.sh`
-- Modify: `tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift`
+- Modify: `Scripts/QA/prd-stitch-ui/run-release-regression.sh`
+- Modify: `Scripts/QA/prd-stitch-ui/release-qa-package-check.swift`
 - Modify: `docs/superpowers/status/2026-06-18-one-command-release-regression.md`
 
 - [ ] **Step 1: Update release handoff mode**
@@ -792,7 +792,7 @@ Release-like backend acceptance
 - [ ] **Step 2: Validate**
 
 ```bash
-RELEASE_HANDOFF_MODE=1 RUN_STANDARD_BUILD=1 RUN_SIMULATOR_SMOKE=1 RUN_ID=20260618-new-prd-release-handoff tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+RELEASE_HANDOFF_MODE=1 RUN_STANDARD_BUILD=1 RUN_SIMULATOR_SMOKE=1 RUN_ID=20260618-new-prd-release-handoff Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 - [ ] **Step 3: Commit**
@@ -865,8 +865,8 @@ Run at least:
 
 ```bash
 git diff --check
-swift tmp/visual-qa/prd-stitch-ui/prd-full-feature-closure-decisions-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/prd-coverage-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/prd-full-feature-closure-decisions-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/prd-coverage-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 For code changes, also run:
@@ -878,13 +878,13 @@ xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -configurati
 For UI changes, also run a simulator smoke and save screenshot:
 
 ```bash
-RUN_ID=<run-id> tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+RUN_ID=<run-id> Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 For backend-contract changes, run:
 
 ```bash
-RUN_ID=<run-id> RELEASE_HANDOFF_MODE=1 tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+RUN_ID=<run-id> RELEASE_HANDOFF_MODE=1 Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 ## Completion Criteria

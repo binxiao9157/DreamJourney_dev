@@ -33,10 +33,10 @@ The password/credential flow remains hidden until product, backend, and security
 Run after changes to profile settings, profile release gating, backend client profile sync, or release regression packaging:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/profile-settings-save-state-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/profile-settings-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/profile-release-gating-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-RUN_ID=20260618-profile-settings-save-state tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+swift Scripts/QA/prd-stitch-ui/profile-settings-save-state-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-settings-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-release-gating-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+RUN_ID=20260618-profile-settings-save-state Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 ## Remaining Work

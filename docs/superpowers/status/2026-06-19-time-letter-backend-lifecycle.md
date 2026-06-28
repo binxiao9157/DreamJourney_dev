@@ -35,20 +35,20 @@
 
 ```bash
 RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE=1 \
-tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 单独运行：
 
 ```bash
 RUN_ID=20260619-time-letter-lifecycle \
-tmp/visual-qa/prd-stitch-ui/run-backend-time-letter-lifecycle-smoke.sh
+Scripts/QA/prd-stitch-ui/run-backend-time-letter-lifecycle-smoke.sh
 ```
 
 静态 guard：
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/archive-time-letter-backend-lifecycle-check.swift \
+swift Scripts/QA/prd-stitch-ui/archive-time-letter-backend-lifecycle-check.swift \
   /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 

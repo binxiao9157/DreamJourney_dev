@@ -67,8 +67,8 @@ Review notes:
 - UIQA harness is compile-gated by `UI_QA_SIMULATOR`.
 - `Podfile.lock` changed only by `PODFILE CHECKSUM`, with no dependency version changes.
 - Detailed review: `docs/superpowers/status/2026-06-17-group1-scaffolding-review.md`.
-- Guard script: `tmp/visual-qa/prd-stitch-ui/group1-scaffolding-check.swift`.
-- Source review guard: `tmp/visual-qa/prd-stitch-ui/group1-source-review-check.swift`.
+- Guard script: `Scripts/QA/prd-stitch-ui/group1-scaffolding-check.swift`.
+- Source review guard: `Scripts/QA/prd-stitch-ui/group1-source-review-check.swift`.
 
 ### Group 2: Shell, Login, Echo, And Prompt Context
 
@@ -97,7 +97,7 @@ Review notes:
 - Real voice SDK/device behavior still needs device-level verification.
 - Text/image echo inputs remain hidden by design.
 - Detailed review: `docs/superpowers/status/2026-06-17-group2-shell-echo-review.md`.
-- Guard scripts: `tmp/visual-qa/prd-stitch-ui/group2-shell-echo-check.swift`, `tmp/visual-qa/prd-stitch-ui/warm-tabbar-single-layer-check.swift`.
+- Guard scripts: `Scripts/QA/prd-stitch-ui/group2-shell-echo-check.swift`, `Scripts/QA/prd-stitch-ui/warm-tabbar-single-layer-check.swift`.
 
 ### Group 3: Archive Core And Creation Branches
 
@@ -127,7 +127,7 @@ Review notes:
 - Audio/time-letter/persona-style branches are compiled but hidden behind flags or explicit UIQA arguments.
 - Backend archive roundtrip and real photo-library behavior still need integration/device verification.
 - Detailed review: `docs/superpowers/status/2026-06-17-group3-archive-core-review.md`.
-- Guard script: `tmp/visual-qa/prd-stitch-ui/group3-archive-core-check.swift`.
+- Guard script: `Scripts/QA/prd-stitch-ui/group3-archive-core-check.swift`.
 
 ### Group 4: Profile, Care, Settings, And Legal
 
@@ -151,7 +151,7 @@ Review notes:
 - Hidden full-list internal QA mode has a minor non-release visual note: `注销账户` can sit close to the floating tabbar on iPhone 17.
 - Family management, doctor contact, and account deletion should not be publicly promoted until product contracts and confirmation/safety copy exist.
 - Detailed review: `docs/superpowers/status/2026-06-17-group4-profile-care-review.md`.
-- Guard script: `tmp/visual-qa/prd-stitch-ui/group4-profile-care-check.swift`.
+- Guard script: `Scripts/QA/prd-stitch-ui/group4-profile-care-check.swift`.
 
 ### Group 5: Map / Future Route Compatibility
 
@@ -172,7 +172,7 @@ Review notes:
 
 - This should remain a future/hidden route unless the PRD explicitly brings time-letter/map footprint back into MVP.
 - Detailed review: `docs/superpowers/status/2026-06-17-group5-map-compatibility-review.md`.
-- Guard script: `tmp/visual-qa/prd-stitch-ui/group5-map-compatibility-check.swift`.
+- Guard script: `Scripts/QA/prd-stitch-ui/group5-map-compatibility-check.swift`.
 
 ### Group 6: Planning And Durable QA Docs
 
@@ -197,22 +197,22 @@ Status: useful for review, but consider committing only selected reports/scripts
 
 High-value scripts:
 
-- `tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh`
-- `tmp/visual-qa/prd-stitch-ui/final-visual-qa-package-check.swift`
-- `tmp/visual-qa/prd-stitch-ui/group1-scaffolding-check.swift`
-- `tmp/visual-qa/prd-stitch-ui/group1-source-review-check.swift`
-- `tmp/visual-qa/prd-stitch-ui/group2-shell-echo-check.swift`
-- `tmp/visual-qa/prd-stitch-ui/group3-archive-core-check.swift`
-- `tmp/visual-qa/prd-stitch-ui/group4-profile-care-check.swift`
-- `tmp/visual-qa/prd-stitch-ui/group5-map-compatibility-check.swift`
-- `tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift`
-- `tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift`
-- `tmp/visual-qa/prd-stitch-ui/warm-tabbar-single-layer-check.swift`
-- `tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift`
-- `tmp/visual-qa/prd-stitch-ui/release-like-hidden-entries-check.swift`
-- `tmp/visual-qa/prd-stitch-ui/profile-release-gating-check.swift`
-- `tmp/visual-qa/prd-stitch-ui/profile-settings-check.swift`
-- `tmp/visual-qa/prd-stitch-ui/profile-legal-center-check.swift`
+- `Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh`
+- `Scripts/QA/prd-stitch-ui/final-visual-qa-package-check.swift`
+- `Scripts/QA/prd-stitch-ui/group1-scaffolding-check.swift`
+- `Scripts/QA/prd-stitch-ui/group1-source-review-check.swift`
+- `Scripts/QA/prd-stitch-ui/group2-shell-echo-check.swift`
+- `Scripts/QA/prd-stitch-ui/group3-archive-core-check.swift`
+- `Scripts/QA/prd-stitch-ui/group4-profile-care-check.swift`
+- `Scripts/QA/prd-stitch-ui/group5-map-compatibility-check.swift`
+- `Scripts/QA/prd-stitch-ui/release-qa-package-check.swift`
+- `Scripts/QA/prd-stitch-ui/submit-slice-inventory-check.swift`
+- `Scripts/QA/prd-stitch-ui/warm-tabbar-single-layer-check.swift`
+- `Scripts/QA/prd-stitch-ui/release-feature-matrix-check.swift`
+- `Scripts/QA/prd-stitch-ui/release-like-hidden-entries-check.swift`
+- `Scripts/QA/prd-stitch-ui/profile-release-gating-check.swift`
+- `Scripts/QA/prd-stitch-ui/profile-settings-check.swift`
+- `Scripts/QA/prd-stitch-ui/profile-legal-center-check.swift`
 
 High-value latest reports:
 
@@ -283,7 +283,7 @@ Suggested review/commit slices:
 Avoid staging all of `tmp/` wholesale. Before staging, run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 Then stage by submit slice rather than with `git add .`.

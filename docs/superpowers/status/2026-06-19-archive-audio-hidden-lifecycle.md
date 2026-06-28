@@ -35,11 +35,11 @@
 已通过：
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/archive-audio-lifecycle-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/archive-audio-ia-release-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/archive-media-entries-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/release-like-hidden-entries-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-RUN_ID=20260619-archive-audio-lifecycle tmp/visual-qa/prd-stitch-ui/run-archive-audio-lifecycle-smoke.sh
+swift Scripts/QA/prd-stitch-ui/archive-audio-lifecycle-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/archive-audio-ia-release-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/archive-media-entries-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-like-hidden-entries-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+RUN_ID=20260619-archive-audio-lifecycle Scripts/QA/prd-stitch-ui/run-archive-audio-lifecycle-smoke.sh
 git diff --check
 xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath tmp/visual-qa/prd-stitch-ui/DerivedDataArchiveAudioLifecycleBuild build
 ```

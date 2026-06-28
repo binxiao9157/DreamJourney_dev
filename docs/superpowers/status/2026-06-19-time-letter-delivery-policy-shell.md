@@ -16,8 +16,8 @@
 ## 验证
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/time-letter-delivery-policy-shell-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-RUN_ARCHIVE_HIDDEN_SHELL_SMOKE=1 tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+swift Scripts/QA/prd-stitch-ui/time-letter-delivery-policy-shell-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+RUN_ARCHIVE_HIDDEN_SHELL_SMOKE=1 Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 ## 边界

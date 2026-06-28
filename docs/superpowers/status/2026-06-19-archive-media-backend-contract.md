@@ -76,7 +76,7 @@ FastAPI `/archive/items` 通过 mock payload 验证：
 ## 验证入口
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/archive-media-backend-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/archive-media-backend-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 
 cd /Users/yxj/Documents/Codex/Video/DreamJourneyBackend
 STORE_BACKEND=memory PYTHONPATH=. .venv/bin/python -m unittest \

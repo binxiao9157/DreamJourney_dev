@@ -32,7 +32,7 @@
 ## 脚本
 
 ```bash
-tmp/visual-qa/prd-stitch-ui/run-profile-care-backend-state-smoke.sh
+Scripts/QA/prd-stitch-ui/run-profile-care-backend-state-smoke.sh
 ```
 
 脚本会优先读取：
@@ -81,7 +81,7 @@ tmp/visual-qa/prd-stitch-ui/run-profile-care-backend-state-smoke.sh
 默认不跑真实后端 UIQA，避免没有部署配置时阻塞本地开发。需要发布/交接验收时优先打开公开 MVP 关怀/心境追踪 P0 回归门：
 
 ```bash
-RUN_P0_PROFILE_CARE_REGRESSION=1 tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+RUN_P0_PROFILE_CARE_REGRESSION=1 Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 该开关会同时跑本地 empty / stale / failed UIQA，以及真实后端 active / empty / stale / failed-retry UIQA。只需要单独跑真实后端状态 smoke 时，仍可使用 `RUN_PROFILE_CARE_BACKEND_STATE_SMOKE=1`。

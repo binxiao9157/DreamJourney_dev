@@ -8,7 +8,7 @@ Harden microphone/photo/backend configuration, privacy, and QA instructions for 
 
 - Planned files:
   - `docs/superpowers/status/2026-06-18-device-backend-acceptance-readiness.md`
-  - `tmp/visual-qa/prd-stitch-ui/device-backend-readiness-check.swift`
+  - `Scripts/QA/prd-stitch-ui/device-backend-readiness-check.swift`
   - `docs/superpowers/status/2026-06-18-prd-continuation-gap-map.md`
   - `.closure-lodestar/`
   - `.complex-problems/L20260618-000157-03/`

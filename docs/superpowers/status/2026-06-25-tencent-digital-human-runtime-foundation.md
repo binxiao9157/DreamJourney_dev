@@ -21,7 +21,7 @@
 - `DreamJourneyBackendClient.DigitalHumanRuntimeCapability`
 - `DreamJourneyBackendClient.DigitalHumanSessionContract`
 - `DJRunDigitalHumanRuntimeStubSmoke`
-- `tmp/visual-qa/prd-stitch-ui/run-digital-human-runtime-stub-smoke.sh`
+- `Scripts/QA/prd-stitch-ui/run-digital-human-runtime-stub-smoke.sh`
 
 当前状态：
 
@@ -35,7 +35,7 @@
 - `DreamJourneyBackendClient` 可以解析 `/config/runtime` 的 `digitalHuman` 能力，并请求 `/digital-human/sessions`。
 - Echo 的 hidden/QA smoke 会把后端 session contract 转换为 `DigitalHumanProfile`，经 `DigitalHumanRuntimeFactory` 驱动 `TencentDigitalHumanRuntimeStub`，并验证 `AudioOnlyDigitalHumanRuntime` 降级。
 - smoke 结果必须包含 `runtimeIsRealSDKBacked=false`，防止把 stub / mock contract 误标为真实腾讯 SDK 接入完成。
-- `RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE=1 tmp/visual-qa/prd-stitch-ui/run-release-regression.sh` 会把这条链路作为可选 release regression gate 执行；默认公开 MVP 回归不执行该隐藏 gate。
+- `RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE=1 Scripts/QA/prd-stitch-ui/run-release-regression.sh` 会把这条链路作为可选 release regression gate 执行；默认公开 MVP 回归不执行该隐藏 gate。
 
 ## Backend
 
@@ -108,9 +108,9 @@
 
 ```bash
 cd /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-tmp/visual-qa/prd-stitch-ui/run-digital-human-runtime-abstraction-check.sh
-tmp/visual-qa/prd-stitch-ui/run-digital-human-session-client-check.sh
-tmp/visual-qa/prd-stitch-ui/run-digital-human-runtime-stub-smoke.sh
+Scripts/QA/prd-stitch-ui/run-digital-human-runtime-abstraction-check.sh
+Scripts/QA/prd-stitch-ui/run-digital-human-session-client-check.sh
+Scripts/QA/prd-stitch-ui/run-digital-human-runtime-stub-smoke.sh
 ```
 
 ```bash

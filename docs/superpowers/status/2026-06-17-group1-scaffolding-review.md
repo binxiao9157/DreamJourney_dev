@@ -55,13 +55,13 @@ Fixed during source review:
 ## Guard Script
 
 ```text
-tmp/visual-qa/prd-stitch-ui/group1-scaffolding-check.swift
+Scripts/QA/prd-stitch-ui/group1-scaffolding-check.swift
 ```
 
 Additional source review guard:
 
 ```text
-tmp/visual-qa/prd-stitch-ui/group1-source-review-check.swift
+Scripts/QA/prd-stitch-ui/group1-source-review-check.swift
 ```
 
 Source review report:

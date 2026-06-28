@@ -23,7 +23,7 @@ Date: 2026-06-19
 ## Verification
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/ios-family-voice-consumer-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/ios-family-voice-consumer-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 该检查已接入 `run-release-regression.sh` 和 release QA package。

@@ -14,12 +14,12 @@
 
 **Files:**
 - Modify: `DreamJourney/Sources/App/FeatureFlagService.swift`
-- Create: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-check.swift`
+- Create: `Scripts/QA/prd-stitch-ui/digital-human-live-panel-check.swift`
 
 - [ ] Add `DJFeature.digitalHumanLivePanel`.
 - [ ] Keep it out of `defaultEnabled`.
 - [ ] Write a Swift static check that asserts the feature flag exists, is not default-enabled, and the QA launch args are the only activation path.
-- [ ] Run `swift tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-check.swift` and confirm it fails before the implementation is wired.
+- [ ] Run `swift Scripts/QA/prd-stitch-ui/digital-human-live-panel-check.swift` and confirm it fails before the implementation is wired.
 
 ### Task 2: Web Wrapper
 
@@ -62,7 +62,7 @@
 
 **Files:**
 - Modify: `DreamJourney/Sources/AppDelegate.swift`
-- Create: `tmp/visual-qa/prd-stitch-ui/run-digital-human-live-panel-smoke.sh`
+- Create: `Scripts/QA/prd-stitch-ui/run-digital-human-live-panel-smoke.sh`
 
 - [ ] Add launch arg `DJRunDigitalHumanLivePanelSmoke`.
 - [ ] Enable `digitalHumanLivePanel` only inside this QA path.
@@ -77,6 +77,6 @@
 - [ ] Run static check.
 - [ ] Run `git diff --check`.
 - [ ] Run simulator build.
-- [ ] Run `tmp/visual-qa/prd-stitch-ui/run-digital-human-live-panel-smoke.sh`.
+- [ ] Run `Scripts/QA/prd-stitch-ui/run-digital-human-live-panel-smoke.sh`.
 - [ ] Run true-device build/install/launch readiness with existing local signing override if a connected device is available.
 - [ ] Document result JSON, screenshot, build logs, true-device logs, and remaining limits.

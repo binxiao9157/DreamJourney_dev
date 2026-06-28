@@ -52,7 +52,7 @@ Echo 档案上下文仍只接收 `manual/analyzed` 的结构化线索；`failed/
 ## 验证
 
 - 后端：`./scripts/verify_backend.sh`
-- iOS 静态合同：`swift tmp/visual-qa/prd-stitch-ui/archive-image-analysis-runtime-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`
-- 部署 smoke 包装检查：`swift tmp/visual-qa/prd-stitch-ui/backend-archive-image-analysis-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`
-- Release QA package：`swift tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`
+- iOS 静态合同：`swift Scripts/QA/prd-stitch-ui/archive-image-analysis-runtime-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`
+- 部署 smoke 包装检查：`swift Scripts/QA/prd-stitch-ui/backend-archive-image-analysis-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`
+- Release QA package：`swift Scripts/QA/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`
 - iOS 构建日志：`tmp/visual-qa/prd-stitch-ui/p1-archive-runtime-contract-build.log`

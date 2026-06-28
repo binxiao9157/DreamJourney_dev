@@ -89,22 +89,22 @@
 
 本轮主要守护脚本：
 
-- `tmp/visual-qa/prd-stitch-ui/tencent-digital-human-audio-owner-stop-semantics-check.swift`
+- `Scripts/QA/prd-stitch-ui/tencent-digital-human-audio-owner-stop-semantics-check.swift`
   - 检查单音频 owner、TextOver 恢复、远端静音、停止打断、UI 过渡态。
-- `tmp/visual-qa/prd-stitch-ui/digital-human-runtime-abstraction-check.swift`
+- `Scripts/QA/prd-stitch-ui/digital-human-runtime-abstraction-check.swift`
   - 检查 runtime/provider abstraction 和腾讯 SDK bridge 状态映射。
-- `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-check.swift`
+- `Scripts/QA/prd-stitch-ui/digital-human-live-panel-check.swift`
   - 检查 WebView/local preview/provider placeholder 显隐策略。
-- `tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift`
+- `Scripts/QA/prd-stitch-ui/release-qa-package-check.swift`
   - 汇总 release QA package 静态门。
 
 本轮已跑过的关键验证：
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/tencent-digital-human-audio-owner-stop-semantics-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/digital-human-runtime-abstraction-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/tencent-digital-human-audio-owner-stop-semantics-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/digital-human-runtime-abstraction-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/digital-human-live-panel-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -configuration Debug -destination 'id=<device-id>' -xcconfig DreamJourney/Config/YXJ.local.xcconfig -allowProvisioningUpdates build

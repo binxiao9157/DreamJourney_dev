@@ -29,8 +29,8 @@ Scope: PRD P0 真机验收与后端验收就绪包。
 
 - PRD: 最新附件 `《寻梦环游 产品PRD V1.0》(1).md`。
 - UI: 当前 Stitch 画布和 `htmlCode` 源码为准，MCP screenshot 只作辅助复核。
-- Core simulator regression: `tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh`。
-- Backend environment regression: `tmp/visual-qa/prd-stitch-ui/run-backend-env-smoke.sh`。
+- Core simulator regression: `Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh`。
+- Backend environment regression: `Scripts/QA/prd-stitch-ui/run-backend-env-smoke.sh`。
 
 ## Backend And Voice Configuration
 
@@ -84,7 +84,7 @@ Rules:
 cd /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 BACKEND_BASE_URL="https://your-backend.example.com" \
 BACKEND_API_TOKEN="your-real-token" \
-tmp/visual-qa/prd-stitch-ui/run-backend-env-smoke.sh
+Scripts/QA/prd-stitch-ui/run-backend-env-smoke.sh
 ```
 
 Expected behavior:
@@ -125,7 +125,7 @@ DREAMJOURNEY_BACKEND_API_TOKEN="your-real-token" \
 VOLCENGINE_APP_ID="your-real-volcengine-app-id" \
 VOLCENGINE_APP_KEY="your-real-volcengine-app-key" \
 VOLCENGINE_APP_TOKEN="your-real-volcengine-app-token" \
-tmp/visual-qa/prd-stitch-ui/run-true-device-voice-preflight.sh
+Scripts/QA/prd-stitch-ui/run-true-device-voice-preflight.sh
 ```
 
 Expected preflight behavior:
@@ -185,7 +185,7 @@ True-device evidence to save:
 ```bash
 cd /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 RUN_ID=20260619-archive-audio-true-device-preflight \
-tmp/visual-qa/prd-stitch-ui/run-true-device-archive-audio-preflight.sh
+Scripts/QA/prd-stitch-ui/run-true-device-archive-audio-preflight.sh
 ```
 
 该脚本会保存 `xcodebuild-destinations.txt`、`devicectl-devices.txt`、`xctrace-devices.txt` 和 `report.md`，并在在线真机可用时执行 Debug device build。设备离线、未解锁、未信任或 Xcode 无法发现物理设备时，脚本必须写出 blocked report，不允许声明通过。
@@ -218,7 +218,7 @@ tmp/visual-qa/prd-stitch-ui/run-true-device-archive-audio-preflight.sh
 
 ```bash
 cd /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh
+Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh
 ```
 
 Expected artifacts:
@@ -241,15 +241,15 @@ Run these before committing acceptance-related changes:
 
 ```bash
 cd /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/device-backend-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/backend-build-config-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/backend-env-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/backend-family-acceptance-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/true-device-voice-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/voice-sdk-readiness-boundary-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/true-device-archive-audio-acceptance-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/true-device-acceptance-evidence-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/device-backend-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/backend-build-config-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/backend-env-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/backend-family-acceptance-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/true-device-voice-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/voice-sdk-readiness-boundary-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/true-device-archive-audio-acceptance-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/true-device-acceptance-evidence-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 ```
 

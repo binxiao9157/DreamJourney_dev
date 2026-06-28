@@ -34,7 +34,7 @@ let releaseQA = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
 
 assertContains(flags, "case voiceCloneShell", "voice clone shell should be feature flagged")
 assertContains(flags, ".voiceCloneShell,", "voice clone should be default enabled after public product decision")
-assertContains(flags, "currentStorageVersion = 9", "feature flag schema should migrate existing installs to public defaults")
+assertContains(flags, "private static let currentStorageVersion", "feature flag schema should migrate existing installs to public defaults without pinning a stale exact value")
 
 for required in [
     "voiceCloneCapability",

@@ -31,8 +31,8 @@ Project path: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev`
 | Profile / 我的 | Partly done, release-gated | Profile card, care dashboard with safe `待同步` fallback, profile settings, legal center, logout, care backend aggregate parsing, QA-only Stitch hidden actions, and Group 4 guard exist; local FastAPI care data renders `需关注 / Call today.` in UIQA; fallback caption has a stable QA identifier | Family-management, account deletion, and doctor contact flows are hidden by default; production care auth and real family-viewer contracts still need release verification. |
 | Backend client | Partly done, locally verified | `DreamJourneyBackendClient` covers `/archive`, `/kb`, `/family`, `/care`; archive remote JSON parsing and gated fetch/merge exist; `DreamJourneyBackendBaseURL` and `DreamJourneyBackendAPIToken` resolve from build settings; memory-store FastAPI contract and token contract scripts pass; archive/profile show basic local fallback copy when backend is unavailable | Real CI/staging secret injection verification, Postgres/Docker persistence, and non-local backend environment verification remain. |
 | Old routes / map | Hidden/future route | Old top-level shell removed; simulator map SDK fallback exists; Group 5 guard confirms map is not a public tab and old memoir banner no longer assumes tab index `1` is footprint | If product brings map back, define a new Stitch screen and route explicitly instead of reviving the old shell. |
-| QA harness | Done for core loop | `tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh` builds, seeds, analyzes, triggers echo, saves result/log/screenshot | Keep `tmp/` artifacts out of release commits unless intentionally archived. |
-| Release feature matrix | Done | `docs/superpowers/status/2026-06-17-release-feature-matrix.md`; `tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift` | Re-run after feature flag, tab, archive creation, echo input, or profile-row changes. |
+| QA harness | Done for core loop | `Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh` builds, seeds, analyzes, triggers echo, saves result/log/screenshot | Keep `tmp/` artifacts out of release commits unless intentionally archived. |
+| Release feature matrix | Done | `docs/superpowers/status/2026-06-17-release-feature-matrix.md`; `Scripts/QA/prd-stitch-ui/release-feature-matrix-check.swift` | Re-run after feature flag, tab, archive creation, echo input, or profile-row changes. |
 | Project hygiene | Needs convergence | New archive source files are in `project.pbxproj`; build has passed in recent checks | Dirty tree is large; split review/commit by module and decide which `tmp/` QA artifacts are kept. |
 
 ## Temporarily Hidden / Not Public
@@ -169,7 +169,7 @@ tmp/visual-qa/prd-stitch-ui/release-feature-matrix/20260617-current/
 Guard check:
 
 ```text
-tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift
+Scripts/QA/prd-stitch-ui/release-feature-matrix-check.swift
 ```
 
 Finding: default enabled flags are pinned to `careDashboard`, `profileSettings`, and `legalCenter`; the check also guards archive text/photo-only creation, voice-first echo, profile release rows, and hidden high-risk or unfinished branches.
@@ -233,7 +233,7 @@ Finding: no blocking issue was found after fixing pushed profile pages to hide t
 After any change touching `记忆档案馆`, archive detail, local analysis, prompt building, `回响`, microphone flow, or Stitch UI structure:
 
 ```bash
-tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh
+Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh
 ```
 
 Expected result JSON:
@@ -281,7 +281,7 @@ tmp/visual-qa/prd-stitch-ui/backend-env-smoke/20260617-backend-env-smoke2/
 Run this smoke after Stitch UI changes that touch archive/profile structure, and after archive/care backend API or token configuration changes:
 
 ```bash
-BACKEND_BASE_URL=http://127.0.0.1:3100 BACKEND_API_TOKEN=<token> tmp/visual-qa/prd-stitch-ui/run-backend-env-smoke.sh
+BACKEND_BASE_URL=http://127.0.0.1:3100 BACKEND_API_TOKEN=<token> Scripts/QA/prd-stitch-ui/run-backend-env-smoke.sh
 ```
 
 Expected result JSON includes `completed=true`, `containsBackendContractPhoto=true`, and `careMoodStatus=需关注`.

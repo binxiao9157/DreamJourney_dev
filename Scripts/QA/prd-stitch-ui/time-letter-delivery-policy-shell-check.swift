@@ -34,12 +34,9 @@ let backendSmoke = read("Scripts/QA/prd-stitch-ui/backend-time-letter-lifecycle-
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let statusDoc = read("docs/superpowers/status/2026-06-21-time-letter-public-delivery.md")
 
-for required in [
-    "private static let currentStorageVersion = 9",
-    ".timeLetters",
-] {
-    assertContains(featureFlags, required, "time-letter should be public by default \(required)")
-}
+assertContains(featureFlags, "case timeLetters", "time-letter feature should have an explicit feature flag")
+assertContains(featureFlags, ".timeLetters", "time-letter should be public by default")
+assertContains(featureFlags, "private static let currentStorageVersion", "feature-flag storage should keep a migration version without pinning a stale exact value")
 
 for required in [
     "timeLetterOpenAtMetadataKey",

@@ -26,5 +26,5 @@ Date: 2026-06-19
 
 - `python -m unittest tests.test_core_services.FamilyAPITests`
 - `python -m unittest tests.test_postgres_store.PostgresStoreTests.test_store_persists_family_member_digital_human_contract`
-- `swift tmp/visual-qa/prd-stitch-ui/family-digital-human-hidden-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`
-- `tmp/visual-qa/prd-stitch-ui/run-release-regression.sh`
+- `swift Scripts/QA/prd-stitch-ui/family-digital-human-hidden-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`
+- `Scripts/QA/prd-stitch-ui/run-release-regression.sh`

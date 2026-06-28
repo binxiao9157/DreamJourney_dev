@@ -34,7 +34,7 @@ The app should preserve future routes for family space, elder care, sunlight/sil
 | Backend client | Local/dev backend base URL and optional token config; archive, KB, family, care endpoint wrappers; App-side backend smoke now verifies archive, care, and accepted family member refresh. | `DreamJourneyBackendClient`, `FamilyRepository.refreshFromBackend`, backend env smoke docs, `backend-family-acceptance-check.swift`. |
 | Persona-scoped core loop | Archive storage, backend archive list payloads, sync payloads, and Echo archive context now resolve from the selected digital-human owner while preserving the default self assistant. | `DigitalHumanContextStore`, `MemoryArchiveRepository`, `persona-scoped-archive-context-check.swift`, archive-to-echo smoke. |
 | Release gates | Incomplete/high-risk branches are hidden by default and guarded by feature flags or UIQA-only launch arguments. | `FeatureFlagService`, release feature matrix. |
-| QA harness | Reusable archive-to-echo smoke, archive media entries smoke, family/persona release smoke, and static guards exist; large generated QA artifacts remain local-only. | `tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh`, `tmp/visual-qa/prd-stitch-ui/run-archive-media-entries-smoke.sh`, `tmp/visual-qa/prd-stitch-ui/run-profile-family-persona-release-smoke.sh`, submit inventory. |
+| QA harness | Reusable archive-to-echo smoke, archive media entries smoke, family/persona release smoke, and static guards exist; large generated QA artifacts remain local-only. | `Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh`, `Scripts/QA/prd-stitch-ui/run-archive-media-entries-smoke.sh`, `Scripts/QA/prd-stitch-ui/run-profile-family-persona-release-smoke.sh`, submit inventory. |
 
 ## Key Remaining Gaps
 
@@ -119,12 +119,12 @@ Reason:
 ## Verification Commands For Next Target
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/persona-scoped-archive-context-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/device-backend-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/backend-family-acceptance-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh
-swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/persona-scoped-archive-context-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/device-backend-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/backend-family-acceptance-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh
+swift Scripts/QA/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 ```
 

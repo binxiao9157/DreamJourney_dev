@@ -9,10 +9,10 @@ Implement release-gated family/persona management, account deletion confirmation
 - Planned files:
   - `DreamJourney/Sources/Modules/Profile/ProfileViewController.swift`
   - `DreamJourney/Sources/Modules/Family/FamilyCircleViewController.swift`
-  - `tmp/visual-qa/prd-stitch-ui/profile-family-persona-switcher-check.swift`
-  - `tmp/visual-qa/prd-stitch-ui/profile-safety-flow-check.swift`
-  - `tmp/visual-qa/prd-stitch-ui/group4-profile-care-check.swift`
-  - `tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift`
+  - `Scripts/QA/prd-stitch-ui/profile-family-persona-switcher-check.swift`
+  - `Scripts/QA/prd-stitch-ui/profile-safety-flow-check.swift`
+  - `Scripts/QA/prd-stitch-ui/group4-profile-care-check.swift`
+  - `Scripts/QA/prd-stitch-ui/submit-slice-inventory-check.swift`
   - `docs/superpowers/status/2026-06-18-profile-family-persona-switcher.md`
   - `docs/superpowers/status/2026-06-18-profile-safety-flows.md`
   - `docs/superpowers/status/2026-06-17-release-feature-matrix.md`

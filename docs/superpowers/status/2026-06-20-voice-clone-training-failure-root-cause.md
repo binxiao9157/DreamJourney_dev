@@ -59,6 +59,6 @@
 ## 验证项
 
 - `STORE_BACKEND=memory PYTHONPATH=. .venv/bin/python -m unittest tests.test_core_services.VoiceCloneProfileAPITests`
-- `swift tmp/visual-qa/prd-stitch-ui/voice-clone-backend-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`
-- `swift tmp/visual-qa/prd-stitch-ui/voice-clone-shell-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`
+- `swift Scripts/QA/prd-stitch-ui/voice-clone-backend-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`
+- `swift Scripts/QA/prd-stitch-ui/voice-clone-shell-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`
 - `git diff --check`

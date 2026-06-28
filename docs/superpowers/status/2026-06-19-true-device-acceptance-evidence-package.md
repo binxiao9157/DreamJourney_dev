@@ -23,7 +23,7 @@
 ```bash
 cd /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 RUN_ID=20260619-voice-true-device-preflight \
-tmp/visual-qa/prd-stitch-ui/run-true-device-voice-preflight.sh
+Scripts/QA/prd-stitch-ui/run-true-device-voice-preflight.sh
 ```
 
 脚本会在 `tmp/visual-qa/prd-stitch-ui/true-device-acceptance/<run-id>/` 生成：
@@ -56,7 +56,7 @@ tmp/visual-qa/prd-stitch-ui/run-true-device-voice-preflight.sh
 ```bash
 cd /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 RUN_ID=20260619-archive-audio-true-device-preflight \
-tmp/visual-qa/prd-stitch-ui/run-true-device-archive-audio-preflight.sh
+Scripts/QA/prd-stitch-ui/run-true-device-archive-audio-preflight.sh
 ```
 
 脚本会在同类 run 目录生成：
@@ -107,7 +107,7 @@ docs/superpowers/status/2026-06-19-true-device-test-issues.md
 新增静态检查：
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/true-device-acceptance-evidence-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/true-device-acceptance-evidence-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 该检查已接入 release regression 和 release QA package，防止后续脚本改动把固定证据包格式删掉。

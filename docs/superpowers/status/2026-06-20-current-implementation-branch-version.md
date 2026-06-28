@@ -146,15 +146,15 @@ providerMode
 基础静态与合同检查：
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/memoir-tts-cache-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/digital-human-tts-viseme-gate-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/memoir-tts-cache-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/digital-human-tts-viseme-gate-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 公开主链路回归：
 
 ```bash
-tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh
+Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh
 ```
 
 数字人 TTS/viseme 可选 gate：
@@ -164,21 +164,21 @@ RUN_DIGITAL_HUMAN_TTS_VISEME_GATE=1 \
 RUN_STANDARD_BUILD=0 \
 RUN_SIMULATOR_SMOKE=0 \
 RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE=0 \
-tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 后端 voice synthesis viseme smoke：
 
 ```bash
-tmp/visual-qa/prd-stitch-ui/run-backend-voice-synthesis-viseme-smoke.sh
+Scripts/QA/prd-stitch-ui/run-backend-voice-synthesis-viseme-smoke.sh
 ```
 
 ## 最近一次本地验证记录
 
 本地 iOS 侧最新缓存合同开发后已验证：
 
-- `swift tmp/visual-qa/prd-stitch-ui/memoir-tts-cache-contract-check.swift` passed
-- `swift tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift` passed
+- `swift Scripts/QA/prd-stitch-ui/memoir-tts-cache-contract-check.swift` passed
+- `swift Scripts/QA/prd-stitch-ui/release-qa-package-check.swift` passed
 - `git diff --check` passed
 - iOS Debug simulator build passed
 

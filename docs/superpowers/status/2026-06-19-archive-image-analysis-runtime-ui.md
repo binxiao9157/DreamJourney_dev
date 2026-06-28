@@ -24,7 +24,7 @@
 
 ## 验证
 
-- 静态 UI gate：`tmp/visual-qa/prd-stitch-ui/archive-image-analysis-runtime-ui-check.swift`
+- 静态 UI gate：`Scripts/QA/prd-stitch-ui/archive-image-analysis-runtime-ui-check.swift`
 - 构建日志：`tmp/visual-qa/prd-stitch-ui/archive-runtime-ui-build.log`
 - 模拟器 smoke：`tmp/visual-qa/prd-stitch-ui/archive-failed-analysis-retry-smoke/20260619-archive-runtime-ui/`
 - 截图：`tmp/visual-qa/prd-stitch-ui/archive-failed-analysis-retry-smoke/20260619-archive-runtime-ui/01-archive-failed-analysis-retry.png`

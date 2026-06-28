@@ -265,7 +265,10 @@ for guard in \
   profile-family-account-lifecycle-check.swift \
   voice-synthesis-viseme-contract-check.swift \
   memoir-tts-cache-contract-check.swift \
+  qa-script-location-check.swift \
+  docs-qa-script-path-check.swift \
   digital-human-live-panel-check.swift \
+  digital-human-conversation-coordinator-check.swift \
   digital-human-runtime-abstraction-check.swift \
   digital-human-session-client-check.swift \
   tencent-digital-human-sdk-handoff-check.swift \

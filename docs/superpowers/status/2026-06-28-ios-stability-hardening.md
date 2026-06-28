@@ -71,6 +71,26 @@ swift Scripts/QA/prd-stitch-ui/tencent-digital-human-audio-owner-stop-semantics-
 swift Scripts/QA/prd-stitch-ui/release-qa-package-check.swift "$PWD"
 ```
 
+## 复扫补充
+
+本轮复扫发现两类容易反复误报的问题，并已收敛：
+
+- 历史文档中仍有长期 QA 脚本指向 `tmp/visual-qa/prd-stitch-ui/`，已统一改为 `Scripts/QA/prd-stitch-ui/`。
+- 部分静态 guard 仍硬编码旧实现细节，例如 feature flag 精确版本号、旧 Podfile checksum、旧腾讯 SDK `chat(ChatParams)` 文本驱动调用。已改为检查当前稳定合同，避免实现正常演进时被旧断言卡住。
+
+新增：
+
+```bash
+swift Scripts/QA/prd-stitch-ui/docs-qa-script-path-check.swift "$PWD"
+```
+
+并已接入：
+
+```bash
+Scripts/QA/prd-stitch-ui/run-release-regression.sh
+swift Scripts/QA/prd-stitch-ui/release-qa-package-check.swift "$PWD"
+```
+
 ## 后续注意
 
 - 如果继续改腾讯数智人连续对话，不要绕过 `DigitalHumanConversationCoordinator` 直接新增散落状态。

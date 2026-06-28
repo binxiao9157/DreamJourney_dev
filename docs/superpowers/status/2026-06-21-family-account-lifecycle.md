@@ -38,7 +38,7 @@ Branch: `feature/prd-stitch-ui-adaptation`
 ## 验证结果
 
 - Backend unit tests: `PYTHONPATH=. STORE_BACKEND=memory .venv/bin/python -m unittest discover tests`，108 tests passed。
-- Python smoke compile: `python3 -m py_compile tmp/visual-qa/prd-stitch-ui/backend-family-account-lifecycle-smoke.py` passed。
+- Python smoke compile: `python3 -m py_compile Scripts/QA/prd-stitch-ui/backend-family-account-lifecycle-smoke.py` passed。
 - Static guards passed:
   - `release-feature-matrix-check.swift`
   - `profile-release-gating-check.swift`
@@ -60,7 +60,7 @@ Branch: `feature/prd-stitch-ui-adaptation`
 - 后端部署后跑：
 
 ```bash
-RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE=1 tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE=1 Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 - 生产账号注销仍需确认 purge 定时任务运行方式、客服恢复支持流程和合规/法务文案。

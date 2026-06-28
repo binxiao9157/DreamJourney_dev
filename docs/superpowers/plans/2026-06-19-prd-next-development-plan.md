@@ -25,8 +25,8 @@
 **Files:**
 - Modify: `DreamJourney/Sources/Modules/Profile/ProfileVoiceCloneShellViewController.swift`
 - Modify: `DreamJourney/Sources/Modules/Profile/ProfileFamilyPersonaReleaseReadiness.swift`
-- Modify: `tmp/visual-qa/prd-stitch-ui/run-profile-family-persona-release-smoke.sh`
-- Create: `tmp/visual-qa/prd-stitch-ui/ios-family-voice-hidden-uiqa-smoke-check.swift`
+- Modify: `Scripts/QA/prd-stitch-ui/run-profile-family-persona-release-smoke.sh`
+- Create: `Scripts/QA/prd-stitch-ui/ios-family-voice-hidden-uiqa-smoke-check.swift`
 - Create or modify: `docs/superpowers/status/YYYY-MM-DD-ios-family-voice-hidden-uiqa.md`
 
 - [ ] Write a failing static guard that requires hidden UIQA to exercise backend-derived `digitalHumanMode`, `familyPersonaContractVersion`, `voiceProfileId`, `sampleStatus`, and `providerMode`.
@@ -44,8 +44,8 @@
 **Files:**
 - Modify: `DreamJourney/Sources/Modules/Archive/MemoryArchiveDetailViewController.swift`
 - Modify: `DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift`
-- Modify: `tmp/visual-qa/prd-stitch-ui/archive-time-letter-backend-lifecycle-check.swift`
-- Create: `tmp/visual-qa/prd-stitch-ui/time-letter-delivery-policy-check.swift`
+- Modify: `Scripts/QA/prd-stitch-ui/archive-time-letter-backend-lifecycle-check.swift`
+- Create: `Scripts/QA/prd-stitch-ui/time-letter-delivery-policy-check.swift`
 - Create or modify: `docs/superpowers/status/YYYY-MM-DD-time-letter-delivery-policy.md`
 
 - [ ] Write a failing guard requiring explicit states: `draft`、`sealed`、`deliveryPendingPolicy`、`deliveryDisabledUntilProductDecision`。
@@ -63,7 +63,7 @@
 - Modify: `DreamJourney/Sources/Modules/Archive/MemoryArchiveVideoEntryViewController.swift`
 - Modify: `DreamJourney/Sources/Modules/Archive/MemoryArchiveDetailViewController.swift`
 - Modify: `DreamJourney/Sources/Modules/Archive/MemoryArchiveDisplayMetadata.swift`
-- Create or modify: `tmp/visual-qa/prd-stitch-ui/archive-video-hidden-readiness-check.swift`
+- Create or modify: `Scripts/QA/prd-stitch-ui/archive-video-hidden-readiness-check.swift`
 - Create or modify: `docs/superpowers/status/YYYY-MM-DD-archive-video-hidden-readiness.md`
 
 - [ ] Write a failing guard requiring video hidden state to show thumbnail placeholder, file-size limit, upload provider mode, analysis status, failure/retry copy, and release-hidden boundary.
@@ -78,9 +78,9 @@
 **Priority:** P0 before any public release claim.
 
 **Files:**
-- Modify: `tmp/visual-qa/prd-stitch-ui/run-true-device-archive-audio-preflight.sh`
+- Modify: `Scripts/QA/prd-stitch-ui/run-true-device-archive-audio-preflight.sh`
 - Modify: `docs/superpowers/status/2026-06-19-true-device-archive-audio-acceptance.md`
-- Create or modify: `tmp/visual-qa/prd-stitch-ui/true-device-release-readiness-check.swift`
+- Create or modify: `Scripts/QA/prd-stitch-ui/true-device-release-readiness-check.swift`
 
 - [ ] Add a guard that requires evidence slots for microphone allow/deny/re-authorize, photo picker, foreground/background recovery, playback route, and screenshots.
 - [ ] Run the guard and verify it fails when evidence is missing.
@@ -95,7 +95,7 @@
 **Files:**
 - Modify: `DreamJourney/Sources/Services/DreamJourneyBackendClient.swift`
 - Modify: `DreamJourney/Sources/Modules/Echo/`
-- Create or modify: `tmp/visual-qa/prd-stitch-ui/production-voice-sdk-readiness-check.swift`
+- Create or modify: `Scripts/QA/prd-stitch-ui/production-voice-sdk-readiness-check.swift`
 - Create or modify: `docs/superpowers/status/YYYY-MM-DD-production-voice-sdk-readiness.md`
 
 - [ ] Write a guard requiring runtime config to distinguish mock ASR/TTS, backend token fallback, and production SDK readiness.
@@ -119,7 +119,7 @@ Run at minimum:
 
 ```bash
 git diff --check
-swift tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 ```
 

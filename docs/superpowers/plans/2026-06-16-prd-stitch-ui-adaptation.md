@@ -1008,26 +1008,26 @@ For disabled features, do not render visible rows that imply availability.
 - `TabCoordinator` remains limited to `记忆档案 / 回响 / 我的`.
 - `MapFootprintViewController` remains target-included but only reachable from guarded future archive routes.
 - `MemoirFlowManager` no longer assumes tab index `1` is the old footprint map when opening hidden memoir details.
-- Regression guard: `tmp/visual-qa/prd-stitch-ui/group5-map-compatibility-check.swift`.
+- Regression guard: `Scripts/QA/prd-stitch-ui/group5-map-compatibility-check.swift`.
 
 2026-06-17 archive backend integration note:
 
 - `DJFeature.archiveRemoteFetch` remains disabled by default.
 - `MemoryArchiveRepository.refreshFromBackend` provides a hidden backend list/parse/merge path for future API verification.
 - Regression guards:
-  - `tmp/visual-qa/prd-stitch-ui/archive-remote-fetch-check.swift`
-  - `tmp/visual-qa/prd-stitch-ui/archive-remote-json-behavior-check.swift`
+  - `Scripts/QA/prd-stitch-ui/archive-remote-fetch-check.swift`
+  - `Scripts/QA/prd-stitch-ui/archive-remote-json-behavior-check.swift`
 
 2026-06-17 care backend fallback note:
 
 - `ProfileCareSnapshot.offlineFallback()` keeps the `我的` care card understandable when no backend environment is available.
 - The fallback displays `待同步` and a local-status caption without exposing raw chat transcript/message data.
-- Regression guard: `tmp/visual-qa/prd-stitch-ui/profile-care-snapshot-check.swift`.
+- Regression guard: `Scripts/QA/prd-stitch-ui/profile-care-snapshot-check.swift`.
 
 2026-06-17 backend integration verification note:
 
 - Local FastAPI backend verification passed in `STORE_BACKEND=memory` mode.
-- `tmp/visual-qa/prd-stitch-ui/backend-integration-contract-check.py` verifies `/archive`, `/kb`, `/family`, and `/care` via real HTTP.
+- `Scripts/QA/prd-stitch-ui/backend-integration-contract-check.py` verifies `/archive`, `/kb`, `/family`, and `/care` via real HTTP.
 - UIQA launch argument `DJEnableArchiveRemoteFetch` enables the hidden archive fetch path inside the app for backend verification without exposing it in release defaults.
 - `run-archive-to-echo-smoke.sh` clears simulator defaults before launch so backend-verification feature flags and remote items do not contaminate the core-loop smoke.
 - Simulator evidence is under `tmp/visual-qa/prd-stitch-ui/backend-integration/20260617-current/`.
@@ -1037,7 +1037,7 @@ For disabled features, do not render visible rows that imply availability.
 
 - `DreamJourneyBackendAPIToken` exists in `Info.plist` as `$(DREAMJOURNEY_BACKEND_API_TOKEN)`.
 - `DreamJourneyBackendClient` ignores empty, placeholder, and unexpanded build-setting token values and sends `Authorization: Bearer <token>` only when a real token is configured in the built app.
-- `tmp/visual-qa/prd-stitch-ui/backend-auth-token-contract-check.py` verifies `401` without token and authorized `/archive` + `/care` access with token.
+- `Scripts/QA/prd-stitch-ui/backend-auth-token-contract-check.py` verifies `401` without token and authorized `/archive` + `/care` access with token.
 - Simulator evidence with token-injected build artifact is under `tmp/visual-qa/prd-stitch-ui/backend-auth-token/20260617-current/`.
 - Remaining backend release work: real CI/staging secret injection verification, Postgres/Docker persistence, and staging/production domain verification.
 
@@ -1047,7 +1047,7 @@ For disabled features, do not render visible rows that imply availability.
 - Debug and Release target defaults stay local/placeholder, so regular simulator builds continue to work without secrets.
 - `DreamJourney/Config/Backend.example.xcconfig` documents the keys; `DreamJourney/Config/Backend.local.xcconfig` is ignored.
 - Override build verification showed dummy staging values landing in the built app bundle without editing source.
-- Regression guard: `tmp/visual-qa/prd-stitch-ui/backend-build-config-check.swift`.
+- Regression guard: `Scripts/QA/prd-stitch-ui/backend-build-config-check.swift`.
 - Simulator/build evidence is under `tmp/visual-qa/prd-stitch-ui/backend-build-config/20260617-current/`.
 
 2026-06-17 backend fallback UI note:
@@ -1055,7 +1055,7 @@ For disabled features, do not render visible rows that imply availability.
 - Archive remote fetch now surfaces a small sync status only when the hidden remote-fetch path is enabled.
 - Failure copy is `远端暂不可用，已保留本地档案`, so users keep local archive context instead of seeing a silent backend failure.
 - Profile care fallback caption has a stable QA identifier and keeps showing `关怀数据暂未同步，当前显示本地安全状态。`.
-- Regression guard: `tmp/visual-qa/prd-stitch-ui/backend-fallback-ui-check.swift`.
+- Regression guard: `Scripts/QA/prd-stitch-ui/backend-fallback-ui-check.swift`.
 - Simulator evidence is under `tmp/visual-qa/prd-stitch-ui/backend-fallback-ui/20260617-current/`.
 
 - [ ] **Step 4: Build and commit**
@@ -1122,7 +1122,7 @@ Verify:
 After any Stitch UI update, archive detail change, echo prompt change, microphone flow change, or PRD adjustment that touches `记忆档案馆` / `回响`, run:
 
 ```bash
-tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh
+Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh
 ```
 
 The script builds the UIQA simulator variant, seeds a pending photo archive item, drives the existing archive detail local-analysis action, switches to `回响`, triggers the existing microphone action, then captures logs, a result JSON, and a screenshot under:
@@ -1151,7 +1151,7 @@ This smoke test verifies the PRD core loop: `记忆档案馆` material can becom
 Before staging or handing off the branch, run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 This verifies that the durable QA documents, selected Group 1-5 evidence, release matrix, hidden-route policy, latest archive-to-echo smoke result, and commit-hygiene notes are present and coherent.
@@ -1161,7 +1161,7 @@ This verifies that the durable QA documents, selected Group 1-5 evidence, releas
 Before staging the branch, run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/submit-slice-inventory-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 This expands the dirty tree and ensures every file belongs to a source slice, durable-doc slice, optional-QA evidence slice, or local-only generated-artifact bucket.
@@ -1171,7 +1171,7 @@ This expands the dirty tree and ensures every file belongs to a source slice, du
 Before handing off a visual QA pass that touches `我的`, run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/profile-scroll-inset-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-scroll-inset-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 This verifies that `ProfileViewController` uses explicit floating-tabbar scroll insets instead of relying on inherited safe-area timing.
@@ -1231,7 +1231,7 @@ Expected:
 - [ ] **Step 4: Run core PRD loop smoke**
 
 ```bash
-tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh
+Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh
 ```
 
 Expected:
@@ -1244,7 +1244,7 @@ Expected:
 - [ ] **Step 4b: Run Profile bottom readability guard**
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/profile-scroll-inset-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-scroll-inset-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 Expected:
@@ -1257,7 +1257,7 @@ Expected:
 ```bash
 BACKEND_BASE_URL=http://127.0.0.1:3100 \
 BACKEND_API_TOKEN=<token> \
-tmp/visual-qa/prd-stitch-ui/run-backend-env-smoke.sh
+Scripts/QA/prd-stitch-ui/run-backend-env-smoke.sh
 ```
 
 Expected:

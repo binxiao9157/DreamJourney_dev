@@ -30,7 +30,7 @@
 
 ```bash
 RUN_ID=20260619-backend-archive-image-analysis-smoke \
-tmp/visual-qa/prd-stitch-ui/run-backend-archive-image-analysis-smoke.sh
+Scripts/QA/prd-stitch-ui/run-backend-archive-image-analysis-smoke.sh
 ```
 
 可选接入 release regression：
@@ -38,7 +38,7 @@ tmp/visual-qa/prd-stitch-ui/run-backend-archive-image-analysis-smoke.sh
 ```bash
 RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE=1 \
 RUN_ID=<run-id> \
-tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 ## 产物
@@ -108,7 +108,7 @@ Smoke 脚本已同步更新：
 
 ```bash
 RUN_ID=20260619-backend-archive-image-analysis-provider-fallback \
-tmp/visual-qa/prd-stitch-ui/run-backend-archive-image-analysis-smoke.sh
+Scripts/QA/prd-stitch-ui/run-backend-archive-image-analysis-smoke.sh
 ```
 
 预期：
@@ -187,7 +187,7 @@ Run ID: `20260619-backend-archive-image-analysis-smoke-preflight`
 
 ```bash
 RUN_ID=20260619-backend-archive-image-analysis-after-deploy \
-tmp/visual-qa/prd-stitch-ui/run-backend-archive-image-analysis-smoke.sh
+Scripts/QA/prd-stitch-ui/run-backend-archive-image-analysis-smoke.sh
 ```
 
 3. 如果仍然失败在 DeepSeek 400，需要切换到明确支持视觉输入的 provider，或把 `/archive/image-analysis` 改成“后端结构化合同 + provider 不可用时返回可重试失败状态”的产品降级方案。

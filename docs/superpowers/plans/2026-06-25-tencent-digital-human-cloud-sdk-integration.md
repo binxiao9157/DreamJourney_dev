@@ -60,20 +60,20 @@
   - Opens/feeds/tears down digital-human runtime under QA/release gating.
 - `DreamJourney/Info.plist`
   - Ensures microphone/camera usage strings exist before true-device SDK tests.
-- `tmp/visual-qa/prd-stitch-ui/run-release-regression.sh`
+- `Scripts/QA/prd-stitch-ui/run-release-regression.sh`
   - Adds optional Tencent cloud SDK gate.
 
 ### New Files To Create
 
 - `DreamJourney/Sources/Services/DigitalHuman/TencentVirtualmanSDKBridge.swift`
   - Imports `VirtualmanStreamSDK` and maps SDK calls to `TencentDigitalHumanSDKBridge`.
-- `tmp/visual-qa/prd-stitch-ui/tencent-digital-human-sdk-binary-check.swift`
+- `Scripts/QA/prd-stitch-ui/tencent-digital-human-sdk-binary-check.swift`
   - Verifies framework/pod/project wiring without requiring a true device.
-- `tmp/visual-qa/prd-stitch-ui/run-tencent-digital-human-sdk-binary-check.sh`
+- `Scripts/QA/prd-stitch-ui/run-tencent-digital-human-sdk-binary-check.sh`
   - Runs the binary wiring check.
-- `tmp/visual-qa/prd-stitch-ui/tencent-digital-human-cloud-runtime-smoke.swift`
+- `Scripts/QA/prd-stitch-ui/tencent-digital-human-cloud-runtime-smoke.swift`
   - Checks the bridge adapter source for required API mappings.
-- `tmp/visual-qa/prd-stitch-ui/run-tencent-digital-human-cloud-runtime-smoke.sh`
+- `Scripts/QA/prd-stitch-ui/run-tencent-digital-human-cloud-runtime-smoke.sh`
   - Runs adapter mapping checks and a simulator smoke when available.
 - `docs/superpowers/status/2026-06-25-tencent-digital-human-sdk-integration-evidence.md`
   - Records SDK version, checksum, build results, true-device evidence, and remaining blockers.
@@ -83,7 +83,7 @@
 **Files:**
 - Modify: `.gitignore`
 - Modify: `docs/superpowers/status/2026-06-25-tencent-digital-human-sdk-handoff.md`
-- Test: `tmp/visual-qa/prd-stitch-ui/tencent-digital-human-sdk-handoff-check.swift`
+- Test: `Scripts/QA/prd-stitch-ui/tencent-digital-human-sdk-handoff-check.swift`
 
 - [ ] **Step 1: Add a gitignore guard for local SDK staging**
 
@@ -130,7 +130,7 @@ Downloaded package SHA-256:
 Run:
 
 ```bash
-tmp/visual-qa/prd-stitch-ui/run-tencent-digital-human-sdk-handoff-check.sh
+Scripts/QA/prd-stitch-ui/run-tencent-digital-human-sdk-handoff-check.sh
 ```
 
 Expected:
@@ -144,7 +144,7 @@ tencent-digital-human-sdk-handoff-check passed
 Run:
 
 ```bash
-git add .gitignore docs/superpowers/status/2026-06-25-tencent-digital-human-sdk-handoff.md tmp/visual-qa/prd-stitch-ui/tencent-digital-human-sdk-handoff-check.swift
+git add .gitignore docs/superpowers/status/2026-06-25-tencent-digital-human-sdk-handoff.md Scripts/QA/prd-stitch-ui/tencent-digital-human-sdk-handoff-check.swift
 git commit -m "docs: record tencent digital human sdk package source"
 ```
 
@@ -152,13 +152,13 @@ git commit -m "docs: record tencent digital human sdk package source"
 
 **Files:**
 - Modify: `Podfile`
-- Create: `tmp/visual-qa/prd-stitch-ui/tencent-digital-human-sdk-binary-check.swift`
-- Create: `tmp/visual-qa/prd-stitch-ui/run-tencent-digital-human-sdk-binary-check.sh`
-- Modify: `tmp/visual-qa/prd-stitch-ui/run-release-regression.sh`
+- Create: `Scripts/QA/prd-stitch-ui/tencent-digital-human-sdk-binary-check.swift`
+- Create: `Scripts/QA/prd-stitch-ui/run-tencent-digital-human-sdk-binary-check.sh`
+- Modify: `Scripts/QA/prd-stitch-ui/run-release-regression.sh`
 
 - [ ] **Step 1: Write binary wiring check**
 
-Create `tmp/visual-qa/prd-stitch-ui/tencent-digital-human-sdk-binary-check.swift`:
+Create `Scripts/QA/prd-stitch-ui/tencent-digital-human-sdk-binary-check.swift`:
 
 ```swift
 import Foundation
@@ -194,20 +194,20 @@ print("tencent-digital-human-sdk-binary-check passed")
 
 - [ ] **Step 2: Add runner**
 
-Create `tmp/visual-qa/prd-stitch-ui/run-tencent-digital-human-sdk-binary-check.sh`:
+Create `Scripts/QA/prd-stitch-ui/run-tencent-digital-human-sdk-binary-check.sh`:
 
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-swift "$ROOT_DIR/tmp/visual-qa/prd-stitch-ui/tencent-digital-human-sdk-binary-check.swift" "$ROOT_DIR"
+swift "$ROOT_DIR/Scripts/QA/prd-stitch-ui/tencent-digital-human-sdk-binary-check.swift" "$ROOT_DIR"
 ```
 
 Run:
 
 ```bash
-chmod +x tmp/visual-qa/prd-stitch-ui/run-tencent-digital-human-sdk-binary-check.sh
+chmod +x Scripts/QA/prd-stitch-ui/run-tencent-digital-human-sdk-binary-check.sh
 ```
 
 - [ ] **Step 3: Run check before implementation**
@@ -215,7 +215,7 @@ chmod +x tmp/visual-qa/prd-stitch-ui/run-tencent-digital-human-sdk-binary-check.
 Run:
 
 ```bash
-tmp/visual-qa/prd-stitch-ui/run-tencent-digital-human-sdk-binary-check.sh
+Scripts/QA/prd-stitch-ui/run-tencent-digital-human-sdk-binary-check.sh
 ```
 
 Expected: FAIL with:
@@ -267,7 +267,7 @@ Expected:
 Run:
 
 ```bash
-git add Podfile Podfile.lock Pods/Manifest.lock tmp/visual-qa/prd-stitch-ui/tencent-digital-human-sdk-binary-check.swift tmp/visual-qa/prd-stitch-ui/run-tencent-digital-human-sdk-binary-check.sh tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+git add Podfile Podfile.lock Pods/Manifest.lock Scripts/QA/prd-stitch-ui/tencent-digital-human-sdk-binary-check.swift Scripts/QA/prd-stitch-ui/run-tencent-digital-human-sdk-binary-check.sh Scripts/QA/prd-stitch-ui/run-release-regression.sh
 git commit -m "build: add tencent digital human trtc dependency gate"
 ```
 
@@ -276,7 +276,7 @@ git commit -m "build: add tencent digital human trtc dependency gate"
 **Files:**
 - Create or copy local binary: `Vendor/TencentDigitalHuman/VirtualmanStreamSDK.xcframework`
 - Modify: `DreamJourney.xcodeproj/project.pbxproj`
-- Modify: `tmp/visual-qa/prd-stitch-ui/tencent-digital-human-sdk-binary-check.swift`
+- Modify: `Scripts/QA/prd-stitch-ui/tencent-digital-human-sdk-binary-check.swift`
 - Test: iOS build
 
 - [ ] **Step 1: Copy SDK to local vendor path**
@@ -314,7 +314,7 @@ Frameworks, Libraries, and Embedded Content: Embed & Sign
 Run:
 
 ```bash
-tmp/visual-qa/prd-stitch-ui/run-tencent-digital-human-sdk-binary-check.sh
+Scripts/QA/prd-stitch-ui/run-tencent-digital-human-sdk-binary-check.sh
 ```
 
 Expected:
@@ -342,7 +342,7 @@ Expected:
 Run:
 
 ```bash
-git add DreamJourney.xcodeproj/project.pbxproj tmp/visual-qa/prd-stitch-ui/tencent-digital-human-sdk-binary-check.swift
+git add DreamJourney.xcodeproj/project.pbxproj Scripts/QA/prd-stitch-ui/tencent-digital-human-sdk-binary-check.swift
 git commit -m "build: wire tencent digital human sdk framework"
 ```
 
@@ -353,13 +353,13 @@ Do not commit `Vendor/TencentDigitalHuman/VirtualmanStreamSDK.xcframework` unles
 **Files:**
 - Create: `DreamJourney/Sources/Services/DigitalHuman/TencentVirtualmanSDKBridge.swift`
 - Modify: `DreamJourney.xcodeproj/project.pbxproj`
-- Create: `tmp/visual-qa/prd-stitch-ui/tencent-digital-human-cloud-runtime-smoke.swift`
-- Create: `tmp/visual-qa/prd-stitch-ui/run-tencent-digital-human-cloud-runtime-smoke.sh`
-- Modify: `tmp/visual-qa/prd-stitch-ui/run-release-regression.sh`
+- Create: `Scripts/QA/prd-stitch-ui/tencent-digital-human-cloud-runtime-smoke.swift`
+- Create: `Scripts/QA/prd-stitch-ui/run-tencent-digital-human-cloud-runtime-smoke.sh`
+- Modify: `Scripts/QA/prd-stitch-ui/run-release-regression.sh`
 
 - [ ] **Step 1: Write adapter mapping check**
 
-Create `tmp/visual-qa/prd-stitch-ui/tencent-digital-human-cloud-runtime-smoke.swift`:
+Create `Scripts/QA/prd-stitch-ui/tencent-digital-human-cloud-runtime-smoke.swift`:
 
 ```swift
 import Foundation
@@ -405,7 +405,7 @@ print("tencent-digital-human-cloud-runtime-smoke passed")
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/tencent-digital-human-cloud-runtime-smoke.swift "$PWD"
+swift Scripts/QA/prd-stitch-ui/tencent-digital-human-cloud-runtime-smoke.swift "$PWD"
 ```
 
 Expected: FAIL because `TencentVirtualmanSDKBridge.swift` does not exist.
@@ -570,7 +570,7 @@ Add `TencentVirtualmanSDKBridge.swift` to the `DreamJourney` target Sources phas
 Run:
 
 ```bash
-tmp/visual-qa/prd-stitch-ui/run-tencent-digital-human-cloud-runtime-smoke.sh
+Scripts/QA/prd-stitch-ui/run-tencent-digital-human-cloud-runtime-smoke.sh
 ```
 
 Expected:
@@ -598,7 +598,7 @@ Expected:
 Run:
 
 ```bash
-git add DreamJourney/Sources/Services/DigitalHuman/TencentVirtualmanSDKBridge.swift DreamJourney.xcodeproj/project.pbxproj tmp/visual-qa/prd-stitch-ui/tencent-digital-human-cloud-runtime-smoke.swift tmp/visual-qa/prd-stitch-ui/run-tencent-digital-human-cloud-runtime-smoke.sh tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+git add DreamJourney/Sources/Services/DigitalHuman/TencentVirtualmanSDKBridge.swift DreamJourney.xcodeproj/project.pbxproj Scripts/QA/prd-stitch-ui/tencent-digital-human-cloud-runtime-smoke.swift Scripts/QA/prd-stitch-ui/run-tencent-digital-human-cloud-runtime-smoke.sh Scripts/QA/prd-stitch-ui/run-release-regression.sh
 git commit -m "feat: add tencent digital human sdk bridge"
 ```
 
@@ -687,8 +687,8 @@ git commit -m "feat: enable tencent digital human provider readiness contract"
 ## Task 6: Simulator QA With SDK Linked But Provider Hidden
 
 **Files:**
-- Modify: `tmp/visual-qa/prd-stitch-ui/run-digital-human-runtime-stub-smoke.sh`
-- Modify: `tmp/visual-qa/prd-stitch-ui/run-release-regression.sh`
+- Modify: `Scripts/QA/prd-stitch-ui/run-digital-human-runtime-stub-smoke.sh`
+- Modify: `Scripts/QA/prd-stitch-ui/run-release-regression.sh`
 - Test artifact: `tmp/visual-qa/prd-stitch-ui/tencent-digital-human-sdk-hidden-smoke/<RUN_ID>/`
 
 - [ ] **Step 1: Add launch arg for SDK-hidden smoke**
@@ -707,7 +707,7 @@ Do not enable public release flag.
 Run:
 
 ```bash
-RUN_ID=YYYYMMDD-tencent-sdk-hidden-smoke tmp/visual-qa/prd-stitch-ui/run-digital-human-runtime-stub-smoke.sh
+RUN_ID=YYYYMMDD-tencent-sdk-hidden-smoke Scripts/QA/prd-stitch-ui/run-digital-human-runtime-stub-smoke.sh
 ```
 
 Expected JSON fields:
@@ -727,7 +727,7 @@ Expected JSON fields:
 Run:
 
 ```bash
-git add tmp/visual-qa/prd-stitch-ui/run-digital-human-runtime-stub-smoke.sh tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+git add Scripts/QA/prd-stitch-ui/run-digital-human-runtime-stub-smoke.sh Scripts/QA/prd-stitch-ui/run-release-regression.sh
 git commit -m "test: keep tencent digital human sdk hidden release gate"
 ```
 
@@ -816,8 +816,8 @@ git commit -m "docs: record tencent digital human true-device acceptance"
 
 **Files:**
 - Modify: `docs/superpowers/status/2026-06-17-release-feature-matrix.md`
-- Modify: `tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift`
-- Modify: `tmp/visual-qa/prd-stitch-ui/run-release-regression.sh`
+- Modify: `Scripts/QA/prd-stitch-ui/release-feature-matrix-check.swift`
+- Modify: `Scripts/QA/prd-stitch-ui/run-release-regression.sh`
 
 - [ ] **Step 1: Keep release default hidden**
 
@@ -847,7 +847,7 @@ Promotion requires:
 Run:
 
 ```bash
-RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE=1 RUN_STANDARD_BUILD=1 RUN_SIMULATOR_SMOKE=0 tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE=1 RUN_STANDARD_BUILD=1 RUN_SIMULATOR_SMOKE=0 Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 Expected:
@@ -861,7 +861,7 @@ Expected:
 Run:
 
 ```bash
-git add docs/superpowers/status/2026-06-17-release-feature-matrix.md tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+git add docs/superpowers/status/2026-06-17-release-feature-matrix.md Scripts/QA/prd-stitch-ui/release-feature-matrix-check.swift Scripts/QA/prd-stitch-ui/run-release-regression.sh
 git commit -m "test: gate tencent digital human public release"
 ```
 

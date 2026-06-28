@@ -16,7 +16,7 @@
 
 ```bash
 RUN_ID=20260619-archive-failed-analysis-retry-smoke \
-tmp/visual-qa/prd-stitch-ui/run-archive-failed-analysis-retry-smoke.sh
+Scripts/QA/prd-stitch-ui/run-archive-failed-analysis-retry-smoke.sh
 ```
 
 脚本会优先读取：
@@ -37,13 +37,13 @@ token 只写入 `tmp` 下的临时 `backend-private.xcconfig`，不进入 git。
 
 ## Release 回归接入
 
-- 静态 guard：`tmp/visual-qa/prd-stitch-ui/archive-failed-analysis-retry-smoke-check.swift`
+- 静态 guard：`Scripts/QA/prd-stitch-ui/archive-failed-analysis-retry-smoke-check.swift`
 - release regression 默认只跑静态 guard。
 - 如需把交互 smoke 纳入一键回归：
 
 ```bash
 RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE=1 \
-tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 ## 验收条件

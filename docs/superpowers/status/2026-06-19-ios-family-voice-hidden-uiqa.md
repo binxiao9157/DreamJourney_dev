@@ -36,8 +36,8 @@ Date: 2026-06-19
 ## Verification
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/ios-family-voice-hidden-uiqa-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-tmp/visual-qa/prd-stitch-ui/run-profile-family-persona-release-smoke.sh
+swift Scripts/QA/prd-stitch-ui/ios-family-voice-hidden-uiqa-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+Scripts/QA/prd-stitch-ui/run-profile-family-persona-release-smoke.sh
 ```
 
 该检查已接入 release regression 和 release QA package。

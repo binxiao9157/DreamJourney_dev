@@ -111,8 +111,8 @@ STORE_BACKEND=memory BACKEND_API_TOKEN=dj-local-test-token PYTHONPATH=. .venv/bi
 HTTP contract checks:
 
 ```bash
-python3 /Users/yxj/Documents/Codex/Video/DreamJourney_dev/tmp/visual-qa/prd-stitch-ui/backend-auth-token-contract-check.py http://127.0.0.1:3100 dj-local-test-token
-python3 /Users/yxj/Documents/Codex/Video/DreamJourney_dev/tmp/visual-qa/prd-stitch-ui/backend-integration-contract-check.py http://127.0.0.1:3100 phase0_contract_user dj-local-test-token
+python3 /Users/yxj/Documents/Codex/Video/DreamJourney_dev/Scripts/QA/prd-stitch-ui/backend-auth-token-contract-check.py http://127.0.0.1:3100 dj-local-test-token
+python3 /Users/yxj/Documents/Codex/Video/DreamJourney_dev/Scripts/QA/prd-stitch-ui/backend-integration-contract-check.py http://127.0.0.1:3100 phase0_contract_user dj-local-test-token
 ```
 
 Result:
@@ -126,7 +126,7 @@ iOS backend smoke:
 
 ```bash
 cd /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-BACKEND_BASE_URL=http://127.0.0.1:3100 BACKEND_API_TOKEN=dj-local-test-token RUN_ID=20260618-phase0-backend-alignment tmp/visual-qa/prd-stitch-ui/run-backend-env-smoke.sh
+BACKEND_BASE_URL=http://127.0.0.1:3100 BACKEND_API_TOKEN=dj-local-test-token RUN_ID=20260618-phase0-backend-alignment Scripts/QA/prd-stitch-ui/run-backend-env-smoke.sh
 ```
 
 Result JSON:

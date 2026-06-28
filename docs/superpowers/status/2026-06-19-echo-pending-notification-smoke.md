@@ -31,19 +31,19 @@
 红灯检查先失败在 AppDelegate 未实际 schedule/query pending request：
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-notification-check.swift .
+swift Scripts/QA/prd-stitch-ui/echo-delayed-reply-notification-check.swift .
 ```
 
 修复后通过：
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-notification-check.swift .
+swift Scripts/QA/prd-stitch-ui/echo-delayed-reply-notification-check.swift .
 ```
 
 模拟器 smoke 通过：
 
 ```bash
-RUN_ID=20260619-echo-pending-notification-query-rerun DERIVED_DATA_PATH=tmp/visual-qa/prd-stitch-ui/DerivedDataEchoPendingNotificationSmokeRerun tmp/visual-qa/prd-stitch-ui/run-echo-delayed-reply-notification-smoke.sh
+RUN_ID=20260619-echo-pending-notification-query-rerun DERIVED_DATA_PATH=tmp/visual-qa/prd-stitch-ui/DerivedDataEchoPendingNotificationSmokeRerun Scripts/QA/prd-stitch-ui/run-echo-delayed-reply-notification-smoke.sh
 ```
 
 关键结果：

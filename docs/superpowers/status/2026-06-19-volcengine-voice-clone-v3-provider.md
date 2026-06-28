@@ -69,8 +69,8 @@ VOLCENGINE_VOICE_CLONE_TTS_RESOURCE_ID=seed-icl-1.0
 
 - `STORE_BACKEND=memory PYTHONPATH=. .venv/bin/python -m unittest tests.test_core_services.VoiceCloneProfileAPITests`
 - `STORE_BACKEND=memory PYTHONPATH=. .venv/bin/python -m unittest discover tests`
-- `swift tmp/visual-qa/prd-stitch-ui/voice-clone-backend-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`
-- `swift tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`
+- `swift Scripts/QA/prd-stitch-ui/voice-clone-backend-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`
+- `swift Scripts/QA/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`
 - `git diff --check` in `DreamJourneyBackend`
 - `git diff --check` in `DreamJourney_dev`
 - iOS simulator generic Debug build with local xcconfig

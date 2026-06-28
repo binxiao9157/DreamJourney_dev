@@ -142,21 +142,21 @@ https://dreamjourney-api.liftora.cn/health -> status=ok, environment=production,
 核心静态/合同检查：
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/prd-coverage-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/prd-coverage-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 公开主链路回归：
 
 ```bash
-tmp/visual-qa/prd-stitch-ui/run-archive-to-echo-smoke.sh
+Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh
 ```
 
 后端 family/voice 线上合同 smoke：
 
 ```bash
-RUN_ID=20260619-deployed-family-voice-contract-check tmp/visual-qa/prd-stitch-ui/run-backend-family-voice-contract-smoke.sh
+RUN_ID=20260619-deployed-family-voice-contract-check Scripts/QA/prd-stitch-ui/run-backend-family-voice-contract-smoke.sh
 ```
 
 发布态矩阵要求：

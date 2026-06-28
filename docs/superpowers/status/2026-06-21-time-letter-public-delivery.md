@@ -48,12 +48,12 @@
 ## 验证入口
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/time-letter-delivery-policy-shell-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/time-letter-delivery-policy-shell-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 ```bash
 RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE=1 \
-tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 ## 部署状态
@@ -64,7 +64,7 @@ tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
 
 ```bash
 RUN_ID=20260621-time-letter-public-delivery-backend \
-tmp/visual-qa/prd-stitch-ui/run-backend-time-letter-lifecycle-smoke.sh
+Scripts/QA/prd-stitch-ui/run-backend-time-letter-lifecycle-smoke.sh
 ```
 
 ## 待后续验收

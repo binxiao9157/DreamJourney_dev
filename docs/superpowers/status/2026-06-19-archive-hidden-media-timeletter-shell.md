@@ -22,14 +22,14 @@
 新增：
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/archive-hidden-media-timeletter-shell-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-RUN_ARCHIVE_HIDDEN_SHELL_SMOKE=1 tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+swift Scripts/QA/prd-stitch-ui/archive-hidden-media-timeletter-shell-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+RUN_ARCHIVE_HIDDEN_SHELL_SMOKE=1 Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 单独 smoke：
 
 ```bash
-tmp/visual-qa/prd-stitch-ui/run-archive-hidden-shell-smoke.sh
+Scripts/QA/prd-stitch-ui/run-archive-hidden-shell-smoke.sh
 ```
 
 smoke 会生成假音频、假视频、时间信件草稿、时间信件封存记录，并验证本地恢复、转写字段、缩略图字段、上传状态和隐藏入口开关。

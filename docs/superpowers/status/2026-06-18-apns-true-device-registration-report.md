@@ -62,7 +62,7 @@ aps-environment
   - 启动时读取 app 内 embedded provisioning profile
   - 如果 profile 中没有 `aps-environment`，不再调用 `registerForRemoteNotifications()`
   - 输出受控日志：`APNs entitlement missing; skip remote notification registration`
-- 新增 `tmp/visual-qa/prd-stitch-ui/apns-entitlement-readiness-check.swift`
+- 新增 `Scripts/QA/prd-stitch-ui/apns-entitlement-readiness-check.swift`
   - 静态检查 entitlement 文件、AppDelegate gate、APNs lifecycle 回调和文档边界
 - 更新真机/后端/PRD 静态 guard 和验收说明
   - 明确 APNs provider delivery 仍是独立外部验收门
@@ -72,10 +72,10 @@ aps-environment
 已执行并通过的检查：
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/apns-entitlement-readiness-check.swift .
-swift tmp/visual-qa/prd-stitch-ui/true-device-voice-readiness-check.swift .
-swift tmp/visual-qa/prd-stitch-ui/device-backend-readiness-check.swift .
-swift tmp/visual-qa/prd-stitch-ui/prd-coverage-matrix-check.swift .
+swift Scripts/QA/prd-stitch-ui/apns-entitlement-readiness-check.swift .
+swift Scripts/QA/prd-stitch-ui/true-device-voice-readiness-check.swift .
+swift Scripts/QA/prd-stitch-ui/device-backend-readiness-check.swift .
+swift Scripts/QA/prd-stitch-ui/prd-coverage-matrix-check.swift .
 git diff --check
 ```
 
@@ -83,7 +83,7 @@ git diff --check
 
 ```bash
 RUN_ID=20260618-apns-gated-registration-preflight-r2 \
-tmp/visual-qa/prd-stitch-ui/run-true-device-voice-preflight.sh
+Scripts/QA/prd-stitch-ui/run-true-device-voice-preflight.sh
 ```
 
 结果：

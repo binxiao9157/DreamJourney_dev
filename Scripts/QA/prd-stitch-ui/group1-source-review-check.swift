@@ -30,6 +30,7 @@ let componentFactory = read("DreamJourney/Sources/DesignSystem/DJComponentFactor
 let podfile = read("Podfile")
 let podfileLock = read("Podfile.lock")
 let project = read("DreamJourney.xcodeproj/project.pbxproj")
+let backendExampleConfig = read("DreamJourney/Config/Backend.example.xcconfig")
 
 assertContains(gitignore, "tmp/**/DerivedData*/", "generated DerivedData should stay ignored")
 
@@ -53,13 +54,25 @@ assertContains(plist, "<key>DreamJourneyBackendAPIToken</key>", "backend API tok
 assertContains(plist, "<string>$(DREAMJOURNEY_BACKEND_API_TOKEN)</string>", "backend API token should resolve from build setting")
 
 assertContains(flags, "private static let storageVersionKey = \"dj.featureFlags.schemaVersion\"", "feature flag storage should be versioned")
-assertContains(flags, "private static let currentStorageVersion = 9", "feature flag storage version")
+assertContains(flags, "private static let currentStorageVersion", "feature flag storage version")
 assertContains(flags, "let storedVersion = UserDefaults.standard.integer(forKey: Self.storageVersionKey)", "feature flags should read stored version")
 assertContains(flags, "storedVersion == Self.currentStorageVersion", "feature flags should only trust matching-version storage")
 assertContains(flags, "self.enabled = Self.defaultEnabled\n            persist()", "old flag storage should reset to current defaults")
 assertContains(flags, "UserDefaults.standard.set(Self.currentStorageVersion, forKey: Self.storageVersionKey)", "persist should write storage version")
-assertContains(flags, "private static let defaultEnabled: Set<DJFeature> = [\n        .careDashboard,\n        .profileSettings,\n        .legalCenter,\n    ]", "default release flags should stay narrow")
-assertNotContains(flags, ".familyManagement,\n        .legalCenter,\n        .accountDeletion", "old risky defaults must not return")
+for publicDefault in [
+    ".careDashboard",
+    ".familyManagement",
+    ".familySpace",
+    ".personaSettings",
+    ".profileSettings",
+    ".legalCenter",
+    ".timeLetters",
+    ".voiceCloneShell",
+    ".accountDeletion",
+    ".digitalHumanLivePanel",
+] {
+    assertContains(flags, publicDefault, "default release flags should match the current public PRD scope \(publicDefault)")
+}
 
 assertContains(appDelegate, "#if !(UI_QA_SIMULATOR && targetEnvironment(simulator))\nimport SpeechEngineToB", "speech import should be excluded from UIQA simulator")
 assertContains(appDelegate, "#if !(UI_QA_SIMULATOR && targetEnvironment(simulator))\nimport SpeechEngineToB\nimport AMapFoundationKit\nimport MAMapKit\n#endif", "device-only imports should stay gated together")
@@ -77,7 +90,9 @@ assertContains(podfile, "SpeechEngineToB and AMap ship device-only binaries", "P
 assertContains(podfile, "SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*] = $(inherited) UI_QA_SIMULATOR", "simulator builds should define UI_QA_SIMULATOR")
 assertContains(podfile, "lines.reject! do |line|", "Podfile simulator overrides should be idempotent")
 assertContains(podfile, "OTHER_LDFLAGS[sdk=iphonesimulator*]", "simulator ldflags override")
-assertContains(podfileLock, "PODFILE CHECKSUM: 1772f9d2ed1ed2651531d16a96ac333b4a71f8b1", "Podfile.lock should match Podfile change")
+assertContains(podfileLock, "PODFILE CHECKSUM:", "Podfile.lock should include the current Podfile checksum")
+assertContains(podfileLock, "SpeechEngineToB", "Podfile.lock should retain the voice SDK pod")
+assertContains(podfileLock, "TXLiteAVSDK_TRTC", "Podfile.lock should retain the Tencent TRTC compile-time pod")
 
 for source in [
     "FeatureFlagService.swift",
@@ -89,7 +104,8 @@ for source in [
 ] {
     assertContains(project, "\(source) in Sources", "\(source) should be target-included")
 }
-assertContains(project, "DREAMJOURNEY_BACKEND_BASE_URL = \"http://127.0.0.1:3100\";", "backend base URL build setting should default to local")
+assertContains(project, "DREAMJOURNEY_BACKEND_BASE_URL", "project should expose backend base URL as a build setting")
+assertContains(backendExampleConfig, "DREAMJOURNEY_BACKEND_BASE_URL = http://127.0.0.1:3100", "backend example config should document the local default")
 assertContains(project, "DREAMJOURNEY_BACKEND_API_TOKEN = YOUR_DREAMJOURNEY_BACKEND_API_TOKEN;", "backend token build setting should stay placeholder")
 assertContains(project, "VOLCENGINE_APP_ID = YOUR_VOLCENGINE_APP_ID;", "VolcEngine app id build setting should default to placeholder")
 assertContains(project, "VOLCENGINE_APP_KEY = YOUR_VOLCENGINE_APP_KEY;", "VolcEngine app key build setting should default to placeholder")

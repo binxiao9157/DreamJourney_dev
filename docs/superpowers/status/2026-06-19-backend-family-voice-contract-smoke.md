@@ -28,7 +28,7 @@ RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE=1 \
 RUN_STANDARD_BUILD=0 \
 RUN_SIMULATOR_SMOKE=0 \
 RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE=0 \
-tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 脚本会从 `DreamJourneyBackend/private/deployed-backend-access.md` 或 `DreamJourneyBackend/deployed-backend-access.md` 读取部署后端地址和 `BACKEND_API_TOKEN`，报告只记录 `configured, value intentionally omitted`，不会输出 token 明文。
@@ -37,7 +37,7 @@ tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
 
 ```bash
 RUN_ID=20260619-deployed-family-voice-contract \
-tmp/visual-qa/prd-stitch-ui/run-backend-family-voice-contract-smoke.sh
+Scripts/QA/prd-stitch-ui/run-backend-family-voice-contract-smoke.sh
 ```
 
 ## Evidence

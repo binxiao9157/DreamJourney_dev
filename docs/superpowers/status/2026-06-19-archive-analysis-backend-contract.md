@@ -36,7 +36,7 @@ iOS `MemoryArchiveItem` 继续保留现有 UI 结构：
   - `ArchiveImageAnalysisAPITests.test_image_analysis_parse_returns_archive_insight_contract`
   - `ArchiveImageAnalysisAPITests.test_archive_image_analysis_dry_run_redacts_secret`
 - iOS static guard:
-  - `tmp/visual-qa/prd-stitch-ui/archive-analysis-backend-payload-contract-check.swift`
+  - `Scripts/QA/prd-stitch-ui/archive-analysis-backend-payload-contract-check.swift`
 - Release package:
-  - `tmp/visual-qa/prd-stitch-ui/run-release-regression.sh`
-  - `tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift`
+  - `Scripts/QA/prd-stitch-ui/run-release-regression.sh`
+  - `Scripts/QA/prd-stitch-ui/release-qa-package-check.swift`

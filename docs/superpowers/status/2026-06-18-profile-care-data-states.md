@@ -27,8 +27,8 @@ These states are public MVP states under the existing `careDashboard` surface. T
 ## Verification
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/profile-care-public-placeholder-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swiftc DreamJourney/Sources/Modules/Profile/ProfileCareModels.swift tmp/visual-qa/prd-stitch-ui/profile-care-snapshot-check.swift -o /tmp/profile-care-snapshot-check
+swift Scripts/QA/prd-stitch-ui/profile-care-public-placeholder-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swiftc DreamJourney/Sources/Modules/Profile/ProfileCareModels.swift Scripts/QA/prd-stitch-ui/profile-care-snapshot-check.swift -o /tmp/profile-care-snapshot-check
 /tmp/profile-care-snapshot-check /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/elder-care-dashboard-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/elder-care-dashboard-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```

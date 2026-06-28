@@ -56,16 +56,16 @@ Hidden or not public by default:
 ## Guard Scripts
 
 ```text
-tmp/visual-qa/prd-stitch-ui/group3-archive-core-check.swift
-tmp/visual-qa/prd-stitch-ui/release-like-hidden-entries-check.swift
-tmp/visual-qa/prd-stitch-ui/archive-local-analysis-flow-check.swift
-tmp/visual-qa/prd-stitch-ui/archive-backend-sync-gate-check.swift
-tmp/visual-qa/prd-stitch-ui/archive-remote-fetch-check.swift
-tmp/visual-qa/prd-stitch-ui/archive-remote-json-behavior-check.swift
-tmp/visual-qa/prd-stitch-ui/archive-analysis-to-echo-prompt-harness-check.swift
-tmp/visual-qa/prd-stitch-ui/archive-context-snapshot-check.swift
-tmp/visual-qa/prd-stitch-ui/archive-context-debug-summary-check.swift
-tmp/visual-qa/prd-stitch-ui/archive-to-echo-smoke-script-check.swift
+Scripts/QA/prd-stitch-ui/group3-archive-core-check.swift
+Scripts/QA/prd-stitch-ui/release-like-hidden-entries-check.swift
+Scripts/QA/prd-stitch-ui/archive-local-analysis-flow-check.swift
+Scripts/QA/prd-stitch-ui/archive-backend-sync-gate-check.swift
+Scripts/QA/prd-stitch-ui/archive-remote-fetch-check.swift
+Scripts/QA/prd-stitch-ui/archive-remote-json-behavior-check.swift
+Scripts/QA/prd-stitch-ui/archive-analysis-to-echo-prompt-harness-check.swift
+Scripts/QA/prd-stitch-ui/archive-context-snapshot-check.swift
+Scripts/QA/prd-stitch-ui/archive-context-debug-summary-check.swift
+Scripts/QA/prd-stitch-ui/archive-to-echo-smoke-script-check.swift
 ```
 
 ## QA Evidence

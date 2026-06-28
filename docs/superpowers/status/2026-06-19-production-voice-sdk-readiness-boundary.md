@@ -45,7 +45,7 @@ DJShowVoiceSDKReadinessPreview
 新增静态检查：
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/voice-sdk-readiness-boundary-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/voice-sdk-readiness-boundary-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 该检查已接入 release regression 和 release QA package，防止后续把 mock/fallback/production readiness 混成一个状态。

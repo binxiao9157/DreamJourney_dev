@@ -53,11 +53,11 @@ Hidden or not public by default:
 ## Guard Scripts
 
 ```text
-tmp/visual-qa/prd-stitch-ui/group4-profile-care-check.swift
-tmp/visual-qa/prd-stitch-ui/profile-release-gating-check.swift
-tmp/visual-qa/prd-stitch-ui/profile-care-snapshot-check.swift
-tmp/visual-qa/prd-stitch-ui/profile-settings-check.swift
-tmp/visual-qa/prd-stitch-ui/profile-legal-center-check.swift
+Scripts/QA/prd-stitch-ui/group4-profile-care-check.swift
+Scripts/QA/prd-stitch-ui/profile-release-gating-check.swift
+Scripts/QA/prd-stitch-ui/profile-care-snapshot-check.swift
+Scripts/QA/prd-stitch-ui/profile-settings-check.swift
+Scripts/QA/prd-stitch-ui/profile-legal-center-check.swift
 ```
 
 ## QA Evidence

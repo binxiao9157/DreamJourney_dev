@@ -27,7 +27,7 @@ Current app business source warnings are cleared in the latest iOS Simulator Deb
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/source-warning-cleanup-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/source-warning-cleanup-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 The guard verifies that the affected app source files do not reintroduce:

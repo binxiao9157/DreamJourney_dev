@@ -136,7 +136,7 @@ Sources:
 - `Podfile`
   - Must not duplicate TRTC if `VirtualmanStreamSDK` already embeds/exports it.
 
-- `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-check.swift`
+- `Scripts/QA/prd-stitch-ui/digital-human-live-panel-check.swift`
   - Static gate for route correctness.
 
 - New backend smoke:
@@ -168,7 +168,7 @@ Add this section:
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 Expected: pass, or fail only if the script has a known path mismatch unrelated to digital human work. Record the result in the status doc.
@@ -179,11 +179,11 @@ Expected: pass, or fail only if the script has a known path mismatch unrelated t
 - Modify: `DreamJourney/Sources/Services/DialogEngineManager.swift`
 - Modify: `DreamJourney/Sources/Modules/Echo/EchoViewController.swift`
 - Modify: `DreamJourney/Sources/Modules/Home/AIRecordingViewController.swift`
-- Modify: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-check.swift`
+- Modify: `Scripts/QA/prd-stitch-ui/digital-human-live-panel-check.swift`
 
 - [ ] **Step 1: Update static check first**
 
-In `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-check.swift`, require the absence of the failed route:
+In `Scripts/QA/prd-stitch-ui/digital-human-live-panel-check.swift`, require the absence of the failed route:
 
 ```swift
 assertNotContains(dialogEngine, "func onTTSAudioChunk(data: Data, isFinal: Bool)", "DialogEngine should not expose Volcengine TTS chunks to Tencent in the text-drive route")
@@ -196,7 +196,7 @@ assertNotContains(echo, "shouldDriveTencentLipSyncWithLocalAudio", "Tencent loca
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/digital-human-live-panel-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 Expected: fail while the experimental code still exists.
@@ -247,7 +247,7 @@ func onTTSAudioChunk(data: Data, isFinal: Bool) {
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/digital-human-live-panel-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 ```
 
@@ -259,7 +259,7 @@ Expected: pass.
 - Modify: `Podfile`
 - Modify: `Podfile.lock`
 - Modify: `DreamJourney/Sources/Services/DigitalHuman/TencentVirtualmanSDKBridge.swift`
-- Modify: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-check.swift`
+- Modify: `Scripts/QA/prd-stitch-ui/digital-human-live-panel-check.swift`
 
 - [ ] **Step 1: Update static check first**
 
@@ -279,7 +279,7 @@ assertNotContains(tencentBridge, "muteAllRemoteAudio(true)", "Tencent bridge sho
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/digital-human-live-panel-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 Expected: fail until app-level TRTC imports and muting calls are removed.
@@ -335,7 +335,7 @@ Expected: build passes; no duplicate TRTC class warnings should appear on next d
 - Modify: `DreamJourney/Sources/Services/DigitalHuman/TencentVirtualmanSDKBridge.swift`
 - Modify: `DreamJourney/Sources/Services/DigitalHuman/TencentDigitalHumanCloudRuntime.swift`
 - Modify: `DreamJourney/Sources/Modules/Echo/EchoViewController.swift`
-- Modify: `tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-check.swift`
+- Modify: `Scripts/QA/prd-stitch-ui/digital-human-live-panel-check.swift`
 
 - [ ] **Step 1: Update static check first**
 
@@ -354,7 +354,7 @@ assertContains(tencentBridge, "sendStreamText", "Tencent bridge should use direc
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/digital-human-live-panel-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 Expected: fail until `virtualman.chat` is removed from the Echo text path.
@@ -425,7 +425,7 @@ if self.routeEchoAudioThroughDigitalHuman,
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/digital-human-live-panel-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 xcodebuild -workspace DreamJourney.xcworkspace \
   -scheme DreamJourney \
@@ -505,7 +505,7 @@ If `textStart=false`, the problem is Tencent project/config/resource, not iOS.
 ## Task 5: iOS True-Device Acceptance Gate
 
 **Files:**
-- Create: `tmp/visual-qa/prd-stitch-ui/true-device-acceptance/run-tencent-digital-human-device-smoke.sh`
+- Create: `Scripts/QA/prd-stitch-ui/run-tencent-digital-human-device-smoke.sh`
 - Modify: `docs/superpowers/status/2026-06-27-tencent-digital-human-true-device-cloudrender.md`
 
 - [ ] **Step 1: Build and install**
@@ -667,8 +667,8 @@ This pass moved the iOS route toward a single-owner Tencent text-drive model:
 
 Verification evidence:
 
-- Static: `swift tmp/visual-qa/prd-stitch-ui/digital-human-live-panel-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`
-- Static: `swift tmp/visual-qa/prd-stitch-ui/digital-human-runtime-abstraction-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`
+- Static: `swift Scripts/QA/prd-stitch-ui/digital-human-live-panel-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`
+- Static: `swift Scripts/QA/prd-stitch-ui/digital-human-runtime-abstraction-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev`
 - Static: `git diff --check`
 - Build: `tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260628-tencent-digital-human-text-drive-single-owner/build-after-active-reqid-guard-generic.log`
 - Prior device logs before the final active-ReqId fix showed Tencent `TextStart/TextOver` working, but also exposed the protocol violation: `ReqId values for streaming text must be equal within the same time period`.

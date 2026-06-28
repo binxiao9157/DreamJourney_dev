@@ -41,13 +41,13 @@
 静态 guard：
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/archive-hidden-media-detail-ui-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/archive-hidden-media-detail-ui-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 模拟器 smoke：
 
 ```bash
-RUN_ID=20260619-hidden-media-detail-ui tmp/visual-qa/prd-stitch-ui/run-archive-hidden-shell-smoke.sh
+RUN_ID=20260619-hidden-media-detail-ui Scripts/QA/prd-stitch-ui/run-archive-hidden-shell-smoke.sh
 ```
 
 该 smoke 会在结果目录额外保存详情页快照：
@@ -63,7 +63,7 @@ RUN_ID=20260619-hidden-media-detail-ui tmp/visual-qa/prd-stitch-ui/run-archive-h
 Release regression 可用：
 
 ```bash
-RUN_ARCHIVE_HIDDEN_SHELL_SMOKE=1 tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+RUN_ARCHIVE_HIDDEN_SHELL_SMOKE=1 Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 ## 暂不覆盖

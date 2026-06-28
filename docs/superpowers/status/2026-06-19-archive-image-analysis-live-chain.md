@@ -34,10 +34,10 @@ iOS 合并以下后端字段：
 ## Verification
 
 - Static guard:
-  - `tmp/visual-qa/prd-stitch-ui/archive-image-analysis-live-chain-check.swift`
+  - `Scripts/QA/prd-stitch-ui/archive-image-analysis-live-chain-check.swift`
 - Existing guards:
-  - `tmp/visual-qa/prd-stitch-ui/archive-analysis-backend-payload-contract-check.swift`
-  - `tmp/visual-qa/prd-stitch-ui/archive-analysis-insights-contract-check.swift`
+  - `Scripts/QA/prd-stitch-ui/archive-analysis-backend-payload-contract-check.swift`
+  - `Scripts/QA/prd-stitch-ui/archive-analysis-insights-contract-check.swift`
 - Release package:
-  - `tmp/visual-qa/prd-stitch-ui/run-release-regression.sh`
-  - `tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift`
+  - `Scripts/QA/prd-stitch-ui/run-release-regression.sh`
+  - `Scripts/QA/prd-stitch-ui/release-qa-package-check.swift`

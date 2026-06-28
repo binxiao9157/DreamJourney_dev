@@ -120,12 +120,12 @@ Downloaded package SHA-256:
 
 ## 验证入口
 
-- 静态检查：`tmp/visual-qa/prd-stitch-ui/run-tencent-digital-human-sdk-handoff-check.sh`
-- Runtime 抽象检查：`tmp/visual-qa/prd-stitch-ui/run-digital-human-runtime-abstraction-check.sh`
-- Session client 检查：`tmp/visual-qa/prd-stitch-ui/run-digital-human-session-client-check.sh`
-- 腾讯云渲染 bridge 检查：`tmp/visual-qa/prd-stitch-ui/run-tencent-digital-human-cloud-runtime-smoke.sh`
-- 部署后端 cloudRender 合同检查：`RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE=1 tmp/visual-qa/prd-stitch-ui/run-release-regression.sh`
-- 模拟器 smoke：`tmp/visual-qa/prd-stitch-ui/run-digital-human-runtime-stub-smoke.sh`
+- 静态检查：`Scripts/QA/prd-stitch-ui/run-tencent-digital-human-sdk-handoff-check.sh`
+- Runtime 抽象检查：`Scripts/QA/prd-stitch-ui/run-digital-human-runtime-abstraction-check.sh`
+- Session client 检查：`Scripts/QA/prd-stitch-ui/run-digital-human-session-client-check.sh`
+- 腾讯云渲染 bridge 检查：`Scripts/QA/prd-stitch-ui/run-tencent-digital-human-cloud-runtime-smoke.sh`
+- 部署后端 cloudRender 合同检查：`RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE=1 Scripts/QA/prd-stitch-ui/run-release-regression.sh`
+- 模拟器 smoke：`Scripts/QA/prd-stitch-ui/run-digital-human-runtime-stub-smoke.sh`
 
 部署后端已配置 `TENCENT_DIGITAL_HUMAN_APP_KEY`、`TENCENT_DIGITAL_HUMAN_ACCESS_TOKEN`，以及 `TENCENT_DIGITAL_HUMAN_ASSET_VIRTUALMAN_KEY` 或 `TENCENT_DIGITAL_HUMAN_VIRTUALMAN_PROJECT_ID` 后，验收标准是：
 
@@ -139,6 +139,6 @@ Downloaded package SHA-256:
 
 最近验证：
 
-- `tmp/visual-qa/prd-stitch-ui/run-tencent-digital-human-cloud-runtime-smoke.sh`
+- `Scripts/QA/prd-stitch-ui/run-tencent-digital-human-cloud-runtime-smoke.sh`
 - `xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath tmp/visual-qa/prd-stitch-ui/tencent-sdk-real-bridge-build CODE_SIGNING_ALLOWED=NO build`
-- `RUN_ID=20260625-tencent-real-bridge-static RUN_STANDARD_BUILD=0 RUN_SIMULATOR_SMOKE=0 RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE=0 tmp/visual-qa/prd-stitch-ui/run-release-regression.sh`
+- `RUN_ID=20260625-tencent-real-bridge-static RUN_STANDARD_BUILD=0 RUN_SIMULATOR_SMOKE=0 RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE=0 Scripts/QA/prd-stitch-ui/run-release-regression.sh`

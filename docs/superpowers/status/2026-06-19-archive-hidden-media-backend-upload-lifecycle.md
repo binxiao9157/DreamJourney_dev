@@ -15,7 +15,7 @@
 脚本：
 
 ```bash
-RUN_ID=20260619-hidden-media-sync tmp/visual-qa/prd-stitch-ui/run-backend-hidden-media-sync-smoke.sh
+RUN_ID=20260619-hidden-media-sync Scripts/QA/prd-stitch-ui/run-backend-hidden-media-sync-smoke.sh
 ```
 
 范围：
@@ -61,7 +61,7 @@ iOS 侧保持隐藏入口，不进入默认发布态。隐藏 QA 模式下：
 ```bash
 RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE=1 \
 RUN_ARCHIVE_HIDDEN_SHELL_SMOKE=1 \
-tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 ## 暂不覆盖

@@ -58,7 +58,7 @@ Echo 启动语音时现在执行：
 
 新增状态机防回退检查：
 
-- `tmp/visual-qa/prd-stitch-ui/echo-state-machine-runtime-check.swift`
+- `Scripts/QA/prd-stitch-ui/echo-state-machine-runtime-check.swift`
 
 本轮补齐两个缺口：
 
@@ -69,10 +69,10 @@ Echo 启动语音时现在执行：
 
 新增/更新：
 
-- `tmp/visual-qa/prd-stitch-ui/backend-voice-runtime-contract-check.swift`
-- `tmp/visual-qa/prd-stitch-ui/echo-state-machine-runtime-check.swift`
-- `tmp/visual-qa/prd-stitch-ui/run-release-regression.sh`
-- `tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift`
+- `Scripts/QA/prd-stitch-ui/backend-voice-runtime-contract-check.swift`
+- `Scripts/QA/prd-stitch-ui/echo-state-machine-runtime-check.swift`
+- `Scripts/QA/prd-stitch-ui/run-release-regression.sh`
+- `Scripts/QA/prd-stitch-ui/release-qa-package-check.swift`
 
 后续 release regression 会覆盖这两个 guard。
 
@@ -87,10 +87,10 @@ cd /Users/yxj/Documents/Codex/Video/DreamJourneyBackend
 
 ```bash
 cd /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/backend-voice-runtime-contract-check.swift .
-swift tmp/visual-qa/prd-stitch-ui/echo-state-machine-runtime-check.swift .
-swift tmp/visual-qa/prd-stitch-ui/echo-waiting-reply-policy-check.swift .
-swift tmp/visual-qa/prd-stitch-ui/echo-voice-state-visual-check.swift .
+swift Scripts/QA/prd-stitch-ui/backend-voice-runtime-contract-check.swift .
+swift Scripts/QA/prd-stitch-ui/echo-state-machine-runtime-check.swift .
+swift Scripts/QA/prd-stitch-ui/echo-waiting-reply-policy-check.swift .
+swift Scripts/QA/prd-stitch-ui/echo-voice-state-visual-check.swift .
 ```
 
 ```bash
@@ -100,7 +100,7 @@ xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -configurati
 
 ```bash
 cd /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-RUN_ID=20260619-backend-voice-runtime-echo-state DERIVED_DATA_PATH=tmp/visual-qa/prd-stitch-ui/DerivedDataBackendVoiceRuntimeEchoStateSmoke tmp/visual-qa/prd-stitch-ui/run-echo-delayed-reply-notification-smoke.sh
+RUN_ID=20260619-backend-voice-runtime-echo-state DERIVED_DATA_PATH=tmp/visual-qa/prd-stitch-ui/DerivedDataBackendVoiceRuntimeEchoStateSmoke Scripts/QA/prd-stitch-ui/run-echo-delayed-reply-notification-smoke.sh
 ```
 
 模拟器 smoke 证据：

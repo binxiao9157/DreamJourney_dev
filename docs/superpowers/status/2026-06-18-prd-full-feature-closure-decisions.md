@@ -254,7 +254,7 @@ PRD / 产品已明确：
 - 每次 UI 或发布范围变化后，运行：
 
 ```bash
-RUN_ID=<run-id> tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+RUN_ID=<run-id> Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 ## 全功能闭环完成标准

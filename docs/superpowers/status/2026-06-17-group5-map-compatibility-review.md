@@ -40,7 +40,7 @@ Group 5 is now release-compatible for the current Stitch/PRD shell.
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/group5-map-compatibility-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/group5-map-compatibility-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 The guard verifies:

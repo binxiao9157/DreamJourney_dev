@@ -74,10 +74,10 @@
 新增检查：
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/echo-waiting-reply-policy-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-notification-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-push-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/echo-delayed-reply-dispatch-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/echo-waiting-reply-policy-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/echo-delayed-reply-notification-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/echo-delayed-reply-push-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/echo-delayed-reply-dispatch-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 本轮模拟器截图：
@@ -89,11 +89,11 @@ tmp/visual-qa/prd-stitch-ui/prd-decision-echo-policy/20260618-current/01-echo-wa
 等待回信持久化/本地通知 smoke：
 
 ```bash
-RUN_ID=20260618-echo-delayed-reply-notification tmp/visual-qa/prd-stitch-ui/run-echo-delayed-reply-notification-smoke.sh
+RUN_ID=20260618-echo-delayed-reply-notification Scripts/QA/prd-stitch-ui/run-echo-delayed-reply-notification-smoke.sh
 ```
 
 release regression 需要覆盖该检查：
 
 ```bash
-RUN_ID=20260618-prd-decision-echo-policy tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+RUN_ID=20260618-prd-decision-echo-policy Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```

@@ -8,9 +8,9 @@ Scope:
 - `docs/superpowers/status/2026-06-17-prd-stitch-ui-gap-audit.md`
 - `docs/superpowers/status/2026-06-17-release-feature-matrix.md`
 - `docs/superpowers/status/2026-06-17-pre-submit-inventory.md`
-- `tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift`
-- `tmp/visual-qa/prd-stitch-ui/final-visual-qa-package-check.swift`
-- `tmp/visual-qa/prd-stitch-ui/submit-slice-inventory-check.swift`
+- `Scripts/QA/prd-stitch-ui/release-qa-package-check.swift`
+- `Scripts/QA/prd-stitch-ui/final-visual-qa-package-check.swift`
+- `Scripts/QA/prd-stitch-ui/submit-slice-inventory-check.swift`
 - selected Group 1-5 QA reports/build logs
 - latest archive-to-echo smoke result and screenshot
 
@@ -57,7 +57,7 @@ The new guard verifies that:
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 Expected output:

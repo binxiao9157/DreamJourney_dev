@@ -40,7 +40,7 @@ Do not start Phase D public exposure work until Phase B keeps hidden entries gat
 **Files:**
 - Modify: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/superpowers/status/2026-06-18-device-backend-acceptance-readiness.md`
 - Modify: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/superpowers/status/2026-06-18-prd-coverage-matrix.md`
-- Test: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/tmp/visual-qa/prd-stitch-ui/prd-coverage-matrix-check.swift`
+- Test: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/Scripts/QA/prd-stitch-ui/prd-coverage-matrix-check.swift`
 
 - [ ] **Step 1: Read current readiness docs**
 
@@ -106,7 +106,7 @@ assertContains(coverage, "Backend release-like simulator acceptance has passed",
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/prd-coverage-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/prd-coverage-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 ```
 
@@ -117,7 +117,7 @@ Expected: both commands pass.
 Run:
 
 ```bash
-git add docs/superpowers/status/2026-06-18-device-backend-acceptance-readiness.md docs/superpowers/status/2026-06-18-prd-coverage-matrix.md tmp/visual-qa/prd-stitch-ui/prd-coverage-matrix-check.swift
+git add docs/superpowers/status/2026-06-18-device-backend-acceptance-readiness.md docs/superpowers/status/2026-06-18-prd-coverage-matrix.md Scripts/QA/prd-stitch-ui/prd-coverage-matrix-check.swift
 git commit -m "docs: refine true-device acceptance checklist"
 ```
 
@@ -130,7 +130,7 @@ git commit -m "docs: refine true-device acceptance checklist"
 **Files:**
 - Create: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/superpowers/status/2026-06-18-profile-ia-contract.md`
 - Modify: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/task_plan.md`
-- Test: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/tmp/visual-qa/prd-stitch-ui/final-visual-qa-package-check.swift`
+- Test: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/Scripts/QA/prd-stitch-ui/final-visual-qa-package-check.swift`
 
 - [x] **Step 1: Refresh Stitch source list**
 
@@ -217,7 +217,7 @@ assertFileExists(
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/final-visual-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/final-visual-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 ```
 
@@ -228,7 +228,7 @@ Expected: guard passes and no whitespace errors.
 Run:
 
 ```bash
-git add docs/superpowers/status/2026-06-18-profile-ia-contract.md task_plan.md tmp/visual-qa/prd-stitch-ui/final-visual-qa-package-check.swift
+git add docs/superpowers/status/2026-06-18-profile-ia-contract.md task_plan.md Scripts/QA/prd-stitch-ui/final-visual-qa-package-check.swift
 git commit -m "docs: add Profile IA contract"
 ```
 
@@ -239,16 +239,16 @@ git commit -m "docs: add Profile IA contract"
 **Purpose:** Now that deployed backend acceptance exists, make the one-command release regression optionally enforce it for release handoff.
 
 **Files:**
-- Modify: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/tmp/visual-qa/prd-stitch-ui/run-release-regression.sh`
+- Modify: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/Scripts/QA/prd-stitch-ui/run-release-regression.sh`
 - Modify: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/superpowers/status/2026-06-18-one-command-release-regression.md`
-- Test: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift`
+- Test: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/Scripts/QA/prd-stitch-ui/release-qa-package-check.swift`
 
 - [x] **Step 1: Inspect current regression flags**
 
 Run:
 
 ```bash
-sed -n '1,230p' tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+sed -n '1,230p' Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 Expected: confirm `RUN_RELEASE_LIKE_BACKEND` exists and defaults to optional.
@@ -279,7 +279,7 @@ RELEASE_HANDOFF_MODE=1 \
 BACKEND_BASE_URL=https://dreamjourney-api.liftora.cn \
 BACKEND_API_TOKEN='<server token from private access doc>' \
 RUN_ID=20260618-release-handoff \
-tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 This forces release-like FastAPI/Postgres acceptance to run as part of the one-command package.
@@ -298,7 +298,7 @@ assertContains(runner, "RELEASE_HANDOFF_MODE", "release regression should suppor
 Run:
 
 ```bash
-RUN_ID=20260618-regression-no-backend RUN_RELEASE_LIKE_BACKEND=0 tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+RUN_ID=20260618-regression-no-backend RUN_RELEASE_LIKE_BACKEND=0 Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 Expected: release-like backend acceptance is skipped by explicit flag, other checks pass.
@@ -308,7 +308,7 @@ Expected: release-like backend acceptance is skipped by explicit flag, other che
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 ```
 
@@ -319,7 +319,7 @@ Expected: both pass.
 Run:
 
 ```bash
-git add tmp/visual-qa/prd-stitch-ui/run-release-regression.sh docs/superpowers/status/2026-06-18-one-command-release-regression.md tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift
+git add Scripts/QA/prd-stitch-ui/run-release-regression.sh docs/superpowers/status/2026-06-18-one-command-release-regression.md Scripts/QA/prd-stitch-ui/release-qa-package-check.swift
 git commit -m "test: require backend in release handoff mode"
 ```
 
@@ -336,7 +336,7 @@ git commit -m "test: require backend in release handoff mode"
   - `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/DreamJourney/Sources/Modules/Profile/ProfileViewController.swift`
   - `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/DreamJourney/Sources/App/WarmTabBarController.swift`
 - Test:
-  - `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/tmp/visual-qa/prd-stitch-ui/run-release-regression.sh`
+  - `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/Scripts/QA/prd-stitch-ui/run-release-regression.sh`
 
 - [x] **Step 1: Capture current public screenshots**
 
@@ -386,7 +386,7 @@ Do not rename tabs, expose hidden buttons, or replace Echo variants in this task
 Run:
 
 ```bash
-RUN_ID=20260618-public-mvp-polish tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+RUN_ID=20260618-public-mvp-polish Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 Expected: regression passes or fails with a concrete visual/functional reason to fix.
@@ -419,8 +419,8 @@ git commit -m "ui: polish public MVP surfaces"
 **Files:**
 - Modify: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/superpowers/status/2026-06-17-release-feature-matrix.md`
 - Modify: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/superpowers/status/2026-06-18-prd-coverage-matrix.md`
-- Test: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift`
-- Test: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/tmp/visual-qa/prd-stitch-ui/prd-coverage-matrix-check.swift`
+- Test: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/Scripts/QA/prd-stitch-ui/release-feature-matrix-check.swift`
+- Test: `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/Scripts/QA/prd-stitch-ui/prd-coverage-matrix-check.swift`
 
 - [x] **Step 1: Audit hidden features**
 
@@ -463,8 +463,8 @@ assertContains(matrix, "No hidden PRD feature is public by default", "matrix sho
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/prd-coverage-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/prd-coverage-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 ```
 
@@ -475,7 +475,7 @@ Expected: all pass.
 Run:
 
 ```bash
-git add docs/superpowers/status/2026-06-17-release-feature-matrix.md docs/superpowers/status/2026-06-18-prd-coverage-matrix.md tmp/visual-qa/prd-stitch-ui/release-feature-matrix-check.swift
+git add docs/superpowers/status/2026-06-17-release-feature-matrix.md docs/superpowers/status/2026-06-18-prd-coverage-matrix.md Scripts/QA/prd-stitch-ui/release-feature-matrix-check.swift
 git commit -m "docs: clarify hidden candidate release gates"
 ```
 
@@ -554,7 +554,7 @@ and list exact failure.
 Run:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/prd-coverage-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/prd-coverage-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 git diff --check
 ```
 

@@ -282,6 +282,7 @@ let requiredScripts = [
     "Scripts/doctor-ios.sh",
     "Scripts/QA/prd-stitch-ui/ios-doctor-check.swift",
     "Scripts/QA/prd-stitch-ui/qa-script-location-check.swift",
+    "Scripts/QA/prd-stitch-ui/docs-qa-script-path-check.swift",
     "Scripts/QA/prd-stitch-ui/digital-human-conversation-coordinator-check.swift",
     "Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh",
     "Scripts/QA/prd-stitch-ui/run-echo-delayed-reply-notification-smoke.sh",

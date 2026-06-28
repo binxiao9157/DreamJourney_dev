@@ -32,12 +32,12 @@ Connect the hidden `阳光 / 星辰 / 静默` digital-human modes to Echo and Pr
 ## Verification
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/digital-human-mode-lifecycle-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swiftc -parse-as-library tmp/visual-qa/prd-stitch-ui/echo-archive-context-status-check.swift DreamJourney/Sources/Modules/Echo/EchoViewModel.swift -o /tmp/echo-archive-context-status-check && /tmp/echo-archive-context-status-check
-swift tmp/visual-qa/prd-stitch-ui/echo-archive-context-indicator-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/dialog-archive-context-integration-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/group2-shell-echo-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift tmp/visual-qa/prd-stitch-ui/profile-safety-flow-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/digital-human-mode-lifecycle-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swiftc -parse-as-library Scripts/QA/prd-stitch-ui/echo-archive-context-status-check.swift DreamJourney/Sources/Modules/Echo/EchoViewModel.swift -o /tmp/echo-archive-context-status-check && /tmp/echo-archive-context-status-check
+swift Scripts/QA/prd-stitch-ui/echo-archive-context-indicator-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/dialog-archive-context-integration-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/group2-shell-echo-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/profile-safety-flow-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath tmp/visual-qa/prd-stitch-ui/digital-human-mode-lifecycle/20260618-current/DerivedDataFinal CODE_SIGNING_ALLOWED=NO build
 xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath tmp/visual-qa/prd-stitch-ui/digital-human-mode-lifecycle/20260618-current/DerivedDataFinalArm64 CODE_SIGNING_ALLOWED=NO EXCLUDED_ARCHS='' ARCHS=arm64 ONLY_ACTIVE_ARCH=NO build
 git diff --check

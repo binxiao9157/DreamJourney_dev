@@ -22,7 +22,7 @@
 ```bash
 cd /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 RUN_ID=20260619-archive-audio-true-device-preflight \
-tmp/visual-qa/prd-stitch-ui/run-true-device-archive-audio-preflight.sh
+Scripts/QA/prd-stitch-ui/run-true-device-archive-audio-preflight.sh
 ```
 
 脚本会：
@@ -56,7 +56,7 @@ tmp/visual-qa/prd-stitch-ui/run-true-device-archive-audio-preflight.sh
 已有模拟器脚本：
 
 ```bash
-tmp/visual-qa/prd-stitch-ui/run-archive-audio-lifecycle-smoke.sh
+Scripts/QA/prd-stitch-ui/run-archive-audio-lifecycle-smoke.sh
 ```
 
 它证明：

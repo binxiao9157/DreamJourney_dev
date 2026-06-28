@@ -64,7 +64,7 @@ Observed through Stitch MCP on 2026-06-18:
 Run the final visual QA guard after Stitch UI, Profile/Care, or tab navigation changes:
 
 ```bash
-swift tmp/visual-qa/prd-stitch-ui/final-visual-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/final-visual-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 ```
 
 The guard must confirm this contract exists before release handoff.

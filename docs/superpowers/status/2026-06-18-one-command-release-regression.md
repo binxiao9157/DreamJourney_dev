@@ -9,7 +9,7 @@ This slice adds the one-command release regression entry for the current PRD/UI 
 Primary command:
 
 ```bash
-tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 The default run covers:
@@ -29,7 +29,7 @@ Use this as the recommended minimum public MVP handoff package when backend cred
 ```bash
 RUN_PUBLIC_MVP_REGRESSION=1 \
 RUN_ID=20260619-public-mvp \
-tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 `RUN_PUBLIC_MVP_REGRESSION=1` forces both P0 Archive -> Echo and P0 Profile Care gates:
@@ -46,7 +46,7 @@ Use this when validating the public MVP `记忆档案 -> 回响` loop after UI, 
 ```bash
 RUN_P0_ARCHIVE_ECHO_REGRESSION=1 \
 RUN_ID=20260619-p0-archive-echo \
-tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 `RUN_P0_ARCHIVE_ECHO_REGRESSION=1` forces `RUN_SIMULATOR_SMOKE=1`, even if a narrow release subset sets `RUN_SIMULATOR_SMOKE=0`.
@@ -60,7 +60,7 @@ Use this when validating the public MVP `我的 -> 心境追踪 / 长辈关怀` 
 ```bash
 RUN_P0_PROFILE_CARE_REGRESSION=1 \
 RUN_ID=20260619-p0-profile-care \
-tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 `RUN_P0_PROFILE_CARE_REGRESSION=1` forces both lower-level switches:
@@ -79,7 +79,7 @@ RELEASE_HANDOFF_MODE=1 \
 BACKEND_BASE_URL=https://dreamjourney-api.liftora.cn \
 BACKEND_API_TOKEN='<server token from private access doc>' \
 RUN_ID=20260618-release-handoff \
-tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 This forces release-like FastAPI/Postgres acceptance and the hidden media combo gate to run as part of the one-command package. Release-like backend acceptance cannot be disabled by RUN_RELEASE_LIKE_BACKEND=0. For local dry runs without a backend, keep `RELEASE_HANDOFF_MODE=0`.
@@ -108,7 +108,7 @@ Enable it only when the environment is available:
 
 ```bash
 RUN_RELEASE_LIKE_BACKEND=1 \
-tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 For an already deployed backend:
@@ -117,7 +117,7 @@ For an already deployed backend:
 RUN_BACKEND_ENV_SMOKE=1 \
 BACKEND_BASE_URL=https://example.com/dreamjourney-api \
 BACKEND_API_TOKEN='<server token>' \
-tmp/visual-qa/prd-stitch-ui/run-release-regression.sh
+Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 ## Notes

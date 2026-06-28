@@ -25,7 +25,7 @@ Scope: 公开 MVP 仅文字和照片。
 
 ## Verification
 
-- Static guard: `tmp/visual-qa/prd-stitch-ui/archive-sync-error-recovery-check.swift`
-- Release regression: `tmp/visual-qa/prd-stitch-ui/run-release-regression.sh`
-- Package guard: `tmp/visual-qa/prd-stitch-ui/release-qa-package-check.swift`
+- Static guard: `Scripts/QA/prd-stitch-ui/archive-sync-error-recovery-check.swift`
+- Release regression: `Scripts/QA/prd-stitch-ui/run-release-regression.sh`
+- Package guard: `Scripts/QA/prd-stitch-ui/release-qa-package-check.swift`
 
