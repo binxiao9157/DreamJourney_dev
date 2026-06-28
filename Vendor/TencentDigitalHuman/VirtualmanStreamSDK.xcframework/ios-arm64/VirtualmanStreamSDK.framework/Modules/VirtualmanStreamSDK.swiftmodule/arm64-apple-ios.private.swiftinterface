@@ -1,0 +1,204 @@
+// swift-interface-format-version: 1.0
+// swift-compiler-version: Apple Swift version 6.1 effective-5.10 (swiftlang-6.1.0.110.21 clang-1700.0.13.3)
+// swift-module-flags: -target arm64-apple-ios13.0 -enable-objc-interop -enable-library-evolution -swift-version 5 -enforce-exclusivity=checked -O -enable-experimental-feature DebugDescriptionMacro -enable-bare-slash-regex -module-name VirtualmanStreamSDK
+// swift-module-flags-ignorable: -no-verify-emitted-module-interface -interface-compiler-version 6.1
+import CommonCrypto
+import Foundation
+import Network
+import Swift
+import TXLiteAVSDK_TRTC
+import UIKit
+@_exported import VirtualmanStreamSDK
+import _Concurrency
+import _StringProcessing
+import _SwiftConcurrencyShims
+import zlib
+@objc @_inheritsConvenienceInitializers public class AssetVirtualmanParams : ObjectiveC.NSObject {
+  public var assetVirtualmanKey: Swift.String
+  public var userId: Swift.String
+  public var extraInfo: VirtualmanStreamSDK.ExtraInfo?
+  public var protocolOption: VirtualmanStreamSDK.ProtocolOption?
+  @objc override dynamic public init()
+  public init(assetVirtualmanKey: Swift.String = "", userId: Swift.String = "", extraInfo: VirtualmanStreamSDK.ExtraInfo? = nil, protocolOption: VirtualmanStreamSDK.ProtocolOption? = nil)
+  @objc deinit
+}
+@objc public class AudioParams : ObjectiveC.NSObject {
+  public var reqId: Swift.String
+  public var audio: Swift.String
+  public var seq: Swift.Int
+  public var isFinal: Swift.Bool
+  public var videoSeiInfo: Swift.String?
+  public init(reqId: Swift.String, audio: Swift.String, seq: Swift.Int, isFinal: Swift.Bool = false, videoSeiInfo: Swift.String? = nil)
+  @objc deinit
+}
+@objc public class ChatParams : ObjectiveC.NSObject {
+  public var text: Swift.String
+  public var isNewChat: Swift.Bool
+  public var reqId: Swift.String
+  public var videoSeiInfo: Swift.String?
+  public init(text: Swift.String, isNewChat: Swift.Bool = false, reqId: Swift.String = CommonUtils.getUUID(), videoSeiInfo: Swift.String? = nil)
+  @objc deinit
+}
+public enum CommonUtils {
+  public static func getUUID() -> Swift.String
+  public static func genTrtcUserSig(sdkAppId: Swift.String, secretKey: Swift.String, userId: Swift.String, expireTime: Swift.Int = 604800) -> Swift.String
+  public static func genTrtcPrivateMapKey(sdkAppId: Swift.String, secretKey: Swift.String, userId: Swift.String, roomId: Swift.UInt32, expireTime: Swift.Int = 604800) -> Swift.String
+}
+@objc public class ExtraInfo : ObjectiveC.NSObject {
+  public var alphaChannelEnable: Swift.Bool
+  public init(alphaChannelEnable: Swift.Bool = false)
+  @objc deinit
+}
+@objc @_inheritsConvenienceInitializers public class ProtocolOption : ObjectiveC.NSObject {
+  public var trtcUseExternalApp: Swift.Bool?
+  public var trtcAppId: Swift.String?
+  public var trtcRoomId: Swift.Int?
+  public var trtcStrRoomId: Swift.String?
+  public var trtcAutoGenRoomIdType: Swift.Int?
+  public var trtcUserSig: Swift.String?
+  public var trtcPrivateMapKey: Swift.String
+  public var clientUserId: Swift.String
+  public var clientUserSig: Swift.String?
+  public var clientPrivateMapKey: Swift.String
+  @objc override dynamic public init()
+  @objc deinit
+}
+public struct VMHeader : Swift.Codable {
+  public let Code: Swift.Int?
+  public let Message: Swift.String?
+  public let RequestID: Swift.String?
+  public let SessionID: Swift.String?
+  public let DialogID: Swift.String?
+  public func encode(to encoder: any Swift.Encoder) throws
+  public init(from decoder: any Swift.Decoder) throws
+}
+public struct VMPayload : Swift.Codable {
+  public let RequestId: Swift.String?
+  public let PlayStreamAddr: Swift.String?
+  public let SessionStatus: Swift.Int?
+  public let SessionId: Swift.String?
+  public let ErrorCode: Swift.Int?
+  public let ErrorMsg: Swift.String?
+  public let ErrorMessage: Swift.String?
+  public let ReqId: Swift.String?
+  public let msgType: Swift.Int?
+  public let Text: Swift.String?
+  public let SpeakStatus: Swift.String?
+  public let Uninterrupt: Swift.Bool?
+  public let SpeechId: Swift.Int?
+  public let IsSessionStarted: Swift.Bool?
+  public let CloseType: Swift.Int?
+  public let Seq: Swift.Int?
+  public let FinalType: Swift.Int?
+  public let Final: Swift.Bool?
+  public let TextPro: Swift.String?
+  public let TextDisplay: Swift.String?
+  public let ContentType: Swift.String?
+  public let Muted: Swift.Bool?
+  public let CloudAiExtra: Swift.String?
+  public let Sessions: [VirtualmanStreamSDK.VMSession]?
+  public func encode(to encoder: any Swift.Encoder) throws
+  public init(from decoder: any Swift.Decoder) throws
+}
+public struct ResponseData : Swift.Codable {
+  public let Header: VirtualmanStreamSDK.VMHeader?
+  public let Payload: VirtualmanStreamSDK.VMPayload?
+  public func encode(to encoder: any Swift.Encoder) throws
+  public init(from decoder: any Swift.Decoder) throws
+}
+public struct VMSession : Swift.Codable {
+  public let UserId: Swift.String?
+  public let SessionId: Swift.String?
+  public let SessionStatus: Swift.Int?
+  public let PlayStreamAddr: Swift.String?
+  public let DriverType: Swift.Int?
+  public let IsSessionStarted: Swift.Bool?
+  public let VirtualmanType: Swift.String?
+  public let CreateType: Swift.Int?
+  public let VirtualmanKey: Swift.String?
+  public let AssetVirtualmanKey: Swift.String?
+  public let VirtualmanProjectId: Swift.String?
+  public func encode(to encoder: any Swift.Encoder) throws
+  public init(from decoder: any Swift.Decoder) throws
+}
+@objc public class StreamTextParams : ObjectiveC.NSObject {
+  public var reqId: Swift.String
+  public var text: Swift.String
+  public var seq: Swift.Int
+  public var isFinal: Swift.Bool
+  public var isSentence: Swift.Bool
+  public var isInsertSentence: Swift.Bool
+  public var videoSeiInfo: Swift.String?
+  public init(reqId: Swift.String, text: Swift.String, seq: Swift.Int, isFinal: Swift.Bool = false, isSentence: Swift.Bool = false, isInsertSentence: Swift.Bool = false, videoSeiInfo: Swift.String? = nil)
+  @objc deinit
+}
+@objc public class TextParams : ObjectiveC.NSObject {
+  public var text: Swift.String
+  public var reqId: Swift.String
+  public var videoSeiInfo: Swift.String?
+  public init(text: Swift.String, reqId: Swift.String = CommonUtils.getUUID(), videoSeiInfo: Swift.String? = nil)
+  @objc deinit
+}
+@objc public protocol VirtualmanDelegate {
+  @objc optional func onRecvSEIMsg(_ userId: Swift.String, message: Foundation.Data)
+  @objc optional func onFirstVideoFrame(_ userId: Swift.String, streamType: Swift.Int32, width: Swift.Int32, height: Swift.Int32)
+  @objc optional func onError(_ errCode: Swift.Int32, errMsg: Swift.String?)
+  @objc optional func onConnectionLost()
+  @objc optional func onTryToReconnect()
+  @objc optional func onConnectionRecovery()
+  @objc optional func onNetworkQuality(localQuality: Swift.Int, remoteQuality: [Swift.Int])
+  @objc optional func onStatistics(_ statistics: TXLiteAVSDK_TRTC.TRTCStatistics)
+}
+@objc @_inheritsConvenienceInitializers public class VirtualmanParams : ObjectiveC.NSObject {
+  public var appkey: Swift.String
+  public var accesstoken: Swift.String
+  public var serverDomain: Swift.String
+  public var disableTls: Swift.Bool
+  public var virtualmanProjectParams: VirtualmanStreamSDK.VirtualmanProjectParams?
+  public var assetVirtualmanParams: VirtualmanStreamSDK.AssetVirtualmanParams?
+  @objc override dynamic public init()
+  public init(appkey: Swift.String, accesstoken: Swift.String, serverDomain: Swift.String = "gw.tvs.qq.com", disableTls: Swift.Bool = false)
+  @objc deinit
+}
+@objc @_inheritsConvenienceInitializers public class VirtualmanProjectParams : ObjectiveC.NSObject {
+  public var virtualmanProjectId: Swift.String
+  public var userId: Swift.String
+  public var extraInfo: VirtualmanStreamSDK.ExtraInfo?
+  public var protocolOption: VirtualmanStreamSDK.ProtocolOption?
+  @objc override dynamic public init()
+  public init(virtualmanProjectId: Swift.String = "", userId: Swift.String = "", extraInfo: VirtualmanStreamSDK.ExtraInfo? = nil, protocolOption: VirtualmanStreamSDK.ProtocolOption? = nil)
+  @objc deinit
+}
+@objc @_inheritsConvenienceInitializers @_Concurrency.MainActor @preconcurrency public class Virtualman : UIKit.UIView {
+  @_Concurrency.MainActor @preconcurrency public static let sdkVersion: Swift.String
+  @_Concurrency.MainActor @preconcurrency @objc override dynamic public init(frame: CoreFoundation.CGRect)
+  @_Concurrency.MainActor @preconcurrency @objc required dynamic public init?(coder: Foundation.NSCoder)
+  @_Concurrency.MainActor @preconcurrency public func initSDK(params: VirtualmanStreamSDK.VirtualmanParams)
+  @_Concurrency.MainActor @preconcurrency public func open(completion: @escaping (_ sessionId: Swift.String?, _ error: Swift.String?) -> Swift.Void)
+  @_Concurrency.MainActor @preconcurrency public func openByAsset(completion: @escaping (_ sessionId: Swift.String?, _ error: Swift.String?) -> Swift.Void)
+  @_Concurrency.MainActor @preconcurrency public func close()
+  @discardableResult
+  @_Concurrency.MainActor @preconcurrency public func chat(_ params: VirtualmanStreamSDK.ChatParams) -> Swift.Bool
+  @discardableResult
+  @_Concurrency.MainActor @preconcurrency public func sendText(_ params: VirtualmanStreamSDK.TextParams) -> Swift.Bool
+  @discardableResult
+  @_Concurrency.MainActor @preconcurrency public func sendStreamText(_ params: VirtualmanStreamSDK.StreamTextParams) -> Swift.Bool
+  @discardableResult
+  @_Concurrency.MainActor @preconcurrency public func sendAudio(_ params: VirtualmanStreamSDK.AudioParams) -> Swift.Bool
+  @discardableResult
+  @_Concurrency.MainActor @preconcurrency public func stop() -> Swift.Bool
+  @_Concurrency.MainActor @preconcurrency public func setSmartActionEnabled(_ value: Swift.Bool)
+  @_Concurrency.MainActor @preconcurrency public func setDelegate(_ delegate: (any VirtualmanStreamSDK.VirtualmanDelegate)?)
+  @_Concurrency.MainActor @preconcurrency public func setWsDelegate(_ delegate: (any VirtualmanStreamSDK.VirtualmanWsDelegate)?)
+  @_Concurrency.MainActor @preconcurrency public func statSession(callback: @escaping (Any) -> Swift.Void)
+  @_Concurrency.MainActor @preconcurrency public func listSessionOfUin(callback: @escaping (Any) -> Swift.Void)
+  @_Concurrency.MainActor @preconcurrency public func listSessionOfProjectid(callback: @escaping (Any) -> Swift.Void)
+  @_Concurrency.MainActor @preconcurrency public func listSessionOfAssetVK(callback: @escaping (Any) -> Swift.Void)
+  @objc deinit
+}
+@objc public protocol VirtualmanWsDelegate {
+  @objc optional func onWsOpen()
+  @objc optional func onWsMessage(_ text: Swift.String)
+  @objc optional func onWsClosed(code: Swift.UInt16, reason: Swift.String)
+  @objc optional func onWsFailure(_ error: (any Swift.Error)?)
+}

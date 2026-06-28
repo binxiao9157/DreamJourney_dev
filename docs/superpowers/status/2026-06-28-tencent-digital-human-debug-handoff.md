@@ -118,26 +118,15 @@ xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -configurati
 
 ## 同事拉代码后能否直接使用
 
-结论：同事可以直接拉当前分支获得代码改动，但不能只靠 Git clone 就跑通真实腾讯数智人。真实数智人需要以下配置和二进制资源。
+结论：同事可以直接拉当前分支获得代码改动和腾讯 iOS SDK 二进制。只要本地 CocoaPods、后端访问配置和真机签名配置齐全，就可以编译真实腾讯数智人链路。
 
-### 必需：腾讯 iOS SDK 二进制
+### 已随仓库提交：腾讯 iOS SDK 二进制
 
 项目引用：
 
 - `Vendor/TencentDigitalHuman/VirtualmanStreamSDK.xcframework`
 
-当前该目录被 `.gitignore` 忽略，没有随 Git 提交。原因是腾讯 SDK 包体较大且可能涉及分发授权。
-
-同事需要：
-
-1. 从腾讯云数智人 iOS 云渲染 SDK Demo/内部制品库获取 `VirtualmanStreamSDK.xcframework`。
-2. 放到仓库根目录下：
-
-```text
-Vendor/TencentDigitalHuman/VirtualmanStreamSDK.xcframework
-```
-
-否则工程会因为缺少 `VirtualmanStreamSDK` 而无法编译真实腾讯 bridge。
+该 SDK 已从 `.gitignore` 放出并随仓库提交，团队成员拉取当前分支后不需要再手动放置 `VirtualmanStreamSDK.xcframework`。后续 SDK 升级时，直接替换该目录并提交即可。
 
 ### 必需：CocoaPods 依赖
 
@@ -197,7 +186,7 @@ DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER = <your bundle id>
 
 ### 可选：后端本地或部署环境
 
-如果使用已部署后端，同事只需要填部署 URL 和 token。
+如果使用已部署后端，同事只需要填部署 URL 和 token；不需要在 iOS 本地配置腾讯数智人的 `appkey` / `accesstoken`。
 
 如果本地跑后端，还需要在后端仓库配置腾讯数智人环境变量，并确认：
 
@@ -213,5 +202,5 @@ POST /digital-human/sessions
 
 - 真机“听感”仍需要人工验收，自动化只能证明代码合同、构建和启动。
 - 腾讯 SDK `TextOver` 与真实音频结束之间仍可能有 provider 内部时序差异；当前通过短 settle delay、尾音 stop 和远端静音规避。
-- SDK 二进制未纳入 Git，团队需要确定后续是继续本地手动放置，还是放入合规制品库。
+- 腾讯 SDK 二进制已纳入 Git；后续需要注意 SDK 授权范围和仓库体积增长。
 - 若后端切换 `asset_virtualman_key` / `virtualmanProjectId`，iOS 不需要改代码，但需要重新跑真机回归。

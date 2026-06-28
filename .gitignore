@@ -30,6 +30,5 @@ Package.resolved
 # xcodegen 生成的工程文件（可选提交）
 # *.xcodeproj
 
-# Tencent Digital Human SDK local staging
-Vendor/TencentDigitalHuman/
+# Tencent Digital Human SDK download/cache staging
 tmp/tencent-digital-human-sdk/

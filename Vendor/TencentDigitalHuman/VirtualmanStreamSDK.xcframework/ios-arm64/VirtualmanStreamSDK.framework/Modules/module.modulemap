@@ -1,0 +1,11 @@
+framework module VirtualmanStreamSDK {
+  umbrella header "VirtualmanStreamSDK.h"
+  export *
+
+  module * { export * }
+}
+
+module VirtualmanStreamSDK.Swift {
+  header "VirtualmanStreamSDK-Swift.h"
+  requires objc
+}
