@@ -128,6 +128,24 @@ final class TencentDigitalHumanCloudRuntime: DigitalHumanRuntime {
         }
     }
 
+    func interruptPlaybackIfNeeded(reason: String) {
+        currentRequestID = nil
+        switch state {
+        case .ready, .buffering, .speaking:
+            bridge.interrupt()
+            if case .ready = state {
+                state = .ready
+            } else {
+                state = .interrupting
+            }
+            print("[TencentDigitalHuman] forced provider playback interrupt reason=\(reason)")
+        case .closed:
+            print("[TencentDigitalHuman] ignored forced provider interrupt while state=closed reason=\(reason)")
+        default:
+            print("[TencentDigitalHuman] ignored forced provider interrupt while state=\(state) reason=\(reason)")
+        }
+    }
+
     func close() {
         setRemoteAudioMuted(false)
         bridge.interrupt()
@@ -151,6 +169,9 @@ final class TencentDigitalHumanCloudRuntime: DigitalHumanRuntime {
             state = .ready
         case .textStart(let requestID):
             state = .speaking(requestID: requestID ?? currentRequestID ?? contract.sessionId)
+        case .speechProgress(let requestID, let status):
+            state = .speaking(requestID: requestID ?? currentRequestID ?? contract.sessionId)
+            print("[TencentDigitalHuman] provider speech progress status=\(status) requestID=\(requestID ?? currentRequestID ?? "unknown")")
         case .textOver:
             currentRequestID = nil
             state = .ready

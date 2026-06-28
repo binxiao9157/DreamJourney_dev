@@ -173,7 +173,8 @@
         personaSubtitle: '',
         assetVideoReady: false,
         realAssetPreviewStarted: false,
-        providerMode: false
+        providerMode: false,
+        localPreviewEnabled: false
       };
 
       function clampLevel(value) {
@@ -271,7 +272,7 @@
       }
 
       function startRealAssetPreview() {
-        if (state.providerMode) {
+        if (state.providerMode || !state.localPreviewEnabled) {
           return;
         }
         if (state.realAssetPreviewStarted) {
@@ -399,6 +400,25 @@
               }
             }
           } else {
+            if (state.localPreviewEnabled) {
+              startRealAssetPreview();
+            }
+          }
+          applyState();
+        },
+        setLocalPreviewEnabled: function (enabled) {
+          state.localPreviewEnabled = Boolean(enabled);
+          const video = document.getElementById('real_asset_video');
+          if (!state.localPreviewEnabled && video) {
+            video.pause();
+          }
+          if (!state.localPreviewEnabled && canvasVideo) {
+            const context = canvasVideo.getContext('2d');
+            if (context) {
+              context.clearRect(0, 0, canvasVideo.width, canvasVideo.height);
+            }
+          }
+          if (state.localPreviewEnabled && !state.providerMode) {
             startRealAssetPreview();
           }
           applyState();
@@ -427,8 +447,8 @@
             lipSyncFrameCount: state.lipSyncFrameCount,
             personaName: state.personaName,
             personaSubtitle: state.personaSubtitle,
-            hasRealDigitalHumanAsset: !state.providerMode,
-            assetVideoReady: !state.providerMode && state.assetVideoReady,
+            hasRealDigitalHumanAsset: state.localPreviewEnabled && !state.providerMode,
+            assetVideoReady: state.localPreviewEnabled && !state.providerMode && state.assetVideoReady,
             assetVideoSrc: assetVideoSrc,
             assetDataSrc: assetDataSrc,
             hasFallbackAvatar: false
@@ -442,7 +462,6 @@
 
       window.addEventListener('load', function () {
         state.ready = true;
-        startRealAssetPreview();
         applyState();
       });
 

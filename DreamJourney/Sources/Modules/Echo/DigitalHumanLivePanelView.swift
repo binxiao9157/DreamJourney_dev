@@ -62,6 +62,7 @@ final class DigitalHumanLivePanelView: UIView {
     private(set) var didFail = false
     private var hostedProviderView: UIView?
     private var providerModeEnabled = false
+    private var localPreviewEnabled = false
 
     override init(frame: CGRect) {
         let configuration = WKWebViewConfiguration()
@@ -135,6 +136,7 @@ final class DigitalHumanLivePanelView: UIView {
         providerView.translatesAutoresizingMaskIntoConstraints = false
         providerView.backgroundColor = .clear
         providerView.isOpaque = false
+        setLocalPreviewEnabled(false)
         setProviderModeEnabled(true)
         webView.isHidden = true
         webView.alpha = 0
@@ -149,13 +151,47 @@ final class DigitalHumanLivePanelView: UIView {
         ])
     }
 
-    func removeHostedProviderView() {
+    func removeHostedProviderView(showFallbackMessage message: String? = nil) {
         hostedProviderView?.removeFromSuperview()
         hostedProviderView = nil
         setProviderModeEnabled(false)
-        webView.isHidden = false
-        webView.alpha = 1
-        webView.isUserInteractionEnabled = true
+        setLocalPreviewEnabled(false)
+        webView.isHidden = true
+        webView.alpha = 0
+        webView.isUserInteractionEnabled = false
+        if let message {
+            fallbackLabel.text = message
+            fallbackLabel.isHidden = false
+        } else {
+            fallbackLabel.isHidden = true
+        }
+    }
+
+    func showProviderPlaceholder(_ message: String = "正在连接腾讯数智人") {
+        hostedProviderView?.removeFromSuperview()
+        hostedProviderView = nil
+        setLocalPreviewEnabled(false)
+        setProviderModeEnabled(true)
+        webView.isHidden = true
+        webView.alpha = 0
+        webView.isUserInteractionEnabled = false
+        fallbackLabel.text = message
+        fallbackLabel.isHidden = false
+    }
+
+    func setLocalPreviewEnabled(_ enabled: Bool) {
+        localPreviewEnabled = enabled
+        if enabled, hostedProviderView == nil {
+            setProviderModeEnabled(false)
+        }
+        evaluate("window.DreamJourneyDigitalHuman && window.DreamJourneyDigitalHuman.setLocalPreviewEnabled(\(enabled ? "true" : "false"))")
+        guard hostedProviderView == nil else { return }
+        webView.isHidden = !enabled
+        webView.alpha = enabled ? 1 : 0
+        webView.isUserInteractionEnabled = enabled
+        if enabled {
+            fallbackLabel.isHidden = true
+        }
     }
 
     private func setProviderModeEnabled(_ enabled: Bool) {
@@ -214,6 +250,9 @@ final class DigitalHumanLivePanelView: UIView {
         webView.scrollView.backgroundColor = .clear
         webView.scrollView.isScrollEnabled = false
         webView.accessibilityIdentifier = "digitalHumanLiveWebView"
+        webView.isHidden = true
+        webView.alpha = 0
+        webView.isUserInteractionEnabled = false
 
         addSubview(webView)
         addSubview(fallbackLabel)
@@ -293,9 +332,14 @@ final class DigitalHumanLivePanelView: UIView {
 extension DigitalHumanLivePanelView: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         isReady = true
-        fallbackLabel.isHidden = true
         if providerModeEnabled {
             setProviderModeEnabled(true)
+        } else if localPreviewEnabled {
+            fallbackLabel.isHidden = true
+        } else {
+            webView.isHidden = true
+            webView.alpha = 0
+            webView.isUserInteractionEnabled = false
         }
         flushPendingScripts()
     }

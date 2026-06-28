@@ -232,6 +232,10 @@ extension TencentVirtualmanSDKBridge: VirtualmanWsDelegate {
         switch payload["SpeakStatus"] as? String {
         case "TextStart":
             eventHandler?(.textStart(requestID: requestID))
+        case "WaitingTextOver", "SentenceStart", "SentenceNext", "WaitingTextStart":
+            if let status = payload["SpeakStatus"] as? String {
+                eventHandler?(.speechProgress(requestID: requestID, status: status))
+            }
         case "TextOver":
             eventHandler?(.textOver(requestID: requestID))
         default:
