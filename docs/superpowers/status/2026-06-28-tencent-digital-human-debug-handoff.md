@@ -128,6 +128,23 @@ xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -configurati
 
 该 SDK 已从 `.gitignore` 放出并随仓库提交，团队成员拉取当前分支后不需要再手动放置 `VirtualmanStreamSDK.xcframework`。后续 SDK 升级时，直接替换该目录并提交即可。
 
+### SDK 入库验证记录
+
+2026-06-28 已按“同事拉代码”路径做过一次干净验证：
+
+- 远程分支：`origin/feature/prd-stitch-ui-adaptation`
+- 验证提交：`930f721 chore: bundle tencent digital human ios sdk`
+- 远程 tree 中 `Vendor/TencentDigitalHuman/VirtualmanStreamSDK.xcframework` tracked 文件数：`31`
+- 真机 arm64 二进制已存在：`Vendor/TencentDigitalHuman/VirtualmanStreamSDK.xcframework/ios-arm64/VirtualmanStreamSDK.framework/VirtualmanStreamSDK`
+- 从远程分支创建干净 worktree 后，SDK 目录存在且不再被 `.gitignore` 忽略。
+- 干净 worktree 中执行 `pod install` 通过。
+- 干净 worktree 中执行 iOS Simulator Debug build 通过。
+
+本次验证日志：
+
+- `/tmp/dreamjourney-sdk-worktree-pod-install.log`
+- `/tmp/dreamjourney-sdk-worktree-build.log`
+
 ### 必需：CocoaPods 依赖
 
 项目依赖 `TXLiteAVSDK_TRTC`、`SpeechEngineToB`、`Moya` 等 Pod。
