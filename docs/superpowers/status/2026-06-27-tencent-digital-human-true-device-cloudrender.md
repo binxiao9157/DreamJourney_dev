@@ -172,7 +172,7 @@ xcrun devicectl device process launch --device B7887DD8-3561-5F2A-8D62-A3FEACDC8
 - 真机截图工具在当前命令行环境不可用，本轮视觉证据以腾讯 SDK 首帧日志为准。
 - 下一轮应在真机日志采集窗口内手动触发一次完整 Echo 对话，或新增 Debug/QA-only 真机自动文本驱动 smoke，以验证文本驱动、说话中、TextOver 超时保护和状态回落。
 
-## 2026-06-28 普通重启可见性修复
+## 2026-06-28 普通重启可见性能力落地
 
 用户反馈：通过真机 smoke 启动时可以看到数字人，但手动关掉 App 再从桌面打开，Echo 页面又回到普通状态，看不到数字人。
 
@@ -182,7 +182,7 @@ xcrun devicectl device process launch --device B7887DD8-3561-5F2A-8D62-A3FEACDC8
 - 手动从桌面重新打开 App 时不会带这些 launch arg，因此 `shouldShowDigitalHumanLivePanel` 返回 false，`DigitalHumanLivePanelView` 不会创建。
 - 这不是腾讯云会话失败，也不是后端配置丢失，而是公开发布入口没有真正从 QA flag 转成默认公开。
 
-修复：
+实现：
 
 - `DJFeature.digitalHumanLivePanel` 加入 `FeatureFlagService.defaultEnabled`。
 - `FeatureFlagService.currentStorageVersion` 从 9 升到 10，避免旧安装继续沿用历史隐藏状态。
@@ -219,7 +219,7 @@ xcrun devicectl device process launch --device B7887DD8-3561-5F2A-8D62-A3FEACDC8
 
 - 模拟器结果：`tmp/visual-qa/prd-stitch-ui/digital-human-runtime-stub-smoke/20260628-digital-human-public-default/digital-human-runtime-stub-smoke-result.json`
 
-## 2026-06-28 启动闪本地素材与连续对话修复
+## 2026-06-28 腾讯数智人公开展示与连续对话能力落地
 
 用户真机反馈：
 
@@ -235,7 +235,7 @@ xcrun devicectl device process launch --device B7887DD8-3561-5F2A-8D62-A3FEACDC8
 - `resumeDialogEngineAfterTencentProviderSpeechIfNeeded` 之前按半双工保守策略直接 `resetToIdle()`，不会在 Tencent `TextOver` 后自动恢复 ASR 聆听。
 - 腾讯负责声音时，`onChatStreaming` 一直等待 SDK TTSStarted fallback，不会对已形成完整句的流式文本做提前 provider prewarm。
 
-修复：
+实现：
 
 - `DigitalHumanLive.html` 新增 `localPreviewEnabled` / `setLocalPreviewEnabled(...)`，本地素材预览改为 QA-only 显式开启；公开启动不再自动播放 `01.mp4`。
 - `DigitalHumanLivePanelView` 默认隐藏 Web renderer，新增 `showProviderPlaceholder(...)`，腾讯连接中只显示中性占位，不暴露本地素材。
@@ -278,7 +278,7 @@ xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -configurati
 - 最终包真机安装日志：`tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260628-tencent-digital-human-continuous-dialog/device-install-r2.log`
 - 最终包真机普通启动返回 0 日志：`tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260628-tencent-digital-human-continuous-dialog/device-launch-no-console-r2.log`
 
-### 2026-06-28 连续对话声音截断 hotfix
+### 2026-06-28 连续对话完整播报能力落地
 
 用户复测反馈：
 
@@ -291,7 +291,7 @@ xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -configurati
 - 但腾讯接管声音时，真正发送 provider 文本前会调用 `pauseDialogEngineForTencentProviderSpeechIfNeeded()`，也就是停止火山 DialogEngine，避免火山和腾讯同时抢音频。
 - 如果在 streaming 阶段提前发送，就会在 `SEEventChatEnded` 之前停掉上游生成，导致后续回复文本没有完整生成；真机表现就是第一句有声音，后续没声音或只剩尾音。
 
-修复：
+实现：
 
 - 腾讯接管声音时，`onChatStreaming` 只更新 UI / pending 文本，不再做 provider prewarm。
 - provider 文本派发重新收敛到 ChatEnded / final text 之后的既有 `onTTSStarted(text:)` 兜底路径。
@@ -315,7 +315,7 @@ swift tmp/visual-qa/prd-stitch-ui/tencent-digital-human-audio-owner-stop-semanti
 - 真机安装日志：`tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260628-digital-human-public-default-reopen/install.log`
 - 真机普通启动日志：`tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260628-digital-human-public-default-reopen/launch.log`
 
-### 2026-06-28 连续对话音频 owner 二次修复
+### 2026-06-28 连续对话单音频 owner 能力落地
 
 用户继续复测反馈：
 
@@ -328,7 +328,7 @@ swift tmp/visual-qa/prd-stitch-ui/tencent-digital-human-audio-owner-stop-semanti
 - 之前连续对话在 `TextOver` 后恢复 ASR 的等待窗口过短，火山录音侧重新打开时可能抢占 AVAudioSession，导致腾讯云渲染音频前半段被压掉。
 - 自动恢复连续对话路径没有像用户手动点击麦克风一样，先静音腾讯 TRTC 远端音频再打开火山 ASR。
 
-修复：
+实现：
 
 - `TencentVirtualmanSDKBridge` 将 `WaitingTextOver`、`SentenceStart`、`SentenceNext`、`WaitingTextStart` 映射为 provider speech progress，运行态保持 `.speaking`，便于真机日志诊断腾讯侧语音进度。
 - `completeTencentDigitalHumanReplyIfNeeded()` 在 `TextOver` 后保留 reply 文本，按文本长度估算恢复 ASR 的等待时间：最短 `2.6s`，最长 `8.0s`，日志输出 `resumeDelay`。
@@ -355,12 +355,12 @@ xcrun devicectl device process launch --device B7887DD8-3561-5F2A-8D62-A3FEACDC8
 - 真机构建日志：`tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260628-tencent-digital-human-continuous-dialog/device-build-r4.log`
 - 真机安装日志：`tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260628-tencent-digital-human-continuous-dialog/device-install-r4.log`
 - 真机普通启动返回 0 日志：`tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260628-tencent-digital-human-continuous-dialog/device-launch-no-console-r4.log`
-- 补充远端静音修复后的模拟器构建日志：`tmp/visual-qa/prd-stitch-ui/tencent-digital-human-continuous-dialog-build/build-r5.log`
-- 补充远端静音修复后的真机构建日志：`tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260628-tencent-digital-human-continuous-dialog/device-build-r5.log`
-- 补充远端静音修复后的真机安装日志：`tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260628-tencent-digital-human-continuous-dialog/device-install-r5.log`
-- 补充远端静音修复后的真机普通启动返回 0 日志：`tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260628-tencent-digital-human-continuous-dialog/device-launch-no-console-r5.log`
+- 补充远端静音能力后的模拟器构建日志：`tmp/visual-qa/prd-stitch-ui/tencent-digital-human-continuous-dialog-build/build-r5.log`
+- 补充远端静音能力后的真机构建日志：`tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260628-tencent-digital-human-continuous-dialog/device-build-r5.log`
+- 补充远端静音能力后的真机安装日志：`tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260628-tencent-digital-human-continuous-dialog/device-install-r5.log`
+- 补充远端静音能力后的真机普通启动返回 0 日志：`tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260628-tencent-digital-human-continuous-dialog/device-launch-no-console-r5.log`
 
-### 2026-06-28 自动恢复聆听过渡态修复
+### 2026-06-28 自动恢复聆听过渡态能力落地
 
 用户复测反馈：
 
@@ -373,7 +373,7 @@ xcrun devicectl device process launch --device B7887DD8-3561-5F2A-8D62-A3FEACDC8
 - 但 `TextOver` 已经是 provider 文本驱动结束/接近音频结束后的事件，再按整句时长等待会造成二次等待。
 - `markReplyDelivered()` 会进入 `.replied`，该状态 UI 显示“回信已抵达”并禁用麦克风，所以等待窗口内看起来像卡住。
 
-修复：
+实现：
 
 - `TextOver` 后恢复 ASR 改为短 post-audio settle delay：默认 `1.2s`，长回复额外 `0.6s`，不再按整句播放时长等待。
 - 自动恢复期间的 `.replied` UI 改为“准备继续听您说”，麦克风按钮保持可用，用户可手动提前继续。
@@ -396,13 +396,13 @@ git diff --check
 - 真机安装日志：`tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260628-tencent-digital-human-continuous-dialog/device-install-r6.log`
 - 真机普通启动返回 0 日志：`tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260628-tencent-digital-human-continuous-dialog/device-launch-no-console-r6.log`
 
-### 2026-06-28 自动恢复聆听按钮语义修复
+### 2026-06-28 自动恢复聆听停止语义能力落地
 
 用户复测反馈：
 
 - 虽然文案显示“准备继续听您说”，但按钮仍是麦克风开始样式，会误解为对话已经停止。
 
-修复：
+实现：
 
 - 自动恢复聆听的 `.replied` 过渡态文案改为“正在恢复聆听”。
 - 按钮图标改为 `stop.fill`，并保持脉冲动画，表达当前仍处于连续对话流程。
@@ -425,14 +425,14 @@ git diff --check
 - 真机安装日志：`tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260628-tencent-digital-human-continuous-dialog/device-install-r7.log`
 - 真机普通启动返回 0 日志：`tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260628-tencent-digital-human-continuous-dialog/device-launch-no-console-r7.log`
 
-### 2026-06-28 数字人说话打断语义修复
+### 2026-06-28 数字人说话打断能力落地
 
-问题：
+能力目标：
 
 - 目标体验是数字人说话时可以点击停止打断。
 - 之前 active request 仍在时可以打断，但腾讯 SDK 可能先发 `TextOver`，实际尾音仍在播放；此时 `activeRequestID` 已清空，点击停止只会结束本地状态，不一定会向腾讯 SDK 发送 stop。
 
-修复：
+实现：
 
 - 新增 `shouldInterruptTencentDigitalHumanOnUserStop`，把 active provider speech 和 post-TextOver 自动恢复窗口都纳入用户停止打断范围。
 - `interruptDigitalHumanPlayback(...)` 对腾讯云渲染 runtime 改用 `interruptPlaybackIfNeeded(reason:)`。

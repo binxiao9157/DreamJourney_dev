@@ -19,44 +19,44 @@
 4. Echo 文本回复通过 `VirtualmanStreamSDK` 的 `sendText(TextParams)` 驱动腾讯数智人，由腾讯云渲染负责声音和口型。
 5. 火山 `DialogEngine` 只负责用户 ASR 和上游对话生成；腾讯数智人接管播报时，火山本地 TTS 播放关闭。
 
-## 本轮已解决的问题
+## 本轮已实现的功能
 
-### 1. 启动闪出本地女生素材
+### 1. 公开启动稳定展示腾讯数智人
 
-问题：腾讯云渲染连接前，WebView 本地预览素材会先显示，造成“先出现女生、再切腾讯数智人”的错觉。
+实现功能：腾讯云渲染连接前只展示中性 provider placeholder，连接成功后稳定展示腾讯数智人，不再暴露本地预览素材。
 
-处理：
+落地内容：
 
 - `DigitalHumanLive.html` 增加 `localPreviewEnabled`，默认不自动播放本地素材。
 - `DigitalHumanLivePanelView` 默认隐藏 Web renderer，连接中显示中性 provider placeholder。
 - provider fallback 时不再重新展示本地素材，只显示“数字人暂不可用”。
 
-### 2. 腾讯数智人声音被火山链路抢占
+### 2. 腾讯数智人播报接管与单音频 owner
 
-问题：火山 ASR/TTS 和腾讯云渲染同时操作音频会话时，会出现没声音、只剩尾音、口型/声音不同步。
+实现功能：腾讯数智人说话时由腾讯云渲染负责声音和口型，火山链路只保留用户 ASR 和上游对话生成，避免双音频链路抢占。
 
-处理：
+落地内容：
 
 - 腾讯接管播报时关闭 Fire/Volcengine 本地 TTS。
 - 发送腾讯文本前暂停 DialogEngine。
 - `onChatStreaming` 不再提前 provider prewarm，等待 final/fallback 文本后再发给腾讯，避免提前停止上游生成。
 - `TextOver` 后只做短暂 post-audio settle，不再按整句时长二次等待。
 
-### 3. 连续对话自动恢复
+### 3. 连续对话自动恢复聆听
 
-问题：数字人说完后停在“回信已抵达”，需要手动重新点麦克风。
+实现功能：数字人说完后自动恢复聆听，用户一次开启对话后可以连续沟通，直到主动点击停止结束本轮对话。
 
-处理：
+落地内容：
 
 - `TextOver` 后自动恢复 DialogEngine ASR，且 `sendsGreeting=false`，避免火山再播开场白。
 - 自动恢复聆听期间显示“正在恢复聆听”，按钮为 `stop.fill`，保留脉冲，避免误解为已停止。
 - 用户点停止时走正常停止路径，结束当前连续对话。
 
-### 4. 数字人说话打断
+### 4. 数字人说话中可打断
 
-问题：active request 期间可以打断，但腾讯 SDK 可能先发 `TextOver`，实际尾音仍在播放；此时点停止不一定能打断 provider。
+实现功能：数字人正在说话或处于 `TextOver` 后尾音窗口时，用户点击停止可以打断当前播报，但不会关闭腾讯数字人视图。
 
-处理：
+落地内容：
 
 - 新增 `shouldInterruptTencentDigitalHumanOnUserStop`，覆盖 active provider speech 和 post-TextOver 自动恢复窗口。
 - `TencentDigitalHumanCloudRuntime.interruptPlaybackIfNeeded(reason:)` 允许在 `.ready / .buffering / .speaking` 状态向腾讯 SDK 发 stop。
