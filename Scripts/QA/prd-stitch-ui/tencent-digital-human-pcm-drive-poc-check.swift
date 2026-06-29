@@ -23,6 +23,7 @@ let cloudRuntime = read("DreamJourney/Sources/Services/DigitalHuman/TencentDigit
 let realBridge = read("DreamJourney/Sources/Services/DigitalHuman/TencentVirtualmanSDKBridge.swift")
 let livePanelCheck = read("Scripts/QA/prd-stitch-ui/digital-human-live-panel-check.swift")
 let releasePackage = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
+let trueDevicePCMDriveSmoke = read("Scripts/QA/prd-stitch-ui/run-true-device-tencent-backend-pcm-drive-smoke.sh")
 
 assertContains(echo, "DJRunTencentDigitalHumanPCMDriveSmoke", "Echo should expose a QA-only Tencent PCM drive launch argument")
 assertContains(appDelegate, "DJRunTencentDigitalHumanPCMDriveSmoke", "AppDelegate should enable the digital human panel for PCM smoke")
@@ -53,5 +54,6 @@ assertContains(cloudRuntime, "case .audioOver:", "cloud runtime should complete 
 
 assertContains(livePanelCheck, "DJRunTencentDigitalHumanPCMDriveSmoke", "digital-human live-panel guard should cover PCM smoke launch argument")
 assertContains(releasePackage, "tencent-digital-human-pcm-drive-poc-check.swift", "release QA package should include PCM drive POC guard")
+assertContains(trueDevicePCMDriveSmoke, "$0 !~ /unavailable/", "true-device Tencent backend PCM smoke must not select unavailable devices from devicectl")
 
 print("tencent-digital-human-pcm-drive-poc-check passed")

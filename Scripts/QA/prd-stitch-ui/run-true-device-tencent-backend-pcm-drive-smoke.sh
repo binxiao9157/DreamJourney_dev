@@ -73,7 +73,7 @@ printf '%s\n' "$DEVICECTL_LIST" > "$DEVICECTL_DEVICES_LOG"
 if [[ -z "$DEVICE_ID" ]]; then
   ONLINE_DEVICE_LINE="$(
     printf '%s\n' "$DEVICECTL_LIST" |
-      awk '$0 ~ /(iPhone|iPad)/ && $0 ~ /available/ { print; exit }'
+      awk '$0 ~ /(iPhone|iPad)/ && $0 !~ /unavailable/ && $0 ~ /available/ { print; exit }'
   )"
   if [[ -n "$ONLINE_DEVICE_LINE" ]]; then
     DEVICE_ID="$(printf '%s\n' "$ONLINE_DEVICE_LINE" | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^[0-9A-Fa-f-]{8,}$/) { print $i; exit } }')"
