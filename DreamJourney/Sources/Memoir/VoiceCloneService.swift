@@ -169,7 +169,41 @@ final class VoiceCloneService {
         VoiceCloneProfileSnapshot(backendContract: backendContract)
     }
 
+    func preferredVoiceCloneProfile(
+        from profiles: [VoiceCloneProfileContract],
+        preferredProfileId: String? = nil
+    ) -> VoiceCloneProfileContract? {
+        let activeProfiles = profiles.filter { $0.sampleStatus != .deleted }
+        let preferredProfileId = normalizedVoiceProfileId(preferredProfileId)
+        if let preferredProfileId,
+           let readyPreferred = activeProfiles.first(where: {
+               $0.voiceProfileId == preferredProfileId && $0.sampleStatus == .ready && $0.isEnabled
+           }) {
+            return readyPreferred
+        }
+        if let readyProfile = activeProfiles.first(where: { $0.sampleStatus == .ready && $0.isEnabled }) {
+            return readyProfile
+        }
+        if let preferredProfileId,
+           let preferred = activeProfiles.first(where: { $0.voiceProfileId == preferredProfileId }) {
+            return preferred
+        }
+        return activeProfiles.first(where: { $0.sampleStatus == .ready })
+            ?? activeProfiles.first(where: { $0.sampleStatus == .pending })
+            ?? activeProfiles.first(where: { $0.sampleStatus == .failed })
+            ?? activeProfiles.first
+            ?? profiles.first
+    }
+
     func persistSnapshot(_ snapshot: VoiceCloneProfileSnapshot) {
+        let existingStatus = UserDefaults.standard.string(forKey: sampleStatusKey)
+            .flatMap(VoiceCloneSampleStatus.init(rawValue:))
+        if existingStatus == .ready,
+           let existingSpeakerId = normalizedVoiceProfileId(currentSpeakerId),
+           snapshot.voiceProfileId != existingSpeakerId,
+           snapshot.sampleStatus == .pending || snapshot.sampleStatus == .failed {
+            return
+        }
         if let speakerId = normalizedVoiceProfileId(snapshot.voiceProfileId),
            snapshot.sampleStatus != .notProvided,
            snapshot.sampleStatus != .deleted {
@@ -271,6 +305,11 @@ final class VoiceCloneService {
         UserDefaults.standard.removeObject(forKey: speakerIdKey)
     }
 
+    private func persistBackendProfileIfUsable(_ profile: VoiceCloneProfileContract) {
+        let snapshot = VoiceCloneProfileSnapshot(backendContract: profile)
+        persistSnapshot(snapshot)
+    }
+
     private func normalizedVoiceProfileId(_ value: String?) -> String? {
         guard let value else { return nil }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -355,8 +394,7 @@ final class VoiceCloneService {
             guard let self else { return }
             switch result {
             case .success(let profile):
-                self.saveSpeakerId(profile.voiceProfileId)
-                self.saveSampleStatus(profile.sampleStatus)
+                self.persistBackendProfileIfUsable(profile)
                 DDLogInfo("[VoiceClone] 后端已接收音色训练: \(profile.voiceProfileId), status=\(profile.sampleStatus.rawValue)")
                 onProfileAccepted?(VoiceCloneProfileSnapshot(backendContract: profile))
                 if profile.sampleStatus == .ready {
@@ -392,7 +430,7 @@ final class VoiceCloneService {
         DreamJourneyBackendClient.shared.refreshVoiceCloneProfile(userId: userId, profileId: sid) { [weak self] result in
             switch result {
             case .success(let profile):
-                self?.saveSampleStatus(profile.sampleStatus)
+                self?.persistBackendProfileIfUsable(profile)
                 DDLogInfo("[VoiceClone] 后端查询状态: speakerId=\(sid), status=\(profile.sampleStatus.rawValue)")
                 completion(.success(Self.cloneStatus(from: profile.sampleStatus)))
             case .failure(let error):

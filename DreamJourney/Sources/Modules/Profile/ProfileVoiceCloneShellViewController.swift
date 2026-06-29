@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPickerDelegate {
     private var snapshot: VoiceCloneProfileSnapshot
+    private var voiceCloneRuntimeCapability = VoiceCloneRuntimeCapability.localFallback(isBackendConfigured: false)
     private let scrollView = UIScrollView()
     private let contentStack = UIStackView()
     private let authorizationSwitch = UISwitch()
@@ -11,6 +12,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     private weak var statusCaptionLabel: UILabel?
     private weak var sampleStatusValueLabel: UILabel?
     private weak var voiceAvailabilityLabel: UILabel?
+    private weak var synthesisStatusValueLabel: UILabel?
     private weak var authorizationHintLabel: UILabel?
     private weak var feedbackLabel: UILabel?
     private weak var submitButton: UIButton?
@@ -39,6 +41,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         view.accessibilityIdentifier = "profile-voice-clone-shell"
         setupLayout()
         applySnapshot(snapshot, feedback: "先确认授权，再选择本人音频样本提交训练。")
+        loadVoiceCloneRuntimeCapability()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -187,7 +190,15 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
             self?.voiceAvailabilityLabel = label
         }
 
-        [statusTitle, statusCaption, sampleRow, availabilityRow].forEach(statusStack.addArrangedSubview)
+        let synthesisRow = makeInfoRow(
+            title: "回响语音",
+            value: voiceSynthesisStatusText(for: snapshot),
+            accessibilityIdentifier: "profileVoiceCloneSynthesisStatusValue"
+        ) { [weak self] label in
+            self?.synthesisStatusValueLabel = label
+        }
+
+        [statusTitle, statusCaption, sampleRow, availabilityRow, synthesisRow].forEach(statusStack.addArrangedSubview)
 
         card.addSubview(stack)
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -449,9 +460,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
                 switch result {
                 case .success(let profiles):
                     let currentProfileId = self.snapshot.voiceProfileId
-                    let selectedProfile = profiles.first(where: { $0.voiceProfileId == currentProfileId })
-                        ?? profiles.first(where: { $0.sampleStatus != .deleted })
-                        ?? profiles.first
+                    let selectedProfile = VoiceCloneService.shared.preferredVoiceCloneProfile(from: profiles, preferredProfileId: currentProfileId)
                     if let selectedProfile {
                         self.applySnapshot(VoiceCloneProfileSnapshot(backendContract: selectedProfile), feedback: feedback)
                     } else {
@@ -464,6 +473,23 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         }
     }
 
+    private func loadVoiceCloneRuntimeCapability() {
+        guard DreamJourneyBackendClient.shared.isVoiceCloneProfileConfigured else {
+            synthesisStatusValueLabel?.text = voiceSynthesisStatusText(for: snapshot)
+            return
+        }
+
+        DreamJourneyBackendClient.shared.fetchVoiceCloneRuntimeCapability { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if case .success(let capability) = result {
+                    self.voiceCloneRuntimeCapability = capability
+                }
+                self.synthesisStatusValueLabel?.text = self.voiceSynthesisStatusText(for: self.snapshot)
+            }
+        }
+    }
+
     private func applySnapshot(_ snapshot: VoiceCloneProfileSnapshot, feedback: String? = nil) {
         VoiceCloneService.shared.persistSnapshot(snapshot)
         self.snapshot = snapshot
@@ -471,6 +497,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         statusCaptionLabel?.text = voiceStatusCaption(for: snapshot)
         sampleStatusValueLabel?.text = snapshot.sampleStatus.displayText
         voiceAvailabilityLabel?.text = voiceAvailabilityText(for: snapshot)
+        synthesisStatusValueLabel?.text = voiceSynthesisStatusText(for: snapshot)
         if let feedback {
             feedbackLabel?.text = feedback
         }
@@ -571,6 +598,30 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
             return "已删除"
         case .notProvided:
             return "待创建"
+        }
+    }
+
+    private func voiceSynthesisStatusText(for snapshot: VoiceCloneProfileSnapshot) -> String {
+        switch snapshot.sampleStatus {
+        case .ready:
+            if voiceCloneRuntimeCapability.canSynthesize {
+                if voiceCloneRuntimeCapability.voiceClone2TrialReady,
+                   voiceCloneRuntimeCapability.tencentAudioDrive.supported {
+                    return "音色已就绪，回响可使用复刻语音"
+                }
+                return "音色已就绪，回响可使用复刻语音"
+            }
+            return "音色已就绪，合成服务待配置"
+        case .pending:
+            return "训练完成后可用于回响"
+        case .failed:
+            return "训练失败，重新提交样本后可用"
+        case .disabled:
+            return "音色已暂停，回响会使用普通语音"
+        case .deleted:
+            return "音色已删除，回响会使用普通语音"
+        case .notProvided:
+            return "创建音色后可用于回响"
         }
     }
 

@@ -55,6 +55,7 @@ for required in [
     "case .voiceClone:",
     "showVoiceCloneShell()",
     "ProfileVoiceCloneShellViewController",
+    "VoiceCloneService.shared.preferredVoiceCloneProfile(from: profiles)",
 ] {
     assertContains(profile, required, "profile settings should gate hidden voice clone shell \(required)")
 }
@@ -78,6 +79,9 @@ for required in [
     "deleteVoiceProfileRemote(",
     "DreamJourneyBackendClient.shared.disableVoiceCloneProfile",
     "DreamJourneyBackendClient.shared.deleteVoiceCloneProfile",
+    "preferredVoiceCloneProfile(",
+    "persistBackendProfileIfUsable(",
+    "existingStatus == .ready",
 ] {
     assertContains(voiceService, required, "voice clone service should expose public backend-backed contract \(required)")
 }
@@ -110,6 +114,7 @@ for required in [
     "onProfileAccepted",
     "VoiceCloneService.shared.disableVoiceProfileRemote",
     "VoiceCloneService.shared.deleteVoiceProfileRemote",
+    "VoiceCloneService.shared.preferredVoiceCloneProfile(from: profiles, preferredProfileId: currentProfileId)",
     "profile-voice-clone-shell",
 ] {
     assertContains(shell, required, "voice clone shell should render public basic feature surface \(required)")

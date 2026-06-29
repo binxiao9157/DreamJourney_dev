@@ -146,7 +146,8 @@ private extension AppDelegate {
             print("[UI_QA] Archive remote fetch enabled")
         }
         if arguments.contains("DJShowDigitalHumanLivePanel")
-            || arguments.contains("DJRunDigitalHumanLivePanelSmoke") {
+            || arguments.contains("DJRunDigitalHumanLivePanelSmoke")
+            || arguments.contains("DJRunTencentBackendPCMDriveMockSmoke") {
             FeatureFlagService.shared.enableForCurrentLaunch(.digitalHumanLivePanel)
             print("[UI_QA] Digital human live panel enabled")
         }
@@ -162,6 +163,23 @@ private extension AppDelegate {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.runDigitalHumanRuntimeStubSmoke()
+            }
+        } else if arguments.contains("DJRunVoiceCloneProfileSelectionSmoke") {
+            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+            FeatureFlagService.shared.resetToDefaults()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.runVoiceCloneProfileSelectionSmoke()
+            }
+        } else if arguments.contains("DJRunVoiceCloneSynthesisRuntimeSmoke") {
+            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+            FeatureFlagService.shared.resetToDefaults()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.runVoiceCloneSynthesisRuntimeSmoke()
+            }
+        } else if arguments.contains("DJRunTencentBackendPCMDriveMockSmoke") {
+            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.runTencentBackendPCMDriveMockSmoke()
             }
         } else if arguments.contains("DJRunProfileCareBackendFailureRetrySmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
@@ -253,6 +271,11 @@ private extension AppDelegate {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.showVoiceSDKReadinessPreview()
+            }
+        } else if arguments.contains("DJShowVoiceCloneStatusFeedbackPreview") {
+            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.showVoiceCloneStatusFeedbackPreview()
             }
         } else if arguments.contains("DJShowEchoVoiceStatePreview") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
@@ -919,6 +942,245 @@ private extension AppDelegate {
             "personaScope": "family",
             "digitalHumanId": "digital_human_uiqa_star",
         ])
+    }
+
+    func runVoiceCloneProfileSelectionSmoke() {
+        let readyProfile = makeUIQAVoiceCloneProfile(
+            voiceProfileId: "S_ready_uiqa",
+            sampleStatus: .ready,
+            providerStatus: "2",
+            providerMessage: "ready",
+            realCloneProviderReady: true,
+            isEnabled: true
+        )
+        let pendingProfile = makeUIQAVoiceCloneProfile(
+            voiceProfileId: "S_pending_uiqa",
+            sampleStatus: .pending,
+            providerStatus: "pending",
+            providerMessage: "training",
+            realCloneProviderReady: false,
+            isEnabled: false
+        )
+        let deletedProfile = makeUIQAVoiceCloneProfile(
+            voiceProfileId: "S_deleted_uiqa",
+            sampleStatus: .deleted,
+            providerStatus: "deleted",
+            providerMessage: "deleted",
+            realCloneProviderReady: false,
+            isEnabled: false
+        )
+
+        let profiles = [pendingProfile, deletedProfile, readyProfile]
+        let selectedProfile = VoiceCloneService.shared.preferredVoiceCloneProfile(from: profiles)
+        let selectedWithPendingPreferred = VoiceCloneService.shared.preferredVoiceCloneProfile(from: profiles, preferredProfileId: pendingProfile.voiceProfileId)
+
+        VoiceCloneService.shared.deleteVoiceProfile(profileId: readyProfile.voiceProfileId)
+        VoiceCloneService.shared.persistSnapshot(VoiceCloneProfileSnapshot(backendContract: readyProfile))
+        let usableBeforePending = VoiceCloneService.shared.currentUsableSpeakerId
+        VoiceCloneService.shared.persistSnapshot(VoiceCloneProfileSnapshot(backendContract: pendingProfile))
+        let usableAfterPending = VoiceCloneService.shared.currentUsableSpeakerId
+
+        let readyPreferredOverPending = selectedProfile?.voiceProfileId == readyProfile.voiceProfileId
+        let readyPreferredOverPendingPreferred = selectedWithPendingPreferred?.voiceProfileId == readyProfile.voiceProfileId
+        let pendingDidNotOverwriteReady = usableBeforePending == readyProfile.voiceProfileId
+            && usableAfterPending == readyProfile.voiceProfileId
+        let deletedIgnored = selectedProfile?.voiceProfileId != deletedProfile.voiceProfileId
+        let completed = readyPreferredOverPending
+            && readyPreferredOverPendingPreferred
+            && pendingDidNotOverwriteReady
+            && deletedIgnored
+
+        writeVoiceCloneProfileSelectionSmokeResult([
+            "completed": completed,
+            "readyVoiceProfileId": readyProfile.voiceProfileId,
+            "pendingVoiceProfileId": pendingProfile.voiceProfileId,
+            "deletedVoiceProfileId": deletedProfile.voiceProfileId,
+            "selectedVoiceProfileId": selectedProfile?.voiceProfileId ?? "missing",
+            "selectedWithPendingPreferredVoiceProfileId": selectedWithPendingPreferred?.voiceProfileId ?? "missing",
+            "usableBeforePending": usableBeforePending ?? "missing",
+            "usableAfterPending": usableAfterPending ?? "missing",
+            "readyPreferredOverPending": readyPreferredOverPending,
+            "readyPreferredOverPendingPreferred": readyPreferredOverPendingPreferred,
+            "pendingDidNotOverwriteReady": pendingDidNotOverwriteReady,
+            "deletedIgnored": deletedIgnored,
+        ])
+        print(
+            "[UI_QA] VoiceCloneProfileSelectionSmoke completed " +
+            "selected=\(selectedProfile?.voiceProfileId ?? "missing") " +
+            "selectedWithPendingPreferred=\(selectedWithPendingPreferred?.voiceProfileId ?? "missing") " +
+            "usableAfterPending=\(usableAfterPending ?? "missing")"
+        )
+    }
+
+    func makeUIQAVoiceCloneProfile(
+        voiceProfileId: String,
+        sampleStatus: VoiceCloneSampleStatus,
+        providerStatus: String,
+        providerMessage: String,
+        realCloneProviderReady: Bool,
+        isEnabled: Bool
+    ) -> VoiceCloneProfileContract {
+        guard let profile = VoiceCloneProfileContract(json: [
+            "voiceProfileId": voiceProfileId,
+            "sampleStatus": sampleStatus.rawValue,
+            "authorizationConfirmed": true,
+            "authorizationVersion": "voice-clone-consent-v1",
+            "authorizationCopy": "UIQA 声音复刻授权合同，仅用于验证音色选择策略。",
+            "providerMode": "volcengineVoiceClone2",
+            "providerStatus": providerStatus,
+            "providerMessage": providerMessage,
+            "realCloneProviderReady": realCloneProviderReady,
+            "qualityAcceptanceRequired": true,
+            "isEnabled": isEnabled,
+            "defaultReleaseVisible": true,
+            "contractVersion": 2,
+            "disableContract": "后端禁用 voiceProfileId 的合成权限。",
+            "deleteContract": "后端删除样本、训练产物和授权记录。",
+            "personaScope": "personal",
+            "digitalHumanId": "digital_human_uiqa_self",
+        ]) else {
+            preconditionFailure("Unable to build UIQA voice clone profile \(voiceProfileId)")
+        }
+        return profile
+    }
+
+    func runVoiceCloneSynthesisRuntimeSmoke() {
+        let voiceProfileId = uiqaArgumentValue(prefix: "DJVoiceCloneProbeProfileId=") ?? "S_PhXlHqB52"
+        let userId = UserManager.shared.currentUser?.id ?? "voice_clone_ios_uiqa"
+
+        DreamJourneyBackendClient.shared.fetchVoiceCloneRuntimeCapability { [weak self] runtimeResult in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch runtimeResult {
+                case .failure(let error):
+                    self.writeVoiceCloneSynthesisRuntimeSmokeResult([
+                        "completed": false,
+                        "failureReason": "runtimeFetchFailed",
+                        "error": error.localizedDescription,
+                        "voiceProfileId": voiceProfileId,
+                    ])
+                    print("[UI_QA] VoiceCloneSynthesisRuntimeSmoke failed reason=runtimeFetchFailed error=\(error.localizedDescription)")
+                case .success(let capability):
+                    guard capability.canSynthesize else {
+                        self.writeVoiceCloneSynthesisRuntimeSmokeResult([
+                            "completed": false,
+                            "failureReason": "runtimeSynthesisUnavailable",
+                            "voiceProfileId": voiceProfileId,
+                            "provider": capability.provider,
+                            "synthesisProviderReady": capability.synthesisProviderReady,
+                            "voiceClone2TrialReady": capability.voiceClone2TrialReady,
+                            "tencentAudioDriveSupported": capability.tencentAudioDrive.supported,
+                        ])
+                        print("[UI_QA] VoiceCloneSynthesisRuntimeSmoke failed reason=runtimeSynthesisUnavailable")
+                        return
+                    }
+                    guard capability.tencentAudioDrive.supported else {
+                        self.writeVoiceCloneSynthesisRuntimeSmokeResult([
+                            "completed": false,
+                            "failureReason": "tencentAudioDriveUnavailable",
+                            "voiceProfileId": voiceProfileId,
+                            "provider": capability.provider,
+                            "synthesisProviderReady": capability.synthesisProviderReady,
+                            "voiceClone2TrialReady": capability.voiceClone2TrialReady,
+                            "tencentAudioDriveSupported": capability.tencentAudioDrive.supported,
+                        ])
+                        print("[UI_QA] VoiceCloneSynthesisRuntimeSmoke failed reason=tencentAudioDriveUnavailable")
+                        return
+                    }
+
+                    DreamJourneyBackendClient.shared.requestVoiceCloneSynthesis(
+                        userId: userId,
+                        voiceProfileId: voiceProfileId,
+                        text: "你好，我在这里。",
+                        audioFormat: "wav",
+                        sampleRate: capability.tencentAudioDrive.sampleRate,
+                        speechRate: -10,
+                        loudnessRate: 10,
+                        outputMode: capability.tencentAudioDrive.requestOutputMode
+                    ) { [weak self] synthesisResult in
+                        DispatchQueue.main.async {
+                            guard let self else { return }
+                            switch synthesisResult {
+                            case .failure(let error):
+                                self.writeVoiceCloneSynthesisRuntimeSmokeResult([
+                                    "completed": false,
+                                    "failureReason": "synthesisFailed",
+                                    "error": error.localizedDescription,
+                                    "voiceProfileId": voiceProfileId,
+                                    "provider": capability.provider,
+                                    "synthesisProviderReady": capability.synthesisProviderReady,
+                                    "voiceClone2TrialReady": capability.voiceClone2TrialReady,
+                                    "tencentAudioDriveSupported": capability.tencentAudioDrive.supported,
+                                ])
+                                print("[UI_QA] VoiceCloneSynthesisRuntimeSmoke failed reason=synthesisFailed error=\(error.localizedDescription)")
+                            case .success(let synthesis):
+                                let pcmData = synthesis.tencentAudioDrivePCMData
+                                let pcmByteCount = pcmData?.count ?? 0
+                                let riffHeader = Data([0x52, 0x49, 0x46, 0x46])
+                                let isRawPCM = pcmData.map { !$0.starts(with: riffHeader) } ?? false
+                                let pcmCompatible = synthesis.isTencentAudioDrivePCMCompatible
+                                    && pcmByteCount == synthesis.byteCount
+                                    && pcmByteCount > 0
+                                    && isRawPCM
+                                self.writeVoiceCloneSynthesisRuntimeSmokeResult([
+                                    "completed": pcmCompatible,
+                                    "failureReason": pcmCompatible ? "" : "pcmContractMismatch",
+                                    "voiceProfileId": synthesis.voiceProfileId,
+                                    "provider": capability.provider,
+                                    "providerMode": synthesis.providerMode,
+                                    "synthesisProviderReady": capability.synthesisProviderReady,
+                                    "voiceClone2TrialReady": capability.voiceClone2TrialReady,
+                                    "tencentAudioDriveSupported": capability.tencentAudioDrive.supported,
+                                    "outputMode": synthesis.outputMode ?? "",
+                                    "audioFormat": synthesis.audioFormat,
+                                    "sampleRate": synthesis.sampleRate ?? 0,
+                                    "bitsPerSample": synthesis.bitsPerSample ?? 0,
+                                    "channelCount": synthesis.channelCount ?? 0,
+                                    "byteCount": synthesis.byteCount,
+                                    "decodedByteCount": pcmByteCount,
+                                    "pcmCompatible": pcmCompatible,
+                                    "audioDataOmitted": true,
+                                ])
+                                print(
+                                    "[UI_QA] VoiceCloneSynthesisRuntimeSmoke completed " +
+                                    "voiceProfileId=\(synthesis.voiceProfileId) " +
+                                    "pcmCompatible=\(pcmCompatible) bytes=\(synthesis.byteCount)"
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    func showVoiceCloneStatusFeedbackPreview() {
+        let readyProfile = makeUIQAVoiceCloneProfile(
+            voiceProfileId: "S_ready_preview",
+            sampleStatus: .ready,
+            providerStatus: "2",
+            providerMessage: "ready",
+            realCloneProviderReady: true,
+            isEnabled: true
+        )
+        let snapshot = VoiceCloneService.shared.voiceCloneShellSnapshot(from: readyProfile)
+        let viewController = ProfileVoiceCloneShellViewController(snapshot: snapshot)
+
+        guard let tabBarController = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController as? WarmTabBarController,
+              let viewControllers = tabBarController.viewControllers,
+              viewControllers.indices.contains(2),
+              let profileNavigationController = viewControllers[2] as? UINavigationController else {
+            return
+        }
+
+        tabBarController.selectedIndex = 2
+        profileNavigationController.popToRootViewController(animated: false)
+        profileNavigationController.pushViewController(viewController, animated: false)
+        print("[UI_QA] VoiceCloneStatusFeedbackPreview shown")
     }
 
     func selectProfileTabForFamilyPersonaSmoke() -> Bool {
@@ -2265,6 +2527,53 @@ private extension AppDelegate {
         }
     }
 
+    func runTencentBackendPCMDriveMockSmoke(retryCount: Int = 0) {
+        guard let tabBarController = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController as? WarmTabBarController else {
+            guard retryCount < 20 else {
+                print("[UI_QA] TencentBackendPCMDriveMockSmoke failed reason=missingRootTab")
+                writeTencentBackendPCMDriveMockSmokeResult([
+                    "completed": false,
+                    "failureReason": "missingRootTab"
+                ])
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                self?.runTencentBackendPCMDriveMockSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+
+        guard let viewControllers = tabBarController.viewControllers,
+              viewControllers.count > 1,
+              let echoNavigationController = viewControllers[1] as? UINavigationController,
+              let echoViewController = echoNavigationController.viewControllers.first as? EchoViewController else {
+            print("[UI_QA] TencentBackendPCMDriveMockSmoke failed reason=missingEcho")
+            writeTencentBackendPCMDriveMockSmokeResult([
+                "completed": false,
+                "failureReason": "missingEcho"
+            ])
+            return
+        }
+
+        tabBarController.selectedIndex = 1
+        let voiceProfileId = uiqaArgumentValue(prefix: "DJTencentBackendPCMDriveMockVoiceProfileId=") ?? "S_PhXlHqB52"
+        echoViewController.runUIQATencentBackendPCMDriveMockSmoke(voiceProfileId: voiceProfileId) { [weak self] payload in
+            var result = payload
+            result["selectedTabIndex"] = tabBarController.selectedIndex
+            self?.writeTencentBackendPCMDriveMockSmokeResult(result)
+            print(
+                "[UI_QA] TencentBackendPCMDriveMockSmoke completed " +
+                "completed=\(result["completed"] as? Bool == true) " +
+                "chunks=\(result["pcmChunkCount"] as? Int ?? 0) " +
+                "final=\(result["finalChunkObserved"] as? Bool == true)"
+            )
+        }
+    }
+
     func runBackendEnvSmoke(retryCount: Int = 0) {
         guard let tabBarController = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
@@ -2879,6 +3188,51 @@ private extension AppDelegate {
             try data.write(to: resultURL, options: [.atomic])
         } catch {
             print("[UI_QA] DigitalHumanRuntimeStubSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    func writeTencentBackendPCMDriveMockSmokeResult(_ result: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
+              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("[UI_QA] TencentBackendPCMDriveMockSmoke failed reason=resultEncoding")
+            return
+        }
+
+        let resultURL = documentsURL.appendingPathComponent("tencent-backend-pcm-drive-mock-smoke-result.json")
+        do {
+            try data.write(to: resultURL, options: [.atomic])
+        } catch {
+            print("[UI_QA] TencentBackendPCMDriveMockSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    func writeVoiceCloneProfileSelectionSmokeResult(_ result: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
+              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("[UI_QA] VoiceCloneProfileSelectionSmoke failed reason=resultEncoding")
+            return
+        }
+
+        let resultURL = documentsURL.appendingPathComponent("voice-clone-profile-selection-smoke-result.json")
+        do {
+            try data.write(to: resultURL, options: [.atomic])
+        } catch {
+            print("[UI_QA] VoiceCloneProfileSelectionSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    func writeVoiceCloneSynthesisRuntimeSmokeResult(_ result: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
+              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("[UI_QA] VoiceCloneSynthesisRuntimeSmoke failed reason=resultEncoding")
+            return
+        }
+
+        let resultURL = documentsURL.appendingPathComponent("voice-clone-synthesis-runtime-smoke-result.json")
+        do {
+            try data.write(to: resultURL, options: [.atomic])
+        } catch {
+            print("[UI_QA] VoiceCloneSynthesisRuntimeSmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
     }
 

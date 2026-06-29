@@ -243,6 +243,7 @@ final class EchoViewController: UIViewController {
             || arguments.contains("DJRunTencentDigitalHumanTextDriveSmoke")
             || arguments.contains("DJRunTencentDigitalHumanPCMDriveSmoke")
             || arguments.contains("DJRunTencentDigitalHumanBackendPCMDriveSmoke")
+            || arguments.contains("DJRunTencentBackendPCMDriveMockSmoke")
     }
 
     private var shouldRunTencentDigitalHumanTextDriveSmoke: Bool {
@@ -257,6 +258,10 @@ final class EchoViewController: UIViewController {
         ProcessInfo.processInfo.arguments.contains("DJRunTencentDigitalHumanBackendPCMDriveSmoke")
     }
 
+    private var shouldRunTencentBackendPCMDriveMockSmoke: Bool {
+        ProcessInfo.processInfo.arguments.contains("DJRunTencentBackendPCMDriveMockSmoke")
+    }
+
     private var shouldRunTencentDigitalHumanPCMDriveStopProbe: Bool {
         ProcessInfo.processInfo.arguments.contains("DJRunTencentDigitalHumanPCMDriveStopProbe")
     }
@@ -269,6 +274,12 @@ final class EchoViewController: UIViewController {
     private var tencentBackendPCMDriveText: String {
         launchArgumentValue(prefix: "DJTencentBackendPCMDriveText=")
             ?? "腾讯数智人复刻声音测试：如果你能听见这句话，并且口型同步，说明后端 PCM 音频驱动链路已经接通。"
+    }
+
+    private var tencentBackendPCMDriveMockVoiceProfileId: String {
+        launchArgumentValue(prefix: "DJTencentBackendPCMDriveMockVoiceProfileId=")
+            ?? tencentBackendPCMDriveVoiceProfileId
+            ?? "S_PhXlHqB52"
     }
 
     private func launchArgumentValue(prefix: String) -> String? {
@@ -763,7 +774,8 @@ final class EchoViewController: UIViewController {
 
     private var tencentDigitalHumanProviderCanOwnAudio: Bool {
         guard let digitalHumanRuntime,
-              digitalHumanRuntime is TencentDigitalHumanCloudRuntime,
+              digitalHumanRuntime is TencentDigitalHumanCloudRuntime
+                || (shouldRunTencentBackendPCMDriveMockSmoke && digitalHumanRuntime is TencentDigitalHumanRuntimeStub),
               digitalHumanRuntime.profile != nil else {
             return false
         }
@@ -778,7 +790,8 @@ final class EchoViewController: UIViewController {
     private var tencentDigitalHumanAudioRouteReserved: Bool {
         guard shouldShowDigitalHumanLivePanel,
               let digitalHumanRuntime,
-              digitalHumanRuntime is TencentDigitalHumanCloudRuntime,
+              digitalHumanRuntime is TencentDigitalHumanCloudRuntime
+                || (shouldRunTencentBackendPCMDriveMockSmoke && digitalHumanRuntime is TencentDigitalHumanRuntimeStub),
               digitalHumanRuntime.profile != nil,
               tencentCloudRenderProvidesAudibleTTS else {
             return false
@@ -841,6 +854,15 @@ final class EchoViewController: UIViewController {
             return
         }
         hasRequestedCloudDigitalHumanRuntime = true
+
+        guard DreamJourneyBackendClient.shared.isDigitalHumanSessionConfigured else {
+            digitalHumanStatusDetailLabel.text = "数字人暂不可用，已回到普通回响"
+            digitalHumanLivePanelView?.removeHostedProviderView(showFallbackMessage: "数字人暂不可用")
+            applyEchoAudioRoutePolicy()
+            print("[TencentDigitalHuman] skipped cloud runtime; backend not configured")
+            return
+        }
+
         digitalHumanStatusDetailLabel.text = "正在连接腾讯数智人"
         digitalHumanLivePanelView?.showProviderPlaceholder("正在连接腾讯数智人")
 
@@ -1623,7 +1645,9 @@ final class EchoViewController: UIViewController {
             if shouldRunTencentDigitalHumanPCMDriveStopProbe {
                 DispatchQueue.main.asyncAfter(deadline: .now() + Self.tencentDigitalHumanPCMDriveStopProbeDelay) { [weak self] in
                     guard let self,
-                          self.shouldRunTencentDigitalHumanPCMDriveSmoke,
+                          self.shouldRunTencentDigitalHumanPCMDriveSmoke
+                            || self.shouldRunTencentDigitalHumanBackendPCMDriveSmoke
+                            || self.shouldRunTencentBackendPCMDriveMockSmoke,
                           self.digitalHumanConversation.activeRequestID == requestID else {
                         return
                     }
@@ -2120,6 +2144,174 @@ extension EchoViewController {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.45) {
             finishWhenRealAssetReady(attemptsRemaining: 14)
+        }
+    }
+
+    func runUIQATencentBackendPCMDriveMockSmoke(
+        voiceProfileId: String,
+        completion: @escaping ([String: Any]) -> Void
+    ) {
+        let stub = TencentDigitalHumanRuntimeStub(contentView: UIView())
+        let profile = DigitalHumanProfile(
+            provider: "tencent",
+            personaId: "uiqa_pcm_drive",
+            displayName: "UIQA 腾讯数智人",
+            lifecycleMode: .sunlight,
+            driveMode: "pcmAudio",
+            alphaEnabled: true,
+            smartActionEnabled: false,
+            assetKey: "uiqa-tencent-backend-pcm"
+        )
+
+        do {
+            try stub.configure(profile)
+            try stub.open()
+        } catch {
+            completion([
+                "completed": false,
+                "failureReason": "stubRuntimeSetupFailed",
+                "error": error.localizedDescription,
+            ])
+            return
+        }
+
+        digitalHumanRuntime = stub
+        hasRequestedCloudDigitalHumanRuntime = true
+        digitalHumanLivePanelView?.hostProviderView(stub.contentView)
+        applyEchoAudioRoutePolicy()
+
+        DreamJourneyBackendClient.shared.fetchVoiceCloneRuntimeCapability { [weak self] capabilityResult in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch capabilityResult {
+                case .failure(let error):
+                    completion([
+                        "completed": false,
+                        "failureReason": "runtimeFetchFailed",
+                        "error": error.localizedDescription,
+                        "voiceProfileId": voiceProfileId,
+                    ])
+                case .success(let capability):
+                    guard capability.canSynthesize,
+                          capability.tencentAudioDrive.supported else {
+                        completion([
+                            "completed": false,
+                            "failureReason": "runtimeCapabilityUnavailable",
+                            "voiceProfileId": voiceProfileId,
+                            "synthesisProviderReady": capability.synthesisProviderReady,
+                            "tencentAudioDriveSupported": capability.tencentAudioDrive.supported,
+                        ])
+                        return
+                    }
+
+                    let text = "UIQA 腾讯数智人 PCM 模拟链路：请验证后端复刻音频能被切块发送。"
+                    let userId = UserManager.shared.currentUser?.id ?? "uiqa_tencent_backend_pcm_mock"
+                    DreamJourneyBackendClient.shared.requestVoiceCloneSynthesis(
+                        userId: userId,
+                        voiceProfileId: voiceProfileId,
+                        text: text,
+                        audioFormat: "wav",
+                        sampleRate: capability.tencentAudioDrive.sampleRate,
+                        speechRate: -10,
+                        loudnessRate: 10,
+                        outputMode: capability.tencentAudioDrive.requestOutputMode
+                    ) { [weak self] synthesisResult in
+                        DispatchQueue.main.async {
+                            guard let self else { return }
+                            switch synthesisResult {
+                            case .failure(let error):
+                                completion([
+                                    "completed": false,
+                                    "failureReason": "synthesisFailed",
+                                    "error": error.localizedDescription,
+                                    "voiceProfileId": voiceProfileId,
+                                ])
+                            case .success(let synthesis):
+                                guard let signal = self.makeTencentDigitalHumanPCMDriveSignal(from: synthesis) else {
+                                    completion([
+                                        "completed": false,
+                                        "failureReason": "pcmContractMismatch",
+                                        "voiceProfileId": voiceProfileId,
+                                        "audioFormat": synthesis.audioFormat,
+                                        "sampleRate": synthesis.sampleRate ?? 0,
+                                        "bitsPerSample": synthesis.bitsPerSample ?? 0,
+                                        "channelCount": synthesis.channelCount ?? 0,
+                                        "byteCount": synthesis.byteCount,
+                                    ])
+                                    return
+                                }
+
+                                let expectedChunkCount = signal.chunkCount + 1
+                                let started = self.sendTencentAudioDriveSynthesisToDigitalHumanRuntime(
+                                    synthesis,
+                                    source: "uiqaTencentBackendPCMDriveMockSmoke",
+                                    replyText: text
+                                )
+                                guard started else {
+                                    completion([
+                                        "completed": false,
+                                        "failureReason": "sendPCMDriveSignalRejected",
+                                        "voiceProfileId": voiceProfileId,
+                                        "expectedChunkCount": expectedChunkCount,
+                                    ])
+                                    return
+                                }
+
+                                let wait = (Double(expectedChunkCount) * Self.tencentDigitalHumanPCMDriveChunkDuration) + 0.55
+                                DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self, weak stub] in
+                                    guard let self,
+                                          let stub else {
+                                        completion([
+                                            "completed": false,
+                                            "failureReason": "stubReleased",
+                                        ])
+                                        return
+                                    }
+
+                                    let records = stub.sentPCMChunks
+                                    let sequences = records.map(\.sequence)
+                                    let expectedSequences = records.isEmpty ? [] : Array(1...records.count)
+                                    let sequenceIsContiguous = !records.isEmpty && sequences == expectedSequences
+                                    let finalChunkObserved = records.last?.isFinal == true
+                                    let nonFinalByteCount = records
+                                        .filter { !$0.isFinal }
+                                        .map(\.byteCount)
+                                        .reduce(0, +)
+
+                                    self.interruptDigitalHumanPlayback(reason: "backendPCMDriveMockStopProbe")
+                                    let interruptProbeCompleted = stub.interruptCount > 0
+                                        && self.digitalHumanConversation.activeRequestID == nil
+
+                                    completion([
+                                        "completed": started
+                                            && synthesis.isTencentAudioDrivePCMCompatible
+                                            && records.count == expectedChunkCount
+                                            && sequenceIsContiguous
+                                            && finalChunkObserved
+                                            && nonFinalByteCount == synthesis.byteCount
+                                            && interruptProbeCompleted,
+                                        "voiceProfileId": synthesis.voiceProfileId,
+                                        "providerMode": synthesis.providerMode,
+                                        "outputMode": synthesis.outputMode ?? "",
+                                        "audioFormat": synthesis.audioFormat,
+                                        "byteCount": synthesis.byteCount,
+                                        "decodedByteCount": synthesis.tencentAudioDrivePCMData?.count ?? 0,
+                                        "pcmCompatible": synthesis.isTencentAudioDrivePCMCompatible,
+                                        "expectedChunkCount": expectedChunkCount,
+                                        "pcmChunkCount": records.count,
+                                        "sentPCMByteCount": nonFinalByteCount,
+                                        "finalChunkObserved": finalChunkObserved,
+                                        "sequenceIsContiguous": sequenceIsContiguous,
+                                        "interruptCount": stub.interruptCount,
+                                        "interruptProbeCompleted": interruptProbeCompleted,
+                                        "audioDataOmitted": true,
+                                    ])
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 

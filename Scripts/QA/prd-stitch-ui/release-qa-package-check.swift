@@ -139,6 +139,8 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-28-ios-stability-hardening.md",
     "docs/superpowers/status/2026-06-29-tencent-digital-human-pcm-drive-poc.md",
     "docs/superpowers/status/2026-06-29-tencent-audio-drive-backend-pcm-contract.md",
+    "docs/superpowers/status/2026-06-29-backend-voice-clone-deployed-smoke.md",
+    "docs/superpowers/status/2026-06-29-tencent-backend-pcm-drive-mock-smoke.md",
 ]
 
 for doc in requiredDocs {
@@ -184,6 +186,8 @@ assertContains(releaseRegression, "RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE", "r
 assertContains(releaseRegression, "RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE", "release regression should expose deployed time-letter lifecycle smoke")
 assertContains(releaseRegression, "RUN_DIGITAL_HUMAN_TTS_VISEME_GATE", "release regression should expose optional digital-human TTS/viseme gate")
 assertContains(releaseRegression, "run-digital-human-tts-viseme-gate.sh", "release regression should call digital-human TTS/viseme gate")
+assertContains(releaseRegression, "RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE", "release regression should expose optional Tencent backend PCM-drive mock smoke")
+assertContains(releaseRegression, "run-tencent-backend-pcm-drive-mock-smoke.sh", "release regression should call Tencent backend PCM-drive mock smoke")
 assertContains(releaseRegression, "RUN_P0_PROFILE_CARE_REGRESSION", "release regression should expose public MVP Profile care P0 gate")
 assertContains(releaseRegression, "RUN_P0_PROFILE_CARE_REGRESSION forces RUN_PROFILE_CARE_STATE_SMOKE and RUN_PROFILE_CARE_BACKEND_STATE_SMOKE", "Profile care P0 gate should force local and deployed backend care smokes")
 assertContains(releaseRegression, "BACKEND_API_TOKEN= BACKEND_BASE_URL= ./scripts/verify_backend.sh", "backend verify should not inherit deployed backend credentials")
@@ -225,6 +229,7 @@ for handoffGuard in [
     "voice-clone-backend-contract-check.swift",
     "family-digital-human-hidden-contract-check.swift",
     "backend-family-voice-contract-smoke-check.swift",
+    "backend-voice-clone-deployed-smoke-check.swift",
     "voice-synthesis-viseme-contract-check.swift",
     "voice-synthesis-tencent-audio-drive-contract-check.swift",
     "memoir-tts-cache-contract-check.swift",
@@ -367,6 +372,17 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/ios-family-voice-hidden-uiqa-smoke-check.swift",
     "Scripts/QA/prd-stitch-ui/backend-family-voice-contract-smoke.py",
     "Scripts/QA/prd-stitch-ui/run-backend-family-voice-contract-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/backend-voice-clone-deployed-smoke-check.swift",
+    "Scripts/QA/prd-stitch-ui/backend-voice-clone-deployed-smoke.py",
+    "Scripts/QA/prd-stitch-ui/run-backend-voice-clone-deployed-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/voice-clone-profile-selection-smoke-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-voice-clone-profile-selection-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/voice-clone-synthesis-runtime-smoke-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-voice-clone-synthesis-runtime-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/tencent-backend-pcm-drive-mock-smoke-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-tencent-backend-pcm-drive-mock-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/voice-clone-status-feedback-check.swift",
+    "Scripts/QA/prd-stitch-ui/voice-clone-runtime-capability-check.swift",
     "Scripts/QA/prd-stitch-ui/backend-digital-human-session-smoke-check.swift",
     "Scripts/QA/prd-stitch-ui/backend-digital-human-session-smoke.py",
     "Scripts/QA/prd-stitch-ui/run-backend-digital-human-session-smoke.sh",

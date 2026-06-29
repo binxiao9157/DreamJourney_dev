@@ -48,6 +48,121 @@ struct ArchiveImageAnalysisRuntimeCapability {
     }
 }
 
+struct VoiceCloneTencentAudioDriveCapability {
+    let supported: Bool
+    let synthesisEndpoint: String
+    let requestOutputMode: String
+    let audioFormat: String
+    let sampleRate: Int
+    let bitsPerSample: Int
+    let channelCount: Int
+    let fallbackMode: String
+    let contractVersion: Int
+
+    init(json: [String: Any]?) {
+        supported = json?["supported"] as? Bool ?? false
+        synthesisEndpoint = json?["synthesisEndpoint"] as? String ?? "/voice/synthesis"
+        requestOutputMode = json?["requestOutputMode"] as? String ?? "tencentAudioDrive"
+        audioFormat = json?["audioFormat"] as? String ?? "pcm16kMono"
+        sampleRate = Self.intValue(json?["sampleRate"]) ?? 16000
+        bitsPerSample = Self.intValue(json?["bitsPerSample"]) ?? 16
+        channelCount = Self.intValue(json?["channelCount"]) ?? 1
+        fallbackMode = json?["fallbackMode"] as? String ?? "providerTextDrive"
+        contractVersion = Self.intValue(json?["contractVersion"]) ?? 1
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.intValue
+        }
+        if let value = value as? String {
+            return Int(value)
+        }
+        return nil
+    }
+}
+
+struct VoiceCloneRuntimeCapability {
+    let enabled: Bool
+    let provider: String
+    let realProviderReady: Bool
+    let trainEndpoint: String
+    let queryEndpoint: String
+    let synthesisEndpoint: String
+    let synthesisProviderReady: Bool
+    let requiresAuthorization: Bool
+    let qualityAcceptanceRequired: Bool
+    let defaultReleaseVisible: Bool
+    let speakerIdMode: String
+    let consoleSpeakerIdConfigured: Bool
+    let speakerIdPoolConfigured: Bool
+    let speakerIdPoolCount: Int
+    let modelType: Int
+    let ttsResourceId: String
+    let voiceClone2TrialReady: Bool
+    let fallbackMode: String
+    let tencentAudioDrive: VoiceCloneTencentAudioDriveCapability
+    let contractVersion: Int
+
+    var canSynthesize: Bool {
+        enabled && synthesisProviderReady
+    }
+
+    static func localFallback(isBackendConfigured: Bool) -> VoiceCloneRuntimeCapability {
+        VoiceCloneRuntimeCapability(json: [
+            "enabled": isBackendConfigured,
+            "provider": "localFallback",
+            "realProviderReady": isBackendConfigured,
+            "synthesisProviderReady": isBackendConfigured,
+            "fallbackMode": isBackendConfigured ? "backendConfigured" : "backendNotConfigured",
+            "tencentAudioDrive": [
+                "supported": false,
+                "requestOutputMode": "tencentAudioDrive",
+                "audioFormat": "pcm16kMono",
+            ],
+        ])
+    }
+
+    init(json: [String: Any]?) {
+        enabled = json?["enabled"] as? Bool ?? false
+        provider = json?["provider"] as? String ?? "unknown"
+        realProviderReady = json?["realProviderReady"] as? Bool ?? false
+        trainEndpoint = json?["trainEndpoint"] as? String ?? "/voice/profiles"
+        queryEndpoint = json?["queryEndpoint"] as? String ?? "/voice/profiles/{user_id}/{voice_profile_id}/refresh"
+        synthesisEndpoint = json?["synthesisEndpoint"] as? String ?? "/voice/synthesis"
+        synthesisProviderReady = json?["synthesisProviderReady"] as? Bool ?? false
+        requiresAuthorization = json?["requiresAuthorization"] as? Bool ?? true
+        qualityAcceptanceRequired = json?["qualityAcceptanceRequired"] as? Bool ?? true
+        defaultReleaseVisible = json?["defaultReleaseVisible"] as? Bool ?? false
+        speakerIdMode = json?["speakerIdMode"] as? String ?? "unknown"
+        consoleSpeakerIdConfigured = json?["consoleSpeakerIdConfigured"] as? Bool ?? false
+        speakerIdPoolConfigured = json?["speakerIdPoolConfigured"] as? Bool ?? false
+        speakerIdPoolCount = Self.intValue(json?["speakerIdPoolCount"]) ?? 0
+        modelType = Self.intValue(json?["modelType"]) ?? 0
+        ttsResourceId = json?["ttsResourceId"] as? String ?? ""
+        voiceClone2TrialReady = json?["voiceClone2TrialReady"] as? Bool ?? false
+        fallbackMode = json?["fallbackMode"] as? String ?? "hiddenContract"
+        tencentAudioDrive = VoiceCloneTencentAudioDriveCapability(json: json?["tencentAudioDrive"] as? [String: Any])
+        contractVersion = Self.intValue(json?["contractVersion"]) ?? 1
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.intValue
+        }
+        if let value = value as? String {
+            return Int(value)
+        }
+        return nil
+    }
+}
+
 struct ArchiveMediaRuntimeCapability {
     let uploadIntentAvailable: Bool
     let uploadIntentEndpoint: String
@@ -198,6 +313,7 @@ struct BackendRuntimeConfig {
     let archiveMediaUploadIntentEndpoint: String?
     let archiveMedia: ArchiveMediaRuntimeCapability
     let archiveImageAnalysis: ArchiveImageAnalysisRuntimeCapability
+    let voiceClone: VoiceCloneRuntimeCapability
     let digitalHuman: DigitalHumanRuntimeCapability
 
     init(json: [String: Any]) {
@@ -206,6 +322,7 @@ struct BackendRuntimeConfig {
         let fallback = voice?["fallback"] as? [String: Any]
         let archive = json["archive"] as? [String: Any]
         let archiveImageAnalysis = json["archiveImageAnalysis"] as? [String: Any]
+        let voiceClone = json["voiceClone"] as? [String: Any]
         let digitalHuman = json["digitalHuman"] as? [String: Any]
         realtimeTokenAvailable = capabilities?["realtimeToken"] as? Bool ?? false
         voiceRuntimeConfigEndpoint = voice?["runtimeConfigEndpoint"] as? String
@@ -214,6 +331,7 @@ struct BackendRuntimeConfig {
         archiveMediaUploadIntentEndpoint = archive?["uploadIntentEndpoint"] as? String
         self.archiveMedia = ArchiveMediaRuntimeCapability(json: archive, capabilities: capabilities)
         self.archiveImageAnalysis = ArchiveImageAnalysisRuntimeCapability(json: archiveImageAnalysis)
+        self.voiceClone = VoiceCloneRuntimeCapability(json: voiceClone)
         self.digitalHuman = DigitalHumanRuntimeCapability(json: digitalHuman, capabilities: capabilities)
     }
 }
@@ -736,6 +854,10 @@ final class DreamJourneyBackendClient {
         hasExplicitBaseURL
     }
 
+    var isDigitalHumanSessionConfigured: Bool {
+        hasExplicitBaseURL
+    }
+
     var isVoiceCloneProfileConfigured: Bool {
         hasExplicitBaseURL
     }
@@ -808,6 +930,14 @@ final class DreamJourneyBackendClient {
     ) {
         fetchRuntimeConfig { result in
             completion(result.map(\.digitalHuman))
+        }
+    }
+
+    func fetchVoiceCloneRuntimeCapability(
+        completion: @escaping (Result<VoiceCloneRuntimeCapability, Error>) -> Void
+    ) {
+        fetchRuntimeConfig { result in
+            completion(result.map(\.voiceClone))
         }
     }
 

@@ -136,6 +136,7 @@ final class DigitalHumanLivePanelView: UIView {
         providerView.translatesAutoresizingMaskIntoConstraints = false
         providerView.backgroundColor = .clear
         providerView.isOpaque = false
+        providerView.isUserInteractionEnabled = false
         setLocalPreviewEnabled(false)
         setProviderModeEnabled(true)
         webView.isHidden = true
@@ -188,7 +189,7 @@ final class DigitalHumanLivePanelView: UIView {
         guard hostedProviderView == nil else { return }
         webView.isHidden = !enabled
         webView.alpha = enabled ? 1 : 0
-        webView.isUserInteractionEnabled = enabled
+        webView.isUserInteractionEnabled = false
         if enabled {
             fallbackLabel.isHidden = true
         }
@@ -239,6 +240,7 @@ final class DigitalHumanLivePanelView: UIView {
     private func configureView() {
         backgroundColor = .clear
         isOpaque = false
+        isUserInteractionEnabled = false
         clipsToBounds = false
         layer.cornerRadius = 0
         layer.masksToBounds = false
@@ -255,6 +257,7 @@ final class DigitalHumanLivePanelView: UIView {
         webView.isHidden = true
         webView.alpha = 0
         webView.isUserInteractionEnabled = false
+        fallbackLabel.isUserInteractionEnabled = false
 
         addSubview(webView)
         addSubview(fallbackLabel)

@@ -22,6 +22,18 @@ func assertNotContains(_ haystack: String, _ needle: String, _ message: String) 
     }
 }
 
+func assertOccurrenceCount(_ haystack: String, _ needle: String, _ expectedCount: Int, _ message: String) {
+    var searchRange = haystack.startIndex..<haystack.endIndex
+    var count = 0
+    while let range = haystack.range(of: needle, range: searchRange) {
+        count += 1
+        searchRange = range.upperBound..<haystack.endIndex
+    }
+    guard count == expectedCount else {
+        fatalError("\(message): expected \(expectedCount), got \(count) for \(needle)")
+    }
+}
+
 let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
@@ -42,6 +54,7 @@ let audioMeter = read("DreamJourney/Sources/Modules/Echo/DigitalHumanAudioLevelM
 let lipSyncTimeline = read("DreamJourney/Sources/Modules/Echo/DigitalHumanLipSyncTimeline.swift")
 let memoirTTS = read("DreamJourney/Sources/Memoir/MemoirTTSService.swift")
 let conversationCoordinator = read("DreamJourney/Sources/Modules/Echo/DigitalHumanConversationCoordinator.swift")
+let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 
 let defaultEnabledStart = featureFlags.range(of: "private static let defaultEnabled")!.lowerBound
 let defaultEnabledEnd = featureFlags.range(of: "private static let nonPersistentFeatures")!.lowerBound
@@ -52,6 +65,9 @@ assertContains(defaultEnabledBlock, ".digitalHumanLivePanel", "Digital human liv
 
 assertContains(echo, "DigitalHumanLivePanelView", "Echo should own the live panel view")
 assertContains(echo, "FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel)", "Echo should show the digital human panel from the public feature flag")
+assertContains(backendClient, "var isDigitalHumanSessionConfigured", "Backend client should expose an explicit digital-human session configuration gate")
+assertContains(echo, "DreamJourneyBackendClient.shared.isDigitalHumanSessionConfigured", "Echo should not fetch digital-human runtime config without an explicit backend")
+assertContains(echo, "skipped cloud runtime; backend not configured", "Echo release smoke should log quiet digital-human fallback when backend is not configured")
 assertContains(echo, "DJDisableDigitalHumanLivePanel", "Echo should keep an explicit troubleshooting launch argument to suppress the public panel")
 assertContains(echo, "数字人回响", "Echo should preserve digital-human entry/status label copy")
 assertContains(echo, "素材已授权", "Echo should explain digital-human asset authorization")
@@ -65,6 +81,7 @@ assertContains(echo, "DJRunTencentDigitalHumanPCMDriveSmoke", "Echo should suppo
 assertContains(echo, "DJRunTencentDigitalHumanBackendPCMDriveSmoke", "Echo should support true-device backend Tencent PCM audio-drive smoke launch argument")
 assertContains(echo, "FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel)", "Echo should keep the public feature flag as the default visibility source")
 assertContains(echo, "runUIQADigitalHumanLivePanelSmoke", "Echo should expose UIQA smoke driver")
+assertOccurrenceCount(echo, "setLocalPreviewEnabled(true)", 1, "Legacy local digital-human preview should only be enabled by the explicit UIQA smoke path")
 assertContains(echo, "setInteractionState", "Echo should forward state to digital human panel")
 assertContains(echo, "digitalHumanAudioLevelMeter", "Echo should own a digital human audio level meter")
 assertContains(echo, "startSDKTTSPlaybackFallback", "Echo should connect SDK TTS started events to the panel without claiming player metering")
@@ -179,6 +196,10 @@ assertContains(panelView, "setProviderModeEnabled(true)", "Panel should disable 
 assertContains(panelView, "setLocalPreviewEnabled(_ enabled: Bool)", "Panel should expose local preview as an explicit QA-only opt-in")
 assertContains(panelView, "showProviderPlaceholder", "Panel should show a neutral placeholder while Tencent connects instead of exposing local preview assets")
 assertContains(panelView, "webView.alpha = 0", "Panel should make the local Web renderer fully transparent while provider view is hosted")
+assertContains(panelView, "isUserInteractionEnabled = false", "Full-screen digital human render layer must pass touches through to Echo controls")
+assertContains(panelView, "providerView.isUserInteractionEnabled = false", "Hosted Tencent provider view must not intercept Echo controls")
+assertContains(panelView, "fallbackLabel.isUserInteractionEnabled = false", "Fullscreen digital human placeholder must not intercept Echo controls")
+assertNotContains(panelView, "webView.isUserInteractionEnabled = enabled", "Local preview must not re-enable touch interception inside the fullscreen digital human render layer")
 assertNotContains(panelView, "startSimulatedAudioLevels", "Panel view must not own simulated audio amplitude")
 assertNotContains(panelView, "simulatedAudioTimer", "Panel view must not keep simulated audio timers")
 

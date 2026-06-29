@@ -709,7 +709,7 @@ final class ProfileViewController: UIViewController {
         DreamJourneyBackendClient.shared.fetchVoiceCloneProfiles(userId: userId) { result in
             switch result {
             case .success(let profiles):
-                if let profile = profiles.first(where: { $0.sampleStatus != .deleted }) ?? profiles.first {
+                if let profile = VoiceCloneService.shared.preferredVoiceCloneProfile(from: profiles) {
                     completion(VoiceCloneService.shared.voiceCloneShellSnapshot(from: profile))
                 } else {
                     completion(VoiceCloneService.shared.voiceCloneShellSnapshot())

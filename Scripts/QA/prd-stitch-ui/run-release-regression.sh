@@ -26,6 +26,10 @@ RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE="${RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMO
 RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE="${RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE:-0}"
 RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE="${RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE:-0}"
 RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE="${RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE:-0}"
+RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE="${RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE:-0}"
+RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE="${RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE:-0}"
+RUN_VOICE_CLONE_SYNTHESIS_RUNTIME_SMOKE="${RUN_VOICE_CLONE_SYNTHESIS_RUNTIME_SMOKE:-0}"
+RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE="${RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE:-0}"
 RUN_DIGITAL_HUMAN_TTS_VISEME_GATE="${RUN_DIGITAL_HUMAN_TTS_VISEME_GATE:-0}"
 RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE="${RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE:-0}"
 RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE="${RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE:-0}"
@@ -98,6 +102,10 @@ Run ID: \`$RUN_ID\`
 - Backend family/voice contract smoke: \`$RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE\`
 - Backend family/account lifecycle smoke: \`$RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE\`
 - Backend digital-human session smoke: \`$RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE\`
+- Backend voice clone deployed smoke: \`$RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE\`
+- Voice clone profile selection UIQA smoke: \`$RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE\`
+- Voice clone synthesis runtime UIQA smoke: \`$RUN_VOICE_CLONE_SYNTHESIS_RUNTIME_SMOKE\`
+- Tencent backend PCM-drive mock UIQA smoke: \`$RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE\`
 - Digital human TTS/viseme combo gate: \`$RUN_DIGITAL_HUMAN_TTS_VISEME_GATE\`
 - Digital human runtime stub gate: \`$RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE\`
 - Archive failed analysis retry UIQA smoke: \`$RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE\`
@@ -127,6 +135,10 @@ Run ID: \`$RUN_ID\`
 - Optional deployed backend family/voice contract smoke when \`RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE=1\`; this verifies hidden family digital-human modes and voice profile lifecycle contracts.
 - Optional deployed backend family/account lifecycle smoke when \`RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE=1\`; this verifies phone invitation, blocked family removal, account soft delete, one-time restore, and no-export retention policy.
 - Optional deployed backend digital-human session smoke when \`RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE=1\`; this verifies \`/config/runtime.digitalHuman\` and \`/digital-human/sessions\` have switched to Tencent \`cloudRender\` with backend-issued appkey/accesstoken and asset/project identity.
+- Optional deployed backend voice clone smoke when \`RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE=1\`; this verifies \`/config/runtime.voiceClone\`, ready \`S_\` synthesis, and Tencent audio-drive compatible \`pcm16kMono\` without printing raw audio.
+- Optional voice clone profile selection UIQA smoke when \`RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE=1\`; this verifies ready \`S_\` profiles win over pending/deleted profiles and pending backend replies do not overwrite a usable ready voice.
+- Optional voice clone synthesis runtime UIQA smoke when \`RUN_VOICE_CLONE_SYNTHESIS_RUNTIME_SMOKE=1\`; this verifies iOS reads \`/config/runtime.voiceClone\`, calls \`/voice/synthesis\`, and receives Tencent audio-drive compatible PCM without printing raw audio.
+- Optional Tencent backend PCM-drive mock UIQA smoke when \`RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE=1\`; this verifies deployed backend synthesis PCM is chunked into the fake Tencent runtime and stop/interruption cleanup works without a true device.
 - Optional digital-human TTS/viseme combo gate when \`RUN_DIGITAL_HUMAN_TTS_VISEME_GATE=1\`; this verifies backend mock synthesis \`visemeTimeline\`, iOS provider timeline UIQA, and \`AVAudioPlayer\` metering fallback UIQA.
 - Optional digital-human runtime stub gate when \`RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE=1\`; this verifies backend \`/digital-human/sessions\`, iOS \`TencentDigitalHumanRuntimeStub\`, and \`AudioOnlyDigitalHumanRuntime\` fallback without connecting the real Tencent SDK.
 - Optional archive detail failed-analysis retry UIQA smoke when \`RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE=1\`.
@@ -161,6 +173,9 @@ append_report_footer() {
 - Backend family/voice contract smoke: \`backend-family-voice-contract-smoke/$RUN_ID/\`
 - Backend family/account lifecycle smoke: \`backend-family-account-lifecycle-smoke/$RUN_ID/\`
 - Backend digital-human session smoke: \`backend-digital-human-session-smoke/$RUN_ID/\`
+- Backend voice clone deployed smoke: \`backend-voice-clone-deployed-smoke/$RUN_ID/\`
+- Voice clone profile selection UIQA smoke: \`voice-clone-profile-selection-smoke/$RUN_ID/\`
+- Voice clone synthesis runtime UIQA smoke: \`voice-clone-synthesis-runtime-smoke/$RUN_ID/\`
 - Digital human TTS/viseme combo gate: \`digital-human-tts-viseme-gate/$RUN_ID/\`
 - Digital human runtime stub gate: \`digital-human-runtime-stub-smoke/$RUN_ID/\`
 - Archive failed analysis retry UIQA smoke: \`archive-failed-analysis-retry-smoke/$RUN_ID/\`
@@ -199,6 +214,7 @@ run_step "Python QA scripts compile" "$STATIC_LOG_DIR/python-qa-compile.log" \
     "$SCRIPT_DIR/backend-family-voice-contract-smoke.py" \
     "$SCRIPT_DIR/backend-family-account-lifecycle-smoke.py" \
     "$SCRIPT_DIR/backend-digital-human-session-smoke.py" \
+    "$SCRIPT_DIR/backend-voice-clone-deployed-smoke.py" \
     "$SCRIPT_DIR/backend-voice-synthesis-viseme-smoke.py"
 
 run_step "Swift model guard profile-care-snapshot-check" "$STATIC_LOG_DIR/profile-care-snapshot-check.log" \
@@ -262,6 +278,10 @@ for guard in \
   family-digital-human-hidden-contract-check.swift \
   backend-family-voice-contract-smoke-check.swift \
   backend-digital-human-session-smoke-check.swift \
+  backend-voice-clone-deployed-smoke-check.swift \
+  voice-clone-profile-selection-smoke-check.swift \
+  voice-clone-synthesis-runtime-smoke-check.swift \
+  tencent-backend-pcm-drive-mock-smoke-check.swift \
   profile-family-account-lifecycle-check.swift \
   voice-synthesis-viseme-contract-check.swift \
   voice-synthesis-tencent-audio-drive-contract-check.swift \
@@ -282,6 +302,8 @@ for guard in \
   ios-family-voice-consumer-contract-check.swift \
   ios-family-voice-hidden-uiqa-smoke-check.swift \
   voice-clone-shell-contract-check.swift \
+  voice-clone-status-feedback-check.swift \
+  voice-clone-runtime-capability-check.swift \
   voice-clone-backend-contract-check.swift \
   final-visual-qa-package-check.swift \
   release-qa-package-check.swift
@@ -402,6 +424,45 @@ if [[ "$RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/backend-digital-human-session-smoke/$RUN_ID"
   echo "Skipped by RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE=0" > "$OUTPUT_DIR/backend-digital-human-session-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/backend-voice-clone-deployed-smoke" \
+  "$SCRIPT_DIR/run-backend-voice-clone-deployed-smoke.sh"
+else
+  mkdir -p "$OUTPUT_DIR/backend-voice-clone-deployed-smoke/$RUN_ID"
+  echo "Skipped by RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE=0" > "$OUTPUT_DIR/backend-voice-clone-deployed-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/voice-clone-profile-selection-smoke" \
+  DERIVED_DATA_PATH="$OUTPUT_DIR/DerivedDataVoiceCloneProfileSelectionSmoke" \
+  "$SCRIPT_DIR/run-voice-clone-profile-selection-smoke.sh"
+else
+  mkdir -p "$OUTPUT_DIR/voice-clone-profile-selection-smoke/$RUN_ID"
+  echo "Skipped by RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE=0" > "$OUTPUT_DIR/voice-clone-profile-selection-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_VOICE_CLONE_SYNTHESIS_RUNTIME_SMOKE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/voice-clone-synthesis-runtime-smoke" \
+  DERIVED_DATA_PATH="$OUTPUT_DIR/DerivedDataVoiceCloneSynthesisRuntimeSmoke" \
+  "$SCRIPT_DIR/run-voice-clone-synthesis-runtime-smoke.sh"
+else
+  mkdir -p "$OUTPUT_DIR/voice-clone-synthesis-runtime-smoke/$RUN_ID"
+  echo "Skipped by RUN_VOICE_CLONE_SYNTHESIS_RUNTIME_SMOKE=0" > "$OUTPUT_DIR/voice-clone-synthesis-runtime-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/tencent-backend-pcm-drive-mock-smoke" \
+  DERIVED_DATA_PATH="$OUTPUT_DIR/DerivedDataTencentBackendPCMDriveMockSmoke" \
+  "$SCRIPT_DIR/run-tencent-backend-pcm-drive-mock-smoke.sh"
+else
+  mkdir -p "$OUTPUT_DIR/tencent-backend-pcm-drive-mock-smoke/$RUN_ID"
+  echo "Skipped by RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE=0" > "$OUTPUT_DIR/tencent-backend-pcm-drive-mock-smoke/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_DIGITAL_HUMAN_TTS_VISEME_GATE" == "1" ]]; then
