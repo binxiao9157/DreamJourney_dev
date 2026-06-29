@@ -371,12 +371,16 @@ final class EchoViewController: UIViewController {
             digitalHumanAudioLevelMeter = DigitalHumanAudioLevelMeter(panelView: digitalHumanLivePanelView)
         }
 
-        view.addSubview(scenicView)
-        view.addSubview(personaBadgeView)
-        view.addSubview(archiveContextStatusView)
         if let digitalHumanLivePanelView {
-            view.addSubview(digitalHumanLivePanelView)
+            view.addSubview(scenicView)
+            view.insertSubview(digitalHumanLivePanelView, aboveSubview: scenicView)
+            view.addSubview(personaBadgeView)
+            view.addSubview(archiveContextStatusView)
             view.addSubview(digitalHumanStatusView)
+        } else {
+            view.addSubview(scenicView)
+            view.addSubview(personaBadgeView)
+            view.addSubview(archiveContextStatusView)
         }
         view.addSubview(quoteBubble)
         view.addSubview(voiceStatusView)
@@ -501,13 +505,13 @@ final class EchoViewController: UIViewController {
 
         if let digitalHumanLivePanelView {
             NSLayoutConstraint.activate([
-                digitalHumanLivePanelView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-                digitalHumanLivePanelView.topAnchor.constraint(equalTo: personaBadgeView.bottomAnchor, constant: 14),
-                digitalHumanLivePanelView.widthAnchor.constraint(equalToConstant: 190),
-                digitalHumanLivePanelView.heightAnchor.constraint(equalTo: digitalHumanLivePanelView.widthAnchor),
+                digitalHumanLivePanelView.topAnchor.constraint(equalTo: view.topAnchor),
+                digitalHumanLivePanelView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                digitalHumanLivePanelView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                digitalHumanLivePanelView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
                 digitalHumanStatusView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-                digitalHumanStatusView.topAnchor.constraint(equalTo: digitalHumanLivePanelView.bottomAnchor, constant: 8),
+                digitalHumanStatusView.topAnchor.constraint(equalTo: personaBadgeView.bottomAnchor, constant: 14),
                 digitalHumanStatusView.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.78),
                 digitalHumanStatusStack.topAnchor.constraint(equalTo: digitalHumanStatusView.topAnchor, constant: 8),
                 digitalHumanStatusStack.leadingAnchor.constraint(equalTo: digitalHumanStatusView.leadingAnchor, constant: 14),

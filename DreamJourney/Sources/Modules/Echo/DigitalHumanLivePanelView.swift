@@ -237,11 +237,13 @@ final class DigitalHumanLivePanelView: UIView {
     }
 
     private func configureView() {
-        backgroundColor = UIColor(hex: "#FEFEF9").withAlphaComponent(0.32)
-        layer.cornerRadius = 28
-        layer.masksToBounds = true
-        layer.borderWidth = 1
-        layer.borderColor = DJDesignTokens.Color.divider.withAlphaComponent(0.16).cgColor
+        backgroundColor = .clear
+        isOpaque = false
+        clipsToBounds = false
+        layer.cornerRadius = 0
+        layer.masksToBounds = false
+        layer.borderWidth = 0
+        layer.borderColor = UIColor.clear.cgColor
         accessibilityIdentifier = "digitalHumanLivePanel"
 
         webView.navigationDelegate = self
