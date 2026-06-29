@@ -61,6 +61,8 @@ assertContains(echo, "MemoirTTSService.shared.getCachedLipSyncTimeline", "Echo s
 assertContains(echo, "DJShowDigitalHumanLivePanel", "Echo should keep legacy QA launch argument compatibility")
 assertContains(echo, "DJRunDigitalHumanLivePanelSmoke", "Echo should support smoke launch argument")
 assertContains(echo, "DJRunTencentDigitalHumanTextDriveSmoke", "Echo should support true-device Tencent text-drive smoke launch argument")
+assertContains(echo, "DJRunTencentDigitalHumanPCMDriveSmoke", "Echo should support true-device Tencent PCM audio-drive smoke launch argument")
+assertContains(echo, "DJRunTencentDigitalHumanBackendPCMDriveSmoke", "Echo should support true-device backend Tencent PCM audio-drive smoke launch argument")
 assertContains(echo, "FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel)", "Echo should keep the public feature flag as the default visibility source")
 assertContains(echo, "runUIQADigitalHumanLivePanelSmoke", "Echo should expose UIQA smoke driver")
 assertContains(echo, "setInteractionState", "Echo should forward state to digital human panel")
@@ -130,6 +132,8 @@ assertNotContains(echo, "stopSimulatedAudioLevels", "Echo must not depend on sim
 
 assertContains(appDelegate, "DJRunDigitalHumanLivePanelSmoke", "AppDelegate should wire the smoke launch argument")
 assertContains(appDelegate, "DJRunTencentDigitalHumanTextDriveSmoke", "AppDelegate should wire the true-device Tencent text-drive smoke launch argument")
+assertContains(appDelegate, "DJRunTencentDigitalHumanPCMDriveSmoke", "AppDelegate should wire the true-device Tencent PCM audio-drive smoke launch argument")
+assertContains(appDelegate, "DJRunTencentDigitalHumanBackendPCMDriveSmoke", "AppDelegate should wire the true-device backend Tencent PCM audio-drive smoke launch argument")
 assertContains(featureFlags, "func enableForCurrentLaunch(_ feature: DJFeature)", "Feature flags should support launch-scoped QA enabling")
 assertContains(appDelegate, "FeatureFlagService.shared.enableForCurrentLaunch(.digitalHumanLivePanel)", "Smoke should enable the digital human flag only for the current launch")
 assertContains(appDelegate, "runDigitalHumanLivePanelSmoke", "AppDelegate should run the digital human smoke")

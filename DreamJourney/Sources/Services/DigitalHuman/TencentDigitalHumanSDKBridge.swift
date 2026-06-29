@@ -38,8 +38,10 @@ protocol TencentDigitalHumanSDKBridge: AnyObject {
 enum TencentDigitalHumanSDKBridgeEvent: Equatable {
     case webSocketOpen
     case textStart(requestID: String?)
+    case audioStart(requestID: String?)
     case speechProgress(requestID: String?, status: String)
     case textOver(requestID: String?)
+    case audioOver(requestID: String?)
     case error(code: Int32, message: String)
     case closed
 }

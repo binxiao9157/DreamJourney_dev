@@ -264,6 +264,7 @@ for guard in \
   backend-digital-human-session-smoke-check.swift \
   profile-family-account-lifecycle-check.swift \
   voice-synthesis-viseme-contract-check.swift \
+  voice-synthesis-tencent-audio-drive-contract-check.swift \
   memoir-tts-cache-contract-check.swift \
   qa-script-location-check.swift \
   docs-qa-script-path-check.swift \
@@ -272,6 +273,7 @@ for guard in \
   digital-human-runtime-abstraction-check.swift \
   digital-human-session-client-check.swift \
   tencent-digital-human-sdk-handoff-check.swift \
+  tencent-digital-human-pcm-drive-poc-check.swift \
   tencent-digital-human-audio-owner-stop-semantics-check.swift \
   tencent-digital-human-trtc-compat-check.swift \
   tencent-digital-human-sdk-binary-check.swift \

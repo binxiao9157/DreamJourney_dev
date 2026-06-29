@@ -595,9 +595,13 @@ struct VoiceCloneProfileContract {
 struct VoiceCloneSynthesisResult {
     let voiceProfileId: String
     let providerMode: String
+    let outputMode: String?
     let audioBase64: String
     let audioFormat: String
     let byteCount: Int
+    let sampleRate: Int?
+    let bitsPerSample: Int?
+    let channelCount: Int?
     let visemeTimeline: DigitalHumanLipSyncTimeline?
 
     init?(json: [String: Any]) {
@@ -609,9 +613,13 @@ struct VoiceCloneSynthesisResult {
         }
         self.voiceProfileId = voiceProfileId
         self.providerMode = json["providerMode"] as? String ?? "unknown"
+        self.outputMode = json["outputMode"] as? String
         self.audioBase64 = audioBase64
         self.audioFormat = audioFormat
         self.byteCount = Self.intValue(audioJSON["byteCount"]) ?? 0
+        self.sampleRate = Self.intValue(audioJSON["sampleRate"])
+        self.bitsPerSample = Self.intValue(audioJSON["bitsPerSample"])
+        self.channelCount = Self.intValue(audioJSON["channelCount"])
         if let visemeTimelineJSON = json["visemeTimeline"] as? [String: Any] {
             self.visemeTimeline = DigitalHumanLipSyncTimeline(json: visemeTimelineJSON)
         } else {
@@ -621,6 +629,22 @@ struct VoiceCloneSynthesisResult {
 
     var audioData: Data? {
         Data(base64Encoded: audioBase64)
+    }
+
+    var isTencentAudioDrivePCMCompatible: Bool {
+        outputMode == "tencentAudioDrive"
+            && audioFormat == "pcm16kMono"
+            && sampleRate == 16000
+            && bitsPerSample == 16
+            && channelCount == 1
+            && byteCount > 0
+    }
+
+    var tencentAudioDrivePCMData: Data? {
+        guard isTencentAudioDrivePCMCompatible else {
+            return nil
+        }
+        return audioData
     }
 
     var lipSyncPlaybackEvent: DigitalHumanPlaybackEvent? {
@@ -921,9 +945,10 @@ final class DreamJourneyBackendClient {
         sampleRate: Int = 24000,
         speechRate: Int = -10,
         loudnessRate: Int = 10,
+        outputMode: String? = nil,
         completion: @escaping (Result<VoiceCloneSynthesisResult, Error>) -> Void
     ) {
-        let payload: [String: Any] = [
+        var payload: [String: Any] = [
             "userId": userId,
             "voiceProfileId": voiceProfileId,
             "text": text,
@@ -932,6 +957,9 @@ final class DreamJourneyBackendClient {
             "speechRate": speechRate,
             "loudnessRate": loudnessRate,
         ]
+        if let outputMode, !outputMode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["outputMode"] = outputMode
+        }
         requestJSON(path: "/voice/synthesis", method: .post, payload: payload) { result in
             switch result {
             case .success(let object):

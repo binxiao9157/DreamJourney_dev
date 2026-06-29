@@ -169,10 +169,15 @@ final class TencentDigitalHumanCloudRuntime: DigitalHumanRuntime {
             state = .ready
         case .textStart(let requestID):
             state = .speaking(requestID: requestID ?? currentRequestID ?? contract.sessionId)
+        case .audioStart(let requestID):
+            state = .speaking(requestID: requestID ?? currentRequestID ?? contract.sessionId)
         case .speechProgress(let requestID, let status):
             state = .speaking(requestID: requestID ?? currentRequestID ?? contract.sessionId)
             print("[TencentDigitalHuman] provider speech progress status=\(status) requestID=\(requestID ?? currentRequestID ?? "unknown")")
         case .textOver:
+            currentRequestID = nil
+            state = .ready
+        case .audioOver:
             currentRequestID = nil
             state = .ready
         case .error(let code, let message):

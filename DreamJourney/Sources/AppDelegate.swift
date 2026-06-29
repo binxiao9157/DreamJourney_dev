@@ -96,6 +96,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         if arguments.contains("DJShowDigitalHumanLivePanel")
             || arguments.contains("DJRunDigitalHumanLivePanelSmoke")
             || arguments.contains("DJRunTencentDigitalHumanTextDriveSmoke")
+            || arguments.contains("DJRunTencentDigitalHumanPCMDriveSmoke")
+            || arguments.contains("DJRunTencentDigitalHumanBackendPCMDriveSmoke")
             || arguments.contains("DJRunDigitalHumanRuntimeStubSmoke") {
             FeatureFlagService.shared.enableForCurrentLaunch(.digitalHumanLivePanel)
             print("[QA] Digital human live panel enabled by launch argument")

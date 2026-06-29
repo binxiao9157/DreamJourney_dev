@@ -137,6 +137,8 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-19-ios-family-voice-consumer-contract.md",
     "docs/superpowers/status/2026-06-19-ios-family-voice-hidden-uiqa.md",
     "docs/superpowers/status/2026-06-28-ios-stability-hardening.md",
+    "docs/superpowers/status/2026-06-29-tencent-digital-human-pcm-drive-poc.md",
+    "docs/superpowers/status/2026-06-29-tencent-audio-drive-backend-pcm-contract.md",
 ]
 
 for doc in requiredDocs {
@@ -224,8 +226,10 @@ for handoffGuard in [
     "family-digital-human-hidden-contract-check.swift",
     "backend-family-voice-contract-smoke-check.swift",
     "voice-synthesis-viseme-contract-check.swift",
+    "voice-synthesis-tencent-audio-drive-contract-check.swift",
     "memoir-tts-cache-contract-check.swift",
     "digital-human-live-panel-check.swift",
+    "tencent-digital-human-pcm-drive-poc-check.swift",
     "digital-human-tts-viseme-gate-check.swift",
     "ios-family-voice-consumer-contract-check.swift",
     "ios-family-voice-hidden-uiqa-smoke-check.swift",
@@ -318,6 +322,7 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/true-device-archive-audio-acceptance-check.swift",
     "Scripts/QA/prd-stitch-ui/true-device-acceptance-evidence-package-check.swift",
     "Scripts/QA/prd-stitch-ui/run-true-device-archive-audio-preflight.sh",
+    "Scripts/QA/prd-stitch-ui/run-true-device-tencent-backend-pcm-drive-smoke.sh",
     "Scripts/QA/prd-stitch-ui/archive-media-backend-contract-check.swift",
     "Scripts/QA/prd-stitch-ui/archive-media-upload-intent-contract-check.swift",
     "Scripts/QA/prd-stitch-ui/archive-media-provider-switch-contract-check.swift",
@@ -366,8 +371,10 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/backend-digital-human-session-smoke.py",
     "Scripts/QA/prd-stitch-ui/run-backend-digital-human-session-smoke.sh",
     "Scripts/QA/prd-stitch-ui/voice-synthesis-viseme-contract-check.swift",
+    "Scripts/QA/prd-stitch-ui/voice-synthesis-tencent-audio-drive-contract-check.swift",
     "Scripts/QA/prd-stitch-ui/memoir-tts-cache-contract-check.swift",
     "Scripts/QA/prd-stitch-ui/digital-human-live-panel-check.swift",
+    "Scripts/QA/prd-stitch-ui/tencent-digital-human-pcm-drive-poc-check.swift",
     "Scripts/QA/prd-stitch-ui/backend-voice-synthesis-viseme-smoke.py",
     "Scripts/QA/prd-stitch-ui/run-backend-voice-synthesis-viseme-smoke.sh",
     "Scripts/QA/prd-stitch-ui/run-digital-human-tts-viseme-gate.sh",
