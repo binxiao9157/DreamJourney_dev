@@ -1,0 +1,43 @@
+import Foundation
+
+let root = URL(fileURLWithPath: CommandLine.arguments.dropFirst().first ?? FileManager.default.currentDirectoryPath)
+
+func read(_ relativePath: String) -> String {
+    let fileURL = root.appendingPathComponent(relativePath)
+    guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else {
+        fatalError("Unable to read \(fileURL.path)")
+    }
+    return content
+}
+
+func require(_ condition: Bool, _ message: String) {
+    guard condition else {
+        fputs("Tencent digital-human voice-clone route check failed: \(message)\n", stderr)
+        exit(1)
+    }
+}
+
+let echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
+let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
+let voiceClone = read("DreamJourney/Sources/Memoir/VoiceCloneService.swift")
+let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
+let releaseQA = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
+
+require(voiceClone.contains("currentUsableSpeakerId"), "VoiceCloneService must expose only quality-accepted speaker IDs")
+require(backendClient.contains("outputMode") && backendClient.contains("tencentAudioDrive"), "backend client must support Tencent audio-drive synthesis")
+require(echo.contains("sendEchoReplyViaTencentVoiceClonePCMDrive"), "Echo must have a production voice-clone PCM-drive reply path")
+require(echo.contains("private var voiceCloneRuntimeCapability"), "Echo must cache backend voice-clone runtime capability")
+require(echo.contains("loadVoiceCloneRuntimeCapabilityIfNeeded"), "Echo must load voice-clone runtime capability before routing cloned speech")
+require(echo.contains("canRouteEchoReplyThroughVoiceClonePCMDrive"), "Echo must gate cloned speech routing through runtime capability")
+require(echo.contains("voiceCloneRuntimeCapability.canSynthesize"), "Echo must require synthesis capability before cloned speech routing")
+require(echo.contains("voiceCloneRuntimeCapability.tencentAudioDrive.supported"), "Echo must require Tencent audio-drive support before cloned speech routing")
+require(echo.contains("VoiceCloneService.shared.currentUsableSpeakerId"), "Echo must read the quality-accepted voice profile ID")
+require(echo.contains("DreamJourneyBackendClient.shared.requestVoiceCloneSynthesis"), "Echo must request backend cloned TTS for digital-human speech")
+require(echo.contains("outputMode: \"tencentAudioDrive\""), "Echo must request Tencent audio-drive compatible PCM")
+require(echo.contains("sendTencentAudioDriveSynthesisToDigitalHumanRuntime"), "Echo must feed cloned PCM into the Tencent runtime")
+require(echo.contains("source: \"voiceClonePCMDrive\""), "Echo logs/source markers must distinguish production voice-clone PCM-drive from QA smokes")
+require(echo.contains("fallbackToTencentText"), "Echo must explicitly fall back to Tencent text when cloned PCM cannot be used")
+require(releaseRegression.contains("tencent-digital-human-voice-clone-route-check.swift"), "release regression should run the voice-clone route guard")
+require(releaseQA.contains("tencent-digital-human-voice-clone-route-check.swift"), "release QA package should include the voice-clone route guard")
+
+print("Tencent digital-human voice-clone route guard passed")

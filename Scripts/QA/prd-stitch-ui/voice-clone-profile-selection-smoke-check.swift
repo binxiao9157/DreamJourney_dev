@@ -43,6 +43,8 @@ for required in [
     "VoiceCloneService.shared.persistSnapshot(VoiceCloneProfileSnapshot(backendContract: readyProfile))",
     "VoiceCloneService.shared.persistSnapshot(VoiceCloneProfileSnapshot(backendContract: pendingProfile))",
     "currentUsableSpeakerId",
+    "pendingPreferredRespected",
+    "pendingClearsUsableReady",
     "voice-clone-profile-selection-smoke-result.json",
 ] {
     assertContains(appDelegate, required, "AppDelegate should implement voice clone profile selection UIQA smoke \(required)")

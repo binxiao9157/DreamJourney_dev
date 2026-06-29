@@ -663,6 +663,8 @@ struct VoiceCloneProfileContract {
     let providerMessage: String
     let realCloneProviderReady: Bool
     let qualityAcceptanceRequired: Bool
+    let qualityAcceptanceState: String
+    let qualityAcceptedAt: String?
     let isEnabled: Bool
     let defaultReleaseVisible: Bool
     let contractVersion: Int
@@ -687,6 +689,8 @@ struct VoiceCloneProfileContract {
         self.providerMessage = json["providerMessage"] as? String ?? ""
         self.realCloneProviderReady = json["realCloneProviderReady"] as? Bool ?? false
         self.qualityAcceptanceRequired = json["qualityAcceptanceRequired"] as? Bool ?? true
+        self.qualityAcceptanceState = json["qualityAcceptanceState"] as? String ?? ""
+        self.qualityAcceptedAt = json["qualityAcceptedAt"] as? String
         self.isEnabled = json["isEnabled"] as? Bool ?? false
         self.defaultReleaseVisible = json["defaultReleaseVisible"] as? Bool ?? false
         self.contractVersion = Self.intValue(json["contractVersion"]) ?? 1
@@ -1053,6 +1057,27 @@ final class DreamJourneyBackendClient {
     ) {
         let path = "/voice/profiles/\(pathComponent(userId))/\(pathComponent(voiceProfileId))/refresh"
         requestJSON(path: path, method: .post, payload: nil) { result in
+            switch result {
+            case .success(let object):
+                guard let profileJSON = object["profile"] as? [String: Any],
+                      let profile = VoiceCloneProfileContract(json: profileJSON) else {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                completion(.success(profile))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func acceptVoiceCloneQuality(
+        userId: String,
+        profileId voiceProfileId: String,
+        completion: @escaping (Result<VoiceCloneProfileContract, Error>) -> Void
+    ) {
+        let path = "/voice/profiles/\(pathComponent(userId))/\(pathComponent(voiceProfileId))/quality-acceptance"
+        requestJSON(path: path, method: .post, payload: ["accepted": true]) { result in
             switch result {
             case .success(let object):
                 guard let profileJSON = object["profile"] as? [String: Any],

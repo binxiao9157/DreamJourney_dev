@@ -294,6 +294,9 @@ for guard in \
   digital-human-session-client-check.swift \
   tencent-digital-human-sdk-handoff-check.swift \
   tencent-digital-human-pcm-drive-poc-check.swift \
+  true-device-tencent-backend-pcm-drive-smoke-check.swift \
+  tencent-digital-human-voice-clone-route-check.swift \
+  tencent-digital-human-provider-stability-check.swift \
   tencent-digital-human-audio-owner-stop-semantics-check.swift \
   tencent-digital-human-trtc-compat-check.swift \
   tencent-digital-human-sdk-binary-check.swift \
@@ -302,6 +305,7 @@ for guard in \
   ios-family-voice-consumer-contract-check.swift \
   ios-family-voice-hidden-uiqa-smoke-check.swift \
   voice-clone-shell-contract-check.swift \
+  voice-clone-stale-ready-state-check.swift \
   voice-clone-status-feedback-check.swift \
   voice-clone-runtime-capability-check.swift \
   voice-clone-backend-contract-check.swift \

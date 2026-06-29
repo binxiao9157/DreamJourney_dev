@@ -1,3 +1,4 @@
+import AVFoundation
 import UIKit
 import UniformTypeIdentifiers
 
@@ -16,9 +17,12 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     private weak var authorizationHintLabel: UILabel?
     private weak var feedbackLabel: UILabel?
     private weak var submitButton: UIButton?
+    private weak var previewButton: UIButton?
+    private weak var acceptQualityButton: UIButton?
     private weak var refreshButton: UIButton?
     private weak var disableButton: UIButton?
     private weak var deleteButton: UIButton?
+    private var previewPlayer: AVAudioPlayer?
 
     private var isBusy = false {
         didSet { updateActionAvailability() }
@@ -285,6 +289,16 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         submit.addTarget(self, action: #selector(submitSampleTapped), for: .touchUpInside)
         submitButton = submit
 
+        let preview = makeActionButton(title: "试听复刻效果", style: .secondary)
+        preview.accessibilityIdentifier = "profileVoiceClonePreviewButton"
+        preview.addTarget(self, action: #selector(previewVoiceTapped), for: .touchUpInside)
+        previewButton = preview
+
+        let accept = makeActionButton(title: "确认使用此音色", style: .primary)
+        accept.accessibilityIdentifier = "profileVoiceCloneAcceptQualityButton"
+        accept.addTarget(self, action: #selector(acceptVoiceQualityTapped), for: .touchUpInside)
+        acceptQualityButton = accept
+
         let refresh = makeActionButton(title: "刷新训练状态", style: .secondary)
         refresh.accessibilityIdentifier = "profileVoiceCloneRefreshButton"
         refresh.addTarget(self, action: #selector(refreshStatusTapped), for: .touchUpInside)
@@ -300,7 +314,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         delete.addTarget(self, action: #selector(deleteVoiceTapped), for: .touchUpInside)
         deleteButton = delete
 
-        [feedback, submit, refresh, disable, delete].forEach(stack.addArrangedSubview)
+        [feedback, submit, preview, accept, refresh, disable, delete].forEach(stack.addArrangedSubview)
 
         card.addSubview(stack)
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -354,6 +368,54 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         }
     }
 
+    @objc private func previewVoiceTapped() {
+        guard canPreviewVoice else {
+            feedbackLabel?.text = "训练完成并确认合成服务可用后，才能试听复刻效果。"
+            return
+        }
+        guard let userId = UserManager.shared.currentUser?.id else {
+            feedbackLabel?.text = "请先登录后再试听音色。"
+            return
+        }
+
+        setBusyFeedback("正在生成试听音频...")
+        DreamJourneyBackendClient.shared.requestVoiceCloneSynthesis(
+            userId: userId,
+            voiceProfileId: snapshot.voiceProfileId,
+            text: "你好，我是你的复刻声音。请听听这段声音是否像你本人。",
+            audioFormat: "mp3",
+            sampleRate: 24000
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success(let synthesis):
+                    self.playPreviewAudio(synthesis)
+                case .failure(let error):
+                    self.finishBusy(feedback: "试听生成失败：\(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    @objc private func acceptVoiceQualityTapped() {
+        guard canAcceptVoiceQuality else {
+            feedbackLabel?.text = "请先试听训练完成的音色，再确认使用。"
+            return
+        }
+
+        let alert = UIAlertController(
+            title: "确认使用此音色？",
+            message: "确认后，回响和后续合成会使用这份音色。若听感不像本人，请重新提交样本。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "再听一下", style: .cancel))
+        alert.addAction(UIAlertAction(title: "确认使用", style: .default) { [weak self] _ in
+            self?.performAcceptVoiceQuality()
+        })
+        present(alert, animated: true)
+    }
+
     @objc private func disableVoiceTapped() {
         confirmDestructive(
             title: "禁用音色",
@@ -361,6 +423,45 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
             actionTitle: "禁用"
         ) { [weak self] in
             self?.performDisableVoice()
+        }
+    }
+
+    private func playPreviewAudio(_ synthesis: VoiceCloneSynthesisResult) {
+        guard let audioData = synthesis.audioData, !audioData.isEmpty else {
+            finishBusy(feedback: "试听生成失败：后端未返回有效音频。")
+            return
+        }
+        do {
+            let fileExtension = synthesis.audioFormat.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "mp3"
+                : synthesis.audioFormat
+            let previewURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("voice-clone-preview-\(snapshot.voiceProfileId)")
+                .appendingPathExtension(fileExtension)
+            try audioData.write(to: previewURL, options: .atomic)
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+            try AVAudioSession.sharedInstance().setActive(true)
+            previewPlayer = try AVAudioPlayer(contentsOf: previewURL)
+            previewPlayer?.prepareToPlay()
+            previewPlayer?.play()
+            finishBusy(feedback: "试听已开始。若声音像本人，请点“确认使用此音色”；不满意可重新提交样本。")
+        } catch {
+            finishBusy(feedback: "试听播放失败：\(error.localizedDescription)")
+        }
+    }
+
+    private func performAcceptVoiceQuality() {
+        setBusyFeedback("正在确认音色效果...")
+        VoiceCloneService.shared.acceptVoiceProfileQualityRemote(profileId: snapshot.voiceProfileId) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success(let snapshot):
+                    self.applySnapshot(snapshot, feedback: "已确认使用此音色，后续回响可使用复刻语音。")
+                case .failure(let error):
+                    self.finishBusy(feedback: "确认失败：\(error.localizedDescription)")
+                }
+            }
         }
     }
 
@@ -397,7 +498,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
                 guard let self else { return }
                 switch result {
                 case .success:
-                    self.reloadBackendSnapshot(feedback: "音色训练已完成，可以用于后续回响。")
+                    self.reloadBackendSnapshot(feedback: "音色训练状态已更新，请先试听确认效果。")
                 case .failure(let error):
                     self.finishBusy(feedback: error.localizedDescription)
                 }
@@ -486,6 +587,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
                     self.voiceCloneRuntimeCapability = capability
                 }
                 self.synthesisStatusValueLabel?.text = self.voiceSynthesisStatusText(for: self.snapshot)
+                self.updateActionAvailability()
             }
         }
     }
@@ -520,11 +622,27 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         return !profileId.isEmpty && profileId != "voiceProfileId_not_created"
     }
 
+    private var canPreviewVoice: Bool {
+        hasVoiceProfile
+            && snapshot.sampleStatus == .ready
+            && snapshot.realCloneProviderReady
+            && snapshot.isEnabled
+            && voiceCloneRuntimeCapability.canSynthesize
+    }
+
+    private var canAcceptVoiceQuality: Bool {
+        canPreviewVoice && snapshot.qualityAcceptanceRequired
+    }
+
     private func updateActionAvailability() {
         submitButton?.isEnabled = !isBusy && authorizationSwitch.isOn
+        previewButton?.isEnabled = !isBusy && canPreviewVoice
+        acceptQualityButton?.isEnabled = !isBusy && canAcceptVoiceQuality
         refreshButton?.isEnabled = !isBusy && hasVoiceProfile && snapshot.sampleStatus != .deleted && snapshot.sampleStatus != .disabled
         disableButton?.isEnabled = !isBusy && hasVoiceProfile && snapshot.sampleStatus != .disabled && snapshot.sampleStatus != .deleted
         deleteButton?.isEnabled = !isBusy && hasVoiceProfile && snapshot.sampleStatus != .deleted
+        previewButton?.isHidden = !canPreviewVoice
+        acceptQualityButton?.isHidden = !canAcceptVoiceQuality
         [refreshButton, disableButton, deleteButton].forEach { button in
             button?.isHidden = !hasVoiceProfile
         }
@@ -550,6 +668,12 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         case .pending:
             return "样本已提交"
         case .ready:
+            guard snapshot.isReadyForUse else {
+                if snapshot.qualityAcceptanceRequired && snapshot.realCloneProviderReady {
+                    return "训练完成，待试听确认"
+                }
+                return "音色状态待同步"
+            }
             return "音色已可使用"
         case .failed:
             return "训练失败，可重新提交"
@@ -567,6 +691,15 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         case .pending:
             return "后端已接收样本，稍后刷新即可查看训练结果。"
         case .ready:
+            guard snapshot.isReadyForUse else {
+                if !snapshot.realCloneProviderReady {
+                    return "后端还未确认这次训练可用于合成，请刷新训练状态。"
+                }
+                if snapshot.qualityAcceptanceRequired {
+                    return "火山已返回可合成状态，但这不等于音色效果已验收；请试听确认后再作为正式复刻音色使用。"
+                }
+                return "音色槽位已返回，但还未满足回响可用条件，请刷新训练状态。"
+            }
             return "后续回响可使用这份音色，仍可随时禁用或删除。"
         case .failed:
             if let providerMessage = providerFailureMessage(for: snapshot) {
@@ -587,7 +720,13 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     private func voiceAvailabilityText(for snapshot: VoiceCloneProfileSnapshot) -> String {
         switch snapshot.sampleStatus {
         case .ready:
-            return "可用于回响"
+            if snapshot.isReadyForUse {
+                return "可用于回响"
+            }
+            if snapshot.qualityAcceptanceRequired && snapshot.realCloneProviderReady {
+                return "待试听确认"
+            }
+            return "待同步确认"
         case .pending:
             return "训练中"
         case .failed:
@@ -604,6 +743,12 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     private func voiceSynthesisStatusText(for snapshot: VoiceCloneProfileSnapshot) -> String {
         switch snapshot.sampleStatus {
         case .ready:
+            guard snapshot.isReadyForUse else {
+                if snapshot.qualityAcceptanceRequired && snapshot.realCloneProviderReady {
+                    return "可合成，待确认效果"
+                }
+                return "音色状态待同步，暂不用于回响"
+            }
             if voiceCloneRuntimeCapability.canSynthesize {
                 if voiceCloneRuntimeCapability.voiceClone2TrialReady,
                    voiceCloneRuntimeCapability.tencentAudioDrive.supported {
@@ -711,7 +856,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     }
 
     private func updateButtonAppearance() {
-        [submitButton, refreshButton, disableButton, deleteButton].forEach { button in
+        [submitButton, previewButton, acceptQualityButton, refreshButton, disableButton, deleteButton].forEach { button in
             guard let button else { return }
             switch button.tag {
             case 1:

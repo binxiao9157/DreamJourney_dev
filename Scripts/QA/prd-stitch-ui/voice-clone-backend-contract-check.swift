@@ -48,6 +48,7 @@ for required in [
     "@app.get(\"/voice/profiles/{user_id}\")",
     "@app.post(\"/voice/profiles/{user_id}/{voice_profile_id}/disable\")",
     "@app.post(\"/voice/profiles/{user_id}/{voice_profile_id}/refresh\")",
+    "@app.post(\"/voice/profiles/{user_id}/{voice_profile_id}/quality-acceptance\")",
     "@app.delete(\"/voice/profiles/{user_id}/{voice_profile_id}\")",
     "@app.post(\"/voice/synthesis\")",
     "_sanitize_voice_profile_payload",
@@ -173,6 +174,7 @@ for required in [
     "fetchVoiceCloneProfiles(",
     "refreshVoiceCloneProfile(",
     "requestVoiceCloneSynthesis(",
+    "acceptVoiceCloneQuality(",
     "disableVoiceCloneProfile(",
     "deleteVoiceCloneProfile(",
 ] {
@@ -184,6 +186,7 @@ for required in [
     "/voice/profiles",
     "DreamJourneyBackendClient.shared.saveVoiceCloneProfile",
     "DreamJourneyBackendClient.shared.refreshVoiceCloneProfile",
+    "DreamJourneyBackendClient.shared.acceptVoiceCloneQuality",
 ] {
     assertContains(voiceService, required, "voice clone shell service should document backend contract \(required)")
 }

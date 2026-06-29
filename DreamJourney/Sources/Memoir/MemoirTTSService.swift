@@ -75,7 +75,7 @@ final class MemoirTTSService {
             return
         }
 
-        guard let speakerId = memoir.speakerId ?? VoiceCloneService.shared.currentSpeakerId,
+        guard let speakerId = memoir.speakerId ?? VoiceCloneService.shared.currentUsableSpeakerId,
               !speakerId.isEmpty else {
             completion(.failure(.noSpeakerId))
             return

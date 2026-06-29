@@ -32,6 +32,8 @@ struct VoiceCloneProfileSnapshot {
     let sampleStatus: VoiceCloneSampleStatus
     let authorizationCopy: String
     let isEnabled: Bool
+    let realCloneProviderReady: Bool
+    let qualityAcceptanceRequired: Bool
     let disableContract: String
     let deleteContract: String
     let providerMode: String
@@ -45,6 +47,8 @@ struct VoiceCloneProfileSnapshot {
         sampleStatus: VoiceCloneSampleStatus,
         authorizationCopy: String,
         isEnabled: Bool,
+        realCloneProviderReady: Bool = false,
+        qualityAcceptanceRequired: Bool = true,
         disableContract: String,
         deleteContract: String,
         providerMode: String = "localFallback",
@@ -57,6 +61,8 @@ struct VoiceCloneProfileSnapshot {
         self.sampleStatus = sampleStatus
         self.authorizationCopy = authorizationCopy
         self.isEnabled = isEnabled
+        self.realCloneProviderReady = realCloneProviderReady
+        self.qualityAcceptanceRequired = qualityAcceptanceRequired
         self.disableContract = disableContract
         self.deleteContract = deleteContract
         self.providerMode = providerMode
@@ -72,6 +78,8 @@ struct VoiceCloneProfileSnapshot {
             sampleStatus: backendContract.sampleStatus,
             authorizationCopy: backendContract.authorizationCopy,
             isEnabled: backendContract.isEnabled,
+            realCloneProviderReady: backendContract.realCloneProviderReady,
+            qualityAcceptanceRequired: backendContract.qualityAcceptanceRequired,
             disableContract: backendContract.disableContract,
             deleteContract: backendContract.deleteContract,
             providerMode: backendContract.providerMode,
@@ -80,6 +88,10 @@ struct VoiceCloneProfileSnapshot {
             contractVersion: backendContract.contractVersion,
             defaultReleaseVisible: backendContract.defaultReleaseVisible
         )
+    }
+
+    var isReadyForUse: Bool {
+        sampleStatus == .ready && isEnabled && realCloneProviderReady && !qualityAcceptanceRequired
     }
 
     var providerFailureDisplayText: String? {
@@ -113,6 +125,12 @@ final class VoiceCloneService {
     /// 当前用户的 speaker_id（持久化到 UserDefaults）
     private let speakerIdKey = "dj.voiceclone.speakerId"
     private let sampleStatusKey = "dj.voiceclone.sampleStatus"
+    private let isEnabledKey = "dj.voiceclone.isEnabled"
+    private let realCloneProviderReadyKey = "dj.voiceclone.realCloneProviderReady"
+    private let qualityAcceptanceRequiredKey = "dj.voiceclone.qualityAcceptanceRequired"
+    private let providerModeKey = "dj.voiceclone.providerMode"
+    private let providerStatusKey = "dj.voiceclone.providerStatus"
+    private let providerMessageKey = "dj.voiceclone.providerMessage"
     private static let emptyVoiceProfileId = "voiceProfileId_not_created"
     static let backendContractEndpoint = "/voice/profiles"
     private static let authorizationCopy = "音色复刻必须由用户主动授权，仅使用用户确认提交的声音样本；训练、查询、合成、禁用和删除都通过 DreamJourney 后端代理执行，iOS 不保存火山语音密钥。"
@@ -142,8 +160,7 @@ final class VoiceCloneService {
 
     var currentUsableSpeakerId: String? {
         let snapshot = voiceCloneShellSnapshot()
-        guard snapshot.isEnabled,
-              snapshot.sampleStatus == .ready,
+        guard snapshot.isReadyForUse,
               let speakerId = normalizedVoiceProfileId(snapshot.voiceProfileId) else {
             return nil
         }
@@ -155,13 +172,21 @@ final class VoiceCloneService {
             .flatMap(VoiceCloneSampleStatus.init(rawValue:))
         let profileId = currentSpeakerId ?? Self.emptyVoiceProfileId
         let sampleStatus = storedStatus ?? (currentSpeakerId == nil ? .notProvided : .pending)
+        let storedProviderMode = UserDefaults.standard.string(forKey: providerModeKey) ?? "localFallback"
+        let storedProviderStatus = UserDefaults.standard.string(forKey: providerStatusKey) ?? ""
+        let storedProviderMessage = UserDefaults.standard.string(forKey: providerMessageKey) ?? ""
         return VoiceCloneProfileSnapshot(
             voiceProfileId: profileId,
             sampleStatus: sampleStatus,
             authorizationCopy: Self.authorizationCopy,
-            isEnabled: sampleStatus == .ready,
+            isEnabled: storedBool(forKey: isEnabledKey) ?? false,
+            realCloneProviderReady: storedBool(forKey: realCloneProviderReadyKey) ?? false,
+            qualityAcceptanceRequired: storedBool(forKey: qualityAcceptanceRequiredKey) ?? true,
             disableContract: Self.disableContract,
-            deleteContract: Self.deleteContract
+            deleteContract: Self.deleteContract,
+            providerMode: storedProviderMode,
+            providerStatus: storedProviderStatus,
+            providerMessage: storedProviderMessage
         )
     }
 
@@ -176,19 +201,15 @@ final class VoiceCloneService {
         let activeProfiles = profiles.filter { $0.sampleStatus != .deleted }
         let preferredProfileId = normalizedVoiceProfileId(preferredProfileId)
         if let preferredProfileId,
-           let readyPreferred = activeProfiles.first(where: {
-               $0.voiceProfileId == preferredProfileId && $0.sampleStatus == .ready && $0.isEnabled
+           let preferred = activeProfiles.first(where: {
+               $0.voiceProfileId == preferredProfileId
            }) {
-            return readyPreferred
-        }
-        if let readyProfile = activeProfiles.first(where: { $0.sampleStatus == .ready && $0.isEnabled }) {
-            return readyProfile
-        }
-        if let preferredProfileId,
-           let preferred = activeProfiles.first(where: { $0.voiceProfileId == preferredProfileId }) {
             return preferred
         }
-        return activeProfiles.first(where: { $0.sampleStatus == .ready })
+        if let readyProfile = activeProfiles.first(where: { Self.isBackendProfileReadyForUse($0) }) {
+            return readyProfile
+        }
+        return activeProfiles.first(where: { $0.sampleStatus == .ready && $0.isEnabled })
             ?? activeProfiles.first(where: { $0.sampleStatus == .pending })
             ?? activeProfiles.first(where: { $0.sampleStatus == .failed })
             ?? activeProfiles.first
@@ -196,14 +217,6 @@ final class VoiceCloneService {
     }
 
     func persistSnapshot(_ snapshot: VoiceCloneProfileSnapshot) {
-        let existingStatus = UserDefaults.standard.string(forKey: sampleStatusKey)
-            .flatMap(VoiceCloneSampleStatus.init(rawValue:))
-        if existingStatus == .ready,
-           let existingSpeakerId = normalizedVoiceProfileId(currentSpeakerId),
-           snapshot.voiceProfileId != existingSpeakerId,
-           snapshot.sampleStatus == .pending || snapshot.sampleStatus == .failed {
-            return
-        }
         if let speakerId = normalizedVoiceProfileId(snapshot.voiceProfileId),
            snapshot.sampleStatus != .notProvided,
            snapshot.sampleStatus != .deleted {
@@ -212,6 +225,7 @@ final class VoiceCloneService {
             clearStoredSpeakerId()
         }
         saveSampleStatus(snapshot.sampleStatus)
+        saveBackendState(snapshot)
     }
 
     @discardableResult
@@ -220,6 +234,7 @@ final class VoiceCloneService {
             return voiceCloneShellSnapshot()
         }
         UserDefaults.standard.set(VoiceCloneSampleStatus.disabled.rawValue, forKey: sampleStatusKey)
+        UserDefaults.standard.set(false, forKey: isEnabledKey)
         return voiceCloneShellSnapshot()
     }
 
@@ -230,6 +245,8 @@ final class VoiceCloneService {
         }
         UserDefaults.standard.removeObject(forKey: speakerIdKey)
         UserDefaults.standard.set(VoiceCloneSampleStatus.deleted.rawValue, forKey: sampleStatusKey)
+        UserDefaults.standard.set(false, forKey: isEnabledKey)
+        UserDefaults.standard.set(false, forKey: realCloneProviderReadyKey)
         return voiceCloneShellSnapshot()
     }
 
@@ -291,10 +308,40 @@ final class VoiceCloneService {
         }
     }
 
+    func acceptVoiceProfileQualityRemote(
+        profileId: String,
+        completion: @escaping (Result<VoiceCloneProfileSnapshot, VoiceCloneError>) -> Void
+    ) {
+        guard DreamJourneyBackendClient.shared.isVoiceCloneProfileConfigured else {
+            completion(.failure(.apiKeyMissing))
+            return
+        }
+
+        let trimmedProfileId = profileId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedProfileId.isEmpty, trimmedProfileId != Self.emptyVoiceProfileId else {
+            completion(.failure(.speakerIdNotFound))
+            return
+        }
+
+        let userId = UserManager.shared.currentUser?.id ?? "default"
+        DreamJourneyBackendClient.shared.acceptVoiceCloneQuality(userId: userId, profileId: trimmedProfileId) { [weak self] result in
+            switch result {
+            case .success(let profile):
+                let snapshot = VoiceCloneProfileSnapshot(backendContract: profile)
+                self?.persistSnapshot(snapshot)
+                completion(.success(snapshot))
+            case .failure(let error):
+                DDLogError("[VoiceClone] 音色试听确认失败: \(error.localizedDescription)")
+                completion(.failure(.networkError(error.localizedDescription)))
+            }
+        }
+    }
+
     /// 保存 speaker_id
     private func saveSpeakerId(_ id: String) {
         UserDefaults.standard.set(id, forKey: speakerIdKey)
         UserDefaults.standard.set(VoiceCloneSampleStatus.pending.rawValue, forKey: sampleStatusKey)
+        UserDefaults.standard.set(false, forKey: isEnabledKey)
     }
 
     private func saveSampleStatus(_ status: VoiceCloneSampleStatus) {
@@ -308,6 +355,26 @@ final class VoiceCloneService {
     private func persistBackendProfileIfUsable(_ profile: VoiceCloneProfileContract) {
         let snapshot = VoiceCloneProfileSnapshot(backendContract: profile)
         persistSnapshot(snapshot)
+    }
+
+    private static func isBackendProfileReadyForUse(_ profile: VoiceCloneProfileContract) -> Bool {
+        profile.sampleStatus == .ready && profile.isEnabled && profile.realCloneProviderReady && !profile.qualityAcceptanceRequired
+    }
+
+    private func storedBool(forKey key: String) -> Bool? {
+        guard UserDefaults.standard.object(forKey: key) != nil else {
+            return nil
+        }
+        return UserDefaults.standard.bool(forKey: key)
+    }
+
+    private func saveBackendState(_ snapshot: VoiceCloneProfileSnapshot) {
+        UserDefaults.standard.set(snapshot.isEnabled, forKey: isEnabledKey)
+        UserDefaults.standard.set(snapshot.realCloneProviderReady, forKey: realCloneProviderReadyKey)
+        UserDefaults.standard.set(snapshot.qualityAcceptanceRequired, forKey: qualityAcceptanceRequiredKey)
+        UserDefaults.standard.set(snapshot.providerMode, forKey: providerModeKey)
+        UserDefaults.standard.set(snapshot.providerStatus, forKey: providerStatusKey)
+        UserDefaults.standard.set(snapshot.providerMessage, forKey: providerMessageKey)
     }
 
     private func normalizedVoiceProfileId(_ value: String?) -> String? {
@@ -432,12 +499,19 @@ final class VoiceCloneService {
             case .success(let profile):
                 self?.persistBackendProfileIfUsable(profile)
                 DDLogInfo("[VoiceClone] 后端查询状态: speakerId=\(sid), status=\(profile.sampleStatus.rawValue)")
-                completion(.success(Self.cloneStatus(from: profile.sampleStatus)))
+                completion(.success(Self.cloneStatus(from: profile)))
             case .failure(let error):
                 DDLogError("[VoiceClone] 后端查询失败: \(error.localizedDescription)")
                 completion(.failure(.networkError(error.localizedDescription)))
             }
         }
+    }
+
+    private static func cloneStatus(from profile: VoiceCloneProfileContract) -> VoiceCloneStatus {
+        if isBackendProfileReadyForUse(profile) {
+            return .success
+        }
+        return cloneStatus(from: profile.sampleStatus)
     }
 
     private static func cloneStatus(from sampleStatus: VoiceCloneSampleStatus) -> VoiceCloneStatus {

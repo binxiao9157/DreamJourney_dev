@@ -65,6 +65,8 @@ for required in [
     "enum VoiceCloneSampleStatus",
     "let voiceProfileId: String",
     "let providerMessage: String",
+    "let realCloneProviderReady",
+    "var isReadyForUse",
     "providerFailureDisplayText",
     "Invalid X-Api-Key",
     "authorizationCopy",
@@ -81,10 +83,12 @@ for required in [
     "DreamJourneyBackendClient.shared.deleteVoiceCloneProfile",
     "preferredVoiceCloneProfile(",
     "persistBackendProfileIfUsable(",
-    "existingStatus == .ready",
+    "currentUsableSpeakerId",
 ] {
     assertContains(voiceService, required, "voice clone service should expose public backend-backed contract \(required)")
 }
+assertContains(voiceService, "guard snapshot.isReadyForUse", "voice clone service should require provider-confirmed usability before synthesis")
+assertNotContains(voiceService, "existingStatus == .ready", "stale ready cache must not block pending or failed backend state")
 assertNotContains(voiceService, "\"authorizationConfirmed\": true", "voice clone service must not forge authorization")
 assertContains(voiceService, "case .disabled:\n            return .notFound", "disabled voice profile must not be treated as ready")
 assertNotContains(memoirFlow, "trainVoice(audioURL: recordingURL)", "memoir flow must not auto-train voice clone from ordinary recording")
@@ -97,6 +101,9 @@ for required in [
     "profileVoiceCloneStatusCaption",
     "providerFailureMessage(for:",
     "训练未完成：\\(",
+    "音色状态待同步",
+    "待同步确认",
+    "暂不用于回响",
     "还没有创建音色",
     "授权与样本",
     "authorizationSwitch",
@@ -106,10 +113,17 @@ for required in [
     "可用状态",
     "训练与管理",
     "选择音频样本并提交",
+    "试听复刻效果",
+    "确认使用此音色",
     "刷新训练状态",
     "禁用音色",
     "删除音色",
     "VoiceCloneService.shared.trainVoice",
+    "previewVoiceTapped",
+    "acceptVoiceQualityTapped",
+    "DreamJourneyBackendClient.shared.requestVoiceCloneSynthesis",
+    "VoiceCloneService.shared.acceptVoiceProfileQualityRemote",
+    "AVAudioPlayer",
     "authorizationConfirmed: authorizationSwitch.isOn",
     "onProfileAccepted",
     "VoiceCloneService.shared.disableVoiceProfileRemote",

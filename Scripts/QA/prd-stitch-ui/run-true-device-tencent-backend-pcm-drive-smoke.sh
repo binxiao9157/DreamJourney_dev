@@ -40,6 +40,7 @@ cat > "$REPORT_PATH" <<REPORT
 - Output dir: \`$OUTPUT_DIR\`
 - Console duration seconds: \`$RUN_SECONDS\`
 - Voice profile argument: \`${DJ_TENCENT_BACKEND_PCM_VOICE_PROFILE_ID:-optional, not provided}\`
+- Stop probe: \`DJRunTencentDigitalHumanPCMDriveStopProbe\`
 
 REPORT
 
@@ -91,7 +92,7 @@ if [[ -z "$DEVICE_ID" ]]; then
         /== Devices ==/ { in_devices=1; next }
         /== Devices Offline ==/ { in_devices=0 }
         /== Simulators ==/ { in_devices=0 }
-        in_devices && $0 !~ /Mac/ && $0 ~ /\([0-9A-Fa-f-]{8,}\)/ { print; exit }
+        in_devices && $0 !~ /Mac/ && $0 !~ /Devices Offline/ && $0 ~ /\([0-9A-Fa-f-]{8,}\)/ { print; exit }
       '
   )"
   if [[ -n "$ONLINE_DEVICE_LINE" ]]; then
@@ -167,6 +168,7 @@ LAUNCH_ARGS=(
   DJUITestBypassLogin
   DJShowDigitalHumanLivePanel
   DJRunTencentDigitalHumanBackendPCMDriveSmoke
+  DJRunTencentDigitalHumanPCMDriveStopProbe
 )
 if [[ -n "${DJ_TENCENT_BACKEND_PCM_VOICE_PROFILE_ID:-}" ]]; then
   LAUNCH_ARGS+=("DJTencentBackendPCMDriveVoiceProfileId=$DJ_TENCENT_BACKEND_PCM_VOICE_PROFILE_ID")
@@ -188,7 +190,7 @@ kill -INT "$LAUNCH_PID" >/dev/null 2>&1 || true
 wait "$LAUNCH_PID" >/dev/null 2>&1
 set -e
 
-append_report "- Launch args: \`DJUITestBypassLogin DJShowDigitalHumanLivePanel DJRunTencentDigitalHumanBackendPCMDriveSmoke [voiceProfileId optional]\`"
+append_report "- Launch args: \`DJUITestBypassLogin DJShowDigitalHumanLivePanel DJRunTencentDigitalHumanBackendPCMDriveSmoke DJRunTencentDigitalHumanPCMDriveStopProbe [voiceProfileId optional]\`"
 append_report "- Console log: \`$LAUNCH_LOG\`"
 
 append_report
@@ -199,7 +201,11 @@ for pattern in \
   "sent PCM-drive signal" \
   "sent PCM chunk" \
   "AudioStart" \
-  "AudioOver"; do
+  "AudioOver" \
+  "provider playback completed" \
+  "PCM-drive stop probe fired" \
+  "forced provider playback interrupt" \
+  "resume voice capture after provider speech reason=pcmDriveSmokeStopProbe"; do
   if grep -q "$pattern" "$LAUNCH_LOG"; then
     append_report "- \`$pattern\`: observed"
   else
@@ -216,6 +222,22 @@ fi
 if ! grep -q "AudioStart" "$LAUNCH_LOG"; then
   fail "Tencent AudioStart was not observed; inspect $LAUNCH_LOG"
 fi
+if ! grep -q "PCM-drive stop probe fired" "$LAUNCH_LOG"; then
+  fail "PCM stop probe was not observed; inspect $LAUNCH_LOG"
+fi
+if ! grep -q "resume voice capture after provider speech reason=pcmDriveSmokeStopProbe" "$LAUNCH_LOG"; then
+  fail "voice capture did not resume after stop probe; inspect $LAUNCH_LOG"
+fi
+
+append_report
+append_report "## Manual visual checks"
+append_report
+append_report "Human confirmation required before accepting real-device UX:"
+append_report
+append_report "- [ ] 真机上能听到复刻声音。"
+append_report "- [ ] 腾讯数智人口型/动态跟随声音变化。"
+append_report "- [ ] Stop probe 触发后声音停止，数字人面板不被关闭。"
+append_report "- [ ] 停止后 App 回到可继续说话/麦克风可用状态。"
 
 append_report
 append_report "## Result"

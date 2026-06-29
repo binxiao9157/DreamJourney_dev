@@ -8,6 +8,9 @@ final class EchoViewController: UIViewController {
     private var digitalHumanLivePanelView: DigitalHumanLivePanelView?
     private var digitalHumanAudioLevelMeter: DigitalHumanAudioLevelMeter?
     private var digitalHumanRuntime: DigitalHumanRuntime?
+    private var voiceCloneRuntimeCapability: VoiceCloneRuntimeCapability?
+    private var isLoadingVoiceCloneRuntimeCapability = false
+    private var lastTencentProviderAudioHandoffAt: Date?
 
     private let personaBadgeView: UIView = {
         let view = UIView()
@@ -199,8 +202,13 @@ final class EchoViewController: UIViewController {
     private static let tencentDigitalHumanPostTextOverResumeDelay: TimeInterval = 1.2
     private static let tencentDigitalHumanLongReplyExtraResumeDelay: TimeInterval = 0.6
     private static let tencentDigitalHumanLongReplyCharacterThreshold = 56
-    private static let tencentDigitalHumanPCMDriveChunkDuration: TimeInterval = 0.1
+    private static let tencentDigitalHumanPCMDriveChunkDuration: TimeInterval = 0.02
+    private static let tencentDigitalHumanPCMDriveStartDelay: TimeInterval = 0.12
+    private static let tencentDigitalHumanPCMDrivePrerollDuration: TimeInterval = 0.16
+    private static let tencentDigitalHumanPCMDriveTailSilenceDuration: TimeInterval = 0.08
+    private static let tencentDigitalHumanPCMDriveFadeDuration: TimeInterval = 0.06
     private static let tencentDigitalHumanPCMDriveStopProbeDelay: TimeInterval = 1.6
+    private static let tencentProviderDialogErrorSuppressionWindow: TimeInterval = 3.0
 
     private struct TencentPCMDriveTestSignal {
         let data: Data
@@ -221,14 +229,81 @@ final class EchoViewController: UIViewController {
         }
 
         func chunks() -> [Data] {
+            let payload = preparedAudioDrivePCMData()
             var chunks: [Data] = []
             var offset = 0
-            while offset < data.count {
-                let end = min(data.count, offset + chunkSize)
-                chunks.append(data.subdata(in: offset..<end))
+            while offset < payload.count {
+                let end = min(payload.count, offset + chunkSize)
+                chunks.append(payload.subdata(in: offset..<end))
                 offset = end
             }
             return chunks
+        }
+
+        func preparedAudioDrivePCMData() -> Data {
+            let stripped = strippedRIFFHeaderIfNeeded(data)
+            guard bitsPerSample == 16, stripped.count >= MemoryLayout<Int16>.size * 4 else {
+                return stripped
+            }
+
+            let aligned = stripped.count % 2 == 0 ? stripped : stripped.dropLast()
+            var smoothed = Data(aligned)
+            smoothed.withUnsafeMutableBytes { rawBuffer in
+                guard let base = rawBuffer.baseAddress else { return }
+                let sampleCount = rawBuffer.count / MemoryLayout<Int16>.size
+                let samples = base.bindMemory(to: Int16.self, capacity: sampleCount)
+                let fadeSampleCount = min(
+                    max(Int(Double(sampleRate) * EchoViewController.tencentDigitalHumanPCMDriveFadeDuration), 1),
+                    sampleCount / 3
+                )
+                guard fadeSampleCount > 1 else { return }
+
+                for index in 0..<fadeSampleCount {
+                    let factor = Double(index) / Double(fadeSampleCount)
+                    let value = Int16(littleEndian: samples[index])
+                    let scaled = Int16(Double(value) * factor)
+                    samples[index] = scaled.littleEndian
+                }
+
+                for index in 0..<fadeSampleCount {
+                    let sampleIndex = sampleCount - 1 - index
+                    let factor = Double(index) / Double(fadeSampleCount)
+                    let value = Int16(littleEndian: samples[sampleIndex])
+                    let scaled = Int16(Double(value) * factor)
+                    samples[sampleIndex] = scaled.littleEndian
+                }
+            }
+
+            let bytesPerSecond = sampleRate * channelCount * (bitsPerSample / 8)
+            let silenceByteCount = alignedPCMByteCount(
+                Int(Double(bytesPerSecond) * EchoViewController.tencentDigitalHumanPCMDrivePrerollDuration)
+            )
+            let tailSilenceByteCount = alignedPCMByteCount(
+                Int(Double(bytesPerSecond) * EchoViewController.tencentDigitalHumanPCMDriveTailSilenceDuration)
+            )
+            var prepared = Data(repeating: 0, count: silenceByteCount)
+            prepared.append(smoothed)
+            prepared.append(Data(repeating: 0, count: tailSilenceByteCount))
+            return prepared
+        }
+
+        private func strippedRIFFHeaderIfNeeded(_ payload: Data) -> Data {
+            guard payload.count > 44,
+                  payload.prefix(4) == Data("RIFF".utf8),
+                  let dataRange = payload.range(of: Data("data".utf8)) else {
+                return payload
+            }
+            let dataSizeStart = dataRange.upperBound
+            let dataStart = dataSizeStart + 4
+            guard dataStart <= payload.count else {
+                return payload
+            }
+            return payload.subdata(in: dataStart..<payload.count)
+        }
+
+        private func alignedPCMByteCount(_ count: Int) -> Int {
+            let frameSize = max(2, channelCount * (bitsPerSample / 8))
+            return max(0, count - (count % frameSize))
         }
     }
 
@@ -309,6 +384,7 @@ final class EchoViewController: UIViewController {
         setupLayout()
         bindViewModel()
         updatePersonaBadge()
+        loadVoiceCloneRuntimeCapabilityIfNeeded()
         seedTranscriptPreview()
         if !viewModel.restoreStoredDelayedReplyIfAvailable() {
             render(state: .idle)
@@ -332,6 +408,7 @@ final class EchoViewController: UIViewController {
         }
         viewModel.refreshArchiveContextStatus()
         updatePersonaBadge()
+        loadVoiceCloneRuntimeCapabilityIfNeeded()
         refreshTranscriptPreviewForCurrentContextIfIdle()
     }
 
@@ -827,6 +904,44 @@ final class EchoViewController: UIViewController {
         routeEchoAudioThroughDigitalHuman && tencentDigitalHumanProviderCanOwnAudio
     }
 
+    private var canRouteEchoReplyThroughVoiceClonePCMDrive: Bool {
+        guard let voiceCloneRuntimeCapability else {
+            loadVoiceCloneRuntimeCapabilityIfNeeded()
+            return false
+        }
+        return voiceCloneRuntimeCapability.canSynthesize
+            && voiceCloneRuntimeCapability.tencentAudioDrive.supported
+    }
+
+    private func loadVoiceCloneRuntimeCapabilityIfNeeded(force: Bool = false) {
+        if !force, voiceCloneRuntimeCapability != nil {
+            return
+        }
+        guard !isLoadingVoiceCloneRuntimeCapability else {
+            return
+        }
+        isLoadingVoiceCloneRuntimeCapability = true
+        DreamJourneyBackendClient.shared.fetchVoiceCloneRuntimeCapability { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isLoadingVoiceCloneRuntimeCapability = false
+                switch result {
+                case .success(let capability):
+                    self.voiceCloneRuntimeCapability = capability
+                    print(
+                        "[TencentDigitalHuman] voice clone runtime capability " +
+                        "canSynthesize=\(capability.canSynthesize) " +
+                        "tencentAudioDriveSupported=\(capability.tencentAudioDrive.supported) " +
+                        "provider=\(capability.provider)"
+                    )
+                case .failure(let error):
+                    self.voiceCloneRuntimeCapability = VoiceCloneRuntimeCapability.localFallback(isBackendConfigured: false)
+                    print("[TencentDigitalHuman] voice clone runtime capability failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
     private func applyEchoAudioRoutePolicy() {
         let shouldRouteThroughDigitalHuman = routeEchoAudioThroughDigitalHuman
         if shouldRouteThroughDigitalHuman {
@@ -1015,6 +1130,11 @@ final class EchoViewController: UIViewController {
         }
     }
 
+    private func markTencentProviderAudioHandoff(reason: String) {
+        lastTencentProviderAudioHandoffAt = Date()
+        print("[TencentDigitalHuman] provider audio handoff marked reason=\(reason)")
+    }
+
     @discardableResult
     private func pauseDialogEngineForTencentProviderSpeechIfNeeded() -> Bool {
         guard routeEchoAudioThroughDigitalHuman,
@@ -1022,9 +1142,39 @@ final class EchoViewController: UIViewController {
             return false
         }
         digitalHumanConversation.markPausingForProviderSpeech()
+        markTencentProviderAudioHandoff(reason: "pauseDialogEngineForProviderSpeech")
         DialogEngineManager.shared.stopDialog()
         print("[TencentDigitalHuman] paused DialogEngine before provider speech")
         return true
+    }
+
+    private func shouldSuppressDialogEngineErrorDuringTencentProviderSpeech(_ error: Error) -> Bool {
+        guard routeEchoAudioThroughDigitalHuman else {
+            return false
+        }
+
+        let isSDKError: Bool
+        if let dialogEngineError = error as? DialogEngineError,
+           case .sdkError = dialogEngineError {
+            isSDKError = true
+        } else {
+            let description = error.localizedDescription.lowercased()
+            isSDKError = description.contains("sami error") || description.contains("sdk")
+        }
+        guard isSDKError else {
+            return false
+        }
+
+        if hasTencentDigitalHumanProviderSpeechInFlight || digitalHumanConversation.isPausingForProviderSpeech {
+            return true
+        }
+
+        if let lastTencentProviderAudioHandoffAt,
+           Date().timeIntervalSince(lastTencentProviderAudioHandoffAt) <= Self.tencentProviderDialogErrorSuppressionWindow {
+            return true
+        }
+
+        return false
     }
 
     @discardableResult
@@ -1092,6 +1242,118 @@ final class EchoViewController: UIViewController {
             )
             return
         }
+
+        if sendEchoReplyViaTencentVoiceClonePCMDrive(
+            normalizedText,
+            source: source,
+            fallbackToTencentText: { [weak self] fallbackSource in
+                self?.sendEchoReplyToTencentTextRuntime(
+                    normalizedText,
+                    source: fallbackSource
+                )
+            }
+        ) {
+            return
+        }
+
+        sendEchoReplyToTencentTextRuntime(normalizedText, source: source)
+    }
+
+    @discardableResult
+    private func sendEchoReplyViaTencentVoiceClonePCMDrive(
+        _ normalizedText: String,
+        source: String,
+        fallbackToTencentText: @escaping (_ fallbackSource: String) -> Void
+    ) -> Bool {
+        guard source != "chatStreamingPrewarm",
+              canRouteEchoReplyThroughVoiceClonePCMDrive,
+              let voiceProfileId = VoiceCloneService.shared.currentUsableSpeakerId else {
+            return false
+        }
+
+        let requestID = makeTencentDigitalHumanRequestID()
+        let turnID = ensureCurrentEchoTurnID()
+        let pausedDialogEngine = pauseDialogEngineForTencentProviderSpeechIfNeeded()
+        prepareAudioSessionForTencentProviderPlayback(preserveRecordingCategory: pausedDialogEngine)
+        digitalHumanConversation.beginProviderRequest(
+            requestID: requestID,
+            replyText: normalizedText,
+            turnID: turnID,
+            keepsPendingReply: routeEchoAudioThroughDigitalHuman
+        )
+        scheduleTencentDigitalHumanTextOverTimeout(requestID: requestID, source: "voiceClonePCMDrive")
+        renderVoiceStatus(text: "正在生成复刻声音", isVisible: true, accessibilityIdentifier: "echoVoiceClonePCMDriveStatus")
+
+        let userId = UserManager.shared.currentUser?.id ?? "default"
+        print(
+            "[TencentDigitalHuman] requesting voice-clone PCM-drive " +
+            "turnID=\(turnID) source=\(source) requestID=\(requestID) voiceProfileId=\(voiceProfileId)"
+        )
+        DreamJourneyBackendClient.shared.requestVoiceCloneSynthesis(
+            userId: userId,
+            voiceProfileId: voiceProfileId,
+            text: normalizedText,
+            audioFormat: "wav",
+            sampleRate: 16_000,
+            speechRate: -10,
+            loudnessRate: 10,
+            outputMode: "tencentAudioDrive"
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                guard self.digitalHumanConversation.activeRequestID == requestID else {
+                    print("[TencentDigitalHuman] ignored stale voice-clone PCM-drive response requestID=\(requestID)")
+                    return
+                }
+
+                switch result {
+                case .success(let synthesis):
+                    guard synthesis.isTencentAudioDrivePCMCompatible,
+                          let signal = self.makeTencentDigitalHumanPCMDriveSignal(from: synthesis) else {
+                        self.cancelTencentDigitalHumanTextOverTimeout()
+                        self.digitalHumanConversation.clearProviderRequest()
+                        self.renderVoiceStatus(text: nil, isVisible: false)
+                        print(
+                            "[TencentDigitalHuman] voice-clone PCM-drive incompatible; fallbackToTencentText " +
+                            "requestID=\(requestID) format=\(synthesis.audioFormat) sampleRate=\(synthesis.sampleRate ?? 0) " +
+                            "bits=\(synthesis.bitsPerSample ?? 0) channels=\(synthesis.channelCount ?? 0)"
+                        )
+                        fallbackToTencentText("voiceClonePCMDriveFallbackToTencentText")
+                        return
+                    }
+
+                    self.renderVoiceStatus(text: "复刻声音正在回响", isVisible: true, accessibilityIdentifier: "echoVoiceClonePCMDriveStatus")
+                    self.startPCMDriveSignalToDigitalHumanRuntime(
+                        signal: signal,
+                        requestID: requestID,
+                        source: "voiceClonePCMDrive"
+                    )
+                    print(
+                        "[TencentDigitalHuman] voice-clone PCM-drive synthesis ready " +
+                        "turnID=\(turnID) requestID=\(requestID) voiceProfileId=\(synthesis.voiceProfileId) " +
+                        "bytes=\(synthesis.byteCount) providerMode=\(synthesis.providerMode)"
+                    )
+                case .failure(let error):
+                    self.cancelTencentDigitalHumanTextOverTimeout()
+                    self.digitalHumanConversation.clearProviderRequest()
+                    self.renderVoiceStatus(text: nil, isVisible: false)
+                    print(
+                        "[TencentDigitalHuman] voice-clone PCM-drive request failed; fallbackToTencentText " +
+                        "requestID=\(requestID) error=\(error.localizedDescription)"
+                    )
+                    fallbackToTencentText("voiceClonePCMDriveFallbackToTencentText")
+                }
+            }
+        }
+        return true
+    }
+
+    private func sendEchoReplyToTencentTextRuntime(_ normalizedText: String, source: String) {
+        guard let digitalHumanRuntime,
+              digitalHumanRuntime.profile != nil else {
+            return
+        }
+
         do {
             let requestID = makeTencentDigitalHumanRequestID()
             let turnID = ensureCurrentEchoTurnID()
@@ -1174,7 +1436,8 @@ final class EchoViewController: UIViewController {
         }
     }
 
-    private func interruptDigitalHumanPlayback(reason: String) {
+    @discardableResult
+    private func interruptDigitalHumanPlayback(reason: String) -> Bool {
         cancelDigitalHumanReplyPrewarm()
         cancelTencentDigitalHumanTextOverTimeout()
         digitalHumanConversation.clearProviderRequestAndResumeState()
@@ -1185,6 +1448,19 @@ final class EchoViewController: UIViewController {
         }
         stopDigitalHumanAudioLevelMetering()
         print("[TencentDigitalHuman] interrupted provider playback turnID=\(digitalHumanConversation.currentTurnID ?? "unknown") reason=\(reason)")
+
+        guard reason == "pcmDriveSmokeStopProbe",
+              shouldRunTencentDigitalHumanBackendPCMDriveSmoke || shouldRunTencentDigitalHumanPCMDriveSmoke,
+              shouldShowDigitalHumanLivePanel,
+              view.window != nil else {
+            return false
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
+            guard let self else { return }
+            self.resumeVoiceCaptureAfterTencentProviderSpeech(reason: reason)
+        }
+        return true
     }
 
     private var hasTencentDigitalHumanProviderSpeechInFlight: Bool {
@@ -1630,16 +1906,10 @@ final class EchoViewController: UIViewController {
                 keepsPendingReply: routeEchoAudioThroughDigitalHuman
             )
             scheduleTencentDigitalHumanTextOverTimeout(requestID: requestID, source: source)
-            digitalHumanLivePanelView?.setInteractionState(.speaking)
-            scheduleTencentDigitalHumanPCMDriveChunks(
+            startPCMDriveSignalToDigitalHumanRuntime(
                 signal: signal,
                 requestID: requestID,
                 source: source
-            )
-            print(
-                "[TencentDigitalHuman][QA] sent PCM-drive signal " +
-                "turnID=\(turnID) source=\(source) requestID=\(requestID) " +
-                "format=\(signal.formatDescription) bytes=\(signal.data.count) chunks=\(signal.chunkCount)"
             )
 
             if shouldRunTencentDigitalHumanPCMDriveStopProbe {
@@ -1651,15 +1921,39 @@ final class EchoViewController: UIViewController {
                           self.digitalHumanConversation.activeRequestID == requestID else {
                         return
                     }
-                    self.interruptDigitalHumanPlayback(reason: "pcmDriveSmokeStopProbe")
-                    self.viewModel.resetToIdle()
-                    print("[TencentDigitalHuman][QA] PCM-drive stop probe fired requestID=\(requestID)")
+                    let resumedVoiceCapture = self.interruptDigitalHumanPlayback(reason: "pcmDriveSmokeStopProbe")
+                    if !resumedVoiceCapture {
+                        self.viewModel.resetToIdle()
+                    }
+                    print(
+                        "[TencentDigitalHuman][QA] PCM-drive stop probe fired " +
+                        "requestID=\(requestID) resumedVoiceCapture=\(resumedVoiceCapture)"
+                    )
                 }
             }
         } catch {
             resumeDialogEngineAfterTencentProviderSpeechIfNeeded(reason: "sendPCMDriveFailed")
             print("[TencentDigitalHuman][QA] PCM-drive smoke failed source=\(source): \(error.localizedDescription)")
         }
+    }
+
+    private func startPCMDriveSignalToDigitalHumanRuntime(
+        signal: TencentPCMDriveTestSignal,
+        requestID: String,
+        source: String
+    ) {
+        digitalHumanLivePanelView?.setInteractionState(.speaking)
+        scheduleTencentDigitalHumanPCMDriveChunks(
+            signal: signal,
+            requestID: requestID,
+            source: source
+        )
+        print(
+            "[TencentDigitalHuman][QA] sent PCM-drive signal " +
+            "turnID=\(digitalHumanConversation.currentTurnID ?? "unknown") source=\(source) " +
+            "requestID=\(requestID) format=\(signal.formatDescription) " +
+            "bytes=\(signal.data.count) chunks=\(signal.chunkCount)"
+        )
     }
 
     private func scheduleTencentDigitalHumanPCMDriveChunks(
@@ -1671,7 +1965,7 @@ final class EchoViewController: UIViewController {
         for (index, chunk) in chunks.enumerated() {
             let sequence = index + 1
             DispatchQueue.main.asyncAfter(
-                deadline: .now() + (Double(index) * Self.tencentDigitalHumanPCMDriveChunkDuration)
+                deadline: .now() + Double(index) * Self.tencentDigitalHumanPCMDriveChunkDuration + Self.tencentDigitalHumanPCMDriveStartDelay
             ) { [weak self] in
                 guard let self,
                       self.digitalHumanConversation.activeRequestID == requestID,
@@ -1696,7 +1990,7 @@ final class EchoViewController: UIViewController {
         }
 
         DispatchQueue.main.asyncAfter(
-            deadline: .now() + (Double(chunks.count) * Self.tencentDigitalHumanPCMDriveChunkDuration)
+            deadline: .now() + Double(chunks.count) * Self.tencentDigitalHumanPCMDriveChunkDuration + Self.tencentDigitalHumanPCMDriveStartDelay
         ) { [weak self] in
             guard let self,
                   self.digitalHumanConversation.activeRequestID == requestID,
@@ -1988,13 +2282,22 @@ extension EchoViewController: DialogEngineDelegate {
 
     func onError(error: Error) {
         DispatchQueue.main.async { [weak self] in
-            self?.stopDigitalHumanAudioLevelMetering()
-            if self?.hasTencentDigitalHumanProviderSpeechInFlight == true {
-                self?.preserveTencentProviderSessionAfterLocalDialogStop(reason: "dialogError")
-            } else {
-                self?.resetDigitalHumanReplyDispatchState()
+            guard let self else { return }
+            if self.shouldSuppressDialogEngineErrorDuringTencentProviderSpeech(error) {
+                if self.hasTencentDigitalHumanProviderSpeechInFlight {
+                    self.preserveTencentProviderSessionAfterLocalDialogStop(reason: "dialogErrorSuppressedDuringProviderSpeech")
+                }
+                print("[TencentDigitalHuman] suppressed DialogEngine error during provider speech: \(error.localizedDescription)")
+                return
             }
-            self?.viewModel.fail(error.localizedDescription)
+
+            self.stopDigitalHumanAudioLevelMetering()
+            if self.hasTencentDigitalHumanProviderSpeechInFlight {
+                self.preserveTencentProviderSessionAfterLocalDialogStop(reason: "dialogError")
+            } else {
+                self.resetDigitalHumanReplyDispatchState()
+            }
+            self.viewModel.fail(error.localizedDescription)
         }
     }
 

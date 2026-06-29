@@ -981,13 +981,13 @@ private extension AppDelegate {
         let usableAfterPending = VoiceCloneService.shared.currentUsableSpeakerId
 
         let readyPreferredOverPending = selectedProfile?.voiceProfileId == readyProfile.voiceProfileId
-        let readyPreferredOverPendingPreferred = selectedWithPendingPreferred?.voiceProfileId == readyProfile.voiceProfileId
-        let pendingDidNotOverwriteReady = usableBeforePending == readyProfile.voiceProfileId
-            && usableAfterPending == readyProfile.voiceProfileId
+        let pendingPreferredRespected = selectedWithPendingPreferred?.voiceProfileId == pendingProfile.voiceProfileId
+        let pendingClearsUsableReady = usableBeforePending == readyProfile.voiceProfileId
+            && usableAfterPending == nil
         let deletedIgnored = selectedProfile?.voiceProfileId != deletedProfile.voiceProfileId
         let completed = readyPreferredOverPending
-            && readyPreferredOverPendingPreferred
-            && pendingDidNotOverwriteReady
+            && pendingPreferredRespected
+            && pendingClearsUsableReady
             && deletedIgnored
 
         writeVoiceCloneProfileSelectionSmokeResult([
@@ -1000,8 +1000,8 @@ private extension AppDelegate {
             "usableBeforePending": usableBeforePending ?? "missing",
             "usableAfterPending": usableAfterPending ?? "missing",
             "readyPreferredOverPending": readyPreferredOverPending,
-            "readyPreferredOverPendingPreferred": readyPreferredOverPendingPreferred,
-            "pendingDidNotOverwriteReady": pendingDidNotOverwriteReady,
+            "pendingPreferredRespected": pendingPreferredRespected,
+            "pendingClearsUsableReady": pendingClearsUsableReady,
             "deletedIgnored": deletedIgnored,
         ])
         print(
@@ -1018,7 +1018,8 @@ private extension AppDelegate {
         providerStatus: String,
         providerMessage: String,
         realCloneProviderReady: Bool,
-        isEnabled: Bool
+        isEnabled: Bool,
+        qualityAcceptanceRequired: Bool = false
     ) -> VoiceCloneProfileContract {
         guard let profile = VoiceCloneProfileContract(json: [
             "voiceProfileId": voiceProfileId,
@@ -1030,7 +1031,7 @@ private extension AppDelegate {
             "providerStatus": providerStatus,
             "providerMessage": providerMessage,
             "realCloneProviderReady": realCloneProviderReady,
-            "qualityAcceptanceRequired": true,
+            "qualityAcceptanceRequired": qualityAcceptanceRequired,
             "isEnabled": isEnabled,
             "defaultReleaseVisible": true,
             "contractVersion": 2,
