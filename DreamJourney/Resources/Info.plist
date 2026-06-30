@@ -30,6 +30,8 @@
 	<string>$(DREAMJOURNEY_BACKEND_BASE_URL)</string>
 	<key>DreamJourneyBackendAPIToken</key>
 	<string>$(DREAMJOURNEY_BACKEND_API_TOKEN)</string>
+	<key>DreamJourneyDigitalHumanAssetVirtualmanKey</key>
+	<string>36a7ca24272b4f389a58417efe1f2d52</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>

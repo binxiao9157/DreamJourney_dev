@@ -439,6 +439,8 @@ struct DigitalHumanSessionCredential {
 }
 
 struct DigitalHumanSessionContract {
+    private static let localAssetVirtualmanKeyInfoKey = "DreamJourneyDigitalHumanAssetVirtualmanKey"
+
     let sessionId: String
     let provider: String
     let providerMode: String
@@ -478,8 +480,9 @@ struct DigitalHumanSessionContract {
         self.deviceId = json["deviceId"] as? String ?? ""
         self.lifecycleMode = lifecycleMode
         self.lifecycleModeLabel = json["lifecycleModeLabel"] as? String ?? lifecycleMode.displayName
-        self.assetKey = json["assetKey"] as? String
-        self.providerAssetId = json["providerAssetId"] as? String
+        let localAssetVirtualmanKey = Self.localAssetVirtualmanKeyOverride
+        self.assetKey = localAssetVirtualmanKey ?? json["assetKey"] as? String
+        self.providerAssetId = localAssetVirtualmanKey ?? json["providerAssetId"] as? String
         self.providerProjectId = json["providerProjectId"] as? String ?? json["virtualmanProjectId"] as? String
         self.driveMode = driveMode
         self.alphaEnabled = json["alphaEnabled"] as? Bool ?? false
@@ -503,6 +506,12 @@ struct DigitalHumanSessionContract {
             smartActionEnabled: smartActionEnabled,
             assetKey: assetKey
         )
+    }
+
+    private static var localAssetVirtualmanKeyOverride: String? {
+        let raw = Bundle.main.object(forInfoDictionaryKey: localAssetVirtualmanKeyInfoKey) as? String
+        let value = raw?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value?.isEmpty == false ? value : nil
     }
 
     private static func intValue(_ value: Any?) -> Int? {
