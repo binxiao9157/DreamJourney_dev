@@ -41,6 +41,8 @@ private enum ArchiveLayout {
     static let timelineAudioPlayIconSize: CGFloat = 12
     static let timelinePlayerTrackHeight: CGFloat = 4
     static let timelineBadgeSpacing: CGFloat = 6
+    static let chapterHeaderSpacing: CGFloat = 10
+    static let chapterPlaceholderHeight: CGFloat = 96
 }
 
 private enum ArchiveKindFilter {
@@ -121,6 +123,15 @@ final class MemoryArchiveViewController: UIViewController {
     private let listStack = UIStackView()
     private let archiveFilterButton = UIButton(type: .system)
 
+    private weak var headerTitleLabel: UILabel?
+    private weak var headerSubtitleLabel: UILabel?
+    private weak var primaryCTAControl: UIControl?
+    private weak var primaryCTAEyebrowLabel: UILabel?
+    private weak var primaryCTATitleLabel: UILabel?
+    private weak var primaryCTASubtitleLabel: UILabel?
+    private weak var firstChapterTitleLabel: UILabel?
+    private weak var firstChapterSubtitleLabel: UILabel?
+
     private let summaryLabel = UILabel()
     private let progressLabel = UILabel()
     private let remoteSyncCaptionLabel = PaddingLabel(horizontalInset: 12, verticalInset: 8)
@@ -130,11 +141,26 @@ final class MemoryArchiveViewController: UIViewController {
     private var activeKindFilter: ArchiveKindFilter?
 
     private var creationOptions: [MemoryArchiveCreationOption] {
-        MemoryArchiveCreationOption.availableOptions(
-            isAudioUploadEnabled: isArchiveAudioCreationEnabled,
-            isVideoUploadEnabled: isArchiveVideoCreationEnabled,
-            isTimeLettersEnabled: isTimeLetterCreationEnabled
+        guard isSelfAutobiographyMode else {
+            return []
+        }
+        return MemoryArchiveCreationOption.availableOptions(
+            isAudioUploadEnabled: false,
+            isVideoUploadEnabled: false,
+            isTimeLettersEnabled: false
         )
+    }
+
+    private var currentArchiveContext: DigitalHumanContext {
+        DigitalHumanContextStore.shared.current
+    }
+
+    private var isSelfAutobiographyMode: Bool {
+        currentArchiveContext.isSelfAssistant
+    }
+
+    private var archivePersonaName: String {
+        currentArchiveContext.resolvedDisplayName
     }
 
     private var isArchiveAudioCreationEnabled: Bool {
@@ -327,13 +353,43 @@ final class MemoryArchiveViewController: UIViewController {
 
     private func refreshContent() {
         let summary = repository.summary()
-        summaryLabel.text = "已封存 \(summary.total) 段素材 · 相册 \(summary.photos) · 语音 \(summary.audio) · 文字 \(summary.text)"
-        progressLabel.text = "档案素材和每一次回响对话，都会补足称呼、关系、偏好与生活线索，让数字人格更接近真实的表达方式。"
+        let archiveLabel = isSelfAutobiographyMode ? "我的自传" : "\(archivePersonaName)的故事"
+        summaryLabel.text = "\(archiveLabel) · \(summary.total) 段片段 · 图片 \(summary.photos) · 文字 \(summary.text)"
+        progressLabel.text = isSelfAutobiographyMode
+            ? "你主动上传的图片和文字会沉淀为个人数据库，后续由 AI 助手陪你继续补全。"
+            : "当前正在阅读家人档案，内容仅用于回响上下文，不在此处编辑或新增。"
 
+        updateAutobiographyPageCopy()
         reloadFeatureCards(summary: summary)
         updateTimeLetterReminderButton()
         updateArchiveFilterButton()
         reloadArchiveList()
+    }
+
+    private func updateAutobiographyPageCopy() {
+        let isSelfMode = isSelfAutobiographyMode
+        view.backgroundColor = DJDesignTokens.Color.background
+        scrollView.backgroundColor = DJDesignTokens.Color.background
+
+        headerTitleLabel?.text = isSelfMode ? "我的自传" : "ta的故事"
+        headerSubtitleLabel?.text = isSelfMode
+            ? "在此处整理、回顾与珍藏那些不愿遗忘的片段。"
+            : "在这里静静翻阅 \(archivePersonaName) 留下的片段。"
+
+        primaryCTAEyebrowLabel?.text = isSelfMode ? "续写" : "只读"
+        primaryCTATitleLabel?.text = isSelfMode ? "继续撰写我的故事" : "翻阅ta的故事"
+        primaryCTASubtitleLabel?.text = isSelfMode
+            ? "添加新的篇章或编辑过往记忆"
+            : "当前切换为家人，只可阅读已有档案"
+        primaryCTAControl?.isEnabled = isSelfMode
+        primaryCTAControl?.alpha = isSelfMode ? 1 : 0.78
+        primaryCTAControl?.accessibilityTraits = isSelfMode ? .button : .staticText
+        primaryCTAControl?.accessibilityLabel = isSelfMode
+            ? "继续撰写我的故事，添加文字或图片"
+            : "ta的故事，只读"
+
+        firstChapterTitleLabel?.text = isSelfMode ? "家族根基" : "记忆片段"
+        firstChapterSubtitleLabel?.text = isSelfMode ? "Family Roots" : "Stories"
     }
 
     private func refreshRemoteArchiveIfNeeded() {
@@ -444,6 +500,13 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     private func updateTimeLetterReminderButton() {
+        guard isSelfAutobiographyMode, isTimeLetterCreationEnabled else {
+            timeLetterReminderButton.setTitle(nil, for: .normal)
+            timeLetterReminderButton.accessibilityLabel = nil
+            timeLetterReminderButton.isHidden = true
+            return
+        }
+
         let dueLetters = repository.dueTimeLetters()
         guard !dueLetters.isEmpty else {
             timeLetterReminderButton.setTitle(nil, for: .normal)
@@ -460,8 +523,8 @@ final class MemoryArchiveViewController: UIViewController {
 
     private func reloadFeatureCards(summary: (total: Int, photos: Int, audio: Int, text: Int)) {
         featureCardsStack.removeAllArrangedSubviews()
-
-        featureCardsStack.addArrangedSubview(makeFeatureGrid(summary: summary))
+        featureCardsStack.isHidden = true
+        analysisPrivacyDisclaimerLabel.isHidden = true
     }
 
     private func reloadArchiveList() {
@@ -479,6 +542,7 @@ final class MemoryArchiveViewController: UIViewController {
             if activeKindFilter == nil {
                 listStack.addArrangedSubview(makeStitchPhotoMemoryCard())
                 listStack.addArrangedSubview(makeStitchAudioMemoryCard())
+                listStack.addArrangedSubview(makeAutobiographyPlaceholderChapter())
             } else {
                 listStack.addArrangedSubview(makeEmptyStateCard(filter: activeKindFilter))
             }
@@ -488,111 +552,154 @@ final class MemoryArchiveViewController: UIViewController {
             return
         }
 
-        items.forEach { item in
-            listStack.addArrangedSubview(makeArchiveTimelineCard(item))
+        guard activeKindFilter == nil else {
+            items.forEach { item in
+                listStack.addArrangedSubview(makeArchiveTimelineCard(item))
+            }
+            return
+        }
+
+        let rootItems = items.filter { $0.kind == .photo || $0.kind == .text }
+        let growthItems = items.filter { $0.kind == .audio || $0.kind == .video }
+        let wisdomItems = items.filter { $0.kind == .timeLetter }
+
+        if rootItems.isEmpty {
+            listStack.addArrangedSubview(makeUnstartedChapterCard())
+        } else {
+            rootItems.forEach { item in
+                listStack.addArrangedSubview(makeArchiveTimelineCard(item))
+            }
+        }
+
+        if !growthItems.isEmpty {
+            let header = makeChapterHeader(indexText: "CHAPTER II", title: "成长之旅", subtitle: "Growth Journey")
+            listStack.addArrangedSubview(header.view)
+            growthItems.forEach { item in
+                listStack.addArrangedSubview(makeArchiveTimelineCard(item))
+            }
+        }
+
+        let wisdomHeader = makeChapterHeader(indexText: "CHAPTER III", title: "人生智慧", subtitle: "Life Wisdom")
+        listStack.addArrangedSubview(wisdomHeader.view)
+        if wisdomItems.isEmpty {
+            listStack.addArrangedSubview(makeUnstartedChapterCard())
+        } else {
+            wisdomItems.forEach { item in
+                listStack.addArrangedSubview(makeArchiveTimelineCard(item))
+            }
         }
     }
 
     private func makeHeader() -> UIView {
         let stack = UIStackView()
         stack.axis = .vertical
-        stack.spacing = ArchiveLayout.headerStackSpacing
+        stack.alignment = .center
+        stack.spacing = 12
+        stack.layoutMargins = UIEdgeInsets(top: 22, left: 0, bottom: 4, right: 0)
+        stack.isLayoutMarginsRelativeArrangement = true
 
         let titleLabel = UILabel()
-        titleLabel.text = "记忆档案馆"
-        titleLabel.font = DJDesignTokens.Font.display(ArchiveLayout.headerTitleFontSize)
+        titleLabel.text = isSelfAutobiographyMode ? "我的自传" : "ta的故事"
+        titleLabel.font = DJDesignTokens.Font.display(34)
         titleLabel.textColor = DJDesignTokens.Color.textPrimary
         titleLabel.numberOfLines = 0
+        titleLabel.textAlignment = .center
 
         let subtitleLabel = UILabel()
-        subtitleLabel.text = "在此处整理、回顾与珍藏那些不愿遗忘的片段。"
-        subtitleLabel.font = DJDesignTokens.Font.body(ArchiveLayout.headerSubtitleFontSize)
+        subtitleLabel.text = isSelfAutobiographyMode
+            ? "在此处整理、回顾与珍藏那些不愿遗忘的片段。"
+            : "在这里静静翻阅 \(archivePersonaName) 留下的片段。"
+        subtitleLabel.font = UIFont.italicSystemFont(ofSize: ArchiveLayout.headerSubtitleFontSize)
         subtitleLabel.textColor = DJDesignTokens.Color.textSecondary
         subtitleLabel.numberOfLines = 0
+        subtitleLabel.textAlignment = .center
+
+        let divider = UIView()
+        divider.backgroundColor = DJDesignTokens.Color.divider.withAlphaComponent(0.48)
 
         stack.addArrangedSubview(titleLabel)
         stack.addArrangedSubview(subtitleLabel)
+        stack.addArrangedSubview(divider)
+        divider.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            divider.widthAnchor.constraint(equalToConstant: 42),
+            divider.heightAnchor.constraint(equalToConstant: 1),
+        ])
+
+        headerTitleLabel = titleLabel
+        headerSubtitleLabel = subtitleLabel
         return stack
     }
 
     private func makePrimaryCTA() -> UIControl {
         let control = UIControl()
-        control.backgroundColor = DJDesignTokens.Color.accent
-        control.layer.cornerRadius = DJDesignTokens.Radius.extraLarge
+        control.backgroundColor = DJDesignTokens.Color.surface.withAlphaComponent(0.38)
+        control.layer.cornerRadius = 28
+        control.layer.borderWidth = 1
+        control.layer.borderColor = DJDesignTokens.Color.divider.withAlphaComponent(0.58).cgColor
         control.addTarget(self, action: #selector(archiveNewMemoryTapped(_:)), for: .touchUpInside)
         DJDesignTokens.applySoftShadow(to: control)
 
-        let iconContainer = UIView()
-        iconContainer.backgroundColor = UIColor.white.withAlphaComponent(0.2)
-        iconContainer.layer.cornerRadius = ArchiveLayout.primaryCTAIconSize / 2
-        iconContainer.isUserInteractionEnabled = false
+        let topRule = UIView()
+        topRule.backgroundColor = DJDesignTokens.Color.divider.withAlphaComponent(0.72)
 
-        let iconView = UIImageView(image: UIImage(systemName: "plus"))
-        iconView.tintColor = DJDesignTokens.Color.accentDeep
-        iconView.contentMode = .scaleAspectFit
+        let bottomRule = UIView()
+        bottomRule.backgroundColor = DJDesignTokens.Color.divider.withAlphaComponent(0.72)
+
+        let eyebrowLabel = UILabel()
+        eyebrowLabel.text = isSelfAutobiographyMode ? "续写" : "只读"
+        eyebrowLabel.font = DJDesignTokens.Font.label(13)
+        eyebrowLabel.textColor = DJDesignTokens.Color.accentDeep
+        eyebrowLabel.textAlignment = .center
 
         let titleLabel = UILabel()
-        titleLabel.text = "封存新记忆"
-        titleLabel.font = DJDesignTokens.Font.title(ArchiveLayout.primaryCTATitleFontSize)
-        titleLabel.textColor = DJDesignTokens.Color.accentDeep
+        titleLabel.text = isSelfAutobiographyMode ? "继续撰写我的故事" : "翻阅ta的故事"
+        titleLabel.font = DJDesignTokens.Font.title(20)
+        titleLabel.textColor = DJDesignTokens.Color.textPrimary
         titleLabel.textAlignment = .center
+        titleLabel.numberOfLines = 0
 
         let subtitleLabel = UILabel()
-        subtitleLabel.text = makeArchiveCTASubtitle()
-        subtitleLabel.font = DJDesignTokens.Font.body(ArchiveLayout.primaryCTASubtitleFontSize)
-        subtitleLabel.textColor = DJDesignTokens.Color.accentDeep.withAlphaComponent(0.78)
+        subtitleLabel.text = isSelfAutobiographyMode ? "添加新的篇章或编辑过往记忆" : "当前切换为家人，只可阅读已有档案"
+        subtitleLabel.font = DJDesignTokens.Font.body(13)
+        subtitleLabel.textColor = DJDesignTokens.Color.textTertiary
         subtitleLabel.textAlignment = .center
+        subtitleLabel.numberOfLines = 0
 
-        let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
+        let textStack = UIStackView(arrangedSubviews: [topRule, eyebrowLabel, titleLabel, subtitleLabel, bottomRule])
         textStack.axis = .vertical
         textStack.alignment = .center
-        textStack.spacing = ArchiveLayout.primaryCTATextSpacing
+        textStack.spacing = 8
         textStack.isUserInteractionEnabled = false
 
-        let stack = UIStackView(arrangedSubviews: [iconContainer, textStack])
-        stack.axis = .vertical
-        stack.alignment = .center
-        stack.spacing = ArchiveLayout.primaryCTAStackSpacing
-        stack.isUserInteractionEnabled = false
-
-        control.addSubview(stack)
-        iconContainer.addSubview(iconView)
-        [stack, iconContainer, iconView].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
+        control.addSubview(textStack)
+        [textStack, topRule, bottomRule].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
 
         NSLayoutConstraint.activate([
-            control.heightAnchor.constraint(equalToConstant: ArchiveLayout.primaryCTAHeight),
+            control.heightAnchor.constraint(equalToConstant: 156),
 
-            stack.centerXAnchor.constraint(equalTo: control.centerXAnchor),
-            stack.centerYAnchor.constraint(equalTo: control.centerYAnchor),
-            stack.leadingAnchor.constraint(greaterThanOrEqualTo: control.leadingAnchor, constant: ArchiveLayout.primaryCTAHorizontalSafety),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: control.trailingAnchor, constant: -ArchiveLayout.primaryCTAHorizontalSafety),
+            textStack.centerXAnchor.constraint(equalTo: control.centerXAnchor),
+            textStack.centerYAnchor.constraint(equalTo: control.centerYAnchor),
+            textStack.leadingAnchor.constraint(greaterThanOrEqualTo: control.leadingAnchor, constant: ArchiveLayout.primaryCTAHorizontalSafety),
+            textStack.trailingAnchor.constraint(lessThanOrEqualTo: control.trailingAnchor, constant: -ArchiveLayout.primaryCTAHorizontalSafety),
 
-            iconContainer.widthAnchor.constraint(equalToConstant: ArchiveLayout.primaryCTAIconSize),
-            iconContainer.heightAnchor.constraint(equalToConstant: ArchiveLayout.primaryCTAIconSize),
-
-            iconView.centerXAnchor.constraint(equalTo: iconContainer.centerXAnchor),
-            iconView.centerYAnchor.constraint(equalTo: iconContainer.centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: ArchiveLayout.primaryCTAIconSymbolSize),
-            iconView.heightAnchor.constraint(equalToConstant: ArchiveLayout.primaryCTAIconSymbolSize),
+            topRule.widthAnchor.constraint(equalToConstant: 56),
+            topRule.heightAnchor.constraint(equalToConstant: 1),
+            bottomRule.widthAnchor.constraint(equalToConstant: 42),
+            bottomRule.heightAnchor.constraint(equalToConstant: 1),
         ])
 
         control.accessibilityTraits = .button
-        control.accessibilityLabel = "封存新记忆，\(makeArchiveCTASubtitle())"
+        control.accessibilityLabel = isSelfAutobiographyMode ? "继续撰写我的故事，添加文字或图片" : "ta的故事，只读"
+        primaryCTAControl = control
+        primaryCTAEyebrowLabel = eyebrowLabel
+        primaryCTATitleLabel = titleLabel
+        primaryCTASubtitleLabel = subtitleLabel
         return control
     }
 
     private func makeArchiveCTASubtitle() -> String {
-        var inputs = ["文字", "图片"]
-        if isArchiveAudioCreationEnabled {
-            inputs.append("声音")
-        }
-        if isArchiveVideoCreationEnabled {
-            inputs.append("视频")
-        }
-        if isTimeLetterCreationEnabled {
-            inputs.append("时间信件")
-        }
-        return inputs.joined(separator: "、")
+        "文字、图片"
     }
 
     private func makeSummaryCard() -> UIView {
@@ -634,25 +741,74 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     private func makeTimelineHeader() -> UIView {
+        let header = makeChapterHeader(
+            indexText: "CHAPTER I",
+            title: isSelfAutobiographyMode ? "家族根基" : "记忆片段",
+            subtitle: isSelfAutobiographyMode ? "Family Roots" : "Stories"
+        )
+        firstChapterTitleLabel = header.titleLabel
+        firstChapterSubtitleLabel = header.subtitleLabel
+        return header.view
+    }
+
+    private func makeChapterHeader(
+        indexText: String,
+        title: String,
+        subtitle: String
+    ) -> (view: UIView, titleLabel: UILabel, subtitleLabel: UILabel) {
         let stack = UIStackView()
-        stack.alignment = .center
-        stack.spacing = 12
+        stack.axis = .vertical
+        stack.spacing = ArchiveLayout.chapterHeaderSpacing
+        stack.layoutMargins = UIEdgeInsets(top: 8, left: 0, bottom: 2, right: 0)
+        stack.isLayoutMarginsRelativeArrangement = true
 
-        let titleLabel = DJComponentFactory.sectionLabel("时间胶囊")
-        titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let topLine = UIStackView()
+        topLine.alignment = .center
+        topLine.spacing = 10
 
-        let sortButton = UIButton(type: .system)
-        sortButton.setTitle("按时间排序", for: .normal)
-        sortButton.titleLabel?.font = DJDesignTokens.Font.label(12)
-        sortButton.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
-        sortButton.setImage(UIImage(systemName: "arrow.up.arrow.down"), for: .normal)
-        sortButton.tintColor = DJDesignTokens.Color.accentDeep
-        sortButton.semanticContentAttribute = .forceRightToLeft
-        sortButton.contentHorizontalAlignment = .trailing
+        let indexLabel = UILabel()
+        indexLabel.text = indexText
+        indexLabel.font = DJDesignTokens.Font.label(12)
+        indexLabel.textColor = DJDesignTokens.Color.accentDeep.withAlphaComponent(0.82)
+        indexLabel.setContentHuggingPriority(.required, for: .horizontal)
 
-        stack.addArrangedSubview(titleLabel)
-        stack.addArrangedSubview(sortButton)
-        return stack
+        let divider = UIView()
+        divider.backgroundColor = DJDesignTokens.Color.divider.withAlphaComponent(0.38)
+
+        let titleLine = UIStackView()
+        titleLine.alignment = .lastBaseline
+        titleLine.spacing = 10
+
+        let titleLabel = UILabel()
+        titleLabel.text = title
+        titleLabel.font = DJDesignTokens.Font.title(22)
+        titleLabel.textColor = DJDesignTokens.Color.textPrimary
+        titleLabel.numberOfLines = 1
+        titleLabel.adjustsFontSizeToFitWidth = true
+        titleLabel.minimumScaleFactor = 0.82
+
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = subtitle
+        subtitleLabel.font = DJDesignTokens.Font.body(12)
+        subtitleLabel.textColor = DJDesignTokens.Color.textTertiary
+        subtitleLabel.numberOfLines = 1
+
+        topLine.addArrangedSubview(indexLabel)
+        topLine.addArrangedSubview(divider)
+        titleLine.addArrangedSubview(titleLabel)
+        titleLine.addArrangedSubview(subtitleLabel)
+        titleLabel.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+        subtitleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        stack.addArrangedSubview(topLine)
+        stack.addArrangedSubview(titleLine)
+
+        divider.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            divider.heightAnchor.constraint(equalToConstant: 1),
+        ])
+
+        return (stack, titleLabel, subtitleLabel)
     }
 
     private func makeFeatureGrid(summary: (total: Int, photos: Int, audio: Int, text: Int)) -> UIView {
@@ -1641,13 +1797,13 @@ final class MemoryArchiveViewController: UIViewController {
         iconView.contentMode = .scaleAspectFit
 
         let titleLabel = UILabel()
-        titleLabel.text = filter?.emptyTitle ?? "还没有封存的记忆"
+        titleLabel.text = filter?.emptyTitle ?? (isSelfAutobiographyMode ? "还没有写下自传片段" : "还没有可阅读的故事")
         titleLabel.font = DJDesignTokens.Font.title(16)
         titleLabel.textColor = DJDesignTokens.Color.textPrimary
         titleLabel.textAlignment = .center
 
         let detailLabel = UILabel()
-        detailLabel.text = filter?.emptyDetail ?? "先写下一段文字，或从相册选择一张照片。"
+        detailLabel.text = filter?.emptyDetail ?? (isSelfAutobiographyMode ? "先写下一段文字，或从相册选择一张照片。" : "切换到自己时可管理我的自传；家人故事页只读。")
         detailLabel.font = DJDesignTokens.Font.body(13)
         detailLabel.textColor = DJDesignTokens.Color.textSecondary
         detailLabel.numberOfLines = 0
@@ -1669,6 +1825,36 @@ final class MemoryArchiveViewController: UIViewController {
             stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
             stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
             stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -22),
+        ])
+
+        return card
+    }
+
+    private func makeAutobiographyPlaceholderChapter() -> UIView {
+        makeUnstartedChapterCard()
+    }
+
+    private func makeUnstartedChapterCard() -> UIView {
+        let card = UIView()
+        card.backgroundColor = DJDesignTokens.Color.surface.withAlphaComponent(0.24)
+        card.layer.cornerRadius = DJDesignTokens.Radius.large
+        card.layer.borderWidth = 1
+        card.layer.borderColor = DJDesignTokens.Color.divider.withAlphaComponent(0.28).cgColor
+
+        let label = UILabel()
+        label.text = isSelfAutobiographyMode ? "尚未开启此章节的书写..." : "这一章还没有可阅读的故事。"
+        label.font = UIFont.italicSystemFont(ofSize: 14)
+        label.textColor = DJDesignTokens.Color.textTertiary
+        label.textAlignment = .center
+        label.numberOfLines = 0
+
+        card.addSubview(label)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            card.heightAnchor.constraint(greaterThanOrEqualToConstant: ArchiveLayout.chapterPlaceholderHeight),
+            label.centerYAnchor.constraint(equalTo: card.centerYAnchor),
+            label.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            label.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
         ])
 
         return card
@@ -1759,6 +1945,11 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     @objc private func archiveNewMemoryTapped(_ sender: UIControl) {
+        guard isSelfAutobiographyMode else {
+            showReadOnlyArchiveToast()
+            return
+        }
+
         let sheet = MemoryArchiveCreationSheetViewController(options: creationOptions)
         sheet.delegate = self
         present(sheet, animated: true)
@@ -1771,7 +1962,7 @@ final class MemoryArchiveViewController: UIViewController {
     @objc private func archiveItemTapped(_ sender: MemoryArchiveItemRowControl) {
         navigationController?.setNavigationBarHidden(false, animated: true)
         navigationController?.pushViewController(
-            MemoryArchiveDetailViewController(item: sender.item),
+            MemoryArchiveDetailViewController(item: sender.item, isReadOnly: !isSelfAutobiographyMode),
             animated: true
         )
     }
@@ -1781,6 +1972,10 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     @objc private func selectPhotoTapped() {
+        guard isSelfAutobiographyMode else {
+            showReadOnlyArchiveToast()
+            return
+        }
         presentPhotoEntry()
     }
 
@@ -1832,6 +2027,11 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     private func presentTextEntry(kind: MemoryArchiveItemKind) {
+        guard isSelfAutobiographyMode else {
+            showReadOnlyArchiveToast()
+            return
+        }
+
         let isTimeLetter = kind == .timeLetter
         let entryViewController = MemoryArchiveTextEntryViewController(kind: kind)
         if isTimeLetter {
@@ -1872,6 +2072,11 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     private func presentAudioEntry() {
+        guard isSelfAutobiographyMode else {
+            showReadOnlyArchiveToast()
+            return
+        }
+
         let entryViewController = MemoryArchiveAudioRecorderViewController()
         entryViewController.onSave = { [weak self] fileURL, duration, note in
             guard let self else { return }
@@ -1888,6 +2093,11 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     private func presentVideoEntry() {
+        guard isSelfAutobiographyMode else {
+            showReadOnlyArchiveToast()
+            return
+        }
+
         let entryViewController = MemoryArchiveVideoEntryViewController()
         entryViewController.onCreateMockVideoArchive = { [weak self] in
             guard let self else { return }
@@ -1945,6 +2155,11 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     private func presentPhotoEntry() {
+        guard isSelfAutobiographyMode else {
+            showReadOnlyArchiveToast()
+            return
+        }
+
         let entryViewController = MemoryArchivePhotoEntryViewController()
         entryViewController.onChoosePhoto = { [weak self] in
             self?.presentPhotoPicker()
@@ -1956,6 +2171,11 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     private func presentPhotoPicker() {
+        guard isSelfAutobiographyMode else {
+            showReadOnlyArchiveToast()
+            return
+        }
+
         guard UIImagePickerController.isSourceTypeAvailable(.photoLibrary) else {
             showToast("无法打开相册", type: .error)
             return
@@ -1992,6 +2212,11 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     private func savePhotoArchiveItem(_ item: MemoryArchiveItem, image: UIImage, successMessage: String) {
+        guard isSelfAutobiographyMode else {
+            showReadOnlyArchiveToast()
+            return
+        }
+
         repository.add(item)
         refreshContent()
         showToast(successMessage, type: .success)
@@ -2086,6 +2311,11 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     private func saveSamplePhotoToArchive() {
+        guard isSelfAutobiographyMode else {
+            showReadOnlyArchiveToast()
+            return
+        }
+
         let image = UIImage(named: "default_memory_1") ?? makeFallbackArchiveImage()
         do {
             let fileURL = try saveImageToArchive(image)
@@ -2106,6 +2336,10 @@ final class MemoryArchiveViewController: UIViewController {
             DJDesignTokens.Color.accentDeep.withAlphaComponent(0.20).setFill()
             context.cgContext.fill(CGRect(x: 0, y: 440, width: 900, height: 200))
         }
+    }
+
+    private func showReadOnlyArchiveToast() {
+        showToast("家人故事仅可阅读，切回自己后可管理我的自传", type: .info)
     }
 }
 
@@ -2140,6 +2374,13 @@ extension MemoryArchiveViewController: MemoryArchiveCreationSheetViewControllerD
         _ viewController: MemoryArchiveCreationSheetViewController,
         didSelect option: MemoryArchiveCreationOption
     ) {
+        guard isSelfAutobiographyMode else {
+            viewController.dismiss(animated: true) { [weak self] in
+                self?.showReadOnlyArchiveToast()
+            }
+            return
+        }
+
         switch option.archiveKind {
         case .text:
             presentTextEntry(kind: .text)

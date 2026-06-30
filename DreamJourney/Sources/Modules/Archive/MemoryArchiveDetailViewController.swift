@@ -27,6 +27,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
 
     private var item: MemoryArchiveItem
     private let repository: MemoryArchiveRepository
+    private let isReadOnly: Bool
     private let scrollView = UIScrollView()
     private let contentStack = UIStackView()
     private var audioPlayer: AVAudioPlayer?
@@ -52,9 +53,14 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         max(stitchDetailBottomRhythm, DJDesignTokens.Spacing.section + safeAreaBottomInset)
     }
 
-    init(item: MemoryArchiveItem, repository: MemoryArchiveRepository = .shared) {
+    init(
+        item: MemoryArchiveItem,
+        repository: MemoryArchiveRepository = .shared,
+        isReadOnly: Bool = false
+    ) {
         self.item = item
         self.repository = repository
+        self.isReadOnly = isReadOnly
         super.init(nibName: nil, bundle: nil)
         hidesBottomBarWhenPushed = true
     }
@@ -140,7 +146,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     }
 
     private var canManageCurrentArchiveItem: Bool {
-        item.canManage(by: UserManager.shared.currentUser?.id ?? "")
+        !isReadOnly && item.canManage(by: UserManager.shared.currentUser?.id ?? "")
     }
 
     private var shouldShowLocalAnalysisAction: Bool {
@@ -985,6 +991,12 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
             if item.isTimeLetterDraft {
                 stack.addArrangedSubview(makeTimeLetterLifecycleActions())
             }
+        } else if item.kind == .text && canManageCurrentArchiveItem {
+            stack.addArrangedSubview(makeLifecycleButton(
+                title: "编辑文字",
+                identifier: "archive-text-edit-button",
+                action: #selector(editTextArchiveTapped)
+            ))
         }
 
         [stack, headerStack, iconContainer, titleStack, titleLabel, subtitleLabel, bodyContainer, accentLine, bodyLabel].forEach {
@@ -1111,7 +1123,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         stack.spacing = 10
         stack.distribution = .fillEqually
 
-        if item.isTimeLetterDraft {
+        if item.isTimeLetterDraft && canManageCurrentArchiveItem {
             stack.addArrangedSubview(makeLifecycleButton(
                 title: "编辑草稿",
                 identifier: "archive-time-letter-edit-draft",
@@ -1591,7 +1603,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     }
 
     @objc private func editTimeLetterDraftTapped() {
-        guard item.isTimeLetterDraft else { return }
+        guard item.isTimeLetterDraft, canManageCurrentArchiveItem else { return }
         let payload = TimeLetterEntryPayload(
             note: item.note,
             openAt: item.timeLetterOpenAt ?? Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date(),
@@ -1628,8 +1640,39 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         present(entryViewController, animated: true)
     }
 
+    @objc private func editTextArchiveTapped() {
+        guard item.kind == .text, canManageCurrentArchiveItem else { return }
+        let entryViewController = MemoryArchiveTextEntryViewController(
+            kind: .text,
+            initialText: item.note,
+            textEntryTitle: "编辑文字",
+            textEntrySubtitle: "调整这段自传内容，保存后会同步更新当前档案。",
+            textSaveButtonTitle: "保存修改"
+        )
+        entryViewController.onSave = { [weak self] rawText in
+            guard let self else { return }
+            item.note = rawText
+            item.title = "文字记忆"
+            item.updatedAt = Date()
+            item.analysisStatus = .manual
+            item.analysisSummary = "这是一段手动封存的文字片段，可作为后续回响生成的语义线索。"
+            if !item.tags.contains("文字片段") {
+                item.tags.append("文字片段")
+            }
+            item.metadata["source"] = "manual_text"
+            item.metadata["contentKind"] = "text"
+            item.metadata["characterCount"] = "\(rawText.count)"
+            item.metadata["storage"] = "local_user_defaults"
+            _ = repository.update(item)
+            reloadContent()
+            configureNavigationActions()
+            showToast("文字已更新", type: .success)
+        }
+        present(entryViewController, animated: true)
+    }
+
     @objc private func sealTimeLetterDraftTapped() {
-        guard item.isTimeLetterDraft else { return }
+        guard item.isTimeLetterDraft, canManageCurrentArchiveItem else { return }
         item = item.sealingTimeLetterDraft()
         _ = repository.update(item)
         reloadContent()
@@ -1637,7 +1680,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     }
 
     @objc private func deleteTimeLetterDraftTapped() {
-        guard item.isTimeLetterDraft else { return }
+        guard item.isTimeLetterDraft, canManageCurrentArchiveItem else { return }
         let alert = UIAlertController(
             title: "删除时间信件草稿？",
             message: "删除后不会触发投递，也不会同步到后端。",

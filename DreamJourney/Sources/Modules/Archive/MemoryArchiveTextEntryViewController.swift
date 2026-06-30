@@ -14,6 +14,10 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
     var onSaveDraftTimeLetter: ((TimeLetterEntryPayload) -> Void)?
 
     private let kind: MemoryArchiveItemKind
+    private let initialText: String?
+    private let textEntryTitle: String?
+    private let textEntrySubtitle: String?
+    private let textSaveButtonTitle: String?
     private let initialTimeLetterPayload: TimeLetterEntryPayload?
     private let textView = UITextView()
     private let placeholderLabel = UILabel()
@@ -25,7 +29,7 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
     private var selectedRecipientIds: Set<String> = ["self"]
     private var selectedImageLocalPath: String?
     private lazy var saveButton = DJComponentFactory.primaryButton(
-        title: isTimeLetter ? "封存时间信件" : "保存到档案馆",
+        title: isTimeLetter ? "封存时间信件" : (textSaveButtonTitle ?? "保存到档案馆"),
         target: self,
         action: #selector(saveTapped)
     )
@@ -45,8 +49,19 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
         kind == .timeLetter
     }
 
-    init(kind: MemoryArchiveItemKind, initialTimeLetterPayload: TimeLetterEntryPayload? = nil) {
+    init(
+        kind: MemoryArchiveItemKind,
+        initialText: String? = nil,
+        textEntryTitle: String? = nil,
+        textEntrySubtitle: String? = nil,
+        textSaveButtonTitle: String? = nil,
+        initialTimeLetterPayload: TimeLetterEntryPayload? = nil
+    ) {
         self.kind = kind
+        self.initialText = initialText
+        self.textEntryTitle = textEntryTitle
+        self.textEntrySubtitle = textEntrySubtitle
+        self.textSaveButtonTitle = textSaveButtonTitle
         self.initialTimeLetterPayload = initialTimeLetterPayload
         super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .pageSheet
@@ -64,6 +79,7 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
         super.viewDidLoad()
         view.backgroundColor = DJDesignTokens.Color.background
         configureTimeLetterDefaults()
+        configureTextEntryDefaults()
         configureSheet()
         buildLayout()
         updateSaveButton()
@@ -82,6 +98,12 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
         placeholderLabel.isHidden = !textView.text.isEmpty
     }
 
+    private func configureTextEntryDefaults() {
+        guard !isTimeLetter else { return }
+        textView.text = initialText ?? ""
+        placeholderLabel.isHidden = !textView.text.isEmpty
+    }
+
     private func configureSheet() {
         if let sheet = sheetPresentationController {
             sheet.detents = [.medium(), .large()]
@@ -92,7 +114,7 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
 
     private func buildLayout() {
         let titleLabel = UILabel()
-        titleLabel.text = isTimeLetter ? "录入时间信件" : "添加文字描述"
+        titleLabel.text = isTimeLetter ? "录入时间信件" : (textEntryTitle ?? "添加文字描述")
         titleLabel.font = DJDesignTokens.Font.display(32)
         titleLabel.textColor = DJDesignTokens.Color.textPrimary
         titleLabel.numberOfLines = 0
@@ -100,7 +122,7 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
         let subtitleLabel = UILabel()
         subtitleLabel.text = isTimeLetter
             ? "写给未来某一天的自己或家人；支持文字和图片，封存后不可删除或修改。"
-            : "写下一段想封存的片段，人物、地点、称呼和生活细节都可以。"
+            : (textEntrySubtitle ?? "写下一段想封存的片段，人物、地点、称呼和生活细节都可以。")
         subtitleLabel.font = DJDesignTokens.Font.body(15)
         subtitleLabel.textColor = DJDesignTokens.Color.textSecondary
         subtitleLabel.numberOfLines = 0
