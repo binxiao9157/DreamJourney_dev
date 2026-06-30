@@ -11,6 +11,9 @@ private enum ArchiveLayout {
     static let afterFeatureGridSpacing: CGFloat = 8
     static let afterRemoteCaptionSpacing: CGFloat = 24
     static let afterListSpacing: CGFloat = 32
+    static let bookEntryCornerRadius: CGFloat = 26
+    static let bookCoverCornerRadius: CGFloat = 22
+    static let materialsHeaderSpacing: CGFloat = 6
     static let featureGridHeight: CGFloat = 140
     static let featureGridGap: CGFloat = 16
     static let featureLargeIconSize: CGFloat = 38
@@ -125,12 +128,17 @@ final class MemoryArchiveViewController: UIViewController {
 
     private weak var headerTitleLabel: UILabel?
     private weak var headerSubtitleLabel: UILabel?
+    private weak var bookEntryControl: UIControl?
+    private weak var bookEntryModeLabel: UILabel?
+    private weak var bookEntryTitleLabel: UILabel?
+    private weak var bookEntrySubtitleLabel: UILabel?
+    private weak var bookEntryMetaLabel: UILabel?
     private weak var primaryCTAControl: UIControl?
     private weak var primaryCTAEyebrowLabel: UILabel?
     private weak var primaryCTATitleLabel: UILabel?
     private weak var primaryCTASubtitleLabel: UILabel?
-    private weak var firstChapterTitleLabel: UILabel?
-    private weak var firstChapterSubtitleLabel: UILabel?
+    private weak var materialsTitleLabel: UILabel?
+    private weak var materialsSubtitleLabel: UILabel?
 
     private let summaryLabel = UILabel()
     private let progressLabel = UILabel()
@@ -311,13 +319,17 @@ final class MemoryArchiveViewController: UIViewController {
         configureRemoteSyncCaptionLabel()
         configureTimeLetterReminderButton()
         configureArchiveFilterButton()
+        let bookEntry = makeBookEntryCard()
+        let materialsHeader = makeMaterialsHeader()
+        let primaryCTA = makePrimaryCTA()
         mainStack.addArrangedSubview(header)
         mainStack.addArrangedSubview(featureCardsStack)
         mainStack.addArrangedSubview(analysisPrivacyDisclaimerLabel)
         mainStack.addArrangedSubview(remoteSyncCaptionLabel)
         mainStack.addArrangedSubview(timeLetterReminderButton)
-        mainStack.addArrangedSubview(makePrimaryCTA())
-        mainStack.addArrangedSubview(makeTimelineHeader())
+        mainStack.addArrangedSubview(bookEntry)
+        mainStack.addArrangedSubview(materialsHeader)
+        mainStack.addArrangedSubview(primaryCTA)
         mainStack.addArrangedSubview(archiveFilterButton)
         mainStack.addArrangedSubview(listStack)
         mainStack.setCustomSpacing(ArchiveLayout.afterHeaderSpacing, after: header)
@@ -325,6 +337,9 @@ final class MemoryArchiveViewController: UIViewController {
         mainStack.setCustomSpacing(ArchiveLayout.afterFeatureGridSpacing, after: analysisPrivacyDisclaimerLabel)
         mainStack.setCustomSpacing(8, after: remoteSyncCaptionLabel)
         mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: timeLetterReminderButton)
+        mainStack.setCustomSpacing(22, after: bookEntry)
+        mainStack.setCustomSpacing(10, after: materialsHeader)
+        mainStack.setCustomSpacing(18, after: primaryCTA)
         mainStack.setCustomSpacing(8, after: archiveFilterButton)
         mainStack.setCustomSpacing(ArchiveLayout.afterListSpacing, after: listStack)
     }
@@ -368,28 +383,42 @@ final class MemoryArchiveViewController: UIViewController {
 
     private func updateAutobiographyPageCopy() {
         let isSelfMode = isSelfAutobiographyMode
+        let summary = repository.summary()
+        let bookTitle = isSelfMode ? "我的自传" : "\(archivePersonaName)的故事"
+        let estimatedPages = max(1, summary.total + 1)
         view.backgroundColor = DJDesignTokens.Color.background
         scrollView.backgroundColor = DJDesignTokens.Color.background
 
-        headerTitleLabel?.text = isSelfMode ? "我的自传" : "ta的故事"
+        headerTitleLabel?.text = "记忆档案"
         headerSubtitleLabel?.text = isSelfMode
-            ? "在此处整理、回顾与珍藏那些不愿遗忘的片段。"
-            : "在这里静静翻阅 \(archivePersonaName) 留下的片段。"
+            ? "上方进入完整自传，下方管理你记录的记忆素材。"
+            : "上方翻阅 \(archivePersonaName) 的故事，下方查看已沉淀的素材。"
 
-        primaryCTAEyebrowLabel?.text = isSelfMode ? "续写" : "只读"
-        primaryCTATitleLabel?.text = isSelfMode ? "继续撰写我的故事" : "翻阅ta的故事"
+        bookEntryModeLabel?.text = isSelfMode ? "AUTOBIOGRAPHY" : "FAMILY STORY"
+        bookEntryTitleLabel?.text = bookTitle
+        bookEntrySubtitleLabel?.text = isSelfMode
+            ? "一本合上的生命书，点击后翻开阅读。"
+            : "一本合上的故事书，点击后翻开阅读。"
+        bookEntryMetaLabel?.text = "3 章 · \(estimatedPages) 页 · \(summary.total) 段素材"
+        bookEntryControl?.accessibilityLabel = "\(bookTitle)，点击翻开书本"
+
+        materialsTitleLabel?.text = isSelfMode ? "我记录的记忆" : "\(archivePersonaName)的记忆素材"
+        materialsSubtitleLabel?.text = isSelfMode
+            ? "这些素材会成为自传里的正文、照片和声音线索。"
+            : "家人档案当前只读，可点开素材查看详情。"
+
+        primaryCTAEyebrowLabel?.text = "添加"
+        primaryCTATitleLabel?.text = "记录新的记忆素材"
         primaryCTASubtitleLabel?.text = isSelfMode
-            ? "添加新的篇章或编辑过往记忆"
+            ? "上传图片或写一段文字，成为自传的下一页"
             : "当前切换为家人，只可阅读已有档案"
         primaryCTAControl?.isEnabled = isSelfMode
-        primaryCTAControl?.alpha = isSelfMode ? 1 : 0.78
+        primaryCTAControl?.isHidden = !isSelfMode
+        primaryCTAControl?.alpha = isSelfMode ? 1 : 0
         primaryCTAControl?.accessibilityTraits = isSelfMode ? .button : .staticText
         primaryCTAControl?.accessibilityLabel = isSelfMode
-            ? "继续撰写我的故事，添加文字或图片"
+            ? "记录新的记忆素材，添加文字或图片"
             : "ta的故事，只读"
-
-        firstChapterTitleLabel?.text = isSelfMode ? "家族根基" : "记忆片段"
-        firstChapterSubtitleLabel?.text = isSelfMode ? "Family Roots" : "Stories"
     }
 
     private func refreshRemoteArchiveIfNeeded() {
@@ -552,41 +581,8 @@ final class MemoryArchiveViewController: UIViewController {
             return
         }
 
-        guard activeKindFilter == nil else {
-            items.forEach { item in
-                listStack.addArrangedSubview(makeArchiveTimelineCard(item))
-            }
-            return
-        }
-
-        let rootItems = items.filter { $0.kind == .photo || $0.kind == .text }
-        let growthItems = items.filter { $0.kind == .audio || $0.kind == .video }
-        let wisdomItems = items.filter { $0.kind == .timeLetter }
-
-        if rootItems.isEmpty {
-            listStack.addArrangedSubview(makeUnstartedChapterCard())
-        } else {
-            rootItems.forEach { item in
-                listStack.addArrangedSubview(makeArchiveTimelineCard(item))
-            }
-        }
-
-        if !growthItems.isEmpty {
-            let header = makeChapterHeader(indexText: "CHAPTER II", title: "成长之旅", subtitle: "Growth Journey")
-            listStack.addArrangedSubview(header.view)
-            growthItems.forEach { item in
-                listStack.addArrangedSubview(makeArchiveTimelineCard(item))
-            }
-        }
-
-        let wisdomHeader = makeChapterHeader(indexText: "CHAPTER III", title: "人生智慧", subtitle: "Life Wisdom")
-        listStack.addArrangedSubview(wisdomHeader.view)
-        if wisdomItems.isEmpty {
-            listStack.addArrangedSubview(makeUnstartedChapterCard())
-        } else {
-            wisdomItems.forEach { item in
-                listStack.addArrangedSubview(makeArchiveTimelineCard(item))
-            }
+        items.forEach { item in
+            listStack.addArrangedSubview(makeArchiveTimelineCard(item))
         }
     }
 
@@ -599,7 +595,7 @@ final class MemoryArchiveViewController: UIViewController {
         stack.isLayoutMarginsRelativeArrangement = true
 
         let titleLabel = UILabel()
-        titleLabel.text = isSelfAutobiographyMode ? "我的自传" : "ta的故事"
+        titleLabel.text = "记忆档案"
         titleLabel.font = DJDesignTokens.Font.display(34)
         titleLabel.textColor = DJDesignTokens.Color.textPrimary
         titleLabel.numberOfLines = 0
@@ -607,8 +603,8 @@ final class MemoryArchiveViewController: UIViewController {
 
         let subtitleLabel = UILabel()
         subtitleLabel.text = isSelfAutobiographyMode
-            ? "在此处整理、回顾与珍藏那些不愿遗忘的片段。"
-            : "在这里静静翻阅 \(archivePersonaName) 留下的片段。"
+            ? "上方进入完整自传，下方管理你记录的记忆素材。"
+            : "上方翻阅 \(archivePersonaName) 的故事，下方查看已沉淀的素材。"
         subtitleLabel.font = UIFont.italicSystemFont(ofSize: ArchiveLayout.headerSubtitleFontSize)
         subtitleLabel.textColor = DJDesignTokens.Color.textSecondary
         subtitleLabel.numberOfLines = 0
@@ -631,66 +627,351 @@ final class MemoryArchiveViewController: UIViewController {
         return stack
     }
 
-    private func makePrimaryCTA() -> UIControl {
+    private func makeBookEntryCard() -> UIControl {
         let control = UIControl()
-        control.backgroundColor = DJDesignTokens.Color.surface.withAlphaComponent(0.38)
-        control.layer.cornerRadius = 28
-        control.layer.borderWidth = 1
-        control.layer.borderColor = DJDesignTokens.Color.divider.withAlphaComponent(0.58).cgColor
-        control.addTarget(self, action: #selector(archiveNewMemoryTapped(_:)), for: .touchUpInside)
+        control.backgroundColor = .clear
+        control.layer.cornerRadius = ArchiveLayout.bookEntryCornerRadius
+        control.addTarget(self, action: #selector(autobiographyBookTapped), for: .touchUpInside)
         DJDesignTokens.applySoftShadow(to: control)
 
-        let topRule = UIView()
-        topRule.backgroundColor = DJDesignTokens.Color.divider.withAlphaComponent(0.72)
+        let bookShadow = UIView()
+        bookShadow.backgroundColor = UIColor.black.withAlphaComponent(0.08)
+        bookShadow.layer.cornerRadius = 22
 
-        let bottomRule = UIView()
-        bottomRule.backgroundColor = DJDesignTokens.Color.divider.withAlphaComponent(0.72)
+        let pageBlock = UIView()
+        pageBlock.backgroundColor = UIColor(red: 0.88, green: 0.82, blue: 0.70, alpha: 1)
+        pageBlock.layer.cornerRadius = ArchiveLayout.bookCoverCornerRadius
+        pageBlock.layer.borderWidth = 1
+        pageBlock.layer.borderColor = UIColor(red: 0.64, green: 0.52, blue: 0.36, alpha: 0.32).cgColor
 
-        let eyebrowLabel = UILabel()
-        eyebrowLabel.text = isSelfAutobiographyMode ? "续写" : "只读"
-        eyebrowLabel.font = DJDesignTokens.Font.label(13)
-        eyebrowLabel.textColor = DJDesignTokens.Color.accentDeep
-        eyebrowLabel.textAlignment = .center
+        let rightPageEdge = UIView()
+        rightPageEdge.backgroundColor = UIColor(red: 0.96, green: 0.92, blue: 0.82, alpha: 1)
+        rightPageEdge.layer.cornerRadius = 10
+        rightPageEdge.layer.maskedCorners = [.layerMaxXMinYCorner, .layerMaxXMaxYCorner]
+        rightPageEdge.clipsToBounds = true
+
+        let pageEdgeLines = UIStackView()
+        pageEdgeLines.axis = .vertical
+        pageEdgeLines.distribution = .fillEqually
+        pageEdgeLines.spacing = 5
+        (0..<12).forEach { index in
+            let line = UIView()
+            line.backgroundColor = UIColor(red: 0.58, green: 0.46, blue: 0.30, alpha: index % 2 == 0 ? 0.18 : 0.10)
+            pageEdgeLines.addArrangedSubview(line)
+            line.translatesAutoresizingMaskIntoConstraints = false
+            line.heightAnchor.constraint(equalToConstant: 1).isActive = true
+        }
+
+        let cover = UIView()
+        cover.backgroundColor = UIColor(red: 0.34, green: 0.16, blue: 0.10, alpha: 1)
+        cover.layer.cornerRadius = ArchiveLayout.bookCoverCornerRadius
+        cover.layer.borderWidth = 1
+        cover.layer.borderColor = UIColor(red: 0.91, green: 0.70, blue: 0.40, alpha: 0.34).cgColor
+        cover.clipsToBounds = true
+
+        let spine = UIView()
+        spine.backgroundColor = UIColor(red: 0.22, green: 0.10, blue: 0.07, alpha: 1)
+
+        let spineRuleTop = UIView()
+        spineRuleTop.backgroundColor = UIColor(red: 0.92, green: 0.70, blue: 0.38, alpha: 0.45)
+        let spineRuleBottom = UIView()
+        spineRuleBottom.backgroundColor = UIColor(red: 0.92, green: 0.70, blue: 0.38, alpha: 0.32)
+
+        let innerFrame = UIView()
+        innerFrame.layer.cornerRadius = 17
+        innerFrame.layer.borderWidth = 1
+        innerFrame.layer.borderColor = UIColor(red: 0.96, green: 0.78, blue: 0.46, alpha: 0.35).cgColor
+        innerFrame.isUserInteractionEnabled = false
+
+        let coverRuleTop = UIView()
+        coverRuleTop.backgroundColor = UIColor(red: 0.96, green: 0.78, blue: 0.46, alpha: 0.48)
+        let coverRuleBottom = UIView()
+        coverRuleBottom.backgroundColor = UIColor(red: 0.96, green: 0.78, blue: 0.46, alpha: 0.36)
+
+        let modeLabel = PaddingLabel(horizontalInset: 10, verticalInset: 5)
+        modeLabel.text = isSelfAutobiographyMode ? "AUTOBIOGRAPHY" : "FAMILY STORY"
+        modeLabel.font = DJDesignTokens.Font.label(10)
+        modeLabel.textColor = UIColor(red: 0.97, green: 0.78, blue: 0.44, alpha: 0.92)
+        modeLabel.backgroundColor = UIColor.black.withAlphaComponent(0.12)
+        modeLabel.layer.cornerRadius = 11
+        modeLabel.layer.masksToBounds = true
 
         let titleLabel = UILabel()
-        titleLabel.text = isSelfAutobiographyMode ? "继续撰写我的故事" : "翻阅ta的故事"
-        titleLabel.font = DJDesignTokens.Font.title(20)
-        titleLabel.textColor = DJDesignTokens.Color.textPrimary
-        titleLabel.textAlignment = .center
-        titleLabel.numberOfLines = 0
+        titleLabel.text = isSelfAutobiographyMode ? "我的自传" : "\(archivePersonaName)的故事"
+        titleLabel.font = DJDesignTokens.Font.display(31)
+        titleLabel.textColor = UIColor(red: 1.0, green: 0.82, blue: 0.50, alpha: 1)
+        titleLabel.shadowColor = UIColor.black.withAlphaComponent(0.24)
+        titleLabel.shadowOffset = CGSize(width: 0, height: 1)
+        titleLabel.numberOfLines = 1
+        titleLabel.adjustsFontSizeToFitWidth = true
+        titleLabel.minimumScaleFactor = 0.76
 
         let subtitleLabel = UILabel()
-        subtitleLabel.text = isSelfAutobiographyMode ? "添加新的篇章或编辑过往记忆" : "当前切换为家人，只可阅读已有档案"
+        subtitleLabel.text = isSelfAutobiographyMode
+            ? "一本合上的生命书，点击后翻开阅读。"
+            : "一本合上的故事书，点击后翻开阅读。"
         subtitleLabel.font = DJDesignTokens.Font.body(13)
-        subtitleLabel.textColor = DJDesignTokens.Color.textTertiary
-        subtitleLabel.textAlignment = .center
-        subtitleLabel.numberOfLines = 0
+        subtitleLabel.textColor = UIColor.white.withAlphaComponent(0.78)
+        subtitleLabel.numberOfLines = 2
 
-        let textStack = UIStackView(arrangedSubviews: [topRule, eyebrowLabel, titleLabel, subtitleLabel, bottomRule])
+        let metaLabel = UILabel()
+        metaLabel.text = "3 章 · 1 页 · 0 段素材"
+        metaLabel.font = DJDesignTokens.Font.label(12)
+        metaLabel.textColor = UIColor(red: 0.96, green: 0.80, blue: 0.50, alpha: 0.78)
+        metaLabel.numberOfLines = 1
+
+        let enterLabel = UILabel()
+        enterLabel.text = "翻开"
+        enterLabel.font = DJDesignTokens.Font.label(13)
+        enterLabel.textColor = UIColor(red: 1.0, green: 0.86, blue: 0.56, alpha: 1)
+
+        let enterIcon = UIImageView(image: UIImage(systemName: "chevron.right"))
+        enterIcon.tintColor = UIColor(red: 1.0, green: 0.86, blue: 0.56, alpha: 1)
+        enterIcon.contentMode = .scaleAspectFit
+
+        let enterRow = UIStackView(arrangedSubviews: [enterLabel, enterIcon])
+        enterRow.alignment = .center
+        enterRow.spacing = 6
+
+        let textStack = UIStackView(arrangedSubviews: [
+            modeLabel,
+            titleLabel,
+            coverRuleTop,
+            subtitleLabel,
+            metaLabel,
+            enterRow,
+            coverRuleBottom,
+        ])
         textStack.axis = .vertical
         textStack.alignment = .center
-        textStack.spacing = 8
+        textStack.spacing = 9
         textStack.isUserInteractionEnabled = false
 
-        control.addSubview(textStack)
-        [textStack, topRule, bottomRule].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
+        [
+            bookShadow,
+            pageBlock,
+            rightPageEdge,
+            pageEdgeLines,
+            cover,
+            spine,
+            spineRuleTop,
+            spineRuleBottom,
+            innerFrame,
+            coverRuleTop,
+            coverRuleBottom,
+            modeLabel,
+            titleLabel,
+            subtitleLabel,
+            metaLabel,
+            enterRow,
+            enterLabel,
+            enterIcon,
+        ].forEach { $0.isUserInteractionEnabled = false }
+
+        rightPageEdge.addSubview(pageEdgeLines)
+        control.addSubview(bookShadow)
+        control.addSubview(pageBlock)
+        pageBlock.addSubview(rightPageEdge)
+        control.addSubview(cover)
+        cover.addSubview(spine)
+        cover.addSubview(innerFrame)
+        spine.addSubview(spineRuleTop)
+        spine.addSubview(spineRuleBottom)
+        cover.addSubview(textStack)
+
+        [
+            bookShadow,
+            pageBlock,
+            rightPageEdge,
+            pageEdgeLines,
+            cover,
+            spine,
+            spineRuleTop,
+            spineRuleBottom,
+            innerFrame,
+            textStack,
+            modeLabel,
+            titleLabel,
+            coverRuleTop,
+            subtitleLabel,
+            metaLabel,
+            enterRow,
+            enterLabel,
+            enterIcon,
+            coverRuleBottom,
+        ].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
 
         NSLayoutConstraint.activate([
-            control.heightAnchor.constraint(equalToConstant: 156),
+            control.heightAnchor.constraint(equalToConstant: 224),
 
-            textStack.centerXAnchor.constraint(equalTo: control.centerXAnchor),
-            textStack.centerYAnchor.constraint(equalTo: control.centerYAnchor),
-            textStack.leadingAnchor.constraint(greaterThanOrEqualTo: control.leadingAnchor, constant: ArchiveLayout.primaryCTAHorizontalSafety),
-            textStack.trailingAnchor.constraint(lessThanOrEqualTo: control.trailingAnchor, constant: -ArchiveLayout.primaryCTAHorizontalSafety),
+            bookShadow.leadingAnchor.constraint(equalTo: control.leadingAnchor, constant: 36),
+            bookShadow.trailingAnchor.constraint(equalTo: control.trailingAnchor, constant: -24),
+            bookShadow.bottomAnchor.constraint(equalTo: control.bottomAnchor, constant: -10),
+            bookShadow.heightAnchor.constraint(equalToConstant: 24),
 
-            topRule.widthAnchor.constraint(equalToConstant: 56),
-            topRule.heightAnchor.constraint(equalToConstant: 1),
-            bottomRule.widthAnchor.constraint(equalToConstant: 42),
-            bottomRule.heightAnchor.constraint(equalToConstant: 1),
+            pageBlock.topAnchor.constraint(equalTo: control.topAnchor, constant: 24),
+            pageBlock.leadingAnchor.constraint(equalTo: control.leadingAnchor, constant: 30),
+            pageBlock.trailingAnchor.constraint(equalTo: control.trailingAnchor, constant: -20),
+            pageBlock.bottomAnchor.constraint(equalTo: control.bottomAnchor, constant: -18),
+
+            rightPageEdge.topAnchor.constraint(equalTo: pageBlock.topAnchor, constant: 10),
+            rightPageEdge.trailingAnchor.constraint(equalTo: pageBlock.trailingAnchor, constant: -4),
+            rightPageEdge.bottomAnchor.constraint(equalTo: pageBlock.bottomAnchor, constant: -9),
+            rightPageEdge.widthAnchor.constraint(equalToConstant: 26),
+
+            pageEdgeLines.topAnchor.constraint(equalTo: rightPageEdge.topAnchor, constant: 12),
+            pageEdgeLines.leadingAnchor.constraint(equalTo: rightPageEdge.leadingAnchor, constant: 4),
+            pageEdgeLines.trailingAnchor.constraint(equalTo: rightPageEdge.trailingAnchor, constant: -4),
+            pageEdgeLines.bottomAnchor.constraint(equalTo: rightPageEdge.bottomAnchor, constant: -12),
+
+            cover.topAnchor.constraint(equalTo: control.topAnchor, constant: 12),
+            cover.leadingAnchor.constraint(equalTo: control.leadingAnchor, constant: 16),
+            cover.trailingAnchor.constraint(equalTo: control.trailingAnchor, constant: -34),
+            cover.bottomAnchor.constraint(equalTo: control.bottomAnchor, constant: -28),
+
+            spine.topAnchor.constraint(equalTo: cover.topAnchor),
+            spine.leadingAnchor.constraint(equalTo: cover.leadingAnchor),
+            spine.bottomAnchor.constraint(equalTo: cover.bottomAnchor),
+            spine.widthAnchor.constraint(equalToConstant: 48),
+
+            spineRuleTop.leadingAnchor.constraint(equalTo: spine.leadingAnchor, constant: 12),
+            spineRuleTop.trailingAnchor.constraint(equalTo: spine.trailingAnchor, constant: -12),
+            spineRuleTop.topAnchor.constraint(equalTo: spine.topAnchor, constant: 28),
+            spineRuleTop.heightAnchor.constraint(equalToConstant: 1),
+
+            spineRuleBottom.leadingAnchor.constraint(equalTo: spine.leadingAnchor, constant: 12),
+            spineRuleBottom.trailingAnchor.constraint(equalTo: spine.trailingAnchor, constant: -12),
+            spineRuleBottom.bottomAnchor.constraint(equalTo: spine.bottomAnchor, constant: -28),
+            spineRuleBottom.heightAnchor.constraint(equalToConstant: 1),
+
+            innerFrame.topAnchor.constraint(equalTo: cover.topAnchor, constant: 18),
+            innerFrame.leadingAnchor.constraint(equalTo: spine.trailingAnchor, constant: 16),
+            innerFrame.trailingAnchor.constraint(equalTo: cover.trailingAnchor, constant: -18),
+            innerFrame.bottomAnchor.constraint(equalTo: cover.bottomAnchor, constant: -18),
+
+            textStack.leadingAnchor.constraint(equalTo: innerFrame.leadingAnchor, constant: 18),
+            textStack.trailingAnchor.constraint(equalTo: innerFrame.trailingAnchor, constant: -18),
+            textStack.centerYAnchor.constraint(equalTo: cover.centerYAnchor),
+            textStack.topAnchor.constraint(greaterThanOrEqualTo: innerFrame.topAnchor, constant: 14),
+            textStack.bottomAnchor.constraint(lessThanOrEqualTo: innerFrame.bottomAnchor, constant: -14),
+
+            coverRuleTop.widthAnchor.constraint(equalToConstant: 84),
+            coverRuleTop.heightAnchor.constraint(equalToConstant: 1),
+            coverRuleBottom.widthAnchor.constraint(equalToConstant: 54),
+            coverRuleBottom.heightAnchor.constraint(equalToConstant: 1),
+            enterIcon.widthAnchor.constraint(equalToConstant: 13),
+            enterIcon.heightAnchor.constraint(equalToConstant: 13),
         ])
 
         control.accessibilityTraits = .button
-        control.accessibilityLabel = isSelfAutobiographyMode ? "继续撰写我的故事，添加文字或图片" : "ta的故事，只读"
+        control.accessibilityLabel = isSelfAutobiographyMode ? "我的自传，点击进入完整书本" : "\(archivePersonaName)的故事，点击进入完整书本"
+        bookEntryControl = control
+        bookEntryModeLabel = modeLabel
+        bookEntryTitleLabel = titleLabel
+        bookEntrySubtitleLabel = subtitleLabel
+        bookEntryMetaLabel = metaLabel
+        return control
+    }
+
+    private func makeMaterialsHeader() -> UIView {
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = ArchiveLayout.materialsHeaderSpacing
+        stack.layoutMargins = UIEdgeInsets(top: 2, left: 0, bottom: 0, right: 0)
+        stack.isLayoutMarginsRelativeArrangement = true
+
+        let titleLabel = UILabel()
+        titleLabel.text = isSelfAutobiographyMode ? "我记录的记忆" : "\(archivePersonaName)的记忆素材"
+        titleLabel.font = DJDesignTokens.Font.title(22)
+        titleLabel.textColor = DJDesignTokens.Color.textPrimary
+        titleLabel.numberOfLines = 1
+        titleLabel.adjustsFontSizeToFitWidth = true
+        titleLabel.minimumScaleFactor = 0.84
+
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = isSelfAutobiographyMode
+            ? "这些素材会成为自传里的正文、照片和声音线索。"
+            : "家人档案当前只读，可点开素材查看详情。"
+        subtitleLabel.font = DJDesignTokens.Font.body(13)
+        subtitleLabel.textColor = DJDesignTokens.Color.textSecondary
+        subtitleLabel.numberOfLines = 0
+
+        stack.addArrangedSubview(titleLabel)
+        stack.addArrangedSubview(subtitleLabel)
+
+        materialsTitleLabel = titleLabel
+        materialsSubtitleLabel = subtitleLabel
+        return stack
+    }
+
+    private func makePrimaryCTA() -> UIControl {
+        let control = UIControl()
+        control.backgroundColor = DJDesignTokens.Color.accent.withAlphaComponent(0.10)
+        control.layer.cornerRadius = DJDesignTokens.Radius.large
+        control.layer.borderWidth = 1
+        control.layer.borderColor = DJDesignTokens.Color.accent.withAlphaComponent(0.20).cgColor
+        control.addTarget(self, action: #selector(archiveNewMemoryTapped(_:)), for: .touchUpInside)
+        DJDesignTokens.applySoftShadow(to: control)
+
+        let iconContainer = makeIconContainer(iconName: "plus", tintColor: DJDesignTokens.Color.accentDeep)
+        iconContainer.backgroundColor = DJDesignTokens.Color.surface.withAlphaComponent(0.86)
+        iconContainer.isUserInteractionEnabled = false
+
+        let eyebrowLabel = UILabel()
+        eyebrowLabel.text = "添加"
+        eyebrowLabel.font = DJDesignTokens.Font.label(11)
+        eyebrowLabel.textColor = DJDesignTokens.Color.accentDeep
+
+        let titleLabel = UILabel()
+        titleLabel.text = "记录新的记忆素材"
+        titleLabel.font = DJDesignTokens.Font.title(17)
+        titleLabel.textColor = DJDesignTokens.Color.textPrimary
+        titleLabel.numberOfLines = 1
+        titleLabel.adjustsFontSizeToFitWidth = true
+        titleLabel.minimumScaleFactor = 0.82
+
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = "上传图片或写一段文字，成为自传的下一页"
+        subtitleLabel.font = DJDesignTokens.Font.body(13)
+        subtitleLabel.textColor = DJDesignTokens.Color.textTertiary
+        subtitleLabel.numberOfLines = 0
+
+        let textStack = UIStackView(arrangedSubviews: [eyebrowLabel, titleLabel, subtitleLabel])
+        textStack.axis = .vertical
+        textStack.spacing = 3
+        textStack.isUserInteractionEnabled = false
+
+        let chevronView = UIImageView(image: UIImage(systemName: "chevron.right"))
+        chevronView.tintColor = DJDesignTokens.Color.accentDeep.withAlphaComponent(0.72)
+        chevronView.contentMode = .scaleAspectFit
+
+        control.addSubview(iconContainer)
+        control.addSubview(textStack)
+        control.addSubview(chevronView)
+        [iconContainer, textStack, chevronView].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
+
+        NSLayoutConstraint.activate([
+            control.heightAnchor.constraint(equalToConstant: 88),
+
+            iconContainer.leadingAnchor.constraint(equalTo: control.leadingAnchor, constant: 16),
+            iconContainer.centerYAnchor.constraint(equalTo: control.centerYAnchor),
+            iconContainer.widthAnchor.constraint(equalToConstant: 42),
+            iconContainer.heightAnchor.constraint(equalToConstant: 42),
+
+            textStack.leadingAnchor.constraint(equalTo: iconContainer.trailingAnchor, constant: 14),
+            textStack.trailingAnchor.constraint(equalTo: chevronView.leadingAnchor, constant: -12),
+            textStack.centerYAnchor.constraint(equalTo: control.centerYAnchor),
+            textStack.topAnchor.constraint(greaterThanOrEqualTo: control.topAnchor, constant: 12),
+            textStack.bottomAnchor.constraint(lessThanOrEqualTo: control.bottomAnchor, constant: -12),
+
+            chevronView.trailingAnchor.constraint(equalTo: control.trailingAnchor, constant: -18),
+            chevronView.centerYAnchor.constraint(equalTo: control.centerYAnchor),
+            chevronView.widthAnchor.constraint(equalToConstant: 14),
+            chevronView.heightAnchor.constraint(equalToConstant: 14),
+        ])
+
+        control.accessibilityTraits = .button
+        control.accessibilityLabel = "记录新的记忆素材，添加文字或图片"
         primaryCTAControl = control
         primaryCTAEyebrowLabel = eyebrowLabel
         primaryCTATitleLabel = titleLabel
@@ -746,8 +1027,6 @@ final class MemoryArchiveViewController: UIViewController {
             title: isSelfAutobiographyMode ? "家族根基" : "记忆片段",
             subtitle: isSelfAutobiographyMode ? "Family Roots" : "Stories"
         )
-        firstChapterTitleLabel = header.titleLabel
-        firstChapterSubtitleLabel = header.subtitleLabel
         return header.view
     }
 
@@ -1955,6 +2234,16 @@ final class MemoryArchiveViewController: UIViewController {
         present(sheet, animated: true)
     }
 
+    @objc private func autobiographyBookTapped() {
+        let viewController = AutobiographyBookViewController(
+            repository: repository,
+            context: currentArchiveContext
+        )
+        viewController.hidesBottomBarWhenPushed = true
+        navigationController?.setNavigationBarHidden(false, animated: false)
+        navigationController?.pushViewController(viewController, animated: true)
+    }
+
     @objc private func disabledFeatureTapped() {
         showToast("该入口将在后续开放", type: .info)
     }
@@ -2340,6 +2629,595 @@ final class MemoryArchiveViewController: UIViewController {
 
     private func showReadOnlyArchiveToast() {
         showToast("家人故事仅可阅读，切回自己后可管理我的自传", type: .info)
+    }
+}
+
+private enum AutobiographyBookLayout {
+    static let pageCornerRadius: CGFloat = 12
+    static let pageInset: CGFloat = 24
+    static let pageSpacing: CGFloat = 22
+    static let photoHeight: CGFloat = 176
+    static let itemSpacing: CGFloat = 16
+    static let pageNumberTopSpacing: CGFloat = 18
+}
+
+private struct AutobiographyBookChapter {
+    let indexText: String
+    let title: String
+    let subtitle: String
+    let emptyText: String
+    let items: [MemoryArchiveItem]
+}
+
+private final class AutobiographyBookViewController: UIViewController {
+    private let repository: MemoryArchiveRepository
+    private let context: DigitalHumanContext
+    private let scrollView = UIScrollView()
+    private let contentView = UIView()
+    private let mainStack = UIStackView()
+
+    private var isSelfMode: Bool {
+        context.isSelfAssistant
+    }
+
+    private var personaName: String {
+        context.resolvedDisplayName
+    }
+
+    private var bookTitle: String {
+        isSelfMode ? "我的自传" : "\(personaName)的故事"
+    }
+
+    private static let bookDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyy.MM.dd"
+        return formatter
+    }()
+
+    init(repository: MemoryArchiveRepository, context: DigitalHumanContext) {
+        self.repository = repository
+        self.context = context
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = bookTitle
+        view.backgroundColor = DJDesignTokens.Color.background
+        setupLayout()
+        reloadBook()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+    }
+
+    private func setupLayout() {
+        scrollView.backgroundColor = DJDesignTokens.Color.background
+        scrollView.showsVerticalScrollIndicator = false
+
+        mainStack.axis = .vertical
+        mainStack.spacing = AutobiographyBookLayout.pageSpacing
+        mainStack.layoutMargins = UIEdgeInsets(
+            top: 18,
+            left: DJDesignTokens.Spacing.page,
+            bottom: 42,
+            right: DJDesignTokens.Spacing.page
+        )
+        mainStack.isLayoutMarginsRelativeArrangement = true
+
+        view.addSubview(scrollView)
+        scrollView.addSubview(contentView)
+        contentView.addSubview(mainStack)
+
+        [scrollView, contentView, mainStack].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
+
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            contentView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            contentView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
+
+            mainStack.topAnchor.constraint(equalTo: contentView.topAnchor),
+            mainStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            mainStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            mainStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+        ])
+    }
+
+    private func reloadBook() {
+        let items = repository.allItems().sorted { $0.createdAt < $1.createdAt }
+        let chapters = makeChapters(from: items)
+
+        mainStack.removeAllArrangedSubviews()
+        mainStack.addArrangedSubview(makeOpeningPage(itemCount: items.count, pageNumber: 1))
+        for (index, chapter) in chapters.enumerated() {
+            mainStack.addArrangedSubview(makeChapterPage(chapter, pageNumber: index + 2))
+        }
+    }
+
+    private func makeChapters(from items: [MemoryArchiveItem]) -> [AutobiographyBookChapter] {
+        let rootItems = items.filter { $0.kind == .photo || $0.kind == .text }
+        let growthItems = items.filter { $0.kind == .audio || $0.kind == .video }
+        let wisdomItems = items.filter { $0.kind == .timeLetter }
+
+        return [
+            AutobiographyBookChapter(
+                indexText: "CHAPTER I",
+                title: isSelfMode ? "家族根基" : "记忆片段",
+                subtitle: isSelfMode ? "Family Roots" : "Stories",
+                emptyText: isSelfMode ? "还没有写入第一章的照片或文字。" : "这一章还没有可阅读的故事。",
+                items: rootItems
+            ),
+            AutobiographyBookChapter(
+                indexText: "CHAPTER II",
+                title: "成长之旅",
+                subtitle: "Growth Journey",
+                emptyText: isSelfMode ? "声音和视频片段会在这里汇成旅程。" : "这一章暂时没有声音或影像。",
+                items: growthItems
+            ),
+            AutobiographyBookChapter(
+                indexText: "CHAPTER III",
+                title: "人生智慧",
+                subtitle: "Life Wisdom",
+                emptyText: isSelfMode ? "时间信件会在这里成为写给未来的页。" : "这一章还在等待被打开。",
+                items: wisdomItems
+            ),
+        ]
+    }
+
+    private func makeOpeningPage(itemCount: Int, pageNumber: Int) -> UIView {
+        let page = makePaperPage()
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.alignment = .center
+        stack.spacing = 14
+        stack.layoutMargins = UIEdgeInsets(
+            top: 34,
+            left: AutobiographyBookLayout.pageInset,
+            bottom: 22,
+            right: AutobiographyBookLayout.pageInset
+        )
+        stack.isLayoutMarginsRelativeArrangement = true
+
+        let modeLabel = PaddingLabel(horizontalInset: 12, verticalInset: 5)
+        modeLabel.text = isSelfMode ? "LIFE BOOK" : "FAMILY MEMORY"
+        modeLabel.font = DJDesignTokens.Font.label(11)
+        modeLabel.textColor = DJDesignTokens.Color.accentDeep
+        modeLabel.backgroundColor = DJDesignTokens.Color.surfaceLow
+        modeLabel.layer.cornerRadius = 12
+        modeLabel.layer.masksToBounds = true
+
+        let titleLabel = UILabel()
+        titleLabel.text = bookTitle
+        titleLabel.font = DJDesignTokens.Font.display(32)
+        titleLabel.textColor = DJDesignTokens.Color.textPrimary
+        titleLabel.textAlignment = .center
+        titleLabel.numberOfLines = 0
+
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = isSelfMode
+            ? "这不是素材列表，而是把你记录下来的片段整理成一本可以翻阅的书。"
+            : "把 \(personaName) 留下的片段整理成一本安静可读的故事。"
+        subtitleLabel.font = UIFont.italicSystemFont(ofSize: 14)
+        subtitleLabel.textColor = DJDesignTokens.Color.textSecondary
+        subtitleLabel.textAlignment = .center
+        subtitleLabel.numberOfLines = 0
+
+        let divider = UIView()
+        divider.backgroundColor = DJDesignTokens.Color.divider.withAlphaComponent(0.42)
+
+        let statsLabel = UILabel()
+        statsLabel.text = "3 个章节 · \(max(1, itemCount + 1)) 页线索 · \(itemCount) 段素材"
+        statsLabel.font = DJDesignTokens.Font.body(13)
+        statsLabel.textColor = DJDesignTokens.Color.textTertiary
+        statsLabel.textAlignment = .center
+        statsLabel.numberOfLines = 0
+
+        let quoteLabel = UILabel()
+        quoteLabel.text = isSelfMode
+            ? "所有记忆都先被好好收下，再慢慢长成故事。"
+            : "愿每一页都保留原本的温度。"
+        quoteLabel.font = DJDesignTokens.Font.title(17)
+        quoteLabel.textColor = DJDesignTokens.Color.textPrimary
+        quoteLabel.textAlignment = .center
+        quoteLabel.numberOfLines = 0
+
+        stack.addArrangedSubview(modeLabel)
+        stack.addArrangedSubview(titleLabel)
+        stack.addArrangedSubview(subtitleLabel)
+        stack.addArrangedSubview(divider)
+        stack.addArrangedSubview(statsLabel)
+        stack.addArrangedSubview(quoteLabel)
+        stack.addArrangedSubview(makePageNumberLabel(pageNumber))
+        page.addSubview(stack)
+
+        [stack, divider].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: page.topAnchor),
+            stack.leadingAnchor.constraint(equalTo: page.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: page.trailingAnchor),
+            stack.bottomAnchor.constraint(equalTo: page.bottomAnchor),
+            divider.widthAnchor.constraint(equalToConstant: 48),
+            divider.heightAnchor.constraint(equalToConstant: 1),
+        ])
+
+        return page
+    }
+
+    private func makeChapterPage(_ chapter: AutobiographyBookChapter, pageNumber: Int) -> UIView {
+        let page = makePaperPage()
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 18
+        stack.layoutMargins = UIEdgeInsets(
+            top: 28,
+            left: AutobiographyBookLayout.pageInset,
+            bottom: 20,
+            right: AutobiographyBookLayout.pageInset
+        )
+        stack.isLayoutMarginsRelativeArrangement = true
+
+        stack.addArrangedSubview(makeChapterHeader(chapter))
+
+        if chapter.items.isEmpty {
+            stack.addArrangedSubview(makeChapterEmptyView(chapter.emptyText))
+        } else {
+            chapter.items.forEach { item in
+                stack.addArrangedSubview(makeBookMemoryView(item))
+            }
+        }
+
+        stack.addArrangedSubview(makePageNumberLabel(pageNumber))
+        page.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: page.topAnchor),
+            stack.leadingAnchor.constraint(equalTo: page.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: page.trailingAnchor),
+            stack.bottomAnchor.constraint(equalTo: page.bottomAnchor),
+        ])
+
+        return page
+    }
+
+    private func makePaperPage() -> UIView {
+        let page = UIView()
+        page.backgroundColor = UIColor(red: 0.98, green: 0.96, blue: 0.91, alpha: 1)
+        page.layer.cornerRadius = AutobiographyBookLayout.pageCornerRadius
+        page.layer.borderWidth = 1
+        page.layer.borderColor = DJDesignTokens.Color.divider.withAlphaComponent(0.34).cgColor
+        DJDesignTokens.applySoftShadow(to: page)
+        return page
+    }
+
+    private func makeChapterHeader(_ chapter: AutobiographyBookChapter) -> UIView {
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 12
+
+        let indexLine = UIStackView()
+        indexLine.alignment = .center
+        indexLine.spacing = 10
+
+        let indexLabel = UILabel()
+        indexLabel.text = chapter.indexText
+        indexLabel.font = DJDesignTokens.Font.label(12)
+        indexLabel.textColor = DJDesignTokens.Color.accentDeep.withAlphaComponent(0.86)
+        indexLabel.setContentHuggingPriority(.required, for: .horizontal)
+
+        let line = UIView()
+        line.backgroundColor = DJDesignTokens.Color.divider.withAlphaComponent(0.42)
+
+        indexLine.addArrangedSubview(indexLabel)
+        indexLine.addArrangedSubview(line)
+
+        let titleLine = UIStackView()
+        titleLine.alignment = .lastBaseline
+        titleLine.spacing = 10
+
+        let titleLabel = UILabel()
+        titleLabel.text = chapter.title
+        titleLabel.font = DJDesignTokens.Font.title(23)
+        titleLabel.textColor = DJDesignTokens.Color.textPrimary
+        titleLabel.numberOfLines = 1
+        titleLabel.adjustsFontSizeToFitWidth = true
+        titleLabel.minimumScaleFactor = 0.82
+
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = chapter.subtitle
+        subtitleLabel.font = DJDesignTokens.Font.body(12)
+        subtitleLabel.textColor = DJDesignTokens.Color.textTertiary
+
+        titleLine.addArrangedSubview(titleLabel)
+        titleLine.addArrangedSubview(subtitleLabel)
+        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        stack.addArrangedSubview(indexLine)
+        stack.addArrangedSubview(titleLine)
+
+        line.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            line.heightAnchor.constraint(equalToConstant: 1),
+        ])
+
+        return stack
+    }
+
+    private func makeChapterEmptyView(_ text: String) -> UIView {
+        let container = UIView()
+        container.backgroundColor = UIColor.white.withAlphaComponent(0.24)
+        container.layer.cornerRadius = 18
+        container.layer.borderWidth = 1
+        container.layer.borderColor = DJDesignTokens.Color.divider.withAlphaComponent(0.26).cgColor
+
+        let label = UILabel()
+        label.text = text
+        label.font = UIFont.italicSystemFont(ofSize: 14)
+        label.textColor = DJDesignTokens.Color.textTertiary
+        label.textAlignment = .center
+        label.numberOfLines = 0
+
+        container.addSubview(label)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            container.heightAnchor.constraint(greaterThanOrEqualToConstant: 92),
+            label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 18),
+            label.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -18),
+            label.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+        ])
+
+        return container
+    }
+
+    private func makeBookMemoryView(_ item: MemoryArchiveItem) -> UIView {
+        switch item.kind {
+        case .photo:
+            return makePhotoMemoryView(item)
+        case .audio:
+            return makeAudioMemoryView(item)
+        case .text, .timeLetter, .video:
+            return makeTextualMemoryView(item)
+        }
+    }
+
+    private func makePhotoMemoryView(_ item: MemoryArchiveItem) -> UIView {
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 10
+
+        let imageContainer = UIView()
+        imageContainer.backgroundColor = UIColor.white.withAlphaComponent(0.48)
+        imageContainer.layer.cornerRadius = 8
+        imageContainer.layer.borderWidth = 1
+        imageContainer.layer.borderColor = DJDesignTokens.Color.divider.withAlphaComponent(0.24).cgColor
+        imageContainer.clipsToBounds = true
+
+        let image = item.resolvedLocalFilePath.flatMap { UIImage(contentsOfFile: $0) }
+        if let image {
+            let imageView = UIImageView(image: image)
+            imageView.contentMode = .scaleAspectFill
+            imageView.clipsToBounds = true
+            imageContainer.addSubview(imageView)
+            imageView.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                imageView.topAnchor.constraint(equalTo: imageContainer.topAnchor),
+                imageView.leadingAnchor.constraint(equalTo: imageContainer.leadingAnchor),
+                imageView.trailingAnchor.constraint(equalTo: imageContainer.trailingAnchor),
+                imageView.bottomAnchor.constraint(equalTo: imageContainer.bottomAnchor),
+            ])
+        } else {
+            let iconView = UIImageView(image: UIImage(systemName: "photo"))
+            iconView.tintColor = DJDesignTokens.Color.accentDeep.withAlphaComponent(0.44)
+            iconView.contentMode = .scaleAspectFit
+            imageContainer.addSubview(iconView)
+            iconView.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                iconView.centerXAnchor.constraint(equalTo: imageContainer.centerXAnchor),
+                iconView.centerYAnchor.constraint(equalTo: imageContainer.centerYAnchor),
+                iconView.widthAnchor.constraint(equalToConstant: 36),
+                iconView.heightAnchor.constraint(equalToConstant: 36),
+            ])
+        }
+
+        let captionLabel = makeBookItemMetaLabel("\(Self.bookDateFormatter.string(from: item.createdAt)) · 照片")
+        captionLabel.textAlignment = .right
+
+        stack.addArrangedSubview(imageContainer)
+        stack.addArrangedSubview(captionLabel)
+        stack.addArrangedSubview(makeBookItemTitleLabel(item.archivePresentation.title))
+        stack.addArrangedSubview(makeBookItemBodyLabel(item.archivePresentation.note))
+
+        imageContainer.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            imageContainer.heightAnchor.constraint(equalToConstant: AutobiographyBookLayout.photoHeight),
+        ])
+
+        return stack
+    }
+
+    private func makeAudioMemoryView(_ item: MemoryArchiveItem) -> UIView {
+        let card = makeBookItemCard()
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 10
+        stack.layoutMargins = UIEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
+        stack.isLayoutMarginsRelativeArrangement = true
+
+        let header = UIStackView()
+        header.alignment = .center
+        header.spacing = 8
+
+        let iconView = UIImageView(image: UIImage(systemName: "waveform"))
+        iconView.tintColor = DJDesignTokens.Color.accentDeep
+        iconView.contentMode = .scaleAspectFit
+
+        let metaLabel = makeBookItemMetaLabel("\(Self.bookDateFormatter.string(from: item.createdAt)) · 声音")
+        header.addArrangedSubview(iconView)
+        header.addArrangedSubview(metaLabel)
+        header.addArrangedSubview(UIView())
+
+        stack.addArrangedSubview(header)
+        stack.addArrangedSubview(makeBookItemTitleLabel(item.archivePresentation.title))
+        stack.addArrangedSubview(makeBookItemBodyLabel(item.archivePresentation.note))
+        stack.addArrangedSubview(makeBookWaveformView(durationText: item.metadata["durationText"] ?? "声音片段"))
+
+        card.addSubview(stack)
+        [stack, iconView].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: card.topAnchor),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor),
+            iconView.widthAnchor.constraint(equalToConstant: 18),
+            iconView.heightAnchor.constraint(equalToConstant: 18),
+        ])
+
+        return card
+    }
+
+    private func makeTextualMemoryView(_ item: MemoryArchiveItem) -> UIView {
+        let card = makeBookItemCard()
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 9
+        stack.layoutMargins = UIEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
+        stack.isLayoutMarginsRelativeArrangement = true
+
+        let kindText: String
+        switch item.kind {
+        case .photo:
+            kindText = "照片"
+        case .audio:
+            kindText = "声音"
+        case .text:
+            kindText = "文字"
+        case .timeLetter:
+            kindText = "信件"
+        case .video:
+            kindText = "视频"
+        }
+
+        stack.addArrangedSubview(makeBookItemMetaLabel("\(Self.bookDateFormatter.string(from: item.createdAt)) · \(kindText)"))
+        stack.addArrangedSubview(makeBookItemTitleLabel(item.archivePresentation.title))
+        stack.addArrangedSubview(makeBookItemBodyLabel(item.archivePresentation.note))
+        if let metadata = item.archivePresentation.metadataSummary {
+            stack.addArrangedSubview(makeBookItemMetaLabel(metadata))
+        }
+
+        card.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: card.topAnchor),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor),
+        ])
+
+        return card
+    }
+
+    private func makeBookItemCard() -> UIView {
+        let card = UIView()
+        card.backgroundColor = UIColor.white.withAlphaComponent(0.25)
+        card.layer.cornerRadius = 16
+        card.layer.borderWidth = 1
+        card.layer.borderColor = DJDesignTokens.Color.divider.withAlphaComponent(0.20).cgColor
+        return card
+    }
+
+    private func makeBookWaveformView(durationText: String) -> UIView {
+        let container = UIView()
+        container.backgroundColor = DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.52)
+        container.layer.cornerRadius = 18
+
+        let bars = UIStackView()
+        bars.axis = .horizontal
+        bars.alignment = .center
+        bars.spacing = 4
+
+        [10, 20, 14, 28, 18, 24, 12, 22, 16].forEach { height in
+            let bar = UIView()
+            bar.backgroundColor = DJDesignTokens.Color.accentDeep.withAlphaComponent(0.48)
+            bar.layer.cornerRadius = 1.5
+            bars.addArrangedSubview(bar)
+            bar.translatesAutoresizingMaskIntoConstraints = false
+            bar.widthAnchor.constraint(equalToConstant: 3).isActive = true
+            bar.heightAnchor.constraint(equalToConstant: CGFloat(height)).isActive = true
+        }
+
+        let durationLabel = UILabel()
+        durationLabel.text = durationText
+        durationLabel.font = DJDesignTokens.Font.label(11)
+        durationLabel.textColor = DJDesignTokens.Color.textTertiary
+        durationLabel.textAlignment = .right
+
+        container.addSubview(bars)
+        container.addSubview(durationLabel)
+        [bars, durationLabel].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
+        NSLayoutConstraint.activate([
+            container.heightAnchor.constraint(equalToConstant: 44),
+            bars.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 14),
+            bars.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            bars.heightAnchor.constraint(equalToConstant: 30),
+
+            durationLabel.leadingAnchor.constraint(equalTo: bars.trailingAnchor, constant: 10),
+            durationLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -14),
+            durationLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+        ])
+
+        return container
+    }
+
+    private func makeBookItemTitleLabel(_ text: String) -> UILabel {
+        let label = UILabel()
+        label.text = text
+        label.font = DJDesignTokens.Font.title(18)
+        label.textColor = DJDesignTokens.Color.textPrimary
+        label.numberOfLines = 0
+        return label
+    }
+
+    private func makeBookItemBodyLabel(_ text: String) -> UILabel {
+        let label = UILabel()
+        label.text = text
+        label.font = DJDesignTokens.Font.body(15)
+        label.textColor = DJDesignTokens.Color.textSecondary
+        label.numberOfLines = 0
+        return label
+    }
+
+    private func makeBookItemMetaLabel(_ text: String) -> UILabel {
+        let label = UILabel()
+        label.text = text
+        label.font = DJDesignTokens.Font.label(12)
+        label.textColor = DJDesignTokens.Color.textTertiary
+        label.numberOfLines = 0
+        return label
+    }
+
+    private func makePageNumberLabel(_ number: Int) -> UILabel {
+        let label = UILabel()
+        label.text = "- \(String(format: "%02d", number)) -"
+        label.font = DJDesignTokens.Font.label(12)
+        label.textColor = DJDesignTokens.Color.textTertiary
+        label.textAlignment = .center
+        label.numberOfLines = 1
+        return label
     }
 }
 
