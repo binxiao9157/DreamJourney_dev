@@ -30,6 +30,7 @@ RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE="${RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE
 RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE="${RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE:-0}"
 RUN_VOICE_CLONE_SYNTHESIS_RUNTIME_SMOKE="${RUN_VOICE_CLONE_SYNTHESIS_RUNTIME_SMOKE:-0}"
 RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE="${RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE:-0}"
+RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE="${RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE:-0}"
 RUN_DIGITAL_HUMAN_TTS_VISEME_GATE="${RUN_DIGITAL_HUMAN_TTS_VISEME_GATE:-0}"
 RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE="${RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE:-0}"
 RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE="${RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE:-0}"
@@ -106,6 +107,7 @@ Run ID: \`$RUN_ID\`
 - Voice clone profile selection UIQA smoke: \`$RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE\`
 - Voice clone synthesis runtime UIQA smoke: \`$RUN_VOICE_CLONE_SYNTHESIS_RUNTIME_SMOKE\`
 - Tencent backend PCM-drive mock UIQA smoke: \`$RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE\`
+- Tencent digital-human Phase 1 non-device gate: \`$RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE\`
 - Digital human TTS/viseme combo gate: \`$RUN_DIGITAL_HUMAN_TTS_VISEME_GATE\`
 - Digital human runtime stub gate: \`$RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE\`
 - Archive failed analysis retry UIQA smoke: \`$RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE\`
@@ -139,6 +141,7 @@ Run ID: \`$RUN_ID\`
 - Optional voice clone profile selection UIQA smoke when \`RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE=1\`; this verifies ready \`S_\` profiles win over pending/deleted profiles and pending backend replies do not overwrite a usable ready voice.
 - Optional voice clone synthesis runtime UIQA smoke when \`RUN_VOICE_CLONE_SYNTHESIS_RUNTIME_SMOKE=1\`; this verifies iOS reads \`/config/runtime.voiceClone\`, calls \`/voice/synthesis\`, and receives Tencent audio-drive compatible PCM without printing raw audio.
 - Optional Tencent backend PCM-drive mock UIQA smoke when \`RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE=1\`; this verifies deployed backend synthesis PCM is chunked into the fake Tencent runtime and stop/interruption cleanup works without a true device.
+- Optional Tencent digital-human Phase 1 non-device gate when \`RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE=1\`; this verifies backend-first asset source, QA-only local override, lifecycle, audio owner logs, runtime stub, PCM-drive mock, and build without true-device validation.
 - Optional digital-human TTS/viseme combo gate when \`RUN_DIGITAL_HUMAN_TTS_VISEME_GATE=1\`; this verifies backend mock synthesis \`visemeTimeline\`, iOS provider timeline UIQA, and \`AVAudioPlayer\` metering fallback UIQA.
 - Optional digital-human runtime stub gate when \`RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE=1\`; this verifies backend \`/digital-human/sessions\`, iOS \`TencentDigitalHumanRuntimeStub\`, and \`AudioOnlyDigitalHumanRuntime\` fallback without connecting the real Tencent SDK.
 - Optional archive detail failed-analysis retry UIQA smoke when \`RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE=1\`.
@@ -176,6 +179,7 @@ append_report_footer() {
 - Backend voice clone deployed smoke: \`backend-voice-clone-deployed-smoke/$RUN_ID/\`
 - Voice clone profile selection UIQA smoke: \`voice-clone-profile-selection-smoke/$RUN_ID/\`
 - Voice clone synthesis runtime UIQA smoke: \`voice-clone-synthesis-runtime-smoke/$RUN_ID/\`
+- Tencent digital-human Phase 1 non-device gate: \`tencent-digital-human-phase1-non-device-gate/$RUN_ID/\`
 - Digital human TTS/viseme combo gate: \`digital-human-tts-viseme-gate/$RUN_ID/\`
 - Digital human runtime stub gate: \`digital-human-runtime-stub-smoke/$RUN_ID/\`
 - Archive failed analysis retry UIQA smoke: \`archive-failed-analysis-retry-smoke/$RUN_ID/\`
@@ -297,6 +301,7 @@ for guard in \
   true-device-tencent-backend-pcm-drive-smoke-check.swift \
   tencent-digital-human-voice-clone-route-check.swift \
   tencent-digital-human-provider-stability-check.swift \
+  tencent-digital-human-phase1-stability-check.swift \
   tencent-digital-human-audio-owner-stop-semantics-check.swift \
   tencent-digital-human-trtc-compat-check.swift \
   tencent-digital-human-sdk-binary-check.swift \
@@ -467,6 +472,17 @@ if [[ "$RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/tencent-backend-pcm-drive-mock-smoke/$RUN_ID"
   echo "Skipped by RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE=0" > "$OUTPUT_DIR/tencent-backend-pcm-drive-mock-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/tencent-digital-human-phase1-non-device-gate" \
+  DERIVED_DATA_PATH="$OUTPUT_DIR/DerivedDataTencentPhase1NonDeviceGate" \
+  RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE=0 \
+  "$SCRIPT_DIR/run-tencent-digital-human-phase1-non-device-gate.sh"
+else
+  mkdir -p "$OUTPUT_DIR/tencent-digital-human-phase1-non-device-gate/$RUN_ID"
+  echo "Skipped by RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE=0" > "$OUTPUT_DIR/tencent-digital-human-phase1-non-device-gate/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_DIGITAL_HUMAN_TTS_VISEME_GATE" == "1" ]]; then

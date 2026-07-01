@@ -440,6 +440,7 @@ struct DigitalHumanSessionCredential {
 
 struct DigitalHumanSessionContract {
     private static let localAssetVirtualmanKeyInfoKey = "DreamJourneyDigitalHumanAssetVirtualmanKey"
+    private static let localAssetVirtualmanKeyOverrideArgument = "DJUseLocalDigitalHumanAssetOverride"
 
     let sessionId: String
     let provider: String
@@ -452,6 +453,7 @@ struct DigitalHumanSessionContract {
     let assetKey: String?
     let providerAssetId: String?
     let providerProjectId: String?
+    let assetSource: String
     let driveMode: String
     let alphaEnabled: Bool
     let smartActionEnabled: Bool
@@ -480,10 +482,15 @@ struct DigitalHumanSessionContract {
         self.deviceId = json["deviceId"] as? String ?? ""
         self.lifecycleMode = lifecycleMode
         self.lifecycleModeLabel = json["lifecycleModeLabel"] as? String ?? lifecycleMode.displayName
-        let localAssetVirtualmanKey = Self.localAssetVirtualmanKeyOverride
-        self.assetKey = localAssetVirtualmanKey ?? json["assetKey"] as? String
-        self.providerAssetId = localAssetVirtualmanKey ?? json["providerAssetId"] as? String
+        let backendAssetKey = Self.nonEmptyString(json["assetKey"])
+        let backendProviderAssetId = Self.nonEmptyString(json["providerAssetId"])
+        let localAssetVirtualmanKey = Self.shouldUseLocalAssetVirtualmanKeyOverride
+            ? Self.localAssetVirtualmanKeyOverride
+            : nil
+        self.assetKey = localAssetVirtualmanKey ?? backendAssetKey
+        self.providerAssetId = localAssetVirtualmanKey ?? backendProviderAssetId
         self.providerProjectId = json["providerProjectId"] as? String ?? json["virtualmanProjectId"] as? String
+        self.assetSource = localAssetVirtualmanKey != nil ? "localQAOverride" : "backendSession"
         self.driveMode = driveMode
         self.alphaEnabled = json["alphaEnabled"] as? Bool ?? false
         self.smartActionEnabled = json["smartActionEnabled"] as? Bool ?? false
@@ -512,6 +519,18 @@ struct DigitalHumanSessionContract {
         let raw = Bundle.main.object(forInfoDictionaryKey: localAssetVirtualmanKeyInfoKey) as? String
         let value = raw?.trimmingCharacters(in: .whitespacesAndNewlines)
         return value?.isEmpty == false ? value : nil
+    }
+
+    private static var shouldUseLocalAssetVirtualmanKeyOverride: Bool {
+        ProcessInfo.processInfo.arguments.contains(localAssetVirtualmanKeyOverrideArgument)
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let value = value as? String else {
+            return nil
+        }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private static func intValue(_ value: Any?) -> Int? {

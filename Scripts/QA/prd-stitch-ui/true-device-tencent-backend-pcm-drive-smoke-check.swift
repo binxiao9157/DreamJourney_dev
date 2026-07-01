@@ -23,6 +23,11 @@ let releasePackage = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swi
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 
 require(script.contains("DJRunTencentDigitalHumanPCMDriveStopProbe"), "true-device script should pass the stop probe launch argument")
+require(script.contains("DJUseLocalDigitalHumanAssetOverride"), "true-device script should document that local asset override is intentionally not passed")
+require(script.contains("assetSource=backendSession"), "true-device script should verify backend digital-human asset source")
+require(script.contains("assetSource=localQAOverride"), "true-device script should fail when local QA asset override is used")
+require(script.contains("audioOwner=tencentDigitalHuman"), "true-device script should verify Tencent owns Echo playback")
+require(script.contains("audioOwner=fallbackMuted"), "true-device script should verify muted provider handoff before capture resumes")
 require(script.contains("PCM-drive stop probe fired"), "true-device script should verify provider interruption was triggered")
 require(script.contains("resume voice capture after provider speech reason=pcmDriveSmokeStopProbe"), "true-device script should verify mic capture resumes after stop probe")
 require(script.contains("provider playback completed"), "true-device script should record normal provider completion when AudioOver is observed")
@@ -35,6 +40,9 @@ require(script.contains("$0 !~ /Devices Offline/"), "true-device script must not
 require(echo.contains("reason == \"pcmDriveSmokeStopProbe\""), "Echo should special-case QA stop probe resume")
 require(echo.contains("resumeVoiceCaptureAfterTencentProviderSpeech(reason: reason)"), "Echo stop probe should resume voice capture after interrupting provider playback")
 require(echo.contains("[TencentDigitalHuman][QA] PCM-drive stop probe fired"), "Echo should log stop probe with a QA marker")
+require(echo.contains("assetSource=\\(contract.assetSource)"), "Echo should log backend/local asset source for true-device verification")
+require(echo.contains("audioOwner=tencentDigitalHuman"), "Echo should log Tencent playback ownership")
+require(echo.contains("audioOwner=fallbackMuted"), "Echo should log provider muted handoff ownership")
 require(echo.contains("DJRunTencentDigitalHumanBackendPCMDriveSmoke"), "Echo should keep backend PCM-drive launch argument")
 
 require(releasePackage.contains("true-device-tencent-backend-pcm-drive-smoke-check.swift"), "release package should include this true-device smoke guard")

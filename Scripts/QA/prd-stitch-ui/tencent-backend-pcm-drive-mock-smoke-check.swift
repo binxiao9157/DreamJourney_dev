@@ -70,6 +70,8 @@ for required in [
     "DreamJourneyBackendClient.shared.requestVoiceCloneSynthesis(",
     "outputMode: capability.tencentAudioDrive.requestOutputMode",
     "sendTencentAudioDriveSynthesisToDigitalHumanRuntime",
+    "preparedByteCount",
+    "nonFinalByteCount == preparedByteCount",
     "stub.sentPCMChunks",
     "stub.interruptCount",
     "finalChunkObserved",
@@ -86,7 +88,13 @@ assertContains(runner, "\"pcmChunkCount\"", "runner should verify PCM chunks wer
 assertContains(runner, "\"finalChunkObserved\"", "runner should verify final chunk")
 assertContains(runner, "\"sequenceIsContiguous\"", "runner should verify chunk order")
 assertContains(runner, "\"audioDataOmitted\"", "runner should verify raw audio is omitted")
+assertContains(runner, "\"preparedByteCount\"", "runner should verify prepared PCM byte count")
+assertContains(runner, "Prepared PCM bytes should include original synthesis PCM", "runner should allow preroll/tail silence while preserving original PCM")
+assertContains(runner, "Sent PCM bytes should equal prepared PCM byteCount", "runner should compare sent bytes against prepared PCM")
 assertContains(runner, "<redacted-backend-token>", "runner should redact backend token from build logs")
+assertContains(runner, "APP_INFO_PLIST=\"$APP_PATH/Info.plist\"", "runner should locate the built app Info.plist")
+assertContains(runner, "Set :DreamJourneyBackendBaseURL $BACKEND_BASE_URL", "runner should reapply backend base URL after LocalConfig build phase")
+assertContains(runner, "Set :DreamJourneyBackendAPIToken $BACKEND_API_TOKEN", "runner should reapply backend token after LocalConfig build phase")
 assertNotContains(runner, "cat \"$BACKEND_API_TOKEN\"", "runner must not print backend token")
 
 assertContains(

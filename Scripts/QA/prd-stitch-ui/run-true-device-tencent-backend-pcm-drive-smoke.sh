@@ -191,11 +191,16 @@ wait "$LAUNCH_PID" >/dev/null 2>&1
 set -e
 
 append_report "- Launch args: \`DJUITestBypassLogin DJShowDigitalHumanLivePanel DJRunTencentDigitalHumanBackendPCMDriveSmoke DJRunTencentDigitalHumanPCMDriveStopProbe [voiceProfileId optional]\`"
+append_report "- Asset source policy: backend \`/digital-human/sessions\` is required; local QA override \`DJUseLocalDigitalHumanAssetOverride\` is intentionally not passed."
 append_report "- Console log: \`$LAUNCH_LOG\`"
 
 append_report
 append_report "## Observed Signals"
 for pattern in \
+  "session contract received" \
+  "assetSource=backendSession" \
+  "audioOwner=tencentDigitalHuman" \
+  "audioOwner=fallbackMuted" \
   "requesting backend PCM-drive synthesis" \
   "backend PCM-drive smoke synthesis ready" \
   "sent PCM-drive signal" \
@@ -213,6 +218,21 @@ for pattern in \
   fi
 done
 
+if grep -q "assetSource=localQAOverride" "$LAUNCH_LOG"; then
+  fail "local digital-human asset override was used during the true-device smoke; inspect $LAUNCH_LOG"
+fi
+if ! grep -q "session contract received" "$LAUNCH_LOG"; then
+  fail "Tencent session contract was not received; inspect $LAUNCH_LOG"
+fi
+if ! grep -q "assetSource=backendSession" "$LAUNCH_LOG"; then
+  fail "Tencent session did not use backend asset source; inspect $LAUNCH_LOG"
+fi
+if ! grep -q "audioOwner=tencentDigitalHuman" "$LAUNCH_LOG"; then
+  fail "Tencent digital-human audio owner was not observed; inspect $LAUNCH_LOG"
+fi
+if ! grep -q "audioOwner=fallbackMuted" "$LAUNCH_LOG"; then
+  fail "Tencent muted handoff audio owner was not observed before capture resume; inspect $LAUNCH_LOG"
+fi
 if ! grep -q "backend PCM-drive smoke synthesis ready" "$LAUNCH_LOG"; then
   fail "backend synthesis did not complete; inspect $LAUNCH_LOG"
 fi

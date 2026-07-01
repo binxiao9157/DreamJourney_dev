@@ -1,6 +1,13 @@
 import AVFoundation
 import UIKit
 
+private enum EchoDigitalHumanAudioOwner: String {
+    case tencentDigitalHuman
+    case localPreview
+    case fallbackMuted
+    case volcengineLocalTTS
+}
+
 final class EchoViewController: UIViewController {
     private let viewModel: EchoViewModel
 
@@ -11,6 +18,7 @@ final class EchoViewController: UIViewController {
     private var voiceCloneRuntimeCapability: VoiceCloneRuntimeCapability?
     private var isLoadingVoiceCloneRuntimeCapability = false
     private var lastTencentProviderAudioHandoffAt: Date?
+    private var currentEchoAudioOwner: EchoDigitalHumanAudioOwner = .volcengineLocalTTS
 
     private let personaBadgeView: UIView = {
         let view = UIView()
@@ -224,8 +232,12 @@ final class EchoViewController: UIViewController {
             )
         }
 
+        var preparedByteCount: Int {
+            preparedAudioDrivePCMData().count
+        }
+
         var chunkCount: Int {
-            Int(ceil(Double(data.count) / Double(chunkSize)))
+            Int(ceil(Double(preparedByteCount) / Double(chunkSize)))
         }
 
         func chunks() -> [Data] {
@@ -430,10 +442,14 @@ final class EchoViewController: UIViewController {
             stopDigitalHumanAudioLevelMetering()
             resetDigitalHumanReplyDispatchState()
             DialogEngineManager.shared.setLocalTTSPlaybackEnabled(true)
+            let didReleaseDigitalHumanRuntime = digitalHumanRuntime != nil
             digitalHumanRuntime?.interrupt()
             digitalHumanRuntime?.close()
             digitalHumanRuntime = nil
             hasRequestedCloudDigitalHumanRuntime = false
+            if didReleaseDigitalHumanRuntime {
+                print("[TencentDigitalHuman] released provider session reason=viewWillDisappear")
+            }
             DialogEngineManager.shared.delegate = nil
         }
     }
@@ -947,7 +963,7 @@ final class EchoViewController: UIViewController {
         if shouldRouteThroughDigitalHuman {
             DialogEngineManager.shared.setLocalTTSPlaybackEnabled(false)
             digitalHumanStatusDetailLabel.text = "腾讯数智人负责声音与口型同步"
-            print("[TencentDigitalHuman] echo audio route=tencentDigitalHuman")
+            setEchoAudioOwner(.tencentDigitalHuman, reason: "routePolicy")
         } else {
             if !tencentDigitalHumanAudioRouteReserved {
                 DialogEngineManager.shared.setLocalTTSPlaybackEnabled(true)
@@ -958,8 +974,28 @@ final class EchoViewController: UIViewController {
                digitalHumanRuntime.profile != nil {
                 digitalHumanStatusDetailLabel.text = "数字人暂未接管声音，已回到普通回响"
             }
-            print("[TencentDigitalHuman] echo audio route=volcengineLocalTTS")
+            setEchoAudioOwner(.volcengineLocalTTS, reason: "routePolicy")
         }
+    }
+
+    private func setEchoAudioOwner(_ owner: EchoDigitalHumanAudioOwner, reason: String) {
+        currentEchoAudioOwner = owner
+        let ownerLabel: String
+        switch owner {
+        case .tencentDigitalHuman:
+            ownerLabel = "audioOwner=tencentDigitalHuman"
+        case .localPreview:
+            ownerLabel = "audioOwner=localPreview"
+        case .fallbackMuted:
+            ownerLabel = "audioOwner=fallbackMuted"
+        case .volcengineLocalTTS:
+            ownerLabel = "audioOwner=volcengineLocalTTS"
+        }
+        print(
+            "[TencentDigitalHuman] \(ownerLabel) " +
+            "reason=\(reason) runtimeState=\(String(describing: digitalHumanRuntime?.state)) " +
+            "providerSpeechInFlight=\(hasTencentDigitalHumanProviderSpeechInFlight)"
+        )
     }
 
     private func prepareCloudDigitalHumanRuntimeIfNeeded() {
@@ -1021,6 +1057,12 @@ final class EchoViewController: UIViewController {
         case .success(let contract):
             let context = DigitalHumanContextStore.shared.current
             let profile = contract.toDigitalHumanProfile(displayName: context.resolvedDisplayName)
+            print(
+                "[TencentDigitalHuman] session contract received " +
+                "provider=\(contract.provider) providerMode=\(contract.providerMode) " +
+                "assetSource=\(contract.assetSource) hasAsset=\((contract.assetKey ?? contract.providerAssetId) != nil) " +
+                "hasProject=\(contract.providerProjectId != nil)"
+            )
             let runtimeSelection = DigitalHumanRuntimeFactory.makeRuntime(
                 for: contract,
                 capability: capability
@@ -1217,6 +1259,7 @@ final class EchoViewController: UIViewController {
         }
         stopDigitalHumanAudioLevelMetering()
         cloudRuntime.setRemoteAudioMuted(true)
+        setEchoAudioOwner(.fallbackMuted, reason: reason)
         print("[TencentDigitalHuman] muted provider remote audio before user capture reason=\(reason)")
         return true
     }
@@ -1674,6 +1717,7 @@ final class EchoViewController: UIViewController {
         stopDigitalHumanAudioLevelMetering()
         (digitalHumanRuntime as? TencentDigitalHumanCloudRuntime)?.setRemoteAudioMuted(true)
         digitalHumanRuntime.interrupt()
+        setEchoAudioOwner(.fallbackMuted, reason: "prepareUserCapture")
         print("[TencentDigitalHuman] muted provider audio before user capture; provider view preserved")
         return true
     }
@@ -2545,6 +2589,7 @@ extension EchoViewController {
                                 }
 
                                 let expectedChunkCount = signal.chunkCount + 1
+                                let preparedByteCount = signal.preparedByteCount
                                 let started = self.sendTencentAudioDriveSynthesisToDigitalHumanRuntime(
                                     synthesis,
                                     source: "uiqaTencentBackendPCMDriveMockSmoke",
@@ -2591,13 +2636,14 @@ extension EchoViewController {
                                             && records.count == expectedChunkCount
                                             && sequenceIsContiguous
                                             && finalChunkObserved
-                                            && nonFinalByteCount == synthesis.byteCount
+                                            && nonFinalByteCount == preparedByteCount
                                             && interruptProbeCompleted,
                                         "voiceProfileId": synthesis.voiceProfileId,
                                         "providerMode": synthesis.providerMode,
                                         "outputMode": synthesis.outputMode ?? "",
                                         "audioFormat": synthesis.audioFormat,
                                         "byteCount": synthesis.byteCount,
+                                        "preparedByteCount": preparedByteCount,
                                         "decodedByteCount": synthesis.tencentAudioDrivePCMData?.count ?? 0,
                                         "pcmCompatible": synthesis.isTencentAudioDrivePCMCompatible,
                                         "expectedChunkCount": expectedChunkCount,

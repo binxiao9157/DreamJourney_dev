@@ -153,6 +153,11 @@ for line in sys.stdin:
 APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION-iphonesimulator/DreamJourney.app"
 [[ -d "$APP_PATH" ]] || fail "Built app not found: $APP_PATH"
 
+APP_INFO_PLIST="$APP_PATH/Info.plist"
+[[ -f "$APP_INFO_PLIST" ]] || fail "Built Info.plist not found: $APP_INFO_PLIST"
+/usr/libexec/PlistBuddy -c "Set :DreamJourneyBackendBaseURL $BACKEND_BASE_URL" "$APP_INFO_PLIST"
+/usr/libexec/PlistBuddy -c "Set :DreamJourneyBackendAPIToken $BACKEND_API_TOKEN" "$APP_INFO_PLIST"
+
 BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
 [[ -n "$BUNDLE_ID" ]] || fail "Unable to read bundle id from $APP_PATH"
 
@@ -231,8 +236,10 @@ if result.get("finalChunkObserved") is not True:
     raise SystemExit(f"Final PCM chunk was not observed: {result}")
 if result.get("sequenceIsContiguous") is not True:
     raise SystemExit(f"PCM chunk sequence should be contiguous: {result}")
-if int(result.get("sentPCMByteCount") or 0) != int(result.get("byteCount") or -1):
-    raise SystemExit(f"Sent PCM bytes should equal synthesis byteCount: {result}")
+if int(result.get("preparedByteCount") or 0) < int(result.get("byteCount") or -1):
+    raise SystemExit(f"Prepared PCM bytes should include original synthesis PCM: {result}")
+if int(result.get("sentPCMByteCount") or 0) != int(result.get("preparedByteCount") or -1):
+    raise SystemExit(f"Sent PCM bytes should equal prepared PCM byteCount: {result}")
 if result.get("interruptProbeCompleted") is not True:
     raise SystemExit(f"Interrupt probe should clear the active provider request: {result}")
 PY
