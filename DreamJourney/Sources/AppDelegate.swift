@@ -186,6 +186,11 @@ private extension AppDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.runEchoTraceExportSmoke()
             }
+        } else if arguments.contains("DJRunEchoRuntimeDiagnosticsExportSmoke") {
+            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.runEchoRuntimeDiagnosticsExportSmoke()
+            }
         } else if arguments.contains("DJRunProfileCareBackendFailureRetrySmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
@@ -2626,6 +2631,52 @@ private extension AppDelegate {
         }
     }
 
+    func runEchoRuntimeDiagnosticsExportSmoke(retryCount: Int = 0) {
+        guard let tabBarController = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController as? WarmTabBarController else {
+            guard retryCount < 20 else {
+                print("[UI_QA] EchoRuntimeDiagnosticsExportSmoke failed reason=missingRootTab")
+                writeEchoRuntimeDiagnosticsExportSmokeResult([
+                    "completed": false,
+                    "failureReason": "missingRootTab"
+                ])
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                self?.runEchoRuntimeDiagnosticsExportSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+
+        guard let viewControllers = tabBarController.viewControllers,
+              viewControllers.count > 1,
+              let echoNavigationController = viewControllers[1] as? UINavigationController,
+              let echoViewController = echoNavigationController.viewControllers.first as? EchoViewController else {
+            print("[UI_QA] EchoRuntimeDiagnosticsExportSmoke failed reason=missingEcho")
+            writeEchoRuntimeDiagnosticsExportSmokeResult([
+                "completed": false,
+                "failureReason": "missingEcho"
+            ])
+            return
+        }
+
+        tabBarController.selectedIndex = 1
+        echoViewController.runUIQAEchoRuntimeDiagnosticsExportSmoke { [weak self] payload in
+            var result = payload
+            result["selectedTabIndex"] = tabBarController.selectedIndex
+            self?.writeEchoRuntimeDiagnosticsExportSmokeResult(result)
+            print(
+                "[UI_QA] EchoRuntimeDiagnosticsExportSmoke completed " +
+                "completed=\(result["completed"] as? Bool == true) " +
+                "snapshotCount=\(result["snapshotCount"] as? Int ?? 0) " +
+                "latestTurnID=\(result["latestTurnID"] as? String ?? "missing")"
+            )
+        }
+    }
+
     func runBackendEnvSmoke(retryCount: Int = 0) {
         guard let tabBarController = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
@@ -3270,6 +3321,21 @@ private extension AppDelegate {
             try data.write(to: resultURL, options: [.atomic])
         } catch {
             print("[UI_QA] EchoTraceExportSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    func writeEchoRuntimeDiagnosticsExportSmokeResult(_ result: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
+              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("[UI_QA] EchoRuntimeDiagnosticsExportSmoke failed reason=resultEncoding")
+            return
+        }
+
+        let resultURL = documentsURL.appendingPathComponent("echo-runtime-diagnostics-export-smoke-result.json")
+        do {
+            try data.write(to: resultURL, options: [.atomic])
+        } catch {
+            print("[UI_QA] EchoRuntimeDiagnosticsExportSmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
     }
 

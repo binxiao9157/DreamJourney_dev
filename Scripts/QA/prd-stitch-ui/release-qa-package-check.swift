@@ -187,6 +187,8 @@ assertContains(releaseRegression, "RUN_P0_ARCHIVE_ECHO_REGRESSION", "release reg
 assertContains(releaseRegression, "RUN_P0_ARCHIVE_ECHO_REGRESSION forces RUN_SIMULATOR_SMOKE", "Archive -> Echo P0 gate should force the core simulator smoke")
 assertContains(releaseRegression, "RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE", "release regression should expose deployed archive image-analysis smoke")
 assertContains(releaseRegression, "RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE", "release regression should expose deployed time-letter lifecycle smoke")
+assertContains(releaseRegression, "RUN_ECHO_READINESS_REPORT", "release regression should expose optional Echo readiness report")
+assertContains(releaseRegression, "run-echo-readiness-report.sh", "release regression should call Echo readiness report")
 assertContains(releaseRegression, "RUN_DIGITAL_HUMAN_TTS_VISEME_GATE", "release regression should expose optional digital-human TTS/viseme gate")
 assertContains(releaseRegression, "run-digital-human-tts-viseme-gate.sh", "release regression should call digital-human TTS/viseme gate")
 assertContains(releaseRegression, "RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE", "release regression should expose optional Tencent backend PCM-drive mock smoke")
@@ -246,6 +248,8 @@ for handoffGuard in [
     "tencent-voice-clone-echo-contract-check.swift",
     "context-packet-v1-check.swift",
     "echo-trace-export-check.swift",
+    "echo-runtime-diagnostics-check.swift",
+    "echo-readiness-report-check.swift",
     "installable-simulator-uiqa-bundle-guard-check.swift",
     "tencent-digital-human-provider-stability-check.swift",
     "digital-human-tts-viseme-gate-check.swift",
@@ -344,6 +348,9 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/true-device-acceptance-evidence-package-check.swift",
     "Scripts/QA/prd-stitch-ui/run-true-device-archive-audio-preflight.sh",
     "Scripts/QA/prd-stitch-ui/run-true-device-tencent-backend-pcm-drive-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/echo-readiness-report.py",
+    "Scripts/QA/prd-stitch-ui/run-echo-readiness-report.sh",
+    "Scripts/QA/prd-stitch-ui/echo-readiness-report-check.swift",
     "Scripts/QA/prd-stitch-ui/archive-media-backend-contract-check.swift",
     "Scripts/QA/prd-stitch-ui/archive-media-upload-intent-contract-check.swift",
     "Scripts/QA/prd-stitch-ui/archive-media-provider-switch-contract-check.swift",

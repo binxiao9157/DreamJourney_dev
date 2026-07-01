@@ -1052,6 +1052,76 @@ struct EchoTraceRecord: Codable {
     }
 }
 
+struct EchoRuntimeDiagnosticsSnapshot: Codable {
+    let schemaVersion: Int
+    let snapshotId: String
+    let turnID: String
+    let traceId: String
+    let userId: String
+    let recordedAt: Date
+    let archiveItemIDs: [String]
+    let archiveItemsIncluded: Int
+    let archiveItemsAvailable: Int
+    let kbFactCount: Int
+    let voiceProfileId: String?
+    let voiceCloneReady: Bool
+    let voiceOutputMode: String
+    let audioOwner: String
+    let digitalHumanRuntimeState: String
+    let digitalHumanSessionReady: Bool
+    let digitalHumanProviderMode: String
+    let providerLogId: String?
+    let providerRequestId: String?
+    let providerMode: String?
+    let fallbackReason: String?
+    let privacyScopeLabel: String
+    let canUseFamilyData: Bool
+    let crossScopeArchiveIncluded: Bool
+    let contextLatencyMs: Int
+    let source: String
+
+    init(
+        trace: EchoTraceRecord?,
+        audioOwner: String,
+        digitalHumanRuntimeState: String,
+        digitalHumanSessionReady: Bool? = nil,
+        digitalHumanProviderMode: String? = nil,
+        providerLogId: String? = nil,
+        providerRequestId: String? = nil,
+        providerMode: String? = nil,
+        fallbackReason: String? = nil,
+        source: String
+    ) {
+        self.schemaVersion = 1
+        let uniqueSuffix = String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(24))
+        self.snapshotId = "echo_diag_" + uniqueSuffix
+        self.turnID = trace?.turnID ?? "unknown"
+        self.traceId = trace?.traceId ?? "none"
+        self.userId = trace?.userId ?? "unknown"
+        self.recordedAt = Date()
+        self.archiveItemIDs = trace?.archiveItemIDs ?? []
+        self.archiveItemsIncluded = trace?.archiveItemsIncluded ?? 0
+        self.archiveItemsAvailable = trace?.archiveItemsAvailable ?? 0
+        self.kbFactCount = trace?.kbFactCount ?? 0
+        self.voiceProfileId = trace?.voiceProfileId
+        self.voiceCloneReady = trace?.voiceCloneReady ?? false
+        self.voiceOutputMode = trace?.voiceOutputMode ?? "unknown"
+        self.audioOwner = audioOwner
+        self.digitalHumanRuntimeState = digitalHumanRuntimeState
+        self.digitalHumanSessionReady = digitalHumanSessionReady ?? trace?.digitalHumanSessionReady ?? false
+        self.digitalHumanProviderMode = digitalHumanProviderMode ?? trace?.digitalHumanProviderMode ?? "unknown"
+        self.providerLogId = providerLogId
+        self.providerRequestId = providerRequestId
+        self.providerMode = providerMode
+        self.fallbackReason = fallbackReason
+        self.privacyScopeLabel = trace?.privacyScopeLabel ?? "unknown"
+        self.canUseFamilyData = trace?.canUseFamilyData ?? false
+        self.crossScopeArchiveIncluded = trace?.crossScopeArchiveIncluded ?? false
+        self.contextLatencyMs = trace?.latencyMs ?? 0
+        self.source = source
+    }
+}
+
 final class EchoTraceStore {
     static let shared = EchoTraceStore()
 
@@ -1099,6 +1169,66 @@ final class EchoTraceStore {
 
     private func save(_ records: [EchoTraceRecord]) {
         guard let data = try? Self.makeJSONEncoder().encode(records) else {
+            return
+        }
+        userDefaults.set(data, forKey: storageKey)
+    }
+
+    private static func makeJSONEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }
+}
+
+final class EchoRuntimeDiagnosticsStore {
+    static let shared = EchoRuntimeDiagnosticsStore()
+
+    private let userDefaults: UserDefaults
+    private let storageKey = "DreamJourney.EchoRuntimeDiagnosticsStore.snapshots.v1"
+    private let maximumSnapshotCount = 20
+
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+    }
+
+    func record(_ snapshot: EchoRuntimeDiagnosticsSnapshot) {
+        var snapshots = recentSnapshots()
+        snapshots.append(snapshot)
+        if snapshots.count > maximumSnapshotCount {
+            snapshots = Array(snapshots.suffix(maximumSnapshotCount))
+        }
+        save(snapshots)
+    }
+
+    func recentSnapshots() -> [EchoRuntimeDiagnosticsSnapshot] {
+        guard let data = userDefaults.data(forKey: storageKey) else {
+            return []
+        }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return (try? decoder.decode([EchoRuntimeDiagnosticsSnapshot].self, from: data)) ?? []
+    }
+
+    func clear() {
+        userDefaults.removeObject(forKey: storageKey)
+    }
+
+    func exportRecentSnapshots(
+        to directory: URL = FileManager.default.temporaryDirectory,
+        fileName: String = "echo-runtime-diagnostics.json"
+    ) throws -> URL {
+        let snapshots = recentSnapshots()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent(fileName)
+        let data = try Self.makeJSONEncoder().encode(snapshots)
+        try data.write(to: url, options: [.atomic])
+        return url
+    }
+
+    private func save(_ snapshots: [EchoRuntimeDiagnosticsSnapshot]) {
+        guard let data = try? Self.makeJSONEncoder().encode(snapshots) else {
             return
         }
         userDefaults.set(data, forKey: storageKey)

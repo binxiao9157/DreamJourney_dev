@@ -135,6 +135,10 @@ final class EchoViewController: UIViewController {
     private var lastTencentProviderAudioHandoffAt: Date?
     private var currentEchoAudioOwner: EchoDigitalHumanAudioOwner = .volcengineLocalTTS
     private var lastEchoTraceRecord: EchoTraceRecord?
+    private var lastVoiceCloneProviderLogId: String?
+    private var lastVoiceCloneProviderRequestId: String?
+    private var lastVoiceCloneProviderMode: String?
+    private var lastEchoRuntimeFallbackReason: String?
     private var trueDeviceBackendPCMDriveTrace = TencentBackendPCMDriveTrueDeviceTrace()
 
     private let personaBadgeView: UIView = {
@@ -279,6 +283,29 @@ final class EchoViewController: UIViewController {
         label.textAlignment = .center
         label.numberOfLines = 1
         label.accessibilityIdentifier = "echoVoiceStatus"
+        return label
+    }()
+
+    private let echoRuntimeDiagnosticsPanelView: UIView = {
+        let view = UIView()
+        view.backgroundColor = UIColor(hex: "#17120B").withAlphaComponent(0.72)
+        view.layer.cornerRadius = 12
+        view.layer.borderWidth = 1
+        view.layer.borderColor = UIColor.white.withAlphaComponent(0.16).cgColor
+        view.clipsToBounds = true
+        view.isHidden = true
+        view.alpha = 0
+        view.accessibilityIdentifier = "echoRuntimeDiagnosticsPanel"
+        return view
+    }()
+
+    private let echoRuntimeDiagnosticsPanelLabel: UILabel = {
+        let label = UILabel()
+        label.font = .monospacedSystemFont(ofSize: 10, weight: .medium)
+        label.textColor = UIColor.white.withAlphaComponent(0.9)
+        label.numberOfLines = 0
+        label.lineBreakMode = .byTruncatingTail
+        label.accessibilityIdentifier = "echoRuntimeDiagnosticsPanelLabel"
         return label
     }()
 
@@ -450,6 +477,12 @@ final class EchoViewController: UIViewController {
             || arguments.contains("DJRunTencentBackendPCMDriveMockSmoke")
     }
 
+    private var shouldShowEchoRuntimeDiagnosticsPanel: Bool {
+        let arguments = ProcessInfo.processInfo.arguments
+        return arguments.contains("DJShowEchoRuntimeDiagnosticsPanel")
+            || arguments.contains("DJRunEchoRuntimeDiagnosticsExportSmoke")
+    }
+
     private var shouldRunTencentDigitalHumanTextDriveSmoke: Bool {
         ProcessInfo.processInfo.arguments.contains("DJRunTencentDigitalHumanTextDriveSmoke")
     }
@@ -605,6 +638,10 @@ final class EchoViewController: UIViewController {
         }
         view.addSubview(quoteBubble)
         view.addSubview(voiceStatusView)
+        if shouldShowEchoRuntimeDiagnosticsPanel {
+            view.addSubview(echoRuntimeDiagnosticsPanelView)
+            echoRuntimeDiagnosticsPanelView.addSubview(echoRuntimeDiagnosticsPanelLabel)
+        }
         view.addSubview(micRingView)
         view.addSubview(micButton)
 
@@ -644,6 +681,8 @@ final class EchoViewController: UIViewController {
             quoteLabel,
             voiceStatusView,
             voiceStatusLabel,
+            echoRuntimeDiagnosticsPanelView,
+            echoRuntimeDiagnosticsPanelLabel,
             micRingView,
             micButton
         ].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
@@ -723,6 +762,39 @@ final class EchoViewController: UIViewController {
             micRingView.widthAnchor.constraint(equalToConstant: 76),
             micRingView.heightAnchor.constraint(equalToConstant: 76)
         ])
+
+        if shouldShowEchoRuntimeDiagnosticsPanel {
+            NSLayoutConstraint.activate([
+                echoRuntimeDiagnosticsPanelView.topAnchor.constraint(
+                    equalTo: view.safeAreaLayoutGuide.topAnchor,
+                    constant: 84
+                ),
+                echoRuntimeDiagnosticsPanelView.trailingAnchor.constraint(
+                    equalTo: view.trailingAnchor,
+                    constant: -DJDesignTokens.Spacing.page
+                ),
+                echoRuntimeDiagnosticsPanelView.widthAnchor.constraint(
+                    lessThanOrEqualTo: view.widthAnchor,
+                    multiplier: 0.66
+                ),
+                echoRuntimeDiagnosticsPanelLabel.topAnchor.constraint(
+                    equalTo: echoRuntimeDiagnosticsPanelView.topAnchor,
+                    constant: 10
+                ),
+                echoRuntimeDiagnosticsPanelLabel.leadingAnchor.constraint(
+                    equalTo: echoRuntimeDiagnosticsPanelView.leadingAnchor,
+                    constant: 10
+                ),
+                echoRuntimeDiagnosticsPanelLabel.trailingAnchor.constraint(
+                    equalTo: echoRuntimeDiagnosticsPanelView.trailingAnchor,
+                    constant: -10
+                ),
+                echoRuntimeDiagnosticsPanelLabel.bottomAnchor.constraint(
+                    equalTo: echoRuntimeDiagnosticsPanelView.bottomAnchor,
+                    constant: -10
+                ),
+            ])
+        }
 
         if let digitalHumanLivePanelView {
             NSLayoutConstraint.activate([
@@ -1121,6 +1193,70 @@ final class EchoViewController: UIViewController {
         print("[TencentDigitalHuman][QA_RESULT] \(json)")
     }
 
+    private func makeEchoRuntimeDiagnosticsSnapshot(reason: String) -> EchoRuntimeDiagnosticsSnapshot {
+        let runtime = digitalHumanRuntime
+        let runtimeState = runtime.map { String(describing: $0.state) } ?? "none"
+        let profile = runtime?.profile
+        let providerMode = profile?.driveMode ?? lastEchoTraceRecord?.digitalHumanProviderMode ?? "unknown"
+        let fallbackReason = lastEchoRuntimeFallbackReason ?? lastEchoTraceRecord?.fallbacks.first
+        return EchoRuntimeDiagnosticsSnapshot(
+            trace: lastEchoTraceRecord,
+            audioOwner: currentEchoAudioOwner.rawValue,
+            digitalHumanRuntimeState: runtimeState,
+            digitalHumanSessionReady: profile != nil || lastEchoTraceRecord?.digitalHumanSessionReady == true,
+            digitalHumanProviderMode: providerMode,
+            providerLogId: lastVoiceCloneProviderLogId,
+            providerRequestId: lastVoiceCloneProviderRequestId,
+            providerMode: lastVoiceCloneProviderMode,
+            fallbackReason: fallbackReason,
+            source: reason
+        )
+    }
+
+    @discardableResult
+    private func recordEchoRuntimeDiagnosticsSnapshot(reason: String) -> EchoRuntimeDiagnosticsSnapshot {
+        let snapshot = makeEchoRuntimeDiagnosticsSnapshot(reason: reason)
+        EchoRuntimeDiagnosticsStore.shared.record(snapshot)
+        renderEchoRuntimeDiagnosticsPanel(snapshot: snapshot)
+        print(
+            "[CFLite] runtime diagnostics snapshot " +
+            "snapshotId=\(snapshot.snapshotId) turnID=\(snapshot.turnID) traceId=\(snapshot.traceId) " +
+            "audioOwner=\(snapshot.audioOwner) digitalHumanState=\(snapshot.digitalHumanRuntimeState) " +
+            "voiceProfileId=\(snapshot.voiceProfileId ?? "none") outputMode=\(snapshot.voiceOutputMode) " +
+            "providerLogId=\(snapshot.providerLogId ?? "none") " +
+            "fallbackReason=\(snapshot.fallbackReason ?? "none") source=\(snapshot.source)"
+        )
+        return snapshot
+    }
+
+    private func renderEchoRuntimeDiagnosticsPanel(snapshot: EchoRuntimeDiagnosticsSnapshot) {
+        guard shouldShowEchoRuntimeDiagnosticsPanel else {
+            return
+        }
+        let archiveIDs = snapshot.archiveItemIDs.isEmpty
+            ? "none"
+            : snapshot.archiveItemIDs.prefix(3).joined(separator: ",")
+        let fallback = snapshot.fallbackReason?.isEmpty == false ? snapshot.fallbackReason! : "none"
+        let voiceProfile = snapshot.voiceProfileId?.isEmpty == false ? snapshot.voiceProfileId! : "none"
+        echoRuntimeDiagnosticsPanelLabel.text = [
+            "Echo QA clues",
+            "turn: \(snapshot.turnID)",
+            "档案: \(snapshot.archiveItemsIncluded)/\(snapshot.archiveItemsAvailable) [\(archiveIDs)]",
+            "KBLite facts: \(snapshot.kbFactCount)",
+            "persona: \(snapshot.privacyScopeLabel)",
+            "family: \(snapshot.canUseFamilyData) cross: \(snapshot.crossScopeArchiveIncluded)",
+            "voice: \(voiceProfile) \(snapshot.voiceOutputMode)",
+            "audioOwner: \(snapshot.audioOwner)",
+            "digitalHuman: \(snapshot.digitalHumanRuntimeState) / \(snapshot.digitalHumanProviderMode)",
+            "providerLogId: \(snapshot.providerLogId ?? "none")",
+            "fallback: \(fallback)",
+            "latencyMs: \(snapshot.contextLatencyMs)"
+        ].joined(separator: "\n")
+        echoRuntimeDiagnosticsPanelView.isHidden = false
+        echoRuntimeDiagnosticsPanelView.alpha = 1
+        echoRuntimeDiagnosticsPanelView.accessibilityLabel = echoRuntimeDiagnosticsPanelLabel.text
+    }
+
     private func prepareCloudDigitalHumanRuntimeIfNeeded() {
         guard shouldShowDigitalHumanLivePanel,
               digitalHumanRuntime == nil,
@@ -1132,6 +1268,8 @@ final class EchoViewController: UIViewController {
         guard DreamJourneyBackendClient.shared.isDigitalHumanSessionConfigured else {
             digitalHumanStatusDetailLabel.text = "数字人暂不可用，已回到普通回响"
             digitalHumanLivePanelView?.removeHostedProviderView(showFallbackMessage: "数字人暂不可用")
+            lastEchoRuntimeFallbackReason = "digitalHumanBackendNotConfigured"
+            recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanBackendNotConfigured")
             applyEchoAudioRoutePolicy()
             print("[TencentDigitalHuman] skipped cloud runtime; backend not configured")
             return
@@ -1148,6 +1286,8 @@ final class EchoViewController: UIViewController {
                 DispatchQueue.main.async {
                     self?.digitalHumanStatusDetailLabel.text = "数字人配置读取失败，已回到普通回响"
                     self?.digitalHumanLivePanelView?.removeHostedProviderView(showFallbackMessage: "数字人暂不可用")
+                    self?.lastEchoRuntimeFallbackReason = "digitalHumanRuntimeCapabilityFailed"
+                    self?.recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanRuntimeCapabilityFailed")
                     self?.applyEchoAudioRoutePolicy()
                     print("[TencentDigitalHuman] runtime capability failed: \(error.localizedDescription)")
                 }
@@ -1197,6 +1337,8 @@ final class EchoViewController: UIViewController {
             guard runtimeSelection.isRealSDKBacked else {
                 digitalHumanStatusDetailLabel.text = "腾讯 SDK 暂不可用，已回到普通回响"
                 digitalHumanLivePanelView?.removeHostedProviderView(showFallbackMessage: "数字人暂不可用")
+                lastEchoRuntimeFallbackReason = runtimeSelection.fallbackReason ?? "digitalHumanRuntimeNotSDKBacked"
+                recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanRuntimeNotSDKBacked")
                 applyEchoAudioRoutePolicy()
                 print("[TencentDigitalHuman] fallback=\(runtimeSelection.fallbackReason ?? "unknown")")
                 return
@@ -1205,6 +1347,7 @@ final class EchoViewController: UIViewController {
             digitalHumanLivePanelView?.hostProviderView(runtime.contentView)
             do {
                 try runtime.configure(profile)
+                lastEchoRuntimeFallbackReason = nil
                 applyEchoAudioRoutePolicy()
                 try runtime.open()
                 digitalHumanStatusDetailLabel.text = "腾讯云渲染连接中"
@@ -1212,12 +1355,16 @@ final class EchoViewController: UIViewController {
             } catch {
                 digitalHumanStatusDetailLabel.text = "腾讯数智人打开失败，已回到普通回响"
                 digitalHumanLivePanelView?.removeHostedProviderView(showFallbackMessage: "数字人暂不可用")
+                lastEchoRuntimeFallbackReason = "digitalHumanOpenFailed"
+                recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanOpenFailed")
                 applyEchoAudioRoutePolicy()
                 print("[TencentDigitalHuman] open failed: \(error.localizedDescription)")
             }
         case .failure(let error):
             digitalHumanStatusDetailLabel.text = "数字人会话创建失败，已回到普通回响"
             digitalHumanLivePanelView?.removeHostedProviderView(showFallbackMessage: "数字人暂不可用")
+            lastEchoRuntimeFallbackReason = "digitalHumanSessionFailed"
+            recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanSessionFailed")
             applyEchoAudioRoutePolicy()
             print("[TencentDigitalHuman] session failed: \(error.localizedDescription)")
         }
@@ -1435,6 +1582,11 @@ final class EchoViewController: UIViewController {
         }
         guard DreamJourneyBackendClient.shared.isVoiceCloneSynthesisConfigured else {
             renderVoiceStatus(text: "复刻声音服务暂不可用", isVisible: true, accessibilityIdentifier: "echoVoiceClonePCMDriveStatus")
+            lastVoiceCloneProviderLogId = nil
+            lastVoiceCloneProviderRequestId = nil
+            lastVoiceCloneProviderMode = nil
+            lastEchoRuntimeFallbackReason = "voiceCloneBackendNotConfigured"
+            recordEchoRuntimeDiagnosticsSnapshot(reason: "voiceCloneBackendNotConfigured")
             print(
                 "[TencentDigitalHuman] voice-clone PCM-drive unavailable; no default voice fallback " +
                 "source=\(source) voiceProfileId=\(voiceProfileId) outputMode=tencentAudioDrive " +
@@ -1445,6 +1597,11 @@ final class EchoViewController: UIViewController {
         if let capability = voiceCloneRuntimeCapability,
            !(capability.canSynthesize && capability.tencentAudioDrive.supported) {
             renderVoiceStatus(text: "复刻声音服务暂不可用", isVisible: true, accessibilityIdentifier: "echoVoiceClonePCMDriveStatus")
+            lastVoiceCloneProviderLogId = nil
+            lastVoiceCloneProviderRequestId = nil
+            lastVoiceCloneProviderMode = nil
+            lastEchoRuntimeFallbackReason = "voiceCloneRuntimeUnsupported"
+            recordEchoRuntimeDiagnosticsSnapshot(reason: "voiceCloneRuntimeUnsupported")
             print(
                 "[TencentDigitalHuman] voice-clone PCM-drive unavailable; no default voice fallback " +
                 "source=\(source) voiceProfileId=\(voiceProfileId) outputMode=tencentAudioDrive " +
@@ -1514,6 +1671,11 @@ final class EchoViewController: UIViewController {
                         return
                     }
 
+                    self.lastVoiceCloneProviderLogId = synthesis.providerLogId
+                    self.lastVoiceCloneProviderRequestId = synthesis.providerRequestId
+                    self.lastVoiceCloneProviderMode = synthesis.providerMode
+                    self.lastEchoRuntimeFallbackReason = nil
+                    self.recordEchoRuntimeDiagnosticsSnapshot(reason: "voiceClonePCMDriveReady")
                     self.renderVoiceStatus(text: "复刻声音正在回响", isVisible: true, accessibilityIdentifier: "echoVoiceClonePCMDriveStatus")
                     self.startPCMDriveSignalToDigitalHumanRuntime(
                         signal: signal,
@@ -1557,6 +1719,11 @@ final class EchoViewController: UIViewController {
             return
         }
         renderVoiceStatus(text: "暂未启用复刻音色", isVisible: true, accessibilityIdentifier: "echoVoiceCloneNotEnabledStatus")
+        lastVoiceCloneProviderLogId = nil
+        lastVoiceCloneProviderRequestId = nil
+        lastVoiceCloneProviderMode = nil
+        lastEchoRuntimeFallbackReason = "voiceCloneNotEnabled"
+        recordEchoRuntimeDiagnosticsSnapshot(reason: "voiceCloneNotEnabled")
         print(
             "[TencentDigitalHuman] voice clone not enabled for Echo " +
             "source=\(source) voiceProfileId=none outputMode=tencentText \(currentEchoAudioOwner.logLabel)"
@@ -1585,6 +1752,7 @@ final class EchoViewController: UIViewController {
                 DispatchQueue.main.async {
                     self?.lastEchoTraceRecord = record
                     EchoTraceStore.shared.record(record)
+                    self?.recordEchoRuntimeDiagnosticsSnapshot(reason: "contextPacketBuilt")
                 }
                 print(
                     "[CFLite] context built " +
@@ -1619,6 +1787,11 @@ final class EchoViewController: UIViewController {
         digitalHumanConversation.clearProviderRequest()
         stopDigitalHumanAudioLevelMetering()
         viewModel.markReplyDelivered()
+        lastVoiceCloneProviderLogId = providerLogId
+        lastVoiceCloneProviderRequestId = providerRequestId
+        lastVoiceCloneProviderMode = outputMode
+        lastEchoRuntimeFallbackReason = reason
+        recordEchoRuntimeDiagnosticsSnapshot(reason: "voiceClonePCMDriveFailed")
         renderVoiceStatus(text: "复刻声音生成失败，请稍后重试", isVisible: true, accessibilityIdentifier: "echoVoiceClonePCMDriveStatus")
         digitalHumanStatusDetailLabel.text = "复刻声音生成失败，未切换默认音色"
         print(
@@ -1980,6 +2153,8 @@ final class EchoViewController: UIViewController {
         cancelTencentDigitalHumanTextOverTimeout()
         digitalHumanConversation.clearForRouteFailure()
         stopDigitalHumanAudioLevelMetering()
+        lastEchoRuntimeFallbackReason = reason
+        recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanRouteDegraded")
 
         let failedRuntime = digitalHumanRuntime
         digitalHumanRuntime = nil
@@ -2884,6 +3059,72 @@ extension EchoViewController {
                 "recordCount": records.count,
                 "oldestRetainedTurnID": records.first?.turnID ?? "missing",
                 "latestTurnID": records.last?.turnID ?? "missing",
+                "exportPath": exportURL.path,
+                "fileExists": FileManager.default.fileExists(atPath: exportURL.path),
+            ])
+        } catch {
+            completion([
+                "completed": false,
+                "failureReason": "exportFailed",
+                "error": error.localizedDescription,
+            ])
+        }
+    }
+
+    func runUIQAEchoRuntimeDiagnosticsExportSmoke(completion: @escaping ([String: Any]) -> Void) {
+        EchoTraceStore.shared.clear()
+        EchoRuntimeDiagnosticsStore.shared.clear()
+
+        for index in 0..<22 {
+            let record = EchoTraceRecord(
+                turnID: "uiqa-runtime-turn-\(index)",
+                traceId: "ctx_uiqa_runtime_\(index)",
+                userId: "uiqa_echo_runtime_user",
+                archiveItemIDs: ["archive_runtime_\(index)"],
+                archiveItemsIncluded: 1,
+                archiveItemsAvailable: 22,
+                kbFactCount: index + 1,
+                voiceProfileId: "S_uiqa_runtime_diagnostics",
+                voiceCloneReady: true,
+                voiceOutputMode: "tencentAudioDrive",
+                digitalHumanSessionReady: true,
+                digitalHumanProviderMode: "tencent-cloud-digital-human",
+                privacyScopeLabel: "personal:uiqa_echo_runtime_user",
+                canUseFamilyData: false,
+                crossScopeArchiveIncluded: false,
+                fallbacks: index.isMultiple(of: 3) ? ["uiqa_fallback_probe"] : [],
+                latencyMs: 12 + index
+            )
+            lastEchoTraceRecord = record
+            EchoTraceStore.shared.record(record)
+            lastVoiceCloneProviderLogId = "uiqa-provider-log-\(index)"
+            lastVoiceCloneProviderRequestId = "uiqa-provider-request-\(index)"
+            lastVoiceCloneProviderMode = "volcengineVoiceCloneV3"
+            lastEchoRuntimeFallbackReason = index.isMultiple(of: 3) ? "uiqa_fallback_probe" : nil
+            recordEchoRuntimeDiagnosticsSnapshot(reason: "uiqaEchoRuntimeDiagnosticsExport")
+        }
+
+        do {
+            let exportURL = try EchoRuntimeDiagnosticsStore.shared.exportRecentSnapshots()
+            let data = try Data(contentsOf: exportURL)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let snapshots = try decoder.decode([EchoRuntimeDiagnosticsSnapshot].self, from: data)
+            completion([
+                "completed": snapshots.count == 20
+                    && snapshots.first?.turnID == "uiqa-runtime-turn-2"
+                    && snapshots.last?.turnID == "uiqa-runtime-turn-21"
+                    && snapshots.last?.voiceProfileId == "S_uiqa_runtime_diagnostics"
+                    && snapshots.last?.audioOwner == currentEchoAudioOwner.rawValue
+                    && snapshots.last?.providerLogId == "uiqa-provider-log-21",
+                "snapshotCount": snapshots.count,
+                "oldestRetainedTurnID": snapshots.first?.turnID ?? "missing",
+                "latestTurnID": snapshots.last?.turnID ?? "missing",
+                "latestVoiceProfileId": snapshots.last?.voiceProfileId ?? "missing",
+                "latestAudioOwner": snapshots.last?.audioOwner ?? "missing",
+                "latestProviderLogId": snapshots.last?.providerLogId ?? "missing",
+                "latestDigitalHumanProviderMode": snapshots.last?.digitalHumanProviderMode ?? "missing",
+                "diagnosticsPanelText": echoRuntimeDiagnosticsPanelLabel.text ?? "",
                 "exportPath": exportURL.path,
                 "fileExists": FileManager.default.fileExists(atPath: exportURL.path),
             ])
