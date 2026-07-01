@@ -12,6 +12,117 @@ private enum EchoDigitalHumanAudioOwner: String {
     }
 }
 
+private struct TencentBackendPCMDriveTrueDeviceTrace {
+    var isActive = false
+    var startedAt = Date()
+    var trigger = ""
+    var requestID = ""
+    var turnID = ""
+    var voiceProfileId = ""
+    var outputMode = "tencentAudioDrive"
+    var providerLogId = ""
+    var providerRequestId = ""
+    var providerMode = ""
+    var rawByteCount = 0
+    var preparedByteCount = 0
+    var expectedChunkCount = 0
+    var sentChunkCount = 0
+    var sentFinalChunk = false
+    var providerSpeakingObserved = false
+    var providerPlaybackCompleted = false
+    var stopProbeFired = false
+    var resumedVoiceCapture = false
+    var failureReason = ""
+    var failureDetail = ""
+
+    mutating func begin(trigger: String, voiceProfileId: String, outputMode: String) {
+        self = TencentBackendPCMDriveTrueDeviceTrace()
+        self.isActive = true
+        self.startedAt = Date()
+        self.trigger = trigger
+        self.voiceProfileId = voiceProfileId
+        self.outputMode = outputMode
+    }
+
+    mutating func markSynthesis(_ synthesis: VoiceCloneSynthesisResult) {
+        voiceProfileId = synthesis.voiceProfileId
+        outputMode = synthesis.outputMode ?? outputMode
+        providerLogId = synthesis.providerLogId ?? ""
+        providerRequestId = synthesis.providerRequestId ?? ""
+        providerMode = synthesis.providerMode
+        rawByteCount = synthesis.byteCount
+    }
+
+    mutating func markRequest(turnID: String, requestID: String) {
+        self.turnID = turnID
+        self.requestID = requestID
+    }
+
+    mutating func markSignal(preparedByteCount: Int, expectedChunkCount: Int) {
+        self.preparedByteCount = preparedByteCount
+        self.expectedChunkCount = expectedChunkCount
+    }
+
+    mutating func markChunkSent() {
+        sentChunkCount += 1
+    }
+
+    mutating func markFinalSent() {
+        sentFinalChunk = true
+    }
+
+    mutating func markFailure(reason: String, detail: String) {
+        failureReason = reason
+        failureDetail = detail
+    }
+
+    var completed: Bool {
+        failureReason.isEmpty
+            && rawByteCount > 0
+            && preparedByteCount > 0
+            && sentChunkCount > 0
+            && sentFinalChunk
+            && (providerPlaybackCompleted || stopProbeFired)
+            && resumedVoiceCapture
+    }
+
+    func jsonLine(audioOwner: EchoDigitalHumanAudioOwner, emitReason: String) -> String {
+        let elapsedMilliseconds = Int(Date().timeIntervalSince(startedAt) * 1000)
+        let payload: [String: Any] = [
+            "schemaVersion": 1,
+            "emitReason": emitReason,
+            "completed": completed,
+            "trigger": trigger,
+            "requestID": requestID,
+            "turnID": turnID,
+            "voiceProfileId": voiceProfileId,
+            "outputMode": outputMode,
+            "providerLogId": providerLogId,
+            "providerRequestId": providerRequestId,
+            "providerMode": providerMode,
+            "rawByteCount": rawByteCount,
+            "preparedByteCount": preparedByteCount,
+            "expectedChunkCount": expectedChunkCount,
+            "sentChunkCount": sentChunkCount,
+            "sentFinalChunk": sentFinalChunk,
+            "providerSpeakingObserved": providerSpeakingObserved,
+            "providerPlaybackCompleted": providerPlaybackCompleted,
+            "stopProbeFired": stopProbeFired,
+            "resumedVoiceCapture": resumedVoiceCapture,
+            "audioOwner": audioOwner.rawValue,
+            "failureReason": failureReason,
+            "failureDetail": failureDetail,
+            "elapsedMilliseconds": elapsedMilliseconds
+        ]
+        guard JSONSerialization.isValidJSONObject(payload),
+              let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]),
+              let string = String(data: data, encoding: .utf8) else {
+            return "{\"schemaVersion\":1,\"emitReason\":\"\(emitReason)\",\"completed\":false,\"failureReason\":\"jsonEncodingFailed\"}"
+        }
+        return string
+    }
+}
+
 final class EchoViewController: UIViewController {
     private let viewModel: EchoViewModel
 
@@ -24,6 +135,7 @@ final class EchoViewController: UIViewController {
     private var lastTencentProviderAudioHandoffAt: Date?
     private var currentEchoAudioOwner: EchoDigitalHumanAudioOwner = .volcengineLocalTTS
     private var lastEchoTraceRecord: EchoTraceRecord?
+    private var trueDeviceBackendPCMDriveTrace = TencentBackendPCMDriveTrueDeviceTrace()
 
     private let personaBadgeView: UIView = {
         let view = UIView()
@@ -994,6 +1106,21 @@ final class EchoViewController: UIViewController {
         )
     }
 
+    private var shouldTraceTrueDeviceBackendPCMDrive: Bool {
+        shouldRunTencentDigitalHumanBackendPCMDriveSmoke && trueDeviceBackendPCMDriveTrace.isActive
+    }
+
+    private func emitTencentBackendPCMDriveTrueDeviceQAResult(reason: String) {
+        guard shouldTraceTrueDeviceBackendPCMDrive else {
+            return
+        }
+        let json = trueDeviceBackendPCMDriveTrace.jsonLine(
+            audioOwner: currentEchoAudioOwner,
+            emitReason: reason
+        )
+        print("[TencentDigitalHuman][QA_RESULT] \(json)")
+    }
+
     private func prepareCloudDigitalHumanRuntimeIfNeeded() {
         guard shouldShowDigitalHumanLivePanel,
               digitalHumanRuntime == nil,
@@ -1243,6 +1370,10 @@ final class EchoViewController: UIViewController {
             DialogEngineManager.shared.startDialog(sendsGreeting: false)
         } else {
             configureVoiceRuntimeThenStart()
+        }
+        if shouldTraceTrueDeviceBackendPCMDrive {
+            trueDeviceBackendPCMDriveTrace.resumedVoiceCapture = true
+            emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "voiceCaptureResumed:\(reason)")
         }
         print("[TencentDigitalHuman] resume voice capture after provider speech reason=\(reason)")
     }
@@ -1803,6 +1934,9 @@ final class EchoViewController: UIViewController {
     private func handleDigitalHumanRuntimeStateChange(_ state: DigitalHumanSessionState) {
         switch state {
         case .speaking:
+            if shouldTraceTrueDeviceBackendPCMDrive {
+                trueDeviceBackendPCMDriveTrace.providerSpeakingObserved = true
+            }
             digitalHumanLivePanelView?.setInteractionState(.speaking)
             if case .speaking = currentState {
                 renderVoiceStatus(text: "腾讯数智人正在回响", isVisible: true)
@@ -1866,6 +2000,11 @@ final class EchoViewController: UIViewController {
         cancelTencentDigitalHumanTextOverTimeout()
         stopDigitalHumanAudioLevelMetering()
         viewModel.markReplyDelivered()
+        if shouldTraceTrueDeviceBackendPCMDrive,
+           trueDeviceBackendPCMDriveTrace.requestID == completion.requestID {
+            trueDeviceBackendPCMDriveTrace.providerPlaybackCompleted = true
+            emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "providerPlaybackCompleted")
+        }
         print(
             "[TencentDigitalHuman] provider playback completed turnID=\(completion.turnID) " +
             "requestID=\(completion.requestID) textLength=\(completion.replyText?.count ?? 0) " +
@@ -1928,15 +2067,30 @@ final class EchoViewController: UIViewController {
         }
 
         hasRunTencentDigitalHumanBackendPCMDriveSmoke = true
+        trueDeviceBackendPCMDriveTrace.begin(
+            trigger: trigger,
+            voiceProfileId: tencentBackendPCMDriveVoiceProfileId ?? "",
+            outputMode: "tencentAudioDrive"
+        )
         guard DreamJourneyBackendClient.shared.isVoiceCloneSynthesisConfigured else {
             let message = "后端复刻合成未配置，无法运行腾讯数智人 PCM 真机链路。"
             viewModel.receiveAIReply(message)
+            trueDeviceBackendPCMDriveTrace.markFailure(
+                reason: "backendNotConfigured",
+                detail: "DreamJourneyBackendClient voice synthesis endpoint is not configured"
+            )
+            emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "backendNotConfigured")
             print("[TencentDigitalHuman][QA] backend PCM-drive smoke failed reason=backendNotConfigured")
             return
         }
         guard let voiceProfileId = tencentBackendPCMDriveVoiceProfileId else {
             let message = "复刻音色未准备好，无法运行腾讯数智人 PCM 真机链路。"
             viewModel.receiveAIReply(message)
+            trueDeviceBackendPCMDriveTrace.markFailure(
+                reason: "missingVoiceProfileId",
+                detail: "No accepted/ready voiceProfileId or launch override was available"
+            )
+            emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "missingVoiceProfileId")
             print("[TencentDigitalHuman][QA] backend PCM-drive smoke failed reason=missingVoiceProfileId")
             return
         }
@@ -1962,9 +2116,15 @@ final class EchoViewController: UIViewController {
                 guard let self else { return }
                 switch result {
                 case .success(let synthesis):
+                    self.trueDeviceBackendPCMDriveTrace.markSynthesis(synthesis)
                     guard synthesis.isTencentAudioDrivePCMCompatible else {
                         self.renderVoiceStatus(text: nil, isVisible: false)
                         self.viewModel.receiveAIReply("后端复刻音频格式不兼容腾讯数智人，已回到普通回响。")
+                        self.trueDeviceBackendPCMDriveTrace.markFailure(
+                            reason: "incompatibleAudio",
+                            detail: "format=\(synthesis.audioFormat),sampleRate=\(synthesis.sampleRate ?? 0),bits=\(synthesis.bitsPerSample ?? 0),channels=\(synthesis.channelCount ?? 0)"
+                        )
+                        self.emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "incompatibleAudio")
                         print(
                             "[TencentDigitalHuman][QA] backend PCM-drive smoke failed " +
                             "reason=incompatibleAudio format=\(synthesis.audioFormat) " +
@@ -1975,11 +2135,18 @@ final class EchoViewController: UIViewController {
                     }
                     self.renderVoiceStatus(text: nil, isVisible: false)
                     self.viewModel.receiveAIReply(text)
-                    _ = self.sendTencentAudioDriveSynthesisToDigitalHumanRuntime(
+                    let sent = self.sendTencentAudioDriveSynthesisToDigitalHumanRuntime(
                         synthesis,
                         source: "trueDeviceBackendPCMDriveSmoke",
                         replyText: text
                     )
+                    if !sent {
+                        self.trueDeviceBackendPCMDriveTrace.markFailure(
+                            reason: "sendSynthesisFailed",
+                            detail: "makeTencentDigitalHumanPCMDriveSignal returned nil"
+                        )
+                        self.emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "sendSynthesisFailed")
+                    }
                     print(
                         "[TencentDigitalHuman][QA] backend PCM-drive smoke synthesis ready " +
                         "voiceProfileId=\(synthesis.voiceProfileId) bytes=\(synthesis.byteCount) " +
@@ -1988,6 +2155,11 @@ final class EchoViewController: UIViewController {
                 case .failure(let error):
                     self.renderVoiceStatus(text: nil, isVisible: false)
                     self.viewModel.receiveAIReply("后端复刻音频请求失败，已回到普通回响。")
+                    self.trueDeviceBackendPCMDriveTrace.markFailure(
+                        reason: "requestFailed",
+                        detail: error.localizedDescription
+                    )
+                    self.emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "requestFailed")
                     print("[TencentDigitalHuman][QA] backend PCM-drive smoke failed reason=requestFailed error=\(error.localizedDescription)")
                 }
             }
@@ -2048,10 +2220,24 @@ final class EchoViewController: UIViewController {
               shouldDispatchEchoReplyToTencentProvider,
               let digitalHumanRuntime,
               digitalHumanRuntime.profile != nil else {
+            if source == "trueDeviceBackendPCMDriveSmoke" {
+                trueDeviceBackendPCMDriveTrace.markFailure(
+                    reason: "runtimeNotReady",
+                    detail: "Digital human runtime/profile was not ready"
+                )
+                emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "runtimeNotReady")
+            }
             print("[TencentDigitalHuman][QA] skipped PCM-drive smoke source=\(source) reason=runtimeNotReady")
             return
         }
         guard digitalHumanConversation.activeRequestID == nil else {
+            if source == "trueDeviceBackendPCMDriveSmoke" {
+                trueDeviceBackendPCMDriveTrace.markFailure(
+                    reason: "providerBusy",
+                    detail: "A Tencent provider request was already active"
+                )
+                emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "providerBusy")
+            }
             print("[TencentDigitalHuman][QA] skipped PCM-drive smoke source=\(source) reason=providerBusy")
             return
         }
@@ -2061,6 +2247,13 @@ final class EchoViewController: UIViewController {
             let turnID = ensureCurrentEchoTurnID()
             let pausedDialogEngine = pauseDialogEngineForTencentProviderSpeechIfNeeded()
             prepareAudioSessionForTencentProviderPlayback(preserveRecordingCategory: pausedDialogEngine)
+            if source == "trueDeviceBackendPCMDriveSmoke" {
+                trueDeviceBackendPCMDriveTrace.markRequest(turnID: turnID, requestID: requestID)
+                trueDeviceBackendPCMDriveTrace.markSignal(
+                    preparedByteCount: signal.preparedByteCount,
+                    expectedChunkCount: signal.chunkCount
+                )
+            }
 
             digitalHumanConversation.beginProviderRequest(
                 requestID: requestID,
@@ -2085,6 +2278,17 @@ final class EchoViewController: UIViewController {
                         return
                     }
                     let resumedVoiceCapture = self.interruptDigitalHumanPlayback(reason: "pcmDriveSmokeStopProbe")
+                    if source == "trueDeviceBackendPCMDriveSmoke" {
+                        self.trueDeviceBackendPCMDriveTrace.stopProbeFired = true
+                        self.trueDeviceBackendPCMDriveTrace.resumedVoiceCapture = resumedVoiceCapture
+                        if !resumedVoiceCapture {
+                            self.trueDeviceBackendPCMDriveTrace.markFailure(
+                                reason: "stopProbeResumeFailed",
+                                detail: "interruptDigitalHumanPlayback returned false"
+                            )
+                        }
+                        self.emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "stopProbeFired")
+                    }
                     if !resumedVoiceCapture {
                         self.viewModel.resetToIdle()
                     }
@@ -2096,6 +2300,13 @@ final class EchoViewController: UIViewController {
             }
         } catch {
             resumeDialogEngineAfterTencentProviderSpeechIfNeeded(reason: "sendPCMDriveFailed")
+            if source == "trueDeviceBackendPCMDriveSmoke" {
+                trueDeviceBackendPCMDriveTrace.markFailure(
+                    reason: "sendPCMDriveFailed",
+                    detail: error.localizedDescription
+                )
+                emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "sendPCMDriveFailed")
+            }
             print("[TencentDigitalHuman][QA] PCM-drive smoke failed source=\(source): \(error.localizedDescription)")
         }
     }
@@ -2137,6 +2348,9 @@ final class EchoViewController: UIViewController {
                 }
                 do {
                     try digitalHumanRuntime.sendPCMChunk(chunk, requestID: requestID, sequence: sequence, isFinal: false)
+                    if source == "trueDeviceBackendPCMDriveSmoke" {
+                        self.trueDeviceBackendPCMDriveTrace.markChunkSent()
+                    }
                     print(
                         "[TencentDigitalHuman][QA] sent PCM chunk " +
                         "source=\(source) requestID=\(requestID) sequence=\(sequence) bytes=\(chunk.count)"
@@ -2144,6 +2358,13 @@ final class EchoViewController: UIViewController {
                 } catch {
                     self.digitalHumanConversation.clearProviderRequestAndResumeState()
                     self.resumeDialogEngineAfterTencentProviderSpeechIfNeeded(reason: "sendPCMChunkFailed")
+                    if source == "trueDeviceBackendPCMDriveSmoke" {
+                        self.trueDeviceBackendPCMDriveTrace.markFailure(
+                            reason: "sendPCMChunkFailed",
+                            detail: "sequence=\(sequence),error=\(error.localizedDescription)"
+                        )
+                        self.emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "sendPCMChunkFailed")
+                    }
                     print(
                         "[TencentDigitalHuman][QA] PCM chunk failed " +
                         "source=\(source) requestID=\(requestID) sequence=\(sequence): \(error.localizedDescription)"
@@ -2163,10 +2384,20 @@ final class EchoViewController: UIViewController {
             do {
                 let sequence = chunks.count + 1
                 try digitalHumanRuntime.sendPCMChunk(Data(), requestID: requestID, sequence: sequence, isFinal: true)
+                if source == "trueDeviceBackendPCMDriveSmoke" {
+                    self.trueDeviceBackendPCMDriveTrace.markFinalSent()
+                }
                 print("[TencentDigitalHuman][QA] sent PCM final source=\(source) requestID=\(requestID) sequence=\(sequence)")
             } catch {
                 self.digitalHumanConversation.clearProviderRequestAndResumeState()
                 self.resumeDialogEngineAfterTencentProviderSpeechIfNeeded(reason: "sendPCMFinalFailed")
+                if source == "trueDeviceBackendPCMDriveSmoke" {
+                    self.trueDeviceBackendPCMDriveTrace.markFailure(
+                        reason: "sendPCMFinalFailed",
+                        detail: error.localizedDescription
+                    )
+                    self.emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "sendPCMFinalFailed")
+                }
                 print("[TencentDigitalHuman][QA] PCM final failed source=\(source) requestID=\(requestID): \(error.localizedDescription)")
             }
         }

@@ -11,6 +11,7 @@ REPORT_PATH="$OUTPUT_DIR/report.md"
 BUILD_LOG="$OUTPUT_DIR/device-build.log"
 INSTALL_LOG="$OUTPUT_DIR/device-install.log"
 LAUNCH_LOG="$OUTPUT_DIR/device-launch-console.log"
+QA_RESULT_JSON_PATH="$OUTPUT_DIR/qa-result.json"
 XCODE_DESTINATIONS_LOG="$OUTPUT_DIR/xcodebuild-destinations.txt"
 DEVICECTL_DEVICES_LOG="$OUTPUT_DIR/devicectl-devices.txt"
 XCTRACE_DEVICES_LOG="$OUTPUT_DIR/xctrace-devices.txt"
@@ -208,10 +209,13 @@ for pattern in \
   "AudioStart" \
   "AudioOver" \
   "provider playback completed" \
+  "[TencentDigitalHuman][QA_RESULT]" \
+  "providerLogId" \
+  "sentChunkCount" \
   "PCM-drive stop probe fired" \
   "forced provider playback interrupt" \
   "resume voice capture after provider speech reason=pcmDriveSmokeStopProbe"; do
-  if grep -q "$pattern" "$LAUNCH_LOG"; then
+  if grep -Fq "$pattern" "$LAUNCH_LOG"; then
     append_report "- \`$pattern\`: observed"
   else
     append_report "- \`$pattern\`: not observed"
@@ -248,6 +252,110 @@ fi
 if ! grep -q "resume voice capture after provider speech reason=pcmDriveSmokeStopProbe" "$LAUNCH_LOG"; then
   fail "voice capture did not resume after stop probe; inspect $LAUNCH_LOG"
 fi
+
+set +e
+QA_RESULT_JSON="$(
+  python3 - "$LAUNCH_LOG" <<'PY'
+import sys
+
+prefix = "[TencentDigitalHuman][QA_RESULT] "
+last = None
+with open(sys.argv[1], "r", encoding="utf-8", errors="replace") as handle:
+    for line in handle:
+        if prefix in line:
+            last = line.split(prefix, 1)[1].strip()
+
+if not last:
+    sys.exit(2)
+print(last)
+PY
+)"
+QA_RESULT_STATUS=$?
+set -e
+if [[ "$QA_RESULT_STATUS" != "0" || -z "$QA_RESULT_JSON" ]]; then
+  fail "structured QA result was not emitted; inspect $LAUNCH_LOG"
+fi
+printf '%s\n' "$QA_RESULT_JSON" > "$QA_RESULT_JSON_PATH"
+
+set +e
+QA_RESULT_REPORT="$(
+  python3 - "$QA_RESULT_JSON_PATH" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8") as handle:
+    payload = json.load(handle)
+
+required = [
+    "voiceProfileId",
+    "outputMode",
+    "providerLogId",
+    "providerRequestId",
+    "providerMode",
+    "rawByteCount",
+    "preparedByteCount",
+    "expectedChunkCount",
+    "sentChunkCount",
+    "sentFinalChunk",
+    "providerSpeakingObserved",
+    "providerPlaybackCompleted",
+    "stopProbeFired",
+    "resumedVoiceCapture",
+    "audioOwner",
+]
+missing = [key for key in required if key not in payload]
+if missing:
+    raise SystemExit(f"missing fields: {', '.join(missing)}")
+
+if payload.get("outputMode") != "tencentAudioDrive":
+    raise SystemExit(f"unexpected outputMode: {payload.get('outputMode')}")
+if payload.get("audioOwner") not in {"tencentDigitalHuman", "fallbackMuted"}:
+    raise SystemExit(f"unexpected audioOwner: {payload.get('audioOwner')}")
+if int(payload.get("rawByteCount") or 0) <= 0:
+    raise SystemExit("rawByteCount must be positive")
+if int(payload.get("preparedByteCount") or 0) <= 0:
+    raise SystemExit("preparedByteCount must be positive")
+if int(payload.get("expectedChunkCount") or 0) <= 0:
+    raise SystemExit("expectedChunkCount must be positive")
+if int(payload.get("sentChunkCount") or 0) <= 0:
+    raise SystemExit("sentChunkCount must be positive")
+if not payload.get("sentFinalChunk"):
+    raise SystemExit("sentFinalChunk was false")
+if not payload.get("stopProbeFired"):
+    raise SystemExit("stopProbeFired was false")
+if not payload.get("resumedVoiceCapture"):
+    raise SystemExit("resumedVoiceCapture was false")
+if payload.get("failureReason"):
+    raise SystemExit(f"failureReason present: {payload.get('failureReason')} {payload.get('failureDetail', '')}")
+
+lines = [
+    f"- Completed: `{payload.get('completed')}`",
+    f"- Voice profile: `{payload.get('voiceProfileId')}`",
+    f"- Output mode: `{payload.get('outputMode')}`",
+    f"- Provider mode: `{payload.get('providerMode')}`",
+    f"- Provider log ID: `{payload.get('providerLogId') or 'none'}`",
+    f"- Provider request ID: `{payload.get('providerRequestId') or 'none'}`",
+    f"- Raw/prepared bytes: `{payload.get('rawByteCount')}` / `{payload.get('preparedByteCount')}`",
+    f"- Sent chunks: `{payload.get('sentChunkCount')}` / expected `{payload.get('expectedChunkCount')}`, final=`{payload.get('sentFinalChunk')}`",
+    f"- Provider state: speaking=`{payload.get('providerSpeakingObserved')}`, playbackCompleted=`{payload.get('providerPlaybackCompleted')}`",
+    f"- Stop/resume: stopProbe=`{payload.get('stopProbeFired')}`, resumedVoiceCapture=`{payload.get('resumedVoiceCapture')}`",
+    f"- Audio owner at final result: `{payload.get('audioOwner')}`",
+    f"- QA result JSON: `{path}`",
+]
+print("\n".join(lines))
+PY
+)"
+QA_PARSE_STATUS=$?
+set -e
+if [[ "$QA_PARSE_STATUS" != "0" ]]; then
+  fail "structured QA result validation failed: $QA_RESULT_REPORT"
+fi
+
+append_report
+append_report "## Structured QA Result"
+append_report
+append_report "$QA_RESULT_REPORT"
 
 append_report
 append_report "## Manual visual checks"
