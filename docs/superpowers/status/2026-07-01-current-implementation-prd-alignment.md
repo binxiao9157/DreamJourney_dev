@@ -550,6 +550,65 @@ Stitch UI / htmlCode 仍是视觉主依据，MCP screenshot 只作为辅助复�
 
 这一步是 CFL v2 的前置状态：先证明结构化上下文和 trace 能稳定工作，再决定是否拆成独立 CFL 服务或引入检索/排序/压缩组件。
 
+### 2026-07-01 CFL-Lite Context Packet v1 更新
+
+本轮继续把 v0 从“散落日志”推进到“结构化 Echo Trace Record”，仍然不改变 Echo 回复生成、腾讯数字人播放、声音复刻 PCM-drive 或现有 UI。
+
+后端 `/context/build` 更新：
+
+- `schemaVersion` 从 `0` 升级到 `1`。
+- `policy.privacyScope` 明确记录本轮上下文允许使用的数据边界：
+  - `scope`
+  - `scopeLabel`
+  - `viewerUserId`
+  - `ownerUserId`
+  - `digitalHumanId`
+  - `viewerFamilyMemberID`
+  - `allowedArchiveScopes`
+  - `allowedDigitalHumanIds`
+  - `canUseFamilyData`
+  - `crossScopeArchiveIncluded`
+- 新增 `trace` 摘要，便于后续回放和排查：
+  - `archiveItemIds`
+  - `archiveItemKinds`
+  - `archiveItemsIncluded`
+  - `kbFactCount`
+  - `voiceProfileId`
+  - `voiceCloneReady`
+  - `voiceOutputMode`
+  - `digitalHumanSessionReady`
+  - `digitalHumanProviderMode`
+  - `fallbacks`
+  - `privacyScope`
+  - `crossScopeArchiveIncluded`
+  - `latencyMs`
+
+iOS 更新：
+
+- `EchoContextPacket` 解析 v1 的 `privacyScope` 和 `trace.archiveItemIds`。
+- 新增 `EchoTraceRecord`，将一轮 Echo 的档案、声音复刻、数字人、fallback 和 privacy scope 聚合成一条结构化记录。
+- `EchoViewController` 新增 `lastEchoTraceRecord`，每个 final 用户语音回合成功构建 context 后会保存最近一轮 trace。
+- Echo 日志新增 `[CFLite] trace record`，可以直接看到：
+  - 本轮用了哪些档案 ID。
+  - 是否有可用复刻音色。
+  - 用的是哪个 `voiceProfileId`。
+  - 数字人 session 是否 ready。
+  - 为什么 fallback。
+  - 是否混入跨 scope 档案。
+  - context 构建耗时。
+
+QA 更新：
+
+- `context-packet-v0-check.swift` 已升级为 `context-packet-v1-check.swift`。
+- release regression 和 release QA package 已改为检查 v1 guard。
+- 后端单测覆盖 `privacyScope`、`trace.archiveItemIds`、`voiceProfileId`、`voiceOutputMode` 和跨 scope 档案隔离。
+
+下一步如果继续走 CFL-Lite，建议优先做“Echo trace 持久化/导出”：
+
+- 本地保留最近 N 轮 `EchoTraceRecord`。
+- QA 一键导出 trace JSON。
+- 真机问题反馈时直接拿 trace 对照后端 provider log、腾讯 session log 和声音复刻 log。
+
 1. 先做真机数字人 + 复刻音色完整回归。
    - 重点验证 Echo 中实际使用复刻音色。
    - 验证腾讯数字人口型同步和打断恢复。

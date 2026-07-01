@@ -844,12 +844,15 @@ struct EchoContextPacket {
     let userId: String
     let archiveItemsAvailable: Int
     let archiveItemsIncluded: Int
+    let archiveItemIDs: [String]
     let kbFactCount: Int
     let voiceProfileId: String?
     let cloneReady: Bool
     let voiceOutputMode: String
     let digitalHumanSessionReady: Bool
     let digitalHumanProviderMode: String
+    let privacyScopeLabel: String
+    let canUseFamilyData: Bool
     let crossScopeArchiveIncluded: Bool
     let fallbacks: [String]
     let latencyMs: Int
@@ -869,6 +872,9 @@ struct EchoContextPacket {
         let facts = memory?["kbFacts"] as? [[String: Any]] ?? []
         self.kbFactCount = facts.count
 
+        let trace = json["trace"] as? [String: Any]
+        self.archiveItemIDs = Self.stringArray(trace?["archiveItemIds"])
+
         let voice = json["voice"] as? [String: Any]
         self.voiceProfileId = voice?["voiceProfileId"] as? String
         self.cloneReady = Self.boolValue(voice?["cloneReady"]) ?? false
@@ -879,6 +885,11 @@ struct EchoContextPacket {
         self.digitalHumanProviderMode = digitalHuman?["providerMode"] as? String ?? "unknown"
 
         let policy = json["policy"] as? [String: Any]
+        let privacyScope = policy?["privacyScope"] as? [String: Any]
+        self.privacyScopeLabel = privacyScope?["scopeLabel"] as? String ?? "unknown"
+        self.canUseFamilyData = Self.boolValue(privacyScope?["canUseFamilyData"])
+            ?? Self.boolValue(policy?["canUseFamilyData"])
+            ?? false
         self.crossScopeArchiveIncluded = Self.boolValue(policy?["crossScopeArchiveIncluded"]) ?? false
         self.fallbacks = json["fallbacks"] as? [String] ?? []
 
@@ -902,6 +913,24 @@ struct EchoContextPacket {
         return nil
     }
 
+    private static func stringArray(_ value: Any?) -> [String] {
+        if let strings = value as? [String] {
+            return strings
+        }
+        if let values = value as? [Any] {
+            return values.compactMap { item in
+                if let text = item as? String {
+                    return text
+                }
+                if let number = item as? NSNumber {
+                    return number.stringValue
+                }
+                return nil
+            }
+        }
+        return []
+    }
+
     private static func boolValue(_ value: Any?) -> Bool? {
         if let value = value as? Bool {
             return value
@@ -920,6 +949,63 @@ struct EchoContextPacket {
             }
         }
         return nil
+    }
+}
+
+struct EchoTraceRecord {
+    let turnID: String
+    let traceId: String
+    let userId: String
+    let archiveItemIDs: [String]
+    let archiveItemsIncluded: Int
+    let archiveItemsAvailable: Int
+    let kbFactCount: Int
+    let voiceProfileId: String?
+    let voiceCloneReady: Bool
+    let voiceOutputMode: String
+    let digitalHumanSessionReady: Bool
+    let digitalHumanProviderMode: String
+    let privacyScopeLabel: String
+    let canUseFamilyData: Bool
+    let crossScopeArchiveIncluded: Bool
+    let fallbacks: [String]
+    let latencyMs: Int
+
+    init(turnID: String, packet: EchoContextPacket) {
+        self.turnID = turnID
+        self.traceId = packet.traceId
+        self.userId = packet.userId
+        self.archiveItemIDs = packet.archiveItemIDs
+        self.archiveItemsIncluded = packet.archiveItemsIncluded
+        self.archiveItemsAvailable = packet.archiveItemsAvailable
+        self.kbFactCount = packet.kbFactCount
+        self.voiceProfileId = packet.voiceProfileId
+        self.voiceCloneReady = packet.cloneReady
+        self.voiceOutputMode = packet.voiceOutputMode
+        self.digitalHumanSessionReady = packet.digitalHumanSessionReady
+        self.digitalHumanProviderMode = packet.digitalHumanProviderMode
+        self.privacyScopeLabel = packet.privacyScopeLabel
+        self.canUseFamilyData = packet.canUseFamilyData
+        self.crossScopeArchiveIncluded = packet.crossScopeArchiveIncluded
+        self.fallbacks = packet.fallbacks
+        self.latencyMs = packet.latencyMs
+    }
+
+    var logLine: String {
+        let archiveIDs = archiveItemIDs.joined(separator: ",")
+        let fallbackList = fallbacks.joined(separator: ",")
+        let profileID = voiceProfileId ?? "none"
+        return "[CFLite] trace record " +
+        "turnID=\(turnID) traceId=\(traceId) userId=\(userId) " +
+        "privacyScope=\(privacyScopeLabel) canUseFamilyData=\(canUseFamilyData) " +
+        "archiveIncluded=\(archiveItemsIncluded)/\(archiveItemsAvailable) " +
+        "archiveItemIDs=\(archiveIDs) " +
+        "kbFacts=\(kbFactCount) cloneReady=\(voiceCloneReady) " +
+        "voiceProfileId=\(profileID) outputMode=\(voiceOutputMode) " +
+        "digitalHumanReady=\(digitalHumanSessionReady) " +
+        "digitalHumanProviderMode=\(digitalHumanProviderMode) " +
+        "crossScopeArchiveIncluded=\(crossScopeArchiveIncluded) " +
+        "fallbacks=\(fallbackList) latencyMs=\(latencyMs)"
     }
 }
 

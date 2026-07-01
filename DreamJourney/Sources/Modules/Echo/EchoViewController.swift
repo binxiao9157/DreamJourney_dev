@@ -23,6 +23,7 @@ final class EchoViewController: UIViewController {
     private var isLoadingVoiceCloneRuntimeCapability = false
     private var lastTencentProviderAudioHandoffAt: Date?
     private var currentEchoAudioOwner: EchoDigitalHumanAudioOwner = .volcengineLocalTTS
+    private var lastEchoTraceRecord: EchoTraceRecord?
 
     private let personaBadgeView: UIView = {
         let view = UIView()
@@ -1446,9 +1447,13 @@ final class EchoViewController: UIViewController {
             digitalHumanId: context.ownerId,
             lifecycleMode: context.mode,
             viewerFamilyMemberID: nil
-        ) { result in
+        ) { [weak self] result in
             switch result {
             case .success(let packet):
+                let record = EchoTraceRecord(turnID: turnID, packet: packet)
+                DispatchQueue.main.async {
+                    self?.lastEchoTraceRecord = record
+                }
                 print(
                     "[CFLite] context built " +
                     "turnID=\(turnID) traceId=\(packet.traceId) schemaVersion=\(packet.schemaVersion) " +
@@ -1457,9 +1462,11 @@ final class EchoViewController: UIViewController {
                     "voiceProfileId=\(packet.voiceProfileId ?? "none") outputMode=\(packet.voiceOutputMode) " +
                     "digitalHumanReady=\(packet.digitalHumanSessionReady) " +
                     "digitalHumanProviderMode=\(packet.digitalHumanProviderMode) " +
+                    "privacyScope=\(packet.privacyScopeLabel) " +
                     "crossScopeArchiveIncluded=\(packet.crossScopeArchiveIncluded) " +
                     "fallbacks=\(packet.fallbacks.joined(separator: ",")) latencyMs=\(packet.latencyMs)"
                 )
+                print(record.logLine + " archiveItemIDs=\(record.archiveItemIDs.joined(separator: ","))")
             case .failure(let error):
                 print("[CFLite] context build failed turnID=\(turnID) error=\(error.localizedDescription)")
             }
