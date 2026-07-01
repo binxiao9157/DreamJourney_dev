@@ -28,6 +28,7 @@ let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let releaseQA = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
 let uiqaSmoke = read("Scripts/QA/prd-stitch-ui/run-echo-trace-evidence-package-export-smoke.sh")
+let panelUIQASmoke = read("Scripts/QA/prd-stitch-ui/run-echo-trace-evidence-package-panel-export-smoke.sh")
 let statusDoc = readIfPresent("docs/superpowers/status/2026-07-02-echo-trace-evidence-package.md")
 
 for required in [
@@ -67,6 +68,11 @@ for forbidden in [
 for required in [
     "private var lastDigitalHumanSessionEvidenceSummary",
     "private var lastVoiceSynthesisEvidenceSummary",
+    "private lazy var echoTraceEvidenceExportButton",
+    "button.addTarget(self, action: #selector(exportEchoTraceEvidencePackageTapped)",
+    "@objc private func exportEchoTraceEvidencePackageTapped",
+    "presentEchoTraceEvidencePackageShareSheet",
+    "UIActivityViewController(activityItems:",
     "makeEchoTraceEvidencePackage(",
     "snapshot: EchoRuntimeDiagnosticsSnapshot?",
     "source: String",
@@ -74,6 +80,7 @@ for required in [
     "EchoDigitalHumanSessionEvidenceSummary(contract:",
     "EchoVoiceSynthesisEvidenceSummary(synthesis:",
     "runUIQAEchoTraceEvidencePackageExportSmoke",
+    "runUIQAEchoTraceEvidencePackagePanelExportSmoke",
     "EchoTraceEvidencePackageStore.shared.exportRecentPackages",
 ] {
     require(echo.contains(required), "Echo should build/export evidence package: \(required)")
@@ -81,9 +88,13 @@ for required in [
 
 for required in [
     "DJRunEchoTraceEvidencePackageExportSmoke",
+    "DJRunEchoTraceEvidencePackagePanelExportSmoke",
     "runEchoTraceEvidencePackageExportSmoke",
+    "runEchoTraceEvidencePackagePanelExportSmoke",
     "writeEchoTraceEvidencePackageExportSmokeResult",
+    "writeEchoTraceEvidencePackagePanelExportSmokeResult",
     "echo-trace-evidence-package-export-smoke-result.json",
+    "echo-trace-evidence-package-panel-export-smoke-result.json",
 ] {
     require(appDelegate.contains(required), "AppDelegate should expose evidence package UIQA smoke: \(required)")
 }
@@ -95,7 +106,9 @@ require(
 
 require(
     releaseRegression.contains("RUN_ECHO_TRACE_EVIDENCE_PACKAGE_EXPORT_SMOKE") &&
-        releaseRegression.contains("run-echo-trace-evidence-package-export-smoke.sh"),
+        releaseRegression.contains("run-echo-trace-evidence-package-export-smoke.sh") &&
+        releaseRegression.contains("RUN_ECHO_TRACE_EVIDENCE_PACKAGE_PANEL_EXPORT_SMOKE") &&
+        releaseRegression.contains("run-echo-trace-evidence-package-panel-export-smoke.sh"),
     "release regression should expose optional evidence package UIQA smoke"
 )
 
@@ -107,6 +120,11 @@ require(
 require(
     releaseQA.contains("run-echo-trace-evidence-package-export-smoke.sh"),
     "release QA package should include evidence package UIQA smoke"
+)
+
+require(
+    releaseQA.contains("run-echo-trace-evidence-package-panel-export-smoke.sh"),
+    "release QA package should include evidence package panel UIQA smoke"
 )
 
 for required in [
@@ -121,6 +139,20 @@ for required in [
     "accesstoken",
 ] {
     require(uiqaSmoke.contains(required), "evidence package UIQA smoke should verify \(required)")
+}
+
+for required in [
+    "run-installable-simulator-uiqa.sh",
+    "DJRunEchoTraceEvidencePackagePanelExportSmoke",
+    "echo-trace-evidence-package-panel-export-smoke-result.json",
+    "echo-trace-evidence-packages.json",
+    "buttonVisible",
+    "导出证据包",
+    "audioBase64",
+    "appkey",
+    "accesstoken",
+] {
+    require(panelUIQASmoke.contains(required), "evidence package panel UIQA smoke should verify \(required)")
 }
 
 for required in [

@@ -196,6 +196,11 @@ private extension AppDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.runEchoTraceEvidencePackageExportSmoke()
             }
+        } else if arguments.contains("DJRunEchoTraceEvidencePackagePanelExportSmoke") {
+            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.runEchoTraceEvidencePackagePanelExportSmoke()
+            }
         } else if arguments.contains("DJRunProfileCareBackendFailureRetrySmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
@@ -2728,6 +2733,52 @@ private extension AppDelegate {
         }
     }
 
+    func runEchoTraceEvidencePackagePanelExportSmoke(retryCount: Int = 0) {
+        guard let tabBarController = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController as? WarmTabBarController else {
+            guard retryCount < 20 else {
+                print("[UI_QA] EchoTraceEvidencePackagePanelExportSmoke failed reason=missingRootTab")
+                writeEchoTraceEvidencePackagePanelExportSmokeResult([
+                    "completed": false,
+                    "failureReason": "missingRootTab"
+                ])
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                self?.runEchoTraceEvidencePackagePanelExportSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+
+        guard let viewControllers = tabBarController.viewControllers,
+              viewControllers.count > 1,
+              let echoNavigationController = viewControllers[1] as? UINavigationController,
+              let echoViewController = echoNavigationController.viewControllers.first as? EchoViewController else {
+            print("[UI_QA] EchoTraceEvidencePackagePanelExportSmoke failed reason=missingEcho")
+            writeEchoTraceEvidencePackagePanelExportSmokeResult([
+                "completed": false,
+                "failureReason": "missingEcho"
+            ])
+            return
+        }
+
+        tabBarController.selectedIndex = 1
+        echoViewController.runUIQAEchoTraceEvidencePackagePanelExportSmoke { [weak self] payload in
+            var result = payload
+            result["selectedTabIndex"] = tabBarController.selectedIndex
+            self?.writeEchoTraceEvidencePackagePanelExportSmokeResult(result)
+            print(
+                "[UI_QA] EchoTraceEvidencePackagePanelExportSmoke completed " +
+                "completed=\(result["completed"] as? Bool == true) " +
+                "buttonVisible=\(result["buttonVisible"] as? Bool == true) " +
+                "latestTurnID=\(result["latestTurnID"] as? String ?? "missing")"
+            )
+        }
+    }
+
     func runBackendEnvSmoke(retryCount: Int = 0) {
         guard let tabBarController = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
@@ -3402,6 +3453,21 @@ private extension AppDelegate {
             try data.write(to: resultURL, options: [.atomic])
         } catch {
             print("[UI_QA] EchoTraceEvidencePackageExportSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    func writeEchoTraceEvidencePackagePanelExportSmokeResult(_ result: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
+              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("[UI_QA] EchoTraceEvidencePackagePanelExportSmoke failed reason=resultEncoding")
+            return
+        }
+
+        let resultURL = documentsURL.appendingPathComponent("echo-trace-evidence-package-panel-export-smoke-result.json")
+        do {
+            try data.write(to: resultURL, options: [.atomic])
+        } catch {
+            print("[UI_QA] EchoTraceEvidencePackagePanelExportSmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
     }
 

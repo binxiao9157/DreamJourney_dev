@@ -126,6 +126,17 @@
 
 ## QA 入口
 
+### 手动导出
+
+在 QA 启动参数 `DJShowEchoRuntimeDiagnosticsPanel` 下，Echo 页面右上角会显示诊断面板。面板底部提供 `导出证据包` 按钮：
+
+- 点击后先记录当前 iOS runtime diagnostics。
+- 生成 `echo-trace-evidence-packages.json`。
+- 通过系统分享面板导出文件。
+- 普通公开模式不显示该按钮。
+
+### 自动 smoke
+
 App launch arg：
 
 ```text
@@ -138,10 +149,17 @@ DJRunEchoTraceEvidencePackageExportSmoke
 Scripts/QA/prd-stitch-ui/run-echo-trace-evidence-package-export-smoke.sh
 ```
 
+QA 面板按钮 smoke：
+
+```bash
+Scripts/QA/prd-stitch-ui/run-echo-trace-evidence-package-panel-export-smoke.sh
+```
+
 结果文件：
 
 ```text
 echo-trace-evidence-package-export-smoke-result.json
+echo-trace-evidence-package-panel-export-smoke-result.json
 ```
 
 证据包文件：
@@ -165,6 +183,7 @@ release regression 可选开关：
 
 ```bash
 RUN_ECHO_TRACE_EVIDENCE_PACKAGE_EXPORT_SMOKE=1 Scripts/QA/prd-stitch-ui/run-release-regression.sh
+RUN_ECHO_TRACE_EVIDENCE_PACKAGE_PANEL_EXPORT_SMOKE=1 Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 ## 后续建议

@@ -311,6 +311,19 @@ final class EchoViewController: UIViewController {
         return label
     }()
 
+    private lazy var echoTraceEvidenceExportButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setTitle("导出证据包", for: .normal)
+        button.titleLabel?.font = DJDesignTokens.Font.label(11)
+        button.setTitleColor(.white, for: .normal)
+        button.backgroundColor = DJDesignTokens.Color.accentDeep.withAlphaComponent(0.84)
+        button.layer.cornerRadius = 11
+        button.clipsToBounds = true
+        button.accessibilityIdentifier = "echoTraceEvidenceExportButton"
+        button.addTarget(self, action: #selector(exportEchoTraceEvidencePackageTapped), for: .touchUpInside)
+        return button
+    }()
+
     private lazy var micButton: UIButton = {
         let button = UIButton(type: .custom)
         button.backgroundColor = DJDesignTokens.Color.accentDeep
@@ -483,6 +496,8 @@ final class EchoViewController: UIViewController {
         let arguments = ProcessInfo.processInfo.arguments
         return arguments.contains("DJShowEchoRuntimeDiagnosticsPanel")
             || arguments.contains("DJRunEchoRuntimeDiagnosticsExportSmoke")
+            || arguments.contains("DJRunEchoTraceEvidencePackageExportSmoke")
+            || arguments.contains("DJRunEchoTraceEvidencePackagePanelExportSmoke")
     }
 
     private var shouldRunTencentDigitalHumanTextDriveSmoke: Bool {
@@ -643,6 +658,7 @@ final class EchoViewController: UIViewController {
         if shouldShowEchoRuntimeDiagnosticsPanel {
             view.addSubview(echoRuntimeDiagnosticsPanelView)
             echoRuntimeDiagnosticsPanelView.addSubview(echoRuntimeDiagnosticsPanelLabel)
+            echoRuntimeDiagnosticsPanelView.addSubview(echoTraceEvidenceExportButton)
         }
         view.addSubview(micRingView)
         view.addSubview(micButton)
@@ -685,6 +701,7 @@ final class EchoViewController: UIViewController {
             voiceStatusLabel,
             echoRuntimeDiagnosticsPanelView,
             echoRuntimeDiagnosticsPanelLabel,
+            echoTraceEvidenceExportButton,
             micRingView,
             micButton
         ].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
@@ -792,9 +809,23 @@ final class EchoViewController: UIViewController {
                     constant: -10
                 ),
                 echoRuntimeDiagnosticsPanelLabel.bottomAnchor.constraint(
+                    lessThanOrEqualTo: echoTraceEvidenceExportButton.topAnchor,
+                    constant: -8
+                ),
+
+                echoTraceEvidenceExportButton.leadingAnchor.constraint(
+                    equalTo: echoRuntimeDiagnosticsPanelView.leadingAnchor,
+                    constant: 10
+                ),
+                echoTraceEvidenceExportButton.trailingAnchor.constraint(
+                    equalTo: echoRuntimeDiagnosticsPanelView.trailingAnchor,
+                    constant: -10
+                ),
+                echoTraceEvidenceExportButton.bottomAnchor.constraint(
                     equalTo: echoRuntimeDiagnosticsPanelView.bottomAnchor,
                     constant: -10
                 ),
+                echoTraceEvidenceExportButton.heightAnchor.constraint(equalToConstant: 28),
             ])
         }
 
@@ -1272,6 +1303,38 @@ final class EchoViewController: UIViewController {
         echoRuntimeDiagnosticsPanelView.isHidden = false
         echoRuntimeDiagnosticsPanelView.alpha = 1
         echoRuntimeDiagnosticsPanelView.accessibilityLabel = echoRuntimeDiagnosticsPanelLabel.text
+    }
+
+    @objc private func exportEchoTraceEvidencePackageTapped() {
+        do {
+            let exportURL = try exportEchoTraceEvidencePackageForQA(source: "qaPanelManualExport")
+            echoTraceEvidenceExportButton.setTitle("已生成证据包", for: .normal)
+            presentEchoTraceEvidencePackageShareSheet(fileURL: exportURL)
+        } catch {
+            echoTraceEvidenceExportButton.setTitle("导出失败", for: .normal)
+            let alert = UIAlertController(
+                title: "证据包导出失败",
+                message: error.localizedDescription,
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "知道了", style: .default))
+            present(alert, animated: true)
+        }
+    }
+
+    @discardableResult
+    private func exportEchoTraceEvidencePackageForQA(source: String) throws -> URL {
+        recordEchoRuntimeDiagnosticsSnapshot(reason: source)
+        return try EchoTraceEvidencePackageStore.shared.exportRecentPackages()
+    }
+
+    private func presentEchoTraceEvidencePackageShareSheet(fileURL: URL) {
+        let activityViewController = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
+        if let popover = activityViewController.popoverPresentationController {
+            popover.sourceView = echoTraceEvidenceExportButton
+            popover.sourceRect = echoTraceEvidenceExportButton.bounds
+        }
+        present(activityViewController, animated: true)
     }
 
     private func prepareCloudDigitalHumanRuntimeIfNeeded() {
@@ -3250,6 +3313,78 @@ extension EchoViewController {
             completion([
                 "completed": false,
                 "failureReason": "exportFailed",
+                "error": error.localizedDescription,
+            ])
+        }
+    }
+
+    func runUIQAEchoTraceEvidencePackagePanelExportSmoke(completion: @escaping ([String: Any]) -> Void) {
+        EchoTraceStore.shared.clear()
+        EchoRuntimeDiagnosticsStore.shared.clear()
+        EchoTraceEvidencePackageStore.shared.clear()
+
+        let record = EchoTraceRecord(
+            turnID: "uiqa-panel-evidence-turn",
+            traceId: "ctx_uiqa_panel_evidence",
+            userId: "uiqa_echo_panel_evidence_user",
+            archiveItemIDs: ["archive_panel_evidence"],
+            archiveItemsIncluded: 1,
+            archiveItemsAvailable: 1,
+            kbFactCount: 3,
+            voiceProfileId: "S_uiqa_panel_trace_evidence",
+            voiceCloneReady: true,
+            voiceOutputMode: "tencentAudioDrive",
+            digitalHumanSessionReady: true,
+            digitalHumanProviderMode: "tencent-cloud-digital-human",
+            privacyScopeLabel: "personal:uiqa_echo_panel_evidence_user",
+            canUseFamilyData: false,
+            crossScopeArchiveIncluded: false,
+            fallbacks: [],
+            latencyMs: 18
+        )
+        lastEchoTraceRecord = record
+        EchoTraceStore.shared.record(record)
+        lastDigitalHumanSessionEvidenceSummary = .unavailable(reason: "uiqaPanelSessionSummary")
+        lastVoiceCloneProviderLogId = "uiqa-panel-provider-log"
+        lastVoiceCloneProviderRequestId = "uiqa-panel-provider-request"
+        lastVoiceCloneProviderMode = "volcengineVoiceCloneV3"
+        lastVoiceSynthesisEvidenceSummary = .failed(
+            voiceProfileId: "S_uiqa_panel_trace_evidence",
+            outputMode: "tencentAudioDrive",
+            providerLogId: "uiqa-panel-provider-log",
+            providerRequestId: "uiqa-panel-provider-request",
+            reason: "uiqaPanelSynthesisSummary",
+            detail: "UIQA panel export stores provider metadata only"
+        )
+
+        do {
+            let exportURL = try exportEchoTraceEvidencePackageForQA(source: "uiqaPanelEvidenceExport")
+            let data = try Data(contentsOf: exportURL)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let packages = try decoder.decode([EchoTraceEvidencePackage].self, from: data)
+            let serialized = String(data: data, encoding: .utf8) ?? ""
+            let latestPackage = packages.last
+            completion([
+                "completed": echoTraceEvidenceExportButton.superview === echoRuntimeDiagnosticsPanelView
+                    && echoTraceEvidenceExportButton.title(for: .normal) == "导出证据包"
+                    && latestPackage?.turnID == "uiqa-panel-evidence-turn"
+                    && latestPackage?.voiceSynthesis?.providerLogId == "uiqa-panel-provider-log"
+                    && !serialized.localizedCaseInsensitiveContains("audioBase64")
+                    && !serialized.localizedCaseInsensitiveContains("appkey")
+                    && !serialized.localizedCaseInsensitiveContains("accesstoken"),
+                "buttonVisible": echoTraceEvidenceExportButton.superview === echoRuntimeDiagnosticsPanelView,
+                "buttonTitle": echoTraceEvidenceExportButton.title(for: .normal) ?? "",
+                "packageCount": packages.count,
+                "latestTurnID": latestPackage?.turnID ?? "missing",
+                "latestProviderLogId": latestPackage?.voiceSynthesis?.providerLogId ?? "missing",
+                "exportPath": exportURL.path,
+                "fileExists": FileManager.default.fileExists(atPath: exportURL.path),
+            ])
+        } catch {
+            completion([
+                "completed": false,
+                "failureReason": "panelExportFailed",
                 "error": error.localizedDescription,
             ])
         }

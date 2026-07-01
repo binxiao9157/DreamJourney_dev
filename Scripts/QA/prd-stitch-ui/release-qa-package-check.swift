@@ -190,6 +190,8 @@ assertContains(releaseRegression, "RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE", "r
 assertContains(releaseRegression, "RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE", "release regression should expose deployed time-letter lifecycle smoke")
 assertContains(releaseRegression, "RUN_ECHO_TRACE_EVIDENCE_PACKAGE_EXPORT_SMOKE", "release regression should expose optional Echo trace evidence package export smoke")
 assertContains(releaseRegression, "run-echo-trace-evidence-package-export-smoke.sh", "release regression should call Echo trace evidence package export smoke")
+assertContains(releaseRegression, "RUN_ECHO_TRACE_EVIDENCE_PACKAGE_PANEL_EXPORT_SMOKE", "release regression should expose optional Echo trace evidence package panel export smoke")
+assertContains(releaseRegression, "run-echo-trace-evidence-package-panel-export-smoke.sh", "release regression should call Echo trace evidence package panel export smoke")
 assertContains(releaseRegression, "RUN_ECHO_READINESS_REPORT", "release regression should expose optional Echo readiness report")
 assertContains(releaseRegression, "run-echo-readiness-report.sh", "release regression should call Echo readiness report")
 assertContains(releaseRegression, "RUN_DIGITAL_HUMAN_TTS_VISEME_GATE", "release regression should expose optional digital-human TTS/viseme gate")
@@ -320,6 +322,7 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/run-echo-delayed-reply-notification-smoke.sh",
     "Scripts/QA/prd-stitch-ui/run-echo-trace-export-uiqa-smoke.sh",
     "Scripts/QA/prd-stitch-ui/run-echo-trace-evidence-package-export-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/run-echo-trace-evidence-package-panel-export-smoke.sh",
     "Scripts/QA/prd-stitch-ui/echo-delayed-reply-dispatch-contract-check.swift",
     "Scripts/QA/prd-stitch-ui/run-release-regression.sh",
     "Scripts/QA/prd-stitch-ui/run-backend-env-smoke.sh",
