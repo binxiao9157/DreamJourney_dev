@@ -14,6 +14,8 @@ DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT_DIR/tmp/visual-qa/prd-stitch-ui/De
 OUTPUT_ROOT="${OUTPUT_ROOT:-$ROOT_DIR/tmp/visual-qa/prd-stitch-ui/tencent-backend-pcm-drive-mock-smoke}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 DJ_TENCENT_BACKEND_PCM_MOCK_VOICE_PROFILE_ID="${DJ_TENCENT_BACKEND_PCM_MOCK_VOICE_PROFILE_ID:-S_PhXlHqB52}"
+LOCAL_BUNDLE_ID="${LOCAL_BUNDLE_ID:-com.yxj.dreamjourney.app}"
+LOCAL_DEVELOPMENT_TEAM="${LOCAL_DEVELOPMENT_TEAM:-2BTR77V3R8}"
 OUTPUT_DIR="$OUTPUT_ROOT/$RUN_ID"
 BUILD_LOG="$OUTPUT_DIR/build.log"
 RUNTIME_LOG="$OUTPUT_DIR/runtime.log"
@@ -129,6 +131,8 @@ fi
 [[ -n "$SIMULATOR_UDID" ]] || fail "No booted simulator. Set SIMULATOR_UDID or SIMULATOR_NAME."
 
 echo "[tencent-backend-pcm-drive-mock-smoke] Building UIQA app..."
+echo "[tencent-backend-pcm-drive-mock-smoke] Local QA bundle id: $LOCAL_BUNDLE_ID"
+echo "[tencent-backend-pcm-drive-mock-smoke] Local QA team id: $LOCAL_DEVELOPMENT_TEAM"
 xcodebuild \
   -workspace DreamJourney.xcworkspace \
   -scheme "$SCHEME" \
@@ -138,6 +142,8 @@ xcodebuild \
   -derivedDataPath "$DERIVED_DATA_PATH" \
   CODE_SIGNING_ALLOWED=NO \
   SWIFT_ACTIVE_COMPILATION_CONDITIONS="$SWIFT_ACTIVE_COMPILATION_CONDITIONS" \
+  DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER="$LOCAL_BUNDLE_ID" \
+  DREAMJOURNEY_DEVELOPMENT_TEAM="$LOCAL_DEVELOPMENT_TEAM" \
   DREAMJOURNEY_BACKEND_BASE_URL="$BACKEND_BASE_URL" \
   DREAMJOURNEY_BACKEND_API_TOKEN="$BACKEND_API_TOKEN" \
   EXCLUDED_ARCHS='' \
@@ -160,6 +166,8 @@ APP_INFO_PLIST="$APP_PATH/Info.plist"
 
 BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
 [[ -n "$BUNDLE_ID" ]] || fail "Unable to read bundle id from $APP_PATH"
+[[ "$BUNDLE_ID" == "$LOCAL_BUNDLE_ID" ]] || fail "Built app bundle id is $BUNDLE_ID, expected $LOCAL_BUNDLE_ID"
+[[ "$BUNDLE_ID" != "com.gaominge.dreamjourney.app" ]] || fail "Built app is using the shared default bundle id."
 
 echo "[tencent-backend-pcm-drive-mock-smoke] Installing $BUNDLE_ID on $SIMULATOR_UDID..."
 xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true

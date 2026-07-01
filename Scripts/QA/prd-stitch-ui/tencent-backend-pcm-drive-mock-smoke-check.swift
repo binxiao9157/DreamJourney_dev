@@ -95,6 +95,10 @@ assertContains(runner, "<redacted-backend-token>", "runner should redact backend
 assertContains(runner, "APP_INFO_PLIST=\"$APP_PATH/Info.plist\"", "runner should locate the built app Info.plist")
 assertContains(runner, "Set :DreamJourneyBackendBaseURL $BACKEND_BASE_URL", "runner should reapply backend base URL after LocalConfig build phase")
 assertContains(runner, "Set :DreamJourneyBackendAPIToken $BACKEND_API_TOKEN", "runner should reapply backend token after LocalConfig build phase")
+assertContains(runner, "DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER=\"$LOCAL_BUNDLE_ID\"", "runner should build with the local installable Bundle ID")
+assertContains(runner, "DREAMJOURNEY_DEVELOPMENT_TEAM=\"$LOCAL_DEVELOPMENT_TEAM\"", "runner should build with the local development team")
+assertContains(runner, "[[ \"$BUNDLE_ID\" == \"$LOCAL_BUNDLE_ID\" ]]", "runner should assert the built Bundle ID")
+assertContains(runner, "[[ \"$BUNDLE_ID\" != \"com.gaominge.dreamjourney.app\" ]]", "runner should reject the shared default Bundle ID")
 assertNotContains(runner, "cat \"$BACKEND_API_TOKEN\"", "runner must not print backend token")
 
 assertContains(
