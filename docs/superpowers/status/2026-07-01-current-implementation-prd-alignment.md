@@ -635,7 +635,49 @@ QA 更新：
 - `echo-trace-export-check.swift` 通过。
 - `release-qa-package-check.swift` 通过。
 - iOS Debug Simulator compile-only 构建通过。
-- 模拟器交互安装 smoke 暂未作为通过证据：当前工程默认 generic simulator 构建产物为 `x86_64`，booted iOS 26.5 模拟器需要 `arm64`；强制 `ARCHS=arm64` 又会被现有 Pods/工程 `EXCLUDED_ARCHS` 配置阻断。该限制属于现有模拟器架构配置问题，不影响静态合同和编译验证。
+- 模拟器交互安装 smoke 需要通过 installable simulator helper 执行，不能直接使用项目默认 Bundle ID，也不能用全局 `PRODUCT_BUNDLE_IDENTIFIER=...` 覆盖。
+
+### 2026-07-01 Installable Simulator UIQA Bundle Guard
+
+本轮固化本机模拟器 UIQA 构建/安装约束，避免后续真机/模拟器验证反复踩同一个坑：
+
+- 新增共享脚本：
+  - `Scripts/QA/prd-stitch-ui/run-installable-simulator-uiqa.sh`
+  - 默认本机 QA Bundle ID：`com.yxj.dreamjourney.app`
+  - 默认本机 Team ID：`2BTR77V3R8`
+  - 构建时只通过项目自有变量传入：
+    - `DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER`
+    - `DREAMJOURNEY_DEVELOPMENT_TEAM`
+  - 明确禁止全局 `PRODUCT_BUNDLE_IDENTIFIER=...` 覆盖，避免 Pods framework bundle id 被一起污染。
+  - 构建后校验 app bundle id、arm64 simulator 架构、ad-hoc 签名并安装到 booted simulator。
+- 新增静态 guard：
+  - `Scripts/QA/prd-stitch-ui/installable-simulator-uiqa-bundle-guard-check.swift`
+  - 已接入 release regression 和 release QA package。
+- 已迁移模拟器 UIQA smoke：
+  - `run-archive-to-echo-smoke.sh`
+  - `run-echo-delayed-reply-notification-smoke.sh`
+  - `run-echo-trace-export-uiqa-smoke.sh`
+- 新增 Echo Trace 可安装模拟器 smoke：
+  - `Scripts/QA/prd-stitch-ui/run-echo-trace-export-uiqa-smoke.sh`
+  - launch arg：`DJRunEchoTraceExportSmoke`
+  - 结果文件：`echo-trace-export-smoke-result.json`
+  - 导出文件：`echo-trace-records.json`
+  - 断言最近 20 条 trace 保留规则：最早 `uiqa-turn-2`、最新 `uiqa-turn-21`。
+
+执行方式：
+
+```bash
+RUN_ECHO_TRACE_EXPORT_UIQA_SMOKE=1 \
+RUN_STANDARD_BUILD=0 \
+RUN_SIMULATOR_SMOKE=0 \
+RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE=0 \
+Scripts/QA/prd-stitch-ui/run-release-regression.sh
+```
+
+注意：
+
+- 项目文件里仍可能存在协作默认值 `com.gaominge.dreamjourney.app`，但本机可安装 UIQA 一律不使用该默认值。
+- 后续新增模拟器 UIQA smoke 必须复用 `run-installable-simulator-uiqa.sh`，不得自行拼接 `xcodebuild PRODUCT_BUNDLE_IDENTIFIER=...`。
 
 后端部署说明：
 

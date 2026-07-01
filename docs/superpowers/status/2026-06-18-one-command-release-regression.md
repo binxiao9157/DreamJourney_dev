@@ -100,6 +100,28 @@ For public MVP care handoff, add `RUN_P0_PROFILE_CARE_REGRESSION=1` to the relea
 
 For the normal public MVP handoff path, prefer `RUN_PUBLIC_MVP_REGRESSION=1` instead of toggling the two P0 gates separately.
 
+## Installable Simulator UIQA Bundle Guard
+
+Use this when a simulator smoke must install and launch the app locally:
+
+```bash
+RUN_ECHO_TRACE_EXPORT_UIQA_SMOKE=1 \
+RUN_STANDARD_BUILD=0 \
+RUN_SIMULATOR_SMOKE=0 \
+RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE=0 \
+RUN_ID=20260701-echo-trace-installable \
+Scripts/QA/prd-stitch-ui/run-release-regression.sh
+```
+
+The installable simulator helper pins local QA signing identity to:
+
+- Bundle ID: `com.yxj.dreamjourney.app`
+- Team ID: `2BTR77V3R8`
+
+It must pass those values through `DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER` and `DREAMJOURNEY_DEVELOPMENT_TEAM`. Do not use global `PRODUCT_BUNDLE_IDENTIFIER=...` in simulator UIQA scripts because that setting is inherited by Pods frameworks and can create duplicate framework bundle identifiers during install.
+
+The guard is `installable-simulator-uiqa-bundle-guard-check.swift`; it requires simulator UIQA smokes to reuse `run-installable-simulator-uiqa.sh`.
+
 ## Optional Release-like Backends
 
 Postgres release-like backend remains optional in the default runner because not every machine has backend credentials or Docker/Postgres runtime.

@@ -156,8 +156,10 @@ assertContains(plan, "release-qa-package-check.swift", "plan should document Gro
 assertContains(plan, "submit-slice-inventory-check.swift", "plan should document submit slice guard")
 
 let archiveSmokeScript = read("Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh")
-assertContains(archiveSmokeScript, "defaults delete \"$BUNDLE_ID\"", "archive-to-echo smoke should clear simulator defaults for isolation")
-assertContains(archiveSmokeScript, "simctl uninstall \"$SIMULATOR_UDID\" \"$BUNDLE_ID\"", "archive-to-echo smoke should uninstall the old app container for isolation")
+let installableSimulatorHelper = read("Scripts/QA/prd-stitch-ui/run-installable-simulator-uiqa.sh")
+assertContains(archiveSmokeScript, "run-installable-simulator-uiqa.sh", "archive-to-echo smoke should use the shared installable simulator helper")
+assertContains(installableSimulatorHelper, "defaults delete \"$BUNDLE_ID\"", "installable simulator helper should clear simulator defaults for isolation")
+assertContains(installableSimulatorHelper, "simctl uninstall \"$SIMULATOR_UDID\" \"$BUNDLE_ID\"", "installable simulator helper should uninstall the old app container for isolation")
 
 let inventory = read("docs/superpowers/status/2026-06-17-pre-submit-inventory.md")
 for group in ["Group 1", "Group 2", "Group 3", "Group 4", "Group 5", "Group 6"] {
@@ -244,6 +246,7 @@ for handoffGuard in [
     "tencent-voice-clone-echo-contract-check.swift",
     "context-packet-v1-check.swift",
     "echo-trace-export-check.swift",
+    "installable-simulator-uiqa-bundle-guard-check.swift",
     "tencent-digital-human-provider-stability-check.swift",
     "digital-human-tts-viseme-gate-check.swift",
     "ios-family-voice-consumer-contract-check.swift",
@@ -303,8 +306,11 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/qa-script-location-check.swift",
     "Scripts/QA/prd-stitch-ui/docs-qa-script-path-check.swift",
     "Scripts/QA/prd-stitch-ui/digital-human-conversation-coordinator-check.swift",
+    "Scripts/QA/prd-stitch-ui/installable-simulator-uiqa-bundle-guard-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-installable-simulator-uiqa.sh",
     "Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh",
     "Scripts/QA/prd-stitch-ui/run-echo-delayed-reply-notification-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/run-echo-trace-export-uiqa-smoke.sh",
     "Scripts/QA/prd-stitch-ui/echo-delayed-reply-dispatch-contract-check.swift",
     "Scripts/QA/prd-stitch-ui/run-release-regression.sh",
     "Scripts/QA/prd-stitch-ui/run-backend-env-smoke.sh",

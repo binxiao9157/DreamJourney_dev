@@ -22,6 +22,7 @@ let echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let releaseQA = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
+let uiqaSmoke = read("Scripts/QA/prd-stitch-ui/run-echo-trace-export-uiqa-smoke.sh")
 
 require(
     backendClient.contains("final class EchoTraceStore") &&
@@ -63,6 +64,16 @@ require(
 require(
     releaseQA.contains("echo-trace-export-check.swift"),
     "release QA package should include Echo trace export guard"
+)
+
+require(
+    uiqaSmoke.contains("run-installable-simulator-uiqa.sh") &&
+        uiqaSmoke.contains("DJRunEchoTraceExportSmoke") &&
+        uiqaSmoke.contains("echo-trace-export-smoke-result.json") &&
+        uiqaSmoke.contains("echo-trace-records.json") &&
+        uiqaSmoke.contains("uiqa-turn-2") &&
+        uiqaSmoke.contains("uiqa-turn-21"),
+    "Echo trace export UIQA smoke should install the local simulator app and verify exported trace retention"
 )
 
 print("Echo Trace export guard passed")

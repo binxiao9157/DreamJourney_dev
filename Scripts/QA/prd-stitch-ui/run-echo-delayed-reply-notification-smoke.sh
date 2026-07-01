@@ -36,44 +36,18 @@ fail() {
   exit 1
 }
 
-booted_simulator_udid() {
-  xcrun simctl list devices booted | awk -F '[()]' '/Booted/ { print $2; exit }'
-}
+INSTALL_ENV_PATH="$OUTPUT_DIR/install.env" \
+BUILD_LOG="$BUILD_LOG" \
+DERIVED_DATA_PATH="$DERIVED_DATA_PATH" \
+OUTPUT_DIR="$OUTPUT_DIR" \
+SCHEME="$SCHEME" \
+CONFIGURATION="$CONFIGURATION" \
+SIMULATOR_NAME="$SIMULATOR_NAME" \
+SWIFT_ACTIVE_COMPILATION_CONDITIONS="$SWIFT_ACTIVE_COMPILATION_CONDITIONS" \
+"$SCRIPT_DIR/run-installable-simulator-uiqa.sh"
 
-SIMULATOR_UDID="${SIMULATOR_UDID:-$(booted_simulator_udid)}"
-if [[ -z "$SIMULATOR_UDID" ]]; then
-  xcrun simctl boot "$SIMULATOR_NAME" >/dev/null
-  SIMULATOR_UDID="$(booted_simulator_udid)"
-fi
-[[ -n "$SIMULATOR_UDID" ]] || fail "No booted simulator. Set SIMULATOR_UDID or SIMULATOR_NAME."
-
-echo "[echo-delayed-reply-notification-smoke] Building UIQA app..."
-xcodebuild \
-  -workspace DreamJourney.xcworkspace \
-  -scheme "$SCHEME" \
-  -configuration "$CONFIGURATION" \
-  -sdk iphonesimulator \
-  -destination 'generic/platform=iOS Simulator' \
-  -derivedDataPath "$DERIVED_DATA_PATH" \
-  CODE_SIGNING_ALLOWED=NO \
-  SWIFT_ACTIVE_COMPILATION_CONDITIONS="$SWIFT_ACTIVE_COMPILATION_CONDITIONS" \
-  EXCLUDED_ARCHS='' \
-  ARCHS=arm64 \
-  ONLY_ACTIVE_ARCH=NO \
-  build > "$BUILD_LOG"
-
-APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION-iphonesimulator/DreamJourney.app"
-[[ -d "$APP_PATH" ]] || fail "Built app not found: $APP_PATH"
-
-BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
-[[ -n "$BUNDLE_ID" ]] || fail "Unable to read bundle id from $APP_PATH"
-
-echo "[echo-delayed-reply-notification-smoke] Installing $BUNDLE_ID on $SIMULATOR_UDID..."
-xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
-xcrun simctl uninstall "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
-xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
-xcrun simctl spawn "$SIMULATOR_UDID" defaults delete "$BUNDLE_ID" >/dev/null 2>&1 || true
-DATA_CONTAINER="$(xcrun simctl get_app_container "$SIMULATOR_UDID" "$BUNDLE_ID" data)"
+# shellcheck source=/dev/null
+source "$OUTPUT_DIR/install.env"
 RESULT_FILE="$DATA_CONTAINER/Documents/echo-delayed-reply-notification-smoke-result.json"
 rm -f "$RESULT_FILE"
 
