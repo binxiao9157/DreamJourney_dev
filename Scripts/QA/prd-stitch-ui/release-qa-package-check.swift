@@ -142,6 +142,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-29-backend-voice-clone-deployed-smoke.md",
     "docs/superpowers/status/2026-06-29-tencent-backend-pcm-drive-mock-smoke.md",
     "docs/superpowers/status/2026-06-29-true-device-tencent-backend-pcm-drive-poc.md",
+    "docs/superpowers/status/2026-07-02-echo-trace-evidence-package.md",
 ]
 
 for doc in requiredDocs {
@@ -187,6 +188,8 @@ assertContains(releaseRegression, "RUN_P0_ARCHIVE_ECHO_REGRESSION", "release reg
 assertContains(releaseRegression, "RUN_P0_ARCHIVE_ECHO_REGRESSION forces RUN_SIMULATOR_SMOKE", "Archive -> Echo P0 gate should force the core simulator smoke")
 assertContains(releaseRegression, "RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE", "release regression should expose deployed archive image-analysis smoke")
 assertContains(releaseRegression, "RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE", "release regression should expose deployed time-letter lifecycle smoke")
+assertContains(releaseRegression, "RUN_ECHO_TRACE_EVIDENCE_PACKAGE_EXPORT_SMOKE", "release regression should expose optional Echo trace evidence package export smoke")
+assertContains(releaseRegression, "run-echo-trace-evidence-package-export-smoke.sh", "release regression should call Echo trace evidence package export smoke")
 assertContains(releaseRegression, "RUN_ECHO_READINESS_REPORT", "release regression should expose optional Echo readiness report")
 assertContains(releaseRegression, "run-echo-readiness-report.sh", "release regression should call Echo readiness report")
 assertContains(releaseRegression, "RUN_DIGITAL_HUMAN_TTS_VISEME_GATE", "release regression should expose optional digital-human TTS/viseme gate")
@@ -249,6 +252,7 @@ for handoffGuard in [
     "context-packet-v1-check.swift",
     "echo-trace-export-check.swift",
     "echo-runtime-diagnostics-check.swift",
+    "echo-trace-evidence-package-check.swift",
     "echo-readiness-report-check.swift",
     "installable-simulator-uiqa-bundle-guard-check.swift",
     "tencent-digital-human-provider-stability-check.swift",
@@ -315,6 +319,7 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh",
     "Scripts/QA/prd-stitch-ui/run-echo-delayed-reply-notification-smoke.sh",
     "Scripts/QA/prd-stitch-ui/run-echo-trace-export-uiqa-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/run-echo-trace-evidence-package-export-smoke.sh",
     "Scripts/QA/prd-stitch-ui/echo-delayed-reply-dispatch-contract-check.swift",
     "Scripts/QA/prd-stitch-ui/run-release-regression.sh",
     "Scripts/QA/prd-stitch-ui/run-backend-env-smoke.sh",
@@ -348,6 +353,7 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/true-device-acceptance-evidence-package-check.swift",
     "Scripts/QA/prd-stitch-ui/run-true-device-archive-audio-preflight.sh",
     "Scripts/QA/prd-stitch-ui/run-true-device-tencent-backend-pcm-drive-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/echo-trace-evidence-package-check.swift",
     "Scripts/QA/prd-stitch-ui/echo-readiness-report.py",
     "Scripts/QA/prd-stitch-ui/run-echo-readiness-report.sh",
     "Scripts/QA/prd-stitch-ui/echo-readiness-report-check.swift",

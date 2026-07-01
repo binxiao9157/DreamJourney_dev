@@ -139,6 +139,8 @@ final class EchoViewController: UIViewController {
     private var lastVoiceCloneProviderRequestId: String?
     private var lastVoiceCloneProviderMode: String?
     private var lastEchoRuntimeFallbackReason: String?
+    private var lastDigitalHumanSessionEvidenceSummary: EchoDigitalHumanSessionEvidenceSummary?
+    private var lastVoiceSynthesisEvidenceSummary: EchoVoiceSynthesisEvidenceSummary?
     private var trueDeviceBackendPCMDriveTrace = TencentBackendPCMDriveTrueDeviceTrace()
 
     private let personaBadgeView: UIView = {
@@ -1217,6 +1219,8 @@ final class EchoViewController: UIViewController {
     private func recordEchoRuntimeDiagnosticsSnapshot(reason: String) -> EchoRuntimeDiagnosticsSnapshot {
         let snapshot = makeEchoRuntimeDiagnosticsSnapshot(reason: reason)
         EchoRuntimeDiagnosticsStore.shared.record(snapshot)
+        let package = makeEchoTraceEvidencePackage(snapshot: snapshot, source: reason)
+        EchoTraceEvidencePackageStore.shared.record(package)
         renderEchoRuntimeDiagnosticsPanel(snapshot: snapshot)
         print(
             "[CFLite] runtime diagnostics snapshot " +
@@ -1227,6 +1231,19 @@ final class EchoViewController: UIViewController {
             "fallbackReason=\(snapshot.fallbackReason ?? "none") source=\(snapshot.source)"
         )
         return snapshot
+    }
+
+    private func makeEchoTraceEvidencePackage(
+        snapshot: EchoRuntimeDiagnosticsSnapshot?,
+        source: String
+    ) -> EchoTraceEvidencePackage {
+        EchoTraceEvidencePackage(
+            traceRecord: lastEchoTraceRecord,
+            runtimeDiagnostics: snapshot,
+            digitalHumanSession: lastDigitalHumanSessionEvidenceSummary,
+            voiceSynthesis: lastVoiceSynthesisEvidenceSummary,
+            source: source
+        )
     }
 
     private func renderEchoRuntimeDiagnosticsPanel(snapshot: EchoRuntimeDiagnosticsSnapshot) {
@@ -1268,6 +1285,7 @@ final class EchoViewController: UIViewController {
         guard DreamJourneyBackendClient.shared.isDigitalHumanSessionConfigured else {
             digitalHumanStatusDetailLabel.text = "数字人暂不可用，已回到普通回响"
             digitalHumanLivePanelView?.removeHostedProviderView(showFallbackMessage: "数字人暂不可用")
+            lastDigitalHumanSessionEvidenceSummary = .unavailable(reason: "digitalHumanBackendNotConfigured")
             lastEchoRuntimeFallbackReason = "digitalHumanBackendNotConfigured"
             recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanBackendNotConfigured")
             applyEchoAudioRoutePolicy()
@@ -1286,6 +1304,10 @@ final class EchoViewController: UIViewController {
                 DispatchQueue.main.async {
                     self?.digitalHumanStatusDetailLabel.text = "数字人配置读取失败，已回到普通回响"
                     self?.digitalHumanLivePanelView?.removeHostedProviderView(showFallbackMessage: "数字人暂不可用")
+                    self?.lastDigitalHumanSessionEvidenceSummary = .failed(
+                        reason: "digitalHumanRuntimeCapabilityFailed",
+                        detail: error.localizedDescription
+                    )
                     self?.lastEchoRuntimeFallbackReason = "digitalHumanRuntimeCapabilityFailed"
                     self?.recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanRuntimeCapabilityFailed")
                     self?.applyEchoAudioRoutePolicy()
@@ -1320,6 +1342,7 @@ final class EchoViewController: UIViewController {
         case .success(let contract):
             let context = DigitalHumanContextStore.shared.current
             let profile = contract.toDigitalHumanProfile(displayName: context.resolvedDisplayName)
+            lastDigitalHumanSessionEvidenceSummary = EchoDigitalHumanSessionEvidenceSummary(contract: contract)
             print(
                 "[TencentDigitalHuman] session contract received " +
                 "provider=\(contract.provider) providerMode=\(contract.providerMode) " +
@@ -1363,6 +1386,10 @@ final class EchoViewController: UIViewController {
         case .failure(let error):
             digitalHumanStatusDetailLabel.text = "数字人会话创建失败，已回到普通回响"
             digitalHumanLivePanelView?.removeHostedProviderView(showFallbackMessage: "数字人暂不可用")
+            lastDigitalHumanSessionEvidenceSummary = .failed(
+                reason: "digitalHumanSessionFailed",
+                detail: error.localizedDescription
+            )
             lastEchoRuntimeFallbackReason = "digitalHumanSessionFailed"
             recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanSessionFailed")
             applyEchoAudioRoutePolicy()
@@ -1585,6 +1612,7 @@ final class EchoViewController: UIViewController {
             lastVoiceCloneProviderLogId = nil
             lastVoiceCloneProviderRequestId = nil
             lastVoiceCloneProviderMode = nil
+            lastVoiceSynthesisEvidenceSummary = .unavailable(reason: "voiceCloneBackendNotConfigured")
             lastEchoRuntimeFallbackReason = "voiceCloneBackendNotConfigured"
             recordEchoRuntimeDiagnosticsSnapshot(reason: "voiceCloneBackendNotConfigured")
             print(
@@ -1600,6 +1628,7 @@ final class EchoViewController: UIViewController {
             lastVoiceCloneProviderLogId = nil
             lastVoiceCloneProviderRequestId = nil
             lastVoiceCloneProviderMode = nil
+            lastVoiceSynthesisEvidenceSummary = .unavailable(reason: "voiceCloneRuntimeUnsupported")
             lastEchoRuntimeFallbackReason = "voiceCloneRuntimeUnsupported"
             recordEchoRuntimeDiagnosticsSnapshot(reason: "voiceCloneRuntimeUnsupported")
             print(
@@ -1674,6 +1703,7 @@ final class EchoViewController: UIViewController {
                     self.lastVoiceCloneProviderLogId = synthesis.providerLogId
                     self.lastVoiceCloneProviderRequestId = synthesis.providerRequestId
                     self.lastVoiceCloneProviderMode = synthesis.providerMode
+                    self.lastVoiceSynthesisEvidenceSummary = EchoVoiceSynthesisEvidenceSummary(synthesis: synthesis)
                     self.lastEchoRuntimeFallbackReason = nil
                     self.recordEchoRuntimeDiagnosticsSnapshot(reason: "voiceClonePCMDriveReady")
                     self.renderVoiceStatus(text: "复刻声音正在回响", isVisible: true, accessibilityIdentifier: "echoVoiceClonePCMDriveStatus")
@@ -1722,6 +1752,7 @@ final class EchoViewController: UIViewController {
         lastVoiceCloneProviderLogId = nil
         lastVoiceCloneProviderRequestId = nil
         lastVoiceCloneProviderMode = nil
+        lastVoiceSynthesisEvidenceSummary = .unavailable(reason: "voiceCloneNotEnabled")
         lastEchoRuntimeFallbackReason = "voiceCloneNotEnabled"
         recordEchoRuntimeDiagnosticsSnapshot(reason: "voiceCloneNotEnabled")
         print(
@@ -1790,6 +1821,14 @@ final class EchoViewController: UIViewController {
         lastVoiceCloneProviderLogId = providerLogId
         lastVoiceCloneProviderRequestId = providerRequestId
         lastVoiceCloneProviderMode = outputMode
+        lastVoiceSynthesisEvidenceSummary = .failed(
+            voiceProfileId: voiceProfileId,
+            outputMode: outputMode,
+            providerLogId: providerLogId,
+            providerRequestId: providerRequestId,
+            reason: reason,
+            detail: detail
+        )
         lastEchoRuntimeFallbackReason = reason
         recordEchoRuntimeDiagnosticsSnapshot(reason: "voiceClonePCMDriveFailed")
         renderVoiceStatus(text: "复刻声音生成失败，请稍后重试", isVisible: true, accessibilityIdentifier: "echoVoiceClonePCMDriveStatus")
@@ -3125,6 +3164,85 @@ extension EchoViewController {
                 "latestProviderLogId": snapshots.last?.providerLogId ?? "missing",
                 "latestDigitalHumanProviderMode": snapshots.last?.digitalHumanProviderMode ?? "missing",
                 "diagnosticsPanelText": echoRuntimeDiagnosticsPanelLabel.text ?? "",
+                "exportPath": exportURL.path,
+                "fileExists": FileManager.default.fileExists(atPath: exportURL.path),
+            ])
+        } catch {
+            completion([
+                "completed": false,
+                "failureReason": "exportFailed",
+                "error": error.localizedDescription,
+            ])
+        }
+    }
+
+    func runUIQAEchoTraceEvidencePackageExportSmoke(completion: @escaping ([String: Any]) -> Void) {
+        EchoTraceStore.shared.clear()
+        EchoRuntimeDiagnosticsStore.shared.clear()
+        EchoTraceEvidencePackageStore.shared.clear()
+
+        for index in 0..<22 {
+            let record = EchoTraceRecord(
+                turnID: "uiqa-evidence-turn-\(index)",
+                traceId: "ctx_uiqa_evidence_\(index)",
+                userId: "uiqa_echo_evidence_user",
+                archiveItemIDs: ["archive_evidence_\(index)"],
+                archiveItemsIncluded: 1,
+                archiveItemsAvailable: 22,
+                kbFactCount: index + 2,
+                voiceProfileId: "S_uiqa_trace_evidence",
+                voiceCloneReady: true,
+                voiceOutputMode: "tencentAudioDrive",
+                digitalHumanSessionReady: true,
+                digitalHumanProviderMode: "tencent-cloud-digital-human",
+                privacyScopeLabel: "personal:uiqa_echo_evidence_user",
+                canUseFamilyData: false,
+                crossScopeArchiveIncluded: false,
+                fallbacks: [],
+                latencyMs: 20 + index
+            )
+            lastEchoTraceRecord = record
+            EchoTraceStore.shared.record(record)
+            lastDigitalHumanSessionEvidenceSummary = .unavailable(reason: "uiqaSessionSummary")
+            lastVoiceCloneProviderLogId = "uiqa-evidence-provider-log-\(index)"
+            lastVoiceCloneProviderRequestId = "uiqa-evidence-provider-request-\(index)"
+            lastVoiceCloneProviderMode = "volcengineVoiceCloneV3"
+            lastVoiceSynthesisEvidenceSummary = .failed(
+                voiceProfileId: "S_uiqa_trace_evidence",
+                outputMode: "tencentAudioDrive",
+                providerLogId: "uiqa-evidence-provider-log-\(index)",
+                providerRequestId: "uiqa-evidence-provider-request-\(index)",
+                reason: "uiqaSynthesisSummary",
+                detail: "UIQA stores provider metadata only"
+            )
+            let snapshot = recordEchoRuntimeDiagnosticsSnapshot(reason: "uiqaEchoTraceEvidencePackageExport")
+            _ = makeEchoTraceEvidencePackage(snapshot: snapshot, source: "uiqaEchoTraceEvidencePackageExport")
+        }
+
+        do {
+            let exportURL = try EchoTraceEvidencePackageStore.shared.exportRecentPackages()
+            let data = try Data(contentsOf: exportURL)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let packages = try decoder.decode([EchoTraceEvidencePackage].self, from: data)
+            let latestPackage = packages.last
+            completion([
+                "completed": packages.count == 20
+                    && packages.first?.turnID == "uiqa-evidence-turn-2"
+                    && latestPackage?.turnID == "uiqa-evidence-turn-21"
+                    && latestPackage?.runtimeDiagnostics?.audioOwner == currentEchoAudioOwner.rawValue
+                    && latestPackage?.contextBuild.kbFactCount == 23
+                    && latestPackage?.digitalHumanSession?.status == "unavailable"
+                    && latestPackage?.voiceSynthesis?.providerLogId == "uiqa-evidence-provider-log-21",
+                "packageCount": packages.count,
+                "oldestRetainedTurnID": packages.first?.turnID ?? "missing",
+                "latestTurnID": latestPackage?.turnID ?? "missing",
+                "latestTraceId": latestPackage?.traceId ?? "missing",
+                "latestVoiceProfileId": latestPackage?.voiceSynthesis?.voiceProfileId ?? "missing",
+                "latestProviderLogId": latestPackage?.voiceSynthesis?.providerLogId ?? "missing",
+                "latestAudioOwner": latestPackage?.runtimeDiagnostics?.audioOwner ?? "missing",
+                "latestContextKBFacts": latestPackage?.contextBuild.kbFactCount ?? -1,
+                "redactionPolicyCount": latestPackage?.redactionPolicy.count ?? 0,
                 "exportPath": exportURL.path,
                 "fileExists": FileManager.default.fileExists(atPath: exportURL.path),
             ])

@@ -20,6 +20,7 @@ RUN_SIMULATOR_SMOKE="${RUN_SIMULATOR_SMOKE:-1}"
 RUN_P0_ARCHIVE_ECHO_REGRESSION="${RUN_P0_ARCHIVE_ECHO_REGRESSION:-0}"
 RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE="${RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE:-1}"
 RUN_ECHO_TRACE_EXPORT_UIQA_SMOKE="${RUN_ECHO_TRACE_EXPORT_UIQA_SMOKE:-0}"
+RUN_ECHO_TRACE_EVIDENCE_PACKAGE_EXPORT_SMOKE="${RUN_ECHO_TRACE_EVIDENCE_PACKAGE_EXPORT_SMOKE:-0}"
 RUN_ECHO_READINESS_REPORT="${RUN_ECHO_READINESS_REPORT:-0}"
 RUN_BACKEND_ENV_SMOKE="${RUN_BACKEND_ENV_SMOKE:-0}"
 RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE="${RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE:-0}"
@@ -99,6 +100,7 @@ Run ID: \`$RUN_ID\`
 - Archive -> Echo simulator smoke: \`$RUN_SIMULATOR_SMOKE\`
 - Echo delayed reply notification smoke: \`$RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE\`
 - Echo trace export UIQA smoke: \`$RUN_ECHO_TRACE_EXPORT_UIQA_SMOKE\`
+- Echo trace evidence package export UIQA smoke: \`$RUN_ECHO_TRACE_EVIDENCE_PACKAGE_EXPORT_SMOKE\`
 - Echo readiness report: \`$RUN_ECHO_READINESS_REPORT\`
 - Backend environment smoke: \`$RUN_BACKEND_ENV_SMOKE\`
 - Backend archive image-analysis smoke: \`$RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE\`
@@ -135,6 +137,7 @@ Run ID: \`$RUN_ID\`
 - Core Archive -> Echo simulator smoke, unless \`RUN_SIMULATOR_SMOKE=0\`.
 - Echo delayed reply persistence/local-notification smoke, unless \`RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE=0\`.
 - Optional Echo trace export UIQA smoke when \`RUN_ECHO_TRACE_EXPORT_UIQA_SMOKE=1\`; this verifies installable local simulator bundle id, trace retention, and JSON export.
+- Optional Echo trace evidence package export UIQA smoke when \`RUN_ECHO_TRACE_EVIDENCE_PACKAGE_EXPORT_SMOKE=1\`; this verifies iOS runtime diagnostics, \`/context/build\`, \`/digital-human/sessions\`, and \`/voice/synthesis\` summaries export as one redacted QA package.
 - Optional Echo readiness report when \`RUN_ECHO_READINESS_REPORT=1\`; this produces a JSON/Markdown diagnostic package for backend, digital-human session, voice synthesis, APNs boundary, KBLite, context packet, and runtime diagnostics readiness.
 - Optional backend environment smoke when \`RUN_BACKEND_ENV_SMOKE=1\` and backend URL/token are configured.
 - Optional deployed backend archive image-analysis smoke when \`RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE=1\`.
@@ -176,6 +179,7 @@ append_report_footer() {
 - Archive -> Echo smoke: \`archive-to-echo-smoke/$RUN_ID/\`
 - Echo delayed reply notification smoke: \`echo-delayed-reply-notification-smoke/$RUN_ID/\`
 - Echo trace export UIQA smoke: \`echo-trace-export-smoke/$RUN_ID/\`
+- Echo trace evidence package export UIQA smoke: \`echo-trace-evidence-package-export-smoke/$RUN_ID/\`
 - Backend env smoke: \`backend-env-smoke/$RUN_ID/\`
 - Backend archive image-analysis smoke: \`backend-archive-image-analysis-smoke/$RUN_ID/\`
 - Backend hidden media sync smoke: \`backend-hidden-media-sync-smoke/$RUN_ID/\`
@@ -311,6 +315,7 @@ for guard in \
   context-packet-v1-check.swift \
   echo-trace-export-check.swift \
   echo-runtime-diagnostics-check.swift \
+  echo-trace-evidence-package-check.swift \
   echo-readiness-report-check.swift \
   installable-simulator-uiqa-bundle-guard-check.swift \
   tencent-digital-human-provider-stability-check.swift \
@@ -385,6 +390,16 @@ if [[ "$RUN_ECHO_TRACE_EXPORT_UIQA_SMOKE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/echo-trace-export-smoke/$RUN_ID"
   echo "Skipped by RUN_ECHO_TRACE_EXPORT_UIQA_SMOKE=0" > "$OUTPUT_DIR/echo-trace-export-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_ECHO_TRACE_EVIDENCE_PACKAGE_EXPORT_SMOKE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/echo-trace-evidence-package-export-smoke" \
+  DERIVED_DATA_PATH="$OUTPUT_DIR/DerivedDataEchoTraceEvidencePackageExportSmoke" \
+  "$SCRIPT_DIR/run-echo-trace-evidence-package-export-smoke.sh"
+else
+  mkdir -p "$OUTPUT_DIR/echo-trace-evidence-package-export-smoke/$RUN_ID"
+  echo "Skipped by RUN_ECHO_TRACE_EVIDENCE_PACKAGE_EXPORT_SMOKE=0" > "$OUTPUT_DIR/echo-trace-evidence-package-export-smoke/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_ECHO_READINESS_REPORT" == "1" ]]; then

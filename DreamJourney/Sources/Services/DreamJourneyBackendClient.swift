@@ -1242,6 +1242,323 @@ final class EchoRuntimeDiagnosticsStore {
     }
 }
 
+struct EchoContextBuildEvidenceSummary: Codable {
+    let status: String
+    let traceId: String
+    let userId: String
+    let archiveItemIDs: [String]
+    let archiveItemsIncluded: Int
+    let archiveItemsAvailable: Int
+    let kbFactCount: Int
+    let voiceProfileId: String?
+    let voiceOutputMode: String
+    let digitalHumanSessionReady: Bool
+    let digitalHumanProviderMode: String
+    let privacyScopeLabel: String
+    let canUseFamilyData: Bool
+    let crossScopeArchiveIncluded: Bool
+    let fallbacks: [String]
+    let latencyMs: Int
+    let failureReason: String?
+
+    init(record: EchoTraceRecord?) {
+        self.status = record == nil ? "missing" : "ready"
+        self.traceId = record?.traceId ?? "none"
+        self.userId = record?.userId ?? "unknown"
+        self.archiveItemIDs = record?.archiveItemIDs ?? []
+        self.archiveItemsIncluded = record?.archiveItemsIncluded ?? 0
+        self.archiveItemsAvailable = record?.archiveItemsAvailable ?? 0
+        self.kbFactCount = record?.kbFactCount ?? 0
+        self.voiceProfileId = record?.voiceProfileId
+        self.voiceOutputMode = record?.voiceOutputMode ?? "unknown"
+        self.digitalHumanSessionReady = record?.digitalHumanSessionReady ?? false
+        self.digitalHumanProviderMode = record?.digitalHumanProviderMode ?? "unknown"
+        self.privacyScopeLabel = record?.privacyScopeLabel ?? "unknown"
+        self.canUseFamilyData = record?.canUseFamilyData ?? false
+        self.crossScopeArchiveIncluded = record?.crossScopeArchiveIncluded ?? false
+        self.fallbacks = record?.fallbacks ?? []
+        self.latencyMs = record?.latencyMs ?? 0
+        self.failureReason = record == nil ? "contextPacketMissing" : nil
+    }
+}
+
+struct EchoDigitalHumanSessionEvidenceSummary: Codable {
+    let status: String
+    let sessionId: String?
+    let provider: String?
+    let providerMode: String?
+    let personaId: String?
+    let scene: String?
+    let lifecycleMode: String?
+    let driveMode: String?
+    let assetSource: String?
+    let hasProviderAssetId: Bool
+    let hasProviderProjectId: Bool
+    let credentialMode: String?
+    let credentialExpiresAt: Date?
+    let hasBackendIssuedCredential: Bool
+    let fallbackMode: String?
+    let fallbackReason: String?
+    let contractVersion: Int?
+    let failureReason: String?
+    let failureDetail: String?
+
+    init(contract: DigitalHumanSessionContract) {
+        self.status = "ready"
+        self.sessionId = contract.sessionId
+        self.provider = contract.provider
+        self.providerMode = contract.providerMode
+        self.personaId = contract.personaId
+        self.scene = contract.scene
+        self.lifecycleMode = contract.lifecycleMode.rawValue
+        self.driveMode = contract.driveMode
+        self.assetSource = contract.assetSource
+        self.hasProviderAssetId = contract.providerAssetId?.isEmpty == false
+        self.hasProviderProjectId = contract.providerProjectId?.isEmpty == false
+        self.credentialMode = contract.credential.mode
+        self.credentialExpiresAt = contract.credential.expiresAt
+        self.hasBackendIssuedCredential = contract.credential.appKey?.isEmpty == false
+            && contract.credential.accessToken?.isEmpty == false
+        self.fallbackMode = contract.fallbackMode
+        self.fallbackReason = contract.fallbackReason
+        self.contractVersion = contract.contractVersion
+        self.failureReason = nil
+        self.failureDetail = nil
+    }
+
+    static func unavailable(reason: String, detail: String? = nil) -> EchoDigitalHumanSessionEvidenceSummary {
+        EchoDigitalHumanSessionEvidenceSummary(status: "unavailable", reason: reason, detail: detail)
+    }
+
+    static func failed(reason: String, detail: String? = nil) -> EchoDigitalHumanSessionEvidenceSummary {
+        EchoDigitalHumanSessionEvidenceSummary(status: "failed", reason: reason, detail: detail)
+    }
+
+    private init(status: String, reason: String, detail: String?) {
+        self.status = status
+        self.sessionId = nil
+        self.provider = nil
+        self.providerMode = nil
+        self.personaId = nil
+        self.scene = nil
+        self.lifecycleMode = nil
+        self.driveMode = nil
+        self.assetSource = nil
+        self.hasProviderAssetId = false
+        self.hasProviderProjectId = false
+        self.credentialMode = nil
+        self.credentialExpiresAt = nil
+        self.hasBackendIssuedCredential = false
+        self.fallbackMode = nil
+        self.fallbackReason = nil
+        self.contractVersion = nil
+        self.failureReason = reason
+        self.failureDetail = detail
+    }
+}
+
+struct EchoVoiceSynthesisEvidenceSummary: Codable {
+    let status: String
+    let voiceProfileId: String?
+    let providerMode: String?
+    let outputMode: String?
+    let audioFormat: String?
+    let byteCount: Int
+    let sampleRate: Int?
+    let bitsPerSample: Int?
+    let channelCount: Int?
+    let durationSeconds: Double?
+    let providerLogId: String?
+    let providerRequestId: String?
+    let tencentAudioDriveCompatible: Bool
+    let visemeFrameCount: Int
+    let failureReason: String?
+    let failureDetail: String?
+
+    init(synthesis: VoiceCloneSynthesisResult) {
+        self.status = "ready"
+        self.voiceProfileId = synthesis.voiceProfileId
+        self.providerMode = synthesis.providerMode
+        self.outputMode = synthesis.outputMode
+        self.audioFormat = synthesis.audioFormat
+        self.byteCount = synthesis.byteCount
+        self.sampleRate = synthesis.sampleRate
+        self.bitsPerSample = synthesis.bitsPerSample
+        self.channelCount = synthesis.channelCount
+        self.durationSeconds = synthesis.durationSeconds
+        self.providerLogId = synthesis.providerLogId
+        self.providerRequestId = synthesis.providerRequestId
+        self.tencentAudioDriveCompatible = synthesis.isTencentAudioDrivePCMCompatible
+        self.visemeFrameCount = synthesis.visemeTimeline?.frames.count ?? 0
+        self.failureReason = nil
+        self.failureDetail = nil
+    }
+
+    static func unavailable(reason: String, detail: String? = nil) -> EchoVoiceSynthesisEvidenceSummary {
+        EchoVoiceSynthesisEvidenceSummary(status: "unavailable", reason: reason, detail: detail)
+    }
+
+    static func failed(
+        voiceProfileId: String?,
+        outputMode: String?,
+        providerLogId: String?,
+        providerRequestId: String?,
+        reason: String,
+        detail: String?
+    ) -> EchoVoiceSynthesisEvidenceSummary {
+        EchoVoiceSynthesisEvidenceSummary(
+            status: "failed",
+            voiceProfileId: voiceProfileId,
+            outputMode: outputMode,
+            providerLogId: providerLogId,
+            providerRequestId: providerRequestId,
+            reason: reason,
+            detail: detail
+        )
+    }
+
+    private init(status: String, reason: String, detail: String?) {
+        self.init(
+            status: status,
+            voiceProfileId: nil,
+            outputMode: nil,
+            providerLogId: nil,
+            providerRequestId: nil,
+            reason: reason,
+            detail: detail
+        )
+    }
+
+    private init(
+        status: String,
+        voiceProfileId: String?,
+        outputMode: String?,
+        providerLogId: String?,
+        providerRequestId: String?,
+        reason: String,
+        detail: String?
+    ) {
+        self.status = status
+        self.voiceProfileId = voiceProfileId
+        self.providerMode = nil
+        self.outputMode = outputMode
+        self.audioFormat = nil
+        self.byteCount = 0
+        self.sampleRate = nil
+        self.bitsPerSample = nil
+        self.channelCount = nil
+        self.durationSeconds = nil
+        self.providerLogId = providerLogId
+        self.providerRequestId = providerRequestId
+        self.tencentAudioDriveCompatible = false
+        self.visemeFrameCount = 0
+        self.failureReason = reason
+        self.failureDetail = detail
+    }
+}
+
+struct EchoTraceEvidencePackage: Codable {
+    let schemaVersion: Int
+    let packageId: String
+    let generatedAt: Date
+    let source: String
+    let turnID: String
+    let traceId: String
+    let traceRecord: EchoTraceRecord?
+    let runtimeDiagnostics: EchoRuntimeDiagnosticsSnapshot?
+    let contextBuild: EchoContextBuildEvidenceSummary
+    let digitalHumanSession: EchoDigitalHumanSessionEvidenceSummary?
+    let voiceSynthesis: EchoVoiceSynthesisEvidenceSummary?
+    let redactionPolicy: [String]
+
+    init(
+        traceRecord: EchoTraceRecord?,
+        runtimeDiagnostics: EchoRuntimeDiagnosticsSnapshot?,
+        digitalHumanSession: EchoDigitalHumanSessionEvidenceSummary?,
+        voiceSynthesis: EchoVoiceSynthesisEvidenceSummary?,
+        source: String
+    ) {
+        self.schemaVersion = 1
+        let uniqueSuffix = String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(24))
+        self.packageId = "echo_evidence_" + uniqueSuffix
+        self.generatedAt = Date()
+        self.source = source
+        self.turnID = runtimeDiagnostics?.turnID ?? traceRecord?.turnID ?? "unknown"
+        self.traceId = runtimeDiagnostics?.traceId ?? traceRecord?.traceId ?? "none"
+        self.traceRecord = traceRecord
+        self.runtimeDiagnostics = runtimeDiagnostics
+        self.contextBuild = EchoContextBuildEvidenceSummary(record: traceRecord)
+        self.digitalHumanSession = digitalHumanSession
+        self.voiceSynthesis = voiceSynthesis
+        self.redactionPolicy = [
+            "不导出原始音频或音频正文",
+            "不导出供应商访问密钥",
+            "只保留 providerLogId/providerRequestId 用于服务商排查",
+            "只导出档案 ID、数量和权限摘要，不导出档案正文"
+        ]
+    }
+}
+
+final class EchoTraceEvidencePackageStore {
+    static let shared = EchoTraceEvidencePackageStore()
+
+    private let userDefaults: UserDefaults
+    private let storageKey = "DreamJourney.EchoTraceEvidencePackageStore.packages.v1"
+    private let maximumPackageCount = 20
+
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+    }
+
+    func record(_ package: EchoTraceEvidencePackage) {
+        var packages = recentPackages()
+        packages.append(package)
+        if packages.count > maximumPackageCount {
+            packages = Array(packages.suffix(maximumPackageCount))
+        }
+        save(packages)
+    }
+
+    func recentPackages() -> [EchoTraceEvidencePackage] {
+        guard let data = userDefaults.data(forKey: storageKey) else {
+            return []
+        }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return (try? decoder.decode([EchoTraceEvidencePackage].self, from: data)) ?? []
+    }
+
+    func clear() {
+        userDefaults.removeObject(forKey: storageKey)
+    }
+
+    func exportRecentPackages(
+        to directory: URL = FileManager.default.temporaryDirectory,
+        fileName: String = "echo-trace-evidence-packages.json"
+    ) throws -> URL {
+        let packages = recentPackages()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent(fileName)
+        let data = try Self.makeJSONEncoder().encode(packages)
+        try data.write(to: url, options: [.atomic])
+        return url
+    }
+
+    private func save(_ packages: [EchoTraceEvidencePackage]) {
+        guard let data = try? Self.makeJSONEncoder().encode(packages) else {
+            return
+        }
+        userDefaults.set(data, forKey: storageKey)
+    }
+
+    private static func makeJSONEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }
+}
+
 final class DreamJourneyBackendClient {
     static let shared = DreamJourneyBackendClient()
 
