@@ -302,6 +302,7 @@ for guard in \
   tencent-digital-human-voice-clone-route-check.swift \
   tencent-voice-clone-echo-contract-check.swift \
   context-packet-v1-check.swift \
+  echo-trace-export-check.swift \
   tencent-digital-human-provider-stability-check.swift \
   tencent-digital-human-phase1-stability-check.swift \
   tencent-digital-human-audio-owner-stop-semantics-check.swift \

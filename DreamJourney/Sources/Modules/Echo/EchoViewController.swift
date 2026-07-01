@@ -1453,6 +1453,7 @@ final class EchoViewController: UIViewController {
                 let record = EchoTraceRecord(turnID: turnID, packet: packet)
                 DispatchQueue.main.async {
                     self?.lastEchoTraceRecord = record
+                    EchoTraceStore.shared.record(record)
                 }
                 print(
                     "[CFLite] context built " +
@@ -2610,6 +2611,57 @@ extension EchoViewController {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.45) {
             finishWhenRealAssetReady(attemptsRemaining: 14)
+        }
+    }
+
+    func runUIQAEchoTraceExportSmoke(completion: @escaping ([String: Any]) -> Void) {
+        EchoTraceStore.shared.clear()
+        for index in 0..<22 {
+            EchoTraceStore.shared.record(
+                EchoTraceRecord(
+                    turnID: "uiqa-turn-\(index)",
+                    traceId: "ctx_uiqa_\(index)",
+                    userId: "uiqa_echo_trace_user",
+                    archiveItemIDs: ["archive_\(index)"],
+                    archiveItemsIncluded: 1,
+                    archiveItemsAvailable: 22,
+                    kbFactCount: index,
+                    voiceProfileId: index.isMultiple(of: 2) ? "S_uiqa_echo_trace" : nil,
+                    voiceCloneReady: index.isMultiple(of: 2),
+                    voiceOutputMode: "tencentAudioDrive",
+                    digitalHumanSessionReady: true,
+                    digitalHumanProviderMode: "tencent-cloud-digital-human",
+                    privacyScopeLabel: "personal:uiqa_echo_trace_user",
+                    canUseFamilyData: false,
+                    crossScopeArchiveIncluded: false,
+                    fallbacks: index.isMultiple(of: 2) ? [] : ["voice_clone_not_ready"],
+                    latencyMs: index
+                )
+            )
+        }
+
+        do {
+            let exportURL = try EchoTraceStore.shared.exportRecentRecords()
+            let data = try Data(contentsOf: exportURL)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let records = try decoder.decode([EchoTraceRecord].self, from: data)
+            completion([
+                "completed": records.count == 20
+                    && records.first?.turnID == "uiqa-turn-2"
+                    && records.last?.turnID == "uiqa-turn-21",
+                "recordCount": records.count,
+                "oldestRetainedTurnID": records.first?.turnID ?? "missing",
+                "latestTurnID": records.last?.turnID ?? "missing",
+                "exportPath": exportURL.path,
+                "fileExists": FileManager.default.fileExists(atPath: exportURL.path),
+            ])
+        } catch {
+            completion([
+                "completed": false,
+                "failureReason": "exportFailed",
+                "error": error.localizedDescription,
+            ])
         }
     }
 

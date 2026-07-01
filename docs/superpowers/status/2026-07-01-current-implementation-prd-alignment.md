@@ -609,6 +609,46 @@ QA 更新：
 - QA 一键导出 trace JSON。
 - 真机问题反馈时直接拿 trace 对照后端 provider log、腾讯 session log 和声音复刻 log。
 
+### 2026-07-01 Echo Trace 持久化与导出更新
+
+本轮已补齐 CFL-Lite 的本地证据留存能力：
+
+- 新增 `EchoTraceStore`。
+  - 使用 `UserDefaults` 本地持久化最近 20 轮 `EchoTraceRecord`。
+  - 超过 20 轮时只保留最新 20 轮。
+  - 支持 `exportRecentRecords(...)` 导出 `echo-trace-records.json`。
+- `EchoTraceRecord` 已支持 `Codable`，并新增 `recordedAt`，便于导出后按时间排序或对照日志。
+- Echo 每次成功构建 `/context/build` 后：
+  - 更新 `lastEchoTraceRecord`。
+  - 写入 `EchoTraceStore.shared.record(record)`。
+  - 继续输出 `[CFLite] trace record` 日志。
+- 新增 QA launch arg：
+  - `DJRunEchoTraceExportSmoke`
+  - 该 smoke 会写入 `echo-trace-export-smoke-result.json`，验证 22 条 mock trace 只保留最新 20 条，最早保留 `uiqa-turn-2`，最新为 `uiqa-turn-21`。
+- 新增静态 guard：
+  - `Scripts/QA/prd-stitch-ui/echo-trace-export-check.swift`
+  - 已接入 release regression 和 release QA package。
+
+验证说明：
+
+- `context-packet-v1-check.swift` 通过。
+- `echo-trace-export-check.swift` 通过。
+- `release-qa-package-check.swift` 通过。
+- iOS Debug Simulator compile-only 构建通过。
+- 模拟器交互安装 smoke 暂未作为通过证据：当前工程默认 generic simulator 构建产物为 `x86_64`，booted iOS 26.5 模拟器需要 `arm64`；强制 `ARCHS=arm64` 又会被现有 Pods/工程 `EXCLUDED_ARCHS` 配置阻断。该限制属于现有模拟器架构配置问题，不影响静态合同和编译验证。
+
+后端部署说明：
+
+- 服务器仓库已拉取到 `35449e5 feat: add context packet v1 trace`。
+- Docker 重启需要服务器 `sudo`/docker 权限；当前会话无法完成容器重启。
+- 在线 `/context/build` 当前仍返回 `schemaVersion=0`，重启后应返回 `schemaVersion=1`、`policy.privacyScope` 和 `trace`。
+- 服务器侧需要执行：
+
+```bash
+cd /opt/services/dreamjourney/DreamJourneyBackend
+sudo docker compose up -d --build
+```
+
 1. 先做真机数字人 + 复刻音色完整回归。
    - 重点验证 Echo 中实际使用复刻音色。
    - 验证腾讯数字人口型同步和打断恢复。

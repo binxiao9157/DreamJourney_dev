@@ -243,6 +243,7 @@ for handoffGuard in [
     "tencent-digital-human-voice-clone-route-check.swift",
     "tencent-voice-clone-echo-contract-check.swift",
     "context-packet-v1-check.swift",
+    "echo-trace-export-check.swift",
     "tencent-digital-human-provider-stability-check.swift",
     "digital-human-tts-viseme-gate-check.swift",
     "ios-family-voice-consumer-contract-check.swift",

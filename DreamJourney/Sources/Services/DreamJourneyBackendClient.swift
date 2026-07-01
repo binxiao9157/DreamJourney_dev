@@ -952,10 +952,11 @@ struct EchoContextPacket {
     }
 }
 
-struct EchoTraceRecord {
+struct EchoTraceRecord: Codable {
     let turnID: String
     let traceId: String
     let userId: String
+    let recordedAt: Date
     let archiveItemIDs: [String]
     let archiveItemsIncluded: Int
     let archiveItemsAvailable: Int
@@ -972,23 +973,65 @@ struct EchoTraceRecord {
     let latencyMs: Int
 
     init(turnID: String, packet: EchoContextPacket) {
+        self.init(
+            turnID: turnID,
+            traceId: packet.traceId,
+            userId: packet.userId,
+            archiveItemIDs: packet.archiveItemIDs,
+            archiveItemsIncluded: packet.archiveItemsIncluded,
+            archiveItemsAvailable: packet.archiveItemsAvailable,
+            kbFactCount: packet.kbFactCount,
+            voiceProfileId: packet.voiceProfileId,
+            voiceCloneReady: packet.cloneReady,
+            voiceOutputMode: packet.voiceOutputMode,
+            digitalHumanSessionReady: packet.digitalHumanSessionReady,
+            digitalHumanProviderMode: packet.digitalHumanProviderMode,
+            privacyScopeLabel: packet.privacyScopeLabel,
+            canUseFamilyData: packet.canUseFamilyData,
+            crossScopeArchiveIncluded: packet.crossScopeArchiveIncluded,
+            fallbacks: packet.fallbacks,
+            latencyMs: packet.latencyMs
+        )
+    }
+
+    init(
+        turnID: String,
+        traceId: String,
+        userId: String,
+        recordedAt: Date = Date(),
+        archiveItemIDs: [String],
+        archiveItemsIncluded: Int,
+        archiveItemsAvailable: Int,
+        kbFactCount: Int,
+        voiceProfileId: String?,
+        voiceCloneReady: Bool,
+        voiceOutputMode: String,
+        digitalHumanSessionReady: Bool,
+        digitalHumanProviderMode: String,
+        privacyScopeLabel: String,
+        canUseFamilyData: Bool,
+        crossScopeArchiveIncluded: Bool,
+        fallbacks: [String],
+        latencyMs: Int
+    ) {
         self.turnID = turnID
-        self.traceId = packet.traceId
-        self.userId = packet.userId
-        self.archiveItemIDs = packet.archiveItemIDs
-        self.archiveItemsIncluded = packet.archiveItemsIncluded
-        self.archiveItemsAvailable = packet.archiveItemsAvailable
-        self.kbFactCount = packet.kbFactCount
-        self.voiceProfileId = packet.voiceProfileId
-        self.voiceCloneReady = packet.cloneReady
-        self.voiceOutputMode = packet.voiceOutputMode
-        self.digitalHumanSessionReady = packet.digitalHumanSessionReady
-        self.digitalHumanProviderMode = packet.digitalHumanProviderMode
-        self.privacyScopeLabel = packet.privacyScopeLabel
-        self.canUseFamilyData = packet.canUseFamilyData
-        self.crossScopeArchiveIncluded = packet.crossScopeArchiveIncluded
-        self.fallbacks = packet.fallbacks
-        self.latencyMs = packet.latencyMs
+        self.traceId = traceId
+        self.userId = userId
+        self.recordedAt = recordedAt
+        self.archiveItemIDs = archiveItemIDs
+        self.archiveItemsIncluded = archiveItemsIncluded
+        self.archiveItemsAvailable = archiveItemsAvailable
+        self.kbFactCount = kbFactCount
+        self.voiceProfileId = voiceProfileId
+        self.voiceCloneReady = voiceCloneReady
+        self.voiceOutputMode = voiceOutputMode
+        self.digitalHumanSessionReady = digitalHumanSessionReady
+        self.digitalHumanProviderMode = digitalHumanProviderMode
+        self.privacyScopeLabel = privacyScopeLabel
+        self.canUseFamilyData = canUseFamilyData
+        self.crossScopeArchiveIncluded = crossScopeArchiveIncluded
+        self.fallbacks = fallbacks
+        self.latencyMs = latencyMs
     }
 
     var logLine: String {
@@ -1006,6 +1049,66 @@ struct EchoTraceRecord {
         "digitalHumanProviderMode=\(digitalHumanProviderMode) " +
         "crossScopeArchiveIncluded=\(crossScopeArchiveIncluded) " +
         "fallbacks=\(fallbackList) latencyMs=\(latencyMs)"
+    }
+}
+
+final class EchoTraceStore {
+    static let shared = EchoTraceStore()
+
+    private let userDefaults: UserDefaults
+    private let storageKey = "DreamJourney.EchoTraceStore.records.v1"
+    private let maximumRecordCount = 20
+
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+    }
+
+    func record(_ record: EchoTraceRecord) {
+        var records = recentRecords()
+        records.append(record)
+        if records.count > maximumRecordCount {
+            records = Array(records.suffix(maximumRecordCount))
+        }
+        save(records)
+    }
+
+    func recentRecords() -> [EchoTraceRecord] {
+        guard let data = userDefaults.data(forKey: storageKey) else {
+            return []
+        }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return (try? decoder.decode([EchoTraceRecord].self, from: data)) ?? []
+    }
+
+    func clear() {
+        userDefaults.removeObject(forKey: storageKey)
+    }
+
+    func exportRecentRecords(
+        to directory: URL = FileManager.default.temporaryDirectory,
+        fileName: String = "echo-trace-records.json"
+    ) throws -> URL {
+        let records = recentRecords()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent(fileName)
+        let data = try Self.makeJSONEncoder().encode(records)
+        try data.write(to: url, options: [.atomic])
+        return url
+    }
+
+    private func save(_ records: [EchoTraceRecord]) {
+        guard let data = try? Self.makeJSONEncoder().encode(records) else {
+            return
+        }
+        userDefaults.set(data, forKey: storageKey)
+    }
+
+    private static func makeJSONEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
     }
 }
 
