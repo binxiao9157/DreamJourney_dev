@@ -143,6 +143,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-29-tencent-backend-pcm-drive-mock-smoke.md",
     "docs/superpowers/status/2026-06-29-true-device-tencent-backend-pcm-drive-poc.md",
     "docs/superpowers/status/2026-07-02-echo-trace-evidence-package.md",
+    "docs/superpowers/status/2026-07-02-context-packet-v2-trace.md",
 ]
 
 for doc in requiredDocs {
@@ -356,6 +357,7 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/true-device-acceptance-evidence-package-check.swift",
     "Scripts/QA/prd-stitch-ui/run-true-device-archive-audio-preflight.sh",
     "Scripts/QA/prd-stitch-ui/run-true-device-tencent-backend-pcm-drive-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/context-packet-v2-trace-check.swift",
     "Scripts/QA/prd-stitch-ui/echo-trace-evidence-package-check.swift",
     "Scripts/QA/prd-stitch-ui/echo-readiness-report.py",
     "Scripts/QA/prd-stitch-ui/run-echo-readiness-report.sh",

@@ -839,12 +839,19 @@ struct VoiceCloneSynthesisResult {
 
 struct EchoContextPacket {
     let schemaVersion: Int
+    let contextVersion: String
     let traceId: String
     let intent: String
     let userId: String
     let archiveItemsAvailable: Int
     let archiveItemsIncluded: Int
     let archiveItemIDs: [String]
+    let selectedContextRefs: [String]
+    let filteredContextReasons: [String]
+    let selectedContextCount: Int
+    let filteredContextCount: Int
+    let rankingTraceCount: Int
+    let selectedContextSourceCounts: [String: Int]
     let kbFactCount: Int
     let voiceProfileId: String?
     let cloneReady: Bool
@@ -864,6 +871,7 @@ struct EchoContextPacket {
             return nil
         }
         self.schemaVersion = Self.intValue(json["schemaVersion"]) ?? 0
+        self.contextVersion = json["contextVersion"] as? String ?? "echo-context-v1"
         self.traceId = traceId
         self.intent = intent
         self.userId = userId
@@ -874,6 +882,16 @@ struct EchoContextPacket {
 
         let trace = json["trace"] as? [String: Any]
         self.archiveItemIDs = Self.stringArray(trace?["archiveItemIds"])
+        let selectedContext = json["selectedContext"] as? [[String: Any]] ?? []
+        let filteredContext = json["filteredContext"] as? [[String: Any]] ?? []
+        let rankingTrace = json["rankingTrace"] as? [[String: Any]] ?? []
+        self.selectedContextRefs = Self.contextRefArray(selectedContext)
+        self.filteredContextReasons = Self.filteredReasonArray(filteredContext)
+        self.selectedContextCount = Self.intValue(trace?["selectedContextCount"]) ?? selectedContext.count
+        self.filteredContextCount = Self.intValue(trace?["filteredContextCount"]) ?? filteredContext.count
+        self.rankingTraceCount = Self.intValue(trace?["rankingTraceCount"]) ?? rankingTrace.count
+        self.selectedContextSourceCounts = Self.intDictionary(trace?["selectedContextSourceCounts"])
+            ?? Self.contextSourceCounts(selectedContext)
 
         let voice = json["voice"] as? [String: Any]
         self.voiceProfileId = voice?["voiceProfileId"] as? String
@@ -931,6 +949,49 @@ struct EchoContextPacket {
         return []
     }
 
+    private static func contextRefArray(_ entries: [[String: Any]]) -> [String] {
+        entries.compactMap { entry in
+            let refId = String(describing: entry["refId"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return refId.isEmpty ? nil : refId
+        }
+    }
+
+    private static func filteredReasonArray(_ entries: [[String: Any]]) -> [String] {
+        entries.compactMap { entry in
+            let refId = String(describing: entry["refId"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let reason = String(describing: entry["reason"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !reason.isEmpty else {
+                return nil
+            }
+            return refId.isEmpty ? reason : "\(refId):\(reason)"
+        }
+    }
+
+    private static func contextSourceCounts(_ entries: [[String: Any]]) -> [String: Int] {
+        var counts: [String: Int] = [:]
+        for entry in entries {
+            let source = String(describing: entry["source"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !source.isEmpty else {
+                continue
+            }
+            counts[source, default: 0] += 1
+        }
+        return counts
+    }
+
+    private static func intDictionary(_ value: Any?) -> [String: Int]? {
+        guard let dictionary = value as? [String: Any] else {
+            return nil
+        }
+        var result: [String: Int] = [:]
+        for (key, value) in dictionary {
+            if let intValue = intValue(value) {
+                result[key] = intValue
+            }
+        }
+        return result
+    }
+
     private static func boolValue(_ value: Any?) -> Bool? {
         if let value = value as? Bool {
             return value
@@ -957,9 +1018,16 @@ struct EchoTraceRecord: Codable {
     let traceId: String
     let userId: String
     let recordedAt: Date
+    let contextVersion: String
     let archiveItemIDs: [String]
     let archiveItemsIncluded: Int
     let archiveItemsAvailable: Int
+    let selectedContextRefs: [String]
+    let filteredContextReasons: [String]
+    let selectedContextCount: Int
+    let filteredContextCount: Int
+    let rankingTraceCount: Int
+    let selectedContextSourceCounts: [String: Int]
     let kbFactCount: Int
     let voiceProfileId: String?
     let voiceCloneReady: Bool
@@ -972,6 +1040,34 @@ struct EchoTraceRecord: Codable {
     let fallbacks: [String]
     let latencyMs: Int
 
+    enum CodingKeys: String, CodingKey {
+        case turnID
+        case traceId
+        case userId
+        case recordedAt
+        case contextVersion
+        case archiveItemIDs
+        case archiveItemsIncluded
+        case archiveItemsAvailable
+        case selectedContextRefs
+        case filteredContextReasons
+        case selectedContextCount
+        case filteredContextCount
+        case rankingTraceCount
+        case selectedContextSourceCounts
+        case kbFactCount
+        case voiceProfileId
+        case voiceCloneReady
+        case voiceOutputMode
+        case digitalHumanSessionReady
+        case digitalHumanProviderMode
+        case privacyScopeLabel
+        case canUseFamilyData
+        case crossScopeArchiveIncluded
+        case fallbacks
+        case latencyMs
+    }
+
     init(turnID: String, packet: EchoContextPacket) {
         self.init(
             turnID: turnID,
@@ -980,6 +1076,13 @@ struct EchoTraceRecord: Codable {
             archiveItemIDs: packet.archiveItemIDs,
             archiveItemsIncluded: packet.archiveItemsIncluded,
             archiveItemsAvailable: packet.archiveItemsAvailable,
+            contextVersion: packet.contextVersion,
+            selectedContextRefs: packet.selectedContextRefs,
+            filteredContextReasons: packet.filteredContextReasons,
+            selectedContextCount: packet.selectedContextCount,
+            filteredContextCount: packet.filteredContextCount,
+            rankingTraceCount: packet.rankingTraceCount,
+            selectedContextSourceCounts: packet.selectedContextSourceCounts,
             kbFactCount: packet.kbFactCount,
             voiceProfileId: packet.voiceProfileId,
             voiceCloneReady: packet.cloneReady,
@@ -1002,6 +1105,13 @@ struct EchoTraceRecord: Codable {
         archiveItemIDs: [String],
         archiveItemsIncluded: Int,
         archiveItemsAvailable: Int,
+        contextVersion: String = "echo-context-v1",
+        selectedContextRefs: [String] = [],
+        filteredContextReasons: [String] = [],
+        selectedContextCount: Int? = nil,
+        filteredContextCount: Int? = nil,
+        rankingTraceCount: Int = 0,
+        selectedContextSourceCounts: [String: Int] = [:],
         kbFactCount: Int,
         voiceProfileId: String?,
         voiceCloneReady: Bool,
@@ -1018,9 +1128,16 @@ struct EchoTraceRecord: Codable {
         self.traceId = traceId
         self.userId = userId
         self.recordedAt = recordedAt
+        self.contextVersion = contextVersion
         self.archiveItemIDs = archiveItemIDs
         self.archiveItemsIncluded = archiveItemsIncluded
         self.archiveItemsAvailable = archiveItemsAvailable
+        self.selectedContextRefs = selectedContextRefs
+        self.filteredContextReasons = filteredContextReasons
+        self.selectedContextCount = selectedContextCount ?? selectedContextRefs.count
+        self.filteredContextCount = filteredContextCount ?? filteredContextReasons.count
+        self.rankingTraceCount = rankingTraceCount
+        self.selectedContextSourceCounts = selectedContextSourceCounts
         self.kbFactCount = kbFactCount
         self.voiceProfileId = voiceProfileId
         self.voiceCloneReady = voiceCloneReady
@@ -1034,15 +1151,55 @@ struct EchoTraceRecord: Codable {
         self.latencyMs = latencyMs
     }
 
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.turnID = try container.decode(String.self, forKey: .turnID)
+        self.traceId = try container.decode(String.self, forKey: .traceId)
+        self.userId = try container.decode(String.self, forKey: .userId)
+        self.recordedAt = try container.decode(Date.self, forKey: .recordedAt)
+        self.contextVersion = try container.decodeIfPresent(String.self, forKey: .contextVersion) ?? "echo-context-v1"
+        self.archiveItemIDs = try container.decodeIfPresent([String].self, forKey: .archiveItemIDs) ?? []
+        self.archiveItemsIncluded = try container.decodeIfPresent(Int.self, forKey: .archiveItemsIncluded) ?? self.archiveItemIDs.count
+        self.archiveItemsAvailable = try container.decodeIfPresent(Int.self, forKey: .archiveItemsAvailable) ?? self.archiveItemsIncluded
+        self.selectedContextRefs = try container.decodeIfPresent([String].self, forKey: .selectedContextRefs) ?? []
+        self.filteredContextReasons = try container.decodeIfPresent([String].self, forKey: .filteredContextReasons) ?? []
+        self.selectedContextCount = try container.decodeIfPresent(Int.self, forKey: .selectedContextCount) ?? self.selectedContextRefs.count
+        self.filteredContextCount = try container.decodeIfPresent(Int.self, forKey: .filteredContextCount) ?? self.filteredContextReasons.count
+        self.rankingTraceCount = try container.decodeIfPresent(Int.self, forKey: .rankingTraceCount) ?? 0
+        self.selectedContextSourceCounts = try container.decodeIfPresent([String: Int].self, forKey: .selectedContextSourceCounts) ?? [:]
+        self.kbFactCount = try container.decodeIfPresent(Int.self, forKey: .kbFactCount) ?? 0
+        self.voiceProfileId = try container.decodeIfPresent(String.self, forKey: .voiceProfileId)
+        self.voiceCloneReady = try container.decodeIfPresent(Bool.self, forKey: .voiceCloneReady) ?? false
+        self.voiceOutputMode = try container.decodeIfPresent(String.self, forKey: .voiceOutputMode) ?? "unknown"
+        self.digitalHumanSessionReady = try container.decodeIfPresent(Bool.self, forKey: .digitalHumanSessionReady) ?? false
+        self.digitalHumanProviderMode = try container.decodeIfPresent(String.self, forKey: .digitalHumanProviderMode) ?? "unknown"
+        self.privacyScopeLabel = try container.decodeIfPresent(String.self, forKey: .privacyScopeLabel) ?? "unknown"
+        self.canUseFamilyData = try container.decodeIfPresent(Bool.self, forKey: .canUseFamilyData) ?? false
+        self.crossScopeArchiveIncluded = try container.decodeIfPresent(Bool.self, forKey: .crossScopeArchiveIncluded) ?? false
+        self.fallbacks = try container.decodeIfPresent([String].self, forKey: .fallbacks) ?? []
+        self.latencyMs = try container.decodeIfPresent(Int.self, forKey: .latencyMs) ?? 0
+    }
+
     var logLine: String {
         let archiveIDs = archiveItemIDs.joined(separator: ",")
+        let selectedRefs = selectedContextRefs.joined(separator: ",")
+        let filteredReasons = filteredContextReasons.joined(separator: ",")
+        let sourceCounts = selectedContextSourceCounts
+            .sorted { $0.key < $1.key }
+            .map { "\($0.key):\($0.value)" }
+            .joined(separator: ",")
         let fallbackList = fallbacks.joined(separator: ",")
         let profileID = voiceProfileId ?? "none"
         return "[CFLite] trace record " +
         "turnID=\(turnID) traceId=\(traceId) userId=\(userId) " +
+        "contextVersion=\(contextVersion) " +
         "privacyScope=\(privacyScopeLabel) canUseFamilyData=\(canUseFamilyData) " +
         "archiveIncluded=\(archiveItemsIncluded)/\(archiveItemsAvailable) " +
         "archiveItemIDs=\(archiveIDs) " +
+        "selectedContextRefs=\(selectedRefs) selectedContextCount=\(selectedContextCount) " +
+        "selectedContextSourceCounts=\(sourceCounts) " +
+        "filteredContextReasons=\(filteredReasons) filteredContextCount=\(filteredContextCount) " +
+        "rankingTraceCount=\(rankingTraceCount) " +
         "kbFacts=\(kbFactCount) cloneReady=\(voiceCloneReady) " +
         "voiceProfileId=\(profileID) outputMode=\(voiceOutputMode) " +
         "digitalHumanReady=\(digitalHumanSessionReady) " +
@@ -1246,9 +1403,16 @@ struct EchoContextBuildEvidenceSummary: Codable {
     let status: String
     let traceId: String
     let userId: String
+    let contextVersion: String?
     let archiveItemIDs: [String]
     let archiveItemsIncluded: Int
     let archiveItemsAvailable: Int
+    let selectedContextRefs: [String]
+    let filteredContextReasons: [String]
+    let selectedContextCount: Int
+    let filteredContextCount: Int
+    let rankingTraceCount: Int
+    let selectedContextSourceCounts: [String: Int]
     let kbFactCount: Int
     let voiceProfileId: String?
     let voiceOutputMode: String
@@ -1265,9 +1429,16 @@ struct EchoContextBuildEvidenceSummary: Codable {
         self.status = record == nil ? "missing" : "ready"
         self.traceId = record?.traceId ?? "none"
         self.userId = record?.userId ?? "unknown"
+        self.contextVersion = record?.contextVersion
         self.archiveItemIDs = record?.archiveItemIDs ?? []
         self.archiveItemsIncluded = record?.archiveItemsIncluded ?? 0
         self.archiveItemsAvailable = record?.archiveItemsAvailable ?? 0
+        self.selectedContextRefs = record?.selectedContextRefs ?? []
+        self.filteredContextReasons = record?.filteredContextReasons ?? []
+        self.selectedContextCount = record?.selectedContextCount ?? 0
+        self.filteredContextCount = record?.filteredContextCount ?? 0
+        self.rankingTraceCount = record?.rankingTraceCount ?? 0
+        self.selectedContextSourceCounts = record?.selectedContextSourceCounts ?? [:]
         self.kbFactCount = record?.kbFactCount ?? 0
         self.voiceProfileId = record?.voiceProfileId
         self.voiceOutputMode = record?.voiceOutputMode ?? "unknown"
