@@ -260,7 +260,12 @@ Stitch UI / htmlCode 仍是视觉主依据，MCP screenshot 只作为辅助复�
   - 复刻音色合成。
   - `tencentAudioDrive` 输出模式。
   - 输出腾讯 audio-drive 兼容 PCM：16kHz、16bit、mono。
-- iOS 已有 QA-only/POC 路径将后端 PCM 喂给腾讯数智人 audio-drive。
+- `tencentAudioDrive` 响应包含 `voiceProfileId`、`outputMode`、PCM 格式、采样率、位深、声道、字节数、`durationSeconds`、`providerRequestId/providerLogId`。
+- iOS Echo 主链路已经接入后端复刻 PCM：
+  - 有 ready/accepted 且质量已确认的 `voiceProfileId` 时，Echo 优先请求 `/voice/synthesis` + `outputMode=tencentAudioDrive`，再把 PCM 喂给腾讯数智人 audio-drive。
+  - 没有可用复刻音色时，UI 会提示“暂未启用复刻音色”。
+  - provider 失败或音频格式不兼容时，UI 会提示“复刻声音生成失败，请稍后重试”，并且不再静默切回腾讯默认 text voice。
+  - QA 日志输出 `voiceProfileId/outputMode/providerLogId/providerRequestId/durationSeconds/audioOwner`，方便和试听音色、后端 provider 日志交叉排查。
 - 已有质量确认/试听相关后端 gate。
 
 与 PRD 对齐：

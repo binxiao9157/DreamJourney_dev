@@ -6,6 +6,10 @@ private enum EchoDigitalHumanAudioOwner: String {
     case localPreview
     case fallbackMuted
     case volcengineLocalTTS
+
+    var logLabel: String {
+        "audioOwner=\(rawValue)"
+    }
 }
 
 final class EchoViewController: UIViewController {
@@ -920,15 +924,6 @@ final class EchoViewController: UIViewController {
         routeEchoAudioThroughDigitalHuman && tencentDigitalHumanProviderCanOwnAudio
     }
 
-    private var canRouteEchoReplyThroughVoiceClonePCMDrive: Bool {
-        guard let voiceCloneRuntimeCapability else {
-            loadVoiceCloneRuntimeCapabilityIfNeeded()
-            return false
-        }
-        return voiceCloneRuntimeCapability.canSynthesize
-            && voiceCloneRuntimeCapability.tencentAudioDrive.supported
-    }
-
     private func loadVoiceCloneRuntimeCapabilityIfNeeded(force: Bool = false) {
         if !force, voiceCloneRuntimeCapability != nil {
             return
@@ -1288,30 +1283,43 @@ final class EchoViewController: UIViewController {
 
         if sendEchoReplyViaTencentVoiceClonePCMDrive(
             normalizedText,
-            source: source,
-            fallbackToTencentText: { [weak self] fallbackSource in
-                self?.sendEchoReplyToTencentTextRuntime(
-                    normalizedText,
-                    source: fallbackSource
-                )
-            }
+            source: source
         ) {
             return
         }
 
+        showVoiceCloneNotEnabledStatusIfNeeded(source: source)
         sendEchoReplyToTencentTextRuntime(normalizedText, source: source)
     }
 
     @discardableResult
     private func sendEchoReplyViaTencentVoiceClonePCMDrive(
         _ normalizedText: String,
-        source: String,
-        fallbackToTencentText: @escaping (_ fallbackSource: String) -> Void
+        source: String
     ) -> Bool {
         guard source != "chatStreamingPrewarm",
-              canRouteEchoReplyThroughVoiceClonePCMDrive,
               let voiceProfileId = VoiceCloneService.shared.currentUsableSpeakerId else {
             return false
+        }
+        guard DreamJourneyBackendClient.shared.isVoiceCloneSynthesisConfigured else {
+            renderVoiceStatus(text: "复刻声音服务暂不可用", isVisible: true, accessibilityIdentifier: "echoVoiceClonePCMDriveStatus")
+            print(
+                "[TencentDigitalHuman] voice-clone PCM-drive unavailable; no default voice fallback " +
+                "source=\(source) voiceProfileId=\(voiceProfileId) outputMode=tencentAudioDrive " +
+                "\(currentEchoAudioOwner.logLabel) reason=backendNotConfigured"
+            )
+            return true
+        }
+        if let capability = voiceCloneRuntimeCapability,
+           !(capability.canSynthesize && capability.tencentAudioDrive.supported) {
+            renderVoiceStatus(text: "复刻声音服务暂不可用", isVisible: true, accessibilityIdentifier: "echoVoiceClonePCMDriveStatus")
+            print(
+                "[TencentDigitalHuman] voice-clone PCM-drive unavailable; no default voice fallback " +
+                "source=\(source) voiceProfileId=\(voiceProfileId) outputMode=tencentAudioDrive " +
+                "\(currentEchoAudioOwner.logLabel) canSynthesize=\(capability.canSynthesize) " +
+                "tencentAudioDriveSupported=\(capability.tencentAudioDrive.supported)"
+            )
+            return true
         }
 
         let requestID = makeTencentDigitalHumanRequestID()
@@ -1330,7 +1338,8 @@ final class EchoViewController: UIViewController {
         let userId = UserManager.shared.currentUser?.id ?? "default"
         print(
             "[TencentDigitalHuman] requesting voice-clone PCM-drive " +
-            "turnID=\(turnID) source=\(source) requestID=\(requestID) voiceProfileId=\(voiceProfileId)"
+            "turnID=\(turnID) source=\(source) requestID=\(requestID) voiceProfileId=\(voiceProfileId) " +
+            "outputMode=tencentAudioDrive \(currentEchoAudioOwner.logLabel)"
         )
         DreamJourneyBackendClient.shared.requestVoiceCloneSynthesis(
             userId: userId,
@@ -1353,15 +1362,23 @@ final class EchoViewController: UIViewController {
                 case .success(let synthesis):
                     guard synthesis.isTencentAudioDrivePCMCompatible,
                           let signal = self.makeTencentDigitalHumanPCMDriveSignal(from: synthesis) else {
-                        self.cancelTencentDigitalHumanTextOverTimeout()
-                        self.digitalHumanConversation.clearProviderRequest()
-                        self.renderVoiceStatus(text: nil, isVisible: false)
-                        print(
-                            "[TencentDigitalHuman] voice-clone PCM-drive incompatible; fallbackToTencentText " +
-                            "requestID=\(requestID) format=\(synthesis.audioFormat) sampleRate=\(synthesis.sampleRate ?? 0) " +
-                            "bits=\(synthesis.bitsPerSample ?? 0) channels=\(synthesis.channelCount ?? 0)"
+                        self.handleVoiceClonePCMDriveFailureWithoutDefaultVoice(
+                            requestID: requestID,
+                            turnID: turnID,
+                            voiceProfileId: synthesis.voiceProfileId,
+                            outputMode: synthesis.outputMode ?? "none",
+                            providerLogId: synthesis.providerLogId,
+                            providerRequestId: synthesis.providerRequestId,
+                            reason: "incompatibleAudioFormat",
+                            detail: "format=\(synthesis.audioFormat) sampleRate=\(synthesis.sampleRate ?? 0) bits=\(synthesis.bitsPerSample ?? 0) channels=\(synthesis.channelCount ?? 0)"
                         )
-                        fallbackToTencentText("voiceClonePCMDriveFallbackToTencentText")
+                        print(
+                            "[TencentDigitalHuman] voice-clone PCM-drive incompatible; no default voice fallback " +
+                            "requestID=\(requestID) format=\(synthesis.audioFormat) sampleRate=\(synthesis.sampleRate ?? 0) " +
+                            "bits=\(synthesis.bitsPerSample ?? 0) channels=\(synthesis.channelCount ?? 0) " +
+                            "voiceProfileId=\(synthesis.voiceProfileId) outputMode=\(synthesis.outputMode ?? "none") " +
+                            "providerLogId=\(synthesis.providerLogId ?? "none") \(self.currentEchoAudioOwner.logLabel)"
+                        )
                         return
                     }
 
@@ -1374,21 +1391,80 @@ final class EchoViewController: UIViewController {
                     print(
                         "[TencentDigitalHuman] voice-clone PCM-drive synthesis ready " +
                         "turnID=\(turnID) requestID=\(requestID) voiceProfileId=\(synthesis.voiceProfileId) " +
-                        "bytes=\(synthesis.byteCount) providerMode=\(synthesis.providerMode)"
+                        "bytes=\(synthesis.byteCount) providerMode=\(synthesis.providerMode) " +
+                        "outputMode=\(synthesis.outputMode ?? "none") providerLogId=\(synthesis.providerLogId ?? "none") " +
+                        "providerRequestId=\(synthesis.providerRequestId ?? "none") " +
+                        "durationSeconds=\(synthesis.durationSeconds ?? 0) \(self.currentEchoAudioOwner.logLabel)"
                     )
                 case .failure(let error):
-                    self.cancelTencentDigitalHumanTextOverTimeout()
-                    self.digitalHumanConversation.clearProviderRequest()
-                    self.renderVoiceStatus(text: nil, isVisible: false)
-                    print(
-                        "[TencentDigitalHuman] voice-clone PCM-drive request failed; fallbackToTencentText " +
-                        "requestID=\(requestID) error=\(error.localizedDescription)"
+                    self.handleVoiceClonePCMDriveFailureWithoutDefaultVoice(
+                        requestID: requestID,
+                        turnID: turnID,
+                        voiceProfileId: voiceProfileId,
+                        outputMode: "tencentAudioDrive",
+                        providerLogId: nil,
+                        providerRequestId: nil,
+                        reason: "providerRequestFailed",
+                        detail: error.localizedDescription
                     )
-                    fallbackToTencentText("voiceClonePCMDriveFallbackToTencentText")
+                    print(
+                        "[TencentDigitalHuman] voice-clone PCM-drive request failed; no default voice fallback " +
+                        "requestID=\(requestID) voiceProfileId=\(voiceProfileId) outputMode=tencentAudioDrive " +
+                        "providerLogId=none \(self.currentEchoAudioOwner.logLabel) error=\(error.localizedDescription)"
+                    )
                 }
             }
         }
         return true
+    }
+
+    private func showVoiceCloneNotEnabledStatusIfNeeded(source: String) {
+        guard source != "chatStreamingPrewarm",
+              shouldDispatchEchoReplyToTencentProvider,
+              VoiceCloneService.shared.currentUsableSpeakerId == nil else {
+            return
+        }
+        renderVoiceStatus(text: "暂未启用复刻音色", isVisible: true, accessibilityIdentifier: "echoVoiceCloneNotEnabledStatus")
+        print(
+            "[TencentDigitalHuman] voice clone not enabled for Echo " +
+            "source=\(source) voiceProfileId=none outputMode=tencentText \(currentEchoAudioOwner.logLabel)"
+        )
+    }
+
+    private func handleVoiceClonePCMDriveFailureWithoutDefaultVoice(
+        requestID: String,
+        turnID: String,
+        voiceProfileId: String,
+        outputMode: String,
+        providerLogId: String?,
+        providerRequestId: String?,
+        reason: String,
+        detail: String
+    ) {
+        cancelTencentDigitalHumanTextOverTimeout()
+        digitalHumanConversation.clearProviderRequest()
+        stopDigitalHumanAudioLevelMetering()
+        viewModel.markReplyDelivered()
+        renderVoiceStatus(text: "复刻声音生成失败，请稍后重试", isVisible: true, accessibilityIdentifier: "echoVoiceClonePCMDriveStatus")
+        digitalHumanStatusDetailLabel.text = "复刻声音生成失败，未切换默认音色"
+        print(
+            "[TencentDigitalHuman] voice-clone PCM-drive failed; no default voice fallback " +
+            "turnID=\(turnID) requestID=\(requestID) voiceProfileId=\(voiceProfileId) " +
+            "outputMode=\(outputMode) providerLogId=\(providerLogId ?? "none") " +
+            "providerRequestId=\(providerRequestId ?? "none") \(currentEchoAudioOwner.logLabel) " +
+            "reason=\(reason) detail=\(detail)"
+        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            guard let self else { return }
+            if self.resumeDialogEngineAfterTencentProviderSpeechIfNeeded(reason: "voiceClonePCMDriveFailed") {
+                return
+            }
+            if DialogEngineManager.shared.isDialogActive {
+                self.viewModel.beginVoiceInteraction()
+            } else {
+                self.viewModel.resetToIdle()
+            }
+        }
     }
 
     private func sendEchoReplyToTencentTextRuntime(_ normalizedText: String, source: String) {

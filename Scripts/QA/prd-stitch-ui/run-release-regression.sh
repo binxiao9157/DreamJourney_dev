@@ -300,6 +300,7 @@ for guard in \
   tencent-digital-human-pcm-drive-poc-check.swift \
   true-device-tencent-backend-pcm-drive-smoke-check.swift \
   tencent-digital-human-voice-clone-route-check.swift \
+  tencent-voice-clone-echo-contract-check.swift \
   tencent-digital-human-provider-stability-check.swift \
   tencent-digital-human-phase1-stability-check.swift \
   tencent-digital-human-audio-owner-stop-semantics-check.swift \

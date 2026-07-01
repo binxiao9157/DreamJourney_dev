@@ -752,6 +752,9 @@ struct VoiceCloneSynthesisResult {
     let sampleRate: Int?
     let bitsPerSample: Int?
     let channelCount: Int?
+    let durationSeconds: Double?
+    let providerLogId: String?
+    let providerRequestId: String?
     let visemeTimeline: DigitalHumanLipSyncTimeline?
 
     init?(json: [String: Any]) {
@@ -770,6 +773,9 @@ struct VoiceCloneSynthesisResult {
         self.sampleRate = Self.intValue(audioJSON["sampleRate"])
         self.bitsPerSample = Self.intValue(audioJSON["bitsPerSample"])
         self.channelCount = Self.intValue(audioJSON["channelCount"])
+        self.durationSeconds = Self.doubleValue(audioJSON["durationSeconds"])
+        self.providerLogId = json["providerLogId"] as? String
+        self.providerRequestId = json["providerRequestId"] as? String
         if let visemeTimelineJSON = json["visemeTimeline"] as? [String: Any] {
             self.visemeTimeline = DigitalHumanLipSyncTimeline(json: visemeTimelineJSON)
         } else {
@@ -813,6 +819,19 @@ struct VoiceCloneSynthesisResult {
         }
         if let value = value as? String {
             return Int(value)
+        }
+        return nil
+    }
+
+    private static func doubleValue(_ value: Any?) -> Double? {
+        if let value = value as? Double {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.doubleValue
+        }
+        if let value = value as? String {
+            return Double(value)
         }
         return nil
     }
