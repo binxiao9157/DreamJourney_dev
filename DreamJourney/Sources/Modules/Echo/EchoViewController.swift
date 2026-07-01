@@ -1431,6 +1431,41 @@ final class EchoViewController: UIViewController {
         )
     }
 
+    private func recordEchoContextPacketForUserTurn(text: String, turnID: String) {
+        guard DreamJourneyBackendClient.shared.isContextBuildConfigured else {
+            print("[CFLite] context build skipped turnID=\(turnID) reason=backendNotConfigured")
+            return
+        }
+        let context = DigitalHumanContextStore.shared.current
+        let userId = UserManager.shared.currentUser?.id ?? context.viewerUserId ?? context.ownerId
+        let personaScope = context.isSelfAssistant ? "personal" : "family"
+        DreamJourneyBackendClient.shared.buildEchoContextPacket(
+            userId: userId,
+            query: text,
+            personaScope: personaScope,
+            digitalHumanId: context.ownerId,
+            lifecycleMode: context.mode,
+            viewerFamilyMemberID: nil
+        ) { result in
+            switch result {
+            case .success(let packet):
+                print(
+                    "[CFLite] context built " +
+                    "turnID=\(turnID) traceId=\(packet.traceId) schemaVersion=\(packet.schemaVersion) " +
+                    "archiveIncluded=\(packet.archiveItemsIncluded)/\(packet.archiveItemsAvailable) " +
+                    "kbFacts=\(packet.kbFactCount) cloneReady=\(packet.cloneReady) " +
+                    "voiceProfileId=\(packet.voiceProfileId ?? "none") outputMode=\(packet.voiceOutputMode) " +
+                    "digitalHumanReady=\(packet.digitalHumanSessionReady) " +
+                    "digitalHumanProviderMode=\(packet.digitalHumanProviderMode) " +
+                    "crossScopeArchiveIncluded=\(packet.crossScopeArchiveIncluded) " +
+                    "fallbacks=\(packet.fallbacks.joined(separator: ",")) latencyMs=\(packet.latencyMs)"
+                )
+            case .failure(let error):
+                print("[CFLite] context build failed turnID=\(turnID) error=\(error.localizedDescription)")
+            }
+        }
+    }
+
     private func handleVoiceClonePCMDriveFailureWithoutDefaultVoice(
         requestID: String,
         turnID: String,
@@ -2330,6 +2365,7 @@ extension EchoViewController: DialogEngineDelegate {
             self.resetDigitalHumanReplyDispatchState()
             let turnID = self.digitalHumanConversation.startUserTurn(makeID: self.makeTencentDigitalHumanRequestID)
             print("[TencentDigitalHuman] user turn started turnID=\(turnID)")
+            self.recordEchoContextPacketForUserTurn(text: text, turnID: turnID)
             self.viewModel.finishUserVoice(text: text)
             if self.viewModel.isWaitingForDelayedReply {
                 self.scheduleDelayedReplyNotificationIfNeeded()

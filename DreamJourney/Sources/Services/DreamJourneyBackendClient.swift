@@ -837,6 +837,92 @@ struct VoiceCloneSynthesisResult {
     }
 }
 
+struct EchoContextPacket {
+    let schemaVersion: Int
+    let traceId: String
+    let intent: String
+    let userId: String
+    let archiveItemsAvailable: Int
+    let archiveItemsIncluded: Int
+    let kbFactCount: Int
+    let voiceProfileId: String?
+    let cloneReady: Bool
+    let voiceOutputMode: String
+    let digitalHumanSessionReady: Bool
+    let digitalHumanProviderMode: String
+    let crossScopeArchiveIncluded: Bool
+    let fallbacks: [String]
+    let latencyMs: Int
+
+    init?(json: [String: Any]) {
+        guard let traceId = json["traceId"] as? String,
+              let intent = json["intent"] as? String,
+              let userId = json["userId"] as? String else {
+            return nil
+        }
+        self.schemaVersion = Self.intValue(json["schemaVersion"]) ?? 0
+        self.traceId = traceId
+        self.intent = intent
+        self.userId = userId
+
+        let memory = json["memory"] as? [String: Any]
+        let facts = memory?["kbFacts"] as? [[String: Any]] ?? []
+        self.kbFactCount = facts.count
+
+        let voice = json["voice"] as? [String: Any]
+        self.voiceProfileId = voice?["voiceProfileId"] as? String
+        self.cloneReady = Self.boolValue(voice?["cloneReady"]) ?? false
+        self.voiceOutputMode = voice?["outputMode"] as? String ?? "unknown"
+
+        let digitalHuman = json["digitalHuman"] as? [String: Any]
+        self.digitalHumanSessionReady = Self.boolValue(digitalHuman?["sessionReady"]) ?? false
+        self.digitalHumanProviderMode = digitalHuman?["providerMode"] as? String ?? "unknown"
+
+        let policy = json["policy"] as? [String: Any]
+        self.crossScopeArchiveIncluded = Self.boolValue(policy?["crossScopeArchiveIncluded"]) ?? false
+        self.fallbacks = json["fallbacks"] as? [String] ?? []
+
+        let debug = json["debug"] as? [String: Any]
+        let sourceCounts = debug?["sourceCounts"] as? [String: Any]
+        self.archiveItemsAvailable = Self.intValue(sourceCounts?["archiveItemsAvailable"]) ?? 0
+        self.archiveItemsIncluded = Self.intValue(sourceCounts?["archiveItemsIncluded"]) ?? 0
+        self.latencyMs = Self.intValue(debug?["latencyMs"]) ?? 0
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.intValue
+        }
+        if let value = value as? String {
+            return Int(value)
+        }
+        return nil
+    }
+
+    private static func boolValue(_ value: Any?) -> Bool? {
+        if let value = value as? Bool {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.boolValue
+        }
+        if let value = value as? String {
+            switch value.lowercased() {
+            case "true", "1", "yes":
+                return true
+            case "false", "0", "no":
+                return false
+            default:
+                return nil
+            }
+        }
+        return nil
+    }
+}
+
 final class DreamJourneyBackendClient {
     static let shared = DreamJourneyBackendClient()
 
@@ -922,6 +1008,10 @@ final class DreamJourneyBackendClient {
     }
 
     var isArchiveImageAnalysisConfigured: Bool {
+        hasExplicitBaseURL
+    }
+
+    var isContextBuildConfigured: Bool {
         hasExplicitBaseURL
     }
 
@@ -1170,6 +1260,42 @@ final class DreamJourneyBackendClient {
                     return
                 }
                 completion(.success(synthesis))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func buildEchoContextPacket(
+        userId: String,
+        query: String,
+        personaScope: String,
+        digitalHumanId: String,
+        lifecycleMode: DigitalHumanMode,
+        viewerFamilyMemberID: String? = nil,
+        completion: @escaping (Result<EchoContextPacket, Error>) -> Void
+    ) {
+        var payload: [String: Any] = [
+            "userId": userId,
+            "intent": "echo_chat",
+            "query": query,
+            "personaScope": personaScope,
+            "digitalHumanId": digitalHumanId,
+            "lifecycleMode": lifecycleMode.rawValue,
+        ]
+        if let viewerFamilyMemberID,
+           !viewerFamilyMemberID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["viewerFamilyMemberID"] = viewerFamilyMemberID
+        }
+        requestJSON(path: "/context/build", method: .post, payload: payload) { result in
+            switch result {
+            case .success(let object):
+                guard let packetJSON = object["contextPacket"] as? [String: Any],
+                      let packet = EchoContextPacket(json: packetJSON) else {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                completion(.success(packet))
             case .failure(let error):
                 completion(.failure(error))
             }

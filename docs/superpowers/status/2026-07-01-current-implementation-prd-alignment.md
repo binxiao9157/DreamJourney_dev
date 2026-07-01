@@ -525,6 +525,31 @@ Stitch UI / htmlCode 仍是视觉主依据，MCP screenshot 只作为辅助复�
 
 ## 9. 建议下一步
 
+### 2026-07-01 CFL-Lite Context Packet v0 更新
+
+本轮在推进完整 CFL 方案前，先落地轻量 `Context Packet v0`：
+
+- 后端新增 `/context/build`，聚合现有 archive、KB、care、voice profile、digital-human runtime 信息。
+- 后端新增 `ContextPacketBuilder`，只使用现有 store 数据，不引入 Mem0 / Zep / Weaviate / Kafka / LangGraph。
+- iOS `DreamJourneyBackendClient` 新增 `EchoContextPacket` 和 `buildEchoContextPacket(...)`。
+- Echo 在每个 final 用户语音回合开始时请求 context packet，并只输出 `[CFLite]` trace 日志，不改变现有回复生成、数字人播放、复刻声音 PCM-drive 逻辑。
+- release regression 新增 `context-packet-v0-check.swift`，防止 `/context/build` 客户端和 Echo trace 被误删。
+
+当前可观测字段包括：
+
+- `traceId`
+- archive available/included 数量
+- KB fact 数量
+- `voiceProfileId`
+- `cloneReady`
+- `digitalHumanSessionReady`
+- `digitalHumanProviderMode`
+- `crossScopeArchiveIncluded`
+- `fallbacks`
+- `latencyMs`
+
+这一步是 CFL v2 的前置状态：先证明结构化上下文和 trace 能稳定工作，再决定是否拆成独立 CFL 服务或引入检索/排序/压缩组件。
+
 1. 先做真机数字人 + 复刻音色完整回归。
    - 重点验证 Echo 中实际使用复刻音色。
    - 验证腾讯数字人口型同步和打断恢复。
