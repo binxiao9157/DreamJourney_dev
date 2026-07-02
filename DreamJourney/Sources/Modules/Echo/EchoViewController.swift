@@ -1277,6 +1277,14 @@ final class EchoViewController: UIViewController {
         )
     }
 
+    private func makeEchoQAEvidenceBundle(
+        snapshot: EchoRuntimeDiagnosticsSnapshot?,
+        source: String
+    ) -> EchoQAEvidenceBundle {
+        let package = makeEchoTraceEvidencePackage(snapshot: snapshot, source: source)
+        return EchoQAEvidenceBundle(evidencePackage: package)
+    }
+
     private func renderEchoRuntimeDiagnosticsPanel(snapshot: EchoRuntimeDiagnosticsSnapshot) {
         guard shouldShowEchoRuntimeDiagnosticsPanel else {
             return
@@ -1310,7 +1318,7 @@ final class EchoViewController: UIViewController {
 
     @objc private func exportEchoTraceEvidencePackageTapped() {
         do {
-            let exportURL = try exportEchoTraceEvidencePackageForQA(source: "qaPanelManualExport")
+            let exportURL = try exportEchoQAEvidenceBundleForQA(source: "qaPanelManualExport")
             echoTraceEvidenceExportButton.setTitle("已生成证据包", for: .normal)
             presentEchoTraceEvidencePackageShareSheet(fileURL: exportURL)
         } catch {
@@ -1329,6 +1337,14 @@ final class EchoViewController: UIViewController {
     private func exportEchoTraceEvidencePackageForQA(source: String) throws -> URL {
         recordEchoRuntimeDiagnosticsSnapshot(reason: source)
         return try EchoTraceEvidencePackageStore.shared.exportRecentPackages()
+    }
+
+    @discardableResult
+    private func exportEchoQAEvidenceBundleForQA(source: String) throws -> URL {
+        let snapshot = recordEchoRuntimeDiagnosticsSnapshot(reason: source)
+        let bundle = makeEchoQAEvidenceBundle(snapshot: snapshot, source: source)
+        EchoQAEvidenceBundleStore.shared.record(bundle)
+        return try EchoQAEvidenceBundleStore.shared.exportLatestBundle()
     }
 
     private func presentEchoTraceEvidencePackageShareSheet(fileURL: URL) {
@@ -3426,6 +3442,124 @@ extension EchoViewController {
             completion([
                 "completed": false,
                 "failureReason": "panelExportFailed",
+                "error": error.localizedDescription,
+            ])
+        }
+    }
+
+    func runUIQAEchoQAEvidenceBundleExportSmoke(completion: @escaping ([String: Any]) -> Void) {
+        EchoTraceStore.shared.clear()
+        EchoRuntimeDiagnosticsStore.shared.clear()
+        EchoTraceEvidencePackageStore.shared.clear()
+        EchoQAEvidenceBundleStore.shared.clear()
+
+        let record = EchoTraceRecord(
+            turnID: "uiqa-qa-bundle-turn",
+            traceId: "ctx_uiqa_qa_bundle",
+            userId: "uiqa_echo_qa_bundle_user",
+            archiveItemIDs: ["archive_qa_bundle"],
+            archiveItemsIncluded: 1,
+            archiveItemsAvailable: 2,
+            contextVersion: "echo-context-v2",
+            selectedContextRefs: [
+                "archive_qa_bundle",
+                "fact_qa_bundle",
+                "persona:personal:uiqa_echo_qa_bundle_user",
+                "care:latest"
+            ],
+            selectedContextRefsBySource: [
+                "archive": ["archive_qa_bundle"],
+                "kbFact": ["fact_qa_bundle"],
+                "persona": ["persona:personal:uiqa_echo_qa_bundle_user"],
+                "care": ["care:latest"]
+            ],
+            filteredContextReasons: [
+                "archive_filtered:analysis_failed_empty_context",
+                "timeLetter_filtered:not_open_for_recipient"
+            ],
+            selectedContextCount: 4,
+            filteredContextCount: 2,
+            rankingTraceCount: 6,
+            selectedContextSourceCounts: [
+                "archive": 1,
+                "kbFact": 1,
+                "persona": 1,
+                "care": 1
+            ],
+            kbFactCount: 4,
+            voiceProfileId: "S_uiqa_qa_bundle",
+            voiceCloneReady: true,
+            voiceOutputMode: "tencentAudioDrive",
+            digitalHumanSessionReady: true,
+            digitalHumanProviderMode: "tencent-cloud-digital-human",
+            privacyScopeLabel: "personal:uiqa_echo_qa_bundle_user",
+            canUseFamilyData: false,
+            crossScopeArchiveIncluded: false,
+            fallbacks: ["voice_clone_provider_retry"],
+            latencyMs: 24
+        )
+        lastEchoTraceRecord = record
+        EchoTraceStore.shared.record(record)
+        lastDigitalHumanSessionEvidenceSummary = .unavailable(reason: "uiqaBundleSessionSummary")
+        lastVoiceCloneProviderLogId = "uiqa-bundle-provider-log"
+        lastVoiceCloneProviderRequestId = "uiqa-bundle-provider-request"
+        lastVoiceCloneProviderMode = "volcengineVoiceCloneV3"
+        lastVoiceSynthesisEvidenceSummary = .failed(
+            voiceProfileId: "S_uiqa_qa_bundle",
+            outputMode: "tencentAudioDrive",
+            providerLogId: "uiqa-bundle-provider-log",
+            providerRequestId: "uiqa-bundle-provider-request",
+            reason: "uiqaBundleSynthesisSummary",
+            detail: "UIQA bundle stores provider metadata only"
+        )
+
+        do {
+            let exportURL = try exportEchoQAEvidenceBundleForQA(source: "uiqaQAEvidenceBundleExport")
+            let data = try Data(contentsOf: exportURL)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let bundle = try decoder.decode(EchoQAEvidenceBundle.self, from: data)
+            let serialized = String(data: data, encoding: .utf8) ?? ""
+            completion([
+                "completed": bundle.schemaVersion == 2
+                    && bundle.evidencePackage.schemaVersion == 1
+                    && bundle.turnID == "uiqa-qa-bundle-turn"
+                    && bundle.contextClues.contextVersion == "echo-context-v2"
+                    && bundle.contextClues.archiveRefs == ["archive_qa_bundle"]
+                    && bundle.contextClues.kbFactRefs == ["fact_qa_bundle"]
+                    && bundle.contextClues.personaRefs == ["persona:personal:uiqa_echo_qa_bundle_user"]
+                    && bundle.contextClues.careRefs == ["care:latest"]
+                    && bundle.contextClues.filteredContextReasons.count == 2
+                    && bundle.contextClues.rankingTraceCount == 6
+                    && bundle.digitalHumanSession?.status == "unavailable"
+                    && bundle.voiceSynthesis?.providerLogId == "uiqa-bundle-provider-log"
+                    && bundle.voiceSynthesis?.outputMode == "tencentAudioDrive"
+                    && bundle.fallbackSummary.contextFallbacks == ["voice_clone_provider_retry"]
+                    && bundle.fallbackSummary.inferredFallbacks.contains("voiceSynthesis:uiqaBundleSynthesisSummary")
+                    && !serialized.localizedCaseInsensitiveContains("audioBase64")
+                    && !serialized.localizedCaseInsensitiveContains("appkey")
+                    && !serialized.localizedCaseInsensitiveContains("accesstoken"),
+                "schemaVersion": bundle.schemaVersion,
+                "latestTurnID": bundle.turnID,
+                "latestTraceId": bundle.traceId,
+                "latestVoiceOutputMode": bundle.voiceSynthesis?.outputMode ?? "missing",
+                "latestProviderLogId": bundle.voiceSynthesis?.providerLogId ?? "missing",
+                "latestDigitalHumanStatus": bundle.digitalHumanSession?.status ?? "missing",
+                "latestFallbacks": bundle.fallbackSummary.contextFallbacks.joined(separator: ","),
+                "latestInferredFallbacks": bundle.fallbackSummary.inferredFallbacks.joined(separator: ","),
+                "latestClueSummaryArchiveRefs": bundle.contextClues.archiveRefs.joined(separator: ","),
+                "latestClueSummaryKbFactRefs": bundle.contextClues.kbFactRefs.joined(separator: ","),
+                "latestClueSummaryPersonaRefs": bundle.contextClues.personaRefs.joined(separator: ","),
+                "latestClueSummaryCareRefs": bundle.contextClues.careRefs.joined(separator: ","),
+                "latestFilteredReasons": bundle.contextClues.filteredContextReasons.joined(separator: ","),
+                "latestRankingTraceCount": bundle.contextClues.rankingTraceCount,
+                "exportPath": exportURL.path,
+                "fileExists": FileManager.default.fileExists(atPath: exportURL.path),
+            ])
+        } catch {
+            completion([
+                "completed": false,
+                "failureReason": "qaEvidenceBundleExportFailed",
                 "error": error.localizedDescription,
             ])
         }

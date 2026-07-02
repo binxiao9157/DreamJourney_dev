@@ -1,0 +1,139 @@
+import Foundation
+
+let root = URL(fileURLWithPath: CommandLine.arguments.dropFirst().first ?? FileManager.default.currentDirectoryPath)
+
+func read(_ relativePath: String) -> String {
+    let fileURL = root.appendingPathComponent(relativePath)
+    guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else {
+        fatalError("Unable to read \(fileURL.path)")
+    }
+    return content
+}
+
+func readIfPresent(_ relativePath: String) -> String {
+    let fileURL = root.appendingPathComponent(relativePath)
+    return (try? String(contentsOf: fileURL, encoding: .utf8)) ?? ""
+}
+
+func require(_ condition: Bool, _ message: String) {
+    guard condition else {
+        fputs("Echo QA evidence bundle guard failed: \(message)\n", stderr)
+        exit(1)
+    }
+}
+
+let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
+let echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
+let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
+let releaseQA = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
+let uiqaSmoke = readIfPresent("Scripts/QA/prd-stitch-ui/run-echo-qa-evidence-bundle-export-smoke.sh")
+let statusDoc = readIfPresent("docs/superpowers/status/2026-07-02-echo-qa-evidence-bundle-v2.md")
+
+for required in [
+    "struct EchoQAEvidenceBundle",
+    "struct EchoQAFallbackSummary",
+    "final class EchoQAEvidenceBundleStore",
+    "func exportLatestBundle(",
+    "echo-qa-evidence-bundle.json",
+    "schemaVersion = 2",
+] {
+    require(backendClient.contains(required), "backend client should define QA bundle support: \(required)")
+}
+
+for field in [
+    "bundleId",
+    "evidencePackage",
+    "contextClues",
+    "digitalHumanSession",
+    "voiceSynthesis",
+    "fallbackSummary",
+    "runtimeDiagnostics",
+    "redactionPolicy",
+] {
+    require(backendClient.contains("let \(field)"), "EchoQAEvidenceBundle should include \(field)")
+}
+
+for forbidden in [
+    "audioBase64",
+    "appkey",
+    "accesstoken",
+] {
+    let qaBundleSection = backendClient.components(separatedBy: "struct EchoQAEvidenceBundle").dropFirst().first ?? ""
+    require(!qaBundleSection.contains("let \(forbidden)"), "QA bundle must not store raw secret/audio field \(forbidden)")
+}
+
+for required in [
+    "makeEchoQAEvidenceBundle(",
+    "exportEchoQAEvidenceBundleForQA(source:",
+    "EchoQAEvidenceBundleStore.shared.record(bundle)",
+    "EchoQAEvidenceBundleStore.shared.exportLatestBundle",
+    "runUIQAEchoQAEvidenceBundleExportSmoke",
+    "latestFallbacks",
+    "latestVoiceOutputMode",
+    "latestDigitalHumanStatus",
+    "latestClueSummaryArchiveRefs",
+] {
+    require(echo.contains(required), "Echo should build/export QA evidence bundle: \(required)")
+}
+
+for required in [
+    "DJRunEchoQAEvidenceBundleExportSmoke",
+    "runEchoQAEvidenceBundleExportSmoke",
+    "writeEchoQAEvidenceBundleExportSmokeResult",
+    "echo-qa-evidence-bundle-export-smoke-result.json",
+] {
+    require(appDelegate.contains(required), "AppDelegate should expose QA evidence bundle smoke: \(required)")
+}
+
+require(
+    releaseRegression.contains("echo-qa-evidence-bundle-check.swift"),
+    "release regression should run QA evidence bundle guard"
+)
+
+require(
+    releaseRegression.contains("RUN_ECHO_QA_EVIDENCE_BUNDLE_EXPORT_SMOKE") &&
+        releaseRegression.contains("run-echo-qa-evidence-bundle-export-smoke.sh"),
+    "release regression should expose optional QA evidence bundle UIQA smoke"
+)
+
+require(
+    releaseQA.contains("echo-qa-evidence-bundle-check.swift"),
+    "release QA package should include QA evidence bundle guard"
+)
+
+require(
+    releaseQA.contains("run-echo-qa-evidence-bundle-export-smoke.sh"),
+    "release QA package should include QA evidence bundle UIQA smoke"
+)
+
+for required in [
+    "run-installable-simulator-uiqa.sh",
+    "DJRunEchoQAEvidenceBundleExportSmoke",
+    "echo-qa-evidence-bundle-export-smoke-result.json",
+    "echo-qa-evidence-bundle.json",
+    "schemaVersion",
+    "contextClues",
+    "digitalHumanSession",
+    "voiceSynthesis",
+    "fallbackSummary",
+    "audioBase64",
+    "appkey",
+    "accesstoken",
+] {
+    require(uiqaSmoke.contains(required), "QA evidence bundle UIQA smoke should verify \(required)")
+}
+
+for required in [
+    "Echo QA Evidence Bundle v2",
+    "Context V2 clue summary",
+    "digital human session",
+    "voice synthesis",
+    "fallback summary",
+    "不导出 raw audio",
+    "不导出 appkey/accesstoken",
+] {
+    require(statusDoc.contains(required), "status doc should document \(required)")
+}
+
+print("Echo QA evidence bundle guard passed")

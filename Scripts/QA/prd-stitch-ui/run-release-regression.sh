@@ -22,6 +22,7 @@ RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE="${RUN_ECHO_DELAYED_REPLY_NOTIFICATION
 RUN_ECHO_TRACE_EXPORT_UIQA_SMOKE="${RUN_ECHO_TRACE_EXPORT_UIQA_SMOKE:-0}"
 RUN_ECHO_TRACE_EVIDENCE_PACKAGE_EXPORT_SMOKE="${RUN_ECHO_TRACE_EVIDENCE_PACKAGE_EXPORT_SMOKE:-0}"
 RUN_ECHO_TRACE_EVIDENCE_PACKAGE_PANEL_EXPORT_SMOKE="${RUN_ECHO_TRACE_EVIDENCE_PACKAGE_PANEL_EXPORT_SMOKE:-0}"
+RUN_ECHO_QA_EVIDENCE_BUNDLE_EXPORT_SMOKE="${RUN_ECHO_QA_EVIDENCE_BUNDLE_EXPORT_SMOKE:-0}"
 RUN_ECHO_READINESS_REPORT="${RUN_ECHO_READINESS_REPORT:-0}"
 RUN_ECHO_CONTEXT_BUILDER_V2_SMOKE="${RUN_ECHO_CONTEXT_BUILDER_V2_SMOKE:-0}"
 RUN_BACKEND_ENV_SMOKE="${RUN_BACKEND_ENV_SMOKE:-0}"
@@ -104,6 +105,7 @@ Run ID: \`$RUN_ID\`
 - Echo trace export UIQA smoke: \`$RUN_ECHO_TRACE_EXPORT_UIQA_SMOKE\`
 - Echo trace evidence package export UIQA smoke: \`$RUN_ECHO_TRACE_EVIDENCE_PACKAGE_EXPORT_SMOKE\`
 - Echo trace evidence package panel export UIQA smoke: \`$RUN_ECHO_TRACE_EVIDENCE_PACKAGE_PANEL_EXPORT_SMOKE\`
+- Echo QA evidence bundle export UIQA smoke: \`$RUN_ECHO_QA_EVIDENCE_BUNDLE_EXPORT_SMOKE\`
 - Echo readiness report: \`$RUN_ECHO_READINESS_REPORT\`
 - Echo Context Builder V2 backend smoke: \`$RUN_ECHO_CONTEXT_BUILDER_V2_SMOKE\`
 - Backend environment smoke: \`$RUN_BACKEND_ENV_SMOKE\`
@@ -143,6 +145,7 @@ Run ID: \`$RUN_ID\`
 - Optional Echo trace export UIQA smoke when \`RUN_ECHO_TRACE_EXPORT_UIQA_SMOKE=1\`; this verifies installable local simulator bundle id, trace retention, and JSON export.
 - Optional Echo trace evidence package export UIQA smoke when \`RUN_ECHO_TRACE_EVIDENCE_PACKAGE_EXPORT_SMOKE=1\`; this verifies iOS runtime diagnostics, \`/context/build\`, \`/digital-human/sessions\`, and \`/voice/synthesis\` summaries export as one redacted QA package.
 - Optional Echo trace evidence package panel export UIQA smoke when \`RUN_ECHO_TRACE_EVIDENCE_PACKAGE_PANEL_EXPORT_SMOKE=1\`; this verifies the QA diagnostics panel has a visible export button and can generate the same redacted evidence package.
+- Optional Echo QA evidence bundle export UIQA smoke when \`RUN_ECHO_QA_EVIDENCE_BUNDLE_EXPORT_SMOKE=1\`; this verifies Context V2 clue summary, digital-human session, voice synthesis, fallback summary, runtime diagnostics, and trace package export as one redacted QA-only v2 bundle.
 - Optional Echo readiness report when \`RUN_ECHO_READINESS_REPORT=1\`; this produces a JSON/Markdown diagnostic package for backend, digital-human session, voice synthesis, APNs boundary, KBLite, context packet, and runtime diagnostics readiness.
 - Optional Echo Context Builder V2 backend smoke when \`RUN_ECHO_CONTEXT_BUILDER_V2_SMOKE=1\`; this verifies \`contextVersion=echo-context-v2\`, selected/filtered/ranking trace, \`kbFact\`/\`persona\`/\`care\` source signals, \`selectedContextSourceCounts\`, failed-analysis filtering, unopened time-letter recipient filtering, pending family viewer blocking, and care snapshot summarization against the backend test client.
 - Optional backend environment smoke when \`RUN_BACKEND_ENV_SMOKE=1\` and backend URL/token are configured.
@@ -187,6 +190,7 @@ append_report_footer() {
 - Echo trace export UIQA smoke: \`echo-trace-export-smoke/$RUN_ID/\`
 - Echo trace evidence package export UIQA smoke: \`echo-trace-evidence-package-export-smoke/$RUN_ID/\`
 - Echo trace evidence package panel export UIQA smoke: \`echo-trace-evidence-package-panel-export-smoke/$RUN_ID/\`
+- Echo QA evidence bundle export UIQA smoke: \`echo-qa-evidence-bundle-export-smoke/$RUN_ID/\`
 - Echo Context Builder V2 backend smoke: \`echo-context-builder-v2-smoke/$RUN_ID/\`
 - Backend env smoke: \`backend-env-smoke/$RUN_ID/\`
 - Backend archive image-analysis smoke: \`backend-archive-image-analysis-smoke/$RUN_ID/\`
@@ -326,6 +330,7 @@ for guard in \
   echo-trace-export-check.swift \
   echo-runtime-diagnostics-check.swift \
   echo-trace-evidence-package-check.swift \
+  echo-qa-evidence-bundle-check.swift \
   echo-readiness-report-check.swift \
   installable-simulator-uiqa-bundle-guard-check.swift \
   tencent-digital-human-provider-stability-check.swift \
@@ -420,6 +425,16 @@ if [[ "$RUN_ECHO_TRACE_EVIDENCE_PACKAGE_PANEL_EXPORT_SMOKE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/echo-trace-evidence-package-panel-export-smoke/$RUN_ID"
   echo "Skipped by RUN_ECHO_TRACE_EVIDENCE_PACKAGE_PANEL_EXPORT_SMOKE=0" > "$OUTPUT_DIR/echo-trace-evidence-package-panel-export-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_ECHO_QA_EVIDENCE_BUNDLE_EXPORT_SMOKE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/echo-qa-evidence-bundle-export-smoke" \
+  DERIVED_DATA_PATH="$OUTPUT_DIR/DerivedDataEchoQAEvidenceBundleExportSmoke" \
+  "$SCRIPT_DIR/run-echo-qa-evidence-bundle-export-smoke.sh"
+else
+  mkdir -p "$OUTPUT_DIR/echo-qa-evidence-bundle-export-smoke/$RUN_ID"
+  echo "Skipped by RUN_ECHO_QA_EVIDENCE_BUNDLE_EXPORT_SMOKE=0" > "$OUTPUT_DIR/echo-qa-evidence-bundle-export-smoke/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_ECHO_READINESS_REPORT" == "1" ]]; then

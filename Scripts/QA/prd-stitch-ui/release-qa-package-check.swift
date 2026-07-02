@@ -146,6 +146,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-07-02-context-packet-v2-trace.md",
     "docs/superpowers/status/2026-07-02-echo-context-v2-clue-panel.md",
     "docs/superpowers/status/2026-07-02-echo-readiness-report-v2.md",
+    "docs/superpowers/status/2026-07-02-echo-qa-evidence-bundle-v2.md",
 ]
 
 for doc in requiredDocs {
@@ -195,6 +196,8 @@ assertContains(releaseRegression, "RUN_ECHO_TRACE_EVIDENCE_PACKAGE_EXPORT_SMOKE"
 assertContains(releaseRegression, "run-echo-trace-evidence-package-export-smoke.sh", "release regression should call Echo trace evidence package export smoke")
 assertContains(releaseRegression, "RUN_ECHO_TRACE_EVIDENCE_PACKAGE_PANEL_EXPORT_SMOKE", "release regression should expose optional Echo trace evidence package panel export smoke")
 assertContains(releaseRegression, "run-echo-trace-evidence-package-panel-export-smoke.sh", "release regression should call Echo trace evidence package panel export smoke")
+assertContains(releaseRegression, "RUN_ECHO_QA_EVIDENCE_BUNDLE_EXPORT_SMOKE", "release regression should expose optional Echo QA evidence bundle export smoke")
+assertContains(releaseRegression, "run-echo-qa-evidence-bundle-export-smoke.sh", "release regression should call Echo QA evidence bundle export smoke")
 assertContains(releaseRegression, "RUN_ECHO_READINESS_REPORT", "release regression should expose optional Echo readiness report")
 assertContains(releaseRegression, "run-echo-readiness-report.sh", "release regression should call Echo readiness report")
 assertContains(releaseRegression, "RUN_DIGITAL_HUMAN_TTS_VISEME_GATE", "release regression should expose optional digital-human TTS/viseme gate")
@@ -259,6 +262,7 @@ for handoffGuard in [
     "echo-trace-export-check.swift",
     "echo-runtime-diagnostics-check.swift",
     "echo-trace-evidence-package-check.swift",
+    "echo-qa-evidence-bundle-check.swift",
     "echo-readiness-report-check.swift",
     "installable-simulator-uiqa-bundle-guard-check.swift",
     "tencent-digital-human-provider-stability-check.swift",
@@ -327,6 +331,7 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/run-echo-trace-export-uiqa-smoke.sh",
     "Scripts/QA/prd-stitch-ui/run-echo-trace-evidence-package-export-smoke.sh",
     "Scripts/QA/prd-stitch-ui/run-echo-trace-evidence-package-panel-export-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/run-echo-qa-evidence-bundle-export-smoke.sh",
     "Scripts/QA/prd-stitch-ui/echo-delayed-reply-dispatch-contract-check.swift",
     "Scripts/QA/prd-stitch-ui/run-release-regression.sh",
     "Scripts/QA/prd-stitch-ui/run-backend-env-smoke.sh",
@@ -363,6 +368,7 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/context-packet-v2-trace-check.swift",
     "Scripts/QA/prd-stitch-ui/echo-context-v2-clue-panel-check.swift",
     "Scripts/QA/prd-stitch-ui/echo-trace-evidence-package-check.swift",
+    "Scripts/QA/prd-stitch-ui/echo-qa-evidence-bundle-check.swift",
     "Scripts/QA/prd-stitch-ui/echo-readiness-report.py",
     "Scripts/QA/prd-stitch-ui/run-echo-readiness-report.sh",
     "Scripts/QA/prd-stitch-ui/echo-readiness-report-check.swift",

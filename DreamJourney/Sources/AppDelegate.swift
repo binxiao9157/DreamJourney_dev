@@ -201,6 +201,11 @@ private extension AppDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.runEchoTraceEvidencePackagePanelExportSmoke()
             }
+        } else if arguments.contains("DJRunEchoQAEvidenceBundleExportSmoke") {
+            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.runEchoQAEvidenceBundleExportSmoke()
+            }
         } else if arguments.contains("DJRunProfileCareBackendFailureRetrySmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
@@ -2779,6 +2784,52 @@ private extension AppDelegate {
         }
     }
 
+    func runEchoQAEvidenceBundleExportSmoke(retryCount: Int = 0) {
+        guard let tabBarController = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController as? WarmTabBarController else {
+            guard retryCount < 20 else {
+                print("[UI_QA] EchoQAEvidenceBundleExportSmoke failed reason=missingRootTab")
+                writeEchoQAEvidenceBundleExportSmokeResult([
+                    "completed": false,
+                    "failureReason": "missingRootTab"
+                ])
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                self?.runEchoQAEvidenceBundleExportSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+
+        guard let viewControllers = tabBarController.viewControllers,
+              viewControllers.count > 1,
+              let echoNavigationController = viewControllers[1] as? UINavigationController,
+              let echoViewController = echoNavigationController.viewControllers.first as? EchoViewController else {
+            print("[UI_QA] EchoQAEvidenceBundleExportSmoke failed reason=missingEcho")
+            writeEchoQAEvidenceBundleExportSmokeResult([
+                "completed": false,
+                "failureReason": "missingEcho"
+            ])
+            return
+        }
+
+        tabBarController.selectedIndex = 1
+        echoViewController.runUIQAEchoQAEvidenceBundleExportSmoke { [weak self] payload in
+            var result = payload
+            result["selectedTabIndex"] = tabBarController.selectedIndex
+            self?.writeEchoQAEvidenceBundleExportSmokeResult(result)
+            print(
+                "[UI_QA] EchoQAEvidenceBundleExportSmoke completed " +
+                "completed=\(result["completed"] as? Bool == true) " +
+                "schemaVersion=\(result["schemaVersion"] as? Int ?? 0) " +
+                "latestTurnID=\(result["latestTurnID"] as? String ?? "missing")"
+            )
+        }
+    }
+
     func runBackendEnvSmoke(retryCount: Int = 0) {
         guard let tabBarController = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
@@ -3468,6 +3519,21 @@ private extension AppDelegate {
             try data.write(to: resultURL, options: [.atomic])
         } catch {
             print("[UI_QA] EchoTraceEvidencePackagePanelExportSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    func writeEchoQAEvidenceBundleExportSmokeResult(_ result: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
+              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("[UI_QA] EchoQAEvidenceBundleExportSmoke failed reason=resultEncoding")
+            return
+        }
+
+        let resultURL = documentsURL.appendingPathComponent("echo-qa-evidence-bundle-export-smoke-result.json")
+        do {
+            try data.write(to: resultURL, options: [.atomic])
+        } catch {
+            print("[UI_QA] EchoQAEvidenceBundleExportSmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
     }
 

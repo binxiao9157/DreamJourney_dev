@@ -1831,6 +1831,156 @@ final class EchoTraceEvidencePackageStore {
     }
 }
 
+struct EchoQAFallbackSummary: Codable {
+    let contextFallbacks: [String]
+    let runtimeFallbackReason: String?
+    let digitalHumanFallbackReason: String?
+    let digitalHumanFailureReason: String?
+    let voiceSynthesisFailureReason: String?
+    let inferredFallbacks: [String]
+
+    init(
+        traceRecord: EchoTraceRecord?,
+        runtimeDiagnostics: EchoRuntimeDiagnosticsSnapshot?,
+        digitalHumanSession: EchoDigitalHumanSessionEvidenceSummary?,
+        voiceSynthesis: EchoVoiceSynthesisEvidenceSummary?
+    ) {
+        self.contextFallbacks = traceRecord?.fallbacks ?? []
+        self.runtimeFallbackReason = runtimeDiagnostics?.fallbackReason
+        self.digitalHumanFallbackReason = digitalHumanSession?.fallbackReason
+        self.digitalHumanFailureReason = digitalHumanSession?.failureReason
+        self.voiceSynthesisFailureReason = voiceSynthesis?.failureReason
+
+        var inferred = Set<String>()
+        for fallback in contextFallbacks where !fallback.isEmpty {
+            inferred.insert(fallback)
+        }
+        if let runtimeFallbackReason, !runtimeFallbackReason.isEmpty {
+            inferred.insert("runtime:\(runtimeFallbackReason)")
+        }
+        if let digitalHumanFallbackReason, !digitalHumanFallbackReason.isEmpty {
+            inferred.insert("digitalHumanFallback:\(digitalHumanFallbackReason)")
+        }
+        if let digitalHumanFailureReason, !digitalHumanFailureReason.isEmpty {
+            inferred.insert("digitalHumanFailure:\(digitalHumanFailureReason)")
+        }
+        if let voiceSynthesisFailureReason, !voiceSynthesisFailureReason.isEmpty {
+            inferred.insert("voiceSynthesis:\(voiceSynthesisFailureReason)")
+        }
+        self.inferredFallbacks = inferred.sorted()
+    }
+}
+
+struct EchoQAEvidenceBundle: Codable {
+    let schemaVersion: Int
+    let bundleId: String
+    let generatedAt: Date
+    let source: String
+    let turnID: String
+    let traceId: String
+    let evidencePackage: EchoTraceEvidencePackage
+    let traceRecord: EchoTraceRecord?
+    let runtimeDiagnostics: EchoRuntimeDiagnosticsSnapshot?
+    let contextClues: EchoContextV2ClueSummary
+    let digitalHumanSession: EchoDigitalHumanSessionEvidenceSummary?
+    let voiceSynthesis: EchoVoiceSynthesisEvidenceSummary?
+    let fallbackSummary: EchoQAFallbackSummary
+    let redactionPolicy: [String]
+
+    init(evidencePackage: EchoTraceEvidencePackage) {
+        self.schemaVersion = 2
+        let uniqueSuffix = String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(24))
+        self.bundleId = "echo_qa_bundle_" + uniqueSuffix
+        self.generatedAt = Date()
+        self.source = evidencePackage.source
+        self.turnID = evidencePackage.turnID
+        self.traceId = evidencePackage.traceId
+        self.evidencePackage = evidencePackage
+        self.traceRecord = evidencePackage.traceRecord
+        self.runtimeDiagnostics = evidencePackage.runtimeDiagnostics
+        self.contextClues = evidencePackage.contextBuild.clueSummary
+        self.digitalHumanSession = evidencePackage.digitalHumanSession
+        self.voiceSynthesis = evidencePackage.voiceSynthesis
+        self.fallbackSummary = EchoQAFallbackSummary(
+            traceRecord: evidencePackage.traceRecord,
+            runtimeDiagnostics: evidencePackage.runtimeDiagnostics,
+            digitalHumanSession: evidencePackage.digitalHumanSession,
+            voiceSynthesis: evidencePackage.voiceSynthesis
+        )
+        self.redactionPolicy = evidencePackage.redactionPolicy + [
+            "QA bundle v2 汇总 Context V2 线索、数字人 session、声音合成和 fallback 摘要",
+            "不导出 raw audio、PCM、音频 base64 或供应商密钥",
+            "手动分享仅在 QA 面板中开放"
+        ]
+    }
+}
+
+final class EchoQAEvidenceBundleStore {
+    static let shared = EchoQAEvidenceBundleStore()
+
+    private let userDefaults: UserDefaults
+    private let storageKey = "DreamJourney.EchoQAEvidenceBundleStore.bundles.v2"
+    private let maximumBundleCount = 20
+
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+    }
+
+    func record(_ bundle: EchoQAEvidenceBundle) {
+        var bundles = recentBundles()
+        bundles.append(bundle)
+        if bundles.count > maximumBundleCount {
+            bundles = Array(bundles.suffix(maximumBundleCount))
+        }
+        save(bundles)
+    }
+
+    func recentBundles() -> [EchoQAEvidenceBundle] {
+        guard let data = userDefaults.data(forKey: storageKey) else {
+            return []
+        }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return (try? decoder.decode([EchoQAEvidenceBundle].self, from: data)) ?? []
+    }
+
+    func clear() {
+        userDefaults.removeObject(forKey: storageKey)
+    }
+
+    func exportLatestBundle(
+        to directory: URL = FileManager.default.temporaryDirectory,
+        fileName: String = "echo-qa-evidence-bundle.json"
+    ) throws -> URL {
+        guard let latestBundle = recentBundles().last else {
+            throw NSError(
+                domain: "DreamJourney.EchoQAEvidenceBundleStore",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "没有可导出的 Echo QA 证据包"]
+            )
+        }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent(fileName)
+        let data = try Self.makeJSONEncoder().encode(latestBundle)
+        try data.write(to: url, options: [.atomic])
+        return url
+    }
+
+    private func save(_ bundles: [EchoQAEvidenceBundle]) {
+        guard let data = try? Self.makeJSONEncoder().encode(bundles) else {
+            return
+        }
+        userDefaults.set(data, forKey: storageKey)
+    }
+
+    private static func makeJSONEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }
+}
+
 final class DreamJourneyBackendClient {
     static let shared = DreamJourneyBackendClient()
 
