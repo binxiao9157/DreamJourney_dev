@@ -105,6 +105,24 @@ def list_mailbox_letters(user_id: str) -> List[Dict[str, Any]]:
     return [item for item in items if isinstance(item, dict)]
 
 
+def get_time_letter_detail(
+    owner_user_id: str,
+    item_id: str,
+    viewer_user_id: str,
+    now: str,
+    expected: int = 200,
+) -> Dict[str, Any]:
+    query = urllib.parse.urlencode({"viewerUserId": viewer_user_id, "now": now})
+    return request_json(
+        "GET",
+        (
+            f"/archive/time-letters/{urllib.parse.quote(owner_user_id)}"
+            f"/{urllib.parse.quote(item_id)}/detail?{query}"
+        ),
+        expected=expected,
+    )
+
+
 def matching_items(item_id: str) -> List[Dict[str, Any]]:
     return [item for item in list_archive_items() if item.get("id") == item_id]
 
@@ -345,6 +363,39 @@ def main() -> Dict[str, Any]:
     assert_equal(len(recipient_future_mailbox), 0, "future timeLetter should not be visible in recipient mailbox")
     if "这段正文" in json.dumps(recipient_mailbox, ensure_ascii=False):
         raise AssertionError("recipient mailbox should not include full timeLetter body")
+    recipient_detail = get_time_letter_detail(
+        USER_ID,
+        due_item_id,
+        recipient_user_id,
+        "2026-07-02T09:00:00Z",
+    )
+    owner_detail = get_time_letter_detail(
+        USER_ID,
+        due_item_id,
+        USER_ID,
+        "2026-07-02T09:00:00Z",
+    )
+    future_detail = get_time_letter_detail(
+        USER_ID,
+        future_item_id,
+        recipient_user_id,
+        "2026-07-02T09:00:00Z",
+        expected=403,
+    )
+    non_recipient_detail = get_time_letter_detail(
+        USER_ID,
+        due_item_id,
+        "not_a_recipient",
+        "2026-07-02T09:00:00Z",
+        expected=403,
+    )
+    assert_equal(recipient_detail.get("status"), "available", "recipient detail status")
+    assert_equal((recipient_detail.get("access") or {}).get("role"), "recipient", "recipient detail role")
+    assert_equal((recipient_detail.get("item") or {}).get("note"), "这段正文不应该进入提醒列表。", "recipient detail body")
+    assert_equal((recipient_detail.get("item") or {}).get("contentRedacted"), False, "recipient detail contentRedacted")
+    assert_equal((owner_detail.get("access") or {}).get("role"), "owner", "owner detail role")
+    assert_equal(future_detail.get("detail"), "timeLetter is not open yet", "future detail blocked")
+    assert_equal(non_recipient_detail.get("detail"), "viewer is not a recipient", "non-recipient detail blocked")
 
     return {
         "completed": True,
@@ -368,6 +419,10 @@ def main() -> Dict[str, Any]:
         "listedFutureAfterDispatch": dispatch_future,
         "ownerMailbox": owner_mailbox,
         "recipientMailbox": recipient_mailbox,
+        "recipientDetail": recipient_detail,
+        "ownerDetail": owner_detail,
+        "futureDetail": future_detail,
+        "nonRecipientDetail": non_recipient_detail,
         "recipientFutureMailboxCount": len(recipient_future_mailbox),
         "recipientUserId": recipient_user_id,
     }

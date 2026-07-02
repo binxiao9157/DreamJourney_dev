@@ -137,6 +137,10 @@ listed_after_dispatch = result.get("listedAfterDispatch") or {}
 listed_future_after_dispatch = result.get("listedFutureAfterDispatch") or {}
 owner_mailbox = result.get("ownerMailbox") or []
 recipient_mailbox = result.get("recipientMailbox") or []
+recipient_detail = result.get("recipientDetail") or {}
+owner_detail = result.get("ownerDetail") or {}
+future_detail = result.get("futureDetail") or {}
+non_recipient_detail = result.get("nonRecipientDetail") or {}
 
 report = f"""# Backend Time Letter Lifecycle Smoke
 
@@ -180,6 +184,10 @@ Status: passed
 - Recipient mailbox reminder count: `{len(recipient_mailbox)}`
 - Recipient future mailbox count: `{result.get("recipientFutureMailboxCount")}`
 - Recipient user ID: `{result.get("recipientUserId")}`
+- Recipient detail status/role: `{recipient_detail.get("status")}` / `{(recipient_detail.get("access") or {}).get("role")}`
+- Owner detail role: `{(owner_detail.get("access") or {}).get("role")}`
+- Future detail blocked: `{future_detail.get("detail")}`
+- Non-recipient detail blocked: `{non_recipient_detail.get("detail")}`
 
 ## Evidence
 
