@@ -1094,6 +1094,9 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         if item.isTimeLetterDraft {
             return "草稿未封存"
         }
+        if item.isTimeLetterDelivered {
+            return "已提醒本人和收件人"
+        }
         return item.isTimeLetterDue ? "已到打开时间" : "等待未来打开"
     }
 

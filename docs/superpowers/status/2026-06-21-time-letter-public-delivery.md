@@ -11,7 +11,7 @@
 - 收件人：可选择本人和家庭亲友中的一位或多位，保存为 `recipients`。
 - 封存规则：封存后不可删除、不可修改。
 - 提醒规则：到达打开时间后，生成本地通知和应用内提醒入口。
-- 后端合同：通过 `/archive/items` 持久化 `openAt`、`recipients`、`sealedAt`、`deliveryStatus`。
+- 后端合同：通过 `/archive/items` 持久化 `openAt`、`recipients`、`sealedAt`、`deliveryStatus`；通过 `/archive/time-letters/dispatch-due` 扫描到期信件并写入 `/mailbox/letters/{userId}` 应用内提醒。
 
 ## 当前实现
 
@@ -33,7 +33,9 @@
 - `MemoryArchiveRepository`：
   - 封存 timeLetter 本地禁止删除。
   - 封存后调度 `UNNotificationRequest`。
-  - 通过 `dueTimeLetters()` 输出应用内提醒数据源。
+  - 通过 `dueTimeLetters()` 输出尚未投递的本地到期提醒。
+  - 通过 `refreshTimeLetterMailboxReminders()` 触发后端 `dispatch-due`，再拉取 mailbox unread reminder。
+  - `timeLetterReminderCount()` 合并本地 due 与后端 mailbox，避免 delivered 信件重复提醒。
 - `MemoryArchiveViewController`：
   - 有到期信件时显示应用内提醒入口。
   - 点击提醒入口筛选到“时间信件”列表。
@@ -44,6 +46,28 @@
 - 后端：
   - `/archive/items` 接收并回传时间信件字段。
   - `DELETE /archive/items/{userId}/{itemId}` 对 sealed timeLetter 返回 409。
+  - `POST /archive/time-letters/dispatch-due` 幂等扫描 due sealed timeLetter，将 `deliveryStatus` / `deliveryExecutionState` 更新为 `delivered`。
+  - dispatch 只为本人和已接受的家庭收件人创建 `timeLetterReminder` mailbox 记录。
+  - 未到 `openAt` 的 timeLetter 不会写入收件人 mailbox。
+  - mailbox reminder 只包含元数据，`metadataOnly=true`、`contentRedacted=true`，不暴露信件正文。
+
+## 2026-07-02 服务端到期投递更新
+
+- 新增后端 due dispatch 合同：
+  - `POST /archive/time-letters/dispatch-due`
+  - 请求：`now`、`limit`
+  - 响应：`status=dispatched`、`itemCount`、`reminderCount`、`items`、`reminders`
+- 幂等策略：
+  - 只扫描 `deliveryStatus=scheduled` 的 sealed timeLetter。
+  - 已投递后状态变为 `delivered`，重复扫描 `itemCount=0`、`reminderCount=0`。
+- 应用内提醒策略：
+  - owner 收到 `recipientRole=owner` 的 mailbox reminder。
+  - accepted family recipient 收到 `recipientRole=recipient` 的 mailbox reminder。
+  - pending/failed/revoked family recipient 不创建提醒。
+- iOS 状态策略：
+  - `delivered` 优先于本地 `openAt <= now` 的 `ready` 推导。
+  - delivered timeLetter 不再重复进入本地 due notification/data source。
+  - Archive 页提醒入口以 `timeLetterReminderCount()` 合并本地 due 和 mailbox unread。
 
 ## 验证入口
 
@@ -56,14 +80,18 @@ RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE=1 \
 Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
+```bash
+RUN_TIME_LETTER_DISPATCH_REMINDER_SMOKE=1 \
+Scripts/QA/prd-stitch-ui/run-release-regression.sh
+```
+
 ## 部署状态
 
 - 本地后端单测已覆盖 sealed timeLetter 删除返回 409。
-- 2026-06-21 部署后端 smoke `20260621-time-letter-public-delivery-backend` 暴露服务器仍返回 200 删除 sealed timeLetter，说明线上尚未部署本轮后端删除保护。
-- 后端部署后需重跑：
+- 2026-07-02 新增 due dispatch / mailbox reminder 合同，后端部署后需重跑：
 
 ```bash
-RUN_ID=20260621-time-letter-public-delivery-backend \
+RUN_ID=20260702-time-letter-dispatch-mailbox \
 Scripts/QA/prd-stitch-ui/run-backend-time-letter-lifecycle-smoke.sh
 ```
 
@@ -71,4 +99,4 @@ Scripts/QA/prd-stitch-ui/run-backend-time-letter-lifecycle-smoke.sh
 
 - APNs/provider 级远程推送送达证据。
 - 真机通知权限、前后台、锁屏提醒实测截图和日志。
-- 收件人端跨账号提醒读取和消息中心聚合策略。
+- mailbox 已读/归档交互与消息中心聚合策略。

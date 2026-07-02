@@ -654,10 +654,18 @@ extension MemoryArchiveItem {
     }
 
     var timeLetterDeliveryStatus: String {
+        if let status = metadata[Self.timeLetterDeliveryStatusMetadataKey],
+           status == "delivered" {
+            return status
+        }
         if isTimeLetterDue {
             return "ready"
         }
         return metadata[Self.timeLetterDeliveryStatusMetadataKey] ?? (isTimeLetterDraft ? "draft" : "scheduled")
+    }
+
+    var isTimeLetterDelivered: Bool {
+        timeLetterDeliveryStatus == "delivered"
     }
 
     var isTimeLetterDue: Bool {

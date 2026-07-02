@@ -30,6 +30,7 @@ RUN_BACKEND_ENV_SMOKE="${RUN_BACKEND_ENV_SMOKE:-0}"
 RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE="${RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE:-0}"
 RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE="${RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE:-0}"
 RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE="${RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE:-0}"
+RUN_TIME_LETTER_DISPATCH_REMINDER_SMOKE="${RUN_TIME_LETTER_DISPATCH_REMINDER_SMOKE:-0}"
 RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE="${RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE:-0}"
 RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE="${RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE:-0}"
 RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE="${RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE:-0}"
@@ -114,6 +115,7 @@ Run ID: \`$RUN_ID\`
 - Backend archive image-analysis smoke: \`$RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE\`
 - Backend hidden media sync smoke: \`$RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE\`
 - Backend time-letter lifecycle smoke: \`$RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE\`
+- Time-letter dispatch reminder UIQA smoke: \`$RUN_TIME_LETTER_DISPATCH_REMINDER_SMOKE\`
 - Backend family/voice contract smoke: \`$RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE\`
 - Backend family/account lifecycle smoke: \`$RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE\`
 - Backend digital-human session smoke: \`$RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE\`
@@ -154,7 +156,8 @@ Run ID: \`$RUN_ID\`
 - Optional backend environment smoke when \`RUN_BACKEND_ENV_SMOKE=1\` and backend URL/token are configured.
 - Optional deployed backend archive image-analysis smoke when \`RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE=1\`.
 - Optional deployed backend hidden media sync smoke when \`RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE=1\`; this verifies mock audio/video/time-letter archive contracts without true-device media capture.
-- Optional deployed backend time-letter lifecycle smoke when \`RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE=1\`; this verifies draft edit, seal, upsert, and delete metadata contracts.
+- Optional deployed backend time-letter lifecycle smoke when \`RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE=1\`; this verifies draft edit, seal, upsert, delete, due dispatch, idempotency, and owner/recipient in-app reminder metadata contracts.
+- Optional time-letter dispatch reminder UIQA smoke when \`RUN_TIME_LETTER_DISPATCH_REMINDER_SMOKE=1\`; this verifies iOS treats delivered time letters as final state and counts backend mailbox unread reminders exactly once.
 - Optional deployed backend family/voice contract smoke when \`RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE=1\`; this verifies hidden family digital-human modes and voice profile lifecycle contracts.
 - Optional deployed backend family/account lifecycle smoke when \`RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE=1\`; this verifies phone invitation, blocked family removal, account soft delete, one-time restore, and no-export retention policy.
 - Optional deployed backend digital-human session smoke when \`RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE=1\`; this verifies \`/config/runtime.digitalHuman\` and \`/digital-human/sessions\` have switched to Tencent \`cloudRender\` with backend-issued appkey/accesstoken and asset/project identity.
@@ -504,6 +507,15 @@ if [[ "$RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/backend-time-letter-lifecycle-smoke/$RUN_ID"
   echo "Skipped by RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE=0" > "$OUTPUT_DIR/backend-time-letter-lifecycle-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_TIME_LETTER_DISPATCH_REMINDER_SMOKE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/time-letter-dispatch-reminder-smoke" \
+  "$SCRIPT_DIR/run-time-letter-dispatch-reminder-smoke.sh"
+else
+  mkdir -p "$OUTPUT_DIR/time-letter-dispatch-reminder-smoke/$RUN_ID"
+  echo "Skipped by RUN_TIME_LETTER_DISPATCH_REMINDER_SMOKE=0" > "$OUTPUT_DIR/time-letter-dispatch-reminder-smoke/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_ECHO_CONTEXT_BUILDER_V2_SMOKE" == "1" ]]; then

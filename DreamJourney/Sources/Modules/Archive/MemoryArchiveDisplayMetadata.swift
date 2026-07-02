@@ -342,6 +342,9 @@ extension MemoryArchiveItem {
         if isTimeLetterDraft {
             return "草稿"
         }
+        if isTimeLetterDelivered {
+            return "已提醒"
+        }
         if isTimeLetterDue {
             return "可打开"
         }
@@ -363,9 +366,6 @@ extension MemoryArchiveItem {
         guard kind == .timeLetter else { return nil }
         if isTimeLetterDraft {
             return "草稿未封存"
-        }
-        if isTimeLetterDue {
-            return "已到打开时间"
         }
         switch timeLetterDeliveryStatus {
         case "scheduled":

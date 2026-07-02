@@ -72,6 +72,15 @@ def assert_not_in(key: str, obj: Dict[str, Any], message: str) -> None:
         raise AssertionError(f"{message}: unexpected key {key!r} in {obj!r}")
 
 
+def stable_user_id(phone: str) -> str:
+    source = "".join(ch for ch in str(phone or "") if ch.isdigit()) or str(phone or "").strip()
+    value = 1_469_598_103_934_665_603
+    for byte in source.encode("utf-8"):
+        value ^= byte
+        value = (value * 1_099_511_628_211) & ((1 << 64) - 1)
+    return f"user_{value:016x}"
+
+
 def post_archive(payload: Dict[str, Any]) -> Dict[str, Any]:
     response = request_json("POST", "/archive/items", payload)
     item = response.get("item")
@@ -85,6 +94,14 @@ def list_archive_items() -> List[Dict[str, Any]]:
     items = response.get("items")
     if not isinstance(items, list):
         raise AssertionError("archive item list response missing items list")
+    return [item for item in items if isinstance(item, dict)]
+
+
+def list_mailbox_letters(user_id: str) -> List[Dict[str, Any]]:
+    response = request_json("GET", f"/mailbox/letters/{urllib.parse.quote(user_id)}")
+    items = response.get("items")
+    if not isinstance(items, list):
+        raise AssertionError("mailbox list response missing items list")
     return [item for item in items if isinstance(item, dict)]
 
 
@@ -205,6 +222,12 @@ def main() -> Dict[str, Any]:
     ]
     draft_item_id = f"time_letter_draft_delete_{MARKER}"
     sealed_item_id = f"time_letter_sealed_{MARKER}"
+    due_item_id = f"time_letter_due_dispatch_{MARKER}"
+    future_item_id = f"time_letter_future_dispatch_{MARKER}"
+    family_member_id = f"family_dispatch_{MARKER}"
+    phone_suffix = f"{sum((index + 1) * ord(ch) for index, ch in enumerate(MARKER)) % 100000000:08d}"
+    recipient_phone = f"+86139{phone_suffix}"
+    recipient_user_id = stable_user_id(recipient_phone)
 
     created = post_archive(payload_for(draft_item_id, "第一版草稿", "draft", now, open_at, recipients))
     edited = post_archive(payload_for(draft_item_id, "第二版草稿", "draft", now, open_at, recipients))
@@ -236,6 +259,93 @@ def main() -> Dict[str, Any]:
     assert_equal(sealed_delete_response.get("detail"), "sealed timeLetter cannot be deleted", "sealed delete detail")
     assert_equal(len(matching_items(sealed_item_id)), 1, "sealed timeLetter delete should be rejected")
 
+    request_json(
+        "POST",
+        "/family/invite",
+        {
+            "userId": USER_ID,
+            "id": family_member_id,
+            "name": "林静文",
+            "relation": "女儿",
+            "phone": recipient_phone,
+        },
+    )
+    request_json(
+        "POST",
+        f"/family/members/{urllib.parse.quote(USER_ID)}/{urllib.parse.quote(family_member_id)}/accept",
+        {"phone": recipient_phone},
+    )
+    dispatch_recipients = [
+        {"id": "self", "name": "我", "type": "self"},
+        {"id": family_member_id, "name": "林静文", "type": "family"},
+    ]
+    due = post_archive(
+        payload_for(
+            due_item_id,
+            "这段正文不应该进入提醒列表。",
+            "sealed",
+            "2026-07-02T07:00:00Z",
+            "2026-07-02T08:00:00Z",
+            dispatch_recipients,
+            "2026-07-02T07:30:00Z",
+        )
+    )
+    future = post_archive(
+        payload_for(
+            future_item_id,
+            "未到期内容不应对收件人可见。",
+            "sealed",
+            "2026-07-02T07:00:00Z",
+            "2999-01-01T00:00:00Z",
+            [{"id": family_member_id, "name": "林静文", "type": "family"}],
+            "2026-07-02T07:30:00Z",
+        )
+    )
+    dispatch_due = request_json(
+        "POST",
+        "/archive/time-letters/dispatch-due",
+        {"now": "2026-07-02T09:00:00Z", "limit": 10},
+    )
+    dispatch_due_repeat = request_json(
+        "POST",
+        "/archive/time-letters/dispatch-due",
+        {"now": "2026-07-02T09:00:00Z", "limit": 10},
+    )
+    assert_equal(dispatch_due.get("status"), "dispatched", "dispatch-due status")
+    assert_equal(dispatch_due.get("itemCount"), 1, "dispatch-due item count")
+    assert_equal(dispatch_due.get("reminderCount"), 2, "dispatch-due reminder count")
+    assert_equal(dispatch_due_repeat.get("itemCount"), 0, "dispatch-due repeat item count")
+    assert_equal(dispatch_due_repeat.get("reminderCount"), 0, "dispatch-due repeat reminder count")
+
+    dispatched_due = matching_items(due_item_id)[0]
+    dispatch_future = matching_items(future_item_id)[0]
+    assert_equal(dispatched_due.get("deliveryStatus"), "delivered", "delivered item status")
+    assert_equal((dispatched_due.get("metadata") or {}).get("deliveryStatus"), "delivered", "delivered metadata status")
+    assert_equal((dispatched_due.get("metadata") or {}).get("deliveryExecutionState"), "delivered", "delivered execution state")
+    assert_equal((dispatched_due.get("metadata") or {}).get("deliveredAt"), "2026-07-02T09:00:00Z", "delivered timestamp")
+    assert_equal(dispatch_future.get("deliveryStatus"), "scheduled", "future item status")
+
+    owner_mailbox = [
+        item for item in list_mailbox_letters(USER_ID)
+        if item.get("sourceArchiveItemId") == due_item_id
+    ]
+    recipient_mailbox = [
+        item for item in list_mailbox_letters(recipient_user_id)
+        if item.get("sourceArchiveItemId") == due_item_id
+    ]
+    recipient_future_mailbox = [
+        item for item in list_mailbox_letters(recipient_user_id)
+        if item.get("sourceArchiveItemId") == future_item_id
+    ]
+    assert_equal([item.get("id") for item in owner_mailbox], [f"time-letter-{due_item_id}-self"], "owner mailbox")
+    assert_equal([item.get("id") for item in recipient_mailbox], [f"time-letter-{due_item_id}-{family_member_id}"], "recipient mailbox")
+    assert_equal(recipient_mailbox[0].get("metadataOnly"), True, "recipient mailbox metadataOnly")
+    assert_equal(recipient_mailbox[0].get("contentRedacted"), True, "recipient mailbox contentRedacted")
+    assert_equal(recipient_mailbox[0].get("recipientRole"), "recipient", "recipient mailbox role")
+    assert_equal(len(recipient_future_mailbox), 0, "future timeLetter should not be visible in recipient mailbox")
+    if "这段正文" in json.dumps(recipient_mailbox, ensure_ascii=False):
+        raise AssertionError("recipient mailbox should not include full timeLetter body")
+
     return {
         "completed": True,
         "health": health,
@@ -250,6 +360,16 @@ def main() -> Dict[str, Any]:
         "listedAfterSeal": listed,
         "sealedDeleteResponse": sealed_delete_response,
         "listedAfterSealedDeleteCount": len(matching_items(sealed_item_id)),
+        "dispatchDue": dispatch_due,
+        "dispatchDueRepeat": dispatch_due_repeat,
+        "dueDispatchItem": due,
+        "futureDispatchItem": future,
+        "listedAfterDispatch": dispatched_due,
+        "listedFutureAfterDispatch": dispatch_future,
+        "ownerMailbox": owner_mailbox,
+        "recipientMailbox": recipient_mailbox,
+        "recipientFutureMailboxCount": len(recipient_future_mailbox),
+        "recipientUserId": recipient_user_id,
     }
 
 

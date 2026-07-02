@@ -63,6 +63,39 @@ struct MemoryArchiveContextSnapshot {
     #endif
 }
 
+struct TimeLetterMailboxReminder: Codable, Equatable {
+    let id: String
+    let sourceArchiveItemId: String
+    let title: String
+    let status: String
+    let deliveredAt: String
+    let recipientRole: String
+
+    init?(_ json: [String: Any]) {
+        let kind = (json["kind"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sourceArchiveItemId = (json["sourceArchiveItemId"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard kind == "timeLetterReminder", !sourceArchiveItemId.isEmpty else {
+            return nil
+        }
+        self.id = (json["id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? "time-letter-reminder-\(sourceArchiveItemId)"
+        self.sourceArchiveItemId = sourceArchiveItemId
+        self.title = (json["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? "时间信件已到打开时间"
+        self.status = (json["status"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? "unread"
+        self.deliveredAt = (json["deliveredAt"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? ""
+        self.recipientRole = (json["recipientRole"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? "recipient"
+    }
+
+    var isUnread: Bool {
+        status != "read"
+    }
+}
+
 private struct ArchiveVisibilityContext {
     let ownerId: String
     let personaScope: String
@@ -73,6 +106,7 @@ final class MemoryArchiveRepository {
     static let shared = MemoryArchiveRepository()
 
     private let baseKey = "dj.memoryArchive.items"
+    private let mailboxBaseKey = "dj.memoryArchive.timeLetterMailbox"
     private let isoFormatter = ISO8601DateFormatter()
     private static let personalPersonaScope = "personal"
     private static let familyPersonaScope = "family"
@@ -215,12 +249,61 @@ final class MemoryArchiveRepository {
         allItems()
             .filter { item in
                 guard item.isSealedTimeLetter,
+                      item.timeLetterDeliveryStatus != "delivered",
                       let openAt = item.timeLetterOpenAt else {
                     return false
                 }
                 return openAt <= now
             }
             .sorted { ($0.timeLetterOpenAt ?? $0.createdAt) > ($1.timeLetterOpenAt ?? $1.createdAt) }
+    }
+
+    func timeLetterMailboxReminders() -> [TimeLetterMailboxReminder] {
+        guard let data = UserDefaults.standard.data(forKey: mailboxStorageKey),
+              let decoded = try? JSONDecoder().decode([TimeLetterMailboxReminder].self, from: data) else {
+            return []
+        }
+        return decoded
+    }
+
+    func timeLetterReminderCount(now: Date = Date()) -> Int {
+        var sourceIds = Set(dueTimeLetters(now: now).map(\.id))
+        timeLetterMailboxReminders()
+            .filter(\.isUnread)
+            .forEach { sourceIds.insert($0.sourceArchiveItemId) }
+        return sourceIds.count
+    }
+
+    func refreshTimeLetterMailboxReminders(
+        completion: ((Result<[TimeLetterMailboxReminder], Error>) -> Void)? = nil
+    ) {
+        guard DreamJourneyBackendClient.shared.isTimeLetterDispatchConfigured else {
+            completion?(.failure(ArchiveRepositoryError.backendNotConfigured))
+            return
+        }
+
+        let fetchMailbox: () -> Void = { [weak self] in
+            guard let self else { return }
+            DreamJourneyBackendClient.shared.listMailboxLetters(userId: currentUserId) { [weak self] result in
+                guard let self else { return }
+                switch result {
+                case .success(let object):
+                    let reminders = Self.timeLetterMailboxReminders(from: object)
+                    saveTimeLetterMailboxReminders(reminders)
+                    completion?(.success(reminders))
+                case .failure(let error):
+                    print("[Archive] timeLetter mailbox fetch failed: \(error.localizedDescription)")
+                    completion?(.failure(error))
+                }
+            }
+        }
+
+        DreamJourneyBackendClient.shared.dispatchDueTimeLetters(limit: 25) { result in
+            if case .failure(let error) = result {
+                print("[Archive] timeLetter dispatch-due failed: \(error.localizedDescription)")
+            }
+            fetchMailbox()
+        }
     }
 
     func contextSnapshot(limit: Int = 6) -> MemoryArchiveContextSnapshot {
@@ -286,10 +369,20 @@ final class MemoryArchiveRepository {
         "\(baseKey).\(currentArchiveOwnerId)"
     }
 
+    private var mailboxStorageKey: String {
+        "\(mailboxBaseKey).\(currentUserId)"
+    }
+
     private func save(_ items: [MemoryArchiveItem]) {
         let sortedItems = items.sorted { $0.createdAt > $1.createdAt }
         if let data = try? JSONEncoder().encode(sortedItems) {
             UserDefaults.standard.set(data, forKey: storageKey)
+        }
+    }
+
+    private func saveTimeLetterMailboxReminders(_ reminders: [TimeLetterMailboxReminder]) {
+        if let data = try? JSONEncoder().encode(reminders) {
+            UserDefaults.standard.set(data, forKey: mailboxStorageKey)
         }
     }
 
@@ -327,7 +420,8 @@ final class MemoryArchiveRepository {
     }
 
     private func scheduleTimeLetterReminderIfNeeded(_ item: MemoryArchiveItem) {
-        guard item.isSealedTimeLetter else { return }
+        guard item.isSealedTimeLetter,
+              item.timeLetterDeliveryStatus != "delivered" else { return }
         TimeLetterReminderScheduler.shared.scheduleIfNeeded(item)
     }
 
@@ -378,6 +472,17 @@ final class MemoryArchiveRepository {
             }
         }
 
+        return []
+    }
+
+    private static func timeLetterMailboxReminders(from object: [String: Any]) -> [TimeLetterMailboxReminder] {
+        if let items = object["items"] as? [[String: Any]] {
+            return items.compactMap(TimeLetterMailboxReminder.init)
+        }
+        if let data = object["data"] as? [String: Any],
+           let items = data["items"] as? [[String: Any]] {
+            return items.compactMap(TimeLetterMailboxReminder.init)
+        }
         return []
     }
 

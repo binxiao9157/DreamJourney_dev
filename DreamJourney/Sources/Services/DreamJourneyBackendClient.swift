@@ -2073,6 +2073,10 @@ final class DreamJourneyBackendClient {
         hasExplicitBaseURL
     }
 
+    var isTimeLetterDispatchConfigured: Bool {
+        hasExplicitBaseURL
+    }
+
     private init() {
         let configured = Bundle.main.object(forInfoDictionaryKey: "DreamJourneyBackendBaseURL") as? String
         let raw = configured?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2507,6 +2511,22 @@ final class DreamJourneyBackendClient {
 
     func listArchiveItems(userId: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
         requestJSON(path: "/archive/items/\(pathComponent(userId))", method: .get, payload: nil, completion: completion)
+    }
+
+    func dispatchDueTimeLetters(
+        nowISO: String? = nil,
+        limit: Int = 25,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        var payload: [String: Any] = ["limit": limit]
+        if let nowISO, !nowISO.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["now"] = nowISO
+        }
+        requestJSON(path: "/archive/time-letters/dispatch-due", method: .post, payload: payload, completion: completion)
+    }
+
+    func listMailboxLetters(userId: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
+        requestJSON(path: "/mailbox/letters/\(pathComponent(userId))", method: .get, payload: nil, completion: completion)
     }
 
     func syncKnowledge(userId: String, graph: [String: Any], completion: @escaping (Result<[String: Any], Error>) -> Void) {

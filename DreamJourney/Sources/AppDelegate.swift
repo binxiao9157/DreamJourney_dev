@@ -289,6 +289,12 @@ private extension AppDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.runArchiveMediaEchoContextSmoke()
             }
+        } else if arguments.contains("DJRunTimeLetterDispatchReminderSmoke") {
+            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+            FeatureFlagService.shared.resetToDefaults()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.runTimeLetterDispatchReminderSmoke()
+            }
         } else if arguments.contains("DJShowEchoListeningStatePreview") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
@@ -2330,6 +2336,70 @@ private extension AppDelegate {
         }
     }
 
+    func runTimeLetterDispatchReminderSmoke() {
+        let userId = UserManager.shared.currentUser?.id ?? "user_001"
+        UserDefaults.standard.removeObject(forKey: "dj.memoryArchive.items.\(userId)")
+        UserDefaults.standard.removeObject(forKey: "dj.memoryArchive.timeLetterMailbox.\(userId)")
+
+        var deliveredLetter = MemoryArchiveItemFactory.makeTimeLetter(
+            note: "这封信已由后端投递，不应再被本地 due 计数重复计算。",
+            openAt: Date().addingTimeInterval(-3600),
+            recipients: [
+                TimeLetterRecipientSelection(id: "self", name: "我"),
+                TimeLetterRecipientSelection(id: "family-uiqa", name: "林静文"),
+            ]
+        )
+        deliveredLetter.metadata[MemoryArchiveItem.timeLetterDeliveryStatusMetadataKey] = "delivered"
+        deliveredLetter.metadata[MemoryArchiveItem.timeLetterDeliveryExecutionStateMetadataKey] = "delivered"
+        deliveredLetter.metadata[MemoryArchiveItem.timeLetterDeliveryScheduleStateMetadataKey] = "dispatched"
+        deliveredLetter.metadata[MemoryArchiveItem.timeLetterDeliveryProviderStateMetadataKey] = "local_notification_and_in_app"
+        deliveredLetter.metadata["deliveredAt"] = ISO8601DateFormatter().string(from: Date())
+
+        MemoryArchiveRepository.shared.add(deliveredLetter, syncToBackend: false)
+
+        let reminder = TimeLetterMailboxReminder([
+            "id": "time-letter-\(deliveredLetter.id)-self",
+            "kind": "timeLetterReminder",
+            "sourceArchiveItemId": deliveredLetter.id,
+            "title": "时间信件已到打开时间",
+            "status": "unread",
+            "deliveredAt": deliveredLetter.metadata["deliveredAt"] ?? "",
+            "recipientRole": "owner",
+            "metadataOnly": true,
+            "contentRedacted": true,
+        ])
+        if let reminder,
+           let data = try? JSONEncoder().encode([reminder]) {
+            UserDefaults.standard.set(data, forKey: "dj.memoryArchive.timeLetterMailbox.\(userId)")
+        }
+
+        let dueLetters = MemoryArchiveRepository.shared.dueTimeLetters()
+        let mailboxReminders = MemoryArchiveRepository.shared.timeLetterMailboxReminders()
+        let reminderCount = MemoryArchiveRepository.shared.timeLetterReminderCount()
+        let restoredDelivered = MemoryArchiveRepository.shared.allItems().first { $0.id == deliveredLetter.id }
+        let completed = reminder != nil
+            && restoredDelivered?.timeLetterDeliveryStatus == "delivered"
+            && restoredDelivered?.isTimeLetterDelivered == true
+            && dueLetters.contains(where: { $0.id == deliveredLetter.id }) == false
+            && mailboxReminders.map(\.sourceArchiveItemId) == [deliveredLetter.id]
+            && reminderCount == 1
+
+        writeTimeLetterDispatchReminderSmokeResult([
+            "completed": completed,
+            "userId": userId,
+            "itemId": deliveredLetter.id,
+            "deliveryStatus": restoredDelivered?.timeLetterDeliveryStatus ?? "missing",
+            "dueLetterIds": dueLetters.map(\.id),
+            "mailboxReminderIds": mailboxReminders.map(\.id),
+            "mailboxSourceArchiveItemIds": mailboxReminders.map(\.sourceArchiveItemId),
+            "reminderCount": reminderCount,
+        ])
+        print(
+            "[UI_QA] TimeLetterDispatchReminderSmoke completed " +
+            "completed=\(completed) reminderCount=\(reminderCount)"
+        )
+    }
+
     func runArchiveFailedAnalysisRetrySmoke(retryCount: Int = 0) {
         guard let tabBarController = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
@@ -3009,6 +3079,21 @@ private extension AppDelegate {
             try data.write(to: resultURL, options: [.atomic])
         } catch {
             print("[UI_QA] ArchiveMediaEchoContextSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    func writeTimeLetterDispatchReminderSmokeResult(_ result: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
+              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("[UI_QA] TimeLetterDispatchReminderSmoke failed reason=resultEncoding")
+            return
+        }
+
+        let resultURL = documentsURL.appendingPathComponent("time-letter-dispatch-reminder-smoke-result.json")
+        do {
+            try data.write(to: resultURL, options: [.atomic])
+        } catch {
+            print("[UI_QA] TimeLetterDispatchReminderSmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
     }
 

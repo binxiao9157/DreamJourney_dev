@@ -146,6 +146,7 @@ final class MemoryArchiveViewController: UIViewController {
     private let analysisPrivacyDisclaimerLabel = PaddingLabel(horizontalInset: 12, verticalInset: 8)
     private let timeLetterReminderButton = UIButton(type: .system)
     private var isRefreshingFromBackend = false
+    private var isRefreshingTimeLetterMailbox = false
     private var activeKindFilter: ArchiveKindFilter?
 
     private var creationOptions: [MemoryArchiveCreationOption] {
@@ -258,6 +259,7 @@ final class MemoryArchiveViewController: UIViewController {
         refreshContent()
         retryPendingPublicArchiveSyncIfNeeded()
         refreshRemoteArchiveIfNeeded()
+        refreshTimeLetterMailboxRemindersIfNeeded()
     }
 
     override func viewDidLayoutSubviews() {
@@ -364,6 +366,7 @@ final class MemoryArchiveViewController: UIViewController {
         refreshContent()
         retryPendingPublicArchiveSyncIfNeeded()
         refreshRemoteArchiveIfNeeded()
+        refreshTimeLetterMailboxRemindersIfNeeded()
     }
 
     private func refreshContent() {
@@ -441,6 +444,22 @@ final class MemoryArchiveViewController: UIViewController {
             case .failure:
                 setArchiveRemoteSyncStatus(.fallback)
             }
+        }
+    }
+
+    private func refreshTimeLetterMailboxRemindersIfNeeded() {
+        guard isSelfAutobiographyMode,
+              isTimeLetterCreationEnabled,
+              DreamJourneyBackendClient.shared.isTimeLetterDispatchConfigured,
+              !isRefreshingTimeLetterMailbox else {
+            return
+        }
+
+        isRefreshingTimeLetterMailbox = true
+        repository.refreshTimeLetterMailboxReminders { [weak self] _ in
+            guard let self else { return }
+            isRefreshingTimeLetterMailbox = false
+            refreshContent()
         }
     }
 
@@ -536,15 +555,15 @@ final class MemoryArchiveViewController: UIViewController {
             return
         }
 
-        let dueLetters = repository.dueTimeLetters()
-        guard !dueLetters.isEmpty else {
+        let reminderCount = repository.timeLetterReminderCount()
+        guard reminderCount > 0 else {
             timeLetterReminderButton.setTitle(nil, for: .normal)
             timeLetterReminderButton.accessibilityLabel = nil
             timeLetterReminderButton.isHidden = true
             return
         }
 
-        let title = "\(dueLetters.count) 封时间信件已到打开时间 · 查看"
+        let title = "\(reminderCount) 封时间信件已到打开时间 · 查看"
         timeLetterReminderButton.setTitle(title, for: .normal)
         timeLetterReminderButton.accessibilityLabel = title
         timeLetterReminderButton.isHidden = false

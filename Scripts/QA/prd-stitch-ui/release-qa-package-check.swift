@@ -192,6 +192,8 @@ assertContains(releaseRegression, "RUN_P0_ARCHIVE_ECHO_REGRESSION", "release reg
 assertContains(releaseRegression, "RUN_P0_ARCHIVE_ECHO_REGRESSION forces RUN_SIMULATOR_SMOKE", "Archive -> Echo P0 gate should force the core simulator smoke")
 assertContains(releaseRegression, "RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE", "release regression should expose deployed archive image-analysis smoke")
 assertContains(releaseRegression, "RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE", "release regression should expose deployed time-letter lifecycle smoke")
+assertContains(releaseRegression, "RUN_TIME_LETTER_DISPATCH_REMINDER_SMOKE", "release regression should expose optional time-letter dispatch reminder smoke")
+assertContains(releaseRegression, "run-time-letter-dispatch-reminder-smoke.sh", "release regression should call time-letter dispatch reminder smoke")
 assertContains(releaseRegression, "RUN_ECHO_TRACE_EVIDENCE_PACKAGE_EXPORT_SMOKE", "release regression should expose optional Echo trace evidence package export smoke")
 assertContains(releaseRegression, "run-echo-trace-evidence-package-export-smoke.sh", "release regression should call Echo trace evidence package export smoke")
 assertContains(releaseRegression, "RUN_ECHO_TRACE_EVIDENCE_PACKAGE_PANEL_EXPORT_SMOKE", "release regression should expose optional Echo trace evidence package panel export smoke")
@@ -230,6 +232,7 @@ for handoffGuard in [
     "archive-hidden-media-timeletter-shell-check.swift",
     "time-letter-delivery-policy-shell-check.swift",
     "archive-time-letter-backend-lifecycle-check.swift",
+    "run-time-letter-dispatch-reminder-smoke.sh",
     "archive-video-hidden-readiness-check.swift",
     "archive-analysis-insights-contract-check.swift",
     "archive-media-echo-context-polish-check.swift",
@@ -393,6 +396,7 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/run-backend-hidden-media-sync-smoke.sh",
     "Scripts/QA/prd-stitch-ui/backend-time-letter-lifecycle-smoke.py",
     "Scripts/QA/prd-stitch-ui/run-backend-time-letter-lifecycle-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/run-time-letter-dispatch-reminder-smoke.sh",
     "Scripts/QA/prd-stitch-ui/archive-analysis-insights-contract-check.swift",
     "Scripts/QA/prd-stitch-ui/archive-analysis-backend-payload-contract-check.swift",
     "Scripts/QA/prd-stitch-ui/archive-context-snapshot-check.swift",

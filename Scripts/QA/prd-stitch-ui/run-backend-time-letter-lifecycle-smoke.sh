@@ -131,6 +131,12 @@ draft_delete_response = result.get("draftDeleteResponse") or {}
 sealed_delete_response = result.get("sealedDeleteResponse") or {}
 metadata = sealed.get("metadata") or {}
 health = result.get("health") or {}
+dispatch_due = result.get("dispatchDue") or {}
+dispatch_due_repeat = result.get("dispatchDueRepeat") or {}
+listed_after_dispatch = result.get("listedAfterDispatch") or {}
+listed_future_after_dispatch = result.get("listedFutureAfterDispatch") or {}
+owner_mailbox = result.get("ownerMailbox") or []
+recipient_mailbox = result.get("recipientMailbox") or []
 
 report = f"""# Backend Time Letter Lifecycle Smoke
 
@@ -165,6 +171,15 @@ Status: passed
 - Draft delete status: `{draft_delete_response.get("status")}`
 - Sealed delete detail: `{sealed_delete_response.get("detail")}`
 - Listed after sealed delete count: `{result.get("listedAfterSealedDeleteCount")}`
+- Dispatch-due status: `{dispatch_due.get("status")}`
+- Dispatch-due item/reminder count: `{dispatch_due.get("itemCount")}` / `{dispatch_due.get("reminderCount")}`
+- Dispatch-due repeat item/reminder count: `{dispatch_due_repeat.get("itemCount")}` / `{dispatch_due_repeat.get("reminderCount")}`
+- Delivered item status: `{listed_after_dispatch.get("deliveryStatus")}`
+- Future item status: `{listed_future_after_dispatch.get("deliveryStatus")}`
+- Owner mailbox reminder count: `{len(owner_mailbox)}`
+- Recipient mailbox reminder count: `{len(recipient_mailbox)}`
+- Recipient future mailbox count: `{result.get("recipientFutureMailboxCount")}`
+- Recipient user ID: `{result.get("recipientUserId")}`
 
 ## Evidence
 
