@@ -144,6 +144,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-29-true-device-tencent-backend-pcm-drive-poc.md",
     "docs/superpowers/status/2026-07-02-echo-trace-evidence-package.md",
     "docs/superpowers/status/2026-07-02-context-packet-v2-trace.md",
+    "docs/superpowers/status/2026-07-02-echo-context-v2-clue-panel.md",
 ]
 
 for doc in requiredDocs {
@@ -253,6 +254,7 @@ for handoffGuard in [
     "tencent-digital-human-voice-clone-route-check.swift",
     "tencent-voice-clone-echo-contract-check.swift",
     "context-packet-v1-check.swift",
+    "echo-context-v2-clue-panel-check.swift",
     "echo-trace-export-check.swift",
     "echo-runtime-diagnostics-check.swift",
     "echo-trace-evidence-package-check.swift",
@@ -358,6 +360,7 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/run-true-device-archive-audio-preflight.sh",
     "Scripts/QA/prd-stitch-ui/run-true-device-tencent-backend-pcm-drive-smoke.sh",
     "Scripts/QA/prd-stitch-ui/context-packet-v2-trace-check.swift",
+    "Scripts/QA/prd-stitch-ui/echo-context-v2-clue-panel-check.swift",
     "Scripts/QA/prd-stitch-ui/echo-trace-evidence-package-check.swift",
     "Scripts/QA/prd-stitch-ui/echo-readiness-report.py",
     "Scripts/QA/prd-stitch-ui/run-echo-readiness-report.sh",

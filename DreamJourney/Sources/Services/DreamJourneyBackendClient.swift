@@ -847,6 +847,7 @@ struct EchoContextPacket {
     let archiveItemsIncluded: Int
     let archiveItemIDs: [String]
     let selectedContextRefs: [String]
+    let selectedContextRefsBySource: [String: [String]]
     let filteredContextReasons: [String]
     let selectedContextCount: Int
     let filteredContextCount: Int
@@ -886,6 +887,7 @@ struct EchoContextPacket {
         let filteredContext = json["filteredContext"] as? [[String: Any]] ?? []
         let rankingTrace = json["rankingTrace"] as? [[String: Any]] ?? []
         self.selectedContextRefs = Self.contextRefArray(selectedContext)
+        self.selectedContextRefsBySource = Self.contextRefsBySource(selectedContext)
         self.filteredContextReasons = Self.filteredReasonArray(filteredContext)
         self.selectedContextCount = Self.intValue(trace?["selectedContextCount"]) ?? selectedContext.count
         self.filteredContextCount = Self.intValue(trace?["filteredContextCount"]) ?? filteredContext.count
@@ -956,6 +958,19 @@ struct EchoContextPacket {
         }
     }
 
+    private static func contextRefsBySource(_ entries: [[String: Any]]) -> [String: [String]] {
+        var result: [String: [String]] = [:]
+        for entry in entries {
+            let source = String(describing: entry["source"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let refId = String(describing: entry["refId"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !source.isEmpty, !refId.isEmpty else {
+                continue
+            }
+            result[source, default: []].append(refId)
+        }
+        return result
+    }
+
     private static func filteredReasonArray(_ entries: [[String: Any]]) -> [String] {
         entries.compactMap { entry in
             let refId = String(describing: entry["refId"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1023,6 +1038,7 @@ struct EchoTraceRecord: Codable {
     let archiveItemsIncluded: Int
     let archiveItemsAvailable: Int
     let selectedContextRefs: [String]
+    let selectedContextRefsBySource: [String: [String]]
     let filteredContextReasons: [String]
     let selectedContextCount: Int
     let filteredContextCount: Int
@@ -1050,6 +1066,7 @@ struct EchoTraceRecord: Codable {
         case archiveItemsIncluded
         case archiveItemsAvailable
         case selectedContextRefs
+        case selectedContextRefsBySource
         case filteredContextReasons
         case selectedContextCount
         case filteredContextCount
@@ -1078,6 +1095,7 @@ struct EchoTraceRecord: Codable {
             archiveItemsAvailable: packet.archiveItemsAvailable,
             contextVersion: packet.contextVersion,
             selectedContextRefs: packet.selectedContextRefs,
+            selectedContextRefsBySource: packet.selectedContextRefsBySource,
             filteredContextReasons: packet.filteredContextReasons,
             selectedContextCount: packet.selectedContextCount,
             filteredContextCount: packet.filteredContextCount,
@@ -1107,6 +1125,7 @@ struct EchoTraceRecord: Codable {
         archiveItemsAvailable: Int,
         contextVersion: String = "echo-context-v1",
         selectedContextRefs: [String] = [],
+        selectedContextRefsBySource: [String: [String]] = [:],
         filteredContextReasons: [String] = [],
         selectedContextCount: Int? = nil,
         filteredContextCount: Int? = nil,
@@ -1133,6 +1152,7 @@ struct EchoTraceRecord: Codable {
         self.archiveItemsIncluded = archiveItemsIncluded
         self.archiveItemsAvailable = archiveItemsAvailable
         self.selectedContextRefs = selectedContextRefs
+        self.selectedContextRefsBySource = selectedContextRefsBySource
         self.filteredContextReasons = filteredContextReasons
         self.selectedContextCount = selectedContextCount ?? selectedContextRefs.count
         self.filteredContextCount = filteredContextCount ?? filteredContextReasons.count
@@ -1162,6 +1182,7 @@ struct EchoTraceRecord: Codable {
         self.archiveItemsIncluded = try container.decodeIfPresent(Int.self, forKey: .archiveItemsIncluded) ?? self.archiveItemIDs.count
         self.archiveItemsAvailable = try container.decodeIfPresent(Int.self, forKey: .archiveItemsAvailable) ?? self.archiveItemsIncluded
         self.selectedContextRefs = try container.decodeIfPresent([String].self, forKey: .selectedContextRefs) ?? []
+        self.selectedContextRefsBySource = try container.decodeIfPresent([String: [String]].self, forKey: .selectedContextRefsBySource) ?? [:]
         self.filteredContextReasons = try container.decodeIfPresent([String].self, forKey: .filteredContextReasons) ?? []
         self.selectedContextCount = try container.decodeIfPresent(Int.self, forKey: .selectedContextCount) ?? self.selectedContextRefs.count
         self.filteredContextCount = try container.decodeIfPresent(Int.self, forKey: .filteredContextCount) ?? self.filteredContextReasons.count
@@ -1183,6 +1204,10 @@ struct EchoTraceRecord: Codable {
     var logLine: String {
         let archiveIDs = archiveItemIDs.joined(separator: ",")
         let selectedRefs = selectedContextRefs.joined(separator: ",")
+        let selectedRefsBySource = selectedContextRefsBySource
+            .sorted { $0.key < $1.key }
+            .map { "\($0.key):\($0.value.joined(separator: "|"))" }
+            .joined(separator: ",")
         let filteredReasons = filteredContextReasons.joined(separator: ",")
         let sourceCounts = selectedContextSourceCounts
             .sorted { $0.key < $1.key }
@@ -1197,6 +1222,7 @@ struct EchoTraceRecord: Codable {
         "archiveIncluded=\(archiveItemsIncluded)/\(archiveItemsAvailable) " +
         "archiveItemIDs=\(archiveIDs) " +
         "selectedContextRefs=\(selectedRefs) selectedContextCount=\(selectedContextCount) " +
+        "selectedContextRefsBySource=\(selectedRefsBySource) " +
         "selectedContextSourceCounts=\(sourceCounts) " +
         "filteredContextReasons=\(filteredReasons) filteredContextCount=\(filteredContextCount) " +
         "rankingTraceCount=\(rankingTraceCount) " +
@@ -1399,6 +1425,79 @@ final class EchoRuntimeDiagnosticsStore {
     }
 }
 
+struct EchoContextV2ClueSummary: Codable {
+    let contextVersion: String
+    let selectedContextRefs: [String]
+    let selectedContextRefsBySource: [String: [String]]
+    let archiveRefs: [String]
+    let kbFactRefs: [String]
+    let personaRefs: [String]
+    let careRefs: [String]
+    let filteredContextReasons: [String]
+    let rankingTraceCount: Int
+    let selectedContextSourceCounts: [String: Int]
+    let fallbacks: [String]
+    let latencyMs: Int
+
+    init(record: EchoTraceRecord?) {
+        self.contextVersion = record?.contextVersion ?? "missing"
+        self.selectedContextRefs = record?.selectedContextRefs ?? []
+        self.selectedContextRefsBySource = record?.selectedContextRefsBySource ?? [:]
+        self.archiveRefs = Self.sourceRefs(record, source: "archive", fallback: record?.archiveItemIDs ?? [])
+        self.kbFactRefs = Self.sourceRefs(record, source: "kbFact")
+        self.personaRefs = Self.sourceRefs(record, source: "persona")
+        self.careRefs = Self.sourceRefs(record, source: "care")
+        self.filteredContextReasons = record?.filteredContextReasons ?? []
+        self.rankingTraceCount = record?.rankingTraceCount ?? 0
+        self.selectedContextSourceCounts = record?.selectedContextSourceCounts ?? [:]
+        self.fallbacks = record?.fallbacks ?? []
+        self.latencyMs = record?.latencyMs ?? 0
+    }
+
+    static func sourceRefs(
+        _ record: EchoTraceRecord?,
+        source: String,
+        fallback: [String] = []
+    ) -> [String] {
+        let refs = record?.selectedContextRefsBySource[source] ?? []
+        return refs.isEmpty ? fallback : refs
+    }
+
+    func panelLines(prefix: String = "ctx") -> [String] {
+        [
+            "\(prefix) 使用线索",
+            "\(prefix) archive: \(Self.preview(archiveRefs))",
+            "\(prefix) kbFact: \(Self.preview(kbFactRefs))",
+            "\(prefix) persona: \(Self.preview(personaRefs))",
+            "\(prefix) care: \(Self.preview(careRefs))",
+            "\(prefix) filtered: \(Self.preview(filteredContextReasons))",
+            "\(prefix) ranking: \(rankingTraceCount)",
+            "\(prefix) sources: \(Self.previewSourceCounts(selectedContextSourceCounts))",
+            "\(prefix) fallbacks: \(Self.preview(fallbacks))",
+            "\(prefix) latencyMs: \(latencyMs)"
+        ]
+    }
+
+    private static func preview(_ values: [String], limit: Int = 3) -> String {
+        guard !values.isEmpty else {
+            return "none"
+        }
+        let prefix = values.prefix(limit).joined(separator: ",")
+        let overflow = values.count > limit ? "+\(values.count - limit)" : ""
+        return prefix + overflow
+    }
+
+    private static func previewSourceCounts(_ counts: [String: Int]) -> String {
+        guard !counts.isEmpty else {
+            return "none"
+        }
+        return counts
+            .sorted { $0.key < $1.key }
+            .map { "\($0.key):\($0.value)" }
+            .joined(separator: ",")
+    }
+}
+
 struct EchoContextBuildEvidenceSummary: Codable {
     let status: String
     let traceId: String
@@ -1413,6 +1512,7 @@ struct EchoContextBuildEvidenceSummary: Codable {
     let filteredContextCount: Int
     let rankingTraceCount: Int
     let selectedContextSourceCounts: [String: Int]
+    let clueSummary: EchoContextV2ClueSummary
     let kbFactCount: Int
     let voiceProfileId: String?
     let voiceOutputMode: String
@@ -1439,6 +1539,7 @@ struct EchoContextBuildEvidenceSummary: Codable {
         self.filteredContextCount = record?.filteredContextCount ?? 0
         self.rankingTraceCount = record?.rankingTraceCount ?? 0
         self.selectedContextSourceCounts = record?.selectedContextSourceCounts ?? [:]
+        self.clueSummary = EchoContextV2ClueSummary(record: record)
         self.kbFactCount = record?.kbFactCount ?? 0
         self.voiceProfileId = record?.voiceProfileId
         self.voiceOutputMode = record?.voiceOutputMode ?? "unknown"

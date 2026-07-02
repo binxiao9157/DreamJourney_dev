@@ -106,6 +106,13 @@ require(result.get("buttonVisible") is True, "QA evidence export button should b
 require(result.get("buttonTitle") == "导出证据包", "QA evidence export button title changed")
 require(result.get("latestTurnID") == "uiqa-panel-evidence-turn", "Panel export latest turn changed")
 require(result.get("latestProviderLogId") == "uiqa-panel-provider-log", "Panel export provider log changed")
+require(result.get("latestArchiveClues") == "archive_panel_evidence", "Panel export archive clues changed")
+require(result.get("latestKbFactClues") == "fact_panel_evidence", "Panel export kbFact clues changed")
+require(result.get("latestPersonaClues") == "persona:personal:uiqa_echo_panel_evidence_user", "Panel export persona clues changed")
+require(result.get("latestCareClues") == "care:latest", "Panel export care clues changed")
+require(result.get("latestContextVersion") == "echo-context-v2", "Panel export context version changed")
+require(result.get("latestFilteredReasons") == "archive_panel_filtered:analysis_failed_empty_context", "Panel export filtered reasons changed")
+require(result.get("latestRankingTraceCount") == 5, "Panel export ranking trace count changed")
 require(result.get("fileExists") is True, "Panel evidence export file should exist")
 export_path = result.get("exportPath")
 require(isinstance(export_path, str) and export_path.endswith("echo-trace-evidence-packages.json"), "Missing evidence package export path")
@@ -114,6 +121,20 @@ export_file = pathlib.Path(export_path)
 require(export_file.exists(), f"Exported evidence package file missing: {export_file}")
 packages = json.loads(export_file.read_text())
 require(packages[-1].get("turnID") == "uiqa-panel-evidence-turn", "Exported panel package latest turn changed")
+clue_summary = packages[-1].get("contextBuild", {}).get("clueSummary", {})
+require(clue_summary.get("archiveRefs") == ["archive_panel_evidence"], "Exported archive clue summary changed")
+require(clue_summary.get("kbFactRefs") == ["fact_panel_evidence"], "Exported kbFact clue summary changed")
+require(
+    clue_summary.get("personaRefs") == ["persona:personal:uiqa_echo_panel_evidence_user"],
+    "Exported persona clue summary changed",
+)
+require(clue_summary.get("careRefs") == ["care:latest"], "Exported care clue summary changed")
+require(clue_summary.get("contextVersion") == "echo-context-v2", "Exported context version changed")
+require(
+    clue_summary.get("filteredContextReasons") == ["archive_panel_filtered:analysis_failed_empty_context"],
+    "Exported filtered clue summary changed",
+)
+require(clue_summary.get("rankingTraceCount") == 5, "Exported ranking trace count changed")
 serialized = json.dumps(packages, ensure_ascii=False)
 require("audioBase64" not in serialized, "Evidence package must not export audioBase64")
 require("appkey" not in serialized.lower(), "Evidence package must not export appkey")

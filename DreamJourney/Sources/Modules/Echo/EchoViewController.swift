@@ -1281,12 +1281,13 @@ final class EchoViewController: UIViewController {
         guard shouldShowEchoRuntimeDiagnosticsPanel else {
             return
         }
+        let contextClues = EchoContextV2ClueSummary(record: lastEchoTraceRecord)
         let archiveIDs = snapshot.archiveItemIDs.isEmpty
             ? "none"
             : snapshot.archiveItemIDs.prefix(3).joined(separator: ",")
         let fallback = snapshot.fallbackReason?.isEmpty == false ? snapshot.fallbackReason! : "none"
         let voiceProfile = snapshot.voiceProfileId?.isEmpty == false ? snapshot.voiceProfileId! : "none"
-        echoRuntimeDiagnosticsPanelLabel.text = [
+        let baseLines = [
             "Echo QA clues",
             "turn: \(snapshot.turnID)",
             "档案: \(snapshot.archiveItemsIncluded)/\(snapshot.archiveItemsAvailable) [\(archiveIDs)]",
@@ -1299,7 +1300,9 @@ final class EchoViewController: UIViewController {
             "providerLogId: \(snapshot.providerLogId ?? "none")",
             "fallback: \(fallback)",
             "latencyMs: \(snapshot.contextLatencyMs)"
-        ].joined(separator: "\n")
+        ]
+        echoRuntimeDiagnosticsPanelLabel.text = (baseLines + contextClues.panelLines(prefix: "ctx"))
+            .joined(separator: "\n")
         echoRuntimeDiagnosticsPanelView.isHidden = false
         echoRuntimeDiagnosticsPanelView.alpha = 1
         echoRuntimeDiagnosticsPanelView.accessibilityLabel = echoRuntimeDiagnosticsPanelLabel.text
@@ -3330,6 +3333,29 @@ extension EchoViewController {
             archiveItemIDs: ["archive_panel_evidence"],
             archiveItemsIncluded: 1,
             archiveItemsAvailable: 1,
+            contextVersion: "echo-context-v2",
+            selectedContextRefs: [
+                "archive_panel_evidence",
+                "fact_panel_evidence",
+                "persona:personal:uiqa_echo_panel_evidence_user",
+                "care:latest"
+            ],
+            selectedContextRefsBySource: [
+                "archive": ["archive_panel_evidence"],
+                "kbFact": ["fact_panel_evidence"],
+                "persona": ["persona:personal:uiqa_echo_panel_evidence_user"],
+                "care": ["care:latest"]
+            ],
+            filteredContextReasons: ["archive_panel_filtered:analysis_failed_empty_context"],
+            selectedContextCount: 4,
+            filteredContextCount: 1,
+            rankingTraceCount: 5,
+            selectedContextSourceCounts: [
+                "archive": 1,
+                "kbFact": 1,
+                "persona": 1,
+                "care": 1
+            ],
             kbFactCount: 3,
             voiceProfileId: "S_uiqa_panel_trace_evidence",
             voiceCloneReady: true,
@@ -3339,7 +3365,7 @@ extension EchoViewController {
             privacyScopeLabel: "personal:uiqa_echo_panel_evidence_user",
             canUseFamilyData: false,
             crossScopeArchiveIncluded: false,
-            fallbacks: [],
+            fallbacks: ["voice_clone_not_ready"],
             latencyMs: 18
         )
         lastEchoTraceRecord = record
@@ -3365,11 +3391,19 @@ extension EchoViewController {
             let packages = try decoder.decode([EchoTraceEvidencePackage].self, from: data)
             let serialized = String(data: data, encoding: .utf8) ?? ""
             let latestPackage = packages.last
+            let clueSummary = latestPackage?.contextBuild.clueSummary
             completion([
                 "completed": echoTraceEvidenceExportButton.superview === echoRuntimeDiagnosticsPanelView
                     && echoTraceEvidenceExportButton.title(for: .normal) == "导出证据包"
                     && latestPackage?.turnID == "uiqa-panel-evidence-turn"
                     && latestPackage?.voiceSynthesis?.providerLogId == "uiqa-panel-provider-log"
+                    && clueSummary?.archiveRefs == ["archive_panel_evidence"]
+                    && clueSummary?.kbFactRefs == ["fact_panel_evidence"]
+                    && clueSummary?.personaRefs == ["persona:personal:uiqa_echo_panel_evidence_user"]
+                    && clueSummary?.careRefs == ["care:latest"]
+                    && clueSummary?.contextVersion == "echo-context-v2"
+                    && clueSummary?.filteredContextReasons == ["archive_panel_filtered:analysis_failed_empty_context"]
+                    && clueSummary?.rankingTraceCount == 5
                     && !serialized.localizedCaseInsensitiveContains("audioBase64")
                     && !serialized.localizedCaseInsensitiveContains("appkey")
                     && !serialized.localizedCaseInsensitiveContains("accesstoken"),
@@ -3378,6 +3412,13 @@ extension EchoViewController {
                 "packageCount": packages.count,
                 "latestTurnID": latestPackage?.turnID ?? "missing",
                 "latestProviderLogId": latestPackage?.voiceSynthesis?.providerLogId ?? "missing",
+                "latestArchiveClues": clueSummary?.archiveRefs.joined(separator: ",") ?? "missing",
+                "latestKbFactClues": clueSummary?.kbFactRefs.joined(separator: ",") ?? "missing",
+                "latestPersonaClues": clueSummary?.personaRefs.joined(separator: ",") ?? "missing",
+                "latestCareClues": clueSummary?.careRefs.joined(separator: ",") ?? "missing",
+                "latestContextVersion": clueSummary?.contextVersion ?? "missing",
+                "latestFilteredReasons": clueSummary?.filteredContextReasons.joined(separator: ",") ?? "missing",
+                "latestRankingTraceCount": clueSummary?.rankingTraceCount ?? -1,
                 "exportPath": exportURL.path,
                 "fileExists": FileManager.default.fileExists(atPath: exportURL.path),
             ])

@@ -322,6 +322,7 @@ for guard in \
   tencent-voice-clone-echo-contract-check.swift \
   context-packet-v1-check.swift \
   context-packet-v2-trace-check.swift \
+  echo-context-v2-clue-panel-check.swift \
   echo-trace-export-check.swift \
   echo-runtime-diagnostics-check.swift \
   echo-trace-evidence-package-check.swift \
