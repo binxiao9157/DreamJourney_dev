@@ -82,10 +82,17 @@ for required in [
 for required in [
     "EchoRoleVoiceProfileSelection",
     "case selfAssistantDefault",
+    "case personalOwner",
+    "case personalOwnerVoiceProfileMissing",
     "case familyMember",
     "case familyVoiceProfileMissing",
     "private func resolveEchoRoleVoiceProfileSelection",
+    "private func isCurrentUserPersonaContext",
     "DigitalHumanContextStore.shared.current",
+    "context.relation",
+    "\"本人\"",
+    "VoiceCloneService.shared.currentUsableSpeakerId",
+    "本人暂未启用复刻音色",
     "FamilyRepository.shared.get(by: context.ownerId)",
     "member.isVoiceProfileReadyForEcho",
     "member.normalizedVoiceProfileId",
@@ -124,13 +131,18 @@ for required in [
 let voiceClonePCMDriveBody = functionBody(named: "sendEchoReplyViaTencentVoiceClonePCMDrive", in: echo)
 require(voiceClonePCMDriveBody.contains("let voiceSelection = resolveEchoRoleVoiceProfileSelection()"), "PCM-drive should resolve voice profile from current Echo role")
 require(voiceClonePCMDriveBody.contains("let voiceProfileId = voiceSelection.voiceProfileId"), "PCM-drive should use selected role voiceProfileId")
-require(!voiceClonePCMDriveBody.contains("VoiceCloneService.shared.currentUsableSpeakerId"), "PCM-drive must not use the current user's voice clone for every role")
+require(!voiceClonePCMDriveBody.contains("VoiceCloneService.shared.currentUsableSpeakerId"), "PCM-drive should consume resolved role voice profile, not directly use the current user's voice clone for every role")
 
 let notEnabledBody = functionBody(named: "showVoiceCloneNotEnabledStatusIfNeeded", in: echo)
 require(notEnabledBody.contains("let voiceSelection = resolveEchoRoleVoiceProfileSelection()"), "voice status should resolve active role")
 require(notEnabledBody.contains("voiceSelection.shouldShowMissingStatus"), "AI assistant should not show missing cloned voice status")
 require(notEnabledBody.contains("voiceSelection.statusText"), "family missing voice should show role-specific status")
 require(!notEnabledBody.contains("VoiceCloneService.shared.currentUsableSpeakerId"), "missing voice status must not be based on current user's voice clone")
+
+let onErrorBody = functionBody(named: "onError", in: echo)
+require(onErrorBody.contains("sanitizedDialogEngineErrorMessage"), "Echo should sanitize low-level DialogEngine errors before showing users")
+require(echo.contains("private func sanitizedDialogEngineErrorMessage"), "Echo should define a dialog error sanitizer")
+require(echo.contains("opus encode input audio size") && echo.contains("音频正在切换，请再说一次"), "Echo should map transient SAMI encoder errors to a user-safe retry message")
 
 for required in [
     "latestRuntimeRoleVoiceSource",

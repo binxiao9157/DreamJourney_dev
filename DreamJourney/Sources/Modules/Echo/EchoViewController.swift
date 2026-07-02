@@ -15,6 +15,8 @@ private enum EchoDigitalHumanAudioOwner: String {
 private struct EchoRoleVoiceProfileSelection {
     enum Source: String {
         case selfAssistantDefault
+        case personalOwner
+        case personalOwnerVoiceProfileMissing
         case familyMember
         case familyVoiceProfileMissing
         case familyMemberUnavailable
@@ -28,9 +30,9 @@ private struct EchoRoleVoiceProfileSelection {
 
     var shouldShowMissingStatus: Bool {
         switch source {
-        case .selfAssistantDefault, .familyMember:
+        case .selfAssistantDefault, .personalOwner, .familyMember:
             return false
-        case .familyVoiceProfileMissing, .familyMemberUnavailable, .familyMemberMissing:
+        case .personalOwnerVoiceProfileMissing, .familyVoiceProfileMissing, .familyMemberUnavailable, .familyMemberMissing:
             return true
         }
     }
@@ -39,6 +41,10 @@ private struct EchoRoleVoiceProfileSelection {
         switch source {
         case .selfAssistantDefault:
             return "AI 助手使用默认音色"
+        case .personalOwner:
+            return "本人复刻音色正在回响"
+        case .personalOwnerVoiceProfileMissing:
+            return "本人暂未启用复刻音色"
         case .familyMember:
             return "复刻音色正在回响"
         case .familyVoiceProfileMissing:
@@ -1390,6 +1396,15 @@ final class EchoViewController: UIViewController {
                 displayName: context.resolvedDisplayName
             )
         }
+        if isCurrentUserPersonaContext(context) {
+            let voiceProfileId = VoiceCloneService.shared.currentUsableSpeakerId
+            return EchoRoleVoiceProfileSelection(
+                voiceProfileId: voiceProfileId,
+                source: voiceProfileId == nil ? .personalOwnerVoiceProfileMissing : .personalOwner,
+                contextOwnerId: context.ownerId,
+                displayName: context.resolvedDisplayName
+            )
+        }
 
         guard let member = FamilyRepository.shared.get(by: context.ownerId) else {
             return EchoRoleVoiceProfileSelection(
@@ -1425,6 +1440,20 @@ final class EchoViewController: UIViewController {
             contextOwnerId: member.id,
             displayName: member.name
         )
+    }
+
+    private func isCurrentUserPersonaContext(_ context: DigitalHumanContext) -> Bool {
+        if context.isSelfAssistant {
+            return true
+        }
+        let ownerId = context.ownerId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let viewerId = (context.viewerUserId ?? UserManager.shared.currentUser?.id ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !ownerId.isEmpty, !viewerId.isEmpty, ownerId == viewerId {
+            return true
+        }
+        let relation = context.relation?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return relation == "本人" || relation == "自己" || relation == "我"
     }
 
     private func setEchoAudioOwner(_ owner: EchoDigitalHumanAudioOwner, reason: String) {
@@ -1821,6 +1850,10 @@ final class EchoViewController: UIViewController {
             return false
         }
 
+        if isTransientDialogEngineAudioRouteError(error) {
+            return true
+        }
+
         let isSDKError: Bool
         if let dialogEngineError = error as? DialogEngineError,
            case .sdkError = dialogEngineError {
@@ -1843,6 +1876,24 @@ final class EchoViewController: UIViewController {
         }
 
         return false
+    }
+
+    private func isTransientDialogEngineAudioRouteError(_ error: Error) -> Bool {
+        let description = error.localizedDescription.lowercased()
+        return description.contains("opus encode input audio size")
+            || (description.contains("未知错误") && description.contains("error domain"))
+            || (description.contains("err_msg") && description.contains("error domain"))
+    }
+
+    private func sanitizedDialogEngineErrorMessage(_ error: Error) -> String {
+        if isTransientDialogEngineAudioRouteError(error) {
+            return "音频正在切换，请再说一次"
+        }
+        let message = error.localizedDescription
+        if message.contains("Error Domain") || message.contains("err_msg") {
+            return "语音服务暂时不稳定，请再试一次"
+        }
+        return message
     }
 
     @discardableResult
@@ -2104,7 +2155,8 @@ final class EchoViewController: UIViewController {
         }
         let context = DigitalHumanContextStore.shared.current
         let userId = UserManager.shared.currentUser?.id ?? context.viewerUserId ?? context.ownerId
-        let personaScope = context.isSelfAssistant ? "personal" : "family"
+        let isCurrentUserPersona = isCurrentUserPersonaContext(context)
+        let personaScope = isCurrentUserPersona ? "personal" : "family"
         DreamJourneyBackendClient.shared.buildEchoContextPacket(
             userId: userId,
             query: text,
@@ -3246,7 +3298,7 @@ extension EchoViewController: DialogEngineDelegate {
             } else {
                 self.resetDigitalHumanReplyDispatchState()
             }
-            self.viewModel.fail(error.localizedDescription)
+            self.viewModel.fail(self.sanitizedDialogEngineErrorMessage(error))
         }
     }
 
