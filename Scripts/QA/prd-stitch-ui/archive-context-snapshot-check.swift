@@ -16,6 +16,10 @@ final class DreamJourneyBackendClient {
         false
     }
 
+    var isTimeLetterDispatchConfigured: Bool {
+        false
+    }
+
     func postArchiveItem(
         _ payload: [String: Any],
         completion: @escaping (Result<[String: Any], Error>) -> Void
@@ -28,6 +32,51 @@ final class DreamJourneyBackendClient {
         completion: @escaping (Result<[String: Any], Error>) -> Void
     ) {
         completion(.success(["items": []]))
+    }
+
+    func dispatchDueTimeLetters(
+        limit: Int,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        completion(.success(["status": "dispatched", "limit": limit]))
+    }
+
+    func listMailboxLetters(
+        userId: String,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        completion(.success(["userId": userId, "items": []]))
+    }
+
+    func markMailboxLetterRead(
+        userId: String,
+        letterId: String,
+        readAtISO: String? = nil,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        completion(.success([
+            "status": "read",
+            "item": [
+                "id": letterId,
+                "kind": "timeLetterReminder",
+                "userId": userId,
+                "sourceArchiveItemId": "stub",
+                "title": "stub",
+                "status": "read",
+                "deliveredAt": "",
+                "readAt": readAtISO ?? "",
+                "recipientRole": "owner",
+            ],
+        ]))
+    }
+
+    func getTimeLetterDetail(
+        ownerUserId: String,
+        itemId: String,
+        viewerUserId: String,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        completion(.failure(NSError(domain: "ArchiveContextSnapshotCheck", code: 1)))
     }
 }
 
