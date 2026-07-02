@@ -65,11 +65,40 @@ struct MemoryArchiveContextSnapshot {
 
 struct TimeLetterMailboxReminder: Codable, Equatable {
     let id: String
+    let ownerUserId: String
     let sourceArchiveItemId: String
     let title: String
     let status: String
     let deliveredAt: String
     let recipientRole: String
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case ownerUserId
+        case sourceArchiveItemId
+        case title
+        case status
+        case deliveredAt
+        case recipientRole
+    }
+
+    init(
+        id: String,
+        ownerUserId: String,
+        sourceArchiveItemId: String,
+        title: String,
+        status: String,
+        deliveredAt: String,
+        recipientRole: String
+    ) {
+        self.id = id
+        self.ownerUserId = ownerUserId
+        self.sourceArchiveItemId = sourceArchiveItemId
+        self.title = title
+        self.status = status
+        self.deliveredAt = deliveredAt
+        self.recipientRole = recipientRole
+    }
 
     init?(_ json: [String: Any]) {
         let kind = (json["kind"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -80,6 +109,8 @@ struct TimeLetterMailboxReminder: Codable, Equatable {
         }
         self.id = (json["id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
             ?? "time-letter-reminder-\(sourceArchiveItemId)"
+        self.ownerUserId = (json["ownerUserId"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? ""
         self.sourceArchiveItemId = sourceArchiveItemId
         self.title = (json["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
             ?? "时间信件已到打开时间"
@@ -89,6 +120,17 @@ struct TimeLetterMailboxReminder: Codable, Equatable {
             ?? ""
         self.recipientRole = (json["recipientRole"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
             ?? "recipient"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        ownerUserId = try container.decodeIfPresent(String.self, forKey: .ownerUserId) ?? ""
+        sourceArchiveItemId = try container.decode(String.self, forKey: .sourceArchiveItemId)
+        title = try container.decode(String.self, forKey: .title)
+        status = try container.decode(String.self, forKey: .status)
+        deliveredAt = try container.decode(String.self, forKey: .deliveredAt)
+        recipientRole = try container.decode(String.self, forKey: .recipientRole)
     }
 
     var isUnread: Bool {
@@ -306,6 +348,47 @@ final class MemoryArchiveRepository {
         }
     }
 
+    func resolveTimeLetterReminderDetail(
+        _ reminder: TimeLetterMailboxReminder,
+        completion: @escaping (Result<MemoryArchiveItem, Error>) -> Void
+    ) {
+        let ownerUserId = reminder.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let canFetchRemoteDetail = DreamJourneyBackendClient.shared.isTimeLetterDispatchConfigured && !ownerUserId.isEmpty
+
+        if canFetchRemoteDetail {
+            DreamJourneyBackendClient.shared.getTimeLetterDetail(
+                ownerUserId: ownerUserId,
+                itemId: reminder.sourceArchiveItemId,
+                viewerUserId: currentUserId
+            ) { [weak self] result in
+                guard let self else { return }
+                switch result {
+                case .success(let object):
+                    guard let item = Self.timeLetterDetailItem(from: object) else {
+                        completion(.failure(ArchiveRepositoryError.invalidBackendDetail))
+                        return
+                    }
+                    upsertResolvedTimeLetterDetail(item)
+                    completion(.success(item))
+                case .failure(let error):
+                    if let localItem = localTimeLetterDetailItem(for: reminder) {
+                        completion(.success(localItem))
+                    } else {
+                        completion(.failure(error))
+                    }
+                }
+            }
+            return
+        }
+
+        if let localItem = localTimeLetterDetailItem(for: reminder) {
+            completion(.success(localItem))
+            return
+        }
+
+        completion(.failure(ArchiveRepositoryError.timeLetterDetailUnavailable))
+    }
+
     func contextSnapshot(limit: Int = 6) -> MemoryArchiveContextSnapshot {
         let items = allItems()
         let availableItems = items
@@ -384,6 +467,22 @@ final class MemoryArchiveRepository {
         if let data = try? JSONEncoder().encode(reminders) {
             UserDefaults.standard.set(data, forKey: mailboxStorageKey)
         }
+    }
+
+    private func localTimeLetterDetailItem(for reminder: TimeLetterMailboxReminder) -> MemoryArchiveItem? {
+        allItems().first { item in
+            item.id == reminder.sourceArchiveItemId && item.kind == .timeLetter
+        }
+    }
+
+    private func upsertResolvedTimeLetterDetail(_ item: MemoryArchiveItem) {
+        var items = allItems()
+        if let index = items.firstIndex(where: { $0.id == item.id }) {
+            items[index] = item
+        } else {
+            items.insert(item, at: 0)
+        }
+        save(items)
     }
 
     private func syncToBackend(_ item: MemoryArchiveItem) {
@@ -486,6 +585,16 @@ final class MemoryArchiveRepository {
         return []
     }
 
+    private static func timeLetterDetailItem(from object: [String: Any]) -> MemoryArchiveItem? {
+        if let item = object["item"] as? [String: Any] {
+            return MemoryArchiveItem(remoteJSON: item)
+        }
+        if let data = object["data"] as? [String: Any] {
+            return timeLetterDetailItem(from: data)
+        }
+        return nil
+    }
+
     private func assignOwnerIfNeededForCurrentUser(_ items: [MemoryArchiveItem]) -> [MemoryArchiveItem] {
         items.map { $0.assigningOwnerIfNeeded(currentUserId) }
     }
@@ -532,11 +641,17 @@ final class MemoryArchiveRepository {
 
 private enum ArchiveRepositoryError: LocalizedError {
     case backendNotConfigured
+    case invalidBackendDetail
+    case timeLetterDetailUnavailable
 
     var errorDescription: String? {
         switch self {
         case .backendNotConfigured:
             return "后端地址未配置"
+        case .invalidBackendDetail:
+            return "后端时间信件详情格式异常"
+        case .timeLetterDetailUnavailable:
+            return "时间信件详情暂不可用"
         }
     }
 }

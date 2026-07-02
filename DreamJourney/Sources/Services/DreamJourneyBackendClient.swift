@@ -2529,6 +2529,26 @@ final class DreamJourneyBackendClient {
         requestJSON(path: "/mailbox/letters/\(pathComponent(userId))", method: .get, payload: nil, completion: completion)
     }
 
+    func getTimeLetterDetail(
+        ownerUserId: String,
+        itemId: String,
+        viewerUserId: String,
+        nowISO: String? = nil,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        var path = "/archive/time-letters/\(pathComponent(ownerUserId))/\(pathComponent(itemId))/detail"
+        var queryItems = [URLQueryItem(name: "viewerUserId", value: viewerUserId)]
+        if let nowISO, !nowISO.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            queryItems.append(URLQueryItem(name: "now", value: nowISO))
+        }
+        var components = URLComponents()
+        components.queryItems = queryItems
+        if let query = components.percentEncodedQuery, !query.isEmpty {
+            path += "?\(query)"
+        }
+        requestJSON(path: path, method: .get, payload: nil, completion: completion)
+    }
+
     func syncKnowledge(userId: String, graph: [String: Any], completion: @escaping (Result<[String: Any], Error>) -> Void) {
         requestJSON(path: "/kb/sync", method: .post, payload: ["userId": userId, "graph": graph], completion: completion)
     }

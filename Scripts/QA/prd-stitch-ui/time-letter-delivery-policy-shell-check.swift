@@ -74,6 +74,7 @@ for required in [
     "dueTimeLetters",
     "TimeLetterMailboxReminder",
     "refreshTimeLetterMailboxReminders",
+    "resolveTimeLetterReminderDetail",
     "timeLetterReminderCount",
     "timeLetterDeliveryStatus != \"delivered\"",
     "if items.contains(where: { $0.id == id && $0.isSealedTimeLetter })",
@@ -97,6 +98,8 @@ for required in [
     "archive-time-letter-in-app-reminder",
     "timeLetterReminderCount()",
     "timeLetterReminderTapped",
+    "openTimeLetterReminder",
+    "MemoryArchiveDetailViewController(item:",
     "refreshTimeLetterMailboxReminders",
     "onSaveTimeLetter",
     "onSaveDraftTimeLetter",
@@ -143,6 +146,9 @@ for required in [
     "/archive/time-letters/dispatch-due",
     "func listMailboxLetters(",
     "/mailbox/letters/",
+    "func getTimeLetterDetail(",
+    "/archive/time-letters/",
+    "/detail",
 ] {
     assertContains(backendClient, required, "backend client should expose time-letter dispatch/mailbox contract \(required)")
 }

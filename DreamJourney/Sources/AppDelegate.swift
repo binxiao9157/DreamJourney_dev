@@ -2377,12 +2377,31 @@ private extension AppDelegate {
         let mailboxReminders = MemoryArchiveRepository.shared.timeLetterMailboxReminders()
         let reminderCount = MemoryArchiveRepository.shared.timeLetterReminderCount()
         let restoredDelivered = MemoryArchiveRepository.shared.allItems().first { $0.id == deliveredLetter.id }
+        var resolvedReminderDetail: MemoryArchiveItem?
+        if let reminder {
+            MemoryArchiveRepository.shared.resolveTimeLetterReminderDetail(reminder) { result in
+                if case .success(let item) = result {
+                    resolvedReminderDetail = item
+                }
+            }
+        }
+        let reminderDetailResolved = resolvedReminderDetail?.id == deliveredLetter.id
+        let reminderDetailNoteVisible = resolvedReminderDetail?.note == deliveredLetter.note
+        let reminderDetailSnapshotWritten = resolvedReminderDetail.map {
+            renderArchiveDetailSnapshot(
+                fileName: "time-letter-reminder-detail.png",
+                item: $0
+            )
+        } ?? false
         let completed = reminder != nil
             && restoredDelivered?.timeLetterDeliveryStatus == "delivered"
             && restoredDelivered?.isTimeLetterDelivered == true
             && dueLetters.contains(where: { $0.id == deliveredLetter.id }) == false
             && mailboxReminders.map(\.sourceArchiveItemId) == [deliveredLetter.id]
             && reminderCount == 1
+            && reminderDetailResolved
+            && reminderDetailNoteVisible
+            && reminderDetailSnapshotWritten
 
         writeTimeLetterDispatchReminderSmokeResult([
             "completed": completed,
@@ -2393,6 +2412,9 @@ private extension AppDelegate {
             "mailboxReminderIds": mailboxReminders.map(\.id),
             "mailboxSourceArchiveItemIds": mailboxReminders.map(\.sourceArchiveItemId),
             "reminderCount": reminderCount,
+            "timeLetterReminderDetailResolved": reminderDetailResolved,
+            "timeLetterReminderDetailNoteVisible": reminderDetailNoteVisible,
+            "timeLetterReminderDetailSnapshotWritten": reminderDetailSnapshotWritten,
         ])
         print(
             "[UI_QA] TimeLetterDispatchReminderSmoke completed " +

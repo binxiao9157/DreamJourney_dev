@@ -2305,7 +2305,26 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     @objc private func timeLetterReminderTapped() {
-        applyArchiveKindFilter(.timeLetter)
+        guard let reminder = repository.timeLetterMailboxReminders().first(where: \.isUnread) else {
+            applyArchiveKindFilter(.timeLetter)
+            return
+        }
+        openTimeLetterReminder(reminder)
+    }
+
+    private func openTimeLetterReminder(_ reminder: TimeLetterMailboxReminder) {
+        showToast("正在打开时间信件", type: .info)
+        repository.resolveTimeLetterReminderDetail(reminder) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let item):
+                let detailViewController = MemoryArchiveDetailViewController(item: item, repository: repository, isReadOnly: true)
+                navigationController?.pushViewController(detailViewController, animated: true)
+            case .failure(let error):
+                showToast(error.localizedDescription.isEmpty ? "时间信件暂不可打开" : error.localizedDescription, type: .error)
+                applyArchiveKindFilter(.timeLetter)
+            }
+        }
     }
 
     private func applyArchiveKindFilter(_ filter: ArchiveKindFilter) {

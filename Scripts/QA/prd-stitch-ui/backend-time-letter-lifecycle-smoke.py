@@ -360,6 +360,7 @@ def main() -> Dict[str, Any]:
     assert_equal(recipient_mailbox[0].get("metadataOnly"), True, "recipient mailbox metadataOnly")
     assert_equal(recipient_mailbox[0].get("contentRedacted"), True, "recipient mailbox contentRedacted")
     assert_equal(recipient_mailbox[0].get("recipientRole"), "recipient", "recipient mailbox role")
+    assert_equal(recipient_mailbox[0].get("ownerUserId"), USER_ID, "recipient mailbox ownerUserId")
     assert_equal(len(recipient_future_mailbox), 0, "future timeLetter should not be visible in recipient mailbox")
     if "这段正文" in json.dumps(recipient_mailbox, ensure_ascii=False):
         raise AssertionError("recipient mailbox should not include full timeLetter body")
