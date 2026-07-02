@@ -116,7 +116,7 @@ private enum ArchiveKindFilter {
     }
 }
 
-private final class TimeLetterReminderCenterViewController: UIViewController {
+private final class InAppMessageCenterViewController: UIViewController {
     private enum Section: Int, CaseIterable {
         case inbox
         case archived
@@ -132,10 +132,10 @@ private final class TimeLetterReminderCenterViewController: UIViewController {
     }
 
     private let repository: MemoryArchiveRepository
-    private var reminders: [TimeLetterMailboxReminder]
-    private let onOpenReminder: (TimeLetterMailboxReminder) -> Void
+    private var messages: [InAppMessage]
+    private let onOpenMessage: (InAppMessage) -> Void
     private let onShowAllTimeLetters: () -> Void
-    private let onReminderStateChanged: () -> Void
+    private let onMessageStateChanged: () -> Void
 
     private let tableView = UITableView(frame: .zero, style: .plain)
     private let headerStack = UIStackView()
@@ -150,17 +150,17 @@ private final class TimeLetterReminderCenterViewController: UIViewController {
     )
 
     init(
-        reminders: [TimeLetterMailboxReminder],
+        snapshot: InAppMessageCenterSnapshot,
         repository: MemoryArchiveRepository,
-        onOpenReminder: @escaping (TimeLetterMailboxReminder) -> Void,
+        onOpenMessage: @escaping (InAppMessage) -> Void,
         onShowAllTimeLetters: @escaping () -> Void,
-        onReminderStateChanged: @escaping () -> Void
+        onMessageStateChanged: @escaping () -> Void
     ) {
         self.repository = repository
-        self.reminders = Self.sortedReminders(reminders)
-        self.onOpenReminder = onOpenReminder
+        self.messages = snapshot.messages
+        self.onOpenMessage = onOpenMessage
         self.onShowAllTimeLetters = onShowAllTimeLetters
-        self.onReminderStateChanged = onReminderStateChanged
+        self.onMessageStateChanged = onMessageStateChanged
         super.init(nibName: nil, bundle: nil)
         hidesBottomBarWhenPushed = true
     }
@@ -171,7 +171,7 @@ private final class TimeLetterReminderCenterViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "提醒中心"
+        title = "消息中心"
         view.backgroundColor = DJDesignTokens.Color.background
         let allLettersButton = UIBarButtonItem(
             title: "全部信件",
@@ -193,7 +193,7 @@ private final class TimeLetterReminderCenterViewController: UIViewController {
             .foregroundColor: DJDesignTokens.Color.textPrimary,
             .font: DJDesignTokens.Font.title(18),
         ]
-        refreshRemindersFromRepository()
+        refreshMessagesFromRepository()
     }
 
     private func configureHeader() {
@@ -208,7 +208,7 @@ private final class TimeLetterReminderCenterViewController: UIViewController {
             trailing: DJDesignTokens.Spacing.page
         )
 
-        titleLabel.text = "时间信件提醒"
+        titleLabel.text = "全部消息"
         titleLabel.font = DJDesignTokens.Font.title(24)
         titleLabel.textColor = DJDesignTokens.Color.textPrimary
 
@@ -227,10 +227,10 @@ private final class TimeLetterReminderCenterViewController: UIViewController {
         tableView.showsVerticalScrollIndicator = false
         tableView.dataSource = self
         tableView.delegate = self
-        tableView.register(TimeLetterReminderCell.self, forCellReuseIdentifier: TimeLetterReminderCell.reuseIdentifier)
-        tableView.accessibilityIdentifier = "time-letter-reminder-center-list"
+        tableView.register(InAppMessageCell.self, forCellReuseIdentifier: InAppMessageCell.reuseIdentifier)
+        tableView.accessibilityIdentifier = "in-app-message-center-list"
 
-        emptyStateLabel.text = "还没有到达打开时间的信件"
+        emptyStateLabel.text = "还没有新的应用内提醒"
         emptyStateLabel.font = DJDesignTokens.Font.body(15)
         emptyStateLabel.textColor = DJDesignTokens.Color.textTertiary
         emptyStateLabel.textAlignment = .center
@@ -260,30 +260,21 @@ private final class TimeLetterReminderCenterViewController: UIViewController {
         ])
     }
 
-    private func refreshRemindersFromRepository() {
-        reminders = Self.sortedReminders(repository.timeLetterMailboxReminders())
+    private func refreshMessagesFromRepository() {
+        messages = repository.inAppMessageCenterSnapshot().messages
         tableView.reloadData()
         updateEmptyState()
     }
 
     private func updateEmptyState() {
-        let inboxCount = reminders.filter { !$0.isArchived }.count
-        let unreadCount = reminders.filter { !$0.isArchived && $0.isUnread }.count
+        let inboxCount = messages.filter { !$0.isArchived }.count
+        let unreadCount = messages.filter { !$0.isArchived && $0.isUnread }.count
         subtitleLabel.text = unreadCount > 0
-            ? "\(unreadCount) 封未读，点按信件查看详情。"
-            : "所有到达时间的信件都已读，可归档收起。"
-        emptyStateLabel.isHidden = !reminders.isEmpty
-        tableView.isHidden = reminders.isEmpty
+            ? "\(unreadCount) 条未读，点按消息查看详情。"
+            : "所有消息都已读，可归档收起。"
+        emptyStateLabel.isHidden = !messages.isEmpty
+        tableView.isHidden = messages.isEmpty
         archiveReadButton.isEnabled = inboxCount > unreadCount
-    }
-
-    private static func sortedReminders(_ reminders: [TimeLetterMailboxReminder]) -> [TimeLetterMailboxReminder] {
-        reminders.sorted { lhs, rhs in
-            if lhs.isUnread != rhs.isUnread {
-                return lhs.isUnread && !rhs.isUnread
-            }
-            return lhs.deliveredAt > rhs.deliveredAt
-        }
     }
 
     @objc private func showAllTimeLettersTapped() {
@@ -291,48 +282,48 @@ private final class TimeLetterReminderCenterViewController: UIViewController {
     }
 
     @objc private func archiveReadRemindersTapped() {
-        let readReminders = reminders.filter { !$0.isArchived && !$0.isUnread }
-        guard !readReminders.isEmpty else {
-            showToast("暂无已读提醒可归档", type: .info)
+        let readMessages = messages.filter { !$0.isArchived && !$0.isUnread }
+        guard !readMessages.isEmpty else {
+            showToast("暂无已读消息可归档", type: .info)
             return
         }
-        readReminders.forEach(archiveReminder)
+        readMessages.forEach(archiveMessage)
     }
 
-    private func reminders(in section: Section) -> [TimeLetterMailboxReminder] {
+    private func messages(in section: Section) -> [InAppMessage] {
         switch section {
         case .inbox:
-            return reminders.filter { !$0.isArchived }
+            return messages.filter { !$0.isArchived }
         case .archived:
-            return reminders.filter(\.isArchived)
+            return messages.filter(\.isArchived)
         }
     }
 
-    private func reminder(at indexPath: IndexPath) -> TimeLetterMailboxReminder {
+    private func message(at indexPath: IndexPath) -> InAppMessage {
         let section = Section(rawValue: indexPath.section) ?? .inbox
-        return reminders(in: section)[indexPath.row]
+        return messages(in: section)[indexPath.row]
     }
 
-    private func replaceLocalReminder(_ reminder: TimeLetterMailboxReminder) {
-        if let index = reminders.firstIndex(where: { $0.id == reminder.id }) {
-            reminders[index] = reminder
+    private func replaceLocalMessage(_ message: InAppMessage) {
+        if let index = messages.firstIndex(where: { $0.id == message.id }) {
+            messages[index] = message
         } else {
-            reminders.insert(reminder, at: 0)
+            messages.insert(message, at: 0)
         }
-        reminders = Self.sortedReminders(reminders)
+        messages = InAppMessageCenterSnapshot.sortedMessages(messages)
         tableView.reloadData()
         updateEmptyState()
-        onReminderStateChanged()
+        onMessageStateChanged()
     }
 
-    private func archiveReminder(_ reminder: TimeLetterMailboxReminder) {
-        let archivedReminder = reminder.markingArchived(archivedAt: ISO8601DateFormatter().string(from: Date()))
-        replaceLocalReminder(archivedReminder)
-        repository.markTimeLetterMailboxReminderArchived(reminder) { [weak self] result in
+    private func archiveMessage(_ message: InAppMessage) {
+        let archivedMessage = message.markingArchived(archivedAt: ISO8601DateFormatter().string(from: Date()))
+        replaceLocalMessage(archivedMessage)
+        repository.archiveInAppMessage(message) { [weak self] result in
             switch result {
             case .success(let updated):
                 DispatchQueue.main.async {
-                    self?.replaceLocalReminder(updated)
+                    self?.replaceLocalMessage(updated)
                 }
             case .failure:
                 DispatchQueue.main.async {
@@ -343,47 +334,47 @@ private final class TimeLetterReminderCenterViewController: UIViewController {
     }
 }
 
-extension TimeLetterReminderCenterViewController: UITableViewDataSource, UITableViewDelegate {
+extension InAppMessageCenterViewController: UITableViewDataSource, UITableViewDelegate {
     func numberOfSections(in tableView: UITableView) -> Int {
         Section.allCases.count
     }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        reminders(in: Section(rawValue: section) ?? .inbox).count
+        messages(in: Section(rawValue: section) ?? .inbox).count
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(
-            withIdentifier: TimeLetterReminderCell.reuseIdentifier,
+            withIdentifier: InAppMessageCell.reuseIdentifier,
             for: indexPath
-        ) as? TimeLetterReminderCell ?? TimeLetterReminderCell(style: .default, reuseIdentifier: TimeLetterReminderCell.reuseIdentifier)
-        cell.configure(with: reminder(at: indexPath))
+        ) as? InAppMessageCell ?? InAppMessageCell(style: .default, reuseIdentifier: InAppMessageCell.reuseIdentifier)
+        cell.configure(with: message(at: indexPath))
         return cell
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        let reminder = reminder(at: indexPath)
-        let readReminder = reminder.markingRead(readAt: ISO8601DateFormatter().string(from: Date()))
-        replaceLocalReminder(readReminder)
-        onOpenReminder(reminder)
+        let message = message(at: indexPath)
+        let readMessage = message.markingRead(readAt: ISO8601DateFormatter().string(from: Date()))
+        replaceLocalMessage(readMessage)
+        onOpenMessage(message)
     }
 
     func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
         let section = Section(rawValue: section) ?? .inbox
-        return reminders(in: section).isEmpty ? nil : section.title
+        return messages(in: section).isEmpty ? nil : section.title
     }
 
     func tableView(
         _ tableView: UITableView,
         trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath
     ) -> UISwipeActionsConfiguration? {
-        let reminder = reminder(at: indexPath)
-        guard !reminder.isArchived else {
+        let message = message(at: indexPath)
+        guard !message.isArchived else {
             return nil
         }
         let archiveAction = UIContextualAction(style: .normal, title: "归档") { [weak self] _, _, completion in
-            self?.archiveReminder(reminder)
+            self?.archiveMessage(message)
             completion(true)
         }
         archiveAction.backgroundColor = DJDesignTokens.Color.textTertiary
@@ -400,8 +391,8 @@ extension TimeLetterReminderCenterViewController: UITableViewDataSource, UITable
     }
 }
 
-private final class TimeLetterReminderCell: UITableViewCell {
-    static let reuseIdentifier = "TimeLetterReminderCell"
+private final class InAppMessageCell: UITableViewCell {
+    static let reuseIdentifier = "InAppMessageCell"
 
     private let cardView = UIView()
     private let statusLabel = PaddingLabel(horizontalInset: 8, verticalInset: 4)
@@ -418,28 +409,29 @@ private final class TimeLetterReminderCell: UITableViewCell {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func configure(with reminder: TimeLetterMailboxReminder) {
-        titleLabel.text = reminder.title
+    func configure(with message: InAppMessage) {
+        titleLabel.text = message.title
         metaLabel.text = [
-            reminder.recipientRole == "owner" ? "写给自己" : "来自家人",
-            Self.formattedDeliveredAt(reminder.deliveredAt),
+            message.kindLabel,
+            message.summary,
+            Self.formattedDeliveredAt(message.deliveredAt),
         ]
         .filter { !$0.isEmpty }
         .joined(separator: " · ")
-        statusLabel.text = reminder.isUnread ? "未读" : "已读"
-        if reminder.isArchived {
+        statusLabel.text = message.isUnread ? "未读" : "已读"
+        if message.isArchived {
             statusLabel.text = "已归档"
         }
-        statusLabel.backgroundColor = reminder.isUnread
+        statusLabel.backgroundColor = message.isUnread
             ? DJDesignTokens.Color.accent.withAlphaComponent(0.18)
             : DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.8)
-        statusLabel.textColor = reminder.isUnread
+        statusLabel.textColor = message.isUnread
             ? DJDesignTokens.Color.accentDeep
             : DJDesignTokens.Color.textTertiary
-        titleLabel.textColor = reminder.isUnread
+        titleLabel.textColor = message.isUnread
             ? DJDesignTokens.Color.textPrimary
             : DJDesignTokens.Color.textSecondary
-        accessibilityIdentifier = "time-letter-reminder-row-\(reminder.id)"
+        accessibilityIdentifier = "in-app-message-row-\(message.kind.rawValue)-\(message.id)"
     }
 
     private func configure() {
@@ -2706,26 +2698,26 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     @objc private func timeLetterReminderTapped() {
-        let reminders = repository.timeLetterMailboxReminders()
-        guard !reminders.isEmpty else {
+        let snapshot = repository.inAppMessageCenterSnapshot()
+        guard !snapshot.messages.isEmpty else {
             applyArchiveKindFilter(.timeLetter)
             return
         }
-        presentTimeLetterReminderCenter(reminders)
+        presentInAppMessageCenter(snapshot)
     }
 
-    private func presentTimeLetterReminderCenter(_ reminders: [TimeLetterMailboxReminder]) {
-        let center = TimeLetterReminderCenterViewController(
-            reminders: reminders,
+    private func presentInAppMessageCenter(_ snapshot: InAppMessageCenterSnapshot) {
+        let center = InAppMessageCenterViewController(
+            snapshot: snapshot,
             repository: repository,
-            onOpenReminder: { [weak self] reminder in
-                self?.openTimeLetterReminder(reminder)
+            onOpenMessage: { [weak self] message in
+                self?.openInAppMessage(message)
             },
             onShowAllTimeLetters: { [weak self] in
                 self?.navigationController?.popViewController(animated: true)
                 self?.applyArchiveKindFilter(.timeLetter)
             },
-            onReminderStateChanged: { [weak self] in
+            onMessageStateChanged: { [weak self] in
                 self?.refreshContent()
             }
         )
@@ -2734,6 +2726,23 @@ final class MemoryArchiveViewController: UIViewController {
         } else {
             let navigationController = UINavigationController(rootViewController: center)
             present(navigationController, animated: true)
+        }
+    }
+
+    private func openInAppMessage(_ message: InAppMessage) {
+        switch message.kind {
+        case .timeLetter:
+            guard let reminder = repository.timeLetterMailboxReminder(for: message) else {
+                showToast("时间信件暂不可打开", type: .error)
+                return
+            }
+            openTimeLetterReminder(reminder)
+        case .familyInvitation:
+            showToast("家庭邀请会在后续接入消息中心", type: .info)
+        case .careSignal:
+            showToast("关怀提醒会在后续接入消息中心", type: .info)
+        case .systemNotice:
+            showToast("系统通知会在后续接入消息中心", type: .info)
         }
     }
 

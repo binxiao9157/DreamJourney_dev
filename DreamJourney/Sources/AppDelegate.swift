@@ -2401,6 +2401,7 @@ private extension AppDelegate {
 
         let dueLetters = MemoryArchiveRepository.shared.dueTimeLetters()
         let mailboxReminders = MemoryArchiveRepository.shared.timeLetterMailboxReminders()
+        let inAppMessageSnapshot = MemoryArchiveRepository.shared.inAppMessageCenterSnapshot()
         let reminderCount = MemoryArchiveRepository.shared.timeLetterReminderCount()
         let restoredDelivered = MemoryArchiveRepository.shared.allItems().first { $0.id == deliveredLetter.id }
         var resolvedReminderDetail: MemoryArchiveItem?
@@ -2436,6 +2437,7 @@ private extension AppDelegate {
             MemoryArchiveRepository.shared.markTimeLetterMailboxReminderArchived(readReminder)
         }
         let remindersAfterArchive = MemoryArchiveRepository.shared.timeLetterMailboxReminders()
+        let inAppMessageSnapshotAfterArchive = MemoryArchiveRepository.shared.inAppMessageCenterSnapshot()
         let reminderArchiveStatusPersisted = openedReminderId.map { reminderId in
             remindersAfterArchive.first(where: { $0.id == reminderId })?.isArchived == true
         } ?? false
@@ -2451,6 +2453,8 @@ private extension AppDelegate {
             && dueLetters.contains(where: { $0.id == secondDeliveredLetter.id }) == false
             && mailboxReminders.map(\.sourceArchiveItemId).contains(deliveredLetter.id)
             && mailboxReminders.map(\.sourceArchiveItemId).contains(secondDeliveredLetter.id)
+            && inAppMessageSnapshot.totalCount == 2
+            && inAppMessageSnapshot.sourceCounts["timeLetter"] == 2
             && reminderCount == 2
             && reminderDetailResolved
             && reminderDetailNoteVisible
@@ -2460,6 +2464,8 @@ private extension AppDelegate {
             && reminderCountAfterRead == 1
             && reminderArchiveStatusPersisted
             && secondReminderStillUnreadAfterArchive
+            && inAppMessageSnapshotAfterArchive.archivedCount == 1
+            && inAppMessageSnapshotAfterArchive.unreadCount == 1
             && reminderCountAfterArchive == 1
 
         writeTimeLetterDispatchReminderSmokeResult([
@@ -2471,6 +2477,9 @@ private extension AppDelegate {
             "dueLetterIds": dueLetters.map(\.id),
             "mailboxReminderIds": mailboxReminders.map(\.id),
             "mailboxSourceArchiveItemIds": mailboxReminders.map(\.sourceArchiveItemId),
+            "inAppMessageCenterKindCounts": inAppMessageSnapshot.sourceCounts,
+            "inAppMessageCenterUnreadCount": inAppMessageSnapshot.unreadCount,
+            "inAppMessageCenterArchivedCountAfterArchive": inAppMessageSnapshotAfterArchive.archivedCount,
             "reminderCount": reminderCount,
             "timeLetterReminderDetailResolved": reminderDetailResolved,
             "timeLetterReminderDetailNoteVisible": reminderDetailNoteVisible,

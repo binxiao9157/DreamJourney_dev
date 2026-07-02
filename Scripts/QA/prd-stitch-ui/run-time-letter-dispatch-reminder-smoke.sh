@@ -100,6 +100,10 @@ grep -Eq '"timeLetterReminderCountAfterRead"[[:space:]]*:[[:space:]]*1' "$RESULT
 grep -Eq '"timeLetterReminderArchiveStatusPersisted"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter reminder should persist archived status."
 grep -Eq '"timeLetterSecondReminderStillUnreadAfterArchive"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Archiving one reminder should not affect the unread sibling reminder."
 grep -Eq '"timeLetterReminderCountAfterArchive"[[:space:]]*:[[:space:]]*1' "$RESULT_FILE" || fail "Archived reminders should not re-enter unread counts."
+grep -Eq '"inAppMessageCenterKindCounts"[[:space:]]*:' "$RESULT_FILE" || fail "Result should include unified message-center kind counts."
+grep -Eq '"timeLetter"[[:space:]]*:[[:space:]]*2' "$RESULT_FILE" || fail "Unified message center should expose two time-letter messages."
+grep -Eq '"inAppMessageCenterUnreadCount"[[:space:]]*:[[:space:]]*2' "$RESULT_FILE" || fail "Unified message center should count unread messages before opening."
+grep -Eq '"inAppMessageCenterArchivedCountAfterArchive"[[:space:]]*:[[:space:]]*1' "$RESULT_FILE" || fail "Unified message center should count archived messages after archive."
 grep -Eq '"dueLetterIds"' "$RESULT_FILE" || fail "Result should include dueLetterIds."
 
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null

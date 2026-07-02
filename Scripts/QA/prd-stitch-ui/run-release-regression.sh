@@ -255,7 +255,7 @@ run_step "Swift model guard profile-care-snapshot-check" "$STATIC_LOG_DIR/profil
   bash -lc "swiftc -parse-as-library '$ROOT_DIR/DreamJourney/Sources/Modules/Profile/ProfileCareModels.swift' '$SCRIPT_DIR/profile-care-snapshot-check.swift' -o '$STATIC_LOG_DIR/profile-care-snapshot-check' && '$STATIC_LOG_DIR/profile-care-snapshot-check' '$ROOT_DIR'"
 
 run_step "Swift model guard archive-context-snapshot-check" "$STATIC_LOG_DIR/archive-context-snapshot-check.log" \
-  bash -lc "swiftc -parse-as-library '$SCRIPT_DIR/archive-context-snapshot-check.swift' '$ROOT_DIR/DreamJourney/Sources/App/FeatureFlagService.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveItem.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveItemFactory.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveDisplayMetadata.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveMediaReleaseReadiness.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift' -o '$STATIC_LOG_DIR/archive-context-snapshot-check' && '$STATIC_LOG_DIR/archive-context-snapshot-check'"
+  bash -lc "swiftc -parse-as-library '$SCRIPT_DIR/archive-context-snapshot-check.swift' '$ROOT_DIR/DreamJourney/Sources/App/FeatureFlagService.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveItem.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveItemFactory.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveDisplayMetadata.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveMediaReleaseReadiness.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/InAppMessageCenter.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift' -o '$STATIC_LOG_DIR/archive-context-snapshot-check' && '$STATIC_LOG_DIR/archive-context-snapshot-check'"
 
 for guard in \
   release-feature-matrix-check.swift \
@@ -292,6 +292,7 @@ for guard in \
   archive-media-provider-switch-contract-check.swift \
   archive-hidden-media-timeletter-shell-check.swift \
   time-letter-delivery-policy-shell-check.swift \
+  in-app-message-center-shell-check.swift \
   archive-hidden-media-backend-upload-lifecycle-check.swift \
   archive-time-letter-backend-lifecycle-check.swift \
   archive-hidden-media-detail-ui-check.swift \

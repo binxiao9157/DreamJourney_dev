@@ -360,6 +360,89 @@ final class MemoryArchiveRepository {
         return sourceIds.count
     }
 
+    func inAppMessageCenterSnapshot(includeUnavailableCandidates: Bool = false) -> InAppMessageCenterSnapshot {
+        let timeLetterMessages = timeLetterMailboxReminders()
+            .map(InAppMessage.fromTimeLetterReminder)
+        let hiddenCandidates = [
+            InAppMessage.unavailableCandidate(
+                kind: .familyInvitation,
+                title: "家庭邀请",
+                reason: "家庭邀请后续会进入统一消息中心，当前仍由家庭页承载。"
+            ),
+            InAppMessage.unavailableCandidate(
+                kind: .careSignal,
+                title: "关怀提醒",
+                reason: "关怀提醒后续会进入统一消息中心，当前仍由我的页面承载。"
+            ),
+            InAppMessage.unavailableCandidate(
+                kind: .systemNotice,
+                title: "系统通知",
+                reason: "系统通知后续会进入统一消息中心，当前不在公开 MVP 暴露。"
+            ),
+        ]
+        let visibleMessages = InAppMessageCenterSnapshot.sortedMessages(timeLetterMessages)
+        let candidateMessages = includeUnavailableCandidates ? hiddenCandidates : []
+        return InAppMessageCenterSnapshot(
+            messages: visibleMessages,
+            hiddenCandidateMessages: candidateMessages
+        )
+    }
+
+    func timeLetterMailboxReminder(for message: InAppMessage) -> TimeLetterMailboxReminder? {
+        guard message.kind == .timeLetter else {
+            return nil
+        }
+        return timeLetterMailboxReminders().first { reminder in
+            reminder.id == message.id || reminder.sourceArchiveItemId == message.sourceArchiveItemId
+        }
+    }
+
+    func markInAppMessageRead(
+        _ message: InAppMessage,
+        completion: ((Result<InAppMessage, Error>) -> Void)? = nil
+    ) {
+        guard message.kind == .timeLetter,
+              let reminder = timeLetterMailboxReminder(for: message) else {
+            completion?(.failure(NSError(
+                domain: "DreamJourney.InAppMessageCenter",
+                code: 404,
+                userInfo: [NSLocalizedDescriptionKey: "消息暂不可打开"]
+            )))
+            return
+        }
+        markTimeLetterMailboxReminderRead(reminder) { result in
+            switch result {
+            case .success(let updatedReminder):
+                completion?(.success(InAppMessage.fromTimeLetterReminder(updatedReminder)))
+            case .failure(let error):
+                completion?(.failure(error))
+            }
+        }
+    }
+
+    func archiveInAppMessage(
+        _ message: InAppMessage,
+        completion: ((Result<InAppMessage, Error>) -> Void)? = nil
+    ) {
+        guard message.kind == .timeLetter,
+              let reminder = timeLetterMailboxReminder(for: message) else {
+            completion?(.failure(NSError(
+                domain: "DreamJourney.InAppMessageCenter",
+                code: 404,
+                userInfo: [NSLocalizedDescriptionKey: "消息暂不可归档"]
+            )))
+            return
+        }
+        markTimeLetterMailboxReminderArchived(reminder) { result in
+            switch result {
+            case .success(let updatedReminder):
+                completion?(.success(InAppMessage.fromTimeLetterReminder(updatedReminder)))
+            case .failure(let error):
+                completion?(.failure(error))
+            }
+        }
+    }
+
     func markTimeLetterMailboxReminderRead(
         _ reminder: TimeLetterMailboxReminder,
         completion: ((Result<TimeLetterMailboxReminder, Error>) -> Void)? = nil
