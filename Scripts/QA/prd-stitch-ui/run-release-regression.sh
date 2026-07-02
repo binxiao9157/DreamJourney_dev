@@ -15,6 +15,7 @@ BUILD_LOG="$OUTPUT_DIR/build-debug.log"
 STATIC_LOG_DIR="$OUTPUT_DIR/static-guards"
 
 RUN_STANDARD_BUILD="${RUN_STANDARD_BUILD:-1}"
+RUN_IPHONEOS_GENERIC_BUILD="${RUN_IPHONEOS_GENERIC_BUILD:-0}"
 RUN_PUBLIC_MVP_REGRESSION="${RUN_PUBLIC_MVP_REGRESSION:-0}"
 RUN_SIMULATOR_SMOKE="${RUN_SIMULATOR_SMOKE:-1}"
 RUN_P0_ARCHIVE_ECHO_REGRESSION="${RUN_P0_ARCHIVE_ECHO_REGRESSION:-0}"
@@ -38,6 +39,7 @@ RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE="${RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE
 RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE="${RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE:-0}"
 RUN_VOICE_CLONE_SYNTHESIS_RUNTIME_SMOKE="${RUN_VOICE_CLONE_SYNTHESIS_RUNTIME_SMOKE:-0}"
 RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE="${RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE:-0}"
+RUN_DIGITAL_HUMAN_VOICE_CLONE_COMBO_GATE="${RUN_DIGITAL_HUMAN_VOICE_CLONE_COMBO_GATE:-0}"
 RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE="${RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE:-0}"
 RUN_DIGITAL_HUMAN_TTS_VISEME_GATE="${RUN_DIGITAL_HUMAN_TTS_VISEME_GATE:-0}"
 RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE="${RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE:-0}"
@@ -100,6 +102,7 @@ Run ID: \`$RUN_ID\`
 ## Configuration
 
 - Standard iOS build: \`$RUN_STANDARD_BUILD\`
+- iPhoneOS generic build: \`$RUN_IPHONEOS_GENERIC_BUILD\`
 - Public MVP minimum regression: \`$RUN_PUBLIC_MVP_REGRESSION\`
 - P0 Archive -> Echo regression gate: \`$RUN_P0_ARCHIVE_ECHO_REGRESSION\`
 - Archive -> Echo simulator smoke: \`$RUN_SIMULATOR_SMOKE\`
@@ -123,6 +126,7 @@ Run ID: \`$RUN_ID\`
 - Voice clone profile selection UIQA smoke: \`$RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE\`
 - Voice clone synthesis runtime UIQA smoke: \`$RUN_VOICE_CLONE_SYNTHESIS_RUNTIME_SMOKE\`
 - Tencent backend PCM-drive mock UIQA smoke: \`$RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE\`
+- Digital-human + voice-clone combo gate: \`$RUN_DIGITAL_HUMAN_VOICE_CLONE_COMBO_GATE\`
 - Tencent digital-human Phase 1 non-device gate: \`$RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE\`
 - Digital human TTS/viseme combo gate: \`$RUN_DIGITAL_HUMAN_TTS_VISEME_GATE\`
 - Digital human runtime stub gate: \`$RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE\`
@@ -142,6 +146,7 @@ Run ID: \`$RUN_ID\`
 - Backend unit/FastAPI smoke, if the sibling backend repo is present.
 - Static PRD/UI/release guard scripts.
 - iOS Debug simulator build, unless \`RUN_STANDARD_BUILD=0\`.
+- Optional iPhoneOS generic build when \`RUN_IPHONEOS_GENERIC_BUILD=1\`; this validates arm64 iPhoneOS compilation, Tencent SDK linkage, and bundle-id override without requiring an online physical device.
 - Optional public MVP minimum regression when \`RUN_PUBLIC_MVP_REGRESSION=1\`; this forces both P0 Archive -> Echo and P0 Profile Care gates.
 - Optional P0 Archive -> Echo regression gate when \`RUN_P0_ARCHIVE_ECHO_REGRESSION=1\`; this forces the core archive seed -> analysis -> Echo context UIQA smoke.
 - Core Archive -> Echo simulator smoke, unless \`RUN_SIMULATOR_SMOKE=0\`.
@@ -165,6 +170,7 @@ Run ID: \`$RUN_ID\`
 - Optional voice clone profile selection UIQA smoke when \`RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE=1\`; this verifies ready \`S_\` profiles win over pending/deleted profiles and pending backend replies do not overwrite a usable ready voice.
 - Optional voice clone synthesis runtime UIQA smoke when \`RUN_VOICE_CLONE_SYNTHESIS_RUNTIME_SMOKE=1\`; this verifies iOS reads \`/config/runtime.voiceClone\`, calls \`/voice/synthesis\`, and receives Tencent audio-drive compatible PCM without printing raw audio.
 - Optional Tencent backend PCM-drive mock UIQA smoke when \`RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE=1\`; this verifies deployed backend synthesis PCM is chunked into the fake Tencent runtime and stop/interruption cleanup works without a true device.
+- Optional digital-human + voice-clone combo gate when \`RUN_DIGITAL_HUMAN_VOICE_CLONE_COMBO_GATE=1\`; this runs backend digital-human session, backend voice clone deployed, iOS synthesis runtime, and Tencent PCM-drive mock gates under one run id.
 - Optional Tencent digital-human Phase 1 non-device gate when \`RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE=1\`; this verifies backend-first asset source, QA-only local override, lifecycle, audio owner logs, runtime stub, PCM-drive mock, and build without true-device validation.
 - Optional digital-human TTS/viseme combo gate when \`RUN_DIGITAL_HUMAN_TTS_VISEME_GATE=1\`; this verifies backend mock synthesis \`visemeTimeline\`, iOS provider timeline UIQA, and \`AVAudioPlayer\` metering fallback UIQA.
 - Optional digital-human runtime stub gate when \`RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE=1\`; this verifies backend \`/digital-human/sessions\`, iOS \`TencentDigitalHumanRuntimeStub\`, and \`AudioOnlyDigitalHumanRuntime\` fallback without connecting the real Tencent SDK.
@@ -189,6 +195,7 @@ append_report_footer() {
 - Command log: \`commands.log\`
 - Static guard logs: \`static-guards/\`
 - Standard build log: \`build-debug.log\`
+- iPhoneOS generic build: \`iphoneos-generic-build/$RUN_ID/\`
 - Public MVP minimum regression: \`archive-to-echo-smoke/$RUN_ID/\`, \`profile-care-state-smoke/$RUN_ID/\`, and \`profile-care-backend-state-smoke/$RUN_ID/\`
 - P0 Archive -> Echo regression gate: \`archive-to-echo-smoke/$RUN_ID/\`
 - Archive -> Echo smoke: \`archive-to-echo-smoke/$RUN_ID/\`
@@ -209,6 +216,8 @@ append_report_footer() {
 - Backend voice clone deployed smoke: \`backend-voice-clone-deployed-smoke/$RUN_ID/\`
 - Voice clone profile selection UIQA smoke: \`voice-clone-profile-selection-smoke/$RUN_ID/\`
 - Voice clone synthesis runtime UIQA smoke: \`voice-clone-synthesis-runtime-smoke/$RUN_ID/\`
+- Tencent backend PCM-drive mock UIQA smoke: \`tencent-backend-pcm-drive-mock-smoke/$RUN_ID/\`
+- Digital-human + voice-clone combo gate: \`digital-human-voice-clone-combo-gate/$RUN_ID/\`
 - Tencent digital-human Phase 1 non-device gate: \`tencent-digital-human-phase1-non-device-gate/$RUN_ID/\`
 - Digital human TTS/viseme combo gate: \`digital-human-tts-viseme-gate/$RUN_ID/\`
 - Digital human runtime stub gate: \`digital-human-runtime-stub-smoke/$RUN_ID/\`
@@ -341,6 +350,7 @@ for guard in \
   echo-qa-evidence-bundle-check.swift \
   echo-readiness-report-check.swift \
   installable-simulator-uiqa-bundle-guard-check.swift \
+  iphoneos-generic-build-check.swift \
   tencent-digital-human-provider-stability-check.swift \
   tencent-digital-human-phase1-stability-check.swift \
   tencent-digital-human-audio-owner-stop-semantics-check.swift \
@@ -357,6 +367,7 @@ for guard in \
   voice-clone-status-feedback-check.swift \
   voice-clone-runtime-capability-check.swift \
   voice-clone-backend-contract-check.swift \
+  digital-human-voice-clone-combo-gate-check.swift \
   final-visual-qa-package-check.swift \
   release-qa-package-check.swift
 do
@@ -385,6 +396,16 @@ if [[ "$RUN_STANDARD_BUILD" == "1" ]]; then
       build
 else
   echo "Skipped by RUN_STANDARD_BUILD=0" > "$BUILD_LOG"
+fi
+
+if [[ "$RUN_IPHONEOS_GENERIC_BUILD" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/iphoneos-generic-build" \
+  DERIVED_DATA_PATH="$OUTPUT_DIR/DerivedDataIPhoneOSGenericBuild" \
+  "$SCRIPT_DIR/run-iphoneos-generic-build.sh"
+else
+  mkdir -p "$OUTPUT_DIR/iphoneos-generic-build/$RUN_ID"
+  echo "Skipped by RUN_IPHONEOS_GENERIC_BUILD=0" > "$OUTPUT_DIR/iphoneos-generic-build/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_SIMULATOR_SMOKE" == "1" ]]; then
@@ -594,6 +615,15 @@ if [[ "$RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/tencent-backend-pcm-drive-mock-smoke/$RUN_ID"
   echo "Skipped by RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE=0" > "$OUTPUT_DIR/tencent-backend-pcm-drive-mock-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_DIGITAL_HUMAN_VOICE_CLONE_COMBO_GATE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/digital-human-voice-clone-combo-gate" \
+  "$SCRIPT_DIR/run-digital-human-voice-clone-combo-gate.sh"
+else
+  mkdir -p "$OUTPUT_DIR/digital-human-voice-clone-combo-gate/$RUN_ID"
+  echo "Skipped by RUN_DIGITAL_HUMAN_VOICE_CLONE_COMBO_GATE=0" > "$OUTPUT_DIR/digital-human-voice-clone-combo-gate/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE" == "1" ]]; then
