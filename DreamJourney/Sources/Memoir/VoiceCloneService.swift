@@ -112,6 +112,17 @@ struct VoiceCloneProfileSnapshot {
 
 // MARK: - 声音复刻服务（后端代理火山引擎 Voice Clone V3）
 
+private struct VoiceClonePersonaTarget {
+    let userId: String
+    let personaScope: String
+    let digitalHumanId: String
+    let familyMemberId: String?
+
+    var isFamilyMember: Bool {
+        familyMemberId != nil
+    }
+}
+
 /// 封装 DreamJourney 后端声音复刻合同：
 /// 1. iOS 只提交授权后的声音样本给后端
 /// 2. 后端持有火山引擎声音复刻 API Key 并代理训练/查询
@@ -146,6 +157,7 @@ final class VoiceCloneService {
 
     /// 训练中的 speakerId（用于 checkPendingTraining 匹配）
     private var trainingSpeakerId: String?
+    private var trainingPersonaTarget: VoiceClonePersonaTarget?
 
     // MARK: - Init
 
@@ -168,6 +180,12 @@ final class VoiceCloneService {
     }
 
     func voiceCloneShellSnapshot() -> VoiceCloneProfileSnapshot {
+        let userId = UserManager.shared.currentUser?.id ?? "default"
+        let target = currentPersonaTarget(userId: userId)
+        if let familySnapshot = familyVoiceCloneShellSnapshot(for: target) {
+            return familySnapshot
+        }
+
         let storedStatus = UserDefaults.standard.string(forKey: sampleStatusKey)
             .flatMap(VoiceCloneSampleStatus.init(rawValue:))
         let profileId = currentSpeakerId ?? Self.emptyVoiceProfileId
@@ -199,24 +217,50 @@ final class VoiceCloneService {
         preferredProfileId: String? = nil
     ) -> VoiceCloneProfileContract? {
         let activeProfiles = profiles.filter { $0.sampleStatus != .deleted }
+        let userId = UserManager.shared.currentUser?.id ?? "default"
+        let target = currentPersonaTarget(userId: userId)
+        let targetProfiles = activeProfiles.filter { profile($0, matches: target) }
+        let personalCompatibleProfiles = activeProfiles.filter {
+            $0.personaScope.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() != "family"
+        }
+        let selectableProfiles: [VoiceCloneProfileContract]
+        if targetProfiles.isEmpty && !target.isFamilyMember {
+            selectableProfiles = personalCompatibleProfiles
+        } else {
+            selectableProfiles = targetProfiles
+        }
         let preferredProfileId = normalizedVoiceProfileId(preferredProfileId)
         if let preferredProfileId,
-           let preferred = activeProfiles.first(where: {
+           let preferred = selectableProfiles.first(where: {
                $0.voiceProfileId == preferredProfileId
            }) {
             return preferred
         }
-        if let readyProfile = activeProfiles.first(where: { Self.isBackendProfileReadyForUse($0) }) {
+        if let readyProfile = selectableProfiles.first(where: { Self.isBackendProfileReadyForUse($0) }) {
             return readyProfile
         }
-        return activeProfiles.first(where: { $0.sampleStatus == .ready && $0.isEnabled })
-            ?? activeProfiles.first(where: { $0.sampleStatus == .pending })
-            ?? activeProfiles.first(where: { $0.sampleStatus == .failed })
-            ?? activeProfiles.first
-            ?? profiles.first
+        return selectableProfiles.first(where: { $0.sampleStatus == .ready && $0.isEnabled })
+            ?? selectableProfiles.first(where: { $0.sampleStatus == .pending })
+            ?? selectableProfiles.first(where: { $0.sampleStatus == .failed })
+            ?? selectableProfiles.first
     }
 
     func persistSnapshot(_ snapshot: VoiceCloneProfileSnapshot) {
+        let userId = UserManager.shared.currentUser?.id ?? "default"
+        persistSnapshot(snapshot, target: currentPersonaTarget(userId: userId))
+    }
+
+    private func persistSnapshot(_ snapshot: VoiceCloneProfileSnapshot, target: VoiceClonePersonaTarget) {
+        if let memberId = target.familyMemberId {
+            FamilyRepository.shared.updateVoiceProfile(
+                memberId: memberId,
+                voiceProfileId: normalizedVoiceProfileId(snapshot.voiceProfileId),
+                sampleStatus: snapshot.sampleStatus.rawValue,
+                voiceEnabled: snapshot.isEnabled
+            )
+            return
+        }
+
         if let speakerId = normalizedVoiceProfileId(snapshot.voiceProfileId),
            snapshot.sampleStatus != .notProvided,
            snapshot.sampleStatus != .deleted {
@@ -266,11 +310,11 @@ final class VoiceCloneService {
         }
 
         let userId = UserManager.shared.currentUser?.id ?? "default"
+        let target = currentPersonaTarget(userId: userId)
         DreamJourneyBackendClient.shared.disableVoiceCloneProfile(userId: userId, profileId: trimmedProfileId) { [weak self] result in
             switch result {
             case .success(let profile):
-                self?.saveSpeakerId(profile.voiceProfileId)
-                self?.saveSampleStatus(profile.sampleStatus)
+                self?.persistBackendProfileIfUsable(profile, target: target)
                 completion(.success(VoiceCloneProfileSnapshot(backendContract: profile)))
             case .failure(let error):
                 DDLogError("[VoiceClone] 后端禁用失败: \(error.localizedDescription)")
@@ -295,11 +339,11 @@ final class VoiceCloneService {
         }
 
         let userId = UserManager.shared.currentUser?.id ?? "default"
+        let target = currentPersonaTarget(userId: userId)
         DreamJourneyBackendClient.shared.deleteVoiceCloneProfile(userId: userId, profileId: trimmedProfileId) { [weak self] result in
             switch result {
             case .success(let profile):
-                self?.clearStoredSpeakerId()
-                self?.saveSampleStatus(profile.sampleStatus)
+                self?.persistBackendProfileIfUsable(profile, target: target)
                 completion(.success(VoiceCloneProfileSnapshot(backendContract: profile)))
             case .failure(let error):
                 DDLogError("[VoiceClone] 后端删除失败: \(error.localizedDescription)")
@@ -324,11 +368,12 @@ final class VoiceCloneService {
         }
 
         let userId = UserManager.shared.currentUser?.id ?? "default"
+        let target = currentPersonaTarget(userId: userId)
         DreamJourneyBackendClient.shared.acceptVoiceCloneQuality(userId: userId, profileId: trimmedProfileId) { [weak self] result in
             switch result {
             case .success(let profile):
                 let snapshot = VoiceCloneProfileSnapshot(backendContract: profile)
-                self?.persistSnapshot(snapshot)
+                self?.persistSnapshot(snapshot, target: target)
                 completion(.success(snapshot))
             case .failure(let error):
                 DDLogError("[VoiceClone] 音色试听确认失败: \(error.localizedDescription)")
@@ -352,9 +397,11 @@ final class VoiceCloneService {
         UserDefaults.standard.removeObject(forKey: speakerIdKey)
     }
 
-    private func persistBackendProfileIfUsable(_ profile: VoiceCloneProfileContract) {
+    private func persistBackendProfileIfUsable(_ profile: VoiceCloneProfileContract, target: VoiceClonePersonaTarget? = nil) {
         let snapshot = VoiceCloneProfileSnapshot(backendContract: profile)
-        persistSnapshot(snapshot)
+        let userId = UserManager.shared.currentUser?.id ?? "default"
+        let resolvedTarget = target ?? personaTarget(from: profile, fallbackUserId: userId) ?? currentPersonaTarget(userId: userId)
+        persistSnapshot(snapshot, target: resolvedTarget)
     }
 
     private static func isBackendProfileReadyForUse(_ profile: VoiceCloneProfileContract) -> Bool {
@@ -384,6 +431,95 @@ final class VoiceCloneService {
             return nil
         }
         return trimmed
+    }
+
+    private func currentPersonaTarget(userId: String) -> VoiceClonePersonaTarget {
+        let context = DigitalHumanContextStore.shared.current
+        let normalizedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let ownerId = context.ownerId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isFamilyPersona = !context.isSelfAssistant
+            && !ownerId.isEmpty
+            && ownerId != normalizedUserId
+
+        if isFamilyPersona {
+            return VoiceClonePersonaTarget(
+                userId: normalizedUserId,
+                personaScope: "family",
+                digitalHumanId: ownerId,
+                familyMemberId: ownerId
+            )
+        }
+
+        return VoiceClonePersonaTarget(
+            userId: normalizedUserId,
+            personaScope: "personal",
+            digitalHumanId: normalizedUserId,
+            familyMemberId: nil
+        )
+    }
+
+    private func personaTarget(
+        from profile: VoiceCloneProfileContract,
+        fallbackUserId: String
+    ) -> VoiceClonePersonaTarget? {
+        let scope = profile.personaScope.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let digitalHumanId = profile.digitalHumanId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let userId = fallbackUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if scope == "family", !digitalHumanId.isEmpty {
+            return VoiceClonePersonaTarget(
+                userId: userId,
+                personaScope: "family",
+                digitalHumanId: digitalHumanId,
+                familyMemberId: digitalHumanId
+            )
+        }
+
+        if scope == "personal" {
+            return VoiceClonePersonaTarget(
+                userId: userId,
+                personaScope: "personal",
+                digitalHumanId: digitalHumanId.isEmpty ? userId : digitalHumanId,
+                familyMemberId: nil
+            )
+        }
+
+        return nil
+    }
+
+    private func profile(_ profile: VoiceCloneProfileContract, matches target: VoiceClonePersonaTarget) -> Bool {
+        let scope = profile.personaScope.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let digitalHumanId = profile.digitalHumanId.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let familyMemberId = target.familyMemberId {
+            return scope == "family" && digitalHumanId == familyMemberId
+        }
+
+        return scope == "personal"
+            && (digitalHumanId.isEmpty || digitalHumanId == target.digitalHumanId || digitalHumanId == target.userId)
+    }
+
+    private func familyVoiceCloneShellSnapshot(for target: VoiceClonePersonaTarget) -> VoiceCloneProfileSnapshot? {
+        guard let memberId = target.familyMemberId,
+              let member = FamilyRepository.shared.get(by: memberId) else {
+            return nil
+        }
+        let status = VoiceCloneSampleStatus(rawValue: member.voiceSampleStatus) ?? .notProvided
+        let profileId = member.normalizedVoiceProfileId ?? Self.emptyVoiceProfileId
+        let readyForEcho = member.isVoiceProfileReadyForEcho
+        return VoiceCloneProfileSnapshot(
+            voiceProfileId: profileId,
+            sampleStatus: status,
+            authorizationCopy: Self.authorizationCopy,
+            isEnabled: member.voiceEnabled,
+            realCloneProviderReady: readyForEcho,
+            qualityAcceptanceRequired: !readyForEcho,
+            disableContract: Self.disableContract,
+            deleteContract: Self.deleteContract,
+            providerMode: "familyProfile",
+            providerStatus: member.voiceCloneStatusLabel,
+            providerMessage: ""
+        )
     }
 
     /// 上传音频训练声音复刻
@@ -429,9 +565,12 @@ final class VoiceCloneService {
 
         let base64Audio = audioData.base64EncodedString()
 
+        let userId = UserManager.shared.currentUser?.id ?? "default"
+        let target = currentPersonaTarget(userId: userId)
+
         // 失败/删除/禁用后的重试不能复用旧 speakerId，否则 provider 侧可能继续命中
         // 已经失败或归属错误的音色资源，导致 resource mismatch 一直存在。
-        let finalSpeakerId = speakerId ?? reusableSpeakerIdForTraining() ?? Self.makeSpeakerId()
+        let finalSpeakerId = speakerId ?? reusableSpeakerIdForTraining(target: target) ?? Self.makeSpeakerId()
 
         // 确定音频格式
         guard let format = audioFormat(from: audioURL) else {
@@ -439,7 +578,6 @@ final class VoiceCloneService {
             return
         }
 
-        let userId = UserManager.shared.currentUser?.id ?? "default"
         let payload: [String: Any] = [
             "userId": userId,
             "voiceProfileId": finalSpeakerId,
@@ -448,20 +586,20 @@ final class VoiceCloneService {
             "authorizationConfirmed": authorizationConfirmed,
             "authorizationVersion": "voice-clone-consent-v1",
             "authorizationText": Self.authorizationCopy,
-            "personaScope": "personal",
-            "digitalHumanId": userId,
+            "personaScope": target.personaScope,
+            "digitalHumanId": target.digitalHumanId,
             "audioBase64": base64Audio,
             "audioFormat": format,
             "language": language,
             "privacyMetadata": ["scope": "generationAllowed"],
         ]
 
-        DDLogInfo("[VoiceClone] 通过后端提交音色训练: \(finalSpeakerId), 音频大小: \(audioData.count) bytes")
+        DDLogInfo("[VoiceClone] 通过后端提交音色训练: \(finalSpeakerId), scope=\(target.personaScope), digitalHumanId=\(target.digitalHumanId), 音频大小: \(audioData.count) bytes")
         DreamJourneyBackendClient.shared.saveVoiceCloneProfile(payload: payload) { [weak self] result in
             guard let self else { return }
             switch result {
             case .success(let profile):
-                self.persistBackendProfileIfUsable(profile)
+                self.persistBackendProfileIfUsable(profile, target: target)
                 DDLogInfo("[VoiceClone] 后端已接收音色训练: \(profile.voiceProfileId), status=\(profile.sampleStatus.rawValue)")
                 onProfileAccepted?(VoiceCloneProfileSnapshot(backendContract: profile))
                 if profile.sampleStatus == .ready {
@@ -469,7 +607,7 @@ final class VoiceCloneService {
                 } else if profile.sampleStatus == .failed {
                     completion(.failure(.trainingFailed(code: 3, message: Self.trainingFailureMessage(from: profile.providerMessage))))
                 } else {
-                    self.startPollingStatus(speakerId: profile.voiceProfileId, completion: completion)
+                    self.startPollingStatus(speakerId: profile.voiceProfileId, target: target, completion: completion)
                 }
             case .failure(let error):
                 DDLogError("[VoiceClone] 后端训练请求失败: \(error.localizedDescription)")
@@ -481,23 +619,32 @@ final class VoiceCloneService {
     /// 查询声音复刻训练状态
     func queryStatus(speakerId: String? = nil,
                      completion: @escaping (Result<VoiceCloneStatus, VoiceCloneError>) -> Void) {
+        let userId = UserManager.shared.currentUser?.id ?? "default"
+        let target = currentPersonaTarget(userId: userId)
+        queryStatus(speakerId: speakerId, target: target, completion: completion)
+    }
 
+    private func queryStatus(
+        speakerId: String? = nil,
+        target: VoiceClonePersonaTarget,
+        completion: @escaping (Result<VoiceCloneStatus, VoiceCloneError>) -> Void
+    ) {
         guard DreamJourneyBackendClient.shared.isVoiceCloneProfileConfigured else {
             completion(.failure(.apiKeyMissing))
             return
         }
 
-        let sid = speakerId ?? currentSpeakerId ?? ""
+        let sid = speakerId ?? reusableSpeakerIdForTraining(target: target) ?? currentSpeakerId ?? ""
         guard !sid.isEmpty else {
             completion(.failure(.speakerIdNotFound))
             return
         }
 
-        let userId = UserManager.shared.currentUser?.id ?? "default"
+        let userId = target.userId.isEmpty ? (UserManager.shared.currentUser?.id ?? "default") : target.userId
         DreamJourneyBackendClient.shared.refreshVoiceCloneProfile(userId: userId, profileId: sid) { [weak self] result in
             switch result {
             case .success(let profile):
-                self?.persistBackendProfileIfUsable(profile)
+                self?.persistBackendProfileIfUsable(profile, target: target)
                 DDLogInfo("[VoiceClone] 后端查询状态: speakerId=\(sid), status=\(profile.sampleStatus.rawValue)")
                 completion(.success(Self.cloneStatus(from: profile)))
             case .failure(let error):
@@ -529,7 +676,22 @@ final class VoiceCloneService {
         }
     }
 
-    private func reusableSpeakerIdForTraining() -> String? {
+    private func reusableSpeakerIdForTraining(target: VoiceClonePersonaTarget? = nil) -> String? {
+        if let target,
+           let memberId = target.familyMemberId,
+           let member = FamilyRepository.shared.get(by: memberId),
+           let voiceProfileId = member.normalizedVoiceProfileId {
+            let storedStatus = VoiceCloneSampleStatus(rawValue: member.voiceSampleStatus)
+            switch storedStatus {
+            case .failed, .deleted, .disabled:
+                return nil
+            case .notProvided, .none:
+                return nil
+            case .pending, .ready:
+                return voiceProfileId
+            }
+        }
+
         guard let speakerId = currentSpeakerId?.trimmingCharacters(in: .whitespacesAndNewlines),
               !speakerId.isEmpty else {
             return nil
@@ -584,8 +746,13 @@ final class VoiceCloneService {
         guard let speakerId = trainingSpeakerId ?? currentSpeakerId else { return }
         // 只有在有 pendingCompletion 时才检查（说明有等待方）
         guard pendingCompletion != nil || pollTimer != nil else { return }
-        isVoiceReady(speakerId: speakerId) { [weak self] ready in
-            guard let self = self, ready else { return }
+        let target = trainingPersonaTarget ?? currentPersonaTarget(userId: UserManager.shared.currentUser?.id ?? "default")
+        queryStatus(speakerId: speakerId, target: target) { [weak self] result in
+            guard let self = self else { return }
+            guard case .success(let status) = result,
+                  status == .success || status == .active else {
+                return
+            }
             DDLogInfo("[VoiceClone] 回前台检测到声音复刻已就绪: \(speakerId)")
             // 在主线程停止轮询（Timer 注册在主线程 RunLoop）
             DispatchQueue.main.async {
@@ -596,6 +763,7 @@ final class VoiceCloneService {
             let completion = self.pendingCompletion
             self.pendingCompletion = nil
             self.trainingSpeakerId = nil
+            self.trainingPersonaTarget = nil
             completion?(.success(speakerId))
         }
     }
@@ -606,9 +774,17 @@ final class VoiceCloneService {
     ///   - speakerId: 要等待的音色 ID
     ///   - completion: 结果回调
     func waitForVoiceReady(speakerId: String, completion: @escaping (Result<String, VoiceCloneError>) -> Void) {
+        let target = currentPersonaTarget(userId: UserManager.shared.currentUser?.id ?? "default")
         // 先快速检查一次
-        isVoiceReady(speakerId: speakerId) { [weak self] ready in
+        queryStatus(speakerId: speakerId, target: target) { [weak self] result in
             guard let self = self else { return }
+            let ready: Bool
+            switch result {
+            case .success(let status):
+                ready = status == .success || status == .active
+            case .failure:
+                ready = false
+            }
             if ready {
                 DDLogInfo("[VoiceClone] 音色已就绪，无需等待: \(speakerId)")
                 completion(.success(speakerId))
@@ -619,11 +795,13 @@ final class VoiceCloneService {
                     // 轮询已在进行，只需注册回调
                     self.pendingCompletion = completion
                     self.trainingSpeakerId = speakerId
+                    self.trainingPersonaTarget = target
                 } else {
                     // 没有轮询在进行，启动新的轮询
-                    self.startPollingStatus(speakerId: speakerId, completion: completion)
+                    self.startPollingStatus(speakerId: speakerId, target: target, completion: completion)
                     self.pendingCompletion = nil  // startPollingStatus 自己管理 completion
                     self.trainingSpeakerId = speakerId
+                    self.trainingPersonaTarget = target
                 }
             }
         }
@@ -631,12 +809,17 @@ final class VoiceCloneService {
 
     // MARK: - 轮询训练状态
 
-    private func startPollingStatus(speakerId: String, completion: @escaping (Result<String, VoiceCloneError>) -> Void) {
+    private func startPollingStatus(
+        speakerId: String,
+        target: VoiceClonePersonaTarget,
+        completion: @escaping (Result<String, VoiceCloneError>) -> Void
+    ) {
         var pollCount = 0
         let maxPolls = 30  // 最多轮询 30 次，约 2.5 分钟
 
         pollTimer?.invalidate()
         trainingSpeakerId = speakerId
+        trainingPersonaTarget = target
         pollTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] timer in
             guard let self = self else { timer.invalidate(); return }
 
@@ -645,6 +828,7 @@ final class VoiceCloneService {
                 timer.invalidate()
                 self.pollTimer = nil
                 self.trainingSpeakerId = nil
+                self.trainingPersonaTarget = nil
                 let pending = self.pendingCompletion
                 self.pendingCompletion = nil
                 // 通知两个回调方
@@ -653,17 +837,20 @@ final class VoiceCloneService {
                 return
             }
 
-            self.queryStatus(speakerId: speakerId) { result in
+            self.queryStatus(speakerId: speakerId, target: target) { result in
                 switch result {
                 case .success(let status):
                     switch status {
                     case .success, .active:
                         DDLogInfo("[VoiceClone] 音色训练完成: \(speakerId)")
-                        self.saveSampleStatus(.ready)
+                        if !target.isFamilyMember {
+                            self.saveSampleStatus(.ready)
+                        }
                         DispatchQueue.main.async {
                             timer.invalidate()
                             self.pollTimer = nil
                             self.trainingSpeakerId = nil
+                            self.trainingPersonaTarget = nil
                         }
                         // 回调原始调用方 + 等待方（如果有）
                         let pending = self.pendingCompletion
@@ -675,6 +862,7 @@ final class VoiceCloneService {
                             timer.invalidate()
                             self.pollTimer = nil
                             self.trainingSpeakerId = nil
+                            self.trainingPersonaTarget = nil
                         }
                         let pending = self.pendingCompletion
                         self.pendingCompletion = nil
@@ -689,6 +877,7 @@ final class VoiceCloneService {
                             timer.invalidate()
                             self.pollTimer = nil
                             self.trainingSpeakerId = nil
+                            self.trainingPersonaTarget = nil
                         }
                         let pending = self.pendingCompletion
                         self.pendingCompletion = nil

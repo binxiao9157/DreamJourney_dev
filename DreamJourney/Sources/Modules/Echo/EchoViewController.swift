@@ -402,6 +402,8 @@ final class EchoViewController: UIViewController {
     private var pendingAIText: String?
     private var digitalHumanReplyPrewarmWorkItem: DispatchWorkItem?
     private var digitalHumanProviderTextOverTimeoutWorkItem: DispatchWorkItem?
+    private var digitalHumanRuntimeRecoveryWorkItem: DispatchWorkItem?
+    private var digitalHumanRuntimeRecoveryAttemptsByContext: [String: Int] = [:]
     private let digitalHumanConversation = DigitalHumanConversationCoordinator()
     private var hasRunTencentDigitalHumanTextDriveSmoke = false
     private var hasRunTencentDigitalHumanPCMDriveSmoke = false
@@ -426,6 +428,9 @@ final class EchoViewController: UIViewController {
     private static let tencentDigitalHumanPCMDriveFadeDuration: TimeInterval = 0.06
     private static let tencentDigitalHumanPCMDriveStopProbeDelay: TimeInterval = 1.6
     private static let tencentProviderDialogErrorSuppressionWindow: TimeInterval = 3.0
+    private static let tencentDigitalHumanContextSwitchReconnectDelay: TimeInterval = 1.4
+    private static let tencentDigitalHumanOpenFailureRecoveryDelay: TimeInterval = 2.0
+    private static let tencentDigitalHumanOpenFailureRecoveryLimit = 1
 
     private struct TencentPCMDriveTestSignal {
         let data: Data
@@ -919,12 +924,19 @@ final class EchoViewController: UIViewController {
     }
 
     @objc private func digitalHumanContextDidChange() {
-        reconcileDigitalHumanRuntimeWithCurrentContext(reason: "contextDidChange")
+        let didReleaseStaleRuntime = reconcileDigitalHumanRuntimeWithCurrentContext(reason: "contextDidChange")
         viewModel.refreshArchiveContextStatus()
         updatePersonaBadge()
         refreshTranscriptPreviewForCurrentContextIfIdle()
         if view.window != nil {
-            prepareCloudDigitalHumanRuntimeIfNeeded()
+            if didReleaseStaleRuntime {
+                scheduleCloudDigitalHumanRuntimeRecovery(
+                    reason: "contextDidChange",
+                    delay: Self.tencentDigitalHumanContextSwitchReconnectDelay
+                )
+            } else {
+                prepareCloudDigitalHumanRuntimeIfNeeded()
+            }
         }
     }
 
@@ -1093,6 +1105,7 @@ final class EchoViewController: UIViewController {
         resetsAudioOwnerToOrdinaryEcho: Bool,
         removeProviderViewMessage: String? = nil
     ) {
+        cancelDigitalHumanRuntimeRecovery()
         pendingDigitalHumanSessionRequestID = nil
         pendingDigitalHumanSessionContextKey = nil
         cancelDigitalHumanReplyPrewarm()
@@ -1146,7 +1159,8 @@ final class EchoViewController: UIViewController {
             && currentDigitalHumanRuntimeContextKey() == contextKey
     }
 
-    private func reconcileDigitalHumanRuntimeWithCurrentContext(reason: String) {
+    @discardableResult
+    private func reconcileDigitalHumanRuntimeWithCurrentContext(reason: String) -> Bool {
         let desiredContextKey = currentDigitalHumanRuntimeContextKey()
         if let pendingContextKey = pendingDigitalHumanSessionContextKey,
            pendingContextKey != desiredContextKey {
@@ -1162,7 +1176,7 @@ final class EchoViewController: UIViewController {
 
         guard let runtimeContextKey = digitalHumanRuntimeContextKey,
               runtimeContextKey != desiredContextKey else {
-            return
+            return false
         }
 
         guard view.window != nil else {
@@ -1171,7 +1185,7 @@ final class EchoViewController: UIViewController {
                 "reason=\(reason) runtimeContextKey=\(runtimeContextKey) " +
                 "desiredContextKey=\(desiredContextKey)"
             )
-            return
+            return false
         }
 
         digitalHumanStatusDetailLabel.text = "正在切换回响对象"
@@ -1183,7 +1197,66 @@ final class EchoViewController: UIViewController {
         DialogEngineManager.shared.setLocalTTSPlaybackEnabled(false)
         setEchoAudioOwner(.fallbackMuted, reason: "contextChanged")
         lastEchoRuntimeFallbackReason = nil
+        digitalHumanRuntimeRecoveryAttemptsByContext[desiredContextKey] = 0
         recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanContextChanged")
+        return true
+    }
+
+    private func cancelDigitalHumanRuntimeRecovery() {
+        digitalHumanRuntimeRecoveryWorkItem?.cancel()
+        digitalHumanRuntimeRecoveryWorkItem = nil
+    }
+
+    private func scheduleCloudDigitalHumanRuntimeRecovery(reason: String, delay: TimeInterval) {
+        guard shouldShowDigitalHumanLivePanel,
+              view.window != nil else {
+            return
+        }
+
+        let contextKey = currentDigitalHumanRuntimeContextKey()
+        cancelDigitalHumanRuntimeRecovery()
+        digitalHumanStatusDetailLabel.text = "正在重新连接数字人"
+        digitalHumanLivePanelView?.showProviderPlaceholder("正在重新连接数字人")
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self,
+                  self.view.window != nil,
+                  self.shouldShowDigitalHumanLivePanel,
+                  self.digitalHumanRuntime == nil,
+                  self.currentDigitalHumanRuntimeContextKey() == contextKey else {
+                return
+            }
+            self.hasRequestedCloudDigitalHumanRuntime = false
+            self.prepareCloudDigitalHumanRuntimeIfNeeded()
+            self.recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanRuntimeRecovery:\(reason)")
+            print(
+                "[TencentDigitalHuman] retrying provider session " +
+                "reason=\(reason) contextKey=\(contextKey)"
+            )
+        }
+        digitalHumanRuntimeRecoveryWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+
+    private func shouldRecoverFromDigitalHumanRuntimeFailure(reason: String) -> Bool {
+        guard shouldShowDigitalHumanLivePanel,
+              view.window != nil else {
+            return false
+        }
+        guard reason == "tencent_cloud_open_failed"
+                || reason == "tencent_cloud_quota_exceeded"
+                || reason.localizedCaseInsensitiveContains("LimitExceeded")
+                || reason.contains("超过配额") else {
+            return false
+        }
+
+        let contextKey = currentDigitalHumanRuntimeContextKey()
+        let attempts = digitalHumanRuntimeRecoveryAttemptsByContext[contextKey, default: 0]
+        guard attempts < Self.tencentDigitalHumanOpenFailureRecoveryLimit else {
+            return false
+        }
+        digitalHumanRuntimeRecoveryAttemptsByContext[contextKey] = attempts + 1
+        return true
     }
 
     private func updatePersonaBadge() {
@@ -1742,7 +1815,13 @@ final class EchoViewController: UIViewController {
     }
 
     private func prepareCloudDigitalHumanRuntimeIfNeeded() {
-        reconcileDigitalHumanRuntimeWithCurrentContext(reason: "prepare")
+        if reconcileDigitalHumanRuntimeWithCurrentContext(reason: "prepare") {
+            scheduleCloudDigitalHumanRuntimeRecovery(
+                reason: "prepareContextChanged",
+                delay: Self.tencentDigitalHumanContextSwitchReconnectDelay
+            )
+            return
+        }
         let context = DigitalHumanContextStore.shared.current
         let contextKey = digitalHumanRuntimeContextKey(for: context)
         guard shouldShowDigitalHumanLivePanel,
@@ -2732,6 +2811,8 @@ final class EchoViewController: UIViewController {
                 renderVoiceStatus(text: "腾讯数智人正在回响", isVisible: true)
             }
         case .ready:
+            cancelDigitalHumanRuntimeRecovery()
+            digitalHumanRuntimeRecoveryAttemptsByContext[currentDigitalHumanRuntimeContextKey()] = 0
             applyEchoAudioRoutePolicy()
             completeTencentDigitalHumanReplyIfNeeded()
             runTencentDigitalHumanTextDriveSmokeIfNeeded(trigger: "runtimeReady")
@@ -2768,13 +2849,25 @@ final class EchoViewController: UIViewController {
     private func degradeTencentDigitalHumanRoute(reason: String) {
         digitalHumanConversation.clearForRouteFailure()
         lastEchoRuntimeFallbackReason = reason
-        let message = digitalHumanRouteFailureMessage(for: reason)
+        let shouldRecover = shouldRecoverFromDigitalHumanRuntimeFailure(reason: reason)
+        let message = shouldRecover
+            ? (
+                detail: "数字人正在重新连接，请稍候",
+                panel: "正在重新连接数字人"
+            )
+            : digitalHumanRouteFailureMessage(for: reason)
         digitalHumanStatusDetailLabel.text = message.detail
         releaseDigitalHumanRuntime(
             reason: "routeFailure:\(reason)",
             resetsAudioOwnerToOrdinaryEcho: true,
             removeProviderViewMessage: message.panel
         )
+        if shouldRecover {
+            scheduleCloudDigitalHumanRuntimeRecovery(
+                reason: "runtimeFailure:\(reason)",
+                delay: Self.tencentDigitalHumanOpenFailureRecoveryDelay
+            )
+        }
         print("[TencentDigitalHuman] route fallback after runtime failure turnID=\(digitalHumanConversation.currentTurnID ?? "unknown"): \(reason)")
     }
 

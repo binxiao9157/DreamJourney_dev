@@ -166,7 +166,9 @@ final class TencentDigitalHumanCloudRuntime: DigitalHumanRuntime {
     private func openFailureCode(for error: Error) -> String {
         let message = error.localizedDescription
         if message.localizedCaseInsensitiveContains("LimitExceeded")
-            || message.contains("超过配额") {
+            || message.localizedCaseInsensitiveContains("Quota")
+            || message.contains("超过配额")
+            || message.contains("并发配额") {
             return "tencent_cloud_quota_exceeded"
         }
         return "tencent_cloud_open_failed"

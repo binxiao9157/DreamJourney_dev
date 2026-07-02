@@ -6,6 +6,7 @@ final class FamilyRepository {
     static let shared = FamilyRepository()
     private init() {
         loadModeOverrides()
+        loadVoiceProfileOverrides()
         seedMockData()
         NotificationCenter.default.addObserver(self, selector: #selector(onKBUpdated), name: .kbLiteDidUpdate, object: nil)
         // 延迟首次同步（等知识库加载完成）
@@ -20,7 +21,15 @@ final class FamilyRepository {
 
     private var members: [FamilyMember] = []
     private var modeOverrides: [String: DigitalHumanMode] = [:]
+    private var voiceProfileOverrides: [String: VoiceProfileOverride] = [:]
     private let modeOverridesKey = "dj.family.digitalHumanModeOverrides"
+    private let voiceProfileOverridesKey = "dj.family.voiceProfileOverrides"
+
+    private struct VoiceProfileOverride: Codable {
+        var voiceProfileId: String
+        var voiceSampleStatus: String
+        var voiceEnabled: Bool
+    }
 
     func getAll() -> [FamilyMember] { return members }
 
@@ -49,6 +58,26 @@ final class FamilyRepository {
         members[index].digitalHumanMode = mode
         modeOverrides[memberId] = mode
         persistModeOverrides()
+        notifyMembersChanged()
+    }
+
+    func updateVoiceProfile(memberId: String, voiceProfileId: String?, sampleStatus: String, voiceEnabled: Bool) {
+        guard let index = members.firstIndex(where: { $0.id == memberId }) else { return }
+        let trimmedProfileId = voiceProfileId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        members[index].voiceProfileId = trimmedProfileId.isEmpty ? nil : trimmedProfileId
+        members[index].voiceSampleStatus = sampleStatus
+        members[index].voiceEnabled = voiceEnabled
+
+        if trimmedProfileId.isEmpty {
+            voiceProfileOverrides.removeValue(forKey: memberId)
+        } else {
+            voiceProfileOverrides[memberId] = VoiceProfileOverride(
+                voiceProfileId: trimmedProfileId,
+                voiceSampleStatus: sampleStatus,
+                voiceEnabled: voiceEnabled
+            )
+        }
+        persistVoiceProfileOverrides()
         notifyMembersChanged()
     }
 
@@ -166,7 +195,7 @@ final class FamilyRepository {
                 lastUpdated = "未知"
             }
 
-            let member = applyModeOverride(to: FamilyMember(
+            let member = applyLocalOverrides(to: FamilyMember(
                 id: "kb_\(person.id.prefix(8))",
                 name: person.name,
                 relation: relation,
@@ -189,20 +218,26 @@ final class FamilyRepository {
             FamilyMember(id: "fm_001", name: "林静文", relation: "祖母",  phone: nil, isOnline: false, lastUpdated: "2小时前"),
             FamilyMember(id: "fm_002", name: "张国强", relation: "父亲",  phone: nil, isOnline: false, lastUpdated: "昨天"),
             FamilyMember(id: "fm_003", name: "周美芳", relation: "母亲",  phone: nil, isOnline: true,  lastUpdated: "刚刚")
-        ].map(applyModeOverride(to:))
+        ].map(applyLocalOverrides(to:))
     }
 
-    private func applyModeOverride(to member: FamilyMember) -> FamilyMember {
-        guard let mode = modeOverrides[member.id] else { return member }
+    private func applyLocalOverrides(to member: FamilyMember) -> FamilyMember {
         var updated = member
-        updated.digitalHumanMode = mode
+        if let mode = modeOverrides[member.id] {
+            updated.digitalHumanMode = mode
+        }
+        if let voiceOverride = voiceProfileOverrides[member.id] {
+            updated.voiceProfileId = voiceOverride.voiceProfileId
+            updated.voiceSampleStatus = voiceOverride.voiceSampleStatus
+            updated.voiceEnabled = voiceOverride.voiceEnabled
+        }
         return updated
     }
 
     private func mergeRemoteMembers(_ remoteMembers: [FamilyMember]) {
         var didChangeMembers = false
         for remoteMember in remoteMembers {
-            let updatedMember = applyModeOverride(to: remoteMember)
+            let updatedMember = applyLocalOverrides(to: remoteMember)
             if let index = members.firstIndex(where: { $0.id == updatedMember.id }) {
                 members[index] = updatedMember
                 didChangeMembers = true
@@ -222,7 +257,7 @@ final class FamilyRepository {
     }
 
     private func upsert(_ member: FamilyMember) {
-        let updatedMember = applyModeOverride(to: member)
+        let updatedMember = applyLocalOverrides(to: member)
         if let index = members.firstIndex(where: { $0.id == updatedMember.id }) {
             members[index] = updatedMember
         } else if let phone = updatedMember.phone,
@@ -249,6 +284,20 @@ final class FamilyRepository {
     private func persistModeOverrides() {
         let rawValues = modeOverrides.mapValues(\.rawValue)
         UserDefaults.standard.set(rawValues, forKey: modeOverridesKey)
+    }
+
+    private func loadVoiceProfileOverrides() {
+        guard let data = UserDefaults.standard.data(forKey: voiceProfileOverridesKey),
+              let overrides = try? JSONDecoder().decode([String: VoiceProfileOverride].self, from: data) else {
+            voiceProfileOverrides = [:]
+            return
+        }
+        voiceProfileOverrides = overrides
+    }
+
+    private func persistVoiceProfileOverrides() {
+        guard let data = try? JSONEncoder().encode(voiceProfileOverrides) else { return }
+        UserDefaults.standard.set(data, forKey: voiceProfileOverridesKey)
     }
 
     private func notifyMembersChanged() {
