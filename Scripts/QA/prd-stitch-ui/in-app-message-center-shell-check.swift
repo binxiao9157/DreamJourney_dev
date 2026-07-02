@@ -55,6 +55,11 @@ let docs = read("docs/superpowers/status/2026-06-21-time-letter-public-delivery.
     "careSignalId",
     "careSignalStatus",
     "careSignalSeverity",
+    "protocol SystemNoticeMessageSource",
+    "static func fromSystemNotice",
+    "systemNoticeId",
+    "systemNoticeCategory",
+    "systemNoticeSeverity",
 ].forEach {
     assertContains(messageCenter, $0, "unified model should include \($0)")
 }
@@ -85,6 +90,11 @@ assertContains(
     "only failed/stale/attention care states should become care-signal messages"
 )
 assertContains(
+    messageCenter,
+    "isSystemNoticeVisibleInMessageCenter",
+    "only published system notices should become message-center notices"
+)
+assertContains(
     repository,
     "func inAppMessageCenterSnapshot(",
     "repository should expose a unified message center snapshot"
@@ -98,6 +108,11 @@ assertContains(
     repository,
     "careSignalMessages",
     "repository should aggregate care signal messages"
+)
+assertContains(
+    repository,
+    "systemNoticeMessages",
+    "repository should aggregate system notice messages"
 )
 assertContains(
     repository,
@@ -160,6 +175,11 @@ assertContains(
     "system notice message kind should remain guarded in UI routing"
 )
 assertContains(
+    archiveView,
+    "openSystemNoticeMessage",
+    "system notice messages should route through a minimal system notice handler"
+)
+assertContains(
     appDelegate,
     "inAppMessageCenterSnapshot",
     "UIQA smoke should assert the unified message center snapshot"
@@ -185,6 +205,11 @@ assertContains(
     "UIQA smoke should export care signal message count"
 )
 assertContains(
+    appDelegate,
+    "systemNoticeMessageCount",
+    "UIQA smoke should export system notice message count"
+)
+assertContains(
     project,
     "InAppMessageCenter.swift",
     "new model should be included in the Xcode target"
@@ -198,6 +223,11 @@ assertContains(
     docs,
     "关怀提醒接入 InAppMessage",
     "time-letter status doc should document the care signal provider"
+)
+assertContains(
+    docs,
+    "系统通知接入 InAppMessage",
+    "time-letter status doc should document the system notice provider"
 )
 
 print("In-app message center shell checks passed")

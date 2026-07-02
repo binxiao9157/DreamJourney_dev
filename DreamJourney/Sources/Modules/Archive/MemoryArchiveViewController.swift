@@ -2704,7 +2704,8 @@ final class MemoryArchiveViewController: UIViewController {
     private func currentInAppMessageCenterSnapshot() -> InAppMessageCenterSnapshot {
         repository.inAppMessageCenterSnapshot(
             familyInvitationSources: FamilyRepository.shared.getAll().map { $0 as FamilyInvitationMessageSource },
-            careSignalSources: currentCareSignalMessageSources()
+            careSignalSources: currentCareSignalMessageSources(),
+            systemNoticeSources: SystemNoticeMessageStore.shared.sources()
         )
     }
 
@@ -2764,7 +2765,7 @@ final class MemoryArchiveViewController: UIViewController {
         case .careSignal:
             openCareSignalMessage(message)
         case .systemNotice:
-            showToast("系统通知会在后续接入消息中心", type: .info)
+            openSystemNoticeMessage(message)
         }
     }
 
@@ -2790,6 +2791,19 @@ final class MemoryArchiveViewController: UIViewController {
             return
         }
         tabBarController.selectedIndex = min(2, (tabBarController.viewControllers?.count ?? 1) - 1)
+    }
+
+    private func openSystemNoticeMessage(_ message: InAppMessage) {
+        repository.markInAppMessageRead(message) { [weak self] _ in
+            self?.refreshContent()
+        }
+        let alert = UIAlertController(
+            title: message.title,
+            message: message.summary,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "知道了", style: .default))
+        present(alert, animated: true)
     }
 
     private func openTimeLetterReminder(_ reminder: TimeLetterMailboxReminder) {

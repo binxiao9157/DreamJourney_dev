@@ -86,6 +86,23 @@ extension CareSignalMessageSource {
     }
 }
 
+protocol SystemNoticeMessageSource {
+    var systemNoticeId: String { get }
+    var systemNoticeTitle: String { get }
+    var systemNoticeSummary: String { get }
+    var systemNoticeStatus: String { get }
+    var systemNoticeCategory: String { get }
+    var systemNoticeSeverity: String { get }
+    var systemNoticeUpdatedAt: String { get }
+}
+
+extension SystemNoticeMessageSource {
+    var isSystemNoticeVisibleInMessageCenter: Bool {
+        let status = systemNoticeStatus.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return status == "published" || status == "active"
+    }
+}
+
 enum InAppMessageStatus: String, Codable {
     case unread
     case read
@@ -115,6 +132,9 @@ struct InAppMessage: Codable, Equatable {
     let careSignalId: String?
     let careSignalStatus: String?
     let careSignalSeverity: String?
+    let systemNoticeId: String?
+    let systemNoticeCategory: String?
+    let systemNoticeSeverity: String?
     let invitationStatus: String?
     let accessStatus: String?
     let recipientRole: String?
@@ -155,6 +175,9 @@ struct InAppMessage: Codable, Equatable {
             careSignalId: careSignalId,
             careSignalStatus: careSignalStatus,
             careSignalSeverity: careSignalSeverity,
+            systemNoticeId: systemNoticeId,
+            systemNoticeCategory: systemNoticeCategory,
+            systemNoticeSeverity: systemNoticeSeverity,
             invitationStatus: invitationStatus,
             accessStatus: accessStatus,
             recipientRole: recipientRole,
@@ -181,6 +204,9 @@ struct InAppMessage: Codable, Equatable {
             careSignalId: careSignalId,
             careSignalStatus: careSignalStatus,
             careSignalSeverity: careSignalSeverity,
+            systemNoticeId: systemNoticeId,
+            systemNoticeCategory: systemNoticeCategory,
+            systemNoticeSeverity: systemNoticeSeverity,
             invitationStatus: invitationStatus,
             accessStatus: accessStatus,
             recipientRole: recipientRole,
@@ -207,6 +233,9 @@ struct InAppMessage: Codable, Equatable {
             careSignalId: nil,
             careSignalStatus: nil,
             careSignalSeverity: nil,
+            systemNoticeId: nil,
+            systemNoticeCategory: nil,
+            systemNoticeSeverity: nil,
             invitationStatus: nil,
             accessStatus: nil,
             recipientRole: timeLetterReminder.recipientRole,
@@ -252,6 +281,9 @@ struct InAppMessage: Codable, Equatable {
             careSignalId: nil,
             careSignalStatus: nil,
             careSignalSeverity: nil,
+            systemNoticeId: nil,
+            systemNoticeCategory: nil,
+            systemNoticeSeverity: nil,
             invitationStatus: source.familyInvitationStatus,
             accessStatus: source.familyAccessStatus,
             recipientRole: "familyInvitation",
@@ -282,11 +314,47 @@ struct InAppMessage: Codable, Equatable {
             careSignalId: source.careSignalId,
             careSignalStatus: source.careSignalStatus,
             careSignalSeverity: source.careSignalSeverity,
+            systemNoticeId: nil,
+            systemNoticeCategory: nil,
+            systemNoticeSeverity: nil,
             invitationStatus: nil,
             accessStatus: nil,
             recipientRole: "careSignal",
             metadataOnly: true,
             contentRedacted: true,
+            isActionable: true,
+            unavailableReason: nil
+        )
+    }
+
+    static func fromSystemNotice(_ source: SystemNoticeMessageSource) -> InAppMessage? {
+        guard source.isSystemNoticeVisibleInMessageCenter else {
+            return nil
+        }
+
+        return InAppMessage(
+            id: "system-notice-\(source.systemNoticeId)",
+            kind: .systemNotice,
+            title: source.systemNoticeTitle,
+            summary: source.systemNoticeSummary,
+            status: .unread,
+            deliveredAt: source.systemNoticeUpdatedAt,
+            readAt: nil,
+            archivedAt: nil,
+            sourceArchiveItemId: nil,
+            ownerUserId: nil,
+            familyMemberId: nil,
+            careSignalId: nil,
+            careSignalStatus: nil,
+            careSignalSeverity: nil,
+            systemNoticeId: source.systemNoticeId,
+            systemNoticeCategory: source.systemNoticeCategory,
+            systemNoticeSeverity: source.systemNoticeSeverity,
+            invitationStatus: nil,
+            accessStatus: nil,
+            recipientRole: "systemNotice",
+            metadataOnly: true,
+            contentRedacted: false,
             isActionable: true,
             unavailableReason: nil
         )
@@ -308,6 +376,9 @@ struct InAppMessage: Codable, Equatable {
             careSignalId: nil,
             careSignalStatus: nil,
             careSignalSeverity: nil,
+            systemNoticeId: nil,
+            systemNoticeCategory: nil,
+            systemNoticeSeverity: nil,
             invitationStatus: nil,
             accessStatus: nil,
             recipientRole: nil,
@@ -327,6 +398,43 @@ struct StaticCareSignalMessageSource: CareSignalMessageSource, Codable {
     let careSignalSeverity: String
     let careSignalUpdatedAt: String
     let careSignalOwnerUserId: String?
+}
+
+struct StaticSystemNoticeMessageSource: SystemNoticeMessageSource, Codable {
+    let systemNoticeId: String
+    let systemNoticeTitle: String
+    let systemNoticeSummary: String
+    let systemNoticeStatus: String
+    let systemNoticeCategory: String
+    let systemNoticeSeverity: String
+    let systemNoticeUpdatedAt: String
+}
+
+final class SystemNoticeMessageStore {
+    static let shared = SystemNoticeMessageStore()
+
+    private let storageKey = "dj.inAppMessage.systemNotice.sources"
+
+    private init() {}
+
+    func sources() -> [SystemNoticeMessageSource] {
+        guard let data = UserDefaults.standard.data(forKey: storageKey),
+              let notices = try? JSONDecoder().decode([StaticSystemNoticeMessageSource].self, from: data) else {
+            return []
+        }
+        return notices
+    }
+
+    func save(_ notices: [StaticSystemNoticeMessageSource]) {
+        guard let data = try? JSONEncoder().encode(notices) else {
+            return
+        }
+        UserDefaults.standard.set(data, forKey: storageKey)
+    }
+
+    func clear() {
+        UserDefaults.standard.removeObject(forKey: storageKey)
+    }
 }
 
 struct InAppMessageCenterSnapshot: Equatable {

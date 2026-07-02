@@ -2474,12 +2474,33 @@ private extension AppDelegate {
                 careSignalOwnerUserId: userId
             ),
         ]
+        let systemNoticeSources: [SystemNoticeMessageSource] = [
+            StaticSystemNoticeMessageSource(
+                systemNoticeId: "system-notice-release-uiqa",
+                systemNoticeTitle: "系统维护通知",
+                systemNoticeSummary: "今晚会进行短时维护，期间可能影响云端同步。",
+                systemNoticeStatus: "published",
+                systemNoticeCategory: "maintenance",
+                systemNoticeSeverity: "info",
+                systemNoticeUpdatedAt: now
+            ),
+            StaticSystemNoticeMessageSource(
+                systemNoticeId: "system-notice-draft-uiqa",
+                systemNoticeTitle: "未发布系统通知",
+                systemNoticeSummary: "这条草稿不应进入消息中心。",
+                systemNoticeStatus: "draft",
+                systemNoticeCategory: "debug",
+                systemNoticeSeverity: "info",
+                systemNoticeUpdatedAt: now
+            ),
+        ]
 
         let dueLetters = MemoryArchiveRepository.shared.dueTimeLetters()
         let mailboxReminders = MemoryArchiveRepository.shared.timeLetterMailboxReminders()
         let inAppMessageSnapshot = MemoryArchiveRepository.shared.inAppMessageCenterSnapshot(
             familyInvitationSources: familyInvitationSources,
-            careSignalSources: careSignalSources
+            careSignalSources: careSignalSources,
+            systemNoticeSources: systemNoticeSources
         )
         let reminderCount = MemoryArchiveRepository.shared.timeLetterReminderCount()
         let restoredDelivered = MemoryArchiveRepository.shared.allItems().first { $0.id == deliveredLetter.id }
@@ -2518,10 +2539,12 @@ private extension AppDelegate {
         let remindersAfterArchive = MemoryArchiveRepository.shared.timeLetterMailboxReminders()
         let inAppMessageSnapshotAfterArchive = MemoryArchiveRepository.shared.inAppMessageCenterSnapshot(
             familyInvitationSources: familyInvitationSources,
-            careSignalSources: careSignalSources
+            careSignalSources: careSignalSources,
+            systemNoticeSources: systemNoticeSources
         )
         let familyInvitationMessageCount = inAppMessageSnapshot.sourceCounts["familyInvitation"] ?? 0
         let careSignalMessageCount = inAppMessageSnapshot.sourceCounts["careSignal"] ?? 0
+        let systemNoticeMessageCount = inAppMessageSnapshot.sourceCounts["systemNotice"] ?? 0
         let inAppMessageCenterEntryTitle = inAppMessageSnapshot.entryButtonTitle(timeLetterReminderCount: reminderCount) ?? ""
         let reminderArchiveStatusPersisted = openedReminderId.map { reminderId in
             remindersAfterArchive.first(where: { $0.id == reminderId })?.isArchived == true
@@ -2538,11 +2561,12 @@ private extension AppDelegate {
             && dueLetters.contains(where: { $0.id == secondDeliveredLetter.id }) == false
             && mailboxReminders.map(\.sourceArchiveItemId).contains(deliveredLetter.id)
             && mailboxReminders.map(\.sourceArchiveItemId).contains(secondDeliveredLetter.id)
-            && inAppMessageSnapshot.totalCount == 7
+            && inAppMessageSnapshot.totalCount == 8
             && inAppMessageSnapshot.sourceCounts["timeLetter"] == 2
             && familyInvitationMessageCount == 2
             && careSignalMessageCount == 3
-            && inAppMessageCenterEntryTitle == "7 条消息待处理 · 查看"
+            && systemNoticeMessageCount == 1
+            && inAppMessageCenterEntryTitle == "8 条消息待处理 · 查看"
             && reminderCount == 2
             && reminderDetailResolved
             && reminderDetailNoteVisible
@@ -2553,7 +2577,7 @@ private extension AppDelegate {
             && reminderArchiveStatusPersisted
             && secondReminderStillUnreadAfterArchive
             && inAppMessageSnapshotAfterArchive.archivedCount == 1
-            && inAppMessageSnapshotAfterArchive.unreadCount == 6
+            && inAppMessageSnapshotAfterArchive.unreadCount == 7
             && reminderCountAfterArchive == 1
 
         writeTimeLetterDispatchReminderSmokeResult([
@@ -2573,6 +2597,8 @@ private extension AppDelegate {
             "familyAcceptedInvitationExcluded": inAppMessageSnapshot.messages.contains { $0.familyMemberId == acceptedFamilyMember.id } == false,
             "careSignalMessageCount": careSignalMessageCount,
             "careNormalSignalExcluded": inAppMessageSnapshot.messages.contains { $0.careSignalId == "care-signal-normal-uiqa" } == false,
+            "systemNoticeMessageCount": systemNoticeMessageCount,
+            "systemDraftNoticeExcluded": inAppMessageSnapshot.messages.contains { $0.systemNoticeId == "system-notice-draft-uiqa" } == false,
             "reminderCount": reminderCount,
             "timeLetterReminderDetailResolved": reminderDetailResolved,
             "timeLetterReminderDetailNoteVisible": reminderDetailNoteVisible,
