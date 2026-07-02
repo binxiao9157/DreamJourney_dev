@@ -24,16 +24,17 @@ RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE=0 \
 
 ## 当前探针音色
 
-- Ready probe：`S_PhXlHqB52`
-- Non-ready diagnostic probe：`S_deJ2HqB52`
+当前不再在脚本里默认写死真实 `S_` 音色 ID。豆包/火山声音复刻 2.0 试用槽位存在训练次数耗尽和过期风险，deployed smoke 必须通过环境变量显式指定当前已训练成功且可用的音色。
 
-如果控制台音色状态变化，可通过环境变量覆盖：
+示例：
 
 ```bash
 VOICE_CLONE_READY_PROFILE_ID=<ready S_ voice id> \
 VOICE_CLONE_NON_READY_PROFILE_ID=<non-ready S_ voice id> \
 ./Scripts/QA/prd-stitch-ui/run-backend-voice-clone-deployed-smoke.sh
 ```
+
+2026-07-03 槽位更新：`S_PhXlHqB52` 已耗尽训练次数；服务器槽位池应切换为 `S_URAKGqB52,S_TRAKGqB52,S_SRAKGqB52`。新用户或重新训练会从新槽位池分配；已有旧音色不会自动迁移，需要重新训练并保存新的 ready `voiceProfileId`。
 
 ## 验证范围
 

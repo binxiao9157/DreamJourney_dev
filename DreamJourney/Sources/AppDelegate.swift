@@ -1084,7 +1084,7 @@ private extension AppDelegate {
     }
 
     func runVoiceCloneSynthesisRuntimeSmoke() {
-        let voiceProfileId = uiqaArgumentValue(prefix: "DJVoiceCloneProbeProfileId=") ?? "S_PhXlHqB52"
+        let voiceProfileId = uiqaArgumentValue(prefix: "DJVoiceCloneProbeProfileId=") ?? "S_uiqa_voice_clone_probe_required"
         let userId = UserManager.shared.currentUser?.id ?? "voice_clone_ios_uiqa"
 
         DreamJourneyBackendClient.shared.fetchVoiceCloneRuntimeCapability { [weak self] runtimeResult in
@@ -2895,7 +2895,7 @@ private extension AppDelegate {
         }
 
         tabBarController.selectedIndex = 1
-        let voiceProfileId = uiqaArgumentValue(prefix: "DJTencentBackendPCMDriveMockVoiceProfileId=") ?? "S_PhXlHqB52"
+        let voiceProfileId = uiqaArgumentValue(prefix: "DJTencentBackendPCMDriveMockVoiceProfileId=") ?? "S_uiqa_tencent_pcm_mock"
         echoViewController.runUIQATencentBackendPCMDriveMockSmoke(voiceProfileId: voiceProfileId) { [weak self] payload in
             var result = payload
             result["selectedTabIndex"] = tabBarController.selectedIndex

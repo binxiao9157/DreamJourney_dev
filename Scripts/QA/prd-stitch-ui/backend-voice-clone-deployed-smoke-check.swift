@@ -71,8 +71,6 @@ for required in [
     "seed-icl-2.0",
     "VOICE_CLONE_READY_PROFILE_ID",
     "VOICE_CLONE_NON_READY_PROFILE_ID",
-    "S_PhXlHqB52",
-    "S_deJ2HqB52",
     "pcm16kMono",
     "byteCount",
     "audioDataOmitted",
@@ -82,6 +80,10 @@ for required in [
     assertContains(pythonContent, required, "Python smoke should cover \(required)")
 }
 assertNotContains(pythonContent, "print(audio", "Python smoke must not print raw audio")
+assertNotContains(pythonContent, "S_PhXlHqB52", "Python smoke must not default to exhausted trial voice IDs")
+assertNotContains(pythonContent, "S_deJ2HqB52", "Python smoke must not default to old trial voice IDs")
+assertNotContains(runnerContent, "S_PhXlHqB52", "runner must not default to exhausted trial voice IDs")
+assertNotContains(runnerContent, "S_deJ2HqB52", "runner must not default to old trial voice IDs")
 
 assertContains(releaseRegression, "RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE", "release regression should expose optional deployed voice clone smoke")
 assertContains(releaseRegression, "run-backend-voice-clone-deployed-smoke.sh", "release regression should call deployed voice clone smoke")
@@ -98,8 +100,9 @@ for requiredPackageEntry in [
 }
 
 assertContains(status, "RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE=1", "status doc should show release regression flag")
-assertContains(status, "S_PhXlHqB52", "status doc should document the current ready probe voice")
-assertContains(status, "S_deJ2HqB52", "status doc should document the current non-ready diagnostic probe")
+assertContains(status, "VOICE_CLONE_READY_PROFILE_ID", "status doc should require explicit ready probe voice")
+assertContains(status, "S_PhXlHqB52` 已耗尽训练次数", "status doc should mark the exhausted voice slot explicitly")
+assertContains(status, "S_URAKGqB52,S_TRAKGqB52,S_SRAKGqB52", "status doc should document the replacement trial slot pool")
 assertContains(status, "不输出音频", "status doc should state raw audio is omitted")
 
 print("Backend voice clone deployed smoke checks passed")

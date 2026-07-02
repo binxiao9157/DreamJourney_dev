@@ -588,7 +588,7 @@ final class EchoViewController: UIViewController {
     private var tencentBackendPCMDriveMockVoiceProfileId: String {
         launchArgumentValue(prefix: "DJTencentBackendPCMDriveMockVoiceProfileId=")
             ?? tencentBackendPCMDriveVoiceProfileId
-            ?? "S_PhXlHqB52"
+            ?? "S_uiqa_tencent_pcm_mock"
     }
 
     private func launchArgumentValue(prefix: String) -> String? {

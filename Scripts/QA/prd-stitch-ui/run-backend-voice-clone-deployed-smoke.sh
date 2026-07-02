@@ -62,8 +62,8 @@ Reason: $reason
 - Backend root: \`$BACKEND_ROOT\`
 - Backend base URL: \`${BACKEND_BASE_URL:-not configured}\`
 - Backend API token: $token_status
-- Ready voice profile: \`${VOICE_CLONE_READY_PROFILE_ID:-S_PhXlHqB52}\`
-- Non-ready diagnostic voice profile: \`${VOICE_CLONE_NON_READY_PROFILE_ID:-S_deJ2HqB52}\`
+- Ready voice profile: \`${VOICE_CLONE_READY_PROFILE_ID:-not configured}\`
+- Non-ready diagnostic voice profile: \`${VOICE_CLONE_NON_READY_PROFILE_ID:-not configured}\`
 - User ID: \`$USER_ID\`
 
 ## Evidence
@@ -135,12 +135,13 @@ BACKEND_API_TOKEN="${BACKEND_API_TOKEN:-${XCCONFIG_API_TOKEN:-$DOC_API_TOKEN}}"
 [[ -n "$BACKEND_BASE_URL" ]] || fail "BACKEND_BASE_URL is required. Export it, configure Backend.local.xcconfig, or provide deployed-backend-access.md."
 [[ -n "$BACKEND_API_TOKEN" ]] || fail "BACKEND_API_TOKEN is required. Export it, configure Backend.local.xcconfig, or provide deployed-backend-access.md."
 [[ "$BACKEND_API_TOKEN" != YOUR_* ]] || fail "BACKEND_API_TOKEN is still a placeholder."
+[[ -n "${VOICE_CLONE_READY_PROFILE_ID:-}" ]] || fail "VOICE_CLONE_READY_PROFILE_ID is required because trial voice slots can expire or exhaust training attempts."
 
 log "Running deployed backend voice clone smoke against $BACKEND_BASE_URL..."
 if ! BACKEND_BASE_URL="$BACKEND_BASE_URL" \
     BACKEND_API_TOKEN="$BACKEND_API_TOKEN" \
-    VOICE_CLONE_READY_PROFILE_ID="${VOICE_CLONE_READY_PROFILE_ID:-S_PhXlHqB52}" \
-    VOICE_CLONE_NON_READY_PROFILE_ID="${VOICE_CLONE_NON_READY_PROFILE_ID:-S_deJ2HqB52}" \
+    VOICE_CLONE_READY_PROFILE_ID="$VOICE_CLONE_READY_PROFILE_ID" \
+    VOICE_CLONE_NON_READY_PROFILE_ID="${VOICE_CLONE_NON_READY_PROFILE_ID:-}" \
     python3 "$SCRIPT_DIR/backend-voice-clone-deployed-smoke.py" \
       "$ROOT_DIR" \
       "$USER_ID" \

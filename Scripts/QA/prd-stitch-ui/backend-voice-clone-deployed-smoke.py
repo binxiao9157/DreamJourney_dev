@@ -20,8 +20,8 @@ BASE_URL = os.environ.get("BACKEND_BASE_URL", "").rstrip("/")
 API_TOKEN = os.environ.get("BACKEND_API_TOKEN", "")
 USER_ID = sys.argv[2]
 MARKER = re.sub(r"[^A-Za-z0-9_-]", "_", sys.argv[3])
-READY_VOICE_PROFILE_ID = os.environ.get("VOICE_CLONE_READY_PROFILE_ID", "S_PhXlHqB52").strip()
-NON_READY_VOICE_PROFILE_ID = os.environ.get("VOICE_CLONE_NON_READY_PROFILE_ID", "S_deJ2HqB52").strip()
+READY_VOICE_PROFILE_ID = os.environ.get("VOICE_CLONE_READY_PROFILE_ID", "").strip()
+NON_READY_VOICE_PROFILE_ID = os.environ.get("VOICE_CLONE_NON_READY_PROFILE_ID", "").strip()
 
 if not BASE_URL:
     raise SystemExit("BACKEND_BASE_URL is required")

@@ -13,7 +13,7 @@ SWIFT_ACTIVE_COMPILATION_CONDITIONS='DEBUG UI_QA_SIMULATOR'
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT_DIR/tmp/visual-qa/prd-stitch-ui/DerivedDataVoiceCloneSynthesisRuntimeSmoke}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-$ROOT_DIR/tmp/visual-qa/prd-stitch-ui/voice-clone-synthesis-runtime-smoke}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
-VOICE_CLONE_READY_PROFILE_ID="${VOICE_CLONE_READY_PROFILE_ID:-S_PhXlHqB52}"
+VOICE_CLONE_READY_PROFILE_ID="${VOICE_CLONE_READY_PROFILE_ID:-}"
 LOCAL_BUNDLE_ID="${LOCAL_BUNDLE_ID:-com.yxj.dreamjourney.app}"
 LOCAL_DEVELOPMENT_TEAM="${LOCAL_DEVELOPMENT_TEAM:-2BTR77V3R8}"
 OUTPUT_DIR="$OUTPUT_ROOT/$RUN_ID"
@@ -41,6 +41,8 @@ fail() {
   fi
   exit 1
 }
+
+[[ -n "$VOICE_CLONE_READY_PROFILE_ID" ]] || fail "VOICE_CLONE_READY_PROFILE_ID is required because trial voice slots can expire or exhaust training attempts."
 
 xcconfig_value() {
   local key="$1"
