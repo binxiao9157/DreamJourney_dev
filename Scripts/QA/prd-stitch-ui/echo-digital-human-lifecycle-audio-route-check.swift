@@ -63,7 +63,7 @@ require(suspendBody.contains("interruptDigitalHumanPlayback(reason: \"appLifecyc
 require(suspendBody.contains("preserveTencentProviderSessionAfterLocalDialogStop(reason: \"appLifecycle:"), "lifecycle suspend should preserve Tencent provider session")
 require(suspendBody.contains("DialogEngineManager.shared.stopDialog()"), "lifecycle suspend should stop active microphone capture")
 require(suspendBody.contains("isStoppingVoiceCaptureForAppLifecycle = true"), "lifecycle DialogEngine stop should be marked for lifecycle handling")
-require(suspendBody.contains("viewModel.resetToIdle()"), "lifecycle suspend should leave UI in an explicit idle/restart state")
+require(suspendBody.contains("resetToLifecyclePausedIdle()"), "lifecycle suspend should leave UI in an explicit idle/restart state")
 require(suspendBody.contains("recordEchoRuntimeDiagnosticsSnapshot(reason: \"appLifecycleSuspended:"), "lifecycle suspend should be traceable in Echo diagnostics")
 require(!suspendBody.contains("digitalHumanRuntime?.close()"), "lifecycle suspend must not close Tencent runtime")
 require(!suspendBody.contains("digitalHumanRuntime = nil"), "lifecycle suspend must not nil out Tencent runtime")
@@ -74,12 +74,14 @@ require(restoreBody.contains("isSuspendedByAppLifecycle = false"), "foreground r
 require(restoreBody.contains("prepareCloudDigitalHumanRuntimeIfNeeded()"), "foreground restore should recreate provider session only if it was actually lost")
 require(restoreBody.contains("applyEchoAudioRoutePolicy()"), "foreground restore should reapply audio-owner policy")
 require(restoreBody.contains("loadVoiceCloneRuntimeCapabilityIfNeeded"), "foreground restore should refresh voice-clone runtime capability")
+require(restoreBody.contains("resetToLifecyclePausedIdle()"), "foreground restore should keep paused UI copy after idle render")
 require(restoreBody.contains("recordEchoRuntimeDiagnosticsSnapshot(reason: \"appLifecycleRestored:"), "foreground restore should be traceable in Echo diagnostics")
 require(!restoreBody.contains("startDialog("), "foreground restore must not auto-start the microphone")
 
 let dialogEndedBody = functionBody(named: "onDialogEnded", in: echo)
 require(dialogEndedBody.contains("isStoppingVoiceCaptureForAppLifecycle"), "DialogEngine ended callback should handle lifecycle stops separately")
 require(dialogEndedBody.contains("dialogEndedAfterAppLifecycle"), "lifecycle stop should preserve provider session with a searchable reason")
+require(dialogEndedBody.contains("resetToLifecyclePausedIdle()"), "DialogEngine lifecycle stop should keep paused UI copy after idle render")
 
 let configureAudioSessionBody = functionBody(named: "configureAudioSession", in: dialogEngine)
 require(configureAudioSessionBody.contains(".allowBluetoothHFP"), "DialogEngine should use non-deprecated Bluetooth HFP audio-session option")

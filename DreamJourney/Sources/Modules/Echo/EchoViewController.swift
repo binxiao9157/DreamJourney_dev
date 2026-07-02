@@ -948,17 +948,11 @@ final class EchoViewController: UIViewController {
         preserveTencentProviderSessionAfterLocalDialogStop(reason: "appLifecycle:\(reason)")
         muteTencentProviderRemoteAudioForUserCapture(reason: "appLifecycle:\(reason)")
         recordEchoRuntimeDiagnosticsSnapshot(reason: "appLifecycleSuspended:\(reason)")
-        renderVoiceStatus(
-            text: "已暂停，轻点话筒继续",
-            isVisible: true,
-            accessibilityIdentifier: "echoLifecyclePausedStatus"
-        )
-
         if DialogEngineManager.shared.isDialogActive {
             isStoppingVoiceCaptureForAppLifecycle = true
             DialogEngineManager.shared.stopDialog()
         } else {
-            viewModel.resetToIdle()
+            resetToLifecyclePausedIdle()
         }
 
         print(
@@ -989,12 +983,7 @@ final class EchoViewController: UIViewController {
         }
 
         loadVoiceCloneRuntimeCapabilityIfNeeded(force: true)
-        viewModel.resetToIdle()
-        renderVoiceStatus(
-            text: "已暂停，轻点话筒继续",
-            isVisible: true,
-            accessibilityIdentifier: "echoLifecyclePausedStatus"
-        )
+        resetToLifecyclePausedIdle()
         recordEchoRuntimeDiagnosticsSnapshot(reason: "appLifecycleRestored:\(reason)")
         print(
             "[TencentDigitalHuman] app lifecycle restored reason=\(reason) " +
@@ -1007,6 +996,17 @@ final class EchoViewController: UIViewController {
             return true
         }
         return false
+    }
+
+    private func resetToLifecyclePausedIdle() {
+        viewModel.resetToIdle()
+        DispatchQueue.main.async { [weak self] in
+            self?.renderVoiceStatus(
+                text: "已暂停，轻点话筒继续",
+                isVisible: true,
+                accessibilityIdentifier: "echoLifecyclePausedStatus"
+            )
+        }
     }
 
     private func updatePersonaBadge() {
@@ -3149,12 +3149,7 @@ extension EchoViewController: DialogEngineDelegate {
                 ConversationMemoryManager.shared.endSession()
                 self.preserveTencentProviderSessionAfterLocalDialogStop(reason: "dialogEndedAfterAppLifecycle")
                 self.resetDigitalHumanReplyDispatchState()
-                self.viewModel.resetToIdle()
-                self.renderVoiceStatus(
-                    text: "已暂停，轻点话筒继续",
-                    isVisible: true,
-                    accessibilityIdentifier: "echoLifecyclePausedStatus"
-                )
+                self.resetToLifecyclePausedIdle()
                 return
             }
             if self.isStoppingVoiceCaptureManually {
@@ -3292,6 +3287,122 @@ extension EchoViewController {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.45) {
             finishWhenRealAssetReady(attemptsRemaining: 14)
         }
+    }
+
+    func runUIQAEchoDigitalHumanLifecycleSmoke(completion: @escaping ([String: Any]) -> Void) {
+        guard let panel = digitalHumanLivePanelView else {
+            completion([
+                "completed": false,
+                "failureReason": "digitalHumanLivePanelNotCreated"
+            ])
+            return
+        }
+
+        let stub = TencentDigitalHumanRuntimeStub(contentView: UIView())
+        let profile = DigitalHumanProfile(
+            provider: "tencent",
+            personaId: "uiqa_lifecycle",
+            displayName: "UIQA 生命周期数字人",
+            lifecycleMode: .sunlight,
+            driveMode: "streamText",
+            alphaEnabled: true,
+            smartActionEnabled: false,
+            assetKey: "uiqa-lifecycle-provider"
+        )
+
+        do {
+            try stub.configure(profile)
+            try stub.open()
+        } catch {
+            completion([
+                "completed": false,
+                "failureReason": "stubRuntimeSetupFailed",
+                "error": error.localizedDescription
+            ])
+            return
+        }
+
+        digitalHumanRuntime = stub
+        hasRequestedCloudDigitalHumanRuntime = true
+        bindDigitalHumanRuntimeState(stub)
+        panel.hostProviderView(stub.contentView)
+        render(state: .listening)
+        renderVoiceStatus(text: "正在聆听", isVisible: true)
+
+        let providerViewBefore = panel.subviews.contains {
+            $0.accessibilityIdentifier == "digitalHumanLiveProviderView"
+        }
+
+        suspendEchoForAppLifecycle(reason: "uiqaWillResignActive")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self, weak panel] in
+            guard let self,
+                  let panel else {
+                completion([
+                    "completed": false,
+                    "failureReason": "lifecycleSmokeReleased"
+                ])
+                return
+            }
+
+            let providerViewAfterSuspend = panel.subviews.contains {
+                $0.accessibilityIdentifier == "digitalHumanLiveProviderView"
+            }
+            let appLifecycleSuspended = self.isSuspendedByAppLifecycle
+            let lifecycleSuspended = appLifecycleSuspended
+                && self.currentStateIsIdleForUIQA
+                && self.voiceStatusLabel.text == "已暂停，轻点话筒继续"
+
+            self.restoreEchoAfterAppLifecycleIfNeeded(reason: "uiqaDidBecomeActive")
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self, weak panel] in
+                guard let self,
+                      let panel else {
+                    completion([
+                        "completed": false,
+                        "failureReason": "lifecycleSmokeReleasedAfterRestore"
+                    ])
+                    return
+                }
+
+                let providerViewAfterRestore = panel.subviews.contains {
+                    $0.accessibilityIdentifier == "digitalHumanLiveProviderView"
+                }
+                let appLifecycleRestored = !self.isSuspendedByAppLifecycle
+                let microphoneAutoStart = DialogEngineManager.shared.isDialogActive
+                let audioOwner = self.currentEchoAudioOwner.rawValue
+                let providerViewPreserved = providerViewBefore && providerViewAfterSuspend && providerViewAfterRestore
+                let lifecycleRestored = appLifecycleRestored
+                    && self.currentStateIsIdleForUIQA
+                    && self.voiceStatusLabel.text == "已暂停，轻点话筒继续"
+
+                completion([
+                    "completed": lifecycleSuspended
+                        && lifecycleRestored
+                        && providerViewPreserved
+                        && microphoneAutoStart == false,
+                    "appLifecycleSuspended": appLifecycleSuspended,
+                    "appLifecycleRestored": appLifecycleRestored,
+                    "lifecycleSuspended": lifecycleSuspended,
+                    "lifecycleRestored": lifecycleRestored,
+                    "providerViewPreserved": providerViewPreserved,
+                    "providerViewBefore": providerViewBefore,
+                    "providerViewAfterSuspend": providerViewAfterSuspend,
+                    "providerViewAfterRestore": providerViewAfterRestore,
+                    "microphoneAutoStart": microphoneAutoStart,
+                    "audioOwner": audioOwner,
+                    "voiceStatusText": self.voiceStatusLabel.text ?? "",
+                    "selectedRuntimeState": String(describing: self.digitalHumanRuntime?.state),
+                    "panelVisible": !panel.isHidden && panel.alpha > 0,
+                ])
+            }
+        }
+    }
+
+    private var currentStateIsIdleForUIQA: Bool {
+        if case .idle = currentState {
+            return true
+        }
+        return false
     }
 
     func runUIQAEchoTraceExportSmoke(completion: @escaping ([String: Any]) -> Void) {

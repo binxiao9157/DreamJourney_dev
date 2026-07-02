@@ -95,6 +95,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         let arguments = ProcessInfo.processInfo.arguments
         if arguments.contains("DJShowDigitalHumanLivePanel")
             || arguments.contains("DJRunDigitalHumanLivePanelSmoke")
+            || arguments.contains("DJRunEchoDigitalHumanLifecycleSmoke")
             || arguments.contains("DJRunTencentDigitalHumanTextDriveSmoke")
             || arguments.contains("DJRunTencentDigitalHumanPCMDriveSmoke")
             || arguments.contains("DJRunTencentDigitalHumanBackendPCMDriveSmoke")
@@ -147,6 +148,7 @@ private extension AppDelegate {
         }
         if arguments.contains("DJShowDigitalHumanLivePanel")
             || arguments.contains("DJRunDigitalHumanLivePanelSmoke")
+            || arguments.contains("DJRunEchoDigitalHumanLifecycleSmoke")
             || arguments.contains("DJRunTencentBackendPCMDriveMockSmoke") {
             FeatureFlagService.shared.enableForCurrentLaunch(.digitalHumanLivePanel)
             print("[UI_QA] Digital human live panel enabled")
@@ -158,6 +160,11 @@ private extension AppDelegate {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.runDigitalHumanLivePanelSmoke()
+            }
+        } else if arguments.contains("DJRunEchoDigitalHumanLifecycleSmoke") {
+            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.runEchoDigitalHumanLifecycleSmoke()
             }
         } else if arguments.contains("DJRunDigitalHumanRuntimeStubSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
@@ -2692,6 +2699,53 @@ private extension AppDelegate {
         }
     }
 
+    func runEchoDigitalHumanLifecycleSmoke(retryCount: Int = 0) {
+        guard let tabBarController = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController as? WarmTabBarController else {
+            guard retryCount < 20 else {
+                print("[UI_QA] EchoDigitalHumanLifecycleSmoke failed reason=missingRootTab")
+                writeEchoDigitalHumanLifecycleSmokeResult([
+                    "completed": false,
+                    "failureReason": "missingRootTab"
+                ])
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                self?.runEchoDigitalHumanLifecycleSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+
+        guard let viewControllers = tabBarController.viewControllers,
+              viewControllers.count > 1,
+              let echoNavigationController = viewControllers[1] as? UINavigationController,
+              let echoViewController = echoNavigationController.viewControllers.first as? EchoViewController else {
+            print("[UI_QA] EchoDigitalHumanLifecycleSmoke failed reason=missingEcho")
+            writeEchoDigitalHumanLifecycleSmokeResult([
+                "completed": false,
+                "failureReason": "missingEcho"
+            ])
+            return
+        }
+
+        tabBarController.selectedIndex = 1
+        echoViewController.runUIQAEchoDigitalHumanLifecycleSmoke { [weak self] payload in
+            var result = payload
+            result["selectedTabIndex"] = tabBarController.selectedIndex
+            self?.writeEchoDigitalHumanLifecycleSmokeResult(result)
+            print(
+                "[UI_QA] EchoDigitalHumanLifecycleSmoke completed " +
+                "completed=\(result["completed"] as? Bool == true) " +
+                "suspended=\(result["lifecycleSuspended"] as? Bool == true) " +
+                "restored=\(result["lifecycleRestored"] as? Bool == true) " +
+                "microphoneAutoStart=\(result["microphoneAutoStart"] as? Bool == true)"
+            )
+        }
+    }
+
     func runEchoTraceEvidencePackageExportSmoke(retryCount: Int = 0) {
         guard let tabBarController = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
@@ -3429,6 +3483,21 @@ private extension AppDelegate {
             try data.write(to: resultURL, options: [.atomic])
         } catch {
             print("[UI_QA] DigitalHumanLivePanelSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    func writeEchoDigitalHumanLifecycleSmokeResult(_ result: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
+              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("[UI_QA] EchoDigitalHumanLifecycleSmoke failed reason=resultEncoding")
+            return
+        }
+
+        let resultURL = documentsURL.appendingPathComponent("echo-digital-human-lifecycle-smoke-result.json")
+        do {
+            try data.write(to: resultURL, options: [.atomic])
+        } catch {
+            print("[UI_QA] EchoDigitalHumanLifecycleSmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
     }
 
