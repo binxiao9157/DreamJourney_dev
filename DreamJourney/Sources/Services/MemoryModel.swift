@@ -143,6 +143,10 @@ struct FamilyMember: Codable, Identifiable {
     var invitationURL: String?
     var invitationCode: String?
     var invitationError: String?
+    /// 家人对应的复刻音色合同字段；Echo 只消费 ready + enabled 的音色。
+    var voiceProfileId: String?
+    var voiceSampleStatus: String
+    var voiceEnabled: Bool
 
     var digitalHumanModeLabel: String {
         digitalHumanMode.displayName
@@ -162,6 +166,40 @@ struct FamilyMember: Codable, Identifiable {
         return "邀请中"
     }
 
+    var normalizedVoiceProfileId: String? {
+        guard let voiceProfileId else { return nil }
+        let trimmed = voiceProfileId.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    var isVoiceProfileReadyForEcho: Bool {
+        guard normalizedVoiceProfileId != nil, voiceEnabled else { return false }
+        switch voiceSampleStatus.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "ready", "accepted":
+            return true
+        default:
+            return false
+        }
+    }
+
+    var voiceCloneStatusLabel: String {
+        guard normalizedVoiceProfileId != nil else {
+            return "未配置复刻音色"
+        }
+        switch voiceSampleStatus.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "ready", "accepted" where voiceEnabled:
+            return "复刻音色可用于回响"
+        case "pending", "training", "processing":
+            return "复刻音色训练中"
+        case "failed":
+            return "复刻音色训练失败"
+        case "disabled":
+            return "复刻音色已停用"
+        default:
+            return voiceEnabled ? "复刻音色待确认" : "复刻音色未启用"
+        }
+    }
+
     init(id: String = UUID().uuidString, name: String, relation: String,
          phone: String? = nil, isOnline: Bool = false, lastUpdated: String = "未知",
          personaScope: String = "family", digitalHumanId: String? = nil,
@@ -173,7 +211,10 @@ struct FamilyMember: Codable, Identifiable {
          invitationStatus: String = "accepted",
          invitationURL: String? = nil,
          invitationCode: String? = nil,
-         invitationError: String? = nil) {
+         invitationError: String? = nil,
+         voiceProfileId: String? = nil,
+         voiceSampleStatus: String = "notProvided",
+         voiceEnabled: Bool = false) {
         self.id = id
         self.name = name
         self.relation = relation
@@ -193,6 +234,9 @@ struct FamilyMember: Codable, Identifiable {
         self.invitationURL = invitationURL
         self.invitationCode = invitationCode
         self.invitationError = invitationError
+        self.voiceProfileId = voiceProfileId
+        self.voiceSampleStatus = voiceSampleStatus
+        self.voiceEnabled = voiceEnabled
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -215,6 +259,9 @@ struct FamilyMember: Codable, Identifiable {
         case invitationURL
         case invitationCode
         case invitationError
+        case voiceProfileId
+        case voiceSampleStatus
+        case voiceEnabled
     }
 
     init(from decoder: Decoder) throws {
@@ -238,6 +285,9 @@ struct FamilyMember: Codable, Identifiable {
         invitationURL = try container.decodeIfPresent(String.self, forKey: .invitationURL)
         invitationCode = try container.decodeIfPresent(String.self, forKey: .invitationCode)
         invitationError = try container.decodeIfPresent(String.self, forKey: .invitationError)
+        voiceProfileId = try container.decodeIfPresent(String.self, forKey: .voiceProfileId)
+        voiceSampleStatus = try container.decodeIfPresent(String.self, forKey: .voiceSampleStatus) ?? "notProvided"
+        voiceEnabled = try container.decodeIfPresent(Bool.self, forKey: .voiceEnabled) ?? false
     }
 
     static func fromBackendJSON(_ object: [String: Any]) -> FamilyMember? {
@@ -266,7 +316,10 @@ struct FamilyMember: Codable, Identifiable {
             invitationStatus: stringValue(in: object, for: "invitationStatus") ?? "pending",
             invitationURL: stringValue(in: object, for: "invitationURL"),
             invitationCode: stringValue(in: object, for: "invitationCode"),
-            invitationError: stringValue(in: object, for: "invitationError")
+            invitationError: stringValue(in: object, for: "invitationError"),
+            voiceProfileId: stringValue(in: object, for: "voiceProfileId"),
+            voiceSampleStatus: stringValue(in: object, for: "voiceSampleStatus") ?? "notProvided",
+            voiceEnabled: boolValue(in: object, for: "voiceEnabled") ?? false
         )
     }
 

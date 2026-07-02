@@ -584,6 +584,15 @@ final class FamilyMemberDetailViewController: UIViewController {
         return label
     }()
 
+    private let voiceStatusLabel: UILabel = {
+        let label = UILabel()
+        label.font = .systemFont(ofSize: 13, weight: .medium)
+        label.textColor = UIColor(red: 0.50, green: 0.35, blue: 0.13, alpha: 1.0)
+        label.numberOfLines = 1
+        label.accessibilityIdentifier = "familyMemberVoiceStatus"
+        return label
+    }()
+
     private lazy var selectButton: UIButton = {
         var configuration = UIButton.Configuration.filled()
         configuration.image = UIImage(systemName: "person.crop.circle.badge.checkmark")
@@ -687,7 +696,7 @@ final class FamilyMemberDetailViewController: UIViewController {
         boundarySection.addSubview(starSwitch)
         boundarySection.addSubview(irreversibleNoticeLabel)
 
-        [avatarView, nameLabel, relationLabel, updatedLabel, selectButton, boundarySection].forEach {
+        [avatarView, nameLabel, relationLabel, updatedLabel, voiceStatusLabel, selectButton, boundarySection].forEach {
             content.addSubview($0)
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
@@ -730,7 +739,11 @@ final class FamilyMemberDetailViewController: UIViewController {
             updatedLabel.trailingAnchor.constraint(equalTo: nameLabel.trailingAnchor),
             updatedLabel.topAnchor.constraint(equalTo: relationLabel.bottomAnchor, constant: 5),
 
-            selectButton.topAnchor.constraint(equalTo: avatarView.bottomAnchor, constant: 28),
+            voiceStatusLabel.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
+            voiceStatusLabel.trailingAnchor.constraint(equalTo: nameLabel.trailingAnchor),
+            voiceStatusLabel.topAnchor.constraint(equalTo: updatedLabel.bottomAnchor, constant: 6),
+
+            selectButton.topAnchor.constraint(equalTo: voiceStatusLabel.bottomAnchor, constant: 24),
             selectButton.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
             selectButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -24),
             selectButton.heightAnchor.constraint(equalToConstant: 48),
@@ -768,6 +781,7 @@ final class FamilyMemberDetailViewController: UIViewController {
         nameLabel.text = member.name
         relationLabel.text = member.relation
         updatedLabel.text = "最近更新: \(member.lastUpdated)"
+        voiceStatusLabel.text = "音色: \(member.voiceCloneStatusLabel)"
         let isCurrent = DigitalHumanContextStore.shared.current.ownerId == member.id
             && !DigitalHumanContextStore.shared.current.isSelfAssistant
         selectButton.configuration?.title = member.isAcceptedFamilyMember

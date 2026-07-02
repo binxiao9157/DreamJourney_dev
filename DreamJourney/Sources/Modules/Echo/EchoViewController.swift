@@ -12,6 +12,45 @@ private enum EchoDigitalHumanAudioOwner: String {
     }
 }
 
+private struct EchoRoleVoiceProfileSelection {
+    enum Source: String {
+        case selfAssistantDefault
+        case familyMember
+        case familyVoiceProfileMissing
+        case familyMemberUnavailable
+        case familyMemberMissing
+    }
+
+    let voiceProfileId: String?
+    let source: Source
+    let contextOwnerId: String
+    let displayName: String
+
+    var shouldShowMissingStatus: Bool {
+        switch source {
+        case .selfAssistantDefault, .familyMember:
+            return false
+        case .familyVoiceProfileMissing, .familyMemberUnavailable, .familyMemberMissing:
+            return true
+        }
+    }
+
+    var statusText: String {
+        switch source {
+        case .selfAssistantDefault:
+            return "AI 助手使用默认音色"
+        case .familyMember:
+            return "复刻音色正在回响"
+        case .familyVoiceProfileMissing:
+            return "该家人暂未配置复刻音色"
+        case .familyMemberUnavailable:
+            return "该家人暂未启用复刻音色"
+        case .familyMemberMissing:
+            return "家人资料未同步，暂未启用复刻音色"
+        }
+    }
+}
+
 private struct TencentBackendPCMDriveTrueDeviceTrace {
     var isActive = false
     var startedAt = Date()
@@ -1341,6 +1380,53 @@ final class EchoViewController: UIViewController {
         }
     }
 
+    private func resolveEchoRoleVoiceProfileSelection() -> EchoRoleVoiceProfileSelection {
+        let context = DigitalHumanContextStore.shared.current
+        if context.isSelfAssistant {
+            return EchoRoleVoiceProfileSelection(
+                voiceProfileId: nil,
+                source: .selfAssistantDefault,
+                contextOwnerId: context.ownerId,
+                displayName: context.resolvedDisplayName
+            )
+        }
+
+        guard let member = FamilyRepository.shared.get(by: context.ownerId) else {
+            return EchoRoleVoiceProfileSelection(
+                voiceProfileId: nil,
+                source: .familyMemberMissing,
+                contextOwnerId: context.ownerId,
+                displayName: context.resolvedDisplayName
+            )
+        }
+
+        guard member.isAcceptedFamilyMember else {
+            return EchoRoleVoiceProfileSelection(
+                voiceProfileId: nil,
+                source: .familyMemberUnavailable,
+                contextOwnerId: member.id,
+                displayName: member.name
+            )
+        }
+
+        guard member.isVoiceProfileReadyForEcho,
+              let voiceProfileId = member.normalizedVoiceProfileId else {
+            return EchoRoleVoiceProfileSelection(
+                voiceProfileId: nil,
+                source: .familyVoiceProfileMissing,
+                contextOwnerId: member.id,
+                displayName: member.name
+            )
+        }
+
+        return EchoRoleVoiceProfileSelection(
+            voiceProfileId: voiceProfileId,
+            source: .familyMember,
+            contextOwnerId: member.id,
+            displayName: member.name
+        )
+    }
+
     private func setEchoAudioOwner(_ owner: EchoDigitalHumanAudioOwner, reason: String) {
         currentEchoAudioOwner = owner
         let ownerLabel: String
@@ -1382,9 +1468,14 @@ final class EchoViewController: UIViewController {
         let profile = runtime?.profile
         let providerMode = profile?.driveMode ?? lastEchoTraceRecord?.digitalHumanProviderMode ?? "unknown"
         let fallbackReason = lastEchoRuntimeFallbackReason ?? lastEchoTraceRecord?.fallbacks.first
+        let voiceSelection = resolveEchoRoleVoiceProfileSelection()
         return EchoRuntimeDiagnosticsSnapshot(
             trace: lastEchoTraceRecord,
             audioOwner: currentEchoAudioOwner.rawValue,
+            selectedVoiceProfileId: voiceSelection.voiceProfileId,
+            roleVoiceSource: voiceSelection.source.rawValue,
+            roleVoiceDisplayName: voiceSelection.displayName,
+            roleVoiceContextOwnerId: voiceSelection.contextOwnerId,
             digitalHumanRuntimeState: runtimeState,
             digitalHumanSessionReady: profile != nil || lastEchoTraceRecord?.digitalHumanSessionReady == true,
             digitalHumanProviderMode: providerMode,
@@ -1408,6 +1499,9 @@ final class EchoViewController: UIViewController {
             "snapshotId=\(snapshot.snapshotId) turnID=\(snapshot.turnID) traceId=\(snapshot.traceId) " +
             "audioOwner=\(snapshot.audioOwner) digitalHumanState=\(snapshot.digitalHumanRuntimeState) " +
             "voiceProfileId=\(snapshot.voiceProfileId ?? "none") outputMode=\(snapshot.voiceOutputMode) " +
+            "roleVoiceSource=\(snapshot.roleVoiceSource ?? "unknown") " +
+            "roleVoiceDisplayName=\(snapshot.roleVoiceDisplayName ?? "unknown") " +
+            "roleVoiceContextOwnerId=\(snapshot.roleVoiceContextOwnerId ?? "unknown") " +
             "providerLogId=\(snapshot.providerLogId ?? "none") " +
             "fallbackReason=\(snapshot.fallbackReason ?? "none") source=\(snapshot.source)"
         )
@@ -1453,6 +1547,9 @@ final class EchoViewController: UIViewController {
             "persona: \(snapshot.privacyScopeLabel)",
             "family: \(snapshot.canUseFamilyData) cross: \(snapshot.crossScopeArchiveIncluded)",
             "voice: \(voiceProfile) \(snapshot.voiceOutputMode)",
+            "roleVoiceSource: \(snapshot.roleVoiceSource ?? "unknown")",
+            "roleVoiceDisplayName: \(snapshot.roleVoiceDisplayName ?? "unknown")",
+            "roleVoiceContextOwnerId: \(snapshot.roleVoiceContextOwnerId ?? "unknown")",
             "audioOwner: \(snapshot.audioOwner)",
             "digitalHuman: \(snapshot.digitalHumanRuntimeState) / \(snapshot.digitalHumanProviderMode)",
             "providerLogId: \(snapshot.providerLogId ?? "none")",
@@ -1835,8 +1932,9 @@ final class EchoViewController: UIViewController {
         _ normalizedText: String,
         source: String
     ) -> Bool {
+        let voiceSelection = resolveEchoRoleVoiceProfileSelection()
         guard source != "chatStreamingPrewarm",
-              let voiceProfileId = VoiceCloneService.shared.currentUsableSpeakerId else {
+              let voiceProfileId = voiceSelection.voiceProfileId else {
             return false
         }
         guard DreamJourneyBackendClient.shared.isVoiceCloneSynthesisConfigured else {
@@ -1850,6 +1948,7 @@ final class EchoViewController: UIViewController {
             print(
                 "[TencentDigitalHuman] voice-clone PCM-drive unavailable; no default voice fallback " +
                 "source=\(source) voiceProfileId=\(voiceProfileId) outputMode=tencentAudioDrive " +
+                "voiceSource=\(voiceSelection.source.rawValue) contextOwnerId=\(voiceSelection.contextOwnerId) " +
                 "\(currentEchoAudioOwner.logLabel) reason=backendNotConfigured"
             )
             return true
@@ -1866,6 +1965,7 @@ final class EchoViewController: UIViewController {
             print(
                 "[TencentDigitalHuman] voice-clone PCM-drive unavailable; no default voice fallback " +
                 "source=\(source) voiceProfileId=\(voiceProfileId) outputMode=tencentAudioDrive " +
+                "voiceSource=\(voiceSelection.source.rawValue) contextOwnerId=\(voiceSelection.contextOwnerId) " +
                 "\(currentEchoAudioOwner.logLabel) canSynthesize=\(capability.canSynthesize) " +
                 "tencentAudioDriveSupported=\(capability.tencentAudioDrive.supported)"
             )
@@ -1889,6 +1989,7 @@ final class EchoViewController: UIViewController {
         print(
             "[TencentDigitalHuman] requesting voice-clone PCM-drive " +
             "turnID=\(turnID) source=\(source) requestID=\(requestID) voiceProfileId=\(voiceProfileId) " +
+            "voiceSource=\(voiceSelection.source.rawValue) contextOwnerId=\(voiceSelection.contextOwnerId) " +
             "outputMode=tencentAudioDrive \(currentEchoAudioOwner.logLabel)"
         )
         DreamJourneyBackendClient.shared.requestVoiceCloneSynthesis(
@@ -1975,21 +2076,24 @@ final class EchoViewController: UIViewController {
     }
 
     private func showVoiceCloneNotEnabledStatusIfNeeded(source: String) {
+        let voiceSelection = resolveEchoRoleVoiceProfileSelection()
         guard source != "chatStreamingPrewarm",
               shouldDispatchEchoReplyToTencentProvider,
-              VoiceCloneService.shared.currentUsableSpeakerId == nil else {
+              voiceSelection.voiceProfileId == nil,
+              voiceSelection.shouldShowMissingStatus else {
             return
         }
-        renderVoiceStatus(text: "暂未启用复刻音色", isVisible: true, accessibilityIdentifier: "echoVoiceCloneNotEnabledStatus")
+        renderVoiceStatus(text: voiceSelection.statusText, isVisible: true, accessibilityIdentifier: "echoVoiceCloneNotEnabledStatus")
         lastVoiceCloneProviderLogId = nil
         lastVoiceCloneProviderRequestId = nil
         lastVoiceCloneProviderMode = nil
-        lastVoiceSynthesisEvidenceSummary = .unavailable(reason: "voiceCloneNotEnabled")
-        lastEchoRuntimeFallbackReason = "voiceCloneNotEnabled"
-        recordEchoRuntimeDiagnosticsSnapshot(reason: "voiceCloneNotEnabled")
+        lastVoiceSynthesisEvidenceSummary = .unavailable(reason: voiceSelection.source.rawValue)
+        lastEchoRuntimeFallbackReason = voiceSelection.source.rawValue
+        recordEchoRuntimeDiagnosticsSnapshot(reason: voiceSelection.source.rawValue)
         print(
             "[TencentDigitalHuman] voice clone not enabled for Echo " +
-            "source=\(source) voiceProfileId=none outputMode=tencentText \(currentEchoAudioOwner.logLabel)"
+            "source=\(source) voiceProfileId=none voiceSource=\(voiceSelection.source.rawValue) " +
+            "contextOwnerId=\(voiceSelection.contextOwnerId) outputMode=tencentText \(currentEchoAudioOwner.logLabel)"
         )
     }
 
@@ -3620,6 +3724,36 @@ extension EchoViewController {
         EchoRuntimeDiagnosticsStore.shared.clear()
         EchoTraceEvidencePackageStore.shared.clear()
 
+        let previousContext = DigitalHumanContextStore.shared.current
+        let previousAudioOwner = currentEchoAudioOwner
+        let qaFamilyMember = FamilyMember(
+            id: "uiqa_family_voice_panel_member",
+            name: "UIQA 家人音色",
+            relation: "家人",
+            isOnline: true,
+            lastUpdated: "刚刚",
+            accessStatus: "active",
+            invitationStatus: "accepted",
+            voiceProfileId: "S_uiqa_family_panel_voice",
+            voiceSampleStatus: "ready",
+            voiceEnabled: true
+        )
+        FamilyRepository.shared.add(qaFamilyMember)
+        DigitalHumanContextStore.shared.current = DigitalHumanContext(
+            viewerUserId: UserManager.shared.currentUser?.id ?? "user_001",
+            ownerId: qaFamilyMember.id,
+            displayName: qaFamilyMember.name,
+            relation: qaFamilyMember.relation,
+            mode: qaFamilyMember.digitalHumanMode,
+            isSelfAssistant: false
+        )
+        setEchoAudioOwner(.tencentDigitalHuman, reason: "uiqaPanelFamilyVoiceSelection")
+        lastEchoRuntimeFallbackReason = nil
+        defer {
+            DigitalHumanContextStore.shared.current = previousContext
+            currentEchoAudioOwner = previousAudioOwner
+        }
+
         let record = EchoTraceRecord(
             turnID: "uiqa-panel-evidence-turn",
             traceId: "ctx_uiqa_panel_evidence",
@@ -3651,15 +3785,15 @@ extension EchoViewController {
                 "care": 1
             ],
             kbFactCount: 3,
-            voiceProfileId: "S_uiqa_panel_trace_evidence",
+            voiceProfileId: "S_uiqa_family_panel_voice",
             voiceCloneReady: true,
             voiceOutputMode: "tencentAudioDrive",
             digitalHumanSessionReady: true,
             digitalHumanProviderMode: "tencent-cloud-digital-human",
-            privacyScopeLabel: "personal:uiqa_echo_panel_evidence_user",
-            canUseFamilyData: false,
+            privacyScopeLabel: "family:uiqa_family_voice_panel_member",
+            canUseFamilyData: true,
             crossScopeArchiveIncluded: false,
-            fallbacks: ["voice_clone_not_ready"],
+            fallbacks: [],
             latencyMs: 18
         )
         lastEchoTraceRecord = record
@@ -3669,7 +3803,7 @@ extension EchoViewController {
         lastVoiceCloneProviderRequestId = "uiqa-panel-provider-request"
         lastVoiceCloneProviderMode = "volcengineVoiceCloneV3"
         lastVoiceSynthesisEvidenceSummary = .failed(
-            voiceProfileId: "S_uiqa_panel_trace_evidence",
+            voiceProfileId: "S_uiqa_family_panel_voice",
             outputMode: "tencentAudioDrive",
             providerLogId: "uiqa-panel-provider-log",
             providerRequestId: "uiqa-panel-provider-request",
@@ -3686,11 +3820,17 @@ extension EchoViewController {
             let serialized = String(data: data, encoding: .utf8) ?? ""
             let latestPackage = packages.last
             let clueSummary = latestPackage?.contextBuild.clueSummary
+            let runtimeDiagnostics = latestPackage?.runtimeDiagnostics
             completion([
                 "completed": echoTraceEvidenceExportButton.superview === echoRuntimeDiagnosticsPanelView
                     && echoTraceEvidenceExportButton.title(for: .normal) == "导出证据包"
                     && latestPackage?.turnID == "uiqa-panel-evidence-turn"
                     && latestPackage?.voiceSynthesis?.providerLogId == "uiqa-panel-provider-log"
+                    && runtimeDiagnostics?.roleVoiceSource == "familyMember"
+                    && runtimeDiagnostics?.roleVoiceDisplayName == "UIQA 家人音色"
+                    && runtimeDiagnostics?.roleVoiceContextOwnerId == "uiqa_family_voice_panel_member"
+                    && runtimeDiagnostics?.voiceProfileId == "S_uiqa_family_panel_voice"
+                    && runtimeDiagnostics?.audioOwner == "tencentDigitalHuman"
                     && clueSummary?.archiveRefs == ["archive_panel_evidence"]
                     && clueSummary?.kbFactRefs == ["fact_panel_evidence"]
                     && clueSummary?.personaRefs == ["persona:personal:uiqa_echo_panel_evidence_user"]
@@ -3706,6 +3846,11 @@ extension EchoViewController {
                 "packageCount": packages.count,
                 "latestTurnID": latestPackage?.turnID ?? "missing",
                 "latestProviderLogId": latestPackage?.voiceSynthesis?.providerLogId ?? "missing",
+                "latestRuntimeRoleVoiceSource": runtimeDiagnostics?.roleVoiceSource ?? "missing",
+                "latestRuntimeRoleVoiceDisplayName": runtimeDiagnostics?.roleVoiceDisplayName ?? "missing",
+                "latestRuntimeRoleVoiceContextOwnerId": runtimeDiagnostics?.roleVoiceContextOwnerId ?? "missing",
+                "latestRuntimeVoiceProfileId": runtimeDiagnostics?.voiceProfileId ?? "missing",
+                "latestRuntimeAudioOwner": runtimeDiagnostics?.audioOwner ?? "missing",
                 "latestArchiveClues": clueSummary?.archiveRefs.joined(separator: ",") ?? "missing",
                 "latestKbFactClues": clueSummary?.kbFactRefs.joined(separator: ",") ?? "missing",
                 "latestPersonaClues": clueSummary?.personaRefs.joined(separator: ",") ?? "missing",

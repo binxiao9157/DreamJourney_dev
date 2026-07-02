@@ -1249,6 +1249,9 @@ struct EchoRuntimeDiagnosticsSnapshot: Codable {
     let voiceProfileId: String?
     let voiceCloneReady: Bool
     let voiceOutputMode: String
+    let roleVoiceSource: String?
+    let roleVoiceDisplayName: String?
+    let roleVoiceContextOwnerId: String?
     let audioOwner: String
     let digitalHumanRuntimeState: String
     let digitalHumanSessionReady: Bool
@@ -1266,6 +1269,10 @@ struct EchoRuntimeDiagnosticsSnapshot: Codable {
     init(
         trace: EchoTraceRecord?,
         audioOwner: String,
+        selectedVoiceProfileId: String? = nil,
+        roleVoiceSource: String? = nil,
+        roleVoiceDisplayName: String? = nil,
+        roleVoiceContextOwnerId: String? = nil,
         digitalHumanRuntimeState: String,
         digitalHumanSessionReady: Bool? = nil,
         digitalHumanProviderMode: String? = nil,
@@ -1286,9 +1293,12 @@ struct EchoRuntimeDiagnosticsSnapshot: Codable {
         self.archiveItemsIncluded = trace?.archiveItemsIncluded ?? 0
         self.archiveItemsAvailable = trace?.archiveItemsAvailable ?? 0
         self.kbFactCount = trace?.kbFactCount ?? 0
-        self.voiceProfileId = trace?.voiceProfileId
+        self.voiceProfileId = selectedVoiceProfileId ?? trace?.voiceProfileId
         self.voiceCloneReady = trace?.voiceCloneReady ?? false
         self.voiceOutputMode = trace?.voiceOutputMode ?? "unknown"
+        self.roleVoiceSource = roleVoiceSource
+        self.roleVoiceDisplayName = roleVoiceDisplayName
+        self.roleVoiceContextOwnerId = roleVoiceContextOwnerId
         self.audioOwner = audioOwner
         self.digitalHumanRuntimeState = digitalHumanRuntimeState
         self.digitalHumanSessionReady = digitalHumanSessionReady ?? trace?.digitalHumanSessionReady ?? false

@@ -340,6 +340,7 @@ for guard in \
   tencent-digital-human-pcm-drive-poc-check.swift \
   true-device-tencent-backend-pcm-drive-smoke-check.swift \
   tencent-digital-human-voice-clone-route-check.swift \
+  echo-role-voice-profile-selection-check.swift \
   tencent-voice-clone-echo-contract-check.swift \
   context-packet-v1-check.swift \
   context-packet-v2-trace-check.swift \
