@@ -104,6 +104,113 @@ No online physical iPhone/iPad detected.
 
 当前 `xctrace` 枚举显示物理 iPhone 在 `Devices Offline`，因此无法安装、启动或验证腾讯数智人真机 audio-drive 播放。
 
+## 2026-07-02 非真机发布前置 Gate 更新
+
+为避免上真机前仍然分散运行多个脚本，本轮新增两条可选 release regression gate：
+
+### 1. iPhoneOS generic build
+
+脚本：
+
+```bash
+Scripts/QA/prd-stitch-ui/run-iphoneos-generic-build.sh
+```
+
+Release regression 开关：
+
+```bash
+RUN_IPHONEOS_GENERIC_BUILD=1
+```
+
+验证目标：
+
+- 不依赖在线真机。
+- 编译 `iphoneos/arm64` Debug 包。
+- 验证腾讯 SDK、Pods 和 app target 在真机架构下可链接。
+- 验证本地 QA Bundle ID 覆盖为 `com.yxj.dreamjourney.app`，不回退到共享默认 Bundle ID。
+
+本轮验证结果：
+
+```text
+Status: passed
+iPhoneOS generic build: passed
+Bundle ID: com.yxj.dreamjourney.app
+```
+
+证据：
+
+```text
+tmp/visual-qa/prd-stitch-ui/release-regression/20260702-175411-release-regression/iphoneos-generic-build/20260702-175411-release-regression/report.md
+```
+
+### 2. Digital human + voice clone combo gate
+
+脚本：
+
+```bash
+Scripts/QA/prd-stitch-ui/run-digital-human-voice-clone-combo-gate.sh
+```
+
+Release regression 开关：
+
+```bash
+RUN_DIGITAL_HUMAN_VOICE_CLONE_COMBO_GATE=1
+```
+
+该组合 gate 会在同一个 run id 下串起四条非真机验证：
+
+1. `run-backend-digital-human-session-smoke.sh`
+   - 验证后端 `/config/runtime.digitalHuman` 和 `/digital-human/sessions`。
+   - 确认腾讯 `cloudRender`、后端签发 credential、asset/project 身份可用。
+2. `run-backend-voice-clone-deployed-smoke.sh`
+   - 验证部署后端声音复刻 ready 音色。
+   - 确认 `/voice/synthesis` 可返回 `tencentAudioDrive` / `pcm16kMono`。
+3. `run-voice-clone-synthesis-runtime-smoke.sh`
+   - 验证 iOS 读取 runtime 能力并请求 `/voice/synthesis`。
+   - 确认使用本地 QA Bundle ID：`com.yxj.dreamjourney.app`。
+4. `run-tencent-backend-pcm-drive-mock-smoke.sh`
+   - 验证后端 PCM 可被切成连续 chunk 喂给 fake Tencent runtime。
+   - 验证 final chunk、stop/interruption cleanup。
+
+本轮验证结果：
+
+```text
+Status: passed
+Digital human + voice clone combo gate: passed
+voiceProfileId: S_PhXlHqB52
+outputMode: tencentAudioDrive
+audioFormat: pcm16kMono
+finalChunkObserved: true
+interruptProbeCompleted: true
+```
+
+证据：
+
+```text
+tmp/visual-qa/prd-stitch-ui/release-regression/20260702-175411-release-regression/digital-human-voice-clone-combo-gate/20260702-175411-release-regression/report.md
+```
+
+### 推荐上线前非真机命令
+
+如果只是想在上真机前压住数字人/复刻链路，可运行：
+
+```bash
+RUN_STANDARD_BUILD=0 \
+RUN_SIMULATOR_SMOKE=0 \
+RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE=0 \
+RUN_IPHONEOS_GENERIC_BUILD=1 \
+RUN_DIGITAL_HUMAN_VOICE_CLONE_COMBO_GATE=1 \
+Scripts/QA/prd-stitch-ui/run-release-regression.sh
+```
+
+这条命令不替代真机听感验收。它只能证明：
+
+- iPhoneOS 编译/链接没有破。
+- 后端数字人 session 合同可用。
+- 后端复刻音色可返回腾讯 audio-drive PCM。
+- iOS 可消费该 PCM 合同。
+- PCM chunk / stop cleanup 的 mock runtime 合同可用。
+
 ## 当前结论
 
 非真机部分已经闭环：
@@ -112,6 +219,7 @@ No online physical iPhone/iPad detected.
 - iOS 能读取 runtime 能力并验证 PCM 合同。
 - Echo 侧已有 QA-only 的后端 PCM-drive 入口。
 - 公开 MVP release gate 不再被未配置后端的数字人 runtime 请求污染。
+- iPhoneOS generic build 和数字人/复刻组合 gate 已接入 release regression，可一键复验。
 
 仍未完成：
 
