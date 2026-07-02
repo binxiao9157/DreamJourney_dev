@@ -124,14 +124,63 @@ def backend_check(
         })
     elif path == "/context/build":
         packet = body.get("contextPacket") or {}
+        trace = packet.get("trace") or {}
+        debug = packet.get("debug") or {}
+        source_counts = debug.get("sourceCounts") or {}
+        selected_context = packet.get("selectedContext") or []
+        filtered_context = packet.get("filteredContext") or []
+        ranking_trace = packet.get("rankingTrace") or []
+        selected_context_refs = [
+            str(item.get("refId"))
+            for item in selected_context
+            if isinstance(item, dict) and item.get("refId")
+        ]
+        selected_context_refs_by_source: Dict[str, List[str]] = {}
+        for item in selected_context:
+            if not isinstance(item, dict):
+                continue
+            source = str(item.get("source") or "").strip()
+            ref_id = str(item.get("refId") or "").strip()
+            if source and ref_id:
+                selected_context_refs_by_source.setdefault(source, []).append(ref_id)
+        filtered_context_reasons = []
+        for item in filtered_context:
+            if not isinstance(item, dict):
+                continue
+            ref_id = str(item.get("refId") or "").strip()
+            reason = str(item.get("reason") or "").strip()
+            if reason:
+                filtered_context_reasons.append(f"{ref_id}:{reason}" if ref_id else reason)
+        memory = packet.get("memory") or {}
+        voice = packet.get("voice") or {}
+        digital_human = packet.get("digitalHuman") or {}
+        policy = packet.get("policy") or {}
+        privacy_scope = policy.get("privacyScope") or {}
         evidence.update({
             "schemaVersion": packet.get("schemaVersion"),
+            "contextVersion": packet.get("contextVersion"),
             "traceId": packet.get("traceId"),
-            "archiveItemsIncluded": packet.get("archiveItemsIncluded"),
-            "kbFactCount": packet.get("kbFactCount"),
-            "voiceProfileId": packet.get("voiceProfileId"),
-            "privacyScopeLabel": packet.get("privacyScopeLabel"),
-            "crossScopeArchiveIncluded": packet.get("crossScopeArchiveIncluded"),
+            "archiveItemIds": trace.get("archiveItemIds") or [],
+            "archiveItemsIncluded": source_counts.get("archiveItemsIncluded", 0),
+            "archiveItemsAvailable": source_counts.get("archiveItemsAvailable", 0),
+            "kbFactCount": len(memory.get("kbFacts") or []),
+            "selectedContextRefs": selected_context_refs,
+            "selectedContextRefsBySource": selected_context_refs_by_source,
+            "selectedContextSourceCounts": trace.get("selectedContextSourceCounts") or {},
+            "selectedContextCount": trace.get("selectedContextCount", len(selected_context)),
+            "filteredContextReasons": filtered_context_reasons,
+            "filteredContextCount": trace.get("filteredContextCount", len(filtered_context)),
+            "rankingTraceCount": trace.get("rankingTraceCount", len(ranking_trace)),
+            "voiceProfileId": voice.get("voiceProfileId"),
+            "voiceCloneReady": voice.get("cloneReady"),
+            "voiceOutputMode": voice.get("outputMode"),
+            "digitalHumanSessionReady": digital_human.get("sessionReady"),
+            "digitalHumanProviderMode": digital_human.get("providerMode"),
+            "privacyScopeLabel": privacy_scope.get("scopeLabel"),
+            "canUseFamilyData": policy.get("canUseFamilyData"),
+            "crossScopeArchiveIncluded": policy.get("crossScopeArchiveIncluded"),
+            "fallbacks": packet.get("fallbacks") or [],
+            "latencyMs": debug.get("latencyMs", 0),
         })
     elif path == "/digital-human/sessions":
         credential = body.get("credential") or {}
@@ -162,9 +211,155 @@ def backend_check(
     return make_check(name, check_status, "ok" if check_status == "passed" else "unexpected status", evidence)
 
 
+def check_evidence(checks: List[Dict[str, Any]], name: str) -> Dict[str, Any]:
+    for check in checks:
+        if check.get("name") == name:
+            evidence = check.get("evidence") or {}
+            return evidence if isinstance(evidence, dict) else {}
+    return {}
+
+
+def check_status(checks: List[Dict[str, Any]], name: str) -> str:
+    for check in checks:
+        if check.get("name") == name:
+            return str(check.get("status") or "missing")
+    return "missing"
+
+
+def source_refs(summary: Dict[str, Any], source: str, fallback: Optional[List[str]] = None) -> List[str]:
+    refs_by_source = summary.get("selectedContextRefsBySource") or {}
+    refs = refs_by_source.get(source) if isinstance(refs_by_source, dict) else None
+    if isinstance(refs, list) and refs:
+        return [str(item) for item in refs]
+    return fallback or []
+
+
+def make_context_clue_summary(context_evidence: Dict[str, Any]) -> Dict[str, Any]:
+    archive_ids = context_evidence.get("archiveItemIds") or []
+    return {
+        "contextVersion": context_evidence.get("contextVersion") or "missing",
+        "traceId": context_evidence.get("traceId") or "none",
+        "selectedContextRefs": context_evidence.get("selectedContextRefs") or [],
+        "selectedContextRefsBySource": context_evidence.get("selectedContextRefsBySource") or {},
+        "archiveRefs": source_refs(context_evidence, "archive", archive_ids),
+        "kbFactRefs": source_refs(context_evidence, "kbFact"),
+        "personaRefs": source_refs(context_evidence, "persona"),
+        "careRefs": source_refs(context_evidence, "care"),
+        "filteredContextReasons": context_evidence.get("filteredContextReasons") or [],
+        "selectedContextSourceCounts": context_evidence.get("selectedContextSourceCounts") or {},
+        "rankingTraceCount": context_evidence.get("rankingTraceCount", 0),
+        "fallbacks": context_evidence.get("fallbacks") or [],
+        "latencyMs": context_evidence.get("latencyMs", 0),
+    }
+
+
+def make_digital_human_session_summary(
+    runtime_evidence: Dict[str, Any],
+    session_evidence: Dict[str, Any],
+    context_evidence: Dict[str, Any],
+) -> Dict[str, Any]:
+    runtime_dh = runtime_evidence.get("digitalHuman") or {}
+    return {
+        "runtimeProvider": runtime_dh.get("provider"),
+        "runtimeProviderMode": runtime_dh.get("providerMode"),
+        "runtimeRealProviderReady": runtime_dh.get("realProviderReady"),
+        "contextSessionReady": context_evidence.get("digitalHumanSessionReady"),
+        "contextProviderMode": context_evidence.get("digitalHumanProviderMode"),
+        "sessionStatusCode": session_evidence.get("statusCode"),
+        "sessionId": session_evidence.get("sessionId"),
+        "provider": session_evidence.get("provider"),
+        "providerMode": session_evidence.get("providerMode"),
+        "hasProviderAssetId": session_evidence.get("hasProviderAssetId"),
+        "hasProviderProjectId": session_evidence.get("hasProviderProjectId"),
+        "credentialMode": session_evidence.get("credentialMode"),
+        "hasBackendIssuedCredential": bool(session_evidence.get("hasAppkey") and session_evidence.get("hasAccessToken")),
+        "fallbackMode": session_evidence.get("fallbackMode"),
+    }
+
+
+def make_voice_synthesis_summary(
+    runtime_evidence: Dict[str, Any],
+    synthesis_evidence: Dict[str, Any],
+    context_evidence: Dict[str, Any],
+    status: str,
+) -> Dict[str, Any]:
+    voice_clone = runtime_evidence.get("voiceClone") or {}
+    tencent_audio_drive = voice_clone.get("tencentAudioDrive") or {}
+    return {
+        "runtimeProvider": voice_clone.get("provider"),
+        "runtimeEnabled": voice_clone.get("enabled"),
+        "runtimeFallbackMode": voice_clone.get("fallbackMode"),
+        "tencentAudioDrive": tencent_audio_drive,
+        "contextVoiceProfileId": context_evidence.get("voiceProfileId"),
+        "contextVoiceCloneReady": context_evidence.get("voiceCloneReady"),
+        "contextOutputMode": context_evidence.get("voiceOutputMode"),
+        "probeStatus": status,
+        "voiceProfileId": synthesis_evidence.get("voiceProfileId"),
+        "outputMode": synthesis_evidence.get("outputMode"),
+        "audioFormat": synthesis_evidence.get("audioFormat"),
+        "sampleRate": synthesis_evidence.get("sampleRate"),
+        "byteCount": synthesis_evidence.get("byteCount"),
+        "providerLogId": synthesis_evidence.get("providerLogId"),
+        "providerRequestId": synthesis_evidence.get("providerRequestId"),
+    }
+
+
+def make_fallback_summary(
+    checks: List[Dict[str, Any]],
+    context_evidence: Dict[str, Any],
+    digital_human_summary: Dict[str, Any],
+    voice_synthesis_summary: Dict[str, Any],
+) -> Dict[str, Any]:
+    failed_checks = [check["name"] for check in checks if check.get("status") == "failed"]
+    skipped_checks = [check["name"] for check in checks if check.get("status") == "skipped"]
+    context_fallbacks = context_evidence.get("fallbacks") or []
+    inferred: List[str] = []
+    if digital_human_summary.get("contextSessionReady") is False:
+        inferred.append("digital_human_not_ready")
+    if voice_synthesis_summary.get("contextVoiceCloneReady") is False:
+        inferred.append("voice_clone_not_ready")
+    if check_status(checks, "backend.voice_synthesis") == "skipped":
+        inferred.append("voice_synthesis_probe_skipped")
+    return {
+        "contextFallbacks": context_fallbacks,
+        "failedChecks": failed_checks,
+        "skippedChecks": skipped_checks,
+        "inferredFallbacks": inferred,
+    }
+
+
+def make_echo_trace_summary(
+    checks: List[Dict[str, Any]]
+) -> Dict[str, Any]:
+    runtime_evidence = check_evidence(checks, "backend.runtime")
+    context_evidence = check_evidence(checks, "backend.context_build")
+    session_evidence = check_evidence(checks, "backend.digital_human_session")
+    synthesis_evidence = check_evidence(checks, "backend.voice_synthesis")
+    context_clues = make_context_clue_summary(context_evidence)
+    digital_human_session = make_digital_human_session_summary(
+        runtime_evidence,
+        session_evidence,
+        context_evidence,
+    )
+    voice_synthesis = make_voice_synthesis_summary(
+        runtime_evidence,
+        synthesis_evidence,
+        context_evidence,
+        check_status(checks, "backend.voice_synthesis"),
+    )
+    fallback_summary = make_fallback_summary(checks, context_evidence, digital_human_session, voice_synthesis)
+    return {
+        "contextClues": context_clues,
+        "digitalHumanSession": digital_human_session,
+        "voiceSynthesis": voice_synthesis,
+        "fallbackSummary": fallback_summary,
+    }
+
+
 def make_report(checks: List[Dict[str, Any]]) -> str:
+    echo_trace = make_echo_trace_summary(checks)
     lines = [
-        "# Echo Readiness Report",
+        "# Echo Readiness Report v2",
         "",
         f"- Backend URL: `{BASE_URL or 'not configured'}`",
         f"- Backend token: `{'configured' if API_TOKEN else 'not configured'}`",
@@ -176,7 +371,9 @@ def make_report(checks: List[Dict[str, Any]]) -> str:
     for check in checks:
         lines.append(f"| {check['name']} | `{check['status']}` | {check['detail']} |")
 
-    lines.extend(["", "## Evidence", ""])
+    lines.extend(["", "## Echo Trace Summary", "", "```json"])
+    lines.append(json.dumps(echo_trace, ensure_ascii=False, indent=2, sort_keys=True))
+    lines.extend(["```", "", "## Evidence", ""])
     for check in checks:
         lines.append(f"### {check['name']}")
         lines.append("")
@@ -294,12 +491,18 @@ def main() -> None:
             "设置 RUN_READINESS_VOICE_SYNTHESIS=1 且提供 VOICE_CLONE_READY_PROFILE_ID 后启用",
         ))
 
+    echo_trace = make_echo_trace_summary(checks)
     result = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "completed": all(check["status"] in ("passed", "skipped") for check in checks),
         "strict": STRICT,
         "backendURLConfigured": bool(BASE_URL),
         "backendTokenConfigured": bool(API_TOKEN),
+        "echoTrace": echo_trace,
+        "contextClues": echo_trace["contextClues"],
+        "digitalHumanSession": echo_trace["digitalHumanSession"],
+        "voiceSynthesis": echo_trace["voiceSynthesis"],
+        "fallbackSummary": echo_trace["fallbackSummary"],
         "checks": checks,
     }
     json_path = OUTPUT_DIR / "echo-readiness-report.json"

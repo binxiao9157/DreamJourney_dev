@@ -145,6 +145,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-07-02-echo-trace-evidence-package.md",
     "docs/superpowers/status/2026-07-02-context-packet-v2-trace.md",
     "docs/superpowers/status/2026-07-02-echo-context-v2-clue-panel.md",
+    "docs/superpowers/status/2026-07-02-echo-readiness-report-v2.md",
 ]
 
 for doc in requiredDocs {
