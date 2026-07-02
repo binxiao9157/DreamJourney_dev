@@ -188,11 +188,18 @@ private struct ArchiveVisibilityContext {
     let digitalHumanId: String
 }
 
+private struct InAppMessageLocalState: Codable {
+    let status: InAppMessageStatus
+    let readAt: String?
+    let archivedAt: String?
+}
+
 final class MemoryArchiveRepository {
     static let shared = MemoryArchiveRepository()
 
     private let baseKey = "dj.memoryArchive.items"
     private let mailboxBaseKey = "dj.memoryArchive.timeLetterMailbox"
+    private let inAppMessageStateBaseKey = "dj.inAppMessage.localState"
     private let isoFormatter = ISO8601DateFormatter()
     private static let personalPersonaScope = "personal"
     private static let familyPersonaScope = "family"
@@ -360,15 +367,16 @@ final class MemoryArchiveRepository {
         return sourceIds.count
     }
 
-    func inAppMessageCenterSnapshot(includeUnavailableCandidates: Bool = false) -> InAppMessageCenterSnapshot {
+    func inAppMessageCenterSnapshot(
+        includeUnavailableCandidates: Bool = false,
+        familyInvitationSources: [FamilyInvitationMessageSource] = []
+    ) -> InAppMessageCenterSnapshot {
         let timeLetterMessages = timeLetterMailboxReminders()
             .map(InAppMessage.fromTimeLetterReminder)
+        let familyInvitationMessages = familyInvitationSources
+            .compactMap(InAppMessage.fromFamilyInvitation)
+            .map(applyLocalInAppMessageStateIfNeeded)
         let hiddenCandidates = [
-            InAppMessage.unavailableCandidate(
-                kind: .familyInvitation,
-                title: "家庭邀请",
-                reason: "家庭邀请后续会进入统一消息中心，当前仍由家庭页承载。"
-            ),
             InAppMessage.unavailableCandidate(
                 kind: .careSignal,
                 title: "关怀提醒",
@@ -380,7 +388,7 @@ final class MemoryArchiveRepository {
                 reason: "系统通知后续会进入统一消息中心，当前不在公开 MVP 暴露。"
             ),
         ]
-        let visibleMessages = InAppMessageCenterSnapshot.sortedMessages(timeLetterMessages)
+        let visibleMessages = InAppMessageCenterSnapshot.sortedMessages(timeLetterMessages + familyInvitationMessages)
         let candidateMessages = includeUnavailableCandidates ? hiddenCandidates : []
         return InAppMessageCenterSnapshot(
             messages: visibleMessages,
@@ -401,6 +409,12 @@ final class MemoryArchiveRepository {
         _ message: InAppMessage,
         completion: ((Result<InAppMessage, Error>) -> Void)? = nil
     ) {
+        guard message.kind == .timeLetter else {
+            let updatedMessage = message.markingRead(readAt: isoFormatter.string(from: Date()))
+            updateLocalInAppMessageState(updatedMessage)
+            completion?(.success(updatedMessage))
+            return
+        }
         guard message.kind == .timeLetter,
               let reminder = timeLetterMailboxReminder(for: message) else {
             completion?(.failure(NSError(
@@ -424,6 +438,12 @@ final class MemoryArchiveRepository {
         _ message: InAppMessage,
         completion: ((Result<InAppMessage, Error>) -> Void)? = nil
     ) {
+        guard message.kind == .timeLetter else {
+            let updatedMessage = message.markingArchived(archivedAt: isoFormatter.string(from: Date()))
+            updateLocalInAppMessageState(updatedMessage)
+            completion?(.success(updatedMessage))
+            return
+        }
         guard message.kind == .timeLetter,
               let reminder = timeLetterMailboxReminder(for: message) else {
             completion?(.failure(NSError(
@@ -651,6 +671,10 @@ final class MemoryArchiveRepository {
         "\(mailboxBaseKey).\(currentUserId)"
     }
 
+    private var inAppMessageStateStorageKey: String {
+        "\(inAppMessageStateBaseKey).\(currentUserId)"
+    }
+
     private func save(_ items: [MemoryArchiveItem]) {
         let sortedItems = items.sorted { $0.createdAt > $1.createdAt }
         if let data = try? JSONEncoder().encode(sortedItems) {
@@ -661,6 +685,48 @@ final class MemoryArchiveRepository {
     private func saveTimeLetterMailboxReminders(_ reminders: [TimeLetterMailboxReminder]) {
         if let data = try? JSONEncoder().encode(reminders) {
             UserDefaults.standard.set(data, forKey: mailboxStorageKey)
+        }
+    }
+
+    private func localInAppMessageStates() -> [String: InAppMessageLocalState] {
+        guard let data = UserDefaults.standard.data(forKey: inAppMessageStateStorageKey),
+              let decoded = try? JSONDecoder().decode([String: InAppMessageLocalState].self, from: data) else {
+            return [:]
+        }
+        return decoded
+    }
+
+    private func saveLocalInAppMessageStates(_ states: [String: InAppMessageLocalState]) {
+        if let data = try? JSONEncoder().encode(states) {
+            UserDefaults.standard.set(data, forKey: inAppMessageStateStorageKey)
+        }
+    }
+
+    private func updateLocalInAppMessageState(_ message: InAppMessage) {
+        guard message.kind != .timeLetter else {
+            return
+        }
+        var states = localInAppMessageStates()
+        states[message.id] = InAppMessageLocalState(
+            status: message.status,
+            readAt: message.readAt,
+            archivedAt: message.archivedAt
+        )
+        saveLocalInAppMessageStates(states)
+    }
+
+    private func applyLocalInAppMessageStateIfNeeded(_ message: InAppMessage) -> InAppMessage {
+        guard message.kind != .timeLetter,
+              let state = localInAppMessageStates()[message.id] else {
+            return message
+        }
+        switch state.status {
+        case .unread:
+            return message
+        case .read:
+            return message.markingRead(readAt: state.readAt ?? isoFormatter.string(from: Date()))
+        case .archived:
+            return message.markingArchived(archivedAt: state.archivedAt ?? isoFormatter.string(from: Date()))
         }
     }
 

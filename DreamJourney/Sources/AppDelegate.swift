@@ -2340,6 +2340,7 @@ private extension AppDelegate {
         let userId = UserManager.shared.currentUser?.id ?? "user_001"
         UserDefaults.standard.removeObject(forKey: "dj.memoryArchive.items.\(userId)")
         UserDefaults.standard.removeObject(forKey: "dj.memoryArchive.timeLetterMailbox.\(userId)")
+        UserDefaults.standard.removeObject(forKey: "dj.inAppMessage.localState.\(userId)")
 
         var deliveredLetter = MemoryArchiveItemFactory.makeTimeLetter(
             note: "这封信已由后端投递，不应再被本地 due 计数重复计算。",
@@ -2399,9 +2400,47 @@ private extension AppDelegate {
             UserDefaults.standard.set(data, forKey: "dj.memoryArchive.timeLetterMailbox.\(userId)")
         }
 
+        let pendingFamilyMember = FamilyMember(
+            id: "family-invite-pending-uiqa",
+            name: "陈岚",
+            relation: "女儿",
+            phone: "13900001111",
+            isOnline: false,
+            lastUpdated: ISO8601DateFormatter().string(from: Date().addingTimeInterval(-120)),
+            accessStatus: "pending",
+            invitationStatus: "pending"
+        )
+        let failedFamilyMember = FamilyMember(
+            id: "family-invite-failed-uiqa",
+            name: "周启明",
+            relation: "哥哥",
+            phone: "13900002222",
+            isOnline: false,
+            lastUpdated: ISO8601DateFormatter().string(from: Date().addingTimeInterval(-180)),
+            accessStatus: "failed",
+            invitationStatus: "failed",
+            invitationError: "手机号暂不可达"
+        )
+        let acceptedFamilyMember = FamilyMember(
+            id: "family-invite-accepted-uiqa",
+            name: "李安然",
+            relation: "妹妹",
+            phone: "13900003333",
+            isOnline: true,
+            lastUpdated: ISO8601DateFormatter().string(from: Date().addingTimeInterval(-60)),
+            accessStatus: "active",
+            invitationStatus: "accepted"
+        )
+        FamilyRepository.shared.add(pendingFamilyMember)
+        FamilyRepository.shared.add(failedFamilyMember)
+        FamilyRepository.shared.add(acceptedFamilyMember)
+        let familyInvitationSources = FamilyRepository.shared.getAll().map { $0 as FamilyInvitationMessageSource }
+
         let dueLetters = MemoryArchiveRepository.shared.dueTimeLetters()
         let mailboxReminders = MemoryArchiveRepository.shared.timeLetterMailboxReminders()
-        let inAppMessageSnapshot = MemoryArchiveRepository.shared.inAppMessageCenterSnapshot()
+        let inAppMessageSnapshot = MemoryArchiveRepository.shared.inAppMessageCenterSnapshot(
+            familyInvitationSources: familyInvitationSources
+        )
         let reminderCount = MemoryArchiveRepository.shared.timeLetterReminderCount()
         let restoredDelivered = MemoryArchiveRepository.shared.allItems().first { $0.id == deliveredLetter.id }
         var resolvedReminderDetail: MemoryArchiveItem?
@@ -2437,7 +2476,10 @@ private extension AppDelegate {
             MemoryArchiveRepository.shared.markTimeLetterMailboxReminderArchived(readReminder)
         }
         let remindersAfterArchive = MemoryArchiveRepository.shared.timeLetterMailboxReminders()
-        let inAppMessageSnapshotAfterArchive = MemoryArchiveRepository.shared.inAppMessageCenterSnapshot()
+        let inAppMessageSnapshotAfterArchive = MemoryArchiveRepository.shared.inAppMessageCenterSnapshot(
+            familyInvitationSources: familyInvitationSources
+        )
+        let familyInvitationMessageCount = inAppMessageSnapshot.sourceCounts["familyInvitation"] ?? 0
         let reminderArchiveStatusPersisted = openedReminderId.map { reminderId in
             remindersAfterArchive.first(where: { $0.id == reminderId })?.isArchived == true
         } ?? false
@@ -2453,8 +2495,9 @@ private extension AppDelegate {
             && dueLetters.contains(where: { $0.id == secondDeliveredLetter.id }) == false
             && mailboxReminders.map(\.sourceArchiveItemId).contains(deliveredLetter.id)
             && mailboxReminders.map(\.sourceArchiveItemId).contains(secondDeliveredLetter.id)
-            && inAppMessageSnapshot.totalCount == 2
+            && inAppMessageSnapshot.totalCount == 4
             && inAppMessageSnapshot.sourceCounts["timeLetter"] == 2
+            && familyInvitationMessageCount == 2
             && reminderCount == 2
             && reminderDetailResolved
             && reminderDetailNoteVisible
@@ -2465,7 +2508,7 @@ private extension AppDelegate {
             && reminderArchiveStatusPersisted
             && secondReminderStillUnreadAfterArchive
             && inAppMessageSnapshotAfterArchive.archivedCount == 1
-            && inAppMessageSnapshotAfterArchive.unreadCount == 1
+            && inAppMessageSnapshotAfterArchive.unreadCount == 3
             && reminderCountAfterArchive == 1
 
         writeTimeLetterDispatchReminderSmokeResult([
@@ -2480,6 +2523,8 @@ private extension AppDelegate {
             "inAppMessageCenterKindCounts": inAppMessageSnapshot.sourceCounts,
             "inAppMessageCenterUnreadCount": inAppMessageSnapshot.unreadCount,
             "inAppMessageCenterArchivedCountAfterArchive": inAppMessageSnapshotAfterArchive.archivedCount,
+            "familyInvitationMessageCount": familyInvitationMessageCount,
+            "familyAcceptedInvitationExcluded": inAppMessageSnapshot.messages.contains { $0.familyMemberId == acceptedFamilyMember.id } == false,
             "reminderCount": reminderCount,
             "timeLetterReminderDetailResolved": reminderDetailResolved,
             "timeLetterReminderDetailNoteVisible": reminderDetailNoteVisible,

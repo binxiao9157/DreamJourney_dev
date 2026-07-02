@@ -106,11 +106,30 @@
   - `timeLetterReminder` mailbox 记录映射为 `InAppMessage.kind=timeLetter`。
   - 保留 `metadataOnly=true`、`contentRedacted=true`，提醒列表不暴露正文。
 - 暂不公开来源：
-  - `familyInvitation`、`careSignal`、`systemNotice` 只保留 hidden candidate / routing guard。
-  - 默认 release 不生成这些消息，不改变家庭页、关怀页、系统通知现有入口。
+  - `careSignal`、`systemNotice` 只保留 hidden candidate / routing guard。
+  - 默认 release 不生成关怀和系统消息，不改变关怀页、系统通知现有入口。
 - QA 覆盖：
   - 新增 `in-app-message-center-shell-check.swift`，接入 release regression 静态 guard。
   - `run-time-letter-dispatch-reminder-smoke.sh` 额外验证 `inAppMessageCenterKindCounts.timeLetter=2`、未读数和归档数。
+
+## 2026-07-02 家庭邀请接入 InAppMessage
+
+- 真实 provider：
+  - `FamilyMember` 实现 `FamilyInvitationMessageSource`。
+  - `MemoryArchiveRepository.inAppMessageCenterSnapshot(familyInvitationSources:)` 合并家庭邀请消息。
+- 入消息中心规则：
+  - `invitationStatus=pending` 或 `accessStatus=pending`：进入消息中心，显示“等待对方加入”。
+  - `invitationStatus=failed` 或 `accessStatus=failed`：进入消息中心，显示失败原因。
+  - `invitationStatus=accepted` 且 `accessStatus=active`：不进入消息中心，避免已加入家人造成提醒噪音。
+- 状态策略：
+  - 家庭邀请消息使用本地 `InAppMessage` read/archive 缓存。
+  - 时间信件仍以后端 mailbox read/archive 状态为准。
+- 点击策略：
+  - 点击家庭邀请消息后进入家人管理上下文。
+  - 如果本地能解析到对应 `FamilyMember`，直接打开家人详情；否则回到 `FamilyCircleViewController`。
+- QA 覆盖：
+  - `in-app-message-center-shell-check.swift` 验证 `FamilyInvitationMessageSource`、`fromFamilyInvitation`、`familyInvitationMessages`、`openFamilyInvitationMessage`。
+  - `run-time-letter-dispatch-reminder-smoke.sh` 构造 pending / failed / accepted 三种家庭状态，断言 pending + failed 计数为 2，accepted 不进入消息中心。
 
 ## 验证入口
 
@@ -146,4 +165,4 @@ Scripts/QA/prd-stitch-ui/run-backend-time-letter-lifecycle-smoke.sh
 
 - APNs/provider 级远程推送送达证据。
 - 真机通知权限、前后台、锁屏提醒实测截图和日志。
-- 将家庭邀请、关怀提醒、系统通知接入 `InAppMessage` 的真实 provider 和后端合同。
+- 将关怀提醒、系统通知接入 `InAppMessage` 的真实 provider 和后端合同。

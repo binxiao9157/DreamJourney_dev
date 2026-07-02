@@ -102,7 +102,10 @@ grep -Eq '"timeLetterSecondReminderStillUnreadAfterArchive"[[:space:]]*:[[:space
 grep -Eq '"timeLetterReminderCountAfterArchive"[[:space:]]*:[[:space:]]*1' "$RESULT_FILE" || fail "Archived reminders should not re-enter unread counts."
 grep -Eq '"inAppMessageCenterKindCounts"[[:space:]]*:' "$RESULT_FILE" || fail "Result should include unified message-center kind counts."
 grep -Eq '"timeLetter"[[:space:]]*:[[:space:]]*2' "$RESULT_FILE" || fail "Unified message center should expose two time-letter messages."
-grep -Eq '"inAppMessageCenterUnreadCount"[[:space:]]*:[[:space:]]*2' "$RESULT_FILE" || fail "Unified message center should count unread messages before opening."
+grep -Eq '"familyInvitation"[[:space:]]*:[[:space:]]*2' "$RESULT_FILE" || fail "Unified message center should expose pending/failed family invitation messages."
+grep -Eq '"familyInvitationMessageCount"[[:space:]]*:[[:space:]]*2' "$RESULT_FILE" || fail "Unified message center should count actionable family invitation messages."
+grep -Eq '"familyAcceptedInvitationExcluded"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Accepted family members should not become noisy invitation messages."
+grep -Eq '"inAppMessageCenterUnreadCount"[[:space:]]*:[[:space:]]*4' "$RESULT_FILE" || fail "Unified message center should count time-letter and family invitation unread messages before opening."
 grep -Eq '"inAppMessageCenterArchivedCountAfterArchive"[[:space:]]*:[[:space:]]*1' "$RESULT_FILE" || fail "Unified message center should count archived messages after archive."
 grep -Eq '"dueLetterIds"' "$RESULT_FILE" || fail "Result should include dueLetterIds."
 

@@ -335,6 +335,17 @@ struct FamilyMember: Codable, Identifiable {
     }
 }
 
+extension FamilyMember: FamilyInvitationMessageSource {
+    var familyMemberId: String { id }
+    var familyMemberName: String { name }
+    var familyMemberRelation: String { relation }
+    var familyMemberPhone: String? { phone }
+    var familyInvitationStatus: String { invitationStatus }
+    var familyAccessStatus: String { accessStatus }
+    var familyInvitationError: String? { invitationError }
+    var familyLastUpdated: String { lastUpdated }
+}
+
 // MARK: - 点赞模型
 struct LikeModel: Codable, Identifiable {
     let id: String

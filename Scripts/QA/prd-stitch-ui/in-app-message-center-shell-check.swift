@@ -45,6 +45,11 @@ let docs = read("docs/superpowers/status/2026-06-21-time-letter-public-delivery.
     "ownerUserId",
     "contentRedacted",
     "metadataOnly",
+    "protocol FamilyInvitationMessageSource",
+    "static func fromFamilyInvitation",
+    "familyMemberId",
+    "invitationStatus",
+    "accessStatus",
 ].forEach {
     assertContains(messageCenter, $0, "unified model should include \($0)")
 }
@@ -60,9 +65,19 @@ assertContains(
     "future family/care/system message types should have hidden candidate placeholders"
 )
 assertContains(
+    messageCenter,
+    "isFamilyInvitationVisibleInMessageCenter",
+    "accepted family members should not become noisy message-center invitations"
+)
+assertContains(
     repository,
     "func inAppMessageCenterSnapshot(",
     "repository should expose a unified message center snapshot"
+)
+assertContains(
+    repository,
+    "familyInvitationMessages",
+    "repository should aggregate real family invitation messages"
 )
 assertContains(
     repository,
@@ -92,7 +107,12 @@ assertContains(
 assertContains(
     archiveView,
     "familyInvitation",
-    "family invitation message kind should remain guarded in UI routing"
+    "family invitation message kind should route through the unified message center"
+)
+assertContains(
+    archiveView,
+    "openFamilyInvitationMessage",
+    "family invitation messages should open family management context"
 )
 assertContains(
     archiveView,
@@ -115,14 +135,19 @@ assertContains(
     "UIQA smoke should export message kind counts"
 )
 assertContains(
+    appDelegate,
+    "familyInvitationMessageCount",
+    "UIQA smoke should export family invitation message count"
+)
+assertContains(
     project,
     "InAppMessageCenter.swift",
     "new model should be included in the Xcode target"
 )
 assertContains(
     docs,
-    "统一 InAppMessage 聚合壳层",
-    "time-letter status doc should document the unified in-app message center shell"
+    "家庭邀请接入 InAppMessage",
+    "time-letter status doc should document the family invitation provider"
 )
 
 print("In-app message center shell checks passed")

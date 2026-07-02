@@ -20,6 +20,32 @@ enum InAppMessageKind: String, Codable, CaseIterable {
     }
 }
 
+protocol FamilyInvitationMessageSource {
+    var familyMemberId: String { get }
+    var familyMemberName: String { get }
+    var familyMemberRelation: String { get }
+    var familyMemberPhone: String? { get }
+    var familyInvitationStatus: String { get }
+    var familyAccessStatus: String { get }
+    var familyInvitationError: String? { get }
+    var familyLastUpdated: String { get }
+    var isAcceptedFamilyMember: Bool { get }
+}
+
+extension FamilyInvitationMessageSource {
+    var isFamilyInvitationVisibleInMessageCenter: Bool {
+        guard !isAcceptedFamilyMember else {
+            return false
+        }
+        let invitation = familyInvitationStatus.lowercased()
+        let access = familyAccessStatus.lowercased()
+        return invitation == "pending"
+            || invitation == "failed"
+            || access == "pending"
+            || access == "failed"
+    }
+}
+
 enum InAppMessageStatus: String, Codable {
     case unread
     case read
@@ -45,6 +71,9 @@ struct InAppMessage: Codable, Equatable {
     let archivedAt: String?
     let sourceArchiveItemId: String?
     let ownerUserId: String?
+    let familyMemberId: String?
+    let invitationStatus: String?
+    let accessStatus: String?
     let recipientRole: String?
     let metadataOnly: Bool
     let contentRedacted: Bool
@@ -79,6 +108,9 @@ struct InAppMessage: Codable, Equatable {
             archivedAt: archivedAt,
             sourceArchiveItemId: sourceArchiveItemId,
             ownerUserId: ownerUserId,
+            familyMemberId: familyMemberId,
+            invitationStatus: invitationStatus,
+            accessStatus: accessStatus,
             recipientRole: recipientRole,
             metadataOnly: metadataOnly,
             contentRedacted: contentRedacted,
@@ -99,6 +131,9 @@ struct InAppMessage: Codable, Equatable {
             archivedAt: archivedAt,
             sourceArchiveItemId: sourceArchiveItemId,
             ownerUserId: ownerUserId,
+            familyMemberId: familyMemberId,
+            invitationStatus: invitationStatus,
+            accessStatus: accessStatus,
             recipientRole: recipientRole,
             metadataOnly: metadataOnly,
             contentRedacted: contentRedacted,
@@ -119,7 +154,52 @@ struct InAppMessage: Codable, Equatable {
             archivedAt: timeLetterReminder.archivedAt,
             sourceArchiveItemId: timeLetterReminder.sourceArchiveItemId,
             ownerUserId: timeLetterReminder.ownerUserId,
+            familyMemberId: nil,
+            invitationStatus: nil,
+            accessStatus: nil,
             recipientRole: timeLetterReminder.recipientRole,
+            metadataOnly: true,
+            contentRedacted: true,
+            isActionable: true,
+            unavailableReason: nil
+        )
+    }
+
+    static func fromFamilyInvitation(_ source: FamilyInvitationMessageSource) -> InAppMessage? {
+        guard source.isFamilyInvitationVisibleInMessageCenter else {
+            return nil
+        }
+
+        let invitationStatus = source.familyInvitationStatus.lowercased()
+        let accessStatus = source.familyAccessStatus.lowercased()
+        let isFailed = invitationStatus == "failed" || accessStatus == "failed"
+        let phoneSuffix = source.familyMemberPhone.map { String($0.suffix(4)) } ?? ""
+        let phoneCopy = phoneSuffix.isEmpty ? "" : "尾号 \(phoneSuffix)"
+        let relationCopy = source.familyMemberRelation.trimmingCharacters(in: .whitespacesAndNewlines)
+        let statusCopy = isFailed ? (source.familyInvitationError ?? "邀请失败，可稍后重试") : "等待对方加入"
+        let summary = [
+            relationCopy.isEmpty ? "家人" : relationCopy,
+            phoneCopy,
+            statusCopy,
+        ]
+        .filter { !$0.isEmpty }
+        .joined(separator: " · ")
+
+        return InAppMessage(
+            id: "family-invitation-\(source.familyMemberId)",
+            kind: .familyInvitation,
+            title: isFailed ? "\(source.familyMemberName) 邀请失败" : "已邀请 \(source.familyMemberName)",
+            summary: summary,
+            status: .unread,
+            deliveredAt: source.familyLastUpdated,
+            readAt: nil,
+            archivedAt: nil,
+            sourceArchiveItemId: nil,
+            ownerUserId: nil,
+            familyMemberId: source.familyMemberId,
+            invitationStatus: source.familyInvitationStatus,
+            accessStatus: source.familyAccessStatus,
+            recipientRole: "familyInvitation",
             metadataOnly: true,
             contentRedacted: true,
             isActionable: true,
@@ -139,6 +219,9 @@ struct InAppMessage: Codable, Equatable {
             archivedAt: nil,
             sourceArchiveItemId: nil,
             ownerUserId: nil,
+            familyMemberId: nil,
+            invitationStatus: nil,
+            accessStatus: nil,
             recipientRole: nil,
             metadataOnly: true,
             contentRedacted: true,

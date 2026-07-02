@@ -943,9 +943,10 @@ final class MemoryArchiveViewController: UIViewController {
             return
         }
 
+        let snapshot = currentInAppMessageCenterSnapshot()
         let reminders = repository.timeLetterMailboxReminders()
         let reminderCount = repository.timeLetterReminderCount()
-        guard reminderCount > 0 || !reminders.isEmpty else {
+        guard reminderCount > 0 || !snapshot.messages.isEmpty else {
             timeLetterReminderButton.setTitle(nil, for: .normal)
             timeLetterReminderButton.accessibilityLabel = nil
             timeLetterReminderButton.isHidden = true
@@ -954,9 +955,11 @@ final class MemoryArchiveViewController: UIViewController {
 
         let archivedCount = reminders.filter(\.isArchived).count
         let historyCopy = archivedCount > 0 ? "\(archivedCount) 封已归档" : "查看历史"
-        let title = reminderCount > 0
+        let title = snapshot.unreadCount > 0
+            ? "\(snapshot.unreadCount) 条消息待处理 · 查看"
+            : reminderCount > 0
             ? "\(reminderCount) 封时间信件已到打开时间 · 查看"
-            : "时间信件提醒中心 · \(historyCopy)"
+            : "消息中心 · \(historyCopy)"
         timeLetterReminderButton.setTitle(title, for: .normal)
         timeLetterReminderButton.accessibilityLabel = title
         timeLetterReminderButton.isHidden = false
@@ -2698,12 +2701,18 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     @objc private func timeLetterReminderTapped() {
-        let snapshot = repository.inAppMessageCenterSnapshot()
+        let snapshot = currentInAppMessageCenterSnapshot()
         guard !snapshot.messages.isEmpty else {
             applyArchiveKindFilter(.timeLetter)
             return
         }
         presentInAppMessageCenter(snapshot)
+    }
+
+    private func currentInAppMessageCenterSnapshot() -> InAppMessageCenterSnapshot {
+        repository.inAppMessageCenterSnapshot(
+            familyInvitationSources: FamilyRepository.shared.getAll().map { $0 as FamilyInvitationMessageSource }
+        )
     }
 
     private func presentInAppMessageCenter(_ snapshot: InAppMessageCenterSnapshot) {
@@ -2738,12 +2747,25 @@ final class MemoryArchiveViewController: UIViewController {
             }
             openTimeLetterReminder(reminder)
         case .familyInvitation:
-            showToast("家庭邀请会在后续接入消息中心", type: .info)
+            openFamilyInvitationMessage(message)
         case .careSignal:
             showToast("关怀提醒会在后续接入消息中心", type: .info)
         case .systemNotice:
             showToast("系统通知会在后续接入消息中心", type: .info)
         }
+    }
+
+    private func openFamilyInvitationMessage(_ message: InAppMessage) {
+        repository.markInAppMessageRead(message) { [weak self] _ in
+            self?.refreshContent()
+        }
+        if let familyMemberId = message.familyMemberId,
+           let member = FamilyRepository.shared.get(by: familyMemberId) {
+            let detailViewController = FamilyMemberDetailViewController(member: member)
+            navigationController?.pushViewController(detailViewController, animated: true)
+            return
+        }
+        navigationController?.pushViewController(FamilyCircleViewController(), animated: true)
     }
 
     private func openTimeLetterReminder(_ reminder: TimeLetterMailboxReminder) {
