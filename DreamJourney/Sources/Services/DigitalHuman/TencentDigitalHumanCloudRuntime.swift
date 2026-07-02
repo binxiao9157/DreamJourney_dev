@@ -158,9 +158,18 @@ final class TencentDigitalHumanCloudRuntime: DigitalHumanRuntime {
         switch result {
         case .success:
             state = .connecting
-        case .failure:
-            state = .failed(code: "tencent_cloud_open_failed")
+        case .failure(let error):
+            state = .failed(code: openFailureCode(for: error))
         }
+    }
+
+    private func openFailureCode(for error: Error) -> String {
+        let message = error.localizedDescription
+        if message.localizedCaseInsensitiveContains("LimitExceeded")
+            || message.contains("超过配额") {
+            return "tencent_cloud_quota_exceeded"
+        }
+        return "tencent_cloud_open_failed"
     }
 
     private func handleBridgeEvent(_ event: TencentDigitalHumanSDKBridgeEvent) {

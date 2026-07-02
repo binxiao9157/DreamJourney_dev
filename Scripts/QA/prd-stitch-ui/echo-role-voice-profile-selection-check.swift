@@ -88,6 +88,16 @@ for required in [
     "case familyVoiceProfileMissing",
     "private func resolveEchoRoleVoiceProfileSelection",
     "private func isCurrentUserPersonaContext",
+    "private func currentDigitalHumanRuntimeContextKey",
+    "private func digitalHumanRuntimeContextKey(for context: DigitalHumanContext)",
+    "private func isCurrentDigitalHumanSessionRequest",
+    "private func reconcileDigitalHumanRuntimeWithCurrentContext",
+    "pendingDigitalHumanSessionRequestID",
+    "pendingDigitalHumanSessionContextKey",
+    "digitalHumanRuntimeContextKey",
+    "ignored stale session response",
+    "invalidated stale session request",
+    "contextChanged",
     "DigitalHumanContextStore.shared.current",
     "context.relation",
     "\"本人\"",
@@ -131,7 +141,15 @@ for required in [
 let voiceClonePCMDriveBody = functionBody(named: "sendEchoReplyViaTencentVoiceClonePCMDrive", in: echo)
 require(voiceClonePCMDriveBody.contains("let voiceSelection = resolveEchoRoleVoiceProfileSelection()"), "PCM-drive should resolve voice profile from current Echo role")
 require(voiceClonePCMDriveBody.contains("let voiceProfileId = voiceSelection.voiceProfileId"), "PCM-drive should use selected role voiceProfileId")
+require(voiceClonePCMDriveBody.contains("let contextKey = currentDigitalHumanRuntimeContextKey()"), "PCM-drive requests should capture active persona context")
+require(voiceClonePCMDriveBody.contains("self.currentDigitalHumanRuntimeContextKey() == contextKey"), "PCM-drive responses should be dropped after persona switches")
 require(!voiceClonePCMDriveBody.contains("VoiceCloneService.shared.currentUsableSpeakerId"), "PCM-drive should consume resolved role voice profile, not directly use the current user's voice clone for every role")
+
+let startPCMDriveBody = functionBody(named: "startPCMDriveSignalToDigitalHumanRuntime", in: echo)
+require(startPCMDriveBody.contains("contextKey: contextKey"), "PCM-drive chunk scheduling should carry the persona context")
+
+let schedulePCMDriveBody = functionBody(named: "scheduleTencentDigitalHumanPCMDriveChunks", in: echo)
+require(schedulePCMDriveBody.contains("self.currentDigitalHumanRuntimeContextKey() == contextKey"), "PCM-drive chunks should stop after persona switches")
 
 let notEnabledBody = functionBody(named: "showVoiceCloneNotEnabledStatusIfNeeded", in: echo)
 require(notEnabledBody.contains("let voiceSelection = resolveEchoRoleVoiceProfileSelection()"), "voice status should resolve active role")
