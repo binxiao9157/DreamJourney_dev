@@ -886,7 +886,7 @@ final class MemoryArchiveViewController: UIViewController {
         timeLetterReminderButton.layer.cornerRadius = 14
         timeLetterReminderButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
         timeLetterReminderButton.contentHorizontalAlignment = .leading
-        timeLetterReminderButton.accessibilityIdentifier = "archive-time-letter-in-app-reminder"
+        timeLetterReminderButton.accessibilityIdentifier = "archive-in-app-message-center"
         timeLetterReminderButton.isHidden = true
         timeLetterReminderButton.addTarget(self, action: #selector(timeLetterReminderTapped), for: .touchUpInside)
     }
@@ -944,22 +944,14 @@ final class MemoryArchiveViewController: UIViewController {
         }
 
         let snapshot = currentInAppMessageCenterSnapshot()
-        let reminders = repository.timeLetterMailboxReminders()
         let reminderCount = repository.timeLetterReminderCount()
-        guard reminderCount > 0 || !snapshot.messages.isEmpty else {
+        guard let title = snapshot.entryButtonTitle(timeLetterReminderCount: reminderCount) else {
             timeLetterReminderButton.setTitle(nil, for: .normal)
             timeLetterReminderButton.accessibilityLabel = nil
             timeLetterReminderButton.isHidden = true
             return
         }
 
-        let archivedCount = reminders.filter(\.isArchived).count
-        let historyCopy = archivedCount > 0 ? "\(archivedCount) 封已归档" : "查看历史"
-        let title = snapshot.unreadCount > 0
-            ? "\(snapshot.unreadCount) 条消息待处理 · 查看"
-            : reminderCount > 0
-            ? "\(reminderCount) 封时间信件已到打开时间 · 查看"
-            : "消息中心 · \(historyCopy)"
         timeLetterReminderButton.setTitle(title, for: .normal)
         timeLetterReminderButton.accessibilityLabel = title
         timeLetterReminderButton.isHidden = false

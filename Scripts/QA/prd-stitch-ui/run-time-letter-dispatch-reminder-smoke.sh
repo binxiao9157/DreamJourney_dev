@@ -101,6 +101,7 @@ grep -Eq '"timeLetterReminderArchiveStatusPersisted"[[:space:]]*:[[:space:]]*tru
 grep -Eq '"timeLetterSecondReminderStillUnreadAfterArchive"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Archiving one reminder should not affect the unread sibling reminder."
 grep -Eq '"timeLetterReminderCountAfterArchive"[[:space:]]*:[[:space:]]*1' "$RESULT_FILE" || fail "Archived reminders should not re-enter unread counts."
 grep -Eq '"inAppMessageCenterKindCounts"[[:space:]]*:' "$RESULT_FILE" || fail "Result should include unified message-center kind counts."
+grep -Eq '"inAppMessageCenterEntryTitle"[[:space:]]*:[[:space:]]*"7 条消息待处理 · 查看"' "$RESULT_FILE" || fail "Unified message center entry title should use total unread count across message kinds."
 grep -Eq '"timeLetter"[[:space:]]*:[[:space:]]*2' "$RESULT_FILE" || fail "Unified message center should expose two time-letter messages."
 grep -Eq '"familyInvitation"[[:space:]]*:[[:space:]]*2' "$RESULT_FILE" || fail "Unified message center should expose pending/failed family invitation messages."
 grep -Eq '"careSignal"[[:space:]]*:[[:space:]]*3' "$RESULT_FILE" || fail "Unified message center should expose failed/stale/attention care signal messages."

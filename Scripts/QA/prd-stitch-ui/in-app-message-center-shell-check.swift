@@ -71,6 +71,11 @@ assertContains(
 )
 assertContains(
     messageCenter,
+    "func entryButtonTitle(",
+    "unified message center should own the Archive entry badge title"
+)
+assertContains(
+    messageCenter,
     "isFamilyInvitationVisibleInMessageCenter",
     "accepted family members should not become noisy message-center invitations"
 )
@@ -111,8 +116,18 @@ assertContains(
 )
 assertContains(
     archiveView,
+    "archive-in-app-message-center",
+    "Archive entry should use a unified message-center accessibility id"
+)
+assertContains(
+    archiveView,
     "inAppMessageCenterSnapshot",
     "Archive UI should use the unified message snapshot"
+)
+assertContains(
+    archiveView,
+    "entryButtonTitle(",
+    "Archive entry should render the unified unread badge from the snapshot"
 )
 assertContains(
     archiveView,
@@ -153,6 +168,11 @@ assertContains(
     appDelegate,
     "inAppMessageCenterKindCounts",
     "UIQA smoke should export message kind counts"
+)
+assertContains(
+    appDelegate,
+    "inAppMessageCenterEntryTitle",
+    "UIQA smoke should export the unified entry badge title"
 )
 assertContains(
     appDelegate,

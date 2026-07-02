@@ -2522,6 +2522,7 @@ private extension AppDelegate {
         )
         let familyInvitationMessageCount = inAppMessageSnapshot.sourceCounts["familyInvitation"] ?? 0
         let careSignalMessageCount = inAppMessageSnapshot.sourceCounts["careSignal"] ?? 0
+        let inAppMessageCenterEntryTitle = inAppMessageSnapshot.entryButtonTitle(timeLetterReminderCount: reminderCount) ?? ""
         let reminderArchiveStatusPersisted = openedReminderId.map { reminderId in
             remindersAfterArchive.first(where: { $0.id == reminderId })?.isArchived == true
         } ?? false
@@ -2541,6 +2542,7 @@ private extension AppDelegate {
             && inAppMessageSnapshot.sourceCounts["timeLetter"] == 2
             && familyInvitationMessageCount == 2
             && careSignalMessageCount == 3
+            && inAppMessageCenterEntryTitle == "7 条消息待处理 · 查看"
             && reminderCount == 2
             && reminderDetailResolved
             && reminderDetailNoteVisible
@@ -2564,6 +2566,7 @@ private extension AppDelegate {
             "mailboxReminderIds": mailboxReminders.map(\.id),
             "mailboxSourceArchiveItemIds": mailboxReminders.map(\.sourceArchiveItemId),
             "inAppMessageCenterKindCounts": inAppMessageSnapshot.sourceCounts,
+            "inAppMessageCenterEntryTitle": inAppMessageCenterEntryTitle,
             "inAppMessageCenterUnreadCount": inAppMessageSnapshot.unreadCount,
             "inAppMessageCenterArchivedCountAfterArchive": inAppMessageSnapshotAfterArchive.archivedCount,
             "familyInvitationMessageCount": familyInvitationMessageCount,

@@ -365,6 +365,22 @@ struct InAppMessageCenterSnapshot: Equatable {
         return counts
     }
 
+    func entryButtonTitle(timeLetterReminderCount: Int) -> String? {
+        if unreadCount > 0 {
+            return "\(unreadCount) 条消息待处理 · 查看"
+        }
+        if timeLetterReminderCount > 0 {
+            return "\(timeLetterReminderCount) 封时间信件已到打开时间 · 查看"
+        }
+        if archivedCount > 0 {
+            return "消息中心 · \(archivedCount) 条已归档"
+        }
+        if totalCount > 0 {
+            return "消息中心 · 查看历史"
+        }
+        return nil
+    }
+
     static func sortedMessages(_ messages: [InAppMessage]) -> [InAppMessage] {
         messages.sorted { lhs, rhs in
             if lhs.isUnread != rhs.isUnread {

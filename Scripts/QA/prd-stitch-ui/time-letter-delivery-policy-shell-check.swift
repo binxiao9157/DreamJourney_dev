@@ -105,7 +105,8 @@ for required in [
 }
 
 for required in [
-    "archive-time-letter-in-app-reminder",
+    "archive-in-app-message-center",
+    "entryButtonTitle(",
     "timeLetterReminderCount()",
     "timeLetterReminderTapped",
     "presentInAppMessageCenter",

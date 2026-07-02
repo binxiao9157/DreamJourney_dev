@@ -151,6 +151,18 @@
   - `in-app-message-center-shell-check.swift` 验证 `CareSignalMessageSource`、`fromCareSignal`、`careSignalMessages`、`openCareSignalMessage`。
   - `run-time-letter-dispatch-reminder-smoke.sh` 构造 failed / stale / needsAttention / normal 四种关怀状态，断言前三类计数为 3，normal 不进入消息中心。
 
+## 2026-07-02 统一消息中心入口 badge
+
+- Archive 页入口从“时间信件提醒”语义升级为统一“消息中心”入口。
+- 入口 accessibility id 固定为 `archive-in-app-message-center`。
+- 入口文案由 `InAppMessageCenterSnapshot.entryButtonTitle(timeLetterReminderCount:)` 统一生成：
+  - 有任意未读消息时，展示跨类型未读总数，例如 `7 条消息待处理 · 查看`。
+  - 只有本地到期时间信件时，仍保留 `N 封时间信件已到打开时间 · 查看` 的兜底。
+  - 只有历史消息时，展示已归档或历史入口。
+- QA 覆盖：
+  - `in-app-message-center-shell-check.swift` 验证入口标题由 snapshot 统一生成。
+  - `run-time-letter-dispatch-reminder-smoke.sh` 验证 timeLetter + familyInvitation + careSignal 共 7 条未读时，入口文案为 `7 条消息待处理 · 查看`。
+
 ## 验证入口
 
 ```bash
