@@ -2711,8 +2711,29 @@ final class MemoryArchiveViewController: UIViewController {
 
     private func currentInAppMessageCenterSnapshot() -> InAppMessageCenterSnapshot {
         repository.inAppMessageCenterSnapshot(
-            familyInvitationSources: FamilyRepository.shared.getAll().map { $0 as FamilyInvitationMessageSource }
+            familyInvitationSources: FamilyRepository.shared.getAll().map { $0 as FamilyInvitationMessageSource },
+            careSignalSources: currentCareSignalMessageSources()
         )
+    }
+
+    private func currentCareSignalMessageSources() -> [CareSignalMessageSource] {
+        let contextOwnerId = DigitalHumanContextStore.shared.current.ownerId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let userId = contextOwnerId.isEmpty ? UserManager.shared.currentUser?.id : contextOwnerId
+        guard let signal = ProfileCareSignalMessageStore.shared.cachedSignal(userId: userId) else {
+            return []
+        }
+        return [
+            StaticCareSignalMessageSource(
+                careSignalId: signal.id,
+                careSignalTitle: signal.title,
+                careSignalSummary: signal.summary,
+                careSignalStatus: signal.status,
+                careSignalSeverity: signal.severity,
+                careSignalUpdatedAt: signal.updatedAt,
+                careSignalOwnerUserId: signal.ownerUserId
+            ),
+        ]
     }
 
     private func presentInAppMessageCenter(_ snapshot: InAppMessageCenterSnapshot) {
@@ -2749,7 +2770,7 @@ final class MemoryArchiveViewController: UIViewController {
         case .familyInvitation:
             openFamilyInvitationMessage(message)
         case .careSignal:
-            showToast("关怀提醒会在后续接入消息中心", type: .info)
+            openCareSignalMessage(message)
         case .systemNotice:
             showToast("系统通知会在后续接入消息中心", type: .info)
         }
@@ -2766,6 +2787,17 @@ final class MemoryArchiveViewController: UIViewController {
             return
         }
         navigationController?.pushViewController(FamilyCircleViewController(), animated: true)
+    }
+
+    private func openCareSignalMessage(_ message: InAppMessage) {
+        repository.markInAppMessageRead(message) { [weak self] _ in
+            self?.refreshContent()
+        }
+        guard let tabBarController else {
+            navigationController?.pushViewController(ProfileViewController(), animated: true)
+            return
+        }
+        tabBarController.selectedIndex = min(2, (tabBarController.viewControllers?.count ?? 1) - 1)
     }
 
     private func openTimeLetterReminder(_ reminder: TimeLetterMailboxReminder) {

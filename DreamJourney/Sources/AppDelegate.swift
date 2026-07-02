@@ -2435,11 +2435,51 @@ private extension AppDelegate {
         FamilyRepository.shared.add(failedFamilyMember)
         FamilyRepository.shared.add(acceptedFamilyMember)
         let familyInvitationSources = FamilyRepository.shared.getAll().map { $0 as FamilyInvitationMessageSource }
+        let now = ISO8601DateFormatter().string(from: Date())
+        let careSignalSources: [CareSignalMessageSource] = [
+            StaticCareSignalMessageSource(
+                careSignalId: "care-signal-failed-uiqa",
+                careSignalTitle: "关怀信号加载失败",
+                careSignalSummary: "心境追踪暂时无法同步，请稍后重试。",
+                careSignalStatus: "failed",
+                careSignalSeverity: "failed",
+                careSignalUpdatedAt: now,
+                careSignalOwnerUserId: userId
+            ),
+            StaticCareSignalMessageSource(
+                careSignalId: "care-signal-stale-uiqa",
+                careSignalTitle: "关怀信号可能过期",
+                careSignalSummary: "关怀数据不是最新，当前展示本地安全状态。",
+                careSignalStatus: "stale",
+                careSignalSeverity: "stale",
+                careSignalUpdatedAt: now,
+                careSignalOwnerUserId: userId
+            ),
+            StaticCareSignalMessageSource(
+                careSignalId: "care-signal-attention-uiqa",
+                careSignalTitle: "心境状态需要关注",
+                careSignalSummary: "近期心境趋势需要家人留意。",
+                careSignalStatus: "available",
+                careSignalSeverity: "needsAttention",
+                careSignalUpdatedAt: now,
+                careSignalOwnerUserId: userId
+            ),
+            StaticCareSignalMessageSource(
+                careSignalId: "care-signal-normal-uiqa",
+                careSignalTitle: "关怀信号平稳",
+                careSignalSummary: "当前没有需要提醒的关怀状态。",
+                careSignalStatus: "available",
+                careSignalSeverity: "normal",
+                careSignalUpdatedAt: now,
+                careSignalOwnerUserId: userId
+            ),
+        ]
 
         let dueLetters = MemoryArchiveRepository.shared.dueTimeLetters()
         let mailboxReminders = MemoryArchiveRepository.shared.timeLetterMailboxReminders()
         let inAppMessageSnapshot = MemoryArchiveRepository.shared.inAppMessageCenterSnapshot(
-            familyInvitationSources: familyInvitationSources
+            familyInvitationSources: familyInvitationSources,
+            careSignalSources: careSignalSources
         )
         let reminderCount = MemoryArchiveRepository.shared.timeLetterReminderCount()
         let restoredDelivered = MemoryArchiveRepository.shared.allItems().first { $0.id == deliveredLetter.id }
@@ -2477,9 +2517,11 @@ private extension AppDelegate {
         }
         let remindersAfterArchive = MemoryArchiveRepository.shared.timeLetterMailboxReminders()
         let inAppMessageSnapshotAfterArchive = MemoryArchiveRepository.shared.inAppMessageCenterSnapshot(
-            familyInvitationSources: familyInvitationSources
+            familyInvitationSources: familyInvitationSources,
+            careSignalSources: careSignalSources
         )
         let familyInvitationMessageCount = inAppMessageSnapshot.sourceCounts["familyInvitation"] ?? 0
+        let careSignalMessageCount = inAppMessageSnapshot.sourceCounts["careSignal"] ?? 0
         let reminderArchiveStatusPersisted = openedReminderId.map { reminderId in
             remindersAfterArchive.first(where: { $0.id == reminderId })?.isArchived == true
         } ?? false
@@ -2495,9 +2537,10 @@ private extension AppDelegate {
             && dueLetters.contains(where: { $0.id == secondDeliveredLetter.id }) == false
             && mailboxReminders.map(\.sourceArchiveItemId).contains(deliveredLetter.id)
             && mailboxReminders.map(\.sourceArchiveItemId).contains(secondDeliveredLetter.id)
-            && inAppMessageSnapshot.totalCount == 4
+            && inAppMessageSnapshot.totalCount == 7
             && inAppMessageSnapshot.sourceCounts["timeLetter"] == 2
             && familyInvitationMessageCount == 2
+            && careSignalMessageCount == 3
             && reminderCount == 2
             && reminderDetailResolved
             && reminderDetailNoteVisible
@@ -2508,7 +2551,7 @@ private extension AppDelegate {
             && reminderArchiveStatusPersisted
             && secondReminderStillUnreadAfterArchive
             && inAppMessageSnapshotAfterArchive.archivedCount == 1
-            && inAppMessageSnapshotAfterArchive.unreadCount == 3
+            && inAppMessageSnapshotAfterArchive.unreadCount == 6
             && reminderCountAfterArchive == 1
 
         writeTimeLetterDispatchReminderSmokeResult([
@@ -2525,6 +2568,8 @@ private extension AppDelegate {
             "inAppMessageCenterArchivedCountAfterArchive": inAppMessageSnapshotAfterArchive.archivedCount,
             "familyInvitationMessageCount": familyInvitationMessageCount,
             "familyAcceptedInvitationExcluded": inAppMessageSnapshot.messages.contains { $0.familyMemberId == acceptedFamilyMember.id } == false,
+            "careSignalMessageCount": careSignalMessageCount,
+            "careNormalSignalExcluded": inAppMessageSnapshot.messages.contains { $0.careSignalId == "care-signal-normal-uiqa" } == false,
             "reminderCount": reminderCount,
             "timeLetterReminderDetailResolved": reminderDetailResolved,
             "timeLetterReminderDetailNoteVisible": reminderDetailNoteVisible,

@@ -239,6 +239,9 @@ final class ProfileViewController: UIViewController {
         guard DreamJourneyBackendClient.shared.isCareSnapshotConfigured else {
             isCareSnapshotRetrying = false
             careSnapshot = .offlineFallback()
+            if let careSnapshot {
+                ProfileCareSignalMessageStore.shared.save(snapshot: careSnapshot, userId: userId)
+            }
             rebuildContent()
             return
         }
@@ -253,14 +256,20 @@ final class ProfileViewController: UIViewController {
             case .success(let json):
                 guard let snapshot = ProfileCareSnapshot(json: json) else {
                     careSnapshot = ProfileCareSnapshot.emptyFallback()
+                    if let careSnapshot {
+                        ProfileCareSignalMessageStore.shared.save(snapshot: careSnapshot, userId: userId)
+                    }
                     rebuildContent()
                     return
                 }
                 careSnapshot = snapshot
+                ProfileCareSignalMessageStore.shared.save(snapshot: snapshot, userId: userId)
                 rebuildContent()
             case .failure(let error):
                 print("[Profile] care snapshot sync unavailable: \(error.localizedDescription)")
-                careSnapshot = careSnapshotFallback(for: error)
+                let snapshot = careSnapshotFallback(for: error)
+                careSnapshot = snapshot
+                ProfileCareSignalMessageStore.shared.save(snapshot: snapshot, userId: userId)
                 rebuildContent()
             }
         }

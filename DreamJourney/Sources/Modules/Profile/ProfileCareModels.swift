@@ -334,6 +334,82 @@ struct ProfileCareSnapshot {
     }
 }
 
+struct ProfileCareCachedSignal: Codable {
+    let id: String
+    let title: String
+    let summary: String
+    let status: String
+    let severity: String
+    let updatedAt: String
+    let ownerUserId: String
+}
+
+final class ProfileCareSignalMessageStore {
+    static let shared = ProfileCareSignalMessageStore()
+
+    private let baseKey = "dj.profileCare.inAppMessageSignal"
+    private let isoFormatter = ISO8601DateFormatter()
+
+    private init() {}
+
+    func save(snapshot: ProfileCareSnapshot, userId: String) {
+        let signal = ProfileCareCachedSignal(
+            id: userId,
+            title: title(for: snapshot),
+            summary: snapshot.syncCaption,
+            status: snapshot.dataState.accessibilityIdentifier,
+            severity: severity(for: snapshot),
+            updatedAt: isoFormatter.string(from: Date()),
+            ownerUserId: userId
+        )
+        guard let data = try? JSONEncoder().encode(signal) else {
+            return
+        }
+        UserDefaults.standard.set(data, forKey: storageKey(userId: userId))
+    }
+
+    func cachedSignal(userId: String?) -> ProfileCareCachedSignal? {
+        guard let userId = userId?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !userId.isEmpty,
+              let data = UserDefaults.standard.data(forKey: storageKey(userId: userId)) else {
+            return nil
+        }
+        return try? JSONDecoder().decode(ProfileCareCachedSignal.self, from: data)
+    }
+
+    private func storageKey(userId: String) -> String {
+        "\(baseKey).\(userId)"
+    }
+
+    private func title(for snapshot: ProfileCareSnapshot) -> String {
+        switch snapshot.dataState {
+        case .failed:
+            return "关怀信号加载失败"
+        case .stale:
+            return "关怀信号可能过期"
+        case .available where snapshot.moodStatus.contains("关注"):
+            return "心境状态需要关注"
+        default:
+            return "关怀提醒"
+        }
+    }
+
+    private func severity(for snapshot: ProfileCareSnapshot) -> String {
+        switch snapshot.dataState {
+        case .failed:
+            return "failed"
+        case .stale:
+            return "stale"
+        case .available where snapshot.moodStatus.contains("重点关注"):
+            return "attention"
+        case .available where snapshot.moodStatus.contains("需关注") || snapshot.moodStatus.contains("关注"):
+            return "needsAttention"
+        default:
+            return "normal"
+        }
+    }
+}
+
 struct ProfileCareMetric {
     let title: String
     let value: Double

@@ -106,8 +106,8 @@
   - `timeLetterReminder` mailbox 记录映射为 `InAppMessage.kind=timeLetter`。
   - 保留 `metadataOnly=true`、`contentRedacted=true`，提醒列表不暴露正文。
 - 暂不公开来源：
-  - `careSignal`、`systemNotice` 只保留 hidden candidate / routing guard。
-  - 默认 release 不生成关怀和系统消息，不改变关怀页、系统通知现有入口。
+  - `systemNotice` 只保留 hidden candidate / routing guard。
+  - 默认 release 不生成系统消息，不改变系统通知现有入口。
 - QA 覆盖：
   - 新增 `in-app-message-center-shell-check.swift`，接入 release regression 静态 guard。
   - `run-time-letter-dispatch-reminder-smoke.sh` 额外验证 `inAppMessageCenterKindCounts.timeLetter=2`、未读数和归档数。
@@ -130,6 +130,26 @@
 - QA 覆盖：
   - `in-app-message-center-shell-check.swift` 验证 `FamilyInvitationMessageSource`、`fromFamilyInvitation`、`familyInvitationMessages`、`openFamilyInvitationMessage`。
   - `run-time-letter-dispatch-reminder-smoke.sh` 构造 pending / failed / accepted 三种家庭状态，断言 pending + failed 计数为 2，accepted 不进入消息中心。
+
+## 2026-07-02 关怀提醒接入 InAppMessage
+
+- 真实 provider：
+  - `ProfileCareSignalMessageStore` 复用“我的/心境追踪”已加载的 `ProfileCareSnapshot`。
+  - `MemoryArchiveRepository.inAppMessageCenterSnapshot(careSignalSources:)` 合并关怀提醒消息。
+- 入消息中心规则：
+  - `failed`：进入消息中心，标题为“关怀信号加载失败”。
+  - `stale` / `expired`：进入消息中心，标题为“关怀信号可能过期”。
+  - `needsAttention` / `attention` / `watch`：进入消息中心，标题为“心境状态需要关注”。
+  - `available + normal`、`loading`、`empty`：不进入消息中心，避免正常状态造成提醒噪音。
+- 状态策略：
+  - 关怀提醒消息使用本地 `InAppMessage` read/archive 缓存。
+  - 关怀数据本身仍由 Profile 关怀快照和后端 `/care/snapshot/latest` 合同提供。
+- 点击策略：
+  - 点击关怀提醒消息后标记已读，并切换到“我的/关怀”上下文。
+  - 不新增公开首页入口，不改变关怀页当前视觉和交互。
+- QA 覆盖：
+  - `in-app-message-center-shell-check.swift` 验证 `CareSignalMessageSource`、`fromCareSignal`、`careSignalMessages`、`openCareSignalMessage`。
+  - `run-time-letter-dispatch-reminder-smoke.sh` 构造 failed / stale / needsAttention / normal 四种关怀状态，断言前三类计数为 3，normal 不进入消息中心。
 
 ## 验证入口
 
@@ -165,4 +185,4 @@ Scripts/QA/prd-stitch-ui/run-backend-time-letter-lifecycle-smoke.sh
 
 - APNs/provider 级远程推送送达证据。
 - 真机通知权限、前后台、锁屏提醒实测截图和日志。
-- 将关怀提醒、系统通知接入 `InAppMessage` 的真实 provider 和后端合同。
+- 将系统通知接入 `InAppMessage` 的真实 provider 和后端合同。

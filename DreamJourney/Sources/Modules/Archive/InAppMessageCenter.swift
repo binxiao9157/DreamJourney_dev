@@ -46,6 +46,46 @@ extension FamilyInvitationMessageSource {
     }
 }
 
+protocol CareSignalMessageSource {
+    var careSignalId: String { get }
+    var careSignalTitle: String { get }
+    var careSignalSummary: String { get }
+    var careSignalStatus: String { get }
+    var careSignalSeverity: String { get }
+    var careSignalUpdatedAt: String { get }
+    var careSignalOwnerUserId: String? { get }
+}
+
+extension CareSignalMessageSource {
+    var isCareSignalVisibleInMessageCenter: Bool {
+        let status = normalizedCareSignalToken(careSignalStatus)
+        let severity = normalizedCareSignalToken(careSignalSeverity)
+        return [
+            "failed",
+            "error",
+            "stale",
+            "expired",
+            "needsattention",
+            "attention",
+            "watch",
+        ].contains(status) || [
+            "failed",
+            "stale",
+            "needsattention",
+            "attention",
+            "watch",
+        ].contains(severity)
+    }
+
+    private func normalizedCareSignalToken(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
+            .replacingOccurrences(of: " ", with: "")
+            .lowercased()
+    }
+}
+
 enum InAppMessageStatus: String, Codable {
     case unread
     case read
@@ -72,6 +112,9 @@ struct InAppMessage: Codable, Equatable {
     let sourceArchiveItemId: String?
     let ownerUserId: String?
     let familyMemberId: String?
+    let careSignalId: String?
+    let careSignalStatus: String?
+    let careSignalSeverity: String?
     let invitationStatus: String?
     let accessStatus: String?
     let recipientRole: String?
@@ -109,6 +152,9 @@ struct InAppMessage: Codable, Equatable {
             sourceArchiveItemId: sourceArchiveItemId,
             ownerUserId: ownerUserId,
             familyMemberId: familyMemberId,
+            careSignalId: careSignalId,
+            careSignalStatus: careSignalStatus,
+            careSignalSeverity: careSignalSeverity,
             invitationStatus: invitationStatus,
             accessStatus: accessStatus,
             recipientRole: recipientRole,
@@ -132,6 +178,9 @@ struct InAppMessage: Codable, Equatable {
             sourceArchiveItemId: sourceArchiveItemId,
             ownerUserId: ownerUserId,
             familyMemberId: familyMemberId,
+            careSignalId: careSignalId,
+            careSignalStatus: careSignalStatus,
+            careSignalSeverity: careSignalSeverity,
             invitationStatus: invitationStatus,
             accessStatus: accessStatus,
             recipientRole: recipientRole,
@@ -155,6 +204,9 @@ struct InAppMessage: Codable, Equatable {
             sourceArchiveItemId: timeLetterReminder.sourceArchiveItemId,
             ownerUserId: timeLetterReminder.ownerUserId,
             familyMemberId: nil,
+            careSignalId: nil,
+            careSignalStatus: nil,
+            careSignalSeverity: nil,
             invitationStatus: nil,
             accessStatus: nil,
             recipientRole: timeLetterReminder.recipientRole,
@@ -197,9 +249,42 @@ struct InAppMessage: Codable, Equatable {
             sourceArchiveItemId: nil,
             ownerUserId: nil,
             familyMemberId: source.familyMemberId,
+            careSignalId: nil,
+            careSignalStatus: nil,
+            careSignalSeverity: nil,
             invitationStatus: source.familyInvitationStatus,
             accessStatus: source.familyAccessStatus,
             recipientRole: "familyInvitation",
+            metadataOnly: true,
+            contentRedacted: true,
+            isActionable: true,
+            unavailableReason: nil
+        )
+    }
+
+    static func fromCareSignal(_ source: CareSignalMessageSource) -> InAppMessage? {
+        guard source.isCareSignalVisibleInMessageCenter else {
+            return nil
+        }
+
+        return InAppMessage(
+            id: "care-signal-\(source.careSignalId)",
+            kind: .careSignal,
+            title: source.careSignalTitle,
+            summary: source.careSignalSummary,
+            status: .unread,
+            deliveredAt: source.careSignalUpdatedAt,
+            readAt: nil,
+            archivedAt: nil,
+            sourceArchiveItemId: nil,
+            ownerUserId: source.careSignalOwnerUserId,
+            familyMemberId: nil,
+            careSignalId: source.careSignalId,
+            careSignalStatus: source.careSignalStatus,
+            careSignalSeverity: source.careSignalSeverity,
+            invitationStatus: nil,
+            accessStatus: nil,
+            recipientRole: "careSignal",
             metadataOnly: true,
             contentRedacted: true,
             isActionable: true,
@@ -220,6 +305,9 @@ struct InAppMessage: Codable, Equatable {
             sourceArchiveItemId: nil,
             ownerUserId: nil,
             familyMemberId: nil,
+            careSignalId: nil,
+            careSignalStatus: nil,
+            careSignalSeverity: nil,
             invitationStatus: nil,
             accessStatus: nil,
             recipientRole: nil,
@@ -229,6 +317,16 @@ struct InAppMessage: Codable, Equatable {
             unavailableReason: reason
         )
     }
+}
+
+struct StaticCareSignalMessageSource: CareSignalMessageSource, Codable {
+    let careSignalId: String
+    let careSignalTitle: String
+    let careSignalSummary: String
+    let careSignalStatus: String
+    let careSignalSeverity: String
+    let careSignalUpdatedAt: String
+    let careSignalOwnerUserId: String?
 }
 
 struct InAppMessageCenterSnapshot: Equatable {

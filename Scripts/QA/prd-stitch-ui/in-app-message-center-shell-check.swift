@@ -50,6 +50,11 @@ let docs = read("docs/superpowers/status/2026-06-21-time-letter-public-delivery.
     "familyMemberId",
     "invitationStatus",
     "accessStatus",
+    "protocol CareSignalMessageSource",
+    "static func fromCareSignal",
+    "careSignalId",
+    "careSignalStatus",
+    "careSignalSeverity",
 ].forEach {
     assertContains(messageCenter, $0, "unified model should include \($0)")
 }
@@ -70,6 +75,11 @@ assertContains(
     "accepted family members should not become noisy message-center invitations"
 )
 assertContains(
+    messageCenter,
+    "isCareSignalVisibleInMessageCenter",
+    "only failed/stale/attention care states should become care-signal messages"
+)
+assertContains(
     repository,
     "func inAppMessageCenterSnapshot(",
     "repository should expose a unified message center snapshot"
@@ -78,6 +88,11 @@ assertContains(
     repository,
     "familyInvitationMessages",
     "repository should aggregate real family invitation messages"
+)
+assertContains(
+    repository,
+    "careSignalMessages",
+    "repository should aggregate care signal messages"
 )
 assertContains(
     repository,
@@ -121,6 +136,11 @@ assertContains(
 )
 assertContains(
     archiveView,
+    "openCareSignalMessage",
+    "care signal messages should open care context instead of showing a placeholder toast"
+)
+assertContains(
+    archiveView,
     "systemNotice",
     "system notice message kind should remain guarded in UI routing"
 )
@@ -140,6 +160,11 @@ assertContains(
     "UIQA smoke should export family invitation message count"
 )
 assertContains(
+    appDelegate,
+    "careSignalMessageCount",
+    "UIQA smoke should export care signal message count"
+)
+assertContains(
     project,
     "InAppMessageCenter.swift",
     "new model should be included in the Xcode target"
@@ -148,6 +173,11 @@ assertContains(
     docs,
     "家庭邀请接入 InAppMessage",
     "time-letter status doc should document the family invitation provider"
+)
+assertContains(
+    docs,
+    "关怀提醒接入 InAppMessage",
+    "time-letter status doc should document the care signal provider"
 )
 
 print("In-app message center shell checks passed")

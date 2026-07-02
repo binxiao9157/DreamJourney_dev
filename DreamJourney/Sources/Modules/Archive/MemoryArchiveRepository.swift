@@ -369,26 +369,27 @@ final class MemoryArchiveRepository {
 
     func inAppMessageCenterSnapshot(
         includeUnavailableCandidates: Bool = false,
-        familyInvitationSources: [FamilyInvitationMessageSource] = []
+        familyInvitationSources: [FamilyInvitationMessageSource] = [],
+        careSignalSources: [CareSignalMessageSource] = []
     ) -> InAppMessageCenterSnapshot {
         let timeLetterMessages = timeLetterMailboxReminders()
             .map(InAppMessage.fromTimeLetterReminder)
         let familyInvitationMessages = familyInvitationSources
             .compactMap(InAppMessage.fromFamilyInvitation)
             .map(applyLocalInAppMessageStateIfNeeded)
+        let careSignalMessages = careSignalSources
+            .compactMap(InAppMessage.fromCareSignal)
+            .map(applyLocalInAppMessageStateIfNeeded)
         let hiddenCandidates = [
-            InAppMessage.unavailableCandidate(
-                kind: .careSignal,
-                title: "关怀提醒",
-                reason: "关怀提醒后续会进入统一消息中心，当前仍由我的页面承载。"
-            ),
             InAppMessage.unavailableCandidate(
                 kind: .systemNotice,
                 title: "系统通知",
                 reason: "系统通知后续会进入统一消息中心，当前不在公开 MVP 暴露。"
             ),
         ]
-        let visibleMessages = InAppMessageCenterSnapshot.sortedMessages(timeLetterMessages + familyInvitationMessages)
+        let visibleMessages = InAppMessageCenterSnapshot.sortedMessages(
+            timeLetterMessages + familyInvitationMessages + careSignalMessages
+        )
         let candidateMessages = includeUnavailableCandidates ? hiddenCandidates : []
         return InAppMessageCenterSnapshot(
             messages: visibleMessages,
