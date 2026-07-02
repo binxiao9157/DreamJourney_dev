@@ -63,6 +63,7 @@ let stopVoiceCapture = substring(
 )
 let viewDidAppear = functionBody("override func viewDidAppear", in: echo)
 let viewWillDisappear = functionBody("override func viewWillDisappear", in: echo)
+let releaseRuntime = functionBody("private func releaseDigitalHumanRuntime", in: echo)
 let prepareRuntime = functionBody("private func prepareCloudDigitalHumanRuntimeIfNeeded", in: echo)
 let handleSession = functionBody("private func handleCloudDigitalHumanSession", in: echo)
 let fallbackRoute = functionBody("private func degradeTencentDigitalHumanRoute", in: echo)
@@ -130,16 +131,20 @@ require(
     "Tencent session handling should host the provider view on success and fallback cleanly on provider failure"
 )
 require(
-    viewWillDisappear.contains("digitalHumanRuntime?.close()") &&
-        viewWillDisappear.contains("digitalHumanRuntime = nil") &&
-        viewWillDisappear.contains("hasRequestedCloudDigitalHumanRuntime = false") &&
-        viewWillDisappear.contains("released provider session reason=viewWillDisappear"),
-    "Echo page exit should be the path that releases the Tencent session"
+    viewWillDisappear.contains("releaseDigitalHumanRuntime(reason: \"viewWillDisappear\"") &&
+        releaseRuntime.contains("runtime?.close()") &&
+        releaseRuntime.contains("digitalHumanRuntime = nil") &&
+        releaseRuntime.contains("hasRequestedCloudDigitalHumanRuntime = false") &&
+        releaseRuntime.contains("released provider session reason=release:"),
+    "Echo page exit should use the unified path that releases the Tencent session"
 )
 require(
-    fallbackRoute.contains("digitalHumanRuntime = nil") &&
-        fallbackRoute.contains("removeHostedProviderView(showFallbackMessage: \"数字人暂不可用\")") &&
-        fallbackRoute.contains("DialogEngineManager.shared.setLocalTTSPlaybackEnabled(true)") &&
+    fallbackRoute.contains("releaseDigitalHumanRuntime(reason: \"routeFailure:") &&
+        fallbackRoute.contains("removeProviderViewMessage: \"数字人暂不可用\"") &&
+        fallbackRoute.contains("resetsAudioOwnerToOrdinaryEcho: true") &&
+        releaseRuntime.contains("removeHostedProviderView(showFallbackMessage:") &&
+        releaseRuntime.contains("DialogEngineManager.shared.setLocalTTSPlaybackEnabled(true)") &&
+        releaseRuntime.contains("setEchoAudioOwner(.volcengineLocalTTS") &&
         fallbackRoute.contains("route fallback after runtime failure"),
     "Tencent provider failure should explicitly degrade to ordinary Echo fallback"
 )

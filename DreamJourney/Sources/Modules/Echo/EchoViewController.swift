@@ -609,17 +609,7 @@ final class EchoViewController: UIViewController {
                 ConversationMemoryManager.shared.endSession()
                 viewModel.resetToIdle()
             }
-            stopDigitalHumanAudioLevelMetering()
-            resetDigitalHumanReplyDispatchState()
-            DialogEngineManager.shared.setLocalTTSPlaybackEnabled(true)
-            let didReleaseDigitalHumanRuntime = digitalHumanRuntime != nil
-            digitalHumanRuntime?.interrupt()
-            digitalHumanRuntime?.close()
-            digitalHumanRuntime = nil
-            hasRequestedCloudDigitalHumanRuntime = false
-            if didReleaseDigitalHumanRuntime {
-                print("[TencentDigitalHuman] released provider session reason=viewWillDisappear")
-            }
+            releaseDigitalHumanRuntime(reason: "viewWillDisappear", resetsAudioOwnerToOrdinaryEcho: true)
             DialogEngineManager.shared.delegate = nil
         }
     }
@@ -1005,6 +995,39 @@ final class EchoViewController: UIViewController {
                 text: "已暂停，轻点话筒继续",
                 isVisible: true,
                 accessibilityIdentifier: "echoLifecyclePausedStatus"
+            )
+        }
+    }
+
+    private func releaseDigitalHumanRuntime(
+        reason: String,
+        resetsAudioOwnerToOrdinaryEcho: Bool,
+        removeProviderViewMessage: String? = nil
+    ) {
+        cancelDigitalHumanReplyPrewarm()
+        cancelTencentDigitalHumanTextOverTimeout()
+        resetDigitalHumanReplyDispatchState()
+        stopDigitalHumanAudioLevelMetering()
+
+        let runtime = digitalHumanRuntime
+        let didReleaseRuntime = runtime != nil
+        runtime?.interrupt()
+        runtime?.close()
+        digitalHumanRuntime = nil
+        hasRequestedCloudDigitalHumanRuntime = false
+
+        if let removeProviderViewMessage {
+            digitalHumanLivePanelView?.removeHostedProviderView(showFallbackMessage: removeProviderViewMessage)
+        }
+        if resetsAudioOwnerToOrdinaryEcho {
+            DialogEngineManager.shared.setLocalTTSPlaybackEnabled(true)
+            setEchoAudioOwner(.volcengineLocalTTS, reason: "release:\(reason)")
+        }
+        recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanRuntimeReleased:\(reason)")
+        if didReleaseRuntime {
+            print(
+                "[TencentDigitalHuman] released provider session reason=release:\(reason) " +
+                "ordinaryEchoFallback=\(resetsAudioOwnerToOrdinaryEcho) \(currentEchoAudioOwner.logLabel)"
             )
         }
     }
@@ -2417,19 +2440,10 @@ final class EchoViewController: UIViewController {
     }
 
     private func degradeTencentDigitalHumanRoute(reason: String) {
-        cancelDigitalHumanReplyPrewarm()
-        cancelTencentDigitalHumanTextOverTimeout()
         digitalHumanConversation.clearForRouteFailure()
-        stopDigitalHumanAudioLevelMetering()
         lastEchoRuntimeFallbackReason = reason
-        recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanRouteDegraded")
-
-        let failedRuntime = digitalHumanRuntime
-        digitalHumanRuntime = nil
-        digitalHumanLivePanelView?.removeHostedProviderView(showFallbackMessage: "数字人暂不可用")
         digitalHumanStatusDetailLabel.text = "数字人声音暂不可用，已回到普通回响"
-        DialogEngineManager.shared.setLocalTTSPlaybackEnabled(true)
-        failedRuntime?.close()
+        releaseDigitalHumanRuntime(reason: "routeFailure:\(reason)", resetsAudioOwnerToOrdinaryEcho: true, removeProviderViewMessage: "数字人暂不可用")
         print("[TencentDigitalHuman] route fallback after runtime failure turnID=\(digitalHumanConversation.currentTurnID ?? "unknown"): \(reason)")
     }
 
