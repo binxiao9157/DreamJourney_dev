@@ -74,9 +74,11 @@ for required in [
     "UNNotificationRequest",
     "dueTimeLetters",
     "TimeLetterMailboxReminder",
+    "isArchived",
     "refreshTimeLetterMailboxReminders",
     "resolveTimeLetterReminderDetail",
     "markTimeLetterMailboxReminderRead",
+    "markTimeLetterMailboxReminderArchived",
     "timeLetterReminderCount",
     "timeLetterDeliveryStatus != \"delivered\"",
     "if items.contains(where: { $0.id == id && $0.isSealedTimeLetter })",
@@ -110,6 +112,8 @@ for required in [
     "TimeLetterReminderCenterViewController",
     "time-letter-reminder-center-list",
     "time-letter-reminder-row-",
+    "归档已读",
+    "trailingSwipeActionsConfigurationForRowAt",
     "openTimeLetterReminder",
     "MemoryArchiveDetailViewController(item:",
     "refreshTimeLetterMailboxReminders",
@@ -148,6 +152,8 @@ for required in [
     "\"dispatchDue\"",
     "\"ownerMailbox\"",
     "\"recipientMailbox\"",
+    "archive_mailbox_letter",
+    "\"recipientMailboxAfterArchive\"",
     "sealed timeLetter cannot be deleted",
 ] {
     assertContains(backendSmoke, required, "backend time-letter smoke should verify public delivery fields \(required)")
@@ -162,7 +168,9 @@ for required in [
     "/archive/time-letters/",
     "/detail",
     "func markMailboxLetterRead(",
+    "func archiveMailboxLetter(",
     "/read",
+    "/archive",
 ] {
     assertContains(backendClient, required, "backend client should expose time-letter dispatch/mailbox contract \(required)")
 }

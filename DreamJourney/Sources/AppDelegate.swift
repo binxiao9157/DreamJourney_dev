@@ -2431,6 +2431,18 @@ private extension AppDelegate {
             remindersAfterRead.first(where: { $0.id == reminder.id })?.isUnread == true
         } ?? false
         let reminderCountAfterRead = MemoryArchiveRepository.shared.timeLetterReminderCount()
+        if let openedReminderId,
+           let readReminder = remindersAfterRead.first(where: { $0.id == openedReminderId }) {
+            MemoryArchiveRepository.shared.markTimeLetterMailboxReminderArchived(readReminder)
+        }
+        let remindersAfterArchive = MemoryArchiveRepository.shared.timeLetterMailboxReminders()
+        let reminderArchiveStatusPersisted = openedReminderId.map { reminderId in
+            remindersAfterArchive.first(where: { $0.id == reminderId })?.isArchived == true
+        } ?? false
+        let secondReminderStillUnreadAfterArchive = secondReminder.map { reminder in
+            remindersAfterArchive.first(where: { $0.id == reminder.id })?.isUnread == true
+        } ?? false
+        let reminderCountAfterArchive = MemoryArchiveRepository.shared.timeLetterReminderCount()
         let completed = reminder != nil
             && secondReminder != nil
             && restoredDelivered?.timeLetterDeliveryStatus == "delivered"
@@ -2446,6 +2458,9 @@ private extension AppDelegate {
             && reminderReadStatusPersisted
             && secondReminderStillUnread
             && reminderCountAfterRead == 1
+            && reminderArchiveStatusPersisted
+            && secondReminderStillUnreadAfterArchive
+            && reminderCountAfterArchive == 1
 
         writeTimeLetterDispatchReminderSmokeResult([
             "completed": completed,
@@ -2463,6 +2478,9 @@ private extension AppDelegate {
             "timeLetterReminderReadStatusPersisted": reminderReadStatusPersisted,
             "timeLetterSecondReminderStillUnread": secondReminderStillUnread,
             "timeLetterReminderCountAfterRead": reminderCountAfterRead,
+            "timeLetterReminderArchiveStatusPersisted": reminderArchiveStatusPersisted,
+            "timeLetterSecondReminderStillUnreadAfterArchive": secondReminderStillUnreadAfterArchive,
+            "timeLetterReminderCountAfterArchive": reminderCountAfterArchive,
         ])
         print(
             "[UI_QA] TimeLetterDispatchReminderSmoke completed " +

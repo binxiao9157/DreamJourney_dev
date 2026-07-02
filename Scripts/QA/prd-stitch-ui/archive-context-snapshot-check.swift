@@ -70,6 +70,28 @@ final class DreamJourneyBackendClient {
         ]))
     }
 
+    func archiveMailboxLetter(
+        userId: String,
+        letterId: String,
+        archivedAtISO: String? = nil,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        completion(.success([
+            "status": "archived",
+            "item": [
+                "id": letterId,
+                "kind": "timeLetterReminder",
+                "userId": userId,
+                "sourceArchiveItemId": "stub",
+                "title": "stub",
+                "status": "archived",
+                "deliveredAt": "",
+                "archivedAt": archivedAtISO ?? "",
+                "recipientRole": "owner",
+            ],
+        ]))
+    }
+
     func getTimeLetterDetail(
         ownerUserId: String,
         itemId: String,

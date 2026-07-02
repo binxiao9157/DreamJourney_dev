@@ -2567,6 +2567,24 @@ final class DreamJourneyBackendClient {
         )
     }
 
+    func archiveMailboxLetter(
+        userId: String,
+        letterId: String,
+        archivedAtISO: String? = nil,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        var payload: [String: Any] = [:]
+        if let archivedAtISO, !archivedAtISO.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["archivedAt"] = archivedAtISO
+        }
+        requestJSON(
+            path: "/mailbox/letters/\(pathComponent(userId))/\(pathComponent(letterId))/archive",
+            method: .post,
+            payload: payload,
+            completion: completion
+        )
+    }
+
     func syncKnowledge(userId: String, graph: [String: Any], completion: @escaping (Result<[String: Any], Error>) -> Void) {
         requestJSON(path: "/kb/sync", method: .post, payload: ["userId": userId, "graph": graph], completion: completion)
     }

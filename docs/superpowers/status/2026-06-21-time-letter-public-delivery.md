@@ -37,9 +37,11 @@
   - 通过 `refreshTimeLetterMailboxReminders()` 触发后端 `dispatch-due`，再拉取 mailbox unread reminder。
   - `timeLetterReminderCount()` 合并本地 due 与后端 mailbox，避免 delivered 信件重复提醒。
   - 通过 `markTimeLetterMailboxReminderRead()` 将打开过的 mailbox reminder 标记为已读。
+  - 通过 `markTimeLetterMailboxReminderArchived()` 将处理过的 mailbox reminder 归档收起。
 - `MemoryArchiveViewController`：
   - 有到期信件时显示应用内提醒入口。
-  - 点击提醒入口进入“时间信件提醒”列表，支持多封信、未读/已读状态、点击打开对应详情。
+  - 点击提醒入口进入“时间信件提醒”列表，支持多封信、未读/已读/已归档状态、点击打开对应详情。
+  - 提醒中心分为“收件箱”和“已归档”，支持滑动归档和一键归档已读提醒。
 - `MemoryArchiveDetailViewController`：
   - 草稿可编辑、封存、删除。
   - 封存后只展示锁定状态，不能删除或修改。
@@ -52,6 +54,7 @@
   - 未到 `openAt` 的 timeLetter 不会写入收件人 mailbox。
   - mailbox reminder 只包含元数据，`metadataOnly=true`、`contentRedacted=true`，不暴露信件正文。
   - `POST /mailbox/letters/{userId}/{letterId}/read` 将单封应用内提醒标记为已读，并保持幂等。
+  - `POST /mailbox/letters/{userId}/{letterId}/archive` 将单封应用内提醒标记为已归档，并保持幂等。
 
 ## 2026-07-02 服务端到期投递更新
 
@@ -83,9 +86,14 @@
   - 成功打开详情后，本地缓存立即标记已读。
   - 后端配置可用时同步调用 `POST /mailbox/letters/{userId}/{letterId}/read`。
   - 只标记当前打开的提醒，不影响其它未读信件。
+- 归档策略：
+  - 用户可在提醒中心滑动归档单封提醒。
+  - 用户可一键归档全部已读提醒。
+  - 已归档提醒仍保留在提醒中心历史分组，不再进入未读计数。
+  - 后端配置可用时同步调用 `POST /mailbox/letters/{userId}/{letterId}/archive`。
 - QA 覆盖：
-  - iOS reminder smoke 构造两封 mailbox reminder，打开一封后断言未读数从 2 变 1。
-  - 后端 lifecycle smoke 覆盖 read endpoint，确认 Postgres/部署环境下 mailbox 状态回传为 `read`。
+  - iOS reminder smoke 构造两封 mailbox reminder，打开并归档一封后断言另一封仍未读，未读数保持 1。
+  - 后端 lifecycle smoke 覆盖 read/archive endpoint，确认 Postgres/部署环境下 mailbox 状态回传为 `read` / `archived`。
 
 ## 验证入口
 
@@ -117,4 +125,4 @@ Scripts/QA/prd-stitch-ui/run-backend-time-letter-lifecycle-smoke.sh
 
 - APNs/provider 级远程推送送达证据。
 - 真机通知权限、前后台、锁屏提醒实测截图和日志。
-- mailbox 归档交互与更完整的消息中心聚合策略。
+- 更完整的跨类型消息中心聚合策略，例如系统消息、家庭邀请、关怀提醒统一入口。

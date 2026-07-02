@@ -71,6 +71,7 @@ struct TimeLetterMailboxReminder: Codable, Equatable {
     let status: String
     let deliveredAt: String
     let readAt: String?
+    let archivedAt: String?
     let recipientRole: String
 
     private enum CodingKeys: String, CodingKey {
@@ -81,6 +82,7 @@ struct TimeLetterMailboxReminder: Codable, Equatable {
         case status
         case deliveredAt
         case readAt
+        case archivedAt
         case recipientRole
     }
 
@@ -92,6 +94,7 @@ struct TimeLetterMailboxReminder: Codable, Equatable {
         status: String,
         deliveredAt: String,
         readAt: String? = nil,
+        archivedAt: String? = nil,
         recipientRole: String
     ) {
         self.id = id
@@ -101,6 +104,7 @@ struct TimeLetterMailboxReminder: Codable, Equatable {
         self.status = status
         self.deliveredAt = deliveredAt
         self.readAt = readAt
+        self.archivedAt = archivedAt
         self.recipientRole = recipientRole
     }
 
@@ -123,6 +127,7 @@ struct TimeLetterMailboxReminder: Codable, Equatable {
         self.deliveredAt = (json["deliveredAt"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
             ?? ""
         self.readAt = (json["readAt"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.archivedAt = (json["archivedAt"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.recipientRole = (json["recipientRole"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
             ?? "recipient"
     }
@@ -136,11 +141,16 @@ struct TimeLetterMailboxReminder: Codable, Equatable {
         status = try container.decode(String.self, forKey: .status)
         deliveredAt = try container.decode(String.self, forKey: .deliveredAt)
         readAt = try container.decodeIfPresent(String.self, forKey: .readAt)
+        archivedAt = try container.decodeIfPresent(String.self, forKey: .archivedAt)
         recipientRole = try container.decode(String.self, forKey: .recipientRole)
     }
 
     var isUnread: Bool {
-        status != "read"
+        status == "unread"
+    }
+
+    var isArchived: Bool {
+        status == "archived"
     }
 
     func markingRead(readAt: String) -> TimeLetterMailboxReminder {
@@ -152,6 +162,21 @@ struct TimeLetterMailboxReminder: Codable, Equatable {
             status: "read",
             deliveredAt: deliveredAt,
             readAt: readAt,
+            archivedAt: archivedAt,
+            recipientRole: recipientRole
+        )
+    }
+
+    func markingArchived(archivedAt: String) -> TimeLetterMailboxReminder {
+        TimeLetterMailboxReminder(
+            id: id,
+            ownerUserId: ownerUserId,
+            sourceArchiveItemId: sourceArchiveItemId,
+            title: title,
+            status: "archived",
+            deliveredAt: deliveredAt,
+            readAt: readAt,
+            archivedAt: archivedAt,
             recipientRole: recipientRole
         )
     }
@@ -364,6 +389,40 @@ final class MemoryArchiveRepository {
                 }
             case .failure(let error):
                 print("[Archive] mark mailbox reminder read failed: \(error.localizedDescription)")
+                completion?(.failure(error))
+            }
+        }
+    }
+
+    func markTimeLetterMailboxReminderArchived(
+        _ reminder: TimeLetterMailboxReminder,
+        completion: ((Result<TimeLetterMailboxReminder, Error>) -> Void)? = nil
+    ) {
+        let archivedAt = isoFormatter.string(from: Date())
+        let updatedReminder = reminder.markingArchived(archivedAt: archivedAt)
+        updateCachedTimeLetterMailboxReminder(updatedReminder)
+
+        guard DreamJourneyBackendClient.shared.isTimeLetterDispatchConfigured else {
+            completion?(.success(updatedReminder))
+            return
+        }
+
+        DreamJourneyBackendClient.shared.archiveMailboxLetter(
+            userId: currentUserId,
+            letterId: reminder.id,
+            archivedAtISO: archivedAt
+        ) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let object):
+                if let item = Self.timeLetterMailboxReminder(fromReadResponse: object) {
+                    updateCachedTimeLetterMailboxReminder(item)
+                    completion?(.success(item))
+                } else {
+                    completion?(.success(updatedReminder))
+                }
+            case .failure(let error):
+                print("[Archive] archive mailbox reminder failed: \(error.localizedDescription)")
                 completion?(.failure(error))
             }
         }

@@ -131,6 +131,14 @@ def mark_mailbox_letter_read(user_id: str, letter_id: str, read_at: str) -> Dict
     )
 
 
+def archive_mailbox_letter(user_id: str, letter_id: str, archived_at: str) -> Dict[str, Any]:
+    return request_json(
+        "POST",
+        f"/mailbox/letters/{urllib.parse.quote(user_id)}/{urllib.parse.quote(letter_id)}/archive",
+        {"archivedAt": archived_at},
+    )
+
+
 def matching_items(item_id: str) -> List[Dict[str, Any]]:
     return [item for item in list_archive_items() if item.get("id") == item_id]
 
@@ -416,6 +424,17 @@ def main() -> Dict[str, Any]:
     ]
     assert_equal((recipient_marked_read.get("item") or {}).get("status"), "read", "recipient reminder read response")
     assert_equal(recipient_mailbox_after_read[0].get("status"), "read", "recipient reminder read persisted")
+    recipient_archived = archive_mailbox_letter(
+        recipient_user_id,
+        recipient_mailbox[0]["id"],
+        "2026-07-02T09:06:00Z",
+    )
+    recipient_mailbox_after_archive = [
+        item for item in list_mailbox_letters(recipient_user_id)
+        if item.get("sourceArchiveItemId") == due_item_id
+    ]
+    assert_equal((recipient_archived.get("item") or {}).get("status"), "archived", "recipient reminder archive response")
+    assert_equal(recipient_mailbox_after_archive[0].get("status"), "archived", "recipient reminder archive persisted")
 
     return {
         "completed": True,
@@ -441,6 +460,8 @@ def main() -> Dict[str, Any]:
         "recipientMailbox": recipient_mailbox,
         "recipientMailboxAfterRead": recipient_mailbox_after_read,
         "recipientMarkedRead": recipient_marked_read,
+        "recipientMailboxAfterArchive": recipient_mailbox_after_archive,
+        "recipientArchived": recipient_archived,
         "recipientDetail": recipient_detail,
         "ownerDetail": owner_detail,
         "futureDetail": future_detail,

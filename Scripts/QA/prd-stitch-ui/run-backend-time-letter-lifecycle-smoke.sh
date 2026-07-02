@@ -142,6 +142,7 @@ owner_detail = result.get("ownerDetail") or {}
 future_detail = result.get("futureDetail") or {}
 non_recipient_detail = result.get("nonRecipientDetail") or {}
 recipient_mailbox_after_read = result.get("recipientMailboxAfterRead") or []
+recipient_mailbox_after_archive = result.get("recipientMailboxAfterArchive") or []
 
 report = f"""# Backend Time Letter Lifecycle Smoke
 
@@ -190,6 +191,7 @@ Status: passed
 - Future detail blocked: `{future_detail.get("detail")}`
 - Non-recipient detail blocked: `{non_recipient_detail.get("detail")}`
 - Recipient mailbox status after read: `{(recipient_mailbox_after_read[0] if recipient_mailbox_after_read else {}).get("status")}`
+- Recipient mailbox status after archive: `{(recipient_mailbox_after_archive[0] if recipient_mailbox_after_archive else {}).get("status")}`
 
 ## Evidence
 

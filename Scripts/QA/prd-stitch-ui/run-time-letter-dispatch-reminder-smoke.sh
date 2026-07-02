@@ -97,6 +97,9 @@ grep -Eq '"timeLetterReminderDetailSnapshotWritten"[[:space:]]*:[[:space:]]*true
 grep -Eq '"timeLetterReminderReadStatusPersisted"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter reminder should persist read status after opening."
 grep -Eq '"timeLetterSecondReminderStillUnread"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Unread sibling reminder should remain unread after opening one letter."
 grep -Eq '"timeLetterReminderCountAfterRead"[[:space:]]*:[[:space:]]*1' "$RESULT_FILE" || fail "Opening one reminder should leave the other delivered letter unread."
+grep -Eq '"timeLetterReminderArchiveStatusPersisted"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter reminder should persist archived status."
+grep -Eq '"timeLetterSecondReminderStillUnreadAfterArchive"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Archiving one reminder should not affect the unread sibling reminder."
+grep -Eq '"timeLetterReminderCountAfterArchive"[[:space:]]*:[[:space:]]*1' "$RESULT_FILE" || fail "Archived reminders should not re-enter unread counts."
 grep -Eq '"dueLetterIds"' "$RESULT_FILE" || fail "Result should include dueLetterIds."
 
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null
