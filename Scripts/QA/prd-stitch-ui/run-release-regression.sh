@@ -336,6 +336,7 @@ for guard in \
   tencent-digital-human-provider-stability-check.swift \
   tencent-digital-human-phase1-stability-check.swift \
   tencent-digital-human-audio-owner-stop-semantics-check.swift \
+  echo-digital-human-lifecycle-audio-route-check.swift \
   tencent-digital-human-trtc-compat-check.swift \
   tencent-digital-human-sdk-binary-check.swift \
   tencent-digital-human-cloud-runtime-smoke.swift \

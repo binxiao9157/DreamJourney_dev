@@ -363,6 +363,8 @@ final class EchoViewController: UIViewController {
     private var showsVoiceSDKReadinessPreview = false
     private var backendRuntimeTokenApplied = false
     private var hasRequestedCloudDigitalHumanRuntime = false
+    private var isSuspendedByAppLifecycle = false
+    private var isStoppingVoiceCaptureForAppLifecycle = false
     private static let digitalHumanReplyPrewarmShortDelay: TimeInterval = 0.18
     private static let digitalHumanReplyPrewarmDebounceDelay: TimeInterval = 0.24
     private static let tencentDigitalHumanTextOverTimeout: TimeInterval = 30
@@ -560,6 +562,7 @@ final class EchoViewController: UIViewController {
         view.backgroundColor = DJDesignTokens.Color.background
         navigationController?.setNavigationBarHidden(true, animated: false)
         observeDigitalHumanContext()
+        observeEchoAppLifecycle()
         setupLayout()
         bindViewModel()
         updatePersonaBadge()
@@ -880,6 +883,130 @@ final class EchoViewController: UIViewController {
         viewModel.refreshArchiveContextStatus()
         updatePersonaBadge()
         refreshTranscriptPreviewForCurrentContextIfIdle()
+    }
+
+    private func observeEchoAppLifecycle() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(echoAppWillResignActive),
+            name: UIApplication.willResignActiveNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(echoAppDidEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(echoAppWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(echoAppDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
+    }
+
+    @objc private func echoAppWillResignActive() {
+        suspendEchoForAppLifecycle(reason: "willResignActive")
+    }
+
+    @objc private func echoAppDidEnterBackground() {
+        suspendEchoForAppLifecycle(reason: "didEnterBackground")
+    }
+
+    @objc private func echoAppWillEnterForeground() {
+        restoreEchoAfterAppLifecycleIfNeeded(reason: "willEnterForeground")
+    }
+
+    @objc private func echoAppDidBecomeActive() {
+        restoreEchoAfterAppLifecycleIfNeeded(reason: "didBecomeActive")
+    }
+
+    private func suspendEchoForAppLifecycle(reason: String) {
+        guard view.window != nil,
+              !isSuspendedByAppLifecycle else {
+            return
+        }
+
+        let shouldSuspendRuntime = DialogEngineManager.shared.isDialogActive
+            || hasTencentDigitalHumanProviderSpeechInFlight
+            || digitalHumanConversation.shouldResumeAfterProviderSpeech
+            || !isCurrentEchoInteractionIdle
+
+        guard shouldSuspendRuntime else {
+            return
+        }
+
+        isSuspendedByAppLifecycle = true
+        interruptDigitalHumanPlayback(reason: "appLifecycle:\(reason)")
+        preserveTencentProviderSessionAfterLocalDialogStop(reason: "appLifecycle:\(reason)")
+        muteTencentProviderRemoteAudioForUserCapture(reason: "appLifecycle:\(reason)")
+        recordEchoRuntimeDiagnosticsSnapshot(reason: "appLifecycleSuspended:\(reason)")
+        renderVoiceStatus(
+            text: "已暂停，轻点话筒继续",
+            isVisible: true,
+            accessibilityIdentifier: "echoLifecyclePausedStatus"
+        )
+
+        if DialogEngineManager.shared.isDialogActive {
+            isStoppingVoiceCaptureForAppLifecycle = true
+            DialogEngineManager.shared.stopDialog()
+        } else {
+            viewModel.resetToIdle()
+        }
+
+        print(
+            "[TencentDigitalHuman] app lifecycle suspended reason=\(reason) " +
+            "providerPreserved=true \(currentEchoAudioOwner.logLabel)"
+        )
+    }
+
+    private func restoreEchoAfterAppLifecycleIfNeeded(reason: String) {
+        guard isSuspendedByAppLifecycle else {
+            return
+        }
+
+        isSuspendedByAppLifecycle = false
+        isStoppingVoiceCaptureForAppLifecycle = false
+        DialogEngineManager.shared.delegate = self
+
+        if shouldShowDigitalHumanLivePanel {
+            DialogEngineManager.shared.setLocalTTSPlaybackEnabled(false)
+            if digitalHumanRuntime == nil {
+                hasRequestedCloudDigitalHumanRuntime = false
+                prepareCloudDigitalHumanRuntimeIfNeeded()
+            } else {
+                applyEchoAudioRoutePolicy()
+            }
+        } else {
+            DialogEngineManager.shared.setLocalTTSPlaybackEnabled(true)
+        }
+
+        loadVoiceCloneRuntimeCapabilityIfNeeded(force: true)
+        viewModel.resetToIdle()
+        renderVoiceStatus(
+            text: "已暂停，轻点话筒继续",
+            isVisible: true,
+            accessibilityIdentifier: "echoLifecyclePausedStatus"
+        )
+        recordEchoRuntimeDiagnosticsSnapshot(reason: "appLifecycleRestored:\(reason)")
+        print(
+            "[TencentDigitalHuman] app lifecycle restored reason=\(reason) " +
+            "microphoneAutoStart=false \(currentEchoAudioOwner.logLabel)"
+        )
+    }
+
+    private var isCurrentEchoInteractionIdle: Bool {
+        if case .idle = currentState {
+            return true
+        }
+        return false
     }
 
     private func updatePersonaBadge() {
@@ -1538,7 +1665,7 @@ final class EchoViewController: UIViewController {
                 try session.setCategory(
                     .playAndRecord,
                     mode: .voiceChat,
-                    options: [.defaultToSpeaker, .allowBluetooth]
+                    options: [.defaultToSpeaker, .allowBluetoothHFP]
                 )
             }
             try session.setActive(true)
@@ -2050,6 +2177,26 @@ final class EchoViewController: UIViewController {
         return true
     }
 
+    @discardableResult
+    private func interruptDigitalHumanPlaybackForUserBargeIn() -> Bool {
+        guard shouldShowDigitalHumanLivePanel,
+              view.window != nil else {
+            return false
+        }
+
+        interruptDigitalHumanPlayback(reason: "userBargeIn")
+        renderVoiceStatus(text: "正在恢复聆听", isVisible: true)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
+            guard let self,
+                  self.view.window != nil else {
+                return
+            }
+            self.resumeVoiceCaptureAfterTencentProviderSpeech(reason: "userBargeIn")
+        }
+        return true
+    }
+
     private var hasTencentDigitalHumanProviderSpeechInFlight: Bool {
         digitalHumanConversation.hasProviderSpeechInFlight
     }
@@ -2538,72 +2685,60 @@ final class EchoViewController: UIViewController {
             return
         }
 
-        do {
-            let requestID = makeTencentDigitalHumanRequestID()
-            let turnID = ensureCurrentEchoTurnID()
-            let pausedDialogEngine = pauseDialogEngineForTencentProviderSpeechIfNeeded()
-            prepareAudioSessionForTencentProviderPlayback(preserveRecordingCategory: pausedDialogEngine)
-            if source == "trueDeviceBackendPCMDriveSmoke" {
-                trueDeviceBackendPCMDriveTrace.markRequest(turnID: turnID, requestID: requestID)
-                trueDeviceBackendPCMDriveTrace.markSignal(
-                    preparedByteCount: signal.preparedByteCount,
-                    expectedChunkCount: signal.chunkCount
-                )
-            }
-
-            digitalHumanConversation.beginProviderRequest(
-                requestID: requestID,
-                replyText: replyText,
-                turnID: turnID,
-                keepsPendingReply: routeEchoAudioThroughDigitalHuman
+        let requestID = makeTencentDigitalHumanRequestID()
+        let turnID = ensureCurrentEchoTurnID()
+        let pausedDialogEngine = pauseDialogEngineForTencentProviderSpeechIfNeeded()
+        prepareAudioSessionForTencentProviderPlayback(preserveRecordingCategory: pausedDialogEngine)
+        if source == "trueDeviceBackendPCMDriveSmoke" {
+            trueDeviceBackendPCMDriveTrace.markRequest(turnID: turnID, requestID: requestID)
+            trueDeviceBackendPCMDriveTrace.markSignal(
+                preparedByteCount: signal.preparedByteCount,
+                expectedChunkCount: signal.chunkCount
             )
-            scheduleTencentDigitalHumanTextOverTimeout(requestID: requestID, source: source)
-            startPCMDriveSignalToDigitalHumanRuntime(
-                signal: signal,
-                requestID: requestID,
-                source: source
-            )
+        }
 
-            if shouldRunTencentDigitalHumanPCMDriveStopProbe {
-                DispatchQueue.main.asyncAfter(deadline: .now() + Self.tencentDigitalHumanPCMDriveStopProbeDelay) { [weak self] in
-                    guard let self,
-                          self.shouldRunTencentDigitalHumanPCMDriveSmoke
-                            || self.shouldRunTencentDigitalHumanBackendPCMDriveSmoke
-                            || self.shouldRunTencentBackendPCMDriveMockSmoke,
-                          self.digitalHumanConversation.activeRequestID == requestID else {
-                        return
-                    }
-                    let resumedVoiceCapture = self.interruptDigitalHumanPlayback(reason: "pcmDriveSmokeStopProbe")
-                    if source == "trueDeviceBackendPCMDriveSmoke" {
-                        self.trueDeviceBackendPCMDriveTrace.stopProbeFired = true
-                        self.trueDeviceBackendPCMDriveTrace.resumedVoiceCapture = resumedVoiceCapture
-                        if !resumedVoiceCapture {
-                            self.trueDeviceBackendPCMDriveTrace.markFailure(
-                                reason: "stopProbeResumeFailed",
-                                detail: "interruptDigitalHumanPlayback returned false"
-                            )
-                        }
-                        self.emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "stopProbeFired")
-                    }
-                    if !resumedVoiceCapture {
-                        self.viewModel.resetToIdle()
-                    }
-                    print(
-                        "[TencentDigitalHuman][QA] PCM-drive stop probe fired " +
-                        "requestID=\(requestID) resumedVoiceCapture=\(resumedVoiceCapture)"
-                    )
+        digitalHumanConversation.beginProviderRequest(
+            requestID: requestID,
+            replyText: replyText,
+            turnID: turnID,
+            keepsPendingReply: routeEchoAudioThroughDigitalHuman
+        )
+        scheduleTencentDigitalHumanTextOverTimeout(requestID: requestID, source: source)
+        startPCMDriveSignalToDigitalHumanRuntime(
+            signal: signal,
+            requestID: requestID,
+            source: source
+        )
+
+        if shouldRunTencentDigitalHumanPCMDriveStopProbe {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.tencentDigitalHumanPCMDriveStopProbeDelay) { [weak self] in
+                guard let self,
+                      self.shouldRunTencentDigitalHumanPCMDriveSmoke
+                        || self.shouldRunTencentDigitalHumanBackendPCMDriveSmoke
+                        || self.shouldRunTencentBackendPCMDriveMockSmoke,
+                      self.digitalHumanConversation.activeRequestID == requestID else {
+                    return
                 }
-            }
-        } catch {
-            resumeDialogEngineAfterTencentProviderSpeechIfNeeded(reason: "sendPCMDriveFailed")
-            if source == "trueDeviceBackendPCMDriveSmoke" {
-                trueDeviceBackendPCMDriveTrace.markFailure(
-                    reason: "sendPCMDriveFailed",
-                    detail: error.localizedDescription
+                let resumedVoiceCapture = self.interruptDigitalHumanPlayback(reason: "pcmDriveSmokeStopProbe")
+                if source == "trueDeviceBackendPCMDriveSmoke" {
+                    self.trueDeviceBackendPCMDriveTrace.stopProbeFired = true
+                    self.trueDeviceBackendPCMDriveTrace.resumedVoiceCapture = resumedVoiceCapture
+                    if !resumedVoiceCapture {
+                        self.trueDeviceBackendPCMDriveTrace.markFailure(
+                            reason: "stopProbeResumeFailed",
+                            detail: "interruptDigitalHumanPlayback returned false"
+                        )
+                    }
+                    self.emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "stopProbeFired")
+                }
+                if !resumedVoiceCapture {
+                    self.viewModel.resetToIdle()
+                }
+                print(
+                    "[TencentDigitalHuman][QA] PCM-drive stop probe fired " +
+                    "requestID=\(requestID) resumedVoiceCapture=\(resumedVoiceCapture)"
                 )
-                emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "sendPCMDriveFailed")
             }
-            print("[TencentDigitalHuman][QA] PCM-drive smoke failed source=\(source): \(error.localizedDescription)")
         }
     }
 
@@ -2793,6 +2928,11 @@ final class EchoViewController: UIViewController {
     }
 
     private func stopVoiceCapture() {
+        if hasTencentDigitalHumanProviderSpeechInFlight,
+           interruptDigitalHumanPlaybackForUserBargeIn() {
+            return
+        }
+
         isStoppingVoiceCaptureManually = true
         if shouldInterruptTencentDigitalHumanOnUserStop {
             interruptDigitalHumanPlayback(reason: "userStop")
@@ -3002,6 +3142,19 @@ extension EchoViewController: DialogEngineDelegate {
             if self.isStoppingForDelayedReply {
                 self.isStoppingForDelayedReply = false
                 ConversationMemoryManager.shared.endSession()
+                return
+            }
+            if self.isStoppingVoiceCaptureForAppLifecycle {
+                self.isStoppingVoiceCaptureForAppLifecycle = false
+                ConversationMemoryManager.shared.endSession()
+                self.preserveTencentProviderSessionAfterLocalDialogStop(reason: "dialogEndedAfterAppLifecycle")
+                self.resetDigitalHumanReplyDispatchState()
+                self.viewModel.resetToIdle()
+                self.renderVoiceStatus(
+                    text: "已暂停，轻点话筒继续",
+                    isVisible: true,
+                    accessibilityIdentifier: "echoLifecyclePausedStatus"
+                )
                 return
             }
             if self.isStoppingVoiceCaptureManually {

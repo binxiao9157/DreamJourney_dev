@@ -702,7 +702,7 @@ final class DialogEngineManager: NSObject {
                 try session.setCategory(
                     .playAndRecord,
                     mode: .voiceChat,
-                    options: [.defaultToSpeaker, .allowBluetooth]
+                    options: [.defaultToSpeaker, .allowBluetoothHFP]
                 )
             }
             try session.setActive(true)
