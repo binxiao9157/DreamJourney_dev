@@ -2355,7 +2355,21 @@ private extension AppDelegate {
         deliveredLetter.metadata[MemoryArchiveItem.timeLetterDeliveryProviderStateMetadataKey] = "local_notification_and_in_app"
         deliveredLetter.metadata["deliveredAt"] = ISO8601DateFormatter().string(from: Date())
 
+        var secondDeliveredLetter = MemoryArchiveItemFactory.makeTimeLetter(
+            note: "第二封到达的时间信件，用于验证提醒中心支持多封提醒。",
+            openAt: Date().addingTimeInterval(-1800),
+            recipients: [
+                TimeLetterRecipientSelection(id: "self", name: "我"),
+            ]
+        )
+        secondDeliveredLetter.metadata[MemoryArchiveItem.timeLetterDeliveryStatusMetadataKey] = "delivered"
+        secondDeliveredLetter.metadata[MemoryArchiveItem.timeLetterDeliveryExecutionStateMetadataKey] = "delivered"
+        secondDeliveredLetter.metadata[MemoryArchiveItem.timeLetterDeliveryScheduleStateMetadataKey] = "dispatched"
+        secondDeliveredLetter.metadata[MemoryArchiveItem.timeLetterDeliveryProviderStateMetadataKey] = "local_notification_and_in_app"
+        secondDeliveredLetter.metadata["deliveredAt"] = ISO8601DateFormatter().string(from: Date().addingTimeInterval(-60))
+
         MemoryArchiveRepository.shared.add(deliveredLetter, syncToBackend: false)
+        MemoryArchiveRepository.shared.add(secondDeliveredLetter, syncToBackend: false)
 
         let reminder = TimeLetterMailboxReminder([
             "id": "time-letter-\(deliveredLetter.id)-self",
@@ -2368,8 +2382,20 @@ private extension AppDelegate {
             "metadataOnly": true,
             "contentRedacted": true,
         ])
+        let secondReminder = TimeLetterMailboxReminder([
+            "id": "time-letter-\(secondDeliveredLetter.id)-self",
+            "kind": "timeLetterReminder",
+            "sourceArchiveItemId": secondDeliveredLetter.id,
+            "title": "给未来的自己",
+            "status": "unread",
+            "deliveredAt": secondDeliveredLetter.metadata["deliveredAt"] ?? "",
+            "recipientRole": "owner",
+            "metadataOnly": true,
+            "contentRedacted": true,
+        ])
         if let reminder,
-           let data = try? JSONEncoder().encode([reminder]) {
+           let secondReminder,
+           let data = try? JSONEncoder().encode([reminder, secondReminder]) {
             UserDefaults.standard.set(data, forKey: "dj.memoryArchive.timeLetterMailbox.\(userId)")
         }
 
@@ -2393,20 +2419,39 @@ private extension AppDelegate {
                 item: $0
             )
         } ?? false
+        if let reminder {
+            MemoryArchiveRepository.shared.markTimeLetterMailboxReminderRead(reminder)
+        }
+        let remindersAfterRead = MemoryArchiveRepository.shared.timeLetterMailboxReminders()
+        let openedReminderId = reminder?.id
+        let reminderReadStatusPersisted = openedReminderId.map { reminderId in
+            remindersAfterRead.first(where: { $0.id == reminderId })?.isUnread == false
+        } ?? false
+        let secondReminderStillUnread = secondReminder.map { reminder in
+            remindersAfterRead.first(where: { $0.id == reminder.id })?.isUnread == true
+        } ?? false
+        let reminderCountAfterRead = MemoryArchiveRepository.shared.timeLetterReminderCount()
         let completed = reminder != nil
+            && secondReminder != nil
             && restoredDelivered?.timeLetterDeliveryStatus == "delivered"
             && restoredDelivered?.isTimeLetterDelivered == true
             && dueLetters.contains(where: { $0.id == deliveredLetter.id }) == false
-            && mailboxReminders.map(\.sourceArchiveItemId) == [deliveredLetter.id]
-            && reminderCount == 1
+            && dueLetters.contains(where: { $0.id == secondDeliveredLetter.id }) == false
+            && mailboxReminders.map(\.sourceArchiveItemId).contains(deliveredLetter.id)
+            && mailboxReminders.map(\.sourceArchiveItemId).contains(secondDeliveredLetter.id)
+            && reminderCount == 2
             && reminderDetailResolved
             && reminderDetailNoteVisible
             && reminderDetailSnapshotWritten
+            && reminderReadStatusPersisted
+            && secondReminderStillUnread
+            && reminderCountAfterRead == 1
 
         writeTimeLetterDispatchReminderSmokeResult([
             "completed": completed,
             "userId": userId,
             "itemId": deliveredLetter.id,
+            "secondItemId": secondDeliveredLetter.id,
             "deliveryStatus": restoredDelivered?.timeLetterDeliveryStatus ?? "missing",
             "dueLetterIds": dueLetters.map(\.id),
             "mailboxReminderIds": mailboxReminders.map(\.id),
@@ -2415,6 +2460,9 @@ private extension AppDelegate {
             "timeLetterReminderDetailResolved": reminderDetailResolved,
             "timeLetterReminderDetailNoteVisible": reminderDetailNoteVisible,
             "timeLetterReminderDetailSnapshotWritten": reminderDetailSnapshotWritten,
+            "timeLetterReminderReadStatusPersisted": reminderReadStatusPersisted,
+            "timeLetterSecondReminderStillUnread": secondReminderStillUnread,
+            "timeLetterReminderCountAfterRead": reminderCountAfterRead,
         ])
         print(
             "[UI_QA] TimeLetterDispatchReminderSmoke completed " +

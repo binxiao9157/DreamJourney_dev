@@ -90,10 +90,13 @@ echo
 
 grep -Eq '"completed"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Smoke did not complete."
 grep -Eq '"deliveryStatus"[[:space:]]*:[[:space:]]*"delivered"' "$RESULT_FILE" || fail "Delivered status should win over local due state."
-grep -Eq '"reminderCount"[[:space:]]*:[[:space:]]*1' "$RESULT_FILE" || fail "Mailbox reminder should be counted once."
+grep -Eq '"reminderCount"[[:space:]]*:[[:space:]]*2' "$RESULT_FILE" || fail "Mailbox reminders should include multiple delivered letters."
 grep -Eq '"timeLetterReminderDetailResolved"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter reminder should resolve a readable detail item."
 grep -Eq '"timeLetterReminderDetailNoteVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter reminder detail should expose the opened letter body."
 grep -Eq '"timeLetterReminderDetailSnapshotWritten"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter reminder detail snapshot should be written."
+grep -Eq '"timeLetterReminderReadStatusPersisted"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Time-letter reminder should persist read status after opening."
+grep -Eq '"timeLetterSecondReminderStillUnread"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Unread sibling reminder should remain unread after opening one letter."
+grep -Eq '"timeLetterReminderCountAfterRead"[[:space:]]*:[[:space:]]*1' "$RESULT_FILE" || fail "Opening one reminder should leave the other delivered letter unread."
 grep -Eq '"dueLetterIds"' "$RESULT_FILE" || fail "Result should include dueLetterIds."
 
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null

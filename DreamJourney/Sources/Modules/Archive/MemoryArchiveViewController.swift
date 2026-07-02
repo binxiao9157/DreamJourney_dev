@@ -116,6 +116,297 @@ private enum ArchiveKindFilter {
     }
 }
 
+private final class TimeLetterReminderCenterViewController: UIViewController {
+    private let repository: MemoryArchiveRepository
+    private var reminders: [TimeLetterMailboxReminder]
+    private let onOpenReminder: (TimeLetterMailboxReminder) -> Void
+    private let onShowAllTimeLetters: () -> Void
+
+    private let tableView = UITableView(frame: .zero, style: .plain)
+    private let headerStack = UIStackView()
+    private let titleLabel = UILabel()
+    private let subtitleLabel = UILabel()
+    private let emptyStateLabel = UILabel()
+
+    init(
+        reminders: [TimeLetterMailboxReminder],
+        repository: MemoryArchiveRepository,
+        onOpenReminder: @escaping (TimeLetterMailboxReminder) -> Void,
+        onShowAllTimeLetters: @escaping () -> Void
+    ) {
+        self.repository = repository
+        self.reminders = Self.sortedReminders(reminders)
+        self.onOpenReminder = onOpenReminder
+        self.onShowAllTimeLetters = onShowAllTimeLetters
+        super.init(nibName: nil, bundle: nil)
+        hidesBottomBarWhenPushed = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "提醒中心"
+        view.backgroundColor = DJDesignTokens.Color.background
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            title: "全部信件",
+            style: .plain,
+            target: self,
+            action: #selector(showAllTimeLettersTapped)
+        )
+        configureHeader()
+        configureTableView()
+        updateEmptyState()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+        navigationController?.navigationBar.tintColor = DJDesignTokens.Color.textPrimary
+        navigationController?.navigationBar.titleTextAttributes = [
+            .foregroundColor: DJDesignTokens.Color.textPrimary,
+            .font: DJDesignTokens.Font.title(18),
+        ]
+        refreshRemindersFromRepository()
+    }
+
+    private func configureHeader() {
+        headerStack.axis = .vertical
+        headerStack.alignment = .fill
+        headerStack.spacing = 6
+        headerStack.isLayoutMarginsRelativeArrangement = true
+        headerStack.directionalLayoutMargins = NSDirectionalEdgeInsets(
+            top: 18,
+            leading: DJDesignTokens.Spacing.page,
+            bottom: 14,
+            trailing: DJDesignTokens.Spacing.page
+        )
+
+        titleLabel.text = "时间信件提醒"
+        titleLabel.font = DJDesignTokens.Font.title(24)
+        titleLabel.textColor = DJDesignTokens.Color.textPrimary
+
+        subtitleLabel.font = DJDesignTokens.Font.body(14)
+        subtitleLabel.textColor = DJDesignTokens.Color.textTertiary
+        subtitleLabel.numberOfLines = 0
+
+        headerStack.addArrangedSubview(titleLabel)
+        headerStack.addArrangedSubview(subtitleLabel)
+    }
+
+    private func configureTableView() {
+        tableView.backgroundColor = .clear
+        tableView.separatorStyle = .none
+        tableView.alwaysBounceVertical = true
+        tableView.showsVerticalScrollIndicator = false
+        tableView.dataSource = self
+        tableView.delegate = self
+        tableView.register(TimeLetterReminderCell.self, forCellReuseIdentifier: TimeLetterReminderCell.reuseIdentifier)
+        tableView.accessibilityIdentifier = "time-letter-reminder-center-list"
+
+        emptyStateLabel.text = "还没有到达打开时间的信件"
+        emptyStateLabel.font = DJDesignTokens.Font.body(15)
+        emptyStateLabel.textColor = DJDesignTokens.Color.textTertiary
+        emptyStateLabel.textAlignment = .center
+        emptyStateLabel.numberOfLines = 0
+
+        view.addSubview(headerStack)
+        view.addSubview(tableView)
+        view.addSubview(emptyStateLabel)
+
+        headerStack.translatesAutoresizingMaskIntoConstraints = false
+        tableView.translatesAutoresizingMaskIntoConstraints = false
+        emptyStateLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        NSLayoutConstraint.activate([
+            headerStack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            headerStack.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            headerStack.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+
+            tableView.topAnchor.constraint(equalTo: headerStack.bottomAnchor),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            emptyStateLabel.centerYAnchor.constraint(equalTo: tableView.centerYAnchor, constant: -24),
+            emptyStateLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
+            emptyStateLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
+        ])
+    }
+
+    private func refreshRemindersFromRepository() {
+        reminders = Self.sortedReminders(repository.timeLetterMailboxReminders())
+        tableView.reloadData()
+        updateEmptyState()
+    }
+
+    private func updateEmptyState() {
+        let unreadCount = reminders.filter(\.isUnread).count
+        subtitleLabel.text = unreadCount > 0
+            ? "\(unreadCount) 封未读，点按信件查看详情。"
+            : "所有到达时间的信件都已读，仍可继续回看。"
+        emptyStateLabel.isHidden = !reminders.isEmpty
+        tableView.isHidden = reminders.isEmpty
+    }
+
+    private static func sortedReminders(_ reminders: [TimeLetterMailboxReminder]) -> [TimeLetterMailboxReminder] {
+        reminders.sorted { lhs, rhs in
+            if lhs.isUnread != rhs.isUnread {
+                return lhs.isUnread && !rhs.isUnread
+            }
+            return lhs.deliveredAt > rhs.deliveredAt
+        }
+    }
+
+    @objc private func showAllTimeLettersTapped() {
+        onShowAllTimeLetters()
+    }
+}
+
+extension TimeLetterReminderCenterViewController: UITableViewDataSource, UITableViewDelegate {
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        reminders.count
+    }
+
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(
+            withIdentifier: TimeLetterReminderCell.reuseIdentifier,
+            for: indexPath
+        ) as? TimeLetterReminderCell ?? TimeLetterReminderCell(style: .default, reuseIdentifier: TimeLetterReminderCell.reuseIdentifier)
+        cell.configure(with: reminders[indexPath.row])
+        return cell
+    }
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        let reminder = reminders[indexPath.row]
+        let readReminder = reminder.markingRead(readAt: ISO8601DateFormatter().string(from: Date()))
+        reminders[indexPath.row] = readReminder
+        tableView.reloadRows(at: [indexPath], with: .automatic)
+        updateEmptyState()
+        onOpenReminder(reminder)
+    }
+
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        UITableView.automaticDimension
+    }
+
+    func tableView(_ tableView: UITableView, estimatedHeightForRowAt indexPath: IndexPath) -> CGFloat {
+        92
+    }
+}
+
+private final class TimeLetterReminderCell: UITableViewCell {
+    static let reuseIdentifier = "TimeLetterReminderCell"
+
+    private let cardView = UIView()
+    private let statusLabel = PaddingLabel(horizontalInset: 8, verticalInset: 4)
+    private let titleLabel = UILabel()
+    private let metaLabel = UILabel()
+    private let chevronImageView = UIImageView()
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        configure()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(with reminder: TimeLetterMailboxReminder) {
+        titleLabel.text = reminder.title
+        metaLabel.text = [
+            reminder.recipientRole == "owner" ? "写给自己" : "来自家人",
+            Self.formattedDeliveredAt(reminder.deliveredAt),
+        ]
+        .filter { !$0.isEmpty }
+        .joined(separator: " · ")
+        statusLabel.text = reminder.isUnread ? "未读" : "已读"
+        statusLabel.backgroundColor = reminder.isUnread
+            ? DJDesignTokens.Color.accent.withAlphaComponent(0.18)
+            : DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.8)
+        statusLabel.textColor = reminder.isUnread
+            ? DJDesignTokens.Color.accentDeep
+            : DJDesignTokens.Color.textTertiary
+        titleLabel.textColor = reminder.isUnread
+            ? DJDesignTokens.Color.textPrimary
+            : DJDesignTokens.Color.textSecondary
+        accessibilityIdentifier = "time-letter-reminder-row-\(reminder.id)"
+    }
+
+    private func configure() {
+        selectionStyle = .none
+        backgroundColor = .clear
+        contentView.backgroundColor = .clear
+
+        cardView.backgroundColor = DJDesignTokens.Color.surface
+        cardView.layer.cornerRadius = DJDesignTokens.Radius.large
+        cardView.layer.borderWidth = 0.6
+        cardView.layer.borderColor = DJDesignTokens.Color.divider.withAlphaComponent(0.42).cgColor
+        DJDesignTokens.applySoftShadow(to: cardView)
+
+        titleLabel.font = DJDesignTokens.Font.title(17)
+        titleLabel.numberOfLines = 2
+
+        metaLabel.font = DJDesignTokens.Font.body(13)
+        metaLabel.textColor = DJDesignTokens.Color.textTertiary
+        metaLabel.numberOfLines = 1
+
+        statusLabel.font = DJDesignTokens.Font.label(12)
+        statusLabel.layer.cornerRadius = 12
+        statusLabel.layer.masksToBounds = true
+
+        chevronImageView.image = UIImage(systemName: "chevron.right")
+        chevronImageView.tintColor = DJDesignTokens.Color.textTertiary.withAlphaComponent(0.55)
+        chevronImageView.contentMode = .scaleAspectFit
+
+        contentView.addSubview(cardView)
+        [statusLabel, titleLabel, metaLabel, chevronImageView].forEach {
+            cardView.addSubview($0)
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
+        cardView.translatesAutoresizingMaskIntoConstraints = false
+
+        NSLayoutConstraint.activate([
+            cardView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
+            cardView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DJDesignTokens.Spacing.page),
+            cardView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
+            cardView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
+
+            statusLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 16),
+            statusLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 16),
+
+            titleLabel.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 10),
+            titleLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 16),
+            titleLabel.trailingAnchor.constraint(equalTo: chevronImageView.leadingAnchor, constant: -12),
+
+            metaLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 6),
+            metaLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+            metaLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
+            metaLabel.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -16),
+
+            chevronImageView.centerYAnchor.constraint(equalTo: cardView.centerYAnchor),
+            chevronImageView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -16),
+            chevronImageView.widthAnchor.constraint(equalToConstant: 12),
+            chevronImageView.heightAnchor.constraint(equalToConstant: 18),
+        ])
+    }
+
+    private static func formattedDeliveredAt(_ rawValue: String) -> String {
+        guard !rawValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let date = ISO8601DateFormatter().date(from: rawValue) else {
+            return ""
+        }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "M月d日 HH:mm"
+        return formatter.string(from: date)
+    }
+}
+
 final class MemoryArchiveViewController: UIViewController {
     private let repository: MemoryArchiveRepository
 
@@ -2305,11 +2596,32 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     @objc private func timeLetterReminderTapped() {
-        guard let reminder = repository.timeLetterMailboxReminders().first(where: \.isUnread) else {
+        let reminders = repository.timeLetterMailboxReminders()
+        guard !reminders.isEmpty else {
             applyArchiveKindFilter(.timeLetter)
             return
         }
-        openTimeLetterReminder(reminder)
+        presentTimeLetterReminderCenter(reminders)
+    }
+
+    private func presentTimeLetterReminderCenter(_ reminders: [TimeLetterMailboxReminder]) {
+        let center = TimeLetterReminderCenterViewController(
+            reminders: reminders,
+            repository: repository,
+            onOpenReminder: { [weak self] reminder in
+                self?.openTimeLetterReminder(reminder)
+            },
+            onShowAllTimeLetters: { [weak self] in
+                self?.navigationController?.popViewController(animated: true)
+                self?.applyArchiveKindFilter(.timeLetter)
+            }
+        )
+        if let navigationController {
+            navigationController.pushViewController(center, animated: true)
+        } else {
+            let navigationController = UINavigationController(rootViewController: center)
+            present(navigationController, animated: true)
+        }
     }
 
     private func openTimeLetterReminder(_ reminder: TimeLetterMailboxReminder) {
@@ -2318,6 +2630,9 @@ final class MemoryArchiveViewController: UIViewController {
             guard let self else { return }
             switch result {
             case .success(let item):
+                repository.markTimeLetterMailboxReminderRead(reminder) { [weak self] _ in
+                    self?.refreshContent()
+                }
                 let detailViewController = MemoryArchiveDetailViewController(item: item, repository: repository, isReadOnly: true)
                 navigationController?.pushViewController(detailViewController, animated: true)
             case .failure(let error):

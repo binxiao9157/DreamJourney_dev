@@ -2549,6 +2549,24 @@ final class DreamJourneyBackendClient {
         requestJSON(path: path, method: .get, payload: nil, completion: completion)
     }
 
+    func markMailboxLetterRead(
+        userId: String,
+        letterId: String,
+        readAtISO: String? = nil,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        var payload: [String: Any] = [:]
+        if let readAtISO, !readAtISO.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["readAt"] = readAtISO
+        }
+        requestJSON(
+            path: "/mailbox/letters/\(pathComponent(userId))/\(pathComponent(letterId))/read",
+            method: .post,
+            payload: payload,
+            completion: completion
+        )
+    }
+
     func syncKnowledge(userId: String, graph: [String: Any], completion: @escaping (Result<[String: Any], Error>) -> Void) {
         requestJSON(path: "/kb/sync", method: .post, payload: ["userId": userId, "graph": graph], completion: completion)
     }

@@ -123,6 +123,14 @@ def get_time_letter_detail(
     )
 
 
+def mark_mailbox_letter_read(user_id: str, letter_id: str, read_at: str) -> Dict[str, Any]:
+    return request_json(
+        "POST",
+        f"/mailbox/letters/{urllib.parse.quote(user_id)}/{urllib.parse.quote(letter_id)}/read",
+        {"readAt": read_at},
+    )
+
+
 def matching_items(item_id: str) -> List[Dict[str, Any]]:
     return [item for item in list_archive_items() if item.get("id") == item_id]
 
@@ -397,6 +405,17 @@ def main() -> Dict[str, Any]:
     assert_equal((owner_detail.get("access") or {}).get("role"), "owner", "owner detail role")
     assert_equal(future_detail.get("detail"), "timeLetter is not open yet", "future detail blocked")
     assert_equal(non_recipient_detail.get("detail"), "viewer is not a recipient", "non-recipient detail blocked")
+    recipient_marked_read = mark_mailbox_letter_read(
+        recipient_user_id,
+        recipient_mailbox[0]["id"],
+        "2026-07-02T09:05:00Z",
+    )
+    recipient_mailbox_after_read = [
+        item for item in list_mailbox_letters(recipient_user_id)
+        if item.get("sourceArchiveItemId") == due_item_id
+    ]
+    assert_equal((recipient_marked_read.get("item") or {}).get("status"), "read", "recipient reminder read response")
+    assert_equal(recipient_mailbox_after_read[0].get("status"), "read", "recipient reminder read persisted")
 
     return {
         "completed": True,
@@ -420,6 +439,8 @@ def main() -> Dict[str, Any]:
         "listedFutureAfterDispatch": dispatch_future,
         "ownerMailbox": owner_mailbox,
         "recipientMailbox": recipient_mailbox,
+        "recipientMailboxAfterRead": recipient_mailbox_after_read,
+        "recipientMarkedRead": recipient_marked_read,
         "recipientDetail": recipient_detail,
         "ownerDetail": owner_detail,
         "futureDetail": future_detail,

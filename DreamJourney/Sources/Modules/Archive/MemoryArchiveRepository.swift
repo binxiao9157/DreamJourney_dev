@@ -70,6 +70,7 @@ struct TimeLetterMailboxReminder: Codable, Equatable {
     let title: String
     let status: String
     let deliveredAt: String
+    let readAt: String?
     let recipientRole: String
 
     private enum CodingKeys: String, CodingKey {
@@ -79,6 +80,7 @@ struct TimeLetterMailboxReminder: Codable, Equatable {
         case title
         case status
         case deliveredAt
+        case readAt
         case recipientRole
     }
 
@@ -89,6 +91,7 @@ struct TimeLetterMailboxReminder: Codable, Equatable {
         title: String,
         status: String,
         deliveredAt: String,
+        readAt: String? = nil,
         recipientRole: String
     ) {
         self.id = id
@@ -97,6 +100,7 @@ struct TimeLetterMailboxReminder: Codable, Equatable {
         self.title = title
         self.status = status
         self.deliveredAt = deliveredAt
+        self.readAt = readAt
         self.recipientRole = recipientRole
     }
 
@@ -118,6 +122,7 @@ struct TimeLetterMailboxReminder: Codable, Equatable {
             ?? "unread"
         self.deliveredAt = (json["deliveredAt"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
             ?? ""
+        self.readAt = (json["readAt"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.recipientRole = (json["recipientRole"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
             ?? "recipient"
     }
@@ -130,11 +135,25 @@ struct TimeLetterMailboxReminder: Codable, Equatable {
         title = try container.decode(String.self, forKey: .title)
         status = try container.decode(String.self, forKey: .status)
         deliveredAt = try container.decode(String.self, forKey: .deliveredAt)
+        readAt = try container.decodeIfPresent(String.self, forKey: .readAt)
         recipientRole = try container.decode(String.self, forKey: .recipientRole)
     }
 
     var isUnread: Bool {
         status != "read"
+    }
+
+    func markingRead(readAt: String) -> TimeLetterMailboxReminder {
+        TimeLetterMailboxReminder(
+            id: id,
+            ownerUserId: ownerUserId,
+            sourceArchiveItemId: sourceArchiveItemId,
+            title: title,
+            status: "read",
+            deliveredAt: deliveredAt,
+            readAt: readAt,
+            recipientRole: recipientRole
+        )
     }
 }
 
@@ -316,6 +335,40 @@ final class MemoryArchiveRepository {
         return sourceIds.count
     }
 
+    func markTimeLetterMailboxReminderRead(
+        _ reminder: TimeLetterMailboxReminder,
+        completion: ((Result<TimeLetterMailboxReminder, Error>) -> Void)? = nil
+    ) {
+        let readAt = isoFormatter.string(from: Date())
+        let updatedReminder = reminder.markingRead(readAt: readAt)
+        updateCachedTimeLetterMailboxReminder(updatedReminder)
+
+        guard DreamJourneyBackendClient.shared.isTimeLetterDispatchConfigured else {
+            completion?(.success(updatedReminder))
+            return
+        }
+
+        DreamJourneyBackendClient.shared.markMailboxLetterRead(
+            userId: currentUserId,
+            letterId: reminder.id,
+            readAtISO: readAt
+        ) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let object):
+                if let item = Self.timeLetterMailboxReminder(fromReadResponse: object) {
+                    updateCachedTimeLetterMailboxReminder(item)
+                    completion?(.success(item))
+                } else {
+                    completion?(.success(updatedReminder))
+                }
+            case .failure(let error):
+                print("[Archive] mark mailbox reminder read failed: \(error.localizedDescription)")
+                completion?(.failure(error))
+            }
+        }
+    }
+
     func refreshTimeLetterMailboxReminders(
         completion: ((Result<[TimeLetterMailboxReminder], Error>) -> Void)? = nil
     ) {
@@ -469,6 +522,16 @@ final class MemoryArchiveRepository {
         }
     }
 
+    private func updateCachedTimeLetterMailboxReminder(_ reminder: TimeLetterMailboxReminder) {
+        var reminders = timeLetterMailboxReminders()
+        if let index = reminders.firstIndex(where: { $0.id == reminder.id }) {
+            reminders[index] = reminder
+        } else {
+            reminders.insert(reminder, at: 0)
+        }
+        saveTimeLetterMailboxReminders(reminders)
+    }
+
     private func localTimeLetterDetailItem(for reminder: TimeLetterMailboxReminder) -> MemoryArchiveItem? {
         allItems().first { item in
             item.id == reminder.sourceArchiveItemId && item.kind == .timeLetter
@@ -583,6 +646,16 @@ final class MemoryArchiveRepository {
             return items.compactMap(TimeLetterMailboxReminder.init)
         }
         return []
+    }
+
+    private static func timeLetterMailboxReminder(fromReadResponse object: [String: Any]) -> TimeLetterMailboxReminder? {
+        if let item = object["item"] as? [String: Any] {
+            return TimeLetterMailboxReminder(item)
+        }
+        if let data = object["data"] as? [String: Any] {
+            return timeLetterMailboxReminder(fromReadResponse: data)
+        }
+        return nil
     }
 
     private static func timeLetterDetailItem(from object: [String: Any]) -> MemoryArchiveItem? {

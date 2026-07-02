@@ -26,6 +26,7 @@ let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let item = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveItem.swift")
 let factory = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveItemFactory.swift")
 let repository = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift")
+let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
 let entry = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveTextEntryViewController.swift")
 let archiveRoot = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift")
 let detail = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveDetailViewController.swift")
@@ -75,12 +76,19 @@ for required in [
     "TimeLetterMailboxReminder",
     "refreshTimeLetterMailboxReminders",
     "resolveTimeLetterReminderDetail",
+    "markTimeLetterMailboxReminderRead",
     "timeLetterReminderCount",
     "timeLetterDeliveryStatus != \"delivered\"",
     "if items.contains(where: { $0.id == id && $0.isSealedTimeLetter })",
 ] {
     assertContains(repository, required, "time-letter repository should schedule and protect sealed letters \(required)")
 }
+
+assertContains(
+    appDelegate,
+    "timeLetterSecondReminderStillUnread",
+    "time-letter dispatch reminder smoke should prove one read reminder does not mark sibling reminders read"
+)
 
 for required in [
     "TimeLetterEntryPayload",
@@ -98,6 +106,10 @@ for required in [
     "archive-time-letter-in-app-reminder",
     "timeLetterReminderCount()",
     "timeLetterReminderTapped",
+    "presentTimeLetterReminderCenter",
+    "TimeLetterReminderCenterViewController",
+    "time-letter-reminder-center-list",
+    "time-letter-reminder-row-",
     "openTimeLetterReminder",
     "MemoryArchiveDetailViewController(item:",
     "refreshTimeLetterMailboxReminders",
@@ -149,6 +161,8 @@ for required in [
     "func getTimeLetterDetail(",
     "/archive/time-letters/",
     "/detail",
+    "func markMailboxLetterRead(",
+    "/read",
 ] {
     assertContains(backendClient, required, "backend client should expose time-letter dispatch/mailbox contract \(required)")
 }

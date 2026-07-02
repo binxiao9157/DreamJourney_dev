@@ -36,9 +36,10 @@
   - 通过 `dueTimeLetters()` 输出尚未投递的本地到期提醒。
   - 通过 `refreshTimeLetterMailboxReminders()` 触发后端 `dispatch-due`，再拉取 mailbox unread reminder。
   - `timeLetterReminderCount()` 合并本地 due 与后端 mailbox，避免 delivered 信件重复提醒。
+  - 通过 `markTimeLetterMailboxReminderRead()` 将打开过的 mailbox reminder 标记为已读。
 - `MemoryArchiveViewController`：
   - 有到期信件时显示应用内提醒入口。
-  - 点击提醒入口筛选到“时间信件”列表。
+  - 点击提醒入口进入“时间信件提醒”列表，支持多封信、未读/已读状态、点击打开对应详情。
 - `MemoryArchiveDetailViewController`：
   - 草稿可编辑、封存、删除。
   - 封存后只展示锁定状态，不能删除或修改。
@@ -50,6 +51,7 @@
   - dispatch 只为本人和已接受的家庭收件人创建 `timeLetterReminder` mailbox 记录。
   - 未到 `openAt` 的 timeLetter 不会写入收件人 mailbox。
   - mailbox reminder 只包含元数据，`metadataOnly=true`、`contentRedacted=true`，不暴露信件正文。
+  - `POST /mailbox/letters/{userId}/{letterId}/read` 将单封应用内提醒标记为已读，并保持幂等。
 
 ## 2026-07-02 服务端到期投递更新
 
@@ -68,6 +70,22 @@
   - `delivered` 优先于本地 `openAt <= now` 的 `ready` 推导。
   - delivered timeLetter 不再重复进入本地 due notification/data source。
   - Archive 页提醒入口以 `timeLetterReminderCount()` 合并本地 due 和 mailbox unread。
+
+## 2026-07-02 应用内提醒中心更新
+
+- Archive 页顶部提醒入口不再只打开单条提醒或简单筛选列表。
+- 新增“时间信件提醒”二级列表：
+  - 未读提醒优先展示。
+  - 支持多封已到达时间的信件。
+  - 每封提醒展示标题、收件角色、送达时间、未读/已读状态。
+  - 点按单封提醒后打开对应时间信件详情。
+- 已读策略：
+  - 成功打开详情后，本地缓存立即标记已读。
+  - 后端配置可用时同步调用 `POST /mailbox/letters/{userId}/{letterId}/read`。
+  - 只标记当前打开的提醒，不影响其它未读信件。
+- QA 覆盖：
+  - iOS reminder smoke 构造两封 mailbox reminder，打开一封后断言未读数从 2 变 1。
+  - 后端 lifecycle smoke 覆盖 read endpoint，确认 Postgres/部署环境下 mailbox 状态回传为 `read`。
 
 ## 验证入口
 
@@ -99,4 +117,4 @@ Scripts/QA/prd-stitch-ui/run-backend-time-letter-lifecycle-smoke.sh
 
 - APNs/provider 级远程推送送达证据。
 - 真机通知权限、前后台、锁屏提醒实测截图和日志。
-- mailbox 已读/归档交互与消息中心聚合策略。
+- mailbox 归档交互与更完整的消息中心聚合策略。
