@@ -214,6 +214,11 @@ final class EchoViewModel {
 
     func markStoredDelayedReplyArrived(_ delayedReply: EchoDelayedReply) {
         pendingDelayedReply = nil
+        EchoReplyMessageStore.shared.saveArrivedReply(
+            id: delayedReply.id,
+            deliverAt: delayedReply.deliverAt,
+            trigger: delayedReply.trigger.rawValue
+        )
         EchoDelayedReplyStore.shared.clear()
         updateState(.replied)
     }

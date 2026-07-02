@@ -5,6 +5,7 @@ enum InAppMessageKind: String, Codable, CaseIterable {
     case familyInvitation
     case careSignal
     case systemNotice
+    case echoReply
 
     var displayTitle: String {
         switch self {
@@ -16,6 +17,8 @@ enum InAppMessageKind: String, Codable, CaseIterable {
             return "关怀提醒"
         case .systemNotice:
             return "系统通知"
+        case .echoReply:
+            return "回响回信"
         }
     }
 }
@@ -100,6 +103,22 @@ extension SystemNoticeMessageSource {
     var isSystemNoticeVisibleInMessageCenter: Bool {
         let status = systemNoticeStatus.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return status == "published" || status == "active"
+    }
+}
+
+protocol EchoReplyMessageSource {
+    var echoReplyId: String { get }
+    var echoReplyTitle: String { get }
+    var echoReplySummary: String { get }
+    var echoReplyStatus: String { get }
+    var echoReplyDeliveredAt: String { get }
+    var echoReplyTrigger: String { get }
+}
+
+extension EchoReplyMessageSource {
+    var isEchoReplyVisibleInMessageCenter: Bool {
+        let status = echoReplyStatus.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return status == "arrived" || status == "delivered" || status == "unread"
     }
 }
 
@@ -360,6 +379,40 @@ struct InAppMessage: Codable, Equatable {
         )
     }
 
+    static func fromEchoReply(_ source: EchoReplyMessageSource) -> InAppMessage? {
+        guard source.isEchoReplyVisibleInMessageCenter else {
+            return nil
+        }
+
+        let status = InAppMessageStatus(rawValue: source.echoReplyStatus) ?? .unread
+        return InAppMessage(
+            id: "echo-reply-\(source.echoReplyId)",
+            kind: .echoReply,
+            title: source.echoReplyTitle,
+            summary: source.echoReplySummary,
+            status: status,
+            deliveredAt: source.echoReplyDeliveredAt,
+            readAt: nil,
+            archivedAt: nil,
+            sourceArchiveItemId: nil,
+            ownerUserId: nil,
+            familyMemberId: nil,
+            careSignalId: nil,
+            careSignalStatus: nil,
+            careSignalSeverity: nil,
+            systemNoticeId: nil,
+            systemNoticeCategory: nil,
+            systemNoticeSeverity: nil,
+            invitationStatus: nil,
+            accessStatus: nil,
+            recipientRole: "echoReply:\(source.echoReplyTrigger)",
+            metadataOnly: true,
+            contentRedacted: false,
+            isActionable: true,
+            unavailableReason: nil
+        )
+    }
+
     static func unavailableCandidate(kind: InAppMessageKind, title: String, reason: String) -> InAppMessage {
         InAppMessage(
             id: "candidate-\(kind.rawValue)",
@@ -410,6 +463,15 @@ struct StaticSystemNoticeMessageSource: SystemNoticeMessageSource, Codable {
     let systemNoticeUpdatedAt: String
 }
 
+struct StaticEchoReplyMessageSource: EchoReplyMessageSource, Codable {
+    let echoReplyId: String
+    let echoReplyTitle: String
+    let echoReplySummary: String
+    let echoReplyStatus: String
+    let echoReplyDeliveredAt: String
+    let echoReplyTrigger: String
+}
+
 final class SystemNoticeMessageStore {
     static let shared = SystemNoticeMessageStore()
 
@@ -430,6 +492,49 @@ final class SystemNoticeMessageStore {
             return
         }
         UserDefaults.standard.set(data, forKey: storageKey)
+    }
+
+    func clear() {
+        UserDefaults.standard.removeObject(forKey: storageKey)
+    }
+}
+
+final class EchoReplyMessageStore {
+    static let shared = EchoReplyMessageStore()
+
+    private let storageKey = "dj.inAppMessage.echoReply.sources"
+    private let isoFormatter = ISO8601DateFormatter()
+
+    private init() {}
+
+    func sources() -> [EchoReplyMessageSource] {
+        guard let data = UserDefaults.standard.data(forKey: storageKey),
+              let replies = try? JSONDecoder().decode([StaticEchoReplyMessageSource].self, from: data) else {
+            return []
+        }
+        return replies
+    }
+
+    func save(_ replies: [StaticEchoReplyMessageSource]) {
+        guard let data = try? JSONEncoder().encode(replies) else {
+            return
+        }
+        UserDefaults.standard.set(data, forKey: storageKey)
+    }
+
+    func saveArrivedReply(id: String, deliverAt: Date, trigger: String) {
+        let source = StaticEchoReplyMessageSource(
+            echoReplyId: id,
+            echoReplyTitle: "回响回信已抵达",
+            echoReplySummary: "之前等待的回响已经准备好，可以继续对话。",
+            echoReplyStatus: "unread",
+            echoReplyDeliveredAt: isoFormatter.string(from: deliverAt),
+            echoReplyTrigger: trigger
+        )
+        var current = sources().compactMap { $0 as? StaticEchoReplyMessageSource }
+        current.removeAll { $0.echoReplyId == source.echoReplyId }
+        current.insert(source, at: 0)
+        save(Array(current.prefix(20)))
     }
 
     func clear() {

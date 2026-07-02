@@ -161,7 +161,7 @@
   - 只有历史消息时，展示已归档或历史入口。
 - QA 覆盖：
   - `in-app-message-center-shell-check.swift` 验证入口标题由 snapshot 统一生成。
-  - `run-time-letter-dispatch-reminder-smoke.sh` 验证 timeLetter + familyInvitation + careSignal + systemNotice 共 8 条未读时，入口文案为 `8 条消息待处理 · 查看`。
+  - `run-time-letter-dispatch-reminder-smoke.sh` 验证 timeLetter + familyInvitation + careSignal + systemNotice + echoReply 共 9 条未读时，入口文案为 `9 条消息待处理 · 查看`。
 
 ## 2026-07-02 系统通知接入 InAppMessage
 
@@ -177,6 +177,21 @@
 - QA 覆盖：
   - `in-app-message-center-shell-check.swift` 验证 `SystemNoticeMessageSource`、`fromSystemNotice`、`systemNoticeMessages`、`openSystemNoticeMessage`。
   - `run-time-letter-dispatch-reminder-smoke.sh` 构造 published + draft 两类系统通知，断言 published 计数为 1，draft 不进入消息中心。
+
+## 2026-07-02 回响回信接入 InAppMessage
+
+- 最小 provider：
+  - 新增 `EchoReplyMessageSource` 和本地 `EchoReplyMessageStore`。
+  - `EchoViewModel.markStoredDelayedReplyArrived(_:)` 在等待回信到达时写入一条 `echoReply` 消息。
+- 入消息中心规则：
+  - `echoReplyStatus=unread` / `arrived` / `delivered` 进入消息中心。
+  - 仍在等待中的 pending delayed reply 不进入消息中心，避免未到达回信提前打扰用户。
+- 点击策略：
+  - 点击回响回信后标记已读，并切换到回响 Tab。
+  - 归档沿用统一本地 `InAppMessage` 状态，避免已处理回信长期占用未读入口。
+- QA 覆盖：
+  - `in-app-message-center-shell-check.swift` 验证 `EchoReplyMessageSource`、`fromEchoReply`、`echoReplyMessages`、`openEchoReplyMessage`。
+  - `run-time-letter-dispatch-reminder-smoke.sh` 构造一条 arrived Echo 回信，断言 `echoReply` 计数为 1。
 
 ## 验证入口
 

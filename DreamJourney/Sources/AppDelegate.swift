@@ -2341,6 +2341,7 @@ private extension AppDelegate {
         UserDefaults.standard.removeObject(forKey: "dj.memoryArchive.items.\(userId)")
         UserDefaults.standard.removeObject(forKey: "dj.memoryArchive.timeLetterMailbox.\(userId)")
         UserDefaults.standard.removeObject(forKey: "dj.inAppMessage.localState.\(userId)")
+        EchoReplyMessageStore.shared.clear()
 
         var deliveredLetter = MemoryArchiveItemFactory.makeTimeLetter(
             note: "这封信已由后端投递，不应再被本地 due 计数重复计算。",
@@ -2494,12 +2495,23 @@ private extension AppDelegate {
                 systemNoticeUpdatedAt: now
             ),
         ]
+        EchoReplyMessageStore.shared.save([
+            StaticEchoReplyMessageSource(
+                echoReplyId: "echo-delayed-reply-uiqa",
+                echoReplyTitle: "回响回信已抵达",
+                echoReplySummary: "之前等待的回响已经准备好，可以继续对话。",
+                echoReplyStatus: "unread",
+                echoReplyDeliveredAt: now,
+                echoReplyTrigger: "contentSignal"
+            ),
+        ])
 
         let dueLetters = MemoryArchiveRepository.shared.dueTimeLetters()
         let mailboxReminders = MemoryArchiveRepository.shared.timeLetterMailboxReminders()
         let inAppMessageSnapshot = MemoryArchiveRepository.shared.inAppMessageCenterSnapshot(
             familyInvitationSources: familyInvitationSources,
             careSignalSources: careSignalSources,
+            echoReplySources: EchoReplyMessageStore.shared.sources(),
             systemNoticeSources: systemNoticeSources
         )
         let reminderCount = MemoryArchiveRepository.shared.timeLetterReminderCount()
@@ -2540,11 +2552,13 @@ private extension AppDelegate {
         let inAppMessageSnapshotAfterArchive = MemoryArchiveRepository.shared.inAppMessageCenterSnapshot(
             familyInvitationSources: familyInvitationSources,
             careSignalSources: careSignalSources,
+            echoReplySources: EchoReplyMessageStore.shared.sources(),
             systemNoticeSources: systemNoticeSources
         )
         let familyInvitationMessageCount = inAppMessageSnapshot.sourceCounts["familyInvitation"] ?? 0
         let careSignalMessageCount = inAppMessageSnapshot.sourceCounts["careSignal"] ?? 0
         let systemNoticeMessageCount = inAppMessageSnapshot.sourceCounts["systemNotice"] ?? 0
+        let echoReplyMessageCount = inAppMessageSnapshot.sourceCounts["echoReply"] ?? 0
         let inAppMessageCenterEntryTitle = inAppMessageSnapshot.entryButtonTitle(timeLetterReminderCount: reminderCount) ?? ""
         let reminderArchiveStatusPersisted = openedReminderId.map { reminderId in
             remindersAfterArchive.first(where: { $0.id == reminderId })?.isArchived == true
@@ -2561,12 +2575,13 @@ private extension AppDelegate {
             && dueLetters.contains(where: { $0.id == secondDeliveredLetter.id }) == false
             && mailboxReminders.map(\.sourceArchiveItemId).contains(deliveredLetter.id)
             && mailboxReminders.map(\.sourceArchiveItemId).contains(secondDeliveredLetter.id)
-            && inAppMessageSnapshot.totalCount == 8
+            && inAppMessageSnapshot.totalCount == 9
             && inAppMessageSnapshot.sourceCounts["timeLetter"] == 2
             && familyInvitationMessageCount == 2
             && careSignalMessageCount == 3
             && systemNoticeMessageCount == 1
-            && inAppMessageCenterEntryTitle == "8 条消息待处理 · 查看"
+            && echoReplyMessageCount == 1
+            && inAppMessageCenterEntryTitle == "9 条消息待处理 · 查看"
             && reminderCount == 2
             && reminderDetailResolved
             && reminderDetailNoteVisible
@@ -2577,7 +2592,7 @@ private extension AppDelegate {
             && reminderArchiveStatusPersisted
             && secondReminderStillUnreadAfterArchive
             && inAppMessageSnapshotAfterArchive.archivedCount == 1
-            && inAppMessageSnapshotAfterArchive.unreadCount == 7
+            && inAppMessageSnapshotAfterArchive.unreadCount == 8
             && reminderCountAfterArchive == 1
 
         writeTimeLetterDispatchReminderSmokeResult([
@@ -2599,6 +2614,7 @@ private extension AppDelegate {
             "careNormalSignalExcluded": inAppMessageSnapshot.messages.contains { $0.careSignalId == "care-signal-normal-uiqa" } == false,
             "systemNoticeMessageCount": systemNoticeMessageCount,
             "systemDraftNoticeExcluded": inAppMessageSnapshot.messages.contains { $0.systemNoticeId == "system-notice-draft-uiqa" } == false,
+            "echoReplyMessageCount": echoReplyMessageCount,
             "reminderCount": reminderCount,
             "timeLetterReminderDetailResolved": reminderDetailResolved,
             "timeLetterReminderDetailNoteVisible": reminderDetailNoteVisible,

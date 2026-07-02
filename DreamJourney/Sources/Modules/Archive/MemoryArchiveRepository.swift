@@ -371,6 +371,7 @@ final class MemoryArchiveRepository {
         includeUnavailableCandidates: Bool = false,
         familyInvitationSources: [FamilyInvitationMessageSource] = [],
         careSignalSources: [CareSignalMessageSource] = [],
+        echoReplySources: [EchoReplyMessageSource] = [],
         systemNoticeSources: [SystemNoticeMessageSource] = []
     ) -> InAppMessageCenterSnapshot {
         let timeLetterMessages = timeLetterMailboxReminders()
@@ -384,9 +385,16 @@ final class MemoryArchiveRepository {
         let systemNoticeMessages = systemNoticeSources
             .compactMap(InAppMessage.fromSystemNotice)
             .map(applyLocalInAppMessageStateIfNeeded)
+        let echoReplyMessages = echoReplySources
+            .compactMap(InAppMessage.fromEchoReply)
+            .map(applyLocalInAppMessageStateIfNeeded)
         let hiddenCandidates: [InAppMessage] = []
         let visibleMessages = InAppMessageCenterSnapshot.sortedMessages(
-            timeLetterMessages + familyInvitationMessages + careSignalMessages + systemNoticeMessages
+            timeLetterMessages
+                + familyInvitationMessages
+                + careSignalMessages
+                + systemNoticeMessages
+                + echoReplyMessages
         )
         let candidateMessages = includeUnavailableCandidates ? hiddenCandidates : []
         return InAppMessageCenterSnapshot(

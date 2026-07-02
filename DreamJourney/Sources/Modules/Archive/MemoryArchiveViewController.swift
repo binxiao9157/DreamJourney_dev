@@ -2705,6 +2705,7 @@ final class MemoryArchiveViewController: UIViewController {
         repository.inAppMessageCenterSnapshot(
             familyInvitationSources: FamilyRepository.shared.getAll().map { $0 as FamilyInvitationMessageSource },
             careSignalSources: currentCareSignalMessageSources(),
+            echoReplySources: EchoReplyMessageStore.shared.sources(),
             systemNoticeSources: SystemNoticeMessageStore.shared.sources()
         )
     }
@@ -2766,6 +2767,8 @@ final class MemoryArchiveViewController: UIViewController {
             openCareSignalMessage(message)
         case .systemNotice:
             openSystemNoticeMessage(message)
+        case .echoReply:
+            openEchoReplyMessage(message)
         }
     }
 
@@ -2804,6 +2807,17 @@ final class MemoryArchiveViewController: UIViewController {
         )
         alert.addAction(UIAlertAction(title: "知道了", style: .default))
         present(alert, animated: true)
+    }
+
+    private func openEchoReplyMessage(_ message: InAppMessage) {
+        repository.markInAppMessageRead(message) { [weak self] _ in
+            self?.refreshContent()
+        }
+        guard let tabBarController else {
+            navigationController?.pushViewController(EchoViewController(), animated: true)
+            return
+        }
+        tabBarController.selectedIndex = min(1, (tabBarController.viewControllers?.count ?? 1) - 1)
     }
 
     private func openTimeLetterReminder(_ reminder: TimeLetterMailboxReminder) {

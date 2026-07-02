@@ -35,6 +35,7 @@ let docs = read("docs/superpowers/status/2026-06-21-time-letter-public-delivery.
     "case familyInvitation",
     "case careSignal",
     "case systemNotice",
+    "case echoReply",
     "enum InAppMessageStatus",
     "case unread",
     "case read",
@@ -60,6 +61,11 @@ let docs = read("docs/superpowers/status/2026-06-21-time-letter-public-delivery.
     "systemNoticeId",
     "systemNoticeCategory",
     "systemNoticeSeverity",
+    "protocol EchoReplyMessageSource",
+    "static func fromEchoReply",
+    "echoReplyId",
+    "echoReplyTrigger",
+    "EchoReplyMessageStore",
 ].forEach {
     assertContains(messageCenter, $0, "unified model should include \($0)")
 }
@@ -113,6 +119,11 @@ assertContains(
     repository,
     "systemNoticeMessages",
     "repository should aggregate system notice messages"
+)
+assertContains(
+    repository,
+    "echoReplyMessages",
+    "repository should aggregate echo reply messages"
 )
 assertContains(
     repository,
@@ -180,6 +191,16 @@ assertContains(
     "system notice messages should route through a minimal system notice handler"
 )
 assertContains(
+    archiveView,
+    "openEchoReplyMessage",
+    "echo reply messages should open Echo and mark the reply read"
+)
+assertContains(
+    archiveView,
+    "EchoReplyMessageStore.shared.sources()",
+    "Archive message center snapshot should include arrived Echo delayed replies"
+)
+assertContains(
     appDelegate,
     "inAppMessageCenterSnapshot",
     "UIQA smoke should assert the unified message center snapshot"
@@ -210,6 +231,11 @@ assertContains(
     "UIQA smoke should export system notice message count"
 )
 assertContains(
+    appDelegate,
+    "echoReplyMessageCount",
+    "UIQA smoke should export echo reply message count"
+)
+assertContains(
     project,
     "InAppMessageCenter.swift",
     "new model should be included in the Xcode target"
@@ -228,6 +254,11 @@ assertContains(
     docs,
     "系统通知接入 InAppMessage",
     "time-letter status doc should document the system notice provider"
+)
+assertContains(
+    docs,
+    "回响回信接入 InAppMessage",
+    "time-letter status doc should document the echo reply provider"
 )
 
 print("In-app message center shell checks passed")
