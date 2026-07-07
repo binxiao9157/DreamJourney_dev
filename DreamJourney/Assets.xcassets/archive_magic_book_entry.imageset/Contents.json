@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "archive_magic_book_entry.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

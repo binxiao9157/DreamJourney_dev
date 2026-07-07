@@ -12,7 +12,6 @@ private enum ArchiveLayout {
     static let afterRemoteCaptionSpacing: CGFloat = 24
     static let afterListSpacing: CGFloat = 32
     static let bookEntryCornerRadius: CGFloat = 26
-    static let bookCoverCornerRadius: CGFloat = 22
     static let materialsHeaderSpacing: CGFloat = 6
     static let featureGridHeight: CGFloat = 140
     static let featureGridGap: CGFloat = 16
@@ -517,10 +516,7 @@ final class MemoryArchiveViewController: UIViewController {
     private weak var headerTitleLabel: UILabel?
     private weak var headerSubtitleLabel: UILabel?
     private weak var bookEntryControl: UIControl?
-    private weak var bookEntryModeLabel: UILabel?
     private weak var bookEntryTitleLabel: UILabel?
-    private weak var bookEntrySubtitleLabel: UILabel?
-    private weak var bookEntryMetaLabel: UILabel?
     private weak var primaryCTAControl: UIControl?
     private weak var primaryCTAEyebrowLabel: UILabel?
     private weak var primaryCTATitleLabel: UILabel?
@@ -774,9 +770,7 @@ final class MemoryArchiveViewController: UIViewController {
 
     private func updateAutobiographyPageCopy() {
         let isSelfMode = isSelfAutobiographyMode
-        let summary = repository.summary()
         let bookTitle = isSelfMode ? "我的自传" : "\(archivePersonaName)的故事"
-        let estimatedPages = max(1, summary.total + 1)
         view.backgroundColor = DJDesignTokens.Color.background
         scrollView.backgroundColor = DJDesignTokens.Color.background
 
@@ -785,12 +779,7 @@ final class MemoryArchiveViewController: UIViewController {
             ? "上方进入完整自传，下方管理你记录的记忆素材。"
             : "上方翻阅 \(archivePersonaName) 的故事，下方查看已沉淀的素材。"
 
-        bookEntryModeLabel?.text = isSelfMode ? "AUTOBIOGRAPHY" : "FAMILY STORY"
         bookEntryTitleLabel?.text = bookTitle
-        bookEntrySubtitleLabel?.text = isSelfMode
-            ? "一本合上的生命书，点击后翻开阅读。"
-            : "一本合上的故事书，点击后翻开阅读。"
-        bookEntryMetaLabel?.text = "3 章 · \(estimatedPages) 页 · \(summary.total) 段素材"
         bookEntryControl?.accessibilityLabel = "\(bookTitle)，点击翻开书本"
 
         materialsTitleLabel?.text = isSelfMode ? "我记录的记忆" : "\(archivePersonaName)的记忆素材"
@@ -1041,231 +1030,118 @@ final class MemoryArchiveViewController: UIViewController {
         control.addTarget(self, action: #selector(autobiographyBookTapped), for: .touchUpInside)
         DJDesignTokens.applySoftShadow(to: control)
 
-        let bookShadow = UIView()
-        bookShadow.backgroundColor = UIColor.black.withAlphaComponent(0.08)
-        bookShadow.layer.cornerRadius = 22
+        let imageContainer = UIView()
+        imageContainer.backgroundColor = UIColor(red: 0.16, green: 0.11, blue: 0.17, alpha: 1)
+        imageContainer.layer.cornerRadius = ArchiveLayout.bookEntryCornerRadius
+        imageContainer.layer.masksToBounds = true
 
-        let pageBlock = UIView()
-        pageBlock.backgroundColor = UIColor(red: 0.88, green: 0.82, blue: 0.70, alpha: 1)
-        pageBlock.layer.cornerRadius = ArchiveLayout.bookCoverCornerRadius
-        pageBlock.layer.borderWidth = 1
-        pageBlock.layer.borderColor = UIColor(red: 0.64, green: 0.52, blue: 0.36, alpha: 0.32).cgColor
+        let imageView = UIImageView(image: UIImage(named: "archive_magic_book_entry"))
+        imageView.contentMode = .scaleAspectFill
+        imageView.clipsToBounds = true
 
-        let rightPageEdge = UIView()
-        rightPageEdge.backgroundColor = UIColor(red: 0.96, green: 0.92, blue: 0.82, alpha: 1)
-        rightPageEdge.layer.cornerRadius = 10
-        rightPageEdge.layer.maskedCorners = [.layerMaxXMinYCorner, .layerMaxXMaxYCorner]
-        rightPageEdge.clipsToBounds = true
+        let softVeil = UIView()
+        softVeil.backgroundColor = UIColor.black.withAlphaComponent(0.08)
 
-        let pageEdgeLines = UIStackView()
-        pageEdgeLines.axis = .vertical
-        pageEdgeLines.distribution = .fillEqually
-        pageEdgeLines.spacing = 5
-        (0..<12).forEach { index in
-            let line = UIView()
-            line.backgroundColor = UIColor(red: 0.58, green: 0.46, blue: 0.30, alpha: index % 2 == 0 ? 0.18 : 0.10)
-            pageEdgeLines.addArrangedSubview(line)
-            line.translatesAutoresizingMaskIntoConstraints = false
-            line.heightAnchor.constraint(equalToConstant: 1).isActive = true
-        }
-
-        let cover = UIView()
-        cover.backgroundColor = UIColor(red: 0.34, green: 0.16, blue: 0.10, alpha: 1)
-        cover.layer.cornerRadius = ArchiveLayout.bookCoverCornerRadius
-        cover.layer.borderWidth = 1
-        cover.layer.borderColor = UIColor(red: 0.91, green: 0.70, blue: 0.40, alpha: 0.34).cgColor
-        cover.clipsToBounds = true
-
-        let spine = UIView()
-        spine.backgroundColor = UIColor(red: 0.22, green: 0.10, blue: 0.07, alpha: 1)
-
-        let spineRuleTop = UIView()
-        spineRuleTop.backgroundColor = UIColor(red: 0.92, green: 0.70, blue: 0.38, alpha: 0.45)
-        let spineRuleBottom = UIView()
-        spineRuleBottom.backgroundColor = UIColor(red: 0.92, green: 0.70, blue: 0.38, alpha: 0.32)
-
-        let innerFrame = UIView()
-        innerFrame.layer.cornerRadius = 17
-        innerFrame.layer.borderWidth = 1
-        innerFrame.layer.borderColor = UIColor(red: 0.96, green: 0.78, blue: 0.46, alpha: 0.35).cgColor
-        innerFrame.isUserInteractionEnabled = false
-
-        let coverRuleTop = UIView()
-        coverRuleTop.backgroundColor = UIColor(red: 0.96, green: 0.78, blue: 0.46, alpha: 0.48)
-        let coverRuleBottom = UIView()
-        coverRuleBottom.backgroundColor = UIColor(red: 0.96, green: 0.78, blue: 0.46, alpha: 0.36)
-
-        let modeLabel = PaddingLabel(horizontalInset: 10, verticalInset: 5)
-        modeLabel.text = isSelfAutobiographyMode ? "AUTOBIOGRAPHY" : "FAMILY STORY"
-        modeLabel.font = DJDesignTokens.Font.label(10)
-        modeLabel.textColor = UIColor(red: 0.97, green: 0.78, blue: 0.44, alpha: 0.92)
-        modeLabel.backgroundColor = UIColor.black.withAlphaComponent(0.12)
-        modeLabel.layer.cornerRadius = 11
-        modeLabel.layer.masksToBounds = true
+        let bottomOverlay = UIView()
+        bottomOverlay.backgroundColor = UIColor.black.withAlphaComponent(0.24)
+        bottomOverlay.layer.cornerRadius = 18
+        bottomOverlay.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
 
         let titleLabel = UILabel()
         titleLabel.text = isSelfAutobiographyMode ? "我的自传" : "\(archivePersonaName)的故事"
-        titleLabel.font = DJDesignTokens.Font.display(31)
-        titleLabel.textColor = UIColor(red: 1.0, green: 0.82, blue: 0.50, alpha: 1)
-        titleLabel.shadowColor = UIColor.black.withAlphaComponent(0.24)
+        titleLabel.font = DJDesignTokens.Font.title(24)
+        titleLabel.textColor = .white
+        titleLabel.shadowColor = UIColor.black.withAlphaComponent(0.40)
         titleLabel.shadowOffset = CGSize(width: 0, height: 1)
         titleLabel.numberOfLines = 1
         titleLabel.adjustsFontSizeToFitWidth = true
-        titleLabel.minimumScaleFactor = 0.76
-
-        let subtitleLabel = UILabel()
-        subtitleLabel.text = isSelfAutobiographyMode
-            ? "一本合上的生命书，点击后翻开阅读。"
-            : "一本合上的故事书，点击后翻开阅读。"
-        subtitleLabel.font = DJDesignTokens.Font.body(13)
-        subtitleLabel.textColor = UIColor.white.withAlphaComponent(0.78)
-        subtitleLabel.numberOfLines = 2
-
-        let metaLabel = UILabel()
-        metaLabel.text = "3 章 · 1 页 · 0 段素材"
-        metaLabel.font = DJDesignTokens.Font.label(12)
-        metaLabel.textColor = UIColor(red: 0.96, green: 0.80, blue: 0.50, alpha: 0.78)
-        metaLabel.numberOfLines = 1
+        titleLabel.minimumScaleFactor = 0.78
 
         let enterLabel = UILabel()
-        enterLabel.text = "翻开"
+        enterLabel.text = "翻开阅读"
         enterLabel.font = DJDesignTokens.Font.label(13)
-        enterLabel.textColor = UIColor(red: 1.0, green: 0.86, blue: 0.56, alpha: 1)
+        enterLabel.textColor = UIColor(red: 1.0, green: 0.84, blue: 0.48, alpha: 1)
 
         let enterIcon = UIImageView(image: UIImage(systemName: "chevron.right"))
-        enterIcon.tintColor = UIColor(red: 1.0, green: 0.86, blue: 0.56, alpha: 1)
+        enterIcon.tintColor = UIColor(red: 1.0, green: 0.84, blue: 0.48, alpha: 1)
         enterIcon.contentMode = .scaleAspectFit
 
         let enterRow = UIStackView(arrangedSubviews: [enterLabel, enterIcon])
         enterRow.alignment = .center
         enterRow.spacing = 6
 
-        let textStack = UIStackView(arrangedSubviews: [
-            modeLabel,
-            titleLabel,
-            coverRuleTop,
-            subtitleLabel,
-            metaLabel,
-            enterRow,
-            coverRuleBottom,
-        ])
-        textStack.axis = .vertical
-        textStack.alignment = .center
-        textStack.spacing = 9
-        textStack.isUserInteractionEnabled = false
+        let titleStack = UIStackView(arrangedSubviews: [titleLabel])
+        titleStack.axis = .vertical
+        titleStack.alignment = .leading
+        titleStack.spacing = 4
+
+        let bottomRow = UIStackView(arrangedSubviews: [titleStack, enterRow])
+        bottomRow.axis = .horizontal
+        bottomRow.alignment = .center
+        bottomRow.spacing = 14
+        bottomRow.isUserInteractionEnabled = false
+
+        titleStack.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        enterRow.setContentHuggingPriority(.required, for: .horizontal)
 
         [
-            bookShadow,
-            pageBlock,
-            rightPageEdge,
-            pageEdgeLines,
-            cover,
-            spine,
-            spineRuleTop,
-            spineRuleBottom,
-            innerFrame,
-            coverRuleTop,
-            coverRuleBottom,
-            modeLabel,
+            imageContainer,
+            imageView,
+            softVeil,
+            bottomOverlay,
             titleLabel,
-            subtitleLabel,
-            metaLabel,
+            titleStack,
+            bottomRow,
             enterRow,
             enterLabel,
             enterIcon,
         ].forEach { $0.isUserInteractionEnabled = false }
 
-        rightPageEdge.addSubview(pageEdgeLines)
-        control.addSubview(bookShadow)
-        control.addSubview(pageBlock)
-        pageBlock.addSubview(rightPageEdge)
-        control.addSubview(cover)
-        cover.addSubview(spine)
-        cover.addSubview(innerFrame)
-        spine.addSubview(spineRuleTop)
-        spine.addSubview(spineRuleBottom)
-        cover.addSubview(textStack)
+        control.addSubview(imageContainer)
+        imageContainer.addSubview(imageView)
+        imageContainer.addSubview(softVeil)
+        imageContainer.addSubview(bottomOverlay)
+        imageContainer.addSubview(bottomRow)
 
         [
-            bookShadow,
-            pageBlock,
-            rightPageEdge,
-            pageEdgeLines,
-            cover,
-            spine,
-            spineRuleTop,
-            spineRuleBottom,
-            innerFrame,
-            textStack,
-            modeLabel,
-            titleLabel,
-            coverRuleTop,
-            subtitleLabel,
-            metaLabel,
+            imageContainer,
+            imageView,
+            softVeil,
+            bottomOverlay,
+            titleStack,
+            bottomRow,
             enterRow,
             enterLabel,
             enterIcon,
-            coverRuleBottom,
         ].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
 
         NSLayoutConstraint.activate([
-            control.heightAnchor.constraint(equalToConstant: 224),
+            control.heightAnchor.constraint(equalToConstant: 238),
 
-            bookShadow.leadingAnchor.constraint(equalTo: control.leadingAnchor, constant: 36),
-            bookShadow.trailingAnchor.constraint(equalTo: control.trailingAnchor, constant: -24),
-            bookShadow.bottomAnchor.constraint(equalTo: control.bottomAnchor, constant: -10),
-            bookShadow.heightAnchor.constraint(equalToConstant: 24),
+            imageContainer.topAnchor.constraint(equalTo: control.topAnchor),
+            imageContainer.leadingAnchor.constraint(equalTo: control.leadingAnchor),
+            imageContainer.trailingAnchor.constraint(equalTo: control.trailingAnchor),
+            imageContainer.bottomAnchor.constraint(equalTo: control.bottomAnchor),
 
-            pageBlock.topAnchor.constraint(equalTo: control.topAnchor, constant: 24),
-            pageBlock.leadingAnchor.constraint(equalTo: control.leadingAnchor, constant: 30),
-            pageBlock.trailingAnchor.constraint(equalTo: control.trailingAnchor, constant: -20),
-            pageBlock.bottomAnchor.constraint(equalTo: control.bottomAnchor, constant: -18),
+            imageView.topAnchor.constraint(equalTo: imageContainer.topAnchor),
+            imageView.leadingAnchor.constraint(equalTo: imageContainer.leadingAnchor),
+            imageView.trailingAnchor.constraint(equalTo: imageContainer.trailingAnchor),
+            imageView.bottomAnchor.constraint(equalTo: imageContainer.bottomAnchor),
 
-            rightPageEdge.topAnchor.constraint(equalTo: pageBlock.topAnchor, constant: 10),
-            rightPageEdge.trailingAnchor.constraint(equalTo: pageBlock.trailingAnchor, constant: -4),
-            rightPageEdge.bottomAnchor.constraint(equalTo: pageBlock.bottomAnchor, constant: -9),
-            rightPageEdge.widthAnchor.constraint(equalToConstant: 26),
+            softVeil.topAnchor.constraint(equalTo: imageContainer.topAnchor),
+            softVeil.leadingAnchor.constraint(equalTo: imageContainer.leadingAnchor),
+            softVeil.trailingAnchor.constraint(equalTo: imageContainer.trailingAnchor),
+            softVeil.bottomAnchor.constraint(equalTo: imageContainer.bottomAnchor),
 
-            pageEdgeLines.topAnchor.constraint(equalTo: rightPageEdge.topAnchor, constant: 12),
-            pageEdgeLines.leadingAnchor.constraint(equalTo: rightPageEdge.leadingAnchor, constant: 4),
-            pageEdgeLines.trailingAnchor.constraint(equalTo: rightPageEdge.trailingAnchor, constant: -4),
-            pageEdgeLines.bottomAnchor.constraint(equalTo: rightPageEdge.bottomAnchor, constant: -12),
+            bottomOverlay.leadingAnchor.constraint(equalTo: imageContainer.leadingAnchor),
+            bottomOverlay.trailingAnchor.constraint(equalTo: imageContainer.trailingAnchor),
+            bottomOverlay.bottomAnchor.constraint(equalTo: imageContainer.bottomAnchor),
+            bottomOverlay.heightAnchor.constraint(equalToConstant: 56),
 
-            cover.topAnchor.constraint(equalTo: control.topAnchor, constant: 12),
-            cover.leadingAnchor.constraint(equalTo: control.leadingAnchor, constant: 16),
-            cover.trailingAnchor.constraint(equalTo: control.trailingAnchor, constant: -34),
-            cover.bottomAnchor.constraint(equalTo: control.bottomAnchor, constant: -28),
+            bottomRow.leadingAnchor.constraint(equalTo: imageContainer.leadingAnchor, constant: 18),
+            bottomRow.trailingAnchor.constraint(equalTo: imageContainer.trailingAnchor, constant: -18),
+            bottomRow.bottomAnchor.constraint(equalTo: imageContainer.bottomAnchor, constant: -14),
 
-            spine.topAnchor.constraint(equalTo: cover.topAnchor),
-            spine.leadingAnchor.constraint(equalTo: cover.leadingAnchor),
-            spine.bottomAnchor.constraint(equalTo: cover.bottomAnchor),
-            spine.widthAnchor.constraint(equalToConstant: 48),
-
-            spineRuleTop.leadingAnchor.constraint(equalTo: spine.leadingAnchor, constant: 12),
-            spineRuleTop.trailingAnchor.constraint(equalTo: spine.trailingAnchor, constant: -12),
-            spineRuleTop.topAnchor.constraint(equalTo: spine.topAnchor, constant: 28),
-            spineRuleTop.heightAnchor.constraint(equalToConstant: 1),
-
-            spineRuleBottom.leadingAnchor.constraint(equalTo: spine.leadingAnchor, constant: 12),
-            spineRuleBottom.trailingAnchor.constraint(equalTo: spine.trailingAnchor, constant: -12),
-            spineRuleBottom.bottomAnchor.constraint(equalTo: spine.bottomAnchor, constant: -28),
-            spineRuleBottom.heightAnchor.constraint(equalToConstant: 1),
-
-            innerFrame.topAnchor.constraint(equalTo: cover.topAnchor, constant: 18),
-            innerFrame.leadingAnchor.constraint(equalTo: spine.trailingAnchor, constant: 16),
-            innerFrame.trailingAnchor.constraint(equalTo: cover.trailingAnchor, constant: -18),
-            innerFrame.bottomAnchor.constraint(equalTo: cover.bottomAnchor, constant: -18),
-
-            textStack.leadingAnchor.constraint(equalTo: innerFrame.leadingAnchor, constant: 18),
-            textStack.trailingAnchor.constraint(equalTo: innerFrame.trailingAnchor, constant: -18),
-            textStack.centerYAnchor.constraint(equalTo: cover.centerYAnchor),
-            textStack.topAnchor.constraint(greaterThanOrEqualTo: innerFrame.topAnchor, constant: 14),
-            textStack.bottomAnchor.constraint(lessThanOrEqualTo: innerFrame.bottomAnchor, constant: -14),
-
-            coverRuleTop.widthAnchor.constraint(equalToConstant: 84),
-            coverRuleTop.heightAnchor.constraint(equalToConstant: 1),
-            coverRuleBottom.widthAnchor.constraint(equalToConstant: 54),
-            coverRuleBottom.heightAnchor.constraint(equalToConstant: 1),
             enterIcon.widthAnchor.constraint(equalToConstant: 13),
             enterIcon.heightAnchor.constraint(equalToConstant: 13),
         ])
@@ -1273,10 +1149,7 @@ final class MemoryArchiveViewController: UIViewController {
         control.accessibilityTraits = .button
         control.accessibilityLabel = isSelfAutobiographyMode ? "我的自传，点击进入完整书本" : "\(archivePersonaName)的故事，点击进入完整书本"
         bookEntryControl = control
-        bookEntryModeLabel = modeLabel
         bookEntryTitleLabel = titleLabel
-        bookEntrySubtitleLabel = subtitleLabel
-        bookEntryMetaLabel = metaLabel
         return control
     }
 
