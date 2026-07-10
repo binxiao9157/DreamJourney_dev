@@ -83,6 +83,8 @@ for required in [
 
 assertContains(runner, "DJRunTencentBackendPCMDriveMockSmoke", "runner should launch the app-side mock smoke")
 assertContains(runner, "DJTencentBackendPCMDriveMockVoiceProfileId=", "runner should pass an explicit ready voiceProfileId")
+assertContains(runner, "DJTencentBackendPCMDriveMockUserId=", "runner should pass the persisted voice profile owner")
+assertContains(runner, "VOICE_CLONE_READY_PROFILE_USER_ID", "runner should accept the deployed profile owner environment")
 assertContains(runner, "tencent-backend-pcm-drive-mock-smoke-result.json", "runner should poll the smoke result")
 assertContains(runner, "\"pcmChunkCount\"", "runner should verify PCM chunks were recorded")
 assertContains(runner, "\"finalChunkObserved\"", "runner should verify final chunk")

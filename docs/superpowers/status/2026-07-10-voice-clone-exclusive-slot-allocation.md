@@ -42,13 +42,28 @@
 - 后端 `verify_backend.sh`：141 项测试、编译、声音复刻合同 smoke、FastAPI smoke、`git diff --check` 全部通过。
 - iOS：10 个声音复刻/家人/Echo QA guard 通过。
 - iOS Debug 模拟器通用构建通过，使用本地 `com.yxj.dreamjourney.app` 覆盖，不改工程共享签名。
-- 本轮未运行真机，也未部署服务器。
+- 真机验收按当前决策延期，本轮完成部署与非真机组合门禁。
 
 ## 部署要求
 
 - 后端包含新表与 API 合同，必须重新构建并部署服务器容器，不能只重启旧镜像。
 - 部署后确认 `/config/runtime` 返回 `contractVersion=2`、`speakerSlotAllocationMode=exclusivePersistentSlot`。
 - 线上 smoke 必须使用已存在逻辑 profile 的 owner：`VOICE_CLONE_READY_PROFILE_ID` + `VOICE_CLONE_READY_PROFILE_USER_ID`，且不会创建或删除真实音色。
+
+## 线上部署结果
+
+- 后端 `main` 已部署到 `166e7e7`，API 容器完成重新构建，Postgres/Redis/API 运行正常。
+- Postgres 已创建 `voice_clone_slots`。
+- `/config/runtime.voiceClone` 已返回 `contractVersion=2`、`speakerSlotAllocationMode=exclusivePersistentSlot`、`speakerSlotReusePolicy=retireOnDelete`。
+- 真实 ready profile 已通过 `/voice/synthesis`，输出 `pcm16kMono`、16kHz、16-bit、mono。
+- 腾讯数智人 session deployed smoke 通过，使用后端 session 与 asset 来源。
+- 数字人 + 复刻音色非真机组合 gate 通过；iOS synthesis 与 Tencent runtime mock 均显式携带 profile owner，PCM 分块、顺序、final chunk 和打断清理通过。
+
+证据路径：
+
+- `tmp/visual-qa/prd-stitch-ui/backend-voice-clone-deployed-smoke/20260710-exclusive-slots-deployed/`
+- `tmp/visual-qa/prd-stitch-ui/backend-digital-human-session-smoke/20260710-post-deploy-digital-human-session/`
+- `tmp/visual-qa/prd-stitch-ui/digital-human-voice-clone-combo-gate/20260710-post-deploy-dh-voice-combo-final/`
 
 ## 验证入口
 

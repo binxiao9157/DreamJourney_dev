@@ -1085,7 +1085,9 @@ private extension AppDelegate {
 
     func runVoiceCloneSynthesisRuntimeSmoke() {
         let voiceProfileId = uiqaArgumentValue(prefix: "DJVoiceCloneProbeProfileId=") ?? "S_uiqa_voice_clone_probe_required"
-        let userId = UserManager.shared.currentUser?.id ?? "voice_clone_ios_uiqa"
+        let userId = uiqaArgumentValue(prefix: "DJVoiceCloneProbeUserId=")
+            ?? UserManager.shared.currentUser?.id
+            ?? "voice_clone_ios_uiqa"
 
         DreamJourneyBackendClient.shared.fetchVoiceCloneRuntimeCapability { [weak self] runtimeResult in
             DispatchQueue.main.async {
@@ -1097,6 +1099,7 @@ private extension AppDelegate {
                         "failureReason": "runtimeFetchFailed",
                         "error": error.localizedDescription,
                         "voiceProfileId": voiceProfileId,
+                        "userId": userId,
                     ])
                     print("[UI_QA] VoiceCloneSynthesisRuntimeSmoke failed reason=runtimeFetchFailed error=\(error.localizedDescription)")
                 case .success(let capability):
@@ -1105,6 +1108,7 @@ private extension AppDelegate {
                             "completed": false,
                             "failureReason": "runtimeSynthesisUnavailable",
                             "voiceProfileId": voiceProfileId,
+                            "userId": userId,
                             "provider": capability.provider,
                             "synthesisProviderReady": capability.synthesisProviderReady,
                             "voiceClone2TrialReady": capability.voiceClone2TrialReady,
@@ -1118,6 +1122,7 @@ private extension AppDelegate {
                             "completed": false,
                             "failureReason": "tencentAudioDriveUnavailable",
                             "voiceProfileId": voiceProfileId,
+                            "userId": userId,
                             "provider": capability.provider,
                             "synthesisProviderReady": capability.synthesisProviderReady,
                             "voiceClone2TrialReady": capability.voiceClone2TrialReady,
@@ -1146,6 +1151,7 @@ private extension AppDelegate {
                                     "failureReason": "synthesisFailed",
                                     "error": error.localizedDescription,
                                     "voiceProfileId": voiceProfileId,
+                                    "userId": userId,
                                     "provider": capability.provider,
                                     "synthesisProviderReady": capability.synthesisProviderReady,
                                     "voiceClone2TrialReady": capability.voiceClone2TrialReady,
@@ -1165,6 +1171,7 @@ private extension AppDelegate {
                                     "completed": pcmCompatible,
                                     "failureReason": pcmCompatible ? "" : "pcmContractMismatch",
                                     "voiceProfileId": synthesis.voiceProfileId,
+                                    "userId": userId,
                                     "provider": capability.provider,
                                     "providerMode": synthesis.providerMode,
                                     "synthesisProviderReady": capability.synthesisProviderReady,
@@ -2896,7 +2903,13 @@ private extension AppDelegate {
 
         tabBarController.selectedIndex = 1
         let voiceProfileId = uiqaArgumentValue(prefix: "DJTencentBackendPCMDriveMockVoiceProfileId=") ?? "S_uiqa_tencent_pcm_mock"
-        echoViewController.runUIQATencentBackendPCMDriveMockSmoke(voiceProfileId: voiceProfileId) { [weak self] payload in
+        let userId = uiqaArgumentValue(prefix: "DJTencentBackendPCMDriveMockUserId=")
+            ?? UserManager.shared.currentUser?.id
+            ?? "uiqa_tencent_backend_pcm_mock"
+        echoViewController.runUIQATencentBackendPCMDriveMockSmoke(
+            voiceProfileId: voiceProfileId,
+            userId: userId
+        ) { [weak self] payload in
             var result = payload
             result["selectedTabIndex"] = tabBarController.selectedIndex
             self?.writeTencentBackendPCMDriveMockSmokeResult(result)

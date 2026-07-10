@@ -14,6 +14,7 @@ DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT_DIR/tmp/visual-qa/prd-stitch-ui/De
 OUTPUT_ROOT="${OUTPUT_ROOT:-$ROOT_DIR/tmp/visual-qa/prd-stitch-ui/voice-clone-synthesis-runtime-smoke}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 VOICE_CLONE_READY_PROFILE_ID="${VOICE_CLONE_READY_PROFILE_ID:-}"
+VOICE_CLONE_READY_PROFILE_USER_ID="${VOICE_CLONE_READY_PROFILE_USER_ID:-}"
 LOCAL_BUNDLE_ID="${LOCAL_BUNDLE_ID:-com.yxj.dreamjourney.app}"
 LOCAL_DEVELOPMENT_TEAM="${LOCAL_DEVELOPMENT_TEAM:-2BTR77V3R8}"
 OUTPUT_DIR="$OUTPUT_ROOT/$RUN_ID"
@@ -43,6 +44,7 @@ fail() {
 }
 
 [[ -n "$VOICE_CLONE_READY_PROFILE_ID" ]] || fail "VOICE_CLONE_READY_PROFILE_ID is required because trial voice slots can expire or exhaust training attempts."
+[[ -n "$VOICE_CLONE_READY_PROFILE_USER_ID" ]] || fail "VOICE_CLONE_READY_PROFILE_USER_ID is required because synthesis enforces persisted profile ownership."
 
 xcconfig_value() {
   local key="$1"
@@ -199,7 +201,8 @@ echo "[voice-clone-synthesis-runtime-smoke] Launching synthesis runtime harness.
 xcrun simctl launch --console "$SIMULATOR_UDID" "$BUNDLE_ID" \
   DJUITestBypassLogin \
   DJRunVoiceCloneSynthesisRuntimeSmoke \
-  "DJVoiceCloneProbeProfileId=$VOICE_CLONE_READY_PROFILE_ID" > "$RUNTIME_LOG" 2>&1 &
+  "DJVoiceCloneProbeProfileId=$VOICE_CLONE_READY_PROFILE_ID" \
+  "DJVoiceCloneProbeUserId=$VOICE_CLONE_READY_PROFILE_USER_ID" > "$RUNTIME_LOG" 2>&1 &
 CONSOLE_PID="$!"
 
 deadline=$((SECONDS + LOG_WAIT_TIMEOUT))
@@ -215,11 +218,11 @@ cp "$RESULT_FILE" "$RESULT_COPY_PATH"
 cat "$RESULT_FILE"
 echo
 
-python3 - "$RESULT_COPY_PATH" "$VOICE_CLONE_READY_PROFILE_ID" <<'PY'
+python3 - "$RESULT_COPY_PATH" "$VOICE_CLONE_READY_PROFILE_ID" "$VOICE_CLONE_READY_PROFILE_USER_ID" <<'PY'
 import json
 import sys
 
-result_path, expected_voice_profile_id = sys.argv[1:3]
+result_path, expected_voice_profile_id, expected_user_id = sys.argv[1:4]
 
 with open(result_path, "r", encoding="utf-8") as handle:
     result = json.load(handle)
@@ -240,6 +243,8 @@ if int(result.get("byteCount") or 0) != int(result.get("decodedByteCount") or -1
     raise SystemExit(f"decoded byte count should match backend byteCount: {result}")
 if result.get("voiceProfileId") != expected_voice_profile_id:
     raise SystemExit(f"voiceProfileId mismatch: {result}")
+if result.get("userId") != expected_user_id:
+    raise SystemExit(f"userId mismatch: {result}")
 PY
 
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null

@@ -23,6 +23,8 @@ let releasePackage = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swi
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 
 require(script.contains("DJRunTencentDigitalHumanPCMDriveStopProbe"), "true-device script should pass the stop probe launch argument")
+require(script.contains("DJTencentBackendPCMDriveUserId="), "true-device script should pass the persisted voice profile owner")
+require(script.contains("VOICE_CLONE_READY_PROFILE_USER_ID"), "true-device script should accept the deployed profile owner environment")
 require(script.contains("DJUseLocalDigitalHumanAssetOverride"), "true-device script should document that local asset override is intentionally not passed")
 require(script.contains("assetSource=backendSession"), "true-device script should verify backend digital-human asset source")
 require(script.contains("assetSource=localQAOverride"), "true-device script should fail when local QA asset override is used")
@@ -68,6 +70,7 @@ require(echo.contains("assetSource=\\(contract.assetSource)"), "Echo should log 
 require(echo.contains("audioOwner=tencentDigitalHuman"), "Echo should log Tencent playback ownership")
 require(echo.contains("audioOwner=fallbackMuted"), "Echo should log provider muted handoff ownership")
 require(echo.contains("DJRunTencentDigitalHumanBackendPCMDriveSmoke"), "Echo should keep backend PCM-drive launch argument")
+require(echo.contains("DJTencentBackendPCMDriveUserId="), "Echo QA smoke should accept a voice profile owner override")
 
 require(releasePackage.contains("true-device-tencent-backend-pcm-drive-smoke-check.swift"), "release package should include this true-device smoke guard")
 require(releaseRegression.contains("true-device-tencent-backend-pcm-drive-smoke-check.swift"), "release regression static guard should include this smoke check")

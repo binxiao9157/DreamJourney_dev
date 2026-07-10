@@ -41,6 +41,7 @@ cat > "$REPORT_PATH" <<REPORT
 - Output dir: \`$OUTPUT_DIR\`
 - Console duration seconds: \`$RUN_SECONDS\`
 - Voice profile argument: \`${DJ_TENCENT_BACKEND_PCM_VOICE_PROFILE_ID:-optional, not provided}\`
+- Voice profile owner argument: \`${DJ_TENCENT_BACKEND_PCM_USER_ID:-${VOICE_CLONE_READY_PROFILE_USER_ID:-optional, not provided}}\`
 - Stop probe: \`DJRunTencentDigitalHumanPCMDriveStopProbe\`
 
 REPORT
@@ -173,6 +174,9 @@ LAUNCH_ARGS=(
 )
 if [[ -n "${DJ_TENCENT_BACKEND_PCM_VOICE_PROFILE_ID:-}" ]]; then
   LAUNCH_ARGS+=("DJTencentBackendPCMDriveVoiceProfileId=$DJ_TENCENT_BACKEND_PCM_VOICE_PROFILE_ID")
+  PCM_OWNER_ID="${DJ_TENCENT_BACKEND_PCM_USER_ID:-${VOICE_CLONE_READY_PROFILE_USER_ID:-}}"
+  [[ -n "$PCM_OWNER_ID" ]] || fail "DJ_TENCENT_BACKEND_PCM_USER_ID or VOICE_CLONE_READY_PROFILE_USER_ID is required with a voice profile."
+  LAUNCH_ARGS+=("DJTencentBackendPCMDriveUserId=$PCM_OWNER_ID")
 fi
 if [[ -n "${DJ_TENCENT_BACKEND_PCM_TEXT:-}" ]]; then
   LAUNCH_ARGS+=("DJTencentBackendPCMDriveText=$DJ_TENCENT_BACKEND_PCM_TEXT")
@@ -191,7 +195,7 @@ kill -INT "$LAUNCH_PID" >/dev/null 2>&1 || true
 wait "$LAUNCH_PID" >/dev/null 2>&1
 set -e
 
-append_report "- Launch args: \`DJUITestBypassLogin DJShowDigitalHumanLivePanel DJRunTencentDigitalHumanBackendPCMDriveSmoke DJRunTencentDigitalHumanPCMDriveStopProbe [voiceProfileId optional]\`"
+append_report "- Launch args: \`DJUITestBypassLogin DJShowDigitalHumanLivePanel DJRunTencentDigitalHumanBackendPCMDriveSmoke DJRunTencentDigitalHumanPCMDriveStopProbe [voiceProfileId + owner optional]\`"
 append_report "- Asset source policy: backend \`/digital-human/sessions\` is required; local QA override \`DJUseLocalDigitalHumanAssetOverride\` is intentionally not passed."
 append_report "- Console log: \`$LAUNCH_LOG\`"
 

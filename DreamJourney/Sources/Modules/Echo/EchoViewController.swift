@@ -580,6 +580,12 @@ final class EchoViewController: UIViewController {
             ?? VoiceCloneService.shared.currentUsableSpeakerId
     }
 
+    private var tencentBackendPCMDriveUserId: String {
+        launchArgumentValue(prefix: "DJTencentBackendPCMDriveUserId=")
+            ?? UserManager.shared.currentUser?.id
+            ?? "default"
+    }
+
     private var tencentBackendPCMDriveText: String {
         launchArgumentValue(prefix: "DJTencentBackendPCMDriveText=")
             ?? "腾讯数智人复刻声音测试：如果你能听见这句话，并且口型同步，说明后端 PCM 音频驱动链路已经接通。"
@@ -2992,7 +2998,7 @@ final class EchoViewController: UIViewController {
         }
 
         let text = tencentBackendPCMDriveText
-        let userId = UserManager.shared.currentUser?.id ?? "default"
+        let userId = tencentBackendPCMDriveUserId
         renderVoiceStatus(text: "正在请求复刻音频", isVisible: true, accessibilityIdentifier: "echoBackendPCMDriveStatus")
         print(
             "[TencentDigitalHuman][QA] requesting backend PCM-drive synthesis " +
@@ -4331,6 +4337,7 @@ extension EchoViewController {
 
     func runUIQATencentBackendPCMDriveMockSmoke(
         voiceProfileId: String,
+        userId: String,
         completion: @escaping ([String: Any]) -> Void
     ) {
         let stub = TencentDigitalHumanRuntimeStub(contentView: UIView())
@@ -4372,6 +4379,7 @@ extension EchoViewController {
                         "failureReason": "runtimeFetchFailed",
                         "error": error.localizedDescription,
                         "voiceProfileId": voiceProfileId,
+                        "userId": userId,
                     ])
                 case .success(let capability):
                     guard capability.canSynthesize,
@@ -4380,6 +4388,7 @@ extension EchoViewController {
                             "completed": false,
                             "failureReason": "runtimeCapabilityUnavailable",
                             "voiceProfileId": voiceProfileId,
+                            "userId": userId,
                             "synthesisProviderReady": capability.synthesisProviderReady,
                             "tencentAudioDriveSupported": capability.tencentAudioDrive.supported,
                         ])
@@ -4387,7 +4396,6 @@ extension EchoViewController {
                     }
 
                     let text = "UIQA 腾讯数智人 PCM 模拟链路：请验证后端复刻音频能被切块发送。"
-                    let userId = UserManager.shared.currentUser?.id ?? "uiqa_tencent_backend_pcm_mock"
                     DreamJourneyBackendClient.shared.requestVoiceCloneSynthesis(
                         userId: userId,
                         voiceProfileId: voiceProfileId,
@@ -4407,6 +4415,7 @@ extension EchoViewController {
                                     "failureReason": "synthesisFailed",
                                     "error": error.localizedDescription,
                                     "voiceProfileId": voiceProfileId,
+                                    "userId": userId,
                                 ])
                             case .success(let synthesis):
                                 guard let signal = self.makeTencentDigitalHumanPCMDriveSignal(from: synthesis) else {
@@ -4414,6 +4423,7 @@ extension EchoViewController {
                                         "completed": false,
                                         "failureReason": "pcmContractMismatch",
                                         "voiceProfileId": voiceProfileId,
+                                        "userId": userId,
                                         "audioFormat": synthesis.audioFormat,
                                         "sampleRate": synthesis.sampleRate ?? 0,
                                         "bitsPerSample": synthesis.bitsPerSample ?? 0,
@@ -4435,6 +4445,7 @@ extension EchoViewController {
                                         "completed": false,
                                         "failureReason": "sendPCMDriveSignalRejected",
                                         "voiceProfileId": voiceProfileId,
+                                        "userId": userId,
                                         "expectedChunkCount": expectedChunkCount,
                                     ])
                                     return
@@ -4474,6 +4485,7 @@ extension EchoViewController {
                                             && nonFinalByteCount == preparedByteCount
                                             && interruptProbeCompleted,
                                         "voiceProfileId": synthesis.voiceProfileId,
+                                        "userId": userId,
                                         "providerMode": synthesis.providerMode,
                                         "outputMode": synthesis.outputMode ?? "",
                                         "audioFormat": synthesis.audioFormat,

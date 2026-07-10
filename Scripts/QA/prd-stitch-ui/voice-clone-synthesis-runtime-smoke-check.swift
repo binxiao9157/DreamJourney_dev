@@ -44,6 +44,7 @@ let releaseQA = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
 for required in [
     "DJRunVoiceCloneSynthesisRuntimeSmoke",
     "DJVoiceCloneProbeProfileId=",
+    "DJVoiceCloneProbeUserId=",
     "runVoiceCloneSynthesisRuntimeSmoke()",
     "fetchVoiceCloneRuntimeCapability",
     "capability.canSynthesize",
@@ -66,6 +67,8 @@ for required in [
     "DJRunVoiceCloneSynthesisRuntimeSmoke",
     "DJVoiceCloneProbeProfileId=",
     "VOICE_CLONE_READY_PROFILE_ID",
+    "DJVoiceCloneProbeUserId=",
+    "VOICE_CLONE_READY_PROFILE_USER_ID",
     "LOCAL_BUNDLE_ID",
     "LOCAL_DEVELOPMENT_TEAM",
     "resolve_deployed_backend_config",

@@ -13,7 +13,8 @@ SWIFT_ACTIVE_COMPILATION_CONDITIONS='DEBUG UI_QA_SIMULATOR'
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT_DIR/tmp/visual-qa/prd-stitch-ui/DerivedDataTencentBackendPCMDriveMockSmoke}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-$ROOT_DIR/tmp/visual-qa/prd-stitch-ui/tencent-backend-pcm-drive-mock-smoke}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
-DJ_TENCENT_BACKEND_PCM_MOCK_VOICE_PROFILE_ID="${DJ_TENCENT_BACKEND_PCM_MOCK_VOICE_PROFILE_ID:-S_uiqa_tencent_pcm_mock}"
+DJ_TENCENT_BACKEND_PCM_MOCK_VOICE_PROFILE_ID="${DJ_TENCENT_BACKEND_PCM_MOCK_VOICE_PROFILE_ID:-${VOICE_CLONE_READY_PROFILE_ID:-}}"
+DJ_TENCENT_BACKEND_PCM_MOCK_USER_ID="${DJ_TENCENT_BACKEND_PCM_MOCK_USER_ID:-${VOICE_CLONE_READY_PROFILE_USER_ID:-}}"
 LOCAL_BUNDLE_ID="${LOCAL_BUNDLE_ID:-com.yxj.dreamjourney.app}"
 LOCAL_DEVELOPMENT_TEAM="${LOCAL_DEVELOPMENT_TEAM:-2BTR77V3R8}"
 OUTPUT_DIR="$OUTPUT_ROOT/$RUN_ID"
@@ -118,6 +119,8 @@ BACKEND_API_TOKEN="${BACKEND_API_TOKEN:-${XCCONFIG_API_TOKEN:-$DOC_API_TOKEN}}"
 [[ -n "$BACKEND_BASE_URL" ]] || fail "BACKEND_BASE_URL is required. Export it, configure Backend.local.xcconfig, or provide deployed-backend-access.md."
 [[ -n "$BACKEND_API_TOKEN" ]] || fail "BACKEND_API_TOKEN is required. Export it, configure Backend.local.xcconfig, or provide deployed-backend-access.md."
 [[ "$BACKEND_API_TOKEN" != YOUR_* ]] || fail "BACKEND_API_TOKEN is still a placeholder."
+[[ -n "$DJ_TENCENT_BACKEND_PCM_MOCK_VOICE_PROFILE_ID" ]] || fail "DJ_TENCENT_BACKEND_PCM_MOCK_VOICE_PROFILE_ID or VOICE_CLONE_READY_PROFILE_ID is required."
+[[ -n "$DJ_TENCENT_BACKEND_PCM_MOCK_USER_ID" ]] || fail "DJ_TENCENT_BACKEND_PCM_MOCK_USER_ID or VOICE_CLONE_READY_PROFILE_USER_ID is required."
 
 booted_simulator_udid() {
   xcrun simctl list devices booted | awk -F '[()]' '/Booted/ { print $2; exit }'
@@ -202,7 +205,8 @@ echo "[tencent-backend-pcm-drive-mock-smoke] Launching fake Tencent backend PCM-
 xcrun simctl launch --console "$SIMULATOR_UDID" "$BUNDLE_ID" \
   DJUITestBypassLogin \
   DJRunTencentBackendPCMDriveMockSmoke \
-  "DJTencentBackendPCMDriveMockVoiceProfileId=$DJ_TENCENT_BACKEND_PCM_MOCK_VOICE_PROFILE_ID" > "$RUNTIME_LOG" 2>&1 &
+  "DJTencentBackendPCMDriveMockVoiceProfileId=$DJ_TENCENT_BACKEND_PCM_MOCK_VOICE_PROFILE_ID" \
+  "DJTencentBackendPCMDriveMockUserId=$DJ_TENCENT_BACKEND_PCM_MOCK_USER_ID" > "$RUNTIME_LOG" 2>&1 &
 CONSOLE_PID="$!"
 
 deadline=$((SECONDS + LOG_WAIT_TIMEOUT))
@@ -218,11 +222,11 @@ cp "$RESULT_FILE" "$RESULT_COPY_PATH"
 cat "$RESULT_FILE"
 echo
 
-python3 - "$RESULT_COPY_PATH" "$DJ_TENCENT_BACKEND_PCM_MOCK_VOICE_PROFILE_ID" <<'PY'
+python3 - "$RESULT_COPY_PATH" "$DJ_TENCENT_BACKEND_PCM_MOCK_VOICE_PROFILE_ID" "$DJ_TENCENT_BACKEND_PCM_MOCK_USER_ID" <<'PY'
 import json
 import sys
 
-result_path, expected_voice_profile_id = sys.argv[1:3]
+result_path, expected_voice_profile_id, expected_user_id = sys.argv[1:4]
 with open(result_path, "r", encoding="utf-8") as handle:
     result = json.load(handle)
 
@@ -230,6 +234,8 @@ if result.get("completed") is not True:
     raise SystemExit(f"Tencent backend PCM-drive mock smoke did not complete: {result}")
 if result.get("voiceProfileId") != expected_voice_profile_id:
     raise SystemExit(f"voiceProfileId mismatch: {result}")
+if result.get("userId") != expected_user_id:
+    raise SystemExit(f"userId mismatch: {result}")
 if result.get("pcmCompatible") is not True:
     raise SystemExit(f"PCM should be compatible: {result}")
 if result.get("audioDataOmitted") is not True:
