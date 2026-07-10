@@ -546,27 +546,17 @@ final class MemoryArchiveRepository {
             return
         }
 
-        let fetchMailbox: () -> Void = { [weak self] in
+        DreamJourneyBackendClient.shared.listMailboxLetters(userId: currentUserId) { [weak self] result in
             guard let self else { return }
-            DreamJourneyBackendClient.shared.listMailboxLetters(userId: currentUserId) { [weak self] result in
-                guard let self else { return }
-                switch result {
-                case .success(let object):
-                    let reminders = Self.timeLetterMailboxReminders(from: object)
-                    saveTimeLetterMailboxReminders(reminders)
-                    completion?(.success(reminders))
-                case .failure(let error):
-                    print("[Archive] timeLetter mailbox fetch failed: \(error.localizedDescription)")
-                    completion?(.failure(error))
-                }
+            switch result {
+            case .success(let object):
+                let reminders = Self.timeLetterMailboxReminders(from: object)
+                saveTimeLetterMailboxReminders(reminders)
+                completion?(.success(reminders))
+            case .failure(let error):
+                print("[Archive] timeLetter mailbox fetch failed: \(error.localizedDescription)")
+                completion?(.failure(error))
             }
-        }
-
-        DreamJourneyBackendClient.shared.dispatchDueTimeLetters(limit: 25) { result in
-            if case .failure(let error) = result {
-                print("[Archive] timeLetter dispatch-due failed: \(error.localizedDescription)")
-            }
-            fetchMailbox()
         }
     }
 

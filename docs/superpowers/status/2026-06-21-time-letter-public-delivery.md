@@ -34,7 +34,7 @@
   - 封存 timeLetter 本地禁止删除。
   - 封存后调度 `UNNotificationRequest`。
   - 通过 `dueTimeLetters()` 输出尚未投递的本地到期提醒。
-  - 通过 `refreshTimeLetterMailboxReminders()` 触发后端 `dispatch-due`，再拉取 mailbox unread reminder。
+  - `refreshTimeLetterMailboxReminders()` 只拉取当前用户 mailbox；全局 `dispatch-due` 由服务端定时调度执行，公开 App 不具备系统调度权限。
   - `timeLetterReminderCount()` 合并本地 due 与后端 mailbox，避免 delivered 信件重复提醒。
   - 通过 `inAppMessageCenterSnapshot()` 将 mailbox reminder 聚合为统一 `InAppMessage`。
   - 通过 `markTimeLetterMailboxReminderRead()` 将打开过的 mailbox reminder 标记为已读。

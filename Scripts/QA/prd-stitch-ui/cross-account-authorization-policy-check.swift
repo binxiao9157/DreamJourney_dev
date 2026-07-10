@@ -20,6 +20,7 @@ func require(_ condition: @autoclosure () -> Bool, _ message: String) {
 }
 
 let policy = read(backendRoot.appendingPathComponent("app/services/authorization_policy.py"))
+let registry = read(backendRoot.appendingPathComponent("app/services/route_ownership.py"))
 let middleware = read(backendRoot.appendingPathComponent("app/main.py"))
 let runtime = read(backendRoot.appendingPathComponent("app/services/runtime_config.py"))
 let client = read(root.appendingPathComponent("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"))
@@ -31,10 +32,10 @@ for policyID in [
     "timeLetterDetail",
     "familyInvitationAccept",
     "familyMemberAccept",
-    "systemOnly",
 ] {
     require(policy.contains(policyID), "Cross-account policy must cover \(policyID)")
 }
+require(registry.contains("SYSTEM_ONLY = \"systemOnly\""), "Route registry must classify system-only routes")
 for decision in ["allowOwner", "allowFamily", "allowRecipient", "deny", "fallback"] {
     require(policy.contains(decision), "Cross-account policy must define \(decision)")
 }

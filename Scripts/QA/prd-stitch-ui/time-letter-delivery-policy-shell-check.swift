@@ -86,6 +86,12 @@ for required in [
     assertContains(repository, required, "time-letter repository should schedule and protect sealed letters \(required)")
 }
 
+assertNotContains(
+    repository,
+    "DreamJourneyBackendClient.shared.dispatchDueTimeLetters",
+    "public app mailbox refresh must not invoke the system-only global dispatch route"
+)
+
 assertContains(
     appDelegate,
     "timeLetterSecondReminderStillUnread",
@@ -197,6 +203,7 @@ for forbidden in [
 
 for required in [
     "时间信件公开投递闭环",
+    "服务端定时调度",
     "openAt",
     "recipients",
     "sealedAt",

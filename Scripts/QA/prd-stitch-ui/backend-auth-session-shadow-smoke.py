@@ -97,9 +97,12 @@ def main():
         "POST",
         "/profile",
         {"userId": f"shadow-other-{suffix}", "nickname": "shadow evidence"},
+        expected=403,
         access_token=access_token,
     )
     require(header(shadow_headers, "X-DreamJourney-Ownership-Decision") == "mismatch", "shadow mismatch must be observable")
+    require(header(shadow_headers, "X-DreamJourney-Authorization-Decision") == "deny", "classified owner mismatch must be denied")
+    require(header(shadow_headers, "X-DreamJourney-Authorization-Reason") == "ownerPrincipalMismatch", "owner mismatch reason missing")
 
     refreshed, _ = request_json(
         "POST",
@@ -132,6 +135,7 @@ def main():
         "completed": True,
         "contractVersion": auth.get("contractVersion"),
         "ownershipMode": "shadow",
+        "principalBoundMismatchRejected": True,
         "refreshRotated": True,
         "refreshReplayRejected": True,
         "logoutRevoked": True,
