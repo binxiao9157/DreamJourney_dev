@@ -302,6 +302,9 @@ run_step "Swift model guard echo-digital-human-lifecycle-coordinator-check" "$ST
 run_step "Swift model guard knowledge-three-way-merge" "$STATIC_LOG_DIR/knowledge-three-way-merge-model-smoke.log" \
   "$SCRIPT_DIR/run-knowledge-three-way-merge-model-smoke.sh"
 
+run_step "Swift model guard knowledge-context-policy" "$STATIC_LOG_DIR/knowledge-context-policy-model-smoke.log" \
+  "$SCRIPT_DIR/run-knowledge-context-policy-model-smoke.sh"
+
 for guard in \
   release-feature-matrix-check.swift \
   prd-coverage-matrix-check.swift \
@@ -323,6 +326,7 @@ for guard in \
   cross-account-authorization-policy-check.swift \
   route-ownership-audit-check.swift \
   knowledge-pipeline-check.swift \
+  knowledge-evidence-context-policy-check.swift \
   profile-settings-save-state-check.swift \
   profile-account-fields-check.swift \
   profile-password-change-check.swift \

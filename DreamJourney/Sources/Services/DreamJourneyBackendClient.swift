@@ -965,6 +965,8 @@ struct EchoContextPacket {
     let traceId: String
     let intent: String
     let userId: String
+    let personaScope: String?
+    let digitalHumanId: String?
     let archiveItemsAvailable: Int
     let archiveItemsIncluded: Int
     let archiveItemIDs: [String]
@@ -1004,6 +1006,11 @@ struct EchoContextPacket {
         self.traceId = traceId
         self.intent = intent
         self.userId = userId
+        let persona = json["persona"] as? [String: Any]
+        self.personaScope = Self.nonEmptyString(persona?["personaScope"])
+            ?? Self.nonEmptyString(json["personaScope"])
+        self.digitalHumanId = Self.nonEmptyString(persona?["digitalHumanId"])
+            ?? Self.nonEmptyString(json["digitalHumanId"])
 
         let memory = json["memory"] as? [String: Any]
         let facts = memory?["kbFacts"] as? [[String: Any]] ?? []
@@ -1164,6 +1171,14 @@ struct EchoContextPacket {
             }
         }
         return nil
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let value = value as? String else {
+            return nil
+        }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
     }
 }
 
@@ -2926,15 +2941,26 @@ final class DreamJourneyBackendClient {
     func extractKnowledge(
         userId: String,
         transcript: String,
+        turns: [ConversationTurn],
         existingSummary: String,
         sessionId: Int,
         completion: @escaping (Result<KBExtractionResult, Error>) -> Void
     ) {
+        let indexedTurns: [[String: Any]] = turns.enumerated().map { index, turn in
+            [
+                "index": index,
+                "role": turn.role == "user" ? "user" : "assistant",
+                "text": turn.text,
+            ]
+        }
         requestJSON(
             path: "/kb/extract",
             method: .post,
             payload: [
                 "userId": userId,
+                "extractionSchemaVersion": 2,
+                "sourcePolicy": "userEvidenceOnly",
+                "turns": indexedTurns,
                 "transcript": transcript,
                 "existingSummary": existingSummary,
                 "sessionId": sessionId,

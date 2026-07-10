@@ -254,8 +254,8 @@ final class KBLiteManager {
         graphLock.lock()
         let ownerUserId = loadedUserId
         let extractionGeneration = userGeneration
-        let previousSessionCount = graph.sessionCount
-        let previousUpdatedAt = graph.lastUpdated
+        let lastBackendExtractionSessionId = graph.lastBackendExtractionSessionId
+        let lastBackendExtractionAt = graph.lastBackendExtractionAt
         graphLock.unlock()
 
         guard ownerUserId != Self.signedOutUserId else {
@@ -264,10 +264,14 @@ final class KBLiteManager {
             return
         }
 
-        // 每 3 次会话或距离上次提取超过 24 小时使用后端提取，其余回合走本地轻量提取。
-        let shouldForceExtract = previousSessionCount == 0
-            || (sessionId - previousSessionCount >= 3)
-            || (Date().timeIntervalSince(previousUpdatedAt) > 86400)
+        // 后端精提取使用独立水位；本地轻量提取仍可推进总 sessionCount。
+        let shouldForceExtract: Bool
+        if let lastBackendExtractionSessionId, let lastBackendExtractionAt {
+            shouldForceExtract = sessionId - lastBackendExtractionSessionId >= 3
+                || Date().timeIntervalSince(lastBackendExtractionAt) > 86400
+        } else {
+            shouldForceExtract = true
+        }
 
         guard shouldForceExtract else {
             print("[KBLite] ⏭️ 后端提取频率控制：会话#\(sessionId)使用本地轻量提取")
@@ -297,10 +301,9 @@ final class KBLiteManager {
             self.isExtracting = true
             print("[KBLite] 🔍 开始后端知识提取 (会话#\(sessionId), \(turns.count)轮)")
 
-            // 组装 transcript 文本
-            let transcript = turns.map { t in
-                let role = t.role == "user" ? "长辈" : "寻梦环游"
-                return "[\(role)]: \(t.text)"
+            // 旧后端只读取 transcript；兼容字段同样只携带用户证据，避免 assistant 回灌。
+            let transcript = turns.filter { $0.role == "user" }.map { turn in
+                "[长辈]: \(turn.text)"
             }.joined(separator: "\n")
 
             self.graphLock.lock()
@@ -323,6 +326,7 @@ final class KBLiteManager {
             DreamJourneyBackendClient.shared.extractKnowledge(
                 userId: ownerUserId,
                 transcript: transcript,
+                turns: turns,
                 existingSummary: existingSummary,
                 sessionId: sessionId
             ) { [weak self] result in
@@ -371,6 +375,11 @@ final class KBLiteManager {
         let addedCount: Int
         if let result {
             addedCount = mergeExtractionResult(result, sessionId: sessionId)
+            graph.lastBackendExtractionSessionId = max(
+                graph.lastBackendExtractionSessionId ?? 0,
+                sessionId
+            )
+            graph.lastBackendExtractionAt = Date()
         } else {
             addedCount = quickExtract(turns: turns, sessionId: sessionId)
         }
@@ -930,17 +939,25 @@ final class KBLiteManager {
     ) -> String {
         var parts: [String] = []
         let graphSnapshot = readGraph { $0 }
-        let canGenerate: (KBPrivacyMetadata?) -> Bool = { metadata in
-            !generationAllowedOnly || metadata?.scope == "generationAllowed"
+        let canGenerateEntity: (KBPrivacyMetadata?) -> Bool = { metadata in
+            !generationAllowedOnly || KnowledgeGenerationPolicy.allowsEntity(
+                privacyScope: metadata?.scope
+            )
+        }
+        let canGenerateFact: (KBFact) -> Bool = { fact in
+            !generationAllowedOnly || KnowledgeGenerationPolicy.allowsFact(
+                privacyScope: fact.privacyMetadata?.scope,
+                confidence: fact.confidence
+            )
         }
 
         // 有 query → 检索相关知识
         if let q = query, !q.trimmingCharacters(in: .whitespaces).isEmpty {
             let result = search(query: q)
-            let people = result.people.filter { canGenerate($0.privacyMetadata) }
-            let places = result.places.filter { canGenerate($0.privacyMetadata) }
-            let events = result.events.filter { canGenerate($0.privacyMetadata) }
-            let facts = result.facts.filter { canGenerate($0.privacyMetadata) }
+            let people = result.people.filter { canGenerateEntity($0.privacyMetadata) }
+            let places = result.places.filter { canGenerateEntity($0.privacyMetadata) }
+            let events = result.events.filter { canGenerateEntity($0.privacyMetadata) }
+            let facts = result.facts.filter(canGenerateFact)
 
             if !people.isEmpty {
                 let summaries: [String] = people.prefix(maxItems).map { p in
@@ -950,7 +967,7 @@ final class KBLiteManager {
 
                     // 附上关联事实
                     let relatedFacts = graphSnapshot.facts.filter {
-                        $0.relatedPersonIds.contains(p.id) && canGenerate($0.privacyMetadata)
+                        $0.relatedPersonIds.contains(p.id) && canGenerateFact($0)
                     }
                     if !relatedFacts.isEmpty {
                         let factsText = relatedFacts.prefix(3).map { $0.statement }.joined(separator: "；")
@@ -993,7 +1010,7 @@ final class KBLiteManager {
         // 无 query 或检索结果为空 → 提供最近摘要
         if parts.isEmpty {
             let recentPeople = graphSnapshot.people
-                .filter { canGenerate($0.privacyMetadata) }
+                .filter { canGenerateEntity($0.privacyMetadata) }
                 .sorted { ($0.sourceSessionIds.last ?? 0) > ($1.sourceSessionIds.last ?? 0) }
             if !recentPeople.isEmpty {
                 let names = recentPeople.prefix(5).map { $0.name }.joined(separator: "、")
@@ -1001,7 +1018,7 @@ final class KBLiteManager {
             }
 
             let recentEvents = graphSnapshot.events
-                .filter { canGenerate($0.privacyMetadata) }
+                .filter { canGenerateEntity($0.privacyMetadata) }
                 .sorted { ($0.sourceSessionIds.last ?? 0) > ($1.sourceSessionIds.last ?? 0) }
             if !recentEvents.isEmpty {
                 let titles = recentEvents.prefix(5).map { e in
@@ -1203,6 +1220,8 @@ final class KBLiteManager {
                 version: max(local.version, imported.version),
                 lastUpdated: Date(),
                 sessionCount: max(local.sessionCount, imported.sessionCount),
+                lastBackendExtractionSessionId: local.lastBackendExtractionSessionId,
+                lastBackendExtractionAt: local.lastBackendExtractionAt,
                 people: preferLocalByID(remote: imported.people, local: local.people, id: { $0.id }),
                 places: preferLocalByID(remote: imported.places, local: local.places, id: { $0.id }),
                 events: preferLocalByID(remote: imported.events, local: local.events, id: { $0.id }),
@@ -1214,6 +1233,8 @@ final class KBLiteManager {
                 version: max(local.version, imported.version),
                 lastUpdated: Date(),
                 sessionCount: max(local.sessionCount, imported.sessionCount),
+                lastBackendExtractionSessionId: local.lastBackendExtractionSessionId,
+                lastBackendExtractionAt: local.lastBackendExtractionAt,
                 people: preferLocalByID(
                     remote: imported.people,
                     local: local.people.filter { !isRemotelySyncable($0.privacyMetadata) },

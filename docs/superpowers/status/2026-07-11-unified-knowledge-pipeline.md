@@ -13,6 +13,9 @@
 知识删除与三方合并的后续增量见：
 `docs/superpowers/status/2026-07-11-knowledge-tombstone-three-way-merge.md`。
 
+知识证据、置信度与 persona-bound Context 的后续 P0 增量见：
+`docs/superpowers/status/2026-07-11-knowledge-evidence-context-isolation.md`。
+
 后端提交 `00df327 feat: add revisioned knowledge context pipeline` 已于 2026-07-11 部署到服务器。公网健康检查返回 `store=postgres`，线上 iOS 已具备使用新 revision/change-feed/generationContext 合同的后端条件。
 
 ## 已完成架构

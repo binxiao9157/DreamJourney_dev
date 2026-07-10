@@ -27,6 +27,7 @@ func requireOrdered(_ content: String, _ first: String, _ second: String, _ mess
 }
 
 let manager = read("DreamJourney/Sources/Services/KBLiteManager.swift")
+let generationPolicy = read("DreamJourney/Sources/Services/KnowledgeGenerationPolicy.swift")
 let coordinator = read("DreamJourney/Sources/Services/KnowledgeSyncCoordinator.swift")
 let threeWayMerge = read("DreamJourney/Sources/Services/KnowledgeThreeWayMerge.swift")
 let backend = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
@@ -59,7 +60,10 @@ require(
 
 require(
     manager.contains("func buildGenerationAllowedContextString(query: String?, maxItems: Int = 5)") &&
-        manager.contains("metadata?.scope == \"generationAllowed\"") &&
+        manager.contains("KnowledgeGenerationPolicy.allowsEntity(") &&
+        manager.contains("KnowledgeGenerationPolicy.allowsFact(") &&
+        generationPolicy.contains("privacyScope == \"generationAllowed\"") &&
+        generationPolicy.contains("case \"high\", \"confirmed\"") &&
         manager.contains("guard loadedUserId == expectedUserId else") &&
         echo.contains("KBLiteManager.shared.buildGenerationAllowedContextString(query: text)"),
     "local Echo fallback must only expose generationAllowed knowledge"

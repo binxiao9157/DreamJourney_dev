@@ -7,9 +7,10 @@
 - 后端分支：`main`
 - 后端提交：`3fc5b2d feat: add knowledge mutation tombstones`
 - 后端 QA 提交：`816993b test: cover deployed knowledge tombstones`
+- iOS 状态文档提交：`8a1a94c docs: close knowledge tombstone rollout`
 - 递归任务：`L20260711-005948`
 
-以上提交当前只保存在本地仓库；本轮未推送，也未部署服务器。
+以上提交已经推送。后端 `816993b` 已部署，公网健康检查为 Postgres；部署态 knowledge V2/tombstone smoke 和跨仓库 release gate 已通过。
 
 ## 已实现
 
@@ -90,7 +91,7 @@ Scripts/QA/prd-stitch-ui/run-release-regression.sh
 
 ## 剩余边界
 
-- 后端新提交尚未推送、部署，因此线上 Postgres v2 smoke 尚未运行。
+- 线上 Postgres v2/tombstone smoke 已运行并通过；最新证据报告为 `tmp/visual-qa/prd-stitch-ui/release-regression/20260711-020906-release-regression/report.md`。
 - 冲突仍是实体级 local-wins，不是字段级 CRDT；暂无公开冲突处理 UI。
 - change feed 分页、保留周期和 compaction 未在本轮实现。
 - 本轮不涉及真机、视觉 UI 或向量数据库。

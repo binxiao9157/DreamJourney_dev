@@ -7,6 +7,8 @@ struct KBLiteGraph: Codable {
     var version: Int = 1
     var lastUpdated: Date = Date()
     var sessionCount: Int = 0        // 已处理的会话数
+    var lastBackendExtractionSessionId: Int? = nil
+    var lastBackendExtractionAt: Date? = nil
     var people: [KBPerson] = []
     var places: [KBPlace] = []
     var events: [KBEvent] = []

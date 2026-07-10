@@ -170,17 +170,39 @@ private struct TencentBackendPCMDriveTrueDeviceTrace {
 
 private final class EchoTurnKnowledgeContextGate {
     let turnID: String
-    let userID: String
+    let expectedUserID: String
+    let expectedPersonaScope: String
+    let expectedDigitalHumanID: String
     let lifecycleToken: DigitalHumanLifecycleToken
     var didSubmit = false
+    var didFinishWithoutContext = false
     var failedSubmissionCount = 0
     var timeoutWorkItem: DispatchWorkItem?
     var retryWorkItem: DispatchWorkItem?
 
-    init(turnID: String, userID: String, lifecycleToken: DigitalHumanLifecycleToken) {
+    init(
+        turnID: String,
+        expectedIdentity: EchoKnowledgeContextIdentity,
+        lifecycleToken: DigitalHumanLifecycleToken
+    ) {
         self.turnID = turnID
-        self.userID = userID
+        self.expectedUserID = expectedIdentity.userId
+        self.expectedPersonaScope = expectedIdentity.personaScope
+        self.expectedDigitalHumanID = expectedIdentity.digitalHumanId
         self.lifecycleToken = lifecycleToken
+    }
+
+    var expectedIdentity: EchoKnowledgeContextIdentity {
+        EchoKnowledgeContextIdentity(
+            userId: expectedUserID,
+            personaScope: expectedPersonaScope,
+            digitalHumanId: expectedDigitalHumanID
+        )
+    }
+
+    func finishWithoutContext() {
+        didFinishWithoutContext = true
+        cancel()
     }
 
     func cancel() {
@@ -2894,6 +2916,26 @@ final class EchoViewController: UIViewController {
         )
     }
 
+    private func echoKnowledgeContextIdentity(
+        for context: DigitalHumanContext
+    ) -> EchoKnowledgeContextIdentity {
+        let userId = UserManager.shared.currentUser?.id ?? context.viewerUserId ?? context.ownerId
+        let personaScope = isCurrentUserPersonaContext(context) ? "personal" : "family"
+        let familyMemberDigitalHumanId = personaScope == "family"
+            ? FamilyRepository.shared.get(by: context.ownerId)?.digitalHumanId
+            : nil
+        let digitalHumanId = EchoKnowledgeContextPolicy.canonicalDigitalHumanId(
+            personaScope: personaScope,
+            ownerId: context.ownerId,
+            familyMemberDigitalHumanId: familyMemberDigitalHumanId
+        )
+        return EchoKnowledgeContextIdentity(
+            userId: userId,
+            personaScope: personaScope,
+            digitalHumanId: digitalHumanId
+        )
+    }
+
     private func recordEchoContextPacketForUserTurn(
         text: String,
         turnID: String,
@@ -2901,9 +2943,7 @@ final class EchoViewController: UIViewController {
         allowsGeneration: Bool
     ) {
         let context = DigitalHumanContextStore.shared.current
-        let userId = UserManager.shared.currentUser?.id ?? context.viewerUserId ?? context.ownerId
-        let isCurrentUserPersona = isCurrentUserPersonaContext(context)
-        let personaScope = isCurrentUserPersona ? "personal" : "family"
+        let expectedIdentity = echoKnowledgeContextIdentity(for: context)
 
         activeEchoTurnKnowledgeContextGate?.cancel()
         activeEchoTurnKnowledgeContextGate = nil
@@ -2912,7 +2952,7 @@ final class EchoViewController: UIViewController {
         if allowsGeneration {
             let turnGate = EchoTurnKnowledgeContextGate(
                 turnID: turnID,
-                userID: userId,
+                expectedIdentity: expectedIdentity,
                 lifecycleToken: lifecycleToken
             )
             gate = turnGate
@@ -2946,10 +2986,10 @@ final class EchoViewController: UIViewController {
             return
         }
         DreamJourneyBackendClient.shared.buildEchoContextPacket(
-            userId: userId,
+            userId: expectedIdentity.userId,
             query: text,
-            personaScope: personaScope,
-            digitalHumanId: context.ownerId,
+            personaScope: expectedIdentity.personaScope,
+            digitalHumanId: expectedIdentity.digitalHumanId,
             lifecycleMode: context.mode,
             viewerFamilyMemberID: nil
         ) { [weak self] result in
@@ -2962,6 +3002,29 @@ final class EchoViewController: UIViewController {
                             lifecycleToken,
                             reason: "contextPacketResponse"
                           ) else { return }
+                    guard EchoKnowledgeContextPolicy.responseIdentityMatches(
+                        expected: expectedIdentity,
+                        responseUserId: packet.userId,
+                        responsePersonaScope: packet.personaScope,
+                        responseDigitalHumanId: packet.digitalHumanId
+                    ) else {
+                        if let gate {
+                            self.submitLocalEchoTurnKnowledgeContext(
+                                text: text,
+                                gate: gate,
+                                source: "localKBLitePacketIdentityMismatch"
+                            )
+                        }
+                        print(
+                            "[CFLite] ignored context packet identity mismatch " +
+                            "turnID=\(turnID) expectedUser=\(expectedIdentity.userId) " +
+                            "expectedPersona=\(expectedIdentity.personaScope) " +
+                            "expectedDigitalHuman=\(expectedIdentity.digitalHumanId) " +
+                            "actualUser=\(packet.userId) actualPersona=\(packet.personaScope ?? "missing") " +
+                            "actualDigitalHuman=\(packet.digitalHumanId ?? "missing")"
+                        )
+                        return
+                    }
                     EchoTraceStore.shared.record(record)
                     guard self.latestEchoContextRequestTurnID == turnID else {
                         print("[CFLite] ignored stale context trace turnID=\(turnID)")
@@ -2989,6 +3052,8 @@ final class EchoViewController: UIViewController {
                 print(
                     "[CFLite] context built " +
                     "turnID=\(turnID) traceId=\(packet.traceId) schemaVersion=\(packet.schemaVersion) " +
+                    "personaScope=\(packet.personaScope ?? "missing") " +
+                    "digitalHumanId=\(packet.digitalHumanId ?? "missing") " +
                     "archiveIncluded=\(packet.archiveItemsIncluded)/\(packet.archiveItemsAvailable) " +
                     "kbFacts=\(packet.kbFactCount) cloneReady=\(packet.cloneReady) " +
                     "voiceProfileId=\(packet.voiceProfileId ?? "none") outputMode=\(packet.voiceOutputMode) " +
@@ -3026,7 +3091,38 @@ final class EchoViewController: UIViewController {
         gate: EchoTurnKnowledgeContextGate,
         source: String
     ) {
+        guard activeEchoTurnKnowledgeContextGate === gate,
+              !gate.didSubmit,
+              !gate.didFinishWithoutContext else {
+            return
+        }
+        guard EchoKnowledgeContextPolicy.allowsLocalKBLiteFallback(
+            for: gate.expectedIdentity
+        ) else {
+            gate.finishWithoutContext()
+            if activeEchoTurnKnowledgeContextGate === gate {
+                activeEchoTurnKnowledgeContextGate = nil
+            }
+            print(
+                "[CFLite] family_local_fallback_forbidden " +
+                "turnID=\(gate.turnID) source=\(source) " +
+                "personaScope=\(gate.expectedPersonaScope) " +
+                "digitalHumanId=\(gate.expectedDigitalHumanID)"
+            )
+            return
+        }
         let localContext = KBLiteManager.shared.buildGenerationAllowedContextString(query: text)
+        guard !localContext.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            gate.finishWithoutContext()
+            if activeEchoTurnKnowledgeContextGate === gate {
+                activeEchoTurnKnowledgeContextGate = nil
+            }
+            print(
+                "[CFLite] turn knowledge finished without local context " +
+                "turnID=\(gate.turnID) source=\(source)"
+            )
+            return
+        }
         submitEchoTurnKnowledgeContext(
             localContext,
             traceID: nil,
@@ -3043,8 +3139,21 @@ final class EchoViewController: UIViewController {
     ) {
         dispatchPrecondition(condition: .onQueue(.main))
         let normalizedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalizedContent.isEmpty,
+           activeEchoTurnKnowledgeContextGate === gate,
+           !gate.didSubmit,
+           !gate.didFinishWithoutContext {
+            gate.finishWithoutContext()
+            activeEchoTurnKnowledgeContextGate = nil
+            print(
+                "[CFLite] turn knowledge finished without backend context " +
+                "turnID=\(gate.turnID) source=\(source)"
+            )
+            return
+        }
         guard activeEchoTurnKnowledgeContextGate === gate,
               !gate.didSubmit,
+              !gate.didFinishWithoutContext,
               !normalizedContent.isEmpty,
               !viewModel.isWaitingForDelayedReply,
               isCurrentDigitalHumanLifecycleToken(
@@ -3053,14 +3162,17 @@ final class EchoViewController: UIViewController {
               ) else {
             return
         }
-        let currentContext = DigitalHumanContextStore.shared.current
-        let currentUserId = UserManager.shared.currentUser?.id
-            ?? currentContext.viewerUserId
-            ?? currentContext.ownerId
-        guard currentUserId == gate.userID else {
+        let currentIdentity = echoKnowledgeContextIdentity(
+            for: DigitalHumanContextStore.shared.current
+        )
+        guard currentIdentity == gate.expectedIdentity else {
             print(
-                "[CFLite] ignored stale turn knowledge user " +
-                "turnID=\(gate.turnID) expected=\(gate.userID) current=\(currentUserId)"
+                "[CFLite] ignored stale turn knowledge identity " +
+                "turnID=\(gate.turnID) expectedUser=\(gate.expectedUserID) " +
+                "expectedPersona=\(gate.expectedPersonaScope) " +
+                "expectedDigitalHuman=\(gate.expectedDigitalHumanID) " +
+                "currentUser=\(currentIdentity.userId) currentPersona=\(currentIdentity.personaScope) " +
+                "currentDigitalHuman=\(currentIdentity.digitalHumanId)"
             )
             return
         }
