@@ -24,6 +24,25 @@
 - Closure Lodestar ledger engine
 - closure-lodestar
 
+## Task 14 Knowledge Architecture Findings
+
+- `KBLiteManager` currently sends both user and assistant turns as one plain transcript to `/kb/extract`; the local regex fallback already filters to user turns. This creates a provider-side self-ingestion risk that must be closed with indexed structured turns and server-side source validation.
+- Current extracted entities expose `sourceTurnIndices`, but the backend does not validate that indices point to user turns. A provider result can therefore claim no source or an assistant-only source and still be merged.
+- `KBFact` already has `confidence`, but both backend Context Packet and iOS local generation fallback can include low/medium facts. P0 policy is high/confirmed only for generation; lower confidence remains a stored candidate.
+- Archive is the source asset authority. The knowledge graph stores source references and normalized entities; it must not duplicate media files or become a fourth public Tab.
+- Voice clone and digital-human runtime are execution state and trace only, never durable user facts.
+- Context policy needs explicit regression for time-letter recipient mismatch and care viewer isolation in addition to existing not-due/pending-family cases.
+- The existing root-level `docs/knowledge-base-design*.md` predates the backend revisioned pipeline. The canonical design is now `docs/superpowers/plans/2026-07-11-product-knowledge-base-architecture-v2.md`; vector search remains threshold-driven rather than an immediate dependency.
+
+## Task 14 Resolution
+
+- `/kb/extract` v2 now accepts indexed turns and enforces `userEvidenceOnly`; every accepted entity must reference valid user turns, while legacy transcript remains compatible and the iOS legacy field is user-only.
+- Backend and iOS generation paths now require `generationAllowed + high/confirmed` for facts. Low/medium candidates remain stored but are observable through filtered reasons.
+- Family persona no longer consumes the viewer's personal KBLite in backend candidates or iOS fallback. Context packet user/persona/digital-human identity is checked before SDK submission.
+- Time-letter recipient/openAt and care viewer-specific access have negative tests; owner care cannot silently replace missing viewer care.
+- Backend 204 tests/full verify, release regression, simulator smoke, generic Simulator and generic iPhoneOS builds passed. No true-device test was run.
+- Remaining P1 work is proposal normalization, persona-scoped entity metadata, source ingestion/retraction, change-feed productionization and local privacy/cache/log hardening.
+
 ## Technical Decisions
 
 - Use `.closure-lodestar/task-ledgers.json` to map Lodestar task files to recursive ledger IDs.

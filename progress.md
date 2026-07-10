@@ -714,3 +714,90 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `none`
 - Counts: 4/4 problems done, 0 blocked, 4/4 tickets done
 - Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+## Task 14 Architecture Checkpoint - 2026-07-11
+
+- Started Phase 9 as a sustainable knowledge-base workstream with no true-device dependency.
+- Audited current PRD decisions, KBLite, `/kb/extract`, Mutation V2, Context V2, Echo RAG and Task 12/13 QA gates.
+- Added the canonical product knowledge-base architecture and fixed the first P0 contract: user-evidence-only extraction, high/confirmed generation confidence, and recipient/viewer Context isolation.
+- Next: initialize the Task 14 recursive ledger, then implement the backend and iOS contract on disjoint work scopes.
+
+## Recursive Closure Checkpoint - 2026-07-11T02:27:13+08:00
+
+- Ledger: `L20260711-022449-15`
+- Lodestar task: `docs/plans/task_14_p0-knowledge-evidence-and-context-isolation.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 0/1 problems done, 0 blocked, 0/1 tickets done
+- Next instruction: Only perform `classify-ticket` for `T000` on `P000: P0 知识证据完整性与 Context 隔离`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. Afte...
+
+## Recursive Closure Checkpoint - 2026-07-11T02:27:51+08:00
+
+- Ledger: `L20260711-022449-15`
+- Lodestar task: `docs/plans/task_14_p0-knowledge-evidence-and-context-isolation.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 0/5 problems done, 0 blocked, 0/1 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P001: 后端结构化证据提取`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. Afte...
+
+## Recursive Closure Checkpoint - 2026-07-11T02:38:58+08:00
+
+- Ledger: `L20260711-022449-15`
+- Lodestar task: `docs/plans/task_14_p0-knowledge-evidence-and-context-isolation.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 0/5 problems done, 0 blocked, 1/2 tickets done
+- Next instruction: Only perform `check-success` for `P001: 后端结构化证据提取`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI fl...
+
+## Recursive Closure Checkpoint - 2026-07-11T02:39:29+08:00
+
+- Ledger: `L20260711-022449-15`
+- Lodestar task: `docs/plans/task_14_p0-knowledge-evidence-and-context-isolation.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 1/5 problems done, 0 blocked, 1/2 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P002: 后端 Context P0 生成与访问门禁`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in E...
+
+## Recursive Closure Checkpoint - 2026-07-11T02:45:05+08:00
+
+- Ledger: `L20260711-022449-15`
+- Lodestar task: `docs/plans/task_14_p0-knowledge-evidence-and-context-isolation.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 2/5 problems done, 0 blocked, 2/3 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P003: iOS 证据上送与 Persona-bound Echo 降级`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names...
+
+## Recursive Closure Checkpoint - 2026-07-11T02:49:44+08:00
+
+- Ledger: `L20260711-022449-15`
+- Lodestar task: `docs/plans/task_14_p0-knowledge-evidence-and-context-isolation.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 3/5 problems done, 0 blocked, 3/4 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P004: Task 14 QA、文档与非真机交付`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in Eng...
+
+## Recursive Closure Checkpoint - 2026-07-11T02:58:05+08:00
+
+- Ledger: `L20260711-022449-15`
+- Lodestar task: `docs/plans/task_14_p0-knowledge-evidence-and-context-isolation.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 4/5 problems done, 0 blocked, 4/5 tickets done
+- Next instruction: Only perform `record-result` for ticket `T000`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-11T02:58:57+08:00
+
+- Ledger: `L20260711-022449-15`
+- Lodestar task: `docs/plans/task_14_p0-knowledge-evidence-and-context-isolation.md`
+- Root: `P000` / done
+- Next action: `none`
+- Counts: 5/5 problems done, 0 blocked, 5/5 tickets done
+- Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+
+## Recursive Closure Checkpoint - 2026-07-11T02:59:17+08:00
+
+- Ledger: `L20260711-022449-15`
+- Lodestar task: `docs/plans/task_14_p0-knowledge-evidence-and-context-isolation.md`
+- Root: `P000` / done
+- Next action: `none`
+- Counts: 5/5 problems done, 0 blocked, 5/5 tickets done
+- Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.

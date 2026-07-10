@@ -1,0 +1,682 @@
+{
+  "checks": {
+    "C000": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P001/checks/C000.md",
+      "created_at": "2026-07-10T18:39:29+00:00",
+      "criteria_map": [
+        "v2/userEvidenceOnly/turns：由 normalization helper、endpoint 和 prompt 实现。",
+        "有效 user turn 过滤：由四类统一 post-filter 与 reason counts 实现。",
+        "无正文 summary：普通 context sanitizer 和 evidencePolicy 已验证。",
+        "v1 兼容：legacy smoke 已验证。"
+      ],
+      "evidence": [
+        "structured turns/input length/role/index 单测通过。",
+        "assistant-only、无来源、越界和非法索引过滤单测与 endpoint smoke 通过。",
+        "v1 dryRun 兼容测试、后端 202 项全量测试及原有 knowledge smoke 通过。"
+      ],
+      "execution_map": [
+        "helper、endpoint、provider prompt、单测和 verify smoke 均有对应改动及结果 R000。"
+      ],
+      "followup_problem_id": null,
+      "id": "C000",
+      "problem_id": "P001",
+      "residual_risk": [
+        "真实 DeepSeek 可能返回更多非标准形态，但服务端 post-filter 会 fail closed；后续部署态 provider smoke 属于外部验收，不阻塞本地合同完成。"
+      ],
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "覆盖 201 turns、单轮 4001 字、错误 role/index/type、assistant-only 和越界 provider 结果。"
+      ],
+      "summary": "P001 的合同、过滤、兼容和本地可重复验证均已完成，真实 provider 验收不属于本任务非真机成功标准。"
+    },
+    "C001": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P002/checks/C001.md",
+      "created_at": "2026-07-10T18:45:05+00:00",
+      "criteria_map": [
+        "high/confirmed 门禁：候选、memory 摘要和 generation renderer 三层一致过滤。",
+        "时间信件：draft、recipient、openAt 均在 archive candidate 前处理。",
+        "care viewer：viewer-specific store read 且无 owner fallback。",
+        "trace/hash：既有重复请求和 Context V2 smoke 继续通过。"
+      ],
+      "evidence": [
+        "low/familyCircle fact reason 与 generation absence 单测、smoke 通过。",
+        "family persona personal fact 不注入单测通过。",
+        "recipient mismatch、recipient not due、owner not due 单测通过。",
+        "owner care 不替代 viewer care 和 accepted viewer 专属 care 单测通过。"
+      ],
+      "execution_map": [
+        "结果 R001 覆盖 builder、fixtures、单测和 smoke。"
+      ],
+      "followup_problem_id": null,
+      "id": "C001",
+      "problem_id": "P002",
+      "residual_risk": [
+        "family persona KBLite 暂时减少召回，这是缺少 persona-scoped entity schema 时的安全取舍，不是 fail-open。"
+      ],
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "同一 snapshot 同时包含 high、confirmed、low 和 familyCircle fact；同一封信分别以正确收件人、错误收件人和本人请求。"
+      ],
+      "summary": "P002 的低置信事实、persona、时间信件和 care viewer 边界均有代码与负向自动化证据，且旧 Context V2 合同保持兼容。"
+    },
+    "C002": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/checks/C002.md",
+      "created_at": "2026-07-10T18:49:44+00:00",
+      "criteria_map": [
+        "证据上送：backend client + KBLiteManager。",
+        "节流水位：KBLiteGraph optional fields + success branch update。",
+        "本地门禁：KnowledgeGenerationPolicy + 直接/关联 fact 统一使用。",
+        "Persona gate：EchoKnowledgeContextPolicy + turn gate expected identity。",
+        "QA：model/static/merge/build 全部通过。"
+      ],
+      "evidence": [
+        "structured turns/user-only legacy transcript 静态 guard 通过。",
+        "旧图谱水位 decode、三轮 cadence、置信度、personal/family fallback 和 packet identity 模型 smoke 通过。",
+        "空上下文关闭 gate 静态 guard 与 workspace simulator build 通过。"
+      ],
+      "execution_map": [
+        "R002 覆盖 iOS service、Echo、Xcode target 和 QA 脚本。"
+      ],
+      "followup_problem_id": null,
+      "id": "C002",
+      "problem_id": "P003",
+      "residual_risk": [
+        "真实音频链不受本任务代码影响，后续真机只需验证 Context 语义，不需要重复修改 policy。"
+      ],
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "模型覆盖 low/medium/localOnly、wrong user/persona/digital-human、missing identity、family canonical ID 和 legacy graph 无水位解码。"
+      ],
+      "summary": "P003 所有原始标准均有生产代码、确定性模型检查和编译证据，且没有改动公开 UI。"
+    },
+    "C003": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P004/checks/C003.md",
+      "created_at": "2026-07-10T18:58:05+00:00",
+      "criteria_map": [
+        "QA 接入：verify_backend 与 release regression 默认运行新增 gate。",
+        "旧能力不退化：knowledge delta/v2/three-way、Archive -> Echo、delayed reply 全部通过。",
+        "非真机构建：Simulator 与 iPhoneOS generic 均通过。",
+        "文档：canonical、status、task plan/ledger 齐全。",
+        "提交：两个仓库已独立提交，按要求未推送部署。"
+      ],
+      "evidence": [
+        "后端 204 tests/full verify 通过。",
+        "iOS release regression、Simulator build/smoke 和 generic iPhoneOS build 通过。",
+        "后端 `7fab675`、iOS `dfea6d4` 提交存在且工作区只剩 Closure 收尾文件。"
+      ],
+      "execution_map": [
+        "R003 汇总 P001-P003 的代码、QA 与验证证据。"
+      ],
+      "followup_problem_id": null,
+      "id": "C003",
+      "problem_id": "P004",
+      "residual_risk": [
+        "外部 provider/部署/真机验收被明确分离，没有被误报为完成。"
+      ],
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "release regression 同时执行全量 Swift guards、后端 verify、可安装 simulator smoke；generic arm64 iPhoneOS 独立构建使用固定本机签名覆盖。"
+      ],
+      "summary": "P004 的 QA、构建、文档和独立提交标准均满足，已形成无需真机和外部 key 的重复回归入口。"
+    },
+    "C004": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/checks/C004.md",
+      "created_at": "2026-07-10T18:58:57+00:00",
+      "criteria_map": [
+        "assistant/self-ingestion：v2 user turn allowlist + legacy user-only transcript。",
+        "low/medium fact：后端/iOS high/confirmed 双门禁。",
+        "family viewer/private KBLite：后端候选和 iOS fallback 双重 fail closed。",
+        "时间信件/care：recipient/openAt/viewer-specific 自动化覆盖。",
+        "兼容/回归：Task 12/13 gate、release regression 和 generic builds 通过。"
+      ],
+      "evidence": [
+        "C000：后端 structured evidence 成功。",
+        "C001：后端 Context policy 成功。",
+        "C002：iOS persona-bound policy 成功。",
+        "C003：QA/文档/构建/提交成功。"
+      ],
+      "execution_map": [
+        "R000-R003 分别对应 P001-P004，无未关闭子问题。"
+      ],
+      "followup_problem_id": null,
+      "id": "C004",
+      "problem_id": "P000",
+      "residual_risk": [
+        "外部验收与 P1/P2 均已写入 canonical/status，不影响本 P0 非真机问题成功。"
+      ],
+      "result_ids": [
+        "R004"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "结构化输入覆盖超长/错误索引/assistant-only；Context 覆盖 low prefix、错误收件人、无效 viewer 和 family persona；iOS 覆盖错 user/persona/digital-human、空上下文与 legacy graph。"
+      ],
+      "summary": "四个子问题均有独立 success check，根问题所要求的设计、写入证据、读取隔离、iOS 消费和非真机交付已经闭环。"
+    }
+  },
+  "counters": {
+    "check": 5,
+    "event": 60,
+    "problem": 5,
+    "result": 5,
+    "ticket": 5
+  },
+  "created_at": "2026-07-10T18:24:49+00:00",
+  "effort": "medium",
+  "language": "zh",
+  "ledger_id": "L20260711-022449-15",
+  "problems": {
+    "P000": {
+      "body_path": "problems/P000/README.md",
+      "check_ids": [
+        "C004"
+      ],
+      "created_at": "2026-07-10T18:24:49+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Close the Lodestar task represented by `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/plans/task_14_p0-knowledge-evidence-and-context-isolation.md` using recursive problem, ticket, result, and check state.\n\nTask context:\n\n# P0 知识证据完整性与 Context 隔离",
+      "followup_ids": [],
+      "id": "P000",
+      "package_path": "problems/P000",
+      "parent_id": null,
+      "result_ids": [
+        "R004"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P001",
+        "P002",
+        "P003",
+        "P004"
+      ],
+      "success_criteria": [
+        "assistant-only 内容不能落成 KBLite 实体。",
+        "provider 无来源或错误来源的实体会被过滤，且 response/日志不包含原始正文。",
+        "low/medium fact 可留作候选，但不会进入 Echo 后端/本地生成上下文。",
+        "写给其他收件人的时间信件、无效家庭关系和错误 care viewer 不会进入 Context。",
+        "Task 12/13 mutation、tombstone、三方合并与旧合同回归不退化。",
+        "后端全量验证、iOS release regression、generic Simulator/iPhoneOS 构建和 `git diff --check` 通过。"
+      ],
+      "ticket_ids": [
+        "T000"
+      ],
+      "title": "P0 知识证据完整性与 Context 隔离",
+      "updated_at": "2026-07-10T18:58:57+00:00"
+    },
+    "P001": {
+      "body_path": "problems/P000/children/P001/README.md",
+      "check_ids": [
+        "C000"
+      ],
+      "created_at": "2026-07-10T18:27:51+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "`/kb/extract` 目前接收普通 transcript，provider 结果没有校验来源 turn，AI 回复、无来源或错误索引可能成为持久知识。",
+      "followup_ids": [],
+      "id": "P001",
+      "package_path": "problems/P000/children/P001",
+      "parent_id": "P000",
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "additive 支持 extraction schema v2、userEvidenceOnly 和 indexed turns，同时保留 v1 兼容。",
+        "服务端校验 role、index、长度，并只接受引用有效 user turn 的实体。",
+        "response 返回不含正文的 evidencePolicy 摘要，provider prompt 明确禁止 assistant 作为事实来源。",
+        "后端单测和 evidence smoke 覆盖 assistant-only、无来源、越界来源及合法来源。"
+      ],
+      "ticket_ids": [
+        "T001"
+      ],
+      "title": "后端结构化证据提取",
+      "updated_at": "2026-07-10T18:39:29+00:00"
+    },
+    "P002": {
+      "body_path": "problems/P000/children/P002/README.md",
+      "check_ids": [
+        "C001"
+      ],
+      "created_at": "2026-07-10T18:27:51+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "Context Packet 可以选择 low/medium KBLite fact，时间信件跨收件人和 care viewer 仍缺少完整负向回归，可能把不可信或无权内容送入 Echo。",
+      "followup_ids": [],
+      "id": "P002",
+      "package_path": "problems/P000/children/P002",
+      "parent_id": "P000",
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "KBLite fact 只有 high/confirmed 能进入 generationContext，其他候选写入固定 filtered reason。",
+        "写给其他收件人、未到期时间信件和无效家庭 viewer 不进入 Context。",
+        "personal/family care 访问使用已验证的 viewer/persona policy，不因客户端 viewer 参数 fail-open。",
+        "Context V2 单测和 smoke 覆盖选择、过滤 reason、hash 稳定及旧合同兼容。"
+      ],
+      "ticket_ids": [
+        "T002"
+      ],
+      "title": "后端 Context P0 生成与访问门禁",
+      "updated_at": "2026-07-10T18:45:05+00:00"
+    },
+    "P003": {
+      "body_path": "problems/P000/children/P003/README.md",
+      "check_ids": [
+        "C002"
+      ],
+      "created_at": "2026-07-10T18:27:51+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "iOS 将 user/assistant 拼成字符串上送，精提取节流水位可能长期退化；family persona 的 Context 失败会读取 viewer 私有 KBLite，Context 响应也未完整绑定当前 gate。",
+      "followup_ids": [],
+      "id": "P003",
+      "package_path": "problems/P000/children/P003",
+      "parent_id": "P000",
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "iOS 上送 indexed structured turns 和 sourcePolicy，并保留旧服务端兼容策略。",
+        "独立后端精提取水位确保频率策略不会被本地 sessionCount 永久推迟。",
+        "本地生成只包含 high/confirmed fact。",
+        "local KBLite fallback 只允许 personal/self；family persona 失败使用空知识上下文。",
+        "Context Packet user/persona/digital-human identity 不匹配时拒绝提交生成。",
+        "纯 Swift model/static smoke 覆盖个人、家庭、错身份和置信度分支。"
+      ],
+      "ticket_ids": [
+        "T003"
+      ],
+      "title": "iOS 证据上送与 Persona-bound Echo 降级",
+      "updated_at": "2026-07-10T18:49:44+00:00"
+    },
+    "P004": {
+      "body_path": "problems/P000/children/P004/README.md",
+      "check_ids": [
+        "C003"
+      ],
+      "created_at": "2026-07-10T18:27:51+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "证据和 Context 政策跨越 iOS/后端，如果不进入统一 gate 和状态文档，后续同步、Echo 或 PRD 改动容易绕过门禁。",
+      "followup_ids": [],
+      "id": "P004",
+      "package_path": "problems/P000/children/P004",
+      "parent_id": "P000",
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "新增后端 evidence/context smoke 和 iOS policy smoke，接入现有 verify/release regression。",
+        "Task 12/13 mutation、tombstone、三方合并和旧合同回归继续通过。",
+        "generic Simulator、generic iPhoneOS、后端全量验证与两个仓库 `git diff --check` 通过。",
+        "canonical 架构、Task 14 状态、验证命令和剩余 P1/P2 缺口更新完整。",
+        "分别提交 iOS 与后端，不推送或部署。"
+      ],
+      "ticket_ids": [
+        "T004"
+      ],
+      "title": "Task 14 QA、文档与非真机交付",
+      "updated_at": "2026-07-10T18:58:05+00:00"
+    }
+  },
+  "results": {
+    "R000": {
+      "artifacts": [
+        "`app/services/knowledge_extraction.py`",
+        "`scripts/backend-knowledge-evidence-smoke.py`",
+        "`scripts/run-backend-knowledge-evidence-smoke.sh`"
+      ],
+      "body_path": "problems/P000/children/P001/results/R000.md",
+      "created_at": "2026-07-10T18:38:57+00:00",
+      "done": [
+        "新增输入规范化、turn 数量/单轮/总长度校验、证据后过滤和统计 helper。",
+        "DeepSeek prompt 明确 assistant 只能帮助理解，不能作为事实来源。",
+        "endpoint dryRun/正式响应兼容 v1/v2，并从 context 删除 turns/transcript/summary。",
+        "新增 endpoint/helper 单测、evidence smoke 和 verify_backend 接入。"
+      ],
+      "id": "R000",
+      "known_gaps": [
+        "未调用真实 DeepSeek provider；当前通过 mock 验证返回过滤合同。",
+        "legacy v1 按兼容要求维持旧语义，iOS 新调用固定使用 v2。",
+        "dryRun 继续返回调试 prompt，调用方不得把 dryRun 响应作为普通日志或用户响应。"
+      ],
+      "problem_id": "P001",
+      "root_id": "P000",
+      "summary": "`/kb/extract` 已 additive 支持 extraction v2 structured turns 和 `userEvidenceOnly`，provider 输出必须引用有效 user turn；普通响应返回无正文 evidencePolicy，v1 transcript 保持兼容。",
+      "ticket_id": "T001",
+      "verification": [
+        "子任务运行 202 项 unittest 全部通过，knowledge delta/v2/evidence smoke 通过。",
+        "主控复跑 evidence helper 两项定向单测和 memory smoke 通过。",
+        "Python/shell 基础检查和 `git diff --check` 通过。"
+      ]
+    },
+    "R001": {
+      "artifacts": [
+        "`app/services/context_packet.py`",
+        "`tests/test_core_services.py`",
+        "`scripts/backend-echo-context-builder-v2-smoke.py`"
+      ],
+      "body_path": "problems/P000/children/P002/results/R001.md",
+      "created_at": "2026-07-10T18:44:54+00:00",
+      "done": [
+        "high/confirmed + generationAllowed 的 fact 才能成为候选和 generation text；其他 fact 进入 filteredContext 固定 reason。",
+        "family persona 在缺少 persona-scoped KB schema 前不使用当前 viewer 的个人 KBLite facts。",
+        "时间信件对非收件人返回 recipient mismatch，对收件人未到期和本人未到期分别安全过滤。",
+        "有 viewerFamilyMemberID 时只读取该 viewer 的 care snapshot，不回退 owner care；family 无明确 viewer 不注入 owner care。",
+        "更新 Context/knowledge smoke 与已有 fixture confidence。"
+      ],
+      "id": "R001",
+      "known_gaps": [
+        "KBLite 实体尚无 personaScope/digitalHumanId，因此 family persona 当前 fail closed 不消费 KBLite；P1 需补 persona knowledge schema 后再开放。",
+        "viewer 身份最终仍依赖已完成的 route principal/ownership policy；本任务不切换全局 enforce。"
+      ],
+      "problem_id": "P002",
+      "root_id": "P000",
+      "summary": "Context V2 已统一执行 KBLite 置信度/隐私门禁、personal persona 边界、时间信件收件人与到期策略，以及 care viewer 专属读取。",
+      "ticket_id": "T002",
+      "verification": [
+        "5 项 Context 定向单测通过，新增 low confidence、family persona、recipient mismatch、owner not due 和 care viewer 隔离覆盖。",
+        "Context V2 smoke、knowledge delta、knowledge v2 smoke 通过。",
+        "Python compile 和 `git diff --check` 通过。"
+      ]
+    },
+    "R002": {
+      "artifacts": [
+        "`DreamJourney/Sources/Services/KnowledgeGenerationPolicy.swift`",
+        "`DreamJourney/Sources/Services/EchoKnowledgeContextPolicy.swift`",
+        "`Scripts/QA/prd-stitch-ui/knowledge-context-policy-model-smoke.swift`",
+        "`/tmp/task14-ios-simulator-build.log`"
+      ],
+      "body_path": "problems/P000/children/P003/results/R002.md",
+      "created_at": "2026-07-10T18:49:32+00:00",
+      "done": [
+        "v2 indexed turns 包含 user/assistant，legacy transcript 仅包含 user 证据。",
+        "optional backend extraction session/date 水位兼容旧图谱，只有后端成功响应推进。",
+        "high/confirmed + generationAllowed 事实才能进入直接或人物关联的本地生成文本。",
+        "Context packet 从 `persona` 子对象解析身份并兼容顶层字段；family canonical ID 优先 repository digitalHumanId。",
+        "timeout/backend missing/failure/contract missing/identity mismatch 统一经过 persona fallback policy；family fail closed。",
+        "空后端/本地上下文明确结束 gate，不残留 timeout/retry。",
+        "新纯 Swift model smoke、静态 guard 和 Xcode target 接入完成。"
+      ],
+      "id": "R002",
+      "known_gaps": [
+        "未做真机 Echo 语义/声音验收，符合本任务约束。",
+        "family persona KBLite 本地 fallback 在 persona-scoped knowledge schema 完成前保持关闭。"
+      ],
+      "problem_id": "P003",
+      "root_id": "P000",
+      "summary": "iOS 已使用 structured user evidence 合同、独立后端精提取水位和统一 fact 生成门禁；Echo Context gate 绑定 user/persona/digital-human identity，family 失败不再读取 viewer 私有 KBLite。",
+      "ticket_id": "T003",
+      "verification": [
+        "policy model smoke、evidence/context static guard、knowledge pipeline guard、three-way merge model smoke 通过。",
+        "DreamJourney workspace generic iOS Simulator Debug build 通过。",
+        "`project.pbxproj` 包含两个新增 policy source；`git diff --check` 通过。"
+      ]
+    },
+    "R003": {
+      "artifacts": [
+        "`docs/superpowers/plans/2026-07-11-product-knowledge-base-architecture-v2.md`",
+        "`docs/superpowers/status/2026-07-11-knowledge-evidence-context-isolation.md`",
+        "release regression 与 iPhoneOS generic build 报告路径见 Verification。"
+      ],
+      "body_path": "problems/P000/children/P004/results/R003.md",
+      "created_at": "2026-07-10T18:57:51+00:00",
+      "done": [
+        "后端 evidence smoke 默认进入 `verify_backend.sh`，Context V2 smoke 覆盖 confidence/persona/openAt/recipient/care viewer。",
+        "iOS policy model/static guard 默认进入 release regression，新 policy 源文件显式加入 target。",
+        "canonical 产品知识库设计、Task 14 状态和 Task 12/13 部署口径已更新。",
+        "后端提交 `7fab675 feat: enforce knowledge evidence context policy`。",
+        "iOS 功能提交 `dfea6d4 feat: bind Echo knowledge to verified evidence`。"
+      ],
+      "id": "R003",
+      "known_gaps": [
+        "未推送、未部署；后端 `main` 与 iOS feature 分支各 ahead 1（Closure 文档收尾后 iOS 还会增加一个文档提交）。",
+        "真实 DeepSeek、线上 Postgres 和真机 Echo 语义为外部验收边界。",
+        "P1 persona-scoped entity schema、mutationProposal、source lifecycle 和 change-feed compaction 尚未实施。"
+      ],
+      "problem_id": "P004",
+      "root_id": "P000",
+      "summary": "知识证据/Context P0 policy 已接入后端 verify 与 iOS release regression，canonical 架构和实现状态文档完整，两个仓库形成独立本地提交。",
+      "ticket_id": "T004",
+      "verification": [
+        "后端 final verify：204 tests、FastAPI、delta、Mutation V2、evidence smoke 全部通过。",
+        "Release regression 通过：`tmp/visual-qa/prd-stitch-ui/release-regression/20260711-knowledge-evidence-context-final/report.md`。",
+        "Archive -> Echo 与 delayed reply simulator smoke 通过并保存截图/日志。",
+        "generic iPhoneOS build 通过：`tmp/visual-qa/prd-stitch-ui/iphoneos-generic-build/20260711-knowledge-evidence-context-final/report.md`。",
+        "两仓库 `git diff --check` 通过；未运行真机。"
+      ]
+    },
+    "R004": {
+      "artifacts": [
+        "Canonical：`docs/superpowers/plans/2026-07-11-product-knowledge-base-architecture-v2.md`",
+        "Status：`docs/superpowers/status/2026-07-11-knowledge-evidence-context-isolation.md`",
+        "Backend commit：`7fab675`",
+        "iOS feature commit：`dfea6d4`"
+      ],
+      "body_path": "problems/P000/results/R004.md",
+      "created_at": "2026-07-10T18:58:45+00:00",
+      "done": [
+        "P001：后端 extraction v2、user evidence post-filter、长度校验和 evidencePolicy。",
+        "P002：后端 high/confirmed Context、family KBLite 隔离、时间信件和 care viewer policy。",
+        "P003：iOS structured turns、独立精提取水位、本地 fact policy 和 persona-bound Echo gate。",
+        "P004：跨仓库 QA、Simulator/iPhoneOS 构建、架构/状态文档和独立提交。"
+      ],
+      "id": "R004",
+      "known_gaps": [
+        "真实 provider、线上部署和真机不在本轮范围，尚未执行。",
+        "P1 mutationProposal、persona knowledge schema、source lifecycle、同步 compaction 和本地隐私稳定性仍按 canonical 路线推进。"
+      ],
+      "problem_id": "P000",
+      "root_id": "P000",
+      "summary": "Task 14 已按 canonical 知识库设计完成首个 P0 非真机闭环：写入侧只接受用户证据，读取侧执行 confidence/persona/recipient/care 门禁，iOS Echo 绑定当前身份并在 family 失败时 fail closed。",
+      "ticket_id": "T000",
+      "verification": [
+        "Results：R000、R001、R002、R003；checks：C000、C001、C002、C003 全部 success。",
+        "后端 204 tests/full verify 通过。",
+        "iOS release regression、Archive -> Echo、delayed reply、Simulator build、generic iPhoneOS build 通过。"
+      ]
+    }
+  },
+  "root_id": "P000",
+  "schema_version": 6,
+  "tickets": {
+    "T000": {
+      "acceptance_criteria": [
+        "assistant-only、无来源、越界来源和只引用 assistant turn 的实体不会被接受。",
+        "`/kb/extract` v1 transcript 保持兼容，v2 返回无原文 `evidencePolicy` 摘要。",
+        "low/medium fact 可以存储，但不会进入后端或 iOS 本地 generation context。",
+        "后端精提取节流不再被每轮本地 fallback 的总 sessionCount 永久推迟。",
+        "family persona 超时/失败不会读取 viewer 私有 KBLite。",
+        "user/persona/digital-human identity 不匹配的 Context Packet 不会提交生成。",
+        "时间信件非收件人、未到期、无效 family/care viewer 不进入 Context。",
+        "Task 12/13 mutation、tombstone、三方合并、旧合同与公开 release regression 不退化。"
+      ],
+      "assumptions": [
+        "当前 `/kb/mutations` V2、revision/change feed 与 Context V2 schema 保持兼容。",
+        "`generationAllowed` 表示可以离开设备，但不等于对所有 persona 或 family viewer 都可见。",
+        "本轮不引入向量数据库，不做真实 provider/真机验收。"
+      ],
+      "body_path": "problems/P000/tickets/T000.md",
+      "classification": "split",
+      "classification_reason": "后端证据策略、iOS persona-bound 消费、跨仓库 QA 与文档收敛是可独立验收且写入范围分离的子结果，需要分别关闭后再判断根问题。",
+      "created_at": "2026-07-10T18:27:13+00:00",
+      "id": "T000",
+      "problem_definition": "当前 KBLite、后端 `/kb/extract` 与 Echo Context 已经具备同步和检索能力，但证据和身份边界仍不完整：iOS 把 user/assistant 作为一段文本上送，后端不验证 provider 返回的来源 turn；低置信 fact 可进入生成；family persona 请求失败会回退 viewer 私有 KBLite；Context 响应也未完整绑定当前 user/persona/digital-human gate。上述问题可能把 AI 回复或错误角色数据注入后续 Echo。",
+      "problem_id": "P000",
+      "proposed_solution": "以 additive 兼容方式增加 extraction v2 structured turns 与 `userEvidenceOnly` policy，后端对 role/index/长度进行校验并在 provider 后处理阶段只保留至少引用一个有效 user turn 的实体，响应只返回不含正文的 evidence summary。后端 Context 与 iOS 本地 fallback 统一只允许 high/confirmed fact。iOS 增加后端精提取独立水位，发送 indexed turns，并把本地 fallback 限制为 personal/self；family persona 失败返回空知识上下文。Context Packet 在提交 SDK 前验证 user/persona/digital-human identity。补齐时间信件收件人和 care viewer 的负向测试，接入现有 release regression。",
+      "result_ids": [
+        "R004"
+      ],
+      "risks": [
+        "旧 provider 结果可能缺少 sourceTurnIndices；v2 应安全过滤并让 iOS 本地规则降级，不能放宽证据要求。",
+        "family persona 禁止本地 fallback 后，后端不可用时上下文会减少；这是明确的隐私优先取舍。",
+        "新的 Context identity 字段可能在旧后端缺失；personal/self 兼容要以当前 request gate 为边界，family 不能 fail-open。",
+        "不能在本任务顺带重写全局 Postgres 连接模型或公开 UI。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "落地知识证据与 Persona-bound Context P0 门禁",
+      "updated_at": "2026-07-10T18:58:45+00:00",
+      "verification_plan": "后端运行全量 unittest、FastAPI smoke、knowledge v1/v2、Context V2 和新增 evidence policy smoke；iOS 运行 structured extraction/persona policy model smoke、knowledge static guard、三方合并模型、release regression、generic Simulator 和 generic iPhoneOS Debug build；两个仓库运行 `git diff --check`。不执行真机测试。"
+    },
+    "T001": {
+      "acceptance_criteria": [
+        "合法 user evidence 被接受；assistant-only、缺失、越界来源被过滤。",
+        "v1 dryRun 和既有调用继续工作。",
+        "response/log 不回显 turn 正文。"
+      ],
+      "assumptions": [
+        "provider JSON 的四类实体继续兼容当前 `KBExtractionResult`。"
+      ],
+      "body_path": "problems/P000/children/P001/tickets/T001.md",
+      "classification": "one_go",
+      "classification_reason": "合同、helper、endpoint 和验证边界明确，修改集中于后端知识提取模块，可在一次可逆实现中完成并立即运行单测。",
+      "created_at": "2026-07-10T18:28:23+00:00",
+      "id": "T001",
+      "problem_definition": "普通 transcript 无法让服务端可靠区分用户事实和 assistant 回复，provider 返回来源也未被验证。",
+      "problem_id": "P001",
+      "proposed_solution": "新增独立 evidence policy helper，解析 structured turns、生成 provider transcript 与 user turn allowlist，并在 provider 响应后按实体统一过滤 `sourceTurnIndices`。`/kb/extract` 保持 legacy transcript 兼容，v2 返回无正文统计摘要；DeepSeek prompt 明确 user-only 规则。",
+      "result_ids": [
+        "R000"
+      ],
+      "risks": [
+        "provider 遗漏 index 时 v2 会过滤；不得以 fail-open 修复召回率。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现 `/kb/extract` 证据策略 V2",
+      "updated_at": "2026-07-10T18:38:57+00:00",
+      "verification_plan": "新增 helper 单测、FastAPI endpoint 单测和 memory evidence smoke，并运行后端全量验证。"
+    },
+    "T002": {
+      "acceptance_criteria": [
+        "low/medium fact 不进入 generation text，high/confirmed 继续可用。",
+        "非收件人、未到期、无效 family/care viewer 被过滤。",
+        "selected/filtered/ranking trace 与稳定 hash 继续兼容。"
+      ],
+      "assumptions": [
+        "family relationship 和 verified principal 的现有 policy 保持权威。"
+      ],
+      "body_path": "problems/P000/children/P002/tickets/T002.md",
+      "classification": "one_go",
+      "classification_reason": "候选过滤、时间信件/care 边界和 Context V2 测试集中在一个 builder，合同明确且可由现有 in-memory smoke 立即回归。",
+      "created_at": "2026-07-10T18:39:41+00:00",
+      "id": "T002",
+      "problem_definition": "Context 会选择低置信 fact，跨收件人时间信件和 care viewer 缺少完整负向覆盖。",
+      "problem_id": "P002",
+      "proposed_solution": "在候选生成阶段增加 fact confidence policy 和固定过滤 reason；修正时间信件 recipient 计算为 owner 或目标收件人 allowlist；care 只在合法 personal self 或 accepted family viewer 下加入。补 Context V2 回归和 smoke。",
+      "result_ids": [
+        "R001"
+      ],
+      "risks": [
+        "旧 fact 缺少 confidence；按安全策略视为非生成候选，不能默认为 high。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "统一后端 Context 证据与访问过滤",
+      "updated_at": "2026-07-10T18:44:54+00:00",
+      "verification_plan": "运行 Context builder 单测、Context V2 smoke、knowledge delta/v2 smoke 和后端全量验证。"
+    },
+    "T003": {
+      "acceptance_criteria": [
+        "structured turns 正确标记 user/assistant 和 index。",
+        "每三次会话能重新触发后端精提取。",
+        "low/medium fact 不进入本地生成。",
+        "family fallback 和错身份 packet 被拒绝，personal self 正常。"
+      ],
+      "assumptions": [
+        "旧后端可忽略 additive turns 或由客户端兼容重试 legacy 请求。"
+      ],
+      "body_path": "problems/P000/children/P003/tickets/T003.md",
+      "classification": "one_go",
+      "classification_reason": "structured payload、水位、纯策略模型和 Echo gate 改动已按明确合同集中实现，可由确定性 Swift smoke、静态 guard 与 generic build 一次验收。",
+      "created_at": "2026-07-10T18:46:15+00:00",
+      "id": "T003",
+      "problem_definition": "iOS 证据上送、精提取频率、本地置信度和 family persona 降级策略不一致。",
+      "problem_id": "P003",
+      "proposed_solution": "扩展 backend client 的 extract payload 为 indexed turns；在 KBLite graph 保存兼容的 lastBackendExtractionSession/Date 水位；统一 generation fact predicate；抽出纯 Swift Echo knowledge context policy，用当前 gate 校验 packet identity 并决定 local fallback，family 默认拒绝本地私有 KB。",
+      "result_ids": [
+        "R002"
+      ],
+      "risks": [
+        "旧图谱解码必须使用默认水位保持兼容。",
+        "不能在 family 失败时静默切回 viewer 数据。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现 iOS 结构化提取和 Persona-bound fallback",
+      "updated_at": "2026-07-10T18:49:32+00:00",
+      "verification_plan": "新增纯 Swift model smoke 和 static guard，运行三方合并 smoke、release regression 及 generic builds。"
+    },
+    "T004": {
+      "acceptance_criteria": [
+        "所有新增/既有知识 gate、后端全量测试和 generic builds 通过。",
+        "报告可定位证据过滤和 persona fallback，不包含正文。",
+        "两仓库 diff 可审阅并分别提交，不推送部署。"
+      ],
+      "assumptions": [
+        "真机和线上部署不属于本任务验收条件。"
+      ],
+      "body_path": "problems/P000/children/P004/tickets/T004.md",
+      "classification": "one_go",
+      "classification_reason": "功能实现已分项关闭，剩余仅为现有 gate 集成、全量非真机验证、状态文档和两个独立提交，可在一次交付检查中完成。",
+      "created_at": "2026-07-10T18:49:55+00:00",
+      "id": "T004",
+      "problem_definition": "新 policy 必须进入日常 QA 和状态文档，否则后续改动会绕过。",
+      "problem_id": "P004",
+      "proposed_solution": "把后端 evidence/context smoke 纳入 verify_backend，把 iOS policy smoke/static guard 纳入 release regression，更新 canonical/状态/Task 文档，运行非真机验证并分别提交。",
+      "result_ids": [
+        "R003"
+      ],
+      "risks": [
+        "release regression 运行时间增加；新增 gate 应保持本地、确定性、无需外部 key。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "固化 Task 14 跨仓库交付门",
+      "updated_at": "2026-07-10T18:57:51+00:00",
+      "verification_plan": "执行任务文档列出的完整命令，保留 release regression report 路径并做 `git diff --check`。"
+    }
+  },
+  "updated_at": "2026-07-10T18:58:57+00:00"
+}

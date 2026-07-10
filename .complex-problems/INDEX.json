@@ -1,5 +1,5 @@
 {
-  "active_ledger_id": "L20260711-005948",
+  "active_ledger_id": "L20260711-022449-15",
   "ledgers": [
     {
       "active_count": 0,
@@ -143,7 +143,18 @@
       "status": "done",
       "title": "P1 知识删除 Tombstone 与三方合并",
       "updated_at": "2026-07-10T17:58:09+00:00"
+    },
+    {
+      "active_count": 0,
+      "blocked_count": 0,
+      "ledger_id": "L20260711-022449-15",
+      "path": "L20260711-022449-15",
+      "root_id": "P000",
+      "schema_version": 6,
+      "status": "done",
+      "title": "P0 知识证据完整性与 Context 隔离",
+      "updated_at": "2026-07-10T18:58:57+00:00"
     }
   ],
-  "updated_at": "2026-07-10T17:58:58+00:00"
+  "updated_at": "2026-07-10T18:59:17+00:00"
 }
