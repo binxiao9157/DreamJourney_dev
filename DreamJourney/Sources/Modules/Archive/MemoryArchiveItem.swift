@@ -1034,6 +1034,16 @@ extension MemoryArchiveItem {
             "analysisRetryable": analysisRetryableForBackend,
             "personaScope": personaScope,
             "digitalHumanId": digitalHumanId,
+            "privacyMetadata": [
+                "scope": "generationAllowed",
+                "sourceRefs": [
+                    [
+                        "kind": "archiveItem",
+                        "id": id,
+                        "title": title,
+                    ],
+                ],
+            ],
         ]
         if let analysisSummary, !analysisSummary.isEmpty {
             payload["analysisSummary"] = analysisSummary

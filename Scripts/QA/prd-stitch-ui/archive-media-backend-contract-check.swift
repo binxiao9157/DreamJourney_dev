@@ -42,6 +42,9 @@ for required in [
     "\"uploaderUserId\": ownerUserId",
     "\"personaScope\": personaScope",
     "\"digitalHumanId\": digitalHumanId",
+    "\"privacyMetadata\": [",
+    "\"scope\": \"generationAllowed\"",
+    "\"kind\": \"archiveItem\"",
 ] {
     assertContains(item, required, "archive item should define media backend contract \(required)")
 }

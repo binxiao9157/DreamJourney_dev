@@ -635,3 +635,21 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `none`
 - Counts: 8/8 problems done, 0 blocked, 8/8 tickets done
 - Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+
+## Recursive Closure Checkpoint - 2026-07-11T00:28:58+08:00
+
+- Ledger: `L20260710-231102-12`
+- Lodestar task: `docs/plans/task_12_p0-unified-knowledge-pipeline.md`
+- Root: `P000` / done
+- Next action: `none`
+- Counts: 7/7 problems done, 0 blocked, 7/7 tickets done
+- Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+
+## Task 12 审查加固与最终验证 - 2026-07-11
+
+- 修复本地 Echo fallback 隐私过滤、用户切换同步竞态、RAG gate 失败重试和 change feed 安全应用。
+- 修复 Postgres knowledge mutation 共享事务问题，并阻止旧 `/kb/sync` 覆盖较新 revision。
+- 复核 agent 逐项确认 6 个审查问题均已解决，无 P0 阻塞项。
+- 后端 188 项测试与本地部署态 knowledge smoke 通过。
+- 最终 release regression 通过：`tmp/visual-qa/prd-stitch-ui/release-regression/20260711-004701-release-regression/report.md`。
+- 后端 `00df327` 已推送并部署；公网 Postgres knowledge smoke 通过 revision、幂等、change feed、generation、409 与 legacy no-op 验收。

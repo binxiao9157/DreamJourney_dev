@@ -35,7 +35,9 @@ require(
 )
 
 require(
-    echo.contains("recordEchoContextPacketForUserTurn(text: text, turnID: turnID)") &&
+    echo.contains("recordEchoContextPacketForUserTurn(") &&
+        echo.contains("lifecycleToken: lifecycleToken") &&
+        echo.contains("allowsGeneration: !self.viewModel.isWaitingForDelayedReply") &&
         echo.contains("private var lastEchoTraceRecord: EchoTraceRecord?") &&
         echo.contains("lastEchoTraceRecord = record") &&
         echo.contains("[CFLite] context built") &&

@@ -156,6 +156,9 @@ final class DialogEngineManager: NSObject {
     var currentTopic: String?
     var currentConfigurationIsProductionReady: Bool { false }
     private(set) var isLocalTTSPlaybackEnabled = true
+    private(set) var usesTurnScopedKnowledgeContext = false
+    private(set) var lastSubmittedTurnKnowledgeContextSource: String?
+    private(set) var lastSubmittedTurnKnowledgeContextLength = 0
 
     private override init() {
         super.init()
@@ -174,10 +177,30 @@ final class DialogEngineManager: NSObject {
         isEngineReady = true
     }
 
-    func startDialog(sendsGreeting: Bool = true) {
+    func startDialog(
+        sendsGreeting: Bool = true,
+        usesTurnScopedKnowledgeContext: Bool = false
+    ) {
+        self.usesTurnScopedKnowledgeContext = usesTurnScopedKnowledgeContext
         recordUIQAPromptSnapshot()
         isDialogActive = true
         delegate?.onDialogStarted()
+    }
+
+    @discardableResult
+    func submitTurnKnowledgeContext(
+        _ content: String,
+        traceID: String?,
+        source: String
+    ) -> Bool {
+        guard isDialogActive else { return false }
+        lastSubmittedTurnKnowledgeContextSource = source
+        lastSubmittedTurnKnowledgeContextLength = content.utf8.count
+        print(
+            "[DialogEngine][UIQA] turn RAG submitted " +
+            "source=\(source) traceID=\(traceID ?? "none") bytes=\(content.utf8.count)"
+        )
+        return true
     }
 
     func stopDialog() {
@@ -189,6 +212,7 @@ final class DialogEngineManager: NSObject {
     func destroyEngine() {
         isEngineReady = false
         isDialogActive = false
+        usesTurnScopedKnowledgeContext = false
         delegate = nil
     }
 
@@ -198,6 +222,8 @@ final class DialogEngineManager: NSObject {
         prompt += buildDigitalHumanModePolicy(context: context)
         let archiveSnapshot = MemoryArchiveRepository.shared.contextSnapshot()
         let archiveContext = archiveSnapshot.promptSection
+        // Legacy UIQA archive smoke still inspects this synthetic prompt. The production
+        // engine suppresses the same startup section when turn-scoped RAG is enabled.
         if shouldExposePersonalContext(for: context), !archiveContext.isEmpty {
             prompt += archiveContext
         }
@@ -290,6 +316,9 @@ final class DialogEngineManager: NSObject {
     /// 当前话题（由业务层设置，注入到 system_role 末尾）
     var currentTopic: String?
     private var suppressGreetingForNextStart = false
+    private(set) var usesTurnScopedKnowledgeContext = false
+    private(set) var lastSubmittedTurnKnowledgeContextSource: String?
+    private(set) var lastSubmittedTurnKnowledgeContextLength = 0
 
     // MARK: - Configuration
 
@@ -592,7 +621,11 @@ final class DialogEngineManager: NSObject {
     }
 
     /// 开始语音对话
-    func startDialog(sendsGreeting: Bool = true) {
+    func startDialog(
+        sendsGreeting: Bool = true,
+        usesTurnScopedKnowledgeContext: Bool = false
+    ) {
+        self.usesTurnScopedKnowledgeContext = usesTurnScopedKnowledgeContext
         suppressGreetingForNextStart = !sendsGreeting
         // 引擎未就绪时先初始化
         guard isEngineReady, let engine = engine else {
@@ -672,6 +705,40 @@ final class DialogEngineManager: NSObject {
         DDLogInfo("[DialogEngine] 发送打断指令")
     }
 
+    /// 为当前已确认的用户 query 提交后端筛选后的知识上下文。
+    /// ChatRagText 会把 content 绑定到 SDK 当前等待中的 turn，不修改下一轮 system_role。
+    @discardableResult
+    func submitTurnKnowledgeContext(
+        _ content: String,
+        traceID: String?,
+        source: String
+    ) -> Bool {
+        guard isDialogActive, let engine else {
+            DDLogWarn("[DialogEngine] 忽略 turn RAG：对话未激活")
+            return false
+        }
+        guard let payloadData = try? JSONSerialization.data(
+            withJSONObject: ["content": content],
+            options: []
+        ), let payload = String(data: payloadData, encoding: .utf8) else {
+            DDLogError("[DialogEngine] turn RAG JSON 编码失败")
+            return false
+        }
+
+        let result = engine.send(SEDirectiveEventChatRagText, data: payload)
+        guard result == SENoError else {
+            DDLogError("[DialogEngine] turn RAG 提交失败: \(result.rawValue)")
+            return false
+        }
+        lastSubmittedTurnKnowledgeContextSource = source
+        lastSubmittedTurnKnowledgeContextLength = content.utf8.count
+        DDLogInfo(
+            "[DialogEngine] turn RAG 已提交 source=\(source) " +
+            "traceID=\(traceID ?? "none") bytes=\(content.utf8.count)"
+        )
+        return true
+    }
+
     /// 销毁引擎（登出/退出时调用）
     func destroyEngine() {
         invalidateSilenceTimer()
@@ -684,6 +751,7 @@ final class DialogEngineManager: NSObject {
         isDialogActive = false
         isAISpeaking = false
         isEnding = false
+        usesTurnScopedKnowledgeContext = false
         restoreAudioSessionIfNeeded()
         DDLogInfo("[DialogEngine] 引擎已销毁")
     }
@@ -942,7 +1010,8 @@ final class DialogEngineManager: NSObject {
             var fullPrompt = config.systemPrompt
             let context = DigitalHumanContextStore.shared.current
             fullPrompt += buildDigitalHumanModePolicy(context: context)
-            if shouldExposePersonalContext(for: context) {
+            if shouldExposePersonalContext(for: context),
+               !usesTurnScopedKnowledgeContext {
                 // 注入跨会话记忆上下文
                 let memory = ConversationMemoryManager.shared.currentMemory
                 if memory.sessionCount > 0 {
@@ -1661,7 +1730,7 @@ extension DialogEngineManager: SpeechEngineDelegate {
         }
 
         // 【KBLite】附加知识库上下文（累计的人物、地点、事件、事实）
-        let kbContext = KBLiteManager.shared.buildContextString(query: nil)
+        let kbContext = KBLiteManager.shared.buildGenerationAllowedContextString(query: nil)
         if !kbContext.isEmpty {
             context += kbContext
         }

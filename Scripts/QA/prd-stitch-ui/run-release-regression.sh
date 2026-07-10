@@ -31,6 +31,7 @@ RUN_BACKEND_ENV_SMOKE="${RUN_BACKEND_ENV_SMOKE:-0}"
 RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE="${RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE:-0}"
 RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE="${RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE:-0}"
 RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE="${RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE:-0}"
+RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE="${RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE:-0}"
 RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE="${RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE:-0}"
 RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE="${RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE:-0}"
 RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE="${RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE:-0}"
@@ -122,6 +123,7 @@ Run ID: \`$RUN_ID\`
 - Backend auth session/ownership shadow smoke: \`$RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE\`
 - Backend cross-account authorization shadow smoke: \`$RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE\`
 - Backend route ownership audit smoke: \`$RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE\`
+- Backend deployed knowledge pipeline smoke: \`$RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE\`
 - Backend archive image-analysis smoke: \`$RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE\`
 - Backend hidden media sync smoke: \`$RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE\`
 - Backend time-letter lifecycle smoke: \`$RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE\`
@@ -169,7 +171,8 @@ Run ID: \`$RUN_ID\`
 - Optional backend environment smoke when \`RUN_BACKEND_ENV_SMOKE=1\` and backend URL/token are configured.
 - Optional backend auth session/ownership shadow smoke when \`RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE=1\`; this verifies opaque login tokens, refresh rotation/replay rejection, logout revocation, and principal-bound owner mismatch rejection while global mode remains shadow.
 - Optional backend cross-account authorization shadow smoke when \`RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE=1\`; this verifies owner/family/time-letter/invitation policy decisions, forged-viewer deny evidence, and retained production shadow mode without invoking global dispatch.
-- Optional backend route ownership audit smoke when \`RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE=1\`; this verifies 54 classified routes, zero omissions, owner path/body denial, system-only denial, and retained global shadow mode without invoking global dispatch.
+- Optional backend route ownership audit smoke when \`RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE=1\`; this verifies 56 classified routes, zero omissions, owner path/body denial, system-only denial, and retained global shadow mode without invoking global dispatch.
+- Optional deployed knowledge pipeline smoke when \`RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE=1\`; this verifies login, revision sync, idempotent mutation, change feed, generation context, and stale-revision conflict against the configured backend.
 - Optional deployed backend archive image-analysis smoke when \`RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE=1\`.
 - Optional deployed backend hidden media sync smoke when \`RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE=1\`; this verifies mock audio/video/time-letter archive contracts without true-device media capture.
 - Optional deployed backend time-letter lifecycle smoke when \`RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE=1\`; this verifies draft edit, seal, upsert, delete, due dispatch, idempotency, and owner/recipient in-app reminder metadata contracts.
@@ -222,6 +225,7 @@ append_report_footer() {
 - Backend auth session/ownership shadow smoke: \`backend-auth-session-shadow-smoke/$RUN_ID/\`
 - Backend cross-account authorization shadow smoke: \`backend-cross-account-authorization-shadow-smoke/$RUN_ID/\`
 - Backend route ownership audit smoke: \`backend-route-ownership-audit-smoke/$RUN_ID/\`
+- Backend deployed knowledge pipeline smoke: \`backend-knowledge-pipeline-smoke/$RUN_ID/\`
 - Backend archive image-analysis smoke: \`backend-archive-image-analysis-smoke/$RUN_ID/\`
 - Backend hidden media sync smoke: \`backend-hidden-media-sync-smoke/$RUN_ID/\`
 - Backend time-letter lifecycle smoke: \`backend-time-letter-lifecycle-smoke/$RUN_ID/\`
@@ -308,6 +312,7 @@ for guard in \
   auth-session-ownership-shadow-check.swift \
   cross-account-authorization-policy-check.swift \
   route-ownership-audit-check.swift \
+  knowledge-pipeline-check.swift \
   profile-settings-save-state-check.swift \
   profile-account-fields-check.swift \
   profile-password-change-check.swift \
@@ -573,6 +578,21 @@ if [[ "$RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/backend-route-ownership-audit-smoke/$RUN_ID"
   echo "Skipped by RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE=0" > "$OUTPUT_DIR/backend-route-ownership-audit-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE" == "1" ]]; then
+  [[ -n "${BACKEND_BASE_URL:-}" ]] || {
+    echo "BACKEND_BASE_URL is required for RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE=1" >&2
+    exit 1
+  }
+  mkdir -p "$OUTPUT_DIR/backend-knowledge-pipeline-smoke/$RUN_ID"
+  BACKEND_BASE_URL="$BACKEND_BASE_URL" \
+  BACKEND_API_TOKEN="${BACKEND_API_TOKEN:-}" \
+  "$BACKEND_ROOT/scripts/run-backend-knowledge-deployed-smoke.sh" \
+    | tee "$OUTPUT_DIR/backend-knowledge-pipeline-smoke/$RUN_ID/result.json"
+else
+  mkdir -p "$OUTPUT_DIR/backend-knowledge-pipeline-smoke/$RUN_ID"
+  echo "Skipped by RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE=0" > "$OUTPUT_DIR/backend-knowledge-pipeline-smoke/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE" == "1" ]]; then

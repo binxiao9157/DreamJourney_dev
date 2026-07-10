@@ -264,6 +264,7 @@ for handoffGuard in [
     "echo-role-voice-profile-selection-check.swift",
     "tencent-voice-clone-echo-contract-check.swift",
     "context-packet-v1-check.swift",
+    "knowledge-pipeline-check.swift",
     "echo-context-v2-clue-panel-check.swift",
     "echo-trace-export-check.swift",
     "echo-runtime-diagnostics-check.swift",

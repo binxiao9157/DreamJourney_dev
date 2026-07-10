@@ -19,6 +19,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         TencentVirtualmanSDKBridge.registerFactory()
         configureLaunchArgumentFeatureFlagsIfNeeded()
+        let currentKnowledgeUserId = UserManager.shared.currentUser?.id
+        KnowledgeSyncCoordinator.shared.userDidChange(to: currentKnowledgeUserId)
+        KBLiteManager.shared.switchUser(to: currentKnowledgeUserId)
 
         // 火山引擎语音 SDK 环境准备
         #if !(UI_QA_SIMULATOR && targetEnvironment(simulator))

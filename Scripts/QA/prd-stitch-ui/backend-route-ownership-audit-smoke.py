@@ -103,7 +103,7 @@ def main():
     require(policy.get("mode") == "shadow", "deployed global ownership mode must remain shadow")
     require(policy.get("productionEnforceReady") is False, "deployed runtime must not claim global enforce readiness")
     require(policy.get("principalBoundRouteEnforcement") is True, "principal-bound enforcement is missing")
-    require(audit.get("routeCount") == 54, "deployed route audit count mismatch")
+    require(audit.get("routeCount") == 56, "deployed route audit count mismatch")
     require(audit.get("unclassifiedCount") == 0, "deployed backend contains unclassified routes")
     require(header(runtime_headers, "X-DreamJourney-Auth-Principal") == "user", "runtime user principal missing")
 
@@ -120,6 +120,7 @@ def main():
         f"/profile/{owner['userId']}",
         f"/voice/profiles/{owner['userId']}",
         f"/kb/snapshot/{owner['userId']}",
+        f"/kb/changes/{owner['userId']}?sinceRevision=0",
         f"/archive/items/{owner['userId']}",
         f"/mailbox/letters/{owner['userId']}",
         f"/echo/delayed-replies/{owner['userId']}",
@@ -132,6 +133,17 @@ def main():
         "/archive/items",
         attacker["token"],
         {"userId": owner["userId"], "id": f"denied-{suffix}", "kind": "text"},
+    )
+    knowledge_body_policy = assert_denied(
+        "POST",
+        "/kb/mutations",
+        attacker["token"],
+        {
+            "userId": owner["userId"],
+            "operationId": f"denied-{suffix}",
+            "baseRevision": 0,
+            "graph": {"facts": []},
+        },
     )
     system_policy = assert_denied(
         "POST",
@@ -149,9 +161,10 @@ def main():
         "routeCount": audit.get("routeCount"),
         "unclassifiedCount": audit.get("unclassifiedCount"),
         "ownerWriteAllowed": True,
-        "ownerPathDenyCount": 7,
+        "ownerPathDenyCount": 8,
         "ownerPathPolicyFingerprint": fingerprint,
         "ownerBodyDenied": body_policy == "archiveOwner",
+        "knowledgeOwnerBodyDenied": knowledge_body_policy == "knowledgeOwner",
         "systemOnlyDenied": system_policy == "systemTimeLetterDispatch",
         "globalDispatchInvoked": False,
         "identifiersRedacted": True,

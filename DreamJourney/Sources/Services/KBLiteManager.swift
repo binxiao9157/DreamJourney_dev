@@ -6,7 +6,7 @@ import Foundation
 ///
 /// 职责：
 /// 1. JSON 持久化（kb_graph.json）
-/// 2. LLM 知识提取（调用 DeepSeekService）
+/// 2. 后端优先知识提取（本地规则作为离线降级）
 /// 3. 实体合并去重
 /// 4. 关键词检索
 /// 5. 组装上下文文本（供 system_prompt 注入）
@@ -16,7 +16,12 @@ final class KBLiteManager {
 
     static let shared = KBLiteManager()
 
-    private init() { load() }
+    private init() {
+        loadedUserId = Self.normalizedUserId(UserManager.shared.currentUser?.id)
+        graph = loadGraph(for: loadedUserId)
+        warmSemanticCache(for: graph)
+        writeToAppGroup(graph: graph)
+    }
 
     // MARK: - Constants
 
@@ -30,6 +35,12 @@ final class KBLiteManager {
 
     /// 内存中的知识图谱
     private(set) var graph = KBLiteGraph()
+
+    /// 当前内存图谱所属用户。登出态使用独立占位值，绝不沿用上一用户图谱。
+    private(set) var loadedUserId = KBLiteManager.signedOutUserId
+
+    /// 用户切换代次，用于丢弃旧用户尚未返回的异步提取结果。
+    private var userGeneration = UUID()
 
     /// 读写锁，保护 graph 的并发访问
     private let graphLock = NSLock()
@@ -62,19 +73,26 @@ final class KBLiteManager {
 
     // MARK: - File Path
 
-    private var graphFilePath: URL {
+    private static let signedOutUserId = "signed-out"
+
+    private static func normalizedUserId(_ userId: String?) -> String {
+        let value = userId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return value.isEmpty ? signedOutUserId : value
+    }
+
+    private func graphFilePath(for userId: String) -> URL {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let kbDir = docs.appendingPathComponent("knowledge_base")
         try? FileManager.default.createDirectory(at: kbDir, withIntermediateDirectories: true)
-        let userId = UserManager.shared.currentUser?.id ?? "default"
         let userFile = kbDir.appendingPathComponent("kb_graph_\(userId).json")
 
-        // 向后兼容：旧文件存在但用户专属文件不存在时，自动迁移
+        // 旧文件只允许迁移一次，避免复制给后续登录的每个用户。
         let legacyFile = kbDir.appendingPathComponent("kb_graph.json")
-        if !FileManager.default.fileExists(atPath: userFile.path) &&
+        if userId != Self.signedOutUserId &&
+            !FileManager.default.fileExists(atPath: userFile.path) &&
             FileManager.default.fileExists(atPath: legacyFile.path) {
             do {
-                try FileManager.default.copyItem(at: legacyFile, to: userFile)
+                try FileManager.default.moveItem(at: legacyFile, to: userFile)
                 print("[KBLite] 已将旧知识库迁移到用户专属文件: \(userFile.lastPathComponent)")
             } catch {
                 print("[KBLite] 旧知识库迁移失败: \(error.localizedDescription)")
@@ -87,30 +105,40 @@ final class KBLiteManager {
     // MARK: - Persistence
 
     private func save() {
+        graphLock.lock()
+        graph.lastUpdated = Date()
+        let graphSnapshot = graph
+        let userId = loadedUserId
+        graphLock.unlock()
+
+        guard userId != Self.signedOutUserId else {
+            print("[KBLite] 登出态不持久化知识图谱")
+            return
+        }
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
         encoder.dateEncodingStrategy = .iso8601
-        graph.lastUpdated = Date()
-        guard let data = try? encoder.encode(graph) else {
+        guard let data = try? encoder.encode(graphSnapshot) else {
             print("[KBLite] ❌ JSON 编码失败")
             return
         }
         do {
-            try data.write(to: graphFilePath, options: .atomic)
-            print("[KBLite] 💾 知识库已保存: \(graph.people.count)人, \(graph.places.count)地, \(graph.events.count)事, \(graph.facts.count)实")
+            try data.write(to: graphFilePath(for: userId), options: .atomic)
+            print("[KBLite] 💾 知识库已保存: \(graphSnapshot.people.count)人, \(graphSnapshot.places.count)地, \(graphSnapshot.events.count)事, \(graphSnapshot.facts.count)实")
         } catch {
             print("[KBLite] ❌ 保存失败: \(error.localizedDescription)")
         }
         // 同步到 App Group 共享容器（供 Widget 读取）
-        writeToAppGroup()
+        writeToAppGroup(graph: graphSnapshot)
         // 通知 UI 数据已更新
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: .kbLiteDidUpdate, object: nil)
+            KnowledgeSyncCoordinator.shared.synchronizeCurrentUser(reason: "graphSaved")
         }
     }
 
     /// 将事件数据写入 App Group 共享容器，供 Widget Extension 读取
-    private func writeToAppGroup() {
+    private func writeToAppGroup(graph: KBLiteGraph) {
         guard let containerURL = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: "group.com.dreamjourney.shared"
         ) else { return }
@@ -130,35 +158,67 @@ final class KBLiteManager {
         try? data.write(to: widgetFile, options: .atomic)
     }
 
-    private func load() {
-        guard FileManager.default.fileExists(atPath: graphFilePath.path) else {
+    private func loadGraph(for userId: String) -> KBLiteGraph {
+        guard userId != Self.signedOutUserId else {
+            return KBLiteGraph()
+        }
+        let filePath = graphFilePath(for: userId)
+        guard FileManager.default.fileExists(atPath: filePath.path) else {
             print("[KBLite] 📂 知识库文件不存在，使用空图谱")
-            return
+            return KBLiteGraph()
         }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         do {
-            let data = try Data(contentsOf: graphFilePath)
+            let data = try Data(contentsOf: filePath)
             let loaded = try decoder.decode(KBLiteGraph.self, from: data)
-            graph = loaded
             print("[KBLite] 📂 已加载知识库: v\(loaded.version), \(loaded.people.count)人, \(loaded.places.count)地, \(loaded.events.count)事, \(loaded.facts.count)实, 共\(loaded.sessionCount)次会话")
-
-            // 后台预热语义缓存
-            DispatchQueue.global(qos: .utility).async {
-                KBLiteSemanticSearch.shared.warmCache(
-                    people: self.graph.people,
-                    places: self.graph.places,
-                    events: self.graph.events,
-                    facts: self.graph.facts
-                )
-            }
+            return loaded
         } catch {
             print("[KBLite] ⚠️ 知识库加载失败: \(error.localizedDescription)，使用空图谱")
             // 备份损坏文件
-            let backupPath = graphFilePath.appendingPathExtension("corrupted")
-            try? FileManager.default.moveItem(at: graphFilePath, to: backupPath)
+            let backupPath = filePath.appendingPathExtension("corrupted")
+            try? FileManager.default.moveItem(at: filePath, to: backupPath)
             print("[KBLite] 📦 已备份损坏文件到: \(backupPath.lastPathComponent)")
+            return KBLiteGraph()
         }
+    }
+
+    private func warmSemanticCache(for graph: KBLiteGraph) {
+        DispatchQueue.global(qos: .utility).async {
+            KBLiteSemanticSearch.shared.warmCache(
+                people: graph.people,
+                places: graph.places,
+                events: graph.events,
+                facts: graph.facts
+            )
+        }
+    }
+
+    /// 在进程内切换知识所有者；旧用户异步结果会因 generation 不匹配而被丢弃。
+    func switchUser(to userId: String?) {
+        let normalized = Self.normalizedUserId(userId)
+        var loadedGraph: KBLiteGraph?
+        extractQueue.sync {
+            graphLock.lock()
+            defer { graphLock.unlock() }
+            guard normalized != loadedUserId else { return }
+            loadedUserId = normalized
+            userGeneration = UUID()
+            graph = loadGraph(for: normalized)
+            didWarnCapacity = false
+            isExtracting = false
+            loadedGraph = graph
+        }
+        guard let loadedGraph else { return }
+        warmSemanticCache(for: loadedGraph)
+        // Widget 共享快照必须随用户切换（包括登出空图谱）同步替换，
+        // 否则 Widget 可能继续展示上一用户的知识。
+        writeToAppGroup(graph: loadedGraph)
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .kbLiteDidUpdate, object: nil)
+        }
+        print("[KBLite] 已切换知识所有者: \(normalized)")
     }
 
     // MARK: - Public API: Stats
@@ -191,17 +251,37 @@ final class KBLiteManager {
             return
         }
 
-        // 提取频率控制：每 3 次会话才触发一次 LLM 提取（节省成本）
-        // 第 1 次、第 10 次、以及距离上次提取超过 24 小时的会话强制执行
-        let shouldForceExtract = graph.sessionCount == 0
-            || (sessionId - graph.sessionCount >= 3)
-            || (Date().timeIntervalSince(graph.lastUpdated) > 86400)
+        graphLock.lock()
+        let ownerUserId = loadedUserId
+        let extractionGeneration = userGeneration
+        let previousSessionCount = graph.sessionCount
+        let previousUpdatedAt = graph.lastUpdated
+        graphLock.unlock()
+
+        guard ownerUserId != Self.signedOutUserId else {
+            print("[KBLite] 登出态跳过知识提取")
+            completion(0)
+            return
+        }
+
+        // 每 3 次会话或距离上次提取超过 24 小时使用后端提取，其余回合走本地轻量提取。
+        let shouldForceExtract = previousSessionCount == 0
+            || (sessionId - previousSessionCount >= 3)
+            || (Date().timeIntervalSince(previousUpdatedAt) > 86400)
 
         guard shouldForceExtract else {
-            print("[KBLite] ⏭️ 提取频率控制：跳过会话#\(sessionId)，上次提取#\(graph.sessionCount)")
-            // 仍然用本地正则做快速提取
-            let count = quickExtract(turns: turns, sessionId: sessionId)
-            completion(count)
+            print("[KBLite] ⏭️ 后端提取频率控制：会话#\(sessionId)使用本地轻量提取")
+            extractQueue.async { [weak self] in
+                self?.finishExtraction(
+                    result: nil,
+                    turns: turns,
+                    sessionId: sessionId,
+                    ownerUserId: ownerUserId,
+                    generation: extractionGeneration,
+                    fallbackReason: "frequencyControlled",
+                    completion: completion
+                )
+            }
             return
         }
 
@@ -215,7 +295,7 @@ final class KBLiteManager {
             }
 
             self.isExtracting = true
-            print("[KBLite] 🔍 开始 LLM 知识提取 (会话#\(sessionId), \(turns.count)轮)")
+            print("[KBLite] 🔍 开始后端知识提取 (会话#\(sessionId), \(turns.count)轮)")
 
             // 组装 transcript 文本
             let transcript = turns.map { t in
@@ -223,33 +303,90 @@ final class KBLiteManager {
                 return "[\(role)]: \(t.text)"
             }.joined(separator: "\n")
 
-            // 构建已有知识摘要（减少重复提取）
+            self.graphLock.lock()
             let existingSummary = self.buildExistingSummary()
+            self.graphLock.unlock()
 
-            // 构造提取 prompt
-            let prompt = self.buildExtractionPrompt(transcript: transcript, existingSummary: existingSummary)
+            guard DreamJourneyBackendClient.shared.isKnowledgeSyncConfigured else {
+                self.finishExtraction(
+                    result: nil,
+                    turns: turns,
+                    sessionId: sessionId,
+                    ownerUserId: ownerUserId,
+                    generation: extractionGeneration,
+                    fallbackReason: "backendNotConfigured",
+                    completion: completion
+                )
+                return
+            }
 
-            // 调用 DeepSeek
-            DeepSeekService.shared.extractKnowledge(prompt: prompt) { [weak self] result in
-                guard let self = self else { return }
-                self.isExtracting = false
-
-                switch result {
-                case .success(let extractionResult):
-                    let addedCount = self.mergeExtractionResult(extractionResult, sessionId: sessionId)
-                    self.graph.sessionCount = sessionId
-                    self.save()
-                    print("[KBLite] ✅ 知识提取完成: 新增 \(addedCount) 实体")
-                    DispatchQueue.main.async { completion(addedCount) }
-
-                case .failure(let error):
-                    print("[KBLite] ⚠️ LLM 提取失败: \(error.localizedDescription)，使用正则 fallback")
-                    let count = self.quickExtract(turns: turns, sessionId: sessionId)
-                    self.graph.sessionCount = sessionId
-                    self.save()
-                    DispatchQueue.main.async { completion(count) }
+            DreamJourneyBackendClient.shared.extractKnowledge(
+                userId: ownerUserId,
+                transcript: transcript,
+                existingSummary: existingSummary,
+                sessionId: sessionId
+            ) { [weak self] result in
+                self?.extractQueue.async {
+                    let extraction: KBExtractionResult?
+                    let fallbackReason: String?
+                    switch result {
+                    case .success(let value):
+                        extraction = value
+                        fallbackReason = nil
+                    case .failure(let error):
+                        extraction = nil
+                        fallbackReason = error.localizedDescription
+                    }
+                    self?.finishExtraction(
+                        result: extraction,
+                        turns: turns,
+                        sessionId: sessionId,
+                        ownerUserId: ownerUserId,
+                        generation: extractionGeneration,
+                        fallbackReason: fallbackReason,
+                        completion: completion
+                    )
                 }
             }
+        }
+    }
+
+    private func finishExtraction(
+        result: KBExtractionResult?,
+        turns: [ConversationTurn],
+        sessionId: Int,
+        ownerUserId: String,
+        generation: UUID,
+        fallbackReason: String?,
+        completion: @escaping (Int) -> Void
+    ) {
+        graphLock.lock()
+        guard loadedUserId == ownerUserId, userGeneration == generation else {
+            graphLock.unlock()
+            print("[KBLite] 丢弃旧用户知识提取结果 user=\(ownerUserId)")
+            DispatchQueue.main.async { completion(0) }
+            return
+        }
+
+        let addedCount: Int
+        if let result {
+            addedCount = mergeExtractionResult(result, sessionId: sessionId)
+        } else {
+            addedCount = quickExtract(turns: turns, sessionId: sessionId)
+        }
+        graph.sessionCount = max(graph.sessionCount, sessionId)
+        graphLock.unlock()
+        isExtracting = false
+        save()
+
+        if let fallbackReason {
+            print("[KBLite] ⚠️ 后端提取降级为本地规则 reason=\(fallbackReason)")
+        } else {
+            print("[KBLite] ✅ 后端知识提取完成: 新增 \(addedCount) 实体")
+        }
+        DispatchQueue.main.async {
+            KnowledgeSyncCoordinator.shared.synchronizeCurrentUser(reason: "extractionCompleted")
+            completion(addedCount)
         }
     }
 
@@ -270,9 +407,10 @@ final class KBLiteManager {
             if allText.contains(kw) {
                 let existing = graph.people.first { $0.name == kw || $0.aliases.contains(kw) }
                 if existing == nil {
-                    let person = KBPerson(id: UUID().uuidString, name: kw, aliases: [], relation: nil,
+                    var person = KBPerson(id: UUID().uuidString, name: kw, aliases: [], relation: nil,
                                           traits: [], sourceSessionIds: [sessionId],
                                           createdAt: Date(), updatedAt: Date())
+                    person.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
                     graph.people.append(person)
                     addedCount += 1
                 } else {
@@ -281,6 +419,9 @@ final class KBLiteManager {
                         if !graph.people[idx].sourceSessionIds.contains(sessionId) {
                             graph.people[idx].sourceSessionIds.append(sessionId)
                             graph.people[idx].updatedAt = Date()
+                        }
+                        if graph.people[idx].privacyMetadata == nil {
+                            graph.people[idx].privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
                         }
                     }
                 }
@@ -295,7 +436,8 @@ final class KBLiteManager {
             if allText.contains(city) {
                 let existing = graph.places.first { $0.name == city }
                 if existing == nil {
-                    let place = KBPlace(id: UUID().uuidString, name: city, sourceSessionIds: [sessionId])
+                    var place = KBPlace(id: UUID().uuidString, name: city, sourceSessionIds: [sessionId])
+                    place.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
                     graph.places.append(place)
                     addedCount += 1
                 }
@@ -309,7 +451,8 @@ final class KBLiteManager {
             if allText.contains(kw) {
                 let existing = graph.events.first { $0.title.contains(kw) }
                 if existing == nil {
-                    let event = KBEvent(id: UUID().uuidString, title: kw, sourceSessionIds: [sessionId])
+                    var event = KBEvent(id: UUID().uuidString, title: kw, sourceSessionIds: [sessionId])
+                    event.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
                     graph.events.append(event)
                     addedCount += 1
                 }
@@ -318,6 +461,18 @@ final class KBLiteManager {
 
         print("[KBLite] 📝 正则快速提取: 新增 \(addedCount) 实体")
         return addedCount
+    }
+
+    private func knowledgePrivacyMetadata(
+        sessionId: Int,
+        kind: String = "conversationSession",
+        title: String = "对话来源"
+    ) -> KBPrivacyMetadata {
+        .generationAllowed(
+            kind: kind,
+            id: "session-\(sessionId)",
+            title: title
+        )
     }
 
     // MARK: - Private: Prompt Building
@@ -474,13 +629,16 @@ final class KBLiteManager {
                     if !p.sourceSessionIds.contains(sessionId) {
                         p.sourceSessionIds.append(sessionId)
                     }
+                    if p.privacyMetadata == nil {
+                        p.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
+                    }
                     p.updatedAt = now
                     graph.people[idx] = p
                     print("[KBLite] 🔄 合并人物: \(p.name)")
                 }
             } else {
                 // 新增人物
-                let person = KBPerson(
+                var person = KBPerson(
                     id: UUID().uuidString,
                     name: ep.name,
                     aliases: ep.aliases,
@@ -491,6 +649,7 @@ final class KBLiteManager {
                     createdAt: now,
                     updatedAt: now
                 )
+                person.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
                 graph.people.append(person)
                 addedCount += 1
                 print("[KBLite] ➕ 新增人物: \(ep.name)")
@@ -506,11 +665,14 @@ final class KBLiteManager {
                     if p.description == nil, let desc = ep.description { p.description = desc }
                     if p.category == nil, let cat = ep.category { p.category = cat }
                     if !p.sourceSessionIds.contains(sessionId) { p.sourceSessionIds.append(sessionId) }
+                    if p.privacyMetadata == nil {
+                        p.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
+                    }
                     graph.places[idx] = p
                     print("[KBLite] 🔄 合并地点: \(p.name)")
                 }
             } else {
-                let place = KBPlace(
+                var place = KBPlace(
                     id: UUID().uuidString,
                     name: ep.name,
                     category: ep.category,
@@ -519,6 +681,7 @@ final class KBLiteManager {
                     description: ep.description,
                     sourceSessionIds: [sessionId]
                 )
+                place.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
                 graph.places.append(place)
                 addedCount += 1
                 print("[KBLite] ➕ 新增地点: \(ep.name)")
@@ -534,11 +697,14 @@ final class KBLiteManager {
                     if e.description == nil, let desc = ee.description { e.description = desc }
                     if e.year == nil, let y = ee.year { e.year = y }
                     if !e.sourceSessionIds.contains(sessionId) { e.sourceSessionIds.append(sessionId) }
+                    if e.privacyMetadata == nil {
+                        e.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
+                    }
                     graph.events[idx] = e
                     print("[KBLite] 🔄 合并事件: \(e.title)")
                 }
             } else {
-                let event = KBEvent(
+                var event = KBEvent(
                     id: UUID().uuidString,
                     title: ee.title,
                     description: ee.description,
@@ -546,6 +712,7 @@ final class KBLiteManager {
                     month: ee.month,
                     sourceSessionIds: [sessionId]
                 )
+                event.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
                 graph.events.append(event)
                 addedCount += 1
                 print("[KBLite] ➕ 新增事件: \(ee.title)")
@@ -565,12 +732,13 @@ final class KBLiteManager {
             }
 
             if !isDuplicate {
-                let fact = KBFact(
+                var fact = KBFact(
                     id: UUID().uuidString,
                     statement: stmt,
                     confidence: ef.confidence ?? "high",
                     sourceSessionIds: [sessionId]
                 )
+                fact.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
                 graph.facts.append(fact)
                 addedCount += 1
                 print("[KBLite] ➕ 新增事实: \(stmt.prefix(40))...")
@@ -739,20 +907,51 @@ final class KBLiteManager {
     ///   - maxItems: 每类实体最多返回条数
     /// - Returns: 上下文字符串，空字符串表示无可用上下文
     func buildContextString(query: String?, maxItems: Int = 5) -> String {
+        buildContextString(query: query, maxItems: maxItems, generationAllowedOnly: false)
+    }
+
+    /// 构建允许发送给生成服务的上下文。缺少显式授权元数据的旧数据不会离开设备。
+    func buildGenerationAllowedContextString(query: String?, maxItems: Int = 5) -> String {
+        let expectedUserId = Self.normalizedUserId(UserManager.shared.currentUser?.id)
+        guard loadedUserId == expectedUserId else {
+            print(
+                "[KBLite] 跳过生成上下文：知识所有者不匹配 " +
+                "loaded=\(loadedUserId) expected=\(expectedUserId)"
+            )
+            return ""
+        }
+        return buildContextString(query: query, maxItems: maxItems, generationAllowedOnly: true)
+    }
+
+    private func buildContextString(
+        query: String?,
+        maxItems: Int,
+        generationAllowedOnly: Bool
+    ) -> String {
         var parts: [String] = []
+        let graphSnapshot = readGraph { $0 }
+        let canGenerate: (KBPrivacyMetadata?) -> Bool = { metadata in
+            !generationAllowedOnly || metadata?.scope == "generationAllowed"
+        }
 
         // 有 query → 检索相关知识
         if let q = query, !q.trimmingCharacters(in: .whitespaces).isEmpty {
             let result = search(query: q)
+            let people = result.people.filter { canGenerate($0.privacyMetadata) }
+            let places = result.places.filter { canGenerate($0.privacyMetadata) }
+            let events = result.events.filter { canGenerate($0.privacyMetadata) }
+            let facts = result.facts.filter { canGenerate($0.privacyMetadata) }
 
-            if !result.people.isEmpty {
-                let summaries: [String] = result.people.prefix(maxItems).map { p in
+            if !people.isEmpty {
+                let summaries: [String] = people.prefix(maxItems).map { p in
                     var line = "\(p.name)"
                     if let rel = p.relation { line += "（\(rel)）" }
                     if !p.traits.isEmpty { line += "，特征：\(p.traits.joined(separator: "、"))" }
 
                     // 附上关联事实
-                    let relatedFacts = graph.facts.filter { $0.relatedPersonIds.contains(p.id) }
+                    let relatedFacts = graphSnapshot.facts.filter {
+                        $0.relatedPersonIds.contains(p.id) && canGenerate($0.privacyMetadata)
+                    }
                     if !relatedFacts.isEmpty {
                         let factsText = relatedFacts.prefix(3).map { $0.statement }.joined(separator: "；")
                         line += "。已知：\(factsText)"
@@ -764,8 +963,8 @@ final class KBLiteManager {
                 parts.append("【相关人物】\n" + summaries.joined(separator: "\n"))
             }
 
-            if !result.places.isEmpty {
-                let summaries: [String] = result.places.prefix(maxItems).map { p in
+            if !places.isEmpty {
+                let summaries: [String] = places.prefix(maxItems).map { p in
                     var line = p.name
                     if let cat = p.category { line += "（\(cat)）" }
                     if let desc = p.description { line += "：\(desc)" }
@@ -774,8 +973,8 @@ final class KBLiteManager {
                 parts.append("【相关地点】\n" + summaries.joined(separator: "\n"))
             }
 
-            if !result.events.isEmpty {
-                let summaries: [String] = result.events.prefix(maxItems).map { e in
+            if !events.isEmpty {
+                let summaries: [String] = events.prefix(maxItems).map { e in
                     var line = e.title
                     let date = e.formattedDate
                     if !date.isEmpty { line += "（\(date)）" }
@@ -785,21 +984,25 @@ final class KBLiteManager {
                 parts.append("【相关事件】\n" + summaries.joined(separator: "\n"))
             }
 
-            if !result.facts.isEmpty {
-                let factsText = result.facts.prefix(maxItems).map { "· \($0.statement)" }.joined(separator: "\n")
+            if !facts.isEmpty {
+                let factsText = facts.prefix(maxItems).map { "· \($0.statement)" }.joined(separator: "\n")
                 parts.append("【相关事实】\n" + factsText)
             }
         }
 
         // 无 query 或检索结果为空 → 提供最近摘要
         if parts.isEmpty {
-            let recentPeople = graph.people.sorted { ($0.sourceSessionIds.last ?? 0) > ($1.sourceSessionIds.last ?? 0) }
+            let recentPeople = graphSnapshot.people
+                .filter { canGenerate($0.privacyMetadata) }
+                .sorted { ($0.sourceSessionIds.last ?? 0) > ($1.sourceSessionIds.last ?? 0) }
             if !recentPeople.isEmpty {
                 let names = recentPeople.prefix(5).map { $0.name }.joined(separator: "、")
                 parts.append("【已知人物】您提到过：\(names)等")
             }
 
-            let recentEvents = graph.events.sorted { ($0.sourceSessionIds.last ?? 0) > ($1.sourceSessionIds.last ?? 0) }
+            let recentEvents = graphSnapshot.events
+                .filter { canGenerate($0.privacyMetadata) }
+                .sorted { ($0.sourceSessionIds.last ?? 0) > ($1.sourceSessionIds.last ?? 0) }
             if !recentEvents.isEmpty {
                 let titles = recentEvents.prefix(5).map { e in
                     let d = e.formattedDate
@@ -829,12 +1032,17 @@ final class KBLiteManager {
         if !result.scene.isEmpty {
             let existing = findMatchingPlace(name: result.scene)
             if existing == nil {
-                let place = KBPlace(
+                var place = KBPlace(
                     id: UUID().uuidString,
                     name: result.scene,
                     description: result.description,
                     sourceSessionIds: [sessionId],
                     createdAt: now
+                )
+                place.privacyMetadata = knowledgePrivacyMetadata(
+                    sessionId: sessionId,
+                    kind: "archiveImageAnalysis",
+                    title: "档案素材"
                 )
                 graph.places.append(place)
                 addedCount += 1
@@ -847,7 +1055,7 @@ final class KBLiteManager {
             let name = extractPersonNameFromDescription(personDesc)
             let existing = findMatchingPerson(name: name, aliases: [])
             if existing == nil {
-                let person = KBPerson(
+                var person = KBPerson(
                     id: UUID().uuidString,
                     name: name,
                     aliases: [],
@@ -856,6 +1064,11 @@ final class KBLiteManager {
                     sourceSessionIds: [sessionId],
                     createdAt: now,
                     updatedAt: now
+                )
+                person.privacyMetadata = knowledgePrivacyMetadata(
+                    sessionId: sessionId,
+                    kind: "archiveImageAnalysis",
+                    title: "档案素材"
                 )
                 graph.people.append(person)
                 addedCount += 1
@@ -952,14 +1165,120 @@ final class KBLiteManager {
         return String(data: data, encoding: .utf8)
     }
 
+    func exportGraphDictionary() -> [String: Any]? {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        graphLock.lock()
+        let snapshot = graph
+        graphLock.unlock()
+        guard let data = try? encoder.encode(snapshot),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return object
+    }
+
+    /// 应用后端 change feed 的最新完整图谱。
+    /// 本机无未同步变更时以后端为准（包括可同步实体的删除），但始终保留
+    /// localOnly/旧版无授权元数据的本地实体；本机有变更时按 ID 保留本机版本，
+    /// 同时吸收后端新增实体，随后由 coordinator 以新 revision 提交合并结果。
+    @discardableResult
+    func applySyncedGraph(
+        _ dictionary: [String: Any],
+        preservingLocalChanges: Bool
+    ) -> Bool {
+        guard JSONSerialization.isValidJSONObject(dictionary),
+              let data = try? JSONSerialization.data(withJSONObject: dictionary) else {
+            return false
+        }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let imported = try? decoder.decode(KBLiteGraph.self, from: data) else {
+            return false
+        }
+        graphLock.lock()
+        if preservingLocalChanges {
+            let local = graph
+            graph = KBLiteGraph(
+                version: max(local.version, imported.version),
+                lastUpdated: Date(),
+                sessionCount: max(local.sessionCount, imported.sessionCount),
+                people: preferLocalByID(remote: imported.people, local: local.people, id: { $0.id }),
+                places: preferLocalByID(remote: imported.places, local: local.places, id: { $0.id }),
+                events: preferLocalByID(remote: imported.events, local: local.events, id: { $0.id }),
+                facts: preferLocalByID(remote: imported.facts, local: local.facts, id: { $0.id })
+            )
+        } else {
+            let local = graph
+            graph = KBLiteGraph(
+                version: max(local.version, imported.version),
+                lastUpdated: Date(),
+                sessionCount: max(local.sessionCount, imported.sessionCount),
+                people: preferLocalByID(
+                    remote: imported.people,
+                    local: local.people.filter { !isRemotelySyncable($0.privacyMetadata) },
+                    id: { $0.id }
+                ),
+                places: preferLocalByID(
+                    remote: imported.places,
+                    local: local.places.filter { !isRemotelySyncable($0.privacyMetadata) },
+                    id: { $0.id }
+                ),
+                events: preferLocalByID(
+                    remote: imported.events,
+                    local: local.events.filter { !isRemotelySyncable($0.privacyMetadata) },
+                    id: { $0.id }
+                ),
+                facts: preferLocalByID(
+                    remote: imported.facts,
+                    local: local.facts.filter { !isRemotelySyncable($0.privacyMetadata) },
+                    id: { $0.id }
+                )
+            )
+        }
+        graph.lastUpdated = Date()
+        graphLock.unlock()
+        save()
+        return true
+    }
+
+    private func preferLocalByID<T>(
+        remote: [T],
+        local: [T],
+        id: (T) -> String
+    ) -> [T] {
+        var localByID: [String: T] = [:]
+        local.forEach { localByID[id($0)] = $0 }
+        let remoteIDs = Set(remote.map(id))
+        let mergedRemote = remote.map { localByID[id($0)] ?? $0 }
+        return mergedRemote + local.filter { !remoteIDs.contains(id($0)) }
+    }
+
+    private func isRemotelySyncable(_ metadata: KBPrivacyMetadata?) -> Bool {
+        guard let scope = metadata?.scope else { return false }
+        return scope == "generationAllowed" || scope == "familyCircle"
+    }
+
     /// 从 JSON 字符串导入知识库（合并模式）
     @discardableResult
     func importJSON(_ jsonString: String) -> Bool {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
         guard let data = jsonString.data(using: .utf8),
-              let imported = try? JSONDecoder().decode(KBLiteGraph.self, from: data) else {
+              let imported = try? decoder.decode(KBLiteGraph.self, from: data) else {
             print("[KBLite] ❌ 导入失败：JSON 解析错误")
             return false
         }
+        graphLock.lock()
+        let addedCount = mergeGraph(imported)
+        graph.lastUpdated = Date()
+        graphLock.unlock()
+        save()
+        print("[KBLite] 📥 导入完成: 新增 \(addedCount) 实体")
+        return true
+    }
+
+    private func mergeGraph(_ imported: KBLiteGraph) -> Int {
         var addedCount = 0
         for person in imported.people {
             if findMatchingPerson(name: person.name, aliases: person.aliases) == nil {
@@ -985,10 +1304,7 @@ final class KBLiteManager {
                 addedCount += 1
             }
         }
-        graph.lastUpdated = Date()
-        save()
-        print("[KBLite] 📥 导入完成: 新增 \(addedCount) 实体")
-        return true
+        return addedCount
     }
 
     /// 生成包含知识库上下文的增强开场白提示

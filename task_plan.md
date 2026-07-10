@@ -3,10 +3,10 @@
 ## STATUS
 
 - **Goal:** 按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态
-- **Mode:** Review
-- **Phase:** Phase 6 full-route ownership audit complete
-- **Task:** docs/plans/task_11_p0-full-route-ownership-audit.md
-- **Blockers:** none for Task 11; SMS identity proof, global production enforce promotion, and true-device regression remain later boundaries
+- **Mode:** Execute
+- **Phase:** Phase 7 unified knowledge pipeline
+- **Task:** docs/plans/task_12_p0-unified-knowledge-pipeline.md
+- **Blockers:** none; true-device validation and advanced vector retrieval remain later boundaries
 
 ## Key Decisions
 
@@ -27,11 +27,12 @@
 - Task 9 is complete: opaque user access/refresh sessions, hash-only persistence, refresh rotation/replay rejection, logout revocation, legacy backend-token compatibility, ownership shadow diagnostics, iOS ThisDeviceOnly Keychain consumption, concurrent refresh coalescing, and the optional deployed smoke gate are implemented. Ledger `L20260710-165434` is closed.
 - Task 10 is complete: policy decisions distinguish owner/family/time-letter recipient/invitation/system-only access; sensitive care/time-letter/invitation routes bind the verified bearer principal; runtime and QA gates keep production enforce explicitly disabled. Ledger `L20260710-193743` is closed.
 - Task 10 deployment evidence is complete: backend `66db803` is live on Postgres; deployed auth rotation/replay/logout and cross-account delegated/forged-viewer smoke passed.
-- Task 11 is complete and deployed: all 54 business routes are explicitly classified, owner/system routes enforce verified principals while global mode remains shadow, delegated family/time-letter policies pass, iOS no longer triggers global dispatch, and backend `275a4c2` passed deployed Postgres gates. Ledger `L20260710-222422` is closed.
+- Task 11 is complete and deployed: its original 54 business routes are explicitly classified, owner/system routes enforce verified principals while global mode remains shadow, delegated family/time-letter policies pass, iOS no longer triggers global dispatch, and backend `275a4c2` passed deployed Postgres gates. Task 12 adds two classified knowledge routes, bringing the current audit total to 56. Ledger `L20260710-222422` is closed.
+- Task 12 is complete locally: KBLite user isolation, backend-first extraction, revision/idempotent mutation/change feed, Context Packet generation text, and query-scoped Echo RAG with local fallback are implemented and guarded. Backend deployment and true-device ChatRagText effect verification remain follow-up acceptance boundaries. Ledger `L20260710-231102-12` is closed.
 
 ## Scope
 
-Phase 2, Phase 3, and Tasks 9-11 are closed. Production remains on global ownership `shadow`, while all registered owner/system routes now have principal-bound enforcement; public UI changes remain outside this slice.
+Phase 2, Phase 3, and Tasks 9-12 are closed locally. Production remains on global ownership `shadow`; public UI changes remain outside this slice.
 
 ## Recovery
 

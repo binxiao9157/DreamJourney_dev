@@ -1,0 +1,1019 @@
+{
+  "checks": {
+    "C000": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P001/checks/C000.md",
+      "created_at": "2026-07-10T15:23:43+00:00",
+      "criteria_map": [
+        "InMemory/Postgres revision 与 operationId：由 store 方法和对应单测覆盖。",
+        "mutation/change feed：由 API 测试和独立 smoke 覆盖。",
+        "旧 sync/snapshot 兼容：既有测试继续通过且响应仅增加字段。",
+        "owner principal：新增两条路由进入 registry，AuthSession owner path/body 403 测试通过。"
+      ],
+      "evidence": [
+        "后端 180 个 unittest 通过。",
+        "`verify_backend.sh`、FastAPI smoke、knowledge delta smoke 与 `git diff --check` 通过。",
+        "PostgresStore 测试覆盖持久化、重复 operation 和 stale base revision。"
+      ],
+      "execution_map": [
+        "schema/store、API、ownership、测试和 smoke 均已落到后端仓库工作区。",
+        "ContextPacketBuilder 继续调用 `get_kb_snapshot()`，没有修改其输入结构。"
+      ],
+      "followup_problem_id": null,
+      "id": "C000",
+      "problem_id": "P001",
+      "residual_risk": [
+        "尚未在部署 Postgres 上执行 smoke；属于后续部署验收，不阻塞当前代码合同闭环。",
+        "P0 只支持整图 replacement，实体级 merge/compaction 留给 P1。"
+      ],
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "同一 operationId 使用不同 graph 重试，返回 duplicate 且不覆盖首次结果。",
+        "使用落后 baseRevision 的新 operation 返回 409 和 currentRevision。",
+        "Postgres 使用 advisory transaction lock 和 row lock 处理并发窗口。"
+      ],
+      "summary": "结果 R000 满足 P001 的本地实现与验证标准：双 store 行为一致，旧合同兼容，新合同具备幂等、冲突和 ownership 证据。"
+    },
+    "C001": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P002/checks/C001.md",
+      "created_at": "2026-07-10T15:41:13+00:00",
+      "criteria_map": [
+        "A/B 用户隔离：显式 loadedUserId、同步切换和 generation guard；登出态空图谱且禁止落盘。",
+        "revision 同步：coordinator 消费 changes、提交 mutation、保存 revision、处理冲突和旧后端 fallback。",
+        "backend-first extraction：KBLite 已移除直接 DeepSeek 调用并接 `/kb/extract`。",
+        "稳定触发点：登录、登出、启动、foreground、graph save 和 extraction complete 均已覆盖。",
+        "UI 兼容：未修改知识库公开页面或现有图谱结构的必填字段。"
+      ],
+      "evidence": [
+        "knowledge pipeline guard 通过并纳入 release QA。",
+        "generic simulator Debug build 成功。",
+        "Xcode target 明确包含新增 coordinator。",
+        "源码检查确认新实体包含 syncable privacy metadata，旧实体不会被默认上传。"
+      ],
+      "execution_map": [
+        "生命周期、模型、客户端、协调器、App hooks、Xcode target 与 release guard 已形成一个可编译闭环。"
+      ],
+      "followup_problem_id": null,
+      "id": "C001",
+      "problem_id": "P002",
+      "residual_risk": [
+        "受当前 x86_64 Tencent simulator SDK 目标限制，未执行可安装 simulator runtime smoke；generic build 与静态 guard 已满足本任务非真机边界，真机/可运行模拟器行为证据留在最终验收。",
+        "实体级冲突审核与 legacy entity 用户授权迁移属于 P1。"
+      ],
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "generation guard 丢弃旧用户异步提取结果。",
+        "pending operationId 在客户端重试时复用，graph fingerprint 阻止无变化 revision 空写。",
+        "409 路径先拉全量 change feed、合并后只重试一次。"
+      ],
+      "summary": "R001 覆盖 P002 的代码合同和非真机构建要求，消除了已确认的用户切换残留、客户端直连提取与同步无调用点问题。"
+    },
+    "C002": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/children/P005/checks/C002.md",
+      "created_at": "2026-07-10T15:59:36+00:00",
+      "criteria_map": [
+        "generationContext 全字段由 ContextPacketBuilder 输出。",
+        "generationAllowed 默认拒绝确保旧/未授权数据不进入文本。",
+        "selectedContext 后置渲染确保草稿、未到期和无效家庭内容已被排除。",
+        "runtime voice/digital-human 未参与生成文本结构。"
+      ],
+      "evidence": [
+        "R002 列出实现文件与聚焦验证结果。",
+        "单测覆盖过滤项、空合同、稳定哈希和 12,000 字符截断。",
+        "Context V2 smoke 继续通过，证明原合同未被替换。"
+      ],
+      "execution_map": [
+        "R002 对应 T004 的一次完整后端实现与验证。"
+      ],
+      "followup_problem_id": null,
+      "id": "C002",
+      "problem_id": "P005",
+      "residual_risk": [
+        "线上部署验证属于后续跨仓库验收，不阻塞本地合同实现成功。"
+      ],
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "使用 13,000 字符档案验证截断、sourceRefs 与哈希在重复请求中保持稳定。",
+        "使用空输入验证固定空哈希和零来源计数。"
+      ],
+      "summary": "成功。实现满足 additive 合同、安全来源、稳定哈希、长度约束和现有 Context V2 兼容要求。"
+    },
+    "C003": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/children/P006/checks/C003.md",
+      "created_at": "2026-07-10T16:26:02+00:00",
+      "criteria_map": [
+        "当前 turn 注入且每轮最多一次：由 turn gate、提交标记和 ChatRagText 调用覆盖。",
+        "后端失败或超时降级：由 0.9 秒 timeout 与当前 query KBLite fallback 覆盖。",
+        "生命周期、turn、用户变化隔离：由 lifecycle generation、turn ID、user ID 与 latest-trace guard 覆盖。",
+        "不重复注入旧摘要：由 `usesTurnScopedKnowledgeContext` 抑制启动期旧知识摘要覆盖。",
+        "trace、延迟回信、数字人和公开 UI 不回归：由静态门、release regression 和两条模拟器 smoke 覆盖。"
+      ],
+      "evidence": [
+        "`DialogEngineManager.submitTurnKnowledgeContext` 在真实 Dialog 路径发送 `SEDirectiveEventChatRagText`，UIQA 路径保留可断言的来源和长度。",
+        "`EchoTurnKnowledgeContextGate` 保证同一 turn 最多提交一次，并在 0.9 秒后执行 query-scoped KBLite fallback。",
+        "Echo 启动时启用 turn-scoped knowledge context，避免旧 KBLite/档案摘要与本轮上下文重复注入。",
+        "`knowledge-pipeline-check.swift`、`context-packet-v1-check.swift`、`dialog-archive-context-integration-check.swift` 均通过。",
+        "2026-07-11 全量 release regression 通过，包含模拟器构建、通用 iPhoneOS 构建、Archive -> Echo smoke 与延迟回信通知 smoke。"
+      ],
+      "execution_map": [
+        "Result R003 实现 iOS 解析、Dialog RAG 指令、Echo turn gate 和降级策略。",
+        "后端 generation context 由 P005 提供；P006 只消费稳定合同，不复制筛选逻辑。",
+        "全量回归报告位于 `tmp/visual-qa/prd-stitch-ui/release-regression/20260711-002316-release-regression/report.md`。"
+      ],
+      "followup_problem_id": null,
+      "id": "C003",
+      "problem_id": "P006",
+      "residual_risk": [
+        "火山线上 ChatRagText 是否始终落在 provider 当前 query 的接收窗口内，仍需后续真机日志和回答内容验收；该项不阻塞本轮明确的非真机代码合同闭环。"
+      ],
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "后端上下文请求超过 0.9 秒时，本地 fallback 抢占提交权；迟到的后端结果因单次提交门禁被忽略。",
+        "用户、页面生命周期或 turn 在请求期间变化时，旧回调不再提交 RAG，也不覆盖最新 trace。",
+        "延迟回信路径只记录 trace，不向已结束的实时 Dialog turn 注入内容。"
+      ],
+      "summary": "本轮实现满足 P006 的代码合同与非真机验收范围：Echo 在最终 ASR 后优先使用后端 `generationContext`，超时或失败时按当前 query 使用当前用户 KBLite 降级，并通过 turn、用户和生命周期门禁避免旧异步结果污染当前轮次。"
+    },
+    "C004": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/checks/C004.md",
+      "created_at": "2026-07-10T16:26:55+00:00",
+      "criteria_map": [
+        "generation/turn token 绑定：由 Echo turn gate、turn ID 与 lifecycle generation 覆盖。",
+        "selected context 进入回复生成：由 `generationContext` 和 `submitTurnKnowledgeContext` 覆盖。",
+        "超时/失败本地降级：由 0.9 秒 timeout 与 query-scoped KBLite 覆盖。",
+        "避免双重注入：由 turn-scoped 启动参数抑制旧 local recent summary 覆盖。",
+        "Echo 既有合同兼容：由 release regression、延迟回信 smoke、数字人静态门与通用设备构建覆盖。",
+        "backend/local/stale 可区分：由来源字段、UIQA 记录和 trace guard 覆盖。"
+      ],
+      "evidence": [
+        "P005 已通过后端合同测试证明 selected context 可形成受隐私约束、长度可控、哈希稳定的生成文本。",
+        "P006 已通过 iOS 静态门与构建证明当前 turn 能提交 ChatRagText，并具备 query-scoped fallback 和 stale callback guard。",
+        "全量 release regression 报告通过，Archive -> Echo smoke 明确返回 `containsArchiveContext=true`。",
+        "后端 182 个单元测试、FastAPI smoke 和 knowledge delta smoke 通过。"
+      ],
+      "execution_map": [
+        "R004 汇总 P005/R002 与 P006/R003 的实现和验证结果。",
+        "生成筛选职责留在后端，iOS 只消费合同并管理当前 turn，不复制权限策略。"
+      ],
+      "followup_problem_id": null,
+      "id": "C004",
+      "problem_id": "P003",
+      "residual_risk": [
+        "真实火山线上回答是否按预期吸收 ChatRagText 仍需真机语义验收；这属于 provider 行为证据，不影响本轮代码合同和非真机闭环判定。"
+      ],
+      "result_ids": [
+        "R004"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "后端慢响应时 fallback 先提交，迟到 backend context 不会形成第二次注入。",
+        "页面、用户或 turn 切换后，旧异步响应不会污染新对话。",
+        "后端返回空或旧版本合同，会明确降级而不是阻塞回复。"
+      ],
+      "summary": "P003 已在非真机范围内闭环。后端 generation context 与 iOS turn-scoped RAG 形成单一知识注入路径，超时降级、旧回调隔离和现有 Echo 状态兼容均有实现与回归证据。"
+    },
+    "C005": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P004/checks/C005.md",
+      "created_at": "2026-07-10T16:28:07+00:00",
+      "criteria_map": [
+        "后端测试与知识 smoke：全部通过。",
+        "iOS 隔离、同步/提取、Echo、release 与设备通用构建：静态门和全量回归通过。",
+        "diff 与改动清单：两仓库 diff check 通过，状态文档按模块记录。",
+        "文档边界：明确 P0 基础管线、旧端兼容、无向量库以及后续 P1/P2。"
+      ],
+      "evidence": [
+        "后端全量验证通过 182 个测试、FastAPI smoke、knowledge delta smoke 和 diff check。",
+        "本地等价部署环境执行 knowledge deployed smoke 通过登录、revision、幂等、change feed、generation context 与 409 conflict。",
+        "iOS 全量 release regression 和 generic iPhoneOS build 通过。",
+        "Archive -> Echo 模拟器 smoke 显示 `containsArchiveContext=true`，延迟回信通知 smoke 验证 pending request。",
+        "两仓库状态文档列明服务器部署和真机/provider 残余项。"
+      ],
+      "execution_map": [
+        "R005 记录脚本、回归报告、截图和文档产物。",
+        "默认 release regression 不访问隐藏/部署功能；部署态知识 gate 通过显式环境变量开启。"
+      ],
+      "followup_problem_id": null,
+      "id": "C005",
+      "problem_id": "P004",
+      "residual_risk": [
+        "服务器尚需部署本轮后端后再跑真实 Postgres smoke；这是部署验收，不阻塞代码与非真机交付闭环。",
+        "线上 ChatRagText 的语义效果仍需真机验证。"
+      ],
+      "result_ids": [
+        "R005"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "重复 operation ID 不重复写入；stale revision 返回 409 并可重新拉取。",
+        "Archive 隐私元数据缺失时后端拒绝同步；补齐 generationAllowed 后主链路通过。",
+        "模拟器与 generic iPhoneOS 分别覆盖可运行流程和 arm64/腾讯 SDK 链接。"
+      ],
+      "summary": "P004 的非真机交付标准已满足。两仓库均有完整验证证据，部署态合同已固化为可选 gate，状态文档没有把基础增量知识管线夸大为向量检索或线上真机验收完成。"
+    },
+    "C006": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/checks/C006.md",
+      "created_at": "2026-07-10T16:28:47+00:00",
+      "criteria_map": [
+        "单一知识主链路：iOS KBLite、后端 mutation/change-feed/context、Echo turn RAG 已串联。",
+        "用户与权限隔离：按 userId 文件、session/generation guard、generationAllowed 后端过滤覆盖。",
+        "增量与冲突：revision、operationId 幂等、change feed、409 refresh/retry 覆盖。",
+        "生成可用：selected context 形成 generationContext，iOS 当前 turn 提交，失败按 query 本地降级。",
+        "可持续验证：部署态 smoke、release gate、文档和 Closure 台账齐全。"
+      ],
+      "evidence": [
+        "P001、P002、P003、P004 均通过独立成功检查。",
+        "后端全量验证通过 182 个单元测试及全部基础 smoke。",
+        "iOS 全量 release regression、generic iPhoneOS build 和关键模拟器 smoke 通过。",
+        "状态文档记录数据流、schema/version、隐私策略、部署命令和剩余风险。"
+      ],
+      "execution_map": [
+        "R006 汇总四个已验收子问题的结果。",
+        "复杂筛选和隐私策略由后端负责；iOS 负责用户隔离、同步调度与当前 turn 生命周期。"
+      ],
+      "followup_problem_id": null,
+      "id": "C006",
+      "problem_id": "P000",
+      "residual_risk": [
+        "服务器真实 Postgres smoke 与火山真机语义验收仍需部署/真机环境；不将其表述为已完成。",
+        "大规模分页、删除 tombstone、向量/混合检索留在 P1/P2，不影响当前 P0 闭环。"
+      ],
+      "result_ids": [
+        "R006"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "stale revision、重复 operation、后端超时、用户切换、页面退出、迟到回调和不允许生成的档案均有防护或测试证据。",
+        "Archive payload 缺隐私元数据时后端拒绝，补齐后主链路 smoke 通过，证明权限门不是空壳。"
+      ],
+      "summary": "根目标已在约定的 P0 与非真机范围内完成。知识写入、增量同步、用户隔离、受控上下文构建和 Echo 当前轮生成已成为一条可观察、可降级、可回归的主链路，同时保留旧客户端兼容。"
+    }
+  },
+  "counters": {
+    "check": 7,
+    "event": 84,
+    "problem": 7,
+    "result": 7,
+    "ticket": 7
+  },
+  "created_at": "2026-07-10T15:11:02+00:00",
+  "effort": "medium",
+  "language": "zh",
+  "ledger_id": "L20260710-231102-12",
+  "problems": {
+    "P000": {
+      "body_path": "problems/P000/README.md",
+      "check_ids": [
+        "C006"
+      ],
+      "created_at": "2026-07-10T15:11:02+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Close the Lodestar task represented by `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/plans/task_12_p0-unified-knowledge-pipeline.md` using recursive problem, ticket, result, and check state.\n\nTask context:\n\n# P0 统一知识库主链路",
+      "followup_ids": [],
+      "id": "P000",
+      "package_path": "problems/P000",
+      "parent_id": null,
+      "result_ids": [
+        "R006"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P001",
+        "P002",
+        "P003",
+        "P004"
+      ],
+      "success_criteria": [
+        "进程内切换用户后，KBLite 不保留上一用户内存图谱。",
+        "同一 mutation 重试不会重复写入；客户端可按 revision 拉取增量。",
+        "正常联网知识提取走后端；后端失败时仅执行明确的本地规则降级。",
+        "Echo 正常路径使用 `/context/build` 的 query-scoped selected context，且旧本地摘要不重复注入。",
+        "后端超时/不可用时，Echo 使用本轮 query 的本地 KBLite 上下文继续工作。",
+        "owner bearer 不能同步、读取、提取或构建其他用户知识上下文。",
+        "Context V2 selected/filtered/ranking trace 和现有 QA evidence bundle 保持兼容。"
+      ],
+      "ticket_ids": [
+        "T000"
+      ],
+      "title": "P0 统一知识库主链路",
+      "updated_at": "2026-07-10T16:28:47+00:00"
+    },
+    "P001": {
+      "body_path": "problems/P000/children/P001/README.md",
+      "check_ids": [
+        "C000"
+      ],
+      "created_at": "2026-07-10T15:12:19+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "后端只保存整份 KB snapshot，缺少统一 revision、幂等 mutation 和 change feed，无法证明多设备重试不会重复写入，也无法让 iOS 稳定增量拉取。需要在 InMemory/Postgres 中实现兼容现有 `/kb/sync` 和 snapshot 的最小增量合同，并保持 route ownership 分类完整。",
+      "followup_ids": [],
+      "id": "P001",
+      "package_path": "problems/P000/children/P001",
+      "parent_id": "P000",
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "InMemory/Postgres 使用同一 revision 与 operationId 幂等语义。",
+        "新增 mutation/change-feed API，现有 sync/snapshot 合同继续通过。",
+        "owner principal 不能写入或读取其他用户 KB。",
+        "单测和 FastAPI smoke 覆盖首次写入、重复 mutation、sinceRevision、错误 principal 和旧 snapshot 兼容。"
+      ],
+      "ticket_ids": [
+        "T001"
+      ],
+      "title": "后端知识 revision 与增量同步合同",
+      "updated_at": "2026-07-10T15:23:43+00:00"
+    },
+    "P002": {
+      "body_path": "problems/P000/children/P002/README.md",
+      "check_ids": [
+        "C001"
+      ],
+      "created_at": "2026-07-10T15:12:19+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "KBLite 单例只在初始化时加载图谱，进程内切换用户可能继续持有旧用户内存数据；`syncKnowledge` 没有稳定业务触发点；知识提取默认仍直连客户端 DeepSeek。需要在不重写现有知识 UI 的前提下补生命周期、同步协调和 backend-first extraction。",
+      "followup_ids": [],
+      "id": "P002",
+      "package_path": "problems/P000/children/P002",
+      "parent_id": "P000",
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "`switchUser(to:)` 原子保存/清空/加载对应用户图谱，登出后不保留上一用户数据。",
+        "知识提取完成、登录/用户切换和前台恢复可以触发去重的同步。",
+        "正常路径调用 `/kb/extract`，后端失败或离线才执行本地规则降级。",
+        "客户端可提交 mutation 并按 revision 拉取变更，旧服务端仍可降级使用 `/kb/sync`。",
+        "静态/launch-arg smoke 覆盖用户隔离、backend-first 和降级行为。"
+      ],
+      "ticket_ids": [
+        "T002"
+      ],
+      "title": "iOS KBLite 用户隔离、同步与后端提取",
+      "updated_at": "2026-07-10T15:41:13+00:00"
+    },
+    "P003": {
+      "body_path": "problems/P000/children/P003/README.md",
+      "check_ids": [
+        "C004"
+      ],
+      "created_at": "2026-07-10T15:12:19+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "Echo 当前异步请求 `/context/build` 只记录 trace，真实回复仍由 `DialogEngineManager` 注入 `query:nil` 最近摘要。需要把 query-scoped selected context 传入真实生成，同时避免增加不可控等待、旧回调污染和双重知识注入。",
+      "followup_ids": [],
+      "id": "P003",
+      "package_path": "problems/P000/children/P003",
+      "parent_id": "P000",
+      "result_ids": [
+        "R004"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P005",
+        "P006"
+      ],
+      "success_criteria": [
+        "final 用户回合使用 generation/turn token 绑定 Context Packet。",
+        "正常路径将 selected context 形成可控文本并传给回复生成。",
+        "Context 请求超时/失败时使用本轮 query 的本地 KBLite 上下文。",
+        "backend context 与旧 local recent summary 不会同时注入。",
+        "Echo trace、数字人、声音复刻、等待回信状态机合同保持兼容。",
+        "非真机 smoke 能区分 backend context、local fallback 和 stale callback ignored。"
+      ],
+      "ticket_ids": [
+        "T003"
+      ],
+      "title": "Context Packet 驱动真实 Echo 生成",
+      "updated_at": "2026-07-10T16:26:55+00:00"
+    },
+    "P004": {
+      "body_path": "problems/P000/children/P004/README.md",
+      "check_ids": [
+        "C005"
+      ],
+      "created_at": "2026-07-10T15:12:19+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "知识库变更跨两个仓库和多条异步链路，需要统一验证合同、release gate、状态文档和回归证据，否则后续修改容易重新形成双轨或跨用户泄漏。",
+      "followup_ids": [],
+      "id": "P004",
+      "package_path": "problems/P000/children/P004",
+      "parent_id": "P000",
+      "result_ids": [
+        "R005"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "后端全量测试、知识 mutation/change-feed smoke 和 Context V2 smoke 通过。",
+        "iOS 用户隔离、同步/提取、Echo context smoke、release regression 和 generic iPhoneOS build 通过。",
+        "两仓库 `git diff --check` 通过，未提交改动按模块清楚列出。",
+        "状态文档记录真实实现、兼容边界、验证命令和后续 P1/P2，不夸大为向量检索完成。"
+      ],
+      "ticket_ids": [
+        "T006"
+      ],
+      "title": "统一知识管线验证与交付收敛",
+      "updated_at": "2026-07-10T16:28:07+00:00"
+    },
+    "P005": {
+      "body_path": "problems/P000/children/P003/children/P005/README.md",
+      "check_ids": [
+        "C002"
+      ],
+      "created_at": "2026-07-10T15:49:27+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T003",
+      "created_from_ticket_mode": "split",
+      "description": "Context Packet 只有 selected/filtered/ranking 调试结构，没有供生成引擎直接消费的稳定、受限文本合同，iOS 无法在不重复实现 policy 的情况下安全注入 Echo。",
+      "followup_ids": [],
+      "id": "P005",
+      "package_path": "problems/P000/children/P003/children/P005",
+      "parent_id": "P003",
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "`/context/build` 兼容新增 `generationContext`，包含版本、文本、来源引用/计数与稳定内容哈希。",
+        "文本仅来源于通过 Context V2 policy 的 archive、KBLite fact、persona、care 候选。",
+        "runtime voice/digital-human 状态及被过滤内容不进入文本。",
+        "空上下文和最大长度行为明确，现有 Context V2 合同与测试不回归。"
+      ],
+      "ticket_ids": [
+        "T004"
+      ],
+      "title": "后端生成上下文合同",
+      "updated_at": "2026-07-10T15:59:36+00:00"
+    },
+    "P006": {
+      "body_path": "problems/P000/children/P003/children/P006/README.md",
+      "check_ids": [
+        "C003"
+      ],
+      "created_at": "2026-07-10T15:49:34+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T003",
+      "created_from_ticket_mode": "split",
+      "description": "iOS 目前只记录 Context Packet trace，真实火山 Dialog 回复仍使用启动时旧摘要，无法利用本轮 query 的后端筛选结果，且旧摘要可能重复注入。",
+      "followup_ids": [],
+      "id": "P006",
+      "package_path": "problems/P000/children/P003/children/P006",
+      "parent_id": "P003",
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "最终 ASR 后将当前 Context Packet 的 `generationContext.text` 通过 `SEDirectiveEventChatRagText` 提交给当前 turn，且每轮最多一次。",
+        "后端失败或短超时后按当前 query 使用当前用户 KBLite 降级。",
+        "lifecycle、turn 或用户变化时旧异步回调不会提交 RAG。",
+        "Echo 使用 turn-scoped RAG 时，会话启动不再重复注入旧 KBLite/档案摘要。",
+        "现有 trace/evidence、延迟回信、数字人音频 owner 与公开 UI 不回归。"
+      ],
+      "ticket_ids": [
+        "T005"
+      ],
+      "title": "iOS 每轮 Echo RAG 注入",
+      "updated_at": "2026-07-10T16:26:02+00:00"
+    }
+  },
+  "results": {
+    "R000": {
+      "artifacts": [
+        "`app/services/knowledge_store.py`",
+        "`app/services/in_memory_store.py`",
+        "`app/services/postgres_store.py`",
+        "`app/services/route_ownership.py`",
+        "`app/main.py`",
+        "`scripts/backend-knowledge-delta-smoke.py`",
+        "`scripts/run-backend-knowledge-delta-smoke.sh`",
+        "对应 core/postgres/route/auth 测试。"
+      ],
+      "body_path": "problems/P000/children/P001/results/R000.md",
+      "created_at": "2026-07-10T15:23:10+00:00",
+      "done": [
+        "新增 `KnowledgeRevisionConflict`，统一表达 stale base revision。",
+        "InMemory/Postgres store 新增 `apply_kb_mutation`、`get_kb_snapshot_record`、`list_kb_changes`。",
+        "`kb_snapshots` 增加 revision；新增 `kb_changes`、operationId 唯一约束和 user/revision 索引。",
+        "Postgres mutation 使用用户级 advisory transaction lock、operationId 查重和 snapshot row lock，保证并发幂等。",
+        "`/kb/sync` 保持兼容并新增 revision；snapshot 响应增加 revision/updatedAt。",
+        "新增 owner-bound `/kb/mutations` 与 `/kb/changes/{user_id}`，并纳入 route ownership registry。",
+        "新增 knowledge delta smoke 并接入 `verify_backend.sh`。"
+      ],
+      "id": "R000",
+      "known_gaps": [
+        "尚未部署到线上 Postgres；本任务范围先完成代码和本地合同验证。",
+        "P0 mutation 使用经过隐私过滤的整图 replacement，不提供通用 JSON Patch 或实体级冲突合并。",
+        "change retention/compaction 与 pgvector 不在本任务范围。"
+      ],
+      "problem_id": "P001",
+      "root_id": "P000",
+      "summary": "在不破坏旧 snapshot/ContextPacketBuilder 读取方式的前提下，为 InMemory/Postgres 增加了可审计、幂等的 P0 知识增量同步层。",
+      "ticket_id": "T001",
+      "verification": [
+        "`scripts/verify_backend.sh` 通过。",
+        "180 个后端 unittest 通过。",
+        "FastAPI health/runtime smoke 通过。",
+        "`scripts/run-backend-knowledge-delta-smoke.sh` 通过。",
+        "Postgres fake-store 持久化、幂等、change feed、冲突测试通过。",
+        "`git diff --check` 通过。"
+      ]
+    },
+    "R001": {
+      "artifacts": [
+        "`DreamJourney/Sources/Services/KBLiteManager.swift`",
+        "`DreamJourney/Sources/Services/KBLiteModels.swift`",
+        "`DreamJourney/Sources/Services/KnowledgeSyncCoordinator.swift`",
+        "`DreamJourney/Sources/Services/DreamJourneyBackendClient.swift`",
+        "`DreamJourney/Sources/Services/UserManager.swift`",
+        "`DreamJourney/Sources/AppDelegate.swift`",
+        "`DreamJourney/Sources/SceneDelegate.swift`",
+        "`scripts/QA/prd-stitch-ui/knowledge-pipeline-check.swift`"
+      ],
+      "body_path": "problems/P000/children/P002/results/R001.md",
+      "created_at": "2026-07-10T15:40:40+00:00",
+      "done": [
+        "KBLite 新增 `loadedUserId`、`switchUser(to:)` 和 generation guard；登出态内存为空且不持久化。",
+        "legacy `kb_graph.json` 改为单次 move，避免复制给多个用户。",
+        "UserManager 登录/登出、App 启动和 Scene 前台恢复接入知识生命周期。",
+        "新增 `KnowledgeSyncCoordinator`，串行合并 change feed、提交 mutation、处理 409、兼容旧 `/kb/sync`。",
+        "增加 graph fingerprint 和持久化 pending operationId，避免未变化前台同步空写，并保证丢响应重试幂等。",
+        "KBLite 主提取改为后端 `/kb/extract`；后端未配置或失败时才执行本地规则。",
+        "新知识实体增加可选 privacyMetadata；新对话/图片分析实体标记 generationAllowed，旧实体默认保持 local-only。",
+        "新增 knowledge pipeline release guard，并把 coordinator 显式加入 Xcode target。"
+      ],
+      "id": "R001",
+      "known_gaps": [
+        "当前机器的真实 simulator destination 不支持此工程的 x86_64 Tencent SDK 组合，因此本阶段完成 generic simulator build，未运行可安装 UIQA。",
+        "P0 graph mutation 仍为整图 replacement；复杂实体冲突审核留给 P1。",
+        "旧知识实体没有隐私元数据时继续 local-only，不自动扩大同步范围。"
+      ],
+      "problem_id": "P002",
+      "root_id": "P000",
+      "summary": "将 KBLite 从进程级隐式单例状态收敛为按用户显式生命周期，并接通 backend-first extraction、revision/change-feed 同步、离线规则降级和旧后端 snapshot fallback。",
+      "ticket_id": "T002",
+      "verification": [
+        "`swift scripts/QA/prd-stitch-ui/knowledge-pipeline-check.swift .` 通过。",
+        "generic iOS Simulator Debug build 通过，bundle id 使用 `com.yxj.dreamjourney.app`。",
+        "`git diff --check` 在阶段检查中通过。",
+        "静态 guard 证明 KBLite 不再调用 `DeepSeekService.shared.extractKnowledge`，且登录/登出/前台触发点和新客户端合同存在。"
+      ]
+    },
+    "R002": {
+      "artifacts": [
+        "app/services/context_packet.py",
+        "tests/test_core_services.py",
+        "scripts/backend-echo-context-builder-v2-smoke.py"
+      ],
+      "body_path": "problems/P000/children/P003/children/P005/results/R002.md",
+      "created_at": "2026-07-10T15:58:18+00:00",
+      "done": [
+        "新增 version、text、sourceRefs、sourceCounts、contentHash、maxChars、truncated 字段。",
+        "仅从最终 selected archive、KBLite fact、persona、care 候选渲染文本。",
+        "仅允许 generationAllowed privacy scope，默认拒绝旧数据和未授权内容。",
+        "排除 voice/digital-human runtime state，并限制为 12,000 字符。",
+        "补充 policy、空合同、稳定哈希、截断和 Context V2 smoke 断言。"
+      ],
+      "id": "R002",
+      "known_gaps": [
+        "尚未部署线上 Postgres 环境验证；本任务只要求本地非真机合同闭环。"
+      ],
+      "problem_id": "P005",
+      "root_id": "P000",
+      "summary": "已在现有 ContextPacketBuilder 上兼容新增 `generationContext` v1，统一输出可供 Echo 生成消费的安全文本及可审计元数据。",
+      "ticket_id": "T004",
+      "verification": [
+        "ArchiveAPITests 22 项通过。",
+        "backend-echo-context-builder-v2-smoke.py 通过。",
+        "Python 编译检查通过。",
+        "git diff --check 通过。"
+      ]
+    },
+    "R003": {
+      "artifacts": [
+        "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift",
+        "DreamJourney/Sources/Services/DialogEngineManager.swift",
+        "DreamJourney/Sources/Modules/Echo/EchoViewController.swift",
+        "Scripts/QA/prd-stitch-ui/knowledge-pipeline-check.swift",
+        "Scripts/QA/prd-stitch-ui/context-packet-v1-check.swift"
+      ],
+      "body_path": "problems/P000/children/P003/children/P006/results/R003.md",
+      "created_at": "2026-07-10T16:02:08+00:00",
+      "done": [
+        "EchoContextPacket 解析 generationContext 版本、文本、来源、哈希和截断状态。",
+        "DialogEngineManager 新增 `submitTurnKnowledgeContext`，真实路径发送 `SEDirectiveEventChatRagText`。",
+        "Echo 最终 ASR 创建 turn gate，后端优先，0.9 秒后按当前 query 使用本地 KBLite。",
+        "旧服务器缺 generationContext、请求失败或未配置后端时均明确降级。",
+        "lifecycle、user、turn 和单次提交校验阻止旧回调污染生成；旧 trace 仍进入历史但不覆盖最新 trace。",
+        "延迟回信只记录 trace，不提交生成 RAG。",
+        "Echo 启动启用 turn-scoped 模式，生产 Dialog prompt 不再重复附加旧 KBLite/档案摘要；其他调用默认不变。"
+      ],
+      "id": "R003",
+      "known_gaps": [
+        "ChatRagText 是否在火山线上当前 query 等待窗口内生效仍需后续真机日志/回答内容验收；本轮按要求未做真机。"
+      ],
+      "problem_id": "P006",
+      "root_id": "P000",
+      "summary": "已把后端 generationContext 接到火山 Dialog 的当前 turn RAG 指令，并建立超时降级、单次提交和生命周期隔离。",
+      "ticket_id": "T005",
+      "verification": [
+        "knowledge-pipeline-check.swift 通过。",
+        "context-packet-v1-check.swift 通过。",
+        "dialog-archive-context-integration-check.swift 通过。",
+        "generic iOS Simulator Debug build 通过。",
+        "generic iPhoneOS Debug build 通过。"
+      ]
+    },
+    "R004": {
+      "artifacts": [],
+      "body_path": "problems/P000/children/P003/results/R004.md",
+      "created_at": "2026-07-10T16:26:37+00:00",
+      "done": [
+        "后端 `/context/build` 兼容返回 `generationContext`，包含版本、文本、来源引用、来源计数、稳定哈希、长度上限和截断标记。",
+        "生成文本只使用最终 selected 的 archive、KB fact、persona、care 内容，并执行 `generationAllowed` 隐私过滤。",
+        "failed 空分析、草稿或未到期时间信件、无效家庭关系等内容不会进入生成上下文；voice/digital-human runtime 只保留运行态，不进入知识文本。",
+        "iOS 在最终 ASR 后创建 turn gate，优先等待后端 0.9 秒，失败后使用当前 query 的 KBLite fallback。",
+        "lifecycle、用户、turn 和单次提交门禁阻止迟到回调与重复 RAG；延迟回信只记录 trace。",
+        "Echo turn-scoped 模式关闭启动期旧知识摘要注入，避免 backend context 与 local recent summary 叠加。"
+      ],
+      "id": "R004",
+      "known_gaps": [
+        "火山线上 ChatRagText 的实际接收时序与回答内容相关性仍需后续真机验收；本轮非真机合同与降级路径已闭环。"
+      ],
+      "problem_id": "P003",
+      "root_id": "P000",
+      "summary": "已完成后端可生成上下文合同和 iOS 每轮 Echo RAG 注入：后端把经过权限与业务规则筛选的 selected context 形成稳定、可追踪的 `generationContext`，iOS 将其绑定到当前最终 ASR turn 并提交给火山 Dialog；请求失败或短超时时按当前 query 使用当前用户 KBLite 降级。",
+      "ticket_id": "T003",
+      "verification": [
+        "后端 182 个单元测试、FastAPI smoke、knowledge delta smoke 通过。",
+        "Context V2/generation contract smoke 通过。",
+        "iOS 知识管线、Context Packet、Dialog/Archive 集成静态检查通过。",
+        "全量 release regression 通过，包含模拟器构建、通用 iPhoneOS 构建、Archive -> Echo smoke 和延迟回信通知 smoke。"
+      ]
+    },
+    "R005": {
+      "artifacts": [
+        "`tmp/visual-qa/prd-stitch-ui/release-regression/20260711-002316-release-regression/report.md`",
+        "`tmp/visual-qa/prd-stitch-ui/release-regression/20260711-002316-release-regression/archive-to-echo-smoke/20260711-002316-release-regression/01-archive-to-echo-completed.png`",
+        "`docs/superpowers/status/2026-07-11-unified-knowledge-pipeline.md`",
+        "后端 `docs/backend/2026-07-11-unified-knowledge-contract-deployment.md`"
+      ],
+      "body_path": "problems/P000/children/P004/results/R005.md",
+      "created_at": "2026-07-10T16:27:49+00:00",
+      "done": [
+        "后端新增本地 knowledge delta smoke 和部署态 knowledge pipeline smoke；`verify_backend.sh` 纳入脚本编译与基础知识合同验证。",
+        "iOS 新增 `knowledge-pipeline-check.swift`，并接入 release QA package。",
+        "release regression 新增 `RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE=1` 可选部署态门，不影响默认公开 MVP 回归。",
+        "Archive payload 补齐 generationAllowed 隐私元数据与 source reference，使 Archive -> Echo 后端上下文链路可通过权限过滤。",
+        "更新 Task 12、实现计划索引和统一知识管线状态文档，记录兼容边界、部署命令和后续风险。"
+      ],
+      "id": "R005",
+      "known_gaps": [
+        "线上部署态 smoke 尚需在服务器更新后使用真实 Postgres/token 再执行。",
+        "火山 Dialog ChatRagText 语义吸收仍需真机验收。",
+        "change feed 分页、保留/压缩和向量检索属于 P1/P2，不在本轮范围。"
+      ],
+      "problem_id": "P004",
+      "root_id": "P000",
+      "summary": "已完成统一知识管线的跨仓库非真机验收、部署态 smoke 固化和状态文档收敛。后端 revision/change-feed/generation 合同与 iOS 用户隔离、同步、提取、Echo turn-scoped RAG 均纳入可重复回归门。",
+      "ticket_id": "T006",
+      "verification": [
+        "后端 `scripts/verify_backend.sh`：182 tests、py_compile、FastAPI smoke、voice contract、knowledge delta smoke、diff check 全部通过。",
+        "部署态 knowledge smoke 在本地 FastAPI 等价环境通过：登录、revision sync、幂等 mutation、change feed、generation context/hash、409 conflict。",
+        "iOS `RUN_IPHONEOS_GENERIC_BUILD=1 Scripts/QA/prd-stitch-ui/run-release-regression.sh` 通过。",
+        "iOS 回归包含模拟器 Debug、generic iPhoneOS、Archive -> Echo smoke 与延迟回信通知 smoke。",
+        "Archive -> Echo 结果为 `containsArchiveContext=true`；延迟回信通知 pending request 合同通过。",
+        "两仓库 `git diff --check` 通过。"
+      ]
+    },
+    "R006": {
+      "artifacts": [],
+      "body_path": "problems/P000/results/R006.md",
+      "created_at": "2026-07-10T16:28:26+00:00",
+      "done": [
+        "P001：后端知识 revision 与增量同步合同，覆盖内存/Postgres、一致冲突与部署态 smoke。",
+        "P002：iOS KBLite 用户隔离、旧数据迁移、App Group 隔离、后端提取与串行同步协调器。",
+        "P003：后端 generation context 与 iOS 每轮 Echo RAG 注入，包含超时、本地 fallback、turn/lifecycle/user 隔离。",
+        "P004：跨仓库 release gate、generic iPhoneOS build、模拟器主链路 smoke、部署说明和状态文档。",
+        "保留 `/kb/sync` 兼容旧客户端，新客户端可使用 mutation/change-feed；未引入无必要的向量数据库。"
+      ],
+      "id": "R006",
+      "known_gaps": [
+        "后端部署后需对真实 Postgres 环境运行 deployed knowledge smoke。",
+        "火山 ChatRagText 真实语义吸收和时序需后续真机验收。",
+        "change feed 分页/保留策略、服务端知识删除 tombstone、混合检索/向量检索属于 P1/P2。"
+      ],
+      "problem_id": "P000",
+      "root_id": "P000",
+      "summary": "已完成 P0 统一知识库主链路：后端提供 revision、幂等 mutation、change feed 和可直接用于生成的受控 Context Packet；iOS KBLite 按用户隔离并通过协调器与后端同步，知识提取以后端为主、本地规则为降级；Echo 每轮最终 ASR 使用 query-scoped Context Packet 注入真实 Dialog RAG，避免旧摘要双重注入。",
+      "ticket_id": "T000",
+      "verification": [
+        "后端 182 个单元测试、FastAPI smoke、knowledge delta smoke、Context generation smoke、py_compile 和 diff check 通过。",
+        "部署态 knowledge smoke 在本地等价 FastAPI 环境通过全部关键合同。",
+        "iOS 全量 release regression、模拟器 Debug、generic iPhoneOS、Archive -> Echo 和延迟回信通知 smoke 通过。",
+        "`Archive -> Echo` 结果确认档案上下文已进入链路。"
+      ]
+    }
+  },
+  "root_id": "P000",
+  "schema_version": 6,
+  "tickets": {
+    "T000": {
+      "acceptance_criteria": [
+        "进程内从用户 A 切换到用户 B 后，内存图谱只包含 B 对应文件内容。",
+        "后端 mutation 使用 operation ID 幂等，同一请求重复提交不会重复增加 revision 或实体。",
+        "客户端可以按 sinceRevision 拉取 change feed，并能继续使用兼容 snapshot。",
+        "正常联网知识提取调用后端 `/kb/extract`，失败/离线时执行可观察的本地规则降级。",
+        "Echo 正常路径将 Context Packet selected context 注入真实生成，且不会再叠加 `query:nil` 最近摘要。",
+        "后端 Context 构建失败时，Echo 继续使用本轮 query 的本地 KBLite 上下文。",
+        "错误 bearer 不能同步、读取、提取或构建其他用户的知识上下文。",
+        "现有 Context V2 trace、数字人、声音复刻和 QA evidence bundle 合同保持兼容。"
+      ],
+      "assumptions": [
+        "后端 Postgres 和 InMemory store 都需要实现同一合同。",
+        "当前 global ownership mode 继续保持 shadow，但已注册 owner 路由继续 principal-bound enforce。",
+        "P0 不引入 pgvector、外部向量库或新的公开知识库视觉设计。",
+        "真机验证不属于本任务完成条件，但 generic iPhoneOS build 必须通过。"
+      ],
+      "body_path": "problems/P000/tickets/T000.md",
+      "classification": "split",
+      "classification_reason": "任务跨后端存储合同、iOS 本地生命周期、知识提取和 Echo 生成四个独立风险边界，应拆分后分别实现与验证，避免一次提交难以定位回归。",
+      "created_at": "2026-07-10T15:11:40+00:00",
+      "id": "T000",
+      "problem_definition": "iOS 本地 KBLite 与后端 KB snapshot / Context Packet V2 当前双轨运行：用户切换时本地图谱没有显式 reload；知识提取可直接依赖客户端 DeepSeek；`syncKnowledge` 没有稳定业务调用点；`/context/build` 只记录 trace，没有驱动真实 Echo 回答；旧的 `query:nil` 最近摘要仍是实际回复的主要知识来源。这会导致跨用户内存残留、本地与后端知识漂移、隐私策略不一致，以及 QA trace 与用户实际听到的回答不一致。",
+      "problem_id": "P000",
+      "proposed_solution": "在保持现有公开 UI、ownership policy、`/kb/sync`、`/kb/snapshot/{userId}` 和 Context Packet V2 兼容的前提下，完成一个 P0 统一知识管线：后端增加 revision、幂等 mutation 和 change feed；iOS 增加按用户切换的 KBLite lifecycle、自动同步协调器和后端知识提取入口；Echo 在 final 用户回合按 query 请求 `/context/build`，把 selected context 传入真实回复生成，后端失败时才使用 query-scoped 本地 KBLite；旧 recent-summary 注入只保留为显式 fallback，避免重复上下文。",
+      "result_ids": [
+        "R006"
+      ],
+      "risks": [
+        "Echo 上下文调用是异步的，若直接阻塞语音回复可能增加延迟；需要超时和 generation token 防止旧回调污染新回合。",
+        "全量 snapshot 与增量 mutation 并存期间可能产生 revision 漂移；兼容接口必须采用同一后端 revision 生成规则。",
+        "本地提取结果和后端模型结果可能冲突；P0 仅做确定性合并和来源保留，不实现复杂公开审核 UI。",
+        "KBLite、Archive context 与 Context Packet 同时存在时容易重复注入；生成入口必须只有一个知识上下文参数。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "收敛 KBLite、后端 KB 与 Echo Context 的 P0 主链路",
+      "updated_at": "2026-07-10T16:28:26+00:00",
+      "verification_plan": "运行后端知识库单测、ownership 单测、FastAPI smoke、mutation/change-feed smoke 与 Context V2 smoke；运行 iOS 用户切换隔离检查、知识同步/提取静态或 launch-arg smoke、Archive-to-Echo/context smoke、release regression、`git diff --check` 和 generic iPhoneOS build。检查输出明确区分 backend context、local fallback 和 extraction fallback，不包含 provider key 或跨用户原始数据。"
+    },
+    "T001": {
+      "acceptance_criteria": [
+        "首次 sync 返回 revision，旧响应字段不删除。",
+        "重复 operationId 返回相同 revision 且不新增 change。",
+        "sinceRevision 只返回更新版本，包含可恢复当前 graph 的兼容 payload。",
+        "baseRevision 冲突返回明确 409 和 currentRevision。",
+        "owner principal 访问其他用户 mutations/changes/snapshot 返回 403。",
+        "InMemory/Postgres 单测和 FastAPI smoke 覆盖上述合同。"
+      ],
+      "assumptions": [
+        "P0 mutation 可以先支持受控的 graph replacement，不在本任务实现通用 JSON Patch。",
+        "change feed 主要供 iOS 同步，不作为家庭共享审计日志。",
+        "change retention P0 可保留有限最近记录，完整压缩策略后续处理。"
+      ],
+      "body_path": "problems/P000/children/P001/tickets/T001.md",
+      "classification": "one_go",
+      "classification_reason": "变更集中在后端 KB store/API/测试，合同边界单一，可由一个后端工作包原子实现并用同一 smoke 验证。",
+      "created_at": "2026-07-10T15:12:41+00:00",
+      "id": "T001",
+      "problem_definition": "当前 `/kb/sync` 直接覆盖用户整份 graph，store 只返回 snapshot，没有 revision 和 operationId。客户端重试无法证明幂等，多设备也无法按版本拉取变化；但 ContextPacketBuilder、现有 smoke 和旧客户端都依赖 snapshot 结构，不能破坏现有接口。",
+      "problem_id": "P001",
+      "proposed_solution": "在 store 层引入 `KnowledgeSnapshotRecord` 语义：graph、revision、updatedAt、appliedOperationIds 和按 revision 记录的 change log。现有 `/kb/sync` 写入时生成一次 replace change；新增 owner-bound `/kb/mutations` 接收 operationId、baseRevision 和 graph replacement/merge mutation；新增 `/kb/changes/{userId}?sinceRevision=` 返回顺序变化及当前 revision。InMemory 与 Postgres 实现同一行为，Postgres 使用事务和唯一 operationId 保证并发幂等。`get_kb_snapshot` 保持只返回 graph，避免破坏 ContextPacketBuilder。",
+      "result_ids": [
+        "R000"
+      ],
+      "risks": [
+        "现有 store 方法由 ContextPacketBuilder 直接消费，返回类型不能直接改成 record。",
+        "Postgres migration 需要兼容已存在的 `kb_snapshots` 行。",
+        "change log 不能保存未经过 privacy filter 的 graph。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "在现有 KB snapshot 上增加兼容的增量同步层",
+      "updated_at": "2026-07-10T15:23:10+00:00",
+      "verification_plan": "运行知识 store 单测、核心 API 单测、authorization policy 单测、FastAPI smoke 和新建 backend KB delta smoke；最后运行后端全量 unittest 与 `git diff --check`。"
+    },
+    "T002": {
+      "acceptance_criteria": [
+        "用户 A/B 进程内切换不会共享内存 graph，登出后为匿名隔离文件或空图谱。",
+        "同步协调器串行、去重并保存每用户 revision；新后端走 mutation/changes，旧后端可回退 snapshot sync。",
+        "正常知识提取调用 `/kb/extract` 并合并结构化结果；失败时本地规则提取仍可完成。",
+        "提取完成、用户切换和前台恢复均有稳定同步触发点，且不会递归触发无限同步。",
+        "不改现有知识库公开 UI，KBLite 搜索/导出和 ConversationMemoryManager 调用兼容。"
+      ],
+      "assumptions": [
+        "P0 继续使用每用户 JSON 文件和 UserDefaults revision，不迁移数据库。",
+        "graph mutation 先整图发送，实体级 merge 留给 P1。",
+        "现有本地 regex 提取可作为离线 fallback。"
+      ],
+      "body_path": "problems/P000/children/P002/tickets/T002.md",
+      "classification": "one_go",
+      "classification_reason": "用户切换、提取完成和同步触发都围绕同一个 KBLiteManager 生命周期，拆开会造成重复修改和中间态；适合一个受控 iOS 工作包统一实现。",
+      "created_at": "2026-07-10T15:24:08+00:00",
+      "id": "T002",
+      "problem_definition": "KBLiteManager 的 graph 在单例初始化时加载，文件路径虽按当前用户计算，但进程内用户切换不会重新加载；对话提取直接调用 DeepSeekService；后端 `syncKnowledge` 无业务触发点。需要在保持现有知识 UI、JSON 文件和本地语义检索的前提下消除隔离与同步缺口。",
+      "problem_id": "P002",
+      "proposed_solution": "给 KBLiteManager 增加显式 `switchUser(to:)`、当前加载 user ID、变更通知和 backend-first extraction 注入点；新增 `KnowledgeSyncCoordinator` 串行管理 mutation/change-feed/snapshot 兼容降级、revision 和去重；扩展 DreamJourneyBackendClient 的 extract/mutate/changes 合同。UserManager 登录/恢复/登出调用切换，App 前台和提取完成触发同步。后端不可用时仅调用现有本地规则提取，并记录 fallback reason；不再从 KBLite 主链路调用客户端 DeepSeek。",
+      "result_ids": [
+        "R001"
+      ],
+      "risks": [
+        "UserManager 当前登录恢复路径较多，遗漏一个切换点会保留旧 graph。",
+        "backend extraction JSON 与现有 KBLite extraction decoder 可能字段不完全一致。",
+        "前台同步不能阻塞主线程或在无认证会话时产生噪音请求。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "为 KBLite 增加按用户生命周期、自动同步与 backend-first extraction",
+      "updated_at": "2026-07-10T15:40:40+00:00",
+      "verification_plan": "增加 Swift 静态 guard 或 launch-arg smoke，覆盖 A/B graph 隔离、backend-first 路由、fallback、revision 保存和触发点；运行相关现有脚本、release regression、`git diff --check` 和 generic iPhoneOS build。"
+    },
+    "T003": {
+      "acceptance_criteria": [
+        "`/context/build` 返回稳定、长度受限、可追踪来源且哈希可复现的 `generationContext`。",
+        "草稿或未到期时间信件、失败图像空线索、无效家庭数据等被过滤内容不进入生成文本。",
+        "iOS 正常路径将后端 `generationContext.text` 送入 `SEDirectiveEventChatRagText`，每个 turn 最多一次。",
+        "后端失败或超时后使用 `KBLiteManager.buildContextString(query: 当前用户文本)`，不使用无 query 的全量摘要。",
+        "lifecycle token、turn ID 或用户变化后，异步结果被丢弃。",
+        "旧启动 prompt 不再重复注入知识上下文，现有 Context V2 trace/evidence 保持兼容。"
+      ],
+      "assumptions": [
+        "当前 SpeechEngineToB 版本已声明并支持 `SEDirectiveEventChatRagText`。",
+        "`/context/build` 已完成 Context V2 ownership 和 policy 过滤。",
+        "本轮不改变公开 UI、数字人音频 owner、声音复刻或延迟回信状态机。"
+      ],
+      "body_path": "problems/P000/children/P003/tickets/T003.md",
+      "classification": "split",
+      "classification_reason": "后端生成上下文合同与 iOS 每轮 RAG 注入可独立实现和验证，分开收敛可降低跨仓库耦合风险",
+      "created_at": "2026-07-10T15:48:19+00:00",
+      "id": "T003",
+      "problem_definition": "现有 `/context/build` 只生成 Context V2 trace，真实 Echo 回复仍依赖会话启动时注入的本地最近摘要，因此后端 policy、ranking、ownership 过滤结果不影响回答，也存在重复注入和跨用户异步污染风险。",
+      "problem_id": "P003",
+      "proposed_solution": "后端为现有 Context Packet 增加兼容的 `generationContext` 字段，只汇总通过 policy 的 archive、KBLite fact、persona、care 内容，并提供来源、稳定哈希和长度边界。iOS 在最终 ASR 后请求 Context Packet，通过火山 Dialog SDK 的 `SEDirectiveEventChatRagText` 为当前 turn 提交一次上下文；后端超时或失败时按当前 query 使用当前用户的 KBLite 检索降级。使用 lifecycle/turn gate 丢弃过期回调，并在启用 turn-scoped RAG 时停止会话启动阶段的旧知识摘要注入。",
+      "result_ids": [
+        "R004"
+      ],
+      "risks": [
+        "火山 SDK 的 RAG 指令必须在当前 query 等待窗口内到达，因此需要短超时和单次提交 gate。",
+        "后端延迟可能导致本轮使用本地降级，但 trace 仍需保留以便诊断。",
+        "Context 文本过长会增加响应延迟，必须在后端统一截断。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "Context Packet 驱动真实 Echo 生成",
+      "updated_at": "2026-07-10T16:26:37+00:00",
+      "verification_plan": "运行后端 Context Packet 单测和 smoke，覆盖 policy、稳定哈希、长度和兼容字段；运行 iOS 静态 QA 检查，覆盖 RAG 指令、超时降级、query-based KBLite、单次提交和旧注入移除；最后运行 `git diff --check`、后端全量测试、release QA、generic iOS Simulator 与 iPhoneOS build。"
+    },
+    "T004": {
+      "acceptance_criteria": [
+        "现有 `/context/build` 字段完全兼容并新增 generationContext。",
+        "被过滤或未授权内容不会进入文本。",
+        "相同输入生成相同文本和哈希，空输入合同稳定。",
+        "长文本受统一上限约束并标记 truncated。",
+        "Context V2 单测与 smoke 通过。"
+      ],
+      "assumptions": [
+        "selectedContext 已完成 ownership、timeLetter、family 与分析状态 policy。",
+        "generationContext 为 additive 合同，不替代 trace。"
+      ],
+      "body_path": "problems/P000/children/P003/children/P005/tickets/T004.md",
+      "classification": "one_go",
+      "classification_reason": "单一 ContextPacketBuilder 增量合同，改动集中且已有聚焦测试和 smoke 可直接验收",
+      "created_at": "2026-07-10T15:57:04+00:00",
+      "id": "T004",
+      "problem_definition": "Context Packet 只有 selected/filtered/ranking 调试结构，没有可直接交给 Echo 生成引擎的稳定文本；如果由 iOS 自行拼接，会重复后端 policy 并产生隐私与一致性风险。",
+      "problem_id": "P005",
+      "proposed_solution": "在 ContextPacketBuilder 基于最终 selected candidates 构建 additive `generationContext`，提供版本、长度受限文本、来源引用/计数、稳定内容哈希及截断状态。仅渲染允许 AI 处理的 archive/KBLite fact/persona/care 内容，不读取 runtime voice/digital-human 字段。",
+      "result_ids": [
+        "R002"
+      ],
+      "risks": [
+        "旧 KBLite 数据缺少 privacy metadata 时必须默认不进入生成。",
+        "文本格式变化会影响哈希，因此版本需要固定。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "后端生成上下文合同",
+      "updated_at": "2026-07-10T15:58:18+00:00",
+      "verification_plan": "运行 Context Packet 聚焦单测、Context V2 smoke、Python 编译检查和 `git diff --check`。"
+    },
+    "T005": {
+      "acceptance_criteria": [
+        "generationContext 字段完整解析且旧服务器响应仍可处理。",
+        "当前 turn 最多提交一次 ChatRagText。",
+        "后端失败、超时和缺合同均使用 query-based 本地降级。",
+        "生命周期、用户或 turn 变化后旧回调不会提交。",
+        "延迟回信不触发生成 RAG，已有 trace 仍记录。",
+        "旧启动知识摘要不与 turn RAG 重复，非 Echo 调用保持默认行为。"
+      ],
+      "assumptions": [
+        "SpeechEngineToB 当前版本声明 `SEDirectiveEventChatRagText`。",
+        "后端 generationContext 已完成安全筛选。"
+      ],
+      "body_path": "problems/P000/children/P003/children/P006/tickets/T005.md",
+      "classification": "one_go",
+      "classification_reason": "调用适配、turn gate 与解析均围绕单一 Echo 回调链路，改动集中且可由静态 gate 和双平台构建共同验证",
+      "created_at": "2026-07-10T16:00:13+00:00",
+      "id": "T005",
+      "problem_definition": "Echo 对 `/context/build` 的调用只写 trace，火山 Dialog 回复仍使用启动时旧摘要，无法消费当前 query 的后端 policy/ranking 结果，且存在旧摘要重复注入和异步回调跨 turn 污染风险。",
+      "problem_id": "P006",
+      "proposed_solution": "扩展 EchoContextPacket 解析 generationContext；让 Echo 最终 ASR 后创建一次性 turn gate，并在 0.9 秒内优先把后端文本通过 `SEDirectiveEventChatRagText` 发送给当前 SDK query。超时、失败或旧服务器缺字段时按当前 query 使用本地 KBLite。用 lifecycle token、turnID、userID 与单次提交标记阻止过期/重复注入。Echo 启动 Dialog 时启用 turn-scoped 模式，生产引擎不再附加旧 KBLite/档案摘要。",
+      "result_ids": [
+        "R003"
+      ],
+      "risks": [
+        "SDK ChatRagText 的在线时序仍需后续真机观测，本轮通过 SDK 声明、编译与 QA gate 固定调用合同。",
+        "0.9 秒超时会在弱网时更多使用本地知识，但不会阻塞对话。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "iOS 每轮 Echo RAG 注入",
+      "updated_at": "2026-07-10T16:02:08+00:00",
+      "verification_plan": "运行 knowledge pipeline、Context Packet、Dialog/archive 静态检查，generic Simulator build、generic iPhoneOS build 和 release regression；检查编译警告与 git diff。"
+    },
+    "T006": {
+      "acceptance_criteria": [
+        "后端 182 个单元测试、FastAPI smoke、knowledge delta smoke 与 Context generation smoke 通过。",
+        "部署态 smoke 可验证登录、revision sync、幂等 mutation、change feed、generation context 和 stale revision 409。",
+        "iOS 知识管线静态门、全量 release regression、Archive -> Echo smoke、延迟回信 smoke 和 generic iPhoneOS build 通过。",
+        "两仓库 `git diff --check` 通过，新增脚本通过语法/编译检查。",
+        "状态文档准确记录 schema/version、数据流、隐私边界、部署方式与 P1/P2，不宣称向量库或线上真机语义验收已完成。"
+      ],
+      "assumptions": [
+        "本轮目标是 P0 统一知识主链路和非真机交付，不引入向量数据库。",
+        "旧客户端仍可使用 `/kb/sync`，新 mutation/change-feed 是增量兼容能力。"
+      ],
+      "body_path": "problems/P000/children/P004/tickets/T006.md",
+      "classification": "one_go",
+      "classification_reason": "验证范围已清晰限定为现有两仓库的测试、smoke、构建、diff 与文档收敛，任务边界具体且已具备可重复脚本，无需继续拆分。",
+      "created_at": "2026-07-10T16:27:21+00:00",
+      "id": "T006",
+      "problem_definition": "统一知识管线同时修改后端 revision/change-feed/context 合同和 iOS 用户隔离、同步、提取及 Echo RAG。必须用同一套 release gate、部署态 smoke 和状态文档证明两端兼容，避免后续维护重新产生双轨数据源或跨用户数据污染。",
+      "problem_id": "P004",
+      "proposed_solution": "执行后端全量测试与知识 smoke，执行 iOS 全量 release regression 并启用通用 iPhoneOS 构建，验证 Archive -> Echo 和延迟回信模拟器流程；新增部署态 knowledge smoke 与 release regression 可选开关；最后更新 Task 12 状态文档，明确已实现边界、旧端兼容、部署命令和未完成的真机/provider/P1 工作。",
+      "result_ids": [
+        "R005"
+      ],
+      "risks": [
+        "部署态 smoke 需要有效后端地址与 token，本轮可先在本地等价 FastAPI 环境证明脚本，线上执行留给部署阶段。",
+        "火山 ChatRagText 的真实语义吸收仍依赖后续真机/provider 验收。",
+        "当前 change feed 为基础版本，未包含大规模分页、压缩和长期清理策略。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "统一知识管线跨仓库验证与交付票",
+      "updated_at": "2026-07-10T16:27:49+00:00",
+      "verification_plan": "运行后端 `scripts/verify_backend.sh`；本地 FastAPI 上运行部署态 knowledge smoke；运行 iOS `RUN_IPHONEOS_GENERIC_BUILD=1 Scripts/QA/prd-stitch-ui/run-release-regression.sh`；复核生成报告、截图和两仓库 diff；最后校验 Closure Lodestar 台账。"
+    }
+  },
+  "updated_at": "2026-07-10T16:28:47+00:00"
+}

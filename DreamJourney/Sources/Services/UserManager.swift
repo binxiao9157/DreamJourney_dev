@@ -26,8 +26,11 @@ final class UserManager {
             phone: phone,
             avatarName: "person.circle.fill"
         )
+        KnowledgeSyncCoordinator.shared.userDidChange(to: user.id)
         currentUser = user
         _ = saveToDefaults()
+        KBLiteManager.shared.switchUser(to: user.id)
+        KnowledgeSyncCoordinator.shared.synchronizeCurrentUser(reason: "loginCompleted")
         NotificationCenter.default.post(name: .djUserDidLogin, object: nil)
     }
 
@@ -109,7 +112,9 @@ final class UserManager {
     // MARK: - 退出登录
     func logout() {
         DreamJourneyBackendClient.shared.logoutAuthSession()
+        KnowledgeSyncCoordinator.shared.userDidChange(to: nil)
         currentUser = nil
+        KBLiteManager.shared.switchUser(to: nil)
         UserDefaults.standard.removeObject(forKey: kUserKey)
         UserDefaults.standard.removeObject(forKey: kLoggedInKey)
         NotificationCenter.default.post(name: .djUserDidLogout, object: nil)

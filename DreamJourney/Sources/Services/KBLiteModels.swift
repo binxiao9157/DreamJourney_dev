@@ -13,6 +13,24 @@ struct KBLiteGraph: Codable {
     var facts: [KBFact] = []
 }
 
+struct KBSourceReference: Codable {
+    let kind: String
+    let id: String
+    let title: String
+}
+
+struct KBPrivacyMetadata: Codable {
+    let scope: String
+    var sourceRefs: [KBSourceReference]
+
+    static func generationAllowed(kind: String, id: String, title: String) -> KBPrivacyMetadata {
+        KBPrivacyMetadata(
+            scope: "generationAllowed",
+            sourceRefs: [KBSourceReference(kind: kind, id: id, title: title)]
+        )
+    }
+}
+
 // MARK: - 人物
 
 struct KBPerson: Codable, Identifiable {
@@ -26,6 +44,7 @@ struct KBPerson: Codable, Identifiable {
     var sourceSessionIds: [Int] // 来源：第几次会话提到此人
     var createdAt: Date
     var updatedAt: Date
+    var privacyMetadata: KBPrivacyMetadata? = nil
 
     /// 所有可用于搜索和匹配的文本
     var searchableText: String {
@@ -46,6 +65,7 @@ struct KBPlace: Codable, Identifiable {
     var relatedPersonIds: [String] = []
     var sourceSessionIds: [Int] = []
     var createdAt: Date = Date()
+    var privacyMetadata: KBPrivacyMetadata? = nil
 
     var searchableText: String {
         [name, category, description].compactMap { $0 }.joined(separator: " ")
@@ -66,6 +86,7 @@ struct KBEvent: Codable, Identifiable {
     var memoirId: String?       // 关联已有回忆录
     var sourceSessionIds: [Int] = []
     var createdAt: Date = Date()
+    var privacyMetadata: KBPrivacyMetadata? = nil
 
     var searchableText: String {
         [title, description].compactMap { $0 }.joined(separator: " ")
@@ -91,6 +112,7 @@ struct KBFact: Codable, Identifiable {
     var relatedEventIds: [String] = []
     var sourceSessionIds: [Int] = []
     var createdAt: Date = Date()
+    var privacyMetadata: KBPrivacyMetadata? = nil
 }
 
 // MARK: - LLM 提取响应模型

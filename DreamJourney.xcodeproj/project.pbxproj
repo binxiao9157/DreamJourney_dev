@@ -42,6 +42,7 @@
 		70BCC3629F42D8E233158576 /* KBLiteTestHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C5B565061358529E1029413 /* KBLiteTestHelper.swift */; };
 		7BD7AD6BC3423E10E98379EF /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F000C9191CDE42D8FB0D946A /* SceneDelegate.swift */; };
 		7C9713B232CCED23B4CC329D /* KBLiteManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 576656BFF57471DCF9B231CB /* KBLiteManager.swift */; };
+		A7BE09165FC943F985E815EE /* KnowledgeSyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E403D09145442D1B647F87B /* KnowledgeSyncCoordinator.swift */; };
 		7D543DD05A96F0944D9BA409 /* bs_texture_halfFace.png in Resources */ = {isa = PBXBuildFile; fileRef = C9115FEF531F2DA00EDE4969 /* bs_texture_halfFace.png */; };
 		7FE1A54F9280057AA970D224 /* DialogEngineManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B3A23A2BA7FD3D92A7BC975 /* DialogEngineManager.swift */; };
 		813B7A93279A0D98C91B3276 /* DreamJourneyWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D151E9314D78EB40CF2EE48 /* DreamJourneyWidget.swift */; };
@@ -168,6 +169,7 @@
 		5628E3908BA5F87F7FC6373B /* KBLiteGapDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLiteGapDetector.swift; sourceTree = "<group>"; };
 		56ED8B99EE2B18AC4D06CC30 /* MemoryEditViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryEditViewController.swift; sourceTree = "<group>"; };
 		576656BFF57471DCF9B231CB /* KBLiteManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLiteManager.swift; sourceTree = "<group>"; };
+		3E403D09145442D1B647F87B /* KnowledgeSyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeSyncCoordinator.swift; sourceTree = "<group>"; };
 		57FC3EFBF8FAC9ABFA05E1C8 /* 01.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = 01.mp4; sourceTree = "<group>"; };
 		5ABDBC7F0000C4386BB6B2C5 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		5B20338C4C40695560A52B81 /* FamilyRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyRepository.swift; sourceTree = "<group>"; };
@@ -345,6 +347,7 @@
 				5B20338C4C40695560A52B81 /* FamilyRepository.swift */,
 				5628E3908BA5F87F7FC6373B /* KBLiteGapDetector.swift */,
 				576656BFF57471DCF9B231CB /* KBLiteManager.swift */,
+				3E403D09145442D1B647F87B /* KnowledgeSyncCoordinator.swift */,
 				766106FFCA3A78A7BE5B2E76 /* KBLiteModels.swift */,
 				8310EA30F87E2748EE0535A1 /* KBLiteMultiUser.swift */,
 				EA7025362579F4B59C5376E8 /* KBLitePDFExporter.swift */,
@@ -913,6 +916,7 @@
 				84655D19F7C25DFB64698F6B /* KBGraphViewController.swift in Sources */,
 				F92EDF35F196BE9DB93A2FB4 /* KBLiteGapDetector.swift in Sources */,
 				7C9713B232CCED23B4CC329D /* KBLiteManager.swift in Sources */,
+				A7BE09165FC943F985E815EE /* KnowledgeSyncCoordinator.swift in Sources */,
 				C24EFDB81921BF13946AB289 /* KBLiteModels.swift in Sources */,
 				FB97211C6E68808436C7DC76 /* KBLiteMultiUser.swift in Sources */,
 				90DF2D00B2A745900FF43F33 /* KBLitePDFExporter.swift in Sources */,

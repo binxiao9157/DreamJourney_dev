@@ -27,6 +27,7 @@ let runtime = read(backendRoot.appendingPathComponent("app/services/runtime_conf
 let repository = read(root.appendingPathComponent("DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift"))
 let backendClient = read(root.appendingPathComponent("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"))
 let releaseRegression = read(root.appendingPathComponent("Scripts/QA/prd-stitch-ui/run-release-regression.sh"))
+let deployedSmoke = read(root.appendingPathComponent("Scripts/QA/prd-stitch-ui/backend-route-ownership-audit-smoke.py"))
 
 for category in [
     "PUBLIC",
@@ -42,7 +43,7 @@ for category in [
 require(registry.contains("class RouteOwnershipRegistry"), "Route ownership registry is missing")
 require(registry.contains("owner_body_field=\"userId\""), "Body-owned routes must bind userId")
 require(registry.contains("owner_path_parameter=parameter"), "Path-owned routes must bind their owner parameter")
-require(registryTests.contains("self.assertEqual(len(app_routes), 54)"), "Route audit must pin the current route count")
+require(registryTests.contains("self.assertEqual(len(app_routes), 56)"), "Route audit must pin the current route count")
 require(registryTests.contains("self.assertEqual(registry_routes, app_routes)"), "Route audit must fail for unclassified routes")
 require(registryTests.contains("len(self.registry.rules), len(registry_routes)"), "Route audit must fail for duplicates")
 
@@ -68,5 +69,8 @@ require(
     releaseRegression.contains("RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE"),
     "Release regression must expose the deployed ownership audit gate"
 )
+require(deployedSmoke.contains("routeCount\") == 56"), "Deployed ownership smoke must pin 56 routes")
+require(deployedSmoke.contains("/kb/changes/"), "Deployed ownership smoke must cover knowledge change feed")
+require(deployedSmoke.contains("/kb/mutations"), "Deployed ownership smoke must cover knowledge mutations")
 
 print("Route ownership audit checks passed")

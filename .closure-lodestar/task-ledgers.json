@@ -96,7 +96,15 @@
       "status": "complete",
       "task_file": "docs/plans/task_11_p0-full-route-ownership-audit.md",
       "updated_at": "2026-07-10T22:53:30+08:00"
+    },
+    "docs/plans/task_12_p0-unified-knowledge-pipeline.md": {
+      "ledger_id": "L20260710-231102-12",
+      "ledger_path": ".complex-problems/L20260710-231102-12",
+      "next_action": "none",
+      "status": "complete",
+      "task_file": "docs/plans/task_12_p0-unified-knowledge-pipeline.md",
+      "updated_at": "2026-07-11T00:28:58+08:00"
     }
   },
-  "updated_at": "2026-07-10T22:53:30+08:00"
+  "updated_at": "2026-07-11T00:28:58+08:00"
 }

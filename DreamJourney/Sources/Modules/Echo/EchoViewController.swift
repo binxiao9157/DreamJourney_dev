@@ -168,7 +168,32 @@ private struct TencentBackendPCMDriveTrueDeviceTrace {
     }
 }
 
+private final class EchoTurnKnowledgeContextGate {
+    let turnID: String
+    let userID: String
+    let lifecycleToken: DigitalHumanLifecycleToken
+    var didSubmit = false
+    var failedSubmissionCount = 0
+    var timeoutWorkItem: DispatchWorkItem?
+    var retryWorkItem: DispatchWorkItem?
+
+    init(turnID: String, userID: String, lifecycleToken: DigitalHumanLifecycleToken) {
+        self.turnID = turnID
+        self.userID = userID
+        self.lifecycleToken = lifecycleToken
+    }
+
+    func cancel() {
+        timeoutWorkItem?.cancel()
+        timeoutWorkItem = nil
+        retryWorkItem?.cancel()
+        retryWorkItem = nil
+    }
+}
+
 final class EchoViewController: UIViewController {
+    private static let echoTurnKnowledgeTimeout: TimeInterval = 0.9
+
     private let viewModel: EchoViewModel
 
     private let scenicView = EchoScenicParkView()
@@ -180,6 +205,8 @@ final class EchoViewController: UIViewController {
     private var lastTencentProviderAudioHandoffAt: Date?
     private var currentEchoAudioOwner: EchoDigitalHumanAudioOwner = .volcengineLocalTTS
     private var lastEchoTraceRecord: EchoTraceRecord?
+    private var activeEchoTurnKnowledgeContextGate: EchoTurnKnowledgeContextGate?
+    private var latestEchoContextRequestTurnID: String?
     private var lastVoiceCloneProviderLogId: String?
     private var lastVoiceCloneProviderRequestId: String?
     private var lastVoiceCloneProviderMode: String?
@@ -1450,6 +1477,9 @@ final class EchoViewController: UIViewController {
         pendingDigitalHumanSessionContextKey = nil
         isLoadingVoiceCloneRuntimeCapability = false
         activeVoiceInteractionLifecycleToken = nil
+        activeEchoTurnKnowledgeContextGate?.cancel()
+        activeEchoTurnKnowledgeContextGate = nil
+        latestEchoContextRequestTurnID = nil
         cancelDigitalHumanReplyPrewarm()
         cancelTencentDigitalHumanTextOverTimeout()
         print(
@@ -1465,6 +1495,9 @@ final class EchoViewController: UIViewController {
             contextKey: currentDigitalHumanRuntimeContextKey(),
             reason: reason
         )
+        activeEchoTurnKnowledgeContextGate?.cancel()
+        activeEchoTurnKnowledgeContextGate = nil
+        latestEchoContextRequestTurnID = nil
         cancelDigitalHumanReplyPrewarm()
         cancelTencentDigitalHumanTextOverTimeout()
         print(
@@ -2616,7 +2649,10 @@ final class EchoViewController: UIViewController {
         viewModel.beginVoiceInteraction()
         applyEchoAudioRoutePolicy()
         if DialogEngineManager.shared.isEngineReady {
-            DialogEngineManager.shared.startDialog(sendsGreeting: false)
+            DialogEngineManager.shared.startDialog(
+                sendsGreeting: false,
+                usesTurnScopedKnowledgeContext: true
+            )
         } else {
             configureVoiceRuntimeThenStart(lifecycleToken: lifecycleToken)
         }
@@ -2858,16 +2894,57 @@ final class EchoViewController: UIViewController {
         )
     }
 
-    private func recordEchoContextPacketForUserTurn(text: String, turnID: String) {
-        guard DreamJourneyBackendClient.shared.isContextBuildConfigured else {
-            print("[CFLite] context build skipped turnID=\(turnID) reason=backendNotConfigured")
-            return
-        }
+    private func recordEchoContextPacketForUserTurn(
+        text: String,
+        turnID: String,
+        lifecycleToken: DigitalHumanLifecycleToken,
+        allowsGeneration: Bool
+    ) {
         let context = DigitalHumanContextStore.shared.current
-        let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "contextPacket")
         let userId = UserManager.shared.currentUser?.id ?? context.viewerUserId ?? context.ownerId
         let isCurrentUserPersona = isCurrentUserPersonaContext(context)
         let personaScope = isCurrentUserPersona ? "personal" : "family"
+
+        activeEchoTurnKnowledgeContextGate?.cancel()
+        activeEchoTurnKnowledgeContextGate = nil
+        latestEchoContextRequestTurnID = turnID
+        let gate: EchoTurnKnowledgeContextGate?
+        if allowsGeneration {
+            let turnGate = EchoTurnKnowledgeContextGate(
+                turnID: turnID,
+                userID: userId,
+                lifecycleToken: lifecycleToken
+            )
+            gate = turnGate
+            activeEchoTurnKnowledgeContextGate = turnGate
+            let timeoutWorkItem = DispatchWorkItem { [weak self, weak turnGate] in
+                guard let self, let turnGate else { return }
+                self.submitLocalEchoTurnKnowledgeContext(
+                    text: text,
+                    gate: turnGate,
+                    source: "localKBLiteTimeout"
+                )
+            }
+            turnGate.timeoutWorkItem = timeoutWorkItem
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + Self.echoTurnKnowledgeTimeout,
+                execute: timeoutWorkItem
+            )
+        } else {
+            gate = nil
+        }
+
+        guard DreamJourneyBackendClient.shared.isContextBuildConfigured else {
+            if let gate {
+                submitLocalEchoTurnKnowledgeContext(
+                    text: text,
+                    gate: gate,
+                    source: "localKBLiteBackendNotConfigured"
+                )
+            }
+            print("[CFLite] context build skipped turnID=\(turnID) reason=backendNotConfigured")
+            return
+        }
         DreamJourneyBackendClient.shared.buildEchoContextPacket(
             userId: userId,
             query: text,
@@ -2885,9 +2962,29 @@ final class EchoViewController: UIViewController {
                             lifecycleToken,
                             reason: "contextPacketResponse"
                           ) else { return }
-                    self.lastEchoTraceRecord = record
                     EchoTraceStore.shared.record(record)
+                    guard self.latestEchoContextRequestTurnID == turnID else {
+                        print("[CFLite] ignored stale context trace turnID=\(turnID)")
+                        return
+                    }
+                    self.lastEchoTraceRecord = record
                     self.recordEchoRuntimeDiagnosticsSnapshot(reason: "contextPacketBuilt")
+                    if let gate {
+                        if packet.generationContextContentHash != nil {
+                            self.submitEchoTurnKnowledgeContext(
+                                packet.generationContextText,
+                                traceID: packet.traceId,
+                                source: "backendContextPacket",
+                                gate: gate
+                            )
+                        } else {
+                            self.submitLocalEchoTurnKnowledgeContext(
+                                text: text,
+                                gate: gate,
+                                source: "localKBLiteBackendContractMissing"
+                            )
+                        }
+                    }
                 }
                 print(
                     "[CFLite] context built " +
@@ -2899,13 +2996,127 @@ final class EchoViewController: UIViewController {
                     "digitalHumanProviderMode=\(packet.digitalHumanProviderMode) " +
                     "privacyScope=\(packet.privacyScopeLabel) " +
                     "crossScopeArchiveIncluded=\(packet.crossScopeArchiveIncluded) " +
+                    "generationVersion=\(packet.generationContextVersion) " +
+                    "generationHash=\(packet.generationContextContentHash ?? "none") " +
+                    "generationRefs=\(packet.generationContextSourceRefs.count) " +
+                    "generationTruncated=\(packet.generationContextTruncated) " +
                     "fallbacks=\(packet.fallbacks.joined(separator: ",")) latencyMs=\(packet.latencyMs)"
                 )
                 print(record.logLine + " archiveItemIDs=\(record.archiveItemIDs.joined(separator: ","))")
             case .failure(let error):
+                DispatchQueue.main.async {
+                    guard let self,
+                          self.isCurrentDigitalHumanLifecycleToken(
+                            lifecycleToken,
+                            reason: "contextPacketFailure"
+                          ), let gate else { return }
+                    self.submitLocalEchoTurnKnowledgeContext(
+                        text: text,
+                        gate: gate,
+                        source: "localKBLiteBackendFailure"
+                    )
+                }
                 print("[CFLite] context build failed turnID=\(turnID) error=\(error.localizedDescription)")
             }
         }
+    }
+
+    private func submitLocalEchoTurnKnowledgeContext(
+        text: String,
+        gate: EchoTurnKnowledgeContextGate,
+        source: String
+    ) {
+        let localContext = KBLiteManager.shared.buildGenerationAllowedContextString(query: text)
+        submitEchoTurnKnowledgeContext(
+            localContext,
+            traceID: nil,
+            source: source,
+            gate: gate
+        )
+    }
+
+    private func submitEchoTurnKnowledgeContext(
+        _ content: String,
+        traceID: String?,
+        source: String,
+        gate: EchoTurnKnowledgeContextGate
+    ) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        let normalizedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard activeEchoTurnKnowledgeContextGate === gate,
+              !gate.didSubmit,
+              !normalizedContent.isEmpty,
+              !viewModel.isWaitingForDelayedReply,
+              isCurrentDigitalHumanLifecycleToken(
+                gate.lifecycleToken,
+                reason: "submitTurnKnowledgeContext"
+              ) else {
+            return
+        }
+        let currentContext = DigitalHumanContextStore.shared.current
+        let currentUserId = UserManager.shared.currentUser?.id
+            ?? currentContext.viewerUserId
+            ?? currentContext.ownerId
+        guard currentUserId == gate.userID else {
+            print(
+                "[CFLite] ignored stale turn knowledge user " +
+                "turnID=\(gate.turnID) expected=\(gate.userID) current=\(currentUserId)"
+            )
+            return
+        }
+
+        let submitted = DialogEngineManager.shared.submitTurnKnowledgeContext(
+            normalizedContent,
+            traceID: traceID,
+            source: source
+        )
+        if submitted {
+            gate.didSubmit = true
+            gate.cancel()
+        } else {
+            scheduleEchoTurnKnowledgeContextRetry(
+                normalizedContent,
+                traceID: traceID,
+                source: source,
+                gate: gate
+            )
+        }
+        print(
+            "[CFLite] turn knowledge submission " +
+            "turnID=\(gate.turnID) source=\(source) submitted=\(submitted) " +
+            "bytes=\(normalizedContent.utf8.count) traceID=\(traceID ?? "none")"
+        )
+    }
+
+    private func scheduleEchoTurnKnowledgeContextRetry(
+        _ content: String,
+        traceID: String?,
+        source: String,
+        gate: EchoTurnKnowledgeContextGate
+    ) {
+        guard gate.failedSubmissionCount < 2 else {
+            print(
+                "[CFLite] turn knowledge retry exhausted " +
+                "turnID=\(gate.turnID) source=\(source)"
+            )
+            return
+        }
+        gate.failedSubmissionCount += 1
+        gate.retryWorkItem?.cancel()
+        let retryWorkItem = DispatchWorkItem { [weak self, weak gate] in
+            guard let self, let gate else { return }
+            self.submitEchoTurnKnowledgeContext(
+                content,
+                traceID: traceID,
+                source: "\(source)Retry\(gate.failedSubmissionCount)",
+                gate: gate
+            )
+        }
+        gate.retryWorkItem = retryWorkItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + (0.12 * Double(gate.failedSubmissionCount)),
+            execute: retryWorkItem
+        )
     }
 
     private func handleVoiceClonePCMDriveFailureWithoutDefaultVoice(
@@ -3932,7 +4143,8 @@ final class EchoViewController: UIViewController {
                     self.renderVoiceSDKReadinessPreviewIfNeeded()
                     self.applyEchoAudioRoutePolicy()
                     DialogEngineManager.shared.startDialog(
-                        sendsGreeting: !self.routeEchoAudioThroughDigitalHuman
+                        sendsGreeting: !self.routeEchoAudioThroughDigitalHuman,
+                        usesTurnScopedKnowledgeContext: true
                     )
                 } else {
                     self.backendRuntimeTokenApplied = false
@@ -3951,7 +4163,8 @@ final class EchoViewController: UIViewController {
     private func startDialogWithLocalVoiceFallback() {
         applyEchoAudioRoutePolicy()
         DialogEngineManager.shared.startDialog(
-            sendsGreeting: !routeEchoAudioThroughDigitalHuman
+            sendsGreeting: !routeEchoAudioThroughDigitalHuman,
+            usesTurnScopedKnowledgeContext: true
         )
     }
 
@@ -4084,7 +4297,7 @@ extension EchoViewController: DialogEngineDelegate {
         guard isFinal else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self,
-                  self.activeVoiceInteractionToken(reason: "asrFinal") != nil else { return }
+                  let lifecycleToken = self.activeVoiceInteractionToken(reason: "asrFinal") else { return }
             if self.routeEchoAudioThroughDigitalHuman,
                self.hasTencentDigitalHumanProviderSpeechInFlight {
                 self.preserveTencentProviderSessionAfterLocalDialogStop(reason: "userSpeechFinal")
@@ -4092,8 +4305,13 @@ extension EchoViewController: DialogEngineDelegate {
             self.resetDigitalHumanReplyDispatchState()
             let turnID = self.digitalHumanConversation.startUserTurn(makeID: self.makeTencentDigitalHumanRequestID)
             print("[TencentDigitalHuman] user turn started turnID=\(turnID)")
-            self.recordEchoContextPacketForUserTurn(text: text, turnID: turnID)
             self.viewModel.finishUserVoice(text: text)
+            self.recordEchoContextPacketForUserTurn(
+                text: text,
+                turnID: turnID,
+                lifecycleToken: lifecycleToken,
+                allowsGeneration: !self.viewModel.isWaitingForDelayedReply
+            )
             if self.viewModel.isWaitingForDelayedReply {
                 self.scheduleDelayedReplyNotificationIfNeeded()
                 self.beginDelayedReplyWait()

@@ -976,6 +976,12 @@ struct EchoContextPacket {
     let rankingTraceCount: Int
     let selectedContextSourceCounts: [String: Int]
     let kbFactCount: Int
+    let generationContextVersion: String
+    let generationContextText: String
+    let generationContextSourceRefs: [String]
+    let generationContextSourceCounts: [String: Int]
+    let generationContextContentHash: String?
+    let generationContextTruncated: Bool
     let voiceProfileId: String?
     let cloneReady: Bool
     let voiceOutputMode: String
@@ -1016,6 +1022,17 @@ struct EchoContextPacket {
         self.rankingTraceCount = Self.intValue(trace?["rankingTraceCount"]) ?? rankingTrace.count
         self.selectedContextSourceCounts = Self.intDictionary(trace?["selectedContextSourceCounts"])
             ?? Self.contextSourceCounts(selectedContext)
+
+        let generationContext = json["generationContext"] as? [String: Any]
+        let generationSourceRefs = generationContext?["sourceRefs"] as? [[String: Any]] ?? []
+        self.generationContextVersion = generationContext?["version"] as? String
+            ?? "echo-generation-context-unavailable"
+        self.generationContextText = generationContext?["text"] as? String ?? ""
+        self.generationContextSourceRefs = Self.contextRefArray(generationSourceRefs)
+        self.generationContextSourceCounts = Self.intDictionary(generationContext?["sourceCounts"])
+            ?? Self.contextSourceCounts(generationSourceRefs)
+        self.generationContextContentHash = generationContext?["contentHash"] as? String
+        self.generationContextTruncated = Self.boolValue(generationContext?["truncated"]) ?? false
 
         let voice = json["voice"] as? [String: Any]
         self.voiceProfileId = voice?["voiceProfileId"] as? String
@@ -2214,6 +2231,10 @@ final class DreamJourneyBackendClient {
         hasExplicitBaseURL
     }
 
+    var isKnowledgeSyncConfigured: Bool {
+        hasExplicitBaseURL
+    }
+
     var isTimeLetterDispatchConfigured: Bool {
         hasExplicitBaseURL
     }
@@ -2844,6 +2865,83 @@ final class DreamJourneyBackendClient {
 
     func syncKnowledge(userId: String, graph: [String: Any], completion: @escaping (Result<[String: Any], Error>) -> Void) {
         requestJSON(path: "/kb/sync", method: .post, payload: ["userId": userId, "graph": graph], completion: completion)
+    }
+
+    func mutateKnowledge(
+        userId: String,
+        graph: [String: Any],
+        operationId: String,
+        baseRevision: Int,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        requestJSON(
+            path: "/kb/mutations",
+            method: .post,
+            payload: [
+                "userId": userId,
+                "operationId": operationId,
+                "baseRevision": baseRevision,
+                "graph": graph,
+            ],
+            completion: completion
+        )
+    }
+
+    func fetchKnowledgeChanges(
+        userId: String,
+        sinceRevision: Int,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        requestJSON(
+            path: "/kb/changes/\(pathComponent(userId))?sinceRevision=\(max(0, sinceRevision))",
+            method: .get,
+            payload: nil,
+            completion: completion
+        )
+    }
+
+    func extractKnowledge(
+        userId: String,
+        transcript: String,
+        existingSummary: String,
+        sessionId: Int,
+        completion: @escaping (Result<KBExtractionResult, Error>) -> Void
+    ) {
+        requestJSON(
+            path: "/kb/extract",
+            method: .post,
+            payload: [
+                "userId": userId,
+                "transcript": transcript,
+                "existingSummary": existingSummary,
+                "sessionId": sessionId,
+                "boundaryAcknowledged": true,
+                "privacyMetadata": [
+                    "scope": "generationAllowed",
+                    "sourceRefs": [
+                        [
+                            "kind": "conversationSession",
+                            "id": "session-\(sessionId)",
+                            "title": "对话来源",
+                        ],
+                    ],
+                ],
+            ]
+        ) { result in
+            switch result {
+            case .success(let object):
+                guard let extraction = object["extraction"] as? [String: Any],
+                      JSONSerialization.isValidJSONObject(extraction),
+                      let data = try? JSONSerialization.data(withJSONObject: extraction),
+                      let decoded = try? JSONDecoder().decode(KBExtractionResult.self, from: data) else {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                completion(.success(decoded))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
     }
 
     func listFamilyMembers(userId: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
