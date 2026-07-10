@@ -15,6 +15,7 @@ BUILD_LOG="${BUILD_LOG:-$OUTPUT_DIR/build.log}"
 INSTALL_ENV_PATH="${INSTALL_ENV_PATH:-$OUTPUT_DIR/install.env}"
 LOCAL_BUNDLE_ID="${LOCAL_BUNDLE_ID:-com.yxj.dreamjourney.app}"
 LOCAL_DEVELOPMENT_TEAM="${LOCAL_DEVELOPMENT_TEAM:-2BTR77V3R8}"
+XCCONFIG_PATH="${XCCONFIG_PATH:-}"
 
 mkdir -p "$OUTPUT_DIR"
 cd "$ROOT_DIR"
@@ -63,6 +64,11 @@ BUILD_SETTINGS=(
   ARCHS=arm64
   ONLY_ACTIVE_ARCH=NO
 )
+XCCONFIG_ARGS=()
+if [[ -n "$XCCONFIG_PATH" ]]; then
+  [[ -f "$XCCONFIG_PATH" ]] || fail "xcconfig not found: $XCCONFIG_PATH"
+  XCCONFIG_ARGS=(-xcconfig "$XCCONFIG_PATH")
+fi
 
 xcodebuild \
   -workspace DreamJourney.xcworkspace \
@@ -71,6 +77,7 @@ xcodebuild \
   -sdk iphonesimulator \
   -destination 'generic/platform=iOS Simulator' \
   -derivedDataPath "$DERIVED_DATA_PATH" \
+  "${XCCONFIG_ARGS[@]}" \
   "${BUILD_SETTINGS[@]}" \
   build > "$BUILD_LOG"
 

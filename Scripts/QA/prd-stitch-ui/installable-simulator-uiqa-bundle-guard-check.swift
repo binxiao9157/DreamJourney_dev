@@ -30,6 +30,7 @@ let helper = read(helperPath)
 let echoTraceSmoke = read(echoTracePath)
 let archiveSmoke = read("Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh")
 let delayedReplySmoke = read("Scripts/QA/prd-stitch-ui/run-echo-delayed-reply-notification-smoke.sh")
+let digitalHumanRuntimeStubSmoke = read("Scripts/QA/prd-stitch-ui/run-digital-human-runtime-stub-smoke.sh")
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let releaseQA = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
 let statusDoc = read("docs/superpowers/status/2026-07-01-current-implementation-prd-alignment.md")
@@ -46,14 +47,17 @@ require(helper.contains("lipo -archs"), "installable simulator helper should ver
 require(helper.contains("arm64"), "installable simulator helper should require arm64 simulator output")
 require(helper.contains("/usr/bin/codesign --force --sign -"), "installable simulator helper should ad-hoc sign the simulator app before install")
 require(helper.contains("xcrun simctl install"), "installable simulator helper should install the app on the booted simulator")
+require(helper.contains("XCCONFIG_PATH") && helper.contains("XCCONFIG_ARGS"), "installable simulator helper should support an optional private xcconfig")
 require(!helper.contains("LOCAL_BUNDLE_ID:-com.gaominge.dreamjourney.app"), "installable simulator helper must not default to the shared bundle id")
 require(!helper.contains("DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER=\"com.gaominge.dreamjourney.app\""), "installable simulator helper must not build the shared bundle id")
 
-for smoke in [archiveSmoke, delayedReplySmoke, echoTraceSmoke] {
+for smoke in [archiveSmoke, delayedReplySmoke, echoTraceSmoke, digitalHumanRuntimeStubSmoke] {
     require(smoke.contains("run-installable-simulator-uiqa.sh"), "simulator UIQA smokes should use the shared installable build helper")
     require(!smoke.contains("com.gaominge.dreamjourney.app"), "simulator UIQA smokes must not run against the shared default bundle id")
     require(!smoke.contains("PRODUCT_BUNDLE_IDENTIFIER=com.yxj.dreamjourney.app"), "simulator UIQA smokes must not use global PRODUCT_BUNDLE_IDENTIFIER")
 }
+
+require(digitalHumanRuntimeStubSmoke.contains("XCCONFIG_PATH=\"$PRIVATE_XCCONFIG\""), "runtime stub smoke should clear private backend settings through the shared build helper")
 
 require(echoTraceSmoke.contains("DJRunEchoTraceExportSmoke"), "Echo trace export UIQA smoke should launch the Echo trace harness")
 require(echoTraceSmoke.contains("echo-trace-export-smoke-result.json"), "Echo trace export UIQA smoke should copy the app-written result JSON")

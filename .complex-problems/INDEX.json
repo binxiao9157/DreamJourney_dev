@@ -1,5 +1,5 @@
 {
-  "active_ledger_id": "L20260710-115209",
+  "active_ledger_id": "L20260710-133057",
   "ledgers": [
     {
       "active_count": 0,
@@ -66,7 +66,18 @@
       "status": "done",
       "title": "P0 voice clone exclusive slot allocation",
       "updated_at": "2026-07-10T04:22:04+00:00"
+    },
+    {
+      "active_count": 0,
+      "blocked_count": 0,
+      "ledger_id": "L20260710-133057",
+      "path": "L20260710-133057",
+      "root_id": "P000",
+      "schema_version": 6,
+      "status": "done",
+      "title": "P0 Echo digital-human stability",
+      "updated_at": "2026-07-10T06:32:12+00:00"
     }
   ],
-  "updated_at": "2026-07-10T04:22:10+00:00"
+  "updated_at": "2026-07-10T06:32:24+00:00"
 }

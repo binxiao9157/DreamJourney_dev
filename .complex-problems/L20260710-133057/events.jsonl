@@ -1,0 +1,62 @@
+{"at": "2026-07-10T05:30:57+00:00", "id": "E000", "payload": {"ledger_id": "L20260710-133057", "root_id": "P000", "title": "P0 Echo digital-human stability"}, "root_id": "P000", "type": "ledger_initialized"}
+{"at": "2026-07-10T05:31:24+00:00", "id": "E001", "payload": {"problem_id": "P000", "ticket_id": "T000", "title": "收敛 Echo 数字人异步代际与生命周期边界"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-10T05:31:24+00:00", "id": "E002", "payload": {"from": "created", "id": "T000", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T05:31:38+00:00", "id": "E003", "payload": {"from": "defined", "id": "T000", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T05:31:38+00:00", "id": "E004", "payload": {"classification": "split", "reason": "任务包含独立的 generation 隔离、后台 lease、session/audio owner 与 fallback 回归三个可分别验收的高风险时序子问题，应拆分执行。", "ticket_id": "T000"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-10T05:32:08+00:00", "id": "E005", "payload": {"from": "classified", "id": "T000", "to": "splitting"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T05:32:08+00:00", "id": "E006", "payload": {"parent_id": "P000", "problem_id": "P001", "source": "split", "title": "建立统一 lifecycle generation 与异步隔离"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-10T05:32:08+00:00", "id": "E007", "payload": {"parent_id": "P000", "problem_id": "P002", "source": "split", "title": "实现后台 session 宽限 lease"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-10T05:32:08+00:00", "id": "E008", "payload": {"parent_id": "P000", "problem_id": "P003", "source": "split", "title": "收敛 session audio owner 打断恢复与配额 fallback"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-10T05:32:34+00:00", "id": "E009", "payload": {"problem_id": "P001", "ticket_id": "T001", "title": "用统一 token 保护 Echo 数字人异步工作"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-10T05:32:34+00:00", "id": "E010", "payload": {"from": "created", "id": "T001", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T05:32:42+00:00", "id": "E011", "payload": {"from": "defined", "id": "T001", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T05:32:42+00:00", "id": "E012", "payload": {"classification": "one_go", "reason": "子问题已限定为一个轻量 coordinator 及其关键回调接入，可在同一实现中立即通过静态检查和构建验证。", "ticket_id": "T001"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-10T05:40:45+00:00", "id": "E013", "payload": {"from": "todo", "id": "P001", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T05:40:45+00:00", "id": "E014", "payload": {"from": "classified", "id": "T001", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T05:44:43+00:00", "id": "E015", "payload": {"from": "executing", "id": "T001", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T05:44:43+00:00", "id": "E016", "payload": {"result_id": "R000", "ticket_id": "T001"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-10T05:45:39+00:00", "id": "E017", "payload": {"from": "doing", "id": "P001", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T05:45:39+00:00", "id": "E018", "payload": {"from": "checking", "id": "P001", "to": "followup"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T05:45:39+00:00", "id": "E019", "payload": {"check_id": "C000", "followup_id": "P004", "problem_id": "P001", "status": "not_success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-10T05:46:04+00:00", "id": "E020", "payload": {"problem_id": "P004", "ticket_id": "T002", "title": "增加 lifecycle coordinator 可执行状态检查"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-10T05:46:04+00:00", "id": "E021", "payload": {"from": "created", "id": "T002", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T05:46:16+00:00", "id": "E022", "payload": {"from": "defined", "id": "T002", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T05:46:16+00:00", "id": "E023", "payload": {"classification": "one_go", "reason": "单个独立 Swift 状态检查，改动范围小、无产品行为变化且可直接编译执行验证。", "ticket_id": "T002"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-10T05:46:25+00:00", "id": "E024", "payload": {"from": "followup", "id": "P004", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T05:46:25+00:00", "id": "E025", "payload": {"from": "classified", "id": "T002", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T05:47:08+00:00", "id": "E026", "payload": {"from": "executing", "id": "T002", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T05:47:08+00:00", "id": "E027", "payload": {"result_id": "R001", "ticket_id": "T002"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-10T05:47:26+00:00", "id": "E028", "payload": {"from": "doing", "id": "P004", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T05:47:26+00:00", "id": "E029", "payload": {"from": "checking", "id": "P004", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T05:47:26+00:00", "id": "E030", "payload": {"check_id": "C001", "followup_id": null, "problem_id": "P004", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-10T05:47:47+00:00", "id": "E031", "payload": {"from": "followup", "id": "P001", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T05:47:47+00:00", "id": "E032", "payload": {"from": "checking", "id": "P001", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T05:47:47+00:00", "id": "E033", "payload": {"check_id": "C002", "followup_id": null, "problem_id": "P001", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-10T05:48:11+00:00", "id": "E034", "payload": {"problem_id": "P002", "ticket_id": "T003", "title": "后台 session 宽限释放与 UIQA 回归"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-10T05:48:11+00:00", "id": "E035", "payload": {"from": "created", "id": "T003", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T05:48:22+00:00", "id": "E036", "payload": {"from": "defined", "id": "T003", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T05:48:22+00:00", "id": "E037", "payload": {"classification": "one_go", "reason": "单一 Echo 生命周期模块内的可取消 DispatchWorkItem 与现有 UIQA 扩展，边界清晰且无需后端或产品 UI 变更。", "ticket_id": "T003"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-10T05:55:59+00:00", "id": "E038", "payload": {"from": "todo", "id": "P002", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T05:55:59+00:00", "id": "E039", "payload": {"from": "classified", "id": "T003", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T05:55:59+00:00", "id": "E040", "payload": {"from": "executing", "id": "T003", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T05:55:59+00:00", "id": "E041", "payload": {"result_id": "R002", "ticket_id": "T003"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-10T05:56:27+00:00", "id": "E042", "payload": {"from": "doing", "id": "P002", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T05:56:27+00:00", "id": "E043", "payload": {"from": "checking", "id": "P002", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T05:56:27+00:00", "id": "E044", "payload": {"check_id": "C003", "followup_id": null, "problem_id": "P002", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-10T05:57:34+00:00", "id": "E045", "payload": {"problem_id": "P003", "ticket_id": "T004", "title": "收敛 runtime 代际、音频 owner 与失败恢复"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-10T05:57:34+00:00", "id": "E046", "payload": {"from": "created", "id": "T004", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T05:57:56+00:00", "id": "E047", "payload": {"from": "defined", "id": "T004", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T05:57:56+00:00", "id": "E048", "payload": {"classification": "one_go", "reason": "改动集中在现有 Echo runtime/owner 边界，失败语义与 guard 已有基础，剩余是显式 generation 绑定和组合回归，能够一次完成并独立验证。", "ticket_id": "T004"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-10T05:58:08+00:00", "id": "E049", "payload": {"from": "todo", "id": "P003", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T05:58:08+00:00", "id": "E050", "payload": {"from": "classified", "id": "T004", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T06:17:57+00:00", "id": "E051", "payload": {"from": "executing", "id": "T004", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T06:17:57+00:00", "id": "E052", "payload": {"result_id": "R003", "ticket_id": "T004"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-10T06:18:49+00:00", "id": "E053", "payload": {"from": "doing", "id": "P003", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T06:18:49+00:00", "id": "E054", "payload": {"from": "checking", "id": "P003", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T06:18:49+00:00", "id": "E055", "payload": {"check_id": "C004", "followup_id": null, "problem_id": "P003", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-10T06:31:26+00:00", "id": "E056", "payload": {"from": "todo", "id": "P000", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T06:31:26+00:00", "id": "E057", "payload": {"from": "splitting", "id": "T000", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T06:31:26+00:00", "id": "E058", "payload": {"result_id": "R004", "ticket_id": "T000"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-10T06:32:12+00:00", "id": "E059", "payload": {"from": "doing", "id": "P000", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T06:32:12+00:00", "id": "E060", "payload": {"from": "checking", "id": "P000", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T06:32:12+00:00", "id": "E061", "payload": {"check_id": "C005", "followup_id": null, "problem_id": "P000", "status": "success"}, "root_id": "P000", "type": "check_recorded"}

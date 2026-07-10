@@ -323,3 +323,30 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `none`
 - Counts: 4/4 problems done, 0 blocked, 4/4 tickets done
 - Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+
+## Recursive Closure Checkpoint - 2026-07-10T13:32:15+08:00
+
+- Ledger: `L20260710-133057`
+- Lodestar task: `docs/plans/task_07_p0-echo-digital-human-stability.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 0/4 problems done, 0 blocked, 0/1 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P001: 建立统一 lifecycle generation 与异步隔离`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names...
+
+## Recursive Closure Checkpoint - 2026-07-10T14:32:24+08:00
+
+- Ledger: `L20260710-133057`
+- Lodestar task: `docs/plans/task_07_p0-echo-digital-human-stability.md`
+- Root: `P000` / done
+- Next action: `none`
+- Counts: 5/5 problems done, 0 blocked, 5/5 tickets done
+- Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+
+## Task 7 Implementation Checkpoint - 2026-07-10T14:32:24+08:00
+
+- Completed Echo digital-human Phase 2 non-device stability work: lifecycle/session and interaction generations, background release lease, generation-bound runtime/audio owner, deterministic tap interruption, guarded microphone recovery, stale PCM isolation, and quota fallback.
+- Lifecycle UIQA passed with lease scheduled/cancelled/expired, runtime released after grace, provider view preserved on short background return, and microphone auto-start disabled.
+- Runtime stub smoke passed with the local QA identity `com.yxj.dreamjourney.app / 2BTR77V3R8`.
+- Final release regression: `tmp/visual-qa/prd-stitch-ui/release-regression/20260710-phase2-stability-final/report.md`.
+- Final non-device combo gate: `tmp/visual-qa/prd-stitch-ui/tencent-digital-human-phase2-non-device-gate/20260710-phase2-stability-final-gate/report.md`.
+- True-device sound, lip-sync, interruption, and microphone recovery acceptance was intentionally not run.

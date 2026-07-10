@@ -37,7 +37,7 @@ for required in [
     "saveBackendState(snapshot)",
     "storedBool(forKey: realCloneProviderReadyKey)",
     "storedBool(forKey: qualityAcceptanceRequiredKey)",
-    "let preferred = activeProfiles.first(where: {",
+    "let preferred = selectableProfiles.first(where: {",
     "$0.voiceProfileId == preferredProfileId",
 ] {
     assertContains(voiceService, required, "voice clone service should prevent stale ready state \(required)")

@@ -50,10 +50,6 @@ fail() {
   exit 1
 }
 
-booted_simulator_udid() {
-  xcrun simctl list devices booted | awk -F '[()]' '/Booted/ { print $2; exit }'
-}
-
 BACKEND_PID=""
 CONSOLE_PID=""
 OSLOG_PID=""
@@ -98,13 +94,6 @@ until curl -fsS "$BACKEND_HEALTH_URL" >/dev/null 2>&1; do
   sleep 1
 done
 
-SIMULATOR_UDID="${SIMULATOR_UDID:-$(booted_simulator_udid)}"
-if [[ -z "$SIMULATOR_UDID" ]]; then
-  xcrun simctl boot "$SIMULATOR_NAME" >/dev/null
-  SIMULATOR_UDID="$(booted_simulator_udid)"
-fi
-[[ -n "$SIMULATOR_UDID" ]] || fail "No booted simulator. Set SIMULATOR_UDID or SIMULATOR_NAME."
-
 if [[ -f "$LOCAL_CONFIG_PATH" ]]; then
   cp "$LOCAL_CONFIG_PATH" "$LOCAL_CONFIG_BACKUP_PATH"
   LOCAL_CONFIG_BACKED_UP=1
@@ -131,34 +120,19 @@ DREAMJOURNEY_BACKEND_BASE_URL =
 DREAMJOURNEY_BACKEND_API_TOKEN =
 EOF
 
-echo "[digital-human-runtime-stub-smoke] Building UIQA app..."
-xcodebuild \
-  -workspace DreamJourney.xcworkspace \
-  -scheme "$SCHEME" \
-  -configuration "$CONFIGURATION" \
-  -sdk iphonesimulator \
-  -destination 'generic/platform=iOS Simulator' \
-  -derivedDataPath "$DERIVED_DATA_PATH" \
-  CODE_SIGNING_ALLOWED=NO \
-  SWIFT_ACTIVE_COMPILATION_CONDITIONS="$SWIFT_ACTIVE_COMPILATION_CONDITIONS" \
-  EXCLUDED_ARCHS='' \
-  ARCHS=arm64 \
-  ONLY_ACTIVE_ARCH=NO \
-  -xcconfig "$PRIVATE_XCCONFIG" \
-  build > "$BUILD_LOG"
+INSTALL_ENV_PATH="$OUTPUT_DIR/install.env" \
+BUILD_LOG="$BUILD_LOG" \
+DERIVED_DATA_PATH="$DERIVED_DATA_PATH" \
+OUTPUT_DIR="$OUTPUT_DIR" \
+SCHEME="$SCHEME" \
+CONFIGURATION="$CONFIGURATION" \
+SIMULATOR_NAME="$SIMULATOR_NAME" \
+SWIFT_ACTIVE_COMPILATION_CONDITIONS="$SWIFT_ACTIVE_COMPILATION_CONDITIONS" \
+XCCONFIG_PATH="$PRIVATE_XCCONFIG" \
+"$SCRIPT_DIR/run-installable-simulator-uiqa.sh"
 
-APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION-iphonesimulator/DreamJourney.app"
-[[ -d "$APP_PATH" ]] || fail "Built app not found: $APP_PATH"
-
-BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
-[[ -n "$BUNDLE_ID" ]] || fail "Unable to read bundle id from $APP_PATH"
-
-echo "[digital-human-runtime-stub-smoke] Installing $BUNDLE_ID on $SIMULATOR_UDID..."
-xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
-xcrun simctl uninstall "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
-xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
-xcrun simctl spawn "$SIMULATOR_UDID" defaults delete "$BUNDLE_ID" >/dev/null 2>&1 || true
-DATA_CONTAINER="$(xcrun simctl get_app_container "$SIMULATOR_UDID" "$BUNDLE_ID" data)"
+# shellcheck source=/dev/null
+source "$OUTPUT_DIR/install.env"
 RESULT_FILE="$DATA_CONTAINER/Documents/digital-human-runtime-stub-smoke-result.json"
 rm -f "$RESULT_FILE"
 

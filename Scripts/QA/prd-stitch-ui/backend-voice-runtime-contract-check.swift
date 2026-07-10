@@ -47,7 +47,8 @@ assertContains(dialogEngine, "func configure(runtimeConfig: RealtimeVoiceRuntime
 assertContains(dialogEngine, "runtimeConfig.authMode == \"legacy\"", "DialogEngine should only apply runtime configs compatible with the current SDK wrapper")
 assertContains(dialogEngine, "runtimeConfig.expiresAt > Date()", "DialogEngine should reject expired runtime configs")
 
-assertContains(echoView, "configureVoiceRuntimeThenStart()", "Echo should resolve voice runtime config before starting the SDK")
+assertContains(echoView, "private func configureVoiceRuntimeThenStart(", "Echo should resolve voice runtime config before starting the SDK")
+assertContains(echoView, "lifecycleToken: lifecycleToken", "Echo voice runtime resolution should retain the current lifecycle generation")
 assertContains(echoView, "fetchRealtimeVoiceConfig", "Echo should prefer backend voice runtime config")
 assertContains(echoView, "startDialogWithLocalVoiceFallback", "Echo should keep local build-settings fallback when backend runtime config is unavailable")
 

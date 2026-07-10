@@ -188,6 +188,7 @@ final class EchoViewController: UIViewController {
     private var lastVoiceSynthesisEvidenceSummary: EchoVoiceSynthesisEvidenceSummary?
     private var trueDeviceBackendPCMDriveTrace = TencentBackendPCMDriveTrueDeviceTrace()
     private var digitalHumanRuntimeContextKey: String?
+    private var digitalHumanRuntimeLifecycleGeneration: UInt64?
     private var pendingDigitalHumanSessionRequestID: String?
     private var pendingDigitalHumanSessionContextKey: String?
 
@@ -403,8 +404,11 @@ final class EchoViewController: UIViewController {
     private var digitalHumanReplyPrewarmWorkItem: DispatchWorkItem?
     private var digitalHumanProviderTextOverTimeoutWorkItem: DispatchWorkItem?
     private var digitalHumanRuntimeRecoveryWorkItem: DispatchWorkItem?
+    private var digitalHumanBackgroundReleaseWorkItem: DispatchWorkItem?
     private var digitalHumanRuntimeRecoveryAttemptsByContext: [String: Int] = [:]
     private let digitalHumanConversation = DigitalHumanConversationCoordinator()
+    private let digitalHumanLifecycle = DigitalHumanLifecycleCoordinator()
+    private var activeVoiceInteractionLifecycleToken: DigitalHumanLifecycleToken?
     private var hasRunTencentDigitalHumanTextDriveSmoke = false
     private var hasRunTencentDigitalHumanPCMDriveSmoke = false
     private var hasRunTencentDigitalHumanBackendPCMDriveSmoke = false
@@ -431,6 +435,7 @@ final class EchoViewController: UIViewController {
     private static let tencentDigitalHumanContextSwitchReconnectDelay: TimeInterval = 1.4
     private static let tencentDigitalHumanOpenFailureRecoveryDelay: TimeInterval = 2.0
     private static let tencentDigitalHumanOpenFailureRecoveryLimit = 1
+    private static let tencentDigitalHumanBackgroundReleaseGracePeriod: TimeInterval = 8.0
 
     private struct TencentPCMDriveTestSignal {
         let data: Data
@@ -622,6 +627,7 @@ final class EchoViewController: UIViewController {
         navigationController?.setNavigationBarHidden(true, animated: false)
         observeDigitalHumanContext()
         observeEchoAppLifecycle()
+        _ = captureDigitalHumanLifecycleToken(reason: "viewDidLoad")
         setupLayout()
         bindViewModel()
         updatePersonaBadge()
@@ -656,12 +662,17 @@ final class EchoViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        prepareCloudDigitalHumanRuntimeIfNeeded()
+        let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "viewDidAppear")
+        prepareCloudDigitalHumanRuntimeIfNeeded(lifecycleToken: lifecycleToken)
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        if DialogEngineManager.shared.delegate === self {
+        cancelCloudDigitalHumanBackgroundRelease(reason: "viewWillDisappear")
+        invalidateDigitalHumanLifecycle(reason: "viewWillDisappear")
+        activeVoiceInteractionLifecycleToken = nil
+        let ownsDialogDelegate = DialogEngineManager.shared.delegate === self
+        if ownsDialogDelegate {
             if DialogEngineManager.shared.isDialogActive {
                 interruptDigitalHumanPlayback(reason: "viewWillDisappear")
                 DialogEngineManager.shared.stopDialog()
@@ -669,7 +680,9 @@ final class EchoViewController: UIViewController {
                 ConversationMemoryManager.shared.endSession()
                 viewModel.resetToIdle()
             }
-            releaseDigitalHumanRuntime(reason: "viewWillDisappear", resetsAudioOwnerToOrdinaryEcho: true)
+        }
+        releaseDigitalHumanRuntime(reason: "viewWillDisappear", resetsAudioOwnerToOrdinaryEcho: true)
+        if ownsDialogDelegate {
             DialogEngineManager.shared.delegate = nil
         }
     }
@@ -979,14 +992,16 @@ final class EchoViewController: UIViewController {
 
     @objc private func echoAppDidEnterBackground() {
         suspendEchoForAppLifecycle(reason: "didEnterBackground")
-        releaseCloudDigitalHumanRuntimeForBackgroundIfNeeded()
+        scheduleCloudDigitalHumanRuntimeReleaseForBackgroundIfNeeded()
     }
 
     @objc private func echoAppWillEnterForeground() {
+        cancelCloudDigitalHumanBackgroundRelease(reason: "willEnterForeground")
         restoreEchoAfterAppLifecycleIfNeeded(reason: "willEnterForeground")
     }
 
     @objc private func echoAppDidBecomeActive() {
+        cancelCloudDigitalHumanBackgroundRelease(reason: "didBecomeActive")
         restoreEchoAfterAppLifecycleIfNeeded(reason: "didBecomeActive")
         prepareCloudDigitalHumanRuntimeAfterForegroundIfNeeded(reason: "didBecomeActive")
     }
@@ -1006,6 +1021,8 @@ final class EchoViewController: UIViewController {
             return
         }
 
+        invalidateDigitalHumanInteraction(reason: "appLifecycle:\(reason)")
+        activeVoiceInteractionLifecycleToken = nil
         isSuspendedByAppLifecycle = true
         interruptDigitalHumanPlayback(reason: "appLifecycle:\(reason)")
         preserveTencentProviderSessionAfterLocalDialogStop(reason: "appLifecycle:\(reason)")
@@ -1024,26 +1041,88 @@ final class EchoViewController: UIViewController {
         )
     }
 
-    private func releaseCloudDigitalHumanRuntimeForBackgroundIfNeeded() {
+    private func scheduleCloudDigitalHumanRuntimeReleaseForBackgroundIfNeeded() {
         guard view.window != nil,
               shouldShowDigitalHumanLivePanel,
-              digitalHumanRuntime is TencentDigitalHumanCloudRuntime else {
+              isDigitalHumanRuntimeEligibleForBackgroundRelease else {
             return
         }
 
-        releaseDigitalHumanRuntime(
-            reason: "appLifecycle:didEnterBackground",
-            resetsAudioOwnerToOrdinaryEcho: true,
-            removeProviderViewMessage: "数字人已暂停"
+        cancelCloudDigitalHumanBackgroundRelease(reason: "reschedule")
+        let contextKey = currentDigitalHumanRuntimeContextKey()
+        let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "backgroundReleaseLease")
+        let lease = digitalHumanLifecycle.beginBackgroundReleaseLease(contextKey: contextKey)
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self,
+                  self.digitalHumanLifecycle.isCurrentBackgroundReleaseLease(
+                    lease,
+                    contextKey: self.currentDigitalHumanRuntimeContextKey()
+                  ),
+                  self.isCurrentDigitalHumanSessionToken(
+                    lifecycleToken,
+                    reason: "backgroundReleaseLeaseExpired"
+                  ) else {
+                return
+            }
+            self.digitalHumanBackgroundReleaseWorkItem = nil
+            self.invalidateDigitalHumanLifecycle(reason: "backgroundReleaseGraceExpired")
+            self.releaseDigitalHumanRuntime(
+                reason: "appLifecycle:backgroundGraceExpired",
+                resetsAudioOwnerToOrdinaryEcho: true,
+                removeProviderViewMessage: "数字人已暂停"
+            )
+            self.digitalHumanStatusDetailLabel.text = "数字人已暂停"
+            self.isSuspendedByAppLifecycle = false
+            self.isStoppingVoiceCaptureForAppLifecycle = false
+            self.resetToLifecyclePausedIdle()
+            self.recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanReleasedAfterBackgroundGrace")
+            print("[TencentDigitalHuman] released cloud session after background grace period")
+        }
+        digitalHumanBackgroundReleaseWorkItem = workItem
+        let gracePeriod = digitalHumanBackgroundReleaseGracePeriod
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + gracePeriod,
+            execute: workItem
         )
-        isSuspendedByAppLifecycle = false
-        isStoppingVoiceCaptureForAppLifecycle = false
-        resetToLifecyclePausedIdle()
-        recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanReleasedForBackground")
-        print("[TencentDigitalHuman] released cloud session for background to avoid quota retention")
+        print(
+            "[TencentDigitalHuman] scheduled background session release " +
+            "graceSeconds=\(gracePeriod) contextKey=\(contextKey)"
+        )
+    }
+
+    private var digitalHumanBackgroundReleaseGracePeriod: TimeInterval {
+#if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        if ProcessInfo.processInfo.arguments.contains("DJRunEchoDigitalHumanLifecycleSmoke") {
+            return 0.45
+        }
+#endif
+        return Self.tencentDigitalHumanBackgroundReleaseGracePeriod
+    }
+
+    private var isDigitalHumanRuntimeEligibleForBackgroundRelease: Bool {
+        if digitalHumanRuntime is TencentDigitalHumanCloudRuntime {
+            return true
+        }
+#if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        return ProcessInfo.processInfo.arguments.contains("DJRunEchoDigitalHumanLifecycleSmoke")
+            && digitalHumanRuntime is TencentDigitalHumanRuntimeStub
+#else
+        return false
+#endif
+    }
+
+    private func cancelCloudDigitalHumanBackgroundRelease(reason: String) {
+        guard let workItem = digitalHumanBackgroundReleaseWorkItem else {
+            return
+        }
+        workItem.cancel()
+        digitalHumanBackgroundReleaseWorkItem = nil
+        digitalHumanLifecycle.cancelBackgroundReleaseLease()
+        print("[TencentDigitalHuman] cancelled background session release reason=\(reason)")
     }
 
     private func restoreEchoAfterAppLifecycleIfNeeded(reason: String) {
+        cancelCloudDigitalHumanBackgroundRelease(reason: "restore:\(reason)")
         guard isSuspendedByAppLifecycle else {
             return
         }
@@ -1111,6 +1190,7 @@ final class EchoViewController: UIViewController {
         resetsAudioOwnerToOrdinaryEcho: Bool,
         removeProviderViewMessage: String? = nil
     ) {
+        cancelCloudDigitalHumanBackgroundRelease(reason: "runtimeRelease:\(reason)")
         cancelDigitalHumanRuntimeRecovery()
         pendingDigitalHumanSessionRequestID = nil
         pendingDigitalHumanSessionContextKey = nil
@@ -1125,6 +1205,7 @@ final class EchoViewController: UIViewController {
         runtime?.close()
         digitalHumanRuntime = nil
         digitalHumanRuntimeContextKey = nil
+        digitalHumanRuntimeLifecycleGeneration = nil
         hasRequestedCloudDigitalHumanRuntime = false
 
         if let removeProviderViewMessage {
@@ -1147,6 +1228,99 @@ final class EchoViewController: UIViewController {
         digitalHumanRuntimeContextKey(for: DigitalHumanContextStore.shared.current)
     }
 
+    private func captureDigitalHumanLifecycleToken(reason: String) -> DigitalHumanLifecycleToken {
+        let contextKey = currentDigitalHumanRuntimeContextKey()
+        let previousGeneration = digitalHumanLifecycle.generation
+        let token = digitalHumanLifecycle.token(for: contextKey)
+        if token.generation != previousGeneration {
+            isLoadingVoiceCloneRuntimeCapability = false
+            print(
+                "[TencentDigitalHuman] lifecycle generation advanced " +
+                "reason=\(reason) generation=\(token.generation) " +
+                "interactionGeneration=\(token.interactionGeneration) contextKey=\(contextKey)"
+            )
+        }
+        return token
+    }
+
+    private func isCurrentDigitalHumanLifecycleToken(
+        _ token: DigitalHumanLifecycleToken,
+        reason: String
+    ) -> Bool {
+        let contextKey = currentDigitalHumanRuntimeContextKey()
+        guard digitalHumanLifecycle.isCurrent(token, contextKey: contextKey) else {
+            print(
+                "[TencentDigitalHuman] ignored stale lifecycle callback " +
+                "reason=\(reason) tokenGeneration=\(token.generation) " +
+                "tokenInteraction=\(token.interactionGeneration) " +
+                "currentGeneration=\(digitalHumanLifecycle.generation) " +
+                "currentInteraction=\(digitalHumanLifecycle.interactionGeneration)"
+            )
+            return false
+        }
+        return true
+    }
+
+    private func isCurrentDigitalHumanSessionToken(
+        _ token: DigitalHumanLifecycleToken,
+        reason: String
+    ) -> Bool {
+        let contextKey = currentDigitalHumanRuntimeContextKey()
+        guard digitalHumanLifecycle.isCurrentSession(token, contextKey: contextKey) else {
+            print(
+                "[TencentDigitalHuman] ignored stale lifecycle callback " +
+                "reason=\(reason) sessionGeneration=\(token.generation) " +
+                "currentGeneration=\(digitalHumanLifecycle.generation)"
+            )
+            return false
+        }
+        return true
+    }
+
+    @discardableResult
+    private func invalidateDigitalHumanLifecycle(reason: String) -> DigitalHumanLifecycleToken {
+        let token = digitalHumanLifecycle.invalidate(
+            contextKey: currentDigitalHumanRuntimeContextKey(),
+            reason: reason
+        )
+        pendingDigitalHumanSessionRequestID = nil
+        pendingDigitalHumanSessionContextKey = nil
+        isLoadingVoiceCloneRuntimeCapability = false
+        activeVoiceInteractionLifecycleToken = nil
+        cancelDigitalHumanReplyPrewarm()
+        cancelTencentDigitalHumanTextOverTimeout()
+        print(
+            "[TencentDigitalHuman] invalidated lifecycle generation " +
+            "reason=\(reason) generation=\(token.generation)"
+        )
+        return token
+    }
+
+    @discardableResult
+    private func invalidateDigitalHumanInteraction(reason: String) -> DigitalHumanLifecycleToken {
+        let token = digitalHumanLifecycle.invalidateInteraction(
+            contextKey: currentDigitalHumanRuntimeContextKey(),
+            reason: reason
+        )
+        cancelDigitalHumanReplyPrewarm()
+        cancelTencentDigitalHumanTextOverTimeout()
+        print(
+            "[TencentDigitalHuman] invalidated interaction generation " +
+            "reason=\(reason) generation=\(token.generation) " +
+            "interactionGeneration=\(token.interactionGeneration)"
+        )
+        return token
+    }
+
+    private func activeVoiceInteractionToken(reason: String) -> DigitalHumanLifecycleToken? {
+        guard let token = activeVoiceInteractionLifecycleToken,
+              isCurrentDigitalHumanLifecycleToken(token, reason: reason) else {
+            print("[TencentDigitalHuman] ignored callback without an active voice interaction reason=\(reason)")
+            return nil
+        }
+        return token
+    }
+
     private func digitalHumanRuntimeContextKey(for context: DigitalHumanContext) -> String {
         [
             context.viewerUserId ?? "",
@@ -1167,6 +1341,7 @@ final class EchoViewController: UIViewController {
 
     @discardableResult
     private func reconcileDigitalHumanRuntimeWithCurrentContext(reason: String) -> Bool {
+        _ = captureDigitalHumanLifecycleToken(reason: "contextReconcile:\(reason)")
         let desiredContextKey = currentDigitalHumanRuntimeContextKey()
         if let pendingContextKey = pendingDigitalHumanSessionContextKey,
            pendingContextKey != desiredContextKey {
@@ -1220,12 +1395,17 @@ final class EchoViewController: UIViewController {
         }
 
         let contextKey = currentDigitalHumanRuntimeContextKey()
+        let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "runtimeRecovery:\(reason)")
         cancelDigitalHumanRuntimeRecovery()
         digitalHumanStatusDetailLabel.text = "正在重新连接数字人"
         digitalHumanLivePanelView?.showProviderPlaceholder("正在重新连接数字人")
 
         let workItem = DispatchWorkItem { [weak self] in
             guard let self,
+                  self.isCurrentDigitalHumanSessionToken(
+                    lifecycleToken,
+                    reason: "runtimeRecovery:\(reason)"
+                  ),
                   self.view.window != nil,
                   self.shouldShowDigitalHumanLivePanel,
                   self.digitalHumanRuntime == nil,
@@ -1233,7 +1413,7 @@ final class EchoViewController: UIViewController {
                 return
             }
             self.hasRequestedCloudDigitalHumanRuntime = false
-            self.prepareCloudDigitalHumanRuntimeIfNeeded()
+            self.prepareCloudDigitalHumanRuntimeIfNeeded(lifecycleToken: lifecycleToken)
             self.recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanRuntimeRecovery:\(reason)")
             print(
                 "[TencentDigitalHuman] retrying provider session " +
@@ -1249,10 +1429,8 @@ final class EchoViewController: UIViewController {
               view.window != nil else {
             return false
         }
-        guard reason == "tencent_cloud_open_failed"
-                || reason == "tencent_cloud_quota_exceeded"
-                || reason.localizedCaseInsensitiveContains("LimitExceeded")
-                || reason.contains("超过配额") else {
+        guard !isDigitalHumanQuotaFailure(reason),
+              reason == "tencent_cloud_open_failed" else {
             return false
         }
 
@@ -1263,6 +1441,14 @@ final class EchoViewController: UIViewController {
         }
         digitalHumanRuntimeRecoveryAttemptsByContext[contextKey] = attempts + 1
         return true
+    }
+
+    private func isDigitalHumanQuotaFailure(_ reason: String) -> Bool {
+        reason == "tencent_cloud_quota_exceeded"
+            || reason.localizedCaseInsensitiveContains("LimitExceeded")
+            || reason.localizedCaseInsensitiveContains("AssetConcurrencyQuotaNotFound")
+            || reason.contains("超过配额")
+            || reason.contains("配额已满")
     }
 
     private func updatePersonaBadge() {
@@ -1472,6 +1658,7 @@ final class EchoViewController: UIViewController {
 
     private var tencentDigitalHumanProviderCanOwnAudio: Bool {
         guard let digitalHumanRuntime,
+              digitalHumanRuntimeLifecycleGeneration == digitalHumanLifecycle.generation,
               digitalHumanRuntime is TencentDigitalHumanCloudRuntime
                 || (shouldRunTencentBackendPCMDriveMockSmoke && digitalHumanRuntime is TencentDigitalHumanRuntimeStub),
               digitalHumanRuntime.profile != nil else {
@@ -1488,6 +1675,7 @@ final class EchoViewController: UIViewController {
     private var tencentDigitalHumanAudioRouteReserved: Bool {
         guard shouldShowDigitalHumanLivePanel,
               let digitalHumanRuntime,
+              digitalHumanRuntimeLifecycleGeneration == digitalHumanLifecycle.generation,
               digitalHumanRuntime is TencentDigitalHumanCloudRuntime
                 || (shouldRunTencentBackendPCMDriveMockSmoke && digitalHumanRuntime is TencentDigitalHumanRuntimeStub),
               digitalHumanRuntime.profile != nil,
@@ -1514,6 +1702,7 @@ final class EchoViewController: UIViewController {
     private var shouldDriveTencentVisualLipSync: Bool {
         guard shouldShowDigitalHumanLivePanel,
               let digitalHumanRuntime,
+              digitalHumanRuntimeLifecycleGeneration == digitalHumanLifecycle.generation,
               digitalHumanRuntime is TencentDigitalHumanCloudRuntime,
               digitalHumanRuntime.profile != nil else {
             return false
@@ -1526,6 +1715,7 @@ final class EchoViewController: UIViewController {
     }
 
     private func loadVoiceCloneRuntimeCapabilityIfNeeded(force: Bool = false) {
+        let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "voiceCloneRuntimeCapability")
         if !force, voiceCloneRuntimeCapability != nil {
             return
         }
@@ -1535,7 +1725,11 @@ final class EchoViewController: UIViewController {
         isLoadingVoiceCloneRuntimeCapability = true
         DreamJourneyBackendClient.shared.fetchVoiceCloneRuntimeCapability { [weak self] result in
             DispatchQueue.main.async {
-                guard let self else { return }
+                guard let self,
+                      self.isCurrentDigitalHumanSessionToken(
+                        lifecycleToken,
+                        reason: "voiceCloneRuntimeCapabilityResponse"
+                      ) else { return }
                 self.isLoadingVoiceCloneRuntimeCapability = false
                 switch result {
                 case .success(let capability):
@@ -1820,7 +2014,9 @@ final class EchoViewController: UIViewController {
         present(activityViewController, animated: true)
     }
 
-    private func prepareCloudDigitalHumanRuntimeIfNeeded() {
+    private func prepareCloudDigitalHumanRuntimeIfNeeded(
+        lifecycleToken providedLifecycleToken: DigitalHumanLifecycleToken? = nil
+    ) {
         if reconcileDigitalHumanRuntimeWithCurrentContext(reason: "prepare") {
             scheduleCloudDigitalHumanRuntimeRecovery(
                 reason: "prepareContextChanged",
@@ -1830,6 +2026,14 @@ final class EchoViewController: UIViewController {
         }
         let context = DigitalHumanContextStore.shared.current
         let contextKey = digitalHumanRuntimeContextKey(for: context)
+        let lifecycleToken = providedLifecycleToken
+            ?? captureDigitalHumanLifecycleToken(reason: "prepareCloudRuntime")
+        guard isCurrentDigitalHumanSessionToken(
+            lifecycleToken,
+            reason: "prepareCloudRuntime"
+        ) else {
+            return
+        }
         guard shouldShowDigitalHumanLivePanel,
               digitalHumanRuntime == nil,
               hasRequestedCloudDigitalHumanRuntime == false || pendingDigitalHumanSessionContextKey != contextKey else {
@@ -1862,6 +2066,10 @@ final class EchoViewController: UIViewController {
             case .success(let capability):
                 DispatchQueue.main.async {
                     guard let self,
+                          self.isCurrentDigitalHumanSessionToken(
+                            lifecycleToken,
+                            reason: "runtimeCapabilitySuccess"
+                          ),
                           self.isCurrentDigitalHumanSessionRequest(requestID: requestID, contextKey: contextKey) else {
                         print("[TencentDigitalHuman] ignored stale runtime capability response requestID=\(requestID)")
                         return
@@ -1870,12 +2078,17 @@ final class EchoViewController: UIViewController {
                         capability: capability,
                         context: context,
                         contextKey: contextKey,
-                        requestID: requestID
+                        requestID: requestID,
+                        lifecycleToken: lifecycleToken
                     )
                 }
             case .failure(let error):
                 DispatchQueue.main.async {
                     guard let self,
+                          self.isCurrentDigitalHumanSessionToken(
+                            lifecycleToken,
+                            reason: "runtimeCapabilityFailure"
+                          ),
                           self.isCurrentDigitalHumanSessionRequest(requestID: requestID, contextKey: contextKey) else {
                         print("[TencentDigitalHuman] ignored stale runtime capability failure requestID=\(requestID)")
                         return
@@ -1902,7 +2115,8 @@ final class EchoViewController: UIViewController {
         capability: DigitalHumanRuntimeCapability,
         context: DigitalHumanContext,
         contextKey: String,
-        requestID: String
+        requestID: String,
+        lifecycleToken: DigitalHumanLifecycleToken
     ) {
         let userId = UserManager.shared.currentUser?.id ?? context.viewerUserId ?? "ios-device-qa"
         let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? "ios-device"
@@ -1919,7 +2133,8 @@ final class EchoViewController: UIViewController {
                     capability: capability,
                     context: context,
                     contextKey: contextKey,
-                    requestID: requestID
+                    requestID: requestID,
+                    lifecycleToken: lifecycleToken
                 )
             }
         }
@@ -1930,9 +2145,14 @@ final class EchoViewController: UIViewController {
         capability: DigitalHumanRuntimeCapability,
         context: DigitalHumanContext,
         contextKey: String,
-        requestID: String
+        requestID: String,
+        lifecycleToken: DigitalHumanLifecycleToken
     ) {
-        guard isCurrentDigitalHumanSessionRequest(requestID: requestID, contextKey: contextKey) else {
+        guard isCurrentDigitalHumanSessionToken(
+                lifecycleToken,
+                reason: "digitalHumanSessionResponse"
+              ),
+              isCurrentDigitalHumanSessionRequest(requestID: requestID, contextKey: contextKey) else {
             print("[TencentDigitalHuman] ignored stale session response requestID=\(requestID)")
             return
         }
@@ -1955,11 +2175,23 @@ final class EchoViewController: UIViewController {
                 capability: capability
             )
             let runtime = runtimeSelection.runtime
+            if let existingRuntime = digitalHumanRuntime,
+               existingRuntime !== runtime {
+                existingRuntime.interrupt()
+                existingRuntime.close()
+                print("[TencentDigitalHuman] closed duplicate runtime before binding current session")
+            }
             digitalHumanRuntime = runtime
             digitalHumanRuntimeContextKey = contextKey
-            bindDigitalHumanRuntimeState(runtime)
+            digitalHumanRuntimeLifecycleGeneration = lifecycleToken.generation
+            bindDigitalHumanRuntimeState(runtime, lifecycleToken: lifecycleToken)
 
             guard runtimeSelection.isRealSDKBacked else {
+                runtime.interrupt()
+                runtime.close()
+                digitalHumanRuntime = nil
+                digitalHumanRuntimeContextKey = nil
+                digitalHumanRuntimeLifecycleGeneration = nil
                 digitalHumanStatusDetailLabel.text = "腾讯 SDK 暂不可用，已回到普通回响"
                 digitalHumanLivePanelView?.removeHostedProviderView(showFallbackMessage: "数字人暂不可用")
                 lastEchoRuntimeFallbackReason = runtimeSelection.fallbackReason ?? "digitalHumanRuntimeNotSDKBacked"
@@ -1982,6 +2214,7 @@ final class EchoViewController: UIViewController {
                 runtime.close()
                 digitalHumanRuntime = nil
                 digitalHumanRuntimeContextKey = nil
+                digitalHumanRuntimeLifecycleGeneration = nil
                 digitalHumanStatusDetailLabel.text = "腾讯数智人打开失败，已回到普通回响"
                 digitalHumanLivePanelView?.removeHostedProviderView(showFallbackMessage: "数字人暂不可用")
                 lastEchoRuntimeFallbackReason = "digitalHumanOpenFailed"
@@ -2033,8 +2266,13 @@ final class EchoViewController: UIViewController {
         let delay = digitalHumanReplyLooksComplete(normalizedText)
             ? Self.digitalHumanReplyPrewarmShortDelay
             : Self.digitalHumanReplyPrewarmDebounceDelay
+        let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "replyPrewarm")
         let workItem = DispatchWorkItem { [weak self] in
-            guard let self else { return }
+            guard let self,
+                  self.isCurrentDigitalHumanLifecycleToken(
+                    lifecycleToken,
+                    reason: "replyPrewarm"
+                  ) else { return }
             self.digitalHumanReplyPrewarmWorkItem = nil
             self.sendEchoReplyToDigitalHumanRuntimeIfReady(normalizedText, source: "chatStreamingPrewarm")
         }
@@ -2145,7 +2383,18 @@ final class EchoViewController: UIViewController {
     }
 
     @discardableResult
-    private func resumeDialogEngineAfterTencentProviderSpeechIfNeeded(reason: String) -> Bool {
+    private func resumeDialogEngineAfterTencentProviderSpeechIfNeeded(
+        reason: String,
+        lifecycleToken providedLifecycleToken: DigitalHumanLifecycleToken? = nil
+    ) -> Bool {
+        let lifecycleToken = providedLifecycleToken
+            ?? captureDigitalHumanLifecycleToken(reason: "resumeDialog:\(reason)")
+        guard isCurrentDigitalHumanLifecycleToken(
+            lifecycleToken,
+            reason: "resumeDialog:\(reason)"
+        ) else {
+            return false
+        }
         guard digitalHumanConversation.consumeResumeAfterProviderSpeech() else {
             return false
         }
@@ -2157,12 +2406,27 @@ final class EchoViewController: UIViewController {
         if DialogEngineManager.shared.isDialogActive {
             DialogEngineManager.shared.stopDialog()
         }
-        resumeVoiceCaptureAfterTencentProviderSpeech(reason: reason)
+        resumeVoiceCaptureAfterTencentProviderSpeech(
+            reason: reason,
+            lifecycleToken: lifecycleToken
+        )
         print("[TencentDigitalHuman] resumed DialogEngine listening after provider speech reason=\(reason)")
         return true
     }
 
-    private func resumeVoiceCaptureAfterTencentProviderSpeech(reason: String) {
+    private func resumeVoiceCaptureAfterTencentProviderSpeech(
+        reason: String,
+        lifecycleToken providedLifecycleToken: DigitalHumanLifecycleToken? = nil
+    ) {
+        let lifecycleToken = providedLifecycleToken
+            ?? captureDigitalHumanLifecycleToken(reason: "resumeVoiceCapture:\(reason)")
+        guard isCurrentDigitalHumanLifecycleToken(
+            lifecycleToken,
+            reason: "resumeVoiceCapture:\(reason)"
+        ) else {
+            return
+        }
+        activeVoiceInteractionLifecycleToken = lifecycleToken
         DialogEngineManager.shared.delegate = self
         resetDigitalHumanReplyDispatchState()
         muteTencentProviderRemoteAudioForUserCapture(reason: reason)
@@ -2171,7 +2435,7 @@ final class EchoViewController: UIViewController {
         if DialogEngineManager.shared.isEngineReady {
             DialogEngineManager.shared.startDialog(sendsGreeting: false)
         } else {
-            configureVoiceRuntimeThenStart()
+            configureVoiceRuntimeThenStart(lifecycleToken: lifecycleToken)
         }
         if shouldTraceTrueDeviceBackendPCMDrive {
             trueDeviceBackendPCMDriveTrace.resumedVoiceCapture = true
@@ -2271,6 +2535,7 @@ final class EchoViewController: UIViewController {
             return true
         }
 
+        let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "voiceClonePCMDrive")
         let contextKey = currentDigitalHumanRuntimeContextKey()
         let requestID = makeTencentDigitalHumanRequestID()
         let turnID = ensureCurrentEchoTurnID()
@@ -2304,7 +2569,11 @@ final class EchoViewController: UIViewController {
         ) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else { return }
-                guard self.digitalHumanConversation.activeRequestID == requestID,
+                guard self.isCurrentDigitalHumanLifecycleToken(
+                        lifecycleToken,
+                        reason: "voiceClonePCMDriveResponse"
+                      ),
+                      self.digitalHumanConversation.activeRequestID == requestID,
                       self.currentDigitalHumanRuntimeContextKey() == contextKey else {
                     print(
                         "[TencentDigitalHuman] ignored stale voice-clone PCM-drive response " +
@@ -2326,7 +2595,8 @@ final class EchoViewController: UIViewController {
                             providerLogId: synthesis.providerLogId,
                             providerRequestId: synthesis.providerRequestId,
                             reason: "incompatibleAudioFormat",
-                            detail: "format=\(synthesis.audioFormat) sampleRate=\(synthesis.sampleRate ?? 0) bits=\(synthesis.bitsPerSample ?? 0) channels=\(synthesis.channelCount ?? 0)"
+                            detail: "format=\(synthesis.audioFormat) sampleRate=\(synthesis.sampleRate ?? 0) bits=\(synthesis.bitsPerSample ?? 0) channels=\(synthesis.channelCount ?? 0)",
+                            lifecycleToken: lifecycleToken
                         )
                         print(
                             "[TencentDigitalHuman] voice-clone PCM-drive incompatible; no default voice fallback " +
@@ -2349,7 +2619,8 @@ final class EchoViewController: UIViewController {
                         signal: signal,
                         requestID: requestID,
                         contextKey: contextKey,
-                        source: "voiceClonePCMDrive"
+                        source: "voiceClonePCMDrive",
+                        lifecycleToken: lifecycleToken
                     )
                     print(
                         "[TencentDigitalHuman] voice-clone PCM-drive synthesis ready " +
@@ -2368,7 +2639,8 @@ final class EchoViewController: UIViewController {
                         providerLogId: nil,
                         providerRequestId: nil,
                         reason: "providerRequestFailed",
-                        detail: error.localizedDescription
+                        detail: error.localizedDescription,
+                        lifecycleToken: lifecycleToken
                     )
                     print(
                         "[TencentDigitalHuman] voice-clone PCM-drive request failed; no default voice fallback " +
@@ -2409,6 +2681,7 @@ final class EchoViewController: UIViewController {
             return
         }
         let context = DigitalHumanContextStore.shared.current
+        let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "contextPacket")
         let userId = UserManager.shared.currentUser?.id ?? context.viewerUserId ?? context.ownerId
         let isCurrentUserPersona = isCurrentUserPersonaContext(context)
         let personaScope = isCurrentUserPersona ? "personal" : "family"
@@ -2424,9 +2697,14 @@ final class EchoViewController: UIViewController {
             case .success(let packet):
                 let record = EchoTraceRecord(turnID: turnID, packet: packet)
                 DispatchQueue.main.async {
-                    self?.lastEchoTraceRecord = record
+                    guard let self,
+                          self.isCurrentDigitalHumanLifecycleToken(
+                            lifecycleToken,
+                            reason: "contextPacketResponse"
+                          ) else { return }
+                    self.lastEchoTraceRecord = record
                     EchoTraceStore.shared.record(record)
-                    self?.recordEchoRuntimeDiagnosticsSnapshot(reason: "contextPacketBuilt")
+                    self.recordEchoRuntimeDiagnosticsSnapshot(reason: "contextPacketBuilt")
                 }
                 print(
                     "[CFLite] context built " +
@@ -2455,7 +2733,8 @@ final class EchoViewController: UIViewController {
         providerLogId: String?,
         providerRequestId: String?,
         reason: String,
-        detail: String
+        detail: String,
+        lifecycleToken: DigitalHumanLifecycleToken
     ) {
         cancelTencentDigitalHumanTextOverTimeout()
         digitalHumanConversation.clearProviderRequest()
@@ -2484,8 +2763,15 @@ final class EchoViewController: UIViewController {
             "reason=\(reason) detail=\(detail)"
         )
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-            guard let self else { return }
-            if self.resumeDialogEngineAfterTencentProviderSpeechIfNeeded(reason: "voiceClonePCMDriveFailed") {
+            guard let self,
+                  self.isCurrentDigitalHumanLifecycleToken(
+                    lifecycleToken,
+                    reason: "voiceClonePCMDriveFailureResume"
+                  ) else { return }
+            if self.resumeDialogEngineAfterTencentProviderSpeechIfNeeded(
+                reason: "voiceClonePCMDriveFailed",
+                lifecycleToken: lifecycleToken
+            ) {
                 return
             }
             if DialogEngineManager.shared.isDialogActive {
@@ -2533,8 +2819,12 @@ final class EchoViewController: UIViewController {
     private func scheduleTencentDigitalHumanTextOverTimeout(requestID: String, source: String) {
         cancelTencentDigitalHumanTextOverTimeout()
         let turnID = ensureCurrentEchoTurnID()
+        let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "textOverTimeout:\(source)")
         let workItem = DispatchWorkItem { [weak self] in
-            self?.handleTencentDigitalHumanTextOverTimeout(requestID: requestID)
+            self?.handleTencentDigitalHumanTextOverTimeout(
+                requestID: requestID,
+                lifecycleToken: lifecycleToken
+            )
         }
         digitalHumanProviderTextOverTimeoutWorkItem = workItem
         DispatchQueue.main.asyncAfter(
@@ -2553,8 +2843,15 @@ final class EchoViewController: UIViewController {
         digitalHumanProviderTextOverTimeoutWorkItem = nil
     }
 
-    private func handleTencentDigitalHumanTextOverTimeout(requestID: String) {
-        guard digitalHumanConversation.activeRequestID == requestID else {
+    private func handleTencentDigitalHumanTextOverTimeout(
+        requestID: String,
+        lifecycleToken: DigitalHumanLifecycleToken
+    ) {
+        guard isCurrentDigitalHumanLifecycleToken(
+                lifecycleToken,
+                reason: "textOverTimeout"
+              ),
+              digitalHumanConversation.activeRequestID == requestID else {
             print(
                 "[TencentDigitalHuman] ignored stale TextOver timeout " +
                 "turnID=\(digitalHumanConversation.currentTurnID ?? "unknown") requestID=\(requestID) " +
@@ -2572,8 +2869,15 @@ final class EchoViewController: UIViewController {
         print("[TencentDigitalHuman] TextOver timeout turnID=\(turnID) requestID=\(requestID); recovered Echo state")
 
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.tencentDigitalHumanPostTextOverResumeDelay) { [weak self] in
-            guard let self else { return }
-            if self.resumeDialogEngineAfterTencentProviderSpeechIfNeeded(reason: "providerTextOverTimeout") {
+            guard let self,
+                  self.isCurrentDigitalHumanLifecycleToken(
+                    lifecycleToken,
+                    reason: "textOverTimeoutResume"
+                  ) else { return }
+            if self.resumeDialogEngineAfterTencentProviderSpeechIfNeeded(
+                reason: "providerTextOverTimeout",
+                lifecycleToken: lifecycleToken
+            ) {
                 return
             }
             if DialogEngineManager.shared.isDialogActive {
@@ -2586,6 +2890,7 @@ final class EchoViewController: UIViewController {
 
     @discardableResult
     private func interruptDigitalHumanPlayback(reason: String) -> Bool {
+        let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "interruptPlayback:\(reason)")
         cancelDigitalHumanReplyPrewarm()
         cancelTencentDigitalHumanTextOverTimeout()
         digitalHumanConversation.clearProviderRequestAndResumeState()
@@ -2605,8 +2910,16 @@ final class EchoViewController: UIViewController {
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
-            guard let self else { return }
-            self.resumeVoiceCaptureAfterTencentProviderSpeech(reason: reason)
+            guard let self,
+                  self.isCurrentDigitalHumanLifecycleToken(
+                    lifecycleToken,
+                    reason: "pcmDriveStopProbeResume"
+                  ) else { return }
+            self.activeVoiceInteractionLifecycleToken = lifecycleToken
+            self.resumeVoiceCaptureAfterTencentProviderSpeech(
+                reason: reason,
+                lifecycleToken: lifecycleToken
+            )
         }
         return true
     }
@@ -2618,15 +2931,24 @@ final class EchoViewController: UIViewController {
             return false
         }
 
+        let lifecycleToken = invalidateDigitalHumanInteraction(reason: "userBargeIn")
+        activeVoiceInteractionLifecycleToken = lifecycleToken
         interruptDigitalHumanPlayback(reason: "userBargeIn")
         renderVoiceStatus(text: "正在恢复聆听", isVisible: true)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
             guard let self,
-                  self.view.window != nil else {
+                  self.view.window != nil,
+                  self.isCurrentDigitalHumanLifecycleToken(
+                    lifecycleToken,
+                    reason: "userBargeInResume"
+                  ) else {
                 return
             }
-            self.resumeVoiceCaptureAfterTencentProviderSpeech(reason: "userBargeIn")
+            self.resumeVoiceCaptureAfterTencentProviderSpeech(
+                reason: "userBargeIn",
+                lifecycleToken: lifecycleToken
+            )
         }
         return true
     }
@@ -2771,10 +3093,19 @@ final class EchoViewController: UIViewController {
     }
 
     private func startVoiceCapture() {
+        let lifecycleToken = invalidateDigitalHumanInteraction(reason: "userStartedVoiceCapture")
+        activeVoiceInteractionLifecycleToken = lifecycleToken
         MicrophonePermissionManager.shared.requestPermission { [weak self] granted in
             guard let self = self else { return }
             DispatchQueue.main.async {
+                guard self.isCurrentDigitalHumanLifecycleToken(
+                    lifecycleToken,
+                    reason: "microphonePermissionResponse"
+                ) else {
+                    return
+                }
                 guard granted else {
+                    self.activeVoiceInteractionLifecycleToken = nil
                     MicrophonePermissionManager.shared.showPermissionDeniedAlert(on: self)
                     self.viewModel.fail("需要麦克风权限，才能听见您的声音")
                     return
@@ -2785,20 +3116,33 @@ final class EchoViewController: UIViewController {
                 self.viewModel.prepareVoiceInteraction()
                 if self.prepareTencentProviderForUserCaptureIfNeeded() {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-                        self?.configureVoiceRuntimeThenStart()
+                        guard let self,
+                              self.isCurrentDigitalHumanLifecycleToken(
+                                lifecycleToken,
+                                reason: "providerCaptureHandoff"
+                              ) else { return }
+                        self.configureVoiceRuntimeThenStart(lifecycleToken: lifecycleToken)
                     }
                 } else {
-                    self.configureVoiceRuntimeThenStart()
+                    self.configureVoiceRuntimeThenStart(lifecycleToken: lifecycleToken)
                 }
             }
         }
     }
 
-    private func bindDigitalHumanRuntimeState(_ runtime: DigitalHumanRuntime) {
+    private func bindDigitalHumanRuntimeState(
+        _ runtime: DigitalHumanRuntime,
+        lifecycleToken: DigitalHumanLifecycleToken
+    ) {
         runtime.onStateChange = { [weak self, weak runtime] state in
             DispatchQueue.main.async {
                 guard let self,
-                      runtime === self.digitalHumanRuntime else {
+                      runtime === self.digitalHumanRuntime,
+                      self.digitalHumanRuntimeLifecycleGeneration == lifecycleToken.generation,
+                      self.isCurrentDigitalHumanSessionToken(
+                        lifecycleToken,
+                        reason: "runtimeStateChange"
+                      ) else {
                     return
                 }
                 self.handleDigitalHumanRuntimeStateChange(state)
@@ -2853,9 +3197,13 @@ final class EchoViewController: UIViewController {
     }
 
     private func degradeTencentDigitalHumanRoute(reason: String) {
+        let isQuotaFailure = isDigitalHumanQuotaFailure(reason)
+        let shouldRecover = !isQuotaFailure
+            && shouldRecoverFromDigitalHumanRuntimeFailure(reason: reason)
+        invalidateDigitalHumanLifecycle(reason: "routeFailure:\(reason)")
+        activeVoiceInteractionLifecycleToken = nil
         digitalHumanConversation.clearForRouteFailure()
         lastEchoRuntimeFallbackReason = reason
-        let shouldRecover = shouldRecoverFromDigitalHumanRuntimeFailure(reason: reason)
         let message = shouldRecover
             ? (
                 detail: "数字人正在重新连接，请稍候",
@@ -2878,11 +3226,9 @@ final class EchoViewController: UIViewController {
     }
 
     private func digitalHumanRouteFailureMessage(for reason: String) -> (detail: String, panel: String) {
-        if reason == "tencent_cloud_quota_exceeded"
-            || reason.localizedCaseInsensitiveContains("LimitExceeded")
-            || reason.contains("超过配额") {
+        if isDigitalHumanQuotaFailure(reason) {
             return (
-                detail: "腾讯数智人并发配额已满，请稍后重试",
+                detail: "腾讯数智人并发配额已满，已回到普通回响",
                 panel: "数智人配额已满"
             )
         }
@@ -2899,6 +3245,7 @@ final class EchoViewController: UIViewController {
         }
 
         let resumeDelay = tencentDigitalHumanDialogResumeDelay(for: completion.replyText)
+        let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "providerTextOver")
         cancelTencentDigitalHumanTextOverTimeout()
         stopDigitalHumanAudioLevelMetering()
         viewModel.markReplyDelivered()
@@ -2913,8 +3260,15 @@ final class EchoViewController: UIViewController {
             "resumeDelay=\(String(format: "%.2f", resumeDelay))"
         )
         DispatchQueue.main.asyncAfter(deadline: .now() + resumeDelay) { [weak self] in
-            guard let self else { return }
-            if self.resumeDialogEngineAfterTencentProviderSpeechIfNeeded(reason: "providerTextOver") {
+            guard let self,
+                  self.isCurrentDigitalHumanLifecycleToken(
+                    lifecycleToken,
+                    reason: "providerTextOverResume"
+                  ) else { return }
+            if self.resumeDialogEngineAfterTencentProviderSpeechIfNeeded(
+                reason: "providerTextOver",
+                lifecycleToken: lifecycleToken
+            ) {
                 return
             }
             if DialogEngineManager.shared.isDialogActive {
@@ -3118,6 +3472,7 @@ final class EchoViewController: UIViewController {
         source: String,
         replyText: String
     ) {
+        let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "pcmDrive:\(source)")
         guard shouldShowDigitalHumanLivePanel,
               shouldDispatchEchoReplyToTencentProvider,
               let digitalHumanRuntime,
@@ -3167,12 +3522,17 @@ final class EchoViewController: UIViewController {
             signal: signal,
             requestID: requestID,
             contextKey: currentDigitalHumanRuntimeContextKey(),
-            source: source
+            source: source,
+            lifecycleToken: lifecycleToken
         )
 
         if shouldRunTencentDigitalHumanPCMDriveStopProbe {
             DispatchQueue.main.asyncAfter(deadline: .now() + Self.tencentDigitalHumanPCMDriveStopProbeDelay) { [weak self] in
                 guard let self,
+                      self.isCurrentDigitalHumanLifecycleToken(
+                        lifecycleToken,
+                        reason: "pcmDriveStopProbe"
+                      ),
                       self.shouldRunTencentDigitalHumanPCMDriveSmoke
                         || self.shouldRunTencentDigitalHumanBackendPCMDriveSmoke
                         || self.shouldRunTencentBackendPCMDriveMockSmoke,
@@ -3206,14 +3566,22 @@ final class EchoViewController: UIViewController {
         signal: TencentPCMDriveTestSignal,
         requestID: String,
         contextKey: String,
-        source: String
+        source: String,
+        lifecycleToken: DigitalHumanLifecycleToken
     ) {
+        guard isCurrentDigitalHumanLifecycleToken(
+            lifecycleToken,
+            reason: "pcmDriveStart:\(source)"
+        ) else {
+            return
+        }
         digitalHumanLivePanelView?.setInteractionState(.speaking)
         scheduleTencentDigitalHumanPCMDriveChunks(
             signal: signal,
             requestID: requestID,
             contextKey: contextKey,
-            source: source
+            source: source,
+            lifecycleToken: lifecycleToken
         )
         print(
             "[TencentDigitalHuman][QA] sent PCM-drive signal " +
@@ -3227,7 +3595,8 @@ final class EchoViewController: UIViewController {
         signal: TencentPCMDriveTestSignal,
         requestID: String,
         contextKey: String,
-        source: String
+        source: String,
+        lifecycleToken: DigitalHumanLifecycleToken
     ) {
         let chunks = signal.chunks()
         for (index, chunk) in chunks.enumerated() {
@@ -3236,6 +3605,10 @@ final class EchoViewController: UIViewController {
                 deadline: .now() + Double(index) * Self.tencentDigitalHumanPCMDriveChunkDuration + Self.tencentDigitalHumanPCMDriveStartDelay
             ) { [weak self] in
                 guard let self,
+                      self.isCurrentDigitalHumanLifecycleToken(
+                        lifecycleToken,
+                        reason: "pcmChunk:\(source):\(sequence)"
+                      ),
                       self.digitalHumanConversation.activeRequestID == requestID,
                       self.currentDigitalHumanRuntimeContextKey() == contextKey,
                       let digitalHumanRuntime = self.digitalHumanRuntime else {
@@ -3251,8 +3624,11 @@ final class EchoViewController: UIViewController {
                         "source=\(source) requestID=\(requestID) sequence=\(sequence) bytes=\(chunk.count)"
                     )
                 } catch {
-                    self.digitalHumanConversation.clearProviderRequestAndResumeState()
-                    self.resumeDialogEngineAfterTencentProviderSpeechIfNeeded(reason: "sendPCMChunkFailed")
+                    self.digitalHumanConversation.clearProviderRequest()
+                    self.resumeDialogEngineAfterTencentProviderSpeechIfNeeded(
+                        reason: "sendPCMChunkFailed",
+                        lifecycleToken: lifecycleToken
+                    )
                     if source == "trueDeviceBackendPCMDriveSmoke" {
                         self.trueDeviceBackendPCMDriveTrace.markFailure(
                             reason: "sendPCMChunkFailed",
@@ -3272,6 +3648,10 @@ final class EchoViewController: UIViewController {
             deadline: .now() + Double(chunks.count) * Self.tencentDigitalHumanPCMDriveChunkDuration + Self.tencentDigitalHumanPCMDriveStartDelay
         ) { [weak self] in
             guard let self,
+                  self.isCurrentDigitalHumanLifecycleToken(
+                    lifecycleToken,
+                    reason: "pcmFinal:\(source)"
+                  ),
                   self.digitalHumanConversation.activeRequestID == requestID,
                   self.currentDigitalHumanRuntimeContextKey() == contextKey,
                   let digitalHumanRuntime = self.digitalHumanRuntime else {
@@ -3285,8 +3665,11 @@ final class EchoViewController: UIViewController {
                 }
                 print("[TencentDigitalHuman][QA] sent PCM final source=\(source) requestID=\(requestID) sequence=\(sequence)")
             } catch {
-                self.digitalHumanConversation.clearProviderRequestAndResumeState()
-                self.resumeDialogEngineAfterTencentProviderSpeechIfNeeded(reason: "sendPCMFinalFailed")
+                self.digitalHumanConversation.clearProviderRequest()
+                self.resumeDialogEngineAfterTencentProviderSpeechIfNeeded(
+                    reason: "sendPCMFinalFailed",
+                    lifecycleToken: lifecycleToken
+                )
                 if source == "trueDeviceBackendPCMDriveSmoke" {
                     self.trueDeviceBackendPCMDriveTrace.markFailure(
                         reason: "sendPCMFinalFailed",
@@ -3330,7 +3713,17 @@ final class EchoViewController: UIViewController {
         )
     }
 
-    private func configureVoiceRuntimeThenStart() {
+    private func configureVoiceRuntimeThenStart(
+        lifecycleToken providedLifecycleToken: DigitalHumanLifecycleToken? = nil
+    ) {
+        let lifecycleToken = providedLifecycleToken
+            ?? captureDigitalHumanLifecycleToken(reason: "configureVoiceRuntime")
+        guard isCurrentDigitalHumanLifecycleToken(
+            lifecycleToken,
+            reason: "configureVoiceRuntimeStart"
+        ) else {
+            return
+        }
         guard DreamJourneyBackendClient.shared.isRealtimeVoiceConfigConfigured else {
             backendRuntimeTokenApplied = false
             renderVoiceSDKReadinessPreviewIfNeeded()
@@ -3343,6 +3736,12 @@ final class EchoViewController: UIViewController {
             ?? "anonymous-ios-user"
         DreamJourneyBackendClient.shared.fetchRealtimeVoiceConfig(userId: userId) { [weak self] result in
             guard let self = self else { return }
+            guard self.isCurrentDigitalHumanLifecycleToken(
+                lifecycleToken,
+                reason: "realtimeVoiceConfigResponse"
+            ) else {
+                return
+            }
             switch result {
             case .success(let runtimeConfig):
                 if DialogEngineManager.shared.configure(runtimeConfig: runtimeConfig) {
@@ -3398,6 +3797,8 @@ final class EchoViewController: UIViewController {
             return
         }
 
+        invalidateDigitalHumanInteraction(reason: "userStoppedVoiceCapture")
+        activeVoiceInteractionLifecycleToken = nil
         isStoppingVoiceCaptureManually = true
         if shouldInterruptTencentDigitalHumanOnUserStop {
             interruptDigitalHumanPlayback(reason: "userStop")
@@ -3489,15 +3890,18 @@ final class EchoViewController: UIViewController {
 extension EchoViewController: DialogEngineDelegate {
     func onDialogStarted() {
         DispatchQueue.main.async { [weak self] in
-            self?.resetDigitalHumanReplyDispatchState()
-            self?.viewModel.beginVoiceInteraction()
+            guard let self,
+                  self.activeVoiceInteractionToken(reason: "dialogStarted") != nil else { return }
+            self.resetDigitalHumanReplyDispatchState()
+            self.viewModel.beginVoiceInteraction()
         }
     }
 
     func onASRResult(text: String, isFinal: Bool) {
         guard isFinal else { return }
         DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
+            guard let self,
+                  self.activeVoiceInteractionToken(reason: "asrFinal") != nil else { return }
             if self.routeEchoAudioThroughDigitalHuman,
                self.hasTencentDigitalHumanProviderSpeechInFlight {
                 self.preserveTencentProviderSessionAfterLocalDialogStop(reason: "userSpeechFinal")
@@ -3515,10 +3919,11 @@ extension EchoViewController: DialogEngineDelegate {
     }
 
     func onTTSStarted(text: String) {
-        guard !viewModel.isWaitingForDelayedReply else { return }
-        pendingAIText = nil
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
+            guard let self,
+                  self.activeVoiceInteractionToken(reason: "ttsStarted") != nil,
+                  !self.viewModel.isWaitingForDelayedReply else { return }
+            self.pendingAIText = nil
             self.cancelDigitalHumanReplyPrewarm()
             self.viewModel.receiveAIReply(text)
             if self.shouldDispatchEchoReplyToTencentProvider {
@@ -3536,7 +3941,8 @@ extension EchoViewController: DialogEngineDelegate {
 
     func onTTSFinished() {
         DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
+            guard let self,
+                  let lifecycleToken = self.activeVoiceInteractionToken(reason: "ttsFinished") else { return }
             guard !self.viewModel.isWaitingForDelayedReply else { return }
             if self.routeEchoAudioThroughDigitalHuman,
                self.hasTencentDigitalHumanProviderSpeechInFlight {
@@ -3546,7 +3952,11 @@ extension EchoViewController: DialogEngineDelegate {
             self.stopDigitalHumanAudioLevelMetering()
             self.viewModel.markReplyDelivered()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-                guard let self = self else { return }
+                guard let self,
+                      self.isCurrentDigitalHumanLifecycleToken(
+                        lifecycleToken,
+                        reason: "ttsFinishedResume"
+                      ) else { return }
                 if DialogEngineManager.shared.isDialogActive {
                     self.viewModel.beginVoiceInteraction()
                 } else {
@@ -3559,6 +3969,7 @@ extension EchoViewController: DialogEngineDelegate {
     func onChatStreaming(text: String) {
         DispatchQueue.main.async { [weak self] in
             guard let self,
+                  self.activeVoiceInteractionToken(reason: "chatStreaming") != nil,
                   !self.viewModel.isWaitingForDelayedReply else {
                 return
             }
@@ -3578,7 +3989,8 @@ extension EchoViewController: DialogEngineDelegate {
 
     func onError(error: Error) {
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
+            guard let self,
+                  self.activeVoiceInteractionToken(reason: "dialogError") != nil else { return }
             if self.shouldSuppressDialogEngineErrorDuringTencentProviderSpeech(error) {
                 if self.hasTencentDigitalHumanProviderSpeechInFlight {
                     self.preserveTencentProviderSessionAfterLocalDialogStop(reason: "dialogErrorSuppressedDuringProviderSpeech")
@@ -3763,6 +4175,11 @@ extension EchoViewController {
             return
         }
 
+        invalidateDigitalHumanLifecycle(reason: "uiqaLifecycleSmokeSetup")
+        releaseDigitalHumanRuntime(
+            reason: "uiqaLifecycleSmokeSetup",
+            resetsAudioOwnerToOrdinaryEcho: true
+        )
         let stub = TencentDigitalHumanRuntimeStub(contentView: UIView())
         let profile = DigitalHumanProfile(
             provider: "tencent",
@@ -3788,8 +4205,11 @@ extension EchoViewController {
         }
 
         digitalHumanRuntime = stub
+        digitalHumanRuntimeContextKey = currentDigitalHumanRuntimeContextKey()
+        let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "uiqaLifecycleRuntimeBind")
+        digitalHumanRuntimeLifecycleGeneration = lifecycleToken.generation
         hasRequestedCloudDigitalHumanRuntime = true
-        bindDigitalHumanRuntimeState(stub)
+        bindDigitalHumanRuntimeState(stub, lifecycleToken: lifecycleToken)
         panel.hostProviderView(stub.contentView)
         render(state: .listening)
         renderVoiceStatus(text: "正在聆听", isVisible: true)
@@ -3799,6 +4219,8 @@ extension EchoViewController {
         }
 
         suspendEchoForAppLifecycle(reason: "uiqaWillResignActive")
+        scheduleCloudDigitalHumanRuntimeReleaseForBackgroundIfNeeded()
+        let backgroundLeaseScheduled = digitalHumanBackgroundReleaseWorkItem != nil
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self, weak panel] in
             guard let self,
                   let panel else {
@@ -3834,31 +4256,57 @@ extension EchoViewController {
                 }
                 let appLifecycleRestored = !self.isSuspendedByAppLifecycle
                 let microphoneAutoStart = DialogEngineManager.shared.isDialogActive
-                let audioOwner = self.currentEchoAudioOwner.rawValue
+                let backgroundLeaseCancelled = self.digitalHumanBackgroundReleaseWorkItem == nil
                 let providerViewPreserved = providerViewBefore && providerViewAfterSuspend && providerViewAfterRestore
                 let lifecycleRestored = appLifecycleRestored
                     && self.currentStateIsIdleForUIQA
                     && self.voiceStatusLabel.text == "已暂停，轻点话筒继续"
 
-                completion([
-                    "completed": lifecycleSuspended
-                        && lifecycleRestored
-                        && providerViewPreserved
-                        && microphoneAutoStart == false,
-                    "appLifecycleSuspended": appLifecycleSuspended,
-                    "appLifecycleRestored": appLifecycleRestored,
-                    "lifecycleSuspended": lifecycleSuspended,
-                    "lifecycleRestored": lifecycleRestored,
-                    "providerViewPreserved": providerViewPreserved,
-                    "providerViewBefore": providerViewBefore,
-                    "providerViewAfterSuspend": providerViewAfterSuspend,
-                    "providerViewAfterRestore": providerViewAfterRestore,
-                    "microphoneAutoStart": microphoneAutoStart,
-                    "audioOwner": audioOwner,
-                    "voiceStatusText": self.voiceStatusLabel.text ?? "",
-                    "selectedRuntimeState": String(describing: self.digitalHumanRuntime?.state),
-                    "panelVisible": !panel.isHidden && panel.alpha > 0,
-                ])
+                self.scheduleCloudDigitalHumanRuntimeReleaseForBackgroundIfNeeded()
+                let expiryLeaseScheduled = self.digitalHumanBackgroundReleaseWorkItem != nil
+                DispatchQueue.main.asyncAfter(
+                    deadline: .now() + self.digitalHumanBackgroundReleaseGracePeriod + 0.25
+                ) { [weak self, weak panel] in
+                    guard let self,
+                          let panel else {
+                        completion([
+                            "completed": false,
+                            "failureReason": "lifecycleSmokeReleasedAfterExpiry"
+                        ])
+                        return
+                    }
+
+                    let runtimeReleasedAfterGrace = self.digitalHumanRuntime == nil
+                    let backgroundLeaseExpired = self.digitalHumanBackgroundReleaseWorkItem == nil
+                        && runtimeReleasedAfterGrace
+                    completion([
+                        "completed": lifecycleSuspended
+                            && lifecycleRestored
+                            && backgroundLeaseScheduled
+                            && backgroundLeaseCancelled
+                            && providerViewPreserved
+                            && expiryLeaseScheduled
+                            && backgroundLeaseExpired
+                            && microphoneAutoStart == false,
+                        "appLifecycleSuspended": appLifecycleSuspended,
+                        "appLifecycleRestored": appLifecycleRestored,
+                        "lifecycleSuspended": lifecycleSuspended,
+                        "lifecycleRestored": lifecycleRestored,
+                        "backgroundLeaseScheduled": backgroundLeaseScheduled,
+                        "backgroundLeaseCancelled": backgroundLeaseCancelled,
+                        "backgroundLeaseExpired": backgroundLeaseExpired,
+                        "runtimeReleasedAfterGrace": runtimeReleasedAfterGrace,
+                        "providerViewPreserved": providerViewPreserved,
+                        "providerViewBefore": providerViewBefore,
+                        "providerViewAfterSuspend": providerViewAfterSuspend,
+                        "providerViewAfterRestore": providerViewAfterRestore,
+                        "microphoneAutoStart": microphoneAutoStart,
+                        "audioOwner": self.currentEchoAudioOwner.rawValue,
+                        "voiceStatusText": self.voiceStatusLabel.text ?? "",
+                        "selectedRuntimeState": String(describing: self.digitalHumanRuntime?.state),
+                        "panelVisible": !panel.isHidden && panel.alpha > 0,
+                    ])
+                }
             }
         }
     }
@@ -4340,6 +4788,12 @@ extension EchoViewController {
         userId: String,
         completion: @escaping ([String: Any]) -> Void
     ) {
+        invalidateDigitalHumanLifecycle(reason: "uiqaPCMDriveMockSetup")
+        releaseDigitalHumanRuntime(
+            reason: "uiqaPCMDriveMockSetup",
+            resetsAudioOwnerToOrdinaryEcho: true
+        )
+        let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "uiqaPCMDriveMockRuntimeBind")
         let stub = TencentDigitalHumanRuntimeStub(contentView: UIView())
         let profile = DigitalHumanProfile(
             provider: "tencent",
@@ -4365,13 +4819,19 @@ extension EchoViewController {
         }
 
         digitalHumanRuntime = stub
+        digitalHumanRuntimeContextKey = currentDigitalHumanRuntimeContextKey()
+        digitalHumanRuntimeLifecycleGeneration = lifecycleToken.generation
         hasRequestedCloudDigitalHumanRuntime = true
         digitalHumanLivePanelView?.hostProviderView(stub.contentView)
         applyEchoAudioRoutePolicy()
 
         DreamJourneyBackendClient.shared.fetchVoiceCloneRuntimeCapability { [weak self] capabilityResult in
             DispatchQueue.main.async {
-                guard let self else { return }
+                guard let self,
+                      self.isCurrentDigitalHumanLifecycleToken(
+                        lifecycleToken,
+                        reason: "uiqaPCMDriveCapabilityResponse"
+                      ) else { return }
                 switch capabilityResult {
                 case .failure(let error):
                     completion([
@@ -4407,7 +4867,11 @@ extension EchoViewController {
                         outputMode: capability.tencentAudioDrive.requestOutputMode
                     ) { [weak self] synthesisResult in
                         DispatchQueue.main.async {
-                            guard let self else { return }
+                            guard let self,
+                                  self.isCurrentDigitalHumanLifecycleToken(
+                                    lifecycleToken,
+                                    reason: "uiqaPCMDriveSynthesisResponse"
+                                  ) else { return }
                             switch synthesisResult {
                             case .failure(let error):
                                 completion([
@@ -4454,7 +4918,11 @@ extension EchoViewController {
                                 let wait = (Double(expectedChunkCount) * Self.tencentDigitalHumanPCMDriveChunkDuration) + 0.55
                                 DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self, weak stub] in
                                     guard let self,
-                                          let stub else {
+                                          let stub,
+                                          self.isCurrentDigitalHumanLifecycleToken(
+                                            lifecycleToken,
+                                            reason: "uiqaPCMDriveResult"
+                                          ) else {
                                         completion([
                                             "completed": false,
                                             "failureReason": "stubReleased",
@@ -4514,6 +4982,7 @@ extension EchoViewController {
     func runUIQADigitalHumanRuntimeStubSmoke(completion: @escaping ([String: Any]) -> Void) {
         let context = DigitalHumanContextStore.shared.current
         let userId = UserManager.shared.currentUser?.id ?? context.viewerUserId ?? "user_9999"
+        let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "uiqaRuntimeStub")
         DreamJourneyBackendClient.shared.createDigitalHumanSession(
             userId: userId,
             personaId: context.ownerId,
@@ -4522,12 +4991,30 @@ extension EchoViewController {
             lifecycleMode: context.mode
         ) { [weak self] result in
             guard let self else { return }
+            guard self.isCurrentDigitalHumanSessionToken(
+                lifecycleToken,
+                reason: "uiqaRuntimeStubSessionResponse"
+            ) else {
+                completion([
+                    "completed": false,
+                    "failureReason": "staleLifecycle",
+                ])
+                return
+            }
             switch result {
             case .success(let contract):
                 let profile = contract.toDigitalHumanProfile(displayName: context.resolvedDisplayName)
                 let runtimeSelection = DigitalHumanRuntimeFactory.makeRuntime(for: contract)
                 let runtime = runtimeSelection.runtime
+                if let existingRuntime = self.digitalHumanRuntime,
+                   existingRuntime !== runtime {
+                    existingRuntime.interrupt()
+                    existingRuntime.close()
+                }
                 self.digitalHumanRuntime = runtime
+                self.digitalHumanRuntimeContextKey = lifecycleToken.contextKey
+                self.digitalHumanRuntimeLifecycleGeneration = lifecycleToken.generation
+                self.bindDigitalHumanRuntimeState(runtime, lifecycleToken: lifecycleToken)
                 do {
                     try runtime.configure(profile)
                     try runtime.open()
@@ -4559,6 +5046,13 @@ extension EchoViewController {
                         "defaultReleaseVisible": FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel),
                     ])
                 } catch {
+                    runtime.interrupt()
+                    runtime.close()
+                    if self.digitalHumanRuntime === runtime {
+                        self.digitalHumanRuntime = nil
+                        self.digitalHumanRuntimeContextKey = nil
+                        self.digitalHumanRuntimeLifecycleGeneration = nil
+                    }
                     completion([
                         "completed": false,
                         "failureReason": "runtimeError",

@@ -35,10 +35,15 @@ for required in [
     "runUIQAEchoDigitalHumanLifecycleSmoke",
     "suspendEchoForAppLifecycle(reason: \"uiqaWillResignActive\")",
     "restoreEchoAfterAppLifecycleIfNeeded(reason: \"uiqaDidBecomeActive\")",
+    "scheduleCloudDigitalHumanRuntimeReleaseForBackgroundIfNeeded()",
     "\"appLifecycleSuspended\"",
     "\"appLifecycleRestored\"",
     "\"microphoneAutoStart\"",
     "\"providerViewPreserved\"",
+    "\"backgroundLeaseScheduled\"",
+    "\"backgroundLeaseCancelled\"",
+    "\"backgroundLeaseExpired\"",
+    "\"runtimeReleasedAfterGrace\"",
     "\"audioOwner\"",
 ] {
     assertContains(echo, required, "Echo should expose lifecycle UIQA behavior \(required)")
@@ -52,6 +57,10 @@ for required in [
     "\"lifecycleSuspended\"",
     "\"lifecycleRestored\"",
     "\"providerViewPreserved\"",
+    "\"backgroundLeaseScheduled\"",
+    "\"backgroundLeaseCancelled\"",
+    "\"backgroundLeaseExpired\"",
+    "\"runtimeReleasedAfterGrace\"",
     "\"microphoneAutoStart\"",
     "simctl io",
 ] {

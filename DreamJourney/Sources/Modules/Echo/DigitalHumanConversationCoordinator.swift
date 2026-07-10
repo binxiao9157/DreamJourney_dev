@@ -1,5 +1,93 @@
 import Foundation
 
+struct DigitalHumanLifecycleToken: Equatable {
+    let generation: UInt64
+    let interactionGeneration: UInt64
+    let contextKey: String
+}
+
+struct DigitalHumanBackgroundReleaseLease: Equatable {
+    let generation: UInt64
+    let contextKey: String
+}
+
+final class DigitalHumanLifecycleCoordinator {
+    private(set) var generation: UInt64 = 0
+    private(set) var interactionGeneration: UInt64 = 0
+    private(set) var contextKey = ""
+    private(set) var lastInvalidationReason = "initial"
+    private(set) var backgroundReleaseGeneration: UInt64 = 0
+    private(set) var backgroundReleaseContextKey: String?
+
+    func token(for contextKey: String) -> DigitalHumanLifecycleToken {
+        if self.contextKey != contextKey {
+            return invalidate(contextKey: contextKey, reason: "contextChanged")
+        }
+        return currentToken
+    }
+
+    @discardableResult
+    func invalidate(contextKey: String, reason: String) -> DigitalHumanLifecycleToken {
+        generation &+= 1
+        interactionGeneration &+= 1
+        cancelBackgroundReleaseLease()
+        self.contextKey = contextKey
+        lastInvalidationReason = reason
+        return currentToken
+    }
+
+    @discardableResult
+    func invalidateInteraction(contextKey: String, reason: String) -> DigitalHumanLifecycleToken {
+        guard self.contextKey == contextKey else {
+            return invalidate(contextKey: contextKey, reason: reason)
+        }
+        interactionGeneration &+= 1
+        lastInvalidationReason = reason
+        return currentToken
+    }
+
+    func isCurrent(_ token: DigitalHumanLifecycleToken, contextKey: String) -> Bool {
+        token == currentToken && self.contextKey == contextKey
+    }
+
+    func isCurrentSession(_ token: DigitalHumanLifecycleToken, contextKey: String) -> Bool {
+        token.generation == generation
+            && token.contextKey == self.contextKey
+            && self.contextKey == contextKey
+    }
+
+    func beginBackgroundReleaseLease(contextKey: String) -> DigitalHumanBackgroundReleaseLease {
+        backgroundReleaseGeneration &+= 1
+        backgroundReleaseContextKey = contextKey
+        return DigitalHumanBackgroundReleaseLease(
+            generation: backgroundReleaseGeneration,
+            contextKey: contextKey
+        )
+    }
+
+    func cancelBackgroundReleaseLease() {
+        backgroundReleaseGeneration &+= 1
+        backgroundReleaseContextKey = nil
+    }
+
+    func isCurrentBackgroundReleaseLease(
+        _ lease: DigitalHumanBackgroundReleaseLease,
+        contextKey: String
+    ) -> Bool {
+        lease.generation == backgroundReleaseGeneration
+            && lease.contextKey == backgroundReleaseContextKey
+            && lease.contextKey == contextKey
+    }
+
+    private var currentToken: DigitalHumanLifecycleToken {
+        DigitalHumanLifecycleToken(
+            generation: generation,
+            interactionGeneration: interactionGeneration,
+            contextKey: contextKey
+        )
+    }
+}
+
 final class DigitalHumanConversationCoordinator {
     private(set) var activeRequestID: String?
     private(set) var pendingReplyText: String?

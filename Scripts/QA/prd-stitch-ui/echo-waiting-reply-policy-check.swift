@@ -47,7 +47,10 @@ assertContains(echoView, "renderVoiceStatus(text: \"回信已抵达\", isVisible
 assertContains(echoView, "先去窗边走走，约 \\(minutes) 分钟后我再回信", "Echo waiting UI should use the updated PRD walk-out guidance copy")
 assertContains(echoView, "private var isStoppingForDelayedReply = false", "Echo controller should preserve waiting UI while stopping the live voice engine")
 assertContains(echoView, "beginDelayedReplyWait()", "Echo controller should stop live voice capture when delayed reply wait starts")
-assertContains(echoView, "guard !viewModel.isWaitingForDelayedReply else { return }", "Echo controller should ignore immediate AI reply callbacks while waiting")
+guard echoView.contains("guard !viewModel.isWaitingForDelayedReply else { return }")
+        || echoView.contains("!self.viewModel.isWaitingForDelayedReply else { return }") else {
+    fatalError("Echo controller should ignore immediate AI reply callbacks while waiting")
+}
 assertContains(echoView, "viewModel.markReplyDelivered()", "Echo controller should mark replies as delivered after TTS finishes")
 assertContains(echoView, "第十次想起这件事", "Echo waiting-reply UIQA preview should drive the ten-round waiting policy")
 

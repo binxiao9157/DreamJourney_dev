@@ -1,0 +1,722 @@
+{
+  "checks": {
+    "C000": {
+      "blocking_gaps": [
+        "缺少直接验证 generation、interaction generation、context 切换与旧 token 拒绝行为的可执行状态检查。",
+        "当前静态检查能证明 guard 存在，不能证明协调器状态转换结果正确。"
+      ],
+      "body_path": "problems/P000/children/P001/checks/C000.md",
+      "created_at": "2026-07-10T05:45:39+00:00",
+      "criteria_map": [],
+      "evidence": [],
+      "execution_map": [],
+      "followup_problem_id": "P004",
+      "id": "C000",
+      "problem_id": "P001",
+      "residual_risk": [],
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "not_success",
+      "stress_test": [],
+      "summary": "实现与编译证据覆盖了主要异步路径，但成功标准要求的纯状态行为还没有独立可执行断言，因此当前证据不足以把一次性实现判为完全成功。"
+    },
+    "C001": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P001/children/P004/checks/C001.md",
+      "created_at": "2026-07-10T05:47:26+00:00",
+      "criteria_map": [
+        "context 切换：断言旧 session 与交互 token 均失效。",
+        "停止/打断：断言旧交互 token 失效而 session token 保持可用。",
+        "页面失效：断言旧 session token 失效。",
+        "后台 lease：断言取消和生命周期失效后均不可触发。"
+      ],
+      "evidence": [
+        "`echo-digital-human-lifecycle-coordinator-check.swift` 编译并执行通过。",
+        "运行输出明确为 `Echo digital-human lifecycle coordinator check passed`。"
+      ],
+      "execution_map": [
+        "R001 完成检查源码、编译与执行。"
+      ],
+      "followup_problem_id": null,
+      "id": "C001",
+      "problem_id": "P004",
+      "residual_risk": [
+        "UIKit/腾讯 SDK 的实际调度时序由后续模拟器 smoke 与真机回归覆盖，不阻塞该纯状态问题关闭。"
+      ],
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "连续执行交互失效、后台 lease、context 切换和页面失效，验证不同代际不会互相复活。"
+      ],
+      "summary": "纯状态检查与生产协调器共同编译执行，所有原始成功标准均有直接断言，缺口已关闭。"
+    },
+    "C002": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P001/checks/C002.md",
+      "created_at": "2026-07-10T05:47:47+00:00",
+      "criteria_map": [
+        "token 签发、推进和校验：R000 实现，R001 直接状态断言。",
+        "角色切换和页面退出失效旧 generation：R000 接入，R001 验证。",
+        "session/capability/realtime/synthesis/PCM/resume guard：R000 静态检查与构建证据。",
+        "旧 token 不改变 runtime/audio/mic：业务路径执行前统一 guard，状态检查证明旧 token 被拒绝。"
+      ],
+      "evidence": [
+        "Phase 2 源码合同检查通过。",
+        "生命周期协调器纯状态检查编译执行通过。",
+        "iOS Simulator Debug 全量构建通过。"
+      ],
+      "execution_map": [
+        "R000：生产实现、静态检查、iOS 构建。",
+        "R001：独立纯状态回归。"
+      ],
+      "followup_problem_id": null,
+      "id": "C002",
+      "problem_id": "P001",
+      "residual_risk": [
+        "真机腾讯 SDK 的实际回调顺序仍需后续真机回归；本阶段按用户要求不做真机验证，不阻塞代码级异步隔离关闭。"
+      ],
+      "result_ids": [
+        "R000",
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "连续推进 interaction、context、后台 lease 和页面 generation，确认旧 token 不会在后续状态中重新生效。"
+      ],
+      "summary": "统一 generation 已覆盖目标异步路径，补充的纯状态回归证明 context、interaction 与页面代际按预期失效，原始问题已解决。"
+    },
+    "C003": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P002/checks/C003.md",
+      "created_at": "2026-07-10T05:56:27+00:00",
+      "criteria_map": [
+        "后台只暂停并安排 lease：源码检查与 runtime log。",
+        "前台取消并保留 provider：UIQA cancel 分支。",
+        "当前 lease 到期才释放：generation 状态检查与 UIQA expiry 分支。",
+        "页面退出取消并释放：源码 guard。",
+        "可重复模拟器验证：一键 lifecycle smoke 已通过。"
+      ],
+      "evidence": [
+        "UIQA 结果：`backgroundLeaseScheduled=true`、`backgroundLeaseCancelled=true`、`backgroundLeaseExpired=true`。",
+        "UIQA 结果：`providerViewPreserved=true`、`runtimeReleasedAfterGrace=true`、`microphoneAutoStart=false`。",
+        "Phase 2 静态检查确认后台入口不再直接调用 runtime release。"
+      ],
+      "execution_map": [
+        "R002：生产实现、release wiring、模拟器 smoke 与截图证据。"
+      ],
+      "followup_problem_id": null,
+      "id": "C003",
+      "problem_id": "P002",
+      "residual_risk": [
+        "真机后台调度可能因系统挂起晚于 8 秒，属于允许的延迟释放，不会导致跨 generation 误释放。"
+      ],
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "同一次 smoke 先取消一个 lease，再创建第二个 lease 并等待到期，验证被取消任务不会误释放、当前任务可释放。"
+      ],
+      "summary": "代码、纯状态检查与模拟器 UIQA 同时覆盖 lease 取消和到期释放，原始后台立即释放问题已解决。"
+    },
+    "C004": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/checks/C004.md",
+      "created_at": "2026-07-10T06:18:49+00:00",
+      "criteria_map": [
+        "单 runtime/session 与 audio owner：显式 runtime generation + 单值 owner + 重复 runtime close。",
+        "停止/打断保留 session：既有 stop semantics guard 和 Phase 2 token guard。",
+        "当前 generation 才恢复麦克风：TextOver、barge-in、stop probe 均传 lifecycle token。",
+        "旧 PCM 不再发送：每个 chunk/final 校验 token、requestID、context。",
+        "配额立即 fallback：quota helper 排除 recovery，统一 release 回普通 Echo。",
+        "QA/build：静态 release、组合 gate、模拟器构建、diff check 均通过。"
+      ],
+      "evidence": [
+        "完整静态 release regression 全部通过。",
+        "非真机组合 gate 的 runtime stub、PCM mock、构建和 diff check 全部通过。",
+        "PCM mock 实际发送 402 个连续 chunk、final chunk，并完成 interrupt cleanup。"
+      ],
+      "execution_map": [
+        "R003：生产代码、QA guard、组合运行和构建证据。"
+      ],
+      "followup_problem_id": null,
+      "id": "C004",
+      "problem_id": "P003",
+      "residual_risk": [
+        "真机腾讯 SDK 的声音、口型和 AudioSession 时序尚未在本阶段验证，按用户要求留作后续验收，不阻塞非真机稳定性目标。"
+      ],
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "mock PCM 长音频被切成 402 个分块后正常 final；随后 interrupt 清理成功，证明中断与尾包状态可收敛。",
+        "lifecycle smoke 连续覆盖 lease 取消与到期释放，防止旧 session 复活。"
+      ],
+      "summary": "代际绑定、停止/打断语义、旧 PCM 拒绝和配额回落均有源码 guard 与非真机运行证据，原始问题在本阶段范围内已解决。"
+    },
+    "C005": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/checks/C005.md",
+      "created_at": "2026-07-10T06:32:12+00:00",
+      "criteria_map": [
+        "旧角色/旧页面回调隔离：统一 session/interaction generation，session、capability、语音配置、合成、Context Packet、PCM 与延迟恢复均校验 token；对应 R000、R003。",
+        "单 runtime 与单 audio owner：runtime 绑定 generation，新 runtime 绑定前关闭旧 runtime，路由仅接受当前 generation；对应 R003。",
+        "停止保留、退出释放：interaction invalidation 不改变 session generation，`viewWillDisappear` 无条件调用统一 release helper；对应 R000、R003。",
+        "后台宽限：8 秒 lease、前台取消、过期释放和不自动开麦均有 UIQA 证据；对应 R002。",
+        "配额立即 fallback：配额错误从 recovery policy 排除并统一回落普通 Echo；对应 R003。",
+        "点击打断及恢复：打断使旧 interaction token 失效，恢复只接受当前 token，PCM 失败保留恢复标记；对应 R003。",
+        "非真机 QA：Phase 2 guard、纯状态测试、lifecycle smoke、runtime stub、PCM mock、release regression、构建和 diff check 均通过；对应 R001-R004。"
+      ],
+      "evidence": [
+        "lifecycle coordinator 与 production source 共同编译执行，验证 context、interaction、session 和后台 lease 的失效规则。",
+        "lifecycle UIQA 最终结果同时证明 lease 可取消、可到期、到期释放 runtime、provider view 在短暂切后台期间保留且不会自动开麦。",
+        "runtime stub 和 PCM-drive mock 验证 session/runtime 状态流、PCM 顺序/final、打断清理及本机 Bundle ID 构建口径。",
+        "`20260710-phase2-stability-final` release regression 的后端基础校验、全部 Swift guard、iOS Debug 模拟器构建和 diff check 通过。",
+        "`20260710-phase2-stability-final-gate` 非真机组合 gate 全部通过。"
+      ],
+      "execution_map": [
+        "P001/R000：统一 lifecycle generation 与异步隔离。",
+        "P004/R001：补生产协调器纯状态回归并关闭初次检查缺口。",
+        "P002/R002：后台 session 宽限 lease 与模拟器分支验证。",
+        "P003/R003：runtime/audio owner、打断恢复、PCM 和 quota fallback。",
+        "P000/R004：整合实现、修正页面退出与 PCM 失败边界并完成最终组合验证。"
+      ],
+      "followup_problem_id": null,
+      "id": "C005",
+      "problem_id": "P000",
+      "residual_risk": [
+        "真机腾讯云渲染真实声音、口型同步、AVAudioSession 抢占、点击打断和麦克风恢复尚未验收；这是明确的后续外部门槛。",
+        "当前只提供点击打断，未实现全双工 VAD。",
+        "以上风险不改变本次“仅完成阶段 2 非真机实现”的成功判定。"
+      ],
+      "result_ids": [
+        "R004"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "角色或 context 在请求返回前发生变化：旧 token 无法安装 runtime、播放 PCM 或恢复麦克风。",
+        "App 短暂切后台后立即回来：lease 被取消，provider view 保留且麦克风不自动启动。",
+        "App 超过宽限期留在后台：当前 lease 到期后 runtime 被释放，旧 lease/回调不能再次生效。",
+        "腾讯配额错误：不进入一次性重试，释放 provider 并切换普通 Echo，避免上一角色声音残留。",
+        "PCM chunk/final 失败：清理失败 request 但保留当前轮恢复意图，避免永久停在 speaking/loading。"
+      ],
+      "summary": "判定成功。R004 汇总的 R000-R003 已覆盖原问题全部非真机成功标准，且最终代码经过可执行状态测试、模拟器 UIQA、PCM mock、全量静态回归和 iOS 构建。未执行的真机听感与口型验收在原问题中明确列为范围外，不阻止本阶段关闭。"
+    }
+  },
+  "counters": {
+    "check": 6,
+    "event": 62,
+    "problem": 5,
+    "result": 5,
+    "ticket": 5
+  },
+  "created_at": "2026-07-10T05:30:57+00:00",
+  "effort": "medium",
+  "language": "zh",
+  "ledger_id": "L20260710-133057",
+  "problems": {
+    "P000": {
+      "body_path": "problems/P000/README.md",
+      "check_ids": [
+        "C005"
+      ],
+      "created_at": "2026-07-10T05:30:57+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Close the Lodestar task represented by `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/plans/task_07_p0-echo-digital-human-stability.md` using recursive problem, ticket, result, and check state.\n\nTask context:\n\n# P0 Echo digital-human stability",
+      "followup_ids": [],
+      "id": "P000",
+      "package_path": "problems/P000",
+      "parent_id": null,
+      "result_ids": [
+        "R004"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P001",
+        "P002",
+        "P003"
+      ],
+      "success_criteria": [
+        "A callback created before a role/context switch cannot install a runtime, synthesize/play audio, send PCM, or reopen the microphone afterward.",
+        "Echo owns at most one Tencent runtime and exposes one explicit audio owner at a time.",
+        "User stop preserves the current Tencent session; page exit releases it.",
+        "Backgrounding does not immediately consume/recreate sessions, but an expired grace lease closes the runtime.",
+        "Returning before lease expiry keeps the provider view and does not auto-start the microphone.",
+        "Quota exhaustion falls back immediately to ordinary Echo and does not retry automatically.",
+        "Tap interruption clears provider work; only the current generation may restore capture.",
+        "Non-device Phase 2 checks, simulator lifecycle smoke, digital-human/voice-clone combo gate, iOS build, and whitespace check pass."
+      ],
+      "ticket_ids": [
+        "T000"
+      ],
+      "title": "P0 Echo digital-human stability",
+      "updated_at": "2026-07-10T06:32:12+00:00"
+    },
+    "P001": {
+      "body_path": "problems/P000/children/P001/README.md",
+      "check_ids": [
+        "C000",
+        "C002"
+      ],
+      "created_at": "2026-07-10T05:32:08+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "Echo 的 session、runtime capability、voice capability、realtime config、synthesis、PCM 和延迟恢复分别使用局部 guard，角色切换或页面生命周期变化后仍可能有旧回调生效。",
+      "followup_ids": [
+        "P004"
+      ],
+      "id": "P001",
+      "package_path": "problems/P000/children/P001",
+      "parent_id": "P000",
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P004"
+      ],
+      "success_criteria": [
+        "生命周期协调器可以签发、推进并校验带 context 的 generation token。",
+        "角色切换和页面退出会失效旧 generation。",
+        "session/capability/realtime/synthesis/PCM/resume 异步路径执行前校验当前 token。",
+        "旧 token 的回调不会安装 runtime、改变 audio owner、发送音频或打开麦克风。",
+        "纯状态与静态检查通过。"
+      ],
+      "ticket_ids": [
+        "T001"
+      ],
+      "title": "建立统一 lifecycle generation 与异步隔离",
+      "updated_at": "2026-07-10T05:47:47+00:00"
+    },
+    "P002": {
+      "body_path": "problems/P000/children/P002/README.md",
+      "check_ids": [
+        "C003"
+      ],
+      "created_at": "2026-07-10T05:32:08+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "当前 `didEnterBackground` 立即关闭腾讯 runtime，短暂切换应用会反复创建 session；同时必须避免后台长期占用并发。",
+      "followup_ids": [],
+      "id": "P002",
+      "package_path": "problems/P000/children/P002",
+      "parent_id": "P000",
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "后台进入只暂停交互并安排带 generation 的短时释放 lease。",
+        "宽限期内回前台取消 lease，保留 provider view/session，不自动启动麦克风。",
+        "lease 到期且 generation/context 仍匹配时才关闭 runtime。",
+        "页面退出仍立即关闭 runtime并取消 lease。",
+        "模拟器 lifecycle UIQA 可重复验证取消与过期两条路径。"
+      ],
+      "ticket_ids": [
+        "T003"
+      ],
+      "title": "实现后台 session 宽限 lease",
+      "updated_at": "2026-07-10T05:56:27+00:00"
+    },
+    "P003": {
+      "body_path": "problems/P000/children/P003/README.md",
+      "check_ids": [
+        "C004"
+      ],
+      "created_at": "2026-07-10T05:32:08+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "已有停止与 audio owner 逻辑分散，延迟恢复缺少统一代际保护；配额错误仍会自动重试，存在旧角色声音或错误麦克风恢复风险。",
+      "followup_ids": [],
+      "id": "P003",
+      "package_path": "problems/P000/children/P003",
+      "parent_id": "P000",
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "同一 generation 最多绑定一个 runtime/session，并保持单一显式 audio owner。",
+        "用户停止/点击打断不销毁 session；页面退出或终止失败才释放。",
+        "provider 完成和点击打断仅能为当前 generation 恢复麦克风。",
+        "中断后旧 PCM chunk/final 不再发送。",
+        "配额错误立即回普通 Echo，不自动恢复，不沿用上一角色声音。",
+        "扩展的静态、UIQA、组合 gate、构建和 diff check 通过。"
+      ],
+      "ticket_ids": [
+        "T004"
+      ],
+      "title": "收敛 session audio owner 打断恢复与配额 fallback",
+      "updated_at": "2026-07-10T06:18:49+00:00"
+    },
+    "P004": {
+      "body_path": "problems/P000/children/P001/children/P004/README.md",
+      "check_ids": [
+        "C001"
+      ],
+      "created_at": "2026-07-10T05:45:39+00:00",
+      "created_from_check_id": "C000",
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "生命周期协调器已经接入业务路径，但缺少独立可执行的状态断言，无法证明旧 token 在 context、交互和页面代际变化后一定失效。",
+      "followup_ids": [],
+      "id": "P004",
+      "package_path": "problems/P000/children/P001/children/P004",
+      "parent_id": "P001",
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "新增可直接编译执行的协调器状态检查。",
+        "覆盖 context 切换推进 session generation。",
+        "覆盖停止/打断只推进 interaction generation，并保持 session token 可用。",
+        "覆盖页面级失效使旧 session 与 interaction token 均不可用。",
+        "检查执行通过。"
+      ],
+      "ticket_ids": [
+        "T002"
+      ],
+      "title": "补生命周期协调器纯状态回归",
+      "updated_at": "2026-07-10T05:47:26+00:00"
+    }
+  },
+  "results": {
+    "R000": {
+      "artifacts": [
+        "`DreamJourney/Sources/Modules/Echo/DigitalHumanConversationCoordinator.swift`",
+        "`DreamJourney/Sources/Modules/Echo/EchoViewController.swift`",
+        "`Scripts/QA/prd-stitch-ui/echo-digital-human-phase2-stability-check.swift`",
+        "`tmp/build/phase2-lifecycle-token/`"
+      ],
+      "body_path": "problems/P000/children/P001/results/R000.md",
+      "created_at": "2026-07-10T05:44:43+00:00",
+      "done": [
+        "新增统一的 `DigitalHumanLifecycleToken`，分别跟踪 session generation 与 interaction generation。",
+        "角色切换、页面退出会使旧 session/交互异步回调失效；用户停止、点击打断只使旧交互回调失效，不销毁腾讯 session。",
+        "会话能力、会话创建、复刻合成、Context Packet、PCM 分块与尾包、TextOver 超时、语音配置和麦克风恢复均接入 generation guard。",
+        "麦克风权限与 provider handoff 延迟回调接入当前交互 token。",
+        "DialogEngine 的 ASR/TTS/流式回复回调只消费当前有效交互。"
+      ],
+      "id": "R000",
+      "known_gaps": [],
+      "problem_id": "P001",
+      "root_id": "P000",
+      "summary": "统一 Echo 数字人 session 与交互异步回调的 generation 边界，旧角色、旧轮次和页面退出后的回调不再改变当前状态。",
+      "ticket_id": "T001",
+      "verification": [
+        "`swift Scripts/QA/prd-stitch-ui/echo-digital-human-phase2-stability-check.swift` 通过。",
+        "iOS Simulator Debug 全量构建通过，产物目录：`tmp/build/phase2-lifecycle-token/`。"
+      ]
+    },
+    "R001": {
+      "artifacts": [
+        "`Scripts/QA/prd-stitch-ui/echo-digital-human-lifecycle-coordinator-check.swift`",
+        "`tmp/echo-digital-human-lifecycle-coordinator-check`"
+      ],
+      "body_path": "problems/P000/children/P001/children/P004/results/R001.md",
+      "created_at": "2026-07-10T05:47:08+00:00",
+      "done": [
+        "覆盖首次 context token、交互代际推进、session 代际保留、context 切换、页面失效。",
+        "覆盖后台 release lease 的签发、取消和生命周期失效。"
+      ],
+      "id": "R001",
+      "known_gaps": [],
+      "problem_id": "P004",
+      "root_id": "P000",
+      "summary": "新增与生产协调器共同编译执行的纯 Swift 状态检查，补足静态源码检查无法证明状态转换的缺口。",
+      "ticket_id": "T002",
+      "verification": [
+        "`swiftc .../DigitalHumanConversationCoordinator.swift .../echo-digital-human-lifecycle-coordinator-check.swift` 编译成功。",
+        "执行输出：`Echo digital-human lifecycle coordinator check passed`。"
+      ]
+    },
+    "R002": {
+      "artifacts": [
+        "`tmp/visual-qa/prd-stitch-ui/echo-digital-human-lifecycle-smoke/20260710-phase2-background-lease-clean/report.md`",
+        "`tmp/visual-qa/prd-stitch-ui/echo-digital-human-lifecycle-smoke/20260710-phase2-background-lease-clean/echo-digital-human-lifecycle-smoke-result.json`",
+        "`tmp/visual-qa/prd-stitch-ui/echo-digital-human-lifecycle-smoke/20260710-phase2-background-lease-clean/01-echo-digital-human-lifecycle-smoke.png`"
+      ],
+      "body_path": "problems/P000/children/P002/results/R002.md",
+      "created_at": "2026-07-10T05:55:59+00:00",
+      "done": [
+        "新增带 context/generation 的 `DigitalHumanBackgroundReleaseLease`。",
+        "后台进入暂停交互并安排宽限释放，不立即关闭 runtime。",
+        "前台恢复在函数内部兜底取消 lease，不自动启动麦克风。",
+        "lease 到期后推进 lifecycle、关闭 runtime、回落普通 Echo。",
+        "页面退出取消 lease 并沿既有统一路径立即释放。",
+        "lifecycle UIQA 同时验证取消与到期释放。"
+      ],
+      "id": "R002",
+      "known_gaps": [],
+      "problem_id": "P002",
+      "root_id": "P000",
+      "summary": "Echo 后台策略已由立即释放改为 8 秒可取消 lease；前台恢复保留 session，当前 lease 到期才释放，并完成模拟器两分支回归。",
+      "ticket_id": "T003",
+      "verification": [
+        "生命周期协调器纯状态检查通过。",
+        "Phase 2 静态检查通过。",
+        "模拟器 lifecycle smoke 通过，结果中 `backgroundLeaseCancelled=true`、`backgroundLeaseExpired=true`、`runtimeReleasedAfterGrace=true`、`microphoneAutoStart=false`。"
+      ]
+    },
+    "R003": {
+      "artifacts": [
+        "`tmp/visual-qa/prd-stitch-ui/tencent-digital-human-phase2-non-device-gate/20260710-phase2-stability-passed/report.md`",
+        "`tmp/visual-qa/prd-stitch-ui/release-regression/20260710-phase2-static-release-passed/report.md`",
+        "`tmp/visual-qa/prd-stitch-ui/tencent-backend-pcm-drive-mock-smoke/20260710-phase2-generation-bound/tencent-backend-pcm-drive-mock-smoke-result.json`"
+      ],
+      "body_path": "problems/P000/children/P003/results/R003.md",
+      "created_at": "2026-07-10T06:17:57+00:00",
+      "done": [
+        "runtime 记录并校验 `digitalHumanRuntimeLifecycleGeneration`，重复 runtime 在绑定前关闭。",
+        "runtime 状态回调、复刻合成、PCM chunk/final、TextOver 与恢复麦克风均校验当前 token。",
+        "用户停止/点击打断仅终止当前交互并保留 session；页面退出与 provider 终止失败走统一 release。",
+        "配额失败排除自动 recovery，立即回普通 Echo，清空旧请求与旧音频 owner。",
+        "PCM mock stub 按生产路径登记 generation，组合回归发送 402 个连续 chunk 和 final 成功。",
+        "Phase 2 guard 与 lifecycle coordinator check 接入 release regression。"
+      ],
+      "id": "R003",
+      "known_gaps": [],
+      "problem_id": "P003",
+      "root_id": "P000",
+      "summary": "Echo runtime 已显式绑定 lifecycle generation，旧 session/角色无法拥有音频；停止、打断、PCM 尾段、麦克风恢复和配额 fallback 均受当前代际约束。",
+      "ticket_id": "T004",
+      "verification": [
+        "完整静态 release regression 通过。",
+        "腾讯数字人非真机组合 gate 通过。",
+        "PCM mock：`completed=true`、`sequenceIsContiguous=true`、`finalChunkObserved=true`、`interruptProbeCompleted=true`。",
+        "iOS Debug simulator build 与 `git diff --check` 通过。"
+      ]
+    },
+    "R004": {
+      "artifacts": [
+        "`DreamJourney/Sources/Modules/Echo/DigitalHumanConversationCoordinator.swift`",
+        "`DreamJourney/Sources/Modules/Echo/EchoViewController.swift`",
+        "`Scripts/QA/prd-stitch-ui/echo-digital-human-phase2-stability-check.swift`",
+        "`Scripts/QA/prd-stitch-ui/echo-digital-human-lifecycle-coordinator-check.swift`",
+        "`tmp/visual-qa/prd-stitch-ui/echo-digital-human-lifecycle-smoke/20260710-phase2-background-lease-final/`",
+        "`tmp/visual-qa/prd-stitch-ui/digital-human-runtime-stub-smoke/20260710-phase2-local-bundle-final/`"
+      ],
+      "body_path": "problems/P000/results/R004.md",
+      "created_at": "2026-07-10T06:31:26+00:00",
+      "done": [
+        "引入统一 lifecycle token，区分 session generation 与 interaction generation；角色切换、页面退出和过期后台 lease 会使旧 session 回调失效，停止/打断只使旧交互回调失效。",
+        "session、runtime state、语音能力、实时语音配置、复刻合成、Context Packet、PCM chunk/final、TextOver timeout 和延迟恢复均校验当前 token。",
+        "runtime 显式绑定 lifecycle generation；新 runtime 绑定前关闭旧 runtime，只有当前 generation 可以占用腾讯 audio owner 或驱动口型。",
+        "停止对话保留腾讯 session；页面退出无条件释放 runtime；后台进入 8 秒可取消宽限期，前台及时返回不重建 session，宽限到期才释放。",
+        "点击说话期间可中断 provider 播放并恢复聆听；PCM 失败保留恢复标记，旧 PCM 尾段和旧异步恢复不会进入新轮次。",
+        "腾讯配额错误立即回落普通 Echo，不参与自动重连，也不会继续保留上一角色音频。",
+        "runtime stub smoke 统一使用本机 QA Bundle ID `com.yxj.dreamjourney.app` 和 Team `2BTR77V3R8`，并保留私密 xcconfig 清空能力。",
+        "子结果：R000、R001、R002、R003。"
+      ],
+      "id": "R004",
+      "known_gaps": [
+        "按用户要求，本阶段未执行真机腾讯云渲染声音、真实口型、点击打断和麦克风恢复验收；这些仍是外部验收门，不视为本次非真机实现缺陷已被实测关闭。",
+        "全双工 VAD 打断仍不在本阶段范围，当前为稳定的点击打断。"
+      ],
+      "problem_id": "P000",
+      "root_id": "P000",
+      "summary": "已在不改变公开 UI、不调整后端合同且不执行真机验收的边界内，完成 Echo 数字人 lifecycle generation、后台 session 宽限释放、单 runtime/音频 owner、点击打断、PCM 尾段隔离、麦克风恢复和配额 fallback 的收敛。",
+      "ticket_id": "T000",
+      "verification": [
+        "`echo-digital-human-phase2-stability-check.swift`、Phase 1 stability、audio owner/stop semantics 与 lifecycle guard 均通过。",
+        "lifecycle coordinator 纯 Swift 状态测试通过。",
+        "lifecycle UIQA smoke 通过：后台 lease 调度、取消、到期释放、provider view 保留、前台不自动开麦均为 true。",
+        "runtime stub smoke 通过，并确认构建安装使用 `com.yxj.dreamjourney.app / 2BTR77V3R8`。",
+        "Tencent 非真机组合 gate 通过：runtime stub、PCM mock、全量静态 release regression、模拟器 Debug 构建和 `git diff --check` 均通过。",
+        "最终 release regression 报告：`tmp/visual-qa/prd-stitch-ui/release-regression/20260710-phase2-stability-final/report.md`。",
+        "最终组合 gate 报告：`tmp/visual-qa/prd-stitch-ui/tencent-digital-human-phase2-non-device-gate/20260710-phase2-stability-final-gate/report.md`。"
+      ]
+    }
+  },
+  "root_id": "P000",
+  "schema_version": 6,
+  "tickets": {
+    "T000": {
+      "acceptance_criteria": [
+        "角色切换后旧 session/capability/synthesis/PCM/resume 回调均无法生效。",
+        "任何时刻只存在一个当前 runtime 与一个显式 audio owner。",
+        "用户停止保留 session，页面退出释放 session。",
+        "后台宽限期内回前台取消释放，过期才关闭 runtime。",
+        "配额满直接普通 Echo fallback，不自动重连。",
+        "当前代际的点击打断和 provider 完成可以恢复麦克风，旧代际不能。",
+        "Phase 2 静态检查、模拟器 lifecycle smoke、组合 gate、构建和 diff check 通过。"
+      ],
+      "assumptions": [
+        "后端 session 与声音复刻合同保持不变。",
+        "现有停止不销毁 session 和 request/context guard 继续保留。",
+        "本阶段仅实现点击打断，不实现全双工 VAD。"
+      ],
+      "body_path": "problems/P000/tickets/T000.md",
+      "classification": "split",
+      "classification_reason": "任务包含独立的 generation 隔离、后台 lease、session/audio owner 与 fallback 回归三个可分别验收的高风险时序子问题，应拆分执行。",
+      "created_at": "2026-07-10T05:31:24+00:00",
+      "id": "T000",
+      "problem_definition": "Echo 已有多个局部 request/context guard，但角色切换、后台、页面退出、TTS 合成、PCM 定时发送和麦克风延迟恢复没有统一代际。短暂后台会立即关闭 session，配额错误仍会自动重试，容易产生旧角色回调、重复 session、错误 audio owner 或旧音频尾包。",
+      "problem_id": "P000",
+      "proposed_solution": "在现有 `DigitalHumanConversationCoordinator` 附近增加轻量生命周期协调器，集中维护 generation token、当前 context、session 绑定和后台释放 lease。Echo 每次角色切换、页面退出、终止失败或后台 lease 到期时推进代际；所有异步回调捕获 token 并在执行前校验。保留现有 request ID/context key 作为请求级细化保护。\n\n后台改为可取消宽限释放；用户停止只打断当前播放并保留 runtime；页面退出立即失效代际并关闭 runtime。配额错误不再进入自动恢复。点击打断、provider 完成、PCM chunk/final 和麦克风恢复全部增加代际检查。通过纯状态检查、静态 guard 和扩展模拟器 lifecycle smoke 验证。",
+      "result_ids": [
+        "R004"
+      ],
+      "risks": [
+        "过度失效 generation 可能让当前有效回调被丢弃，需要只在角色/页面/后台过期/终止失败边界推进。",
+        "后台宽限期过长会占用腾讯并发，过短则失去收益；首版采用固定短时常量并可通过 UIQA 覆盖。",
+        "不做真机测试，实际 AVAudioSession 和腾讯 SDK 时序仍保留外部验收风险。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "收敛 Echo 数字人异步代际与生命周期边界",
+      "updated_at": "2026-07-10T06:31:26+00:00",
+      "verification_plan": "先增加针对 coordinator 与 Echo 源码合同的失败检查；再扩展 lifecycle UIQA，覆盖 generation 前进、旧 token 拒绝、后台 lease 取消/过期、session 保留与 quota 不重试。最后运行现有 audio-owner/stop guard、数字人组合 gate、release QA package 和通用模拟器构建。"
+    },
+    "T001": {
+      "acceptance_criteria": [
+        "token 包含 generation/context 并可判定 stale。",
+        "角色切换、页面退出使旧 token 失效。",
+        "session、capability、realtime、synthesis、PCM、resume 关键路径均有 token guard。",
+        "现有正常流程与 QA smoke 不改变业务输出。"
+      ],
+      "assumptions": [
+        "不修改后端合同。",
+        "所有相关 UI 更新都在主线程执行。"
+      ],
+      "body_path": "problems/P000/children/P001/tickets/T001.md",
+      "classification": "one_go",
+      "classification_reason": "子问题已限定为一个轻量 coordinator 及其关键回调接入，可在同一实现中立即通过静态检查和构建验证。",
+      "created_at": "2026-07-10T05:32:34+00:00",
+      "id": "T001",
+      "problem_definition": "局部 request/context guard 无法覆盖 capability、realtime token、synthesis 和延迟恢复，旧角色或旧页面回调可能修改当前 Echo。",
+      "problem_id": "P001",
+      "proposed_solution": "在 `DigitalHumanConversationCoordinator.swift` 增加 `DigitalHumanLifecycleCoordinator` 和不可变 token。Echo 维护当前 context generation，在角色切换、页面退出和终止释放时推进；异步入口捕获 token，回调通过统一 helper 校验。PCM 保留 request/context 检查并叠加 token。",
+      "result_ids": [
+        "R000"
+      ],
+      "risks": [
+        "token 推进过于频繁会误丢有效回调。",
+        "旧 PCM 定时闭包数量较多，必须保留 requestID guard。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "用统一 token 保护 Echo 数字人异步工作",
+      "updated_at": "2026-07-10T05:44:43+00:00",
+      "verification_plan": "新增 Phase 2 静态 guard 检查 token API 与关键调用点；编译并运行 coordinator、现有 session/audio owner 检查和相关模拟器 smoke。"
+    },
+    "T002": {
+      "acceptance_criteria": [
+        "首次 context token 可用。",
+        "context 切换后旧 session 与 interaction token 均失效。",
+        "interaction 失效后旧 interaction token 失效，但同代 session token仍可用于 session 回调。",
+        "-页面级失效后旧 session token 失效。",
+        "-后台 release lease 可取消，且生命周期失效后不可继续生效。"
+      ],
+      "assumptions": [
+        "`DigitalHumanConversationCoordinator.swift` 保持只依赖 Foundation，可被独立编译。"
+      ],
+      "body_path": "problems/P000/children/P001/children/P004/tickets/T002.md",
+      "classification": "one_go",
+      "classification_reason": "单个独立 Swift 状态检查，改动范围小、无产品行为变化且可直接编译执行验证。",
+      "created_at": "2026-07-10T05:46:04+00:00",
+      "id": "T002",
+      "problem_definition": "现有 Phase 2 静态检查只能确认 token guard 已接入源码，不能直接证明协调器在 context 切换、交互失效与页面失效时的状态转换。",
+      "problem_id": "P004",
+      "proposed_solution": "新增一个带 `@main` 的 Swift 状态检查文件，与生产 `DigitalHumanConversationCoordinator.swift` 一起通过 `swiftc` 编译执行。断言 session generation、interaction generation、context 与后台 lease 的有效性变化。",
+      "result_ids": [
+        "R001"
+      ],
+      "risks": [
+        "检查只验证纯状态机，不替代 UIKit 生命周期和真实腾讯 SDK 行为验证。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "增加 lifecycle coordinator 可执行状态检查",
+      "updated_at": "2026-07-10T05:47:08+00:00",
+      "verification_plan": "使用 `swiftc` 同时编译生产协调器与 QA check，执行产物并要求退出码为 0；随后重跑 Phase 2 静态检查。"
+    },
+    "T003": {
+      "acceptance_criteria": [
+        "后台暂停不会立即移除 provider view。",
+        "宽限期内前台恢复取消 lease，不自动启动麦克风。",
+        "到期只在 lease/context/session token 仍有效时释放。",
+        "页面退出取消 lease 并立即释放。",
+        "lifecycle UIQA 可验证取消与到期两条路径。"
+      ],
+      "assumptions": [
+        "短暂切后台优先保留现有 session；超过宽限允许前台重新创建。"
+      ],
+      "body_path": "problems/P000/children/P002/tickets/T003.md",
+      "classification": "one_go",
+      "classification_reason": "单一 Echo 生命周期模块内的可取消 DispatchWorkItem 与现有 UIQA 扩展，边界清晰且无需后端或产品 UI 变更。",
+      "created_at": "2026-07-10T05:48:11+00:00",
+      "id": "T003",
+      "problem_definition": "Echo 进入后台会立即关闭腾讯 runtime，短暂切换应用导致反复建连；但无限保留又会长期占用并发配额。",
+      "problem_id": "P002",
+      "proposed_solution": "将立即释放改为带 generation/context 的 8 秒可取消 lease。前台恢复取消 lease 并保留 session，lease 到期才失效 lifecycle 并关闭 runtime。扩展 UIQA，分别验证前台取消和模拟到期释放。",
+      "result_ids": [
+        "R002"
+      ],
+      "risks": [
+        "iOS 可能在后台挂起主队列，实际释放时间可能晚于 8 秒，但不会早于宽限或跨 generation 误释放。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "后台 session 宽限释放与 UIQA 回归",
+      "updated_at": "2026-07-10T05:55:59+00:00",
+      "verification_plan": "运行生命周期纯状态检查、Phase 2 静态检查、模拟器 lifecycle UIQA smoke，并执行 iOS Simulator Debug 构建。"
+    },
+    "T004": {
+      "acceptance_criteria": [
+        "同一时刻只有一个 runtime，且其 generation 与当前 lifecycle 一致时才可拥有音频。",
+        "旧 runtime callback、复刻响应、PCM chunk/final 和延迟恢复不能作用于新角色。",
+        "用户停止/打断保留 session；页面退出和失败释放。",
+        "配额满立即回普通 Echo，不进入 recovery。",
+        "相关静态检查、组合 gate、模拟器构建与 diff check 通过。"
+      ],
+      "assumptions": [
+        "本阶段按用户要求暂停真机验证，真机只作为后续验收门。"
+      ],
+      "body_path": "problems/P000/children/P003/tickets/T004.md",
+      "classification": "one_go",
+      "classification_reason": "改动集中在现有 Echo runtime/owner 边界，失败语义与 guard 已有基础，剩余是显式 generation 绑定和组合回归，能够一次完成并独立验证。",
+      "created_at": "2026-07-10T05:57:34+00:00",
+      "id": "T004",
+      "problem_definition": "Echo 虽有单一 runtime 属性和 audio owner 日志，但 runtime 未显式绑定 lifecycle generation；配额、旧 PCM 尾段和延迟恢复需要统一证明不会影响新角色。",
+      "problem_id": "P003",
+      "proposed_solution": "为当前 runtime 记录 lifecycle generation，音频路由与 runtime 回调只接受当前代际。保留用户停止/点击打断的 session，页面退出和终止失败统一释放。配额失败明确排除自动重连。扩展 Phase 2 静态检查和既有 audio-owner guard，并运行数字人/复刻组合 gate。",
+      "result_ids": [
+        "R003"
+      ],
+      "risks": [
+        "非真机 gate 不能证明腾讯 SDK 的真实音频听感与口型同步。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "收敛 runtime 代际、音频 owner 与失败恢复",
+      "updated_at": "2026-07-10T06:17:57+00:00",
+      "verification_plan": "运行 Phase 1/Phase 2、audio-owner/stop、lifecycle coordinator guard；运行 digital-human/voice-clone 非真机组合 gate；执行 iOS Simulator Debug 构建和 `git diff --check`。"
+    }
+  },
+  "updated_at": "2026-07-10T06:32:12+00:00"
+}

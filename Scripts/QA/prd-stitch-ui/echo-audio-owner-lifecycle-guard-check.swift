@@ -71,8 +71,12 @@ require(!viewWillDisappearBody.contains("digitalHumanRuntime?.close()"), "page e
 require(!viewWillDisappearBody.contains("digitalHumanRuntime = nil"), "page exit must not nil runtime inline")
 
 let degradeBody = functionBody(named: "degradeTencentDigitalHumanRoute", in: echo)
-require(degradeBody.contains("releaseDigitalHumanRuntime(reason: \"routeFailure"), "provider failure should use unified release helper")
-require(degradeBody.contains("removeProviderViewMessage: \"数字人暂不可用\""), "provider failure should still remove failed provider view")
+require(
+    degradeBody.contains("releaseDigitalHumanRuntime(")
+        && degradeBody.contains("reason: \"routeFailure"),
+    "provider failure should use unified release helper"
+)
+require(degradeBody.contains("removeProviderViewMessage: message.panel"), "provider failure should still remove the selected fallback provider view")
 require(degradeBody.contains("resetsAudioOwnerToOrdinaryEcho: true"), "provider failure should reset audio owner to ordinary Echo")
 require(!degradeBody.contains("failedRuntime?.close()"), "provider failure must not close runtime inline")
 

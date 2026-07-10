@@ -42,3 +42,20 @@
 - A deleted slot is retired rather than automatically recycled, preventing a subsequent user from inheriting residual provider voice data.
 - Existing profiles whose logical ID is already an `S_` provider ID remain readable through a legacy compatibility path.
 - Synthesis must resolve and authorize a persisted profile before calling the provider; provider failures remain explicit and do not silently switch voices.
+
+## Task 7 Issues
+
+- Session and PCM work use request/context IDs, but capability, realtime-token, synthesis completion, and delayed microphone-resume callbacks do not share one lifecycle generation.
+- `didEnterBackground` releases the Tencent runtime immediately; there is no cancellable grace period for brief app switching.
+- Tencent quota exhaustion is included in the one-shot automatic recovery path even though the product requirement is an immediate ordinary-Echo fallback.
+- Existing stop/session/audio-owner behavior is mostly correct and should be strengthened rather than replaced.
+
+## Task 7 Resolution
+
+- A single lifecycle coordinator now separates session generation from interaction generation. Role/page/background expiry invalidates session work; stop and barge-in invalidate only the current interaction.
+- Every session/runtime/capability/voice synthesis/PCM/delayed-resume path touched by Phase 2 validates its captured token before changing current Echo state.
+- Runtime ownership is bound to lifecycle generation, duplicate runtime instances are closed before replacement, and page exit always releases the provider regardless of DialogEngine delegate ownership.
+- Background release uses an 8-second cancellable lease. Foreground cancellation preserves the provider view and never auto-starts the microphone; expiry releases the session.
+- Quota failures are terminal for the current provider attempt and fall back to ordinary Echo without retrying or retaining the prior role's audio.
+- PCM send failure clears the failed provider request while preserving the pending microphone-resume state.
+- Non-device evidence passed; real Tencent audio, rendered lip movement, AVAudioSession contention, tap interruption, and microphone recovery still require a later true-device pass.

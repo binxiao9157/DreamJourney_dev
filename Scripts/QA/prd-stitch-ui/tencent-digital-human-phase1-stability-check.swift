@@ -115,8 +115,9 @@ require(
     "user stop path must not close and nil out the digital-human runtime"
 )
 require(
-    viewDidAppear.contains("prepareCloudDigitalHumanRuntimeIfNeeded()"),
-    "Echo page appearance should create or restore the Tencent session"
+    viewDidAppear.contains("prepareCloudDigitalHumanRuntimeIfNeeded(lifecycleToken: lifecycleToken)")
+        && viewDidAppear.contains("captureDigitalHumanLifecycleToken(reason: \"viewDidAppear\")"),
+    "Echo page appearance should create or restore the Tencent session with a lifecycle token"
 )
 require(
     prepareRuntime.contains("digitalHumanRuntime == nil") &&
@@ -139,8 +140,9 @@ require(
     "Echo page exit should use the unified path that releases the Tencent session"
 )
 require(
-    fallbackRoute.contains("releaseDigitalHumanRuntime(reason: \"routeFailure:") &&
-        fallbackRoute.contains("removeProviderViewMessage: \"数字人暂不可用\"") &&
+    fallbackRoute.contains("releaseDigitalHumanRuntime(") &&
+        fallbackRoute.contains("reason: \"routeFailure:") &&
+        fallbackRoute.contains("removeProviderViewMessage: message.panel") &&
         fallbackRoute.contains("resetsAudioOwnerToOrdinaryEcho: true") &&
         releaseRuntime.contains("removeHostedProviderView(showFallbackMessage:") &&
         releaseRuntime.contains("DialogEngineManager.shared.setLocalTTSPlaybackEnabled(true)") &&

@@ -43,7 +43,12 @@ require(script.contains("$0 !~ /unavailable/"), "true-device script must not sel
 require(script.contains("$0 !~ /Devices Offline/"), "true-device script must not select xctrace offline devices")
 
 require(echo.contains("reason == \"pcmDriveSmokeStopProbe\""), "Echo should special-case QA stop probe resume")
-require(echo.contains("resumeVoiceCaptureAfterTencentProviderSpeech(reason: reason)"), "Echo stop probe should resume voice capture after interrupting provider playback")
+require(
+    echo.contains("resumeVoiceCaptureAfterTencentProviderSpeech(")
+        && echo.contains("reason: reason,")
+        && echo.contains("lifecycleToken: lifecycleToken"),
+    "Echo stop probe should resume voice capture with the current lifecycle token"
+)
 require(echo.contains("[TencentDigitalHuman][QA] PCM-drive stop probe fired"), "Echo should log stop probe with a QA marker")
 require(echo.contains("[TencentDigitalHuman][QA_RESULT]"), "Echo should emit structured true-device backend PCM-drive QA result")
 require(echo.contains("TencentBackendPCMDriveTrueDeviceTrace"), "Echo should keep a structured trace for backend PCM-drive true-device smoke")

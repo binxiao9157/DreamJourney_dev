@@ -15,8 +15,8 @@ func require(_ condition: @autoclosure () -> Bool, _ message: String) {
 }
 
 func functionBody(named functionName: String, in source: String) -> String {
-    let privateSignature = source.range(of: "private func \(functionName)")
-    let internalSignature = source.range(of: "func \(functionName)")
+    let privateSignature = source.range(of: "private func \(functionName)(")
+    let internalSignature = source.range(of: "func \(functionName)(")
     guard let signature = privateSignature ?? internalSignature else {
         require(false, "\(functionName) is missing")
         return ""
@@ -89,7 +89,12 @@ let routePolicyBody = functionBody(named: "applyEchoAudioRoutePolicy", in: echo)
 require(routePolicyBody.contains("tencentDigitalHumanAudioRouteReserved"), "Echo route policy must use the reserved Tencent audio owner state")
 require(routePolicyBody.contains("if !tencentDigitalHumanAudioRouteReserved"), "Echo route policy must not enable Fire/Volcengine local TTS while Tencent runtime is reserved")
 let providerSpeechFinishBody = functionBody(named: "resumeDialogEngineAfterTencentProviderSpeechIfNeeded", in: echo)
-require(providerSpeechFinishBody.contains("resumeVoiceCaptureAfterTencentProviderSpeech(reason: reason)"), "Tencent TextOver should hand off to the continuous-listening resume path")
+require(
+    providerSpeechFinishBody.contains("resumeVoiceCaptureAfterTencentProviderSpeech(")
+        && providerSpeechFinishBody.contains("reason: reason")
+        && providerSpeechFinishBody.contains("lifecycleToken: lifecycleToken"),
+    "Tencent TextOver should hand off to the generation-guarded continuous-listening resume path"
+)
 require(!providerSpeechFinishBody.contains("resetToIdle()"), "Tencent TextOver should not return Echo to idle while the user has not tapped stop")
 require(providerSpeechFinishBody.contains("resumed DialogEngine listening after provider speech"), "Tencent provider speech finish should log the continuous conversation decision")
 let providerSpeechResumeBody = functionBody(named: "resumeVoiceCaptureAfterTencentProviderSpeech", in: echo)
@@ -155,7 +160,12 @@ let echoInterruptBody = functionBody(named: "interruptDigitalHumanPlayback", in:
 require(echoInterruptBody.contains("interruptPlaybackIfNeeded(reason: reason)"), "Echo manual stop must use Tencent forced playback interrupt for post-TextOver tail audio")
 let echoUserBargeInBody = functionBody(named: "interruptDigitalHumanPlaybackForUserBargeIn", in: echo)
 require(echoUserBargeInBody.contains("interruptDigitalHumanPlayback(reason: \"userBargeIn\")"), "User barge-in must interrupt Tencent provider speech")
-require(echoUserBargeInBody.contains("resumeVoiceCaptureAfterTencentProviderSpeech(reason: \"userBargeIn\")"), "User barge-in must resume microphone capture after interrupting provider speech")
+require(
+    echoUserBargeInBody.contains("resumeVoiceCaptureAfterTencentProviderSpeech(")
+        && echoUserBargeInBody.contains("reason: \"userBargeIn\"")
+        && echoUserBargeInBody.contains("lifecycleToken: lifecycleToken"),
+    "User barge-in must resume microphone capture with the current lifecycle token"
+)
 require(echoUserBargeInBody.contains("asyncAfter(deadline: .now() + 0.45)"), "User barge-in should wait briefly for Tencent audio stop before reopening Fire/Volcengine capture")
 let pcmSignalBody = functionBody(named: "sendPCMDriveSignalToDigitalHumanRuntime", in: echo)
 require(!pcmSignalBody.contains("} catch {"), "PCM-drive scheduling must not keep an unreachable outer catch block")

@@ -4,9 +4,9 @@
 
 - **Goal:** 按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态
 - **Mode:** Review
-- **Phase:** Review complete
-- **Task:** docs/plans/task_06_p0-voice-clone-exclusive-slot-allocation.md
-- **Blockers:** server deployment/Postgres smoke and true-device acceptance remain external; the current three VolcEngine trial slots are QA capacity and cannot represent unrestricted production capacity
+- **Phase:** Phase 2 complete; paused before true-device acceptance
+- **Task:** docs/plans/task_07_p0-echo-digital-human-stability.md (done)
+- **Blockers:** no implementation blocker; true-device audio/lip-sync/interruption/microphone acceptance remains intentionally deferred
 
 ## Key Decisions
 
@@ -22,10 +22,11 @@
 - Profile IA contract exists: `我的` remains the third public tab and carries settings/account/legal/care entries; `长辈关怀` is Profile/Care content, not a tab rename.
 - Task 6 is complete: deterministic hash-based trial-slot selection was replaced with persistent exclusive assignment, legacy `S_` profiles remain readable, and app-facing `voiceProfileId` is separated from provider-facing speaker IDs.
 - Account purge retires owned provider slots; deleted voice data is never silently recycled to another user.
+- Task 7 is complete: Echo now has lifecycle/session and interaction generations, a cancellable background release lease, generation-bound runtime/audio ownership, deterministic tap interruption, guarded microphone recovery, stale PCM isolation, and immediate quota fallback. Ledger `L20260710-133057` is closed.
 
 ## Scope
 
-To be refined in docs/plans/task_N.md files.
+Phase 2 non-device implementation is closed. Do not continue into true-device validation or a new phase until explicitly resumed.
 
 ## Recovery
 
