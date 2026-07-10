@@ -28,6 +28,7 @@ func requireOrdered(_ content: String, _ first: String, _ second: String, _ mess
 
 let manager = read("DreamJourney/Sources/Services/KBLiteManager.swift")
 let coordinator = read("DreamJourney/Sources/Services/KnowledgeSyncCoordinator.swift")
+let threeWayMerge = read("DreamJourney/Sources/Services/KnowledgeThreeWayMerge.swift")
 let backend = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let dialogEngine = read("DreamJourney/Sources/Services/DialogEngineManager.swift")
 let echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
@@ -66,17 +67,31 @@ require(
 
 require(
     coordinator.contains("fetchKnowledgeChanges(") &&
+        coordinator.contains("mutateKnowledgeV2(") &&
         coordinator.contains("mutateKnowledge(") &&
         coordinator.contains("pushLegacySnapshot") &&
         coordinator.contains("BackendAuthSessionStore.shared.currentSession?.userId == userId") &&
         coordinator.contains("isRevisionConflict") &&
-        coordinator.contains("graphFingerprint") &&
-        coordinator.contains("pendingOperationId") &&
+        coordinator.contains("KnowledgeRemoteBaseStore") &&
+        coordinator.contains("KnowledgePendingMutationStore") &&
+        coordinator.contains("KnowledgeSyncGraphEngine.makeDelta") &&
+        coordinator.contains("KnowledgeMutationV2FallbackPolicy.shouldFallback") &&
         coordinator.contains("queue.sync") &&
         coordinator.contains("KBLiteManager.shared.loadedUserId == userId") &&
         coordinator.contains("applySyncedGraph") &&
         coordinator.contains("guard self.didApplyChanges"),
-    "sync coordinator should consume revision/change-feed, avoid unchanged writes, preserve retry idempotency, and retain legacy fallback"
+    "sync coordinator should consume revision/change-feed, persist a remote base, reuse pending V2 mutations, and retain legacy fallback"
+)
+
+require(
+    threeWayMerge.contains("static func bootstrap(") &&
+        threeWayMerge.contains("static func merge(") &&
+        threeWayMerge.contains("static func makeDelta(") &&
+        threeWayMerge.contains("local private entity") &&
+        threeWayMerge.contains("qaConflictSummary") &&
+        threeWayMerge.contains("KnowledgeRemoteBaseStore") &&
+        threeWayMerge.contains("KnowledgePendingMutationStore"),
+    "knowledge sync model should own bootstrap, three-way merge, tombstones, privacy protection, and per-user file persistence"
 )
 
 require(
@@ -88,6 +103,8 @@ require(
 require(
     backend.contains("var isKnowledgeSyncConfigured") &&
         backend.contains("func mutateKnowledge(") &&
+        backend.contains("func mutateKnowledgeV2(") &&
+        backend.contains("\"mutationSchemaVersion\": 2") &&
         backend.contains("func fetchKnowledgeChanges(") &&
         backend.contains("func extractKnowledge("),
     "backend client should expose unified knowledge contracts"
@@ -151,6 +168,7 @@ requireOrdered(
 
 require(
     project.contains("KnowledgeSyncCoordinator.swift in Sources") &&
+        project.contains("KnowledgeThreeWayMerge.swift in Sources") &&
         regression.contains("knowledge-pipeline-check.swift") &&
         regression.contains("RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE") &&
         releaseQA.contains("knowledge-pipeline-check.swift"),

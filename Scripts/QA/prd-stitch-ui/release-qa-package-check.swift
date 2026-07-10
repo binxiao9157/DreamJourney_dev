@@ -212,6 +212,9 @@ assertContains(releaseRegression, "RUN_DIGITAL_HUMAN_SESSION_LEASE_GATE", "relea
 assertContains(releaseRegression, "run-digital-human-session-lease-gate.sh", "release regression should call digital-human session lease gate")
 assertContains(releaseRegression, "RUN_P0_PROFILE_CARE_REGRESSION", "release regression should expose public MVP Profile care P0 gate")
 assertContains(releaseRegression, "RUN_P0_PROFILE_CARE_REGRESSION forces RUN_PROFILE_CARE_STATE_SMOKE and RUN_PROFILE_CARE_BACKEND_STATE_SMOKE", "Profile care P0 gate should force local and deployed backend care smokes")
+assertContains(releaseRegression, "RUN_KNOWLEDGE_V2_SYNC_GATE", "release regression should expose the knowledge V2 cross-repository gate")
+assertContains(releaseRegression, "run-knowledge-three-way-merge-model-smoke.sh", "release regression should always run the knowledge three-way merge model")
+assertContains(releaseRegression, "RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE=1", "knowledge V2 combo gate should force the deployed backend smoke")
 assertContains(releaseRegression, "BACKEND_API_TOKEN= BACKEND_BASE_URL= ./scripts/verify_backend.sh", "backend verify should not inherit deployed backend credentials")
 for handoffGuard in [
     "prd-full-feature-closure-decisions-check.swift",
@@ -265,6 +268,7 @@ for handoffGuard in [
     "tencent-voice-clone-echo-contract-check.swift",
     "context-packet-v1-check.swift",
     "knowledge-pipeline-check.swift",
+    "run-knowledge-three-way-merge-model-smoke.sh",
     "echo-context-v2-clue-panel-check.swift",
     "echo-trace-export-check.swift",
     "echo-runtime-diagnostics-check.swift",

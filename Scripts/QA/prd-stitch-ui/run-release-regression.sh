@@ -32,6 +32,7 @@ RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE="${RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE:-
 RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE="${RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE:-0}"
 RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE="${RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE:-0}"
 RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE="${RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE:-0}"
+RUN_KNOWLEDGE_V2_SYNC_GATE="${RUN_KNOWLEDGE_V2_SYNC_GATE:-0}"
 RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE="${RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE:-0}"
 RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE="${RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE:-0}"
 RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE="${RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE:-0}"
@@ -71,6 +72,11 @@ if [[ "$RUN_P0_PROFILE_CARE_REGRESSION" == "1" ]]; then
   # so public MVP care regression cannot accidentally run only half of the gate.
   RUN_PROFILE_CARE_STATE_SMOKE=1
   RUN_PROFILE_CARE_BACKEND_STATE_SMOKE=1
+fi
+if [[ "$RUN_KNOWLEDGE_V2_SYNC_GATE" == "1" ]]; then
+  # The local three-way merge model always runs. This switch adds the deployed
+  # Postgres V2 mutation/tombstone half to form one cross-repository gate.
+  RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE=1
 fi
 RELEASE_HANDOFF_MODE="${RELEASE_HANDOFF_MODE:-0}"
 if [[ "$RELEASE_HANDOFF_MODE" == "1" ]]; then
@@ -124,6 +130,7 @@ Run ID: \`$RUN_ID\`
 - Backend cross-account authorization shadow smoke: \`$RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE\`
 - Backend route ownership audit smoke: \`$RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE\`
 - Backend deployed knowledge pipeline smoke: \`$RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE\`
+- Knowledge V2 three-way/deployed combo gate: \`$RUN_KNOWLEDGE_V2_SYNC_GATE\`
 - Backend archive image-analysis smoke: \`$RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE\`
 - Backend hidden media sync smoke: \`$RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE\`
 - Backend time-letter lifecycle smoke: \`$RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE\`
@@ -291,6 +298,9 @@ run_step "Swift model guard archive-context-snapshot-check" "$STATIC_LOG_DIR/arc
 
 run_step "Swift model guard echo-digital-human-lifecycle-coordinator-check" "$STATIC_LOG_DIR/echo-digital-human-lifecycle-coordinator-check.log" \
   bash -lc "swiftc '$ROOT_DIR/DreamJourney/Sources/Modules/Echo/DigitalHumanConversationCoordinator.swift' '$SCRIPT_DIR/echo-digital-human-lifecycle-coordinator-check.swift' -o '$STATIC_LOG_DIR/echo-digital-human-lifecycle-coordinator-check' && '$STATIC_LOG_DIR/echo-digital-human-lifecycle-coordinator-check'"
+
+run_step "Swift model guard knowledge-three-way-merge" "$STATIC_LOG_DIR/knowledge-three-way-merge-model-smoke.log" \
+  "$SCRIPT_DIR/run-knowledge-three-way-merge-model-smoke.sh"
 
 for guard in \
   release-feature-matrix-check.swift \

@@ -2887,6 +2887,29 @@ final class DreamJourneyBackendClient {
         )
     }
 
+    func mutateKnowledgeV2(
+        userId: String,
+        upserts: [String: [[String: Any]]],
+        tombstones: [[String: Any]],
+        operationId: String,
+        baseRevision: Int,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        requestJSON(
+            path: "/kb/mutations",
+            method: .post,
+            payload: [
+                "userId": userId,
+                "operationId": operationId,
+                "baseRevision": baseRevision,
+                "mutationSchemaVersion": 2,
+                "upserts": upserts,
+                "tombstones": tombstones,
+            ],
+            completion: completion
+        )
+    }
+
     func fetchKnowledgeChanges(
         userId: String,
         sinceRevision: Int,
