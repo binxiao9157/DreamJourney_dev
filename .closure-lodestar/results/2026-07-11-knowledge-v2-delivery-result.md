@@ -1,0 +1,33 @@
+# 知识 V2 跨仓库 QA 与交付结果
+
+## Summary
+
+知识 V2 已形成可重复的本地模型、部署形态 HTTP smoke 与 release regression 组合门，并完成状态文档和两仓库独立提交。
+
+## Done
+
+- 部署态 knowledge smoke 从 v1 全量 mutation 升级为 v1 seed + v2 upsert/tombstone，覆盖幂等、change metadata、legacy no-op、Context 和 409。
+- release regression 新增 `RUN_KNOWLEDGE_V2_SYNC_GATE=1`；启用时强制部署后端 smoke，本地三方合并模型则始终运行。
+- release QA package 检查新增 runner 与组合开关防回退断言。
+- 新增 Task 13 状态文档，并修正统一知识管线文档中已过时的 v1/UserDefaults 描述。
+- 后端提交为 `3fc5b2d`、`816993b`；iOS 功能提交为 `e63a5ed`。
+
+## Verification
+
+- 后端 `verify_backend.sh`：195 项单测及全部 smoke 通过。
+- 部署形态脚本对本地 FastAPI 实际 HTTP 调用通过，结果包含 `mutationSchemaVersion=2` 与 `tombstoneVerified=true`。
+- `RUN_KNOWLEDGE_V2_SYNC_GATE=1` release regression 通过，报告位于 `tmp/visual-qa/prd-stitch-ui/release-regression/20260711-014817-release-regression/report.md`。
+- release QA package、docs path guard、两仓库 diff checks 通过。
+- generic Simulator 与 generic iPhoneOS Debug build 均使用 `2BTR77V3R8 / com.yxj.dreamjourney.app` 覆盖并成功。
+
+## Known Gaps
+
+- Task 13 后端提交尚未推送/部署，所以公网 Postgres V2 smoke 尚未运行。
+- XcodeBuildMCP 无法识别当前具体 iOS 26.5 simulator destination；generic simulator xcodebuild 成功。
+- 本轮按范围未跑真机、未改公开 UI。
+
+## Artifacts
+
+- `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/superpowers/status/2026-07-11-knowledge-tombstone-three-way-merge.md`
+- `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/scripts/QA/prd-stitch-ui/run-release-regression.sh`
+- `/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/scripts/backend-knowledge-deployed-smoke.py`

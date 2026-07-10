@@ -10,6 +10,9 @@
 - 后端实施前基线：`275a4c2`
 - 递归任务：`L20260710-231102-12`
 
+知识删除与三方合并的后续增量见：
+`docs/superpowers/status/2026-07-11-knowledge-tombstone-three-way-merge.md`。
+
 后端提交 `00df327 feat: add revisioned knowledge context pipeline` 已于 2026-07-11 部署到服务器。公网健康检查返回 `store=postgres`，线上 iOS 已具备使用新 revision/change-feed/generationContext 合同的后端条件。
 
 ## 已完成架构
@@ -47,7 +50,7 @@
   - 首次旧客户端同步可建立 revision 1；已有 revision 后，无 `baseRevision` 的旧请求返回安全 no-op，不覆盖较新的图谱。
   - 新客户端可传 `baseRevision`、`operationId`，冲突仍返回 409。
 
-Postgres knowledge mutation 使用请求独占连接、用户级 advisory transaction lock、snapshot row lock 和唯一 operation ID，避免并发请求共享事务或生成重复 revision；异常会在该请求连接内 rollback，完成后关闭连接。iOS 保存 revision、graph fingerprint 和 pending operation ID；响应丢失后会复用同一 operation ID。
+Postgres knowledge mutation 使用请求独占连接、用户级 advisory transaction lock、snapshot row lock 和唯一 operation ID，避免并发请求共享事务或生成重复 revision；异常会在该请求连接内 rollback，完成后关闭连接。Task 13 后，iOS 改为保存每用户远端 base 和完整 pending V2 payload；响应丢失后会复用同一 operation ID 与 tombstone 时间戳。
 
 兼容策略：
 
@@ -55,7 +58,7 @@ Postgres knowledge mutation 使用请求独占连接、用户级 advisory transa
 - 409 时先全量拉取 change feed，合并后只重试一次。
 - change feed 只应用最新完整快照，解析或用户校验失败时不会推进本地 revision。
 - 本机没有未同步修改时，最新远端快照只对可同步实体为权威值；`localOnly` 和旧版无授权元数据实体始终留在本机。本机有修改时按实体 ID 保留本机值并吸收远端新增项，再基于新 revision 提交。
-- 当前 v1 mutation 仍传完整图谱快照，change feed 是 revision 化快照流，不是实体级 patch。
+- v1 mutation 继续兼容完整图谱快照；v2 使用实体级 upsert/tombstone，change feed 同时保留每个 revision 的权威 graph 便于客户端恢复。
 
 ### 4. Context Packet 生成合同
 
@@ -132,6 +135,7 @@ iOS 静态与 release gate：
 ```bash
 cd /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift Scripts/QA/prd-stitch-ui/knowledge-pipeline-check.swift .
+Scripts/QA/prd-stitch-ui/run-knowledge-three-way-merge-model-smoke.sh
 swift Scripts/QA/prd-stitch-ui/context-packet-v1-check.swift .
 Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
@@ -153,10 +157,9 @@ Scripts/QA/prd-stitch-ui/run-release-regression.sh
 
 ### P1 冲突与删除语义
 
-- 当前远端合并已按实体 ID 处理字段更新；本地 dirty 时采用本机值优先并吸收远端新增项，尚未提供用户可见的字段级冲突选择。
-- clean client 可接受可同步实体的远端删除，同时保留 local-only 数据；本地与远端同时存在变更时，删除语义仍需实体 tombstone/三方基线才能无歧义合并。
-- 当前 change feed 为完整图谱快照，尚未实现实体级 upsert/delete tombstone。
-- `kb_changes` 需要后续分页、保留期限和 compaction 策略。
+- 实体级 tombstone、每用户三方基线和 local-wins 冲突证据已完成。
+- 尚未提供用户可见的字段级冲突选择或 CRDT；双方修改同一实体时仍以本地实体为准。
+- `kb_changes` 仍需要后续分页、保留期限和 compaction 策略。
 
 ### P1 Postgres 全局连接治理
 

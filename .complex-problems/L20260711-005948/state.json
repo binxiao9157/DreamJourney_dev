@@ -1,0 +1,584 @@
+{
+  "checks": {
+    "C000": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P001/checks/C000.md",
+      "created_at": "2026-07-10T17:20:19+00:00",
+      "criteria_map": [
+        "v2 类型、ID、scope、时间及空 mutation 校验：由 core service tests 与 v2 smoke 覆盖。",
+        "原子 revision、重复 operationId、stale base 409：由 InMemory/Postgres 测试覆盖。",
+        "nullable mutation metadata 与历史 v1 兼容：由 Postgres migration/query 和跨 schema replay 测试覆盖。",
+        "权威 graph、mutation 摘要和 change feed：由 API 测试及 v2 smoke 覆盖。",
+        "统一后端验证：全部通过。"
+      ],
+      "evidence": [
+        "`R000` 记录了 v2 合同、双存储实现、兼容策略和完整验证结果。",
+        "`./scripts/verify_backend.sh` 实际执行 195 项单测，并通过 FastAPI、v1 delta、v2 tombstone smoke。"
+      ],
+      "execution_map": [
+        "存储无关规则集中在 `knowledge_store.py`。",
+        "InMemory 和 Postgres 各自在持有写锁/事务后检查幂等与 revision，再应用 v2 delta。",
+        "路由保持 v1 graph 入口，并对 v2 返回 additive metadata。"
+      ],
+      "followup_problem_id": null,
+      "id": "C000",
+      "problem_id": "P001",
+      "residual_risk": [
+        "尚未部署并跑线上 Postgres smoke；该风险由后续交付问题 P003 处理，不影响 P001 代码合同判定。"
+      ],
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "验证同一 ID 跨实体类型不会误删。",
+        "验证 tombstone 与同 revision upsert 冲突时 upsert 胜出。",
+        "验证同 operationId 跨 v1/v2 重放仍返回首次持久化合同。",
+        "验证空 mutation、无时区删除时间与 `localOnly` 上行均被拒绝且不推进 revision。"
+      ],
+      "summary": "结果已满足 P001 的全部合同与验证标准；线上部署不属于该子问题的完成条件，不阻断本地实现闭环。"
+    },
+    "C001": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P002/checks/C001.md",
+      "created_at": "2026-07-10T17:42:03+00:00",
+      "criteria_map": [
+        "每用户基线与首次升级：文件 store + bootstrap/user isolation smoke 覆盖。",
+        "四类实体三方合并：纯模型按 type+id 执行，并覆盖单边修改、单边删除及双方冲突。",
+        "私有实体不上传/不误删：delta 和 remote deletion smoke 覆盖。",
+        "v2 与 v1 兼容：BackendClient、Coordinator 选择性 fallback 及策略测试覆盖。",
+        "QA 冲突隐私：摘要仅包含 count/type/id，并断言不含正文。"
+      ],
+      "evidence": [
+        "`R001` 列出实现文件、模型 smoke、静态 guard 与 generic Simulator build 证据。",
+        "主控重新运行三方合并 model smoke 与 `knowledge-pipeline-check.swift`，均通过。",
+        "主控逐分支审查 Coordinator 的首次升级、pending retry、409 refresh、权威响应和 fallback 条件。"
+      ],
+      "execution_map": [
+        "`KnowledgeThreeWayMerge.swift` 承担纯模型、基线/pending 文件和合同判定。",
+        "`KnowledgeSyncCoordinator.swift` 保留原用户 generation/revision 流程，并接入 v2 delta。",
+        "`DreamJourneyBackendClient.swift` 只新增 additive v2 方法，不改公开 UI。"
+      ],
+      "followup_problem_id": null,
+      "id": "C001",
+      "problem_id": "P002",
+      "residual_risk": [
+        "实体级 local-wins 会牺牲远端同实体字段级修改；这是本任务明确的 v1 策略，QA 冲突摘要可追踪。",
+        "跨仓库组合 gate 与线上 Postgres 验证属于 P003。"
+      ],
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "首次升级本地/远端同 ID 时不制造历史冲突且不误删远端独有项。",
+        "本地编辑对远端删除、以及本地删除对远端编辑均 local-wins，并产生冲突证据。",
+        "localOnly/无 metadata 与远端同 ID 冲突时仍留在本地。",
+        "400 一般 v2 校验错误不会被误判为旧后端而静默 fallback。"
+      ],
+      "summary": "R001 满足 P002 的每用户基线、三方合并、delta、隐私边界和 v1 fallback 标准；主控复核后补充的编辑/删除冲突测试也通过。"
+    },
+    "C002": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/checks/C002.md",
+      "created_at": "2026-07-10T17:55:03+00:00",
+      "criteria_map": [
+        "部署态 v2 合同：已由本地 FastAPI HTTP 进程和 deployed smoke 验证。",
+        "单开关组合 gate：`RUN_KNOWLEDGE_V2_SYNC_GATE` 强制部署 smoke，模型 smoke 始终执行。",
+        "防回退静态检查：release QA package 断言 runner、开关和后端强制逻辑。",
+        "文档与版本：Task 13 专项状态文档完成。",
+        "全量验证：195 后端测试、iOS generic build、diff checks 均通过。"
+      ],
+      "evidence": [
+        "release regression 报告证明全部静态 guard、iOS/后端 diff checks 与部署形态 V2 smoke 同次通过。",
+        "HTTP smoke 输出明确包含 `mutationSchemaVersion=2`、`tombstoneVerified=true`、幂等、Context 和冲突证据。",
+        "状态文档列出 iOS/后端提交、命令和未部署边界。"
+      ],
+      "execution_map": [
+        "后端 deployed smoke 负责持久化合同与 Context 结果。",
+        "iOS release regression 负责本地模型和跨仓库编排。",
+        "状态文档负责明确上线前命令及未部署状态。"
+      ],
+      "followup_problem_id": null,
+      "id": "C002",
+      "problem_id": "P003",
+      "residual_risk": [
+        "公网 Postgres 环境要在后端推送和部署后再运行同一开关；该外部状态不影响本地交付物完整性。",
+        "具体模拟器 destination 的 MCP 映射异常仍存在，但 generic iOS Simulator 编译成功。"
+      ],
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "stale v1 `/kb/sync` 不能恢复已 tombstone 的实体。",
+        "重放相同 v2 operationId 不推进 revision，mutation metadata 保持一致。",
+        "stale base 必须返回 409；一般 v2 校验错误不触发 iOS fallback。"
+      ],
+      "summary": "R002 满足 P003 的组合 gate、部署形态合同、文档和提交要求；公网部署明确不在本轮自动执行范围内。"
+    },
+    "C003": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/checks/C003.md",
+      "created_at": "2026-07-10T17:58:09+00:00",
+      "criteria_map": [
+        "InMemory/Postgres v2 原子应用、幂等、409：P001 覆盖。",
+        "change feed v1/v2 兼容与权威 graph：P001/P002 覆盖。",
+        "per-user base、三方合并、delta：P002 覆盖。",
+        "local-only/无授权实体保护：P002 模型与主控审查覆盖。",
+        "单边更新/删除、双方编辑/删除冲突、malformed feed、用户切换：模型与现有 generation guard 覆盖。",
+        "v1 smoke、release regression、generic iPhoneOS：P003 与最终构建覆盖。"
+      ],
+      "evidence": [
+        "P001/P002/P003 分别由 `C000`、`C001`、`C002` 判定成功。",
+        "后端 195 项测试、FastAPI、v1/v2 smoke 通过。",
+        "iOS 模型 smoke、静态/QA checks、release 组合 gate、generic Simulator 和 generic iPhoneOS build 通过。"
+      ],
+      "execution_map": [
+        "后端负责权威 revision、mutation 与变更历史。",
+        "iOS 负责本地/远端三方决策和稳定 pending 重试。",
+        "release gate 将纯模型与部署形态 HTTP 合同串联。"
+      ],
+      "followup_problem_id": null,
+      "id": "C003",
+      "problem_id": "P000",
+      "residual_risk": [
+        "未推送/部署，因此线上 Postgres gate 仍是上线前必跑项，不影响本轮本地实现完成判定。",
+        "字段级 CRDT、公开冲突 UI 和 change-feed compaction 留作后续独立规划。"
+      ],
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "编辑与删除双向冲突均确定性 local-wins，并留下不含正文的 QA evidence。",
+        "localOnly 与远端同 ID 时不会上传、误删或被覆盖。",
+        "stale v1 sync 不能恢复 tombstone，重复 v2 operation 不重复执行。",
+        "旧服务端只在明确合同不支持时 fallback，一般校验错误保持可见。"
+      ],
+      "summary": "R003 汇总的三个子闭环已全部通过独立检查，并满足根票对后端原子 delta、iOS 三方合并、隐私边界、兼容性和非真机验证的要求。"
+    }
+  },
+  "counters": {
+    "check": 4,
+    "event": 48,
+    "problem": 4,
+    "result": 4,
+    "ticket": 4
+  },
+  "created_at": "2026-07-10T16:59:48+00:00",
+  "effort": "medium",
+  "language": "zh",
+  "ledger_id": "L20260711-005948",
+  "problems": {
+    "P000": {
+      "body_path": "problems/P000/README.md",
+      "check_ids": [
+        "C003"
+      ],
+      "created_at": "2026-07-10T16:59:48+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Close the Lodestar task represented by `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/plans/task_13_p1-knowledge-tombstone-three-way-merge.md` using recursive problem, ticket, result, and check state.\n\nTask context:\n\n# P1 知识删除 Tombstone 与三方合并",
+      "followup_ids": [],
+      "id": "P000",
+      "package_path": "problems/P000",
+      "parent_id": null,
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P001",
+        "P002",
+        "P003"
+      ],
+      "success_criteria": [
+        "本地删除同步为 tombstone，其他客户端拉取后不会恢复该实体。",
+        "远端删除不会删除本机 local-only/旧无授权实体。",
+        "双方只改一侧时不丢更新；双方同改时行为确定且可在 QA trace 识别。",
+        "malformed change feed 不推进 revision，用户切换旧回调仍被隔离。",
+        "v1 与旧服务端降级合同继续通过现有 release regression。"
+      ],
+      "ticket_ids": [
+        "T000"
+      ],
+      "title": "P1 知识删除 Tombstone 与三方合并",
+      "updated_at": "2026-07-10T17:58:09+00:00"
+    },
+    "P001": {
+      "body_path": "problems/P000/children/P001/README.md",
+      "check_ids": [
+        "C000"
+      ],
+      "created_at": "2026-07-10T17:00:54+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "后端当前只接受完整 graph replacement，`kb_changes` 也只保存快照，无法表达实体删除或让其他客户端区分 upsert/tombstone。需要在保持 v1 合同、ownership 和 revision/operationId 语义不变的前提下增加 v2 delta。",
+      "followup_ids": [],
+      "id": "P001",
+      "package_path": "problems/P000/children/P001",
+      "parent_id": "P000",
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "`/kb/mutations` 接受固定的 v2 upserts/tombstones 合同并严格校验类型、ID、scope 和时间字段。",
+        "InMemory/Postgres 在同一 revision 事务内原子应用 delta，重复 operation 不重复执行，stale base 返回 409。",
+        "`kb_changes` 幂等迁移 nullable mutation metadata，历史 v1 记录和响应保持兼容。",
+        "v2 响应返回权威 graph 和 mutation 摘要；change feed 可回放删除。",
+        "后端单测、FastAPI smoke、v1 knowledge smoke 和新增 v2 smoke 通过。"
+      ],
+      "ticket_ids": [
+        "T001"
+      ],
+      "title": "后端知识 Mutation V2 与 Tombstone",
+      "updated_at": "2026-07-10T17:20:19+00:00"
+    },
+    "P002": {
+      "body_path": "problems/P000/children/P002/README.md",
+      "check_ids": [
+        "C001"
+      ],
+      "created_at": "2026-07-10T17:00:54+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "iOS 当前只保存 revision/fingerprint，收到远端快照后无法判断本地与远端各自相对哪个基线变化，因而不能可靠处理删除和同实体双改。需要按用户持久化 remote base，并用纯数据三方合并生成 v2 delta。",
+      "followup_ids": [],
+      "id": "P002",
+      "package_path": "problems/P000/children/P002",
+      "parent_id": "P000",
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "每用户 remote base 与 revision 独立持久化，用户切换和旧回调不能跨用户读取或写入。",
+        "base/local/remote 按类型和实体 ID 三方合并：单侧变化不丢失，双方同改确定性 local-wins 并输出 QA conflict summary。",
+        "local-only/旧无元数据实体始终留本机，不进入 upserts，也不受远端 tombstone 删除。",
+        "由 base/local 生成 upserts/tombstones；v2 成功后更新 base，旧后端可降级 v1。",
+        "纯模型/静态检查、模拟器或 generic build 通过，不改变公开 UI。"
+      ],
+      "ticket_ids": [
+        "T002"
+      ],
+      "title": "iOS 远端基线、三方合并与 Delta 生成",
+      "updated_at": "2026-07-10T17:42:03+00:00"
+    },
+    "P003": {
+      "body_path": "problems/P000/children/P003/README.md",
+      "check_ids": [
+        "C002"
+      ],
+      "created_at": "2026-07-10T17:00:54+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "后端和 iOS 分别实现后仍需一条可重复组合门证明删除不会复活、单侧更新不丢失、冲突可观察且 v1 fallback 不回归，并需要明确部署前后的版本边界。",
+      "followup_ids": [],
+      "id": "P003",
+      "package_path": "problems/P000/children/P003",
+      "parent_id": "P000",
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "新增 backend v2 smoke、iOS model/static gate 和可选 release regression 组合开关。",
+        "两客户端场景覆盖 upsert、tombstone、重复 operation、409、malformed feed、local-only 保留。",
+        "后端全量测试、iOS release regression、generic iPhoneOS build 与两仓库 diff check 通过。",
+        "状态/部署文档记录 schema、兼容路径、冲突策略、验证证据和未完成的分页/公开 UI。"
+      ],
+      "ticket_ids": [
+        "T003"
+      ],
+      "title": "知识 V2 跨仓库 QA 与交付收敛",
+      "updated_at": "2026-07-10T17:55:03+00:00"
+    }
+  },
+  "results": {
+    "R000": {
+      "artifacts": [
+        "`/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/app/services/knowledge_store.py`",
+        "`/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/scripts/backend-knowledge-v2-smoke.py`",
+        "`/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/scripts/run-backend-knowledge-v2-smoke.sh`"
+      ],
+      "body_path": "problems/P000/children/P001/results/R000.md",
+      "created_at": "2026-07-10T17:18:53+00:00",
+      "done": [
+        "`/kb/mutations` 新增 `mutationSchemaVersion=2` 增量合同，支持 `people`、`places`、`events`、`facts` 的按 ID upsert。",
+        "新增带时区 ISO-8601 `deletedAt` 的 tombstone，并确保相同 ID 在不同实体类型之间互不误删。",
+        "v2 upsert 强制要求同步许可隐私范围，拒绝 `localOnly`、缺失 metadata、未知类型、空 ID 和空 mutation。",
+        "保持 v1 全量 graph 合同兼容；重复 `operationId` 优先返回首次持久化的 schema 与 mutation，跨 schema 重放不改写历史。",
+        "InMemory 与 Postgres 存储均持久化 mutation schema/metadata，change feed 可回传 v2 变更摘要。",
+        "新增独立 v2 smoke 并接入后端统一验证脚本。"
+      ],
+      "id": "R000",
+      "known_gaps": [
+        "本轮未部署服务器，也未运行线上 Postgres smoke；该步骤留在跨仓库交付阶段执行。",
+        "本轮只提供知识图谱增量与删除合同，不引入向量数据库或公开 UI。"
+      ],
+      "problem_id": "P001",
+      "root_id": "P000",
+      "summary": "后端知识写入已从全量 graph 合同扩展为兼容 v1 的 Mutation V2，覆盖增量 upsert、tombstone、幂等重放和 Postgres 变更元数据。",
+      "ticket_id": "T001",
+      "verification": [
+        "`./scripts/verify_backend.sh`：195 项单测通过。",
+        "FastAPI smoke、知识库 v1 delta smoke、知识库 v2 tombstone smoke 均通过。",
+        "`py_compile`、部署文件检查和 `git diff --check` 均通过。"
+      ]
+    },
+    "R001": {
+      "artifacts": [
+        "`/Users/yxj/Documents/Codex/Video/DreamJourney_dev/DreamJourney/Sources/Services/KnowledgeThreeWayMerge.swift`",
+        "`/Users/yxj/Documents/Codex/Video/DreamJourney_dev/DreamJourney/Sources/Services/KnowledgeSyncCoordinator.swift`",
+        "`/Users/yxj/Documents/Codex/Video/DreamJourney_dev/Scripts/QA/prd-stitch-ui/knowledge-three-way-merge-model-smoke.swift`"
+      ],
+      "body_path": "problems/P000/children/P002/results/R001.md",
+      "created_at": "2026-07-10T17:41:29+00:00",
+      "done": [
+        "新增纯 Foundation 合并引擎，按实体类型和 ID 处理首次升级、单边修改、远端/本地删除及双方冲突；双方冲突确定性 local-wins。",
+        "`localOnly` 与缺失同步 metadata 的实体只留本地，不上传、不生成 tombstone，也不被远端缺失删除。",
+        "每用户远端 base 与 pending mutation 使用 Application Support 独立 JSON 文件持久化；重试复用 operationId、baseRevision、deletedAt 和 payload。",
+        "BackendClient 新增 v2 mutation 请求，Coordinator 消费权威 v2 graph/change metadata，并仅在明确旧合同错误时降级 v1。",
+        "新文件显式加入 Xcode target，局部知识管线 guard 已更新。"
+      ],
+      "id": "R001",
+      "known_gaps": [
+        "冲突策略是实体级 local-wins，不是字段级 CRDT；冲突只写 QA 类型/ID 摘要。",
+        "旧后端 v1 fallback 无法表达精确 tombstone，这是兼容路径的固有限制。",
+        "release 总 gate、部署态 v2 smoke 和状态文档由后续 P003 完成。"
+      ],
+      "problem_id": "P002",
+      "root_id": "P000",
+      "summary": "iOS 已从 UserDefaults revision/fingerprint 全量同步升级为每用户远端基线、Mutation V2 delta 与实体级三方合并，同时保留旧后端 v1 降级路径。",
+      "ticket_id": "T002",
+      "verification": [
+        "独立三方合并 model smoke 通过，覆盖首次升级、单边修改/删除、编辑与删除冲突、tombstone、私有实体保护、用户隔离和 fallback 判定。",
+        "`knowledge-pipeline-check.swift` 通过。",
+        "模型以 `swiftc -warnings-as-errors` 编译通过。",
+        "iOS Debug generic Simulator build 由执行 agent 验证为 `BUILD SUCCEEDED`。",
+        "P002 文件范围 `git diff --check` 通过。"
+      ]
+    },
+    "R002": {
+      "artifacts": [
+        "`/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/superpowers/status/2026-07-11-knowledge-tombstone-three-way-merge.md`",
+        "`/Users/yxj/Documents/Codex/Video/DreamJourney_dev/scripts/QA/prd-stitch-ui/run-release-regression.sh`",
+        "`/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/scripts/backend-knowledge-deployed-smoke.py`"
+      ],
+      "body_path": "problems/P000/children/P003/results/R002.md",
+      "created_at": "2026-07-10T17:54:26+00:00",
+      "done": [
+        "部署态 knowledge smoke 从 v1 全量 mutation 升级为 v1 seed + v2 upsert/tombstone，覆盖幂等、change metadata、legacy no-op、Context 和 409。",
+        "release regression 新增 `RUN_KNOWLEDGE_V2_SYNC_GATE=1`；启用时强制部署后端 smoke，本地三方合并模型则始终运行。",
+        "release QA package 检查新增 runner 与组合开关防回退断言。",
+        "新增 Task 13 状态文档，并修正统一知识管线文档中已过时的 v1/UserDefaults 描述。",
+        "后端提交为 `3fc5b2d`、`816993b`；iOS 功能提交为 `e63a5ed`。"
+      ],
+      "id": "R002",
+      "known_gaps": [
+        "Task 13 后端提交尚未推送/部署，所以公网 Postgres V2 smoke 尚未运行。",
+        "XcodeBuildMCP 无法识别当前具体 iOS 26.5 simulator destination；generic simulator xcodebuild 成功。",
+        "本轮按范围未跑真机、未改公开 UI。"
+      ],
+      "problem_id": "P003",
+      "root_id": "P000",
+      "summary": "知识 V2 已形成可重复的本地模型、部署形态 HTTP smoke 与 release regression 组合门，并完成状态文档和两仓库独立提交。",
+      "ticket_id": "T003",
+      "verification": [
+        "后端 `verify_backend.sh`：195 项单测及全部 smoke 通过。",
+        "部署形态脚本对本地 FastAPI 实际 HTTP 调用通过，结果包含 `mutationSchemaVersion=2` 与 `tombstoneVerified=true`。",
+        "`RUN_KNOWLEDGE_V2_SYNC_GATE=1` release regression 通过，报告位于 `tmp/visual-qa/prd-stitch-ui/release-regression/20260711-014817-release-regression/report.md`。",
+        "release QA package、docs path guard、两仓库 diff checks 通过。",
+        "generic Simulator Debug build 使用 `2BTR77V3R8 / com.yxj.dreamjourney.app` 覆盖并成功。"
+      ]
+    },
+    "R003": {
+      "artifacts": [
+        "R000：后端 Mutation V2 结果。",
+        "R001：iOS 三方合并结果。",
+        "R002：跨仓库 QA 与交付结果。",
+        "`/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/superpowers/status/2026-07-11-knowledge-tombstone-three-way-merge.md`"
+      ],
+      "body_path": "problems/P000/results/R003.md",
+      "created_at": "2026-07-10T17:55:59+00:00",
+      "done": [
+        "P001：后端四类实体 upsert/tombstone、Postgres metadata、revision/operationId 幂等与 v1 兼容完成。",
+        "P002：iOS per-user base、pending payload、三方合并、local-only 保护、v2 delta 与选择性 v1 fallback 完成。",
+        "P003：部署形态 V2 smoke、release 组合 gate、状态文档和两仓库独立提交完成。"
+      ],
+      "id": "R003",
+      "known_gaps": [
+        "提交尚未推送和部署，公网 Postgres V2 smoke 待部署后执行。",
+        "冲突为实体级 local-wins，未实现字段级 CRDT 或公开冲突 UI。",
+        "change feed 分页、保留周期和 compaction 未纳入本轮。"
+      ],
+      "problem_id": "P000",
+      "root_id": "P000",
+      "summary": "P1 已从后端 Mutation V2、iOS 每用户三方合并到跨仓库 release gate 完整闭环，同时保持 v1 客户端/旧后端兼容。",
+      "ticket_id": "T000",
+      "verification": [
+        "子结果 `R000`、`R001`、`R002` 均通过独立 success check。",
+        "后端 195 项单测及所有本地 smoke 通过。",
+        "iOS 模型/静态/release QA、跨仓库组合 gate 与 generic Simulator build 通过。",
+        "两仓库 `git diff --check` 通过。"
+      ]
+    }
+  },
+  "root_id": "P000",
+  "schema_version": 6,
+  "tickets": {
+    "T000": {
+      "acceptance_criteria": [
+        "v2 upsert/tombstone 在 InMemory 和 Postgres 中原子应用，operationId 幂等、baseRevision 409 不回归。",
+        "change feed 兼容返回权威 graph 和可选 mutation metadata，历史 v1 change 仍可读取。",
+        "iOS 持久化 per-user remote base，以 base/local/remote 按 ID 三方合并并生成下一次 delta。",
+        "local-only/无授权实体不上传且不被远端 tombstone 删除。",
+        "单侧更新、单侧删除、双方同改、malformed feed、用户切换均有非真机检查或测试。",
+        "原有 v1 smoke、release regression、模拟器与 generic iPhoneOS build 继续通过。"
+      ],
+      "assumptions": [
+        "服务端继续保存权威完整 graph，v2 delta 只改变 mutation 输入和 change metadata，不引入新数据库。",
+        "实体 ID 在所属类型内稳定且非空。",
+        "当前 P1 只做数据合同和 QA，不开放用户可见冲突处理界面。"
+      ],
+      "body_path": "problems/P000/tickets/T000.md",
+      "classification": "split",
+      "classification_reason": "任务跨后端数据库事务、API兼容、iOS持久化与三方合并、跨仓库验证四类边界，写集可分离且风险不同，适合拆成后端、iOS、交付三个子问题并行收敛。",
+      "created_at": "2026-07-10T17:00:14+00:00",
+      "id": "T000",
+      "problem_definition": "现有 revision/change-feed 能防止整图静默覆盖，但无法表达实体删除；当本机和远端同时改变时，客户端只能整体 local-wins，删除可能被恢复、单侧更新也可能被覆盖。需要在不破坏 v1 客户端和当前 Echo 主链路的前提下，建立实体级 delta 与稳定三方合并。",
+      "problem_id": "P000",
+      "proposed_solution": "将实施拆成三个相互独立的闭环：后端扩展 `POST /kb/mutations` v2 upserts/tombstones，并在 change feed 持久化 mutation metadata；iOS 增加每用户 remote base、纯数据三方合并和 v2 delta 生成，并保留旧后端 fallback；最后由主控增加跨仓库 smoke/release gate、状态文档和部署说明。公开 UI、向量检索和真机流程不变。",
+      "result_ids": [
+        "R003"
+      ],
+      "risks": [
+        "三方合并若把 local-only 混入 remote base 会造成隐私或误删，必须使用 scope 过滤并按用户分文件。",
+        "mutation metadata 是新增 nullable 字段，数据库迁移必须幂等且历史行可读。",
+        "双方同时修改同一实体暂采用 local-wins，只能作为确定性策略并留 QA conflict trace，不能宣称自动解决业务冲突。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "知识 Mutation V2 与三方合并实施票",
+      "updated_at": "2026-07-10T17:55:59+00:00",
+      "verification_plan": "后端运行全量 unittest、FastAPI/delta/v2 smoke 和 diff check；iOS运行专用 Swift model/static gate、现有 knowledge pipeline gate、release regression 和 generic iPhoneOS build；用本地 FastAPI 模拟两个客户端执行 A 更新、B 删除、重复 operation 和 stale revision。线上部署不在本票执行范围。"
+    },
+    "T001": {
+      "acceptance_criteria": [
+        "upserts/tombstones 校验和原子应用符合 Task 13 固定合同。",
+        "idempotency、409、历史 nullable mutation、ownership 与 v1 返回不回归。",
+        "Postgres 迁移幂等且事务连接始终 commit/rollback/close。",
+        "全量后端测试、v1/v2 smoke、py_compile 和 diff check 通过。"
+      ],
+      "assumptions": [
+        "server snapshot 仍是每个 revision 的权威完整图谱。",
+        "v2 change metadata 仅用于同步/审计，不进入 Context generation 文本。"
+      ],
+      "body_path": "problems/P000/children/P001/tickets/T001.md",
+      "classification": "one_go",
+      "classification_reason": "后端范围已由固定 JSON 合同、明确 store/API 文件和可重复单测/smoke 限定，可由单个 worker 在独立仓库内一次实现并验证。",
+      "created_at": "2026-07-10T17:01:17+00:00",
+      "id": "T001",
+      "problem_definition": "在已部署的 v1 revision/full-graph mutation 上增加实体级 upserts/tombstones，同时保证历史数据、旧客户端、ownership、幂等和 Postgres 并发事务不回归。",
+      "problem_id": "P001",
+      "proposed_solution": "新增纯函数合同模块负责 v2 校验与 delta 应用；store 增加 `apply_kb_delta_mutation`，复用请求独占事务和 revision lock；`kb_changes` 增加 nullable mutation JSONB，InMemory 使用同结构；路由按 `mutationSchemaVersion=2` 分发并返回权威 graph。新增 v2 API/store/Postgres 测试与独立 smoke，v1 路径保持原样。",
+      "result_ids": [
+        "R000"
+      ],
+      "risks": [
+        "partial upsert 不能通过局部 privacy 过滤破坏指向已有实体的关联 ID，应在应用到当前 graph 后统一过滤并验证 upsert ID 仍存在。",
+        "tombstone 类型或 ID 未严格限制会产生跨类型误删。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "后端知识 Mutation V2 实施票",
+      "updated_at": "2026-07-10T17:18:53+00:00",
+      "verification_plan": "先补 InMemory/API/Postgres fake-connection 失败测试，再实现；运行目标测试、`scripts/verify_backend.sh` 和新增本地 FastAPI v2 smoke。"
+    },
+    "T002": {
+      "acceptance_criteria": [
+        "每用户基线落盘，不跨用户复用；首次升级能建立基线而不把远端实体误判为删除。",
+        "四类实体按类型+ID 三方合并，覆盖本地单改、远端单改、双方改、双方删和远端删。",
+        "仅同步许可实体进入 v2 delta；本地私有实体不上传，也不因远端缺失被删除。",
+        "客户端支持 v2 request/response/change metadata，并在旧后端拒绝 v2 时兼容回退 v1。",
+        "冲突日志不包含知识正文，只记录计数、实体类型和 ID。"
+      ],
+      "assumptions": [
+        "远端 v2 mutation 返回权威 graph 和 revision。",
+        "可同步 scope 继续沿用现有 `generationAllowed` 与 `familyCircle` 合同。",
+        "本轮不改公开 UI，不引入向量数据库或设备依赖。"
+      ],
+      "body_path": "problems/P000/children/P002/tickets/T002.md",
+      "classification": "one_go",
+      "classification_reason": "合同、纯合并引擎、客户端接入和验证均集中在现有 iOS 知识同步边界内，可由单一负责者一次实现并以独立模型 smoke 与构建完整验收；拆分会增加同文件协调成本。",
+      "created_at": "2026-07-10T17:21:03+00:00",
+      "id": "T002",
+      "problem_definition": "iOS 当前以本地 graph 全量覆盖远端，无法区分本地修改、远端修改和远端删除；多设备同步可能覆盖另一端数据，`localOnly` 内容也缺少明确的三方合并保护。",
+      "problem_id": "P002",
+      "proposed_solution": "新增纯 Foundation 的知识同步引擎，为每个用户持久化最近一次同步的远端 revision 与 graph 基线。按实体类型和 ID 比较 base/local/remote：单边变化保留，双方变化采用明确的 local-wins 策略并产生仅含类型/ID 的 QA 冲突摘要。由 base 到当前本地 graph 生成 v2 upsert/tombstone，调用新后端合同；当服务端不支持 v2 时回退现有 v1 全量同步。`localOnly` 或缺失同步 metadata 的实体始终只留在本地。",
+      "result_ids": [
+        "R001"
+      ],
+      "risks": [
+        "当前策略为确定性的 local-wins，不等同于字段级 CRDT；冲突摘要必须保留，便于后续产品化升级。",
+        "老后端 fallback 只能保持既有全量同步语义，不能获得 tombstone 精度。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "iOS 知识三方合并与 Delta 同步",
+      "updated_at": "2026-07-10T17:41:29+00:00",
+      "verification_plan": "- 新增独立 Swift model smoke，覆盖基线升级、三方冲突、tombstone、隐私过滤、v1 fallback 判定和用户隔离。\n- 运行相关静态检查、`git diff --check` 与 iOS Simulator/Generic build。\n- 将 model smoke 接入 release QA 的可选 gate。"
+    },
+    "T003": {
+      "acceptance_criteria": [
+        "部署态 smoke 验证 tombstone 删除、同类型 upsert、v2 metadata、幂等和 stale revision。",
+        "release regression 可通过一个明确开关运行知识 V2 组合 gate，默认不要求外部后端环境。",
+        "release QA package 静态检查能发现模型 runner 或文档接入被移除。",
+        "文档准确列出两仓库提交、验证命令、部署要求和剩余风险。",
+        "两仓库工作树通过 `git diff --check`，后端全量验证和 iOS 构建通过。"
+      ],
+      "assumptions": [
+        "本轮允许提交本地两仓库，但未明确要求前不推送、不部署。",
+        "不做真机、公开 UI 或向量数据库改动。"
+      ],
+      "body_path": "problems/P000/children/P003/tickets/T003.md",
+      "classification": "one_go",
+      "classification_reason": "修改集中在现有 deployed smoke、release regression 和状态文档，合同已由 P001/P002 固定，风险低且可由一组可重复命令完整验证。",
+      "created_at": "2026-07-10T17:42:52+00:00",
+      "id": "T003",
+      "problem_definition": "后端 Mutation V2 与 iOS 三方合并已分别实现，但 release regression 尚未形成一个可重复的跨仓库门，现有状态文档也仍描述 v1 全量 graph 语义，后续维护者容易漏跑 tombstone 与冲突验证。",
+      "problem_id": "P003",
+      "proposed_solution": "扩展部署态 knowledge smoke，使其在真实后端依次验证 v1 seed、v2 upsert/tombstone、幂等、change metadata、409 与 Context 结果。将 iOS 三方合并 model smoke 纳入 release QA，并提供单一环境开关串起本地模型与部署后端检查。更新 Task 13 和统一知识管线状态文档，明确 v2 合同、运行命令、未部署状态及兼容边界。",
+      "result_ids": [
+        "R002"
+      ],
+      "risks": [
+        "未部署 Task 13 后端前，公网环境无法通过 v2 deployed smoke；脚本必须默认关闭且给出明确配置错误。",
+        "QA 脚本不得输出 access token 或知识正文。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "知识 V2 跨仓库 QA 与交付收敛",
+      "updated_at": "2026-07-10T17:54:26+00:00",
+      "verification_plan": "- 运行后端 `verify_backend.sh` 与本地/部署等价 v2 smoke。\n- 运行 iOS knowledge model、knowledge pipeline、release package checks。\n- 运行 release regression 的知识 V2 组合开关（使用本地 FastAPI 或明确记录未部署线上验证）。\n- 运行 iOS generic Simulator build。"
+    }
+  },
+  "updated_at": "2026-07-10T17:58:09+00:00"
+}

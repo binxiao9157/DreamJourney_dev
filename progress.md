@@ -384,7 +384,6 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `none`
 - Counts: 3/3 problems done, 0 blocked, 3/3 tickets done
 - Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
-
 ## Task 8 Implementation Checkpoint - 2026-07-10T15:21:03+08:00
 
 - Completed backend digital-human lease persistence, reuse, heartbeat, release, TTL, capacity arbitration, and credential-redaction boundaries.
@@ -501,7 +500,6 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `record-result`
 - Counts: 1/4 problems done, 0 blocked, 1/3 tickets done
 - Next instruction: Only perform `record-result` for ticket `T002`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
-
 ## Recursive Closure Checkpoint - 2026-07-10T17:23:01+08:00
 
 - Ledger: `L20260710-165434`
@@ -653,3 +651,66 @@ Update this file after every recursive state-changing command bundle and before 
 - 后端 188 项测试与本地部署态 knowledge smoke 通过。
 - 最终 release regression 通过：`tmp/visual-qa/prd-stitch-ui/release-regression/20260711-004701-release-regression/report.md`。
 - 后端 `00df327` 已推送并部署；公网 Postgres knowledge smoke 通过 revision、幂等、change feed、generation、409 与 legacy no-op 验收。
+
+## Recursive Closure Checkpoint - 2026-07-11T01:00:14+08:00
+
+- Ledger: `L20260711-005948`
+- Lodestar task: `docs/plans/task_13_p1-knowledge-tombstone-three-way-merge.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 0/1 problems done, 0 blocked, 0/1 tickets done
+- Next instruction: Only perform `classify-ticket` for `T000` on `P000: P1 知识删除 Tombstone 与三方合并`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. Aft...
+
+## Recursive Closure Checkpoint - 2026-07-11T01:00:24+08:00
+
+- Ledger: `L20260711-005948`
+- Lodestar task: `docs/plans/task_13_p1-knowledge-tombstone-three-way-merge.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 0/1 problems done, 0 blocked, 0/1 tickets done
+- Next instruction: Only perform `split-ticket` for `T000` on `P000: P1 知识删除 Tombstone 与三方合并`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flag...
+
+## Recursive Closure Checkpoint - 2026-07-11T01:00:54+08:00
+
+- Ledger: `L20260711-005948`
+- Lodestar task: `docs/plans/task_13_p1-knowledge-tombstone-three-way-merge.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 0/4 problems done, 0 blocked, 0/1 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P001: 后端知识 Mutation V2 与 Tombstone`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names st...
+
+## Recursive Closure Checkpoint - 2026-07-11T01:01:25+08:00
+
+- Ledger: `L20260711-005948`
+- Lodestar task: `docs/plans/task_13_p1-knowledge-tombstone-three-way-merge.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 0/4 problems done, 0 blocked, 0/2 tickets done
+- Next instruction: Only perform `execute-ticket` for `T001` on `P001: 后端知识 Mutation V2 与 Tombstone`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/exe...
+
+## Recursive Closure Checkpoint - 2026-07-11T01:01:33+08:00
+
+- Ledger: `L20260711-005948`
+- Lodestar task: `docs/plans/task_13_p1-knowledge-tombstone-three-way-merge.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 0/4 problems done, 0 blocked, 0/2 tickets done
+- Next instruction: Only perform `record-result` for ticket `T001`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-11T01:24:24+08:00
+
+- Ledger: `L20260711-005948`
+- Lodestar task: `docs/plans/task_13_p1-knowledge-tombstone-three-way-merge.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 1/4 problems done, 0 blocked, 1/3 tickets done
+- Next instruction: Only perform `record-result` for ticket `T002`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-11T01:59:16+08:00
+
+- Ledger: `L20260711-005948`
+- Lodestar task: `docs/plans/task_13_p1-knowledge-tombstone-three-way-merge.md`
+- Root: `P000` / done
+- Next action: `none`
+- Counts: 4/4 problems done, 0 blocked, 4/4 tickets done
+- Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.

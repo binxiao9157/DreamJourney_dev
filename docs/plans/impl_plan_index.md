@@ -25,6 +25,7 @@
 | 10 | done | P0 cross-account authorization policy shadow | `docs/plans/task_10_p0-cross-account-authorization-policy-shadow.md` | `L20260710-193743` |
 | 11 | done | P0 full-route ownership audit and principal binding | `docs/plans/task_11_p0-full-route-ownership-audit.md` | `L20260710-222422` |
 | 12 | done | P0 unified knowledge pipeline | `docs/plans/task_12_p0-unified-knowledge-pipeline.md` | `L20260710-231102-12` |
+| 13 | done | P1 knowledge tombstone and three-way merge | `docs/plans/task_13_p1-knowledge-tombstone-three-way-merge.md` | `L20260711-005948` |
 
 ## File Structure
 
