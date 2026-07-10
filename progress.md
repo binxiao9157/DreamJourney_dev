@@ -121,6 +121,19 @@ Update this file after every recursive state-changing command bundle and before 
 2. After each recursive state change, run `sync_recursive_to_lodestar.py`.
 3. If all mapped ledgers report `next_action=none`, run Lodestar Review before final delivery.
 
+## 2026-07-11 Task 15 Started
+
+- Entered Phase 10: P1 knowledge mutation proposal and persona ownership.
+- Frozen additive `/kb/extract` proposal contract, deterministic identity rules, legacy compatibility and family-persona read boundary.
+- Next: initialize the Task 15 recursive ledger, implement backend and iOS slices, then run the non-device release/build gates.
+
+## 2026-07-11 Task 15 Completed
+
+- Closed ledger `L20260711-030653-15`: 7/7 problems, 7/7 tickets and 7/7 checks complete.
+- Backend mutation proposal, Context persona policy, iOS identity-bound merge and cross-repository QA are complete.
+- Backend verify passed 213 tests; release regression `20260711-knowledge-proposal-persona-final3` and generic iPhoneOS build `20260711-knowledge-proposal-persona-final` passed.
+- No true-device test, deployment or push was performed.
+
 ## Implementation Checkpoint - 2026-06-18T19:36:34+0800
 
 - Task: close the public profile metadata backend contract.
@@ -801,3 +814,234 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `none`
 - Counts: 5/5 problems done, 0 blocked, 5/5 tickets done
 - Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+
+## Closure Lodestar Recovery - 2026-07-11T03:05:44+08:00
+
+- Goal: 按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态
+- Mode: Review
+- Phase: Phase 9 product knowledge architecture and evidence integrity complete
+- Task: `docs/plans/task_14_p0-knowledge-evidence-and-context-isolation.md`
+- Blockers: none for non-device implementation
+
+### docs/plans/task_01_prd-gap-map-and-priority-ledger.md
+- Ledger: `.complex-problems/L20260618-000157-01`
+- Root: PRD gap map and priority ledger
+- Next action: `none`
+- Problems: 2/2 done, 0 blocked
+- Validate: ok
+
+### docs/plans/task_02_p0-persona-scoped-archive-and-echo-context.md
+- Ledger: `.complex-problems/L20260618-000157-02`
+- Root: P0 persona-scoped archive and echo context
+- Next action: `none`
+- Problems: 1/1 done, 0 blocked
+- Validate: ok
+
+### docs/plans/task_03_p0-real-device-and-backend-acceptance-readiness.md
+- Ledger: `.complex-problems/L20260618-000157-03`
+- Root: P0 real-device and backend acceptance readiness
+- Next action: `none`
+- Problems: 1/1 done, 0 blocked
+- Validate: ok
+
+### docs/plans/task_04_p1-profile-family-and-safety-flows.md
+- Ledger: `.complex-problems/L20260618-000157-04`
+- Root: P1 profile family and safety flows
+- Next action: `none`
+- Problems: 2/2 done, 0 blocked
+- Validate: ok
+
+### docs/plans/task_05_review-and-release-qa.md
+- Ledger: `.complex-problems/L20260618-000157-05`
+- Root: Review and release QA
+- Next action: `none`
+- Problems: 1/1 done, 0 blocked
+- Validate: ok
+
+### docs/plans/task_06_p0-voice-clone-exclusive-slot-allocation.md
+- Ledger: `.complex-problems/L20260710-115209`
+- Root: P0 voice clone exclusive slot allocation
+- Next action: `none`
+- Problems: 4/4 done, 0 blocked
+- Validate: ok
+
+### docs/plans/task_07_p0-echo-digital-human-stability.md
+- Ledger: `.complex-problems/L20260710-133057`
+- Root: P0 Echo digital-human stability
+- Next action: `none`
+- Problems: 5/5 done, 0 blocked
+- Validate: ok
+
+### docs/plans/task_08_p0-digital-human-session-lease.md
+- Ledger: `.complex-problems/L20260710-145321`
+- Root: P0 Digital-human session lease and concurrency control
+- Next action: `none`
+- Problems: 3/3 done, 0 blocked
+- Validate: ok
+
+### docs/plans/task_09_p0-auth-session-ownership-shadow.md
+- Ledger: `.complex-problems/L20260710-165434`
+- Root: P0 Auth Session and Ownership Shadow Mode
+- Next action: `none`
+- Problems: 4/4 done, 0 blocked
+- Validate: ok
+
+### docs/plans/task_10_p0-cross-account-authorization-policy-shadow.md
+- Ledger: `.complex-problems/L20260710-193743`
+- Root: P0 跨账号授权策略与 Shadow 证据
+- Next action: `none`
+- Problems: 4/4 done, 0 blocked
+- Validate: ok
+
+### docs/plans/task_11_p0-full-route-ownership-audit.md
+- Ledger: `.complex-problems/L20260710-222422`
+- Root: P0 全路由 Ownership 审计与 Principal 绑定
+- Next action: `none`
+- Problems: 8/8 done, 0 blocked
+- Validate: ok
+
+### docs/plans/task_12_p0-unified-knowledge-pipeline.md
+- Ledger: `.complex-problems/L20260710-231102-12`
+- Root: P0 统一知识库主链路
+- Next action: `none`
+- Problems: 7/7 done, 0 blocked
+- Validate: ok
+
+### docs/plans/task_13_p1-knowledge-tombstone-three-way-merge.md
+- Ledger: `.complex-problems/L20260711-005948`
+- Root: P1 知识删除 Tombstone 与三方合并
+- Next action: `none`
+- Problems: 4/4 done, 0 blocked
+- Validate: ok
+
+### docs/plans/task_14_p0-knowledge-evidence-and-context-isolation.md
+- Ledger: `.complex-problems/L20260711-022449-15`
+- Root: P0 知识证据完整性与 Context 隔离
+- Next action: `none`
+- Problems: 5/5 done, 0 blocked
+- Validate: ok
+
+### Resume Protocol
+1. If a ledger has a non-`none` next action, run `ledger.py next` and perform exactly that action.
+2. After each recursive state change, run `sync_recursive_to_lodestar.py`.
+3. If all mapped ledgers report `next_action=none`, run Lodestar Review before final delivery.
+
+## Recursive Closure Checkpoint - 2026-07-11T03:08:07+08:00
+
+- Ledger: `L20260711-030653-15`
+- Lodestar task: `docs/plans/task_15_p1-knowledge-mutation-proposal-persona-schema.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 0/1 problems done, 0 blocked, 0/1 tickets done
+- Next instruction: Only perform `classify-ticket` for `T000` on `P000: P1 知识 Mutation Proposal 与 Persona 归属`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in...
+
+## Recursive Closure Checkpoint - 2026-07-11T03:08:22+08:00
+
+- Ledger: `L20260711-030653-15`
+- Lodestar task: `docs/plans/task_15_p1-knowledge-mutation-proposal-persona-schema.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 0/1 problems done, 0 blocked, 0/1 tickets done
+- Next instruction: Only perform `split-ticket` for `T000` on `P000: P1 知识 Mutation Proposal 与 Persona 归属`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in...
+
+## Recursive Closure Checkpoint - 2026-07-11T03:09:05+08:00
+
+- Ledger: `L20260711-030653-15`
+- Lodestar task: `docs/plans/task_15_p1-knowledge-mutation-proposal-persona-schema.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 0/5 problems done, 0 blocked, 0/1 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P001: 后端 Mutation Proposal Builder`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names st...
+
+## Recursive Closure Checkpoint - 2026-07-11T03:18:32+08:00
+
+- Ledger: `L20260711-030653-15`
+- Lodestar task: `docs/plans/task_15_p1-knowledge-mutation-proposal-persona-schema.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 0/5 problems done, 0 blocked, 1/2 tickets done
+- Next instruction: Only perform `check-success` for `P001: 后端 Mutation Proposal Builder`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evid...
+
+## Recursive Closure Checkpoint - 2026-07-11T03:18:52+08:00
+
+- Ledger: `L20260711-030653-15`
+- Lodestar task: `docs/plans/task_15_p1-knowledge-mutation-proposal-persona-schema.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 1/5 problems done, 0 blocked, 1/2 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P002: 后端 Persona Context Policy`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay ...
+
+## Recursive Closure Checkpoint - 2026-07-11T03:24:12+08:00
+
+- Ledger: `L20260711-030653-15`
+- Lodestar task: `docs/plans/task_15_p1-knowledge-mutation-proposal-persona-schema.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 2/5 problems done, 0 blocked, 2/3 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P003: iOS Proposal 消费与 Identity-bound 合并`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field na...
+
+## Recursive Closure Checkpoint - 2026-07-11T03:24:51+08:00
+
+- Ledger: `L20260711-030653-15`
+- Lodestar task: `docs/plans/task_15_p1-knowledge-mutation-proposal-persona-schema.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 2/7 problems done, 0 blocked, 2/4 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P005: iOS Proposal Schema 与 Backend Client`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field ...
+
+## Recursive Closure Checkpoint - 2026-07-11T03:32:58+08:00
+
+- Ledger: `L20260711-030653-15`
+- Lodestar task: `docs/plans/task_15_p1-knowledge-mutation-proposal-persona-schema.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 3/7 problems done, 0 blocked, 3/5 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P006: iOS Identity-bound Proposal 合并与 Persona 本地策略`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags an...
+
+## Recursive Closure Checkpoint - 2026-07-11T03:47:21+08:00
+
+- Ledger: `L20260711-030653-15`
+- Lodestar task: `docs/plans/task_15_p1-knowledge-mutation-proposal-persona-schema.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 4/7 problems done, 0 blocked, 4/6 tickets done
+- Next instruction: Only perform `record-result` for ticket `T003`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-11T03:47:56+08:00
+
+- Ledger: `L20260711-030653-15`
+- Lodestar task: `docs/plans/task_15_p1-knowledge-mutation-proposal-persona-schema.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 5/7 problems done, 0 blocked, 5/6 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P004: 跨仓库 QA、构建与交付收敛`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English....
+
+## Recursive Closure Checkpoint - 2026-07-11T03:56:57+08:00
+
+- Ledger: `L20260711-030653-15`
+- Lodestar task: `docs/plans/task_15_p1-knowledge-mutation-proposal-persona-schema.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 6/7 problems done, 0 blocked, 6/7 tickets done
+- Next instruction: Only perform `record-result` for ticket `T000`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-11T03:57:33+08:00
+
+- Ledger: `L20260711-030653-15`
+- Lodestar task: `docs/plans/task_15_p1-knowledge-mutation-proposal-persona-schema.md`
+- Root: `P000` / done
+- Next action: `none`
+- Counts: 7/7 problems done, 0 blocked, 7/7 tickets done
+- Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+
+## Task 15 Completed - 2026-07-11
+
+- `/kb/extract` v2 now returns an additive, revision-bound `mutationProposal` without mutating the knowledge snapshot or change feed.
+- Stable IDs, relationship remapping, source/evidence/privacy metadata, and rejected/superseded preservation are implemented in the backend proposal builder.
+- Backend Context and iOS KBLite now share personal-legacy/family-strict persona rules and evidence eligibility boundaries.
+- iOS freezes canonical user/persona identity before asynchronous extraction, rejects stale role callbacks, and performs proposal-first relationship-safe merge with legacy compatibility.
+- Cross-repository proposal/persona QA, release regression, Simulator build, delayed-reply notification smoke, and generic iPhoneOS build passed.
+- Evidence: `tmp/visual-qa/prd-stitch-ui/release-regression/20260711-knowledge-proposal-persona-final3/report.md` and `tmp/visual-qa/prd-stitch-ui/iphoneos-generic-build/20260711-knowledge-proposal-persona-final/report.md`.
+- No true-device validation, push, or deployment was performed in this task.
+- Local commits: backend `5fd14a1`, iOS feature `07ff13b`; documentation/ledger closure is committed separately.
+- Ledger `L20260711-030653-15` closed with 7/7 problems, 7/7 tickets, and 7/7 checks complete.

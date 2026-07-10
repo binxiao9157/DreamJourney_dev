@@ -1,0 +1,942 @@
+{
+  "checks": {
+    "C000": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P001/checks/C000.md",
+      "created_at": "2026-07-10T19:18:52+00:00",
+      "criteria_map": [
+        "稳定 ID 与 legacy 复用：NFKC/casefold 重试及 snapshot 测试通过。",
+        "proposal/Mutation V2：测试直接调用 validator 通过。",
+        "关系有效性：人物、地点、事件、事实关系及未知关系过滤测试通过。",
+        "来源与隐私：原始 title/text 哨兵不出现在 proposal，source title 被净化。",
+        "非持久化：endpoint 前后 snapshot 和 changes 完全一致。"
+      ],
+      "evidence": [
+        "`tests/test_knowledge_proposal.py` 覆盖 5 个核心场景。",
+        "worker 全量 209 项后端测试通过；主控定向 7 项、py_compile 和 diff check 通过。"
+      ],
+      "execution_map": [
+        "R000 完成 service、route 和测试实现。",
+        "既有 v1/v2 extraction 行为由原测试集继续覆盖。"
+      ],
+      "followup_problem_id": null,
+      "id": "C000",
+      "problem_id": "P001",
+      "residual_risk": [
+        "同名不同实体仍采用保守唯一匹配；这是后续治理体验问题，不阻塞 proposal 合同。",
+        "revision 竞争继续交由既有 Mutation V2 409/三方合并处理。"
+      ],
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "同一自然键不同 Unicode/空白形式得到同一 ID。",
+        "family 请求不会复用 legacy personal 或其他 digitalHumanId 实体。",
+        "provider 返回未知关系时不生成悬空 ID。"
+      ],
+      "summary": "P001 成功。实现满足稳定身份、权威快照去重、关系解析、metadata 和非持久化 endpoint 合同，且没有扩大旧接口权限。"
+    },
+    "C001": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P002/checks/C001.md",
+      "created_at": "2026-07-10T19:24:12+00:00",
+      "criteria_map": [
+        "personal legacy/self：通过。",
+        "personal 显式 mismatch：按 owner/scope/digitalHuman reason 过滤。",
+        "family match：进入三条输出路径。",
+        "family missing/mismatch：全部过滤。",
+        "candidate/low/privacy：保留过滤门禁。"
+      ],
+      "evidence": [
+        "27 项 Context/Archive 定向测试通过。",
+        "新测试显式比较 `memory.kbFacts`、`selectedContext` 和 `generationContext` 的 KB ref 集合。"
+      ],
+      "execution_map": [
+        "R001 实现 policy、输出统一和回归测试。"
+      ],
+      "followup_problem_id": null,
+      "id": "C001",
+      "problem_id": "P002",
+      "residual_risk": [
+        "旧 family 数据需要后续显式迁移；当前拒绝默认是安全边界，不阻塞合同。"
+      ],
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "同一 packet 混合 legacy、self、其他 owner、其他 persona 和其他 digitalHuman facts，仅合法集合进入生成。",
+        "family 缺 owner 或缺 evidence status 时均采取拒绝默认。"
+      ],
+      "summary": "P002 成功。实体级 persona/evidence 策略覆盖 personal legacy 与 family strict 两条路径，并统一 Context 输出口径。"
+    },
+    "C002": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/children/P005/checks/C002.md",
+      "created_at": "2026-07-10T19:32:57+00:00",
+      "criteria_map": [
+        "旧 KBLite JSON：smoke 解码通过。",
+        "完整 proposal：revision、relations、metadata、policy 解码通过。",
+        "legacy envelope：proposal=nil 通过。",
+        "malformed proposal：custom envelope decode 采取失败策略。",
+        "request identity：client payload 包含 personaScope/digitalHumanId。"
+      ],
+      "evidence": [
+        "proposal/context 两个 Swift model smoke 通过。",
+        "CocoaPods workspace generic Simulator Debug build 成功。"
+      ],
+      "execution_map": [
+        "R002 完成 models、client 和 smoke runner。"
+      ],
+      "followup_problem_id": null,
+      "id": "C002",
+      "problem_id": "P005",
+      "residual_risk": [
+        "proposal 合并和异步 identity guard 尚属 P006，不属于本 schema 子问题。"
+      ],
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "proposal 新实体缺 createdAt/updatedAt 仍可解码。",
+        "mutationProposal 键存在但为 null/malformed 时不当作 legacy。"
+      ],
+      "summary": "P005 成功。新 schema/client 合同可独立编译，旧图谱与旧服务端兼容，显式坏 proposal 不会静默污染合并路径。"
+    },
+    "C003": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/children/P006/checks/C003.md",
+      "created_at": "2026-07-10T19:47:21+00:00",
+      "criteria_map": [
+        "proposal merge/ID remap：实现并通过 workspace 编译与 relation decode smoke。",
+        "metadata/source/evidence：模型、backend proposal 和 manager 写入均有检查。",
+        "user/persona 竞态：completion 同时校验 generation 与 current identity。",
+        "personal legacy/family strict：纯 policy smoke 通过。",
+        "old extraction/graph：legacy envelope 与 graph decode smoke 通过。"
+      ],
+      "evidence": [
+        "generic Simulator workspace `BUILD SUCCEEDED`。",
+        "五条 knowledge model/static gates 通过。",
+        "source guard 显式检查 envelope、captured/current identity、proposal-first、watermark 和 Echo expected identity。"
+      ],
+      "execution_map": [
+        "R003 完成 iOS identity-bound proposal 消费并由主控修复、复核和构建。"
+      ],
+      "followup_problem_id": null,
+      "id": "C003",
+      "problem_id": "P006",
+      "residual_risk": [
+        "无真机验收是用户明确边界；非真机代码与合同验收已满足本问题。"
+      ],
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "family 对缺 metadata legacy entity 拒绝，personal 继续兼容。",
+        "candidate/rejected evidence 不进入本地 generation。",
+        "malformed/identity-mismatch/tombstone proposal 被拒绝，且不推进 backend extraction watermark。"
+      ],
+      "summary": "P006 成功。核心编译错误已修复，identity 由会话开始到提取、合并和 Echo fallback 一致贯穿，旧合同兼容边界保留。"
+    },
+    "C004": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/checks/C004.md",
+      "created_at": "2026-07-10T19:47:55+00:00",
+      "criteria_map": [
+        "proposal 解码与 identity：完成。",
+        "ID/关系/metadata 合并：完成。",
+        "legacy server/local graph：完成。",
+        "异步角色切换丢弃：完成。",
+        "personal legacy/family strict：完成。"
+      ],
+      "evidence": [
+        "C002：proposal schema/client 通过。",
+        "C003：identity-bound merge/persona local policy 通过。",
+        "R004 汇总两条执行结果；generic Simulator build 成功。"
+      ],
+      "execution_map": [
+        "P005 -> R002/C002。",
+        "P006 -> R003/C003。",
+        "P003 -> R004。"
+      ],
+      "followup_problem_id": null,
+      "id": "C004",
+      "problem_id": "P003",
+      "residual_risk": [
+        "真机不在本轮范围；无阻塞非真机交付的残余风险。"
+      ],
+      "result_ids": [
+        "R004"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "malformed/identity-mismatch/tombstone proposal、candidate/rejected evidence、family legacy data 均采取拒绝或安全 fallback。"
+      ],
+      "summary": "P003 成功。两个拆分子问题均已通过独立 check，组合后形成完整且兼容的 iOS proposal 消费链路。"
+    },
+    "C005": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P004/checks/C005.md",
+      "created_at": "2026-07-10T19:56:57+00:00",
+      "criteria_map": [
+        "常态 iOS guards：已接入。",
+        "可选本地跨仓库 gate：已接入并执行。",
+        "全量后端/release/generic builds：通过。",
+        "状态/canonical 文档：已更新。",
+        "不推送/不部署/不真机：遵守。"
+      ],
+      "evidence": [
+        "Release report final3 状态通过。",
+        "Backend verify 明确记录 213 tests OK 与全部知识 smoke 通过。",
+        "Generic iPhoneOS report 状态 passed。"
+      ],
+      "execution_map": [
+        "R005 完成 QA 接线、三轮 guard 兼容收敛、最终验证和文档。"
+      ],
+      "followup_problem_id": null,
+      "id": "C005",
+      "problem_id": "P004",
+      "residual_risk": [
+        "线上部署和真机仅是后续验收边界，不阻塞本任务的非真机完成。"
+      ],
+      "result_ids": [
+        "R005"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "Release regression 实际发现并修复两个依赖旧源码字符串的 guard，最终从头完整通过，证明新 canonical resolver 没有让旧 QA 静默失效。",
+        "本地组合 gate 以 memory backend 重跑 proposal 与 persona Context 测试。"
+      ],
+      "summary": "P004 成功。新合同具有常态化、无外部依赖的回归入口，并通过完整后端、release 和 generic device 编译门。"
+    },
+    "C006": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/checks/C006.md",
+      "created_at": "2026-07-10T19:57:33+00:00",
+      "criteria_map": [
+        "稳定 ID、legacy reuse、关系有效：完成。",
+        "可直接用于 Mutation V2 且 extract 不落库：完成。",
+        "owner/persona/source/evidence/privacy 可审计：完成。",
+        "stale role callback：完成。",
+        "personal legacy/family exact：完成。",
+        "Task 12-14 回归与全量构建：完成。"
+      ],
+      "evidence": [
+        "P001/C000：后端 proposal。",
+        "P002/C001：Context persona policy。",
+        "P003/C004：iOS schema 与 identity-bound merge。",
+        "P004/C005：跨仓库 QA/构建/文档。"
+      ],
+      "execution_map": [
+        "R006 汇总 R000-R005，所有子问题均有 success check。"
+      ],
+      "followup_problem_id": null,
+      "id": "C006",
+      "problem_id": "P000",
+      "residual_risk": [
+        "无阻塞本任务的残余风险；设备/部署与后续 P1 治理明确留待下一任务。"
+      ],
+      "result_ids": [
+        "R006"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "Unicode/空白幂等、family metadata mismatch、unknown relations、rejected evidence、malformed proposal、角色切换和旧 server/graph 均有自动化或静态证据。"
+      ],
+      "summary": "P000 成功。原始问题的 proposal、persona、iOS 合并和 QA 标准全部由关闭子问题与最终自动化证据覆盖。"
+    }
+  },
+  "counters": {
+    "check": 7,
+    "event": 84,
+    "problem": 7,
+    "result": 7,
+    "ticket": 7
+  },
+  "created_at": "2026-07-10T19:06:53+00:00",
+  "effort": "medium",
+  "language": "zh",
+  "ledger_id": "L20260711-030653-15",
+  "problems": {
+    "P000": {
+      "body_path": "problems/P000/README.md",
+      "check_ids": [
+        "C006"
+      ],
+      "created_at": "2026-07-10T19:06:53+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Close the Lodestar task represented by `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/plans/task_15_p1-knowledge-mutation-proposal-persona-schema.md` using recursive problem, ticket, result, and check state.\n\nTask context:\n\n# P1 知识 Mutation Proposal 与 Persona 归属",
+      "followup_ids": [],
+      "id": "P000",
+      "package_path": "problems/P000",
+      "parent_id": null,
+      "result_ids": [
+        "R006"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P001",
+        "P002",
+        "P003",
+        "P004"
+      ],
+      "success_criteria": [
+        "相同 owner/persona/自然键重复提取产生相同 ID；已有 legacy UUID 会被复用。",
+        "proposal 不直接写库，且可直接作为 Mutation V2 upserts 使用。",
+        "所有 proposal 实体可回答 owner、persona、来源、证据状态和隐私范围。",
+        "人物/地点/事件/事实关联只指向当前 snapshot 或本次 proposal 的有效 ID。",
+        "角色或用户切换后的旧异步结果不会写入当前知识库。",
+        "personal 旧数据兼容；family Context 只消费目标 digitalHumanId 的显式 family facts。",
+        "Task 12-14 的 revision/tombstone/evidence/Context 回归不退化。",
+        "后端全量验证、iOS release regression、generic Simulator/iPhoneOS 构建和 `git diff --check` 通过。"
+      ],
+      "ticket_ids": [
+        "T000"
+      ],
+      "title": "P1 知识 Mutation Proposal 与 Persona 归属",
+      "updated_at": "2026-07-10T19:57:33+00:00"
+    },
+    "P001": {
+      "body_path": "problems/P000/children/P001/README.md",
+      "check_ids": [
+        "C000"
+      ],
+      "created_at": "2026-07-10T19:09:05+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "后端 extraction 尚未基于权威 snapshot 生成稳定、可审计且可直接提交 Mutation V2 的 proposal。",
+      "followup_ids": [],
+      "id": "P001",
+      "package_path": "problems/P000/children/P001",
+      "parent_id": "P000",
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "基于 owner/persona/entity natural key 生成稳定 ID，并优先复用 snapshot 现有 ID。",
+        "输出 revision-bound upserts、metadata、证据状态和已解析关系，且不直接持久化。",
+        "单元/API 测试覆盖幂等、legacy ID、关系解析和隐私净化。"
+      ],
+      "ticket_ids": [
+        "T001"
+      ],
+      "title": "后端 Mutation Proposal Builder",
+      "updated_at": "2026-07-10T19:18:52+00:00"
+    },
+    "P002": {
+      "body_path": "problems/P000/children/P002/README.md",
+      "check_ids": [
+        "C001"
+      ],
+      "created_at": "2026-07-10T19:09:05+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "Context 当前只允许 personal self KB facts；缺少实体级 persona 过滤后，family facts 无法安全启用。",
+      "followup_ids": [],
+      "id": "P002",
+      "package_path": "problems/P000/children/P002",
+      "parent_id": "P000",
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "personal/self 兼容缺少 metadata 的旧事实，但拒绝其他显式 persona。",
+        "family 只允许 owner、family scope 和目标 digitalHumanId 全部匹配的事实。",
+        "负向测试覆盖 scope、digitalHumanId、owner 和 legacy family 越界。"
+      ],
+      "ticket_ids": [
+        "T002"
+      ],
+      "title": "后端 Persona Context Policy",
+      "updated_at": "2026-07-10T19:24:12+00:00"
+    },
+    "P003": {
+      "body_path": "problems/P000/children/P003/README.md",
+      "check_ids": [
+        "C004"
+      ],
+      "created_at": "2026-07-10T19:09:05+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "iOS 当前只解码 extraction 并随机生成 ID，且会话结束提取没有捕获 persona identity。",
+      "followup_ids": [],
+      "id": "P003",
+      "package_path": "problems/P000/children/P003",
+      "parent_id": "P000",
+      "result_ids": [
+        "R004"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P005",
+        "P006"
+      ],
+      "success_criteria": [
+        "iOS 可解码 proposal/persona metadata 并优先使用 proposal ID、关联和来源字段。",
+        "异步完成时 user/persona/digital-human identity 不匹配则丢弃结果。",
+        "旧 extraction 和旧本地 KBLite 文件保持兼容，family 不推断旧 personal 数据。"
+      ],
+      "ticket_ids": [
+        "T003"
+      ],
+      "title": "iOS Proposal 消费与 Identity-bound 合并",
+      "updated_at": "2026-07-10T19:47:55+00:00"
+    },
+    "P004": {
+      "body_path": "problems/P000/children/P004/README.md",
+      "check_ids": [
+        "C005"
+      ],
+      "created_at": "2026-07-10T19:09:05+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "新 proposal/persona 合同需要可重复的跨仓库证据，且不得破坏既有知识与公开 release 回归。",
+      "followup_ids": [],
+      "id": "P004",
+      "package_path": "problems/P000/children/P004",
+      "parent_id": "P000",
+      "result_ids": [
+        "R005"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "新增后端/iOS smoke 和 release 可选组合 gate。",
+        "后端全量测试、既有 knowledge gates、release regression、generic Simulator/iPhoneOS build 和 diff check 通过。",
+        "状态文档、ledger 和两个仓库的独立提交完整，且不推送、不部署、不做真机。"
+      ],
+      "ticket_ids": [
+        "T006"
+      ],
+      "title": "跨仓库 QA、构建与交付收敛",
+      "updated_at": "2026-07-10T19:56:57+00:00"
+    },
+    "P005": {
+      "body_path": "problems/P000/children/P003/children/P005/README.md",
+      "check_ids": [
+        "C002"
+      ],
+      "created_at": "2026-07-10T19:24:51+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T003",
+      "created_from_ticket_mode": "split",
+      "description": "iOS 没有 proposal/persona metadata 的兼容模型，backend client 只能返回裸 `KBExtractionResult`。",
+      "followup_ids": [],
+      "id": "P005",
+      "package_path": "problems/P000/children/P003/children/P005",
+      "parent_id": "P003",
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "KBLite 实体 optional 增加 owner/persona/evidence/sourceTurn metadata，旧 JSON 可解码。",
+        "新增 proposal/envelope Codable 模型，覆盖所有 upsert/关系字段。",
+        "backend client 请求发送 persona identity，响应优先解码 proposal 并验证基本 schema。",
+        "Swift model smoke 覆盖完整 proposal 和 legacy extraction envelope。"
+      ],
+      "ticket_ids": [
+        "T004"
+      ],
+      "title": "iOS Proposal Schema 与 Backend Client",
+      "updated_at": "2026-07-10T19:32:57+00:00"
+    },
+    "P006": {
+      "body_path": "problems/P000/children/P003/children/P006/README.md",
+      "check_ids": [
+        "C003"
+      ],
+      "created_at": "2026-07-10T19:24:51+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T003",
+      "created_from_ticket_mode": "split",
+      "description": "KBLiteManager 没有 proposal-first merge、ID remap 或 persona-bound async guard，summary/local fallback 可能跨角色使用知识。",
+      "followup_ids": [],
+      "id": "P006",
+      "package_path": "problems/P000/children/P003/children/P006",
+      "parent_id": "P003",
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "proposal-first 合并复用 exact/local natural match，关系 ID 完成 remap，metadata 持久化。",
+        "旧 extraction 和 quick fallback 仍工作，并给新实体写 captured identity。",
+        "会话结束捕获 canonical identity；完成时 identity 已切换则丢弃。",
+        "existingSummary 和 generation fallback 执行 personal legacy/family strict 过滤。",
+        "静态/模型 smoke 覆盖竞态、persona 过滤和 legacy compatibility。"
+      ],
+      "ticket_ids": [
+        "T005"
+      ],
+      "title": "iOS Identity-bound Proposal 合并与 Persona 本地策略",
+      "updated_at": "2026-07-10T19:47:21+00:00"
+    }
+  },
+  "results": {
+    "R000": {
+      "artifacts": [
+        "`app/services/knowledge_proposal.py`",
+        "`tests/test_knowledge_proposal.py`",
+        "`app/main.py`",
+        "`tests/test_core_services.py`"
+      ],
+      "body_path": "problems/P000/children/P001/results/R000.md",
+      "created_at": "2026-07-10T19:18:31+00:00",
+      "done": [
+        "实现稳定 ID、snapshot 去重、metadata、evidence status 和关系解析。",
+        "`/kb/extract` v2 additive 返回 proposal，旧合同和 dryRun 保持兼容。"
+      ],
+      "id": "R000",
+      "known_gaps": [
+        "同名不同实体只做保守唯一匹配，歧义留给后续用户治理。",
+        "proposal 提交前 revision 变化仍由既有 Mutation V2 409/三方合并处理。"
+      ],
+      "problem_id": "P001",
+      "root_id": "P000",
+      "summary": "新增纯函数 proposal builder，并将其 additive 接入 `/kb/extract` v2。服务端现在基于权威 snapshot revision 复用 legacy/匹配 persona ID，未命中时生成稳定 SHA-256 ID，继承净化后的来源与隐私，写入 owner/persona/evidence metadata，并把抽取名称关系解析为有效实体 ID。接口只返回 proposal，不修改 snapshot/change feed。",
+      "ticket_id": "T001",
+      "verification": [
+        "新增 `app/services/knowledge_proposal.py` 和 `tests/test_knowledge_proposal.py`。",
+        "修改 `app/main.py` 与 extraction 兼容测试。",
+        "worker 全量后端测试 209/209 通过。",
+        "主控复跑 7 项定向测试、`py_compile` 和 `git diff --check` 通过。"
+      ]
+    },
+    "R001": {
+      "artifacts": [
+        "`app/services/context_packet.py`",
+        "`tests/test_context_packet_persona_policy.py`",
+        "`tests/test_core_services.py`"
+      ],
+      "body_path": "problems/P000/children/P002/results/R001.md",
+      "created_at": "2026-07-10T19:24:05+00:00",
+      "done": [
+        "personal 兼容 legacy/self，过滤显式 owner/scope/digitalHuman mismatch。",
+        "family 仅允许 metadata 完整且目标一致的事实。",
+        "observed/confirmed 可生成；candidate/rejected/superseded 与 low confidence 继续过滤。",
+        "新增稳定 filtered reason 和独立测试。"
+      ],
+      "id": "R001",
+      "known_gaps": [
+        "缺 metadata 的旧 family 数据有意不可用，需要后续显式迁移，不能自动推断。"
+      ],
+      "problem_id": "P002",
+      "root_id": "P000",
+      "summary": "Context Packet 现在对 KB facts 执行 owner/persona/digitalHuman/evidence 的实体级策略，并让 memory、selected candidates 和 generationContext 共享同一 eligible fact 集合。",
+      "ticket_id": "T002",
+      "verification": [
+        "主控复跑 Context persona + Archive API 27 项测试通过。",
+        "worker 定向 27 项通过；py_compile 与 diff check 通过。"
+      ]
+    },
+    "R002": {
+      "artifacts": [
+        "`DreamJourney/Sources/Services/KBLiteModels.swift`",
+        "`DreamJourney/Sources/Services/DreamJourneyBackendClient.swift`",
+        "`Scripts/QA/prd-stitch-ui/knowledge-proposal-model-smoke.swift`",
+        "`Scripts/QA/prd-stitch-ui/run-knowledge-proposal-model-smoke.sh`"
+      ],
+      "body_path": "problems/P000/children/P003/children/P005/results/R002.md",
+      "created_at": "2026-07-10T19:32:51+00:00",
+      "done": [
+        "KBLite 四类实体增加 optional owner/persona/evidence/source-turn 字段。",
+        "新增完整 proposal/upserts/policy/tombstone/envelope Codable 模型。",
+        "新增 `extractKnowledgeEnvelope`，旧 `extractKnowledge` wrapper 保持编译兼容。",
+        "显式 malformed/null proposal 会失败，字段缺失才视为 legacy。"
+      ],
+      "id": "R002",
+      "known_gaps": [
+        "KBLiteManager 尚未消费 envelope，由 P006 接入。"
+      ],
+      "problem_id": "P005",
+      "root_id": "P000",
+      "summary": "iOS 已具备向后兼容的 persona metadata/proposal 模型，并新增 envelope API 发送 persona identity、严格解码 optional proposal；旧服务端无 proposal 时仍返回 legacy extraction。",
+      "ticket_id": "T004",
+      "verification": [
+        "proposal model smoke 与既有 context model smoke 均通过。",
+        "worker generic Simulator workspace build 成功。",
+        "runner bash syntax 与 scoped whitespace 通过。"
+      ]
+    },
+    "R003": {
+      "artifacts": [
+        "`DreamJourney/Sources/Services/EchoKnowledgeContextPolicy.swift`",
+        "`DreamJourney/Sources/Services/KBLiteManager.swift`",
+        "`DreamJourney/Sources/Services/ConversationMemoryManager.swift`",
+        "`DreamJourney/Sources/Modules/Echo/EchoViewController.swift`",
+        "proposal/persona model 与 static smoke scripts"
+      ],
+      "body_path": "problems/P000/children/P003/children/P006/results/R003.md",
+      "created_at": "2026-07-10T19:47:12+00:00",
+      "done": [
+        "新增 `KBPersonaIdentity/Resolver/Policy`，统一 Echo 与 KBLite 身份。",
+        "ConversationMemory 在会话结束时捕获 identity。",
+        "KBLite 使用 envelope，校验 proposal schema/identity/tombstone 边界。",
+        "两阶段 proposal ID mapping 避免 local legacy 重复并重映射关系。",
+        "legacy extraction/quick fallback 仍兼容，并写 persona/evidence/source metadata。",
+        "summary/local generation 同时执行 privacy、persona、confidence 与 evidenceStatus 门禁。",
+        "invalid proposal 不推进后端精提取水位。"
+      ],
+      "id": "R003",
+      "known_gaps": [
+        "本轮按要求不做真机；真实多轮 Echo 行为留给后续设备验收。",
+        "proposal merge 通过编译、模型与 source guard 验证，尚无独立 XCTest target；跨仓库 release gate 将在 P004 收敛。"
+      ],
+      "problem_id": "P006",
+      "root_id": "P000",
+      "summary": "iOS KBLite 主链路已切为 proposal-first，并用同一 canonical persona identity 绑定会话提取、异步 completion、existing summary、Echo 本地 fallback 和实体合并。角色切换后的旧结果被丢弃，family 不再读取未标注 personal legacy 知识。",
+      "ticket_id": "T005",
+      "verification": [
+        "proposal/context/three-way model smoke 通过。",
+        "proposal persona 与旧 evidence source guard 通过。",
+        "CocoaPods workspace generic Simulator Debug build 成功。",
+        "iOS `git diff --check` 通过。"
+      ]
+    },
+    "R004": {
+      "artifacts": [
+        "R002",
+        "R003"
+      ],
+      "body_path": "problems/P000/children/P003/results/R004.md",
+      "created_at": "2026-07-10T19:47:37+00:00",
+      "done": [
+        "proposal/envelope/persona metadata schema 和 strict decode。",
+        "captured identity、canonical resolver、proposal-first merge、ID remap。",
+        "legacy extraction/quick fallback、summary/local context persona policy。",
+        "Echo/ConversationMemory 接线和非真机构建。"
+      ],
+      "id": "R004",
+      "known_gaps": [
+        "无真机测试；符合当前目标边界。",
+        "公开知识治理 UI 与用户纠正/拒绝操作属于后续任务。"
+      ],
+      "problem_id": "P003",
+      "root_id": "P000",
+      "summary": "P005/P006 已共同完成 proposal schema/client 与 persona-bound merge。iOS 现在既兼容旧图谱/旧服务端，又能优先消费服务端稳定 proposal，并在角色切换、family scope 和证据状态上执行安全默认。",
+      "ticket_id": "T003",
+      "verification": [
+        "P005/P006 checks C002/C003 成功。",
+        "proposal/context/three-way smokes、两个 static guards、generic Simulator build 通过。"
+      ]
+    },
+    "R005": {
+      "artifacts": [
+        "`tmp/visual-qa/prd-stitch-ui/release-regression/20260711-knowledge-proposal-persona-final3/report.md`",
+        "`tmp/visual-qa/prd-stitch-ui/iphoneos-generic-build/20260711-knowledge-proposal-persona-final/report.md`",
+        "`docs/superpowers/status/2026-07-11-knowledge-mutation-proposal-persona-schema.md`"
+      ],
+      "body_path": "problems/P000/children/P004/results/R005.md",
+      "created_at": "2026-07-10T19:56:35+00:00",
+      "done": [
+        "新增后端 proposal/persona smoke runner。",
+        "release regression 固定运行 iOS proposal model/source guard，并提供本地组合 gate。",
+        "更新旧 knowledge/role-voice guards 以识别 canonical identity 重构。",
+        "更新 Task 15、canonical 和状态文档。"
+      ],
+      "id": "R005",
+      "known_gaps": [
+        "按目标不做真机、线上部署或远程推送。",
+        "提交将在 ledger 关闭后分别创建。"
+      ],
+      "problem_id": "P004",
+      "root_id": "P000",
+      "summary": "新 proposal/persona 合同已接入 release regression 和 release QA package，后端/iOS 全量非真机验证通过，状态与 canonical 文档已更新。",
+      "ticket_id": "T006",
+      "verification": [
+        "后端 verify：213 tests，FastAPI、delta、V2、evidence、proposal/persona 全通过。",
+        "release regression final3 通过，含 standard Simulator build 与 delayed-reply smoke。",
+        "generic iPhoneOS build 通过，bundle guard 为 `com.yxj.dreamjourney.app`。",
+        "两仓库 diff check 通过。"
+      ]
+    },
+    "R006": {
+      "artifacts": [
+        "R000-R005",
+        "Task 15 status/canonical docs"
+      ],
+      "body_path": "problems/P000/results/R006.md",
+      "created_at": "2026-07-10T19:57:16+00:00",
+      "done": [
+        "服务端稳定、可审计、不自动持久化的 extraction proposal。",
+        "personal legacy/family strict 的 Context 事实隔离。",
+        "iOS canonical identity、stale callback guard、proposal-first merge 和旧合同兼容。",
+        "release gate、全量测试、generic builds 和中文状态文档。"
+      ],
+      "id": "R006",
+      "known_gaps": [
+        "真机、线上部署、用户治理 UI、来源删除级联和同步生产化属于后续任务。"
+      ],
+      "problem_id": "P000",
+      "root_id": "P000",
+      "summary": "Task 15 的四个子问题全部关闭：后端 proposal builder、Context persona policy、iOS proposal/identity merge、跨仓库 QA 与交付均已实现和验证。",
+      "ticket_id": "T000",
+      "verification": [
+        "C000-C005 全部 success。",
+        "Backend verify 213 tests；release final3；generic iPhoneOS passed。"
+      ]
+    }
+  },
+  "root_id": "P000",
+  "schema_version": 6,
+  "tickets": {
+    "T000": {
+      "acceptance_criteria": [
+        "相同 owner/persona/自然键生成稳定 ID，snapshot 已有实体复用原 ID。",
+        "proposal 可直接用于 Mutation V2，包含 revision、来源、隐私、persona 和 evidence metadata，且不自动写库。",
+        "人物、地点、事件与事实关联只指向有效 snapshot/proposal ID。",
+        "iOS 在 user/persona 切换后丢弃旧回调，并兼容旧 extraction。",
+        "family Context 只消费目标 digitalHumanId 的 family facts，个人旧数据不会越界。",
+        "Task 12-14 回归、后端测试、release regression 和 generic builds 通过。"
+      ],
+      "assumptions": [
+        "后端 snapshot/revision 是 proposal 去重的权威来源。",
+        "iOS 当前用户拥有本地 KBLite 文件；知识实体不能自行授予家庭访问权限。",
+        "本轮不改变公开 UI，不做真机或真实 provider 质量验收。"
+      ],
+      "body_path": "problems/P000/tickets/T000.md",
+      "classification": "split",
+      "classification_reason": "后端 proposal、Context persona policy、iOS 合并与跨仓库验证是可独立验收且写集不同的子问题，拆分可降低合同与兼容回归风险。",
+      "created_at": "2026-07-10T19:08:07+00:00",
+      "id": "T000",
+      "problem_definition": "当前 `/kb/extract` 只返回 provider 形态 extraction，iOS 使用随机 UUID 和本地名称匹配合并，导致重试/多端实体身份不稳定、关系无法可靠解析，且实体缺少 owner/persona/evidence 元数据。家庭 persona 因此不能安全消费目标角色知识。",
+      "problem_id": "P000",
+      "proposed_solution": "在后端新增纯函数 proposal builder，基于服务端权威 snapshot 完成自然键规范化、旧 ID 复用、稳定 ID 生成、关系解析和来源/隐私/persona 继承；`/kb/extract` additive 返回非持久化 `mutationProposal`。iOS 增加兼容模型并优先合并 proposal，捕获请求发起时的 canonical identity，旧服务端继续走 extraction 降级。Context 对 personal 旧数据兼容，对 family 只读取显式匹配 `personaScope/digitalHumanId` 的事实。",
+      "result_ids": [
+        "R006"
+      ],
+      "risks": [
+        "名称自然键可能合并同名不同人；本轮只做确定性保守匹配，后续用户治理处理歧义。",
+        "旧数据没有 persona metadata；仅 personal/self 兼容，避免推断 family 权限。",
+        "proposal 基于 baseRevision，提交前可能发生冲突；继续由现有 Mutation V2 409/三方合并处理。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "落地可审计知识 Proposal 与 Persona 归属",
+      "updated_at": "2026-07-10T19:57:16+00:00",
+      "verification_plan": "1. 后端单测覆盖稳定 ID、legacy ID 复用、关系解析、metadata、空/非法 persona 与 endpoint 合同。\n2. Context 测试覆盖 personal legacy、family match、family mismatch 和跨 owner 过滤。\n3. iOS Swift smoke 覆盖 proposal decoding、identity policy、legacy fallback 和 persona metadata。\n4. 运行后端全量 verify、跨仓库 knowledge gate、release regression、generic Simulator/iPhoneOS build 与 `git diff --check`。"
+    },
+    "T001": {
+      "acceptance_criteria": [
+        "proposal schema/revision/upserts 可直接通过 Mutation V2 validator。",
+        "重试生成相同 ID，existing snapshot ID 优先复用。",
+        "关系解析只指向有效 ID，未知关系被省略。",
+        "metadata 经过净化且不包含 transcript 正文。",
+        "dryRun 不调用 provider，也不伪造 proposal。"
+      ],
+      "assumptions": [
+        "snapshot record 是现有实体与 revision 的权威来源。",
+        "proposal 只建议 upsert，不执行持久化或删除。"
+      ],
+      "body_path": "problems/P000/children/P001/tickets/T001.md",
+      "classification": "one_go",
+      "classification_reason": "该子问题限定在后端 proposal 服务、单一路由集成和对应测试，写集集中且验收边界明确，可一次实现。",
+      "created_at": "2026-07-10T19:09:30+00:00",
+      "id": "T001",
+      "problem_definition": "`/kb/extract` 的 provider extraction 没有稳定 ID、revision、persona metadata 或关系 ID，客户端无法在重试和多端环境中确定性合并。",
+      "problem_id": "P001",
+      "proposed_solution": "新增独立 `knowledge_proposal` 服务，规范化 persona 和自然键，从 `get_kb_snapshot_record` 建立现有实体索引，复用 legacy ID 或生成确定性 SHA-256 ID，填充来源、隐私、证据状态和关系 ID，并由 `/kb/extract` v2 additive 返回 proposal。",
+      "result_ids": [
+        "R000"
+      ],
+      "risks": [
+        "同名实体消歧有限；使用保守自然键并记录后续治理边界。",
+        "snapshot revision 可能在 proposal 后变化；由既有 Mutation V2 409 处理。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现后端 Knowledge Mutation Proposal Builder",
+      "updated_at": "2026-07-10T19:18:31+00:00",
+      "verification_plan": "运行 proposal 纯函数测试、endpoint mocked provider 测试、现有 evidence tests 和后端全量 unittest/verify。"
+    },
+    "T002": {
+      "acceptance_criteria": [
+        "personal legacy fact 可用；显式 family/mismatch personal fact 被过滤。",
+        "family matching fact 可用；legacy、owner/scope/digitalHuman mismatch 被过滤并有固定 reason。",
+        "candidate、memory.kbFacts 和 generationContext 保持一致。",
+        "candidate/low confidence 仍不能进入 generation。"
+      ],
+      "assumptions": [
+        "family request 已使用 canonical digitalHumanId。",
+        "KB entity 不能自行授予 family relationship 权限。"
+      ],
+      "body_path": "problems/P000/children/P002/tickets/T002.md",
+      "classification": "one_go",
+      "classification_reason": "该子问题集中在 ContextPacketBuilder 单一策略模块与测试，合同和验收样例已经固定。",
+      "created_at": "2026-07-10T19:19:09+00:00",
+      "id": "T002",
+      "problem_definition": "Context Packet 当前对 KB facts 仅执行 personal-self 粗粒度开关；family facts 无法使用，而 `memory.kbFacts` 与 generation candidate 也可能采用不同筛选口径。",
+      "problem_id": "P002",
+      "proposed_solution": "建立实体级 persona 判定：personal 兼容无 metadata 的旧事实但拒绝显式其他 persona；family 必须 owner、scope、digitalHumanId 全匹配。候选、memory summary、filtered reason 和 generation selection 复用同一判定，并继续叠加 privacy、confidence/evidenceStatus 门禁。",
+      "result_ids": [
+        "R001"
+      ],
+      "risks": [
+        "旧 family 数据缺 metadata 时不可用，这是有意的安全默认。",
+        "`ownerUserId` 表示当前 KB 账号 owner，不代表被提及人物或家庭成员授权身份。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现后端 Persona-scoped KB Context Policy",
+      "updated_at": "2026-07-10T19:24:05+00:00",
+      "verification_plan": "新增 Context builder 单元测试并运行 context v2 smoke、全量后端测试、py_compile 和 diff check。"
+    },
+    "T003": {
+      "acceptance_criteria": [
+        "proposal 可解码且响应 identity 必须与请求一致。",
+        "proposal ID、关系、source/evidence/persona metadata 被持久化，local natural match 不重复。",
+        "旧 server extraction 与旧本地文件继续可读。",
+        "提取期间用户/角色切换会丢弃旧结果。",
+        "personal 兼容 legacy；family 只匹配显式 metadata，summary/fallback 不跨 persona。"
+      ],
+      "assumptions": [
+        "后端 proposal 不包含新实体时间戳时，iOS 可安全使用本地当前时间。",
+        "KnowledgeSyncCoordinator 继续负责最终 Mutation V2 提交和 revision 冲突。"
+      ],
+      "body_path": "problems/P000/children/P003/tickets/T003.md",
+      "classification": "split",
+      "classification_reason": "响应 schema/client 与 KBLite identity-bound merge 是不同写集和独立验收风险，拆分后可先固定解码合同再接入状态合并。",
+      "created_at": "2026-07-10T19:24:32+00:00",
+      "id": "T003",
+      "problem_definition": "iOS 仍只解码 provider extraction、随机生成 ID，并在异步完成时只校验用户 generation；提取 summary 和本地 fallback 也未按实体 persona 过滤。",
+      "problem_id": "P003",
+      "proposed_solution": "先增加兼容 proposal/envelope/persona metadata 模型与 backend client 解码，再改 KBLite 合并为 proposal-first、legacy fallback，并在会话结束捕获 canonical identity。所有 summary、local extraction 与 generation fallback 按 identity 过滤，异步结果 identity 变化时丢弃。",
+      "result_ids": [
+        "R004"
+      ],
+      "risks": [
+        "本地未同步 legacy ID 与服务端稳定 ID 可能不一致，需要 proposal-to-local ID remap。",
+        "KBLiteModels 是广泛使用的 Codable schema，新增字段必须 optional 保持旧文件兼容。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "iOS 消费 Mutation Proposal 并绑定 Persona Identity",
+      "updated_at": "2026-07-10T19:47:37+00:00",
+      "verification_plan": "新增纯 Swift model/policy smoke、静态 source guard、release regression 与 generic builds；不做真机。"
+    },
+    "T004": {
+      "acceptance_criteria": [
+        "旧 KBLite JSON 和旧 extraction response 继续解码。",
+        "完整 proposal 的 ID、relations、metadata、revision 和 policy 可解码。",
+        "request payload 包含 canonical personaScope/digitalHumanId。",
+        "malformed proposal 不污染 extraction 兼容路径，并产生明确解析策略。"
+      ],
+      "assumptions": [
+        "manager 合并逻辑由后续 P006 消费 envelope。"
+      ],
+      "body_path": "problems/P000/children/P003/children/P005/tickets/T004.md",
+      "classification": "one_go",
+      "classification_reason": "模型与 client envelope 是集中在两个文件及独立 smoke 的低耦合合同切片。",
+      "created_at": "2026-07-10T19:25:06+00:00",
+      "id": "T004",
+      "problem_definition": "iOS 模型无法表达 proposal/persona metadata，backend client 丢弃 `mutationProposal`，因此后续 manager 无法确定性合并。",
+      "problem_id": "P005",
+      "proposed_solution": "以 optional additive 字段扩展 KBLite 实体，新增独立 proposal upsert/envelope Codable 类型；修改 `extractKnowledge` 接收 persona identity、发送请求字段并返回 extraction + optional proposal。解码必须兼容旧服务端。",
+      "result_ids": [
+        "R002"
+      ],
+      "risks": [
+        "新字段若使用 nonoptional 会破坏旧 JSON；必须使用 optional/default-safe 解码。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现 iOS Proposal Schema 与 Client Envelope",
+      "updated_at": "2026-07-10T19:32:51+00:00",
+      "verification_plan": "新增独立 Swift model smoke 和静态 source check，并运行相关脚本、diff check 与编译。"
+    },
+    "T005": {
+      "acceptance_criteria": [
+        "proposal merge 不重复本地 natural match，关系 remap 有效。",
+        "entity metadata/source/evidence 持久化，candidate 仍不进入 generation。",
+        "user/persona 切换旧回调被丢弃。",
+        "personal legacy 可用；family 只读写显式匹配实体。",
+        "old extraction/server/local graph compatibility 保持。"
+      ],
+      "assumptions": [
+        "family digitalHumanId 从 FamilyRepository canonical 字段获取，缺失时使用 ownerId 与 Echo 现有策略一致。"
+      ],
+      "body_path": "problems/P000/children/P003/children/P006/tickets/T005.md",
+      "classification": "one_go",
+      "classification_reason": "该子问题虽涉及多处调用，但核心状态边界都集中在 KBLite extraction/merge 路径，拆分会造成同文件并行冲突；用一组模型和构建回归整体验收更安全。",
+      "created_at": "2026-07-10T19:33:17+00:00",
+      "id": "T005",
+      "problem_definition": "KBLiteManager 尚未消费 proposal，异步提取只绑定用户 generation；existing summary、quick extraction 和 local generation fallback 也可能跨 persona 读写。",
+      "problem_id": "P006",
+      "proposed_solution": "引入轻量 `KBPersonaIdentity` 与纯策略，统一从当前 DigitalHumanContext 解析 canonical identity。提取请求捕获 identity，使用 envelope；completion 同时校验用户 generation 与当前 identity。proposal-first merge 先建立 proposal-to-local ID remap 再合并实体/关系；legacy extraction/quick fallback 继续工作但写入 identity metadata。summary 和 local generation 按 personal-legacy/family-strict 过滤。",
+      "result_ids": [
+        "R003"
+      ],
+      "risks": [
+        "KBLiteManager 较大，修改必须集中在 extraction/merge/context 路径，避免无关重构。",
+        "local legacy ID remap 必须在关系合并前完成。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现 iOS Identity-bound Proposal 合并与 Persona 本地策略",
+      "updated_at": "2026-07-10T19:47:12+00:00",
+      "verification_plan": "新增纯 Swift persona/merge smoke 或 test hook、静态 source guard，跑 proposal/context/three-way smoke 和 generic builds。"
+    },
+    "T006": {
+      "acceptance_criteria": [
+        "日常 release regression 始终运行 iOS proposal model 与 static policy guard。",
+        "可选跨仓库 gate 可运行后端 proposal/context persona tests，不依赖部署环境。",
+        "后端 212+ tests、iOS release regression、generic Simulator/iPhoneOS build 通过。",
+        "状态文档准确记录实现、验证、非真机边界和后续任务。",
+        "两仓库干净且各有清晰提交；不推送、不部署。"
+      ],
+      "assumptions": [
+        "当前目标明确不要求推送、部署或真机。"
+      ],
+      "body_path": "problems/P000/children/P004/tickets/T006.md",
+      "classification": "one_go",
+      "classification_reason": "实现已完成，剩余工作是集中式 QA 接线、全量验证、文档和独立提交，具有单一交付边界。",
+      "created_at": "2026-07-10T19:48:30+00:00",
+      "id": "T006",
+      "problem_definition": "后端和 iOS 功能已分别实现，但新合同尚未作为 release regression 常态 guard，也缺最终状态文档、全量构建证据和独立提交。",
+      "problem_id": "P004",
+      "proposed_solution": "新增后端 proposal/persona smoke runner，将 iOS proposal model 与 persona source guard 接入 release regression/release QA package；运行后端全量 verify、知识 gates、release regression、generic Simulator/iPhoneOS build 和 diff checks；更新 canonical/status/Lodestar 后分别提交两仓库。",
+      "result_ids": [
+        "R005"
+      ],
+      "risks": [
+        "release regression 体量较大；新增 guard 必须快速、确定、无外部网络依赖。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "收敛 Knowledge Proposal/Persona 跨仓库 QA 与交付",
+      "updated_at": "2026-07-10T19:56:35+00:00",
+      "verification_plan": "执行所有新增/既有知识 gates、`verify_backend.sh`、release QA package、release regression、generic builds、closure check 和 git diff/status。"
+    }
+  },
+  "updated_at": "2026-07-10T19:57:33+00:00"
+}

@@ -120,7 +120,15 @@
       "status": "complete",
       "task_file": "docs/plans/task_14_p0-knowledge-evidence-and-context-isolation.md",
       "updated_at": "2026-07-11T02:59:17+08:00"
+    },
+    "docs/plans/task_15_p1-knowledge-mutation-proposal-persona-schema.md": {
+      "ledger_id": "L20260711-030653-15",
+      "ledger_path": ".complex-problems/L20260711-030653-15",
+      "next_action": "none",
+      "status": "complete",
+      "task_file": "docs/plans/task_15_p1-knowledge-mutation-proposal-persona-schema.md",
+      "updated_at": "2026-07-11T03:57:33+08:00"
     }
   },
-  "updated_at": "2026-07-11T02:59:17+08:00"
+  "updated_at": "2026-07-11T03:57:33+08:00"
 }

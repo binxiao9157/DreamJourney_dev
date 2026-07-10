@@ -43,6 +43,23 @@
 - Backend 204 tests/full verify, release regression, simulator smoke, generic Simulator and generic iPhoneOS builds passed. No true-device test was run.
 - Remaining P1 work is proposal normalization, persona-scoped entity metadata, source ingestion/retraction, change-feed productionization and local privacy/cache/log hardening.
 
+## Task 15 Knowledge Proposal Findings
+
+- `/kb/extract` currently returns provider-shaped entities only; iOS assigns random UUIDs and resolves duplicates by local name matching, so retries and multiple devices cannot share stable identity.
+- The backend already owns the authoritative KB snapshot/revision and Mutation V2 validator, making it the correct place to build a non-persisting, revision-bound mutation proposal.
+- Extracted relation fields are names, while stored graph relations are IDs. Resolution must use both existing snapshot entities and current proposal entities before the result reaches iOS.
+- KBLite storage is per signed-in user, but entities do not yet carry persona metadata. Family Context currently blocks all KB facts; it can only safely consume facts after explicit `personaScope=family` and matching `digitalHumanId` are persisted.
+- `ConversationMemoryManager.endSession()` starts extraction after clearing the active transcript and currently does not capture persona identity. The identity must be snapshotted with the transcript so later role changes cannot relabel asynchronous results.
+- Backward compatibility requires old entities without persona fields to remain personal/self-only; they must never be inferred as family knowledge.
+
+## Task 15 Resolution
+
+- `/kb/extract` v2 now returns a non-persisting, revision-bound Mutation V2 proposal with stable IDs, snapshot legacy-ID reuse, normalized relationships, redacted sources and persona/evidence metadata.
+- Backend Context uses one eligible fact set for memory, selection and generation. Personal legacy remains readable; family requires exact owner/family/digital-human metadata and observed/confirmed evidence.
+- iOS decodes proposal envelopes strictly, snapshots canonical persona identity at session end, discards stale role callbacks, remaps proposal relationships to local legacy IDs and keeps old server/local graph compatibility.
+- Existing summaries and local generation fallbacks are now privacy/persona/evidence filtered; family local fallback remains forbidden.
+- Backend 213-test verify, release regression, Simulator smoke and generic Simulator/iPhoneOS builds passed. True-device verification was intentionally not run.
+
 ## Technical Decisions
 
 - Use `.closure-lodestar/task-ledgers.json` to map Lodestar task files to recursive ledger IDs.

@@ -348,6 +348,8 @@ P1 让提取返回 `mutationProposal`，服务端基于当前 snapshot 完成稳
 - KBLite person 到 Family 的自动派生改为“未授权候选”或彻底移除；生产 seed 成员迁到 QA-only。
 - timeLetter draft 的后端 payload 使用字段 allowlist；`metadataOnly` 不得携带正文、分析摘要或 transcript，删除草稿需同步撤销。
 
+实施进度：Task 15 已完成本节前四项中的 proposal、稳定 ID/关系/metadata、persona-scoped Context 和 iOS canonical identity 主链路。用户治理、来源删除级联、历史 canonical ID 迁移与 timeLetter 草稿收敛继续作为后续 P1。
+
 ### P1：同步生产化
 
 - operation payload hash。

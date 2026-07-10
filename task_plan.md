@@ -4,8 +4,8 @@
 
 - **Goal:** 按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态
 - **Mode:** Review
-- **Phase:** Phase 9 product knowledge architecture and evidence integrity complete
-- **Task:** `docs/plans/task_14_p0-knowledge-evidence-and-context-isolation.md`
+- **Phase:** Phase 10 knowledge proposal and persona ownership complete
+- **Task:** `docs/plans/task_15_p1-knowledge-mutation-proposal-persona-schema.md`
 - **Blockers:** none for non-device implementation
 
 ## Key Decisions
@@ -33,10 +33,11 @@
 - Task 13 is complete and deployed: backend Mutation V2 supports entity upserts/tombstones and compatible change metadata; iOS persists a per-user remote base/pending payload and performs deterministic three-way merge with local-only protection; the cross-repository gate is `RUN_KNOWLEDGE_V2_SYNC_GATE=1`. Ledger `L20260711-005948` is closed.
 - Task 13 deployment is complete: backend `816993b` and iOS `8a1a94c` are pushed; public Postgres knowledge V2 smoke and the cross-repository release gate passed.
 - Task 14 is complete. `docs/superpowers/plans/2026-07-11-product-knowledge-base-architecture-v2.md` is the canonical product/engineering design. Assistant-response self-ingestion, low-confidence generation, family local fallback, Context identity, recipient/openAt and care viewer P0 boundaries are guarded. Backend `7fab675` and iOS `dfea6d4` are committed locally; ledger `L20260711-022449-15` is closed.
+- Task 15 is complete. `/kb/extract` v2 returns a revision-bound non-persisting mutation proposal with stable IDs, relationship resolution and persona/evidence metadata; Context and iOS use personal-legacy/family-strict policy. Backend `5fd14a1` and iOS `07ff13b` are committed locally; ledger `L20260711-030653-15` is closed.
 
 ## Scope
 
-Phase 2, Phase 3, and Tasks 9-14 are closed. Production remains on global ownership `shadow`; public UI changes remain outside this slice. The next knowledge slice should start from P1 `mutationProposal + persona-scoped knowledge schema`, not repeat revision/tombstone/evidence work.
+Phase 2, Phase 3, and Tasks 9-15 are closed. Production remains on global ownership `shadow`; public UI changes remain outside this slice. The next knowledge slice should implement user confirmation/rejection/correction and source deletion cascade, not repeat proposal/persona/revision/tombstone/evidence work.
 
 ## Recovery
 
