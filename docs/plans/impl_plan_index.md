@@ -18,6 +18,7 @@
 | 3 | done | P0 real-device and backend acceptance readiness | `docs/plans/task_03_p0-real-device-and-backend-acceptance-readiness.md` | `L20260618-000157-03` |
 | 4 | done | P1 profile family and safety flows | `docs/plans/task_04_p1-profile-family-and-safety-flows.md` | `L20260618-000157-04` |
 | 5 | done | Review and release QA | `docs/plans/task_05_review-and-release-qa.md` | `L20260618-000157-05` |
+| 6 | done | P0 voice clone exclusive slot allocation | `docs/plans/task_06_p0-voice-clone-exclusive-slot-allocation.md` | `L20260710-115209` |
 
 ## File Structure
 

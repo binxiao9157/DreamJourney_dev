@@ -187,8 +187,8 @@ struct FamilyMember: Codable, Identifiable {
             return "未配置复刻音色"
         }
         switch voiceSampleStatus.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
-        case "ready", "accepted" where voiceEnabled:
-            return "复刻音色可用于回响"
+        case "ready", "accepted":
+            return voiceEnabled ? "复刻音色可用于回响" : "复刻音色已停用"
         case "pending", "training", "processing":
             return "复刻音色训练中"
         case "failed":

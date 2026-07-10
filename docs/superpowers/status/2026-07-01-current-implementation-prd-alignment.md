@@ -5,6 +5,15 @@
 
 > 本文用于给产品、开发、测试和后续接手同事快速理解：当前工程已经实现了什么、对应 PRD 哪些闭环、哪些能力仍需真机/服务端/产品决策继续验收。本文不记录任何密钥、token、SecretId、SecretKey 或服务器私密配置。
 
+## 2026-07-10 基线补充
+
+- 本轮基于 iOS `9999290`、后端 `481869e` 继续开发。
+- 2026-07-02 已完成 Echo 本人/家人角色音色路由、角色切换 runtime guard、消息中心和 Context V2 证据链。
+- 2026-07-03 已完成家人 voice profile 绑定修复和旧试用槽默认值清理。
+- 声音复刻合同现升级为 v2：iOS 使用逻辑 `vp_...` profile；后端把它独占绑定到火山 `providerSpeakerId=S_...`，训练、refresh、合成都只在服务端解析 provider ID。
+- `/voice/synthesis` 现在强制验证 profile owner、ready、enabled、provider readiness 和质量验收；不再允许任意用户直接拿 `S_` ID 合成。
+- `voice_clone_slots` 删除策略为 `retireOnDelete`，三个试用槽属于 QA 容量，不是多用户生产容量。
+
 ## 1. 当前仓库与版本
 
 ### iOS 工程

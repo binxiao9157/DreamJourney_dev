@@ -63,6 +63,7 @@ Reason: $reason
 - Backend base URL: \`${BACKEND_BASE_URL:-not configured}\`
 - Backend API token: $token_status
 - Ready voice profile: \`${VOICE_CLONE_READY_PROFILE_ID:-not configured}\`
+- Ready voice profile owner: \`${VOICE_CLONE_READY_PROFILE_USER_ID:-not configured}\`
 - Non-ready diagnostic voice profile: \`${VOICE_CLONE_NON_READY_PROFILE_ID:-not configured}\`
 - User ID: \`$USER_ID\`
 
@@ -136,12 +137,15 @@ BACKEND_API_TOKEN="${BACKEND_API_TOKEN:-${XCCONFIG_API_TOKEN:-$DOC_API_TOKEN}}"
 [[ -n "$BACKEND_API_TOKEN" ]] || fail "BACKEND_API_TOKEN is required. Export it, configure Backend.local.xcconfig, or provide deployed-backend-access.md."
 [[ "$BACKEND_API_TOKEN" != YOUR_* ]] || fail "BACKEND_API_TOKEN is still a placeholder."
 [[ -n "${VOICE_CLONE_READY_PROFILE_ID:-}" ]] || fail "VOICE_CLONE_READY_PROFILE_ID is required because trial voice slots can expire or exhaust training attempts."
+[[ -n "${VOICE_CLONE_READY_PROFILE_USER_ID:-}" ]] || fail "VOICE_CLONE_READY_PROFILE_USER_ID is required because synthesis now enforces persisted profile ownership."
 
 log "Running deployed backend voice clone smoke against $BACKEND_BASE_URL..."
 if ! BACKEND_BASE_URL="$BACKEND_BASE_URL" \
     BACKEND_API_TOKEN="$BACKEND_API_TOKEN" \
     VOICE_CLONE_READY_PROFILE_ID="$VOICE_CLONE_READY_PROFILE_ID" \
+    VOICE_CLONE_READY_PROFILE_USER_ID="$VOICE_CLONE_READY_PROFILE_USER_ID" \
     VOICE_CLONE_NON_READY_PROFILE_ID="${VOICE_CLONE_NON_READY_PROFILE_ID:-}" \
+    VOICE_CLONE_NON_READY_PROFILE_USER_ID="${VOICE_CLONE_NON_READY_PROFILE_USER_ID:-}" \
     python3 "$SCRIPT_DIR/backend-voice-clone-deployed-smoke.py" \
       "$ROOT_DIR" \
       "$USER_ID" \
@@ -198,6 +202,7 @@ Status: passed
 ## Ready Probe
 
 - Voice profile: `{ready.get("voiceProfileId")}`
+- Profile owner: `{ready.get("userId")}`
 - Sample status: `{ready.get("sampleStatus")}`
 - Provider status: `{ready.get("providerStatus")}`
 - Provider log ID: `{ready.get("providerLogId")}`

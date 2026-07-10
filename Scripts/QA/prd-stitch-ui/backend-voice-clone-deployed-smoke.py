@@ -7,7 +7,6 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -21,7 +20,9 @@ API_TOKEN = os.environ.get("BACKEND_API_TOKEN", "")
 USER_ID = sys.argv[2]
 MARKER = re.sub(r"[^A-Za-z0-9_-]", "_", sys.argv[3])
 READY_VOICE_PROFILE_ID = os.environ.get("VOICE_CLONE_READY_PROFILE_ID", "").strip()
+READY_VOICE_PROFILE_USER_ID = os.environ.get("VOICE_CLONE_READY_PROFILE_USER_ID", "").strip()
 NON_READY_VOICE_PROFILE_ID = os.environ.get("VOICE_CLONE_NON_READY_PROFILE_ID", "").strip()
+NON_READY_VOICE_PROFILE_USER_ID = os.environ.get("VOICE_CLONE_NON_READY_PROFILE_USER_ID", "").strip()
 
 if not BASE_URL:
     raise SystemExit("BACKEND_BASE_URL is required")
@@ -29,6 +30,8 @@ if not API_TOKEN:
     raise SystemExit("BACKEND_API_TOKEN is required")
 if not READY_VOICE_PROFILE_ID:
     raise SystemExit("VOICE_CLONE_READY_PROFILE_ID is required")
+if not READY_VOICE_PROFILE_USER_ID:
+    raise SystemExit("VOICE_CLONE_READY_PROFILE_USER_ID is required")
 
 
 def request_json(
@@ -78,44 +81,31 @@ def assert_true(value: Any, message: str) -> None:
         raise AssertionError(message)
 
 
-def profile_payload(voice_profile_id: str) -> Dict[str, Any]:
-    return {
-        "userId": USER_ID,
-        "voiceProfileId": voice_profile_id,
-        "sampleStatus": "pending",
-        "sampleCount": 1,
-        "authorizationConfirmed": True,
-        "authorizationVersion": "voice-clone-smoke-v1",
-        "authorizationText": "QA smoke only verifies deployed voice clone contracts.",
-        "authorizationConfirmedAt": datetime.now(timezone.utc).isoformat(),
-        "personaScope": "personal",
-        "digitalHumanId": USER_ID,
-        "privacyMetadata": {"scope": "generationAllowed"},
-    }
-
-
-def save_refresh_delete_profile(voice_profile_id: str) -> Dict[str, Any]:
-    request_json("POST", "/voice/profiles", profile_payload(voice_profile_id))
+def refresh_profile(user_id: str, voice_profile_id: str) -> Dict[str, Any]:
     _, refreshed = request_json(
         "POST",
-        f"/voice/profiles/{urllib.parse.quote(USER_ID)}/{urllib.parse.quote(voice_profile_id)}/refresh",
+        f"/voice/profiles/{urllib.parse.quote(user_id)}/{urllib.parse.quote(voice_profile_id)}/refresh",
     )
     profile = refreshed.get("profile")
     if not isinstance(profile, dict):
         raise AssertionError("refresh response missing profile")
-    request_json(
-        "DELETE",
-        f"/voice/profiles/{urllib.parse.quote(USER_ID)}/{urllib.parse.quote(voice_profile_id)}",
-    )
+    if profile.get("sampleStatus") == "ready" and profile.get("qualityAcceptanceRequired"):
+        _, accepted = request_json(
+            "POST",
+            f"/voice/profiles/{urllib.parse.quote(user_id)}/{urllib.parse.quote(voice_profile_id)}/quality-acceptance",
+        )
+        profile = accepted.get("profile")
+        if not isinstance(profile, dict):
+            raise AssertionError("quality acceptance response missing profile")
     return profile
 
 
-def synthesize(voice_profile_id: str, *, expected: Optional[int] = 200) -> Tuple[int, Dict[str, Any]]:
+def synthesize(user_id: str, voice_profile_id: str, *, expected: Optional[int] = 200) -> Tuple[int, Dict[str, Any]]:
     return request_json(
         "POST",
         "/voice/synthesis",
         {
-            "userId": USER_ID,
+            "userId": user_id,
             "voiceProfileId": voice_profile_id,
             "text": "你好。",
             "format": "wav",
@@ -192,17 +182,20 @@ def main() -> None:
     assert_equal(tencent_audio_drive.get("requestOutputMode"), "tencentAudioDrive", "tencentAudioDrive output mode")
     assert_equal(tencent_audio_drive.get("audioFormat"), "pcm16kMono", "tencentAudioDrive audioFormat")
 
-    ready_profile = save_refresh_delete_profile(READY_VOICE_PROFILE_ID)
+    ready_profile = refresh_profile(READY_VOICE_PROFILE_USER_ID, READY_VOICE_PROFILE_ID)
     assert_equal(ready_profile.get("voiceProfileId"), READY_VOICE_PROFILE_ID, "ready voiceProfileId")
     assert_equal(ready_profile.get("sampleStatus"), "ready", "ready sampleStatus")
     assert_equal(ready_profile.get("isEnabled"), True, "ready isEnabled")
 
-    _, ready_synthesis = synthesize(READY_VOICE_PROFILE_ID, expected=200)
+    assert_equal(ready_profile.get("qualityAcceptanceRequired"), False, "ready quality acceptance")
+
+    _, ready_synthesis = synthesize(READY_VOICE_PROFILE_USER_ID, READY_VOICE_PROFILE_ID, expected=200)
     ready_result = validate_tencent_audio_drive(ready_synthesis, READY_VOICE_PROFILE_ID)
 
     non_ready_result: Dict[str, Any] = {"configured": bool(NON_READY_VOICE_PROFILE_ID)}
     if NON_READY_VOICE_PROFILE_ID:
-        non_ready_profile = save_refresh_delete_profile(NON_READY_VOICE_PROFILE_ID)
+        non_ready_owner = NON_READY_VOICE_PROFILE_USER_ID or READY_VOICE_PROFILE_USER_ID
+        non_ready_profile = refresh_profile(non_ready_owner, NON_READY_VOICE_PROFILE_ID)
         non_ready_result.update({
             "voiceProfileId": NON_READY_VOICE_PROFILE_ID,
             "sampleStatus": non_ready_profile.get("sampleStatus"),
@@ -212,7 +205,7 @@ def main() -> None:
         if non_ready_profile.get("sampleStatus") == "ready":
             non_ready_result["diagnosticFailure"] = "skipped because probe voice is now ready"
         else:
-            status, failure = synthesize(NON_READY_VOICE_PROFILE_ID, expected=None)
+            status, failure = synthesize(non_ready_owner, NON_READY_VOICE_PROFILE_ID, expected=None)
             if 200 <= status < 300:
                 raise AssertionError("non-ready voice unexpectedly synthesized successfully")
             non_ready_result.update(diagnostic_failure_payload(status, failure))
@@ -238,6 +231,7 @@ def main() -> None:
             "tencentAudioDriveSupported": tencent_audio_drive.get("supported"),
         },
         "readyProbe": {
+            "userId": READY_VOICE_PROFILE_USER_ID,
             "voiceProfileId": READY_VOICE_PROFILE_ID,
             "sampleStatus": ready_profile.get("sampleStatus"),
             "providerStatus": ready_profile.get("providerStatus"),

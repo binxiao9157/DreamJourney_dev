@@ -47,7 +47,16 @@
       "task_file": "docs/plans/task_05_review-and-release-qa.md",
       "title": "Review and release QA",
       "updated_at": "2026-06-18T00:50:38+08:00"
+    },
+    "docs/plans/task_06_p0-voice-clone-exclusive-slot-allocation.md": {
+      "ledger_id": "L20260710-115209",
+      "ledger_path": ".complex-problems/L20260710-115209",
+      "next_action": "none",
+      "status": "complete",
+      "task_file": "docs/plans/task_06_p0-voice-clone-exclusive-slot-allocation.md",
+      "title": "P0 voice clone exclusive slot allocation",
+      "updated_at": "2026-07-10T12:22:17+08:00"
     }
   },
-  "updated_at": "2026-06-18T00:50:38+08:00"
+  "updated_at": "2026-07-10T12:22:17+08:00"
 }

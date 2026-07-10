@@ -46,6 +46,7 @@ let pythonContent = read(pythonSmoke)
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let releasePackage = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
 let status = read(statusDoc)
+let voiceCloneService = read("DreamJourney/Sources/Memoir/VoiceCloneService.swift")
 
 for required in [
     "BACKEND_VOICE_CLONE_DEPLOYED_SMOKE",
@@ -70,6 +71,7 @@ for required in [
     "tencentAudioDrive",
     "seed-icl-2.0",
     "VOICE_CLONE_READY_PROFILE_ID",
+    "VOICE_CLONE_READY_PROFILE_USER_ID",
     "VOICE_CLONE_NON_READY_PROFILE_ID",
     "pcm16kMono",
     "byteCount",
@@ -80,10 +82,30 @@ for required in [
     assertContains(pythonContent, required, "Python smoke should cover \(required)")
 }
 assertNotContains(pythonContent, "print(audio", "Python smoke must not print raw audio")
+assertNotContains(pythonContent, "\"DELETE\"", "deployed smoke must not delete a real trained voice profile")
+assertContains(pythonContent, "/quality-acceptance", "deployed smoke should accept ready profile quality before synthesis when needed")
 assertNotContains(pythonContent, "S_PhXlHqB52", "Python smoke must not default to exhausted trial voice IDs")
 assertNotContains(pythonContent, "S_deJ2HqB52", "Python smoke must not default to old trial voice IDs")
 assertNotContains(runnerContent, "S_PhXlHqB52", "runner must not default to exhausted trial voice IDs")
 assertNotContains(runnerContent, "S_deJ2HqB52", "runner must not default to old trial voice IDs")
+assertContains(runnerContent, "VOICE_CLONE_READY_PROFILE_USER_ID", "runner should require the persisted profile owner")
+assertContains(voiceCloneService, #""vp_\(UUID().uuidString.prefix(8))""#, "new iOS voice profiles should use provider-agnostic logical IDs")
+
+let backendRoot = root.deletingLastPathComponent().appendingPathComponent("DreamJourneyBackend")
+let backendVoiceClone = backendRoot.appendingPathComponent("app/services/voice_clone.py")
+let backendMain = backendRoot.appendingPathComponent("app/main.py")
+let backendStore = backendRoot.appendingPathComponent("app/services/postgres_store.py")
+if fileManager.fileExists(atPath: backendVoiceClone.path),
+   fileManager.fileExists(atPath: backendMain.path),
+   fileManager.fileExists(atPath: backendStore.path) {
+    let providerContent = try String(contentsOf: backendVoiceClone, encoding: .utf8)
+    let mainContent = try String(contentsOf: backendMain, encoding: .utf8)
+    let storeContent = try String(contentsOf: backendStore, encoding: .utf8)
+    assertNotContains(providerContent, "_speaker_id_for_profile", "backend must not restore hash-based slot selection")
+    assertContains(mainContent, "voice clone speaker slot capacity exhausted", "backend should expose explicit slot capacity failure")
+    assertContains(mainContent, "qualityAcceptanceRequired", "synthesis should enforce quality acceptance")
+    assertContains(storeContent, "FOR UPDATE SKIP LOCKED", "Postgres slot allocation should remain atomic")
+}
 
 assertContains(releaseRegression, "RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE", "release regression should expose optional deployed voice clone smoke")
 assertContains(releaseRegression, "run-backend-voice-clone-deployed-smoke.sh", "release regression should call deployed voice clone smoke")

@@ -1,0 +1,588 @@
+{
+  "checks": {
+    "C000": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P001/checks/C000.md",
+      "created_at": "2026-07-10T03:58:06+00:00",
+      "criteria_map": [
+        "独占与复用：内存及 Fake Postgres 测试已覆盖。",
+        "容量耗尽：第三个 profile 在两槽配置下返回 `None`。",
+        "retirement：retired 后不重新分配。",
+        "原子分配：SQL 结构断言已覆盖。"
+      ],
+      "evidence": [
+        "`voice_clone_slots` schema 包含 provider 主键与逻辑 profile 唯一约束。",
+        "Postgres 分配 SQL 使用 `FOR UPDATE SKIP LOCKED` 和单条 CTE update。",
+        "23 个 Postgres store 测试全部通过。"
+      ],
+      "execution_map": [
+        "R000 记录 schema、store API、测试与已知边界。"
+      ],
+      "followup_problem_id": null,
+      "id": "C000",
+      "problem_id": "P001",
+      "residual_risk": [
+        "真实 Postgres 容器执行将在 Task 6 总体验证中完成；当前 SQL 仍由 psycopg 参数适配和 FakeCursor 合同覆盖。"
+      ],
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "使用两槽、三个不同 profile 验证容量边界，并对第一个 profile 重复申请及退休后再次申请。"
+      ],
+      "summary": "结果 R000 满足 P001 的 store 级成功标准；尚未接入 API 属于已规划的 P002，不是本子问题缺口。"
+    },
+    "C001": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P002/checks/C001.md",
+      "created_at": "2026-07-10T04:08:51+00:00",
+      "criteria_map": [
+        "容量错误：第四个 profile 返回 409。",
+        "ID 分离：provider 收到 `S_`，响应保持 `vp_`。",
+        "生命周期：refresh 使用 provider binding，delete 将 slot 置为 retired。",
+        "合成授权：持久化归属、ready/enabled/provider-ready/quality accepted 均为强制条件。",
+        "旧数据：无 `providerSpeakerId` 的 `S_` profile 仍可解析合成。"
+      ],
+      "evidence": [
+        "完整后端验证通过 140 tests、compileall、Voice Clone 2.0 contract smoke 和 FastAPI smoke。",
+        "API 测试证明三槽容量、provider 实际参数、公开响应脱敏、跨用户拒绝、pending 拒绝和 legacy `S_` 合成。"
+      ],
+      "execution_map": [
+        "R001 列出代码、合同和验证结果。"
+      ],
+      "followup_problem_id": null,
+      "id": "C001",
+      "problem_id": "P002",
+      "residual_risk": [
+        "旧 deployed smoke 仍按“先删除再合成”的旧宽松行为编排，必须在 P003 更新为先质量验收和合成、最后删除。",
+        "线上 Postgres migration/deployed smoke 尚未运行，属于任务级验证边界。"
+      ],
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "三槽四 profile 容量测试、跨用户 profile ID 抢占、跨用户 synthesis、删除后退休均有自动化覆盖。"
+      ],
+      "summary": "R001 证明 P002 的训练、refresh、生命周期和 synthesis 合同已经统一到逻辑 profile 与 provider speaker 分离模型。"
+    },
+    "C002": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/checks/C002.md",
+      "created_at": "2026-07-10T04:16:46+00:00",
+      "criteria_map": [
+        "新 profile `vp_`：源码与静态 guard 覆盖。",
+        "旧 `S_`：client parser 和后端 legacy provider binding 保留。",
+        "binding 字段：client/snapshot 已解析。",
+        "smoke 安全：不创建、不删除、先 refresh/quality acceptance 再 synthesis。",
+        "文档：实现、路由、部署、运维和专项状态均已更新。"
+      ],
+      "evidence": [
+        "iOS generic simulator build 成功。",
+        "9 个相关 Swift guard、release QA package check、后端 140 tests 均通过。",
+        "deployed smoke 静态检查明确禁止 DELETE，并要求 profile owner。"
+      ],
+      "execution_map": [
+        "R002 完整记录客户端、QA、文档和构建结果。"
+      ],
+      "followup_problem_id": null,
+      "id": "C002",
+      "problem_id": "P003",
+      "residual_risk": [
+        "线上部署和真机听感仍是后续阶段验收，不阻塞本非真机子问题完成。"
+      ],
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "静态 guard 同时检查 iOS `vp_`、后端无 hash helper、容量错误和 `FOR UPDATE SKIP LOCKED`，防止两个仓库单边回退。"
+      ],
+      "summary": "R002 满足 P003 的逻辑 ID、客户端兼容、deployed smoke 安全和文档成功标准。"
+    },
+    "C003": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/checks/C003.md",
+      "created_at": "2026-07-10T04:22:04+00:00",
+      "criteria_map": [
+        "同一供应商音色槽不能被两个逻辑档案拥有：由存储唯一绑定、原子分配及内存/Postgres 测试证明。",
+        "三槽池的第四个活跃档案明确失败：后端返回 HTTP 409，测试覆盖容量耗尽，不会覆盖已有声音。",
+        "非法合成被拒绝：缺失、跨用户、禁用、删除、未 ready 或未质量验收均有 404/409 合同测试。",
+        "有效逻辑档案可解析供应商槽：训练、refresh、synthesis 均通过内部 binding 调用 provider。",
+        "旧 `S_` 档案兼容：legacy direct provider 路径和测试已保留。",
+        "iOS 无需供应商槽 ID：角色、家人和 Echo 合同只依赖逻辑 `voiceProfileId`，静态 guard 通过。",
+        "后端与 iOS 非真机验证通过：完整后端验证、QA guard 和模拟器构建均成功。"
+      ],
+      "evidence": [
+        "内存与 Postgres 存储均实现独占分配、同档案重试复用、容量耗尽、状态更新与永久退役合同。",
+        "Postgres 分配使用唯一约束和 `FOR UPDATE SKIP LOCKED`，并通过并发合同测试。",
+        "后端训练、状态刷新和合成只在内部使用 `providerSpeakerId`；公开 API 与 iOS 继续使用逻辑 `voiceProfileId`。",
+        "`/voice/synthesis` 校验用户归属、ready、enabled、供应商就绪、质量验收和 provider binding。",
+        "iOS 新档案采用 `vp_` 逻辑 ID，并能解析 provider binding 状态；已有 `S_` 档案保留兼容路径。",
+        "`verify_backend.sh` 通过 141 项测试、编译检查、声音复刻合同 smoke、FastAPI smoke 和 diff 检查。",
+        "10 个相关 Swift QA guard 与 iOS Debug 模拟器通用构建通过。"
+      ],
+      "execution_map": [
+        "P001 完成存储层与原子分配。",
+        "P002 完成 API、provider binding、授权与生命周期合同。",
+        "P003 完成 iOS 消费、QA 脚本和交接文档。",
+        "根级复核补充账号超期清理时的槽位退役，并加入内存/Postgres 回归测试。"
+      ],
+      "followup_problem_id": null,
+      "id": "C003",
+      "problem_id": "P000",
+      "residual_risk": [
+        "服务器尚未部署新表和合同，部署后必须在真实 Postgres 上运行 deployed smoke；这属于当前非部署任务之外的外部验收。",
+        "三个试用槽只支持三个未退休档案，扩容依赖购买或配置新的供应商槽位。",
+        "真机听感、腾讯 audio-drive 和麦克风恢复不属于本任务范围，仍需后续真机阶段验收。"
+      ],
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "两个用户分别占用不同槽位，同档案重试保持原槽，容量耗尽后新档案无法分配。",
+        "档案删除或账号最终清理后槽位进入 `retired`，新用户无法继承该槽位。",
+        "跨用户复用同一逻辑档案 ID 和跨用户合成均被拒绝。"
+      ],
+      "summary": "验收通过。当前实现已在既定非真机范围内消除哈希选槽导致的跨用户覆盖风险，建立逻辑音色档案与供应商音色槽的持久化独占关系，并在合成前完成归属与可用状态校验。账号最终清理也会退役已绑定槽位，不会把残留声音重新分配给其他用户。"
+    }
+  },
+  "counters": {
+    "check": 4,
+    "event": 48,
+    "problem": 4,
+    "result": 4,
+    "ticket": 4
+  },
+  "created_at": "2026-07-10T03:52:09+00:00",
+  "effort": "medium",
+  "language": "zh",
+  "ledger_id": "L20260710-115209",
+  "problems": {
+    "P000": {
+      "body_path": "problems/P000/README.md",
+      "check_ids": [
+        "C003"
+      ],
+      "created_at": "2026-07-10T03:52:09+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Close the Lodestar task represented by `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/plans/task_06_p0-voice-clone-exclusive-slot-allocation.md` using recursive problem, ticket, result, and check state.\n\nTask context:\n\n# P0 voice clone exclusive slot allocation",
+      "followup_ids": [],
+      "id": "P000",
+      "package_path": "problems/P000",
+      "parent_id": null,
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P001",
+        "P002",
+        "P003"
+      ],
+      "success_criteria": [
+        "Two logical profiles cannot own the same configured provider speaker.",
+        "A fourth active profile against a three-slot pool receives an explicit capacity error rather than overwriting another voice.",
+        "`/voice/synthesis` rejects missing, disabled, deleted, unaccepted, or cross-user profiles.",
+        "A valid logical profile resolves to its assigned provider speaker for training, status refresh, and synthesis.",
+        "Existing persisted profiles with `voiceProfileId=S_...` remain synthesizable when otherwise usable.",
+        "No provider speaker ID is required in iOS role/family binding.",
+        "Backend verification and iOS non-device build pass."
+      ],
+      "ticket_ids": [
+        "T000"
+      ],
+      "title": "P0 voice clone exclusive slot allocation",
+      "updated_at": "2026-07-10T04:22:04+00:00"
+    },
+    "P001": {
+      "body_path": "problems/P000/children/P001/README.md",
+      "check_ids": [
+        "C000"
+      ],
+      "created_at": "2026-07-10T03:53:55+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "内存与 Postgres store 目前没有 provider speaker 的所有权记录，训练入口只能通过哈希选择配置中的 `S_` 槽，无法阻止并发碰撞或跨 profile 覆盖。",
+      "followup_ids": [],
+      "id": "P001",
+      "package_path": "problems/P000/children/P001",
+      "parent_id": "P000",
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "两种 store 都能同步配置槽、独占分配、查询和更新槽状态。",
+        "Postgres 使用带锁/原子更新，两个并发分配不会取得同一槽。",
+        "重复分配同一逻辑 profile 返回原槽。",
+        "容量耗尽返回空结果供 API 映射为 409。",
+        "删除后的槽可标记 retired，且不再被分配。",
+        "store 单元测试覆盖分配、重用、容量和退休行为。"
+      ],
+      "ticket_ids": [
+        "T001"
+      ],
+      "title": "建立音色槽持久化与原子独占分配",
+      "updated_at": "2026-07-10T03:58:06+00:00"
+    },
+    "P002": {
+      "body_path": "problems/P000/children/P002/README.md",
+      "check_ids": [
+        "C001"
+      ],
+      "created_at": "2026-07-10T03:53:56+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "训练、状态查询和合成目前把客户端 `voiceProfileId` 直接当成火山 speaker ID；合成入口也没有验证 profile 所有权、状态和质量验收。",
+      "followup_ids": [],
+      "id": "P002",
+      "package_path": "problems/P000/children/P002",
+      "parent_id": "P000",
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "pool 模式训练先分配 `providerSpeakerId`，API 和角色绑定继续使用逻辑 `voiceProfileId`。",
+        "refresh 和 synthesis 内部解析 provider speaker。",
+        "synthesis 只允许当前用户已持久化、ready、enabled、quality accepted 的 profile。",
+        "disabled/deleted/failed/pending/cross-user profile 被拒绝。",
+        "旧 `voiceProfileId=S_...` profile 保持兼容。",
+        "slot 状态随训练、refresh、disable/delete 更新，删除进入 retired。",
+        "FastAPI 和 provider 单测覆盖上述合同。"
+      ],
+      "ticket_ids": [
+        "T002"
+      ],
+      "title": "接入逻辑 profile 与 provider speaker 分离合同",
+      "updated_at": "2026-07-10T04:08:51+00:00"
+    },
+    "P003": {
+      "body_path": "problems/P000/children/P003/README.md",
+      "check_ids": [
+        "C002"
+      ],
+      "created_at": "2026-07-10T03:53:56+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "iOS 仍把新建逻辑 profile 命名为 `S_...`，容易与真实火山 speaker 混淆；状态文档也未记录独占槽和容量边界。",
+      "followup_ids": [],
+      "id": "P003",
+      "package_path": "problems/P000/children/P003",
+      "parent_id": "P000",
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "iOS 新建 profile 使用 provider 无关的 `vp_...` ID，旧本地 `S_` ID 仍可读取。",
+        "QA 静态检查阻止恢复哈希分配和真实槽默认值。",
+        "runtime/部署文档说明 exclusive slot、retire-on-delete、容量耗尽和旧 profile 兼容策略。",
+        "最新实现/分支状态文档更新到当前提交口径。",
+        "后端验证、相关 Swift 检查、iOS Debug build 和两个仓库 `git diff --check` 通过。"
+      ],
+      "ticket_ids": [
+        "T003"
+      ],
+      "title": "更新 iOS 逻辑 ID、QA 护栏和交接文档",
+      "updated_at": "2026-07-10T04:16:46+00:00"
+    }
+  },
+  "results": {
+    "R000": {
+      "artifacts": [
+        "`app/services/in_memory_store.py`",
+        "`app/services/postgres_store.py`",
+        "`tests/test_postgres_store.py`"
+      ],
+      "body_path": "problems/P000/children/P001/results/R000.md",
+      "created_at": "2026-07-10T03:57:33+00:00",
+      "done": [
+        "新增 `voice_clone_slots` 结构化表及用户索引。",
+        "新增 `allocate_voice_clone_slot`、`get_voice_clone_slot`、`list_voice_clone_slots`、`update_voice_clone_slot`。",
+        "同一逻辑 profile 重复申请返回原槽；不同 profile 独占；满容量返回 `None`。",
+        "retired 槽保留绑定且不再回池。",
+        "Fake Postgres 和内存 store 测试覆盖分配、复用、容量、训练次数和退休。"
+      ],
+      "id": "R000",
+      "known_gaps": [
+        "尚未把 store 分配接入训练、refresh、disable/delete 和 synthesis API；由 P002 处理。",
+        "真实 Postgres 容器验证留到任务级整体验证。"
+      ],
+      "problem_id": "P001",
+      "root_id": "P000",
+      "summary": "内存和 Postgres store 已具备配置槽注册、逻辑 profile 独占分配、查询、状态更新和退休能力。Postgres 使用单条 CTE 与 `FOR UPDATE SKIP LOCKED` 完成抢占。",
+      "ticket_id": "T001",
+      "verification": [
+        "`.venv/bin/python -m unittest tests.test_postgres_store`：23 tests passed。",
+        "聚焦三个新增测试先失败，再在实现后通过。"
+      ]
+    },
+    "R001": {
+      "artifacts": [
+        "`app/main.py`",
+        "`app/services/voice_clone.py`",
+        "`app/services/runtime_config.py`",
+        "`scripts/voice_clone_2_contract_smoke.py`",
+        "`tests/test_core_services.py`"
+      ],
+      "body_path": "problems/P000/children/P002/results/R001.md",
+      "created_at": "2026-07-10T04:07:58+00:00",
+      "done": [
+        "删除 provider 层哈希选槽，pool 模式只接受已分配的 configured speaker。",
+        "创建 profile 时分配独占槽，容量耗尽返回 HTTP 409。",
+        "provider 返回的 `S_` ID 不再覆盖逻辑 profile ID。",
+        "refresh 使用绑定的 provider ID；disable/delete 同步 slot，删除进入 retired。",
+        "synthesis 验证持久化归属、ready、enabled、provider ready 和 quality acceptance。",
+        "legacy `voiceProfileId=S_...` profile 保留直接解析兼容。",
+        "profile 响应隐藏 `providerSpeakerId`，暴露 binding mode/state。",
+        "防止相同逻辑 profile ID 被另一用户覆盖。",
+        "runtime 合同升级到 v2，声明 exclusivePersistentSlot 和 retireOnDelete。"
+      ],
+      "id": "R001",
+      "known_gaps": [
+        "真实 Postgres 服务环境部署 smoke 尚未执行；留到 Task 6 总体验证/部署阶段。",
+        "iOS 仍生成 `S_` 逻辑 ID，P003 将改成 `vp_` 并保留旧数据兼容。"
+      ],
+      "problem_id": "P002",
+      "root_id": "P000",
+      "summary": "训练、refresh 和 synthesis 已统一通过持久化 profile 解析 provider speaker；公开 API 保留逻辑 `voiceProfileId` 并隐藏真实 `providerSpeakerId`。合成新增所有权、状态、启用和质量验收校验。",
+      "ticket_id": "T002",
+      "verification": [
+        "`STORE_BACKEND=memory .venv/bin/python -m unittest tests.test_core_services tests.test_postgres_store`：134 tests passed。",
+        "`./scripts/verify_backend.sh`：140 tests、compileall、Voice Clone 2.0 contract smoke、FastAPI smoke、diff check 全部通过。"
+      ]
+    },
+    "R002": {
+      "artifacts": [
+        "`DreamJourney/Sources/Memoir/VoiceCloneService.swift`",
+        "`DreamJourney/Sources/Services/DreamJourneyBackendClient.swift`",
+        "`Scripts/QA/prd-stitch-ui/backend-voice-clone-deployed-smoke.py`",
+        "`docs/superpowers/status/2026-07-10-voice-clone-exclusive-slot-allocation.md`"
+      ],
+      "body_path": "problems/P000/children/P003/results/R002.md",
+      "created_at": "2026-07-10T04:16:18+00:00",
+      "done": [
+        "`VoiceCloneService.makeSpeakerId()` 改为 `vp_...`，旧 `S_` 持久化值仍可读取。",
+        "iOS contract/snapshot 新增 binding mode、managed 和 slot state。",
+        "修复家人音色 ready 但 disabled 时状态文案误报可用的问题。",
+        "deployed smoke 强制 `VOICE_CLONE_READY_PROFILE_USER_ID`，不创建/删除真实 profile。",
+        "静态 guard 覆盖逻辑 ID、profile owner、不删除音色、无哈希分配、Postgres 锁和容量错误。",
+        "更新当前实现、数字人/音色路由、部署 smoke、服务器运维和独占槽状态文档。"
+      ],
+      "id": "R002",
+      "known_gaps": [
+        "未部署后端，线上 `/config/runtime` 和 Postgres schema 尚未验证 v2。",
+        "未运行真机听感；本任务明确不包含真机。",
+        "现有 UIKit 文件仍有若干 `contentEdgeInsets` deprecated warning，与本合同无关。"
+      ],
+      "problem_id": "P003",
+      "root_id": "P000",
+      "summary": "iOS 新建 profile 已使用 `vp_` 逻辑 ID并解析 provider binding 状态；deployed smoke 改为按真实 owner refresh/quality-accept/synthesis，且不再删除线上音色。状态、部署和调用链文档已更新。",
+      "ticket_id": "T003",
+      "verification": [
+        "9 个声音复刻/家人/角色 Swift 静态检查全部通过。",
+        "release QA package check 通过；仅提示历史截图证据目录未完整，不影响本次合同检查。",
+        "iOS Debug simulator generic build 通过，使用 `com.yxj.dreamjourney.app` / `2BTR77V3R8` 命令行覆盖。",
+        "后端 `verify_backend.sh` 通过 140 tests 和全部 smoke。"
+      ]
+    },
+    "R003": {
+      "artifacts": [
+        "子结果：R000、R001、R002。",
+        "专项状态：`docs/superpowers/status/2026-07-10-voice-clone-exclusive-slot-allocation.md`。"
+      ],
+      "body_path": "problems/P000/results/R003.md",
+      "created_at": "2026-07-10T04:17:28+00:00",
+      "done": [
+        "新增内存/Postgres `voice_clone_slots`、原子分配、容量、状态和退休合同。",
+        "去除 provider 哈希选槽；逻辑 `voiceProfileId` 与 `providerSpeakerId` 分离。",
+        "合成增加 owner、ready、enabled、provider-ready、quality acceptance 校验。",
+        "防止 profile ID 跨用户覆盖；legacy `S_` profile 兼容。",
+        "iOS 新 profile 使用 `vp_`，解析 binding 状态，修正家人禁用音色文案。",
+        "deployed smoke 不再删除真实 profile，并要求 owner。",
+        "更新状态、路由、部署和运维文档。"
+      ],
+      "id": "R003",
+      "known_gaps": [
+        "尚未部署到服务器和运行线上 Postgres deployed smoke。",
+        "尚未进行真机听感/腾讯 audio-drive 验收，按任务范围留到后续阶段。",
+        "三个试用槽仍只有三个未退休 profile 容量，生产扩容需要外部资源。"
+      ],
+      "problem_id": "P000",
+      "root_id": "P000",
+      "summary": "P001-P003 均已通过子问题验收。声音复刻从哈希试用槽升级为持久化独占槽，训练/refresh/synthesis 使用后端 provider binding，iOS 与家人/Echo 继续使用逻辑 profile ID。",
+      "ticket_id": "T000",
+      "verification": [
+        "P001：Postgres store 23 tests passed。",
+        "P002：backend verify 140 tests、compileall、contract smoke、FastAPI smoke passed。",
+        "P003：9 个 Swift guard、release QA package check、iOS Debug simulator generic build passed。"
+      ]
+    }
+  },
+  "root_id": "P000",
+  "schema_version": 6,
+  "tickets": {
+    "T000": {
+      "acceptance_criteria": [
+        "同一 configured provider speaker 同时最多绑定一个有效逻辑 profile。",
+        "三个 provider speaker 已占用时，第四个新 profile 返回明确的 HTTP 409 capacity error。",
+        "重复提交同一逻辑 profile 复用原分配，不重新占用其他槽。",
+        "训练、refresh 与 synthesis 使用 `providerSpeakerId`，API 返回和 iOS 绑定继续使用逻辑 `voiceProfileId`。",
+        "合成拒绝不存在、跨用户、pending、failed、disabled、deleted 或未质量验收的 profile。",
+        "删除后的 provider slot 进入 retired，不自动分配给其他用户。",
+        "旧 `S_` profile 在满足可用条件时仍可合成。",
+        "后端完整测试、静态 QA、iOS Debug 构建与 `git diff --check` 通过。"
+      ],
+      "assumptions": [
+        "当前三个 `S_` 槽用于 QA/试用，生产扩容需要另行购买或切换后付费资源。",
+        "iOS 不需要知道真实 provider speaker ID。",
+        "本任务不改变腾讯数字人会话、公开 UI 和真机流程。"
+      ],
+      "body_path": "problems/P000/tickets/T000.md",
+      "classification": "split",
+      "classification_reason": "任务包含独立的存储原子分配、训练/刷新/合成合同迁移、iOS 逻辑 ID 兼容和跨仓库验证，分别需要清晰的成功标准。",
+      "created_at": "2026-07-10T03:52:56+00:00",
+      "id": "T000",
+      "problem_definition": "当前试用/控制台音色池使用逻辑 profile ID 哈希取模选择 `S_` 音色。不同用户或角色可能碰撞到同一 provider speaker，后一次训练会覆盖前一人的声音。`/voice/synthesis` 也没有先验证 profile 的所有权、启用状态与质量验收状态，存在错误音色和越权合成风险。",
+      "problem_id": "P000",
+      "proposed_solution": "在内存和 Postgres store 中增加 provider speaker slot 记录与原子分配接口。App 继续使用逻辑 `voiceProfileId`，后端将其绑定到独占的 `providerSpeakerId`，并在训练、查询和合成时内部解析。训练状态同步到 slot；禁用保留占用；删除将 slot 标记为 retired，避免跨用户复用残留音色。旧的 `voiceProfileId=S_...` profile 走兼容解析。合成入口必须加载持久化 profile，验证用户归属、ready/enabled/quality accepted，再调用 provider。",
+      "result_ids": [
+        "R003"
+      ],
+      "risks": [
+        "现有数据库中的 `S_` profile 没有 slot 记录，需要兼容而不能强制迁移失败。",
+        "provider 训练失败后是否可重试必须继续绑定原槽，不能把可能含有声音数据的槽发给其他用户。",
+        "Postgres 分配必须使用单条带锁语句或等价原子操作，避免并发抢占同一槽。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现可持久化的音色槽独占分配与合成授权",
+      "updated_at": "2026-07-10T04:17:28+00:00",
+      "verification_plan": "先补 store 和 API 失败测试，再实现 schema/store/service。运行后端单测和 FastAPI smoke，增加静态合同检查覆盖逻辑/供应商 ID 分离和禁止哈希分配。更新 iOS 逻辑 ID前缀并运行相关 Swift 检查与模拟器 Debug 构建，最后执行两个仓库的 `git diff --check`。"
+    },
+    "T001": {
+      "acceptance_criteria": [
+        "schema 包含 provider speaker 主键和唯一逻辑 profile 绑定。",
+        "同一逻辑 profile 重复分配返回同一槽。",
+        "不同 profile 不会获得同一槽。",
+        "满容量返回 `None`。",
+        "retired 槽不再分配。",
+        "Postgres fake/store 测试覆盖并发竞争模拟。"
+      ],
+      "assumptions": [
+        "provider speaker 配置列表由环境变量提供。",
+        "槽删除后默认退休，不自动清空 provider 数据。"
+      ],
+      "body_path": "problems/P000/children/P001/tickets/T001.md",
+      "classification": "one_go",
+      "classification_reason": "存储接口、SQL 方案和验证边界已经明确，可在一个可回滚实现中完成并立即运行聚焦单测。",
+      "created_at": "2026-07-10T03:54:19+00:00",
+      "id": "T001",
+      "problem_definition": "后端没有 provider speaker 的持久化所有权，无法安全支持多个本人/家人音色 profile。",
+      "problem_id": "P001",
+      "proposed_solution": "新增 `voice_clone_slots` 表和 store API。配置槽先幂等注册；分配使用单条 Postgres CTE + `FOR UPDATE SKIP LOCKED` 选择已有绑定或可用槽，并原子更新为 assigned。内存 store 实现相同行为。提供状态更新、查询和列表能力，删除后标记 retired。",
+      "result_ids": [
+        "R000"
+      ],
+      "risks": [
+        "FakeCursor 必须准确模拟 CTE 分配，否则测试可能只验证假实现。",
+        "老数据库需要通过 `CREATE TABLE IF NOT EXISTS` 无损升级。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "为内存与 Postgres 增加独占音色槽存储",
+      "updated_at": "2026-07-10T03:57:33+00:00",
+      "verification_plan": "先扩展 `tests/test_postgres_store.py` 和独立内存 store 测试，再实现 schema 和方法，运行相关 unittest。"
+    },
+    "T002": {
+      "acceptance_criteria": [
+        "pool 模式第四个 profile 对三槽配置返回 409。",
+        "profile API 返回逻辑 ID，不把真实 provider ID暴露给 iOS。",
+        "provider 收到分配后的真实 `S_` ID。",
+        "refresh、synthesis、disable、delete 更新正确槽状态。",
+        "synthesis 拒绝未持久化、跨用户和未验收 profile。",
+        "legacy `S_` profile 仍能合成。",
+        "API、provider 与 runtime 测试通过。"
+      ],
+      "assumptions": [
+        "旧 `S_` profile 只有在后端已持久化且状态可用时兼容。",
+        "provider speaker ID 仅在后端内部存储和日志中使用。"
+      ],
+      "body_path": "problems/P000/children/P002/tickets/T002.md",
+      "classification": "one_go",
+      "classification_reason": "生命周期入口共享同一 profile-to-provider 解析规则，作为一个原子合同修改更容易保持兼容并用同一组 API 测试验证。",
+      "created_at": "2026-07-10T03:58:35+00:00",
+      "id": "T002",
+      "problem_definition": "API 仍直接把客户端逻辑 ID 当成 provider speaker，且 synthesis 没有 profile 授权校验，无法利用刚实现的独占槽边界。",
+      "problem_id": "P002",
+      "proposed_solution": "抽取 pool-mode/configured-speaker helper。创建 profile 时在 pool 模式原子分配槽，以逻辑 ID 保存 profile、以 `providerSpeakerId` 调 provider；refresh 和 synthesis 从持久化 profile 解析 provider ID。增加公开 profile 过滤，响应只暴露 binding mode/state，不暴露真实 provider ID。生命周期操作同步槽状态，删除退休。synthesis 强制验证归属、ready、enabled、quality accepted 和 provider readiness，并保留旧 `S_` profile fallback。",
+      "result_ids": [
+        "R001"
+      ],
+      "risks": [
+        "当前测试中部分 synthesis 直接传 `S_` 而没有 seed profile，需要改成显式 legacy profile fixture。",
+        "provider 返回的 speaker ID 不能覆盖逻辑 ID。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "将独占槽接入声音复刻全生命周期",
+      "updated_at": "2026-07-10T04:07:58+00:00",
+      "verification_plan": "先增加 FastAPI 失败测试和 provider 参数断言，再修改 service/main/runtime。运行 `tests.test_core_services` 和完整后端验证。"
+    },
+    "T003": {
+      "acceptance_criteria": [
+        "新建 iOS profile 使用 `vp_`，旧 `S_` 本地 profile 正常读取。",
+        "iOS 可解析 `providerBindingMode/providerSlotState/providerSlotManaged`。",
+        "deployed smoke 不创建或删除真实 ready profile，且按 owner 调 synthesis。",
+        "静态 guard 阻止真实槽默认值、哈希分配语义和先删除后合成回归。",
+        "文档明确逻辑 ID、独占槽、retire-on-delete、容量和部署迁移。",
+        "iOS build、Swift QA、后端验证及 diff check 通过。"
+      ],
+      "assumptions": [
+        "deployed smoke 的 `VOICE_CLONE_READY_PROFILE_ID` 指逻辑 profile ID；legacy 环境中它可以仍是 `S_`。",
+        "真机听感不在本任务范围。"
+      ],
+      "body_path": "problems/P000/children/P003/tickets/T003.md",
+      "classification": "one_go",
+      "classification_reason": "iOS 字段兼容、smoke 编排和文档口径均依赖已确定的 v2 合同，可作为一个跨仓库但低风险的收敛修改并立即构建验证。",
+      "created_at": "2026-07-10T04:09:50+00:00",
+      "id": "T003",
+      "problem_definition": "iOS 新建 profile 仍使用 `S_` 前缀，deployed smoke 依赖“任意用户直接合成并先删除 profile”的旧宽松合同，文档也把真实 provider 槽和产品 profile 混为一谈。",
+      "problem_id": "P003",
+      "proposed_solution": "将 iOS 新逻辑 ID 改为 `vp_`，在 client/snapshot 中解析 binding mode/state。重写 deployed smoke：明确 profile owner、读取/refresh 已持久化 profile、必要时质量确认、先合成后结束且绝不删除真实 profile。扩展静态 guard，更新 runtime/部署/实现文档与 Lodestar 状态。",
+      "result_ids": [
+        "R002"
+      ],
+      "risks": [
+        "已部署 profile 的 owner user ID 必须由 QA 明确提供，不能继续使用随机 probe user。",
+        "不应在 smoke 中破坏或删除真实已训练音色。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "收敛 iOS 逻辑 ID、deployed smoke 与交接文档",
+      "updated_at": "2026-07-10T04:16:18+00:00",
+      "verification_plan": "运行 backend smoke static check、相关 voice clone Swift checks、release QA package check、iOS Debug simulator build、后端 verify 和两个仓库 diff check。"
+    }
+  },
+  "updated_at": "2026-07-10T04:22:04+00:00"
+}

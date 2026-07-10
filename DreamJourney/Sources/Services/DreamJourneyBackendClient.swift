@@ -700,6 +700,9 @@ struct VoiceCloneProfileContract {
     let deleteContract: String
     let personaScope: String
     let digitalHumanId: String
+    let providerBindingMode: String
+    let providerSlotManaged: Bool
+    let providerSlotState: String
 
     init?(json: [String: Any]) {
         guard let voiceProfileId = json["voiceProfileId"] as? String,
@@ -726,6 +729,11 @@ struct VoiceCloneProfileContract {
         self.deleteContract = json["deleteContract"] as? String ?? ""
         self.personaScope = json["personaScope"] as? String ?? "personal"
         self.digitalHumanId = json["digitalHumanId"] as? String ?? ""
+        self.providerBindingMode = json["providerBindingMode"] as? String ?? (
+            voiceProfileId.hasPrefix("S_") ? "legacyDirectProviderId" : "unassigned"
+        )
+        self.providerSlotManaged = json["providerSlotManaged"] as? Bool ?? false
+        self.providerSlotState = json["providerSlotState"] as? String ?? ""
     }
 
     private static func intValue(_ value: Any?) -> Int? {

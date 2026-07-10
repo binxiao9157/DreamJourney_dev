@@ -41,6 +41,9 @@ struct VoiceCloneProfileSnapshot {
     let providerMessage: String
     let contractVersion: Int
     let defaultReleaseVisible: Bool
+    let providerBindingMode: String
+    let providerSlotManaged: Bool
+    let providerSlotState: String
 
     init(
         voiceProfileId: String,
@@ -55,7 +58,10 @@ struct VoiceCloneProfileSnapshot {
         providerStatus: String = "",
         providerMessage: String = "",
         contractVersion: Int = 1,
-        defaultReleaseVisible: Bool = true
+        defaultReleaseVisible: Bool = true,
+        providerBindingMode: String = "unassigned",
+        providerSlotManaged: Bool = false,
+        providerSlotState: String = ""
     ) {
         self.voiceProfileId = voiceProfileId
         self.sampleStatus = sampleStatus
@@ -70,6 +76,9 @@ struct VoiceCloneProfileSnapshot {
         self.providerMessage = providerMessage
         self.contractVersion = contractVersion
         self.defaultReleaseVisible = defaultReleaseVisible
+        self.providerBindingMode = providerBindingMode
+        self.providerSlotManaged = providerSlotManaged
+        self.providerSlotState = providerSlotState
     }
 
     init(backendContract: VoiceCloneProfileContract) {
@@ -86,7 +95,10 @@ struct VoiceCloneProfileSnapshot {
             providerStatus: backendContract.providerStatus,
             providerMessage: backendContract.providerMessage,
             contractVersion: backendContract.contractVersion,
-            defaultReleaseVisible: backendContract.defaultReleaseVisible
+            defaultReleaseVisible: backendContract.defaultReleaseVisible,
+            providerBindingMode: backendContract.providerBindingMode,
+            providerSlotManaged: backendContract.providerSlotManaged,
+            providerSlotState: backendContract.providerSlotState
         )
     }
 
@@ -709,7 +721,7 @@ final class VoiceCloneService {
     }
 
     private static func makeSpeakerId() -> String {
-        "S_\(UUID().uuidString.prefix(8))"
+        "vp_\(UUID().uuidString.prefix(8))"
     }
 
     private static func trainingFailureMessage(from providerMessage: String) -> String {
