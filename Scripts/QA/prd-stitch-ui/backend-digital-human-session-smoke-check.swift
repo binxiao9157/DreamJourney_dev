@@ -81,6 +81,11 @@ for required in [
     "appkey",
     "accesstoken",
     "silent mode",
+    "sessionLease",
+    "heartbeatEndpoint",
+    "releaseEndpoint",
+    "digital_human_session_capacity_exhausted",
+    "capacityReacquired",
     "value intentionally omitted",
 ] {
     assertContains(pythonContent, required, "Python smoke should cover \(required)")
@@ -104,6 +109,9 @@ for required in [
     "credential[\"accesstoken\"]",
     "providerAssetId",
     "providerProjectId",
+    "DIGITAL_HUMAN_SESSION_LEASE_CONTRACT_VERSION",
+    "heartbeat_digital_human_session",
+    "release_digital_human_session",
 ] {
     assertContains(backendMain, required, "backend session endpoint should emit \(required)")
 }
@@ -115,6 +123,8 @@ for required in [
     "cloudRender",
     "appkey",
     "accesstoken",
+    "test_session_lease_reuses_same_context_and_rejects_competing_device",
+    "test_session_lease_heartbeat_and_release_are_owner_scoped_and_idempotent",
 ] {
     assertContains(backendTests, required, "backend tests should cover \(required)")
 }

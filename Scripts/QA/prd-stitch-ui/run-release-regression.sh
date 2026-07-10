@@ -41,6 +41,7 @@ RUN_VOICE_CLONE_SYNTHESIS_RUNTIME_SMOKE="${RUN_VOICE_CLONE_SYNTHESIS_RUNTIME_SMO
 RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE="${RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE:-0}"
 RUN_DIGITAL_HUMAN_VOICE_CLONE_COMBO_GATE="${RUN_DIGITAL_HUMAN_VOICE_CLONE_COMBO_GATE:-0}"
 RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE="${RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE:-0}"
+RUN_DIGITAL_HUMAN_SESSION_LEASE_GATE="${RUN_DIGITAL_HUMAN_SESSION_LEASE_GATE:-0}"
 RUN_DIGITAL_HUMAN_TTS_VISEME_GATE="${RUN_DIGITAL_HUMAN_TTS_VISEME_GATE:-0}"
 RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE="${RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE:-0}"
 RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE="${RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE:-0}"
@@ -128,6 +129,7 @@ Run ID: \`$RUN_ID\`
 - Tencent backend PCM-drive mock UIQA smoke: \`$RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE\`
 - Digital-human + voice-clone combo gate: \`$RUN_DIGITAL_HUMAN_VOICE_CLONE_COMBO_GATE\`
 - Tencent digital-human Phase 1 non-device gate: \`$RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE\`
+- Digital-human session lease non-device gate: \`$RUN_DIGITAL_HUMAN_SESSION_LEASE_GATE\`
 - Digital human TTS/viseme combo gate: \`$RUN_DIGITAL_HUMAN_TTS_VISEME_GATE\`
 - Digital human runtime stub gate: \`$RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE\`
 - Archive failed analysis retry UIQA smoke: \`$RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE\`
@@ -172,6 +174,7 @@ Run ID: \`$RUN_ID\`
 - Optional Tencent backend PCM-drive mock UIQA smoke when \`RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE=1\`; this verifies deployed backend synthesis PCM is chunked into the fake Tencent runtime and stop/interruption cleanup works without a true device.
 - Optional digital-human + voice-clone combo gate when \`RUN_DIGITAL_HUMAN_VOICE_CLONE_COMBO_GATE=1\`; this runs backend digital-human session, backend voice clone deployed, iOS synthesis runtime, and Tencent PCM-drive mock gates under one run id.
 - Optional Tencent digital-human Phase 1 non-device gate when \`RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE=1\`; this verifies backend-first asset source, QA-only local override, lifecycle, audio owner logs, runtime stub, PCM-drive mock, and build without true-device validation.
+- Optional digital-human session lease gate when \`RUN_DIGITAL_HUMAN_SESSION_LEASE_GATE=1\`; this verifies lease reuse, heartbeat, release, expiry, capacity arbitration, stale callback cleanup, and simulator create-heartbeat-release without true-device validation.
 - Optional digital-human TTS/viseme combo gate when \`RUN_DIGITAL_HUMAN_TTS_VISEME_GATE=1\`; this verifies backend mock synthesis \`visemeTimeline\`, iOS provider timeline UIQA, and \`AVAudioPlayer\` metering fallback UIQA.
 - Optional digital-human runtime stub gate when \`RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE=1\`; this verifies backend \`/digital-human/sessions\`, iOS \`TencentDigitalHumanRuntimeStub\`, and \`AudioOnlyDigitalHumanRuntime\` fallback without connecting the real Tencent SDK.
 - Optional archive detail failed-analysis retry UIQA smoke when \`RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE=1\`.
@@ -219,6 +222,7 @@ append_report_footer() {
 - Tencent backend PCM-drive mock UIQA smoke: \`tencent-backend-pcm-drive-mock-smoke/$RUN_ID/\`
 - Digital-human + voice-clone combo gate: \`digital-human-voice-clone-combo-gate/$RUN_ID/\`
 - Tencent digital-human Phase 1 non-device gate: \`tencent-digital-human-phase1-non-device-gate/$RUN_ID/\`
+- Digital-human session lease gate: \`digital-human-session-lease-gate/$RUN_ID/\`
 - Digital human TTS/viseme combo gate: \`digital-human-tts-viseme-gate/$RUN_ID/\`
 - Digital human runtime stub gate: \`digital-human-runtime-stub-smoke/$RUN_ID/\`
 - Archive failed analysis retry UIQA smoke: \`archive-failed-analysis-retry-smoke/$RUN_ID/\`
@@ -357,6 +361,7 @@ for guard in \
   iphoneos-generic-build-check.swift \
   tencent-digital-human-provider-stability-check.swift \
   tencent-digital-human-phase1-stability-check.swift \
+  digital-human-session-lease-check.swift \
   echo-digital-human-phase2-stability-check.swift \
   tencent-digital-human-audio-owner-stop-semantics-check.swift \
   echo-audio-owner-lifecycle-guard-check.swift \
@@ -641,6 +646,16 @@ if [[ "$RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/tencent-digital-human-phase1-non-device-gate/$RUN_ID"
   echo "Skipped by RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE=0" > "$OUTPUT_DIR/tencent-digital-human-phase1-non-device-gate/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_DIGITAL_HUMAN_SESSION_LEASE_GATE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/digital-human-session-lease-gate" \
+  DERIVED_DATA_PATH="$OUTPUT_DIR/DerivedDataDigitalHumanSessionLeaseGate" \
+  "$SCRIPT_DIR/run-digital-human-session-lease-gate.sh"
+else
+  mkdir -p "$OUTPUT_DIR/digital-human-session-lease-gate/$RUN_ID"
+  echo "Skipped by RUN_DIGITAL_HUMAN_SESSION_LEASE_GATE=0" > "$OUTPUT_DIR/digital-human-session-lease-gate/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_DIGITAL_HUMAN_TTS_VISEME_GATE" == "1" ]]; then

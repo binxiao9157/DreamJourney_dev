@@ -177,6 +177,9 @@ grep -Eq '"runtimeStateAfterFinal"[[:space:]]*:[[:space:]]*"ready"' "$RESULT_FIL
 grep -Eq '"allowInterrupt"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Session policy should allow interrupt."
 grep -Eq '"proactiveSpeechAllowed"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Session policy should disallow proactive speech."
 grep -Eq '"credentialMode"[[:space:]]*:[[:space:]]*"backend-issued-mock"' "$RESULT_FILE" || fail "Credential mode should be backend-issued-mock."
+grep -Eq '"leaseStatus"[[:space:]]*:[[:space:]]*"active"' "$RESULT_FILE" || fail "Session lease should start active."
+grep -Eq '"leaseHeartbeatStatus"[[:space:]]*:[[:space:]]*"active"' "$RESULT_FILE" || fail "Session lease heartbeat should succeed."
+grep -Eq '"leaseReleaseStatus"[[:space:]]*:[[:space:]]*"released"' "$RESULT_FILE" || fail "Session lease should be released after the smoke."
 grep -Eq '"defaultReleaseVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Digital human panel must be visible by default."
 
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null

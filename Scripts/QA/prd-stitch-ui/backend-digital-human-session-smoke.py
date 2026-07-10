@@ -94,6 +94,18 @@ def main() -> None:
         False,
         "runtime defaultReleaseVisible",
     )
+    session_lease_capability = digital_human.get("sessionLease") or {}
+    assert_equal(session_lease_capability.get("enabled"), True, "runtime session lease enabled")
+    assert_true(session_lease_capability.get("ttlSeconds", 0) > 0, "runtime session lease ttlSeconds")
+    assert_true(
+        session_lease_capability.get("heartbeatIntervalSeconds", 0) > 0,
+        "runtime session lease heartbeatIntervalSeconds",
+    )
+    assert_equal(
+        session_lease_capability.get("conflictStatusCode"),
+        409,
+        "runtime session lease conflictStatusCode",
+    )
 
     session_payload = {
         "userId": USER_ID,
@@ -124,6 +136,62 @@ def main() -> None:
     fallback = session.get("fallback") or {}
     assert_equal(fallback.get("mode"), "none", "session fallback mode")
 
+    lease = session.get("lease") or {}
+    assert_equal(lease.get("status"), "active", "session lease status")
+    assert_true(lease.get("heartbeatEndpoint"), "session lease heartbeatEndpoint")
+    assert_true(lease.get("releaseEndpoint"), "session lease releaseEndpoint")
+
+    reused_session = request_json("POST", "/digital-human/sessions", session_payload)
+    assert_equal(reused_session.get("sessionId"), session.get("sessionId"), "same context session reuse")
+    assert_equal((reused_session.get("lease") or {}).get("reused"), True, "same context lease reused")
+
+    competing_payload = dict(session_payload)
+    competing_payload["deviceId"] = "deployed-contract-smoke-competitor"
+    capacity_conflict = request_json(
+        "POST",
+        "/digital-human/sessions",
+        competing_payload,
+        expected=409,
+    )
+    conflict_detail = capacity_conflict.get("detail") or {}
+    assert_equal(
+        conflict_detail.get("code"),
+        "digital_human_session_capacity_exhausted",
+        "competing device capacity conflict",
+    )
+
+    heartbeat = request_json(
+        "POST",
+        lease["heartbeatEndpoint"],
+        {"userId": USER_ID, "deviceId": session_payload["deviceId"]},
+    )
+    assert_equal(heartbeat.get("status"), "active", "session heartbeat status")
+
+    release = request_json(
+        "POST",
+        lease["releaseEndpoint"],
+        {
+            "userId": USER_ID,
+            "deviceId": session_payload["deviceId"],
+            "reason": "deployedContractSmokeCompleted",
+        },
+    )
+    assert_true(release.get("status") in ("released", "alreadyReleased"), "session release status")
+
+    next_session = request_json("POST", "/digital-human/sessions", competing_payload)
+    next_lease = next_session.get("lease") or {}
+    assert_equal(next_lease.get("status"), "active", "released capacity can be reacquired")
+    next_release = request_json(
+        "POST",
+        next_lease["releaseEndpoint"],
+        {
+            "userId": USER_ID,
+            "deviceId": competing_payload["deviceId"],
+            "reason": "deployedContractSmokeCleanup",
+        },
+    )
+    assert_true(next_release.get("status") in ("released", "alreadyReleased"), "cleanup release status")
+
     silent = request_json(
         "POST",
         "/digital-human/sessions",
@@ -151,6 +219,8 @@ def main() -> None:
             "sdkAdapterLinked": digital_human.get("sdkAdapterLinked"),
             "assetMode": digital_human.get("assetMode"),
             "defaultReleaseVisible": digital_human.get("defaultReleaseVisible"),
+            "sessionLeaseEnabled": session_lease_capability.get("enabled"),
+            "sessionLeaseTTLSeconds": session_lease_capability.get("ttlSeconds"),
         },
         "session": {
             "sessionId": session.get("sessionId"),
@@ -161,6 +231,12 @@ def main() -> None:
             "hasProviderAssetId": has_asset,
             "hasProviderProjectId": has_project,
             "fallbackMode": fallback.get("mode"),
+            "leaseStatus": lease.get("status"),
+            "leaseReused": (reused_session.get("lease") or {}).get("reused"),
+            "heartbeatStatus": heartbeat.get("status"),
+            "releaseStatus": release.get("status"),
+            "capacityConflictCode": conflict_detail.get("code"),
+            "capacityReacquired": next_lease.get("status") == "active",
         },
         "silentModeRejected": True,
     }

@@ -208,6 +208,8 @@ assertContains(releaseRegression, "RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE", "r
 assertContains(releaseRegression, "run-tencent-backend-pcm-drive-mock-smoke.sh", "release regression should call Tencent backend PCM-drive mock smoke")
 assertContains(releaseRegression, "RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE", "release regression should expose optional Tencent digital-human Phase 1 non-device gate")
 assertContains(releaseRegression, "run-tencent-digital-human-phase1-non-device-gate.sh", "release regression should call Tencent digital-human Phase 1 non-device gate")
+assertContains(releaseRegression, "RUN_DIGITAL_HUMAN_SESSION_LEASE_GATE", "release regression should expose optional digital-human session lease gate")
+assertContains(releaseRegression, "run-digital-human-session-lease-gate.sh", "release regression should call digital-human session lease gate")
 assertContains(releaseRegression, "RUN_P0_PROFILE_CARE_REGRESSION", "release regression should expose public MVP Profile care P0 gate")
 assertContains(releaseRegression, "RUN_P0_PROFILE_CARE_REGRESSION forces RUN_PROFILE_CARE_STATE_SMOKE and RUN_PROFILE_CARE_BACKEND_STATE_SMOKE", "Profile care P0 gate should force local and deployed backend care smokes")
 assertContains(releaseRegression, "BACKEND_API_TOKEN= BACKEND_BASE_URL= ./scripts/verify_backend.sh", "backend verify should not inherit deployed backend credentials")
@@ -462,6 +464,8 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/echo-digital-human-lifecycle-uiqa-smoke-check.swift",
     "Scripts/QA/prd-stitch-ui/run-echo-digital-human-lifecycle-smoke.sh",
     "Scripts/QA/prd-stitch-ui/run-tencent-digital-human-phase1-non-device-gate.sh",
+    "Scripts/QA/prd-stitch-ui/digital-human-session-lease-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-digital-human-session-lease-gate.sh",
     "Scripts/QA/prd-stitch-ui/backend-voice-synthesis-viseme-smoke.py",
     "Scripts/QA/prd-stitch-ui/run-backend-voice-synthesis-viseme-smoke.sh",
     "Scripts/QA/prd-stitch-ui/run-digital-human-tts-viseme-gate.sh",

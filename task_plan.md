@@ -4,9 +4,9 @@
 
 - **Goal:** 按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态
 - **Mode:** Review
-- **Phase:** Phase 2 complete; paused before true-device acceptance
-- **Task:** docs/plans/task_07_p0-echo-digital-human-stability.md (done)
-- **Blockers:** no implementation blocker; true-device audio/lip-sync/interruption/microphone acceptance remains intentionally deferred
+- **Phase:** Phase 3 non-device session lease and concurrency control complete
+- **Task:** docs/plans/task_08_p0-digital-human-session-lease.md
+- **Blockers:** no implementation blocker; provider-side quota release timing remains a later true-device acceptance item
 
 ## Key Decisions
 
@@ -23,10 +23,11 @@
 - Task 6 is complete: deterministic hash-based trial-slot selection was replaced with persistent exclusive assignment, legacy `S_` profiles remain readable, and app-facing `voiceProfileId` is separated from provider-facing speaker IDs.
 - Account purge retires owned provider slots; deleted voice data is never silently recycled to another user.
 - Task 7 is complete: Echo now has lifecycle/session and interaction generations, a cancellable background release lease, generation-bound runtime/audio ownership, deterministic tap interruption, guarded microphone recovery, stale PCM isolation, and immediate quota fallback. Ledger `L20260710-133057` is closed.
+- Task 8 is complete and deployed: digital-human session leases now support safe persistence, reuse, heartbeat, release, TTL expiry, atomic capacity arbitration, iOS lifecycle cleanup, stale-response release, and non-device/deployed Postgres gates. Backend `e9b3104` is live and ledger `L20260710-145321` is closed.
 
 ## Scope
 
-Phase 2 non-device implementation is closed. Do not continue into true-device validation or a new phase until explicitly resumed.
+Phase 2 and Phase 3 are closed, and the backend deployment plus deployed Postgres smoke passed. The next delivery boundary is the deferred true-device Tencent digital-human and cloned-voice acceptance pass.
 
 ## Recovery
 

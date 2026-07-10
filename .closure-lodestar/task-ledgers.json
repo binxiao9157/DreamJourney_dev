@@ -64,7 +64,15 @@
       "status": "complete",
       "task_file": "docs/plans/task_07_p0-echo-digital-human-stability.md",
       "updated_at": "2026-07-10T14:32:24+08:00"
+    },
+    "docs/plans/task_08_p0-digital-human-session-lease.md": {
+      "ledger_id": "L20260710-145321",
+      "ledger_path": ".complex-problems/L20260710-145321",
+      "next_action": "none",
+      "status": "complete",
+      "task_file": "docs/plans/task_08_p0-digital-human-session-lease.md",
+      "updated_at": "2026-07-10T15:21:03+08:00"
     }
   },
-  "updated_at": "2026-07-10T14:32:24+08:00"
+  "updated_at": "2026-07-10T15:21:03+08:00"
 }

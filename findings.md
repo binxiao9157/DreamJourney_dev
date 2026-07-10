@@ -59,3 +59,14 @@
 - Quota failures are terminal for the current provider attempt and fall back to ordinary Echo without retrying or retaining the prior role's audio.
 - PCM send failure clears the failed provider request while preserving the pending microphone-resume state.
 - Non-device evidence passed; real Tencent audio, rendered lip movement, AVAudioSession contention, tap interruption, and microphone recovery still require a later true-device pass.
+
+## Task 8 Resolution
+
+- Backend digital-human sessions now use a persisted lease contract with same-context reuse, same-device context replacement, heartbeat renewal, explicit idempotent release, TTL recovery, and structured capacity conflicts.
+- Postgres arbitration takes transaction-scoped advisory locks for the device and provider resource before capacity decisions, so multiple workers cannot concurrently allocate the same single-capacity asset.
+- Lease persistence contains identifiers, lifecycle metadata, timestamps, and status only; Tencent appkey, accesstoken, and credential payloads remain ephemeral.
+- iOS keeps one active lease with the Tencent runtime, schedules heartbeat while its session generation is current, and releases on role switch, page exit, background grace expiry, provider terminal failure, and stale successful responses.
+- User stop invalidates only the current conversation and does not release the provider lease, preserving continuous Echo behavior.
+- The simulator runtime smoke now performs create, heartbeat, and release, preventing QA runs from leaving capacity occupied until TTL.
+- Final non-device evidence: `tmp/visual-qa/prd-stitch-ui/digital-human-session-lease-gate/20260710-session-lease-final/report.md`.
+- Backend commit `e9b3104` is deployed and the Postgres session smoke passed; real Tencent quota release timing and true-device audio/render behavior remain explicit follow-up acceptance boundaries.

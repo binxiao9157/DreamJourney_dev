@@ -354,6 +354,7 @@ struct DigitalHumanRuntimeCapability {
     let fallbackMode: String
     let defaultReleaseVisible: Bool
     let requiresBackendIssuedCredential: Bool
+    let sessionLease: DigitalHumanSessionLeaseRuntimeCapability
     let contractVersion: Int
 
     var canCreateMockSession: Bool {
@@ -378,6 +379,47 @@ struct DigitalHumanRuntimeCapability {
         fallbackMode = json?["fallbackMode"] as? String ?? "audioOnly"
         defaultReleaseVisible = json?["defaultReleaseVisible"] as? Bool ?? false
         requiresBackendIssuedCredential = json?["requiresBackendIssuedCredential"] as? Bool ?? true
+        sessionLease = DigitalHumanSessionLeaseRuntimeCapability(
+            json: json?["sessionLease"] as? [String: Any],
+            capabilityEnabled: capabilities?["digitalHumanSessionLease"] as? Bool ?? false
+        )
+        contractVersion = Self.intValue(json?["contractVersion"]) ?? 1
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.intValue
+        }
+        if let value = value as? String {
+            return Int(value)
+        }
+        return nil
+    }
+}
+
+struct DigitalHumanSessionLeaseRuntimeCapability {
+    let enabled: Bool
+    let heartbeatEndpointTemplate: String
+    let releaseEndpointTemplate: String
+    let ttlSeconds: Int
+    let heartbeatIntervalSeconds: Int
+    let maxConcurrentSessions: Int
+    let conflictStatusCode: Int
+    let contractVersion: Int
+
+    init(json: [String: Any]?, capabilityEnabled: Bool) {
+        enabled = capabilityEnabled || (json?["enabled"] as? Bool ?? false)
+        heartbeatEndpointTemplate = json?["heartbeatEndpointTemplate"] as? String
+            ?? "/digital-human/sessions/{sessionId}/heartbeat"
+        releaseEndpointTemplate = json?["releaseEndpointTemplate"] as? String
+            ?? "/digital-human/sessions/{sessionId}/release"
+        ttlSeconds = Self.intValue(json?["ttlSeconds"]) ?? 0
+        heartbeatIntervalSeconds = Self.intValue(json?["heartbeatIntervalSeconds"]) ?? 0
+        maxConcurrentSessions = Self.intValue(json?["maxConcurrentSessions"]) ?? 1
+        conflictStatusCode = Self.intValue(json?["conflictStatusCode"]) ?? 409
         contractVersion = Self.intValue(json?["contractVersion"]) ?? 1
     }
 
@@ -438,11 +480,80 @@ struct DigitalHumanSessionCredential {
     }
 }
 
+struct DigitalHumanSessionLeaseContract {
+    let status: String
+    let reused: Bool
+    let createdAt: Date?
+    let heartbeatAt: Date?
+    let expiresAt: Date?
+    let heartbeatIntervalSeconds: Int
+    let heartbeatEndpoint: String
+    let releaseEndpoint: String
+    let releaseReason: String?
+    let releasedAt: Date?
+    let contractVersion: Int
+
+    var isActive: Bool {
+        status == "active"
+    }
+
+    init(json: [String: Any]) {
+        status = json["status"] as? String ?? "unknown"
+        reused = json["reused"] as? Bool ?? false
+        createdAt = Self.dateValue(json["createdAt"])
+        heartbeatAt = Self.dateValue(json["heartbeatAt"])
+        expiresAt = Self.dateValue(json["expiresAt"])
+        heartbeatIntervalSeconds = max(1, Self.intValue(json["heartbeatIntervalSeconds"]) ?? 45)
+        heartbeatEndpoint = json["heartbeatEndpoint"] as? String ?? ""
+        releaseEndpoint = json["releaseEndpoint"] as? String ?? ""
+        releaseReason = json["releaseReason"] as? String
+        releasedAt = Self.dateValue(json["releasedAt"])
+        contractVersion = Self.intValue(json["contractVersion"]) ?? 1
+    }
+
+    private static func dateValue(_ value: Any?) -> Date? {
+        guard let value = value as? String else {
+            return nil
+        }
+        return BackendDateParser.date(from: value)
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.intValue
+        }
+        if let value = value as? String {
+            return Int(value)
+        }
+        return nil
+    }
+}
+
+struct DigitalHumanSessionLeaseOperationResult {
+    let status: String
+    let sessionId: String
+    let lease: DigitalHumanSessionLeaseContract
+
+    init?(json: [String: Any]) {
+        guard let sessionId = json["sessionId"] as? String,
+              let leaseJSON = json["lease"] as? [String: Any] else {
+            return nil
+        }
+        status = json["status"] as? String ?? "unknown"
+        self.sessionId = sessionId
+        lease = DigitalHumanSessionLeaseContract(json: leaseJSON)
+    }
+}
+
 struct DigitalHumanSessionContract {
     private static let localAssetVirtualmanKeyInfoKey = "DreamJourneyDigitalHumanAssetVirtualmanKey"
     private static let localAssetVirtualmanKeyOverrideArgument = "DJUseLocalDigitalHumanAssetOverride"
 
     let sessionId: String
+    let userId: String
     let provider: String
     let providerMode: String
     let personaId: String
@@ -461,6 +572,7 @@ struct DigitalHumanSessionContract {
     let credential: DigitalHumanSessionCredential
     let fallbackMode: String
     let fallbackReason: String
+    let lease: DigitalHumanSessionLeaseContract?
     let contractVersion: Int
 
     init?(json: [String: Any]) {
@@ -475,6 +587,7 @@ struct DigitalHumanSessionContract {
             return nil
         }
         self.sessionId = sessionId
+        self.userId = json["userId"] as? String ?? ""
         self.provider = provider
         self.providerMode = providerMode
         self.personaId = personaId
@@ -499,6 +612,7 @@ struct DigitalHumanSessionContract {
         let fallback = json["fallback"] as? [String: Any]
         self.fallbackMode = fallback?["mode"] as? String ?? "audioOnly"
         self.fallbackReason = fallback?["reason"] as? String ?? ""
+        self.lease = (json["lease"] as? [String: Any]).map(DigitalHumanSessionLeaseContract.init(json:))
         self.contractVersion = Self.intValue(json["contractVersion"]) ?? 1
     }
 
@@ -2191,6 +2305,78 @@ final class DreamJourneyBackendClient {
         }
     }
 
+    func heartbeatDigitalHumanSession(
+        _ contract: DigitalHumanSessionContract,
+        completion: @escaping (Result<DigitalHumanSessionLeaseOperationResult, Error>) -> Void
+    ) {
+        guard let lease = contract.lease,
+              lease.isActive,
+              !contract.userId.isEmpty,
+              !contract.deviceId.isEmpty else {
+            completion(.failure(ClientError.backendError(
+                statusCode: nil,
+                detail: "digital human session lease is unavailable"
+            )))
+            return
+        }
+        let fallbackPath = "/digital-human/sessions/\(pathComponent(contract.sessionId))/heartbeat"
+        let path = validatedDigitalHumanLeasePath(lease.heartbeatEndpoint, fallback: fallbackPath)
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: ["userId": contract.userId, "deviceId": contract.deviceId]
+        ) { result in
+            switch result {
+            case .success(let object):
+                guard let operation = DigitalHumanSessionLeaseOperationResult(json: object) else {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                completion(.success(operation))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func releaseDigitalHumanSession(
+        _ contract: DigitalHumanSessionContract,
+        reason: String,
+        completion: @escaping (Result<DigitalHumanSessionLeaseOperationResult, Error>) -> Void
+    ) {
+        guard let lease = contract.lease,
+              !contract.userId.isEmpty,
+              !contract.deviceId.isEmpty else {
+            completion(.failure(ClientError.backendError(
+                statusCode: nil,
+                detail: "digital human session lease is unavailable"
+            )))
+            return
+        }
+        let fallbackPath = "/digital-human/sessions/\(pathComponent(contract.sessionId))/release"
+        let path = validatedDigitalHumanLeasePath(lease.releaseEndpoint, fallback: fallbackPath)
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: [
+                "userId": contract.userId,
+                "deviceId": contract.deviceId,
+                "reason": String(reason.prefix(80)),
+            ]
+        ) { result in
+            switch result {
+            case .success(let object):
+                guard let operation = DigitalHumanSessionLeaseOperationResult(json: object) else {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                completion(.success(operation))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func fetchRealtimeVoiceConfig(
         userId: String,
         completion: @escaping (Result<RealtimeVoiceRuntimeConfig, Error>) -> Void
@@ -2745,6 +2931,15 @@ final class DreamJourneyBackendClient {
                     }
                 }
             }
+    }
+
+    private func validatedDigitalHumanLeasePath(_ candidate: String, fallback: String) -> String {
+        guard candidate.hasPrefix("/digital-human/sessions/"),
+              !candidate.contains("?"),
+              !candidate.contains("#") else {
+            return fallback
+        }
+        return candidate
     }
 
     private static func backendErrorMessage(from data: Data?) -> String? {

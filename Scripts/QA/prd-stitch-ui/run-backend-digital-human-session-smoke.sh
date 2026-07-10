@@ -148,8 +148,9 @@ Status: passed
 - `/digital-human/sessions` returns a backend-issued Tencent session contract.
 - Session credential contains appkey/accesstoken, but the evidence redacts raw values.
 - Session includes `providerAssetId` or `providerProjectId`.
+- Session lease supports reuse, heartbeat, idempotent release, capacity conflict, and reacquisition after release.
 - `silent` lifecycle mode is rejected before render session creation.
-- Public release exposes the Tencent digital-human panel through `defaultReleaseVisible=true`; provider failure must still degrade to ordinary Echo.
+- Backend runtime keeps `defaultReleaseVisible=false`; iOS public exposure is governed separately, and provider failure must still degrade to ordinary Echo.
 
 ## Evidence
 
@@ -158,10 +159,18 @@ Status: passed
 - Runtime provider mode: `{runtime.get("providerMode")}`
 - Runtime asset mode: `{runtime.get("assetMode")}`
 - Runtime SDK adapter linked: `{runtime.get("sdkAdapterLinked")}`
+- Runtime session lease enabled: `{runtime.get("sessionLeaseEnabled")}`
+- Runtime session lease TTL seconds: `{runtime.get("sessionLeaseTTLSeconds")}`
 - Session provider mode: `{session.get("providerMode")}`
 - Session credential mode: `{session.get("credentialMode")}`
 - Has provider asset id: `{session.get("hasProviderAssetId")}`
 - Has provider project id: `{session.get("hasProviderProjectId")}`
+- Session lease status: `{session.get("leaseStatus")}`
+- Same-context lease reused: `{session.get("leaseReused")}`
+- Heartbeat status: `{session.get("heartbeatStatus")}`
+- Release status: `{session.get("releaseStatus")}`
+- Capacity conflict code: `{session.get("capacityConflictCode")}`
+- Capacity reacquired after release: `{session.get("capacityReacquired")}`
 - Silent mode rejected: `{result.get("silentModeRejected")}`
 
 """

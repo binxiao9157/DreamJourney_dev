@@ -1,0 +1,430 @@
+{
+  "checks": {
+    "C000": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P001/checks/C000.md",
+      "created_at": "2026-07-10T07:00:29+00:00",
+      "criteria_map": [
+        "一致 acquire/heartbeat/release/get：内存与 Postgres 同名方法及共同测试语义。",
+        "数据库原子性：resource/device lock key 以稳定排序在同一事务获取。",
+        "复用/替换/冲突/TTL：InMemory 与 Postgres 测试覆盖。",
+        "安全持久化：candidate 仅含 lease 元数据，测试扫描通过。"
+      ],
+      "evidence": [
+        "完整 `tests.test_postgres_store` 通过。",
+        "Postgres SQL 证据包含 `pg_advisory_xact_lock` 和新增 schema/index。",
+        "测试明确断言持久化数据不含 `appkey` 或 `accesstoken`。"
+      ],
+      "execution_map": [
+        "R000 完成 store、schema、FakeConnection 与单元测试。"
+      ],
+      "followup_problem_id": null,
+      "id": "C000",
+      "problem_id": "P001",
+      "residual_risk": [
+        "真实 Postgres 容器并发将在组合 gate 中复核，但 SQL 已使用事务级 advisory lock，不依赖进程内锁。"
+      ],
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "同一设备切 context 会先释放旧 lease；不同设备在容量 1 下返回冲突；过期 lease 在容量判断前转为 expired。"
+      ],
+      "summary": "判定成功。R000 覆盖内存/Postgres 一致语义、数据库原子锁、安全元数据和全部要求的状态转换。"
+    },
+    "C001": {
+      "blocking_gaps": [
+        "缺少 session lease API/runtime contract。",
+        "缺少 iOS heartbeat/release/stale-response cleanup。",
+        "缺少组合验证和文档收口。"
+      ],
+      "body_path": "problems/P000/checks/C001.md",
+      "created_at": "2026-07-10T07:01:15+00:00",
+      "criteria_map": [],
+      "evidence": [],
+      "execution_map": [],
+      "followup_problem_id": "P002",
+      "id": "C001",
+      "problem_id": "P000",
+      "residual_risk": [],
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "not_success",
+      "stress_test": [],
+      "summary": "判定未完成。Store 层已关闭，但原问题还要求 API、iOS 生命周期消费和端到端非真机 gate。"
+    },
+    "C002": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P002/checks/C002.md",
+      "created_at": "2026-07-10T07:19:52+00:00",
+      "criteria_map": [
+        "存储、并发、安全、API、iOS 生命周期和 QA 污染六类标准均有代码与自动化证据"
+      ],
+      "evidence": [
+        "36 项专项测试、147 项后端全量测试、iOS build、静态守卫和模拟器组合 gate 通过"
+      ],
+      "execution_map": [
+        "backend store/API -> iOS client/lifecycle -> simulator create-heartbeat-release -> release gate"
+      ],
+      "followup_problem_id": null,
+      "id": "C002",
+      "problem_id": "P002",
+      "residual_risk": [
+        "真实腾讯 provider 配额释放时延及音视频行为待后续真机/线上验收"
+      ],
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "覆盖同设备复用/切换、跨设备冲突、TTL、幂等释放、stale response 和三次 heartbeat 失败降级"
+      ],
+      "summary": "非真机 Session Lease API、iOS 消费与组合验收已完整闭环"
+    },
+    "C003": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/checks/C003.md",
+      "created_at": "2026-07-10T07:20:25+00:00",
+      "criteria_map": [
+        "原始 Scope 与 Success Criteria 均由 R001/R002 覆盖"
+      ],
+      "evidence": [
+        "存储/API/iOS/QA 四层实现和自动化证据齐全"
+      ],
+      "execution_map": [
+        "安全存储 -> 原子仲裁 -> session v2 -> iOS lifecycle -> simulator/release gate"
+      ],
+      "followup_problem_id": null,
+      "id": "C003",
+      "problem_id": "P000",
+      "residual_risk": [
+        "尚未部署线上，真实腾讯 provider 行为待后续真机验收"
+      ],
+      "result_ids": [
+        "R001",
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "覆盖复用、切换、并发冲突、崩溃 TTL、重复释放、stale callback 和 heartbeat 失败"
+      ],
+      "summary": "P0 Session Lease 与并发控制在非真机范围内完成"
+    }
+  },
+  "counters": {
+    "check": 4,
+    "event": 38,
+    "problem": 3,
+    "result": 3,
+    "ticket": 3
+  },
+  "created_at": "2026-07-10T06:53:21+00:00",
+  "effort": "medium",
+  "language": "zh",
+  "ledger_id": "L20260710-145321",
+  "problems": {
+    "P000": {
+      "body_path": "problems/P000/README.md",
+      "check_ids": [
+        "C001",
+        "C003"
+      ],
+      "created_at": "2026-07-10T06:53:21+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Close the Lodestar task represented by `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/plans/task_08_p0-digital-human-session-lease.md` using recursive problem, ticket, result, and check state.\n\nTask context:\n\n# P0 Digital-human session lease and concurrency control",
+      "followup_ids": [
+        "P002"
+      ],
+      "id": "P000",
+      "package_path": "problems/P000",
+      "parent_id": null,
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P001",
+        "P002"
+      ],
+      "success_criteria": [
+        "Repeating the same device/context request returns the same active session with `reused=true`.",
+        "A role/context switch on the same device releases the previous logical lease and creates a new one.",
+        "A second device above configured capacity receives a structured conflict and retry delay.",
+        "Heartbeat extends only an active lease owned by the same user/device.",
+        "Release is idempotent; TTL expiry frees capacity after an app crash or network loss.",
+        "Stale iOS session responses are released rather than silently discarded.",
+        "User stop does not release the session; page/context/background/provider terminal paths do.",
+        "No Tencent credential is persisted in the lease store or returned by diagnostics.",
+        "All non-device checks and builds pass."
+      ],
+      "ticket_ids": [
+        "T000"
+      ],
+      "title": "P0 Digital-human session lease and concurrency control",
+      "updated_at": "2026-07-10T07:20:25+00:00"
+    },
+    "P001": {
+      "body_path": "problems/P000/children/P001/README.md",
+      "check_ids": [
+        "C000"
+      ],
+      "created_at": "2026-07-10T06:54:40+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "内存和 Postgres store 尚无数字人 session lease。需要实现安全元数据持久化、同 context 复用、同设备替换、跨设备容量冲突、heartbeat、幂等 release 和 TTL 过期，并保证 Postgres 多 worker 原子性。",
+      "followup_ids": [],
+      "id": "P001",
+      "package_path": "problems/P000/children/P001",
+      "parent_id": "P000",
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "内存与 Postgres 提供一致 acquire/heartbeat/release/get 语义。",
+        "Postgres acquire 使用事务级数据库锁完成容量判断和写入。",
+        "lease payload 不包含腾讯 credential。",
+        "store 单测覆盖复用、替换、冲突、heartbeat、release、expiry 和并发 SQL 合同。"
+      ],
+      "ticket_ids": [
+        "T001"
+      ],
+      "title": "后端数字人 Lease 持久化与并发仲裁",
+      "updated_at": "2026-07-10T07:00:29+00:00"
+    },
+    "P002": {
+      "body_path": "problems/P000/children/P002/README.md",
+      "check_ids": [
+        "C002"
+      ],
+      "created_at": "2026-07-10T07:01:15+00:00",
+      "created_from_check_id": "C001",
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Store 已具备 lease 能力，但尚未对外暴露 v2 session、heartbeat/release/runtime capability，iOS 也没有持有、续租和释放 lease，缺少非真机端到端证据。",
+      "followup_ids": [],
+      "id": "P002",
+      "package_path": "problems/P000/children/P002",
+      "parent_id": "P000",
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "后端 v2 API、runtime capability、heartbeat/release 与结构化容量冲突测试通过。",
+        "iOS 解析 lease，当前 session heartbeat，页面/context/background/provider/stale-response release，用户 stop 保留。",
+        "新增后端 smoke、iOS guard、模拟器 gate、构建和 diff check。",
+        "文档和 release regression 开关更新。"
+      ],
+      "ticket_ids": [
+        "T002"
+      ],
+      "title": "完成 Session Lease API、iOS 消费与组合验收",
+      "updated_at": "2026-07-10T07:19:52+00:00"
+    }
+  },
+  "results": {
+    "R000": {
+      "artifacts": [
+        "`/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/app/services/in_memory_store.py`",
+        "`/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/app/services/postgres_store.py`",
+        "`/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/tests/test_postgres_store.py`"
+      ],
+      "body_path": "problems/P000/children/P001/results/R000.md",
+      "created_at": "2026-07-10T07:00:02+00:00",
+      "done": [
+        "新增 `digital_human_sessions` 表及 resource/status、user/device 索引。",
+        "acquire 支持同 context 复用、同设备旧 context 释放、跨设备容量冲突和过期 lease 回收。",
+        "heartbeat 校验 user/device owner，仅延长未过期 active lease。",
+        "release 支持幂等 `released/alreadyReleased/alreadyExpired`。",
+        "账号最终清理同步移除数字人 lease。",
+        "持久化 payload 仅含 lease 元数据，不含 appkey/accesstoken。"
+      ],
+      "id": "R000",
+      "known_gaps": [
+        "API 路由和 iOS 消费尚属于后续子任务。",
+        "真实 Postgres 容器 smoke 在完整后端 gate 阶段执行。"
+      ],
+      "problem_id": "P001",
+      "root_id": "P000",
+      "summary": "已为 InMemoryStore 和 PostgresStore 增加一致的数字人 session lease acquire、heartbeat、release、get 语义，并通过数据库事务 advisory lock 完成多 worker 容量仲裁。",
+      "ticket_id": "T001",
+      "verification": [
+        "`tests.test_postgres_store` 28 项通过。",
+        "InMemoryStore 覆盖复用、替换、冲突、heartbeat、幂等 release、TTL。",
+        "PostgresStore 覆盖 advisory lock、复用、冲突、heartbeat、release、TTL 和 schema。",
+        "`git diff --check` 通过。"
+      ]
+    },
+    "R001": {
+      "artifacts": [
+        "R000"
+      ],
+      "body_path": "problems/P000/results/R001.md",
+      "created_at": "2026-07-10T07:01:03+00:00",
+      "done": [
+        "完成 R000：store schema、acquire/reuse/replace/conflict、heartbeat、release、TTL 和安全持久化。"
+      ],
+      "id": "R001",
+      "known_gaps": [
+        "`/digital-human/sessions` v2、heartbeat/release 路由和 runtime capability 未实现。",
+        "iOS session lease 解析、heartbeat、生命周期 release 和旧响应清理未实现。",
+        "后端/iOS 组合 smoke、构建和 release regression 未执行。"
+      ],
+      "problem_id": "P000",
+      "root_id": "P000",
+      "summary": "已完成后端内存/Postgres lease store 与原子容量仲裁，但 API 合同、iOS 消费和组合验证尚未完成，因此父任务仅为部分结果。",
+      "ticket_id": "T000",
+      "verification": [
+        "`tests.test_postgres_store` 通过。",
+        "Postgres advisory lock 与 credential 不落库断言通过。"
+      ]
+    },
+    "R002": {
+      "artifacts": [
+        "tmp/visual-qa/prd-stitch-ui/digital-human-session-lease-gate/20260710-session-lease-final/report.md"
+      ],
+      "body_path": "problems/P000/children/P002/results/R002.md",
+      "created_at": "2026-07-10T07:19:12+00:00",
+      "done": [
+        "后端 lease 持久化、容量仲裁、heartbeat/release/TTL 合同",
+        "iOS lease 解析、心跳、统一释放和 stale response 清理",
+        "模拟器 create-heartbeat-release smoke 与 release gate"
+      ],
+      "id": "R002",
+      "known_gaps": [
+        "未执行真机腾讯 provider 配额释放、有声、口型、打断和麦克风恢复验收"
+      ],
+      "problem_id": "P002",
+      "root_id": "P000",
+      "summary": "完成 Session Lease API、iOS 消费和非真机组合验收",
+      "ticket_id": "T002",
+      "verification": [
+        "后端 36 项专项测试和 147 项全量测试通过",
+        "iOS 构建、静态守卫、组合 gate、git diff --check 通过"
+      ]
+    }
+  },
+  "root_id": "P000",
+  "schema_version": 6,
+  "tickets": {
+    "T000": {
+      "acceptance_criteria": [
+        "同一用户、设备和 context 重复 acquire 返回相同 session，`reused=true`。",
+        "同设备切角色替换旧 lease；其他设备超过容量时返回结构化 409 与 retry delay。",
+        "heartbeat 只延长当前 owner 的 active lease；release 幂等；TTL 可释放崩溃残留容量。",
+        "Postgres acquire 使用数据库级锁，不能依赖单进程内存锁。",
+        "lease 存储不包含 appkey、accesstoken 或其他腾讯凭据。",
+        "iOS 旧 session 成功响应会主动 release；当前 session 定时 heartbeat。",
+        "stop conversation 不 release；page/context/background/provider terminal 路径 release。",
+        "后端验证、Postgres store tests、iOS guard、模拟器 smoke、构建与 diff check 通过。"
+      ],
+      "assumptions": [
+        "当前腾讯资产默认并发配置为 1，但后端字段允许配置更高容量。",
+        "iOS 始终提供稳定 `deviceId`；旧客户端缺失时后端使用受控 fallback，不破坏兼容性。",
+        "本轮不改变公开 UI 和数字人供应商。"
+      ],
+      "body_path": "problems/P000/tickets/T000.md",
+      "classification": "split",
+      "classification_reason": "跨后端持久化、API 合同、iOS 生命周期消费与组合验证四个边界，需拆分独立验收。",
+      "created_at": "2026-07-10T06:54:08+00:00",
+      "id": "T000",
+      "problem_definition": "当前后端数字人 session 是无状态合同：每次请求生成新 ID，缺少持久化、幂等复用、并发仲裁、heartbeat、release 和 TTL。iOS 本地关闭 runtime 后无法同步服务端状态，旧异步成功响应也可能留下无人消费的 session。多设备场景只能等腾讯 SDK 报配额错误，无法提前给出可恢复的冲突合同。",
+      "problem_id": "P000",
+      "proposed_solution": "在后端新增不含腾讯凭据的安全 lease 模型，由内存和 Postgres store 负责原子 acquire、同设备复用/替换、容量冲突、heartbeat、release 与过期回收。将 `/digital-human/sessions` 升级到 v2，并新增 heartbeat/release 路由及 runtime capability。iOS 扩展 session contract 和 backend client，在当前 generation 绑定 heartbeat，在页面退出、角色切换、后台宽限到期、provider 终止及旧响应丢弃时释放 lease；用户只停止当前对话时保留 lease。最后增加后端、Postgres、iOS 和模拟器组合 gate。",
+      "result_ids": [
+        "R001"
+      ],
+      "risks": [
+        "后端逻辑 release 不能替代腾讯 SDK `close()`；真实 provider 配额释放时延仍需真机/线上观测。",
+        "App 被系统杀死时无法主动 release，必须依靠 TTL。",
+        "多 worker Postgres 并发必须使用事务级 advisory lock 或同等数据库原子策略。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "建立数字人 Session Lease 与并发控制闭环",
+      "updated_at": "2026-07-10T07:01:03+00:00",
+      "verification_plan": "先写 API/store 与 iOS 静态失败测试；实现后运行后端完整测试和 FastAPI smoke、Postgres fake/真实可用 smoke、session lease API smoke、iOS release regression、runtime stub/lifecycle 模拟器 smoke、Debug build 和 `git diff --check`。不运行真机。"
+    },
+    "T001": {
+      "acceptance_criteria": [
+        "内存与 Postgres API 返回统一 outcome。",
+        "同 context 复用，同设备切换替换，跨设备超额冲突。",
+        "heartbeat owner 校验、TTL 延长、release 幂等。",
+        "数据库 schema/index 和事务锁受测试保护。",
+        "不保存 credential、asset secret 或 access token。"
+      ],
+      "assumptions": [
+        "Session lease 容量由调用方传入，store 不读取全局 settings。",
+        "时间统一使用带时区 ISO-8601。"
+      ],
+      "body_path": "problems/P000/children/P001/tickets/T001.md",
+      "classification": "one_go",
+      "classification_reason": "Store 边界明确，可由针对性单元测试覆盖并一次实现。",
+      "created_at": "2026-07-10T06:55:09+00:00",
+      "id": "T001",
+      "problem_definition": "Store 层没有数字人 session 状态，无法对多设备并发做原子仲裁，也无法在客户端崩溃后通过 TTL 回收逻辑容量。",
+      "problem_id": "P001",
+      "proposed_solution": "新增 `digital_human_sessions` Postgres 表和内存映射，实现 acquire、heartbeat、release、get。Postgres acquire 在 resource/device 两个稳定 key 上使用事务 advisory lock，锁内清理过期 lease、复用相同 context、释放同设备旧 context、检查资源容量并插入。所有持久化 payload 只保存 lease 元数据。",
+      "result_ids": [
+        "R000"
+      ],
+      "risks": [
+        "FakeConnection 必须忠实覆盖新增 SQL 语义，不能让测试只匹配字符串而遗漏状态转换。",
+        "advisory lock key 顺序必须稳定，避免 device/resource 交叉死锁。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现内存与 Postgres Session Lease Store",
+      "updated_at": "2026-07-10T07:00:02+00:00",
+      "verification_plan": "先补 InMemoryStore/PostgresStore 失败测试和 FakeConnection 合同，再实现；运行 `tests/test_postgres_store.py`、完整 backend tests、编译与 diff check。"
+    },
+    "T002": {
+      "acceptance_criteria": [
+        "API 测试覆盖 create/reuse/conflict/heartbeat/release/expiry 和 runtime config。",
+        "iOS client/contract 与 Echo 生命周期语义由静态 guard 和模拟器 smoke 证明。",
+        "后端凭据不进入 lease store/响应诊断。",
+        "后端验证、iOS 构建、release regression 和 diff check 通过。"
+      ],
+      "assumptions": [
+        "Store R000 是稳定基础。",
+        "本轮不依赖真实腾讯 SDK 或真机。"
+      ],
+      "body_path": "problems/P000/children/P002/tickets/T002.md",
+      "classification": "one_go",
+      "classification_reason": "Store 基础已完成，剩余 API、iOS 与验证围绕同一 v2 合同，需一起实现避免合同漂移。",
+      "created_at": "2026-07-10T07:01:40+00:00",
+      "id": "T002",
+      "problem_definition": "Lease store 已实现，但现有 API 仍无状态，iOS 也不知道 heartbeat/release，尚不能形成用户可感知的并发保护。",
+      "problem_id": "P002",
+      "proposed_solution": "升级后端 session contract v2，新增 runtime lease capability、结构化 409、heartbeat/release；补 API 和 smoke。iOS 增加 lease model/client，绑定当前 session generation 定时 heartbeat，在统一 runtime release helper 和 stale response 路径释放；用户 stop 保留。新增静态 guard、组合 smoke 与 release regression 开关。",
+      "result_ids": [
+        "R002"
+      ],
+      "risks": [
+        "网络 heartbeat 失败需要有限重试，不能因一次瞬时错误销毁数字人。",
+        "旧 session 响应必须 release，但不能释放当前新 session。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "交付 Session Lease v2 API 与 iOS 生命周期消费",
+      "updated_at": "2026-07-10T07:19:12+00:00",
+      "verification_plan": "测试先行；运行 backend verify、session lease smoke、iOS guard、runtime stub/lifecycle smoke、Debug build、release QA 和 whitespace check。"
+    }
+  },
+  "updated_at": "2026-07-10T07:20:25+00:00"
+}

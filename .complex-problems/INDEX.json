@@ -1,5 +1,5 @@
 {
-  "active_ledger_id": "L20260710-133057",
+  "active_ledger_id": "L20260710-145321",
   "ledgers": [
     {
       "active_count": 0,
@@ -77,7 +77,18 @@
       "status": "done",
       "title": "P0 Echo digital-human stability",
       "updated_at": "2026-07-10T06:32:12+00:00"
+    },
+    {
+      "active_count": 0,
+      "blocked_count": 0,
+      "ledger_id": "L20260710-145321",
+      "path": "L20260710-145321",
+      "root_id": "P000",
+      "schema_version": 6,
+      "status": "done",
+      "title": "P0 Digital-human session lease and concurrency control",
+      "updated_at": "2026-07-10T07:20:25+00:00"
     }
   ],
-  "updated_at": "2026-07-10T06:32:24+00:00"
+  "updated_at": "2026-07-10T07:20:52+00:00"
 }

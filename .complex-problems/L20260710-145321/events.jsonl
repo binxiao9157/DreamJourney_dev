@@ -1,0 +1,38 @@
+{"at": "2026-07-10T06:53:21+00:00", "id": "E000", "payload": {"ledger_id": "L20260710-145321", "root_id": "P000", "title": "P0 Digital-human session lease and concurrency control"}, "root_id": "P000", "type": "ledger_initialized"}
+{"at": "2026-07-10T06:54:08+00:00", "id": "E001", "payload": {"problem_id": "P000", "ticket_id": "T000", "title": "建立数字人 Session Lease 与并发控制闭环"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-10T06:54:08+00:00", "id": "E002", "payload": {"from": "created", "id": "T000", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T06:54:18+00:00", "id": "E003", "payload": {"from": "defined", "id": "T000", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T06:54:18+00:00", "id": "E004", "payload": {"classification": "split", "reason": "跨后端持久化、API 合同、iOS 生命周期消费与组合验证四个边界，需拆分独立验收。", "ticket_id": "T000"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-10T06:54:40+00:00", "id": "E005", "payload": {"from": "classified", "id": "T000", "to": "splitting"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T06:54:40+00:00", "id": "E006", "payload": {"parent_id": "P000", "problem_id": "P001", "source": "split", "title": "后端数字人 Lease 持久化与并发仲裁"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-10T06:55:09+00:00", "id": "E007", "payload": {"problem_id": "P001", "ticket_id": "T001", "title": "实现内存与 Postgres Session Lease Store"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-10T06:55:09+00:00", "id": "E008", "payload": {"from": "created", "id": "T001", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T06:55:09+00:00", "id": "E009", "payload": {"from": "defined", "id": "T001", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T06:55:09+00:00", "id": "E010", "payload": {"classification": "one_go", "reason": "Store 边界明确，可由针对性单元测试覆盖并一次实现。", "ticket_id": "T001"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-10T06:55:22+00:00", "id": "E011", "payload": {"from": "todo", "id": "P001", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T06:55:22+00:00", "id": "E012", "payload": {"from": "classified", "id": "T001", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T07:00:02+00:00", "id": "E013", "payload": {"from": "executing", "id": "T001", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T07:00:02+00:00", "id": "E014", "payload": {"result_id": "R000", "ticket_id": "T001"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-10T07:00:29+00:00", "id": "E015", "payload": {"from": "doing", "id": "P001", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T07:00:29+00:00", "id": "E016", "payload": {"from": "checking", "id": "P001", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T07:00:29+00:00", "id": "E017", "payload": {"check_id": "C000", "followup_id": null, "problem_id": "P001", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-10T07:01:03+00:00", "id": "E018", "payload": {"from": "todo", "id": "P000", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T07:01:03+00:00", "id": "E019", "payload": {"from": "splitting", "id": "T000", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T07:01:03+00:00", "id": "E020", "payload": {"result_id": "R001", "ticket_id": "T000"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-10T07:01:15+00:00", "id": "E021", "payload": {"from": "doing", "id": "P000", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T07:01:15+00:00", "id": "E022", "payload": {"from": "checking", "id": "P000", "to": "followup"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T07:01:15+00:00", "id": "E023", "payload": {"check_id": "C001", "followup_id": "P002", "problem_id": "P000", "status": "not_success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-10T07:01:40+00:00", "id": "E024", "payload": {"problem_id": "P002", "ticket_id": "T002", "title": "交付 Session Lease v2 API 与 iOS 生命周期消费"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-10T07:01:40+00:00", "id": "E025", "payload": {"from": "created", "id": "T002", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T07:01:40+00:00", "id": "E026", "payload": {"from": "defined", "id": "T002", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T07:01:40+00:00", "id": "E027", "payload": {"classification": "one_go", "reason": "Store 基础已完成，剩余 API、iOS 与验证围绕同一 v2 合同，需一起实现避免合同漂移。", "ticket_id": "T002"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-10T07:01:40+00:00", "id": "E028", "payload": {"from": "followup", "id": "P002", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T07:01:40+00:00", "id": "E029", "payload": {"from": "classified", "id": "T002", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T07:19:12+00:00", "id": "E030", "payload": {"from": "executing", "id": "T002", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-10T07:19:12+00:00", "id": "E031", "payload": {"result_id": "R002", "ticket_id": "T002"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-10T07:19:52+00:00", "id": "E032", "payload": {"from": "doing", "id": "P002", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T07:19:52+00:00", "id": "E033", "payload": {"from": "checking", "id": "P002", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T07:19:52+00:00", "id": "E034", "payload": {"check_id": "C002", "followup_id": null, "problem_id": "P002", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-10T07:20:25+00:00", "id": "E035", "payload": {"from": "followup", "id": "P000", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T07:20:25+00:00", "id": "E036", "payload": {"from": "checking", "id": "P000", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-10T07:20:25+00:00", "id": "E037", "payload": {"check_id": "C003", "followup_id": null, "problem_id": "P000", "status": "success"}, "root_id": "P000", "type": "check_recorded"}

@@ -350,3 +350,66 @@ Update this file after every recursive state-changing command bundle and before 
 - Final release regression: `tmp/visual-qa/prd-stitch-ui/release-regression/20260710-phase2-stability-final/report.md`.
 - Final non-device combo gate: `tmp/visual-qa/prd-stitch-ui/tencent-digital-human-phase2-non-device-gate/20260710-phase2-stability-final-gate/report.md`.
 - True-device sound, lip-sync, interruption, and microphone recovery acceptance was intentionally not run.
+
+## Recursive Closure Checkpoint - 2026-07-10T14:53:21+08:00
+
+- Ledger: `L20260710-145321`
+- Lodestar task: `docs/plans/task_08_p0-digital-human-session-lease.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 0/1 problems done, 0 blocked, 0/0 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P000: P0 Digital-human session lease and concurrency control`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CL...
+
+## Recursive Closure Checkpoint - 2026-07-10T15:19:17+08:00
+
+- Ledger: `L20260710-145321`
+- Lodestar task: `docs/plans/task_08_p0-digital-human-session-lease.md`
+- Root: `P000` / followup
+- Next action: `check-success`
+- Counts: 1/3 problems done, 0 blocked, 3/3 tickets done
+- Next instruction: Only perform `check-success` for `P002: 完成 Session Lease API、iOS 消费与组合验收`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, ...
+
+## Recursive Closure Checkpoint - 2026-07-10T15:19:58+08:00
+
+- Ledger: `L20260710-145321`
+- Lodestar task: `docs/plans/task_08_p0-digital-human-session-lease.md`
+- Root: `P000` / followup
+- Next action: `check-success`
+- Counts: 2/3 problems done, 0 blocked, 3/3 tickets done
+- Next instruction: Only perform `check-success` for `P000: P0 Digital-human session lease and concurrency control`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions,...
+
+## Recursive Closure Checkpoint - 2026-07-10T15:20:32+08:00
+
+- Ledger: `L20260710-145321`
+- Lodestar task: `docs/plans/task_08_p0-digital-human-session-lease.md`
+- Root: `P000` / done
+- Next action: `none`
+- Counts: 3/3 problems done, 0 blocked, 3/3 tickets done
+- Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+
+## Task 8 Implementation Checkpoint - 2026-07-10T15:21:03+08:00
+
+- Completed backend digital-human lease persistence, reuse, heartbeat, release, TTL, capacity arbitration, and credential-redaction boundaries.
+- Completed iOS lease parsing, heartbeat scheduling, stale-response release, unified lifecycle cleanup, and user-stop preservation.
+- Backend verification passed: 36 focused tests and 147 full-suite tests.
+- iOS Debug simulator build and create-heartbeat-release runtime smoke passed.
+- Final gate: `tmp/visual-qa/prd-stitch-ui/digital-human-session-lease-gate/20260710-session-lease-final/report.md`.
+- Backend deployment and true-device Tencent provider acceptance were intentionally not run.
+
+## Task 8 Deployment Checkpoint - 2026-07-10T15:34:00+08:00
+
+- Backend commit `e9b3104` was pushed to `origin/main`, pulled on the server, and deployed by rebuilding the API container.
+- API, Postgres, and Redis are running; public health reports `store=postgres`.
+- Postgres created `digital_human_sessions` with both lease indexes.
+- Deployed smoke passed same-context reuse, heartbeat, idempotent release, capacity conflict, and reacquisition after release.
+- Evidence: `tmp/visual-qa/prd-stitch-ui/backend-digital-human-session-smoke/20260710-deployed-session-lease-final/report.md`.
+- Smoke leases were cleaned up; only released test rows remain.
+
+## Recursive Closure Checkpoint - 2026-07-10T15:21:03+08:00
+
+- Ledger: `L20260710-145321`
+- Lodestar task: `docs/plans/task_08_p0-digital-human-session-lease.md`
+- Root: `P000` / done
+- Next action: `none`
+- Counts: 3/3 problems done, 0 blocked, 3/3 tickets done
+- Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.

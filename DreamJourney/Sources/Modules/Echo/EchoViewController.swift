@@ -189,6 +189,7 @@ final class EchoViewController: UIViewController {
     private var trueDeviceBackendPCMDriveTrace = TencentBackendPCMDriveTrueDeviceTrace()
     private var digitalHumanRuntimeContextKey: String?
     private var digitalHumanRuntimeLifecycleGeneration: UInt64?
+    private var activeDigitalHumanSessionContract: DigitalHumanSessionContract?
     private var pendingDigitalHumanSessionRequestID: String?
     private var pendingDigitalHumanSessionContextKey: String?
 
@@ -405,6 +406,8 @@ final class EchoViewController: UIViewController {
     private var digitalHumanProviderTextOverTimeoutWorkItem: DispatchWorkItem?
     private var digitalHumanRuntimeRecoveryWorkItem: DispatchWorkItem?
     private var digitalHumanBackgroundReleaseWorkItem: DispatchWorkItem?
+    private var digitalHumanSessionHeartbeatWorkItem: DispatchWorkItem?
+    private var digitalHumanSessionHeartbeatFailureCount = 0
     private var digitalHumanRuntimeRecoveryAttemptsByContext: [String: Int] = [:]
     private let digitalHumanConversation = DigitalHumanConversationCoordinator()
     private let digitalHumanLifecycle = DigitalHumanLifecycleCoordinator()
@@ -1185,6 +1188,165 @@ final class EchoViewController: UIViewController {
         }
     }
 
+    private func activateDigitalHumanSessionLease(
+        _ contract: DigitalHumanSessionContract,
+        lifecycleToken: DigitalHumanLifecycleToken
+    ) {
+        if let activeContract = activeDigitalHumanSessionContract,
+           activeContract.sessionId != contract.sessionId {
+            activeDigitalHumanSessionContract = nil
+            cancelDigitalHumanSessionHeartbeat(reason: "replaceActiveSession")
+            releaseDigitalHumanSessionLease(activeContract, reason: "replacedByNewSession")
+        }
+
+        activeDigitalHumanSessionContract = contract
+        digitalHumanSessionHeartbeatFailureCount = 0
+        scheduleDigitalHumanSessionHeartbeat(for: contract, lifecycleToken: lifecycleToken)
+        if let lease = contract.lease {
+            print(
+                "[TencentDigitalHuman] lease activated sessionId=\(contract.sessionId) " +
+                "reused=\(lease.reused) heartbeatSeconds=\(lease.heartbeatIntervalSeconds)"
+            )
+        } else {
+            print("[TencentDigitalHuman] backend session has no lease contract; heartbeat disabled")
+        }
+    }
+
+    private func scheduleDigitalHumanSessionHeartbeat(
+        for contract: DigitalHumanSessionContract,
+        lifecycleToken: DigitalHumanLifecycleToken,
+        delayOverride: TimeInterval? = nil
+    ) {
+        cancelDigitalHumanSessionHeartbeat(reason: "reschedule")
+        guard let lease = contract.lease,
+              lease.isActive else {
+            return
+        }
+
+        let delay = delayOverride ?? TimeInterval(max(10, lease.heartbeatIntervalSeconds))
+        let sessionId = contract.sessionId
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self,
+                  self.activeDigitalHumanSessionContract?.sessionId == sessionId,
+                  self.isCurrentDigitalHumanSessionToken(
+                    lifecycleToken,
+                    reason: "digitalHumanSessionHeartbeat"
+                  ) else {
+                return
+            }
+            self.digitalHumanSessionHeartbeatWorkItem = nil
+            DreamJourneyBackendClient.shared.heartbeatDigitalHumanSession(contract) { [weak self] result in
+                guard let self,
+                      self.activeDigitalHumanSessionContract?.sessionId == sessionId,
+                      self.isCurrentDigitalHumanSessionToken(
+                        lifecycleToken,
+                        reason: "digitalHumanSessionHeartbeatResponse"
+                      ) else {
+                    return
+                }
+                switch result {
+                case .success(let operation):
+                    self.digitalHumanSessionHeartbeatFailureCount = 0
+                    self.scheduleDigitalHumanSessionHeartbeat(
+                        for: contract,
+                        lifecycleToken: lifecycleToken
+                    )
+                    print(
+                        "[TencentDigitalHuman] lease heartbeat succeeded " +
+                        "sessionId=\(operation.sessionId) status=\(operation.lease.status)"
+                    )
+                case .failure(let error):
+                    self.digitalHumanSessionHeartbeatFailureCount += 1
+                    let isInactive = self.isInactiveDigitalHumanSessionLeaseError(error)
+                    print(
+                        "[TencentDigitalHuman] lease heartbeat failed " +
+                        "sessionId=\(sessionId) attempt=\(self.digitalHumanSessionHeartbeatFailureCount) " +
+                        "error=\(error.localizedDescription)"
+                    )
+                    if isInactive || self.digitalHumanSessionHeartbeatFailureCount >= 3 {
+                        self.degradeTencentDigitalHumanRoute(
+                            reason: isInactive
+                                ? "digital_human_session_lease_inactive"
+                                : "digital_human_session_heartbeat_failed"
+                        )
+                    } else {
+                        self.scheduleDigitalHumanSessionHeartbeat(
+                            for: contract,
+                            lifecycleToken: lifecycleToken,
+                            delayOverride: 5
+                        )
+                    }
+                }
+            }
+        }
+        digitalHumanSessionHeartbeatWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+
+    private func cancelDigitalHumanSessionHeartbeat(reason: String) {
+        guard digitalHumanSessionHeartbeatWorkItem != nil else {
+            return
+        }
+        digitalHumanSessionHeartbeatWorkItem?.cancel()
+        digitalHumanSessionHeartbeatWorkItem = nil
+        print("[TencentDigitalHuman] lease heartbeat cancelled reason=\(reason)")
+    }
+
+    private func releaseActiveDigitalHumanSessionLease(reason: String) {
+        cancelDigitalHumanSessionHeartbeat(reason: "release:\(reason)")
+        digitalHumanSessionHeartbeatFailureCount = 0
+        guard let contract = activeDigitalHumanSessionContract else {
+            return
+        }
+        activeDigitalHumanSessionContract = nil
+        releaseDigitalHumanSessionLease(contract, reason: reason)
+    }
+
+    private func releaseDigitalHumanSessionLease(
+        _ contract: DigitalHumanSessionContract,
+        reason: String
+    ) {
+        guard contract.lease != nil else {
+            return
+        }
+        guard activeDigitalHumanSessionContract?.sessionId != contract.sessionId else {
+            print(
+                "[TencentDigitalHuman] skipped stale lease release because session is active " +
+                "sessionId=\(contract.sessionId) reason=\(reason)"
+            )
+            return
+        }
+        DreamJourneyBackendClient.shared.releaseDigitalHumanSession(
+            contract,
+            reason: reason
+        ) { result in
+            switch result {
+            case .success(let operation):
+                print(
+                    "[TencentDigitalHuman] lease released sessionId=\(operation.sessionId) " +
+                    "status=\(operation.status) reason=\(reason)"
+                )
+            case .failure(let error):
+                print(
+                    "[TencentDigitalHuman] lease release failed sessionId=\(contract.sessionId) " +
+                    "reason=\(reason) error=\(error.localizedDescription)"
+                )
+            }
+        }
+    }
+
+    private func isInactiveDigitalHumanSessionLeaseError(_ error: Error) -> Bool {
+        guard let clientError = error as? DreamJourneyBackendClient.ClientError else {
+            return false
+        }
+        guard case .backendError(let statusCode, let detail) = clientError else {
+            return false
+        }
+        return statusCode == 404
+            || statusCode == 409
+            || detail.contains("digital_human_session_lease_inactive")
+    }
+
     private func releaseDigitalHumanRuntime(
         reason: String,
         resetsAudioOwnerToOrdinaryEcho: Bool,
@@ -1192,6 +1354,7 @@ final class EchoViewController: UIViewController {
     ) {
         cancelCloudDigitalHumanBackgroundRelease(reason: "runtimeRelease:\(reason)")
         cancelDigitalHumanRuntimeRecovery()
+        releaseActiveDigitalHumanSessionLease(reason: reason)
         pendingDigitalHumanSessionRequestID = nil
         pendingDigitalHumanSessionContextKey = nil
         cancelDigitalHumanReplyPrewarm()
@@ -1445,6 +1608,7 @@ final class EchoViewController: UIViewController {
 
     private func isDigitalHumanQuotaFailure(_ reason: String) -> Bool {
         reason == "tencent_cloud_quota_exceeded"
+            || reason.localizedCaseInsensitiveContains("digital_human_session_capacity_exhausted")
             || reason.localizedCaseInsensitiveContains("LimitExceeded")
             || reason.localizedCaseInsensitiveContains("AssetConcurrencyQuotaNotFound")
             || reason.contains("超过配额")
@@ -2153,6 +2317,12 @@ final class EchoViewController: UIViewController {
                 reason: "digitalHumanSessionResponse"
               ),
               isCurrentDigitalHumanSessionRequest(requestID: requestID, contextKey: contextKey) else {
+            if case .success(let staleContract) = result {
+                releaseDigitalHumanSessionLease(
+                    staleContract,
+                    reason: "staleSessionResponse"
+                )
+            }
             print("[TencentDigitalHuman] ignored stale session response requestID=\(requestID)")
             return
         }
@@ -2162,6 +2332,7 @@ final class EchoViewController: UIViewController {
 
         switch result {
         case .success(let contract):
+            activateDigitalHumanSessionLease(contract, lifecycleToken: lifecycleToken)
             let profile = contract.toDigitalHumanProfile(displayName: context.resolvedDisplayName)
             lastDigitalHumanSessionEvidenceSummary = EchoDigitalHumanSessionEvidenceSummary(contract: contract)
             print(
@@ -2192,6 +2363,7 @@ final class EchoViewController: UIViewController {
                 digitalHumanRuntime = nil
                 digitalHumanRuntimeContextKey = nil
                 digitalHumanRuntimeLifecycleGeneration = nil
+                releaseActiveDigitalHumanSessionLease(reason: "runtimeNotSDKBacked")
                 digitalHumanStatusDetailLabel.text = "腾讯 SDK 暂不可用，已回到普通回响"
                 digitalHumanLivePanelView?.removeHostedProviderView(showFallbackMessage: "数字人暂不可用")
                 lastEchoRuntimeFallbackReason = runtimeSelection.fallbackReason ?? "digitalHumanRuntimeNotSDKBacked"
@@ -2215,6 +2387,7 @@ final class EchoViewController: UIViewController {
                 digitalHumanRuntime = nil
                 digitalHumanRuntimeContextKey = nil
                 digitalHumanRuntimeLifecycleGeneration = nil
+                releaseActiveDigitalHumanSessionLease(reason: "digitalHumanOpenFailed")
                 digitalHumanStatusDetailLabel.text = "腾讯数智人打开失败，已回到普通回响"
                 digitalHumanLivePanelView?.removeHostedProviderView(showFallbackMessage: "数字人暂不可用")
                 lastEchoRuntimeFallbackReason = "digitalHumanOpenFailed"
@@ -2223,16 +2396,26 @@ final class EchoViewController: UIViewController {
                 print("[TencentDigitalHuman] open failed: \(error.localizedDescription)")
             }
         case .failure(let error):
-            digitalHumanStatusDetailLabel.text = "数字人会话创建失败，已回到普通回响"
-            digitalHumanLivePanelView?.removeHostedProviderView(showFallbackMessage: "数字人暂不可用")
-            lastDigitalHumanSessionEvidenceSummary = .failed(
-                reason: "digitalHumanSessionFailed",
-                detail: error.localizedDescription
+            let reason = error.localizedDescription
+            let quotaFailure = isDigitalHumanQuotaFailure(reason)
+            digitalHumanStatusDetailLabel.text = quotaFailure
+                ? "腾讯数智人并发配额已满，已回到普通回响"
+                : "数字人会话创建失败，已回到普通回响"
+            digitalHumanLivePanelView?.removeHostedProviderView(
+                showFallbackMessage: quotaFailure ? "数智人配额已满" : "数字人暂不可用"
             )
-            lastEchoRuntimeFallbackReason = "digitalHumanSessionFailed"
+            lastDigitalHumanSessionEvidenceSummary = .failed(
+                reason: quotaFailure
+                    ? "digital_human_session_capacity_exhausted"
+                    : "digitalHumanSessionFailed",
+                detail: reason
+            )
+            lastEchoRuntimeFallbackReason = quotaFailure
+                ? "digital_human_session_capacity_exhausted"
+                : "digitalHumanSessionFailed"
             recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanSessionFailed")
             applyEchoAudioRoutePolicy()
-            print("[TencentDigitalHuman] session failed: \(error.localizedDescription)")
+            print("[TencentDigitalHuman] session failed: \(reason)")
         }
     }
 
@@ -4995,6 +5178,12 @@ extension EchoViewController {
                 lifecycleToken,
                 reason: "uiqaRuntimeStubSessionResponse"
             ) else {
+                if case .success(let staleContract) = result {
+                    self.releaseDigitalHumanSessionLease(
+                        staleContract,
+                        reason: "uiqaStaleSessionResponse"
+                    )
+                }
                 completion([
                     "completed": false,
                     "failureReason": "staleLifecycle",
@@ -5026,7 +5215,7 @@ extension EchoViewController {
                     try audioOnlyRuntime.configure(profile)
                     try audioOnlyRuntime.open()
 
-                    completion([
+                    let payload: [String: Any] = [
                         "completed": true,
                         "provider": contract.provider,
                         "providerMode": contract.providerMode,
@@ -5043,8 +5232,15 @@ extension EchoViewController {
                         "allowInterrupt": contract.sessionPolicy.allowInterrupt,
                         "proactiveSpeechAllowed": contract.sessionPolicy.proactiveSpeechAllowed,
                         "credentialMode": contract.credential.mode,
+                        "leaseStatus": contract.lease?.status ?? "unsupported",
+                        "leaseReused": contract.lease?.reused ?? false,
                         "defaultReleaseVisible": FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel),
-                    ])
+                    ]
+                    self.completeUIQADigitalHumanRuntimeStubLeaseSmoke(
+                        contract: contract,
+                        payload: payload,
+                        completion: completion
+                    )
                 } catch {
                     runtime.interrupt()
                     runtime.close()
@@ -5053,11 +5249,15 @@ extension EchoViewController {
                         self.digitalHumanRuntimeContextKey = nil
                         self.digitalHumanRuntimeLifecycleGeneration = nil
                     }
-                    completion([
+                    self.completeUIQADigitalHumanRuntimeStubLeaseSmoke(
+                        contract: contract,
+                        payload: [
                         "completed": false,
                         "failureReason": "runtimeError",
                         "error": error.localizedDescription,
-                    ])
+                        ],
+                        completion: completion
+                    )
                 }
             case .failure(let error):
                 completion([
@@ -5065,6 +5265,47 @@ extension EchoViewController {
                     "failureReason": "backendSessionError",
                     "error": error.localizedDescription,
                 ])
+            }
+        }
+    }
+
+    private func completeUIQADigitalHumanRuntimeStubLeaseSmoke(
+        contract: DigitalHumanSessionContract,
+        payload: [String: Any],
+        completion: @escaping ([String: Any]) -> Void
+    ) {
+        guard contract.lease != nil else {
+            completion(payload.merging([
+                "leaseHeartbeatStatus": "unsupported",
+                "leaseReleaseStatus": "unsupported",
+            ]) { _, new in new })
+            return
+        }
+
+        DreamJourneyBackendClient.shared.heartbeatDigitalHumanSession(contract) { heartbeatResult in
+            let heartbeatStatus: String
+            switch heartbeatResult {
+            case .success(let operation):
+                heartbeatStatus = operation.lease.status
+            case .failure(let error):
+                heartbeatStatus = "failed:\(error.localizedDescription)"
+            }
+
+            DreamJourneyBackendClient.shared.releaseDigitalHumanSession(
+                contract,
+                reason: "uiqaRuntimeStubCompleted"
+            ) { releaseResult in
+                let releaseStatus: String
+                switch releaseResult {
+                case .success(let operation):
+                    releaseStatus = operation.status
+                case .failure(let error):
+                    releaseStatus = "failed:\(error.localizedDescription)"
+                }
+                completion(payload.merging([
+                    "leaseHeartbeatStatus": heartbeatStatus,
+                    "leaseReleaseStatus": releaseStatus,
+                ]) { _, new in new })
             }
         }
     }
