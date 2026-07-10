@@ -6,6 +6,7 @@ enum KnowledgeContextPolicyModelSmoke {
         verifyGenerationConfidencePolicy()
         verifyPersonaFallbackPolicy()
         verifyPacketIdentityPolicy()
+        verifyPersonaEntityAndEvidencePolicy()
         try verifyLegacyGraphCompatibility()
         print("Knowledge context policy model smoke passed")
     }
@@ -143,6 +144,69 @@ enum KnowledgeContextPolicyModelSmoke {
                 responseDigitalHumanId: nil
             ),
             "packet identity contract omissions must be rejected"
+        )
+    }
+
+    private static func verifyPersonaEntityAndEvidencePolicy() {
+        let personal = KBPersonaIdentity(
+            ownerUserId: "viewer",
+            personaScope: "personal",
+            digitalHumanId: "viewer"
+        )
+        let family = KBPersonaIdentity(
+            ownerUserId: "viewer",
+            personaScope: "family",
+            digitalHumanId: "family-canonical"
+        )
+        require(
+            KBPersonaPolicy.allowsEntity(
+                ownerUserId: nil,
+                personaScope: nil,
+                digitalHumanId: nil,
+                for: personal,
+                legacyOwnerUserId: "viewer"
+            ),
+            "personal identity must retain legacy entity compatibility"
+        )
+        require(
+            !KBPersonaPolicy.allowsEntity(
+                ownerUserId: nil,
+                personaScope: nil,
+                digitalHumanId: nil,
+                for: family,
+                legacyOwnerUserId: "viewer"
+            ),
+            "family identity must reject legacy entities without explicit metadata"
+        )
+        require(
+            KBPersonaPolicy.allowsEntity(
+                ownerUserId: "viewer",
+                personaScope: "family",
+                digitalHumanId: "family-canonical",
+                for: family,
+                legacyOwnerUserId: "viewer"
+            ),
+            "family identity must allow an exact owner/persona/digital-human match"
+        )
+        require(
+            KBPersonaPolicy.allowsEvidenceStatus(nil, for: personal),
+            "personal legacy evidence may remain usable"
+        )
+        require(
+            !KBPersonaPolicy.allowsEvidenceStatus(nil, for: family),
+            "family evidence must be explicit"
+        )
+        require(
+            KBPersonaPolicy.allowsEvidenceStatus("observed", for: family),
+            "observed family evidence must be usable"
+        )
+        require(
+            !KBPersonaPolicy.allowsEvidenceStatus("candidate", for: personal),
+            "candidate evidence must not enter generation"
+        )
+        require(
+            !KBPersonaPolicy.allowsEvidenceStatus("rejected", for: personal),
+            "rejected evidence must not enter generation"
         )
     }
 

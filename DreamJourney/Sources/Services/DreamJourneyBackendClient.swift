@@ -2946,6 +2946,29 @@ final class DreamJourneyBackendClient {
         sessionId: Int,
         completion: @escaping (Result<KBExtractionResult, Error>) -> Void
     ) {
+        extractKnowledgeEnvelope(
+            userId: userId,
+            transcript: transcript,
+            turns: turns,
+            existingSummary: existingSummary,
+            sessionId: sessionId,
+            personaScope: "personal",
+            digitalHumanId: userId
+        ) { result in
+            completion(result.map(\.extraction))
+        }
+    }
+
+    func extractKnowledgeEnvelope(
+        userId: String,
+        transcript: String,
+        turns: [ConversationTurn],
+        existingSummary: String,
+        sessionId: Int,
+        personaScope: String = "personal",
+        digitalHumanId: String? = nil,
+        completion: @escaping (Result<KBKnowledgeExtractionEnvelope, Error>) -> Void
+    ) {
         let indexedTurns: [[String: Any]] = turns.enumerated().map { index, turn in
             [
                 "index": index,
@@ -2964,6 +2987,8 @@ final class DreamJourneyBackendClient {
                 "transcript": transcript,
                 "existingSummary": existingSummary,
                 "sessionId": sessionId,
+                "personaScope": personaScope,
+                "digitalHumanId": digitalHumanId ?? userId,
                 "boundaryAcknowledged": true,
                 "privacyMetadata": [
                     "scope": "generationAllowed",
@@ -2979,18 +3004,40 @@ final class DreamJourneyBackendClient {
         ) { result in
             switch result {
             case .success(let object):
-                guard let extraction = object["extraction"] as? [String: Any],
-                      JSONSerialization.isValidJSONObject(extraction),
-                      let data = try? JSONSerialization.data(withJSONObject: extraction),
-                      let decoded = try? JSONDecoder().decode(KBExtractionResult.self, from: data) else {
+                guard JSONSerialization.isValidJSONObject(object),
+                      let data = try? JSONSerialization.data(withJSONObject: object) else {
                     completion(.failure(ClientError.invalidJSONResponse))
                     return
                 }
-                completion(.success(decoded))
+                do {
+                    let envelope = try Self.makeKnowledgeExtractionDecoder().decode(
+                        KBKnowledgeExtractionEnvelope.self,
+                        from: data
+                    )
+                    completion(.success(envelope))
+                } catch {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                }
             case .failure(let error):
                 completion(.failure(error))
             }
         }
+    }
+
+    private static func makeKnowledgeExtractionDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let value = try container.decode(String.self)
+            guard let date = BackendDateParser.date(from: value) else {
+                throw DecodingError.dataCorruptedError(
+                    in: container,
+                    debugDescription: "Expected an ISO-8601 date"
+                )
+            }
+            return date
+        }
+        return decoder
     }
 
     func listFamilyMembers(userId: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {

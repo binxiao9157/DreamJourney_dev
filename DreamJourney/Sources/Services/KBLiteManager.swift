@@ -80,6 +80,22 @@ final class KBLiteManager {
         return value.isEmpty ? signedOutUserId : value
     }
 
+    static func resolvePersonaIdentity(for context: DigitalHumanContext) -> KBPersonaIdentity {
+        let viewerUserId = UserManager.shared.currentUser?.id ?? context.viewerUserId
+        let familyMemberDigitalHumanId = FamilyRepository.shared.get(by: context.ownerId)?.digitalHumanId
+        return KBPersonaIdentityResolver.resolve(
+            viewerUserId: viewerUserId,
+            ownerId: context.ownerId,
+            relation: context.relation,
+            isSelfAssistant: context.isSelfAssistant,
+            familyMemberDigitalHumanId: familyMemberDigitalHumanId
+        )
+    }
+
+    static func resolveCurrentPersonaIdentity() -> KBPersonaIdentity {
+        resolvePersonaIdentity(for: DigitalHumanContextStore.shared.current)
+    }
+
     private func graphFilePath(for userId: String) -> URL {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let kbDir = docs.appendingPathComponent("knowledge_base")
@@ -243,6 +259,7 @@ final class KBLiteManager {
     func extractFromTranscript(
         turns: [ConversationTurn],
         sessionId: Int,
+        identity: KBPersonaIdentity? = nil,
         completion: @escaping (Int) -> Void = { _ in }
     ) {
         guard !turns.isEmpty else {
@@ -258,7 +275,11 @@ final class KBLiteManager {
         let lastBackendExtractionAt = graph.lastBackendExtractionAt
         graphLock.unlock()
 
-        guard ownerUserId != Self.signedOutUserId else {
+        let capturedIdentity = identity ?? Self.resolveCurrentPersonaIdentity()
+
+        guard ownerUserId != Self.signedOutUserId,
+              capturedIdentity.isComplete,
+              capturedIdentity.ownerUserId == ownerUserId else {
             print("[KBLite] 登出态跳过知识提取")
             completion(0)
             return
@@ -280,7 +301,7 @@ final class KBLiteManager {
                     result: nil,
                     turns: turns,
                     sessionId: sessionId,
-                    ownerUserId: ownerUserId,
+                    identity: capturedIdentity,
                     generation: extractionGeneration,
                     fallbackReason: "frequencyControlled",
                     completion: completion
@@ -307,7 +328,7 @@ final class KBLiteManager {
             }.joined(separator: "\n")
 
             self.graphLock.lock()
-            let existingSummary = self.buildExistingSummary()
+            let existingSummary = self.buildExistingSummary(for: capturedIdentity)
             self.graphLock.unlock()
 
             guard DreamJourneyBackendClient.shared.isKnowledgeSyncConfigured else {
@@ -315,7 +336,7 @@ final class KBLiteManager {
                     result: nil,
                     turns: turns,
                     sessionId: sessionId,
-                    ownerUserId: ownerUserId,
+                    identity: capturedIdentity,
                     generation: extractionGeneration,
                     fallbackReason: "backendNotConfigured",
                     completion: completion
@@ -323,29 +344,31 @@ final class KBLiteManager {
                 return
             }
 
-            DreamJourneyBackendClient.shared.extractKnowledge(
+            DreamJourneyBackendClient.shared.extractKnowledgeEnvelope(
                 userId: ownerUserId,
                 transcript: transcript,
                 turns: turns,
                 existingSummary: existingSummary,
-                sessionId: sessionId
+                sessionId: sessionId,
+                personaScope: capturedIdentity.personaScope,
+                digitalHumanId: capturedIdentity.digitalHumanId
             ) { [weak self] result in
                 self?.extractQueue.async {
-                    let extraction: KBExtractionResult?
+                    let envelope: KBKnowledgeExtractionEnvelope?
                     let fallbackReason: String?
                     switch result {
                     case .success(let value):
-                        extraction = value
+                        envelope = value
                         fallbackReason = nil
                     case .failure(let error):
-                        extraction = nil
+                        envelope = nil
                         fallbackReason = error.localizedDescription
                     }
                     self?.finishExtraction(
-                        result: extraction,
+                        result: envelope,
                         turns: turns,
                         sessionId: sessionId,
-                        ownerUserId: ownerUserId,
+                        identity: capturedIdentity,
                         generation: extractionGeneration,
                         fallbackReason: fallbackReason,
                         completion: completion
@@ -356,32 +379,71 @@ final class KBLiteManager {
     }
 
     private func finishExtraction(
-        result: KBExtractionResult?,
+        result: KBKnowledgeExtractionEnvelope?,
         turns: [ConversationTurn],
         sessionId: Int,
-        ownerUserId: String,
+        identity: KBPersonaIdentity,
         generation: UUID,
         fallbackReason: String?,
         completion: @escaping (Int) -> Void
     ) {
+        let currentIdentity = Self.resolveCurrentPersonaIdentity()
         graphLock.lock()
-        guard loadedUserId == ownerUserId, userGeneration == generation else {
+        guard loadedUserId == identity.ownerUserId, userGeneration == generation else {
             graphLock.unlock()
-            print("[KBLite] 丢弃旧用户知识提取结果 user=\(ownerUserId)")
+            isExtracting = false
+            print("[KBLite] 丢弃旧用户知识提取结果 user=\(identity.ownerUserId)")
+            DispatchQueue.main.async { completion(0) }
+            return
+        }
+        guard currentIdentity == identity else {
+            graphLock.unlock()
+            isExtracting = false
+            print(
+                "[KBLite] 丢弃角色切换后的知识提取结果 " +
+                "captured=\(identity.personaScope)/\(identity.digitalHumanId) " +
+                "current=\(currentIdentity.personaScope)/\(currentIdentity.digitalHumanId)"
+            )
             DispatchQueue.main.async { completion(0) }
             return
         }
 
         let addedCount: Int
-        if let result {
-            addedCount = mergeExtractionResult(result, sessionId: sessionId)
+        let completionMode: String
+        let acceptedBackendExtraction: Bool
+        if let result, let proposal = result.proposal {
+            if KBPersonaPolicy.isValidProposal(proposal, for: identity) {
+                addedCount = mergeProposal(proposal, sessionId: sessionId, identity: identity)
+                completionMode = "proposal"
+                acceptedBackendExtraction = true
+            } else {
+                addedCount = quickExtract(
+                    turns: turns,
+                    sessionId: sessionId,
+                    identity: identity
+                )
+                completionMode = "invalidProposalQuickFallback"
+                acceptedBackendExtraction = false
+            }
+        } else if let result {
+            addedCount = mergeExtractionResult(
+                result.extraction,
+                sessionId: sessionId,
+                identity: identity
+            )
+            completionMode = "legacyExtraction"
+            acceptedBackendExtraction = true
+        } else {
+            addedCount = quickExtract(turns: turns, sessionId: sessionId, identity: identity)
+            completionMode = "quickFallback"
+            acceptedBackendExtraction = false
+        }
+        if acceptedBackendExtraction {
             graph.lastBackendExtractionSessionId = max(
                 graph.lastBackendExtractionSessionId ?? 0,
                 sessionId
             )
             graph.lastBackendExtractionAt = Date()
-        } else {
-            addedCount = quickExtract(turns: turns, sessionId: sessionId)
         }
         graph.sessionCount = max(graph.sessionCount, sessionId)
         graphLock.unlock()
@@ -391,7 +453,7 @@ final class KBLiteManager {
         if let fallbackReason {
             print("[KBLite] ⚠️ 后端提取降级为本地规则 reason=\(fallbackReason)")
         } else {
-            print("[KBLite] ✅ 后端知识提取完成: 新增 \(addedCount) 实体")
+            print("[KBLite] ✅ 后端知识提取完成 mode=\(completionMode): 新增 \(addedCount) 实体")
         }
         DispatchQueue.main.async {
             KnowledgeSyncCoordinator.shared.synchronizeCurrentUser(reason: "extractionCompleted")
@@ -401,7 +463,11 @@ final class KBLiteManager {
 
     /// 本地正则快速提取（LLM 不可用时的 fallback）
     /// 复用 ConversationMemoryManager 的维度提取逻辑，但存入知识库
-    private func quickExtract(turns: [ConversationTurn], sessionId: Int) -> Int {
+    private func quickExtract(
+        turns: [ConversationTurn],
+        sessionId: Int,
+        identity: KBPersonaIdentity
+    ) -> Int {
         let userTexts = turns.filter { $0.role == "user" }.map { $0.text }
         let allText = userTexts.joined(separator: " ")
 
@@ -414,12 +480,19 @@ final class KBLiteManager {
                               "儿子", "女儿", "孙子", "孙女", "老师", "师傅", "同学", "战友"]
         for kw in peopleKeywords {
             if allText.contains(kw) {
-                let existing = graph.people.first { $0.name == kw || $0.aliases.contains(kw) }
+                let turnIndices = sourceTurnIndices(containing: kw, in: turns)
+                let existing = findMatchingPerson(name: kw, aliases: [], identity: identity)
                 if existing == nil {
                     var person = KBPerson(id: UUID().uuidString, name: kw, aliases: [], relation: nil,
                                           traits: [], sourceSessionIds: [sessionId],
                                           createdAt: Date(), updatedAt: Date())
                     person.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
+                    applyIdentity(
+                        identity,
+                        evidenceStatus: "candidate",
+                        sourceTurnIndices: turnIndices,
+                        to: &person
+                    )
                     graph.people.append(person)
                     addedCount += 1
                 } else {
@@ -432,6 +505,12 @@ final class KBLiteManager {
                         if graph.people[idx].privacyMetadata == nil {
                             graph.people[idx].privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
                         }
+                        applyIdentity(
+                            identity,
+                            evidenceStatus: "candidate",
+                            sourceTurnIndices: turnIndices,
+                            to: &graph.people[idx]
+                        )
                     }
                 }
             }
@@ -443,12 +522,33 @@ final class KBLiteManager {
                       "东北", "四川", "湖南", "湖北", "广东", "江西", "安徽", "河南", "山东"]
         for city in cities {
             if allText.contains(city) {
-                let existing = graph.places.first { $0.name == city }
+                let turnIndices = sourceTurnIndices(containing: city, in: turns)
+                let existing = findMatchingPlace(name: city, identity: identity)
                 if existing == nil {
                     var place = KBPlace(id: UUID().uuidString, name: city, sourceSessionIds: [sessionId])
                     place.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
+                    applyIdentity(
+                        identity,
+                        evidenceStatus: "candidate",
+                        sourceTurnIndices: turnIndices,
+                        to: &place
+                    )
                     graph.places.append(place)
                     addedCount += 1
+                } else if let idx = graph.places.firstIndex(where: { $0.id == existing?.id }) {
+                    graph.places[idx].sourceSessionIds = merged(
+                        graph.places[idx].sourceSessionIds,
+                        [sessionId]
+                    )
+                    if graph.places[idx].privacyMetadata == nil {
+                        graph.places[idx].privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
+                    }
+                    applyIdentity(
+                        identity,
+                        evidenceStatus: "candidate",
+                        sourceTurnIndices: turnIndices,
+                        to: &graph.places[idx]
+                    )
                 }
             }
         }
@@ -458,18 +558,47 @@ final class KBLiteManager {
                              "生孩子", "做饭", "种地", "打工", "赶集", "学手艺", "出国", "下海"]
         for kw in eventKeywords {
             if allText.contains(kw) {
-                let existing = graph.events.first { $0.title.contains(kw) }
+                let turnIndices = sourceTurnIndices(containing: kw, in: turns)
+                let existing = graph.events.first {
+                    entityIsVisible($0, for: identity) && $0.title.contains(kw)
+                }
                 if existing == nil {
                     var event = KBEvent(id: UUID().uuidString, title: kw, sourceSessionIds: [sessionId])
                     event.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
+                    applyIdentity(
+                        identity,
+                        evidenceStatus: "candidate",
+                        sourceTurnIndices: turnIndices,
+                        to: &event
+                    )
                     graph.events.append(event)
                     addedCount += 1
+                } else if let idx = graph.events.firstIndex(where: { $0.id == existing?.id }) {
+                    graph.events[idx].sourceSessionIds = merged(
+                        graph.events[idx].sourceSessionIds,
+                        [sessionId]
+                    )
+                    if graph.events[idx].privacyMetadata == nil {
+                        graph.events[idx].privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
+                    }
+                    applyIdentity(
+                        identity,
+                        evidenceStatus: "candidate",
+                        sourceTurnIndices: turnIndices,
+                        to: &graph.events[idx]
+                    )
                 }
             }
         }
 
         print("[KBLite] 📝 正则快速提取: 新增 \(addedCount) 实体")
         return addedCount
+    }
+
+    private func sourceTurnIndices(containing value: String, in turns: [ConversationTurn]) -> [Int] {
+        turns.enumerated().compactMap { index, turn in
+            turn.role == "user" && turn.text.contains(value) ? index : nil
+        }
     }
 
     private func knowledgePrivacyMetadata(
@@ -487,31 +616,47 @@ final class KBLiteManager {
     // MARK: - Private: Prompt Building
 
     /// 构建已有知识摘要（供 LLM prompt 使用）
-    private func buildExistingSummary() -> String {
-        if graph.people.isEmpty && graph.places.isEmpty && graph.events.isEmpty {
+    private func buildExistingSummary(for identity: KBPersonaIdentity) -> String {
+        let people = graph.people.filter {
+            entityIsVisible($0, for: identity)
+                && KnowledgeGenerationPolicy.allowsEntity(privacyScope: $0.privacyMetadata?.scope)
+        }
+        let places = graph.places.filter {
+            entityIsVisible($0, for: identity)
+                && KnowledgeGenerationPolicy.allowsEntity(privacyScope: $0.privacyMetadata?.scope)
+        }
+        let events = graph.events.filter {
+            entityIsVisible($0, for: identity)
+                && KnowledgeGenerationPolicy.allowsEntity(privacyScope: $0.privacyMetadata?.scope)
+        }
+        let facts = graph.facts.filter {
+            entityIsVisible($0, for: identity)
+                && KnowledgeGenerationPolicy.allowsEntity(privacyScope: $0.privacyMetadata?.scope)
+        }
+        if people.isEmpty && places.isEmpty && events.isEmpty && facts.isEmpty {
             return "（暂无已有知识）"
         }
 
         var lines: [String] = []
 
-        if !graph.people.isEmpty {
+        if !people.isEmpty {
             lines.append("已知人物：")
-            for p in graph.people.prefix(15) {
+            for p in people.prefix(15) {
                 let traits = p.traits.isEmpty ? "" : "（\(p.traits.joined(separator: "、"))）"
                 lines.append("  - \(p.name)\(traits)")
             }
         }
 
-        if !graph.places.isEmpty {
-            lines.append("已知地点：\(graph.places.prefix(10).map { $0.name }.joined(separator: "、"))")
+        if !places.isEmpty {
+            lines.append("已知地点：\(places.prefix(10).map { $0.name }.joined(separator: "、"))")
         }
 
-        if !graph.events.isEmpty {
-            lines.append("已知事件：\(graph.events.prefix(10).map { $0.title }.joined(separator: "、"))")
+        if !events.isEmpty {
+            lines.append("已知事件：\(events.prefix(10).map { $0.title }.joined(separator: "、"))")
         }
 
-        if !graph.facts.isEmpty {
-            let recentFacts = graph.facts.sorted { ($0.sourceSessionIds.last ?? 0) > ($1.sourceSessionIds.last ?? 0) }
+        if !facts.isEmpty {
+            let recentFacts = facts.sorted { ($0.sourceSessionIds.last ?? 0) > ($1.sourceSessionIds.last ?? 0) }
             lines.append("最近事实：")
             for f in recentFacts.prefix(5) {
                 lines.append("  - \(f.statement)")
@@ -599,209 +744,807 @@ final class KBLiteManager {
 
     /// 将 LLM 提取结果合并到知识图谱
     /// - Returns: 新增实体数量
-    private func mergeExtractionResult(_ result: KBExtractionResult, sessionId: Int) -> Int {
+    private func mergeExtractionResult(
+        _ result: KBExtractionResult,
+        sessionId: Int,
+        identity: KBPersonaIdentity
+    ) -> Int {
         var addedCount = 0
         let now = Date()
-
-        // 容量检查
         checkCapacity()
 
-        // 1. 合并人物
-        for ep in result.people {
-            let matched = findMatchingPerson(name: ep.name, aliases: ep.aliases)
-            if let existing = matched {
-                // 更新已有人物
-                if let idx = graph.people.firstIndex(where: { $0.id == existing.id }) {
-                    var p = graph.people[idx]
-
-                    // 合并别名（取并集）
-                    for alias in ep.aliases where !p.aliases.contains(alias) && alias != p.name {
-                        p.aliases.append(alias)
-                    }
-
-                    // 合并 traits（取并集）
-                    for trait in ep.traits where !p.traits.contains(trait) {
-                        p.traits.append(trait)
-                    }
-
-                    // 补充关系
-                    if p.relation == nil, let rel = ep.relation {
-                        p.relation = rel
-                    }
-
-                    // 补充简介
-                    if p.briefBio == nil, let bio = ep.briefBio {
-                        p.briefBio = bio
-                    }
-
-                    // 记录来源
-                    if !p.sourceSessionIds.contains(sessionId) {
-                        p.sourceSessionIds.append(sessionId)
-                    }
-                    if p.privacyMetadata == nil {
-                        p.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
-                    }
-                    p.updatedAt = now
-                    graph.people[idx] = p
-                    print("[KBLite] 🔄 合并人物: \(p.name)")
-                }
+        for extracted in result.people {
+            let name = extracted.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { continue }
+            if let existing = findMatchingPerson(name: name, aliases: extracted.aliases, identity: identity),
+               let index = graph.people.firstIndex(where: { $0.id == existing.id }) {
+                graph.people[index].aliases = merged(graph.people[index].aliases, extracted.aliases)
+                    .filter { $0 != graph.people[index].name }
+                graph.people[index].traits = merged(graph.people[index].traits, extracted.traits)
+                if graph.people[index].relation == nil { graph.people[index].relation = extracted.relation }
+                if graph.people[index].briefBio == nil { graph.people[index].briefBio = extracted.briefBio }
+                graph.people[index].sourceSessionIds = merged(
+                    graph.people[index].sourceSessionIds,
+                    [sessionId]
+                )
+                graph.people[index].privacyMetadata = graph.people[index].privacyMetadata
+                    ?? knowledgePrivacyMetadata(sessionId: sessionId)
+                graph.people[index].updatedAt = now
+                applyIdentity(
+                    identity,
+                    evidenceStatus: "observed",
+                    sourceTurnIndices: extracted.sourceTurnIndices,
+                    to: &graph.people[index]
+                )
             } else {
-                // 新增人物
                 var person = KBPerson(
                     id: UUID().uuidString,
-                    name: ep.name,
-                    aliases: ep.aliases,
-                    relation: ep.relation,
-                    traits: ep.traits,
-                    briefBio: ep.briefBio,
+                    name: name,
+                    aliases: extracted.aliases,
+                    relation: extracted.relation,
+                    traits: extracted.traits,
+                    briefBio: extracted.briefBio,
                     sourceSessionIds: [sessionId],
                     createdAt: now,
                     updatedAt: now
                 )
                 person.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
+                applyIdentity(
+                    identity,
+                    evidenceStatus: "observed",
+                    sourceTurnIndices: extracted.sourceTurnIndices,
+                    to: &person
+                )
                 graph.people.append(person)
                 addedCount += 1
-                print("[KBLite] ➕ 新增人物: \(ep.name)")
             }
         }
 
-        // 2. 合并地点
-        for ep in result.places {
-            let matched = findMatchingPlace(name: ep.name)
-            if let existing = matched {
-                if let idx = graph.places.firstIndex(where: { $0.id == existing.id }) {
-                    var p = graph.places[idx]
-                    if p.description == nil, let desc = ep.description { p.description = desc }
-                    if p.category == nil, let cat = ep.category { p.category = cat }
-                    if !p.sourceSessionIds.contains(sessionId) { p.sourceSessionIds.append(sessionId) }
-                    if p.privacyMetadata == nil {
-                        p.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
-                    }
-                    graph.places[idx] = p
-                    print("[KBLite] 🔄 合并地点: \(p.name)")
-                }
+        for extracted in result.places {
+            let name = extracted.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { continue }
+            let relatedPersonIds = extracted.relatedPeople.compactMap {
+                findMatchingPerson(name: $0, aliases: [], identity: identity)?.id
+            }
+            if let existing = findMatchingPlace(name: name, identity: identity),
+               let index = graph.places.firstIndex(where: { $0.id == existing.id }) {
+                if graph.places[index].description == nil { graph.places[index].description = extracted.description }
+                if graph.places[index].category == nil { graph.places[index].category = extracted.category }
+                if graph.places[index].latitude == nil { graph.places[index].latitude = extracted.latitude }
+                if graph.places[index].longitude == nil { graph.places[index].longitude = extracted.longitude }
+                graph.places[index].relatedPersonIds = merged(
+                    graph.places[index].relatedPersonIds,
+                    relatedPersonIds
+                )
+                graph.places[index].sourceSessionIds = merged(
+                    graph.places[index].sourceSessionIds,
+                    [sessionId]
+                )
+                graph.places[index].privacyMetadata = graph.places[index].privacyMetadata
+                    ?? knowledgePrivacyMetadata(sessionId: sessionId)
+                applyIdentity(
+                    identity,
+                    evidenceStatus: "observed",
+                    sourceTurnIndices: extracted.sourceTurnIndices,
+                    to: &graph.places[index]
+                )
             } else {
                 var place = KBPlace(
                     id: UUID().uuidString,
-                    name: ep.name,
-                    category: ep.category,
-                    latitude: ep.latitude,
-                    longitude: ep.longitude,
-                    description: ep.description,
-                    sourceSessionIds: [sessionId]
+                    name: name,
+                    category: extracted.category,
+                    latitude: extracted.latitude,
+                    longitude: extracted.longitude,
+                    description: extracted.description,
+                    relatedPersonIds: relatedPersonIds,
+                    sourceSessionIds: [sessionId],
+                    createdAt: now
                 )
                 place.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
+                applyIdentity(
+                    identity,
+                    evidenceStatus: "observed",
+                    sourceTurnIndices: extracted.sourceTurnIndices,
+                    to: &place
+                )
                 graph.places.append(place)
                 addedCount += 1
-                print("[KBLite] ➕ 新增地点: \(ep.name)")
             }
         }
 
-        // 3. 合并事件
-        for ee in result.events {
-            let existing = graph.events.first { $0.title == ee.title }
-            if let existing = existing {
-                if let idx = graph.events.firstIndex(where: { $0.id == existing.id }) {
-                    var e = graph.events[idx]
-                    if e.description == nil, let desc = ee.description { e.description = desc }
-                    if e.year == nil, let y = ee.year { e.year = y }
-                    if !e.sourceSessionIds.contains(sessionId) { e.sourceSessionIds.append(sessionId) }
-                    if e.privacyMetadata == nil {
-                        e.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
-                    }
-                    graph.events[idx] = e
-                    print("[KBLite] 🔄 合并事件: \(e.title)")
-                }
+        for extracted in result.events {
+            let title = extracted.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !title.isEmpty else { continue }
+            let locationId = extracted.location.flatMap {
+                findMatchingPlace(name: $0, identity: identity)?.id
+            }
+            let participantIds = extracted.participants.compactMap {
+                findMatchingPerson(name: $0, aliases: [], identity: identity)?.id
+            }
+            if let existing = findMatchingEvent(
+                title: title,
+                year: extracted.year,
+                month: extracted.month,
+                identity: identity
+            ), let index = graph.events.firstIndex(where: { $0.id == existing.id }) {
+                if graph.events[index].description == nil { graph.events[index].description = extracted.description }
+                if graph.events[index].year == nil { graph.events[index].year = extracted.year }
+                if graph.events[index].month == nil { graph.events[index].month = extracted.month }
+                if graph.events[index].locationId == nil { graph.events[index].locationId = locationId }
+                graph.events[index].participantIds = merged(
+                    graph.events[index].participantIds,
+                    participantIds
+                )
+                graph.events[index].sourceSessionIds = merged(
+                    graph.events[index].sourceSessionIds,
+                    [sessionId]
+                )
+                graph.events[index].privacyMetadata = graph.events[index].privacyMetadata
+                    ?? knowledgePrivacyMetadata(sessionId: sessionId)
+                applyIdentity(
+                    identity,
+                    evidenceStatus: "observed",
+                    sourceTurnIndices: extracted.sourceTurnIndices,
+                    to: &graph.events[index]
+                )
             } else {
                 var event = KBEvent(
                     id: UUID().uuidString,
-                    title: ee.title,
-                    description: ee.description,
-                    year: ee.year,
-                    month: ee.month,
-                    sourceSessionIds: [sessionId]
+                    title: title,
+                    description: extracted.description,
+                    year: extracted.year,
+                    month: extracted.month,
+                    locationId: locationId,
+                    participantIds: participantIds,
+                    sourceSessionIds: [sessionId],
+                    createdAt: now
                 )
                 event.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
+                applyIdentity(
+                    identity,
+                    evidenceStatus: "observed",
+                    sourceTurnIndices: extracted.sourceTurnIndices,
+                    to: &event
+                )
                 graph.events.append(event)
                 addedCount += 1
-                print("[KBLite] ➕ 新增事件: \(ee.title)")
             }
         }
 
-        // 4. 合并事实（按 statement 去重）
-        for ef in result.facts {
-            let stmt = ef.statement.trimmingCharacters(in: .whitespaces)
-            guard !stmt.isEmpty else { continue }
-
-            // 检查是否已存在相同或高度相似的事实
-            let isDuplicate = graph.facts.contains { existing in
-                existing.statement == stmt ||
-                (existing.statement.count >= 10 && stmt.count >= 10 &&
-                 (existing.statement.contains(stmt) || stmt.contains(existing.statement)))
+        for extracted in result.facts {
+            let statement = extracted.statement.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !statement.isEmpty else { continue }
+            let relatedPersonIds = extracted.relatedPeople.compactMap {
+                findMatchingPerson(name: $0, aliases: [], identity: identity)?.id
             }
-
-            if !isDuplicate {
+            let relatedPlaceIds = extracted.relatedPlaces.compactMap {
+                findMatchingPlace(name: $0, identity: identity)?.id
+            }
+            let relatedEventIds = extracted.relatedEvents.compactMap { title in
+                graph.events.first {
+                    entityIsVisible($0, for: identity) && $0.title == title
+                }?.id
+            }
+            if let existing = findMatchingFact(statement: statement, identity: identity),
+               let index = graph.facts.firstIndex(where: { $0.id == existing.id }) {
+                graph.facts[index].confidence = mergedConfidence(
+                    graph.facts[index].confidence,
+                    extracted.confidence ?? "high"
+                )
+                graph.facts[index].relatedPersonIds = merged(
+                    graph.facts[index].relatedPersonIds,
+                    relatedPersonIds
+                )
+                graph.facts[index].relatedPlaceIds = merged(
+                    graph.facts[index].relatedPlaceIds,
+                    relatedPlaceIds
+                )
+                graph.facts[index].relatedEventIds = merged(
+                    graph.facts[index].relatedEventIds,
+                    relatedEventIds
+                )
+                graph.facts[index].sourceSessionIds = merged(
+                    graph.facts[index].sourceSessionIds,
+                    [sessionId]
+                )
+                graph.facts[index].privacyMetadata = graph.facts[index].privacyMetadata
+                    ?? knowledgePrivacyMetadata(sessionId: sessionId)
+                applyIdentity(
+                    identity,
+                    evidenceStatus: KnowledgeGenerationPolicy.allowsFact(
+                        privacyScope: "generationAllowed",
+                        confidence: extracted.confidence ?? "high"
+                    ) ? "observed" : "candidate",
+                    sourceTurnIndices: extracted.sourceTurnIndices,
+                    to: &graph.facts[index]
+                )
+            } else {
                 var fact = KBFact(
                     id: UUID().uuidString,
-                    statement: stmt,
-                    confidence: ef.confidence ?? "high",
-                    sourceSessionIds: [sessionId]
+                    statement: statement,
+                    confidence: extracted.confidence ?? "high",
+                    relatedPersonIds: relatedPersonIds,
+                    relatedPlaceIds: relatedPlaceIds,
+                    relatedEventIds: relatedEventIds,
+                    sourceSessionIds: [sessionId],
+                    createdAt: now
                 )
                 fact.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
+                applyIdentity(
+                    identity,
+                    evidenceStatus: KnowledgeGenerationPolicy.allowsFact(
+                        privacyScope: "generationAllowed",
+                        confidence: extracted.confidence ?? "high"
+                    ) ? "observed" : "candidate",
+                    sourceTurnIndices: extracted.sourceTurnIndices,
+                    to: &fact
+                )
                 graph.facts.append(fact)
                 addedCount += 1
-                print("[KBLite] ➕ 新增事实: \(stmt.prefix(40))...")
             }
         }
 
         return addedCount
     }
 
-    // MARK: - Private: Matching
+    private func mergeProposal(
+        _ proposal: KBKnowledgeMutationProposal,
+        sessionId: Int,
+        identity: KBPersonaIdentity
+    ) -> Int {
+        checkCapacity()
+        let now = Date()
+        var addedCount = 0
+        var personMap: [String: String] = [:]
+        var placeMap: [String: String] = [:]
+        var eventMap: [String: String] = [:]
+        var factMap: [String: String] = [:]
 
-    /// 查找匹配的人物（按名字、别名）
-    private func findMatchingPerson(name: String, aliases: [String]) -> KBPerson? {
-        let allNames = [name] + aliases
-
-        // 1. 完全匹配名字
-        if let match = graph.people.first(where: { allNames.contains($0.name) }) {
-            return match
+        for item in proposal.upserts.people {
+            let exact = graph.people.first { $0.id == item.id && entityIsVisible($0, for: identity) }
+            let natural = findMatchingPerson(name: item.name, aliases: item.aliases, identity: identity)
+            personMap[item.id] = exact?.id ?? natural?.id ?? uniqueLocalID(
+                preferred: item.id,
+                occupied: Set(graph.people.map(\.id))
+            )
+        }
+        for item in proposal.upserts.places {
+            let exact = graph.places.first { $0.id == item.id && entityIsVisible($0, for: identity) }
+            let natural = findMatchingPlace(name: item.name, identity: identity)
+            placeMap[item.id] = exact?.id ?? natural?.id ?? uniqueLocalID(
+                preferred: item.id,
+                occupied: Set(graph.places.map(\.id))
+            )
+        }
+        for item in proposal.upserts.events {
+            let exact = graph.events.first { $0.id == item.id && entityIsVisible($0, for: identity) }
+            let natural = findMatchingEvent(
+                title: item.title,
+                year: item.year,
+                month: item.month,
+                identity: identity
+            )
+            eventMap[item.id] = exact?.id ?? natural?.id ?? uniqueLocalID(
+                preferred: item.id,
+                occupied: Set(graph.events.map(\.id))
+            )
+        }
+        for item in proposal.upserts.facts {
+            let exact = graph.facts.first { $0.id == item.id && entityIsVisible($0, for: identity) }
+            let natural = findMatchingFact(statement: item.statement, identity: identity)
+            factMap[item.id] = exact?.id ?? natural?.id ?? uniqueLocalID(
+                preferred: item.id,
+                occupied: Set(graph.facts.map(\.id))
+            )
         }
 
-        // 2. 匹配别名
-        if let match = graph.people.first(where: { p in
-            p.aliases.contains(where: { alias in allNames.contains(alias) })
-        }) {
-            return match
-        }
+        let visiblePersonIDs = Set(graph.people.filter { entityIsVisible($0, for: identity) }.map(\.id))
+        let visiblePlaceIDs = Set(graph.places.filter { entityIsVisible($0, for: identity) }.map(\.id))
+        let visibleEventIDs = Set(graph.events.filter { entityIsVisible($0, for: identity) }.map(\.id))
 
-        // 3. 模糊匹配（包含关系）
-        if name.count >= 2 {
-            for p in graph.people {
-                let searchText = [p.name] + p.aliases
-                for text in searchText {
-                    if text.contains(name) || name.contains(text) {
-                        return p
-                    }
-                }
+        for item in proposal.upserts.people {
+            guard let localID = personMap[item.id] else { continue }
+            let relatedIDs = mappedReferences(
+                item.relatedPersonIds,
+                through: personMap,
+                existing: visiblePersonIDs
+            )
+            if let index = graph.people.firstIndex(where: { $0.id == localID }) {
+                graph.people[index].aliases = merged(graph.people[index].aliases, item.aliases)
+                    .filter { $0 != graph.people[index].name }
+                graph.people[index].traits = merged(graph.people[index].traits, item.traits)
+                if graph.people[index].relation == nil { graph.people[index].relation = item.relation }
+                if graph.people[index].briefBio == nil { graph.people[index].briefBio = item.briefBio }
+                graph.people[index].relatedPersonIds = merged(
+                    graph.people[index].relatedPersonIds,
+                    relatedIDs
+                )
+                graph.people[index].sourceSessionIds = merged(
+                    graph.people[index].sourceSessionIds,
+                    item.sourceSessionIds + [sessionId]
+                )
+                graph.people[index].sourceTurnIndices = merged(
+                    graph.people[index].sourceTurnIndices ?? [],
+                    item.sourceTurnIndices
+                )
+                graph.people[index].privacyMetadata = mergedPrivacy(
+                    graph.people[index].privacyMetadata,
+                    item.privacyMetadata
+                )
+                graph.people[index].evidenceStatus = mergedEvidence(
+                    graph.people[index].evidenceStatus,
+                    item.evidenceStatus
+                )
+                graph.people[index].ownerUserId = identity.ownerUserId
+                graph.people[index].personaScope = identity.personaScope
+                graph.people[index].digitalHumanId = identity.digitalHumanId
+                graph.people[index].updatedAt = max(graph.people[index].updatedAt, item.updatedAt ?? now)
+            } else {
+                var person = KBPerson(
+                    id: localID,
+                    name: item.name,
+                    aliases: item.aliases,
+                    relation: item.relation,
+                    traits: item.traits,
+                    briefBio: item.briefBio,
+                    relatedPersonIds: relatedIDs,
+                    sourceSessionIds: merged(item.sourceSessionIds, [sessionId]),
+                    createdAt: item.createdAt ?? now,
+                    updatedAt: item.updatedAt ?? now,
+                    privacyMetadata: item.privacyMetadata
+                )
+                applyIdentity(
+                    identity,
+                    evidenceStatus: item.evidenceStatus,
+                    sourceTurnIndices: item.sourceTurnIndices,
+                    to: &person
+                )
+                graph.people.append(person)
+                addedCount += 1
             }
         }
 
-        return nil
+        for item in proposal.upserts.places {
+            guard let localID = placeMap[item.id] else { continue }
+            let relatedIDs = mappedReferences(
+                item.relatedPersonIds,
+                through: personMap,
+                existing: visiblePersonIDs
+            )
+            if let index = graph.places.firstIndex(where: { $0.id == localID }) {
+                if graph.places[index].category == nil { graph.places[index].category = item.category }
+                if graph.places[index].latitude == nil { graph.places[index].latitude = item.latitude }
+                if graph.places[index].longitude == nil { graph.places[index].longitude = item.longitude }
+                if graph.places[index].description == nil { graph.places[index].description = item.description }
+                graph.places[index].relatedPersonIds = merged(
+                    graph.places[index].relatedPersonIds,
+                    relatedIDs
+                )
+                graph.places[index].sourceSessionIds = merged(
+                    graph.places[index].sourceSessionIds,
+                    item.sourceSessionIds + [sessionId]
+                )
+                graph.places[index].sourceTurnIndices = merged(
+                    graph.places[index].sourceTurnIndices ?? [],
+                    item.sourceTurnIndices
+                )
+                graph.places[index].privacyMetadata = mergedPrivacy(
+                    graph.places[index].privacyMetadata,
+                    item.privacyMetadata
+                )
+                graph.places[index].evidenceStatus = mergedEvidence(
+                    graph.places[index].evidenceStatus,
+                    item.evidenceStatus
+                )
+                graph.places[index].ownerUserId = identity.ownerUserId
+                graph.places[index].personaScope = identity.personaScope
+                graph.places[index].digitalHumanId = identity.digitalHumanId
+            } else {
+                var place = KBPlace(
+                    id: localID,
+                    name: item.name,
+                    category: item.category,
+                    latitude: item.latitude,
+                    longitude: item.longitude,
+                    description: item.description,
+                    relatedPersonIds: relatedIDs,
+                    sourceSessionIds: merged(item.sourceSessionIds, [sessionId]),
+                    createdAt: item.createdAt ?? now,
+                    privacyMetadata: item.privacyMetadata
+                )
+                applyIdentity(
+                    identity,
+                    evidenceStatus: item.evidenceStatus,
+                    sourceTurnIndices: item.sourceTurnIndices,
+                    to: &place
+                )
+                graph.places.append(place)
+                addedCount += 1
+            }
+        }
+
+        for item in proposal.upserts.events {
+            guard let localID = eventMap[item.id] else { continue }
+            let locationID = item.locationId.flatMap {
+                mappedReference($0, through: placeMap, existing: visiblePlaceIDs)
+            }
+            let participantIDs = mappedReferences(
+                item.participantIds,
+                through: personMap,
+                existing: visiblePersonIDs
+            )
+            if let index = graph.events.firstIndex(where: { $0.id == localID }) {
+                if graph.events[index].description == nil { graph.events[index].description = item.description }
+                if graph.events[index].year == nil { graph.events[index].year = item.year }
+                if graph.events[index].month == nil { graph.events[index].month = item.month }
+                if graph.events[index].locationId == nil { graph.events[index].locationId = locationID }
+                graph.events[index].participantIds = merged(
+                    graph.events[index].participantIds,
+                    participantIDs
+                )
+                graph.events[index].mediaIds = merged(graph.events[index].mediaIds, item.mediaIds)
+                if graph.events[index].memoirId == nil { graph.events[index].memoirId = item.memoirId }
+                graph.events[index].sourceSessionIds = merged(
+                    graph.events[index].sourceSessionIds,
+                    item.sourceSessionIds + [sessionId]
+                )
+                graph.events[index].sourceTurnIndices = merged(
+                    graph.events[index].sourceTurnIndices ?? [],
+                    item.sourceTurnIndices
+                )
+                graph.events[index].privacyMetadata = mergedPrivacy(
+                    graph.events[index].privacyMetadata,
+                    item.privacyMetadata
+                )
+                graph.events[index].evidenceStatus = mergedEvidence(
+                    graph.events[index].evidenceStatus,
+                    item.evidenceStatus
+                )
+                graph.events[index].ownerUserId = identity.ownerUserId
+                graph.events[index].personaScope = identity.personaScope
+                graph.events[index].digitalHumanId = identity.digitalHumanId
+            } else {
+                var event = KBEvent(
+                    id: localID,
+                    title: item.title,
+                    description: item.description,
+                    year: item.year,
+                    month: item.month,
+                    locationId: locationID,
+                    participantIds: participantIDs,
+                    mediaIds: item.mediaIds,
+                    memoirId: item.memoirId,
+                    sourceSessionIds: merged(item.sourceSessionIds, [sessionId]),
+                    createdAt: item.createdAt ?? now,
+                    privacyMetadata: item.privacyMetadata
+                )
+                applyIdentity(
+                    identity,
+                    evidenceStatus: item.evidenceStatus,
+                    sourceTurnIndices: item.sourceTurnIndices,
+                    to: &event
+                )
+                graph.events.append(event)
+                addedCount += 1
+            }
+        }
+
+        for item in proposal.upserts.facts {
+            guard let localID = factMap[item.id] else { continue }
+            let relatedPersonIDs = mappedReferences(
+                item.relatedPersonIds,
+                through: personMap,
+                existing: visiblePersonIDs
+            )
+            let relatedPlaceIDs = mappedReferences(
+                item.relatedPlaceIds,
+                through: placeMap,
+                existing: visiblePlaceIDs
+            )
+            let relatedEventIDs = mappedReferences(
+                item.relatedEventIds,
+                through: eventMap,
+                existing: visibleEventIDs
+            )
+            if let index = graph.facts.firstIndex(where: { $0.id == localID }) {
+                graph.facts[index].confidence = mergedConfidence(
+                    graph.facts[index].confidence,
+                    item.confidence
+                )
+                graph.facts[index].relatedPersonIds = merged(
+                    graph.facts[index].relatedPersonIds,
+                    relatedPersonIDs
+                )
+                graph.facts[index].relatedPlaceIds = merged(
+                    graph.facts[index].relatedPlaceIds,
+                    relatedPlaceIDs
+                )
+                graph.facts[index].relatedEventIds = merged(
+                    graph.facts[index].relatedEventIds,
+                    relatedEventIDs
+                )
+                graph.facts[index].sourceSessionIds = merged(
+                    graph.facts[index].sourceSessionIds,
+                    item.sourceSessionIds + [sessionId]
+                )
+                graph.facts[index].sourceTurnIndices = merged(
+                    graph.facts[index].sourceTurnIndices ?? [],
+                    item.sourceTurnIndices
+                )
+                graph.facts[index].privacyMetadata = mergedPrivacy(
+                    graph.facts[index].privacyMetadata,
+                    item.privacyMetadata
+                )
+                graph.facts[index].evidenceStatus = mergedEvidence(
+                    graph.facts[index].evidenceStatus,
+                    item.evidenceStatus
+                )
+                graph.facts[index].ownerUserId = identity.ownerUserId
+                graph.facts[index].personaScope = identity.personaScope
+                graph.facts[index].digitalHumanId = identity.digitalHumanId
+            } else {
+                var fact = KBFact(
+                    id: localID,
+                    statement: item.statement,
+                    confidence: item.confidence,
+                    relatedPersonIds: relatedPersonIDs,
+                    relatedPlaceIds: relatedPlaceIDs,
+                    relatedEventIds: relatedEventIDs,
+                    sourceSessionIds: merged(item.sourceSessionIds, [sessionId]),
+                    createdAt: item.createdAt ?? now,
+                    privacyMetadata: item.privacyMetadata
+                )
+                applyIdentity(
+                    identity,
+                    evidenceStatus: item.evidenceStatus,
+                    sourceTurnIndices: item.sourceTurnIndices,
+                    to: &fact
+                )
+                graph.facts.append(fact)
+                addedCount += 1
+            }
+        }
+
+        return addedCount
     }
 
-    /// 查找匹配的地点（按名字）
-    private func findMatchingPlace(name: String) -> KBPlace? {
-        if let match = graph.places.first(where: { $0.name == name }) {
-            return match
+    // MARK: - Private: Matching and Persona Metadata
+
+    private func findMatchingPerson(
+        name: String,
+        aliases: [String],
+        identity: KBPersonaIdentity
+    ) -> KBPerson? {
+        let allNames = Set(([name] + aliases).map(normalizedMatchText).filter { !$0.isEmpty })
+        let visiblePeople = graph.people.filter { entityIsVisible($0, for: identity) }
+        if let exact = visiblePeople.first(where: {
+            allNames.contains(normalizedMatchText($0.name))
+                || !$0.aliases.map(normalizedMatchText).filter(allNames.contains).isEmpty
+        }) {
+            return exact
         }
-        // 包含关系匹配（"外滩" ⊂ "上海外滩"）
-        for place in graph.places {
-            if place.name.contains(name) || name.contains(place.name) {
-                return place
+        guard normalizedMatchText(name).count >= 2 else { return nil }
+        return visiblePeople.first { person in
+            ([person.name] + person.aliases).contains { candidate in
+                let normalizedCandidate = normalizedMatchText(candidate)
+                let normalizedName = normalizedMatchText(name)
+                return normalizedCandidate.contains(normalizedName)
+                    || normalizedName.contains(normalizedCandidate)
             }
         }
-        return nil
+    }
+
+    private func findMatchingPlace(name: String, identity: KBPersonaIdentity) -> KBPlace? {
+        let normalizedName = normalizedMatchText(name)
+        return graph.places.filter { entityIsVisible($0, for: identity) }.first { place in
+            let candidate = normalizedMatchText(place.name)
+            return candidate == normalizedName
+                || candidate.contains(normalizedName)
+                || normalizedName.contains(candidate)
+        }
+    }
+
+    private func findMatchingEvent(
+        title: String,
+        year: Int?,
+        month: Int?,
+        identity: KBPersonaIdentity
+    ) -> KBEvent? {
+        let normalizedTitle = normalizedMatchText(title)
+        return graph.events.first {
+            entityIsVisible($0, for: identity)
+                && normalizedMatchText($0.title) == normalizedTitle
+                && ($0.year == nil || year == nil || $0.year == year)
+                && ($0.month == nil || month == nil || $0.month == month)
+        }
+    }
+
+    private func findMatchingFact(
+        statement: String,
+        identity: KBPersonaIdentity
+    ) -> KBFact? {
+        let normalizedStatement = normalizedMatchText(statement)
+        return graph.facts.first { fact in
+            guard entityIsVisible(fact, for: identity) else { return false }
+            let existing = normalizedMatchText(fact.statement)
+            return existing == normalizedStatement
+                || (existing.count >= 10 && normalizedStatement.count >= 10
+                    && (existing.contains(normalizedStatement) || normalizedStatement.contains(existing)))
+        }
+    }
+
+    private func entityIsVisible(_ person: KBPerson, for identity: KBPersonaIdentity) -> Bool {
+        KBPersonaPolicy.allowsEntity(
+            ownerUserId: person.ownerUserId,
+            personaScope: person.personaScope,
+            digitalHumanId: person.digitalHumanId,
+            for: identity,
+            legacyOwnerUserId: loadedUserId
+        )
+    }
+
+    private func entityIsVisible(_ place: KBPlace, for identity: KBPersonaIdentity) -> Bool {
+        KBPersonaPolicy.allowsEntity(
+            ownerUserId: place.ownerUserId,
+            personaScope: place.personaScope,
+            digitalHumanId: place.digitalHumanId,
+            for: identity,
+            legacyOwnerUserId: loadedUserId
+        )
+    }
+
+    private func entityIsVisible(_ event: KBEvent, for identity: KBPersonaIdentity) -> Bool {
+        KBPersonaPolicy.allowsEntity(
+            ownerUserId: event.ownerUserId,
+            personaScope: event.personaScope,
+            digitalHumanId: event.digitalHumanId,
+            for: identity,
+            legacyOwnerUserId: loadedUserId
+        )
+    }
+
+    private func entityIsVisible(_ fact: KBFact, for identity: KBPersonaIdentity) -> Bool {
+        KBPersonaPolicy.allowsEntity(
+            ownerUserId: fact.ownerUserId,
+            personaScope: fact.personaScope,
+            digitalHumanId: fact.digitalHumanId,
+            for: identity,
+            legacyOwnerUserId: loadedUserId
+        )
+    }
+
+    private func applyIdentity(
+        _ identity: KBPersonaIdentity,
+        evidenceStatus: String,
+        sourceTurnIndices: [Int],
+        to person: inout KBPerson
+    ) {
+        person.ownerUserId = identity.ownerUserId
+        person.personaScope = identity.personaScope
+        person.digitalHumanId = identity.digitalHumanId
+        person.evidenceStatus = mergedEvidence(person.evidenceStatus, evidenceStatus)
+        person.sourceTurnIndices = merged(person.sourceTurnIndices ?? [], sourceTurnIndices)
+    }
+
+    private func applyIdentity(
+        _ identity: KBPersonaIdentity,
+        evidenceStatus: String,
+        sourceTurnIndices: [Int],
+        to place: inout KBPlace
+    ) {
+        place.ownerUserId = identity.ownerUserId
+        place.personaScope = identity.personaScope
+        place.digitalHumanId = identity.digitalHumanId
+        place.evidenceStatus = mergedEvidence(place.evidenceStatus, evidenceStatus)
+        place.sourceTurnIndices = merged(place.sourceTurnIndices ?? [], sourceTurnIndices)
+    }
+
+    private func applyIdentity(
+        _ identity: KBPersonaIdentity,
+        evidenceStatus: String,
+        sourceTurnIndices: [Int],
+        to event: inout KBEvent
+    ) {
+        event.ownerUserId = identity.ownerUserId
+        event.personaScope = identity.personaScope
+        event.digitalHumanId = identity.digitalHumanId
+        event.evidenceStatus = mergedEvidence(event.evidenceStatus, evidenceStatus)
+        event.sourceTurnIndices = merged(event.sourceTurnIndices ?? [], sourceTurnIndices)
+    }
+
+    private func applyIdentity(
+        _ identity: KBPersonaIdentity,
+        evidenceStatus: String,
+        sourceTurnIndices: [Int],
+        to fact: inout KBFact
+    ) {
+        fact.ownerUserId = identity.ownerUserId
+        fact.personaScope = identity.personaScope
+        fact.digitalHumanId = identity.digitalHumanId
+        fact.evidenceStatus = mergedEvidence(fact.evidenceStatus, evidenceStatus)
+        fact.sourceTurnIndices = merged(fact.sourceTurnIndices ?? [], sourceTurnIndices)
+    }
+
+    private func merged<T: Hashable>(_ existing: [T], _ incoming: [T]) -> [T] {
+        var seen = Set(existing)
+        return existing + incoming.filter { seen.insert($0).inserted }
+    }
+
+    private func mergedPrivacy(
+        _ existing: KBPrivacyMetadata?,
+        _ incoming: KBPrivacyMetadata
+    ) -> KBPrivacyMetadata {
+        guard let existing else { return incoming }
+        var refs = existing.sourceRefs
+        for ref in incoming.sourceRefs where !refs.contains(where: {
+            $0.kind == ref.kind && $0.id == ref.id && $0.title == ref.title
+        }) {
+            refs.append(ref)
+        }
+        let scope = existing.scope == "localOnly" ? existing.scope : incoming.scope
+        return KBPrivacyMetadata(scope: scope, sourceRefs: refs)
+    }
+
+    private func mergedEvidence(_ existing: String?, _ incoming: String) -> String {
+        if let existing,
+           ["rejected", "superseded"].contains(existing.lowercased()) {
+            return existing
+        }
+        if ["rejected", "superseded"].contains(incoming.lowercased()) {
+            return incoming
+        }
+        let rank = ["candidate": 0, "observed": 1, "confirmed": 2]
+        guard let existing else { return incoming }
+        return (rank[existing.lowercased()] ?? 0) >= (rank[incoming.lowercased()] ?? 0)
+            ? existing
+            : incoming
+    }
+
+    private func mergedConfidence(_ existing: String, _ incoming: String) -> String {
+        let rank = ["low": 0, "medium": 1, "high": 2, "confirmed": 3]
+        return (rank[existing.lowercased()] ?? 0) >= (rank[incoming.lowercased()] ?? 0)
+            ? existing
+            : incoming
+    }
+
+    private func mappedReferences(
+        _ references: [String],
+        through map: [String: String],
+        existing: Set<String>
+    ) -> [String] {
+        references.compactMap { mappedReference($0, through: map, existing: existing) }
+    }
+
+    private func mappedReference(
+        _ reference: String,
+        through map: [String: String],
+        existing: Set<String>
+    ) -> String? {
+        map[reference] ?? (existing.contains(reference) ? reference : nil)
+    }
+
+    private func uniqueLocalID(preferred: String, occupied: Set<String>) -> String {
+        occupied.contains(preferred) ? UUID().uuidString : preferred
+    }
+
+    private func normalizedMatchText(_ value: String) -> String {
+        value
+            .precomposedStringWithCompatibilityMapping
+            .lowercased()
+            .split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
+    }
+
+    private func findMatchingPerson(name: String, aliases: [String]) -> KBPerson? {
+        findMatchingPerson(
+            name: name,
+            aliases: aliases,
+            identity: Self.resolveCurrentPersonaIdentity()
+        )
+    }
+
+    private func findMatchingPlace(name: String) -> KBPlace? {
+        findMatchingPlace(name: name, identity: Self.resolveCurrentPersonaIdentity())
     }
 
     // MARK: - Public API: Search
@@ -916,48 +1659,90 @@ final class KBLiteManager {
     ///   - maxItems: 每类实体最多返回条数
     /// - Returns: 上下文字符串，空字符串表示无可用上下文
     func buildContextString(query: String?, maxItems: Int = 5) -> String {
-        buildContextString(query: query, maxItems: maxItems, generationAllowedOnly: false)
+        buildContextString(
+            query: query,
+            maxItems: maxItems,
+            generationAllowedOnly: false,
+            expectedIdentity: nil
+        )
     }
 
     /// 构建允许发送给生成服务的上下文。缺少显式授权元数据的旧数据不会离开设备。
-    func buildGenerationAllowedContextString(query: String?, maxItems: Int = 5) -> String {
-        let expectedUserId = Self.normalizedUserId(UserManager.shared.currentUser?.id)
-        guard loadedUserId == expectedUserId else {
+    func buildGenerationAllowedContextString(
+        query: String?,
+        maxItems: Int = 5,
+        expectedIdentity: KBPersonaIdentity? = nil
+    ) -> String {
+        let identity = expectedIdentity ?? Self.resolveCurrentPersonaIdentity()
+        guard identity.isComplete, loadedUserId == identity.ownerUserId else {
             print(
                 "[KBLite] 跳过生成上下文：知识所有者不匹配 " +
-                "loaded=\(loadedUserId) expected=\(expectedUserId)"
+                "loaded=\(loadedUserId) expected=\(identity.ownerUserId)"
             )
             return ""
         }
-        return buildContextString(query: query, maxItems: maxItems, generationAllowedOnly: true)
+        return buildContextString(
+            query: query,
+            maxItems: maxItems,
+            generationAllowedOnly: true,
+            expectedIdentity: identity
+        )
     }
 
     private func buildContextString(
         query: String?,
         maxItems: Int,
-        generationAllowedOnly: Bool
+        generationAllowedOnly: Bool,
+        expectedIdentity: KBPersonaIdentity?
     ) -> String {
         var parts: [String] = []
         let graphSnapshot = readGraph { $0 }
-        let canGenerateEntity: (KBPrivacyMetadata?) -> Bool = { metadata in
-            !generationAllowedOnly || KnowledgeGenerationPolicy.allowsEntity(
+        let canGenerateEntity: (KBPrivacyMetadata?, String?) -> Bool = { metadata, evidenceStatus in
+            guard generationAllowedOnly else { return true }
+            guard KnowledgeGenerationPolicy.allowsEntity(
                 privacyScope: metadata?.scope
+            ), let expectedIdentity else {
+                return false
+            }
+            return KBPersonaPolicy.allowsEvidenceStatus(
+                evidenceStatus,
+                for: expectedIdentity
             )
         }
         let canGenerateFact: (KBFact) -> Bool = { fact in
-            !generationAllowedOnly || KnowledgeGenerationPolicy.allowsFact(
+            guard generationAllowedOnly else { return true }
+            guard KnowledgeGenerationPolicy.allowsFact(
                 privacyScope: fact.privacyMetadata?.scope,
                 confidence: fact.confidence
+            ) else {
+                return false
+            }
+            guard let expectedIdentity else { return false }
+            return KBPersonaPolicy.allowsEvidenceStatus(
+                fact.evidenceStatus,
+                for: expectedIdentity
             )
         }
 
         // 有 query → 检索相关知识
         if let q = query, !q.trimmingCharacters(in: .whitespaces).isEmpty {
             let result = search(query: q)
-            let people = result.people.filter { canGenerateEntity($0.privacyMetadata) }
-            let places = result.places.filter { canGenerateEntity($0.privacyMetadata) }
-            let events = result.events.filter { canGenerateEntity($0.privacyMetadata) }
-            let facts = result.facts.filter(canGenerateFact)
+            let people = result.people.filter {
+                canGenerateEntity($0.privacyMetadata, $0.evidenceStatus)
+                    && (expectedIdentity == nil || entityIsVisible($0, for: expectedIdentity!))
+            }
+            let places = result.places.filter {
+                canGenerateEntity($0.privacyMetadata, $0.evidenceStatus)
+                    && (expectedIdentity == nil || entityIsVisible($0, for: expectedIdentity!))
+            }
+            let events = result.events.filter {
+                canGenerateEntity($0.privacyMetadata, $0.evidenceStatus)
+                    && (expectedIdentity == nil || entityIsVisible($0, for: expectedIdentity!))
+            }
+            let facts = result.facts.filter {
+                canGenerateFact($0)
+                    && (expectedIdentity == nil || entityIsVisible($0, for: expectedIdentity!))
+            }
 
             if !people.isEmpty {
                 let summaries: [String] = people.prefix(maxItems).map { p in
@@ -967,7 +1752,9 @@ final class KBLiteManager {
 
                     // 附上关联事实
                     let relatedFacts = graphSnapshot.facts.filter {
-                        $0.relatedPersonIds.contains(p.id) && canGenerateFact($0)
+                        $0.relatedPersonIds.contains(p.id)
+                            && canGenerateFact($0)
+                            && (expectedIdentity == nil || entityIsVisible($0, for: expectedIdentity!))
                     }
                     if !relatedFacts.isEmpty {
                         let factsText = relatedFacts.prefix(3).map { $0.statement }.joined(separator: "；")
@@ -1010,7 +1797,10 @@ final class KBLiteManager {
         // 无 query 或检索结果为空 → 提供最近摘要
         if parts.isEmpty {
             let recentPeople = graphSnapshot.people
-                .filter { canGenerateEntity($0.privacyMetadata) }
+                .filter {
+                    canGenerateEntity($0.privacyMetadata, $0.evidenceStatus)
+                        && (expectedIdentity == nil || entityIsVisible($0, for: expectedIdentity!))
+                }
                 .sorted { ($0.sourceSessionIds.last ?? 0) > ($1.sourceSessionIds.last ?? 0) }
             if !recentPeople.isEmpty {
                 let names = recentPeople.prefix(5).map { $0.name }.joined(separator: "、")
@@ -1018,7 +1808,10 @@ final class KBLiteManager {
             }
 
             let recentEvents = graphSnapshot.events
-                .filter { canGenerateEntity($0.privacyMetadata) }
+                .filter {
+                    canGenerateEntity($0.privacyMetadata, $0.evidenceStatus)
+                        && (expectedIdentity == nil || entityIsVisible($0, for: expectedIdentity!))
+                }
                 .sorted { ($0.sourceSessionIds.last ?? 0) > ($1.sourceSessionIds.last ?? 0) }
             if !recentEvents.isEmpty {
                 let titles = recentEvents.prefix(5).map { e in

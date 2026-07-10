@@ -60,7 +60,7 @@ require(
 )
 requireOrdered(
     manager,
-    "if let result {",
+    "if acceptedBackendExtraction {",
     "graph.lastBackendExtractionSessionId = max(",
     "backend watermarks must only advance inside the successful extraction branch"
 )
@@ -69,8 +69,10 @@ require(
     generationPolicy.contains("case \"high\", \"confirmed\"") &&
         generationPolicy.contains("privacyScope == \"generationAllowed\"") &&
         manager.contains("KnowledgeGenerationPolicy.allowsFact(") &&
-        manager.contains("$0.relatedPersonIds.contains(p.id) && canGenerateFact($0)") &&
-        manager.contains("let facts = result.facts.filter(canGenerateFact)"),
+        manager.contains("$0.relatedPersonIds.contains(p.id)") &&
+        manager.contains("&& canGenerateFact($0)") &&
+        manager.contains("let facts = result.facts.filter {") &&
+        manager.contains("KBPersonaPolicy.allowsEvidenceStatus("),
     "direct and related local facts must share privacy/confidence generation policy"
 )
 
@@ -90,10 +92,11 @@ require(
 )
 
 require(
-    echoPolicy.contains("normalizedScope == \"family\"") &&
-        echoPolicy.contains("memberDigitalHumanId.isEmpty ? normalizedOwnerId : memberDigitalHumanId") &&
-        echoPolicy.contains("identity.personaScope == \"personal\" || identity.personaScope == \"self\"") &&
-        echo.contains("FamilyRepository.shared.get(by: context.ownerId)?.digitalHumanId") &&
+    echoPolicy.contains("enum KBPersonaIdentityResolver") &&
+        echoPolicy.contains("let personaScope = isPersonal ? \"personal\" : \"family\"") &&
+        echoPolicy.contains("identity.isPersonal") &&
+        manager.contains("FamilyRepository.shared.get(by: context.ownerId)?.digitalHumanId") &&
+        echo.contains("KBLiteManager.resolvePersonaIdentity(for: context)") &&
         echo.contains("digitalHumanId: expectedIdentity.digitalHumanId") &&
         echo.contains("family_local_fallback_forbidden") &&
         echo.contains("activeEchoTurnKnowledgeContextGate = nil"),
@@ -102,7 +105,7 @@ require(
 requireOrdered(
     echo,
     "EchoKnowledgeContextPolicy.allowsLocalKBLiteFallback(",
-    "KBLiteManager.shared.buildGenerationAllowedContextString(query: text)",
+    "KBLiteManager.shared.buildGenerationAllowedContextString(",
     "persona fallback policy must run before any local KBLite read"
 )
 require(

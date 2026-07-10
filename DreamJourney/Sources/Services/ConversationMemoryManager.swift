@@ -174,6 +174,7 @@ final class ConversationMemoryManager {
         // 捕获 transcript 快照（清空前）
         let transcriptSnapshot = currentTranscript
         let sessionId = currentMemory.sessionCount
+        let knowledgeIdentity = KBLiteManager.resolveCurrentPersonaIdentity()
 
         // 清空当前会话临时记录
         currentTranscript = []
@@ -190,7 +191,8 @@ final class ConversationMemoryManager {
         DispatchQueue.global(qos: .utility).async {
             KBLiteManager.shared.extractFromTranscript(
                 turns: transcriptSnapshot,
-                sessionId: sessionId
+                sessionId: sessionId,
+                identity: knowledgeIdentity
             ) { addedCount in
                 if addedCount > 0 {
                     print("[Memory] 🧠 知识库新增 \(addedCount) 实体")

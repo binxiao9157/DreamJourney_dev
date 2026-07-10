@@ -51,7 +51,7 @@ require(
 )
 
 require(
-    manager.contains("DreamJourneyBackendClient.shared.extractKnowledge(") &&
+    manager.contains("DreamJourneyBackendClient.shared.extractKnowledgeEnvelope(") &&
         !manager.contains("DeepSeekService.shared.extractKnowledge") &&
         manager.contains("fallbackReason: \"backendNotConfigured\"") &&
         manager.contains("KnowledgeSyncCoordinator.shared.synchronizeCurrentUser(reason: \"extractionCompleted\")"),
@@ -59,13 +59,13 @@ require(
 )
 
 require(
-    manager.contains("func buildGenerationAllowedContextString(query: String?, maxItems: Int = 5)") &&
+    manager.contains("func buildGenerationAllowedContextString(") &&
         manager.contains("KnowledgeGenerationPolicy.allowsEntity(") &&
         manager.contains("KnowledgeGenerationPolicy.allowsFact(") &&
         generationPolicy.contains("privacyScope == \"generationAllowed\"") &&
         generationPolicy.contains("case \"high\", \"confirmed\"") &&
-        manager.contains("guard loadedUserId == expectedUserId else") &&
-        echo.contains("KBLiteManager.shared.buildGenerationAllowedContextString(query: text)"),
+        manager.contains("loadedUserId == identity.ownerUserId") &&
+        echo.contains("KBLiteManager.shared.buildGenerationAllowedContextString("),
     "local Echo fallback must only expose generationAllowed knowledge"
 )
 
@@ -133,7 +133,8 @@ require(
     echo.contains("EchoTurnKnowledgeContextGate") &&
         echo.contains("latestEchoContextRequestTurnID == turnID") &&
         echo.contains("generationContextText") &&
-        echo.contains("KBLiteManager.shared.buildGenerationAllowedContextString(query: text)") &&
+        echo.contains("KBLiteManager.shared.buildGenerationAllowedContextString(") &&
+        echo.contains("expectedIdentity: gate.expectedIdentity") &&
         echo.contains("echoTurnKnowledgeTimeout") &&
         echo.contains("submitTurnKnowledgeContext("),
     "Echo should prefer backend generation context and use query-scoped KBLite on timeout"

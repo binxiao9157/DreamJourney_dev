@@ -2044,17 +2044,7 @@ final class EchoViewController: UIViewController {
     }
 
     private func isCurrentUserPersonaContext(_ context: DigitalHumanContext) -> Bool {
-        if context.isSelfAssistant {
-            return true
-        }
-        let ownerId = context.ownerId.trimmingCharacters(in: .whitespacesAndNewlines)
-        let viewerId = (context.viewerUserId ?? UserManager.shared.currentUser?.id ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if !ownerId.isEmpty, !viewerId.isEmpty, ownerId == viewerId {
-            return true
-        }
-        let relation = context.relation?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return relation == "本人" || relation == "自己" || relation == "我"
+        KBLiteManager.resolvePersonaIdentity(for: context).isPersonal
     }
 
     private func setEchoAudioOwner(_ owner: EchoDigitalHumanAudioOwner, reason: String) {
@@ -2919,21 +2909,7 @@ final class EchoViewController: UIViewController {
     private func echoKnowledgeContextIdentity(
         for context: DigitalHumanContext
     ) -> EchoKnowledgeContextIdentity {
-        let userId = UserManager.shared.currentUser?.id ?? context.viewerUserId ?? context.ownerId
-        let personaScope = isCurrentUserPersonaContext(context) ? "personal" : "family"
-        let familyMemberDigitalHumanId = personaScope == "family"
-            ? FamilyRepository.shared.get(by: context.ownerId)?.digitalHumanId
-            : nil
-        let digitalHumanId = EchoKnowledgeContextPolicy.canonicalDigitalHumanId(
-            personaScope: personaScope,
-            ownerId: context.ownerId,
-            familyMemberDigitalHumanId: familyMemberDigitalHumanId
-        )
-        return EchoKnowledgeContextIdentity(
-            userId: userId,
-            personaScope: personaScope,
-            digitalHumanId: digitalHumanId
-        )
+        KBLiteManager.resolvePersonaIdentity(for: context)
     }
 
     private func recordEchoContextPacketForUserTurn(
@@ -3111,7 +3087,10 @@ final class EchoViewController: UIViewController {
             )
             return
         }
-        let localContext = KBLiteManager.shared.buildGenerationAllowedContextString(query: text)
+        let localContext = KBLiteManager.shared.buildGenerationAllowedContextString(
+            query: text,
+            expectedIdentity: gate.expectedIdentity
+        )
         guard !localContext.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             gate.finishWithoutContext()
             if activeEchoTurnKnowledgeContextGate === gate {

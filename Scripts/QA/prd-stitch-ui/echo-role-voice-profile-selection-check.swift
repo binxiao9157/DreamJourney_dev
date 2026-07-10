@@ -50,6 +50,7 @@ func functionBody(named functionName: String, in source: String) -> String {
 let familyModel = read("DreamJourney/Sources/Services/MemoryModel.swift")
 let familyDetail = read("DreamJourney/Sources/Modules/Family/FamilyCircleViewController.swift")
 let echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
+let knowledgePolicy = read("DreamJourney/Sources/Services/EchoKnowledgeContextPolicy.swift")
 let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let panelSmoke = read("Scripts/QA/prd-stitch-ui/run-echo-trace-evidence-package-panel-export-smoke.sh")
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
@@ -99,8 +100,6 @@ for required in [
     "invalidated stale session request",
     "contextChanged",
     "DigitalHumanContextStore.shared.current",
-    "context.relation",
-    "\"本人\"",
     "VoiceCloneService.shared.currentUsableSpeakerId",
     "本人暂未启用复刻音色",
     "FamilyRepository.shared.get(by: context.ownerId)",
@@ -122,6 +121,17 @@ for required in [
     "latestRuntimeAudioOwner"
 ] {
     require(echo.contains(required), "Echo should resolve voice profile by active role \(required)")
+}
+
+for required in [
+    "enum KBPersonaIdentityResolver",
+    "relation: String?",
+    "[\"本人\", \"自己\", \"我\"]"
+] {
+    require(
+        knowledgePolicy.contains(required),
+        "canonical persona resolver should retain self-role semantics \(required)"
+    )
 }
 
 for required in [

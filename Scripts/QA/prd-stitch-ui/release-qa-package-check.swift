@@ -215,6 +215,10 @@ assertContains(releaseRegression, "RUN_P0_PROFILE_CARE_REGRESSION forces RUN_PRO
 assertContains(releaseRegression, "RUN_KNOWLEDGE_V2_SYNC_GATE", "release regression should expose the knowledge V2 cross-repository gate")
 assertContains(releaseRegression, "run-knowledge-three-way-merge-model-smoke.sh", "release regression should always run the knowledge three-way merge model")
 assertContains(releaseRegression, "RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE=1", "knowledge V2 combo gate should force the deployed backend smoke")
+assertContains(releaseRegression, "RUN_KNOWLEDGE_PROPOSAL_PERSONA_GATE", "release regression should expose the knowledge proposal/persona local gate")
+assertContains(releaseRegression, "run-knowledge-proposal-model-smoke.sh", "release regression should always run the knowledge proposal model")
+assertContains(releaseRegression, "knowledge-proposal-persona-policy-check.swift", "release regression should always run the knowledge proposal/persona source guard")
+assertContains(releaseRegression, "run-backend-knowledge-proposal-persona-smoke.sh", "knowledge proposal/persona gate should run the backend contract smoke")
 assertContains(releaseRegression, "BACKEND_API_TOKEN= BACKEND_BASE_URL= ./scripts/verify_backend.sh", "backend verify should not inherit deployed backend credentials")
 for handoffGuard in [
     "prd-full-feature-closure-decisions-check.swift",
@@ -269,6 +273,8 @@ for handoffGuard in [
     "context-packet-v1-check.swift",
     "knowledge-pipeline-check.swift",
     "run-knowledge-three-way-merge-model-smoke.sh",
+    "run-knowledge-proposal-model-smoke.sh",
+    "knowledge-proposal-persona-policy-check.swift",
     "echo-context-v2-clue-panel-check.swift",
     "echo-trace-export-check.swift",
     "echo-runtime-diagnostics-check.swift",

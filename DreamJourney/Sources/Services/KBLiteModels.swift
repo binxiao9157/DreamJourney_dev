@@ -47,6 +47,11 @@ struct KBPerson: Codable, Identifiable {
     var createdAt: Date
     var updatedAt: Date
     var privacyMetadata: KBPrivacyMetadata? = nil
+    var ownerUserId: String? = nil
+    var personaScope: String? = nil
+    var digitalHumanId: String? = nil
+    var evidenceStatus: String? = nil
+    var sourceTurnIndices: [Int]? = nil
 
     /// 所有可用于搜索和匹配的文本
     var searchableText: String {
@@ -68,6 +73,11 @@ struct KBPlace: Codable, Identifiable {
     var sourceSessionIds: [Int] = []
     var createdAt: Date = Date()
     var privacyMetadata: KBPrivacyMetadata? = nil
+    var ownerUserId: String? = nil
+    var personaScope: String? = nil
+    var digitalHumanId: String? = nil
+    var evidenceStatus: String? = nil
+    var sourceTurnIndices: [Int]? = nil
 
     var searchableText: String {
         [name, category, description].compactMap { $0 }.joined(separator: " ")
@@ -89,6 +99,11 @@ struct KBEvent: Codable, Identifiable {
     var sourceSessionIds: [Int] = []
     var createdAt: Date = Date()
     var privacyMetadata: KBPrivacyMetadata? = nil
+    var ownerUserId: String? = nil
+    var personaScope: String? = nil
+    var digitalHumanId: String? = nil
+    var evidenceStatus: String? = nil
+    var sourceTurnIndices: [Int]? = nil
 
     var searchableText: String {
         [title, description].compactMap { $0 }.joined(separator: " ")
@@ -115,6 +130,11 @@ struct KBFact: Codable, Identifiable {
     var sourceSessionIds: [Int] = []
     var createdAt: Date = Date()
     var privacyMetadata: KBPrivacyMetadata? = nil
+    var ownerUserId: String? = nil
+    var personaScope: String? = nil
+    var digitalHumanId: String? = nil
+    var evidenceStatus: String? = nil
+    var sourceTurnIndices: [Int]? = nil
 }
 
 // MARK: - LLM 提取响应模型
@@ -162,6 +182,162 @@ struct KBExtractionResult: Codable {
         var relatedPlaces: [String] = []
         var relatedEvents: [String] = []
         var sourceTurnIndices: [Int] = []
+    }
+}
+
+// MARK: - Backend knowledge mutation proposal
+
+struct KBKnowledgeMutationProposal: Codable {
+    let proposalSchemaVersion: Int
+    let mutationSchemaVersion: Int
+    let baseRevision: Int
+    let ownerUserId: String
+    let personaScope: String
+    let digitalHumanId: String
+    let upserts: KBKnowledgeProposalUpserts
+    let tombstones: [KBKnowledgeProposalTombstone]
+    let proposalPolicy: KBKnowledgeProposalPolicy
+}
+
+struct KBKnowledgeProposalUpserts: Codable {
+    let people: [KBKnowledgeProposalPerson]
+    let places: [KBKnowledgeProposalPlace]
+    let events: [KBKnowledgeProposalEvent]
+    let facts: [KBKnowledgeProposalFact]
+}
+
+struct KBKnowledgeProposalPerson: Codable, Identifiable {
+    let id: String
+    let name: String
+    let aliases: [String]
+    let relation: String?
+    let traits: [String]
+    let briefBio: String?
+    let relatedPersonIds: [String]
+    let sourceSessionIds: [Int]
+    let sourceTurnIndices: [Int]
+    let privacyMetadata: KBPrivacyMetadata
+    let ownerUserId: String
+    let personaScope: String
+    let digitalHumanId: String
+    let evidenceStatus: String
+    let createdAt: Date?
+    let updatedAt: Date?
+}
+
+struct KBKnowledgeProposalPlace: Codable, Identifiable {
+    let id: String
+    let name: String
+    let category: String?
+    let latitude: Double?
+    let longitude: Double?
+    let description: String?
+    let relatedPersonIds: [String]
+    let sourceSessionIds: [Int]
+    let sourceTurnIndices: [Int]
+    let privacyMetadata: KBPrivacyMetadata
+    let ownerUserId: String
+    let personaScope: String
+    let digitalHumanId: String
+    let evidenceStatus: String
+    let createdAt: Date?
+    let updatedAt: Date?
+}
+
+struct KBKnowledgeProposalEvent: Codable, Identifiable {
+    let id: String
+    let title: String
+    let description: String?
+    let year: Int?
+    let month: Int?
+    let locationId: String?
+    let participantIds: [String]
+    let mediaIds: [String]
+    let memoirId: String?
+    let sourceSessionIds: [Int]
+    let sourceTurnIndices: [Int]
+    let privacyMetadata: KBPrivacyMetadata
+    let ownerUserId: String
+    let personaScope: String
+    let digitalHumanId: String
+    let evidenceStatus: String
+    let createdAt: Date?
+    let updatedAt: Date?
+}
+
+struct KBKnowledgeProposalFact: Codable, Identifiable {
+    let id: String
+    let statement: String
+    let confidence: String
+    let relatedPersonIds: [String]
+    let relatedPlaceIds: [String]
+    let relatedEventIds: [String]
+    let sourceSessionIds: [Int]
+    let sourceTurnIndices: [Int]
+    let privacyMetadata: KBPrivacyMetadata
+    let ownerUserId: String
+    let personaScope: String
+    let digitalHumanId: String
+    let evidenceStatus: String
+    let createdAt: Date?
+    let updatedAt: Date?
+}
+
+struct KBKnowledgeProposalTombstone: Codable {
+    let entityType: String
+    let entityId: String
+    let deletedAt: Date
+}
+
+struct KBKnowledgeProposalPolicy: Codable {
+    let version: Int
+    let snapshotEntityCount: Int
+    let eligibleSnapshotEntityCount: Int
+    let upsertEntityCount: Int
+    let upsertCounts: KBKnowledgeProposalEntityCounts
+    let reusedEntityCount: Int
+    let generatedEntityCount: Int
+    let duplicateEntityCount: Int
+    let skippedEntityCount: Int
+    let resolvedRelationCount: Int
+    let unresolvedRelationCount: Int
+}
+
+struct KBKnowledgeProposalEntityCounts: Codable {
+    let people: Int
+    let places: Int
+    let events: Int
+    let facts: Int
+}
+
+struct KBKnowledgeExtractionEnvelope: Codable {
+    let extraction: KBExtractionResult
+    let proposal: KBKnowledgeMutationProposal?
+
+    private enum CodingKeys: String, CodingKey {
+        case extraction
+        case proposal = "mutationProposal"
+    }
+
+    init(extraction: KBExtractionResult, proposal: KBKnowledgeMutationProposal?) {
+        self.extraction = extraction
+        self.proposal = proposal
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        extraction = try container.decode(KBExtractionResult.self, forKey: .extraction)
+        proposal = container.contains(.proposal)
+            ? try container.decode(KBKnowledgeMutationProposal.self, forKey: .proposal)
+            : nil
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(extraction, forKey: .extraction)
+        if let proposal {
+            try container.encode(proposal, forKey: .proposal)
+        }
     }
 }
 

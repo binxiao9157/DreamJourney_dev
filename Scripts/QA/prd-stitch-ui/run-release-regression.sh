@@ -33,6 +33,7 @@ RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE="${RUN_BACKEND_CROSS_ACCOUNT_AUTH_SH
 RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE="${RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE:-0}"
 RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE="${RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE:-0}"
 RUN_KNOWLEDGE_V2_SYNC_GATE="${RUN_KNOWLEDGE_V2_SYNC_GATE:-0}"
+RUN_KNOWLEDGE_PROPOSAL_PERSONA_GATE="${RUN_KNOWLEDGE_PROPOSAL_PERSONA_GATE:-0}"
 RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE="${RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE:-0}"
 RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE="${RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE:-0}"
 RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE="${RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE:-0}"
@@ -131,6 +132,7 @@ Run ID: \`$RUN_ID\`
 - Backend route ownership audit smoke: \`$RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE\`
 - Backend deployed knowledge pipeline smoke: \`$RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE\`
 - Knowledge V2 three-way/deployed combo gate: \`$RUN_KNOWLEDGE_V2_SYNC_GATE\`
+- Knowledge proposal/persona local combo gate: \`$RUN_KNOWLEDGE_PROPOSAL_PERSONA_GATE\`
 - Backend archive image-analysis smoke: \`$RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE\`
 - Backend hidden media sync smoke: \`$RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE\`
 - Backend time-letter lifecycle smoke: \`$RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE\`
@@ -233,6 +235,7 @@ append_report_footer() {
 - Backend cross-account authorization shadow smoke: \`backend-cross-account-authorization-shadow-smoke/$RUN_ID/\`
 - Backend route ownership audit smoke: \`backend-route-ownership-audit-smoke/$RUN_ID/\`
 - Backend deployed knowledge pipeline smoke: \`backend-knowledge-pipeline-smoke/$RUN_ID/\`
+- Knowledge proposal/persona local smoke: \`knowledge-proposal-persona-smoke/$RUN_ID/\`
 - Backend archive image-analysis smoke: \`backend-archive-image-analysis-smoke/$RUN_ID/\`
 - Backend hidden media sync smoke: \`backend-hidden-media-sync-smoke/$RUN_ID/\`
 - Backend time-letter lifecycle smoke: \`backend-time-letter-lifecycle-smoke/$RUN_ID/\`
@@ -305,6 +308,9 @@ run_step "Swift model guard knowledge-three-way-merge" "$STATIC_LOG_DIR/knowledg
 run_step "Swift model guard knowledge-context-policy" "$STATIC_LOG_DIR/knowledge-context-policy-model-smoke.log" \
   "$SCRIPT_DIR/run-knowledge-context-policy-model-smoke.sh"
 
+run_step "Swift model guard knowledge-proposal" "$STATIC_LOG_DIR/knowledge-proposal-model-smoke.log" \
+  "$SCRIPT_DIR/run-knowledge-proposal-model-smoke.sh"
+
 for guard in \
   release-feature-matrix-check.swift \
   prd-coverage-matrix-check.swift \
@@ -327,6 +333,7 @@ for guard in \
   route-ownership-audit-check.swift \
   knowledge-pipeline-check.swift \
   knowledge-evidence-context-policy-check.swift \
+  knowledge-proposal-persona-policy-check.swift \
   profile-settings-save-state-check.swift \
   profile-account-fields-check.swift \
   profile-password-change-check.swift \
@@ -607,6 +614,16 @@ if [[ "$RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/backend-knowledge-pipeline-smoke/$RUN_ID"
   echo "Skipped by RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE=0" > "$OUTPUT_DIR/backend-knowledge-pipeline-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_KNOWLEDGE_PROPOSAL_PERSONA_GATE" == "1" ]]; then
+  mkdir -p "$OUTPUT_DIR/knowledge-proposal-persona-smoke/$RUN_ID"
+  "$BACKEND_ROOT/scripts/run-backend-knowledge-proposal-persona-smoke.sh" \
+    | tee "$OUTPUT_DIR/knowledge-proposal-persona-smoke/$RUN_ID/result.log"
+else
+  mkdir -p "$OUTPUT_DIR/knowledge-proposal-persona-smoke/$RUN_ID"
+  echo "Skipped by RUN_KNOWLEDGE_PROPOSAL_PERSONA_GATE=0" \
+    > "$OUTPUT_DIR/knowledge-proposal-persona-smoke/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE" == "1" ]]; then
