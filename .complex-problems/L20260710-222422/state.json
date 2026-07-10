@@ -1,0 +1,1068 @@
+{
+  "checks": {
+    "C000": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P001/checks/C000.md",
+      "created_at": "2026-07-10T14:30:12+00:00",
+      "criteria_map": [
+        "唯一显式分类：54 条应用路由与 54 条唯一规则完全相等。",
+        "actual path 与 owner 提取：`/archive/items/user_123` 和 body `userId` 已验证。",
+        "分类防回退：高风险路由的 systemOnly/delegated/owner 类别由测试固定。",
+        "无 PII 摘要：摘要仅输出模板和分类，测试确认不出现样例 user id。"
+      ],
+      "evidence": [
+        "运行 `STORE_BACKEND=memory PYTHONPATH=. .venv/bin/python -m unittest tests.test_route_ownership_registry`，4 项测试通过。",
+        "测试直接读取 `app.routes`，注册表新增、遗漏或重复条目会导致集合或数量断言失败。",
+        "高风险系统调度、mailbox 投递、委托访问和 voice synthesis 均有显式类别断言。"
+      ],
+      "execution_map": [
+        "实现：`app/services/route_ownership.py`。",
+        "验证：`tests/test_route_ownership_registry.py`。",
+        "结果：R000。"
+      ],
+      "followup_problem_id": null,
+      "id": "C000",
+      "problem_id": "P001",
+      "residual_risk": [
+        "注册表当前只是审计事实源，尚未绑定请求 principal；这是 P002 的独立范围，不阻塞 P001 完成。"
+      ],
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "可信失败模式为新增 FastAPI 业务路由但忘记登记；集合完全相等断言会立刻失败。",
+        "重复登记同一 method/path 时规则总数与唯一键总数不相等，测试会失败。",
+        "将已列高风险路由错误改成 public/service 时显式类别断言会失败。"
+      ],
+      "summary": "结果 R000 满足 P001 的全部成功标准。注册表覆盖当前全部 54 条业务路由，并通过实际路径匹配、owner 提取、高风险分类和无 PII 摘要测试。"
+    },
+    "C001": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P002/children/P004/checks/C001.md",
+      "created_at": "2026-07-10T14:35:29+00:00",
+      "criteria_map": [
+        "owner/system 非法访问拒绝：参数化路由测试与 dispatch 测试覆盖。",
+        "owner/delegated/system 合法访问：正向 API 测试覆盖。",
+        "global shadow 不变：测试 setUp 与响应 header 断言覆盖。",
+        "无敏感日志：日志仍只调用 `_ownership_log_hash`，响应诊断仅固定枚举。"
+      ],
+      "evidence": [
+        "后端 177 项单元与 API 集成测试全部通过。",
+        "shadow 模式下 owner mismatch 与 system-only user 请求均返回 403。",
+        "本人 profile、合法家庭 care、时间信件 recipient 和 backend system token 均通过。",
+        "runtime audit 报告 routeCount=54、unclassifiedCount=0、productionEnforceReady=false。"
+      ],
+      "execution_map": [
+        "策略：`app/services/authorization_policy.py`。",
+        "中间件：`app/main.py`。",
+        "审计：`app/services/route_ownership.py`、`app/services/runtime_config.py`。",
+        "验证：R001 所列测试。"
+      ],
+      "followup_problem_id": null,
+      "id": "C001",
+      "problem_id": "P004",
+      "residual_risk": [
+        "Postgres 部署环境尚待 P003 验证，属于交付证据，不是 P004 实现缺口。"
+      ],
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "可信失败模式为大 body 绕过 owner 检查；300 KB KB sync 测试已证明仍解析 owner 并允许本人，跨 owner 则由同一 principal-bound 规则拒绝。",
+        "delegated 被通用 owner 误拒绝的风险由 family/care/timeLetter 正向测试覆盖。"
+      ],
+      "summary": "R001 满足 P004 的全部成功标准。授权行为已由路由注册表驱动，且全量后端测试证明 owner、system、delegated 三类边界没有相互覆盖。"
+    },
+    "C002": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P002/children/P005/checks/C002.md",
+      "created_at": "2026-07-10T14:38:48+00:00",
+      "criteria_map": [
+        "只拉取 mailbox：代码与禁止调用静态断言覆盖。",
+        "backend client system API 保留：delivery shell check 继续断言合同存在。",
+        "提醒行为不回归：simulator smoke JSON 全部为通过状态。"
+      ],
+      "evidence": [
+        "repository 中不存在 `DreamJourneyBackendClient.shared.dispatchDueTimeLetters`。",
+        "时间信件静态检查、archive snapshot 检查和 simulator reminder smoke 均通过。",
+        "smoke 证明多封提醒、详情解析、已读、归档和 sibling unread 状态未回归。"
+      ],
+      "execution_map": [
+        "生产代码、静态 guard、状态文档和模拟器 smoke 证据均记录在 R002。"
+      ],
+      "followup_problem_id": null,
+      "id": "C002",
+      "problem_id": "P005",
+      "residual_risk": [
+        "服务器 timer 停止将影响到期投递，需要部署监控承担；不应由普通客户端恢复 system 权限。"
+      ],
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "可信失败模式为移除 dispatch 后提醒列表不刷新；smoke 通过 stub mailbox 返回两封提醒并验证详情、已读和归档，证明读取链路独立成立。"
+      ],
+      "summary": "R002 满足 P005 的全部成功标准。公开 App 不再要求 system-only 调度能力，且现有 mailbox 提醒体验通过模拟器 smoke。"
+    },
+    "C003": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P002/checks/C003.md",
+      "created_at": "2026-07-10T14:39:21+00:00",
+      "criteria_map": [
+        "owner/system 403 且 global shadow：R001。",
+        "owner/delegated/system token 通过：R001。",
+        "mailbox refresh 不 dispatch：R002。",
+        "多业务路由负向覆盖：R001 的参数化 API 测试。"
+      ],
+      "evidence": [
+        "P004、P005 均为 success。",
+        "后端全量测试 177 项通过。",
+        "iOS 时间信件 simulator smoke 与静态 guard 通过。"
+      ],
+      "execution_map": [
+        "后端 principal 绑定由 P004 完成。",
+        "iOS system 调度移除由 P005 完成。"
+      ],
+      "followup_problem_id": null,
+      "id": "C003",
+      "problem_id": "P002",
+      "residual_risk": [
+        "部署环境验证属于 P003，当前实现层面无阻塞缺口。"
+      ],
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "大 body owner 绕过和 delegated 被误拒绝均有回归测试。",
+        "无客户端 dispatch 时 mailbox 多提醒仍通过模拟器 smoke。"
+      ],
+      "summary": "R003 及其子结果 R001、R002 完整满足 P002：安全边界已生效，合法 owner/delegated/system 兼容，客户端不再调用全局调度。"
+    },
+    "C004": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/children/P006/checks/C004.md",
+      "created_at": "2026-07-10T14:46:40+00:00",
+      "criteria_map": [
+        "新路由遗漏失败：后端 app.routes 与 registry 集合完全相等测试。",
+        "principal/iOS 边界：Swift audit check。",
+        "deployed 行为：可选 Python smoke 与 release 开关。",
+        "非真机构建：generic iPhoneOS 报告。"
+      ],
+      "evidence": [
+        "新 Swift check 和三条本地 HTTP smoke 均通过。",
+        "release regression 全部静态 guard 及 iPhoneOS generic build 通过。",
+        "输出 JSON 仅含 URL、布尔值、计数和 policy fingerprint。"
+      ],
+      "execution_map": [
+        "QA 源码、release wiring、README、Task 11 状态均由 R004 记录。"
+      ],
+      "followup_problem_id": null,
+      "id": "C004",
+      "problem_id": "P006",
+      "residual_risk": [
+        "线上 Postgres 尚待 P007；gate 本身已具备部署执行条件。"
+      ],
+      "result_ids": [
+        "R004"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "owner path 覆盖 7 个不同资源族，另有 owner body 和 system-only 负向请求，避免只验证 profile 单点。",
+        "smoke 明确不运行全局 dispatch，避免测试污染生产投递状态。"
+      ],
+      "summary": "R004 满足 P006 的全部标准。静态、HTTP 与 release gate 可重复运行，报告脱敏，默认回归不依赖部署环境。"
+    },
+    "C005": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/children/P007/checks/C005.md",
+      "created_at": "2026-07-10T14:51:50+00:00",
+      "criteria_map": [
+        "两仓库可追踪提交：远端 push 输出与 SHA。",
+        "API-only 部署：compose 输出仅 API Recreate，数据容器保持三周运行实例。",
+        "线上 owner/system/delegated 行为：三份 deployed JSON 报告。",
+        "global shadow 边界：runtime/smoke 均为 shadow、productionEnforceReady=false。"
+      ],
+      "evidence": [
+        "后端 `275a4c2` 与 iOS `ac2360f` 已推送。",
+        "服务器 head=`275a4c2`、tracked_changes=0。",
+        "health 返回 production/postgres；Postgres healthy、Redis running。",
+        "三条 deployed smoke completed=true。",
+        "timer enabled/active。"
+      ],
+      "execution_map": [
+        "部署、健康、容器、timer 与 smoke 证据均记录在 R005。"
+      ],
+      "followup_problem_id": null,
+      "id": "C005",
+      "problem_id": "P007",
+      "residual_risk": [
+        "全局 enforce 与 SMS 身份证明仍未启用，符合任务边界并明确留待后续。"
+      ],
+      "result_ids": [
+        "R005"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "跨 owner 覆盖 7 个 path 资源族、1 个 body 写入和 1 个 system-only 请求。",
+        "delegated smoke 同时验证合法 family/timeLetter 与伪造 viewer，避免安全收紧造成业务回归。"
+      ],
+      "summary": "R005 满足 P007 的全部成功标准。远端版本、服务器版本、Postgres 运行态和脱敏 smoke 证据一致。"
+    },
+    "C006": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/checks/C006.md",
+      "created_at": "2026-07-10T14:52:30+00:00",
+      "criteria_map": [
+        "漏分类 gate：R004。",
+        "release 可选开关：R004。",
+        "两仓库构建/提交：R004、R005。",
+        "Postgres/global shadow/54 routes/delegated 证据：R005。"
+      ],
+      "evidence": [
+        "P006、P007 success。",
+        "release regression 与 generic iPhoneOS build 通过。",
+        "后端/iOS 提交已推送，服务器与远端后端 SHA 一致。",
+        "线上 auth、cross-account、route audit smoke 通过。"
+      ],
+      "execution_map": [
+        "本地 gate 由 P006 完成，线上交付由 P007 完成。"
+      ],
+      "followup_problem_id": null,
+      "id": "C006",
+      "problem_id": "P003",
+      "residual_risk": [
+        "无 P003 阻塞风险；global enforce 仍按计划关闭。"
+      ],
+      "result_ids": [
+        "R006"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "实际生产 Postgres 和真实中间件执行了相同负向访问矩阵，不仅依赖 memory store。",
+        "部署保持 Postgres/Redis 原实例，避免通过重置数据掩盖问题。"
+      ],
+      "summary": "R006 与子结果 R004、R005 完整满足 P003，QA gate 和线上交付证据均已闭环。"
+    },
+    "C007": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/checks/C007.md",
+      "created_at": "2026-07-10T14:53:13+00:00",
+      "criteria_map": [
+        "完整分类与漂移防护：P001。",
+        "user bearer 私有资源/system 保护：P002/P004。",
+        "system token 与 delegated 兼容：P002/P004 及线上 smoke。",
+        "iOS 调度边界：P002/P005。",
+        "shadow/runtime/QA/构建/部署：P003/P006/P007。"
+      ],
+      "evidence": [
+        "P001、P002、P003 及其子问题全部 success。",
+        "54/54 路由唯一分类，0 unclassified。",
+        "owner path/body 与 system-only 的真实线上 403 证据。",
+        "owner、family、timeLetter、invitation delegated 正向证据。",
+        "iOS mailbox 无 system dispatch，提醒 simulator smoke 通过。",
+        "后端/iOS 已推送，生产 API 使用后端 `275a4c2`。"
+      ],
+      "execution_map": [
+        "注册表、principal、iOS、gate、提交、部署均有独立结果和成功检查。"
+      ],
+      "followup_problem_id": null,
+      "id": "C007",
+      "problem_id": "P000",
+      "residual_risk": [
+        "SMS identity proof 和全局 enforce 是明确后续条件，不影响 Task 11 的已分类路由安全边界。",
+        "未做真机，符合本阶段非真机范围。"
+      ],
+      "result_ids": [
+        "R007"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "大 JSON owner 检查消除了旧 256 KB 绕过。",
+        "线上跨 owner 覆盖 7 个 path 资源族、body 写入与 system-only。",
+        "合法 delegated 与伪造 viewer 同时验证，防止只追求拒绝率而破坏业务。"
+      ],
+      "summary": "R007 及全部子问题结果满足根问题全部成功标准。实现、QA、提交、部署和线上证据一致，且没有越过 global enforce 的产品边界。"
+    }
+  },
+  "counters": {
+    "check": 8,
+    "event": 96,
+    "problem": 8,
+    "result": 8,
+    "ticket": 8
+  },
+  "created_at": "2026-07-10T14:24:22+00:00",
+  "effort": "medium",
+  "language": "zh",
+  "ledger_id": "L20260710-222422",
+  "problems": {
+    "P000": {
+      "body_path": "problems/P000/README.md",
+      "check_ids": [
+        "C007"
+      ],
+      "created_at": "2026-07-10T14:24:22+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Close the Lodestar task represented by `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/plans/task_11_p0-full-route-ownership-audit.md` using recursive problem, ticket, result, and check state.\n\nTask context:\n\n# P0 全路由 Ownership 审计与 Principal 绑定",
+      "followup_ids": [],
+      "id": "P000",
+      "package_path": "problems/P000",
+      "parent_id": null,
+      "result_ids": [
+        "R007"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P001",
+        "P002",
+        "P003"
+      ],
+      "success_criteria": [
+        "所有业务路由均有唯一、显式 ownership 分类；新增未分类路由使测试失败。",
+        "user bearer 不能读写其他用户的 profile、archive、mailbox、voice、KB、memory、session、push、echo 或 family owner 资源。",
+        "user bearer 不能调用 purge、mailbox create、echo/time-letter dispatch 等 system-only 路由。",
+        "system backend token 与本地无 token 开发模式保持兼容。",
+        "delegated family/time-letter/invitation 路由继续通过。",
+        "iOS 刷新提醒只读取 mailbox，不再触发全局 dispatch。",
+        "runtime 和 QA 报告继续明确 `ownershipMode=shadow`、`productionEnforceReady=false`。",
+        "后端全量测试、线上 Postgres smoke、release QA、simulator/generic iPhoneOS build 和两仓库 `git diff --check` 通过。"
+      ],
+      "ticket_ids": [
+        "T000"
+      ],
+      "title": "P0 全路由 Ownership 审计与 Principal 绑定",
+      "updated_at": "2026-07-10T14:53:13+00:00"
+    },
+    "P001": {
+      "body_path": "problems/P000/children/P001/README.md",
+      "check_ids": [
+        "C000"
+      ],
+      "created_at": "2026-07-10T14:25:13+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "当前没有机器可校验的完整 FastAPI ownership 清单，新增或修改路由可能绕过 user/system/delegated 分类。",
+      "followup_ids": [],
+      "id": "P001",
+      "package_path": "problems/P000/children/P001",
+      "parent_id": "P000",
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "所有业务路由有唯一显式分类。",
+        "注册表支持 actual path 匹配和 owner path/body 提取。",
+        "新增未分类、重复分类或高风险路由使用 service/public 分类时测试失败。",
+        "清单可导出不含 PII 的审计摘要。"
+      ],
+      "ticket_ids": [
+        "T001"
+      ],
+      "title": "全路由注册表与覆盖测试",
+      "updated_at": "2026-07-10T14:30:12+00:00"
+    },
+    "P002": {
+      "body_path": "problems/P000/children/P002/README.md",
+      "check_ids": [
+        "C003"
+      ],
+      "created_at": "2026-07-10T14:25:13+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "多数 owner/system 路由只记录 shadow mismatch，user bearer 仍可能访问其他用户资源；iOS 仍主动触发全局时间信件 dispatch。",
+      "followup_ids": [],
+      "id": "P002",
+      "package_path": "problems/P000/children/P002",
+      "parent_id": "P000",
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P004",
+        "P005"
+      ],
+      "success_criteria": [
+        "owner-bound mismatch 和 user 调用 system-only 即时 403，global mode 仍为 shadow。",
+        "owner match、delegated family/time-letter/invitation 和 legacy system token 继续通过。",
+        "iOS mailbox refresh 不再调用 dispatch-due。",
+        "profile/archive/mailbox/voice/KB/session/push/echo/family 等代表性读写有负向测试。"
+      ],
+      "ticket_ids": [
+        "T002"
+      ],
+      "title": "Principal 绑定与 iOS 调度收敛",
+      "updated_at": "2026-07-10T14:39:21+00:00"
+    },
+    "P003": {
+      "body_path": "problems/P000/children/P003/README.md",
+      "check_ids": [
+        "C006"
+      ],
+      "created_at": "2026-07-10T14:25:13+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "全路由策略需要稳定 QA、文档和线上 Postgres 证据，否则路由新增或部署漂移会绕过审计。",
+      "followup_ids": [],
+      "id": "P003",
+      "package_path": "problems/P000/children/P003",
+      "parent_id": "P000",
+      "result_ids": [
+        "R006"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P006",
+        "P007"
+      ],
+      "success_criteria": [
+        "新增静态审计 guard、HTTP smoke 和 release 可选 gate。",
+        "后端全量测试、simulator/generic iPhoneOS build、diff check 通过。",
+        "两仓库提交推送，后端重新部署并确认 commit/store/shadow/runtime。",
+        "线上 owner mismatch、system-only 和 delegated smoke 通过且不泄漏 token/正文。"
+      ],
+      "ticket_ids": [
+        "T005"
+      ],
+      "title": "Audit Gate、提交与部署证据",
+      "updated_at": "2026-07-10T14:52:30+00:00"
+    },
+    "P004": {
+      "body_path": "problems/P000/children/P002/children/P004/README.md",
+      "check_ids": [
+        "C001"
+      ],
+      "created_at": "2026-07-10T14:31:40+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T002",
+      "created_from_ticket_mode": "split",
+      "description": "路由 ownership 目前已分类但尚未参与中间件决策，user bearer 在 shadow 模式下仍可能跨 owner 访问，或调用 system-only 任务。",
+      "followup_ids": [],
+      "id": "P004",
+      "package_path": "problems/P000/children/P002/children/P004",
+      "parent_id": "P002",
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "ownerBody/ownerPath mismatch 在 shadow 模式下即时返回 403。",
+        "systemOnly 对 user principal 即时返回 403，backend system token 保持可用。",
+        "owner match 与 family/time-letter/invitation/care delegated 访问保持可用。",
+        "profile、archive、mailbox、voice、KB、session、push、echo、family 有代表性正负向测试。",
+        "授权拒绝日志继续只记录 hash。"
+      ],
+      "ticket_ids": [
+        "T003"
+      ],
+      "title": "后端 Principal 强绑定",
+      "updated_at": "2026-07-10T14:35:29+00:00"
+    },
+    "P005": {
+      "body_path": "problems/P000/children/P002/children/P005/README.md",
+      "check_ids": [
+        "C002"
+      ],
+      "created_at": "2026-07-10T14:31:40+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T002",
+      "created_from_ticket_mode": "split",
+      "description": "iOS mailbox refresh 会主动调用全局 `/archive/time-letters/dispatch-due`，与服务器已启用的定时调度重复，也要求普通用户具备 system-only 能力。",
+      "followup_ids": [],
+      "id": "P005",
+      "package_path": "problems/P000/children/P002/children/P005",
+      "parent_id": "P002",
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "iOS mailbox refresh 只拉取当前用户 mailbox，不再触发全局 dispatch。",
+        "backend client 的 system API 可保留给 QA/运维，但不在公开 App 生产路径调用。",
+        "静态检查固定该边界，相关时间信件 QA 不回归。"
+      ],
+      "ticket_ids": [
+        "T004"
+      ],
+      "title": "iOS 时间信件调度职责收敛",
+      "updated_at": "2026-07-10T14:38:48+00:00"
+    },
+    "P006": {
+      "body_path": "problems/P000/children/P003/children/P006/README.md",
+      "check_ids": [
+        "C004"
+      ],
+      "created_at": "2026-07-10T14:40:13+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T005",
+      "created_from_ticket_mode": "split",
+      "description": "缺少跨后端注册表、principal-bound 中间件、iOS system 调度边界和部署 HTTP 行为的一键检查。",
+      "followup_ids": [],
+      "id": "P006",
+      "package_path": "problems/P000/children/P003/children/P006",
+      "parent_id": "P003",
+      "result_ids": [
+        "R004"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "新增静态 audit check，校验 54 路由、0 未分类、principal-bound block 和 iOS 无生产 dispatch。",
+        "新增 deployed route ownership HTTP smoke，报告不含 token、手机号或原始 user id。",
+        "release regression 提供可选开关运行 deployed smoke，默认不影响公开 MVP gate。",
+        "相关后端测试、Swift QA 和 iOS generic build 通过。"
+      ],
+      "ticket_ids": [
+        "T006"
+      ],
+      "title": "Ownership Audit Gate 固化",
+      "updated_at": "2026-07-10T14:46:40+00:00"
+    },
+    "P007": {
+      "body_path": "problems/P000/children/P003/children/P007/README.md",
+      "check_ids": [
+        "C005"
+      ],
+      "created_at": "2026-07-10T14:40:13+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T005",
+      "created_from_ticket_mode": "split",
+      "description": "实现必须以可追踪提交部署到线上 Postgres，并验证真实中间件、路由、timer 与 delegated 合同，不可只停留在 memory 测试。",
+      "followup_ids": [],
+      "id": "P007",
+      "package_path": "problems/P000/children/P003/children/P007",
+      "parent_id": "P003",
+      "result_ids": [
+        "R005"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "后端与 iOS 分别提交并推送当前分支，无无关文件进入提交。",
+        "服务器只重建 API，Postgres/Redis 保持运行。",
+        "线上 health=200、store=postgres、global mode=shadow、routeCount=54、unclassified=0。",
+        "auth、cross-account 与 route ownership deployed smoke 全部通过并保存脱敏报告。",
+        "服务端时间信件 timer 仍 active。"
+      ],
+      "ticket_ids": [
+        "T007"
+      ],
+      "title": "Ownership 版本提交部署与线上证据",
+      "updated_at": "2026-07-10T14:51:50+00:00"
+    }
+  },
+  "results": {
+    "R000": {
+      "artifacts": [
+        "`/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/app/services/route_ownership.py`",
+        "`/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/tests/test_route_ownership_registry.py`"
+      ],
+      "body_path": "problems/P000/children/P001/results/R000.md",
+      "created_at": "2026-07-10T14:29:35+00:00",
+      "done": [
+        "新增后端 `RouteOwnershipRegistry`，显式登记全部 54 条 FastAPI 业务路由。",
+        "将路由分类为 public、authenticatedService、userSession、ownerBody、ownerPath、delegated、systemOnly。",
+        "为 owner 路由记录 `userId` 的 body/path 来源，为委托访问和系统任务记录独立 policy id。",
+        "将账号清理、mailbox 投递、Echo 延迟回信调度、时间信件调度列为 systemOnly。",
+        "新增覆盖测试，任何新增、遗漏或重复注册的业务路由都会失败。"
+      ],
+      "id": "R000",
+      "known_gaps": [
+        "注册表尚未接入请求中间件，因此当前步骤没有改变线上授权行为。",
+        "principal 强绑定、iOS 全局时间信件调度移除、release gate 和线上部署由后续子问题完成。"
+      ],
+      "problem_id": "P001",
+      "root_id": "P000",
+      "summary": "后端已经具备可机器审计的全路由 ownership 事实源，当前步骤未改变授权执行模式。",
+      "ticket_id": "T001",
+      "verification": [
+        "`STORE_BACKEND=memory PYTHONPATH=. .venv/bin/python -m unittest tests.test_route_ownership_registry`",
+        "结果：4 tests passed。",
+        "审计断言：routeCount=54，unclassifiedCount=0，注册表仅输出路径模板，不包含真实用户标识。"
+      ]
+    },
+    "R001": {
+      "artifacts": [
+        "`/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/app/services/authorization_policy.py`",
+        "`/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/app/services/route_ownership.py`",
+        "`/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/app/main.py`",
+        "`/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/tests/test_auth_sessions.py`",
+        "`/Users/yxj/Documents/Codex/Video/DreamJourneyBackend/tests/test_authorization_policy.py`"
+      ],
+      "body_path": "problems/P000/children/P002/children/P004/results/R001.md",
+      "created_at": "2026-07-10T14:35:13+00:00",
+      "done": [
+        "`AuthorizationPolicyDecision` 新增 principal-bound 标记。",
+        "ownerBody/ownerPath 由注册表提取 owner 并与 access token principal 比较。",
+        "systemOnly 对 user principal 即时拒绝，legacy backend token 保持兼容。",
+        "delegated family、timeLetter、invitation、care 策略优先于通用 owner 规则。",
+        "大 JSON 请求不再跳过 ownership 检查，消除 256 KB 以上 body 绕过路径。",
+        "runtime config 暴露 54 路由、0 未分类的无 PII 审计摘要，`productionEnforceReady` 仍为 false。"
+      ],
+      "id": "R001",
+      "known_gaps": [
+        "尚未运行部署环境 Postgres smoke；由 P003 统一提交、部署并生成线上证据。",
+        "iOS mailbox 仍需移除主动 dispatch 调用；由 P005 处理。"
+      ],
+      "problem_id": "P004",
+      "root_id": "P000",
+      "summary": "全路由注册表已接入授权中间件；普通用户的 owner mismatch 与 system-only 调用现在形成即时安全边界，同时保持全局模式为 shadow。",
+      "ticket_id": "T003",
+      "verification": [
+        "`STORE_BACKEND=memory PYTHONPATH=. .venv/bin/python -m unittest discover -s tests`",
+        "结果：177 tests passed。",
+        "参数化负向覆盖 profile、archive、mailbox、voice、KB、memory、digital-human session、push、echo、family。",
+        "正向覆盖 owner profile、family/care/timeLetter delegated、legacy backend token system dispatch。"
+      ]
+    },
+    "R002": {
+      "artifacts": [
+        "`/Users/yxj/Documents/Codex/Video/DreamJourney_dev/DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift`",
+        "`/Users/yxj/Documents/Codex/Video/DreamJourney_dev/Scripts/QA/prd-stitch-ui/time-letter-delivery-policy-shell-check.swift`",
+        "`/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/superpowers/status/2026-06-21-time-letter-public-delivery.md`",
+        "`/Users/yxj/Documents/Codex/Video/DreamJourney_dev/tmp/visual-qa/prd-stitch-ui/time-letter-dispatch-reminder-smoke/20260710-223724/time-letter-dispatch-reminder-smoke-result.json`"
+      ],
+      "body_path": "problems/P000/children/P002/children/P005/results/R002.md",
+      "created_at": "2026-07-10T14:38:31+00:00",
+      "done": [
+        "移除 `MemoryArchiveRepository` 对 `dispatchDueTimeLetters` 的生产调用。",
+        "保留 backend client system API，供独立 QA/运维使用。",
+        "静态检查新增禁止公开 repository 调用 system-only dispatch 的断言。",
+        "状态文档明确服务端定时调度与客户端 mailbox 消费边界。"
+      ],
+      "id": "R002",
+      "known_gaps": [
+        "服务端 timer 的线上 active 状态已在本轮部署前确认；新版本部署后的复核由 P003 完成。"
+      ],
+      "problem_id": "P005",
+      "root_id": "P000",
+      "summary": "iOS 公开 App 的 mailbox refresh 已只读取当前用户提醒，全局到期扫描完全交由服务端定时任务负责。",
+      "ticket_id": "T004",
+      "verification": [
+        "`time-letter-delivery-policy-shell-check.swift` 通过。",
+        "archive context snapshot check 通过。",
+        "simulator time-letter dispatch reminder smoke 完成，提醒读取、详情、已读、归档及多消息状态均通过。",
+        "`git diff --check` 通过。"
+      ]
+    },
+    "R003": {
+      "artifacts": [
+        "R001",
+        "R002"
+      ],
+      "body_path": "problems/P000/children/P002/results/R003.md",
+      "created_at": "2026-07-10T14:39:05+00:00",
+      "done": [
+        "P004 完成 route registry 驱动的 owner/system principal 强绑定。",
+        "P005 完成 iOS mailbox-only 刷新与 system dispatch 边界静态 guard。",
+        "全局 ownership mode 保持 shadow，未开启未知路由的全局 enforce。"
+      ],
+      "id": "R003",
+      "known_gaps": [
+        "尚待 P003 完成 release audit gate、提交、部署及线上 Postgres smoke。"
+      ],
+      "problem_id": "P002",
+      "root_id": "P000",
+      "summary": "后端 principal-bound 授权与 iOS 调度职责均已收敛，普通用户只可访问本人或显式 delegated 数据，且不再承担系统级时间信件扫描。",
+      "ticket_id": "T002",
+      "verification": [
+        "子结果 R001：后端 177 tests passed。",
+        "子结果 R002：时间信件静态检查、archive snapshot、simulator reminder smoke 通过。",
+        "两个子问题均经成功检查关闭。"
+      ]
+    },
+    "R004": {
+      "artifacts": [
+        "`/Users/yxj/Documents/Codex/Video/DreamJourney_dev/Scripts/QA/prd-stitch-ui/route-ownership-audit-check.swift`",
+        "`/Users/yxj/Documents/Codex/Video/DreamJourney_dev/Scripts/QA/prd-stitch-ui/backend-route-ownership-audit-smoke.py`",
+        "`/Users/yxj/Documents/Codex/Video/DreamJourney_dev/Scripts/QA/prd-stitch-ui/run-backend-route-ownership-audit-smoke.sh`",
+        "`/Users/yxj/Documents/Codex/Video/DreamJourney_dev/tmp/visual-qa/prd-stitch-ui/release-regression/20260710-task11-ownership-audit/report.md`"
+      ],
+      "body_path": "problems/P000/children/P003/children/P006/results/R004.md",
+      "created_at": "2026-07-10T14:46:24+00:00",
+      "done": [
+        "新增跨仓库 `route-ownership-audit-check.swift`。",
+        "新增脱敏 `backend-route-ownership-audit-smoke.py` 及 shell wrapper。",
+        "release regression 新增 `RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE=1` 可选开关。",
+        "旧 auth shadow smoke 更新为 principal-bound mismatch 必须 403。",
+        "QA README 与 Task 11 文档更新。"
+      ],
+      "id": "R004",
+      "known_gaps": [
+        "尚未提交推送和部署线上 Postgres；由 P007 完成。"
+      ],
+      "problem_id": "P006",
+      "root_id": "P000",
+      "summary": "全路由 ownership 已形成静态、HTTP 和 release regression 三层可重复 gate，并完成本地全量验证与 iPhoneOS generic build。",
+      "ticket_id": "T006",
+      "verification": [
+        "route ownership、cross-account、auth session、time-letter Swift checks 通过。",
+        "三条本地 HTTP smoke 通过，均未调用全局 dispatch。",
+        "后端 verify：177 tests、FastAPI smoke、py_compile、diff check 通过。",
+        "release regression 全部静态 guard 通过。",
+        "iPhoneOS generic Debug build 通过。"
+      ]
+    },
+    "R005": {
+      "artifacts": [
+        "`/Users/yxj/Documents/Codex/Video/DreamJourney_dev/tmp/visual-qa/prd-stitch-ui/deployed-route-ownership/20260710-275a4c2/auth-session/report.json`",
+        "`/Users/yxj/Documents/Codex/Video/DreamJourney_dev/tmp/visual-qa/prd-stitch-ui/deployed-route-ownership/20260710-275a4c2/cross-account/report.json`",
+        "`/Users/yxj/Documents/Codex/Video/DreamJourney_dev/tmp/visual-qa/prd-stitch-ui/deployed-route-ownership/20260710-275a4c2/route-audit/report.json`"
+      ],
+      "body_path": "problems/P000/children/P003/children/P007/results/R005.md",
+      "created_at": "2026-07-10T14:51:28+00:00",
+      "done": [
+        "后端提交并推送 `275a4c2 feat: enforce route ownership principals` 到 `origin/main`。",
+        "iOS/QA 提交并推送 `ac2360f test: enforce route ownership audit gate` 到 feature 分支。",
+        "服务器从 `66db803` fast-forward 到 `275a4c2`，仅 recreate API。",
+        "`.env` 已在服务器生成 600 权限的部署前备份，未读取或输出内容。",
+        "Postgres/Redis 容器保持原实例与数据卷，时间信件 timer 保持 enabled/active。"
+      ],
+      "id": "R005",
+      "known_gaps": [
+        "SMS identity proof 与全局 `AUTH_OWNERSHIP_MODE=enforce` 仍是后续边界，本任务明确不启用。"
+      ],
+      "problem_id": "P007",
+      "root_id": "P000",
+      "summary": "Task 11 已分别提交到后端与 iOS 远端，后端以 API-only 方式部署到生产 Postgres，三条线上 smoke 全部通过。",
+      "ticket_id": "T007",
+      "verification": [
+        "health：production、postgres、200。",
+        "auth deployed smoke：轮换、防重放、注销、principal-bound mismatch 403 通过。",
+        "cross-account deployed smoke：邀请/关怀/时间信件 delegated 通过，伪造 viewer 403。",
+        "route audit deployed smoke：54 routes、0 unclassified、7 owner path denies、owner body deny、system-only deny、global shadow。",
+        "服务器 repo tracked clean，head=`275a4c2`。"
+      ]
+    },
+    "R006": {
+      "artifacts": [
+        "R004",
+        "R005"
+      ],
+      "body_path": "problems/P000/children/P003/results/R006.md",
+      "created_at": "2026-07-10T14:52:09+00:00",
+      "done": [
+        "P006 固化静态、HTTP、release 三层 gate，并通过 iPhoneOS generic build。",
+        "P007 完成两仓库推送、API-only 部署、health/container/timer 检查和三条 deployed smoke。"
+      ],
+      "id": "R006",
+      "known_gaps": [
+        "SMS identity proof 和 global enforce promotion 是明确后续，不属于 Task 11。"
+      ],
+      "problem_id": "P003",
+      "root_id": "P000",
+      "summary": "Ownership audit 已从本地实现推进为可重复 release gate，并以已提交版本完成线上 Postgres 部署验证。",
+      "ticket_id": "T005",
+      "verification": [
+        "子结果 R004、R005 均经 success check 关闭。",
+        "本地 177 后端测试与线上 3 条 smoke 全部通过。"
+      ]
+    },
+    "R007": {
+      "artifacts": [
+        "R000",
+        "R003",
+        "R006"
+      ],
+      "body_path": "problems/P000/results/R007.md",
+      "created_at": "2026-07-10T14:52:49+00:00",
+      "done": [
+        "P001：完整 route ownership registry、唯一覆盖测试和无 PII audit summary。",
+        "P002：principal-bound 403、安全 delegated 兼容、iOS mailbox-only 调度职责。",
+        "P003：静态/HTTP/release gate、两仓库提交、API-only 部署和线上证据。"
+      ],
+      "id": "R007",
+      "known_gaps": [
+        "SMS identity proof 未实现。",
+        "`AUTH_OWNERSHIP_MODE` 继续为 shadow，尚未全局 enforce；已分类 owner/system 路由已独立即时强制。",
+        "本任务按要求不做真机验证。"
+      ],
+      "problem_id": "P000",
+      "root_id": "P000",
+      "summary": "Task 11 已完成：54 条业务路由全部显式分类，owner/system 路由绑定已验证 user principal，delegated 合同保持可用，iOS 不再触发系统调度，并完成线上 Postgres 验证。",
+      "ticket_id": "T000",
+      "verification": [
+        "后端 177 tests、FastAPI smoke、py_compile、diff check。",
+        "iOS 全部 release 静态 guard、时间信件 simulator smoke、generic iPhoneOS build。",
+        "线上 production Postgres 三条 deployed smoke。",
+        "子问题 P001、P002、P003 全部 success。"
+      ]
+    }
+  },
+  "root_id": "P000",
+  "schema_version": 6,
+  "tickets": {
+    "T000": {
+      "acceptance_criteria": [
+        "全部业务路由唯一分类；高风险跨用户访问和用户调用 system-only 返回 403；delegated 与 system token 通过；iOS 只拉 mailbox；全局仍 shadow；全量及线上验证通过。"
+      ],
+      "assumptions": [
+        "线上时间信件 systemd timer 已 enabled/active，客户端无需调用全局 dispatch。"
+      ],
+      "body_path": "problems/P000/tickets/T000.md",
+      "classification": "split",
+      "classification_reason": "任务包含路由注册表、principal 绑定与 iOS 行为调整、跨仓库 QA/部署三个独立风险面，必须拆分验证。",
+      "created_at": "2026-07-10T14:24:38+00:00",
+      "id": "T000",
+      "problem_definition": "后端 52 个业务路由缺少统一 ownership 分类，多数用户资源仍只在 shadow 观察 mismatch；iOS 还会以普通用户身份触发全局时间信件调度。",
+      "problem_id": "P000",
+      "proposed_solution": "建立显式 route ownership registry 和覆盖测试，将 owner/system 路由绑定 bearer principal，保留 delegated/system-token 兼容；移除 iOS global dispatch 并固化非真机/部署 gate。",
+      "result_ids": [
+        "R007"
+      ],
+      "risks": [
+        "过度收紧可能误拦合法家庭 persona 或现有 QA system 调用，必须按 principal kind 和 delegated policy 区分，未知语义不得臆测。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "完成全路由 ownership 审计与 principal 绑定",
+      "updated_at": "2026-07-10T14:52:49+00:00",
+      "verification_plan": "路由清单单测、FastAPI 集成测试、HTTP smoke、release QA、simulator/generic iPhoneOS build、线上 Postgres smoke 和 diff check。"
+    },
+    "T001": {
+      "acceptance_criteria": [
+        "所有业务路由唯一分类；新增路由未登记测试失败；owner source 和 path template 匹配单测通过；审计摘要不含 PII。"
+      ],
+      "assumptions": [
+        "FastAPI route.path 提供稳定模板，docs/openapi 路由可明确排除。"
+      ],
+      "body_path": "problems/P000/children/P001/tickets/T001.md",
+      "classification": "one_go",
+      "classification_reason": "注册表和覆盖单测是单一纯后端边界，不改变运行行为，可独立闭环。",
+      "created_at": "2026-07-10T14:25:29+00:00",
+      "id": "T001",
+      "problem_definition": "52 个业务路由没有机器可校验的 ownership 分类，route drift 无法在 CI/QA 中被发现。",
+      "problem_id": "P001",
+      "proposed_solution": "新增 RouteOwnershipRegistry，按 exact template 分类 public/service/userSession/ownerBody/ownerPath/delegated/systemOnly，并用 app.routes 自动校验覆盖、唯一性和风险分类。",
+      "result_ids": [
+        "R000"
+      ],
+      "risks": [
+        "路由模板与实际 path 匹配错误会造成误判，测试必须同时覆盖 template 和 concrete path。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现全路由 ownership registry",
+      "updated_at": "2026-07-10T14:29:35+00:00",
+      "verification_plan": "先新增失败的 route inventory test，再实现 registry，运行专用和全量后端测试。"
+    },
+    "T002": {
+      "acceptance_criteria": [
+        "user bearer 跨 owner 访问代表性 ownerBody/ownerPath 路由返回 403。",
+        "user bearer 调用 systemOnly 返回 403，即使全局模式为 shadow。",
+        "owner 自身访问、委托访问和 backend system token 不回归。",
+        "iOS 生产刷新路径不再调用全局 dispatch-due。",
+        "授权日志只记录 hash，不输出 phone、token 或原始 user id。"
+      ],
+      "assumptions": [
+        "线上 systemd timer 已启用并每分钟调用时间信件 dispatch。",
+        "backend token 是服务间 system principal 的兼容入口。",
+        "全局 ownership enforce 暂不启用。"
+      ],
+      "body_path": "problems/P000/children/P002/tickets/T002.md",
+      "classification": "split",
+      "classification_reason": "后端 principal 强绑定涉及安全行为与多路由回归，iOS 调度职责收敛是独立客户端改动；两部分可分别验证后再汇总。",
+      "created_at": "2026-07-10T14:30:43+00:00",
+      "id": "T002",
+      "problem_definition": "当前用户 bearer 已能识别 principal，但大多数 owner mismatch 只记录 shadow 日志，不会阻止跨用户访问；同时 iOS mailbox 刷新还会触发属于服务端职责的全局时间信件扫描。",
+      "problem_id": "P002",
+      "proposed_solution": "- 在 `CrossAccountAuthorizationPolicy` 中消费 `RouteOwnershipRegistry`。\n- ownerBody/ownerPath 路由在 user principal 与 owner 不一致时直接拒绝，一致时明确放行。\n- systemOnly 路由拒绝 user principal；legacy system token 继续由现有中间件优先放行。\n- delegated family/time-letter/invitation/care 继续走既有委托策略，不改产品合同。\n- 中间件仅对 principal-bound 决策立即 403；全局 `AUTH_OWNERSHIP_MODE` 继续保持 shadow，不开启未知路由的全局 enforce。\n- iOS mailbox refresh 只拉取 mailbox，不再调用 `/archive/time-letters/dispatch-due`，交由现有服务器 timer 执行。",
+      "result_ids": [
+        "R003"
+      ],
+      "risks": [
+        "旧客户端如果用 user token 操作其他 userId，会从 shadow 日志变为 403；这是预期安全收紧，但需由覆盖测试确认当前 iOS 均使用登录用户 id。",
+        "delegated 路由不能被通用 owner 规则覆盖，否则会破坏合法家庭访问。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "将路由 ownership 注册表接入 principal 强绑定",
+      "updated_at": "2026-07-10T14:39:05+00:00",
+      "verification_plan": "- 扩展后端 auth session 集成测试，覆盖 profile、archive、mailbox、voice、KB、digital-human session、push、echo、family 和 system dispatch。\n- 运行现有 cross-account policy 与 auth session 全套测试。\n- 新增/更新 iOS 静态检查，确认 repository 不再触发 dispatch-due。\n- 运行 `git diff --check` 和相关 Swift QA 检查。"
+    },
+    "T003": {
+      "acceptance_criteria": [
+        "owner 与 system-only 的非法 user 请求返回 403。",
+        "owner 自身、delegated 和 system token 正常。",
+        "全局 ownership mode 仍是 shadow。",
+        "拒绝日志不含原始用户信息和 token。"
+      ],
+      "assumptions": [
+        "backend token 保持 system principal 兼容通道。",
+        "未带 user token 的本地 memory 测试继续沿用现有兼容行为。"
+      ],
+      "body_path": "problems/P000/children/P002/children/P004/tickets/T003.md",
+      "classification": "one_go",
+      "classification_reason": "改动集中在授权策略、中间件和同一组集成测试，边界清晰且可由 memory 测试完整验证。",
+      "created_at": "2026-07-10T14:31:59+00:00",
+      "id": "T003",
+      "problem_definition": "后端已有完整 route registry，但 user bearer 的 owner mismatch 和 system-only 调用仍只受全局 shadow/enforce 控制，不能形成安全边界。",
+      "problem_id": "P004",
+      "proposed_solution": "- 扩展授权策略决策，标记 `principal_bound`。\n- 由注册表解析 ownerBody/ownerPath 并比较登录 principal。\n- owner mismatch 与 system-only user 调用在 shadow 模式下也立即 403。\n- public/service/userSession/delegated 分别保留现有语义，legacy backend token 继续优先通过。\n- 扩展 auth integration tests 覆盖代表性业务路由与委托访问回归。",
+      "result_ids": [
+        "R001"
+      ],
+      "risks": [
+        "通用规则若先于 delegated 规则执行，会误拒绝合法家庭访问；实现中必须让专用 delegated policy 优先。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "接入注册表并强制 principal-bound 决策",
+      "updated_at": "2026-07-10T14:35:13+00:00",
+      "verification_plan": "- 运行 route ownership、authorization policy、auth sessions、cross-account 全套单测。\n- 增加多路由 owner path/body 参数化测试。\n- 运行 `git diff --check`。"
+    },
+    "T004": {
+      "acceptance_criteria": [
+        "mailbox refresh 不再发起 dispatch-due。",
+        "时间信件 reminder 拉取、已读、归档逻辑不变。",
+        "静态 QA 与相关 smoke 通过。"
+      ],
+      "assumptions": [
+        "服务端 dispatch timer 每分钟运行。",
+        "reminder mailbox GET 是当前 App 的唯一消费入口。"
+      ],
+      "body_path": "problems/P000/children/P002/children/P005/tickets/T004.md",
+      "classification": "one_go",
+      "classification_reason": "仅修改一个 repository 调用点和对应静态检查，范围小且可由现有时间信件 QA 验证。",
+      "created_at": "2026-07-10T14:35:49+00:00",
+      "id": "T004",
+      "problem_definition": "App 刷新 mailbox 时仍调用 system-only 的 `/archive/time-letters/dispatch-due`，与服务器 timer 重复且会被新的 principal-bound policy 拒绝。",
+      "problem_id": "P005",
+      "proposed_solution": "- 修改 `MemoryArchiveRepository.refreshTimeLetterMailboxReminders`，直接获取当前用户 mailbox。\n- 保留 backend client 的 dispatch 方法供 QA/system tooling 使用，但不在公开 App 业务路径调用。\n- 更新时间信件静态检查，固定“客户端只读 mailbox、服务器负责 dispatch”的边界。",
+      "result_ids": [
+        "R002"
+      ],
+      "risks": [
+        "如果服务器 timer 停止，客户端不再兜底投递；线上 timer 已确认 active，应由 readiness/部署监控负责。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "移除 App 生产路径的全局时间信件调度",
+      "updated_at": "2026-07-10T14:38:31+00:00",
+      "verification_plan": "- 搜索生产 repository 的 dispatch 调用为 0。\n- 运行时间信件 delivery/lifecycle/message center 检查。\n- 运行相关 iOS 构建与 `git diff --check`。"
+    },
+    "T005": {
+      "acceptance_criteria": [
+        "新路由未分类会使 gate 失败。",
+        "release regression 可通过环境开关运行 deployed ownership smoke。",
+        "两仓库构建与检查通过并有清晰提交。",
+        "线上健康、Postgres、global shadow、54/0 audit、owner/system 403、delegated 合法访问均有报告。"
+      ],
+      "assumptions": [
+        "服务器 SSH、私密 access 文档和部署环境仍可用。",
+        "用户已明确要求执行部署与线上验证。"
+      ],
+      "body_path": "problems/P000/children/P003/tickets/T005.md",
+      "classification": "split",
+      "classification_reason": "QA gate 开发与线上提交部署是两个独立风险面；先让 gate 可重复通过，再用已提交版本部署并采集线上证据。",
+      "created_at": "2026-07-10T14:39:42+00:00",
+      "id": "T005",
+      "problem_definition": "当前实现与局部测试已通过，但缺少可重复的一键 audit gate、release regression 开关和部署环境 Postgres 证据，后续新增路由可能绕过分类。",
+      "problem_id": "P003",
+      "proposed_solution": "- 新增 iOS/后端静态 ownership audit check。\n- 新增部署后端 HTTP smoke，验证 owner 正向、跨 owner 403、system-only 403、delegated smoke 兼容。\n- 接入 `run-release-regression.sh` 可选开关，不影响默认公开 MVP 回归。\n- 更新 Task 11 与 QA 文档。\n- 运行全量后端测试、Swift QA、iOS generic build、`git diff --check`。\n- 分别提交并推送两仓库，部署后端，运行线上 Postgres auth/cross-account/route audit smokes。",
+      "result_ids": [
+        "R006"
+      ],
+      "risks": [
+        "线上用户数据不能进入测试报告；smoke 使用独立测试手机号并只输出 hash/计数。",
+        "部署必须只重建 API，不影响 Postgres/Redis 数据卷。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "固化 Ownership Audit Gate 并生成部署证据",
+      "updated_at": "2026-07-10T14:52:09+00:00",
+      "verification_plan": "- 后端 `unittest discover`。\n- 新静态 check 与 deployed HTTP smoke。\n- release regression 相关开关检查。\n- iPhoneOS generic Debug build。\n- 部署后 health + 三个线上 smoke。"
+    },
+    "T006": {
+      "acceptance_criteria": [
+        "静态 check 与本地 HTTP smoke 可重复通过。",
+        "脚本不输出 token、手机号、昵称或原始 user id。",
+        "release 默认不依赖部署后端，开启开关时执行 smoke。",
+        "后端全测和 iOS generic build 通过。"
+      ],
+      "assumptions": [
+        "现有 auth/cross-account smoke 提供可复用的 URL/token 解析与脱敏模式。"
+      ],
+      "body_path": "problems/P000/children/P003/children/P006/tickets/T006.md",
+      "classification": "one_go",
+      "classification_reason": "三个 QA 文件和 release 开关围绕同一合同，验证路径明确且不改变业务实现。",
+      "created_at": "2026-07-10T14:40:36+00:00",
+      "id": "T006",
+      "problem_definition": "当前测试分散，release QA 无法一键证明 route registry、principal-bound 规则、客户端 system 边界和部署 HTTP 行为同时成立。",
+      "problem_id": "P006",
+      "proposed_solution": "- 新增 `route-ownership-audit-check.swift` 跨仓库检查实现边界。\n- 新增 `backend-route-ownership-audit-smoke.py` 与 shell wrapper，使用两名临时用户验证 owner 正向、跨 owner/system 403 和 runtime audit。\n- 输出仅含固定状态、计数和 hash 的 JSON 报告。\n- 在 release regression 添加 `RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE=1` 可选开关。\n- 更新 QA README 和 Task 11 状态。",
+      "result_ids": [
+        "R004"
+      ],
+      "risks": [
+        "脚本需复用私密 access 文档读取方式，不能把 token 写入仓库或命令输出。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "新增 Ownership 静态与部署 Smoke Gate",
+      "updated_at": "2026-07-10T14:46:24+00:00",
+      "verification_plan": "- 运行 Swift check、Python compile、memory/local HTTP smoke。\n- 运行后端全量测试、`git diff --check`、generic Debug build。"
+    },
+    "T007": {
+      "acceptance_criteria": [
+        "两仓库远端包含清晰提交且工作区无遗漏。",
+        "服务器 API 提交与远端后端提交一致，Postgres/Redis 不重建。",
+        "三条 deployed smoke 全部通过，报告脱敏。",
+        "timer active，global mode shadow，productionEnforceReady=false。"
+      ],
+      "assumptions": [
+        "SSH alias、服务器 repo 和私密 access 文档未变化。"
+      ],
+      "body_path": "problems/P000/children/P003/children/P007/tickets/T007.md",
+      "classification": "one_go",
+      "classification_reason": "实现已通过 gate，剩余步骤是顺序化提交、API-only 部署和三条既定 smoke，可在一次交付窗口内完成并回滚。",
+      "created_at": "2026-07-10T14:47:05+00:00",
+      "id": "T007",
+      "problem_definition": "本地实现和 gate 已通过，但线上仍运行旧提交，尚未具备 54 路由 principal-bound 行为和新 runtime audit。",
+      "problem_id": "P007",
+      "proposed_solution": "- 审查两仓库 diff，仅提交 Task 11 相关源码、测试、QA 和 Lodestar 记录。\n- 后端先提交推送 main，iOS 提交推送当前 feature 分支。\n- SSH 到服务器，确认 tracked clean、备份 `.env`、fast-forward pull，仅重建/recreate API。\n- 验证 health、容器、Postgres、ownership mode、route audit、timer。\n- 运行 auth、cross-account、route ownership 三条 deployed smoke 并保存报告。",
+      "result_ids": [
+        "R005"
+      ],
+      "risks": [
+        "部署期间 API 短暂重启；只重建 API 并保留数据容器。",
+        "smoke 创建测试账号数据；使用随机手机号且不输出身份信息。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "提交推送、部署 API 并运行线上 Ownership Gate",
+      "updated_at": "2026-07-10T14:51:28+00:00",
+      "verification_plan": "- push 后比较 local/remote SHA。\n- 部署后请求 `/health` 与 `/config/runtime`。\n- 运行三条 smoke，检查 JSON。\n- 运行两仓库 `git diff --check` 与最终 status。"
+    }
+  },
+  "updated_at": "2026-07-10T14:53:13+00:00"
+}

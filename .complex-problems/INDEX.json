@@ -1,5 +1,5 @@
 {
-  "active_ledger_id": "L20260710-193743",
+  "active_ledger_id": "L20260710-222422",
   "ledgers": [
     {
       "active_count": 0,
@@ -110,7 +110,18 @@
       "status": "done",
       "title": "P0 跨账号授权策略与 Shadow 证据",
       "updated_at": "2026-07-10T12:00:12+00:00"
+    },
+    {
+      "active_count": 0,
+      "blocked_count": 0,
+      "ledger_id": "L20260710-222422",
+      "path": "L20260710-222422",
+      "root_id": "P000",
+      "schema_version": 6,
+      "status": "done",
+      "title": "P0 全路由 Ownership 审计与 Principal 绑定",
+      "updated_at": "2026-07-10T14:53:13+00:00"
     }
   ],
-  "updated_at": "2026-07-10T12:00:19+00:00"
+  "updated_at": "2026-07-10T14:53:30+00:00"
 }

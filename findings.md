@@ -78,4 +78,13 @@
 - Middleware exposes fixed-enum authorization policy/decision/reason headers, marks legal delegation separately, and hashes identifiers in application logs.
 - `/config/runtime` reports `crossAccountPolicy.contractVersion=1` and `productionEnforceReady=false` so deployments cannot mistake this slice for complete production authorization.
 - Final non-device evidence: `tmp/visual-qa/prd-stitch-ui/release-regression/20260710-cross-account-auth-final/report.md`.
-- Deployed Postgres shadow evidence, SMS identity proof, full-route audit, and global enforce promotion remain explicit follow-ups.
+- Deployed Postgres shadow evidence and the full-route audit were completed by Task 11; SMS identity proof and global enforce promotion remain explicit follow-ups.
+
+## Task 11 Resolution
+
+- A single `RouteOwnershipRegistry` now classifies all 54 FastAPI business routes as public, authenticated service, user session, owner body/path, delegated, or system-only; tests fail for omissions or duplicates.
+- Owner-bound mismatches and user calls to system-only routes now return 403 even while the global mode remains `shadow`; unknown/unclassified behavior is not globally promoted to enforce.
+- Delegated family, invitation, care, and time-letter recipient policies remain explicit and passed both local and deployed Postgres smoke.
+- Large JSON bodies no longer bypass principal inspection, and the immutable route registry is compiled once per process rather than once per request.
+- iOS mailbox refresh no longer triggers global time-letter dispatch; the enabled server timer owns due delivery.
+- Backend `275a4c2` is deployed. Online evidence reports `routeCount=54`, `unclassifiedCount=0`, principal-bound owner/system denies, valid delegated access, production Postgres health, and an active time-letter timer.

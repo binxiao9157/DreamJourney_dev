@@ -4,9 +4,9 @@
 
 - **Goal:** 按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态
 - **Mode:** Review
-- **Phase:** Phase 5 cross-account authorization policy shadow complete
-- **Task:** docs/plans/task_10_p0-cross-account-authorization-policy-shadow.md
-- **Blockers:** none for Task 10; deployed Postgres shadow evidence, SMS identity proof, full-route audit, and production enforce promotion remain later boundaries
+- **Phase:** Phase 6 full-route ownership audit complete
+- **Task:** docs/plans/task_11_p0-full-route-ownership-audit.md
+- **Blockers:** none for Task 11; SMS identity proof, global production enforce promotion, and true-device regression remain later boundaries
 
 ## Key Decisions
 
@@ -26,10 +26,12 @@
 - Task 8 is complete and deployed: digital-human session leases now support safe persistence, reuse, heartbeat, release, TTL expiry, atomic capacity arbitration, iOS lifecycle cleanup, stale-response release, and non-device/deployed Postgres gates. Backend `e9b3104` is live and ledger `L20260710-145321` is closed.
 - Task 9 is complete: opaque user access/refresh sessions, hash-only persistence, refresh rotation/replay rejection, logout revocation, legacy backend-token compatibility, ownership shadow diagnostics, iOS ThisDeviceOnly Keychain consumption, concurrent refresh coalescing, and the optional deployed smoke gate are implemented. Ledger `L20260710-165434` is closed.
 - Task 10 is complete: policy decisions distinguish owner/family/time-letter recipient/invitation/system-only access; sensitive care/time-letter/invitation routes bind the verified bearer principal; runtime and QA gates keep production enforce explicitly disabled. Ledger `L20260710-193743` is closed.
+- Task 10 deployment evidence is complete: backend `66db803` is live on Postgres; deployed auth rotation/replay/logout and cross-account delegated/forged-viewer smoke passed.
+- Task 11 is complete and deployed: all 54 business routes are explicitly classified, owner/system routes enforce verified principals while global mode remains shadow, delegated family/time-letter policies pass, iOS no longer triggers global dispatch, and backend `275a4c2` passed deployed Postgres gates. Ledger `L20260710-222422` is closed.
 
 ## Scope
 
-Phase 2, Phase 3, and Task 9's Phase 4 slice are closed. Task 10 keeps production on ownership `shadow` while defining enforce-safe legal cross-account decisions; public UI changes remain outside this slice.
+Phase 2, Phase 3, and Tasks 9-11 are closed. Production remains on global ownership `shadow`, while all registered owner/system routes now have principal-bound enforcement; public UI changes remain outside this slice.
 
 ## Recovery
 

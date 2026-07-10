@@ -23,6 +23,7 @@
 | 8 | done | P0 digital-human session lease and concurrency control | `docs/plans/task_08_p0-digital-human-session-lease.md` | `L20260710-145321` |
 | 9 | done | P0 auth session and ownership shadow mode | `docs/plans/task_09_p0-auth-session-ownership-shadow.md` | `L20260710-165434` |
 | 10 | done | P0 cross-account authorization policy shadow | `docs/plans/task_10_p0-cross-account-authorization-policy-shadow.md` | `L20260710-193743` |
+| 11 | done | P0 full-route ownership audit and principal binding | `docs/plans/task_11_p0-full-route-ownership-audit.md` | `L20260710-222422` |
 
 ## File Structure
 

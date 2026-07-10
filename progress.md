@@ -340,7 +340,6 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `none`
 - Counts: 5/5 problems done, 0 blocked, 5/5 tickets done
 - Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
-
 ## Task 7 Implementation Checkpoint - 2026-07-10T14:32:24+08:00
 
 - Completed Echo digital-human Phase 2 non-device stability work: lifecycle/session and interaction generations, background release lease, generation-bound runtime/audio owner, deterministic tap interruption, guarded microphone recovery, stale PCM isolation, and quota fallback.
@@ -608,4 +607,31 @@ Update this file after every recursive state-changing command bundle and before 
 - Root: `P000` / done
 - Next action: `none`
 - Counts: 4/4 problems done, 0 blocked, 4/4 tickets done
+- Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+
+## Recursive Closure Checkpoint - 2026-07-10T22:30:12+08:00
+
+- Ledger: `L20260710-222422`
+- Lodestar task: `docs/plans/task_11_p0-full-route-ownership-audit.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 1/4 problems done, 0 blocked, 1/2 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P002: Principal 绑定与 iOS 调度收敛`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in ...
+
+## Recursive Closure Checkpoint - 2026-07-10T22:39:21+08:00
+
+- Ledger: `L20260710-222422`
+- Lodestar task: `docs/plans/task_11_p0-full-route-ownership-audit.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 4/6 problems done, 0 blocked, 4/5 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P003: Audit Gate、提交与部署证据`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in Engl...
+
+## Recursive Closure Checkpoint - 2026-07-10T22:53:30+08:00
+
+- Ledger: `L20260710-222422`
+- Lodestar task: `docs/plans/task_11_p0-full-route-ownership-audit.md`
+- Root: `P000` / done
+- Next action: `none`
+- Counts: 8/8 problems done, 0 blocked, 8/8 tickets done
 - Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
