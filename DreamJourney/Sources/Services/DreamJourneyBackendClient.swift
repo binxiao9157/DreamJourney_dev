@@ -2116,6 +2116,11 @@ final class EchoQAEvidenceBundleStore {
 final class DreamJourneyBackendClient {
     static let shared = DreamJourneyBackendClient()
 
+    private enum RequestAuthPolicy {
+        case automatic
+        case backendOnly
+    }
+
     enum ClientError: LocalizedError {
         case invalidJSONResponse
         case unsupportedJSONRoot
@@ -2144,6 +2149,10 @@ final class DreamJourneyBackendClient {
     private let baseURL: String
     private let apiToken: String?
     private let hasExplicitBaseURL: Bool
+    private let authSessionStore = BackendAuthSessionStore.shared
+    private let authRefreshQueue = DispatchQueue(label: "com.dreamjourney.backend-auth-refresh")
+    private var authRefreshWaiters: [(Bool) -> Void] = []
+    private var isAuthRefreshInFlight = false
 
     var isProfileSyncConfigured: Bool {
         hasExplicitBaseURL
@@ -2645,7 +2654,51 @@ final class DreamJourneyBackendClient {
         if let password, !password.isEmpty {
             payload["password"] = password
         }
-        requestJSON(path: "/auth/login", method: .post, payload: payload, completion: completion)
+        requestJSON(
+            path: "/auth/login",
+            method: .post,
+            payload: payload,
+            authPolicy: .backendOnly,
+            allowsRefresh: false
+        ) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let object):
+                guard let user = object["user"] as? [String: Any],
+                      let responseUserId = user["id"] as? String,
+                      !responseUserId.isEmpty else {
+                    self.authSessionStore.clear()
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                if let auth = object["auth"] as? [String: Any],
+                   auth["userId"] as? String != responseUserId {
+                    self.authSessionStore.clear()
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                do {
+                    try self.adoptAuthSession(from: object)
+                    completion(.success(object))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func logoutAuthSession() {
+        guard let session = authSessionStore.currentSession else { return }
+        requestJSON(
+            path: "/auth/logout",
+            method: .post,
+            payload: ["refreshToken": session.refreshToken],
+            authPolicy: .automatic,
+            allowsRefresh: false
+        ) { _ in }
+        authSessionStore.clear(sessionId: session.sessionId)
     }
 
     func updateProfile(
@@ -2890,10 +2943,13 @@ final class DreamJourneyBackendClient {
         path: String,
         method: HTTPMethod,
         payload: [String: Any]?,
+        authPolicy: RequestAuthPolicy = .automatic,
+        allowsRefresh: Bool = true,
         completion: @escaping (Result<[String: Any], Error>) -> Void
     ) {
         let url = "\(baseURL)\(path)"
-        AF.request(url, method: method, parameters: payload, encoding: JSONEncoding.default, headers: authHeaders)
+        let requestHeaders = authPolicy == .automatic ? authHeaders : authHeaders(for: authPolicy)
+        AF.request(url, method: method, parameters: payload, encoding: JSONEncoding.default, headers: requestHeaders)
             .validate(statusCode: 200..<300)
             .responseData(queue: .global(qos: .utility)) { response in
                 switch response.result {
@@ -2916,6 +2972,31 @@ final class DreamJourneyBackendClient {
                     }
                 case .failure(let error):
                     let statusCode = response.response?.statusCode
+                    if statusCode == 401,
+                       allowsRefresh,
+                       authPolicy == .automatic,
+                       self.authSessionStore.currentSession != nil {
+                        self.refreshAuthSession { refreshed in
+                            if refreshed {
+                                self.requestJSON(
+                                    path: path,
+                                    method: method,
+                                    payload: payload,
+                                    authPolicy: authPolicy,
+                                    allowsRefresh: false,
+                                    completion: completion
+                                )
+                            } else {
+                                let detail = Self.backendErrorMessage(from: response.data)
+                                    ?? "登录状态已失效，请重新登录"
+                                completion(.failure(ClientError.backendError(
+                                    statusCode: statusCode,
+                                    detail: detail
+                                )))
+                            }
+                        }
+                        return
+                    }
                     if let backendMessage = Self.backendErrorMessage(from: response.data) {
                         DispatchQueue.main.async {
                             completion(.failure(ClientError.backendError(statusCode: statusCode, detail: backendMessage)))
@@ -2931,6 +3012,67 @@ final class DreamJourneyBackendClient {
                     }
                 }
             }
+    }
+
+    @discardableResult
+    private func adoptAuthSession(from object: [String: Any]) throws -> Bool {
+        guard let authObject = object["auth"] else {
+            authSessionStore.clear()
+            return false
+        }
+        guard let authJSON = authObject as? [String: Any],
+              let session = BackendAuthSessionContract(json: authJSON) else {
+            throw ClientError.invalidJSONResponse
+        }
+        if let user = object["user"] as? [String: Any],
+           let responseUserId = user["id"] as? String,
+           session.userId != responseUserId {
+            throw ClientError.invalidJSONResponse
+        }
+        try authSessionStore.save(session)
+        return true
+    }
+
+    private func refreshAuthSession(completion: @escaping (Bool) -> Void) {
+        authRefreshQueue.async {
+            self.authRefreshWaiters.append(completion)
+            guard !self.isAuthRefreshInFlight else { return }
+            guard let currentSession = self.authSessionStore.currentSession else {
+                self.finishAuthRefresh(success: false)
+                return
+            }
+            self.isAuthRefreshInFlight = true
+            self.requestJSON(
+                path: "/auth/refresh",
+                method: .post,
+                payload: ["refreshToken": currentSession.refreshToken],
+                authPolicy: .backendOnly,
+                allowsRefresh: false
+            ) { result in
+                let refreshed: Bool
+                switch result {
+                case .success(let object):
+                    refreshed = (try? self.adoptAuthSession(from: object)) == true
+                case .failure:
+                    refreshed = false
+                }
+                if !refreshed {
+                    self.authSessionStore.clear(sessionId: currentSession.sessionId)
+                }
+                self.authRefreshQueue.async {
+                    self.finishAuthRefresh(success: refreshed)
+                }
+            }
+        }
+    }
+
+    private func finishAuthRefresh(success: Bool) {
+        let waiters = authRefreshWaiters
+        authRefreshWaiters.removeAll()
+        isAuthRefreshInFlight = false
+        DispatchQueue.main.async {
+            waiters.forEach { $0(success) }
+        }
     }
 
     private func validatedDigitalHumanLeasePath(_ candidate: String, fallback: String) -> String {
@@ -2969,8 +3111,22 @@ final class DreamJourneyBackendClient {
     }
 
     private var authHeaders: HTTPHeaders? {
-        guard let apiToken else { return nil }
-        return ["Authorization": "Bearer \(apiToken)"]
+        authHeaders(for: .automatic)
+    }
+
+    private func authHeaders(for policy: RequestAuthPolicy) -> HTTPHeaders? {
+        var values: [String: String] = [:]
+        if let apiToken {
+            values["X-DreamJourney-Api-Token"] = apiToken
+        }
+
+        if policy == .automatic, let session = authSessionStore.currentSession {
+            values["Authorization"] = "Bearer \(session.accessToken)"
+            values["X-DreamJourney-User-Id"] = session.userId
+        } else if policy == .automatic, let apiToken {
+            values["Authorization"] = "Bearer \(apiToken)"
+        }
+        return values.isEmpty ? nil : HTTPHeaders(values)
     }
 
     private func pathComponent(_ value: String) -> String {

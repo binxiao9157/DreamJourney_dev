@@ -39,7 +39,8 @@ assertContains(client, "private let apiToken: String?", "backend client should k
 assertContains(client, "private var authHeaders: HTTPHeaders?", "backend client should build optional auth headers")
 assertContains(client, "Authorization", "backend client should send Authorization header when token is configured")
 assertContains(client, "Bearer \\(apiToken)", "backend client should use bearer token scheme")
-assertContains(client, "headers: authHeaders", "backend client requests should include auth headers")
+assertContains(client, "authHeaders(for: authPolicy)", "backend client requests should apply the selected auth policy")
+assertContains(client, "X-DreamJourney-Api-Token", "backend compatibility token should use a dedicated header beside user auth")
 assertOrder(client, "private let apiToken: String?", "AF.request", "token should be resolved before requests are made")
 
 print("Backend auth token source checks passed")

@@ -21,6 +21,8 @@
 | 6 | done | P0 voice clone exclusive slot allocation | `docs/plans/task_06_p0-voice-clone-exclusive-slot-allocation.md` | `L20260710-115209` |
 | 7 | done | P0 Echo digital-human stability | `docs/plans/task_07_p0-echo-digital-human-stability.md` | `L20260710-133057` |
 | 8 | done | P0 digital-human session lease and concurrency control | `docs/plans/task_08_p0-digital-human-session-lease.md` | `L20260710-145321` |
+| 9 | done | P0 auth session and ownership shadow mode | `docs/plans/task_09_p0-auth-session-ownership-shadow.md` | `L20260710-165434` |
+| 10 | done | P0 cross-account authorization policy shadow | `docs/plans/task_10_p0-cross-account-authorization-policy-shadow.md` | `L20260710-193743` |
 
 ## File Structure
 

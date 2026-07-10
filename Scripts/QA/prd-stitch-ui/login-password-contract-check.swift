@@ -39,7 +39,7 @@ assertContains(backendClient, "var isLoginSyncConfigured", "Backend client shoul
 assertContains(backendClient, "func upsertUser(", "Backend client login should expose upsertUser")
 assertContains(backendClient, "password: String? = nil", "Backend client login should accept an optional password")
 assertContains(backendClient, "payload[\"password\"] = password", "Backend auth payload should include password when provided")
-assertContains(backendClient, "requestJSON(path: \"/auth/login\"", "Backend auth should use /auth/login")
+assertContains(backendClient, "path: \"/auth/login\"", "Backend auth should use /auth/login")
 
 assertContains(releaseRegression, "login-password-contract-check.swift", "Release regression should run login password guard")
 assertContains(releasePackage, "Scripts/QA/prd-stitch-ui/login-password-contract-check.swift", "Release QA package should include login password guard")

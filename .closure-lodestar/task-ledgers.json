@@ -72,7 +72,23 @@
       "status": "complete",
       "task_file": "docs/plans/task_08_p0-digital-human-session-lease.md",
       "updated_at": "2026-07-10T15:21:03+08:00"
+    },
+    "docs/plans/task_09_p0-auth-session-ownership-shadow.md": {
+      "ledger_id": "L20260710-165434",
+      "ledger_path": ".complex-problems/L20260710-165434",
+      "next_action": "none",
+      "status": "complete",
+      "task_file": "docs/plans/task_09_p0-auth-session-ownership-shadow.md",
+      "updated_at": "2026-07-10T17:27:17+08:00"
+    },
+    "docs/plans/task_10_p0-cross-account-authorization-policy-shadow.md": {
+      "ledger_id": "L20260710-193743",
+      "ledger_path": ".complex-problems/L20260710-193743",
+      "next_action": "none",
+      "status": "complete",
+      "task_file": "docs/plans/task_10_p0-cross-account-authorization-policy-shadow.md",
+      "updated_at": "2026-07-10T20:00:20+08:00"
     }
   },
-  "updated_at": "2026-07-10T15:21:03+08:00"
+  "updated_at": "2026-07-10T20:00:20+08:00"
 }

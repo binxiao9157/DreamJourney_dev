@@ -4,9 +4,9 @@
 
 - **Goal:** 按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态
 - **Mode:** Review
-- **Phase:** Phase 3 non-device session lease and concurrency control complete
-- **Task:** docs/plans/task_08_p0-digital-human-session-lease.md
-- **Blockers:** no implementation blocker; provider-side quota release timing remains a later true-device acceptance item
+- **Phase:** Phase 5 cross-account authorization policy shadow complete
+- **Task:** docs/plans/task_10_p0-cross-account-authorization-policy-shadow.md
+- **Blockers:** none for Task 10; deployed Postgres shadow evidence, SMS identity proof, full-route audit, and production enforce promotion remain later boundaries
 
 ## Key Decisions
 
@@ -24,10 +24,12 @@
 - Account purge retires owned provider slots; deleted voice data is never silently recycled to another user.
 - Task 7 is complete: Echo now has lifecycle/session and interaction generations, a cancellable background release lease, generation-bound runtime/audio ownership, deterministic tap interruption, guarded microphone recovery, stale PCM isolation, and immediate quota fallback. Ledger `L20260710-133057` is closed.
 - Task 8 is complete and deployed: digital-human session leases now support safe persistence, reuse, heartbeat, release, TTL expiry, atomic capacity arbitration, iOS lifecycle cleanup, stale-response release, and non-device/deployed Postgres gates. Backend `e9b3104` is live and ledger `L20260710-145321` is closed.
+- Task 9 is complete: opaque user access/refresh sessions, hash-only persistence, refresh rotation/replay rejection, logout revocation, legacy backend-token compatibility, ownership shadow diagnostics, iOS ThisDeviceOnly Keychain consumption, concurrent refresh coalescing, and the optional deployed smoke gate are implemented. Ledger `L20260710-165434` is closed.
+- Task 10 is complete: policy decisions distinguish owner/family/time-letter recipient/invitation/system-only access; sensitive care/time-letter/invitation routes bind the verified bearer principal; runtime and QA gates keep production enforce explicitly disabled. Ledger `L20260710-193743` is closed.
 
 ## Scope
 
-Phase 2 and Phase 3 are closed, and the backend deployment plus deployed Postgres smoke passed. The next delivery boundary is the deferred true-device Tencent digital-human and cloned-voice acceptance pass.
+Phase 2, Phase 3, and Task 9's Phase 4 slice are closed. Task 10 keeps production on ownership `shadow` while defining enforce-safe legal cross-account decisions; public UI changes remain outside this slice.
 
 ## Recovery
 

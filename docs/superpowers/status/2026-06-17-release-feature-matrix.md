@@ -4,7 +4,7 @@ Date: 2026-06-17
 
 Branch: `feature/prd-stitch-ui-adaptation`
 
-Last synced: 2026-06-28, after the product decision to make the Tencent Echo digital-human live panel public by default while preserving ordinary Echo fallback, family phone invitation, account soft deletion, time letters, and voice clone public foundations.
+Last synced: 2026-07-10, after adding opaque user sessions, ownership shadow, and principal-bound cross-account authorization for family care, time-letter recipients, and invitation acceptance while preserving the existing public surfaces and backend-token compatibility.
 
 Source of truth:
 
@@ -20,7 +20,7 @@ These items are available without hidden-branch launch arguments and without man
 | Area | Public in MVP | Code guard / evidence |
 | --- | --- | --- |
 | App shell | `记忆档案`, `回响`, `我的` | `TabCoordinator` builds the 3-tab PRD shell. |
-| Login | Stitch-aligned light login form | `LoginViewController` keeps existing auth callback behavior. |
+| Login | Stitch-aligned light login form with opaque access/refresh session | `LoginViewController` keeps the visible flow; `BackendAuthSessionStore` saves the backend session in ThisDeviceOnly Keychain, while `DreamJourneyBackendClient` rotates refresh tokens and retains the legacy backend-token compatibility header. Backend `CrossAccountAuthorizationPolicy` classifies owner/family/recipient access; sensitive care/time-letter/invitation routes bind the verified bearer principal while global ownership remains shadow. |
 | Archive overview | `记忆档案馆`, `相册影像`, `语音档案`, `人格设定`, `封存新记忆`, timeline list | `MemoryArchiveViewController` renders the PRD archive home. Feature cards are category/capability entries; `封存新记忆` remains the creation entry. |
 | Archive creation | Text, photo, and time letter: `添加文字描述`, `选择照片`, `录入时间信件` | `MemoryArchiveCreationOption.availableOptions` starts with `.text`, `.photo` and adds `.timeLetter` when default `DJFeature.timeLetters` is enabled. |
 | Archive persona | `人格设定` opens the persona/knowledge settings surface | `DJFeature.personaSettings` is enabled by default. |

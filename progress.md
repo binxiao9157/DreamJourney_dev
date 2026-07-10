@@ -323,7 +323,6 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `none`
 - Counts: 4/4 problems done, 0 blocked, 4/4 tickets done
 - Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
-
 ## Recursive Closure Checkpoint - 2026-07-10T13:32:15+08:00
 
 - Ledger: `L20260710-133057`
@@ -412,4 +411,201 @@ Update this file after every recursive state-changing command bundle and before 
 - Root: `P000` / done
 - Next action: `none`
 - Counts: 3/3 problems done, 0 blocked, 3/3 tickets done
+- Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+
+## Recursive Closure Checkpoint - 2026-07-10T16:54:42+08:00
+
+- Ledger: `L20260710-165434`
+- Lodestar task: `docs/plans/task_09_p0-auth-session-ownership-shadow.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 0/1 problems done, 0 blocked, 0/0 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P000: P0 Auth Session and Ownership Shadow Mode`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and f...
+
+## Recursive Closure Checkpoint - 2026-07-10T16:55:37+08:00
+
+- Ledger: `L20260710-165434`
+- Lodestar task: `docs/plans/task_09_p0-auth-session-ownership-shadow.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 0/1 problems done, 0 blocked, 0/1 tickets done
+- Next instruction: Only perform `classify-ticket` for `T000` on `P000: P0 Auth Session and Ownership Shadow Mode`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names st...
+
+## Recursive Closure Checkpoint - 2026-07-10T16:56:07+08:00
+
+- Ledger: `L20260710-165434`
+- Lodestar task: `docs/plans/task_09_p0-auth-session-ownership-shadow.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 0/1 problems done, 0 blocked, 0/1 tickets done
+- Next instruction: Only perform `split-ticket` for `T000` on `P000: P0 Auth Session and Ownership Shadow Mode`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidenc...
+
+## Recursive Closure Checkpoint - 2026-07-10T16:58:16+08:00
+
+- Ledger: `L20260710-165434`
+- Lodestar task: `docs/plans/task_09_p0-auth-session-ownership-shadow.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 0/4 problems done, 0 blocked, 0/1 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P001: 后端 opaque auth session 合同`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay ...
+
+## Recursive Closure Checkpoint - 2026-07-10T16:58:57+08:00
+
+- Ledger: `L20260710-165434`
+- Lodestar task: `docs/plans/task_09_p0-auth-session-ownership-shadow.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 0/4 problems done, 0 blocked, 0/2 tickets done
+- Next instruction: Only perform `execute-ticket` for `T001` on `P001: 后端 opaque auth session 合同`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execut...
+
+## Recursive Closure Checkpoint - 2026-07-10T17:20:53+08:00
+
+- Ledger: `L20260710-165434`
+- Lodestar task: `docs/plans/task_09_p0-auth-session-ownership-shadow.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 0/4 problems done, 0 blocked, 1/2 tickets done
+- Next instruction: Only perform `check-success` for `P001: 后端 opaque auth session 合同`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidenc...
+
+## Recursive Closure Checkpoint - 2026-07-10T17:21:40+08:00
+
+- Ledger: `L20260710-165434`
+- Lodestar task: `docs/plans/task_09_p0-auth-session-ownership-shadow.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 1/4 problems done, 0 blocked, 1/2 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P002: Principal 解析与 ownership shadow`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names ...
+
+## Recursive Closure Checkpoint - 2026-07-10T17:22:26+08:00
+
+- Ledger: `L20260710-165434`
+- Lodestar task: `docs/plans/task_09_p0-auth-session-ownership-shadow.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 1/4 problems done, 0 blocked, 1/3 tickets done
+- Next instruction: Only perform `classify-ticket` for `T002` on `P002: Principal 解析与 ownership shadow`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in Engli...
+
+## Recursive Closure Checkpoint - 2026-07-10T17:22:33+08:00
+
+- Ledger: `L20260710-165434`
+- Lodestar task: `docs/plans/task_09_p0-auth-session-ownership-shadow.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 1/4 problems done, 0 blocked, 1/3 tickets done
+- Next instruction: Only perform `execute-ticket` for `T002` on `P002: Principal 解析与 ownership shadow`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/e...
+
+## Recursive Closure Checkpoint - 2026-07-10T17:22:41+08:00
+
+- Ledger: `L20260710-165434`
+- Lodestar task: `docs/plans/task_09_p0-auth-session-ownership-shadow.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 1/4 problems done, 0 blocked, 1/3 tickets done
+- Next instruction: Only perform `record-result` for ticket `T002`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-10T17:23:01+08:00
+
+- Ledger: `L20260710-165434`
+- Lodestar task: `docs/plans/task_09_p0-auth-session-ownership-shadow.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 1/4 problems done, 0 blocked, 2/3 tickets done
+- Next instruction: Only perform `check-success` for `P002: Principal 解析与 ownership shadow`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, ev...
+
+## Recursive Closure Checkpoint - 2026-07-10T17:23:19+08:00
+
+- Ledger: `L20260710-165434`
+- Lodestar task: `docs/plans/task_09_p0-auth-session-ownership-shadow.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 2/4 problems done, 0 blocked, 2/3 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P003: iOS Keychain 消费与非真机 gate`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay i...
+
+## Recursive Closure Checkpoint - 2026-07-10T17:23:40+08:00
+
+- Ledger: `L20260710-165434`
+- Lodestar task: `docs/plans/task_09_p0-auth-session-ownership-shadow.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 2/4 problems done, 0 blocked, 2/4 tickets done
+- Next instruction: Only perform `classify-ticket` for `T003` on `P003: iOS Keychain 消费与非真机 gate`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. Af...
+
+## Recursive Closure Checkpoint - 2026-07-10T17:23:47+08:00
+
+- Ledger: `L20260710-165434`
+- Lodestar task: `docs/plans/task_09_p0-auth-session-ownership-shadow.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 2/4 problems done, 0 blocked, 2/4 tickets done
+- Next instruction: Only perform `execute-ticket` for `T003` on `P003: iOS Keychain 消费与非真机 gate`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execute...
+
+## Recursive Closure Checkpoint - 2026-07-10T17:23:58+08:00
+
+- Ledger: `L20260710-165434`
+- Lodestar task: `docs/plans/task_09_p0-auth-session-ownership-shadow.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 2/4 problems done, 0 blocked, 2/4 tickets done
+- Next instruction: Only perform `record-result` for ticket `T003`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-10T17:25:54+08:00
+
+- Ledger: `L20260710-165434`
+- Lodestar task: `docs/plans/task_09_p0-auth-session-ownership-shadow.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 2/4 problems done, 0 blocked, 3/4 tickets done
+- Next instruction: Only perform `check-success` for `P003: iOS Keychain 消费与非真机 gate`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence...
+
+## Recursive Closure Checkpoint - 2026-07-10T17:26:16+08:00
+
+- Ledger: `L20260710-165434`
+- Lodestar task: `docs/plans/task_09_p0-auth-session-ownership-shadow.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 3/4 problems done, 0 blocked, 3/4 tickets done
+- Next instruction: Only perform `record-result` for ticket `T000`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-10T17:26:40+08:00
+
+- Ledger: `L20260710-165434`
+- Lodestar task: `docs/plans/task_09_p0-auth-session-ownership-shadow.md`
+- Root: `P000` / doing
+- Next action: `check-success`
+- Counts: 3/4 problems done, 0 blocked, 4/4 tickets done
+- Next instruction: Only perform `check-success` for `P000: P0 Auth Session and Ownership Shadow Mode`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, c...
+
+## Recursive Closure Checkpoint - 2026-07-10T17:27:08+08:00
+
+- Ledger: `L20260710-165434`
+- Lodestar task: `docs/plans/task_09_p0-auth-session-ownership-shadow.md`
+- Root: `P000` / done
+- Next action: `none`
+- Counts: 4/4 problems done, 0 blocked, 4/4 tickets done
+- Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+
+## Recursive Closure Checkpoint - 2026-07-10T17:27:17+08:00
+
+- Ledger: `L20260710-165434`
+- Lodestar task: `docs/plans/task_09_p0-auth-session-ownership-shadow.md`
+- Root: `P000` / done
+- Next action: `none`
+- Counts: 4/4 problems done, 0 blocked, 4/4 tickets done
+- Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+
+## Task 9 Implementation Checkpoint - 2026-07-10T17:29:00+08:00
+
+- Completed opaque access/refresh issuance, hash-only persistence, refresh rotation/replay rejection, logout revocation, legacy backend-token compatibility, and ownership shadow diagnostics.
+- Completed iOS ThisDeviceOnly Keychain storage, separate user/system headers, concurrent refresh coalescing, bounded retry, and session-aware logout cleanup.
+- Backend verification passed 156 tests plus FastAPI smoke; local HTTP auth/shadow smoke and iPhoneOS generic Debug build passed.
+- Ledger `L20260710-165434` is valid and closed with 4/4 successful checks.
+- Online Postgres deployment smoke, true-device weak-network/Keychain acceptance, SMS identity proof, and ownership enforce remain explicit follow-ups.
+
+## Recursive Closure Checkpoint - 2026-07-10T20:00:20+08:00
+
+- Ledger: `L20260710-193743`
+- Lodestar task: `docs/plans/task_10_p0-cross-account-authorization-policy-shadow.md`
+- Root: `P000` / done
+- Next action: `none`
+- Counts: 4/4 problems done, 0 blocked, 4/4 tickets done
 - Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.

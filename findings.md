@@ -70,3 +70,12 @@
 - The simulator runtime smoke now performs create, heartbeat, and release, preventing QA runs from leaving capacity occupied until TTL.
 - Final non-device evidence: `tmp/visual-qa/prd-stitch-ui/digital-human-session-lease-gate/20260710-session-lease-final/report.md`.
 - Backend commit `e9b3104` is deployed and the Postgres session smoke passed; real Tencent quota release timing and true-device audio/render behavior remain explicit follow-up acceptance boundaries.
+
+## Task 10 Resolution
+
+- A dedicated `CrossAccountAuthorizationPolicy` now distinguishes owner, accepted family viewer, time-letter recipient, invitation recipient, system-only, and legacy ownership fallback decisions.
+- Care snapshot reads, time-letter detail, and invitation acceptance bind the verified bearer principal even while global ownership remains `shadow`; forged viewers no longer receive sensitive content.
+- Middleware exposes fixed-enum authorization policy/decision/reason headers, marks legal delegation separately, and hashes identifiers in application logs.
+- `/config/runtime` reports `crossAccountPolicy.contractVersion=1` and `productionEnforceReady=false` so deployments cannot mistake this slice for complete production authorization.
+- Final non-device evidence: `tmp/visual-qa/prd-stitch-ui/release-regression/20260710-cross-account-auth-final/report.md`.
+- Deployed Postgres shadow evidence, SMS identity proof, full-route audit, and global enforce promotion remain explicit follow-ups.

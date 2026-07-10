@@ -1,0 +1,480 @@
+{
+  "checks": {
+    "C000": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P001/checks/C000.md",
+      "created_at": "2026-07-10T11:44:14+00:00",
+      "criteria_map": [
+        "owner/family/timeLetter/invitation/systemOnly/fallback/PII-safe 均由 tests.test_authorization_policy 覆盖。"
+      ],
+      "evidence": [
+        "结果 `R000` 提供了独立策略实现和测试文件。",
+        "8 项单测覆盖 success criteria 中的 owner、active family、pending family、time-letter viewer 绑定、invitation principal、system-only、fallback 和 PII-safe headers。",
+        "缺少 middleware 集成属于已拆分的 P002，不影响 P001 自身闭环。"
+      ],
+      "execution_map": [
+        "R000 对应 app/services/authorization_policy.py 与 tests/test_authorization_policy.py。"
+      ],
+      "followup_problem_id": null,
+      "id": "C000",
+      "problem_id": "P001",
+      "residual_risk": [
+        "尚未证明 middleware、Postgres 或生产 enforce；由 P002/P003 继续处理。"
+      ],
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "pending family、错误 principal、伪造 viewer、未知路由和 system-only 普通用户均有负向用例。"
+      ],
+      "summary": "授权策略模型和测试满足子问题目标。"
+    },
+    "C001": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P002/checks/C001.md",
+      "created_at": "2026-07-10T11:47:37+00:00",
+      "criteria_map": [
+        "合法 family/time-letter delegated、伪造 viewer/system-only deny、旧 fallback 兼容和安全 headers 均由集成测试覆盖。"
+      ],
+      "evidence": [
+        "结果覆盖中间件接入、兼容 fallback、脱敏响应头和 enforce-safe 决策。",
+        "19 项策略/集成测试通过，包含合法与伪造跨账号访问负向证据。",
+        "默认模式没有从 shadow 改为 enforce。"
+      ],
+      "execution_map": [
+        "R001 对应 app/main.py 和 tests/test_auth_sessions.py。"
+      ],
+      "followup_problem_id": null,
+      "id": "C001",
+      "problem_id": "P002",
+      "residual_risk": [
+        "生产 shadow 未切换；独立 HTTP/Postgres 证据待 P003。"
+      ],
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "enforce 合法家庭放行、错误 principal 403、用户调度 403、旧 profile mismatch 403 均通过。"
+      ],
+      "summary": "middleware 集成满足 shadow/enforce-safe 子问题目标。"
+    },
+    "C002": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/checks/C002.md",
+      "created_at": "2026-07-10T11:59:38+00:00",
+      "criteria_map": [
+        "runtime、HTTP smoke、release switch、QA package、文档、simulator/generic builds 和 diff check 全部有通过证据。"
+      ],
+      "evidence": [
+        "Runtime、HTTP smoke、静态 guard、release 可选开关和文档均已存在并互相校验。",
+        "后端 169 项测试、独立 HTTP smoke、simulator Debug 和 generic iPhoneOS build 均通过。",
+        "报告明确 `productionEnforceReady=false`，没有把非真机证据误报为生产授权完成。"
+      ],
+      "execution_map": [
+        "R002 对应三份 QA 脚本、runtime config、release regression 和状态文档。"
+      ],
+      "followup_problem_id": null,
+      "id": "C002",
+      "problem_id": "P003",
+      "residual_risk": [
+        "部署 Postgres、SMS identity proof、真机 Keychain/弱网仍待后续。"
+      ],
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "伪造 care/time-letter viewer 均在 shadow 默认下由敏感路由 403；smoke 未调用 global dispatch，生产 enforceReady 明确 false。"
+      ],
+      "summary": "非真机 QA gate 和交付证据满足子问题目标。"
+    },
+    "C003": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/checks/C003.md",
+      "created_at": "2026-07-10T12:00:12+00:00",
+      "criteria_map": [
+        "owner/family/recipient/systemOnly 决策、delegated 语义、伪造 viewer 拒绝、安全 headers/logs、shadow 默认和完整验证均满足。"
+      ],
+      "evidence": [
+        "三个拆分子问题均有成功结果和独立 check。",
+        "合法 owner/family/recipient 有明确 allow 决策，伪造 viewer 和 system-only 用户调用有 deny 证据。",
+        "关怀、时间信件和邀请敏感路由已经直接绑定 bearer principal，不依赖全局 enforce 才保护内容。",
+        "所有新增诊断值为固定枚举，应用日志只记录 hash，不记录 token、手机号或正文。",
+        "默认 ownership 仍为 shadow，runtime 明确不具备生产 enforce readiness。"
+      ],
+      "execution_map": [
+        "R003 汇总 P001/C000、P002/C001、P003/C002 的实现与证据。"
+      ],
+      "followup_problem_id": null,
+      "id": "C003",
+      "problem_id": "P000",
+      "residual_risk": [
+        "生产多用户授权尚未全部完成：需部署 Postgres shadow evidence、SMS identity proof 和全路由审计后才能评估 enforce。"
+      ],
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "pending family、错误 principal、伪造 viewer、unknown fallback、enforce 合法 family、system-only 用户调用和独立 HTTP 进程均已覆盖。"
+      ],
+      "summary": "Task 10 的授权策略、敏感路由保护和非真机证据达到既定范围。"
+    }
+  },
+  "counters": {
+    "check": 4,
+    "event": 48,
+    "problem": 4,
+    "result": 4,
+    "ticket": 4
+  },
+  "created_at": "2026-07-10T11:37:43+00:00",
+  "effort": "medium",
+  "language": "zh",
+  "ledger_id": "L20260710-193743",
+  "problems": {
+    "P000": {
+      "body_path": "problems/P000/README.md",
+      "check_ids": [
+        "C003"
+      ],
+      "created_at": "2026-07-10T11:37:43+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Close the Lodestar task represented by `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/plans/task_10_p0-cross-account-authorization-policy-shadow.md` using recursive problem, ticket, result, and check state.\n\nTask context:\n\n# P0 跨账号授权策略与 Shadow 证据",
+      "followup_ids": [],
+      "id": "P000",
+      "package_path": "problems/P000",
+      "parent_id": null,
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P001",
+        "P002",
+        "P003"
+      ],
+      "success_criteria": [
+        "owner 访问自身资源返回 `allowOwner`。",
+        "已接受家庭成员读取其专属关怀快照返回 `allowFamily`，ownership 为 `delegated`。",
+        "时间信件 owner 和到期后的有效收件人可通过各自 principal 访问；伪造 `viewerUserId` 被标记为 deny。",
+        "家庭邀请只能由与邀请手机号映射一致的用户 principal 接受。",
+        "普通用户调用 dispatch/purge 等 system-only 路由被标记为 deny。",
+        "默认 shadow 不改变现有公开行为；测试 enforce 能允许合法委托并拒绝已知越权。",
+        "响应头和日志不包含 token、手机号、明文用户 ID 或信件正文。",
+        "后端测试、HTTP smoke、release QA、generic iPhoneOS/simulator build 和 `git diff --check` 通过。"
+      ],
+      "ticket_ids": [
+        "T000"
+      ],
+      "title": "P0 跨账号授权策略与 Shadow 证据",
+      "updated_at": "2026-07-10T12:00:12+00:00"
+    },
+    "P001": {
+      "body_path": "problems/P000/children/P001/README.md",
+      "check_ids": [
+        "C000"
+      ],
+      "created_at": "2026-07-10T11:39:57+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "基础 ownership mismatch 无法表达 owner、已接受家庭成员、时间信件有效收件人、家庭邀请接收人和 system-only 路由之间的不同授权语义。若没有独立、可单测的策略模型，直接开启 enforce 会误拦合法访问或放过伪造 viewer。",
+      "followup_ids": [],
+      "id": "P001",
+      "package_path": "problems/P000/children/P001",
+      "parent_id": "P000",
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "单元测试先覆盖 owner、family care viewer、time-letter recipient、invitation recipient 和 system-only。",
+        "合法 owner/family/recipient 返回明确 allow 决策。",
+        "伪造 viewer、非成员和普通用户访问 system-only 返回 deny。",
+        "决策 policy/reason 仅使用固定枚举，不包含手机号、用户 ID、token 或正文。"
+      ],
+      "ticket_ids": [
+        "T001"
+      ],
+      "title": "授权策略模型与单元测试",
+      "updated_at": "2026-07-10T11:44:14+00:00"
+    },
+    "P002": {
+      "body_path": "problems/P000/children/P002/README.md",
+      "check_ids": [
+        "C001"
+      ],
+      "created_at": "2026-07-10T11:39:57+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "现有 auth middleware 只比较声明 userId 与 principal，不能在 enforce 模式中区分合法家庭委托和真实越权，也没有可供 QA 判断规则来源的授权证据。",
+      "followup_ids": [],
+      "id": "P002",
+      "package_path": "problems/P000/children/P002",
+      "parent_id": "P000",
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "策略评估器接入 middleware，未知路由继续走 Task 9 ownership fallback。",
+        "默认 shadow 不改变现有业务响应。",
+        "合法家庭/时间信件访问标记 delegated，enforce 测试不会误拦。",
+        "伪造 viewer 和普通用户调用 system-only 在 enforce 测试中返回 403。",
+        "新增安全的 policy/decision/reason 响应头并保持旧 ownership 响应头兼容。"
+      ],
+      "ticket_ids": [
+        "T002"
+      ],
+      "title": "中间件集成与跨账号 FastAPI 验证",
+      "updated_at": "2026-07-10T11:47:37+00:00"
+    },
+    "P003": {
+      "body_path": "problems/P000/children/P003/README.md",
+      "check_ids": [
+        "C002"
+      ],
+      "created_at": "2026-07-10T11:39:57+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "跨账号授权需要可重复的本地 HTTP 证据和 release gate；仅有后端单测不足以证明 iOS 请求合同、runtime 能力声明和交付文档保持一致。",
+      "followup_ids": [],
+      "id": "P003",
+      "package_path": "problems/P000/children/P003",
+      "parent_id": "P000",
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "新增跨账号授权 HTTP smoke 和运行脚本。",
+        "新增 Swift 静态 guard，并接入 release QA package 与可选 release regression 开关。",
+        "`/config/runtime` 暴露授权策略合同版本和默认 shadow 状态。",
+        "后端全量测试、HTTP smoke、release QA、generic iPhoneOS/simulator build 和 `git diff --check` 通过。",
+        "文档明确生产 enforce、短信身份校验和真机验收仍未完成。"
+      ],
+      "ticket_ids": [
+        "T003"
+      ],
+      "title": "非真机 QA Gate 与文档收敛",
+      "updated_at": "2026-07-10T11:59:38+00:00"
+    }
+  },
+  "results": {
+    "R000": {
+      "artifacts": [
+        "app/services/authorization_policy.py; tests/test_authorization_policy.py"
+      ],
+      "body_path": "problems/P000/children/P001/results/R000.md",
+      "created_at": "2026-07-10T11:43:45+00:00",
+      "done": [
+        "固定 owner/family/timeLetter/invitation/systemOnly 决策与 PII-safe header 枚举。"
+      ],
+      "id": "R000",
+      "known_gaps": [
+        "尚未接入 FastAPI middleware 和 HTTP smoke。"
+      ],
+      "problem_id": "P001",
+      "root_id": "P000",
+      "summary": "完成独立跨账号授权策略及 8 项单测。",
+      "ticket_id": "T001",
+      "verification": [
+        "python3 -m unittest tests.test_authorization_policy 通过 8 项。"
+      ]
+    },
+    "R001": {
+      "artifacts": [
+        "app/main.py; tests/test_auth_sessions.py"
+      ],
+      "body_path": "problems/P000/children/P002/results/R001.md",
+      "created_at": "2026-07-10T11:47:29+00:00",
+      "done": [
+        "新增 delegated 与授权响应头，保留 ownership fallback；合法 family enforce 放行，伪造 viewer/system-only enforce 拒绝。"
+      ],
+      "id": "R001",
+      "known_gaps": [
+        "尚未跑独立 HTTP smoke、Postgres 和部署验证。"
+      ],
+      "problem_id": "P002",
+      "root_id": "P000",
+      "summary": "跨账号策略已接入 auth middleware，默认 shadow 且 enforce-safe。",
+      "ticket_id": "T002",
+      "verification": [
+        "策略与 AuthSessionAPITests 共 19 项通过。"
+      ]
+    },
+    "R002": {
+      "artifacts": [
+        "tmp/visual-qa/prd-stitch-ui/release-regression/20260710-cross-account-auth-final/report.md"
+      ],
+      "body_path": "problems/P000/children/P003/results/R002.md",
+      "created_at": "2026-07-10T11:59:30+00:00",
+      "done": [
+        "新增 principal-bound sensitive routes、contractVersion=1、脱敏 smoke、Swift guard、release switch 和状态文档。"
+      ],
+      "id": "R002",
+      "known_gaps": [
+        "未部署 Postgres；SMS identity proof 和生产 enforce 未完成。"
+      ],
+      "problem_id": "P003",
+      "root_id": "P000",
+      "summary": "跨账号授权 runtime、HTTP smoke、release gate 与非真机构建已收敛。",
+      "ticket_id": "T003",
+      "verification": [
+        "169 backend tests、Uvicorn smoke、全静态 guards、simulator Debug、generic iPhoneOS 和 diff check 通过。"
+      ]
+    },
+    "R003": {
+      "artifacts": [
+        "tmp/visual-qa/prd-stitch-ui/release-regression/20260710-cross-account-auth-final/report.md"
+      ],
+      "body_path": "problems/P000/results/R003.md",
+      "created_at": "2026-07-10T12:00:03+00:00",
+      "done": [
+        "P001/P002/P003 全部 success，owner/family/recipient/system-only 规则和 fallback 边界已收敛。"
+      ],
+      "id": "R003",
+      "known_gaps": [
+        "未部署 Postgres；SMS identity proof 和生产全局 enforce 未完成。"
+      ],
+      "problem_id": "P000",
+      "root_id": "P000",
+      "summary": "跨账号授权矩阵、敏感 principal 绑定和非真机 QA gate 完成。",
+      "ticket_id": "T000",
+      "verification": [
+        "169 backend tests，Uvicorn smoke，simulator Debug，generic iPhoneOS，静态 QA 和 diff check 通过。"
+      ]
+    }
+  },
+  "root_id": "P000",
+  "schema_version": 6,
+  "tickets": {
+    "T000": {
+      "acceptance_criteria": [
+        "合法 owner/family/recipient 决策可区分；伪造 viewer 和 user 调用 system-only 被标记 deny；enforce 测试允许合法委托并拒绝越权；生产默认仍为 shadow；无 PII 泄漏。"
+      ],
+      "assumptions": [
+        "登录 principal 的 userId 由 stable_user_id(phone) 生成，家庭成员记录中的手机号可用于已接受成员身份映射。"
+      ],
+      "body_path": "problems/P000/tickets/T000.md",
+      "classification": "split",
+      "classification_reason": "任务同时包含策略模型、中间件集成和跨仓库 QA 收敛，拆分后可以分别证明授权正确性与交付 gate，降低误开启 enforce 的风险。",
+      "created_at": "2026-07-10T11:38:24+00:00",
+      "id": "T000",
+      "problem_definition": "基础 ownership mismatch 无法表达家庭、时间信件等合法跨账号访问，也无法安全支持后续 enforce。",
+      "problem_id": "P000",
+      "proposed_solution": "新增统一授权策略评估器，绑定 user principal 与 owner、已接受家庭成员、时间信件收件人和邀请手机号；中间件输出脱敏证据，默认 shadow，并通过单测、HTTP smoke、release gate 验证。",
+      "result_ids": [
+        "R003"
+      ],
+      "risks": [
+        "规则矩阵不完整可能在 enforce 时误拦旧路由，因此未知路由必须保留 Task 9 fallback，生产不得在本任务切换 enforce。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现跨账号授权矩阵与非真机证据闭环",
+      "updated_at": "2026-07-10T12:00:03+00:00",
+      "verification_plan": "先运行后端策略单测与 FastAPI 集成测试，再运行本地 HTTP smoke、Swift 静态 guard、release QA、generic iPhoneOS/simulator build 和 git diff --check。"
+    },
+    "T001": {
+      "acceptance_criteria": [
+        "owner/family/timeLetter/invitation/systemOnly 的 allow/deny 单测通过，未知路由返回 fallback，输出不含 PII。"
+      ],
+      "assumptions": [
+        "family member accepted/active 且手机号 stable_user_id 与 principal 一致时可视为合法家庭 viewer。"
+      ],
+      "body_path": "problems/P000/children/P001/tickets/T001.md",
+      "classification": "one_go",
+      "classification_reason": "策略评估器与纯单元测试边界清晰，不改路由行为，可在一个实现循环内完成并独立验证。",
+      "created_at": "2026-07-10T11:40:39+00:00",
+      "id": "T001",
+      "problem_definition": "缺少可复用的跨账号授权语义，基础 userId mismatch 无法安全区分 owner、家庭查看者、时间信件收件人和 system-only。",
+      "problem_id": "P001",
+      "proposed_solution": "先补策略单测，再实现独立 CrossAccountAuthorizationPolicy，根据 method/path/query/body/principal 和 store 关系返回固定枚举决策。",
+      "result_ids": [
+        "R000"
+      ],
+      "risks": [
+        "策略读取 store 时遇到缺失资源不能提前覆盖 endpoint 的 404/403 语义，应返回 defer 而非武断 allow。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现授权策略评估器及测试",
+      "updated_at": "2026-07-10T11:43:45+00:00",
+      "verification_plan": "运行 tests/test_authorization_policy.py，并在后续 FastAPI 中间件集成测试复用同一策略。"
+    },
+    "T002": {
+      "acceptance_criteria": [
+        "shadow 合法 family 为 delegated，伪造 principal 为 deny/mismatch；enforce 允许合法 family 并拒绝伪造/system-only；旧 profile mismatch 与 legacy system token 兼容。"
+      ],
+      "assumptions": [
+        "系统 token 继续绕过用户策略；anonymous 行为本任务不改变。"
+      ],
+      "body_path": "problems/P000/children/P002/tickets/T002.md",
+      "classification": "one_go",
+      "classification_reason": "只改一个 middleware 入口并复用已测试策略，集成用例可直接覆盖 shadow/enforce 和兼容路径，适合单次闭环。",
+      "created_at": "2026-07-10T11:44:27+00:00",
+      "id": "T002",
+      "problem_definition": "现有 middleware 在合法 family access 上只看到 owner mismatch，也不能将 viewer/phone 与登录 principal 的策略结果用于 enforce。",
+      "problem_id": "P002",
+      "proposed_solution": "扩展 request context 解析并调用 CrossAccountAuthorizationPolicy，新增脱敏 authorization headers；已分类路由使用策略决定 enforce，未知路由保留旧 ownership fallback。",
+      "result_ids": [
+        "R001"
+      ],
+      "risks": [
+        "middleware 读取 body 或提前访问 store 可能改变 endpoint 语义；缺失资源和缺字段必须 defer 给 endpoint。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "接入授权策略到 auth middleware",
+      "updated_at": "2026-07-10T11:47:29+00:00",
+      "verification_plan": "先补 tests/test_auth_sessions.py 集成用例，再实现 middleware，运行 auth/policy 测试和全量后端验证。"
+    },
+    "T003": {
+      "acceptance_criteria": [
+        "runtime contractVersion=1/default shadow；HTTP smoke 验证 family care/time-letter delegated 与伪造 viewer deny；QA package/release switch 收录；全量验证通过。"
+      ],
+      "assumptions": [
+        "本地 memory backend 可用于流程证据，线上 Postgres smoke 留到部署后的独立阶段。"
+      ],
+      "body_path": "problems/P000/children/P003/tickets/T003.md",
+      "classification": "one_go",
+      "classification_reason": "QA 产物和文档均围绕同一已实现合同，代码风险低且必须一起收敛才能形成可执行 gate。",
+      "created_at": "2026-07-10T11:48:38+00:00",
+      "id": "T003",
+      "problem_definition": "授权策略尚无 runtime 能力声明、独立 HTTP smoke 或 release gate，后续部署无法判断合法 family/recipient 与 deny 证据是否仍一致。",
+      "problem_id": "P003",
+      "proposed_solution": "暴露 crossAccountPolicy runtime 合同；新增脱敏 HTTP smoke、Swift 静态 guard、release regression 开关和文档；完成全量后端与 iOS 非真机构建。",
+      "result_ids": [
+        "R002"
+      ],
+      "risks": [
+        "部署 smoke 会创建测试用户/邀请/时间信件记录，报告必须脱敏且不得调用会影响真实数据的全局 dispatch。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "固化跨账号授权 QA Gate",
+      "updated_at": "2026-07-10T11:59:30+00:00",
+      "verification_plan": "本地启动 Uvicorn 运行 smoke，执行 verify_backend、Swift guards、release regression、generic iPhoneOS/simulator build 和 diff check。"
+    }
+  },
+  "updated_at": "2026-07-10T12:00:12+00:00"
+}

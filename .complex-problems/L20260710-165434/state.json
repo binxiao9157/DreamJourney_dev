@@ -1,0 +1,512 @@
+{
+  "checks": {
+    "C000": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P001/checks/C000.md",
+      "created_at": "2026-07-10T09:21:40+00:00",
+      "criteria_map": [
+        "专项与全量测试通过；持久化仅含 token hash"
+      ],
+      "evidence": [
+        "专项 API/service 测试与 Postgres store 合同测试通过。",
+        "155 项后端全量测试、FastAPI smoke、compile 和 diff check 通过。",
+        "持久化 record 只包含 accessTokenHash/refreshTokenHash；测试断言原始 token 不出现在 record。",
+        "轮换、防重放、旧 access 失效和 logout 撤销均由真实 Uvicorn HTTP smoke 覆盖。"
+      ],
+      "execution_map": [
+        "R000 覆盖 service、API、内存/Postgres store 与 Uvicorn smoke"
+      ],
+      "followup_problem_id": null,
+      "id": "C000",
+      "problem_id": "P001",
+      "residual_risk": [
+        "线上 Postgres 部署 smoke 留在根任务交付边界"
+      ],
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "旧 refresh 重放、旧 access、logout 后 access、过期 access 均被拒绝"
+      ],
+      "summary": "opaque 会话签发、轮换、撤销和安全持久化合同已完成"
+    },
+    "C001": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P002/checks/C001.md",
+      "created_at": "2026-07-10T09:23:19+00:00",
+      "criteria_map": [
+        "legacy、user bearer、shadow mismatch、enforce 测试全部通过"
+      ],
+      "evidence": [
+        "legacy system principal、有效 user principal、无效 user token、shadow mismatch 和 enforce mismatch 均有 API 测试。",
+        "真实 HTTP smoke 证明 shadow middleware 不破坏下游 JSON payload。",
+        "mismatch 日志仅保留不可逆短 hash，不输出 credential 或 PII。"
+      ],
+      "execution_map": [
+        "R001 覆盖中间件实现、脱敏 header/log 和真实 Uvicorn smoke"
+      ],
+      "followup_problem_id": null,
+      "id": "C001",
+      "problem_id": "P002",
+      "residual_risk": [
+        "跨账号规则完成前保持 shadow"
+      ],
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "无效/旧/撤销 access 被拒绝，mismatch 在 shadow 放行、enforce 拒绝"
+      ],
+      "summary": "principal 双轨解析和 ownership shadow 诊断达到子问题目标"
+    },
+    "C002": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/checks/C002.md",
+      "created_at": "2026-07-10T09:26:16+00:00",
+      "criteria_map": [
+        "Keychain、登录采纳、双轨 header、并发 refresh、logout 和 build 均有实现与检查"
+      ],
+      "evidence": [
+        "token contract 明确保存在 ThisDeviceOnly Keychain，源码中无 UserDefaults/token 日志路径。",
+        "登录、自动 auth header、401 refresh、并发 waiter、单次 retry 和 logout 条件清理均受静态 guard 约束。",
+        "后端真实 HTTP smoke 验证了 iOS 所依赖的轮换与 shadow 合同。",
+        "iPhoneOS generic build 完整通过，证明新增 source/KeychainAccess/Alamofire 调用可编译链接。"
+      ],
+      "execution_map": [
+        "R002 覆盖 iOS source、QA gate、HTTP contract smoke 与 generic build"
+      ],
+      "followup_problem_id": null,
+      "id": "C002",
+      "problem_id": "P003",
+      "residual_risk": [
+        "真机 Keychain 与弱网体验留待设备验收"
+      ],
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "并发 401 合并、refresh 失败条件清理、旧 session logout 不清新 session"
+      ],
+      "summary": "iOS Keychain session 消费、刷新和非真机 gate 已达到子问题目标"
+    },
+    "C003": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/checks/C003.md",
+      "created_at": "2026-07-10T09:27:08+00:00",
+      "criteria_map": [
+        "九项根成功标准均映射到 P001/P002/P003 的实现和测试证据"
+      ],
+      "evidence": [
+        "P001、P002、P003 三个子问题均有独立 result 和 success check。",
+        "登录返回显式过期时间的 access/refresh，raw token 不持久化；轮换、防重放、撤销、过期均有测试。",
+        "legacy system token 与 user bearer 并存，shadow mismatch 可观察但不拦截。",
+        "iOS Keychain、独立 header、并发 refresh 合并和 bounded retry 已编译并受 guard 保护。",
+        "后端全量验证、真实本地 HTTP smoke、release 静态 QA 和 iPhoneOS generic build 已通过。"
+      ],
+      "execution_map": [
+        "R003 汇总三个已成功子问题以及 backend verify、HTTP smoke、generic build"
+      ],
+      "followup_problem_id": null,
+      "id": "C003",
+      "problem_id": "P000",
+      "residual_risk": [
+        "线上部署、真机弱网与 enforce promotion 后续处理"
+      ],
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "refresh replay、旧/撤销/过期 access、并发 401、shadow/enforce mismatch 和 legacy compatibility"
+      ],
+      "summary": "Auth Session 与 Ownership Shadow 的后端、iOS 和非真机验收闭环完成"
+    }
+  },
+  "counters": {
+    "check": 4,
+    "event": 48,
+    "problem": 4,
+    "result": 4,
+    "ticket": 4
+  },
+  "created_at": "2026-07-10T08:54:34+00:00",
+  "effort": "medium",
+  "language": "zh",
+  "ledger_id": "L20260710-165434",
+  "problems": {
+    "P000": {
+      "body_path": "problems/P000/README.md",
+      "check_ids": [
+        "C003"
+      ],
+      "created_at": "2026-07-10T08:54:34+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Close the Lodestar task represented by `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/plans/task_09_p0-auth-session-ownership-shadow.md` using recursive problem, ticket, result, and check state.\n\nTask context:\n\n# P0 Auth Session and Ownership Shadow Mode",
+      "followup_ids": [],
+      "id": "P000",
+      "package_path": "problems/P000",
+      "parent_id": null,
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P001",
+        "P002",
+        "P003"
+      ],
+      "success_criteria": [
+        "Login returns access/refresh tokens with explicit expiries and no raw token is persisted.",
+        "Refresh rotates both tokens; a consumed refresh token cannot be reused.",
+        "Logout revokes the session; revoked and expired access tokens fail.",
+        "Legacy backend-token-only requests remain compatible.",
+        "A valid user bearer resolves the expected principal.",
+        "Ownership mismatch is observable in shadow mode but does not block the request.",
+        "iOS stores tokens in Keychain rather than UserDefaults and sends the user bearer separately from the backend token.",
+        "iOS retries one failed request after a successful refresh without recursive refresh loops.",
+        "All non-device tests and builds pass."
+      ],
+      "ticket_ids": [
+        "T000"
+      ],
+      "title": "P0 Auth Session and Ownership Shadow Mode",
+      "updated_at": "2026-07-10T09:27:08+00:00"
+    },
+    "P001": {
+      "body_path": "problems/P000/children/P001/README.md",
+      "check_ids": [
+        "C000"
+      ],
+      "created_at": "2026-07-10T08:57:46+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "安全签发、旋转、撤销和持久化 opaque 用户会话",
+      "followup_ids": [],
+      "id": "P001",
+      "package_path": "problems/P000/children/P001",
+      "parent_id": "P000",
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "后端专项与全量测试通过且数据库无 token 原文"
+      ],
+      "ticket_ids": [
+        "T001"
+      ],
+      "title": "后端 opaque auth session 合同",
+      "updated_at": "2026-07-10T09:21:40+00:00"
+    },
+    "P002": {
+      "body_path": "problems/P000/children/P002/README.md",
+      "check_ids": [
+        "C001"
+      ],
+      "created_at": "2026-07-10T08:57:58+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "兼容解析用户 principal 并记录 ownership mismatch",
+      "followup_ids": [],
+      "id": "P002",
+      "package_path": "problems/P000/children/P002",
+      "parent_id": "P000",
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "legacy、user bearer、shadow mismatch 和 enforce 测试全部通过"
+      ],
+      "ticket_ids": [
+        "T002"
+      ],
+      "title": "Principal 解析与 ownership shadow",
+      "updated_at": "2026-07-10T09:23:19+00:00"
+    },
+    "P003": {
+      "body_path": "problems/P000/children/P003/README.md",
+      "check_ids": [
+        "C002"
+      ],
+      "created_at": "2026-07-10T08:58:07+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "iOS Keychain、双鉴权 header、自动 refresh 和组合 gate",
+      "followup_ids": [],
+      "id": "P003",
+      "package_path": "problems/P000/children/P003",
+      "parent_id": "P000",
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "模拟器登录刷新退出 smoke、构建与 release regression 通过"
+      ],
+      "ticket_ids": [
+        "T003"
+      ],
+      "title": "iOS Keychain 消费与非真机 gate",
+      "updated_at": "2026-07-10T09:26:16+00:00"
+    }
+  },
+  "results": {
+    "R000": {
+      "artifacts": [
+        "Backend `app/services/auth_sessions.py`",
+        "Backend `tests/test_auth_sessions.py`",
+        "iOS QA `tmp/visual-qa/prd-stitch-ui/backend-auth-session-shadow-smoke/report.json`"
+      ],
+      "body_path": "problems/P000/children/P001/results/R000.md",
+      "created_at": "2026-07-10T09:20:53+00:00",
+      "done": [
+        "`/auth/login` 返回带明确过期时间的 `dja_` access token 与 `djr_` refresh token。",
+        "存储层只持久化 SHA-256 token hash 和安全会话元数据，不保存原始 token。",
+        "`/auth/refresh` 原子消费 refresh token 并轮换两类 token；旧 refresh 重放和旧 access 均返回 `401`。",
+        "`/auth/logout` 撤销当前 access 对应会话；账号最终清理同时删除 auth sessions。",
+        "保留原 `BACKEND_API_TOKEN` system principal 兼容路径。",
+        "`/config/runtime` 暴露 auth session、TTL、refresh rotation 和 ownership mode 合同。"
+      ],
+      "id": "R000",
+      "known_gaps": [
+        "本轮尚未部署到线上 Postgres；真实部署 smoke 需在两仓库提交、推送和服务器重建后执行。",
+        "SMS 身份证明和生产 ownership enforce 不在本票范围。"
+      ],
+      "problem_id": "P001",
+      "root_id": "P000",
+      "summary": "完成 opaque access/refresh session 的服务、内存与 Postgres 存储合同，并在现有 FastAPI 登录链路中接入签发、轮换、防重放和撤销。",
+      "ticket_id": "T001",
+      "verification": [
+        "`python -m unittest tests.test_auth_sessions`：7 项通过。",
+        "`python -m unittest tests.test_postgres_store`：29 项通过，包含 Postgres 会话保存与轮换 fake-store 合同。",
+        "`./scripts/verify_backend.sh`：155 项全量单测、compile、FastAPI smoke 和 diff check 通过。",
+        "本地真实 Uvicorn smoke：登录、用户 bearer、refresh 轮换、防重放、logout 撤销均通过，报告不输出 token。"
+      ]
+    },
+    "R001": {
+      "artifacts": [
+        "Backend `app/main.py`",
+        "QA `backend-auth-session-shadow-smoke.py`"
+      ],
+      "body_path": "problems/P000/children/P002/results/R001.md",
+      "created_at": "2026-07-10T09:23:01+00:00",
+      "done": [
+        "legacy `BACKEND_API_TOKEN` 解析为 system principal。",
+        "opaque user bearer 解析为 user principal；无效、过期、轮换或撤销 token 返回 `401`。",
+        "从专用 actor header、顶层 JSON、query 和已知 user path 提取有限 ownership claim。",
+        "返回 `X-DreamJourney-Auth-Principal`、ownership mode/decision 安全 QA header。",
+        "mismatch 日志只包含 userId hash 前缀和 path，不包含 token、手机号或原始 userId。",
+        "shadow 模式允许 mismatch 继续；测试 enforce 模式明确返回 `403`。"
+      ],
+      "id": "R001",
+      "known_gaps": [
+        "合法跨账号家庭/时间信件授权尚未建模，因此线上必须保持 `AUTH_OWNERSHIP_MODE=shadow`。"
+      ],
+      "problem_id": "P002",
+      "root_id": "P000",
+      "summary": "完成 system/user principal 双轨解析和 ownership shadow 诊断，中间件默认不改变现有业务授权结果。",
+      "ticket_id": "T002",
+      "verification": [
+        "`tests.test_auth_sessions` 覆盖 legacy、user、shadow 和 enforce。",
+        "本地 Uvicorn smoke 确认 JSON body 未被中间件消耗，match/mismatch 请求均正常完成。",
+        "155 项后端全量测试通过。"
+      ]
+    },
+    "R002": {
+      "artifacts": [
+        "`DreamJourney/Sources/Services/BackendAuthSessionStore.swift`",
+        "`Scripts/QA/prd-stitch-ui/auth-session-ownership-shadow-check.swift`",
+        "`Scripts/QA/prd-stitch-ui/run-backend-auth-session-shadow-smoke.sh`"
+      ],
+      "body_path": "problems/P000/children/P003/results/R002.md",
+      "created_at": "2026-07-10T09:25:54+00:00",
+      "done": [
+        "新增 `BackendAuthSessionContract/Store`，使用 KeychainAccess `afterFirstUnlockThisDeviceOnly` 保存 token。",
+        "登录使用 backend-only compatibility header，成功响应先校验并保存 auth session，再回调登录 UI。",
+        "自动请求同时发送 user access bearer、独立 backend compatibility header 和 session user actor hint。",
+        "`401` 最多触发一次 refresh；并发失败请求共用 `authRefreshWaiters`，刷新后各自仅重试一次。",
+        "refresh 失败按 sessionId 清理，避免旧请求删除后续新登录 session。",
+        "logout 先构造撤销请求，再同步清理当前 session；本地 UserManager 退出已接入。",
+        "新增静态 guard、部署 smoke runner、release regression 开关和 QA package 清单。"
+      ],
+      "id": "R002",
+      "known_gaps": [
+        "本轮按范围不做真机 UI/Keychain 生命周期验收。",
+        "后端尚未线上部署，因此部署 URL smoke 待提交推送后执行。"
+      ],
+      "problem_id": "P003",
+      "root_id": "P000",
+      "summary": "完成 iOS opaque auth session 的 Keychain 保存、用户 bearer 请求、并发 refresh 合并、单次重试和 logout 撤销清理，并纳入 release QA。",
+      "ticket_id": "T003",
+      "verification": [
+        "`auth-session-ownership-shadow-check.swift`、旧 backend token/login password guards 通过。",
+        "release QA package 检查通过。",
+        "iPhoneOS generic Debug build 成功，`BackendAuthSessionStore.swift` 已编译并链接 KeychainAccess。",
+        "本地 Uvicorn 组合 smoke 通过，报告位于 `tmp/visual-qa/prd-stitch-ui/backend-auth-session-shadow-smoke/report.json`。",
+        "release regression 全部静态 guard 已运行；首次末尾仅因 ledger sync 生成的 EOF 空行导致 `git diff --check` 退出，空行已清理，最终回归将在根问题关闭前重跑。"
+      ]
+    },
+    "R003": {
+      "artifacts": [
+        "`docs/plans/task_09_p0-auth-session-ownership-shadow.md`",
+        "`tmp/visual-qa/prd-stitch-ui/backend-auth-session-shadow-smoke/report.json`",
+        "`tmp/DerivedDataAuthSession/Build/Products/Debug-iphoneos/DreamJourney.app`"
+      ],
+      "body_path": "problems/P000/results/R003.md",
+      "created_at": "2026-07-10T09:26:40+00:00",
+      "done": [
+        "后端签发、hash 持久化、refresh rotation/replay rejection、logout revoke、账号清理合同完成。",
+        "system/user principal 双轨解析与脱敏 ownership `match/mismatch/unclaimed` 诊断完成。",
+        "iOS ThisDeviceOnly Keychain、登录采纳、双 header、并发 refresh coalescing、单次 retry、logout sessionId 条件清理完成。",
+        "`/config/runtime`、`.env.example`、README、QA 脚本和 release regression 可选 gate 已更新。",
+        "公开 UI 与现有业务路由未改变；ownership 默认保持 shadow。"
+      ],
+      "id": "R003",
+      "known_gaps": [
+        "尚未提交、推送、部署到线上 Postgres；部署后需运行 `RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE=1`。",
+        "SMS 验证、合法跨账号授权矩阵和生产 `enforce` 是后续 Phase，不在本轮。",
+        "真机 Keychain/弱网刷新体验未验收。"
+      ],
+      "problem_id": "P000",
+      "root_id": "P000",
+      "summary": "完成后端 opaque access/refresh session、principal/ownership shadow 中间件，以及 iOS Keychain 消费和单次自动刷新；保留 legacy backend token 路径且未启用生产 enforce。",
+      "ticket_id": "T000",
+      "verification": [
+        "Backend 155 项全量测试、compile、FastAPI smoke、diff check 通过。",
+        "本地真实 Uvicorn auth session/ownership smoke 通过且输出已脱敏。",
+        "iOS auth/login 静态 guards 与 release QA package 通过。",
+        "iPhoneOS generic Debug build 成功。",
+        "release regression 全量静态 guards 通过；组合脚本首次仅在末尾发现 ledger sync 产生的 EOF 空行，已清除并由独立 `git diff --check` 复验通过。"
+      ]
+    }
+  },
+  "root_id": "P000",
+  "schema_version": 6,
+  "tickets": {
+    "T000": {
+      "acceptance_criteria": [
+        "签发、刷新、撤销、兼容、shadow 与非真机 gate 全部通过"
+      ],
+      "assumptions": [],
+      "body_path": "problems/P000/tickets/T000.md",
+      "classification": "split",
+      "classification_reason": "涉及后端持久化/API、中间件授权、iOS Keychain/刷新和组合验收四个独立风险面，应拆分后逐项收敛",
+      "created_at": "2026-07-10T08:55:26+00:00",
+      "id": "T000",
+      "problem_definition": "共享 backend token 无法形成多用户授权边界",
+      "problem_id": "P000",
+      "proposed_solution": "opaque token hash 持久化、iOS Keychain 消费和 ownership shadow 兼容模式",
+      "result_ids": [
+        "R003"
+      ],
+      "risks": [
+        "不得在本轮启用严格 ownership enforcement 或破坏旧客户端"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现用户会话与 ownership shadow 小闭环",
+      "updated_at": "2026-07-10T09:26:40+00:00",
+      "verification_plan": "后端全量测试、iOS 构建、模拟器登录刷新 smoke 和 release regression"
+    },
+    "T001": {
+      "acceptance_criteria": [
+        "签发、过期、旋转、重放拒绝、撤销和账号清理测试通过"
+      ],
+      "assumptions": [],
+      "body_path": "problems/P000/children/P001/tickets/T001.md",
+      "classification": "one_go",
+      "classification_reason": "边界集中在后端 session service、store 和 API，可通过专项测试一次闭环",
+      "created_at": "2026-07-10T08:58:37+00:00",
+      "id": "T001",
+      "problem_definition": "后端缺少可刷新、可撤销的用户会话",
+      "problem_id": "P001",
+      "proposed_solution": "opaque token hash 持久化和登录/刷新/退出 API",
+      "result_ids": [
+        "R000"
+      ],
+      "risks": [
+        "不能保存原始 token 或破坏 backend token 兼容"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现后端 opaque auth session 合同",
+      "updated_at": "2026-07-10T09:20:53+00:00",
+      "verification_plan": "后端专项、Postgres store、全量 verify_backend"
+    },
+    "T002": {
+      "acceptance_criteria": [
+        "legacy/user bearer/shadow mismatch/enforce 测试全部通过且日志脱敏"
+      ],
+      "assumptions": [
+        "本轮不启用生产 enforce"
+      ],
+      "body_path": "problems/P000/children/P002/tickets/T002.md",
+      "classification": "one_go",
+      "classification_reason": "中间件改动边界明确，专项测试、enforce 测试和真实 HTTP smoke 可一次验证",
+      "created_at": "2026-07-10T09:22:26+00:00",
+      "id": "T002",
+      "problem_definition": "现有单一 backend token 无法识别实际用户 actor，也无法观察跨用户 claim",
+      "problem_id": "P002",
+      "proposed_solution": "在兼容中间件中解析 system/user principal，提取有限 actor claim 并以 shadow 模式记录安全诊断",
+      "result_ids": [
+        "R001"
+      ],
+      "risks": [
+        "错误识别合法跨账号场景，因此生产默认只启用 shadow"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现 principal 解析与 ownership shadow",
+      "updated_at": "2026-07-10T09:23:01+00:00",
+      "verification_plan": "后端专项单测、全量 verify 与真实 Uvicorn smoke"
+    },
+    "T003": {
+      "acceptance_criteria": [
+        "Keychain、登录采纳、401 单次刷新、logout 与非真机 gate 全部通过"
+      ],
+      "assumptions": [
+        "本轮不做真机 UI 验收"
+      ],
+      "body_path": "problems/P000/children/P003/tickets/T003.md",
+      "classification": "one_go",
+      "classification_reason": "改动集中在一个 Keychain store、网络请求入口和 logout，且已有静态/HTTP/build 三层验证",
+      "created_at": "2026-07-10T09:23:40+00:00",
+      "id": "T003",
+      "problem_definition": "iOS 仅发送共享 backend token，缺少用户 session 的安全保存、刷新和撤销",
+      "problem_id": "P003",
+      "proposed_solution": "使用 KeychainAccess 保存 opaque session，网络层双轨 header、并发 refresh 合并和单次重试，logout 会话级清理",
+      "result_ids": [
+        "R002"
+      ],
+      "risks": [
+        "并发 401 或旧 logout 回调可能破坏新 session，需 sessionId 条件清理和 refresh waiter 合并"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "接入 iOS Keychain auth session 与非真机 gate",
+      "updated_at": "2026-07-10T09:25:54+00:00",
+      "verification_plan": "静态 guard、真实 Uvicorn smoke、release package、iPhoneOS generic build"
+    }
+  },
+  "updated_at": "2026-07-10T09:27:08+00:00"
+}

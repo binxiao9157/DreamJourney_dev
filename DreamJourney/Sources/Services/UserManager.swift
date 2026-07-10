@@ -108,6 +108,7 @@ final class UserManager {
 
     // MARK: - 退出登录
     func logout() {
+        DreamJourneyBackendClient.shared.logoutAuthSession()
         currentUser = nil
         UserDefaults.standard.removeObject(forKey: kUserKey)
         UserDefaults.standard.removeObject(forKey: kLoggedInKey)

@@ -1,5 +1,5 @@
 {
-  "active_ledger_id": "L20260710-145321",
+  "active_ledger_id": "L20260710-193743",
   "ledgers": [
     {
       "active_count": 0,
@@ -88,7 +88,29 @@
       "status": "done",
       "title": "P0 Digital-human session lease and concurrency control",
       "updated_at": "2026-07-10T07:20:25+00:00"
+    },
+    {
+      "active_count": 0,
+      "blocked_count": 0,
+      "ledger_id": "L20260710-165434",
+      "path": "L20260710-165434",
+      "root_id": "P000",
+      "schema_version": 6,
+      "status": "done",
+      "title": "P0 Auth Session and Ownership Shadow Mode",
+      "updated_at": "2026-07-10T09:27:08+00:00"
+    },
+    {
+      "active_count": 0,
+      "blocked_count": 0,
+      "ledger_id": "L20260710-193743",
+      "path": "L20260710-193743",
+      "root_id": "P000",
+      "schema_version": 6,
+      "status": "done",
+      "title": "P0 跨账号授权策略与 Shadow 证据",
+      "updated_at": "2026-07-10T12:00:12+00:00"
     }
   ],
-  "updated_at": "2026-07-10T07:20:52+00:00"
+  "updated_at": "2026-07-10T12:00:19+00:00"
 }
