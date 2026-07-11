@@ -67,6 +67,7 @@ final class KnowledgeSyncCoordinator {
         operationId: String = "ios-governance-\(UUID().uuidString.lowercased())",
         completion: @escaping (Result<KBKnowledgeGovernanceResponse, Error>) -> Void
     ) -> String {
+        let normalizedOperationId = operationId.trimmingCharacters(in: .whitespacesAndNewlines)
         let identity = expectedIdentity ?? KBLiteManager.resolveCurrentPersonaIdentity()
         guard DreamJourneyBackendClient.shared.isKnowledgeSyncConfigured,
               identity.isComplete,
@@ -78,13 +79,13 @@ final class KnowledgeSyncCoordinator {
             DispatchQueue.main.async {
                 completion(.failure(KnowledgeGovernanceCoordinatorError.invalidSessionOrIdentity))
             }
-            return operationId
+            return normalizedOperationId
         }
 
         queue.async {
             do {
                 let item = KnowledgeGovernanceOutboxItem(
-                    operationId: operationId,
+                    operationId: normalizedOperationId,
                     userId: userId,
                     expectedOwnerUserId: identity.ownerUserId,
                     expectedPersonaScope: identity.personaScope,
@@ -94,7 +95,10 @@ final class KnowledgeSyncCoordinator {
                 )
                 // Durability is the commit point: never issue the request before this succeeds.
                 try self.governanceOutboxStore.enqueue(item, for: userId)
-                self.governanceCompletions[operationId] = completion
+                guard self.governanceCompletions[normalizedOperationId] == nil else {
+                    throw KnowledgeSyncModelError.operationPayloadConflict
+                }
+                self.governanceCompletions[normalizedOperationId] = completion
 
                 if self.activeUserId != userId {
                     self.activeUserId = userId
@@ -116,7 +120,7 @@ final class KnowledgeSyncCoordinator {
                 DispatchQueue.main.async { completion(.failure(error)) }
             }
         }
-        return operationId
+        return normalizedOperationId
     }
 
     func pendingGovernanceCount(completion: @escaping (Int) -> Void) {
@@ -188,7 +192,7 @@ final class KnowledgeSyncCoordinator {
         guard KBLiteManager.shared.loadedUserId == userId,
               currentIdentity.isComplete,
               let item = loadGovernanceOutbox(for: userId).first(where: {
-                  $0.expectedIdentity == currentIdentity
+                  !$0.isQuarantined && $0.expectedIdentity == currentIdentity
               }) else {
             return false
         }
@@ -219,7 +223,14 @@ final class KnowledgeSyncCoordinator {
                         generation: generation
                     )
                 case .failure(let error):
-                    if Self.isRevisionConflict(error) {
+                    if Self.isOperationPayloadConflict(error) {
+                        self.handleGovernancePayloadConflict(
+                            error,
+                            item: item,
+                            userId: userId,
+                            generation: generation
+                        )
+                    } else if Self.isRevisionConflict(error) {
                         // Keep the durable item and operation ID; refresh the base before retrying.
                         self.isSyncing = false
                         self.enqueueSync(reason: "governanceRevisionConflict")
@@ -236,6 +247,61 @@ final class KnowledgeSyncCoordinator {
             }
         }
         return true
+    }
+
+    private func handleGovernancePayloadConflict(
+        _ error: Error,
+        item: KnowledgeGovernanceOutboxItem,
+        userId: String,
+        generation: UUID
+    ) {
+        do {
+            if item.recoveryCount == 0 {
+                let nextOperationId = "ios-governance-\(UUID().uuidString.lowercased())"
+                let replacement = item.rotatingOperation(to: nextOperationId)
+                try governanceOutboxStore.replace(
+                    operationId: item.operationId,
+                    with: replacement,
+                    for: userId
+                )
+                if let completion = governanceCompletions.removeValue(forKey: item.operationId) {
+                    governanceCompletions[nextOperationId] = completion
+                }
+                print(
+                    "[KnowledgeSync] governanceOperationRotated user=\(userId) "
+                        + "recoveryCount=\(replacement.recoveryCount)"
+                )
+                isSyncing = false
+                enqueueSync(reason: "governanceOperationPayloadConflict")
+                return
+            }
+
+            let quarantined = item.quarantined(reason: "knowledgeOperationPayloadConflict")
+            try governanceOutboxStore.replace(
+                operationId: item.operationId,
+                with: quarantined,
+                for: userId
+            )
+            print(
+                "[KnowledgeSync] governanceOperationQuarantined user=\(userId) "
+                    + "recoveryCount=\(quarantined.recoveryCount)"
+            )
+            completeGovernance(item.operationId, result: .failure(error))
+            finishGovernance(
+                userId: userId,
+                generation: generation,
+                error: error,
+                continueDraining: true
+            )
+        } catch {
+            completeGovernance(item.operationId, result: .failure(error))
+            finishGovernance(
+                userId: userId,
+                generation: generation,
+                error: error,
+                continueDraining: false
+            )
+        }
     }
 
     private func handleGovernanceSuccess(
@@ -487,7 +553,13 @@ final class KnowledgeSyncCoordinator {
                     }
                     self.finishSync(userId: userId, generation: generation, error: nil)
                 case .failure(let error):
-                    if retryOnConflict, Self.isRevisionConflict(error) {
+                    if Self.isOperationPayloadConflict(error) {
+                        self.recoverPendingOperationConflict(
+                            userId: userId,
+                            generation: generation,
+                            error: error
+                        )
+                    } else if retryOnConflict, Self.isRevisionConflict(error) {
                         self.refreshAfterConflict(userId: userId, generation: generation)
                     } else if Self.shouldFallbackV2(error) {
                         self.pushLegacyMutation(
@@ -500,6 +572,20 @@ final class KnowledgeSyncCoordinator {
                     }
                 }
             }
+        }
+    }
+
+    private func recoverPendingOperationConflict(
+        userId: String,
+        generation: UUID,
+        error: Error
+    ) {
+        do {
+            try pendingStore.remove(for: userId)
+            print("[KnowledgeSync] pendingOperationDiscarded user=\(userId) reason=payloadConflict")
+            refreshAfterConflict(userId: userId, generation: generation)
+        } catch {
+            finishSync(userId: userId, generation: generation, error: error)
         }
     }
 
@@ -562,7 +648,13 @@ final class KnowledgeSyncCoordinator {
                     }
                     self.finishSync(userId: userId, generation: generation, error: nil)
                 case .failure(let error):
-                    if retryOnConflict, Self.isRevisionConflict(error) {
+                    if Self.isOperationPayloadConflict(error) {
+                        self.recoverPendingOperationConflict(
+                            userId: userId,
+                            generation: generation,
+                            error: error
+                        )
+                    } else if retryOnConflict, Self.isRevisionConflict(error) {
                         self.refreshAfterConflict(userId: userId, generation: generation)
                     } else if Self.isUnsupportedEndpoint(error) {
                         self.pushLegacySnapshot(userId: userId, generation: generation)
@@ -719,12 +811,12 @@ final class KnowledgeSyncCoordinator {
 
     private static func shouldFallbackV2(_ error: Error) -> Bool {
         guard let clientError = error as? DreamJourneyBackendClient.ClientError,
-              case .backendError(let statusCode, let detail) = clientError else {
+              case .backendError(let statusCode, let context) = clientError else {
             return false
         }
         return KnowledgeMutationV2FallbackPolicy.shouldFallback(
             statusCode: statusCode,
-            detail: detail
+            detail: context.detail
         )
     }
 
@@ -738,10 +830,18 @@ final class KnowledgeSyncCoordinator {
 
     private static func isRevisionConflict(_ error: Error) -> Bool {
         guard let clientError = error as? DreamJourneyBackendClient.ClientError,
-              case .backendError(let statusCode, let detail) = clientError else {
+              case .backendError(let statusCode, let context) = clientError else {
             return false
         }
-        return statusCode == 409 && detail.contains("knowledgeRevisionConflict")
+        return statusCode == 409 && context.code == "knowledgeRevisionConflict"
+    }
+
+    private static func isOperationPayloadConflict(_ error: Error) -> Bool {
+        guard let clientError = error as? DreamJourneyBackendClient.ClientError,
+              case .backendError(let statusCode, let context) = clientError else {
+            return false
+        }
+        return statusCode == 409 && context.code == "knowledgeOperationPayloadConflict"
     }
 }
 

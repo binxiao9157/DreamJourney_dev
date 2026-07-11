@@ -1,5 +1,5 @@
 {
-  "active_ledger_id": "L20260711-040419",
+  "active_ledger_id": "L20260711-100251",
   "ledgers": [
     {
       "active_count": 0,
@@ -176,7 +176,18 @@
       "status": "done",
       "title": "Task 16：P1 知识治理与来源删除级联",
       "updated_at": "2026-07-11T01:51:41+00:00"
+    },
+    {
+      "active_count": 0,
+      "blocked_count": 0,
+      "ledger_id": "L20260711-100251",
+      "path": "L20260711-100251",
+      "root_id": "P000",
+      "schema_version": 6,
+      "status": "done",
+      "title": "Task 17：P1 Knowledge Operation Receipt 与冲突恢复",
+      "updated_at": "2026-07-11T02:35:45+00:00"
     }
   ],
-  "updated_at": "2026-07-11T01:51:51+00:00"
+  "updated_at": "2026-07-11T02:35:56+00:00"
 }

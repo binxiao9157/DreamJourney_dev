@@ -42,6 +42,12 @@ enum KnowledgeGovernanceOutboxModelSmoke {
         try require(try store.load(for: "user-a") == [first, second], "queue order must persist")
         try require(try store.load(for: "user-b") == [otherUser], "users must be isolated")
 
+        try store.enqueue(first, for: "user-a")
+        try require(
+            try store.load(for: "user-a") == [first, second],
+            "same operation and semantic payload must be an idempotent no-op"
+        )
+
         let replacement = item(
             operationId: "operation-1",
             userId: "user-a",
@@ -51,13 +57,22 @@ enum KnowledgeGovernanceOutboxModelSmoke {
                 decidedAt: decidedAt
             )
         )
-        try store.enqueue(replacement, for: "user-a")
+        requireThrows("duplicate operation with different payload must be rejected") {
+            try store.enqueue(replacement, for: "user-a")
+        }
+        let rotated = first.rotatingOperation(to: "operation-1-retry")
+        try store.replace(operationId: first.operationId, with: rotated, for: "user-a")
         try require(
-            try store.load(for: "user-a") == [replacement, second],
-            "duplicate operation must update in place without reordering"
+            try store.load(for: "user-a") == [rotated, second],
+            "payload conflict recovery must atomically rotate the operation"
         )
+        let quarantined = rotated.quarantined(reason: "knowledgeOperationPayloadConflict")
+        try store.replace(operationId: rotated.operationId, with: quarantined, for: "user-a")
+        let afterQuarantine = try store.load(for: "user-a")
+        require(afterQuarantine.first?.isQuarantined == true, "second conflict must persist quarantine")
+        require(afterQuarantine.last == second, "quarantine must not remove later queue items")
 
-        try store.remove(operationId: "operation-1", for: "user-a")
+        try store.remove(operationId: "operation-1-retry", for: "user-a")
         try require(try store.load(for: "user-a") == [second], "single removal must persist")
         try store.remove(operationId: "operation-2", for: "user-a")
         try require(try store.load(for: "user-a").isEmpty, "empty queue must remove its file")
@@ -66,6 +81,7 @@ enum KnowledgeGovernanceOutboxModelSmoke {
         try store.removeAll(for: "user-b")
         try require(try store.count(for: "user-b") == 0, "removeAll must clear the user queue")
         verifyInvalidItem(store: store, decidedAt: decidedAt)
+        try verifyBackwardCompatibleEnvelope(root: root, decidedAt: decidedAt)
         try verifyCorruptEnvelope(root: root, decidedAt: decidedAt)
         print("Knowledge governance outbox model smoke passed")
     }
@@ -140,6 +156,36 @@ enum KnowledgeGovernanceOutboxModelSmoke {
         requireThrows("unsupported envelope schema must be rejected") {
             _ = try store.load(for: "corrupt-user")
         }
+    }
+
+    private static func verifyBackwardCompatibleEnvelope(root: URL, decidedAt: Date) throws {
+        let legacyRoot = root.appendingPathComponent("legacy", isDirectory: true)
+        let store = KnowledgeGovernanceOutboxStore(rootDirectory: legacyRoot)
+        let legacyItem = item(
+            operationId: "legacy-operation",
+            userId: "legacy-user",
+            action: .confirm(
+                target: .init(entityType: .facts, entityId: "fact-1"),
+                decidedAt: decidedAt
+            )
+        )
+        try store.enqueue(legacyItem, for: "legacy-user")
+        let files = try FileManager.default.contentsOfDirectory(
+            at: legacyRoot,
+            includingPropertiesForKeys: nil
+        )
+        guard let url = files.first,
+              var object = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any],
+              var items = object["items"] as? [[String: Any]],
+              !items.isEmpty else {
+            fail("legacy outbox envelope must exist")
+        }
+        items[0].removeValue(forKey: "recoveryCount")
+        items[0].removeValue(forKey: "quarantineReason")
+        object["items"] = items
+        try JSONSerialization.data(withJSONObject: object).write(to: url, options: .atomic)
+        let decoded = try store.load(for: "legacy-user")
+        require(decoded == [legacyItem], "legacy outbox must default recovery metadata")
     }
 
     private static func require(_ condition: @autoclosure () throws -> Bool, _ message: String) rethrows {

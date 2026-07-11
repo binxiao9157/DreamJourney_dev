@@ -57,21 +57,24 @@
 - Echo 当前 turn 使用 `ChatRagText` 注入，超时使用本地 generationAllowed KBLite 降级。
 - QA evidence 已能记录来源、hash、fallback、声音和数字人 runtime 摘要。
 - Task 16 知识治理：后端权威 `confirm / reject / correct / deleteSource`、Archive 来源删除组合事务、iOS typed consumer、per-user outbox 和 generation gate。
+- Task 17 操作完整性：后端权威 operation receipt/payload fingerprint、Archive 无级联删除幂等、结构化 409，以及 iOS poisoned mutation 恢复与 governance quarantine。
 - `RUN_KNOWLEDGE_GOVERNANCE_GATE=1`：串联 iOS 治理/合并检查与后端 memory/fake Postgres 来源级联回归。
 
-已经通过 Task 13-16 收敛的风险：
+已经通过 Task 13-17 收敛的风险：
 
 - provider 实体必须引用有效用户 turn；assistant-only、无来源和越界来源不再进入知识 proposal。
 - 后端精提取水位与总 session count 分离，family persona 禁止回退到 viewer 个人 KBLite。
 - Context 响应提交前校验 user/persona/digital-human identity，low/medium fact 不进入生成文本。
 - 时间信件收件人、care viewer、家庭 persona 和跨用户边界具备负向回归。
 - 用户治理动作由后端 snapshot 生成 Mutation V2；旧 user/persona 回调不能直接覆盖当前图谱。
+- 同一用户的 operation ID 已绑定稳定 kind/payload 指纹；新请求不能用同一 ID 静默替换 graph、mutation、governance action 或 Archive item。
+- iOS 不会永久重放 payload-conflict pending；治理动作最多自动旋转一次，二次冲突进入持久化 quarantine 且不阻塞后续队列。
 
 当前剩余 P1 边界：
 
 - 公开知识审阅/确认/纠正入口尚未由 PRD 和 Stitch 决定，当前只提供稳定 service API。
 - 新 Archive 来源使用 `memoryArchiveItem + archiveItem.id`；历史 `archiveImageAnalysis + session-*` 来源需要显式迁移，不会被新删除级联自动命中。
-- operation payload hash、change feed compaction 和真实 Postgres deployed smoke 仍是后续生产化工作。
+- operation receipt 已完成本地/fake Postgres 实现；真实 Postgres migration/deployed smoke、change feed compaction 仍是后续生产化工作。
 
 现有旧文档 `docs/knowledge-base-design*.md` 只作为历史思路参考。以下旧方向不再作为当前实施依据：
 
@@ -275,9 +278,17 @@ Task 16 已完成：
 - Archive 删除与知识来源撤销在 memory/Postgres 中使用同一组合事务；sealed 时间信件仍禁止删除。
 - iOS 治理动作先进入 per-user outbox，再与普通 graph sync 共用串行 coordinator；409 用同 operation ID 重试。
 
+Task 17 已完成：
+
+- 新增独立 `kb_operation_receipts`，保存 operation kind、schema、canonical payload hash 和无正文结果摘要。
+- 指纹不包含 `baseRevision`，因此相同业务 payload 在 revision conflict 后仍可幂等重放；不同 payload/schema/kind 返回 `knowledgeOperationPayloadConflict`。
+- Receipt 与 snapshot、change feed、Archive 删除在 Postgres 同一事务中提交；无知识级联的 Archive 删除也有稳定 receipt。
+- 历史 `kb_changes` 无法还原原始 payload，继续兼容重放但返回 `operationPayloadVerified=false`，不伪造历史 hash。
+- Backend client 保留结构化 `code/operationId/detail`；普通 pending 丢弃 poisoned ID 后刷新重建，governance 首次冲突旋转、第二次隔离。
+
 后续同步生产化：
 
-- operation ID 增加 payload hash，一 ID 不允许重放不同内容。
+- 在部署 Postgres 上执行 additive receipt schema 并跑 operation conflict/deletion smoke。
 - change feed 增加分页、水位和保留/compaction。
 - 为历史 Archive 分析来源建立 canonical sourceRef 迁移工具和迁移证据。
 
@@ -331,6 +342,15 @@ POST /kb/governance/actions
 - 响应返回权威 graph/revision、幂等标志和不含知识正文的 summary。
 - Archive 删除复用 `deleteSource(memoryArchiveItem, archiveItem.id)`，零命中时仍可删除档案但不推进知识 revision。
 
+### 9.4 Task 17 operation receipt 合同
+
+- 指纹由后端对 `operationKind + schemaVersion + normalizedPayload` 做 canonical SHA-256；客户端不上传 hash。
+- `baseRevision` 不进入指纹，仍单独承担并发前提校验。
+- 相同 kind/hash 返回首次权威结果并标记 `duplicate=true`、`operationPayloadVerified=true`。
+- 同 ID 不同语义返回 409 `knowledgeOperationPayloadConflict`，detail 只含 code 和 operation ID。
+- Legacy change 没有可信原始 payload，兼容返回但 `operationPayloadVerified=false`。
+- Receipt、日志和 QA 不记录知识正文；API 不返回 payload hash。
+
 ## 10. 可观测性与 QA
 
 每轮知识处理和 Echo Context 应记录：
@@ -351,6 +371,7 @@ POST /kb/governance/actions
 5. 不同用户、不同 family persona、登出/切换旧回调不串数据。
 6. tombstone、重试、409 和旧服务端降级仍通过。
 7. confirm/reject/correct/deleteSource、Archive 组合删除、outbox 重启恢复和 user/persona 旧回调隔离仍通过。
+8. 同 ID 不同 payload/schema/kind/item 返回 409；相同 payload 改 base revision 仍重放；poisoned pending 和 governance quarantine 不阻塞后续同步。
 
 ## 11. 分阶段实施计划
 
@@ -376,11 +397,11 @@ POST /kb/governance/actions
 - KBLite person 到 Family 的自动派生改为“未授权候选”或彻底移除；生产 seed 成员迁到 QA-only。
 - timeLetter draft 的后端 payload 使用字段 allowlist；`metadataOnly` 不得携带正文、分析摘要或 transcript，删除草稿需同步撤销。
 
-实施进度：Task 15 已完成 proposal、稳定 ID/关系/metadata、persona-scoped Context 和 iOS canonical identity 主链路。Task 16 已完成用户治理、Archive 来源删除级联、iOS durable outbox/coordinator 和组合 QA gate。历史 canonical sourceRef 迁移、timeLetter 草稿字段收敛与公开治理体验继续作为后续 P1/P2。
+实施进度：Task 15 已完成 proposal、稳定 ID/关系/metadata、persona-scoped Context 和 iOS canonical identity 主链路。Task 16 已完成用户治理、Archive 来源删除级联、iOS durable outbox/coordinator 和组合 QA gate。Task 17 已完成 operation receipt/payload fingerprint、客户端冲突恢复与隔离。历史 canonical sourceRef 迁移、timeLetter 草稿字段收敛与公开治理体验继续作为后续 P1/P2。
 
 ### P1：同步生产化
 
-- operation payload hash。
+- operation receipt 的真实 Postgres migration/deployed smoke 与运维观测。
 - change feed 分页、水位和 compaction。
 - Postgres 多账号并发与事务集成测试。
 - 知识、档案、时间信件和关怀的 `asOf` 可观测水位。

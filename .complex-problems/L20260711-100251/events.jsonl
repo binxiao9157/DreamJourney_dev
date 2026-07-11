@@ -1,0 +1,48 @@
+{"at": "2026-07-11T02:02:51+00:00", "id": "E000", "payload": {"ledger_id": "L20260711-100251", "root_id": "P000", "title": "Task 17：P1 Knowledge Operation Receipt 与冲突恢复"}, "root_id": "P000", "type": "ledger_initialized"}
+{"at": "2026-07-11T02:03:46+00:00", "id": "E001", "payload": {"problem_id": "P000", "ticket_id": "T000", "title": "建立权威知识操作凭据并恢复客户端冲突"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T02:03:46+00:00", "id": "E002", "payload": {"from": "created", "id": "T000", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T02:03:52+00:00", "id": "E003", "payload": {"from": "defined", "id": "T000", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T02:03:52+00:00", "id": "E004", "payload": {"classification": "split", "reason": "任务跨越后端事务模型、多个 API 入口、iOS 持久化状态机与组合回归，需拆分为后端凭据、客户端恢复和集成验收三个独立子问题以控制风险。", "ticket_id": "T000"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T02:04:24+00:00", "id": "E005", "payload": {"from": "classified", "id": "T000", "to": "splitting"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T02:04:24+00:00", "id": "E006", "payload": {"parent_id": "P000", "problem_id": "P001", "source": "split", "title": "后端权威 operation receipt 与事务幂等"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T02:04:24+00:00", "id": "E007", "payload": {"parent_id": "P000", "problem_id": "P002", "source": "split", "title": "iOS payload conflict 恢复与治理隔离"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T02:04:24+00:00", "id": "E008", "payload": {"parent_id": "P000", "problem_id": "P003", "source": "split", "title": "Task 17 跨仓 QA、文档与非真机验收"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T02:04:55+00:00", "id": "E009", "payload": {"problem_id": "P001", "ticket_id": "T001", "title": "实现后端知识操作凭据"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T02:04:55+00:00", "id": "E010", "payload": {"from": "created", "id": "T001", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T02:05:08+00:00", "id": "E011", "payload": {"from": "defined", "id": "T001", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T02:05:08+00:00", "id": "E012", "payload": {"classification": "one_go", "reason": "该子问题已限定在后端幂等凭据模块和相关 API/store 测试，验收边界明确，可作为一个事务一致性改动整体实现，避免再次拆分破坏原子性。", "ticket_id": "T001"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T02:20:36+00:00", "id": "E013", "payload": {"from": "todo", "id": "P001", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T02:20:36+00:00", "id": "E014", "payload": {"from": "classified", "id": "T001", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T02:20:36+00:00", "id": "E015", "payload": {"from": "executing", "id": "T001", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T02:20:36+00:00", "id": "E016", "payload": {"result_id": "R000", "ticket_id": "T001"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T02:21:19+00:00", "id": "E017", "payload": {"from": "doing", "id": "P001", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T02:21:19+00:00", "id": "E018", "payload": {"from": "checking", "id": "P001", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T02:21:19+00:00", "id": "E019", "payload": {"check_id": "C000", "followup_id": null, "problem_id": "P001", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T02:21:40+00:00", "id": "E020", "payload": {"problem_id": "P002", "ticket_id": "T002", "title": "实现 iOS 知识操作冲突恢复"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T02:21:40+00:00", "id": "E021", "payload": {"from": "created", "id": "T002", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T02:21:49+00:00", "id": "E022", "payload": {"from": "defined", "id": "T002", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T02:21:49+00:00", "id": "E023", "payload": {"classification": "one_go", "reason": "该子问题已限定在 Backend client、KnowledgeSyncCoordinator、governance outbox 及对应 QA；状态机必须整体修改和验证，拆分会增加 completion/持久化不一致风险。", "ticket_id": "T002"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T02:28:23+00:00", "id": "E024", "payload": {"from": "todo", "id": "P002", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T02:28:23+00:00", "id": "E025", "payload": {"from": "classified", "id": "T002", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T02:28:23+00:00", "id": "E026", "payload": {"from": "executing", "id": "T002", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T02:28:23+00:00", "id": "E027", "payload": {"result_id": "R001", "ticket_id": "T002"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T02:28:52+00:00", "id": "E028", "payload": {"from": "doing", "id": "P002", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T02:28:52+00:00", "id": "E029", "payload": {"from": "checking", "id": "P002", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T02:28:52+00:00", "id": "E030", "payload": {"check_id": "C001", "followup_id": null, "problem_id": "P002", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T02:29:09+00:00", "id": "E031", "payload": {"problem_id": "P003", "ticket_id": "T003", "title": "收敛 Task 17 跨仓交付"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T02:29:09+00:00", "id": "E032", "payload": {"from": "created", "id": "T003", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T02:29:09+00:00", "id": "E033", "payload": {"from": "defined", "id": "T003", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T02:29:09+00:00", "id": "E034", "payload": {"classification": "one_go", "reason": "集成子问题只包含已实现功能的门禁、文档、全量验证和分仓提交，边界明确且无需再次拆分。", "ticket_id": "T003"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T02:34:42+00:00", "id": "E035", "payload": {"from": "todo", "id": "P003", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T02:34:42+00:00", "id": "E036", "payload": {"from": "classified", "id": "T003", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T02:34:42+00:00", "id": "E037", "payload": {"from": "executing", "id": "T003", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T02:34:42+00:00", "id": "E038", "payload": {"result_id": "R002", "ticket_id": "T003"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T02:35:03+00:00", "id": "E039", "payload": {"from": "doing", "id": "P003", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T02:35:03+00:00", "id": "E040", "payload": {"from": "checking", "id": "P003", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T02:35:03+00:00", "id": "E041", "payload": {"check_id": "C002", "followup_id": null, "problem_id": "P003", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T02:35:21+00:00", "id": "E042", "payload": {"from": "todo", "id": "P000", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T02:35:21+00:00", "id": "E043", "payload": {"from": "splitting", "id": "T000", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T02:35:21+00:00", "id": "E044", "payload": {"result_id": "R003", "ticket_id": "T000"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T02:35:45+00:00", "id": "E045", "payload": {"from": "doing", "id": "P000", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T02:35:45+00:00", "id": "E046", "payload": {"from": "checking", "id": "P000", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T02:35:45+00:00", "id": "E047", "payload": {"check_id": "C003", "followup_id": null, "problem_id": "P000", "status": "success"}, "root_id": "P000", "type": "check_recorded"}

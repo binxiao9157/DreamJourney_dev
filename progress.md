@@ -592,7 +592,6 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `none`
 - Counts: 4/4 problems done, 0 blocked, 4/4 tickets done
 - Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
-
 ## Recursive Closure Checkpoint - 2026-07-10T17:27:17+08:00
 
 - Ledger: `L20260710-165434`
@@ -1779,4 +1778,166 @@ Update this file after every recursive state-changing command bundle and before 
 - Root: `P000` / done
 - Next action: `none`
 - Counts: 16/16 problems done, 0 blocked, 16/16 tickets done
+- Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+
+## Recursive Closure Checkpoint - 2026-07-11T10:03:46+08:00
+
+- Ledger: `L20260711-100251`
+- Lodestar task: `docs/plans/task_17_p1-knowledge-operation-payload-hash.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 0/1 problems done, 0 blocked, 0/1 tickets done
+- Next instruction: Only perform `classify-ticket` for `T000` on `P000: Task 17：P1 Knowledge Operation Receipt 与冲突恢复`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names...
+
+## Recursive Closure Checkpoint - 2026-07-11T10:03:52+08:00
+
+- Ledger: `L20260711-100251`
+- Lodestar task: `docs/plans/task_17_p1-knowledge-operation-payload-hash.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 0/1 problems done, 0 blocked, 0/1 tickets done
+- Next instruction: Only perform `split-ticket` for `T000` on `P000: Task 17：P1 Knowledge Operation Receipt 与冲突恢复`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evid...
+
+## Recursive Closure Checkpoint - 2026-07-11T10:04:24+08:00
+
+- Ledger: `L20260711-100251`
+- Lodestar task: `docs/plans/task_17_p1-knowledge-operation-payload-hash.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 0/4 problems done, 0 blocked, 0/1 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P001: 后端权威 operation receipt 与事务幂等`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names st...
+
+## Recursive Closure Checkpoint - 2026-07-11T10:04:56+08:00
+
+- Ledger: `L20260711-100251`
+- Lodestar task: `docs/plans/task_17_p1-knowledge-operation-payload-hash.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 0/4 problems done, 0 blocked, 0/2 tickets done
+- Next instruction: Only perform `classify-ticket` for `T001` on `P001: 后端权威 operation receipt 与事务幂等`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English...
+
+## Recursive Closure Checkpoint - 2026-07-11T10:05:08+08:00
+
+- Ledger: `L20260711-100251`
+- Lodestar task: `docs/plans/task_17_p1-knowledge-operation-payload-hash.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 0/4 problems done, 0 blocked, 0/2 tickets done
+- Next instruction: Only perform `execute-ticket` for `T001` on `P001: 后端权威 operation receipt 与事务幂等`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/exe...
+
+## Recursive Closure Checkpoint - 2026-07-11T10:20:37+08:00
+
+- Ledger: `L20260711-100251`
+- Lodestar task: `docs/plans/task_17_p1-knowledge-operation-payload-hash.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 0/4 problems done, 0 blocked, 1/2 tickets done
+- Next instruction: Only perform `check-success` for `P001: 后端权威 operation receipt 与事务幂等`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evid...
+
+## Recursive Closure Checkpoint - 2026-07-11T10:21:19+08:00
+
+- Ledger: `L20260711-100251`
+- Lodestar task: `docs/plans/task_17_p1-knowledge-operation-payload-hash.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 1/4 problems done, 0 blocked, 1/2 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P002: iOS payload conflict 恢复与治理隔离`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names st...
+
+## Recursive Closure Checkpoint - 2026-07-11T10:21:40+08:00
+
+- Ledger: `L20260711-100251`
+- Lodestar task: `docs/plans/task_17_p1-knowledge-operation-payload-hash.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 1/4 problems done, 0 blocked, 1/3 tickets done
+- Next instruction: Only perform `classify-ticket` for `T002` on `P002: iOS payload conflict 恢复与治理隔离`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English...
+
+## Recursive Closure Checkpoint - 2026-07-11T10:21:49+08:00
+
+- Ledger: `L20260711-100251`
+- Lodestar task: `docs/plans/task_17_p1-knowledge-operation-payload-hash.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 1/4 problems done, 0 blocked, 1/3 tickets done
+- Next instruction: Only perform `execute-ticket` for `T002` on `P002: iOS payload conflict 恢复与治理隔离`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/exe...
+
+## Recursive Closure Checkpoint - 2026-07-11T10:28:23+08:00
+
+- Ledger: `L20260711-100251`
+- Lodestar task: `docs/plans/task_17_p1-knowledge-operation-payload-hash.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 1/4 problems done, 0 blocked, 2/3 tickets done
+- Next instruction: Only perform `check-success` for `P002: iOS payload conflict 恢复与治理隔离`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evid...
+
+## Recursive Closure Checkpoint - 2026-07-11T10:28:52+08:00
+
+- Ledger: `L20260711-100251`
+- Lodestar task: `docs/plans/task_17_p1-knowledge-operation-payload-hash.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 2/4 problems done, 0 blocked, 2/3 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P003: Task 17 跨仓 QA、文档与非真机验收`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in ...
+
+## Recursive Closure Checkpoint - 2026-07-11T10:29:09+08:00
+
+- Ledger: `L20260711-100251`
+- Lodestar task: `docs/plans/task_17_p1-knowledge-operation-payload-hash.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 2/4 problems done, 0 blocked, 2/4 tickets done
+- Next instruction: Only perform `classify-ticket` for `T003` on `P003: Task 17 跨仓 QA、文档与非真机验收`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. Afte...
+
+## Recursive Closure Checkpoint - 2026-07-11T10:29:09+08:00
+
+- Ledger: `L20260711-100251`
+- Lodestar task: `docs/plans/task_17_p1-knowledge-operation-payload-hash.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 2/4 problems done, 0 blocked, 2/4 tickets done
+- Next instruction: Only perform `execute-ticket` for `T003` on `P003: Task 17 跨仓 QA、文档与非真机验收`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execute-t...
+
+## Recursive Closure Checkpoint - 2026-07-11T10:34:42+08:00
+
+- Ledger: `L20260711-100251`
+- Lodestar task: `docs/plans/task_17_p1-knowledge-operation-payload-hash.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 2/4 problems done, 0 blocked, 3/4 tickets done
+- Next instruction: Only perform `check-success` for `P003: Task 17 跨仓 QA、文档与非真机验收`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) ...
+
+## Recursive Closure Checkpoint - 2026-07-11T10:35:03+08:00
+
+- Ledger: `L20260711-100251`
+- Lodestar task: `docs/plans/task_17_p1-knowledge-operation-payload-hash.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 3/4 problems done, 0 blocked, 3/4 tickets done
+- Next instruction: Only perform `record-result` for ticket `T000`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-11T10:35:21+08:00
+
+- Ledger: `L20260711-100251`
+- Lodestar task: `docs/plans/task_17_p1-knowledge-operation-payload-hash.md`
+- Root: `P000` / doing
+- Next action: `check-success`
+- Counts: 3/4 problems done, 0 blocked, 4/4 tickets done
+- Next instruction: Only perform `check-success` for `P000: Task 17：P1 Knowledge Operation Receipt 与冲突恢复`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries...
+
+## Recursive Closure Checkpoint - 2026-07-11T10:35:45+08:00
+
+- Ledger: `L20260711-100251`
+- Lodestar task: `docs/plans/task_17_p1-knowledge-operation-payload-hash.md`
+- Root: `P000` / done
+- Next action: `none`
+- Counts: 4/4 problems done, 0 blocked, 4/4 tickets done
+- Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+
+## Recursive Closure Checkpoint - 2026-07-11T10:35:57+08:00
+
+- Ledger: `L20260711-100251`
+- Lodestar task: `docs/plans/task_17_p1-knowledge-operation-payload-hash.md`
+- Root: `P000` / done
+- Next action: `none`
+- Counts: 4/4 problems done, 0 blocked, 4/4 tickets done
 - Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.

@@ -2148,6 +2148,18 @@ final class EchoQAEvidenceBundleStore {
 final class DreamJourneyBackendClient {
     static let shared = DreamJourneyBackendClient()
 
+    struct BackendErrorContext: Equatable {
+        let code: String?
+        let operationId: String?
+        let detail: String
+
+        init(code: String? = nil, operationId: String? = nil, detail: String) {
+            self.code = code
+            self.operationId = operationId
+            self.detail = detail
+        }
+    }
+
     private enum RequestAuthPolicy {
         case automatic
         case backendOnly
@@ -2156,7 +2168,12 @@ final class DreamJourneyBackendClient {
     enum ClientError: LocalizedError {
         case invalidJSONResponse
         case unsupportedJSONRoot
-        case backendError(statusCode: Int?, detail: String)
+        case backendError(statusCode: Int?, context: BackendErrorContext)
+
+        var backendErrorContext: BackendErrorContext? {
+            guard case .backendError(_, let context) = self else { return nil }
+            return context
+        }
 
         var errorDescription: String? {
             switch self {
@@ -2164,11 +2181,11 @@ final class DreamJourneyBackendClient {
                 return "后端返回的数据不是有效 JSON"
             case .unsupportedJSONRoot:
                 return "后端返回的 JSON 根节点不是对象"
-            case .backendError(let statusCode, let detail):
+            case .backendError(let statusCode, let context):
                 if let statusCode {
-                    return "后端请求失败（\(statusCode)）：\(detail)"
+                    return "后端请求失败（\(statusCode)）：\(context.detail)"
                 }
-                return "后端请求失败：\(detail)"
+                return "后端请求失败：\(context.detail)"
             }
         }
     }
@@ -2365,7 +2382,7 @@ final class DreamJourneyBackendClient {
               !contract.deviceId.isEmpty else {
             completion(.failure(ClientError.backendError(
                 statusCode: nil,
-                detail: "digital human session lease is unavailable"
+                context: .init(detail: "digital human session lease is unavailable")
             )))
             return
         }
@@ -2399,7 +2416,7 @@ final class DreamJourneyBackendClient {
               !contract.deviceId.isEmpty else {
             completion(.failure(ClientError.backendError(
                 statusCode: nil,
-                detail: "digital human session lease is unavailable"
+                context: .init(detail: "digital human session lease is unavailable")
             )))
             return
         }
@@ -3231,25 +3248,31 @@ final class DreamJourneyBackendClient {
                                     completion: completion
                                 )
                             } else {
-                                let detail = Self.backendErrorMessage(from: response.data)
-                                    ?? "登录状态已失效，请重新登录"
+                                let context = Self.backendErrorContext(from: response.data)
+                                    ?? .init(detail: "登录状态已失效，请重新登录")
                                 completion(.failure(ClientError.backendError(
                                     statusCode: statusCode,
-                                    detail: detail
+                                    context: context
                                 )))
                             }
                         }
                         return
                     }
-                    if let backendMessage = Self.backendErrorMessage(from: response.data) {
+                    if let context = Self.backendErrorContext(from: response.data) {
                         DispatchQueue.main.async {
-                            completion(.failure(ClientError.backendError(statusCode: statusCode, detail: backendMessage)))
+                            completion(.failure(ClientError.backendError(
+                                statusCode: statusCode,
+                                context: context
+                            )))
                         }
                         return
                     }
                     DispatchQueue.main.async {
                         if let statusCode {
-                            completion(.failure(ClientError.backendError(statusCode: statusCode, detail: error.localizedDescription)))
+                            completion(.failure(ClientError.backendError(
+                                statusCode: statusCode,
+                                context: .init(detail: error.localizedDescription)
+                            )))
                         } else {
                             completion(.failure(error))
                         }
@@ -3328,21 +3351,31 @@ final class DreamJourneyBackendClient {
         return candidate
     }
 
-    private static func backendErrorMessage(from data: Data?) -> String? {
+    private static func backendErrorContext(from data: Data?) -> BackendErrorContext? {
         guard let data, !data.isEmpty else { return nil }
 
         if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            if let detail = object["detail"] as? String, !detail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return detail
+            if let detail = object["detail"] as? [String: Any] {
+                let code = normalizedBackendErrorString(detail["code"])
+                let operationId = normalizedBackendErrorString(detail["operationId"])
+                let message = normalizedBackendErrorString(detail["message"])
+                    ?? normalizedBackendErrorString(detail["error"])
+                    ?? code
+                    ?? "后端请求失败"
+                return BackendErrorContext(
+                    code: code,
+                    operationId: operationId,
+                    detail: message
+                )
             }
-            if let message = object["message"] as? String, !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return message
+            if let detail = normalizedBackendErrorString(object["detail"]) {
+                return BackendErrorContext(detail: detail)
             }
-            if let error = object["error"] as? String, !error.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return error
+            if let message = normalizedBackendErrorString(object["message"]) {
+                return BackendErrorContext(detail: message)
             }
-            if let detail = object["detail"] {
-                return String(describing: detail)
+            if let error = normalizedBackendErrorString(object["error"]) {
+                return BackendErrorContext(detail: error)
             }
         }
 
@@ -3351,7 +3384,13 @@ final class DreamJourneyBackendClient {
               !text.isEmpty else {
             return nil
         }
-        return String(text.prefix(240))
+        return BackendErrorContext(detail: String(text.prefix(240)))
+    }
+
+    private static func normalizedBackendErrorString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
     }
 
     private var authHeaders: HTTPHeaders? {

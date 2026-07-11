@@ -51,6 +51,27 @@ require(coordinator.contains("enqueueSync(reason: \"governanceRevisionConflict\"
         "revision conflicts must refresh the remote base before retry")
 require(coordinator.contains("operationId: item.operationId"),
         "retryable governance requests must preserve their operation ID")
+require(coordinator.contains("if Self.isOperationPayloadConflict(error)"),
+        "operation payload conflicts must have an explicit disposition")
+require(coordinator.contains("private func handleGovernancePayloadConflict("),
+        "governance payload conflict recovery must be centralized")
+require(coordinator.contains("item.rotatingOperation(to: nextOperationId)"),
+        "the first payload conflict must rotate the poisoned operation ID")
+require(coordinator.contains("item.quarantined(reason: \"knowledgeOperationPayloadConflict\")"),
+        "a repeated payload conflict must enter durable quarantine")
+require(coordinator.contains("!$0.isQuarantined && $0.expectedIdentity == currentIdentity"),
+        "quarantined actions must not block later dispatchable actions")
+require(coordinator.contains("private func recoverPendingOperationConflict("),
+        "ordinary pending mutations need a dedicated recovery path")
+guard let recoveryRange = coordinator.range(of: "private func recoverPendingOperationConflict(") else {
+    fputs("knowledge-governance-coordinator-check failed: missing pending recovery function\n", stderr)
+    exit(1)
+}
+let recoverySource = String(coordinator[recoveryRange.lowerBound...])
+let pendingRemoval = position("try pendingStore.remove(for: userId)", in: recoverySource)
+let pendingRefresh = position("refreshAfterConflict(userId: userId, generation: generation)", in: recoverySource)
+require(pendingRemoval < pendingRefresh,
+        "the poisoned pending operation must be removed before authoritative refresh")
 
 let applyPosition = position("guard applyAuthoritativeRemote(remote, previousBase: previousBase, userId: userId)", in: coordinator)
 guard let removeRange = coordinator.range(
@@ -75,7 +96,11 @@ for declaration in [
     "struct KnowledgeGovernanceOutboxItem: Codable, Equatable",
     "final class KnowledgeGovernanceOutboxStore",
     "func enqueue(_ item: KnowledgeGovernanceOutboxItem, for userId: String) throws",
+    "func replace(",
     "func remove(operationId: String, for userId: String) throws",
+    "let recoveryCount: Int",
+    "let quarantineReason: String?",
+    "func hasSameSemanticPayload(as other: KnowledgeGovernanceOutboxItem) -> Bool",
 ] {
     require(outbox.contains(declaration), "missing durable outbox contract \(declaration)")
 }

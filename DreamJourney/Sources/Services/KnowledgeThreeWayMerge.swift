@@ -64,6 +64,7 @@ struct KnowledgePendingMutation {
 enum KnowledgeSyncModelError: LocalizedError {
     case invalidGraph(String)
     case invalidPersistenceEnvelope
+    case operationPayloadConflict
 
     var errorDescription: String? {
         switch self {
@@ -71,6 +72,8 @@ enum KnowledgeSyncModelError: LocalizedError {
             return "知识图谱无效：\(reason)"
         case .invalidPersistenceEnvelope:
             return "知识同步基线文件无效"
+        case .operationPayloadConflict:
+            return "同一知识操作编号不能对应不同治理内容"
         }
     }
 }
@@ -511,12 +514,103 @@ struct KnowledgeGovernanceOutboxItem: Codable, Equatable {
     let expectedDigitalHumanId: String
     let action: KBKnowledgeGovernanceAction
     let createdAt: Date
+    let recoveryCount: Int
+    let quarantineReason: String?
+
+    init(
+        operationId: String,
+        userId: String,
+        expectedOwnerUserId: String,
+        expectedPersonaScope: String,
+        expectedDigitalHumanId: String,
+        action: KBKnowledgeGovernanceAction,
+        createdAt: Date,
+        recoveryCount: Int = 0,
+        quarantineReason: String? = nil
+    ) {
+        self.operationId = operationId.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.userId = userId
+        self.expectedOwnerUserId = expectedOwnerUserId
+        self.expectedPersonaScope = expectedPersonaScope
+        self.expectedDigitalHumanId = expectedDigitalHumanId
+        self.action = action
+        self.createdAt = createdAt
+        self.recoveryCount = max(0, recoveryCount)
+        self.quarantineReason = quarantineReason?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case operationId
+        case userId
+        case expectedOwnerUserId
+        case expectedPersonaScope
+        case expectedDigitalHumanId
+        case action
+        case createdAt
+        case recoveryCount
+        case quarantineReason
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            operationId: try container.decode(String.self, forKey: .operationId),
+            userId: try container.decode(String.self, forKey: .userId),
+            expectedOwnerUserId: try container.decode(String.self, forKey: .expectedOwnerUserId),
+            expectedPersonaScope: try container.decode(String.self, forKey: .expectedPersonaScope),
+            expectedDigitalHumanId: try container.decode(String.self, forKey: .expectedDigitalHumanId),
+            action: try container.decode(KBKnowledgeGovernanceAction.self, forKey: .action),
+            createdAt: try container.decode(Date.self, forKey: .createdAt),
+            recoveryCount: try container.decodeIfPresent(Int.self, forKey: .recoveryCount) ?? 0,
+            quarantineReason: try container.decodeIfPresent(String.self, forKey: .quarantineReason)
+        )
+    }
 
     var expectedIdentity: KBPersonaIdentity {
         KBPersonaIdentity(
             ownerUserId: expectedOwnerUserId,
             personaScope: expectedPersonaScope,
             digitalHumanId: expectedDigitalHumanId
+        )
+    }
+
+    var isQuarantined: Bool {
+        guard let quarantineReason else { return false }
+        return !quarantineReason.isEmpty
+    }
+
+    func hasSameSemanticPayload(as other: KnowledgeGovernanceOutboxItem) -> Bool {
+        userId == other.userId
+            && expectedOwnerUserId == other.expectedOwnerUserId
+            && expectedPersonaScope == other.expectedPersonaScope
+            && expectedDigitalHumanId == other.expectedDigitalHumanId
+            && action == other.action
+    }
+
+    func rotatingOperation(to operationId: String) -> KnowledgeGovernanceOutboxItem {
+        KnowledgeGovernanceOutboxItem(
+            operationId: operationId,
+            userId: userId,
+            expectedOwnerUserId: expectedOwnerUserId,
+            expectedPersonaScope: expectedPersonaScope,
+            expectedDigitalHumanId: expectedDigitalHumanId,
+            action: action,
+            createdAt: createdAt,
+            recoveryCount: recoveryCount + 1
+        )
+    }
+
+    func quarantined(reason: String) -> KnowledgeGovernanceOutboxItem {
+        KnowledgeGovernanceOutboxItem(
+            operationId: operationId,
+            userId: userId,
+            expectedOwnerUserId: expectedOwnerUserId,
+            expectedPersonaScope: expectedPersonaScope,
+            expectedDigitalHumanId: expectedDigitalHumanId,
+            action: action,
+            createdAt: createdAt,
+            recoveryCount: recoveryCount,
+            quarantineReason: reason
         )
     }
 }
@@ -579,10 +673,33 @@ final class KnowledgeGovernanceOutboxStore {
         try validate(item, expectedUserId: normalizedUserId)
         var items = try load(for: normalizedUserId)
         if let index = items.firstIndex(where: { $0.operationId == item.operationId }) {
-            items[index] = item
+            guard items[index].hasSameSemanticPayload(as: item) else {
+                throw KnowledgeSyncModelError.operationPayloadConflict
+            }
+            return
         } else {
             items.append(item)
         }
+        try write(items, for: normalizedUserId)
+    }
+
+    func replace(
+        operationId: String,
+        with replacement: KnowledgeGovernanceOutboxItem,
+        for userId: String
+    ) throws {
+        let normalizedUserId = try normalizedIdentifier(userId)
+        let normalizedOperationId = try normalizedIdentifier(operationId)
+        try validate(replacement, expectedUserId: normalizedUserId)
+        var items = try load(for: normalizedUserId)
+        guard let index = items.firstIndex(where: { $0.operationId == normalizedOperationId }) else {
+            throw KnowledgeSyncModelError.invalidPersistenceEnvelope
+        }
+        if replacement.operationId != normalizedOperationId,
+           items.contains(where: { $0.operationId == replacement.operationId }) {
+            throw KnowledgeSyncModelError.operationPayloadConflict
+        }
+        items[index] = replacement
         try write(items, for: normalizedUserId)
     }
 

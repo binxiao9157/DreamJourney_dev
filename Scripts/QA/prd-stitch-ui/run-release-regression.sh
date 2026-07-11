@@ -309,6 +309,9 @@ run_step "Swift model guard echo-digital-human-lifecycle-coordinator-check" "$ST
 run_step "Swift model guard knowledge-governance-model" "$STATIC_LOG_DIR/knowledge-governance-model-smoke.log" \
   "$SCRIPT_DIR/run-knowledge-governance-model-smoke.sh"
 
+run_step "Swift model guard knowledge-governance-outbox" "$STATIC_LOG_DIR/knowledge-governance-outbox-model-smoke.log" \
+  "$SCRIPT_DIR/run-knowledge-governance-outbox-model-smoke.sh"
+
 run_step "Swift model guard knowledge-governance-client" "$STATIC_LOG_DIR/knowledge-governance-client-check.log" \
   "$SCRIPT_DIR/run-knowledge-governance-client-check.sh"
 

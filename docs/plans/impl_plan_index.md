@@ -29,6 +29,7 @@
 | 14 | done | P0 knowledge evidence integrity and Context isolation | `docs/plans/task_14_p0-knowledge-evidence-and-context-isolation.md` | `L20260711-022449-15` |
 | 15 | done | P1 knowledge mutation proposal and persona schema | `docs/plans/task_15_p1-knowledge-mutation-proposal-persona-schema.md` | `L20260711-030653-15` |
 | 16 | done | P1 knowledge governance and source cascade | `docs/plans/task_16_p1-knowledge-governance-source-cascade.md` | `L20260711-040419` |
+| 17 | done | P1 knowledge operation receipt and conflict recovery | `docs/plans/task_17_p1-knowledge-operation-payload-hash.md` | `L20260711-100251` |
 
 ## File Structure
 

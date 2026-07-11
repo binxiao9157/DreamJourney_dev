@@ -136,7 +136,15 @@
       "status": "complete",
       "task_file": "docs/plans/task_16_p1-knowledge-governance-source-cascade.md",
       "updated_at": "2026-07-11T09:51:41+08:00"
+    },
+    "docs/plans/task_17_p1-knowledge-operation-payload-hash.md": {
+      "ledger_id": "L20260711-100251",
+      "ledger_path": ".complex-problems/L20260711-100251",
+      "next_action": "none",
+      "status": "complete",
+      "task_file": "docs/plans/task_17_p1-knowledge-operation-payload-hash.md",
+      "updated_at": "2026-07-11T10:35:57+08:00"
     }
   },
-  "updated_at": "2026-07-11T09:51:41+08:00"
+  "updated_at": "2026-07-11T10:35:57+08:00"
 }

@@ -1388,12 +1388,13 @@ final class EchoViewController: UIViewController {
         guard let clientError = error as? DreamJourneyBackendClient.ClientError else {
             return false
         }
-        guard case .backendError(let statusCode, let detail) = clientError else {
+        guard case .backendError(let statusCode, let context) = clientError else {
             return false
         }
         return statusCode == 404
             || statusCode == 409
-            || detail.contains("digital_human_session_lease_inactive")
+            || context.code == "digital_human_session_lease_inactive"
+            || context.detail.contains("digital_human_session_lease_inactive")
     }
 
     private func releaseDigitalHumanRuntime(

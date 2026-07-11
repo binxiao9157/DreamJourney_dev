@@ -34,7 +34,7 @@ Task 16 已完成非真机代码闭环。当前工程具备后端权威知识治
 - `DreamJourneyBackendClient.governKnowledge` 严格编码 schema v1 并校验响应 user/operation identity。
 - `KnowledgeGovernanceOutboxStore` 按用户原子保存多项动作，支持去重、删除、损坏拒绝和跨重启恢复。
 - `KnowledgeSyncCoordinator.performGovernance` 与普通 graph sync 共用单一 `isSyncing` owner。
-- 409 保留相同 operation ID，先刷新基线再重试；同 persona 成功后先应用权威 graph/base，再移除 outbox。
+- revision conflict 保留相同 operation ID，先刷新基线再重试；payload conflict 首次旋转 operation ID，二次冲突进入 quarantine；同 persona 成功后先应用权威 graph/base，再移除 outbox。
 - user/persona 已变化时旧回调不直接写当前图谱，改走 change feed 收敛。
 
 ## QA 与运行方式
@@ -74,4 +74,4 @@ Scripts/QA/prd-stitch-ui/run-release-regression.sh
 - 新来源 canonical identity 为 `memoryArchiveItem + archiveItem.id`。
 - 历史 `archiveImageAnalysis + session-*` 来源不会被新删除级联自动命中，需独立迁移和回归证据。
 - 本轮未做真实 Postgres deployed smoke、线上部署、真机验证或 provider 质量验收。
-- operation payload hash、change feed 分页/compaction、物理审计清理仍是后续生产化任务。
+- operation receipt/payload hash 已由 Task 17 完成；真实 Postgres 部署迁移、change feed 分页/compaction、物理审计清理仍是后续生产化任务。

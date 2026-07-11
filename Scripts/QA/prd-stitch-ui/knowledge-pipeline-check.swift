@@ -76,6 +76,8 @@ require(
         coordinator.contains("pushLegacySnapshot") &&
         coordinator.contains("BackendAuthSessionStore.shared.currentSession?.userId == userId") &&
         coordinator.contains("isRevisionConflict") &&
+        coordinator.contains("isOperationPayloadConflict") &&
+        coordinator.contains("recoverPendingOperationConflict") &&
         coordinator.contains("KnowledgeRemoteBaseStore") &&
         coordinator.contains("KnowledgePendingMutationStore") &&
         coordinator.contains("KnowledgeSyncGraphEngine.makeDelta") &&
@@ -96,6 +98,15 @@ require(
         threeWayMerge.contains("KnowledgeRemoteBaseStore") &&
         threeWayMerge.contains("KnowledgePendingMutationStore"),
     "knowledge sync model should own bootstrap, three-way merge, tombstones, privacy protection, and per-user file persistence"
+)
+
+require(
+    backend.contains("struct BackendErrorContext: Equatable") &&
+        backend.contains("normalizedBackendErrorString(detail[\"code\"])") &&
+        coordinator.contains("context.code == \"knowledgeOperationPayloadConflict\"") &&
+        coordinator.contains("pendingOperationDiscarded") &&
+        !coordinator.contains("detail.contains(\"knowledgeRevisionConflict\")"),
+    "knowledge conflicts must consume structured backend codes and discard poisoned operation IDs"
 )
 
 require(

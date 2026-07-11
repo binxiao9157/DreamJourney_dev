@@ -63,6 +63,16 @@ for field in ["governanceSchemaVersion", "userId", "operationId", "baseRevision"
 require(client.contains("action.backendJSONObject()"), "governance request must use safe action encoding")
 require(client.contains("response.userId == userId, response.operationId == operationId"),
         "governance response identity must match the request")
+require(client.contains("struct BackendErrorContext: Equatable"),
+        "backend errors must preserve structured contract metadata")
+require(client.contains("let code: String?"),
+        "backend errors must preserve a stable error code")
+require(client.contains("let operationId: String?"),
+        "backend errors must preserve the conflicting operation ID")
+require(client.contains("private static func backendErrorContext(from data: Data?)"),
+        "backend error responses must be parsed structurally")
+require(client.contains("normalizedBackendErrorString(detail[\"code\"])"),
+        "structured FastAPI detail codes must not be reduced to display text")
 
 require(client.contains("operationId: String? = nil"),
         "archive deletion must accept a stable operationId")

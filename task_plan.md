@@ -4,8 +4,8 @@
 
 - **Goal:** 按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态
 - **Mode:** Review
-- **Phase:** Phase 11 knowledge governance and source cascade complete
-- **Task:** `docs/plans/task_16_p1-knowledge-governance-source-cascade.md`
+- **Phase:** Phase 12 knowledge operation integrity complete
+- **Task:** `docs/plans/task_17_p1-knowledge-operation-payload-hash.md`
 - **Blockers:** none for non-device implementation
 
 ## Key Decisions
@@ -35,10 +35,11 @@
 - Task 14 is complete. `docs/superpowers/plans/2026-07-11-product-knowledge-base-architecture-v2.md` is the canonical product/engineering design. Assistant-response self-ingestion, low-confidence generation, family local fallback, Context identity, recipient/openAt and care viewer P0 boundaries are guarded. Backend `7fab675` and iOS `dfea6d4` are committed locally; ledger `L20260711-022449-15` is closed.
 - Task 15 is complete. `/kb/extract` v2 returns a revision-bound non-persisting mutation proposal with stable IDs, relationship resolution and persona/evidence metadata; Context and iOS use personal-legacy/family-strict policy. Backend `5fd14a1` and iOS `07ff13b` are committed locally; ledger `L20260711-030653-15` is closed.
 - Task 16 is complete. Owner-only confirm/reject/correct/deleteSource actions, Archive source cascade transactions, iOS durable governance outbox/coordinator and `RUN_KNOWLEDGE_GOVERNANCE_GATE=1` are implemented. Backend `3057ef9` and iOS `69306c1` are committed locally; ledger `L20260711-040419` is closed.
+- Task 17 is complete. Authoritative operation receipts and payload fingerprints cover knowledge sync/governance/archive cascade; iOS poisoned-operation recovery and governance quarantine are guarded without public UI changes. Ledger `L20260711-100251` is closed.
 
 ## Scope
 
-Phase 2, Phase 3, and Tasks 9-16 are closed. Production remains on global ownership `shadow`; public knowledge-governance UI, historical sourceRef migration, operation payload hash, change-feed compaction, deployed Postgres and true-device acceptance remain follow-up slices.
+Phase 2, Phase 3, and Tasks 9-17 are closed. Production remains on global ownership `shadow`; public knowledge-governance UI, historical sourceRef migration, change-feed compaction, deployed Postgres receipt migration/smoke and true-device acceptance remain follow-up slices.
 
 ## Recovery
 

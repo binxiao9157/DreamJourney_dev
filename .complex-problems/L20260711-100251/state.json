@@ -1,0 +1,470 @@
+{
+  "checks": {
+    "C000": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P001/checks/C000.md",
+      "created_at": "2026-07-11T02:21:19+00:00",
+      "criteria_map": [
+        "稳定指纹、冲突 409、legacy 未验证兼容、Archive 无级联重放、事务回滚、purge 均有实现和测试。"
+      ],
+      "evidence": [
+        "Memory/Postgres/API/Archive/governance 代码与 204 项相关测试；worker 全量 250 项验证。"
+      ],
+      "execution_map": [
+        "R000 覆盖 P001 的全部验收标准。"
+      ],
+      "followup_problem_id": null,
+      "id": "C000",
+      "problem_id": "P001",
+      "residual_risk": [
+        "线上 Postgres migration/deploy 未执行，属于明确排除边界。"
+      ],
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "同 ID 改 payload/schema/kind/item、相同 payload 改 revision、legacy replay 与 Archive 无级联重放。"
+      ],
+      "summary": "后端 operation receipt 与事务幂等已实现并通过验证。"
+    },
+    "C001": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P002/checks/C001.md",
+      "created_at": "2026-07-11T02:28:52+00:00",
+      "criteria_map": [
+        "普通 pending 重建、governance rotate/quarantine、非阻塞队列、旧 JSON 兼容和本地 payload 冲突拒绝均已覆盖。"
+      ],
+      "evidence": [
+        "结构化 client、Coordinator 状态机、outbox model smoke、跨仓 gate 和 Simulator build。"
+      ],
+      "execution_map": [
+        "R001 覆盖 P002 全部验收标准。"
+      ],
+      "followup_problem_id": null,
+      "id": "C001",
+      "problem_id": "P002",
+      "residual_risk": [
+        "无可注入网络的 Coordinator XCTest；真机和线上错误注入留待外部验收。"
+      ],
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "同 ID 不同 action、本地重复 enqueue、首次/二次冲突、隔离后后续 item、旧 envelope 解码。"
+      ],
+      "summary": "iOS payload conflict 恢复和治理隔离已实现并通过非真机验证。"
+    },
+    "C002": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/checks/C002.md",
+      "created_at": "2026-07-11T02:35:03+00:00",
+      "criteria_map": [
+        "长期 outbox gate、canonical 文档、全量验证和不越过部署/真机边界均满足。"
+      ],
+      "evidence": [
+        "后端 250 tests、跨仓 224 tests、release regression、Simulator 与 generic iPhoneOS build 报告。"
+      ],
+      "execution_map": [
+        "R002 覆盖 P003 全部验收标准。"
+      ],
+      "followup_problem_id": null,
+      "id": "C002",
+      "problem_id": "P003",
+      "residual_risk": [
+        "线上 Postgres schema/deployed smoke 未执行。"
+      ],
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "日常 release regression、可选跨仓 gate、两仓 diff check 和本地 Bundle ID generic build。"
+      ],
+      "summary": "Task 17 跨仓 QA、文档与非真机验收已通过。"
+    },
+    "C003": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/checks/C003.md",
+      "created_at": "2026-07-11T02:35:45+00:00",
+      "criteria_map": [
+        "后端严格幂等、legacy 兼容、Archive 重放、iOS pending 恢复、治理隔离、长期 QA 均满足。"
+      ],
+      "evidence": [
+        "C000/C001/C002、后端 250 tests、跨仓 224 tests、release regression 和两类非真机构建。"
+      ],
+      "execution_map": [
+        "R003 汇总三个已成功检查的子问题。"
+      ],
+      "followup_problem_id": null,
+      "id": "C003",
+      "problem_id": "P000",
+      "residual_risk": [
+        "线上 Postgres migration/deployed smoke 与真机未执行。"
+      ],
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "跨 payload/schema/kind/item、baseRevision 改变、legacy、重启 outbox、二次 quarantine 和发布回归。"
+      ],
+      "summary": "Task 17 operation receipt 与冲突恢复整体闭环成功。"
+    }
+  },
+  "counters": {
+    "check": 4,
+    "event": 48,
+    "problem": 4,
+    "result": 4,
+    "ticket": 4
+  },
+  "created_at": "2026-07-11T02:02:51+00:00",
+  "effort": "medium",
+  "language": "zh",
+  "ledger_id": "L20260711-100251",
+  "problems": {
+    "P000": {
+      "body_path": "problems/P000/README.md",
+      "check_ids": [
+        "C003"
+      ],
+      "created_at": "2026-07-11T02:02:51+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Close the Lodestar task represented by `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/plans/task_17_p1-knowledge-operation-payload-hash.md` using recursive problem, ticket, result, and check state.\n\nTask context:\n\n# Task 17：P1 Knowledge Operation Receipt 与冲突恢复",
+      "followup_ids": [],
+      "id": "P000",
+      "package_path": "problems/P000",
+      "parent_id": null,
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P001",
+        "P002",
+        "P003"
+      ],
+      "success_criteria": [
+        "新 operation ID 不会把不同 kind/payload 静默当成 duplicate。",
+        "相同语义 payload 即使 base revision 改变也能安全重放。",
+        "legacy 操作继续兼容，但明确为未验证。",
+        "iOS 不会永久重放 poisoned item，治理隔离项不阻塞后续队列。",
+        "现有知识、治理、release QA 与非真机构建全部通过。"
+      ],
+      "ticket_ids": [
+        "T000"
+      ],
+      "title": "Task 17：P1 Knowledge Operation Receipt 与冲突恢复",
+      "updated_at": "2026-07-11T02:35:45+00:00"
+    },
+    "P001": {
+      "body_path": "problems/P000/children/P001/README.md",
+      "check_ids": [
+        "C000"
+      ],
+      "created_at": "2026-07-11T02:04:24+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "知识同步、治理和 Archive 删除只按 operation ID 去重，无法确认重放 payload 是否一致，且无 KB 级联删除没有持久化幂等凭据。",
+      "followup_ids": [],
+      "id": "P001",
+      "package_path": "problems/P000/children/P001",
+      "parent_id": "P000",
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "canonical fingerprint 稳定覆盖 operation kind、schema 和规范化 payload，并排除 baseRevision。",
+        "Memory/Postgres 在业务写入同一事务内保存 receipt；相同指纹重放，不同指纹 409。",
+        "Governance 在构造 snapshot-dependent mutation 前识别 receipt。",
+        "Archive 无级联删除原样重放，并拒绝同 ID 删除另一 item。",
+        "legacy change 继续兼容并标记未验证，purge 清理 receipt。",
+        "后端单测、Postgres fake 与知识治理 smoke 通过。"
+      ],
+      "ticket_ids": [
+        "T001"
+      ],
+      "title": "后端权威 operation receipt 与事务幂等",
+      "updated_at": "2026-07-11T02:21:19+00:00"
+    },
+    "P002": {
+      "body_path": "problems/P000/children/P002/README.md",
+      "check_ids": [
+        "C001"
+      ],
+      "created_at": "2026-07-11T02:04:24+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "iOS 只识别 revision conflict；payload conflict 会永久保留普通 pending 或治理 outbox 队首，同时 outbox 允许同 operation ID 覆盖为不同 action。",
+      "followup_ids": [],
+      "id": "P002",
+      "package_path": "problems/P000/children/P002",
+      "parent_id": "P000",
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "Backend client 和 Coordinator 精确识别 payload conflict。",
+        "普通 mutation 清除 poisoned pending、保留本地 intent，并在刷新后用新 ID 重建。",
+        "Governance 首次冲突旋转 ID，第二次进入 quarantine，隔离项不阻塞后续队列。",
+        "Outbox operation ID 规范化、相同 payload 幂等、不同 payload 本地拒绝，Codable 兼容旧数据。",
+        "model smoke、client/coordinator checks 与知识管线 gate 通过。"
+      ],
+      "ticket_ids": [
+        "T002"
+      ],
+      "title": "iOS payload conflict 恢复与治理隔离",
+      "updated_at": "2026-07-11T02:28:52+00:00"
+    },
+    "P003": {
+      "body_path": "problems/P000/children/P003/README.md",
+      "check_ids": [
+        "C002"
+      ],
+      "created_at": "2026-07-11T02:04:24+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "后端 receipt 与 iOS 恢复只有被组合门禁和发布回归持续执行，才能防止后续知识功能重新引入静默去重或 poisoned queue。",
+      "followup_ids": [],
+      "id": "P003",
+      "package_path": "problems/P000/children/P003",
+      "parent_id": "P000",
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "新 payload conflict 场景进入知识治理组合 gate 和 release regression。",
+        "canonical 知识架构、Task 17、状态和 QA 命令文档一致。",
+        "后端全量测试、git diff --check、iOS release regression、Simulator workspace build、generic iPhoneOS build 全部通过。",
+        "后端和 iOS 分仓提交，工作树干净；不推送、不部署、不做真机。"
+      ],
+      "ticket_ids": [
+        "T003"
+      ],
+      "title": "Task 17 跨仓 QA、文档与非真机验收",
+      "updated_at": "2026-07-11T02:35:03+00:00"
+    }
+  },
+  "results": {
+    "R000": {
+      "artifacts": [],
+      "body_path": "problems/P000/children/P001/results/R000.md",
+      "created_at": "2026-07-11T02:20:36+00:00",
+      "done": [],
+      "id": "R000",
+      "known_gaps": [],
+      "problem_id": "P001",
+      "root_id": "P000",
+      "summary": "已在 Memory/Postgres 实现独立 `kb_operation_receipts`、canonical SHA-256 fingerprint 和结构化 payload conflict，覆盖知识同步、V1/V2 mutation、治理动作与 Archive 删除。Receipt 与 snapshot/change/archive 写入共享事务；legacy change 保持未验证兼容。",
+      "ticket_id": "T001",
+      "verification": []
+    },
+    "R001": {
+      "artifacts": [],
+      "body_path": "problems/P000/children/P002/results/R001.md",
+      "created_at": "2026-07-11T02:28:23+00:00",
+      "done": [],
+      "id": "R001",
+      "known_gaps": [],
+      "problem_id": "P002",
+      "root_id": "P000",
+      "summary": "Backend client 现保留结构化 error code、operation ID 和展示 detail；KnowledgeSyncCoordinator 对普通 mutation 和 governance payload conflict 分别执行可恢复状态机；治理 outbox 支持向后兼容的 recovery/quarantine 元数据、语义幂等 enqueue 和原子 replace。",
+      "ticket_id": "T002",
+      "verification": []
+    },
+    "R002": {
+      "artifacts": [],
+      "body_path": "problems/P000/children/P003/results/R002.md",
+      "created_at": "2026-07-11T02:34:42+00:00",
+      "done": [],
+      "id": "R002",
+      "known_gaps": [],
+      "problem_id": "P003",
+      "root_id": "P000",
+      "summary": "Operation receipt 与 iOS conflict recovery 已进入日常 release regression 和跨仓治理 gate；canonical 知识架构与完成状态文档已更新。最终非真机验收全部通过。",
+      "ticket_id": "T003",
+      "verification": []
+    },
+    "R003": {
+      "artifacts": [],
+      "body_path": "problems/P000/results/R003.md",
+      "created_at": "2026-07-11T02:35:21+00:00",
+      "done": [
+        "后端 Memory/Postgres receipt 与事务、legacy 未验证兼容、purge。",
+        "四类知识/治理/Archive API 冲突合同。",
+        "iOS BackendErrorContext、pending 重建、治理隔离和旧 outbox 兼容。",
+        "Release regression 固定 outbox smoke、canonical 文档和完成状态。",
+        "后端 250 tests、跨仓 224 tests、Simulator/generic iPhoneOS build 通过。"
+      ],
+      "id": "R003",
+      "known_gaps": [],
+      "problem_id": "P000",
+      "root_id": "P000",
+      "summary": "后端权威 operation receipt、payload fingerprint、Archive 无级联删除幂等和结构化 409 已完成；iOS 结构化错误、普通 mutation 恢复、governance rotate/quarantine 与长期 QA gate 已完成。公开 UI 未变化。",
+      "ticket_id": "T000",
+      "verification": []
+    }
+  },
+  "root_id": "P000",
+  "schema_version": 6,
+  "tickets": {
+    "T000": {
+      "acceptance_criteria": [
+        "新 operation ID 无法静默复用到不同 payload、schema、operation kind 或 Archive item。",
+        "相同语义 payload 在 base revision 改变后仍可幂等重放。",
+        "无 KB 级联的 Archive 删除也可原样重放，且不会污染 change feed。",
+        "legacy change 保持兼容，并明确返回 operationPayloadVerified=false。",
+        "Governance 原样 action 可重放，不同 action 返回 409；iOS 冲突恢复不形成无限循环。",
+        "公开产品 UI、Echo 上下文和用户正文不受影响，hash 不出现在 API 响应或日志正文中。"
+      ],
+      "assumptions": [
+        "operation ID 在单个用户范围内唯一。",
+        "baseRevision 是并发前提，不属于稳定业务 payload 指纹。",
+        "当前任务不执行线上数据库迁移、部署或真机验证。"
+      ],
+      "body_path": "problems/P000/tickets/T000.md",
+      "classification": "split",
+      "classification_reason": "任务跨越后端事务模型、多个 API 入口、iOS 持久化状态机与组合回归，需拆分为后端凭据、客户端恢复和集成验收三个独立子问题以控制风险。",
+      "created_at": "2026-07-11T02:03:46+00:00",
+      "id": "T000",
+      "problem_definition": "当前后端只按用户和 operation ID 去重，不验证同一 operation ID 是否仍对应相同语义 payload；不同知识写入、治理动作或 Archive 删除可能被静默当成首次请求的重复操作。iOS 对新冲突也没有终止或恢复策略，poisoned item 会永久阻塞治理队列。",
+      "problem_id": "P000",
+      "proposed_solution": "在后端建立独立 operation receipt，使用 canonical JSON 和 SHA-256 记录 operation kind 与规范化 payload 的语义指纹，并把 receipt 与 KB snapshot、change feed、Archive 删除置于同一事务。相同指纹安全重放，不同指纹返回结构化 409；旧 change 继续兼容但标记为未验证。iOS 将错误解析为强类型 disposition，普通 mutation 清理 poisoned pending 后刷新并用新 ID 重建，治理动作首次旋转、再次冲突隔离，且隔离项不阻塞后续队列。",
+      "result_ids": [
+        "R003"
+      ],
+      "risks": [
+        "Receipt 与业务写入若不在同一事务会造成错误回放或重复执行。",
+        "Governance mutation 依赖当前 snapshot，必须在构建 mutation 前检查稳定 action receipt。",
+        "Legacy 行无法还原原始 payload，不能伪造可信 hash。",
+        "iOS outbox Codable 变化必须兼容旧持久化文件。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "建立权威知识操作凭据并恢复客户端冲突",
+      "updated_at": "2026-07-11T02:35:21+00:00",
+      "verification_plan": "运行后端 memory/Postgres 单元测试、知识治理组合 gate 和全量测试；运行 iOS model smoke、client/coordinator static checks、知识治理 gate、release regression、Simulator workspace build 与 generic iPhoneOS build；最后执行两个仓库的 git diff --check 并分别提交。"
+    },
+    "T001": {
+      "acceptance_criteria": [
+        "五类 operation kind 均有稳定指纹和结构化冲突。",
+        "Receipt 覆盖有/无 mutation 的 Archive 删除和 governance 原样重放。",
+        "Postgres receipt、snapshot、change、archive 原子提交/回滚。",
+        "API 只返回 operationPayloadVerified 布尔值。",
+        "相关单元测试和组合 smoke 通过。"
+      ],
+      "assumptions": [
+        "本轮只做 additive schema 初始化，不执行线上部署。",
+        "baseRevision 不进入稳定指纹。"
+      ],
+      "body_path": "problems/P000/children/P001/tickets/T001.md",
+      "classification": "one_go",
+      "classification_reason": "该子问题已限定在后端幂等凭据模块和相关 API/store 测试，验收边界明确，可作为一个事务一致性改动整体实现，避免再次拆分破坏原子性。",
+      "created_at": "2026-07-11T02:04:55+00:00",
+      "id": "T001",
+      "problem_definition": "现有 store 无法确认重复 operation ID 的业务意图是否一致，且 Archive 无级联删除与 governance snapshot-dependent action 无完整幂等语义。",
+      "problem_id": "P001",
+      "proposed_solution": "新增稳定 fingerprint 与冲突异常，在 Memory/Postgres 建立独立 receipt；各 API 在业务副作用前检查 receipt，并在相同事务中记录权威结果。新记录严格比较 kind/hash，旧 change 走 unverified legacy 兼容。",
+      "result_ids": [
+        "R000"
+      ],
+      "risks": [
+        "Fake Postgres cursor 需同步新 SQL。",
+        "并发 insert 冲突必须回读并验证，而不是吞掉数据库唯一冲突。",
+        "Legacy 行不能推断为可信 exact payload。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现后端知识操作凭据",
+      "updated_at": "2026-07-11T02:20:36+00:00",
+      "verification_plan": "运行 core services、archive store、Postgres store、API route 相关测试和全量 pytest；运行知识治理 backend smoke 并检查 git diff。"
+    },
+    "T002": {
+      "acceptance_criteria": [
+        "Coordinator 精确识别 payload conflict，且不触发 V2->V1 fallback。",
+        "普通 pending 冲突后不再复用旧 ID，本地知识修改不丢失。",
+        "Governance 第一次冲突旋转，第二次 quarantine；隔离项不自动重放、不阻塞后续项。",
+        "相同 ID/相同 action enqueue 幂等，不同 action 本地拒绝；旧 outbox JSON 可读取。",
+        "QA model smoke 和源码门禁覆盖状态机。"
+      ],
+      "assumptions": [
+        "Backend 409 detail 包含稳定 error code 和 operation ID。",
+        "本轮只提供 QA 证据，不增加公开 UI。"
+      ],
+      "body_path": "problems/P000/children/P002/tickets/T002.md",
+      "classification": "one_go",
+      "classification_reason": "该子问题已限定在 Backend client、KnowledgeSyncCoordinator、governance outbox 及对应 QA；状态机必须整体修改和验证，拆分会增加 completion/持久化不一致风险。",
+      "created_at": "2026-07-11T02:21:40+00:00",
+      "id": "T002",
+      "problem_definition": "客户端无法精确区分 revision 与 payload conflict；普通 mutation 会永久复用 poisoned operation ID，治理 outbox 会让冲突项持续阻塞队列，并允许相同 ID 被不同 action 覆盖。",
+      "problem_id": "P002",
+      "proposed_solution": "为 backend error 增加稳定 code 解析和 conflict disposition；普通 mutation 遇到 payload conflict 时删除旧 pending、保留本地图谱并刷新后重建。Governance outbox 增加 recovery count 和 quarantine reason，首次冲突原子旋转 ID，第二次隔离并继续后续队列；修正重复 enqueue 与 operation ID 规范化。",
+      "result_ids": [
+        "R001"
+      ],
+      "risks": [
+        "completion 必须随 operation ID 旋转迁移，避免调用方永远收不到结果。",
+        "quarantine 写盘失败时不能错误声称已终止。",
+        "刷新权威 base 时 applyAuthoritativeRemote 会清 pending，需确保本地图谱合并保留 intent。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现 iOS 知识操作冲突恢复",
+      "updated_at": "2026-07-11T02:28:23+00:00",
+      "verification_plan": "运行 outbox model smoke、three-way merge smoke、client/coordinator checks、knowledge pipeline 和 governance gate，再运行编译与 release regression。"
+    },
+    "T003": {
+      "acceptance_criteria": [
+        "Release QA 始终执行 outbox recovery model/client/coordinator checks。",
+        "Canonical design 明确 receipt、legacy、隐私和客户端恢复语义。",
+        "后端全量 250 项测试、跨仓 gate、release regression 和两类非真机构建通过。",
+        "两仓 git diff --check 通过并独立提交，工作树仅保留明确忽略产物。"
+      ],
+      "assumptions": [
+        "本轮不推送、不部署、不运行真机。"
+      ],
+      "body_path": "problems/P000/children/P003/tickets/T003.md",
+      "classification": "one_go",
+      "classification_reason": "集成子问题只包含已实现功能的门禁、文档、全量验证和分仓提交，边界明确且无需再次拆分。",
+      "created_at": "2026-07-11T02:29:09+00:00",
+      "id": "T003",
+      "problem_definition": "后端 receipt 与 iOS recovery 已分别实现，但还需要进入长期 QA 门禁、canonical 知识架构与状态文档，并完成两个仓库的最终非真机验证和独立提交。",
+      "problem_id": "P003",
+      "proposed_solution": "将 operation receipt/payload conflict 场景纳入治理 gate 和 release regression，更新产品知识库架构、Task 17 状态和 QA 命令；运行后端全量验证、release regression、Simulator 与 generic iPhoneOS build，清理临时产物后分别提交。",
+      "result_ids": [
+        "R002"
+      ],
+      "risks": [
+        "Release regression 较长，需区分环境噪声与代码回归。",
+        "Closure 自动同步可能在 progress.md 末尾产生空白，需要最终 diff 检查修正。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "收敛 Task 17 跨仓交付",
+      "updated_at": "2026-07-11T02:34:42+00:00",
+      "verification_plan": "运行 `scripts/verify_backend.sh`、`run-knowledge-governance-gate.sh`、`run-release-regression.sh`、Simulator workspace build 和 `run-iphoneos-generic-build.sh`，记录报告路径与 commit。"
+    }
+  },
+  "updated_at": "2026-07-11T02:35:45+00:00"
+}
