@@ -52,7 +52,7 @@
 - [x] 原有 envelope、路径和账号隔离行为兼容。
 - [x] generation Context 在 ranking 前完成 persona/privacy/evidence 候选过滤，并保留排名后二次过滤。
 - [x] 新 gates、release QA、Simulator/generic iPhoneOS build 与差异检查通过。
-- [ ] 代码、文档提交推送；后端无变化时明确无需部署。
+- [x] iOS 实现已由 `f0ee683` 提交并推送；后端无变化，无需部署。
 
 ## 最终非真机证据
 

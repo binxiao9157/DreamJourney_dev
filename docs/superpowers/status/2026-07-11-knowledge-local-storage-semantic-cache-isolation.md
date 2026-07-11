@@ -1,7 +1,7 @@
 # 知识本地存储与语义缓存隔离状态
 
 日期：2026-07-11
-状态：非真机实现与完整回归通过，等待提交交付。
+状态：非真机实现、完整回归与远端交付完成。
 
 ## 已完成
 
@@ -38,3 +38,10 @@ Simulator、generic iPhoneOS、Archive -> Echo smoke 和延迟回信通知 smoke
 - 真机锁屏前后 Data Protection 与系统备份行为仍需后续设备验收，本轮不宣称完成。
 - legacy sync history 所属的整库分享仍默认关闭；本轮只保护文件，不重新开放产品能力。
 - 后端没有代码或合同变化，不需要重新部署。
+
+## 交付版本
+
+- iOS 分支：`feature/prd-stitch-ui-adaptation`
+- 实现提交：`f0ee683 feat: isolate local knowledge cache and storage`
+- 远端状态：已推送至 `origin/feature/prd-stitch-ui-adaptation`
+- 后端：本轮无代码或合同变化，无需部署

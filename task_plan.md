@@ -4,7 +4,7 @@
 
 - **Goal:** 按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态
 - **Mode:** Review
-- **Phase:** Phase 18 local knowledge storage and semantic cache isolation closed; delivery pending
+- **Phase:** Phase 18 local knowledge storage and semantic cache isolation delivered
 - **Task:** `docs/plans/task_23_p1-knowledge-local-storage-semantic-cache-isolation.md`
 - **Blockers:** none for non-device implementation
 
@@ -41,11 +41,11 @@
 - Task 20 is complete and deployed. V2 mutation response/change/receipt/replay now share one canonical source-title contract; historical Postgres metadata was backed up, cleaned, and verified at zero pending changes after a new online sentinel write. Backend `d6d13be` is live, iOS/QA `190d65f` is pushed, and ledger `L20260711-122802` is closed.
 - Task 21 is complete. It binds Widget/App Group knowledge snapshots to the current user, defaults Widget disclosure to deny, clears/reloads on logout or account switch, fixes the missing App Group target contract, passes the default release regression and both non-device builds, and is delivered in `fa8fb9c`. Ledger `L20260711-145625-21` is closed.
 - Task 22 is delivered in iOS commit `f790313`. Non-device implementation, final8 regression, ledger closure and remote push are complete. Backend phone invitation remains the relationship authority; runtime freshness, immutable persona snapshots, active Echo fallback and coordinator authorization epoch prevent stale family knowledge use. No backend behavior changed, so no server deployment was required.
-- Task 23 implementation, independent review, final3 release regression and ledger closure are complete. It scopes semantic embedding cache by account/generation/content, filters generation candidates before ranking, and applies one local storage protection policy to graph/base/pending/outbox files without changing public UI or file envelopes. Commit/push remains; backend has no changes.
+- Task 23 is delivered in iOS commit `f0ee683`. It scopes semantic embedding cache by account/generation/content, filters generation candidates before ranking, applies one local storage protection policy to graph/base/pending/outbox files, and closes independent review findings without changing public UI or file envelopes. Backend had no changes and required no deployment.
 
 ## Scope
 
-Phase 2, Phase 3, and Tasks 9-22 are closed and delivered. Task 23 is closed at implementation/review level and awaiting remote delivery. Production remains on global ownership `shadow`; actual historical sourceRef identity migration, public knowledge-governance UI, change-feed retention/compaction and true-device acceptance remain follow-up slices.
+Phase 2, Phase 3, and Tasks 9-23 are closed and delivered. Production remains on global ownership `shadow`; actual historical sourceRef identity migration, public knowledge-governance UI, change-feed retention/compaction and true-device acceptance remain follow-up slices.
 
 ## Recovery
 
