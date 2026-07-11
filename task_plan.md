@@ -3,9 +3,9 @@
 ## STATUS
 
 - **Goal:** 按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态
-- **Mode:** Review
-- **Phase:** Phase 14 canonical knowledge source identity complete
-- **Task:** Task 19 closed; select the next PRD knowledge slice before new implementation
+- **Mode:** Plan
+- **Phase:** Phase 15 knowledge mutation privacy canonicalization
+- **Task:** `docs/plans/task_20_p0-knowledge-mutation-privacy-canonicalization.md`
 - **Blockers:** none for non-device implementation
 
 ## Key Decisions
@@ -38,10 +38,11 @@
 - Task 17 is complete. Authoritative operation receipts and payload fingerprints cover knowledge sync/governance/archive cascade; iOS poisoned-operation recovery and governance quarantine are guarded without public UI changes. Ledger `L20260711-100251` is closed.
 - Task 18 is complete and deployed. Stable-target change-feed pagination, terminal-only iOS commit and KBLite graph mutation CAS passed local, build and deployed Postgres gates. Ledger `L20260711-104956` is closed.
 - Task 19 is complete and deployed. New knowledge uses exact conversation-turn/photo identities; owner-bound legacy source audit is aggregate-only; backend `dd88f17` is live on Postgres and iOS `fc5772d` is pushed. Ledger `L20260711-113033` is closed.
+- Task 20 is active. It closes the raw source-title privacy bypass across V2 mutation responses, change feed, operation receipts and persisted history without changing source identity or public UI.
 
 ## Scope
 
-Phase 2, Phase 3, and Tasks 9-19 are closed. Production remains on global ownership `shadow`; actual historical sourceRef apply migration, public knowledge-governance UI, change-feed retention/compaction, deployed Postgres receipt-specific smoke and true-device acceptance remain follow-up slices.
+Phase 2, Phase 3, and Tasks 9-19 are closed. Task 20 is active. Production remains on global ownership `shadow`; actual historical sourceRef identity migration, public knowledge-governance UI, change-feed retention/compaction, Widget/privacy lifecycle and true-device acceptance remain follow-up slices.
 
 ## Recovery
 

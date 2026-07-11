@@ -146,3 +146,11 @@
 - `/kb/source-ref-audit/{userId}` 只返回聚合计数和建议动作，owner principal 绑定，跨账号访问被拒绝，不返回 graph、正文或 source ID。
 - 跨仓 source identity gate 已进入默认 release regression。后端 `dd88f17` 已部署，线上 Postgres smoke 证明 canonical count、权限和聚合隐私边界；iOS `fc5772d` 已推送。
 - 历史 legacy ref 的真实迁移仍需独立批准和可证明的来源映射，本任务没有 apply migration API。
+
+## Task 20 Exploration
+
+- V2 graph 会通过 `filter_syncable_graph` canonicalize source title，但 normalized mutation 原样保留客户端 title。
+- 原始 mutation 同时进入首次响应、`kb_changes.mutation`、`kb_operation_receipts.result` 和 replay，构成独立于 snapshot 的持久化隐私旁路。
+- 修复必须发生在 payload fingerprint 之前，否则同一 operation ID 仅因不可信 title 不同就会错误冲突。
+- 存量修复必须同时规范 change mutation 与 receipt result；对 `kb.mutation` V2 receipt 可由 canonical mutation 安全重算 hash，其他 operation kind 不猜测原始输入。
+- 本轮不混入 Widget、Family 权限、semantic cache 或 compaction，保持单一隐私闭环。

@@ -160,7 +160,15 @@
       "status": "complete",
       "task_file": "docs/plans/task_19_p1-canonical-knowledge-source-identity.md",
       "updated_at": "2026-07-11T12:19:05+08:00"
+    },
+    "docs/plans/task_20_p0-knowledge-mutation-privacy-canonicalization.md": {
+      "ledger_id": "L20260711-122802",
+      "ledger_path": ".complex-problems/L20260711-122802",
+      "next_action": "execute-ticket",
+      "status": "next",
+      "task_file": "docs/plans/task_20_p0-knowledge-mutation-privacy-canonicalization.md",
+      "updated_at": "2026-07-11T14:30:34+08:00"
     }
   },
-  "updated_at": "2026-07-11T12:19:05+08:00"
+  "updated_at": "2026-07-11T14:30:34+08:00"
 }

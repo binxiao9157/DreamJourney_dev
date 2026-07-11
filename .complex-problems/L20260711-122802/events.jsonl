@@ -1,0 +1,42 @@
+{"at": "2026-07-11T04:28:02+00:00", "id": "E000", "payload": {"ledger_id": "L20260711-122802", "root_id": "P000", "title": "Task 20：P0 Knowledge Mutation / Receipt 隐私 Canonicalization"}, "root_id": "P000", "type": "ledger_initialized"}
+{"at": "2026-07-11T04:28:27+00:00", "id": "E001", "payload": {"problem_id": "P000", "ticket_id": "T000", "title": "统一知识 mutation 隐私格式并清洗持久化历史"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T04:28:27+00:00", "id": "E002", "payload": {"from": "created", "id": "T000", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T04:28:35+00:00", "id": "E003", "payload": {"from": "defined", "id": "T000", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T04:28:35+00:00", "id": "E004", "payload": {"classification": "split", "reason": "包含新写入合同、历史数据维护事务和跨仓部署验收三个独立风险面，必须分开证明且不能在一个结果中互相掩盖。", "ticket_id": "T000"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T04:29:16+00:00", "id": "E005", "payload": {"from": "classified", "id": "T000", "to": "splitting"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T04:29:16+00:00", "id": "E006", "payload": {"parent_id": "P000", "problem_id": "P001", "source": "split", "title": "新 V2 mutation 单一 canonical 隐私合同"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T04:29:16+00:00", "id": "E007", "payload": {"parent_id": "P000", "problem_id": "P002", "source": "split", "title": "历史知识隐私 metadata 幂等维护工具"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T04:29:16+00:00", "id": "E008", "payload": {"parent_id": "P000", "problem_id": "P003", "source": "split", "title": "跨仓 QA、提交部署与线上存量验收"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T04:29:43+00:00", "id": "E009", "payload": {"problem_id": "P001", "ticket_id": "T001", "title": "在知识 mutation 入口 canonicalize 隐私 metadata"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T04:29:43+00:00", "id": "E010", "payload": {"from": "created", "id": "T001", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T04:29:55+00:00", "id": "E011", "payload": {"from": "defined", "id": "T001", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T04:29:55+00:00", "id": "E012", "payload": {"classification": "one_go", "reason": "一个 canonicalizer 入口加两种 store 的定向回归，范围内聚且不涉及历史数据写入，可一次实现和验证。", "ticket_id": "T001"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T06:19:14+00:00", "id": "E013", "payload": {"from": "todo", "id": "P001", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T06:19:14+00:00", "id": "E014", "payload": {"from": "classified", "id": "T001", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T06:19:14+00:00", "id": "E015", "payload": {"from": "executing", "id": "T001", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T06:19:14+00:00", "id": "E016", "payload": {"result_id": "R000", "ticket_id": "T001"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T06:19:34+00:00", "id": "E017", "payload": {"from": "doing", "id": "P001", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T06:19:34+00:00", "id": "E018", "payload": {"from": "checking", "id": "P001", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T06:19:34+00:00", "id": "E019", "payload": {"check_id": "C000", "followup_id": null, "problem_id": "P001", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T06:20:07+00:00", "id": "E020", "payload": {"problem_id": "P002", "ticket_id": "T002", "title": "以单事务维护服务规范历史知识隐私 metadata"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T06:20:07+00:00", "id": "E021", "payload": {"from": "created", "id": "T002", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T06:20:16+00:00", "id": "E022", "payload": {"from": "defined", "id": "T002", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T06:20:16+00:00", "id": "E023", "payload": {"classification": "one_go", "reason": "维护算法、Postgres 事务入口和 CLI 属于同一个不可分割的数据安全闭环，必须一起实现才能诚实验证 dry-run/apply/rollback。", "ticket_id": "T002"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T06:27:40+00:00", "id": "E024", "payload": {"from": "todo", "id": "P002", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T06:27:40+00:00", "id": "E025", "payload": {"from": "classified", "id": "T002", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T06:27:40+00:00", "id": "E026", "payload": {"from": "executing", "id": "T002", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T06:27:40+00:00", "id": "E027", "payload": {"result_id": "R001", "ticket_id": "T002"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T06:28:06+00:00", "id": "E028", "payload": {"from": "doing", "id": "P002", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T06:28:06+00:00", "id": "E029", "payload": {"from": "checking", "id": "P002", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T06:28:06+00:00", "id": "E030", "payload": {"check_id": "C001", "followup_id": null, "problem_id": "P002", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T06:28:42+00:00", "id": "E031", "payload": {"problem_id": "P003", "ticket_id": "T003", "title": "固化隐私 gate 并完成双仓发布与线上清洗验收"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T06:28:42+00:00", "id": "E032", "payload": {"from": "created", "id": "T003", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T06:28:49+00:00", "id": "E033", "payload": {"from": "defined", "id": "T003", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T06:28:49+00:00", "id": "E034", "payload": {"classification": "split", "reason": "跨仓 gate/构建提交与生产部署清洗是两个不同风险面；前者可在本地完整验证，后者涉及服务器备份、表锁和生产写入，必须分别检查且不能用本地结果替代线上证据。", "ticket_id": "T003"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T06:29:13+00:00", "id": "E035", "payload": {"from": "classified", "id": "T003", "to": "splitting"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T06:29:14+00:00", "id": "E036", "payload": {"parent_id": "P003", "problem_id": "P004", "source": "split", "title": "跨仓隐私 QA、构建与提交发布"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T06:29:14+00:00", "id": "E037", "payload": {"parent_id": "P003", "problem_id": "P005", "source": "split", "title": "后端部署与生产 Postgres 存量隐私验收"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T06:30:20+00:00", "id": "E038", "payload": {"problem_id": "P004", "ticket_id": "T004", "title": "增加知识隐私组合 gate 并发布双仓提交"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T06:30:20+00:00", "id": "E039", "payload": {"from": "created", "id": "T004", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T06:30:34+00:00", "id": "E040", "payload": {"from": "defined", "id": "T004", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T06:30:34+00:00", "id": "E041", "payload": {"classification": "one_go", "reason": "范围虽跨两个仓库，但所有改动都是同一个本地 release gate 的脚本、文档、构建和提交闭环，不含生产数据写入；验证可由一组确定命令完成，进一步拆分会让接线与证据相互等待。", "ticket_id": "T004"}, "root_id": "P000", "type": "ticket_classified"}

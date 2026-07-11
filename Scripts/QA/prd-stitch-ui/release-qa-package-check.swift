@@ -116,6 +116,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-18-profile-care-intervention-placeholder.md",
     "docs/superpowers/status/2026-06-18-archive-sync-error-recovery.md",
     "docs/superpowers/status/2026-06-19-archive-analysis-backend-contract.md",
+    "docs/superpowers/status/2026-07-11-knowledge-mutation-privacy-canonicalization.md",
     "docs/superpowers/status/2026-06-19-archive-image-analysis-live-chain.md",
     "docs/superpowers/status/2026-06-19-archive-image-analysis-runtime-contract.md",
     "docs/superpowers/status/2026-06-19-archive-image-analysis-runtime-ui.md",
@@ -188,6 +189,7 @@ assertContains(matrix, "DJEnableProfileHiddenBranches", "release matrix should d
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let knowledgeGovernanceGate = read("Scripts/QA/prd-stitch-ui/run-knowledge-governance-gate.sh")
 let knowledgeSourceIdentityGate = read("Scripts/QA/prd-stitch-ui/run-knowledge-source-identity-gate.sh")
+let knowledgePrivacyMaintenanceGate = read("Scripts/QA/prd-stitch-ui/run-knowledge-privacy-maintenance-gate.sh")
 let knowledgeSourceIdentityModel = read("DreamJourney/Sources/Services/KBLiteModels.swift")
 let knowledgeBackendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let knowledgeGovernanceStatus = read("docs/superpowers/status/2026-07-11-knowledge-governance-source-cascade.md")
@@ -232,6 +234,9 @@ assertContains(releaseRegression, "run-knowledge-governance-model-smoke.sh", "re
 assertContains(releaseRegression, "run-knowledge-governance-outbox-model-smoke.sh", "release regression should always run governance outbox recovery smoke")
 assertContains(releaseRegression, "run-knowledge-change-feed-pagination-gate.sh", "release regression should always run stable change-feed pagination gate")
 assertContains(releaseRegression, "run-knowledge-source-identity-gate.sh", "release regression should always run canonical knowledge source identity gate")
+assertContains(releaseRegression, "RUN_KNOWLEDGE_PRIVACY_MAINTENANCE_GATE", "release regression should expose the knowledge privacy maintenance gate")
+assertContains(releaseRegression, "run-knowledge-privacy-maintenance-gate.sh", "release regression should run the knowledge privacy maintenance gate")
+assertContains(knowledgePrivacyMaintenanceGate, "run-backend-knowledge-privacy-maintenance-smoke.sh", "privacy maintenance gate should run the backend fixture smoke")
 assertContains(knowledgeSourceIdentityGate, "run-knowledge-source-identity-model-smoke.sh", "source identity gate should run the iOS canonical model smoke")
 assertContains(knowledgeSourceIdentityGate, "knowledge-source-identity-client-check.swift", "source identity gate should run the typed client guard")
 assertContains(knowledgeSourceIdentityGate, "run-backend-knowledge-source-identity-smoke.sh", "source identity gate should run the backend contract smoke")
@@ -401,6 +406,8 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/run-knowledge-source-identity-model-smoke.sh",
     "Scripts/QA/prd-stitch-ui/knowledge-source-identity-client-check.swift",
     "Scripts/QA/prd-stitch-ui/run-knowledge-source-identity-gate.sh",
+    "Scripts/QA/prd-stitch-ui/knowledge-privacy-maintenance-contract-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-knowledge-privacy-maintenance-gate.sh",
     "Scripts/QA/prd-stitch-ui/run-backend-env-smoke.sh",
     "Scripts/QA/prd-stitch-ui/run-release-like-backend-acceptance.sh",
     "Scripts/QA/prd-stitch-ui/final-visual-qa-package-check.swift",

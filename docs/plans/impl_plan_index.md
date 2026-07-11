@@ -32,6 +32,7 @@
 | 17 | done | P1 knowledge operation receipt and conflict recovery | `docs/plans/task_17_p1-knowledge-operation-payload-hash.md` | `L20260711-100251` |
 | 18 | done | P1 knowledge change-feed stable pagination | `docs/plans/task_18_p1-knowledge-change-feed-pagination.md` | `L20260711-104956` |
 | 19 | done | P1 canonical knowledge source identity and legacy audit | `docs/plans/task_19_p1-canonical-knowledge-source-identity.md` | `L20260711-113033` |
+| 20 | execute-ticket | P0 knowledge mutation/receipt privacy canonicalization | `docs/plans/task_20_p0-knowledge-mutation-privacy-canonicalization.md` | `L20260711-122802` |
 
 ## File Structure
 
