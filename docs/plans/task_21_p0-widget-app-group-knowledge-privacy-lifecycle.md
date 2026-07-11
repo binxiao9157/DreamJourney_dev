@@ -62,7 +62,7 @@
 - [x] publish/clear 触发 `reloadTimelines(ofKind:)`。
 - [x] App/Widget entitlement、bundle ID 和 App Group build setting 一致。
 - [x] 模型 smoke、静态 gate、release QA、Simulator/generic iPhoneOS build、git diff check 通过。
-- [ ] 提交推送；不做真机、不改 Stitch UI。
+- [x] 实现提交 `fa8fb9c` 已推送；不做真机、不改 Stitch UI。
 
 ## 非目标
 

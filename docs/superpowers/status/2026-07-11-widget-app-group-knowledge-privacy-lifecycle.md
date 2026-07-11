@@ -6,6 +6,8 @@
 
 状态：非真机实现与验证完成；真实 App Group provisioning/Widget Gallery 验收待外部执行。
 
+实现提交：`fa8fb9c feat: guard Widget knowledge privacy lifecycle`，已推送至 `origin/feature/prd-stitch-ui-adaptation`。
+
 ## 完成内容
 
 - `KBPrivacyMetadata.widgetVisibility` 为独立显式授权，历史数据和默认值均为 deny。

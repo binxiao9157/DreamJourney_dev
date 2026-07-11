@@ -1,6 +1,6 @@
 # P000: Task 21：P0 Widget / App Group 知识隐私生命周期
 
-Status: followup
+Status: done
 Parent: none
 Root: P000
 Source Ticket: none (none)
@@ -32,13 +32,14 @@ Task context:
 - R006
 
 ## Latest Check
-C006
+C008
 
 ## Bodies
 - Problem: problems/P000/README.md
 - Ticket T000: problems/P000/tickets/T000.md
 - Result R006: problems/P000/results/R006.md
 - Check C006: problems/P000/checks/C006.md
+- Check C008: problems/P000/checks/C008.md
 
 ## Follow-ups
 - P007: 提交推送 Task 21 并完成闭环状态

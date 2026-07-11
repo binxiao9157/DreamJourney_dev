@@ -237,13 +237,96 @@
       "status": "not_success",
       "stress_test": [],
       "summary": "R006 证明全部技术与非真机验收已完成，但原始验收清单明确要求提交推送；当前工作区仍有未提交变更，因此不能判定根问题成功。"
+    },
+    "C007": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P007/checks/C007.md",
+      "created_at": "2026-07-11T07:24:51+00:00",
+      "criteria_map": [
+        "实现/QA/账本/文档提交：`fa8fb9c`。",
+        "远端可用：origin 分支已更新。",
+        "无 secret/tmp：提交前状态与敏感模式审核通过，tmp 证据未被 add。",
+        "完成态更新：Task 21 最后一项已标记并引用提交。"
+      ],
+      "evidence": [
+        "`git push` 输出确认 `a344b80..fa8fb9c` 已更新远端分支。",
+        "`git rev-parse HEAD` 与 `git rev-parse origin/feature/prd-stitch-ui-adaptation` 完全一致。",
+        "Task 21 清单和状态文档记录相同实现提交。"
+      ],
+      "execution_map": [
+        "T007/R007 执行了审核、提交、推送和远端一致性验证。"
+      ],
+      "followup_problem_id": null,
+      "id": "C007",
+      "problem_id": "P007",
+      "residual_risk": [
+        "本 success check 与根账本关闭会新增 ledger 状态；finalization 后必须再提交推送并确认 clean，这是流程尾部动作。"
+      ],
+      "result_ids": [
+        "R007"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "使用完整 40 位 SHA 比较本地与远端，而不是仅依赖 push 命令无错误。"
+      ],
+      "summary": "R007 证明实现提交已推送且本地/远端一致，满足 P007 对可共享交付的核心要求；账本关闭后的状态提交由 Closure finalization 紧接执行。"
+    },
+    "C008": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/checks/C008.md",
+      "created_at": "2026-07-11T07:27:24+00:00",
+      "criteria_map": [
+        "默认与 legacy 知识不进入 Widget：P001/C000。",
+        "快照不含 raw owner/event/source ID、description 或 sourceRefs：P001/C000 与 P003/C004。",
+        "owner 不匹配、登出、旧 schema、损坏文件返回空态：P002/C001 与 P003/C004。",
+        "旧 generation 无法覆盖新账号或登出清理：P002/C001。",
+        "publish、撤销和失败清理触发指定 Widget timeline reload：P002/C001。",
+        "App/Widget entitlement、App Group 与 bundle ID 接线一致：P003/C004。",
+        "默认 release regression、两类 iOS build 与 diff 检查通过：P004/C005、P007/C007。",
+        "实现提交并推送：P007/C007。"
+      ],
+      "evidence": [
+        "P001/C000：只有显式 `summaryAllowed`、`generationAllowed`、confirmed、personal 且 owner 匹配的知识事件可生成最小摘要；legacy/default 均拒绝。",
+        "P002/C001：App Group 快照绑定不可逆 owner digest 与 publication generation；切换账号、登出、旧异步保存和写入失败均 fail closed，并触发 timeline reload。",
+        "P003/C004：Widget reader 校验 schema、active owner digest 与字段边界；主 App 嵌入 Widget extension，bundle ID、entitlement 与 App Group build setting 一致。",
+        "P004/C005：三个模型 smoke、专项静态 gate、release QA package、完整 release regression、Simulator 与 generic iPhoneOS build 均通过。",
+        "P007/C007：实现提交 `fa8fb9c` 已推送，HEAD 与远端分支 SHA 一致，交付证据可共享。"
+      ],
+      "execution_map": [
+        "T001/R000 实现并验证最小隐私投影。",
+        "T002/R001 实现并验证 generation-bound 快照生命周期。",
+        "T003 的 P005/R002 与 P006/R003 分别完成 reader 和工程接线，R004 汇总验收。",
+        "T004/R005 完成 QA、构建、回归和文档。",
+        "T007/R007 完成仓库提交、推送和远端一致性验证。"
+      ],
+      "followup_problem_id": null,
+      "id": "C008",
+      "problem_id": "P000",
+      "residual_risk": [
+        "Apple Developer Portal App Group 注册、provisioning 刷新、Widget Gallery 与锁屏隐私属于明确排除的真实设备外部验收，不影响本轮非真机代码闭环。",
+        "当前没有公开 Widget 授权入口，因此知识默认不展示是预期的 fail-closed 产品行为。"
+      ],
+      "result_ids": [
+        "R006",
+        "R007"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "覆盖默认拒绝、跨 owner、family persona、未确认 evidence、旧 generation、登出、账号切换、旧 schema、损坏快照与 active owner 不匹配。",
+        "验证 `.appex` 同时存在于 Simulator 和 generic iPhoneOS 构建产物，并验证本地 bundle identifier override 不破坏 Widget 派生标识。",
+        "完整 release regression 证明移除旧无条件 App Group 导出后，Archive -> Echo 等公开 MVP 链路仍通过。",
+        "使用完整 SHA 比较本地与远端提交，避免把仅本地完成误判为交付完成。"
+      ],
+      "summary": "R006 已证明 Task 21 的隐私投影、账号与 generation 生命周期、Widget fail-closed 读取、工程嵌入、默认发布回归和文档全部完成；R007 进一步证明实现与证据已提交并推送。两项结果合并后满足根问题全部标准。"
     }
   },
   "counters": {
-    "check": 7,
-    "event": 90,
+    "check": 9,
+    "event": 98,
     "problem": 8,
-    "result": 7,
+    "result": 8,
     "ticket": 8
   },
   "created_at": "2026-07-11T06:56:25+00:00",
@@ -254,7 +337,8 @@
     "P000": {
       "body_path": "problems/P000/README.md",
       "check_ids": [
-        "C006"
+        "C006",
+        "C008"
       ],
       "created_at": "2026-07-11T06:56:25+00:00",
       "created_from_check_id": null,
@@ -271,7 +355,7 @@
         "R006"
       ],
       "root_id": "P000",
-      "status": "followup",
+      "status": "done",
       "subproblem_ids": [
         "P001",
         "P002",
@@ -288,7 +372,7 @@
         "T000"
       ],
       "title": "Task 21：P0 Widget / App Group 知识隐私生命周期",
-      "updated_at": "2026-07-11T07:22:29+00:00"
+      "updated_at": "2026-07-11T07:27:24+00:00"
     },
     "P001": {
       "body_path": "problems/P000/children/P001/README.md",
@@ -494,7 +578,9 @@
     },
     "P007": {
       "body_path": "problems/P000/children/P007/README.md",
-      "check_ids": [],
+      "check_ids": [
+        "C007"
+      ],
       "created_at": "2026-07-11T07:22:29+00:00",
       "created_from_check_id": "C006",
       "created_from_ticket_id": null,
@@ -504,9 +590,11 @@
       "id": "P007",
       "package_path": "problems/P000/children/P007",
       "parent_id": "P000",
-      "result_ids": [],
+      "result_ids": [
+        "R007"
+      ],
       "root_id": "P000",
-      "status": "doing",
+      "status": "done",
       "subproblem_ids": [],
       "success_criteria": [
         "提交当前 Task 21 实现、QA、账本和文档，提交信息清晰说明 Widget 知识隐私生命周期。",
@@ -518,7 +606,7 @@
         "T007"
       ],
       "title": "提交推送 Task 21 并完成闭环状态",
-      "updated_at": "2026-07-11T07:23:10+00:00"
+      "updated_at": "2026-07-11T07:24:51+00:00"
     }
   },
   "results": {
@@ -735,6 +823,35 @@
         "三个模型 smoke、专项静态 gate、release QA package 通过。",
         "Simulator 与 generic iPhoneOS build 通过，`.appex` 已嵌入且 bundle ID 正确派生。",
         "完整 release regression `20260711-task21-widget-privacy-rerun` 通过。"
+      ]
+    },
+    "R007": {
+      "artifacts": [
+        "Commit `fa8fb9c`",
+        "Remote `origin/feature/prd-stitch-ui-adaptation`"
+      ],
+      "body_path": "problems/P000/children/P007/results/R007.md",
+      "created_at": "2026-07-11T07:24:44+00:00",
+      "done": [
+        "最终 diff/敏感模式审核未发现 LocalConfig、token 或私密配置进入变更。",
+        "提交 `fa8fb9c feat: guard Widget knowledge privacy lifecycle`。",
+        "推送 `origin/feature/prd-stitch-ui-adaptation` 成功。",
+        "`HEAD` 与远端分支均为 `fa8fb9c618bdbbf82f0af82a32c9bba026a3a434`。",
+        "Task 21 最后一项和状态文档已更新为有提交证据的完成态。"
+      ],
+      "id": "R007",
+      "known_gaps": [
+        "Closure success check/最终状态同步会产生少量账本与计划变更，需要在账本关闭后再做一个闭环文档提交；这是正常的 ledger finalization，不是功能缺口。",
+        "真机 App Group provisioning 仍按 Task 21 非目标保留。"
+      ],
+      "problem_id": "P007",
+      "root_id": "P000",
+      "summary": "Task 21 全部实现、QA、Closure 中间证据和产品文档已形成远程提交 `fa8fb9c`；本地与 origin 提交一致。计划清单已记录该交付事实。",
+      "ticket_id": "T007",
+      "verification": [
+        "提交前 `git diff --check` 通过。",
+        "推送后工作区曾为 clean，分支 ahead/behind 为 0。",
+        "已完成的专项、完整 regression 与两 SDK build 证据均随提交文档可追溯。"
       ]
     }
   },
@@ -991,16 +1108,18 @@
       "problem_definition": "全部实现和验证仍只存在本地工作区，无法供其他同事使用，也不能满足 Task 21 明确的提交推送验收项。",
       "problem_id": "P007",
       "proposed_solution": "先做最终敏感信息与 diff 审核，提交并推送实现态；再更新 Task 21/索引/Task Plan 和 Closure 完成状态，运行格式与账本检查，提交推送闭环文档。最终确认本地分支与 origin 一致、工作区干净。",
-      "result_ids": [],
+      "result_ids": [
+        "R007"
+      ],
       "risks": [
         "Closure 状态在实现提交后仍会变化，因此必须有第二个小型闭环提交，不能错误宣称一次提交后工作区干净。"
       ],
       "root_id": "P000",
-      "status": "executing",
+      "status": "done",
       "title": "形成远程可共享的 Task 21 完整提交",
-      "updated_at": "2026-07-11T07:23:10+00:00",
+      "updated_at": "2026-07-11T07:24:44+00:00",
       "verification_plan": "使用 `git diff --check`、敏感模式扫描、`git status/diff --stat` 审核；提交推送后比较 `HEAD` 与 `origin/feature/prd-stitch-ui-adaptation`；运行 Closure `next/check` 和最终工作区状态检查。"
     }
   },
-  "updated_at": "2026-07-11T07:23:10+00:00"
+  "updated_at": "2026-07-11T07:27:24+00:00"
 }

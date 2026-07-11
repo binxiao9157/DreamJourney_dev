@@ -172,3 +172,18 @@
 - `switchUser(to:)` 已尝试用新/空图谱替换共享文件，这是可复用基础，但共享 JSON 没有 schema/owner digest，Provider 无法识别旧用户或损坏快照。
 - 当前没有 `WidgetCenter.reloadTimelines`，即使登出写空文件，系统已缓存的旧 entry 仍可能持续展示。
 - Task 21 必须采用显式 `summaryAllowed` + confirmed personal owner 组合，默认/legacy 一律 deny；本轮不凭空开放产品授权入口。
+
+## Task 21 Resolution
+
+- Widget 知识快照升级为 schema v2，只包含显式 `summaryAllowed`、`generationAllowed`、confirmed、personal 且 owner 匹配的最小摘要；raw owner/event/source ID、description 和 sourceRefs 不进入 App Group。
+- `KnowledgeWidgetSnapshotStore` 使用 owner digest 与 publication generation 阻断旧账号异步写，登出/切换/失败清理均撤销 active owner 并 reload `TodayInHistory` timeline。
+- Widget reader 对 schema、active owner、快照 owner 和内容边界执行 fail-closed 校验；旧 schema、损坏文件和身份不匹配只返回空态。
+- 主 App 与 Widget extension 的 App Group entitlement、bundle identifier 派生、嵌入和 target dependency 已接通；Simulator 与 generic iPhoneOS 构建产物均包含 `.appex`。
+- 三个模型 smoke、静态隐私 gate、release QA package 和完整 release regression 均通过；实现提交 `fa8fb9c` 已推送，ledger `L20260711-145625-21` 已关闭。
+- 真实 App Group provisioning、Widget Gallery 和锁屏隐私仍是明确排除的外部真机验收；公开授权入口未决前继续默认 deny。
+
+## Task 22 Exploration
+
+- Canonical 知识架构明确规定：对话中提取的 `KBPerson` 只能作为人物候选，不能自动成为 `active + accepted` 家庭成员；家庭关系必须来自手机号邀请、接受状态和后端授权合同。
+- 当前 `FamilyRepository.syncFromKnowledgeBase()` 将 `KBPerson` 直接构造成 `FamilyMember`，而 `FamilyMember` 本地 initializer/legacy decoder 默认 `accessStatus=active`、`invitationStatus=accepted`，存在本地角色列表提前授权风险。
+- 后端 `/context/build` 已验证 pending family viewer 不可使用家庭 Archive、care 或私有事实，因此下一 P0 应收敛 iOS 本地候选/授权语义，而不是重建后端 Context policy。

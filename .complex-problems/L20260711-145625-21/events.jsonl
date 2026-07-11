@@ -88,3 +88,11 @@
 {"at": "2026-07-11T07:22:57+00:00", "id": "E087", "payload": {"classification": "one_go", "reason": "只剩仓库审核、两次提交推送和状态关闭，步骤线性且验收可由远端引用和干净工作区直接证明。", "ticket_id": "T007"}, "root_id": "P000", "type": "ticket_classified"}
 {"at": "2026-07-11T07:23:10+00:00", "id": "E088", "payload": {"from": "followup", "id": "P007", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
 {"at": "2026-07-11T07:23:10+00:00", "id": "E089", "payload": {"from": "classified", "id": "T007", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T07:24:44+00:00", "id": "E090", "payload": {"from": "executing", "id": "T007", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T07:24:44+00:00", "id": "E091", "payload": {"result_id": "R007", "ticket_id": "T007"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T07:24:51+00:00", "id": "E092", "payload": {"from": "doing", "id": "P007", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T07:24:51+00:00", "id": "E093", "payload": {"from": "checking", "id": "P007", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T07:24:51+00:00", "id": "E094", "payload": {"check_id": "C007", "followup_id": null, "problem_id": "P007", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T07:27:24+00:00", "id": "E095", "payload": {"from": "followup", "id": "P000", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T07:27:24+00:00", "id": "E096", "payload": {"from": "checking", "id": "P000", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T07:27:24+00:00", "id": "E097", "payload": {"check_id": "C008", "followup_id": null, "problem_id": "P000", "status": "success"}, "root_id": "P000", "type": "check_recorded"}

@@ -222,16 +222,16 @@
       "updated_at": "2026-07-11T06:47:32+00:00"
     },
     {
-      "active_count": 2,
+      "active_count": 0,
       "blocked_count": 0,
       "ledger_id": "L20260711-145625-21",
       "path": "L20260711-145625-21",
       "root_id": "P000",
       "schema_version": 6,
-      "status": "doing",
+      "status": "done",
       "title": "Task 21：P0 Widget / App Group 知识隐私生命周期",
-      "updated_at": "2026-07-11T07:23:10+00:00"
+      "updated_at": "2026-07-11T07:27:24+00:00"
     }
   ],
-  "updated_at": "2026-07-11T07:23:10+00:00"
+  "updated_at": "2026-07-11T07:27:34+00:00"
 }
