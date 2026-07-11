@@ -103,7 +103,7 @@ def main():
     require(policy.get("mode") == "shadow", "deployed global ownership mode must remain shadow")
     require(policy.get("productionEnforceReady") is False, "deployed runtime must not claim global enforce readiness")
     require(policy.get("principalBoundRouteEnforcement") is True, "principal-bound enforcement is missing")
-    require(audit.get("routeCount") == 57, "deployed route audit count mismatch")
+    require(audit.get("routeCount") == 58, "deployed route audit count mismatch")
     require(audit.get("unclassifiedCount") == 0, "deployed backend contains unclassified routes")
     require(header(runtime_headers, "X-DreamJourney-Auth-Principal") == "user", "runtime user principal missing")
 
@@ -121,6 +121,7 @@ def main():
         f"/voice/profiles/{owner['userId']}",
         f"/kb/snapshot/{owner['userId']}",
         f"/kb/changes/{owner['userId']}?sinceRevision=0",
+        f"/kb/source-ref-audit/{owner['userId']}",
         f"/archive/items/{owner['userId']}",
         f"/mailbox/letters/{owner['userId']}",
         f"/echo/delayed-replies/{owner['userId']}",

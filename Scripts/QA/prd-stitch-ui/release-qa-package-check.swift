@@ -187,6 +187,9 @@ assertContains(matrix, "DJEnableProfileHiddenBranches", "release matrix should d
 
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let knowledgeGovernanceGate = read("Scripts/QA/prd-stitch-ui/run-knowledge-governance-gate.sh")
+let knowledgeSourceIdentityGate = read("Scripts/QA/prd-stitch-ui/run-knowledge-source-identity-gate.sh")
+let knowledgeSourceIdentityModel = read("DreamJourney/Sources/Services/KBLiteModels.swift")
+let knowledgeBackendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let knowledgeGovernanceStatus = read("docs/superpowers/status/2026-07-11-knowledge-governance-source-cascade.md")
 let oneCommandRegression = read("docs/superpowers/status/2026-06-18-one-command-release-regression.md")
 assertContains(releaseRegression, "Release handoff mode forces release-like backend acceptance", "release handoff mode should document forced backend acceptance")
@@ -228,6 +231,14 @@ assertContains(releaseRegression, "RUN_KNOWLEDGE_GOVERNANCE_GATE", "release regr
 assertContains(releaseRegression, "run-knowledge-governance-model-smoke.sh", "release regression should always run the governance model guard")
 assertContains(releaseRegression, "run-knowledge-governance-outbox-model-smoke.sh", "release regression should always run governance outbox recovery smoke")
 assertContains(releaseRegression, "run-knowledge-change-feed-pagination-gate.sh", "release regression should always run stable change-feed pagination gate")
+assertContains(releaseRegression, "run-knowledge-source-identity-gate.sh", "release regression should always run canonical knowledge source identity gate")
+assertContains(knowledgeSourceIdentityGate, "run-knowledge-source-identity-model-smoke.sh", "source identity gate should run the iOS canonical model smoke")
+assertContains(knowledgeSourceIdentityGate, "knowledge-source-identity-client-check.swift", "source identity gate should run the typed client guard")
+assertContains(knowledgeSourceIdentityGate, "run-backend-knowledge-source-identity-smoke.sh", "source identity gate should run the backend contract smoke")
+assertContains(knowledgeSourceIdentityModel, "conversationTurn", "knowledge source identity should keep exact conversation turn refs")
+assertContains(knowledgeSourceIdentityModel, "conversationPhoto", "knowledge source identity should distinguish conversation photos from Archive items")
+assertContains(knowledgeBackendClient, "sourceContractVersion", "knowledge extraction should declare the canonical source contract")
+assertContains(knowledgeBackendClient, "fetchKnowledgeSourceRefAudit", "iOS should consume the aggregate read-only source audit")
 assertContains(releaseRegression, "run-knowledge-governance-client-check.sh", "release regression should always run the governance client guard")
 assertContains(releaseRegression, "run-knowledge-governance-coordinator-check.sh", "release regression should always run the governance coordinator guard")
 assertContains(releaseRegression, "knowledge-governance-release-boundary-check.swift", "release regression should guard public UI non-exposure")
@@ -386,6 +397,10 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/run-knowledge-governance-coordinator-check.sh",
     "Scripts/QA/prd-stitch-ui/knowledge-governance-release-boundary-check.swift",
     "Scripts/QA/prd-stitch-ui/run-knowledge-governance-gate.sh",
+    "Scripts/QA/prd-stitch-ui/knowledge-source-identity-model-smoke.swift",
+    "Scripts/QA/prd-stitch-ui/run-knowledge-source-identity-model-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/knowledge-source-identity-client-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-knowledge-source-identity-gate.sh",
     "Scripts/QA/prd-stitch-ui/run-backend-env-smoke.sh",
     "Scripts/QA/prd-stitch-ui/run-release-like-backend-acceptance.sh",
     "Scripts/QA/prd-stitch-ui/final-visual-qa-package-check.swift",

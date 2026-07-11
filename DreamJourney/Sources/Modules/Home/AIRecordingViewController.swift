@@ -508,7 +508,14 @@ extension AIRecordingViewController: UIImagePickerControllerDelegate, UINavigati
 
                     // 入库
                     let sessionId = ConversationMemoryManager.shared.currentMemory.sessionCount + 1
-                    KBLiteManager.shared.ingestImageAnalysis(analysis, sessionId: sessionId)
+                    let sourceAssetId = URL(fileURLWithPath: imagePath)
+                        .deletingPathExtension()
+                        .lastPathComponent
+                    KBLiteManager.shared.ingestImageAnalysis(
+                        analysis,
+                        sessionId: sessionId,
+                        sourceAssetId: sourceAssetId
+                    )
 
                     // 关联照片到足迹地图
                     if !analysis.scene.isEmpty || analysis.estimatedDecade != nil {
@@ -616,7 +623,7 @@ extension AIRecordingViewController: UIImagePickerControllerDelegate, UINavigati
         let photosDir = docs.appendingPathComponent("photos")
         try? FileManager.default.createDirectory(at: photosDir, withIntermediateDirectories: true)
 
-        let fileName = "photo_\(Int(Date().timeIntervalSince1970)).jpg"
+        let fileName = "\(UUID().uuidString.lowercased()).jpg"
         let fileURL = photosDir.appendingPathComponent(fileName)
 
         if let data = image.jpegData(compressionQuality: 0.8) {

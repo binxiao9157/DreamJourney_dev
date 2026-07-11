@@ -3037,6 +3037,31 @@ final class DreamJourneyBackendClient {
         }
     }
 
+    func fetchKnowledgeSourceRefAudit(
+        userId: String,
+        completion: @escaping (Result<KBKnowledgeSourceRefAuditResponse, Error>) -> Void
+    ) {
+        requestJSON(
+            path: "/kb/source-ref-audit/\(pathComponent(userId))",
+            method: .get,
+            payload: nil
+        ) { result in
+            switch result {
+            case .success(let object):
+                guard let response = KBKnowledgeSourceRefAuditResponse(
+                    json: object,
+                    expectedUserId: userId
+                ) else {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                completion(.success(response))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func extractKnowledge(
         userId: String,
         transcript: String,
@@ -3088,16 +3113,11 @@ final class DreamJourneyBackendClient {
                 "sessionId": sessionId,
                 "personaScope": personaScope,
                 "digitalHumanId": digitalHumanId ?? userId,
+                "sourceContractVersion": KBKnowledgeSourceIdentityPolicy.sourceContractVersion,
                 "boundaryAcknowledged": true,
                 "privacyMetadata": [
                     "scope": "generationAllowed",
-                    "sourceRefs": [
-                        [
-                            "kind": "conversationSession",
-                            "id": "session-\(sessionId)",
-                            "title": "对话来源",
-                        ],
-                    ],
+                    "sourceRefs": [],
                 ],
             ]
         ) { result in

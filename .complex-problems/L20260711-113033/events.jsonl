@@ -1,0 +1,53 @@
+{"at": "2026-07-11T03:30:33+00:00", "id": "E000", "payload": {"ledger_id": "L20260711-113033", "root_id": "P000", "title": "Task 19：P1 Canonical Knowledge Source Identity 与历史来源审计"}, "root_id": "P000", "type": "ledger_initialized"}
+{"at": "2026-07-11T03:31:16+00:00", "id": "E001", "payload": {"problem_id": "P000", "ticket_id": "T000", "title": "实现 canonical 来源身份与历史来源只读审计"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T03:31:16+00:00", "id": "E002", "payload": {"from": "created", "id": "T000", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T03:31:28+00:00", "id": "E003", "payload": {"from": "defined", "id": "T000", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T03:31:28+00:00", "id": "E004", "payload": {"classification": "split", "reason": "后端 canonical proposal/audit、iOS source 生成、跨仓交付可独立验证，拆分可避免来源语义与 UI/数据迁移边界混杂", "ticket_id": "T000"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T03:32:15+00:00", "id": "E005", "payload": {"from": "classified", "id": "T000", "to": "splitting"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T03:32:30+00:00", "id": "E006", "payload": {"parent_id": "P000", "problem_id": "P001", "source": "split", "title": "后端 canonical 来源与只读审计"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T03:32:30+00:00", "id": "E007", "payload": {"parent_id": "P000", "problem_id": "P002", "source": "split", "title": "iOS canonical 来源生成与 typed audit consumer"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T03:32:30+00:00", "id": "E008", "payload": {"parent_id": "P000", "problem_id": "P003", "source": "split", "title": "跨仓交付、文档与部署验收"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T03:33:09+00:00", "id": "E009", "payload": {"problem_id": "P001", "ticket_id": "T001", "title": "实现后端 canonical conversation-turn 来源与只读 source audit"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T03:33:09+00:00", "id": "E010", "payload": {"from": "created", "id": "T001", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T03:33:23+00:00", "id": "E011", "payload": {"from": "defined", "id": "T001", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T03:33:23+00:00", "id": "E012", "payload": {"classification": "one_go", "reason": "写入范围集中在 knowledge proposal/privacy/audit/route 与对应测试，合同清晰且无生产数据写入，可一次实现并全量验证", "ticket_id": "T001"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T03:48:44+00:00", "id": "E013", "payload": {"from": "todo", "id": "P001", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T03:48:44+00:00", "id": "E014", "payload": {"from": "classified", "id": "T001", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T03:48:44+00:00", "id": "E015", "payload": {"from": "executing", "id": "T001", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T03:48:44+00:00", "id": "E016", "payload": {"result_id": "R000", "ticket_id": "T001"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T03:48:56+00:00", "id": "E017", "payload": {"from": "doing", "id": "P001", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T03:48:56+00:00", "id": "E018", "payload": {"from": "checking", "id": "P001", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T03:48:56+00:00", "id": "E019", "payload": {"check_id": "C000", "followup_id": null, "problem_id": "P001", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T03:50:01+00:00", "id": "E020", "payload": {"problem_id": "P002", "ticket_id": "T002", "title": "实现 iOS canonical source identity 与 typed audit consumer"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T03:50:01+00:00", "id": "E021", "payload": {"from": "created", "id": "T002", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T03:50:01+00:00", "id": "E022", "payload": {"from": "defined", "id": "T002", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T03:50:01+00:00", "id": "E023", "payload": {"classification": "one_go", "reason": "改动集中于 KBLite source policy、AIRecording 调用、BackendClient 与独立 QA，边界明确且可纯模型验证", "ticket_id": "T002"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T03:59:53+00:00", "id": "E024", "payload": {"from": "todo", "id": "P002", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T03:59:53+00:00", "id": "E025", "payload": {"from": "classified", "id": "T002", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T04:00:26+00:00", "id": "E026", "payload": {"from": "executing", "id": "T002", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T04:00:26+00:00", "id": "E027", "payload": {"result_id": "R001", "ticket_id": "T002"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T04:00:51+00:00", "id": "E028", "payload": {"from": "doing", "id": "P002", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T04:00:51+00:00", "id": "E029", "payload": {"from": "checking", "id": "P002", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T04:00:51+00:00", "id": "E030", "payload": {"check_id": "C001", "followup_id": null, "problem_id": "P002", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T04:01:30+00:00", "id": "E031", "payload": {"problem_id": "P003", "ticket_id": "T003", "title": "固化 canonical 来源合同并完成双仓交付部署"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T04:01:30+00:00", "id": "E032", "payload": {"from": "created", "id": "T003", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T04:01:41+00:00", "id": "E033", "payload": {"from": "defined", "id": "T003", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T04:01:41+00:00", "id": "E034", "payload": {"classification": "split", "reason": "包含跨仓 gate/文档与双仓提交部署两类独立验收面，拆分可分别证明本地交付完整性和线上 Postgres 合同。", "ticket_id": "T003"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T04:02:09+00:00", "id": "E035", "payload": {"from": "classified", "id": "T003", "to": "splitting"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T04:02:09+00:00", "id": "E036", "payload": {"parent_id": "P003", "problem_id": "P004", "source": "split", "title": "Canonical 来源跨仓 gate 与文档交付"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T04:02:09+00:00", "id": "E037", "payload": {"parent_id": "P003", "problem_id": "P005", "source": "split", "title": "双仓提交推送与线上只读审计验收"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T04:02:26+00:00", "id": "E038", "payload": {"problem_id": "P004", "ticket_id": "T004", "title": "固化来源身份验证入口和产品知识库口径"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T04:02:26+00:00", "id": "E039", "payload": {"from": "created", "id": "T004", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T04:02:37+00:00", "id": "E040", "payload": {"from": "defined", "id": "T004", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T04:02:37+00:00", "id": "E041", "payload": {"classification": "one_go", "reason": "范围限于一个确定性跨仓 gate、release 接线和对应文档，改动内聚、低风险且可由现有非真机验证完整证明。", "ticket_id": "T004"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T04:08:32+00:00", "id": "E042", "payload": {"from": "todo", "id": "P004", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T04:08:33+00:00", "id": "E043", "payload": {"from": "classified", "id": "T004", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T04:08:33+00:00", "id": "E044", "payload": {"from": "executing", "id": "T004", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T04:08:33+00:00", "id": "E045", "payload": {"result_id": "R002", "ticket_id": "T004"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T04:08:51+00:00", "id": "E046", "payload": {"from": "doing", "id": "P004", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T04:08:51+00:00", "id": "E047", "payload": {"from": "checking", "id": "P004", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T04:08:51+00:00", "id": "E048", "payload": {"check_id": "C002", "followup_id": null, "problem_id": "P004", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T04:09:14+00:00", "id": "E049", "payload": {"problem_id": "P005", "ticket_id": "T005", "title": "提交双仓并部署认证只读来源审计合同"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T04:09:14+00:00", "id": "E050", "payload": {"from": "created", "id": "T005", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T04:09:23+00:00", "id": "E051", "payload": {"from": "defined", "id": "T005", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T04:09:23+00:00", "id": "E052", "payload": {"classification": "one_go", "reason": "本地验证已完成，剩余步骤是标准双仓提交、既有服务器部署和单一只读 endpoint 验收，顺序明确且可在一次交付窗口内完成。", "ticket_id": "T005"}, "root_id": "P000", "type": "ticket_classified"}

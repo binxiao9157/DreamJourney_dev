@@ -261,6 +261,18 @@ final class KBLiteManager {
         graph.people.isEmpty && graph.places.isEmpty && graph.events.isEmpty && graph.facts.isEmpty
     }
 
+    /// QA-only aggregate. It deliberately returns counts rather than source IDs or entity content.
+    func sourceRefAuditCounts() -> KBKnowledgeSourceAuditCounts {
+        readGraph { graph in
+            var references: [KBSourceReference] = []
+            references.append(contentsOf: graph.people.flatMap { $0.privacyMetadata?.sourceRefs ?? [] })
+            references.append(contentsOf: graph.places.flatMap { $0.privacyMetadata?.sourceRefs ?? [] })
+            references.append(contentsOf: graph.events.flatMap { $0.privacyMetadata?.sourceRefs ?? [] })
+            references.append(contentsOf: graph.facts.flatMap { $0.privacyMetadata?.sourceRefs ?? [] })
+            return KBKnowledgeSourceIdentityPolicy.audit(sourceReferences: references)
+        }
+    }
+
     // MARK: - Public API: Knowledge Extraction
 
     /// 从对话 transcript 提取知识（异步，不阻塞 UI）
@@ -498,7 +510,10 @@ final class KBLiteManager {
                     var person = KBPerson(id: UUID().uuidString, name: kw, aliases: [], relation: nil,
                                           traits: [], sourceSessionIds: [sessionId],
                                           createdAt: Date(), updatedAt: Date())
-                    person.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
+                    person.privacyMetadata = conversationPrivacyMetadata(
+                        sessionId: sessionId,
+                        sourceTurnIndices: turnIndices
+                    )
                     applyIdentity(
                         identity,
                         evidenceStatus: "candidate",
@@ -514,9 +529,13 @@ final class KBLiteManager {
                             graph.people[idx].sourceSessionIds.append(sessionId)
                             graph.people[idx].updatedAt = Date()
                         }
-                        if graph.people[idx].privacyMetadata == nil {
-                            graph.people[idx].privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
-                        }
+                        graph.people[idx].privacyMetadata = mergedPrivacy(
+                            graph.people[idx].privacyMetadata,
+                            conversationPrivacyMetadata(
+                                sessionId: sessionId,
+                                sourceTurnIndices: turnIndices
+                            )
+                        )
                         applyIdentity(
                             identity,
                             evidenceStatus: "candidate",
@@ -538,7 +557,10 @@ final class KBLiteManager {
                 let existing = findMatchingPlace(name: city, identity: identity)
                 if existing == nil {
                     var place = KBPlace(id: UUID().uuidString, name: city, sourceSessionIds: [sessionId])
-                    place.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
+                    place.privacyMetadata = conversationPrivacyMetadata(
+                        sessionId: sessionId,
+                        sourceTurnIndices: turnIndices
+                    )
                     applyIdentity(
                         identity,
                         evidenceStatus: "candidate",
@@ -552,9 +574,13 @@ final class KBLiteManager {
                         graph.places[idx].sourceSessionIds,
                         [sessionId]
                     )
-                    if graph.places[idx].privacyMetadata == nil {
-                        graph.places[idx].privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
-                    }
+                    graph.places[idx].privacyMetadata = mergedPrivacy(
+                        graph.places[idx].privacyMetadata,
+                        conversationPrivacyMetadata(
+                            sessionId: sessionId,
+                            sourceTurnIndices: turnIndices
+                        )
+                    )
                     applyIdentity(
                         identity,
                         evidenceStatus: "candidate",
@@ -576,7 +602,10 @@ final class KBLiteManager {
                 }
                 if existing == nil {
                     var event = KBEvent(id: UUID().uuidString, title: kw, sourceSessionIds: [sessionId])
-                    event.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
+                    event.privacyMetadata = conversationPrivacyMetadata(
+                        sessionId: sessionId,
+                        sourceTurnIndices: turnIndices
+                    )
                     applyIdentity(
                         identity,
                         evidenceStatus: "candidate",
@@ -590,9 +619,13 @@ final class KBLiteManager {
                         graph.events[idx].sourceSessionIds,
                         [sessionId]
                     )
-                    if graph.events[idx].privacyMetadata == nil {
-                        graph.events[idx].privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
-                    }
+                    graph.events[idx].privacyMetadata = mergedPrivacy(
+                        graph.events[idx].privacyMetadata,
+                        conversationPrivacyMetadata(
+                            sessionId: sessionId,
+                            sourceTurnIndices: turnIndices
+                        )
+                    )
                     applyIdentity(
                         identity,
                         evidenceStatus: "candidate",
@@ -613,15 +646,15 @@ final class KBLiteManager {
         }
     }
 
-    private func knowledgePrivacyMetadata(
+    private func conversationPrivacyMetadata(
         sessionId: Int,
-        kind: String = "conversationSession",
-        title: String = "对话来源"
+        sourceTurnIndices: [Int]
     ) -> KBPrivacyMetadata {
         .generationAllowed(
-            kind: kind,
-            id: "session-\(sessionId)",
-            title: title
+            sourceRefs: KBKnowledgeSourceIdentityPolicy.conversationTurnReferences(
+                sessionId: sessionId,
+                turnIndices: sourceTurnIndices
+            )
         )
     }
 
@@ -779,8 +812,13 @@ final class KBLiteManager {
                     graph.people[index].sourceSessionIds,
                     [sessionId]
                 )
-                graph.people[index].privacyMetadata = graph.people[index].privacyMetadata
-                    ?? knowledgePrivacyMetadata(sessionId: sessionId)
+                graph.people[index].privacyMetadata = mergedPrivacy(
+                    graph.people[index].privacyMetadata,
+                    conversationPrivacyMetadata(
+                        sessionId: sessionId,
+                        sourceTurnIndices: extracted.sourceTurnIndices
+                    )
+                )
                 graph.people[index].updatedAt = now
                 applyIdentity(
                     identity,
@@ -800,7 +838,10 @@ final class KBLiteManager {
                     createdAt: now,
                     updatedAt: now
                 )
-                person.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
+                person.privacyMetadata = conversationPrivacyMetadata(
+                    sessionId: sessionId,
+                    sourceTurnIndices: extracted.sourceTurnIndices
+                )
                 applyIdentity(
                     identity,
                     evidenceStatus: "observed",
@@ -832,8 +873,13 @@ final class KBLiteManager {
                     graph.places[index].sourceSessionIds,
                     [sessionId]
                 )
-                graph.places[index].privacyMetadata = graph.places[index].privacyMetadata
-                    ?? knowledgePrivacyMetadata(sessionId: sessionId)
+                graph.places[index].privacyMetadata = mergedPrivacy(
+                    graph.places[index].privacyMetadata,
+                    conversationPrivacyMetadata(
+                        sessionId: sessionId,
+                        sourceTurnIndices: extracted.sourceTurnIndices
+                    )
+                )
                 applyIdentity(
                     identity,
                     evidenceStatus: "observed",
@@ -852,7 +898,10 @@ final class KBLiteManager {
                     sourceSessionIds: [sessionId],
                     createdAt: now
                 )
-                place.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
+                place.privacyMetadata = conversationPrivacyMetadata(
+                    sessionId: sessionId,
+                    sourceTurnIndices: extracted.sourceTurnIndices
+                )
                 applyIdentity(
                     identity,
                     evidenceStatus: "observed",
@@ -891,8 +940,13 @@ final class KBLiteManager {
                     graph.events[index].sourceSessionIds,
                     [sessionId]
                 )
-                graph.events[index].privacyMetadata = graph.events[index].privacyMetadata
-                    ?? knowledgePrivacyMetadata(sessionId: sessionId)
+                graph.events[index].privacyMetadata = mergedPrivacy(
+                    graph.events[index].privacyMetadata,
+                    conversationPrivacyMetadata(
+                        sessionId: sessionId,
+                        sourceTurnIndices: extracted.sourceTurnIndices
+                    )
+                )
                 applyIdentity(
                     identity,
                     evidenceStatus: "observed",
@@ -911,7 +965,10 @@ final class KBLiteManager {
                     sourceSessionIds: [sessionId],
                     createdAt: now
                 )
-                event.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
+                event.privacyMetadata = conversationPrivacyMetadata(
+                    sessionId: sessionId,
+                    sourceTurnIndices: extracted.sourceTurnIndices
+                )
                 applyIdentity(
                     identity,
                     evidenceStatus: "observed",
@@ -959,8 +1016,13 @@ final class KBLiteManager {
                     graph.facts[index].sourceSessionIds,
                     [sessionId]
                 )
-                graph.facts[index].privacyMetadata = graph.facts[index].privacyMetadata
-                    ?? knowledgePrivacyMetadata(sessionId: sessionId)
+                graph.facts[index].privacyMetadata = mergedPrivacy(
+                    graph.facts[index].privacyMetadata,
+                    conversationPrivacyMetadata(
+                        sessionId: sessionId,
+                        sourceTurnIndices: extracted.sourceTurnIndices
+                    )
+                )
                 applyIdentity(
                     identity,
                     evidenceStatus: KnowledgeGenerationPolicy.allowsFact(
@@ -981,7 +1043,10 @@ final class KBLiteManager {
                     sourceSessionIds: [sessionId],
                     createdAt: now
                 )
-                fact.privacyMetadata = knowledgePrivacyMetadata(sessionId: sessionId)
+                fact.privacyMetadata = conversationPrivacyMetadata(
+                    sessionId: sessionId,
+                    sourceTurnIndices: extracted.sourceTurnIndices
+                )
                 applyIdentity(
                     identity,
                     evidenceStatus: KnowledgeGenerationPolicy.allowsFact(
@@ -1846,7 +1911,21 @@ final class KBLiteManager {
     /// - Parameters:
     ///   - result: 图片分析结果
     ///   - sessionId: 当前会话序号
-    func ingestImageAnalysis(_ result: KBImageAnalysisResult, sessionId: Int) {
+    ///   - sourceAssetId: 对话照片的稳定资源 ID，不得使用本地绝对路径
+    func ingestImageAnalysis(
+        _ result: KBImageAnalysisResult,
+        sessionId: Int,
+        sourceAssetId: String
+    ) {
+        guard let photoSource = KBKnowledgeSourceIdentityPolicy.conversationPhotoReference(
+            assetId: sourceAssetId
+        ) else {
+            print("[KBLite] 图片分析来源 ID 无效，跳过知识入库")
+            return
+        }
+        let photoPrivacyMetadata = KBPrivacyMetadata.generationAllowed(
+            sourceRefs: [photoSource]
+        )
         var addedCount = 0
         let now = Date()
 
@@ -1861,11 +1940,7 @@ final class KBLiteManager {
                     sourceSessionIds: [sessionId],
                     createdAt: now
                 )
-                place.privacyMetadata = knowledgePrivacyMetadata(
-                    sessionId: sessionId,
-                    kind: "archiveImageAnalysis",
-                    title: "档案素材"
-                )
+                place.privacyMetadata = photoPrivacyMetadata
                 graph.places.append(place)
                 addedCount += 1
             }
@@ -1887,11 +1962,7 @@ final class KBLiteManager {
                     createdAt: now,
                     updatedAt: now
                 )
-                person.privacyMetadata = knowledgePrivacyMetadata(
-                    sessionId: sessionId,
-                    kind: "archiveImageAnalysis",
-                    title: "档案素材"
-                )
+                person.privacyMetadata = photoPrivacyMetadata
                 graph.people.append(person)
                 addedCount += 1
             }

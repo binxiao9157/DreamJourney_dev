@@ -3,9 +3,9 @@
 ## STATUS
 
 - **Goal:** 按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态
-- **Mode:** Review
-- **Phase:** Phase 13 knowledge change-feed pagination complete
-- **Task:** `docs/plans/task_18_p1-knowledge-change-feed-pagination.md`
+- **Mode:** Plan
+- **Phase:** Phase 14 canonical knowledge source identity
+- **Task:** `docs/plans/task_19_p1-canonical-knowledge-source-identity.md`
 - **Blockers:** none for non-device implementation
 
 ## Key Decisions
@@ -37,10 +37,11 @@
 - Task 16 is complete. Owner-only confirm/reject/correct/deleteSource actions, Archive source cascade transactions, iOS durable governance outbox/coordinator and `RUN_KNOWLEDGE_GOVERNANCE_GATE=1` are implemented. Backend `3057ef9` and iOS `69306c1` are committed locally; ledger `L20260711-040419` is closed.
 - Task 17 is complete. Authoritative operation receipts and payload fingerprints cover knowledge sync/governance/archive cascade; iOS poisoned-operation recovery and governance quarantine are guarded without public UI changes. Ledger `L20260711-100251` is closed.
 - Task 18 is complete and deployed. Stable-target change-feed pagination, terminal-only iOS commit and KBLite graph mutation CAS passed local, build and deployed Postgres gates. Ledger `L20260711-104956` is closed.
+- Task 19 is active. It stops new ambiguous source refs, derives exact conversation-turn/photo identities, and adds read-only legacy source audit without automatically migrating production data.
 
 ## Scope
 
-Phase 2, Phase 3, and Tasks 9-18 are closed. Production remains on global ownership `shadow`; public knowledge-governance UI, historical sourceRef migration, change-feed retention/compaction, deployed Postgres receipt-specific smoke and true-device acceptance remain follow-up slices.
+Phase 2, Phase 3, and Tasks 9-18 are closed. Task 19 is active. Production remains on global ownership `shadow`; actual historical sourceRef apply migration, public knowledge-governance UI, change-feed retention/compaction, deployed Postgres receipt-specific smoke and true-device acceptance remain follow-up slices.
 
 ## Recovery
 

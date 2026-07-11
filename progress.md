@@ -2066,3 +2066,93 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `none`
 - Counts: 4/4 problems done, 0 blocked, 4/4 tickets done
 - Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+
+## Recursive Closure Checkpoint - 2026-07-11T12:00:26+08:00
+
+- Ledger: `L20260711-113033`
+- Lodestar task: `docs/plans/task_19_p1-canonical-knowledge-source-identity.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 1/4 problems done, 0 blocked, 2/3 tickets done
+- Next instruction: Only perform `check-success` for `P002: iOS canonical 来源生成与 typed audit consumer`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, cr...
+
+## Recursive Closure Checkpoint - 2026-07-11T12:00:51+08:00
+
+- Ledger: `L20260711-113033`
+- Lodestar task: `docs/plans/task_19_p1-canonical-knowledge-source-identity.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 2/4 problems done, 0 blocked, 2/3 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P003: 跨仓交付、文档与部署验收`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. A...
+
+## Recursive Closure Checkpoint - 2026-07-11T12:01:30+08:00
+
+- Ledger: `L20260711-113033`
+- Lodestar task: `docs/plans/task_19_p1-canonical-knowledge-source-identity.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 2/4 problems done, 0 blocked, 2/4 tickets done
+- Next instruction: Only perform `classify-ticket` for `T003` on `P003: 跨仓交付、文档与部署验收`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this act...
+
+## Recursive Closure Checkpoint - 2026-07-11T12:01:41+08:00
+
+- Ledger: `L20260711-113033`
+- Lodestar task: `docs/plans/task_19_p1-canonical-knowledge-source-identity.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 2/4 problems done, 0 blocked, 2/4 tickets done
+- Next instruction: Only perform `split-ticket` for `T003` on `P003: 跨仓交付、文档与部署验收`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field...
+
+## Recursive Closure Checkpoint - 2026-07-11T12:02:09+08:00
+
+- Ledger: `L20260711-113033`
+- Lodestar task: `docs/plans/task_19_p1-canonical-knowledge-source-identity.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 2/6 problems done, 0 blocked, 2/4 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P004: Canonical 来源跨仓 gate 与文档交付`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay ...
+
+## Recursive Closure Checkpoint - 2026-07-11T12:02:26+08:00
+
+- Ledger: `L20260711-113033`
+- Lodestar task: `docs/plans/task_19_p1-canonical-knowledge-source-identity.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 2/6 problems done, 0 blocked, 2/5 tickets done
+- Next instruction: Only perform `classify-ticket` for `T004` on `P004: Canonical 来源跨仓 gate 与文档交付`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. A...
+
+## Recursive Closure Checkpoint - 2026-07-11T12:02:37+08:00
+
+- Ledger: `L20260711-113033`
+- Lodestar task: `docs/plans/task_19_p1-canonical-knowledge-source-identity.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 2/6 problems done, 0 blocked, 2/5 tickets done
+- Next instruction: Only perform `execute-ticket` for `T004` on `P004: Canonical 来源跨仓 gate 与文档交付`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execut...
+
+## Recursive Closure Checkpoint - 2026-07-11T12:08:51+08:00
+
+- Ledger: `L20260711-113033`
+- Lodestar task: `docs/plans/task_19_p1-canonical-knowledge-source-identity.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 3/6 problems done, 0 blocked, 3/5 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P005: 双仓提交推送与线上只读审计验收`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English...
+
+## Recursive Closure Checkpoint - 2026-07-11T12:09:14+08:00
+
+- Ledger: `L20260711-113033`
+- Lodestar task: `docs/plans/task_19_p1-canonical-knowledge-source-identity.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 3/6 problems done, 0 blocked, 3/6 tickets done
+- Next instruction: Only perform `classify-ticket` for `T005` on `P005: 双仓提交推送与线上只读审计验收`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this ...
+
+## Recursive Closure Checkpoint - 2026-07-11T12:09:23+08:00
+
+- Ledger: `L20260711-113033`
+- Lodestar task: `docs/plans/task_19_p1-canonical-knowledge-source-identity.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 3/6 problems done, 0 blocked, 3/6 tickets done
+- Next instruction: Only perform `execute-ticket` for `T005` on `P005: 双仓提交推送与线上只读审计验收`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execute-ticket.m...

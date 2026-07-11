@@ -1,0 +1,12 @@
+# 双仓提交推送与线上只读审计验收
+
+## Problem
+
+本地验证通过后仍需分别提交推送 iOS 与后端，部署后端并证明线上 Postgres 环境已提供受 ownership 保护的只读来源审计合同。
+
+## Success Criteria
+
+- 后端和 iOS 各自形成清晰提交并推送当前远端分支。
+- 服务器拉取后端 main 并重建 API，health 返回正常且 store=postgres。
+- 线上认证 smoke 验证 `/kb/source-ref-audit/{userId}` schemaVersion、聚合计数、recommendedAction 与隐私字段边界。
+- 不输出私密 token，不执行历史来源迁移，不做真机验证。

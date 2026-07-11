@@ -135,6 +135,7 @@ Run ID: \`$RUN_ID\`
 - Knowledge V2 three-way/deployed combo gate: \`$RUN_KNOWLEDGE_V2_SYNC_GATE\`
 - Knowledge proposal/persona local combo gate: \`$RUN_KNOWLEDGE_PROPOSAL_PERSONA_GATE\`
 - Knowledge governance/source-cascade local combo gate: \`$RUN_KNOWLEDGE_GOVERNANCE_GATE\`
+- Knowledge source identity cross-repository gate: \`always\`
 - Backend archive image-analysis smoke: \`$RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE\`
 - Backend hidden media sync smoke: \`$RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE\`
 - Backend time-letter lifecycle smoke: \`$RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE\`
@@ -240,6 +241,7 @@ append_report_footer() {
 - Backend deployed knowledge pipeline smoke: \`backend-knowledge-pipeline-smoke/$RUN_ID/\`
 - Knowledge proposal/persona local smoke: \`knowledge-proposal-persona-smoke/$RUN_ID/\`
 - Knowledge governance/source-cascade local gate: \`knowledge-governance-gate/$RUN_ID/\`
+- Knowledge source identity cross-repository gate: \`static-guards/knowledge-source-identity-gate.log\`
 - Backend archive image-analysis smoke: \`backend-archive-image-analysis-smoke/$RUN_ID/\`
 - Backend hidden media sync smoke: \`backend-hidden-media-sync-smoke/$RUN_ID/\`
 - Backend time-letter lifecycle smoke: \`backend-time-letter-lifecycle-smoke/$RUN_ID/\`
@@ -314,6 +316,9 @@ run_step "Swift model guard knowledge-governance-outbox" "$STATIC_LOG_DIR/knowle
 
 run_step "Knowledge change-feed pagination cross-repository gate" "$STATIC_LOG_DIR/knowledge-change-feed-pagination-gate.log" \
   env BACKEND_ROOT="$BACKEND_ROOT" "$SCRIPT_DIR/run-knowledge-change-feed-pagination-gate.sh"
+
+run_step "Knowledge source identity cross-repository gate" "$STATIC_LOG_DIR/knowledge-source-identity-gate.log" \
+  env BACKEND_ROOT="$BACKEND_ROOT" "$SCRIPT_DIR/run-knowledge-source-identity-gate.sh"
 
 run_step "Swift model guard knowledge-governance-client" "$STATIC_LOG_DIR/knowledge-governance-client-check.log" \
   "$SCRIPT_DIR/run-knowledge-governance-client-check.sh"

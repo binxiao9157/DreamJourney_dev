@@ -75,7 +75,8 @@
 当前剩余 P1 边界：
 
 - 公开知识审阅/确认/纠正入口尚未由 PRD 和 Stitch 决定，当前只提供稳定 service API。
-- 新 Archive 来源使用 `memoryArchiveItem + archiveItem.id`；历史 `archiveImageAnalysis + session-*` 来源需要显式迁移，不会被新删除级联自动命中。
+- 新 Archive 来源使用 `memoryArchiveItem + archiveItem.id`；对话内照片使用 `conversationPhoto + photo-{stableAssetId}`。
+- 历史 `archiveImageAnalysis + session-*` 来自对话内照片分析，不是 Archive item，不能猜测迁成 `memoryArchiveItem`；只读审计后需另行设计有证据的迁移。
 - operation receipt 与 change-feed 分页已完成本地/fake Postgres 实现；真实 Postgres migration/deployed smoke、change feed 保留/compaction 仍是后续生产化工作。
 
 现有旧文档 `docs/knowledge-base-design*.md` 只作为历史思路参考。以下旧方向不再作为当前实施依据：
@@ -300,7 +301,7 @@ Task 18 已完成：
 
 - 在部署 Postgres 上执行 additive receipt schema 并跑 operation conflict/deletion smoke。
 - 为 change feed 增加保留/compaction 与 snapshot fallback；分页和稳定水位已完成。
-- 为历史 Archive 分析来源建立 canonical sourceRef 迁移工具和迁移证据。
+- 先只读审计历史 `conversationSession/archiveImageAnalysis`；只有来源资产能被确定证明时才设计迁移工具，禁止按 session 猜测 Archive item。
 
 ## 9. API 演进
 
@@ -407,7 +408,7 @@ POST /kb/governance/actions
 - KBLite person 到 Family 的自动派生改为“未授权候选”或彻底移除；生产 seed 成员迁到 QA-only。
 - timeLetter draft 的后端 payload 使用字段 allowlist；`metadataOnly` 不得携带正文、分析摘要或 transcript，删除草稿需同步撤销。
 
-实施进度：Task 15 已完成 proposal、稳定 ID/关系/metadata、persona-scoped Context 和 iOS canonical identity 主链路。Task 16 已完成用户治理、Archive 来源删除级联、iOS durable outbox/coordinator 和组合 QA gate。Task 17 已完成 operation receipt/payload fingerprint、客户端冲突恢复与隔离。Task 18 已完成稳定目标分页、终页提交和 KBLite CAS。历史 canonical sourceRef 迁移、timeLetter 草稿字段收敛与公开治理体验继续作为后续 P1/P2。
+实施进度：Task 15 已完成 proposal、稳定 ID/关系/metadata、persona-scoped Context 和 iOS canonical identity 主链路。Task 16 已完成用户治理、Archive 来源删除级联、iOS durable outbox/coordinator 和组合 QA gate。Task 17 已完成 operation receipt/payload fingerprint、客户端冲突恢复与隔离。Task 18 已完成稳定目标分页、终页提交和 KBLite CAS。Task 19 已停止新增 `conversationSession/archiveImageAnalysis`，统一新对话 turn/照片来源，并提供不暴露正文或 source ID 的只读审计。历史 legacy ref 仍需独立批准的证据化迁移；timeLetter 草稿字段收敛与公开治理体验继续作为后续 P1/P2。
 
 ### P1：同步生产化
 

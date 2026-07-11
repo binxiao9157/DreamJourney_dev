@@ -152,7 +152,15 @@
       "status": "complete",
       "task_file": "docs/plans/task_18_p1-knowledge-change-feed-pagination.md",
       "updated_at": "2026-07-11T11:23:35+08:00"
+    },
+    "docs/plans/task_19_p1-canonical-knowledge-source-identity.md": {
+      "ledger_id": "L20260711-113033",
+      "ledger_path": ".complex-problems/L20260711-113033",
+      "next_action": "execute-ticket",
+      "status": "next",
+      "task_file": "docs/plans/task_19_p1-canonical-knowledge-source-identity.md",
+      "updated_at": "2026-07-11T12:09:23+08:00"
     }
   },
-  "updated_at": "2026-07-11T11:23:35+08:00"
+  "updated_at": "2026-07-11T12:09:23+08:00"
 }

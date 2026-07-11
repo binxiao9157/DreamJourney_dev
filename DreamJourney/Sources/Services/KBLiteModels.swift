@@ -16,7 +16,7 @@ struct KBLiteGraph: Codable {
     var facts: [KBFact] = []
 }
 
-struct KBSourceReference: Codable {
+struct KBSourceReference: Codable, Equatable {
     let kind: String
     let id: String
     let title: String
@@ -31,6 +31,198 @@ struct KBPrivacyMetadata: Codable {
             scope: "generationAllowed",
             sourceRefs: [KBSourceReference(kind: kind, id: id, title: title)]
         )
+    }
+
+    static func generationAllowed(sourceRefs: [KBSourceReference]) -> KBPrivacyMetadata {
+        KBPrivacyMetadata(scope: "generationAllowed", sourceRefs: sourceRefs)
+    }
+}
+
+enum KBKnowledgeSourceAuditRecommendedAction: String, Equatable {
+    case none
+    case planLegacySourceRefMigration
+    case reviewUnknownSourceRefs
+}
+
+struct KBKnowledgeSourceAuditCounts: Equatable {
+    let total: Int
+    let canonical: Int
+    let legacy: Int
+    let unknown: Int
+
+    var recommendedAction: KBKnowledgeSourceAuditRecommendedAction {
+        if unknown > 0 { return .reviewUnknownSourceRefs }
+        if legacy > 0 { return .planLegacySourceRefMigration }
+        return .none
+    }
+}
+
+struct KBKnowledgeSourceRefEntityAuditCounts: Equatable {
+    let total: Int
+    let withSourceRefs: Int
+    let withCanonicalRefs: Int
+    let withLegacyRefs: Int
+    let withUnknownRefs: Int
+}
+
+struct KBKnowledgeSourceRefAuditResponse: Equatable {
+    let schemaVersion: Int
+    let userId: String
+    let revision: Int
+    let entityCounts: KBKnowledgeSourceRefEntityAuditCounts
+    let sourceRefCounts: KBKnowledgeSourceAuditCounts
+    let recommendedAction: KBKnowledgeSourceAuditRecommendedAction
+
+    init?(json: [String: Any], expectedUserId: String) {
+        guard let schemaVersion = Self.intValue(json["schemaVersion"]),
+              schemaVersion == 1,
+              let userId = json["userId"] as? String,
+              userId == expectedUserId,
+              let revision = Self.intValue(json["revision"]),
+              revision >= 0,
+              let counts = json["counts"] as? [String: Any],
+              let entities = counts["entities"] as? [String: Any],
+              let sourceRefs = counts["sourceRefs"] as? [String: Any],
+              let totalEntities = Self.nonNegativeInt(entities["total"]),
+              let withSourceRefs = Self.nonNegativeInt(entities["withSourceRefs"]),
+              let withCanonicalRefs = Self.nonNegativeInt(entities["withCanonicalRefs"]),
+              let withLegacyRefs = Self.nonNegativeInt(entities["withLegacyRefs"]),
+              let withUnknownRefs = Self.nonNegativeInt(entities["withUnknownRefs"]),
+              withSourceRefs <= totalEntities,
+              withCanonicalRefs <= withSourceRefs,
+              withLegacyRefs <= withSourceRefs,
+              withUnknownRefs <= withSourceRefs,
+              let totalRefs = Self.nonNegativeInt(sourceRefs["total"]),
+              let canonicalRefs = Self.nonNegativeInt(sourceRefs["canonical"]),
+              let legacyRefs = Self.nonNegativeInt(sourceRefs["legacy"]),
+              let unknownRefs = Self.nonNegativeInt(sourceRefs["unknown"]),
+              totalRefs == canonicalRefs + legacyRefs + unknownRefs,
+              let actionRaw = json["recommendedAction"] as? String,
+              let recommendedAction = KBKnowledgeSourceAuditRecommendedAction(rawValue: actionRaw) else {
+            return nil
+        }
+
+        let sourceRefCounts = KBKnowledgeSourceAuditCounts(
+            total: totalRefs,
+            canonical: canonicalRefs,
+            legacy: legacyRefs,
+            unknown: unknownRefs
+        )
+        guard sourceRefCounts.recommendedAction == recommendedAction else { return nil }
+
+        self.schemaVersion = schemaVersion
+        self.userId = userId
+        self.revision = revision
+        self.entityCounts = KBKnowledgeSourceRefEntityAuditCounts(
+            total: totalEntities,
+            withSourceRefs: withSourceRefs,
+            withCanonicalRefs: withCanonicalRefs,
+            withLegacyRefs: withLegacyRefs,
+            withUnknownRefs: withUnknownRefs
+        )
+        self.sourceRefCounts = sourceRefCounts
+        self.recommendedAction = recommendedAction
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = value as? String { return Int(value) }
+        return nil
+    }
+
+    private static func nonNegativeInt(_ value: Any?) -> Int? {
+        guard let value = intValue(value), value >= 0 else { return nil }
+        return value
+    }
+}
+
+enum KBKnowledgeSourceIdentityPolicy {
+    static let sourceContractVersion = 1
+
+    private static let canonicalKinds = Set([
+        "conversationTurn",
+        "conversationPhoto",
+        "memoryArchiveItem",
+        "timeMailboxLetter",
+        "kbLiteEntity",
+        "memoir",
+        "importRecord",
+        "userAuthorization",
+    ])
+    private static let legacyKinds = Set([
+        "conversationSession",
+        "archiveImageAnalysis",
+    ])
+    private static let photoAssetCharacters = CharacterSet.alphanumerics.union(
+        CharacterSet(charactersIn: "-_.")
+    )
+
+    static func conversationTurnReferences(
+        sessionId: Int,
+        turnIndices: [Int]
+    ) -> [KBSourceReference] {
+        guard sessionId >= 0 else { return [] }
+        var seen = Set<Int>()
+        return turnIndices.compactMap { turnIndex in
+            guard turnIndex >= 0, seen.insert(turnIndex).inserted else { return nil }
+            return KBSourceReference(
+                kind: "conversationTurn",
+                id: "session-\(sessionId):turn-\(turnIndex)",
+                title: title(for: "conversationTurn")
+            )
+        }
+    }
+
+    static func conversationPhotoReference(assetId: String) -> KBSourceReference? {
+        let normalized = assetId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalized.isEmpty,
+              normalized.count <= 128,
+              normalized.rangeOfCharacter(from: photoAssetCharacters.inverted) == nil else {
+            return nil
+        }
+        return KBSourceReference(
+            kind: "conversationPhoto",
+            id: "photo-\(normalized)",
+            title: title(for: "conversationPhoto")
+        )
+    }
+
+    static func audit(sourceReferences: [KBSourceReference]) -> KBKnowledgeSourceAuditCounts {
+        var canonical = 0
+        var legacy = 0
+        var unknown = 0
+        for reference in sourceReferences {
+            if canonicalKinds.contains(reference.kind) {
+                canonical += 1
+            } else if legacyKinds.contains(reference.kind) {
+                legacy += 1
+            } else {
+                unknown += 1
+            }
+        }
+        return KBKnowledgeSourceAuditCounts(
+            total: sourceReferences.count,
+            canonical: canonical,
+            legacy: legacy,
+            unknown: unknown
+        )
+    }
+
+    static func title(for kind: String) -> String {
+        switch kind {
+        case "conversationTurn": return "对话来源"
+        case "conversationPhoto": return "对话照片"
+        case "memoryArchiveItem": return "档案素材"
+        case "conversationSession": return "旧版对话会话来源"
+        case "archiveImageAnalysis": return "旧版档案图像分析"
+        case "timeMailboxLetter": return "时空信件"
+        case "kbLiteEntity": return "知识条目"
+        case "memoir": return "回忆录"
+        case "importRecord": return "导入记录"
+        case "userAuthorization": return "授权记录"
+        default: return "来源记录"
+        }
     }
 }
 
