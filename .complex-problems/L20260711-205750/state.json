@@ -1,0 +1,1436 @@
+{
+  "checks": {
+    "C000": {
+      "blocking_gaps": [
+        "`receiptCompacted` / `originalRevision` 仅在 change 已压缩后的 snapshot fallback 路径返回；读取 compact envelope 但 change 仍存在时没有一致标记，客户端无法仅凭响应稳定判断该次 duplicate 来自 compact receipt。",
+        "compact envelope 仍保存 `userId`、`operationId`、`operationKind`、`operationSchemaVersion`，与 receipt 表身份列重复；重放逻辑又未校验这些重复字段，既增加载荷，也引入潜在的双重事实来源。",
+        "上述问题属于 P001 自身的 replay/envelope 合同，不应推迟到历史迁移或发布 gate。"
+      ],
+      "body_path": "problems/P000/children/P001/checks/C000.md",
+      "created_at": "2026-07-11T13:11:54+00:00",
+      "criteria_map": [],
+      "evidence": [],
+      "execution_map": [],
+      "followup_problem_id": "P004",
+      "id": "C000",
+      "problem_id": "P001",
+      "residual_risk": [],
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "not_success",
+      "stress_test": [],
+      "summary": "当前结果覆盖了核心读写与重放路径，测试证据充分，但尚不能判定成功。Compact replay 的标记语义在 change 重建与 snapshot fallback 两条路径上不一致，且 envelope 仍重复保存 receipt 表已有的身份字段，不满足“结果载荷最小化且语义可稳定消费”的完整标准。"
+    },
+    "C001": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P001/children/P004/checks/C001.md",
+      "created_at": "2026-07-11T13:18:18+00:00",
+      "criteria_map": [
+        "最小 envelope：已由内存/Postgres 持久化断言覆盖。",
+        "一致 compact replay 标记：change 与 snapshot 两条路径均有断言。",
+        "Legacy/full 与历史 compact 兼容：保留 dual-read，历史额外字段不会影响 reader。",
+        "Governance/archive duplicate：summary、幂等与无正文断言通过。",
+        "API/iOS parser 兼容：对外仍返回 graph/revision/mutation，仅增加可选诊断字段。"
+      ],
+      "evidence": [
+        "`compact_knowledge_operation_receipt_result` 只写版本、revision、mutation schema、可选时间/兼容标记和 ID-only governance summary。",
+        "`rebuild_compact_knowledge_operation_result` 在 change 与 snapshot 两条分支之后统一设置 `receiptCompacted=true` 和 envelope 原始 revision。",
+        "内存和 Postgres 测试明确断言 envelope 不含 user/operation identity、graph、mutation 与私有正文。",
+        "218 项相关测试及 289 项后端全量回归通过。"
+      ],
+      "execution_map": [
+        "R001 完成 helper、store 与测试修正。",
+        "P002 负责历史 full receipt 迁移，不作为本跟进问题的未完成项。"
+      ],
+      "followup_problem_id": null,
+      "id": "C001",
+      "problem_id": "P004",
+      "residual_risk": [
+        "尚未在真实 Postgres 上执行历史迁移；该风险属于 P002/P003，且 P001 不会单独部署。"
+      ],
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "使用不同 baseRevision 重放同 operation，验证 fingerprint-first duplicate。",
+        "删除关联 change 后重放，验证当前 snapshot + 空 V2 mutation fallback。",
+        "同 operation ID 更换 payload，验证在查询 change/snapshot 前即 conflict。"
+      ],
+      "summary": "修复结果满足跟进问题的全部标准：compact envelope 已去除重复身份字段，两条重放路径使用一致诊断语义，legacy/full 与历史 compact 双读保持兼容，且相关与全量回归均通过。"
+    },
+    "C002": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P001/checks/C002.md",
+      "created_at": "2026-07-11T13:18:47+00:00",
+      "criteria_map": [
+        "无正文 compact envelope：满足。",
+        "Fingerprint-first：满足。",
+        "Mutation/governance/archive duplicate 不增加 revision、不重复副作用：满足。",
+        "Governance summary 与 V2 空 mutation 可解析：满足。",
+        "In-memory/Postgres 同 payload、异 payload、无 snapshot 边界：满足。"
+      ],
+      "evidence": [
+        "新 receipt result 不保存 graph、原始 mutation upserts、实体正文或重复身份字段。",
+        "Fingerprint 在任何 change/snapshot 查询前验证，异 payload 仍冲突。",
+        "Change 存在时精确重建；change 已压缩时返回当前权威 snapshot 与合法空 V2 mutation。",
+        "Governance/archive 使用 ID-only summary，duplicate 不重复副作用。",
+        "Server-generated legacy sync compatibility no-op 不再产生无意义 receipt。",
+        "218 项相关测试与 289 项后端全量回归通过；独立审查未发现 P001 其余缺陷。"
+      ],
+      "execution_map": [
+        "R000：完成 compact/full 双读、四类 operation 重放与测试。",
+        "R001：移除 envelope 重复身份并统一 compact replay 标记。",
+        "P004：跟进问题已通过 C001 验收。"
+      ],
+      "followup_problem_id": null,
+      "id": "C002",
+      "problem_id": "P001",
+      "residual_risk": [
+        "`knowledge_privacy_maintenance` 必须在部署前识别 compact V2 envelope并保留表列 payload hash；该工作属于已规划的 P002 阻断项。",
+        "真实 Postgres 历史迁移与线上验证属于 P002/P003。"
+      ],
+      "result_ids": [
+        "R000",
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "同 operation ID 改 payload，在 change/snapshot 查询前即抛 conflict。",
+        "删除 operation change 和 snapshot 后仍返回结构合法的空 V2 fallback。",
+        "Governance/archive change 被压缩后仍返回 ID-only summary，不泄露正文。"
+      ],
+      "summary": "P001 的 compact receipt 与安全重放合同已完成。初次实现的标记与最小化缺口由 P004 修复；四类 operation 的幂等、冲突、重建和 iOS 兼容响应均有测试证据。现有 privacy maintenance 尚不识别 compact V2 envelope，但该问题已明确归入 P002，且本任务在 P002 完成前不会部署。"
+    },
+    "C003": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P002/children/P005/checks/C003.md",
+      "created_at": "2026-07-11T13:23:43+00:00",
+      "criteria_map": [
+        "纯函数转换与正文清除：满足。",
+        "Compact 幂等与旧身份字段清理：满足。",
+        "异常输入明确失败：满足。",
+        "Privacy maintenance 不要求 compact V2 mutation：满足。",
+        "Legacy full 行为不回退：现有 privacy 测试继续通过。"
+      ],
+      "evidence": [
+        "四种 operation kind 的 legacy full result 均有转换测试。",
+        "输出断言不含 graph、mutation、正文和重复身份字段。",
+        "Governance/archive 使用白名单 ID-only summary；非法摘要 fail closed。",
+        "Compact V2 privacy canonicalization 与 payload hash 保留测试通过。",
+        "230 项相关组合测试通过。"
+      ],
+      "execution_map": [
+        "R002 覆盖 helper、privacy 兼容与单测。",
+        "数据库事务和 CLI 明确留给 P006，不构成本问题缺口。"
+      ],
+      "followup_problem_id": null,
+      "id": "C003",
+      "problem_id": "P005",
+      "residual_risk": [
+        "历史数据的异常分布需由 P006 dry-run 报告，不在纯函数层猜测修复。"
+      ],
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "Governance mutation 无法提取安全 summary 时拒绝转换。",
+        "Compact envelope 夹带 graph/mutation 时 privacy canonicalizer 拒绝。",
+        "旧 compact envelope 的额外身份/私有 summary 字段被 canonicalizer 清理。"
+      ],
+      "summary": "纯转换与 privacy compatibility 问题已解决，结果满足 P005 成功标准，并为后续 Postgres 维护提供了单一、安全、可测试的转换入口。"
+    },
+    "C004": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P002/children/P006/checks/C004.md",
+      "created_at": "2026-07-11T13:37:52+00:00",
+      "criteria_map": [
+        "参数与 keep-days=0：满足。",
+        "用户级事务/advisory lock/timeout：满足。",
+        "Dry-run 无写：满足。",
+        "Apply 只更新 result 且批量执行：满足。",
+        "单用户失败隔离：满足。",
+        "无正文结构化报告：满足。",
+        "幂等与 CLI 默认 dry-run：满足。"
+      ],
+      "evidence": [
+        "Dry-run 测试确认无 UPDATE、数据库结果不变，并使用与 apply 相同的 advisory lock 边界。",
+        "Apply 测试确认只更新 result，receipt identity/kind/schema/payload hash/created_at 保持不变。",
+        "锁超时和模拟更新失败均只回滚对应用户，后续用户继续成功。",
+        "第二次 apply candidate/updated 为 0，全部计入 skipped/alreadyCompact。",
+        "报告对私有 fixture 文本无泄露，按 kind 与 estimated bytes 统计完整。",
+        "完整后端 302 项回归、CLI help、py_compile、diff check 通过。"
+      ],
+      "execution_map": [
+        "R003 包含 PostgresStore 方法、CLI 与 fake-Postgres 专项测试。",
+        "P005 提供已验收的纯转换 helper。"
+      ],
+      "followup_problem_id": null,
+      "id": "C004",
+      "problem_id": "P006",
+      "residual_risk": [
+        "尚未在真实 Postgres 验证 JSONB/WAL/锁等待和实际字节下降；P003 部署阶段必须先 dry-run，再审阅报告后 apply。",
+        "Receipt 表 created_at 运维索引属于后续规模化优化，本轮不在 startup transaction 中贸然新增。"
+      ],
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "Batch size=1 跨页处理，验证 operationId keyset pagination 无漏重。",
+        "Dry-run/apply 均进入用户 advisory xact lock；锁超时报告 partial 后继续。",
+        "一个用户首批更新抛错，整个用户事务回滚，其他用户提交不受影响。"
+      ],
+      "summary": "P006 的 Postgres 维护与 CLI 合同已完成。实现满足默认 dry-run、分用户锁与事务、失败隔离、幂等和无正文报告要求；真实 Postgres 执行证据明确留给部署阶段，不影响本地实现验收。"
+    },
+    "C005": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P002/children/P007/children/P008/checks/C005.md",
+      "created_at": "2026-07-11T13:47:54+00:00",
+      "criteria_map": [
+        "Canonical compare：满足。",
+        "Dirty compact 清理与幂等：满足。",
+        "空 operation ID 可见：满足。",
+        "用户 keyset 分页：满足。",
+        "报告计数/bytes：现有及新增断言通过。",
+        "专项和全量回归：满足。"
+      ],
+      "evidence": [
+        "Dirty compact fixture 在 apply 后无 graph/mutation/重复身份/私有正文，第二次运行 candidate=0。",
+        "空 operation ID fixture 被扫描并计入 failed user，而非静默漏过。",
+        "Batch size=1 时用户发现执行三页查询，scannedUsers/processedUsers 均为 2，无重复处理。",
+        "后端 304 项全量回归及 34 项组合 smoke 通过。"
+      ],
+      "execution_map": [
+        "R004 完成维护查询、canonical 判定与测试修正。"
+      ],
+      "followup_problem_id": null,
+      "id": "C005",
+      "problem_id": "P008",
+      "residual_risk": [
+        "真实 Postgres 行为与 created_at 索引规模风险需在 P003 在线 dry-run 观察。"
+      ],
+      "result_ids": [
+        "R004"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "伪 compact 同时夹带 envelope 版本、graph、mutation 和重复身份，验证不会走快速跳过。",
+        "历史空 ID 无法安全转换时按用户回滚并继续。",
+        "用户数量恰为分页大小整数倍时额外终止页正常结束，无无限循环。"
+      ],
+      "summary": "P008 的隐私与扫描阻断已解决。实现不再相信单一版本标记，空 operation ID 和多页用户均有明确测试，满足组合 smoke 的前置条件。"
+    },
+    "C006": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P002/children/P007/checks/C006.md",
+      "created_at": "2026-07-11T13:49:17+00:00",
+      "criteria_map": [
+        "组合覆盖：满足。",
+        "Verify 接入：满足。",
+        "CLI 默认 dry-run：满足。",
+        "运维说明：满足。",
+        "不依赖真实 Postgres且无正文输出：满足。",
+        "全量验证：满足。"
+      ],
+      "evidence": [
+        "一键 smoke 同时运行 receipt、privacy、change-feed 和四类 operation replay 测试。",
+        "`verify_backend.sh` 直接调用组合 smoke。",
+        "运维文档明确禁止 reader-first 前 apply，并给出 dry-run/apply/幂等/失败处理顺序。",
+        "304 项后端全量回归和 34 项组合 smoke 通过。"
+      ],
+      "execution_map": [
+        "R005 完成 smoke、verify 接入和文档。",
+        "P008 R004/C005 关闭独立审查阻断。"
+      ],
+      "followup_problem_id": null,
+      "id": "C006",
+      "problem_id": "P007",
+      "residual_risk": [
+        "真实 Postgres 仅能由 P003 部署后验证；文档已将其设为 apply 前硬门。"
+      ],
+      "result_ids": [
+        "R005"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "Dirty compact、空 ID、多页用户、锁超时、用户回滚、二次 apply 均在组合测试覆盖。"
+      ],
+      "summary": "P007 已完成。组合 smoke、默认 dry-run 静态合同、后端全量回归和运维边界均有直接证据；P008 的阻断问题已关闭。"
+    },
+    "C007": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P002/checks/C007.md",
+      "created_at": "2026-07-11T13:50:44+00:00",
+      "criteria_map": [
+        "Dry-run-first Store/CLI：满足。",
+        "用户 advisory lock 与独立事务：满足。",
+        "单用户失败隔离和幂等：满足。",
+        "Compact 后无正文且 bytes 下降报告：满足。",
+        "Fake Postgres 覆盖 dry-run/apply/timeout/rollback/idempotency：满足。",
+        "Privacy/change-feed/replay 组合兼容：满足。"
+      ],
+      "evidence": [
+        "四个子问题均有 success check。",
+        "304 项后端全量测试和 34 项组合 smoke 通过。",
+        "独立审查发现的 dirty compact/空 ID/用户分页问题已修复并新增回归。",
+        "运维文档明确 real Postgres dry-run 是 apply 前硬门。"
+      ],
+      "execution_map": [
+        "R006 汇总 P005/P006/P007/P008 结果。"
+      ],
+      "followup_problem_id": null,
+      "id": "C007",
+      "problem_id": "P002",
+      "residual_risk": [
+        "真实 PostgreSQL 专有行为与实际物理空间必须在 P003 部署验收中证明。"
+      ],
+      "result_ids": [
+        "R006"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "Dirty compact、空 operation ID、整数分页边界、锁超时、更新异常和二次 apply 全部覆盖。"
+      ],
+      "summary": "P002 全部子问题已关闭，维护路径满足默认只读、用户级锁/事务、失败隔离、幂等和隐私最小化要求，可进入跨仓与线上验收。"
+    },
+    "C008": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/children/P009/checks/C008.md",
+      "created_at": "2026-07-11T14:08:30+00:00",
+      "criteria_map": [
+        "BACKEND_ROOT 可配置：满足。",
+        "默认低成本 static + 可选完整 gate：满足。",
+        "Release QA package：满足。",
+        "状态文档：满足。",
+        "Release regression/Simulator/generic iPhoneOS/diff check：满足。",
+        "不改公开 UI、不做真机：满足。"
+      ],
+      "evidence": [
+        "Static guard 和完整跨仓 gate 均通过。",
+        "Release QA package check 直接断言新增产物及 release runner 接入。",
+        "默认 release regression 生成完整 report，包含 Simulator build 和两个核心 smoke。",
+        "Generic iPhoneOS report 证明 arm64 iPhoneOS 编译与本地 Bundle ID guard 通过。",
+        "双仓 diff check 通过。"
+      ],
+      "execution_map": [
+        "R007 完成全部 P009 产物与验证。"
+      ],
+      "followup_problem_id": null,
+      "id": "C008",
+      "problem_id": "P009",
+      "residual_risk": [
+        "线上真实 Postgres 与远程交付仍属于 P010，尚未开始。"
+      ],
+      "result_ids": [
+        "R007"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "Static guard 明确检查 dirty compact canonical compare、fingerprint-first、no-delete/no-hash-rewrite 和 CLI 无默认 apply。",
+        "默认完整 release regression 同时运行后端 304 项测试与现有 iOS 核心模拟器链路，未发现跨模块回归。"
+      ],
+      "summary": "P009 全部成功标准已满足。跨仓合同、release 接入、状态证据和两类非真机构建均有可重复命令与通过报告。"
+    }
+  },
+  "counters": {
+    "check": 9,
+    "event": 123,
+    "problem": 13,
+    "result": 8,
+    "ticket": 12
+  },
+  "created_at": "2026-07-11T12:57:50+00:00",
+  "effort": "medium",
+  "language": "zh",
+  "ledger_id": "L20260711-205750",
+  "problems": {
+    "P000": {
+      "body_path": "problems/P000/README.md",
+      "check_ids": [],
+      "created_at": "2026-07-11T12:57:50+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Close the Lodestar task represented by `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/plans/task_26_p0-knowledge-operation-receipt-minimization.md` using recursive problem, ticket, result, and check state.\n\nTask context:\n\n# Task 26：P0 Knowledge Operation Receipt 保留与最小化",
+      "followup_ids": [],
+      "id": "P000",
+      "package_path": "problems/P000",
+      "parent_id": null,
+      "result_ids": [],
+      "root_id": "P000",
+      "status": "todo",
+      "subproblem_ids": [
+        "P001",
+        "P002",
+        "P003"
+      ],
+      "success_criteria": [
+        "compact 后 receipt 不包含 `graph`、实体正文或原始 mutation upserts。",
+        "同 operationId + 同 payload 重放返回 duplicate、verified，并携带当前权威 graph；revision 不增加。",
+        "同 operationId + 不同 payload 仍返回冲突。",
+        "governance 重放仍返回合法 summary；archive delete 重放不再次删除或级联。",
+        "change-feed compactor 仍把 compact receipt 视为 receipt，不形成新屏障。",
+        "dry-run 不修改数据库；apply 按用户锁执行、失败按用户回滚并可重复运行。",
+        "后端测试、跨仓 gate、默认 release regression 与 iOS 两类非真机构建通过。"
+      ],
+      "ticket_ids": [
+        "T000"
+      ],
+      "title": "Task 26：P0 Knowledge Operation Receipt 保留与最小化",
+      "updated_at": "2026-07-11T12:57:50+00:00"
+    },
+    "P001": {
+      "body_path": "problems/P000/children/P001/README.md",
+      "check_ids": [
+        "C000",
+        "C002"
+      ],
+      "created_at": "2026-07-11T12:59:26+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "旧 receipt 保存完整 graph/mutation，且现有 replay 直接返回该 result。需要定义不含正文的 compact envelope，并在 mutation、governance、archive delete 重放时从当前 snapshot 重建 iOS 兼容响应。",
+      "followup_ids": [
+        "P004"
+      ],
+      "id": "P001",
+      "package_path": "problems/P000/children/P001",
+      "parent_id": "P000",
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P004"
+      ],
+      "success_criteria": [
+        "共享 helper 生成无 graph/实体正文的 compact envelope。",
+        "fingerprint 校验继续在重建前执行。",
+        "compact mutation/governance/archive delete 重放不增加 revision、不重复副作用。",
+        "governance summary 和 V2 空 mutation 合同可被现有 iOS 解析。",
+        "in-memory/Postgres 单测覆盖同 payload、异 payload和无 snapshot 边界。"
+      ],
+      "ticket_ids": [
+        "T001"
+      ],
+      "title": "子问题：Compact Receipt 与安全重放合同",
+      "updated_at": "2026-07-11T13:18:47+00:00"
+    },
+    "P002": {
+      "body_path": "problems/P000/children/P002/README.md",
+      "check_ids": [
+        "C007"
+      ],
+      "created_at": "2026-07-11T12:59:26+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "需要可审计、可重复、默认不写库的维护路径，把超过保留窗口的 full receipt result 转换为 compact envelope，同时与在线 mutation 和 change compaction 共用锁边界。",
+      "followup_ids": [],
+      "id": "P002",
+      "package_path": "problems/P000/children/P002",
+      "parent_id": "P000",
+      "result_ids": [
+        "R006"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P005",
+        "P006",
+        "P007"
+      ],
+      "success_criteria": [
+        "Store 提供 dry-run-first 维护方法，按用户 advisory lock 和独立事务运行。",
+        "CLI 支持 keep-days、timeout、apply 和结构化报告。",
+        "apply 失败只回滚当前用户，重复执行无额外修改。",
+        "compact 后结果字节数下降且正文/graph 不存在。",
+        "fake Postgres 和 Store 测试覆盖 dry-run、apply、锁超时、回滚和幂等。"
+      ],
+      "ticket_ids": [
+        "T003"
+      ],
+      "title": "子问题：Postgres Receipt Dry-run/Apply 维护",
+      "updated_at": "2026-07-11T13:50:44+00:00"
+    },
+    "P003": {
+      "body_path": "problems/P000/children/P003/README.md",
+      "check_ids": [],
+      "created_at": "2026-07-11T12:59:26+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "Receipt 压缩会影响后端幂等响应和 iOS V2 解析，需要固定跨仓合同、部署 smoke、维护文档和 release regression，避免后续回归或误操作生产数据。",
+      "followup_ids": [],
+      "id": "P003",
+      "package_path": "problems/P000/children/P003",
+      "parent_id": "P000",
+      "result_ids": [],
+      "root_id": "P000",
+      "status": "todo",
+      "subproblem_ids": [
+        "P009",
+        "P010"
+      ],
+      "success_criteria": [
+        "后端 smoke 验证 full -> compact -> replay、payload conflict 和 change compaction 兼容。",
+        "iOS 静态/模型检查验证 compact duplicate 响应仍能生成 authoritative snapshot 与 governance response。",
+        "跨仓 gate 接入可选 release regression，默认静态保护不依赖部署环境。",
+        "部署文档明确先 dry-run、备份、apply、post-check 和回滚边界。",
+        "后端全测、release regression、Simulator/generic iPhoneOS build 通过。"
+      ],
+      "ticket_ids": [
+        "T008"
+      ],
+      "title": "子问题：Receipt 最小化跨仓 Gate 与部署收口",
+      "updated_at": "2026-07-11T12:59:26+00:00"
+    },
+    "P004": {
+      "body_path": "problems/P000/children/P001/children/P004/README.md",
+      "check_ids": [
+        "C001"
+      ],
+      "created_at": "2026-07-11T13:11:54+00:00",
+      "created_from_check_id": "C000",
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Compact receipt 已可安全重放，但响应标记不一致，且 envelope 重复保存表级身份字段。需要在不破坏 legacy/full 双读和现有 iOS V2 parser 的前提下，统一 duplicate 响应语义并移除重复身份载荷。",
+      "followup_ids": [],
+      "id": "P004",
+      "package_path": "problems/P000/children/P001/children/P004",
+      "parent_id": "P001",
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "所有 compact-envelope 重放都返回 `receiptCompacted=true` 与稳定的 `originalRevision`。",
+        "compact envelope 不再保存 receipt 表已持久化的 user/operation identity 字段，身份仅以表列和请求 fingerprint 为准。",
+        "legacy full result 继续可读，同 payload duplicate 与异 payload conflict 行为不变。",
+        "change 重建、snapshot fallback、governance/archive duplicate 均有回归测试。",
+        "后端相关测试和全量 `verify_backend.sh` 通过。"
+      ],
+      "ticket_ids": [
+        "T002"
+      ],
+      "title": "收敛 Compact Receipt 标记与最小 envelope",
+      "updated_at": "2026-07-11T13:18:18+00:00"
+    },
+    "P005": {
+      "body_path": "problems/P000/children/P002/children/P005/README.md",
+      "check_ids": [
+        "C003"
+      ],
+      "created_at": "2026-07-11T13:20:09+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T003",
+      "created_from_ticket_mode": "split",
+      "description": "需要一个不依赖数据库的安全转换层，把 legacy full receipt result 最小化为 P001 compact envelope，并让现有 privacy maintenance 正确认识 compact V2 receipt，避免部署后维护任务失效。",
+      "followup_ids": [],
+      "id": "P005",
+      "package_path": "problems/P000/children/P002/children/P005",
+      "parent_id": "P002",
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "纯函数转换 legacy full result，保留原始 revision、mutation schema、兼容标记和 ID-only governance summary。",
+        "转换结果不含 graph、mutation upserts、实体正文或重复身份字段。",
+        "已是 compact envelope 时幂等返回，不二次变化。",
+        "异常 result 明确报错，不猜测生成 envelope。",
+        "Privacy maintenance 对 compact V2 envelope 原样保留 result 和 payload hash，不要求 mutation；legacy full V2 行为不变。",
+        "单测覆盖四类 operation、正文清除、幂等、异常输入和 privacy compatibility。"
+      ],
+      "ticket_ids": [
+        "T004"
+      ],
+      "title": "Receipt 历史转换与隐私维护兼容合同",
+      "updated_at": "2026-07-11T13:23:43+00:00"
+    },
+    "P006": {
+      "body_path": "problems/P000/children/P002/children/P006/README.md",
+      "check_ids": [
+        "C004"
+      ],
+      "created_at": "2026-07-11T13:20:10+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T003",
+      "created_from_ticket_mode": "split",
+      "description": "需要在真实 Postgres 上默认只读地盘点历史 full receipt，并通过显式 apply 按用户安全转换，避免全表事务、锁等待或单用户坏数据影响整个维护任务。",
+      "followup_ids": [],
+      "id": "P006",
+      "package_path": "problems/P000/children/P002/children/P006",
+      "parent_id": "P002",
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "Postgres store 提供 keep-days/batch-size/timeout/apply 参数化维护方法。",
+        "Dry-run 不执行 UPDATE，不提交数据变化。",
+        "Apply 每个用户独立事务并获取 knowledge user advisory lock；锁超时、statement timeout 或转换失败只记录该用户并继续。",
+        "Payload hash、kind/schema 和 receipt identity 行保持不变。",
+        "报告只含计数/字节/用户摘要，不含知识正文。",
+        "第二次 apply 不再更新已 compact 行。",
+        "CLI 默认 dry-run，显式 `--apply` 才写库。",
+        "Fake Postgres 测试覆盖 dry-run、apply、锁超时、回滚、幂等和结构化报告。"
+      ],
+      "ticket_ids": [
+        "T005"
+      ],
+      "title": "Postgres Receipt 用户级维护与 CLI",
+      "updated_at": "2026-07-11T13:37:52+00:00"
+    },
+    "P007": {
+      "body_path": "problems/P000/children/P002/children/P007/README.md",
+      "check_ids": [
+        "C006"
+      ],
+      "created_at": "2026-07-11T13:20:10+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T003",
+      "created_from_ticket_mode": "split",
+      "description": "Receipt 维护必须与 change-feed compaction、privacy metadata maintenance 和线上重放合同共同工作，需要一条后端组合回归和明确的运维边界，避免单测通过但脚本组合失效。",
+      "followup_ids": [],
+      "id": "P007",
+      "package_path": "problems/P000/children/P002/children/P007",
+      "parent_id": "P002",
+      "result_ids": [
+        "R005"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P008"
+      ],
+      "success_criteria": [
+        "新增后端 receipt maintenance smoke，验证 dry-run、apply、duplicate replay 和第二次幂等。",
+        "现有 privacy maintenance 在 compact V2 receipt 存在时 dry-run/apply 不报 invalidRecords。",
+        "Change-feed compactor 仍把 compact receipt 行视为有效幂等屏障。",
+        "`verify_backend.sh` 接入必要 smoke，默认不依赖真实 Postgres。",
+        "CLI `--help`、py_compile、后端全量测试与 diff check 通过。",
+        "输出部署前先 dry-run、观察 bytes/WAL/vacuum、再分批 apply 的运维说明。"
+      ],
+      "ticket_ids": [
+        "T006"
+      ],
+      "title": "Receipt 维护组合回归与运维边界",
+      "updated_at": "2026-07-11T13:49:17+00:00"
+    },
+    "P008": {
+      "body_path": "problems/P000/children/P002/children/P007/children/P008/README.md",
+      "check_ids": [
+        "C005"
+      ],
+      "created_at": "2026-07-11T13:41:42+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T006",
+      "created_from_ticket_mode": "spawn",
+      "description": "组合审查发现维护器仅凭 `receiptEnvelopeVersion=1` 就跳过行，可能永久保留夹带 graph/mutation/私有扩展字段的脏 compact receipt；operationId 空字符串会被首页游标漏过；用户发现一次性 fetchall 也不满足长期运行的有界扫描要求。这些问题会使 P007 的隐私与组合回归结论不成立。",
+      "followup_ids": [],
+      "id": "P008",
+      "package_path": "problems/P000/children/P002/children/P007/children/P008",
+      "parent_id": "P007",
+      "result_ids": [
+        "R004"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "每条 receipt 都通过统一转换/canonicalization 判断；只有与 canonical compact envelope 完全一致才计为 alreadyCompact/skipped。",
+        "带 envelope 版本但夹带 graph、mutation、重复身份或私有 summary 字段的行会成为 candidate，并在 apply 后清除正文。",
+        "空 operationId 历史行可被扫描；若转换无法安全执行则明确 failed，而不是静默漏过。",
+        "用户发现采用有界 keyset 分页，不一次性 fetchall 全部用户。",
+        "新增 fake Postgres 回归覆盖脏 compact、空 operationId 和多页用户发现。",
+        "Receipt 专项和后端全量回归通过。"
+      ],
+      "ticket_ids": [
+        "T007"
+      ],
+      "title": "Receipt Maintenance 脏 Compact 与扫描完整性修复",
+      "updated_at": "2026-07-11T13:47:54+00:00"
+    },
+    "P009": {
+      "body_path": "problems/P000/children/P003/children/P009/README.md",
+      "check_ids": [
+        "C008"
+      ],
+      "created_at": "2026-07-11T13:52:48+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T008",
+      "created_from_ticket_mode": "split",
+      "description": "iOS release 流程尚未固定后端 receipt 最小化、maintenance 默认 dry-run 和组合 smoke 合同，需要跨仓 gate、状态文档和两类非真机构建证据。",
+      "followup_ids": [],
+      "id": "P009",
+      "package_path": "problems/P000/children/P003/children/P009",
+      "parent_id": "P003",
+      "result_ids": [
+        "R007"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "新增跨仓 static check 和 runner，检查后端核心 helper、CLI、smoke 与运维文档。",
+        "接入 release regression 和 release QA package。",
+        "更新 Task 26 状态文档、PRD/知识库覆盖和验证命令。",
+        "跨仓 gate、默认 release regression、release QA package check 通过。",
+        "Simulator 和 generic iPhoneOS 构建、双仓 diff check 通过。",
+        "不修改公开 UI、不做真机。"
+      ],
+      "ticket_ids": [
+        "T009"
+      ],
+      "title": "Receipt 最小化跨仓 Gate 与非真机构建",
+      "updated_at": "2026-07-11T14:08:30+00:00"
+    },
+    "P010": {
+      "body_path": "problems/P000/children/P003/children/P010/README.md",
+      "check_ids": [],
+      "created_at": "2026-07-11T13:52:48+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T008",
+      "created_from_ticket_mode": "split",
+      "description": "本地实现需要形成可追溯双仓提交并部署到现有服务器，真实 Postgres 必须先 dry-run 再决定 apply，同时验证线上重放和维护组合合同。",
+      "followup_ids": [],
+      "id": "P010",
+      "package_path": "problems/P000/children/P003/children/P010",
+      "parent_id": "P003",
+      "result_ids": [],
+      "root_id": "P000",
+      "status": "todo",
+      "subproblem_ids": [
+        "P011",
+        "P012"
+      ],
+      "success_criteria": [
+        "iOS 与后端分别提交并推送正确分支，状态干净且无密钥/临时产物。",
+        "服务器拉取新后端并重建/重启成功，`/health` 正常。",
+        "线上 receipt maintenance dry-run 报告脱敏保存，`status=ok`、failed=0 才允许 apply。",
+        "Apply 使用小 batch；二次运行 candidate/updated=0。",
+        "线上 duplicate/conflict、privacy maintenance 和 change-feed receipt barrier 验证通过。",
+        "失败时停止 apply 并记录真实 blocker，不删除 receipt 行。"
+      ],
+      "ticket_ids": [
+        "T010"
+      ],
+      "title": "双仓提交部署与线上 Postgres Receipt 验收",
+      "updated_at": "2026-07-11T13:52:48+00:00"
+    },
+    "P011": {
+      "body_path": "problems/P000/children/P003/children/P010/children/P011/README.md",
+      "check_ids": [],
+      "created_at": "2026-07-11T14:11:28+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T010",
+      "created_from_ticket_mode": "split",
+      "description": "后端实现和 iOS QA/文档仍处于未提交状态，需要在不混入密钥、tmp 或无关改动的前提下形成两个清晰提交并推送正确分支。",
+      "followup_ids": [],
+      "id": "P011",
+      "package_path": "problems/P000/children/P003/children/P010/children/P011",
+      "parent_id": "P010",
+      "result_ids": [],
+      "root_id": "P000",
+      "status": "doing",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "双仓 git diff/status 审计完成，确认所有改动属于 Task 26。",
+        "敏感信息和 tmp/DerivedData 未进入 staged 内容。",
+        "后端 main 与 iOS feature 分支分别提交，提交信息清楚。",
+        "两仓 push 成功，远端 commit 与本地 HEAD 一致。",
+        "Push 后工作树干净或仅保留明确未提交的本地证据产物。"
+      ],
+      "ticket_ids": [
+        "T011"
+      ],
+      "title": "Task 26 双仓提交与远端基线确认",
+      "updated_at": "2026-07-11T14:13:01+00:00"
+    },
+    "P012": {
+      "body_path": "problems/P000/children/P003/children/P010/children/P012/README.md",
+      "check_ids": [],
+      "created_at": "2026-07-11T14:11:28+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T010",
+      "created_from_ticket_mode": "split",
+      "description": "远端提交需要部署到现有服务器，并用真实 Postgres 验证 maintenance SQL、锁/JSONB 行为、dry-run/apply 幂等和线上 replay 合同。",
+      "followup_ids": [],
+      "id": "P012",
+      "package_path": "problems/P000/children/P003/children/P010/children/P012",
+      "parent_id": "P010",
+      "result_ids": [],
+      "root_id": "P000",
+      "status": "todo",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "服务器运行目标后端提交，health 200 且 store=postgres。",
+        "线上 dry-run 报告脱敏保存；status=ok、failed=0、kind 合法才允许 apply。",
+        "小 batch apply 成功，不删除 receipt identity；二次运行 candidate/updated=0。",
+        "Duplicate/conflict、privacy maintenance dry-run 与 change-feed receipt barrier 验收通过。",
+        "状态文档记录部署版本、报告路径、结果和 remaining risk。"
+      ],
+      "ticket_ids": [],
+      "title": "后端部署与真实 Postgres Receipt 验收",
+      "updated_at": "2026-07-11T14:11:28+00:00"
+    }
+  },
+  "results": {
+    "R000": {
+      "artifacts": [
+        "后端：`app/services/knowledge_store.py`",
+        "后端：`app/services/in_memory_store.py`",
+        "后端：`app/services/postgres_store.py`",
+        "后端：`app/main.py`",
+        "测试：`tests/test_core_services.py`",
+        "测试：`tests/test_postgres_store.py`",
+        "测试：`tests/test_knowledge_governance.py`"
+      ],
+      "body_path": "problems/P000/children/P001/results/R000.md",
+      "created_at": "2026-07-11T13:11:20+00:00",
+      "done": [
+        "后端新增版本化 compact receipt envelope，新写入的 operation receipt 不再保存完整知识图谱或实体正文。",
+        "Postgres 与内存存储同时兼容 legacy full result 和 compact envelope。",
+        "重放前先校验 operation kind、schema version 与 payload hash；同 payload 返回 duplicate，异 payload 保持 conflict。",
+        "关联 change 仍存在时，使用 change 重建精确 graph/mutation；change 已压缩时，使用当前权威 snapshot 与结构合法的空 V2 mutation 重建兼容响应。",
+        "`kb.sync`、`kb.mutation`、`kb.governance`、`archive.delete` 四类操作均接入 compact receipt 合同。",
+        "governance/archive receipt 仅保留 ID 级摘要，不保留实体文本。",
+        "server-generated legacy sync compatibility no-op 不再写入无意义 receipt。"
+      ],
+      "id": "R000",
+      "known_gaps": [],
+      "problem_id": "P001",
+      "root_id": "P000",
+      "summary": "已完成新旧 receipt 双读、compact envelope 写入、fingerprint-first 重放和四类知识操作兼容；后端相关及全量回归通过。历史数据迁移和跨仓发布门留给后续子问题处理。",
+      "ticket_id": "T001",
+      "verification": [
+        "使用项目 `.venv` 运行知识库相关测试：218 项通过。",
+        "运行 `STORE_BACKEND=memory scripts/verify_backend.sh`：289 项测试、FastAPI smoke、知识库 smoke 与 `git diff --check` 全部通过。",
+        "新增测试覆盖 compact/full 双读、fingerprint conflict、change 重建、snapshot fallback、governance/archive duplicate 及 Postgres 查询合同。"
+      ]
+    },
+    "R001": {
+      "artifacts": [
+        "`app/services/knowledge_store.py`",
+        "`app/services/in_memory_store.py`",
+        "`app/services/postgres_store.py`",
+        "`tests/test_core_services.py`",
+        "`tests/test_postgres_store.py`",
+        "`tests/test_knowledge_governance.py`"
+      ],
+      "body_path": "problems/P000/children/P001/children/P004/results/R001.md",
+      "created_at": "2026-07-11T13:16:14+00:00",
+      "done": [
+        "Compact envelope 仅保留版本、原始 revision、mutation schema、可选更新时间、兼容 no-op 标记和 ID-only governance summary。",
+        "移除 `userId`、`operationId`、`operationKind`、`operationSchemaVersion` 重复字段，身份以 receipt 表列与 fingerprint 为唯一权威来源。",
+        "Change 仍存在和已压缩后的 snapshot fallback 两条重放路径均返回 `receiptCompacted=true` 与 envelope 的 `originalRevision`。",
+        "Reader 继续容忍历史 compact envelope 的额外字段，legacy full result 继续直接双读。",
+        "更新内存、Postgres、同步与治理回归测试，显式校验最小 envelope 和两条 compact replay 路径。"
+      ],
+      "id": "R001",
+      "known_gaps": [],
+      "problem_id": "P004",
+      "root_id": "P000",
+      "summary": "已移除 compact envelope 中与 receipt 表重复的身份字段，并统一所有 compact duplicate 重放响应的 `receiptCompacted` 与 `originalRevision` 语义；历史 full/compact 双读和现有 API 兼容保持不变。",
+      "ticket_id": "T002",
+      "verification": [
+        "`STORE_BACKEND=memory .venv/bin/python -m unittest tests.test_core_services tests.test_postgres_store tests.test_knowledge_governance`：218 项通过。",
+        "`STORE_BACKEND=memory scripts/verify_backend.sh`：289 项测试、FastAPI smoke、知识库 delta/V2/evidence smoke 和 diff check 全部通过。",
+        "`py_compile` 与 `git diff --check` 通过。"
+      ]
+    },
+    "R002": {
+      "artifacts": [
+        "`app/services/knowledge_receipt_maintenance.py`",
+        "`app/services/knowledge_privacy_maintenance.py`",
+        "`tests/test_knowledge_receipt_maintenance.py`"
+      ],
+      "body_path": "problems/P000/children/P002/children/P005/results/R002.md",
+      "created_at": "2026-07-11T13:23:18+00:00",
+      "done": [
+        "新增四类 operation 支持的历史 receipt 转换 helper。",
+        "转换结果移除 graph、mutation、实体正文和重复身份字段，保留原始 revision/schema/可选兼容标记及 ID-only governance summary。",
+        "Compact envelope canonicalizer 可去除旧版重复身份与非白名单 summary 字段，再次执行保持幂等。",
+        "非法 revision/schema、未知 operation kind、缺失治理摘要等情况 fail closed。",
+        "Privacy canonicalizer 识别 compact V2 envelope，不再要求 mutation。",
+        "Compact V2 receipt 的 payload hash 原样保留；legacy full V2 继续走原有 canonical mutation/hash 逻辑。"
+      ],
+      "id": "R002",
+      "known_gaps": [],
+      "problem_id": "P005",
+      "root_id": "P000",
+      "summary": "已建立 legacy full receipt 到最小 compact envelope 的纯转换层，并修复 privacy maintenance 对 compact V2 receipt 的误判；不涉及数据库事务或部署。",
+      "ticket_id": "T004",
+      "verification": [
+        "新增 receipt maintenance 纯函数测试 6 项。",
+        "`STORE_BACKEND=memory` 下 receipt/privacy/core/Postgres/governance 组合测试 230 项通过。",
+        "新模块 py_compile 与 `git diff --check` 通过。"
+      ]
+    },
+    "R003": {
+      "artifacts": [
+        "`app/services/postgres_store.py`",
+        "`scripts/maintain_knowledge_operation_receipts.py`",
+        "`tests/test_knowledge_receipt_postgres_maintenance.py`"
+      ],
+      "body_path": "problems/P000/children/P002/children/P006/results/R003.md",
+      "created_at": "2026-07-11T13:33:59+00:00",
+      "done": [
+        "`PostgresStore.maintain_knowledge_operation_receipts` 支持 keep-days、batch-size、apply、lock timeout 和 statement timeout。",
+        "先只读列出候选用户，再按用户独立连接/事务获取 `knowledge:{userId}` advisory xact lock。",
+        "Dry-run 与 apply 使用同一锁边界；dry-run 不执行 UPDATE 并 rollback 只读事务。",
+        "Apply 使用 `FOR UPDATE` 分页读取并批量只更新 result；kind/schema/payload hash/created_at/identity 不变。",
+        "单用户锁超时、语句超时或转换失败回滚该用户并继续其他用户。",
+        "报告包含 scanned/candidate/updated/skipped/alreadyCompact/failed、用户计数、失败原因、按 kind 计数和估算 bytes before/after/saved，不输出 receipt 正文。",
+        "`keep_days=0` 可立即盘点；其他 batch/timeout 参数严格验证。",
+        "新增默认 dry-run CLI，非 Postgres store 明确拒绝。"
+      ],
+      "id": "R003",
+      "known_gaps": [],
+      "problem_id": "P006",
+      "root_id": "P000",
+      "summary": "已实现默认 dry-run 的 Postgres receipt 历史瘦身维护、用户级锁/事务隔离、结构化无正文报告和命令行入口；专用测试与后端全量回归通过。",
+      "ticket_id": "T005",
+      "verification": [
+        "Receipt maintenance 专项测试 13 项通过。",
+        "Receipt/privacy 组合测试 19 项通过。",
+        "完整 `STORE_BACKEND=memory scripts/verify_backend.sh`：302 项测试及全部 FastAPI/知识 smoke 通过。",
+        "`py_compile`、CLI `--help` 与 `git diff --check` 通过。"
+      ]
+    },
+    "R004": {
+      "artifacts": [
+        "`app/services/postgres_store.py`",
+        "`tests/test_knowledge_receipt_postgres_maintenance.py`",
+        "`scripts/run-backend-knowledge-receipt-maintenance-smoke.sh`"
+      ],
+      "body_path": "problems/P000/children/P002/children/P007/children/P008/results/R004.md",
+      "created_at": "2026-07-11T13:47:20+00:00",
+      "done": [
+        "每行先调用统一转换 helper，仅当转换结果与原 result 完全一致才计为 alreadyCompact/skipped。",
+        "带 envelope 版本但夹带 graph、mutation、重复身份或私有 summary 的行成为 candidate，apply 后清理。",
+        "Operation 第一页使用无下界查询，后续页才使用 `operation_id > last`，空字符串 ID 不再漏扫。",
+        "用户发现按 userId keyset 和 batch-size 分页，每页独立只读事务，不再一次 fetchall 全部用户。",
+        "新增脏 compact apply/二次幂等、空 operation ID fail-visible、多页用户发现无漏重测试。",
+        "组合 smoke 已纳入这些回归。"
+      ],
+      "id": "R004",
+      "known_gaps": [],
+      "problem_id": "P008",
+      "root_id": "P000",
+      "summary": "已关闭独立审查发现的维护隐私阻断：所有 receipt 统一 canonical compare，脏 compact 不再被跳过；operation 与用户扫描均改为完整、有界的 keyset 分页。",
+      "ticket_id": "T007",
+      "verification": [
+        "Receipt/privacy/change-feed 专项测试 29 项通过。",
+        "Receipt maintenance 组合 smoke 34 项通过。",
+        "后端全量 verify：304 项测试、FastAPI/knowledge smokes、py_compile 与 diff check 全部通过。"
+      ]
+    },
+    "R005": {
+      "artifacts": [
+        "`scripts/run-backend-knowledge-receipt-maintenance-smoke.sh`",
+        "`scripts/verify_backend.sh`",
+        "`docs/backend/2026-07-11-knowledge-operation-receipt-maintenance.md`",
+        "P008 R004/C005"
+      ],
+      "body_path": "problems/P000/children/P002/children/P007/results/R005.md",
+      "created_at": "2026-07-11T13:48:42+00:00",
+      "done": [
+        "新增 `run-backend-knowledge-receipt-maintenance-smoke.sh`，覆盖转换、Postgres、privacy、change-feed、mutation/governance/archive duplicate。",
+        "Smoke 校验 CLI 暴露 `--apply`/keep-days/batch-size，且 argparse 使用 store_true、默认不会 apply。",
+        "`verify_backend.sh` 显式运行 receipt maintenance smoke。",
+        "新增后端运维文档，说明备份、reader-first 部署、dry-run 审阅、低峰 apply、二次幂等、WAL/vacuum 观察和回滚边界。",
+        "P008 修复 dirty compact、空 operation ID 与用户发现分页完整性。"
+      ],
+      "id": "R005",
+      "known_gaps": [],
+      "problem_id": "P007",
+      "root_id": "P000",
+      "summary": "已把 receipt 转换、Postgres 维护、privacy compatibility、change-feed 幂等屏障和 duplicate replay 固化为一条后端组合 smoke，并补齐 reader-first、dry-run-first 的生产运维说明。独立审查发现的脏 compact 扫描阻断已通过 P008 修复。",
+      "ticket_id": "T006",
+      "verification": [
+        "Receipt maintenance 组合 smoke 34 项通过。",
+        "后端完整 verify：304 项测试、FastAPI/knowledge smokes、py_compile 与 diff check 全部通过。",
+        "CLI help 和脚本静态默认 dry-run 断言通过。"
+      ]
+    },
+    "R006": {
+      "artifacts": [
+        "P005 R002/C003",
+        "P006 R003/C004",
+        "P007 R005/C006",
+        "P008 R004/C005"
+      ],
+      "body_path": "problems/P000/children/P002/results/R006.md",
+      "created_at": "2026-07-11T13:50:07+00:00",
+      "done": [
+        "P005：完成 legacy/full 到 canonical compact envelope 转换和 compact V2 privacy maintenance 兼容。",
+        "P006：完成默认 dry-run CLI、分用户事务/advisory lock、timeout、分页、结构化报告和幂等 apply。",
+        "P007：完成 receipt/privacy/change-feed/replay 组合 smoke、verify_backend 接入和生产运维说明。",
+        "P008：修复 dirty compact 快速跳过、空 operation ID 漏扫和用户发现无界 fetchall。",
+        "Receipt identity、kind/schema、payload hash 与 created_at 始终不修改，receipt 行不删除。"
+      ],
+      "id": "R006",
+      "known_gaps": [],
+      "problem_id": "P002",
+      "root_id": "P000",
+      "summary": "历史 receipt 的纯转换、privacy compatibility、Postgres 分用户 dry-run/apply、组合 smoke 和运维边界均已完成；本地实现已达到部署前状态。",
+      "ticket_id": "T003",
+      "verification": [
+        "后端全量 304 项测试通过。",
+        "Receipt maintenance 组合 smoke 34 项通过。",
+        "FastAPI/knowledge smokes、py_compile、CLI help 和 diff check 全部通过。"
+      ]
+    },
+    "R007": {
+      "artifacts": [
+        "`Scripts/QA/prd-stitch-ui/knowledge-receipt-maintenance-contract-check.swift`",
+        "`Scripts/QA/prd-stitch-ui/run-knowledge-receipt-maintenance-gate.sh`",
+        "`docs/superpowers/status/2026-07-11-knowledge-operation-receipt-minimization.md`",
+        "`tmp/visual-qa/prd-stitch-ui/release-regression/20260711-task26-receipt-final/report.md`",
+        "`tmp/visual-qa/prd-stitch-ui/iphoneos-generic-build/20260711-task26-receipt-final-iphoneos/report.md`"
+      ],
+      "body_path": "problems/P000/children/P003/children/P009/results/R007.md",
+      "created_at": "2026-07-11T14:07:41+00:00",
+      "done": [
+        "新增 Swift static contract check，覆盖 compact writer/reader、fingerprint-first、dirty compact canonical compare、privacy hash 保留、CLI 默认 dry-run、组合 smoke 和运维边界。",
+        "新增跨仓 runner，串联 Swift guard 与后端 34 项 receipt maintenance smoke。",
+        "Release regression 默认执行静态 guard，新增 `RUN_KNOWLEDGE_RECEIPT_MAINTENANCE_GATE=1` 可选完整 gate。",
+        "Release QA package 检查新增 guard、runner 和状态文档。",
+        "状态文档记录部署先 dry-run、不删除 receipt、不重写 hash、不做真机及验证证据。"
+      ],
+      "id": "R007",
+      "known_gaps": [],
+      "problem_id": "P009",
+      "root_id": "P000",
+      "summary": "已完成 P009：新增跨仓静态/完整 gate，接入 release regression 与 release QA package，更新状态文档，并完成默认 release regression、Simulator smoke 和 generic iPhoneOS 构建。",
+      "ticket_id": "T009",
+      "verification": [
+        "完整跨仓 receipt gate：通过，后端组合 smoke 34 项。",
+        "Release QA package check：通过。",
+        "默认 release regression：通过；包含后端 304 项 verify、全部 Swift guard、Simulator build、Archive -> Echo 和延迟回信 smoke。",
+        "Generic iPhoneOS 无签名构建：通过，Bundle ID 使用 `com.yxj.dreamjourney.app`。",
+        "双仓 `git diff --check`：通过。"
+      ]
+    }
+  },
+  "root_id": "P000",
+  "schema_version": 6,
+  "tickets": {
+    "T000": {
+      "acceptance_criteria": [
+        "compact receipt 不含 graph 或原始实体正文。",
+        "mutation/governance/archive delete 的同 payload 重放安全，异 payload 冲突不变。",
+        "iOS V2 mutation/governance 解析合同继续成立。",
+        "维护脚本默认 dry-run，apply 可重复且用户级失败回滚。",
+        "change-feed compaction 继续识别 receipt 行。",
+        "单测、跨仓 gate、release regression 和非真机构建通过。"
+      ],
+      "assumptions": [],
+      "body_path": "problems/P000/tickets/T000.md",
+      "classification": "split",
+      "classification_reason": "涉及在线重放合同、Postgres 维护事务、治理摘要兼容与跨仓验收，属于多边界高风险数据生命周期变更，应拆分实现和验证。",
+      "created_at": "2026-07-11T12:58:14+00:00",
+      "id": "T000",
+      "problem_definition": "`kb_operation_receipts` 永久保存 payload fingerprint 是幂等安全要求，但当前 `result` 同时永久复制完整 graph 和 mutation，造成无界增长与历史知识文本旁路。receipt 不能直接删除，否则 change feed 已压缩后旧 operationId 可能被再次执行。",
+      "problem_id": "P000",
+      "proposed_solution": "定义 compact receipt envelope，仅保留操作身份、原始 revision、schema、非文本治理摘要和压缩元数据；fingerprint 列保持不变。重放 compact receipt 时读取当前 authoritative snapshot，构造 duplicate/verified 兼容响应和空 V2 mutation，不重新执行操作。Postgres 维护采用 dry-run-first、按用户 advisory lock 和可重复 apply。",
+      "result_ids": [],
+      "risks": [
+        "governance response 依赖 summary，compact envelope 必须保留只含 ID/动作的治理摘要。",
+        "V2 iOS 要求 mutation 为对象，重建响应必须返回结构合法的空 mutation而不是省略字段。",
+        "维护与在线 mutation/change compaction 必须共用用户 advisory lock，避免压缩半写 receipt。"
+      ],
+      "root_id": "P000",
+      "status": "splitting",
+      "title": "实现可重建的知识操作收据压缩",
+      "updated_at": "2026-07-11T12:59:25+00:00",
+      "verification_plan": "先写 compact/replay 单测和维护 fake-Postgres 测试，再实现共享 envelope helper、Postgres replay 重建、维护方法和 CLI；运行后端全量测试、知识 deployed smoke、本地跨仓 gate、默认 release regression、Simulator/generic iPhoneOS build，并在部署前执行生产 dry-run。"
+    },
+    "T001": {
+      "acceptance_criteria": [
+        "四种 operation kind 双读通过。",
+        "同 payload verified duplicate，异 payload conflict。",
+        "compact result 不含 graph/upserts/实体正文。",
+        "governance/archive duplicate 不重复副作用。",
+        "现有 iOS parser 合同不变。"
+      ],
+      "assumptions": [],
+      "body_path": "problems/P000/children/P001/tickets/T001.md",
+      "classification": "one_go",
+      "classification_reason": "边界集中在 receipt helper、两类 store replay 和对应单测，接口明确且可由后端测试独立验证。",
+      "created_at": "2026-07-11T13:00:02+00:00",
+      "id": "T001",
+      "problem_definition": "新旧 receipt 必须可并存；旧 result 含完整 graph，新 compact envelope 不含正文。Reader 要在验证 fingerprint 后优先用关联 change 重建，change 已压缩时使用当前 snapshot，并保持 mutation/governance/archive delete 合同。",
+      "problem_id": "P001",
+      "proposed_solution": "在 knowledge store 层定义版本化 compact envelope helper。新 receipt 写入即最小化；Postgres 和 in-memory replay 同时接受 legacy/compact。Compact replay 查询 operation change，缺失时查询 current snapshot，V2 返回空 mutation，governance 使用 envelope 中 ID-only summary。匿名 legacy sync no-op 不再生成无意义 receipt。",
+      "result_ids": [
+        "R000"
+      ],
+      "risks": [
+        "change 已压缩后的 duplicate graph 是当前 snapshot，而非历史时点 snapshot；响应显式标记 receiptCompacted，客户端将其作为最新权威状态。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现 Compact Receipt 双读与权威快照重放",
+      "updated_at": "2026-07-11T13:11:20+00:00",
+      "verification_plan": "扩充 knowledge store、governance、core/postgres 单测，运行后端相关与全量测试，并执行现有 knowledge smoke。"
+    },
+    "T002": {
+      "acceptance_criteria": [
+        "Compact envelope 不含 `userId`、`operationId`、`operationKind`、`operationSchemaVersion`。",
+        "Change 重建和 snapshot fallback 均返回 `receiptCompacted=true` 与正确 `originalRevision`。",
+        "Governance/archive delete 的 ID-only summary 与 duplicate 行为不变。",
+        "Legacy full receipt 继续兼容，同 payload duplicate 和异 payload conflict 行为不变。",
+        "新增或更新回归测试覆盖 envelope 最小化与两条 compact replay 路径。"
+      ],
+      "assumptions": [
+        "Receipt 表的 operation identity 与 fingerprint 列是唯一权威来源。",
+        "iOS 仅依赖兼容 graph/mutation 响应，不依赖 compact envelope 的内部字段。"
+      ],
+      "body_path": "problems/P000/children/P001/children/P004/tickets/T002.md",
+      "classification": "one_go",
+      "classification_reason": "改动集中在 compact envelope helper、重放标记和对应测试，范围小、合同明确且可用现有全量回归验证。",
+      "created_at": "2026-07-11T13:12:21+00:00",
+      "id": "T002",
+      "problem_definition": "当前 compact receipt 可以重放，但 change 重建路径和 snapshot fallback 路径的 `receiptCompacted` 标记不一致；envelope 还重复保存 receipt 表已有的 user/operation 身份字段，形成不必要载荷和潜在双重事实来源。",
+      "problem_id": "P004",
+      "proposed_solution": "将 compact envelope 收敛为仅包含重放所需的版本、原始 revision、mutation schema、可选时间/兼容标记和 ID-only governance summary。身份与 fingerprint 只读取 receipt 表列。所有 compact-envelope 重放在返回兼容响应时统一增加 `receiptCompacted=true` 和 `originalRevision`，无论关联 change 是否仍存在。Legacy full result 保持原样双读。",
+      "result_ids": [
+        "R001"
+      ],
+      "risks": [
+        "历史 compact envelope 可能已包含重复身份字段；reader 必须容忍额外字段，不能要求严格键集合。",
+        "`originalRevision` 表示 receipt 对应的原始 operation revision，不应被当前 snapshot revision 覆盖。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "最小化 Compact Receipt 并统一重放标记",
+      "updated_at": "2026-07-11T13:16:14+00:00",
+      "verification_plan": "运行知识库相关单测、Postgres fake-store 测试、governance 测试和完整 `STORE_BACKEND=memory scripts/verify_backend.sh`，并执行 `git diff --check`。"
+    },
+    "T003": {
+      "acceptance_criteria": [
+        "CLI 默认 dry-run，显式 `--apply` 才写库，并支持 keep-days、batch-size、lock timeout 与 statement timeout。",
+        "历史 full receipt 可转换为无 graph/原始 mutation/正文的 compact envelope，payload hash 不变。",
+        "按用户 advisory lock 和独立事务执行；一个用户锁超时或失败不会回滚其他用户。",
+        "Apply 可重复运行，第二次无额外修改。",
+        "报告包含 scanned/candidate/updated/skipped/failed、按 kind 计数、估算 bytes before/after/saved，且不输出正文。",
+        "Governance/archive 的 ID-only summary 可从历史 mutation/result 安全提取。",
+        "Privacy maintenance 接受 compact V2 envelope，不重算其 payload hash；legacy full result 行为不变。",
+        "Fake Postgres/服务单测覆盖 dry-run、apply、锁超时、用户级回滚、幂等和 compact privacy compatibility。"
+      ],
+      "assumptions": [
+        "Receipt 身份行永久保留，不按 TTL 删除。",
+        "`payload_hash` 是幂等权威，历史最小化不得重新计算或修改。",
+        "P001 dual-reader 已先部署代码路径但不会在 P002/P003 完成前上线。"
+      ],
+      "body_path": "problems/P000/children/P002/tickets/T003.md",
+      "classification": "split",
+      "classification_reason": "该任务同时涉及纯转换合同、Postgres 用户级事务/锁/CLI，以及现有 privacy maintenance 兼容；三部分写集和验证边界可分离，拆分后更易严格验收。",
+      "created_at": "2026-07-11T13:19:15+00:00",
+      "id": "T003",
+      "problem_definition": "线上历史 `kb_operation_receipts.result` 仍可能保存完整 graph/mutation，需要默认只读、按用户隔离的维护入口转换为 compact envelope。与此同时，现有 privacy maintenance 会把不含 mutation 的 compact V2 receipt 误判为无效并在 apply 时中止，必须在部署前修复。",
+      "problem_id": "P002",
+      "proposed_solution": "新增独立 receipt maintenance service、Postgres store 方法和 CLI。先扫描超过 keep-days 的 legacy full receipt，按 operation kind 构造 compact envelope；dry-run 只统计候选、估算字节与风险，apply 对每个用户使用独立事务、advisory lock、lock/statement timeout 和批量更新。保持 receipt 表的 kind/schema/payload hash 不变。同步修改 privacy maintenance：识别 compact envelope 后只校验结构并原样保留 fingerprint，不要求已移除的 V2 mutation。",
+      "result_ids": [
+        "R006"
+      ],
+      "risks": [
+        "JSONB 更新会产生 WAL 与表膨胀，必须分用户、小批量并在部署文档中说明 vacuum 观察。",
+        "历史异常 receipt 不能猜测修复，应计入 failed/skipped 并保留原数据。",
+        "Change 已压缩时不影响维护，因为 compact envelope 只依赖 receipt result 内的原始 revision 与可提取摘要。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现 Receipt Dry-run/Apply 维护与现有维护兼容",
+      "updated_at": "2026-07-11T13:50:07+00:00",
+      "verification_plan": "运行新增 maintenance 单测、现有 privacy/change-feed/knowledge 回归、完整 `STORE_BACKEND=memory scripts/verify_backend.sh`、CLI `--help`、`py_compile` 和 `git diff --check`。P003 再负责跨仓 gate、真实 Postgres dry-run/apply 与部署证据。"
+    },
+    "T004": {
+      "acceptance_criteria": [
+        "四种 operation kind 均可从 legacy full result 转换。",
+        "Compact 输入幂等返回，转换结果无正文/graph/mutation/重复身份字段。",
+        "缺失 revision、非法 result 或无法安全提取所需 governance summary 时返回明确错误。",
+        "Privacy maintenance 识别 compact V2，不要求 mutation、不重算 hash。",
+        "Legacy full privacy canonicalization 行为与测试不回退。"
+      ],
+      "assumptions": [
+        "Receipt 表列提供可信 operation identity 与 payload hash。",
+        "P001 compact helper 是新 envelope 的唯一 writer。"
+      ],
+      "body_path": "problems/P000/children/P002/children/P005/tickets/T004.md",
+      "classification": "one_go",
+      "classification_reason": "纯转换 helper 与 privacy canonicalizer 兼容集中在两个服务文件及单测，不涉及数据库事务，可在一个有界实现中完成并验证。",
+      "created_at": "2026-07-11T13:20:38+00:00",
+      "id": "T004",
+      "problem_definition": "历史 full receipt 需要在数据库维护之前通过可单测的纯函数安全转换；现有 privacy maintenance 又会把缺少 mutation 的 compact V2 envelope 当作损坏数据并尝试重算 payload hash。",
+      "problem_id": "P005",
+      "proposed_solution": "新增 `knowledge_receipt_maintenance.py`，定义 legacy/full 到 compact envelope 的转换、候选识别、估算尺寸和结构化错误。复用 P001 compact helper，根据 receipt 表列传入 operation kind/id/schema，并从 legacy result 提取必要的 ID-only governance summary。修改 privacy canonicalizer 和 payload hash 逻辑：版本化 compact envelope 只做结构校验并保留现有 hash，legacy full V2 继续 canonicalize mutation 和重算 hash。",
+      "result_ids": [
+        "R002"
+      ],
+      "risks": [
+        "历史 archive delete 可能没有 mutation 但有 item/cascade，需要只保留可验证的 ID-only summary，不能保留 item 正文。",
+        "历史异常 governance receipt 缺少可提取摘要时应跳过并报告，不应生成语义不完整 envelope。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "建立 Legacy Receipt 转换与 Compact Privacy 兼容层",
+      "updated_at": "2026-07-11T13:23:18+00:00",
+      "verification_plan": "新增纯函数测试，扩充 `test_knowledge_privacy_maintenance.py`，运行相关单测、py_compile 和 diff check；后续 P007 再跑组合 smoke 与全量回归。"
+    },
+    "T005": {
+      "acceptance_criteria": [
+        "参数验证完整，keep-days 可为 0，batch-size/timeout 必须为正数。",
+        "Dry-run 不执行 UPDATE/commit 数据变化。",
+        "Apply 分用户事务、advisory lock、lock/statement timeout，并限制每批候选数。",
+        "单用户 lock timeout、statement timeout 或转换失败记录为 failed/skipped 后继续。",
+        "报告含 scanned/candidate/updated/alreadyCompact/failed、按 kind 计数和 bytes before/after/saved，不含 result 正文。",
+        "Payload hash 与 receipt 身份列不修改，第二次 apply 幂等。",
+        "CLI 默认 dry-run，非 Postgres store 明确失败。"
+      ],
+      "assumptions": [
+        "P005 转换 helper 已通过验收。",
+        "Receipt 行不删除，payload hash 永久保留。"
+      ],
+      "body_path": "problems/P000/children/P002/children/P006/tickets/T005.md",
+      "classification": "one_go",
+      "classification_reason": "实现集中在一个 PostgresStore 维护方法、单个 CLI 与专用 fake-Postgres 测试，边界明确且不改在线 API，可作为一个有界提交验证。",
+      "created_at": "2026-07-11T13:24:16+00:00",
+      "id": "T005",
+      "problem_definition": "历史 full receipt 需要在不删除幂等身份行、不改变 fingerprint、不过度锁表的前提下分批瘦身。维护命令必须默认只读，并在单个用户锁等待或异常时继续处理其他用户。",
+      "problem_id": "P006",
+      "proposed_solution": "在 PostgresStore 增加 `maintain_knowledge_operation_receipts`。先只读列出达到 keep-days 的 legacy receipt 用户与候选；每个用户使用独立连接/事务，设置 lock/statement timeout，获取与知识写入一致的 user advisory lock，重新 `FOR UPDATE` 读取候选并调用 P005 纯转换 helper。Dry-run 只计算 canonical JSON bytes；apply 按 batch 更新 result，不修改 kind/schema/hash/created_at。新增 CLI 暴露 apply、keep-days、batch-size 与 timeout，并输出不含正文的结构化报告。",
+      "result_ids": [
+        "R003"
+      ],
+      "risks": [
+        "真实 Postgres 的 `pg_column_size(jsonb)` 与 Python canonical JSON bytes 不完全相同；报告应明确是估算值，真实线上 P003 再读取数据库尺寸。",
+        "对候选先列用户再逐用户重查可避免长事务，但维护期间新增 receipt 不保证本轮处理，下一轮可继续。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现 Postgres Receipt 分用户维护与 Dry-run CLI",
+      "updated_at": "2026-07-11T13:33:59+00:00",
+      "verification_plan": "新增 fake database/connection/cursor 测试覆盖 dry-run、apply、幂等、锁超时、用户级回滚、参数校验和 CLI 参数；运行相关单测、py_compile、CLI help 和 diff check。"
+    },
+    "T006": {
+      "acceptance_criteria": [
+        "一键脚本覆盖 receipt 转换、Postgres dry-run/apply、compact privacy compatibility、change-feed receipt barrier 和 duplicate replay。",
+        "`verify_backend.sh` 显式运行该 smoke。",
+        "CLI help 和默认 dry-run 合同由脚本检查。",
+        "运维文档说明部署顺序、dry-run 审阅字段、apply 前置条件、失败处理、幂等复跑和数据库观察项。",
+        "组合测试不依赖真实 Postgres，不输出知识正文。",
+        "后端全量回归、py_compile、diff check 通过。"
+      ],
+      "assumptions": [
+        "P005/P006 已通过本地验收。",
+        "线上部署和真实 Postgres 证据由 P003 最终收口。"
+      ],
+      "body_path": "problems/P000/children/P002/children/P007/tickets/T006.md",
+      "classification": "one_go",
+      "classification_reason": "只新增一个组合 smoke、verify_backend 接入和一份运维文档，均基于已完成实现，范围小且可直接验证。",
+      "created_at": "2026-07-11T13:38:43+00:00",
+      "id": "T006",
+      "problem_definition": "单项测试已证明转换和 Postgres 维护，但仍需显式证明 compact receipt 与 privacy maintenance、change-feed compaction、duplicate replay 能组合工作，并给部署人员一套先 dry-run、后 apply 的安全顺序。",
+      "problem_id": "P007",
+      "proposed_solution": "新增后端一键 receipt maintenance smoke，运行 receipt 纯函数/Postgres/隐私维护/change-feed compaction/核心 duplicate 测试及 CLI help；将其接入 `verify_backend.sh`。补后端部署文档，明确 reader-first 部署、dry-run 报告字段、异常停止条件、分批 apply、二次幂等、WAL/表膨胀/vacuum 观察和回滚边界。增加静态 smoke 断言维护脚本默认无 `--apply`。",
+      "result_ids": [
+        "R005"
+      ],
+      "risks": [
+        "Fixture smoke 不能替代线上 Postgres；文档必须明确 P003 先 dry-run 后 apply。",
+        "不应在本轮自动执行 production apply 或删除 receipt 行。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "固化 Receipt Maintenance 组合 Smoke 与运维说明",
+      "updated_at": "2026-07-11T13:48:42+00:00",
+      "verification_plan": "运行新增一键 smoke、`STORE_BACKEND=memory scripts/verify_backend.sh`、CLI help、grep 确认文档/脚本接入和 `git diff --check`。"
+    },
+    "T007": {
+      "acceptance_criteria": [
+        "Dirty compact 夹带 graph/mutation/身份/私有 summary 时不会跳过。",
+        "Apply 后 dirty compact 转为 canonical envelope，第二次运行幂等。",
+        "空 operation ID 被扫描并按安全转换结果处理。",
+        "用户发现至少跨两页且无漏重，不一次 fetchall 全量用户。",
+        "报告计数和 bytes 在 canonical compare 后正确。",
+        "专项和全量回归通过。"
+      ],
+      "assumptions": [
+        "P005 转换 helper 对 canonical compact 输入幂等，并能清除脏 compact 夹带字段。"
+      ],
+      "body_path": "problems/P000/children/P002/children/P007/children/P008/tickets/T007.md",
+      "classification": "one_go",
+      "classification_reason": "修复集中在单一维护方法及其 fake Postgres 测试，三个扫描边界相互关联且可在同一回归中验证。",
+      "created_at": "2026-07-11T13:42:19+00:00",
+      "id": "T007",
+      "problem_definition": "当前维护器把所有版本化 envelope 直接视为已压缩，无法清理伪 compact 脏数据；operation ID 和 user ID 的首页游标边界也不完整。",
+      "problem_id": "P008",
+      "proposed_solution": "对每一行统一调用 `compact_persisted_knowledge_receipt_result`，以转换结果和原 result 的深度相等作为 alreadyCompact 判定；不同则作为 candidate。Operation 分页首批使用无下界 SQL，后续页才追加 `operation_id > %s`，从而覆盖空字符串。用户发现改为 `user_id` keyset 分页，每页受 batch-size 限制，逐页结束后释放 coordinator 事务，再进入既有分用户维护。",
+      "result_ids": [
+        "R004"
+      ],
+      "risks": [
+        "用户 keyset 分页仍依赖数据库扫描；线上 created_at 索引属于独立运维优化，不在 startup schema 中直接创建。",
+        "历史空 operation ID 不符合当前 API 合同，但维护必须显式处理而非漏扫。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "Canonical Compare 与有界 Keyset 扫描",
+      "updated_at": "2026-07-11T13:47:20+00:00",
+      "verification_plan": "扩充 fake Postgres fixture 与测试，运行 receipt maintenance smoke、后端全量 verify、py_compile 和 diff check。"
+    },
+    "T008": {
+      "acceptance_criteria": [
+        "iOS 跨仓静态 gate 覆盖 compact envelope、fingerprint 保留、CLI 默认 dry-run、组合 smoke 和运维文档。",
+        "Gate 接入 release regression 与 release QA package。",
+        "Task 26 状态文档记录实现、分支/提交、验证命令、部署顺序和线上证据。",
+        "默认 release regression、相关可选 gate、Simulator 与 generic iPhoneOS build、双仓 diff check 通过。",
+        "后端和 iOS 分别提交推送，不混入密钥或临时产物。",
+        "后端成功部署，线上 `/health` 正常。",
+        "线上 Postgres 先 dry-run；若 `status=ok` 且 failed=0，再小批 apply，并确认二次运行 candidate/updated=0。",
+        "线上 duplicate/conflict、privacy maintenance 和 change-feed receipt barrier smoke 通过。"
+      ],
+      "assumptions": [
+        "既有服务器 SSH/部署文档和私密访问配置仍可用。",
+        "用户已授权完成后提交、推送和部署。"
+      ],
+      "body_path": "problems/P000/children/P003/tickets/T008.md",
+      "classification": "split",
+      "classification_reason": "本地跨仓 gate/构建与远程提交部署/真实 Postgres apply 属于不同风险边界；必须先完成并验收本地交付，再进入不可逆线上维护。",
+      "created_at": "2026-07-11T13:51:51+00:00",
+      "id": "T008",
+      "problem_definition": "后端实现已完成，但 iOS release 流程尚不知道新的 receipt maintenance gate，Task 26 状态文档、双仓提交、部署和真实 Postgres 证据也尚未收口。",
+      "problem_id": "P003",
+      "proposed_solution": "在 iOS QA 目录新增跨仓 contract check 和 gate runner，验证后端 compact writer/reader、maintenance CLI、组合 smoke、运维文档与默认无 apply，并接入 release regression 和 release QA package。更新状态文档与覆盖矩阵。运行跨仓 gate、release regression、Simulator/generic iPhoneOS 构建和双仓 diff check；分别提交推送。随后通过既有服务器访问方式部署后端，运行线上 health/knowledge smoke、receipt maintenance dry-run，只有报告满足硬门才执行小批 apply 和二次幂等验证。",
+      "result_ids": [],
+      "risks": [
+        "线上 dry-run 若发现异常历史行或锁超时，必须停止 apply，记录 blocker，不猜测修复。",
+        "JSONB apply 可能产生 WAL/表膨胀，先小 batch 并观察数据库。",
+        "iOS 不需要修改产品 UI，也不做真机。"
+      ],
+      "root_id": "P000",
+      "status": "splitting",
+      "title": "Receipt 最小化跨仓 Gate、构建与部署验收",
+      "updated_at": "2026-07-11T13:52:48+00:00",
+      "verification_plan": "运行新增 cross-repo gate、release regression、release QA package check、xcodebuild Simulator/generic iPhoneOS、后端 verify、git diff/check/status；部署后保存 health、dry-run/apply 与 deployed smoke 脱敏报告。"
+    },
+    "T009": {
+      "acceptance_criteria": [
+        "Static check 与 runner 可在任意正确 BACKEND_ROOT 下执行。",
+        "Release regression 默认有低成本静态 guard，并暴露可选完整 gate 开关。",
+        "Release QA package 检查新增产物和 runner 接入。",
+        "状态文档记录实现边界、命令、分支、部署前后顺序和不做真机。",
+        "Default release regression、完整 gate、Simulator/generic iPhoneOS build、diff check 通过。"
+      ],
+      "assumptions": [
+        "BACKEND_ROOT 默认指向同级 `DreamJourneyBackend`。"
+      ],
+      "body_path": "problems/P000/children/P003/children/P009/tickets/T009.md",
+      "classification": "one_go",
+      "classification_reason": "跨仓 guard、runner、release 接入和状态文档遵循现有模式，写集集中且可用同一 release regression/构建证据验收。",
+      "created_at": "2026-07-11T13:53:23+00:00",
+      "id": "T009",
+      "problem_definition": "后端 receipt 最小化功能尚未被 iOS release regression 和 QA package 守护，状态文档也未形成可复验交接证据。",
+      "problem_id": "P009",
+      "proposed_solution": "沿用现有 knowledge privacy/change-feed gate 模式，新增 Swift static contract check 和 shell runner。Static check 读取后端 helper/store/CLI/smoke/运维文档，断言最小 envelope、fingerprint-first、dirty compact canonical compare、default dry-run 和 no delete/no hash rewrite。Runner 执行后端组合 smoke与 static check。Release regression 默认运行 static contract，可选开关运行完整跨仓 gate；release QA package 验证接入。更新 Task 26 状态文档与覆盖矩阵，运行 default release regression、QA check、Simulator 和 generic iPhoneOS build。",
+      "result_ids": [
+        "R007"
+      ],
+      "risks": [
+        "Release regression 已较大，默认只运行静态 guard，完整后端组合 gate使用显式开关。",
+        "不应读取或输出后端私密部署 token。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "接入 Receipt 跨仓 Release Gate 并完成非真机构建",
+      "updated_at": "2026-07-11T14:07:41+00:00",
+      "verification_plan": "运行新增 runner、Swift check、release QA package check、默认 release regression、xcodebuild 两类非真机构建和双仓 `git diff --check`。"
+    },
+    "T010": {
+      "acceptance_criteria": [
+        "两仓提交内容无密钥、私密配置和 tmp 产物，推送成功且远端包含新提交。",
+        "服务部署到新后端提交，health 返回 200 且 store=postgres。",
+        "Dry-run 报告脱敏保存，异常时停止 apply。",
+        "Apply 不删除 receipt、不修改 payload hash；小 batch 成功，二次运行幂等。",
+        "线上 duplicate/conflict、privacy maintenance 与 change-feed barrier 验收通过。",
+        "iOS/后端状态文档记录提交、部署版本、命令、结果与剩余风险。"
+      ],
+      "assumptions": [
+        "现有服务器 SSH 与部署私密文档仍有效。",
+        "用户已授权任务完成后提交、推送和部署。"
+      ],
+      "body_path": "problems/P000/children/P003/children/P010/tickets/T010.md",
+      "classification": "split",
+      "classification_reason": "双仓提交推送是可逆交付边界，服务器部署与真实 Postgres apply 是独立高风险边界；拆分后必须先确认远端提交，再允许线上维护。",
+      "created_at": "2026-07-11T14:10:33+00:00",
+      "id": "T010",
+      "problem_definition": "Task 26 已完成本地实现和跨仓非真机验收，但两仓仍未提交推送，服务器尚未运行新 reader/maintenance 代码，真实 Postgres 的 dry-run、apply、幂等和 replay 证据缺失。",
+      "problem_id": "P010",
+      "proposed_solution": "先复核双仓状态与敏感信息，分别提交后端实现和 iOS QA/文档并推送正确分支。按照现有 SSH/部署文档登录服务器，确认当前版本、拉取后端 main、重建并重启服务，验证 health。随后在容器/服务实际环境运行 receipt maintenance dry-run，将脱敏 JSON 保存到本地证据目录；仅当 status=ok、failed/failedUsers=0 且 kind 合法时，以小 batch 执行 apply，再二次 dry-run/apply确认 candidate/updated=0。最后运行线上 duplicate/conflict、privacy maintenance dry-run 和 change-feed receipt barrier smoke，更新状态文档和 ledger。",
+      "result_ids": [],
+      "risks": [
+        "Dry-run 发现异常历史 receipt、锁超时或未知 kind 时必须停止，不允许自动猜测修复。",
+        "JSONB apply 会产生 WAL/旧 tuple，应使用小 batch 并观察数据库。",
+        "远程私密 token/DSN/SSH 信息只从已忽略私密文件读取，不写入日志或提交。"
+      ],
+      "root_id": "P000",
+      "status": "splitting",
+      "title": "提交部署并执行真实 Postgres Receipt 验收",
+      "updated_at": "2026-07-11T14:11:28+00:00",
+      "verification_plan": "执行双仓 git status/log/diff/check、push 后远端 commit 校验；服务器 git rev-parse、容器/服务状态、health；maintenance dry-run/apply JSON 审计；线上 knowledge deployed smoke 和 privacy/change-feed 维护检查；最终双仓状态与 Closure check。"
+    },
+    "T011": {
+      "acceptance_criteria": [
+        "Staged 文件全部属于 Task 26，未包含 `tmp/`、DerivedData、私密配置、token/key/DSN。",
+        "后端和 iOS 各自形成清晰提交。",
+        "Push 成功，HEAD 与对应 origin 分支一致。",
+        "新 shell runner 保持 executable。",
+        "提交后状态清晰。"
+      ],
+      "assumptions": [
+        "当前未提交改动均由本任务产生；如发现无关改动则不纳入提交。"
+      ],
+      "body_path": "problems/P000/children/P003/children/P010/children/P011/tickets/T011.md",
+      "classification": "one_go",
+      "classification_reason": "双仓审计、提交和推送是单一可追溯交付边界，已有完整回归证据，可一次完成并用远端 commit 比对验证。",
+      "created_at": "2026-07-11T14:12:13+00:00",
+      "id": "T011",
+      "problem_definition": "两仓包含大量 Task 26 代码、QA 和 Closure 文档，需要确认没有敏感信息、临时产物或无关改动后分别提交推送。",
+      "problem_id": "P011",
+      "proposed_solution": "逐仓审查 status、diff stat、name-only 和敏感字符串；确认新脚本权限与 ignore 状态。后端提交 compact receipt/maintenance/smoke/运维文档，iOS 提交跨仓 gate、release 接入、Task 26 计划/ledger/状态文档。提交前再跑 diff check 和关键 gate，提交后 push 并用 `git ls-remote`/远端跟踪分支确认。",
+      "result_ids": [],
+      "risks": [
+        "Closure ledger 在后续部署阶段还会变化，P012 完成后可能需要一个最终 iOS 文档提交。"
+      ],
+      "root_id": "P000",
+      "status": "executing",
+      "title": "审计并提交 Task 26 双仓改动",
+      "updated_at": "2026-07-11T14:13:01+00:00",
+      "verification_plan": "运行 git diff/check/status、敏感词扫描、关键 receipt gate、commit show/name-status、push 和 rev-list/ls-remote 比对。"
+    }
+  },
+  "updated_at": "2026-07-11T14:13:01+00:00"
+}

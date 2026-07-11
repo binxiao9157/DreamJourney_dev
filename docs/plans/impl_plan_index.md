@@ -38,6 +38,7 @@
 | 23 | done | P1 local knowledge storage and semantic cache isolation | `docs/plans/task_23_p1-knowledge-local-storage-semantic-cache-isolation.md` | `L20260711-174842` |
 | 24 | done | P1 knowledge change retention and snapshot fallback | `docs/plans/task_24_p1-knowledge-change-retention-snapshot-fallback.md` | `L20260711-191536` |
 | 25 | done | P1 Echo trace account isolation and logout purge | `docs/plans/task_25_p1-echo-trace-account-isolation.md` | `L20260711-200812` |
+| 26 | create-solution-ticket | P0 knowledge operation receipt retention and minimization | `docs/plans/task_26_p0-knowledge-operation-receipt-minimization.md` | `L20260711-205750` |
 
 ## File Structure
 

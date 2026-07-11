@@ -1259,7 +1259,6 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `record-result`
 - Counts: 2/9 problems done, 0 blocked, 2/6 tickets done
 - Next instruction: Only perform `record-result` for ticket `T005`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
-
 ## Recursive Closure Checkpoint - 2026-07-11T04:25:52+08:00
 
 - Ledger: `L20260711-040419`
@@ -2917,3 +2916,21 @@ Update this file after every recursive state-changing command bundle and before 
 - UserManager 账号切换、KBLite/Knowledge 副作用和 profile 保存边界已串行化；旧 session/voice 回调不能污染新账号。
 - 三条模拟器导出 smoke、默认 release regression、Simulator/generic iPhoneOS 构建和独立复审通过。
 - Ledger `L20260711-200812` 已关闭；下一候选是知识 operation receipt 的保留与最小化。
+
+## Recursive Closure Checkpoint - 2026-07-11T21:24:59+08:00
+
+- Ledger: `L20260711-205750`
+- Lodestar task: `docs/plans/task_26_p0-knowledge-operation-receipt-minimization.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 3/8 problems done, 0 blocked, 3/6 tickets done
+- Next instruction: Only perform `record-result` for ticket `T005`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-11T22:08:30+08:00
+
+- Ledger: `L20260711-205750`
+- Lodestar task: `docs/plans/task_26_p0-knowledge-operation-receipt-minimization.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 8/11 problems done, 0 blocked, 8/10 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P010: 双仓提交部署与线上 Postgres Receipt 验收`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names s...

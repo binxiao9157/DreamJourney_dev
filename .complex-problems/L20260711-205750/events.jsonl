@@ -1,0 +1,123 @@
+{"at": "2026-07-11T12:57:50+00:00", "id": "E000", "payload": {"ledger_id": "L20260711-205750", "root_id": "P000", "title": "Task 26：P0 Knowledge Operation Receipt 保留与最小化"}, "root_id": "P000", "type": "ledger_initialized"}
+{"at": "2026-07-11T12:58:14+00:00", "id": "E001", "payload": {"problem_id": "P000", "ticket_id": "T000", "title": "实现可重建的知识操作收据压缩"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T12:58:14+00:00", "id": "E002", "payload": {"from": "created", "id": "T000", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T12:58:25+00:00", "id": "E003", "payload": {"from": "defined", "id": "T000", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T12:58:25+00:00", "id": "E004", "payload": {"classification": "split", "reason": "涉及在线重放合同、Postgres 维护事务、治理摘要兼容与跨仓验收，属于多边界高风险数据生命周期变更，应拆分实现和验证。", "ticket_id": "T000"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T12:59:25+00:00", "id": "E005", "payload": {"from": "classified", "id": "T000", "to": "splitting"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T12:59:26+00:00", "id": "E006", "payload": {"parent_id": "P000", "problem_id": "P001", "source": "split", "title": "子问题：Compact Receipt 与安全重放合同"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T12:59:26+00:00", "id": "E007", "payload": {"parent_id": "P000", "problem_id": "P002", "source": "split", "title": "子问题：Postgres Receipt Dry-run/Apply 维护"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T12:59:26+00:00", "id": "E008", "payload": {"parent_id": "P000", "problem_id": "P003", "source": "split", "title": "子问题：Receipt 最小化跨仓 Gate 与部署收口"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T13:00:02+00:00", "id": "E009", "payload": {"problem_id": "P001", "ticket_id": "T001", "title": "实现 Compact Receipt 双读与权威快照重放"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T13:00:02+00:00", "id": "E010", "payload": {"from": "created", "id": "T001", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:00:08+00:00", "id": "E011", "payload": {"from": "defined", "id": "T001", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:00:08+00:00", "id": "E012", "payload": {"classification": "one_go", "reason": "边界集中在 receipt helper、两类 store replay 和对应单测，接口明确且可由后端测试独立验证。", "ticket_id": "T001"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T13:00:17+00:00", "id": "E013", "payload": {"from": "todo", "id": "P001", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T13:00:17+00:00", "id": "E014", "payload": {"from": "classified", "id": "T001", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:11:20+00:00", "id": "E015", "payload": {"from": "executing", "id": "T001", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:11:20+00:00", "id": "E016", "payload": {"result_id": "R000", "ticket_id": "T001"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T13:11:54+00:00", "id": "E017", "payload": {"from": "doing", "id": "P001", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T13:11:54+00:00", "id": "E018", "payload": {"from": "checking", "id": "P001", "to": "followup"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T13:11:54+00:00", "id": "E019", "payload": {"check_id": "C000", "followup_id": "P004", "problem_id": "P001", "status": "not_success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T13:12:21+00:00", "id": "E020", "payload": {"problem_id": "P004", "ticket_id": "T002", "title": "最小化 Compact Receipt 并统一重放标记"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T13:12:21+00:00", "id": "E021", "payload": {"from": "created", "id": "T002", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:12:33+00:00", "id": "E022", "payload": {"from": "defined", "id": "T002", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:12:33+00:00", "id": "E023", "payload": {"classification": "one_go", "reason": "改动集中在 compact envelope helper、重放标记和对应测试，范围小、合同明确且可用现有全量回归验证。", "ticket_id": "T002"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T13:16:14+00:00", "id": "E024", "payload": {"from": "classified", "id": "T002", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:16:14+00:00", "id": "E025", "payload": {"from": "executing", "id": "T002", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:16:14+00:00", "id": "E026", "payload": {"result_id": "R001", "ticket_id": "T002"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T13:18:18+00:00", "id": "E027", "payload": {"from": "followup", "id": "P004", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T13:18:18+00:00", "id": "E028", "payload": {"from": "checking", "id": "P004", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T13:18:18+00:00", "id": "E029", "payload": {"check_id": "C001", "followup_id": null, "problem_id": "P004", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T13:18:47+00:00", "id": "E030", "payload": {"from": "followup", "id": "P001", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T13:18:47+00:00", "id": "E031", "payload": {"from": "checking", "id": "P001", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T13:18:47+00:00", "id": "E032", "payload": {"check_id": "C002", "followup_id": null, "problem_id": "P001", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T13:19:15+00:00", "id": "E033", "payload": {"problem_id": "P002", "ticket_id": "T003", "title": "实现 Receipt Dry-run/Apply 维护与现有维护兼容"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T13:19:15+00:00", "id": "E034", "payload": {"from": "created", "id": "T003", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:19:28+00:00", "id": "E035", "payload": {"from": "defined", "id": "T003", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:19:28+00:00", "id": "E036", "payload": {"classification": "split", "reason": "该任务同时涉及纯转换合同、Postgres 用户级事务/锁/CLI，以及现有 privacy maintenance 兼容；三部分写集和验证边界可分离，拆分后更易严格验收。", "ticket_id": "T003"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T13:20:09+00:00", "id": "E037", "payload": {"from": "classified", "id": "T003", "to": "splitting"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:20:09+00:00", "id": "E038", "payload": {"parent_id": "P002", "problem_id": "P005", "source": "split", "title": "Receipt 历史转换与隐私维护兼容合同"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T13:20:10+00:00", "id": "E039", "payload": {"parent_id": "P002", "problem_id": "P006", "source": "split", "title": "Postgres Receipt 用户级维护与 CLI"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T13:20:10+00:00", "id": "E040", "payload": {"parent_id": "P002", "problem_id": "P007", "source": "split", "title": "Receipt 维护组合回归与运维边界"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T13:20:38+00:00", "id": "E041", "payload": {"problem_id": "P005", "ticket_id": "T004", "title": "建立 Legacy Receipt 转换与 Compact Privacy 兼容层"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T13:20:38+00:00", "id": "E042", "payload": {"from": "created", "id": "T004", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:20:58+00:00", "id": "E043", "payload": {"from": "defined", "id": "T004", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:20:58+00:00", "id": "E044", "payload": {"classification": "one_go", "reason": "纯转换 helper 与 privacy canonicalizer 兼容集中在两个服务文件及单测，不涉及数据库事务，可在一个有界实现中完成并验证。", "ticket_id": "T004"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T13:23:18+00:00", "id": "E045", "payload": {"from": "todo", "id": "P005", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T13:23:18+00:00", "id": "E046", "payload": {"from": "classified", "id": "T004", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:23:18+00:00", "id": "E047", "payload": {"from": "executing", "id": "T004", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:23:18+00:00", "id": "E048", "payload": {"result_id": "R002", "ticket_id": "T004"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T13:23:43+00:00", "id": "E049", "payload": {"from": "doing", "id": "P005", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T13:23:43+00:00", "id": "E050", "payload": {"from": "checking", "id": "P005", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T13:23:43+00:00", "id": "E051", "payload": {"check_id": "C003", "followup_id": null, "problem_id": "P005", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T13:24:16+00:00", "id": "E052", "payload": {"problem_id": "P006", "ticket_id": "T005", "title": "实现 Postgres Receipt 分用户维护与 Dry-run CLI"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T13:24:16+00:00", "id": "E053", "payload": {"from": "created", "id": "T005", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:24:27+00:00", "id": "E054", "payload": {"from": "defined", "id": "T005", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:24:27+00:00", "id": "E055", "payload": {"classification": "one_go", "reason": "实现集中在一个 PostgresStore 维护方法、单个 CLI 与专用 fake-Postgres 测试，边界明确且不改在线 API，可作为一个有界提交验证。", "ticket_id": "T005"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T13:24:40+00:00", "id": "E056", "payload": {"from": "todo", "id": "P006", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T13:24:40+00:00", "id": "E057", "payload": {"from": "classified", "id": "T005", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:33:59+00:00", "id": "E058", "payload": {"from": "executing", "id": "T005", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:33:59+00:00", "id": "E059", "payload": {"result_id": "R003", "ticket_id": "T005"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T13:37:52+00:00", "id": "E060", "payload": {"from": "doing", "id": "P006", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T13:37:52+00:00", "id": "E061", "payload": {"from": "checking", "id": "P006", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T13:37:52+00:00", "id": "E062", "payload": {"check_id": "C004", "followup_id": null, "problem_id": "P006", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T13:38:43+00:00", "id": "E063", "payload": {"problem_id": "P007", "ticket_id": "T006", "title": "固化 Receipt Maintenance 组合 Smoke 与运维说明"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T13:38:43+00:00", "id": "E064", "payload": {"from": "created", "id": "T006", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:39:18+00:00", "id": "E065", "payload": {"from": "defined", "id": "T006", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:39:18+00:00", "id": "E066", "payload": {"classification": "one_go", "reason": "只新增一个组合 smoke、verify_backend 接入和一份运维文档，均基于已完成实现，范围小且可直接验证。", "ticket_id": "T006"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T13:41:42+00:00", "id": "E067", "payload": {"from": "todo", "id": "P007", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T13:41:42+00:00", "id": "E068", "payload": {"from": "classified", "id": "T006", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:41:42+00:00", "id": "E069", "payload": {"parent_id": "P007", "problem_id": "P008", "source": "spawn", "title": "Receipt Maintenance 脏 Compact 与扫描完整性修复"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T13:42:19+00:00", "id": "E070", "payload": {"problem_id": "P008", "ticket_id": "T007", "title": "Canonical Compare 与有界 Keyset 扫描"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T13:42:19+00:00", "id": "E071", "payload": {"from": "created", "id": "T007", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:42:34+00:00", "id": "E072", "payload": {"from": "defined", "id": "T007", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:42:34+00:00", "id": "E073", "payload": {"classification": "one_go", "reason": "修复集中在单一维护方法及其 fake Postgres 测试，三个扫描边界相互关联且可在同一回归中验证。", "ticket_id": "T007"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T13:47:20+00:00", "id": "E074", "payload": {"from": "todo", "id": "P008", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T13:47:20+00:00", "id": "E075", "payload": {"from": "classified", "id": "T007", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:47:20+00:00", "id": "E076", "payload": {"from": "executing", "id": "T007", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:47:20+00:00", "id": "E077", "payload": {"result_id": "R004", "ticket_id": "T007"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T13:47:54+00:00", "id": "E078", "payload": {"from": "doing", "id": "P008", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T13:47:54+00:00", "id": "E079", "payload": {"from": "checking", "id": "P008", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T13:47:54+00:00", "id": "E080", "payload": {"check_id": "C005", "followup_id": null, "problem_id": "P008", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T13:48:42+00:00", "id": "E081", "payload": {"from": "executing", "id": "T006", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:48:42+00:00", "id": "E082", "payload": {"result_id": "R005", "ticket_id": "T006"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T13:49:17+00:00", "id": "E083", "payload": {"from": "doing", "id": "P007", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T13:49:17+00:00", "id": "E084", "payload": {"from": "checking", "id": "P007", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T13:49:17+00:00", "id": "E085", "payload": {"check_id": "C006", "followup_id": null, "problem_id": "P007", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T13:50:07+00:00", "id": "E086", "payload": {"from": "todo", "id": "P002", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T13:50:07+00:00", "id": "E087", "payload": {"from": "splitting", "id": "T003", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:50:07+00:00", "id": "E088", "payload": {"result_id": "R006", "ticket_id": "T003"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T13:50:44+00:00", "id": "E089", "payload": {"from": "doing", "id": "P002", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T13:50:44+00:00", "id": "E090", "payload": {"from": "checking", "id": "P002", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T13:50:44+00:00", "id": "E091", "payload": {"check_id": "C007", "followup_id": null, "problem_id": "P002", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T13:51:51+00:00", "id": "E092", "payload": {"problem_id": "P003", "ticket_id": "T008", "title": "Receipt 最小化跨仓 Gate、构建与部署验收"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T13:51:51+00:00", "id": "E093", "payload": {"from": "created", "id": "T008", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:52:10+00:00", "id": "E094", "payload": {"from": "defined", "id": "T008", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:52:10+00:00", "id": "E095", "payload": {"classification": "split", "reason": "本地跨仓 gate/构建与远程提交部署/真实 Postgres apply 属于不同风险边界；必须先完成并验收本地交付，再进入不可逆线上维护。", "ticket_id": "T008"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T13:52:48+00:00", "id": "E096", "payload": {"from": "classified", "id": "T008", "to": "splitting"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:52:48+00:00", "id": "E097", "payload": {"parent_id": "P003", "problem_id": "P009", "source": "split", "title": "Receipt 最小化跨仓 Gate 与非真机构建"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T13:52:48+00:00", "id": "E098", "payload": {"parent_id": "P003", "problem_id": "P010", "source": "split", "title": "双仓提交部署与线上 Postgres Receipt 验收"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T13:53:23+00:00", "id": "E099", "payload": {"problem_id": "P009", "ticket_id": "T009", "title": "接入 Receipt 跨仓 Release Gate 并完成非真机构建"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T13:53:23+00:00", "id": "E100", "payload": {"from": "created", "id": "T009", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:53:44+00:00", "id": "E101", "payload": {"from": "defined", "id": "T009", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T13:53:44+00:00", "id": "E102", "payload": {"classification": "one_go", "reason": "跨仓 guard、runner、release 接入和状态文档遵循现有模式，写集集中且可用同一 release regression/构建证据验收。", "ticket_id": "T009"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T13:53:59+00:00", "id": "E103", "payload": {"from": "todo", "id": "P009", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T13:53:59+00:00", "id": "E104", "payload": {"from": "classified", "id": "T009", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:07:41+00:00", "id": "E105", "payload": {"from": "executing", "id": "T009", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:07:41+00:00", "id": "E106", "payload": {"result_id": "R007", "ticket_id": "T009"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T14:08:30+00:00", "id": "E107", "payload": {"from": "doing", "id": "P009", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:08:30+00:00", "id": "E108", "payload": {"from": "checking", "id": "P009", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:08:30+00:00", "id": "E109", "payload": {"check_id": "C008", "followup_id": null, "problem_id": "P009", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T14:10:33+00:00", "id": "E110", "payload": {"problem_id": "P010", "ticket_id": "T010", "title": "提交部署并执行真实 Postgres Receipt 验收"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T14:10:33+00:00", "id": "E111", "payload": {"from": "created", "id": "T010", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:10:53+00:00", "id": "E112", "payload": {"from": "defined", "id": "T010", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:10:53+00:00", "id": "E113", "payload": {"classification": "split", "reason": "双仓提交推送是可逆交付边界，服务器部署与真实 Postgres apply 是独立高风险边界；拆分后必须先确认远端提交，再允许线上维护。", "ticket_id": "T010"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T14:11:28+00:00", "id": "E114", "payload": {"from": "classified", "id": "T010", "to": "splitting"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:11:28+00:00", "id": "E115", "payload": {"parent_id": "P010", "problem_id": "P011", "source": "split", "title": "Task 26 双仓提交与远端基线确认"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T14:11:28+00:00", "id": "E116", "payload": {"parent_id": "P010", "problem_id": "P012", "source": "split", "title": "后端部署与真实 Postgres Receipt 验收"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T14:12:13+00:00", "id": "E117", "payload": {"problem_id": "P011", "ticket_id": "T011", "title": "审计并提交 Task 26 双仓改动"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T14:12:13+00:00", "id": "E118", "payload": {"from": "created", "id": "T011", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:12:41+00:00", "id": "E119", "payload": {"from": "defined", "id": "T011", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:12:41+00:00", "id": "E120", "payload": {"classification": "one_go", "reason": "双仓审计、提交和推送是单一可追溯交付边界，已有完整回归证据，可一次完成并用远端 commit 比对验证。", "ticket_id": "T011"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T14:13:01+00:00", "id": "E121", "payload": {"from": "todo", "id": "P011", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:13:01+00:00", "id": "E122", "payload": {"from": "classified", "id": "T011", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}

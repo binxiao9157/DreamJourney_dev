@@ -208,7 +208,15 @@
       "status": "complete",
       "task_file": "docs/plans/task_25_p1-echo-trace-account-isolation.md",
       "updated_at": "2026-07-11T20:51:31+08:00"
+    },
+    "docs/plans/task_26_p0-knowledge-operation-receipt-minimization.md": {
+      "ledger_id": "L20260711-205750",
+      "ledger_path": ".complex-problems/L20260711-205750",
+      "next_action": "create-solution-ticket",
+      "status": "next",
+      "task_file": "docs/plans/task_26_p0-knowledge-operation-receipt-minimization.md",
+      "updated_at": "2026-07-11T22:08:30+08:00"
     }
   },
-  "updated_at": "2026-07-11T20:51:31+08:00"
+  "updated_at": "2026-07-11T22:08:30+08:00"
 }

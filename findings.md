@@ -207,3 +207,11 @@
 - UserManager 将账号字段、Echo scope、KBLite/Knowledge 和通知副作用串行化；nickname-only 保存用 expectedUserId 阻断跨账号旧写。
 - Echo 账号变化会失效 lifecycle、无 diagnostics 释放旧 runtime/session、清除 capability/trace/provider/evidence 缓存；session/voice callback 使用请求发起时 owner。
 - 新 model/static guard 已进入默认 release regression；三条实际模拟器导出 smoke 与两类非真机构建通过。
+
+## Task 26 Exploration
+
+- `kb_operation_receipts.result` 当前保存完整 graph 和 mutation，不是轻量摘要；随着 graph 增长，历史体积最坏接近所有操作时点 graph 大小总和。
+- Receipt 行不能按固定 TTL 直接删除：iOS pending/governance outbox 没有 TTL，且 change 压缩后 receipt 是阻止旧 operationId 被再次执行、保留 payload conflict 语义的唯一权威。
+- 安全方案是永久保留 kind/schema/payload hash 身份行，将 result 改为版本化 compact envelope；重放先查关联 change，change 已压缩才使用当前 snapshot 重建兼容响应。
+- `KB_OPERATION_SYNC/MUTATION/GOVERNANCE/ARCHIVE_DELETE` 均需双读；governance 只需保留 action、entity/source link 等 ID-only summary，不应保留实体正文。
+- server-generated legacy sync compatibility no-op 每次 operationId 都不同，没有重放价值，不应继续制造完整 receipt；真正产生 change 的首次 legacy sync 仍保留 receipt 作为 compaction 证明。
