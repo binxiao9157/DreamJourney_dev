@@ -32,6 +32,14 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `none`
 - Counts: 2/2 problems done, 0 blocked, 2/2 tickets done
 - Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+
+## Task 19 Closure - 2026-07-11T12:19:30+08:00
+
+- Ledger `L20260711-113033` closed with 6/6 problems, 6/6 tickets and 6/6 checks complete.
+- Backend `dd88f17` is deployed; production health reports Postgres.
+- Deployed source audit smoke passed with canonical count 1, aggregate-only response and cross-account denial.
+- iOS `fc5772d` is pushed; generic Simulator/iPhoneOS builds and non-device release regression passed.
+- True-device testing and historical source-ref migration were intentionally not performed.
 ## Recursive Closure Checkpoint - 2026-06-18T00:18:01+08:00
 
 - Ledger: `L20260618-000157-02`
@@ -2156,3 +2164,48 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `execute-ticket`
 - Counts: 3/6 problems done, 0 blocked, 3/6 tickets done
 - Next instruction: Only perform `execute-ticket` for `T005` on `P005: 双仓提交推送与线上只读审计验收`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execute-ticket.m...
+
+## Recursive Closure Checkpoint - 2026-07-11T12:17:24+08:00
+
+- Ledger: `L20260711-113033`
+- Lodestar task: `docs/plans/task_19_p1-canonical-knowledge-source-identity.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 4/6 problems done, 0 blocked, 4/6 tickets done
+- Next instruction: Only perform `record-result` for ticket `T003`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-11T12:17:49+08:00
+
+- Ledger: `L20260711-113033`
+- Lodestar task: `docs/plans/task_19_p1-canonical-knowledge-source-identity.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 4/6 problems done, 0 blocked, 5/6 tickets done
+- Next instruction: Only perform `check-success` for `P003: 跨仓交付、文档与部署验收`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI...
+
+## Recursive Closure Checkpoint - 2026-07-11T12:18:30+08:00
+
+- Ledger: `L20260711-113033`
+- Lodestar task: `docs/plans/task_19_p1-canonical-knowledge-source-identity.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 5/6 problems done, 0 blocked, 5/6 tickets done
+- Next instruction: Only perform `record-result` for ticket `T000`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-11T12:18:46+08:00
+
+- Ledger: `L20260711-113033`
+- Lodestar task: `docs/plans/task_19_p1-canonical-knowledge-source-identity.md`
+- Root: `P000` / doing
+- Next action: `check-success`
+- Counts: 5/6 problems done, 0 blocked, 6/6 tickets done
+- Next instruction: Only perform `check-success` for `P000: Task 19：P1 Canonical Knowledge Source Identity 与历史来源审计`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions,...
+
+## Recursive Closure Checkpoint - 2026-07-11T12:19:05+08:00
+
+- Ledger: `L20260711-113033`
+- Lodestar task: `docs/plans/task_19_p1-canonical-knowledge-source-identity.md`
+- Root: `P000` / done
+- Next action: `none`
+- Counts: 6/6 problems done, 0 blocked, 6/6 tickets done
+- Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.

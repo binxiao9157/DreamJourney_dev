@@ -200,16 +200,16 @@
       "updated_at": "2026-07-11T03:23:26+00:00"
     },
     {
-      "active_count": 3,
+      "active_count": 0,
       "blocked_count": 0,
       "ledger_id": "L20260711-113033",
       "path": "L20260711-113033",
       "root_id": "P000",
       "schema_version": 6,
-      "status": "doing",
+      "status": "done",
       "title": "Task 19：P1 Canonical Knowledge Source Identity 与历史来源审计",
-      "updated_at": "2026-07-11T04:09:23+00:00"
+      "updated_at": "2026-07-11T04:19:05+00:00"
     }
   ],
-  "updated_at": "2026-07-11T04:09:23+00:00"
+  "updated_at": "2026-07-11T04:19:12+00:00"
 }

@@ -105,13 +105,125 @@
         "首轮 release regression 因新增路由但旧 guard 固定 57 条而失败；更新 deployed/静态 ownership guard 后重跑成功，证明新增 API 已纳入路由审计。"
       ],
       "summary": "P004 成功。跨仓合同已有确定性入口、release 防回退保护、准确文档与完整非真机构建证据。"
+    },
+    "C003": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/children/P005/checks/C003.md",
+      "created_at": "2026-07-11T04:17:24+00:00",
+      "criteria_map": [
+        "双仓提交推送：完成。",
+        "服务器部署：完成并运行最新 HEAD。",
+        "线上 schema/聚合/权限/隐私：完成。",
+        "不迁移历史、不真机：遵守。"
+      ],
+      "evidence": [
+        "后端 origin/main 和服务器 HEAD 均包含 `dd88f17`，核心功能提交为 `f62e5a9`。",
+        "iOS origin feature 分支包含 `fc5772d`。",
+        "health 返回 production/postgres，API、Postgres、Redis 容器均正常。",
+        "deployed smoke 返回 canonicalSourceRefCount=1、recommendedAction=none、crossAccountDenied=true、aggregateOnly=true。"
+      ],
+      "execution_map": [
+        "Git 提交提供可追踪版本。",
+        "Docker Compose 重建 API 并保留服务器 `.env`。",
+        "独立 deployed smoke 通过临时用户与 canonical mutation 验证真实合同。"
+      ],
+      "followup_problem_id": null,
+      "id": "C003",
+      "problem_id": "P005",
+      "residual_risk": [
+        "历史 legacy refs 仍只读审计，实际迁移需独立批准。",
+        "未执行真机验证，符合本任务边界。"
+      ],
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "首次部署 smoke 暴露线上 403 detail shape 与 TestClient 不同；脚本改为验证 403 和存在 detail。",
+        "第二次暴露 `counts.sourceRefs` 是合法聚合键而非来源列表；泄漏检查修正后仍禁止 graph、statement、实体 ID 和 session ID，最终 smoke 通过。"
+      ],
+      "summary": "P005 成功。双仓功能提交已推送，后端生产容器运行最新版本，真实 Postgres 的 owner-bound aggregate audit 合同已有脱敏证据。"
+    },
+    "C004": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/checks/C004.md",
+      "created_at": "2026-07-11T04:18:30+00:00",
+      "criteria_map": [
+        "一键跨仓验证与 release 防回退：满足。",
+        "文档和历史迁移边界：满足。",
+        "双仓提交推送：满足。",
+        "线上只读 aggregate audit：满足。"
+      ],
+      "evidence": [
+        "C002 证明 gate、文档、build 与 release regression 完成。",
+        "C003 证明双仓 push、生产部署和 Postgres audit smoke 完成。"
+      ],
+      "execution_map": [
+        "P004 负责本地交付和文档。",
+        "P005 负责版本发布、容器部署和线上验收。"
+      ],
+      "followup_problem_id": null,
+      "id": "C004",
+      "problem_id": "P003",
+      "residual_risk": [
+        "仅剩本任务明确排除的历史迁移和真机验收。"
+      ],
+      "result_ids": [
+        "R004"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "release route count 回退保护与两次 deployed smoke shape 差异均在交付前被发现、修正并重跑通过。"
+      ],
+      "summary": "P003 成功。其两个拆分子问题均已独立验收，覆盖了本地交付完整性和线上生产合同。"
+    },
+    "C005": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/checks/C005.md",
+      "created_at": "2026-07-11T04:19:05+00:00",
+      "criteria_map": [
+        "不再新增 ambiguous text refs：满足。",
+        "对话照片独立于 Archive item：满足。",
+        "历史来源只读分类、无自动迁移：满足。",
+        "audit 不暴露正文/source IDs 且 owner-bound：满足。",
+        "跨仓 gate、文档、推送、部署：满足。"
+      ],
+      "evidence": [
+        "后端 259 项全量测试和 canonical source identity 定向测试通过。",
+        "iOS source model/client 检查、generic Simulator/iPhoneOS build 通过。",
+        "release regression 完成并产出报告。",
+        "双仓远端版本与服务器版本可追踪，线上 audit smoke 通过。"
+      ],
+      "execution_map": [
+        "P001 后端。",
+        "P002 iOS。",
+        "P003 交付与部署。"
+      ],
+      "followup_problem_id": null,
+      "id": "C005",
+      "problem_id": "P000",
+      "residual_risk": [
+        "历史来源迁移需单独批准，不属于本任务完成条件。",
+        "真机不涉及本次数据合同与非 UI 改动，并被用户明确暂缓。"
+      ],
+      "result_ids": [
+        "R005"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "覆盖非法照片 ID、重复/越界 turn、伪造 request source refs、unknown/legacy 分类、跨账号访问、路由数量变更和线上错误体差异。"
+      ],
+      "summary": "Task 19 成功。所有原始目标均有代码、自动化回归、构建、提交部署和线上 Postgres 证据，且遵守无自动迁移、无公开 UI、无真机的范围边界。"
     }
   },
   "counters": {
-    "check": 3,
-    "event": 53,
+    "check": 6,
+    "event": 72,
     "problem": 6,
-    "result": 3,
+    "result": 6,
     "ticket": 6
   },
   "created_at": "2026-07-11T03:30:33+00:00",
@@ -121,7 +233,9 @@
   "problems": {
     "P000": {
       "body_path": "problems/P000/README.md",
-      "check_ids": [],
+      "check_ids": [
+        "C005"
+      ],
       "created_at": "2026-07-11T03:30:33+00:00",
       "created_from_check_id": null,
       "created_from_ticket_id": null,
@@ -131,9 +245,11 @@
       "id": "P000",
       "package_path": "problems/P000",
       "parent_id": null,
-      "result_ids": [],
+      "result_ids": [
+        "R005"
+      ],
       "root_id": "P000",
-      "status": "todo",
+      "status": "done",
       "subproblem_ids": [
         "P001",
         "P002",
@@ -148,7 +264,7 @@
         "T000"
       ],
       "title": "Task 19：P1 Canonical Knowledge Source Identity 与历史来源审计",
-      "updated_at": "2026-07-11T03:30:33+00:00"
+      "updated_at": "2026-07-11T04:19:05+00:00"
     },
     "P001": {
       "body_path": "problems/P000/children/P001/README.md",
@@ -210,7 +326,9 @@
     },
     "P003": {
       "body_path": "problems/P000/children/P003/README.md",
-      "check_ids": [],
+      "check_ids": [
+        "C004"
+      ],
       "created_at": "2026-07-11T03:32:30+00:00",
       "created_from_check_id": null,
       "created_from_ticket_id": "T000",
@@ -220,9 +338,11 @@
       "id": "P003",
       "package_path": "problems/P000/children/P003",
       "parent_id": "P000",
-      "result_ids": [],
+      "result_ids": [
+        "R004"
+      ],
       "root_id": "P000",
-      "status": "todo",
+      "status": "done",
       "subproblem_ids": [
         "P004",
         "P005"
@@ -234,7 +354,7 @@
         "T003"
       ],
       "title": "跨仓交付、文档与部署验收",
-      "updated_at": "2026-07-11T03:32:30+00:00"
+      "updated_at": "2026-07-11T04:18:30+00:00"
     },
     "P004": {
       "body_path": "problems/P000/children/P003/children/P004/README.md",
@@ -270,7 +390,9 @@
     },
     "P005": {
       "body_path": "problems/P000/children/P003/children/P005/README.md",
-      "check_ids": [],
+      "check_ids": [
+        "C003"
+      ],
       "created_at": "2026-07-11T04:02:09+00:00",
       "created_from_check_id": null,
       "created_from_ticket_id": "T003",
@@ -280,9 +402,11 @@
       "id": "P005",
       "package_path": "problems/P000/children/P003/children/P005",
       "parent_id": "P003",
-      "result_ids": [],
+      "result_ids": [
+        "R003"
+      ],
       "root_id": "P000",
-      "status": "todo",
+      "status": "done",
       "subproblem_ids": [],
       "success_criteria": [
         "后端和 iOS 各自形成清晰提交并推送当前远端分支。",
@@ -294,7 +418,7 @@
         "T005"
       ],
       "title": "双仓提交推送与线上只读审计验收",
-      "updated_at": "2026-07-11T04:02:09+00:00"
+      "updated_at": "2026-07-11T04:17:24+00:00"
     }
   },
   "results": {
@@ -386,6 +510,96 @@
         "非真机 release regression 通过，报告位于 `tmp/visual-qa/prd-stitch-ui/release-regression/20260711-task19-canonical-source-identity-rerun/report.md`。",
         "release QA package check 与双仓 `git diff --check` 通过。"
       ]
+    },
+    "R003": {
+      "artifacts": [
+        "`/tmp/task19-health.json`",
+        "`/tmp/task19-source-ref-deployed-smoke.json`",
+        "`docs/superpowers/status/2026-07-11-canonical-knowledge-source-identity.md`",
+        "`DreamJourneyBackend/scripts/backend-knowledge-source-ref-deployed-smoke.py`"
+      ],
+      "body_path": "problems/P000/children/P003/children/P005/results/R003.md",
+      "created_at": "2026-07-11T04:16:58+00:00",
+      "done": [
+        "后端功能提交 `f62e5a9` 已推送。",
+        "部署 smoke 兼容修正 `20b8ce1`、`dd88f17` 已推送并部署。",
+        "服务器通过 `miao` 用户 fast-forward 拉取，保留 `.env` 与备份文件，API 容器重建成功。",
+        "新增认证 deployed source-ref audit smoke，覆盖 owner、攻击者和 canonical mutation。",
+        "iOS 状态文档记录提交、部署版本和脱敏验收摘要。",
+        "iOS `fc5772d` 已推送到 `origin/feature/prd-stitch-ui-adaptation`。"
+      ],
+      "id": "R003",
+      "known_gaps": [
+        "ledger 最终关闭状态将在一个独立文档提交中推送，不影响已交付功能版本。",
+        "未执行真机验证；历史 legacy ref 未迁移。"
+      ],
+      "problem_id": "P005",
+      "root_id": "P000",
+      "summary": "后端 canonical source identity 已提交、推送并部署到生产 Postgres；线上认证 smoke 验证 owner-bound、aggregate-only audit 合同。iOS 功能、gate 和状态文档已由 `fc5772d` 提交推送。",
+      "ticket_id": "T005",
+      "verification": [
+        "线上 health：production / postgres。",
+        "服务器 HEAD：`dd88f17`。",
+        "smoke：schemaVersion=1、revision=1、canonicalSourceRefCount=1、recommendedAction=none。",
+        "crossAccountDenied=true、aggregateOnly=true、tokensRedacted=true、userIdentifiersRedacted=true。"
+      ]
+    },
+    "R004": {
+      "artifacts": [
+        "R002 / C002。",
+        "R003 / C003。",
+        "`docs/superpowers/status/2026-07-11-canonical-knowledge-source-identity.md`。"
+      ],
+      "body_path": "problems/P000/children/P003/results/R004.md",
+      "created_at": "2026-07-11T04:17:48+00:00",
+      "done": [
+        "默认 release regression 包含 canonical source identity 跨仓 gate。",
+        "release package guard、架构文档和状态文档已更新。",
+        "后端与 iOS 提交均已推送。",
+        "后端生产部署与 Postgres owner-bound aggregate audit smoke 已通过。"
+      ],
+      "id": "R004",
+      "known_gaps": [
+        "历史 legacy source refs 未迁移，需独立批准和证据化方案。",
+        "未做真机，符合任务边界。"
+      ],
+      "problem_id": "P003",
+      "root_id": "P000",
+      "summary": "P004 与 P005 已分别完成本地交付 gate/文档和双仓提交/线上部署，Task 19 的交付路径完整闭环。",
+      "ticket_id": "T003",
+      "verification": [
+        "P004 check C002：本地 gate、259 项后端测试、两类 iOS generic build、release regression。",
+        "P005 check C003：远端版本、生产容器、health、线上权限与隐私 smoke。"
+      ]
+    },
+    "R005": {
+      "artifacts": [
+        "C000、C001、C004。",
+        "`docs/plans/task_19_p1-canonical-knowledge-source-identity.md`。",
+        "`docs/superpowers/status/2026-07-11-canonical-knowledge-source-identity.md`。"
+      ],
+      "body_path": "problems/P000/results/R005.md",
+      "created_at": "2026-07-11T04:18:46+00:00",
+      "done": [
+        "后端 canonical proposal、来源 title policy、只读 audit 与 ownership 保护。",
+        "iOS canonical 文本/照片生成、typed audit consumer 与本地聚合审计。",
+        "跨仓 gate、release regression/package guard 和产品知识库文档。",
+        "双仓提交推送、生产部署和线上脱敏 smoke。"
+      ],
+      "id": "R005",
+      "known_gaps": [
+        "历史 legacy refs 只审计不迁移；未来需独立产品与数据迁移批准。",
+        "不包含公开知识治理 UI、change-feed compaction 或真机验证。"
+      ],
+      "problem_id": "P000",
+      "root_id": "P000",
+      "summary": "Task 19 已停止新增含义模糊的知识来源，统一对话 turn、对话照片与 Archive item 的来源身份，并提供 owner-bound、aggregate-only 历史审计。双仓代码已交付，后端生产 Postgres 已验收。",
+      "ticket_id": "T000",
+      "verification": [
+        "P001/C000：后端实现与全量测试。",
+        "P002/C001：iOS 实现、模型/client guard、Simulator build。",
+        "P003/C004：跨仓交付、generic iPhoneOS、release regression、生产 Postgres smoke。"
+      ]
     }
   },
   "root_id": "P000",
@@ -406,14 +620,16 @@
       "problem_definition": "现有 iOS 和后端来源类型不一致，且历史对话照片来源被误称为档案分析，存在错误迁移和删除级联风险",
       "problem_id": "P000",
       "proposed_solution": "为新数据生成精确 canonical conversationTurn/conversationPhoto refs，并增加只读 legacy source audit，不自动改写历史 graph",
-      "result_ids": [],
+      "result_ids": [
+        "R005"
+      ],
       "risks": [
         "不能把 session 猜测映射为 archive item，也不能自动改写生产知识"
       ],
       "root_id": "P000",
-      "status": "splitting",
+      "status": "done",
       "title": "实现 canonical 来源身份与历史来源只读审计",
-      "updated_at": "2026-07-11T03:32:15+00:00",
+      "updated_at": "2026-07-11T04:18:46+00:00",
       "verification_plan": "后端单测、iOS model/static smoke、知识 gate、两类 build、release regression 和线上 audit smoke"
     },
     "T001": {
@@ -492,16 +708,18 @@
       "problem_definition": "后端与 iOS 已分别实现 canonical source identity，但还缺少统一可重复的跨仓验证入口、准确的知识库架构说明、release QA 防回退检查，以及线上部署后的只读审计证据。若直接提交，后续修改可能重新生成 legacy refs 或误把对话照片当成 Archive 来源。",
       "problem_id": "P003",
       "proposed_solution": "新增一个 iOS 仓库入口的跨仓 source identity gate，组合 iOS 模型/client 检查与后端来源合同测试；将 gate 接入 release regression 和 release QA package guard。修正文档中历史 `archiveImageAnalysis` 的来源解释，新增 Task 19 状态与部署验收说明。验证通过后分别提交推送两个仓库，部署后端，并使用认证 smoke 用户调用线上只读 audit endpoint，确认 Postgres 合同与权限边界。",
-      "result_ids": [],
+      "result_ids": [
+        "R004"
+      ],
       "risks": [
         "线上已有 legacy refs，audit 可能返回迁移建议；这是预期证据，不应触发自动迁移。",
         "release regression 范围较大，应避免启用真机和无关 provider gate。",
         "部署必须保留服务器私密 `.env`，不得在仓库或日志输出凭据。"
       ],
       "root_id": "P000",
-      "status": "splitting",
+      "status": "done",
       "title": "固化 canonical 来源合同并完成双仓交付部署",
-      "updated_at": "2026-07-11T04:02:09+00:00",
+      "updated_at": "2026-07-11T04:17:48+00:00",
       "verification_plan": "1. 运行新增跨仓 gate 与 release QA package check。\n2. 运行后端 `verify_backend.sh`。\n3. 运行 iOS generic Simulator 和 generic iPhoneOS 无签名构建。\n4. 运行 release regression 的非真机必需路径并保存报告。\n5. 分仓 `git diff --check`、提交、推送。\n6. SSH 服务器拉取 main、重建 API 容器、检查 health/store。\n7. 使用独立认证 smoke 用户在线写入一条 canonical knowledge proposal 后调用 audit endpoint，校验只读聚合合同与 ownership。"
     },
     "T004": {
@@ -557,18 +775,20 @@
       "problem_definition": "本地代码、gate 和文档已验证，但远端分支和线上服务器仍未包含新来源审计 endpoint。需要完成可追踪提交、部署和真实 Postgres 合同证据。",
       "problem_id": "P005",
       "proposed_solution": "先检查并暂存各仓库与 Task 19 直接相关的文件，分别提交并推送 iOS 当前 feature 分支与后端 main。随后通过现有 SSH 运维流程在服务器拉取后端 main、重建 API 容器并检查 health。新增或复用部署 smoke，用临时登录用户创建 canonical 知识来源后调用 owner-bound audit endpoint，校验聚合响应、隐私边界和跨账号拒绝。",
-      "result_ids": [],
+      "result_ids": [
+        "R003"
+      ],
       "risks": [
         "服务器目录或 compose service 名可能变化，必须先只读检查现状。",
         "smoke 不得输出 access token、后端 API token 或真实用户内容。",
         "部署期间保留服务器 `.env`，不得覆盖私密配置。"
       ],
       "root_id": "P000",
-      "status": "classified",
+      "status": "done",
       "title": "提交双仓并部署认证只读来源审计合同",
-      "updated_at": "2026-07-11T04:09:23+00:00",
+      "updated_at": "2026-07-11T04:16:58+00:00",
       "verification_plan": "提交前运行双仓 diff/status；push 后比较 HEAD 和 origin。部署后读取容器/health 状态，运行认证 deployed source audit smoke，并保存脱敏 JSON/Markdown 报告。"
     }
   },
-  "updated_at": "2026-07-11T04:09:23+00:00"
+  "updated_at": "2026-07-11T04:19:05+00:00"
 }

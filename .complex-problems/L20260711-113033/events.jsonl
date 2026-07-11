@@ -51,3 +51,22 @@
 {"at": "2026-07-11T04:09:14+00:00", "id": "E050", "payload": {"from": "created", "id": "T005", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
 {"at": "2026-07-11T04:09:23+00:00", "id": "E051", "payload": {"from": "defined", "id": "T005", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
 {"at": "2026-07-11T04:09:23+00:00", "id": "E052", "payload": {"classification": "one_go", "reason": "本地验证已完成，剩余步骤是标准双仓提交、既有服务器部署和单一只读 endpoint 验收，顺序明确且可在一次交付窗口内完成。", "ticket_id": "T005"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T04:16:58+00:00", "id": "E053", "payload": {"from": "todo", "id": "P005", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T04:16:58+00:00", "id": "E054", "payload": {"from": "classified", "id": "T005", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T04:16:58+00:00", "id": "E055", "payload": {"from": "executing", "id": "T005", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T04:16:58+00:00", "id": "E056", "payload": {"result_id": "R003", "ticket_id": "T005"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T04:17:24+00:00", "id": "E057", "payload": {"from": "doing", "id": "P005", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T04:17:24+00:00", "id": "E058", "payload": {"from": "checking", "id": "P005", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T04:17:24+00:00", "id": "E059", "payload": {"check_id": "C003", "followup_id": null, "problem_id": "P005", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T04:17:48+00:00", "id": "E060", "payload": {"from": "todo", "id": "P003", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T04:17:48+00:00", "id": "E061", "payload": {"from": "splitting", "id": "T003", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T04:17:48+00:00", "id": "E062", "payload": {"result_id": "R004", "ticket_id": "T003"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T04:18:30+00:00", "id": "E063", "payload": {"from": "doing", "id": "P003", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T04:18:30+00:00", "id": "E064", "payload": {"from": "checking", "id": "P003", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T04:18:30+00:00", "id": "E065", "payload": {"check_id": "C004", "followup_id": null, "problem_id": "P003", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T04:18:46+00:00", "id": "E066", "payload": {"from": "todo", "id": "P000", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T04:18:46+00:00", "id": "E067", "payload": {"from": "splitting", "id": "T000", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T04:18:46+00:00", "id": "E068", "payload": {"result_id": "R005", "ticket_id": "T000"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T04:19:05+00:00", "id": "E069", "payload": {"from": "doing", "id": "P000", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T04:19:05+00:00", "id": "E070", "payload": {"from": "checking", "id": "P000", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T04:19:05+00:00", "id": "E071", "payload": {"check_id": "C005", "followup_id": null, "problem_id": "P000", "status": "success"}, "root_id": "P000", "type": "check_recorded"}

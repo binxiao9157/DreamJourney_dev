@@ -137,3 +137,12 @@
 - Current Archive deletion removes only the Archive record/local item and does not touch knowledge `sourceRefs`; the production path therefore needs an explicit source-revocation step, not merely a new standalone governance API.
 - Current proposal ingestion intentionally merges `observed` knowledge immediately and Context allows `observed/confirmed`. Task 16 adds user override/governance, not a mandatory approval queue; changing every extraction to pending would be a separate product decision and would materially change current Echo behavior.
 - Existing image-analysis ingestion still uses session-derived source IDs rather than canonical Archive item IDs. New source-backed ingestion must use `memoryArchiveItem + archiveItem.id`; legacy records without that ref cannot be retroactively cascaded without a migration heuristic and must not be falsely reported as covered.
+
+## Task 19 Resolution
+
+- Task 16 对历史 `archiveImageAnalysis` 的推断已被代码审计纠正：这些 ref 来自 `AIRecordingViewController` 的对话照片，并非 `MemoryArchiveItem`，不能猜测迁成 Archive item。
+- 新对话文字使用精确的 `conversationTurn + session-{sessionId}:turn-{turnIndex}`；新对话照片使用 `conversationPhoto + photo-{stableAssetId}`；Archive 仍使用 `memoryArchiveItem + archiveItem.id`。
+- 后端忽略请求级 source refs，只根据服务端校验的 session/turn 证据生成 canonical refs；既有 refs 被保留，不静默删除 legacy 历史。
+- `/kb/source-ref-audit/{userId}` 只返回聚合计数和建议动作，owner principal 绑定，跨账号访问被拒绝，不返回 graph、正文或 source ID。
+- 跨仓 source identity gate 已进入默认 release regression。后端 `dd88f17` 已部署，线上 Postgres smoke 证明 canonical count、权限和聚合隐私边界；iOS `fc5772d` 已推送。
+- 历史 legacy ref 的真实迁移仍需独立批准和可证明的来源映射，本任务没有 apply migration API。

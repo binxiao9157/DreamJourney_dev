@@ -1,6 +1,6 @@
 # P000: Task 19：P1 Canonical Knowledge Source Identity 与历史来源审计
 
-Status: todo
+Status: done
 Parent: none
 Root: P000
 Source Ticket: none (none)
@@ -27,14 +27,16 @@ Task context:
 - P003: 跨仓交付、文档与部署验收
 
 ## Results
-- none
+- R005
 
 ## Latest Check
-none
+C005
 
 ## Bodies
 - Problem: problems/P000/README.md
 - Ticket T000: problems/P000/tickets/T000.md
+- Result R005: problems/P000/results/R005.md
+- Check C005: problems/P000/checks/C005.md
 
 ## Follow-ups
 - none
