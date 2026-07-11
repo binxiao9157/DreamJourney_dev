@@ -55,6 +55,8 @@
 		7FE1A54F9280057AA970D224 /* DialogEngineManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B3A23A2BA7FD3D92A7BC975 /* DialogEngineManager.swift */; };
 		813B7A93279A0D98C91B3276 /* DreamJourneyWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D151E9314D78EB40CF2EE48 /* DreamJourneyWidget.swift */; };
 		824FE84FF055277FD802AE21 /* KBLiteSemanticSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0616F4B34725AE4D0BCCA4D9 /* KBLiteSemanticSearch.swift */; };
+		C7E170000000000000000001 /* KBLiteSemanticCachePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E170000000000000000101 /* KBLiteSemanticCachePolicy.swift */; };
+		C7E180000000000000000001 /* KnowledgeLocalStoragePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E180000000000000000101 /* KnowledgeLocalStoragePolicy.swift */; };
 		84655D19F7C25DFB64698F6B /* KBGraphViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 939BB4DA6D4456E9F95F60DD /* KBGraphViewController.swift */; };
 		8525A06805EC0F2C59676EBE /* DJDesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9721373237BB9D8AB345E0CA /* DJDesignTokens.swift */; };
 		8635AA9D8CE8E081376A1C0C /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 04D035B5F78F66A15EB0C01A /* Main.storyboard */; };
@@ -180,6 +182,8 @@
 		00898E98E95E3808561BEB51 /* MemoirTTSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirTTSService.swift; sourceTree = "<group>"; };
 		04D035B5F78F66A15EB0C01A /* Main.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = Main.storyboard; sourceTree = "<group>"; };
 		0616F4B34725AE4D0BCCA4D9 /* KBLiteSemanticSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLiteSemanticSearch.swift; sourceTree = "<group>"; };
+		C7E170000000000000000101 /* KBLiteSemanticCachePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLiteSemanticCachePolicy.swift; sourceTree = "<group>"; };
+		C7E180000000000000000101 /* KnowledgeLocalStoragePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeLocalStoragePolicy.swift; sourceTree = "<group>"; };
 		06E17BD90B489ADAD5BB3B17 /* DreamJourney.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DreamJourney.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		07B6BA3BDEF61B3A339E10DD /* MemoirModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirModel.swift; sourceTree = "<group>"; };
 		0E34D9D2B8943EBBDECBC489 /* MemoirAudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirAudioPlayer.swift; sourceTree = "<group>"; };
@@ -395,6 +399,8 @@
 				8310EA30F87E2748EE0535A1 /* KBLiteMultiUser.swift */,
 				EA7025362579F4B59C5376E8 /* KBLitePDFExporter.swift */,
 				0616F4B34725AE4D0BCCA4D9 /* KBLiteSemanticSearch.swift */,
+				C7E170000000000000000101 /* KBLiteSemanticCachePolicy.swift */,
+				C7E180000000000000000101 /* KnowledgeLocalStoragePolicy.swift */,
 				8C5B565061358529E1029413 /* KBLiteTestHelper.swift */,
 				1EC2B6D3AE2C256785CCE388 /* MemoryModel.swift */,
 				B2BCB52701683AE3FAFABA6F /* MemoryRepository.swift */,
@@ -974,6 +980,8 @@
 				FB97211C6E68808436C7DC76 /* KBLiteMultiUser.swift in Sources */,
 				90DF2D00B2A745900FF43F33 /* KBLitePDFExporter.swift in Sources */,
 				824FE84FF055277FD802AE21 /* KBLiteSemanticSearch.swift in Sources */,
+				C7E170000000000000000001 /* KBLiteSemanticCachePolicy.swift in Sources */,
+				C7E180000000000000000001 /* KnowledgeLocalStoragePolicy.swift in Sources */,
 				70BCC3629F42D8E233158576 /* KBLiteTestHelper.swift in Sources */,
 				896769650B9A953A6C0B6F19 /* KBSyncViewController.swift in Sources */,
 				F2F9DEA8D6BDEBC8B7C5538F /* KnowledgeBaseViewController.swift in Sources */,

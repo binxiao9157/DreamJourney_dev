@@ -12,6 +12,7 @@ swiftc \
   -parse-as-library \
   "$ROOT_DIR/DreamJourney/Sources/Services/KBLiteModels.swift" \
   "$ROOT_DIR/DreamJourney/Sources/Services/EchoKnowledgeContextPolicy.swift" \
+  "$ROOT_DIR/DreamJourney/Sources/Services/KnowledgeLocalStoragePolicy.swift" \
   "$ROOT_DIR/DreamJourney/Sources/Services/KnowledgeThreeWayMerge.swift" \
   "$SCRIPT_DIR/knowledge-change-feed-pagination-model-smoke.swift" \
   -o "$BIN_PATH"

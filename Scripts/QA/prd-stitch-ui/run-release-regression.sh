@@ -347,6 +347,21 @@ run_step "Swift model guard knowledge-three-way-merge" "$STATIC_LOG_DIR/knowledg
 run_step "Swift model guard knowledge-context-policy" "$STATIC_LOG_DIR/knowledge-context-policy-model-smoke.log" \
   "$SCRIPT_DIR/run-knowledge-context-policy-model-smoke.sh"
 
+run_step "Swift model guard knowledge-semantic-cache-isolation" "$STATIC_LOG_DIR/knowledge-semantic-cache-isolation-model-smoke.log" \
+  "$SCRIPT_DIR/run-knowledge-semantic-cache-isolation-model-smoke.sh"
+
+run_step "Swift guard knowledge-semantic-cache-isolation" "$STATIC_LOG_DIR/knowledge-semantic-cache-isolation-check.log" \
+  "$SCRIPT_DIR/run-knowledge-semantic-cache-isolation-check.sh"
+
+run_step "Swift model guard knowledge-local-storage-protection" "$STATIC_LOG_DIR/knowledge-local-storage-protection-model-smoke.log" \
+  "$SCRIPT_DIR/run-knowledge-local-storage-protection-model-smoke.sh"
+
+run_step "Swift guard knowledge-local-storage-protection" "$STATIC_LOG_DIR/knowledge-local-storage-protection-check.log" \
+  "$SCRIPT_DIR/run-knowledge-local-storage-protection-check.sh"
+
+run_step "Swift guard knowledge-persona-ranking-prefilter" "$STATIC_LOG_DIR/knowledge-persona-ranking-prefilter-check.log" \
+  "$SCRIPT_DIR/run-knowledge-persona-ranking-prefilter-check.sh"
+
 run_step "Swift model guard family-relationship-authorization" "$STATIC_LOG_DIR/family-relationship-authorization-policy-model-smoke.log" \
   "$SCRIPT_DIR/run-family-relationship-authorization-policy-model-smoke.sh"
 

@@ -65,7 +65,7 @@ final class KBLiteMultiUser {
     private var kbDirectory: URL {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let kbDir = docs.appendingPathComponent("knowledge_base")
-        try? FileManager.default.createDirectory(at: kbDir, withIntermediateDirectories: true)
+        try? KnowledgeLocalStoragePolicy.prepareDirectory(at: kbDir)
         return kbDir
     }
 
@@ -328,6 +328,7 @@ final class KBLiteMultiUser {
     private func loadSyncHistory() {
         guard FileManager.default.fileExists(atPath: syncHistoryPath.path) else { return }
         do {
+            try? KnowledgeLocalStoragePolicy.hardenExistingItem(at: syncHistoryPath)
             let data = try Data(contentsOf: syncHistoryPath)
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
@@ -344,7 +345,7 @@ final class KBLiteMultiUser {
             encoder.dateEncodingStrategy = .iso8601
             encoder.outputFormatting = .prettyPrinted
             let data = try encoder.encode(syncHistory)
-            try data.write(to: syncHistoryPath, options: .atomic)
+            try KnowledgeLocalStoragePolicy.write(data, to: syncHistoryPath)
             print("[KBMultiUser] 同步历史已保存")
         } catch {
             print("[KBMultiUser] 保存同步历史失败: \(error.localizedDescription)")

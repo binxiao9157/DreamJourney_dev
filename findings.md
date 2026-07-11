@@ -189,3 +189,12 @@
 - 后端 `/context/build` 已验证 pending family viewer 不可使用家庭 Archive、care 或私有事实，因此下一 P0 应收敛 iOS 本地候选/授权语义，而不是重建后端 Context policy。
 - `DigitalHumanContextStore` 恢复仅校验 viewer，`KBPersonaIdentityResolver` 又允许 relation-only personal 推断；旧/伪造 family context 可能绕到 personal fallback，必须与 repository authorization 一起收敛。
 - 通用 knowledge sync 的 scope 判断不足以证明 owner/persona authorization；Task 22 需要让 Echo、family repository 和 sync 共用同一 fail-closed authority contract。
+
+## Task 23 Resolution
+
+- 旧语义 embedding cache 只按 entity ID 缓存，跨账号、跨类型、内容更新和旧 warm callback 都可能复用错误向量；全局 `isCacheWarm` 还会阻止后续账号预热。
+- Task 23 使用 owner digest + user generation scope、kind/ID/text fingerprint key 和 lock-protected active scope；账号切换先激活新 scope，旧任务在提交前后均 fail closed。
+- 独立审计发现 generation Context 先整图 ranking、后 persona 过滤会造成候选挤占；现已改为先构造 persona/privacy/evidence 可见候选图，再统一执行 semantic/keyword ranking，并保留结果后二次过滤。
+- graph/base/pending/outbox/sync history 原有原子写入已收敛到统一 `KnowledgeLocalStoragePolicy`，最终 inode 使用 first-unlock protection 并排除备份，旧文件读取时 best-effort 加固。
+- 独立复核发现并关闭三个问题：账号切换时旧最近摘要 fallback、文件已提交但加固失败被误报为业务写失败、并发切换导致旧 cache activation 覆盖新 scope。
+- 完整 release regression `20260711-task23-knowledge-storage-cache-final3`、Simulator、generic iPhoneOS 和两个核心 Simulator smoke 通过；真机锁屏/备份行为保持外部验收。

@@ -1,0 +1,613 @@
+{
+  "checks": {
+    "C000": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P001/checks/C000.md",
+      "created_at": "2026-07-11T09:56:23+00:00",
+      "criteria_map": [
+        "owner/generation scope：满足。",
+        "kind/ID/text key：满足。",
+        "并发读写锁：满足。",
+        "stale warm reject：满足。",
+        "登录切换和关键词 fallback：满足。"
+      ],
+      "evidence": [
+        "scope 模型验证不同 owner/generation 不相等且不保存 raw userId。",
+        "key 模型验证 entity kind、owner 与文本变化均改变 key，文本仅保留 fingerprint。",
+        "static gate 禁止全局 warm flag、raw ID key 和无 scope lifecycle。",
+        "Simulator workspace build 证明新源文件已进入 target 并可与完整依赖编译。"
+      ],
+      "execution_map": [
+        "R000 完成 cache policy、语义搜索实现、KBLite 生命周期接线和 QA。"
+      ],
+      "followup_problem_id": null,
+      "id": "C000",
+      "problem_id": "P001",
+      "residual_risk": [
+        "Persona-visible top-K 顺序是独立检索质量问题，不影响本问题的 embedding cache 隔离结论。"
+      ],
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "模型覆盖相同 ID 在不同 owner、generation、kind、text 下的组合；生产写入在计算前后各验证 active scope。"
+      ],
+      "summary": "R000 满足 P001。cache scope、key 和并发边界均由生产代码与纯模型/static gate 直接证明；旧账号或旧 generation 的异步预热不能通过最终写入 guard，同 ID 内容更新不会命中旧向量。"
+    },
+    "C001": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P002/checks/C001.md",
+      "created_at": "2026-07-11T10:02:28+00:00",
+      "criteria_map": [
+        "五类 writer 统一策略：满足。",
+        "protection 与 backup exclusion：满足。",
+        "最终 inode 加固：满足。",
+        "旧文件 best-effort 加固：满足。",
+        "路径/envelope/测试兼容：满足。"
+      ],
+      "evidence": [
+        "static gate 禁止 graph/sync history/sync stores 继续直接调用裸 `Data.write`。",
+        "model smoke 两次替换同一文件并读取 protection/backup 属性。",
+        "base/pending/outbox 的既有模型 smoke 使用临时目录真实读写成功。",
+        "Simulator 与 generic iPhoneOS workspace build 通过。"
+      ],
+      "execution_map": [
+        "R001 完成 policy、五类接线、旧文件加固和 QA。"
+      ],
+      "followup_problem_id": null,
+      "id": "C001",
+      "problem_id": "P002",
+      "residual_risk": [
+        "真机锁屏与系统备份验收不在非真机范围，文档未将其误标完成。"
+      ],
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "model smoke 覆盖首次创建与 atomic replacement；三个原 store smoke 覆盖 empty/load/save/remove/冲突相关路径。"
+      ],
+      "summary": "R001 满足 P002。所有目标 writer 都通过唯一策略写入，host smoke 证明 atomic replacement 后最终 inode 保留 backup exclusion 和 first-unlock protection；既有 store 行为和两种非真机构建均通过。"
+    },
+    "C002": {
+      "blocking_gaps": [
+        "persona 可见候选尚未在 semantic top-K 前过滤，新增安全 gates 尚未接入默认 release regression/QA。"
+      ],
+      "body_path": "problems/P000/checks/C002.md",
+      "created_at": "2026-07-11T10:03:26+00:00",
+      "criteria_map": [
+        "cache scope/content/concurrency：满足。",
+        "本地文件保护：满足。",
+        "persona-visible semantic candidate isolation：不完整。",
+        "默认 release regression/QA 接线：未满足。",
+        "最终状态文档与完整回归：未满足。"
+      ],
+      "evidence": [
+        "新 runner 当前未出现在 `run-release-regression.sh` 和 `release-qa-package-check.swift`。",
+        "`buildGenerationAllowedContextString` 的既有路径先调用整图 `search(query:)`，再做 identity/evidence 过滤。",
+        "两种构建成功只能证明可编译，不能证明默认发布门会持续运行新增安全检查。"
+      ],
+      "execution_map": [
+        "R002 汇总已完成实现，但诚实记录剩余发布和检索顺序缺口。"
+      ],
+      "followup_problem_id": "P003",
+      "id": "C002",
+      "problem_id": "P000",
+      "residual_risk": [
+        "若直接关闭根任务，后续改动可以绕过新增 gates，且 family persona 检索可能稳定返回空或低质量结果。"
+      ],
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "not_success",
+      "stress_test": [
+        "独立审计构造跨 persona 竞争场景：无权/非当前 persona 条目虽会在最终 Context 被过滤，但可能先占据 semantic top-K，导致当前 persona 正确条目未被召回。"
+      ],
+      "summary": "R002 尚未完全满足 P000。P001/P002 的核心实现成立，但根验收明确要求新增 gates 接入 release regression/release QA；当前尚未接线。独立审计发现 persona 过滤晚于 semantic top-K，也与“检索治理和账号/persona 隔离”的最终目标存在差距。"
+    },
+    "C003": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/checks/C003.md",
+      "created_at": "2026-07-11T10:22:41+00:00",
+      "criteria_map": [
+        "ranking 前 persona/privacy/evidence 过滤：满足。",
+        "普通本地搜索保持全账号图：满足。",
+        "semantic/keyword 同一 snapshot：满足。",
+        "旧账号 Context fail closed：满足。",
+        "默认 release/QA 接线与完整回归：满足。"
+      ],
+      "evidence": [
+        "persona ranking static gate 固定 prefilter-before-search、二次过滤和旧 scope Context reject。",
+        "cache gate 固定账号切换区间内 activation，storage model/static gate固定明确 post-commit outcome。",
+        "final3 从零运行全部默认 gates、两种构建和两个 Simulator smoke。",
+        "独立审查复核没有发现 P0 或 Xcode/QA 接线阻断。"
+      ],
+      "execution_map": [
+        "R003 完成检索顺序、发布门、独立审查修复和最终证据。"
+      ],
+      "followup_problem_id": null,
+      "id": "C003",
+      "problem_id": "P003",
+      "residual_risk": [
+        "真实锁屏/备份行为与检索质量基线属于后续外部/P2 验收，不影响当前代码合同。"
+      ],
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "覆盖账号切换发生在搜索与最近摘要之间、并发 switch activation 反序、atomic commit 后属性加固失败三类时序。"
+      ],
+      "summary": "R003 满足 P003。候选过滤顺序、snapshot scope、排名后二次过滤和默认发布门均由源码 gate 与 final3 直接证明；独立审查指出的并发和提交语义问题已纳入最终代码而非仅记录为风险。"
+    },
+    "C004": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/checks/C004.md",
+      "created_at": "2026-07-11T10:23:01+00:00",
+      "criteria_map": [
+        "跨账号/类型/内容 cache 隔离：满足。",
+        "并发 scope 生命周期：满足。",
+        "graph/base/pending/outbox/sync history 文件保护：满足。",
+        "路径/envelope 兼容：满足。",
+        "persona-visible ranking：满足。",
+        "发布回归、构建与文档：满足。"
+      ],
+      "evidence": [
+        "owner/generation/kind/content cache key 与 stale task policy 有纯模型和 static gate。",
+        "五类文件统一写入策略有真实属性 smoke、static gate 和原 store model smokes。",
+        "generation Context 在 ranking 前后均执行 persona/privacy/evidence 边界。",
+        "final3 默认 release regression、Simulator、generic iPhoneOS 和关键 smoke 全部通过。",
+        "权威设计、Task 23 计划和状态文档已同步，未过度声明真机 Data Protection。"
+      ],
+      "execution_map": [
+        "R002 汇总 P001/P002 初始实现。",
+        "R003 完成 follow-up 修复、发布接线和最终回归。"
+      ],
+      "followup_problem_id": null,
+      "id": "C004",
+      "problem_id": "P000",
+      "residual_risk": [
+        "真机锁屏/系统备份和离线检索质量基线属于明确后续验收，不削弱当前非真机代码闭环。"
+      ],
+      "result_ids": [
+        "R002",
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "覆盖跨 owner/generation/kind/text key、旧 warm callback、并发 switch、旧摘要 fallback、atomic replacement 与 post-commit hardening warning。"
+      ],
+      "summary": "R002 与 R003 共同满足 P000。R002 已完成 cache/storage 核心实现，R003 关闭 persona ranking、默认发布门和独立审查发现的并发/提交语义缺口；final3 与两种非真机构建提供最终一致代码证据。"
+    }
+  },
+  "counters": {
+    "check": 5,
+    "event": 50,
+    "problem": 4,
+    "result": 4,
+    "ticket": 4
+  },
+  "created_at": "2026-07-11T09:48:42+00:00",
+  "effort": "medium",
+  "language": "zh",
+  "ledger_id": "L20260711-174842",
+  "problems": {
+    "P000": {
+      "body_path": "problems/P000/README.md",
+      "check_ids": [
+        "C002",
+        "C004"
+      ],
+      "created_at": "2026-07-11T09:48:42+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Close the Lodestar task represented by `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/plans/task_23_p1-knowledge-local-storage-semantic-cache-isolation.md` using recursive problem, ticket, result, and check state.\n\nTask context:\n\n# Task 23：P1 本地知识文件保护与语义缓存隔离",
+      "followup_ids": [
+        "P003"
+      ],
+      "id": "P000",
+      "package_path": "problems/P000",
+      "parent_id": null,
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P001",
+        "P002",
+        "P003"
+      ],
+      "success_criteria": [
+        "Recursive ledger reaches next_action=none.",
+        "Relevant implementation and verification evidence is recorded.",
+        "A compact status checkpoint is synced back to Lodestar progress.md."
+      ],
+      "ticket_ids": [
+        "T000"
+      ],
+      "title": "Task 23：P1 本地知识文件保护与语义缓存隔离",
+      "updated_at": "2026-07-11T10:23:01+00:00"
+    },
+    "P001": {
+      "body_path": "problems/P000/children/P001/README.md",
+      "check_ids": [
+        "C000"
+      ],
+      "created_at": "2026-07-11T09:50:16+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "`KBLiteSemanticSearch` 使用无锁全局字典和 entity ID key；跨账号、跨类型、同 ID 内容更新和账号切换期间的旧 warm task 都可能复用或写入错误向量。",
+      "followup_ids": [],
+      "id": "P001",
+      "package_path": "problems/P000/children/P001",
+      "parent_id": "P000",
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "cache scope 绑定不可逆 owner key 与 KBLite generation。",
+        "cache key 包含 entity kind、ID 与 searchable text fingerprint，不包含原始正文或 userId。",
+        "cache 激活、读取、写入、失效均线程安全。",
+        "旧 scope 的异步 warm task 不能写入当前 scope。",
+        "登出、账号切换与内容更新有自动化 gate，且既有关键词 fallback 保持不变。"
+      ],
+      "ticket_ids": [
+        "T001"
+      ],
+      "title": "语义缓存账号、代次与内容隔离",
+      "updated_at": "2026-07-11T09:56:23+00:00"
+    },
+    "P002": {
+      "body_path": "problems/P000/children/P002/README.md",
+      "check_ids": [
+        "C001"
+      ],
+      "created_at": "2026-07-11T09:50:16+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "知识 graph、remote base、pending mutation、governance outbox 和 legacy sync history 的写入策略分散；虽然多数使用 atomic write，但文件保护、目录保护和 backup exclusion 不完整，无法形成统一静态数据保护合同。",
+      "followup_ids": [],
+      "id": "P002",
+      "package_path": "problems/P000/children/P002",
+      "parent_id": "P000",
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "新增统一 `KnowledgeLocalStoragePolicy` 处理目录准备、backup exclusion、文件保护和 atomic write。",
+        "graph/base/pending/outbox/sync history 全部通过该策略写入。",
+        "保留现有文件路径、文件名、JSON envelope 和临时目录注入能力。",
+        "既有文件在读取/写入时可 best-effort 加固，不自动删除或迁移。",
+        "新增静态 gate 并通过 Simulator/generic iPhoneOS build。"
+      ],
+      "ticket_ids": [
+        "T002"
+      ],
+      "title": "统一知识本地文件保护策略",
+      "updated_at": "2026-07-11T10:02:28+00:00"
+    },
+    "P003": {
+      "body_path": "problems/P000/children/P003/README.md",
+      "check_ids": [
+        "C003"
+      ],
+      "created_at": "2026-07-11T10:03:26+00:00",
+      "created_from_check_id": "C002",
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Task 23 的 cache/storage 实现尚未接入默认发布回归；generation Context 的 semantic top-K 在 persona/evidence 过滤之前执行，其他 persona 或不可生成实体可能挤占当前角色候选。",
+      "followup_ids": [],
+      "id": "P003",
+      "package_path": "problems/P000/children/P003",
+      "parent_id": "P000",
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "generation Context 在 semantic ranking 前只提供 expected identity 且 generation-eligible 的候选实体。",
+        "普通本地浏览搜索保持既有全账号图谱行为，不扩大公开数据权限。",
+        "新增纯模型/static gate 覆盖 persona prefilter 与关键词 fallback。",
+        "semantic cache 和 storage 四条 runner 接入默认 release regression 与 release QA package。",
+        "完整 release regression、Simulator/generic iPhoneOS build、文档和 `git diff --check` 通过。"
+      ],
+      "ticket_ids": [
+        "T003"
+      ],
+      "title": "收口 persona 可见检索与默认发布门",
+      "updated_at": "2026-07-11T10:22:41+00:00"
+    }
+  },
+  "results": {
+    "R000": {
+      "artifacts": [
+        "`DreamJourney/Sources/Services/KBLiteSemanticCachePolicy.swift`",
+        "`DreamJourney/Sources/Services/KBLiteSemanticSearch.swift`",
+        "`Scripts/QA/prd-stitch-ui/knowledge-semantic-cache-isolation-model-smoke.swift`",
+        "`Scripts/QA/prd-stitch-ui/knowledge-semantic-cache-isolation-check.swift`"
+      ],
+      "body_path": "problems/P000/children/P001/results/R000.md",
+      "created_at": "2026-07-11T09:55:55+00:00",
+      "done": [
+        "新增纯 `KBLiteSemanticCacheScope`、`KBLiteSemanticCacheKey` 和 stale-work policy。",
+        "移除全局 `isCacheWarm` 和 `embeddingCache[item.id]`。",
+        "`KBLiteSemanticSearch` 的 activate/read/write/warm/search 全部采用 lock + scope guard。",
+        "`KBLiteManager` 在 init/switch/save/search 路径捕获并传递同一 generation scope。",
+        "同 ID 的跨类型、跨账号和内容更新向量不再复用；key 不保存 raw userId 或正文。"
+      ],
+      "id": "R000",
+      "known_gaps": [
+        "Persona-visible entity 过滤目前仍发生在 semantic top-K 之后，可能造成检索质量竞争；不存在越权注入证据，但应作为独立检索治理子问题修复。",
+        "NaturalLanguage 模型实际可用性不属于本次非真机 cache policy 验收。"
+      ],
+      "problem_id": "P001",
+      "root_id": "P000",
+      "summary": "语义 embedding cache 已从进程级 raw entity ID 字典升级为 owner digest + user generation scope，并以 entity kind、entity ID fingerprint 和 searchable text fingerprint 作为 key。所有 cache 状态使用锁保护，账号切换/登出会同步激活新 scope 或清空；旧 warm task 在写入前重新校验 scope。",
+      "ticket_id": "T001",
+      "verification": [
+        "`run-knowledge-semantic-cache-isolation-model-smoke.sh` 通过。",
+        "`run-knowledge-semantic-cache-isolation-check.sh` 通过。",
+        "`knowledge-pipeline-check.swift` 通过。",
+        "`run-knowledge-context-policy-model-smoke.sh` 通过。",
+        "`xcodebuild -workspace DreamJourney.xcworkspace ... iphonesimulator` 通过，日志 `/tmp/dj-task23-p001-workspace-build.log`。"
+      ]
+    },
+    "R001": {
+      "artifacts": [
+        "`DreamJourney/Sources/Services/KnowledgeLocalStoragePolicy.swift`",
+        "`Scripts/QA/prd-stitch-ui/knowledge-local-storage-protection-model-smoke.swift`",
+        "`Scripts/QA/prd-stitch-ui/knowledge-local-storage-protection-check.swift`"
+      ],
+      "body_path": "problems/P000/children/P002/results/R001.md",
+      "created_at": "2026-07-11T10:02:13+00:00",
+      "done": [
+        "集中实现目录准备、backup exclusion、文件保护和原子写入。",
+        "KBLite graph、sync history、base、pending、outbox 五类 writer 全部接入。",
+        "graph legacy quarantine/corrupted backup 与所有既有加载路径补 best-effort 加固。",
+        "更新三个 host model runner，保持临时目录注入和原有 store 行为。"
+      ],
+      "id": "R001",
+      "known_gaps": [
+        "真机锁屏前后 Data Protection 行为和系统备份结果不在本轮非真机验收范围。",
+        "sync history 仍是默认关闭的 legacy 全局历史；本轮保护文件但不重启已关闭的跨账号分享产品能力。"
+      ],
+      "problem_id": "P002",
+      "root_id": "P000",
+      "summary": "新增统一 `KnowledgeLocalStoragePolicy`，graph、remote base、pending mutation、governance outbox 和 legacy sync history 已统一使用 atomic + first-unlock protection 写入，原子替换后再次加固最终 inode，并排除系统备份。既有文件在读取时 best-effort 加固，路径、文件名和 JSON envelope 不变。",
+      "ticket_id": "T002",
+      "verification": [
+        "`run-knowledge-local-storage-protection-model-smoke.sh` 真实写入/替换并校验属性，通过。",
+        "`run-knowledge-local-storage-protection-check.sh` 通过。",
+        "three-way merge、governance outbox、change-feed pagination model smokes 通过。",
+        "Simulator Debug workspace build 通过：`/tmp/dj-task23-simulator-build.log`。",
+        "generic iPhoneOS no-sign build 通过：`/tmp/dj-task23-iphoneos-build.log`。"
+      ]
+    },
+    "R002": {
+      "artifacts": [
+        "`DreamJourney/Sources/Services/KBLiteSemanticCachePolicy.swift`",
+        "`DreamJourney/Sources/Services/KBLiteSemanticSearch.swift`",
+        "`DreamJourney/Sources/Services/KnowledgeLocalStoragePolicy.swift`"
+      ],
+      "body_path": "problems/P000/results/R002.md",
+      "created_at": "2026-07-11T10:02:51+00:00",
+      "done": [
+        "P001 完成 generation-bound、线程安全、内容感知的语义 embedding cache。",
+        "P002 完成 graph/base/pending/outbox/sync history 的统一文件保护策略。",
+        "新模型/static gates 与既有 store/knowledge gates 通过。",
+        "Simulator 与 generic iPhoneOS build 通过。"
+      ],
+      "id": "R002",
+      "known_gaps": [
+        "新增四条 runner 尚未接入默认 `run-release-regression.sh` 和 `release-qa-package-check.swift`。",
+        "semantic top-K 前尚未按当前 persona/evidence 可见性缩小候选集合，可能造成当前角色召回被其他 persona 数据挤占。",
+        "Task 23 状态文档和最终完整回归尚未收口。"
+      ],
+      "problem_id": "P000",
+      "root_id": "P000",
+      "summary": "语义 cache 的 owner/generation/content 隔离与五类本地知识文件保护已实现并分别验收；两种非真机构建通过。但根任务尚未完成默认发布回归接线，独立审计还发现 persona-visible 过滤晚于 semantic top-K，可能让其他 persona 实体挤占当前角色候选。",
+      "ticket_id": "T000",
+      "verification": [
+        "R000/C000：语义缓存隔离验收成功。",
+        "R001/C001：本地文件保护验收成功。",
+        "`/tmp/dj-task23-simulator-build.log` 与 `/tmp/dj-task23-iphoneos-build.log` 均包含 BUILD SUCCEEDED。"
+      ]
+    },
+    "R003": {
+      "artifacts": [
+        "`Scripts/QA/prd-stitch-ui/knowledge-persona-ranking-prefilter-check.swift`",
+        "`Scripts/QA/prd-stitch-ui/run-release-regression.sh`",
+        "`Scripts/QA/prd-stitch-ui/release-qa-package-check.swift`",
+        "`docs/superpowers/status/2026-07-11-knowledge-local-storage-semantic-cache-isolation.md`"
+      ],
+      "body_path": "problems/P000/children/P003/results/R003.md",
+      "created_at": "2026-07-11T10:22:14+00:00",
+      "done": [
+        "search 核心只消费同一次锁内捕获的 graph + cache scope。",
+        "generation Context 在 ranking 前过滤 people/places/events/facts。",
+        "Context 返回前再次复核 scope，账号切换时旧最近摘要 fail closed。",
+        "cache activation 与账号状态更新处于同一串行 switch 区间。",
+        "storage write 区分 committed-and-hardened 与 committed-with-warning，不对已提交业务操作返回失败。",
+        "五条 Task 23 gates 接入默认 release regression 和 release QA package。"
+      ],
+      "id": "R003",
+      "known_gaps": [
+        "真机锁屏 Data Protection 和系统备份行为仍需外部验收。",
+        "离线 Recall/precision 评测与 rerank 阈值不在本轮范围。"
+      ],
+      "problem_id": "P003",
+      "root_id": "P000",
+      "summary": "generation Context 已在 semantic/keyword ranking 前按 expected persona、privacy 与 evidence 构造候选图，排名后仍保留二次过滤；普通本地搜索继续使用当前账号全图。Task 23 五条 gates 已接入默认 release regression/QA，独立审查发现的旧摘要 fallback、post-commit 加固结果歧义和并发 cache activation 排序均已修复。",
+      "ticket_id": "T003",
+      "verification": [
+        "五条新增 model/static gates 通过。",
+        "three-way merge、governance outbox、change-feed、context policy 与 knowledge pipeline gates 通过。",
+        "独立 agent 审查的三个问题均完成针对性修复。",
+        "final3 完整回归通过：`tmp/visual-qa/prd-stitch-ui/release-regression/20260711-task23-knowledge-storage-cache-final3/report.md`。",
+        "Simulator、generic iPhoneOS、Archive -> Echo 与延迟回信 notification smoke 通过。"
+      ]
+    }
+  },
+  "root_id": "P000",
+  "schema_version": 6,
+  "tickets": {
+    "T000": {
+      "acceptance_criteria": [
+        "语义缓存 scope 同时绑定不可逆 owner key 和 KBLite generation。",
+        "entity kind、entity ID、searchable text fingerprint 共同决定缓存 key。",
+        "账号切换、登出和 generation 变化会立即失效旧 cache，旧异步 warm 不得写入新 scope。",
+        "cache 字典不存在无锁并发读写。",
+        "graph/base/pending/outbox/sync history 使用统一 storage policy，并保持现有文件名和 envelope 兼容。",
+        "storage policy 使用 atomic write、`completeUntilFirstUserAuthentication` 和 backup exclusion。",
+        "新增 gates 接入 release regression/release QA；Simulator、generic iPhoneOS build 和 `git diff --check` 通过。"
+      ],
+      "assumptions": [
+        "`completeUntilFirstUserAuthentication` 满足后台同步与静态数据保护之间的当前产品取舍。",
+        "本轮不引入网络 embedding、向量数据库或新缓存基础设施。",
+        "本轮不移动或批量删除现有用户文件，不改 Echo/Stitch UI，不做真机验证。"
+      ],
+      "body_path": "problems/P000/tickets/T000.md",
+      "classification": "split",
+      "classification_reason": "语义缓存隔离与本地文件保护涉及不同并发模型和写入入口，应拆成两个可独立验证的子问题，再由根任务统一接入发布回归。",
+      "created_at": "2026-07-11T09:49:42+00:00",
+      "id": "T000",
+      "problem_definition": "当前语义 embedding cache 只按实体 ID 缓存、使用无锁共享字典和全局预热状态；跨账号、跨实体类型、内容更新或旧异步预热可能复用错误向量。graph、remote base、pending mutation、governance outbox、legacy sync history 虽大多原子写入，但目录、文件保护与备份排除策略分散，无法证明所有敏感知识持久化都受到同一保护。",
+      "problem_id": "P000",
+      "proposed_solution": "在不改变现有知识文件路径、JSON envelope 和公开 UI 的前提下，引入 owner digest + KBLite generation 的语义 cache scope，使用 entity kind + ID + searchable text fingerprint 构造 cache key，并用锁与 scope token 拒绝旧异步写入。新增统一 `KnowledgeLocalStoragePolicy`，集中处理目录准备、backup exclusion、`completeUntilFirstUserAuthentication` 与 atomic write，并接入全部五类知识持久化入口。",
+      "result_ids": [
+        "R002"
+      ],
+      "risks": [
+        "文件保护在 Simulator/macOS 测试环境的行为与真机不同，因此必须以编译和静态合同证明接线，但不能宣称真机静态数据保护已验收。",
+        "旧预热任务与账号切换并发，必须先切 scope 再允许新 graph 参与检索，不能仅在 warm 结束时清空。",
+        "现有注入临时目录的 store 测试必须保持可运行，统一策略不能假定只有沙盒 Documents/Application Support。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现本地知识文件保护与语义缓存隔离",
+      "updated_at": "2026-07-11T10:02:51+00:00",
+      "verification_plan": "1. 先新增 semantic cache scope/content/concurrency gate 与 storage protection gate，使其在旧实现上失败。\n2. 实现纯 scope/key 模型、线程安全 cache 和 KBLite 生命周期接线。\n3. 实现统一 storage policy 并接入五类知识持久化入口。\n4. 运行新增 gates、现有 knowledge pipeline/merge gates、release QA package。\n5. 运行 Simulator Debug 与 generic iPhoneOS build，不做真机。"
+    },
+    "T001": {
+      "acceptance_criteria": [
+        "相同 ID 在不同账号、generation、类型或文本下不共享 cache key。",
+        "cache key 和日志不含 raw userId 或正文。",
+        "账号切换先激活新 scope，再 warm 新 graph。",
+        "所有 embedding cache 读写都位于锁保护 API 内。",
+        "旧 warm callback 在 scope 不匹配时不写入。",
+        "新模型/static gates 和相关知识检索 gate 通过。"
+      ],
+      "assumptions": [
+        "语义 cache 只保存在进程内，不需要磁盘迁移。",
+        "owner digest 可复用知识同步 userKey 的不可逆散列语义，但不能产生模块循环依赖。"
+      ],
+      "body_path": "problems/P000/children/P001/tickets/T001.md",
+      "classification": "one_go",
+      "classification_reason": "范围集中在语义缓存策略、KBLite 生命周期接线和两条 gate，可在一个小闭环内实现并独立构建验证。",
+      "created_at": "2026-07-11T09:50:34+00:00",
+      "id": "T001",
+      "problem_definition": "当前语义 cache 既没有账号/generation namespace，也没有线程同步和内容指纹；旧 warm task 与新账号搜索可以并发访问同一字典。",
+      "problem_id": "P001",
+      "proposed_solution": "在 `KBLiteSemanticSearch` 内定义纯 `KBLiteSemanticCacheScope` 与 `KBLiteSemanticCacheKey`，使用 owner digest、generation、entity kind、ID 和文本 fingerprint。由锁保护 active scope 与 embedding cache；`KBLiteManager` 在 init/switch 时激活 scope，并在 warm/search 时传入同一 scope。旧 scope 写入必须被拒绝。",
+      "result_ids": [
+        "R000"
+      ],
+      "risks": [
+        "NaturalLanguage embedding 在 CI/Simulator 可用性不稳定，因此正确性验收应基于纯 cache policy，不依赖模型是否下载。",
+        "generation 读取必须与 graph snapshot 同步，避免 scope 与 graph 不一致。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现 generation-bound 语义缓存",
+      "updated_at": "2026-07-11T09:55:55+00:00",
+      "verification_plan": "- 先新增纯模型 smoke 覆盖 scope/key 差异和旧 scope reject。\n- 新增 static gate 固定 KBLite lifecycle 接线、锁与关键词 fallback。\n- 运行新增 gates、knowledge pipeline/context gates 和 iOS build。"
+    },
+    "T002": {
+      "acceptance_criteria": [
+        "五类 writer 不再直接调用 `Data.write(... .atomic)`。",
+        "统一 policy 明确使用 `completeUntilFirstUserAuthentication` 和 `isExcludedFromBackup`。",
+        "原子替换后重新加固最终文件。",
+        "既有文件加载前尝试加固，失败不删除或改写用户数据。",
+        "临时目录注入的 store 测试保持兼容。",
+        "新 static gate、既有 merge/store gates 和两种非真机构建通过。"
+      ],
+      "assumptions": [
+        "当前需要保护但允许首次解锁后后台访问，因此采用 `completeUntilFirstUserAuthentication`。",
+        "本轮不移动 Documents graph，不改变文件 envelope。"
+      ],
+      "body_path": "problems/P000/children/P002/tickets/T002.md",
+      "classification": "one_go",
+      "classification_reason": "保护策略 API 与五个既有 writer 的接线范围明确，文件 envelope 和路径不变，可由一条静态门禁与既有 store 回归完整验收。",
+      "created_at": "2026-07-11T09:56:43+00:00",
+      "id": "T002",
+      "problem_definition": "五类知识 JSON writer 分布在三个服务中，只有 atomic write 较一致；文件/目录 protection 和 backup exclusion 缺失，旧文件读取时也不会补强属性。",
+      "problem_id": "P002",
+      "proposed_solution": "新增 `KnowledgeLocalStoragePolicy`，提供 `prepareDirectory`、`hardenExistingItem`、`write` 三个集中 API。写入使用 atomic + complete-file-protection-until-first-authentication，随后加固最终 inode 并排除备份。graph、sync history、base、pending、outbox 只通过该策略写入；读取前对既有目录/文件 best-effort 加固，保持原路径和 envelope。",
+      "result_ids": [
+        "R001"
+      ],
+      "risks": [
+        "macOS host 测试不完全模拟 iOS Data Protection；静态与编译证据不能替代真机锁屏验收。",
+        "backup exclusion 或 protection 属性在不支持的临时文件系统上可能失败，不能因此破坏注入目录的业务读写测试。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "接入统一知识文件保护策略",
+      "updated_at": "2026-07-11T10:02:13+00:00",
+      "verification_plan": "- 先新增静态 gate，检查 policy 与五个 writer 的接线并在旧实现失败。\n- 实现 policy 并接入目标 writer/reader。\n- 运行 knowledge merge/outbox/model gates、release QA、Simulator 和 generic iPhoneOS build。"
+    },
+    "T003": {
+      "acceptance_criteria": [
+        "generation Context 的 people/places/events/facts 在 ranking 前完成 persona、privacy、evidence 过滤。",
+        "ranking 后保留二次过滤，避免未来 search 改动绕过边界。",
+        "普通 `search(query:)` 继续搜索当前账号全图，不改变知识页行为。",
+        "semantic 和 keyword fallback 使用同一传入 snapshot，不回读另一账号 graph。",
+        "Task 23 新 gates 默认进入 release regression 和 QA package。",
+        "完整非真机回归与两种构建通过。"
+      ],
+      "assumptions": [
+        "当前 KB 实体上限允许生成一次值语义 candidate snapshot。",
+        "本轮不改变排序阈值或 UI。"
+      ],
+      "body_path": "problems/P000/children/P003/tickets/T003.md",
+      "classification": "one_go",
+      "classification_reason": "候选图预过滤、search snapshot 重载和发布门接线都集中在 KBLite 与 QA runner，边界明确且可由完整回归一次验收。",
+      "created_at": "2026-07-11T10:04:03+00:00",
+      "id": "T003",
+      "problem_definition": "generation Context 目前先对账号整图做 semantic top-K，再按 expected persona/evidence/privacy 过滤；不属于当前 persona 的高相似实体可能挤占候选。Task 23 新增 gates 也尚未进入默认 release 回归。",
+      "problem_id": "P003",
+      "proposed_solution": "把 KBLite 的 search 核心改为接收不可变 graph snapshot；生成 Context 先根据同一 `canGenerate` 与 `entityIsVisible` policy 构造 persona-visible candidate graph，再进行 semantic/keyword ranking，排名后保留现有二次过滤。新增顺序 static gate，并把 semantic cache/storage 四条 runner 与该 gate 接入 release regression/release QA package。",
+      "result_ids": [
+        "R003"
+      ],
+      "risks": [
+        "复制 KBLiteGraph 可能有小额内存开销，但实体上限固定且只在构建 Context 时发生。",
+        "必须确保 related facts 仍使用同一 persona policy。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "在 ranking 前隔离 persona 候选并接入发布门",
+      "updated_at": "2026-07-11T10:22:14+00:00",
+      "verification_plan": "- 新增 static gate 固定 prefilter-before-search 顺序和二次过滤。\n- 运行 cache/storage/context/pipeline/model gates。\n- 运行 release QA package、完整 release regression、Simulator 与 generic iPhoneOS build。"
+    }
+  },
+  "updated_at": "2026-07-11T10:23:01+00:00"
+}

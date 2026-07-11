@@ -225,6 +225,11 @@ assertContains(releaseRegression, "RUN_P0_PROFILE_CARE_REGRESSION", "release reg
 assertContains(releaseRegression, "RUN_P0_PROFILE_CARE_REGRESSION forces RUN_PROFILE_CARE_STATE_SMOKE and RUN_PROFILE_CARE_BACKEND_STATE_SMOKE", "Profile care P0 gate should force local and deployed backend care smokes")
 assertContains(releaseRegression, "RUN_KNOWLEDGE_V2_SYNC_GATE", "release regression should expose the knowledge V2 cross-repository gate")
 assertContains(releaseRegression, "run-knowledge-three-way-merge-model-smoke.sh", "release regression should always run the knowledge three-way merge model")
+assertContains(releaseRegression, "run-knowledge-semantic-cache-isolation-model-smoke.sh", "release regression should always model semantic cache account isolation")
+assertContains(releaseRegression, "run-knowledge-semantic-cache-isolation-check.sh", "release regression should always guard semantic cache lifecycle wiring")
+assertContains(releaseRegression, "run-knowledge-local-storage-protection-model-smoke.sh", "release regression should always verify knowledge file attributes after atomic replacement")
+assertContains(releaseRegression, "run-knowledge-local-storage-protection-check.sh", "release regression should always guard every knowledge writer")
+assertContains(releaseRegression, "run-knowledge-persona-ranking-prefilter-check.sh", "release regression should always guard persona filtering before ranking")
 assertContains(releaseRegression, "run-family-relationship-authorization-policy-model-smoke.sh", "release regression should always run family relationship authority model")
 assertContains(releaseRegression, "run-family-authorization-freshness-model-smoke.sh", "release regression should always run family authorization freshness model")
 assertContains(releaseRegression, "run-family-context-reconciliation-model-smoke.sh", "release regression should always run family context reconciliation model")
@@ -452,6 +457,16 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/run-family-context-reconciliation-check.sh",
     "Scripts/QA/prd-stitch-ui/knowledge-family-sync-import-authorization-check.swift",
     "Scripts/QA/prd-stitch-ui/run-knowledge-family-sync-import-authorization-check.sh",
+    "Scripts/QA/prd-stitch-ui/knowledge-semantic-cache-isolation-model-smoke.swift",
+    "Scripts/QA/prd-stitch-ui/run-knowledge-semantic-cache-isolation-model-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/knowledge-semantic-cache-isolation-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-knowledge-semantic-cache-isolation-check.sh",
+    "Scripts/QA/prd-stitch-ui/knowledge-local-storage-protection-model-smoke.swift",
+    "Scripts/QA/prd-stitch-ui/run-knowledge-local-storage-protection-model-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/knowledge-local-storage-protection-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-knowledge-local-storage-protection-check.sh",
+    "Scripts/QA/prd-stitch-ui/knowledge-persona-ranking-prefilter-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-knowledge-persona-ranking-prefilter-check.sh",
     "Scripts/QA/prd-stitch-ui/run-backend-env-smoke.sh",
     "Scripts/QA/prd-stitch-ui/run-release-like-backend-acceptance.sh",
     "Scripts/QA/prd-stitch-ui/final-visual-qa-package-check.swift",

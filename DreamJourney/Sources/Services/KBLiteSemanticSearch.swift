@@ -29,16 +29,16 @@ final class KBLiteSemanticSearch {
         return NLEmbedding.wordEmbedding(for: .traditionalChinese)
     }()
 
-    /// 缓存已生成的实体句向量（entityId → [Double]）
-    private var embeddingCache: [String: [Double]] = [:]
-
-    /// 缓存是否已预热
-    private var isCacheWarm = false
+    /// Cache state is process-local and must never outlive its owner/generation scope.
+    private let cacheLock = NSLock()
+    private var activeScope: KBLiteSemanticCacheScope?
+    private var embeddingCache: [KBLiteSemanticCacheKey: [Double]] = [:]
 
     // MARK: - Public API
 
     /// 对搜索 query 进行语义匹配
     func semanticSearch(
+        scope: KBLiteSemanticCacheScope,
         query: String,
         people: [KBPerson],
         places: [KBPlace],
@@ -46,7 +46,7 @@ final class KBLiteSemanticSearch {
         facts: [KBFact],
         topK: Int = 5
     ) -> KBSearchResult {
-        guard isAvailable else { return KBSearchResult() }
+        guard isAvailable, isActive(scope: scope) else { return KBSearchResult() }
 
         guard let queryEmbedding = sentenceEmbedding(for: query) else {
             return KBSearchResult()
@@ -55,53 +55,91 @@ final class KBLiteSemanticSearch {
         var result = KBSearchResult()
 
         result.people = rankBySimilarity(queryEmbedding: queryEmbedding,
+                                         scope: scope,
+                                         entityKind: .person,
                                          items: people,
                                          textExtractor: { $0.searchableText },
                                          topK: topK)
 
         result.places = rankBySimilarity(queryEmbedding: queryEmbedding,
+                                          scope: scope,
+                                          entityKind: .place,
                                           items: places,
                                           textExtractor: { $0.searchableText },
                                           topK: topK)
 
         result.events = rankBySimilarity(queryEmbedding: queryEmbedding,
+                                          scope: scope,
+                                          entityKind: .event,
                                           items: events,
                                           textExtractor: { $0.searchableText + " " + $0.formattedDate },
                                           topK: topK)
 
         result.facts = rankBySimilarity(queryEmbedding: queryEmbedding,
+                                         scope: scope,
+                                         entityKind: .fact,
                                          items: facts,
                                          textExtractor: { $0.statement },
                                          topK: topK)
 
+        guard isActive(scope: scope) else { return KBSearchResult() }
         print("[KBLite] 🧬 语义搜索: \"\(query)\" → \(result.totalCount) 条 (人:\(result.people.count) 地:\(result.places.count) 事:\(result.events.count) 实:\(result.facts.count))")
         return result
     }
 
-    /// 预热缓存
-    func warmCache(people: [KBPerson], places: [KBPlace], events: [KBEvent], facts: [KBFact]) {
-        guard isAvailable, !isCacheWarm else { return }
+    func activate(scope: KBLiteSemanticCacheScope?) {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        guard activeScope != scope else { return }
+        activeScope = scope
+        embeddingCache.removeAll(keepingCapacity: false)
+    }
 
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            guard let self = self else { return }
-            var count = 0
-            for p in people {
-                if self.embeddingCache[p.id] == nil,
-                   let emb = self.sentenceEmbedding(for: p.searchableText) {
-                    self.embeddingCache[p.id] = emb
-                    count += 1
-                }
-            }
-            for p in places {
-                if self.embeddingCache[p.id] == nil,
-                   let emb = self.sentenceEmbedding(for: p.searchableText) {
-                    self.embeddingCache[p.id] = emb
-                    count += 1
-                }
-            }
-            self.isCacheWarm = true
-            print("[KBLite] 🧬 语义缓存预热完成: \(count) 实体")
+    /// Caller schedules this work off the main thread. Every write revalidates its launch scope.
+    func warmCache(
+        scope: KBLiteSemanticCacheScope,
+        people: [KBPerson],
+        places: [KBPlace],
+        events: [KBEvent],
+        facts: [KBFact]
+    ) {
+        guard isAvailable, isActive(scope: scope) else { return }
+
+        var count = 0
+        for item in people where cachedEmbedding(
+            scope: scope,
+            entityKind: .person,
+            entityId: item.id,
+            searchableText: item.searchableText
+        ) != nil {
+            count += 1
         }
+        for item in places where cachedEmbedding(
+            scope: scope,
+            entityKind: .place,
+            entityId: item.id,
+            searchableText: item.searchableText
+        ) != nil {
+            count += 1
+        }
+        for item in events where cachedEmbedding(
+            scope: scope,
+            entityKind: .event,
+            entityId: item.id,
+            searchableText: item.searchableText + " " + item.formattedDate
+        ) != nil {
+            count += 1
+        }
+        for item in facts where cachedEmbedding(
+            scope: scope,
+            entityKind: .fact,
+            entityId: item.id,
+            searchableText: item.statement
+        ) != nil {
+            count += 1
+        }
+        guard isActive(scope: scope) else { return }
+        print("[KBLite] 🧬 语义缓存预热完成: \(count) 实体")
     }
 
     // MARK: - Private
@@ -165,6 +203,8 @@ final class KBLiteSemanticSearch {
     /// 按余弦相似度排序
     private func rankBySimilarity<T: Identifiable>(
         queryEmbedding: [Double],
+        scope: KBLiteSemanticCacheScope,
+        entityKind: KBLiteSemanticEntityKind,
         items: [T],
         textExtractor: (T) -> String,
         topK: Int
@@ -174,15 +214,13 @@ final class KBLiteSemanticSearch {
         var scored: [(item: T, score: Double)] = []
 
         for item in items {
-            let itemEmbedding: [Double]?
-            if let cached = embeddingCache[item.id] {
-                itemEmbedding = cached
-            } else {
-                itemEmbedding = sentenceEmbedding(for: textExtractor(item))
-                if let emb = itemEmbedding {
-                    embeddingCache[item.id] = emb
-                }
-            }
+            guard isActive(scope: scope) else { return [] }
+            let itemEmbedding = cachedEmbedding(
+                scope: scope,
+                entityKind: entityKind,
+                entityId: item.id,
+                searchableText: textExtractor(item)
+            )
 
             if let emb = itemEmbedding {
                 let similarity = cosineSimilarity(queryEmbedding, emb)
@@ -196,6 +234,46 @@ final class KBLiteSemanticSearch {
             .sorted { $0.score > $1.score }
             .prefix(topK)
             .map { $0.item }
+    }
+
+    private func cachedEmbedding(
+        scope: KBLiteSemanticCacheScope,
+        entityKind: KBLiteSemanticEntityKind,
+        entityId: String,
+        searchableText: String
+    ) -> [Double]? {
+        let key = KBLiteSemanticCacheKey(
+            scope: scope,
+            entityKind: entityKind,
+            entityId: entityId,
+            searchableText: searchableText
+        )
+        cacheLock.lock()
+        guard KBLiteSemanticCachePolicy.accepts(taskScope: scope, activeScope: activeScope) else {
+            cacheLock.unlock()
+            return nil
+        }
+        if let cached = embeddingCache[key] {
+            cacheLock.unlock()
+            return cached
+        }
+        cacheLock.unlock()
+
+        guard let computed = sentenceEmbedding(for: searchableText) else { return nil }
+
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        guard KBLiteSemanticCachePolicy.accepts(taskScope: scope, activeScope: activeScope) else {
+            return nil
+        }
+        embeddingCache[key] = computed
+        return computed
+    }
+
+    private func isActive(scope: KBLiteSemanticCacheScope) -> Bool {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        return KBLiteSemanticCachePolicy.accepts(taskScope: scope, activeScope: activeScope)
     }
 
     /// 余弦相似度

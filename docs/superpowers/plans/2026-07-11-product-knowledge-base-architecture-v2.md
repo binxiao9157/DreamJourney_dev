@@ -413,7 +413,7 @@ POST /kb/governance/actions
 - KBLite person 到 Family 的自动派生改为“未授权候选”或彻底移除；生产 seed 成员迁到 QA-only。
 - timeLetter draft 的后端 payload 使用字段 allowlist；`metadataOnly` 不得携带正文、分析摘要或 transcript，删除草稿需同步撤销。
 
-实施进度：Task 15 已完成 proposal、稳定 ID/关系/metadata、persona-scoped Context 和 iOS canonical identity 主链路。Task 16 已完成用户治理、Archive 来源删除级联、iOS durable outbox/coordinator 和组合 QA gate。Task 17 已完成 operation receipt/payload fingerprint、客户端冲突恢复与隔离。Task 18 已完成稳定目标分页、终页提交和 KBLite CAS。Task 19 已停止新增 `conversationSession/archiveImageAnalysis`，统一新对话 turn/照片来源，并提供不暴露正文或 source ID 的只读审计。Task 20 已统一 mutation/change/receipt/replay 的 canonical privacy/source metadata 并完成生产维护。Task 21 已把系统 Widget 改为显式 `summaryAllowed`、当前 owner、personal、confirmed 的最小摘要投影，使用 schema v2 owner digest 和 generation 防止跨账号旧写，并补齐扩展/App Group 工程合同；真实 App Group provisioning 与 Widget Gallery 仍需真机外部验收。Task 22 已把家庭关系 authority 收敛到当前 owner 的 backend invitation accepted 合同：KBPerson 只形成候选，ownerless legacy 隔离，family Context 每轮复核，整库本地分享默认关闭；账号级同步授权同时覆盖 personal 与全部 accepted family persona。运行期进一步用 refresh/user/persona/family generation 和 coordinator authorization epoch 阻断乱序响应与旧 callback，授权撤销会主动持久化回本人 Echo Context。历史 legacy ref 仍需独立批准的证据化迁移；timeLetter 草稿字段收敛与公开治理体验继续作为后续 P1/P2。
+实施进度：Task 15 已完成 proposal、稳定 ID/关系/metadata、persona-scoped Context 和 iOS canonical identity 主链路。Task 16 已完成用户治理、Archive 来源删除级联、iOS durable outbox/coordinator 和组合 QA gate。Task 17 已完成 operation receipt/payload fingerprint、客户端冲突恢复与隔离。Task 18 已完成稳定目标分页、终页提交和 KBLite CAS。Task 19 已停止新增 `conversationSession/archiveImageAnalysis`，统一新对话 turn/照片来源，并提供不暴露正文或 source ID 的只读审计。Task 20 已统一 mutation/change/receipt/replay 的 canonical privacy/source metadata 并完成生产维护。Task 21 已把系统 Widget 改为显式 `summaryAllowed`、当前 owner、personal、confirmed 的最小摘要投影，使用 schema v2 owner digest 和 generation 防止跨账号旧写，并补齐扩展/App Group 工程合同；真实 App Group provisioning 与 Widget Gallery 仍需真机外部验收。Task 22 已把家庭关系 authority 收敛到当前 owner 的 backend invitation accepted 合同：KBPerson 只形成候选，ownerless legacy 隔离，family Context 每轮复核，整库本地分享默认关闭；账号级同步授权同时覆盖 personal 与全部 accepted family persona。运行期进一步用 refresh/user/persona/family generation 和 coordinator authorization epoch 阻断乱序响应与旧 callback，授权撤销会主动持久化回本人 Echo Context。Task 23 已让本地 embedding cache 按 owner digest + generation + entity kind/content fingerprint 隔离，并在线程安全 scope guard 下拒绝旧预热任务；generation Context 在 semantic/keyword ranking 前先过滤 persona/privacy/evidence 候选，graph/base/pending/outbox/sync history 统一使用 atomic、first-unlock protection 和 backup exclusion。历史 legacy ref 仍需独立批准的证据化迁移；timeLetter 草稿字段收敛与公开治理体验继续作为后续 P1/P2。
 
 ### P1：同步生产化
 
@@ -421,7 +421,7 @@ POST /kb/governance/actions
 - change feed 保留/compaction、snapshot fallback 与 deployed Postgres 分页验收。
 - Postgres 多账号并发与事务集成测试。
 - 知识、档案、时间信件和关怀的 `asOf` 可观测水位。
-- 本地 KB/base/pending 文件保护与备份策略；语义缓存按用户隔离并支持内容更新失效。
+- 已完成（Task 23）：本地 KB/base/pending/outbox 文件保护与备份排除；语义缓存按用户/generation 隔离并支持内容更新失效。
 - Widget 只导出允许共享的摘要；生产日志和 Echo trace 不记录知识正文，trace 按用户隔离并在登出时清理。
 
 ### P2：检索质量与治理体验

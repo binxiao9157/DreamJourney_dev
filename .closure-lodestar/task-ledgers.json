@@ -184,7 +184,15 @@
       "status": "complete",
       "task_file": "docs/plans/task_22_p0-family-knowledge-authorization-boundary.md",
       "updated_at": "2026-07-11T17:43:45+08:00"
+    },
+    "docs/plans/task_23_p1-knowledge-local-storage-semantic-cache-isolation.md": {
+      "ledger_id": "L20260711-174842",
+      "ledger_path": ".complex-problems/L20260711-174842",
+      "next_action": "none",
+      "status": "complete",
+      "task_file": "docs/plans/task_23_p1-knowledge-local-storage-semantic-cache-isolation.md",
+      "updated_at": "2026-07-11T18:23:12+08:00"
     }
   },
-  "updated_at": "2026-07-11T17:43:45+08:00"
+  "updated_at": "2026-07-11T18:23:12+08:00"
 }

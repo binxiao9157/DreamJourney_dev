@@ -658,6 +658,7 @@ final class KnowledgeRemoteBaseStore {
     func load(for userId: String) throws -> KnowledgeRemoteBaseSnapshot? {
         let url = fileURL(prefix: "kb_sync_base", userId: userId)
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        try? KnowledgeLocalStoragePolicy.hardenExistingItem(at: url)
         let data = try Data(contentsOf: url)
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               object["userKey"] as? String == Self.userKey(userId),
@@ -693,9 +694,8 @@ final class KnowledgeRemoteBaseStore {
     }
 
     private func write(_ object: [String: Any], to url: URL) throws {
-        try FileManager.default.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
         let data = try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
-        try data.write(to: url, options: .atomic)
+        try KnowledgeLocalStoragePolicy.write(data, to: url)
     }
 
     private static func defaultRootDirectory() -> URL {
@@ -737,6 +737,7 @@ final class KnowledgePendingMutationStore {
     func load(for userId: String) throws -> KnowledgePendingMutation? {
         let url = fileURL(userId: userId)
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        try? KnowledgeLocalStoragePolicy.hardenExistingItem(at: url)
         let data = try Data(contentsOf: url)
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               object["userKey"] as? String == KnowledgeRemoteBaseStore.userKey(userId),
@@ -757,7 +758,6 @@ final class KnowledgePendingMutationStore {
     }
 
     func save(_ pending: KnowledgePendingMutation, for userId: String) throws {
-        try FileManager.default.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
         let object: [String: Any] = [
             "schemaVersion": 1,
             "userKey": KnowledgeRemoteBaseStore.userKey(userId),
@@ -768,7 +768,7 @@ final class KnowledgePendingMutationStore {
             "payload": pending.payload,
         ]
         let data = try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
-        try data.write(to: fileURL(userId: userId), options: .atomic)
+        try KnowledgeLocalStoragePolicy.write(data, to: fileURL(userId: userId))
     }
 
     func remove(for userId: String) throws {
@@ -926,6 +926,7 @@ final class KnowledgeGovernanceOutboxStore {
         let url = fileURL(userId: normalizedUserId)
         guard FileManager.default.fileExists(atPath: url.path) else { return [] }
         do {
+            try? KnowledgeLocalStoragePolicy.hardenExistingItem(at: url)
             let data = try Data(contentsOf: url)
             let envelope = try decoder.decode(Envelope.self, from: data)
             guard envelope.schemaVersion == 1,
@@ -1015,17 +1016,13 @@ final class KnowledgeGovernanceOutboxStore {
             try removeAll(for: userId)
             return
         }
-        try FileManager.default.createDirectory(
-            at: rootDirectory,
-            withIntermediateDirectories: true
-        )
         let envelope = Envelope(
             schemaVersion: 1,
             userKey: KnowledgeRemoteBaseStore.userKey(userId),
             items: items
         )
         let data = try encoder.encode(envelope)
-        try data.write(to: fileURL(userId: userId), options: .atomic)
+        try KnowledgeLocalStoragePolicy.write(data, to: fileURL(userId: userId))
     }
 
     private func validate(

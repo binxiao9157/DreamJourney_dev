@@ -31,7 +31,9 @@ final class KBLiteManager {
     private init() {
         loadedUserId = Self.normalizedUserId(UserManager.shared.currentUser?.id)
         graph = loadGraph(for: loadedUserId)
-        warmSemanticCache(for: graph)
+        let semanticScope = semanticCacheScopeLocked()
+        KBLiteSemanticSearch.shared.activate(scope: semanticScope)
+        warmSemanticCache(for: graph, scope: semanticScope)
         let activeOwner = loadedUserId == Self.signedOutUserId ? nil : loadedUserId
         widgetSnapshotStore.activate(ownerUserId: activeOwner, generation: userGeneration)
         if let activeOwner {
@@ -224,7 +226,7 @@ final class KBLiteManager {
     private func graphFilePath(for userId: String) -> URL {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let kbDir = docs.appendingPathComponent("knowledge_base")
-        try? FileManager.default.createDirectory(at: kbDir, withIntermediateDirectories: true)
+        try? KnowledgeLocalStoragePolicy.prepareDirectory(at: kbDir)
         let userFile = kbDir.appendingPathComponent("kb_graph_\(userId).json")
 
         // 旧文件没有 owner/persona/evidence 证明，不能自动归给下一位登录用户。
@@ -237,6 +239,7 @@ final class KBLiteManager {
                 : preferredQuarantine
             do {
                 try FileManager.default.moveItem(at: legacyFile, to: quarantineFile)
+                try? KnowledgeLocalStoragePolicy.hardenExistingItem(at: quarantineFile)
                 print("[KBLite] 已隔离无 owner 证明的旧知识库: \(quarantineFile.lastPathComponent)")
             } catch {
                 print("[KBLite] 旧知识库隔离失败: \(error.localizedDescription)")
@@ -254,6 +257,7 @@ final class KBLiteManager {
         let graphSnapshot = graph
         let userId = loadedUserId
         let generation = userGeneration
+        let semanticScope = semanticCacheScopeLocked()
         graphLock.unlock()
 
         guard userId != Self.signedOutUserId else {
@@ -269,13 +273,14 @@ final class KBLiteManager {
             return
         }
         do {
-            try data.write(to: graphFilePath(for: userId), options: .atomic)
+            try KnowledgeLocalStoragePolicy.write(data, to: graphFilePath(for: userId))
             print("[KBLite] 💾 知识库已保存: \(graphSnapshot.people.count)人, \(graphSnapshot.places.count)地, \(graphSnapshot.events.count)事, \(graphSnapshot.facts.count)实")
             widgetSnapshotStore.publish(
                 graph: graphSnapshot,
                 ownerUserId: userId,
                 generation: generation
             )
+            warmSemanticCache(for: graphSnapshot, scope: semanticScope)
         } catch {
             print("[KBLite] ❌ 保存失败: \(error.localizedDescription)")
             widgetSnapshotStore.invalidateSnapshot(ownerUserId: userId, generation: generation)
@@ -299,6 +304,7 @@ final class KBLiteManager {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         do {
+            try? KnowledgeLocalStoragePolicy.hardenExistingItem(at: filePath)
             let data = try Data(contentsOf: filePath)
             let loaded = try decoder.decode(KBLiteGraph.self, from: data)
             print("[KBLite] 📂 已加载知识库: v\(loaded.version), \(loaded.people.count)人, \(loaded.places.count)地, \(loaded.events.count)事, \(loaded.facts.count)实, 共\(loaded.sessionCount)次会话")
@@ -308,14 +314,30 @@ final class KBLiteManager {
             // 备份损坏文件
             let backupPath = filePath.appendingPathExtension("corrupted")
             try? FileManager.default.moveItem(at: filePath, to: backupPath)
+            try? KnowledgeLocalStoragePolicy.hardenExistingItem(at: backupPath)
             print("[KBLite] 📦 已备份损坏文件到: \(backupPath.lastPathComponent)")
             return KBLiteGraph()
         }
     }
 
-    private func warmSemanticCache(for graph: KBLiteGraph) {
+    private func semanticCacheScopeLocked() -> KBLiteSemanticCacheScope? {
+        KBLiteSemanticCacheScope(ownerUserId: loadedUserId, generation: userGeneration)
+    }
+
+    private func isCurrentSemanticCacheScope(_ scope: KBLiteSemanticCacheScope) -> Bool {
+        graphLock.lock()
+        defer { graphLock.unlock() }
+        return semanticCacheScopeLocked() == scope
+    }
+
+    private func warmSemanticCache(
+        for graph: KBLiteGraph,
+        scope semanticScope: KBLiteSemanticCacheScope?
+    ) {
+        guard let semanticScope else { return }
         DispatchQueue.global(qos: .utility).async {
             KBLiteSemanticSearch.shared.warmCache(
+                scope: semanticScope,
                 people: graph.people,
                 places: graph.places,
                 events: graph.events,
@@ -329,6 +351,7 @@ final class KBLiteManager {
         let normalized = Self.normalizedUserId(userId)
         var loadedGraph: KBLiteGraph?
         var activatedGeneration: UUID?
+        var semanticScope: KBLiteSemanticCacheScope?
         extractQueue.sync {
             graphLock.lock()
             defer { graphLock.unlock() }
@@ -345,10 +368,13 @@ final class KBLiteManager {
             personaGeneration = UUID()
             familyAuthorizationGeneration = nil
             activatedGeneration = userGeneration
+            semanticScope = semanticCacheScopeLocked()
             graph = loadGraph(for: normalized)
             didWarnCapacity = false
             isExtracting = false
             loadedGraph = graph
+            // Keep manager state and cache activation in the same serialized switch.
+            KBLiteSemanticSearch.shared.activate(scope: semanticScope)
         }
         guard let loadedGraph, let activatedGeneration else { return }
         let activeOwner = normalized == Self.signedOutUserId ? nil : normalized
@@ -363,7 +389,7 @@ final class KBLiteManager {
                 generation: activatedGeneration
             )
         }
-        warmSemanticCache(for: loadedGraph)
+        warmSemanticCache(for: loadedGraph, scope: semanticScope)
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: .kbLiteDidUpdate, object: nil)
         }
@@ -1749,32 +1775,61 @@ final class KBLiteManager {
 
     // MARK: - Public API: Search
 
+    private func semanticSearchSnapshot() -> (
+        graph: KBLiteGraph,
+        scope: KBLiteSemanticCacheScope?
+    ) {
+        graphLock.lock()
+        defer { graphLock.unlock() }
+        return (graph, semanticCacheScopeLocked())
+    }
+
     /// 混合检索：语义搜索（iOS 17+）+ 关键词 fallback
     /// - Parameter query: 用户当前说的内容
     /// - Returns: 匹配的实体集合
     func search(query: String) -> KBSearchResult {
         guard !query.isEmpty else { return KBSearchResult() }
+        let snapshot = semanticSearchSnapshot()
+        return search(
+            query: query,
+            graphSnapshot: snapshot.graph,
+            semanticScope: snapshot.scope
+        )
+    }
+
+    private func search(
+        query: String,
+        graphSnapshot: KBLiteGraph,
+        semanticScope: KBLiteSemanticCacheScope?
+    ) -> KBSearchResult {
+        if let semanticScope, !isCurrentSemanticCacheScope(semanticScope) {
+            return KBSearchResult()
+        }
 
         // 尝试语义搜索（iOS 17+），失败或不可用则 fallback 关键词
-        if KBLiteSemanticSearch.shared.isAvailable {
+        if KBLiteSemanticSearch.shared.isAvailable, let semanticScope {
             let semantic = KBLiteSemanticSearch.shared.semanticSearch(
+                scope: semanticScope,
                 query: query,
-                people: graph.people,
-                places: graph.places,
-                events: graph.events,
-                facts: graph.facts
+                people: graphSnapshot.people,
+                places: graphSnapshot.places,
+                events: graphSnapshot.events,
+                facts: graphSnapshot.facts
             )
-            if !semantic.isEmpty {
+            if !semantic.isEmpty, isCurrentSemanticCacheScope(semanticScope) {
                 return semantic
             }
         }
 
         // Fallback: 关键词匹配
-        return keywordSearch(query: query)
+        if let semanticScope, !isCurrentSemanticCacheScope(semanticScope) {
+            return KBSearchResult()
+        }
+        return keywordSearch(query: query, graphSnapshot: graphSnapshot)
     }
 
     /// 关键词检索（原始实现，作为语义搜索的 fallback）
-    private func keywordSearch(query: String) -> KBSearchResult {
+    private func keywordSearch(query: String, graphSnapshot: KBLiteGraph) -> KBSearchResult {
         var result = KBSearchResult()
 
         // 使用 NSLinguisticTagger 做中文分词
@@ -1783,7 +1838,7 @@ final class KBLiteManager {
         print("[KBLite] 🔍 检索: \"\(query)\" → 关键词: \(keywords)")
 
         // 人物匹配
-        result.people = graph.people.filter { person in
+        result.people = graphSnapshot.people.filter { person in
             let searchTarget = person.searchableText
             return keywords.contains { kw in
                 searchTarget.contains(kw)
@@ -1791,7 +1846,7 @@ final class KBLiteManager {
         }
 
         // 地点匹配
-        result.places = graph.places.filter { place in
+        result.places = graphSnapshot.places.filter { place in
             let searchTarget = place.searchableText
             return keywords.contains { kw in
                 searchTarget.contains(kw)
@@ -1799,7 +1854,7 @@ final class KBLiteManager {
         }
 
         // 事件匹配
-        result.events = graph.events.filter { event in
+        result.events = graphSnapshot.events.filter { event in
             let searchTarget = event.searchableText + " " + event.formattedDate
             return keywords.contains { kw in
                 searchTarget.contains(kw)
@@ -1807,7 +1862,7 @@ final class KBLiteManager {
         }
 
         // 事实匹配
-        result.facts = graph.facts.filter { fact in
+        result.facts = graphSnapshot.facts.filter { fact in
             keywords.contains { kw in
                 fact.statement.contains(kw)
             }
@@ -1896,7 +1951,14 @@ final class KBLiteManager {
         expectedIdentity: KBPersonaIdentity?
     ) -> String {
         var parts: [String] = []
-        let graphSnapshot = readGraph { $0 }
+        let searchSnapshot = semanticSearchSnapshot()
+        let graphSnapshot = searchSnapshot.graph
+        if generationAllowedOnly {
+            guard let contextScope = searchSnapshot.scope,
+                  isCurrentSemanticCacheScope(contextScope) else {
+                return ""
+            }
+        }
         let canGenerateEntity: (KBPrivacyMetadata?, String?) -> Bool = { metadata, evidenceStatus in
             guard generationAllowedOnly else { return true }
             guard KnowledgeGenerationPolicy.allowsEntity(
@@ -1926,7 +1988,19 @@ final class KBLiteManager {
 
         // 有 query → 检索相关知识
         if let q = query, !q.trimmingCharacters(in: .whitespaces).isEmpty {
-            let result = search(query: q)
+            let rankingCandidates = generationAllowedOnly
+                ? generationSearchCandidates(
+                    from: graphSnapshot,
+                    expectedIdentity: expectedIdentity,
+                    canGenerateEntity: canGenerateEntity,
+                    canGenerateFact: canGenerateFact
+                )
+                : graphSnapshot
+            let result = search(
+                query: q,
+                graphSnapshot: rankingCandidates,
+                semanticScope: searchSnapshot.scope
+            )
             let people = result.people.filter {
                 canGenerateEntity($0.privacyMetadata, $0.evidenceStatus)
                     && (expectedIdentity == nil || entityIsVisible($0, for: expectedIdentity!))
@@ -2022,10 +2096,40 @@ final class KBLiteManager {
             }
         }
 
+        if let contextScope = searchSnapshot.scope,
+           !isCurrentSemanticCacheScope(contextScope) {
+            return ""
+        }
         if parts.isEmpty { return "" }
 
         return "\n\n=== 用户知识库 ===\n" + parts.joined(separator: "\n\n") +
                "\n请自然地引用上述已知信息，让长辈感受到你记得他/她说过的事。不要逐条播报。"
+    }
+
+    private func generationSearchCandidates(
+        from graph: KBLiteGraph,
+        expectedIdentity: KBPersonaIdentity?,
+        canGenerateEntity: (KBPrivacyMetadata?, String?) -> Bool,
+        canGenerateFact: (KBFact) -> Bool
+    ) -> KBLiteGraph {
+        guard let expectedIdentity else { return KBLiteGraph() }
+        var candidates = graph
+        candidates.people = graph.people.filter {
+            canGenerateEntity($0.privacyMetadata, $0.evidenceStatus)
+                && entityIsVisible($0, for: expectedIdentity)
+        }
+        candidates.places = graph.places.filter {
+            canGenerateEntity($0.privacyMetadata, $0.evidenceStatus)
+                && entityIsVisible($0, for: expectedIdentity)
+        }
+        candidates.events = graph.events.filter {
+            canGenerateEntity($0.privacyMetadata, $0.evidenceStatus)
+                && entityIsVisible($0, for: expectedIdentity)
+        }
+        candidates.facts = graph.facts.filter {
+            canGenerateFact($0) && entityIsVisible($0, for: expectedIdentity)
+        }
+        return candidates
     }
 
     // MARK: - Public API: Image Analysis
