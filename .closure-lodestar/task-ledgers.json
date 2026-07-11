@@ -200,7 +200,15 @@
       "status": "complete",
       "task_file": "docs/plans/task_24_p1-knowledge-change-retention-snapshot-fallback.md",
       "updated_at": "2026-07-11T19:58:13+08:00"
+    },
+    "docs/plans/task_25_p1-echo-trace-account-isolation.md": {
+      "ledger_id": "L20260711-200812",
+      "ledger_path": ".complex-problems/L20260711-200812",
+      "next_action": "none",
+      "status": "complete",
+      "task_file": "docs/plans/task_25_p1-echo-trace-account-isolation.md",
+      "updated_at": "2026-07-11T20:51:31+08:00"
     }
   },
-  "updated_at": "2026-07-11T19:58:13+08:00"
+  "updated_at": "2026-07-11T20:51:31+08:00"
 }

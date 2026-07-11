@@ -229,6 +229,8 @@ assertContains(releaseRegression, "run-knowledge-semantic-cache-isolation-model-
 assertContains(releaseRegression, "run-knowledge-semantic-cache-isolation-check.sh", "release regression should always guard semantic cache lifecycle wiring")
 assertContains(releaseRegression, "run-knowledge-local-storage-protection-model-smoke.sh", "release regression should always verify knowledge file attributes after atomic replacement")
 assertContains(releaseRegression, "run-knowledge-local-storage-protection-check.sh", "release regression should always guard every knowledge writer")
+assertContains(releaseRegression, "run-echo-trace-owner-isolation-model-smoke.sh", "release regression should always model Echo trace account isolation")
+assertContains(releaseRegression, "echo-trace-owner-isolation-check.swift", "release regression should always guard Echo trace owner lifecycle wiring")
 assertContains(releaseRegression, "run-knowledge-persona-ranking-prefilter-check.sh", "release regression should always guard persona filtering before ranking")
 assertContains(releaseRegression, "run-family-relationship-authorization-policy-model-smoke.sh", "release regression should always run family relationship authority model")
 assertContains(releaseRegression, "run-family-authorization-freshness-model-smoke.sh", "release regression should always run family authorization freshness model")
@@ -337,6 +339,8 @@ for handoffGuard in [
     "run-knowledge-governance-coordinator-check.sh",
     "knowledge-governance-release-boundary-check.swift",
     "echo-context-v2-clue-panel-check.swift",
+    "run-echo-trace-owner-isolation-model-smoke.sh",
+    "echo-trace-owner-isolation-check.swift",
     "echo-trace-export-check.swift",
     "echo-runtime-diagnostics-check.swift",
     "echo-trace-evidence-package-check.swift",
@@ -465,6 +469,9 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/run-knowledge-local-storage-protection-model-smoke.sh",
     "Scripts/QA/prd-stitch-ui/knowledge-local-storage-protection-check.swift",
     "Scripts/QA/prd-stitch-ui/run-knowledge-local-storage-protection-check.sh",
+    "Scripts/QA/prd-stitch-ui/echo-trace-owner-isolation-model-smoke.swift",
+    "Scripts/QA/prd-stitch-ui/run-echo-trace-owner-isolation-model-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/echo-trace-owner-isolation-check.swift",
     "Scripts/QA/prd-stitch-ui/knowledge-persona-ranking-prefilter-check.swift",
     "Scripts/QA/prd-stitch-ui/run-knowledge-persona-ranking-prefilter-check.sh",
     "Scripts/QA/prd-stitch-ui/run-backend-env-smoke.sh",

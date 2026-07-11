@@ -198,3 +198,12 @@
 - graph/base/pending/outbox/sync history 原有原子写入已收敛到统一 `KnowledgeLocalStoragePolicy`，最终 inode 使用 first-unlock protection 并排除备份，旧文件读取时 best-effort 加固。
 - 独立复核发现并关闭三个问题：账号切换时旧最近摘要 fallback、文件已提交但加固失败被误报为业务写失败、并发切换导致旧 cache activation 覆盖新 scope。
 - 完整 release regression `20260711-task23-knowledge-storage-cache-final3`、Simulator、generic iPhoneOS 和两个核心 Simulator smoke 通过；真机锁屏/备份行为保持外部验收。
+
+## Task 25 Resolution
+
+- 四类 Echo QA/诊断 Store 原先使用全局 UserDefaults key，账号切换后存在读取、导出和晚到 callback 重建旧数据的风险。
+- 现在所有 Store 使用不可逆 owner digest key 和 active-owner scope；Evidence package、数字人 session、语音合成摘要均携带并校验 owner。
+- 导出文件使用 owner digest 目录并在切换/登出时确定性删除；legacy 全局 key 和旧临时文件只清除、不迁移。
+- UserManager 将账号字段、Echo scope、KBLite/Knowledge 和通知副作用串行化；nickname-only 保存用 expectedUserId 阻断跨账号旧写。
+- Echo 账号变化会失效 lifecycle、无 diagnostics 释放旧 runtime/session、清除 capability/trace/provider/evidence 缓存；session/voice callback 使用请求发起时 owner。
+- 新 model/static guard 已进入默认 release regression；三条实际模拟器导出 smoke 与两类非真机构建通过。

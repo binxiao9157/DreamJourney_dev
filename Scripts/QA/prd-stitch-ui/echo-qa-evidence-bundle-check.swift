@@ -66,7 +66,7 @@ for forbidden in [
 for required in [
     "makeEchoQAEvidenceBundle(",
     "exportEchoQAEvidenceBundleForQA(source:",
-    "EchoQAEvidenceBundleStore.shared.record(bundle)",
+    "EchoQAEvidenceBundleStore.shared.record(bundle, ownerUserId:",
     "EchoQAEvidenceBundleStore.shared.exportLatestBundle",
     "runUIQAEchoQAEvidenceBundleExportSmoke",
     "latestFallbacks",

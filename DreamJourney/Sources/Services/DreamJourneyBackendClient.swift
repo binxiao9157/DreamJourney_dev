@@ -1,5 +1,6 @@
 import Foundation
 import Alamofire
+import CryptoKit
 
 private enum BackendDateParser {
     private static let fractionalISO8601Formatter: ISO8601DateFormatter = {
@@ -1422,6 +1423,7 @@ struct EchoRuntimeDiagnosticsSnapshot: Codable {
 
     init(
         trace: EchoTraceRecord?,
+        ownerUserId: String? = nil,
         audioOwner: String,
         selectedVoiceProfileId: String? = nil,
         roleVoiceSource: String? = nil,
@@ -1439,153 +1441,407 @@ struct EchoRuntimeDiagnosticsSnapshot: Codable {
         self.schemaVersion = 1
         let uniqueSuffix = String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(24))
         self.snapshotId = "echo_diag_" + uniqueSuffix
-        self.turnID = trace?.turnID ?? "unknown"
-        self.traceId = trace?.traceId ?? "none"
-        self.userId = trace?.userId ?? "unknown"
+        let explicitOwnerUserId = EchoTraceOwnerScope.normalizedOwnerUserId(ownerUserId)
+        let traceOwnerUserId = EchoTraceOwnerScope.normalizedOwnerUserId(trace?.userId)
+        let scopedTrace = explicitOwnerUserId == nil || explicitOwnerUserId == traceOwnerUserId
+            ? trace
+            : nil
+        self.turnID = scopedTrace?.turnID ?? "unknown"
+        self.traceId = scopedTrace?.traceId ?? "none"
+        self.userId = explicitOwnerUserId ?? traceOwnerUserId ?? "unknown"
         self.recordedAt = Date()
-        self.archiveItemIDs = trace?.archiveItemIDs ?? []
-        self.archiveItemsIncluded = trace?.archiveItemsIncluded ?? 0
-        self.archiveItemsAvailable = trace?.archiveItemsAvailable ?? 0
-        self.kbFactCount = trace?.kbFactCount ?? 0
-        self.voiceProfileId = selectedVoiceProfileId ?? trace?.voiceProfileId
-        self.voiceCloneReady = trace?.voiceCloneReady ?? false
-        self.voiceOutputMode = trace?.voiceOutputMode ?? "unknown"
+        self.archiveItemIDs = scopedTrace?.archiveItemIDs ?? []
+        self.archiveItemsIncluded = scopedTrace?.archiveItemsIncluded ?? 0
+        self.archiveItemsAvailable = scopedTrace?.archiveItemsAvailable ?? 0
+        self.kbFactCount = scopedTrace?.kbFactCount ?? 0
+        self.voiceProfileId = selectedVoiceProfileId ?? scopedTrace?.voiceProfileId
+        self.voiceCloneReady = scopedTrace?.voiceCloneReady ?? false
+        self.voiceOutputMode = scopedTrace?.voiceOutputMode ?? "unknown"
         self.roleVoiceSource = roleVoiceSource
         self.roleVoiceDisplayName = roleVoiceDisplayName
         self.roleVoiceContextOwnerId = roleVoiceContextOwnerId
         self.audioOwner = audioOwner
         self.digitalHumanRuntimeState = digitalHumanRuntimeState
-        self.digitalHumanSessionReady = digitalHumanSessionReady ?? trace?.digitalHumanSessionReady ?? false
-        self.digitalHumanProviderMode = digitalHumanProviderMode ?? trace?.digitalHumanProviderMode ?? "unknown"
+        self.digitalHumanSessionReady = digitalHumanSessionReady ?? scopedTrace?.digitalHumanSessionReady ?? false
+        self.digitalHumanProviderMode = digitalHumanProviderMode ?? scopedTrace?.digitalHumanProviderMode ?? "unknown"
         self.providerLogId = providerLogId
         self.providerRequestId = providerRequestId
         self.providerMode = providerMode
         self.fallbackReason = fallbackReason
-        self.privacyScopeLabel = trace?.privacyScopeLabel ?? "unknown"
-        self.canUseFamilyData = trace?.canUseFamilyData ?? false
-        self.crossScopeArchiveIncluded = trace?.crossScopeArchiveIncluded ?? false
-        self.contextLatencyMs = trace?.latencyMs ?? 0
+        self.privacyScopeLabel = scopedTrace?.privacyScopeLabel ?? "unknown"
+        self.canUseFamilyData = scopedTrace?.canUseFamilyData ?? false
+        self.crossScopeArchiveIncluded = scopedTrace?.crossScopeArchiveIncluded ?? false
+        self.contextLatencyMs = scopedTrace?.latencyMs ?? 0
         self.source = source
+    }
+}
+
+enum EchoTraceStorageError: LocalizedError {
+    case inactiveOwner
+    case invalidEvidenceOwner
+    case noEvidenceBundle
+
+    var errorDescription: String? {
+        switch self {
+        case .inactiveOwner:
+            return "Echo 诊断数据所属账号已失效"
+        case .invalidEvidenceOwner:
+            return "Echo 证据包缺少一致的账号信息"
+        case .noEvidenceBundle:
+            return "没有可导出的 Echo QA 证据包"
+        }
+    }
+}
+
+final class EchoTraceOwnerScope {
+    static let shared = EchoTraceOwnerScope()
+
+    private let lock = NSRecursiveLock()
+    private var activeOwnerDigest: String?
+
+    private init() {}
+
+    static func normalizedOwnerUserId(_ ownerUserId: String?) -> String? {
+        let normalized = ownerUserId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !normalized.isEmpty, normalized.lowercased() != "unknown" else {
+            return nil
+        }
+        return normalized
+    }
+
+    static func ownerDigest(for ownerUserId: String?) -> String? {
+        guard let normalizedOwnerUserId = normalizedOwnerUserId(ownerUserId) else {
+            return nil
+        }
+        return SHA256.hash(data: Data("echo-trace-owner-v2|\(normalizedOwnerUserId)".utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+
+    func withActiveOwner<T>(
+        ownerUserId: String,
+        operation: (String) throws -> T
+    ) rethrows -> T? {
+        guard let ownerDigest = Self.ownerDigest(for: ownerUserId) else {
+            return nil
+        }
+        lock.lock()
+        defer { lock.unlock() }
+        guard activeOwnerDigest == ownerDigest else {
+            return nil
+        }
+        return try operation(ownerDigest)
+    }
+
+    fileprivate func transition(
+        to ownerUserId: String?,
+        clearingOwnerUserIds: [String],
+        cleanup: (Set<String>) -> Void
+    ) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let nextOwnerDigest = Self.ownerDigest(for: ownerUserId)
+        var ownerDigestsToClear = Set(clearingOwnerUserIds.compactMap(Self.ownerDigest(for:)))
+        if let activeOwnerDigest {
+            ownerDigestsToClear.insert(activeOwnerDigest)
+        }
+        if let nextOwnerDigest {
+            ownerDigestsToClear.remove(nextOwnerDigest)
+        }
+
+        activeOwnerDigest = nil
+        cleanup(ownerDigestsToClear)
+        activeOwnerDigest = nextOwnerDigest
+    }
+}
+
+private final class EchoOwnerScopedDefaultsStore<Value: Codable> {
+    private let userDefaults: UserDefaults
+    private let storageKeyPrefix: String
+    private let legacyStorageKey: String
+    private let legacyExportFileName: String
+    private let maximumValueCount: Int
+    private let ownerScope: EchoTraceOwnerScope
+    private let exportNamespace: String
+    private let exportRootDirectoryName = "DreamJourneyEchoQAExports"
+
+    init(
+        userDefaults: UserDefaults,
+        storageKeyPrefix: String,
+        legacyStorageKey: String,
+        legacyExportFileName: String,
+        maximumValueCount: Int,
+        ownerScope: EchoTraceOwnerScope = .shared
+    ) {
+        self.userDefaults = userDefaults
+        self.storageKeyPrefix = storageKeyPrefix
+        self.legacyStorageKey = legacyStorageKey
+        self.legacyExportFileName = legacyExportFileName
+        self.maximumValueCount = maximumValueCount
+        self.ownerScope = ownerScope
+        self.exportNamespace = SHA256.hash(data: Data(storageKeyPrefix.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+
+    func record(
+        _ value: Value,
+        ownerUserId: String,
+        ownerIsValid: (String) -> Bool
+    ) -> Bool {
+        guard let normalizedOwnerUserId = EchoTraceOwnerScope.normalizedOwnerUserId(ownerUserId),
+              ownerIsValid(normalizedOwnerUserId) else {
+            return false
+        }
+        return ownerScope.withActiveOwner(ownerUserId: normalizedOwnerUserId) { ownerDigest in
+            var values = loadValues(forOwnerDigest: ownerDigest)
+            values.append(value)
+            if values.count > maximumValueCount {
+                values = Array(values.suffix(maximumValueCount))
+            }
+            return save(values, forOwnerDigest: ownerDigest)
+        } ?? false
+    }
+
+    func values(
+        ownerUserId: String,
+        ownerIsValid: (Value, String) -> Bool
+    ) -> [Value] {
+        guard let normalizedOwnerUserId = EchoTraceOwnerScope.normalizedOwnerUserId(ownerUserId) else {
+            return []
+        }
+        return ownerScope.withActiveOwner(ownerUserId: normalizedOwnerUserId) { ownerDigest in
+            loadValues(forOwnerDigest: ownerDigest).filter {
+                ownerIsValid($0, normalizedOwnerUserId)
+            }
+        } ?? []
+    }
+
+    func clear(ownerUserId: String) -> Bool {
+        guard let normalizedOwnerUserId = EchoTraceOwnerScope.normalizedOwnerUserId(ownerUserId) else {
+            return false
+        }
+        return ownerScope.withActiveOwner(ownerUserId: normalizedOwnerUserId) { ownerDigest in
+            clearStorage(forOwnerDigest: ownerDigest)
+            return true
+        } ?? false
+    }
+
+    func export(
+        ownerUserId: String,
+        to url: URL,
+        latestValueOnly: Bool = false,
+        ownerIsValid: (Value, String) -> Bool
+    ) throws -> URL {
+        guard let normalizedOwnerUserId = EchoTraceOwnerScope.normalizedOwnerUserId(ownerUserId),
+              let exportedURL = try ownerScope.withActiveOwner(
+                ownerUserId: normalizedOwnerUserId,
+                operation: { ownerDigest in
+                    let values = loadValues(forOwnerDigest: ownerDigest).filter {
+                        ownerIsValid($0, normalizedOwnerUserId)
+                    }
+                    let data: Data
+                    if latestValueOnly {
+                        guard let latestValue = values.last else {
+                            throw EchoTraceStorageError.noEvidenceBundle
+                        }
+                        data = try Self.makeJSONEncoder().encode(latestValue)
+                    } else {
+                        data = try Self.makeJSONEncoder().encode(values)
+                    }
+                    let scopedURL = url.deletingLastPathComponent()
+                        .appendingPathComponent(exportRootDirectoryName, isDirectory: true)
+                        .appendingPathComponent(ownerDigest, isDirectory: true)
+                        .appendingPathComponent(exportNamespace, isDirectory: true)
+                        .appendingPathComponent(url.lastPathComponent, isDirectory: false)
+                    try FileManager.default.createDirectory(
+                        at: scopedURL.deletingLastPathComponent(),
+                        withIntermediateDirectories: true
+                    )
+                    try data.write(to: scopedURL, options: [.atomic])
+                    recordExportURL(scopedURL, forOwnerDigest: ownerDigest)
+                    return scopedURL
+                }
+              ) else {
+            throw EchoTraceStorageError.inactiveOwner
+        }
+        return exportedURL
+    }
+
+    fileprivate func clearStorage(forOwnerDigest ownerDigest: String) {
+        userDefaults.removeObject(forKey: storageKey(forOwnerDigest: ownerDigest))
+        removeExportedFiles(forOwnerDigest: ownerDigest)
+    }
+
+    fileprivate func purgeLegacyStorage() {
+        userDefaults.removeObject(forKey: legacyStorageKey)
+        let legacyURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(legacyExportFileName, isDirectory: false)
+        try? FileManager.default.removeItem(at: legacyURL)
+    }
+
+    private func storageKey(forOwnerDigest ownerDigest: String) -> String {
+        "\(storageKeyPrefix)\(ownerDigest)"
+    }
+
+    private func exportManifestKey(forOwnerDigest ownerDigest: String) -> String {
+        "\(storageKeyPrefix)exports.\(ownerDigest)"
+    }
+
+    private func recordExportURL(_ url: URL, forOwnerDigest ownerDigest: String) {
+        let manifestKey = exportManifestKey(forOwnerDigest: ownerDigest)
+        var paths = Set(userDefaults.stringArray(forKey: manifestKey) ?? [])
+        paths.insert(url.path)
+        userDefaults.set(paths.sorted(), forKey: manifestKey)
+    }
+
+    private func removeExportedFiles(forOwnerDigest ownerDigest: String) {
+        let manifestKey = exportManifestKey(forOwnerDigest: ownerDigest)
+        let paths = userDefaults.stringArray(forKey: manifestKey) ?? []
+        let namespaceDirectories = Set(paths.map {
+            URL(fileURLWithPath: $0).deletingLastPathComponent().standardizedFileURL
+        })
+        for directory in namespaceDirectories where directory.lastPathComponent == exportNamespace {
+            try? FileManager.default.removeItem(at: directory)
+        }
+        userDefaults.removeObject(forKey: manifestKey)
+    }
+
+    private func loadValues(forOwnerDigest ownerDigest: String) -> [Value] {
+        guard let data = userDefaults.data(forKey: storageKey(forOwnerDigest: ownerDigest)) else {
+            return []
+        }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return (try? decoder.decode([Value].self, from: data)) ?? []
+    }
+
+    private func save(_ values: [Value], forOwnerDigest ownerDigest: String) -> Bool {
+        guard let data = try? Self.makeJSONEncoder().encode(values) else {
+            return false
+        }
+        userDefaults.set(data, forKey: storageKey(forOwnerDigest: ownerDigest))
+        return true
+    }
+
+    private static func makeJSONEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
     }
 }
 
 final class EchoTraceStore {
     static let shared = EchoTraceStore()
 
-    private let userDefaults: UserDefaults
-    private let storageKey = "DreamJourney.EchoTraceStore.records.v1"
+    private static let storageKeyPrefix = "DreamJourney.EchoTraceStore.records.v2.owner."
+    private static let legacyStorageKey = "DreamJourney.EchoTraceStore.records.v1"
     private let maximumRecordCount = 20
+    private let storage: EchoOwnerScopedDefaultsStore<EchoTraceRecord>
 
     init(userDefaults: UserDefaults = .standard) {
-        self.userDefaults = userDefaults
+        storage = EchoOwnerScopedDefaultsStore(
+            userDefaults: userDefaults,
+            storageKeyPrefix: Self.storageKeyPrefix,
+            legacyStorageKey: Self.legacyStorageKey,
+            legacyExportFileName: "echo-trace-records.json",
+            maximumValueCount: maximumRecordCount
+        )
     }
 
-    func record(_ record: EchoTraceRecord) {
-        var records = recentRecords()
-        records.append(record)
-        if records.count > maximumRecordCount {
-            records = Array(records.suffix(maximumRecordCount))
+    @discardableResult
+    func record(_ record: EchoTraceRecord, ownerUserId: String) -> Bool {
+        storage.record(record, ownerUserId: ownerUserId) { normalizedOwnerUserId in
+            EchoTraceOwnerScope.normalizedOwnerUserId(record.userId) == normalizedOwnerUserId
         }
-        save(records)
     }
 
-    func recentRecords() -> [EchoTraceRecord] {
-        guard let data = userDefaults.data(forKey: storageKey) else {
-            return []
+    func recentRecords(ownerUserId: String) -> [EchoTraceRecord] {
+        storage.values(ownerUserId: ownerUserId) { record, normalizedOwnerUserId in
+            EchoTraceOwnerScope.normalizedOwnerUserId(record.userId) == normalizedOwnerUserId
         }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return (try? decoder.decode([EchoTraceRecord].self, from: data)) ?? []
     }
 
-    func clear() {
-        userDefaults.removeObject(forKey: storageKey)
+    @discardableResult
+    func clear(ownerUserId: String) -> Bool {
+        storage.clear(ownerUserId: ownerUserId)
     }
 
     func exportRecentRecords(
+        ownerUserId: String,
         to directory: URL = FileManager.default.temporaryDirectory,
         fileName: String = "echo-trace-records.json"
     ) throws -> URL {
-        let records = recentRecords()
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appendingPathComponent(fileName)
-        let data = try Self.makeJSONEncoder().encode(records)
-        try data.write(to: url, options: [.atomic])
-        return url
-    }
-
-    private func save(_ records: [EchoTraceRecord]) {
-        guard let data = try? Self.makeJSONEncoder().encode(records) else {
-            return
+        return try storage.export(ownerUserId: ownerUserId, to: url) { record, normalizedOwnerUserId in
+            EchoTraceOwnerScope.normalizedOwnerUserId(record.userId) == normalizedOwnerUserId
         }
-        userDefaults.set(data, forKey: storageKey)
     }
 
-    private static func makeJSONEncoder() -> JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        return encoder
+    fileprivate func clearStorage(forOwnerDigest ownerDigest: String) {
+        storage.clearStorage(forOwnerDigest: ownerDigest)
+    }
+
+    fileprivate func purgeLegacyStorage() {
+        storage.purgeLegacyStorage()
     }
 }
 
 final class EchoRuntimeDiagnosticsStore {
     static let shared = EchoRuntimeDiagnosticsStore()
 
-    private let userDefaults: UserDefaults
-    private let storageKey = "DreamJourney.EchoRuntimeDiagnosticsStore.snapshots.v1"
+    private static let storageKeyPrefix = "DreamJourney.EchoRuntimeDiagnosticsStore.snapshots.v2.owner."
+    private static let legacyStorageKey = "DreamJourney.EchoRuntimeDiagnosticsStore.snapshots.v1"
     private let maximumSnapshotCount = 20
+    private let storage: EchoOwnerScopedDefaultsStore<EchoRuntimeDiagnosticsSnapshot>
 
     init(userDefaults: UserDefaults = .standard) {
-        self.userDefaults = userDefaults
+        storage = EchoOwnerScopedDefaultsStore(
+            userDefaults: userDefaults,
+            storageKeyPrefix: Self.storageKeyPrefix,
+            legacyStorageKey: Self.legacyStorageKey,
+            legacyExportFileName: "echo-runtime-diagnostics.json",
+            maximumValueCount: maximumSnapshotCount
+        )
     }
 
-    func record(_ snapshot: EchoRuntimeDiagnosticsSnapshot) {
-        var snapshots = recentSnapshots()
-        snapshots.append(snapshot)
-        if snapshots.count > maximumSnapshotCount {
-            snapshots = Array(snapshots.suffix(maximumSnapshotCount))
+    @discardableResult
+    func record(_ snapshot: EchoRuntimeDiagnosticsSnapshot, ownerUserId: String) -> Bool {
+        storage.record(snapshot, ownerUserId: ownerUserId) { normalizedOwnerUserId in
+            EchoTraceOwnerScope.normalizedOwnerUserId(snapshot.userId) == normalizedOwnerUserId
         }
-        save(snapshots)
     }
 
-    func recentSnapshots() -> [EchoRuntimeDiagnosticsSnapshot] {
-        guard let data = userDefaults.data(forKey: storageKey) else {
-            return []
+    func recentSnapshots(ownerUserId: String) -> [EchoRuntimeDiagnosticsSnapshot] {
+        storage.values(ownerUserId: ownerUserId) { snapshot, normalizedOwnerUserId in
+            EchoTraceOwnerScope.normalizedOwnerUserId(snapshot.userId) == normalizedOwnerUserId
         }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return (try? decoder.decode([EchoRuntimeDiagnosticsSnapshot].self, from: data)) ?? []
     }
 
-    func clear() {
-        userDefaults.removeObject(forKey: storageKey)
+    @discardableResult
+    func clear(ownerUserId: String) -> Bool {
+        storage.clear(ownerUserId: ownerUserId)
     }
 
     func exportRecentSnapshots(
+        ownerUserId: String,
         to directory: URL = FileManager.default.temporaryDirectory,
         fileName: String = "echo-runtime-diagnostics.json"
     ) throws -> URL {
-        let snapshots = recentSnapshots()
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appendingPathComponent(fileName)
-        let data = try Self.makeJSONEncoder().encode(snapshots)
-        try data.write(to: url, options: [.atomic])
-        return url
-    }
-
-    private func save(_ snapshots: [EchoRuntimeDiagnosticsSnapshot]) {
-        guard let data = try? Self.makeJSONEncoder().encode(snapshots) else {
-            return
+        return try storage.export(ownerUserId: ownerUserId, to: url) { snapshot, normalizedOwnerUserId in
+            EchoTraceOwnerScope.normalizedOwnerUserId(snapshot.userId) == normalizedOwnerUserId
         }
-        userDefaults.set(data, forKey: storageKey)
     }
 
-    private static func makeJSONEncoder() -> JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        return encoder
+    fileprivate func clearStorage(forOwnerDigest ownerDigest: String) {
+        storage.clearStorage(forOwnerDigest: ownerDigest)
+    }
+
+    fileprivate func purgeLegacyStorage() {
+        storage.purgeLegacyStorage()
     }
 }
 
@@ -1719,6 +1975,7 @@ struct EchoContextBuildEvidenceSummary: Codable {
 }
 
 struct EchoDigitalHumanSessionEvidenceSummary: Codable {
+    let ownerUserId: String
     let status: String
     let sessionId: String?
     let provider: String?
@@ -1739,7 +1996,8 @@ struct EchoDigitalHumanSessionEvidenceSummary: Codable {
     let failureReason: String?
     let failureDetail: String?
 
-    init(contract: DigitalHumanSessionContract) {
+    init(contract: DigitalHumanSessionContract, ownerUserId: String) {
+        self.ownerUserId = ownerUserId
         self.status = "ready"
         self.sessionId = contract.sessionId
         self.provider = contract.provider
@@ -1762,15 +2020,34 @@ struct EchoDigitalHumanSessionEvidenceSummary: Codable {
         self.failureDetail = nil
     }
 
-    static func unavailable(reason: String, detail: String? = nil) -> EchoDigitalHumanSessionEvidenceSummary {
-        EchoDigitalHumanSessionEvidenceSummary(status: "unavailable", reason: reason, detail: detail)
+    static func unavailable(
+        ownerUserId: String,
+        reason: String,
+        detail: String? = nil
+    ) -> EchoDigitalHumanSessionEvidenceSummary {
+        EchoDigitalHumanSessionEvidenceSummary(
+            ownerUserId: ownerUserId,
+            status: "unavailable",
+            reason: reason,
+            detail: detail
+        )
     }
 
-    static func failed(reason: String, detail: String? = nil) -> EchoDigitalHumanSessionEvidenceSummary {
-        EchoDigitalHumanSessionEvidenceSummary(status: "failed", reason: reason, detail: detail)
+    static func failed(
+        ownerUserId: String,
+        reason: String,
+        detail: String? = nil
+    ) -> EchoDigitalHumanSessionEvidenceSummary {
+        EchoDigitalHumanSessionEvidenceSummary(
+            ownerUserId: ownerUserId,
+            status: "failed",
+            reason: reason,
+            detail: detail
+        )
     }
 
-    private init(status: String, reason: String, detail: String?) {
+    private init(ownerUserId: String, status: String, reason: String, detail: String?) {
+        self.ownerUserId = ownerUserId
         self.status = status
         self.sessionId = nil
         self.provider = nil
@@ -1794,6 +2071,7 @@ struct EchoDigitalHumanSessionEvidenceSummary: Codable {
 }
 
 struct EchoVoiceSynthesisEvidenceSummary: Codable {
+    let ownerUserId: String
     let status: String
     let voiceProfileId: String?
     let providerMode: String?
@@ -1811,7 +2089,8 @@ struct EchoVoiceSynthesisEvidenceSummary: Codable {
     let failureReason: String?
     let failureDetail: String?
 
-    init(synthesis: VoiceCloneSynthesisResult) {
+    init(synthesis: VoiceCloneSynthesisResult, ownerUserId: String) {
+        self.ownerUserId = ownerUserId
         self.status = "ready"
         self.voiceProfileId = synthesis.voiceProfileId
         self.providerMode = synthesis.providerMode
@@ -1830,11 +2109,21 @@ struct EchoVoiceSynthesisEvidenceSummary: Codable {
         self.failureDetail = nil
     }
 
-    static func unavailable(reason: String, detail: String? = nil) -> EchoVoiceSynthesisEvidenceSummary {
-        EchoVoiceSynthesisEvidenceSummary(status: "unavailable", reason: reason, detail: detail)
+    static func unavailable(
+        ownerUserId: String,
+        reason: String,
+        detail: String? = nil
+    ) -> EchoVoiceSynthesisEvidenceSummary {
+        EchoVoiceSynthesisEvidenceSummary(
+            ownerUserId: ownerUserId,
+            status: "unavailable",
+            reason: reason,
+            detail: detail
+        )
     }
 
     static func failed(
+        ownerUserId: String,
         voiceProfileId: String?,
         outputMode: String?,
         providerLogId: String?,
@@ -1843,6 +2132,7 @@ struct EchoVoiceSynthesisEvidenceSummary: Codable {
         detail: String?
     ) -> EchoVoiceSynthesisEvidenceSummary {
         EchoVoiceSynthesisEvidenceSummary(
+            ownerUserId: ownerUserId,
             status: "failed",
             voiceProfileId: voiceProfileId,
             outputMode: outputMode,
@@ -1853,8 +2143,9 @@ struct EchoVoiceSynthesisEvidenceSummary: Codable {
         )
     }
 
-    private init(status: String, reason: String, detail: String?) {
+    private init(ownerUserId: String, status: String, reason: String, detail: String?) {
         self.init(
+            ownerUserId: ownerUserId,
             status: status,
             voiceProfileId: nil,
             outputMode: nil,
@@ -1866,6 +2157,7 @@ struct EchoVoiceSynthesisEvidenceSummary: Codable {
     }
 
     private init(
+        ownerUserId: String,
         status: String,
         voiceProfileId: String?,
         outputMode: String?,
@@ -1874,6 +2166,7 @@ struct EchoVoiceSynthesisEvidenceSummary: Codable {
         reason: String,
         detail: String?
     ) {
+        self.ownerUserId = ownerUserId
         self.status = status
         self.voiceProfileId = voiceProfileId
         self.providerMode = nil
@@ -1895,6 +2188,7 @@ struct EchoVoiceSynthesisEvidenceSummary: Codable {
 
 struct EchoTraceEvidencePackage: Codable {
     let schemaVersion: Int
+    let ownerUserId: String
     let packageId: String
     let generatedAt: Date
     let source: String
@@ -1907,7 +2201,33 @@ struct EchoTraceEvidencePackage: Codable {
     let voiceSynthesis: EchoVoiceSynthesisEvidenceSummary?
     let redactionPolicy: [String]
 
+    var derivedOwnerUserId: String? {
+        guard let packageOwner = EchoTraceOwnerScope.normalizedOwnerUserId(ownerUserId) else {
+            return nil
+        }
+        let traceOwner = traceRecord.flatMap {
+            EchoTraceOwnerScope.normalizedOwnerUserId($0.userId)
+        }
+        let runtimeOwner = runtimeDiagnostics.flatMap {
+            EchoTraceOwnerScope.normalizedOwnerUserId($0.userId)
+        }
+        let digitalHumanOwner = digitalHumanSession.flatMap {
+            EchoTraceOwnerScope.normalizedOwnerUserId($0.ownerUserId)
+        }
+        let voiceSynthesisOwner = voiceSynthesis.flatMap {
+            EchoTraceOwnerScope.normalizedOwnerUserId($0.ownerUserId)
+        }
+        guard traceRecord == nil || traceOwner == packageOwner,
+              runtimeDiagnostics == nil || runtimeOwner == packageOwner,
+              digitalHumanSession == nil || digitalHumanOwner == packageOwner,
+              voiceSynthesis == nil || voiceSynthesisOwner == packageOwner else {
+            return nil
+        }
+        return packageOwner
+    }
+
     init(
+        ownerUserId: String,
         traceRecord: EchoTraceRecord?,
         runtimeDiagnostics: EchoRuntimeDiagnosticsSnapshot?,
         digitalHumanSession: EchoDigitalHumanSessionEvidenceSummary?,
@@ -1915,6 +2235,7 @@ struct EchoTraceEvidencePackage: Codable {
         source: String
     ) {
         self.schemaVersion = 1
+        self.ownerUserId = ownerUserId
         let uniqueSuffix = String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(24))
         self.packageId = "echo_evidence_" + uniqueSuffix
         self.generatedAt = Date()
@@ -1938,60 +2259,56 @@ struct EchoTraceEvidencePackage: Codable {
 final class EchoTraceEvidencePackageStore {
     static let shared = EchoTraceEvidencePackageStore()
 
-    private let userDefaults: UserDefaults
-    private let storageKey = "DreamJourney.EchoTraceEvidencePackageStore.packages.v1"
+    private static let storageKeyPrefix = "DreamJourney.EchoTraceEvidencePackageStore.packages.v2.owner."
+    private static let legacyStorageKey = "DreamJourney.EchoTraceEvidencePackageStore.packages.v1"
     private let maximumPackageCount = 20
+    private let storage: EchoOwnerScopedDefaultsStore<EchoTraceEvidencePackage>
 
     init(userDefaults: UserDefaults = .standard) {
-        self.userDefaults = userDefaults
+        storage = EchoOwnerScopedDefaultsStore(
+            userDefaults: userDefaults,
+            storageKeyPrefix: Self.storageKeyPrefix,
+            legacyStorageKey: Self.legacyStorageKey,
+            legacyExportFileName: "echo-trace-evidence-packages.json",
+            maximumValueCount: maximumPackageCount
+        )
     }
 
-    func record(_ package: EchoTraceEvidencePackage) {
-        var packages = recentPackages()
-        packages.append(package)
-        if packages.count > maximumPackageCount {
-            packages = Array(packages.suffix(maximumPackageCount))
+    @discardableResult
+    func record(_ package: EchoTraceEvidencePackage, ownerUserId: String) -> Bool {
+        storage.record(package, ownerUserId: ownerUserId) { normalizedOwnerUserId in
+            package.derivedOwnerUserId == normalizedOwnerUserId
         }
-        save(packages)
     }
 
-    func recentPackages() -> [EchoTraceEvidencePackage] {
-        guard let data = userDefaults.data(forKey: storageKey) else {
-            return []
+    func recentPackages(ownerUserId: String) -> [EchoTraceEvidencePackage] {
+        storage.values(ownerUserId: ownerUserId) { package, normalizedOwnerUserId in
+            package.derivedOwnerUserId == normalizedOwnerUserId
         }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return (try? decoder.decode([EchoTraceEvidencePackage].self, from: data)) ?? []
     }
 
-    func clear() {
-        userDefaults.removeObject(forKey: storageKey)
+    @discardableResult
+    func clear(ownerUserId: String) -> Bool {
+        storage.clear(ownerUserId: ownerUserId)
     }
 
     func exportRecentPackages(
+        ownerUserId: String,
         to directory: URL = FileManager.default.temporaryDirectory,
         fileName: String = "echo-trace-evidence-packages.json"
     ) throws -> URL {
-        let packages = recentPackages()
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appendingPathComponent(fileName)
-        let data = try Self.makeJSONEncoder().encode(packages)
-        try data.write(to: url, options: [.atomic])
-        return url
-    }
-
-    private func save(_ packages: [EchoTraceEvidencePackage]) {
-        guard let data = try? Self.makeJSONEncoder().encode(packages) else {
-            return
+        return try storage.export(ownerUserId: ownerUserId, to: url) { package, normalizedOwnerUserId in
+            package.derivedOwnerUserId == normalizedOwnerUserId
         }
-        userDefaults.set(data, forKey: storageKey)
     }
 
-    private static func makeJSONEncoder() -> JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        return encoder
+    fileprivate func clearStorage(forOwnerDigest ownerDigest: String) {
+        storage.clearStorage(forOwnerDigest: ownerDigest)
+    }
+
+    fileprivate func purgeLegacyStorage() {
+        storage.purgeLegacyStorage()
     }
 }
 
@@ -2051,6 +2368,10 @@ struct EchoQAEvidenceBundle: Codable {
     let fallbackSummary: EchoQAFallbackSummary
     let redactionPolicy: [String]
 
+    var derivedOwnerUserId: String? {
+        evidencePackage.derivedOwnerUserId
+    }
+
     init(evidencePackage: EchoTraceEvidencePackage) {
         self.schemaVersion = 2
         let uniqueSuffix = String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(24))
@@ -2082,66 +2403,103 @@ struct EchoQAEvidenceBundle: Codable {
 final class EchoQAEvidenceBundleStore {
     static let shared = EchoQAEvidenceBundleStore()
 
-    private let userDefaults: UserDefaults
-    private let storageKey = "DreamJourney.EchoQAEvidenceBundleStore.bundles.v2"
+    private static let storageKeyPrefix = "DreamJourney.EchoQAEvidenceBundleStore.bundles.v3.owner."
+    private static let legacyStorageKey = "DreamJourney.EchoQAEvidenceBundleStore.bundles.v2"
     private let maximumBundleCount = 20
+    private let storage: EchoOwnerScopedDefaultsStore<EchoQAEvidenceBundle>
 
     init(userDefaults: UserDefaults = .standard) {
-        self.userDefaults = userDefaults
+        storage = EchoOwnerScopedDefaultsStore(
+            userDefaults: userDefaults,
+            storageKeyPrefix: Self.storageKeyPrefix,
+            legacyStorageKey: Self.legacyStorageKey,
+            legacyExportFileName: "echo-qa-evidence-bundle.json",
+            maximumValueCount: maximumBundleCount
+        )
     }
 
-    func record(_ bundle: EchoQAEvidenceBundle) {
-        var bundles = recentBundles()
-        bundles.append(bundle)
-        if bundles.count > maximumBundleCount {
-            bundles = Array(bundles.suffix(maximumBundleCount))
+    @discardableResult
+    func record(_ bundle: EchoQAEvidenceBundle, ownerUserId: String) -> Bool {
+        storage.record(bundle, ownerUserId: ownerUserId) { normalizedOwnerUserId in
+            bundle.derivedOwnerUserId == normalizedOwnerUserId
         }
-        save(bundles)
     }
 
-    func recentBundles() -> [EchoQAEvidenceBundle] {
-        guard let data = userDefaults.data(forKey: storageKey) else {
-            return []
+    func recentBundles(ownerUserId: String) -> [EchoQAEvidenceBundle] {
+        storage.values(ownerUserId: ownerUserId) { bundle, normalizedOwnerUserId in
+            bundle.derivedOwnerUserId == normalizedOwnerUserId
         }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return (try? decoder.decode([EchoQAEvidenceBundle].self, from: data)) ?? []
     }
 
-    func clear() {
-        userDefaults.removeObject(forKey: storageKey)
+    @discardableResult
+    func clear(ownerUserId: String) -> Bool {
+        storage.clear(ownerUserId: ownerUserId)
     }
 
     func exportLatestBundle(
+        ownerUserId: String,
         to directory: URL = FileManager.default.temporaryDirectory,
         fileName: String = "echo-qa-evidence-bundle.json"
     ) throws -> URL {
-        guard let latestBundle = recentBundles().last else {
-            throw NSError(
-                domain: "DreamJourney.EchoQAEvidenceBundleStore",
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "没有可导出的 Echo QA 证据包"]
-            )
-        }
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appendingPathComponent(fileName)
-        let data = try Self.makeJSONEncoder().encode(latestBundle)
-        try data.write(to: url, options: [.atomic])
-        return url
-    }
-
-    private func save(_ bundles: [EchoQAEvidenceBundle]) {
-        guard let data = try? Self.makeJSONEncoder().encode(bundles) else {
-            return
+        return try storage.export(
+            ownerUserId: ownerUserId,
+            to: url,
+            latestValueOnly: true
+        ) { bundle, normalizedOwnerUserId in
+            bundle.derivedOwnerUserId == normalizedOwnerUserId
         }
-        userDefaults.set(data, forKey: storageKey)
     }
 
-    private static func makeJSONEncoder() -> JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        return encoder
+    fileprivate func clearStorage(forOwnerDigest ownerDigest: String) {
+        storage.clearStorage(forOwnerDigest: ownerDigest)
+    }
+
+    fileprivate func purgeLegacyStorage() {
+        storage.purgeLegacyStorage()
+    }
+
+}
+
+enum EchoTraceAccountLifecycle {
+    static func activate(ownerUserId: String?) {
+        transition(to: ownerUserId, clearingOwnerUserIds: [])
+    }
+
+    static func switchOwner(from previousOwnerUserId: String?, to ownerUserId: String) {
+        transition(
+            to: ownerUserId,
+            clearingOwnerUserIds: previousOwnerUserId.map { [$0] } ?? []
+        )
+    }
+
+    static func invalidateAndClear(ownerUserId: String?) {
+        transition(
+            to: nil,
+            clearingOwnerUserIds: ownerUserId.map { [$0] } ?? []
+        )
+    }
+
+    private static func transition(to ownerUserId: String?, clearingOwnerUserIds: [String]) {
+        EchoTraceOwnerScope.shared.transition(
+            to: ownerUserId,
+            clearingOwnerUserIds: clearingOwnerUserIds
+        ) { ownerDigestsToClear in
+            for ownerDigest in ownerDigestsToClear {
+                EchoTraceStore.shared.clearStorage(forOwnerDigest: ownerDigest)
+                EchoRuntimeDiagnosticsStore.shared.clearStorage(forOwnerDigest: ownerDigest)
+                EchoTraceEvidencePackageStore.shared.clearStorage(forOwnerDigest: ownerDigest)
+                EchoQAEvidenceBundleStore.shared.clearStorage(forOwnerDigest: ownerDigest)
+                let defaultOwnerExportDirectory = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("DreamJourneyEchoQAExports", isDirectory: true)
+                    .appendingPathComponent(ownerDigest, isDirectory: true)
+                try? FileManager.default.removeItem(at: defaultOwnerExportDirectory)
+            }
+            EchoTraceStore.shared.purgeLegacyStorage()
+            EchoRuntimeDiagnosticsStore.shared.purgeLegacyStorage()
+            EchoTraceEvidencePackageStore.shared.purgeLegacyStorage()
+            EchoQAEvidenceBundleStore.shared.purgeLegacyStorage()
+        }
     }
 }
 

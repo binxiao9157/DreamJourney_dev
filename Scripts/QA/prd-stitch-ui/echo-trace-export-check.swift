@@ -28,8 +28,8 @@ require(
     backendClient.contains("final class EchoTraceStore") &&
         backendClient.contains("static let shared = EchoTraceStore()") &&
         backendClient.contains("private let maximumRecordCount = 20") &&
-        backendClient.contains("func record(_ record: EchoTraceRecord)") &&
-        backendClient.contains("func recentRecords() -> [EchoTraceRecord]") &&
+        backendClient.contains("func record(_ record: EchoTraceRecord, ownerUserId: String) -> Bool") &&
+        backendClient.contains("func recentRecords(ownerUserId: String) -> [EchoTraceRecord]") &&
         backendClient.contains("func exportRecentRecords(") &&
         backendClient.contains("echo-trace-records.json") &&
         backendClient.contains("JSONEncoder()") &&
@@ -38,7 +38,7 @@ require(
 )
 
 require(
-    echo.contains("EchoTraceStore.shared.record(record)") &&
+    echo.contains("EchoTraceStore.shared.record(record, ownerUserId:") &&
         echo.contains("runUIQAEchoTraceExportSmoke") &&
         echo.contains("EchoTraceStore.shared.exportRecentRecords") &&
         echo.contains("oldestRetainedTurnID") &&

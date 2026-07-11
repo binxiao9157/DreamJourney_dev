@@ -678,6 +678,7 @@ final class EchoViewController: UIViewController {
         view.backgroundColor = DJDesignTokens.Color.background
         navigationController?.setNavigationBarHidden(true, animated: false)
         observeDigitalHumanContext()
+        observeEchoAccountLifecycle()
         observeEchoAppLifecycle()
         _ = captureDigitalHumanLifecycleToken(reason: "viewDidLoad")
         setupLayout()
@@ -992,6 +993,41 @@ final class EchoViewController: UIViewController {
             name: .djDigitalHumanContextDidChange,
             object: nil
         )
+    }
+
+    private func observeEchoAccountLifecycle() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(echoAccountDidChange),
+            name: .djUserDidLogin,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(echoAccountDidChange),
+            name: .djUserDidLogout,
+            object: nil
+        )
+    }
+
+    @objc private func echoAccountDidChange() {
+        invalidateDigitalHumanLifecycle(reason: "accountDidChange")
+        releaseDigitalHumanRuntime(
+            reason: "accountDidChange",
+            resetsAudioOwnerToOrdinaryEcho: true,
+            removeProviderViewMessage: nil,
+            recordsDiagnostics: false
+        )
+        voiceCloneRuntimeCapability = nil
+        isLoadingVoiceCloneRuntimeCapability = false
+        lastEchoTraceRecord = nil
+        lastDigitalHumanSessionEvidenceSummary = nil
+        lastVoiceSynthesisEvidenceSummary = nil
+        lastVoiceCloneProviderLogId = nil
+        lastVoiceCloneProviderRequestId = nil
+        lastVoiceCloneProviderMode = nil
+        lastEchoRuntimeFallbackReason = nil
+        echoRuntimeDiagnosticsPanelLabel.text = ""
     }
 
     @objc private func digitalHumanContextDidChange() {
@@ -1400,7 +1436,8 @@ final class EchoViewController: UIViewController {
     private func releaseDigitalHumanRuntime(
         reason: String,
         resetsAudioOwnerToOrdinaryEcho: Bool,
-        removeProviderViewMessage: String? = nil
+        removeProviderViewMessage: String? = nil,
+        recordsDiagnostics: Bool = true
     ) {
         cancelCloudDigitalHumanBackgroundRelease(reason: "runtimeRelease:\(reason)")
         cancelDigitalHumanRuntimeRecovery()
@@ -1428,7 +1465,9 @@ final class EchoViewController: UIViewController {
             DialogEngineManager.shared.setLocalTTSPlaybackEnabled(true)
             setEchoAudioOwner(.volcengineLocalTTS, reason: "release:\(reason)")
         }
-        recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanRuntimeReleased:\(reason)")
+        if recordsDiagnostics {
+            recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanRuntimeReleased:\(reason)")
+        }
         if didReleaseRuntime {
             print(
                 "[TencentDigitalHuman] released provider session reason=release:\(reason) " +
@@ -2063,6 +2102,12 @@ final class EchoViewController: UIViewController {
         shouldRunTencentDigitalHumanBackendPCMDriveSmoke && trueDeviceBackendPCMDriveTrace.isActive
     }
 
+    private var currentEchoEvidenceOwnerUserId: String {
+        EchoTraceOwnerScope.normalizedOwnerUserId(UserManager.shared.currentUser?.id)
+            ?? EchoTraceOwnerScope.normalizedOwnerUserId(lastEchoTraceRecord?.userId)
+            ?? "unknown"
+    }
+
     private func emitTencentBackendPCMDriveTrueDeviceQAResult(reason: String) {
         guard shouldTraceTrueDeviceBackendPCMDrive else {
             return
@@ -2075,21 +2120,27 @@ final class EchoViewController: UIViewController {
     }
 
     private func makeEchoRuntimeDiagnosticsSnapshot(reason: String) -> EchoRuntimeDiagnosticsSnapshot {
+        let ownerUserId = EchoTraceOwnerScope.normalizedOwnerUserId(UserManager.shared.currentUser?.id)
+            ?? EchoTraceOwnerScope.normalizedOwnerUserId(lastEchoTraceRecord?.userId)
+        let ownerTrace = lastEchoTraceRecord.flatMap { trace in
+            EchoTraceOwnerScope.normalizedOwnerUserId(trace.userId) == ownerUserId ? trace : nil
+        }
         let runtime = digitalHumanRuntime
         let runtimeState = runtime.map { String(describing: $0.state) } ?? "none"
         let profile = runtime?.profile
-        let providerMode = profile?.driveMode ?? lastEchoTraceRecord?.digitalHumanProviderMode ?? "unknown"
-        let fallbackReason = lastEchoRuntimeFallbackReason ?? lastEchoTraceRecord?.fallbacks.first
+        let providerMode = profile?.driveMode ?? ownerTrace?.digitalHumanProviderMode ?? "unknown"
+        let fallbackReason = lastEchoRuntimeFallbackReason ?? ownerTrace?.fallbacks.first
         let voiceSelection = resolveEchoRoleVoiceProfileSelection()
         return EchoRuntimeDiagnosticsSnapshot(
-            trace: lastEchoTraceRecord,
+            trace: ownerTrace,
+            ownerUserId: ownerUserId,
             audioOwner: currentEchoAudioOwner.rawValue,
             selectedVoiceProfileId: voiceSelection.voiceProfileId,
             roleVoiceSource: voiceSelection.source.rawValue,
             roleVoiceDisplayName: voiceSelection.displayName,
             roleVoiceContextOwnerId: voiceSelection.contextOwnerId,
             digitalHumanRuntimeState: runtimeState,
-            digitalHumanSessionReady: profile != nil || lastEchoTraceRecord?.digitalHumanSessionReady == true,
+            digitalHumanSessionReady: profile != nil || ownerTrace?.digitalHumanSessionReady == true,
             digitalHumanProviderMode: providerMode,
             providerLogId: lastVoiceCloneProviderLogId,
             providerRequestId: lastVoiceCloneProviderRequestId,
@@ -2102,9 +2153,11 @@ final class EchoViewController: UIViewController {
     @discardableResult
     private func recordEchoRuntimeDiagnosticsSnapshot(reason: String) -> EchoRuntimeDiagnosticsSnapshot {
         let snapshot = makeEchoRuntimeDiagnosticsSnapshot(reason: reason)
-        EchoRuntimeDiagnosticsStore.shared.record(snapshot)
         let package = makeEchoTraceEvidencePackage(snapshot: snapshot, source: reason)
-        EchoTraceEvidencePackageStore.shared.record(package)
+        if let ownerUserId = package.derivedOwnerUserId {
+            EchoRuntimeDiagnosticsStore.shared.record(snapshot, ownerUserId: ownerUserId)
+            EchoTraceEvidencePackageStore.shared.record(package, ownerUserId: ownerUserId)
+        }
         renderEchoRuntimeDiagnosticsPanel(snapshot: snapshot)
         print(
             "[CFLite] runtime diagnostics snapshot " +
@@ -2124,11 +2177,25 @@ final class EchoViewController: UIViewController {
         snapshot: EchoRuntimeDiagnosticsSnapshot?,
         source: String
     ) -> EchoTraceEvidencePackage {
-        EchoTraceEvidencePackage(
-            traceRecord: lastEchoTraceRecord,
+        let ownerUserId = EchoTraceOwnerScope.normalizedOwnerUserId(snapshot?.userId)
+            ?? EchoTraceOwnerScope.normalizedOwnerUserId(UserManager.shared.currentUser?.id)
+            ?? EchoTraceOwnerScope.normalizedOwnerUserId(lastEchoTraceRecord?.userId)
+            ?? "unknown"
+        let ownerTrace = lastEchoTraceRecord.flatMap { trace in
+            EchoTraceOwnerScope.normalizedOwnerUserId(trace.userId) == ownerUserId ? trace : nil
+        }
+        let ownerSession = lastDigitalHumanSessionEvidenceSummary.flatMap { summary in
+            EchoTraceOwnerScope.normalizedOwnerUserId(summary.ownerUserId) == ownerUserId ? summary : nil
+        }
+        let ownerSynthesis = lastVoiceSynthesisEvidenceSummary.flatMap { summary in
+            EchoTraceOwnerScope.normalizedOwnerUserId(summary.ownerUserId) == ownerUserId ? summary : nil
+        }
+        return EchoTraceEvidencePackage(
+            ownerUserId: ownerUserId,
+            traceRecord: ownerTrace,
             runtimeDiagnostics: snapshot,
-            digitalHumanSession: lastDigitalHumanSessionEvidenceSummary,
-            voiceSynthesis: lastVoiceSynthesisEvidenceSummary,
+            digitalHumanSession: ownerSession,
+            voiceSynthesis: ownerSynthesis,
             source: source
         )
     }
@@ -2194,16 +2261,23 @@ final class EchoViewController: UIViewController {
 
     @discardableResult
     private func exportEchoTraceEvidencePackageForQA(source: String) throws -> URL {
-        recordEchoRuntimeDiagnosticsSnapshot(reason: source)
-        return try EchoTraceEvidencePackageStore.shared.exportRecentPackages()
+        let snapshot = recordEchoRuntimeDiagnosticsSnapshot(reason: source)
+        let package = makeEchoTraceEvidencePackage(snapshot: snapshot, source: source)
+        guard let ownerUserId = package.derivedOwnerUserId else {
+            throw EchoTraceStorageError.invalidEvidenceOwner
+        }
+        return try EchoTraceEvidencePackageStore.shared.exportRecentPackages(ownerUserId: ownerUserId)
     }
 
     @discardableResult
     private func exportEchoQAEvidenceBundleForQA(source: String) throws -> URL {
         let snapshot = recordEchoRuntimeDiagnosticsSnapshot(reason: source)
         let bundle = makeEchoQAEvidenceBundle(snapshot: snapshot, source: source)
-        EchoQAEvidenceBundleStore.shared.record(bundle)
-        return try EchoQAEvidenceBundleStore.shared.exportLatestBundle()
+        guard let ownerUserId = bundle.derivedOwnerUserId else {
+            throw EchoTraceStorageError.invalidEvidenceOwner
+        }
+        EchoQAEvidenceBundleStore.shared.record(bundle, ownerUserId: ownerUserId)
+        return try EchoQAEvidenceBundleStore.shared.exportLatestBundle(ownerUserId: ownerUserId)
     }
 
     private func presentEchoTraceEvidencePackageShareSheet(fileURL: URL) {
@@ -2227,6 +2301,9 @@ final class EchoViewController: UIViewController {
         }
         let context = DigitalHumanContextStore.shared.current
         let contextKey = digitalHumanRuntimeContextKey(for: context)
+        let requestOwnerUserId = EchoTraceOwnerScope.normalizedOwnerUserId(UserManager.shared.currentUser?.id)
+            ?? EchoTraceOwnerScope.normalizedOwnerUserId(context.viewerUserId)
+            ?? "ios-device-qa"
         let lifecycleToken = providedLifecycleToken
             ?? captureDigitalHumanLifecycleToken(reason: "prepareCloudRuntime")
         guard isCurrentDigitalHumanSessionToken(
@@ -2251,7 +2328,10 @@ final class EchoViewController: UIViewController {
             hasRequestedCloudDigitalHumanRuntime = false
             digitalHumanStatusDetailLabel.text = "数字人暂不可用，已回到普通回响"
             digitalHumanLivePanelView?.removeHostedProviderView(showFallbackMessage: "数字人暂不可用")
-            lastDigitalHumanSessionEvidenceSummary = .unavailable(reason: "digitalHumanBackendNotConfigured")
+            lastDigitalHumanSessionEvidenceSummary = .unavailable(
+                ownerUserId: requestOwnerUserId,
+                reason: "digitalHumanBackendNotConfigured"
+            )
             lastEchoRuntimeFallbackReason = "digitalHumanBackendNotConfigured"
             recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanBackendNotConfigured")
             applyEchoAudioRoutePolicy()
@@ -2280,7 +2360,8 @@ final class EchoViewController: UIViewController {
                         context: context,
                         contextKey: contextKey,
                         requestID: requestID,
-                        lifecycleToken: lifecycleToken
+                        lifecycleToken: lifecycleToken,
+                        requestOwnerUserId: requestOwnerUserId
                     )
                 }
             case .failure(let error):
@@ -2300,6 +2381,7 @@ final class EchoViewController: UIViewController {
                     self.digitalHumanStatusDetailLabel.text = "数字人配置读取失败，已回到普通回响"
                     self.digitalHumanLivePanelView?.removeHostedProviderView(showFallbackMessage: "数字人暂不可用")
                     self.lastDigitalHumanSessionEvidenceSummary = .failed(
+                        ownerUserId: requestOwnerUserId,
                         reason: "digitalHumanRuntimeCapabilityFailed",
                         detail: error.localizedDescription
                     )
@@ -2317,12 +2399,12 @@ final class EchoViewController: UIViewController {
         context: DigitalHumanContext,
         contextKey: String,
         requestID: String,
-        lifecycleToken: DigitalHumanLifecycleToken
+        lifecycleToken: DigitalHumanLifecycleToken,
+        requestOwnerUserId: String
     ) {
-        let userId = UserManager.shared.currentUser?.id ?? context.viewerUserId ?? "ios-device-qa"
         let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? "ios-device"
         DreamJourneyBackendClient.shared.createDigitalHumanSession(
-            userId: userId,
+            userId: requestOwnerUserId,
             personaId: context.ownerId,
             scene: "echo",
             deviceId: deviceId,
@@ -2335,7 +2417,8 @@ final class EchoViewController: UIViewController {
                     context: context,
                     contextKey: contextKey,
                     requestID: requestID,
-                    lifecycleToken: lifecycleToken
+                    lifecycleToken: lifecycleToken,
+                    requestOwnerUserId: requestOwnerUserId
                 )
             }
         }
@@ -2347,9 +2430,12 @@ final class EchoViewController: UIViewController {
         context: DigitalHumanContext,
         contextKey: String,
         requestID: String,
-        lifecycleToken: DigitalHumanLifecycleToken
+        lifecycleToken: DigitalHumanLifecycleToken,
+        requestOwnerUserId: String
     ) {
-        guard isCurrentDigitalHumanSessionToken(
+        let activeOwnerUserId = EchoTraceOwnerScope.normalizedOwnerUserId(UserManager.shared.currentUser?.id)
+        guard activeOwnerUserId == EchoTraceOwnerScope.normalizedOwnerUserId(requestOwnerUserId),
+              isCurrentDigitalHumanSessionToken(
                 lifecycleToken,
                 reason: "digitalHumanSessionResponse"
               ),
@@ -2371,7 +2457,10 @@ final class EchoViewController: UIViewController {
         case .success(let contract):
             activateDigitalHumanSessionLease(contract, lifecycleToken: lifecycleToken)
             let profile = contract.toDigitalHumanProfile(displayName: context.resolvedDisplayName)
-            lastDigitalHumanSessionEvidenceSummary = EchoDigitalHumanSessionEvidenceSummary(contract: contract)
+            lastDigitalHumanSessionEvidenceSummary = EchoDigitalHumanSessionEvidenceSummary(
+                contract: contract,
+                ownerUserId: requestOwnerUserId
+            )
             print(
                 "[TencentDigitalHuman] session contract received " +
                 "provider=\(contract.provider) providerMode=\(contract.providerMode) " +
@@ -2442,6 +2531,7 @@ final class EchoViewController: UIViewController {
                 showFallbackMessage: quotaFailure ? "数智人配额已满" : "数字人暂不可用"
             )
             lastDigitalHumanSessionEvidenceSummary = .failed(
+                ownerUserId: requestOwnerUserId,
                 reason: quotaFailure
                     ? "digital_human_session_capacity_exhausted"
                     : "digitalHumanSessionFailed",
@@ -2728,7 +2818,10 @@ final class EchoViewController: UIViewController {
             lastVoiceCloneProviderLogId = nil
             lastVoiceCloneProviderRequestId = nil
             lastVoiceCloneProviderMode = nil
-            lastVoiceSynthesisEvidenceSummary = .unavailable(reason: "voiceCloneBackendNotConfigured")
+            lastVoiceSynthesisEvidenceSummary = .unavailable(
+                ownerUserId: currentEchoEvidenceOwnerUserId,
+                reason: "voiceCloneBackendNotConfigured"
+            )
             lastEchoRuntimeFallbackReason = "voiceCloneBackendNotConfigured"
             recordEchoRuntimeDiagnosticsSnapshot(reason: "voiceCloneBackendNotConfigured")
             print(
@@ -2745,7 +2838,10 @@ final class EchoViewController: UIViewController {
             lastVoiceCloneProviderLogId = nil
             lastVoiceCloneProviderRequestId = nil
             lastVoiceCloneProviderMode = nil
-            lastVoiceSynthesisEvidenceSummary = .unavailable(reason: "voiceCloneRuntimeUnsupported")
+            lastVoiceSynthesisEvidenceSummary = .unavailable(
+                ownerUserId: currentEchoEvidenceOwnerUserId,
+                reason: "voiceCloneRuntimeUnsupported"
+            )
             lastEchoRuntimeFallbackReason = "voiceCloneRuntimeUnsupported"
             recordEchoRuntimeDiagnosticsSnapshot(reason: "voiceCloneRuntimeUnsupported")
             print(
@@ -2792,7 +2888,9 @@ final class EchoViewController: UIViewController {
         ) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else { return }
-                guard self.isCurrentDigitalHumanLifecycleToken(
+                let activeOwnerUserId = EchoTraceOwnerScope.normalizedOwnerUserId(UserManager.shared.currentUser?.id)
+                guard activeOwnerUserId == EchoTraceOwnerScope.normalizedOwnerUserId(userId),
+                      self.isCurrentDigitalHumanLifecycleToken(
                         lifecycleToken,
                         reason: "voiceClonePCMDriveResponse"
                       ),
@@ -2817,6 +2915,7 @@ final class EchoViewController: UIViewController {
                             outputMode: synthesis.outputMode ?? "none",
                             providerLogId: synthesis.providerLogId,
                             providerRequestId: synthesis.providerRequestId,
+                            ownerUserId: userId,
                             reason: "incompatibleAudioFormat",
                             detail: "format=\(synthesis.audioFormat) sampleRate=\(synthesis.sampleRate ?? 0) bits=\(synthesis.bitsPerSample ?? 0) channels=\(synthesis.channelCount ?? 0)",
                             lifecycleToken: lifecycleToken
@@ -2834,7 +2933,10 @@ final class EchoViewController: UIViewController {
                     self.lastVoiceCloneProviderLogId = synthesis.providerLogId
                     self.lastVoiceCloneProviderRequestId = synthesis.providerRequestId
                     self.lastVoiceCloneProviderMode = synthesis.providerMode
-                    self.lastVoiceSynthesisEvidenceSummary = EchoVoiceSynthesisEvidenceSummary(synthesis: synthesis)
+                    self.lastVoiceSynthesisEvidenceSummary = EchoVoiceSynthesisEvidenceSummary(
+                        synthesis: synthesis,
+                        ownerUserId: userId
+                    )
                     self.lastEchoRuntimeFallbackReason = nil
                     self.recordEchoRuntimeDiagnosticsSnapshot(reason: "voiceClonePCMDriveReady")
                     self.renderVoiceStatus(text: "复刻声音正在回响", isVisible: true, accessibilityIdentifier: "echoVoiceClonePCMDriveStatus")
@@ -2861,6 +2963,7 @@ final class EchoViewController: UIViewController {
                         outputMode: "tencentAudioDrive",
                         providerLogId: nil,
                         providerRequestId: nil,
+                        ownerUserId: userId,
                         reason: "providerRequestFailed",
                         detail: error.localizedDescription,
                         lifecycleToken: lifecycleToken
@@ -2888,7 +2991,10 @@ final class EchoViewController: UIViewController {
         lastVoiceCloneProviderLogId = nil
         lastVoiceCloneProviderRequestId = nil
         lastVoiceCloneProviderMode = nil
-        lastVoiceSynthesisEvidenceSummary = .unavailable(reason: voiceSelection.source.rawValue)
+        lastVoiceSynthesisEvidenceSummary = .unavailable(
+            ownerUserId: currentEchoEvidenceOwnerUserId,
+            reason: voiceSelection.source.rawValue
+        )
         lastEchoRuntimeFallbackReason = voiceSelection.source.rawValue
         recordEchoRuntimeDiagnosticsSnapshot(reason: voiceSelection.source.rawValue)
         print(
@@ -3001,7 +3107,7 @@ final class EchoViewController: UIViewController {
                         )
                         return
                     }
-                    EchoTraceStore.shared.record(record)
+                    EchoTraceStore.shared.record(record, ownerUserId: expectedIdentity.userId)
                     guard self.latestEchoContextRequestTurnID == turnID else {
                         print("[CFLite] ignored stale context trace turnID=\(turnID)")
                         return
@@ -3220,6 +3326,7 @@ final class EchoViewController: UIViewController {
         outputMode: String,
         providerLogId: String?,
         providerRequestId: String?,
+        ownerUserId: String,
         reason: String,
         detail: String,
         lifecycleToken: DigitalHumanLifecycleToken
@@ -3232,6 +3339,7 @@ final class EchoViewController: UIViewController {
         lastVoiceCloneProviderRequestId = providerRequestId
         lastVoiceCloneProviderMode = outputMode
         lastVoiceSynthesisEvidenceSummary = .failed(
+            ownerUserId: ownerUserId,
             voiceProfileId: voiceProfileId,
             outputMode: outputMode,
             providerLogId: providerLogId,
@@ -4813,14 +4921,47 @@ extension EchoViewController {
         return false
     }
 
+    private func prepareEchoTraceUIQAOwner(fallbackOwnerUserId: String) -> (ownerUserId: String, isTemporary: Bool) {
+        if let ownerUserId = UserManager.shared.currentUser?.id {
+            return (ownerUserId, false)
+        }
+        EchoTraceAccountLifecycle.activate(ownerUserId: fallbackOwnerUserId)
+        return (fallbackOwnerUserId, true)
+    }
+
+    private func restoreEchoTraceUIQAOwner(_ context: (ownerUserId: String, isTemporary: Bool)) {
+        guard context.isTemporary else { return }
+        EchoTraceAccountLifecycle.invalidateAndClear(ownerUserId: context.ownerUserId)
+    }
+
+    private func preserveTemporaryEchoTraceUIQAExport(
+        _ sourceURL: URL,
+        ownerContext: (ownerUserId: String, isTemporary: Bool)
+    ) throws -> URL {
+        guard ownerContext.isTemporary,
+              let documentsURL = FileManager.default.urls(
+                for: .documentDirectory,
+                in: .userDomainMask
+              ).first else {
+            return sourceURL
+        }
+        let destinationURL = documentsURL.appendingPathComponent(sourceURL.lastPathComponent)
+        try? FileManager.default.removeItem(at: destinationURL)
+        try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+        return destinationURL
+    }
+
     func runUIQAEchoTraceExportSmoke(completion: @escaping ([String: Any]) -> Void) {
-        EchoTraceStore.shared.clear()
+        let ownerContext = prepareEchoTraceUIQAOwner(fallbackOwnerUserId: "uiqa_echo_trace_user")
+        let ownerUserId = ownerContext.ownerUserId
+        defer { restoreEchoTraceUIQAOwner(ownerContext) }
+        EchoTraceStore.shared.clear(ownerUserId: ownerUserId)
         for index in 0..<22 {
             EchoTraceStore.shared.record(
                 EchoTraceRecord(
                     turnID: "uiqa-turn-\(index)",
                     traceId: "ctx_uiqa_\(index)",
-                    userId: "uiqa_echo_trace_user",
+                    userId: ownerUserId,
                     archiveItemIDs: ["archive_\(index)"],
                     archiveItemsIncluded: 1,
                     archiveItemsAvailable: 22,
@@ -4835,12 +4976,17 @@ extension EchoViewController {
                     crossScopeArchiveIncluded: false,
                     fallbacks: index.isMultiple(of: 2) ? [] : ["voice_clone_not_ready"],
                     latencyMs: index
-                )
+                ),
+                ownerUserId: ownerUserId
             )
         }
 
         do {
-            let exportURL = try EchoTraceStore.shared.exportRecentRecords()
+            let scopedExportURL = try EchoTraceStore.shared.exportRecentRecords(ownerUserId: ownerUserId)
+            let exportURL = try preserveTemporaryEchoTraceUIQAExport(
+                scopedExportURL,
+                ownerContext: ownerContext
+            )
             let data = try Data(contentsOf: exportURL)
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
@@ -4865,14 +5011,17 @@ extension EchoViewController {
     }
 
     func runUIQAEchoRuntimeDiagnosticsExportSmoke(completion: @escaping ([String: Any]) -> Void) {
-        EchoTraceStore.shared.clear()
-        EchoRuntimeDiagnosticsStore.shared.clear()
+        let ownerContext = prepareEchoTraceUIQAOwner(fallbackOwnerUserId: "uiqa_echo_runtime_user")
+        let ownerUserId = ownerContext.ownerUserId
+        defer { restoreEchoTraceUIQAOwner(ownerContext) }
+        EchoTraceStore.shared.clear(ownerUserId: ownerUserId)
+        EchoRuntimeDiagnosticsStore.shared.clear(ownerUserId: ownerUserId)
 
         for index in 0..<22 {
             let record = EchoTraceRecord(
                 turnID: "uiqa-runtime-turn-\(index)",
                 traceId: "ctx_uiqa_runtime_\(index)",
-                userId: "uiqa_echo_runtime_user",
+                userId: ownerUserId,
                 archiveItemIDs: ["archive_runtime_\(index)"],
                 archiveItemsIncluded: 1,
                 archiveItemsAvailable: 22,
@@ -4889,7 +5038,7 @@ extension EchoViewController {
                 latencyMs: 12 + index
             )
             lastEchoTraceRecord = record
-            EchoTraceStore.shared.record(record)
+            EchoTraceStore.shared.record(record, ownerUserId: ownerUserId)
             lastVoiceCloneProviderLogId = "uiqa-provider-log-\(index)"
             lastVoiceCloneProviderRequestId = "uiqa-provider-request-\(index)"
             lastVoiceCloneProviderMode = "volcengineVoiceCloneV3"
@@ -4898,7 +5047,11 @@ extension EchoViewController {
         }
 
         do {
-            let exportURL = try EchoRuntimeDiagnosticsStore.shared.exportRecentSnapshots()
+            let scopedExportURL = try EchoRuntimeDiagnosticsStore.shared.exportRecentSnapshots(ownerUserId: ownerUserId)
+            let exportURL = try preserveTemporaryEchoTraceUIQAExport(
+                scopedExportURL,
+                ownerContext: ownerContext
+            )
             let data = try Data(contentsOf: exportURL)
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
@@ -4931,15 +5084,18 @@ extension EchoViewController {
     }
 
     func runUIQAEchoTraceEvidencePackageExportSmoke(completion: @escaping ([String: Any]) -> Void) {
-        EchoTraceStore.shared.clear()
-        EchoRuntimeDiagnosticsStore.shared.clear()
-        EchoTraceEvidencePackageStore.shared.clear()
+        let ownerContext = prepareEchoTraceUIQAOwner(fallbackOwnerUserId: "uiqa_echo_evidence_user")
+        let ownerUserId = ownerContext.ownerUserId
+        defer { restoreEchoTraceUIQAOwner(ownerContext) }
+        EchoTraceStore.shared.clear(ownerUserId: ownerUserId)
+        EchoRuntimeDiagnosticsStore.shared.clear(ownerUserId: ownerUserId)
+        EchoTraceEvidencePackageStore.shared.clear(ownerUserId: ownerUserId)
 
         for index in 0..<22 {
             let record = EchoTraceRecord(
                 turnID: "uiqa-evidence-turn-\(index)",
                 traceId: "ctx_uiqa_evidence_\(index)",
-                userId: "uiqa_echo_evidence_user",
+                userId: ownerUserId,
                 archiveItemIDs: ["archive_evidence_\(index)"],
                 archiveItemsIncluded: 1,
                 archiveItemsAvailable: 22,
@@ -4956,12 +5112,16 @@ extension EchoViewController {
                 latencyMs: 20 + index
             )
             lastEchoTraceRecord = record
-            EchoTraceStore.shared.record(record)
-            lastDigitalHumanSessionEvidenceSummary = .unavailable(reason: "uiqaSessionSummary")
+            EchoTraceStore.shared.record(record, ownerUserId: ownerUserId)
+            lastDigitalHumanSessionEvidenceSummary = .unavailable(
+                ownerUserId: ownerUserId,
+                reason: "uiqaSessionSummary"
+            )
             lastVoiceCloneProviderLogId = "uiqa-evidence-provider-log-\(index)"
             lastVoiceCloneProviderRequestId = "uiqa-evidence-provider-request-\(index)"
             lastVoiceCloneProviderMode = "volcengineVoiceCloneV3"
             lastVoiceSynthesisEvidenceSummary = .failed(
+                ownerUserId: ownerUserId,
                 voiceProfileId: "S_uiqa_trace_evidence",
                 outputMode: "tencentAudioDrive",
                 providerLogId: "uiqa-evidence-provider-log-\(index)",
@@ -4974,7 +5134,11 @@ extension EchoViewController {
         }
 
         do {
-            let exportURL = try EchoTraceEvidencePackageStore.shared.exportRecentPackages()
+            let scopedExportURL = try EchoTraceEvidencePackageStore.shared.exportRecentPackages(ownerUserId: ownerUserId)
+            let exportURL = try preserveTemporaryEchoTraceUIQAExport(
+                scopedExportURL,
+                ownerContext: ownerContext
+            )
             let data = try Data(contentsOf: exportURL)
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
@@ -5010,9 +5174,12 @@ extension EchoViewController {
     }
 
     func runUIQAEchoTraceEvidencePackagePanelExportSmoke(completion: @escaping ([String: Any]) -> Void) {
-        EchoTraceStore.shared.clear()
-        EchoRuntimeDiagnosticsStore.shared.clear()
-        EchoTraceEvidencePackageStore.shared.clear()
+        let ownerContext = prepareEchoTraceUIQAOwner(fallbackOwnerUserId: "uiqa_echo_panel_evidence_user")
+        let ownerUserId = ownerContext.ownerUserId
+        defer { restoreEchoTraceUIQAOwner(ownerContext) }
+        EchoTraceStore.shared.clear(ownerUserId: ownerUserId)
+        EchoRuntimeDiagnosticsStore.shared.clear(ownerUserId: ownerUserId)
+        EchoTraceEvidencePackageStore.shared.clear(ownerUserId: ownerUserId)
 
         let previousContext = DigitalHumanContextStore.shared.current
         let previousAudioOwner = currentEchoAudioOwner
@@ -5049,7 +5216,7 @@ extension EchoViewController {
         let record = EchoTraceRecord(
             turnID: "uiqa-panel-evidence-turn",
             traceId: "ctx_uiqa_panel_evidence",
-            userId: "uiqa_echo_panel_evidence_user",
+            userId: ownerUserId,
             archiveItemIDs: ["archive_panel_evidence"],
             archiveItemsIncluded: 1,
             archiveItemsAvailable: 1,
@@ -5089,12 +5256,16 @@ extension EchoViewController {
             latencyMs: 18
         )
         lastEchoTraceRecord = record
-        EchoTraceStore.shared.record(record)
-        lastDigitalHumanSessionEvidenceSummary = .unavailable(reason: "uiqaPanelSessionSummary")
+        EchoTraceStore.shared.record(record, ownerUserId: ownerUserId)
+        lastDigitalHumanSessionEvidenceSummary = .unavailable(
+            ownerUserId: ownerUserId,
+            reason: "uiqaPanelSessionSummary"
+        )
         lastVoiceCloneProviderLogId = "uiqa-panel-provider-log"
         lastVoiceCloneProviderRequestId = "uiqa-panel-provider-request"
         lastVoiceCloneProviderMode = "volcengineVoiceCloneV3"
         lastVoiceSynthesisEvidenceSummary = .failed(
+            ownerUserId: ownerUserId,
             voiceProfileId: "S_uiqa_family_panel_voice",
             outputMode: "tencentAudioDrive",
             providerLogId: "uiqa-panel-provider-log",
@@ -5104,7 +5275,11 @@ extension EchoViewController {
         )
 
         do {
-            let exportURL = try exportEchoTraceEvidencePackageForQA(source: "uiqaPanelEvidenceExport")
+            let scopedExportURL = try exportEchoTraceEvidencePackageForQA(source: "uiqaPanelEvidenceExport")
+            let exportURL = try preserveTemporaryEchoTraceUIQAExport(
+                scopedExportURL,
+                ownerContext: ownerContext
+            )
             let data = try Data(contentsOf: exportURL)
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
@@ -5163,15 +5338,18 @@ extension EchoViewController {
     }
 
     func runUIQAEchoQAEvidenceBundleExportSmoke(completion: @escaping ([String: Any]) -> Void) {
-        EchoTraceStore.shared.clear()
-        EchoRuntimeDiagnosticsStore.shared.clear()
-        EchoTraceEvidencePackageStore.shared.clear()
-        EchoQAEvidenceBundleStore.shared.clear()
+        let ownerContext = prepareEchoTraceUIQAOwner(fallbackOwnerUserId: "uiqa_echo_qa_bundle_user")
+        let ownerUserId = ownerContext.ownerUserId
+        defer { restoreEchoTraceUIQAOwner(ownerContext) }
+        EchoTraceStore.shared.clear(ownerUserId: ownerUserId)
+        EchoRuntimeDiagnosticsStore.shared.clear(ownerUserId: ownerUserId)
+        EchoTraceEvidencePackageStore.shared.clear(ownerUserId: ownerUserId)
+        EchoQAEvidenceBundleStore.shared.clear(ownerUserId: ownerUserId)
 
         let record = EchoTraceRecord(
             turnID: "uiqa-qa-bundle-turn",
             traceId: "ctx_uiqa_qa_bundle",
-            userId: "uiqa_echo_qa_bundle_user",
+            userId: ownerUserId,
             archiveItemIDs: ["archive_qa_bundle"],
             archiveItemsIncluded: 1,
             archiveItemsAvailable: 2,
@@ -5214,12 +5392,16 @@ extension EchoViewController {
             latencyMs: 24
         )
         lastEchoTraceRecord = record
-        EchoTraceStore.shared.record(record)
-        lastDigitalHumanSessionEvidenceSummary = .unavailable(reason: "uiqaBundleSessionSummary")
+        EchoTraceStore.shared.record(record, ownerUserId: ownerUserId)
+        lastDigitalHumanSessionEvidenceSummary = .unavailable(
+            ownerUserId: ownerUserId,
+            reason: "uiqaBundleSessionSummary"
+        )
         lastVoiceCloneProviderLogId = "uiqa-bundle-provider-log"
         lastVoiceCloneProviderRequestId = "uiqa-bundle-provider-request"
         lastVoiceCloneProviderMode = "volcengineVoiceCloneV3"
         lastVoiceSynthesisEvidenceSummary = .failed(
+            ownerUserId: ownerUserId,
             voiceProfileId: "S_uiqa_qa_bundle",
             outputMode: "tencentAudioDrive",
             providerLogId: "uiqa-bundle-provider-log",
@@ -5229,7 +5411,11 @@ extension EchoViewController {
         )
 
         do {
-            let exportURL = try exportEchoQAEvidenceBundleForQA(source: "uiqaQAEvidenceBundleExport")
+            let scopedExportURL = try exportEchoQAEvidenceBundleForQA(source: "uiqaQAEvidenceBundleExport")
+            let exportURL = try preserveTemporaryEchoTraceUIQAExport(
+                scopedExportURL,
+                ownerContext: ownerContext
+            )
             let data = try Data(contentsOf: exportURL)
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601

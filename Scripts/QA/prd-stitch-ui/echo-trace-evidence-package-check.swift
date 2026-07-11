@@ -52,6 +52,7 @@ for field in [
     "digitalHumanSession",
     "voiceSynthesis",
     "redactionPolicy",
+    "ownerUserId",
 ] {
     require(backendClient.contains("let \(field)"), "EchoTraceEvidencePackage should include \(field)")
 }
@@ -76,9 +77,11 @@ for required in [
     "makeEchoTraceEvidencePackage(",
     "snapshot: EchoRuntimeDiagnosticsSnapshot?",
     "source: String",
-    "EchoTraceEvidencePackageStore.shared.record(package)",
-    "EchoDigitalHumanSessionEvidenceSummary(contract:",
-    "EchoVoiceSynthesisEvidenceSummary(synthesis:",
+    "EchoTraceEvidencePackageStore.shared.record(package, ownerUserId:",
+    "EchoDigitalHumanSessionEvidenceSummary(",
+    "contract: contract",
+    "EchoVoiceSynthesisEvidenceSummary(",
+    "synthesis: synthesis",
     "runUIQAEchoTraceEvidencePackageExportSmoke",
     "runUIQAEchoTraceEvidencePackagePanelExportSmoke",
     "EchoTraceEvidencePackageStore.shared.exportRecentPackages",

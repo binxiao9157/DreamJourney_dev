@@ -10,12 +10,21 @@ enum UserProfileSaveResult {
 final class UserManager {
 
     static let shared = UserManager()
-    private init() { loadFromDefaults() }
+    private init() {
+        loadFromDefaults()
+        EchoTraceAccountLifecycle.activate(ownerUserId: currentUser?.id)
+    }
 
+    private let accountStateLock = NSRecursiveLock()
     private let kUserKey = "dj_current_user"
     private let kLoggedInKey = "dj_is_logged_in"
 
-    private(set) var currentUser: UserModel?
+    private var storedCurrentUser: UserModel?
+    var currentUser: UserModel? {
+        accountStateLock.lock()
+        defer { accountStateLock.unlock() }
+        return storedCurrentUser
+    }
     var isLoggedIn: Bool { currentUser != nil }
 
     // MARK: - 登录
@@ -26,12 +35,16 @@ final class UserManager {
             phone: phone,
             avatarName: "person.circle.fill"
         )
+        accountStateLock.lock()
+        let previousOwnerUserId = storedCurrentUser?.id
+        storedCurrentUser = user
+        EchoTraceAccountLifecycle.switchOwner(from: previousOwnerUserId, to: user.id)
+        _ = saveToDefaultsLocked(user: user)
         KnowledgeSyncCoordinator.shared.userDidChange(to: user.id)
-        currentUser = user
-        _ = saveToDefaults()
         KBLiteManager.shared.switchUser(to: user.id)
         KnowledgeSyncCoordinator.shared.synchronizeCurrentUser(reason: "loginCompleted")
         NotificationCenter.default.post(name: .djUserDidLogin, object: nil)
+        accountStateLock.unlock()
     }
 
     func updateProfile(nickname: String) {
@@ -39,24 +52,61 @@ final class UserManager {
     }
 
     func saveProfile(nickname: String, completion: @escaping (UserProfileSaveResult) -> Void) {
+        accountStateLock.lock()
+        guard let user = storedCurrentUser else {
+            accountStateLock.unlock()
+            completion(.failed("请先登录后再保存"))
+            return
+        }
+        let expectedUserId = user.id
+        let gender = user.gender
+        let region = user.region
+        let avatarName = user.avatarName
+        accountStateLock.unlock()
         saveProfile(
             nickname: nickname,
-            gender: currentUser?.gender,
-            region: currentUser?.region,
-            avatarName: currentUser?.avatarName,
+            gender: gender,
+            region: region,
+            avatarName: avatarName,
+            expectedUserId: expectedUserId,
             completion: completion
         )
     }
 
     func saveProfile(nickname: String, gender: String?, region: String?, avatarName: String? = nil, completion: @escaping (UserProfileSaveResult) -> Void) {
+        saveProfile(
+            nickname: nickname,
+            gender: gender,
+            region: region,
+            avatarName: avatarName,
+            expectedUserId: nil,
+            completion: completion
+        )
+    }
+
+    private func saveProfile(
+        nickname: String,
+        gender: String?,
+        region: String?,
+        avatarName: String?,
+        expectedUserId: String?,
+        completion: @escaping (UserProfileSaveResult) -> Void
+    ) {
         let trimmedNickname = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedNickname.isEmpty else {
             completion(.failed("昵称不能为空"))
             return
         }
 
-        guard var user = currentUser else {
+        accountStateLock.lock()
+        guard var user = storedCurrentUser else {
+            accountStateLock.unlock()
             completion(.failed("请先登录后再保存"))
+            return
+        }
+        guard expectedUserId == nil || expectedUserId == user.id else {
+            accountStateLock.unlock()
+            completion(.failed("账号已切换，请重新保存"))
             return
         }
         user.nickname = trimmedNickname
@@ -65,12 +115,14 @@ final class UserManager {
         if avatarName != nil {
             user.avatarName = normalizedProfileField(avatarName)
         }
-        currentUser = user
-        guard saveToDefaults() else {
+        storedCurrentUser = user
+        guard saveToDefaultsLocked(user: user) else {
+            accountStateLock.unlock()
             completion(.failed("本地保存失败，请稍后再试"))
             return
         }
         NotificationCenter.default.post(name: .djUserDidUpdate, object: nil)
+        accountStateLock.unlock()
 
         guard DreamJourneyBackendClient.shared.isProfileSyncConfigured else {
             completion(.saved)
@@ -100,31 +152,35 @@ final class UserManager {
     }
 
     private func updateProfileLocally(nickname: String) -> Bool {
-        guard var user = currentUser else { return false }
+        accountStateLock.lock()
+        defer { accountStateLock.unlock() }
+        guard var user = storedCurrentUser else { return false }
         let trimmedNickname = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
         user.nickname = trimmedNickname.isEmpty ? "寻梦环游用户" : trimmedNickname
-        currentUser = user
-        guard saveToDefaults() else { return false }
+        storedCurrentUser = user
+        guard saveToDefaultsLocked(user: user) else { return false }
         NotificationCenter.default.post(name: .djUserDidUpdate, object: nil)
         return true
     }
 
     // MARK: - 退出登录
     func logout() {
-        DreamJourneyBackendClient.shared.logoutAuthSession()
-        KnowledgeSyncCoordinator.shared.userDidChange(to: nil)
-        currentUser = nil
-        KBLiteManager.shared.switchUser(to: nil)
+        accountStateLock.lock()
+        let ownerUserId = storedCurrentUser?.id
+        storedCurrentUser = nil
+        EchoTraceAccountLifecycle.invalidateAndClear(ownerUserId: ownerUserId)
         UserDefaults.standard.removeObject(forKey: kUserKey)
         UserDefaults.standard.removeObject(forKey: kLoggedInKey)
+        DreamJourneyBackendClient.shared.logoutAuthSession()
+        KnowledgeSyncCoordinator.shared.userDidChange(to: nil)
+        KBLiteManager.shared.switchUser(to: nil)
         NotificationCenter.default.post(name: .djUserDidLogout, object: nil)
+        accountStateLock.unlock()
     }
 
     // MARK: - 持久化
-    @discardableResult
-    private func saveToDefaults() -> Bool {
-        guard let user = currentUser,
-              let data = try? JSONEncoder().encode(user) else { return false }
+    private func saveToDefaultsLocked(user: UserModel) -> Bool {
+        guard let data = try? JSONEncoder().encode(user) else { return false }
         UserDefaults.standard.set(data, forKey: kUserKey)
         UserDefaults.standard.set(true, forKey: kLoggedInKey)
         return true
@@ -133,7 +189,7 @@ final class UserManager {
     private func loadFromDefaults() {
         guard let data = UserDefaults.standard.data(forKey: kUserKey),
               let user = try? JSONDecoder().decode(UserModel.self, from: data) else { return }
-        currentUser = user
+        storedCurrentUser = user
     }
 }
 

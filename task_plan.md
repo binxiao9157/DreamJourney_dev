@@ -4,8 +4,8 @@
 
 - **Goal:** 按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态
 - **Mode:** Review
-- **Phase:** Phase 19 knowledge change retention and snapshot recovery delivered
-- **Task:** `docs/plans/task_24_p1-knowledge-change-retention-snapshot-fallback.md`
+- **Phase:** Phase 20 Echo trace account privacy lifecycle complete
+- **Task:** `docs/plans/task_25_p1-echo-trace-account-isolation.md`
 - **Blockers:** none for non-device implementation
 
 ## Key Decisions
@@ -43,10 +43,11 @@
 - Task 22 is delivered in iOS commit `f790313`. Non-device implementation, final8 regression, ledger closure and remote push are complete. Backend phone invitation remains the relationship authority; runtime freshness, immutable persona snapshots, active Echo fallback and coordinator authorization epoch prevent stale family knowledge use. No backend behavior changed, so no server deployment was required.
 - Task 23 is delivered in iOS commit `f0ee683`. It scopes semantic embedding cache by account/generation/content, filters generation candidates before ranking, applies one local storage protection policy to graph/base/pending/outbox files, and closes independent review findings without changing public UI or file envelopes. Backend had no changes and required no deployment.
 - Task 24 is complete and delivered. It adds a durable change-feed retention watermark, an explicit compacted-history contract, one-shot iOS snapshot recovery, and a dry-run-first Postgres maintenance path without changing public UI. Backend `32607ec` is deployed and iOS `102b1ca` is pushed. Real Postgres knowledge smoke, structured 410/snapshot/retained-continuation acceptance, QA data cleanup and a zero-delete compaction dry-run passed. Ledger `L20260711-191536` is closed.
+- Task 25 is complete. It scopes all persisted Echo trace/evidence surfaces and export files to the active account, serializes account-side effects, rejects stale session/voice callbacks, clears old Echo runtime evidence on account changes, and preserves QA-only export behavior without public UI changes. Ledger `L20260711-200812` is closed.
 
 ## Scope
 
-Phase 2, Phase 3, and Tasks 9-24 are closed and delivered. Production remains on global ownership `shadow`; actual historical sourceRef identity migration, public knowledge-governance UI and true-device acceptance remain follow-up slices.
+Phase 2, Phase 3, and Tasks 9-25 are closed. The next bounded knowledge-base candidate is operation receipt retention/minimization; production remains on global ownership `shadow`, while actual historical sourceRef identity migration, public knowledge-governance UI and true-device acceptance remain separate follow-up slices.
 
 ## Recovery
 

@@ -1,0 +1,182 @@
+{
+  "checks": {
+    "C000": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/checks/C000.md",
+      "created_at": "2026-07-11T12:51:24+00:00",
+      "criteria_map": [
+        "A 不能读取/导出 B：active-owner scope、owner digest key、package owner 一致性和 model smoke 覆盖。",
+        "A -> B 清理 A：UserDefaults、manifest、确定性默认 owner 导出目录和 Echo 页面缓存同时清理。",
+        "登出清理当前账号：UserManager 串行事务先失效 Echo owner，再清本地记录和 runtime/session。",
+        "旧 callback 不重建：session/voice 捕获 request owner，回调校验当前 owner，Store 再拒绝 inactive owner。",
+        "冷启动和 legacy：恢复用户后激活唯一 owner，旧全局 key/临时文件只清除不迁移。",
+        "QA 能力不回归：trace、evidence package、QA bundle 模拟器 smoke 均通过。"
+      ],
+      "evidence": [
+        "Result `R000` 记录了实现文件、测试命令和模拟器证据路径。",
+        "owner isolation model smoke 验证 A/B 读写隔离、旧 owner 晚到写入拒绝、切换/登出清理、原始 ID 不进入 key/path。",
+        "三条实际 Simulator UIQA 导出 smoke 验证生产 Store 的 JSON 写入、解码和 QA harness 兼容性。",
+        "默认 release regression 在最终代码上运行并包含新增 model/static guard。",
+        "Simulator 和 generic iPhoneOS 构建成功；`git diff --check` 通过。",
+        "两轮独立复审发现的五类竞态与残留问题均已修复，末轮唯一 nickname-only 竞态已通过 expectedUserId 边界收敛。"
+      ],
+      "execution_map": [
+        "数据层：`EchoTraceOwnerScope`、`EchoOwnerScopedDefaultsStore` 和四类 Store。",
+        "证据层：runtime snapshot、session/voice summary、evidence package 的 owner 绑定。",
+        "账号层：`UserManager` 的递归锁事务及 expectedUserId profile guard。",
+        "页面层：Echo account lifecycle reset、旧 runtime 无 diagnostics 释放、request owner 回调检查。",
+        "QA 层：新增 model/static guard并接入 release regression/release QA package。"
+      ],
+      "followup_problem_id": null,
+      "id": "C000",
+      "problem_id": "P000",
+      "residual_risk": [
+        "未做真机验证，但本任务只改变本地诊断数据生命周期，Simulator、generic iPhoneOS 和默认 release regression 足以覆盖计划内非真机验收。",
+        "UIQA 临时账号复制到 Documents 的内容全部为 harness 构造的 mock 数据，不用于生产账号导出。",
+        "operation receipt 保留周期是独立知识库维护问题，不影响本任务成功判定。"
+      ],
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "模型执行 A 写入、B 越权写入、A -> B 切换、A 晚到写入、B 导出、A 越权导出、B 登出和 B 晚到写入。",
+        "evidence owner 分别注入 runtime、session、synthesis 不一致，全部拒绝。",
+        "导出文件在切换和登出后检查实际文件不存在。",
+        "独立复审模拟账号切换夹在 profile 保存及 provider callback 之间，相关路径已增加事务或 request owner 校验。"
+      ],
+      "summary": "结论为成功。实现覆盖原问题的四类持久化数据、导出文件、页面缓存、账号事务和异步 provider 回调，且默认发布回归与两类构建均通过。"
+    }
+  },
+  "counters": {
+    "check": 1,
+    "event": 12,
+    "problem": 1,
+    "result": 1,
+    "ticket": 1
+  },
+  "created_at": "2026-07-11T12:08:12+00:00",
+  "effort": "medium",
+  "language": "zh",
+  "ledger_id": "L20260711-200812",
+  "problems": {
+    "P000": {
+      "body_path": "problems/P000/README.md",
+      "check_ids": [
+        "C000"
+      ],
+      "created_at": "2026-07-11T12:08:12+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Close the Lodestar task represented by `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/plans/task_25_p1-echo-trace-account-isolation.md` using recursive problem, ticket, result, and check state.\n\nTask context:\n\n# Task 25：P1 Echo Trace 账号隔离与登出清理",
+      "followup_ids": [],
+      "id": "P000",
+      "package_path": "problems/P000",
+      "parent_id": null,
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "A 账号记录无法被 B 账号读取或导出。",
+        "切换 A -> B 后 A 数据被清理；登出后四类 store 均为空。",
+        "登出/切换后到达的 A 账号异步写入被拒绝，不会重建旧数据。",
+        "冷启动恢复登录态后只激活该账号；legacy 全局 key 被安全清除而非跨账号迁移。",
+        "QA smoke 使用显式 owner，不破坏现有 Echo trace/evidence 导出。",
+        "相关 model/static checks、release regression、Simulator 和 generic iPhoneOS 构建通过。"
+      ],
+      "ticket_ids": [
+        "T000"
+      ],
+      "title": "Task 25：P1 Echo Trace 账号隔离与登出清理",
+      "updated_at": "2026-07-11T12:51:24+00:00"
+    }
+  },
+  "results": {
+    "R000": {
+      "artifacts": [
+        "`docs/plans/task_25_p1-echo-trace-account-isolation.md`",
+        "`docs/plans/task_25_solution_ticket.md`",
+        "`Scripts/QA/prd-stitch-ui/echo-trace-owner-isolation-check.swift`",
+        "`Scripts/QA/prd-stitch-ui/echo-trace-owner-isolation-model-smoke.swift`",
+        "`Scripts/QA/prd-stitch-ui/run-echo-trace-owner-isolation-model-smoke.sh`",
+        "`tmp/visual-qa/prd-stitch-ui/echo-trace-export-smoke/20260711-203344/`",
+        "`tmp/visual-qa/prd-stitch-ui/echo-trace-evidence-package-export-smoke/20260711-203407/`",
+        "`tmp/visual-qa/prd-stitch-ui/echo-qa-evidence-bundle-export-smoke/20260711-203428/`"
+      ],
+      "body_path": "problems/P000/results/R000.md",
+      "created_at": "2026-07-11T12:50:31+00:00",
+      "done": [
+        "使用 SHA-256 owner digest 为 trace、runtime diagnostics、evidence package、QA bundle 派生账号级存储键，不暴露原始 user ID。",
+        "record/read/export 全部要求显式 owner，并由 active-owner scope 拒绝失效账号操作。",
+        "evidence package、数字人 session 摘要和语音合成摘要携带 owner，trace/runtime/session/voice owner 不一致时拒绝记录和导出。",
+        "导出文件写入 owner digest 目录；账号切换和登出同时清除 UserDefaults、默认导出目录、manifest 和旧版全局文件。",
+        "UserManager 将账号状态、Echo scope、KBLite、Knowledge 协调器和通知串行化；旧账号 profile 保存通过 expectedUserId 拒绝。",
+        "Echo 页面在账号变化时失效生命周期、释放旧 runtime/session 且不生成新账号 diagnostics，并清空 capability、trace、provider 和 evidence 缓存。",
+        "腾讯 session 与声音复刻回调使用请求发起时 owner，并在回调到达时再次校验当前账号。",
+        "新增 owner isolation model smoke/static guard，并接入默认 release regression 和 release QA package。"
+      ],
+      "id": "R000",
+      "known_gaps": [
+        "本任务按计划不做真机验证。",
+        "UIQA 临时账号的纯 mock 导出会复制到 Simulator Documents 供外部 harness 读取；生产账号导出仍受 owner 生命周期清理约束。",
+        "operation receipt 生命周期不属于本任务，保留为后续知识库隐私维护候选。"
+      ],
+      "problem_id": "P000",
+      "root_id": "P000",
+      "summary": "四类 Echo QA/诊断数据已从全局存储迁移到 active-owner 作用域。账号切换和登出会清理旧账号记录、页面缓存及临时导出，旧 session/voice 异步回调不能写入新账号证据。",
+      "ticket_id": "T000",
+      "verification": [
+        "`run-echo-trace-owner-isolation-model-smoke.sh` 通过。",
+        "owner isolation、trace export、runtime diagnostics、evidence package、QA bundle 静态检查通过。",
+        "Echo trace、evidence package、QA evidence bundle 三条模拟器导出 smoke 通过。",
+        "默认 `run-release-regression.sh` 通过，报告位于 `tmp/visual-qa/prd-stitch-ui/release-regression/20260711-204702-release-regression/report.md`。",
+        "Debug Simulator 与 generic iPhoneOS 无签名构建通过。",
+        "`git diff --check` 通过。",
+        "独立复审指出的导出残留、owner 盖章、账号副作用竞态、旧 runtime 缓存和 nickname-only 竞态均已修复。"
+      ]
+    }
+  },
+  "root_id": "P000",
+  "schema_version": 6,
+  "tickets": {
+    "T000": {
+      "acceptance_criteria": [
+        "四类 store 全部账号隔离且 key 不包含原始 user ID。",
+        "A/B 切换、登出、冷启动、旧 owner 写入和 legacy key 清理均有测试。",
+        "导出只包含当前账号数据。",
+        "现有 Echo QA trace/evidence 能力不回归。",
+        "release regression 与两个非真机构建通过。"
+      ],
+      "assumptions": [
+        "现有 Echo lifecycle token 已阻断被销毁页面的旧 callback。",
+        "QA trace 是可清理诊断数据，不要求从旧全局 key 迁移。"
+      ],
+      "body_path": "problems/P000/tickets/T000.md",
+      "classification": "one_go",
+      "classification_reason": "改动集中在 iOS Echo 诊断 stores、UserManager 生命周期和现有 QA harness，边界明确、无后端与公开 UI 变化。",
+      "created_at": "2026-07-11T12:08:48+00:00",
+      "id": "T000",
+      "problem_definition": "四类 Echo QA/诊断 store 使用固定全局 `UserDefaults` key，读取和导出不要求 owner；UserManager 登出未清理。账号切换后可能读取上一账号 trace，且旧异步回调可能在清理后重新写入。",
+      "problem_id": "P000",
+      "proposed_solution": "建立线程安全 active-owner scope 和不可逆 owner digest storage key。四类 store 的 record/read/export 都绑定 owner并验证当前 scope；UserManager 在冷启动、登录、切换、登出时激活或清理 scope。旧全局 key 直接清除，不跨账号迁移。QA smoke 改用显式 owner，生产异步路径继续叠加现有 lifecycle token。",
+      "result_ids": [
+        "R000"
+      ],
+      "risks": [
+        "QA launch harness 使用固定 fake user，需要显式激活测试 scope 后恢复。",
+        "Evidence package 没有独立 owner 字段，必须从 trace/runtime 一致推导并拒绝不一致。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现 Echo 诊断数据账号级隐私生命周期",
+      "updated_at": "2026-07-11T12:50:31+00:00",
+      "verification_plan": "先新增独立 Swift model smoke 和 static guard，再修改 stores/UserManager/Echo call sites；运行 Echo trace/evidence checks、release regression、Simulator/generic iPhoneOS build 与 diff check。"
+    }
+  },
+  "updated_at": "2026-07-11T12:51:24+00:00"
+}

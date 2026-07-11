@@ -2901,3 +2901,19 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `none`
 - Counts: 4/4 problems done, 0 blocked, 4/4 tickets done
 - Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+
+## Recursive Closure Checkpoint - 2026-07-11T20:51:31+08:00
+
+- Ledger: `L20260711-200812`
+- Lodestar task: `docs/plans/task_25_p1-echo-trace-account-isolation.md`
+- Root: `P000` / done
+- Next action: `none`
+- Counts: 1/1 problems done, 0 blocked, 1/1 tickets done
+- Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+
+## Task 25 Completion - 2026-07-11
+
+- Echo trace、runtime diagnostics、evidence package、QA bundle 和临时导出文件已按账号隔离。
+- UserManager 账号切换、KBLite/Knowledge 副作用和 profile 保存边界已串行化；旧 session/voice 回调不能污染新账号。
+- 三条模拟器导出 smoke、默认 release regression、Simulator/generic iPhoneOS 构建和独立复审通过。
+- Ledger `L20260711-200812` 已关闭；下一候选是知识 operation receipt 的保留与最小化。

@@ -27,7 +27,7 @@ for required in [
     "struct EchoRuntimeDiagnosticsSnapshot",
     "final class EchoRuntimeDiagnosticsStore",
     "static let shared = EchoRuntimeDiagnosticsStore()",
-    "func record(_ snapshot: EchoRuntimeDiagnosticsSnapshot)",
+    "func record(_ snapshot: EchoRuntimeDiagnosticsSnapshot, ownerUserId: String) -> Bool",
     "func exportRecentSnapshots(",
     "echo-runtime-diagnostics.json",
 ] {
@@ -68,7 +68,7 @@ for required in [
     "KBLite facts",
     "privacyScopeLabel",
     "makeEchoRuntimeDiagnosticsSnapshot(reason:",
-    "EchoRuntimeDiagnosticsStore.shared.record(snapshot)",
+    "EchoRuntimeDiagnosticsStore.shared.record(snapshot, ownerUserId:",
     "runUIQAEchoRuntimeDiagnosticsExportSmoke",
     "EchoRuntimeDiagnosticsStore.shared.exportRecentSnapshots",
     "diagnosticsPanelText",

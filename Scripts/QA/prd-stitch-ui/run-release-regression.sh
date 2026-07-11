@@ -359,6 +359,9 @@ run_step "Swift model guard knowledge-local-storage-protection" "$STATIC_LOG_DIR
 run_step "Swift guard knowledge-local-storage-protection" "$STATIC_LOG_DIR/knowledge-local-storage-protection-check.log" \
   "$SCRIPT_DIR/run-knowledge-local-storage-protection-check.sh"
 
+run_step "Swift model guard echo-trace-owner-isolation" "$STATIC_LOG_DIR/echo-trace-owner-isolation-model-smoke.log" \
+  "$SCRIPT_DIR/run-echo-trace-owner-isolation-model-smoke.sh"
+
 run_step "Swift guard knowledge-persona-ranking-prefilter" "$STATIC_LOG_DIR/knowledge-persona-ranking-prefilter-check.log" \
   "$SCRIPT_DIR/run-knowledge-persona-ranking-prefilter-check.sh"
 
@@ -487,6 +490,7 @@ for guard in \
   context-packet-v1-check.swift \
   context-packet-v2-trace-check.swift \
   echo-context-v2-clue-panel-check.swift \
+  echo-trace-owner-isolation-check.swift \
   echo-trace-export-check.swift \
   echo-runtime-diagnostics-check.swift \
   echo-trace-evidence-package-check.swift \

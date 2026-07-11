@@ -1,5 +1,5 @@
 {
-  "active_ledger_id": "L20260711-191536",
+  "active_ledger_id": "L20260711-200812",
   "ledgers": [
     {
       "active_count": 0,
@@ -264,7 +264,18 @@
       "status": "done",
       "title": "Task 24：P1 知识变更历史保留与快照恢复",
       "updated_at": "2026-07-11T11:58:13+00:00"
+    },
+    {
+      "active_count": 0,
+      "blocked_count": 0,
+      "ledger_id": "L20260711-200812",
+      "path": "L20260711-200812",
+      "root_id": "P000",
+      "schema_version": 6,
+      "status": "done",
+      "title": "Task 25：P1 Echo Trace 账号隔离与登出清理",
+      "updated_at": "2026-07-11T12:51:24+00:00"
     }
   ],
-  "updated_at": "2026-07-11T11:58:20+00:00"
+  "updated_at": "2026-07-11T12:51:31+00:00"
 }
