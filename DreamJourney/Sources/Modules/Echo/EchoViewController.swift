@@ -2008,21 +2008,12 @@ final class EchoViewController: UIViewController {
             )
         }
 
-        guard let member = FamilyRepository.shared.get(by: context.ownerId) else {
+        guard let member = FamilyRepository.shared.acceptedMember(by: context.ownerId) else {
             return EchoRoleVoiceProfileSelection(
                 voiceProfileId: nil,
                 source: .familyMemberMissing,
                 contextOwnerId: context.ownerId,
                 displayName: context.resolvedDisplayName
-            )
-        }
-
-        guard member.isAcceptedFamilyMember else {
-            return EchoRoleVoiceProfileSelection(
-                voiceProfileId: nil,
-                source: .familyMemberUnavailable,
-                contextOwnerId: member.id,
-                displayName: member.name
             )
         }
 
@@ -2045,7 +2036,7 @@ final class EchoViewController: UIViewController {
     }
 
     private func isCurrentUserPersonaContext(_ context: DigitalHumanContext) -> Bool {
-        KBLiteManager.resolvePersonaIdentity(for: context).isPersonal
+        KBLiteManager.resolveAuthorizedPersonaIdentity(for: context)?.isPersonal == true
     }
 
     private func setEchoAudioOwner(_ owner: EchoDigitalHumanAudioOwner, reason: String) {
@@ -2909,8 +2900,8 @@ final class EchoViewController: UIViewController {
 
     private func echoKnowledgeContextIdentity(
         for context: DigitalHumanContext
-    ) -> EchoKnowledgeContextIdentity {
-        KBLiteManager.resolvePersonaIdentity(for: context)
+    ) -> EchoKnowledgeContextIdentity? {
+        KBLiteManager.resolveAuthorizedPersonaIdentity(for: context)
     }
 
     private func recordEchoContextPacketForUserTurn(
@@ -2920,7 +2911,15 @@ final class EchoViewController: UIViewController {
         allowsGeneration: Bool
     ) {
         let context = DigitalHumanContextStore.shared.current
-        let expectedIdentity = echoKnowledgeContextIdentity(for: context)
+        guard let expectedIdentity = echoKnowledgeContextIdentity(for: context) else {
+            activeEchoTurnKnowledgeContextGate?.cancel()
+            activeEchoTurnKnowledgeContextGate = nil
+            latestEchoContextRequestTurnID = turnID
+            lastEchoRuntimeFallbackReason = "familyRelationshipUnauthorized"
+            recordEchoRuntimeDiagnosticsSnapshot(reason: "familyRelationshipUnauthorized")
+            print("[CFLite] context build skipped turnID=\(turnID) reason=familyRelationshipUnauthorized")
+            return
+        }
 
         activeEchoTurnKnowledgeContextGate?.cancel()
         activeEchoTurnKnowledgeContextGate = nil
@@ -2968,7 +2967,7 @@ final class EchoViewController: UIViewController {
             personaScope: expectedIdentity.personaScope,
             digitalHumanId: expectedIdentity.digitalHumanId,
             lifecycleMode: context.mode,
-            viewerFamilyMemberID: nil
+            viewerFamilyMemberID: context.isSelfAssistant ? nil : context.ownerId
         ) { [weak self] result in
             switch result {
             case .success(let packet):
@@ -3142,9 +3141,12 @@ final class EchoViewController: UIViewController {
               ) else {
             return
         }
-        let currentIdentity = echoKnowledgeContextIdentity(
+        guard let currentIdentity = echoKnowledgeContextIdentity(
             for: DigitalHumanContextStore.shared.current
-        )
+        ) else {
+            print("[CFLite] ignored turn knowledge because family relationship is no longer authorized turnID=\(gate.turnID)")
+            return
+        }
         guard currentIdentity == gate.expectedIdentity else {
             print(
                 "[CFLite] ignored stale turn knowledge identity " +
@@ -5020,6 +5022,8 @@ extension EchoViewController {
             relation: "家人",
             isOnline: true,
             lastUpdated: "刚刚",
+            relationshipOwnerUserId: UserManager.shared.currentUser?.id ?? "user_001",
+            relationshipAuthoritySource: .qaFixture,
             accessStatus: "active",
             invitationStatus: "accepted",
             voiceProfileId: "S_uiqa_family_panel_voice",

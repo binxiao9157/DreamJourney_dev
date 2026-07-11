@@ -275,13 +275,63 @@ enum KnowledgeGraphCASPolicy {
     }
 }
 
+struct KnowledgeSyncAuthorizationScope: Equatable {
+    private struct PersonaKey: Hashable {
+        let personaScope: String
+        let digitalHumanId: String
+    }
+
+    let ownerUserId: String
+    private let allowedPersonaKeys: Set<PersonaKey>
+
+    init(identity: KBPersonaIdentity, additionalIdentities: [KBPersonaIdentity] = []) {
+        let normalizedOwner = KBPersonaIdentity.normalizedIdentifier(identity.ownerUserId)
+        ownerUserId = normalizedOwner
+        allowedPersonaKeys = Set(
+            ([identity] + additionalIdentities).compactMap { candidate in
+                let candidateOwner = KBPersonaIdentity.normalizedIdentifier(candidate.ownerUserId)
+                let personaScope = KBPersonaIdentity.canonicalPersonaScope(candidate.personaScope)
+                let digitalHumanId = KBPersonaIdentity.normalizedIdentifier(candidate.digitalHumanId)
+                guard candidateOwner == normalizedOwner,
+                      personaScope == "personal" || personaScope == "family",
+                      !digitalHumanId.isEmpty else {
+                    return nil
+                }
+                return PersonaKey(personaScope: personaScope, digitalHumanId: digitalHumanId)
+            }
+        )
+    }
+
+    var isComplete: Bool {
+        !ownerUserId.isEmpty && !allowedPersonaKeys.isEmpty
+    }
+
+    func allows(ownerUserId: String, personaScope: String, digitalHumanId: String) -> Bool {
+        let normalizedOwner = KBPersonaIdentity.normalizedIdentifier(ownerUserId)
+        let key = PersonaKey(
+            personaScope: KBPersonaIdentity.canonicalPersonaScope(personaScope),
+            digitalHumanId: KBPersonaIdentity.normalizedIdentifier(digitalHumanId)
+        )
+        return normalizedOwner == self.ownerUserId && allowedPersonaKeys.contains(key)
+    }
+
+    func allows(identity: KBPersonaIdentity) -> Bool {
+        allows(
+            ownerUserId: identity.ownerUserId,
+            personaScope: identity.personaScope,
+            digitalHumanId: identity.digitalHumanId
+        )
+    }
+}
+
 enum KnowledgeSyncGraphEngine {
     static let entityTypes = ["people", "places", "events", "facts"]
     static let syncableScopes = Set(["generationAllowed", "familyCircle"])
 
     static func bootstrap(
         local: [String: Any],
-        remote: [String: Any]
+        remote: [String: Any],
+        authorization: KnowledgeSyncAuthorizationScope
     ) throws -> KnowledgeSyncMergeResult {
         try validate(local)
         try validate(remote)
@@ -289,7 +339,7 @@ enum KnowledgeSyncGraphEngine {
         var output = graphTemplate(local: local, remote: remote)
         for entityType in entityTypes {
             let remoteEntities = try entities(in: remote, type: entityType)
-                .filter(isSyncable)
+                .filter { isSyncable($0, authorization: authorization) }
             let localEntities = try entities(in: local, type: entityType)
             var merged = index(remoteEntities)
             for entity in localEntities {
@@ -303,23 +353,26 @@ enum KnowledgeSyncGraphEngine {
     static func merge(
         base: [String: Any],
         local: [String: Any],
-        remote: [String: Any]
+        remote: [String: Any],
+        authorization: KnowledgeSyncAuthorizationScope
     ) throws -> KnowledgeSyncMergeResult {
         try validate(base)
         try validate(local)
         try validate(remote)
 
-        let comparableBase = try syncPayloadGraph(from: base)
-        let comparableLocal = try syncPayloadGraph(from: local)
-        let comparableRemote = try syncPayloadGraph(from: remote)
+        let comparableBase = try syncPayloadGraph(from: base, authorization: authorization)
+        let comparableLocal = try syncPayloadGraph(from: local, authorization: authorization)
+        let comparableRemote = try syncPayloadGraph(from: remote, authorization: authorization)
         var output = graphTemplate(local: local, remote: remote)
         var conflicts: [KnowledgeSyncConflict] = []
 
         for entityType in entityTypes {
-            let rawBase = index(try entities(in: base, type: entityType).filter(isSyncable))
-            let rawLocal = index(try entities(in: local, type: entityType).filter(isSyncable))
-            let rawRemote = index(try entities(in: remote, type: entityType).filter(isSyncable))
-            let privateLocal = index(try entities(in: local, type: entityType).filter { !isSyncable($0) })
+            let rawBase = index(try entities(in: base, type: entityType).filter { isSyncable($0, authorization: authorization) })
+            let rawLocal = index(try entities(in: local, type: entityType).filter { isSyncable($0, authorization: authorization) })
+            let rawRemote = index(try entities(in: remote, type: entityType).filter { isSyncable($0, authorization: authorization) })
+            let privateLocal = index(try entities(in: local, type: entityType).filter {
+                !isSyncable($0, authorization: authorization)
+            })
 
             let comparedBase = index(try entities(in: comparableBase, type: entityType))
             let comparedLocal = index(try entities(in: comparableLocal, type: entityType))
@@ -366,12 +419,13 @@ enum KnowledgeSyncGraphEngine {
     static func makeDelta(
         base: [String: Any],
         local: [String: Any],
-        deletedAt: String
+        deletedAt: String,
+        authorization: KnowledgeSyncAuthorizationScope
     ) throws -> KnowledgeMutationDelta {
         try validate(base)
         try validate(local)
-        let comparableBase = try syncPayloadGraph(from: base)
-        let comparableLocal = try syncPayloadGraph(from: local)
+        let comparableBase = try syncPayloadGraph(from: base, authorization: authorization)
+        let comparableLocal = try syncPayloadGraph(from: local, authorization: authorization)
         var upserts = emptyUpserts()
         var tombstones: [KnowledgeTombstone] = []
 
@@ -401,15 +455,25 @@ enum KnowledgeSyncGraphEngine {
         return KnowledgeMutationDelta(upserts: upserts, tombstones: tombstones)
     }
 
-    static func syncPayloadGraph(from graph: [String: Any]) throws -> [String: Any] {
+    static func syncPayloadGraph(
+        from graph: [String: Any],
+        authorization: KnowledgeSyncAuthorizationScope
+    ) throws -> [String: Any] {
         try validate(graph)
-        let people = try entities(in: graph, type: "people").filter(isSyncable)
-        let places = try entities(in: graph, type: "places").filter(isSyncable)
+        guard authorization.isComplete else {
+            throw KnowledgeSyncModelError.invalidGraph("knowledge sync authorization is incomplete")
+        }
+        let people = try entities(in: graph, type: "people").filter {
+            isSyncable($0, authorization: authorization)
+        }
+        let places = try entities(in: graph, type: "places").filter {
+            isSyncable($0, authorization: authorization)
+        }
         let peopleIDs = Set(people.map(entityID))
         let placeIDs = Set(places.map(entityID))
 
         let events = try entities(in: graph, type: "events")
-            .filter(isSyncable)
+            .filter { isSyncable($0, authorization: authorization) }
             .map { entity -> [String: Any] in
                 var copy = sanitizeSourceReferences(in: entity)
                 copy["participantIds"] = stringArray(copy["participantIds"]).filter(peopleIDs.contains)
@@ -420,7 +484,7 @@ enum KnowledgeSyncGraphEngine {
             }
         let eventIDs = Set(events.map(entityID))
         let facts = try entities(in: graph, type: "facts")
-            .filter(isSyncable)
+            .filter { isSyncable($0, authorization: authorization) }
             .map { entity -> [String: Any] in
                 var copy = sanitizeSourceReferences(in: entity)
                 copy["relatedPersonIds"] = stringArray(copy["relatedPersonIds"]).filter(peopleIDs.contains)
@@ -486,12 +550,30 @@ enum KnowledgeSyncGraphEngine {
         (entity["id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
-    private static func isSyncable(_ entity: [String: Any]) -> Bool {
+    private static func isSyncable(
+        _ entity: [String: Any],
+        authorization: KnowledgeSyncAuthorizationScope
+    ) -> Bool {
         guard let metadata = entity["privacyMetadata"] as? [String: Any],
-              let scope = metadata["scope"] as? String else {
+              let scope = metadata["scope"] as? String,
+              syncableScopes.contains(scope),
+              let ownerUserId = normalizedString(entity["ownerUserId"]),
+              let personaScope = normalizedString(entity["personaScope"]),
+              let digitalHumanId = normalizedString(entity["digitalHumanId"]),
+              authorization.allows(
+                ownerUserId: ownerUserId,
+                personaScope: personaScope,
+                digitalHumanId: digitalHumanId
+              ) else {
             return false
         }
-        return syncableScopes.contains(scope)
+        return true
+    }
+
+    private static func normalizedString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
     }
 
     private static func graphTemplate(local: [String: Any], remote: [String: Any]) -> [String: Any] {

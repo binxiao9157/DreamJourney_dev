@@ -25,7 +25,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func sceneDidBecomeActive(_ scene: UIScene) {}
     func sceneWillResignActive(_ scene: UIScene) {}
     func sceneWillEnterForeground(_ scene: UIScene) {
-        KnowledgeSyncCoordinator.shared.synchronizeCurrentUser(reason: "foreground")
+        FamilyRepository.shared.bootstrapCurrentUserFromBackend { _ in
+            KnowledgeSyncCoordinator.shared.synchronizeCurrentUser(reason: "foregroundAfterFamilyRefresh")
+        }
     }
     func sceneDidEnterBackground(_ scene: UIScene) {}
 }

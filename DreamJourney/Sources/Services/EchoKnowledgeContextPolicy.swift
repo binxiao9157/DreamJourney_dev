@@ -35,9 +35,56 @@ struct KBPersonaIdentity: Equatable {
     }
 }
 
-enum KBPersonaIdentityResolver {
-    private static let personalRelations: Set<String> = ["本人", "自己", "我"]
+struct KBPersonaAuthorizationSnapshot: Equatable {
+    let identity: KBPersonaIdentity
+    let userGeneration: UUID
+    let personaGeneration: UUID
+    let familyAuthorizationGeneration: UUID?
 
+    var isComplete: Bool {
+        identity.isComplete
+            && (identity.isPersonal || familyAuthorizationGeneration != nil)
+    }
+}
+
+enum KBPersonaAuthorizationSnapshotPolicy {
+    static func isCurrent(
+        _ snapshot: KBPersonaAuthorizationSnapshot,
+        currentIdentity: KBPersonaIdentity?,
+        userGeneration: UUID,
+        personaGeneration: UUID,
+        familyAuthorizationGeneration: UUID?
+    ) -> Bool {
+        guard snapshot.isComplete,
+              currentIdentity == snapshot.identity,
+              userGeneration == snapshot.userGeneration,
+              personaGeneration == snapshot.personaGeneration else {
+            return false
+        }
+        return snapshot.identity.isPersonal
+            || familyAuthorizationGeneration == snapshot.familyAuthorizationGeneration
+    }
+}
+
+struct KnowledgeAuthorizationEpochState: Equatable {
+    private(set) var currentEpoch: UUID
+
+    init(currentEpoch: UUID = UUID()) {
+        self.currentEpoch = currentEpoch
+    }
+
+    @discardableResult
+    mutating func rotate() -> UUID {
+        currentEpoch = UUID()
+        return currentEpoch
+    }
+
+    func accepts(boundEpoch: UUID?) -> Bool {
+        boundEpoch == currentEpoch
+    }
+}
+
+enum KBPersonaIdentityResolver {
     static func resolve(
         viewerUserId: String?,
         ownerId: String,
@@ -48,10 +95,8 @@ enum KBPersonaIdentityResolver {
         let normalizedOwnerId = KBPersonaIdentity.normalizedIdentifier(ownerId)
         let normalizedViewerId = KBPersonaIdentity.normalizedIdentifier(viewerUserId ?? "")
         let effectiveViewerId = normalizedViewerId.isEmpty ? normalizedOwnerId : normalizedViewerId
-        let normalizedRelation = relation?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let isPersonal = isSelfAssistant
             || (!normalizedOwnerId.isEmpty && normalizedOwnerId == effectiveViewerId)
-            || personalRelations.contains(normalizedRelation)
         let personaScope = isPersonal ? "personal" : "family"
         let memberDigitalHumanId = KBPersonaIdentity.normalizedIdentifier(
             familyMemberDigitalHumanId ?? ""
@@ -92,35 +137,16 @@ enum KBPersonaPolicy {
         personaScope: String?,
         digitalHumanId: String?,
         for expected: KBPersonaIdentity,
-        legacyOwnerUserId: String
+        legacyOwnerUserId _: String
     ) -> Bool {
         guard expected.isComplete else { return false }
-
-        if expected.personaScope == "family" {
-            guard let ownerUserId, let personaScope, let digitalHumanId else { return false }
-            return responseIdentityMatches(
-                expected: expected,
-                ownerUserId: ownerUserId,
-                personaScope: personaScope,
-                digitalHumanId: digitalHumanId
-            )
-        }
-
-        guard expected.isPersonal else { return false }
-        let entityOwner = KBPersonaIdentity.normalizedIdentifier(
-            ownerUserId ?? legacyOwnerUserId
+        guard let ownerUserId, let personaScope, let digitalHumanId else { return false }
+        return responseIdentityMatches(
+            expected: expected,
+            ownerUserId: ownerUserId,
+            personaScope: personaScope,
+            digitalHumanId: digitalHumanId
         )
-        guard entityOwner == expected.ownerUserId else { return false }
-
-        if let personaScope,
-           KBPersonaIdentity.canonicalPersonaScope(personaScope) != "personal" {
-            return false
-        }
-        if let digitalHumanId,
-           KBPersonaIdentity.normalizedIdentifier(digitalHumanId) != expected.digitalHumanId {
-            return false
-        }
-        return true
     }
 
     static func isValidProposal(
@@ -168,9 +194,7 @@ enum KBPersonaPolicy {
         let normalized = evidenceStatus?
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased() ?? ""
-        if normalized.isEmpty {
-            return expected.isPersonal
-        }
+        if normalized.isEmpty { return false }
         return normalized == "observed" || normalized == "confirmed"
     }
 }

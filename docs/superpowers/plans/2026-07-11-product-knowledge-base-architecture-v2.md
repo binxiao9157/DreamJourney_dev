@@ -261,6 +261,10 @@ family_relationship_inactive
 - Family relationship 必须来自手机号邀请、接受状态和后端授权合同。
 - 示例/seed 家庭成员只能在 QA launch arg 或测试数据中存在，不能作为生产默认授权数据。
 - 同一家庭角色的 Archive、Context 和 Echo 必须使用同一个 canonical `digitalHumanId`。
+- iOS 家庭关系记录必须携带 `relationshipOwnerUserId` 与 authority source；只有当前 owner 的 backend invitation `active + accepted` 可授予生产访问权限。
+- FamilyRepository 必须按账号 generation 隔离；KBPerson 只进入候选集合，迟到响应、legacy 数据和前一账号 override 一律不能提升权限。
+- relation 展示文案不能推断 personal identity；持久化 family context 和每轮 Echo 请求都必须重新查询 accepted member。
+- 完整图谱本地分享包不是生产授权合同；没有后端签名 grant 时，release 必须禁止导出/导入，裸 graph 永远拒绝。
 
 ## 8. 同步、一致性与删除
 
@@ -271,6 +275,7 @@ family_relationship_inactive
 - upsert 与 tombstone 原子提交。
 - 本地 `localOnly` 永不上传，也不被远端删除。
 - 同一实体双方修改目前确定性 local-wins，并写 QA conflict summary。
+- 所有 sync payload/merge/delta 还必须匹配当前 `ownerUserId/personaScope/digitalHumanId` authorization scope；ownerless legacy 只保留在本地兼容域。
 
 Task 16 已完成：
 
@@ -408,7 +413,7 @@ POST /kb/governance/actions
 - KBLite person 到 Family 的自动派生改为“未授权候选”或彻底移除；生产 seed 成员迁到 QA-only。
 - timeLetter draft 的后端 payload 使用字段 allowlist；`metadataOnly` 不得携带正文、分析摘要或 transcript，删除草稿需同步撤销。
 
-实施进度：Task 15 已完成 proposal、稳定 ID/关系/metadata、persona-scoped Context 和 iOS canonical identity 主链路。Task 16 已完成用户治理、Archive 来源删除级联、iOS durable outbox/coordinator 和组合 QA gate。Task 17 已完成 operation receipt/payload fingerprint、客户端冲突恢复与隔离。Task 18 已完成稳定目标分页、终页提交和 KBLite CAS。Task 19 已停止新增 `conversationSession/archiveImageAnalysis`，统一新对话 turn/照片来源，并提供不暴露正文或 source ID 的只读审计。Task 20 已统一 mutation/change/receipt/replay 的 canonical privacy/source metadata 并完成生产维护。Task 21 已把系统 Widget 改为显式 `summaryAllowed`、当前 owner、personal、confirmed 的最小摘要投影，使用 schema v2 owner digest 和 generation 防止跨账号旧写，并补齐扩展/App Group 工程合同；真实 App Group provisioning 与 Widget Gallery 仍需真机外部验收。历史 legacy ref 仍需独立批准的证据化迁移；timeLetter 草稿字段收敛与公开治理体验继续作为后续 P1/P2。
+实施进度：Task 15 已完成 proposal、稳定 ID/关系/metadata、persona-scoped Context 和 iOS canonical identity 主链路。Task 16 已完成用户治理、Archive 来源删除级联、iOS durable outbox/coordinator 和组合 QA gate。Task 17 已完成 operation receipt/payload fingerprint、客户端冲突恢复与隔离。Task 18 已完成稳定目标分页、终页提交和 KBLite CAS。Task 19 已停止新增 `conversationSession/archiveImageAnalysis`，统一新对话 turn/照片来源，并提供不暴露正文或 source ID 的只读审计。Task 20 已统一 mutation/change/receipt/replay 的 canonical privacy/source metadata 并完成生产维护。Task 21 已把系统 Widget 改为显式 `summaryAllowed`、当前 owner、personal、confirmed 的最小摘要投影，使用 schema v2 owner digest 和 generation 防止跨账号旧写，并补齐扩展/App Group 工程合同；真实 App Group provisioning 与 Widget Gallery 仍需真机外部验收。Task 22 已把家庭关系 authority 收敛到当前 owner 的 backend invitation accepted 合同：KBPerson 只形成候选，ownerless legacy 隔离，family Context 每轮复核，整库本地分享默认关闭；账号级同步授权同时覆盖 personal 与全部 accepted family persona。运行期进一步用 refresh/user/persona/family generation 和 coordinator authorization epoch 阻断乱序响应与旧 callback，授权撤销会主动持久化回本人 Echo Context。历史 legacy ref 仍需独立批准的证据化迁移；timeLetter 草稿字段收敛与公开治理体验继续作为后续 P1/P2。
 
 ### P1：同步生产化
 

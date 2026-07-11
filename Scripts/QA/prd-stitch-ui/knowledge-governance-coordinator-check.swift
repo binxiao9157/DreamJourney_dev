@@ -40,10 +40,12 @@ require(enqueuePosition < requestPosition,
 
 require(coordinator.contains("$0.expectedIdentity == currentIdentity"),
         "pending action must match the current persona before dispatch")
-require(coordinator.contains("currentIdentity == item.expectedIdentity"),
+require(coordinator.contains("private var activePersonaIdentity: KBPersonaIdentity?"),
+        "governance must own an immutable queue persona snapshot")
+require(coordinator.contains("authorization.allows(identity: currentIdentity)"),
+        "pending action must be covered by the queue-owned account authorization")
+require(coordinator.contains("activePersonaIdentity == item.expectedIdentity"),
         "persona identity must be checked again before applying the response")
-require(coordinator.contains("enqueueSync(reason: \"governancePersonaChanged\")"),
-        "a stale persona response must be recovered through normal sync")
 
 require(coordinator.contains("if Self.isRevisionConflict(error)"),
         "revision conflicts must be handled explicitly")

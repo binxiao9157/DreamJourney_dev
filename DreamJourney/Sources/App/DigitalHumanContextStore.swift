@@ -1,6 +1,6 @@
 import Foundation
 
-enum DigitalHumanMode: String, Codable {
+enum DigitalHumanMode: String, Codable, Equatable {
     case sunlight
     case star
     case silent
@@ -28,7 +28,7 @@ enum DigitalHumanMode: String, Codable {
     }
 }
 
-struct DigitalHumanContext: Codable {
+struct DigitalHumanContext: Codable, Equatable {
     var viewerUserId: String?
     var ownerId: String
     var displayName: String
@@ -69,28 +69,99 @@ struct DigitalHumanContext: Codable {
 final class DigitalHumanContextStore {
     static let shared = DigitalHumanContextStore()
 
-    private let key = "dj.digitalHuman.currentContext"
+    private let keyBase = "dj.digitalHuman.currentContext"
 
     private init() {}
 
     var current: DigitalHumanContext {
         get {
-            let userId = UserManager.shared.currentUser?.id ?? "user_001"
-            if let data = UserDefaults.standard.data(forKey: key),
+            let userId = normalizedUserId(UserManager.shared.currentUser?.id)
+            guard !userId.isEmpty else { return .defaultContext(userId: "") }
+            if let data = UserDefaults.standard.data(forKey: key(for: userId)),
                let context = try? JSONDecoder().decode(DigitalHumanContext.self, from: data),
-               (context.viewerUserId ?? context.ownerId) == userId {
-                return context.normalizedForCurrentViewer(userId)
+               let validated = validatedContext(context, userId: userId) {
+                return validated
             }
             return .defaultContext(userId: userId)
         }
         set {
-            let userId = UserManager.shared.currentUser?.id ?? "user_001"
-            let normalized = newValue.normalizedForCurrentViewer(userId)
-            if let data = try? JSONEncoder().encode(normalized) {
-                UserDefaults.standard.set(data, forKey: key)
-                NotificationCenter.default.post(name: .djDigitalHumanContextDidChange, object: normalized)
+            guard Thread.isMainThread else {
+                DispatchQueue.main.async {
+                    self.current = newValue
+                }
+                return
             }
+            let userId = normalizedUserId(UserManager.shared.currentUser?.id)
+            guard !userId.isEmpty else { return }
+            let safeContext = validatedContext(newValue, userId: userId) ?? .defaultContext(userId: userId)
+            let previousContext = storedContext(for: userId)
+            guard let data = try? JSONEncoder().encode(safeContext) else { return }
+            UserDefaults.standard.set(data, forKey: key(for: userId))
+            let identity = KBLiteManager.resolveAuthorizedPersonaIdentity(for: safeContext)
+            KBLiteManager.shared.personaContextDidChange(to: identity)
+            KnowledgeSyncCoordinator.shared.personaContextDidChange(to: identity)
+            guard previousContext != safeContext else { return }
+            NotificationCenter.default.post(name: .djDigitalHumanContextDidChange, object: safeContext)
         }
+    }
+
+    func reconcileFamilyAuthorization() {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async {
+                self.reconcileFamilyAuthorization()
+            }
+            return
+        }
+        let userId = normalizedUserId(UserManager.shared.currentUser?.id)
+        guard !userId.isEmpty,
+              let data = UserDefaults.standard.data(forKey: key(for: userId)),
+              let storedContext = try? JSONDecoder().decode(DigitalHumanContext.self, from: data) else {
+            return
+        }
+        let hasAuthorizedFamilyMember = FamilyRepository.shared.acceptedMember(
+            by: storedContext.ownerId
+        ) != nil
+        guard FamilyContextReconciliationPolicy.shouldFallbackToSelf(
+            viewerUserId: userId,
+            contextOwnerId: storedContext.ownerId,
+            isSelfAssistant: storedContext.isSelfAssistant,
+            hasAuthorizedFamilyMember: hasAuthorizedFamilyMember
+        ) else { return }
+        current = .defaultContext(userId: userId)
+    }
+
+    private func validatedContext(_ context: DigitalHumanContext, userId: String) -> DigitalHumanContext? {
+        let normalized = context.normalizedForCurrentViewer(userId)
+        let ownerId = normalized.ownerId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !ownerId.isEmpty else { return nil }
+
+        if normalized.isSelfAssistant || ownerId == userId {
+            return .defaultContext(userId: userId)
+        }
+        guard let member = FamilyRepository.shared.acceptedMember(by: ownerId) else {
+            return nil
+        }
+        return DigitalHumanContext(
+            viewerUserId: userId,
+            ownerId: member.id,
+            displayName: member.name,
+            relation: member.relation,
+            mode: member.digitalHumanMode,
+            isSelfAssistant: false
+        )
+    }
+
+    private func key(for userId: String) -> String {
+        "\(keyBase).\(userId)"
+    }
+
+    private func storedContext(for userId: String) -> DigitalHumanContext? {
+        guard let data = UserDefaults.standard.data(forKey: key(for: userId)) else { return nil }
+        return try? JSONDecoder().decode(DigitalHumanContext.self, from: data)
+    }
+
+    private func normalizedUserId(_ userId: String?) -> String {
+        userId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 }
 

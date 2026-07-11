@@ -5,10 +5,113 @@ enum KnowledgeContextPolicyModelSmoke {
     static func main() throws {
         verifyGenerationConfidencePolicy()
         verifyPersonaFallbackPolicy()
+        verifyRelationCannotGrantPersonalIdentity()
+        verifyPersonaAuthorizationSnapshot()
+        verifyAuthorizationEpoch()
         verifyPacketIdentityPolicy()
         verifyPersonaEntityAndEvidencePolicy()
         try verifyLegacyGraphCompatibility()
         print("Knowledge context policy model smoke passed")
+    }
+
+    private static func verifyAuthorizationEpoch() {
+        var epoch = KnowledgeAuthorizationEpochState()
+        let callbackEpoch = epoch.currentEpoch
+        require(epoch.accepts(boundEpoch: callbackEpoch), "the active callback must match its bound authorization epoch")
+        epoch.rotate()
+        require(!epoch.accepts(boundEpoch: callbackEpoch), "rotating authorization must immediately stale queued callbacks")
+        require(epoch.accepts(boundEpoch: epoch.currentEpoch), "a new generation must bind the rotated epoch")
+    }
+
+    private static func verifyPersonaAuthorizationSnapshot() {
+        let personal = KBPersonaAuthorizationSnapshot(
+            identity: KBPersonaIdentity(ownerUserId: "viewer", personaScope: "personal", digitalHumanId: "viewer"),
+            userGeneration: UUID(),
+            personaGeneration: UUID(),
+            familyAuthorizationGeneration: nil
+        )
+        require(personal.isComplete, "personal async authorization snapshot must not require a family token")
+
+        let familyIdentity = KBPersonaIdentity(
+            ownerUserId: "viewer",
+            personaScope: "family",
+            digitalHumanId: "family-A"
+        )
+        let missingFamilyToken = KBPersonaAuthorizationSnapshot(
+            identity: familyIdentity,
+            userGeneration: UUID(),
+            personaGeneration: UUID(),
+            familyAuthorizationGeneration: nil
+        )
+        require(!missingFamilyToken.isComplete, "family async authorization snapshot must fail closed without a generation token")
+        let authorizedFamily = KBPersonaAuthorizationSnapshot(
+            identity: familyIdentity,
+            userGeneration: UUID(),
+            personaGeneration: UUID(),
+            familyAuthorizationGeneration: UUID()
+        )
+        require(authorizedFamily.isComplete, "family async authorization snapshot must accept an explicit generation token")
+        require(
+            KBPersonaAuthorizationSnapshotPolicy.isCurrent(
+                authorizedFamily,
+                currentIdentity: familyIdentity,
+                userGeneration: authorizedFamily.userGeneration,
+                personaGeneration: authorizedFamily.personaGeneration,
+                familyAuthorizationGeneration: authorizedFamily.familyAuthorizationGeneration
+            ),
+            "matching family generations must keep the async snapshot current"
+        )
+        require(
+            !KBPersonaAuthorizationSnapshotPolicy.isCurrent(
+                authorizedFamily,
+                currentIdentity: familyIdentity,
+                userGeneration: UUID(),
+                personaGeneration: authorizedFamily.personaGeneration,
+                familyAuthorizationGeneration: authorizedFamily.familyAuthorizationGeneration
+            ),
+            "a user generation change must invalidate the async snapshot"
+        )
+        require(
+            !KBPersonaAuthorizationSnapshotPolicy.isCurrent(
+                authorizedFamily,
+                currentIdentity: familyIdentity,
+                userGeneration: authorizedFamily.userGeneration,
+                personaGeneration: UUID(),
+                familyAuthorizationGeneration: authorizedFamily.familyAuthorizationGeneration
+            ),
+            "a persona generation change must invalidate the async snapshot"
+        )
+        require(
+            !KBPersonaAuthorizationSnapshotPolicy.isCurrent(
+                authorizedFamily,
+                currentIdentity: familyIdentity,
+                userGeneration: authorizedFamily.userGeneration,
+                personaGeneration: authorizedFamily.personaGeneration,
+                familyAuthorizationGeneration: UUID()
+            ),
+            "a family authorization generation change must invalidate the async snapshot"
+        )
+    }
+
+    private static func verifyRelationCannotGrantPersonalIdentity() {
+        let spoofed = KBPersonaIdentityResolver.resolve(
+            viewerUserId: "viewer",
+            ownerId: "family-member",
+            relation: "本人",
+            isSelfAssistant: false,
+            familyMemberDigitalHumanId: "family-digital-human"
+        )
+        require(spoofed.personaScope == "family", "relation text must not grant personal identity")
+        require(spoofed.digitalHumanId == "family-digital-human", "authorized family identity must retain canonical digital-human ID")
+
+        let explicitSelf = KBPersonaIdentityResolver.resolve(
+            viewerUserId: "viewer",
+            ownerId: "viewer",
+            relation: "家人",
+            isSelfAssistant: true,
+            familyMemberDigitalHumanId: nil
+        )
+        require(explicitSelf.isPersonal, "explicit self identity must remain personal")
     }
 
     private static func verifyGenerationConfidencePolicy() {
@@ -159,14 +262,14 @@ enum KnowledgeContextPolicyModelSmoke {
             digitalHumanId: "family-canonical"
         )
         require(
-            KBPersonaPolicy.allowsEntity(
+            !KBPersonaPolicy.allowsEntity(
                 ownerUserId: nil,
                 personaScope: nil,
                 digitalHumanId: nil,
                 for: personal,
                 legacyOwnerUserId: "viewer"
             ),
-            "personal identity must retain legacy entity compatibility"
+            "personal identity must not claim ownerless legacy entities"
         )
         require(
             !KBPersonaPolicy.allowsEntity(
@@ -189,8 +292,8 @@ enum KnowledgeContextPolicyModelSmoke {
             "family identity must allow an exact owner/persona/digital-human match"
         )
         require(
-            KBPersonaPolicy.allowsEvidenceStatus(nil, for: personal),
-            "personal legacy evidence may remain usable"
+            !KBPersonaPolicy.allowsEvidenceStatus(nil, for: personal),
+            "personal legacy evidence must remain quarantined from generation"
         )
         require(
             !KBPersonaPolicy.allowsEvidenceStatus(nil, for: family),

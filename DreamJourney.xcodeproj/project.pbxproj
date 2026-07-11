@@ -50,6 +50,7 @@
 		C7E150000000000000000002 /* KnowledgeWidgetSnapshotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E150000000000000000102 /* KnowledgeWidgetSnapshotStore.swift */; };
 		C7E150000000000000000003 /* WidgetKnowledgeSnapshotReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E150000000000000000103 /* WidgetKnowledgeSnapshotReader.swift */; };
 		C7E150000000000000000004 /* DreamJourneyWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = C31B66E6C099EABF318FC693 /* DreamJourneyWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		C7E160000000000000000001 /* FamilyRelationshipAuthorizationPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E160000000000000000101 /* FamilyRelationshipAuthorizationPolicy.swift */; };
 		7D543DD05A96F0944D9BA409 /* bs_texture_halfFace.png in Resources */ = {isa = PBXBuildFile; fileRef = C9115FEF531F2DA00EDE4969 /* bs_texture_halfFace.png */; };
 		7FE1A54F9280057AA970D224 /* DialogEngineManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B3A23A2BA7FD3D92A7BC975 /* DialogEngineManager.swift */; };
 		813B7A93279A0D98C91B3276 /* DreamJourneyWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D151E9314D78EB40CF2EE48 /* DreamJourneyWidget.swift */; };
@@ -205,6 +206,7 @@
 		C7E150000000000000000102 /* KnowledgeWidgetSnapshotStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeWidgetSnapshotStore.swift; sourceTree = "<group>"; };
 		C7E150000000000000000103 /* WidgetKnowledgeSnapshotReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetKnowledgeSnapshotReader.swift; sourceTree = "<group>"; };
 		C7E150000000000000000104 /* DreamJourneyWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DreamJourneyWidget.entitlements; sourceTree = "<group>"; };
+		C7E160000000000000000101 /* FamilyRelationshipAuthorizationPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyRelationshipAuthorizationPolicy.swift; sourceTree = "<group>"; };
 		57FC3EFBF8FAC9ABFA05E1C8 /* 01.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = 01.mp4; sourceTree = "<group>"; };
 		5ABDBC7F0000C4386BB6B2C5 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		5B20338C4C40695560A52B81 /* FamilyRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyRepository.swift; sourceTree = "<group>"; };
@@ -388,6 +390,7 @@
 				C7E14A110000000000000102 /* EchoKnowledgeContextPolicy.swift */,
 				C7E150000000000000000101 /* KnowledgeWidgetPrivacyPolicy.swift */,
 				C7E150000000000000000102 /* KnowledgeWidgetSnapshotStore.swift */,
+				C7E160000000000000000101 /* FamilyRelationshipAuthorizationPolicy.swift */,
 				766106FFCA3A78A7BE5B2E76 /* KBLiteModels.swift */,
 				8310EA30F87E2748EE0535A1 /* KBLiteMultiUser.swift */,
 				EA7025362579F4B59C5376E8 /* KBLitePDFExporter.swift */,
@@ -1003,6 +1006,7 @@
 				52B3383F8F4517669DA70A7B /* MemoryDetailViewController.swift in Sources */,
 				FEF405C138F6D1A6B57DD767 /* MemoryEditViewController.swift in Sources */,
 				8D3329C01B2DE3980D08E92E /* MemoryModel.swift in Sources */,
+				C7E160000000000000000001 /* FamilyRelationshipAuthorizationPolicy.swift in Sources */,
 				A52FFB266D8D9FC320182A0A /* MemoryRepository.swift in Sources */,
 				E888BD0CCEFEF938A377A489 /* MessageCells.swift in Sources */,
 				1D6C68E038F68B262E1C025D /* MicrophonePermissionManager.swift in Sources */,

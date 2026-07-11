@@ -15,17 +15,35 @@ final class KnowledgeSyncCoordinator {
     private var needsResync = false
     private var debounceWorkItem: DispatchWorkItem?
     private var activePullSessionID: UUID?
+    private var activeSyncAuthorization: KnowledgeSyncAuthorizationScope?
+    private var activePersonaIdentity: KBPersonaIdentity?
+    private var activeAuthorizationEpoch: UUID?
+    private var authorizationEpochState = KnowledgeAuthorizationEpochState()
+    private var authorizationOwnerUserId: String?
+    private var authorizationPersonaIdentity: KBPersonaIdentity?
+    private let authorizationEpochLock = NSLock()
+    private let queueIdentityKey = DispatchSpecificKey<UInt8>()
+    private let queueIdentityValue: UInt8 = 1
 
-    private init() {}
+    private init() {
+        queue.setSpecific(key: queueIdentityKey, value: queueIdentityValue)
+    }
 
     func userDidChange(to userId: String?) {
         // 必须在 KBLite 切换图谱前同步失效旧 generation，避免已排队的旧用户回调
         // 通过检查后写入新用户文件。
-        queue.sync {
+        let authorizationEpoch = rotateAuthorizationEpoch(
+            ownerUserId: userId,
+            personaIdentity: nil
+        )
+        performSynchronouslyOnQueue {
             let staleCompletions = Array(self.governanceCompletions.values)
             self.governanceCompletions.removeAll()
             self.activeUserId = userId
+            self.activeSyncAuthorization = nil
+            self.activePersonaIdentity = nil
             self.syncGeneration = UUID()
+            self.activeAuthorizationEpoch = authorizationEpoch
             self.isSyncing = false
             self.needsResync = false
             self.activePullSessionID = nil
@@ -45,22 +63,161 @@ final class KnowledgeSyncCoordinator {
         }
     }
 
+    func personaContextDidChange(to identity: KBPersonaIdentity?) {
+        guard let authorizationEpoch = rotateAuthorizationEpochForPersonaChange(identity) else {
+            return
+        }
+        performSynchronouslyOnQueue {
+            let authorizedIdentity: KBPersonaIdentity?
+            if let identity,
+               identity.ownerUserId == self.activeUserId,
+               self.activeSyncAuthorization?.allows(identity: identity) == true {
+                authorizedIdentity = identity
+            } else {
+                authorizedIdentity = nil
+            }
+            self.bindAuthorizationMetadata(
+                ownerUserId: self.activeUserId,
+                personaIdentity: authorizedIdentity
+            )
+
+            let staleCompletions = Array(self.governanceCompletions.values)
+            self.governanceCompletions.removeAll()
+            self.activePersonaIdentity = authorizedIdentity
+            self.syncGeneration = UUID()
+            self.activeAuthorizationEpoch = authorizationEpoch
+            self.isSyncing = false
+            self.needsResync = false
+            self.activePullSessionID = nil
+            self.debounceWorkItem?.cancel()
+            self.debounceWorkItem = nil
+            if !staleCompletions.isEmpty {
+                DispatchQueue.main.async {
+                    staleCompletions.forEach {
+                        $0(.failure(KnowledgeGovernanceCoordinatorError.invalidSessionOrIdentity))
+                    }
+                }
+            }
+        }
+    }
+
+    func familyAuthorizationRefreshStarted(ownerUserId: String) {
+        let normalizedOwner = ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedOwner.isEmpty else { return }
+        guard let authorizationEpoch = rotateAuthorizationEpochForFamilyRefresh(
+            ownerUserId: normalizedOwner
+        ) else { return }
+        performSynchronouslyOnQueue {
+            guard self.activeUserId == normalizedOwner else { return }
+            let staleCompletions = Array(self.governanceCompletions.values)
+            self.governanceCompletions.removeAll()
+            self.activeSyncAuthorization = nil
+            self.syncGeneration = UUID()
+            self.activeAuthorizationEpoch = authorizationEpoch
+            self.isSyncing = false
+            self.needsResync = false
+            self.activePullSessionID = nil
+            self.debounceWorkItem?.cancel()
+            self.debounceWorkItem = nil
+            if !staleCompletions.isEmpty {
+                DispatchQueue.main.async {
+                    staleCompletions.forEach {
+                        $0(.failure(KnowledgeGovernanceCoordinatorError.invalidSessionOrIdentity))
+                    }
+                }
+            }
+        }
+    }
+
+    func familyAuthorizationDidRefresh(ownerUserId: String, authorizationChanged: Bool) {
+        updateFamilyAuthorization(
+            ownerUserId: ownerUserId,
+            resetRemoteBase: authorizationChanged,
+            reason: "familyAuthorizationRefreshed"
+        )
+    }
+
+    func familyAuthorizationRefreshFailed(ownerUserId: String) {
+        updateFamilyAuthorization(
+            ownerUserId: ownerUserId,
+            resetRemoteBase: true,
+            reason: "familyAuthorizationFailed"
+        )
+    }
+
+    private func updateFamilyAuthorization(
+        ownerUserId: String,
+        resetRemoteBase: Bool,
+        reason: String
+    ) {
+        let normalizedOwner = ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedOwner.isEmpty else { return }
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async {
+                self.updateFamilyAuthorization(
+                    ownerUserId: normalizedOwner,
+                    resetRemoteBase: resetRemoteBase,
+                    reason: reason
+                )
+            }
+            return
+        }
+        guard let authorization = makeAccountSyncAuthorization(userId: normalizedOwner) else { return }
+        let currentPersonaIdentity = KBLiteManager.captureCurrentPersonaAuthorizationSnapshot()?.identity
+        bindAuthorizationMetadata(
+            ownerUserId: normalizedOwner,
+            personaIdentity: currentPersonaIdentity
+        )
+        let authorizationEpoch = currentAuthorizationEpoch()
+        queue.async {
+            guard self.activeUserId == normalizedOwner else { return }
+            self.activeSyncAuthorization = authorization
+            self.activeAuthorizationEpoch = authorizationEpoch
+            self.activePersonaIdentity = currentPersonaIdentity.flatMap {
+                authorization.allows(identity: $0) ? $0 : nil
+            }
+            if resetRemoteBase {
+                try? self.baseStore.remove(for: normalizedOwner)
+                try? self.pendingStore.remove(for: normalizedOwner)
+            }
+            self.enqueueSync(reason: reason)
+        }
+    }
+
     func synchronizeCurrentUser(reason: String) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async {
+                self.synchronizeCurrentUser(reason: reason)
+            }
+            return
+        }
         guard DreamJourneyBackendClient.shared.isKnowledgeSyncConfigured,
               let userId = UserManager.shared.currentUser?.id,
-              BackendAuthSessionStore.shared.currentSession?.userId == userId else {
+              BackendAuthSessionStore.shared.currentSession?.userId == userId,
+              let authorization = makeAccountSyncAuthorization(userId: userId) else {
             print("[KnowledgeSync] skip reason=missingBackendOrUserSession trigger=\(reason)")
             return
         }
+        let currentPersonaIdentity = KBLiteManager.captureCurrentPersonaAuthorizationSnapshot()?.identity
+        bindAuthorizationMetadata(ownerUserId: userId, personaIdentity: currentPersonaIdentity)
+        let authorizationEpoch = currentAuthorizationEpoch()
         queue.async {
             if self.activeUserId != userId {
                 self.activeUserId = userId
                 self.syncGeneration = UUID()
+                self.activeAuthorizationEpoch = authorizationEpoch
                 self.isSyncing = false
                 self.needsResync = false
                 self.activePullSessionID = nil
                 self.debounceWorkItem?.cancel()
                 self.debounceWorkItem = nil
+            }
+            self.activeSyncAuthorization = authorization
+            if self.activeAuthorizationEpoch == nil {
+                self.activeAuthorizationEpoch = authorizationEpoch
+            }
+            self.activePersonaIdentity = currentPersonaIdentity.flatMap {
+                authorization.allows(identity: $0) ? $0 : nil
             }
             self.enqueueSync(reason: reason)
         }
@@ -75,14 +232,18 @@ final class KnowledgeSyncCoordinator {
         completion: @escaping (Result<KBKnowledgeGovernanceResponse, Error>) -> Void
     ) -> String {
         let normalizedOperationId = operationId.trimmingCharacters(in: .whitespacesAndNewlines)
-        let identity = expectedIdentity ?? KBLiteManager.resolveCurrentPersonaIdentity()
+        let authorizationSnapshot = KBLiteManager.captureCurrentPersonaAuthorizationSnapshot()
+        let identity = expectedIdentity ?? authorizationSnapshot?.identity
         guard DreamJourneyBackendClient.shared.isKnowledgeSyncConfigured,
-              identity.isComplete,
+              let authorizationSnapshot,
+              let identity,
+              authorizationSnapshot.identity == identity,
+              let accountAuthorization = makeAccountSyncAuthorization(userId: identity.ownerUserId),
+              accountAuthorization.allows(identity: identity),
               let userId = UserManager.shared.currentUser?.id,
               BackendAuthSessionStore.shared.currentSession?.userId == userId,
               KBLiteManager.shared.loadedUserId == userId,
-              identity.ownerUserId == userId,
-              KBLiteManager.resolveCurrentPersonaIdentity() == identity else {
+              identity.ownerUserId == userId else {
             DispatchQueue.main.async {
                 completion(.failure(KnowledgeGovernanceCoordinatorError.invalidSessionOrIdentity))
             }
@@ -91,6 +252,12 @@ final class KnowledgeSyncCoordinator {
 
         queue.async {
             do {
+                guard self.activeUserId == userId,
+                      self.activePersonaIdentity == nil || self.activePersonaIdentity == identity else {
+                    throw KnowledgeGovernanceCoordinatorError.invalidSessionOrIdentity
+                }
+                self.activeSyncAuthorization = accountAuthorization
+                self.activePersonaIdentity = identity
                 let item = KnowledgeGovernanceOutboxItem(
                     operationId: normalizedOperationId,
                     userId: userId,
@@ -107,10 +274,6 @@ final class KnowledgeSyncCoordinator {
                 }
                 self.governanceCompletions[normalizedOperationId] = completion
 
-                if self.activeUserId != userId {
-                    self.activeUserId = userId
-                    self.syncGeneration = UUID()
-                }
                 if self.isSyncing {
                     self.needsResync = true
                     return
@@ -176,9 +339,9 @@ final class KnowledgeSyncCoordinator {
               let base = loadBase(for: userId) else {
             return false
         }
-        let currentIdentity = KBLiteManager.resolveCurrentPersonaIdentity()
-        guard KBLiteManager.shared.loadedUserId == userId,
-              currentIdentity.isComplete,
+        guard let authorization = currentSyncAuthorization(userId: userId),
+              let currentIdentity = activePersonaIdentity,
+              authorization.allows(identity: currentIdentity),
               let item = loadGovernanceOutbox(for: userId).first(where: {
                   !$0.isQuarantined && $0.expectedIdentity == currentIdentity
               }) else {
@@ -299,23 +462,14 @@ final class KnowledgeSyncCoordinator {
         userId: String,
         generation: UUID
     ) {
-        let currentIdentity = KBLiteManager.resolveCurrentPersonaIdentity()
-        guard currentIdentity == item.expectedIdentity,
-              KBLiteManager.shared.loadedUserId == userId else {
-            do {
-                try governanceOutboxStore.remove(operationId: item.operationId, for: userId)
-                completeGovernance(item.operationId, result: .success(response))
-                isSyncing = false
-                enqueueSync(reason: "governancePersonaChanged")
-            } catch {
-                completeGovernance(item.operationId, result: .failure(error))
-                finishGovernance(
-                    userId: userId,
-                    generation: generation,
-                    error: error,
-                    continueDraining: false
-                )
-            }
+        guard let authorization = currentSyncAuthorization(userId: userId),
+              activePersonaIdentity == item.expectedIdentity,
+              authorization.allows(identity: item.expectedIdentity) else {
+            completeGovernance(
+                item.operationId,
+                result: .failure(KnowledgeGovernanceCoordinatorError.invalidSessionOrIdentity)
+            )
+            isSyncing = false
             return
         }
 
@@ -514,7 +668,8 @@ final class KnowledgeSyncCoordinator {
         for attempt in 1...3 {
             guard KBLiteManager.shared.loadedUserId == userId,
                   let localSnapshot = KBLiteManager.shared.exportGraphSnapshot(),
-                  localSnapshot.userId == userId else {
+                  localSnapshot.userId == userId,
+                  let authorization = currentSyncAuthorization(userId: userId) else {
                 return false
             }
             do {
@@ -523,12 +678,14 @@ final class KnowledgeSyncCoordinator {
                     result = try KnowledgeSyncGraphEngine.merge(
                         base: previousBase.graph,
                         local: localSnapshot.dictionary,
-                        remote: remote.graph
+                        remote: remote.graph,
+                        authorization: authorization
                     )
                 } else {
                     result = try KnowledgeSyncGraphEngine.bootstrap(
                         local: localSnapshot.dictionary,
-                        remote: remote.graph
+                        remote: remote.graph,
+                        authorization: authorization
                     )
                 }
                 switch KBLiteManager.shared.applySyncedGraphCAS(
@@ -538,7 +695,17 @@ final class KnowledgeSyncCoordinator {
                     expectedUserId: userId
                 ) {
                 case .applied:
-                    try baseStore.save(remote, for: userId)
+                    let authorizedRemoteGraph = try KnowledgeSyncGraphEngine.syncPayloadGraph(
+                        from: remote.graph,
+                        authorization: authorization
+                    )
+                    try baseStore.save(
+                        KnowledgeRemoteBaseSnapshot(
+                            revision: remote.revision,
+                            graph: authorizedRemoteGraph
+                        ),
+                        for: userId
+                    )
                     try? pendingStore.remove(for: userId)
                     if !result.conflicts.isEmpty {
                         // Do not log entity content. This summary is QA-only type/ID evidence.
@@ -564,14 +731,18 @@ final class KnowledgeSyncCoordinator {
         guard isCurrent(userId: userId, generation: generation),
               KBLiteManager.shared.loadedUserId == userId,
               let localGraph = KBLiteManager.shared.exportGraphDictionary(),
-              let base = loadBase(for: userId) else {
+              let base = loadBase(for: userId),
+              let authorization = currentSyncAuthorization(userId: userId) else {
             finishSync(userId: userId, generation: generation, error: KnowledgeSyncError.missingRemoteBase)
             return
         }
 
         let pending: KnowledgePendingMutation
         do {
-            let syncableGraph = try KnowledgeSyncGraphEngine.syncPayloadGraph(from: localGraph)
+            let syncableGraph = try KnowledgeSyncGraphEngine.syncPayloadGraph(
+                from: localGraph,
+                authorization: authorization
+            )
             guard let fingerprint = KnowledgeSyncGraphEngine.fingerprint(of: syncableGraph) else {
                 throw KnowledgeSyncError.invalidLocalGraph
             }
@@ -585,7 +756,8 @@ final class KnowledgeSyncCoordinator {
                 let delta = try KnowledgeSyncGraphEngine.makeDelta(
                     base: base.graph,
                     local: localGraph,
-                    deletedAt: deletedAt
+                    deletedAt: deletedAt,
+                    authorization: authorization
                 )
                 if delta.isEmpty {
                     try? pendingStore.remove(for: userId)
@@ -691,13 +863,17 @@ final class KnowledgeSyncCoordinator {
         retryOnConflict: Bool
     ) {
         guard KBLiteManager.shared.loadedUserId == userId,
-              let localGraph = KBLiteManager.shared.exportGraphDictionary() else {
+              let localGraph = KBLiteManager.shared.exportGraphDictionary(),
+              let authorization = currentSyncAuthorization(userId: userId) else {
             finishSync(userId: userId, generation: generation, error: KnowledgeSyncError.invalidLocalGraph)
             return
         }
         let graph: [String: Any]
         do {
-            graph = try KnowledgeSyncGraphEngine.syncPayloadGraph(from: localGraph)
+            graph = try KnowledgeSyncGraphEngine.syncPayloadGraph(
+                from: localGraph,
+                authorization: authorization
+            )
         } catch {
             finishSync(userId: userId, generation: generation, error: error)
             return
@@ -742,13 +918,17 @@ final class KnowledgeSyncCoordinator {
 
     private func pushLegacySnapshot(userId: String, generation: UUID) {
         guard KBLiteManager.shared.loadedUserId == userId,
-              let localGraph = KBLiteManager.shared.exportGraphDictionary() else {
+              let localGraph = KBLiteManager.shared.exportGraphDictionary(),
+              let authorization = currentSyncAuthorization(userId: userId) else {
             finishSync(userId: userId, generation: generation, error: KnowledgeSyncError.invalidLocalGraph)
             return
         }
         let graph: [String: Any]
         do {
-            graph = try KnowledgeSyncGraphEngine.syncPayloadGraph(from: localGraph)
+            graph = try KnowledgeSyncGraphEngine.syncPayloadGraph(
+                from: localGraph,
+                authorization: authorization
+            )
         } catch {
             finishSync(userId: userId, generation: generation, error: error)
             return
@@ -803,8 +983,94 @@ final class KnowledgeSyncCoordinator {
         }
     }
 
+    private func currentSyncAuthorization(userId: String) -> KnowledgeSyncAuthorizationScope? {
+        guard activeSyncAuthorization?.ownerUserId == userId,
+              activeSyncAuthorization?.isComplete == true else {
+            return nil
+        }
+        return activeSyncAuthorization
+    }
+
+    private func makeAccountSyncAuthorization(userId: String) -> KnowledgeSyncAuthorizationScope? {
+        guard Thread.isMainThread, UserManager.shared.currentUser?.id == userId else { return nil }
+        let personalIdentity = KBPersonaIdentity(
+            ownerUserId: userId,
+            personaScope: "personal",
+            digitalHumanId: userId
+        )
+        let familyIdentities = FamilyRepository.shared.acceptedMembersForKnowledgeSync(ownerUserId: userId).map { member in
+            let digitalHumanId = member.digitalHumanId
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return KBPersonaIdentity(
+                ownerUserId: userId,
+                personaScope: "family",
+                digitalHumanId: digitalHumanId.isEmpty ? member.id : digitalHumanId
+            )
+        }
+        let authorization = KnowledgeSyncAuthorizationScope(
+            identity: personalIdentity,
+            additionalIdentities: familyIdentities
+        )
+        return authorization.isComplete ? authorization : nil
+    }
+
     private func isCurrent(userId: String, generation: UUID) -> Bool {
-        activeUserId == userId && syncGeneration == generation
+        guard activeUserId == userId, syncGeneration == generation else { return false }
+        authorizationEpochLock.lock()
+        defer { authorizationEpochLock.unlock() }
+        return authorizationEpochState.accepts(boundEpoch: activeAuthorizationEpoch)
+    }
+
+    private func rotateAuthorizationEpoch(
+        ownerUserId: String?,
+        personaIdentity: KBPersonaIdentity?
+    ) -> UUID {
+        authorizationEpochLock.lock()
+        defer { authorizationEpochLock.unlock() }
+        authorizationOwnerUserId = ownerUserId
+        authorizationPersonaIdentity = personaIdentity
+        return authorizationEpochState.rotate()
+    }
+
+    private func rotateAuthorizationEpochForPersonaChange(
+        _ identity: KBPersonaIdentity?
+    ) -> UUID? {
+        authorizationEpochLock.lock()
+        defer { authorizationEpochLock.unlock() }
+        guard authorizationPersonaIdentity != identity else { return nil }
+        authorizationPersonaIdentity = identity
+        return authorizationEpochState.rotate()
+    }
+
+    private func rotateAuthorizationEpochForFamilyRefresh(ownerUserId: String) -> UUID? {
+        authorizationEpochLock.lock()
+        defer { authorizationEpochLock.unlock() }
+        guard authorizationOwnerUserId == ownerUserId else { return nil }
+        return authorizationEpochState.rotate()
+    }
+
+    private func bindAuthorizationMetadata(
+        ownerUserId: String?,
+        personaIdentity: KBPersonaIdentity?
+    ) {
+        authorizationEpochLock.lock()
+        authorizationOwnerUserId = ownerUserId
+        authorizationPersonaIdentity = personaIdentity
+        authorizationEpochLock.unlock()
+    }
+
+    private func currentAuthorizationEpoch() -> UUID {
+        authorizationEpochLock.lock()
+        defer { authorizationEpochLock.unlock() }
+        return authorizationEpochState.currentEpoch
+    }
+
+    private func performSynchronouslyOnQueue(_ block: () -> Void) {
+        if DispatchQueue.getSpecific(key: queueIdentityKey) == queueIdentityValue {
+            block()
+        } else {
+            queue.sync(execute: block)
+        }
     }
 
     private func isCurrentPull(

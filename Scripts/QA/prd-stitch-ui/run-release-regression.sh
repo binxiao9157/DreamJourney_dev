@@ -347,6 +347,33 @@ run_step "Swift model guard knowledge-three-way-merge" "$STATIC_LOG_DIR/knowledg
 run_step "Swift model guard knowledge-context-policy" "$STATIC_LOG_DIR/knowledge-context-policy-model-smoke.log" \
   "$SCRIPT_DIR/run-knowledge-context-policy-model-smoke.sh"
 
+run_step "Swift model guard family-relationship-authorization" "$STATIC_LOG_DIR/family-relationship-authorization-policy-model-smoke.log" \
+  "$SCRIPT_DIR/run-family-relationship-authorization-policy-model-smoke.sh"
+
+run_step "Swift model guard family-authorization-freshness" "$STATIC_LOG_DIR/family-authorization-freshness-model-smoke.log" \
+  "$SCRIPT_DIR/run-family-authorization-freshness-model-smoke.sh"
+
+run_step "Swift model guard family-context-reconciliation" "$STATIC_LOG_DIR/family-context-reconciliation-model-smoke.log" \
+  "$SCRIPT_DIR/run-family-context-reconciliation-model-smoke.sh"
+
+run_step "Swift guard knowledge-async-authorization-snapshot" "$STATIC_LOG_DIR/knowledge-async-authorization-snapshot-check.log" \
+  "$SCRIPT_DIR/run-knowledge-async-authorization-snapshot-check.sh"
+
+run_step "Swift guard knowledge-coordinator-authorization-epoch" "$STATIC_LOG_DIR/knowledge-coordinator-authorization-epoch-check.log" \
+  "$SCRIPT_DIR/run-knowledge-coordinator-authorization-epoch-check.sh"
+
+run_step "Swift guard family-repository-authorization-lifecycle" "$STATIC_LOG_DIR/family-repository-authorization-lifecycle-check.log" \
+  "$SCRIPT_DIR/run-family-repository-authorization-lifecycle-check.sh"
+
+run_step "Swift guard echo-family-context-authorization" "$STATIC_LOG_DIR/echo-family-context-authorization-check.log" \
+  "$SCRIPT_DIR/run-echo-family-context-authorization-check.sh"
+
+run_step "Swift guard family-context-reconciliation" "$STATIC_LOG_DIR/family-context-reconciliation-check.log" \
+  "$SCRIPT_DIR/run-family-context-reconciliation-check.sh"
+
+run_step "Swift guard knowledge-family-sync-import-authorization" "$STATIC_LOG_DIR/knowledge-family-sync-import-authorization-check.log" \
+  "$SCRIPT_DIR/run-knowledge-family-sync-import-authorization-check.sh"
+
 run_step "Swift model guard knowledge-widget-privacy-policy" "$STATIC_LOG_DIR/knowledge-widget-privacy-policy-model-smoke.log" \
   "$SCRIPT_DIR/run-knowledge-widget-privacy-policy-model-smoke.sh"
 

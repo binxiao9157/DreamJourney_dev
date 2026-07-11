@@ -1,5 +1,29 @@
 import Foundation
 
+enum FamilyKnowledgeShareError: LocalizedError {
+    case backendGrantRequired
+    case invalidSourceIdentity
+
+    var errorDescription: String? {
+        switch self {
+        case .backendGrantRequired:
+            return "家庭知识同步尚未开放，需由后端确认家庭关系和授权"
+        case .invalidSourceIdentity:
+            return "知识分享来源无法验证"
+        }
+    }
+}
+
+enum FamilyKnowledgeSharePolicy {
+    static var allowsLegacyLocalPackages: Bool {
+        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        return true
+        #else
+        return false
+        #endif
+    }
+}
+
 // MARK: - SharePackage
 
 /// 知识库分享包，包含元数据和 graph JSON
@@ -85,7 +109,21 @@ final class KBLiteMultiUser {
     ///   - json: 对方导出的 JSON（KBLiteGraph 格式）
     ///   - sourceUserId: 对方的 userId
     /// - Returns: 新增实体数
-    func mergeFromFamilyMember(json: String, sourceUserId: String) -> Int {
+    func mergeFromFamilyMember(
+        json: String,
+        sourceUserId: String
+    ) -> Result<Int, FamilyKnowledgeShareError> {
+        let normalizedSource = sourceUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard FamilyKnowledgeSharePolicy.allowsLegacyLocalPackages else {
+            return .failure(.backendGrantRequired)
+        }
+        guard !normalizedSource.isEmpty, normalizedSource.lowercased() != "unknown" else {
+            return .failure(.invalidSourceIdentity)
+        }
+        return .success(mergeAuthorizedLegacyGraph(json: json, sourceUserId: normalizedSource))
+    }
+
+    private func mergeAuthorizedLegacyGraph(json: String, sourceUserId: String) -> Int {
         guard let data = json.data(using: .utf8) else {
             print("[KBMultiUser] JSON 转 Data 失败")
             return 0
@@ -232,6 +270,9 @@ final class KBLiteMultiUser {
 
     /// 生成当前知识库的分享包（包含 userId 和 nickname 元数据）
     func generateSharePackage() -> SharePackage? {
+        guard FamilyKnowledgeSharePolicy.allowsLegacyLocalPackages else {
+            return nil
+        }
         guard let graphJSON = KBLiteManager.shared.exportJSON() else {
             print("[KBMultiUser] 导出 graph JSON 失败")
             return nil
@@ -253,10 +294,17 @@ final class KBLiteMultiUser {
 
     /// 从分享包导入
     /// - Returns: 新增实体数
-    func importSharePackage(_ package: SharePackage) -> Int {
+    func importSharePackage(_ package: SharePackage) -> Result<Int, FamilyKnowledgeShareError> {
+        guard FamilyKnowledgeSharePolicy.allowsLegacyLocalPackages else {
+            return .failure(.backendGrantRequired)
+        }
+        let sourceUserId = package.sourceUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !sourceUserId.isEmpty else {
+            return .failure(.invalidSourceIdentity)
+        }
         print("[KBMultiUser] 开始导入分享包: 来源=\(package.sourceNickname)(\(package.sourceUserId)), 日期=\(package.exportDate)")
 
-        let addedCount = mergeFromFamilyMember(json: package.graphJSON, sourceUserId: package.sourceUserId)
+        let addedCount = mergeAuthorizedLegacyGraph(json: package.graphJSON, sourceUserId: sourceUserId)
 
         // 记录同步历史
         let record = KBSyncRecord(
@@ -268,7 +316,7 @@ final class KBLiteMultiUser {
         syncHistory.insert(record, at: 0)
         saveSyncHistory()
 
-        return addedCount
+        return .success(addedCount)
     }
 
     // MARK: - Sync History Persistence

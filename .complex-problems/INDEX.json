@@ -1,5 +1,5 @@
 {
-  "active_ledger_id": "L20260711-145625-21",
+  "active_ledger_id": "L20260711-153159",
   "ledgers": [
     {
       "active_count": 0,
@@ -231,7 +231,18 @@
       "status": "done",
       "title": "Task 21：P0 Widget / App Group 知识隐私生命周期",
       "updated_at": "2026-07-11T07:27:24+00:00"
+    },
+    {
+      "active_count": 0,
+      "blocked_count": 0,
+      "ledger_id": "L20260711-153159",
+      "path": "L20260711-153159",
+      "root_id": "P000",
+      "schema_version": 6,
+      "status": "done",
+      "title": "Task 22：P0 家庭关系授权与知识候选隔离",
+      "updated_at": "2026-07-11T09:43:27+00:00"
     }
   ],
-  "updated_at": "2026-07-11T07:27:34+00:00"
+  "updated_at": "2026-07-11T09:43:45+00:00"
 }

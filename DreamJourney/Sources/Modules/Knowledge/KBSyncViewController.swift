@@ -59,6 +59,10 @@ final class KBSyncViewController: UIViewController {
     // MARK: - Actions
 
     private func exportKnowledgeBase() {
+        guard FamilyKnowledgeSharePolicy.allowsLegacyLocalPackages else {
+            showToast("家庭知识同步尚未开放", type: .info)
+            return
+        }
         guard let package = KBLiteMultiUser.shared.generateSharePackage() else {
             showToast("导出失败，请稍后重试", type: .error)
             return
@@ -99,6 +103,10 @@ final class KBSyncViewController: UIViewController {
     }
 
     private func importKnowledgeBase() {
+        guard FamilyKnowledgeSharePolicy.allowsLegacyLocalPackages else {
+            showToast("家庭知识同步需完成后端家庭授权", type: .info)
+            return
+        }
         let alert = UIAlertController(title: "导入家人的知识库", message: "选择导入方式", preferredStyle: .actionSheet)
 
         alert.addAction(UIAlertAction(title: "从剪贴板粘贴", style: .default) { [weak self] _ in
@@ -153,26 +161,19 @@ final class KBSyncViewController: UIViewController {
             )
             alert.addAction(UIAlertAction(title: "取消", style: .cancel))
             alert.addAction(UIAlertAction(title: "导入", style: .default) { [weak self] _ in
-                let count = KBLiteMultiUser.shared.importSharePackage(package)
-                self?.showToast("导入成功，新增 \(count) 条知识", type: .success)
-                self?.tableView.reloadData()
+                switch KBLiteMultiUser.shared.importSharePackage(package) {
+                case .success(let count):
+                    self?.showToast("导入成功，新增 \(count) 条知识", type: .success)
+                    self?.tableView.reloadData()
+                case .failure(let error):
+                    self?.showToast(error.localizedDescription, type: .error)
+                }
             })
             present(alert, animated: true)
         } else {
-            // 尝试作为裸 graph JSON 导入
+            // 裸 graph 没有可验证身份，任何构建都拒绝。
             if let _ = try? decoder.decode(KBLiteGraph.self, from: data) {
-                let alert = UIAlertController(
-                    title: "确认导入",
-                    message: "检测到知识库数据（无元信息），确定要合并吗？",
-                    preferredStyle: .alert
-                )
-                alert.addAction(UIAlertAction(title: "取消", style: .cancel))
-                alert.addAction(UIAlertAction(title: "导入", style: .default) { [weak self] _ in
-                    let count = KBLiteMultiUser.shared.mergeFromFamilyMember(json: jsonString, sourceUserId: "unknown")
-                    self?.showToast("导入成功，新增 \(count) 条知识", type: .success)
-                    self?.tableView.reloadData()
-                })
-                present(alert, animated: true)
+                showToast(FamilyKnowledgeShareError.invalidSourceIdentity.localizedDescription, type: .error)
             } else {
                 showToast("无法识别的文件格式", type: .error)
             }
@@ -209,7 +210,7 @@ extension KBSyncViewController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         switch section {
         case 0: return 1  // 用户信息卡片
-        case 1: return 2  // 导出 + 导入
+        case 1: return FamilyKnowledgeSharePolicy.allowsLegacyLocalPackages ? 2 : 0
         case 2: return max(syncHistory.count, 1)  // 同步历史
         case 3: return 1  // 底部说明
         default: return 0

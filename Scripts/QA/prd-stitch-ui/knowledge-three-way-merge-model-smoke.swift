@@ -2,6 +2,14 @@ import Foundation
 
 @main
 enum KnowledgeThreeWayMergeModelSmoke {
+    private static let authorization = KnowledgeSyncAuthorizationScope(
+        identity: KBPersonaIdentity(
+            ownerUserId: "owner-A",
+            personaScope: "personal",
+            digitalHumanId: "owner-A"
+        )
+    )
+
     static func main() throws {
         try verifyFirstUpgradeBootstrap()
         try verifyOneSidedAndConflictingChanges()
@@ -9,6 +17,8 @@ enum KnowledgeThreeWayMergeModelSmoke {
         try verifyConflictingDeletionAndEdit()
         try verifyTombstonesAndPrivateProtection()
         try verifyPerUserBaseAndPendingIsolation()
+        try verifyOwnerAndPersonaAuthorizationBoundary()
+        try verifyAccountPersonaAuthorizationPreventsCrossPersonaTombstones()
         verifyV2ResponseAndFallbackContracts()
         print("Knowledge three-way merge model smoke passed")
     }
@@ -23,7 +33,11 @@ enum KnowledgeThreeWayMergeModelSmoke {
             facts: [entity(id: "shared", value: "remote-version")]
         )
 
-        let result = try KnowledgeSyncGraphEngine.bootstrap(local: local, remote: remote)
+        let result = try KnowledgeSyncGraphEngine.bootstrap(
+            local: local,
+            remote: remote,
+            authorization: authorization
+        )
         require(ids(in: result.graph, type: "people") == ["local-person"], "bootstrap must retain local entities")
         require(ids(in: result.graph, type: "places") == ["remote-place"], "bootstrap must absorb remote entities")
         require(value(in: result.graph, type: "facts", id: "shared") == "local-version", "bootstrap must prefer local on same ID")
@@ -47,7 +61,12 @@ enum KnowledgeThreeWayMergeModelSmoke {
             events: [entity(id: "conflict", value: "remote-secret-text")]
         )
 
-        let result = try KnowledgeSyncGraphEngine.merge(base: base, local: local, remote: remote)
+        let result = try KnowledgeSyncGraphEngine.merge(
+            base: base,
+            local: local,
+            remote: remote,
+            authorization: authorization
+        )
         require(value(in: result.graph, type: "people", id: "local-change") == "local", "local-only change must survive")
         require(value(in: result.graph, type: "places", id: "remote-change") == "remote", "remote-only change must be adopted")
         require(value(in: result.graph, type: "events", id: "conflict") == "local-secret-text", "two-sided conflict must be local-wins")
@@ -65,14 +84,24 @@ enum KnowledgeThreeWayMergeModelSmoke {
         let local = graph(facts: [privateEntity, legacyPrivate])
         let deletedAt = "2026-07-11T01:02:03Z"
 
-        let delta = try KnowledgeSyncGraphEngine.makeDelta(base: base, local: local, deletedAt: deletedAt)
+        let delta = try KnowledgeSyncGraphEngine.makeDelta(
+            base: base,
+            local: local,
+            deletedAt: deletedAt,
+            authorization: authorization
+        )
         require(delta.upserts.values.flatMap { $0 }.isEmpty, "private entities must never be uploaded")
         require(delta.tombstones.count == 1, "only the actually removed syncable entity should become a tombstone")
         require(delta.tombstones.first?.entityType == "people", "tombstone must retain entity type")
         require(delta.tombstones.first?.entityId == "deleted-person", "tombstone must retain entity ID")
         require(delta.tombstones.first?.deletedAt == deletedAt, "tombstone timestamp must be stable")
 
-        let merge = try KnowledgeSyncGraphEngine.merge(base: base, local: local, remote: graph())
+        let merge = try KnowledgeSyncGraphEngine.merge(
+            base: base,
+            local: local,
+            remote: graph(),
+            authorization: authorization
+        )
         require(value(in: merge.graph, type: "facts", id: "private-collision") == "private-local", "remote deletion must not delete localOnly data")
         require(value(in: merge.graph, type: "facts", id: "legacy-private") == "legacy", "remote deletion must not delete legacy data without metadata")
     }
@@ -85,7 +114,12 @@ enum KnowledgeThreeWayMergeModelSmoke {
         let local = graph(people: [entity(id: "remote-delete", value: "base")])
         let remote = graph(people: [entity(id: "local-delete", value: "base")])
 
-        let result = try KnowledgeSyncGraphEngine.merge(base: base, local: local, remote: remote)
+        let result = try KnowledgeSyncGraphEngine.merge(
+            base: base,
+            local: local,
+            remote: remote,
+            authorization: authorization
+        )
         require(ids(in: result.graph, type: "people").isEmpty, "one-sided local and remote deletions must both be retained")
         require(result.conflicts.isEmpty, "one-sided deletions must not be reported as conflicts")
     }
@@ -98,7 +132,12 @@ enum KnowledgeThreeWayMergeModelSmoke {
         let local = graph(facts: [entity(id: "local-edit", value: "edited locally")])
         let remote = graph(facts: [entity(id: "local-delete", value: "edited remotely")])
 
-        let result = try KnowledgeSyncGraphEngine.merge(base: base, local: local, remote: remote)
+        let result = try KnowledgeSyncGraphEngine.merge(
+            base: base,
+            local: local,
+            remote: remote,
+            authorization: authorization
+        )
         require(
             value(in: result.graph, type: "facts", id: "local-edit") == "edited locally",
             "a local edit must win when the remote side deleted the same entity"
@@ -155,6 +194,102 @@ enum KnowledgeThreeWayMergeModelSmoke {
         require(otherPending == nil, "pending mutation must be user-isolated")
     }
 
+    private static func verifyOwnerAndPersonaAuthorizationBoundary() throws {
+        let exact = entity(id: "exact", value: "allowed")
+        let wrongOwner = entity(id: "wrong-owner", value: "denied", ownerUserId: "owner-B")
+        let ownerless = entity(id: "ownerless", value: "local-only", ownerUserId: nil)
+        let family = entity(
+            id: "family",
+            value: "family-only",
+            personaScope: "family",
+            digitalHumanId: "family-A"
+        )
+        let local = graph(facts: [exact, wrongOwner, ownerless, family])
+
+        let payload = try KnowledgeSyncGraphEngine.syncPayloadGraph(
+            from: local,
+            authorization: authorization
+        )
+        require(
+            ids(in: payload, type: "facts") == ["exact"],
+            "personal sync payload must require exact owner/persona/digital-human identity"
+        )
+
+        let merged = try KnowledgeSyncGraphEngine.bootstrap(
+            local: graph(facts: [ownerless]),
+            remote: graph(facts: [exact, wrongOwner, family]),
+            authorization: authorization
+        )
+        require(
+            ids(in: merged.graph, type: "facts") == ["exact", "ownerless"],
+            "remote unauthorized entities must be filtered while local legacy remains local"
+        )
+
+        let familyAuthorization = KnowledgeSyncAuthorizationScope(
+            identity: KBPersonaIdentity(
+                ownerUserId: "owner-A",
+                personaScope: "family",
+                digitalHumanId: "family-A"
+            )
+        )
+        let familyPayload = try KnowledgeSyncGraphEngine.syncPayloadGraph(
+            from: graph(facts: [family, exact]),
+            authorization: familyAuthorization
+        )
+        require(
+            ids(in: familyPayload, type: "facts") == ["family"],
+            "family sync must require exact family digital-human identity"
+        )
+    }
+
+    private static func verifyAccountPersonaAuthorizationPreventsCrossPersonaTombstones() throws {
+        let familyIdentity = KBPersonaIdentity(
+            ownerUserId: "owner-A",
+            personaScope: "family",
+            digitalHumanId: "family-A"
+        )
+        let accountAuthorization = KnowledgeSyncAuthorizationScope(
+            identity: KBPersonaIdentity(
+                ownerUserId: "owner-A",
+                personaScope: "personal",
+                digitalHumanId: "owner-A"
+            ),
+            additionalIdentities: [familyIdentity]
+        )
+        let personal = entity(id: "personal", value: "personal")
+        let family = entity(
+            id: "family",
+            value: "family",
+            personaScope: "family",
+            digitalHumanId: "family-A"
+        )
+        let unauthorizedFamily = entity(
+            id: "other-family",
+            value: "denied",
+            personaScope: "family",
+            digitalHumanId: "family-B"
+        )
+
+        let bootstrap = try KnowledgeSyncGraphEngine.bootstrap(
+            local: graph(),
+            remote: graph(facts: [personal, family, unauthorizedFamily]),
+            authorization: accountAuthorization
+        )
+        require(
+            ids(in: bootstrap.graph, type: "facts") == ["family", "personal"],
+            "account sync must retain every authorized persona and reject unaccepted family personas"
+        )
+
+        let delta = try KnowledgeSyncGraphEngine.makeDelta(
+            base: graph(facts: [personal, family]),
+            local: bootstrap.graph,
+            deletedAt: "2026-07-11T01:02:03Z",
+            authorization: accountAuthorization
+        )
+        require(delta.tombstones.isEmpty, "persona switching must not tombstone another authorized persona")
+        require(delta.upserts.values.flatMap { $0 }.isEmpty, "unchanged authorized personas must not be re-uploaded")
+    }
+
     private static func verifyV2ResponseAndFallbackContracts() {
         let mutation: [String: Any] = ["upserts": emptyUpserts(), "tombstones": []]
         let response: [String: Any] = [
@@ -203,8 +338,18 @@ enum KnowledgeThreeWayMergeModelSmoke {
         ]
     }
 
-    private static func entity(id: String, value: String, scope: String? = "generationAllowed") -> [String: Any] {
+    private static func entity(
+        id: String,
+        value: String,
+        scope: String? = "generationAllowed",
+        ownerUserId: String? = "owner-A",
+        personaScope: String = "personal",
+        digitalHumanId: String = "owner-A"
+    ) -> [String: Any] {
         var object: [String: Any] = ["id": id, "value": value]
+        if let ownerUserId { object["ownerUserId"] = ownerUserId }
+        object["personaScope"] = personaScope
+        object["digitalHumanId"] = digitalHumanId
         if let scope {
             object["privacyMetadata"] = ["scope": scope, "sourceRefs": []]
         }

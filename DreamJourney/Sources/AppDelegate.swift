@@ -848,7 +848,11 @@ private extension AppDelegate {
             isOnline: true,
             lastUpdated: "UI QA 已准备",
             digitalHumanMode: .star,
-            backendContractMode: "uiqaStarCare"
+            backendContractMode: "uiqaStarCare",
+            relationshipOwnerUserId: UserManager.shared.currentUser?.id ?? "user_9999",
+            relationshipAuthoritySource: .qaFixture,
+            accessStatus: "active",
+            invitationStatus: "accepted"
         ))
     }
 
@@ -953,7 +957,9 @@ private extension AppDelegate {
             "name": "星辰测试家人",
             "relation": "家人",
             "phone": "13900001111",
+            "ownerUserId": UserManager.shared.currentUser?.id ?? "user_9999",
             "accessStatus": "active",
+            "invitationStatus": "accepted",
             "lastUpdated": "后端已同步",
             "personaScope": "family",
             "digitalHumanId": "digital_human_uiqa_star",
@@ -2418,6 +2424,8 @@ private extension AppDelegate {
             phone: "13900001111",
             isOnline: false,
             lastUpdated: ISO8601DateFormatter().string(from: Date().addingTimeInterval(-120)),
+            relationshipOwnerUserId: userId,
+            relationshipAuthoritySource: .qaFixture,
             accessStatus: "pending",
             invitationStatus: "pending"
         )
@@ -2428,6 +2436,8 @@ private extension AppDelegate {
             phone: "13900002222",
             isOnline: false,
             lastUpdated: ISO8601DateFormatter().string(from: Date().addingTimeInterval(-180)),
+            relationshipOwnerUserId: userId,
+            relationshipAuthoritySource: .qaFixture,
             accessStatus: "failed",
             invitationStatus: "failed",
             invitationError: "手机号暂不可达"
@@ -2439,6 +2449,8 @@ private extension AppDelegate {
             phone: "13900003333",
             isOnline: true,
             lastUpdated: ISO8601DateFormatter().string(from: Date().addingTimeInterval(-60)),
+            relationshipOwnerUserId: userId,
+            relationshipAuthoritySource: .qaFixture,
             accessStatus: "active",
             invitationStatus: "accepted"
         )

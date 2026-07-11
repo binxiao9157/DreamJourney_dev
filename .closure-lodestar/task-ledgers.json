@@ -176,7 +176,15 @@
       "status": "complete",
       "task_file": "docs/plans/task_21_p0-widget-app-group-knowledge-privacy-lifecycle.md",
       "updated_at": "2026-07-11T15:27:24+08:00"
+    },
+    "docs/plans/task_22_p0-family-knowledge-authorization-boundary.md": {
+      "ledger_id": "L20260711-153159",
+      "ledger_path": ".complex-problems/L20260711-153159",
+      "next_action": "none",
+      "status": "complete",
+      "task_file": "docs/plans/task_22_p0-family-knowledge-authorization-boundary.md",
+      "updated_at": "2026-07-11T17:43:45+08:00"
     }
   },
-  "updated_at": "2026-07-11T15:27:24+08:00"
+  "updated_at": "2026-07-11T17:43:45+08:00"
 }

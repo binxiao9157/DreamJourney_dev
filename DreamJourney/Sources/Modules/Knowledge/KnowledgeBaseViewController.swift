@@ -116,10 +116,12 @@ final class KnowledgeBaseViewController: UIViewController {
             self?.exportKnowledgeBase()
         })
 
-        alert.addAction(UIAlertAction(title: "家族同步", style: .default) { [weak self] _ in
-            let syncVC = KBSyncViewController()
-            self?.navigationController?.pushViewController(syncVC, animated: true)
-        })
+        if FamilyKnowledgeSharePolicy.allowsLegacyLocalPackages {
+            alert.addAction(UIAlertAction(title: "家族同步", style: .default) { [weak self] _ in
+                let syncVC = KBSyncViewController()
+                self?.navigationController?.pushViewController(syncVC, animated: true)
+            })
+        }
 
         alert.addAction(UIAlertAction(title: "重置知识库", style: .destructive) { [weak self] _ in
             self?.confirmReset()

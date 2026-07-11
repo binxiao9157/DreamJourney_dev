@@ -4,8 +4,8 @@
 
 - **Goal:** 按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态
 - **Mode:** Review
-- **Phase:** Phase 16 Widget/App Group knowledge privacy lifecycle closed
-- **Task:** `docs/plans/task_21_p0-widget-app-group-knowledge-privacy-lifecycle.md`
+- **Phase:** Phase 17 family knowledge authorization boundary closed; remote delivery pending
+- **Task:** `docs/plans/task_22_p0-family-knowledge-authorization-boundary.md`
 - **Blockers:** none for non-device implementation
 
 ## Key Decisions
@@ -40,10 +40,11 @@
 - Task 19 is complete and deployed. New knowledge uses exact conversation-turn/photo identities; owner-bound legacy source audit is aggregate-only; backend `dd88f17` is live on Postgres and iOS `fc5772d` is pushed. Ledger `L20260711-113033` is closed.
 - Task 20 is complete and deployed. V2 mutation response/change/receipt/replay now share one canonical source-title contract; historical Postgres metadata was backed up, cleaned, and verified at zero pending changes after a new online sentinel write. Backend `d6d13be` is live, iOS/QA `190d65f` is pushed, and ledger `L20260711-122802` is closed.
 - Task 21 is complete. It binds Widget/App Group knowledge snapshots to the current user, defaults Widget disclosure to deny, clears/reloads on logout or account switch, fixes the missing App Group target contract, passes the default release regression and both non-device builds, and is delivered in `fa8fb9c`. Ledger `L20260711-145625-21` is closed.
+- Task 22 non-device implementation, final8 regression and ledger closure are complete. Backend phone invitation remains the relationship authority; runtime freshness, immutable persona snapshots, active Echo fallback and coordinator authorization epoch prevent stale family knowledge use. The iOS commit/push remains the only delivery step.
 
 ## Scope
 
-Phase 2, Phase 3, and Tasks 9-21 are closed. Production remains on global ownership `shadow`; actual historical sourceRef identity migration, public knowledge-governance UI, change-feed retention/compaction, semantic cache isolation and true-device acceptance remain follow-up slices. The next P0 audit is the family authorization boundary: a `KBPerson` candidate must never become an accepted family relationship without the backend phone-invitation contract.
+Phase 2, Phase 3, and Tasks 9-22 are closed at implementation/review level. Task 22 is awaiting remote delivery only. Production remains on global ownership `shadow`; actual historical sourceRef identity migration, public knowledge-governance UI, change-feed retention/compaction, semantic cache isolation and true-device acceptance remain follow-up slices.
 
 ## Recovery
 

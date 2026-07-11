@@ -20,6 +20,29 @@ func require(_ condition: Bool, _ message: String) {
     }
 }
 
+func functionBody(_ signature: String, in source: String) -> String {
+    guard let signatureRange = source.range(of: signature),
+          let openingBrace = source[signatureRange.lowerBound...].firstIndex(of: "{") else {
+        fputs("Knowledge proposal/persona guard failed: missing \(signature)\n", stderr)
+        exit(1)
+    }
+    var depth = 0
+    var cursor = openingBrace
+    while cursor < source.endIndex {
+        if source[cursor] == "{" {
+            depth += 1
+        } else if source[cursor] == "}" {
+            depth -= 1
+            if depth == 0 {
+                return String(source[openingBrace...cursor])
+            }
+        }
+        cursor = source.index(after: cursor)
+    }
+    fputs("Knowledge proposal/persona guard failed: unterminated \(signature)\n", stderr)
+    exit(1)
+}
+
 let models = read("DreamJourney/Sources/Services/KBLiteModels.swift")
 let client = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let policy = read("DreamJourney/Sources/Services/EchoKnowledgeContextPolicy.swift")
@@ -55,10 +78,13 @@ require(
     "one canonical persona/proposal policy must guard identity, schema and evidence"
 )
 
+let finishExtraction = functionBody("private func finishExtraction(", in: manager)
 require(
-    manager.contains("let capturedIdentity = identity ?? Self.resolveCurrentPersonaIdentity()") &&
-        manager.contains("let currentIdentity = Self.resolveCurrentPersonaIdentity()") &&
-        manager.contains("guard currentIdentity == identity") &&
+    manager.contains("let capturedAuthorization = authorizationSnapshot") &&
+        manager.contains("isCurrentAuthorizationSnapshotLocked(capturedAuthorization)") &&
+        finishExtraction.contains("isCurrentAuthorizationSnapshotLocked(authorizationSnapshot)") &&
+        !finishExtraction.contains("resolveCurrentPersonaIdentity") &&
+        !finishExtraction.contains("FamilyRepository") &&
         manager.contains("extractKnowledgeEnvelope(") &&
         manager.contains("mergeProposal(proposal") &&
         manager.contains("acceptedBackendExtraction") &&
@@ -68,16 +94,19 @@ require(
 )
 
 require(
-    memory.contains("let knowledgeIdentity = KBLiteManager.resolveCurrentPersonaIdentity()") &&
-        memory.contains("identity: knowledgeIdentity"),
-    "conversation completion must snapshot persona identity before async extraction"
+    memory.contains("let knowledgeAuthorization = KBLiteManager.captureCurrentPersonaAuthorizationSnapshot()") &&
+        memory.contains("authorizationSnapshot: knowledgeAuthorization") &&
+        memory.range(of: "captureCurrentPersonaAuthorizationSnapshot()")!.lowerBound
+            < memory.range(of: "DispatchQueue.global(qos: .utility).async")!.lowerBound,
+    "conversation completion must snapshot persona authorization before async extraction"
 )
 
 require(
-    echo.contains("KBLiteManager.resolvePersonaIdentity(for: context)") &&
+    echo.contains("KBLiteManager.resolveAuthorizedPersonaIdentity(for: context)") &&
+        echo.contains("familyRelationshipUnauthorized") &&
         echo.contains("expectedIdentity: gate.expectedIdentity") &&
         echo.contains("family_local_fallback_forbidden"),
-    "Echo must share the canonical identity and keep family local fallback forbidden"
+    "Echo must share an authorized canonical identity and keep family local fallback forbidden"
 )
 
 print("Knowledge proposal/persona policy guard passed")

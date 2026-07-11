@@ -62,6 +62,11 @@ final class KBLiteManager {
     /// 用户切换代次，用于丢弃旧用户尚未返回的异步提取结果。
     private var userGeneration = UUID()
 
+    /// 当前角色及其代次。异步提取只能比较这份锁内状态，不能在后台重读 FamilyRepository。
+    private var activePersonaIdentity: KBPersonaIdentity?
+    private var personaGeneration = UUID()
+    private var familyAuthorizationGeneration: UUID?
+
     /// 只向 Widget 发布当前账号明确授权的最小知识摘要。
     private let widgetSnapshotStore = KnowledgeWidgetSnapshotStore.shared
 
@@ -104,19 +109,116 @@ final class KBLiteManager {
     }
 
     static func resolvePersonaIdentity(for context: DigitalHumanContext) -> KBPersonaIdentity {
+        if let authorizedIdentity = resolveAuthorizedPersonaIdentity(for: context) {
+            return authorizedIdentity
+        }
+        let viewerUserId = UserManager.shared.currentUser?.id ?? context.viewerUserId ?? context.ownerId
+        return KBPersonaIdentity(
+            ownerUserId: viewerUserId,
+            personaScope: "personal",
+            digitalHumanId: viewerUserId
+        )
+    }
+
+    static func resolveAuthorizedPersonaIdentity(for context: DigitalHumanContext) -> KBPersonaIdentity? {
         let viewerUserId = UserManager.shared.currentUser?.id ?? context.viewerUserId
-        let familyMemberDigitalHumanId = FamilyRepository.shared.get(by: context.ownerId)?.digitalHumanId
+        let normalizedViewer = viewerUserId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let normalizedOwner = context.ownerId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedViewer.isEmpty, !normalizedOwner.isEmpty else { return nil }
+
+        if context.isSelfAssistant || normalizedOwner == normalizedViewer {
+            return KBPersonaIdentityResolver.resolve(
+                viewerUserId: normalizedViewer,
+                ownerId: normalizedOwner,
+                relation: context.relation,
+                isSelfAssistant: true,
+                familyMemberDigitalHumanId: nil
+            )
+        }
+
+        guard let acceptedMember = FamilyRepository.shared.acceptedMember(by: normalizedOwner) else {
+            return nil
+        }
         return KBPersonaIdentityResolver.resolve(
-            viewerUserId: viewerUserId,
-            ownerId: context.ownerId,
-            relation: context.relation,
-            isSelfAssistant: context.isSelfAssistant,
-            familyMemberDigitalHumanId: familyMemberDigitalHumanId
+            viewerUserId: normalizedViewer,
+            ownerId: acceptedMember.id,
+            relation: acceptedMember.relation,
+            isSelfAssistant: false,
+            familyMemberDigitalHumanId: acceptedMember.digitalHumanId
         )
     }
 
     static func resolveCurrentPersonaIdentity() -> KBPersonaIdentity {
         resolvePersonaIdentity(for: DigitalHumanContextStore.shared.current)
+    }
+
+    /// 必须在主线程捕获：FamilyRepository 与持久化角色均为主线程状态。
+    static func captureCurrentPersonaAuthorizationSnapshot() -> KBPersonaAuthorizationSnapshot? {
+        guard Thread.isMainThread,
+              let identity = resolveAuthorizedPersonaIdentity(for: DigitalHumanContextStore.shared.current) else {
+            return nil
+        }
+        let familyGeneration = identity.isPersonal
+            ? nil
+            : FamilyRepository.shared.authorizationGeneration(for: identity.ownerUserId)
+        return shared.captureAuthorizationSnapshot(
+            identity: identity,
+            familyAuthorizationGeneration: familyGeneration
+        )
+    }
+
+    func personaContextDidChange(to identity: KBPersonaIdentity?) {
+        graphLock.lock()
+        defer { graphLock.unlock() }
+        let authorizedIdentity = identity?.ownerUserId == loadedUserId ? identity : nil
+        guard activePersonaIdentity != authorizedIdentity else { return }
+        activePersonaIdentity = authorizedIdentity
+        personaGeneration = UUID()
+    }
+
+    func familyAuthorizationGenerationDidChange(ownerUserId: String, generation: UUID?) {
+        let normalizedOwner = Self.normalizedUserId(ownerUserId)
+        graphLock.lock()
+        defer { graphLock.unlock() }
+        guard normalizedOwner == loadedUserId else { return }
+        familyAuthorizationGeneration = generation
+    }
+
+    private func captureAuthorizationSnapshot(
+        identity: KBPersonaIdentity,
+        familyAuthorizationGeneration: UUID?
+    ) -> KBPersonaAuthorizationSnapshot? {
+        graphLock.lock()
+        defer { graphLock.unlock() }
+        guard loadedUserId != Self.signedOutUserId,
+              identity.ownerUserId == loadedUserId else {
+            return nil
+        }
+        if activePersonaIdentity != identity {
+            activePersonaIdentity = identity
+            personaGeneration = UUID()
+        }
+        if !identity.isPersonal {
+            self.familyAuthorizationGeneration = familyAuthorizationGeneration
+        }
+        let snapshot = KBPersonaAuthorizationSnapshot(
+            identity: identity,
+            userGeneration: userGeneration,
+            personaGeneration: personaGeneration,
+            familyAuthorizationGeneration: identity.isPersonal ? nil : familyAuthorizationGeneration
+        )
+        return snapshot.isComplete ? snapshot : nil
+    }
+
+    private func isCurrentAuthorizationSnapshotLocked(_ snapshot: KBPersonaAuthorizationSnapshot) -> Bool {
+        loadedUserId == snapshot.identity.ownerUserId
+            && KBPersonaAuthorizationSnapshotPolicy.isCurrent(
+                snapshot,
+                currentIdentity: activePersonaIdentity,
+                userGeneration: userGeneration,
+                personaGeneration: personaGeneration,
+                familyAuthorizationGeneration: familyAuthorizationGeneration
+            )
     }
 
     private func graphFilePath(for userId: String) -> URL {
@@ -125,16 +227,19 @@ final class KBLiteManager {
         try? FileManager.default.createDirectory(at: kbDir, withIntermediateDirectories: true)
         let userFile = kbDir.appendingPathComponent("kb_graph_\(userId).json")
 
-        // 旧文件只允许迁移一次，避免复制给后续登录的每个用户。
+        // 旧文件没有 owner/persona/evidence 证明，不能自动归给下一位登录用户。
         let legacyFile = kbDir.appendingPathComponent("kb_graph.json")
         if userId != Self.signedOutUserId &&
-            !FileManager.default.fileExists(atPath: userFile.path) &&
             FileManager.default.fileExists(atPath: legacyFile.path) {
+            let preferredQuarantine = kbDir.appendingPathComponent("kb_graph_legacy_quarantine.json")
+            let quarantineFile = FileManager.default.fileExists(atPath: preferredQuarantine.path)
+                ? kbDir.appendingPathComponent("kb_graph_legacy_quarantine_\(UUID().uuidString).json")
+                : preferredQuarantine
             do {
-                try FileManager.default.moveItem(at: legacyFile, to: userFile)
-                print("[KBLite] 已将旧知识库迁移到用户专属文件: \(userFile.lastPathComponent)")
+                try FileManager.default.moveItem(at: legacyFile, to: quarantineFile)
+                print("[KBLite] 已隔离无 owner 证明的旧知识库: \(quarantineFile.lastPathComponent)")
             } catch {
-                print("[KBLite] 旧知识库迁移失败: \(error.localizedDescription)")
+                print("[KBLite] 旧知识库隔离失败: \(error.localizedDescription)")
             }
         }
 
@@ -230,6 +335,15 @@ final class KBLiteManager {
             guard normalized != loadedUserId else { return }
             loadedUserId = normalized
             userGeneration = UUID()
+            activePersonaIdentity = normalized == Self.signedOutUserId
+                ? nil
+                : KBPersonaIdentity(
+                    ownerUserId: normalized,
+                    personaScope: "personal",
+                    digitalHumanId: normalized
+                )
+            personaGeneration = UUID()
+            familyAuthorizationGeneration = nil
             activatedGeneration = userGeneration
             graph = loadGraph(for: normalized)
             didWarnCapacity = false
@@ -291,6 +405,7 @@ final class KBLiteManager {
         turns: [ConversationTurn],
         sessionId: Int,
         identity: KBPersonaIdentity? = nil,
+        authorizationSnapshot: KBPersonaAuthorizationSnapshot? = nil,
         completion: @escaping (Int) -> Void = { _ in }
     ) {
         guard !turns.isEmpty else {
@@ -299,19 +414,28 @@ final class KBLiteManager {
             return
         }
 
+        let capturedAuthorization = authorizationSnapshot
+            ?? Self.captureCurrentPersonaAuthorizationSnapshot()
+        guard let capturedAuthorization,
+              capturedAuthorization.isComplete,
+              identity == nil || identity == capturedAuthorization.identity else {
+            print("[KBLite] 缺少当前角色授权快照，跳过知识提取")
+            completion(0)
+            return
+        }
+        let capturedIdentity = capturedAuthorization.identity
+
         graphLock.lock()
         let ownerUserId = loadedUserId
-        let extractionGeneration = userGeneration
         let lastBackendExtractionSessionId = graph.lastBackendExtractionSessionId
         let lastBackendExtractionAt = graph.lastBackendExtractionAt
+        let isCurrentAuthorization = isCurrentAuthorizationSnapshotLocked(capturedAuthorization)
         graphLock.unlock()
 
-        let capturedIdentity = identity ?? Self.resolveCurrentPersonaIdentity()
-
         guard ownerUserId != Self.signedOutUserId,
-              capturedIdentity.isComplete,
+              isCurrentAuthorization,
               capturedIdentity.ownerUserId == ownerUserId else {
-            print("[KBLite] 登出态跳过知识提取")
+            print("[KBLite] 用户或角色授权已变化，跳过知识提取")
             completion(0)
             return
         }
@@ -332,8 +456,7 @@ final class KBLiteManager {
                     result: nil,
                     turns: turns,
                     sessionId: sessionId,
-                    identity: capturedIdentity,
-                    generation: extractionGeneration,
+                    authorizationSnapshot: capturedAuthorization,
                     fallbackReason: "frequencyControlled",
                     completion: completion
                 )
@@ -367,8 +490,7 @@ final class KBLiteManager {
                     result: nil,
                     turns: turns,
                     sessionId: sessionId,
-                    identity: capturedIdentity,
-                    generation: extractionGeneration,
+                    authorizationSnapshot: capturedAuthorization,
                     fallbackReason: "backendNotConfigured",
                     completion: completion
                 )
@@ -399,8 +521,7 @@ final class KBLiteManager {
                         result: envelope,
                         turns: turns,
                         sessionId: sessionId,
-                        identity: capturedIdentity,
-                        generation: extractionGeneration,
+                        authorizationSnapshot: capturedAuthorization,
                         fallbackReason: fallbackReason,
                         completion: completion
                     )
@@ -413,27 +534,18 @@ final class KBLiteManager {
         result: KBKnowledgeExtractionEnvelope?,
         turns: [ConversationTurn],
         sessionId: Int,
-        identity: KBPersonaIdentity,
-        generation: UUID,
+        authorizationSnapshot: KBPersonaAuthorizationSnapshot,
         fallbackReason: String?,
         completion: @escaping (Int) -> Void
     ) {
-        let currentIdentity = Self.resolveCurrentPersonaIdentity()
+        let identity = authorizationSnapshot.identity
         graphLock.lock()
-        guard loadedUserId == identity.ownerUserId, userGeneration == generation else {
-            graphLock.unlock()
-            isExtracting = false
-            print("[KBLite] 丢弃旧用户知识提取结果 user=\(identity.ownerUserId)")
-            DispatchQueue.main.async { completion(0) }
-            return
-        }
-        guard currentIdentity == identity else {
+        guard isCurrentAuthorizationSnapshotLocked(authorizationSnapshot) else {
             graphLock.unlock()
             isExtracting = false
             print(
-                "[KBLite] 丢弃角色切换后的知识提取结果 " +
-                "captured=\(identity.personaScope)/\(identity.digitalHumanId) " +
-                "current=\(currentIdentity.personaScope)/\(currentIdentity.digitalHumanId)"
+                "[KBLite] 丢弃授权代次变化后的知识提取结果 " +
+                "captured=\(identity.personaScope)/\(identity.digitalHumanId)"
             )
             DispatchQueue.main.async { completion(0) }
             return
@@ -1928,6 +2040,13 @@ final class KBLiteManager {
         sessionId: Int,
         sourceAssetId: String
     ) {
+        guard let identity = Self.resolveAuthorizedPersonaIdentity(
+            for: DigitalHumanContextStore.shared.current
+        ),
+        identity.ownerUserId == loadedUserId else {
+            print("[KBLite] 图片分析缺少授权 persona identity，跳过知识入库")
+            return
+        }
         guard let photoSource = KBKnowledgeSourceIdentityPolicy.conversationPhotoReference(
             assetId: sourceAssetId
         ) else {
@@ -1952,6 +2071,12 @@ final class KBLiteManager {
                     createdAt: now
                 )
                 place.privacyMetadata = photoPrivacyMetadata
+                applyIdentity(
+                    identity,
+                    evidenceStatus: "observed",
+                    sourceTurnIndices: [],
+                    to: &place
+                )
                 graph.places.append(place)
                 addedCount += 1
             }
@@ -1974,6 +2099,12 @@ final class KBLiteManager {
                     updatedAt: now
                 )
                 person.privacyMetadata = photoPrivacyMetadata
+                applyIdentity(
+                    identity,
+                    evidenceStatus: "observed",
+                    sourceTurnIndices: [],
+                    to: &person
+                )
                 graph.people.append(person)
                 addedCount += 1
             }

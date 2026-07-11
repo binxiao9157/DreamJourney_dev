@@ -44,11 +44,14 @@ require(
     manager.contains("func switchUser(to userId: String?)") &&
         manager.contains("private(set) var loadedUserId") &&
         manager.contains("userGeneration") &&
-        manager.contains("丢弃旧用户知识提取结果") &&
-        manager.contains("moveItem(at: legacyFile, to: userFile)") &&
+        manager.contains("KBPersonaAuthorizationSnapshot") &&
+        manager.contains("isCurrentAuthorizationSnapshotLocked") &&
+        manager.contains("丢弃授权代次变化后的知识提取结果") &&
+        manager.contains("moveItem(at: legacyFile, to: quarantineFile)") &&
+        manager.contains("kb_graph_legacy_quarantine") &&
         manager.contains("widgetSnapshotStore.activate(") &&
         manager.contains("widgetSnapshotStore.publish("),
-    "KBLite should isolate in-memory graphs by user, migrate the legacy file once, and publish Widget data through the guarded lifecycle store"
+    "KBLite should isolate in-memory graphs by user, quarantine ownerless legacy files, and publish Widget data through the guarded lifecycle store"
 )
 
 require(
@@ -178,7 +181,8 @@ require(
     userManager.contains("KBLiteManager.shared.switchUser(to: user.id)") &&
         userManager.contains("KBLiteManager.shared.switchUser(to: nil)") &&
         appDelegate.contains("KnowledgeSyncCoordinator.shared.userDidChange(to: currentKnowledgeUserId)") &&
-        sceneDelegate.contains("synchronizeCurrentUser(reason: \"foreground\")"),
+        sceneDelegate.contains("bootstrapCurrentUserFromBackend") &&
+        sceneDelegate.contains("synchronizeCurrentUser(reason: \"foregroundAfterFamilyRefresh\")"),
     "login, logout, app restore, and foreground should drive the knowledge lifecycle"
 )
 

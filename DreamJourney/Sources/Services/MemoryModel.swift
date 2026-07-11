@@ -138,6 +138,9 @@ struct FamilyMember: Codable, Identifiable {
     var familyPersonaContractVersion: Int
     var backendContractMode: String?
     var defaultReleaseVisible: Bool
+    /// 家庭关系归属与授权来源。缺失/legacy 一律不具备家庭访问权限。
+    var relationshipOwnerUserId: String
+    var relationshipAuthoritySource: FamilyRelationshipAuthoritySource
     var accessStatus: String
     var invitationStatus: String
     var invitationURL: String?
@@ -153,7 +156,23 @@ struct FamilyMember: Codable, Identifiable {
     }
 
     var isAcceptedFamilyMember: Bool {
-        accessStatus.lowercased() == "active" && invitationStatus.lowercased() == "accepted"
+        isAcceptedFamilyMember(
+            for: relationshipOwnerUserId,
+            allowQAFixtures: FamilyRelationshipAuthorizationPolicy.currentBuildAllowsQAFixtures
+        )
+    }
+
+    func isAcceptedFamilyMember(for ownerUserId: String, allowQAFixtures: Bool = false) -> Bool {
+        FamilyRelationshipAuthorizationPolicy.isAuthorized(
+            relationshipOwnerUserId: relationshipOwnerUserId,
+            authoritySource: relationshipAuthoritySource,
+            accessStatus: accessStatus,
+            invitationStatus: invitationStatus,
+            context: FamilyRelationshipAuthorizationContext(
+                currentOwnerUserId: ownerUserId,
+                allowQAFixtures: allowQAFixtures
+            )
+        )
     }
 
     var familyInvitationDisplayName: String {
@@ -207,8 +226,10 @@ struct FamilyMember: Codable, Identifiable {
          familyPersonaContractVersion: Int = 1,
          backendContractMode: String? = nil,
          defaultReleaseVisible: Bool = false,
-         accessStatus: String = "active",
-         invitationStatus: String = "accepted",
+         relationshipOwnerUserId: String = "",
+         relationshipAuthoritySource: FamilyRelationshipAuthoritySource = .legacyUnverified,
+         accessStatus: String = "pending",
+         invitationStatus: String = "pending",
          invitationURL: String? = nil,
          invitationCode: String? = nil,
          invitationError: String? = nil,
@@ -229,6 +250,8 @@ struct FamilyMember: Codable, Identifiable {
         self.familyPersonaContractVersion = familyPersonaContractVersion
         self.backendContractMode = backendContractMode
         self.defaultReleaseVisible = defaultReleaseVisible
+        self.relationshipOwnerUserId = relationshipOwnerUserId
+        self.relationshipAuthoritySource = relationshipAuthoritySource
         self.accessStatus = accessStatus
         self.invitationStatus = invitationStatus
         self.invitationURL = invitationURL
@@ -254,6 +277,8 @@ struct FamilyMember: Codable, Identifiable {
         case familyPersonaContractVersion
         case backendContractMode
         case defaultReleaseVisible
+        case relationshipOwnerUserId
+        case relationshipAuthoritySource
         case accessStatus
         case invitationStatus
         case invitationURL
@@ -280,8 +305,13 @@ struct FamilyMember: Codable, Identifiable {
         familyPersonaContractVersion = try container.decodeIfPresent(Int.self, forKey: .familyPersonaContractVersion) ?? 1
         backendContractMode = try container.decodeIfPresent(String.self, forKey: .backendContractMode)
         defaultReleaseVisible = try container.decodeIfPresent(Bool.self, forKey: .defaultReleaseVisible) ?? false
-        accessStatus = try container.decodeIfPresent(String.self, forKey: .accessStatus) ?? "active"
-        invitationStatus = try container.decodeIfPresent(String.self, forKey: .invitationStatus) ?? "accepted"
+        relationshipOwnerUserId = try container.decodeIfPresent(String.self, forKey: .relationshipOwnerUserId) ?? ""
+        relationshipAuthoritySource = try container.decodeIfPresent(
+            FamilyRelationshipAuthoritySource.self,
+            forKey: .relationshipAuthoritySource
+        ) ?? .legacyUnverified
+        accessStatus = try container.decodeIfPresent(String.self, forKey: .accessStatus) ?? "pending"
+        invitationStatus = try container.decodeIfPresent(String.self, forKey: .invitationStatus) ?? "pending"
         invitationURL = try container.decodeIfPresent(String.self, forKey: .invitationURL)
         invitationCode = try container.decodeIfPresent(String.self, forKey: .invitationCode)
         invitationError = try container.decodeIfPresent(String.self, forKey: .invitationError)
@@ -312,6 +342,10 @@ struct FamilyMember: Codable, Identifiable {
             familyPersonaContractVersion: intValue(in: object, for: "familyPersonaContractVersion") ?? 1,
             backendContractMode: stringValue(in: object, for: "backendContractMode"),
             defaultReleaseVisible: boolValue(in: object, for: "defaultReleaseVisible") ?? false,
+            relationshipOwnerUserId: stringValue(in: object, for: "ownerUserId")
+                ?? stringValue(in: object, for: "userId")
+                ?? "",
+            relationshipAuthoritySource: .backendInvitation,
             accessStatus: stringValue(in: object, for: "accessStatus") ?? "pending",
             invitationStatus: stringValue(in: object, for: "invitationStatus") ?? "pending",
             invitationURL: stringValue(in: object, for: "invitationURL"),

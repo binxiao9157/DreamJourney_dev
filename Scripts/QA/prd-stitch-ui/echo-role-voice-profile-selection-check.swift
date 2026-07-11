@@ -51,6 +51,7 @@ let familyModel = read("DreamJourney/Sources/Services/MemoryModel.swift")
 let familyDetail = read("DreamJourney/Sources/Modules/Family/FamilyCircleViewController.swift")
 let echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
 let knowledgePolicy = read("DreamJourney/Sources/Services/EchoKnowledgeContextPolicy.swift")
+let knowledgeManager = read("DreamJourney/Sources/Services/KBLiteManager.swift")
 let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let panelSmoke = read("Scripts/QA/prd-stitch-ui/run-echo-trace-evidence-package-panel-export-smoke.sh")
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
@@ -102,7 +103,7 @@ for required in [
     "DigitalHumanContextStore.shared.current",
     "VoiceCloneService.shared.currentUsableSpeakerId",
     "本人暂未启用复刻音色",
-    "FamilyRepository.shared.get(by: context.ownerId)",
+    "FamilyRepository.shared.acceptedMember(by: context.ownerId)",
     "member.isVoiceProfileReadyForEcho",
     "member.normalizedVoiceProfileId",
     "该家人暂未配置复刻音色",
@@ -123,16 +124,12 @@ for required in [
     require(echo.contains(required), "Echo should resolve voice profile by active role \(required)")
 }
 
-for required in [
-    "enum KBPersonaIdentityResolver",
-    "relation: String?",
-    "[\"本人\", \"自己\", \"我\"]"
-] {
-    require(
-        knowledgePolicy.contains(required),
-        "canonical persona resolver should retain self-role semantics \(required)"
-    )
-}
+require(knowledgePolicy.contains("enum KBPersonaIdentityResolver"), "canonical persona resolver should remain available")
+require(knowledgePolicy.contains("let isPersonal = isSelfAssistant"), "personal identity should require explicit self semantics")
+require(knowledgePolicy.contains("normalizedOwnerId == effectiveViewerId"), "owner/viewer exact match should retain personal semantics")
+require(!knowledgePolicy.contains("[\"本人\", \"自己\", \"我\"]"), "relation text must not grant personal identity")
+require(knowledgeManager.contains("resolveAuthorizedPersonaIdentity(for context: DigitalHumanContext)"), "role selection should have an authorization-aware persona resolver")
+require(echo.contains("KBLiteManager.resolveAuthorizedPersonaIdentity(for: context)?.isPersonal == true"), "role voice selection must fail closed for unauthorized contexts")
 
 for required in [
     "let roleVoiceSource: String?",

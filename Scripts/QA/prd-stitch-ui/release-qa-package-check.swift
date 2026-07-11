@@ -117,6 +117,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-18-archive-sync-error-recovery.md",
     "docs/superpowers/status/2026-06-19-archive-analysis-backend-contract.md",
     "docs/superpowers/status/2026-07-11-knowledge-mutation-privacy-canonicalization.md",
+    "docs/superpowers/status/2026-07-11-family-knowledge-authorization-boundary.md",
     "docs/superpowers/status/2026-06-19-archive-image-analysis-live-chain.md",
     "docs/superpowers/status/2026-06-19-archive-image-analysis-runtime-contract.md",
     "docs/superpowers/status/2026-06-19-archive-image-analysis-runtime-ui.md",
@@ -224,6 +225,15 @@ assertContains(releaseRegression, "RUN_P0_PROFILE_CARE_REGRESSION", "release reg
 assertContains(releaseRegression, "RUN_P0_PROFILE_CARE_REGRESSION forces RUN_PROFILE_CARE_STATE_SMOKE and RUN_PROFILE_CARE_BACKEND_STATE_SMOKE", "Profile care P0 gate should force local and deployed backend care smokes")
 assertContains(releaseRegression, "RUN_KNOWLEDGE_V2_SYNC_GATE", "release regression should expose the knowledge V2 cross-repository gate")
 assertContains(releaseRegression, "run-knowledge-three-way-merge-model-smoke.sh", "release regression should always run the knowledge three-way merge model")
+assertContains(releaseRegression, "run-family-relationship-authorization-policy-model-smoke.sh", "release regression should always run family relationship authority model")
+assertContains(releaseRegression, "run-family-authorization-freshness-model-smoke.sh", "release regression should always run family authorization freshness model")
+assertContains(releaseRegression, "run-family-context-reconciliation-model-smoke.sh", "release regression should always run family context reconciliation model")
+assertContains(releaseRegression, "run-knowledge-async-authorization-snapshot-check.sh", "release regression should always guard async knowledge authorization snapshots")
+assertContains(releaseRegression, "run-knowledge-coordinator-authorization-epoch-check.sh", "release regression should always guard coordinator authorization epoch")
+assertContains(releaseRegression, "run-family-repository-authorization-lifecycle-check.sh", "release regression should always guard account-bound family repository lifecycle")
+assertContains(releaseRegression, "run-echo-family-context-authorization-check.sh", "release regression should always guard Echo family context authorization")
+assertContains(releaseRegression, "run-family-context-reconciliation-check.sh", "release regression should always guard active Echo family fallback")
+assertContains(releaseRegression, "run-knowledge-family-sync-import-authorization-check.sh", "release regression should always guard family knowledge sync/import authorization")
 assertContains(releaseRegression, "RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE=1", "knowledge V2 combo gate should force the deployed backend smoke")
 assertContains(releaseRegression, "RUN_KNOWLEDGE_PROPOSAL_PERSONA_GATE", "release regression should expose the knowledge proposal/persona local gate")
 assertContains(releaseRegression, "run-knowledge-proposal-model-smoke.sh", "release regression should always run the knowledge proposal model")
@@ -306,6 +316,15 @@ for handoffGuard in [
     "context-packet-v1-check.swift",
     "knowledge-pipeline-check.swift",
     "run-knowledge-three-way-merge-model-smoke.sh",
+    "run-family-relationship-authorization-policy-model-smoke.sh",
+    "run-family-authorization-freshness-model-smoke.sh",
+    "run-family-context-reconciliation-model-smoke.sh",
+    "run-knowledge-async-authorization-snapshot-check.sh",
+    "run-knowledge-coordinator-authorization-epoch-check.sh",
+    "run-family-repository-authorization-lifecycle-check.sh",
+    "run-echo-family-context-authorization-check.sh",
+    "run-family-context-reconciliation-check.sh",
+    "run-knowledge-family-sync-import-authorization-check.sh",
     "run-knowledge-proposal-model-smoke.sh",
     "knowledge-proposal-persona-policy-check.swift",
     "run-knowledge-governance-model-smoke.sh",
@@ -415,6 +434,24 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/knowledge-widget-snapshot-reader-model-smoke.swift",
     "Scripts/QA/prd-stitch-ui/run-knowledge-widget-snapshot-reader-model-smoke.sh",
     "Scripts/QA/prd-stitch-ui/knowledge-widget-privacy-lifecycle-check.swift",
+    "Scripts/QA/prd-stitch-ui/family-relationship-authorization-policy-model-smoke.swift",
+    "Scripts/QA/prd-stitch-ui/run-family-relationship-authorization-policy-model-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/family-authorization-freshness-model-smoke.swift",
+    "Scripts/QA/prd-stitch-ui/run-family-authorization-freshness-model-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/family-context-reconciliation-model-smoke.swift",
+    "Scripts/QA/prd-stitch-ui/run-family-context-reconciliation-model-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/knowledge-async-authorization-snapshot-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-knowledge-async-authorization-snapshot-check.sh",
+    "Scripts/QA/prd-stitch-ui/knowledge-coordinator-authorization-epoch-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-knowledge-coordinator-authorization-epoch-check.sh",
+    "Scripts/QA/prd-stitch-ui/family-repository-authorization-lifecycle-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-family-repository-authorization-lifecycle-check.sh",
+    "Scripts/QA/prd-stitch-ui/echo-family-context-authorization-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-echo-family-context-authorization-check.sh",
+    "Scripts/QA/prd-stitch-ui/family-context-reconciliation-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-family-context-reconciliation-check.sh",
+    "Scripts/QA/prd-stitch-ui/knowledge-family-sync-import-authorization-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-knowledge-family-sync-import-authorization-check.sh",
     "Scripts/QA/prd-stitch-ui/run-backend-env-smoke.sh",
     "Scripts/QA/prd-stitch-ui/run-release-like-backend-acceptance.sh",
     "Scripts/QA/prd-stitch-ui/final-visual-qa-package-check.swift",

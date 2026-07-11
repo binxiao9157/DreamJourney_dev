@@ -1,0 +1,2359 @@
+{
+  "checks": {
+    "C000": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P001/checks/C000.md",
+      "created_at": "2026-07-11T07:37:54+00:00",
+      "criteria_map": [
+        "owner/source 显式化：FamilyMember 新字段与 policy。",
+        "legacy/default deny：initializer/decoder pending + legacyUnverified。",
+        "backend accepted 放行：纯模型 smoke 正例。",
+        "QA 生产拒绝/显式放行：纯模型 smoke 双向断言。",
+        "可构建：workspace build succeeded。"
+      ],
+      "evidence": [
+        "model smoke 直接覆盖 current-owner backend accepted、owner mismatch、pending/failed/revoked、knowledgeCandidate、legacyUnverified 和 QA policy。",
+        "MemoryModel initializer/decoder 已移除 active/accepted 兼容默认。",
+        "fromBackendJSON 显式绑定后端 owner 与 backendInvitation source。",
+        "xcworkspace Simulator Debug build 证明模型字段和 Xcode target 接线兼容现有工程。"
+      ],
+      "execution_map": [
+        "T001/R000 完成 authority policy、FamilyMember 兼容迁移、Xcode 接线和模型 smoke；没有依赖未执行的子票。"
+      ],
+      "followup_problem_id": null,
+      "id": "C000",
+      "problem_id": "P001",
+      "residual_risk": [
+        "仓库账号 generation、候选隔离和显式 QA fixture 属于 P002，不属于本模型子问题。"
+      ],
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "状态比较包含空白和大小写规范化；空 owner 与跨 owner 均拒绝。",
+        "qaFixture 即使 active+accepted 在 production context 仍拒绝。"
+      ],
+      "summary": "R000 满足 P001：生产放行条件已经从隐式状态字符串升级为 owner/source/status 全维度纯策略，legacy/default/knowledge/QA 均按合同 fail closed，且真实工程编译通过。"
+    },
+    "C001": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P002/checks/C001.md",
+      "created_at": "2026-07-11T07:42:48+00:00",
+      "criteria_map": [
+        "candidate/member 分离：`knowledgeCandidates` 与 candidate-only sync。",
+        "owner/generation：login/logout observers、capturedGeneration。",
+        "remote authority：`replaceRemoteMembers` + `isOwnedBackendRecord`。",
+        "scoped override：`ownerScopedKey`。",
+        "mock 边界：seed 移除、QA source 显式化。"
+      ],
+      "evidence": [
+        "static gate 检查 safe defaults、candidate 集合、generation guard、stale response、owner-scoped keys、无 release seed 和显式 QA fixture。",
+        "workspace build 证明 FamilyRepository API 迁移兼容现有家庭、Echo、时间信件和声音复刻调用。",
+        "authority smoke 证明 repository 复用的底层关系策略正确。"
+      ],
+      "execution_map": [
+        "T002/R001 完成仓库、QA fixture、静态 gate 与 Simulator build。"
+      ],
+      "followup_problem_id": null,
+      "id": "C001",
+      "problem_id": "P002",
+      "residual_risk": [
+        "真正 family Context 的使用边界由 P003 验证；本子问题只保证 repository 数据源可信。"
+      ],
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "空 owner、owner mismatch、generation mismatch 和后端记录数量不一致均拒绝合并。",
+        "后端返回空数组会清除旧成员，避免增量 merge 留下已失效关系。"
+      ],
+      "summary": "R001 满足 P002：知识人物与家庭成员已物理分离，账号 owner/generation、远端权威替换和 owner-scoped overrides 均有代码与构建证据。"
+    },
+    "C002": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/checks/C002.md",
+      "created_at": "2026-07-11T07:46:01+00:00",
+      "criteria_map": [
+        "relation spoof：resolver 移除 personalRelations。",
+        "persisted context：validatedContext + acceptedMember。",
+        "request preflight：optional echoKnowledgeContextIdentity guard。",
+        "canonical family：repository member digitalHumanId。",
+        "backend recheck：viewerFamilyMemberID。"
+      ],
+      "evidence": [
+        "model smoke 直接证明 relation=\"本人\" 仍是 family，explicit self 仍是 personal。",
+        "static gate 验证 acceptedMember、user-scoped context key、unauthorized fallback 与 viewerFamilyMemberID。",
+        "workspace build 验证 optional identity 传播到 gate 与 stale-submit 路径无编译缺口。"
+      ],
+      "execution_map": [
+        "T003/R002 完成 identity、context store、Echo preflight、smokes 与 build。"
+      ],
+      "followup_problem_id": null,
+      "id": "C002",
+      "problem_id": "P003",
+      "residual_risk": [
+        "服务端 accepted policy 的完整回归在 P005 统一运行。"
+      ],
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "对话建立 gate 后若关系失效，submit 阶段第二次 optional resolve 会丢弃旧 context。",
+        "旧全局 UserDefaults context 不再读取，避免跨账号恢复。"
+      ],
+      "summary": "R002 证明 P003 的 relation、持久化恢复、请求前和回调提交四个边界均已 fail closed，同时 accepted exact-match 保持可用。"
+    },
+    "C003": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P004/checks/C003.md",
+      "created_at": "2026-07-11T07:52:28+00:00",
+      "criteria_map": [
+        "必填 authorization：所有 engine API 与 coordinator calls。",
+        "owner/persona/digital exact：isSyncable guard。",
+        "local legacy only：privateLocal merge 与模型断言。",
+        "release share deny：FamilyKnowledgeSharePolicy。",
+        "UI no false success：Result switch 与 raw rejection。"
+      ],
+      "evidence": [
+        "merge model smoke 证明 exact personal/family identity 可同步，wrong owner/ownerless/wrong persona 被过滤，本地 ownerless 保留。",
+        "static gate 证明 coordinator 没有省略 authorization 的调用，raw graph 不再进入 merge。",
+        "workspace build 证明 KBSync Result API 和 sync engine 签名迁移完整。"
+      ],
+      "execution_map": [
+        "T004/R003 完成 sync engine、coordinator、legacy share、UI、smokes 与 build。"
+      ],
+      "followup_problem_id": null,
+      "id": "C003",
+      "problem_id": "P004",
+      "residual_risk": [
+        "没有后端 share grant，所以 release 功能保持关闭；这是安全产品边界而非未实现的隐式 fallback。"
+      ],
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "family authorization 只同步 family-A，拒绝同 owner personal 实体。",
+        "remote wrong-owner 不合并，local ownerless 不上传也不丢失。",
+        "sourceUserId=\"unknown\" 即使 QA policy 开启仍拒绝。"
+      ],
+      "summary": "R003 满足 P004：远端同步和本地整库分享两条数据出入站旁路均有默认拒绝合同、正反模型证据和真实工程编译证据。"
+    },
+    "C004": {
+      "blocking_gaps": [
+        "App 前台恢复不会先刷新家庭关系；服务端已撤销成员在进程存活期间仍可能保留于 account sync authorization snapshot。",
+        "extraction/governance 后台路径仍可能通过当前 context 间接读取可变 FamilyRepository，账号切换或撤销时存在竞态窗口。",
+        "当前选中的 family context 失效后没有主动持久化回 self 并广播 context change，Echo UI/runtime 可能短暂保留旧角色。"
+      ],
+      "body_path": "problems/P000/children/P005/checks/C004.md",
+      "created_at": "2026-07-11T08:30:56+00:00",
+      "criteria_map": [],
+      "evidence": [],
+      "execution_map": [],
+      "followup_problem_id": "P006",
+      "id": "C004",
+      "problem_id": "P005",
+      "residual_risk": [],
+      "result_ids": [
+        "R004"
+      ],
+      "root_id": "P000",
+      "status": "not_success",
+      "stress_test": [],
+      "summary": "回归与文档证据完整，但独立复核证明家庭 authority 新鲜度和异步读取边界仍未完全闭合，因此当前结果不能判定成功。"
+    },
+    "C005": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P005/children/P006/children/P007/checks/C005.md",
+      "created_at": "2026-07-11T08:41:28+00:00",
+      "criteria_map": [
+        "ready-only knowledge snapshot：`acceptedMembersForKnowledgeSync` + freshness model。",
+        "失败/非法/账号切换失效：`invalidateAuthorization`、`reset`、generation 变化。",
+        "foreground 顺序：SceneDelegate completion 后调用 `foregroundAfterFamilyRefresh`。",
+        "stale response：既有 userGeneration/capturedGeneration guard 保留。"
+      ],
+      "evidence": [
+        "`FamilyAuthorizationFreshness` 模型 smoke 覆盖 generation、成功、刷新中、失败和 reset。",
+        "FamilyRepository lifecycle gate 覆盖 refresh started/did refresh/failed 与 owner-bound snapshot。",
+        "workspace Simulator build 和 release QA package 通过。"
+      ],
+      "execution_map": [
+        "R005 完成模型、repository、coordinator、Scene 与 QA 接线。"
+      ],
+      "followup_problem_id": null,
+      "id": "C005",
+      "problem_id": "P007",
+      "residual_risk": [
+        "extraction/governance 和 Echo context 的后续闭环已分别由 P008/P009 显式承接，不阻断 P007 自身成功。"
+      ],
+      "result_ids": [
+        "R005"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "模型执行 ready -> refreshing -> failed，证明旧 verified snapshot 不再用于新 family sync；refresh start 会使旧异步 generation 失效。"
+      ],
+      "summary": "R005 满足 P007：授权状态、失败失效、foreground 顺序和同步恢复均有代码与专项验证。"
+    },
+    "C006": {
+      "blocking_gaps": [
+        "更新既有 proposal/persona 静态检查，使其明确要求主线程授权快照，并禁止完成回调重新读取当前角色。"
+      ],
+      "body_path": "problems/P000/children/P005/children/P006/children/P008/checks/C006.md",
+      "created_at": "2026-07-11T09:01:00+00:00",
+      "criteria_map": [
+        "开始前捕获不可变授权：已满足。",
+        "回调只比较 token：已满足。",
+        "governance 使用 queue-owned snapshot：已满足。",
+        "所有现有发布门接受新合同：未满足。"
+      ],
+      "evidence": [
+        "新 snapshot 模型测试覆盖 user/persona/family generation 变化并通过。",
+        "`finishExtraction`、`startNextGovernance` 和 `handleGovernanceSuccess` 已无 `FamilyRepository` 或当前 Context 重读。",
+        "Workspace Debug Simulator build 成功。",
+        "`run-knowledge-proposal-persona-policy-check.sh` 失败，仍要求 `resolveCurrentPersonaIdentity()` 旧实现。"
+      ],
+      "execution_map": [
+        "R006 完成运行时代码、新模型和新静态 gate；既有 proposal/persona gate 未同步到新安全合同。"
+      ],
+      "followup_problem_id": "P010",
+      "id": "C006",
+      "problem_id": "P008",
+      "residual_risk": [
+        "在旧 gate 更新并重新运行前，全量 release regression 不能作为 P008 完成证据。"
+      ],
+      "result_ids": [
+        "R006"
+      ],
+      "root_id": "P000",
+      "status": "not_success",
+      "stress_test": [
+        "用不同 user/persona/family generation 执行模型 smoke，旧 snapshot 均被拒绝。",
+        "运行既有 proposal/persona gate，确认发布回归仍会被旧断言阻断。"
+      ],
+      "summary": "R006 的运行时代码和专项新 gate 满足不可变快照方向，Simulator 编译通过；但既有 proposal/persona 发布门仍断言旧的后台重读实现并失败，因此当前尚不能判定 P008 成功。"
+    },
+    "C007": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P005/children/P006/children/P008/children/P010/checks/C007.md",
+      "created_at": "2026-07-11T09:03:06+00:00",
+      "criteria_map": [
+        "不再要求旧 resolver：满足。",
+        "明确捕获和传递 snapshot：满足。",
+        "完成阶段禁止 mutable authority 读取：满足。",
+        "保留 proposal/evidence/family fallback：满足。"
+      ],
+      "evidence": [
+        "proposal/persona gate 从 resolver 字符串断言升级为函数体级 snapshot 断言。",
+        "proposal/persona、async snapshot、governance coordinator 和 release QA package 全部通过。",
+        "P008 Simulator build 已证明该合同对应的运行时代码可编译。"
+      ],
+      "execution_map": [
+        "R007 仅修改既有静态 gate，没有改变运行时或公开行为。"
+      ],
+      "followup_problem_id": null,
+      "id": "C007",
+      "problem_id": "P010",
+      "residual_risk": [
+        "最终全量回归在 P009 完成后一并执行，不阻断本验证合同自身成功。"
+      ],
+      "result_ids": [
+        "R007"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "gate 以 brace depth 提取 `finishExtraction`，不会因相邻函数仍有合法 resolver 使用而误判。"
+      ],
+      "summary": "R007 完整解决 P010：旧 gate 已验证新的安全合同，专项检查和 release QA package 均通过，未放宽原有业务约束。"
+    },
+    "C008": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P005/children/P006/children/P008/checks/C008.md",
+      "created_at": "2026-07-11T09:05:10+00:00",
+      "criteria_map": [
+        "开始前捕获 identity/user/persona/family generation：满足。",
+        "完成回调只比较锁内 token：满足。",
+        "governance queue 使用 account authorization + active persona：满足。",
+        "stale callback 不写 graph/base/outbox：账号、角色或授权变化都会旋转 sync/extraction generation，旧回调在写入前返回。"
+      ],
+      "evidence": [
+        "generation 模型覆盖用户、角色、家庭授权三种失效并通过。",
+        "函数体静态 gate 证明 `finishExtraction`、`startNextGovernance`、`handleGovernanceSuccess` 无 mutable authority 重读。",
+        "proposal/persona、governance coordinator、family freshness、release QA package 均通过。",
+        "Workspace Simulator build 成功，日志 `/tmp/dj-task22-p008-build2.log`。"
+      ],
+      "execution_map": [
+        "R006 实现运行时、模型和新 gate。",
+        "R007 修正既有发布门，恢复完整验证链路。"
+      ],
+      "followup_problem_id": null,
+      "id": "C008",
+      "problem_id": "P008",
+      "residual_risk": [
+        "P009 仍需证明家庭授权撤销会主动持久化 self context 并通知 Echo；该问题独立于 P008 的后台快照闭环。"
+      ],
+      "result_ids": [
+        "R006",
+        "R007"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "模型分别替换 user/persona/family generation，旧 snapshot 均被拒绝。",
+        "角色变化使 coordinator `syncGeneration` 失效，治理 callback 的 `isCurrent` guard 在处理响应前返回。"
+      ],
+      "summary": "R006 与 R007 共同满足 P008：运行时使用不可变 generation snapshot，旧发布门也已对齐并通过，后台提取/治理不再读取可变家庭仓库或当前 Context。"
+    },
+    "C009": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P005/children/P006/children/P009/checks/C009.md",
+      "created_at": "2026-07-11T09:08:40+00:00",
+      "criteria_map": [
+        "authority 变化触发 reconcile：满足。",
+        "失效 Context 写回 self 并通知：满足。",
+        "Echo 取消旧 runtime 并准备 self：满足。",
+        "正常 accepted family 不重置：纯策略和 guard 均证明。"
+      ],
+      "evidence": [
+        "纯策略模型覆盖 self、accepted family、revoked family 和 signed-out。",
+        "静态 gate 证明 freshness、持久化、通知、KBLite/coordinator persona 更新与 Echo runtime observer 全链存在。",
+        "family repository/Echo authorization/release QA 和 Simulator build 均通过。"
+      ],
+      "execution_map": [
+        "R008 完成 freshness 约束、纯 policy、ContextStore/observer 链和 QA 接线。"
+      ],
+      "followup_problem_id": null,
+      "id": "C009",
+      "problem_id": "P009",
+      "residual_risk": [
+        "同账号刷新乱序与 coordinator invalidate 排序属于父问题的并发 follow-up，不否定 P009 主动回退逻辑本身。"
+      ],
+      "result_ids": [
+        "R008"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "revoked family 输入得到 fallback；同一输入改为 authorized 后保持 family，不产生误回退。"
+      ],
+      "summary": "R008 满足 P009：授权失败或撤销会把持久化 family context 主动切回本人，并沿既有 Context 通知链使 Echo、知识角色和治理队列一致回退。"
+    },
+    "C010": {
+      "blocking_gaps": [
+        "为每次家庭 refresh 捕获并比较独立 refresh generation。",
+        "让 persona/family authority invalidation 在调用返回前同步完成，或用可在线程安全位置立即轮换的外部 generation 阻断已排队 callback。",
+        "增加乱序 refresh 与 callback-before-invalidate 模型/静态回归。"
+      ],
+      "body_path": "problems/P000/children/P005/children/P006/checks/C010.md",
+      "created_at": "2026-07-11T09:09:35+00:00",
+      "criteria_map": [
+        "foreground refresh 与失败 fail closed：基本满足，但并发旧 refresh 可覆盖新结果。",
+        "extraction immutable snapshot：满足。",
+        "governance stale callback 不写 graph/base/outbox：未完全满足，失效排序存在窗口。",
+        "Echo context 主动回退：满足。"
+      ],
+      "evidence": [
+        "P007/P008/P009 的模型、静态 gate 和 Simulator build 通过。",
+        "FamilyRepository refresh callback 只捕获 `userGeneration`，未比较本次 `authorizationFreshness.generation`。",
+        "coordinator 的 persona/auth invalidation 使用 `queue.async`，而网络 callback 也异步入同一队列；setter 返回不代表旧 callback 已失效。"
+      ],
+      "execution_map": [
+        "R009 汇总 P007/P008/P009；新增并发缺口必须作为独立 follow-up 实施。"
+      ],
+      "followup_problem_id": "P011",
+      "id": "C010",
+      "problem_id": "P006",
+      "residual_risk": [
+        "未修复前，服务端撤销或角色切换附近仍可能短暂写入旧知识 base/outbox 状态。"
+      ],
+      "result_ids": [
+        "R009"
+      ],
+      "root_id": "P000",
+      "status": "not_success",
+      "stress_test": [
+        "推演 refresh A/B 乱序：B 成功后 A 失败仍可调用 `invalidateAuthorization`。",
+        "推演 callback 已入队、随后 context setter 入队：callback 可能先应用 authoritative graph，再执行失效块。"
+      ],
+      "summary": "R009 完成三个计划子问题，但独立并发时序审查证明同账号 refresh 乱序和 coordinator invalidate 排序仍可让旧 authority 结果生效，因此 P006 当前不能判定成功。"
+    },
+    "C011": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P005/children/P006/children/P011/children/P012/checks/C011.md",
+      "created_at": "2026-07-11T09:15:18+00:00",
+      "criteria_map": [
+        "A/B 乱序：满足。",
+        "账号/owner 切换：policy 同时比较两者，满足。",
+        "不执行旧 replace/invalidate：guard 位于 result switch 之前，满足。"
+      ],
+      "evidence": [
+        "纯 policy 同时验证 owner、user generation 和 refresh generation。",
+        "模型实际执行 refresh A -> refresh B -> B commit，并证明 A 与重复 B 均 stale。",
+        "repository lifecycle gate 要求捕获和消费 refresh generation。"
+      ],
+      "execution_map": [
+        "R010 完成 policy、repository 接入和回归。"
+      ],
+      "followup_problem_id": null,
+      "id": "C011",
+      "problem_id": "P012",
+      "residual_risk": [
+        "coordinator callback 失效线性化由 P013 独立处理。"
+      ],
+      "result_ids": [
+        "R010"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "A token、B token和 B commit 后 token 三阶段均有模型断言。"
+      ],
+      "summary": "R010 满足 P012：最新 refresh 是唯一能提交 authority 的请求，旧成功、旧失败和重复 callback 都因 refresh generation 不匹配而拒绝。"
+    },
+    "C012": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P005/children/P006/children/P011/children/P013/checks/C012.md",
+      "created_at": "2026-07-11T09:24:47+00:00",
+      "criteria_map": [
+        "立即轮换 epoch：满足。",
+        "callback-before-invalidate：旧 epoch 在 queue block 前已失效，满足。",
+        "API 返回前 queue 状态完成：queue-specific 同步执行，满足。",
+        "无自锁/main sync：queue identity 防重入，且不存在 main.sync，满足。"
+      ],
+      "evidence": [
+        "epoch 模型证明 rotate 后旧 bound epoch 立即失效。",
+        "static gate 固定 user/persona/family 三个失效入口与 `isCurrent` epoch 检查。",
+        "独立 agent 复核 callback 排队时序，确认 graph/base/outbox 写入前均被阻断。",
+        "governance/async/release QA 与 Simulator build 通过。"
+      ],
+      "execution_map": [
+        "R011 完成 epoch state、coordinator 接入和发布 gate。"
+      ],
+      "followup_problem_id": null,
+      "id": "C012",
+      "problem_id": "P013",
+      "residual_risk": [
+        "真实高并发网络调度不做真机验证，但非真机目标已有模型、静态、编译和独立复核证据。"
+      ],
+      "result_ids": [
+        "R011"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "模型执行 bind -> rotate -> old callback reject；独立源码时序复核覆盖已排队 callback。"
+      ],
+      "summary": "R011 满足 P013；独立复核确认角色/家庭失效会先轮换 epoch，再同步更新 queue generation，旧 callback 无法通过写入 guard，且未发现新阻断问题。"
+    },
+    "C013": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P005/children/P006/children/P011/checks/C013.md",
+      "created_at": "2026-07-11T09:25:43+00:00",
+      "criteria_map": [
+        "refresh A/B 乱序：满足。",
+        "invalidation 线性化：满足。",
+        "无 queue 自锁：满足。",
+        "回归/构建：专项与 Simulator 已通过；全量由 Task 22 父层统一执行。"
+      ],
+      "evidence": [
+        "P012 证明只有最新 family refresh 可提交。",
+        "P013 证明失效 epoch 与 queue generation 共同拦截旧 callback。",
+        "独立 agent 对原始两个 P0 逐项复核并确认关闭。"
+      ],
+      "execution_map": [
+        "R012 聚合 P012/R010 和 P013/R011。"
+      ],
+      "followup_problem_id": null,
+      "id": "C013",
+      "problem_id": "P011",
+      "residual_risk": [
+        "真实设备网络调度属于目标外的真机验收，非真机范围无剩余并发阻断。"
+      ],
+      "result_ids": [
+        "R012"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "乱序 token 模型与 authorization epoch rotate 模型均通过；源码复核覆盖 callback 先入队场景。"
+      ],
+      "summary": "R012 满足 P011：两个独立并发根因均有运行时修复、模型/静态证据和独立复核，未发现剩余阻断。"
+    },
+    "C014": {
+      "blocking_gaps": [
+        "更新 knowledge pipeline gate 的 snapshot、foreground 顺序断言并重跑完整 regression/generic build。"
+      ],
+      "body_path": "problems/P000/children/P005/children/P006/checks/C014.md",
+      "created_at": "2026-07-11T09:28:11+00:00",
+      "criteria_map": [
+        "运行时新鲜度/快照/回退/并发：满足。",
+        "全量 release regression：未满足，验证合同过期。"
+      ],
+      "evidence": [
+        "专项模型、静态 gate、Simulator build 和独立复核均通过。",
+        "final6 全量回归运行至 `knowledge-pipeline-check` 失败；该 gate 仍要求旧的“丢弃旧用户”日志和 foreground 直接同步合同。",
+        "当前实现已升级为 authorization snapshot 日志与 foreground family refresh completion 顺序。"
+      ],
+      "execution_map": [
+        "R009/R012 完成运行时；需要一个发布门兼容 follow-up。"
+      ],
+      "followup_problem_id": "P014",
+      "id": "C014",
+      "problem_id": "P006",
+      "residual_risk": [
+        "旧 gate 更新并全量重跑前，不能证明后续所有历史发布检查与新合同兼容。"
+      ],
+      "result_ids": [
+        "R009",
+        "R012"
+      ],
+      "root_id": "P000",
+      "status": "not_success",
+      "stress_test": [
+        "final6 从 backend verify 连续运行至 knowledge pipeline guard，前置 Task 22 新 gates 全部通过。"
+      ],
+      "summary": "R009/R012 已关闭运行期与并发问题，但全量 release regression 被过期的 `knowledge-pipeline-check` 阻断，当前还不能判定 P006 成功。"
+    },
+    "C015": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P005/children/P006/children/P014/checks/C015.md",
+      "created_at": "2026-07-11T09:34:28+00:00",
+      "criteria_map": [
+        "snapshot isolation：满足。",
+        "refresh-before-sync：满足。",
+        "不放宽其他知识合同：原有断言保留并通过。",
+        "full regression/diff/build：满足。"
+      ],
+      "evidence": [
+        "knowledge pipeline gate 单跑和 final8 内均通过。",
+        "final8 同时通过所有静态/model gates、Simulator/generic iPhoneOS build 与两个关键 Simulator smoke。"
+      ],
+      "execution_map": [
+        "R013 完成 gate 对齐与 final8 证据。"
+      ],
+      "followup_problem_id": null,
+      "id": "C015",
+      "problem_id": "P014",
+      "residual_risk": [
+        "仅有 Pods Kingfisher Swift 6 whitespace warning，不属于本任务代码或阻断。"
+      ],
+      "result_ids": [
+        "R013"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "final6 暴露旧断言、final7 暴露格式门、final8 从零完整通过，证明不是跳过失败步骤。"
+      ],
+      "summary": "R013 满足 P014：只替换了被 Task 22 淘汰的旧断言，完整发布回归和两种非真机构建通过。"
+    },
+    "C016": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P005/children/P006/checks/C016.md",
+      "created_at": "2026-07-11T09:34:53+00:00",
+      "criteria_map": [
+        "refresh 前置和失败 fail closed：满足。",
+        "extraction/governance immutable snapshot：满足。",
+        "revoked context 主动回退：满足。",
+        "stale callback 并发线性化：满足。",
+        "全量 regression/build：满足。"
+      ],
+      "evidence": [
+        "P007/P008/P009/P011/P014 均有成功 check。",
+        "独立复核确认 refresh 乱序和 governance callback 两个 P0 已解决，无新阻断。",
+        "final8 release regression、Simulator/generic iPhoneOS build、Archive->Echo 与 delayed reply smokes 全部通过。"
+      ],
+      "execution_map": [
+        "R009 完成主功能；R012 关闭并发复核缺口；R013 恢复全量发布门证据。"
+      ],
+      "followup_problem_id": null,
+      "id": "C016",
+      "problem_id": "P006",
+      "residual_risk": [
+        "不做真机网络调度验收符合当前目标边界；非真机范围无剩余阻断。"
+      ],
+      "result_ids": [
+        "R009",
+        "R012",
+        "R013"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "refresh A/B 乱序、user/persona/family generation 变化、authorization epoch rotate 和 revoked family fallback 均有模型覆盖。"
+      ],
+      "summary": "R009、R012、R013 共同满足 P006：前台刷新、异步快照、Echo 回退和两个并发排序缺口均已关闭，完整非真机发布回归通过。"
+    },
+    "C017": {
+      "blocking_gaps": [
+        "更新 Task 22 状态/canonical/coverage/release matrix/计划索引与最终证据。"
+      ],
+      "body_path": "problems/P000/children/P005/checks/C017.md",
+      "created_at": "2026-07-11T09:35:37+00:00",
+      "criteria_map": [
+        "发布 gates：满足。",
+        "full regression/build：满足。",
+        "canonical/coverage/release/status 一致：未完全满足。"
+      ],
+      "evidence": [
+        "final8 全量非真机回归通过。",
+        "`2026-07-11-family-knowledge-authorization-boundary.md` 的最终证据仍为 final5，验证入口缺少后续四组 gates。",
+        "canonical 实施进度只概括初始 Task 22，没有运行期并发边界。"
+      ],
+      "execution_map": [
+        "R004 为初始文档，R009/R012/R013 增加了后续运行时事实，需要文档 follow-up。"
+      ],
+      "followup_problem_id": "P015",
+      "id": "C017",
+      "problem_id": "P005",
+      "residual_risk": [
+        "不更新会让后续维护者误认为 final5 是最终结果，并遗漏并发 guard 命令。"
+      ],
+      "result_ids": [
+        "R004",
+        "R009",
+        "R012",
+        "R013"
+      ],
+      "root_id": "P000",
+      "status": "not_success",
+      "stress_test": [
+        "对照最终 report 与状态文档，发现证据 run ID 和 gate 列表不一致。"
+      ],
+      "summary": "R004/R009/R012/R013 已证明代码与 full regression 成功，但 canonical/status 文档仍引用 final5，未记录运行期新鲜度、不可变快照、主动回退和并发修复，当前不能判定 P005 完成。"
+    },
+    "C018": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P005/children/P015/checks/C018.md",
+      "created_at": "2026-07-11T09:42:32+00:00",
+      "criteria_map": [
+        "最终实现口径收口：满足。",
+        "自动化与构建证据可追溯：满足。",
+        "既有 family/voice 验收证据保留：满足。",
+        "后续 P1/P2 与外部验收缺口诚实保留：满足。"
+      ],
+      "evidence": [
+        "PRD 覆盖矩阵、发布功能矩阵和 release QA package 三项文档门禁通过。",
+        "Task 22 实施计划与知识库 V2 权威设计均记录 freshness generation、不可变 persona snapshot、coordinator authorization epoch 和授权撤销主动回退。",
+        "final8 完整回归包含 Simulator、generic iPhoneOS build 和关键流程 smoke。",
+        "文档明确本轮后端无行为修改，不虚构部署证据。"
+      ],
+      "execution_map": [
+        "R014 完成 Task 22 文档、矩阵和最终证据收口。"
+      ],
+      "followup_problem_id": null,
+      "id": "C018",
+      "problem_id": "P015",
+      "residual_risk": [
+        "历史 sourceRef 迁移、公开治理体验、change-feed retention/compaction 和 semantic cache 隔离仍是明确后续任务，不影响本问题的文档收口结论。"
+      ],
+      "result_ids": [
+        "R014"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "初次覆盖矩阵检查因旧 family/voice 证据引用缺失而失败；修复采用补回证据链而不是削弱检查，随后三项文档门禁通过。"
+      ],
+      "summary": "R014 满足 P015。状态文档已准确记录 Task 22 的实现边界、运行期授权合同、最终回归证据和后续缺口；覆盖矩阵保留了既有 family/voice 证据，没有用删除断言的方式通过门禁。"
+    },
+    "C019": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P005/checks/C019.md",
+      "created_at": "2026-07-11T09:42:48+00:00",
+      "criteria_map": [
+        "发布回归覆盖默认拒绝与 accepted family 放行：满足。",
+        "运行期撤权和旧异步回调 fail closed：满足。",
+        "关键非真机构建与流程 smoke：满足。",
+        "文档、状态矩阵和诚实缺口收口：满足。"
+      ],
+      "evidence": [
+        "家庭 authority 模型、仓库生命周期、Echo Context、知识同步/导入和关系候选隔离门禁已接入发布回归。",
+        "final8 完整回归通过 Simulator Debug、generic iPhoneOS build、Archive -> Echo 和延迟回信 smoke。",
+        "独立复核发现的同账号乱序刷新与 coordinator 失效排序窗口均已修复并分别有模型/static gate。",
+        "PRD 覆盖矩阵、发布功能矩阵和 release QA package 文档检查通过。"
+      ],
+      "execution_map": [
+        "R004 提供初始发布门与文档。",
+        "R009、R012 关闭运行期授权新鲜度与主动回退缺口。",
+        "R013 对齐统一知识管线门禁并完成 final8。",
+        "R014 完成最终文档和矩阵收口。"
+      ],
+      "followup_problem_id": null,
+      "id": "C019",
+      "problem_id": "P005",
+      "residual_risk": [
+        "历史 legacy sourceRef 迁移和未来签名式家庭整库共享不属于本问题；当前默认拒绝策略保持安全。"
+      ],
+      "result_ids": [
+        "R004",
+        "R009",
+        "R012",
+        "R013",
+        "R014"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "完整回归先后暴露旧断言和格式问题，修复后从零运行 final8；独立源码复核专门覆盖乱序网络响应和已排队 callback 场景。"
+      ],
+      "summary": "R004、R009、R012、R013、R014 及其已验收子问题共同满足 P005。家庭授权边界已进入默认 release regression 和 release QA package，运行期新鲜度、异步快照、主动 Echo 回退与 coordinator epoch 均有自动化证据，最终状态文档与覆盖矩阵已同步。"
+    },
+    "C020": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/checks/C020.md",
+      "created_at": "2026-07-11T09:43:27+00:00",
+      "criteria_map": [
+        "KBPerson 仅候选：满足。",
+        "只有 backend invitation accepted 可授权：满足。",
+        "账号、请求与异步生命周期隔离：满足。",
+        "Echo、音色、收件人、关怀和知识同步共享授权边界：满足。",
+        "legacy 分享默认拒绝：满足。",
+        "发布回归、文档、构建证据：满足。"
+      ],
+      "evidence": [
+        "默认拒绝授权 policy 与纯模型 smoke 覆盖 owner、authority source、status、QA 和 legacy 组合。",
+        "repository lifecycle/freshness gates 覆盖账号切换、同账号乱序 refresh 和 owner-scoped overrides。",
+        "Echo reconciliation 与 Context authorization gates 覆盖撤权主动回退和禁止未授权 family 请求。",
+        "sync/import/snapshot/epoch gates 覆盖 wrong-owner、无 grant 分享、旧 extraction/governance callback。",
+        "final8 完整发布回归和两种非真机构建通过；独立审查发现的问题已修复复验。"
+      ],
+      "execution_map": [
+        "R015 汇总 P001-P015 的模型、仓库、Echo、同步、运行期并发和发布收口成果。"
+      ],
+      "followup_problem_id": null,
+      "id": "C020",
+      "problem_id": "P000",
+      "residual_risk": [
+        "历史数据迁移与未来跨账号签名 grant 是后续独立能力；当前 fail-closed 行为满足本 P0 目标。"
+      ],
+      "result_ids": [
+        "R015"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "覆盖账号切换、同账号请求乱序、撤权、持久化旧 Context、已排队治理 callback、relation spoof、wrong-owner 和无签名 graph 导入。"
+      ],
+      "summary": "R015 与全部已验收子问题证明 P000 成功完成。当前公开业务只信任当前 owner 的后端 accepted family 关系；候选、legacy、错误 owner、撤销关系和迟到异步工作均不能进入家庭 Echo 或远端知识同步。实现、发布门、非真机构建和状态文档形成了闭环证据。"
+    }
+  },
+  "counters": {
+    "check": 21,
+    "event": 202,
+    "problem": 16,
+    "result": 16,
+    "ticket": 16
+  },
+  "created_at": "2026-07-11T07:31:59+00:00",
+  "effort": "medium",
+  "language": "zh",
+  "ledger_id": "L20260711-153159",
+  "problems": {
+    "P000": {
+      "body_path": "problems/P000/README.md",
+      "check_ids": [
+        "C020"
+      ],
+      "created_at": "2026-07-11T07:31:59+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Close the Lodestar task represented by `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/plans/task_22_p0-family-knowledge-authorization-boundary.md` using recursive problem, ticket, result, and check state.\n\nTask context:\n\n# Task 22：P0 家庭关系授权与知识候选隔离",
+      "followup_ids": [],
+      "id": "P000",
+      "package_path": "problems/P000",
+      "parent_id": null,
+      "result_ids": [
+        "R015"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P001",
+        "P002",
+        "P003",
+        "P004",
+        "P005"
+      ],
+      "success_criteria": [
+        "Recursive ledger reaches next_action=none.",
+        "Relevant implementation and verification evidence is recorded.",
+        "A compact status checkpoint is synced back to Lodestar progress.md."
+      ],
+      "ticket_ids": [
+        "T000"
+      ],
+      "title": "Task 22：P0 家庭关系授权与知识候选隔离",
+      "updated_at": "2026-07-11T09:43:27+00:00"
+    },
+    "P001": {
+      "body_path": "problems/P000/children/P001/README.md",
+      "check_ids": [
+        "C000"
+      ],
+      "created_at": "2026-07-11T07:34:03+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "`FamilyMember` 缺少关系 owner/source，initializer 与 legacy decode 又默认 active/accepted，调用方无法区分后端已接受邀请、知识候选、QA fixture 和旧本地对象。",
+      "followup_ids": [],
+      "id": "P001",
+      "package_path": "problems/P000/children/P001",
+      "parent_id": "P000",
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "定义可 Codable 的 authority source 与纯 `FamilyRelationshipAuthorizationPolicy`。",
+        "FamilyMember 记录 owner/source，legacy/default/缺字段 fail closed。",
+        "仅 owner 精确匹配的 backend invitation active+accepted 被生产策略授权。",
+        "QA fixture 只有显式 QA 策略才可用，公开策略始终拒绝。",
+        "纯模型 smoke 覆盖 owner/source/status/legacy/QA 组合。"
+      ],
+      "ticket_ids": [
+        "T001"
+      ],
+      "title": "建立默认拒绝的家庭关系 authority 模型",
+      "updated_at": "2026-07-11T07:37:54+00:00"
+    },
+    "P002": {
+      "body_path": "problems/P000/children/P002/README.md",
+      "check_ids": [
+        "C001"
+      ],
+      "created_at": "2026-07-11T07:34:03+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "FamilyRepository 把 KBPerson 直接追加到成员列表，无 active owner/generation，启动 mock、迟到响应和全局 mode/voice overrides 可能跨账号残留或提升权限。",
+      "followup_ids": [],
+      "id": "P002",
+      "package_path": "problems/P000/children/P002",
+      "parent_id": "P000",
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "KBPerson 只进入独立 candidate 集合，不进入 getAll/accepted member。",
+        "FamilyRepository 绑定 active owner/generation，登录、切换、登出清理旧状态。",
+        "refresh/invite 回调验证 owner 与 generation，迟到响应不合并。",
+        "后端 refresh 对当前 owner 使用权威替换，而不是保留已消失旧成员。",
+        "mode/voice overrides 按 owner 分区；无 owner 不读写。",
+        "启动 mock 不进入公开仓库，UIQA fixture 显式标记。"
+      ],
+      "ticket_ids": [
+        "T002"
+      ],
+      "title": "隔离 KBPerson 候选并绑定家庭仓库账号生命周期",
+      "updated_at": "2026-07-11T07:42:48+00:00"
+    },
+    "P003": {
+      "body_path": "problems/P000/children/P003/README.md",
+      "check_ids": [
+        "C002"
+      ],
+      "created_at": "2026-07-11T07:34:03+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "relation 文本可把非 self context 推断为 personal，DigitalHumanContextStore 恢复和 Echo 请求又未统一验证当前 owner 的 accepted family member，可能开启错误 personal fallback 或发送未授权 family context。",
+      "followup_ids": [],
+      "id": "P003",
+      "package_path": "problems/P000/children/P003",
+      "parent_id": "P000",
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "personal identity 只由显式 self 或 owner/viewer 精确一致决定，relation spoof 无效。",
+        "持久化 family context 恢复时验证当前 owner 的 accepted member，不通过则回退当前用户 self context。",
+        "Echo family 请求前执行同一 accepted-member preflight；失败时不请求 family `/context/build`。",
+        "pending/failed/revoked 和跨 owner member 均拒绝，accepted exact digitalHumanId 正常通过。",
+        "模型/静态 smoke 覆盖恢复、请求与 fallback。"
+      ],
+      "ticket_ids": [
+        "T003"
+      ],
+      "title": "在 Echo 与持久化数字人上下文前复核家庭授权",
+      "updated_at": "2026-07-11T07:46:01+00:00"
+    },
+    "P004": {
+      "body_path": "problems/P000/children/P004/README.md",
+      "check_ids": [
+        "C003"
+      ],
+      "created_at": "2026-07-11T07:34:03+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "knowledge sync 主要依据 privacy scope，ownerless/wrong-owner/unaccepted-family graph 缺少统一边界；KBLiteMultiUser 又信任文件自报 sourceUserId 并允许裸 graph 直接合并。",
+      "followup_ids": [],
+      "id": "P004",
+      "package_path": "problems/P000/children/P004",
+      "parent_id": "P000",
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "增加 owner/persona sync authorization policy，出站和 authoritative merge 复用。",
+        "wrong-owner、ownerless legacy 上传和未授权 family persona 不进入远端同步或生成；个人 legacy 仅本地兼容。",
+        "裸 graph 永远拒绝，无后端 grant 的 share package 默认拒绝。",
+        "KBSync UI 不把被拒绝导入显示为成功，公开 release 不提供可执行整库导入。",
+        "纯模型与静态 gate 覆盖 accepted exact-match 与各拒绝分支。"
+      ],
+      "ticket_ids": [
+        "T004"
+      ],
+      "title": "阻断未授权家庭知识同步与 legacy 整库导入",
+      "updated_at": "2026-07-11T07:52:28+00:00"
+    },
+    "P005": {
+      "body_path": "problems/P000/children/P005/README.md",
+      "check_ids": [
+        "C004",
+        "C017",
+        "C019"
+      ],
+      "created_at": "2026-07-11T07:34:03+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "现有 QA 分散验证 family UI、Context 和知识同步，没有一个默认 gate 能证明 KBPerson、账号切换、relation spoof、未授权 sync/import 均 fail closed，也没有同步产品覆盖矩阵。",
+      "followup_ids": [
+        "P006",
+        "P015"
+      ],
+      "id": "P005",
+      "package_path": "problems/P000/children/P005",
+      "parent_id": "P000",
+      "result_ids": [
+        "R004"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P006",
+        "P015"
+      ],
+      "success_criteria": [
+        "新模型/static/组合 gates 进入默认 release regression 和 release QA package。",
+        "现有后端 family/context 测试证明 pending/failed/revoked 拒绝、accepted 放行。",
+        "release QA、完整 regression、Simulator/generic iPhoneOS build 与 diff check 通过。",
+        "canonical 知识架构、PRD coverage、release matrix 和 Task 22 状态说明一致。",
+        "按实际变更提交推送；需要后端变化时部署并跑 Postgres smoke，否则记录后端无行为变化依据。"
+      ],
+      "ticket_ids": [
+        "T005"
+      ],
+      "title": "将家庭授权边界纳入发布回归并收口文档",
+      "updated_at": "2026-07-11T09:42:48+00:00"
+    },
+    "P006": {
+      "body_path": "problems/P000/children/P005/children/P006/README.md",
+      "check_ids": [
+        "C010",
+        "C014",
+        "C016"
+      ],
+      "created_at": "2026-07-11T08:30:56+00:00",
+      "created_from_check_id": "C004",
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Task 22 已实现默认拒绝、账号级同步授权与冷启动 bootstrap，但服务端撤销关系在 App 长期运行期间不能及时使同步、extraction/governance 和 Echo 当前角色 fail closed。",
+      "followup_ids": [
+        "P011",
+        "P014"
+      ],
+      "id": "P006",
+      "package_path": "problems/P000/children/P005/children/P006",
+      "parent_id": "P005",
+      "result_ids": [
+        "R009"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P007",
+        "P008",
+        "P009",
+        "P011",
+        "P014"
+      ],
+      "success_criteria": [
+        "前台恢复和知识同步启动前刷新家庭 authority；刷新失败或过期时不得继续使用旧 family persona 进行新同步。",
+        "extraction 与 governance 在异步开始前捕获授权 identity/generation，完成时只比较不可变快照，不从后台线程读取 FamilyRepository。",
+        "当前 family context 被撤销时主动回退 self、持久化并发送 context change，Echo 取消旧 gate/runtime 请求。",
+        "新增模型/静态 smoke 覆盖撤销、刷新失败、账号切换和 stale callback，并重新通过全量 release regression 与非真机构建。"
+      ],
+      "ticket_ids": [
+        "T006"
+      ],
+      "title": "收紧运行期家庭授权新鲜度与异步快照",
+      "updated_at": "2026-07-11T09:34:53+00:00"
+    },
+    "P007": {
+      "body_path": "problems/P000/children/P005/children/P006/children/P007/README.md",
+      "check_ids": [
+        "C005"
+      ],
+      "created_at": "2026-07-11T08:32:44+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T006",
+      "created_from_ticket_mode": "split",
+      "description": "服务端撤销或刷新失败不能及时失效进程内 accepted family snapshot；foreground 会直接开始知识同步。",
+      "followup_ids": [],
+      "id": "P007",
+      "package_path": "problems/P000/children/P005/children/P006/children/P007",
+      "parent_id": "P006",
+      "result_ids": [
+        "R005"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "FamilyRepository 暴露 owner-bound refresh generation/state，成功、失败、账号切换都会更新 generation。",
+        "foreground 先异步刷新家庭 authority，再启动知识同步；失败时 family authorization fail closed。",
+        "accepted family 集合变化清理旧 knowledge base/pending 并从 revision 0 重拉。",
+        "模型/静态 smoke 覆盖成功、撤销、失败和 stale response。"
+      ],
+      "ticket_ids": [
+        "T007"
+      ],
+      "title": "家庭授权刷新状态与前台同步顺序",
+      "updated_at": "2026-07-11T08:41:28+00:00"
+    },
+    "P008": {
+      "body_path": "problems/P000/children/P005/children/P006/children/P008/README.md",
+      "check_ids": [
+        "C006",
+        "C008"
+      ],
+      "created_at": "2026-07-11T08:32:45+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T006",
+      "created_from_ticket_mode": "split",
+      "description": "知识提取和治理后台回调仍可能重新解析当前 FamilyRepository/context，在账号或角色切换期间产生竞态。",
+      "followup_ids": [
+        "P010"
+      ],
+      "id": "P008",
+      "package_path": "problems/P000/children/P005/children/P006/children/P008",
+      "parent_id": "P006",
+      "result_ids": [
+        "R006"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P010"
+      ],
+      "success_criteria": [
+        "异步提取开始前捕获 persona identity、用户 generation 与 family authorization generation。",
+        "完成回调只比较不可变 token，不在后台线程读取 FamilyRepository。",
+        "governance 启动和成功处理使用 queue-owned authorization snapshot 验证 expected identity。",
+        "stale callback 被丢弃且不修改图谱/base/outbox。"
+      ],
+      "ticket_ids": [
+        "T008"
+      ],
+      "title": "Extraction 与 Governance 不可变授权快照",
+      "updated_at": "2026-07-11T09:05:10+00:00"
+    },
+    "P009": {
+      "body_path": "problems/P000/children/P005/children/P006/children/P009/README.md",
+      "check_ids": [
+        "C009"
+      ],
+      "created_at": "2026-07-11T08:32:45+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T006",
+      "created_from_ticket_mode": "split",
+      "description": "选中 family context 失效时 getter 虽返回 self，但没有持久化或发送 context change，Echo UI/runtime 可能保留旧角色。",
+      "followup_ids": [],
+      "id": "P009",
+      "package_path": "problems/P000/children/P005/children/P006/children/P009",
+      "parent_id": "P006",
+      "result_ids": [
+        "R008"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "FamilyRepository authority generation 变化后触发 DigitalHumanContextStore reconcile。",
+        "失效 family context 被持久化为当前用户 self context，并发送 `djDigitalHumanContextDidChange`。",
+        "Echo 复用现有 context observer 取消旧 gate/session request 并重建 self runtime。",
+        "正常 accepted family context 不产生多余通知或重置。"
+      ],
+      "ticket_ids": [
+        "T010"
+      ],
+      "title": "家庭授权撤销后的 Echo Context 主动回退",
+      "updated_at": "2026-07-11T09:08:40+00:00"
+    },
+    "P010": {
+      "body_path": "problems/P000/children/P005/children/P006/children/P008/children/P010/README.md",
+      "check_ids": [
+        "C007"
+      ],
+      "created_at": "2026-07-11T09:01:00+00:00",
+      "created_from_check_id": "C006",
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "`knowledge-proposal-persona-policy-check.swift` 仍要求旧的 `resolveCurrentPersonaIdentity()` 开始/完成双重读取，导致更安全的 generation snapshot 实现无法通过既有发布回归。",
+      "followup_ids": [],
+      "id": "P010",
+      "package_path": "problems/P000/children/P005/children/P006/children/P008/children/P010",
+      "parent_id": "P008",
+      "result_ids": [
+        "R007"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "proposal/persona gate 要求 `captureCurrentPersonaAuthorizationSnapshot()` 在后台派发前执行。",
+        "gate 要求 extraction completion 使用 generation snapshot，且不包含 `resolveCurrentPersonaIdentity()` 或 `FamilyRepository`。",
+        "proposal/persona、async authorization、governance coordinator 和 release QA package 检查全部通过。",
+        "`git diff --check` 与 Workspace Simulator build 保持通过。"
+      ],
+      "ticket_ids": [
+        "T009"
+      ],
+      "title": "对齐既有知识发布门与不可变授权快照合同",
+      "updated_at": "2026-07-11T09:03:06+00:00"
+    },
+    "P011": {
+      "body_path": "problems/P000/children/P005/children/P006/children/P011/README.md",
+      "check_ids": [
+        "C013"
+      ],
+      "created_at": "2026-07-11T09:09:35+00:00",
+      "created_from_check_id": "C010",
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "同账号并发家庭 refresh 没有比较每次 refresh generation，旧响应可覆盖新结果；persona/family invalidation 异步排入 coordinator，已排队旧治理 callback 可能在失效块之前修改 graph/base/outbox。",
+      "followup_ids": [],
+      "id": "P011",
+      "package_path": "problems/P000/children/P005/children/P006/children/P011",
+      "parent_id": "P006",
+      "result_ids": [
+        "R012"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P012",
+        "P013"
+      ],
+      "success_criteria": [
+        "FamilyRepository 每次 refresh 捕获 freshness generation，回调只接受账号 generation、owner 和 refresh generation 全部匹配的最新响应。",
+        "persona/context 与 family refresh invalidation 在 API 返回前已轮换 coordinator generation，旧 callback 即使已入队也不能通过写入 guard。",
+        "不在主线程与 coordinator queue 之间形成 sync 死锁。",
+        "模型/静态 smoke 覆盖 refresh A/B 乱序、旧成功、旧失败、callback-before-invalidate 和账号切换。",
+        "Task 22 专项 gates、release QA、`git diff --check`、Simulator/generic iPhoneOS build 与最终 release regression 通过。"
+      ],
+      "ticket_ids": [
+        "T011"
+      ],
+      "title": "消除家庭刷新与治理失效的并发排序窗口",
+      "updated_at": "2026-07-11T09:25:43+00:00"
+    },
+    "P012": {
+      "body_path": "problems/P000/children/P005/children/P006/children/P011/children/P012/README.md",
+      "check_ids": [
+        "C011"
+      ],
+      "created_at": "2026-07-11T09:12:51+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T011",
+      "created_from_ticket_mode": "split",
+      "description": "FamilyRepository 并发 refresh 只比较账号 generation；同一账号的旧成功或旧失败响应可覆盖较新的 authority snapshot。",
+      "followup_ids": [],
+      "id": "P012",
+      "package_path": "problems/P000/children/P005/children/P006/children/P011/children/P012",
+      "parent_id": "P011",
+      "result_ids": [
+        "R010"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "每次 refresh 捕获独立 freshness generation。",
+        "callback 同时比较 owner、账号 generation 和 refresh generation。",
+        "refresh A/B 乱序时旧成功与旧失败均被识别为 stale。",
+        "模型与 repository lifecycle gate 覆盖该行为并通过。"
+      ],
+      "ticket_ids": [
+        "T012"
+      ],
+      "title": "同账号家庭刷新响应代次隔离",
+      "updated_at": "2026-07-11T09:15:18+00:00"
+    },
+    "P013": {
+      "body_path": "problems/P000/children/P005/children/P006/children/P011/children/P013/README.md",
+      "check_ids": [
+        "C012"
+      ],
+      "created_at": "2026-07-11T09:12:51+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T011",
+      "created_from_ticket_mode": "split",
+      "description": "persona/family invalidation 仅异步排入 serial queue，已排队的旧 callback 可能先通过旧 generation 并修改 graph/base/outbox。",
+      "followup_ids": [],
+      "id": "P013",
+      "package_path": "problems/P000/children/P005/children/P006/children/P011/children/P013",
+      "parent_id": "P011",
+      "result_ids": [
+        "R011"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "coordinator 拥有线程安全 authorization epoch，并在账号、角色、family refresh 开始时立即轮换。",
+        "每个 queue-owned sync generation 绑定当前 epoch，`isCurrent` 同时验证二者。",
+        "invalidation 在返回前同步更新 queue 状态，且 queue 内调用不会自锁。",
+        "模型/静态 gate 覆盖 callback-before-invalidate 时序并通过。"
+      ],
+      "ticket_ids": [
+        "T013"
+      ],
+      "title": "Coordinator 授权失效线性化",
+      "updated_at": "2026-07-11T09:24:47+00:00"
+    },
+    "P014": {
+      "body_path": "problems/P000/children/P005/children/P006/children/P014/README.md",
+      "check_ids": [
+        "C015"
+      ],
+      "created_at": "2026-07-11T09:28:11+00:00",
+      "created_from_check_id": "C014",
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "`knowledge-pipeline-check.swift` 仍断言旧 extraction 日志和旧 foreground 直接同步行为，无法验证当前 authorization snapshot 与 refresh-before-sync 合同。",
+      "followup_ids": [],
+      "id": "P014",
+      "package_path": "problems/P000/children/P005/children/P006/children/P014",
+      "parent_id": "P006",
+      "result_ids": [
+        "R013"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "KBLite isolation 断言改为要求授权 snapshot/generation 失效，不放宽 ownerless legacy 和 Widget 隔离。",
+        "foreground 断言要求先 `bootstrapCurrentUserFromBackend`，completion 后触发 `foregroundAfterFamilyRefresh`。",
+        "逐项修正该 gate 中其他过期但已被更安全合同替换的断言。",
+        "knowledge pipeline gate、release QA、完整 release regression、Simulator/generic iPhoneOS build 与 `git diff --check` 通过。"
+      ],
+      "ticket_ids": [
+        "T014"
+      ],
+      "title": "对齐统一知识管线发布门与家庭授权合同",
+      "updated_at": "2026-07-11T09:34:28+00:00"
+    },
+    "P015": {
+      "body_path": "problems/P000/children/P005/children/P015/README.md",
+      "check_ids": [
+        "C018"
+      ],
+      "created_at": "2026-07-11T09:35:37+00:00",
+      "created_from_check_id": "C017",
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "状态文档和 canonical 设计未反映运行期家庭授权新鲜度、异步 generation snapshot、Echo 主动回退、并发 refresh/epoch 修复及 final8 回归证据。",
+      "followup_ids": [],
+      "id": "P015",
+      "package_path": "problems/P000/children/P005/children/P015",
+      "parent_id": "P005",
+      "result_ids": [
+        "R014"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "Task 22 状态文档记录完整运行时合同、所有新增 gates、final8 report 与无后端部署影响。",
+        "canonical 知识架构实施进度同步 Task 22 最终边界。",
+        "PRD coverage、release feature matrix、impl plan index 和 task plan 标记 Task 22 非真机完成。",
+        "release QA package、文档矩阵 gates、`git diff --check` 与 Closure check 通过。"
+      ],
+      "ticket_ids": [
+        "T015"
+      ],
+      "title": "收口 Task 22 最终实现与回归文档",
+      "updated_at": "2026-07-11T09:42:32+00:00"
+    }
+  },
+  "results": {
+    "R000": {
+      "artifacts": [
+        "`DreamJourney/Sources/Services/FamilyRelationshipAuthorizationPolicy.swift`",
+        "`DreamJourney/Sources/Services/MemoryModel.swift`",
+        "`Scripts/QA/prd-stitch-ui/run-family-relationship-authorization-policy-model-smoke.sh`"
+      ],
+      "body_path": "problems/P000/children/P001/results/R000.md",
+      "created_at": "2026-07-11T07:37:19+00:00",
+      "done": [
+        "新增 `FamilyRelationshipAuthoritySource`、authorization context/policy。",
+        "FamilyMember 增加 relationship owner/source、context-aware accepted 判断。",
+        "initializer 与 legacy decoder 默认 pending + legacyUnverified。",
+        "backend parser 绑定 ownerUserId/userId 并标记 backendInvitation。",
+        "新文件已加入 Xcode target。",
+        "新增并运行纯模型 smoke。"
+      ],
+      "id": "R000",
+      "known_gaps": [
+        "现有 FamilyRepository 仍需在 P002 绑定当前 owner/generation，并显式标记 UIQA fixture。",
+        "当前便捷属性以记录 owner 计算，跨账号隔离由 P002 repository authority boundary 完成。"
+      ],
+      "problem_id": "P001",
+      "root_id": "P000",
+      "summary": "新增统一纯策略与显式 authority source，FamilyMember 的 owner/source/status 组合不再依赖不安全默认值；后端 accepted invitation 是生产唯一放行来源，QA fixture 必须显式开启。",
+      "ticket_id": "T001",
+      "verification": [
+        "`run-family-relationship-authorization-policy-model-smoke.sh` 通过。",
+        "Xcode workspace Simulator Debug build 通过，证明 MemoryModel 与现有调用方兼容。",
+        "project.pbxproj `plutil -lint` 通过。",
+        "直接 xcodeproj 构建因 Pods module 解析失败，改用工程权威的 xcworkspace 后通过；不是代码失败。"
+      ]
+    },
+    "R001": {
+      "artifacts": [
+        "`DreamJourney/Sources/Services/FamilyRepository.swift`",
+        "`Scripts/QA/prd-stitch-ui/family-repository-authorization-lifecycle-check.swift`"
+      ],
+      "body_path": "problems/P000/children/P002/results/R001.md",
+      "created_at": "2026-07-11T07:42:48+00:00",
+      "done": [
+        "新增 `FamilyRelationshipCandidate`，KBLite 更新只重建 candidate 集合。",
+        "移除 `seedMockData` 和 KBPerson -> member 自动追加。",
+        "登录/登出切换 active owner 与 generation，并清理 members/candidates/overrides。",
+        "refresh/invite 捕获 generation，拒绝旧账号迟到回调。",
+        "后端列表执行 owner/source 校验和权威替换。",
+        "mode/voice overrides 改为 owner-scoped key，更新仅限 accepted member。",
+        "AppDelegate/Echo QA 家庭 fixture 显式标记 owner/source。"
+      ],
+      "id": "R001",
+      "known_gaps": [
+        "Echo identity/context 的 accepted preflight 属于 P003。",
+        "knowledge sync 与 legacy share import 属于 P004。"
+      ],
+      "problem_id": "P002",
+      "root_id": "P000",
+      "summary": "FamilyRepository 不再是混合 mock、KBPerson 与多账号响应的全局列表；它现在绑定当前 owner/generation，只接受匹配 owner 的后端关系，KBPerson 保留为非授权候选。",
+      "ticket_id": "T002",
+      "verification": [
+        "authority model smoke 通过。",
+        "family repository lifecycle static check 通过。",
+        "xcworkspace Simulator Debug build 通过。",
+        "`plutil -lint` 已在 P001 验证新增 target 接线，当前增量不改变工程结构。"
+      ]
+    },
+    "R002": {
+      "artifacts": [
+        "`EchoKnowledgeContextPolicy.swift`",
+        "`KBLiteManager.swift`",
+        "`DigitalHumanContextStore.swift`",
+        "`EchoViewController.swift`"
+      ],
+      "body_path": "problems/P000/children/P003/results/R002.md",
+      "created_at": "2026-07-11T07:46:01+00:00",
+      "done": [
+        "移除 relation-only personal inference。",
+        "KBLiteManager 新增 optional authorized persona resolver，family 使用 accepted member canonical digitalHumanId。",
+        "DigitalHumanContextStore 改为 user-scoped persistence，get/set 都复核 accepted member。",
+        "Echo 建 gate 前 preflight，未授权记录 `familyRelationshipUnauthorized` 且不发请求。",
+        "family Context 请求携带 member ID，供后端 accepted policy 复核。",
+        "stale turn submit 再次复核 identity。"
+      ],
+      "id": "R002",
+      "known_gaps": [
+        "sync/import 仍需 P004 收敛。",
+        "真机角色切换不在本任务范围。"
+      ],
+      "problem_id": "P003",
+      "root_id": "P000",
+      "summary": "非 self 角色不能再凭 relation 文本获得 personal identity；持久化 context 与每轮 Echo backend context request 都要求当前仓库存在 accepted family member，失效时回退 self 或跳过请求。",
+      "ticket_id": "T003",
+      "verification": [
+        "knowledge context model smoke 包含 relation spoof 与 explicit self，已通过。",
+        "Echo family context authorization static gate 已通过。",
+        "family authority/repository gates 继续通过。",
+        "xcworkspace Simulator Debug build 通过。"
+      ]
+    },
+    "R003": {
+      "artifacts": [
+        "`KnowledgeThreeWayMerge.swift`",
+        "`KnowledgeSyncCoordinator.swift`",
+        "`KBLiteMultiUser.swift`",
+        "`KBSyncViewController.swift`"
+      ],
+      "body_path": "problems/P000/children/P004/results/R003.md",
+      "created_at": "2026-07-11T07:52:28+00:00",
+      "done": [
+        "新增必填 `KnowledgeSyncAuthorizationScope` 并覆盖 bootstrap/merge/delta/payload。",
+        "Coordinator 从 authorized current persona 派生 scope，所有生产 sync 调用显式传入。",
+        "wrong owner、ownerless、persona/digital mismatch 从同步和远端合并域过滤。",
+        "local private/legacy 仍保留，不被 remote 删除。",
+        "FamilyKnowledgeSharePolicy 在 release 关闭完整图谱 export/import；unknown/raw graph 拒绝。",
+        "KBSync UI release 隐藏动作，拒绝时显示明确原因。"
+      ],
+      "id": "R003",
+      "known_gaps": [
+        "后续若产品开放整库家庭共享，需要独立后端 grant/签名协议；本任务没有伪造该合同。",
+        "P005 仍需把 gates 接入默认 release regression/QA 并运行全量验证。"
+      ],
+      "problem_id": "P004",
+      "root_id": "P000",
+      "summary": "知识同步现在要求 owner/persona/digitalHuman 精确授权，ownerless legacy 只留本地；未签名整库分享在 release 不生成、不显示、不导入，裸 graph 始终拒绝。",
+      "ticket_id": "T004",
+      "verification": [
+        "扩展后的 knowledge three-way merge model smoke 通过，含 personal/family identity 矩阵。",
+        "knowledge family sync/import static gate 通过。",
+        "xcworkspace Simulator Debug build 通过。"
+      ]
+    },
+    "R004": {
+      "artifacts": [
+        "`docs/superpowers/status/2026-07-11-family-knowledge-authorization-boundary.md`",
+        "`tmp/visual-qa/prd-stitch-ui/release-regression/20260711-task22-family-knowledge-authorization-final5/report.md`",
+        "`Scripts/QA/prd-stitch-ui/run-family-relationship-authorization-policy-model-smoke.sh`",
+        "`Scripts/QA/prd-stitch-ui/run-family-repository-authorization-lifecycle-check.sh`",
+        "`Scripts/QA/prd-stitch-ui/run-echo-family-context-authorization-check.sh`",
+        "`Scripts/QA/prd-stitch-ui/run-knowledge-family-sync-import-authorization-check.sh`"
+      ],
+      "body_path": "problems/P000/children/P005/results/R004.md",
+      "created_at": "2026-07-11T08:30:06+00:00",
+      "done": [
+        "新增家庭关系授权、仓库生命周期、Echo family context、知识同步/导入四组 Task 22 gate，并接入默认 release regression 与 release QA package。",
+        "更新 PRD coverage、release feature matrix、知识库架构 V2、Task 22 状态与实施计划，明确 backend invitation accepted 是生产家庭 authority，KBPerson 仅为候选。",
+        "独立审查后修复 account-level multi-persona 同步：personal 与 accepted family persona 使用同一不可变授权快照，授权变化会清理旧 base/pending 并从 revision 0 重拉，避免 persona 切换误发 tombstone。",
+        "ownerless legacy 图谱文件改为 quarantine，缺 owner/evidence 的实体不得进入 generation 或 sync；远端 base 仅持久化授权后的图谱。",
+        "图片分析人物/地点绑定授权 persona identity；家庭关系在冷启动/登录后主动刷新；release 隐藏无 grant 的旧家族同步入口。"
+      ],
+      "id": "R004",
+      "known_gaps": [
+        "本任务没有后端行为变更，不需要重新部署服务器。",
+        "不开放整库跨账号分享；未来必须使用后端签名且绑定 owner/source accepted member/expiry 的 grant。",
+        "不新增知识人物转家人、家庭解除/删除或公开知识治理 UI。",
+        "真机、App Group provisioning 与最终外部验收不在本任务范围。"
+      ],
+      "problem_id": "P005",
+      "root_id": "P000",
+      "summary": "家庭关系授权边界、知识同步隔离、发布回归和状态文档已完成非真机收口；独立审查发现的跨 persona tombstone 与 ownerless legacy 生成风险也已修复。",
+      "ticket_id": "T005",
+      "verification": [
+        "Task 22 四组新增 gate、知识三方合并模型、Context policy 模型均通过。",
+        "后端 memory targeted tests 3/3 通过：pending family viewer 阻断、family viewer 不替代 owner care、accepted family 合同。",
+        "全量 release regression `20260711-task22-family-knowledge-authorization-final5` 通过全部静态守卫、`git diff --check`、Simulator Debug build、generic iPhoneOS build、Archive -> Echo smoke 与延迟回信通知 smoke。",
+        "回归报告：`tmp/visual-qa/prd-stitch-ui/release-regression/20260711-task22-family-knowledge-authorization-final5/report.md`。"
+      ]
+    },
+    "R005": {
+      "artifacts": [
+        "`DreamJourney/Sources/Services/FamilyRelationshipAuthorizationPolicy.swift`",
+        "`DreamJourney/Sources/Services/FamilyRepository.swift`",
+        "`DreamJourney/Sources/Services/KnowledgeSyncCoordinator.swift`",
+        "`DreamJourney/Sources/SceneDelegate.swift`",
+        "`Scripts/QA/prd-stitch-ui/family-authorization-freshness-model-smoke.swift`"
+      ],
+      "body_path": "problems/P000/children/P005/children/P006/children/P007/results/R005.md",
+      "created_at": "2026-07-11T08:41:02+00:00",
+      "done": [
+        "`FamilyAuthorizationFreshness` 覆盖 unknown/refreshing/ready/failed、verified snapshot 与 generation。",
+        "FamilyRepository 只有 verified snapshot 才向知识同步提供 family persona；刷新失败使 family 权限 fail closed。",
+        "知识同步在刷新开始时取消旧 generation；成功恢复 account authorization，授权集合变化才清 base；失败回到 personal-only 并重拉。",
+        "Scene foreground 先刷新家庭关系，再触发 `foregroundAfterFamilyRefresh` 同步。",
+        "新增 freshness model smoke 并接入 release regression/release QA。"
+      ],
+      "id": "R005",
+      "known_gaps": [
+        "extraction/governance 的不可变 generation 校验由 P008 收口。",
+        "Echo context 主动回退的完整 gate 由 P009 收口。"
+      ],
+      "problem_id": "P007",
+      "root_id": "P000",
+      "summary": "已引入 owner-bound 家庭授权新鲜度状态机，并把 foreground 知识同步改为等待后端家庭刷新完成；刷新开始、成功和失败均有明确的同步 generation 行为。",
+      "ticket_id": "T007",
+      "verification": [
+        "`run-family-authorization-freshness-model-smoke.sh` 通过。",
+        "family repository 与 family sync/import 静态 gate 通过。",
+        "release QA package 与 `git diff --check` 通过。",
+        "DreamJourney workspace Simulator Debug build 通过，日志 `/tmp/dj-task22-p007-build2.log`。"
+      ]
+    },
+    "R006": {
+      "artifacts": [
+        "`DreamJourney/Sources/Services/EchoKnowledgeContextPolicy.swift`",
+        "`DreamJourney/Sources/Services/KBLiteManager.swift`",
+        "`DreamJourney/Sources/Services/ConversationMemoryManager.swift`",
+        "`DreamJourney/Sources/Services/KnowledgeSyncCoordinator.swift`",
+        "`Scripts/QA/prd-stitch-ui/knowledge-async-authorization-snapshot-check.swift`"
+      ],
+      "body_path": "problems/P000/children/P005/children/P006/children/P008/results/R006.md",
+      "created_at": "2026-07-11T08:57:31+00:00",
+      "done": [
+        "新增 `KBPersonaAuthorizationSnapshotPolicy`，以用户、角色和家庭授权三类 generation 共同判断异步结果是否仍可写入。",
+        "`ConversationMemoryManager` 在进入后台队列前捕获完整授权快照，`KBLiteManager.finishExtraction` 只比较锁内 token，不再读取 `FamilyRepository` 或当前持久化角色。",
+        "家庭授权刷新开始、成功、失败和账号重置均更新 KBLite 的家庭授权 generation；角色切换更新 persona generation。",
+        "`KnowledgeSyncCoordinator` 新增 queue-owned `activePersonaIdentity`，治理派发和成功处理同时验证账号授权与当前 persona，不再在队列中调用 `resolveCurrentPersonaIdentity()`。",
+        "新增 `knowledge-async-authorization-snapshot-check.swift` 并接入默认 release regression 和 release QA package。"
+      ],
+      "id": "R006",
+      "known_gaps": [
+        "P009 仍需单独证明家庭授权撤销后，持久化 Context、Echo observer 和治理 persona 会主动回退本人角色。",
+        "全量 release regression 与 generic iPhoneOS build 在 P009 完成后统一执行。"
+      ],
+      "problem_id": "P008",
+      "root_id": "P000",
+      "summary": "知识提取和治理现已在主线程捕获授权身份与 generation，后台回调只比较不可变 token，不再重新读取可变家庭仓库或持久化角色。",
+      "ticket_id": "T008",
+      "verification": [
+        "`run-knowledge-context-policy-model-smoke.sh`：通过，覆盖用户、角色和家庭授权 generation 失效。",
+        "`run-knowledge-async-authorization-snapshot-check.sh`：通过。",
+        "`run-family-authorization-freshness-model-smoke.sh`：通过。",
+        "`run-family-repository-authorization-lifecycle-check.sh`：通过。",
+        "`run-knowledge-governance-coordinator-check.sh`：通过。",
+        "Workspace Debug Simulator build：通过，证据 `/tmp/dj-task22-p008-build2.log`。"
+      ]
+    },
+    "R007": {
+      "artifacts": [
+        "`Scripts/QA/prd-stitch-ui/knowledge-proposal-persona-policy-check.swift`"
+      ],
+      "body_path": "problems/P000/children/P005/children/P006/children/P008/children/P010/results/R007.md",
+      "created_at": "2026-07-11T09:02:48+00:00",
+      "done": [
+        "新增 brace-depth 函数体提取，确保禁止项只检查 `finishExtraction`。",
+        "要求 ConversationMemory 在后台派发前捕获 `KBPersonaAuthorizationSnapshot`。",
+        "要求 KBLite 完成阶段只比较 generation snapshot，并禁止读取 `FamilyRepository`/当前 persona resolver。",
+        "保留 proposal-first、evidence、Echo family fallback 既有断言。"
+      ],
+      "id": "R007",
+      "known_gaps": [
+        "P009 Echo context 主动回退和最终全量 release regression 尚未执行。"
+      ],
+      "problem_id": "P010",
+      "root_id": "P000",
+      "summary": "旧 proposal/persona gate 已改为验证不可变授权快照，不再要求后台完成阶段重读当前 persona。",
+      "ticket_id": "T009",
+      "verification": [
+        "proposal/persona gate：通过。",
+        "async authorization snapshot gate：通过。",
+        "governance coordinator gate：通过。",
+        "release QA package：通过。",
+        "P008 Workspace Simulator build：通过。"
+      ]
+    },
+    "R008": {
+      "artifacts": [
+        "`DreamJourney/Sources/Services/FamilyRelationshipAuthorizationPolicy.swift`",
+        "`DreamJourney/Sources/Services/FamilyRepository.swift`",
+        "`DreamJourney/Sources/App/DigitalHumanContextStore.swift`",
+        "`Scripts/QA/prd-stitch-ui/family-context-reconciliation-model-smoke.swift`",
+        "`Scripts/QA/prd-stitch-ui/family-context-reconciliation-check.swift`"
+      ],
+      "body_path": "problems/P000/children/P005/children/P006/children/P009/results/R008.md",
+      "created_at": "2026-07-11T09:08:15+00:00",
+      "done": [
+        "`acceptedMember(by:)` 增加 freshness guard，授权刷新失败后不再返回旧成员。",
+        "新增纯 `FamilyContextReconciliationPolicy`，明确 self/accepted/revoked/signed-out 行为。",
+        "ContextStore 读取原始 owner-scoped 持久化 Context，只有失效 family 才写回本人。",
+        "Context setter 更新 KBLite persona generation 和 coordinator queue persona，并对相同 Context 去重通知。",
+        "新增 model/static smoke 并接入默认 release regression 与 release QA package。"
+      ],
+      "id": "R008",
+      "known_gaps": [
+        "独立复核发现同账号并发 refresh 乱序和 coordinator 异步失效排序两个 P0 竞态，需由 P006 后续问题收口。",
+        "全量 release regression 与 generic iPhoneOS build 在上述竞态修复后执行。"
+      ],
+      "problem_id": "P009",
+      "root_id": "P000",
+      "summary": "失效 family context 现在会在主线程持久化回本人 Context，并通过现有通知链同步重建 Echo、KBLite 和治理 persona；正常 accepted family 不会被误重置。",
+      "ticket_id": "T010",
+      "verification": [
+        "family context reconciliation model/static gate：通过。",
+        "family repository、Echo family authorization、async snapshot gate：通过。",
+        "release QA package：通过。",
+        "Workspace Simulator build：通过，日志 `/tmp/dj-task22-p009-build.log`。"
+      ]
+    },
+    "R009": {
+      "artifacts": [
+        "P007/R005、P008/R006+R007、P009/R008。",
+        "`Scripts/QA/prd-stitch-ui/knowledge-async-authorization-snapshot-check.swift`",
+        "`Scripts/QA/prd-stitch-ui/family-context-reconciliation-check.swift`"
+      ],
+      "body_path": "problems/P000/children/P005/children/P006/results/R009.md",
+      "created_at": "2026-07-11T09:09:04+00:00",
+      "done": [
+        "foreground 在家庭 authority 刷新完成后才启动知识同步。",
+        "extraction 使用 user/persona/family generation snapshot，后台不读取 FamilyRepository/context。",
+        "governance dispatch/success 使用 queue-owned account authorization 与 persona。",
+        "family 授权失败或撤销后，持久化 Context 主动回退本人并通知 Echo。",
+        "新增 freshness、async snapshot、context reconciliation 模型/静态 gates。"
+      ],
+      "id": "R009",
+      "known_gaps": [
+        "同账号并发家庭 refresh 仅比较 user generation，旧 refresh 响应仍可能覆盖新成功/失败结果。",
+        "persona/family invalidate 使用 `queue.async`；已经排入 coordinator 的旧治理 callback 可能先于失效块修改 graph/base/outbox。",
+        "全量 release regression 和 generic iPhoneOS build 尚待并发缺口修复后执行。"
+      ],
+      "problem_id": "P006",
+      "root_id": "P000",
+      "summary": "P007/P008/P009 已分别完成前台刷新顺序、不可变 extraction/governance snapshot 和 Echo 主动回退；独立并发复核仍发现两个必须继续修复的排序缺口。",
+      "ticket_id": "T006",
+      "verification": [
+        "P007、P008、P009 专项模型和静态 gates 通过。",
+        "release QA package 通过。",
+        "Workspace Simulator build 通过，最新日志 `/tmp/dj-task22-p009-build.log`。",
+        "独立 agent 完成并发时序复核。"
+      ]
+    },
+    "R010": {
+      "artifacts": [
+        "`DreamJourney/Sources/Services/FamilyRelationshipAuthorizationPolicy.swift`",
+        "`DreamJourney/Sources/Services/FamilyRepository.swift`",
+        "`Scripts/QA/prd-stitch-ui/family-authorization-freshness-model-smoke.swift`"
+      ],
+      "body_path": "problems/P000/children/P005/children/P006/children/P011/children/P012/results/R010.md",
+      "created_at": "2026-07-11T09:14:54+00:00",
+      "done": [
+        "新增纯 `FamilyAuthorizationRefreshResponsePolicy`。",
+        "callback 同时比较 owner、user generation 和 refresh generation。",
+        "freshness 模型覆盖 refresh A/B 乱序与提交后重复 callback。",
+        "repository lifecycle gate 固定 refresh token 合同。"
+      ],
+      "id": "R010",
+      "known_gaps": [
+        "coordinator authorization epoch 由 P013 收口。",
+        "最终构建和全量回归在 P013 后统一执行。"
+      ],
+      "problem_id": "P012",
+      "root_id": "P000",
+      "summary": "每次家庭 refresh 现已绑定独立 freshness generation，同账号旧成功、旧失败或重复 callback 均无法覆盖最新 authority。",
+      "ticket_id": "T012",
+      "verification": [
+        "family authorization freshness model：通过。",
+        "family repository lifecycle gate：通过。",
+        "family context reconciliation 与 async authorization gates：通过。"
+      ]
+    },
+    "R011": {
+      "artifacts": [
+        "`DreamJourney/Sources/Services/EchoKnowledgeContextPolicy.swift`",
+        "`DreamJourney/Sources/Services/KnowledgeSyncCoordinator.swift`",
+        "`Scripts/QA/prd-stitch-ui/knowledge-coordinator-authorization-epoch-check.swift`"
+      ],
+      "body_path": "problems/P000/children/P005/children/P006/children/P011/children/P013/results/R011.md",
+      "created_at": "2026-07-11T09:23:45+00:00",
+      "done": [
+        "新增纯 `KnowledgeAuthorizationEpochState` 与 rotate/accept 模型。",
+        "coordinator 增加 epoch lock、owner/persona metadata 与 queue-specific 同步执行。",
+        "user/persona/family refresh invalidation 轮换 epoch，并在返回前更新 sync generation/active epoch。",
+        "`isCurrent` 同时验证 active user、sync generation 与 authorization epoch；`isCurrentPull` 继承该约束。",
+        "新增 coordinator epoch static gate 并接入 release regression/release QA。"
+      ],
+      "id": "R011",
+      "known_gaps": [
+        "等待独立并发复核确认上次两个 P0 均已关闭。",
+        "全量 release regression 与 generic iPhoneOS build 由父问题统一执行。"
+      ],
+      "problem_id": "P013",
+      "root_id": "P000",
+      "summary": "coordinator 现以锁保护 authorization epoch 作为 queue generation 的外部失效令牌；账号、角色和家庭刷新开始会在 queue invalidation 前轮换，旧 callback 的 `isCurrent` 无法继续写入。",
+      "ticket_id": "T013",
+      "verification": [
+        "knowledge context policy epoch model：通过。",
+        "coordinator epoch、governance coordinator、async snapshot gates：通过。",
+        "release QA package：通过。",
+        "Workspace Simulator build：通过，日志 `/tmp/dj-task22-p013-build2.log`。"
+      ]
+    },
+    "R012": {
+      "artifacts": [
+        "`FamilyAuthorizationRefreshResponsePolicy`",
+        "`KnowledgeAuthorizationEpochState`",
+        "`knowledge-coordinator-authorization-epoch-check.swift`"
+      ],
+      "body_path": "problems/P000/children/P005/children/P006/children/P011/results/R012.md",
+      "created_at": "2026-07-11T09:25:19+00:00",
+      "done": [
+        "refresh response 绑定 owner/user/freshness 三重 generation。",
+        "coordinator generation 绑定 lock-protected authorization epoch。",
+        "账号、角色与 family refresh 失效先轮换 epoch，并同步完成 queue state 更新。",
+        "模型、静态 gate 和 release QA 接入完成。"
+      ],
+      "id": "R012",
+      "known_gaps": [
+        "Task 22 最终全量 release regression、generic iPhoneOS build 和文档收口尚待执行。"
+      ],
+      "problem_id": "P011",
+      "root_id": "P000",
+      "summary": "P012 与 P013 已分别关闭同账号 refresh 响应乱序和 coordinator callback 失效排序窗口，独立复核确认上次两个 P0 均已解决。",
+      "ticket_id": "T011",
+      "verification": [
+        "P012/R010 与 P013/R011 专项 checks 成功。",
+        "独立 agent 复核无新阻断问题。",
+        "Workspace Simulator build 通过，日志 `/tmp/dj-task22-p013-build2.log`。"
+      ]
+    },
+    "R013": {
+      "artifacts": [
+        "`Scripts/QA/prd-stitch-ui/knowledge-pipeline-check.swift`",
+        "`tmp/visual-qa/prd-stitch-ui/release-regression/20260711-task22-family-authorization-final8/report.md`"
+      ],
+      "body_path": "problems/P000/children/P005/children/P006/children/P014/results/R013.md",
+      "created_at": "2026-07-11T09:34:04+00:00",
+      "done": [
+        "KBLite isolation 改为验证 snapshot/generation stale callback guard。",
+        "foreground 改为验证 family bootstrap completion 后同步。",
+        "保留三方合并、隐私、分页、Widget、后端优先提取与 Echo RAG 原有断言。"
+      ],
+      "id": "R013",
+      "known_gaps": [
+        "无本票阻断；剩余工作是 Task 22 文档、ledger 与提交收口。"
+      ],
+      "problem_id": "P014",
+      "root_id": "P000",
+      "summary": "统一知识管线 gate 已对齐 authorization snapshot 与 family-refresh-before-sync 合同；完整 final8 release regression 通过。",
+      "ticket_id": "T014",
+      "verification": [
+        "`knowledge-pipeline-check.swift`：通过。",
+        "final8 全量 release regression：通过。",
+        "Simulator Debug build、generic iPhoneOS build：通过。",
+        "Archive -> Echo 与 delayed reply notification Simulator smokes：通过。",
+        "iOS/backend `git diff --check`：通过。"
+      ]
+    },
+    "R014": {
+      "artifacts": [
+        "`docs/plans/task_22_p0-family-knowledge-authorization-boundary.md`",
+        "`docs/superpowers/status/2026-07-11-family-knowledge-authorization-boundary.md`",
+        "`docs/superpowers/plans/2026-07-11-product-knowledge-base-architecture-v2.md`",
+        "`docs/superpowers/status/2026-06-18-prd-coverage-matrix.md`",
+        "`docs/superpowers/status/2026-06-17-release-feature-matrix.md`"
+      ],
+      "body_path": "problems/P000/children/P005/children/P015/results/R014.md",
+      "created_at": "2026-07-11T09:42:08+00:00",
+      "done": [
+        "更新家庭知识授权边界状态文档、知识库 V2 权威设计、PRD 覆盖矩阵、发布功能矩阵和 Task 22 实施计划。",
+        "记录 `FamilyRepository` 新鲜度、异步 persona 授权快照、coordinator authorization epoch 和授权撤销后主动回退本人 Context 的运行期合同。",
+        "保留既有 family/voice 合同与 UIQA 证据，同时加入 Task 22 新增的 freshness、snapshot、reconciliation 和 epoch 证据。",
+        "记录本轮后端无行为修改，因此不需要重新部署。"
+      ],
+      "id": "R014",
+      "known_gaps": [
+        "历史 ownerless/legacy sourceRef 的证据化迁移需要单独批准与实施，不能由兼容逻辑静默授权。",
+        "timeLetter 草稿字段收敛、公开知识治理体验、change-feed retention/compaction 和 semantic cache 隔离属于后续 P1/P2。",
+        "真实 App Group provisioning、Widget Gallery 和设备场景验收不在本轮非真机范围。"
+      ],
+      "problem_id": "P015",
+      "root_id": "P000",
+      "summary": "Task 22 的最终实现、回归证据与状态文档已完成收口。家庭关系的生产授权统一依赖当前 owner 的后端手机号邀请 accepted 合同；知识人物仅作为候选，不能自动提升为家人权限。运行期使用账号、请求、persona、家庭授权 generation 与 coordinator authorization epoch，阻止乱序响应和旧异步回调继续写入或参与 Echo。",
+      "ticket_id": "T015",
+      "verification": [
+        "`prd-coverage-matrix-check.swift` 通过。",
+        "`release-feature-matrix-check.swift` 通过。",
+        "`release-qa-package-check.swift` 通过。",
+        "Full release regression final8 通过，报告位于 `tmp/visual-qa/prd-stitch-ui/release-regression/20260711-task22-family-authorization-final8/report.md`。",
+        "Simulator Debug build、generic iPhoneOS build、Archive -> Echo smoke、Echo delayed reply notification smoke 均通过。",
+        "后端既有 family/context targeted tests 3/3 通过。"
+      ]
+    },
+    "R015": {
+      "artifacts": [
+        "`docs/plans/task_22_p0-family-knowledge-authorization-boundary.md`",
+        "`docs/superpowers/status/2026-07-11-family-knowledge-authorization-boundary.md`",
+        "`.complex-problems/L20260711-153159`",
+        "`tmp/visual-qa/prd-stitch-ui/release-regression/20260711-task22-family-authorization-final8/report.md`"
+      ],
+      "body_path": "problems/P000/results/R015.md",
+      "created_at": "2026-07-11T09:43:11+00:00",
+      "done": [
+        "建立默认拒绝、owner/source/status aware 的家庭关系授权模型。",
+        "将知识人物隔离为候选，不进入 accepted family repository。",
+        "绑定家庭仓库账号生命周期、请求 generation 和账号分区 override。",
+        "在 Echo 与持久化数字人 Context 前重新验证 accepted family，撤权后主动回退本人。",
+        "阻断 wrong-owner、ownerless legacy、未授权 family persona 的知识同步和生成；默认拒绝裸 graph 与无 grant 分享包。",
+        "使用不可变 persona authorization snapshot 和 coordinator authorization epoch 阻断旧 extraction/governance callback。",
+        "接入默认 release regression、release QA package、覆盖矩阵与状态文档。"
+      ],
+      "id": "R015",
+      "known_gaps": [
+        "历史 ownerless/legacy sourceRef 仍保持隔离；迁移必须使用单独批准的证据化流程。",
+        "家庭解除/退出策略和 candidate-to-invite 产品交互尚未由 PRD 明确，不在本轮公开实现。",
+        "未来整库跨账号分享必须依赖后端签名 grant，本轮保持默认关闭。",
+        "真机、App Group provisioning 与 Widget Gallery 属于外部验收，不在本轮目标。"
+      ],
+      "problem_id": "P000",
+      "root_id": "P000",
+      "summary": "Task 22 已完成当前非真机范围内的 P0 家庭关系授权与知识候选隔离。生产 authority 唯一来源是当前登录 owner 的后端手机号邀请 accepted 关系；KBPerson、本地 legacy member、QA fixture 和无签名整库分享均不能自动获得公开业务权限。Echo、知识提取、治理、同步、家庭音色和持久化 Context 共享同一授权边界。",
+      "ticket_id": "T000",
+      "verification": [
+        "final8 完整 release regression 通过。",
+        "Simulator Debug 与 generic iPhoneOS build 通过。",
+        "Archive -> Echo 与 Echo delayed reply notification Simulator smoke 通过。",
+        "家庭授权 policy、repository 生命周期、freshness、snapshot、reconciliation、epoch、Echo 和同步/导入 gates 通过。",
+        "后端既有 family/context targeted tests 3/3 通过；本轮无后端行为变更，不需要部署。",
+        "独立复核发现的两个并发 P0 问题已修复并重新验收。"
+      ]
+    }
+  },
+  "root_id": "P000",
+  "schema_version": 6,
+  "tickets": {
+    "T000": {
+      "acceptance_criteria": [
+        "1. FamilyMember 模型包含 owner 与 authority source，legacy/local/default fail closed；仅当前 owner 的 backendInvitation + active + accepted 可用于生产家庭业务。",
+        "2. KBPerson 仅进入独立候选集合，不进入成员列表或 Echo/收件人/音色/care。",
+        "3. FamilyRepository 绑定账号 generation，切换/登出清理，迟到响应拒绝，mode/voice override 按 owner 分区。",
+        "4. relation 文本不能单独把非 self context 推断为 personal；持久化 family context 和 Echo family 请求必须重新验证 accepted member。",
+        "5. knowledge sync 拒绝 wrong-owner、ownerless legacy 上传和未授权 family persona；本地 legacy 兼容不能变成远端/生成权限。",
+        "6. 裸 graph 与无后端 grant 的 share package 默认拒绝，不显示伪成功。",
+        "7. 后端 pending/failed/revoked family Context 保持 fail closed，accepted exact-match 正常通过。",
+        "8. 新增模型、静态与组合 gates，接入默认 release regression/QA；Simulator 和 generic iPhoneOS build 通过。",
+        "9. iOS 与后端各自按实际改动提交推送；若后端无需行为变化，须记录现有服务端合同和测试足以覆盖。"
+      ],
+      "assumptions": [
+        "后端 family member payload 的 `ownerUserId/userId`、`accessStatus` 和 `invitationStatus` 是唯一生产关系授权事实。",
+        "QA fixture 可通过编译/launch 策略显式放行，但不能进入 release 授权判断。",
+        "本轮允许保留 ownerless legacy 知识在当前用户本地浏览，但不允许上传、跨 persona 生成或转为家庭权限。"
+      ],
+      "body_path": "problems/P000/tickets/T000.md",
+      "classification": "split",
+      "classification_reason": "涉及 FamilyMember 模型、账号 generation 仓库、Echo identity/context、knowledge sync 和 legacy share 五个独立边界，写集与验证方式不同；应拆分实现并分别验收，避免用单一绿灯掩盖权限旁路。",
+      "created_at": "2026-07-11T07:33:17+00:00",
+      "id": "T000",
+      "problem_definition": "当前 iOS 将 `KBPerson` 自动转换为默认 `active + accepted` 的 `FamilyMember`，FamilyRepository 又缺少账号 generation 和 owner 分区；relation 文本、持久化 digital-human context、通用 knowledge sync 与无签名本地分享包形成多条权限旁路。后端已把 accepted 手机号邀请作为 Context 授权来源，但客户端没有在列表、Echo 和同步入口统一消费，可能让知识候选、legacy 数据、前一账号成员或伪造 JSON 获得家庭知识权限。",
+      "problem_id": "P000",
+      "proposed_solution": "以后端手机号邀请 accepted 合同作为唯一生产家庭关系 authority，建立纯 `FamilyRelationshipAuthorizationPolicy`，统一收敛 FamilyRepository、Echo identity/context、knowledge sync 与 legacy family share。FamilyMember 明确 owner/source，legacy/default deny；KBPerson 只进入候选集合；FamilyRepository 使用 active owner/generation 和 owner-scoped overrides；Echo 与持久化 context 在请求前复核 accepted member；sync 拒绝 wrong-owner/ownerless/unaccepted-family；本地整库导入默认关闭。任何 KBPerson、legacy、本地默认、旧账号响应或无签名数据都不能提升为家庭权限。",
+      "result_ids": [
+        "R015"
+      ],
+      "risks": [
+        "现有启动 mock 和 legacy 本地成员会从默认 accepted 变为未授权，若 QA 未显式标记会导致旧 smoke 失败，需要同步修正测试 fixture，而不能恢复不安全默认值。",
+        "FamilyRepository 是全局单例，账号 generation 改造必须防止 refresh/invite 回调竞态和通知重入。",
+        "禁用本地整库导入可能改变隐藏知识页行为，但这是在没有服务端授权合同前的必要 fail-closed 边界。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实施家庭授权与知识候选隔离的 P0 闭环",
+      "updated_at": "2026-07-11T09:43:11+00:00",
+      "verification_plan": "- 纯 Swift 模型 smoke 验证 authority 状态矩阵、relation spoof、owner/persona sync policy 和 import policy。\n- 静态 gate 验证 KB candidate 隔离、账号/generation 生命周期、owner-scoped overrides、Echo preflight 和 release UI 不暴露。\n- 运行现有 backend family/context 单测与 smoke，证明 pending/revoked 拒绝和 accepted 放行。\n- 运行 release QA package、完整 release regression、Simulator Debug build、generic iPhoneOS no-sign build、`git diff --check`。"
+    },
+    "T001": {
+      "acceptance_criteria": [
+        "缺 owner/source、legacy/default、本地普通对象均不 accepted。",
+        "当前 owner + backendInvitation + active + accepted 才通过生产策略。",
+        "owner mismatch、pending、failed、revoked、knowledgeCandidate 均拒绝。",
+        "qaFixture 在生产拒绝，显式 QA context 可通过。",
+        "fromBackendJSON 读取 ownerUserId/userId 并标记 backendInvitation。",
+        "纯 Swift model smoke 运行通过。"
+      ],
+      "assumptions": [
+        "后端 payload 总能提供 `ownerUserId` 或 `userId`；两者都缺失时必须拒绝。",
+        "existing pending/failed backend parser 语义保持不变。"
+      ],
+      "body_path": "problems/P000/children/P001/tickets/T001.md",
+      "classification": "one_go",
+      "classification_reason": "模型与纯策略集中在 MemoryModel 和一个新 policy 文件，边界清楚，可用独立模型 smoke 直接判定。",
+      "created_at": "2026-07-11T07:34:31+00:00",
+      "id": "T001",
+      "problem_definition": "FamilyMember 目前没有 authority source，普通 initializer 与 legacy decode 缺字段时默认 active/accepted，使 KBPerson、mock 和历史本地对象与后端已接受手机号邀请无法区分。",
+      "problem_id": "P001",
+      "proposed_solution": "新增 `FamilyRelationshipAuthoritySource`、`FamilyRelationshipAuthorizationContext` 和纯 `FamilyRelationshipAuthorizationPolicy`。FamilyMember 持久化 `relationshipOwnerUserId` 与 `relationshipAuthoritySource`，`isAcceptedFamilyMember` 通过当前登录 owner 和生产策略计算；后端 parser 显式标记 backend invitation，legacy/default 标记 unverified 并使用 pending 状态。QA fixture 必须显式 source 且只在 allowQA context 下通过。",
+      "result_ids": [
+        "R000"
+      ],
+      "risks": [
+        "依赖旧 initializer 默认 accepted 的 UIQA fixture 会失败，后续 repository 子问题必须显式标记 QA source。",
+        "isAcceptedFamilyMember 读取当前 UserManager 会降低模型纯度，因此属性应委托 context-aware 方法，默认生产 context 只用于 app 消费。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "用显式 owner/source/status 决定家庭关系权限",
+      "updated_at": "2026-07-11T07:37:19+00:00",
+      "verification_plan": "新增独立 model smoke，编译 MemoryModel 与 policy，覆盖所有状态组合、legacy JSON decode 和后端 JSON parse；运行静态 grep 确认不再存在 active/accepted 默认值。"
+    },
+    "T002": {
+      "acceptance_criteria": [
+        "knowledgeCandidates 与 members 分离，KB 更新不 append member。",
+        "active owner/generation 对 login/logout、refresh/invite 生效。",
+        "remote list 权威替换且拒绝缺 owner/wrong owner。",
+        "mode/voice override owner-scoped，更新仅限 accepted member。",
+        "release 不 seed mock；QA fixture 显式 owner/source。",
+        "static gate、authority smoke 与 Simulator build 通过。"
+      ],
+      "assumptions": [
+        "UserManager login/logout 通知是账号生命周期权威事件。",
+        "后端 family list 是当前 owner 的权威集合。"
+      ],
+      "body_path": "problems/P000/children/P002/tickets/T002.md",
+      "classification": "one_go",
+      "classification_reason": "仓库改造集中在 FamilyRepository 和显式 QA fixture，已有纯策略可复用，静态 gate 与 workspace build 可直接验证。",
+      "created_at": "2026-07-11T07:42:15+00:00",
+      "id": "T002",
+      "problem_definition": "现有仓库无 owner/generation，自动把 KBPerson 和启动 mock 加入 members，并使用跨账号全局 override；迟到后端响应和旧成员可跨登录状态残留。",
+      "problem_id": "P002",
+      "proposed_solution": "FamilyRepository 初始化并监听当前账号，使用 owner + UUID generation 管理内存状态；登录/退出清空并重新加载 owner-scoped overrides。后端 refresh 只接受匹配 owner 的 backendInvitation records 并权威替换；invite/refresh 回调捕获 generation。KBPerson 只投影到独立 candidate 列表。移除 release mock，UIQA fixture 显式 source/owner。",
+      "result_ids": [
+        "R001"
+      ],
+      "risks": [
+        "首次进入家庭页在远端 refresh 完成前会显示真实空态，不再短暂显示 mock，这是预期。",
+        "迟到请求 completion 返回 stale error，调用 UI 必须保持已有失败处理。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "将 FamilyRepository 改为账号绑定的后端关系仓库",
+      "updated_at": "2026-07-11T07:42:48+00:00",
+      "verification_plan": "运行 authority model smoke、repository lifecycle static check 和 xcworkspace Simulator Debug build；搜索旧 seed/merge/global override 模式并运行 diff check。"
+    },
+    "T003": {
+      "acceptance_criteria": [
+        "relation=\"本人\" 不能把 family owner 变 personal。",
+        "explicit self/owner-viewer exact match 保持 personal。",
+        "persisted invalid family context 回退 self。",
+        "Echo unauthorized family 不建请求，accepted family 使用 canonical digitalHumanId。",
+        "family request 传 viewerFamilyMemberID，后端可复核 accepted 状态。",
+        "model/static smoke 和 workspace build 通过。"
+      ],
+      "assumptions": [
+        "current user owner 调用 family persona 时，viewerFamilyMemberID 使用被选择的 accepted member ID，后端 policy 会再次校验。"
+      ],
+      "body_path": "problems/P000/children/P003/tickets/T003.md",
+      "classification": "one_go",
+      "classification_reason": "改动集中在 identity resolver、context store 与 Echo preflight，复用已完成的 accepted-member policy，可由模型/static smoke 和编译直接验收。",
+      "created_at": "2026-07-11T07:45:01+00:00",
+      "id": "T003",
+      "problem_definition": "relation-only personal 推断、未复核的持久化 family context 与 Echo backend request 可绕过 repository authority，使旧/伪造角色开启 personal fallback 或请求未授权 family persona。",
+      "problem_id": "P003",
+      "proposed_solution": "移除 relation-only personal 判定；KBLiteManager 增加 optional authorized identity resolver，family 必须命中当前 repository accepted member。DigitalHumanContextStore 改为 user-scoped key，get/set 都验证 member，失败回退 self。Echo 建 gate 和发 `/context/build` 前使用 optional resolver，失败记录明确 fallback，不发请求；family 请求带 member ID。",
+      "result_ids": [
+        "R002"
+      ],
+      "risks": [
+        "旧全局 context key 不再读取，用户会回到 self，而不是恢复未经验证角色，这是预期安全迁移。",
+        "family member 在对话中被撤销时，当前 turn context 将被丢弃，不应降级使用个人知识。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "让持久化角色与 Echo Context 使用 accepted family preflight",
+      "updated_at": "2026-07-11T07:46:01+00:00",
+      "verification_plan": "扩展 knowledge context model smoke；新增 Echo family context static gate；运行 Simulator workspace build 和现有 family/context 后端测试。"
+    },
+    "T004": {
+      "acceptance_criteria": [
+        "sync API 没有无 authorization 的生产调用。",
+        "wrong owner、ownerless、persona/digital mismatch 不进入 payload/remote merge。",
+        "accepted exact identity 保持同步，local legacy 保留不被 remote 删除。",
+        "release 不生成 share package，不执行 package/raw graph import。",
+        "QA-only legacy fixture 可显式运行但不能改变 production policy。",
+        "model/static smoke 与 workspace build 通过。"
+      ],
+      "assumptions": [
+        "所有新知识实体已经由 Task 14/15 写入 owner/persona/digitalHuman。",
+        "后续整库共享必须另设后端签名 grant，不复用本地 JSON sourceUserId。"
+      ],
+      "body_path": "problems/P000/children/P004/tickets/T004.md",
+      "classification": "one_go",
+      "classification_reason": "同步 authorization 与 legacy share 都是同一数据出入站授权边界，可用同一模型/静态 gate 验证，且不需要新后端接口。",
+      "created_at": "2026-07-11T07:47:28+00:00",
+      "id": "T004",
+      "problem_definition": "KnowledgeSyncGraphEngine 只按 privacy scope 判断可同步，ownerless/wrong-owner/unaccepted-family 实体可能上传或从 authoritative remote 合并；KBLiteMultiUser 又允许文件自报身份或裸 graph 直接合并完整知识。",
+      "problem_id": "P004",
+      "proposed_solution": "为 sync engine 增加必填 `KnowledgeSyncAuthorizationScope`，所有 bootstrap/merge/delta/payload 同时校验 owner/persona/digitalHuman。Coordinator 只从 authorized current persona 构造 scope。ownerless legacy 视为本地 private，不上传。新增 FamilyKnowledgeSharePolicy：release 禁用完整图谱导出和任何无后端 grant 导入，裸 graph 永远拒绝；UI 展示明确未开放而非成功 0 条。",
+      "result_ids": [
+        "R003"
+      ],
+      "risks": [
+        "历史 ownerless 远端实体将不再进入可同步域，但本地副本保持，不做删除迁移。",
+        "当前没有后端 family share grant，因此 release 整库同步入口会关闭，这是预期边界。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "用 owner/persona scope 守住知识同步并关闭未签名整库分享",
+      "updated_at": "2026-07-11T07:52:28+00:00",
+      "verification_plan": "扩展 three-way merge model smoke 覆盖 identity 矩阵；新增 share policy/static gate；运行 knowledge sync 现有模型、release checks 和 Simulator build。"
+    },
+    "T005": {
+      "acceptance_criteria": [
+        "默认 release regression 无开关地运行四个新 gates。",
+        "release QA package 强制文档、runner 和 smoke source 存在。",
+        "后端 pending/accepted/revoked family Context targeted tests 通过。",
+        "release QA、完整 regression、Simulator/generic iPhoneOS build 与 diff check 通过。",
+        "文档明确后端是否变化/部署、真机与产品保留边界。",
+        "iOS 提交推送，工作区与远端一致。"
+      ],
+      "assumptions": [
+        "本轮 iOS 行为改动不需要后端 schema/route 变化。",
+        "不执行真机和服务器部署，除非审计确认后端存在本任务必要差异。"
+      ],
+      "body_path": "problems/P000/children/P005/tickets/T005.md",
+      "classification": "one_go",
+      "classification_reason": "剩余工作是 QA wiring、全量验证、文档和交付，验收命令明确，可作为一个收口票完成。",
+      "created_at": "2026-07-11T07:54:24+00:00",
+      "id": "T005",
+      "problem_definition": "新增 authority、repository、Echo 与 sync/import gates 尚未全部纳入默认 release regression/release QA，canonical 与状态矩阵也未形成可交接证据；后端现有 accepted viewer policy 需要 targeted regression 证明未被客户端改动误解。",
+      "problem_id": "P005",
+      "proposed_solution": "把四个新 runner 与扩展后的 context/merge model 设为默认 release steps，并由 release-qa-package-check 强制文件/命令存在。更新 canonical、PRD coverage、release matrix 和 Task 状态。运行后端 Context/family targeted tests、release QA、完整 release regression、Simulator/generic iPhoneOS build、diff check；按实际差异判断后端是否需要部署。",
+      "result_ids": [
+        "R004"
+      ],
+      "risks": [
+        "全量 regression 时间较长，旧 static guard 可能仍断言不安全默认；应更新过时断言而不是恢复旧行为。",
+        "后端仓库存在非本任务未提交改动时不得混入或部署。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "将家庭知识授权边界设为默认发布门",
+      "updated_at": "2026-07-11T08:30:06+00:00",
+      "verification_plan": "先运行新 gates 和 release-qa-package-check，再运行 backend pytest selectors、release regression、generic iPhoneOS build；检查 git diff/secrets，提交推送并记录 report path。"
+    },
+    "T006": {
+      "acceptance_criteria": [
+        "服务端撤销、刷新失败和账号切换都会使旧 family authorization generation 失效。",
+        "foreground 不会在家庭刷新完成前启动新的 family knowledge sync。",
+        "extraction/governance 后台回调不直接读取 FamilyRepository；stale identity/generation 结果被拒绝。",
+        "当前 family context 失效时主动回退 self 并广播，Echo 现有 context observer 可取消旧 gate/runtime 请求。",
+        "Task 22 gates、专项 stale callback smoke、全量 release regression、Simulator/generic iPhoneOS build 通过。"
+      ],
+      "assumptions": [
+        "后端 family list/accept 合同继续是唯一生产 authority。",
+        "本任务不新增撤销 UI，也不修改后端路由。",
+        "QA fixture 仍只在 UI_QA_SIMULATOR 构建中获得显式授权。"
+      ],
+      "body_path": "problems/P000/children/P005/children/P006/tickets/T006.md",
+      "classification": "split",
+      "classification_reason": "包含授权新鲜度、异步 identity generation 与 Echo context reconcile 三个可独立验证的风险面，拆分可避免一次修改掩盖竞态。",
+      "created_at": "2026-07-11T08:31:53+00:00",
+      "id": "T006",
+      "problem_definition": "当前家庭 authority 能在登录、冷启动和已知列表变化时刷新，但前台长期运行期间可能继续使用已被服务端撤销的 family persona；extraction/governance 的回调仍通过当前 context 重新解析 repository；选中 family 失效时没有主动通知 Echo 重置。",
+      "problem_id": "P006",
+      "proposed_solution": "为 FamilyRepository 增加 owner-bound authorization generation、刷新状态和刷新完成 API。前台恢复先刷新家庭 authority，再触发知识同步；刷新失败把授权快照标记为不可用于新权限判断。知识 extraction/governance 在主线程发起时捕获 identity + family authorization generation，异步完成只比较捕获 token 和账号 generation。FamilyRepository 每次授权集合失效后调用 DigitalHumanContextStore 主动 reconcile，持久化 self context 并发送统一 context change。",
+      "result_ids": [
+        "R009"
+      ],
+      "risks": [
+        "网络失败时 fail closed 会暂时使 family Echo 回退 self，需要保留家庭列表展示但不能继续授予知识权限。",
+        "foreground 刷新不能阻塞 UI；同步应在 completion 后异步启动。",
+        "避免 FamilyRepository、DigitalHumanContextStore、KnowledgeSyncCoordinator 单例初始化形成递归。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "运行期家庭授权刷新与异步 identity generation",
+      "updated_at": "2026-07-11T09:09:04+00:00",
+      "verification_plan": "先补纯模型/静态 smoke 覆盖刷新成功、撤销、失败、账号切换和旧 callback；再实现 repository snapshot/token、foreground 顺序、extraction/governance capture、context reconciliation。运行后端 family targeted tests、Task 22 gates、`git diff --check` 和全量非真机 release regression。"
+    },
+    "T007": {
+      "acceptance_criteria": [
+        "只有 ready snapshot 能向同步/Echo 提供 accepted family。",
+        "backend failure、非法记录、账号切换使旧 snapshot 失效并递增 generation。",
+        "foreground 刷新完成后才调用 `synchronizeCurrentUser`。",
+        "stale response 不污染新 owner；QA fixture 只在 UIQA 显式进入 ready。",
+        "专项 gate 和 workspace Simulator build 通过。"
+      ],
+      "assumptions": [
+        "`/family/members/{userId}` 是完整权威列表。",
+        "foreground 刷新为异步，不阻塞 UI 主线程。"
+      ],
+      "body_path": "problems/P000/children/P005/children/P006/children/P007/tickets/T007.md",
+      "classification": "one_go",
+      "classification_reason": "范围集中在 FamilyRepository 状态机、Scene foreground 调用顺序和现有通知复用，验收可由专项模型与静态 gate 完整覆盖。",
+      "created_at": "2026-07-11T08:34:04+00:00",
+      "id": "T007",
+      "problem_definition": "FamilyRepository 只保存成员数组，无法区分“已验证”“刷新中”“刷新失败”；foreground 直接同步知识，可能继续使用服务端已撤销的旧 accepted family。",
+      "problem_id": "P007",
+      "proposed_solution": "增加家庭授权 refresh state、authorization generation 和 owner-bound snapshot。成功刷新以权威列表替换成员；失败使授权 snapshot fail closed 但保留列表仅供展示。Scene foreground 调用带 completion 的家庭刷新，完成后再启动知识同步。授权 generation 变化统一通知 KnowledgeSyncCoordinator 清 base/re-pull，并触发 DigitalHumanContextStore reconcile。",
+      "result_ids": [
+        "R005"
+      ],
+      "risks": [
+        "网络失败时 family Echo 会 fail closed 回 self，但成员列表仍保留用于解释状态。",
+        "同一授权集合重复刷新不能触发无意义的 base 清理。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "引入 owner-bound 家庭授权刷新状态并串联 foreground",
+      "updated_at": "2026-07-11T08:41:02+00:00",
+      "verification_plan": "扩展 family repository lifecycle static gate，增加纯 refresh-state 模型 smoke；运行 Task 22 四 gate、`git diff --check` 与 workspace Simulator build。"
+    },
+    "T008": {
+      "acceptance_criteria": [
+        "family extraction 没有 generation token 时 fail closed。",
+        "refresh start/success/failure 与账号切换使旧 extraction snapshot 失效。",
+        "extraction finish 不调用 `resolveCurrentPersonaIdentity()`。",
+        "governance start/success 不调用 persona resolver，只使用 active sync authorization + sync generation。",
+        "模型/static gate 与 Simulator build 通过。"
+      ],
+      "assumptions": [
+        "ConversationMemoryManager.endSession 在主线程捕获当前 persona。",
+        "KBLite graphLock 是 user/family generation 的统一线程安全边界。"
+      ],
+      "body_path": "problems/P000/children/P005/children/P006/children/P008/tickets/T008.md",
+      "classification": "one_go",
+      "classification_reason": "提取与治理共享同一不可变 identity/generation 合同，修改点虽跨两个服务但风险一致且可由同一 stale callback gate 验证。",
+      "created_at": "2026-07-11T08:42:32+00:00",
+      "id": "T008",
+      "problem_definition": "知识提取结束和 governance queue 会重新调用当前 persona resolver，导致后台线程读取 FamilyRepository，并可能在账号/家庭授权切换时接纳旧结果。",
+      "problem_id": "P008",
+      "proposed_solution": "新增可传递的 `KBPersonaAuthorizationSnapshot`，在会话结束的主线程捕获 identity、KBLite user generation 与 family authorization generation。FamilyRepository 每次 refresh generation 变化都发布给 KBLiteManager 的锁保护状态；finishExtraction 只比较 snapshot 和锁内 generation。Governance 改用 queue-owned `KnowledgeSyncAuthorizationScope.allows(identity:)` 验证 outbox item，不再在 queue 上解析当前 context/repository。",
+      "result_ids": [
+        "R006"
+      ],
+      "risks": [
+        "旧调用点若未提供 family token 将被拒绝，personal flow 保持兼容。",
+        "refresh 中完成的旧 extraction 会被丢弃，下一轮对话可重新提取。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "用 generation token 固化知识提取与治理授权",
+      "updated_at": "2026-07-11T08:57:31+00:00",
+      "verification_plan": "增加 async authorization snapshot model/static smoke，扩展 extraction/governance source checks，运行知识 proposal/governance/Task 22 gates 和 workspace Simulator build。"
+    },
+    "T009": {
+      "acceptance_criteria": [
+        "proposal/persona gate 不再断言旧 resolver 双重读取。",
+        "gate 明确验证主线程捕获、snapshot 传递及后台完成阶段禁止读取可变授权源。",
+        "proposal/persona、async snapshot、governance coordinator 与 release QA package 全部通过。",
+        "`git diff --check` 与 Simulator build 通过。"
+      ],
+      "assumptions": [
+        "P008 运行时代码和模型保持不变，本票只修正既有验证合同。"
+      ],
+      "body_path": "problems/P000/children/P005/children/P006/children/P008/children/P010/tickets/T009.md",
+      "classification": "one_go",
+      "classification_reason": "仅更新一个既有静态 gate 的断言与函数体解析，运行时代码不变，改动范围小且有明确专项验证。",
+      "created_at": "2026-07-11T09:01:33+00:00",
+      "id": "T009",
+      "problem_definition": "既有 proposal/persona 静态检查仍把后台重新解析当前 persona 当作正确行为，与 P008 的不可变 generation snapshot 合同冲突并阻断 release regression。",
+      "problem_id": "P010",
+      "proposed_solution": "更新 `knowledge-proposal-persona-policy-check.swift`：要求 `ConversationMemoryManager` 在后台派发前捕获 `KBPersonaAuthorizationSnapshot`，要求 `KBLiteManager.finishExtraction` 只调用锁内 snapshot policy，并显式禁止其中出现 `resolveCurrentPersonaIdentity()` 或 `FamilyRepository`。保留 proposal-first、evidence 和 Echo family fallback 既有断言。",
+      "result_ids": [
+        "R007"
+      ],
+      "risks": [
+        "静态函数体解析若过宽可能误判相邻函数，使用现有 brace-depth helper 限定函数体。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "更新旧发布门以验证不可变授权快照",
+      "updated_at": "2026-07-11T09:02:48+00:00",
+      "verification_plan": "运行 `run-knowledge-proposal-persona-policy-check.sh`、`run-knowledge-async-authorization-snapshot-check.sh`、`run-knowledge-governance-coordinator-check.sh`、release QA package、`git diff --check`；复用 P008 已通过的 Simulator build，并在后续全量回归再次构建。"
+    },
+    "T010": {
+      "acceptance_criteria": [
+        "刷新失败或 family member 被撤销后，旧 family context 持久化回当前用户 self。",
+        "只对真正失效的 family context发送 `djDigitalHumanContextDidChange`，正常 accepted family 不产生额外回退。",
+        "Echo observer 收到通知后取消/释放旧 runtime 请求并准备 self runtime。",
+        "KBLite 和 KnowledgeSyncCoordinator 同步切换当前 persona。",
+        "专项模型、静态 gate、release QA、`git diff --check` 和 Simulator build 通过。"
+      ],
+      "assumptions": [
+        "Echo 已观察 `djDigitalHumanContextDidChange` 并通过现有 generation 机制取消旧 runtime。"
+      ],
+      "body_path": "problems/P000/children/P005/children/P006/children/P009/tickets/T010.md",
+      "classification": "one_go",
+      "classification_reason": "回退路径已有主体实现，只需把 freshness 约束、纯策略测试和 Echo/通知静态证据收口，范围集中且可独立验证。",
+      "created_at": "2026-07-11T09:05:48+00:00",
+      "id": "T010",
+      "problem_definition": "当前持久化 family context 在服务端撤销、刷新失败或授权记录失效时，getter 可能只临时返回本人默认值；若未持久化并广播，Echo UI/runtime、知识角色和治理队列仍可能保留旧家人角色。",
+      "problem_id": "P009",
+      "proposed_solution": "让 `acceptedMember(by:)` 受授权 freshness 约束；FamilyRepository 授权集合变化或失败后调用 `DigitalHumanContextStore.reconcileFamilyAuthorization()`。ContextStore 在主线程读取原始持久化 family context，确认失效后写回本人默认 Context，并通过既有通知驱动 Echo runtime、KBLite persona generation 和 governance persona 一起切换。增加纯 reconciliation policy 模型与源码 gate。",
+      "result_ids": [
+        "R008"
+      ],
+      "risks": [
+        "回退通知可能与 UI 主动切换同时发生；setter 通过当前用户 owner-scoped key 和相同值去重避免重复广播。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "家庭授权撤销时主动回退本人 Echo Context",
+      "updated_at": "2026-07-11T09:08:15+00:00",
+      "verification_plan": "新增 family context reconciliation model/static smoke 并接入 release regression；运行 family freshness/repository/Echo authorization gates、release QA 和 Workspace Simulator build。"
+    },
+    "T011": {
+      "acceptance_criteria": [
+        "refresh A/B 任意乱序时只有最后一次请求响应可更新 authority；旧成功和旧失败均返回 stale。",
+        "persona/family invalidation 调用返回前已轮换 epoch 和 queue generation。",
+        "callback 即使先入队，只要失效先线性化，就不能通过 `isCurrent` 修改 graph/base/outbox。",
+        "queue 内调用不会因 `queue.sync` 自锁；主线程不等待任何 queue -> main sync。",
+        "模型/静态 gate、Task 22 gates、release QA、完整 regression 与两种非真机构建通过。"
+      ],
+      "assumptions": [
+        "网络 callback 的所有图谱/base/outbox写入路径均先经过 `isCurrent` 或 governance callback 的同一 generation guard。"
+      ],
+      "body_path": "problems/P000/children/P005/children/P006/children/P011/tickets/T011.md",
+      "classification": "split",
+      "classification_reason": "包含两个独立并发根因：家庭 HTTP 响应乱序与 coordinator 本地失效线性化；分别实现和验证可降低遗漏与误判风险。",
+      "created_at": "2026-07-11T09:12:13+00:00",
+      "id": "T011",
+      "problem_definition": "同账号并发家庭 refresh 仅绑定账号 generation，旧响应可能覆盖较新结果；coordinator 的角色/授权失效异步排队，旧 callback 可能先于失效块写入 graph/base/outbox。",
+      "problem_id": "P011",
+      "proposed_solution": "FamilyRepository 在 `beginRefresh` 后捕获 freshness generation，并通过纯 response acceptance policy 同时比较 owner、user generation 和 refresh generation。KnowledgeSyncCoordinator 增加锁保护 authorization epoch：本地账号、角色、家庭刷新开始时先同步轮换 epoch，再同步更新 queue-owned generation；`isCurrent` 同时验证 queue generation 与当前 epoch，使已排队旧 callback 在任何写入前失败。",
+      "result_ids": [
+        "R012"
+      ],
+      "risks": [
+        "同步 queue invalidation 会短暂等待正在执行的本地 commit；队列不使用 main.sync，避免互锁。",
+        "epoch 必须在每个新 sync generation 建立时同步绑定，否则会永久拒绝新 callback。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "用 refresh token 与 authorization epoch 封闭并发失效窗口",
+      "updated_at": "2026-07-11T09:25:19+00:00",
+      "verification_plan": "扩展 freshness 模型并新增 coordinator authorization epoch 模型/静态 gate；运行知识治理、三方合并、家庭授权、Echo context、release QA、全量 release regression、Simulator 和 generic iPhoneOS build。"
+    },
+    "T012": {
+      "acceptance_criteria": [
+        "A/B refresh 中 B 开始后 A 响应必定拒绝。",
+        "B 完成并再次轮换 generation 后 A 响应仍拒绝。",
+        "账号切换和 owner 不匹配保持拒绝。",
+        "freshness 模型和 repository lifecycle gate 通过。"
+      ],
+      "assumptions": [
+        "`FamilyAuthorizationFreshness.generation` 每次 begin/success/failure/reset 都轮换。"
+      ],
+      "body_path": "problems/P000/children/P005/children/P006/children/P011/children/P012/tickets/T012.md",
+      "classification": "one_go",
+      "classification_reason": "只增加一个纯响应接受策略和一次 callback token 比较，影响范围集中且可用乱序模型直接验证。",
+      "created_at": "2026-07-11T09:13:25+00:00",
+      "id": "T012",
+      "problem_definition": "同账号多次 `refreshFromBackend` 共享 user generation，旧请求回调无法与最新请求区分。",
+      "problem_id": "P012",
+      "proposed_solution": "在 `beginRefresh()` 后捕获 `authorizationFreshness.generation`，通过纯 `FamilyAuthorizationRefreshResponsePolicy` 同时比较 owner、user generation 和 refresh generation；任何一项不匹配均返回 stale，不执行 replace/invalidate。",
+      "result_ids": [
+        "R010"
+      ],
+      "risks": [
+        "旧请求 completion 将收到 stale error，但不会改变已验证 authority。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "用 freshness generation 拒绝旧家庭响应",
+      "updated_at": "2026-07-11T09:14:54+00:00",
+      "verification_plan": "扩展 `family-authorization-freshness-model-smoke.swift` 覆盖 A/B 乱序；扩展 repository static gate；运行 Task 22 相关检查和 Simulator build。"
+    },
+    "T013": {
+      "acceptance_criteria": [
+        "本地 invalidation 一开始就使旧 active epoch 失效。",
+        "已排队 callback 在任何写入 guard 处因 epoch 不匹配返回。",
+        "queue state 在 invalidation API 返回前完成更新。",
+        "queue 内重入不会 `queue.sync` 自锁，代码不存在 queue -> main sync。",
+        "epoch 模型、静态 gate、governance/knowledge sync gates 和构建通过。"
+      ],
+      "assumptions": [
+        "coordinator 网络 callback 在写 graph/base/outbox 前均经过 `isCurrent` 或 `isCurrentPull`。"
+      ],
+      "body_path": "problems/P000/children/P005/children/P006/children/P011/children/P013/tickets/T013.md",
+      "classification": "one_go",
+      "classification_reason": "单一 coordinator 状态机改动，epoch 模型与静态赋值点检查可完整覆盖，拆分会增加共享文件冲突。",
+      "created_at": "2026-07-11T09:16:55+00:00",
+      "id": "T013",
+      "problem_definition": "角色或家庭授权失效通过 `queue.async` 延后执行；旧网络 callback 若已排队，可先用旧 generation 修改 graph/base/outbox。",
+      "problem_id": "P013",
+      "proposed_solution": "增加锁保护 `KnowledgeAuthorizationEpochState`。账号、角色和家庭刷新开始先同步 rotate epoch，再通过 queue-specific 安全的同步执行更新 queue generation；每个 active sync generation 绑定 epoch，`isCurrent` 同时验证 user、generation 与当前 epoch。",
+      "result_ids": [
+        "R011"
+      ],
+      "risks": [
+        "所有新 generation 都必须绑定当前 epoch；静态 gate 固定每个 generation 赋值点。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "用 authorization epoch 线性化 coordinator 失效",
+      "updated_at": "2026-07-11T09:23:45+00:00",
+      "verification_plan": "扩展 context policy model，新增 coordinator epoch static gate；运行 governance coordinator、async snapshot、three-way merge、release QA 和 Simulator build，最终由父任务跑全量 regression/generic iPhoneOS。"
+    },
+    "T014": {
+      "acceptance_criteria": [
+        "knowledge pipeline gate 通过且不重新接受 mutable persona resolver。",
+        "release QA package 通过。",
+        "full release regression 包含 Simulator、generic iPhoneOS 和 delayed reply smoke 并成功。",
+        "`git diff --check` 通过。"
+      ],
+      "assumptions": [
+        "final6 前置 Task 22 gates 均通过，失败点仅为旧 pipeline gate。"
+      ],
+      "body_path": "problems/P000/children/P005/children/P006/children/P014/tickets/T014.md",
+      "classification": "one_go",
+      "classification_reason": "单文件静态断言兼容修复，运行时代码不变，必须通过完整回归才能验收。",
+      "created_at": "2026-07-11T09:28:57+00:00",
+      "id": "T014",
+      "problem_definition": "统一知识管线 gate 仍要求 Task 12 时代的 extraction 日志与 foreground 直接同步，和 Task 22 的授权 snapshot、family refresh-first 行为冲突。",
+      "problem_id": "P014",
+      "proposed_solution": "只更新 `knowledge-pipeline-check.swift` 的过期断言：KBLite 用户隔离改为验证 `KBPersonaAuthorizationSnapshot`/锁内 generation，foreground 改为验证 family bootstrap completion 后同步；保留后端优先提取、隐私、三方合并、稳定分页、Widget 和 Echo RAG 原有检查。",
+      "result_ids": [
+        "R013"
+      ],
+      "risks": [
+        "不允许删除与本任务无关的原有断言，只能替换已有安全合同已明确淘汰的部分。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "更新统一知识管线静态发布合同",
+      "updated_at": "2026-07-11T09:34:04+00:00",
+      "verification_plan": "先单跑 knowledge pipeline gate；根据实际失败逐项确认是过期合同还是运行时缺口；之后重跑 final7 全量 regression。"
+    },
+    "T015": {
+      "acceptance_criteria": [
+        "文档明确 Task 22 非真机实现完成、待提交，而非 active 开发中。",
+        "final8 report 和新增验证命令可直接找到。",
+        "coverage/release/canonical 对家庭 authority 和后续非目标表述一致。",
+        "文档矩阵 gates、release QA、Closure validate/check 与 `git diff --check` 通过。"
+      ],
+      "assumptions": [
+        "本轮后端仓库 clean，Task 22 无需部署。"
+      ],
+      "body_path": "problems/P000/children/P005/children/P015/tickets/T015.md",
+      "classification": "one_go",
+      "classification_reason": "纯文档和状态矩阵收口，事实来源已由 final8 与成功 ledger checks 固定。",
+      "created_at": "2026-07-11T09:36:27+00:00",
+      "id": "T015",
+      "problem_definition": "最终代码和 final8 回归已完成，但 canonical/status/matrix/index 仍停在初始 Task 22 或 final5，无法作为后续唯一权威口径。",
+      "problem_id": "P015",
+      "proposed_solution": "更新 Task 22 状态文档、canonical 知识架构、PRD coverage、release matrix、impl plan index 与 task plan，记录 freshness/snapshot/reconciliation/refresh token/authorization epoch 合同、全部新增 gates、final8 路径和无后端部署影响。",
+      "result_ids": [
+        "R014"
+      ],
+      "risks": [
+        "提交哈希只能在提交后补写；提交前使用“等待最终提交”，提交后追加 delivery commit。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "更新 Task 22 最终状态与验收证据",
+      "updated_at": "2026-07-11T09:42:08+00:00",
+      "verification_plan": "运行 release feature matrix、PRD coverage、release QA package、`git diff --check`、Closure sync/check；提交前再次检查 status/index。"
+    }
+  },
+  "updated_at": "2026-07-11T09:43:27+00:00"
+}

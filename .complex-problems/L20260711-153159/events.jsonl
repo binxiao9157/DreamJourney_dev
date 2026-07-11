@@ -1,0 +1,202 @@
+{"at": "2026-07-11T07:31:59+00:00", "id": "E000", "payload": {"ledger_id": "L20260711-153159", "root_id": "P000", "title": "Task 22：P0 家庭关系授权与知识候选隔离"}, "root_id": "P000", "type": "ledger_initialized"}
+{"at": "2026-07-11T07:33:17+00:00", "id": "E001", "payload": {"problem_id": "P000", "ticket_id": "T000", "title": "实施家庭授权与知识候选隔离的 P0 闭环"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T07:33:17+00:00", "id": "E002", "payload": {"from": "created", "id": "T000", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T07:33:27+00:00", "id": "E003", "payload": {"from": "defined", "id": "T000", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T07:33:27+00:00", "id": "E004", "payload": {"classification": "split", "reason": "涉及 FamilyMember 模型、账号 generation 仓库、Echo identity/context、knowledge sync 和 legacy share 五个独立边界，写集与验证方式不同；应拆分实现并分别验收，避免用单一绿灯掩盖权限旁路。", "ticket_id": "T000"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T07:34:03+00:00", "id": "E005", "payload": {"from": "classified", "id": "T000", "to": "splitting"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T07:34:03+00:00", "id": "E006", "payload": {"parent_id": "P000", "problem_id": "P001", "source": "split", "title": "建立默认拒绝的家庭关系 authority 模型"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T07:34:03+00:00", "id": "E007", "payload": {"parent_id": "P000", "problem_id": "P002", "source": "split", "title": "隔离 KBPerson 候选并绑定家庭仓库账号生命周期"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T07:34:03+00:00", "id": "E008", "payload": {"parent_id": "P000", "problem_id": "P003", "source": "split", "title": "在 Echo 与持久化数字人上下文前复核家庭授权"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T07:34:03+00:00", "id": "E009", "payload": {"parent_id": "P000", "problem_id": "P004", "source": "split", "title": "阻断未授权家庭知识同步与 legacy 整库导入"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T07:34:03+00:00", "id": "E010", "payload": {"parent_id": "P000", "problem_id": "P005", "source": "split", "title": "将家庭授权边界纳入发布回归并收口文档"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T07:34:31+00:00", "id": "E011", "payload": {"problem_id": "P001", "ticket_id": "T001", "title": "用显式 owner/source/status 决定家庭关系权限"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T07:34:31+00:00", "id": "E012", "payload": {"from": "created", "id": "T001", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T07:34:31+00:00", "id": "E013", "payload": {"from": "defined", "id": "T001", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T07:34:31+00:00", "id": "E014", "payload": {"classification": "one_go", "reason": "模型与纯策略集中在 MemoryModel 和一个新 policy 文件，边界清楚，可用独立模型 smoke 直接判定。", "ticket_id": "T001"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T07:34:59+00:00", "id": "E015", "payload": {"from": "todo", "id": "P001", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T07:34:59+00:00", "id": "E016", "payload": {"from": "classified", "id": "T001", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T07:37:19+00:00", "id": "E017", "payload": {"from": "executing", "id": "T001", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T07:37:19+00:00", "id": "E018", "payload": {"result_id": "R000", "ticket_id": "T001"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T07:37:54+00:00", "id": "E019", "payload": {"from": "doing", "id": "P001", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T07:37:54+00:00", "id": "E020", "payload": {"from": "checking", "id": "P001", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T07:37:54+00:00", "id": "E021", "payload": {"check_id": "C000", "followup_id": null, "problem_id": "P001", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T07:42:15+00:00", "id": "E022", "payload": {"problem_id": "P002", "ticket_id": "T002", "title": "将 FamilyRepository 改为账号绑定的后端关系仓库"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T07:42:15+00:00", "id": "E023", "payload": {"from": "created", "id": "T002", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T07:42:15+00:00", "id": "E024", "payload": {"from": "defined", "id": "T002", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T07:42:15+00:00", "id": "E025", "payload": {"classification": "one_go", "reason": "仓库改造集中在 FamilyRepository 和显式 QA fixture，已有纯策略可复用，静态 gate 与 workspace build 可直接验证。", "ticket_id": "T002"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T07:42:15+00:00", "id": "E026", "payload": {"from": "todo", "id": "P002", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T07:42:15+00:00", "id": "E027", "payload": {"from": "classified", "id": "T002", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T07:42:48+00:00", "id": "E028", "payload": {"from": "executing", "id": "T002", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T07:42:48+00:00", "id": "E029", "payload": {"result_id": "R001", "ticket_id": "T002"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T07:42:48+00:00", "id": "E030", "payload": {"from": "doing", "id": "P002", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T07:42:48+00:00", "id": "E031", "payload": {"from": "checking", "id": "P002", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T07:42:48+00:00", "id": "E032", "payload": {"check_id": "C001", "followup_id": null, "problem_id": "P002", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T07:45:01+00:00", "id": "E033", "payload": {"problem_id": "P003", "ticket_id": "T003", "title": "让持久化角色与 Echo Context 使用 accepted family preflight"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T07:45:01+00:00", "id": "E034", "payload": {"from": "created", "id": "T003", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T07:45:01+00:00", "id": "E035", "payload": {"from": "defined", "id": "T003", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T07:45:01+00:00", "id": "E036", "payload": {"classification": "one_go", "reason": "改动集中在 identity resolver、context store 与 Echo preflight，复用已完成的 accepted-member policy，可由模型/static smoke 和编译直接验收。", "ticket_id": "T003"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T07:45:01+00:00", "id": "E037", "payload": {"from": "todo", "id": "P003", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T07:45:01+00:00", "id": "E038", "payload": {"from": "classified", "id": "T003", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T07:46:01+00:00", "id": "E039", "payload": {"from": "executing", "id": "T003", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T07:46:01+00:00", "id": "E040", "payload": {"result_id": "R002", "ticket_id": "T003"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T07:46:01+00:00", "id": "E041", "payload": {"from": "doing", "id": "P003", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T07:46:01+00:00", "id": "E042", "payload": {"from": "checking", "id": "P003", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T07:46:01+00:00", "id": "E043", "payload": {"check_id": "C002", "followup_id": null, "problem_id": "P003", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T07:47:28+00:00", "id": "E044", "payload": {"problem_id": "P004", "ticket_id": "T004", "title": "用 owner/persona scope 守住知识同步并关闭未签名整库分享"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T07:47:28+00:00", "id": "E045", "payload": {"from": "created", "id": "T004", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T07:47:28+00:00", "id": "E046", "payload": {"from": "defined", "id": "T004", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T07:47:28+00:00", "id": "E047", "payload": {"classification": "one_go", "reason": "同步 authorization 与 legacy share 都是同一数据出入站授权边界，可用同一模型/静态 gate 验证，且不需要新后端接口。", "ticket_id": "T004"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T07:47:28+00:00", "id": "E048", "payload": {"from": "todo", "id": "P004", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T07:47:28+00:00", "id": "E049", "payload": {"from": "classified", "id": "T004", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T07:52:28+00:00", "id": "E050", "payload": {"from": "executing", "id": "T004", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T07:52:28+00:00", "id": "E051", "payload": {"result_id": "R003", "ticket_id": "T004"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T07:52:28+00:00", "id": "E052", "payload": {"from": "doing", "id": "P004", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T07:52:28+00:00", "id": "E053", "payload": {"from": "checking", "id": "P004", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T07:52:28+00:00", "id": "E054", "payload": {"check_id": "C003", "followup_id": null, "problem_id": "P004", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T07:54:24+00:00", "id": "E055", "payload": {"problem_id": "P005", "ticket_id": "T005", "title": "将家庭知识授权边界设为默认发布门"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T07:54:24+00:00", "id": "E056", "payload": {"from": "created", "id": "T005", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T07:54:24+00:00", "id": "E057", "payload": {"from": "defined", "id": "T005", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T07:54:24+00:00", "id": "E058", "payload": {"classification": "one_go", "reason": "剩余工作是 QA wiring、全量验证、文档和交付，验收命令明确，可作为一个收口票完成。", "ticket_id": "T005"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T07:54:24+00:00", "id": "E059", "payload": {"from": "todo", "id": "P005", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T07:54:24+00:00", "id": "E060", "payload": {"from": "classified", "id": "T005", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T08:30:06+00:00", "id": "E061", "payload": {"from": "executing", "id": "T005", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T08:30:06+00:00", "id": "E062", "payload": {"result_id": "R004", "ticket_id": "T005"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T08:30:56+00:00", "id": "E063", "payload": {"from": "doing", "id": "P005", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T08:30:56+00:00", "id": "E064", "payload": {"from": "checking", "id": "P005", "to": "followup"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T08:30:56+00:00", "id": "E065", "payload": {"check_id": "C004", "followup_id": "P006", "problem_id": "P005", "status": "not_success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T08:31:53+00:00", "id": "E066", "payload": {"problem_id": "P006", "ticket_id": "T006", "title": "运行期家庭授权刷新与异步 identity generation"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T08:31:53+00:00", "id": "E067", "payload": {"from": "created", "id": "T006", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T08:32:08+00:00", "id": "E068", "payload": {"from": "defined", "id": "T006", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T08:32:08+00:00", "id": "E069", "payload": {"classification": "split", "reason": "包含授权新鲜度、异步 identity generation 与 Echo context reconcile 三个可独立验证的风险面，拆分可避免一次修改掩盖竞态。", "ticket_id": "T006"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T08:32:44+00:00", "id": "E070", "payload": {"from": "classified", "id": "T006", "to": "splitting"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T08:32:44+00:00", "id": "E071", "payload": {"parent_id": "P006", "problem_id": "P007", "source": "split", "title": "家庭授权刷新状态与前台同步顺序"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T08:32:45+00:00", "id": "E072", "payload": {"parent_id": "P006", "problem_id": "P008", "source": "split", "title": "Extraction 与 Governance 不可变授权快照"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T08:32:45+00:00", "id": "E073", "payload": {"parent_id": "P006", "problem_id": "P009", "source": "split", "title": "家庭授权撤销后的 Echo Context 主动回退"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T08:34:04+00:00", "id": "E074", "payload": {"problem_id": "P007", "ticket_id": "T007", "title": "引入 owner-bound 家庭授权刷新状态并串联 foreground"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T08:34:04+00:00", "id": "E075", "payload": {"from": "created", "id": "T007", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T08:34:16+00:00", "id": "E076", "payload": {"from": "defined", "id": "T007", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T08:34:16+00:00", "id": "E077", "payload": {"classification": "one_go", "reason": "范围集中在 FamilyRepository 状态机、Scene foreground 调用顺序和现有通知复用，验收可由专项模型与静态 gate 完整覆盖。", "ticket_id": "T007"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T08:41:02+00:00", "id": "E078", "payload": {"from": "todo", "id": "P007", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T08:41:02+00:00", "id": "E079", "payload": {"from": "classified", "id": "T007", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T08:41:02+00:00", "id": "E080", "payload": {"from": "executing", "id": "T007", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T08:41:02+00:00", "id": "E081", "payload": {"result_id": "R005", "ticket_id": "T007"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T08:41:28+00:00", "id": "E082", "payload": {"from": "doing", "id": "P007", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T08:41:28+00:00", "id": "E083", "payload": {"from": "checking", "id": "P007", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T08:41:28+00:00", "id": "E084", "payload": {"check_id": "C005", "followup_id": null, "problem_id": "P007", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T08:42:32+00:00", "id": "E085", "payload": {"problem_id": "P008", "ticket_id": "T008", "title": "用 generation token 固化知识提取与治理授权"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T08:42:32+00:00", "id": "E086", "payload": {"from": "created", "id": "T008", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T08:42:50+00:00", "id": "E087", "payload": {"from": "defined", "id": "T008", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T08:42:50+00:00", "id": "E088", "payload": {"classification": "one_go", "reason": "提取与治理共享同一不可变 identity/generation 合同，修改点虽跨两个服务但风险一致且可由同一 stale callback gate 验证。", "ticket_id": "T008"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T08:47:35+00:00", "id": "E089", "payload": {"from": "todo", "id": "P008", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T08:47:35+00:00", "id": "E090", "payload": {"from": "classified", "id": "T008", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T08:57:31+00:00", "id": "E091", "payload": {"from": "executing", "id": "T008", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T08:57:31+00:00", "id": "E092", "payload": {"result_id": "R006", "ticket_id": "T008"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T09:01:00+00:00", "id": "E093", "payload": {"from": "doing", "id": "P008", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:01:00+00:00", "id": "E094", "payload": {"from": "checking", "id": "P008", "to": "followup"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:01:00+00:00", "id": "E095", "payload": {"check_id": "C006", "followup_id": "P010", "problem_id": "P008", "status": "not_success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T09:01:33+00:00", "id": "E096", "payload": {"problem_id": "P010", "ticket_id": "T009", "title": "更新旧发布门以验证不可变授权快照"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T09:01:33+00:00", "id": "E097", "payload": {"from": "created", "id": "T009", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:01:41+00:00", "id": "E098", "payload": {"from": "defined", "id": "T009", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:01:41+00:00", "id": "E099", "payload": {"classification": "one_go", "reason": "仅更新一个既有静态 gate 的断言与函数体解析，运行时代码不变，改动范围小且有明确专项验证。", "ticket_id": "T009"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T09:01:49+00:00", "id": "E100", "payload": {"from": "followup", "id": "P010", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:01:49+00:00", "id": "E101", "payload": {"from": "classified", "id": "T009", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:02:48+00:00", "id": "E102", "payload": {"from": "executing", "id": "T009", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:02:48+00:00", "id": "E103", "payload": {"result_id": "R007", "ticket_id": "T009"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T09:03:06+00:00", "id": "E104", "payload": {"from": "doing", "id": "P010", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:03:06+00:00", "id": "E105", "payload": {"from": "checking", "id": "P010", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:03:06+00:00", "id": "E106", "payload": {"check_id": "C007", "followup_id": null, "problem_id": "P010", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T09:05:10+00:00", "id": "E107", "payload": {"from": "followup", "id": "P008", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:05:10+00:00", "id": "E108", "payload": {"from": "checking", "id": "P008", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:05:10+00:00", "id": "E109", "payload": {"check_id": "C008", "followup_id": null, "problem_id": "P008", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T09:05:48+00:00", "id": "E110", "payload": {"problem_id": "P009", "ticket_id": "T010", "title": "家庭授权撤销时主动回退本人 Echo Context"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T09:05:48+00:00", "id": "E111", "payload": {"from": "created", "id": "T010", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:06:02+00:00", "id": "E112", "payload": {"from": "defined", "id": "T010", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:06:02+00:00", "id": "E113", "payload": {"classification": "one_go", "reason": "回退路径已有主体实现，只需把 freshness 约束、纯策略测试和 Echo/通知静态证据收口，范围集中且可独立验证。", "ticket_id": "T010"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T09:06:09+00:00", "id": "E114", "payload": {"from": "todo", "id": "P009", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:06:09+00:00", "id": "E115", "payload": {"from": "classified", "id": "T010", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:08:15+00:00", "id": "E116", "payload": {"from": "executing", "id": "T010", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:08:15+00:00", "id": "E117", "payload": {"result_id": "R008", "ticket_id": "T010"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T09:08:40+00:00", "id": "E118", "payload": {"from": "doing", "id": "P009", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:08:40+00:00", "id": "E119", "payload": {"from": "checking", "id": "P009", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:08:40+00:00", "id": "E120", "payload": {"check_id": "C009", "followup_id": null, "problem_id": "P009", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T09:09:04+00:00", "id": "E121", "payload": {"from": "followup", "id": "P006", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:09:04+00:00", "id": "E122", "payload": {"from": "splitting", "id": "T006", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:09:04+00:00", "id": "E123", "payload": {"result_id": "R009", "ticket_id": "T006"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T09:09:35+00:00", "id": "E124", "payload": {"from": "doing", "id": "P006", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:09:35+00:00", "id": "E125", "payload": {"from": "checking", "id": "P006", "to": "followup"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:09:35+00:00", "id": "E126", "payload": {"check_id": "C010", "followup_id": "P011", "problem_id": "P006", "status": "not_success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T09:12:13+00:00", "id": "E127", "payload": {"problem_id": "P011", "ticket_id": "T011", "title": "用 refresh token 与 authorization epoch 封闭并发失效窗口"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T09:12:13+00:00", "id": "E128", "payload": {"from": "created", "id": "T011", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:12:25+00:00", "id": "E129", "payload": {"from": "defined", "id": "T011", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:12:25+00:00", "id": "E130", "payload": {"classification": "split", "reason": "包含两个独立并发根因：家庭 HTTP 响应乱序与 coordinator 本地失效线性化；分别实现和验证可降低遗漏与误判风险。", "ticket_id": "T011"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T09:12:51+00:00", "id": "E131", "payload": {"from": "classified", "id": "T011", "to": "splitting"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:12:51+00:00", "id": "E132", "payload": {"parent_id": "P011", "problem_id": "P012", "source": "split", "title": "同账号家庭刷新响应代次隔离"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T09:12:51+00:00", "id": "E133", "payload": {"parent_id": "P011", "problem_id": "P013", "source": "split", "title": "Coordinator 授权失效线性化"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T09:13:25+00:00", "id": "E134", "payload": {"problem_id": "P012", "ticket_id": "T012", "title": "用 freshness generation 拒绝旧家庭响应"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T09:13:25+00:00", "id": "E135", "payload": {"from": "created", "id": "T012", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:13:25+00:00", "id": "E136", "payload": {"from": "defined", "id": "T012", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:13:25+00:00", "id": "E137", "payload": {"classification": "one_go", "reason": "只增加一个纯响应接受策略和一次 callback token 比较，影响范围集中且可用乱序模型直接验证。", "ticket_id": "T012"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T09:13:44+00:00", "id": "E138", "payload": {"from": "todo", "id": "P012", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:13:44+00:00", "id": "E139", "payload": {"from": "classified", "id": "T012", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:14:54+00:00", "id": "E140", "payload": {"from": "executing", "id": "T012", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:14:54+00:00", "id": "E141", "payload": {"result_id": "R010", "ticket_id": "T012"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T09:15:18+00:00", "id": "E142", "payload": {"from": "doing", "id": "P012", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:15:18+00:00", "id": "E143", "payload": {"from": "checking", "id": "P012", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:15:18+00:00", "id": "E144", "payload": {"check_id": "C011", "followup_id": null, "problem_id": "P012", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T09:16:55+00:00", "id": "E145", "payload": {"problem_id": "P013", "ticket_id": "T013", "title": "用 authorization epoch 线性化 coordinator 失效"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T09:16:55+00:00", "id": "E146", "payload": {"from": "created", "id": "T013", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:16:55+00:00", "id": "E147", "payload": {"from": "defined", "id": "T013", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:16:55+00:00", "id": "E148", "payload": {"classification": "one_go", "reason": "单一 coordinator 状态机改动，epoch 模型与静态赋值点检查可完整覆盖，拆分会增加共享文件冲突。", "ticket_id": "T013"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T09:17:16+00:00", "id": "E149", "payload": {"from": "todo", "id": "P013", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:17:16+00:00", "id": "E150", "payload": {"from": "classified", "id": "T013", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:23:45+00:00", "id": "E151", "payload": {"from": "executing", "id": "T013", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:23:45+00:00", "id": "E152", "payload": {"result_id": "R011", "ticket_id": "T013"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T09:24:47+00:00", "id": "E153", "payload": {"from": "doing", "id": "P013", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:24:47+00:00", "id": "E154", "payload": {"from": "checking", "id": "P013", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:24:47+00:00", "id": "E155", "payload": {"check_id": "C012", "followup_id": null, "problem_id": "P013", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T09:25:19+00:00", "id": "E156", "payload": {"from": "followup", "id": "P011", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:25:19+00:00", "id": "E157", "payload": {"from": "splitting", "id": "T011", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:25:19+00:00", "id": "E158", "payload": {"result_id": "R012", "ticket_id": "T011"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T09:25:43+00:00", "id": "E159", "payload": {"from": "doing", "id": "P011", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:25:43+00:00", "id": "E160", "payload": {"from": "checking", "id": "P011", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:25:43+00:00", "id": "E161", "payload": {"check_id": "C013", "followup_id": null, "problem_id": "P011", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T09:28:11+00:00", "id": "E162", "payload": {"from": "followup", "id": "P006", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:28:11+00:00", "id": "E163", "payload": {"from": "checking", "id": "P006", "to": "followup"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:28:11+00:00", "id": "E164", "payload": {"check_id": "C014", "followup_id": "P014", "problem_id": "P006", "status": "not_success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T09:28:57+00:00", "id": "E165", "payload": {"problem_id": "P014", "ticket_id": "T014", "title": "更新统一知识管线静态发布合同"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T09:28:57+00:00", "id": "E166", "payload": {"from": "created", "id": "T014", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:28:57+00:00", "id": "E167", "payload": {"from": "defined", "id": "T014", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:28:57+00:00", "id": "E168", "payload": {"classification": "one_go", "reason": "单文件静态断言兼容修复，运行时代码不变，必须通过完整回归才能验收。", "ticket_id": "T014"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T09:28:57+00:00", "id": "E169", "payload": {"from": "followup", "id": "P014", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:28:57+00:00", "id": "E170", "payload": {"from": "classified", "id": "T014", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:34:04+00:00", "id": "E171", "payload": {"from": "executing", "id": "T014", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:34:04+00:00", "id": "E172", "payload": {"result_id": "R013", "ticket_id": "T014"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T09:34:28+00:00", "id": "E173", "payload": {"from": "doing", "id": "P014", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:34:28+00:00", "id": "E174", "payload": {"from": "checking", "id": "P014", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:34:28+00:00", "id": "E175", "payload": {"check_id": "C015", "followup_id": null, "problem_id": "P014", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T09:34:53+00:00", "id": "E176", "payload": {"from": "followup", "id": "P006", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:34:53+00:00", "id": "E177", "payload": {"from": "checking", "id": "P006", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:34:53+00:00", "id": "E178", "payload": {"check_id": "C016", "followup_id": null, "problem_id": "P006", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T09:35:37+00:00", "id": "E179", "payload": {"from": "followup", "id": "P005", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:35:37+00:00", "id": "E180", "payload": {"from": "checking", "id": "P005", "to": "followup"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:35:37+00:00", "id": "E181", "payload": {"check_id": "C017", "followup_id": "P015", "problem_id": "P005", "status": "not_success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T09:36:27+00:00", "id": "E182", "payload": {"problem_id": "P015", "ticket_id": "T015", "title": "更新 Task 22 最终状态与验收证据"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T09:36:27+00:00", "id": "E183", "payload": {"from": "created", "id": "T015", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:36:27+00:00", "id": "E184", "payload": {"from": "defined", "id": "T015", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:36:27+00:00", "id": "E185", "payload": {"classification": "one_go", "reason": "纯文档和状态矩阵收口，事实来源已由 final8 与成功 ledger checks 固定。", "ticket_id": "T015"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T09:36:27+00:00", "id": "E186", "payload": {"from": "followup", "id": "P015", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:36:28+00:00", "id": "E187", "payload": {"from": "classified", "id": "T015", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:42:08+00:00", "id": "E188", "payload": {"from": "executing", "id": "T015", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:42:08+00:00", "id": "E189", "payload": {"result_id": "R014", "ticket_id": "T015"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T09:42:32+00:00", "id": "E190", "payload": {"from": "doing", "id": "P015", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:42:32+00:00", "id": "E191", "payload": {"from": "checking", "id": "P015", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:42:32+00:00", "id": "E192", "payload": {"check_id": "C018", "followup_id": null, "problem_id": "P015", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T09:42:48+00:00", "id": "E193", "payload": {"from": "followup", "id": "P005", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:42:48+00:00", "id": "E194", "payload": {"from": "checking", "id": "P005", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:42:48+00:00", "id": "E195", "payload": {"check_id": "C019", "followup_id": null, "problem_id": "P005", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T09:43:11+00:00", "id": "E196", "payload": {"from": "todo", "id": "P000", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:43:11+00:00", "id": "E197", "payload": {"from": "splitting", "id": "T000", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T09:43:11+00:00", "id": "E198", "payload": {"result_id": "R015", "ticket_id": "T000"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T09:43:27+00:00", "id": "E199", "payload": {"from": "doing", "id": "P000", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:43:27+00:00", "id": "E200", "payload": {"from": "checking", "id": "P000", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T09:43:27+00:00", "id": "E201", "payload": {"check_id": "C020", "followup_id": null, "problem_id": "P000", "status": "success"}, "root_id": "P000", "type": "check_recorded"}

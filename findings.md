@@ -187,3 +187,5 @@
 - Canonical 知识架构明确规定：对话中提取的 `KBPerson` 只能作为人物候选，不能自动成为 `active + accepted` 家庭成员；家庭关系必须来自手机号邀请、接受状态和后端授权合同。
 - 当前 `FamilyRepository.syncFromKnowledgeBase()` 将 `KBPerson` 直接构造成 `FamilyMember`，而 `FamilyMember` 本地 initializer/legacy decoder 默认 `accessStatus=active`、`invitationStatus=accepted`，存在本地角色列表提前授权风险。
 - 后端 `/context/build` 已验证 pending family viewer 不可使用家庭 Archive、care 或私有事实，因此下一 P0 应收敛 iOS 本地候选/授权语义，而不是重建后端 Context policy。
+- `DigitalHumanContextStore` 恢复仅校验 viewer，`KBPersonaIdentityResolver` 又允许 relation-only personal 推断；旧/伪造 family context 可能绕到 personal fallback，必须与 repository authorization 一起收敛。
+- 通用 knowledge sync 的 scope 判断不足以证明 owner/persona authorization；Task 22 需要让 Echo、family repository 和 sync 共用同一 fail-closed authority contract。

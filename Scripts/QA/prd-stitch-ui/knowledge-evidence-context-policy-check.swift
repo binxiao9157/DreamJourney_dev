@@ -95,8 +95,10 @@ require(
     echoPolicy.contains("enum KBPersonaIdentityResolver") &&
         echoPolicy.contains("let personaScope = isPersonal ? \"personal\" : \"family\"") &&
         echoPolicy.contains("identity.isPersonal") &&
-        manager.contains("FamilyRepository.shared.get(by: context.ownerId)?.digitalHumanId") &&
-        echo.contains("KBLiteManager.resolvePersonaIdentity(for: context)") &&
+        manager.contains("static func resolveAuthorizedPersonaIdentity(for context: DigitalHumanContext)") &&
+        manager.contains("FamilyRepository.shared.acceptedMember(by: normalizedOwner)") &&
+        echo.contains("KBLiteManager.resolveAuthorizedPersonaIdentity(for: context)") &&
+        echo.contains("familyRelationshipUnauthorized") &&
         echo.contains("digitalHumanId: expectedIdentity.digitalHumanId") &&
         echo.contains("family_local_fallback_forbidden") &&
         echo.contains("activeEchoTurnKnowledgeContextGate = nil"),
