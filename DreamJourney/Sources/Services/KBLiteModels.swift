@@ -25,6 +25,7 @@ struct KBSourceReference: Codable, Equatable {
 struct KBPrivacyMetadata: Codable {
     let scope: String
     var sourceRefs: [KBSourceReference]
+    var widgetVisibility: String? = nil
 
     static func generationAllowed(kind: String, id: String, title: String) -> KBPrivacyMetadata {
         KBPrivacyMetadata(
@@ -35,6 +36,14 @@ struct KBPrivacyMetadata: Codable {
 
     static func generationAllowed(sourceRefs: [KBSourceReference]) -> KBPrivacyMetadata {
         KBPrivacyMetadata(scope: "generationAllowed", sourceRefs: sourceRefs)
+    }
+
+    static func widgetSummaryAllowed(sourceRefs: [KBSourceReference]) -> KBPrivacyMetadata {
+        KBPrivacyMetadata(
+            scope: "generationAllowed",
+            sourceRefs: sourceRefs,
+            widgetVisibility: "summaryAllowed"
+        )
     }
 }
 

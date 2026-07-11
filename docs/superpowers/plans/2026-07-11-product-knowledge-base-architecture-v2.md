@@ -408,7 +408,7 @@ POST /kb/governance/actions
 - KBLite person 到 Family 的自动派生改为“未授权候选”或彻底移除；生产 seed 成员迁到 QA-only。
 - timeLetter draft 的后端 payload 使用字段 allowlist；`metadataOnly` 不得携带正文、分析摘要或 transcript，删除草稿需同步撤销。
 
-实施进度：Task 15 已完成 proposal、稳定 ID/关系/metadata、persona-scoped Context 和 iOS canonical identity 主链路。Task 16 已完成用户治理、Archive 来源删除级联、iOS durable outbox/coordinator 和组合 QA gate。Task 17 已完成 operation receipt/payload fingerprint、客户端冲突恢复与隔离。Task 18 已完成稳定目标分页、终页提交和 KBLite CAS。Task 19 已停止新增 `conversationSession/archiveImageAnalysis`，统一新对话 turn/照片来源，并提供不暴露正文或 source ID 的只读审计。历史 legacy ref 仍需独立批准的证据化迁移；timeLetter 草稿字段收敛与公开治理体验继续作为后续 P1/P2。
+实施进度：Task 15 已完成 proposal、稳定 ID/关系/metadata、persona-scoped Context 和 iOS canonical identity 主链路。Task 16 已完成用户治理、Archive 来源删除级联、iOS durable outbox/coordinator 和组合 QA gate。Task 17 已完成 operation receipt/payload fingerprint、客户端冲突恢复与隔离。Task 18 已完成稳定目标分页、终页提交和 KBLite CAS。Task 19 已停止新增 `conversationSession/archiveImageAnalysis`，统一新对话 turn/照片来源，并提供不暴露正文或 source ID 的只读审计。Task 20 已统一 mutation/change/receipt/replay 的 canonical privacy/source metadata 并完成生产维护。Task 21 已把系统 Widget 改为显式 `summaryAllowed`、当前 owner、personal、confirmed 的最小摘要投影，使用 schema v2 owner digest 和 generation 防止跨账号旧写，并补齐扩展/App Group 工程合同；真实 App Group provisioning 与 Widget Gallery 仍需真机外部验收。历史 legacy ref 仍需独立批准的证据化迁移；timeLetter 草稿字段收敛与公开治理体验继续作为后续 P1/P2。
 
 ### P1：同步生产化
 

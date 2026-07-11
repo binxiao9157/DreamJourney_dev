@@ -168,7 +168,15 @@
       "status": "complete",
       "task_file": "docs/plans/task_20_p0-knowledge-mutation-privacy-canonicalization.md",
       "updated_at": "2026-07-11T14:47:40+08:00"
+    },
+    "docs/plans/task_21_p0-widget-app-group-knowledge-privacy-lifecycle.md": {
+      "ledger_id": "L20260711-145625-21",
+      "ledger_path": ".complex-problems/L20260711-145625-21",
+      "next_action": "record-result",
+      "status": "next",
+      "task_file": "docs/plans/task_21_p0-widget-app-group-knowledge-privacy-lifecycle.md",
+      "updated_at": "2026-07-11T15:21:37+08:00"
     }
   },
-  "updated_at": "2026-07-11T14:47:40+08:00"
+  "updated_at": "2026-07-11T15:21:37+08:00"
 }

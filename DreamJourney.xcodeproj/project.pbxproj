@@ -46,6 +46,10 @@
 		C7E13A110000000000000002 /* KnowledgeThreeWayMerge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E13A110000000000000001 /* KnowledgeThreeWayMerge.swift */; };
 		C7E14A110000000000000001 /* KnowledgeGenerationPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E14A110000000000000101 /* KnowledgeGenerationPolicy.swift */; };
 		C7E14A110000000000000002 /* EchoKnowledgeContextPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E14A110000000000000102 /* EchoKnowledgeContextPolicy.swift */; };
+		C7E150000000000000000001 /* KnowledgeWidgetPrivacyPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E150000000000000000101 /* KnowledgeWidgetPrivacyPolicy.swift */; };
+		C7E150000000000000000002 /* KnowledgeWidgetSnapshotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E150000000000000000102 /* KnowledgeWidgetSnapshotStore.swift */; };
+		C7E150000000000000000003 /* WidgetKnowledgeSnapshotReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E150000000000000000103 /* WidgetKnowledgeSnapshotReader.swift */; };
+		C7E150000000000000000004 /* DreamJourneyWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = C31B66E6C099EABF318FC693 /* DreamJourneyWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		7D543DD05A96F0944D9BA409 /* bs_texture_halfFace.png in Resources */ = {isa = PBXBuildFile; fileRef = C9115FEF531F2DA00EDE4969 /* bs_texture_halfFace.png */; };
 		7FE1A54F9280057AA970D224 /* DialogEngineManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B3A23A2BA7FD3D92A7BC975 /* DialogEngineManager.swift */; };
 		813B7A93279A0D98C91B3276 /* DreamJourneyWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D151E9314D78EB40CF2EE48 /* DreamJourneyWidget.swift */; };
@@ -136,7 +140,28 @@
 		FEF405C138F6D1A6B57DD767 /* MemoryEditViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56ED8B99EE2B18AC4D06CC30 /* MemoryEditViewController.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		C7E150000000000000000201 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 30BC97AD07A459B78C06D936 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 14D813E1BAF7F066DE226016;
+			remoteInfo = DreamJourneyWidget;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXCopyFilesBuildPhase section */
+		C7E150000000000000000202 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				C7E150000000000000000004 /* DreamJourneyWidget.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D3A000000000000000000109 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -176,6 +201,10 @@
 		C7E13A110000000000000001 /* KnowledgeThreeWayMerge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeThreeWayMerge.swift; sourceTree = "<group>"; };
 		C7E14A110000000000000101 /* KnowledgeGenerationPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeGenerationPolicy.swift; sourceTree = "<group>"; };
 		C7E14A110000000000000102 /* EchoKnowledgeContextPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EchoKnowledgeContextPolicy.swift; sourceTree = "<group>"; };
+		C7E150000000000000000101 /* KnowledgeWidgetPrivacyPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeWidgetPrivacyPolicy.swift; sourceTree = "<group>"; };
+		C7E150000000000000000102 /* KnowledgeWidgetSnapshotStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeWidgetSnapshotStore.swift; sourceTree = "<group>"; };
+		C7E150000000000000000103 /* WidgetKnowledgeSnapshotReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetKnowledgeSnapshotReader.swift; sourceTree = "<group>"; };
+		C7E150000000000000000104 /* DreamJourneyWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DreamJourneyWidget.entitlements; sourceTree = "<group>"; };
 		57FC3EFBF8FAC9ABFA05E1C8 /* 01.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = 01.mp4; sourceTree = "<group>"; };
 		5ABDBC7F0000C4386BB6B2C5 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		5B20338C4C40695560A52B81 /* FamilyRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyRepository.swift; sourceTree = "<group>"; };
@@ -357,6 +386,8 @@
 				C7E13A110000000000000001 /* KnowledgeThreeWayMerge.swift */,
 				C7E14A110000000000000101 /* KnowledgeGenerationPolicy.swift */,
 				C7E14A110000000000000102 /* EchoKnowledgeContextPolicy.swift */,
+				C7E150000000000000000101 /* KnowledgeWidgetPrivacyPolicy.swift */,
+				C7E150000000000000000102 /* KnowledgeWidgetSnapshotStore.swift */,
 				766106FFCA3A78A7BE5B2E76 /* KBLiteModels.swift */,
 				8310EA30F87E2748EE0535A1 /* KBLiteMultiUser.swift */,
 				EA7025362579F4B59C5376E8 /* KBLitePDFExporter.swift */,
@@ -475,9 +506,11 @@
 			children = (
 				6D151E9314D78EB40CF2EE48 /* DreamJourneyWidget.swift */,
 				D6AC678D507A1494FFBFDAA0 /* SharedModels.swift */,
+				C7E150000000000000000103 /* WidgetKnowledgeSnapshotReader.swift */,
 				82D71FC48ADC02F8BCBED835 /* TodayInHistoryEntry.swift */,
 				FF7E1F392A912E6A3B365A8C /* TodayInHistoryProvider.swift */,
 				8671DFE378573EA24A2FACC1 /* TodayInHistoryView.swift */,
+				C7E150000000000000000104 /* DreamJourneyWidget.entitlements */,
 			);
 			path = DreamJourneyWidget;
 			sourceTree = "<group>";
@@ -715,11 +748,13 @@
 				D3A000000000000000000109 /* Embed Frameworks */,
 				A5D68B9D0372FD4EFAAE195A /* [CP] Embed Pods Frameworks */,
 				E3A5D35B643EA409B9B966A7 /* [CP] Copy Pods Resources */,
+				C7E150000000000000000202 /* Embed App Extensions */,
 				D6A2B4C75A9D4F1D9F0A1C7B /* Apply LocalConfig.plist */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				C7E150000000000000000203 /* PBXTargetDependency */,
 			);
 			name = DreamJourney;
 			productName = DreamJourney;
@@ -873,6 +908,7 @@
 			files = (
 				813B7A93279A0D98C91B3276 /* DreamJourneyWidget.swift in Sources */,
 				39AA8CDBD51067C54985F46B /* SharedModels.swift in Sources */,
+				C7E150000000000000000003 /* WidgetKnowledgeSnapshotReader.swift in Sources */,
 				B90C2E9CA47079EB38309125 /* TodayInHistoryEntry.swift in Sources */,
 				1074B6D9588F46B0001A61E1 /* TodayInHistoryProvider.swift in Sources */,
 				0F70ED911BFB7D4BB385430C /* TodayInHistoryView.swift in Sources */,
@@ -929,6 +965,8 @@
 				C7E13A110000000000000002 /* KnowledgeThreeWayMerge.swift in Sources */,
 				C7E14A110000000000000001 /* KnowledgeGenerationPolicy.swift in Sources */,
 				C7E14A110000000000000002 /* EchoKnowledgeContextPolicy.swift in Sources */,
+				C7E150000000000000000001 /* KnowledgeWidgetPrivacyPolicy.swift in Sources */,
+				C7E150000000000000000002 /* KnowledgeWidgetSnapshotStore.swift in Sources */,
 				C24EFDB81921BF13946AB289 /* KBLiteModels.swift in Sources */,
 				FB97211C6E68808436C7DC76 /* KBLiteMultiUser.swift in Sources */,
 				90DF2D00B2A745900FF43F33 /* KBLitePDFExporter.swift in Sources */,
@@ -995,11 +1033,24 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		C7E150000000000000000203 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 14D813E1BAF7F066DE226016 /* DreamJourneyWidget */;
+			targetProxy = C7E150000000000000000201 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
 		00D804E67862C69AA3D0E395 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = DreamJourneyWidget/DreamJourneyWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "$(DREAMJOURNEY_DEVELOPMENT_TEAM)";
+				DREAMJOURNEY_APP_GROUP_IDENTIFIER = group.com.dreamjourney.shared;
+				DREAMJOURNEY_DEVELOPMENT_TEAM = D68L29NBC2;
+				DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER = com.gaominge.dreamjourney.app;
 				INFOPLIST_FILE = DreamJourneyWidget/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1007,7 +1058,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.dreamjourney.app.widget;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER).widget";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -1081,8 +1132,10 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_ENTITLEMENTS = DreamJourney/DreamJourney.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = "$(DREAMJOURNEY_DEVELOPMENT_TEAM)";
+				DREAMJOURNEY_APP_GROUP_IDENTIFIER = group.com.dreamjourney.shared;
 				DREAMJOURNEY_BACKEND_API_TOKEN = YOUR_DREAMJOURNEY_BACKEND_API_TOKEN;
 				DREAMJOURNEY_BACKEND_BASE_URL = "";
 				DREAMJOURNEY_DEVELOPMENT_TEAM = D68L29NBC2;
@@ -1106,7 +1159,12 @@
 		25CE1E172972FE0AC1FE6A31 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = DreamJourneyWidget/DreamJourneyWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "$(DREAMJOURNEY_DEVELOPMENT_TEAM)";
+				DREAMJOURNEY_APP_GROUP_IDENTIFIER = group.com.dreamjourney.shared;
+				DREAMJOURNEY_DEVELOPMENT_TEAM = D68L29NBC2;
+				DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER = com.gaominge.dreamjourney.app;
 				INFOPLIST_FILE = DreamJourneyWidget/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1114,7 +1172,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.dreamjourney.app.widget;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER).widget";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -1129,8 +1187,10 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_ENTITLEMENTS = DreamJourney/DreamJourney.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = "$(DREAMJOURNEY_DEVELOPMENT_TEAM)";
+				DREAMJOURNEY_APP_GROUP_IDENTIFIER = group.com.dreamjourney.shared;
 				DREAMJOURNEY_BACKEND_API_TOKEN = YOUR_DREAMJOURNEY_BACKEND_API_TOKEN;
 				DREAMJOURNEY_BACKEND_BASE_URL = "";
 				DREAMJOURNEY_DEVELOPMENT_TEAM = D68L29NBC2;

@@ -86,6 +86,7 @@ struct TodayInHistoryView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.warmTitle)
                     .lineLimit(2)
+                    .privacySensitive()
             }
 
             Spacer()
@@ -139,21 +140,11 @@ struct TodayInHistoryView: View {
                     .fixedSize()
             }
 
-            VStack(alignment: .leading, spacing: 2) {
-                // Title
-                Text(event.title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.warmTitle)
-                    .lineLimit(1)
-
-                // Description snippet
-                if let desc = event.description, !desc.isEmpty {
-                    Text(desc)
-                        .font(.system(size: 11))
-                        .foregroundColor(.warmSecondary)
-                        .lineLimit(1)
-                }
-            }
+            Text(event.title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.warmTitle)
+                .lineLimit(2)
+                .privacySensitive()
 
             Spacer(minLength: 0)
         }

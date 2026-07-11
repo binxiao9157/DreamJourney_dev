@@ -5,8 +5,13 @@ struct TodayInHistoryProvider: TimelineProvider {
 
     // MARK: - App Group Identifier
 
-    private let appGroupIdentifier = "group.com.dreamjourney.shared"
-    private let widgetDataFileName = "kb_widget_data.json"
+    private var appGroupIdentifier: String {
+        let configured = Bundle.main.object(
+            forInfoDictionaryKey: "DreamJourneyAppGroupIdentifier"
+        ) as? String
+        let normalized = configured?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return normalized.isEmpty ? "group.com.dreamjourney.shared" : normalized
+    }
 
     // MARK: - TimelineProvider
 
@@ -14,7 +19,7 @@ struct TodayInHistoryProvider: TimelineProvider {
         TodayInHistoryEntry(
             date: Date(),
             events: [
-                WidgetEvent(id: "placeholder", title: "全家去外滩合影", year: 1985, description: "那年夏天一家人去上海玩")
+                WidgetEvent(id: "placeholder", title: "一段已授权的记忆摘要", year: 0)
             ],
             isEmpty: false
         )
@@ -52,37 +57,41 @@ struct TodayInHistoryProvider: TimelineProvider {
         return TodayInHistoryEntry(date: date, events: displayEvents, isEmpty: false)
     }
 
-    /// 从 App Group 共享容器读取 kb_widget_data.json 并筛选当月事件
+    /// 只读取当前账号已授权的 schema v2 最小摘要。
     private func loadEventsForCurrentMonth(date: Date) -> [WidgetEvent] {
         guard let containerURL = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: appGroupIdentifier
-        ) else {
+        ), let defaults = UserDefaults(suiteName: appGroupIdentifier) else {
             return []
         }
 
-        let fileURL = containerURL.appendingPathComponent(widgetDataFileName)
+        let fileURL = containerURL.appendingPathComponent(
+            WidgetKnowledgeSnapshotReader.snapshotFileName
+        )
 
         guard FileManager.default.fileExists(atPath: fileURL.path),
               let data = try? Data(contentsOf: fileURL) else {
             return []
         }
 
-        guard let graph = try? JSONDecoder().decode(WidgetKBGraph.self, from: data) else {
-            return []
-        }
+        let summaries = WidgetKnowledgeSnapshotReader.acceptedEvents(
+            from: data,
+            activeOwnerDigest: defaults.string(
+                forKey: WidgetKnowledgeSnapshotReader.activeOwnerDigestKey
+            )
+        )
 
         // 获取当前月份
         let calendar = Calendar.current
         let currentMonth = calendar.component(.month, from: date)
 
         // 筛选与当前月份相同的事件
-        let matchingEvents = graph.events.compactMap { event -> WidgetEvent? in
+        let matchingEvents = summaries.compactMap { event -> WidgetEvent? in
             guard event.month == currentMonth else { return nil }
             return WidgetEvent(
-                id: event.id,
+                id: event.idDigest,
                 title: event.title,
-                year: event.year ?? 0,
-                description: event.description
+                year: event.year ?? 0
             )
         }
 

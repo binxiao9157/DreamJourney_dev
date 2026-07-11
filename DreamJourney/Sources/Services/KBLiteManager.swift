@@ -32,7 +32,15 @@ final class KBLiteManager {
         loadedUserId = Self.normalizedUserId(UserManager.shared.currentUser?.id)
         graph = loadGraph(for: loadedUserId)
         warmSemanticCache(for: graph)
-        writeToAppGroup(graph: graph)
+        let activeOwner = loadedUserId == Self.signedOutUserId ? nil : loadedUserId
+        widgetSnapshotStore.activate(ownerUserId: activeOwner, generation: userGeneration)
+        if let activeOwner {
+            widgetSnapshotStore.publish(
+                graph: graph,
+                ownerUserId: activeOwner,
+                generation: userGeneration
+            )
+        }
     }
 
     // MARK: - Constants
@@ -53,6 +61,9 @@ final class KBLiteManager {
 
     /// 用户切换代次，用于丢弃旧用户尚未返回的异步提取结果。
     private var userGeneration = UUID()
+
+    /// 只向 Widget 发布当前账号明确授权的最小知识摘要。
+    private let widgetSnapshotStore = KnowledgeWidgetSnapshotStore.shared
 
     /// 读写锁，保护 graph 的并发访问
     private let graphLock = NSLock()
@@ -137,6 +148,7 @@ final class KBLiteManager {
         graph.lastUpdated = Date()
         let graphSnapshot = graph
         let userId = loadedUserId
+        let generation = userGeneration
         graphLock.unlock()
 
         guard userId != Self.signedOutUserId else {
@@ -148,42 +160,26 @@ final class KBLiteManager {
         encoder.dateEncodingStrategy = .iso8601
         guard let data = try? encoder.encode(graphSnapshot) else {
             print("[KBLite] ❌ JSON 编码失败")
+            widgetSnapshotStore.invalidateSnapshot(ownerUserId: userId, generation: generation)
             return
         }
         do {
             try data.write(to: graphFilePath(for: userId), options: .atomic)
             print("[KBLite] 💾 知识库已保存: \(graphSnapshot.people.count)人, \(graphSnapshot.places.count)地, \(graphSnapshot.events.count)事, \(graphSnapshot.facts.count)实")
+            widgetSnapshotStore.publish(
+                graph: graphSnapshot,
+                ownerUserId: userId,
+                generation: generation
+            )
         } catch {
             print("[KBLite] ❌ 保存失败: \(error.localizedDescription)")
+            widgetSnapshotStore.invalidateSnapshot(ownerUserId: userId, generation: generation)
         }
-        // 同步到 App Group 共享容器（供 Widget 读取）
-        writeToAppGroup(graph: graphSnapshot)
         // 通知 UI 数据已更新
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: .kbLiteDidUpdate, object: nil)
             KnowledgeSyncCoordinator.shared.synchronizeCurrentUser(reason: "graphSaved")
         }
-    }
-
-    /// 将事件数据写入 App Group 共享容器，供 Widget Extension 读取
-    private func writeToAppGroup(graph: KBLiteGraph) {
-        guard let containerURL = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: "group.com.dreamjourney.shared"
-        ) else { return }
-        let widgetFile = containerURL.appendingPathComponent("kb_widget_data.json")
-        // 只写入 events（Widget 只需要事件数据）
-        let widgetEvents = graph.events.map { e -> [String: Any] in
-            var dict: [String: Any] = [
-                "id": e.id,
-                "title": e.title
-            ]
-            dict["description"] = e.description ?? ""
-            dict["year"] = e.year ?? 0
-            dict["month"] = e.month ?? 0
-            return dict
-        }
-        guard let data = try? JSONSerialization.data(withJSONObject: ["events": widgetEvents]) else { return }
-        try? data.write(to: widgetFile, options: .atomic)
     }
 
     private func loadGraph(for userId: String) -> KBLiteGraph {
@@ -227,22 +223,33 @@ final class KBLiteManager {
     func switchUser(to userId: String?) {
         let normalized = Self.normalizedUserId(userId)
         var loadedGraph: KBLiteGraph?
+        var activatedGeneration: UUID?
         extractQueue.sync {
             graphLock.lock()
             defer { graphLock.unlock() }
             guard normalized != loadedUserId else { return }
             loadedUserId = normalized
             userGeneration = UUID()
+            activatedGeneration = userGeneration
             graph = loadGraph(for: normalized)
             didWarnCapacity = false
             isExtracting = false
             loadedGraph = graph
         }
-        guard let loadedGraph else { return }
+        guard let loadedGraph, let activatedGeneration else { return }
+        let activeOwner = normalized == Self.signedOutUserId ? nil : normalized
+        widgetSnapshotStore.activate(
+            ownerUserId: activeOwner,
+            generation: activatedGeneration
+        )
+        if let activeOwner {
+            widgetSnapshotStore.publish(
+                graph: loadedGraph,
+                ownerUserId: activeOwner,
+                generation: activatedGeneration
+            )
+        }
         warmSemanticCache(for: loadedGraph)
-        // Widget 共享快照必须随用户切换（包括登出空图谱）同步替换，
-        // 否则 Widget 可能继续展示上一用户的知识。
-        writeToAppGroup(graph: loadedGraph)
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: .kbLiteDidUpdate, object: nil)
         }
@@ -1559,7 +1566,11 @@ final class KBLiteManager {
             refs.append(ref)
         }
         let scope = existing.scope == "localOnly" ? existing.scope : incoming.scope
-        return KBPrivacyMetadata(scope: scope, sourceRefs: refs)
+        return KBPrivacyMetadata(
+            scope: scope,
+            sourceRefs: refs,
+            widgetVisibility: existing.widgetVisibility
+        )
     }
 
     private func mergedEvidence(_ existing: String?, _ incoming: String) -> String {

@@ -1,0 +1,1006 @@
+{
+  "checks": {
+    "C000": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P001/checks/C000.md",
+      "created_at": "2026-07-11T07:01:24+00:00",
+      "criteria_map": [
+        "向后兼容字段：legacy 解码断言覆盖。",
+        "五项 allowlist：允许样本及 scope/visibility/owner/persona/evidence/空标题拒绝矩阵覆盖。",
+        "最小 schema：编码 JSON 禁止字段和仅一个允许事件断言覆盖。",
+        "digest/标题边界：稳定 owner digest、非 raw event ID、80 字符上限断言覆盖。",
+        "独立 smoke：runner 已实际编译生产模型并执行通过。"
+      ],
+      "evidence": [
+        "实际运行 `run-knowledge-widget-privacy-policy-model-smoke.sh` 通过。",
+        "测试实际编码 snapshot JSON 并检查禁止字段/原始标识不存在，不是仅靠源码字符串检查。",
+        "legacy metadata JSON 无 `widgetVisibility` 时成功解码且投影被拒绝。"
+      ],
+      "execution_map": [
+        "R000 对应唯一执行票据 T001，列出的四个代码/测试产物均存在。",
+        "首次运行先因生产策略文件不存在失败，随后实现并通过，符合先建立合同再修改行为的顺序。"
+      ],
+      "followup_problem_id": null,
+      "id": "C000",
+      "problem_id": "P001",
+      "residual_risk": [
+        "CryptoKit 与模型 smoke 已验证；App target 编译和 Widget IO 尚未验证，但明确属于 P002/P003，不是 P001 的纯模型范围。"
+      ],
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "使用同一图谱同时放入显式允许和默认拒绝事件，确认只导出一个。",
+        "输入空 owner、空白标题、其他 owner、family persona 和 observed evidence，全部 fail closed。",
+        "JSON 中放入易检索的 raw owner/event/source 标识及 description，编码结果逐项断言不存在。"
+      ],
+      "summary": "结果 R000 完成了 P001 要求的纯模型授权、最小快照和自动化验证；已知 IO/WidgetKit 缺口属于兄弟问题，不阻断本问题成功。"
+    },
+    "C001": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P002/checks/C001.md",
+      "created_at": "2026-07-11T07:05:06+00:00",
+      "criteria_map": [
+        "可注入存储：container/defaults/reloader 三项均可注入且 smoke 使用了替身。",
+        "旧 generation 拒绝：A→B 和 B→logout 两种延迟重放均有断言。",
+        "切换/登出顺序：文件存在性和 shared digest 断言覆盖。",
+        "fail closed：publish 异常分支与主图保存失败分支均调用共享快照清理。",
+        "timeline reload：spy 计数覆盖激活、发布与清理。",
+        "旧导出移除：源码负向检查通过。"
+      ],
+      "evidence": [
+        "临时目录和隔离 UserDefaults 的运行时 smoke 实际通过，不依赖真机或静态模拟。",
+        "KBLiteManager 保存时捕获 graph、owner、generation，并由 store 在落盘前再次校验当前状态。",
+        "登出路径调用 `activate(ownerUserId: nil)`，先撤销 shared digest，再删除文件并 reload。"
+      ],
+      "execution_map": [
+        "T002 的唯一结果 R001 覆盖 store、KBLiteManager 集成和模型 smoke。",
+        "未发现需要运行时派生的阻断子问题。"
+      ],
+      "followup_problem_id": null,
+      "id": "C001",
+      "problem_id": "P002",
+      "residual_risk": [
+        "`WidgetCenter` 调用及 App target 编译待 P003 工程接线验证；不削弱本问题对存储和 KBLite 生命周期的证明。"
+      ],
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "在 owner A 已有文件后快速激活 B，确认文件在 B 发布前已删除；随后重放 A generation，文件仍不存在。",
+        "登出后重放 B generation，同样无法重建文件。"
+      ],
+      "summary": "R001 完成了 P002 的 generation-bound 发布和账号生命周期目标；Xcode/Widget 端接线属于 P003 的明确范围。"
+    },
+    "C002": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/children/P005/checks/C002.md",
+      "created_at": "2026-07-11T07:08:08+00:00",
+      "criteria_map": [
+        "schema/owner 校验：reader 条件与 smoke 断言覆盖。",
+        "异常为空：nil/空/错 owner、旧 schema、损坏 JSON 和无效字段均覆盖。",
+        "v2 文件/key：provider 直接引用 reader 常量，不保留旧文件 fallback。",
+        "最小 UI：entry/view 负向源码检查覆盖，真实标题标记 privacySensitive。",
+        "placeholder：使用非具体“已授权的记忆摘要”。"
+      ],
+      "evidence": [
+        "reader smoke 实际编码/解码 schema v2 并通过成功和失败矩阵。",
+        "Provider 只有 reader 返回摘要后才建立 timeline entry。",
+        "entry 模型已不存在 description 字段，View 也没有正文分支。"
+      ],
+      "execution_map": [
+        "唯一票据 T004 返回 R002，代码与模型 smoke 产物齐全。"
+      ],
+      "followup_problem_id": null,
+      "id": "C002",
+      "problem_id": "P005",
+      "residual_risk": [
+        "Widget target 编译和 App Group 配置由 P006 验证，不属于读取策略本身。"
+      ],
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "构造 schema 正确但 event digest、标题长度、月份同时非法的快照，reader 拒绝整个快照而非部分容忍。"
+      ],
+      "summary": "R002 完整满足 P005 的读取端身份校验、fail-closed 与最小 UI 展示要求。"
+    },
+    "C003": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/children/P006/checks/C003.md",
+      "created_at": "2026-07-11T07:13:41+00:00",
+      "criteria_map": [
+        "新文件 membership：两类构建编译成功证明。",
+        "嵌入/dependency：target graph 与 App/PlugIns 产物证明。",
+        "同一 App Group/entitlements：源 plist lint、showBuildSettings 与构建 Info 值证明。",
+        "Bundle/team 同源：本地 override 下 showBuildSettings 和产物 bundle ID 证明。",
+        "不含私密配置：只新增 build setting 占位和 entitlement，没有修改 LocalConfig。"
+      ],
+      "evidence": [
+        "Target graph 实际显示 DreamJourney 显式依赖 DreamJourneyWidget。",
+        "Simulator 与 iPhoneOS 两种 SDK 构建均成功。",
+        "构建产物中的 `.appex`、主/扩展 bundle IDs 和 App Group Info 值已直接读取验证。"
+      ],
+      "execution_map": [
+        "T005/R003 覆盖所有 P006 工程产物；首轮构建暴露 phase cycle，已在同一执行中修复并重新构建通过。"
+      ],
+      "followup_problem_id": null,
+      "id": "C003",
+      "problem_id": "P006",
+      "residual_risk": [
+        "App Group capability 和 provisioning profile 不能由无签名 generic build 证明，必须保留为后续真机外部门槛。"
+      ],
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "同时使用本地 Bundle ID/Team 命令行覆盖构建主 App 和扩展，验证扩展不是固定到其他同事的 bundle/team。",
+        "对 Simulator 与真实 iPhoneOS SDK 分别构建，避免只在一种平台偶然通过。"
+      ],
+      "summary": "R003 满足 P006 的 target membership、扩展嵌入、配置继承与非真机构建要求，外部 provisioning 风险已明确保留。"
+    },
+    "C004": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/checks/C004.md",
+      "created_at": "2026-07-11T07:14:18+00:00",
+      "criteria_map": [
+        "v2/owner 校验与异常空态：R002/C002。",
+        "去 description、通用 placeholder、privacySensitive：R002/C002。",
+        "扩展嵌入与 dependency：R003/C003。",
+        "Bundle/Team/App Group/entitlement 同源：R003/C003。",
+        "两种 SDK 构建与 `.appex`：R003/C003。"
+      ],
+      "evidence": [
+        "C002 证明读取端 fail closed 与最小展示。",
+        "C003 证明工程依赖、嵌入和两种 SDK 构建/产物。"
+      ],
+      "execution_map": [
+        "T003 拆分为 P005/T004 和 P006/T005，两个 child 均有 result 和 success check；R004 只汇总已验证事实。"
+      ],
+      "followup_problem_id": null,
+      "id": "C004",
+      "problem_id": "P003",
+      "residual_risk": [
+        "真实 App Group capability/provisioning 与 WidgetKit 系统缓存体验需后续真机，不影响当前非真机交付合同成立。"
+      ],
+      "result_ids": [
+        "R004"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "读取端对错 owner/旧 schema/损坏数据进行负向运行时测试；工程端以本地 Bundle/Team 覆盖跨两 SDK 构建，首轮 phase cycle 也已实际发现并修复。"
+      ],
+      "summary": "R004 由两个已独立成功检查的子结果组成，完整解决 P003；真实签名门槛不在非真机任务成功定义内且已显式保留。"
+    },
+    "C005": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P004/checks/C005.md",
+      "created_at": "2026-07-11T07:21:37+00:00",
+      "criteria_map": [
+        "静态 gate：覆盖授权、脱敏、生命周期、读取端和工程配置。",
+        "默认 release 接线：runner 中三个 run_step 和静态 guard，无开关条件。",
+        "release QA package：requiredScripts 包含七个新文件。",
+        "完整验证：专项、package、regression、两 SDK build、diff check 均通过。",
+        "文档：Task/架构/覆盖/release/status 已更新并保留真机边界。"
+      ],
+      "evidence": [
+        "专项模型/静态/package checks 全部实际运行通过。",
+        "完整 release regression rerun exit 0，并包含新 Widget steps。",
+        "Simulator/generic iPhoneOS build 证据均存在，默认回归额外跑通两个核心模拟器 smoke。"
+      ],
+      "execution_map": [
+        "T006/R005 是唯一 QA 收口执行；首次回归失败促成旧 guard 修复，最终完整重跑通过。"
+      ],
+      "followup_problem_id": null,
+      "id": "C005",
+      "problem_id": "P004",
+      "residual_risk": [
+        "提交推送和外部真机门槛在根任务层处理。"
+      ],
+      "result_ids": [
+        "R005"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "完整 release regression 不只运行新增脚本，还覆盖现有 Backend verify、全部历史 static guards、Archive→Echo 与 delayed reply smoke，证明没有以窄测试替代全局回归。"
+      ],
+      "summary": "R005 满足 P004 的默认发布门、完整回归和文档证据要求；提交推送属于 Task 21 根收尾而不是该 QA 子问题的实现缺口。"
+    },
+    "C006": {
+      "blocking_gaps": [
+        "将完整 Task 21 实现、QA、账本与文档提交到 `feature/prd-stitch-ui-adaptation` 并推送 origin。",
+        "提交后更新计划最后一项和状态索引，再关闭账本并推送最终闭环文档。"
+      ],
+      "body_path": "problems/P000/checks/C006.md",
+      "created_at": "2026-07-11T07:22:29+00:00",
+      "criteria_map": [],
+      "evidence": [],
+      "execution_map": [],
+      "followup_problem_id": "P007",
+      "id": "C006",
+      "problem_id": "P000",
+      "residual_risk": [],
+      "result_ids": [
+        "R006"
+      ],
+      "root_id": "P000",
+      "status": "not_success",
+      "stress_test": [],
+      "summary": "R006 证明全部技术与非真机验收已完成，但原始验收清单明确要求提交推送；当前工作区仍有未提交变更，因此不能判定根问题成功。"
+    }
+  },
+  "counters": {
+    "check": 7,
+    "event": 90,
+    "problem": 8,
+    "result": 7,
+    "ticket": 8
+  },
+  "created_at": "2026-07-11T06:56:25+00:00",
+  "effort": "medium",
+  "language": "zh",
+  "ledger_id": "L20260711-145625-21",
+  "problems": {
+    "P000": {
+      "body_path": "problems/P000/README.md",
+      "check_ids": [
+        "C006"
+      ],
+      "created_at": "2026-07-11T06:56:25+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Close the Lodestar task represented by `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/plans/task_21_p0-widget-app-group-knowledge-privacy-lifecycle.md` using recursive problem, ticket, result, and check state.\n\nTask context:\n\n# Task 21：P0 Widget / App Group 知识隐私生命周期",
+      "followup_ids": [
+        "P007"
+      ],
+      "id": "P000",
+      "package_path": "problems/P000",
+      "parent_id": null,
+      "result_ids": [
+        "R006"
+      ],
+      "root_id": "P000",
+      "status": "followup",
+      "subproblem_ids": [
+        "P001",
+        "P002",
+        "P003",
+        "P004",
+        "P007"
+      ],
+      "success_criteria": [
+        "Recursive ledger reaches next_action=none.",
+        "Relevant implementation and verification evidence is recorded.",
+        "A compact status checkpoint is synced back to Lodestar progress.md."
+      ],
+      "ticket_ids": [
+        "T000"
+      ],
+      "title": "Task 21：P0 Widget / App Group 知识隐私生命周期",
+      "updated_at": "2026-07-11T07:22:29+00:00"
+    },
+    "P001": {
+      "body_path": "problems/P000/children/P001/README.md",
+      "check_ids": [
+        "C000"
+      ],
+      "created_at": "2026-07-11T06:58:15+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "当前共享 JSON 直接包含全部事件正文和原始标识，缺少独立 Widget 授权、schema、owner digest 和可测试的字段边界。需要先建立不依赖 WidgetKit/文件系统的纯模型合同，作为主 App 写入端和 Widget 读取端共同遵循的隐私基线。",
+      "followup_ids": [],
+      "id": "P001",
+      "package_path": "problems/P000/children/P001",
+      "parent_id": "P000",
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "`KBPrivacyMetadata` 兼容增加可选 `widgetVisibility`，legacy/default 为 deny。",
+        "纯策略只允许当前 owner、generationAllowed、summaryAllowed、personal、confirmed 事件。",
+        "schema v2 快照只含 owner digest、generatedAt 和最小事件摘要，不含 raw ID、description 或 sourceRefs。",
+        "纯模型 smoke 覆盖允许组合、拒绝矩阵、摘要截断和 owner digest，测试先于生产行为修改建立。",
+        "该子问题不接触 WidgetKit、App Group IO 或 Xcode 工程配置。"
+      ],
+      "ticket_ids": [
+        "T001"
+      ],
+      "title": "定义默认拒绝的 Widget 知识快照与隐私策略",
+      "updated_at": "2026-07-11T07:01:24+00:00"
+    },
+    "P002": {
+      "body_path": "problems/P000/children/P002/README.md",
+      "check_ids": [
+        "C001"
+      ],
+      "created_at": "2026-07-11T06:58:15+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "当前 `KBLiteManager.save()` 和 `switchUser()` 可并发覆盖同一共享文件，登出/切换没有 active owner 撤销、文件删除和 timeline reload，旧用户延迟保存可能重新暴露内容。",
+      "followup_ids": [],
+      "id": "P002",
+      "package_path": "problems/P000/children/P002",
+      "parent_id": "P000",
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "独立 snapshot store 维护 active owner digest 与 active generation。",
+        "publish 只接受当前 owner/generation，并使用原子写入和首次解锁后文件保护。",
+        "switch/login 在发布新快照前使旧快照失效；logout 先撤销 owner 再删除文件。",
+        "publish、clear 和失败清理都触发指定 Widget kind reload。",
+        "`KBLiteManager` 移除旧无条件导出并接入 store；旧 generation 发布有模型/静态证据证明被拒绝。"
+      ],
+      "ticket_ids": [
+        "T002"
+      ],
+      "title": "实现 generation 绑定的 App Group 发布与账号生命周期",
+      "updated_at": "2026-07-11T07:05:06+00:00"
+    },
+    "P003": {
+      "body_path": "problems/P000/children/P003/README.md",
+      "check_ids": [
+        "C004"
+      ],
+      "created_at": "2026-07-11T06:58:15+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "Widget 当前读取旧无身份 schema 并显示 description，主 App 未嵌入扩展，双方缺少一致 App Group entitlement，Widget Bundle ID 也不跟随主 App，导致功能不可交付且读取端无法 fail closed。",
+      "followup_ids": [],
+      "id": "P003",
+      "package_path": "problems/P000/children/P003",
+      "parent_id": "P000",
+      "result_ids": [
+        "R004"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P005",
+        "P006"
+      ],
+      "success_criteria": [
+        "Widget 只解码 schema v2，并校验共享 active owner digest 与 snapshot owner digest。",
+        "缺失、不匹配、旧 schema 或损坏 JSON 返回空 entry；UI 不再展示事件 description，敏感摘要带系统隐私标记。",
+        "主 App 嵌入 Widget extension 并声明 target dependency。",
+        "Widget Bundle ID 由主 App bundle ID 派生，两个 target 使用同一可配置 App Group build setting 与 entitlement。",
+        "模拟器或构建产物证据证明 `.appex` 被嵌入，generic iPhoneOS 构建可通过；真实 provisioning 明确为外部验收。"
+      ],
+      "ticket_ids": [
+        "T003"
+      ],
+      "title": "升级 Widget 读取端并补齐扩展与 App Group 工程接线",
+      "updated_at": "2026-07-11T07:14:18+00:00"
+    },
+    "P004": {
+      "body_path": "problems/P000/children/P004/README.md",
+      "check_ids": [
+        "C005"
+      ],
+      "created_at": "2026-07-11T06:58:15+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "现有 release QA 没有覆盖 Widget 授权、跨账号清理、generation 竞态、provider fail-closed 或扩展工程配置，后续知识库改动可能重新引入隐私泄露。",
+      "followup_ids": [],
+      "id": "P004",
+      "package_path": "problems/P000/children/P004",
+      "parent_id": "P000",
+      "result_ids": [
+        "R005"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "增加静态 gate 检查 privacy allowlist、最小快照、账号清理/reload、provider 校验、entitlement、bundle ID 和扩展嵌入。",
+        "将模型 smoke 与静态 gate 接入 release QA package/release regression，默认执行且不依赖真机。",
+        "`git diff --check`、相关 smoke、release QA、release regression、Simulator build 和 generic iPhoneOS build 全部通过。",
+        "更新 Task 21、PRD 覆盖/状态与进度文档，明确已完成证据和真机/App Group Portal 剩余外部门槛。",
+        "关闭 Task 21 Closure 账本并提交推送当前 iOS 分支。"
+      ],
+      "ticket_ids": [
+        "T006"
+      ],
+      "title": "将 Widget 隐私生命周期纳入发布回归并收口文档",
+      "updated_at": "2026-07-11T07:21:37+00:00"
+    },
+    "P005": {
+      "body_path": "problems/P000/children/P003/children/P005/README.md",
+      "check_ids": [
+        "C002"
+      ],
+      "created_at": "2026-07-11T07:05:53+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T003",
+      "created_from_ticket_mode": "split",
+      "description": "Widget provider 直接信任旧共享 JSON，并将事件 description 放进 timeline entry 和界面，无法拒绝旧 schema、跨账号或损坏快照。",
+      "followup_ids": [],
+      "id": "P005",
+      "package_path": "problems/P000/children/P003/children/P005",
+      "parent_id": "P003",
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "Shared model 与主 App schema v2 字段一致，并提供可纯测试的 snapshot acceptance policy。",
+        "provider 只有在 schema 与 active owner digest 匹配时返回事件，其余情况为空。",
+        "entry/view 不再携带或显示 description，placeholder 使用通用非真实内容。",
+        "事件内容标记 `.privacySensitive()`，不改 App 主页面视觉。",
+        "读取策略模型 smoke 覆盖匹配、缺 owner、错 owner、旧 schema 和损坏数据。"
+      ],
+      "ticket_ids": [
+        "T004"
+      ],
+      "title": "实现 Widget schema v2 身份校验与最小展示",
+      "updated_at": "2026-07-11T07:08:08+00:00"
+    },
+    "P006": {
+      "body_path": "problems/P000/children/P003/children/P006/README.md",
+      "check_ids": [
+        "C003"
+      ],
+      "created_at": "2026-07-11T07:05:53+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T003",
+      "created_from_ticket_mode": "split",
+      "description": "主 App 当前没有嵌入 Widget extension，也没有依赖关系；主/扩展 target 缺少 App Group entitlement，Widget Bundle ID 与本地覆盖后的主 App 不同源，无法可靠签名交付。",
+      "followup_ids": [],
+      "id": "P006",
+      "package_path": "problems/P000/children/P003/children/P006",
+      "parent_id": "P003",
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "新策略/存储 Swift 文件加入主 target sources。",
+        "主 App 增加 Embed App Extensions copy phase 和 Widget target dependency。",
+        "主/Widget entitlements 含相同可配置 App Group；Info.plist 可读取相同 identifier。",
+        "Widget bundle ID 为主 App bundle ID 加 `.widget`，development team 同源。",
+        "Simulator 与 generic iPhoneOS build 通过，构建 App 包内存在 Widget `.appex`。",
+        "文档声明真实 Developer Portal capability/provisioning 仍待真机验收。"
+      ],
+      "ticket_ids": [
+        "T005"
+      ],
+      "title": "补齐 Widget 扩展嵌入、Bundle ID 与 App Group 配置",
+      "updated_at": "2026-07-11T07:13:41+00:00"
+    },
+    "P007": {
+      "body_path": "problems/P000/children/P007/README.md",
+      "check_ids": [],
+      "created_at": "2026-07-11T07:22:29+00:00",
+      "created_from_check_id": "C006",
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Task 21 的代码和非真机验收已通过，但尚未形成可共享的远程提交；计划最后一项与根问题因此不能关闭。",
+      "followup_ids": [],
+      "id": "P007",
+      "package_path": "problems/P000/children/P007",
+      "parent_id": "P000",
+      "result_ids": [],
+      "root_id": "P000",
+      "status": "doing",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "提交当前 Task 21 实现、QA、账本和文档，提交信息清晰说明 Widget 知识隐私生命周期。",
+        "推送当前 `feature/prd-stitch-ui-adaptation` 分支并确认本地/远端提交一致。",
+        "更新 Task 21 最后一项、计划索引和 Task Plan 为完成态，关闭 Closure 账本。",
+        "对闭环状态变更再执行 `git diff --check`、Closure validate/check，并提交推送最终文档；工作区干净。"
+      ],
+      "ticket_ids": [
+        "T007"
+      ],
+      "title": "提交推送 Task 21 并完成闭环状态",
+      "updated_at": "2026-07-11T07:23:10+00:00"
+    }
+  },
+  "results": {
+    "R000": {
+      "artifacts": [
+        "`DreamJourney/Sources/Services/KnowledgeWidgetPrivacyPolicy.swift`",
+        "`DreamJourney/Sources/Services/KBLiteModels.swift`",
+        "`Scripts/QA/prd-stitch-ui/knowledge-widget-privacy-policy-model-smoke.swift`",
+        "`Scripts/QA/prd-stitch-ui/run-knowledge-widget-privacy-policy-model-smoke.sh`"
+      ],
+      "body_path": "problems/P000/children/P001/results/R000.md",
+      "created_at": "2026-07-11T07:00:57+00:00",
+      "done": [
+        "`KBPrivacyMetadata` 新增向后兼容的可选 `widgetVisibility`；历史 JSON 缺失该字段可正常解码并保持默认拒绝。",
+        "新增 `KnowledgeWidgetPrivacyPolicy`、schema v2 `KnowledgeWidgetSnapshot` 和最小 `KnowledgeWidgetEventSummary`。",
+        "allowlist 同时检查当前 owner、`generationAllowed`、`summaryAllowed`、`personal`、`confirmed`，任一不满足均不投影。",
+        "owner 与 event 标识使用 SHA-256 digest；标题压缩空白并限制为 80 字符；description/sourceRefs/raw ID 不进入 schema。",
+        "新增独立模型 smoke 和 runner，测试先失败于缺少实现，完成实现后通过。"
+      ],
+      "id": "R000",
+      "known_gaps": [
+        "尚未接 App Group IO、generation 生命周期、WidgetKit provider 或 Xcode target；由后续 P002/P003 处理。"
+      ],
+      "problem_id": "P001",
+      "root_id": "P000",
+      "summary": "已建立默认拒绝、显式授权、字段最小化且可独立测试的 Widget 知识投影合同。",
+      "ticket_id": "T001",
+      "verification": [
+        "`Scripts/QA/prd-stitch-ui/run-knowledge-widget-privacy-policy-model-smoke.sh`：通过，输出 `Knowledge widget privacy policy model smoke passed`。",
+        "smoke 编码实际 snapshot JSON 并断言不含 `owner-A`、raw event/source ID、`description`、`sourceRefs`。",
+        "`git diff --check` 首次发现 Closure sync 在 `progress.md` 末尾生成空行；已修正该格式问题，后续总体验证再次运行。"
+      ]
+    },
+    "R001": {
+      "artifacts": [
+        "`DreamJourney/Sources/Services/KnowledgeWidgetSnapshotStore.swift`",
+        "`DreamJourney/Sources/Services/KBLiteManager.swift`",
+        "`Scripts/QA/prd-stitch-ui/knowledge-widget-snapshot-store-model-smoke.swift`",
+        "`Scripts/QA/prd-stitch-ui/run-knowledge-widget-snapshot-store-model-smoke.sh`"
+      ],
+      "body_path": "problems/P000/children/P002/results/R001.md",
+      "created_at": "2026-07-11T07:05:00+00:00",
+      "done": [
+        "新增 `KnowledgeWidgetSnapshotStore`，串行维护 active owner digest 与 UUID generation。",
+        "`activate` 先写/撤销共享 active owner，再删除旧快照并 reload；`publish` 同时校验 owner、generation 和共享 digest。",
+        "快照原子写入、排除备份，并在 iOS 设置 `completeUntilFirstUserAuthentication` 文件保护。",
+        "publish 失败或 KBLite 主文件保存失败时删除共享快照，保持 fail closed。",
+        "`KBLiteManager` init/save/switchUser 接入 store；save 捕获 generation，延迟旧保存会被拒绝。",
+        "删除旧 `writeToAppGroup`、`kb_widget_data.json` 和 description/raw event 映射。",
+        "metadata 合并保留已有显式 Widget 授权，不由后续知识提取隐式重置。"
+      ],
+      "id": "R001",
+      "known_gaps": [
+        "新生产文件尚未加入 Xcode target；WidgetKit 真实读取端和 entitlement/扩展嵌入由 P003 完成后才能进行 App 构建。"
+      ],
+      "problem_id": "P002",
+      "root_id": "P000",
+      "summary": "已用独立存储层替换 KBLiteManager 的无条件共享 JSON 导出，并建立账号激活、发布、切换、登出、失败失效和 timeline reload 合同。",
+      "ticket_id": "T002",
+      "verification": [
+        "`run-knowledge-widget-snapshot-store-model-smoke.sh` 通过。",
+        "临时 App Group 测试覆盖 owner A 发布、切 B 先删、A 旧 generation 重放被拒、B 发布、登出撤销与旧 B 重放被拒。",
+        "spy reloader 证明激活、发布和清理会触发 timeline invalidation。",
+        "隐私策略 smoke 再次通过；源码检查确认旧导出符号和文件名已移除。"
+      ]
+    },
+    "R002": {
+      "artifacts": [
+        "`DreamJourneyWidget/SharedModels.swift`",
+        "`DreamJourneyWidget/WidgetKnowledgeSnapshotReader.swift`",
+        "`DreamJourneyWidget/TodayInHistoryProvider.swift`",
+        "`DreamJourneyWidget/TodayInHistoryEntry.swift`",
+        "`DreamJourneyWidget/TodayInHistoryView.swift`",
+        "reader model smoke 与 runner"
+      ],
+      "body_path": "problems/P000/children/P003/children/P005/results/R002.md",
+      "created_at": "2026-07-11T07:08:03+00:00",
+      "done": [
+        "重写 shared snapshot/event models，与主 App v2 schema 对齐。",
+        "新增纯 `WidgetKnowledgeSnapshotReader`，校验 schema、64 位小写 hex owner/event digest、标题边界和月份范围。",
+        "provider 从可配置 App Group 读取 v2 文件及 shared active owner digest，再筛选当月事件。",
+        "timeline entry 删除 description；small/medium view 只显示标题并标记 `.privacySensitive()`。",
+        "placeholder 改为通用授权摘要，不再模拟具体家庭事件。"
+      ],
+      "id": "R002",
+      "known_gaps": [
+        "新 reader 文件尚待 P006 加入 Widget target；target 构建和扩展嵌入尚未验证。"
+      ],
+      "problem_id": "P005",
+      "root_id": "P000",
+      "summary": "Widget 已改为只读取身份匹配的 schema v2 最小摘要，旧文件、损坏数据和身份异常均为空态，界面不再携带知识描述正文。",
+      "ticket_id": "T004",
+      "verification": [
+        "`run-knowledge-widget-snapshot-reader-model-smoke.sh` 通过。",
+        "实际 JSON 解码覆盖正确 owner、nil/空/错误 owner、旧 schema、损坏 JSON 和非法 event 字段。",
+        "Widget 源码负向检查确认旧文件名与 description 已移除。"
+      ]
+    },
+    "R003": {
+      "artifacts": [
+        "`DreamJourney.xcodeproj/project.pbxproj`",
+        "`DreamJourney/DreamJourney.entitlements`",
+        "`DreamJourneyWidget/DreamJourneyWidget.entitlements`",
+        "主/Widget Info.plist",
+        "`tmp/DerivedData-task21-simulator`、`tmp/DerivedData-task21-iphoneos` 构建证据"
+      ],
+      "body_path": "problems/P000/children/P003/children/P006/results/R003.md",
+      "created_at": "2026-07-11T07:13:26+00:00",
+      "done": [
+        "新策略/存储文件加入主 target，snapshot reader 加入 Widget target。",
+        "主 target 新增 Widget target dependency 和 Embed App Extensions copy phase。",
+        "主/Widget Info.plist 均注入 `DreamJourneyAppGroupIdentifier`；Widget Info.plist 补齐完整 bundle 元数据。",
+        "主/Widget entitlements 使用相同 `$(DREAMJOURNEY_APP_GROUP_IDENTIFIER)`。",
+        "Widget bundle ID 派生为 `$(DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER).widget`，development team 继承本地覆盖。",
+        "将扩展 copy phase 放在 LocalConfig 脚本前，消除实际构建发现的 phase dependency cycle。"
+      ],
+      "id": "R003",
+      "known_gaps": [
+        "未进行真实签名/真机 Widget Gallery 验收；Apple Developer Portal 必须注册 `group.com.dreamjourney.shared` 并刷新主/扩展 provisioning profile。"
+      ],
+      "problem_id": "P006",
+      "root_id": "P000",
+      "summary": "主 App 与 Widget target 的源码、依赖、嵌入、Bundle/Team/App Group 和 entitlement 接线已完成，并由 Simulator 与 generic iPhoneOS 实际构建及产物检查证明。",
+      "ticket_id": "T005",
+      "verification": [
+        "四个 plist/entitlements `plutil -lint` 通过，`xcodebuild -project ... -list` 通过。",
+        "Widget showBuildSettings 在本地覆盖下得到 `com.yxj.dreamjourney.app.widget`、Team `2BTR77V3R8` 和共享 App Group。",
+        "generic iOS Simulator Debug build 通过。",
+        "generic iPhoneOS Debug build（不签名）通过；输出只有既有 Pods/SDK deprecated/umbrella warnings。",
+        "两类构建产物均包含 `DreamJourney.app/PlugIns/DreamJourneyWidget.appex`；Simulator 产物主/扩展 bundle ID 分别为 `com.yxj.dreamjourney.app` 与 `.widget`，App Group 值一致。"
+      ]
+    },
+    "R004": {
+      "artifacts": [
+        "Results R002、R003",
+        "Checks C002、C003"
+      ],
+      "body_path": "problems/P000/children/P003/results/R004.md",
+      "created_at": "2026-07-11T07:14:00+00:00",
+      "done": [
+        "P005/R002：schema v2 reader、fail-closed provider、无 description entry/view、privacySensitive 和模型 smoke。",
+        "P006/R003：target membership、Embed App Extensions、target dependency、双方 entitlement/Info/build settings 和产物构建验证。"
+      ],
+      "id": "R004",
+      "known_gaps": [
+        "Apple Developer Portal App Group 注册、带签名 Archive 和真机 Widget Gallery/锁屏脱敏仍是明确外部验收项。"
+      ],
+      "problem_id": "P003",
+      "root_id": "P000",
+      "summary": "P003 的两个拆分子问题均已成功关闭：Widget 读取端严格校验 schema/账号并最小展示，Xcode 工程已嵌入扩展并统一 App Group/Bundle/Team 配置。",
+      "ticket_id": "T003",
+      "verification": [
+        "reader 模型 smoke 通过，旧 schema/身份异常/损坏/非法字段均为空。",
+        "Simulator 与 generic iPhoneOS build 通过。",
+        "两种 App 包均嵌入 `DreamJourneyWidget.appex`；本地 Bundle ID 覆盖后扩展正确派生 `.widget`。"
+      ]
+    },
+    "R005": {
+      "artifacts": [
+        "Widget 四个 QA 脚本/runner",
+        "release regression 报告及 static guard logs",
+        "`docs/superpowers/status/2026-07-11-widget-app-group-knowledge-privacy-lifecycle.md`"
+      ],
+      "body_path": "problems/P000/children/P004/results/R005.md",
+      "created_at": "2026-07-11T07:21:27+00:00",
+      "done": [
+        "新增 `knowledge-widget-privacy-lifecycle-check.swift`，守护 allowlist、最小 schema、owner/generation、reload、provider、entitlement、Bundle/dependency/embed 合同。",
+        "三个 Widget model smoke 和静态 gate 默认接入 `run-release-regression.sh`。",
+        "release QA package 必须包含全部新脚本/runner。",
+        "更新 Task 21 计划、canonical 知识架构、PRD coverage、release feature matrix 和独立状态文档。",
+        "更新旧 `knowledge-pipeline-check.swift`，不再错误要求已移除的不安全 exporter，而是要求 guarded store。"
+      ],
+      "id": "R005",
+      "known_gaps": [
+        "尚未提交/推送；需在 Closure 根问题关闭后完成。",
+        "真实 App Group provisioning/Widget Gallery 仍是外部真机验收项。"
+      ],
+      "problem_id": "P004",
+      "root_id": "P000",
+      "summary": "Task 21 的三层运行时模型、静态工程合同、release QA package、完整默认 release regression 和状态/PRD 文档均已完成并通过非真机验证。",
+      "ticket_id": "T006",
+      "verification": [
+        "三个 model smoke、专项静态 gate、release QA package 均通过。",
+        "首次完整 regression 在旧 knowledge-pipeline guard 处失败；修正陈旧断言后同一完整回归重跑通过。",
+        "成功报告：`tmp/visual-qa/prd-stitch-ui/release-regression/20260711-task21-widget-privacy-rerun/report.md`。",
+        "默认回归同时通过 Backend verify、全部静态 guards、iOS diff、Simulator build、Archive→Echo smoke 和 Echo delayed-reply notification smoke。",
+        "generic iPhoneOS build 已在 P006 独立通过。"
+      ]
+    },
+    "R006": {
+      "artifacts": [
+        "Results R000、R001、R004、R005",
+        "Checks C000、C001、C004、C005",
+        "`docs/superpowers/status/2026-07-11-widget-app-group-knowledge-privacy-lifecycle.md`"
+      ],
+      "body_path": "problems/P000/results/R006.md",
+      "created_at": "2026-07-11T07:22:10+00:00",
+      "done": [
+        "P001/R000：默认拒绝的最小 Widget 知识快照。",
+        "P002/R001：generation-bound App Group 发布与登出/切换清理。",
+        "P003/R004：Widget v2 reader、最小展示、扩展嵌入和 App Group 工程合同。",
+        "P004/R005：默认 release gates、完整 regression 和产品/状态文档。"
+      ],
+      "id": "R006",
+      "known_gaps": [
+        "当前工作区尚未提交并推送，因此根任务的最后一项交付标准未满足。",
+        "真实 App Group provisioning/Widget Gallery 是明确排除的真机外部验收，不属于本任务代码闭环。"
+      ],
+      "problem_id": "P000",
+      "root_id": "P000",
+      "summary": "四个计划子问题均已成功：隐私投影、账号/generation 生命周期、Widget fail-closed 读取与工程嵌入、默认发布回归和文档均完成。当前只剩显式验收项“提交推送”。",
+      "ticket_id": "T000",
+      "verification": [
+        "三个模型 smoke、专项静态 gate、release QA package 通过。",
+        "Simulator 与 generic iPhoneOS build 通过，`.appex` 已嵌入且 bundle ID 正确派生。",
+        "完整 release regression `20260711-task21-widget-privacy-rerun` 通过。"
+      ]
+    }
+  },
+  "root_id": "P000",
+  "schema_version": 6,
+  "tickets": {
+    "T000": {
+      "acceptance_criteria": [
+        "legacy/default、非当前 owner、非 personal、非 confirmed、非 generationAllowed 或未显式 summaryAllowed 的事件均不进入快照。",
+        "快照只包含 schema、owner digest、生成时间和最小事件摘要，不含 raw owner/event/source ID、description、sourceRefs 或其他知识正文。",
+        "Widget 对 active owner 缺失或不匹配、旧 schema、损坏 JSON 一律返回空态。",
+        "账号切换与登出先使旧快照失效并 reload timeline；旧 generation publish 无法覆盖新用户或登出状态。",
+        "主 App 包含 Widget extension，Widget Bundle ID 跟随主 App，两个 target 使用相同可配置 App Group entitlement。",
+        "新模型 smoke、静态检查、release QA package、release regression、Simulator build、generic iPhoneOS build 和 `git diff --check` 全部通过。",
+        "文档明确 App Group Developer Portal/provisioning 和真实 Widget Gallery 仍需外部真机验收，本任务不作真机完成声明。"
+      ],
+      "assumptions": [
+        "`KBLiteManager.userGeneration` 可作为 Widget publication generation 的唯一进程内时序来源。",
+        "`summaryAllowed` 是独立于 Echo `generationAllowed` 的显式系统展示授权，两者必须同时满足。",
+        "本轮不开放 familyCircle、数字人角色知识或事件描述到 Widget。"
+      ],
+      "body_path": "problems/P000/tickets/T000.md",
+      "classification": "split",
+      "classification_reason": "任务同时涉及纯隐私模型、账号生命周期并发、Widget 读取端、Xcode 扩展接线和多层回归，写入面与工程配置可拆为互相独立验证的子问题，拆分能降低隐私回归和工程文件冲突风险。",
+      "created_at": "2026-07-11T06:57:33+00:00",
+      "id": "T000",
+      "problem_definition": "当前 `KBLiteManager` 将全部知识事件的标题、描述和日期无条件写入共享 App Group 文件，Widget 无法验证快照所属账号，也不会在登出或切换账号后主动刷新已缓存 timeline。主 App 与 Widget target 同时缺少完整的扩展嵌入、Bundle ID 继承和 App Group entitlement 合同，导致功能不可交付且存在跨账号旧内容展示、未授权知识外泄和旧异步保存覆盖新身份数据的风险。",
+      "problem_id": "P000",
+      "proposed_solution": "建立版本化 Widget 快照 v2 和独立的隐私策略/存储层。隐私策略默认拒绝，只允许当前 owner、`generationAllowed`、显式 `summaryAllowed`、`personal`、`confirmed` 的事件生成不含正文和原始标识符的最小摘要。存储层使用 owner digest 与 KBLite generation 绑定发布，账号切换或登出时先撤销 active owner、删除快照并刷新 Widget，旧 generation 的延迟发布必须被拒绝。Widget 读取端校验 schema 与 active owner digest，任何缺失、不匹配、损坏或旧格式都返回空态。补齐扩展嵌入、Bundle ID 继承、双方 entitlement 和可配置 App Group build setting，并通过纯模型 smoke、静态 gate、模拟器与通用 iPhoneOS 构建验证。",
+      "result_ids": [
+        "R006"
+      ],
+      "risks": [
+        "Apple Developer Portal 尚未注册目标 App Group 时，真实签名/真机安装仍可能失败；代码与构建合同不能替代 provisioning 验收。",
+        "当前 PRD 没有公开 Widget 授权入口，因此默认拒绝会使生产 Widget 保持空态，直到后续产品明确授权流程。",
+        "WidgetKit timeline 缓存行为只能通过模拟器/静态证据部分验证，最终锁屏和桌面隐私展示仍需真机。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "建立账号绑定且默认拒绝的 Widget 知识快照链路",
+      "updated_at": "2026-07-11T07:22:10+00:00",
+      "verification_plan": "先增加纯 Swift 模型 smoke，覆盖隐私组合矩阵、字段脱敏、owner digest、generation 拒绝和 provider fail-closed；再增加静态 gate 检查 entitlement、bundle 继承、扩展嵌入、timeline reload 与旧无条件导出已移除。实现完成后运行相关 smoke、release QA package、完整 release regression、模拟器构建、generic iPhoneOS 构建和 `git diff --check`，并检查构建产物包含 `.appex` 及其配置。"
+    },
+    "T001": {
+      "acceptance_criteria": [
+        "解码旧知识数据时 `widgetVisibility` 缺失不会失败且默认拒绝。",
+        "只有 scope、widgetVisibility、owner、persona、evidence 五项全部符合才生成摘要。",
+        "摘要无 raw owner/event/source ID、description 和 sourceRefs。",
+        "owner/event digest 使用稳定不可逆 SHA-256，标题有确定长度上限与空白规范化。",
+        "独立模型 smoke 通过并对每个拒绝维度提供断言。"
+      ],
+      "assumptions": [
+        "`summaryAllowed` 由后续显式产品/QA 流程设置，本轮所有旧数据保持 deny。",
+        "标题是唯一允许进入 Widget 的知识文本字段，description 一律禁止。"
+      ],
+      "body_path": "problems/P000/children/P001/tickets/T001.md",
+      "classification": "one_go",
+      "classification_reason": "纯模型、单一授权投影和独立 smoke 的范围清晰，无 IO 或工程接线，可一次实现并直接验证。",
+      "created_at": "2026-07-11T06:58:40+00:00",
+      "id": "T001",
+      "problem_definition": "Widget 共享数据目前没有独立披露授权或最小字段 schema，无法用自动化测试证明 legacy、其他账号、其他 persona 或低置信证据不会进入系统表面。",
+      "problem_id": "P001",
+      "proposed_solution": "扩展 `KBPrivacyMetadata`，以可选 `widgetVisibility` 表示显式摘要授权；新增 Foundation/CryptoKit 纯模型 `KnowledgeWidgetPrivacyPolicy`、schema v2 snapshot 和摘要事件，集中完成 allowlist、不可逆摘要标识、标题规范化及最小投影。先编写独立 Swift smoke，直接编译相关模型与策略，覆盖允许和拒绝组合。",
+      "result_ids": [
+        "R000"
+      ],
+      "risks": [
+        "CryptoKit 在脚本编译环境中的模块可用性需验证。",
+        "新可选字段必须保持现有 Codable 数据兼容，不能要求历史数据迁移。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现纯 Swift Widget 隐私投影合同",
+      "updated_at": "2026-07-11T07:00:57+00:00",
+      "verification_plan": "新增并运行 `knowledge-widget-privacy-policy-model-smoke.swift`；检查编码 JSON 中禁止字段和原始 ID 不存在；运行 `git diff --check`。本票据不要求 App Group IO、WidgetKit 或工程构建。"
+    },
+    "T002": {
+      "acceptance_criteria": [
+        "store 能用可注入容器/重载器进行非真机模型测试。",
+        "旧 generation/owner publish 被拒绝且不会重建已清除文件。",
+        "登录切换先失效旧状态，再发布新快照；登出不写“匿名空图谱”，而是撤销身份并删除文件。",
+        "App Group 不可用、编码或写入失败时 active owner 被撤销/快照被清理，保持 fail closed。",
+        "成功发布、撤销和失败清理都会请求刷新 `TodayInHistoryWidget`。",
+        "`KBLiteManager` 不再包含旧无条件 event title/description 导出。"
+      ],
+      "assumptions": [
+        "单进程内 `userGeneration` 单调递增，足以阻止切换前延迟写。",
+        "App Group defaults 和文件位于同一共享容器；Widget 读取时会在 P003 同时校验两者。"
+      ],
+      "body_path": "problems/P000/children/P002/tickets/T002.md",
+      "classification": "one_go",
+      "classification_reason": "store 与 KBLiteManager 只形成一条明确的发布调用链，写入范围集中于两个服务文件和一个模型 smoke，可在临时目录完整验证且无需再拆并发子系统。",
+      "created_at": "2026-07-11T07:01:44+00:00",
+      "id": "T002",
+      "problem_definition": "当前共享文件写入没有当前账号身份、generation 或 timeline 失效语义。账号切换与保存操作异步交错时，旧用户快照可能最后落盘；登出即使写空图谱，也不能保证已缓存 Widget 立即清空。",
+      "problem_id": "P002",
+      "proposed_solution": "新增 `KnowledgeWidgetSnapshotStore`，在串行队列中保存 active owner digest 与 generation，并把 active owner digest 写入 App Group defaults。`activate` 先撤销旧快照；`publish` 只接受当前 owner/generation 并调用纯策略生成快照；`clear` 先移除 active owner 再删除文件。所有状态变化触发 Widget timeline reload，写入使用原子文件和首次解锁后保护。`KBLiteManager` 初始化、保存、切换账号改用该 store，彻底删除旧 `writeToAppGroup`。",
+      "result_ids": [
+        "R001"
+      ],
+      "risks": [
+        "`KBLiteManager.save()` 的异步队列与内部锁不能在 store 内形成反向锁顺序。",
+        "WidgetKit 不应污染纯测试，因此 timeline reload 需以小协议/闭包注入并在生产 adapter 中调用。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "建立可撤销且防旧写覆盖的 Widget 快照存储",
+      "updated_at": "2026-07-11T07:05:00+00:00",
+      "verification_plan": "新增 store 模型 smoke，使用临时目录、内存 active-owner store 和 spy reloader 验证发布、切换、登出、旧 generation、损坏/失败清理；运行现有 KBLite 相关 smoke 与 `git diff --check`。后续 P003 再验证真实 App Group entitlement 和 WidgetKit target。"
+    },
+    "T003": {
+      "acceptance_criteria": [
+        "Widget 读取端拒绝旧 schema、身份不匹配、缺失 active owner 和损坏 JSON。",
+        "UI 不展示 description；placeholder 不冒充真实家庭数据；知识摘要使用系统隐私标记。",
+        "主 App target 编译新策略/存储文件并嵌入 `DreamJourneyWidget.appex`。",
+        "Widget product bundle ID 为 `$(DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER).widget`，team 与主 App 共用，双方 entitlements 使用同一 `$(DREAMJOURNEY_APP_GROUP_IDENTIFIER)`。",
+        "模拟器和 generic iPhoneOS 构建通过，构建产物含 `.appex`；不宣称已完成 Developer Portal/provisioning 真机验收。"
+      ],
+      "assumptions": [
+        "主 App 本地 bundle/team build settings 是仓库既有覆盖入口，Widget 应派生而不是新增第二套本机配置。",
+        "公开产品尚无 Widget 内容授权 UI，因此大多数真实快照仍为空是预期的安全行为。"
+      ],
+      "body_path": "problems/P000/children/P003/tickets/T003.md",
+      "classification": "split",
+      "classification_reason": "Widget 运行时 fail-closed 读取与 Xcode 扩展嵌入/签名配置是两个独立风险面，可分别用模型测试和构建产物验证，拆分后验收更可靠。",
+      "created_at": "2026-07-11T07:05:28+00:00",
+      "id": "T003",
+      "problem_definition": "Widget 仍读取无身份旧 schema 并展示 description，且 Xcode 工程没有把扩展嵌入主 App、没有 target dependency、双方没有一致 App Group entitlement，Bundle ID 也不满足随主 App 派生的交付合同。",
+      "problem_id": "P003",
+      "proposed_solution": "将 Widget 共享模型升级为与主 App schema v2 对齐的最小结构，Provider 从可配置 App Group 读取 shared active owner digest 并校验 schema/owner 后才生成 entry，任何异常为空态；View 删除 description 并标记事件摘要为 privacy sensitive。新增 Widget entitlements，更新主 entitlements、Info.plist 与 build settings；在 pbxproj 中加入新生产文件、Embed App Extensions copy phase、target dependency，并让 Widget bundle/team/app-group 从主设置派生。",
+      "result_ids": [
+        "R004"
+      ],
+      "risks": [
+        "手工编辑 pbxproj 容易产生引用或 copy phase 错误，必须通过两种 SDK 构建和产物检查验证。",
+        "App Group capability 是否已在 Apple Developer Portal 注册无法从非真机构建完全证明。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "让 Widget fail closed 并作为主 App 扩展正确交付",
+      "updated_at": "2026-07-11T07:14:00+00:00",
+      "verification_plan": "先增加 Widget provider 纯读取 smoke/静态检查，再修改 shared models/provider/view 和工程文件。用 `xcodebuild -showBuildSettings`、Simulator build、generic iPhoneOS build 和产物检查验证 target 配置与扩展嵌入；运行 `plutil` 检查 entitlements/Info.plist。"
+    },
+    "T004": {
+      "acceptance_criteria": [
+        "reader 仅接受 schemaVersion=2 且 non-empty activeOwnerDigest 与 snapshot ownerDigest 完全一致的数据。",
+        "nil/空/错 owner、旧 schema、损坏 JSON 均返回空数组。",
+        "provider 使用 `kb_widget_snapshot_v2.json` 和共享 active owner digest key，不保留旧文件兼容降级。",
+        "entry/view 完全移除 description；placeholder 不使用具体人物或家族故事。",
+        "独立 reader smoke 实际解码 JSON 并覆盖成功与失败矩阵。"
+      ],
+      "assumptions": [
+        "active owner digest 由主 App store 写入同一 App Group defaults。"
+      ],
+      "body_path": "problems/P000/children/P003/children/P005/tickets/T004.md",
+      "classification": "one_go",
+      "classification_reason": "reader、provider 与 view 都属于同一小型 Widget 数据流，模型 smoke 可直接覆盖校验边界，文件数少且无需工程配置即可验证核心逻辑。",
+      "created_at": "2026-07-11T07:06:10+00:00",
+      "id": "T004",
+      "problem_definition": "Widget 无条件解码旧 events 数组并把 description 带入 timeline，无法证明数据属于当前账号，也不能在旧 schema、损坏文件或身份撤销时 fail closed。",
+      "problem_id": "P005",
+      "proposed_solution": "重写 Widget shared models 为 schema v2 最小模型，新增不依赖 WidgetKit 的 `KnowledgeWidgetSnapshotReader`，输入 data 与 active owner digest 后完成解码和严格校验；provider 只负责获取可配置 App Group 文件/defaults 并调用 reader。Timeline entry 只保留标题/日期，view 删除正文并将真实摘要标记为 privacy sensitive。",
+      "result_ids": [
+        "R002"
+      ],
+      "risks": [
+        "主 App 和 Widget 各自定义相同 schema，后续需静态 gate 防止字段漂移。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "用纯校验策略升级 Widget 快照读取",
+      "updated_at": "2026-07-11T07:08:03+00:00",
+      "verification_plan": "新增 reader smoke 与 runner，直接编译 SharedModels/reader；运行源码负向检查确认 description 和旧文件名不在 Widget 链路；P006 工程接线完成后再做 target build。"
+    },
+    "T005": {
+      "acceptance_criteria": [
+        "新文件分别属于正确 sources phase。",
+        "DreamJourney App 的 build phases 包含 Embed App Extensions，依赖 DreamJourneyWidget target，并拷贝 widget product。",
+        "Debug/Release 两侧均配置同一 App Group setting 和各自 entitlements。",
+        "Widget PRODUCT_BUNDLE_IDENTIFIER 为 `$(DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER).widget`，DEVELOPMENT_TEAM 同源。",
+        "Simulator/generic iPhoneOS 构建通过，App 包内含 `PlugIns/DreamJourneyWidget.appex`。",
+        "不写入任何本地证书、密钥或 LocalConfig 内容。"
+      ],
+      "assumptions": [
+        "仓库默认 App Group 名称继续为 `group.com.dreamjourney.shared`，可通过 `DREAMJOURNEY_APP_GROUP_IDENTIFIER` 覆盖。",
+        "真实设备 capability/provisioning 由后续外部验收完成。"
+      ],
+      "body_path": "problems/P000/children/P003/children/P006/tickets/T005.md",
+      "classification": "one_go",
+      "classification_reason": "工程改动集中在单一 pbxproj、两个 entitlement 和两个 Info.plist，且能由两类构建与产物检查一次性验证，无需进一步拆分。",
+      "created_at": "2026-07-11T07:08:31+00:00",
+      "id": "T005",
+      "problem_definition": "当前主 App 不嵌入 Widget extension，主/Widget 没有相同 App Group entitlement，Widget bundle/team 也不跟随主 App，本轮新增服务和 reader 文件尚未加入 target，导致代码即使正确也无法随产品构建交付。",
+      "problem_id": "P006",
+      "proposed_solution": "手工、最小化更新 pbxproj：加入三个 Swift 文件引用/build files，给主 target 增加 Embed App Extensions copy phase 与 Widget dependency，设置两 target 的 entitlements、统一 App Group build setting、Widget bundle/team 派生。更新主/Widget Info.plist 的 App Group key，扩充主 entitlements并新增 Widget entitlements。通过 build settings、Simulator/generic iPhoneOS 构建和 `.appex` 产物检查验证。",
+      "result_ids": [
+        "R003"
+      ],
+      "risks": [
+        "pbxproj ID、phase 顺序或 dependency proxy 配置错误会造成构建失败，必须以实际产物而不是文本存在为准。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "修复 Widget target 的可交付工程合同",
+      "updated_at": "2026-07-11T07:13:26+00:00",
+      "verification_plan": "运行 `plutil -lint`、`xcodebuild -showBuildSettings`、Simulator build、generic iPhoneOS build，并检查产物路径和嵌入扩展 Info.plist/bundle ID；最后运行新增模型 smokes。"
+    },
+    "T006": {
+      "acceptance_criteria": [
+        "静态 gate 会阻止默认授权、description/raw ID 共享、缺 owner/generation/reload、provider 不校验、entitlement/bundle/dependency/embed 漂移。",
+        "三个模型 smoke 和静态 gate 默认出现在 release regression，不需环境开关。",
+        "release QA package 能确认 runner 可执行且 release script 已包含步骤。",
+        "全部 smoke、git diff check、release regression、Simulator/generic iPhoneOS build 通过。",
+        "Task 21 文档验收项、状态索引、PRD 覆盖与 progress 更新为有证据的完成态，同时明确真机外部门槛。"
+      ],
+      "assumptions": [
+        "现有 release regression 默认不会要求真机或可选线上后端开关。"
+      ],
+      "body_path": "problems/P000/children/P004/tickets/T006.md",
+      "classification": "one_go",
+      "classification_reason": "实现已完成，剩余是一个静态 gate、release runner 接线、文档证据与统一回归，验收路径明确且不再涉及产品行为变更。",
+      "created_at": "2026-07-11T07:14:37+00:00",
+      "id": "T006",
+      "problem_definition": "当前三个模型 runner 尚未接入默认 release regression，工程/entitlement/生命周期也没有静态防回归检查；Task 21 文档仍是未完成清单，后续修改可能重新引入跨账号或正文泄露。",
+      "problem_id": "P004",
+      "proposed_solution": "新增单一 Widget privacy lifecycle 静态 gate，解析关键源码、entitlements 和 pbxproj 合同；将三个模型 runner 与静态 gate 作为默认步骤接入 `run-release-regression.sh` 和 release QA package 检查清单。运行全部相关检查、release regression 和最终构建，更新计划/状态/覆盖矩阵与 Closure 证据，删除临时票据文件后提交推送。",
+      "result_ids": [
+        "R005"
+      ],
+      "risks": [
+        "完整 release regression 时间较长，失败时需区分 Task 21 回归与既有可选后端环境门。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "固化 Widget 隐私发布门并收口 Task 21 证据",
+      "updated_at": "2026-07-11T07:21:27+00:00",
+      "verification_plan": "先写静态脚本并故意确认其检查当前合同，再接 release runner；运行相关 smoke、release QA package、完整 release regression 和最终两类构建。使用 Closure check/validate 确认账本关闭后再提交推送。"
+    },
+    "T007": {
+      "acceptance_criteria": [
+        "两次提交均仅包含 Task 21 相关代码、QA、Closure 和文档，无 LocalConfig/secret/tmp 产物。",
+        "origin 当前分支包含实现提交和闭环状态提交。",
+        "Task 21 清单、impl index、task_plan 与 Closure ledger 全部完成。",
+        "`git diff --check`、Closure validation/check 通过，最终 `git status` 干净且 ahead/behind 为 0。"
+      ],
+      "assumptions": [
+        "当前远端未发生新的并发提交；若推送被拒绝，先 fetch/rebase 安全集成而不覆盖他人变更。"
+      ],
+      "body_path": "problems/P000/children/P007/tickets/T007.md",
+      "classification": "one_go",
+      "classification_reason": "只剩仓库审核、两次提交推送和状态关闭，步骤线性且验收可由远端引用和干净工作区直接证明。",
+      "created_at": "2026-07-11T07:22:50+00:00",
+      "id": "T007",
+      "problem_definition": "全部实现和验证仍只存在本地工作区，无法供其他同事使用，也不能满足 Task 21 明确的提交推送验收项。",
+      "problem_id": "P007",
+      "proposed_solution": "先做最终敏感信息与 diff 审核，提交并推送实现态；再更新 Task 21/索引/Task Plan 和 Closure 完成状态，运行格式与账本检查，提交推送闭环文档。最终确认本地分支与 origin 一致、工作区干净。",
+      "result_ids": [],
+      "risks": [
+        "Closure 状态在实现提交后仍会变化，因此必须有第二个小型闭环提交，不能错误宣称一次提交后工作区干净。"
+      ],
+      "root_id": "P000",
+      "status": "executing",
+      "title": "形成远程可共享的 Task 21 完整提交",
+      "updated_at": "2026-07-11T07:23:10+00:00",
+      "verification_plan": "使用 `git diff --check`、敏感模式扫描、`git status/diff --stat` 审核；提交推送后比较 `HEAD` 与 `origin/feature/prd-stitch-ui-adaptation`；运行 Closure `next/check` 和最终工作区状态检查。"
+    }
+  },
+  "updated_at": "2026-07-11T07:23:10+00:00"
+}

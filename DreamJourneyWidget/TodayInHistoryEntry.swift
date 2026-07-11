@@ -11,5 +11,4 @@ struct WidgetEvent: Identifiable {
     let id: String
     let title: String
     let year: Int
-    let description: String?
 }

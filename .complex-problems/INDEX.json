@@ -1,5 +1,5 @@
 {
-  "active_ledger_id": "L20260711-122802",
+  "active_ledger_id": "L20260711-145625-21",
   "ledgers": [
     {
       "active_count": 0,
@@ -220,7 +220,18 @@
       "status": "done",
       "title": "Task 20：P0 Knowledge Mutation / Receipt 隐私 Canonicalization",
       "updated_at": "2026-07-11T06:47:32+00:00"
+    },
+    {
+      "active_count": 2,
+      "blocked_count": 0,
+      "ledger_id": "L20260711-145625-21",
+      "path": "L20260711-145625-21",
+      "root_id": "P000",
+      "schema_version": 6,
+      "status": "doing",
+      "title": "Task 21：P0 Widget / App Group 知识隐私生命周期",
+      "updated_at": "2026-07-11T07:23:10+00:00"
     }
   ],
-  "updated_at": "2026-07-11T06:47:40+00:00"
+  "updated_at": "2026-07-11T07:23:10+00:00"
 }

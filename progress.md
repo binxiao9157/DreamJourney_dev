@@ -581,7 +581,6 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `record-result`
 - Counts: 3/4 problems done, 0 blocked, 3/4 tickets done
 - Next instruction: Only perform `record-result` for ticket `T000`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
-
 ## Recursive Closure Checkpoint - 2026-07-10T17:26:40+08:00
 
 - Ledger: `L20260710-165434`
@@ -2496,3 +2495,57 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `none`
 - Counts: 8/8 problems done, 0 blocked, 8/8 tickets done
 - Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+
+## Recursive Closure Checkpoint - 2026-07-11T14:57:34+08:00
+
+- Ledger: `L20260711-145625-21`
+- Lodestar task: `docs/plans/task_21_p0-widget-app-group-knowledge-privacy-lifecycle.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 0/1 problems done, 0 blocked, 0/1 tickets done
+- Next instruction: Only perform `classify-ticket` for `T000` on `P000: Task 21：P0 Widget / App Group 知识隐私生命周期`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay ...
+
+## Recursive Closure Checkpoint - 2026-07-11T14:58:15+08:00
+
+- Ledger: `L20260711-145625-21`
+- Lodestar task: `docs/plans/task_21_p0-widget-app-group-knowledge-privacy-lifecycle.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 0/5 problems done, 0 blocked, 0/1 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P001: 定义默认拒绝的 Widget 知识快照与隐私策略`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay i...
+
+## Recursive Closure Checkpoint - 2026-07-11T15:01:24+08:00
+
+- Ledger: `L20260711-145625-21`
+- Lodestar task: `docs/plans/task_21_p0-widget-app-group-knowledge-privacy-lifecycle.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 1/5 problems done, 0 blocked, 1/2 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P002: 实现 generation 绑定的 App Group 发布与账号生命周期`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field...
+
+## Recursive Closure Checkpoint - 2026-07-11T15:05:06+08:00
+
+- Ledger: `L20260711-145625-21`
+- Lodestar task: `docs/plans/task_21_p0-widget-app-group-knowledge-privacy-lifecycle.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 2/5 problems done, 0 blocked, 2/3 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P003: 升级 Widget 读取端并补齐扩展与 App Group 工程接线`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field na...
+
+## Recursive Closure Checkpoint - 2026-07-11T15:14:18+08:00
+
+- Ledger: `L20260711-145625-21`
+- Lodestar task: `docs/plans/task_21_p0-widget-app-group-knowledge-privacy-lifecycle.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 5/7 problems done, 0 blocked, 5/6 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P004: 将 Widget 隐私生命周期纳入发布回归并收口文档`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay...
+
+## Recursive Closure Checkpoint - 2026-07-11T15:21:37+08:00
+
+- Ledger: `L20260711-145625-21`
+- Lodestar task: `docs/plans/task_21_p0-widget-app-group-knowledge-privacy-lifecycle.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 6/7 problems done, 0 blocked, 6/7 tickets done
+- Next instruction: Only perform `record-result` for ticket `T000`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.

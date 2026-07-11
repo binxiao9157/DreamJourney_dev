@@ -164,3 +164,11 @@
 - 生产 full Postgres 备份后完成 4 个 change mutation、2 个 receipt result 和 2 个 receipt hash 清洗；post-apply 和新 sentinel 写入后的 dry-run 均为零待更新。
 - 后端 `d6d13be` 已部署，iOS/QA `190d65f` 已推送；release regression `20260711-task20-knowledge-privacy` 通过。
 - 下一 P0 隐私问题是 Widget/App Group 共享时间线：需要按当前用户授权写入、退出/切换清除缓存，并防止旧 timeline 跨用户展示。
+
+## Task 21 Exploration
+
+- 当前 App Group 导出无条件包含所有 event title/description，不检查 owner、persona、evidenceStatus 或显式 Widget 授权；这是系统表面隐私泄露，不等同于 Echo 的 generationAllowed 权限。
+- 主 App 与 Widget target 均未配置 `com.apple.security.application-groups`，现有共享容器调用没有完整签名合同；Widget extension bundle ID 也没有跟随主 App 的本地覆盖。
+- `switchUser(to:)` 已尝试用新/空图谱替换共享文件，这是可复用基础，但共享 JSON 没有 schema/owner digest，Provider 无法识别旧用户或损坏快照。
+- 当前没有 `WidgetCenter.reloadTimelines`，即使登出写空文件，系统已缓存的旧 entry 仍可能持续展示。
+- Task 21 必须采用显式 `summaryAllowed` + confirmed personal owner 组合，默认/legacy 一律 deny；本轮不凭空开放产品授权入口。

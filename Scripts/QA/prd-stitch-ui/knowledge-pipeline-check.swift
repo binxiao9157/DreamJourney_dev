@@ -46,8 +46,9 @@ require(
         manager.contains("userGeneration") &&
         manager.contains("丢弃旧用户知识提取结果") &&
         manager.contains("moveItem(at: legacyFile, to: userFile)") &&
-        manager.contains("writeToAppGroup(graph: loadedGraph)"),
-    "KBLite should isolate in-memory graphs by user and migrate the legacy file only once"
+        manager.contains("widgetSnapshotStore.activate(") &&
+        manager.contains("widgetSnapshotStore.publish("),
+    "KBLite should isolate in-memory graphs by user, migrate the legacy file once, and publish Widget data through the guarded lifecycle store"
 )
 
 require(

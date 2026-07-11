@@ -347,6 +347,15 @@ run_step "Swift model guard knowledge-three-way-merge" "$STATIC_LOG_DIR/knowledg
 run_step "Swift model guard knowledge-context-policy" "$STATIC_LOG_DIR/knowledge-context-policy-model-smoke.log" \
   "$SCRIPT_DIR/run-knowledge-context-policy-model-smoke.sh"
 
+run_step "Swift model guard knowledge-widget-privacy-policy" "$STATIC_LOG_DIR/knowledge-widget-privacy-policy-model-smoke.log" \
+  "$SCRIPT_DIR/run-knowledge-widget-privacy-policy-model-smoke.sh"
+
+run_step "Swift model guard knowledge-widget-snapshot-store" "$STATIC_LOG_DIR/knowledge-widget-snapshot-store-model-smoke.log" \
+  "$SCRIPT_DIR/run-knowledge-widget-snapshot-store-model-smoke.sh"
+
+run_step "Swift model guard knowledge-widget-snapshot-reader" "$STATIC_LOG_DIR/knowledge-widget-snapshot-reader-model-smoke.log" \
+  "$SCRIPT_DIR/run-knowledge-widget-snapshot-reader-model-smoke.sh"
+
 run_step "Swift model guard knowledge-proposal" "$STATIC_LOG_DIR/knowledge-proposal-model-smoke.log" \
   "$SCRIPT_DIR/run-knowledge-proposal-model-smoke.sh"
 
@@ -373,6 +382,7 @@ for guard in \
   knowledge-pipeline-check.swift \
   knowledge-evidence-context-policy-check.swift \
   knowledge-proposal-persona-policy-check.swift \
+  knowledge-widget-privacy-lifecycle-check.swift \
   profile-settings-save-state-check.swift \
   profile-account-fields-check.swift \
   profile-password-change-check.swift \
