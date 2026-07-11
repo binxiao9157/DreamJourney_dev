@@ -3037,6 +3037,31 @@ final class DreamJourneyBackendClient {
         }
     }
 
+    func fetchKnowledgeSnapshot(
+        userId: String,
+        completion: @escaping (Result<KnowledgeSnapshotResponse, Error>) -> Void
+    ) {
+        requestJSON(
+            path: "/kb/snapshot/\(pathComponent(userId))",
+            method: .get,
+            payload: nil
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try KnowledgeSnapshotResponse(
+                        json: object,
+                        expectedUserId: userId
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func fetchKnowledgeSourceRefAudit(
         userId: String,
         completion: @escaping (Result<KBKnowledgeSourceRefAuditResponse, Error>) -> Void

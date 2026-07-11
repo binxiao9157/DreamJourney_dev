@@ -15,6 +15,7 @@ final class KnowledgeSyncCoordinator {
     private var needsResync = false
     private var debounceWorkItem: DispatchWorkItem?
     private var activePullSessionID: UUID?
+    private var snapshotFallbackAttemptedPullSessionID: UUID?
     private var activeSyncAuthorization: KnowledgeSyncAuthorizationScope?
     private var activePersonaIdentity: KBPersonaIdentity?
     private var activeAuthorizationEpoch: UUID?
@@ -47,6 +48,7 @@ final class KnowledgeSyncCoordinator {
             self.isSyncing = false
             self.needsResync = false
             self.activePullSessionID = nil
+            self.snapshotFallbackAttemptedPullSessionID = nil
             self.debounceWorkItem?.cancel()
             self.debounceWorkItem = nil
             if !staleCompletions.isEmpty {
@@ -89,6 +91,7 @@ final class KnowledgeSyncCoordinator {
             self.isSyncing = false
             self.needsResync = false
             self.activePullSessionID = nil
+            self.snapshotFallbackAttemptedPullSessionID = nil
             self.debounceWorkItem?.cancel()
             self.debounceWorkItem = nil
             if !staleCompletions.isEmpty {
@@ -117,6 +120,7 @@ final class KnowledgeSyncCoordinator {
             self.isSyncing = false
             self.needsResync = false
             self.activePullSessionID = nil
+            self.snapshotFallbackAttemptedPullSessionID = nil
             self.debounceWorkItem?.cancel()
             self.debounceWorkItem = nil
             if !staleCompletions.isEmpty {
@@ -209,6 +213,7 @@ final class KnowledgeSyncCoordinator {
                 self.isSyncing = false
                 self.needsResync = false
                 self.activePullSessionID = nil
+                self.snapshotFallbackAttemptedPullSessionID = nil
                 self.debounceWorkItem?.cancel()
                 self.debounceWorkItem = nil
             }
@@ -545,6 +550,7 @@ final class KnowledgeSyncCoordinator {
     ) {
         let pullSessionID = UUID()
         activePullSessionID = pullSessionID
+        snapshotFallbackAttemptedPullSessionID = nil
         pullNextKnowledgePage(
             userId: userId,
             generation: generation,
@@ -616,14 +622,91 @@ final class KnowledgeSyncCoordinator {
                         self.finishSync(userId: userId, generation: generation, error: error)
                     }
                 case .failure(let error):
-                    self.activePullSessionID = nil
-                    if allowLegacyEndpointFallback,
+                    if Self.shouldRecoverCompactedChangeFeed(error) {
+                        self.recoverCompactedKnowledgeFeed(
+                            userId: userId,
+                            generation: generation,
+                            pullSessionID: pullSessionID,
+                            retryLocalMutationOnConflict: retryLocalMutationOnConflict
+                        )
+                    } else if allowLegacyEndpointFallback,
                        reducer.pageCount == 0,
                        Self.isUnsupportedEndpoint(error) {
+                        self.activePullSessionID = nil
                         self.pushLegacySnapshot(userId: userId, generation: generation)
                     } else {
+                        self.activePullSessionID = nil
                         self.finishSync(userId: userId, generation: generation, error: error)
                     }
+                }
+            }
+        }
+    }
+
+    private func recoverCompactedKnowledgeFeed(
+        userId: String,
+        generation: UUID,
+        pullSessionID: UUID,
+        retryLocalMutationOnConflict: Bool
+    ) {
+        guard isCurrentPull(
+            userId: userId,
+            generation: generation,
+            pullSessionID: pullSessionID
+        ) else {
+            return
+        }
+        guard snapshotFallbackAttemptedPullSessionID != pullSessionID else {
+            activePullSessionID = nil
+            finishSync(
+                userId: userId,
+                generation: generation,
+                error: KnowledgeSyncError.invalidChangeFeed
+            )
+            return
+        }
+        snapshotFallbackAttemptedPullSessionID = pullSessionID
+        let previousBase = loadBase(for: userId)
+        DreamJourneyBackendClient.shared.fetchKnowledgeSnapshot(userId: userId) { [weak self] result in
+            self?.queue.async {
+                guard let self,
+                      self.isCurrentPull(
+                          userId: userId,
+                          generation: generation,
+                          pullSessionID: pullSessionID
+                      ),
+                      self.snapshotFallbackAttemptedPullSessionID == pullSessionID else {
+                    return
+                }
+                switch result {
+                case .success(let response):
+                    let minimumRevision = previousBase?.revision ?? 0
+                    guard response.revision >= minimumRevision,
+                          self.applyAuthoritativeRemote(
+                              KnowledgeRemoteBaseSnapshot(
+                                  revision: response.revision,
+                                  graph: response.graph
+                              ),
+                              previousBase: previousBase,
+                              userId: userId
+                          ) else {
+                        self.activePullSessionID = nil
+                        self.finishSync(
+                            userId: userId,
+                            generation: generation,
+                            error: KnowledgeSyncError.invalidSnapshotResponse
+                        )
+                        return
+                    }
+                    self.activePullSessionID = nil
+                    self.pushLocalGraph(
+                        userId: userId,
+                        generation: generation,
+                        retryOnConflict: retryLocalMutationOnConflict
+                    )
+                case .failure(let error):
+                    self.activePullSessionID = nil
+                    self.finishSync(userId: userId, generation: generation, error: error)
                 }
             }
         }
@@ -968,6 +1051,7 @@ final class KnowledgeSyncCoordinator {
     private func finishSync(userId: String, generation: UUID, error: Error?) {
         guard isCurrent(userId: userId, generation: generation) else { return }
         activePullSessionID = nil
+        snapshotFallbackAttemptedPullSessionID = nil
         isSyncing = false
         if let error {
             print("[KnowledgeSync] failed user=\(userId) error=\(error.localizedDescription)")
@@ -1172,6 +1256,17 @@ final class KnowledgeSyncCoordinator {
         return statusCode == 404 || statusCode == 405
     }
 
+    private static func shouldRecoverCompactedChangeFeed(_ error: Error) -> Bool {
+        guard let clientError = error as? DreamJourneyBackendClient.ClientError,
+              case .backendError(let statusCode, let context) = clientError else {
+            return false
+        }
+        return KnowledgeChangeFeedRecoveryPolicy.shouldFetchSnapshot(
+            statusCode: statusCode,
+            detailCode: context.code
+        )
+    }
+
     private static func isRevisionConflict(_ error: Error) -> Bool {
         guard let clientError = error as? DreamJourneyBackendClient.ClientError,
               case .backendError(let statusCode, let context) = clientError else {
@@ -1191,6 +1286,7 @@ final class KnowledgeSyncCoordinator {
 
 private enum KnowledgeSyncError: LocalizedError {
     case invalidChangeFeed
+    case invalidSnapshotResponse
     case invalidLocalGraph
     case missingRemoteBase
     case invalidPendingMutation
@@ -1201,6 +1297,8 @@ private enum KnowledgeSyncError: LocalizedError {
         switch self {
         case .invalidChangeFeed:
             return "知识增量响应无法安全应用"
+        case .invalidSnapshotResponse:
+            return "知识快照响应无法安全应用"
         case .invalidLocalGraph:
             return "本地知识图谱无法安全同步"
         case .missingRemoteBase:

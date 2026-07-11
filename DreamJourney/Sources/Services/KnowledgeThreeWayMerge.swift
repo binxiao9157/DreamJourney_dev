@@ -53,6 +53,45 @@ struct KnowledgeRemoteBaseSnapshot {
     let graph: [String: Any]
 }
 
+struct KnowledgeSnapshotResponse {
+    let userId: String
+    let graph: [String: Any]
+    let revision: Int
+    let updatedAt: String
+
+    init(json: [String: Any], expectedUserId: String) throws {
+        guard !expectedUserId.isEmpty,
+              let userId = json["userId"] as? String,
+              userId == expectedUserId,
+              let graph = json["graph"] as? [String: Any],
+              JSONSerialization.isValidJSONObject(graph),
+              let revision = json["revision"] as? Int,
+              revision >= 0,
+              let updatedAt = json["updatedAt"] as? String,
+              Self.isISO8601Timestamp(updatedAt) else {
+            throw KnowledgeSyncModelError.invalidSnapshotResponse
+        }
+        for entityType in ["people", "places", "events", "facts"] {
+            guard let rawEntities = graph[entityType] else { continue }
+            guard let entities = rawEntities as? [Any],
+                  entities.allSatisfy({ $0 is [String: Any] }) else {
+                throw KnowledgeSyncModelError.invalidSnapshotResponse
+            }
+        }
+        self.userId = userId
+        self.graph = graph
+        self.revision = revision
+        self.updatedAt = updatedAt
+    }
+
+    private static func isISO8601Timestamp(_ value: String) -> Bool {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if fractional.date(from: value) != nil { return true }
+        return ISO8601DateFormatter().date(from: value) != nil
+    }
+}
+
 struct KnowledgePendingMutation {
     let operationId: String
     let baseRevision: Int
@@ -66,6 +105,7 @@ enum KnowledgeSyncModelError: LocalizedError {
     case invalidPersistenceEnvelope
     case operationPayloadConflict
     case invalidChangePage(String)
+    case invalidSnapshotResponse
 
     var errorDescription: String? {
         switch self {
@@ -77,7 +117,15 @@ enum KnowledgeSyncModelError: LocalizedError {
             return "同一知识操作编号不能对应不同治理内容"
         case .invalidChangePage(let reason):
             return "知识增量分页无效：\(reason)"
+        case .invalidSnapshotResponse:
+            return "知识快照响应无效"
         }
+    }
+}
+
+enum KnowledgeChangeFeedRecoveryPolicy {
+    static func shouldFetchSnapshot(statusCode: Int?, detailCode: String?) -> Bool {
+        statusCode == 410 && detailCode == "knowledgeChangeFeedCompacted"
     }
 }
 

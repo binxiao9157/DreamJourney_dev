@@ -1,5 +1,5 @@
 {
-  "active_ledger_id": "L20260711-174842",
+  "active_ledger_id": "L20260711-191536",
   "ledgers": [
     {
       "active_count": 0,
@@ -253,7 +253,18 @@
       "status": "done",
       "title": "Task 23：P1 本地知识文件保护与语义缓存隔离",
       "updated_at": "2026-07-11T10:23:01+00:00"
+    },
+    {
+      "active_count": 2,
+      "blocked_count": 0,
+      "ledger_id": "L20260711-191536",
+      "path": "L20260711-191536",
+      "root_id": "P000",
+      "schema_version": 6,
+      "status": "doing",
+      "title": "Task 24：P1 知识变更历史保留与快照恢复",
+      "updated_at": "2026-07-11T11:46:54+00:00"
     }
   ],
-  "updated_at": "2026-07-11T10:23:12+00:00"
+  "updated_at": "2026-07-11T11:46:54+00:00"
 }

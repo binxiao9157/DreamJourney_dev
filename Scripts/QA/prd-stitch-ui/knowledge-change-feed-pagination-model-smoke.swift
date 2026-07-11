@@ -3,11 +3,87 @@ import Foundation
 @main
 enum KnowledgeChangeFeedPaginationModelSmoke {
     static func main() throws {
+        try verifyStrictSnapshotResponse()
+        verifyCompactedRecoveryClassification()
         try verifyThreePageReduction()
         try verifyLegacyTerminalPage()
         verifyMalformedPages()
         verifyCASPolicy()
         print("Knowledge change feed pagination model smoke passed")
+    }
+
+    private static func verifyStrictSnapshotResponse() throws {
+        let response = try KnowledgeSnapshotResponse(
+            json: snapshotJSON(),
+            expectedUserId: "user-a"
+        )
+        require(response.userId == "user-a", "snapshot must preserve the requested user")
+        require(response.revision == 8, "snapshot must preserve its non-negative revision")
+        require(response.graph["marker"] as? Int == 8, "snapshot must preserve its graph")
+        require(response.updatedAt == "2026-07-11T08:30:00.123Z", "snapshot must preserve updatedAt")
+
+        var legacyPartialGraph = snapshotJSON()
+        legacyPartialGraph["graph"] = ["facts": [], "marker": 8]
+        _ = try KnowledgeSnapshotResponse(
+            json: legacyPartialGraph,
+            expectedUserId: "user-a"
+        )
+
+        requireThrows("snapshot user mismatch must be rejected") {
+            _ = try KnowledgeSnapshotResponse(json: snapshotJSON(), expectedUserId: "user-b")
+        }
+        requireThrows("snapshot revision strings must be rejected") {
+            var json = snapshotJSON()
+            json["revision"] = "8"
+            _ = try KnowledgeSnapshotResponse(json: json, expectedUserId: "user-a")
+        }
+        requireThrows("snapshot negative revisions must be rejected") {
+            var json = snapshotJSON()
+            json["revision"] = -1
+            _ = try KnowledgeSnapshotResponse(json: json, expectedUserId: "user-a")
+        }
+        requireThrows("snapshot graph must be an object") {
+            var json = snapshotJSON()
+            json["graph"] = []
+            _ = try KnowledgeSnapshotResponse(json: json, expectedUserId: "user-a")
+        }
+        requireThrows("snapshot updatedAt must be present and ISO-8601") {
+            var json = snapshotJSON()
+            json.removeValue(forKey: "updatedAt")
+            _ = try KnowledgeSnapshotResponse(json: json, expectedUserId: "user-a")
+        }
+        requireThrows("snapshot updatedAt must be a valid ISO-8601 timestamp") {
+            var json = snapshotJSON()
+            json["updatedAt"] = "yesterday"
+            _ = try KnowledgeSnapshotResponse(json: json, expectedUserId: "user-a")
+        }
+    }
+
+    private static func verifyCompactedRecoveryClassification() {
+        require(
+            KnowledgeChangeFeedRecoveryPolicy.shouldFetchSnapshot(
+                statusCode: 410,
+                detailCode: "knowledgeChangeFeedCompacted"
+            ),
+            "structured compacted 410 must request a snapshot"
+        )
+        let nonCompactedFailures: [(Int?, String?)] = [
+            (nil, nil),
+            (410, nil),
+            (410, "knowledgeRevisionConflict"),
+            (409, "knowledgeChangeFeedCompacted"),
+            (404, "knowledgeChangeFeedCompacted"),
+            (405, "knowledgeChangeFeedCompacted"),
+        ]
+        for candidate in nonCompactedFailures {
+            require(
+                !KnowledgeChangeFeedRecoveryPolicy.shouldFetchSnapshot(
+                    statusCode: candidate.0,
+                    detailCode: candidate.1
+                ),
+                "only an exact structured compacted 410 may request a snapshot"
+            )
+        }
     }
 
     private static func verifyThreePageReduction() throws {
@@ -148,6 +224,24 @@ enum KnowledgeChangeFeedPaginationModelSmoke {
                 "marker": revision,
             ],
             "mutationSchemaVersion": 1,
+        ]
+    }
+
+    private static func snapshotJSON() -> [String: Any] {
+        [
+            "userId": "user-a",
+            "graph": [
+                "version": 1,
+                "lastUpdated": "2026-07-11T08:30:00Z",
+                "sessionCount": 0,
+                "people": [],
+                "places": [],
+                "events": [],
+                "facts": [],
+                "marker": 8,
+            ],
+            "revision": 8,
+            "updatedAt": "2026-07-11T08:30:00.123Z",
         ]
     }
 
