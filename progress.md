@@ -32,7 +32,6 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `none`
 - Counts: 2/2 problems done, 0 blocked, 2/2 tickets done
 - Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
-
 ## Task 19 Closure - 2026-07-11T12:19:30+08:00
 
 - Ledger `L20260711-113033` closed with 6/6 problems, 6/6 tickets and 6/6 checks complete.
@@ -2353,3 +2352,147 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `execute-ticket`
 - Counts: 2/6 problems done, 0 blocked, 2/5 tickets done
 - Next instruction: Only perform `execute-ticket` for `T004` on `P004: 跨仓隐私 QA、构建与提交发布`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execute-ticket.m...
+
+## Recursive Closure Checkpoint - 2026-07-11T14:37:42+08:00
+
+- Ledger: `L20260711-122802`
+- Lodestar task: `docs/plans/task_20_p0-knowledge-mutation-privacy-canonicalization.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 2/6 problems done, 0 blocked, 3/5 tickets done
+- Next instruction: Only perform `check-success` for `P004: 跨仓隐私 QA、构建与提交发布`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. ...
+
+## Recursive Closure Checkpoint - 2026-07-11T14:38:03+08:00
+
+- Ledger: `L20260711-122802`
+- Lodestar task: `docs/plans/task_20_p0-knowledge-mutation-privacy-canonicalization.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 3/6 problems done, 0 blocked, 3/5 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P005: 后端部署与生产 Postgres 存量隐私验收`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in...
+
+## Recursive Closure Checkpoint - 2026-07-11T14:38:30+08:00
+
+- Ledger: `L20260711-122802`
+- Lodestar task: `docs/plans/task_20_p0-knowledge-mutation-privacy-canonicalization.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 3/6 problems done, 0 blocked, 3/6 tickets done
+- Next instruction: Only perform `classify-ticket` for `T005` on `P005: 后端部署与生产 Postgres 存量隐私验收`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. Aft...
+
+## Recursive Closure Checkpoint - 2026-07-11T14:38:37+08:00
+
+- Ledger: `L20260711-122802`
+- Lodestar task: `docs/plans/task_20_p0-knowledge-mutation-privacy-canonicalization.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 3/6 problems done, 0 blocked, 3/6 tickets done
+- Next instruction: Only perform `split-ticket` for `T005` on `P005: 后端部署与生产 Postgres 存量隐私验收`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flag...
+
+## Recursive Closure Checkpoint - 2026-07-11T14:38:58+08:00
+
+- Ledger: `L20260711-122802`
+- Lodestar task: `docs/plans/task_20_p0-knowledge-mutation-privacy-canonicalization.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 3/8 problems done, 0 blocked, 3/6 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P006: 部署、备份与生产 maintenance preflight`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names ...
+
+## Recursive Closure Checkpoint - 2026-07-11T14:39:28+08:00
+
+- Ledger: `L20260711-122802`
+- Lodestar task: `docs/plans/task_20_p0-knowledge-mutation-privacy-canonicalization.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 3/8 problems done, 0 blocked, 3/7 tickets done
+- Next instruction: Only perform `execute-ticket` for `T006` on `P006: 部署、备份与生产 maintenance preflight`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/e...
+
+## Recursive Closure Checkpoint - 2026-07-11T14:42:26+08:00
+
+- Ledger: `L20260711-122802`
+- Lodestar task: `docs/plans/task_20_p0-knowledge-mutation-privacy-canonicalization.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 3/8 problems done, 0 blocked, 4/7 tickets done
+- Next instruction: Only perform `check-success` for `P006: 部署、备份与生产 maintenance preflight`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, ev...
+
+## Recursive Closure Checkpoint - 2026-07-11T14:42:44+08:00
+
+- Ledger: `L20260711-122802`
+- Lodestar task: `docs/plans/task_20_p0-knowledge-mutation-privacy-canonicalization.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 4/8 problems done, 0 blocked, 4/7 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P007: 生产 apply、归零与线上 sentinel 验收`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay...
+
+## Recursive Closure Checkpoint - 2026-07-11T14:43:18+08:00
+
+- Ledger: `L20260711-122802`
+- Lodestar task: `docs/plans/task_20_p0-knowledge-mutation-privacy-canonicalization.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 4/8 problems done, 0 blocked, 4/8 tickets done
+- Next instruction: Only perform `execute-ticket` for `T007` on `P007: 生产 apply、归零与线上 sentinel 验收`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execu...
+
+## Recursive Closure Checkpoint - 2026-07-11T14:45:26+08:00
+
+- Ledger: `L20260711-122802`
+- Lodestar task: `docs/plans/task_20_p0-knowledge-mutation-privacy-canonicalization.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 4/8 problems done, 0 blocked, 5/8 tickets done
+- Next instruction: Only perform `check-success` for `P007: 生产 apply、归零与线上 sentinel 验收`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, eviden...
+
+## Recursive Closure Checkpoint - 2026-07-11T14:45:48+08:00
+
+- Ledger: `L20260711-122802`
+- Lodestar task: `docs/plans/task_20_p0-knowledge-mutation-privacy-canonicalization.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 5/8 problems done, 0 blocked, 5/8 tickets done
+- Next instruction: Only perform `record-result` for ticket `T005`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-11T14:46:04+08:00
+
+- Ledger: `L20260711-122802`
+- Lodestar task: `docs/plans/task_20_p0-knowledge-mutation-privacy-canonicalization.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 5/8 problems done, 0 blocked, 6/8 tickets done
+- Next instruction: Only perform `check-success` for `P005: 后端部署与生产 Postgres 存量隐私验收`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence)...
+
+## Recursive Closure Checkpoint - 2026-07-11T14:46:27+08:00
+
+- Ledger: `L20260711-122802`
+- Lodestar task: `docs/plans/task_20_p0-knowledge-mutation-privacy-canonicalization.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 6/8 problems done, 0 blocked, 6/8 tickets done
+- Next instruction: Only perform `record-result` for ticket `T003`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-11T14:46:59+08:00
+
+- Ledger: `L20260711-122802`
+- Lodestar task: `docs/plans/task_20_p0-knowledge-mutation-privacy-canonicalization.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 7/8 problems done, 0 blocked, 7/8 tickets done
+- Next instruction: Only perform `record-result` for ticket `T000`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-11T14:47:32+08:00
+
+- Ledger: `L20260711-122802`
+- Lodestar task: `docs/plans/task_20_p0-knowledge-mutation-privacy-canonicalization.md`
+- Root: `P000` / done
+- Next action: `none`
+- Counts: 8/8 problems done, 0 blocked, 8/8 tickets done
+- Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+
+## Recursive Closure Checkpoint - 2026-07-11T14:47:40+08:00
+
+- Ledger: `L20260711-122802`
+- Lodestar task: `docs/plans/task_20_p0-knowledge-mutation-privacy-canonicalization.md`
+- Root: `P000` / done
+- Next action: `none`
+- Counts: 8/8 problems done, 0 blocked, 8/8 tickets done
+- Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.

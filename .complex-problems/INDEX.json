@@ -211,16 +211,16 @@
       "updated_at": "2026-07-11T04:19:05+00:00"
     },
     {
-      "active_count": 4,
+      "active_count": 0,
       "blocked_count": 0,
       "ledger_id": "L20260711-122802",
       "path": "L20260711-122802",
       "root_id": "P000",
       "schema_version": 6,
-      "status": "doing",
+      "status": "done",
       "title": "Task 20：P0 Knowledge Mutation / Receipt 隐私 Canonicalization",
-      "updated_at": "2026-07-11T06:30:34+00:00"
+      "updated_at": "2026-07-11T06:47:32+00:00"
     }
   ],
-  "updated_at": "2026-07-11T06:30:34+00:00"
+  "updated_at": "2026-07-11T06:47:40+00:00"
 }

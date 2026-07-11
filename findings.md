@@ -154,3 +154,13 @@
 - 修复必须发生在 payload fingerprint 之前，否则同一 operation ID 仅因不可信 title 不同就会错误冲突。
 - 存量修复必须同时规范 change mutation 与 receipt result；对 `kb.mutation` V2 receipt 可由 canonical mutation 安全重算 hash，其他 operation kind 不猜测原始输入。
 - 本轮不混入 Widget、Family 权限、semantic cache 或 compaction，保持单一隐私闭环。
+
+## Task 20 Resolution
+
+- V2 mutation 在 payload fingerprint 前规范 `privacyMetadata.sourceRefs[].title`，因此 raw/canonical title 重试保持同一语义 operation；source kind/id 或正文变化仍会冲突。
+- 首次响应、change feed、operation receipt 和 duplicate replay 现在共享同一 canonical mutation，客户端 raw title 不再形成旁路。
+- 历史维护工具默认 dry-run，使用单事务、5 秒 lock timeout、全局/用户 advisory lock 和知识表锁；无效历史结构拒绝 apply，SQL 中途失败整批回滚。
+- 只有 `kb.mutation` V2 receipt 按 canonical mutation 重算 hash，其他 operation kind 保持原 hash。
+- 生产 full Postgres 备份后完成 4 个 change mutation、2 个 receipt result 和 2 个 receipt hash 清洗；post-apply 和新 sentinel 写入后的 dry-run 均为零待更新。
+- 后端 `d6d13be` 已部署，iOS/QA `190d65f` 已推送；release regression `20260711-task20-knowledge-privacy` 通过。
+- 下一 P0 隐私问题是 Widget/App Group 共享时间线：需要按当前用户授权写入、退出/切换清除缓存，并防止旧 timeline 跨用户展示。

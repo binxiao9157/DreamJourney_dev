@@ -44,7 +44,7 @@
 - [x] 存量 dry-run 不写库，apply 只改 canonical metadata，第二次 apply 更新数为 0。
 - [x] Postgres 迁移在异常时完整回滚，报告只含聚合计数。
 - [x] 后端全量测试、跨仓 gate、release regression、Simulator/generic iPhoneOS build 通过。
-- [ ] 分仓提交推送；后端部署并先 dry-run、再 apply、再 dry-run 验证存量清洗归零。
+- [x] 分仓提交推送；后端部署并先 dry-run、再 apply、再 dry-run 验证存量清洗归零。
 - [x] 不做真机，不改 Stitch UI，不迁移 source identity。
 
 ## 非目标

@@ -77,14 +77,234 @@
         "raw/canonical 重跑验证第二次 apply 零更新。"
       ],
       "summary": "R001 满足 P002 的实现与非线上验证边界。维护工具覆盖 snapshot/change/receipt，默认 dry-run，显式 apply 才更新；所有 apply 更新处于同一事务，且无效记录和 SQL 中途失败都会回滚。"
+    },
+    "C002": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/children/P004/checks/C002.md",
+      "created_at": "2026-07-11T06:38:03+00:00",
+      "criteria_map": [
+        "canonical/maintenance 防回退：成功。",
+        "release regression 不执行生产写操作：成功。",
+        "非真机构建和模拟器 smoke：成功。",
+        "状态文档和 QA package：成功。",
+        "双仓提交推送：成功。"
+      ],
+      "evidence": [
+        "跨仓 gate 实际运行 Swift 静态合同与后端 8 个 fixture tests，且 runner 不含生产 `--apply`。",
+        "release QA package 明确要求新 guard、组合 gate 和状态文档存在。",
+        "完整 release regression 产出 `20260711-task20-knowledge-privacy/report.md`，过程包含后端 267 tests、全静态 guard、Simulator 构建、Archive -> Echo、延迟回信通知和 generic iPhoneOS build。",
+        "generic build 报告确认 bundle ID 为 `com.yxj.dreamjourney.app`。",
+        "后端 `e1f06a8` 与 iOS `190d65f` 均推送成功，远端分支无先行冲突。"
+      ],
+      "execution_map": [
+        "R002：脚本、文档、全量回归、构建、提交与推送。"
+      ],
+      "followup_problem_id": null,
+      "id": "C002",
+      "problem_id": "P004",
+      "residual_risk": [
+        "真实 Postgres 锁和历史存量只在 P005 部署/生产步骤中验证；P004 没有把本地 fixture 结果扩大宣称为线上完成。"
+      ],
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "maintenance 定向测试包含无效记录拒绝、中途 SQL 失败回滚、第二次 apply 零变更和非 mutation hash 保持。",
+        "release regression 从干净 Simulator 安装路径运行核心 smoke，未用真机结果替代。"
+      ],
+      "summary": "R002 满足跨仓隐私 QA、非真机构建与双仓发布要求。新增 gate 能检测 canonical mutation、maintenance 默认 dry-run、回滚测试和 release 接线缺失；完整 release regression 与两种 iOS 构建均通过，提交已推送远端。"
+    },
+    "C003": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/children/P005/children/P006/checks/C003.md",
+      "created_at": "2026-07-11T06:42:44+00:00",
+      "criteria_map": [
+        "部署目标版本：成功，安全修订后实际目标为 `d6d13be`。",
+        "私密备份：成功。",
+        "真实 Postgres dry-run：成功。",
+        "发现异常时阻断：本次无异常，apply 前置条件成立。"
+      ],
+      "evidence": [
+        "服务器 HEAD 与容器代码为 `d6d13be`，包含 maintenance CLI 和 5 秒 lock timeout。",
+        "公网及容器 health 均证明 production/Postgres。",
+        "full DB custom dump 非空、权限 600、有 SHA-256，存放在 Git 仓库外的 root 私密目录。",
+        "dry-run schema 严格校验通过，invalidRecordCount=0，报告仅含聚合键。",
+        "preflight 只运行 CLI 默认模式，没有传入 `--apply`。"
+      ],
+      "execution_map": [
+        "R003：部署、备份、health 与 dry-run 聚合证据。"
+      ],
+      "followup_problem_id": null,
+      "id": "C003",
+      "problem_id": "P006",
+      "residual_risk": [
+        "生产 apply 和线上新写入合同仍由 P007 单独验收；P006 的成功只授权进入下一关，不代表清洗已完成。"
+      ],
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "部署前保留 38 个历史未跟踪 `.env.backup*`，确认没有 tracked dirty 后才 pull，未触碰私密备份。",
+        "API 重启初始连接 reset 后使用有界重试，最终 health 合格。"
+      ],
+      "summary": "R003 满足部署、备份与只读 preflight 的全部条件，且未越界执行生产 apply。真实 Postgres dry-run 无无效记录，备份可验证，服务版本和运行环境明确。"
+    },
+    "C004": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/children/P005/children/P007/checks/C004.md",
+      "created_at": "2026-07-11T06:45:48+00:00",
+      "criteria_map": [
+        "显式 apply 成功：成功。",
+        "post-dry-run 归零：成功。",
+        "线上首次响应/change/receipt replay canonical：成功。",
+        "raw/canonical 幂等重试：成功。",
+        "文档更新与敏感信息边界：成功。"
+      ],
+      "evidence": [
+        "apply 聚合精确更新 preflight 发现的 4/2/2 项，invalidRecordCount=0。",
+        "post-apply 和 sentinel 后两次 dry-run 的所有 changed 值均为 0。",
+        "线上 smoke 使用 raw title 首次提交、canonical title 同 operation ID 重试，返回 duplicate=true、operationPayloadVerified=true。",
+        "response、receipt replay、change feed mutation 相等，raw sentinel absent，canonical title 为服务端“对话来源”。",
+        "报告输出只有聚合布尔值/计数，token 和身份标识未输出；服务器 JSON 权限 600。"
+      ],
+      "execution_map": [
+        "R004：生产 apply、两次归零 dry-run、线上 sentinel、文档更新。"
+      ],
+      "followup_problem_id": null,
+      "id": "C004",
+      "problem_id": "P007",
+      "residual_risk": [
+        "合成 QA 账号仍保留在生产，属于测试数据生命周期治理，不影响本任务的隐私 canonicalization 合同。"
+      ],
+      "result_ids": [
+        "R004"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "sentinel 写入发生在首次归零后，随后再次 dry-run 仍为零，证明新写入不会重新产生历史维护债务。",
+        "5 秒 lock timeout 保证并发锁竞争不会无限等待；本次 apply 未超时且单事务完成。"
+      ],
+      "summary": "R004 证明生产历史清洗和新写入 canonical 合同均已完成。apply 前置备份有效，更新量与 pre-dry-run 一致，apply 后及 sentinel 写入后均保持零待清洗项。"
+    },
+    "C005": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/children/P005/checks/C005.md",
+      "created_at": "2026-07-11T06:46:27+00:00",
+      "criteria_map": [
+        "部署目标版本：成功。",
+        "备份与 preflight：成功。",
+        "apply 与幂等归零：成功。",
+        "线上 canonical response/change/replay：成功。",
+        "敏感信息边界：成功。"
+      ],
+      "evidence": [
+        "P006 C003：版本、health、备份和真实 dry-run preflight 成功，未提前 apply。",
+        "P007 C004：apply、归零和线上 sentinel 成功，新写入后再次 dry-run 为零。",
+        "生产报告保持聚合、权限 600，未提交 Git 或暴露 token/身份/正文。"
+      ],
+      "execution_map": [
+        "R005 汇总 R003/C003 与 R004/C004。"
+      ],
+      "followup_problem_id": null,
+      "id": "C005",
+      "problem_id": "P005",
+      "residual_risk": [
+        "不含真机和其他知识管线后续项，符合本任务边界。"
+      ],
+      "result_ids": [
+        "R005"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "服务重建、真实 JSONB 更新、表锁事务、raw/canonical retry 和 sentinel 后再审计均已覆盖。"
+      ],
+      "summary": "R005 及子问题 P006/P007 的独立检查共同证明部署与生产 Postgres 验收完成，没有用本地 fixture 替代线上证据。"
+    },
+    "C006": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/checks/C006.md",
+      "created_at": "2026-07-11T06:46:59+00:00",
+      "criteria_map": [
+        "跨仓 gate/release package：成功。",
+        "后端全量/release regression/非真机构建：成功。",
+        "双仓提交推送与后端部署：成功。",
+        "dry-run/apply/dry-run 归零：成功。",
+        "线上 response/change/receipt replay canonical：成功。"
+      ],
+      "evidence": [
+        "P004 C002 覆盖本地 release 防回退、Simulator/generic build 与双仓 push。",
+        "P005 C005 覆盖生产版本、备份、真实 Postgres apply/归零和线上 sentinel。",
+        "状态文档保留生产证据边界，报告未进入 Git。"
+      ],
+      "execution_map": [
+        "R006 汇总 R002/C002 与 R005/C005。"
+      ],
+      "followup_problem_id": null,
+      "id": "C006",
+      "problem_id": "P003",
+      "residual_risk": [
+        "无 P003 范围内剩余风险；其他知识库任务仍由总体持续目标后续推进。"
+      ],
+      "result_ids": [
+        "R006"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "同时覆盖本地失败注入和生产真实 Postgres 新写入后再审计。"
+      ],
+      "summary": "R006 及 P004/P005 检查证明跨仓 QA、非真机构建、提交推送、部署和线上存量验收全部完成。"
+    },
+    "C007": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/checks/C007.md",
+      "created_at": "2026-07-11T06:47:32+00:00",
+      "criteria_map": [
+        "raw title 不出现在 response/replay/change/receipt：成功。",
+        "raw/canonical 重试幂等，身份/正文变化冲突：成功。",
+        "历史维护只规范 metadata/hash、幂等且回滚：成功。",
+        "聚合报告不泄露内容：成功。",
+        "跨仓 gate、非真机构建、提交部署和线上归零：成功。",
+        "不做真机、不改 UI、不迁移 source identity：遵守。"
+      ],
+      "evidence": [
+        "P001：raw/canonical payload 同 operation 幂等，kind/id/body 变化冲突，四个 mutation 表面无 raw title。",
+        "P002：dry-run 零写、apply 幂等、无效记录拒绝、部分 SQL 失败整批回滚、仅 V2 mutation hash 重算。",
+        "P003：267 tests、release regression、Simulator/generic build、双仓 push、部署、备份、生产清洗归零和线上 sentinel。",
+        "sentinel 写入后的最终生产 dry-run 仍全部 changed=0。"
+      ],
+      "execution_map": [
+        "R007 汇总 P001 C000、P002 C001、P003 C006。"
+      ],
+      "followup_problem_id": null,
+      "id": "C007",
+      "problem_id": "P000",
+      "residual_risk": [
+        "Task 20 无未完成项。Widget 隐私、Family 权限域、semantic cache 隔离和 change-feed compaction 是已排队的独立后续任务，不属于本次成功条件。"
+      ],
+      "result_ids": [
+        "R007"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "覆盖 in-memory、Fake Postgres、SQL 失败注入、真实 production Postgres 和新写入后再次审计五层证据。"
+      ],
+      "summary": "R007 和三个子问题检查充分证明 Task 20 已完成。证据覆盖新写入语义、历史存量、失败/幂等行为、跨仓发布及真实生产数据库，没有以单一测试或意图替代完成证明。"
     }
   },
   "counters": {
-    "check": 2,
-    "event": 42,
-    "problem": 6,
-    "result": 2,
-    "ticket": 5
+    "check": 8,
+    "event": 96,
+    "problem": 8,
+    "result": 8,
+    "ticket": 8
   },
   "created_at": "2026-07-11T04:28:02+00:00",
   "effort": "medium",
@@ -93,7 +313,9 @@
   "problems": {
     "P000": {
       "body_path": "problems/P000/README.md",
-      "check_ids": [],
+      "check_ids": [
+        "C007"
+      ],
       "created_at": "2026-07-11T04:28:02+00:00",
       "created_from_check_id": null,
       "created_from_ticket_id": null,
@@ -103,9 +325,11 @@
       "id": "P000",
       "package_path": "problems/P000",
       "parent_id": null,
-      "result_ids": [],
+      "result_ids": [
+        "R007"
+      ],
       "root_id": "P000",
-      "status": "todo",
+      "status": "done",
       "subproblem_ids": [
         "P001",
         "P002",
@@ -120,7 +344,7 @@
         "T000"
       ],
       "title": "Task 20：P0 Knowledge Mutation / Receipt 隐私 Canonicalization",
-      "updated_at": "2026-07-11T04:28:02+00:00"
+      "updated_at": "2026-07-11T06:47:32+00:00"
     },
     "P001": {
       "body_path": "problems/P000/children/P001/README.md",
@@ -187,7 +411,9 @@
     },
     "P003": {
       "body_path": "problems/P000/children/P003/README.md",
-      "check_ids": [],
+      "check_ids": [
+        "C006"
+      ],
       "created_at": "2026-07-11T04:29:16+00:00",
       "created_from_check_id": null,
       "created_from_ticket_id": "T000",
@@ -197,9 +423,11 @@
       "id": "P003",
       "package_path": "problems/P000/children/P003",
       "parent_id": "P000",
-      "result_ids": [],
+      "result_ids": [
+        "R006"
+      ],
       "root_id": "P000",
-      "status": "todo",
+      "status": "done",
       "subproblem_ids": [
         "P004",
         "P005"
@@ -215,11 +443,13 @@
         "T003"
       ],
       "title": "跨仓 QA、提交部署与线上存量验收",
-      "updated_at": "2026-07-11T04:29:16+00:00"
+      "updated_at": "2026-07-11T06:46:59+00:00"
     },
     "P004": {
       "body_path": "problems/P000/children/P003/children/P004/README.md",
-      "check_ids": [],
+      "check_ids": [
+        "C002"
+      ],
       "created_at": "2026-07-11T06:29:13+00:00",
       "created_from_check_id": null,
       "created_from_ticket_id": "T003",
@@ -229,9 +459,11 @@
       "id": "P004",
       "package_path": "problems/P000/children/P003/children/P004",
       "parent_id": "P003",
-      "result_ids": [],
+      "result_ids": [
+        "R002"
+      ],
       "root_id": "P000",
-      "status": "todo",
+      "status": "done",
       "subproblem_ids": [],
       "success_criteria": [
         "新增可重复的 maintenance/canonical mutation contract gate，覆盖默认 dry-run、raw title sentinel、receipt/change/replay 一致性和脱敏报告结构。",
@@ -244,11 +476,13 @@
         "T004"
       ],
       "title": "跨仓隐私 QA、构建与提交发布",
-      "updated_at": "2026-07-11T06:29:13+00:00"
+      "updated_at": "2026-07-11T06:38:03+00:00"
     },
     "P005": {
       "body_path": "problems/P000/children/P003/children/P005/README.md",
-      "check_ids": [],
+      "check_ids": [
+        "C005"
+      ],
       "created_at": "2026-07-11T06:29:14+00:00",
       "created_from_check_id": null,
       "created_from_ticket_id": "T003",
@@ -258,10 +492,15 @@
       "id": "P005",
       "package_path": "problems/P000/children/P003/children/P005",
       "parent_id": "P003",
-      "result_ids": [],
+      "result_ids": [
+        "R005"
+      ],
       "root_id": "P000",
-      "status": "todo",
-      "subproblem_ids": [],
+      "status": "done",
+      "subproblem_ids": [
+        "P006",
+        "P007"
+      ],
       "success_criteria": [
         "服务器拉取目标后端提交、重建服务，health 显示 production/Postgres 且版本与远端一致。",
         "apply 前确认可恢复备份，并先执行 dry-run；若 invalidRecordCount 非零则拒绝 apply，记录为明确阻断。",
@@ -270,9 +509,77 @@
         "线上合成 sentinel mutation 的首次响应、change feed、receipt replay 均不含 raw title，且 canonical mutation 一致。",
         "保存脱敏聚合证据，不做真机、不修改 UI 或其他产品模块。"
       ],
-      "ticket_ids": [],
+      "ticket_ids": [
+        "T005"
+      ],
       "title": "后端部署与生产 Postgres 存量隐私验收",
-      "updated_at": "2026-07-11T06:29:14+00:00"
+      "updated_at": "2026-07-11T06:46:27+00:00"
+    },
+    "P006": {
+      "body_path": "problems/P000/children/P003/children/P005/children/P006/README.md",
+      "check_ids": [
+        "C003"
+      ],
+      "created_at": "2026-07-11T06:38:58+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T005",
+      "created_from_ticket_mode": "split",
+      "description": "生产服务器仍需部署 `e1f06a8`，并在任何清洗写入前证明 health、版本、备份和 pre-dry-run 均满足安全条件。",
+      "followup_ids": [],
+      "id": "P006",
+      "package_path": "problems/P000/children/P003/children/P005/children/P006",
+      "parent_id": "P005",
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "服务器仓库和 API 容器运行 `e1f06a8`，health 为 production/Postgres。",
+        "不覆盖服务器私密 `.env`，不输出 token。",
+        "创建权限受限、非空、有校验值的 Postgres 备份。",
+        "maintenance 默认 dry-run 在真实 Postgres 上成功，`mode=dryRun`、`invalidRecordCount=0`，报告只含聚合字段。",
+        "若任一条件失败，停止，不执行 apply。"
+      ],
+      "ticket_ids": [
+        "T006"
+      ],
+      "title": "部署、备份与生产 maintenance preflight",
+      "updated_at": "2026-07-11T06:42:44+00:00"
+    },
+    "P007": {
+      "body_path": "problems/P000/children/P003/children/P005/children/P007/README.md",
+      "check_ids": [
+        "C004"
+      ],
+      "created_at": "2026-07-11T06:38:58+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T005",
+      "created_from_ticket_mode": "split",
+      "description": "只有部署和 preflight 合格后，才能清洗历史数据并验证新写入合同。需要执行一次可回滚的生产 apply、post-dry-run 归零和不泄露内容的线上 sentinel smoke。",
+      "followup_ids": [],
+      "id": "P007",
+      "package_path": "problems/P000/children/P003/children/P005/children/P007",
+      "parent_id": "P005",
+      "result_ids": [
+        "R004"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "显式 apply 成功，输出只含聚合计数。",
+        "post-apply dry-run 的 invalidRecordCount 为 0，所有 changed 计数为 0。",
+        "线上 V2 mutation 首次响应、change feed、receipt replay 不含 raw sentinel，canonical mutation 一致，raw/canonical 重试幂等。",
+        "更新状态文档和 Task 20 验收清单，记录脱敏报告/备份路径边界，不提交真实生产报告或 token。",
+        "最终账本关闭，iOS 文档提交推送，双仓工作区与远端一致。"
+      ],
+      "ticket_ids": [
+        "T007"
+      ],
+      "title": "生产 apply、归零与线上 sentinel 验收",
+      "updated_at": "2026-07-11T06:45:48+00:00"
     }
   },
   "results": {
@@ -341,6 +648,178 @@
         "FastAPI smoke、knowledge delta/V2/evidence smoke、py_compile、git diff --check 均通过。",
         "报告测试证明不包含 user ID、source title、正文或 token。"
       ]
+    },
+    "R002": {
+      "artifacts": [
+        "`tmp/visual-qa/prd-stitch-ui/release-regression/20260711-task20-knowledge-privacy/report.md`",
+        "`docs/superpowers/status/2026-07-11-knowledge-mutation-privacy-canonicalization.md`"
+      ],
+      "body_path": "problems/P000/children/P003/children/P004/results/R002.md",
+      "created_at": "2026-07-11T06:37:42+00:00",
+      "done": [
+        "后端新增 `run-backend-knowledge-privacy-maintenance-smoke.sh`，运行 canonical mutation 与 maintenance 的 8 个定向测试。",
+        "iOS QA 新增 `knowledge-privacy-maintenance-contract-check.swift` 和组合 gate，静态守护 canonicalization、事务/回滚、默认 dry-run、脱敏报告与 release 接线。",
+        "gate 接入 release regression，默认启用；release QA package 检查脚本与状态文档。",
+        "状态文档记录生产 `dry-run -> apply -> dry-run` 安全顺序和非真机边界。",
+        "后端提交 `e1f06a8 feat: canonicalize knowledge privacy metadata` 已推送 `origin/main`。",
+        "iOS 提交 `190d65f test: guard knowledge privacy canonicalization` 已推送 `origin/feature/prd-stitch-ui-adaptation`。"
+      ],
+      "id": "R002",
+      "known_gaps": [
+        "生产服务器尚未部署后端 `e1f06a8`。",
+        "生产 Postgres dry-run/apply/dry-run 与线上 mutation sentinel 尚未执行，属于 P005。"
+      ],
+      "problem_id": "P004",
+      "root_id": "P000",
+      "summary": "完成 Task 20 的本地跨仓防回退、release QA、Simulator/generic iPhoneOS 构建、双仓提交和推送。release regression 默认运行 fixture-only 知识隐私 gate，不连接生产数据库，也不会执行 `--apply`。",
+      "ticket_id": "T004",
+      "verification": [
+        "后端 verify：267 tests passed；FastAPI、knowledge delta/V2/evidence smoke 通过。",
+        "跨仓隐私 gate：8 tests passed。",
+        "Release QA package：通过。",
+        "Release regression：`20260711-task20-knowledge-privacy` 通过。",
+        "Simulator：Archive -> Echo 与 delayed reply notification smoke 通过并保存截图。",
+        "generic iPhoneOS build：通过，bundle ID `com.yxj.dreamjourney.app`。",
+        "双仓 `git diff --check` 和 push 均通过。"
+      ]
+    },
+    "R003": {
+      "artifacts": [
+        "服务器私密备份和 pre-dry-run JSON；均位于 `/opt/backups/dreamjourney`，未提交 Git。",
+        "后端提交 `d6d13be fix: bound knowledge maintenance lock wait` 已推送并部署。"
+      ],
+      "body_path": "problems/P000/children/P003/children/P005/children/P006/results/R003.md",
+      "created_at": "2026-07-11T06:42:26+00:00",
+      "done": [
+        "服务器后端从 `dd88f17` 更新到 `e1f06a8`，随后补充 5 秒 lock timeout 并更新至 `d6d13be`。",
+        "API 容器重建成功，maintenance CLI 与 lock timeout 均存在。",
+        "创建 full Postgres custom-format 备份 `/opt/backups/dreamjourney/task20-pre-maintenance-20260711-144201.dump`，权限 600，大小 71985 bytes，SHA-256 `971db1d39ba8795900b273f94d1ace460bf7bca3e8d901ed96859970e2f095e6`。",
+        "默认 dry-run 报告保存于服务器私密目录，权限 600；未执行 `--apply`。"
+      ],
+      "id": "R003",
+      "known_gaps": [
+        "尚未执行显式 apply、post-apply dry-run 或线上新 mutation sentinel；属于 P007。"
+      ],
+      "problem_id": "P006",
+      "root_id": "P000",
+      "summary": "后端已部署包含锁等待上限的 `d6d13be`，生产 API health 为 production/Postgres。已创建受限全库备份并完成真实 Postgres 默认 dry-run；无无效记录，满足进入显式 apply 的前置条件。",
+      "ticket_id": "T006",
+      "verification": [
+        "Health：status=ok、environment=production、store=postgres。",
+        "Dry-run：schemaVersion=1、mode=dryRun、status=ok、invalidRecordCount=0。",
+        "扫描聚合：21 users、21 snapshots、12 changes、7 receipts。",
+        "待规范聚合：4 change mutations、2 receipt results、2 receipt payload hashes；snapshot/change graphs 均为 0。",
+        "输出 schema 只包含 mode/status/scanned/changed/invalid 聚合字段。"
+      ]
+    },
+    "R004": {
+      "artifacts": [
+        "`/opt/backups/dreamjourney/task20-apply-20260711-144331.json`（服务器私密，600）。",
+        "`/opt/backups/dreamjourney/task20-post-dry-run-20260711-144331.json`（服务器私密，600）。",
+        "`docs/superpowers/status/2026-07-11-knowledge-mutation-privacy-canonicalization.md`。"
+      ],
+      "body_path": "problems/P000/children/P003/children/P005/children/P007/results/R004.md",
+      "created_at": "2026-07-11T06:45:26+00:00",
+      "done": [
+        "显式 apply 清洗 4 个 change mutation、2 个 receipt result 和 2 个 V2 receipt payload hash；无 snapshot/change graph 更新。",
+        "apply 后 dry-run 的全部 changed 计数为 0，invalidRecordCount=0。",
+        "线上合成 QA 用户发送 raw title mutation，再以 canonical title/同 operation ID 重试；重试 duplicate=true、operationPayloadVerified=true。",
+        "首次响应、receipt duplicate replay 和 change feed mutation 完全一致，raw sentinel 不存在，kind/id 保持。",
+        "sentinel 写入后再次运行生产 dry-run，22 users、22 snapshots、13 changes、8 receipts 全部零待更新。",
+        "更新 Task 20 验收清单和状态文档，生产 JSON 继续保存在服务器 600 私密目录。"
+      ],
+      "id": "R004",
+      "known_gaps": [
+        "本任务不物理删除合成 QA 用户；账号只包含合成知识，不含真实用户内容。后续测试数据保留策略属于独立运维治理范围。"
+      ],
+      "problem_id": "P007",
+      "root_id": "P000",
+      "summary": "生产 apply、post-dry-run 归零和线上 V2 mutation sentinel 全部通过。历史 raw source title 旁路已清洗，新写入 response/change/receipt replay 使用同一 canonical mutation，任务文档已更新。",
+      "ticket_id": "T007",
+      "verification": [
+        "Apply report：mode=apply、status=ok、invalidRecordCount=0。",
+        "Post report：mode=dryRun、status=ok、全部 changed=0。",
+        "Online smoke：firstResponseCanonical、duplicateReceiptReplayCanonical、changeFeedCanonical、rawTitleAbsent、rawCanonicalRetryIdempotent、operationPayloadVerified 均为 true。",
+        "最终 dry-run：全部 changed=0。"
+      ]
+    },
+    "R005": {
+      "artifacts": [
+        "服务器 `/opt/backups/dreamjourney` 私密备份和聚合报告。",
+        "iOS Task 20 状态文档与验收清单。"
+      ],
+      "body_path": "problems/P000/children/P003/children/P005/results/R005.md",
+      "created_at": "2026-07-11T06:46:04+00:00",
+      "done": [
+        "部署后端 `d6d13be`，production/Postgres health 正常。",
+        "创建权限 600 的 full Postgres 备份并记录 SHA-256。",
+        "pre-dry-run 无 invalid records，识别 4/2/2 个待更新字段。",
+        "apply 单事务更新后，post-dry-run 全部 changed=0。",
+        "线上 response/change/receipt replay canonical 一致，raw/canonical operation 重试幂等。",
+        "sentinel 写入后再次 dry-run 仍全部 changed=0。"
+      ],
+      "id": "R005",
+      "known_gaps": [
+        "合成 QA 账号的长期清理策略不在本任务范围内。"
+      ],
+      "problem_id": "P005",
+      "root_id": "P000",
+      "summary": "P006 与 P007 已完成部署、备份、pre-dry-run、显式 apply、post-dry-run 归零和线上 sentinel。生产历史知识隐私 metadata 已规范，新 mutation 合同在真实服务器上成立。",
+      "ticket_id": "T005",
+      "verification": [
+        "P006：R003/C003。",
+        "P007：R004/C004。"
+      ]
+    },
+    "R006": {
+      "artifacts": [
+        "Release regression `20260711-task20-knowledge-privacy`。",
+        "Task 20 状态文档与服务器私密聚合报告。"
+      ],
+      "body_path": "problems/P000/children/P003/results/R006.md",
+      "created_at": "2026-07-11T06:46:41+00:00",
+      "done": [
+        "P004：release gate、QA package、Simulator/generic build、双仓提交推送。",
+        "P005：服务器部署、备份、dry-run/apply/dry-run、线上 canonical mutation smoke。"
+      ],
+      "id": "R006",
+      "known_gaps": [
+        "无 Task 20 范围内未完成项。"
+      ],
+      "problem_id": "P003",
+      "root_id": "P000",
+      "summary": "本地跨仓 gate/构建/提交发布和生产部署/备份/清洗/线上 sentinel 已分别完成并通过独立检查。",
+      "ticket_id": "T003",
+      "verification": [
+        "P004 R002/C002。",
+        "P005 R005/C005。"
+      ]
+    },
+    "R007": {
+      "artifacts": [
+        "后端 `d6d13be` 已部署。",
+        "iOS/QA `190d65f` 已推送，最终账本文档将形成收敛提交。",
+        "`docs/superpowers/status/2026-07-11-knowledge-mutation-privacy-canonicalization.md`。"
+      ],
+      "body_path": "problems/P000/results/R007.md",
+      "created_at": "2026-07-11T06:47:14+00:00",
+      "done": [
+        "P001：新 mutation 在 fingerprint、response、change、receipt 前统一 canonicalize。",
+        "P002：历史 snapshot/change/receipt 单事务 maintenance，默认 dry-run、幂等、失败回滚、聚合脱敏。",
+        "P003：跨仓 gate、全量非真机回归、双仓发布、服务器部署、备份、生产清洗归零和线上 sentinel。"
+      ],
+      "id": "R007",
+      "known_gaps": [
+        "无 Task 20 范围内剩余项。"
+      ],
+      "problem_id": "P000",
+      "root_id": "P000",
+      "summary": "知识 V2 mutation 的 raw source title 隐私旁路已在新写入、历史存量、release QA 和生产 Postgres 四个层面关闭。",
+      "ticket_id": "T000",
+      "verification": [
+        "P001 C000、P002 C001、P003 C006 全部成功。",
+        "后端 267 tests、release regression、Simulator smoke、generic iPhoneOS build 和生产 Postgres 验收通过。"
+      ]
     }
   },
   "root_id": "P000",
@@ -367,16 +846,18 @@
       "problem_definition": "V2 snapshot graph 已使用服务端 canonical source title，但 normalized mutation 仍保留客户端原始 title，并被写入 API 响应、change feed 与 operation receipt。该分叉会持久化不可信或敏感标题，且重复操作的 payload hash 受到非语义 title 影响。线上历史 JSONB 也需要可审计、可回滚、幂等的规范化处理。",
       "problem_id": "P000",
       "proposed_solution": "将 mutation canonicalization 提升为 knowledge_store 的单一入口，在 fingerprint、merge、持久化和回包前完成。分别在 InMemory/Postgres 证明首次写入与 replay 一致；新增 Postgres maintenance service/CLI 以 dry-run 和事务 apply 清洗 snapshots、changes、receipts，并只对可证明输入的 `kb.mutation` V2 receipt 重算 hash。最后增加跨仓 gate、release 防回退、文档、提交部署与线上 dry-run/apply/dry-run 证据。",
-      "result_ids": [],
+      "result_ids": [
+        "R007"
+      ],
       "risks": [
         "receipt payload hash 不能对无法还原原始 semantic payload 的 operation kind 猜测重算。",
         "maintenance 必须与知识 mutation 使用互斥锁并在单事务中执行。",
         "生产 apply 只允许 canonical metadata 修复，不改变 source identity 或用户正文。"
       ],
       "root_id": "P000",
-      "status": "splitting",
+      "status": "done",
       "title": "统一知识 mutation 隐私格式并清洗持久化历史",
-      "updated_at": "2026-07-11T04:29:16+00:00",
+      "updated_at": "2026-07-11T06:47:14+00:00",
       "verification_plan": "拆分为新写入 canonicalization、存量 maintenance、跨仓交付部署三个子问题；各自使用 sentinel tests，最后执行线上 dry-run/apply/dry-run 并保存脱敏摘要。"
     },
     "T001": {
@@ -470,16 +951,18 @@
       "problem_definition": "新写入 canonical mutation 与历史维护工具已经通过后端单元测试，但尚未进入 iOS/release QA 防回退，也尚未在真实生产 Postgres 上验证锁、JSONB 更新、receipt hash 和存量归零。必须用可重复脚本连接代码合同、构建、发布和线上清洗证据，避免只凭单元测试宣布完成。",
       "problem_id": "P003",
       "proposed_solution": "1. 新增后端 maintenance contract smoke，使用隔离的 Postgres fixture 或线上受控路径验证 default dry-run、apply、二次 dry-run、V2 receipt replay 与脱敏聚合输出。\n2. 新增 iOS 侧静态 gate/QA runner，检查 mutation/receipt/change canonical 合同和维护脚本仍被 release QA package 引用，不改变公开 UI。\n3. 将可选知识隐私 gate 接入现有 release regression，运行后端全量、iOS 相关静态检查、模拟器或可用替代 smoke、generic iPhoneOS build 与 diff check。\n4. 后端与 iOS 分仓提交并推送；部署后端，确认 production/Postgres health 与版本。\n5. 生产执行备份确认、dry-run、`--apply`、post-apply dry-run；保存只含聚合计数的报告，要求最终 changed 全为 0，且线上新 V2 mutation 的 response/change/receipt/replay 不含 sentinel raw title。",
-      "result_ids": [],
+      "result_ids": [
+        "R006"
+      ],
       "risks": [
         "生产表锁会短暂阻塞知识写入；维护需在低流量窗口执行并设置可控超时。",
         "历史无效结构会让 apply 整体拒绝；必须先看 dry-run invalidRecordCount，不能绕过后局部清洗。",
         "线上测试不得输出真实 token、用户或知识内容；sentinel 数据必须使用新建 QA 账号和合成内容。"
       ],
       "root_id": "P000",
-      "status": "splitting",
+      "status": "done",
       "title": "固化隐私 gate 并完成双仓发布与线上清洗验收",
-      "updated_at": "2026-07-11T06:29:13+00:00",
+      "updated_at": "2026-07-11T06:46:41+00:00",
       "verification_plan": "- 后端：`scripts/verify_backend.sh`、maintenance 定向测试、部署 smoke、线上 V2 mutation sentinel smoke。\n- iOS：知识静态检查、release QA package、Simulator smoke（若环境可用）、generic iPhoneOS build。\n- 数据：生产维护三阶段聚合 JSON 对比；apply 前确认数据库备份可用，apply 后再次 dry-run 证明归零。\n- Git：双仓 `git diff --check`、提交历史、远端分支与服务器版本核对。"
     },
     "T004": {
@@ -502,17 +985,121 @@
       "problem_definition": "当前 release regression 会运行后端全量测试，但没有一个命名明确的 Task 20 gate 来证明 raw source title 在 response/change/receipt/replay 中不可见、maintenance 默认 dry-run 且报告脱敏。状态文档和 QA package 也无法防止维护入口被改成默认写入。",
       "problem_id": "P004",
       "proposed_solution": "- 后端新增一个只使用 Fake Postgres/memory fixture 的 knowledge privacy maintenance smoke runner，复用定向 unittest，不接生产数据库。\n- iOS QA 目录新增跨仓静态 guard 和组合 shell gate，检查后端 canonicalizer、维护 CLI 默认行为、receipt hash 边界、测试 sentinel，以及 release/docs 接线。\n- release regression 默认运行纯本地跨仓 guard；额外开关运行完整 maintenance smoke，绝不自动执行线上 `--apply`。\n- 更新 release QA package、Task 20 与状态文档，明确生产只能手工按备份确认后的 dry-run/apply/dry-run 执行。\n- 运行完整后端验证、release regression、generic iPhoneOS build；Simulator smoke 依现有 release runner 执行并保存报告。\n- 审核 diff 后分别提交、推送后端 main 与 iOS 当前功能分支。",
-      "result_ids": [],
+      "result_ids": [
+        "R002"
+      ],
       "risks": [
         "release regression 很大，历史视觉证据可能缺失；需要区分真实代码失败与既有可选证据缺口。",
         "macOS 大小写不敏感路径可能掩盖 CI 路径问题；新增脚本统一使用仓库既有 `Scripts/QA/prd-stitch-ui` 约定。"
       ],
       "root_id": "P000",
-      "status": "classified",
+      "status": "done",
       "title": "增加知识隐私组合 gate 并发布双仓提交",
-      "updated_at": "2026-07-11T06:30:34+00:00",
+      "updated_at": "2026-07-11T06:37:42+00:00",
       "verification_plan": "- 直接运行新跨仓 gate与 maintenance unittest runner。\n- `./scripts/verify_backend.sh`。\n- `RUN_IPHONEOS_GENERIC_BUILD=1` 的 release regression；保留生成报告路径。\n- `swift release-qa-package-check.swift` 和双仓 `git diff --check`。\n- 提交后核对本地 HEAD、远端 tracking branch 与 clean status。"
+    },
+    "T005": {
+      "acceptance_criteria": [
+        "服务器代码与容器版本为 `e1f06a8`，health 为 production/Postgres。",
+        "apply 前存在可读但非公开的 Postgres 备份，权限受限，校验值已记录。",
+        "pre-dry-run、apply、post-dry-run 均成功且只输出脱敏聚合；pre-dry-run 无 invalid records，post-dry-run changed 全 0。",
+        "线上新 mutation 的 response/change/replay 不含 raw sentinel，canonical mutation 一致，raw/canonical 同 operation ID 重试幂等。",
+        "不在聊天、Git、日志报告中暴露 token、用户/source/entity ID 或知识正文。",
+        "最终 iOS 文档/账本提交推送，两个仓库工作区干净。"
+      ],
+      "assumptions": [
+        "`miao-server` SSH、sudo Docker 和 `/opt/services/dreamjourney/DreamJourneyBackend` 仍可用。",
+        "服务器有足够磁盘空间生成受限备份。",
+        "当前生产知识写入量允许一次短时维护锁；不做真机。"
+      ],
+      "body_path": "problems/P000/children/P003/children/P005/tickets/T005.md",
+      "classification": "split",
+      "classification_reason": "生产部署/备份/pre-dry-run 与实际 apply/线上 sentinel 是两个连续但独立的风险关口；只有前一关证明版本、备份和 invalidRecordCount 合格，后一关才允许执行生产写入。",
+      "created_at": "2026-07-11T06:38:30+00:00",
+      "id": "T005",
+      "problem_definition": "后端 `e1f06a8` 已推送，但服务器仍运行旧版本，真实 Postgres 中也可能保留 raw source title。必须在不泄露生产内容的前提下完成部署、备份、dry-run/apply/dry-run 和线上新写入 sentinel 验收。",
+      "problem_id": "P005",
+      "proposed_solution": "1. SSH 到服务器，核对后端仓库/容器/数据库健康和当前版本；使用服务器私密 `.env`，不输出 token。\n2. 拉取 `origin/main` 的 `e1f06a8`，重建并重启 API，确认 `/health` 为 production/Postgres。\n3. 在 apply 前使用 `pg_dump` 对知识三表及其依赖 schema 创建带时间戳备份，记录文件路径、权限、大小和校验值，不读取/打印内容。\n4. 在 API 容器相同私密环境中运行 maintenance 默认 dry-run，将 stdout 保存为权限 600 的聚合 JSON；要求 `invalidRecordCount=0`。\n5. 仅在 dry-run 合格后执行 `--apply`，再运行 post-apply dry-run；要求最终所有 changed=0。\n6. 使用私密 backend token 创建隔离 QA 用户和 sentinel V2 mutation，验证首次响应、change feed、duplicate receipt replay 全部 canonical 且不含 raw title；证据只输出布尔值和计数。\n7. 更新 iOS 状态文档/账本，提交并推送最终文档收敛。",
+      "result_ids": [
+        "R005"
+      ],
+      "risks": [
+        "生产表锁会短暂阻塞知识写入；设置数据库 lock timeout，并在低流量窗口执行。",
+        "发现 invalidRecordCount 时必须停止 apply，不能为了完成任务跳过无效记录。",
+        "备份或部署环境可能与文档假设不同；先探测再操作，不覆盖服务器 `.env`。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "部署 Task 20 并安全清洗生产知识隐私 metadata",
+      "updated_at": "2026-07-11T06:46:04+00:00",
+      "verification_plan": "- `ssh miao-server` 核对 git SHA、Docker compose 状态与 health。\n- `pg_dump` 成功、备份文件 `test -s`、`stat` 权限与 `sha256sum`。\n- 容器内运行 maintenance 三阶段并用 Python 只断言 schema/mode/status/counts。\n- 本地私密 token 文件驱动线上 sentinel smoke；输出红acted JSON。\n- 双仓 git status、远端 tracking SHA 和最终 `git diff --check`。"
+    },
+    "T006": {
+      "acceptance_criteria": [
+        "API 运行提交 `e1f06a8`，health production/Postgres。",
+        "备份存在、非空、600、有 SHA-256，且路径不在 Git 仓库公开目录。",
+        "pre-dry-run 成功且 invalidRecordCount=0，报告不含用户 ID、知识正文或 token。",
+        "本步骤没有执行 `--apply`。"
+      ],
+      "assumptions": [
+        "SSH alias、sudo Docker、服务器仓库路径仍有效。",
+        "服务器容器镜像包含应用脚本与 Python 依赖。"
+      ],
+      "body_path": "problems/P000/children/P003/children/P005/children/P006/tickets/T006.md",
+      "classification": "one_go",
+      "classification_reason": "该步骤只做部署、备份和只读 dry-run，不包含生产清洗写入；所有动作按安全前置条件串行且可用一组 SSH 证据完成。",
+      "created_at": "2026-07-11T06:39:21+00:00",
+      "id": "T006",
+      "problem_definition": "生产尚未运行 Task 20，不能直接 apply。需要先部署目标提交、确认服务和 Postgres，再创建可恢复备份并执行只读 dry-run，任何异常都必须在写入前阻断。",
+      "problem_id": "P006",
+      "proposed_solution": "- 通过 `miao-server` 探测仓库、compose 服务、数据库容器和磁盘，不修改 `.env`。\n- `sudo -u miao -H git pull --ff-only origin main` 拉取并用 compose 重建 API，核对 HEAD/health。\n- 从 compose 配置解析数据库服务名，在服务器私密目录创建时间戳 `pg_dump` custom-format 备份；权限 600，检查非空和 SHA-256。\n- 在 API 容器中运行 maintenance 默认命令，保存 stdout 至服务器私密 600 JSON；用独立 Python 只校验 schema/mode/status/invalid/count keys。\n- 若 invalidRecordCount 非零、备份失败或 health/版本不符，停止并记录，不运行 apply。",
+      "result_ids": [
+        "R003"
+      ],
+      "risks": [
+        "compose service 名称或数据库凭据可能不同，先 inspect 配置，不猜测。",
+        "`pg_dump` 可能占用磁盘；先检查可用空间，失败立即停止。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "安全部署并证明生产清洗可执行",
+      "updated_at": "2026-07-11T06:42:26+00:00",
+      "verification_plan": "- SSH 输出只保留 SHA、health 摘要、容器状态、备份元数据和 dry-run 聚合计数。\n- 用 grep/JSON schema 断言报告键集合，不打印原始生产行。\n- 部署后从公网 `/health` 再验证一次。"
+    },
+    "T007": {
+      "acceptance_criteria": [
+        "apply 聚合与 pre-dry-run 待更新计数一致或可解释，invalidRecordCount=0。",
+        "post-dry-run 所有 changed=0。",
+        "首次响应、duplicate replay、change feed 与 operation replay 均不含 raw sentinel，并返回相同 canonical mutation。",
+        "raw/canonical 同 operation ID 重试为 duplicate 且 operationPayloadVerified=true。",
+        "生产输出、Git 与聊天不含 token、用户/source/entity ID 或知识正文。",
+        "Task 20 根账本完成检查，最终文档提交推送。"
+      ],
+      "assumptions": [
+        "P006 的备份和 dry-run 在本轮仍有效，服务器版本未变化。",
+        "deployed access 私密文件格式可由现有 smoke 脚本解析。"
+      ],
+      "body_path": "problems/P000/children/P003/children/P005/children/P007/tickets/T007.md",
+      "classification": "one_go",
+      "classification_reason": "P006 已建立备份并证明真实 Postgres 无无效记录；本步骤是一次受保护的 apply、立即归零检查和同一线上合同 smoke，必须作为一个不可分割的验收闭环。",
+      "created_at": "2026-07-11T06:43:07+00:00",
+      "id": "T007",
+      "problem_definition": "preflight 发现 4 个 change mutation、2 个 receipt result 和 2 个 V2 receipt hash 待规范，且无无效记录。需要在现有备份保护下显式 apply、证明二次 dry-run 归零，并验证部署后的新写入/重放合同。",
+      "problem_id": "P007",
+      "proposed_solution": "- 在服务器 API 容器执行 maintenance `--apply`，保存权限 600 的聚合 JSON；校验 mode/status/invalid/count schema，不输出内容。\n- 紧接着运行默认 post-dry-run，要求 invalidRecordCount=0 且所有 changed=0。\n- 使用本地私密 deployed access 文件读取 URL/token，不在命令输出中展示 token；调用登录与 `/kb/mutate-v2` 创建唯一 QA operation。\n- 第一次发送 raw source title，再用 canonical title 和同 operation ID 重试，读取 change feed 与 replay；脚本只输出布尔值、canonical title 和计数，并在 finally 尝试清理 QA 用户或记录测试数据边界。\n- 更新状态文档、Task 20 清单和账本；提交推送最终 iOS 文档收敛。",
+      "result_ids": [
+        "R004"
+      ],
+      "risks": [
+        "apply 获得知识表锁，可能短暂阻塞写入；已有 5 秒 lock timeout，失败可安全重试且不会部分提交。",
+        "QA 账号清理接口可能触发 30 天 soft delete 而非物理删除；测试只使用合成数据并记录边界。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "执行生产清洗并证明线上 canonical 合同",
+      "updated_at": "2026-07-11T06:45:26+00:00",
+      "verification_plan": "- 在服务器读取 apply/post-dry-run 私密 JSON并仅打印聚合断言。\n- 运行受控线上 sentinel Python smoke，失败时仅显示 HTTP 状态/错误码，不显示请求凭据或知识 payload。\n- 运行最终跨仓 gate、release QA、git diff check；核对远端分支。"
     }
   },
-  "updated_at": "2026-07-11T06:30:34+00:00"
+  "updated_at": "2026-07-11T06:47:32+00:00"
 }

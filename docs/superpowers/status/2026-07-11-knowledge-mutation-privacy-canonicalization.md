@@ -52,7 +52,16 @@ dry-run -> apply -> dry-run
 - Archive -> Echo Simulator smoke：`tmp/visual-qa/prd-stitch-ui/release-regression/20260711-task20-knowledge-privacy/archive-to-echo-smoke/20260711-task20-knowledge-privacy/01-archive-to-echo-completed.png`。
 - Echo delayed reply Simulator smoke：`tmp/visual-qa/prd-stitch-ui/release-regression/20260711-task20-knowledge-privacy/echo-delayed-reply-notification-smoke/20260711-task20-knowledge-privacy/01-echo-delayed-reply-notification-smoke.png`。
 - generic iPhoneOS build：通过，bundle ID 为 `com.yxj.dreamjourney.app`。
-- 双仓提交、服务器部署和生产 Postgres 清洗：下一步骤执行。
+- 后端提交：`e1f06a8 feat: canonicalize knowledge privacy metadata`；生产锁等待修订：`d6d13be fix: bound knowledge maintenance lock wait`。
+- iOS/QA 提交：`190d65f test: guard knowledge privacy canonicalization`。
+- 生产部署：服务器及 API 容器运行 `d6d13be`，health 为 production/Postgres。
+- apply 前 full Postgres 备份：`/opt/backups/dreamjourney/task20-pre-maintenance-20260711-144201.dump`，权限 600，大小 71985 bytes，SHA-256 `971db1d39ba8795900b273f94d1ace460bf7bca3e8d901ed96859970e2f095e6`。
+- pre-dry-run：21 users、21 snapshots、12 changes、7 receipts；待处理 4 个 change mutation、2 个 receipt result、2 个 V2 receipt hash；`invalidRecordCount=0`。
+- apply：上述 8 个 metadata/hash 更新一次完成，`invalidRecordCount=0`。
+- post-apply dry-run：所有 `changed` 计数为 0。
+- 线上新 V2 mutation smoke：首次响应、duplicate receipt replay、change feed 的 canonical mutation 完全一致；raw title 不出现，raw/canonical 同 operation ID 重试保持幂等。
+- sentinel 写入后的最终 dry-run：22 users、22 snapshots、13 changes、8 receipts；所有 `changed` 计数仍为 0。
+- 生产报告只保存在服务器权限 600 的私密目录，未提交 Git，未记录 token、用户/source/entity ID 或知识正文。
 
 ## 非目标
 

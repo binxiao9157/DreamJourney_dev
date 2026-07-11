@@ -1,6 +1,6 @@
 # P000: Task 20：P0 Knowledge Mutation / Receipt 隐私 Canonicalization
 
-Status: todo
+Status: done
 Parent: none
 Root: P000
 Source Ticket: none (none)
@@ -27,14 +27,16 @@ Task context:
 - P003: 跨仓 QA、提交部署与线上存量验收
 
 ## Results
-- none
+- R007
 
 ## Latest Check
-none
+C007
 
 ## Bodies
 - Problem: problems/P000/README.md
 - Ticket T000: problems/P000/tickets/T000.md
+- Result R007: problems/P000/results/R007.md
+- Check C007: problems/P000/checks/C007.md
 
 ## Follow-ups
 - none

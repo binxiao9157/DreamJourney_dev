@@ -1,13 +1,13 @@
 # P005: 后端部署与生产 Postgres 存量隐私验收
 
-Status: todo
+Status: done
 Parent: P003
 Root: P000
 Source Ticket: T003 (split)
 Source Check: none
 Package: problems/P000/children/P003/children/P005
 Body: problems/P000/children/P003/children/P005/README.md
-Ticket(s): none
+Ticket(s): T005
 
 ## Problem
 本地测试不能证明真实 Postgres 的锁、JSONB 更新和存量数据状态。需要部署已推送后端，并在确认备份后按 dry-run/apply/dry-run 完成生产维护，同时验证新写入 mutation 的四个对外/持久化表面都使用 canonical title。
@@ -21,16 +21,20 @@ Ticket(s): none
 - 保存脱敏聚合证据，不做真机、不修改 UI 或其他产品模块。
 
 ## Subproblems
-- none
+- P006: 部署、备份与生产 maintenance preflight
+- P007: 生产 apply、归零与线上 sentinel 验收
 
 ## Results
-- none
+- R005
 
 ## Latest Check
-none
+C005
 
 ## Bodies
 - Problem: problems/P000/children/P003/children/P005/README.md
+- Ticket T005: problems/P000/children/P003/children/P005/tickets/T005.md
+- Result R005: problems/P000/children/P003/children/P005/results/R005.md
+- Check C005: problems/P000/children/P003/children/P005/checks/C005.md
 
 ## Follow-ups
 - none

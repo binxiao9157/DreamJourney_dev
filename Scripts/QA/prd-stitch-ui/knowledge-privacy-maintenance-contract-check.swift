@@ -59,6 +59,7 @@ require(
     "maintenance must cover graph/mutation and only recalculate V2 mutation hashes"
 )
 for contract in [
+    "SET LOCAL lock_timeout = '5s'",
     "knowledge-privacy-metadata-maintenance:v1",
     "knowledge:{user_id}",
     "LOCK TABLE kb_snapshots, kb_changes, kb_operation_receipts",
