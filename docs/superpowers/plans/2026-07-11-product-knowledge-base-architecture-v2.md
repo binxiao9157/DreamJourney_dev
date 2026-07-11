@@ -58,6 +58,7 @@
 - QA evidence 已能记录来源、hash、fallback、声音和数字人 runtime 摘要。
 - Task 16 知识治理：后端权威 `confirm / reject / correct / deleteSource`、Archive 来源删除组合事务、iOS typed consumer、per-user outbox 和 generation gate。
 - Task 17 操作完整性：后端权威 operation receipt/payload fingerprint、Archive 无级联删除幂等、结构化 409，以及 iOS poisoned mutation 恢复与 governance quarantine。
+- Task 18 同步读取稳定性：`/kb/changes` 支持固定 `targetRevision` 的有界分页；iOS 仅在终页提交权威图谱，并用 KBLite graph CAS 防止分页期间的本地写入被覆盖。
 - `RUN_KNOWLEDGE_GOVERNANCE_GATE=1`：串联 iOS 治理/合并检查与后端 memory/fake Postgres 来源级联回归。
 
 已经通过 Task 13-17 收敛的风险：
@@ -69,12 +70,13 @@
 - 用户治理动作由后端 snapshot 生成 Mutation V2；旧 user/persona 回调不能直接覆盖当前图谱。
 - 同一用户的 operation ID 已绑定稳定 kind/payload 指纹；新请求不能用同一 ID 静默替换 graph、mutation、governance action 或 Archive item。
 - iOS 不会永久重放 payload-conflict pending；治理动作最多自动旋转一次，二次冲突进入持久化 quarantine 且不阻塞后续队列。
+- 新客户端按稳定目标水位分页读取 change feed；中间页不写 remote base、不清 pending、不写 KBLite，终页 CAS 失败时重新读取本地图谱并有限重算。
 
 当前剩余 P1 边界：
 
 - 公开知识审阅/确认/纠正入口尚未由 PRD 和 Stitch 决定，当前只提供稳定 service API。
 - 新 Archive 来源使用 `memoryArchiveItem + archiveItem.id`；历史 `archiveImageAnalysis + session-*` 来源需要显式迁移，不会被新删除级联自动命中。
-- operation receipt 已完成本地/fake Postgres 实现；真实 Postgres migration/deployed smoke、change feed compaction 仍是后续生产化工作。
+- operation receipt 与 change-feed 分页已完成本地/fake Postgres 实现；真实 Postgres migration/deployed smoke、change feed 保留/compaction 仍是后续生产化工作。
 
 现有旧文档 `docs/knowledge-base-design*.md` 只作为历史思路参考。以下旧方向不再作为当前实施依据：
 
@@ -286,10 +288,18 @@ Task 17 已完成：
 - 历史 `kb_changes` 无法还原原始 payload，继续兼容重放但返回 `operationPayloadVerified=false`，不伪造历史 hash。
 - Backend client 保留结构化 `code/operationId/detail`；普通 pending 丢弃 poisoned ID 后刷新重建，governance 首次冲突旋转、第二次隔离。
 
+Task 18 已完成：
+
+- 新客户端通过 `limit` opt-in 稳定目标分页；首请求固定 `targetRevision`，后续只读取 `sinceRevision < revision <= targetRevision`。
+- 旧客户端不传 `limit` 时仍获得原完整响应；旧后端返回 legacy 单页时 iOS 继续兼容。
+- Memory/Postgres change query 按 revision 升序、目标上界与页大小读取，并拒绝非法水位和无进展的非终页。
+- iOS typed page/reducer 校验用户、连续 revision、稳定 target、页数上限和终页；Coordinator 使用 user/generation/pull session 隔离陈旧回调。
+- 中间页没有持久化副作用；终页执行一次三方合并，KBLite mutation token CAS 保护分页期间的新本地知识。
+
 后续同步生产化：
 
 - 在部署 Postgres 上执行 additive receipt schema 并跑 operation conflict/deletion smoke。
-- change feed 增加分页、水位和保留/compaction。
+- 为 change feed 增加保留/compaction 与 snapshot fallback；分页和稳定水位已完成。
 - 为历史 Archive 分析来源建立 canonical sourceRef 迁移工具和迁移证据。
 
 ## 9. API 演进
@@ -397,12 +407,12 @@ POST /kb/governance/actions
 - KBLite person 到 Family 的自动派生改为“未授权候选”或彻底移除；生产 seed 成员迁到 QA-only。
 - timeLetter draft 的后端 payload 使用字段 allowlist；`metadataOnly` 不得携带正文、分析摘要或 transcript，删除草稿需同步撤销。
 
-实施进度：Task 15 已完成 proposal、稳定 ID/关系/metadata、persona-scoped Context 和 iOS canonical identity 主链路。Task 16 已完成用户治理、Archive 来源删除级联、iOS durable outbox/coordinator 和组合 QA gate。Task 17 已完成 operation receipt/payload fingerprint、客户端冲突恢复与隔离。历史 canonical sourceRef 迁移、timeLetter 草稿字段收敛与公开治理体验继续作为后续 P1/P2。
+实施进度：Task 15 已完成 proposal、稳定 ID/关系/metadata、persona-scoped Context 和 iOS canonical identity 主链路。Task 16 已完成用户治理、Archive 来源删除级联、iOS durable outbox/coordinator 和组合 QA gate。Task 17 已完成 operation receipt/payload fingerprint、客户端冲突恢复与隔离。Task 18 已完成稳定目标分页、终页提交和 KBLite CAS。历史 canonical sourceRef 迁移、timeLetter 草稿字段收敛与公开治理体验继续作为后续 P1/P2。
 
 ### P1：同步生产化
 
 - operation receipt 的真实 Postgres migration/deployed smoke 与运维观测。
-- change feed 分页、水位和 compaction。
+- change feed 保留/compaction、snapshot fallback 与 deployed Postgres 分页验收。
 - Postgres 多账号并发与事务集成测试。
 - 知识、档案、时间信件和关怀的 `asOf` 可观测水位。
 - 本地 KB/base/pending 文件保护与备份策略；语义缓存按用户隔离并支持内容更新失效。

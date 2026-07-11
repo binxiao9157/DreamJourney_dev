@@ -312,6 +312,9 @@ run_step "Swift model guard knowledge-governance-model" "$STATIC_LOG_DIR/knowled
 run_step "Swift model guard knowledge-governance-outbox" "$STATIC_LOG_DIR/knowledge-governance-outbox-model-smoke.log" \
   "$SCRIPT_DIR/run-knowledge-governance-outbox-model-smoke.sh"
 
+run_step "Knowledge change-feed pagination cross-repository gate" "$STATIC_LOG_DIR/knowledge-change-feed-pagination-gate.log" \
+  env BACKEND_ROOT="$BACKEND_ROOT" "$SCRIPT_DIR/run-knowledge-change-feed-pagination-gate.sh"
+
 run_step "Swift model guard knowledge-governance-client" "$STATIC_LOG_DIR/knowledge-governance-client-check.log" \
   "$SCRIPT_DIR/run-knowledge-governance-client-check.sh"
 

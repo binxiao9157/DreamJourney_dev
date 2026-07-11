@@ -1,5 +1,17 @@
 import Foundation
 
+struct KBLiteGraphSnapshot {
+    let dictionary: [String: Any]
+    let mutationToken: UInt64
+    let userId: String
+}
+
+enum KBLiteSyncedGraphApplyResult: Equatable {
+    case applied
+    case staleLocalMutation
+    case invalidGraph
+}
+
 // MARK: - KBLiteManager
 
 /// Lite 版知识库中央管理器 — 单例
@@ -1976,16 +1988,26 @@ final class KBLiteManager {
     }
 
     func exportGraphDictionary() -> [String: Any]? {
+        exportGraphSnapshot()?.dictionary
+    }
+
+    func exportGraphSnapshot() -> KBLiteGraphSnapshot? {
         let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
         graphLock.lock()
         let snapshot = graph
+        let userId = loadedUserId
         graphLock.unlock()
         guard let data = try? encoder.encode(snapshot),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return nil
         }
-        return object
+        return KBLiteGraphSnapshot(
+            dictionary: object,
+            mutationToken: Self.graphMutationToken(data),
+            userId: userId
+        )
     }
 
     /// 应用后端 change feed 的最新完整图谱。
@@ -1997,16 +2019,53 @@ final class KBLiteManager {
         _ dictionary: [String: Any],
         preservingLocalChanges: Bool
     ) -> Bool {
+        applySyncedGraphCAS(
+            dictionary,
+            preservingLocalChanges: preservingLocalChanges,
+            expectedMutationToken: nil,
+            expectedUserId: nil
+        ) == .applied
+    }
+
+    func applySyncedGraphCAS(
+        _ dictionary: [String: Any],
+        preservingLocalChanges: Bool,
+        expectedMutationToken: UInt64?,
+        expectedUserId: String?
+    ) -> KBLiteSyncedGraphApplyResult {
         guard JSONSerialization.isValidJSONObject(dictionary),
               let data = try? JSONSerialization.data(withJSONObject: dictionary) else {
-            return false
+            return .invalidGraph
         }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         guard let imported = try? decoder.decode(KBLiteGraph.self, from: data) else {
-            return false
+            return .invalidGraph
         }
         graphLock.lock()
+        if expectedMutationToken != nil {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            encoder.dateEncodingStrategy = .iso8601
+            guard let currentData = try? encoder.encode(graph),
+                  KnowledgeGraphCASPolicy.canApply(
+                      expectedMutationToken: expectedMutationToken,
+                      currentMutationToken: Self.graphMutationToken(currentData),
+                      expectedUserId: expectedUserId,
+                      currentUserId: loadedUserId
+                  ) else {
+                graphLock.unlock()
+                return .staleLocalMutation
+            }
+        } else if !KnowledgeGraphCASPolicy.canApply(
+            expectedMutationToken: nil,
+            currentMutationToken: 0,
+            expectedUserId: expectedUserId,
+            currentUserId: loadedUserId
+        ) {
+            graphLock.unlock()
+            return .staleLocalMutation
+        }
         if preservingLocalChanges {
             let local = graph
             graph = KBLiteGraph(
@@ -2053,7 +2112,16 @@ final class KBLiteManager {
         graph.lastUpdated = Date()
         graphLock.unlock()
         save()
-        return true
+        return .applied
+    }
+
+    private static func graphMutationToken(_ data: Data) -> UInt64 {
+        var hash: UInt64 = 14_695_981_039_346_656_037
+        for byte in data {
+            hash ^= UInt64(byte)
+            hash &*= 1_099_511_628_211
+        }
+        return hash
     }
 
     private func preferLocalByID<T>(

@@ -144,7 +144,15 @@
       "status": "complete",
       "task_file": "docs/plans/task_17_p1-knowledge-operation-payload-hash.md",
       "updated_at": "2026-07-11T10:35:57+08:00"
+    },
+    "docs/plans/task_18_p1-knowledge-change-feed-pagination.md": {
+      "ledger_id": "L20260711-104956",
+      "ledger_path": ".complex-problems/L20260711-104956",
+      "next_action": "none",
+      "status": "complete",
+      "task_file": "docs/plans/task_18_p1-knowledge-change-feed-pagination.md",
+      "updated_at": "2026-07-11T11:23:35+08:00"
     }
   },
-  "updated_at": "2026-07-11T10:35:57+08:00"
+  "updated_at": "2026-07-11T11:23:35+08:00"
 }

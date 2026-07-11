@@ -65,6 +65,7 @@ enum KnowledgeSyncModelError: LocalizedError {
     case invalidGraph(String)
     case invalidPersistenceEnvelope
     case operationPayloadConflict
+    case invalidChangePage(String)
 
     var errorDescription: String? {
         switch self {
@@ -74,7 +75,203 @@ enum KnowledgeSyncModelError: LocalizedError {
             return "知识同步基线文件无效"
         case .operationPayloadConflict:
             return "同一知识操作编号不能对应不同治理内容"
+        case .invalidChangePage(let reason):
+            return "知识增量分页无效：\(reason)"
         }
+    }
+}
+
+struct KnowledgeChangePage {
+    let userId: String
+    let sinceRevision: Int
+    let currentRevision: Int
+    let targetRevision: Int
+    let nextSinceRevision: Int
+    let hasMore: Bool
+    let pageLimit: Int?
+    let changes: [[String: Any]]
+    let isLegacy: Bool
+
+    init(
+        json: [String: Any],
+        expectedUserId: String,
+        requestedSinceRevision: Int,
+        requestedTargetRevision: Int?
+    ) throws {
+        guard let userId = json["userId"] as? String,
+              userId == expectedUserId,
+              let sinceRevision = Self.intValue(json["sinceRevision"]),
+              sinceRevision == requestedSinceRevision,
+              let currentRevision = Self.intValue(json["currentRevision"]),
+              currentRevision >= 0,
+              let changes = json["changes"] as? [[String: Any]] else {
+            throw KnowledgeSyncModelError.invalidChangePage("identity or base fields mismatch")
+        }
+
+        let paginationKeys = ["targetRevision", "nextSinceRevision", "hasMore", "pageLimit"]
+        let paginationFieldCount = paginationKeys.filter { json[$0] != nil }.count
+        let isLegacy = paginationFieldCount == 0
+        guard isLegacy || paginationFieldCount == paginationKeys.count else {
+            throw KnowledgeSyncModelError.invalidChangePage("pagination fields must be all present")
+        }
+
+        var previousRevision = sinceRevision
+        for change in changes {
+            guard let revision = Self.intValue(change["revision"]),
+                  revision == previousRevision + 1,
+                  change["graph"] is [String: Any],
+                  Self.hasValidMutationMetadata(change) else {
+                throw KnowledgeSyncModelError.invalidChangePage("changes must be contiguous full snapshots")
+            }
+            previousRevision = revision
+        }
+
+        if isLegacy {
+            guard requestedTargetRevision == nil,
+                  previousRevision == currentRevision,
+                  currentRevision >= sinceRevision else {
+                throw KnowledgeSyncModelError.invalidChangePage("legacy response is not terminal")
+            }
+            self.userId = userId
+            self.sinceRevision = sinceRevision
+            self.currentRevision = currentRevision
+            self.targetRevision = currentRevision
+            self.nextSinceRevision = previousRevision
+            self.hasMore = false
+            self.pageLimit = nil
+            self.changes = changes
+            self.isLegacy = true
+            return
+        }
+
+        guard let targetRevision = Self.intValue(json["targetRevision"]),
+              let nextSinceRevision = Self.intValue(json["nextSinceRevision"]),
+              let hasMore = json["hasMore"] as? Bool,
+              let pageLimit = Self.intValue(json["pageLimit"]),
+              (1...100).contains(pageLimit),
+              changes.count <= pageLimit,
+              currentRevision == targetRevision,
+              sinceRevision <= targetRevision,
+              requestedTargetRevision == nil || requestedTargetRevision == targetRevision,
+              nextSinceRevision == previousRevision,
+              hasMore == (nextSinceRevision < targetRevision),
+              !hasMore || !changes.isEmpty,
+              hasMore || nextSinceRevision == targetRevision else {
+            throw KnowledgeSyncModelError.invalidChangePage("pagination watermarks are inconsistent")
+        }
+
+        self.userId = userId
+        self.sinceRevision = sinceRevision
+        self.currentRevision = currentRevision
+        self.targetRevision = targetRevision
+        self.nextSinceRevision = nextSinceRevision
+        self.hasMore = hasMore
+        self.pageLimit = pageLimit
+        self.changes = changes
+        self.isLegacy = false
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = value as? String { return Int(value) }
+        return nil
+    }
+
+    private static func hasValidMutationMetadata(_ change: [String: Any]) -> Bool {
+        guard let rawVersion = change["mutationSchemaVersion"] else { return true }
+        guard let version = intValue(rawVersion) else { return false }
+        if version == 1 { return true }
+        return version == 2 && change["mutation"] is [String: Any]
+    }
+}
+
+struct KnowledgeChangeFeedReduction {
+    let nextSinceRevision: Int
+    let targetRevision: Int
+    let isTerminal: Bool
+    let authoritativeSnapshot: KnowledgeRemoteBaseSnapshot?
+}
+
+struct KnowledgeChangeFeedReducer {
+    let startRevision: Int
+    let maxPageCount: Int
+    private(set) var nextSinceRevision: Int
+    private(set) var targetRevision: Int?
+    private(set) var pageCount = 0
+    private var latestSnapshot: KnowledgeRemoteBaseSnapshot?
+
+    init(startRevision: Int, maxPageCount: Int = 200) {
+        self.startRevision = max(0, startRevision)
+        self.maxPageCount = max(1, maxPageCount)
+        self.nextSinceRevision = max(0, startRevision)
+    }
+
+    mutating func consume(_ page: KnowledgeChangePage) throws -> KnowledgeChangeFeedReduction {
+        guard pageCount < maxPageCount else {
+            throw KnowledgeSyncModelError.invalidChangePage("page count exceeds limit")
+        }
+        guard page.sinceRevision == nextSinceRevision else {
+            throw KnowledgeSyncModelError.invalidChangePage("page does not continue the prior watermark")
+        }
+        if let targetRevision {
+            guard targetRevision == page.targetRevision, !page.isLegacy else {
+                throw KnowledgeSyncModelError.invalidChangePage("target revision changed during pull")
+            }
+        } else {
+            targetRevision = page.targetRevision
+        }
+
+        pageCount += 1
+        nextSinceRevision = page.nextSinceRevision
+        if let latest = page.changes.last,
+           let revision = Self.intValue(latest["revision"]),
+           let graph = latest["graph"] as? [String: Any] {
+            latestSnapshot = KnowledgeRemoteBaseSnapshot(revision: revision, graph: graph)
+        }
+
+        if page.hasMore {
+            return KnowledgeChangeFeedReduction(
+                nextSinceRevision: nextSinceRevision,
+                targetRevision: page.targetRevision,
+                isTerminal: false,
+                authoritativeSnapshot: nil
+            )
+        }
+
+        guard nextSinceRevision == page.targetRevision else {
+            throw KnowledgeSyncModelError.invalidChangePage("terminal page did not reach target")
+        }
+        return KnowledgeChangeFeedReduction(
+            nextSinceRevision: nextSinceRevision,
+            targetRevision: page.targetRevision,
+            isTerminal: true,
+            authoritativeSnapshot: latestSnapshot
+        )
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = value as? String { return Int(value) }
+        return nil
+    }
+}
+
+enum KnowledgeGraphCASPolicy {
+    static func canApply(
+        expectedMutationToken: UInt64?,
+        currentMutationToken: UInt64,
+        expectedUserId: String?,
+        currentUserId: String
+    ) -> Bool {
+        if let expectedUserId, expectedUserId != currentUserId {
+            return false
+        }
+        if let expectedMutationToken, expectedMutationToken != currentMutationToken {
+            return false
+        }
+        return true
     }
 }
 

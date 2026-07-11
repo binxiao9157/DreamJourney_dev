@@ -227,6 +227,7 @@ assertContains(releaseRegression, "run-backend-knowledge-proposal-persona-smoke.
 assertContains(releaseRegression, "RUN_KNOWLEDGE_GOVERNANCE_GATE", "release regression should expose the knowledge governance/source-cascade local gate")
 assertContains(releaseRegression, "run-knowledge-governance-model-smoke.sh", "release regression should always run the governance model guard")
 assertContains(releaseRegression, "run-knowledge-governance-outbox-model-smoke.sh", "release regression should always run governance outbox recovery smoke")
+assertContains(releaseRegression, "run-knowledge-change-feed-pagination-gate.sh", "release regression should always run stable change-feed pagination gate")
 assertContains(releaseRegression, "run-knowledge-governance-client-check.sh", "release regression should always run the governance client guard")
 assertContains(releaseRegression, "run-knowledge-governance-coordinator-check.sh", "release regression should always run the governance coordinator guard")
 assertContains(releaseRegression, "knowledge-governance-release-boundary-check.swift", "release regression should guard public UI non-exposure")

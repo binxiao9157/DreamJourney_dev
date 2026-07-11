@@ -84,9 +84,12 @@ require(
         coordinator.contains("KnowledgeMutationV2FallbackPolicy.shouldFallback") &&
         coordinator.contains("queue.sync") &&
         coordinator.contains("KBLiteManager.shared.loadedUserId == userId") &&
-        coordinator.contains("applySyncedGraph") &&
-        coordinator.contains("guard self.didApplyChanges"),
-    "sync coordinator should consume revision/change-feed, persist a remote base, reuse pending V2 mutations, and retain legacy fallback"
+        coordinator.contains("beginKnowledgePull(") &&
+        coordinator.contains("pullNextKnowledgePage(") &&
+        coordinator.contains("commitKnowledgePull(") &&
+        coordinator.contains("applySyncedGraphCAS") &&
+        !coordinator.contains("didApplyChanges("),
+    "sync coordinator should page to a stable target, commit only the terminal snapshot, persist a remote base, reuse pending V2 mutations, and retain legacy fallback"
 )
 
 require(
@@ -95,6 +98,8 @@ require(
         threeWayMerge.contains("static func makeDelta(") &&
         threeWayMerge.contains("local private entity") &&
         threeWayMerge.contains("qaConflictSummary") &&
+        threeWayMerge.contains("KnowledgeChangeFeedReducer") &&
+        threeWayMerge.contains("KnowledgeGraphCASPolicy") &&
         threeWayMerge.contains("KnowledgeRemoteBaseStore") &&
         threeWayMerge.contains("KnowledgePendingMutationStore"),
     "knowledge sync model should own bootstrap, three-way merge, tombstones, privacy protection, and per-user file persistence"
@@ -121,6 +126,8 @@ require(
         backend.contains("func mutateKnowledgeV2(") &&
         backend.contains("\"mutationSchemaVersion\": 2") &&
         backend.contains("func fetchKnowledgeChanges(") &&
+        backend.contains("Result<KnowledgeChangePage, Error>") &&
+        backend.contains("URLQueryItem(name: \"targetRevision\"") &&
         backend.contains("func extractKnowledge("),
     "backend client should expose unified knowledge contracts"
 )

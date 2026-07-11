@@ -1,0 +1,477 @@
+{
+  "checks": {
+    "C000": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P001/checks/C000.md",
+      "created_at": "2026-07-11T02:57:11+00:00",
+      "criteria_map": [
+        "legacy、limit/target、排序、固定水位、空页和用户隔离均覆盖。"
+      ],
+      "evidence": [
+        "Memory/Postgres/API 分页测试、delta smoke 和 254 项 backend verify。"
+      ],
+      "execution_map": [
+        "R000 覆盖 P001 全部验收标准。"
+      ],
+      "followup_problem_id": null,
+      "id": "C000",
+      "problem_id": "P001",
+      "residual_risk": [
+        "未部署真实 Postgres。"
+      ],
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "target 后并发新增、非法 limit/revision、终页和多页前进。"
+      ],
+      "summary": "后端固定 target revision 分页已完成。"
+    },
+    "C001": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P002/checks/C001.md",
+      "created_at": "2026-07-11T03:02:07+00:00",
+      "criteria_map": [
+        "三页/legacy/异常页、最终 snapshot、mutation token 和 user CAS 均覆盖。"
+      ],
+      "evidence": [
+        "Swift model smoke 和 Simulator workspace build。"
+      ],
+      "execution_map": [
+        "R001 覆盖 P002 全部验收标准。"
+      ],
+      "followup_problem_id": null,
+      "id": "C001",
+      "problem_id": "P002",
+      "residual_risk": [
+        "Coordinator 集成留在 P003。"
+      ],
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "revision gap、空中间页、target 漂移、页数上限、token/user mismatch。"
+      ],
+      "summary": "iOS 分页 reducer 与 KBLite CAS 基础模型完成。"
+    },
+    "C002": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/checks/C002.md",
+      "created_at": "2026-07-11T03:22:18+00:00",
+      "criteria_map": [
+        "稳定 target、终页提交、CAS、本地并发保护、legacy 兼容和 QA 接入均已覆盖"
+      ],
+      "evidence": [
+        "跨仓分页 gate、254 后端测试、release regression、两类 iOS build、线上 Postgres smoke 均通过"
+      ],
+      "execution_map": [
+        "DreamJourneyBackendClient -> KnowledgeChangeFeedReducer -> KnowledgeSyncCoordinator -> KBLite CAS"
+      ],
+      "followup_problem_id": null,
+      "id": "C002",
+      "problem_id": "P003",
+      "residual_risk": [
+        "保留/compaction、snapshot fallback 和中间页恢复 journal 为明确非目标"
+      ],
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "覆盖 revision gap、空非终页、target 漂移、最大页数以及 target 后并发新增 revision"
+      ],
+      "summary": "Coordinator 分页交付满足 Task 18 验收"
+    },
+    "C003": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/checks/C003.md",
+      "created_at": "2026-07-11T03:23:26+00:00",
+      "criteria_map": [
+        "后端分页、iOS reducer、Coordinator 终页提交、CAS、兼容性和交付证据全部满足"
+      ],
+      "evidence": [
+        "三个子问题均关闭，后端全量、跨仓 gate、release regression、构建与线上 Postgres smoke 通过"
+      ],
+      "execution_map": [
+        "P001 后端合同；P002 typed reducer/CAS；P003 Coordinator/QA/部署验收"
+      ],
+      "followup_problem_id": null,
+      "id": "C003",
+      "problem_id": "P000",
+      "residual_risk": [
+        "compaction、snapshot fallback、中间页恢复和公开 UI 为后续独立任务"
+      ],
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "目标后新增、非法水位、revision gap、空页、target 漂移、页数上限和本地并发写均覆盖"
+      ],
+      "summary": "Task 18 的稳定分页、终页提交和并发保护满足目标"
+    }
+  },
+  "counters": {
+    "check": 4,
+    "event": 48,
+    "problem": 4,
+    "result": 4,
+    "ticket": 4
+  },
+  "created_at": "2026-07-11T02:49:56+00:00",
+  "effort": "medium",
+  "language": "zh",
+  "ledger_id": "L20260711-104956",
+  "problems": {
+    "P000": {
+      "body_path": "problems/P000/README.md",
+      "check_ids": [
+        "C003"
+      ],
+      "created_at": "2026-07-11T02:49:56+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": null,
+      "created_from_ticket_mode": null,
+      "description": "Close the Lodestar task represented by `/Users/yxj/Documents/Codex/Video/DreamJourney_dev/docs/plans/task_18_p1-knowledge-change-feed-pagination.md` using recursive problem, ticket, result, and check state.\n\nTask context:\n\n# Task 18：P1 Knowledge Change Feed 稳定水位分页",
+      "followup_ids": [],
+      "id": "P000",
+      "package_path": "problems/P000",
+      "parent_id": null,
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [
+        "P001",
+        "P002",
+        "P003"
+      ],
+      "success_criteria": [
+        "大型 change feed 可按固定 target 多页读取，不重复、不遗漏、不追逐请求后的新 revision。",
+        "iOS 只有终页完成后才推进 base 和发送 mutation。",
+        "分页期间产生的本地知识不会被终页 apply 覆盖。",
+        "旧后端、旧客户端和现有治理/operation receipt 合同保持兼容。"
+      ],
+      "ticket_ids": [
+        "T000"
+      ],
+      "title": "Task 18：P1 Knowledge Change Feed 稳定水位分页",
+      "updated_at": "2026-07-11T03:23:26+00:00"
+    },
+    "P001": {
+      "body_path": "problems/P000/children/P001/README.md",
+      "check_ids": [
+        "C000"
+      ],
+      "created_at": "2026-07-11T02:50:41+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "`/kb/changes` 和两个 store 当前返回 sinceRevision 后全部记录，没有响应上界、limit 或固定读取水位。",
+      "followup_ids": [],
+      "id": "P001",
+      "package_path": "problems/P000/children/P001",
+      "parent_id": "P000",
+      "result_ids": [
+        "R000"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "无 limit 保持 legacy 响应；显式 limit 返回 target/next/hasMore/pageLimit。",
+        "首次固定 target，后续只读到该 target，不追逐新写入。",
+        "Memory/Postgres 使用相同边界和 revision ASC。",
+        "参数异常、三页、固定 target、空终页和用户隔离测试通过。",
+        "后端全量验证通过。"
+      ],
+      "ticket_ids": [
+        "T001"
+      ],
+      "title": "后端稳定 target revision 分页",
+      "updated_at": "2026-07-11T02:57:11+00:00"
+    },
+    "P002": {
+      "body_path": "problems/P000/children/P002/README.md",
+      "check_ids": [
+        "C001"
+      ],
+      "created_at": "2026-07-11T02:50:41+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "iOS 没有 typed page/reducer，`didApplyChanges` 带副作用且只接受终页；KBLite export/merge/apply 之间没有本地 mutation version CAS。",
+      "followup_ids": [],
+      "id": "P002",
+      "package_path": "problems/P000/children/P002",
+      "parent_id": "P000",
+      "result_ids": [
+        "R001"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "Typed page 与纯 reducer 严格验证 target、revision、hasMore、进展、页数和 legacy 单页。",
+        "Reducer 只保留最终权威 graph，不写任何 store。",
+        "KBLite graph snapshot 带 mutation version，所有保存/用户切换推进版本。",
+        "CAS apply 发现版本变化时拒绝覆盖，model smoke 证明重算后保留本地知识。"
+      ],
+      "ticket_ids": [
+        "T002"
+      ],
+      "title": "iOS 分页 reducer 与 KBLite CAS",
+      "updated_at": "2026-07-11T03:02:07+00:00"
+    },
+    "P003": {
+      "body_path": "problems/P000/children/P003/README.md",
+      "check_ids": [
+        "C002"
+      ],
+      "created_at": "2026-07-11T02:50:41+00:00",
+      "created_from_check_id": null,
+      "created_from_ticket_id": "T000",
+      "created_from_ticket_mode": "split",
+      "description": "正常 sync 和 409 refresh 各自发起一次性 change 请求；分页中没有 pull session/generation/终页提交边界，也没有长期组合门禁。",
+      "followup_ids": [],
+      "id": "P003",
+      "package_path": "problems/P000/children/P003",
+      "parent_id": "P000",
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "subproblem_ids": [],
+      "success_criteria": [
+        "正常 sync/409 refresh 共用 paginated pull state machine。",
+        "user/generation/pullSession 失效页被丢弃；终页前无 base/pending/KBLite/mutation/governance 副作用。",
+        "终页 CAS merge 有界重算后只 push 一次。",
+        "QA/release/docs 更新，后端全量、跨仓 gate、Simulator/generic iPhoneOS build 通过。",
+        "两仓独立提交，不推送、不部署、不真机。"
+      ],
+      "ticket_ids": [
+        "T003"
+      ],
+      "title": "Coordinator 分页集成与交付验收",
+      "updated_at": "2026-07-11T03:22:18+00:00"
+    }
+  },
+  "results": {
+    "R000": {
+      "artifacts": [],
+      "body_path": "problems/P000/children/P001/results/R000.md",
+      "created_at": "2026-07-11T02:56:52+00:00",
+      "done": [],
+      "id": "R000",
+      "known_gaps": [],
+      "problem_id": "P001",
+      "root_id": "P000",
+      "summary": "`/kb/changes` 已支持显式 limit 与固定 targetRevision 分页，旧无 limit 合同保持不变；Memory/Postgres 查询使用相同 since/through/limit 边界。",
+      "ticket_id": "T001",
+      "verification": []
+    },
+    "R001": {
+      "artifacts": [],
+      "body_path": "problems/P000/children/P002/results/R001.md",
+      "created_at": "2026-07-11T03:01:39+00:00",
+      "done": [],
+      "id": "R001",
+      "known_gaps": [],
+      "problem_id": "P002",
+      "root_id": "P000",
+      "summary": "已增加严格 KnowledgeChangePage/KnowledgeChangeFeedReducer 纯模型，以及 KBLite graph snapshot mutation token 与 expected-token/user CAS apply。",
+      "ticket_id": "T002",
+      "verification": []
+    },
+    "R002": {
+      "artifacts": [
+        "docs/superpowers/status/2026-07-11-knowledge-change-feed-pagination.md"
+      ],
+      "body_path": "problems/P000/children/P003/results/R002.md",
+      "created_at": "2026-07-11T03:21:37+00:00",
+      "done": [
+        "分页拉取和交付闭环完成"
+      ],
+      "id": "R002",
+      "known_gaps": [
+        "保留/compaction 与 snapshot fallback 不在本任务范围"
+      ],
+      "problem_id": "P003",
+      "root_id": "P000",
+      "summary": "完成 Coordinator 稳定分页、终页提交、KBLite CAS、跨仓 QA 与线上 Postgres 验收",
+      "ticket_id": "T003",
+      "verification": [
+        "254 后端测试、release regression、两类 iOS build、线上分页 smoke 通过"
+      ]
+    },
+    "R003": {
+      "artifacts": [
+        "docs/superpowers/status/2026-07-11-knowledge-change-feed-pagination.md"
+      ],
+      "body_path": "problems/P000/results/R003.md",
+      "created_at": "2026-07-11T03:23:00+00:00",
+      "done": [
+        "后端分页、iOS 终页提交与 CAS、QA、文档和线上验收完成"
+      ],
+      "id": "R003",
+      "known_gaps": [
+        "compaction、snapshot fallback 与中间页 journal 不在范围"
+      ],
+      "problem_id": "P000",
+      "root_id": "P000",
+      "summary": "Task 18 稳定水位分页非真机闭环完成并部署验收",
+      "ticket_id": "T000",
+      "verification": [
+        "254 后端测试、release regression、两类构建、线上 Postgres smoke 通过"
+      ]
+    }
+  },
+  "root_id": "P000",
+  "schema_version": 6,
+  "tickets": {
+    "T000": {
+      "acceptance_criteria": [
+        "后端分页不追逐 target 后的新 revision，严格升序且有界，旧请求行为不变。",
+        "iOS 中间页不写 base/KBLite、不清 pending、不发送 mutation/governance。",
+        "malformed、循环、无进展、target 改变和旧 generation 页被拒绝。",
+        "分页期间本地知识写入通过 CAS 重算保留。",
+        "非真机全量测试、release regression 和两类构建通过。"
+      ],
+      "assumptions": [
+        "每个知识 revision 都有对应 change，且 change 当前携带完整 graph。",
+        "本轮不做 compaction、部署或真机。"
+      ],
+      "body_path": "problems/P000/tickets/T000.md",
+      "classification": "split",
+      "classification_reason": "任务跨后端稳定水位查询、iOS 纯分页 reducer/KBLite CAS、Coordinator 异步集成与全量 QA，必须拆分以分别证明无副作用和事务边界。",
+      "created_at": "2026-07-11T02:50:16+00:00",
+      "id": "T000",
+      "problem_definition": "当前后端一次返回用户全部知识变更，数据增长后响应无界；iOS 假设一次请求到达最新 revision，任何直接分页都会在中间页失败或提前提交、清 pending 和发送 mutation。分页窗口还会放大本地提取与远端 apply 的覆盖竞态。",
+      "problem_id": "P000",
+      "proposed_solution": "后端提供显式 limit + 固定 targetRevision 的 revision 水位分页，保留无 limit 的旧合同。iOS 增加无副作用 page reducer，只保留最终权威 snapshot；Coordinator 在终页后一次提交，并用 KBLite graph mutation version/CAS 在本地变化时重算 merge。正常同步和 409 refresh 共用状态机。",
+      "result_ids": [
+        "R003"
+      ],
+      "risks": [
+        "中间页副作用会造成 base/pending 不一致。",
+        "后端 target 未固定会导致连续写入时永远追页。",
+        "CAS 若未覆盖全部本地写路径仍可能丢知识。",
+        "旧后端分页字段缺失必须只按单页终态兼容。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "建立稳定水位分页与终页提交",
+      "updated_at": "2026-07-11T03:23:00+00:00",
+      "verification_plan": "分别验证后端 Memory/Postgres/API 三页与固定 target；运行 iOS reducer/CAS model smoke、Coordinator source gate、跨仓分页 gate、release regression、Simulator 与 generic iPhoneOS build。"
+    },
+    "T001": {
+      "acceptance_criteria": [
+        "limit 1...100，target/since 非负且 since<=target<=current。",
+        "多页严格升序，target 后新增 change 不进入本轮。",
+        "hasMore/next 水位一致，空终页安全。",
+        "legacy 调用及现有测试不变。",
+        "后端全量验证通过。"
+      ],
+      "assumptions": [
+        "每 revision 对应一条 change，且 revision 连续。"
+      ],
+      "body_path": "problems/P000/children/P001/tickets/T001.md",
+      "classification": "one_go",
+      "classification_reason": "子问题限定在后端 change query/API 与测试，合同边界明确且需要 Memory/Postgres 保持同一语义，可整体实现。",
+      "created_at": "2026-07-11T02:51:06+00:00",
+      "id": "T001",
+      "problem_definition": "知识 change feed 无界返回，无法固定一次同步读取的目标 revision；连续写入下客户端无法安全分页。",
+      "problem_id": "P001",
+      "proposed_solution": "为 store 增加可选 through revision/limit bounded query；API 在显式 limit 时固定或校验 targetRevision，返回 nextSinceRevision/hasMore/pageLimit，legacy 无 limit 响应保持不变。补 Memory/Postgres/API 和 deterministic smoke。",
+      "result_ids": [
+        "R000"
+      ],
+      "risks": [
+        "FakeCursor 必须支持 upper-bound 与 limit SQL。",
+        "currentRevision/targetRevision 语义不能破坏旧 iOS。",
+        "并发写入后续 revision 必须留给下一轮。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现后端稳定水位分页",
+      "updated_at": "2026-07-11T02:56:52+00:00",
+      "verification_plan": "运行 core/Postgres 分页测试、分页 API smoke、全部 backend verify 和 diff check。"
+    },
+    "T002": {
+      "acceptance_criteria": [
+        "Reducer 验证稳定 target、strict contiguous revisions、hasMore/next、空页、legacy 和最大页数。",
+        "中间页无 store 副作用且只保留最后 graph。",
+        "KBLite snapshot 原子返回 dictionary/version/user；CAS stale 不修改 graph。",
+        "本地写入后重算 merge 可保留本地知识。",
+        "model smoke 和 iOS build 通过。"
+      ],
+      "assumptions": [
+        "每个 change 当前包含完整 graph，revision 连续。"
+      ],
+      "body_path": "problems/P000/children/P002/tickets/T002.md",
+      "classification": "one_go",
+      "classification_reason": "子问题限制在纯 page reducer 与 KBLite CAS 两个紧密相连的本地一致性边界，可用独立 model smoke 和编译整体验证。",
+      "created_at": "2026-07-11T02:57:52+00:00",
+      "id": "T002",
+      "problem_definition": "iOS change consumer 解析与副作用耦合，无法验证多页链；KBLite export 与 apply 之间本地写入可能被覆盖。",
+      "problem_id": "P002",
+      "proposed_solution": "在知识同步模型中加入严格 typed page/reducer，只保留最终 graph/revision；KBLiteManager 增加 mutation version snapshot 与 expected-version CAS apply，所有 save/user switch 推进版本。补纯模型和源码/构建验证。",
+      "result_ids": [
+        "R001"
+      ],
+      "risks": [
+        "graph mutation version 必须覆盖 save 和 user switch。",
+        "CAS 失败不能与 invalid graph 混淆。",
+        "不应改变现有 public KBLite API 行为。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "实现分页 reducer 与本地图谱 CAS",
+      "updated_at": "2026-07-11T03:01:39+00:00",
+      "verification_plan": "新增 Swift model smoke 覆盖正常三页、legacy、异常页和 CAS policy；运行 workspace build 与现有 three-way merge/governance gates。"
+    },
+    "T003": {
+      "acceptance_criteria": [
+        "每页绑定 user/generation/pull session，旧回调丢弃。",
+        "target 首次固定并传给后续请求。",
+        "终页前不调用 apply/push/governance drain。",
+        "CAS stale 最多重算三次，失败不推进 base/pending。",
+        "legacy response 单页兼容，malformed 不 fallback v1。",
+        "跨仓 gate、release regression、两类 build 通过并分仓提交。"
+      ],
+      "assumptions": [
+        "后端新合同已由 P001 完成，旧后端仍返回 legacy 单页。"
+      ],
+      "body_path": "problems/P000/children/P003/tickets/T003.md",
+      "classification": "one_go",
+      "classification_reason": "剩余工作是已完成后端和纯模型的单一 Coordinator 集成、门禁与交付验证，状态边界必须整体修改和验收。",
+      "created_at": "2026-07-11T03:02:47+00:00",
+      "id": "T003",
+      "problem_definition": "Client 仍返回 raw object，Coordinator 正常/冲突刷新各执行一次性 fetch/apply/push，无法使用 reducer 或 CAS，也没有分页组合门禁。",
+      "problem_id": "P003",
+      "proposed_solution": "Client 使用 URLComponents 构造分页 query 并返回 typed page；Coordinator 增加 pullSessionID 和递归 reducer，正常/409 refresh 共用 begin/pull/terminal commit。终页通过 CAS 有界重算后 apply 一次，再 push；中间页无副作用。接入 QA/release/docs 并全量验证提交。",
+      "result_ids": [
+        "R002"
+      ],
+      "risks": [
+        "finishSync 必须清 active pull，避免旧页复活。",
+        "409 refresh 只能重试 local mutation 一次。",
+        "空 revision 0 终页需构造安全空远端 graph。"
+      ],
+      "root_id": "P000",
+      "status": "done",
+      "title": "集成分页同步状态机并完成交付",
+      "updated_at": "2026-07-11T03:21:37+00:00",
+      "verification_plan": "运行 pagination model/client/coordinator checks、backend delta smoke、knowledge governance/V2 gates、release regression、Simulator 与 generic iPhoneOS build。"
+    }
+  },
+  "updated_at": "2026-07-11T03:23:26+00:00"
+}

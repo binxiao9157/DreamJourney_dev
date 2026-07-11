@@ -1,5 +1,5 @@
 {
-  "active_ledger_id": "L20260711-100251",
+  "active_ledger_id": "L20260711-104956",
   "ledgers": [
     {
       "active_count": 0,
@@ -187,7 +187,18 @@
       "status": "done",
       "title": "Task 17：P1 Knowledge Operation Receipt 与冲突恢复",
       "updated_at": "2026-07-11T02:35:45+00:00"
+    },
+    {
+      "active_count": 0,
+      "blocked_count": 0,
+      "ledger_id": "L20260711-104956",
+      "path": "L20260711-104956",
+      "root_id": "P000",
+      "schema_version": 6,
+      "status": "done",
+      "title": "Task 18：P1 Knowledge Change Feed 稳定水位分页",
+      "updated_at": "2026-07-11T03:23:26+00:00"
     }
   ],
-  "updated_at": "2026-07-11T02:35:56+00:00"
+  "updated_at": "2026-07-11T03:23:35+00:00"
 }

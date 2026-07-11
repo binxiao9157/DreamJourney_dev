@@ -14,6 +14,7 @@ final class KnowledgeSyncCoordinator {
     private var isSyncing = false
     private var needsResync = false
     private var debounceWorkItem: DispatchWorkItem?
+    private var activePullSessionID: UUID?
 
     private init() {}
 
@@ -27,6 +28,7 @@ final class KnowledgeSyncCoordinator {
             self.syncGeneration = UUID()
             self.isSyncing = false
             self.needsResync = false
+            self.activePullSessionID = nil
             self.debounceWorkItem?.cancel()
             self.debounceWorkItem = nil
             if !staleCompletions.isEmpty {
@@ -54,6 +56,11 @@ final class KnowledgeSyncCoordinator {
             if self.activeUserId != userId {
                 self.activeUserId = userId
                 self.syncGeneration = UUID()
+                self.isSyncing = false
+                self.needsResync = false
+                self.activePullSessionID = nil
+                self.debounceWorkItem?.cancel()
+                self.debounceWorkItem = nil
             }
             self.enqueueSync(reason: reason)
         }
@@ -154,32 +161,13 @@ final class KnowledgeSyncCoordinator {
         isSyncing = true
         let revision = loadBase(for: userId)?.revision ?? 0
         print("[KnowledgeSync] start user=\(userId) revision=\(revision) reason=\(reason)")
-        DreamJourneyBackendClient.shared.fetchKnowledgeChanges(
+        beginKnowledgePull(
             userId: userId,
-            sinceRevision: revision
-        ) { [weak self] result in
-            self?.queue.async {
-                guard let self, self.isCurrent(userId: userId, generation: generation) else { return }
-                switch result {
-                case .success(let object):
-                    guard self.didApplyChanges(object, userId: userId) else {
-                        self.finishSync(
-                            userId: userId,
-                            generation: generation,
-                            error: KnowledgeSyncError.invalidChangeFeed
-                        )
-                        return
-                    }
-                    self.pushLocalGraph(userId: userId, generation: generation, retryOnConflict: true)
-                case .failure(let error):
-                    if Self.isUnsupportedEndpoint(error) {
-                        self.pushLegacySnapshot(userId: userId, generation: generation)
-                    } else {
-                        self.finishSync(userId: userId, generation: generation, error: error)
-                    }
-                }
-            }
-        }
+            generation: generation,
+            startRevision: revision,
+            retryLocalMutationOnConflict: true,
+            allowLegacyEndpointFallback: true
+        )
     }
 
     @discardableResult
@@ -394,40 +382,126 @@ final class KnowledgeSyncCoordinator {
         DispatchQueue.main.async { completion(result) }
     }
 
-    private func didApplyChanges(_ object: [String: Any], userId: String) -> Bool {
-        guard KBLiteManager.shared.loadedUserId == userId,
-              let localGraph = KBLiteManager.shared.exportGraphDictionary() else {
-            return false
-        }
-        let changes = object["changes"] as? [[String: Any]] ?? []
-        let currentRevision = Self.intValue(object["currentRevision"])
-        guard currentRevision >= 0 else { return false }
-        let existingBase = loadBase(for: userId)
+    private func beginKnowledgePull(
+        userId: String,
+        generation: UUID,
+        startRevision: Int,
+        retryLocalMutationOnConflict: Bool,
+        allowLegacyEndpointFallback: Bool
+    ) {
+        let pullSessionID = UUID()
+        activePullSessionID = pullSessionID
+        pullNextKnowledgePage(
+            userId: userId,
+            generation: generation,
+            pullSessionID: pullSessionID,
+            reducer: KnowledgeChangeFeedReducer(startRevision: startRevision),
+            retryLocalMutationOnConflict: retryLocalMutationOnConflict,
+            allowLegacyEndpointFallback: allowLegacyEndpointFallback
+        )
+    }
 
-        guard let latestChange = changes.max(by: {
-            Self.intValue($0["revision"]) < Self.intValue($1["revision"])
-        }) else {
-            if let existingBase {
-                // An empty feed can only be authoritative when the revision is unchanged.
-                return currentRevision == existingBase.revision
+    private func pullNextKnowledgePage(
+        userId: String,
+        generation: UUID,
+        pullSessionID: UUID,
+        reducer: KnowledgeChangeFeedReducer,
+        retryLocalMutationOnConflict: Bool,
+        allowLegacyEndpointFallback: Bool
+    ) {
+        DreamJourneyBackendClient.shared.fetchKnowledgeChanges(
+            userId: userId,
+            sinceRevision: reducer.nextSinceRevision,
+            targetRevision: reducer.targetRevision
+        ) { [weak self] result in
+            self?.queue.async {
+                guard let self,
+                      self.isCurrentPull(
+                          userId: userId,
+                          generation: generation,
+                          pullSessionID: pullSessionID
+                      ) else {
+                    return
+                }
+                switch result {
+                case .success(let page):
+                    do {
+                        var nextReducer = reducer
+                        let reduction = try nextReducer.consume(page)
+                        if !reduction.isTerminal {
+                            self.pullNextKnowledgePage(
+                                userId: userId,
+                                generation: generation,
+                                pullSessionID: pullSessionID,
+                                reducer: nextReducer,
+                                retryLocalMutationOnConflict: retryLocalMutationOnConflict,
+                                allowLegacyEndpointFallback: allowLegacyEndpointFallback
+                            )
+                            return
+                        }
+
+                        self.activePullSessionID = nil
+                        guard self.commitKnowledgePull(
+                            reduction,
+                            userId: userId
+                        ) else {
+                            self.finishSync(
+                                userId: userId,
+                                generation: generation,
+                                error: KnowledgeSyncError.invalidChangeFeed
+                            )
+                            return
+                        }
+                        self.pushLocalGraph(
+                            userId: userId,
+                            generation: generation,
+                            retryOnConflict: retryLocalMutationOnConflict
+                        )
+                    } catch {
+                        self.activePullSessionID = nil
+                        self.finishSync(userId: userId, generation: generation, error: error)
+                    }
+                case .failure(let error):
+                    self.activePullSessionID = nil
+                    if allowLegacyEndpointFallback,
+                       reducer.pageCount == 0,
+                       Self.isUnsupportedEndpoint(error) {
+                        self.pushLegacySnapshot(userId: userId, generation: generation)
+                    } else {
+                        self.finishSync(userId: userId, generation: generation, error: error)
+                    }
+                }
             }
-            guard currentRevision == 0 else { return false }
-            let remote = Self.emptyRemoteGraph(localMetadata: localGraph)
-            return applyAuthoritativeRemote(
-                KnowledgeRemoteBaseSnapshot(revision: 0, graph: remote),
-                previousBase: nil,
-                userId: userId
-            )
         }
+    }
 
-        guard Self.intValue(latestChange["revision"]) == currentRevision,
-              let remoteGraph = latestChange["graph"] as? [String: Any],
-              Self.hasValidChangeMetadata(latestChange) else {
+    private func commitKnowledgePull(
+        _ reduction: KnowledgeChangeFeedReduction,
+        userId: String
+    ) -> Bool {
+        let existingBase = loadBase(for: userId)
+        if let remote = reduction.authoritativeSnapshot {
+            return remote.revision == reduction.targetRevision
+                && applyAuthoritativeRemote(
+                    remote,
+                    previousBase: existingBase,
+                    userId: userId
+                )
+        }
+        if let existingBase {
+            return existingBase.revision == reduction.targetRevision
+        }
+        guard reduction.targetRevision == 0,
+              let localSnapshot = KBLiteManager.shared.exportGraphSnapshot(),
+              localSnapshot.userId == userId else {
             return false
         }
         return applyAuthoritativeRemote(
-            KnowledgeRemoteBaseSnapshot(revision: currentRevision, graph: remoteGraph),
-            previousBase: existingBase,
+            KnowledgeRemoteBaseSnapshot(
+                revision: 0,
+                graph: Self.emptyRemoteGraph(localMetadata: localSnapshot.dictionary)
+            ),
+            previousBase: nil,
             userId: userId
         )
     }
@@ -437,41 +511,53 @@ final class KnowledgeSyncCoordinator {
         previousBase: KnowledgeRemoteBaseSnapshot?,
         userId: String
     ) -> Bool {
-        guard KBLiteManager.shared.loadedUserId == userId,
-              let localGraph = KBLiteManager.shared.exportGraphDictionary() else {
-            return false
-        }
-        do {
-            let result: KnowledgeSyncMergeResult
-            if let previousBase {
-                result = try KnowledgeSyncGraphEngine.merge(
-                    base: previousBase.graph,
-                    local: localGraph,
-                    remote: remote.graph
-                )
-            } else {
-                result = try KnowledgeSyncGraphEngine.bootstrap(
-                    local: localGraph,
-                    remote: remote.graph
-                )
-            }
-            guard KBLiteManager.shared.applySyncedGraph(
-                result.graph,
-                preservingLocalChanges: false
-            ), KBLiteManager.shared.loadedUserId == userId else {
+        for attempt in 1...3 {
+            guard KBLiteManager.shared.loadedUserId == userId,
+                  let localSnapshot = KBLiteManager.shared.exportGraphSnapshot(),
+                  localSnapshot.userId == userId else {
                 return false
             }
-            try baseStore.save(remote, for: userId)
-            try? pendingStore.remove(for: userId)
-            if !result.conflicts.isEmpty {
-                // Do not log entity content. This summary is QA-only type/ID evidence.
-                print("[KnowledgeSync] threeWayConflicts \(result.qaConflictSummary)")
+            do {
+                let result: KnowledgeSyncMergeResult
+                if let previousBase {
+                    result = try KnowledgeSyncGraphEngine.merge(
+                        base: previousBase.graph,
+                        local: localSnapshot.dictionary,
+                        remote: remote.graph
+                    )
+                } else {
+                    result = try KnowledgeSyncGraphEngine.bootstrap(
+                        local: localSnapshot.dictionary,
+                        remote: remote.graph
+                    )
+                }
+                switch KBLiteManager.shared.applySyncedGraphCAS(
+                    result.graph,
+                    preservingLocalChanges: false,
+                    expectedMutationToken: localSnapshot.mutationToken,
+                    expectedUserId: userId
+                ) {
+                case .applied:
+                    try baseStore.save(remote, for: userId)
+                    try? pendingStore.remove(for: userId)
+                    if !result.conflicts.isEmpty {
+                        // Do not log entity content. This summary is QA-only type/ID evidence.
+                        print("[KnowledgeSync] threeWayConflicts \(result.qaConflictSummary)")
+                    }
+                    return true
+                case .staleLocalMutation:
+                    print("[KnowledgeSync] localGraphChangedDuringCommit user=\(userId) attempt=\(attempt)")
+                    continue
+                case .invalidGraph:
+                    return false
+                }
+            } catch {
+                print("[KnowledgeSync] authoritativeMergeFailed user=\(userId) error=\(error.localizedDescription)")
+                return false
             }
-            return true
-        } catch {
-            print("[KnowledgeSync] authoritativeMergeFailed user=\(userId) error=\(error.localizedDescription)")
-            return false
         }
+        print("[KnowledgeSync] authoritativeCommitCASExhausted user=\(userId)")
+        return false
     }
 
     private func pushLocalGraph(userId: String, generation: UUID, retryOnConflict: Bool) {
@@ -590,25 +676,13 @@ final class KnowledgeSyncCoordinator {
     }
 
     private func refreshAfterConflict(userId: String, generation: UUID) {
-        DreamJourneyBackendClient.shared.fetchKnowledgeChanges(userId: userId, sinceRevision: 0) { [weak self] result in
-            self?.queue.async {
-                guard let self, self.isCurrent(userId: userId, generation: generation) else { return }
-                switch result {
-                case .success(let object):
-                    guard self.didApplyChanges(object, userId: userId) else {
-                        self.finishSync(
-                            userId: userId,
-                            generation: generation,
-                            error: KnowledgeSyncError.invalidChangeFeed
-                        )
-                        return
-                    }
-                    self.pushLocalGraph(userId: userId, generation: generation, retryOnConflict: false)
-                case .failure(let error):
-                    self.finishSync(userId: userId, generation: generation, error: error)
-                }
-            }
-        }
+        beginKnowledgePull(
+            userId: userId,
+            generation: generation,
+            startRevision: 0,
+            retryLocalMutationOnConflict: false,
+            allowLegacyEndpointFallback: false
+        )
     }
 
     private func pushLegacyMutation(
@@ -713,6 +787,7 @@ final class KnowledgeSyncCoordinator {
 
     private func finishSync(userId: String, generation: UUID, error: Error?) {
         guard isCurrent(userId: userId, generation: generation) else { return }
+        activePullSessionID = nil
         isSyncing = false
         if let error {
             print("[KnowledgeSync] failed user=\(userId) error=\(error.localizedDescription)")
@@ -730,6 +805,16 @@ final class KnowledgeSyncCoordinator {
 
     private func isCurrent(userId: String, generation: UUID) -> Bool {
         activeUserId == userId && syncGeneration == generation
+    }
+
+    private func isCurrentPull(
+        userId: String,
+        generation: UUID,
+        pullSessionID: UUID
+    ) -> Bool {
+        isCurrent(userId: userId, generation: generation)
+            && activePullSessionID == pullSessionID
+            && isSyncing
     }
 
     private func loadBase(for userId: String) -> KnowledgeRemoteBaseSnapshot? {
@@ -777,13 +862,6 @@ final class KnowledgeSyncCoordinator {
             upserts[entityType] = values
         }
         return (upserts, tombstones)
-    }
-
-    private static func hasValidChangeMetadata(_ change: [String: Any]) -> Bool {
-        guard let rawVersion = change["mutationSchemaVersion"] else { return true }
-        let version = intValue(rawVersion)
-        if version == 1 { return true }
-        return version == 2 && change["mutation"] is [String: Any]
     }
 
     private static func intValue(_ value: Any?) -> Int {

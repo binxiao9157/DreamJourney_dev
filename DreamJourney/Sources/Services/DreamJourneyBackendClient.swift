@@ -2995,14 +2995,46 @@ final class DreamJourneyBackendClient {
     func fetchKnowledgeChanges(
         userId: String,
         sinceRevision: Int,
-        completion: @escaping (Result<[String: Any], Error>) -> Void
+        targetRevision: Int? = nil,
+        pageLimit: Int = 50,
+        completion: @escaping (Result<KnowledgeChangePage, Error>) -> Void
     ) {
+        let normalizedSinceRevision = max(0, sinceRevision)
+        var components = URLComponents()
+        components.percentEncodedPath = "/kb/changes/\(pathComponent(userId))"
+        var queryItems = [
+            URLQueryItem(name: "sinceRevision", value: String(normalizedSinceRevision)),
+            URLQueryItem(name: "limit", value: String(min(100, max(1, pageLimit)))),
+        ]
+        if let targetRevision {
+            queryItems.append(URLQueryItem(name: "targetRevision", value: String(max(0, targetRevision))))
+        }
+        components.queryItems = queryItems
+        guard let path = components.string else {
+            completion(.failure(ClientError.invalidJSONResponse))
+            return
+        }
         requestJSON(
-            path: "/kb/changes/\(pathComponent(userId))?sinceRevision=\(max(0, sinceRevision))",
+            path: path,
             method: .get,
-            payload: nil,
-            completion: completion
-        )
+            payload: nil
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try KnowledgeChangePage(
+                        json: object,
+                        expectedUserId: userId,
+                        requestedSinceRevision: normalizedSinceRevision,
+                        requestedTargetRevision: targetRevision
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
     }
 
     func extractKnowledge(
