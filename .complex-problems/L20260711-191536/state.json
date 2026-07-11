@@ -71,13 +71,83 @@
         "覆盖 410 code/status 不完全匹配、目标漂移、格式 gap、用户切换以及 fallback 重入预算。"
       ],
       "summary": "P002 满足严格解析、精确错误分类、单次恢复、并发身份保护和恢复后继续同步的全部标准。"
+    },
+    "C002": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/children/P003/checks/C002.md",
+      "created_at": "2026-07-11T11:57:29+00:00",
+      "criteria_map": [
+        "本地验证：R002 列出的测试、gate、构建全部成功。",
+        "文档与复用：Task 24 计划、维护脚本及部署说明存在。",
+        "版本状态：Backend `32607ec`、iOS `102b1ca` 已推送。",
+        "线上验收：真实 Postgres smoke 和 dry-run 均成功且零删除。"
+      ],
+      "evidence": [
+        "后端 281 项测试及线上 deployed smoke 通过。",
+        "跨仓库 gate、release regression、两个 iOS 构建通过。",
+        "后端与 iOS 提交均已推送，后端版本已部署。",
+        "线上测试用户证明 410、snapshot 和 floor continuation；测试数据已清理。"
+      ],
+      "execution_map": [
+        "R002 对应 P003 唯一 one-go ticket T003。",
+        "验证顺序遵循 local -> build -> push -> deploy -> deployed smoke -> dry-run。"
+      ],
+      "followup_problem_id": null,
+      "id": "C002",
+      "problem_id": "P003",
+      "residual_risk": [
+        "首次生产 apply 仍需独立操作审批；本任务不以执行破坏性清理作为完成条件。"
+      ],
+      "result_ids": [
+        "R002"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "线上专用 QA 用户人为形成 floor 2，验证旧游标 410、snapshot revision 3 与保留区 continuation；随后清理关联知识和账号数据。"
+      ],
+      "summary": "P003 的本地 QA、非真机构建、版本交付、后端部署、真实 Postgres 合同和安全 dry-run 均有直接证据，满足成功标准。"
+    },
+    "C003": {
+      "blocking_gaps": [],
+      "body_path": "problems/P000/checks/C003.md",
+      "created_at": "2026-07-11T11:58:13+00:00",
+      "criteria_map": [
+        "历史压缩不再产生永久 gap：410 + snapshot fallback 已本地与线上验证。",
+        "保留本地未同步修改：fallback 复用现有三方合并/CAS/push 路径并由 QA guard 约束。",
+        "dry-run/apply 原子与幂等：后端专项测试覆盖，线上 dry-run 零删除。",
+        "文档、脚本、提交、部署：均有版本和报告证据。"
+      ],
+      "evidence": [
+        "C000 证明后端保留水位与压缩实现。",
+        "C001 证明 iOS snapshot fallback 与游标恢复。",
+        "C002 证明跨仓库交付与线上 Postgres 验收。"
+      ],
+      "execution_map": [
+        "R003 汇总 R000、R001、R002；三个子问题均有独立 success check。"
+      ],
+      "followup_problem_id": null,
+      "id": "C003",
+      "problem_id": "P000",
+      "residual_risk": [
+        "生产 apply 仍需基于 dry-run 报告审批；这是运维控制，不是实现缺口。"
+      ],
+      "result_ids": [
+        "R003"
+      ],
+      "root_id": "P000",
+      "status": "success",
+      "stress_test": [
+        "覆盖分页中途压缩、非零水位二次压缩、锁超时隔离、legacy receipt barrier、线上专用用户 410/snapshot/continuation。"
+      ],
+      "summary": "Task 24 原始目标已被三个已验收子问题完整覆盖，未发现未映射的实现或验证缺口。"
     }
   },
   "counters": {
-    "check": 2,
-    "event": 37,
+    "check": 4,
+    "event": 48,
     "problem": 4,
-    "result": 2,
+    "result": 4,
     "ticket": 4
   },
   "created_at": "2026-07-11T11:15:36+00:00",
@@ -87,7 +157,9 @@
   "problems": {
     "P000": {
       "body_path": "problems/P000/README.md",
-      "check_ids": [],
+      "check_ids": [
+        "C003"
+      ],
       "created_at": "2026-07-11T11:15:36+00:00",
       "created_from_check_id": null,
       "created_from_ticket_id": null,
@@ -97,9 +169,11 @@
       "id": "P000",
       "package_path": "problems/P000",
       "parent_id": null,
-      "result_ids": [],
+      "result_ids": [
+        "R003"
+      ],
       "root_id": "P000",
-      "status": "todo",
+      "status": "done",
       "subproblem_ids": [
         "P001",
         "P002",
@@ -114,7 +188,7 @@
         "T000"
       ],
       "title": "Task 24：P1 知识变更历史保留与快照恢复",
-      "updated_at": "2026-07-11T11:15:36+00:00"
+      "updated_at": "2026-07-11T11:58:13+00:00"
     },
     "P001": {
       "body_path": "problems/P000/children/P001/README.md",
@@ -182,7 +256,9 @@
     },
     "P003": {
       "body_path": "problems/P000/children/P003/README.md",
-      "check_ids": [],
+      "check_ids": [
+        "C002"
+      ],
       "created_at": "2026-07-11T11:16:54+00:00",
       "created_from_check_id": null,
       "created_from_ticket_id": "T000",
@@ -192,9 +268,11 @@
       "id": "P003",
       "package_path": "problems/P000/children/P003",
       "parent_id": "P000",
-      "result_ids": [],
+      "result_ids": [
+        "R002"
+      ],
       "root_id": "P000",
-      "status": "doing",
+      "status": "done",
       "subproblem_ids": [],
       "success_criteria": [
         "知识专项 gate、默认 release regression、后端全量相关测试通过。",
@@ -206,7 +284,7 @@
         "T003"
       ],
       "title": "Task 24 跨仓库 QA、文档与部署验收",
-      "updated_at": "2026-07-11T11:46:54+00:00"
+      "updated_at": "2026-07-11T11:57:29+00:00"
     }
   },
   "results": {
@@ -269,6 +347,67 @@
         "worker Simulator Debug build 成功。",
         "`git diff --check` 在清理 Lodestar 尾部空行后通过待最终复核。"
       ]
+    },
+    "R002": {
+      "artifacts": [
+        "Backend commit `32607ec`",
+        "iOS commit `102b1ca`",
+        "Release report `tmp/visual-qa/prd-stitch-ui/release-regression/20260711-task24-local/report.md`"
+      ],
+      "body_path": "problems/P000/children/P003/results/R002.md",
+      "created_at": "2026-07-11T11:57:08+00:00",
+      "done": [
+        "后端 `32607ec` 已推送 `main` 并部署到服务器。",
+        "iOS `102b1ca` 已推送 `feature/prd-stitch-ui-adaptation`。",
+        "线上验证正常分页、V2 mutation、snapshot、结构化 410 和从 floor 继续拉取。",
+        "compaction dry-run 扫描 23 个用户，计划/实际删除均为 0，无 gap、锁超时或跳过。",
+        "精确匹配并删除 2 个 `task24 floor smoke` QA 账号及关联测试数据。"
+      ],
+      "id": "R002",
+      "known_gaps": [
+        "生产 compaction apply 未执行，这是本任务明确的安全边界；首次 apply 需单独审批 dry-run 报告并在低峰执行。",
+        "不包含真机验证，符合目标范围。"
+      ],
+      "problem_id": "P003",
+      "root_id": "P000",
+      "summary": "Task 24 已完成跨仓库验证、提交推送、后端部署和线上 Postgres 验收。生产 compaction 保持 dry-run，没有删除真实历史数据；Task 24 QA 账号残留已按精确昵称条件清理。",
+      "ticket_id": "T003",
+      "verification": [
+        "后端全量 281 项测试通过。",
+        "Knowledge change-feed cross-repository gate 通过。",
+        "默认静态 release regression 通过，报告：`tmp/visual-qa/prd-stitch-ui/release-regression/20260711-task24-local/report.md`。",
+        "Simulator Debug 与 generic iPhoneOS Debug 均 `BUILD SUCCEEDED`。",
+        "线上 Postgres smoke：`410/minimumSinceRevision=2/snapshotRevision=3/retained continuation` 全部通过。",
+        "两仓库 `git diff --check` 通过。"
+      ]
+    },
+    "R003": {
+      "artifacts": [
+        "Results：R000、R001、R002",
+        "Backend `32607ec`",
+        "iOS `102b1ca`"
+      ],
+      "body_path": "problems/P000/results/R003.md",
+      "created_at": "2026-07-11T11:57:52+00:00",
+      "done": [
+        "P001：后端水位、原子分页、410、短事务 compaction 和维护脚本完成。",
+        "P002：iOS typed snapshot、精确 410 分类和单次 fallback 完成。",
+        "P003：QA、构建、提交推送、部署、线上验收和 QA 数据清理完成。"
+      ],
+      "id": "R003",
+      "known_gaps": [
+        "不执行未经审批的生产 compaction apply。",
+        "不做真机验证，符合 Task 24 和当前目标边界。"
+      ],
+      "problem_id": "P000",
+      "root_id": "P000",
+      "summary": "知识 change-feed 已具备长期保留治理：后端可安全压缩有 receipt 的连续历史并发布明确水位，iOS 可在历史断档时通过权威 snapshot 恢复且保留本地待同步修改。跨仓库 QA、非真机构建、提交、部署和真实 Postgres 验收均完成。",
+      "ticket_id": "T000",
+      "verification": [
+        "子问题检查 C000、C001、C002 均为 success。",
+        "后端 281 项测试、跨仓库 gate、release regression、两个 iOS build 通过。",
+        "线上 Postgres 正常与 compacted 恢复合同通过，dry-run 零删除。"
+      ]
     }
   },
   "root_id": "P000",
@@ -299,16 +438,18 @@
       "problem_definition": "现有知识 change feed 永久保留每个 revision 的完整 graph，Postgres 数据会持续增长；一旦人工清理历史，后端会返回 revision gap 500，iOS 严格分页 reducer 会永久停止同步。分页读取还通过两次独立查询获得 snapshot 与 changes，无法与并发 mutation/compaction 保持同一事务视图。",
       "problem_id": "P000",
       "proposed_solution": "后端新增每用户 change-feed 水位和原子读取合同。维护脚本默认 dry-run，显式 apply 时按保留天数与最少 revision 数计算安全 cutoff，在同一用户知识锁事务中删除有权威 operation receipt 的历史 change 并推进水位。请求早于水位时返回结构化 HTTP 410，成功分页合同保持不变。\n\niOS 增加严格 snapshot 响应解析和 GET 客户端。Coordinator 仅在收到结构化 compacted 错误时执行一次 snapshot fallback，并继续使用现有 user/generation/pull-session、三方合并、CAS 和本地 pending 保护；其他分页结构错误仍直接失败。",
-      "result_ids": [],
+      "result_ids": [
+        "R003"
+      ],
       "risks": [
         "分页中途发生压缩可能改变可读窗口，必须以 410 中断而不是拼接旧页与新 snapshot。",
         "删除没有 receipt 的旧 change 会破坏 legacy operation replay，因此只删除可由 receipt 保证幂等的记录。",
         "自动 apply 可能造成不可逆历史清理，因此部署后仍保持 dry-run，显式命令才执行。"
       ],
       "root_id": "P000",
-      "status": "splitting",
+      "status": "done",
       "title": "实现知识变更历史压缩与快照恢复闭环",
-      "updated_at": "2026-07-11T11:16:29+00:00",
+      "updated_at": "2026-07-11T11:57:52+00:00",
       "verification_plan": "后端先补 in-memory API 合同测试和 Postgres fake-connection 维护测试，再实现 store/route/script；增加部署 smoke 验证正常分页与 compacted 410/snapshot 合同。iOS 先扩展 model smoke 验证 snapshot 和错误分类，再实现 client/coordinator。最终运行知识专项 gate、默认 release regression、`git diff --check`、后端测试和两个 iOS 非真机构建。"
     },
     "T001": {
@@ -399,17 +540,19 @@
       "problem_definition": "后端与 iOS 合同已分别实现，但尚缺统一 gate、最终构建、版本提交推送、后端部署和真实 Postgres 证据。",
       "problem_id": "P003",
       "proposed_solution": "复核现有 cross-repository gate 已消费新增测试，更新 Task/Lodestar 和部署状态文档；运行后端验证、知识专项 gate、默认 release regression、Simulator/generic iPhoneOS 构建与 diff check。随后分仓库提交推送，按既有安全部署流程更新后端，在线验证 schema、正常分页、snapshot、结构化 410 和 compaction dry-run，不在生产自动 apply 删除。",
-      "result_ids": [],
+      "result_ids": [
+        "R002"
+      ],
       "risks": [
         "部署环境或 SSH 外部状态可能暂时不可用。",
         "compaction apply 是破坏性操作，本任务线上只做 dry-run。"
       ],
       "root_id": "P000",
-      "status": "executing",
+      "status": "done",
       "title": "完成 Task 24 跨仓库交付与线上验收",
-      "updated_at": "2026-07-11T11:46:54+00:00",
+      "updated_at": "2026-07-11T11:57:08+00:00",
       "verification_plan": "按 local tests -> builds -> commit/push -> deploy -> deployed smoke -> dry-run report 顺序执行，任一步失败先修复再继续。"
     }
   },
-  "updated_at": "2026-07-11T11:46:54+00:00"
+  "updated_at": "2026-07-11T11:58:13+00:00"
 }

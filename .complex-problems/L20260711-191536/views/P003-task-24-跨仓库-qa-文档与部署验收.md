@@ -1,6 +1,6 @@
 # P003: Task 24 跨仓库 QA、文档与部署验收
 
-Status: doing
+Status: done
 Parent: P000
 Root: P000
 Source Ticket: T000 (split)
@@ -24,14 +24,16 @@ Ticket(s): T003
 - none
 
 ## Results
-- none
+- R002
 
 ## Latest Check
-none
+C002
 
 ## Bodies
 - Problem: problems/P000/children/P003/README.md
 - Ticket T003: problems/P000/children/P003/tickets/T003.md
+- Result R002: problems/P000/children/P003/results/R002.md
+- Check C002: problems/P000/children/P003/checks/C002.md
 
 ## Follow-ups
 - none

@@ -35,3 +35,14 @@
 {"at": "2026-07-11T11:46:54+00:00", "id": "E034", "payload": {"classification": "one_go", "reason": "交付步骤顺序固定，代码实现已完成，剩余工作是可验证的 gate、构建、提交、部署和 dry-run 验收。", "ticket_id": "T003"}, "root_id": "P000", "type": "ticket_classified"}
 {"at": "2026-07-11T11:46:54+00:00", "id": "E035", "payload": {"from": "todo", "id": "P003", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
 {"at": "2026-07-11T11:46:54+00:00", "id": "E036", "payload": {"from": "classified", "id": "T003", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T11:57:08+00:00", "id": "E037", "payload": {"from": "executing", "id": "T003", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T11:57:08+00:00", "id": "E038", "payload": {"result_id": "R002", "ticket_id": "T003"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T11:57:29+00:00", "id": "E039", "payload": {"from": "doing", "id": "P003", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T11:57:29+00:00", "id": "E040", "payload": {"from": "checking", "id": "P003", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T11:57:29+00:00", "id": "E041", "payload": {"check_id": "C002", "followup_id": null, "problem_id": "P003", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T11:57:52+00:00", "id": "E042", "payload": {"from": "todo", "id": "P000", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T11:57:52+00:00", "id": "E043", "payload": {"from": "splitting", "id": "T000", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T11:57:52+00:00", "id": "E044", "payload": {"result_id": "R003", "ticket_id": "T000"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T11:58:13+00:00", "id": "E045", "payload": {"from": "doing", "id": "P000", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T11:58:13+00:00", "id": "E046", "payload": {"from": "checking", "id": "P000", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T11:58:13+00:00", "id": "E047", "payload": {"check_id": "C003", "followup_id": null, "problem_id": "P000", "status": "success"}, "root_id": "P000", "type": "check_recorded"}

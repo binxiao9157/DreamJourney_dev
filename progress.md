@@ -648,7 +648,6 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `none`
 - Counts: 8/8 problems done, 0 blocked, 8/8 tickets done
 - Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
-
 ## Recursive Closure Checkpoint - 2026-07-11T00:28:58+08:00
 
 - Ledger: `L20260710-231102-12`
@@ -2893,3 +2892,12 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `record-result`
 - Counts: 0/4 problems done, 0 blocked, 0/2 tickets done
 - Next instruction: Only perform `record-result` for ticket `T001`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-11T19:58:13+08:00
+
+- Ledger: `L20260711-191536`
+- Lodestar task: `docs/plans/task_24_p1-knowledge-change-retention-snapshot-fallback.md`
+- Root: `P000` / done
+- Next action: `none`
+- Counts: 4/4 problems done, 0 blocked, 4/4 tickets done
+- Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
