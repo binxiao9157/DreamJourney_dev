@@ -2,7 +2,7 @@
 
 日期：2026-07-11  
 分支：`feature/prd-stitch-ui-adaptation`  
-状态：非真机实现与全量回归完成，等待最终提交。
+状态：非真机实现、全量回归与远端交付完成。
 
 ## 问题
 
@@ -85,6 +85,13 @@ tmp/visual-qa/prd-stitch-ui/release-regression/20260711-task22-family-authorizat
 ## 后端影响
 
 本轮不需要后端行为改动。现有 `/family/invite`、accept 合同和 Context Builder 已把 pending/failed/revoked viewer 阻断、accepted viewer 放行；本轮只让 iOS 在发请求和同步前消费相同 authority。仍需运行后端 targeted tests 作为回归证据，但不需要重新部署服务器。
+
+## 交付版本
+
+- iOS 分支：`feature/prd-stitch-ui-adaptation`
+- 实现提交：`f790313 feat: enforce family knowledge authorization lifecycle`
+- 远端状态：已推送至 `origin/feature/prd-stitch-ui-adaptation`
+- 后端：本轮无代码变化，无需重新部署
 
 ## 保留边界
 

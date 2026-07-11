@@ -76,7 +76,7 @@
 - [x] relation spoof 不能开启 personal fallback；失效的持久化 family context 回退 self。
 - [x] wrong-owner、ownerless legacy 和未授权 family graph 不进入远端 sync/generation。
 - [x] 模型 smoke、静态 gate、release QA、Simulator/generic iPhoneOS build、git diff check 通过。
-- [ ] iOS/后端变更分别提交推送；需要后端变化时部署并跑 Postgres smoke。
+- [x] iOS 变更已由 `f790313` 提交并推送；后端本轮无行为变化，无需部署或新增 Postgres smoke。
 
 ## 最终非真机证据
 
