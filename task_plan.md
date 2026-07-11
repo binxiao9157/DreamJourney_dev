@@ -3,10 +3,10 @@
 ## STATUS
 
 - **Goal:** 按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态
-- **Mode:** Execute
-- **Phase:** Phase 21 knowledge operation receipt minimization
-- **Task:** `docs/plans/task_26_p0-knowledge-operation-receipt-minimization.md`
-- **Blockers:** none for non-device implementation
+- **Mode:** Review
+- **Phase:** Phase 21 knowledge operation receipt minimization complete
+- **Task:** none; Tasks 1-26 are closed
+- **Blockers:** none for the completed non-device knowledge-base scope
 
 ## Key Decisions
 
@@ -44,11 +44,11 @@
 - Task 23 is delivered in iOS commit `f0ee683`. It scopes semantic embedding cache by account/generation/content, filters generation candidates before ranking, applies one local storage protection policy to graph/base/pending/outbox files, and closes independent review findings without changing public UI or file envelopes. Backend had no changes and required no deployment.
 - Task 24 is complete and delivered. It adds a durable change-feed retention watermark, an explicit compacted-history contract, one-shot iOS snapshot recovery, and a dry-run-first Postgres maintenance path without changing public UI. Backend `32607ec` is deployed and iOS `102b1ca` is pushed. Real Postgres knowledge smoke, structured 410/snapshot/retained-continuation acceptance, QA data cleanup and a zero-delete compaction dry-run passed. Ledger `L20260711-191536` is closed.
 - Task 25 is complete. It scopes all persisted Echo trace/evidence surfaces and export files to the active account, serializes account-side effects, rejects stale session/voice callbacks, clears old Echo runtime evidence on account changes, and preserves QA-only export behavior without public UI changes. Ledger `L20260711-200812` is closed.
-- Task 26 is active. It retains receipt fingerprints for permanent idempotency while compacting old full-result graph/text copies and reconstructing compatible duplicate responses from the current authoritative snapshot.
+- Task 26 is complete and deployed. It retains receipt fingerprints for permanent idempotency, compacts old full-result graph/text copies, reconstructs compatible duplicate responses from the current authoritative snapshot, and passed dry-run-first production Postgres migration. Backend `4c0538b` is live; the final 18 online receipts are compact and a repeated maintenance run has zero candidates. Ledger `L20260711-205750` is closed.
 
 ## Scope
 
-Phase 2, Phase 3, and Tasks 9-25 are closed. Task 26 owns operation receipt retention/minimization; production remains on global ownership `shadow`, while actual historical sourceRef identity migration, public knowledge-governance UI and true-device acceptance remain separate follow-up slices.
+Phase 2, Phase 3, and Tasks 1-26 are closed for the current non-device knowledge-base target. Production remains on global ownership `shadow`; historical sourceRef identity migration, public knowledge-governance UI and true-device acceptance remain separate future product/release slices and were not silently included in Task 26.
 
 ## Recovery
 

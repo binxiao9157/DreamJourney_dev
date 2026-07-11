@@ -121,3 +121,85 @@
 {"at": "2026-07-11T14:12:41+00:00", "id": "E120", "payload": {"classification": "one_go", "reason": "双仓审计、提交和推送是单一可追溯交付边界，已有完整回归证据，可一次完成并用远端 commit 比对验证。", "ticket_id": "T011"}, "root_id": "P000", "type": "ticket_classified"}
 {"at": "2026-07-11T14:13:01+00:00", "id": "E121", "payload": {"from": "todo", "id": "P011", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
 {"at": "2026-07-11T14:13:01+00:00", "id": "E122", "payload": {"from": "classified", "id": "T011", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:16:32+00:00", "id": "E123", "payload": {"from": "executing", "id": "T011", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:16:32+00:00", "id": "E124", "payload": {"result_id": "R008", "ticket_id": "T011"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T14:17:07+00:00", "id": "E125", "payload": {"from": "doing", "id": "P011", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:17:07+00:00", "id": "E126", "payload": {"from": "checking", "id": "P011", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:17:07+00:00", "id": "E127", "payload": {"check_id": "C009", "followup_id": null, "problem_id": "P011", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T14:17:38+00:00", "id": "E128", "payload": {"problem_id": "P012", "ticket_id": "T012", "title": "部署 Reader-first 后端并安全最小化线上 Receipt"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T14:17:38+00:00", "id": "E129", "payload": {"from": "created", "id": "T012", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:18:03+00:00", "id": "E130", "payload": {"from": "defined", "id": "T012", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:18:03+00:00", "id": "E131", "payload": {"classification": "split", "reason": "Reader-first 部署/health 与真实 Postgres apply 是两个独立硬门；必须先证明新 reader 正常，再允许任何线上 JSONB 更新。", "ticket_id": "T012"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T14:18:40+00:00", "id": "E132", "payload": {"from": "classified", "id": "T012", "to": "splitting"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:18:40+00:00", "id": "E133", "payload": {"parent_id": "P012", "problem_id": "P013", "source": "split", "title": "Reader-first 后端部署与健康验证"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T14:18:40+00:00", "id": "E134", "payload": {"parent_id": "P012", "problem_id": "P014", "source": "split", "title": "真实 Postgres Receipt Dry-run、Apply 与幂等验收"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T14:19:18+00:00", "id": "E135", "payload": {"problem_id": "P013", "ticket_id": "T013", "title": "部署 Compact Receipt Reader 并验证服务基线"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T14:19:18+00:00", "id": "E136", "payload": {"from": "created", "id": "T013", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:19:39+00:00", "id": "E137", "payload": {"from": "defined", "id": "T013", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:19:39+00:00", "id": "E138", "payload": {"classification": "one_go", "reason": "仅执行既有后端部署流程和只读健康/基础 smoke，不涉及数据库维护，范围明确且失败时可停止。", "ticket_id": "T013"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T14:20:01+00:00", "id": "E139", "payload": {"from": "todo", "id": "P013", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:20:01+00:00", "id": "E140", "payload": {"from": "classified", "id": "T013", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:24:08+00:00", "id": "E141", "payload": {"from": "executing", "id": "T013", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:24:08+00:00", "id": "E142", "payload": {"result_id": "R009", "ticket_id": "T013"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T14:25:22+00:00", "id": "E143", "payload": {"from": "doing", "id": "P013", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:25:22+00:00", "id": "E144", "payload": {"from": "checking", "id": "P013", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:25:22+00:00", "id": "E145", "payload": {"check_id": "C010", "followup_id": null, "problem_id": "P013", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T14:26:46+00:00", "id": "E146", "payload": {"problem_id": "P014", "ticket_id": "T014", "title": "以聚合指纹守护真实 Postgres Receipt 最小化"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T14:26:46+00:00", "id": "E147", "payload": {"from": "created", "id": "T014", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:27:26+00:00", "id": "E148", "payload": {"from": "defined", "id": "T014", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:27:26+00:00", "id": "E149", "payload": {"classification": "split", "reason": "线上 dry-run 审计和 apply 是明确的安全硬门；dry-run 必须先独立验收成功，才允许创建并执行写数据库子问题。", "ticket_id": "T014"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T14:28:17+00:00", "id": "E150", "payload": {"from": "classified", "id": "T014", "to": "splitting"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:28:17+00:00", "id": "E151", "payload": {"parent_id": "P014", "problem_id": "P015", "source": "split", "title": "线上 Receipt Baseline 与 Dry-run 硬门"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T14:28:17+00:00", "id": "E152", "payload": {"parent_id": "P014", "problem_id": "P016", "source": "split", "title": "线上 Receipt Apply、幂等与关联 Smoke"}, "root_id": "P000", "type": "problem_created"}
+{"at": "2026-07-11T14:29:03+00:00", "id": "E153", "payload": {"problem_id": "P015", "ticket_id": "T015", "title": "采集脱敏聚合并审计线上 Dry-run"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T14:29:03+00:00", "id": "E154", "payload": {"from": "created", "id": "T015", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:29:39+00:00", "id": "E155", "payload": {"from": "defined", "id": "T015", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:29:39+00:00", "id": "E156", "payload": {"classification": "one_go", "reason": "仅执行只读聚合与默认 dry-run，无数据库写入，输出合同明确且可由本地断言一次验收。", "ticket_id": "T015"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T14:30:05+00:00", "id": "E157", "payload": {"from": "todo", "id": "P015", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:30:06+00:00", "id": "E158", "payload": {"from": "classified", "id": "T015", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:35:48+00:00", "id": "E159", "payload": {"from": "executing", "id": "T015", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:35:48+00:00", "id": "E160", "payload": {"result_id": "R010", "ticket_id": "T015"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T14:35:55+00:00", "id": "E161", "payload": {"from": "doing", "id": "P015", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:35:55+00:00", "id": "E162", "payload": {"from": "checking", "id": "P015", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:35:55+00:00", "id": "E163", "payload": {"check_id": "C011", "followup_id": null, "problem_id": "P015", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T14:36:39+00:00", "id": "E164", "payload": {"problem_id": "P016", "ticket_id": "T016", "title": "小批 Apply、二次幂等与线上关联回归"}, "root_id": "P000", "type": "ticket_created"}
+{"at": "2026-07-11T14:36:39+00:00", "id": "E165", "payload": {"from": "created", "id": "T016", "to": "defined"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:36:46+00:00", "id": "E166", "payload": {"from": "defined", "id": "T016", "to": "classified"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:36:46+00:00", "id": "E167", "payload": {"classification": "one_go", "reason": "P015 已建立只读硬门，线上仅 12 条候选；apply、幂等与关联 smoke 必须按顺序串行执行，拆分反而会破坏同一基线的连续证据。", "ticket_id": "T016"}, "root_id": "P000", "type": "ticket_classified"}
+{"at": "2026-07-11T14:37:00+00:00", "id": "E168", "payload": {"from": "todo", "id": "P016", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:37:01+00:00", "id": "E169", "payload": {"from": "classified", "id": "T016", "to": "executing"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:39:48+00:00", "id": "E170", "payload": {"from": "executing", "id": "T016", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:39:48+00:00", "id": "E171", "payload": {"result_id": "R011", "ticket_id": "T016"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T14:39:55+00:00", "id": "E172", "payload": {"from": "doing", "id": "P016", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:39:55+00:00", "id": "E173", "payload": {"from": "checking", "id": "P016", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:39:55+00:00", "id": "E174", "payload": {"check_id": "C012", "followup_id": null, "problem_id": "P016", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T14:41:46+00:00", "id": "E175", "payload": {"from": "todo", "id": "P014", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:41:46+00:00", "id": "E176", "payload": {"from": "splitting", "id": "T014", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:41:46+00:00", "id": "E177", "payload": {"result_id": "R012", "ticket_id": "T014"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T14:41:53+00:00", "id": "E178", "payload": {"from": "doing", "id": "P014", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:41:53+00:00", "id": "E179", "payload": {"from": "checking", "id": "P014", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:41:53+00:00", "id": "E180", "payload": {"check_id": "C013", "followup_id": null, "problem_id": "P014", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T14:42:00+00:00", "id": "E181", "payload": {"from": "todo", "id": "P012", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:42:00+00:00", "id": "E182", "payload": {"from": "splitting", "id": "T012", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:42:00+00:00", "id": "E183", "payload": {"result_id": "R013", "ticket_id": "T012"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T14:42:09+00:00", "id": "E184", "payload": {"from": "doing", "id": "P012", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:42:09+00:00", "id": "E185", "payload": {"from": "checking", "id": "P012", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:42:09+00:00", "id": "E186", "payload": {"check_id": "C014", "followup_id": null, "problem_id": "P012", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T14:42:18+00:00", "id": "E187", "payload": {"from": "todo", "id": "P010", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:42:19+00:00", "id": "E188", "payload": {"from": "splitting", "id": "T010", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:42:19+00:00", "id": "E189", "payload": {"result_id": "R014", "ticket_id": "T010"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T14:42:35+00:00", "id": "E190", "payload": {"from": "doing", "id": "P010", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:42:35+00:00", "id": "E191", "payload": {"from": "checking", "id": "P010", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:42:35+00:00", "id": "E192", "payload": {"check_id": "C015", "followup_id": null, "problem_id": "P010", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T14:42:54+00:00", "id": "E193", "payload": {"from": "todo", "id": "P003", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:42:54+00:00", "id": "E194", "payload": {"from": "splitting", "id": "T008", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:42:54+00:00", "id": "E195", "payload": {"result_id": "R015", "ticket_id": "T008"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T14:43:06+00:00", "id": "E196", "payload": {"from": "doing", "id": "P003", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:43:06+00:00", "id": "E197", "payload": {"from": "checking", "id": "P003", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:43:06+00:00", "id": "E198", "payload": {"check_id": "C016", "followup_id": null, "problem_id": "P003", "status": "success"}, "root_id": "P000", "type": "check_recorded"}
+{"at": "2026-07-11T14:43:14+00:00", "id": "E199", "payload": {"from": "todo", "id": "P000", "to": "doing"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:43:14+00:00", "id": "E200", "payload": {"from": "splitting", "id": "T000", "to": "done"}, "root_id": "P000", "type": "ticket_status_changed"}
+{"at": "2026-07-11T14:43:14+00:00", "id": "E201", "payload": {"result_id": "R016", "ticket_id": "T000"}, "root_id": "P000", "type": "result_recorded"}
+{"at": "2026-07-11T14:43:26+00:00", "id": "E202", "payload": {"from": "doing", "id": "P000", "to": "checking"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:43:26+00:00", "id": "E203", "payload": {"from": "checking", "id": "P000", "to": "done"}, "root_id": "P000", "type": "problem_status_changed"}
+{"at": "2026-07-11T14:43:26+00:00", "id": "E204", "payload": {"check_id": "C017", "followup_id": null, "problem_id": "P000", "status": "success"}, "root_id": "P000", "type": "check_recorded"}

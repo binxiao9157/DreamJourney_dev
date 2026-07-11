@@ -215,3 +215,12 @@
 - 安全方案是永久保留 kind/schema/payload hash 身份行，将 result 改为版本化 compact envelope；重放先查关联 change，change 已压缩才使用当前 snapshot 重建兼容响应。
 - `KB_OPERATION_SYNC/MUTATION/GOVERNANCE/ARCHIVE_DELETE` 均需双读；governance 只需保留 action、entity/source link 等 ID-only summary，不应保留实体正文。
 - server-generated legacy sync compatibility no-op 每次 operationId 都不同，没有重放价值，不应继续制造完整 receipt；真正产生 change 的首次 legacy sync 仍保留 receipt 作为 compaction 证明。
+
+## Task 26 Resolution
+
+- 新 writer 只保存版本化 compact envelope，不再复制完整 graph、实体正文或原始 mutation upserts；legacy full 与历史 compact 仍可双读。
+- Duplicate replay 先校验 operation kind 与 payload fingerprint，再优先用 change 精确重建，change 已压缩时回落 authoritative snapshot；冲突、governance 和 archive delete 语义保持兼容。
+- Postgres maintenance 默认 dry-run，按用户事务与 advisory lock 执行，失败隔离、keyset 扫描、脏 compact canonical compare 和脱敏报告均有组合测试。
+- 后端 `4c0538b` 已 reader-first 部署。线上 dry-run 识别 12 条候选且失败为 0；apply 后 receipt identity 聚合不变，result 占用从 15408 降至 2396 字节。
+- 第二次 dry-run/apply 为零候选、零更新；部署知识 smoke 新建 receipt 后，最终 18 条均已 compact。Privacy 和 change-feed maintenance dry-run 无无效记录、跳过或超时。
+- iOS 跨仓 gate、release QA package、默认 release regression、Simulator smoke 和 generic iPhoneOS build 均通过；本任务不改变公开 UI，也不依赖真机。

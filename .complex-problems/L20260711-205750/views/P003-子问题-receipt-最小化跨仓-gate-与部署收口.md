@@ -1,6 +1,6 @@
 # P003: 子问题：Receipt 最小化跨仓 Gate 与部署收口
 
-Status: todo
+Status: done
 Parent: P000
 Root: P000
 Source Ticket: T000 (split)
@@ -24,14 +24,16 @@ Receipt 压缩会影响后端幂等响应和 iOS V2 解析，需要固定跨仓�
 - P010: 双仓提交部署与线上 Postgres Receipt 验收
 
 ## Results
-- none
+- R015
 
 ## Latest Check
-none
+C016
 
 ## Bodies
 - Problem: problems/P000/children/P003/README.md
 - Ticket T008: problems/P000/children/P003/tickets/T008.md
+- Result R015: problems/P000/children/P003/results/R015.md
+- Check C016: problems/P000/children/P003/checks/C016.md
 
 ## Follow-ups
 - none

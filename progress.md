@@ -656,7 +656,6 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `none`
 - Counts: 7/7 problems done, 0 blocked, 7/7 tickets done
 - Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
-
 ## Task 12 审查加固与最终验证 - 2026-07-11
 
 - 修复本地 Echo fallback 隐私过滤、用户切换同步竞态、RAG gate 失败重试和 change feed 安全应用。
@@ -2934,3 +2933,12 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `create-solution-ticket`
 - Counts: 8/11 problems done, 0 blocked, 8/10 tickets done
 - Next instruction: Only perform `create-solution-ticket` for `P010: 双仓提交部署与线上 Postgres Receipt 验收`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names s...
+
+## Recursive Closure Checkpoint - 2026-07-11T22:43:47+08:00
+
+- Ledger: `L20260711-205750`
+- Lodestar task: `docs/plans/task_26_p0-knowledge-operation-receipt-minimization.md`
+- Root: `P000` / done
+- Next action: `none`
+- Counts: 17/17 problems done, 0 blocked, 17/17 tickets done
+- Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.

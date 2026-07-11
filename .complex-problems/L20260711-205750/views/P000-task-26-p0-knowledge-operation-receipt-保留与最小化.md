@@ -1,6 +1,6 @@
 # P000: Task 26：P0 Knowledge Operation Receipt 保留与最小化
 
-Status: todo
+Status: done
 Parent: none
 Root: P000
 Source Ticket: none (none)
@@ -31,14 +31,16 @@ Task context:
 - P003: 子问题：Receipt 最小化跨仓 Gate 与部署收口
 
 ## Results
-- none
+- R016
 
 ## Latest Check
-none
+C017
 
 ## Bodies
 - Problem: problems/P000/README.md
 - Ticket T000: problems/P000/tickets/T000.md
+- Result R016: problems/P000/results/R016.md
+- Check C017: problems/P000/checks/C017.md
 
 ## Follow-ups
 - none

@@ -1,6 +1,6 @@
 # P010: 双仓提交部署与线上 Postgres Receipt 验收
 
-Status: todo
+Status: done
 Parent: P003
 Root: P000
 Source Ticket: T008 (split)
@@ -25,14 +25,16 @@ Ticket(s): T010
 - P012: 后端部署与真实 Postgres Receipt 验收
 
 ## Results
-- none
+- R014
 
 ## Latest Check
-none
+C015
 
 ## Bodies
 - Problem: problems/P000/children/P003/children/P010/README.md
 - Ticket T010: problems/P000/children/P003/children/P010/tickets/T010.md
+- Result R014: problems/P000/children/P003/children/P010/results/R014.md
+- Check C015: problems/P000/children/P003/children/P010/checks/C015.md
 
 ## Follow-ups
 - none

@@ -277,16 +277,16 @@
       "updated_at": "2026-07-11T12:51:24+00:00"
     },
     {
-      "active_count": 5,
+      "active_count": 0,
       "blocked_count": 0,
       "ledger_id": "L20260711-205750",
       "path": "L20260711-205750",
       "root_id": "P000",
       "schema_version": 6,
-      "status": "doing",
+      "status": "done",
       "title": "Task 26：P0 Knowledge Operation Receipt 保留与最小化",
-      "updated_at": "2026-07-11T14:13:01+00:00"
+      "updated_at": "2026-07-11T14:43:26+00:00"
     }
   ],
-  "updated_at": "2026-07-11T14:13:01+00:00"
+  "updated_at": "2026-07-11T14:43:38+00:00"
 }
