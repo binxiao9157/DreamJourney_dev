@@ -124,3 +124,16 @@
 - Large JSON bodies no longer bypass principal inspection, and the immutable route registry is compiled once per process rather than once per request.
 - iOS mailbox refresh no longer triggers global time-letter dispatch; the enabled server timer owns due delivery.
 - Backend `275a4c2` is deployed. Online evidence reports `routeCount=54`, `unclassifiedCount=0`, principal-bound owner/system denies, valid delegated access, production Postgres health, and an active time-letter timer.
+
+## Task 16 Exploration
+
+- Existing Mutation V2 already supplies revision conflicts, operation-ID idempotency, atomic Postgres advisory locking, authoritative graph responses, tombstones, and change feed; governance should compose this layer rather than create another persistence system.
+- Existing evidence policy already excludes `rejected/superseded` from backend Context and iOS generation. Governance therefore needs authoritative state transitions and audit metadata, not a second retrieval policy.
+- Existing generic `/kb/mutations` accepts arbitrary entity upserts and cannot prove that a correction preserved history. A dedicated owner-only governance endpoint is required to build the mutation from the current server snapshot.
+- A correction must create a replacement entity and mark the original `superseded`; editing the original ID would violate the canonical design requirement that user actions form a new mutation instead of silently rewriting history.
+- Source deletion is an evidence revocation, not an entity tombstone. The conservative P1 contract marks every directly referencing entity `superseded`, removes the deleted source ref, and keeps the entity for audit/change-feed history.
+- iOS already owns per-user base/pending persistence and authoritative three-way merge. Governance consumption should be serialized through `KnowledgeSyncCoordinator` and apply the server graph only while user/persona generation remains current.
+- Postgres `archive_items.id` is globally unique and its generic upsert currently rewrites `user_id` on conflict. Source lifecycle work must first prevent a different owner from reusing an existing archive ID; otherwise a cascade target could be reassigned before deletion.
+- Current Archive deletion removes only the Archive record/local item and does not touch knowledge `sourceRefs`; the production path therefore needs an explicit source-revocation step, not merely a new standalone governance API.
+- Current proposal ingestion intentionally merges `observed` knowledge immediately and Context allows `observed/confirmed`. Task 16 adds user override/governance, not a mandatory approval queue; changing every extraction to pending would be a separate product decision and would materially change current Echo behavior.
+- Existing image-analysis ingestion still uses session-derived source IDs rather than canonical Archive item IDs. New source-backed ingestion must use `memoryArchiveItem + archiveItem.id`; legacy records without that ref cannot be retroactively cascaded without a migration heuristic and must not be falsely reported as covered.

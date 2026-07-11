@@ -28,6 +28,7 @@
 | 13 | done | P1 knowledge tombstone and three-way merge | `docs/plans/task_13_p1-knowledge-tombstone-three-way-merge.md` | `L20260711-005948` |
 | 14 | done | P0 knowledge evidence integrity and Context isolation | `docs/plans/task_14_p0-knowledge-evidence-and-context-isolation.md` | `L20260711-022449-15` |
 | 15 | done | P1 knowledge mutation proposal and persona schema | `docs/plans/task_15_p1-knowledge-mutation-proposal-persona-schema.md` | `L20260711-030653-15` |
+| 16 | done | P1 knowledge governance and source cascade | `docs/plans/task_16_p1-knowledge-governance-source-cascade.md` | `L20260711-040419` |
 
 ## File Structure
 

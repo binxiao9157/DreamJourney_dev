@@ -128,7 +128,15 @@
       "status": "complete",
       "task_file": "docs/plans/task_15_p1-knowledge-mutation-proposal-persona-schema.md",
       "updated_at": "2026-07-11T03:57:33+08:00"
+    },
+    "docs/plans/task_16_p1-knowledge-governance-source-cascade.md": {
+      "ledger_id": "L20260711-040419",
+      "ledger_path": ".complex-problems/L20260711-040419",
+      "next_action": "none",
+      "status": "complete",
+      "task_file": "docs/plans/task_16_p1-knowledge-governance-source-cascade.md",
+      "updated_at": "2026-07-11T09:51:41+08:00"
     }
   },
-  "updated_at": "2026-07-11T03:57:33+08:00"
+  "updated_at": "2026-07-11T09:51:41+08:00"
 }

@@ -1,5 +1,5 @@
 {
-  "active_ledger_id": "L20260711-030653-15",
+  "active_ledger_id": "L20260711-040419",
   "ledgers": [
     {
       "active_count": 0,
@@ -165,7 +165,18 @@
       "status": "done",
       "title": "P1 知识 Mutation Proposal 与 Persona 归属",
       "updated_at": "2026-07-10T19:57:33+00:00"
+    },
+    {
+      "active_count": 0,
+      "blocked_count": 0,
+      "ledger_id": "L20260711-040419",
+      "path": "L20260711-040419",
+      "root_id": "P000",
+      "schema_version": 6,
+      "status": "done",
+      "title": "Task 16：P1 知识治理与来源删除级联",
+      "updated_at": "2026-07-11T01:51:41+00:00"
     }
   ],
-  "updated_at": "2026-07-10T19:57:41+00:00"
+  "updated_at": "2026-07-11T01:51:51+00:00"
 }
