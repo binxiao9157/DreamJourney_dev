@@ -147,6 +147,9 @@ let requiredDocs = [
     "docs/superpowers/status/2026-07-02-echo-context-v2-clue-panel.md",
     "docs/superpowers/status/2026-07-02-echo-readiness-report-v2.md",
     "docs/superpowers/status/2026-07-02-echo-qa-evidence-bundle-v2.md",
+    "docs/superpowers/plans/2026-07-11-product-knowledge-base-architecture-v2.md",
+    "docs/plans/task_16_p1-knowledge-governance-source-cascade.md",
+    "docs/superpowers/status/2026-07-11-knowledge-governance-source-cascade.md",
 ]
 
 for doc in requiredDocs {
@@ -183,6 +186,8 @@ assertContains(matrix, "DJEnableArchiveHiddenBranches", "release matrix should d
 assertContains(matrix, "DJEnableProfileHiddenBranches", "release matrix should document profile hidden QA arg")
 
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
+let knowledgeGovernanceGate = read("Scripts/QA/prd-stitch-ui/run-knowledge-governance-gate.sh")
+let knowledgeGovernanceStatus = read("docs/superpowers/status/2026-07-11-knowledge-governance-source-cascade.md")
 let oneCommandRegression = read("docs/superpowers/status/2026-06-18-one-command-release-regression.md")
 assertContains(releaseRegression, "Release handoff mode forces release-like backend acceptance", "release handoff mode should document forced backend acceptance")
 assertContains(releaseRegression, "RUN_RELEASE_LIKE_BACKEND=1", "release handoff mode should force release-like backend acceptance")
@@ -219,6 +224,16 @@ assertContains(releaseRegression, "RUN_KNOWLEDGE_PROPOSAL_PERSONA_GATE", "releas
 assertContains(releaseRegression, "run-knowledge-proposal-model-smoke.sh", "release regression should always run the knowledge proposal model")
 assertContains(releaseRegression, "knowledge-proposal-persona-policy-check.swift", "release regression should always run the knowledge proposal/persona source guard")
 assertContains(releaseRegression, "run-backend-knowledge-proposal-persona-smoke.sh", "knowledge proposal/persona gate should run the backend contract smoke")
+assertContains(releaseRegression, "RUN_KNOWLEDGE_GOVERNANCE_GATE", "release regression should expose the knowledge governance/source-cascade local gate")
+assertContains(releaseRegression, "run-knowledge-governance-model-smoke.sh", "release regression should always run the governance model guard")
+assertContains(releaseRegression, "run-knowledge-governance-client-check.sh", "release regression should always run the governance client guard")
+assertContains(releaseRegression, "run-knowledge-governance-coordinator-check.sh", "release regression should always run the governance coordinator guard")
+assertContains(releaseRegression, "knowledge-governance-release-boundary-check.swift", "release regression should guard public UI non-exposure")
+assertContains(releaseRegression, "run-knowledge-governance-gate.sh", "knowledge governance gate should run the cross-repository wrapper")
+assertContains(knowledgeGovernanceGate, "run-backend-knowledge-governance-source-cascade-smoke.sh", "knowledge governance gate should run the deterministic backend smoke")
+assertContains(knowledgeGovernanceStatus, "memoryArchiveItem + archiveItem.id", "governance status must document the canonical Archive source identity")
+assertContains(knowledgeGovernanceStatus, "archiveImageAnalysis + session-*", "governance status must document the legacy source migration gap")
+assertContains(knowledgeGovernanceStatus, "没有公开知识管理页面", "governance status must retain the public UI boundary")
 assertContains(releaseRegression, "BACKEND_API_TOKEN= BACKEND_BASE_URL= ./scripts/verify_backend.sh", "backend verify should not inherit deployed backend credentials")
 for handoffGuard in [
     "prd-full-feature-closure-decisions-check.swift",
@@ -275,6 +290,10 @@ for handoffGuard in [
     "run-knowledge-three-way-merge-model-smoke.sh",
     "run-knowledge-proposal-model-smoke.sh",
     "knowledge-proposal-persona-policy-check.swift",
+    "run-knowledge-governance-model-smoke.sh",
+    "run-knowledge-governance-client-check.sh",
+    "run-knowledge-governance-coordinator-check.sh",
+    "knowledge-governance-release-boundary-check.swift",
     "echo-context-v2-clue-panel-check.swift",
     "echo-trace-export-check.swift",
     "echo-runtime-diagnostics-check.swift",
@@ -355,6 +374,16 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/run-echo-qa-evidence-bundle-export-smoke.sh",
     "Scripts/QA/prd-stitch-ui/echo-delayed-reply-dispatch-contract-check.swift",
     "Scripts/QA/prd-stitch-ui/run-release-regression.sh",
+    "Scripts/QA/prd-stitch-ui/knowledge-governance-model-smoke.swift",
+    "Scripts/QA/prd-stitch-ui/run-knowledge-governance-model-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/knowledge-governance-client-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-knowledge-governance-client-check.sh",
+    "Scripts/QA/prd-stitch-ui/knowledge-governance-outbox-model-smoke.swift",
+    "Scripts/QA/prd-stitch-ui/run-knowledge-governance-outbox-model-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/knowledge-governance-coordinator-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-knowledge-governance-coordinator-check.sh",
+    "Scripts/QA/prd-stitch-ui/knowledge-governance-release-boundary-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-knowledge-governance-gate.sh",
     "Scripts/QA/prd-stitch-ui/run-backend-env-smoke.sh",
     "Scripts/QA/prd-stitch-ui/run-release-like-backend-acceptance.sh",
     "Scripts/QA/prd-stitch-ui/final-visual-qa-package-check.swift",

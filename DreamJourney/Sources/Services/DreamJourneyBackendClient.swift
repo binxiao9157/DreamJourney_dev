@@ -2277,9 +2277,14 @@ final class DreamJourneyBackendClient {
     func deleteArchiveItem(
         userId: String,
         itemId: String,
+        operationId: String? = nil,
         completion: @escaping (Result<[String: Any], Error>) -> Void
     ) {
-        let path = "/archive/items/\(pathComponent(userId))/\(pathComponent(itemId))"
+        var path = "/archive/items/\(pathComponent(userId))/\(pathComponent(itemId))"
+        if let operationId = operationId?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !operationId.isEmpty {
+            path += "?operationId=\(queryComponent(operationId))"
+        }
         requestJSON(path: path, method: .delete, payload: nil, completion: completion)
     }
 
@@ -2925,6 +2930,51 @@ final class DreamJourneyBackendClient {
         )
     }
 
+    func governKnowledge(
+        userId: String,
+        operationId: String,
+        baseRevision: Int,
+        action: KBKnowledgeGovernanceAction,
+        completion: @escaping (Result<KBKnowledgeGovernanceResponse, Error>) -> Void
+    ) {
+        let actionObject: [String: Any]
+        do {
+            actionObject = try action.backendJSONObject()
+        } catch {
+            completion(.failure(error))
+            return
+        }
+
+        requestJSON(
+            path: "/kb/governance/actions",
+            method: .post,
+            payload: [
+                "governanceSchemaVersion": 1,
+                "userId": userId,
+                "operationId": operationId,
+                "baseRevision": baseRevision,
+                "action": actionObject,
+            ]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    let response = try KBKnowledgeGovernanceResponse(json: object)
+                    guard response.userId == userId, response.operationId == operationId else {
+                        throw KBKnowledgeGovernanceModelError.invalidResponse(
+                            "response identity does not match the request"
+                        )
+                    }
+                    completion(.success(response))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func fetchKnowledgeChanges(
         userId: String,
         sinceRevision: Int,
@@ -3326,6 +3376,12 @@ final class DreamJourneyBackendClient {
     private func pathComponent(_ value: String) -> String {
         var allowed = CharacterSet.urlPathAllowed
         allowed.remove(charactersIn: "/?#[]@!$&'()*+,;=")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+    }
+
+    private func queryComponent(_ value: String) -> String {
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
         return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
     }
 

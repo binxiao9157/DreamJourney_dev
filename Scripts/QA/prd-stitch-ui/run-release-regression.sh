@@ -34,6 +34,7 @@ RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE="${RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMO
 RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE="${RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE:-0}"
 RUN_KNOWLEDGE_V2_SYNC_GATE="${RUN_KNOWLEDGE_V2_SYNC_GATE:-0}"
 RUN_KNOWLEDGE_PROPOSAL_PERSONA_GATE="${RUN_KNOWLEDGE_PROPOSAL_PERSONA_GATE:-0}"
+RUN_KNOWLEDGE_GOVERNANCE_GATE="${RUN_KNOWLEDGE_GOVERNANCE_GATE:-0}"
 RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE="${RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE:-0}"
 RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE="${RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE:-0}"
 RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE="${RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE:-0}"
@@ -133,6 +134,7 @@ Run ID: \`$RUN_ID\`
 - Backend deployed knowledge pipeline smoke: \`$RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE\`
 - Knowledge V2 three-way/deployed combo gate: \`$RUN_KNOWLEDGE_V2_SYNC_GATE\`
 - Knowledge proposal/persona local combo gate: \`$RUN_KNOWLEDGE_PROPOSAL_PERSONA_GATE\`
+- Knowledge governance/source-cascade local combo gate: \`$RUN_KNOWLEDGE_GOVERNANCE_GATE\`
 - Backend archive image-analysis smoke: \`$RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE\`
 - Backend hidden media sync smoke: \`$RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE\`
 - Backend time-letter lifecycle smoke: \`$RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE\`
@@ -180,8 +182,9 @@ Run ID: \`$RUN_ID\`
 - Optional backend environment smoke when \`RUN_BACKEND_ENV_SMOKE=1\` and backend URL/token are configured.
 - Optional backend auth session/ownership shadow smoke when \`RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE=1\`; this verifies opaque login tokens, refresh rotation/replay rejection, logout revocation, and principal-bound owner mismatch rejection while global mode remains shadow.
 - Optional backend cross-account authorization shadow smoke when \`RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE=1\`; this verifies owner/family/time-letter/invitation policy decisions, forged-viewer deny evidence, and retained production shadow mode without invoking global dispatch.
-- Optional backend route ownership audit smoke when \`RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE=1\`; this verifies 56 classified routes, zero omissions, owner path/body denial, system-only denial, and retained global shadow mode without invoking global dispatch.
+- Optional backend route ownership audit smoke when \`RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE=1\`; this verifies 57 classified routes, zero omissions, owner path/body denial (including knowledge governance), system-only denial, and retained global shadow mode without invoking global dispatch.
 - Optional deployed knowledge pipeline smoke when \`RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE=1\`; this verifies login, revision sync, idempotent mutation, change feed, generation context, and stale-revision conflict against the configured backend.
+- Optional knowledge governance/source-cascade gate when \`RUN_KNOWLEDGE_GOVERNANCE_GATE=1\`; this verifies typed iOS actions, durable outbox, generation gating, three-way compatibility, public UI non-exposure, and deterministic backend governance/Archive cascade behavior without a true device or deployed database.
 - Optional deployed backend archive image-analysis smoke when \`RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE=1\`.
 - Optional deployed backend hidden media sync smoke when \`RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE=1\`; this verifies mock audio/video/time-letter archive contracts without true-device media capture.
 - Optional deployed backend time-letter lifecycle smoke when \`RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE=1\`; this verifies draft edit, seal, upsert, delete, due dispatch, idempotency, and owner/recipient in-app reminder metadata contracts.
@@ -236,6 +239,7 @@ append_report_footer() {
 - Backend route ownership audit smoke: \`backend-route-ownership-audit-smoke/$RUN_ID/\`
 - Backend deployed knowledge pipeline smoke: \`backend-knowledge-pipeline-smoke/$RUN_ID/\`
 - Knowledge proposal/persona local smoke: \`knowledge-proposal-persona-smoke/$RUN_ID/\`
+- Knowledge governance/source-cascade local gate: \`knowledge-governance-gate/$RUN_ID/\`
 - Backend archive image-analysis smoke: \`backend-archive-image-analysis-smoke/$RUN_ID/\`
 - Backend hidden media sync smoke: \`backend-hidden-media-sync-smoke/$RUN_ID/\`
 - Backend time-letter lifecycle smoke: \`backend-time-letter-lifecycle-smoke/$RUN_ID/\`
@@ -301,6 +305,18 @@ run_step "Swift model guard archive-context-snapshot-check" "$STATIC_LOG_DIR/arc
 
 run_step "Swift model guard echo-digital-human-lifecycle-coordinator-check" "$STATIC_LOG_DIR/echo-digital-human-lifecycle-coordinator-check.log" \
   bash -lc "swiftc '$ROOT_DIR/DreamJourney/Sources/Modules/Echo/DigitalHumanConversationCoordinator.swift' '$SCRIPT_DIR/echo-digital-human-lifecycle-coordinator-check.swift' -o '$STATIC_LOG_DIR/echo-digital-human-lifecycle-coordinator-check' && '$STATIC_LOG_DIR/echo-digital-human-lifecycle-coordinator-check'"
+
+run_step "Swift model guard knowledge-governance-model" "$STATIC_LOG_DIR/knowledge-governance-model-smoke.log" \
+  "$SCRIPT_DIR/run-knowledge-governance-model-smoke.sh"
+
+run_step "Swift model guard knowledge-governance-client" "$STATIC_LOG_DIR/knowledge-governance-client-check.log" \
+  "$SCRIPT_DIR/run-knowledge-governance-client-check.sh"
+
+run_step "Swift model guard knowledge-governance-coordinator" "$STATIC_LOG_DIR/knowledge-governance-coordinator-check.log" \
+  "$SCRIPT_DIR/run-knowledge-governance-coordinator-check.sh"
+
+run_step "Swift guard knowledge-governance-release-boundary" "$STATIC_LOG_DIR/knowledge-governance-release-boundary-check.log" \
+  swift "$SCRIPT_DIR/knowledge-governance-release-boundary-check.swift" "$ROOT_DIR"
 
 run_step "Swift model guard knowledge-three-way-merge" "$STATIC_LOG_DIR/knowledge-three-way-merge-model-smoke.log" \
   "$SCRIPT_DIR/run-knowledge-three-way-merge-model-smoke.sh"
@@ -624,6 +640,18 @@ else
   mkdir -p "$OUTPUT_DIR/knowledge-proposal-persona-smoke/$RUN_ID"
   echo "Skipped by RUN_KNOWLEDGE_PROPOSAL_PERSONA_GATE=0" \
     > "$OUTPUT_DIR/knowledge-proposal-persona-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_KNOWLEDGE_GOVERNANCE_GATE" == "1" ]]; then
+  mkdir -p "$OUTPUT_DIR/knowledge-governance-gate/$RUN_ID"
+  run_step \
+    "Knowledge governance/source-cascade cross-repository gate" \
+    "$OUTPUT_DIR/knowledge-governance-gate/$RUN_ID/result.log" \
+    env BACKEND_ROOT="$BACKEND_ROOT" "$SCRIPT_DIR/run-knowledge-governance-gate.sh"
+else
+  mkdir -p "$OUTPUT_DIR/knowledge-governance-gate/$RUN_ID"
+  echo "Skipped by RUN_KNOWLEDGE_GOVERNANCE_GATE=0" \
+    > "$OUTPUT_DIR/knowledge-governance-gate/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE" == "1" ]]; then

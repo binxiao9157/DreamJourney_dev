@@ -7,6 +7,8 @@ final class KnowledgeSyncCoordinator {
     private let queue = DispatchQueue(label: "com.dreamjourney.knowledge-sync", qos: .utility)
     private let baseStore = KnowledgeRemoteBaseStore()
     private let pendingStore = KnowledgePendingMutationStore()
+    private let governanceOutboxStore = KnowledgeGovernanceOutboxStore()
+    private var governanceCompletions: [String: (Result<KBKnowledgeGovernanceResponse, Error>) -> Void] = [:]
     private var activeUserId: String?
     private var syncGeneration = UUID()
     private var isSyncing = false
@@ -19,12 +21,21 @@ final class KnowledgeSyncCoordinator {
         // 必须在 KBLite 切换图谱前同步失效旧 generation，避免已排队的旧用户回调
         // 通过检查后写入新用户文件。
         queue.sync {
+            let staleCompletions = Array(self.governanceCompletions.values)
+            self.governanceCompletions.removeAll()
             self.activeUserId = userId
             self.syncGeneration = UUID()
             self.isSyncing = false
             self.needsResync = false
             self.debounceWorkItem?.cancel()
             self.debounceWorkItem = nil
+            if !staleCompletions.isEmpty {
+                DispatchQueue.main.async {
+                    staleCompletions.forEach {
+                        $0(.failure(KnowledgeGovernanceCoordinatorError.userChanged))
+                    }
+                }
+            }
         }
         guard userId != nil else { return }
         DispatchQueue.main.async {
@@ -45,6 +56,77 @@ final class KnowledgeSyncCoordinator {
                 self.syncGeneration = UUID()
             }
             self.enqueueSync(reason: reason)
+        }
+    }
+
+    /// 将用户知识治理动作先持久化，再与普通图谱同步共用同一串行网络所有权。
+    @discardableResult
+    func performGovernance(
+        action: KBKnowledgeGovernanceAction,
+        expectedIdentity: KBPersonaIdentity? = nil,
+        operationId: String = "ios-governance-\(UUID().uuidString.lowercased())",
+        completion: @escaping (Result<KBKnowledgeGovernanceResponse, Error>) -> Void
+    ) -> String {
+        let identity = expectedIdentity ?? KBLiteManager.resolveCurrentPersonaIdentity()
+        guard DreamJourneyBackendClient.shared.isKnowledgeSyncConfigured,
+              identity.isComplete,
+              let userId = UserManager.shared.currentUser?.id,
+              BackendAuthSessionStore.shared.currentSession?.userId == userId,
+              KBLiteManager.shared.loadedUserId == userId,
+              identity.ownerUserId == userId,
+              KBLiteManager.resolveCurrentPersonaIdentity() == identity else {
+            DispatchQueue.main.async {
+                completion(.failure(KnowledgeGovernanceCoordinatorError.invalidSessionOrIdentity))
+            }
+            return operationId
+        }
+
+        queue.async {
+            do {
+                let item = KnowledgeGovernanceOutboxItem(
+                    operationId: operationId,
+                    userId: userId,
+                    expectedOwnerUserId: identity.ownerUserId,
+                    expectedPersonaScope: identity.personaScope,
+                    expectedDigitalHumanId: identity.digitalHumanId,
+                    action: action,
+                    createdAt: Date()
+                )
+                // Durability is the commit point: never issue the request before this succeeds.
+                try self.governanceOutboxStore.enqueue(item, for: userId)
+                self.governanceCompletions[operationId] = completion
+
+                if self.activeUserId != userId {
+                    self.activeUserId = userId
+                    self.syncGeneration = UUID()
+                }
+                if self.isSyncing {
+                    self.needsResync = true
+                    return
+                }
+                self.debounceWorkItem?.cancel()
+                self.debounceWorkItem = nil
+                let generation = self.syncGeneration
+                if self.loadBase(for: userId) == nil {
+                    self.startSync(userId: userId, generation: generation, reason: "governanceBootstrap")
+                } else {
+                    _ = self.startNextGovernance(userId: userId, generation: generation)
+                }
+            } catch {
+                DispatchQueue.main.async { completion(.failure(error)) }
+            }
+        }
+        return operationId
+    }
+
+    func pendingGovernanceCount(completion: @escaping (Int) -> Void) {
+        queue.async {
+            guard let userId = self.activeUserId else {
+                DispatchQueue.main.async { completion(0) }
+                return
+            }
+            let count = self.loadGovernanceOutbox(for: userId).count
+            DispatchQueue.main.async { completion(count) }
         }
     }
 
@@ -94,6 +176,156 @@ final class KnowledgeSyncCoordinator {
                 }
             }
         }
+    }
+
+    @discardableResult
+    private func startNextGovernance(userId: String, generation: UUID) -> Bool {
+        guard isCurrent(userId: userId, generation: generation), !isSyncing,
+              let base = loadBase(for: userId) else {
+            return false
+        }
+        let currentIdentity = KBLiteManager.resolveCurrentPersonaIdentity()
+        guard KBLiteManager.shared.loadedUserId == userId,
+              currentIdentity.isComplete,
+              let item = loadGovernanceOutbox(for: userId).first(where: {
+                  $0.expectedIdentity == currentIdentity
+              }) else {
+            return false
+        }
+
+        isSyncing = true
+        print(
+            "[KnowledgeSync] governanceStart user=\(userId) operation=\(item.operationId) "
+                + "action=\(item.action.kind.rawValue) revision=\(base.revision)"
+        )
+        DreamJourneyBackendClient.shared.governKnowledge(
+            userId: userId,
+            operationId: item.operationId,
+            baseRevision: base.revision,
+            action: item.action
+        ) { [weak self] result in
+            self?.queue.async {
+                guard let self,
+                      self.isCurrent(userId: userId, generation: generation) else {
+                    return
+                }
+                switch result {
+                case .success(let response):
+                    self.handleGovernanceSuccess(
+                        response,
+                        item: item,
+                        previousBase: base,
+                        userId: userId,
+                        generation: generation
+                    )
+                case .failure(let error):
+                    if Self.isRevisionConflict(error) {
+                        // Keep the durable item and operation ID; refresh the base before retrying.
+                        self.isSyncing = false
+                        self.enqueueSync(reason: "governanceRevisionConflict")
+                    } else {
+                        self.completeGovernance(item.operationId, result: .failure(error))
+                        self.finishGovernance(
+                            userId: userId,
+                            generation: generation,
+                            error: error,
+                            continueDraining: false
+                        )
+                    }
+                }
+            }
+        }
+        return true
+    }
+
+    private func handleGovernanceSuccess(
+        _ response: KBKnowledgeGovernanceResponse,
+        item: KnowledgeGovernanceOutboxItem,
+        previousBase: KnowledgeRemoteBaseSnapshot,
+        userId: String,
+        generation: UUID
+    ) {
+        let currentIdentity = KBLiteManager.resolveCurrentPersonaIdentity()
+        guard currentIdentity == item.expectedIdentity,
+              KBLiteManager.shared.loadedUserId == userId else {
+            do {
+                try governanceOutboxStore.remove(operationId: item.operationId, for: userId)
+                completeGovernance(item.operationId, result: .success(response))
+                isSyncing = false
+                enqueueSync(reason: "governancePersonaChanged")
+            } catch {
+                completeGovernance(item.operationId, result: .failure(error))
+                finishGovernance(
+                    userId: userId,
+                    generation: generation,
+                    error: error,
+                    continueDraining: false
+                )
+            }
+            return
+        }
+
+        let remote = KnowledgeRemoteBaseSnapshot(revision: response.revision, graph: response.graph)
+        guard applyAuthoritativeRemote(remote, previousBase: previousBase, userId: userId) else {
+            let error = KnowledgeGovernanceCoordinatorError.authoritativeApplyFailed
+            completeGovernance(item.operationId, result: .failure(error))
+            finishGovernance(
+                userId: userId,
+                generation: generation,
+                error: error,
+                continueDraining: false
+            )
+            return
+        }
+        do {
+            // Remove only after the authoritative graph and revision are durable locally.
+            try governanceOutboxStore.remove(operationId: item.operationId, for: userId)
+            completeGovernance(item.operationId, result: .success(response))
+            finishGovernance(
+                userId: userId,
+                generation: generation,
+                error: nil,
+                continueDraining: true
+            )
+        } catch {
+            completeGovernance(item.operationId, result: .failure(error))
+            finishGovernance(
+                userId: userId,
+                generation: generation,
+                error: error,
+                continueDraining: false
+            )
+        }
+    }
+
+    private func finishGovernance(
+        userId: String,
+        generation: UUID,
+        error: Error?,
+        continueDraining: Bool
+    ) {
+        guard isCurrent(userId: userId, generation: generation) else { return }
+        isSyncing = false
+        if let error {
+            print("[KnowledgeSync] governanceFailed user=\(userId) error=\(error.localizedDescription)")
+        } else {
+            print("[KnowledgeSync] governanceCompleted user=\(userId)")
+        }
+        if continueDraining, startNextGovernance(userId: userId, generation: generation) {
+            return
+        }
+        if needsResync {
+            needsResync = false
+            enqueueSync(reason: "governanceCoalescedUpdate")
+        }
+    }
+
+    private func completeGovernance(
+        _ operationId: String,
+        result: Result<KBKnowledgeGovernanceResponse, Error>
+    ) {
+        guard let completion = governanceCompletions.removeValue(forKey: operationId) else { return }
+        DispatchQueue.main.async { completion(result) }
     }
 
     private func didApplyChanges(_ object: [String: Any], userId: String) -> Bool {
@@ -394,6 +626,9 @@ final class KnowledgeSyncCoordinator {
             print("[KnowledgeSync] failed user=\(userId) error=\(error.localizedDescription)")
         } else {
             print("[KnowledgeSync] completed user=\(userId) revision=\(loadBase(for: userId)?.revision ?? 0)")
+            if startNextGovernance(userId: userId, generation: generation) {
+                return
+            }
         }
         if needsResync {
             needsResync = false
@@ -423,6 +658,16 @@ final class KnowledgeSyncCoordinator {
             print("[KnowledgeSync] invalidPendingRemoved user=\(userId) error=\(error.localizedDescription)")
             try? pendingStore.remove(for: userId)
             return nil
+        }
+    }
+
+    private func loadGovernanceOutbox(for userId: String) -> [KnowledgeGovernanceOutboxItem] {
+        do {
+            return try governanceOutboxStore.load(for: userId)
+        } catch {
+            print("[KnowledgeSync] invalidGovernanceOutboxRemoved user=\(userId) error=\(error.localizedDescription)")
+            try? governanceOutboxStore.removeAll(for: userId)
+            return []
         }
     }
 
@@ -522,6 +767,23 @@ private enum KnowledgeSyncError: LocalizedError {
             return "知识 V2 变更响应缺少权威图谱"
         case .basePersistenceFailed:
             return "知识远端基线无法持久化"
+        }
+    }
+}
+
+private enum KnowledgeGovernanceCoordinatorError: LocalizedError {
+    case invalidSessionOrIdentity
+    case authoritativeApplyFailed
+    case userChanged
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidSessionOrIdentity:
+            return "当前账号或数字人身份无法安全提交知识治理动作"
+        case .authoritativeApplyFailed:
+            return "知识治理结果无法安全应用到本地图谱"
+        case .userChanged:
+            return "账号已切换，旧知识治理请求已取消"
         }
     }
 }

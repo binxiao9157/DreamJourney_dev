@@ -503,6 +503,180 @@ final class KnowledgePendingMutationStore {
     }
 }
 
+struct KnowledgeGovernanceOutboxItem: Codable, Equatable {
+    let operationId: String
+    let userId: String
+    let expectedOwnerUserId: String
+    let expectedPersonaScope: String
+    let expectedDigitalHumanId: String
+    let action: KBKnowledgeGovernanceAction
+    let createdAt: Date
+
+    var expectedIdentity: KBPersonaIdentity {
+        KBPersonaIdentity(
+            ownerUserId: expectedOwnerUserId,
+            personaScope: expectedPersonaScope,
+            digitalHumanId: expectedDigitalHumanId
+        )
+    }
+}
+
+final class KnowledgeGovernanceOutboxStore {
+    private struct Envelope: Codable {
+        let schemaVersion: Int
+        let userKey: String
+        let items: [KnowledgeGovernanceOutboxItem]
+    }
+
+    private let rootDirectory: URL
+
+    init(rootDirectory: URL? = nil) {
+        if let rootDirectory {
+            self.rootDirectory = rootDirectory
+        } else {
+            let applicationSupport = FileManager.default.urls(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask
+            ).first ?? FileManager.default.urls(
+                for: .documentDirectory,
+                in: .userDomainMask
+            ).first!
+            self.rootDirectory = applicationSupport.appendingPathComponent(
+                "knowledge_base",
+                isDirectory: true
+            )
+        }
+    }
+
+    func load(for userId: String) throws -> [KnowledgeGovernanceOutboxItem] {
+        let normalizedUserId = try normalizedIdentifier(userId)
+        let url = fileURL(userId: normalizedUserId)
+        guard FileManager.default.fileExists(atPath: url.path) else { return [] }
+        do {
+            let data = try Data(contentsOf: url)
+            let envelope = try decoder.decode(Envelope.self, from: data)
+            guard envelope.schemaVersion == 1,
+                  envelope.userKey == KnowledgeRemoteBaseStore.userKey(normalizedUserId) else {
+                throw KnowledgeSyncModelError.invalidPersistenceEnvelope
+            }
+            var operations = Set<String>()
+            for item in envelope.items {
+                try validate(item, expectedUserId: normalizedUserId)
+                guard operations.insert(item.operationId).inserted else {
+                    throw KnowledgeSyncModelError.invalidPersistenceEnvelope
+                }
+            }
+            return envelope.items
+        } catch let error as KnowledgeSyncModelError {
+            throw error
+        } catch {
+            throw KnowledgeSyncModelError.invalidPersistenceEnvelope
+        }
+    }
+
+    func enqueue(_ item: KnowledgeGovernanceOutboxItem, for userId: String) throws {
+        let normalizedUserId = try normalizedIdentifier(userId)
+        try validate(item, expectedUserId: normalizedUserId)
+        var items = try load(for: normalizedUserId)
+        if let index = items.firstIndex(where: { $0.operationId == item.operationId }) {
+            items[index] = item
+        } else {
+            items.append(item)
+        }
+        try write(items, for: normalizedUserId)
+    }
+
+    func remove(operationId: String, for userId: String) throws {
+        let normalizedUserId = try normalizedIdentifier(userId)
+        let normalizedOperationId = operationId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedOperationId.isEmpty else {
+            throw KnowledgeSyncModelError.invalidPersistenceEnvelope
+        }
+        let remaining = try load(for: normalizedUserId).filter {
+            $0.operationId != normalizedOperationId
+        }
+        if remaining.isEmpty {
+            try removeAll(for: normalizedUserId)
+        } else {
+            try write(remaining, for: normalizedUserId)
+        }
+    }
+
+    func removeAll(for userId: String) throws {
+        let normalizedUserId = try normalizedIdentifier(userId)
+        let url = fileURL(userId: normalizedUserId)
+        if FileManager.default.fileExists(atPath: url.path) {
+            try FileManager.default.removeItem(at: url)
+        }
+    }
+
+    func count(for userId: String) throws -> Int {
+        try load(for: userId).count
+    }
+
+    private func write(_ items: [KnowledgeGovernanceOutboxItem], for userId: String) throws {
+        guard !items.isEmpty else {
+            try removeAll(for: userId)
+            return
+        }
+        try FileManager.default.createDirectory(
+            at: rootDirectory,
+            withIntermediateDirectories: true
+        )
+        let envelope = Envelope(
+            schemaVersion: 1,
+            userKey: KnowledgeRemoteBaseStore.userKey(userId),
+            items: items
+        )
+        let data = try encoder.encode(envelope)
+        try data.write(to: fileURL(userId: userId), options: .atomic)
+    }
+
+    private func validate(
+        _ item: KnowledgeGovernanceOutboxItem,
+        expectedUserId: String
+    ) throws {
+        guard item.userId.trimmingCharacters(in: .whitespacesAndNewlines) == expectedUserId,
+              !item.operationId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              item.expectedIdentity.isComplete,
+              item.expectedIdentity.ownerUserId == expectedUserId else {
+            throw KnowledgeSyncModelError.invalidPersistenceEnvelope
+        }
+        do {
+            _ = try item.action.backendJSONObject()
+        } catch {
+            throw KnowledgeSyncModelError.invalidPersistenceEnvelope
+        }
+    }
+
+    private func normalizedIdentifier(_ value: String) throws -> String {
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else {
+            throw KnowledgeSyncModelError.invalidPersistenceEnvelope
+        }
+        return normalized
+    }
+
+    private func fileURL(userId: String) -> URL {
+        rootDirectory.appendingPathComponent(
+            "kb_governance_outbox_\(KnowledgeRemoteBaseStore.userKey(userId)).json"
+        )
+    }
+
+    private var encoder: JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return encoder
+    }
+
+    private var decoder: JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }
+}
+
 enum KnowledgeMutationV2Contract {
     static func authoritativeSnapshot(from object: [String: Any]) -> KnowledgeRemoteBaseSnapshot? {
         guard intValue(object["mutationSchemaVersion"]) == 2,

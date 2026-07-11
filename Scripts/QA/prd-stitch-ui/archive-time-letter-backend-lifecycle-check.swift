@@ -18,6 +18,7 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
 }
 
 let backendMain = read("app/main.py", in: backendRoot)
+let archiveStore = read("app/services/archive_store.py", in: backendRoot)
 let inMemoryStore = read("app/services/in_memory_store.py", in: backendRoot)
 let postgresStore = read("app/services/postgres_store.py", in: backendRoot)
 let backendApiTests = read("tests/test_core_services.py", in: backendRoot)
@@ -32,16 +33,18 @@ let statusDoc = read("docs/superpowers/status/2026-06-21-time-letter-public-deli
 
 for required in [
     "@app.delete(\"/archive/items/{user_id}/{item_id}\")",
-    "_is_sealed_time_letter",
-    "sealed timeLetter cannot be deleted",
-    "store.delete_archive_item(user_id, item_id)",
+    "store.delete_archive_item_with_kb_mutation(",
+    "except ArchiveItemDeletionForbidden as exc:",
     "\"status\": \"deleted\"",
 ] {
     assertContains(backendMain, required, "backend API should expose timeLetter archive delete contract \(required)")
 }
+assertContains(archiveStore, "def is_sealed_time_letter", "shared archive store contract should identify sealed timeLetter")
 
 for required in [
     "def delete_archive_item(self, user_id: str, item_id: str)",
+    "def delete_archive_item_with_kb_mutation(",
+    "sealed timeLetter cannot be deleted",
     "items[:] = [entry for entry in items if entry.get(\"id\") != item[\"id\"]]",
 ] {
     assertContains(inMemoryStore, required, "memory store should upsert/delete archive items \(required)")
@@ -49,6 +52,8 @@ for required in [
 
 for required in [
     "def delete_archive_item(self, user_id: str, item_id: str)",
+    "def delete_archive_item_with_kb_mutation(",
+    "sealed timeLetter cannot be deleted",
     "DELETE FROM archive_items",
     "ON CONFLICT (id) DO UPDATE SET",
 ] {

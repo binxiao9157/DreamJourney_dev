@@ -1,0 +1,83 @@
+import Foundation
+
+let root = URL(fileURLWithPath: CommandLine.arguments.dropFirst().first ?? FileManager.default.currentDirectoryPath)
+
+func read(_ relativePath: String) throws -> String {
+    try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+}
+
+func require(_ condition: @autoclosure () -> Bool, _ message: String) {
+    guard condition() else {
+        fputs("knowledge-governance-coordinator-check failed: \(message)\n", stderr)
+        exit(1)
+    }
+}
+
+func position(_ needle: String, in source: String) -> String.Index {
+    guard let range = source.range(of: needle) else {
+        fputs("knowledge-governance-coordinator-check failed: missing \(needle)\n", stderr)
+        exit(1)
+    }
+    return range.lowerBound
+}
+
+let coordinator = try read("DreamJourney/Sources/Services/KnowledgeSyncCoordinator.swift")
+let outbox = try read("DreamJourney/Sources/Services/KnowledgeThreeWayMerge.swift")
+
+require(coordinator.contains("private let governanceOutboxStore = KnowledgeGovernanceOutboxStore()"),
+        "coordinator must own the durable governance outbox")
+require(coordinator.contains("func performGovernance("),
+        "coordinator governance entry point is missing")
+require(coordinator.contains("private func startNextGovernance("),
+        "governance requests must share the serial sync coordinator")
+require(coordinator.contains("guard isCurrent(userId: userId, generation: generation), !isSyncing"),
+        "governance must use the sync generation and single network owner gate")
+
+let enqueuePosition = position("try self.governanceOutboxStore.enqueue(item, for: userId)", in: coordinator)
+let requestPosition = position("DreamJourneyBackendClient.shared.governKnowledge(", in: coordinator)
+require(enqueuePosition < requestPosition,
+        "governance action must be persisted before the backend request")
+
+require(coordinator.contains("$0.expectedIdentity == currentIdentity"),
+        "pending action must match the current persona before dispatch")
+require(coordinator.contains("currentIdentity == item.expectedIdentity"),
+        "persona identity must be checked again before applying the response")
+require(coordinator.contains("enqueueSync(reason: \"governancePersonaChanged\")"),
+        "a stale persona response must be recovered through normal sync")
+
+require(coordinator.contains("if Self.isRevisionConflict(error)"),
+        "revision conflicts must be handled explicitly")
+require(coordinator.contains("enqueueSync(reason: \"governanceRevisionConflict\")"),
+        "revision conflicts must refresh the remote base before retry")
+require(coordinator.contains("operationId: item.operationId"),
+        "retryable governance requests must preserve their operation ID")
+
+let applyPosition = position("guard applyAuthoritativeRemote(remote, previousBase: previousBase, userId: userId)", in: coordinator)
+guard let removeRange = coordinator.range(
+    of: "try governanceOutboxStore.remove(operationId: item.operationId, for: userId)",
+    range: applyPosition..<coordinator.endIndex
+) else {
+    fputs("knowledge-governance-coordinator-check failed: missing post-apply outbox removal\n", stderr)
+    exit(1)
+}
+let removePosition = removeRange.lowerBound
+require(applyPosition < removePosition,
+        "same-persona outbox item may only be removed after authoritative graph application")
+
+require(coordinator.contains("let staleCompletions = Array(self.governanceCompletions.values)"),
+        "user changes must invalidate governance callbacks")
+require(coordinator.contains("KnowledgeGovernanceCoordinatorError.userChanged"),
+        "invalidated callbacks need an explicit failure")
+require(coordinator.contains("invalidGovernanceOutboxRemoved"),
+        "corrupt outbox recovery must be observable without knowledge content")
+
+for declaration in [
+    "struct KnowledgeGovernanceOutboxItem: Codable, Equatable",
+    "final class KnowledgeGovernanceOutboxStore",
+    "func enqueue(_ item: KnowledgeGovernanceOutboxItem, for userId: String) throws",
+    "func remove(operationId: String, for userId: String) throws",
+] {
+    require(outbox.contains(declaration), "missing durable outbox contract \(declaration)")
+}
+
+print("Knowledge governance coordinator check passed")

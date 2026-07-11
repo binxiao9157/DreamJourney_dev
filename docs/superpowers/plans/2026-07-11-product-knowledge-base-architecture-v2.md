@@ -56,15 +56,22 @@
 - `/context/build` Context V2：selected、filtered、ranking trace 与 generationContext。
 - Echo 当前 turn 使用 `ChatRagText` 注入，超时使用本地 generationAllowed KBLite 降级。
 - QA evidence 已能记录来源、hash、fallback、声音和数字人 runtime 摘要。
+- Task 16 知识治理：后端权威 `confirm / reject / correct / deleteSource`、Archive 来源删除组合事务、iOS typed consumer、per-user outbox 和 generation gate。
+- `RUN_KNOWLEDGE_GOVERNANCE_GATE=1`：串联 iOS 治理/合并检查与后端 memory/fake Postgres 来源级联回归。
 
-当前审计确认的 P0 风险：
+已经通过 Task 13-16 收敛的风险：
 
-- 后端提取接收 user/assistant 拼接文本，provider 结果的 `sourceTurnIndices` 未验证，存在 AI 回复回灌为事实的风险。
-- iOS 的“每 3 次后端提取”与总 `sessionCount` 共用水位，本地提取也会推进水位，可能导致首次之后长期只走轻量正则。
-- family persona 的 Context 超时会回退到当前登录者个人 KBLite，可能把 viewer 私有事实注入另一个家庭角色。
-- Context 响应提交生成前缺少完整的 user/persona/digital-human identity 校验。
-- 现有 low/medium fact 可以进入后端和本地生成文本。
-- 时间信件和 care viewer 仍需补跨收件人/跨 viewer 负向回归。
+- provider 实体必须引用有效用户 turn；assistant-only、无来源和越界来源不再进入知识 proposal。
+- 后端精提取水位与总 session count 分离，family persona 禁止回退到 viewer 个人 KBLite。
+- Context 响应提交前校验 user/persona/digital-human identity，low/medium fact 不进入生成文本。
+- 时间信件收件人、care viewer、家庭 persona 和跨用户边界具备负向回归。
+- 用户治理动作由后端 snapshot 生成 Mutation V2；旧 user/persona 回调不能直接覆盖当前图谱。
+
+当前剩余 P1 边界：
+
+- 公开知识审阅/确认/纠正入口尚未由 PRD 和 Stitch 决定，当前只提供稳定 service API。
+- 新 Archive 来源使用 `memoryArchiveItem + archiveItem.id`；历史 `archiveImageAnalysis + session-*` 来源需要显式迁移，不会被新删除级联自动命中。
+- operation payload hash、change feed compaction 和真实 Postgres deployed smoke 仍是后续生产化工作。
 
 现有旧文档 `docs/knowledge-base-design*.md` 只作为历史思路参考。以下旧方向不再作为当前实施依据：
 
@@ -259,12 +266,20 @@ family_relationship_inactive
 - 本地 `localOnly` 永不上传，也不被远端删除。
 - 同一实体双方修改目前确定性 local-wins，并写 QA conflict summary。
 
-后续 P1：
+Task 16 已完成：
+
+- `confirm` 保留实体与来源，标记 `confirmed`。
+- `reject` 保留审计历史，标记 `rejected`，Context 继续过滤。
+- `correct` 将旧实体标记 `superseded`，创建稳定 ID 的 `confirmed` replacement，禁止原地改写。
+- `deleteSource` 精确匹配 `(kind,id)`，移除对应 source ref，并把直接引用实体标记 `superseded`。
+- Archive 删除与知识来源撤销在 memory/Postgres 中使用同一组合事务；sealed 时间信件仍禁止删除。
+- iOS 治理动作先进入 per-user outbox，再与普通 graph sync 共用串行 coordinator；409 用同 operation ID 重试。
+
+后续同步生产化：
 
 - operation ID 增加 payload hash，一 ID 不允许重放不同内容。
 - change feed 增加分页、水位和保留/compaction。
-- source 删除时标记关联知识 `superseded/rejected`，避免孤儿事实继续进入 Echo。
-- 用户确认/拒绝形成新的 mutation，不静默改写历史来源。
+- 为历史 Archive 分析来源建立 canonical sourceRef 迁移工具和迁移证据。
 
 ## 9. API 演进
 
@@ -304,6 +319,18 @@ family_relationship_inactive
 
 P1 让提取返回 `mutationProposal`，服务端基于当前 snapshot 完成稳定 ID、去重、来源和授权继承；提取接口本身不直接持久化。iOS/治理策略确认后再调用 Mutation V2。
 
+### 9.3 Task 16 治理合同
+
+```text
+POST /kb/governance/actions
+```
+
+- 请求固定 `governanceSchemaVersion=1`、`userId`、`operationId`、`baseRevision` 和 typed action。
+- 只有 owner principal 可以发起；family action 必须保持 canonical `personaScope/digitalHumanId`。
+- 服务端基于当前 snapshot 生成 Mutation V2，客户端不得拼接权威实体。
+- 响应返回权威 graph/revision、幂等标志和不含知识正文的 summary。
+- Archive 删除复用 `deleteSource(memoryArchiveItem, archiveItem.id)`，零命中时仍可删除档案但不推进知识 revision。
+
 ## 10. 可观测性与 QA
 
 每轮知识处理和 Echo Context 应记录：
@@ -323,6 +350,7 @@ P1 让提取返回 `mutationProposal`，服务端基于当前 snapshot 完成稳
 4. 写给 A 的未到期/非 B 收件人时间信件不进入 B 的 Context。
 5. 不同用户、不同 family persona、登出/切换旧回调不串数据。
 6. tombstone、重试、409 和旧服务端降级仍通过。
+7. confirm/reject/correct/deleteSource、Archive 组合删除、outbox 重启恢复和 user/persona 旧回调隔离仍通过。
 
 ## 11. 分阶段实施计划
 
@@ -348,7 +376,7 @@ P1 让提取返回 `mutationProposal`，服务端基于当前 snapshot 完成稳
 - KBLite person 到 Family 的自动派生改为“未授权候选”或彻底移除；生产 seed 成员迁到 QA-only。
 - timeLetter draft 的后端 payload 使用字段 allowlist；`metadataOnly` 不得携带正文、分析摘要或 transcript，删除草稿需同步撤销。
 
-实施进度：Task 15 已完成本节前四项中的 proposal、稳定 ID/关系/metadata、persona-scoped Context 和 iOS canonical identity 主链路。用户治理、来源删除级联、历史 canonical ID 迁移与 timeLetter 草稿收敛继续作为后续 P1。
+实施进度：Task 15 已完成 proposal、稳定 ID/关系/metadata、persona-scoped Context 和 iOS canonical identity 主链路。Task 16 已完成用户治理、Archive 来源删除级联、iOS durable outbox/coordinator 和组合 QA gate。历史 canonical sourceRef 迁移、timeLetter 草稿字段收敛与公开治理体验继续作为后续 P1/P2。
 
 ### P1：同步生产化
 

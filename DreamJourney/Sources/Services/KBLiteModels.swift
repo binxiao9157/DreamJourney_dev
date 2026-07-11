@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 
 // MARK: - Lite 知识库数据模型
 
@@ -33,6 +34,597 @@ struct KBPrivacyMetadata: Codable {
     }
 }
 
+// MARK: - Knowledge governance
+
+enum KBKnowledgeEntityType: String, Codable, CaseIterable {
+    case people
+    case places
+    case events
+    case facts
+}
+
+struct KBKnowledgeEntityLink: Codable, Equatable {
+    let entityType: KBKnowledgeEntityType
+    let entityId: String
+}
+
+struct KBKnowledgeSourceIdentity: Codable, Equatable {
+    let kind: String
+    let id: String
+}
+
+enum KBKnowledgeGovernanceActionKind: String, Codable {
+    case confirm
+    case reject
+    case correct
+    case deleteSource
+}
+
+struct KBKnowledgeGovernanceMetadata: Codable, Equatable {
+    let action: KBKnowledgeGovernanceActionKind
+    let operationId: String
+    let decidedAt: Date
+    let target: KBKnowledgeEntityLink
+    let replacement: KBKnowledgeEntityLink?
+    let sourceRef: KBKnowledgeSourceIdentity?
+
+    private enum CodingKeys: String, CodingKey {
+        case action
+        case operationId
+        case decidedAt
+        case target
+        case replacement
+        case sourceRef
+    }
+
+    init(
+        action: KBKnowledgeGovernanceActionKind,
+        operationId: String,
+        decidedAt: Date,
+        target: KBKnowledgeEntityLink,
+        replacement: KBKnowledgeEntityLink? = nil,
+        sourceRef: KBKnowledgeSourceIdentity? = nil
+    ) {
+        self.action = action
+        self.operationId = operationId
+        self.decidedAt = decidedAt
+        self.target = target
+        self.replacement = replacement
+        self.sourceRef = sourceRef
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        action = try container.decode(KBKnowledgeGovernanceActionKind.self, forKey: .action)
+        operationId = try container.decode(String.self, forKey: .operationId)
+        decidedAt = try KBKnowledgeGovernanceDateCoding.decode(from: container, forKey: .decidedAt)
+        target = try container.decode(KBKnowledgeEntityLink.self, forKey: .target)
+        replacement = try container.decodeIfPresent(KBKnowledgeEntityLink.self, forKey: .replacement)
+        sourceRef = try container.decodeIfPresent(KBKnowledgeSourceIdentity.self, forKey: .sourceRef)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(action, forKey: .action)
+        try container.encode(operationId, forKey: .operationId)
+        try KBKnowledgeGovernanceDateCoding.encode(decidedAt, to: &container, forKey: .decidedAt)
+        try container.encode(target, forKey: .target)
+        try container.encodeIfPresent(replacement, forKey: .replacement)
+        try container.encodeIfPresent(sourceRef, forKey: .sourceRef)
+    }
+}
+
+struct KBPersonGovernanceCorrection: Codable, Equatable {
+    var name: String? = nil
+    var aliases: [String]? = nil
+    var relation: String? = nil
+    var traits: [String]? = nil
+    var briefBio: String? = nil
+    var relatedPersonIds: [String]? = nil
+
+    fileprivate var hasChanges: Bool {
+        name != nil || aliases != nil || relation != nil || traits != nil || briefBio != nil || relatedPersonIds != nil
+    }
+}
+
+struct KBPlaceGovernanceCorrection: Codable, Equatable {
+    var name: String? = nil
+    var category: String? = nil
+    var latitude: Double? = nil
+    var longitude: Double? = nil
+    var description: String? = nil
+    var relatedPersonIds: [String]? = nil
+
+    fileprivate var hasChanges: Bool {
+        name != nil || category != nil || latitude != nil || longitude != nil || description != nil || relatedPersonIds != nil
+    }
+}
+
+struct KBEventGovernanceCorrection: Codable, Equatable {
+    var title: String? = nil
+    var description: String? = nil
+    var year: Int? = nil
+    var month: Int? = nil
+    var locationId: String? = nil
+    var participantIds: [String]? = nil
+    var mediaIds: [String]? = nil
+    var memoirId: String? = nil
+
+    fileprivate var hasChanges: Bool {
+        title != nil || description != nil || year != nil || month != nil || locationId != nil ||
+            participantIds != nil || mediaIds != nil || memoirId != nil
+    }
+}
+
+struct KBFactGovernanceCorrection: Codable, Equatable {
+    var statement: String? = nil
+    var relatedPersonIds: [String]? = nil
+    var relatedPlaceIds: [String]? = nil
+    var relatedEventIds: [String]? = nil
+
+    fileprivate var hasChanges: Bool {
+        statement != nil || relatedPersonIds != nil || relatedPlaceIds != nil || relatedEventIds != nil
+    }
+}
+
+enum KBKnowledgeGovernanceCorrection: Equatable {
+    case person(KBPersonGovernanceCorrection)
+    case place(KBPlaceGovernanceCorrection)
+    case event(KBEventGovernanceCorrection)
+    case fact(KBFactGovernanceCorrection)
+
+    var entityType: KBKnowledgeEntityType {
+        switch self {
+        case .person: return .people
+        case .place: return .places
+        case .event: return .events
+        case .fact: return .facts
+        }
+    }
+
+    fileprivate var hasChanges: Bool {
+        switch self {
+        case .person(let correction): return correction.hasChanges
+        case .place(let correction): return correction.hasChanges
+        case .event(let correction): return correction.hasChanges
+        case .fact(let correction): return correction.hasChanges
+        }
+    }
+}
+
+enum KBKnowledgeGovernanceAction: Codable, Equatable {
+    case confirm(target: KBKnowledgeEntityLink, decidedAt: Date)
+    case reject(target: KBKnowledgeEntityLink, decidedAt: Date)
+    case correct(target: KBKnowledgeEntityLink, correction: KBKnowledgeGovernanceCorrection, decidedAt: Date)
+    case deleteSource(sourceRef: KBKnowledgeSourceIdentity, decidedAt: Date)
+
+    private enum CodingKeys: String, CodingKey {
+        case kind
+        case entityType
+        case entityId
+        case correction
+        case sourceRef
+        case decidedAt
+    }
+
+    var kind: KBKnowledgeGovernanceActionKind {
+        switch self {
+        case .confirm: return .confirm
+        case .reject: return .reject
+        case .correct: return .correct
+        case .deleteSource: return .deleteSource
+        }
+    }
+
+    func backendJSONObject() throws -> [String: Any] {
+        try validateForBackend()
+        let data = try JSONEncoder().encode(self)
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw KBKnowledgeGovernanceModelError.invalidAction("action must encode as a JSON object")
+        }
+        return object
+    }
+
+    private func validateForBackend() throws {
+        switch self {
+        case .confirm(let target, _), .reject(let target, _):
+            try Self.validate(target: target)
+        case .correct(let target, let correction, _):
+            try Self.validate(target: target)
+            guard target.entityType == correction.entityType, correction.hasChanges else {
+                throw KBKnowledgeGovernanceModelError.invalidAction(
+                    "correction must be non-empty and match entityType"
+                )
+            }
+        case .deleteSource(let sourceRef, _):
+            guard !sourceRef.kind.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  !sourceRef.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw KBKnowledgeGovernanceModelError.invalidAction(
+                    "sourceRef kind and id are required"
+                )
+            }
+        }
+    }
+
+    private static func validate(target: KBKnowledgeEntityLink) throws {
+        guard !target.entityId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw KBKnowledgeGovernanceModelError.invalidAction("entityId is required")
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let kind = try container.decode(KBKnowledgeGovernanceActionKind.self, forKey: .kind)
+        let decidedAt = try KBKnowledgeGovernanceDateCoding.decode(from: container, forKey: .decidedAt)
+
+        switch kind {
+        case .deleteSource:
+            guard !container.contains(.entityType),
+                  !container.contains(.entityId),
+                  !container.contains(.correction) else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .sourceRef,
+                    in: container,
+                    debugDescription: "deleteSource cannot contain an entity target or correction"
+                )
+            }
+            let sourceRef = try container.decode(KBKnowledgeSourceIdentity.self, forKey: .sourceRef)
+            self = .deleteSource(sourceRef: sourceRef, decidedAt: decidedAt)
+        case .confirm, .reject, .correct:
+            guard !container.contains(.sourceRef) else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .sourceRef,
+                    in: container,
+                    debugDescription: "entity governance actions cannot contain sourceRef"
+                )
+            }
+            let entityType = try container.decode(KBKnowledgeEntityType.self, forKey: .entityType)
+            let entityId = try container.decode(String.self, forKey: .entityId)
+            let target = KBKnowledgeEntityLink(entityType: entityType, entityId: entityId)
+            if kind == .confirm || kind == .reject {
+                guard !container.contains(.correction) else {
+                    throw DecodingError.dataCorruptedError(
+                        forKey: .correction,
+                        in: container,
+                        debugDescription: "only correct can contain correction"
+                    )
+                }
+                self = kind == .confirm
+                    ? .confirm(target: target, decidedAt: decidedAt)
+                    : .reject(target: target, decidedAt: decidedAt)
+                return
+            }
+
+            let correction = try Self.decodeCorrection(entityType: entityType, from: container)
+            guard correction.hasChanges else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .correction,
+                    in: container,
+                    debugDescription: "correction must contain at least one supported field"
+                )
+            }
+            self = .correct(target: target, correction: correction, decidedAt: decidedAt)
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(kind, forKey: .kind)
+
+        switch self {
+        case .confirm(let target, let decidedAt), .reject(let target, let decidedAt):
+            try container.encode(target.entityType, forKey: .entityType)
+            try container.encode(target.entityId, forKey: .entityId)
+            try KBKnowledgeGovernanceDateCoding.encode(decidedAt, to: &container, forKey: .decidedAt)
+        case .correct(let target, let correction, let decidedAt):
+            guard target.entityType == correction.entityType else {
+                throw EncodingError.invalidValue(
+                    correction,
+                    EncodingError.Context(
+                        codingPath: container.codingPath + [CodingKeys.correction],
+                        debugDescription: "correction type must match entityType"
+                    )
+                )
+            }
+            guard correction.hasChanges else {
+                throw EncodingError.invalidValue(
+                    correction,
+                    EncodingError.Context(
+                        codingPath: container.codingPath + [CodingKeys.correction],
+                        debugDescription: "correction must contain at least one supported field"
+                    )
+                )
+            }
+            try container.encode(target.entityType, forKey: .entityType)
+            try container.encode(target.entityId, forKey: .entityId)
+            try Self.encodeCorrection(correction, to: &container)
+            try KBKnowledgeGovernanceDateCoding.encode(decidedAt, to: &container, forKey: .decidedAt)
+        case .deleteSource(let sourceRef, let decidedAt):
+            try container.encode(sourceRef, forKey: .sourceRef)
+            try KBKnowledgeGovernanceDateCoding.encode(decidedAt, to: &container, forKey: .decidedAt)
+        }
+    }
+
+    private static func decodeCorrection(
+        entityType: KBKnowledgeEntityType,
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) throws -> KBKnowledgeGovernanceCorrection {
+        let correctionContainer = try container.nestedContainer(
+            keyedBy: KBKnowledgeGovernanceDynamicCodingKey.self,
+            forKey: .correction
+        )
+        let presentFields = Set(correctionContainer.allKeys.map(\.stringValue))
+        let allowedFields: Set<String>
+        switch entityType {
+        case .people:
+            allowedFields = ["name", "aliases", "relation", "traits", "briefBio", "relatedPersonIds"]
+        case .places:
+            allowedFields = ["name", "category", "latitude", "longitude", "description", "relatedPersonIds"]
+        case .events:
+            allowedFields = [
+                "title", "description", "year", "month", "locationId", "participantIds", "mediaIds", "memoirId",
+            ]
+        case .facts:
+            allowedFields = ["statement", "relatedPersonIds", "relatedPlaceIds", "relatedEventIds"]
+        }
+        guard !presentFields.isEmpty, presentFields.isSubset(of: allowedFields) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .correction,
+                in: container,
+                debugDescription: "correction contains no fields or an unsupported field"
+            )
+        }
+
+        switch entityType {
+        case .people:
+            return .person(try container.decode(KBPersonGovernanceCorrection.self, forKey: .correction))
+        case .places:
+            return .place(try container.decode(KBPlaceGovernanceCorrection.self, forKey: .correction))
+        case .events:
+            return .event(try container.decode(KBEventGovernanceCorrection.self, forKey: .correction))
+        case .facts:
+            return .fact(try container.decode(KBFactGovernanceCorrection.self, forKey: .correction))
+        }
+    }
+
+    private static func encodeCorrection(
+        _ correction: KBKnowledgeGovernanceCorrection,
+        to container: inout KeyedEncodingContainer<CodingKeys>
+    ) throws {
+        switch correction {
+        case .person(let value): try container.encode(value, forKey: .correction)
+        case .place(let value): try container.encode(value, forKey: .correction)
+        case .event(let value): try container.encode(value, forKey: .correction)
+        case .fact(let value): try container.encode(value, forKey: .correction)
+        }
+    }
+}
+
+struct KBKnowledgeGovernanceSummary: Codable, Equatable {
+    let action: KBKnowledgeGovernanceActionKind
+    let decidedAt: Date
+    let affectedEntityCount: Int
+    let target: KBKnowledgeEntityLink?
+    let replacement: KBKnowledgeEntityLink?
+    let sourceRef: KBKnowledgeSourceIdentity?
+    let targets: [KBKnowledgeEntityLink]?
+
+    private enum CodingKeys: String, CodingKey {
+        case action
+        case decidedAt
+        case affectedEntityCount
+        case target
+        case replacement
+        case sourceRef
+        case targets
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        action = try container.decode(KBKnowledgeGovernanceActionKind.self, forKey: .action)
+        decidedAt = try KBKnowledgeGovernanceDateCoding.decode(from: container, forKey: .decidedAt)
+        affectedEntityCount = try container.decode(Int.self, forKey: .affectedEntityCount)
+        target = try container.decodeIfPresent(KBKnowledgeEntityLink.self, forKey: .target)
+        replacement = try container.decodeIfPresent(KBKnowledgeEntityLink.self, forKey: .replacement)
+        sourceRef = try container.decodeIfPresent(KBKnowledgeSourceIdentity.self, forKey: .sourceRef)
+        targets = try container.decodeIfPresent([KBKnowledgeEntityLink].self, forKey: .targets)
+
+        guard affectedEntityCount > 0 else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .affectedEntityCount,
+                in: container,
+                debugDescription: "affectedEntityCount must be positive"
+            )
+        }
+        switch action {
+        case .deleteSource:
+            guard sourceRef != nil,
+                  let targets,
+                  !targets.isEmpty,
+                  affectedEntityCount == targets.count,
+                  target == nil,
+                  replacement == nil else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .sourceRef,
+                    in: container,
+                    debugDescription: "deleteSource summary requires sourceRef and targets"
+                )
+            }
+        case .correct:
+            guard affectedEntityCount == 2,
+                  target != nil,
+                  replacement != nil,
+                  sourceRef == nil,
+                  targets == nil else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .replacement,
+                    in: container,
+                    debugDescription: "correct summary requires target and replacement"
+                )
+            }
+        case .confirm, .reject:
+            guard affectedEntityCount == 1,
+                  target != nil,
+                  replacement == nil,
+                  sourceRef == nil,
+                  targets == nil else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .target,
+                    in: container,
+                    debugDescription: "entity summary requires only a target"
+                )
+            }
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(action, forKey: .action)
+        try KBKnowledgeGovernanceDateCoding.encode(decidedAt, to: &container, forKey: .decidedAt)
+        try container.encode(affectedEntityCount, forKey: .affectedEntityCount)
+        try container.encodeIfPresent(target, forKey: .target)
+        try container.encodeIfPresent(replacement, forKey: .replacement)
+        try container.encodeIfPresent(sourceRef, forKey: .sourceRef)
+        try container.encodeIfPresent(targets, forKey: .targets)
+    }
+}
+
+struct KBKnowledgeGovernanceResponse {
+    let governanceSchemaVersion: Int
+    let mutationSchemaVersion: Int
+    let userId: String
+    let operationId: String
+    let revision: Int
+    let duplicate: Bool
+    let summary: KBKnowledgeGovernanceSummary
+    let graph: [String: Any]
+
+    init(json: [String: Any]) throws {
+        guard let governanceSchemaVersion = Self.strictInt(json["governanceSchemaVersion"]),
+              governanceSchemaVersion == 1 else {
+            throw KBKnowledgeGovernanceModelError.invalidResponse("governanceSchemaVersion must be 1")
+        }
+        guard let mutationSchemaVersion = Self.strictInt(json["mutationSchemaVersion"]),
+              mutationSchemaVersion == 2 else {
+            throw KBKnowledgeGovernanceModelError.invalidResponse("mutationSchemaVersion must be 2")
+        }
+        guard let userId = json["userId"] as? String, !userId.isEmpty else {
+            throw KBKnowledgeGovernanceModelError.invalidResponse("userId is required")
+        }
+        guard let operationId = json["operationId"] as? String, !operationId.isEmpty else {
+            throw KBKnowledgeGovernanceModelError.invalidResponse("operationId is required")
+        }
+        guard let revision = Self.strictInt(json["revision"]), revision >= 0 else {
+            throw KBKnowledgeGovernanceModelError.invalidResponse("revision must be a non-negative integer")
+        }
+        guard let duplicate = Self.strictBool(json["duplicate"]) else {
+            throw KBKnowledgeGovernanceModelError.invalidResponse("duplicate must be a boolean")
+        }
+        guard let graph = json["graph"] as? [String: Any], JSONSerialization.isValidJSONObject(graph) else {
+            throw KBKnowledgeGovernanceModelError.invalidResponse("graph must be a JSON object")
+        }
+        guard let summaryObject = json["summary"] as? [String: Any],
+              JSONSerialization.isValidJSONObject(summaryObject) else {
+            throw KBKnowledgeGovernanceModelError.invalidResponse("summary must be a JSON object")
+        }
+        do {
+            let data = try JSONSerialization.data(withJSONObject: summaryObject)
+            summary = try JSONDecoder().decode(KBKnowledgeGovernanceSummary.self, from: data)
+        } catch {
+            throw KBKnowledgeGovernanceModelError.invalidResponse("summary is invalid")
+        }
+
+        self.governanceSchemaVersion = governanceSchemaVersion
+        self.mutationSchemaVersion = mutationSchemaVersion
+        self.userId = userId
+        self.operationId = operationId
+        self.revision = revision
+        self.duplicate = duplicate
+        self.graph = graph
+    }
+
+    private static func strictInt(_ value: Any?) -> Int? {
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID(),
+              ["c", "C", "s", "S", "i", "I", "l", "L", "q", "Q"].contains(String(cString: number.objCType)) else {
+            return nil
+        }
+        return number.intValue
+    }
+
+    private static func strictBool(_ value: Any?) -> Bool? {
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) == CFBooleanGetTypeID() else {
+            return nil
+        }
+        return number.boolValue
+    }
+}
+
+enum KBKnowledgeGovernanceModelError: LocalizedError {
+    case invalidAction(String)
+    case invalidResponse(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidAction(let detail): return "Invalid knowledge governance action: \(detail)"
+        case .invalidResponse(let detail): return "Invalid knowledge governance response: \(detail)"
+        }
+    }
+}
+
+private enum KBKnowledgeGovernanceDateCoding {
+    static func decode<Key: CodingKey>(
+        from container: KeyedDecodingContainer<Key>,
+        forKey key: Key
+    ) throws -> Date {
+        let value = try container.decode(String.self, forKey: key)
+        guard let date = date(from: value) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: key,
+                in: container,
+                debugDescription: "Expected an ISO-8601 timestamp"
+            )
+        }
+        return date
+    }
+
+    static func encode<Key: CodingKey>(
+        _ date: Date,
+        to container: inout KeyedEncodingContainer<Key>,
+        forKey key: Key
+    ) throws {
+        try container.encode(string(from: date), forKey: key)
+    }
+
+    private static func date(from value: String) -> Date? {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractional.date(from: value) ?? ISO8601DateFormatter().date(from: value)
+    }
+
+    private static func string(from date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: date)
+    }
+}
+
+private struct KBKnowledgeGovernanceDynamicCodingKey: CodingKey, Hashable {
+    let stringValue: String
+    let intValue: Int?
+
+    init?(stringValue: String) {
+        self.stringValue = stringValue
+        self.intValue = nil
+    }
+
+    init?(intValue: Int) {
+        self.stringValue = String(intValue)
+        self.intValue = intValue
+    }
+}
+
 // MARK: - 人物
 
 struct KBPerson: Codable, Identifiable {
@@ -52,6 +644,7 @@ struct KBPerson: Codable, Identifiable {
     var digitalHumanId: String? = nil
     var evidenceStatus: String? = nil
     var sourceTurnIndices: [Int]? = nil
+    var governanceMetadata: KBKnowledgeGovernanceMetadata? = nil
 
     /// 所有可用于搜索和匹配的文本
     var searchableText: String {
@@ -78,6 +671,7 @@ struct KBPlace: Codable, Identifiable {
     var digitalHumanId: String? = nil
     var evidenceStatus: String? = nil
     var sourceTurnIndices: [Int]? = nil
+    var governanceMetadata: KBKnowledgeGovernanceMetadata? = nil
 
     var searchableText: String {
         [name, category, description].compactMap { $0 }.joined(separator: " ")
@@ -104,6 +698,7 @@ struct KBEvent: Codable, Identifiable {
     var digitalHumanId: String? = nil
     var evidenceStatus: String? = nil
     var sourceTurnIndices: [Int]? = nil
+    var governanceMetadata: KBKnowledgeGovernanceMetadata? = nil
 
     var searchableText: String {
         [title, description].compactMap { $0 }.joined(separator: " ")
@@ -135,6 +730,7 @@ struct KBFact: Codable, Identifiable {
     var digitalHumanId: String? = nil
     var evidenceStatus: String? = nil
     var sourceTurnIndices: [Int]? = nil
+    var governanceMetadata: KBKnowledgeGovernanceMetadata? = nil
 }
 
 // MARK: - LLM 提取响应模型
