@@ -4,6 +4,8 @@
 更新日期：2026-07-15  
 状态：`PRODUCT_DECISIONS_SYNCED_STATIC_CHECKED_IMPLEMENTATION_UNVERIFIED`
 
+> 分类：`DELIVERY_SNAPSHOT_NON_CANONICAL`。本目录是 2026-07-15 交付快照，不是后续编辑入口。正式工作源位于 `docs/product/`、`docs/superpowers/plans/2026-07-12-dreamjourney-v4-executable-development-roadmap.md` 和 `Scripts/QA/product-v4/`；快照内容不得反向覆盖这些路径。
+
 ## 1. 工程基线
 
 - iOS：`feature/prd-stitch-ui-adaptation@8a1922b`
