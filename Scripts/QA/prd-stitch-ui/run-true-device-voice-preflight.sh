@@ -111,15 +111,11 @@ write_evidence_manifest
 cd "$ROOT_DIR"
 
 load_local_xcconfig "DreamJourney/Config/Backend.local.xcconfig"
-load_local_xcconfig "DreamJourney/Config/VoiceSDK.local.xcconfig"
 load_local_xcconfig "DreamJourney/Config/YXJ.local.xcconfig"
 
-append_report "## Required Environment"
+append_report "## Backend Runtime Boundary"
 require_env "DREAMJOURNEY_BACKEND_BASE_URL"
-require_env "DREAMJOURNEY_BACKEND_API_TOKEN"
-require_env "VOLCENGINE_APP_ID"
-require_env "VOLCENGINE_APP_KEY"
-require_env "VOLCENGINE_APP_TOKEN"
+append_report "- Provider and server compatibility credentials remain server-side and are not accepted as iOS build settings."
 
 append_report
 append_report "## Privacy Declarations"
@@ -215,10 +211,6 @@ if [[ "$RUN_DEVICE_BUILD" == "1" ]]; then
   if [[ ${#XCODEBUILD_XCCONFIG_ARGS[@]} -eq 0 ]]; then
     for name in \
       DREAMJOURNEY_BACKEND_BASE_URL \
-      DREAMJOURNEY_BACKEND_API_TOKEN \
-      VOLCENGINE_APP_ID \
-      VOLCENGINE_APP_KEY \
-      VOLCENGINE_APP_TOKEN \
       DREAMJOURNEY_DEVELOPMENT_TEAM \
       DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER \
       CODE_SIGN_STYLE; do

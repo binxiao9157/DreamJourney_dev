@@ -81,19 +81,15 @@ xcodebuild \
   CODE_SIGNING_ALLOWED=NO \
   SWIFT_ACTIVE_COMPILATION_CONDITIONS="$SWIFT_ACTIVE_COMPILATION_CONDITIONS" \
   DREAMJOURNEY_BACKEND_BASE_URL="$BACKEND_BASE_URL" \
-  DREAMJOURNEY_BACKEND_API_TOKEN="$BACKEND_API_TOKEN" \
   EXCLUDED_ARCHS='' \
   ARCHS=arm64 \
   ONLY_ACTIVE_ARCH=NO \
-  build 2>&1 | python3 -c 'import sys
-token = sys.argv[1]
-replacement = "<redacted-backend-token>"
-for line in sys.stdin:
-    sys.stdout.write(line.replace(token, replacement) if token else line)
-' "$BACKEND_API_TOKEN" > "$BUILD_LOG"
+  build > "$BUILD_LOG" 2>&1
 
 APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION-iphonesimulator/DreamJourney.app"
 [[ -d "$APP_PATH" ]] || fail "Built app not found: $APP_PATH"
+QA_MOBILE_CREDENTIAL_APP_PATH="$APP_PATH" \
+  python3 "$ROOT_DIR/Scripts/QA/product-v4/product-v4-qa-mobile-credential-artifact-check.py"
 
 BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
 [[ -n "$BUNDLE_ID" ]] || fail "Unable to read bundle id from $APP_PATH"
@@ -266,7 +262,7 @@ Bundle ID: \`$BUNDLE_ID\`
 
 - Runs \`backend-auth-token-contract-check.py\`.
 - Runs \`backend-integration-contract-check.py\` for \`$USER_ID\`.
-- Builds the iOS app with \`DREAMJOURNEY_BACKEND_BASE_URL="\$BACKEND_BASE_URL"\` and \`DREAMJOURNEY_BACKEND_API_TOKEN="\$BACKEND_API_TOKEN"\`.
+- Uses the server compatibility token only for direct backend contract setup; the iOS app is built with \`DREAMJOURNEY_BACKEND_BASE_URL="\$BACKEND_BASE_URL"\` and no shared token.
 - Launches \`DJSeedEchoArchiveContext\`, \`DJEnableArchiveRemoteFetch\`, and \`DJRunBackendEnvSmoke\`.
 - Verifies app-side archive/profile/family backend results through \`backend-env-smoke-result.json\`.
 - Captures merged archive store summary in \`app-archive-store-summary.json\`.

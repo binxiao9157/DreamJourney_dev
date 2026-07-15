@@ -5769,10 +5769,20 @@ extension EchoViewController {
                     )
                 }
             case .failure(let error):
+                let message = error.localizedDescription
+                let isExpectedBrokerBlock = message.contains(
+                    "revocable scoped session credential broker"
+                )
                 completion([
-                    "completed": false,
-                    "failureReason": "backendSessionError",
-                    "error": error.localizedDescription,
+                    "completed": isExpectedBrokerBlock,
+                    "failureReason": isExpectedBrokerBlock ? "" : "backendSessionError",
+                    "boundaryState": isExpectedBrokerBlock ? "scopedBrokerRequired" : "unexpectedBackendError",
+                    "provider": "tencent",
+                    "providerMode": "blockedUntilScopedBroker",
+                    "runtimeProvider": "none",
+                    "runtimeIsRealSDKBacked": false,
+                    "fallbackMode": "textOnly",
+                    "error": message,
                 ])
             }
         }

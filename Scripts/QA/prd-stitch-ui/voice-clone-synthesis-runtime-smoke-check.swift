@@ -75,8 +75,8 @@ for required in [
     "DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER=\"$LOCAL_BUNDLE_ID\"",
     "DREAMJOURNEY_DEVELOPMENT_TEAM=\"$LOCAL_DEVELOPMENT_TEAM\"",
     "DREAMJOURNEY_BACKEND_BASE_URL",
-    "DREAMJOURNEY_BACKEND_API_TOKEN",
-    "<redacted-backend-token>",
+    "QA_MOBILE_CREDENTIAL_APP_PATH",
+    "product-v4-qa-mobile-credential-artifact-check.py",
     "[[ \"$BUNDLE_ID\" == \"$LOCAL_BUNDLE_ID\" ]]",
     "[[ \"$BUNDLE_ID\" != \"com.gaominge.dreamjourney.app\" ]]",
     "voice-clone-synthesis-runtime-smoke-result.json",
@@ -86,7 +86,8 @@ for required in [
 ] {
     assertContains(runnerContent, required, "runner should verify iOS synthesis smoke \(required)")
 }
-assertNotContains(runnerContent, "cat \"$BACKEND_API_TOKEN\"", "runner must not print backend token")
+assertNotContains(runnerContent, "DREAMJOURNEY_BACKEND_API_TOKEN", "runner must not inject a server compatibility token into iOS")
+assertNotContains(runnerContent, "DreamJourneyBackendAPIToken", "runner must not write a backend token to Info.plist")
 
 assertContains(
     releaseRegression,

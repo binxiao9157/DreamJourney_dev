@@ -457,6 +457,9 @@ run_step "Product V4 credential response boundary" "$STATIC_LOG_DIR/product-v4-c
 run_step "Product V4 mobile credential path retirement" "$STATIC_LOG_DIR/product-v4-mobile-credential-path-retirement.log" \
   python3 "$ROOT_DIR/Scripts/QA/product-v4/product-v4-mobile-credential-path-retirement-check.py"
 
+run_step "Product V4 QA mobile credential artifact boundary" "$STATIC_LOG_DIR/product-v4-qa-mobile-credential-artifact.log" \
+  python3 "$ROOT_DIR/Scripts/QA/product-v4/product-v4-qa-mobile-credential-artifact-check.py"
+
 for guard in \
   release-feature-matrix-check.swift \
   prd-coverage-matrix-check.swift \

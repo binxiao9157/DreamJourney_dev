@@ -23,6 +23,12 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
     }
 }
 
+func assertNotContains(_ haystack: String, _ needle: String, _ message: String) {
+    guard !haystack.contains(needle) else {
+        fatalError("\(message): found \(needle)")
+    }
+}
+
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
 let careModels = read("DreamJourney/Sources/Modules/Profile/ProfileCareModels.swift")
 let profileView = read("DreamJourney/Sources/Modules/Profile/ProfileViewController.swift")
@@ -122,8 +128,11 @@ for phrase in [
     "DJRunProfileCareBackendStateSmoke",
     "profile-care-backend-state-smoke-result.json",
     "DREAMJOURNEY_BACKEND_BASE_URL",
-    "DREAMJOURNEY_BACKEND_API_TOKEN",
+    "BACKEND_API_TOKEN",
     "backend-private.xcconfig",
+    "backend-unreachable.xcconfig",
+    "QA_MOBILE_CREDENTIAL_APP_PATH",
+    "product-v4-qa-mobile-credential-artifact-check.py",
     "profileCareStateAvailable",
     "profileCareStateEmpty",
     "profileCareStateStale",
@@ -135,10 +144,14 @@ for phrase in [
     "retryFinalState",
     "DJRunProfileCareBackendFailureRetrySmoke",
     "profile-care-backend-failure-retry-smoke-result.json",
-    "backend-invalid-token.xcconfig",
 ] {
     assertContains(smokeScript, phrase, "profile care backend state smoke script should include \(phrase)")
 }
+assertNotContains(
+    smokeScript,
+    "DREAMJOURNEY_BACKEND_API_TOKEN",
+    "profile care smoke must not inject the server compatibility token into iOS"
+)
 
 assertContains(
     releaseRegression,

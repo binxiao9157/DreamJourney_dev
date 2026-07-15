@@ -18,6 +18,12 @@ func assertContains(_ source: String, _ needle: String, _ message: String) {
     }
 }
 
+func assertNotContains(_ source: String, _ needle: String, _ message: String) {
+    guard !source.contains(needle) else {
+        fatalError(message)
+    }
+}
+
 func assertFileExists(_ relativePath: String, _ message: String) {
     let url = rootURL.appendingPathComponent(relativePath)
     guard FileManager.default.fileExists(atPath: url.path) else {
@@ -37,9 +43,9 @@ assertContains(script, "BACKEND_API_TOKEN", "script should accept backend API to
 assertContains(script, "backend-auth-token-contract-check.py", "script should verify backend token auth contract")
 assertContains(script, "backend-integration-contract-check.py", "script should verify backend integration contract")
 assertContains(script, "DREAMJOURNEY_BACKEND_BASE_URL=\"$BACKEND_BASE_URL\"", "script should inject backend base URL into iOS build")
-assertContains(script, "DREAMJOURNEY_BACKEND_API_TOKEN=\"$BACKEND_API_TOKEN\"", "script should inject backend token into iOS build")
-assertContains(script, "line.replace(token, replacement)", "script should redact backend token from build logs")
-assertContains(script, "<redacted-backend-token>", "script should use a stable backend token redaction marker")
+assertNotContains(script, "DREAMJOURNEY_BACKEND_API_TOKEN=\"$BACKEND_API_TOKEN\"", "script must not inject the server compatibility token into the iOS build")
+assertContains(script, "QA_MOBILE_CREDENTIAL_APP_PATH", "script should scan the built app before installation")
+assertContains(script, "product-v4-qa-mobile-credential-artifact-check.py", "script should enforce the Product V4 artifact boundary")
 assertContains(script, "DJSeedEchoArchiveContext", "script should seed archive context for UIQA")
 assertContains(script, "DJEnableArchiveRemoteFetch", "script should enable hidden remote fetch only inside UIQA")
 assertContains(script, "DJRunBackendEnvSmoke", "script should launch the app-side backend smoke harness")

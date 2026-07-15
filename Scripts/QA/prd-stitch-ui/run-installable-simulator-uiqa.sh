@@ -67,6 +67,27 @@ BUILD_SETTINGS=(
 XCCONFIG_ARGS=()
 if [[ -n "$XCCONFIG_PATH" ]]; then
   [[ -f "$XCCONFIG_PATH" ]] || fail "xcconfig not found: $XCCONFIG_PATH"
+  python3 - "$XCCONFIG_PATH" <<'PY'
+import sys
+from pathlib import Path
+
+forbidden = {
+    "DREAMJOURNEY_BACKEND_API_TOKEN",
+    "VOLCENGINE_APP_ID",
+    "VOLCENGINE_APP_KEY",
+    "VOLCENGINE_APP_TOKEN",
+}
+path = Path(sys.argv[1])
+configured = set()
+for line in path.read_text(encoding="utf-8").splitlines():
+    stripped = line.strip()
+    if not stripped or stripped.startswith("//") or "=" not in stripped:
+        continue
+    configured.add(stripped.split("=", 1)[0].strip())
+found = sorted(configured & forbidden)
+if found:
+    raise SystemExit("xcconfig contains retired mobile credential keys: " + ", ".join(found))
+PY
   XCCONFIG_ARGS=(-xcconfig "$XCCONFIG_PATH")
 fi
 
@@ -83,6 +104,9 @@ xcodebuild \
 
 APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION-iphonesimulator/$APP_PRODUCT_NAME.app"
 [[ -d "$APP_PATH" ]] || fail "Built app not found: $APP_PATH"
+
+QA_MOBILE_CREDENTIAL_APP_PATH="$APP_PATH" \
+  python3 "$ROOT_DIR/Scripts/QA/product-v4/product-v4-qa-mobile-credential-artifact-check.py"
 
 BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
 [[ "$BUNDLE_ID" == "$LOCAL_BUNDLE_ID" ]] || fail "Built app bundle id is $BUNDLE_ID, expected $LOCAL_BUNDLE_ID"

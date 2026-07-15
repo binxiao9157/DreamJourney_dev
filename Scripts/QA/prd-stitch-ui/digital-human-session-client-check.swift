@@ -61,10 +61,10 @@ require(appDelegate.contains("digital-human-runtime-stub-smoke-result.json"), "Q
 
 require(runtimeStubSmoke.contains("DJRunDigitalHumanRuntimeStubSmoke"), "runtime stub smoke must launch the QA harness")
 require(runtimeStubSmoke.contains("STORE_BACKEND=memory"), "runtime stub smoke must start an isolated memory backend")
-require(runtimeStubSmoke.contains("defaultReleaseVisible"), "runtime stub smoke must assert public default visible state")
+require(runtimeStubSmoke.contains("scopedBrokerRequired"), "runtime stub smoke must assert the scoped broker stop condition")
+require(runtimeStubSmoke.contains("blockedUntilScopedBroker"), "runtime stub smoke must keep the provider blocked without a scoped broker")
 require(runtimeStubSmoke.contains("runtimeIsRealSDKBacked"), "runtime stub smoke must assert SDK is not falsely marked real")
-require(runtimeStubSmoke.contains("runtimeFactoryFallbackReason"), "runtime stub smoke must assert factory fallback reason")
-require(runtimeStubSmoke.contains("audioOnlyFallbackState"), "runtime stub smoke must assert audio-only fallback")
+require(runtimeStubSmoke.contains("fallbackMode") && runtimeStubSmoke.contains("textOnly"), "runtime stub smoke must assert text-only fallback")
 require(releaseRegression.contains("RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE"), "release regression optional runtime stub gate is missing")
 require(releaseRegression.contains("run-digital-human-runtime-stub-smoke.sh"), "release regression must call runtime stub smoke")
 

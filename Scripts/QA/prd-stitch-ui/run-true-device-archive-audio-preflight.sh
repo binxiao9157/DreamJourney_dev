@@ -112,13 +112,12 @@ write_evidence_manifest
 cd "$ROOT_DIR"
 
 load_local_xcconfig "DreamJourney/Config/Backend.local.xcconfig"
-load_local_xcconfig "DreamJourney/Config/VoiceSDK.local.xcconfig"
 load_local_xcconfig "DreamJourney/Config/YXJ.local.xcconfig"
 
 append_report "## Optional Local Configuration"
 append_report
-append_report "These values are loaded only as build settings when present. Archive audio recording itself is validated through the native microphone/audio-file route."
-for name in DREAMJOURNEY_BACKEND_BASE_URL DREAMJOURNEY_BACKEND_API_TOKEN VOLCENGINE_APP_ID VOLCENGINE_APP_KEY VOLCENGINE_APP_TOKEN; do
+append_report "Only the non-secret backend base URL may be loaded as an app build setting. Archive audio recording is validated through the native microphone/audio-file route."
+for name in DREAMJOURNEY_BACKEND_BASE_URL; do
   env_state "$name"
 done
 
@@ -216,10 +215,6 @@ if [[ "$RUN_DEVICE_BUILD" == "1" ]]; then
   if [[ ${#XCODEBUILD_XCCONFIG_ARGS[@]} -eq 0 ]]; then
     for name in \
       DREAMJOURNEY_BACKEND_BASE_URL \
-      DREAMJOURNEY_BACKEND_API_TOKEN \
-      VOLCENGINE_APP_ID \
-      VOLCENGINE_APP_KEY \
-      VOLCENGINE_APP_TOKEN \
       DREAMJOURNEY_DEVELOPMENT_TEAM \
       DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER \
       CODE_SIGN_STYLE; do

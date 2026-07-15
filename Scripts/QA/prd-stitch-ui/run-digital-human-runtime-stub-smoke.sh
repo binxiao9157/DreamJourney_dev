@@ -108,7 +108,6 @@ with path.open("wb") as file:
     plistlib.dump(
         {
             "DreamJourneyBackendBaseURL": "$BACKEND_BASE_URL",
-            "DreamJourneyBackendAPIToken": "",
         },
         file,
     )
@@ -117,7 +116,6 @@ PY
 PRIVATE_XCCONFIG="$OUTPUT_DIR/backend-private.xcconfig"
 cat > "$PRIVATE_XCCONFIG" <<EOF
 DREAMJOURNEY_BACKEND_BASE_URL =
-DREAMJOURNEY_BACKEND_API_TOKEN =
 EOF
 
 INSTALL_ENV_PATH="$OUTPUT_DIR/install.env" \
@@ -164,23 +162,11 @@ echo
 
 grep -Eq '"completed"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Runtime stub smoke did not complete."
 grep -Eq '"provider"[[:space:]]*:[[:space:]]*"tencent"' "$RESULT_FILE" || fail "Provider should be tencent."
-grep -Eq '"providerMode"[[:space:]]*:[[:space:]]*"mockContract"' "$RESULT_FILE" || fail "Provider mode should be mockContract."
-grep -Eq '"runtimeProvider"[[:space:]]*:[[:space:]]*"tencent"' "$RESULT_FILE" || fail "Runtime provider should be tencent."
-grep -Eq '"runtimeProviderMode"[[:space:]]*:[[:space:]]*"mockContract"' "$RESULT_FILE" || fail "Runtime provider mode should be mockContract."
-grep -Eq '"runtimeIsRealSDKBacked"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Runtime stub smoke must not claim real Tencent SDK backing."
-grep -Eq '"runtimeFactoryFallbackReason"[[:space:]]*:' "$RESULT_FILE" || fail "Runtime factory fallback reason should be reported."
-grep -Eq '"driveMode"[[:space:]]*:[[:space:]]*"streamText"' "$RESULT_FILE" || fail "Drive mode should be streamText."
-grep -Eq '"fallbackMode"[[:space:]]*:[[:space:]]*"audioOnly"' "$RESULT_FILE" || fail "Fallback should be audioOnly."
-grep -Eq '"audioOnlyFallbackState"[[:space:]]*:[[:space:]]*"degraded"' "$RESULT_FILE" || fail "Audio-only runtime should report degraded."
-grep -Eq '"runtimeSpeakingState"[[:space:]]*:[[:space:]]*"speaking' "$RESULT_FILE" || fail "Tencent stub should reach speaking state."
-grep -Eq '"runtimeStateAfterFinal"[[:space:]]*:[[:space:]]*"ready"' "$RESULT_FILE" || fail "Tencent stub should return to ready after final chunk."
-grep -Eq '"allowInterrupt"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Session policy should allow interrupt."
-grep -Eq '"proactiveSpeechAllowed"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Session policy should disallow proactive speech."
-grep -Eq '"credentialMode"[[:space:]]*:[[:space:]]*"backend-issued-mock"' "$RESULT_FILE" || fail "Credential mode should be backend-issued-mock."
-grep -Eq '"leaseStatus"[[:space:]]*:[[:space:]]*"active"' "$RESULT_FILE" || fail "Session lease should start active."
-grep -Eq '"leaseHeartbeatStatus"[[:space:]]*:[[:space:]]*"active"' "$RESULT_FILE" || fail "Session lease heartbeat should succeed."
-grep -Eq '"leaseReleaseStatus"[[:space:]]*:[[:space:]]*"released"' "$RESULT_FILE" || fail "Session lease should be released after the smoke."
-grep -Eq '"defaultReleaseVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Digital human panel must be visible by default."
+grep -Eq '"boundaryState"[[:space:]]*:[[:space:]]*"scopedBrokerRequired"' "$RESULT_FILE" || fail "Runtime must report the scoped broker boundary."
+grep -Eq '"providerMode"[[:space:]]*:[[:space:]]*"blockedUntilScopedBroker"' "$RESULT_FILE" || fail "Provider mode should remain blocked until a scoped broker exists."
+grep -Eq '"runtimeProvider"[[:space:]]*:[[:space:]]*"none"' "$RESULT_FILE" || fail "Blocked mode must not create a digital-human runtime."
+grep -Eq '"runtimeIsRealSDKBacked"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Blocked mode must not claim real Tencent SDK backing."
+grep -Eq '"fallbackMode"[[:space:]]*:[[:space:]]*"textOnly"' "$RESULT_FILE" || fail "Blocked mode must fall back to text-only Echo."
 
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null
 xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true

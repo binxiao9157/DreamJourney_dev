@@ -32,7 +32,7 @@ FAILURE_SCREENSHOT_PATH="$OUTPUT_DIR/02-profile-care-backend-failure-retry.png"
 RESULT_COPY_PATH="$OUTPUT_DIR/profile-care-backend-state-smoke-result.json"
 FAILURE_RESULT_COPY_PATH="$OUTPUT_DIR/profile-care-backend-failure-retry-smoke-result.json"
 PRIVATE_XCCONFIG="$OUTPUT_DIR/backend-private.xcconfig"
-INVALID_PRIVATE_XCCONFIG="$OUTPUT_DIR/backend-invalid-token.xcconfig"
+UNREACHABLE_PRIVATE_XCCONFIG="$OUTPUT_DIR/backend-unreachable.xcconfig"
 COMPLETION_PATTERN="ProfileCareBackendStateSmoke completed"
 FAILURE_COMPLETION_PATTERN="ProfileCareBackendFailureRetrySmoke completed"
 LOG_WAIT_TIMEOUT="${LOG_WAIT_TIMEOUT:-90}"
@@ -49,7 +49,7 @@ cleanup() {
   if [[ -n "$OSLOG_PID" ]]; then
     kill "$OSLOG_PID" >/dev/null 2>&1 || true
   fi
-  rm -f "$PRIVATE_XCCONFIG" "$INVALID_PRIVATE_XCCONFIG"
+  rm -f "$PRIVATE_XCCONFIG" "$UNREACHABLE_PRIVATE_XCCONFIG"
 }
 trap cleanup EXIT
 
@@ -106,8 +106,6 @@ for path in candidates:
             base_url = stripped.split("=", 1)[1].strip().strip("'\"")
         elif stripped.startswith("BACKEND_API_TOKEN="):
             token = stripped.split("=", 1)[1].strip().strip("'\"")
-        elif stripped.startswith("DreamJourneyBackendAPIToken=") and not token:
-            token = stripped.split("=", 1)[1].strip().strip("'\"")
     if not base_url:
         match = re.search(r"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+", content)
         base_url = match.group(0).rstrip("/,") if match else ""
@@ -156,34 +154,30 @@ ACTIVE_USER_ID="${CARE_FIXTURE_VALUES[0]}"
 EMPTY_USER_ID="${CARE_FIXTURE_VALUES[1]}"
 STALE_USER_ID="${CARE_FIXTURE_VALUES[2]}"
 
-python3 - "$PRIVATE_XCCONFIG" "$BACKEND_BASE_URL" "$BACKEND_API_TOKEN" <<'PY'
+python3 - "$PRIVATE_XCCONFIG" "$BACKEND_BASE_URL" <<'PY'
 import sys
 from pathlib import Path
 
-path, base_url, token = sys.argv[1:4]
+path, base_url = sys.argv[1:3]
 escaped_base_url = base_url.replace("//", "/$()/")
 Path(path).write_text(
-    "DREAMJOURNEY_BACKEND_BASE_URL = " + escaped_base_url + "\n"
-    "DREAMJOURNEY_BACKEND_API_TOKEN = " + token + "\n",
+    "DREAMJOURNEY_BACKEND_BASE_URL = " + escaped_base_url + "\n",
     encoding="utf-8",
 )
 PY
 chmod 600 "$PRIVATE_XCCONFIG"
 
-python3 - "$INVALID_PRIVATE_XCCONFIG" "$BACKEND_BASE_URL" "$BACKEND_API_TOKEN" <<'PY'
+python3 - "$UNREACHABLE_PRIVATE_XCCONFIG" <<'PY'
 import sys
 from pathlib import Path
 
-path, base_url, token = sys.argv[1:4]
-escaped_base_url = base_url.replace("//", "/$()/")
-invalid_token = f"{token}-invalid-uiqa"
+path = sys.argv[1]
 Path(path).write_text(
-    "DREAMJOURNEY_BACKEND_BASE_URL = " + escaped_base_url + "\n"
-    "DREAMJOURNEY_BACKEND_API_TOKEN = " + invalid_token + "\n",
+    "DREAMJOURNEY_BACKEND_BASE_URL = http:/$()/127.0.0.1:9\n",
     encoding="utf-8",
 )
 PY
-chmod 600 "$INVALID_PRIVATE_XCCONFIG"
+chmod 600 "$UNREACHABLE_PRIVATE_XCCONFIG"
 
 booted_simulator_udid() {
   xcrun simctl list devices booted | awk -F '[()]' '/Booted/ { print $2; exit }'
@@ -216,6 +210,8 @@ xcodebuild \
 
 APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION-iphonesimulator/DreamJourney.app"
 [[ -d "$APP_PATH" ]] || fail "Built app not found: $APP_PATH"
+QA_MOBILE_CREDENTIAL_APP_PATH="$APP_PATH" \
+  python3 "$ROOT_DIR/Scripts/QA/product-v4/product-v4-qa-mobile-credential-artifact-check.py"
 
 BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
 [[ -n "$BUNDLE_ID" ]] || fail "Unable to read bundle id from $APP_PATH"
@@ -336,7 +332,7 @@ if [[ -n "$OSLOG_PID" ]]; then
   OSLOG_PID=""
 fi
 
-echo "[profile-care-backend-state-smoke] Building UIQA app with invalid backend token for failure retry..."
+echo "[profile-care-backend-state-smoke] Building UIQA app with unreachable backend for failure retry..."
 xcodebuild \
   -workspace DreamJourney.xcworkspace \
   -scheme "$SCHEME" \
@@ -344,7 +340,7 @@ xcodebuild \
   -sdk iphonesimulator \
   -destination 'generic/platform=iOS Simulator' \
   -derivedDataPath "$FAILURE_DERIVED_DATA_PATH" \
-  -xcconfig "$INVALID_PRIVATE_XCCONFIG" \
+  -xcconfig "$UNREACHABLE_PRIVATE_XCCONFIG" \
   DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER="$LOCAL_QA_BUNDLE_ID" \
   DREAMJOURNEY_DEVELOPMENT_TEAM="$LOCAL_QA_TEAM_ID" \
   CODE_SIGNING_ALLOWED=NO \
@@ -356,11 +352,13 @@ xcodebuild \
 
 FAILURE_APP_PATH="$FAILURE_DERIVED_DATA_PATH/Build/Products/$CONFIGURATION-iphonesimulator/DreamJourney.app"
 [[ -d "$FAILURE_APP_PATH" ]] || fail "Built failure retry app not found: $FAILURE_APP_PATH"
+QA_MOBILE_CREDENTIAL_APP_PATH="$FAILURE_APP_PATH" \
+  python3 "$ROOT_DIR/Scripts/QA/product-v4/product-v4-qa-mobile-credential-artifact-check.py"
 
 BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$FAILURE_APP_PATH/Info.plist")"
 [[ -n "$BUNDLE_ID" ]] || fail "Unable to read bundle id from $FAILURE_APP_PATH"
 
-echo "[profile-care-backend-state-smoke] Installing invalid-token app for failure retry on $SIMULATOR_UDID..."
+echo "[profile-care-backend-state-smoke] Installing unreachable-backend app for failure retry on $SIMULATOR_UDID..."
 xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
 xcrun simctl uninstall "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
 xcrun simctl install "$SIMULATOR_UDID" "$FAILURE_APP_PATH"
@@ -408,7 +406,7 @@ with open(fixture_path, "r", encoding="utf-8") as handle:
 if result.get("completed") is not True:
     raise SystemExit(f"profile care backend failure retry smoke did not complete: {result}")
 if result.get("backendConfigured") is not True:
-    raise SystemExit(f"backend should be configured even with invalid token: {result}")
+    raise SystemExit(f"backend should be configured even when its endpoint is unreachable: {result}")
 if result.get("profileTabSelected") is not True:
     raise SystemExit(f"profile tab should be selected: {result}")
 

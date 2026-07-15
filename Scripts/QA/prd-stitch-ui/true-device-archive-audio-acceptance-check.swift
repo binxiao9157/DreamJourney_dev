@@ -27,6 +27,12 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
     }
 }
 
+func assertNotContains(_ haystack: String, _ needle: String, _ message: String) {
+    guard !haystack.contains(needle) else {
+        fatalError("\(message): found \(needle)")
+    }
+}
+
 let scriptPath = "Scripts/QA/prd-stitch-ui/run-true-device-archive-audio-preflight.sh"
 let statusDocPath = "docs/superpowers/status/2026-06-19-true-device-archive-audio-acceptance.md"
 
@@ -44,7 +50,7 @@ let detail = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveDetailViewC
 
 for required in [
     "load_local_xcconfig",
-    "DreamJourney/Config/VoiceSDK.local.xcconfig",
+    "DreamJourney/Config/Backend.local.xcconfig",
     "DreamJourney/Config/YXJ.local.xcconfig",
     "-xcconfig",
     "DREAMJOURNEY_DEVELOPMENT_TEAM",
@@ -73,6 +79,19 @@ for required in [
     "06-audio-after-background-foreground.png",
 ] {
     assertContains(script, required, "true-device archive audio preflight should include \(required)")
+}
+
+for retiredCredential in [
+    "DREAMJOURNEY_BACKEND_API_TOKEN",
+    "VOLCENGINE_APP_ID",
+    "VOLCENGINE_APP_KEY",
+    "VOLCENGINE_APP_TOKEN",
+] {
+    assertNotContains(
+        script,
+        retiredCredential,
+        "true-device archive audio preflight must not accept mobile credential build settings"
+    )
 }
 
 for required in [

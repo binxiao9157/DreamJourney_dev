@@ -442,12 +442,7 @@ final class DialogEngineManager: NSObject {
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return false }
             guard !trimmed.hasPrefix("$(") else { return false }
-            let placeholders = [
-                "YOUR_VOLCENGINE_APP_ID",
-                "YOUR_VOLCENGINE_APP_KEY",
-                "YOUR_VOLCENGINE_APP_TOKEN",
-            ]
-            return !placeholders.contains(trimmed)
+            return !trimmed.hasPrefix("YOUR_")
         }
     }
 

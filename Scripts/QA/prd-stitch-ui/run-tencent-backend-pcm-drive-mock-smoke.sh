@@ -85,21 +85,15 @@ for path in candidates:
         continue
     content = path.read_text(encoding="utf-8")
     base_url = ""
-    token = ""
     for line in content.splitlines():
         stripped = line.strip()
         if stripped.startswith("DreamJourneyBackendBaseURL="):
             base_url = stripped.split("=", 1)[1].strip().strip("'\"")
-        elif stripped.startswith("BACKEND_API_TOKEN="):
-            token = stripped.split("=", 1)[1].strip().strip("'\"")
-        elif stripped.startswith("DreamJourneyBackendAPIToken=") and not token:
-            token = stripped.split("=", 1)[1].strip().strip("'\"")
     if not base_url:
         match = re.search(r"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+", content)
         base_url = match.group(0).rstrip("/,") if match else ""
-    if base_url or token:
+    if base_url:
         print(f"base_url={base_url}")
-        print(f"token={token}")
         raise SystemExit(0)
 
 raise SystemExit(0)
@@ -108,17 +102,12 @@ PY
 
 BACKEND_XCCONFIG="$ROOT_DIR/DreamJourney/Config/Backend.local.xcconfig"
 XCCONFIG_BASE_URL="$(normalize_xcconfig_url "$(xcconfig_value DREAMJOURNEY_BACKEND_BASE_URL "$BACKEND_XCCONFIG")")"
-XCCONFIG_API_TOKEN="$(xcconfig_value DREAMJOURNEY_BACKEND_API_TOKEN "$BACKEND_XCCONFIG")"
 CONFIG_OUTPUT="$(resolve_deployed_backend_config || true)"
 DOC_BASE_URL="$(printf '%s\n' "$CONFIG_OUTPUT" | awk -F= '/^base_url=/{print substr($0, 10); exit}')"
-DOC_API_TOKEN="$(printf '%s\n' "$CONFIG_OUTPUT" | awk -F= '/^token=/{print substr($0, 7); exit}')"
 
 BACKEND_BASE_URL="${BACKEND_BASE_URL:-${XCCONFIG_BASE_URL:-$DOC_BASE_URL}}"
-BACKEND_API_TOKEN="${BACKEND_API_TOKEN:-${XCCONFIG_API_TOKEN:-$DOC_API_TOKEN}}"
 
 [[ -n "$BACKEND_BASE_URL" ]] || fail "BACKEND_BASE_URL is required. Export it, configure Backend.local.xcconfig, or provide deployed-backend-access.md."
-[[ -n "$BACKEND_API_TOKEN" ]] || fail "BACKEND_API_TOKEN is required. Export it, configure Backend.local.xcconfig, or provide deployed-backend-access.md."
-[[ "$BACKEND_API_TOKEN" != YOUR_* ]] || fail "BACKEND_API_TOKEN is still a placeholder."
 [[ -n "$DJ_TENCENT_BACKEND_PCM_MOCK_VOICE_PROFILE_ID" ]] || fail "DJ_TENCENT_BACKEND_PCM_MOCK_VOICE_PROFILE_ID or VOICE_CLONE_READY_PROFILE_ID is required."
 [[ -n "$DJ_TENCENT_BACKEND_PCM_MOCK_USER_ID" ]] || fail "DJ_TENCENT_BACKEND_PCM_MOCK_USER_ID or VOICE_CLONE_READY_PROFILE_USER_ID is required."
 
@@ -148,24 +137,15 @@ xcodebuild \
   DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER="$LOCAL_BUNDLE_ID" \
   DREAMJOURNEY_DEVELOPMENT_TEAM="$LOCAL_DEVELOPMENT_TEAM" \
   DREAMJOURNEY_BACKEND_BASE_URL="$BACKEND_BASE_URL" \
-  DREAMJOURNEY_BACKEND_API_TOKEN="$BACKEND_API_TOKEN" \
   EXCLUDED_ARCHS='' \
   ARCHS=arm64 \
   ONLY_ACTIVE_ARCH=NO \
-  build 2>&1 | python3 -c 'import sys
-token = sys.argv[1]
-replacement = "<redacted-backend-token>"
-for line in sys.stdin:
-    sys.stdout.write(line.replace(token, replacement) if token else line)
-' "$BACKEND_API_TOKEN" > "$BUILD_LOG"
+  build > "$BUILD_LOG" 2>&1
 
 APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION-iphonesimulator/DreamJourney.app"
 [[ -d "$APP_PATH" ]] || fail "Built app not found: $APP_PATH"
-
-APP_INFO_PLIST="$APP_PATH/Info.plist"
-[[ -f "$APP_INFO_PLIST" ]] || fail "Built Info.plist not found: $APP_INFO_PLIST"
-/usr/libexec/PlistBuddy -c "Set :DreamJourneyBackendBaseURL $BACKEND_BASE_URL" "$APP_INFO_PLIST"
-/usr/libexec/PlistBuddy -c "Set :DreamJourneyBackendAPIToken $BACKEND_API_TOKEN" "$APP_INFO_PLIST"
+QA_MOBILE_CREDENTIAL_APP_PATH="$APP_PATH" \
+  python3 "$ROOT_DIR/Scripts/QA/product-v4/product-v4-qa-mobile-credential-artifact-check.py"
 
 BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
 [[ -n "$BUNDLE_ID" ]] || fail "Unable to read bundle id from $APP_PATH"

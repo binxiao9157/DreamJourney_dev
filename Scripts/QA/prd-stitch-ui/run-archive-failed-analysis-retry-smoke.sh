@@ -80,8 +80,6 @@ for path in candidates:
             base_url = stripped.split("=", 1)[1].strip().strip("'\"")
         elif stripped.startswith("BACKEND_API_TOKEN="):
             token = stripped.split("=", 1)[1].strip().strip("'\"")
-        elif stripped.startswith("DreamJourneyBackendAPIToken=") and not token:
-            token = stripped.split("=", 1)[1].strip().strip("'\"")
     if not base_url:
         match = re.search(r"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+", content)
         base_url = match.group(0).rstrip("/,") if match else ""
@@ -104,15 +102,14 @@ BACKEND_API_TOKEN="${BACKEND_API_TOKEN:-$DOC_API_TOKEN}"
 [[ -n "$BACKEND_BASE_URL" ]] || fail "BACKEND_BASE_URL is required. Export it or provide deployed-backend-access.md."
 [[ -n "$BACKEND_API_TOKEN" ]] || fail "BACKEND_API_TOKEN is required. Export it or provide deployed-backend-access.md."
 
-python3 - "$PRIVATE_XCCONFIG" "$BACKEND_BASE_URL" "$BACKEND_API_TOKEN" <<'PY'
+python3 - "$PRIVATE_XCCONFIG" "$BACKEND_BASE_URL" <<'PY'
 import sys
 from pathlib import Path
 
-path, base_url, token = sys.argv[1:4]
+path, base_url = sys.argv[1:3]
 escaped_base_url = base_url.replace("//", "/$()/")
 Path(path).write_text(
-    "DREAMJOURNEY_BACKEND_BASE_URL = " + escaped_base_url + "\n"
-    "DREAMJOURNEY_BACKEND_API_TOKEN = " + token + "\n",
+    "DREAMJOURNEY_BACKEND_BASE_URL = " + escaped_base_url + "\n",
     encoding="utf-8",
 )
 PY
@@ -147,6 +144,8 @@ xcodebuild \
 
 APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION-iphonesimulator/DreamJourney.app"
 [[ -d "$APP_PATH" ]] || fail "Built app not found: $APP_PATH"
+QA_MOBILE_CREDENTIAL_APP_PATH="$APP_PATH" \
+  python3 "$ROOT_DIR/Scripts/QA/product-v4/product-v4-qa-mobile-credential-artifact-check.py"
 
 BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
 [[ -n "$BUNDLE_ID" ]] || fail "Unable to read bundle id from $APP_PATH"

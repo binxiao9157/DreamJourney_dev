@@ -93,15 +93,15 @@ assertContains(runner, "\"audioDataOmitted\"", "runner should verify raw audio i
 assertContains(runner, "\"preparedByteCount\"", "runner should verify prepared PCM byte count")
 assertContains(runner, "Prepared PCM bytes should include original synthesis PCM", "runner should allow preroll/tail silence while preserving original PCM")
 assertContains(runner, "Sent PCM bytes should equal prepared PCM byteCount", "runner should compare sent bytes against prepared PCM")
-assertContains(runner, "<redacted-backend-token>", "runner should redact backend token from build logs")
-assertContains(runner, "APP_INFO_PLIST=\"$APP_PATH/Info.plist\"", "runner should locate the built app Info.plist")
-assertContains(runner, "Set :DreamJourneyBackendBaseURL $BACKEND_BASE_URL", "runner should reapply backend base URL after LocalConfig build phase")
-assertContains(runner, "Set :DreamJourneyBackendAPIToken $BACKEND_API_TOKEN", "runner should reapply backend token after LocalConfig build phase")
+assertContains(runner, "DREAMJOURNEY_BACKEND_BASE_URL=\"$BACKEND_BASE_URL\"", "runner should provide only the non-secret backend base URL to the build")
+assertContains(runner, "QA_MOBILE_CREDENTIAL_APP_PATH", "runner should scan the built app before installation")
+assertContains(runner, "product-v4-qa-mobile-credential-artifact-check.py", "runner should enforce the Product V4 artifact boundary")
 assertContains(runner, "DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER=\"$LOCAL_BUNDLE_ID\"", "runner should build with the local installable Bundle ID")
 assertContains(runner, "DREAMJOURNEY_DEVELOPMENT_TEAM=\"$LOCAL_DEVELOPMENT_TEAM\"", "runner should build with the local development team")
 assertContains(runner, "[[ \"$BUNDLE_ID\" == \"$LOCAL_BUNDLE_ID\" ]]", "runner should assert the built Bundle ID")
 assertContains(runner, "[[ \"$BUNDLE_ID\" != \"com.gaominge.dreamjourney.app\" ]]", "runner should reject the shared default Bundle ID")
-assertNotContains(runner, "cat \"$BACKEND_API_TOKEN\"", "runner must not print backend token")
+assertNotContains(runner, "DREAMJOURNEY_BACKEND_API_TOKEN", "runner must not inject a server compatibility token into iOS")
+assertNotContains(runner, "DreamJourneyBackendAPIToken", "runner must not write a backend token to Info.plist")
 
 assertContains(
     releaseRegression,
