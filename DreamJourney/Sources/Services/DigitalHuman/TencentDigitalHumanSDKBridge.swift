@@ -3,8 +3,6 @@ import UIKit
 
 struct TencentDigitalHumanSDKConfiguration: Equatable {
     let sessionId: String
-    let appKey: String
-    let accessToken: String
     let assetVirtualmanKey: String?
     let virtualmanProjectId: String?
     let alphaChannelEnable: Bool
@@ -49,6 +47,7 @@ enum TencentDigitalHumanSDKBridgeEvent: Equatable {
 enum TencentDigitalHumanSDKBridgeError: Error, Equatable {
     case missingAssetVirtualmanKey
     case missingVirtualmanProjectId
+    case credentialBrokerUnavailable
     case bridgeUnavailable
     case unsupportedPCMDrive
 }

@@ -207,6 +207,7 @@ assertContains(releaseRegression, "run-credential-inventory-scan.sh", "release r
 assertContains(releaseRegression, "product-v4-credential-response-boundary-check.py", "release regression should always enforce the credential response boundary")
 assertContains(releaseRegression, "product-v4-mobile-credential-path-retirement-check.py", "release regression should always enforce mobile credential path retirement")
 assertContains(releaseRegression, "product-v4-qa-mobile-credential-artifact-check.py", "release regression should always enforce the QA mobile credential artifact boundary")
+assertContains(releaseRegression, "product-v4-digital-human-secure-path-check.py", "release regression should always enforce the digital-human secure path")
 assertContains(credentialInventoryRunner, "credential-inventory-scanner.py", "credential inventory runner should invoke the value-free scanner")
 assertContains(credentialInventoryRunner, "CREDENTIAL_SCAN_ENFORCE", "credential inventory runner should support release enforcement")
 assertContains(releaseRegression, "RUN_PUBLIC_MVP_REGRESSION", "release regression should expose the public MVP minimum regression gate")
@@ -426,6 +427,7 @@ let requiredScripts = [
     "Scripts/QA/product-v4/product-v4-credential-response-boundary-check.py",
     "Scripts/QA/product-v4/product-v4-mobile-credential-path-retirement-check.py",
     "Scripts/QA/product-v4/product-v4-qa-mobile-credential-artifact-check.py",
+    "Scripts/QA/product-v4/product-v4-digital-human-secure-path-check.py",
     "../DreamJourneyBackend/scripts/run-backend-credential-response-deployed-smoke.sh",
     "Scripts/QA/prd-stitch-ui/ios-doctor-check.swift",
     "Scripts/QA/prd-stitch-ui/qa-script-location-check.swift",

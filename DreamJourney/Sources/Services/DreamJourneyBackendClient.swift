@@ -338,12 +338,23 @@ struct BackendRuntimeConfig {
 }
 
 struct DigitalHumanRuntimeCapability {
+    private static let scopedSessionRequirements: Set<String> = ["scope", "ttl", "audience", "revocation"]
+
     let enabled: Bool
     let provider: String
     let providerMode: String
     let realProviderReady: Bool
     let sdkProvider: String
     let sdkAuthMode: String
+    let credentialMode: String
+    let accessPath: String
+    let mobileDirectAllowed: Bool
+    let brokerStatus: String
+    let decision: String?
+    let decisionReasonCode: String?
+    let requiredCredentialProperties: [String]
+    let verifiedCredentialProperties: [String]
+    let missingCredentialProperties: [String]
     let sdkAdapterLinked: Bool
     let sdkReadinessMessage: String
     let requiredServerEnv: [String]
@@ -362,6 +373,19 @@ struct DigitalHumanRuntimeCapability {
         enabled && provider == "tencent" && providerMode == "mockContract"
     }
 
+    var allowsScopedMobileSession: Bool {
+        enabled
+            && realProviderReady
+            && credentialMode == "scopedSessionCredential"
+            && accessPath == "scopedSessionCredential"
+            && mobileDirectAllowed
+            && brokerStatus == "verified"
+            && Set(requiredCredentialProperties) == Self.scopedSessionRequirements
+            && Set(verifiedCredentialProperties) == Self.scopedSessionRequirements
+            && missingCredentialProperties.isEmpty
+            && contractVersion >= 4
+    }
+
     init(json: [String: Any]?, capabilities: [String: Any]?) {
         enabled = capabilities?["digitalHumanSession"] as? Bool ?? json?["enabled"] as? Bool ?? false
         provider = json?["provider"] as? String ?? "unknown"
@@ -369,6 +393,16 @@ struct DigitalHumanRuntimeCapability {
         realProviderReady = json?["realProviderReady"] as? Bool ?? false
         sdkProvider = json?["sdkProvider"] as? String ?? ""
         sdkAuthMode = json?["sdkAuthMode"] as? String ?? ""
+        credentialMode = json?["credentialMode"] as? String ?? "blockedStaticCredential"
+        accessPath = json?["accessPath"] as? String ?? "textFallback"
+        mobileDirectAllowed = json?["mobileDirectAllowed"] as? Bool ?? false
+        brokerStatus = json?["brokerStatus"] as? String ?? "unknown"
+        let decisionReceipt = json?["decisionReceipt"] as? [String: Any]
+        decision = decisionReceipt?["decision"] as? String
+        decisionReasonCode = decisionReceipt?["reasonCode"] as? String
+        requiredCredentialProperties = decisionReceipt?["requiredProperties"] as? [String] ?? []
+        verifiedCredentialProperties = decisionReceipt?["verifiedProperties"] as? [String] ?? []
+        missingCredentialProperties = decisionReceipt?["missingProperties"] as? [String] ?? []
         sdkAdapterLinked = json?["sdkAdapterLinked"] as? Bool ?? false
         sdkReadinessMessage = json?["sdkReadinessMessage"] as? String ?? ""
         requiredServerEnv = json?["requiredServerEnv"] as? [String] ?? []
@@ -467,6 +501,12 @@ struct DigitalHumanSessionCredential {
     let mode: String
     let expiresAt: Date?
     let scopedSessionReady: Bool
+
+    var isUsableScopedSessionCredential: Bool {
+        mode == "scopedSessionCredential"
+            && scopedSessionReady
+            && (expiresAt.map { $0 > Date() } ?? false)
+    }
 
     init(json: [String: Any]?) {
         mode = json?["mode"] as? String ?? "unknown"

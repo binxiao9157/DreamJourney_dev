@@ -48,6 +48,7 @@ let releasePackage = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swi
 let handoff = read(statusDoc)
 let backendConfig = read("../DreamJourneyBackend/app/core/config.py")
 let backendRuntime = read("../DreamJourneyBackend/app/services/runtime_config.py")
+let backendAccess = read("../DreamJourneyBackend/app/services/digital_human_access.py")
 let backendMain = read("../DreamJourneyBackend/app/main.py")
 let backendTests = read("../DreamJourneyBackend/tests/test_digital_human_sessions.py")
 
@@ -71,10 +72,12 @@ for required in [
     "blocked",
     "realProviderReady",
     "sdkAuthMode",
-    "credentialBrokerRequired",
+    "staticProjectCredentialUnsupportedOnMobile",
     "sdkAdapterLinked",
     "blockedStaticCredential",
     "digital_human_credential_broker_unavailable",
+    "providerContractNotVerified",
+    "keepDirectMobileClosed",
     "assert_no_store",
     "assert_value_free",
     "silent mode",
@@ -92,22 +95,24 @@ for forbidden in [
 }
 
 assertContains(backendConfig, "TENCENT_DIGITAL_HUMAN_SESSION_TTL_SECONDS", "backend settings should retain lease cleanup timing")
-assertContains(backendRuntime, "credentialBrokerRequired", "runtime config should require a scoped credential broker")
-assertContains(backendRuntime, "blockedStaticCredential", "runtime config should block static credential delivery")
+assertContains(backendRuntime, "staticProjectCredentialUnsupportedOnMobile", "runtime config should reject project credentials on mobile")
+assertContains(backendRuntime, "DigitalHumanAccessPolicy", "runtime config should reuse the server-authoritative access policy")
+assertContains(backendAccess, "blockedStaticCredential", "access policy should block static credential delivery")
+assertContains(backendAccess, "providerContractNotVerified", "access policy should record the unverified Provider contract")
+assertContains(backendAccess, "keepDirectMobileClosed", "access policy should record the closed direct-mobile decision")
 assertNotContains(backendRuntime, "TENCENT_DIGITAL_HUMAN_APP_KEY", "runtime response code must not reference static appkey env labels")
 assertNotContains(backendRuntime, "TENCENT_DIGITAL_HUMAN_ACCESS_TOKEN", "runtime response code must not reference static access token env labels")
 
 for required in [
-    "DIGITAL_HUMAN_SESSION_CONTRACT_VERSION = 3",
+    "DigitalHumanAccessPolicy().blocked_mobile_contract()",
     "digital_human_credential_broker_unavailable",
-    "blockedStaticCredential",
-    "fallbackMode",
     "DIGITAL_HUMAN_SESSION_LEASE_CONTRACT_VERSION",
     "heartbeat_digital_human_session",
     "release_digital_human_session",
 ] {
     assertContains(backendMain, required, "backend session endpoint should emit \(required)")
 }
+assertContains(backendAccess, "CONTRACT_VERSION = 4", "access policy should own the digital-human contract version")
 for forbidden in [
     "credential[\"appkey\"]",
     "credential[\"accesstoken\"]",

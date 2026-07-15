@@ -34,15 +34,27 @@ final class DigitalHumanRuntimeFactory {
 
         if contract.provider == "tencent",
            realTencentProviderModes.contains(contract.providerMode) {
-            if let capability,
-               capability.sdkAdapterLinked == false || capability.realProviderReady == false {
+            guard let capability,
+                  capability.allowsScopedMobileSession,
+                  contract.credential.isUsableScopedSessionCredential else {
+                let readinessMessage = capability?.sdkReadinessMessage ?? "Digital-human runtime capability is missing."
                 return DigitalHumanRuntimeSelection(
                     runtime: AudioOnlyDigitalHumanRuntime(contentView: contentView),
                     selectedProvider: contract.provider,
                     selectedMode: contract.providerMode,
-                    fallbackReason: capability.sdkReadinessMessage.isEmpty
-                        ? "Tencent SDK runtime capability is not ready."
-                        : capability.sdkReadinessMessage,
+                    fallbackReason: readinessMessage.isEmpty
+                        ? "Tencent scoped mobile session credential is not verified."
+                        : readinessMessage,
+                    isRealSDKBacked: false
+                )
+            }
+
+            if capability.sdkAdapterLinked == false {
+                return DigitalHumanRuntimeSelection(
+                    runtime: AudioOnlyDigitalHumanRuntime(contentView: contentView),
+                    selectedProvider: contract.provider,
+                    selectedMode: contract.providerMode,
+                    fallbackReason: "Tencent SDK adapter is not linked.",
                     isRealSDKBacked: false
                 )
             }

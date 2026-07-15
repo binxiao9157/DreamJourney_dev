@@ -122,7 +122,11 @@ def main() -> None:
     assert_equal(digital_human.get("provider"), "tencent", "runtime digitalHuman provider")
     assert_equal(digital_human.get("providerMode"), "blocked", "runtime digitalHuman providerMode")
     assert_equal(digital_human.get("realProviderReady"), False, "runtime realProviderReady")
-    assert_equal(digital_human.get("sdkAuthMode"), "credentialBrokerRequired", "runtime sdkAuthMode")
+    assert_equal(
+        digital_human.get("sdkAuthMode"),
+        "staticProjectCredentialUnsupportedOnMobile",
+        "runtime sdkAuthMode",
+    )
     assert_equal(digital_human.get("sdkAdapterLinked"), False, "runtime sdkAdapterLinked")
     assert_equal(
         digital_human.get("requiresBackendIssuedCredential"),
@@ -135,12 +139,23 @@ def main() -> None:
         "runtime defaultReleaseVisible",
     )
     assert_equal(digital_human.get("credentialMode"), "blockedStaticCredential", "runtime credentialMode")
+    assert_equal(digital_human.get("accessPath"), "textFallback", "runtime accessPath")
+    assert_equal(digital_human.get("mobileDirectAllowed"), False, "runtime mobileDirectAllowed")
+    assert_equal(digital_human.get("brokerStatus"), "providerContractNotVerified", "runtime brokerStatus")
     assert_equal(digital_human.get("releaseVisible"), False, "runtime releaseVisible")
     assert_equal(digital_human.get("fallbackMode"), "text", "runtime fallbackMode")
     assert_equal(
         (digital_human.get("credentialBroker") or {}).get("status"),
-        "unavailable",
+        "providerContractNotVerified",
         "runtime credential broker status",
+    )
+    required_credential_properties = ["scope", "ttl", "audience", "revocation"]
+    runtime_receipt = digital_human.get("decisionReceipt") or {}
+    assert_equal(runtime_receipt.get("decision"), "keepDirectMobileClosed", "runtime decision")
+    assert_equal(
+        runtime_receipt.get("missingProperties"),
+        required_credential_properties,
+        "runtime missing credential properties",
     )
     session_lease_capability = digital_human.get("sessionLease") or {}
     assert_equal(session_lease_capability.get("enabled"), False, "runtime session lease enabled")
@@ -174,11 +189,23 @@ def main() -> None:
     assert_equal(blocked_detail.get("code"), "digital_human_credential_broker_unavailable", "blocked code")
     assert_equal(blocked_detail.get("provider"), "tencent", "blocked provider")
     assert_equal(blocked_detail.get("credentialMode"), "blockedStaticCredential", "blocked credential mode")
+    assert_equal(blocked_detail.get("accessPath"), "textFallback", "blocked access path")
+    assert_equal(blocked_detail.get("mobileDirectAllowed"), False, "blocked mobileDirectAllowed")
+    assert_equal(blocked_detail.get("brokerStatus"), "providerContractNotVerified", "blocked brokerStatus")
     assert_equal(blocked_detail.get("providerReady"), False, "blocked providerReady")
     assert_equal(blocked_detail.get("releaseVisible"), False, "blocked releaseVisible")
     assert_equal(blocked_detail.get("retryable"), False, "blocked retryable")
     assert_equal(blocked_detail.get("fallbackMode"), "text", "blocked fallbackMode")
-    assert_equal(blocked_detail.get("contractVersion"), 3, "blocked contractVersion")
+    blocked_receipt = blocked_detail.get("decisionReceipt") or {}
+    assert_equal(blocked_receipt.get("decision"), "keepDirectMobileClosed", "blocked decision")
+    assert_equal(
+        blocked_receipt.get("missingProperties"),
+        required_credential_properties,
+        "blocked missing credential properties",
+    )
+    assert_true("expiresAt" not in blocked_detail, "blocked response must not invent expiresAt")
+    assert_true("expiresInSeconds" not in blocked_detail, "blocked response must not invent expiresInSeconds")
+    assert_equal(blocked_detail.get("contractVersion"), 4, "blocked contractVersion")
 
     repeated_session = request_json(
         "POST",

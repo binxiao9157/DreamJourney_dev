@@ -8,7 +8,6 @@ final class TencentVirtualmanSDKBridge: NSObject, TencentDigitalHumanSDKBridge {
     var eventHandler: ((TencentDigitalHumanSDKBridgeEvent) -> Void)?
 
     private let virtualman: Virtualman
-    private var configuration: TencentDigitalHumanSDKConfiguration?
     private var remoteAudioUserIds = Set<String>()
     private var isRemoteAudioMuted = false
 
@@ -30,53 +29,17 @@ final class TencentVirtualmanSDKBridge: NSObject, TencentDigitalHumanSDKBridge {
     }
 
     func configure(_ configuration: TencentDigitalHumanSDKConfiguration, profile: DigitalHumanProfile) throws {
-        self.configuration = configuration
-
-        let params = VirtualmanParams(appkey: configuration.appKey, accesstoken: configuration.accessToken)
-
-        if let assetKey = configuration.assetVirtualmanKey, !assetKey.isEmpty {
-            let assetParams = AssetVirtualmanParams(assetVirtualmanKey: assetKey)
-            assetParams.extraInfo = ExtraInfo(alphaChannelEnable: configuration.alphaChannelEnable)
-            params.assetVirtualmanParams = assetParams
-        }
-
-        if let projectId = configuration.virtualmanProjectId, !projectId.isEmpty {
-            let projectParams = VirtualmanProjectParams(virtualmanProjectId: projectId)
-            projectParams.extraInfo = ExtraInfo(alphaChannelEnable: configuration.alphaChannelEnable)
-            params.virtualmanProjectParams = projectParams
-        }
-
-        virtualman.initSDK(params: params)
+        _ = configuration
+        _ = profile
+        throw TencentDigitalHumanSDKBridgeError.credentialBrokerUnavailable
     }
 
     func openByAsset(completion: @escaping (Result<String, Error>) -> Void) {
-        guard configuration?.shouldOpenByAsset == true else {
-            completion(.failure(TencentDigitalHumanSDKBridgeError.missingAssetVirtualmanKey))
-            return
-        }
-
-        virtualman.openByAsset { sessionId, error in
-            if let sessionId {
-                completion(.success(sessionId))
-            } else {
-                completion(.failure(Self.providerError(code: 1, message: error ?? "Tencent asset stream failed")))
-            }
-        }
+        completion(.failure(TencentDigitalHumanSDKBridgeError.credentialBrokerUnavailable))
     }
 
     func openByProject(completion: @escaping (Result<String, Error>) -> Void) {
-        guard configuration?.shouldOpenByProject == true else {
-            completion(.failure(TencentDigitalHumanSDKBridgeError.missingVirtualmanProjectId))
-            return
-        }
-
-        virtualman.open { sessionId, error in
-            if let sessionId {
-                completion(.success(sessionId))
-            } else {
-                completion(.failure(Self.providerError(code: 2, message: error ?? "Tencent project stream failed")))
-            }
-        }
+        completion(.failure(TencentDigitalHumanSDKBridgeError.credentialBrokerUnavailable))
     }
 
     func sendText(_ text: String, requestID: String, sequence: Int, isFinal: Bool) throws {
