@@ -41,7 +41,7 @@ Recommended local file:
 ```xcconfig
 // DreamJourney/Config/Backend.local.xcconfig
 DREAMJOURNEY_BACKEND_BASE_URL = https://your-backend.example.com
-DREAMJOURNEY_BACKEND_API_TOKEN = your-real-token
+DREAMJOURNEY_BACKEND_API_TOKEN = YOUR_BACKEND_API_TOKEN
 ```
 
 Rules:
@@ -58,8 +58,8 @@ Recommended local file:
 ```xcconfig
 // DreamJourney/Config/VoiceSDK.local.xcconfig
 VOLCENGINE_APP_ID = your-real-volcengine-app-id
-VOLCENGINE_APP_KEY = your-real-volcengine-app-key
-VOLCENGINE_APP_TOKEN = your-real-volcengine-app-token
+VOLCENGINE_APP_KEY = YOUR_VOLCENGINE_APP_KEY
+VOLCENGINE_APP_TOKEN = YOUR_VOLCENGINE_APP_TOKEN
 ```
 
 Rules:
@@ -83,7 +83,7 @@ Rules:
 ```bash
 cd /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 BACKEND_BASE_URL="https://your-backend.example.com" \
-BACKEND_API_TOKEN="your-real-token" \
+BACKEND_API_TOKEN=YOUR_BACKEND_API_TOKEN \
 Scripts/QA/prd-stitch-ui/run-backend-env-smoke.sh
 ```
 
@@ -121,10 +121,10 @@ Preflight command:
 ```bash
 cd /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 DREAMJOURNEY_BACKEND_BASE_URL="https://your-backend.example.com" \
-DREAMJOURNEY_BACKEND_API_TOKEN="your-real-token" \
+DREAMJOURNEY_BACKEND_API_TOKEN=YOUR_BACKEND_API_TOKEN \
 VOLCENGINE_APP_ID="your-real-volcengine-app-id" \
-VOLCENGINE_APP_KEY="your-real-volcengine-app-key" \
-VOLCENGINE_APP_TOKEN="your-real-volcengine-app-token" \
+VOLCENGINE_APP_KEY=YOUR_VOLCENGINE_APP_KEY \
+VOLCENGINE_APP_TOKEN=YOUR_VOLCENGINE_APP_TOKEN \
 Scripts/QA/prd-stitch-ui/run-true-device-voice-preflight.sh
 ```
 

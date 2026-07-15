@@ -33,7 +33,7 @@ SURFACE_CATEGORIES = {
     "CONTAINER",
 }
 ASSIGNMENT_TEMPLATE = (
-    r"(?is)(?:[\"']?(?:{key})[\"']?\s*(?:=|:)\s*[\"']?)"
+    r"(?is)(?:[\"']?(?:{key})[\"']?[ \t]*(?:=|:)[ \t]*)(?P<quote>[\"']?)"
     r"(?P<value>[^\s\"'`,;<>]{{4,2048}})"
 )
 PLIST_TEMPLATE = (
@@ -111,6 +111,8 @@ def is_placeholder(value: str, tokens: Iterable[str]) -> bool:
         return True
     if any(marker in normalized for marker in ("${", "$(", "{{", "\\(", "***")):
         return True
+    if re.search(r"\$(?:[A-Za-z_]|\{|\()", normalized):
+        return True
     return upper in {"NIL", "NONE", "NULL", "FALSE", "UNSET"}
 
 
@@ -135,6 +137,18 @@ class InventoryBuilder:
         self.reference_patterns = [
             re.compile(pattern) for pattern in policy.get("referenceValuePatterns", [])
         ]
+        self.code_reference_path_patterns = [
+            re.compile(pattern) for pattern in policy.get("codeReferencePathPatterns", [])
+        ]
+        self.code_reference_value_patterns = [
+            re.compile(pattern) for pattern in policy.get("codeReferenceValuePatterns", [])
+        ]
+        self.fixture_path_patterns = [
+            re.compile(pattern) for pattern in policy.get("fixturePathPatterns", [])
+        ]
+        self.fixture_value_patterns = [
+            re.compile(pattern) for pattern in policy.get("fixtureValuePatterns", [])
+        ]
         self.types: list[tuple[dict[str, Any], re.Pattern[str], re.Pattern[str]]] = []
         for entry in policy.get("credentialTypes", []):
             key = entry["keyPattern"]
@@ -153,18 +167,43 @@ class InventoryBuilder:
         category: str,
         path: str,
         line: int,
+        is_quoted: bool = False,
     ) -> None:
         value = raw_value.strip().strip("\"'")
         if len(value) < 4:
             return
         fingerprint = short_hash(value)
         status = entry["classification"]
+        reference_candidates = {
+            value,
+            value.rstrip(",?:! "),
+            value.lstrip("([{ ").rstrip(")]},?:! "),
+        }
         if is_placeholder(value, self.placeholder_tokens) or any(
             pattern.search(value) for pattern in self.placeholder_patterns
         ):
             status = "PLACEHOLDER"
-        elif any(pattern.search(value) for pattern in self.reference_patterns):
+        elif any(
+            pattern.search(candidate)
+            for pattern in self.reference_patterns
+            for candidate in reference_candidates
+        ):
             status = "REFERENCE"
+        elif (
+            not is_quoted
+            and any(pattern.search(path) for pattern in self.code_reference_path_patterns)
+            and any(
+                pattern.search(candidate)
+                for pattern in self.code_reference_value_patterns
+                for candidate in reference_candidates
+            )
+        ):
+            status = "REFERENCE"
+        elif (
+            any(pattern.search(path) for pattern in self.fixture_path_patterns)
+            and any(pattern.search(value) for pattern in self.fixture_value_patterns)
+        ):
+            status = "PLACEHOLDER"
         allowlisted = False
         for allowed in self.policy.get("allowlist", []):
             if (
@@ -214,7 +253,7 @@ class InventoryBuilder:
     def scan_text(self, text: str, category: str, path: str, base_line: int = 0) -> None:
         occupied: set[tuple[int, int]] = set()
         for entry, assignment, plist in self.types:
-            for pattern in (plist, assignment):
+            for pattern, source_kind in ((plist, "plist"), (assignment, "assignment")):
                 for match in pattern.finditer(text):
                     span = match.span("value")
                     if any(span[0] < end and span[1] > start for start, end in occupied):
@@ -226,6 +265,10 @@ class InventoryBuilder:
                         category,
                         path,
                         base_line + line_number(text, span[0]),
+                        is_quoted=(
+                            source_kind == "plist"
+                            or bool(match.groupdict().get("quote"))
+                        ),
                     )
 
         private_entry = {

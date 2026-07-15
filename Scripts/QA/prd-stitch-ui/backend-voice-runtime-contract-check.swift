@@ -29,7 +29,14 @@ for required in ["\"status\": \"blocked\"", "\"credentialMode\": \"blockedStatic
 require(!backendTokens.contains("\"expiresInSeconds\""), "blocked realtime voice must not invent a credential TTL")
 require(!backendTokens.contains("\"expiresAt\""), "blocked realtime voice must not invent a credential expiry")
 require(backendRuntime.contains("\"realtimeToken\": False"), "runtime capability must disable realtime tokens")
-require(backendRuntime.contains("\"credentialMode\": \"blockedStaticCredential\""), "runtime must declare the blocked credential mode")
+require(
+    backendRuntime.contains("TokenService(self.settings).realtime_config"),
+    "runtime must source the blocked voice contract from TokenService"
+)
+require(
+    backendRuntime.contains("\"voice\": {") && backendRuntime.contains("**realtime_voice"),
+    "runtime must merge the complete blocked voice contract"
+)
 require(backendBoundaryTests.contains("test_realtime_voice_returns_blocked_value_free_capability"), "backend must test the blocked value-free contract")
 require(backendBoundaryTests.contains("assert_no_store"), "backend must test no-store headers")
 
@@ -40,7 +47,10 @@ require(!backendClient.contains("let appToken: String"), "iOS runtime model must
 require(!backendClient.contains("let apiKey: String"), "iOS runtime model must not parse a Provider API key")
 
 require(dialogEngine.contains("case providerCredentialBlocked"), "voice readiness must represent the credential boundary")
-require(dialogEngine.contains("guard !runtimeConfig.isBlocked"), "DialogEngine must fail closed for a blocked contract")
+require(
+    dialogEngine.contains("!runtimeConfig.isBlocked else"),
+    "DialogEngine must fail closed for a blocked contract"
+)
 require(!dialogEngine.contains("VolcEngineAppToken"), "DialogEngine must not read a packaged Provider token")
 require(echoView.contains("handleBlockedRealtimeVoice"), "Echo must expose the safe blocked path")
 require(echoView.contains("echoRealtimeVoiceCredentialBlocked"), "Echo must expose an accessible blocked status")

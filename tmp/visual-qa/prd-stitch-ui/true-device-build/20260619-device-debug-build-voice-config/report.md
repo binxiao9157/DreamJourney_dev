@@ -12,7 +12,7 @@ The previous true-device build was created with the project default build settin
 
 - `VOLCENGINE_APP_ID = YOUR_VOLCENGINE_APP_ID`
 - `VOLCENGINE_APP_KEY = YOUR_VOLCENGINE_APP_KEY`
-- `VOLCENGINE_APP_TOKEN = YOUR_VOLCENGINE_APP_TOKEN`
+- `VOLCENGINE_APP_TOKEN = REDACTED
 
 `DialogEngineManager` reads `VolcEngineAppID`, `VolcEngineAppKey`, and `VolcEngineAppToken` from the app `Info.plist`. Because the previous build still contained placeholder values, the app correctly showed:
 
@@ -36,9 +36,9 @@ The built app `Info.plist` was checked without printing secret values:
 ```text
 VolcEngineAppID: configured=True
 VolcEngineAppKey: configured=True
-VolcEngineAppToken: configured=True
+VolcEngineAppToken: REDACTED
 DreamJourneyBackendBaseURL: configured=True
-DreamJourneyBackendAPIToken: configured=True
+DreamJourneyBackendAPIToken: REDACTED
 ```
 
 Private values were also checked against the build log and were not present after redaction.

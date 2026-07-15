@@ -105,7 +105,7 @@ Local backend start:
 
 ```bash
 cd /Users/yxj/Documents/Codex/Video/DreamJourneyBackend
-STORE_BACKEND=memory BACKEND_API_TOKEN=dj-local-test-token PYTHONPATH=. .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 3100
+STORE_BACKEND=memory BACKEND_API_TOKEN=YOUR_BACKEND_API_TOKEN PYTHONPATH=. .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 3100
 ```
 
 HTTP contract checks:
@@ -126,7 +126,7 @@ iOS backend smoke:
 
 ```bash
 cd /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-BACKEND_BASE_URL=http://127.0.0.1:3100 BACKEND_API_TOKEN=dj-local-test-token RUN_ID=20260618-phase0-backend-alignment Scripts/QA/prd-stitch-ui/run-backend-env-smoke.sh
+BACKEND_BASE_URL=http://127.0.0.1:3100 BACKEND_API_TOKEN=YOUR_BACKEND_API_TOKEN RUN_ID=20260618-phase0-backend-alignment Scripts/QA/prd-stitch-ui/run-backend-env-smoke.sh
 ```
 
 Result JSON:

@@ -25,7 +25,7 @@ Access/refresh token 与 ownership shadow 的部署后端 smoke：
 
 ```bash
 DREAMJOURNEY_BACKEND_BASE_URL=https://your-backend.example.com \
-DREAMJOURNEY_BACKEND_API_TOKEN='server compatibility token' \
+DREAMJOURNEY_BACKEND_API_TOKEN='YOUR_BACKEND_API_TOKEN' \
 Scripts/QA/prd-stitch-ui/run-backend-auth-session-shadow-smoke.sh
 ```
 
@@ -35,7 +35,7 @@ Scripts/QA/prd-stitch-ui/run-backend-auth-session-shadow-smoke.sh
 
 ```bash
 DREAMJOURNEY_BACKEND_BASE_URL=https://your-backend.example.com \
-DREAMJOURNEY_BACKEND_API_TOKEN='server compatibility token' \
+DREAMJOURNEY_BACKEND_API_TOKEN='YOUR_BACKEND_API_TOKEN' \
 Scripts/QA/prd-stitch-ui/run-backend-cross-account-authorization-shadow-smoke.sh
 ```
 
@@ -45,7 +45,7 @@ Scripts/QA/prd-stitch-ui/run-backend-cross-account-authorization-shadow-smoke.sh
 
 ```bash
 DREAMJOURNEY_BACKEND_BASE_URL=https://your-backend.example.com \
-DREAMJOURNEY_BACKEND_API_TOKEN='server compatibility token' \
+DREAMJOURNEY_BACKEND_API_TOKEN='YOUR_BACKEND_API_TOKEN' \
 Scripts/QA/prd-stitch-ui/run-backend-route-ownership-audit-smoke.sh
 ```
 

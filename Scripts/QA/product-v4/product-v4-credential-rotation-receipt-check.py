@@ -43,6 +43,7 @@ REQUIRED_CONTAINMENT = {
     "realtimeDirectMobile",
     "digitalHumanDirectMobile",
     "digitalHumanLeaseDrain",
+    "currentSourceCredentialLiterals",
 }
 
 
@@ -81,6 +82,19 @@ def main() -> None:
     require(
         containment["digitalHumanLeaseDrain"].get("status") == "AUTOMATED_AND_DEPLOYED",
         "digital-human lease drain is not deployed",
+    )
+    require(
+        containment["currentSourceCredentialLiterals"].get("status") == "RETIRED_AND_DEPLOYED",
+        "current source credential literals are not retired",
+    )
+    inventory = receipt.get("inventoryEvidence") or {}
+    require(inventory.get("sourceBlockingObservationCount") == 0, "current source must have zero blockers")
+    require(inventory.get("historyBlockingObservationCount", 0) > 0, "history blocker evidence is missing")
+    require(inventory.get("containerBlockingObservationCount", 0) > 0, "private/container blocker evidence is missing")
+    require(
+        inventory.get("blockingObservationCount")
+        == inventory.get("historyBlockingObservationCount") + inventory.get("containerBlockingObservationCount"),
+        "blocking observation totals do not reconcile",
     )
     drain = receipt.get("drainReceipt") or {}
     require(drain.get("elapsedActiveBefore") == 1, "drain receipt must retain the observed before count")

@@ -17,10 +17,11 @@ Lease：`HELD`
 
 ## 2. 本轮无值基线
 
-- scanner report：`tmp/visual-qa/prd-stitch-ui/credential-inventory/20260716-wi-s0-03-07-baseline/credential-inventory.json`。
-- SHA-256：`f5624b036bbb19a53d0bcf1454881e6f2567df03f910c296f7078cd308e3995e`。
-- 唯一候选 `284`，唯一阻断候选 `156`，阻断 observation `644`。
-- `GENERIC_SECRET` 仍有 `233` 条 observation 待 `SECURITY_TRIAGE_OWNER` 分类。
+- scanner report：`tmp/visual-qa/prd-stitch-ui/credential-inventory/20260716-wi-s0-03-07-final/credential-inventory.json`。
+- SHA-256：`f1bb5f637b933237d93281a35eb4752618f5d929392b856608e9338bf88e998b`。
+- 唯一候选 `286`，唯一阻断候选 `30`，阻断 observation `47`。
+- 当前 `SOURCE` 阻断 observation 已降为 `0`；剩余仅为 `HISTORY=38`、`CONTAINER=9`。
+- `GENERIC_SECRET` 仍有 `2` 条历史/私密面 observation 待 `SECURITY_TRIAGE_OWNER` 分类。
 - 报告与本文不包含 credential 原值、Authorization header、Provider response 正文或完整私有配置。
 
 ## 3. 已完成的内部 containment
@@ -31,6 +32,7 @@ Lease：`HELD`
 - realtime direct mobile 关闭：Backend `2fafa50`、iOS `55a791a`。
 - digital-human direct mobile 关闭：Backend `d23b940`、iOS `551590c`。
 - 数字人旧 lease drain：Backend `7839583` 已推送和部署；启动时幂等清理超过 `expiresAt` 的 active lease。
+- 当前源码字面量 containment：Backend `85902bd` 已推送和部署；示例配置改为显式 `YOUR_*`，测试值改为 `fixture-*`，旧 QA 证据改为 `REDACTED`，Compose 不再硬编码数据库密码。
 
 ## 4. Drain 部署证据
 
@@ -58,7 +60,10 @@ Lease：`HELD`
 
 - Backend：311 项单测、Postgres store targeted tests、FastAPI smoke、credential response boundary smoke 通过。
 - Backend：`7839583 security(WI-S0-03-07): drain expired digital-human leases` 已推送、部署，线上 Postgres drain 通过。
+- Backend：`85902bd security(WI-S0-03-07): remove current credential literals` 已推送、部署；Compose config、Postgres readiness、`/health store=postgres` 与线上 credential response boundary smoke 通过。
+- iOS/release：credential inventory、rotation receipt、release QA package、静态 guards、标准模拟器构建通过；窄版 regression 使用 `RUN_SIMULATOR_SMOKE=0`。
+- 默认 Archive -> Echo 模拟器 smoke 仍因旧 harness 未建立新 auth session 收到 `401`；不得通过恢复共享 token 修复，需在后续 QA auth harness Work Item 单独收敛。
 - value-free receipt：`docs/superpowers/status/2026-07-16-wi-s0-03-07-credential-rotation-receipt.json`。
 - iOS control-plane commit：本文所在提交。
 - receipt truthfulness gate 会拒绝 credential 原值字段，也会拒绝在无 Provider evidence 时把 G0 或 release decision 标成通过。
-- 当前只完成可逆 containment 与 drain；真实 rotation/revoke 需要资产 Owner 操作，因而 Work Item 保持 `EXTERNAL_BLOCKED`。
+- 当前源码阻断为零，但 Git 历史与私密容器仍保留旧版本指纹；真实 rotation/revoke 需要资产 Owner 操作，因而 Work Item 保持 `EXTERNAL_BLOCKED`。

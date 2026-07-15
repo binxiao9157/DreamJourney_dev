@@ -618,7 +618,7 @@ In `tests/test_digital_human_sessions.py`, add:
 def test_runtime_config_marks_real_provider_ready_with_asset_env(self):
     with patch.dict(os.environ, {
         "TENCENT_DIGITAL_HUMAN_APP_KEY": "app-key",
-        "TENCENT_DIGITAL_HUMAN_ACCESS_TOKEN": "access-token",
+        "TENCENT_DIGITAL_HUMAN_ACCESS_TOKEN": "YOUR_TENCENT_DIGITAL_HUMAN_ACCESS_TOKEN",
         "TENCENT_DIGITAL_HUMAN_ASSET_VIRTUALMAN_KEY": "asset-key",
     }, clear=False):
         response = client.get("/config/runtime")

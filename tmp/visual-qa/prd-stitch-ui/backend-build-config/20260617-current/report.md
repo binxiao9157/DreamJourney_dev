@@ -35,7 +35,7 @@ Default built plist values:
 
 ```text
 DreamJourneyBackendBaseURL = http://127.0.0.1:3100
-DreamJourneyBackendAPIToken = YOUR_DREAMJOURNEY_BACKEND_API_TOKEN
+DreamJourneyBackendAPIToken = REDACTED
 ```
 
 Override build:
@@ -48,7 +48,7 @@ Override built plist values:
 
 ```text
 DreamJourneyBackendBaseURL = https://staging.example.invalid
-DreamJourneyBackendAPIToken = qa-build-token
+DreamJourneyBackendAPIToken = REDACTED
 ```
 
 `qa-build-token` is a dummy local QA value, not a real secret.
@@ -58,7 +58,7 @@ DreamJourneyBackendAPIToken = qa-build-token
 ```bash
 swift tmp/visual-qa/prd-stitch-ui/backend-build-config-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -destination 'generic/platform=iOS Simulator' -configuration Debug -derivedDataPath tmp/visual-qa/prd-stitch-ui/DerivedDataBackendBuildConfigDefault build
-xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -destination 'generic/platform=iOS Simulator' -configuration Debug -derivedDataPath tmp/visual-qa/prd-stitch-ui/DerivedDataBackendBuildConfigOverride DREAMJOURNEY_BACKEND_BASE_URL=https://staging.example.invalid DREAMJOURNEY_BACKEND_API_TOKEN=qa-build-token build
+xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -destination 'generic/platform=iOS Simulator' -configuration Debug -derivedDataPath tmp/visual-qa/prd-stitch-ui/DerivedDataBackendBuildConfigOverride DREAMJOURNEY_BACKEND_BASE_URL=https://staging.example.invalid DREAMJOURNEY_BACKEND_API_TOKEN=REDACTED build
 plutil -lint DreamJourney/Resources/Info.plist DreamJourney.xcodeproj/project.pbxproj
 ```
 

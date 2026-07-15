@@ -96,6 +96,41 @@ def main() -> None:
             "let apiKey: String\nlet accessToken = config.accessToken\n",
             encoding="utf-8",
         )
+        fixture_directory = fixture_root / "tests"
+        fixture_directory.mkdir()
+        (fixture_directory / "auth_fixture.py").write_text(
+            'password = "owner-password-smoke-123"\n'
+            'access_token = login.get("accessToken")\n'
+            "api_key = settings.api_key\n"
+            "def request(access_token=None):\n"
+            "    access_token=owner_token\n"
+            '    access_token = "dja_" + secrets.token_urlsafe(32)\n',
+            encoding="utf-8",
+        )
+        (fixture_directory / "password_reference.swift").write_text(
+            'let currentPassword = (rawCurrentPassword ?? "").trimmingCharacters(in: .whitespaces)\n',
+            encoding="utf-8",
+        )
+        (fixture_directory / "shell_reference.sh").write_text(
+            'BACKEND_API_TOKEN="$backend_api_token"\n',
+            encoding="utf-8",
+        )
+        (fixture_directory / "provider.swiftinterface").write_text(
+            "public var accessToken: Swift.String? { get }\n",
+            encoding="utf-8",
+        )
+        production_directory = fixture_root / "app"
+        production_directory.mkdir()
+        production_like_value = "productionMaterial" + "E" * 40
+        (production_directory / "runtime.env").write_text(
+            f"API_KEY={production_like_value}\n",
+            encoding="utf-8",
+        )
+        (production_directory / "empty.env").write_text(
+            "VOLCENGINE_API_KEY=\n"
+            "VOLCENGINE_VOICE_TYPE=zh_female_fixture_voice\n",
+            encoding="utf-8",
+        )
         excluded = fixture_root / ".venv"
         excluded.mkdir()
         excluded_secret = "excluded-" + "C" * 48
@@ -135,6 +170,62 @@ def main() -> None:
             "specific credential matches must not be duplicated as generic findings",
         )
         require(any(item["status"] == "REFERENCE" for item in findings), "source references were not classified")
+        require(
+            any(
+                item["path"].endswith("tests/auth_fixture.py")
+                and item["type"] == "GENERIC_SECRET"
+                and item["status"] == "PLACEHOLDER"
+                for item in findings
+            ),
+            "explicit test password fixture was not classified as a placeholder",
+        )
+        require(
+            all(
+                item["status"] == "REFERENCE"
+                for item in findings
+                if item["path"].endswith("tests/auth_fixture.py")
+                and item["line"] in {2, 3, 4, 5, 6}
+            ),
+            "unquoted test code references must not remain blocking",
+        )
+        require(
+            all(
+                item["status"] == "REFERENCE"
+                for item in findings
+                if item["path"].endswith("tests/password_reference.swift")
+            ),
+            "wrapped Swift password references must not remain blocking",
+        )
+        require(
+            all(
+                item["status"] in {"PLACEHOLDER", "REFERENCE"}
+                for item in findings
+                if item["path"].endswith("tests/shell_reference.sh")
+            ),
+            "quoted shell variable references must not remain blocking",
+        )
+        require(
+            all(
+                item["status"] == "REFERENCE"
+                for item in findings
+                if item["path"].endswith("tests/provider.swiftinterface")
+            ),
+            "SDK interface type references must not remain blocking",
+        )
+        production_fingerprint = hashlib.sha256(production_like_value.encode("utf-8")).hexdigest()[:16]
+        require(
+            any(
+                item["type"] == "GENERIC_SECRET"
+                and item["fingerprint"] == production_fingerprint
+                and item["status"] == "UNKNOWN"
+                for item in findings
+            ),
+            "production-like unquoted material must remain blocking",
+        )
+        require(
+            not any(item["path"].endswith("app/empty.env") for item in findings),
+            "an empty credential assignment must not consume the next line as its value",
+        )
         require(all(len(item["fingerprint"]) == 16 for item in findings), "fingerprints must be truncated SHA-256")
         require(report.get("summary", {}).get("blockingFindings", 0) >= 2, "secret findings must block release enforcement")
         require(report.get("summary", {}).get("uniqueBlockingCredentials", 0) >= 2, "unique secret inventory is incomplete")
