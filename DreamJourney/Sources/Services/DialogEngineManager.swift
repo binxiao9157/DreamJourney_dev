@@ -165,7 +165,6 @@ final class DialogEngineManager: NSObject {
         super.init()
     }
 
-    func configure(token: String) {}
     func configure(runtimeConfig: RealtimeVoiceRuntimeConfig) -> Bool { !runtimeConfig.isBlocked }
     func interruptAI() {}
     @discardableResult
@@ -249,7 +248,7 @@ enum DialogEngineError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .productionConfigurationMissing:
-            return "生产语音服务尚未完成配置，请先注入火山语音 AppID、AppKey 和 Token"
+            return "实时语音凭据代理尚未开放，当前可继续使用文字回响"
         case .initFailed(let code):
             return "语音引擎初始化失败 (错误码: \(code))"
         case .startFailed(let code):
@@ -324,7 +323,7 @@ final class DialogEngineManager: NSObject {
     // MARK: - Configuration
 
     /// 火山引擎 Dialog 服务配置
-    struct Config {
+    private struct Config {
         /// 从火山控制台获取的 AppID
         var appID: String = ""
         /// 从火山控制台获取的 AppKey
@@ -453,7 +452,7 @@ final class DialogEngineManager: NSObject {
     }
 
     /// 当前配置
-    var config = Config()
+    private var config = Config()
     var currentConfigurationIsProductionReady: Bool { config.isProductionReady }
 
     // MARK: - Private
@@ -477,12 +476,6 @@ final class DialogEngineManager: NSObject {
     }
 
     // MARK: - Public API
-
-    /// 旧的直接 Token 注入入口仅为源码兼容保留，不再接收共享 Provider 凭据。
-    func configure(token: String) {
-        _ = token
-        DDLogWarn("[DialogEngine] 忽略直接 Provider token 注入；需要可撤销的 session broker")
-    }
 
     @discardableResult
     func setLocalTTSPlaybackEnabled(_ enabled: Bool) -> Bool {
@@ -1734,7 +1727,7 @@ enum DialogEngineError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .productionConfigurationMissing:
-            return "生产语音服务尚未完成配置，请先注入火山语音 AppID、AppKey 和 Token"
+            return "实时语音凭据代理尚未开放，当前可继续使用文字回响"
         case .initFailed(let code):
             return "语音引擎初始化失败 (错误码: \(code))"
         case .startFailed(let code):

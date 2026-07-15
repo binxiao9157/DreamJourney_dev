@@ -454,6 +454,9 @@ run_step "Swift model guard knowledge-proposal" "$STATIC_LOG_DIR/knowledge-propo
 run_step "Product V4 credential response boundary" "$STATIC_LOG_DIR/product-v4-credential-response-boundary.log" \
   python3 "$ROOT_DIR/Scripts/QA/product-v4/product-v4-credential-response-boundary-check.py"
 
+run_step "Product V4 mobile credential path retirement" "$STATIC_LOG_DIR/product-v4-mobile-credential-path-retirement.log" \
+  python3 "$ROOT_DIR/Scripts/QA/product-v4/product-v4-mobile-credential-path-retirement-check.py"
+
 for guard in \
   release-feature-matrix-check.swift \
   prd-coverage-matrix-check.swift \
