@@ -495,10 +495,15 @@ final class DialogEngineManager: NSObject {
     /// 共享静态凭据已停用；真正的短期 session broker 在后续 Work Item 接入。
     @discardableResult
     func configure(runtimeConfig: RealtimeVoiceRuntimeConfig) -> Bool {
-        guard !runtimeConfig.isBlocked else {
+        guard runtimeConfig.mobileDirectAllowed,
+              runtimeConfig.accessPath == "scopedSessionCredential",
+              !runtimeConfig.isBlocked else {
             DDLogWarn(
                 "[DialogEngine] providerCredentialBlocked " +
-                "mode=\(runtimeConfig.credentialMode) fallback=\(runtimeConfig.fallbackMode ?? "text")"
+                "mode=\(runtimeConfig.credentialMode) " +
+                "path=\(runtimeConfig.accessPath) " +
+                "reason=\(runtimeConfig.decisionReasonCode ?? "unknown") " +
+                "fallback=\(runtimeConfig.fallbackMode ?? "text")"
             )
             return false
         }

@@ -663,14 +663,26 @@ struct DigitalHumanSessionContract {
 struct RealtimeVoiceRuntimeConfig {
     let status: String
     let credentialMode: String
+    let accessPath: String
+    let mobileDirectAllowed: Bool
+    let brokerStatus: String
     let providerReady: Bool
     let releaseVisible: Bool
     let retryable: Bool
+    let decision: String?
+    let decisionReasonCode: String?
+    let requiredCredentialProperties: [String]
+    let verifiedCredentialProperties: [String]
+    let missingCredentialProperties: [String]
     let fallbackMode: String?
     let contractVersion: Int
 
     var isBlocked: Bool {
-        status == "blocked" || credentialMode == "blockedStaticCredential" || !providerReady
+        status == "blocked"
+            || credentialMode == "blockedStaticCredential"
+            || !providerReady
+            || !mobileDirectAllowed
+            || accessPath != "scopedSessionCredential"
     }
 
     init?(json: [String: Any]) {
@@ -680,9 +692,18 @@ struct RealtimeVoiceRuntimeConfig {
         }
         self.status = status
         self.credentialMode = credentialMode
+        self.accessPath = json["accessPath"] as? String ?? "backendProxyOrText"
+        self.mobileDirectAllowed = json["mobileDirectAllowed"] as? Bool ?? false
+        self.brokerStatus = json["brokerStatus"] as? String ?? "unknown"
         self.providerReady = json["providerReady"] as? Bool ?? false
         self.releaseVisible = json["releaseVisible"] as? Bool ?? false
         self.retryable = json["retryable"] as? Bool ?? false
+        let decisionReceipt = json["decisionReceipt"] as? [String: Any]
+        self.decision = decisionReceipt?["decision"] as? String
+        self.decisionReasonCode = decisionReceipt?["reasonCode"] as? String
+        self.requiredCredentialProperties = decisionReceipt?["requiredProperties"] as? [String] ?? []
+        self.verifiedCredentialProperties = decisionReceipt?["verifiedProperties"] as? [String] ?? []
+        self.missingCredentialProperties = decisionReceipt?["missingProperties"] as? [String] ?? []
         let fallback = json["fallback"] as? [String: Any]
         self.fallbackMode = fallback?["mode"] as? String
         self.contractVersion = Self.intValue(json["contractVersion"]) ?? 1
