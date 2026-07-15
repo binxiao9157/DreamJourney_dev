@@ -144,33 +144,34 @@ Status: passed
 
 ## Scope
 
-- `/config/runtime.digitalHuman` reports Tencent cloud-render readiness.
-- `/digital-human/sessions` returns a backend-issued Tencent session contract.
-- Session credential contains appkey/accesstoken, but the evidence redacts raw values.
-- Session includes `providerAssetId` or `providerProjectId`.
-- Session lease supports reuse, heartbeat, idempotent release, capacity conflict, and reacquisition after release.
+- `/config/runtime.digitalHuman` reports the scoped credential broker as unavailable.
+- `/digital-human/sessions` fails closed with `digital_human_credential_broker_unavailable`.
+- Runtime and session responses are value-free and carry `Cache-Control: no-store`.
+- Static Tencent appkey/accesstoken values are never returned to iOS.
+- Blocked requests do not allocate or reuse a digital-human lease.
 - `silent` lifecycle mode is rejected before render session creation.
-- Backend runtime keeps `defaultReleaseVisible=false`; iOS public exposure is governed separately, and provider failure must still degrade to ordinary Echo.
+- Backend runtime keeps `defaultReleaseVisible=false` and explicitly degrades to text Echo.
 
 ## Evidence
 
 - Result JSON: `backend-digital-human-session-smoke-result.json`
 - Log: `backend-digital-human-session-smoke.log`
 - Runtime provider mode: `{runtime.get("providerMode")}`
-- Runtime asset mode: `{runtime.get("assetMode")}`
+- Runtime credential mode: `{runtime.get("credentialMode")}`
+- Runtime credential broker status: `{runtime.get("credentialBrokerStatus")}`
+- Runtime fallback mode: `{runtime.get("fallbackMode")}`
 - Runtime SDK adapter linked: `{runtime.get("sdkAdapterLinked")}`
 - Runtime session lease enabled: `{runtime.get("sessionLeaseEnabled")}`
 - Runtime session lease TTL seconds: `{runtime.get("sessionLeaseTTLSeconds")}`
-- Session provider mode: `{session.get("providerMode")}`
+- Session status: `{session.get("status")}`
+- Session blocked code: `{session.get("code")}`
 - Session credential mode: `{session.get("credentialMode")}`
-- Has provider asset id: `{session.get("hasProviderAssetId")}`
-- Has provider project id: `{session.get("hasProviderProjectId")}`
-- Session lease status: `{session.get("leaseStatus")}`
-- Same-context lease reused: `{session.get("leaseReused")}`
-- Heartbeat status: `{session.get("heartbeatStatus")}`
-- Release status: `{session.get("releaseStatus")}`
-- Capacity conflict code: `{session.get("capacityConflictCode")}`
-- Capacity reacquired after release: `{session.get("capacityReacquired")}`
+- Session provider ready: `{session.get("providerReady")}`
+- Session release visible: `{session.get("releaseVisible")}`
+- Session fallback mode: `{session.get("fallbackMode")}`
+- Session response no-store: `{session.get("responseNoStore")}`
+- Session response value-free: `{session.get("valueFree")}`
+- Repeated request stayed blocked: `{session.get("repeatedRequestStayedBlocked")}`
 - Silent mode rejected: `{result.get("silentModeRejected")}`
 
 """

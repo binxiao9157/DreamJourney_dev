@@ -28,6 +28,7 @@ RUN_ECHO_DIGITAL_HUMAN_LIFECYCLE_SMOKE="${RUN_ECHO_DIGITAL_HUMAN_LIFECYCLE_SMOKE
 RUN_ECHO_READINESS_REPORT="${RUN_ECHO_READINESS_REPORT:-0}"
 RUN_ECHO_CONTEXT_BUILDER_V2_SMOKE="${RUN_ECHO_CONTEXT_BUILDER_V2_SMOKE:-0}"
 RUN_BACKEND_ENV_SMOKE="${RUN_BACKEND_ENV_SMOKE:-0}"
+RUN_BACKEND_CREDENTIAL_RESPONSE_BOUNDARY_SMOKE="${RUN_BACKEND_CREDENTIAL_RESPONSE_BOUNDARY_SMOKE:-0}"
 RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE="${RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE:-0}"
 RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE="${RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE:-0}"
 RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE="${RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE:-0}"
@@ -94,6 +95,9 @@ if [[ "$RELEASE_HANDOFF_MODE" == "1" ]]; then
   # Release handoff must inventory source/history/container and supplied
   # release artifacts without emitting credential values.
   RUN_CREDENTIAL_INVENTORY_SCAN=1
+  # Release handoff must prove deployed auth/provider responses are no-store
+  # and never expose long-lived Provider credential fields.
+  RUN_BACKEND_CREDENTIAL_RESPONSE_BOUNDARY_SMOKE=1
 else
   RUN_RELEASE_LIKE_BACKEND="${RUN_RELEASE_LIKE_BACKEND:-0}"
 fi
@@ -134,6 +138,7 @@ Run ID: \`$RUN_ID\`
 - Echo readiness report: \`$RUN_ECHO_READINESS_REPORT\`
 - Echo Context Builder V2 backend smoke: \`$RUN_ECHO_CONTEXT_BUILDER_V2_SMOKE\`
 - Backend environment smoke: \`$RUN_BACKEND_ENV_SMOKE\`
+- Backend credential response boundary smoke: \`$RUN_BACKEND_CREDENTIAL_RESPONSE_BOUNDARY_SMOKE\`
 - Backend auth session/ownership shadow smoke: \`$RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE\`
 - Backend cross-account authorization shadow smoke: \`$RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE\`
 - Backend route ownership audit smoke: \`$RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE\`
@@ -190,6 +195,7 @@ Run ID: \`$RUN_ID\`
 - Optional Echo readiness report when \`RUN_ECHO_READINESS_REPORT=1\`; this produces a JSON/Markdown diagnostic package for backend, digital-human session, voice synthesis, APNs boundary, KBLite, context packet, and runtime diagnostics readiness.
 - Optional Echo Context Builder V2 backend smoke when \`RUN_ECHO_CONTEXT_BUILDER_V2_SMOKE=1\`; this verifies \`contextVersion=echo-context-v2\`, selected/filtered/ranking trace, \`kbFact\`/\`persona\`/\`care\` source signals, \`selectedContextSourceCounts\`, failed-analysis filtering, unopened time-letter recipient filtering, pending family viewer blocking, and care snapshot summarization against the backend test client.
 - Optional backend environment smoke when \`RUN_BACKEND_ENV_SMOKE=1\` and backend URL/token are configured.
+- Optional deployed credential boundary smoke when \`RUN_BACKEND_CREDENTIAL_RESPONSE_BOUNDARY_SMOKE=1\`; release handoff forces this gate and verifies no-store, value-free realtime voice, and blocked digital-human broker contracts.
 - Optional backend auth session/ownership shadow smoke when \`RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE=1\`; this verifies opaque login tokens, refresh rotation/replay rejection, logout revocation, and principal-bound owner mismatch rejection while global mode remains shadow.
 - Optional backend cross-account authorization shadow smoke when \`RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE=1\`; this verifies owner/family/time-letter/invitation policy decisions, forged-viewer deny evidence, and retained production shadow mode without invoking global dispatch.
 - Optional backend route ownership audit smoke when \`RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE=1\`; this verifies 57 classified routes, zero omissions, owner path/body denial (including knowledge governance), system-only denial, and retained global shadow mode without invoking global dispatch.
@@ -445,6 +451,9 @@ run_step "Swift model guard knowledge-widget-snapshot-reader" "$STATIC_LOG_DIR/k
 run_step "Swift model guard knowledge-proposal" "$STATIC_LOG_DIR/knowledge-proposal-model-smoke.log" \
   "$SCRIPT_DIR/run-knowledge-proposal-model-smoke.sh"
 
+run_step "Product V4 credential response boundary" "$STATIC_LOG_DIR/product-v4-credential-response-boundary.log" \
+  python3 "$ROOT_DIR/Scripts/QA/product-v4/product-v4-credential-response-boundary-check.py"
+
 for guard in \
   release-feature-matrix-check.swift \
   prd-coverage-matrix-check.swift \
@@ -693,6 +702,18 @@ if [[ "$RUN_BACKEND_ENV_SMOKE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/backend-env-smoke/$RUN_ID"
   echo "Skipped by RUN_BACKEND_ENV_SMOKE=0" > "$OUTPUT_DIR/backend-env-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_BACKEND_CREDENTIAL_RESPONSE_BOUNDARY_SMOKE" == "1" ]]; then
+  [[ -n "${BACKEND_BASE_URL:-}" ]] || {
+    echo "BACKEND_BASE_URL is required for RUN_BACKEND_CREDENTIAL_RESPONSE_BOUNDARY_SMOKE=1" >&2
+    exit 1
+  }
+  BACKEND_BASE_URL="$BACKEND_BASE_URL" \
+  "$BACKEND_ROOT/scripts/run-backend-credential-response-deployed-smoke.sh"
+else
+  mkdir -p "$OUTPUT_DIR/backend-credential-response-boundary-smoke/$RUN_ID"
+  echo "Skipped by RUN_BACKEND_CREDENTIAL_RESPONSE_BOUNDARY_SMOKE=0" > "$OUTPUT_DIR/backend-credential-response-boundary-smoke/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE" == "1" ]]; then

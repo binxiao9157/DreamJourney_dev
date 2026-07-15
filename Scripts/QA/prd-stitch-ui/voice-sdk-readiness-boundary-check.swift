@@ -10,10 +10,8 @@ func read(_ relativePath: String) -> String {
     return content
 }
 
-func assertContains(_ haystack: String, _ needle: String, _ message: String) {
-    guard haystack.contains(needle) else {
-        fatalError("\(message): missing \(needle)")
-    }
+func require(_ condition: @autoclosure () -> Bool, _ message: String) {
+    guard condition() else { fatalError(message) }
 }
 
 let dialogEngine = read("DreamJourney/Sources/Services/DialogEngineManager.swift")
@@ -21,48 +19,34 @@ let echoView = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift"
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
 let releaseQA = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
-let deviceReadiness = read("docs/superpowers/status/2026-06-18-device-backend-acceptance-readiness.md")
-let statusDoc = read("docs/superpowers/status/2026-06-19-production-voice-sdk-readiness-boundary.md")
 
 for required in [
     "enum VoiceSDKReadinessState",
     "case mockASRTTS",
-    "case backendTokenFallback",
+    "case providerCredentialBlocked",
     "case productionSDKNeedsTrueDeviceQA",
     "struct VoiceSDKReadinessSummary",
-    "static func current(",
     "productionVoiceSDKQualityVerified: Bool",
-    "isProductionReady",
+    "实时语音凭据代理尚未开放",
+    "客户端不会使用共享 Provider 密钥",
 ] {
-    assertContains(dialogEngine, required, "DialogEngine should model explicit voice SDK readiness boundary \(required)")
+    require(dialogEngine.contains(required), "voice readiness boundary is missing \(required)")
 }
 
 for required in [
     "DJShowVoiceSDKReadinessPreview",
-    "showVoiceSDKReadinessPreview",
     "runUIQAVoiceSDKReadinessPreview",
     "echoVoiceSDKReadinessStatus",
-    "VoiceSDKReadinessSummary.current",
-    "生产语音待真机验收",
-    "后端 token 不可用，使用本地语音配置",
-    "UIQA mock ASR/TTS，仅验证状态机",
+    "handleBlockedRealtimeVoice",
+    "echoRealtimeVoiceCredentialBlocked",
 ] {
-    assertContains(echoView + appDelegate + dialogEngine, required, "Echo hidden UIQA should expose readiness boundary \(required)")
+    require((echoView + appDelegate).contains(required), "Echo QA readiness boundary is missing \(required)")
 }
 
-assertContains(releaseRegression, "voice-sdk-readiness-boundary-check.swift", "release regression should run voice SDK readiness guard")
-assertContains(releaseQA, "voice-sdk-readiness-boundary-check.swift", "release QA package should include voice SDK readiness guard")
-assertContains(releaseQA, "docs/superpowers/status/2026-06-19-production-voice-sdk-readiness-boundary.md", "release QA package should include voice SDK readiness status doc")
+require(!dialogEngine.contains("VolcEngineAppKey"), "voice SDK must not read a packaged app key")
+require(!dialogEngine.contains("VolcEngineAppToken"), "voice SDK must not read a packaged app token")
+require(!echoView.contains("startDialogWithLocalVoiceFallback"), "blocked Provider capability must not start a local static fallback")
+require(releaseRegression.contains("voice-sdk-readiness-boundary-check.swift"), "release regression must run this guard")
+require(releaseQA.contains("voice-sdk-readiness-boundary-check.swift"), "release QA package must include this guard")
 
-for required in [
-    "mock ASR/TTS",
-    "后端 token fallback",
-    "生产 SDK readiness",
-    "不声明生产语音闭环完成",
-    "真机验收",
-] {
-    assertContains(deviceReadiness, required, "device readiness doc should state production voice boundary \(required)")
-    assertContains(statusDoc, required, "status doc should state production voice boundary \(required)")
-}
-
-print("Voice SDK readiness boundary checks passed")
+print("Voice SDK credential boundary checks passed")

@@ -5,7 +5,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 
 if len(sys.argv) < 3:
@@ -22,7 +22,7 @@ if not API_TOKEN:
     raise SystemExit("BACKEND_API_TOKEN is required")
 
 
-def request_json(
+def request_json_response(
     method: str,
     path: str,
     payload: Optional[Dict[str, Any]] = None,
@@ -30,7 +30,7 @@ def request_json(
     auth: bool = True,
     expected: int = 200,
     timeout: int = 45,
-) -> Dict[str, Any]:
+) -> Tuple[Dict[str, Any], Mapping[str, str]]:
     url = f"{BASE_URL}{path}"
     data = None
     headers = {"Accept": "application/json"}
@@ -45,17 +45,38 @@ def request_json(
         with urllib.request.urlopen(request, timeout=timeout) as response:
             body = response.read().decode("utf-8")
             status = response.status
+            response_headers = response.headers
     except urllib.error.HTTPError as error:
         body = error.read().decode("utf-8", errors="replace")
         if error.code == expected:
-            return json.loads(body) if body else {}
+            return (json.loads(body) if body else {}, error.headers)
         raise AssertionError(f"{method} {path} expected {expected}, got {error.code}: {body}") from error
     except urllib.error.URLError as error:
         raise AssertionError(f"{method} {path} failed: {error}") from error
 
     if status != expected:
         raise AssertionError(f"{method} {path} expected {expected}, got {status}: {body}")
-    return json.loads(body) if body else {}
+    return (json.loads(body) if body else {}, response_headers)
+
+
+def request_json(
+    method: str,
+    path: str,
+    payload: Optional[Dict[str, Any]] = None,
+    *,
+    auth: bool = True,
+    expected: int = 200,
+    timeout: int = 45,
+) -> Dict[str, Any]:
+    body, _ = request_json_response(
+        method,
+        path,
+        payload,
+        auth=auth,
+        expected=expected,
+        timeout=timeout,
+    )
+    return body
 
 
 def assert_equal(actual: Any, expected: Any, message: str) -> None:
@@ -68,22 +89,41 @@ def assert_true(value: Any, message: str) -> None:
         raise AssertionError(message)
 
 
+def assert_no_store(headers: Mapping[str, str], message: str) -> None:
+    cache_control = headers.get("Cache-Control", "")
+    assert_true("no-store" in cache_control.lower(), f"{message}: Cache-Control must include no-store")
+
+
+def assert_value_free(payload: Dict[str, Any], message: str) -> None:
+    forbidden_keys = {"appkey", "accesstoken", "access_token", "secret", "secretkey"}
+
+    def walk(value: Any, path: str) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key.lower() in forbidden_keys:
+                    raise AssertionError(f"{message}: forbidden credential key at {path}.{key}")
+                walk(child, f"{path}.{key}")
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                walk(child, f"{path}[{index}]")
+
+    walk(payload, "response")
+
+
 def main() -> None:
     health = request_json("GET", "/health", auth=False)
-    runtime = request_json("GET", "/config/runtime")
+    runtime, runtime_headers = request_json_response("GET", "/config/runtime")
     assert_equal(health.get("status"), "ok", "health status")
     assert_equal(health.get("store"), "postgres", "deployed store")
+    assert_no_store(runtime_headers, "runtime response")
+    assert_value_free(runtime, "runtime response")
 
     digital_human = runtime.get("digitalHuman") or {}
     assert_equal(digital_human.get("provider"), "tencent", "runtime digitalHuman provider")
-    assert_equal(digital_human.get("providerMode"), "cloudRender", "runtime digitalHuman providerMode")
-    assert_equal(digital_human.get("realProviderReady"), True, "runtime realProviderReady")
-    assert_equal(digital_human.get("sdkAuthMode"), "appkeyAccessToken", "runtime sdkAuthMode")
-    assert_equal(digital_human.get("sdkAdapterLinked"), True, "runtime sdkAdapterLinked")
-    assert_true(
-        digital_human.get("assetMode") in ("asset", "project"),
-        "runtime assetMode must be asset or project",
-    )
+    assert_equal(digital_human.get("providerMode"), "blocked", "runtime digitalHuman providerMode")
+    assert_equal(digital_human.get("realProviderReady"), False, "runtime realProviderReady")
+    assert_equal(digital_human.get("sdkAuthMode"), "credentialBrokerRequired", "runtime sdkAuthMode")
+    assert_equal(digital_human.get("sdkAdapterLinked"), False, "runtime sdkAdapterLinked")
     assert_equal(
         digital_human.get("requiresBackendIssuedCredential"),
         True,
@@ -94,8 +134,16 @@ def main() -> None:
         False,
         "runtime defaultReleaseVisible",
     )
+    assert_equal(digital_human.get("credentialMode"), "blockedStaticCredential", "runtime credentialMode")
+    assert_equal(digital_human.get("releaseVisible"), False, "runtime releaseVisible")
+    assert_equal(digital_human.get("fallbackMode"), "text", "runtime fallbackMode")
+    assert_equal(
+        (digital_human.get("credentialBroker") or {}).get("status"),
+        "unavailable",
+        "runtime credential broker status",
+    )
     session_lease_capability = digital_human.get("sessionLease") or {}
-    assert_equal(session_lease_capability.get("enabled"), True, "runtime session lease enabled")
+    assert_equal(session_lease_capability.get("enabled"), False, "runtime session lease enabled")
     assert_true(session_lease_capability.get("ttlSeconds", 0) > 0, "runtime session lease ttlSeconds")
     assert_true(
         session_lease_capability.get("heartbeatIntervalSeconds", 0) > 0,
@@ -114,83 +162,36 @@ def main() -> None:
         "deviceId": "deployed-contract-smoke",
         "lifecycleMode": "sunlight",
     }
-    session = request_json("POST", "/digital-human/sessions", session_payload)
-    assert_equal(session.get("provider"), "tencent", "session provider")
-    assert_equal(session.get("providerMode"), "cloudRender", "session providerMode")
-    assert_equal(session.get("personaId"), session_payload["personaId"], "session personaId")
-    assert_equal(session.get("scene"), "echo", "session scene")
-    assert_equal(session.get("lifecycleMode"), "sunlight", "session lifecycleMode")
-    assert_equal(session.get("driveMode"), "streamText", "session driveMode")
-    assert_equal(session.get("alphaEnabled"), True, "session alphaEnabled")
-
-    credential = session.get("credential") or {}
-    assert_equal(credential.get("mode"), "backend-issued-tencent-cloud", "credential mode")
-    assert_true(credential.get("expiresAt"), "credential expiresAt")
-    assert_true(credential.get("appkey"), "credential appkey")
-    assert_true(credential.get("accesstoken"), "credential accesstoken")
-
-    has_asset = bool(session.get("providerAssetId"))
-    has_project = bool(session.get("providerProjectId"))
-    assert_true(has_asset or has_project, "session must return providerAssetId or providerProjectId")
-
-    fallback = session.get("fallback") or {}
-    assert_equal(fallback.get("mode"), "none", "session fallback mode")
-
-    lease = session.get("lease") or {}
-    assert_equal(lease.get("status"), "active", "session lease status")
-    assert_true(lease.get("heartbeatEndpoint"), "session lease heartbeatEndpoint")
-    assert_true(lease.get("releaseEndpoint"), "session lease releaseEndpoint")
-
-    reused_session = request_json("POST", "/digital-human/sessions", session_payload)
-    assert_equal(reused_session.get("sessionId"), session.get("sessionId"), "same context session reuse")
-    assert_equal((reused_session.get("lease") or {}).get("reused"), True, "same context lease reused")
-
-    competing_payload = dict(session_payload)
-    competing_payload["deviceId"] = "deployed-contract-smoke-competitor"
-    capacity_conflict = request_json(
+    blocked_session, session_headers = request_json_response(
         "POST",
         "/digital-human/sessions",
-        competing_payload,
-        expected=409,
+        session_payload,
+        expected=503,
     )
-    conflict_detail = capacity_conflict.get("detail") or {}
+    assert_no_store(session_headers, "digital-human session response")
+    assert_value_free(blocked_session, "digital-human session response")
+    blocked_detail = blocked_session.get("detail") or {}
+    assert_equal(blocked_detail.get("code"), "digital_human_credential_broker_unavailable", "blocked code")
+    assert_equal(blocked_detail.get("provider"), "tencent", "blocked provider")
+    assert_equal(blocked_detail.get("credentialMode"), "blockedStaticCredential", "blocked credential mode")
+    assert_equal(blocked_detail.get("providerReady"), False, "blocked providerReady")
+    assert_equal(blocked_detail.get("releaseVisible"), False, "blocked releaseVisible")
+    assert_equal(blocked_detail.get("retryable"), False, "blocked retryable")
+    assert_equal(blocked_detail.get("fallbackMode"), "text", "blocked fallbackMode")
+    assert_equal(blocked_detail.get("contractVersion"), 3, "blocked contractVersion")
+
+    repeated_session = request_json(
+        "POST",
+        "/digital-human/sessions",
+        session_payload,
+        expected=503,
+    )
     assert_equal(
-        conflict_detail.get("code"),
-        "digital_human_session_capacity_exhausted",
-        "competing device capacity conflict",
+        (repeated_session.get("detail") or {}).get("code"),
+        "digital_human_credential_broker_unavailable",
+        "repeated request stays blocked",
     )
-
-    heartbeat = request_json(
-        "POST",
-        lease["heartbeatEndpoint"],
-        {"userId": USER_ID, "deviceId": session_payload["deviceId"]},
-    )
-    assert_equal(heartbeat.get("status"), "active", "session heartbeat status")
-
-    release = request_json(
-        "POST",
-        lease["releaseEndpoint"],
-        {
-            "userId": USER_ID,
-            "deviceId": session_payload["deviceId"],
-            "reason": "deployedContractSmokeCompleted",
-        },
-    )
-    assert_true(release.get("status") in ("released", "alreadyReleased"), "session release status")
-
-    next_session = request_json("POST", "/digital-human/sessions", competing_payload)
-    next_lease = next_session.get("lease") or {}
-    assert_equal(next_lease.get("status"), "active", "released capacity can be reacquired")
-    next_release = request_json(
-        "POST",
-        next_lease["releaseEndpoint"],
-        {
-            "userId": USER_ID,
-            "deviceId": competing_payload["deviceId"],
-            "reason": "deployedContractSmokeCleanup",
-        },
-    )
-    assert_true(next_release.get("status") in ("released", "alreadyReleased"), "cleanup release status")
+    assert_value_free(repeated_session, "repeated digital-human session response")
 
     silent = request_json(
         "POST",
@@ -217,26 +218,25 @@ def main() -> None:
             "realProviderReady": digital_human.get("realProviderReady"),
             "sdkAuthMode": digital_human.get("sdkAuthMode"),
             "sdkAdapterLinked": digital_human.get("sdkAdapterLinked"),
-            "assetMode": digital_human.get("assetMode"),
+            "credentialMode": digital_human.get("credentialMode"),
+            "credentialBrokerStatus": (digital_human.get("credentialBroker") or {}).get("status"),
+            "fallbackMode": digital_human.get("fallbackMode"),
             "defaultReleaseVisible": digital_human.get("defaultReleaseVisible"),
             "sessionLeaseEnabled": session_lease_capability.get("enabled"),
             "sessionLeaseTTLSeconds": session_lease_capability.get("ttlSeconds"),
         },
         "session": {
-            "sessionId": session.get("sessionId"),
-            "providerMode": session.get("providerMode"),
-            "credentialMode": credential.get("mode"),
-            "credentialAppkey": "configured, value intentionally omitted",
-            "credentialAccessToken": "configured, value intentionally omitted",
-            "hasProviderAssetId": has_asset,
-            "hasProviderProjectId": has_project,
-            "fallbackMode": fallback.get("mode"),
-            "leaseStatus": lease.get("status"),
-            "leaseReused": (reused_session.get("lease") or {}).get("reused"),
-            "heartbeatStatus": heartbeat.get("status"),
-            "releaseStatus": release.get("status"),
-            "capacityConflictCode": conflict_detail.get("code"),
-            "capacityReacquired": next_lease.get("status") == "active",
+            "status": "blocked",
+            "code": blocked_detail.get("code"),
+            "credentialMode": blocked_detail.get("credentialMode"),
+            "providerReady": blocked_detail.get("providerReady"),
+            "releaseVisible": blocked_detail.get("releaseVisible"),
+            "retryable": blocked_detail.get("retryable"),
+            "fallbackMode": blocked_detail.get("fallbackMode"),
+            "contractVersion": blocked_detail.get("contractVersion"),
+            "responseNoStore": "no-store" in session_headers.get("Cache-Control", "").lower(),
+            "valueFree": True,
+            "repeatedRequestStayedBlocked": True,
         },
         "silentModeRejected": True,
     }

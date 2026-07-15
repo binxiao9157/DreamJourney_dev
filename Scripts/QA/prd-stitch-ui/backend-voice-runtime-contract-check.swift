@@ -1,8 +1,7 @@
 import Foundation
 
 let appRoot = URL(fileURLWithPath: CommandLine.arguments.dropFirst().first ?? FileManager.default.currentDirectoryPath)
-let workspaceRoot = appRoot.deletingLastPathComponent()
-let backendRoot = workspaceRoot.appendingPathComponent("DreamJourneyBackend")
+let backendRoot = appRoot.deletingLastPathComponent().appendingPathComponent("DreamJourneyBackend")
 
 func read(_ url: URL) -> String {
     guard let content = try? String(contentsOf: url, encoding: .utf8) else {
@@ -11,48 +10,43 @@ func read(_ url: URL) -> String {
     return content
 }
 
-func assertContains(_ haystack: String, _ needle: String, _ message: String) {
-    guard haystack.contains(needle) else {
-        fatalError("\(message): missing \(needle)")
-    }
+func require(_ condition: @autoclosure () -> Bool, _ message: String) {
+    guard condition() else { fatalError(message) }
 }
 
 let backendTokens = read(backendRoot.appendingPathComponent("app/services/tokens.py"))
 let backendRuntime = read(backendRoot.appendingPathComponent("app/services/runtime_config.py"))
-let backendTests = read(backendRoot.appendingPathComponent("tests/test_core_services.py"))
+let backendBoundaryTests = read(backendRoot.appendingPathComponent("tests/test_credential_response_boundary.py"))
 let backendClient = read(appRoot.appendingPathComponent("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"))
 let dialogEngine = read(appRoot.appendingPathComponent("DreamJourney/Sources/Services/DialogEngineManager.swift"))
 let echoView = read(appRoot.appendingPathComponent("DreamJourney/Sources/Modules/Echo/EchoViewController.swift"))
 let releasePackage = read(appRoot.appendingPathComponent("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift"))
 let releaseRegression = read(appRoot.appendingPathComponent("Scripts/QA/prd-stitch-ui/run-release-regression.sh"))
 
-assertContains(backendTokens, "\"expiresInSeconds\"", "realtime token contract should include an explicit TTL")
-assertContains(backendTokens, "\"expiresAt\"", "realtime token contract should include an absolute expiry")
-assertContains(backendTokens, "\"fallback\"", "realtime token contract should document client fallback")
-assertContains(backendRuntime, "\"runtimeConfigEndpoint\": \"/voice/realtime-token\"", "runtime config should point iOS to the voice runtime endpoint")
-assertContains(backendRuntime, "\"fallback\"", "runtime config should document the local voice fallback strategy")
-assertContains(backendTests, "test_runtime_config_documents_realtime_token_endpoint_and_fallback", "backend tests should guard runtime voice fallback")
-assertContains(backendTests, "expiresInSeconds", "backend tests should guard voice token TTL")
-assertContains(backendTests, "expiresAt", "backend tests should guard voice token expiry")
+for required in ["\"status\": \"blocked\"", "\"credentialMode\": \"blockedStaticCredential\"", "\"providerReady\": False", "\"fallback\""] {
+    require(backendTokens.contains(required), "realtime voice response must be value-free and blocked: missing \(required)")
+}
+require(!backendTokens.contains("\"expiresInSeconds\""), "blocked realtime voice must not invent a credential TTL")
+require(!backendTokens.contains("\"expiresAt\""), "blocked realtime voice must not invent a credential expiry")
+require(backendRuntime.contains("\"realtimeToken\": False"), "runtime capability must disable realtime tokens")
+require(backendRuntime.contains("\"credentialMode\": \"blockedStaticCredential\""), "runtime must declare the blocked credential mode")
+require(backendBoundaryTests.contains("test_realtime_voice_returns_blocked_value_free_capability"), "backend must test the blocked value-free contract")
+require(backendBoundaryTests.contains("assert_no_store"), "backend must test no-store headers")
 
-assertContains(backendClient, "struct RealtimeVoiceRuntimeConfig", "iOS should model realtime voice runtime config")
-assertContains(backendClient, "func fetchRuntimeConfig", "iOS should be able to fetch /config/runtime")
-assertContains(backendClient, "func fetchRealtimeVoiceConfig", "iOS should be able to fetch /voice/realtime-token")
-assertContains(backendClient, "path: \"/config/runtime\"", "runtime config should use the documented backend endpoint")
-assertContains(backendClient, "path: \"/voice/realtime-token\"", "voice token should use the documented backend endpoint")
-assertContains(backendClient, "var isExpired", "iOS should understand token expiry before applying runtime config")
-assertContains(backendClient, "fallbackMode", "iOS should keep fallback metadata from the backend")
+require(backendClient.contains("struct RealtimeVoiceRuntimeConfig"), "iOS must model realtime voice capability state")
+require(backendClient.contains("var isBlocked: Bool"), "iOS must reject blocked capability responses")
+require(backendClient.contains("fetchRealtimeVoiceConfig"), "iOS must fetch the backend capability contract")
+require(!backendClient.contains("let appToken: String"), "iOS runtime model must not parse a Provider app token")
+require(!backendClient.contains("let apiKey: String"), "iOS runtime model must not parse a Provider API key")
 
-assertContains(dialogEngine, "func configure(runtimeConfig: RealtimeVoiceRuntimeConfig)", "DialogEngine should accept backend voice runtime config")
-assertContains(dialogEngine, "runtimeConfig.authMode == \"legacy\"", "DialogEngine should only apply runtime configs compatible with the current SDK wrapper")
-assertContains(dialogEngine, "runtimeConfig.expiresAt > Date()", "DialogEngine should reject expired runtime configs")
+require(dialogEngine.contains("case providerCredentialBlocked"), "voice readiness must represent the credential boundary")
+require(dialogEngine.contains("guard !runtimeConfig.isBlocked"), "DialogEngine must fail closed for a blocked contract")
+require(!dialogEngine.contains("VolcEngineAppToken"), "DialogEngine must not read a packaged Provider token")
+require(echoView.contains("handleBlockedRealtimeVoice"), "Echo must expose the safe blocked path")
+require(echoView.contains("echoRealtimeVoiceCredentialBlocked"), "Echo must expose an accessible blocked status")
+require(!echoView.contains("startDialogWithLocalVoiceFallback"), "Echo must not restore static local Provider fallback")
 
-assertContains(echoView, "private func configureVoiceRuntimeThenStart(", "Echo should resolve voice runtime config before starting the SDK")
-assertContains(echoView, "lifecycleToken: lifecycleToken", "Echo voice runtime resolution should retain the current lifecycle generation")
-assertContains(echoView, "fetchRealtimeVoiceConfig", "Echo should prefer backend voice runtime config")
-assertContains(echoView, "startDialogWithLocalVoiceFallback", "Echo should keep local build-settings fallback when backend runtime config is unavailable")
+require(releasePackage.contains("backend-voice-runtime-contract-check.swift"), "release QA package must include this guard")
+require(releaseRegression.contains("backend-voice-runtime-contract-check.swift"), "release regression must run this guard")
 
-assertContains(releasePackage, "backend-voice-runtime-contract-check.swift", "release QA package should include backend voice runtime guard")
-assertContains(releaseRegression, "backend-voice-runtime-contract-check.swift", "release regression should run backend voice runtime guard")
-
-print("Backend voice runtime contract checks passed")
+print("Backend voice runtime blocked-contract checks passed")

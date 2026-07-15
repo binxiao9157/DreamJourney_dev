@@ -466,13 +466,11 @@ struct DigitalHumanSessionPolicy {
 struct DigitalHumanSessionCredential {
     let mode: String
     let expiresAt: Date?
-    let appKey: String?
-    let accessToken: String?
+    let scopedSessionReady: Bool
 
     init(json: [String: Any]?) {
         mode = json?["mode"] as? String ?? "unknown"
-        appKey = json?["appkey"] as? String ?? json?["appKey"] as? String
-        accessToken = json?["accesstoken"] as? String ?? json?["accessToken"] as? String
+        scopedSessionReady = json?["scopedSessionReady"] as? Bool ?? false
         if let expiresAtValue = json?["expiresAt"] as? String {
             expiresAt = BackendDateParser.date(from: expiresAtValue)
         } else {
@@ -663,46 +661,38 @@ struct DigitalHumanSessionContract {
 }
 
 struct RealtimeVoiceRuntimeConfig {
-    let authMode: String
-    let address: String
-    let uri: String
-    let resourceID: String
-    let appID: String?
-    let appKey: String?
-    let appToken: String?
-    let uid: String
-    let expiresInSeconds: Int
-    let expiresAt: Date
+    let status: String
+    let credentialMode: String
+    let providerReady: Bool
+    let releaseVisible: Bool
+    let retryable: Bool
     let fallbackMode: String?
+    let contractVersion: Int
 
-    var isExpired: Bool {
-        expiresAt <= Date()
+    var isBlocked: Bool {
+        status == "blocked" || credentialMode == "blockedStaticCredential" || !providerReady
     }
 
     init?(json: [String: Any]) {
-        guard let authMode = json["authMode"] as? String,
-              let address = json["address"] as? String,
-              let uri = json["uri"] as? String,
-              let resourceID = json["resourceID"] as? String,
-              let uid = json["uid"] as? String,
-              let expiresInSeconds = json["expiresInSeconds"] as? Int,
-              let expiresAtValue = json["expiresAt"] as? String,
-              let expiresAt = BackendDateParser.date(from: expiresAtValue) else {
+        guard let status = json["status"] as? String,
+              let credentialMode = json["credentialMode"] as? String else {
             return nil
         }
-
-        self.authMode = authMode
-        self.address = address
-        self.uri = uri
-        self.resourceID = resourceID
-        self.appID = json["appID"] as? String
-        self.appKey = json["appKey"] as? String
-        self.appToken = json["appToken"] as? String
-        self.uid = uid
-        self.expiresInSeconds = expiresInSeconds
-        self.expiresAt = expiresAt
+        self.status = status
+        self.credentialMode = credentialMode
+        self.providerReady = json["providerReady"] as? Bool ?? false
+        self.releaseVisible = json["releaseVisible"] as? Bool ?? false
+        self.retryable = json["retryable"] as? Bool ?? false
         let fallback = json["fallback"] as? [String: Any]
         self.fallbackMode = fallback?["mode"] as? String
+        self.contractVersion = Self.intValue(json["contractVersion"]) ?? 1
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = value as? String { return Int(value) }
+        return nil
     }
 }
 
@@ -897,8 +887,8 @@ struct VoiceCloneSynthesisResult {
         self.bitsPerSample = Self.intValue(audioJSON["bitsPerSample"])
         self.channelCount = Self.intValue(audioJSON["channelCount"])
         self.durationSeconds = Self.doubleValue(audioJSON["durationSeconds"])
-        self.providerLogId = json["providerLogId"] as? String
-        self.providerRequestId = json["providerRequestId"] as? String
+        self.providerLogId = json["providerLogIdHash"] as? String
+        self.providerRequestId = json["providerRequestIdHash"] as? String
         if let visemeTimelineJSON = json["visemeTimeline"] as? [String: Any] {
             self.visemeTimeline = DigitalHumanLipSyncTimeline(json: visemeTimelineJSON)
         } else {
@@ -2011,8 +2001,7 @@ struct EchoDigitalHumanSessionEvidenceSummary: Codable {
         self.hasProviderProjectId = contract.providerProjectId?.isEmpty == false
         self.credentialMode = contract.credential.mode
         self.credentialExpiresAt = contract.credential.expiresAt
-        self.hasBackendIssuedCredential = contract.credential.appKey?.isEmpty == false
-            && contract.credential.accessToken?.isEmpty == false
+        self.hasBackendIssuedCredential = contract.credential.scopedSessionReady
         self.fallbackMode = contract.fallbackMode
         self.fallbackReason = contract.fallbackReason
         self.contractVersion = contract.contractVersion
@@ -2250,7 +2239,7 @@ struct EchoTraceEvidencePackage: Codable {
         self.redactionPolicy = [
             "不导出原始音频或音频正文",
             "不导出供应商访问密钥",
-            "只保留 providerLogId/providerRequestId 用于服务商排查",
+            "只保留 providerLogId/providerRequestId 的无值哈希用于服务商排查",
             "只导出档案 ID、数量和权限摘要，不导出档案正文"
         ]
     }
@@ -2520,7 +2509,7 @@ final class DreamJourneyBackendClient {
 
     private enum RequestAuthPolicy {
         case automatic
-        case backendOnly
+        case anonymous
     }
 
     enum ClientError: LocalizedError {
@@ -2550,11 +2539,7 @@ final class DreamJourneyBackendClient {
 
     private static let defaultBaseURL = "http://127.0.0.1:3100"
     private static let placeholderBaseURL = "$(DREAMJOURNEY_BACKEND_BASE_URL)"
-    private static let placeholderAPIToken = "YOUR_DREAMJOURNEY_BACKEND_API_TOKEN"
-    private static let placeholderAPITokenBuildSetting = "$(DREAMJOURNEY_BACKEND_API_TOKEN)"
-
     private let baseURL: String
-    private let apiToken: String?
     private let hasExplicitBaseURL: Bool
     private let authSessionStore = BackendAuthSessionStore.shared
     private let authRefreshQueue = DispatchQueue(label: "com.dreamjourney.backend-auth-refresh")
@@ -2636,13 +2621,6 @@ final class DreamJourneyBackendClient {
         self.baseURL = resolved.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         self.hasExplicitBaseURL = raw?.isEmpty == false && raw != Self.placeholderBaseURL
 
-        let configuredToken = Bundle.main.object(forInfoDictionaryKey: "DreamJourneyBackendAPIToken") as? String
-        let token = configuredToken?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let token, !token.isEmpty, token != Self.placeholderAPIToken, token != Self.placeholderAPITokenBuildSetting {
-            self.apiToken = token
-        } else {
-            self.apiToken = nil
-        }
     }
 
     func postArchiveItem(_ payload: [String: Any], completion: @escaping (Result<[String: Any], Error>) -> Void) {
@@ -3074,7 +3052,7 @@ final class DreamJourneyBackendClient {
             path: "/auth/login",
             method: .post,
             payload: payload,
-            authPolicy: .backendOnly,
+            authPolicy: .anonymous,
             allowsRefresh: false
         ) { [weak self] result in
             guard let self else { return }
@@ -3748,7 +3726,7 @@ final class DreamJourneyBackendClient {
                 path: "/auth/refresh",
                 method: .post,
                 payload: ["refreshToken": currentSession.refreshToken],
-                authPolicy: .backendOnly,
+                authPolicy: .anonymous,
                 allowsRefresh: false
             ) { result in
                 let refreshed: Bool
@@ -3833,18 +3811,14 @@ final class DreamJourneyBackendClient {
     }
 
     private func authHeaders(for policy: RequestAuthPolicy) -> HTTPHeaders? {
-        var values: [String: String] = [:]
-        if let apiToken {
-            values["X-DreamJourney-Api-Token"] = apiToken
+        guard policy == .automatic,
+              let session = authSessionStore.currentSession else {
+            return nil
         }
-
-        if policy == .automatic, let session = authSessionStore.currentSession {
-            values["Authorization"] = "Bearer \(session.accessToken)"
-            values["X-DreamJourney-User-Id"] = session.userId
-        } else if policy == .automatic, let apiToken {
-            values["Authorization"] = "Bearer \(apiToken)"
-        }
-        return values.isEmpty ? nil : HTTPHeaders(values)
+        return HTTPHeaders([
+            "Authorization": "Bearer \(session.accessToken)",
+            "X-DreamJourney-User-Id": session.userId,
+        ])
     }
 
     private func pathComponent(_ value: String) -> String {

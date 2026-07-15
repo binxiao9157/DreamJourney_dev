@@ -68,62 +68,61 @@ for required in [
     "/config/runtime",
     "/digital-human/sessions",
     "providerMode",
-    "cloudRender",
+    "blocked",
     "realProviderReady",
     "sdkAuthMode",
-    "appkeyAccessToken",
+    "credentialBrokerRequired",
     "sdkAdapterLinked",
-    "assetMode",
-    "backend-issued-tencent-cloud",
-    "providerAssetId",
-    "providerProjectId",
-    "credential",
-    "appkey",
-    "accesstoken",
+    "blockedStaticCredential",
+    "digital_human_credential_broker_unavailable",
+    "assert_no_store",
+    "assert_value_free",
     "silent mode",
-    "sessionLease",
-    "heartbeatEndpoint",
-    "releaseEndpoint",
-    "digital_human_session_capacity_exhausted",
-    "capacityReacquired",
+    "repeatedRequestStayedBlocked",
     "value intentionally omitted",
 ] {
     assertContains(pythonContent, required, "Python smoke should cover \(required)")
 }
-
-for required in [
-    "TENCENT_DIGITAL_HUMAN_APP_KEY",
-    "TENCENT_DIGITAL_HUMAN_ACCESS_TOKEN",
-    "TENCENT_DIGITAL_HUMAN_ASSET_VIRTUALMAN_KEY",
-    "TENCENT_DIGITAL_HUMAN_VIRTUALMAN_PROJECT_ID",
+for forbidden in [
+    "credential.get(\"appkey\")",
+    "credential.get(\"accesstoken\")",
+    "backend-issued-tencent-cloud",
 ] {
-    assertContains(backendConfig, required, "backend settings should read \(required)")
-    assertContains(backendRuntime, required, "runtime config should document \(required)")
+    assertNotContains(pythonContent, forbidden, "Python smoke must not accept legacy static credential contract")
 }
 
+assertContains(backendConfig, "TENCENT_DIGITAL_HUMAN_SESSION_TTL_SECONDS", "backend settings should retain lease cleanup timing")
+assertContains(backendRuntime, "credentialBrokerRequired", "runtime config should require a scoped credential broker")
+assertContains(backendRuntime, "blockedStaticCredential", "runtime config should block static credential delivery")
+assertNotContains(backendRuntime, "TENCENT_DIGITAL_HUMAN_APP_KEY", "runtime response code must not reference static appkey env labels")
+assertNotContains(backendRuntime, "TENCENT_DIGITAL_HUMAN_ACCESS_TOKEN", "runtime response code must not reference static access token env labels")
+
 for required in [
-    "DIGITAL_HUMAN_SESSION_CLOUD_PROVIDER_MODE = \"cloudRender\"",
-    "provider_mode",
-    "backend-issued-tencent-cloud",
-    "credential[\"appkey\"]",
-    "credential[\"accesstoken\"]",
-    "providerAssetId",
-    "providerProjectId",
+    "DIGITAL_HUMAN_SESSION_CONTRACT_VERSION = 3",
+    "digital_human_credential_broker_unavailable",
+    "blockedStaticCredential",
+    "fallbackMode",
     "DIGITAL_HUMAN_SESSION_LEASE_CONTRACT_VERSION",
     "heartbeat_digital_human_session",
     "release_digital_human_session",
 ] {
     assertContains(backendMain, required, "backend session endpoint should emit \(required)")
 }
+for forbidden in [
+    "credential[\"appkey\"]",
+    "credential[\"accesstoken\"]",
+    "backend-issued-tencent-cloud",
+] {
+    assertNotContains(backendMain, forbidden, "backend session endpoint must not emit legacy static credentials")
+}
 
 for required in [
-    "test_create_digital_human_session_returns_cloud_render_contract_when_configured",
-    "test_runtime_config_reports_cloud_render_ready_when_configured",
-    "providerMode",
-    "cloudRender",
-    "appkey",
-    "accesstoken",
-    "test_session_lease_reuses_same_context_and_rejects_competing_device",
+    "test_create_digital_human_session_is_blocked_without_scoped_broker",
+    "test_blocked_session_requests_never_allocate_or_reuse_a_lease",
+    "test_runtime_config_blocks_digital_human_without_scoped_broker",
+    "test_static_provider_configuration_does_not_reenable_session_response",
+    "digital_human_credential_broker_unavailable",
+    "blockedStaticCredential",
     "test_session_lease_heartbeat_and_release_are_owner_scoped_and_idempotent",
 ] {
     assertContains(backendTests, required, "backend tests should cover \(required)")
@@ -143,6 +142,5 @@ for requiredPackageEntry in [
 }
 
 assertContains(handoff, "RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE=1", "handoff should document deployed backend digital-human smoke")
-assertContains(handoff, "providerMode=cloudRender", "handoff should document cloudRender acceptance")
 
 print("Backend digital-human session smoke checks passed")

@@ -4323,7 +4323,7 @@ final class EchoViewController: UIViewController {
         guard DreamJourneyBackendClient.shared.isRealtimeVoiceConfigConfigured else {
             backendRuntimeTokenApplied = false
             renderVoiceSDKReadinessPreviewIfNeeded()
-            startDialogWithLocalVoiceFallback()
+            handleBlockedRealtimeVoice(reason: "backendVoiceRuntimeUnavailable")
             return
         }
 
@@ -4351,23 +4351,32 @@ final class EchoViewController: UIViewController {
                 } else {
                     self.backendRuntimeTokenApplied = false
                     self.renderVoiceSDKReadinessPreviewIfNeeded()
-                    self.startDialogWithLocalVoiceFallback()
+                    self.handleBlockedRealtimeVoice(reason: "providerCredentialBlocked")
                 }
             case .failure(let error):
-                print("[Echo] backend voice runtime config failed, fallback to local build settings: \(error.localizedDescription)")
+                print("[Echo] backend voice runtime config unavailable; local provider fallback is disabled: \(error.localizedDescription)")
                 self.backendRuntimeTokenApplied = false
                 self.renderVoiceSDKReadinessPreviewIfNeeded()
-                self.startDialogWithLocalVoiceFallback()
+                self.handleBlockedRealtimeVoice(reason: "backendVoiceRuntimeRequestFailed")
             }
         }
     }
 
-    private func startDialogWithLocalVoiceFallback() {
-        applyEchoAudioRoutePolicy()
-        DialogEngineManager.shared.startDialog(
-            sendsGreeting: !routeEchoAudioThroughDigitalHuman,
-            usesTurnScopedKnowledgeContext: true
+    private func handleBlockedRealtimeVoice(reason: String) {
+        backendRuntimeTokenApplied = false
+        activeVoiceInteractionLifecycleToken = nil
+        if DialogEngineManager.shared.isDialogActive {
+            DialogEngineManager.shared.stopDialog()
+        }
+        lastEchoRuntimeFallbackReason = reason
+        viewModel.fail("实时语音暂不可用，文字回响仍可查看")
+        renderVoiceStatus(
+            text: "实时语音暂不可用",
+            isVisible: true,
+            accessibilityIdentifier: "echoRealtimeVoiceCredentialBlocked"
         )
+        recordEchoRuntimeDiagnosticsSnapshot(reason: reason)
+        print("[Echo] providerCredentialBlocked reason=\(reason)")
     }
 
     private func currentVoiceSDKReadinessSummary() -> VoiceSDKReadinessSummary {

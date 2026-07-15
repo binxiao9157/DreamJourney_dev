@@ -34,28 +34,10 @@ final class TencentDigitalHumanCloudRuntime: DigitalHumanRuntime {
             throw DigitalHumanRuntimeError.silentModeDisabled
         }
 
-        guard let appKey = contract.credential.appKey, !appKey.isEmpty,
-              let accessToken = contract.credential.accessToken, !accessToken.isEmpty else {
-            state = .failed(code: "missing_tencent_sdk_credential")
-            throw DigitalHumanRuntimeError.unsupportedOperation("Tencent SDK credential is missing from backend session contract.")
-        }
-
-        let configuration = TencentDigitalHumanSDKConfiguration(
-            sessionId: contract.sessionId,
-            appKey: appKey,
-            accessToken: accessToken,
-            assetVirtualmanKey: contract.assetKey ?? contract.providerAssetId,
-            virtualmanProjectId: contract.providerProjectId,
-            alphaChannelEnable: contract.alphaEnabled,
-            smartActionEnabled: contract.smartActionEnabled,
-            driveMode: contract.driveMode,
-            credentialMode: contract.credential.mode
+        state = .failed(code: "credential_broker_unavailable")
+        throw DigitalHumanRuntimeError.unsupportedOperation(
+            "credentialBrokerUnavailable: Tencent runtime requires a revocable scoped session credential."
         )
-
-        try bridge.configure(configuration, profile: profile)
-        self.profile = profile
-        self.configuration = configuration
-        state = .preparing
     }
 
     func open() throws {

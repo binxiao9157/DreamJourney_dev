@@ -54,10 +54,10 @@ require(
     backendClient.contains("let providerLogId: String?") &&
         backendClient.contains("let providerRequestId: String?") &&
         backendClient.contains("let durationSeconds: Double?") &&
-        backendClient.contains("self.providerLogId = json[\"providerLogId\"] as? String") &&
-        backendClient.contains("self.providerRequestId = json[\"providerRequestId\"] as? String") &&
+        backendClient.contains("self.providerLogId = json[\"providerLogIdHash\"] as? String") &&
+        backendClient.contains("self.providerRequestId = json[\"providerRequestIdHash\"] as? String") &&
         backendClient.contains("self.durationSeconds = Self.doubleValue(audioJSON[\"durationSeconds\"])"),
-    "iOS synthesis result should parse durationSeconds, providerLogId, and providerRequestId for QA support"
+    "iOS synthesis result should parse durationSeconds and value-free provider reference hashes for QA support"
 )
 require(
     echo.contains("暂未启用复刻音色"),
