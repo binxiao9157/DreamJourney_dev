@@ -1,0 +1,3543 @@
+{
+  "baseline": {
+    "authorityLeases": {
+      "ACCOUNT_LOCAL_STATE": {
+        "owner": "UNASSIGNED",
+        "state": "UNHELD"
+      },
+      "ASYNC_EFFECT": {
+        "owner": "UNASSIGNED",
+        "state": "UNHELD"
+      },
+      "CREDENTIAL_CONTROL": {
+        "owner": "UNASSIGNED",
+        "state": "UNHELD"
+      },
+      "DB_RECOVERY": {
+        "owner": "UNASSIGNED",
+        "state": "UNHELD"
+      },
+      "IDENTITY_AUTHZ": {
+        "owner": "UNASSIGNED",
+        "state": "UNHELD"
+      },
+      "IOS_COMPOSITION": {
+        "owner": "UNASSIGNED",
+        "state": "UNHELD"
+      },
+      "MIGRATION_EVIDENCE": {
+        "owner": "UNASSIGNED",
+        "state": "UNHELD"
+      },
+      "OPERATIONS_EVIDENCE": {
+        "owner": "UNASSIGNED",
+        "state": "UNHELD"
+      },
+      "OWNER_TRUTH": {
+        "owner": "UNASSIGNED",
+        "state": "UNHELD"
+      },
+      "PUBLICATION": {
+        "owner": "UNASSIGNED",
+        "state": "UNHELD"
+      },
+      "RELEASE_POLICY": {
+        "owner": "UNASSIGNED",
+        "state": "UNHELD"
+      },
+      "RIGHTS_DELETION": {
+        "owner": "UNASSIGNED",
+        "state": "UNHELD"
+      },
+      "VOICE_DH_GOVERNANCE": {
+        "owner": "UNASSIGNED",
+        "state": "UNHELD"
+      }
+    },
+    "decision": {
+      "coreAndMvpExtension": "STOP",
+      "migration": "NO_GO"
+    },
+    "executionOwner": "UNASSIGNED",
+    "gateEvidence": "MISSING",
+    "implementationClaim": "NONE",
+    "lifecycle": "PLANNED",
+    "openIncidents": []
+  },
+  "counts": {
+    "packages": 13,
+    "sourceFields": 1840,
+    "workItems": 115
+  },
+  "enums": {
+    "authorityLeaseState": [
+      "UNHELD",
+      "HELD",
+      "EXPIRED",
+      "REVOKED"
+    ],
+    "authorityLock": [
+      "ACCOUNT_LOCAL_STATE",
+      "IDENTITY_AUTHZ",
+      "CREDENTIAL_CONTROL",
+      "DB_RECOVERY",
+      "RIGHTS_DELETION",
+      "RELEASE_POLICY",
+      "OPERATIONS_EVIDENCE",
+      "OWNER_TRUTH",
+      "ASYNC_EFFECT",
+      "IOS_COMPOSITION",
+      "PUBLICATION",
+      "VOICE_DH_GOVERNANCE",
+      "MIGRATION_EVIDENCE"
+    ],
+    "decision": [
+      "STOP",
+      "NO_GO",
+      "GO"
+    ],
+    "defaultExposure": [
+      "DEFAULT_OFF",
+      "EXISTING_PUBLIC_SHELL"
+    ],
+    "gate": [
+      "G0",
+      "G1",
+      "G2",
+      "G3",
+      "G4"
+    ],
+    "gateEvidence": [
+      "MISSING",
+      "PASS",
+      "FAIL",
+      "EXPIRED"
+    ],
+    "lifecycle": [
+      "PLANNED",
+      "IN_PROGRESS",
+      "INTERNAL_READY",
+      "EXTERNAL_BLOCKED",
+      "DEPLOYED_UNVERIFIED",
+      "VERIFIED",
+      "PAUSED",
+      "RETIRED"
+    ],
+    "priorityClass": [
+      "P0",
+      "P1",
+      "P2"
+    ],
+    "releaseClass": [
+      "CORE",
+      "MVP_EXTENSION",
+      "MIGRATION"
+    ]
+  },
+  "packages": [
+    {
+      "authorityLock": "CREDENTIAL_CONTROL",
+      "decision": "STOP",
+      "defaultExposure": "EXISTING_PUBLIC_SHELL",
+      "exitPackageDependencies": [],
+      "id": "WP-S0-03",
+      "lifecycle": "PLANNED",
+      "migrationGateRefs": [],
+      "name": "Credential Stop-Loss",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "roadmapLane": "Stage 0",
+      "selectorBand": 0,
+      "startPackageDependencies": []
+    },
+    {
+      "authorityLock": "DB_RECOVERY",
+      "decision": "STOP",
+      "defaultExposure": "EXISTING_PUBLIC_SHELL",
+      "exitPackageDependencies": [],
+      "id": "WP-S0-04",
+      "lifecycle": "PLANNED",
+      "migrationGateRefs": [],
+      "name": "DB Foundation & Recovery",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "roadmapLane": "Stage 0",
+      "selectorBand": 1,
+      "startPackageDependencies": []
+    },
+    {
+      "authorityLock": "RELEASE_POLICY",
+      "decision": "STOP",
+      "defaultExposure": "EXISTING_PUBLIC_SHELL",
+      "exitPackageDependencies": [],
+      "id": "WP-S0-06",
+      "lifecycle": "PLANNED",
+      "migrationGateRefs": [],
+      "name": "Release Scope Stop-Loss",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "roadmapLane": "Stage 0",
+      "selectorBand": 2,
+      "startPackageDependencies": []
+    },
+    {
+      "authorityLock": "OPERATIONS_EVIDENCE",
+      "decision": "STOP",
+      "defaultExposure": "EXISTING_PUBLIC_SHELL",
+      "exitPackageDependencies": [],
+      "id": "WP-S0-07",
+      "lifecycle": "PLANNED",
+      "migrationGateRefs": [],
+      "name": "Operations Evidence",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "roadmapLane": "Stage 0→持续",
+      "selectorBand": 3,
+      "startPackageDependencies": []
+    },
+    {
+      "authorityLock": "IDENTITY_AUTHZ",
+      "decision": "STOP",
+      "defaultExposure": "EXISTING_PUBLIC_SHELL",
+      "exitPackageDependencies": [],
+      "id": "WP-S0-02",
+      "lifecycle": "PLANNED",
+      "migrationGateRefs": [],
+      "name": "Identity & AuthZ Enforce",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "roadmapLane": "Stage 0",
+      "selectorBand": 10,
+      "startPackageDependencies": [
+        "WP-S0-03",
+        "WP-S0-04"
+      ]
+    },
+    {
+      "authorityLock": "ACCOUNT_LOCAL_STATE",
+      "decision": "STOP",
+      "defaultExposure": "EXISTING_PUBLIC_SHELL",
+      "exitPackageDependencies": [
+        "WP-S0-02"
+      ],
+      "id": "WP-S0-01",
+      "lifecycle": "PLANNED",
+      "migrationGateRefs": [],
+      "name": "Account & Local Isolation",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "roadmapLane": "Stage 0",
+      "selectorBand": 20,
+      "startPackageDependencies": [
+        "WP-S0-02"
+      ]
+    },
+    {
+      "authorityLock": "OWNER_TRUTH",
+      "decision": "STOP",
+      "defaultExposure": "EXISTING_PUBLIC_SHELL",
+      "exitPackageDependencies": [
+        "WP-S1-02",
+        "WP-S1-03"
+      ],
+      "id": "WP-S1-01",
+      "lifecycle": "PLANNED",
+      "migrationGateRefs": [
+        "WI-MIG-01-08:authorization"
+      ],
+      "name": "Owner Truth Authority",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "roadmapLane": "Stage 1",
+      "selectorBand": 30,
+      "startPackageDependencies": [
+        "WP-S0-01",
+        "WP-S0-02",
+        "WP-S0-04",
+        "WP-S0-06"
+      ]
+    },
+    {
+      "authorityLock": "ASYNC_EFFECT",
+      "decision": "STOP",
+      "defaultExposure": "EXISTING_PUBLIC_SHELL",
+      "exitPackageDependencies": [],
+      "id": "WP-S1-02",
+      "lifecycle": "PLANNED",
+      "migrationGateRefs": [],
+      "name": "Async Effect Authority",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "roadmapLane": "Stage 1→2",
+      "selectorBand": 40,
+      "startPackageDependencies": [
+        "WP-S0-02",
+        "WP-S0-04",
+        "WP-S0-07",
+        "WP-S1-01"
+      ]
+    },
+    {
+      "authorityLock": "IOS_COMPOSITION",
+      "decision": "STOP",
+      "defaultExposure": "EXISTING_PUBLIC_SHELL",
+      "exitPackageDependencies": [],
+      "id": "WP-S1-03",
+      "lifecycle": "PLANNED",
+      "migrationGateRefs": [],
+      "name": "iOS Composition & Runtime",
+      "priorityClass": "P1",
+      "releaseClass": "CORE",
+      "roadmapLane": "Stage 1",
+      "selectorBand": 41,
+      "startPackageDependencies": [
+        "WP-S0-01",
+        "WP-S0-02",
+        "WP-S0-06",
+        "WP-S1-01"
+      ]
+    },
+    {
+      "authorityLock": "RIGHTS_DELETION",
+      "decision": "STOP",
+      "defaultExposure": "EXISTING_PUBLIC_SHELL",
+      "exitPackageDependencies": [
+        "WP-S1-02"
+      ],
+      "id": "WP-S0-05",
+      "lifecycle": "PLANNED",
+      "migrationGateRefs": [],
+      "name": "Rights & Deletion",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "roadmapLane": "Stage 0→1",
+      "selectorBand": 42,
+      "startPackageDependencies": [
+        "WP-S0-02",
+        "WP-S0-04"
+      ]
+    },
+    {
+      "authorityLock": "PUBLICATION",
+      "decision": "STOP",
+      "defaultExposure": "DEFAULT_OFF",
+      "exitPackageDependencies": [],
+      "id": "WP-S3-01",
+      "lifecycle": "PLANNED",
+      "migrationGateRefs": [],
+      "name": "Family Delegated Publication & Visitor",
+      "priorityClass": "P0",
+      "releaseClass": "MVP_EXTENSION",
+      "roadmapLane": "Product MVP-P",
+      "selectorBand": 80,
+      "startPackageDependencies": [
+        "WP-S0-02",
+        "WP-S0-05",
+        "WP-S0-06",
+        "WP-S0-07",
+        "WP-S1-01",
+        "WP-S1-02"
+      ]
+    },
+    {
+      "authorityLock": "VOICE_DH_GOVERNANCE",
+      "decision": "STOP",
+      "defaultExposure": "DEFAULT_OFF",
+      "exitPackageDependencies": [],
+      "id": "WP-V0-01",
+      "lifecycle": "PLANNED",
+      "migrationGateRefs": [],
+      "name": "Voice Product MVP / DH Beta Extension Governance",
+      "priorityClass": "P0",
+      "releaseClass": "MVP_EXTENSION",
+      "roadmapLane": "Product MVP Voice + Beta Extension DH",
+      "selectorBand": 81,
+      "startPackageDependencies": [
+        "WP-S0-02",
+        "WP-S0-03",
+        "WP-S0-05",
+        "WP-S0-06",
+        "WP-S0-07"
+      ]
+    },
+    {
+      "authorityLock": "MIGRATION_EVIDENCE",
+      "decision": "NO_GO",
+      "defaultExposure": "DEFAULT_OFF",
+      "exitPackageDependencies": [],
+      "id": "WP-MIG-01",
+      "lifecycle": "PLANNED",
+      "migrationGateRefs": [],
+      "name": "Lean Migration + Scale-triggered Composite Drills",
+      "priorityClass": "P0",
+      "releaseClass": "MIGRATION",
+      "roadmapLane": "Migration Cross-cutting",
+      "selectorBand": 90,
+      "startPackageDependencies": []
+    }
+  ],
+  "schemaVersion": "dreamjourney.execution-registry.v1.1",
+  "source": {
+    "authority": "ROADMAP_WORK_ITEMS_PLUS_TYPED_PACKAGE_CONTROLS",
+    "path": "docs/superpowers/plans/2026-07-12-dreamjourney-v4-executable-development-roadmap.md",
+    "sha256": "f5ba8f186e23e956efefb933a9e6a19cca6d6a4ea7f787ef558770ee064a69df"
+  },
+  "workItems": [
+    {
+      "authorityLock": "CREDENTIAL_CONTROL",
+      "decision": "STOP",
+      "dependencyNotesHash": "842aefa1046f04d5f22046a25ca15f00ce55b212e4f0d05c22484ccadef4a7af",
+      "directDependencies": [],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING"
+      },
+      "id": "WI-S0-03-01",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-03",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 1
+    },
+    {
+      "authorityLock": "CREDENTIAL_CONTROL",
+      "decision": "STOP",
+      "dependencyNotesHash": "67e05ae00a1c7e86afb5d79b8ecbb150390f152fdc3daeb2f475505c9c1ad89b",
+      "directDependencies": [
+        "WI-S0-03-01"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING"
+      },
+      "id": "WI-S0-03-02",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-03",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 2
+    },
+    {
+      "authorityLock": "CREDENTIAL_CONTROL",
+      "decision": "STOP",
+      "dependencyNotesHash": "3f7f7eb43983fd20fa779239ac86e6a5f7c09d7a95171a7f3ea41fbc780df269",
+      "directDependencies": [
+        "WI-S0-02-03",
+        "WI-S0-02-06",
+        "WI-S0-03-01",
+        "WI-S0-03-02"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING"
+      },
+      "id": "WI-S0-03-03",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-03",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 3
+    },
+    {
+      "authorityLock": "CREDENTIAL_CONTROL",
+      "decision": "STOP",
+      "dependencyNotesHash": "bfedc55f01fb701bb8ea43bfaf4c1531895b95d047ebb9cf3820afd6a0ab8d0b",
+      "directDependencies": [
+        "WI-S0-03-01",
+        "WI-S0-03-02",
+        "WI-S0-03-03"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S0-03-04",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-03",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4
+    },
+    {
+      "authorityLock": "CREDENTIAL_CONTROL",
+      "decision": "STOP",
+      "dependencyNotesHash": "58473a17d65994642897719a6ec3691e9f9fab7f98e5f5b287f3c1b8e23e3926",
+      "directDependencies": [
+        "WI-S0-03-01",
+        "WI-S0-03-02",
+        "WI-S0-03-03"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S0-03-05",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-03",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 5
+    },
+    {
+      "authorityLock": "CREDENTIAL_CONTROL",
+      "decision": "STOP",
+      "dependencyNotesHash": "d1030c789c9d69c5cae8367ac9fa2975e766d69ffbba5eca34b85caec896bf65",
+      "directDependencies": [
+        "WI-S0-03-01",
+        "WI-S0-03-02"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING"
+      },
+      "id": "WI-S0-03-06",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-03",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 6
+    },
+    {
+      "authorityLock": "CREDENTIAL_CONTROL",
+      "decision": "STOP",
+      "dependencyNotesHash": "8682c46a29ddfbe62d0e1773f29969e9f83f4981325ba5bbfec4e8afcd0aaff5",
+      "directDependencies": [
+        "WI-S0-03-01",
+        "WI-S0-03-02",
+        "WI-S0-03-03",
+        "WI-S0-03-04",
+        "WI-S0-03-05",
+        "WI-S0-03-06"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING"
+      },
+      "id": "WI-S0-03-07",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-03",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 7
+    },
+    {
+      "authorityLock": "DB_RECOVERY",
+      "decision": "STOP",
+      "dependencyNotesHash": "ef1d27ba25888e3ee51b163631e25dbdce601f5b82a9b5f3dfb8b9f495f96a01",
+      "directDependencies": [],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING"
+      },
+      "id": "WI-S0-04-01",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-04",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 101
+    },
+    {
+      "authorityLock": "DB_RECOVERY",
+      "decision": "STOP",
+      "dependencyNotesHash": "47414a5117869994e3e4a2a4b6020643dae7fcd1f68fbd6f5ac41dbc98240010",
+      "directDependencies": [
+        "WI-S0-04-01"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING"
+      },
+      "id": "WI-S0-04-02",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-04",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 102
+    },
+    {
+      "authorityLock": "DB_RECOVERY",
+      "decision": "STOP",
+      "dependencyNotesHash": "56db0bdd5c26f699abf2dead6740c0a2eb32868d1b2a7106ebbe230fb05b7d0d",
+      "directDependencies": [
+        "WI-S0-04-01",
+        "WI-S0-04-02"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING"
+      },
+      "id": "WI-S0-04-03",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-04",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 103
+    },
+    {
+      "authorityLock": "DB_RECOVERY",
+      "decision": "STOP",
+      "dependencyNotesHash": "da31acca440f9f0308260b89fad2d84d8eddf186f4d2058c26836541801daf2b",
+      "directDependencies": [
+        "WI-S0-04-02"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING"
+      },
+      "id": "WI-S0-04-04",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-04",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 104
+    },
+    {
+      "authorityLock": "DB_RECOVERY",
+      "decision": "STOP",
+      "dependencyNotesHash": "9a554d6c9ca0c24d48a547901bda94b0c0fa543fb647bb4a5d7535a7985f3862",
+      "directDependencies": [
+        "WI-S0-04-01",
+        "WI-S0-04-02",
+        "WI-S0-04-03",
+        "WI-S0-04-04"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING",
+        "G3": "MISSING"
+      },
+      "id": "WI-S0-04-05",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-04",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2",
+        "G3"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 105
+    },
+    {
+      "authorityLock": "RELEASE_POLICY",
+      "decision": "STOP",
+      "dependencyNotesHash": "9f69e8aac1d08cca19d30743aab1c803fb24f75ffc63763505319142383b17f4",
+      "directDependencies": [],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G4": "MISSING"
+      },
+      "id": "WI-S0-06-01",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-06",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 201
+    },
+    {
+      "authorityLock": "RELEASE_POLICY",
+      "decision": "STOP",
+      "dependencyNotesHash": "c88e179aeffb38e31a2c239341954d9d417b24139d202059bddef863a9e9e884",
+      "directDependencies": [
+        "WI-S0-06-01",
+        "WI-S0-01-02"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING"
+      },
+      "id": "WI-S0-06-02",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-06",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 202
+    },
+    {
+      "authorityLock": "RELEASE_POLICY",
+      "decision": "STOP",
+      "dependencyNotesHash": "3dae5018ff3dd0468f482bc0802a71b1bebb15b714a0b8d1a3c8c1c7ae1d7daf",
+      "directDependencies": [
+        "WI-S0-06-01",
+        "WI-S0-06-02"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING"
+      },
+      "id": "WI-S0-06-03",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-06",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 203
+    },
+    {
+      "authorityLock": "RELEASE_POLICY",
+      "decision": "STOP",
+      "dependencyNotesHash": "932d99995664764a1fd8890a7e6251e47939ae031c8d5bfdf2dc1bc03155ade8",
+      "directDependencies": [
+        "WI-S0-06-01",
+        "WI-S0-06-02",
+        "WI-S0-06-03"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING",
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S0-06-04",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-06",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2",
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 204
+    },
+    {
+      "authorityLock": "RELEASE_POLICY",
+      "decision": "STOP",
+      "dependencyNotesHash": "39202400afe04115eed80279cc56989f8590c2d041fe007997fe6817b9c9c610",
+      "directDependencies": [
+        "WI-S0-06-01"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S0-06-05",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-06",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 205
+    },
+    {
+      "authorityLock": "RELEASE_POLICY",
+      "decision": "STOP",
+      "dependencyNotesHash": "593544172c5ecc880d9478f78801254b4a2cb22e8158cc95a336d186bafb4d89",
+      "directDependencies": [
+        "WI-S0-06-02",
+        "WI-S0-06-04"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING"
+      },
+      "id": "WI-S0-06-06",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-06",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 206
+    },
+    {
+      "authorityLock": "RELEASE_POLICY",
+      "decision": "STOP",
+      "dependencyNotesHash": "20fbecde32471f5fd5ef1e27f8c274b15b9db9ca6e129f2fab70de03906c0bcf",
+      "directDependencies": [
+        "WI-S0-06-01",
+        "WI-S0-06-02",
+        "WI-S0-06-03",
+        "WI-S0-06-04",
+        "WI-S0-06-05",
+        "WI-S0-06-06"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S0-06-07",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-06",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 207
+    },
+    {
+      "authorityLock": "RELEASE_POLICY",
+      "decision": "STOP",
+      "dependencyNotesHash": "3edad426805798a8d0b2001096feb645564f39ad129d94ca9fccd117c670bb59",
+      "directDependencies": [
+        "WI-S0-06-01",
+        "WI-S0-06-02",
+        "WI-S0-06-03",
+        "WI-S0-06-04",
+        "WI-S0-06-05",
+        "WI-S0-06-06",
+        "WI-S0-06-07"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S0-06-08",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-06",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 208
+    },
+    {
+      "authorityLock": "RELEASE_POLICY",
+      "decision": "STOP",
+      "dependencyNotesHash": "97a2fca232902198ae61df3e5da280f40e0e6328a3b9f98ca57f105e2ae872ad",
+      "directDependencies": [
+        "WI-S0-06-01",
+        "WI-S0-06-04",
+        "WI-S0-07-01"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S0-06-09",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-06",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 209
+    },
+    {
+      "authorityLock": "OPERATIONS_EVIDENCE",
+      "decision": "STOP",
+      "dependencyNotesHash": "6f97fcccda24e3792999033254c65a7f3e6bf29d70f4daafa1dbff443b1d35de",
+      "directDependencies": [],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING"
+      },
+      "id": "WI-S0-07-01",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-07",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 301
+    },
+    {
+      "authorityLock": "OPERATIONS_EVIDENCE",
+      "decision": "STOP",
+      "dependencyNotesHash": "04bb52a992c14557db40f537780e6b1ae2ffe9853af669da6d0b7ec40b342841",
+      "directDependencies": [
+        "WI-S0-07-01"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING"
+      },
+      "id": "WI-S0-07-02",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-07",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 302
+    },
+    {
+      "authorityLock": "OPERATIONS_EVIDENCE",
+      "decision": "STOP",
+      "dependencyNotesHash": "98f6a87a6265e5b5982a8d52d9c7f65f08efe112a5686a0c2a4764a8bf2e8534",
+      "directDependencies": [
+        "WI-S0-07-01",
+        "WI-S0-07-02"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING"
+      },
+      "id": "WI-S0-07-03",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-07",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 303
+    },
+    {
+      "authorityLock": "OPERATIONS_EVIDENCE",
+      "decision": "STOP",
+      "dependencyNotesHash": "c773c24f085a91725021795e4af913368d541efad0a37b1c32a4dfc1352ddde5",
+      "directDependencies": [
+        "WI-S0-05-01",
+        "WI-S0-05-02",
+        "WI-S0-05-03",
+        "WI-S0-05-04",
+        "WI-S0-05-05",
+        "WI-S0-07-01",
+        "WI-S0-07-02",
+        "WI-S0-07-03"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING"
+      },
+      "id": "WI-S0-07-04",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-07",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 304
+    },
+    {
+      "authorityLock": "OPERATIONS_EVIDENCE",
+      "decision": "STOP",
+      "dependencyNotesHash": "fbc5d5775ab56c89e50c2f6dc2cde753800b90128dc91495074f3bd9d8ba85d7",
+      "directDependencies": [
+        "WI-S0-07-01",
+        "WI-S0-07-02",
+        "WI-S0-07-03"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G3": "MISSING"
+      },
+      "id": "WI-S0-07-05",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-07",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G3"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 305
+    },
+    {
+      "authorityLock": "OPERATIONS_EVIDENCE",
+      "decision": "STOP",
+      "dependencyNotesHash": "a7cf53acd11ab8cdb4a99c5f735fa280304a41fedfc3965803a648e8425ce922",
+      "directDependencies": [
+        "WI-S0-07-01",
+        "WI-S0-07-02"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING"
+      },
+      "id": "WI-S0-07-06",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-07",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 306
+    },
+    {
+      "authorityLock": "OPERATIONS_EVIDENCE",
+      "decision": "STOP",
+      "dependencyNotesHash": "1edf378fdbf8edea258fe4647447c4644e6cd62488a22e1ea43bf5686122e537",
+      "directDependencies": [
+        "WI-S0-07-01"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING"
+      },
+      "id": "WI-S0-07-07",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-07",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 307
+    },
+    {
+      "authorityLock": "OPERATIONS_EVIDENCE",
+      "decision": "STOP",
+      "dependencyNotesHash": "2e5a5caf9c1c510986d7ce56e7e8ea1b99c6b7a376aff3e9773d617560639975",
+      "directDependencies": [
+        "WI-S0-07-01",
+        "WI-S0-07-02",
+        "WI-S0-07-03",
+        "WI-S0-07-07"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING"
+      },
+      "id": "WI-S0-07-08",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-07",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 308
+    },
+    {
+      "authorityLock": "OPERATIONS_EVIDENCE",
+      "decision": "STOP",
+      "dependencyNotesHash": "aff420ec7e1ccc8e130e944ba34a80aa4728f8303746d839b327201a24964433",
+      "directDependencies": [
+        "WI-S0-07-01",
+        "WI-S0-07-02",
+        "WI-S0-07-03",
+        "WI-S0-07-04",
+        "WI-S0-07-05",
+        "WI-S0-07-06",
+        "WI-S0-07-07",
+        "WI-S0-07-08"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S0-07-09",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-07",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 309
+    },
+    {
+      "authorityLock": "IDENTITY_AUTHZ",
+      "decision": "STOP",
+      "dependencyNotesHash": "d3da13c72dcc81927190eaf804092925916f0983addb5d67ea0294d09bb8cf32",
+      "directDependencies": [],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G4": "MISSING"
+      },
+      "id": "WI-S0-02-01",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-02",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 1001
+    },
+    {
+      "authorityLock": "IDENTITY_AUTHZ",
+      "decision": "STOP",
+      "dependencyNotesHash": "40d4d2b060df505fc682a0dbd7ccc748a8cb74eaed44a35353ba6e356044e8d9",
+      "directDependencies": [
+        "WI-S0-02-01"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING"
+      },
+      "id": "WI-S0-02-02",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-02",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 1002
+    },
+    {
+      "authorityLock": "IDENTITY_AUTHZ",
+      "decision": "STOP",
+      "dependencyNotesHash": "1923faeb4b691b99ffe1b7070ee092a088426684b9bad6a2175aa9e68d2b60c0",
+      "directDependencies": [
+        "WI-S0-02-01",
+        "WI-S0-02-02"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING"
+      },
+      "id": "WI-S0-02-03",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-02",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 1003
+    },
+    {
+      "authorityLock": "IDENTITY_AUTHZ",
+      "decision": "STOP",
+      "dependencyNotesHash": "44adfe43a207ec66d9ebe8e91071256bf2684d42ea57a35e9d2483e95dfdbe55",
+      "directDependencies": [
+        "WI-S0-02-03"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING"
+      },
+      "id": "WI-S0-02-04",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-02",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 1004
+    },
+    {
+      "authorityLock": "IDENTITY_AUTHZ",
+      "decision": "STOP",
+      "dependencyNotesHash": "d505b47d61b7a828cafd3ce85d6350da5d98c4f4410db39a627921950e58439a",
+      "directDependencies": [
+        "WI-S0-02-01",
+        "WI-S0-02-03",
+        "WI-S0-02-04"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G4": "MISSING"
+      },
+      "id": "WI-S0-02-05",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-02",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 1005
+    },
+    {
+      "authorityLock": "IDENTITY_AUTHZ",
+      "decision": "STOP",
+      "dependencyNotesHash": "c3b323d65b236ceb458aa79cf87418a0b9a69ea497dbfd948033bba34442f9ba",
+      "directDependencies": [
+        "WI-S0-02-01",
+        "WI-S0-02-02",
+        "WI-S0-02-03",
+        "WI-S0-02-04"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S0-02-06",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-02",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 1006
+    },
+    {
+      "authorityLock": "ACCOUNT_LOCAL_STATE",
+      "decision": "STOP",
+      "dependencyNotesHash": "d0879cda414cbdb282f26f15d689482f5d80411ce194c0677a3a805256fa88da",
+      "directDependencies": [],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING"
+      },
+      "id": "WI-S0-01-01",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-01",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 2001
+    },
+    {
+      "authorityLock": "ACCOUNT_LOCAL_STATE",
+      "decision": "STOP",
+      "dependencyNotesHash": "74b29a7a2365ec8eac9d595eb6fd2c3a11b5944ce2324b261bb389af50d55c06",
+      "directDependencies": [
+        "WI-S0-01-01"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S0-01-02",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-01",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 2002
+    },
+    {
+      "authorityLock": "ACCOUNT_LOCAL_STATE",
+      "decision": "STOP",
+      "dependencyNotesHash": "9f2fffd9ff1cf3909017634556bab3bbe9f5c136645f70dffb52a594b7f74db3",
+      "directDependencies": [
+        "WI-S0-01-02"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING"
+      },
+      "id": "WI-S0-01-03",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-01",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 2003
+    },
+    {
+      "authorityLock": "ACCOUNT_LOCAL_STATE",
+      "decision": "STOP",
+      "dependencyNotesHash": "6883ef6d7c82ce364860a0a43e8ebccbb1bbad924e8a1ffcf396627ffb42d715",
+      "directDependencies": [
+        "WI-S0-01-02",
+        "WI-S0-01-03",
+        "WI-S0-01-01"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S0-01-04",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-01",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 2004
+    },
+    {
+      "authorityLock": "ACCOUNT_LOCAL_STATE",
+      "decision": "STOP",
+      "dependencyNotesHash": "44cbd10152b6b143a3caff3cd33db1d77bf7b28db9018a42984db28bdc6fc404",
+      "directDependencies": [
+        "WI-S0-01-01",
+        "WI-S0-01-02",
+        "WI-S0-01-04"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING"
+      },
+      "id": "WI-S0-01-05",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-01",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 2005
+    },
+    {
+      "authorityLock": "ACCOUNT_LOCAL_STATE",
+      "decision": "STOP",
+      "dependencyNotesHash": "98b8a96236dd5f3fb5e0715236d21a530241a127d852a42e84534b98c3aa1588",
+      "directDependencies": [
+        "WI-S0-01-01",
+        "WI-S0-01-02",
+        "WI-S0-01-04"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G4": "MISSING"
+      },
+      "id": "WI-S0-01-06",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-01",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 2006
+    },
+    {
+      "authorityLock": "ACCOUNT_LOCAL_STATE",
+      "decision": "STOP",
+      "dependencyNotesHash": "3e8277c000ba20509bb958619103c7bda1ca3cb2ffd2a9e8620df112e3112cde",
+      "directDependencies": [
+        "WI-S0-01-02",
+        "WI-S0-01-04"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S0-01-07",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-01",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 2007
+    },
+    {
+      "authorityLock": "ACCOUNT_LOCAL_STATE",
+      "decision": "STOP",
+      "dependencyNotesHash": "cc66e2c013df4ba1e58b08d6b803e199acd8f9d1866591fb115682fe394de418",
+      "directDependencies": [
+        "WI-S0-01-01",
+        "WI-S0-01-02",
+        "WI-S0-01-03",
+        "WI-S0-01-04",
+        "WI-S0-01-05",
+        "WI-S0-01-06",
+        "WI-S0-01-07"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G1": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S0-01-08",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-01",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G1",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 2008
+    },
+    {
+      "authorityLock": "OWNER_TRUTH",
+      "decision": "STOP",
+      "dependencyNotesHash": "be216c49dc6a8a5a4bd195f105d7b79265dc4b4116a3137feaa0c30df2fbb074",
+      "directDependencies": [
+        "WI-S0-04-02",
+        "WI-S0-04-03",
+        "WI-S0-02-03"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING"
+      },
+      "id": "WI-S1-01-01",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-01",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 3001
+    },
+    {
+      "authorityLock": "OWNER_TRUTH",
+      "decision": "STOP",
+      "dependencyNotesHash": "02d8dcbc55f1bd23e37f4caf883dc7dcd0291189e60df714883ad0ad1798acc1",
+      "directDependencies": [
+        "WI-S1-01-01",
+        "WI-S0-01-02",
+        "WI-S0-01-04",
+        "WI-S0-02-04",
+        "WI-S0-02-05",
+        "WI-S0-04-01"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING"
+      },
+      "id": "WI-S1-01-02",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-01",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 3002
+    },
+    {
+      "authorityLock": "OWNER_TRUTH",
+      "decision": "STOP",
+      "dependencyNotesHash": "6dbe5f74f2c875407367ca61a94792aa3a02aa8af9bf350a765db29d4bdc4993",
+      "directDependencies": [
+        "WI-S1-01-02",
+        "WI-S1-02-01",
+        "WI-S1-02-02"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING"
+      },
+      "id": "WI-S1-01-03",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-01",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G2",
+        "G3"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 3003
+    },
+    {
+      "authorityLock": "OWNER_TRUTH",
+      "decision": "STOP",
+      "dependencyNotesHash": "9542f0da68100f567ca8b3ddab980a637ca92f799d42d3cabcba9e272f24f64a",
+      "directDependencies": [
+        "WI-S1-01-03"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S1-01-04",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-01",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 3004
+    },
+    {
+      "authorityLock": "OWNER_TRUTH",
+      "decision": "STOP",
+      "dependencyNotesHash": "7637ca142fddb3c287752f74a4523bdd5eadae4a96999dfa856d5eb561c3e215",
+      "directDependencies": [
+        "WI-S1-01-04"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING"
+      },
+      "id": "WI-S1-01-05",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-01",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 3005
+    },
+    {
+      "authorityLock": "OWNER_TRUTH",
+      "decision": "STOP",
+      "dependencyNotesHash": "929e151e7fe0e225810d0e99915152abbe8ad60fa2db09e7fa30a4149dad0ad6",
+      "directDependencies": [
+        "WI-S1-01-05",
+        "WI-S1-02-01",
+        "WI-S1-02-02",
+        "WI-S1-02-03",
+        "WI-S1-02-04"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING"
+      },
+      "id": "WI-S1-01-06",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-01",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 3006
+    },
+    {
+      "authorityLock": "OWNER_TRUTH",
+      "decision": "STOP",
+      "dependencyNotesHash": "deb9159c55905e9df9da5dceb069cb0b095581659643d94ac5d3ef2b5ead186b",
+      "directDependencies": [
+        "WI-S1-01-05",
+        "WI-S1-01-06"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING"
+      },
+      "id": "WI-S1-01-07",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-01",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G3"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 3007
+    },
+    {
+      "authorityLock": "OWNER_TRUTH",
+      "decision": "STOP",
+      "dependencyNotesHash": "f4a9227b0bb69518c06c52f85717dae67727e49f57f27dd735c8400ef3f5d714",
+      "directDependencies": [
+        "WI-S1-01-04",
+        "WI-S1-01-05",
+        "WI-S1-01-07"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S1-01-08",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-01",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 3008
+    },
+    {
+      "authorityLock": "OWNER_TRUTH",
+      "decision": "STOP",
+      "dependencyNotesHash": "391f2cafda9084b965b1a8e2985fbe46b82547cef7e4ef8f04af50ce984b57bd",
+      "directDependencies": [
+        "WI-S1-01-01",
+        "WI-S1-01-02",
+        "WI-S1-01-03",
+        "WI-S1-01-04",
+        "WI-S1-01-05",
+        "WI-S1-01-06"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING"
+      },
+      "id": "WI-S1-01-09",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-01",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 3009
+    },
+    {
+      "authorityLock": "OWNER_TRUTH",
+      "decision": "STOP",
+      "dependencyNotesHash": "7b0ceede7e8bc88e8a8d74230b5164d549aa443804489f692ab1c261dd3bb8ce",
+      "directDependencies": [
+        "WI-S1-01-01",
+        "WI-S1-01-02",
+        "WI-S1-01-03",
+        "WI-S1-01-04",
+        "WI-S1-01-05",
+        "WI-S1-01-06",
+        "WI-S1-01-07",
+        "WI-S1-01-08",
+        "WI-S1-01-09"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S1-01-10",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-01",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 3010
+    },
+    {
+      "authorityLock": "OWNER_TRUTH",
+      "decision": "STOP",
+      "dependencyNotesHash": "9e5375304e0cd3414fb88f0888af921096132a178ba492e01e3b64a343c16005",
+      "directDependencies": [
+        "WI-S1-01-01",
+        "WI-S1-01-05"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S1-01-11",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-01",
+      "priorityClass": "P1",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 3011
+    },
+    {
+      "authorityLock": "OWNER_TRUTH",
+      "decision": "STOP",
+      "dependencyNotesHash": "ae6cd1f777025b00d247c54f48f409334115f78879e46a4eab291cd708444c95",
+      "directDependencies": [
+        "WI-S1-01-01",
+        "WI-S1-01-02"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S1-01-12",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-01",
+      "priorityClass": "P1",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 3012
+    },
+    {
+      "authorityLock": "ASYNC_EFFECT",
+      "decision": "STOP",
+      "dependencyNotesHash": "04157d8028a23fbfdd55cbe03b3c20c50bbbe2bd937b32a10a0cc7d5e1190a3d",
+      "directDependencies": [
+        "WI-S0-04-01",
+        "WI-S0-04-02",
+        "WI-S0-04-03"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING"
+      },
+      "id": "WI-S1-02-01",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-02",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4001
+    },
+    {
+      "authorityLock": "ASYNC_EFFECT",
+      "decision": "STOP",
+      "dependencyNotesHash": "79f66bae1fe55864c66942f2af0704587efd56966b4cdc9536bcd24deefc7bd1",
+      "directDependencies": [
+        "WI-S1-02-01",
+        "WI-S0-04-01"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING"
+      },
+      "id": "WI-S1-02-02",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-02",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4002
+    },
+    {
+      "authorityLock": "ASYNC_EFFECT",
+      "decision": "STOP",
+      "dependencyNotesHash": "97537b4c53f9b1324a08cf380e1e873af3436e8043db7f1b73e1b503e3899a64",
+      "directDependencies": [
+        "WI-S1-02-01",
+        "WI-S1-02-02"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING"
+      },
+      "id": "WI-S1-02-03",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-02",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G2",
+        "G3"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4003
+    },
+    {
+      "authorityLock": "ASYNC_EFFECT",
+      "decision": "STOP",
+      "dependencyNotesHash": "b9f47c831f0b6349af38ec223042fcd4cfa3dc4e9d5f2a6ba7749037fd5e576d",
+      "directDependencies": [
+        "WI-S1-02-01",
+        "WI-S1-02-02",
+        "WI-S1-02-03"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING"
+      },
+      "id": "WI-S1-02-04",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-02",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4004
+    },
+    {
+      "authorityLock": "ASYNC_EFFECT",
+      "decision": "STOP",
+      "dependencyNotesHash": "439fd76b3c5048f64a36a35726b736079d4ec042fb17e546c8fb68803ff1edcb",
+      "directDependencies": [
+        "WI-S1-02-01",
+        "WI-S1-02-02",
+        "WI-S1-02-03",
+        "WI-S1-02-04"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S1-02-05",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-02",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G2",
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4005
+    },
+    {
+      "authorityLock": "ASYNC_EFFECT",
+      "decision": "STOP",
+      "dependencyNotesHash": "8fb36acaad88d4ea032bac840158ca89aa5d83b6cdf42f2212ca6323205d890a",
+      "directDependencies": [
+        "WI-S1-01-07",
+        "WI-S1-02-01",
+        "WI-S1-02-02",
+        "WI-S1-02-03",
+        "WI-S1-02-04"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING"
+      },
+      "id": "WI-S1-02-06",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-02",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G3"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4006
+    },
+    {
+      "authorityLock": "ASYNC_EFFECT",
+      "decision": "STOP",
+      "dependencyNotesHash": "73b5362910e709d73915bfa4d42c44790de60fcb133d74bd3ef0f52195827e62",
+      "directDependencies": [
+        "WI-S1-02-01",
+        "WI-S1-02-02",
+        "WI-S1-02-03",
+        "WI-S1-02-04"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S1-02-07",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-02",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G2",
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4007
+    },
+    {
+      "authorityLock": "ASYNC_EFFECT",
+      "decision": "STOP",
+      "dependencyNotesHash": "f8088e9ebdfada4dc65c2ff18cc2adabe863e15e0213478addbb71181f736726",
+      "directDependencies": [
+        "WI-S1-02-04",
+        "WI-S1-02-05",
+        "WI-S1-02-06",
+        "WI-S1-02-07"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S1-02-08",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-02",
+      "priorityClass": "P1",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4008
+    },
+    {
+      "authorityLock": "ASYNC_EFFECT",
+      "decision": "STOP",
+      "dependencyNotesHash": "a0133515d88df6f127c0b66bab48e0d4780912839d27f9ab3e5267f7d062c825",
+      "directDependencies": [
+        "WI-S1-02-01",
+        "WI-S1-02-02",
+        "WI-S1-02-03",
+        "WI-S1-02-04",
+        "WI-S1-02-05",
+        "WI-S1-02-06",
+        "WI-S1-02-07",
+        "WI-S1-02-08"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING"
+      },
+      "id": "WI-S1-02-09",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-02",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G2",
+        "G3"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4009
+    },
+    {
+      "authorityLock": "ASYNC_EFFECT",
+      "decision": "STOP",
+      "dependencyNotesHash": "4d09ae07b8a55a2059ba677c552752debdaf20ead38f57ffb77f24fa61e04d05",
+      "directDependencies": [
+        "WI-S1-02-01",
+        "WI-S1-02-02",
+        "WI-S1-02-03",
+        "WI-S1-02-04",
+        "WI-S1-02-05",
+        "WI-S1-02-06",
+        "WI-S1-02-07",
+        "WI-S1-02-08",
+        "WI-S1-02-09"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING"
+      },
+      "id": "WI-S1-02-10",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-02",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G2",
+        "G3"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4010
+    },
+    {
+      "authorityLock": "ASYNC_EFFECT",
+      "decision": "STOP",
+      "dependencyNotesHash": "8aaa83f2f63f9d01d0cb4a3e588e604dbb702e2563a0ef19a115f2f1e69e4be9",
+      "directDependencies": [
+        "WI-S1-01-12",
+        "WI-S1-02-01",
+        "WI-S1-02-02",
+        "WI-S1-02-03",
+        "WI-S1-02-04",
+        "WI-S1-02-07",
+        "WI-S1-02-09"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S1-02-11",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-02",
+      "priorityClass": "P1",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4011
+    },
+    {
+      "authorityLock": "IOS_COMPOSITION",
+      "decision": "STOP",
+      "dependencyNotesHash": "5eb476af54a82d6579fabcbfc7d564d2d689b3edf93389ef1467653f1b24c6da",
+      "directDependencies": [
+        "WI-S0-01-01"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING"
+      },
+      "id": "WI-S1-03-01",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-03",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4101
+    },
+    {
+      "authorityLock": "IOS_COMPOSITION",
+      "decision": "STOP",
+      "dependencyNotesHash": "26a2127151d8a98f5063c981c56f655818ae9709aaffc569ad98a4d3a5820348",
+      "directDependencies": [
+        "WI-S1-03-01"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING"
+      },
+      "id": "WI-S1-03-02",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-03",
+      "priorityClass": "P1",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4102
+    },
+    {
+      "authorityLock": "IOS_COMPOSITION",
+      "decision": "STOP",
+      "dependencyNotesHash": "19be722ed2dd983d7f0e353b26d1df20eac837f4abe57153b860ed2f919edc1c",
+      "directDependencies": [
+        "WI-S1-03-01",
+        "WI-S1-03-02",
+        "WI-S0-01-02",
+        "WI-S0-01-03",
+        "WI-S0-01-04",
+        "WI-S0-01-05",
+        "WI-S0-01-06",
+        "WI-S0-01-07",
+        "WI-S0-01-08"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S1-03-03",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-03",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4103
+    },
+    {
+      "authorityLock": "IOS_COMPOSITION",
+      "decision": "STOP",
+      "dependencyNotesHash": "df4500cc6878987f6c24de23812c92d82461619d6f9a2b7cc3ab8c35de6dbeb2",
+      "directDependencies": [
+        "WI-S1-03-02",
+        "WI-S1-03-03",
+        "WI-S1-01-02",
+        "WI-S1-01-04",
+        "WI-S1-01-05",
+        "WI-S1-01-07",
+        "WI-S1-01-08"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING"
+      },
+      "id": "WI-S1-03-04",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-03",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4104
+    },
+    {
+      "authorityLock": "IOS_COMPOSITION",
+      "decision": "STOP",
+      "dependencyNotesHash": "3726a15fc2faeab4385072ae455730fe887f4b83f8352d385edf81dcb40262b2",
+      "directDependencies": [
+        "WI-S1-03-01",
+        "WI-S1-03-02",
+        "WI-S1-03-03",
+        "WI-S1-03-04",
+        "WI-S1-01-07",
+        "WI-S1-02-06"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING"
+      },
+      "id": "WI-S1-03-05",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-03",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G3"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4105
+    },
+    {
+      "authorityLock": "IOS_COMPOSITION",
+      "decision": "STOP",
+      "dependencyNotesHash": "49d176de4091d2f3bb47afbfb951226fa0b5beb0c92543ba6861f94f03910c07",
+      "directDependencies": [
+        "WI-S1-03-03",
+        "WI-S1-03-05"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S1-03-06",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-03",
+      "priorityClass": "P1",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4106
+    },
+    {
+      "authorityLock": "IOS_COMPOSITION",
+      "decision": "STOP",
+      "dependencyNotesHash": "ffa267da9234675c6515a2745394b7c903995e52f80783719999150d8cbd9b6d",
+      "directDependencies": [
+        "WI-S1-03-01",
+        "WI-S1-03-03",
+        "WI-S1-03-06"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S1-03-07",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-03",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4107
+    },
+    {
+      "authorityLock": "IOS_COMPOSITION",
+      "decision": "STOP",
+      "dependencyNotesHash": "ea08651db890b733f58f9f5e4f7b049dd37fdc959b43b6eaf0e822a250d0fe6f",
+      "directDependencies": [
+        "WI-S1-03-03",
+        "WI-S1-03-06",
+        "WI-S1-03-07"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S1-03-08",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-03",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4108
+    },
+    {
+      "authorityLock": "IOS_COMPOSITION",
+      "decision": "STOP",
+      "dependencyNotesHash": "19c298fcd681d23e62b6b52dc8a2c8daa231b6b44f7ef98f0c47a871d0442a2b",
+      "directDependencies": [
+        "WI-S1-03-03",
+        "WI-S1-03-04",
+        "WI-S1-03-05",
+        "WI-S1-02-08"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S1-03-09",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-03",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4109
+    },
+    {
+      "authorityLock": "IOS_COMPOSITION",
+      "decision": "STOP",
+      "dependencyNotesHash": "7ea890aaaa533db982ab97b038d5aea98e652270093c245bae2f22cb99c0bc23",
+      "directDependencies": [
+        "WI-S1-03-01",
+        "WI-S1-03-02",
+        "WI-S1-03-03",
+        "WI-S1-03-04",
+        "WI-S1-03-05",
+        "WI-S1-03-06",
+        "WI-S1-03-07",
+        "WI-S1-03-08",
+        "WI-S1-03-09"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S1-03-10",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S1-03",
+      "priorityClass": "P1",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4110
+    },
+    {
+      "authorityLock": "RIGHTS_DELETION",
+      "decision": "STOP",
+      "dependencyNotesHash": "a6ec299df8c1ed0a9016d998f27765f7e8140a24bfa59e85a4461182bd9d83f9",
+      "directDependencies": [],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S0-05-01",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-05",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4201
+    },
+    {
+      "authorityLock": "RIGHTS_DELETION",
+      "decision": "STOP",
+      "dependencyNotesHash": "af9dc1e2dab64331d2587df1b3b3f4c07eb6113193ab7510aaac42aee517ca7b",
+      "directDependencies": [
+        "WI-S0-05-01"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING"
+      },
+      "id": "WI-S0-05-02",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-05",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4202
+    },
+    {
+      "authorityLock": "RIGHTS_DELETION",
+      "decision": "STOP",
+      "dependencyNotesHash": "04fdeca973677eef4ed69bc4fa6d4aa6a2637829c29aec67ba9cea55f966e62c",
+      "directDependencies": [
+        "WI-S0-02-01",
+        "WI-S0-02-02",
+        "WI-S0-05-01",
+        "WI-S0-05-02"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S0-05-03",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-05",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4203
+    },
+    {
+      "authorityLock": "RIGHTS_DELETION",
+      "decision": "STOP",
+      "dependencyNotesHash": "c1473b84fd4805710728c7306c79805015c4ad94014f5c8b39fcc455221caf0c",
+      "directDependencies": [
+        "WI-S0-05-01",
+        "WI-S0-05-02",
+        "WI-S0-05-03"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G2": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S0-05-04",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-05",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G2",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4204
+    },
+    {
+      "authorityLock": "RIGHTS_DELETION",
+      "decision": "STOP",
+      "dependencyNotesHash": "3323beb4dfc24fcdbe3b088884431fd29d6c433b742f72578a1e8f686dd70061",
+      "directDependencies": [
+        "WI-S0-05-04"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S0-05-05",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-05",
+      "priorityClass": "P1",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4205
+    },
+    {
+      "authorityLock": "RIGHTS_DELETION",
+      "decision": "STOP",
+      "dependencyNotesHash": "b293791dbeb2c6e39f56d903d9482d13947acbe9711cc6a64ce5acc139974601",
+      "directDependencies": [
+        "WI-S0-05-01",
+        "WI-S0-05-02",
+        "WI-S0-05-03",
+        "WI-S0-05-04",
+        "WI-S0-05-05"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S0-05-06",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S0-05",
+      "priorityClass": "P0",
+      "releaseClass": "CORE",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 4206
+    },
+    {
+      "authorityLock": "PUBLICATION",
+      "decision": "STOP",
+      "dependencyNotesHash": "5ec2dd2b3ee8fd8467438d9d47a4652744e9529f5dd2bef5960c1fed8876181a",
+      "directDependencies": [],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S3-01-01",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S3-01",
+      "priorityClass": "P0",
+      "releaseClass": "MVP_EXTENSION",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 8001
+    },
+    {
+      "authorityLock": "PUBLICATION",
+      "decision": "STOP",
+      "dependencyNotesHash": "50aca464db15c64c710de3e96beab2570d8a6368cb9cb9e54dc68d4595c008f9",
+      "directDependencies": [
+        "WI-S3-01-01"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S3-01-02",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S3-01",
+      "priorityClass": "P0",
+      "releaseClass": "MVP_EXTENSION",
+      "requiredGates": [
+        "G0",
+        "G2",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 8002
+    },
+    {
+      "authorityLock": "PUBLICATION",
+      "decision": "STOP",
+      "dependencyNotesHash": "82045f1fcc5e0bdb31237ba0a1ad856e27816096dd6da84092d67d57603f610b",
+      "directDependencies": [
+        "WI-S3-01-01",
+        "WI-S3-01-02"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S3-01-03",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S3-01",
+      "priorityClass": "P1",
+      "releaseClass": "MVP_EXTENSION",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 8003
+    },
+    {
+      "authorityLock": "PUBLICATION",
+      "decision": "STOP",
+      "dependencyNotesHash": "b7374658336f00f459fe003ab7fa1cc87c91eb34896c8d39766024746dabd2e2",
+      "directDependencies": [
+        "WI-S3-01-02",
+        "WI-S3-01-03"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING"
+      },
+      "id": "WI-S3-01-04",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S3-01",
+      "priorityClass": "P1",
+      "releaseClass": "MVP_EXTENSION",
+      "requiredGates": [
+        "G0",
+        "G2",
+        "G3"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 8004
+    },
+    {
+      "authorityLock": "PUBLICATION",
+      "decision": "STOP",
+      "dependencyNotesHash": "e3c8978d1c87afe797652f955167cc8357dc83c6e47d5375c27ebeb6c0715590",
+      "directDependencies": [
+        "WI-S3-01-01",
+        "WI-S3-01-02",
+        "WI-S3-01-03",
+        "WI-S3-01-04"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S3-01-05",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S3-01",
+      "priorityClass": "P0",
+      "releaseClass": "MVP_EXTENSION",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 8005
+    },
+    {
+      "authorityLock": "PUBLICATION",
+      "decision": "STOP",
+      "dependencyNotesHash": "63813dd46be3592d206c01e79b4b3cba67549841a6292b93a2a922ecf5bda5d0",
+      "directDependencies": [
+        "WI-S3-01-04",
+        "WI-S3-01-05"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S3-01-06",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S3-01",
+      "priorityClass": "P1",
+      "releaseClass": "MVP_EXTENSION",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 8006
+    },
+    {
+      "authorityLock": "PUBLICATION",
+      "decision": "STOP",
+      "dependencyNotesHash": "6e55922873e8a1d0f7c5e277d27550b55aacba64f8aea36600ea2803804ff002",
+      "directDependencies": [
+        "WI-S3-01-02",
+        "WI-S3-01-03",
+        "WI-S3-01-04",
+        "WI-S3-01-05",
+        "WI-S3-01-06"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S3-01-07",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S3-01",
+      "priorityClass": "P0",
+      "releaseClass": "MVP_EXTENSION",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 8007
+    },
+    {
+      "authorityLock": "PUBLICATION",
+      "decision": "STOP",
+      "dependencyNotesHash": "19f9e940289c2adf934ba7609ef4e86c280563e45bc31e50f1c0e1f51fd4e06c",
+      "directDependencies": [
+        "WI-S3-01-01",
+        "WI-S3-01-02",
+        "WI-S3-01-03",
+        "WI-S3-01-04",
+        "WI-S3-01-05",
+        "WI-S3-01-06",
+        "WI-S3-01-07"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S3-01-08",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S3-01",
+      "priorityClass": "P1",
+      "releaseClass": "MVP_EXTENSION",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 8008
+    },
+    {
+      "authorityLock": "PUBLICATION",
+      "decision": "STOP",
+      "dependencyNotesHash": "5e1afca67f5c563791a9016ded343a12dbd8e244ea5916de65f49ab6fc0b2930",
+      "directDependencies": [
+        "WI-S3-01-01",
+        "WI-S3-01-02",
+        "WI-S3-01-03",
+        "WI-S3-01-04",
+        "WI-S3-01-05",
+        "WI-S3-01-06",
+        "WI-S3-01-07",
+        "WI-S3-01-08"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-S3-01-09",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-S3-01",
+      "priorityClass": "P0",
+      "releaseClass": "MVP_EXTENSION",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 8009
+    },
+    {
+      "authorityLock": "VOICE_DH_GOVERNANCE",
+      "decision": "STOP",
+      "dependencyNotesHash": "a68fac01a0e0dbce0a3468ae695bbb64c051c6ee0b3fd622cf8c04c81c60a4e1",
+      "directDependencies": [],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-V0-01-01",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-V0-01",
+      "priorityClass": "P0",
+      "releaseClass": "MVP_EXTENSION",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 8101
+    },
+    {
+      "authorityLock": "VOICE_DH_GOVERNANCE",
+      "decision": "STOP",
+      "dependencyNotesHash": "6af832e6354c97d3a7b03fe7a3900217c0db972855cb450c35c5104146d3dedd",
+      "directDependencies": [
+        "WI-V0-01-01"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-V0-01-02",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-V0-01",
+      "priorityClass": "P0",
+      "releaseClass": "MVP_EXTENSION",
+      "requiredGates": [
+        "G0",
+        "G2",
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 8102
+    },
+    {
+      "authorityLock": "VOICE_DH_GOVERNANCE",
+      "decision": "STOP",
+      "dependencyNotesHash": "76987bfeecedd5b52d97ee13fc46aa5d72f9d0831c17a7b0ecd6b56cae117bcd",
+      "directDependencies": [
+        "WI-V0-01-01",
+        "WI-V0-01-02"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-V0-01-03",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-V0-01",
+      "priorityClass": "P0",
+      "releaseClass": "MVP_EXTENSION",
+      "requiredGates": [
+        "G0",
+        "G2",
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 8103
+    },
+    {
+      "authorityLock": "VOICE_DH_GOVERNANCE",
+      "decision": "STOP",
+      "dependencyNotesHash": "a14d4c491eda2f33fea057cd52eea46e7b4d2f0ba3eab7e1485f48510639a48d",
+      "directDependencies": [
+        "WI-V0-01-01",
+        "WI-V0-01-02"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING"
+      },
+      "id": "WI-V0-01-04",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-V0-01",
+      "priorityClass": "P0",
+      "releaseClass": "MVP_EXTENSION",
+      "requiredGates": [
+        "G0",
+        "G2",
+        "G3"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 8104
+    },
+    {
+      "authorityLock": "VOICE_DH_GOVERNANCE",
+      "decision": "STOP",
+      "dependencyNotesHash": "036caeefb10c8fd3d66e0dad6ae42ae32a03133bd2eafeb9c485ef2a45483b3d",
+      "directDependencies": [
+        "WI-V0-01-01",
+        "WI-V0-01-02",
+        "WI-V0-01-03",
+        "WI-V0-01-04"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G3": "MISSING"
+      },
+      "id": "WI-V0-01-05",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-V0-01",
+      "priorityClass": "P1",
+      "releaseClass": "MVP_EXTENSION",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G3"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 8105
+    },
+    {
+      "authorityLock": "VOICE_DH_GOVERNANCE",
+      "decision": "STOP",
+      "dependencyNotesHash": "fdf4893297b002ed2be34bb087ddadd3e324dcea0a7baa11de7c1047aa1583a8",
+      "directDependencies": [
+        "WI-V0-01-01",
+        "WI-V0-01-02",
+        "WI-V0-01-04",
+        "WI-V0-01-05"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-V0-01-06",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-V0-01",
+      "priorityClass": "P1",
+      "releaseClass": "MVP_EXTENSION",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 8106
+    },
+    {
+      "authorityLock": "VOICE_DH_GOVERNANCE",
+      "decision": "STOP",
+      "dependencyNotesHash": "f68ddc574cb6d3512d0d436d8bc31bfd558082941bb7c2762dd8ff6e86ab15bd",
+      "directDependencies": [
+        "WI-V0-01-01",
+        "WI-V0-01-02",
+        "WI-V0-01-05",
+        "WI-V0-01-06"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-V0-01-07",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-V0-01",
+      "priorityClass": "P0",
+      "releaseClass": "MVP_EXTENSION",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 8107
+    },
+    {
+      "authorityLock": "VOICE_DH_GOVERNANCE",
+      "decision": "STOP",
+      "dependencyNotesHash": "57f6fd1539d7bcec688dac65c8892932c2a79a3881667346ec818b08da9c096e",
+      "directDependencies": [
+        "WI-V0-01-01",
+        "WI-V0-01-02",
+        "WI-V0-01-04"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-V0-01-08",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-V0-01",
+      "priorityClass": "P1",
+      "releaseClass": "MVP_EXTENSION",
+      "requiredGates": [
+        "G0",
+        "G2",
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 8108
+    },
+    {
+      "authorityLock": "VOICE_DH_GOVERNANCE",
+      "decision": "STOP",
+      "dependencyNotesHash": "55a339a6cfb019604d774dc0fc1050235528646ca9d6dbf4be9dbab4fd7ea1c4",
+      "directDependencies": [
+        "WI-V0-01-06",
+        "WI-V0-01-07",
+        "WI-V0-01-08",
+        "WI-S1-03-06",
+        "WI-S1-03-07",
+        "WI-S1-03-08"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-V0-01-09",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-V0-01",
+      "priorityClass": "P1",
+      "releaseClass": "MVP_EXTENSION",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 8109
+    },
+    {
+      "authorityLock": "VOICE_DH_GOVERNANCE",
+      "decision": "STOP",
+      "dependencyNotesHash": "8162ca36bde7bfbc4504d58cafbeccafbc3d2a1a5574e28af0d97d1a1d92a697",
+      "directDependencies": [
+        "WI-V0-01-01",
+        "WI-V0-01-02",
+        "WI-V0-01-03",
+        "WI-V0-01-04",
+        "WI-V0-01-05",
+        "WI-V0-01-06",
+        "WI-V0-01-07",
+        "WI-V0-01-08",
+        "WI-V0-01-09"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-V0-01-10",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-V0-01",
+      "priorityClass": "P0",
+      "releaseClass": "MVP_EXTENSION",
+      "requiredGates": [
+        "G0",
+        "G2",
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 8110
+    },
+    {
+      "authorityLock": "VOICE_DH_GOVERNANCE",
+      "decision": "STOP",
+      "dependencyNotesHash": "9c89ccde6c17ca6b7b198e5d32f31b3136b575082f8dfd508ff7d52e3c26cb0b",
+      "directDependencies": [
+        "WI-V0-01-01",
+        "WI-V0-01-02",
+        "WI-V0-01-03",
+        "WI-V0-01-04",
+        "WI-V0-01-05",
+        "WI-V0-01-06",
+        "WI-V0-01-07",
+        "WI-V0-01-08",
+        "WI-V0-01-09",
+        "WI-V0-01-10"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-V0-01-11",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-V0-01",
+      "priorityClass": "P1",
+      "releaseClass": "MVP_EXTENSION",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 8111
+    },
+    {
+      "authorityLock": "MIGRATION_EVIDENCE",
+      "decision": "NO_GO",
+      "dependencyNotesHash": "75dcbd921d15eb9042f8bb0ceb97e72748c5b1f78dd2d0729a4cf2450190a9cb",
+      "directDependencies": [],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING"
+      },
+      "id": "WI-MIG-01-01",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-MIG-01",
+      "priorityClass": "P0",
+      "releaseClass": "MIGRATION",
+      "requiredGates": [
+        "G0",
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 9001
+    },
+    {
+      "authorityLock": "MIGRATION_EVIDENCE",
+      "decision": "NO_GO",
+      "dependencyNotesHash": "89902adfa270260886c6b592ea4668bc618c346a30adb6d32db4f203caf0f110",
+      "directDependencies": [
+        "WI-MIG-01-01"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING"
+      },
+      "id": "WI-MIG-01-02",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-MIG-01",
+      "priorityClass": "P0",
+      "releaseClass": "MIGRATION",
+      "requiredGates": [
+        "G0",
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 9002
+    },
+    {
+      "authorityLock": "MIGRATION_EVIDENCE",
+      "decision": "NO_GO",
+      "dependencyNotesHash": "186aa9999bbecdb1279bd3a013bc31ff5ebe842e804443a8e102312b32db6c9e",
+      "directDependencies": [
+        "WI-MIG-01-01",
+        "WI-MIG-01-02"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-MIG-01-03",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-MIG-01",
+      "priorityClass": "P0",
+      "releaseClass": "MIGRATION",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 9003
+    },
+    {
+      "authorityLock": "MIGRATION_EVIDENCE",
+      "decision": "NO_GO",
+      "dependencyNotesHash": "6d7c7f7e36e60bec079d39d39c6e24f5f5a2ff711bee0ab97a78e14570a925dc",
+      "directDependencies": [
+        "WI-MIG-01-01",
+        "WI-MIG-01-02",
+        "WI-MIG-01-03"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING"
+      },
+      "id": "WI-MIG-01-04",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-MIG-01",
+      "priorityClass": "P0",
+      "releaseClass": "MIGRATION",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 9004
+    },
+    {
+      "authorityLock": "MIGRATION_EVIDENCE",
+      "decision": "NO_GO",
+      "dependencyNotesHash": "4130282cad395a5d3b3db0852e4c28452f69cce7dc6baec213168ddcc3b6200c",
+      "directDependencies": [
+        "WI-MIG-01-01",
+        "WI-MIG-01-02",
+        "WI-MIG-01-03",
+        "WI-MIG-01-04"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING"
+      },
+      "id": "WI-MIG-01-05",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-MIG-01",
+      "priorityClass": "P0",
+      "releaseClass": "MIGRATION",
+      "requiredGates": [
+        "G0",
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 9005
+    },
+    {
+      "authorityLock": "MIGRATION_EVIDENCE",
+      "decision": "NO_GO",
+      "dependencyNotesHash": "4a421e696545f65842f2db1c521f5f751ad3a8ed73434c453c37592aaf4cceda",
+      "directDependencies": [
+        "WI-MIG-01-05"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING"
+      },
+      "id": "WI-MIG-01-06",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-MIG-01",
+      "priorityClass": "P0",
+      "releaseClass": "MIGRATION",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 9006
+    },
+    {
+      "authorityLock": "MIGRATION_EVIDENCE",
+      "decision": "NO_GO",
+      "dependencyNotesHash": "66b30a307b126d487ac73674eb5f3a8f0c0eb67eb0e19fb55b22fd4ec4fb4573",
+      "directDependencies": [
+        "WI-MIG-01-06"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-MIG-01-07",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-MIG-01",
+      "priorityClass": "P0",
+      "releaseClass": "MIGRATION",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G3",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 9007
+    },
+    {
+      "authorityLock": "MIGRATION_EVIDENCE",
+      "decision": "NO_GO",
+      "dependencyNotesHash": "83e200b06fc135453e4fad4cf4f5992786d9d38136c3578670dc5b386c1cd7c1",
+      "directDependencies": [
+        "WI-MIG-01-01",
+        "WI-MIG-01-02",
+        "WI-MIG-01-03",
+        "WI-MIG-01-04",
+        "WI-MIG-01-05",
+        "WI-MIG-01-06",
+        "WI-MIG-01-07"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING"
+      },
+      "id": "WI-MIG-01-08",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-MIG-01",
+      "priorityClass": "P0",
+      "releaseClass": "MIGRATION",
+      "requiredGates": [
+        "G0",
+        "G2"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 9008
+    },
+    {
+      "authorityLock": "MIGRATION_EVIDENCE",
+      "decision": "NO_GO",
+      "dependencyNotesHash": "8f9c1cdedd8c489d489cf4bd434716922e450b485686f637943cc670f5091d1a",
+      "directDependencies": [
+        "WI-MIG-01-08"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G4": "MISSING"
+      },
+      "id": "WI-MIG-01-09",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-MIG-01",
+      "priorityClass": "P0",
+      "releaseClass": "MIGRATION",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G4"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 9009
+    },
+    {
+      "authorityLock": "MIGRATION_EVIDENCE",
+      "decision": "NO_GO",
+      "dependencyNotesHash": "d849d78570d58a225ad529fe79c724102ea91082e2eb4674976a3ef9db9002a5",
+      "directDependencies": [
+        "WI-MIG-01-09"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G1": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING"
+      },
+      "id": "WI-MIG-01-10",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-MIG-01",
+      "priorityClass": "P0",
+      "releaseClass": "MIGRATION",
+      "requiredGates": [
+        "G0",
+        "G1",
+        "G2",
+        "G3"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 9010
+    },
+    {
+      "authorityLock": "MIGRATION_EVIDENCE",
+      "decision": "NO_GO",
+      "dependencyNotesHash": "cfeed9f87034a5f454db5d97b91ec32602b9e3c959ad8530030f795755bbfafe",
+      "directDependencies": [
+        "WI-MIG-01-10"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING"
+      },
+      "id": "WI-MIG-01-11",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-MIG-01",
+      "priorityClass": "P0",
+      "releaseClass": "MIGRATION",
+      "requiredGates": [
+        "G0",
+        "G2",
+        "G3"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 9011
+    },
+    {
+      "authorityLock": "MIGRATION_EVIDENCE",
+      "decision": "NO_GO",
+      "dependencyNotesHash": "de629d1f4f43801c4f5856508e1cee879b755a6feb1e857573a80271366317fa",
+      "directDependencies": [
+        "WI-MIG-01-11"
+      ],
+      "executionOwner": "UNASSIGNED",
+      "gateEvidence": {
+        "G0": "MISSING",
+        "G2": "MISSING",
+        "G3": "MISSING"
+      },
+      "id": "WI-MIG-01-12",
+      "lifecycle": "PLANNED",
+      "packageId": "WP-MIG-01",
+      "priorityClass": "P0",
+      "releaseClass": "MIGRATION",
+      "requiredGates": [
+        "G0",
+        "G2",
+        "G3"
+      ],
+      "sourceFieldCount": 16,
+      "stableRank": 9012
+    }
+  ]
+}
