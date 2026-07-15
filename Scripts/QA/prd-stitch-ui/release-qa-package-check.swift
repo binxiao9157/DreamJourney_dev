@@ -118,6 +118,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-06-19-archive-analysis-backend-contract.md",
     "docs/superpowers/status/2026-07-11-knowledge-mutation-privacy-canonicalization.md",
     "docs/superpowers/status/2026-07-11-family-knowledge-authorization-boundary.md",
+    "docs/superpowers/status/2026-07-15-wi-s0-03-01-credential-inventory.md",
     "docs/superpowers/status/2026-06-19-archive-image-analysis-live-chain.md",
     "docs/superpowers/status/2026-06-19-archive-image-analysis-runtime-contract.md",
     "docs/superpowers/status/2026-06-19-archive-image-analysis-runtime-ui.md",
@@ -189,6 +190,7 @@ assertContains(matrix, "DJEnableArchiveHiddenBranches", "release matrix should d
 assertContains(matrix, "DJEnableProfileHiddenBranches", "release matrix should document profile hidden QA arg")
 
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
+let credentialInventoryRunner = read("Scripts/QA/prd-stitch-ui/run-credential-inventory-scan.sh")
 let knowledgeGovernanceGate = read("Scripts/QA/prd-stitch-ui/run-knowledge-governance-gate.sh")
 let knowledgeSourceIdentityGate = read("Scripts/QA/prd-stitch-ui/run-knowledge-source-identity-gate.sh")
 let knowledgePrivacyMaintenanceGate = read("Scripts/QA/prd-stitch-ui/run-knowledge-privacy-maintenance-gate.sh")
@@ -199,6 +201,10 @@ let knowledgeGovernanceStatus = read("docs/superpowers/status/2026-07-11-knowled
 let oneCommandRegression = read("docs/superpowers/status/2026-06-18-one-command-release-regression.md")
 assertContains(releaseRegression, "Release handoff mode forces release-like backend acceptance", "release handoff mode should document forced backend acceptance")
 assertContains(releaseRegression, "RUN_RELEASE_LIKE_BACKEND=1", "release handoff mode should force release-like backend acceptance")
+assertContains(releaseRegression, "RUN_CREDENTIAL_INVENTORY_SCAN", "release regression should expose the credential inventory gate")
+assertContains(releaseRegression, "run-credential-inventory-scan.sh", "release regression should invoke the credential inventory runner")
+assertContains(credentialInventoryRunner, "credential-inventory-scanner.py", "credential inventory runner should invoke the value-free scanner")
+assertContains(credentialInventoryRunner, "CREDENTIAL_SCAN_ENFORCE", "credential inventory runner should support release enforcement")
 assertContains(releaseRegression, "RUN_PUBLIC_MVP_REGRESSION", "release regression should expose the public MVP minimum regression gate")
 assertContains(releaseRegression, "RUN_PUBLIC_MVP_REGRESSION forces RUN_P0_ARCHIVE_ECHO_REGRESSION and RUN_P0_PROFILE_CARE_REGRESSION", "public MVP gate should force both P0 gates")
 assertContains(releaseRegression, "RUN_P0_ARCHIVE_ECHO_REGRESSION", "release regression should expose public MVP Archive -> Echo P0 gate")

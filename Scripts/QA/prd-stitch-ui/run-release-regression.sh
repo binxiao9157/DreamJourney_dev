@@ -37,6 +37,7 @@ RUN_KNOWLEDGE_PROPOSAL_PERSONA_GATE="${RUN_KNOWLEDGE_PROPOSAL_PERSONA_GATE:-0}"
 RUN_KNOWLEDGE_GOVERNANCE_GATE="${RUN_KNOWLEDGE_GOVERNANCE_GATE:-0}"
 RUN_KNOWLEDGE_PRIVACY_MAINTENANCE_GATE="${RUN_KNOWLEDGE_PRIVACY_MAINTENANCE_GATE:-1}"
 RUN_KNOWLEDGE_RECEIPT_MAINTENANCE_GATE="${RUN_KNOWLEDGE_RECEIPT_MAINTENANCE_GATE:-0}"
+RUN_CREDENTIAL_INVENTORY_SCAN="${RUN_CREDENTIAL_INVENTORY_SCAN:-0}"
 RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE="${RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE:-0}"
 RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE="${RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE:-0}"
 RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE="${RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE:-0}"
@@ -90,6 +91,9 @@ if [[ "$RELEASE_HANDOFF_MODE" == "1" ]]; then
   # Release handoff mode forces hidden media combo gate so mock audio/video
   # detail states and deployed /archive/items field persistence stay aligned.
   RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE=1
+  # Release handoff must inventory source/history/container and supplied
+  # release artifacts without emitting credential values.
+  RUN_CREDENTIAL_INVENTORY_SCAN=1
 else
   RUN_RELEASE_LIKE_BACKEND="${RUN_RELEASE_LIKE_BACKEND:-0}"
 fi
@@ -140,6 +144,7 @@ Run ID: \`$RUN_ID\`
 - Knowledge source identity cross-repository gate: \`always\`
 - Knowledge privacy maintenance local gate: \`$RUN_KNOWLEDGE_PRIVACY_MAINTENANCE_GATE\`
 - Knowledge receipt maintenance full gate: \`$RUN_KNOWLEDGE_RECEIPT_MAINTENANCE_GATE\`
+- Credential inventory scan: \`$RUN_CREDENTIAL_INVENTORY_SCAN\`
 - Backend archive image-analysis smoke: \`$RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE\`
 - Backend hidden media sync smoke: \`$RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE\`
 - Backend time-letter lifecycle smoke: \`$RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE\`
@@ -192,6 +197,7 @@ Run ID: \`$RUN_ID\`
 - Optional knowledge governance/source-cascade gate when \`RUN_KNOWLEDGE_GOVERNANCE_GATE=1\`; this verifies typed iOS actions, durable outbox, generation gating, three-way compatibility, public UI non-exposure, and deterministic backend governance/Archive cascade behavior without a true device or deployed database.
 - Local knowledge privacy maintenance gate when \`RUN_KNOWLEDGE_PRIVACY_MAINTENANCE_GATE=1\`; this verifies canonical mutation, dry-run/apply idempotency, rollback, redacted aggregate reporting, and default no-production-write behavior with fixtures only.
 - Knowledge receipt maintenance static contract always runs; \`RUN_KNOWLEDGE_RECEIPT_MAINTENANCE_GATE=1\` adds the full backend fixture smoke for compact writer/reader, fingerprint-first replay, dirty compact canonicalization, and dry-run-only maintenance safety.
+- Optional credential inventory scan when \`RUN_CREDENTIAL_INVENTORY_SCAN=1\`; release handoff forces value-free source/history/container enforcement and can additionally require APP/IPA/dSYM roots.
 - Optional deployed backend archive image-analysis smoke when \`RUN_BACKEND_ARCHIVE_IMAGE_ANALYSIS_SMOKE=1\`.
 - Optional deployed backend hidden media sync smoke when \`RUN_BACKEND_HIDDEN_MEDIA_SYNC_SMOKE=1\`; this verifies mock audio/video/time-letter archive contracts without true-device media capture.
 - Optional deployed backend time-letter lifecycle smoke when \`RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE=1\`; this verifies draft edit, seal, upsert, delete, due dispatch, idempotency, and owner/recipient in-app reminder metadata contracts.
@@ -251,6 +257,7 @@ append_report_footer() {
 - Knowledge privacy maintenance cross-repository gate: \`static-guards/knowledge-privacy-maintenance-gate.log\`
 - Knowledge receipt maintenance static contract: \`static-guards/knowledge-receipt-maintenance-contract-check.log\`
 - Knowledge receipt maintenance full gate: \`static-guards/knowledge-receipt-maintenance-gate.log\`
+- Credential inventory scan: \`credential-inventory/$RUN_ID/credential-inventory.json\`
 - Backend archive image-analysis smoke: \`backend-archive-image-analysis-smoke/$RUN_ID/\`
 - Backend hidden media sync smoke: \`backend-hidden-media-sync-smoke/$RUN_ID/\`
 - Backend time-letter lifecycle smoke: \`backend-time-letter-lifecycle-smoke/$RUN_ID/\`
@@ -307,6 +314,24 @@ run_step "Python QA scripts compile" "$STATIC_LOG_DIR/python-qa-compile.log" \
     "$SCRIPT_DIR/backend-digital-human-session-smoke.py" \
     "$SCRIPT_DIR/backend-voice-clone-deployed-smoke.py" \
     "$SCRIPT_DIR/backend-voice-synthesis-viseme-smoke.py"
+
+if [[ "$RUN_CREDENTIAL_INVENTORY_SCAN" == "1" ]]; then
+  mkdir -p "$OUTPUT_DIR/credential-inventory/$RUN_ID"
+  run_step \
+    "Credential inventory scan" \
+    "$OUTPUT_DIR/credential-inventory/$RUN_ID/scan.log" \
+    env \
+      BACKEND_ROOT="$BACKEND_ROOT" \
+      RUN_ID="$RUN_ID" \
+      OUTPUT_ROOT="$OUTPUT_DIR/credential-inventory" \
+      CREDENTIAL_SCAN_ENFORCE=1 \
+      CREDENTIAL_SCAN_REQUIRE_RELEASE_ARTIFACTS="${CREDENTIAL_SCAN_REQUIRE_RELEASE_ARTIFACTS:-0}" \
+      "$SCRIPT_DIR/run-credential-inventory-scan.sh"
+else
+  mkdir -p "$OUTPUT_DIR/credential-inventory/$RUN_ID"
+  echo "Skipped by RUN_CREDENTIAL_INVENTORY_SCAN=0" \
+    > "$OUTPUT_DIR/credential-inventory/$RUN_ID/skipped.txt"
+fi
 
 run_step "Swift model guard profile-care-snapshot-check" "$STATIC_LOG_DIR/profile-care-snapshot-check.log" \
   bash -lc "swiftc -parse-as-library '$ROOT_DIR/DreamJourney/Sources/Modules/Profile/ProfileCareModels.swift' '$SCRIPT_DIR/profile-care-snapshot-check.swift' -o '$STATIC_LOG_DIR/profile-care-snapshot-check' && '$STATIC_LOG_DIR/profile-care-snapshot-check' '$ROOT_DIR'"
