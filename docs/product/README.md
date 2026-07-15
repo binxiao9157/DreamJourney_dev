@@ -18,6 +18,8 @@
 
 ## 派生与参考材料
 
+- `DreamJourney_V4_开发前问题与决策收敛清单_V1.0.md` 记录 2026-07-15 五项产品细节的确认回执与实施交接；正式权威口径已经回写 Product Spec、决策登记册和既有路线图。
+- `../superpowers/plans/2026-07-15-dreamjourney-v4-confirmed-decisions-execution-plan.md` 是确认后的派生执行切片，不新增 Work Item，不覆盖 115 项正式路线图、Registry stableRank 或 Gate。
 - `DreamJourney_V4_路线追踪矩阵_V1.0.md` 与 `DreamJourney_V4_路线执行注册表_V1.0.json` 是生成产物，不应手工编辑。
 - `reviews/` 和 Round 2/3 文档是评审证据，不覆盖 Product Spec 或决策登记册。
 - PRD、V3 Blueprint、Hermes/AOS 分析和历史一致性分析是输入材料，不是 V4 当前实现证明。

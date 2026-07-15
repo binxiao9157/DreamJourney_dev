@@ -1,9 +1,10 @@
 # DreamJourney V4 产品定义与目标架构 Product Spec
 
-版本：V4.2 Product Confirmed Baseline + Staged Validation + Startup Lean Profile
+版本：V4.3 Product Confirmed Baseline + Development Detail Decisions
 初版日期：2026-07-12
 更新日期：2026-07-15
 状态：独立方案评审40项产品回复及三级验证策略确认已同步为产品范围基线；工程实现、法律/供应商外部门、G2-G4与发布批准仍独立验收
+产品细节确认批次：2026-07-15 五项开发前确认已回写，详见 0.4 和决策登记册 3.8。
 工程基线：iOS `feature/prd-stitch-ui-adaptation@8a1922b`；Backend `main@4c0538b`
 评审控制面：[DreamJourney V4 评审与验收清单](./DreamJourney_V4_评审与验收清单_V1.0.md)
 定稿边界：本文件已完成产品/架构文档评审，不表示 115 个 Work Item 已实现、G2-G4 已关闭或已获发布批准。
@@ -57,13 +58,23 @@ Product Spec 标签与决策登记册状态不是同一个状态轴，映射如�
 3. Product MVP 必须具备手机号登录、本人/纪念人物档案、家庭人物切换和贡献、文字问答、家庭授权 Publication/Visitor、声音复刻；数字人、非必要媒体理解为 Beta Extension，Care/TimeLetter 后置。
 4. 维持“记忆档案/回响/我的”三个主 Tab。
 5. 产品覆盖全年龄人物资料；未成年人由经核验监护人创建和管理。未成年人 Voice/Persona、外部 AI 和公开用途仍需专项法律与 Provider Gate。
-6. 未确认材料通过问答追问形成 Candidate，在退出页面前或约5至10轮后批量确认；未确认材料与 AI 输出不能直接成为人物事实。
+6. 未确认材料通过问答追问形成 Candidate 并持续持久化；退出页面或待审核数量/上下文预算达到服务端动态阈值时，以先到者触发批量确认。未确认材料与 AI 输出不能直接成为人物事实，模型上下文截断不得造成业务数据丢失。
 7. 家庭查询使用独立、可过期、可撤回的授权上下文；Visitor 默认 TTL 为7天，主控人默认看不到访问者问题正文。
 8. 首版不提供自助批量导出，但法定数据权利请求不能被协议排除；账号注销采用30日恢复，上传人删除自己的 Source 为不可撤回操作并触发依赖暂停。
 9. 声音复刻进入 Product MVP，数字人受控 Beta Extension；用途授权、来源绑定、AI 标识、资产删除和 Provider fail-closed 为强制合同。
 10. 接受 WTMR、统一测量合同和 Projection/Retrieval DFX；精确商业成本与配额参数暂缓，但工程硬配额、熔断和文字降级必须首发具备。
 
 产品希望由监护人/纪念账户主控人承担日常内容、家庭冲突、第三方内容和高风险表达的选择，并在协议中明确责任。该产品意图不能取代中国首发法律、有效第三方权利请求、未成年人保护、供应商数据条款、生成内容标识或平台自身义务；这些仍按 `EXTERNAL_DEPENDENCY` fail-closed。
+
+### 0.4 2026-07-15 开发前产品细节确认
+
+产品经理对[开发前问题与决策收敛清单](./DreamJourney_V4_开发前问题与决策收敛清单_V1.0.md)中的五项细节完成确认。以下内容补充 `DR-003/009/015/037/041/043`，不关闭任何工程或外部 Gate：
+
+1. Product MVP 基线要求 Owner private Voice 与经授权 Family Voice；Visitor Voice 使用独立 capability/cohort，不阻断基础 Product MVP 发布。家庭成员客户端必须解析目标 Owner/Represented Persona 已授权且 active/quality-accepted 的精确 `voiceProfileVersion`；不可用时明确降级，不得借用访问者、上一角色或默认音色冒充。`CONFIRMED`
+2. Closed Pilot 保留照片选择、本地草稿和本机预览，明确显示“仅本机保存/尚未云端保存”；无真实对象、checksum、HEAD/scan/delete receipt 时不得显示已上传、已同步或 verified。`CONFIRMED`
+3. Candidate、Message、Source 和 DecisionReceipt 在对话过程中持续持久化；用户退出页面，或待审核 Candidate 数量/上下文预算达到服务端 policy 动态阈值时，以先到者触发审核。强杀、断网后恢复批次，敏感候选逐条确认；模型上下文截断不得造成业务数据丢失。`CONFIRMED`
+4. Family relationship 支持暂停和终止；任一方可发起，敏感主控关系二次确认。终止立即撤销后续查询 grant，历史贡献和审计保留；重新建立关系必须重新邀请并重新授权，不恢复旧 grant。各类 Source、Publication、TimeLetter 按自身 Authority 和 rights 合同处理。`CONFIRMED`
+5. 首批 Closed Pilot 只开放 Adult Self；Memorial Controller 在死亡事实、亲属关系和主控任命闭环可验证后进入第二 cohort；Guardian/未成年人保持独立 G4 cohort。该顺序不缩减长期产品范围。`CONFIRMED`
 
 ## 1. 执行摘要
 
@@ -167,14 +178,14 @@ Family Contributor 是纪念场景的协作者；Visitor、Operator 和 Admin �
 范围：
 
 - Persona 最小初始化，不承载 AI 推断人格。
-- 文字输入和现有可可靠保存的资料形成 Source。
-- 异步生成 Candidate，通过自然问答追问补齐；退出页面前或约5至10轮后提供批量确认、纠正、拒绝和敏感逐条审核，不在每轮对话后弹确认。
+- 文字输入和现有可可靠保存的资料形成 Source；照片可作为 owner-scoped 本地草稿和本机预览，但必须明确未云端保存，不成为 verified SourceObject。
+- 异步生成 Candidate，通过自然问答追问补齐并持续持久化；退出页面或服务端 policy 判定待审核数量/上下文预算达到动态阈值时，以先到者提供批量确认、纠正、拒绝和敏感逐条审核，不在每轮对话后弹确认。
 - 形成 Canonical Memory 与不可覆盖的版本历史。
 - Knowledge Projection 由权威记忆生成，不反向成为事实源。
 - 提供文字优先的 Owner QA、来源引用、回答反馈和纠正入口。
 - 支持 Source/Memory 查看和删除闭环；首版不提供自助批量导出，法定数据权利请求通过人工受理和回执执行。
 - 支持同一受控 Owner/纪念账户主控人的私人文字闭环；Closed Pilot 不以家庭切换、家庭贡献或外部查询作为退出依赖。
-- 所有入口受 Closed Pilot cohort、ReleasePolicy、审计和回退控制，不开放匿名 Visitor，不训练声音，不启动数字人。
+- 所有入口受 Closed Pilot cohort、ReleasePolicy、审计和回退控制；首批只开放 Adult Self，不开放匿名 Visitor，不训练声音，不启动数字人。Memorial Controller 和 Guardian/未成年人分别按后续 cohort 与 G4 放行。
 
 非目标：Family/人物切换与贡献、Publication/Visitor、Voice Clone、Digital Human、非必要媒体理解、复杂实体图谱、Care 和 TimeLetter 不阻塞 Closed Pilot 退出。前三项仍是 Product MVP 必需切片，不因 Closed Pilot 通过而被删除或视为已验收。
 
@@ -208,6 +219,8 @@ Family Contributor 是纪念场景的协作者；Visitor、Operator 和 Admin �
 ### 3.5 Product MVP-V：Voice Clone；Beta Extension：Digital Human
 
 声音复刻是 Product MVP 完成门，Digital Human 是独立 Beta Extension；两者均不能阻断 Closed Pilot 或 Product MVP 的文字 QA 降级可用性。`CONFIRMED`
+
+Owner private Voice 与经授权 Family Voice 构成基础 Voice MVP 退出范围；Visitor Voice 保留正式 purpose/Publication/answer 合同，但作为独立 capability/cohort，不阻断基础 Product MVP 发布。`CONFIRMED`
 
 | Beta | 范围 | 进入门 | 退出门 |
 | --- | --- | --- | --- |
@@ -835,7 +848,7 @@ requested -> access_revoked -> purging -> completed
 | Operations | Job/Outbox、幂等、重试、成本/模型/prompt trace、关键操作审计和最小权限运营 | 本地日志、单次 smoke 或 provider log ID | `FR-OPS-001`、`FR-OPS-002`、`FR-OPS-003` |
 | Voice / Digital Human | 主体证明、独立用途授权、质量/活体、训练/试听/启停/删除回执、Owner/Visitor 分轨和真实设备/provider 验收 | provider ready、模拟器 PCM、数字人显示或一次真机有声 | `FR-VOICE-001` 至 `FR-VOICE-005` |
 
-MVP 的最小完成定义是：一个完成手机号强验证的成年人 Self Owner、Memorial Controller 或 Guardian Controller 可以提交文字 Source，通过引导问答积累素材，在退出或每 5–10 轮后批量审核 Candidate，形成版本化已确认记忆，用文字提问获得带来源回答并纠错；可以邀请家庭成员在授权范围贡献或查询，生成与私人 Authority 隔离的 PublicationVersion 并向已认证/受邀 Visitor 提供受控查询；Owner 私人回响支持已授权 Voice Clone，并在声音不可用时明确降级为文字。账号注销、Source 删除、恢复和人工数据权利回执必须闭环；首版不要求自助批量导出，也不以 Digital Human Beta、Care 或 TimeLetter 作为发布前提。`CONFIRMED`
+MVP 的最小完成定义是：一个完成手机号强验证的成年人 Self Owner、Memorial Controller 或 Guardian Controller 可以提交文字 Source，通过引导问答积累素材，在退出或动态审核阈值先到时批量审核已持续持久化的 Candidate，形成版本化已确认记忆，用文字提问获得带来源回答并纠错；可以邀请家庭成员在授权范围贡献或查询，生成与私人 Authority 隔离的 PublicationVersion 并向已认证/受邀 Visitor 提供受控文字查询；Owner 私人回响和经授权 Family 回响支持对应人物 Voice Clone，并在声音不可用时明确降级为文字。Visitor Voice 是独立 capability/cohort，不阻断该基础 MVP。账号注销、Source 删除、恢复和人工数据权利回执必须闭环；首版不要求自助批量导出，也不以 Digital Human Beta、Care 或 TimeLetter 作为发布前提。首批 Closed Pilot 只开放 Adult Self，Memorial Controller 与 Guardian/未成年人按独立 cohort/G4 顺序进入。`CONFIRMED`
 
 ## 15. AI、检索与安全行为合同
 
@@ -852,6 +865,8 @@ MVP 的最小完成定义是：一个完成手机号强验证的成年人 Self O
 - 每条 Candidate 必须引用至少一个 Source span/object、提取版本和内容类型。
 - 事实陈述、主观回忆、情绪观察、关系评价和 AI 推断使用不同类型，不互相升级。
 - 批量确认不得包含 high/unknown sensitivity、第三方负面评价或未成年人内容。
+- Message、Source、Candidate 和 DecisionReceipt 必须在对话过程中持续持久化，不依赖模型上下文窗口保存；上下文截断只影响本轮模型输入，不得丢失业务记录。
+- 用户退出页面或待审核 Candidate 数量/上下文预算达到服务端 policy 动态阈值时，以先到者触发审核；后台、强杀和断网后恢复同一批次，首版不向用户暴露轮数设置。
 - 模型失败只改变 processing operation；Source 保持可用，UI 不生成空人物/地点/场景线索。
 - 相同 Source/version/policy 的重试必须幂等，不重复制造审核项。
 
@@ -988,7 +1003,7 @@ MVP 的最小完成定义是：一个完成手机号强验证的成年人 Self O
 
 ### 17.3 Visitor voice / Digital Human
 
-- 家庭/Visitor 语音是 MVP 的受控能力，但只有文字 Visitor、独立声音用途授权、AI/声音披露、滥用治理、7 日会话 TTL、Provider 合同和成本门全部通过后才可对对应 persona 开放；否则保持文字回答。Digital Human 为独立 Beta，不阻塞文字与已批准的声音链路。
+- Family Voice 是基础 Voice MVP 的受控能力；家庭成员客户端必须使用目标 Owner/Represented Persona 对应且已授权的 `voiceProfileVersion`，不得使用访问者、上一角色或默认音色冒充。Visitor Voice 保留 MVP 合同但作为独立 capability/cohort，不阻断基础 Product MVP；只有文字 Visitor、独立声音用途授权、AI/声音披露、滥用治理、7 日会话 TTL、Provider 合同和成本门全部通过后才可开放，否则保持文字回答。Digital Human 为独立 Beta，不阻塞文字与已批准的声音链路。
 - 平台不提供下载并不能保证不会被外部录音；产品必须披露二次传播和冒用风险。
 - Digital Human 必须证明相对音频/文本的增量价值，并完成素材授权、并发、失败降级、口型/声音和真实设备验收。
 - adapter 只隔离调用，不保证声音模型和数字人资产可迁移；provider exit plan 是采购前置。

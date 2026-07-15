@@ -1,9 +1,9 @@
 # DreamJourney V4 产品决策登记册
 
-版本：V1.2 Product Confirmed Baseline + Staged Validation + Startup Lean Profile
+版本：V1.3 Product Confirmed Baseline + Development Detail Decisions
 初版日期：2026-07-12
 更新日期：2026-07-15
-状态：产品负责人已完成独立方案评审的40项回复并追加确认三级验证策略；产品范围选择已同步，法律、供应商、生产与真实用户证据仍按各自 Gate 独立关闭
+状态：产品负责人已完成独立方案评审的40项回复、三级验证策略和开发前五项产品细节确认；产品范围选择已同步，法律、供应商、生产与真实用户证据仍按各自 Gate 独立关闭
 工程基线：iOS `feature/prd-stitch-ui-adaptation@8a1922b`；Backend `main@4c0538b`
 关联：[Product Spec V4](./DreamJourney_V4_产品定义与目标架构_Product_Spec_V4.0.md) · [当前实现证据矩阵](./DreamJourney_V4_当前实现证据矩阵_V1.0.md) · [评审与验收清单](./DreamJourney_V4_评审与验收清单_V1.0.md)
 定稿边界：登记册定稿不等于开放决定获批，不表示 115 个 Work Item 已实现、G2-G4 已关闭或已获发布批准。
@@ -30,19 +30,19 @@
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | DR-001 | C-01：三 Tab vs 四 Tab Blueprint | Product/IA | `CONFIRMED` | 保留“记忆档案/回响/我的”三个主入口；Source、Candidate、Memory、自传和家人管理使用页内层级，不新增主 Tab | 不改主 Tab，不暴露空分身域 | 保持当前信息架构，降低首发 UI 重写 | Product + iOS | 2026-07-15 产品确认；实现仍需 G1 真机验收 |
 | DR-002 | C-02：Publication/Visitor 的 Product MVP 范围 | Product/Scope | `CONFIRMED` | 受控 Publication/Visitor 进入 Product MVP，但仅面向家庭成员或明确授权用户访问独立、可撤回副本；不开放匿名公共访问，不阻塞 Closed Pilot | 没有独立 PublicationVersion、授权上下文和撤回链路时入口关闭 | `WP-S3-01` 是 Product MVP 受控切片；与 Owner 文字核心隔离 | Product | 2026-07-15 产品确认；真实开放仍需身份、隐私、安全与 G2/G4 |
-| DR-003 | C-03：Family/Care/TimeLetter 首发范围 | Product/Scope | `CONFIRMED` | Product MVP 必须具备家庭成员、家庭人物切换和受授权查询；Care、TimeLetter 暂不进入 Product MVP，保留兼容并默认关闭；Family 不阻塞 Closed Pilot | Care/TimeLetter policy 默认关闭；Family 未完成 AuthZ 时只显示不可用 | 家庭基础能力成为 Product MVP 范围，Care/TimeLetter 延后 | Product | 2026-07-15 产品确认 |
+| DR-003 | C-03：Family/Care/TimeLetter 首发范围 | Product/Scope | `CONFIRMED` | Product MVP 必须具备家庭成员、家庭人物切换和受授权查询；Care、TimeLetter 暂不进入 Product MVP，保留兼容并默认关闭；Family 不阻塞 Closed Pilot。Family relationship 支持暂停和终止，任一方可发起且敏感主控关系二次确认；终止立即撤销后续查询 grant，保留历史贡献/审计，重新建立关系必须重新邀请和授权 | Care/TimeLetter policy 默认关闭；Family 未完成 AuthZ 时只显示不可用；关系终止不恢复旧 grant，也不直接物理删除其他 Authority 的历史数据 | 家庭基础能力成为 Product MVP 范围，Care/TimeLetter 延后；关系退出与数据权利分离 | Product | 2026-07-15 产品确认；开发前细节回执同步 |
 | DR-004 | C-04：本人、家人、逝者纪念人格与主控边界 | Product/Rights/Voice | `CONFIRMED` | 经核验的在世主控人可建立 MemorialVault、邀请 Family Contributor 并决定日常产品内使用；逝者是 Represented Persona，不是登录 principal。本人、未成年人和逝者资料分别绑定本人或监护人/主控人证据；Publication、Voice、Portrait、DH 按 purpose 独立。主控人的产品选择不能替代强制法律、有效第三方异议、供应商条款或平台法定义务 | 身份/关系/监护或人工复核缺失时不创建正式 Persona；法律/Provider Gate 未关闭时 Voice/Portrait/DH 保持 blocked | 支持全龄人物资料和家庭共建，同时保留高风险能力外部门 | Product + Privacy/Legal + Architecture | 产品边界已确认；未成年人、第三方和逝者 Voice/DH 仍受 DR-022/026/031/036/037 外部门 |
 | DR-005 | C-05：首版自助导出范围 | Data rights | `CONFIRMED` | 首版不提供用户自助批量导出或下载全部上传内容；服务协议如实说明产品功能边界。但依法必须提供的访问、更正、复制、转移或权利请求渠道不能用协议排除，按人工受理和最小 DataRightsAuthorization 执行 | UI 不显示已支持完整导出；内部 QA 导出不得冒充用户功能；法定权利请求不得拒绝或静默丢失 | 减少首版自助导出工程量，但仍需权利请求受理、身份核验和回执 | Product + Privacy/Legal | 2026-07-15 产品确认；中国首发法律文本与人工流程需 G4 |
 | DR-006 | C-06：独立发布副本与公开索引 | Architecture/Privacy | `CONFIRMED` | Product MVP 的家庭授权访问必须读取钉住 Memory Version 的独立脱敏 PublicationVersion 与独立索引；拒绝 `isPrivate=false`、私人 Projection 过滤视图或整库直接暴露 | 不存在独立 Publication authority 就不开放 | `WP-S3-01` 成为 Product MVP 必需包；保护私人域不被家庭授权绕过 | Architecture + Privacy/Legal | 2026-07-15 产品确认；G2/G4 后才可真实开放 |
 | DR-007 | C-07：未确认材料如何参与问答 | Product/AI | `CONFIRMED` | 确定性回答只使用已确认记忆；未确认材料通过自然问答追问补齐并进入批量候选确认，不要求用户逐条点击。未确认、AI 推断和家属陈述必须保留状态与视角，不能伪装成事实 | 未确认材料不进入确定性 QA/Publication；批量确认前保持 Candidate | 降低确认打扰，需要对话引导、批量审核和可解释差异 | Product + Architecture | 2026-07-15 产品确认 |
 | DR-008 | C-08：文字、声音复刻与数字人发布关系 | Product/Conversation | `CONFIRMED` | 文字问答属于 Closed Pilot；声音复刻属于 Product MVP；数字人作为独立 Beta Extension。Conversation/Message Authority 与声音/DH runtime 分开，任一 Provider 失败均回退文字 | Voice/DH 不可用不得阻断文字 QA；数字人 Beta 默认按账户/家庭白名单开放 | `WP-V0-01` 中 Voice 治理/训练/TTS 为 Product MVP，DH 保持受控 Beta Extension | Product + iOS + Backend | 产品范围已确认；真实声音/DH 仍需法律、Provider、配额和真机 G3/G4 |
-| DR-009 | C-09：真实资料处理 vs mock upload | Architecture/External | `EXTERNAL_REQUIRED` | Stage 2 接对象存储、扫描、OCR/ASR/PDF/DOCX processors；视频只存不理解。供应商选择保持 port 隔离 | mock/local-only 入口不公开为云能力 | 需要存储合同、删除 SLA、成本和任务系统 | Architecture + Operations | Stage 2 开发前 |
+| DR-009 | C-09：真实资料处理 vs mock upload | Architecture/External | `EXTERNAL_REQUIRED` | Closed Pilot 可保留照片选择、owner-scoped 本地草稿和本机预览，但必须明确“仅本机保存/尚未云端保存”；Stage 2 再接对象存储、扫描、OCR/ASR/PDF/DOCX processors，视频只存不理解。供应商选择保持 port 隔离 | mock/local-only 入口不得显示已上传、已同步或 verified，也不公开为云能力 | 保留照片入口但要求诚实状态；真实存储仍需要合同、删除 SLA、成本和任务系统 | Architecture + Operations + Product | 本地入口已于 2026-07-15 确认；真实 Stage 2 开发前仍需外部门 |
 | DR-010 | C-10：Visitor 身份与邀请模式 | Security/Product | `CONFIRMED` | MVP 仅允许已认证用户或具有过期/限次 grant 的受邀访问；匿名入口延后，家庭关系本身不自动产生查询权限 | 无匿名公共入口；无有效授权上下文即 deny | 降低滥用面，家庭用户需各自登录 | Product + Security | 2026-07-15 产品确认；G2/G4 后开放 |
 | DR-011 | C-11：账号注销与上传记录删除 | Data rights | `CONFIRMED` | 账号注销采用“立即撤销访问 + 30 日可披露恢复窗口 + 到期分层 purge”。上传人可不可撤回地删除自己提交的 Source；删除必须级联暂停依赖 Memory/Publication/QA，并保留最小删除回执。纪念账户主控权和共同材料不得因主控账号注销被静默删除 | 账号注销立即撤销 session/grant；Source 删除立即停止未来使用；无 purge receipt 不称完成 | 需要把账号、Vault、Source、声音/DH资产四类删除分开实现 | Product + Privacy/Legal | 2026-07-15 产品确认；法律 hold/第三方权利和供应商回执仍需 G4/G3 |
 | DR-012 | C-12：AOS 完整能力主张无源码支撑 | Evidence/Architecture | `REJECTED` | 不把 AOS MemoryStore/Slot/Scatter 当组件集成；只借鉴 raw/derived、promotion、bounded workflow 原则 | Hermes/AOS 目录不进入产品依赖或仓库 | 避免重写和不可验证基础设施 | Architecture | 已由证据审计关闭；重新采用需新证据 |
 | DR-013 | C-13：FR 与验证优先级 | Product/Priority | `CONFIRMED` | 依赖顺序为安全/身份/备份恢复基础、Closed Pilot Owner 记忆与文字问答、Product MVP 家庭协作与受控 Publication/Visitor、Product MVP Voice Clone；数字人为 Beta Extension，Care/TimeLetter 后置 | 不按旧 P0 标签并行开发；外部门未关闭的能力保持隐藏或 fail-closed | 用独立价值门替代“大爆炸式完整 MVP 验证” | Product + Engineering | 2026-07-15 产品确认 |
 | DR-014 | C-14：Voice/Digital Human 发布层级 | Product/Voice | `CONFIRMED` | 文字问答先进入 Closed Pilot；声音复刻与复刻 TTS 进入 Product MVP；数字人进入独立 Beta Extension。Voice/DH 失败或外部 Gate 未关闭时回退文字，不冒充已启用 | 缺授权、Provider、真机、质量或地域证据时对应能力 blocked | 保留 Product MVP 声音价值并隔离数字人风险 | Product + Privacy/Legal | 产品范围已确认；真实训练/合成仍需 G3/G4 |
-| DR-015 | C-15：assistant 回复与批量记忆确认 | Product/AI | `CONFIRMED` | 延续 `userEvidenceOnly`；每次对话不逐条弹窗。退出页面前或约5至10轮对话后，将可追溯用户陈述汇总为候选批次供用户一次审核；assistant/Visitor 输出不能自动成为 Source | 未完成批次确认的内容不进入正式记忆、Publication 或人物事实回答 | 降低确认打扰，需要批次来源、逐项撤销和部分接受 | Product + Architecture | 2026-07-15 产品确认 |
+| DR-015 | C-15：assistant 回复与批量记忆确认 | Product/AI | `CONFIRMED` | 延续 `userEvidenceOnly`；每次对话不逐条弹窗。Message/Source/Candidate/DecisionReceipt 持续持久化；退出页面或待审核数量/上下文预算达到服务端 policy 动态阈值时，以先到者触发批量审核，强杀/断网后恢复同一批次；assistant/Visitor 输出不能自动成为 Source | 未完成批次确认的内容不进入正式记忆、Publication 或人物事实回答；模型上下文截断不得丢失业务数据 | 降低确认打扰，需要批次来源、逐项撤销、部分接受和可恢复持久化；首版不提供用户轮数设置 | Product + Architecture | 2026-07-15 产品确认；开发前动态阈值细节回执同步 |
 | DR-016 | C-16：Source/Memory 变化后的发布失效 | Privacy/Contract | `CONFIRMED` | Source 删除、Memory 修正/删除、第三方异议或 grant 过期时，依赖 Publication 同步进入 `suspended`；恢复发布需主控人重审并生成新版本 | 先停未来访问，再异步清索引和对象 | 保证安全优先，可能产生暂时不可用 | Product + Privacy/Legal | 2026-07-15 产品确认；暂停 SLO 由测量合同验收 |
 | DR-017 | C-17：地域、匿名、声音、留存、成本未决 | Cross-functional | `EXTERNAL_REQUIRED` | 建立阶段入口门，分别由 DR-023 至 DR-028、DR-031 决定；不得由工程选择默认供应商或地域 | 不采集/出站/公开对应数据 | 可能阻塞真实用户和 provider 扩量 | Product + Privacy/Legal + Finance | 对应阶段开发前 |
 | DR-018 | C-18：绝对可信/可控文案 | Product/Legal | `REJECTED` | 禁止“完全可信/完全可控/彻底删除/不会冒用/立即撤回”；使用“用户可管理、显示来源、按披露边界处理，AI 可能出错” | 对外不作不可证明保证 | 降低营销强度，避免错误合规承诺 | Product + Privacy/Legal | 所有公开文案前 |
@@ -69,13 +69,13 @@
 | DR-034 | Final review RV-11：legacy confirmed 仅在 Projection | Data migration | `RECOMMENDED_PENDING` | 只有 owner/source/decision receipt 完整者可迁为 Memory v1；缺证据进入 `legacy_needs_review`，observed/candidate/rejected/superseded 分级映射，按 authorityEpoch 切换 | legacy 未验证内容不进确定性 QA/Publication | 增加审核和迁移成本，避免丢数据或伪造确认 | Product + Architecture | Round 3 migration 设计前 |
 | DR-035 | Final review RV-02/RV-12：撤权后删除/审计失去授权 | Security/Privacy | `RECOMMENDED_PENDING` | 分离 ProcessingBasis/Consent、AccessGrant、WorkAuthorization、DataRightsAuthorization、RetentionHold 和短期 ProviderCapability；禁止通用 system 绕过 | 普通访问撤销，已受理数据权利 job 仅凭最小 operation authorization 继续 | 新增 policy/job authority，修复删除死锁 | Security + Privacy/Legal + Architecture | Round 3 auth/job 设计前 |
 | DR-036 | 第三方、未成年人、逝者用途和权利请求 | Privacy/Product | `EXTERNAL_REQUIRED` | 产品希望由经核验主控人承担日常内容、冲突、第三方公开和逝者 Voice/DH 选择，并在协议中明确责任；架构仍必须按私人保存、AI/QA、Publication、Voice/Persona 分用途，提供 RightsRequest、异议冻结和 receipt。协议不能排除平台法定义务、有效第三方请求或未成年人保护 | 主控选择已记录，但未取得中国首发专项法律意见、监护/关系证据和 Provider 允许前，高风险用途 blocked；有效权利请求可触发 scope hold | 产品意图与外部法律边界分离，避免把协议勾选误当免责 | Privacy/Legal + Product | 产品意图已确认；真实未成年人/第三方公开/逝者 Voice-DH 前需专项 G4 |
-| DR-037 | Voice 资产、用途授权和合成内容绑定 | Voice/Privacy | `CONFIRMED` | Product MVP 按训练、私人问答、家庭播放、Visitor、商业展示分别授权；Profile 资产状态与 grant 分开，paused 不删除；合成绑定 answer/publication、text hash、policy、profile version、purpose 和 GeneratedAudio TTL/receipt，不开放任意文本冒充 | 缺用途绑定、来源、授权或 TTL 即拒绝 | 影响现有 synthesis API 和缓存，降低滥用 | Product + Privacy/Legal + Architecture | 2026-07-15 产品确认；后续合并用途需重新评审 |
+| DR-037 | Voice 资产、用途授权和合成内容绑定 | Voice/Privacy | `CONFIRMED` | Product MVP 按训练、私人问答、家庭播放、Visitor、商业展示分别授权；基础 MVP 要求 Owner private 与授权 Family Voice，Visitor Voice 为独立 capability/cohort，不阻断基础 MVP。家庭成员客户端必须解析目标 Owner/Represented Persona 已授权且 active/quality-accepted 的精确 profile version；合成绑定 answer/publication、text hash、policy、profile version、purpose 和 GeneratedAudio TTL/receipt，不开放任意文本冒充 | 缺用途绑定、来源、授权或 TTL 即拒绝；不得借用访问者、上一角色或默认音色冒充目标人物 | 影响现有 synthesis API、角色解析和缓存，降低声音错配与滥用；Visitor Voice 可独立关闭 | Product + Privacy/Legal + Architecture | 2026-07-15 产品确认；开发前 Voice 细节回执同步；后续合并用途需重新评审 |
 | DR-038 | Visitor 输入生命周期 | Privacy/Product | `CONFIRMED` | VisitorSession、Message 和 IP/device 派生标识默认 TTL 为7天；主控人默认只看授权使用统计和安全事件，不看问题正文。主动共享、合法争议或 RetentionHold 仅保留最小必要证据 | 到期或撤权停止读取和 Provider 处理；默认不向主控人展示正文 | 增加 MVP Visitor 数据权利与反滥用实现 | Product + Privacy/Legal + Security | 2026-07-15 产品确认；举报/法律保留例外需 G4 |
 | DR-039 | 指标、SLO 与统一测量合同 | Product/Operations | `CONFIRMED` | 接受统一测量合同和现有 Projection/Retrieval DFX 作为研发基线；每个指标附 build/env/region/provider、负载、样本、窗口、分母、冷启动、超时和 artifact。未实测前不对用户承诺端到端时延 | 无 measurement metadata 不做 pass 或扩量 | 增加测试与遥测工作，减少选择性报告 | Product + Operations + Privacy | 2026-07-15 产品确认；具体扩量阈值需 G2 |
 | DR-040 | 轻量迁移与未来完整迁移体系 | Architecture/Operations | `CONFIRMED` | 百级用户 MVP 采用强制最低版本、提前通知维护窗和四阶段轻量迁移：盘点/备份恢复、离线演练、维护窗冻结写入并切换、24至72小时观察与退役。C00-C11 保留为未来目标，当无法强制升级、无法接受维护窗或进入规模化运营时启用 | 缺 backup/isolated restore、迁移校验或 go/no-go 时不切换；post-cutover 不恢复 legacy 写 Authority | 当前显著降低执行负担，未来仍保留完整安全模型 | Architecture + Operations + Security + Product | 2026-07-15 产品确认；具体窗口/RPO/RTO需实测批准 |
-| DR-041 | 账号切换、登出与本地草稿 | Product/Privacy | `CONFIRMED` | switch 只卸载并锁定同 subject 的加密显式草稿；logout 清 runtime/cache/export/notification，草稿只能由同一强验证 subject 恢复并提供清理选择；account delete 立即清全部本地用户数据 | 无 owner proof 的 legacy 数据 quarantine；保留草稿不跨账号显示、上传、索引或送 Provider | 保护未提交内容并增加本地迁移和清理 UX | Product + Privacy/Legal + iOS | 2026-07-15 产品确认 |
+| DR-041 | 账号切换、登出与本地草稿 | Product/Privacy | `CONFIRMED` | switch 只卸载并锁定同 subject 的加密显式草稿；logout 清 runtime/cache/export/notification，草稿只能由同一强验证 subject 恢复并提供清理选择；account delete 立即清全部本地用户数据。Closed Pilot 的本地照片草稿可预览，但必须明确未云端保存 | 无 owner proof 的 legacy 数据 quarantine；保留草稿不跨账号显示、上传、索引或送 Provider；本地媒体不得冒充同步成功 | 保护未提交内容并增加本地迁移、清理和诚实状态 UX | Product + Privacy/Legal + iOS | 2026-07-15 产品确认；开发前照片入口回执同步 |
 | DR-042 | 初创团队 MVP Operating Profile | Product/Architecture/Operations | `CONFIRMED` | 以百级用户、单一中国首发地域、模块化单体、单 Postgres、私有对象存储、单独 Worker、Provider Adapter、可强制升级和可维护窗口为当前 Operating Profile。115项路线按“Closed Pilot、Product MVP、Beta Extension、规模触发”分层 | 不因轻量模式取消 Vault 隔离、来源引用、用途授权、访问撤回、删除回执、备份恢复和 Provider fail-closed | 让目标架构与初创团队能力匹配，同时保留规模化升级路径 | Product + Architecture + Operations | 2026-07-15 产品确认；工程实现与外部门仍分别验收 |
-| DR-043 | 三级产品验证与发布层级 | Product/Release/Architecture | `CONFIRMED` | 采用 `Closed Pilot -> Product MVP -> Beta Extension`。Closed Pilot 只验证强身份/Vault隔离、文字记忆 Capture→Review→QA→Citation→Correction→Deletion，不等待 Family/Publication/Visitor、Voice Clone、Digital Human 或非必要媒体。Product MVP 增加 Family/人物切换与贡献、受控 Publication/Visitor 和 Voice Clone。Beta Extension 独立承载 Digital Human、媒体理解及 Care/TimeLetter | Closed Pilot 只向受控 cohort 开放，不得匿名访问或宣称完整 MVP；下一层未过门时只关闭该层入口，不反向阻断已通过的文字核心 | 解除供应商、真机、法律或家庭授权延期对早期核心价值验证的阻塞，同时保留完整 Product MVP 承诺 | Product + Architecture + Operations | 2026-07-15 产品接受建议；每层实现及适用 G0-G4 仍独立验收 |
+| DR-043 | 三级产品验证与发布层级 | Product/Release/Architecture | `CONFIRMED` | 采用 `Closed Pilot -> Product MVP -> Beta Extension`。首批 Closed Pilot 只开放 Adult Self；Memorial Controller 在死亡事实、亲属关系和主控任命可验证后进入第二 cohort，Guardian/未成年人保持独立 G4 cohort。Closed Pilot 只验证强身份/Vault隔离、文字记忆 Capture→Review→QA→Citation→Correction→Deletion，不等待 Family/Publication/Visitor、Voice Clone、Digital Human 或非必要媒体。Product MVP 增加 Family/人物切换与贡献、受控 Publication/Visitor 和 Voice Clone。Beta Extension 独立承载 Digital Human、媒体理解及 Care/TimeLetter | Closed Pilot 只向受控 cohort 开放，不得匿名访问或宣称完整 MVP；下一层未过门时只关闭该层入口，不反向阻断已通过的文字核心 | 以 Adult Self 降低首批真实数据风险，解除供应商、真机、法律或家庭授权延期对早期核心价值验证的阻塞，同时保留长期全龄与纪念产品范围 | Product + Architecture + Operations | 2026-07-15 产品接受建议并确认首批 cohort；每层实现及适用 G0-G4 仍独立验收 |
 
 ### 3.1 Round 3C3C Provider 决策映射
 
@@ -124,6 +124,20 @@ IAR-01..07、BAR-01..07、SOR-01..08 已在 Round 3 评审响应中映射到 CR-
 3. `Beta Extension` 承载 Digital Human、非必要媒体理解及后续 Care/TimeLetter，独立白名单和独立停止线；
 4. 三层共享同一数据 Authority，不创建简化版旁路数据模型；层级通过不自动关闭下一层的法律、Provider、真机、隐私或生产 Gate。
 
+### 3.8 2026-07-15 开发前产品细节确认
+
+产品经理完成 `PDC-D01..D05` 回执。为避免增加重复 Decision ID，本次确认补充既有决定而不新增第二套决策轴：
+
+| 回执 | 选择 | 补充的 Decision | 确认结果 |
+| --- | --- | --- | --- |
+| `PDC-D01` | `A` | `DR-037/043` | Owner private 与授权 Family Voice 是基础 MVP 门；Visitor Voice 独立 capability/cohort，不阻断基础 MVP；家庭成员客户端必须使用目标人物对应且已授权的精确 profile version |
+| `PDC-D02` | `A` | `DR-009/041` | Closed Pilot 保留本地照片草稿和本机预览，明确未云端保存；不得把 local/mock 显示为 uploaded/synced/verified |
+| `PDC-D03` | 自定义 `D` | `DR-015` | Candidate 持续持久化；退出页面或服务端动态阈值先到即审核；强杀/断网恢复；模型上下文截断不得丢业务数据 |
+| `PDC-D04` | `A` | `DR-003` | Family 支持暂停/终止；任一方可发起，敏感主控关系二次确认；立即撤 grant、保留历史、重建关系需重新邀请授权 |
+| `PDC-D05` | `A` | `DR-043` | 首批 Closed Pilot 只开放 Adult Self；Memorial Controller 第二 cohort；Guardian/未成年人独立 G4 |
+
+确认人/角色：产品经理。确认日期：2026-07-15。详细回执和规范化理由见[开发前问题与决策收敛清单](./DreamJourney_V4_开发前问题与决策收敛清单_V1.0.md)。这些确认不自动关闭 G2/G3/G4，也不提升当前实现成熟度。
+
 ## 4. 决策队列
 
 ### 4.1 MVP 产品范围已确认
@@ -131,6 +145,8 @@ IAR-01..07、BAR-01..07、SOR-01..08 已在 Round 3 评审响应中映射到 CR-
 - 三 Tab、Family、家庭人物切换、手机登录、Owner Truth Loop、批量候选确认、30日账号恢复、本地草稿、Operator/Admin、AI披露和危机路径已确认。
 - 家庭授权 Publication/Visitor 进入 MVP，使用独立发布副本、认证/邀请 grant 和7天 Visitor TTL。
 - 声音复刻进入 MVP，数字人作为受控 Beta；Care/TimeLetter 后置。
+- Owner private 与授权 Family Voice 是基础 MVP 门，Visitor Voice 独立放行；首批 Closed Pilot 只开放 Adult Self。
+- 本地照片草稿可保留但不得冒充云端；Candidate 在退出或动态阈值先到时审核并持续持久化；Family 支持暂停/终止且终止不删除历史 Authority。
 - WTMR、统一测量合同、DFX 和四阶段轻量迁移已确认。
 
 产品范围确认只允许路线重新排序，不代表相应 Work Item 已实现或可真实发布。
@@ -155,6 +171,7 @@ IAR-01..07、BAR-01..07、SOR-01..08 已在 Round 3 评审响应中映射到 CR-
 ### 4.4 Voice / Digital Human MVP Gate
 
 - 声音复刻和复刻 TTS 是 MVP 必需切片；数字人是独立 Beta。
+- 基础 Voice MVP 只要求 Owner private 与授权 Family Voice；Visitor Voice 保留独立用途合同，但作为独立 capability/cohort，不阻断基础 MVP。
 - 主控人日常选择已确认，但逝者无生前明确授权、未成年人声音/Persona、第三方声音仍需专项法律和 Provider Gate；服务协议不能单独关闭这些门。
 - 训练、私人问答、家庭播放、Visitor 和商业展示分用途授权；任意文本合成、跨人物音色借用和无来源人格表达继续禁止。
 - 精确商业配额暂缓，但每家庭/用户资产隔离、Provider硬配额、unknown reconcile、文字降级和删除回执必须先实现。
