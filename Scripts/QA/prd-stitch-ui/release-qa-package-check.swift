@@ -208,6 +208,7 @@ assertContains(releaseRegression, "product-v4-credential-response-boundary-check
 assertContains(releaseRegression, "product-v4-mobile-credential-path-retirement-check.py", "release regression should always enforce mobile credential path retirement")
 assertContains(releaseRegression, "product-v4-qa-mobile-credential-artifact-check.py", "release regression should always enforce the QA mobile credential artifact boundary")
 assertContains(releaseRegression, "product-v4-digital-human-secure-path-check.py", "release regression should always enforce the digital-human secure path")
+assertContains(releaseRegression, "product-v4-credential-rotation-receipt-check.py", "release regression should always enforce the value-free rotation receipt")
 assertContains(credentialInventoryRunner, "credential-inventory-scanner.py", "credential inventory runner should invoke the value-free scanner")
 assertContains(credentialInventoryRunner, "CREDENTIAL_SCAN_ENFORCE", "credential inventory runner should support release enforcement")
 assertContains(releaseRegression, "RUN_PUBLIC_MVP_REGRESSION", "release regression should expose the public MVP minimum regression gate")
@@ -428,6 +429,9 @@ let requiredScripts = [
     "Scripts/QA/product-v4/product-v4-mobile-credential-path-retirement-check.py",
     "Scripts/QA/product-v4/product-v4-qa-mobile-credential-artifact-check.py",
     "Scripts/QA/product-v4/product-v4-digital-human-secure-path-check.py",
+    "Scripts/QA/product-v4/product-v4-credential-rotation-receipt-check.py",
+    "docs/superpowers/status/2026-07-16-wi-s0-03-07-credential-rotation-receipt.json",
+    "docs/superpowers/status/2026-07-16-wi-s0-03-07-credential-rotation-revoke-drain.md",
     "../DreamJourneyBackend/scripts/run-backend-credential-response-deployed-smoke.sh",
     "Scripts/QA/prd-stitch-ui/ios-doctor-check.swift",
     "Scripts/QA/prd-stitch-ui/qa-script-location-check.swift",
