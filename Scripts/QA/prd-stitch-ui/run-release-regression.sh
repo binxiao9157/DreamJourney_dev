@@ -554,6 +554,9 @@ run_step "Product V4 versioned database migrator" "$STATIC_LOG_DIR/product-v4-db
 run_step "Product V4 schema/auth readiness" "$STATIC_LOG_DIR/product-v4-readiness.log" \
   env BACKEND_ROOT="$BACKEND_ROOT" python3 "$ROOT_DIR/Scripts/QA/product-v4/product-v4-readiness-check.py"
 
+run_step "Product V4 verified Postgres backup" "$STATIC_LOG_DIR/product-v4-db-backup.log" \
+  env BACKEND_ROOT="$BACKEND_ROOT" python3 "$ROOT_DIR/Scripts/QA/product-v4/product-v4-db-backup-check.py"
+
 for guard in \
   release-policy-shadow-contract-check.swift \
   release-policy-cache-contract-check.swift \

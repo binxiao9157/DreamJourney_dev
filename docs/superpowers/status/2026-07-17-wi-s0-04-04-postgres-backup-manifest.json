@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "workItem": "WI-S0-04-04",
+  "authorityLock": "DB_RECOVERY",
+  "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
+  "lease": "ACTIVE",
+  "status": "INTERNAL_READY_DEPLOYED_G2_SERVER_LOCAL_BACKUP_VERIFIED_OFFHOST_KMS_PRIVACY_SRE_PENDING",
+  "backend": {
+        "branch": "main",
+        "implementationCommit": "434a3bd",
+        "deployedEvidenceCommit": "127f7ac",
+        "diagnosticCommit": "1b7f2fe",
+        "failClosedCompatibilityCommit": "ecb2cf6",
+        "serverSourceCommit": "ecb2cf6",
+    "environment": "production",
+    "store": "postgres"
+  },
+  "backup": {
+    "format": "pgCustom",
+    "schemaHead": "0001",
+    "verifiedCurrentBackupCount": 2,
+    "encrypted": true,
+    "manifestMode": "600",
+    "artifactMode": "600",
+    "backupRootMode": "700",
+    "freshnessGate": "VERIFIED_36_HOURS",
+    "partialArtifactCount": 0,
+    "automaticDeletion": false
+  },
+  "scheduler": {
+    "dailyBackupTimer": "ENABLED_ACTIVE",
+    "weeklyRetentionAuditTimer": "ENABLED_ACTIVE",
+    "persistentCatchup": true,
+    "naturalTimerCycleEvidence": "PENDING_FIRST_SCHEDULED_RUN"
+  },
+  "gates": {
+    "unitAndContract": "VERIFIED_5_BACKUP_385_FULL",
+    "localIntegration": "VERIFIED_2_CONSECUTIVE_ENCRYPTED",
+    "interruption": "VERIFIED_FAILURE_RECEIPT",
+        "insufficientSpace": "VERIFIED_FAILURE_RECEIPT_BASH32_20_OF_20",
+    "checksumCorruption": "VERIFIED_FAIL_CLOSED",
+    "retention": "VERIFIED_AUDIT_ONLY_LAST_VALID_PROTECTED",
+    "serverLocalProductionBackup": "VERIFIED_2_CURRENT",
+        "serverDeployedSmoke": "VERIFIED",
+        "releaseRegression": "VERIFIED_20260717_WI_S0_04_04_FINAL",
+    "alertReceipt": "VERIFIED_LOCAL",
+    "offHostCopy": "EXTERNAL_PENDING",
+    "kmsKeyCustody": "EXTERNAL_PENDING",
+    "restrictedBackupRole": "EXTERNAL_PENDING",
+    "externalPaging": "EXTERNAL_PENDING",
+    "privacyLegalRetention": "EXTERNAL_PENDING",
+    "isolatedRestore": "WI-S0-04-05"
+  }
+}
