@@ -1,4 +1,4 @@
-#if UI_QA_SIMULATOR && targetEnvironment(simulator)
+#if (UI_QA_SIMULATOR || RELEASE_SCOPE_SIMULATOR) && targetEnvironment(simulator)
 import UIKit
 
 // MARK: - 足迹页面访问模式

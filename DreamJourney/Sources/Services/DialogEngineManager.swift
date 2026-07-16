@@ -129,7 +129,7 @@ struct VoiceSDKReadinessSummary {
     }
 }
 
-#if UI_QA_SIMULATOR && targetEnvironment(simulator)
+#if (UI_QA_SIMULATOR || RELEASE_SCOPE_SIMULATOR) && targetEnvironment(simulator)
 
 enum DialogEndReason {
     case manual
@@ -217,6 +217,7 @@ final class DialogEngineManager: NSObject {
     }
 
     private func recordUIQAPromptSnapshot() {
+        #if DEBUG || UI_QA_SIMULATOR
         var prompt = "【UI QA 回响 Prompt】\n请以温和、自然的方式回应长辈。"
         let context = DigitalHumanContextStore.shared.current
         prompt += buildDigitalHumanModePolicy(context: context)
@@ -235,6 +236,7 @@ final class DialogEngineManager: NSObject {
             "available=\(archiveSnapshot.availableItemCount) " +
             "entries=\(archiveSnapshot.debugSummary())"
         )
+        #endif
     }
 }
 

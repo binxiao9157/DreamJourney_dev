@@ -46,6 +46,9 @@ let profileReadiness = read("DreamJourney/Sources/Modules/Profile/ProfileFamilyP
 let settings = read("DreamJourney/Sources/Modules/Profile/ProfileSettingsViewController.swift")
 let legal = read("DreamJourney/Sources/Modules/Profile/ProfileLegalViewController.swift")
 let matrix = read("docs/superpowers/status/2026-06-17-release-feature-matrix.md")
+let infoPlist = read("DreamJourney/Resources/Info.plist")
+let sceneDelegate = read("DreamJourney/Sources/SceneDelegate.swift")
+let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 
 let ownerCore: Set<String> = [
     "echoTextInput",
@@ -143,5 +146,8 @@ for argument in ["DJEnableArchiveHiddenBranches", "DJEnableProfileHiddenBranches
     assertContains(matrix, argument, "matrix must document QA argument \(argument)")
 }
 assertNotContains(matrix, "enabled by default", "matrix must not preserve the superseded public digital-human policy")
+assertNotContains(infoPlist, "CFBundleURLTypes", "Closed Pilot must not register hidden deep links")
+assertNotContains(sceneDelegate, "openURLContexts", "Closed Pilot must not handle hidden deep links")
+assertContains(releaseRegression, "RUN_PUBLIC_RELEASE_SCOPE_GATE", "release regression must expose the combined public-scope gate")
 
 print("Release feature matrix checks passed")

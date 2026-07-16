@@ -17,6 +17,8 @@ STATIC_LOG_DIR="$OUTPUT_DIR/static-guards"
 RUN_STANDARD_BUILD="${RUN_STANDARD_BUILD:-1}"
 RUN_IPHONEOS_GENERIC_BUILD="${RUN_IPHONEOS_GENERIC_BUILD:-0}"
 RUN_RELEASE_QA_OVERRIDE_ARTIFACT_SCAN="${RUN_RELEASE_QA_OVERRIDE_ARTIFACT_SCAN:-0}"
+RUN_PUBLIC_RELEASE_SCOPE_GATE="${RUN_PUBLIC_RELEASE_SCOPE_GATE:-0}"
+RUN_PUBLIC_RELEASE_SCOPE_BACKEND_G2="${RUN_PUBLIC_RELEASE_SCOPE_BACKEND_G2:-0}"
 RUN_PUBLIC_MVP_REGRESSION="${RUN_PUBLIC_MVP_REGRESSION:-0}"
 RUN_SIMULATOR_SMOKE="${RUN_SIMULATOR_SMOKE:-1}"
 RUN_P0_ARCHIVE_ECHO_REGRESSION="${RUN_P0_ARCHIVE_ECHO_REGRESSION:-0}"
@@ -103,6 +105,10 @@ if [[ "$RELEASE_HANDOFF_MODE" == "1" ]]; then
   # Release handoff must prove QA-only controls are absent from the production
   # binary and its packaged configuration.
   RUN_RELEASE_QA_OVERRIDE_ARTIFACT_SCAN=1
+  # Release handoff must prove the complete Closed Pilot surface, policy
+  # fallback, deep-link denial, and deployed command denial as one bundle.
+  RUN_PUBLIC_RELEASE_SCOPE_GATE=1
+  RUN_PUBLIC_RELEASE_SCOPE_BACKEND_G2=1
   # Release handoff must prove deployed auth/provider responses are no-store
   # and never expose long-lived Provider credential fields.
   RUN_BACKEND_CREDENTIAL_RESPONSE_BOUNDARY_SMOKE=1
@@ -147,6 +153,8 @@ Run ID: \`$RUN_ID\`
 - Standard iOS build: \`$RUN_STANDARD_BUILD\`
 - iPhoneOS generic build: \`$RUN_IPHONEOS_GENERIC_BUILD\`
 - Release QA override artifact scan: \`$RUN_RELEASE_QA_OVERRIDE_ARTIFACT_SCAN\`
+- Public Release Scope combination gate: \`$RUN_PUBLIC_RELEASE_SCOPE_GATE\`
+- Public Release Scope deployed G2: \`$RUN_PUBLIC_RELEASE_SCOPE_BACKEND_G2\`
 - Public MVP minimum regression: \`$RUN_PUBLIC_MVP_REGRESSION\`
 - P0 Archive -> Echo regression gate: \`$RUN_P0_ARCHIVE_ECHO_REGRESSION\`
 - Archive -> Echo simulator smoke: \`$RUN_SIMULATOR_SMOKE\`
@@ -209,6 +217,7 @@ Run ID: \`$RUN_ID\`
 - iOS Debug simulator build, unless \`RUN_STANDARD_BUILD=0\`.
 - Optional iPhoneOS generic build when \`RUN_IPHONEOS_GENERIC_BUILD=1\`; this validates arm64 iPhoneOS compilation, Tencent SDK linkage, and bundle-id override without requiring an online physical device.
 - Optional Release QA override artifact scan when \`RUN_RELEASE_QA_OVERRIDE_ARTIFACT_SCAN=1\`; release handoff forces a Release iPhoneOS build and rejects QA launch arguments, process-only setters, and persistent local provider overrides.
+- Optional Public Release Scope gate when \`RUN_PUBLIC_RELEASE_SCOPE_GATE=1\`; release handoff forces the typed offline/expired/emergency model, Release artifact scan, Release simulator Owner screenshot, deep-link negative probes, and deployed policy/command negative smoke into one redacted evidence bundle.
 - Optional public MVP minimum regression when \`RUN_PUBLIC_MVP_REGRESSION=1\`; this forces both P0 Archive -> Echo and P0 Profile Care gates.
 - Optional P0 Archive -> Echo regression gate when \`RUN_P0_ARCHIVE_ECHO_REGRESSION=1\`; this forces the core archive seed -> analysis -> Echo context UIQA smoke.
 - Core Archive -> Echo simulator smoke, unless \`RUN_SIMULATOR_SMOKE=0\`.
@@ -273,6 +282,7 @@ append_report_footer() {
 - Standard build log: \`build-debug.log\`
 - iPhoneOS generic build: \`iphoneos-generic-build/$RUN_ID/\`
 - Release QA override artifact scan: \`release-qa-override-artifact-scan/$RUN_ID/\`
+- Public Release Scope combination gate: \`public-release-scope-regression/$RUN_ID/\`
 - Public MVP minimum regression: \`archive-to-echo-smoke/$RUN_ID/\`, \`profile-care-state-smoke/$RUN_ID/\`, and \`profile-care-backend-state-smoke/$RUN_ID/\`
 - P0 Archive -> Echo regression gate: \`archive-to-echo-smoke/$RUN_ID/\`
 - Archive -> Echo smoke: \`archive-to-echo-smoke/$RUN_ID/\`
@@ -350,7 +360,8 @@ run_step "Python QA scripts compile" "$STATIC_LOG_DIR/python-qa-compile.log" \
     "$SCRIPT_DIR/backend-family-account-lifecycle-smoke.py" \
     "$SCRIPT_DIR/backend-digital-human-session-smoke.py" \
     "$SCRIPT_DIR/backend-voice-clone-deployed-smoke.py" \
-    "$SCRIPT_DIR/backend-voice-synthesis-viseme-smoke.py"
+    "$SCRIPT_DIR/backend-voice-synthesis-viseme-smoke.py" \
+    "$SCRIPT_DIR/public-release-scope-evidence.py"
 
 if [[ "$RUN_CREDENTIAL_INVENTORY_SCAN" == "1" ]]; then
   mkdir -p "$OUTPUT_DIR/credential-inventory/$RUN_ID"
@@ -512,6 +523,7 @@ for guard in \
   captured-feature-policy-gate-check.swift \
   runtime-capability-axis-integration-check.swift \
   qa-override-release-boundary-check.swift \
+  public-release-scope-regression-check.swift \
   future-beta-default-deny-check.swift \
   release-feature-matrix-check.swift \
   prd-coverage-matrix-check.swift \
@@ -674,6 +686,29 @@ else
   mkdir -p "$OUTPUT_DIR/release-qa-override-artifact-scan/$RUN_ID"
   echo "Skipped by RUN_RELEASE_QA_OVERRIDE_ARTIFACT_SCAN=0" \
     > "$OUTPUT_DIR/release-qa-override-artifact-scan/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_PUBLIC_RELEASE_SCOPE_GATE" == "1" ]]; then
+  public_scope_artifact_mode=1
+  public_scope_artifact_report=""
+  if [[ "$RUN_RELEASE_QA_OVERRIDE_ARTIFACT_SCAN" == "1" ]]; then
+    public_scope_artifact_mode=0
+    public_scope_artifact_report="$OUTPUT_DIR/release-qa-override-artifact-scan/$RUN_ID/report.md"
+  fi
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/public-release-scope-regression" \
+  RUN_RELEASE_ARTIFACT="$public_scope_artifact_mode" \
+  RELEASE_ARTIFACT_REPORT="$public_scope_artifact_report" \
+  RUN_BACKEND_G2="$RUN_PUBLIC_RELEASE_SCOPE_BACKEND_G2" \
+  BACKEND_ROOT="$BACKEND_ROOT" \
+  BACKEND_BASE_URL="${BACKEND_BASE_URL:-}" \
+  BACKEND_API_TOKEN="${BACKEND_API_TOKEN:-}" \
+  EXPECTED_RELEASE_POLICY_COMMAND_MODE="${EXPECTED_RELEASE_POLICY_COMMAND_MODE:-observe}" \
+    "$SCRIPT_DIR/run-public-release-scope-regression.sh"
+else
+  mkdir -p "$OUTPUT_DIR/public-release-scope-regression/$RUN_ID"
+  echo "Skipped by RUN_PUBLIC_RELEASE_SCOPE_GATE=0" \
+    > "$OUTPUT_DIR/public-release-scope-regression/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_SIMULATOR_SMOKE" == "1" ]]; then

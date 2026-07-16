@@ -6,7 +6,7 @@
 import AVFoundation
 import UIKit
 import UserNotifications
-#if !(UI_QA_SIMULATOR && targetEnvironment(simulator))
+#if !((UI_QA_SIMULATOR || RELEASE_SCOPE_SIMULATOR) && targetEnvironment(simulator))
 import SpeechEngineToB
 import AMapFoundationKit
 import MAMapKit
@@ -24,7 +24,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         KBLiteManager.shared.switchUser(to: currentKnowledgeUserId)
 
         // 火山引擎语音 SDK 环境准备
-        #if !(UI_QA_SIMULATOR && targetEnvironment(simulator))
+        #if !((UI_QA_SIMULATOR || RELEASE_SCOPE_SIMULATOR) && targetEnvironment(simulator))
         SpeechEngine.prepareEnvironment()
 
         // ⚠️ AMap3DMap 8.1.0+ 强制要求：必须在创建 MAMapView 之前调用隐私合规接口，

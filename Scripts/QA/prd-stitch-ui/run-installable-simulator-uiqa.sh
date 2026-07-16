@@ -8,7 +8,13 @@ SCHEME="${SCHEME:-DreamJourney}"
 CONFIGURATION="${CONFIGURATION:-Debug}"
 SIMULATOR_NAME="${SIMULATOR_NAME:-iPhone 16}"
 APP_PRODUCT_NAME="${APP_PRODUCT_NAME:-DreamJourney}"
-SWIFT_ACTIVE_COMPILATION_CONDITIONS="${SWIFT_ACTIVE_COMPILATION_CONDITIONS:-DEBUG UI_QA_SIMULATOR}"
+if [[ -z "${SWIFT_ACTIVE_COMPILATION_CONDITIONS+x}" ]]; then
+  if [[ "$CONFIGURATION" == "Release" ]]; then
+    SWIFT_ACTIVE_COMPILATION_CONDITIONS="RELEASE"
+  else
+    SWIFT_ACTIVE_COMPILATION_CONDITIONS="DEBUG UI_QA_SIMULATOR"
+  fi
+fi
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT_DIR/tmp/visual-qa/prd-stitch-ui/DerivedDataInstallableSimulatorUIQA}"
 OUTPUT_DIR="${OUTPUT_DIR:-$ROOT_DIR/tmp/visual-qa/prd-stitch-ui/installable-simulator-uiqa/$(date +%Y%m%d-%H%M%S)}"
 BUILD_LOG="${BUILD_LOG:-$OUTPUT_DIR/build.log}"
@@ -19,6 +25,13 @@ XCCONFIG_PATH="${XCCONFIG_PATH:-}"
 
 mkdir -p "$OUTPUT_DIR"
 cd "$ROOT_DIR"
+
+if [[ "$CONFIGURATION" == "Release" ]] \
+  && [[ "$SWIFT_ACTIVE_COMPILATION_CONDITIONS" == *"DEBUG"* \
+    || "$SWIFT_ACTIVE_COMPILATION_CONDITIONS" == *"UI_QA_SIMULATOR"* ]]; then
+  echo "[installable-simulator-uiqa] Release builds cannot enable DEBUG or UI_QA_SIMULATOR" >&2
+  exit 1
+fi
 
 fail() {
   echo "[installable-simulator-uiqa] $*" >&2
@@ -141,6 +154,8 @@ write_env_var "APP_PATH" "$APP_PATH"
 write_env_var "BUNDLE_ID" "$BUNDLE_ID"
 write_env_var "DATA_CONTAINER" "$DATA_CONTAINER"
 write_env_var "APP_EXECUTABLE_ARCHS" "$ARCHS"
+write_env_var "CONFIGURATION" "$CONFIGURATION"
+write_env_var "SWIFT_ACTIVE_COMPILATION_CONDITIONS" "$SWIFT_ACTIVE_COMPILATION_CONDITIONS"
 
 echo "[installable-simulator-uiqa] Build log: $BUILD_LOG"
 echo "[installable-simulator-uiqa] Install env: $INSTALL_ENV_PATH"
