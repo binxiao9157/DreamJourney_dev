@@ -38,6 +38,7 @@ RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE="${RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE:-
 RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE="${RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE:-0}"
 RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE="${RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE:-0}"
 RUN_BACKEND_RELEASE_POLICY_SMOKE="${RUN_BACKEND_RELEASE_POLICY_SMOKE:-0}"
+RUN_BACKEND_EVIDENCE_PERSISTENCE_SMOKE="${RUN_BACKEND_EVIDENCE_PERSISTENCE_SMOKE:-0}"
 RUN_BACKEND_RUNTIME_CAPABILITY_SMOKE="${RUN_BACKEND_RUNTIME_CAPABILITY_SMOKE:-0}"
 RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE="${RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE:-0}"
 RUN_BACKEND_RELEASE_POLICY_COMMAND_SMOKE="${RUN_BACKEND_RELEASE_POLICY_COMMAND_SMOKE:-0}"
@@ -121,6 +122,9 @@ if [[ "$RELEASE_HANDOFF_MODE" == "1" ]]; then
   # Release handoff must prove the server-authored policy snapshot is deployed,
   # value-free, no-store, and fail closed for unknown/version-downgrade inputs.
   RUN_BACKEND_RELEASE_POLICY_SMOKE=1
+  # Release handoff must prove rollout observations use the persistent
+  # append-only evidence source instead of a process-local recorder.
+  RUN_BACKEND_EVIDENCE_PERSISTENCE_SMOKE=1
   # Release handoff must prove runtime capability axes remain independent in
   # the deployed response and cannot be inferred from legacy bool aliases.
   RUN_BACKEND_RUNTIME_CAPABILITY_SMOKE=1
@@ -180,6 +184,7 @@ Run ID: \`$RUN_ID\`
 - Backend cross-account authorization shadow smoke: \`$RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE\`
 - Backend route ownership audit smoke: \`$RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE\`
 - Backend release-policy shadow smoke: \`$RUN_BACKEND_RELEASE_POLICY_SMOKE\`
+- Backend evidence persistence smoke: \`$RUN_BACKEND_EVIDENCE_PERSISTENCE_SMOKE\`
 - Backend runtime capability five-axis smoke: \`$RUN_BACKEND_RUNTIME_CAPABILITY_SMOKE\`
 - Release-policy deployed-to-cache smoke: \`$RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE\`
 - Backend captured release-policy command smoke: \`$RUN_BACKEND_RELEASE_POLICY_COMMAND_SMOKE\`
@@ -244,6 +249,7 @@ Run ID: \`$RUN_ID\`
 - Optional backend cross-account authorization shadow smoke when \`RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE=1\`; this verifies owner/family/time-letter/invitation policy decisions, forged-viewer deny evidence, and retained production shadow mode without invoking global dispatch.
 - Optional backend route ownership audit smoke when \`RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE=1\`; this verifies 59 classified routes, zero omissions, owner path/body denial (including knowledge governance), system-only denial, and retained global shadow mode without invoking global dispatch.
 - Optional backend release-policy smoke when \`RUN_BACKEND_RELEASE_POLICY_SMOKE=1\`; release handoff forces this gate to verify the deployed typed shadow snapshot, no-store response, explicit Closed Pilot allowlist, unknown-feature deny, and version-downgrade rejection.
+- Optional backend evidence persistence smoke when \`RUN_BACKEND_EVIDENCE_PERSISTENCE_SMOKE=1\`; release handoff forces this gate to verify the deployed rollout writer uses the persistent append-only source. Restart continuity is verified by running the same smoke before and after an API restart with \`BASELINE_PATH\`.
 - Optional backend runtime capability smoke when \`RUN_BACKEND_RUNTIME_CAPABILITY_SMOKE=1\`; release handoff forces this gate to verify \`implemented/enabled/providerReady/releaseVisible/externalVerified\` remain independent, mock/text-only providers do not become ready, and no credential fields are returned.
 - Optional deployed-to-cache smoke when \`RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE=1\`; release handoff forces this G2 gate to verify the live snapshot can enter an account/build-scoped cache while account switch and app upgrade remain isolated.
 - Optional captured command smoke when \`RUN_BACKEND_RELEASE_POLICY_COMMAND_SMOKE=1\`; release handoff forces this gate to verify server-side route classification, immutable decision diagnostics, and observe/enforce denial behavior without mutating production data.
@@ -903,6 +909,26 @@ if [[ "$RUN_BACKEND_RELEASE_POLICY_SMOKE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/backend-release-policy-smoke/$RUN_ID"
   echo "Skipped by RUN_BACKEND_RELEASE_POLICY_SMOKE=0" > "$OUTPUT_DIR/backend-release-policy-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_BACKEND_EVIDENCE_PERSISTENCE_SMOKE" == "1" ]]; then
+  [[ -n "${BACKEND_BASE_URL:-}" ]] || {
+    echo "BACKEND_BASE_URL is required for RUN_BACKEND_EVIDENCE_PERSISTENCE_SMOKE=1" >&2
+    exit 1
+  }
+  [[ -n "${BACKEND_API_TOKEN:-}" ]] || {
+    echo "BACKEND_API_TOKEN is required for RUN_BACKEND_EVIDENCE_PERSISTENCE_SMOKE=1" >&2
+    exit 1
+  }
+  mkdir -p "$OUTPUT_DIR/backend-evidence-persistence-smoke/$RUN_ID"
+  BACKEND_BASE_URL="$BACKEND_BASE_URL" \
+  BACKEND_API_TOKEN="$BACKEND_API_TOKEN" \
+  OUTPUT_PATH="$OUTPUT_DIR/backend-evidence-persistence-smoke/$RUN_ID/result.json" \
+    "$BACKEND_ROOT/scripts/run-backend-evidence-persistence-deployed-smoke.sh" \
+      | tee "$OUTPUT_DIR/backend-evidence-persistence-smoke/$RUN_ID/result.log"
+else
+  mkdir -p "$OUTPUT_DIR/backend-evidence-persistence-smoke/$RUN_ID"
+  echo "Skipped by RUN_BACKEND_EVIDENCE_PERSISTENCE_SMOKE=0" > "$OUTPUT_DIR/backend-evidence-persistence-smoke/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_BACKEND_RUNTIME_CAPABILITY_SMOKE" == "1" ]]; then

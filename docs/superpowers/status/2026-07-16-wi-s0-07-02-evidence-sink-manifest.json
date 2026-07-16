@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "workItem": "WI-S0-07-02",
+  "authorityLock": "OPERATIONS_EVIDENCE",
+  "status": "INTERNAL_READY_G2_PARTIAL",
+  "storage": {
+    "table": "evidence_events",
+    "mode": "appendOnlyShadow",
+    "eventSchemaVersion": 1,
+    "payloadLimitBytes": 16384,
+    "updateProtection": "databaseTrigger",
+    "duplicatePolicy": "sameHashDeduplicated",
+    "tamperPolicy": "sameIdDifferentHashRejected"
+  },
+  "indexes": [
+    "eventIdPrimaryKey",
+    "operationIdOccurredAt",
+    "eventTypeOccurredAt",
+    "operationKindOccurredAt",
+    "retentionExpiry"
+  ],
+  "retentionClasses": [
+    "rolloutObservation",
+    "operationalTemporary",
+    "rightsAudit",
+    "incidentAudit",
+    "providerCost",
+    "legalHold"
+  ],
+  "currentWriter": "backend.releasePolicyDecisionRecorder",
+  "currentQuery": "systemOnly./ops/release-policy/observations",
+  "ordinaryAccountPurgeDeletesEvidence": false,
+  "retentionReceipt": "implementedNotExternallyScheduled",
+  "iosEvidenceAuthority": "localQaCacheOnly",
+  "gates": {
+    "unitAndContract": "VERIFIED",
+    "realPostgresWriteRead": "PENDING_DEPLOYMENT",
+    "apiRestartContinuity": "PENDING_DEPLOYMENT",
+    "backupIsolatedRestore": "BLOCKED_BY_WI-S0-04",
+    "privacyLegalRetention": "EXTERNAL_BLOCKED",
+    "highRiskMandatoryWriter": "NOT_STARTED"
+  }
+}

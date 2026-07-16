@@ -250,6 +250,8 @@ assertContains(releaseRegression, "RUN_BACKEND_RELEASE_POLICY_COMMAND_SMOKE", "r
 assertContains(releaseRegression, "run-backend-release-policy-command-deployed-smoke.sh", "release regression should call deployed command-policy smoke")
 assertContains(releaseRegression, "run-runtime-capability-snapshot-model-smoke.sh", "release regression should model independent runtime capability axes")
 assertContains(releaseRegression, "runtime-capability-axis-integration-check.swift", "release regression should guard five-axis runtime consumption")
+assertContains(releaseRegression, "RUN_BACKEND_EVIDENCE_PERSISTENCE_SMOKE", "release regression should expose the persistent evidence gate")
+assertContains(releaseRegression, "run-backend-evidence-persistence-deployed-smoke.sh", "release regression should invoke the persistent evidence smoke")
 assertContains(releaseRegression, "RUN_BACKEND_RUNTIME_CAPABILITY_SMOKE", "release regression should expose deployed five-axis capability evidence")
 assertContains(releaseRegression, "run-knowledge-semantic-cache-isolation-check.sh", "release regression should always guard semantic cache lifecycle wiring")
 assertContains(releaseRegression, "run-knowledge-local-storage-protection-model-smoke.sh", "release regression should always verify knowledge file attributes after atomic replacement")
@@ -469,8 +471,12 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/run-release-policy-rollout-gate.sh",
     "DreamJourney/Sources/Services/OperationsEvidenceEvent.swift",
     "Scripts/QA/prd-stitch-ui/operations-evidence-event-check.swift",
+    "../DreamJourneyBackend/scripts/backend-evidence-persistence-deployed-smoke.py",
+    "../DreamJourneyBackend/scripts/run-backend-evidence-persistence-deployed-smoke.sh",
     "docs/superpowers/status/2026-07-16-wi-s0-07-01-event-envelope.md",
     "docs/superpowers/status/2026-07-16-wi-s0-07-01-event-mapping-manifest.json",
+    "docs/superpowers/status/2026-07-16-wi-s0-07-02-evidence-sink.md",
+    "docs/superpowers/status/2026-07-16-wi-s0-07-02-evidence-sink-manifest.json",
     "docs/superpowers/status/2026-07-16-wi-s0-06-01-release-policy-shadow.md",
     "docs/superpowers/status/2026-07-16-wi-s0-06-02-release-policy-cache.md",
     "docs/superpowers/status/2026-07-16-wi-s0-06-04-captured-policy-gate.md",
