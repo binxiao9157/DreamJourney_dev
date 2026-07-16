@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "workItem": "WI-S0-04-03",
+  "authorityLock": "DB_RECOVERY",
+  "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
+  "lease": "ACTIVE",
+  "status": "INTERNAL_READY_DEPLOYED_G2_PRODUCTION_READINESS_VERIFIED_OPS_LB_APPROVAL_PENDING",
+  "backend": {
+    "branch": "main",
+    "implementationCommit": "55ec7f2",
+    "serverSourceCommit": "8310b11",
+    "runningImageImplementation": "55ec7f2",
+    "environment": "production",
+    "store": "postgres"
+  },
+  "endpoints": {
+    "liveness": "/live",
+    "readiness": "/ready",
+    "legacyHealth": "/health",
+    "legacyHealthDeprecated": true,
+    "readinessHttpReady": 200,
+    "readinessHttpNotReady": 503
+  },
+  "requiredComponents": [
+    "database",
+    "schema",
+    "auth"
+  ],
+  "probePolicy": {
+    "freshPerRequest": true,
+    "businessUowBypassed": true,
+    "temporaryWriteRollback": true,
+    "statementTimeoutMs": 2000,
+    "optionalProvidersBlockBaseReadiness": false,
+    "sensitiveFieldsReturned": false
+  },
+  "gates": {
+    "unitAndContract": "VERIFIED_380_FULL",
+    "migrationHead": "VERIFIED_0001",
+    "realPostgresHealthy": "VERIFIED",
+    "realPostgresPoolExhaustion": "VERIFIED_FAIL_CLOSED",
+    "realPostgresChecksumDrift": "VERIFIED_FAIL_CLOSED",
+    "realPostgresRecovery": "VERIFIED",
+    "idleInTransaction": 0,
+    "dockerHealthcheck": "VERIFIED_HEALTHY_READY_ENDPOINT",
+    "publicDeployedSmoke": "VERIFIED_DATABASE_SCHEMA_AUTH_READY",
+    "secretRedaction": "VERIFIED",
+    "formalLbMonitorApproval": "EXTERNAL_PENDING"
+  }
+}

@@ -37,9 +37,9 @@ Lease：`ACTIVE`
 - 本轮是 additive baseline/ledger，不包含 legacy contract migration，也没有自动 down migration。
 - 生产 baseline adoption 已真实演练，但正式 Data/SRE migration window、审批和容量制度仍需外部确认。
 - backup manifest、隔离 restore 和 receipt replay 属于 `WI-S0-04-04/05`，不能用本轮临时数据库 smoke 替代。
-- schema head 尚未接入流量 readiness；该合同属于下一项 `WI-S0-04-03`。
-- worker/deploy automation 目前依赖明确执行 CLI；在 `/ready` 与部署 gate 完成前，不宣称自动化发布闭环已完成。
+- `WI-S0-04-03` 已把 schema head/checksum、数据库读写和必需 Auth 配置接入 `/ready`；本项不再承担该缺口。
+- worker/deploy automation 仍依赖明确执行 migration CLI；readiness 只负责拒绝错误 schema，不会自动修复生产数据库。
 
 ## 下一步
 
-进入 `WI-S0-04-03`：新增 `/live` 与 `/ready`，使 DB checkout、migration head/checksum、required auth config 决定流量 readiness，并保留旧 `/health` 兼容语义。
+进入 `WI-S0-04-04`：建立 Postgres backup manifest、调度、保留和失败告警合同。

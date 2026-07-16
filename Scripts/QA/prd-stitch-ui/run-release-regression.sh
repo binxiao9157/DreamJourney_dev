@@ -40,6 +40,7 @@ RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE="${RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMO
 RUN_BACKEND_RELEASE_POLICY_SMOKE="${RUN_BACKEND_RELEASE_POLICY_SMOKE:-0}"
 RUN_BACKEND_EVIDENCE_PERSISTENCE_SMOKE="${RUN_BACKEND_EVIDENCE_PERSISTENCE_SMOKE:-0}"
 RUN_BACKEND_DB_UOW_SMOKE="${RUN_BACKEND_DB_UOW_SMOKE:-0}"
+RUN_BACKEND_READINESS_SMOKE="${RUN_BACKEND_READINESS_SMOKE:-0}"
 RUN_BACKEND_RUNTIME_CAPABILITY_SMOKE="${RUN_BACKEND_RUNTIME_CAPABILITY_SMOKE:-0}"
 RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE="${RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE:-0}"
 RUN_BACKEND_RELEASE_POLICY_COMMAND_SMOKE="${RUN_BACKEND_RELEASE_POLICY_COMMAND_SMOKE:-0}"
@@ -129,6 +130,9 @@ if [[ "$RELEASE_HANDOFF_MODE" == "1" ]]; then
   # Release handoff must prove deployed requests use explicit commit/rollback
   # work units and expose healthy pool-return metrics.
   RUN_BACKEND_DB_UOW_SMOKE=1
+  # Release handoff must prove the deployed instance is safe to receive traffic,
+  # not merely that its process is alive.
+  RUN_BACKEND_READINESS_SMOKE=1
   # Release handoff must prove runtime capability axes remain independent in
   # the deployed response and cannot be inferred from legacy bool aliases.
   RUN_BACKEND_RUNTIME_CAPABILITY_SMOKE=1
@@ -190,6 +194,7 @@ Run ID: \`$RUN_ID\`
 - Backend release-policy shadow smoke: \`$RUN_BACKEND_RELEASE_POLICY_SMOKE\`
 - Backend evidence persistence smoke: \`$RUN_BACKEND_EVIDENCE_PERSISTENCE_SMOKE\`
 - Backend database request UoW smoke: \`$RUN_BACKEND_DB_UOW_SMOKE\`
+- Backend schema/auth readiness smoke: \`$RUN_BACKEND_READINESS_SMOKE\`
 - Backend runtime capability five-axis smoke: \`$RUN_BACKEND_RUNTIME_CAPABILITY_SMOKE\`
 - Release-policy deployed-to-cache smoke: \`$RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE\`
 - Backend captured release-policy command smoke: \`$RUN_BACKEND_RELEASE_POLICY_COMMAND_SMOKE\`
@@ -252,10 +257,11 @@ Run ID: \`$RUN_ID\`
 - Optional deployed credential boundary smoke when \`RUN_BACKEND_CREDENTIAL_RESPONSE_BOUNDARY_SMOKE=1\`; release handoff forces this gate and verifies no-store, value-free realtime voice, and blocked digital-human broker contracts.
 - Optional backend auth session/ownership shadow smoke when \`RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE=1\`; this verifies opaque login tokens, refresh rotation/replay rejection, logout revocation, and principal-bound owner mismatch rejection while global mode remains shadow.
 - Optional backend cross-account authorization shadow smoke when \`RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE=1\`; this verifies owner/family/time-letter/invitation policy decisions, forged-viewer deny evidence, and retained production shadow mode without invoking global dispatch.
-- Optional backend route ownership audit smoke when \`RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE=1\`; this verifies 59 classified routes, zero omissions, owner path/body denial (including knowledge governance), system-only denial, and retained global shadow mode without invoking global dispatch.
+- Optional backend route ownership audit smoke when \`RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE=1\`; this verifies 62 classified routes, zero omissions, owner path/body denial (including knowledge governance), system-only denial, and retained global shadow mode without invoking global dispatch.
 - Optional backend release-policy smoke when \`RUN_BACKEND_RELEASE_POLICY_SMOKE=1\`; release handoff forces this gate to verify the deployed typed shadow snapshot, no-store response, explicit Closed Pilot allowlist, unknown-feature deny, and version-downgrade rejection.
 - Optional backend evidence persistence smoke when \`RUN_BACKEND_EVIDENCE_PERSISTENCE_SMOKE=1\`; release handoff forces this gate to verify the deployed rollout writer uses the persistent append-only source. Restart continuity is verified by running the same smoke before and after an API restart with \`BASELINE_PATH\`.
 - Optional backend database request UoW smoke when \`RUN_BACKEND_DB_UOW_SMOKE=1\`; release handoff forces this gate to verify request-scoped checkouts, explicit success commits, error-response rollbacks, correlation IDs, and zero new pool/return failures. The direct Postgres smoke separately proves concurrent isolation, aborted-transaction recovery, and pool-exhaustion fail-closed behavior.
+- Optional backend schema/auth readiness smoke when \`RUN_BACKEND_READINESS_SMOKE=1\`; release handoff forces the anonymous deployed \`/live\` and \`/ready\` contract, required database/schema/auth components, no-store behavior, business-UoW bypass, and sensitive-field redaction.
 - Optional backend runtime capability smoke when \`RUN_BACKEND_RUNTIME_CAPABILITY_SMOKE=1\`; release handoff forces this gate to verify \`implemented/enabled/providerReady/releaseVisible/externalVerified\` remain independent, mock/text-only providers do not become ready, and no credential fields are returned.
 - Optional deployed-to-cache smoke when \`RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE=1\`; release handoff forces this G2 gate to verify the live snapshot can enter an account/build-scoped cache while account switch and app upgrade remain isolated.
 - Optional captured command smoke when \`RUN_BACKEND_RELEASE_POLICY_COMMAND_SMOKE=1\`; release handoff forces this gate to verify server-side route classification, immutable decision diagnostics, and observe/enforce denial behavior without mutating production data.
@@ -544,6 +550,9 @@ run_step "Product V4 database request UoW" "$STATIC_LOG_DIR/product-v4-db-uow.lo
 
 run_step "Product V4 versioned database migrator" "$STATIC_LOG_DIR/product-v4-db-migration.log" \
   env BACKEND_ROOT="$BACKEND_ROOT" python3 "$ROOT_DIR/Scripts/QA/product-v4/product-v4-db-migration-check.py"
+
+run_step "Product V4 schema/auth readiness" "$STATIC_LOG_DIR/product-v4-readiness.log" \
+  env BACKEND_ROOT="$BACKEND_ROOT" python3 "$ROOT_DIR/Scripts/QA/product-v4/product-v4-readiness-check.py"
 
 for guard in \
   release-policy-shadow-contract-check.swift \
@@ -961,6 +970,21 @@ if [[ "$RUN_BACKEND_DB_UOW_SMOKE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/backend-db-uow-smoke/$RUN_ID"
   echo "Skipped by RUN_BACKEND_DB_UOW_SMOKE=0" > "$OUTPUT_DIR/backend-db-uow-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_BACKEND_READINESS_SMOKE" == "1" ]]; then
+  [[ -n "${BACKEND_BASE_URL:-}" ]] || {
+    echo "BACKEND_BASE_URL is required for RUN_BACKEND_READINESS_SMOKE=1" >&2
+    exit 1
+  }
+  mkdir -p "$OUTPUT_DIR/backend-readiness-smoke/$RUN_ID"
+  BACKEND_BASE_URL="$BACKEND_BASE_URL" \
+  OUTPUT_PATH="$OUTPUT_DIR/backend-readiness-smoke/$RUN_ID/result.json" \
+    "$BACKEND_ROOT/scripts/run-backend-readiness-deployed-smoke.sh" \
+      | tee "$OUTPUT_DIR/backend-readiness-smoke/$RUN_ID/result.log"
+else
+  mkdir -p "$OUTPUT_DIR/backend-readiness-smoke/$RUN_ID"
+  echo "Skipped by RUN_BACKEND_READINESS_SMOKE=0" > "$OUTPUT_DIR/backend-readiness-smoke/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_BACKEND_RUNTIME_CAPABILITY_SMOKE" == "1" ]]; then

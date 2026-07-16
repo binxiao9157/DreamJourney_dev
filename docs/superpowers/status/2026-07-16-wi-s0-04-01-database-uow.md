@@ -32,12 +32,12 @@ Lease：`ACTIVE`
 ## 未关闭边界
 
 - 默认 pool 大小只是保守技术基线，尚未完成生产并发压测、峰值连接预算和 Operations 容量批准，因此不宣称容量 Gate 完成。
-- `/health` 仍只表示进程健康；DB/schema/auth readiness 属于 `WI-S0-04-03`，本项不提前扩展健康合同。
+- `WI-S0-04-03` 已新增 `/live` 与 `/ready` 并接入 DB/schema/auth readiness；本项不再承担该缺口。
 - `WI-S0-04-02` 已建立 versioned migrator 并退役 API startup DDL；本项不再承担该缺口。
 - backup、隔离 restore 和 receipt replay 基线属于后续 `WI-S0-04-04/05`，本项没有伪造恢复证据。
 - maintenance job 的多批次事务保持原有每用户/每批边界；本项没有把长任务强行合并为单个大事务。
 
 ## 下一步
 
-1. 进入 `WI-S0-04-03`，完成 `/ready` DB/schema/auth readiness。
+1. 进入 `WI-S0-04-04`，建立 Postgres backup manifest、调度、保留和失败告警合同。
 2. Operations 在独立窗口完成 pool 容量基线；在此之前保持当前默认值，不以单次 smoke 代替负载验收。
