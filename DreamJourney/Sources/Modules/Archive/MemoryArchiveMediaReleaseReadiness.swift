@@ -109,13 +109,18 @@ enum MemoryArchiveMediaReleaseReadiness {
         case .publicRelease:
             return true
         case .hiddenReady(let feature, _, _):
+            if isHiddenBranchesEnabled { return true }
+            let snapshot: RuntimeCapabilitySnapshot?
             switch feature {
             case .archiveAudioUpload:
-                return isAudioUploadEnabled || isHiddenBranchesEnabled
+                snapshot = RuntimeCapabilitySnapshotStore.shared.snapshot(for: .archiveAudioUpload)
+                return isAudioUploadEnabled && snapshot?.isPubliclyAvailable == true
             case .timeLetters:
-                return isTimeLettersEnabled || isHiddenBranchesEnabled
+                snapshot = RuntimeCapabilitySnapshotStore.shared.snapshot(for: .timeLetters)
+                return isTimeLettersEnabled && snapshot?.isPubliclyAvailable == true
             case .archiveVideoUpload:
-                return isVideoUploadEnabled || isHiddenBranchesEnabled
+                snapshot = RuntimeCapabilitySnapshotStore.shared.snapshot(for: .archiveVideoUpload)
+                return isVideoUploadEnabled && snapshot?.isPubliclyAvailable == true
             default:
                 return false
             }

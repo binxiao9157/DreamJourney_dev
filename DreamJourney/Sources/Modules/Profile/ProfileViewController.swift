@@ -51,7 +51,7 @@ final class ProfileViewController: UIViewController {
     private var isVoiceCloneShellVisible: Bool {
         ProfileFamilyPersonaReleaseReadiness.isVoiceCloneVisible(
             isVoiceCloneEnabled: isFeatureRouteAllowed(.voiceCloneShell, risk: .providerEffect),
-            isHiddenBranchesEnabled: false
+            isHiddenBranchesEnabled: isProfileHiddenBranchesEnabled
         )
     }
 
@@ -95,6 +95,7 @@ final class ProfileViewController: UIViewController {
         configureScrollView()
         buildContent()
         loadCareSnapshot()
+        loadRuntimeCapabilitySnapshots()
     }
 
     deinit {
@@ -173,6 +174,15 @@ final class ProfileViewController: UIViewController {
             view.removeFromSuperview()
         }
         buildContent()
+    }
+
+    private func loadRuntimeCapabilitySnapshots() {
+        DreamJourneyBackendClient.shared.fetchRuntimeConfig { [weak self] result in
+            guard case .success = result else { return }
+            DispatchQueue.main.async {
+                self?.rebuildContent()
+            }
+        }
     }
 
     private func observeDigitalHumanContext() {

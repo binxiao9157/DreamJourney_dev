@@ -32,6 +32,8 @@ Authority：服务器 `ReleasePolicySnapshot`；iOS 本地 flag 仅承担 UI 组
 | `voiceCloneShell` | hidden | training/query/synthesis contracts | consent/provider approval | G2/G3/G4 | Release deny；`DJEnableProfileHiddenBranches` only；no mobile Provider key |
 | `digitalHumanLivePanel` | hidden | Tencent session/audio-drive implementation | product/provider approval | G2/G3/G4 | Release deny；explicit Debug/UIQA launch arg only |
 
+> Runtime readiness 不再由上述实现状态或单一 Provider bool 推断。`WI-S0-06-05` 起，扩展能力统一按 `implemented / enabled / providerReady / releaseVisible / externalVerified` 五轴解释；只有完整新合同且五轴同时满足时，普通发布态入口才可视为可用。旧 alias、mock、text-only、缺失或过期外部证据均按 unknown/deny。
+
 ## QA-only Overrides
 
 以下入口只用于合成账号、mock 数据或明确的内部 Provider 验证。Release 真机不能通过参数或旧 `UserDefaults` 值开启：

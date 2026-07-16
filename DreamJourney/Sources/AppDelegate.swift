@@ -128,6 +128,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     @objc private func handleReleasePolicyAccountChange() {
         FeatureGateService.shared.invalidateCapturedRoutes()
+        RuntimeCapabilitySnapshotStore.shared.invalidate()
         refreshReleasePolicy()
     }
 

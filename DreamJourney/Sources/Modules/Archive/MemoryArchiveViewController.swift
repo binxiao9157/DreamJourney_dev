@@ -602,7 +602,7 @@ final class MemoryArchiveViewController: UIViewController {
                 localEnabled: FeatureFlagService.shared.isEnabled(.timeLetters),
                 qaSyntheticOverride: isUIQAArchiveHiddenBranchesEnabled
             ),
-            isHiddenBranchesEnabled: false
+            isHiddenBranchesEnabled: isUIQAArchiveHiddenBranchesEnabled
         )
     }
 
@@ -642,6 +642,7 @@ final class MemoryArchiveViewController: UIViewController {
         observeDigitalHumanContext()
         setupLayout()
         refreshContent()
+        loadRuntimeCapabilitySnapshots()
     }
 
     deinit {
@@ -777,6 +778,15 @@ final class MemoryArchiveViewController: UIViewController {
         updateTimeLetterReminderButton()
         updateArchiveFilterButton()
         reloadArchiveList()
+    }
+
+    private func loadRuntimeCapabilitySnapshots() {
+        DreamJourneyBackendClient.shared.fetchRuntimeConfig { [weak self] result in
+            guard case .success = result else { return }
+            DispatchQueue.main.async {
+                self?.refreshContent()
+            }
+        }
     }
 
     private func updateAutobiographyPageCopy() {

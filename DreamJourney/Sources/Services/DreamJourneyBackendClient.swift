@@ -24,9 +24,10 @@ struct ArchiveImageAnalysisRuntimeCapability {
     let supportsVision: Bool
     let fallbackMode: String
     let statuses: [String]
+    let axisSnapshot: RuntimeCapabilitySnapshot
 
     var canRunVisionAnalysis: Bool {
-        enabled && supportsVision
+        supportsVision && axisSnapshot.isProviderOperational
     }
 
     var availabilityDisplayText: String {
@@ -39,13 +40,21 @@ struct ArchiveImageAnalysisRuntimeCapability {
         return "AI 分析暂不可用"
     }
 
-    init(json: [String: Any]?) {
+    init(json: [String: Any]?, axisSnapshot: RuntimeCapabilitySnapshot? = nil) {
         enabled = json?["enabled"] as? Bool ?? false
         endpoint = json?["endpoint"] as? String ?? "/archive/image-analysis"
         provider = json?["provider"] as? String ?? "unknown"
         supportsVision = json?["supportsVision"] as? Bool ?? false
         fallbackMode = json?["fallbackMode"] as? String ?? "retryableFailure"
         statuses = json?["statuses"] as? [String] ?? []
+        self.axisSnapshot = axisSnapshot ?? RuntimeCapabilitySnapshot.conservativeLegacy(
+            capability: RuntimeCapabilityID.archiveImageAnalysis.rawValue,
+            implemented: true,
+            enabled: enabled,
+            providerReady: enabled && supportsVision,
+            provider: provider,
+            fallbackMode: fallbackMode
+        )
     }
 }
 
@@ -600,9 +609,10 @@ struct VoiceCloneRuntimeCapability {
     let fallbackMode: String
     let tencentAudioDrive: VoiceCloneTencentAudioDriveCapability
     let contractVersion: Int
+    let axisSnapshot: RuntimeCapabilitySnapshot
 
     var canSynthesize: Bool {
-        enabled && synthesisProviderReady
+        axisSnapshot.isProviderOperational
     }
 
     static func localFallback(isBackendConfigured: Bool) -> VoiceCloneRuntimeCapability {
@@ -620,7 +630,7 @@ struct VoiceCloneRuntimeCapability {
         ])
     }
 
-    init(json: [String: Any]?) {
+    init(json: [String: Any]?, axisSnapshot: RuntimeCapabilitySnapshot? = nil) {
         enabled = json?["enabled"] as? Bool ?? false
         provider = json?["provider"] as? String ?? "unknown"
         realProviderReady = json?["realProviderReady"] as? Bool ?? false
@@ -641,6 +651,14 @@ struct VoiceCloneRuntimeCapability {
         fallbackMode = json?["fallbackMode"] as? String ?? "hiddenContract"
         tencentAudioDrive = VoiceCloneTencentAudioDriveCapability(json: json?["tencentAudioDrive"] as? [String: Any])
         contractVersion = Self.intValue(json?["contractVersion"]) ?? 1
+        self.axisSnapshot = axisSnapshot ?? RuntimeCapabilitySnapshot.conservativeLegacy(
+            capability: RuntimeCapabilityID.voiceCloneShell.rawValue,
+            implemented: true,
+            enabled: enabled,
+            providerReady: enabled && synthesisProviderReady,
+            provider: provider,
+            fallbackMode: fallbackMode
+        )
     }
 
     private static func intValue(_ value: Any?) -> Int? {
@@ -800,6 +818,8 @@ struct ArchiveMediaRuntimeCapability {
 }
 
 struct BackendRuntimeConfig {
+    let capabilitySnapshotSchemaVersion: Int
+    let capabilitySnapshots: [String: RuntimeCapabilitySnapshot]
     let realtimeTokenAvailable: Bool
     let voiceRuntimeConfigEndpoint: String?
     let fallbackMode: String?
@@ -812,6 +832,17 @@ struct BackendRuntimeConfig {
     let releasePolicy: BackendReleasePolicyRuntimeDescriptor
 
     init(json: [String: Any]) {
+        capabilitySnapshotSchemaVersion = Self.intValue(json["capabilitySnapshotSchemaVersion"]) ?? 0
+        let rawSnapshots = json["capabilitySnapshots"] as? [String: Any] ?? [:]
+        let decodedSnapshots: [String: RuntimeCapabilitySnapshot] = rawSnapshots.reduce(into: [:]) { result, entry in
+            guard let value = entry.value as? [String: Any],
+                  let snapshot = RuntimeCapabilitySnapshot(json: value),
+                  snapshot.capability == entry.key else {
+                return
+            }
+            result[entry.key] = snapshot
+        }
+        capabilitySnapshots = decodedSnapshots
         let capabilities = json["capabilities"] as? [String: Any]
         let voice = json["voice"] as? [String: Any]
         let fallback = voice?["fallback"] as? [String: Any]
@@ -826,10 +857,27 @@ struct BackendRuntimeConfig {
         archiveMediaUploadIntentAvailable = capabilities?["archiveMediaUploadIntent"] as? Bool ?? false
         archiveMediaUploadIntentEndpoint = archive?["uploadIntentEndpoint"] as? String
         self.archiveMedia = ArchiveMediaRuntimeCapability(json: archive, capabilities: capabilities)
-        self.archiveImageAnalysis = ArchiveImageAnalysisRuntimeCapability(json: archiveImageAnalysis)
-        self.voiceClone = VoiceCloneRuntimeCapability(json: voiceClone)
-        self.digitalHuman = DigitalHumanRuntimeCapability(json: digitalHuman, capabilities: capabilities)
+        self.archiveImageAnalysis = ArchiveImageAnalysisRuntimeCapability(
+            json: archiveImageAnalysis,
+            axisSnapshot: decodedSnapshots[RuntimeCapabilityID.archiveImageAnalysis.rawValue]
+        )
+        self.voiceClone = VoiceCloneRuntimeCapability(
+            json: voiceClone,
+            axisSnapshot: decodedSnapshots[RuntimeCapabilityID.voiceCloneShell.rawValue]
+        )
+        self.digitalHuman = DigitalHumanRuntimeCapability(
+            json: digitalHuman,
+            capabilities: capabilities,
+            axisSnapshot: decodedSnapshots[RuntimeCapabilityID.digitalHumanLivePanel.rawValue]
+        )
         self.releasePolicy = BackendReleasePolicyRuntimeDescriptor(json: releasePolicy)
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = value as? String { return Int(value) }
+        return nil
     }
 }
 
@@ -864,14 +912,14 @@ struct DigitalHumanRuntimeCapability {
     let requiresBackendIssuedCredential: Bool
     let sessionLease: DigitalHumanSessionLeaseRuntimeCapability
     let contractVersion: Int
+    let axisSnapshot: RuntimeCapabilitySnapshot
 
     var canCreateMockSession: Bool {
         enabled && provider == "tencent" && providerMode == "mockContract"
     }
 
     var allowsScopedMobileSession: Bool {
-        enabled
-            && realProviderReady
+        axisSnapshot.isProviderOperational
             && credentialMode == "scopedSessionCredential"
             && accessPath == "scopedSessionCredential"
             && mobileDirectAllowed
@@ -882,7 +930,11 @@ struct DigitalHumanRuntimeCapability {
             && contractVersion >= 4
     }
 
-    init(json: [String: Any]?, capabilities: [String: Any]?) {
+    init(
+        json: [String: Any]?,
+        capabilities: [String: Any]?,
+        axisSnapshot: RuntimeCapabilitySnapshot? = nil
+    ) {
         enabled = capabilities?["digitalHumanSession"] as? Bool ?? json?["enabled"] as? Bool ?? false
         provider = json?["provider"] as? String ?? "unknown"
         providerMode = json?["providerMode"] as? String ?? "unknown"
@@ -915,6 +967,14 @@ struct DigitalHumanRuntimeCapability {
             capabilityEnabled: capabilities?["digitalHumanSessionLease"] as? Bool ?? false
         )
         contractVersion = Self.intValue(json?["contractVersion"]) ?? 1
+        self.axisSnapshot = axisSnapshot ?? RuntimeCapabilitySnapshot.conservativeLegacy(
+            capability: RuntimeCapabilityID.digitalHumanLivePanel.rawValue,
+            implemented: true,
+            enabled: enabled,
+            providerReady: enabled && realProviderReady,
+            provider: provider,
+            fallbackMode: fallbackMode
+        )
     }
 
     private static func intValue(_ value: Any?) -> Int? {
@@ -3211,7 +3271,11 @@ final class DreamJourneyBackendClient {
 
     func fetchRuntimeConfig(completion: @escaping (Result<BackendRuntimeConfig, Error>) -> Void) {
         requestJSON(path: "/config/runtime", method: .get, payload: nil) { result in
-            completion(result.map(BackendRuntimeConfig.init(json:)))
+            let mapped = result.map(BackendRuntimeConfig.init(json:))
+            if case .success(let config) = mapped {
+                RuntimeCapabilitySnapshotStore.shared.replace(with: config.capabilitySnapshots)
+            }
+            completion(mapped)
         }
     }
 

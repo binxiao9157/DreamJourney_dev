@@ -2254,6 +2254,12 @@ final class EchoViewController: UIViewController {
             return "policy.\(decision.feature): \(decision.allowed ? "allow" : "deny") "
                 + "v=\(decision.policyVersion ?? "none") r=\(revision) reason=\(decision.reason)"
         }
+        let capabilityLines = [
+            RuntimeCapabilitySnapshotStore.shared.snapshot(for: .voiceCloneShell),
+            RuntimeCapabilitySnapshotStore.shared.snapshot(for: .digitalHumanLivePanel),
+        ].compactMap { capability in
+            capability.map { "capability.\($0.diagnosticSummary)" }
+        }
         let baseLines = [
             "Echo QA clues",
             "turn: \(snapshot.turnID)",
@@ -2272,7 +2278,7 @@ final class EchoViewController: UIViewController {
             "latencyMs: \(snapshot.contextLatencyMs)"
         ]
         echoRuntimeDiagnosticsPanelLabel.text = (
-            baseLines + policyLines + contextClues.panelLines(prefix: "ctx")
+            baseLines + capabilityLines + policyLines + contextClues.panelLines(prefix: "ctx")
         )
             .joined(separator: "\n")
         echoRuntimeDiagnosticsPanelView.isHidden = false

@@ -248,6 +248,9 @@ assertContains(releaseRegression, "run-feature-gate-evaluator-model-smoke.sh", "
 assertContains(releaseRegression, "captured-feature-policy-gate-check.swift", "release regression should guard cross-repository captured policy wiring")
 assertContains(releaseRegression, "RUN_BACKEND_RELEASE_POLICY_COMMAND_SMOKE", "release regression should expose deployed command-policy evidence")
 assertContains(releaseRegression, "run-backend-release-policy-command-deployed-smoke.sh", "release regression should call deployed command-policy smoke")
+assertContains(releaseRegression, "run-runtime-capability-snapshot-model-smoke.sh", "release regression should model independent runtime capability axes")
+assertContains(releaseRegression, "runtime-capability-axis-integration-check.swift", "release regression should guard five-axis runtime consumption")
+assertContains(releaseRegression, "RUN_BACKEND_RUNTIME_CAPABILITY_SMOKE", "release regression should expose deployed five-axis capability evidence")
 assertContains(releaseRegression, "run-knowledge-semantic-cache-isolation-check.sh", "release regression should always guard semantic cache lifecycle wiring")
 assertContains(releaseRegression, "run-knowledge-local-storage-protection-model-smoke.sh", "release regression should always verify knowledge file attributes after atomic replacement")
 assertContains(releaseRegression, "run-knowledge-local-storage-protection-check.sh", "release regression should always guard every knowledge writer")
@@ -449,15 +452,22 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/feature-gate-evaluator-model-smoke.swift",
     "Scripts/QA/prd-stitch-ui/run-feature-gate-evaluator-model-smoke.sh",
     "Scripts/QA/prd-stitch-ui/captured-feature-policy-gate-check.swift",
+    "DreamJourney/Sources/Services/RuntimeCapabilitySnapshot.swift",
+    "Scripts/QA/prd-stitch-ui/runtime-capability-snapshot-model-smoke.swift",
+    "Scripts/QA/prd-stitch-ui/run-runtime-capability-snapshot-model-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/runtime-capability-axis-integration-check.swift",
     "docs/superpowers/status/2026-07-16-wi-s0-06-01-release-policy-shadow.md",
     "docs/superpowers/status/2026-07-16-wi-s0-06-02-release-policy-cache.md",
     "docs/superpowers/status/2026-07-16-wi-s0-06-04-captured-policy-gate.md",
+    "docs/superpowers/status/2026-07-16-wi-s0-06-05-runtime-capability-axes.md",
     "docs/superpowers/status/2026-07-16-wi-s0-03-07-credential-rotation-receipt.json",
     "docs/superpowers/status/2026-07-16-wi-s0-03-07-credential-rotation-revoke-drain.md",
     "../DreamJourneyBackend/scripts/run-backend-credential-response-deployed-smoke.sh",
     "../DreamJourneyBackend/scripts/run-backend-release-policy-deployed-smoke.sh",
     "../DreamJourneyBackend/scripts/backend-release-policy-command-deployed-smoke.py",
     "../DreamJourneyBackend/scripts/run-backend-release-policy-command-deployed-smoke.sh",
+    "../DreamJourneyBackend/scripts/backend-runtime-capability-deployed-smoke.py",
+    "../DreamJourneyBackend/scripts/run-backend-runtime-capability-deployed-smoke.sh",
     "Scripts/QA/prd-stitch-ui/ios-doctor-check.swift",
     "Scripts/QA/prd-stitch-ui/qa-script-location-check.swift",
     "Scripts/QA/prd-stitch-ui/docs-qa-script-path-check.swift",

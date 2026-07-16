@@ -67,7 +67,9 @@ enum ProfileFamilyPersonaReleaseReadiness {
         isFamilyManagementEnabled: Bool,
         isHiddenBranchesEnabled: Bool
     ) -> Bool {
-        isHiddenBranchesEnabled || isFamilyManagementEnabled
+        if isHiddenBranchesEnabled { return true }
+        let snapshot = RuntimeCapabilitySnapshotStore.shared.snapshot(for: .familyManagement)
+        return isFamilyManagementEnabled && snapshot?.isPubliclyAvailable == true
     }
 
     static func canOpenFamilyPersonaSwitcher(
@@ -75,14 +77,20 @@ enum ProfileFamilyPersonaReleaseReadiness {
         isFamilySpaceEnabled: Bool,
         isHiddenBranchesEnabled: Bool
     ) -> Bool {
-        isHiddenBranchesEnabled || isFamilyManagementEnabled || isFamilySpaceEnabled
+        if isHiddenBranchesEnabled { return true }
+        let management = RuntimeCapabilitySnapshotStore.shared.snapshot(for: .familyManagement)
+        let familySpace = RuntimeCapabilitySnapshotStore.shared.snapshot(for: .familySpace)
+        return (isFamilyManagementEnabled && management?.isPubliclyAvailable == true)
+            || (isFamilySpaceEnabled && familySpace?.isPubliclyAvailable == true)
     }
 
     static func canOpenFamilyPersonaSwitcher(
         isFamilySpaceEnabled: Bool,
         isHiddenBranchesEnabled: Bool
     ) -> Bool {
-        isHiddenBranchesEnabled || isFamilySpaceEnabled
+        if isHiddenBranchesEnabled { return true }
+        let snapshot = RuntimeCapabilitySnapshotStore.shared.snapshot(for: .familySpace)
+        return isFamilySpaceEnabled && snapshot?.isPubliclyAvailable == true
     }
 
     static func isPasswordChangeVisible(
@@ -96,6 +104,8 @@ enum ProfileFamilyPersonaReleaseReadiness {
         isVoiceCloneEnabled: Bool,
         isHiddenBranchesEnabled: Bool
     ) -> Bool {
-        isHiddenBranchesEnabled || isVoiceCloneEnabled
+        if isHiddenBranchesEnabled { return true }
+        let snapshot = RuntimeCapabilitySnapshotStore.shared.snapshot(for: .voiceCloneShell)
+        return isVoiceCloneEnabled && snapshot?.isPubliclyAvailable == true
     }
 }
