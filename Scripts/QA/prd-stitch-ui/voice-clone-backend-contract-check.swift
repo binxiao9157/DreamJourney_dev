@@ -30,6 +30,7 @@ let backendProvider = read("app/services/voice_clone.py", in: backendRoot)
 let backendTTS = read("app/services/tts.py", in: backendRoot)
 let backendMemoryStore = read("app/services/in_memory_store.py", in: backendRoot)
 let backendPostgresStore = read("app/services/postgres_store.py", in: backendRoot)
+let backendBaselineMigration = read("db/migrations/0001_existing_schema_baseline.sql", in: backendRoot)
 let backendTests = read("tests/test_core_services.py", in: backendRoot)
 let backendPostgresTests = read("tests/test_postgres_store.py", in: backendRoot)
 let backendReadme = read("README.md", in: backendRoot)
@@ -133,10 +134,10 @@ for required in [
 }
 
 for required in [
-    "CREATE TABLE IF NOT EXISTS voice_profiles",
+    "CREATE TABLE voice_profiles",
     "idx_voice_profiles_user_updated",
 ] {
-    assertContains(backendPostgresStore, required, "postgres schema should include \(required)")
+    assertContains(backendBaselineMigration, required, "versioned postgres schema should include \(required)")
 }
 
 for forbidden in [

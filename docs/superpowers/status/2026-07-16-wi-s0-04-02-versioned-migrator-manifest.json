@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "workItem": "WI-S0-04-02",
+  "authorityLock": "DB_RECOVERY",
+  "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
+  "lease": "ACTIVE",
+  "status": "INTERNAL_READY_DEPLOYED_G2_PRODUCTION_BASELINE_VERIFIED_DATA_SRE_APPROVAL_PENDING",
+  "backend": {
+    "branch": "main",
+    "implementationCommit": "89fe5a5",
+    "deployedCommit": "d4fb9ec",
+    "environment": "production",
+    "store": "postgres"
+  },
+  "migration": {
+    "expectedHead": "0001",
+    "appliedHead": "0001",
+    "version": "0001",
+    "name": "existing_schema_baseline",
+    "checksum": "8f97e876d8d259765d342ccdb4ba955fd304fe0209bf904514d68c872e1eeb13",
+    "productionExecutionMode": "adopted",
+    "productionReceiptBuildId": "89fe5a5",
+    "startupDDLCount": 0,
+    "automaticDownMigration": false
+  },
+  "baseline": {
+    "tableCount": 19,
+    "explicitIndexCount": 18,
+    "appendOnlyTrigger": "evidence_events_no_update",
+    "partialSchemaPolicy": "failClosed",
+    "existingSchemaPolicy": "explicitVerifiedAdoptionOnly"
+  },
+  "gates": {
+    "unitAndContract": "VERIFIED_9_MIGRATOR_371_FULL",
+    "productionDryRun": "VERIFIED_ADOPT_EXPLICITLY",
+    "productionBaselineAdoption": "VERIFIED_0001_ADOPTED",
+    "productionVerify": "VERIFIED_HEAD_0001",
+    "freshPostgres": "VERIFIED_19_TABLES",
+    "repeatNoop": "VERIFIED",
+    "concurrentMigrator": "VERIFIED_APPLY_1_SKIP_1",
+    "startupReceiptUnchanged": "VERIFIED",
+    "dataSreApproval": "EXTERNAL_PENDING",
+    "backupRestoreReplay": "WI-S0-04-04_05"
+  }
+}

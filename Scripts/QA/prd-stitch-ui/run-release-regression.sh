@@ -542,6 +542,9 @@ run_step "Product V4 credential rotation receipt" "$STATIC_LOG_DIR/product-v4-cr
 run_step "Product V4 database request UoW" "$STATIC_LOG_DIR/product-v4-db-uow.log" \
   env BACKEND_ROOT="$BACKEND_ROOT" python3 "$ROOT_DIR/Scripts/QA/product-v4/product-v4-db-uow-check.py"
 
+run_step "Product V4 versioned database migrator" "$STATIC_LOG_DIR/product-v4-db-migration.log" \
+  env BACKEND_ROOT="$BACKEND_ROOT" python3 "$ROOT_DIR/Scripts/QA/product-v4/product-v4-db-migration-check.py"
+
 for guard in \
   release-policy-shadow-contract-check.swift \
   release-policy-cache-contract-check.swift \
