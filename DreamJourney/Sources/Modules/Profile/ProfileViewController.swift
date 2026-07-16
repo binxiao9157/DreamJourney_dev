@@ -45,13 +45,25 @@ final class ProfileViewController: UIViewController {
     }
 
     private var isCareDoctorContactVisible: Bool {
-        isProfileHiddenBranchesEnabled || featureFlags.isEnabled(.careDoctorContact)
+        isFeatureRouteAllowed(.careDoctorContact)
     }
 
     private var isVoiceCloneShellVisible: Bool {
         ProfileFamilyPersonaReleaseReadiness.isVoiceCloneVisible(
-            isVoiceCloneEnabled: featureFlags.isEnabled(.voiceCloneShell),
-            isHiddenBranchesEnabled: isProfileHiddenBranchesEnabled
+            isVoiceCloneEnabled: isFeatureRouteAllowed(.voiceCloneShell, risk: .providerEffect),
+            isHiddenBranchesEnabled: false
+        )
+    }
+
+    private func isFeatureRouteAllowed(
+        _ feature: DJFeature,
+        risk: ReleasePolicyRiskClass? = nil
+    ) -> Bool {
+        FeatureGateService.shared.isRouteAllowed(
+            feature,
+            risk: risk,
+            localEnabled: featureFlags.isEnabled(feature),
+            qaSyntheticOverride: isProfileHiddenBranchesEnabled
         )
     }
 
@@ -363,7 +375,7 @@ final class ProfileViewController: UIViewController {
     }
 
     private func shouldShowCareDashboard(context: DigitalHumanContext) -> Bool {
-        guard featureFlags.isEnabled(.careDashboard),
+        guard isFeatureRouteAllowed(.careDashboard),
               FamilyRepository.shared.hasStarModeMember else {
             return false
         }
@@ -537,23 +549,23 @@ final class ProfileViewController: UIViewController {
 
     private func makeSettingsRows() -> [ProfileRowAction] {
         var rows: [ProfileRowAction] = []
-        if isProfileHiddenBranchesEnabled || featureFlags.isEnabled(.profileSettings) {
+        if isFeatureRouteAllowed(.profileSettings, risk: .ownerTextCore) {
             rows.append(.profileSettings)
         }
         if ProfileFamilyPersonaReleaseReadiness.isFamilyManagementRowVisible(
-            isFamilyManagementEnabled: featureFlags.isEnabled(.familyManagement),
-            isHiddenBranchesEnabled: isProfileHiddenBranchesEnabled
+            isFamilyManagementEnabled: isFeatureRouteAllowed(.familyManagement),
+            isHiddenBranchesEnabled: false
         ) {
             rows.append(.familyManagement)
         }
         if isVoiceCloneShellVisible {
             rows.append(.voiceClone)
         }
-        if isProfileHiddenBranchesEnabled || featureFlags.isEnabled(.legalCenter) {
+        if isFeatureRouteAllowed(.legalCenter, risk: .ownerTextCore) {
             rows.append(.legalCenter)
         }
         rows.append(.logout)
-        if isProfileHiddenBranchesEnabled || featureFlags.isEnabled(.accountDeletion) {
+        if isFeatureRouteAllowed(.accountDeletion, risk: .ownerTextCore) {
             rows.append(.accountDeletion)
         }
         return rows
@@ -810,9 +822,9 @@ final class ProfileViewController: UIViewController {
 
     private func openFamilyManagement() {
         guard ProfileFamilyPersonaReleaseReadiness.canOpenFamilyPersonaSwitcher(
-            isFamilyManagementEnabled: featureFlags.isEnabled(.familyManagement),
-            isFamilySpaceEnabled: featureFlags.isEnabled(.familySpace),
-            isHiddenBranchesEnabled: isProfileHiddenBranchesEnabled
+            isFamilyManagementEnabled: isFeatureRouteAllowed(.familyManagement),
+            isFamilySpaceEnabled: isFeatureRouteAllowed(.familySpace),
+            isHiddenBranchesEnabled: false
         ) else {
             showUnavailableAlert(
                 title: ProfileFamilyPersonaReleaseReadiness.unavailableTitle,

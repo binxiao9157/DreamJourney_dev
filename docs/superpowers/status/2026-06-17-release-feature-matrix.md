@@ -13,16 +13,16 @@ Authority：服务器 `ReleasePolicySnapshot`；iOS 本地 flag 仅承担 UI 组
 
 | Feature | Public status | Internal status | Decision gate | External gate | Route policy |
 | --- | --- | --- | --- | --- | --- |
-| `echoTextInput` | public-core | implemented | Closed Pilot Owner core | G0/G1 | server allow；scoped cache；captured route gate pending `WI-S0-06-04` |
+| `echoTextInput` | public-core | implemented | Closed Pilot Owner core | G0/G1 | server allow；scoped cache；captured route/request Gate；线上 command observe allow |
 | `echoImageInput` | hidden | shell/contract | product scope | G1/G2 | Release deny；未提供公开入口 |
-| `timeLetters` | hidden | lifecycle + backend delivery contract | product/privacy approval | G2/G4 | Release deny；`DJEnableArchiveHiddenBranches` only；command gate pending `WI-S0-06-04` |
-| `profileSettings` | public-core | implemented | Closed Pilot Owner core | G0/G1 | server allow；scoped cache；captured route gate pending `WI-S0-06-04` |
+| `timeLetters` | hidden | lifecycle + backend delivery contract | product/privacy approval | G2/G4 | Release deny；`DJEnableArchiveHiddenBranches` only；captured command 保持 deny |
+| `profileSettings` | public-core | implemented | Closed Pilot Owner core | G0/G1 | server allow；scoped cache；captured route/request Gate；线上 command observe allow |
 | `personaSettings` | hidden | local knowledge/persona shell | product/privacy approval | G1/G4 | Release deny；archive QA branch only |
 | `archiveAudioUpload` | hidden | recorder/detail/upload contracts | media release decision | G2/G3/G4 | Release deny；mock/QA entry only |
 | `archiveVideoUpload` | hidden | detail/upload-intent shell | media release decision | G2/G3/G4 | Release deny；mock/QA entry only |
 | `archiveRemoteFetch` | hidden | backend-ready client | data authority rollout | G1/G2 | Release deny；`DJEnableArchiveRemoteFetch` in Debug/UIQA only |
 | `archiveLocalAnalysis` | hidden | local/failed-retry shell | analysis disclosure decision | G1/G4 | Release deny；QA only |
-| `familyManagement` | hidden | phone invite + relationship contracts | family/privacy approval | G1/G2/G4 | Release deny；`DJEnableProfileHiddenBranches` only；command gate pending `WI-S0-06-04` |
+| `familyManagement` | hidden | phone invite + relationship contracts | family/privacy approval | G1/G2/G4 | Release deny；`DJEnableProfileHiddenBranches` only；线上 command observeDeny 已验证 |
 | `familySpace` | hidden | persona switch + family context contracts | family authorization approval | G1/G2/G4 | Release deny；`DJEnableProfileHiddenBranches` only |
 | `legalCenter` | public-core | implemented | Closed Pilot Owner core | G0/G1 | server allow；read-only route |
 | `accountDeletion` | public-core | soft-delete/restore contract | Closed Pilot safety requirement | G1/G2 | server allow；destructive confirmation remains mandatory |

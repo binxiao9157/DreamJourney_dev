@@ -594,8 +594,12 @@ final class EchoViewController: UIViewController {
         if isDigitalHumanQADisableEnabled {
             return false
         }
-        return FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel)
-            || isDigitalHumanQAOverrideEnabled
+        return FeatureGateService.shared.isRouteAllowed(
+            .digitalHumanLivePanel,
+            risk: .providerEffect,
+            localEnabled: FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel),
+            qaSyntheticOverride: isDigitalHumanQAOverrideEnabled
+        )
     }
 
     private var isDigitalHumanQAOverrideEnabled: Bool {
@@ -691,6 +695,11 @@ final class EchoViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        FeatureGateService.shared.captureRoute(
+            feature: .echoTextInput,
+            risk: .ownerTextCore,
+            localEnabled: FeatureFlagService.shared.isEnabled(.echoTextInput)
+        )
         view.backgroundColor = DJDesignTokens.Color.background
         navigationController?.setNavigationBarHidden(true, animated: false)
         observeDigitalHumanContext()
@@ -2147,6 +2156,11 @@ final class EchoViewController: UIViewController {
         let providerMode = profile?.driveMode ?? ownerTrace?.digitalHumanProviderMode ?? "unknown"
         let fallbackReason = lastEchoRuntimeFallbackReason ?? ownerTrace?.fallbacks.first
         let voiceSelection = resolveEchoRoleVoiceProfileSelection()
+        let policyDecisions = FeatureGateService.shared.qaEvidenceSnapshot(features: [
+            .echoTextInput,
+            .voiceCloneShell,
+            .digitalHumanLivePanel,
+        ])
         return EchoRuntimeDiagnosticsSnapshot(
             trace: ownerTrace,
             ownerUserId: ownerUserId,
@@ -2162,6 +2176,7 @@ final class EchoViewController: UIViewController {
             providerRequestId: lastVoiceCloneProviderRequestId,
             providerMode: lastVoiceCloneProviderMode,
             fallbackReason: fallbackReason,
+            featurePolicyDecisions: policyDecisions,
             source: reason
         )
     }
@@ -2234,6 +2249,11 @@ final class EchoViewController: UIViewController {
             : snapshot.archiveItemIDs.prefix(3).joined(separator: ",")
         let fallback = snapshot.fallbackReason?.isEmpty == false ? snapshot.fallbackReason! : "none"
         let voiceProfile = snapshot.voiceProfileId?.isEmpty == false ? snapshot.voiceProfileId! : "none"
+        let policyLines = (snapshot.featurePolicyDecisions ?? []).map { decision in
+            let revision = decision.validatedPolicyRevision ?? decision.capturedPolicyRevision ?? 0
+            return "policy.\(decision.feature): \(decision.allowed ? "allow" : "deny") "
+                + "v=\(decision.policyVersion ?? "none") r=\(revision) reason=\(decision.reason)"
+        }
         let baseLines = [
             "Echo QA clues",
             "turn: \(snapshot.turnID)",
@@ -2251,7 +2271,9 @@ final class EchoViewController: UIViewController {
             "fallback: \(fallback)",
             "latencyMs: \(snapshot.contextLatencyMs)"
         ]
-        echoRuntimeDiagnosticsPanelLabel.text = (baseLines + contextClues.panelLines(prefix: "ctx"))
+        echoRuntimeDiagnosticsPanelLabel.text = (
+            baseLines + policyLines + contextClues.panelLines(prefix: "ctx")
+        )
             .joined(separator: "\n")
         echoRuntimeDiagnosticsPanelView.isHidden = false
         echoRuntimeDiagnosticsPanelView.alpha = 1

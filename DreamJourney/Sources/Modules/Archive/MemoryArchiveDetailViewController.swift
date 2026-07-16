@@ -152,10 +152,15 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     private var shouldShowLocalAnalysisAction: Bool {
         guard item.analysisStatus != .analyzed else { return false }
         #if DEBUG || UI_QA_SIMULATOR
-        return true
+        let qaSyntheticOverride = true
         #else
-        return FeatureFlagService.shared.isEnabled(.archiveLocalAnalysis)
+        let qaSyntheticOverride = false
         #endif
+        return FeatureGateService.shared.isRouteAllowed(
+            .archiveLocalAnalysis,
+            localEnabled: FeatureFlagService.shared.isEnabled(.archiveLocalAnalysis),
+            qaSyntheticOverride: qaSyntheticOverride
+        )
     }
 
     private var shouldSyncArchiveUpdateToBackend: Bool {

@@ -43,6 +43,19 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             name: .djUserDidLogin,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleReleasePolicyAccountChange),
+            name: .djUserDidLogin,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleReleasePolicyAccountChange),
+            name: .djUserDidLogout,
+            object: nil
+        )
+        refreshReleasePolicy()
         configurePushDeviceTokenRegistration(application)
         #if UI_QA_SIMULATOR && targetEnvironment(simulator)
         configureUIQASmokeHarnessIfNeeded()
@@ -111,6 +124,19 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     @objc private func handleUserDidLoginForPushDeviceToken() {
         syncStoredPushDeviceTokenIfPossible()
+    }
+
+    @objc private func handleReleasePolicyAccountChange() {
+        FeatureGateService.shared.invalidateCapturedRoutes()
+        refreshReleasePolicy()
+    }
+
+    private func refreshReleasePolicy() {
+        FeatureGateService.shared.refreshPolicy { result in
+            if case .failure(let error) = result {
+                print("[ReleasePolicy] refresh failed; cached fail-closed policy remains active: \(error.localizedDescription)")
+            }
+        }
     }
 
     private func syncStoredPushDeviceTokenIfPossible() {

@@ -40,8 +40,12 @@ final class ProfileSettingsViewController: UIViewController {
 
     private var isPasswordChangeVisible: Bool {
         ProfileFamilyPersonaReleaseReadiness.isPasswordChangeVisible(
-            isPasswordChangeEnabled: featureFlags.isEnabled(.accountPasswordChange),
-            isHiddenBranchesEnabled: isProfileHiddenBranchesEnabled
+            isPasswordChangeEnabled: FeatureGateService.shared.isRouteAllowed(
+                .accountPasswordChange,
+                localEnabled: featureFlags.isEnabled(.accountPasswordChange),
+                qaSyntheticOverride: isProfileHiddenBranchesEnabled
+            ),
+            isHiddenBranchesEnabled: false
         )
     }
 

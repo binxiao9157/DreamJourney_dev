@@ -35,6 +35,216 @@ enum ReleasePolicyCacheState: String, Codable {
     case invalidScope
 }
 
+enum FeatureGatePurpose: String, Codable {
+    case route
+    case request
+}
+
+struct FeatureGatePolicySnapshot: Equatable {
+    let accessMode: ReleasePolicyAccessMode
+    let policyVersion: String?
+    let policyRevision: Int?
+    let emergencyRevision: Int?
+    let expiresAt: Date?
+    let featureEnabled: Bool
+    let releaseVisible: Bool
+    let reason: String
+
+    static func unavailable(
+        accessMode: ReleasePolicyAccessMode,
+        reason: String
+    ) -> FeatureGatePolicySnapshot {
+        FeatureGatePolicySnapshot(
+            accessMode: accessMode,
+            policyVersion: nil,
+            policyRevision: nil,
+            emergencyRevision: nil,
+            expiresAt: nil,
+            featureEnabled: false,
+            releaseVisible: false,
+            reason: reason
+        )
+    }
+}
+
+struct FeatureDecision: Equatable {
+    let decisionId: String
+    let feature: DJFeature
+    let purpose: FeatureGatePurpose
+    let policyVersion: String?
+    let policyRevision: Int?
+    let emergencyRevision: Int?
+    let validatedPolicyRevision: Int?
+    let validatedEmergencyRevision: Int?
+    let accountGeneration: String
+    let allowed: Bool
+    let reason: String
+    let expiresAt: Date?
+
+    var capturedPolicyRevision: Int? { policyRevision }
+
+    func deniedForRequest(
+        reason: String,
+        validatedPolicyRevision: Int? = nil,
+        validatedEmergencyRevision: Int? = nil
+    ) -> FeatureDecision {
+        FeatureDecision(
+            decisionId: decisionId,
+            feature: feature,
+            purpose: .request,
+            policyVersion: policyVersion,
+            policyRevision: policyRevision,
+            emergencyRevision: emergencyRevision,
+            validatedPolicyRevision: validatedPolicyRevision,
+            validatedEmergencyRevision: validatedEmergencyRevision,
+            accountGeneration: accountGeneration,
+            allowed: false,
+            reason: reason,
+            expiresAt: expiresAt
+        )
+    }
+}
+
+struct FeatureDecisionEvidenceSummary: Codable, Equatable {
+    let decisionId: String
+    let feature: String
+    let purpose: String
+    let policyVersion: String?
+    let capturedPolicyRevision: Int?
+    let capturedEmergencyRevision: Int?
+    let validatedPolicyRevision: Int?
+    let validatedEmergencyRevision: Int?
+    let accountGeneration: String
+    let allowed: Bool
+    let reason: String
+    let expiresAt: Date?
+
+    init(decision: FeatureDecision) {
+        decisionId = decision.decisionId
+        feature = decision.feature.rawValue
+        purpose = decision.purpose.rawValue
+        policyVersion = decision.policyVersion
+        capturedPolicyRevision = decision.policyRevision
+        capturedEmergencyRevision = decision.emergencyRevision
+        validatedPolicyRevision = decision.validatedPolicyRevision
+        validatedEmergencyRevision = decision.validatedEmergencyRevision
+        accountGeneration = decision.accountGeneration
+        allowed = decision.allowed
+        reason = decision.reason
+        expiresAt = decision.expiresAt
+    }
+}
+
+struct FeatureGateEvaluator {
+    func capture(
+        feature: DJFeature,
+        risk: ReleasePolicyRiskClass,
+        purpose: FeatureGatePurpose,
+        localEnabled: Bool,
+        qaSyntheticOverride: Bool,
+        accountGeneration: String,
+        policy: FeatureGatePolicySnapshot
+    ) -> FeatureDecision {
+        let normalizedGeneration = accountGeneration.trimmingCharacters(in: .whitespacesAndNewlines)
+        let generation = normalizedGeneration.isEmpty ? "anonymous" : normalizedGeneration
+
+        let allowed: Bool
+        let reason: String
+        if purpose == .route, qaSyntheticOverride {
+            allowed = true
+            reason = "qaSyntheticRouteOnly"
+        } else if !localEnabled {
+            allowed = false
+            reason = "localFeatureDisabled"
+        } else {
+            switch policy.accessMode {
+            case .useCachedPolicy:
+                allowed = policy.featureEnabled && (purpose == .request || policy.releaseVisible)
+                reason = allowed ? policy.reason : policy.reason
+            case .readOnly:
+                allowed = purpose == .route && risk == .ownerTextCore
+                reason = allowed ? "ownerCoreReadOnly" : policy.reason
+            case .deny:
+                allowed = false
+                reason = policy.reason
+            }
+        }
+
+        return FeatureDecision(
+            decisionId: UUID().uuidString.lowercased(),
+            feature: feature,
+            purpose: purpose,
+            policyVersion: policy.policyVersion,
+            policyRevision: policy.policyRevision,
+            emergencyRevision: policy.emergencyRevision,
+            validatedPolicyRevision: policy.policyRevision,
+            validatedEmergencyRevision: policy.emergencyRevision,
+            accountGeneration: generation,
+            allowed: allowed,
+            reason: reason,
+            expiresAt: policy.expiresAt
+        )
+    }
+
+    func revalidateForRequest(
+        captured: FeatureDecision,
+        localEnabled: Bool,
+        accountGeneration: String,
+        currentPolicy: FeatureGatePolicySnapshot,
+        now: Date = Date()
+    ) -> FeatureDecision {
+        guard captured.allowed else {
+            return captured.deniedForRequest(reason: captured.reason)
+        }
+
+        let normalizedGeneration = accountGeneration.trimmingCharacters(in: .whitespacesAndNewlines)
+        let currentGeneration = normalizedGeneration.isEmpty ? "anonymous" : normalizedGeneration
+        guard captured.accountGeneration == currentGeneration else {
+            return captured.deniedForRequest(reason: "accountGenerationChanged")
+        }
+        guard localEnabled else {
+            return captured.deniedForRequest(reason: "localFeatureDisabled")
+        }
+        if let expiresAt = captured.expiresAt, expiresAt <= now {
+            return captured.deniedForRequest(
+                reason: "capturedPolicyExpired",
+                validatedPolicyRevision: currentPolicy.policyRevision,
+                validatedEmergencyRevision: currentPolicy.emergencyRevision
+            )
+        }
+        guard captured.policyVersion == currentPolicy.policyVersion else {
+            return captured.deniedForRequest(
+                reason: "policyVersionChanged",
+                validatedPolicyRevision: currentPolicy.policyRevision,
+                validatedEmergencyRevision: currentPolicy.emergencyRevision
+            )
+        }
+        guard currentPolicy.accessMode == .useCachedPolicy,
+              currentPolicy.featureEnabled else {
+            return captured.deniedForRequest(
+                reason: currentPolicy.reason,
+                validatedPolicyRevision: currentPolicy.policyRevision,
+                validatedEmergencyRevision: currentPolicy.emergencyRevision
+            )
+        }
+
+        return FeatureDecision(
+            decisionId: captured.decisionId,
+            feature: captured.feature,
+            purpose: .request,
+            policyVersion: captured.policyVersion,
+            policyRevision: captured.policyRevision,
+            emergencyRevision: captured.emergencyRevision,
+            validatedPolicyRevision: currentPolicy.policyRevision,
+            validatedEmergencyRevision: currentPolicy.emergencyRevision,
+            accountGeneration: captured.accountGeneration,
+            allowed: true,
+            reason: "capturedPolicyRevalidated",
+            expiresAt: captured.expiresAt
+        )
+    }
+}
+
 struct ReleasePolicyCacheScope: Hashable {
     let accountOrAnonymousScope: String
     let appBuild: String

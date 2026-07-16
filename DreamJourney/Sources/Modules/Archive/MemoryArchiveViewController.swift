@@ -569,12 +569,11 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     private var isPersonaSettingsVisible: Bool {
-        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
-        if isUIQAArchiveHiddenBranchesEnabled {
-            return true
-        }
-        #endif
-        return FeatureFlagService.shared.isEnabled(.personaSettings)
+        FeatureGateService.shared.isRouteAllowed(
+            .personaSettings,
+            localEnabled: FeatureFlagService.shared.isEnabled(.personaSettings),
+            qaSyntheticOverride: isUIQAArchiveHiddenBranchesEnabled
+        )
     }
 
     private var isUIQAArchiveHiddenBranchesEnabled: Bool {
@@ -588,10 +587,22 @@ final class MemoryArchiveViewController: UIViewController {
     private func isArchiveCreationVisible(for kind: MemoryArchiveItemKind) -> Bool {
         MemoryArchiveMediaReleaseReadiness.isCreationVisible(
             for: kind,
-            isAudioUploadEnabled: FeatureFlagService.shared.isEnabled(.archiveAudioUpload),
-            isVideoUploadEnabled: FeatureFlagService.shared.isEnabled(.archiveVideoUpload),
-            isTimeLettersEnabled: FeatureFlagService.shared.isEnabled(.timeLetters),
-            isHiddenBranchesEnabled: isUIQAArchiveHiddenBranchesEnabled
+            isAudioUploadEnabled: FeatureGateService.shared.isRouteAllowed(
+                .archiveAudioUpload,
+                localEnabled: FeatureFlagService.shared.isEnabled(.archiveAudioUpload),
+                qaSyntheticOverride: isUIQAArchiveHiddenBranchesEnabled
+            ),
+            isVideoUploadEnabled: FeatureGateService.shared.isRouteAllowed(
+                .archiveVideoUpload,
+                localEnabled: FeatureFlagService.shared.isEnabled(.archiveVideoUpload),
+                qaSyntheticOverride: isUIQAArchiveHiddenBranchesEnabled
+            ),
+            isTimeLettersEnabled: FeatureGateService.shared.isRouteAllowed(
+                .timeLetters,
+                localEnabled: FeatureFlagService.shared.isEnabled(.timeLetters),
+                qaSyntheticOverride: isUIQAArchiveHiddenBranchesEnabled
+            ),
+            isHiddenBranchesEnabled: false
         )
     }
 
@@ -802,7 +813,12 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     private func refreshRemoteArchiveIfNeeded() {
-        guard FeatureFlagService.shared.isEnabled(.archiveRemoteFetch),
+        guard FeatureGateService.shared.isRouteAllowed(
+                .archiveRemoteFetch,
+                risk: .providerEffect,
+                localEnabled: FeatureFlagService.shared.isEnabled(.archiveRemoteFetch),
+                qaSyntheticOverride: isUIQAArchiveHiddenBranchesEnabled
+              ),
               DreamJourneyBackendClient.shared.isArchiveSyncConfigured,
               !isRefreshingFromBackend else {
             return
@@ -2555,7 +2571,11 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     @objc private func personaCardTapped() {
-        guard FeatureFlagService.shared.isEnabled(.personaSettings) else {
+        guard FeatureGateService.shared.isRouteAllowed(
+            .personaSettings,
+            localEnabled: FeatureFlagService.shared.isEnabled(.personaSettings),
+            qaSyntheticOverride: isUIQAArchiveHiddenBranchesEnabled
+        ) else {
             showToast("人格设定将在后续开放", type: .info)
             return
         }

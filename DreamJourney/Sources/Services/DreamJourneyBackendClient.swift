@@ -233,6 +233,282 @@ struct BackendCachedReleasePolicyEvaluation {
     }
 }
 
+extension BackendCachedReleasePolicyEvaluation {
+    func featureGatePolicySnapshot(for feature: DJFeature) -> FeatureGatePolicySnapshot {
+        let featureDecision = decision(for: feature)
+        return FeatureGatePolicySnapshot(
+            accessMode: accessMode,
+            policyVersion: policyVersion,
+            policyRevision: policyRevision,
+            emergencyRevision: emergencyRevision,
+            expiresAt: snapshot?.expiresAt,
+            featureEnabled: featureDecision.enabled,
+            releaseVisible: featureDecision.releaseVisible,
+            reason: featureDecision.reason
+        )
+    }
+}
+
+final class FeatureGateService {
+    static let shared = FeatureGateService()
+
+    private let evaluator = FeatureGateEvaluator()
+    private let lock = NSLock()
+    private var routeDecisions: [DJFeature: FeatureDecision] = [:]
+    private var latestDecisions: [DJFeature: FeatureDecision] = [:]
+
+    private init() {}
+
+    var clientBuild: Int {
+        let rawValue = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+        return max(1, Int(rawValue ?? "") ?? 1)
+    }
+
+    func refreshPolicy(completion: ((Result<BackendReleasePolicySnapshot, Error>) -> Void)? = nil) {
+        let cached = DreamJourneyBackendClient.shared.cachedReleasePolicyEvaluation(
+            risk: .futureBeta,
+            clientBuild: clientBuild
+        )
+        DreamJourneyBackendClient.shared.fetchReleasePolicy(
+            clientBuild: clientBuild,
+            knownPolicyRevision: cached.policyRevision ?? 0
+        ) { result in
+            completion?(result)
+        }
+    }
+
+    @discardableResult
+    func captureRoute(
+        feature: DJFeature,
+        risk: ReleasePolicyRiskClass? = nil,
+        localEnabled: Bool? = nil,
+        qaSyntheticOverride: Bool = false
+    ) -> FeatureDecision {
+        let resolvedRisk = risk ?? riskClass(for: feature)
+        let decision = evaluator.capture(
+            feature: feature,
+            risk: resolvedRisk,
+            purpose: .route,
+            localEnabled: localEnabled ?? FeatureFlagService.shared.isEnabled(feature),
+            qaSyntheticOverride: Self.qaOverrideAllowed(qaSyntheticOverride),
+            accountGeneration: accountGeneration,
+            policy: currentPolicy(for: feature, risk: resolvedRisk)
+        )
+        lock.lock()
+        routeDecisions[feature] = decision
+        latestDecisions[feature] = decision
+        lock.unlock()
+        return decision
+    }
+
+    func isRouteAllowed(
+        _ feature: DJFeature,
+        risk: ReleasePolicyRiskClass? = nil,
+        localEnabled: Bool? = nil,
+        qaSyntheticOverride: Bool = false
+    ) -> Bool {
+        captureRoute(
+            feature: feature,
+            risk: risk,
+            localEnabled: localEnabled,
+            qaSyntheticOverride: qaSyntheticOverride
+        ).allowed
+    }
+
+    func requestDecision(for feature: DJFeature) -> FeatureDecision {
+        let risk = riskClass(for: feature)
+        let generation = accountGeneration
+        let localEnabled = FeatureFlagService.shared.isEnabled(feature)
+        let captured: FeatureDecision?
+        lock.lock()
+        captured = routeDecisions[feature]
+        lock.unlock()
+
+        let decision: FeatureDecision
+        if let captured, captured.accountGeneration == generation {
+            decision = evaluator.revalidateForRequest(
+                captured: captured,
+                localEnabled: localEnabled,
+                accountGeneration: generation,
+                currentPolicy: currentPolicy(for: feature, risk: risk)
+            )
+        } else {
+            decision = evaluator.capture(
+                feature: feature,
+                risk: risk,
+                purpose: .request,
+                localEnabled: localEnabled,
+                qaSyntheticOverride: false,
+                accountGeneration: generation,
+                policy: currentPolicy(for: feature, risk: risk)
+            )
+        }
+        storeLatest(decision)
+        return decision
+    }
+
+    func revalidateRequest(_ captured: FeatureDecision) -> FeatureDecision {
+        let decision = evaluator.revalidateForRequest(
+            captured: captured,
+            localEnabled: FeatureFlagService.shared.isEnabled(captured.feature),
+            accountGeneration: accountGeneration,
+            currentPolicy: currentPolicy(for: captured.feature, risk: riskClass(for: captured.feature))
+        )
+        storeLatest(decision)
+        return decision
+    }
+
+    func qaEvidenceSnapshot(features: [DJFeature]) -> [FeatureDecisionEvidenceSummary] {
+        lock.lock()
+        let decisions = features.compactMap { latestDecisions[$0] }
+        lock.unlock()
+        return decisions.map(FeatureDecisionEvidenceSummary.init(decision:))
+    }
+
+    func invalidateCapturedRoutes() {
+        lock.lock()
+        routeDecisions.removeAll()
+        latestDecisions.removeAll()
+        lock.unlock()
+    }
+
+    func featureForRequest(
+        path: String,
+        method: HTTPMethod,
+        payload: [String: Any]?
+    ) -> DJFeature? {
+        let normalizedPath = path.split(separator: "?", maxSplits: 1).first.map(String.init) ?? path
+        if normalizedPath.hasPrefix("/digital-human/") { return .digitalHumanLivePanel }
+        if normalizedPath.hasPrefix("/voice/") || normalizedPath == "/tts" { return .voiceCloneShell }
+        if normalizedPath.hasPrefix("/family/") { return .familyManagement }
+        if normalizedPath.hasPrefix("/care/") { return .careDashboard }
+        if normalizedPath.hasPrefix("/mailbox/letters")
+            || normalizedPath.hasPrefix("/archive/time-letters/") {
+            return .timeLetters
+        }
+        if normalizedPath == "/profile" { return .profileSettings }
+        if normalizedPath == "/context/build"
+            || normalizedPath.hasPrefix("/echo/delayed-replies") {
+            return .echoTextInput
+        }
+        if normalizedPath == "/archive/image-analysis" { return .archiveLocalAnalysis }
+        if normalizedPath == "/archive/photos" { return .archiveRemoteFetch }
+        if normalizedPath == "/auth/password" { return .accountPasswordChange }
+        if normalizedPath == "/auth/delete" || normalizedPath == "/auth/restore" {
+            return .accountDeletion
+        }
+        if normalizedPath == "/archive/media/upload-intent" {
+            return archiveMediaFeature(payload)
+        }
+        if normalizedPath == "/archive/items" {
+            return archiveItemFeature(payload)
+        }
+        if method == .get, normalizedPath.hasPrefix("/archive/items/") {
+            return .archiveRemoteFetch
+        }
+        return nil
+    }
+
+    func metadataHeaders(for decision: FeatureDecision) -> [String: String] {
+        var headers: [String: String] = [
+            "X-DreamJourney-Feature": decision.feature.rawValue,
+            "X-DreamJourney-Feature-Decision-Id": decision.decisionId,
+            "X-DreamJourney-Feature-Allowed": decision.allowed ? "true" : "false",
+            "X-DreamJourney-Account-Generation": decision.accountGeneration,
+            "X-DreamJourney-Client-Build": String(clientBuild),
+            "X-DreamJourney-Policy-Audience": "owner",
+            "X-DreamJourney-Policy-Cohort": "closedPilotAdultSelf",
+        ]
+        if let policyVersion = decision.policyVersion {
+            headers["X-DreamJourney-Policy-Version"] = policyVersion
+        }
+        if let policyRevision = decision.policyRevision {
+            headers["X-DreamJourney-Policy-Revision"] = String(policyRevision)
+        }
+        if let emergencyRevision = decision.emergencyRevision {
+            headers["X-DreamJourney-Emergency-Revision"] = String(emergencyRevision)
+        }
+        return headers
+    }
+
+    private var accountGeneration: String {
+        let source = BackendAuthSessionStore.shared.currentSession?.sessionId
+            ?? UserManager.shared.currentUser?.id
+            ?? "anonymous"
+        return SHA256.hash(data: Data(source.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+            .prefix(24)
+            .description
+    }
+
+    private func currentPolicy(
+        for feature: DJFeature,
+        risk: ReleasePolicyRiskClass
+    ) -> FeatureGatePolicySnapshot {
+        DreamJourneyBackendClient.shared.cachedReleasePolicyEvaluation(
+            risk: risk,
+            clientBuild: clientBuild
+        ).featureGatePolicySnapshot(for: feature)
+    }
+
+    private func storeLatest(_ decision: FeatureDecision) {
+        lock.lock()
+        latestDecisions[decision.feature] = decision
+        lock.unlock()
+    }
+
+    private func riskClass(for feature: DJFeature) -> ReleasePolicyRiskClass {
+        switch feature {
+        case .echoTextInput, .profileSettings, .legalCenter, .accountDeletion:
+            return .ownerTextCore
+        case .voiceCloneShell, .digitalHumanLivePanel, .archiveRemoteFetch:
+            return .providerEffect
+        default:
+            return .futureBeta
+        }
+    }
+
+    private func archiveMediaFeature(_ payload: [String: Any]?) -> DJFeature {
+        let rawKind = payload?["mediaType"] ?? payload?["kind"] ?? payload?["assetKind"]
+        switch String(describing: rawKind ?? "").lowercased() {
+        case "audio", "voice", "recording":
+            return .archiveAudioUpload
+        case "video", "movie":
+            return .archiveVideoUpload
+        default:
+            return .archiveRemoteFetch
+        }
+    }
+
+    private func archiveItemFeature(_ payload: [String: Any]?) -> DJFeature? {
+        let metadata = payload?["metadata"] as? [String: Any]
+        let rawKind = payload?["kind"]
+            ?? payload?["type"]
+            ?? payload?["assetKind"]
+            ?? metadata?["kind"]
+            ?? metadata?["assetKind"]
+        switch String(describing: rawKind ?? "").lowercased() {
+        case "timeletter", "time_letter", "letter":
+            return .timeLetters
+        case "audio", "voice", "recording":
+            return .archiveAudioUpload
+        case "video", "movie":
+            return .archiveVideoUpload
+        default:
+            return nil
+        }
+    }
+
+    private static func qaOverrideAllowed(_ requested: Bool) -> Bool {
+        #if DEBUG || UI_QA_SIMULATOR
+        return requested
+        #else
+        return false
+        #endif
+    }
+}
+
 struct BackendReleasePolicyRuntimeDescriptor {
     let endpoint: String
     let schemaVersion: Int
@@ -243,6 +519,7 @@ struct BackendReleasePolicyRuntimeDescriptor {
     let emergencyRevision: Int
     let source: String
     let shadowMode: Bool
+    let commandMode: String
 
     init(json: [String: Any]?) {
         endpoint = json?["endpoint"] as? String ?? "/v2/release-policy"
@@ -254,6 +531,7 @@ struct BackendReleasePolicyRuntimeDescriptor {
         emergencyRevision = Self.intValue(json?["emergencyRevision"]) ?? 0
         source = json?["source"] as? String ?? "unknown"
         shadowMode = json?["shadowMode"] as? Bool ?? true
+        commandMode = json?["commandMode"] as? String ?? (shadowMode ? "observe" : "enforce")
     }
 
     private static func intValue(_ value: Any?) -> Int? {
@@ -1688,6 +1966,7 @@ struct EchoRuntimeDiagnosticsSnapshot: Codable {
     let canUseFamilyData: Bool
     let crossScopeArchiveIncluded: Bool
     let contextLatencyMs: Int
+    let featurePolicyDecisions: [FeatureDecisionEvidenceSummary]?
     let source: String
 
     init(
@@ -1705,6 +1984,7 @@ struct EchoRuntimeDiagnosticsSnapshot: Codable {
         providerRequestId: String? = nil,
         providerMode: String? = nil,
         fallbackReason: String? = nil,
+        featurePolicyDecisions: [FeatureDecisionEvidenceSummary] = [],
         source: String
     ) {
         self.schemaVersion = 1
@@ -1741,6 +2021,7 @@ struct EchoRuntimeDiagnosticsSnapshot: Codable {
         self.canUseFamilyData = scopedTrace?.canUseFamilyData ?? false
         self.crossScopeArchiveIncluded = scopedTrace?.crossScopeArchiveIncluded ?? false
         self.contextLatencyMs = scopedTrace?.latencyMs ?? 0
+        self.featurePolicyDecisions = featurePolicyDecisions
         self.source = source
     }
 }
@@ -2794,6 +3075,7 @@ final class DreamJourneyBackendClient {
     enum ClientError: LocalizedError {
         case invalidJSONResponse
         case unsupportedJSONRoot
+        case featurePolicyDenied(feature: String, reason: String)
         case backendError(statusCode: Int?, context: BackendErrorContext)
 
         var backendErrorContext: BackendErrorContext? {
@@ -2807,6 +3089,8 @@ final class DreamJourneyBackendClient {
                 return "后端返回的数据不是有效 JSON"
             case .unsupportedJSONRoot:
                 return "后端返回的 JSON 根节点不是对象"
+            case .featurePolicyDenied(let feature, let reason):
+                return "功能请求已被发布策略拦截（\(feature)：\(reason)）"
             case .backendError(let statusCode, let context):
                 if let statusCode {
                     return "后端请求失败（\(statusCode)）：\(context.detail)"
@@ -3967,10 +4251,41 @@ final class DreamJourneyBackendClient {
         payload: [String: Any]?,
         authPolicy: RequestAuthPolicy = .automatic,
         allowsRefresh: Bool = true,
+        featureDecision: FeatureDecision? = nil,
         completion: @escaping (Result<[String: Any], Error>) -> Void
     ) {
+        let gatedFeature = FeatureGateService.shared.featureForRequest(
+            path: path,
+            method: method,
+            payload: payload
+        )
+        let preparedFeatureDecision: FeatureDecision?
+        if let featureDecision {
+            preparedFeatureDecision = FeatureGateService.shared.revalidateRequest(featureDecision)
+        } else if let gatedFeature {
+            preparedFeatureDecision = FeatureGateService.shared.requestDecision(for: gatedFeature)
+        } else {
+            preparedFeatureDecision = nil
+        }
+        if let preparedFeatureDecision, !preparedFeatureDecision.allowed {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: preparedFeatureDecision.feature.rawValue,
+                    reason: preparedFeatureDecision.reason
+                )))
+            }
+            return
+        }
+
         let url = "\(baseURL)\(path)"
-        let requestHeaders = authPolicy == .automatic ? authHeaders : authHeaders(for: authPolicy)
+        var requestHeaders = authPolicy == .automatic ? authHeaders : authHeaders(for: authPolicy)
+        if let preparedFeatureDecision {
+            var headers = requestHeaders ?? HTTPHeaders()
+            for (name, value) in FeatureGateService.shared.metadataHeaders(for: preparedFeatureDecision) {
+                headers.add(name: name, value: value)
+            }
+            requestHeaders = headers
+        }
         AF.request(url, method: method, parameters: payload, encoding: JSONEncoding.default, headers: requestHeaders)
             .validate(statusCode: 200..<300)
             .responseData(queue: .global(qos: .utility)) { response in
@@ -4006,6 +4321,7 @@ final class DreamJourneyBackendClient {
                                     payload: payload,
                                     authPolicy: authPolicy,
                                     allowsRefresh: false,
+                                    featureDecision: preparedFeatureDecision,
                                     completion: completion
                                 )
                             } else {

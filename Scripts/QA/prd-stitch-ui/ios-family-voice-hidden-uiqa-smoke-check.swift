@@ -25,6 +25,7 @@ func assertNotContains(_ source: String, _ needle: String, _ message: String) {
 }
 
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let familyController = read("DreamJourney/Sources/Modules/Family/FamilyCircleViewController.swift")
 let profileController = read("DreamJourney/Sources/Modules/Profile/ProfileViewController.swift")
 let voiceShell = read("DreamJourney/Sources/Modules/Profile/ProfileVoiceCloneShellViewController.swift")
@@ -101,6 +102,13 @@ assertContains(releaseMatrix, "| `familyManagement` | hidden |", "release matrix
 assertContains(releaseMatrix, "| `voiceCloneShell` | hidden |", "release matrix should document hidden voice UI")
 assertContains(statusDoc, "Hidden Family / Voice UIQA", "status doc should describe hidden family/voice UIQA")
 
-assertNotContains(profileController, ".voiceCloneShell,", "voice clone shell must not be added to default feature flags from profile code")
+let defaultMarker = "private static let defaultEnabled: Set<DJFeature> = ["
+guard let defaultStart = featureFlags.range(of: defaultMarker)?.upperBound,
+      let defaultEnd = featureFlags[defaultStart...].range(of: "]")?.lowerBound else {
+    fatalError("Unable to inspect default feature flags")
+}
+let defaultFlags = String(featureFlags[defaultStart..<defaultEnd])
+assertNotContains(defaultFlags, ".voiceCloneShell", "voice clone shell must remain disabled by default")
+assertContains(profileController, "isFeatureRouteAllowed(.voiceCloneShell", "voice clone route must use captured release policy")
 
 print("iOS family/voice hidden UIQA smoke guard passed")
