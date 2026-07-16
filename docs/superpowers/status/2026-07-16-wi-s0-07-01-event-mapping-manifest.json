@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "workItem": "WI-S0-07-01",
+  "authorityLock": "OPERATIONS_EVIDENCE",
+  "eventEnvelopeVersion": 1,
+  "redactionVersion": 1,
+  "allowedEventTypes": [
+    "operation",
+    "rights",
+    "incident",
+    "providerCost"
+  ],
+  "forbiddenPayloadClasses": [
+    "content",
+    "prompt",
+    "secret",
+    "rawIdentity",
+    "media",
+    "audio"
+  ],
+  "packageMappings": [
+    {
+      "packageId": "WP-S0-01",
+      "mappingOwner": "ios.accountSessionActor",
+      "eventTypes": ["operation", "incident"],
+      "source": "accountLeaseAndOwnerScopedDiagnostics",
+      "status": "OWNER_ASSIGNED_NOT_WRITING"
+    },
+    {
+      "packageId": "WP-S0-02",
+      "mappingOwner": "backend.authorizationPolicy",
+      "eventTypes": ["rights", "operation"],
+      "source": "authorizationDecision",
+      "status": "OWNER_ASSIGNED_NOT_WRITING"
+    },
+    {
+      "packageId": "WP-S0-03",
+      "mappingOwner": "release.credentialControl",
+      "eventTypes": ["incident", "operation"],
+      "source": "credentialInventoryAndRotationReceipt",
+      "status": "OWNER_ASSIGNED_NOT_WRITING"
+    },
+    {
+      "packageId": "WP-S0-04",
+      "mappingOwner": "backend.persistenceBoundary",
+      "eventTypes": ["operation", "incident"],
+      "source": "migrationUnitOfWorkAndRestoreReceipt",
+      "status": "OWNER_ASSIGNED_NOT_WRITING"
+    },
+    {
+      "packageId": "WP-S0-05",
+      "mappingOwner": "backend.rightsWorkflow",
+      "eventTypes": ["rights", "operation"],
+      "source": "rightsDecisionAndProviderReceipt",
+      "status": "OWNER_ASSIGNED_NOT_WRITING"
+    },
+    {
+      "packageId": "WP-S0-06",
+      "mappingOwner": "backend.releasePolicyDecisionRecorder",
+      "eventTypes": ["operation"],
+      "source": "releasePolicyDecision",
+      "status": "SHADOW_MAPPED"
+    },
+    {
+      "packageId": "WP-S0-07",
+      "mappingOwner": "operations.evidenceSchema",
+      "eventTypes": ["operation", "rights", "incident", "providerCost"],
+      "source": "typedEventEnvelope",
+      "status": "SCHEMA_OWNER"
+    }
+  ],
+  "currentWriters": [
+    "backend.releasePolicyDecisionRecorder.shadow",
+    "ios.echoRuntimeDiagnostics.localMapper"
+  ],
+  "persistentSink": "NOT_IMPLEMENTED_WI-S0-07-02",
+  "externalAnalytics": "OUT_OF_SCOPE"
+}

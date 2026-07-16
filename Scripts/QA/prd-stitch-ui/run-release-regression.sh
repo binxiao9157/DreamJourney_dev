@@ -535,6 +535,7 @@ for guard in \
   qa-override-release-boundary-check.swift \
   public-release-scope-regression-check.swift \
   release-policy-rollout-retirement-check.swift \
+  operations-evidence-event-check.swift \
   future-beta-default-deny-check.swift \
   release-feature-matrix-check.swift \
   prd-coverage-matrix-check.swift \

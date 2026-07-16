@@ -18,6 +18,7 @@
 		28D8501C781E7E8F03B1C87B /* FeatureFlagService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 392F026F981C3221600209E7 /* FeatureFlagService.swift */; };
 		C7E190000000000000000001 /* ReleasePolicyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E190000000000000000101 /* ReleasePolicyStore.swift */; };
 		C7E190000000000000000002 /* RuntimeCapabilitySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E190000000000000000102 /* RuntimeCapabilitySnapshot.swift */; };
+		C7E1A0000000000000000001 /* OperationsEvidenceEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1A0000000000000000101 /* OperationsEvidenceEvent.swift */; };
 		328F094BD6DC27B02845187F /* MemoirAudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E34D9D2B8943EBBDECBC489 /* MemoirAudioPlayer.swift */; };
 		344DFB2063508315CC912EF7 /* KBExportPreviewViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66A439914BFCD681134DAF8A /* KBExportPreviewViewController.swift */; };
 		36CF52237589B0C4691394E6 /* DJComponentFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D8F3BB4380923E82E24664 /* DJComponentFactory.swift */; };
@@ -198,6 +199,7 @@
 		392F026F981C3221600209E7 /* FeatureFlagService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlagService.swift; sourceTree = "<group>"; };
 		C7E190000000000000000101 /* ReleasePolicyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleasePolicyStore.swift; sourceTree = "<group>"; };
 		C7E190000000000000000102 /* RuntimeCapabilitySnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeCapabilitySnapshot.swift; sourceTree = "<group>"; };
+		C7E1A0000000000000000101 /* OperationsEvidenceEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperationsEvidenceEvent.swift; sourceTree = "<group>"; };
 		3CCF5FAEB2B1690C0FB7E56E /* MicrophonePermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophonePermissionManager.swift; sourceTree = "<group>"; };
 		41B3D2BD9BE7DFE0AABF34F1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		47D8F3BB4380923E82E24664 /* DJComponentFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DJComponentFactory.swift; sourceTree = "<group>"; };
@@ -407,6 +409,7 @@
 				C7E180000000000000000101 /* KnowledgeLocalStoragePolicy.swift */,
 				C7E190000000000000000101 /* ReleasePolicyStore.swift */,
 				C7E190000000000000000102 /* RuntimeCapabilitySnapshot.swift */,
+				C7E1A0000000000000000101 /* OperationsEvidenceEvent.swift */,
 				8C5B565061358529E1029413 /* KBLiteTestHelper.swift */,
 				1EC2B6D3AE2C256785CCE388 /* MemoryModel.swift */,
 				B2BCB52701683AE3FAFABA6F /* MemoryRepository.swift */,
@@ -953,6 +956,7 @@
 				28D8501C781E7E8F03B1C87B /* FeatureFlagService.swift in Sources */,
 				C7E190000000000000000001 /* ReleasePolicyStore.swift in Sources */,
 				C7E190000000000000000002 /* RuntimeCapabilitySnapshot.swift in Sources */,
+				C7E1A0000000000000000001 /* OperationsEvidenceEvent.swift in Sources */,
 				9D62718D2F007D0949BE1701 /* FootprintNotificationBanner.swift in Sources */,
 				9A84BB0966C1478900AA56A3 /* HomeHeaderView.swift in Sources */,
 				36CF52237589B0C4691394E6 /* DJComponentFactory.swift in Sources */,
