@@ -103,8 +103,9 @@ assertContains(
 )
 assertContains(
     releaseMatrix,
-    "ios-family-voice-consumer-contract-check.swift",
-    "release matrix should document iOS family/voice consumer guard"
+    "| `familySpace` | hidden |",
+    "release matrix should document the iOS family consumer boundary"
 )
+assertContains(releaseMatrix, "| `voiceCloneShell` | hidden |", "release matrix should document the iOS voice consumer boundary")
 
 print("iOS family/voice consumer contract guard passed")

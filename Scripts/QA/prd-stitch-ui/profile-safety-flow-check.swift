@@ -60,14 +60,9 @@ let releaseMatrix = read("docs/superpowers/status/2026-06-17-release-feature-mat
 let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 
 let expectedDefaults: Set<String> = [
-    "careDashboard",
-    "familyManagement",
-    "familySpace",
+    "echoTextInput",
     "profileSettings",
     "legalCenter",
-    "personaSettings",
-    "timeLetters",
-    "voiceCloneShell",
     "accountDeletion",
 ]
 let defaults = extractDefaultEnabledFeatures(from: flags)
@@ -75,7 +70,7 @@ guard defaults == expectedDefaults else {
     fatalError("Default release flags changed. Expected \(expectedDefaults.sorted()), got \(defaults.sorted())")
 }
 
-for hidden in ["careDoctorContact", "accountPasswordChange"] {
+for hidden in ["familyManagement", "familySpace", "personaSettings", "timeLetters", "voiceCloneShell", "careDashboard", "careDoctorContact", "accountPasswordChange"] {
     guard !defaults.contains(hidden) else {
         fatalError("\(hidden) must stay hidden by default")
     }
@@ -118,8 +113,8 @@ assertContains(doctorContractSource, "急救服务", "doctor safety notice shoul
 assertContains(doctorContractSource, "真实联系契约未接入", "doctor safety notice should say real contact contract is not connected")
 assertNotContains(doctorBody, "tel://", "doctor safety notice should not launch a phone call")
 
-assertContains(releaseMatrix, "账号注销", "release matrix should document account deletion boundary")
-assertContains(releaseMatrix, "医生联系", "release matrix should document doctor contact boundary")
-assertContains(releaseMatrix, "profile-safety-flow-check.swift", "release matrix should include profile safety guard")
+assertContains(releaseMatrix, "| `accountDeletion` | public-core |", "release matrix should document account deletion as owner core")
+assertContains(releaseMatrix, "| `careDoctorContact` | hidden |", "release matrix should document the doctor-contact boundary")
+assertContains(releaseMatrix, "no call/message/backend effect", "release matrix should preserve the non-executing care boundary")
 
 print("Profile safety flow checks passed")

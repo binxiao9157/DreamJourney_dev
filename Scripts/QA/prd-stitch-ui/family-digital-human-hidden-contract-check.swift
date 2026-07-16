@@ -87,7 +87,7 @@ for required in [
 
 assertContains(releaseRegression, "family-digital-human-hidden-contract-check.swift", "release regression should run family digital-human guard")
 assertContains(releaseQA, "family-digital-human-hidden-contract-check.swift", "release QA package should include family digital-human guard")
-assertContains(releaseMatrix, "family-digital-human-hidden-contract-check.swift", "release matrix should document family digital-human guard")
+assertContains(releaseMatrix, "| `familySpace` | hidden |", "release matrix should document the family digital-human boundary")
 assertContains(statusDoc, "mockFamilyPersona", "status doc should record the hidden backend contract")
 assertContains(statusDoc, "不开放公开入口", "status doc should preserve public release boundary")
 

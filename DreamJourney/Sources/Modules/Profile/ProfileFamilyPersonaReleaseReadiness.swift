@@ -17,24 +17,28 @@ enum ProfileFamilyPersonaReleaseReadiness {
     static let unavailableTitle = "家人管理暂未开放"
     static let unavailableMessage = "当前版本先保留入口，完整家人空间会在后续版本开放。"
     static let voiceCloneUnavailableTitle = "音色复刻暂不可用"
-    static let voiceCloneUnavailableMessage = "当前环境未完成后端语音服务配置；音色复刻入口已公开，但训练、查询、禁用和删除都必须通过后端代理执行。"
+    static let voiceCloneUnavailableMessage = "当前版本暂不公开音色复刻；内部验证仍通过后端代理执行训练、查询、合成、禁用和删除。"
 
     static let familyManagementCapability = Capability(
         title: "家人管理",
         feature: .familyManagement,
-        stage: .publicReady(
-            reason: "家人管理已按最新 PRD 公开基础能力：通过手机号邀请，展示邀请中、已加入、失败状态；成员不可删除，退出或解除关系暂未开放。"
+        stage: .hiddenReady(
+            feature: .familyManagement,
+            qaLaunchArgument: hiddenBranchesLaunchArgument,
+            reason: "V4 Closed Pilot 暂不公开家庭关系写入；手机号邀请和状态合同保留供内部验证。"
         ),
-        releaseCopy: "手机号邀请家人"
+        releaseCopy: "家人管理暂未开放"
     )
 
     static let familySpaceCapability = Capability(
         title: "数字人切换",
         feature: .familySpace,
-        stage: .publicReady(
-            reason: "基础家人空间随家人管理公开；高级生命周期、解除关系和继承规则仍不开放。"
+        stage: .hiddenReady(
+            feature: .familySpace,
+            qaLaunchArgument: hiddenBranchesLaunchArgument,
+            reason: "家庭授权、角色切换和生命周期仍需后续 Gate，当前只保留 QA 壳层。"
         ),
-        releaseCopy: "家人空间"
+        releaseCopy: "家人空间暂未开放"
     )
 
     static let passwordChangeCapability = Capability(
@@ -51,10 +55,12 @@ enum ProfileFamilyPersonaReleaseReadiness {
     static let voiceCloneCapability = Capability(
         title: "音色复刻",
         feature: .voiceCloneShell,
-        stage: .publicReady(
-            reason: "音色复刻已按产品决策公开；入口默认可见，但必须先完成用户授权，训练、查询、合成、禁用和删除均通过后端代理，voiceProfileId 由后端返回和管理，不在 iOS 暴露火山密钥。"
+        stage: .hiddenReady(
+            feature: .voiceCloneShell,
+            qaLaunchArgument: hiddenBranchesLaunchArgument,
+            reason: "V4 Closed Pilot 暂不公开音色复刻；授权、Provider 质量和外部门完成前只允许 QA 验证。"
         ),
-        releaseCopy: "需授权后提交样本"
+        releaseCopy: "音色复刻暂未开放"
     )
 
     static func isFamilyManagementRowVisible(

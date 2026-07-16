@@ -183,11 +183,12 @@ assertContains(inventory, "final-visual-qa-package-check.swift", "inventory shou
 assertContains(inventory, "submit-slice-inventory-check.swift", "inventory should list the submit slice guard")
 
 let matrix = read("docs/superpowers/status/2026-06-17-release-feature-matrix.md")
-assertContains(matrix, "Default enabled feature flags must remain exactly", "release matrix should pin default feature flags")
-assertContains(matrix, "Hidden By Default", "release matrix should list hidden branches")
-assertContains(matrix, "DJFeature.archiveRemoteFetch", "release matrix should document remote archive fetch as hidden")
+assertContains(matrix, "## V4 Closed Pilot Baseline", "release matrix should pin the V4 baseline")
+assertContains(matrix, "| Feature | Public status | Internal status | Decision gate | External gate | Route policy |", "release matrix should use the V4 decision columns")
+assertContains(matrix, "| `archiveRemoteFetch` | hidden |", "release matrix should document remote archive fetch as hidden")
 assertContains(matrix, "DJEnableArchiveHiddenBranches", "release matrix should document archive hidden QA arg")
 assertContains(matrix, "DJEnableProfileHiddenBranches", "release matrix should document profile hidden QA arg")
+assertContains(matrix, "## Promotion Rule", "release matrix should require an explicit promotion decision")
 
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let credentialInventoryRunner = read("Scripts/QA/prd-stitch-ui/run-credential-inventory-scan.sh")
@@ -293,6 +294,7 @@ assertContains(knowledgeGovernanceStatus, "archiveImageAnalysis + session-*", "g
 assertContains(knowledgeGovernanceStatus, "没有公开知识管理页面", "governance status must retain the public UI boundary")
 assertContains(releaseRegression, "BACKEND_API_TOKEN= BACKEND_BASE_URL= ./scripts/verify_backend.sh", "backend verify should not inherit deployed backend credentials")
 for handoffGuard in [
+    "future-beta-default-deny-check.swift",
     "prd-full-feature-closure-decisions-check.swift",
     "echo-state-machine-runtime-check.swift",
     "echo-delayed-reply-notification-check.swift",
@@ -674,6 +676,7 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/profile-compact-stitch-layout-check.swift",
     "Scripts/QA/prd-stitch-ui/group5-map-compatibility-check.swift",
     "Scripts/QA/prd-stitch-ui/profile-scroll-inset-check.swift",
+    "Scripts/QA/prd-stitch-ui/future-beta-default-deny-check.swift",
     "Scripts/QA/prd-stitch-ui/release-feature-matrix-check.swift",
     "Scripts/QA/prd-stitch-ui/prd-coverage-matrix-check.swift",
     "Scripts/QA/prd-stitch-ui/prd-full-feature-closure-decisions-check.swift",

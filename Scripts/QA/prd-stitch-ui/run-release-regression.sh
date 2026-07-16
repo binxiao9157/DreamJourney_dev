@@ -484,6 +484,7 @@ run_step "Product V4 credential rotation receipt" "$STATIC_LOG_DIR/product-v4-cr
 for guard in \
   release-policy-shadow-contract-check.swift \
   release-policy-cache-contract-check.swift \
+  future-beta-default-deny-check.swift \
   release-feature-matrix-check.swift \
   prd-coverage-matrix-check.swift \
   prd-full-feature-closure-decisions-check.swift \

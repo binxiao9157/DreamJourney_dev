@@ -72,7 +72,7 @@ assertContains(profile, "card.isAccessibilityElement = !isCareDoctorContactVisib
 assertContains(profile, "callButton.accessibilityIdentifier = \"profileDoctorContactButton\"", "doctor contact button should have stable UIQA identifier")
 assertContains(profile, "callButton.accessibilityLabel = \"生成关怀升级草稿\"", "doctor contact button should describe hidden draft action")
 
-assertContains(releaseMatrix, "关怀升级草稿", "release matrix should document hidden care escalation draft boundary")
-assertContains(releaseMatrix, "profile-care-escalation-contract-check.swift", "release matrix should include care escalation contract guard")
+assertContains(releaseMatrix, "| `careDoctorContact` | hidden |", "release matrix should document the hidden care escalation boundary")
+assertContains(releaseMatrix, "clinical/legal approval", "release matrix should preserve the care escalation promotion gate")
 
 print("Profile care escalation contract checks passed")

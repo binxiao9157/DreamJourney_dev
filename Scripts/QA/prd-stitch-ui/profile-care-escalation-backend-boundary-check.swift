@@ -72,6 +72,6 @@ assertContains(contractCheck, "backendCandidatePayload(viewerUserId:", "existing
 assertContains(releasePackage, "profile-care-escalation-backend-boundary-check.swift", "release package should include care escalation backend boundary guard")
 assertContains(releasePackage, "run-profile-care-escalation-boundary-smoke.sh", "release package should include care escalation boundary smoke")
 assertContains(status, "run-profile-care-escalation-boundary-smoke.sh", "status doc should document the care escalation boundary smoke")
-assertContains(releaseMatrix, "profile-care-escalation-backend-boundary-check.swift", "release matrix should document backend boundary guard")
+assertContains(releaseMatrix, "| `careDoctorContact` | hidden |", "release matrix should document the non-executing backend boundary")
 
 print("Profile care escalation backend boundary checks passed")

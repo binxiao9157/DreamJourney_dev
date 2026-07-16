@@ -26,20 +26,29 @@ final class FeatureFlagService {
 
     private static let storageKey = "dj.featureFlags.enabled"
     private static let storageVersionKey = "dj.featureFlags.schemaVersion"
-    private static let currentStorageVersion = 10
+    private static let currentStorageVersion = 11
     private static let defaultEnabled: Set<DJFeature> = [
-        .careDashboard,
-        .familyManagement,
-        .familySpace,
-        .personaSettings,
+        .echoTextInput,
         .profileSettings,
         .legalCenter,
-        .timeLetters,
-        .voiceCloneShell,
         .accountDeletion,
+    ]
+    private static let nonPersistentFeatures: Set<DJFeature> = [
+        .echoImageInput,
+        .timeLetters,
+        .personaSettings,
+        .archiveAudioUpload,
+        .archiveVideoUpload,
+        .archiveRemoteFetch,
+        .archiveLocalAnalysis,
+        .familyManagement,
+        .familySpace,
+        .accountPasswordChange,
+        .careDashboard,
+        .careDoctorContact,
+        .voiceCloneShell,
         .digitalHumanLivePanel,
     ]
-    private static let nonPersistentFeatures: Set<DJFeature> = []
 
     private var enabled: Set<DJFeature>
     private var transientEnabled: Set<DJFeature> = []
@@ -63,11 +72,15 @@ final class FeatureFlagService {
     func set(_ feature: DJFeature, enabled isEnabled: Bool) {
         if Self.nonPersistentFeatures.contains(feature) {
             enabled.remove(feature)
+            #if DEBUG || UI_QA_SIMULATOR
             if isEnabled {
                 transientEnabled.insert(feature)
             } else {
                 transientEnabled.remove(feature)
             }
+            #else
+            transientEnabled.remove(feature)
+            #endif
             persist()
             return
         }
@@ -81,7 +94,9 @@ final class FeatureFlagService {
     }
 
     func enableForCurrentLaunch(_ feature: DJFeature) {
+        #if DEBUG || UI_QA_SIMULATOR
         transientEnabled.insert(feature)
+        #endif
     }
 
     func resetToDefaults() {

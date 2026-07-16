@@ -34,24 +34,12 @@ let backendExampleConfig = read("DreamJourney/Config/Backend.example.xcconfig")
 
 assertContains(gitignore, "tmp/**/DerivedData*/", "generated DerivedData should stay ignored")
 
-for placeholder in [
-    "YOUR_AMAP_KEY",
-    "YOUR_DEEPSEEK_API_KEY",
-    "YOUR_VOICECLONE_API_KEY",
-] {
-    assertContains(plist, placeholder, "Info.plist should keep placeholder \(placeholder)")
-}
-for buildSetting in [
-    "$(VOLCENGINE_APP_ID)",
-    "$(VOLCENGINE_APP_KEY)",
-    "$(VOLCENGINE_APP_TOKEN)",
-] {
-    assertContains(plist, buildSetting, "Info.plist should inject voice SDK config through build setting \(buildSetting)")
-}
+assertContains(plist, "YOUR_AMAP_KEY", "Info.plist should keep the non-secret map placeholder")
 assertContains(plist, "<key>DreamJourneyBackendBaseURL</key>", "backend base URL key")
 assertContains(plist, "<string>$(DREAMJOURNEY_BACKEND_BASE_URL)</string>", "backend URL should resolve from build setting")
-assertContains(plist, "<key>DreamJourneyBackendAPIToken</key>", "backend API token key")
-assertContains(plist, "<string>$(DREAMJOURNEY_BACKEND_API_TOKEN)</string>", "backend API token should resolve from build setting")
+for retiredKey in ["DreamJourneyBackendAPIToken", "DREAMJOURNEY_BACKEND_API_TOKEN", "YOUR_DEEPSEEK_API_KEY", "YOUR_VOICECLONE_API_KEY", "VOLCENGINE_APP_ID", "VOLCENGINE_APP_KEY", "VOLCENGINE_APP_TOKEN"] {
+    assertNotContains(plist, retiredKey, "mobile credentials must stay retired from Info.plist")
+}
 
 assertContains(flags, "private static let storageVersionKey = \"dj.featureFlags.schemaVersion\"", "feature flag storage should be versioned")
 assertContains(flags, "private static let currentStorageVersion", "feature flag storage version")
@@ -59,20 +47,12 @@ assertContains(flags, "let storedVersion = UserDefaults.standard.integer(forKey:
 assertContains(flags, "storedVersion == Self.currentStorageVersion", "feature flags should only trust matching-version storage")
 assertContains(flags, "self.enabled = Self.defaultEnabled\n            persist()", "old flag storage should reset to current defaults")
 assertContains(flags, "UserDefaults.standard.set(Self.currentStorageVersion, forKey: Self.storageVersionKey)", "persist should write storage version")
-for publicDefault in [
-    ".careDashboard",
-    ".familyManagement",
-    ".familySpace",
-    ".personaSettings",
-    ".profileSettings",
-    ".legalCenter",
-    ".timeLetters",
-    ".voiceCloneShell",
-    ".accountDeletion",
-    ".digitalHumanLivePanel",
-] {
-    assertContains(flags, publicDefault, "default release flags should match the current public PRD scope \(publicDefault)")
-}
+assertContains(
+    flags,
+    "private static let defaultEnabled: Set<DJFeature> = [\n        .echoTextInput,\n        .profileSettings,\n        .legalCenter,\n        .accountDeletion,\n    ]",
+    "default release flags should match the V4 owner core"
+)
+assertContains(flags, "private static let nonPersistentFeatures: Set<DJFeature>", "future and beta features should remain available only through process-scoped QA overrides")
 
 assertContains(appDelegate, "#if !(UI_QA_SIMULATOR && targetEnvironment(simulator))\nimport SpeechEngineToB", "speech import should be excluded from UIQA simulator")
 assertContains(appDelegate, "#if !(UI_QA_SIMULATOR && targetEnvironment(simulator))\nimport SpeechEngineToB\nimport AMapFoundationKit\nimport MAMapKit\n#endif", "device-only imports should stay gated together")
@@ -106,9 +86,8 @@ for source in [
 }
 assertContains(project, "DREAMJOURNEY_BACKEND_BASE_URL", "project should expose backend base URL as a build setting")
 assertContains(backendExampleConfig, "DREAMJOURNEY_BACKEND_BASE_URL = http://127.0.0.1:3100", "backend example config should document the local default")
-assertContains(project, "DREAMJOURNEY_BACKEND_API_TOKEN = YOUR_DREAMJOURNEY_BACKEND_API_TOKEN;", "backend token build setting should stay placeholder")
-assertContains(project, "VOLCENGINE_APP_ID = YOUR_VOLCENGINE_APP_ID;", "VolcEngine app id build setting should default to placeholder")
-assertContains(project, "VOLCENGINE_APP_KEY = YOUR_VOLCENGINE_APP_KEY;", "VolcEngine app key build setting should default to placeholder")
-assertContains(project, "VOLCENGINE_APP_TOKEN = YOUR_VOLCENGINE_APP_TOKEN;", "VolcEngine token build setting should default to placeholder")
+for retiredSetting in ["DREAMJOURNEY_BACKEND_API_TOKEN", "VOLCENGINE_APP_ID", "VOLCENGINE_APP_KEY", "VOLCENGINE_APP_TOKEN"] {
+    assertNotContains(project, retiredSetting, "mobile provider/shared-token build setting must stay retired")
+}
 
 print("Group 1 source review checks passed")

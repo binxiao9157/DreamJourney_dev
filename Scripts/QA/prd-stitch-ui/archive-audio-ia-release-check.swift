@@ -32,7 +32,8 @@ let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh
 let releaseQA = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
 let hiddenEntries = read("Scripts/QA/prd-stitch-ui/release-like-hidden-entries-check.swift")
 
-assertContains(archive, "title: \"语音档案\"", "archive home should expose voice archive as a category card")
+assertContains(archive, "title: \"语音档案\"", "archive should preserve the QA voice category card")
+assertContains(archive, "if isArchiveAudioCreationEnabled {", "voice category card must stay behind the V4 release/QA gate")
 assertContains(archive, "detail: \"\\(summary.audio) 段声音\"", "voice archive card should show audio count")
 assertContains(archive, "action: #selector(audioCardTapped)", "voice archive card should open category filter")
 assertContains(archive, "applyArchiveKindFilter(.audio)", "voice archive card should filter timeline to audio items")
@@ -69,7 +70,7 @@ assertContains(detail, "@objc private func playAudioTapped()", "audio detail sho
 assertContains(detail, "AVAudioPlayer(contentsOf:", "audio detail should use local audio playback")
 assertContains(detail, "private func audioDurationText()", "audio detail should expose duration structure")
 
-assertContains(matrix, "| Archive | Audio upload / `录入语音` |", "release matrix should keep audio upload hidden by default")
+assertContains(matrix, "| `archiveAudioUpload` | hidden |", "release matrix should keep audio upload hidden by default")
 assertContains(hiddenEntries, "FeatureFlagService.shared.isEnabled(.archiveAudioUpload)", "hidden-entry guard should protect voice recording flag")
 assertContains(hiddenEntries, "DJEnableArchiveHiddenBranches", "hidden-entry guard should protect QA-only archive branches")
 assertContains(releaseRegression, "archive-audio-ia-release-check.swift", "release regression should run voice archive IA guard")

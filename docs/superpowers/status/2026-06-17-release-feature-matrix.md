@@ -1,202 +1,83 @@
-# DreamJourney Release Feature Matrix
+# DreamJourney V4 Release Feature Matrix
 
-Date: 2026-06-17
+日期：2026-07-16
+分支：`feature/prd-stitch-ui-adaptation`
+适用范围：V4 Closed Pilot
+Authority：服务器 `ReleasePolicySnapshot`；iOS 本地 flag 仅承担 UI 组合和 Debug/UIQA 临时验证，不是发布授权。
 
-Branch: `feature/prd-stitch-ui-adaptation`
+## V4 Closed Pilot Baseline
 
-Last synced: 2026-07-10, after adding opaque user sessions, ownership shadow, and principal-bound cross-account authorization for family care, time-letter recipients, and invitation acceptance while preserving the existing public surfaces and backend-token compatibility.
+当前公开基线只保留 Owner 核心：三 Tab 壳层、文字/照片档案、普通回响、个人资料、法律中心、账号注销与退出登录。家庭、关怀、时间信件、人格、音色复刻、数字人、音视频媒体和远端效果均保留实现，但在新的产品/Privacy/Provider Gate 关闭前默认隐藏。
 
-Source of truth:
+旧 PRD 曾经批准公开的功能不自动继承到 V4。代码存在、Provider 已配置、真机曾跑通或 QA 截图通过，都不能单独把功能变成公开能力。
 
-- Visual target: current Stitch canvas, then `htmlCode`.
-- Product target: updated `《寻梦环游 产品PRD V1.0》(1).md`.
-- Code target: current UIKit implementation in `DreamJourney_dev`.
-- MCP screenshots are auxiliary evidence only.
+| Feature | Public status | Internal status | Decision gate | External gate | Route policy |
+| --- | --- | --- | --- | --- | --- |
+| `echoTextInput` | public-core | implemented | Closed Pilot Owner core | G0/G1 | server allow；scoped cache；captured route gate pending `WI-S0-06-04` |
+| `echoImageInput` | hidden | shell/contract | product scope | G1/G2 | Release deny；未提供公开入口 |
+| `timeLetters` | hidden | lifecycle + backend delivery contract | product/privacy approval | G2/G4 | Release deny；`DJEnableArchiveHiddenBranches` only；command gate pending `WI-S0-06-04` |
+| `profileSettings` | public-core | implemented | Closed Pilot Owner core | G0/G1 | server allow；scoped cache；captured route gate pending `WI-S0-06-04` |
+| `personaSettings` | hidden | local knowledge/persona shell | product/privacy approval | G1/G4 | Release deny；archive QA branch only |
+| `archiveAudioUpload` | hidden | recorder/detail/upload contracts | media release decision | G2/G3/G4 | Release deny；mock/QA entry only |
+| `archiveVideoUpload` | hidden | detail/upload-intent shell | media release decision | G2/G3/G4 | Release deny；mock/QA entry only |
+| `archiveRemoteFetch` | hidden | backend-ready client | data authority rollout | G1/G2 | Release deny；`DJEnableArchiveRemoteFetch` in Debug/UIQA only |
+| `archiveLocalAnalysis` | hidden | local/failed-retry shell | analysis disclosure decision | G1/G4 | Release deny；QA only |
+| `familyManagement` | hidden | phone invite + relationship contracts | family/privacy approval | G1/G2/G4 | Release deny；`DJEnableProfileHiddenBranches` only；command gate pending `WI-S0-06-04` |
+| `familySpace` | hidden | persona switch + family context contracts | family authorization approval | G1/G2/G4 | Release deny；`DJEnableProfileHiddenBranches` only |
+| `legalCenter` | public-core | implemented | Closed Pilot Owner core | G0/G1 | server allow；read-only route |
+| `accountDeletion` | public-core | soft-delete/restore contract | Closed Pilot safety requirement | G1/G2 | server allow；destructive confirmation remains mandatory |
+| `accountPasswordChange` | hidden | UI/backend-ready shell | auth security approval | G1/G2 | Release deny；profile QA branch only |
+| `careDashboard` | hidden | snapshot states + retry + message provider | care product/privacy approval | G1/G2/G4 | Release deny；profile QA branch only |
+| `careDoctorContact` | hidden | non-executing draft shell | clinical/legal approval | G1/G2/G4 | Release deny；no call/message/backend effect |
+| `voiceCloneShell` | hidden | training/query/synthesis contracts | consent/provider approval | G2/G3/G4 | Release deny；`DJEnableProfileHiddenBranches` only；no mobile Provider key |
+| `digitalHumanLivePanel` | hidden | Tencent session/audio-drive implementation | product/provider approval | G2/G3/G4 | Release deny；explicit Debug/UIQA launch arg only |
 
-## Default Public Surface
+## QA-only Overrides
 
-These items are available without hidden-branch launch arguments and without manual feature-flag mutation.
-
-| Area | Public in MVP | Code guard / evidence |
-| --- | --- | --- |
-| App shell | `记忆档案`, `回响`, `我的` | `TabCoordinator` builds the 3-tab PRD shell. |
-| Login | Stitch-aligned light login form with opaque access/refresh session | `LoginViewController` keeps the visible flow; `BackendAuthSessionStore` saves the backend session in ThisDeviceOnly Keychain, while `DreamJourneyBackendClient` rotates refresh tokens and retains the legacy backend-token compatibility header. Backend `CrossAccountAuthorizationPolicy` classifies owner/family/recipient access; sensitive care/time-letter/invitation routes bind the verified bearer principal while global ownership remains shadow. |
-| Archive overview | `记忆档案馆`, `相册影像`, `语音档案`, `人格设定`, `封存新记忆`, timeline list | `MemoryArchiveViewController` renders the PRD archive home. Feature cards are category/capability entries; `封存新记忆` remains the creation entry. |
-| Archive creation | Text, photo, and time letter: `添加文字描述`, `选择照片`, `录入时间信件` | `MemoryArchiveCreationOption.availableOptions` starts with `.text`, `.photo` and adds `.timeLetter` when default `DJFeature.timeLetters` is enabled. |
-| Archive persona | `人格设定` opens the persona/knowledge settings surface | `DJFeature.personaSettings` is enabled by default. |
-| Echo | Voice-first interaction + Tencent digital human live panel: `开始语音`, `数字人回响` | `EchoViewController` exposes mic interaction, not text/image input controls. `DJFeature.digitalHumanLivePanel` is enabled by default; `DJDisableDigitalHumanLivePanel` can suppress it only for QA isolation. The panel uses the backend-issued Tencent cloud-render session when available, explains fallback to ordinary Echo, and prefers cached Memoir TTS `visemeTimeline` before SDK/player fallback. `VoiceSDKReadinessSummary` keeps mock ASR/TTS, backend token fallback, and production SDK readiness separate. |
-| System Widget | `历史上的今天` shell is embedded; knowledge content is empty unless an event has explicit `summaryAllowed` authorization | `KnowledgeWidgetPrivacyPolicy` defaults legacy/current events to deny, publishes only confirmed personal owner summaries, and removes all descriptions/raw IDs; Widget validates schema v2 and active owner digest before display. |
-| Profile care | Persona card, `心境追踪`, aggregate `长辈关怀` child dashboard, loading/empty/stale/failed care states, non-executing `关怀升级准备中` placeholder, doctor identity row without call action | `DJFeature.careDashboard` is enabled by default; `careDoctorContact` is not. |
-| Profile settings | `个人资料设置`, `家人管理`, `音色复刻`, `法律法规`, `退出登录`, `注销账户` | `DJFeature.profileSettings`, `DJFeature.familyManagement`, `DJFeature.familySpace`, `DJFeature.voiceCloneShell`, `DJFeature.legalCenter`, and `DJFeature.accountDeletion` are enabled by default; logout is always appended. |
-| Family management | 手机号邀请家人；邀请中、已加入、失败状态；不提供删除家人操作。生产授权只接受当前 owner 的 backend invitation `active + accepted`；KBPerson 保持候选。前台刷新、请求级 generation、异步 persona snapshot 和 coordinator epoch 共同阻断旧关系/旧 callback；撤销后 Echo 主动回退本人。 | `FamilyRelationshipAuthorizationPolicy`, account-bound `FamilyRepository`, `DigitalHumanContextStore`, `KnowledgeSyncCoordinator`, Task 22 family authorization gates, `/family/invite`, `/family/members/{user}/{member}/revoke` returns 409. |
-| Account deletion | 二次确认；不支持数据导出；数据保留 30 天；30 天内同手机号可恢复 1 次；超期清理合同 | `ProfileViewController.showAccountDeletionConfirmation`, `DreamJourneyBackendClient.softDeleteAccount`, `/auth/delete`, `/auth/restore`, `/auth/purge-expired-deletions`. |
-| Profile settings page | Avatar display, name/gender/region editing, masked phone, inline save states, local profile persistence, backend-ready sync fallback | `ProfileSettingsViewController`; `profile-settings-save-state-check.swift`, `profile-account-fields-check.swift`. |
-| Profile voice clone | `音色复刻` public foundation: authorization, audio sample submission, backend training/status refresh, disable/delete contract | `ProfileVoiceCloneShellViewController`, `VoiceCloneService`, `/voice/profiles`; `voice-clone-shell-contract-check.swift`, `voice-clone-backend-contract-check.swift`. |
-| Legal center | AI assistance, psychological boundary, privacy/data, ethics, emergency guidance | `ProfileLegalViewController`. |
-
-Default enabled feature flags must remain exactly:
-
-```text
-careDashboard
-accountDeletion
-familyManagement
-familySpace
-personaSettings
-profileSettings
-timeLetters
-legalCenter
-voiceCloneShell
-digitalHumanLivePanel
-```
-
-## Hidden By Default
-
-These items must not appear in the public release surface yet.
-
-| Area | Hidden item | Current access policy |
-| --- | --- | --- |
-| Echo | Text input | `DJFeature.echoTextInput`; no public control. |
-| Echo | Image input | `DJFeature.echoImageInput`; no public control. |
-| Echo / QA | Voice SDK readiness preview | `DJShowVoiceSDKReadinessPreview` only; hidden UIQA shows readiness boundary and must not appear in public release. |
-| Archive | Audio upload / `录入语音` | `DJFeature.archiveAudioUpload` or `DJEnableArchiveHiddenBranches` only. |
-| Archive | Video upload / `录入视频片段` | `DJFeature.archiveVideoUpload` or `DJEnableArchiveHiddenBranches` mock-file shell only. |
-| Archive backend | Remote archive fetch | `DJFeature.archiveRemoteFetch` only; default public app stays local-first. |
-| Archive detail | Local analysis debug controls | `DJFeature.archiveLocalAnalysis`, debug/UIQA only. |
-| Profile / Echo | Hidden `阳光 / 星辰 / 静默` mode management | Hidden family rows expose a QA context menu only; mode is persisted locally, drives care visibility, changes Echo context/prompt boundaries, and keeps internal mode names out of visible Echo copy. |
-| Backend / Profile | Hidden family digital-human backend contract | `family-digital-human-hidden-contract-check.swift` guards mock persistence for `personaScope`, `digitalHumanId`, and `阳光 / 星辰 / 静默` without exposing public family management. |
-| Backend / Profile | Deployed family + voice contract smoke | `backend-family-voice-contract-smoke-check.swift` guards the deployed `family digital-human` three-state contract and `voice profile lifecycle`; run with `RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE=1` after backend redeploy. |
-| iOS / Profile | Family + voice deployed contract consumer | `ios-family-voice-consumer-contract-check.swift` guards typed iOS parsing for `digitalHumanMode`, `familyPersonaContractVersion`, and backend `voiceProfileId/sampleStatus` snapshots. |
-| iOS / Profile UIQA | Hidden family + voice UIQA consumer | `ios-family-voice-hidden-uiqa-smoke-check.swift` remains historical QA evidence for backend-derived family/voice fields; the voice clone entry is now public. |
-| Profile settings | `修改密码` | `DJFeature.accountPasswordChange` or `DJEnableProfileHiddenBranches` only. |
-| Profile care | `立即通话` | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` only. |
-
-## 2026-06-19 Completed Hidden/Acceptance Guards
-
-These are now implemented as guarded contracts or QA evidence packages. They do not expand the default public release surface:
-
-- Hidden Family / Voice UIQA Consumer Gate: backend-derived `digitalHumanMode`, `familyPersonaContractVersion`, `voiceProfileId`, and `sampleStatus` are parsed and consumed in hidden QA.
-- Digital human live panel: `数字人回响` is public by default; `digital-human-live-panel-check.swift` guards default visibility, explicit QA disable, authorized-asset/fallback copy, Tencent cloud-render handoff, and Memoir TTS `visemeTimeline` priority, while `digital-human-tts-viseme-gate-check.swift` and `digital-human-session-client-check.swift` keep optional provider-timeline and Tencent-runtime QA gates.
-- 时间信件公开投递闭环: draft/sealed time letters persist `openAt` / `recipients` / `sealedAt` / `deliveryStatus`; sealed letters reject deletion and schedule local + in-app reminders.
-- 视频档案 Hidden Readiness: mock video cards/details show thumbnail placeholder, file size, upload status, failed/retry analysis state, and runtime media capability.
-- 真机验收包强化: true-device voice and archive-audio preflight scripts now generate evidence manifests, screenshot names, logs, and manual QA notes.
-- 生产语音 SDK readiness 边界: mock ASR/TTS, backend token fallback, production SDK needs true-device QA, and future verified state are explicitly separated.
-
-## Hidden Candidate Release Decisions
-
-No remaining hidden PRD feature is public by default. Family phone invitation, time-letter foundation, voice-clone foundation, and account soft deletion are no longer hidden candidates after the latest PRD clarification. The candidates below may be available in QA-only branches or as safety shells, but they are not part of the default public MVP until the promotion criteria are met.
-
-| Feature | Current gate | Public in MVP | Needed before public | Test evidence |
-| --- | --- | --- | --- | --- |
-| archive audio upload | `DJFeature.archiveAudioUpload` or `DJEnableArchiveHiddenBranches` | no | true-device recording acceptance, storage/privacy copy, backend media policy | `archive-audio-lifecycle-smoke-check.swift`, `archive-audio-ia-release-check.swift`, `true-device-archive-audio-acceptance-check.swift`, `true-device-acceptance-evidence-package-check.swift`, release regression |
-| video upload | `DJFeature.archiveVideoUpload` or `DJEnableArchiveHiddenBranches` mock-file shell only | no | PRD public scope, real picker/compression/storage/backend provider policy, true-device video picker acceptance | `archive-video-hidden-readiness-check.swift`, `archive-hidden-media-detail-ui-check.swift`, `archive-hidden-media-combo-gate-check.swift`, `archive-media-upload-intent-contract-check.swift`, `archive-media-provider-switch-contract-check.swift`, release regression |
-| family advanced lifecycle controls | base phone invite is public; hidden family rows / local QA context only cover advanced lifecycle | no | product/legal policy for exit/unlink/lifecycle transitions, consent copy, recovery rules | `digital-human-mode-management-check.swift`, `digital-human-mode-lifecycle-check.swift` |
-| legacy full-graph family sharing | unsigned clipboard/file package and raw graph import are disabled; KBPerson candidates cannot grant relationship access | no | signed backend grant bound to owner/source accepted member/expiry, audit and product consent | `knowledge-family-sync-import-authorization-check.swift`, `FamilyKnowledgeSharePolicy` |
-| care dashboard expansion | aggregate `DJFeature.careDashboard` and non-executing `关怀升级准备中` placeholder are public; intervention/contact execution stays behind `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | aggregate + placeholder only | family-facing copy, alert thresholds, backend persistence, true-device acceptance | `elder-care-dashboard-check.swift`, `profile-care-public-placeholder-check.swift`, backend acceptance |
-| account password change | `DJFeature.accountPasswordChange` or `DJEnableProfileHiddenBranches` | no | backend `/auth/password` implementation, auth/security review, true-device acceptance | `profile-password-change-check.swift`, release regression |
-| doctor contact / intervention execution | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | no | real escalation provider, emergency disclaimers, backend submission contract | `profile-care-escalation-contract-check.swift`, `profile-care-escalation-backend-boundary-check.swift` |
-| care escalation draft | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` local draft shell only | no | product decision to promote draft, backend submit contract, clinical/legal review | `profile-care-escalation-contract-check.swift`, `run-profile-care-escalation-boundary-smoke.sh` |
-| digital inheritance lifecycle | hidden lifecycle boundary only | no | inheritance trigger policy, family/legal consent, backend audit contract | `digital-human-mode-lifecycle-check.swift`, PRD coverage matrix |
-
-## Risky Public Contracts
-
-These flows are public only after the latest PRD made their safety policy explicit. They still require backend deployment and release regression evidence before production handoff.
-
-| Area | Safety boundary | Evidence |
-| --- | --- | --- |
-| 账号注销 | Public soft-delete contract only: two confirmations, no data export, 30-day retention, same-phone restore once, irreversible purge contract after deadline. | `ProfileViewController.showAccountDeletionConfirmation`, `DreamJourneyBackendClient.softDeleteAccount`, backend `AccountDeletionAPITests`, `profile-family-account-lifecycle-check.swift`, `backend-family-account-lifecycle-smoke.py`. |
-| 医生联系 / 关怀升级 | Public dashboard shows only a non-executing `关怀升级准备中` placeholder: no phone call, no message, no upload. Hidden doctor contact still renders a local `关怀升级草稿`; it is non-emergency, not medical diagnosis, does not call, does not upload, and the real contact contract is not connected. A backend candidate payload exists only as `draftOnly` contract evidence and is not submitted anywhere. | `ProfileElderCareDashboardViewController.makeEscalationPlaceholderCard`, `ProfileViewController.showDoctorContactSafetyNotice`, `profile-safety-flow-check.swift`, `profile-care-public-placeholder-check.swift`, `profile-care-escalation-contract-check.swift`, `profile-care-escalation-backend-boundary-check.swift`, `run-profile-care-escalation-boundary-smoke.sh`. |
-
-## Internal QA Launch Arguments
-
-Hidden UI branches may be exposed for visual or interaction QA only with explicit launch arguments:
+以下入口只用于合成账号、mock 数据或明确的内部 Provider 验证。Release 真机不能通过参数或旧 `UserDefaults` 值开启：
 
 ```text
 DJEnableArchiveHiddenBranches
 DJEnableProfileHiddenBranches
+DJEnableArchiveRemoteFetch
+DJShowDigitalHumanLivePanel
+DJRunDigitalHumanLivePanelSmoke
+DJRunTencentDigitalHumanTextDriveSmoke
+DJRunTencentDigitalHumanPCMDriveSmoke
+DJRunTencentDigitalHumanBackendPCMDriveSmoke
+DJRunTencentBackendPCMDriveMockSmoke
 ```
 
-These launch arguments must not be required for the default public smoke path.
+约束：
 
-## Release Regression Commands
+1. override 只在 `DEBUG` 或 `UI_QA_SIMULATOR` 编译条件下生效。
+2. Future/Beta flags 不写入持久化发布 Authority，进程退出即失效。
+3. 旧 schema 的持久化 flag 在升级后重置；不能迁移为 server allow。
+4. QA 入口不能绕过后端 AuthZ、ReleasePolicy、Provider credential 或 command deny。
+5. 当前 QA 只使用合成数据；真实用户正文、媒体和凭据不得进入证据包。
 
-Run these after changes to tabs, archive creation, profile rows, feature flags, or release gating:
+## Gate Interpretation
+
+- `G0`：代码、合同、静态检查、构建和回归证据。
+- `G1`：安全、Privacy、数据边界和人工评审。
+- `G2`：真实部署、数据库、缓存或服务端 effect 证据。
+- `G3`：Provider、凭据、配额、质量或真机外部证据。
+- `G4`：产品、法务、合规或运营批准。
+
+Feature 只有服务器 `releaseVisible=true`、客户端 fresh scoped policy 允许、route/command gate 允许、AuthZ 允许且 Provider ready 时才可产生真实效果。任一轴缺失都应隐藏、只读或明确失败。
+
+## Release Regression
+
+本矩阵变更后至少运行：
 
 ```bash
+swift Scripts/QA/prd-stitch-ui/future-beta-default-deny-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift Scripts/QA/prd-stitch-ui/release-feature-matrix-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 swift Scripts/QA/prd-stitch-ui/release-like-hidden-entries-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift Scripts/QA/prd-stitch-ui/profile-release-gating-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift Scripts/QA/prd-stitch-ui/profile-family-account-lifecycle-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift Scripts/QA/prd-stitch-ui/profile-family-persona-switcher-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift Scripts/QA/prd-stitch-ui/digital-human-mode-management-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift Scripts/QA/prd-stitch-ui/digital-human-mode-lifecycle-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift Scripts/QA/prd-stitch-ui/profile-safety-flow-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift Scripts/QA/prd-stitch-ui/profile-care-escalation-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift Scripts/QA/prd-stitch-ui/elder-care-dashboard-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift Scripts/QA/prd-stitch-ui/profile-care-public-placeholder-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift Scripts/QA/prd-stitch-ui/voice-clone-shell-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift Scripts/QA/prd-stitch-ui/voice-clone-backend-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift Scripts/QA/prd-stitch-ui/voice-sdk-readiness-boundary-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift Scripts/QA/prd-stitch-ui/digital-human-live-panel-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift Scripts/QA/prd-stitch-ui/digital-human-tts-viseme-gate-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift Scripts/QA/prd-stitch-ui/ios-family-voice-consumer-contract-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift Scripts/QA/prd-stitch-ui/ios-family-voice-hidden-uiqa-smoke-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift Scripts/QA/prd-stitch-ui/time-letter-delivery-policy-shell-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift Scripts/QA/prd-stitch-ui/archive-video-hidden-readiness-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift Scripts/QA/prd-stitch-ui/true-device-acceptance-evidence-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
-swift Scripts/QA/prd-stitch-ui/final-visual-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+swift Scripts/QA/prd-stitch-ui/release-qa-package-check.swift /Users/yxj/Documents/Codex/Video/DreamJourney_dev
+Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
-After backend deployment, run the optional deployed family/account lifecycle gate:
+## Promotion Rule
 
-```bash
-RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE=1 Scripts/QA/prd-stitch-ui/run-release-regression.sh
-```
-
-Run the full core loop smoke after changes touching archive-to-echo behavior:
-
-```bash
-Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh
-```
-
-Expected result:
-
-```json
-{"availableItemCount":1,"completed":true,"containsArchiveContext":true,"entries":"相册影像（相册）"}
-```
-
-## Promotion Criteria
-
-Hidden features can be moved into the public matrix only after all of the following are true:
-
-1. The PRD explicitly includes the feature in the release scope.
-2. The UI is aligned with the current Stitch canvas and `htmlCode`.
-3. The user action has a real implemented flow, not only a placeholder alert.
-4. Risky flows have copy and confirmation states, especially account deletion, family access, emergency guidance, and doctor contact.
-5. A static check or simulator smoke protects the newly visible path.
-
-## Remaining Gates By Type
-
-Public MVP gates:
-
-- True-device Echo voice, photo archive, foreground/background, playback route, screenshots, and logs.
-- Production voice SDK ASR/TTS quality and recovery evidence.
-- Final Stitch visual QA after each design update.
-
-Hidden gates:
-
-- Audio/video real media behavior and delivery rules.
-- Family exit/unlink/advanced lifecycle controls and permission recovery rules.
-
-External gates:
-
-- APNs provider delivery and true-device notification arrival.
-- Paid Apple Developer Team capability if push is promoted.
-- Real object-storage provider for media upload.
-- Production voice clone provider quality acceptance and real trained-voice synthesis evidence.
-
-Product/compliance gates:
-
-- Account deletion production legal review, purge scheduling operations, and restore support process.
-- Doctor contact or intervention execution.
-- Voice clone authorization copy, sample quality policy, and consent audit review.
-- Digital inheritance and lifecycle transitions.
+隐藏功能升级为公开功能时，必须同时更新服务器 policy、iOS scoped cache/route gate、backend command gate、本矩阵和对应 release regression。只改本地 `defaultEnabled`、readiness 文案或截图均视为无效发布变更。

@@ -27,7 +27,7 @@ let profile = read("DreamJourney/Sources/Modules/Profile/ProfileViewController.s
 let legal = read("DreamJourney/Sources/Modules/Profile/ProfileLegalViewController.swift")
 let project = read("DreamJourney.xcodeproj/project.pbxproj")
 
-assertContains(flags, "private static let defaultEnabled: Set<DJFeature> = [\n        .careDashboard,\n        .profileSettings,\n        .legalCenter,\n    ]", "profile settings and legal center should be default release features")
+assertContains(flags, "private static let defaultEnabled: Set<DJFeature> = [\n        .echoTextInput,\n        .profileSettings,\n        .legalCenter,\n        .accountDeletion,\n    ]", "profile settings and legal center should remain in the V4 owner-core defaults")
 
 assertContains(profile, "case .legalCenter:\n            showLegalCenter()", "legal row should push a real page")
 assertContains(profile, "private func showLegalCenter()", "profile should expose a legal center route")

@@ -50,12 +50,10 @@ let model = read("DreamJourney/Sources/Services/MemoryModel.swift")
 let releaseMatrix = read("docs/superpowers/status/2026-06-17-release-feature-matrix.md")
 
 let defaults = extractDefaultEnabledFeatures(from: flags)
-for visible in ["familyManagement", "familySpace", "accountDeletion"] {
-    guard defaults.contains(visible) else {
-        fatalError("\(visible) should be public by default after latest PRD decision")
-    }
+guard defaults.contains("accountDeletion") else {
+    fatalError("accountDeletion must remain in the V4 owner core")
 }
-for hidden in ["careDoctorContact", "accountPasswordChange"] {
+for hidden in ["familyManagement", "familySpace", "careDoctorContact", "accountPasswordChange"] {
     guard !defaults.contains(hidden) else {
         fatalError("\(hidden) must stay hidden by default")
     }
@@ -67,9 +65,8 @@ assertContains(profile, "ProfileFamilyPersonaReleaseReadiness.isFamilyManagement
 assertContains(profile, "ProfileFamilyPersonaReleaseReadiness.canOpenFamilyPersonaSwitcher", "family route should use the release readiness route contract")
 assertContains(profile, "featureFlags.isEnabled(.familyManagement)", "family row should stay feature-gated")
 assertContains(profile, "featureFlags.isEnabled(.familySpace)", "family route should stay behind familySpace")
-assertContains(profileReadiness, "stage: .publicReady", "family release readiness contract should mark the foundation public")
-assertContains(profileReadiness, "通过手机号邀请", "family release readiness contract should document phone invite rule")
-assertContains(profileReadiness, "成员不可删除", "family release readiness contract should document no-delete rule")
+assertContains(profileReadiness, "stage: .hiddenReady(", "family release readiness contract should keep the implementation behind the V4 gate")
+assertContains(profileReadiness, "V4 Closed Pilot 暂不公开家庭关系写入", "family release readiness should explain the V4 boundary")
 assertContains(profile, ".djDigitalHumanContextDidChange", "profile should observe selected persona changes")
 assertContains(profile, "makePersonaTitle(context:", "profile should derive persona title from context")
 assertContains(profile, "makePersonaSubtitle(context:", "profile should derive persona subtitle from context")
@@ -100,8 +97,7 @@ assertContains(repository, "func getAll() -> [FamilyMember]", "family repository
 assertContains(repository, "func updateMode(memberId: String, mode: DigitalHumanMode)", "family repository should persist mode changes")
 assertContains(model, "digitalHumanMode: DigitalHumanMode = .sunlight", "family members should default to sunlight mode")
 
-assertContains(releaseMatrix, "家人管理", "release matrix should document family management")
-assertContains(releaseMatrix, "familyManagement", "release matrix should document familyManagement gate")
-assertContains(releaseMatrix, "familySpace", "release matrix should document familySpace gate")
+assertContains(releaseMatrix, "| `familyManagement` | hidden |", "release matrix should document the family-management boundary")
+assertContains(releaseMatrix, "| `familySpace` | hidden |", "release matrix should document the family-space boundary")
 
 print("Profile family persona switcher checks passed")

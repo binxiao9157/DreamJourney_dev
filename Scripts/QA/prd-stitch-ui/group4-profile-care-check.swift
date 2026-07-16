@@ -31,10 +31,12 @@ let userManager = read("DreamJourney/Sources/Services/UserManager.swift")
 let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let project = read("DreamJourney.xcodeproj/project.pbxproj")
 
-for requiredDefault in [".careDashboard", ".familyManagement", ".familySpace", ".profileSettings", ".legalCenter", ".accountDeletion"] {
-    assertContains(flags, requiredDefault, "profile release defaults should include latest public PRD feature \(requiredDefault)")
-}
-assertNotContains(flags, ".accountPasswordChange,\n        .careDoctorContact", "unfinished password/contact flows must not be enabled by default")
+assertContains(
+    flags,
+    "private static let defaultEnabled: Set<DJFeature> = [\n        .echoTextInput,\n        .profileSettings,\n        .legalCenter,\n        .accountDeletion,\n    ]",
+    "profile release defaults must match the V4 owner core"
+)
+assertContains(flags, ".careDashboard,\n        .careDoctorContact,", "care capabilities must remain implemented but non-persistent")
 
 assertContains(profile, "private static func profileScrollBottomInset(safeAreaBottomInset: CGFloat) -> CGFloat", "profile root should reserve bottom scroll space for floating tabbar")
 assertContains(profile, "scrollView.contentInsetAdjustmentBehavior = .never", "profile root should not rely on inherited safe area timing")

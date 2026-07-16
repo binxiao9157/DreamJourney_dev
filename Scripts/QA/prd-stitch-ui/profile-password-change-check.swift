@@ -35,7 +35,11 @@ let releaseMatrix = read("docs/superpowers/status/2026-06-17-release-feature-mat
 let coverageMatrix = read("docs/superpowers/status/2026-06-18-prd-coverage-matrix.md")
 
 assertContains(flags, "case accountPasswordChange", "Feature flag should declare hidden password change gate")
-assertNotContains(flags, ".accountPasswordChange,", "Password change must stay out of default release flags")
+let defaultEnabledStart = flags.range(of: "private static let defaultEnabled")!.lowerBound
+let defaultEnabledEnd = flags.range(of: "private static let nonPersistentFeatures")!.lowerBound
+let defaultEnabledBlock = String(flags[defaultEnabledStart..<defaultEnabledEnd])
+assertNotContains(defaultEnabledBlock, ".accountPasswordChange", "Password change must stay out of default release flags")
+assertContains(flags, ".accountPasswordChange,", "Password change should remain a non-persistent QA capability")
 
 assertContains(readiness, "passwordChangeCapability", "Profile readiness should document password change capability")
 assertContains(readiness, "title: \"修改密码\"", "Password change capability should use product copy")
@@ -84,8 +88,8 @@ assertContains(releaseMatrixCheck, "\"accountPasswordChange\"", "release guard s
 assertContains(releaseMatrixCheck, "isPasswordChangeVisible", "release guard should enforce hidden password gate")
 assertNotContains(releaseMatrixCheck, "assertNotContains(settings, \"密码\"", "release guard should not rely on raw source absence after hidden shell exists")
 
-assertContains(releaseMatrix, "修改密码", "release matrix should document password change state")
-assertContains(releaseMatrix, "| account password change | `DJFeature.accountPasswordChange` or `DJEnableProfileHiddenBranches` | no | backend `/auth/password` implementation, auth/security review, true-device acceptance | `profile-password-change-check.swift`, release regression |", "release matrix should document hidden password change candidate")
+assertContains(releaseMatrix, "| `accountPasswordChange` | hidden |", "release matrix should document the V4 password-change boundary")
+assertContains(releaseMatrix, "auth security approval", "release matrix should retain the password-change promotion gate")
 assertContains(coverageMatrix, "password change hidden shell", "PRD coverage should record current password change state")
 
 print("Profile password change checks passed")

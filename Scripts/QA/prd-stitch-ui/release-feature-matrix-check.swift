@@ -1,48 +1,45 @@
 import Foundation
 
-let root = CommandLine.arguments.dropFirst().first ?? FileManager.default.currentDirectoryPath
+let root = URL(fileURLWithPath: CommandLine.arguments.dropFirst().first ?? FileManager.default.currentDirectoryPath)
 
 func read(_ relativePath: String) -> String {
-    let path = "\(root)/\(relativePath)"
-    guard let content = try? String(contentsOfFile: path, encoding: .utf8) else {
-        fatalError("Unable to read \(path)")
+    let fileURL = root.appendingPathComponent(relativePath)
+    guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else {
+        fatalError("Unable to read \(fileURL.path)")
     }
     return content
 }
 
-func assertContains(_ haystack: String, _ needle: String, _ message: String) {
-    guard haystack.contains(needle) else {
+func assertContains(_ source: String, _ needle: String, _ message: String) {
+    guard source.contains(needle) else {
         fatalError("\(message): missing \(needle)")
     }
 }
 
-func assertNotContains(_ haystack: String, _ needle: String, _ message: String) {
-    guard !haystack.contains(needle) else {
+func assertNotContains(_ source: String, _ needle: String, _ message: String) {
+    guard !source.contains(needle) else {
         fatalError("\(message): unexpected \(needle)")
     }
 }
 
-func extractDefaultEnabledFeatures(from flags: String) -> Set<String> {
-    let marker = "private static let defaultEnabled: Set<DJFeature> = ["
-    guard let start = flags.range(of: marker)?.upperBound,
-          let end = flags[start...].range(of: "]")?.lowerBound else {
-        fatalError("Unable to find FeatureFlagService.defaultEnabled")
+func extractFeatures(_ source: String, marker: String) -> Set<String> {
+    guard let start = source.range(of: marker)?.upperBound,
+          let end = source[start...].range(of: "]")?.lowerBound else {
+        fatalError("Unable to find \(marker)")
     }
-
-    let body = flags[start..<end]
-    let pattern = "\\.([A-Za-z0-9_]+)"
-    let regex = try! NSRegularExpression(pattern: pattern)
-    let nsRange = NSRange(body.startIndex..<body.endIndex, in: body)
-    return Set(regex.matches(in: String(body), range: nsRange).compactMap { match in
-        guard let range = Range(match.range(at: 1), in: body) else { return nil }
-        return String(body[range])
+    let body = String(source[start..<end])
+    let regex = try! NSRegularExpression(pattern: "\\.([A-Za-z0-9_]+)")
+    let range = NSRange(body.startIndex..<body.endIndex, in: body)
+    return Set(regex.matches(in: body, range: range).compactMap { match in
+        guard let valueRange = Range(match.range(at: 1), in: body) else { return nil }
+        return String(body[valueRange])
     })
 }
 
 let flags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let archive = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift")
-let readiness = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveMediaReleaseReadiness.swift")
 let archiveOptions = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveCreationOption.swift")
+let archiveReadiness = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveMediaReleaseReadiness.swift")
 let echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
 let profile = read("DreamJourney/Sources/Modules/Profile/ProfileViewController.swift")
 let profileReadiness = read("DreamJourney/Sources/Modules/Profile/ProfileFamilyPersonaReleaseReadiness.swift")
@@ -50,154 +47,100 @@ let settings = read("DreamJourney/Sources/Modules/Profile/ProfileSettingsViewCon
 let legal = read("DreamJourney/Sources/Modules/Profile/ProfileLegalViewController.swift")
 let matrix = read("docs/superpowers/status/2026-06-17-release-feature-matrix.md")
 
-let expectedDefaults: Set<String> = [
-    "careDashboard",
-    "accountDeletion",
-    "familyManagement",
-    "familySpace",
-    "personaSettings",
+let ownerCore: Set<String> = [
+    "echoTextInput",
     "profileSettings",
     "legalCenter",
-    "timeLetters",
-    "voiceCloneShell",
-    "digitalHumanLivePanel",
+    "accountDeletion",
 ]
-
-let hiddenByDefault: Set<String> = [
-    "echoTextInput",
+let futureOrBeta: Set<String> = [
     "echoImageInput",
+    "timeLetters",
+    "personaSettings",
     "archiveAudioUpload",
     "archiveVideoUpload",
     "archiveRemoteFetch",
     "archiveLocalAnalysis",
+    "familyManagement",
+    "familySpace",
     "accountPasswordChange",
+    "careDashboard",
     "careDoctorContact",
+    "voiceCloneShell",
+    "digitalHumanLivePanel",
 ]
 
-let defaults = extractDefaultEnabledFeatures(from: flags)
-guard defaults == expectedDefaults else {
-    fatalError("Default release feature flags changed. Expected \(expectedDefaults.sorted()), got \(defaults.sorted())")
+let defaults = extractFeatures(
+    flags,
+    marker: "private static let defaultEnabled: Set<DJFeature> = ["
+)
+let nonPersistent = extractFeatures(
+    flags,
+    marker: "private static let nonPersistentFeatures: Set<DJFeature> = ["
+)
+
+guard defaults == ownerCore else {
+    fatalError("V4 owner-core defaults changed. Expected \(ownerCore.sorted()), got \(defaults.sorted())")
+}
+guard futureOrBeta.isSubset(of: nonPersistent) else {
+    fatalError("Future/Beta flags must be process-scoped and non-persistent")
+}
+guard defaults.isDisjoint(with: futureOrBeta) else {
+    fatalError("Future/Beta flags must be hidden by default")
 }
 
-for feature in expectedDefaults.union(hiddenByDefault) {
+for feature in ownerCore.union(futureOrBeta) {
     assertContains(flags, "case \(feature)", "feature enum must declare \(feature)")
 }
+assertContains(flags, "private static let currentStorageVersion = 11", "stale persisted public flags must be invalidated")
+assertContains(flags, "subtracting(Self.nonPersistentFeatures)", "stored flags must drop future capabilities")
+assertContains(flags, "#if DEBUG || UI_QA_SIMULATOR", "QA overrides must be compile-time restricted")
 
-for feature in hiddenByDefault {
-    guard !defaults.contains(feature) else {
-        fatalError("\(feature) must stay hidden by default")
-    }
+assertContains(archiveOptions, "var options: [MemoryArchiveCreationOption] = [\n            .text,\n            .photo,\n        ]", "archive creation baseline must remain text/photo")
+for feature in ["archiveAudioUpload", "archiveVideoUpload", "archiveRemoteFetch", "timeLetters", "personaSettings"] {
+    assertContains(archive, "FeatureFlagService.shared.isEnabled(.\(feature))", "archive route must remain gated by \(feature)")
 }
+assertContains(archive, "MemoryArchiveMediaReleaseReadiness.isCreationVisible", "archive creation must consume the shared readiness contract")
+assertContains(archiveReadiness, "case .timeLetter:\n            return .hiddenReady(", "time letters must remain implemented but hidden")
+assertContains(archiveReadiness, "DJEnableArchiveHiddenBranches", "archive QA branches need one explicit launch argument")
 
-assertContains(archiveOptions, "var options: [MemoryArchiveCreationOption] = [\n            .text,\n            .photo,\n        ]", "archive creation must default to text/photo only")
-assertContains(readiness, "DJEnableArchiveHiddenBranches", "archive hidden branches need explicit QA launch argument")
-assertContains(archive, "MemoryArchiveMediaReleaseReadiness.hiddenBranchesLaunchArgument", "archive screen must use shared hidden branch launch argument")
-assertContains(archive, "MemoryArchiveMediaReleaseReadiness.isCreationVisible", "archive hidden creation branches must use media readiness contract")
-assertContains(archive, "FeatureFlagService.shared.isEnabled(.archiveAudioUpload)", "archive audio branch must be release gated")
-assertContains(archive, "FeatureFlagService.shared.isEnabled(.archiveVideoUpload)", "archive video branch must be release gated")
-assertContains(archive, "FeatureFlagService.shared.isEnabled(.archiveRemoteFetch)", "archive remote fetch must be release gated")
-assertContains(archive, "FeatureFlagService.shared.isEnabled(.timeLetters)", "time-letter branch must be release gated")
-assertContains(archive, "FeatureFlagService.shared.isEnabled(.personaSettings)", "persona branch must be release gated")
-assertContains(archive, "private func makeArchiveCTASubtitle() -> String", "archive CTA subtitle should come from a named helper")
-assertContains(archive, "\"文字、图片\"", "archive CTA subtitle must keep the compact public text/photo copy")
-assertContains(archiveOptions, "if isTimeLettersEnabled {\n            options.append(.timeLetter)\n        }", "time-letter creation should be public through the creation sheet when enabled")
-assertContains(archive, "action: #selector(photoCardTapped)", "archive photo feature card should not duplicate photo creation")
-assertContains(archive, "applyArchiveKindFilter(.audio)", "archive voice feature card should open the voice archive category")
-assertContains(archive, "navigationController?.pushViewController(KnowledgeBaseViewController(), animated: true)", "archive persona card should open persona settings")
+assertContains(profile, "featureFlags.isEnabled(.profileSettings)", "profile settings route must remain gated")
+assertContains(profile, "featureFlags.isEnabled(.legalCenter)", "legal route must remain gated")
+assertContains(profile, "featureFlags.isEnabled(.familyManagement)", "family route must remain gated")
+assertContains(profile, "featureFlags.isEnabled(.voiceCloneShell)", "voice clone route must remain gated")
+assertContains(profile, "featureFlags.isEnabled(.accountDeletion)", "account deletion route must remain gated")
+assertContains(profileReadiness, "DJEnableProfileHiddenBranches", "profile QA branches need one explicit launch argument")
+assertContains(profileReadiness, "stage: .hiddenReady(", "family and voice capabilities must remain hidden-ready")
+assertContains(profileReadiness, "V4 Closed Pilot 暂不公开音色复刻", "voice clone readiness must explain the V4 boundary")
 
-assertContains(echo, "accessibilityLabel = \"开始语音\"", "echo must expose voice-first public control")
-assertContains(echo, "数字人回响", "echo must preserve the public digital-human visual layer copy")
-assertContains(echo, "自动回到普通回响", "echo must document digital-human failure fallback")
-assertContains(echo, "MemoirTTSService.shared.getCachedLipSyncTimeline", "echo must prefer cached TTS viseme timelines for the public digital-human panel")
-assertContains(echo, "DJDisableDigitalHumanLivePanel", "echo digital-human panel should only be suppressible through an explicit troubleshooting launch argument")
-assertNotContains(echo, "FeatureFlagService.shared.isEnabled(.echoTextInput)", "echo text input should not be publicly wired yet")
-assertNotContains(echo, "FeatureFlagService.shared.isEnabled(.echoImageInput)", "echo image input should not be publicly wired yet")
+assertContains(echo, "FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel)", "digital human panel must remain feature gated")
+assertContains(echo, "private var isDigitalHumanQAOverrideEnabled: Bool", "digital human QA arguments must be isolated")
+assertContains(echo, "#if DEBUG || UI_QA_SIMULATOR", "digital human QA arguments must be compile-time restricted")
+assertContains(echo, "自动回到普通回响", "digital human failure must retain an ordinary Echo fallback")
 
-assertContains(profileReadiness, "DJEnableProfileHiddenBranches", "profile hidden branches need explicit QA launch argument")
-assertContains(profile, "ProfileFamilyPersonaReleaseReadiness.hiddenBranchesLaunchArgument", "profile must consume the hidden branch launch argument from readiness contract")
-assertContains(profile, "ProfileFamilyPersonaReleaseReadiness.isFamilyManagementRowVisible", "family management row must use release readiness visibility contract")
-assertContains(profile, "ProfileFamilyPersonaReleaseReadiness.canOpenFamilyPersonaSwitcher", "family management route must use release readiness route contract")
-assertContains(profile, "featureFlags.isEnabled(.profileSettings)", "profile settings row must be feature gated")
-assertContains(profile, "featureFlags.isEnabled(.legalCenter)", "legal center row must be feature gated")
-assertContains(profile, "featureFlags.isEnabled(.familyManagement)", "family management row must be feature gated")
-assertContains(profile, "featureFlags.isEnabled(.voiceCloneShell)", "voice clone shell row must be feature gated")
-assertContains(profile, "featureFlags.isEnabled(.accountDeletion)", "account deletion row must be feature gated")
-assertContains(profile, "isCareDoctorContactVisible", "doctor contact must use an explicit visibility gate")
-assertContains(profile, "rows.append(.logout)", "logout should remain a stable public action")
-assertContains(profileReadiness, "voiceCloneCapability", "voice clone shell should have a public readiness capability")
-assertContains(profileReadiness, "publicReady", "voice clone shell should be publicly ready after product decision")
-assertContains(profileReadiness, "isVoiceCloneVisible", "voice clone shell should use release readiness visibility contract")
+assertContains(settings, "ProfileSettingsViewController", "profile settings page must remain implemented")
+assertContains(settings, "isPasswordChangeVisible", "password change must remain explicitly gated")
+assertContains(legal, "ProfileLegalViewController", "legal center must remain implemented")
+assertContains(legal, "AI 辅助说明", "legal center must retain AI disclosure")
 
-assertContains(settings, "ProfileSettingsViewController", "profile settings page must exist")
-assertContains(settings, "保存", "profile settings page must provide save action")
-assertContains(profileReadiness, "isPasswordChangeVisible", "password change must use release readiness visibility contract")
-assertContains(settings, "isPasswordChangeVisible", "password change must use an explicit visibility gate")
-assertContains(settings, "featureFlags.isEnabled(.accountPasswordChange)", "password change must be feature gated")
-assertContains(settings, "ProfileFamilyPersonaReleaseReadiness.hiddenBranchesLaunchArgument", "password change hidden branch should use shared launch argument")
-
-assertContains(legal, "ProfileLegalViewController", "legal center page must exist")
-assertContains(legal, "AI 辅助说明", "legal center must cover AI assistance")
-assertContains(legal, "紧急情况", "legal center must cover emergency guidance")
-
-for label in ["记忆档案", "回响", "我的", "添加文字描述", "选择照片", "录入时间信件", "个人资料设置", "法律法规", "退出登录", "注销账户"] {
-    assertContains(matrix, label, "release matrix must document public label \(label)")
-}
-for label in ["语音档案", "人格设定"] {
-    assertContains(matrix, label, "release matrix must document PRD archive feature-card label \(label)")
-}
-
-for label in ["录入语音", "修改密码", "立即通话"] {
-    assertContains(matrix, label, "release matrix must document hidden label \(label)")
-}
-assertContains(matrix, "数字人回响", "release matrix must document public digital-human label")
-assertContains(matrix, "录入视频片段", "release matrix must document hidden video label")
-assertContains(matrix, "账号注销", "release matrix must document public account deletion policy")
-assertContains(matrix, "手机号邀请", "release matrix must document public family phone invite policy")
-
-assertContains(matrix, "## Hidden Candidate Release Decisions", "release matrix should include hidden candidate decision table")
-assertContains(matrix, "| Feature | Current gate | Public in MVP | Needed before public | Test evidence |", "release matrix should include hidden candidate decision columns")
-assertContains(matrix, "No remaining hidden PRD feature is public by default", "release matrix should preserve hidden-by-default policy")
-assertContains(matrix, "Last synced: 2026-07-10", "release matrix should include current sync timestamp")
-assertContains(matrix, "opaque access/refresh session", "release matrix should document the current login session boundary")
-assertContains(matrix, "Voice SDK readiness preview", "release matrix should document hidden voice SDK readiness preview")
-assertContains(matrix, "DJShowVoiceSDKReadinessPreview", "release matrix should document hidden readiness launch arg")
-assertContains(matrix, "Tencent digital human live panel", "release matrix should document the public digital human live panel")
-assertContains(matrix, "enabled by default", "release matrix should document digital-human default-public policy")
-assertContains(matrix, "DJDisableDigitalHumanLivePanel", "release matrix should document digital-human QA disable policy")
-assertContains(matrix, "digital-human-live-panel-check.swift", "release matrix should document digital-human public release guard")
-assertContains(matrix, "digital-human-tts-viseme-gate-check.swift", "release matrix should document digital-human TTS/viseme guard")
-assertContains(matrix, "## 2026-06-19 Completed Hidden/Acceptance Guards", "release matrix should document recently completed guards")
-
-for phrase in [
-    "Hidden Family / Voice UIQA Consumer Gate",
-    "时间信件公开投递闭环",
-    "视频档案 Hidden Readiness",
-    "真机验收包强化",
-    "生产语音 SDK readiness 边界",
-    "voice-sdk-readiness-boundary-check.swift",
-    "time-letter-delivery-policy-shell-check.swift",
-    "archive-video-hidden-readiness-check.swift",
-    "true-device-acceptance-evidence-package-check.swift",
-    "Remaining Gates By Type",
-    "Public MVP gates",
-    "Hidden gates",
-    "External gates",
-    "Product/compliance gates",
+for heading in [
+    "## V4 Closed Pilot Baseline",
+    "| Feature | Public status | Internal status | Decision gate | External gate | Route policy |",
+    "## QA-only Overrides",
+    "## Gate Interpretation",
+    "## Promotion Rule",
 ] {
-    assertContains(matrix, phrase, "release matrix should include synced task or gate classification \(phrase)")
+    assertContains(matrix, heading, "release matrix must contain the V4 control section")
 }
-
-let hiddenDecisionRows = [
-    "| archive audio upload | `DJFeature.archiveAudioUpload` or `DJEnableArchiveHiddenBranches` | no | true-device recording acceptance, storage/privacy copy, backend media policy | `archive-audio-lifecycle-smoke-check.swift`, `archive-audio-ia-release-check.swift`, `true-device-archive-audio-acceptance-check.swift`, `true-device-acceptance-evidence-package-check.swift`, release regression |",
-    "| video upload | `DJFeature.archiveVideoUpload` or `DJEnableArchiveHiddenBranches` mock-file shell only | no | PRD public scope, real picker/compression/storage/backend provider policy, true-device video picker acceptance | `archive-video-hidden-readiness-check.swift`, `archive-hidden-media-detail-ui-check.swift`, `archive-hidden-media-combo-gate-check.swift`, `archive-media-upload-intent-contract-check.swift`, `archive-media-provider-switch-contract-check.swift`, release regression |",
-    "| family advanced lifecycle controls | base phone invite is public; hidden family rows / local QA context only cover advanced lifecycle | no | product/legal policy for exit/unlink/lifecycle transitions, consent copy, recovery rules | `digital-human-mode-management-check.swift`, `digital-human-mode-lifecycle-check.swift` |",
-    "| care dashboard expansion | aggregate `DJFeature.careDashboard` and non-executing `关怀升级准备中` placeholder are public; intervention/contact execution stays behind `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | aggregate + placeholder only | family-facing copy, alert thresholds, backend persistence, true-device acceptance | `elder-care-dashboard-check.swift`, `profile-care-public-placeholder-check.swift`, backend acceptance |",
-    "| account password change | `DJFeature.accountPasswordChange` or `DJEnableProfileHiddenBranches` | no | backend `/auth/password` implementation, auth/security review, true-device acceptance | `profile-password-change-check.swift`, release regression |",
-    "| doctor contact / intervention execution | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` | no | real escalation provider, emergency disclaimers, backend submission contract | `profile-care-escalation-contract-check.swift`, `profile-care-escalation-backend-boundary-check.swift` |",
-    "| care escalation draft | `DJFeature.careDoctorContact` or `DJEnableProfileHiddenBranches` local draft shell only | no | product decision to promote draft, backend submit contract, clinical/legal review | `profile-care-escalation-contract-check.swift`, `run-profile-care-escalation-boundary-smoke.sh` |",
-    "| digital inheritance lifecycle | hidden lifecycle boundary only | no | inheritance trigger policy, family/legal consent, backend audit contract | `digital-human-mode-lifecycle-check.swift`, PRD coverage matrix |",
-]
-
-for row in hiddenDecisionRows {
-    assertContains(matrix, row, "release matrix should include hidden candidate decision row")
+for feature in ownerCore {
+    assertContains(matrix, "| `\(feature)` | public-core |", "matrix must mark \(feature) as owner core")
 }
+for feature in futureOrBeta {
+    assertContains(matrix, "| `\(feature)` | hidden |", "matrix must mark \(feature) hidden")
+}
+for argument in ["DJEnableArchiveHiddenBranches", "DJEnableProfileHiddenBranches", "DJShowDigitalHumanLivePanel"] {
+    assertContains(matrix, argument, "matrix must document QA argument \(argument)")
+}
+assertNotContains(matrix, "enabled by default", "matrix must not preserve the superseded public digital-human policy")
+
+print("Release feature matrix checks passed")

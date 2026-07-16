@@ -66,7 +66,12 @@ assertContains(
 assertContains(
     archive,
     "title: \"语音档案\"",
-    "PRD archive feature grid should include voice archive"
+    "voice archive card implementation should remain available for QA"
+)
+assertContains(
+    archive,
+    "if isArchiveAudioCreationEnabled {",
+    "voice archive card must remain hidden unless its release/QA gate is open"
 )
 assertContains(
     archive,
@@ -86,12 +91,17 @@ assertContains(
 assertContains(
     flags,
     ".personaSettings",
-    "persona settings should be declared as a default PRD archive capability"
+    "persona settings should remain a declared gated capability"
 )
 assertContains(
     matrix,
-    "`相册影像`, `语音档案`, `人格设定`, `封存新记忆`",
-    "release matrix should document the PRD feature-card IA"
+    "| `archiveAudioUpload` | hidden |",
+    "release matrix should document the voice-archive boundary"
+)
+assertContains(
+    matrix,
+    "| `personaSettings` | hidden |",
+    "release matrix should document the persona-settings boundary"
 )
 assertContains(
     releaseRegression,

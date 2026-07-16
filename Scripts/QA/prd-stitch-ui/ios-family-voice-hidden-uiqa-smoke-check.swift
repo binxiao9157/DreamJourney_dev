@@ -97,9 +97,9 @@ assertContains(releaseScript, "\"backendFamilyDigitalHumanMode\"", "family/perso
 assertContains(releaseScript, "\"backendVoiceProfileId\"", "family/persona smoke runner should grep backend voice profile id")
 assertContains(releaseRegression, "ios-family-voice-hidden-uiqa-smoke-check.swift", "release regression should run hidden family/voice UIQA guard")
 assertContains(releaseQA, "ios-family-voice-hidden-uiqa-smoke-check.swift", "release QA package should include hidden family/voice UIQA guard")
-assertContains(releaseMatrix, "ios-family-voice-hidden-uiqa-smoke-check.swift", "release matrix should document hidden family/voice UIQA guard")
+assertContains(releaseMatrix, "| `familyManagement` | hidden |", "release matrix should document hidden family UI")
+assertContains(releaseMatrix, "| `voiceCloneShell` | hidden |", "release matrix should document hidden voice UI")
 assertContains(statusDoc, "Hidden Family / Voice UIQA", "status doc should describe hidden family/voice UIQA")
-assertContains(statusDoc, "voice clone entry has since been promoted", "status doc should document updated public voice clone boundary")
 
 assertNotContains(profileController, ".voiceCloneShell,", "voice clone shell must not be added to default feature flags from profile code")
 

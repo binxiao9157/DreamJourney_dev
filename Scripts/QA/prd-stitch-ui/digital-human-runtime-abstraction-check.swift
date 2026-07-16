@@ -97,6 +97,6 @@ let defaultEnabledStart = featureFlags.range(of: "private static let defaultEnab
 let defaultEnabledEnd = featureFlags.range(of: "private static let nonPersistentFeatures")!.lowerBound
 let defaultEnabledRange = defaultEnabledStart..<defaultEnabledEnd
 let defaultEnabledBlock = String(featureFlags[defaultEnabledRange])
-require(defaultEnabledBlock.contains(".digitalHumanLivePanel"), "public Tencent digital human panel must be enabled by default")
+require(!defaultEnabledBlock.contains(".digitalHumanLivePanel"), "Tencent digital human panel must stay hidden in the V4 Closed Pilot")
 
 print("digital-human-runtime-abstraction-check passed")

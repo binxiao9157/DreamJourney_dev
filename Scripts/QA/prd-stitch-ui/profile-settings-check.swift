@@ -28,7 +28,7 @@ let settings = read("DreamJourney/Sources/Modules/Profile/ProfileSettingsViewCon
 let userManager = read("DreamJourney/Sources/Services/UserManager.swift")
 let project = read("DreamJourney.xcodeproj/project.pbxproj")
 
-assertContains(flags, "private static let defaultEnabled: Set<DJFeature> = [\n        .careDashboard,\n        .profileSettings,\n        .legalCenter,\n    ]", "profile settings should be a default release feature")
+assertContains(flags, "private static let defaultEnabled: Set<DJFeature> = [\n        .echoTextInput,\n        .profileSettings,\n        .legalCenter,\n        .accountDeletion,\n    ]", "profile settings should remain in the V4 owner-core defaults")
 
 assertContains(profile, "case .profileSettings:\n            showProfileSettings()", "profile settings should push a real page")
 assertContains(profile, "private func showProfileSettings()", "profile should expose a settings route")
@@ -40,12 +40,13 @@ assertContains(userManager, "static let djUserDidUpdate", "profile updates shoul
 
 assertContains(settings, "final class ProfileSettingsViewController", "settings page view controller")
 assertContains(settings, "title = \"个人资料设置\"", "settings page title")
-assertContains(settings, "昵称", "nickname field")
+assertContains(settings, "名称", "profile name field")
 assertContains(settings, "头像", "avatar display")
 assertContains(settings, "手机号", "phone display")
 assertContains(settings, "保存", "save action")
 assertContains(settings, "UserManager.shared.saveProfile(nickname:", "settings page should persist through UserManager")
-assertNotContains(settings, "密码", "password entry should remain hidden until implemented")
+assertContains(settings, "isPasswordChangeVisible", "password entry should remain behind an explicit release gate")
+assertContains(settings, "featureFlags.isEnabled(.accountPasswordChange)", "password entry should consume its feature flag")
 
 assertContains(project, "ProfileSettingsViewController.swift in Sources", "settings page added to app target")
 assertContains(project, "ProfileSettingsViewController.swift", "settings page file reference")

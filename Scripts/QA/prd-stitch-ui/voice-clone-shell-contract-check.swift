@@ -33,21 +33,23 @@ let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh
 let releaseQA = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
 
 assertContains(flags, "case voiceCloneShell", "voice clone shell should be feature flagged")
-assertContains(flags, ".voiceCloneShell,", "voice clone should be default enabled after public product decision")
-assertContains(flags, "private static let currentStorageVersion", "feature flag schema should migrate existing installs to public defaults without pinning a stale exact value")
+let defaultEnabledStart = flags.range(of: "private static let defaultEnabled")!.lowerBound
+let defaultEnabledEnd = flags.range(of: "private static let nonPersistentFeatures")!.lowerBound
+let defaultEnabledBlock = String(flags[defaultEnabledStart..<defaultEnabledEnd])
+assertNotContains(defaultEnabledBlock, ".voiceCloneShell", "voice clone must stay hidden in the V4 Closed Pilot")
+assertContains(flags, ".voiceCloneShell,", "voice clone must remain available through the non-persistent QA boundary")
+assertContains(flags, "private static let currentStorageVersion", "feature flag schema should invalidate stale public flags")
 
 for required in [
     "voiceCloneCapability",
     "title: \"音色复刻\"",
     "feature: .voiceCloneShell",
-    "voiceProfileId",
-    "publicReady",
+    "stage: .hiddenReady(",
+    "V4 Closed Pilot 暂不公开音色复刻",
     "isVoiceCloneVisible(",
 ] {
-    assertContains(readiness, required, "profile readiness should define public voice clone capability \(required)")
+    assertContains(readiness, required, "profile readiness should define the hidden voice clone capability \(required)")
 }
-assertNotContains(readiness, "声音克隆暂未开放", "public voice clone copy should not say unavailable")
-assertNotContains(readiness, "默认发布态不展示声音克隆", "public voice clone capability should not remain hidden")
 
 for required in [
     "isVoiceCloneShellVisible",
@@ -89,7 +91,7 @@ for required in [
     "persistBackendProfileIfUsable(",
     "currentUsableSpeakerId",
 ] {
-    assertContains(voiceService, required, "voice clone service should expose public backend-backed contract \(required)")
+    assertContains(voiceService, required, "voice clone service should preserve its backend-backed contract \(required)")
 }
 assertContains(voiceService, "guard snapshot.isReadyForUse", "voice clone service should require provider-confirmed usability before synthesis")
 assertNotContains(voiceService, "existingStatus == .ready", "stale ready cache must not block pending or failed backend state")
@@ -135,10 +137,9 @@ for required in [
     "VoiceCloneService.shared.preferredVoiceCloneProfile(from: profiles, preferredProfileId: currentProfileId)",
     "profile-voice-clone-shell",
 ] {
-    assertContains(shell, required, "voice clone shell should render public basic feature surface \(required)")
+    assertContains(shell, required, "voice clone shell should render the QA feature surface \(required)")
 }
-assertNotContains(shell, "未开放", "public voice clone shell should not render unavailable disabled actions")
-assertNotContains(shell, "默认隐藏", "public voice clone shell should not claim default hidden")
+assertNotContains(shell, "默认隐藏", "the internal shell should not expose release-policy terminology to users")
 assertNotContains(shell, "profileVoiceCloneProfileIdValue", "voice profile id should not be a visible user-facing field")
 assertNotContains(shell, "profileVoiceCloneProviderModeValue", "provider mode should not be a visible user-facing field")
 assertNotContains(shell, "profileVoiceCloneContractVersionValue", "contract version should not be a visible user-facing field")

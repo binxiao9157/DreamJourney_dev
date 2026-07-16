@@ -591,17 +591,33 @@ final class EchoViewController: UIViewController {
     }
 
     private var shouldShowDigitalHumanLivePanel: Bool {
-        let arguments = ProcessInfo.processInfo.arguments
-        if arguments.contains("DJDisableDigitalHumanLivePanel") {
+        if isDigitalHumanQADisableEnabled {
             return false
         }
         return FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel)
-            || arguments.contains("DJShowDigitalHumanLivePanel")
+            || isDigitalHumanQAOverrideEnabled
+    }
+
+    private var isDigitalHumanQAOverrideEnabled: Bool {
+        #if DEBUG || UI_QA_SIMULATOR
+        let arguments = ProcessInfo.processInfo.arguments
+        return arguments.contains("DJShowDigitalHumanLivePanel")
             || arguments.contains("DJRunDigitalHumanLivePanelSmoke")
             || arguments.contains("DJRunTencentDigitalHumanTextDriveSmoke")
             || arguments.contains("DJRunTencentDigitalHumanPCMDriveSmoke")
             || arguments.contains("DJRunTencentDigitalHumanBackendPCMDriveSmoke")
             || arguments.contains("DJRunTencentBackendPCMDriveMockSmoke")
+        #else
+        return false
+        #endif
+    }
+
+    private var isDigitalHumanQADisableEnabled: Bool {
+        #if DEBUG || UI_QA_SIMULATOR
+        return ProcessInfo.processInfo.arguments.contains("DJDisableDigitalHumanLivePanel")
+        #else
+        return false
+        #endif
     }
 
     private var shouldShowEchoRuntimeDiagnosticsPanel: Bool {

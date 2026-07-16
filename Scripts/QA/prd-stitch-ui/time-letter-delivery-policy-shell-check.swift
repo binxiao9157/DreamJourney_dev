@@ -35,9 +35,15 @@ let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClien
 let backendSmoke = read("Scripts/QA/prd-stitch-ui/backend-time-letter-lifecycle-smoke.py")
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let statusDoc = read("docs/superpowers/status/2026-06-21-time-letter-public-delivery.md")
+let releaseMatrix = read("docs/superpowers/status/2026-06-17-release-feature-matrix.md")
 
 assertContains(featureFlags, "case timeLetters", "time-letter feature should have an explicit feature flag")
-assertContains(featureFlags, ".timeLetters", "time-letter should be public by default")
+let defaultEnabledStart = featureFlags.range(of: "private static let defaultEnabled")!.lowerBound
+let defaultEnabledEnd = featureFlags.range(of: "private static let nonPersistentFeatures")!.lowerBound
+let defaultEnabledBlock = String(featureFlags[defaultEnabledStart..<defaultEnabledEnd])
+assertNotContains(defaultEnabledBlock, ".timeLetters", "time-letter must stay hidden in the V4 Closed Pilot")
+assertContains(featureFlags, "private static let nonPersistentFeatures", "time-letter QA overrides must be process-scoped")
+assertContains(releaseMatrix, "| `timeLetters` | hidden |", "release matrix must record the V4 time-letter boundary")
 assertContains(featureFlags, "private static let currentStorageVersion", "feature-flag storage should keep a migration version without pinning a stale exact value")
 
 for required in [
@@ -212,4 +218,4 @@ for required in [
     assertContains(statusDoc, required, "status doc should document public time-letter delivery \(required)")
 }
 
-print("Time-letter public delivery checks passed")
+print("Time-letter hidden lifecycle contract checks passed")

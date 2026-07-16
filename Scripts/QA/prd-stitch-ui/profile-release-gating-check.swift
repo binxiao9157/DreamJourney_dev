@@ -45,12 +45,11 @@ let profileReadiness = read("DreamJourney/Sources/Modules/Profile/ProfileFamilyP
 assertContains(flags, "case profileSettings", "profile settings must be independently gateable")
 assertContains(flags, "case careDoctorContact", "doctor contact must be independently gateable")
 let defaultEnabled = extractDefaultEnabledFeatures(from: flags)
-for requiredDefault in ["careDashboard", "familyManagement", "familySpace", "profileSettings", "legalCenter", "voiceCloneShell", "accountDeletion"] {
-    guard defaultEnabled.contains(requiredDefault) else {
-        fatalError("\(requiredDefault) should be visible by default")
-    }
+let expectedDefaults: Set<String> = ["echoTextInput", "profileSettings", "legalCenter", "accountDeletion"]
+guard defaultEnabled == expectedDefaults else {
+    fatalError("V4 owner-core defaults changed: \(defaultEnabled.sorted())")
 }
-for hiddenDefault in ["accountPasswordChange", "careDoctorContact"] {
+for hiddenDefault in ["familyManagement", "familySpace", "voiceCloneShell", "careDashboard", "accountPasswordChange", "careDoctorContact"] {
     guard !defaultEnabled.contains(hiddenDefault) else {
         fatalError("\(hiddenDefault) must not be enabled by default")
     }

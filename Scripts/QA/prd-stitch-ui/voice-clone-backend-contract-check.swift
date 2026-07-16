@@ -221,6 +221,7 @@ assertContains(backendKeySeparationDoc, "不要在当前链路里给声音复刻
 assertContains(releaseRegression, "voice-clone-backend-contract-check.swift", "release regression should run voice clone backend guard")
 assertContains(releaseQA, "voice-clone-backend-contract-check.swift", "release QA package should include voice clone backend guard")
 assertContains(shellGuard, "voice-clone-backend-contract-check.swift", "voice shell guard should point to backend contract guard")
-assertContains(releaseMatrix, "voice-clone-backend-contract-check.swift", "release matrix should document voice clone backend guard")
+assertContains(releaseMatrix, "| `voiceCloneShell` | hidden |", "release matrix should document the V4 voice-clone boundary")
+assertContains(releaseMatrix, "consent/provider approval", "release matrix should preserve the voice-clone promotion gate")
 
 print("Voice clone backend contract guard passed")

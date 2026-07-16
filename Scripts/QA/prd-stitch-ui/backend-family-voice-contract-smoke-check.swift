@@ -101,7 +101,8 @@ for requiredPackageEntry in [
     assertContains(releasePackage, requiredPackageEntry, "release QA package should include \(requiredPackageEntry)")
 }
 
-assertContains(releaseMatrix, "backend-family-voice-contract-smoke-check.swift", "release matrix should document the family/voice backend smoke")
+assertContains(releaseMatrix, "| `familyManagement` | hidden |", "release matrix should document the family boundary")
+assertContains(releaseMatrix, "| `voiceCloneShell` | hidden |", "release matrix should document the voice boundary")
 assertContains(status, "family digital-human", "status doc should document family digital-human scope")
 assertContains(status, "voice profile lifecycle", "status doc should document voice profile lifecycle scope")
 assertContains(status, "RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE=1", "status doc should show release regression flag")

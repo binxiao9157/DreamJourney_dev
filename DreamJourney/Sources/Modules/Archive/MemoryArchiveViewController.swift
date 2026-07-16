@@ -1413,13 +1413,15 @@ final class MemoryArchiveViewController: UIViewController {
     private func makeSecondaryFeatureTiles(summary: (total: Int, photos: Int, audio: Int, text: Int)) -> [UIView] {
         var tiles: [UIView] = []
 
-        tiles.append(makeFeatureTile(
-            iconName: "waveform",
-            title: "语音档案",
-            detail: "\(summary.audio) 段声音",
-            isLarge: false,
-            action: #selector(audioCardTapped)
-        ))
+        if isArchiveAudioCreationEnabled {
+            tiles.append(makeFeatureTile(
+                iconName: "waveform",
+                title: "语音档案",
+                detail: "\(summary.audio) 段声音",
+                isLarge: false,
+                action: #selector(audioCardTapped)
+            ))
+        }
 
         if isPersonaSettingsVisible {
             tiles.append(makeFeatureTile(
