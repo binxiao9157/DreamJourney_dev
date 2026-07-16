@@ -625,56 +625,97 @@ final class EchoViewController: UIViewController {
     }
 
     private var shouldShowEchoRuntimeDiagnosticsPanel: Bool {
+        #if DEBUG || UI_QA_SIMULATOR
         let arguments = ProcessInfo.processInfo.arguments
         return arguments.contains("DJShowEchoRuntimeDiagnosticsPanel")
             || arguments.contains("DJRunEchoRuntimeDiagnosticsExportSmoke")
             || arguments.contains("DJRunEchoTraceEvidencePackageExportSmoke")
             || arguments.contains("DJRunEchoTraceEvidencePackagePanelExportSmoke")
+        #else
+        return false
+        #endif
     }
 
     private var shouldRunTencentDigitalHumanTextDriveSmoke: Bool {
-        ProcessInfo.processInfo.arguments.contains("DJRunTencentDigitalHumanTextDriveSmoke")
+        #if DEBUG || UI_QA_SIMULATOR
+        return ProcessInfo.processInfo.arguments.contains("DJRunTencentDigitalHumanTextDriveSmoke")
+        #else
+        return false
+        #endif
     }
 
     private var shouldRunTencentDigitalHumanPCMDriveSmoke: Bool {
-        ProcessInfo.processInfo.arguments.contains("DJRunTencentDigitalHumanPCMDriveSmoke")
+        #if DEBUG || UI_QA_SIMULATOR
+        return ProcessInfo.processInfo.arguments.contains("DJRunTencentDigitalHumanPCMDriveSmoke")
+        #else
+        return false
+        #endif
     }
 
     private var shouldRunTencentDigitalHumanBackendPCMDriveSmoke: Bool {
-        ProcessInfo.processInfo.arguments.contains("DJRunTencentDigitalHumanBackendPCMDriveSmoke")
+        #if DEBUG || UI_QA_SIMULATOR
+        return ProcessInfo.processInfo.arguments.contains("DJRunTencentDigitalHumanBackendPCMDriveSmoke")
+        #else
+        return false
+        #endif
     }
 
     private var shouldRunTencentBackendPCMDriveMockSmoke: Bool {
-        ProcessInfo.processInfo.arguments.contains("DJRunTencentBackendPCMDriveMockSmoke")
+        #if DEBUG || UI_QA_SIMULATOR
+        return ProcessInfo.processInfo.arguments.contains("DJRunTencentBackendPCMDriveMockSmoke")
+        #else
+        return false
+        #endif
     }
 
     private var shouldRunTencentDigitalHumanPCMDriveStopProbe: Bool {
-        ProcessInfo.processInfo.arguments.contains("DJRunTencentDigitalHumanPCMDriveStopProbe")
+        #if DEBUG || UI_QA_SIMULATOR
+        return ProcessInfo.processInfo.arguments.contains("DJRunTencentDigitalHumanPCMDriveStopProbe")
+        #else
+        return false
+        #endif
     }
 
     private var tencentBackendPCMDriveVoiceProfileId: String? {
+        #if DEBUG || UI_QA_SIMULATOR
         launchArgumentValue(prefix: "DJTencentBackendPCMDriveVoiceProfileId=")
             ?? VoiceCloneService.shared.currentUsableSpeakerId
+        #else
+        nil
+        #endif
     }
 
     private var tencentBackendPCMDriveUserId: String {
+        #if DEBUG || UI_QA_SIMULATOR
         launchArgumentValue(prefix: "DJTencentBackendPCMDriveUserId=")
             ?? UserManager.shared.currentUser?.id
             ?? "default"
+        #else
+        return ""
+        #endif
     }
 
     private var tencentBackendPCMDriveText: String {
+        #if DEBUG || UI_QA_SIMULATOR
         launchArgumentValue(prefix: "DJTencentBackendPCMDriveText=")
             ?? "腾讯数智人复刻声音测试：如果你能听见这句话，并且口型同步，说明后端 PCM 音频驱动链路已经接通。"
+        #else
+        return ""
+        #endif
     }
 
     private var tencentBackendPCMDriveMockVoiceProfileId: String {
+        #if DEBUG || UI_QA_SIMULATOR
         launchArgumentValue(prefix: "DJTencentBackendPCMDriveMockVoiceProfileId=")
             ?? tencentBackendPCMDriveVoiceProfileId
             ?? "S_uiqa_tencent_pcm_mock"
+        #else
+        return ""
+        #endif
     }
 
     private func launchArgumentValue(prefix: String) -> String? {
+        #if DEBUG || UI_QA_SIMULATOR
         ProcessInfo.processInfo.arguments
             .first { $0.hasPrefix(prefix) }
             .map { String($0.dropFirst(prefix.count)) }
@@ -682,6 +723,9 @@ final class EchoViewController: UIViewController {
                 let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
                 return trimmed.isEmpty ? nil : trimmed
             }
+        #else
+        return nil
+        #endif
     }
 
     init(viewModel: EchoViewModel = EchoViewModel()) {

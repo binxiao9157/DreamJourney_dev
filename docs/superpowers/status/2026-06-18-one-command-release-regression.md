@@ -82,7 +82,7 @@ RUN_ID=20260618-release-handoff \
 Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
-This forces release-like FastAPI/Postgres acceptance and the hidden media combo gate to run as part of the one-command package. Release-like backend acceptance cannot be disabled by RUN_RELEASE_LIKE_BACKEND=0. For local dry runs without a backend, keep `RELEASE_HANDOFF_MODE=0`.
+This forces release-like FastAPI/Postgres acceptance, the hidden media combo gate, and the Release iPhoneOS QA override artifact scan to run as part of the one-command package. Release-like backend acceptance cannot be disabled by RUN_RELEASE_LIKE_BACKEND=0. For local dry runs without a backend, keep `RELEASE_HANDOFF_MODE=0`.
 
 Release handoff mode must include these gates:
 
@@ -93,6 +93,7 @@ Release handoff mode must include these gates:
 - Care placeholder guard: `profile-care-public-placeholder-check.swift`
 - Release-like backend acceptance: `run-release-like-backend-acceptance.sh`
 - Hidden media combo gate: `RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE=1`, which runs `run-archive-hidden-media-combo-gate.sh`
+- QA override artifact gate: `RUN_RELEASE_QA_OVERRIDE_ARTIFACT_SCAN=1`, which builds `Release + iphoneos` and rejects QA launch arguments, QA setter symbols, and packaged local Tencent asset overrides
 
 For public MVP archive handoff, add `RUN_P0_ARCHIVE_ECHO_REGRESSION=1` to the release handoff command so archive seed, analysis, and Echo context run in the same package.
 

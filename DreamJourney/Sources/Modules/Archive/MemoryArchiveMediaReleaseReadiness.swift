@@ -16,7 +16,11 @@ enum MemoryArchiveMediaReleaseReadiness {
         let releaseCopy: String
     }
 
+    #if DEBUG || UI_QA_SIMULATOR
     static let hiddenBranchesLaunchArgument = "DJEnableArchiveHiddenBranches"
+    #else
+    static let hiddenBranchesLaunchArgument = ""
+    #endif
     static let mediaUploadIntentEndpoint = "/archive/media/upload-intent"
     static let uploadIntentTTLSeconds = 900
     static let audioFileSizeLimitMB = 50

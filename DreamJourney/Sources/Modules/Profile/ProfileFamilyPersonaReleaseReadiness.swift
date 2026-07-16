@@ -13,7 +13,11 @@ enum ProfileFamilyPersonaReleaseReadiness {
         let releaseCopy: String
     }
 
+    #if DEBUG || UI_QA_SIMULATOR
     static let hiddenBranchesLaunchArgument = "DJEnableProfileHiddenBranches"
+    #else
+    static let hiddenBranchesLaunchArgument = ""
+    #endif
     static let unavailableTitle = "家人管理暂未开放"
     static let unavailableMessage = "当前版本先保留入口，完整家人空间会在后续版本开放。"
     static let voiceCloneUnavailableTitle = "音色复刻暂不可用"

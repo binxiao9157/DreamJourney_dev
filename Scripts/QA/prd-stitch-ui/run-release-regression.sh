@@ -16,6 +16,7 @@ STATIC_LOG_DIR="$OUTPUT_DIR/static-guards"
 
 RUN_STANDARD_BUILD="${RUN_STANDARD_BUILD:-1}"
 RUN_IPHONEOS_GENERIC_BUILD="${RUN_IPHONEOS_GENERIC_BUILD:-0}"
+RUN_RELEASE_QA_OVERRIDE_ARTIFACT_SCAN="${RUN_RELEASE_QA_OVERRIDE_ARTIFACT_SCAN:-0}"
 RUN_PUBLIC_MVP_REGRESSION="${RUN_PUBLIC_MVP_REGRESSION:-0}"
 RUN_SIMULATOR_SMOKE="${RUN_SIMULATOR_SMOKE:-1}"
 RUN_P0_ARCHIVE_ECHO_REGRESSION="${RUN_P0_ARCHIVE_ECHO_REGRESSION:-0}"
@@ -99,6 +100,9 @@ if [[ "$RELEASE_HANDOFF_MODE" == "1" ]]; then
   # Release handoff must inventory source/history/container and supplied
   # release artifacts without emitting credential values.
   RUN_CREDENTIAL_INVENTORY_SCAN=1
+  # Release handoff must prove QA-only controls are absent from the production
+  # binary and its packaged configuration.
+  RUN_RELEASE_QA_OVERRIDE_ARTIFACT_SCAN=1
   # Release handoff must prove deployed auth/provider responses are no-store
   # and never expose long-lived Provider credential fields.
   RUN_BACKEND_CREDENTIAL_RESPONSE_BOUNDARY_SMOKE=1
@@ -142,6 +146,7 @@ Run ID: \`$RUN_ID\`
 
 - Standard iOS build: \`$RUN_STANDARD_BUILD\`
 - iPhoneOS generic build: \`$RUN_IPHONEOS_GENERIC_BUILD\`
+- Release QA override artifact scan: \`$RUN_RELEASE_QA_OVERRIDE_ARTIFACT_SCAN\`
 - Public MVP minimum regression: \`$RUN_PUBLIC_MVP_REGRESSION\`
 - P0 Archive -> Echo regression gate: \`$RUN_P0_ARCHIVE_ECHO_REGRESSION\`
 - Archive -> Echo simulator smoke: \`$RUN_SIMULATOR_SMOKE\`
@@ -203,6 +208,7 @@ Run ID: \`$RUN_ID\`
 - Static PRD/UI/release guard scripts.
 - iOS Debug simulator build, unless \`RUN_STANDARD_BUILD=0\`.
 - Optional iPhoneOS generic build when \`RUN_IPHONEOS_GENERIC_BUILD=1\`; this validates arm64 iPhoneOS compilation, Tencent SDK linkage, and bundle-id override without requiring an online physical device.
+- Optional Release QA override artifact scan when \`RUN_RELEASE_QA_OVERRIDE_ARTIFACT_SCAN=1\`; release handoff forces a Release iPhoneOS build and rejects QA launch arguments, process-only setters, and persistent local provider overrides.
 - Optional public MVP minimum regression when \`RUN_PUBLIC_MVP_REGRESSION=1\`; this forces both P0 Archive -> Echo and P0 Profile Care gates.
 - Optional P0 Archive -> Echo regression gate when \`RUN_P0_ARCHIVE_ECHO_REGRESSION=1\`; this forces the core archive seed -> analysis -> Echo context UIQA smoke.
 - Core Archive -> Echo simulator smoke, unless \`RUN_SIMULATOR_SMOKE=0\`.
@@ -220,7 +226,7 @@ Run ID: \`$RUN_ID\`
 - Optional backend cross-account authorization shadow smoke when \`RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE=1\`; this verifies owner/family/time-letter/invitation policy decisions, forged-viewer deny evidence, and retained production shadow mode without invoking global dispatch.
 - Optional backend route ownership audit smoke when \`RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE=1\`; this verifies 59 classified routes, zero omissions, owner path/body denial (including knowledge governance), system-only denial, and retained global shadow mode without invoking global dispatch.
 - Optional backend release-policy smoke when \`RUN_BACKEND_RELEASE_POLICY_SMOKE=1\`; release handoff forces this gate to verify the deployed typed shadow snapshot, no-store response, explicit Closed Pilot allowlist, unknown-feature deny, and version-downgrade rejection.
-- Optional backend runtime capability smoke when \`RUN_BACKEND_RUNTIME_CAPABILITY_SMOKE=1\`; release handoff forces this gate to verify `implemented/enabled/providerReady/releaseVisible/externalVerified` remain independent, mock/text-only providers do not become ready, and no credential fields are returned.
+- Optional backend runtime capability smoke when \`RUN_BACKEND_RUNTIME_CAPABILITY_SMOKE=1\`; release handoff forces this gate to verify \`implemented/enabled/providerReady/releaseVisible/externalVerified\` remain independent, mock/text-only providers do not become ready, and no credential fields are returned.
 - Optional deployed-to-cache smoke when \`RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE=1\`; release handoff forces this G2 gate to verify the live snapshot can enter an account/build-scoped cache while account switch and app upgrade remain isolated.
 - Optional captured command smoke when \`RUN_BACKEND_RELEASE_POLICY_COMMAND_SMOKE=1\`; release handoff forces this gate to verify server-side route classification, immutable decision diagnostics, and observe/enforce denial behavior without mutating production data.
 - Optional deployed knowledge pipeline smoke when \`RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE=1\`; this verifies login, revision sync, idempotent mutation, change feed, generation context, and stale-revision conflict against the configured backend.
@@ -266,6 +272,7 @@ append_report_footer() {
 - Static guard logs: \`static-guards/\`
 - Standard build log: \`build-debug.log\`
 - iPhoneOS generic build: \`iphoneos-generic-build/$RUN_ID/\`
+- Release QA override artifact scan: \`release-qa-override-artifact-scan/$RUN_ID/\`
 - Public MVP minimum regression: \`archive-to-echo-smoke/$RUN_ID/\`, \`profile-care-state-smoke/$RUN_ID/\`, and \`profile-care-backend-state-smoke/$RUN_ID/\`
 - P0 Archive -> Echo regression gate: \`archive-to-echo-smoke/$RUN_ID/\`
 - Archive -> Echo smoke: \`archive-to-echo-smoke/$RUN_ID/\`
@@ -504,6 +511,7 @@ for guard in \
   release-policy-cache-contract-check.swift \
   captured-feature-policy-gate-check.swift \
   runtime-capability-axis-integration-check.swift \
+  qa-override-release-boundary-check.swift \
   future-beta-default-deny-check.swift \
   release-feature-matrix-check.swift \
   prd-coverage-matrix-check.swift \
@@ -656,6 +664,16 @@ if [[ "$RUN_IPHONEOS_GENERIC_BUILD" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/iphoneos-generic-build/$RUN_ID"
   echo "Skipped by RUN_IPHONEOS_GENERIC_BUILD=0" > "$OUTPUT_DIR/iphoneos-generic-build/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_RELEASE_QA_OVERRIDE_ARTIFACT_SCAN" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/release-qa-override-artifact-scan" \
+    "$SCRIPT_DIR/run-release-qa-override-artifact-scan.sh"
+else
+  mkdir -p "$OUTPUT_DIR/release-qa-override-artifact-scan/$RUN_ID"
+  echo "Skipped by RUN_RELEASE_QA_OVERRIDE_ARTIFACT_SCAN=0" \
+    > "$OUTPUT_DIR/release-qa-override-artifact-scan/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_SIMULATOR_SMOKE" == "1" ]]; then

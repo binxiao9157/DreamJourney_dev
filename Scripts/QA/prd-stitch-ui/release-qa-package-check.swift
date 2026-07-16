@@ -456,10 +456,13 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/runtime-capability-snapshot-model-smoke.swift",
     "Scripts/QA/prd-stitch-ui/run-runtime-capability-snapshot-model-smoke.sh",
     "Scripts/QA/prd-stitch-ui/runtime-capability-axis-integration-check.swift",
+    "Scripts/QA/prd-stitch-ui/qa-override-release-boundary-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-release-qa-override-artifact-scan.sh",
     "docs/superpowers/status/2026-07-16-wi-s0-06-01-release-policy-shadow.md",
     "docs/superpowers/status/2026-07-16-wi-s0-06-02-release-policy-cache.md",
     "docs/superpowers/status/2026-07-16-wi-s0-06-04-captured-policy-gate.md",
     "docs/superpowers/status/2026-07-16-wi-s0-06-05-runtime-capability-axes.md",
+    "docs/superpowers/status/2026-07-16-wi-s0-06-06-qa-override-boundary.md",
     "docs/superpowers/status/2026-07-16-wi-s0-03-07-credential-rotation-receipt.json",
     "docs/superpowers/status/2026-07-16-wi-s0-03-07-credential-rotation-revoke-drain.md",
     "../DreamJourneyBackend/scripts/run-backend-credential-response-deployed-smoke.sh",
@@ -779,6 +782,7 @@ assertContains(gitignore, "tmp/**/DerivedData*", "gitignore should exclude gener
 let releaseRegressionRunner = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let releaseRegressionDoc = read("docs/superpowers/status/2026-06-18-one-command-release-regression.md")
 assertContains(releaseRegressionRunner, "RELEASE_HANDOFF_MODE", "release regression should support backend-required handoff mode")
+assertContains(releaseRegressionRunner, "RUN_RELEASE_QA_OVERRIDE_ARTIFACT_SCAN=1", "release handoff should force the QA override artifact scan")
 assertContains(releaseRegressionDoc, "Release Handoff Mode", "release regression docs should include handoff mode")
 
 print("Release QA package checks passed")

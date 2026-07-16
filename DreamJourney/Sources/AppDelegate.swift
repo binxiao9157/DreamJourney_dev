@@ -173,7 +173,7 @@ private extension AppDelegate {
     func configureUIQASmokeHarnessIfNeeded() {
         let arguments = ProcessInfo.processInfo.arguments
         if arguments.contains("DJEnableArchiveRemoteFetch") {
-            FeatureFlagService.shared.set(.archiveRemoteFetch, enabled: true)
+            FeatureFlagService.shared.enableForCurrentLaunch(.archiveRemoteFetch)
             print("[UI_QA] Archive remote fetch enabled")
         }
         if arguments.contains("DJShowDigitalHumanLivePanel")
@@ -929,9 +929,9 @@ private extension AppDelegate {
         let firstFamilyMember = backendFamilyMember ?? familyMembers.first
         let profileTabSelected = selectProfileTabForFamilyPersonaSmoke()
         let completed = releaseRowVisible == false
-            && familyManagementOnlyRowVisible
-            && familyManagementOnlyCanOpenSwitcher
-            && familySpaceCanOpenSwitcher
+            && familyManagementOnlyRowVisible == false
+            && familyManagementOnlyCanOpenSwitcher == false
+            && familySpaceCanOpenSwitcher == false
             && hiddenBranchesCanOpenSwitcher
             && selfContext.isSelfAssistant
             && profileTabSelected

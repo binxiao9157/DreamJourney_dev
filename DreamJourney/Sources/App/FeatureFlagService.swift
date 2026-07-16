@@ -93,11 +93,11 @@ final class FeatureFlagService {
         persist()
     }
 
+    #if DEBUG || UI_QA_SIMULATOR
     func enableForCurrentLaunch(_ feature: DJFeature) {
-        #if DEBUG || UI_QA_SIMULATOR
         transientEnabled.insert(feature)
-        #endif
     }
+    #endif
 
     func resetToDefaults() {
         enabled = Self.defaultEnabled

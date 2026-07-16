@@ -1144,8 +1144,10 @@ struct DigitalHumanSessionLeaseOperationResult {
 }
 
 struct DigitalHumanSessionContract {
-    private static let localAssetVirtualmanKeyInfoKey = "DreamJourneyDigitalHumanAssetVirtualmanKey"
+    #if DEBUG || UI_QA_SIMULATOR
+    private static let localAssetVirtualmanKeyEnvironmentKey = "DREAMJOURNEY_DIGITAL_HUMAN_ASSET_VIRTUALMAN_KEY"
     private static let localAssetVirtualmanKeyOverrideArgument = "DJUseLocalDigitalHumanAssetOverride"
+    #endif
 
     let sessionId: String
     let userId: String
@@ -1225,13 +1227,21 @@ struct DigitalHumanSessionContract {
     }
 
     private static var localAssetVirtualmanKeyOverride: String? {
-        let raw = Bundle.main.object(forInfoDictionaryKey: localAssetVirtualmanKeyInfoKey) as? String
+        #if DEBUG || UI_QA_SIMULATOR
+        let raw = ProcessInfo.processInfo.environment[localAssetVirtualmanKeyEnvironmentKey]
         let value = raw?.trimmingCharacters(in: .whitespacesAndNewlines)
         return value?.isEmpty == false ? value : nil
+        #else
+        return nil
+        #endif
     }
 
     private static var shouldUseLocalAssetVirtualmanKeyOverride: Bool {
+        #if DEBUG || UI_QA_SIMULATOR
         ProcessInfo.processInfo.arguments.contains(localAssetVirtualmanKeyOverrideArgument)
+        #else
+        false
+        #endif
     }
 
     private static func nonEmptyString(_ value: Any?) -> String? {

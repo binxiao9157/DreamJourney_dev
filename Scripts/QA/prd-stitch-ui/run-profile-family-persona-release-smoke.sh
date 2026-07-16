@@ -116,9 +116,9 @@ echo
 
 grep -Eq '"completed"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Smoke did not complete."
 grep -Eq '"releaseRowVisible"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Family row should stay hidden in default release mode."
-grep -Eq '"familyManagementOnlyRowVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "familyManagement flag should show only the safe row."
+grep -Eq '"familyManagementOnlyRowVisible"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "familyManagement must remain hidden when runtime releaseVisible is false."
 grep -Eq '"familyManagementOnlyCanOpenSwitcher"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "familyManagement alone must not open persona switcher."
-grep -Eq '"familySpaceCanOpenSwitcher"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "familySpace flag should open persona switcher."
+grep -Eq '"familySpaceCanOpenSwitcher"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "familySpace must remain closed when runtime releaseVisible is false."
 grep -Eq '"hiddenBranchesCanOpenSwitcher"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Hidden QA launch should open persona switcher."
 grep -Eq '"profileTabSelected"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Smoke should select the profile tab before screenshot."
 grep -Eq '"familyMemberCount"[[:space:]]*:[[:space:]]*[1-9]' "$RESULT_FILE" || fail "Family repository should provide at least one persona option."

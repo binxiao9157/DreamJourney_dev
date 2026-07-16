@@ -24,8 +24,6 @@
 	<string>1</string>
 	<key>DreamJourneyBackendBaseURL</key>
 	<string>$(DREAMJOURNEY_BACKEND_BASE_URL)</string>
-	<key>DreamJourneyDigitalHumanAssetVirtualmanKey</key>
-	<string>2d71a8468d3c49d2942f3c388814f070</string>
 	<key>DreamJourneyAppGroupIdentifier</key>
 	<string>$(DREAMJOURNEY_APP_GROUP_IDENTIFIER)</string>
 	<key>LSRequiresIPhoneOS</key>
