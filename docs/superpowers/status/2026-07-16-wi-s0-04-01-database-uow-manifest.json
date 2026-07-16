@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "workItem": "WI-S0-04-01",
+  "authorityLock": "DB_RECOVERY",
+  "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
+  "lease": "ACTIVE",
+  "status": "INTERNAL_READY_DEPLOYED_G0_G2_FUNCTIONAL_VERIFIED_CAPACITY_BASELINE_PENDING",
+  "backend": {
+    "branch": "main",
+    "commit": "dfdff1d",
+    "environment": "production",
+    "store": "postgres"
+  },
+  "pool": {
+    "provider": "psycopg_pool",
+    "defaultMinSize": 1,
+    "defaultMaxSize": 10,
+    "defaultTimeoutSeconds": 5,
+    "sharedConnectionFieldCount": 0,
+    "poolExhaustionFallback": "failClosed503"
+  },
+  "requestUnitOfWork": {
+    "healthExcluded": true,
+    "success": "commit",
+    "errorResponse": "rollback",
+    "exception": "rollback",
+    "connectionReturn": "always",
+    "correlationHeader": "X-DreamJourney-Correlation-Id"
+  },
+  "gates": {
+    "G0FakeContract": "VERIFIED_66_TARGETED_362_FULL",
+    "G2RealPostgresConcurrency": "VERIFIED_TWO_CONNECTIONS_TWO_TRANSACTIONS",
+    "G2AbortedTransactionRecovery": "VERIFIED_DIVISION_BY_ZERO_THEN_SELECT_ONE",
+    "G2PoolExhaustion": "VERIFIED_FAIL_CLOSED",
+    "G2DeployedRequestCommitRollback": "VERIFIED_COMMIT_2_ROLLBACK_1",
+    "idleInTransactionAfterSmoke": 0,
+    "connectionReturnFailure": 0,
+    "operationsCapacityBaseline": "EXTERNAL_PENDING"
+  },
+  "nonGoals": {
+    "versionedMigrator": "WI-S0-04-02",
+    "databaseReadiness": "WI-S0-04-03",
+    "backupRestoreReplay": "WI-S0-04-04_05"
+  }
+}
