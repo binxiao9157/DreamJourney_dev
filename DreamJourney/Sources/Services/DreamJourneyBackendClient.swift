@@ -94,9 +94,15 @@ struct BackendReleasePolicyFeatureDecision: Equatable {
 
 enum BackendReleasePolicyContractError: LocalizedError {
     case malformedSnapshot
+    case accountScopeChanged
 
     var errorDescription: String? {
-        "发布策略合同无效，相关可选功能已保持关闭"
+        switch self {
+        case .malformedSnapshot:
+            return "发布策略合同无效，相关可选功能已保持关闭"
+        case .accountScopeChanged:
+            return "账号已切换，旧发布策略响应已丢弃"
+        }
     }
 }
 
@@ -177,6 +183,53 @@ struct BackendReleasePolicySnapshot {
             return Int(value)
         }
         return nil
+    }
+}
+
+struct BackendCachedReleasePolicyEvaluation {
+    let state: ReleasePolicyCacheState
+    let accessMode: ReleasePolicyAccessMode
+    let reason: String
+    let policyVersion: String?
+    let policyRevision: Int?
+    let emergencyRevision: Int?
+    let ageSeconds: TimeInterval?
+    let snapshot: BackendReleasePolicySnapshot?
+
+    func decision(for feature: DJFeature) -> BackendReleasePolicyFeatureDecision {
+        guard accessMode == .useCachedPolicy, let snapshot else {
+            return .failClosed(feature: feature.rawValue, reason: reason)
+        }
+        return snapshot.decision(for: feature)
+    }
+
+    init(cache: ReleasePolicyCacheEvaluation, risk: ReleasePolicyRiskClass) {
+        policyVersion = cache.policyVersion
+        policyRevision = cache.policyRevision
+        emergencyRevision = cache.emergencyRevision
+        ageSeconds = cache.ageSeconds
+
+        guard cache.accessMode == .useCachedPolicy else {
+            state = cache.state
+            accessMode = cache.accessMode
+            reason = cache.reason
+            snapshot = nil
+            return
+        }
+        guard let payload = cache.payload,
+              let json = try? JSONSerialization.jsonObject(with: payload) as? [String: Any],
+              let parsedSnapshot = try? BackendReleasePolicySnapshot(json: json) else {
+            state = .corrupt
+            accessMode = risk.unavailableAccessMode
+            reason = "cachedPolicyContractInvalid"
+            snapshot = nil
+            return
+        }
+
+        state = .fresh
+        accessMode = .useCachedPolicy
+        reason = cache.reason
+        snapshot = parsedSnapshot
     }
 }
 
@@ -2768,6 +2821,7 @@ final class DreamJourneyBackendClient {
     private let baseURL: String
     private let hasExplicitBaseURL: Bool
     private let authSessionStore = BackendAuthSessionStore.shared
+    private let releasePolicyStore = ReleasePolicyStore.shared
     private let authRefreshQueue = DispatchQueue(label: "com.dreamjourney.backend-auth-refresh")
     private var authRefreshWaiters: [(Bool) -> Void] = []
     private var isAuthRefreshInFlight = false
@@ -2884,6 +2938,7 @@ final class DreamJourneyBackendClient {
         knownPolicyRevision: Int = 0,
         completion: @escaping (Result<BackendReleasePolicySnapshot, Error>) -> Void
     ) {
+        let requestedScope = releasePolicyCacheScope(clientBuild: clientBuild)
         let path = "/v2/release-policy"
             + "?audience=\(queryComponent(audience))"
             + "&cohort=\(queryComponent(cohort))"
@@ -2893,7 +2948,22 @@ final class DreamJourneyBackendClient {
             switch result {
             case .success(let json):
                 do {
-                    completion(.success(try BackendReleasePolicySnapshot(json: json)))
+                    let snapshot = try BackendReleasePolicySnapshot(json: json)
+                    let payload = try JSONSerialization.data(withJSONObject: json, options: [.sortedKeys])
+                    guard requestedScope == self.releasePolicyCacheScope(clientBuild: clientBuild) else {
+                        throw BackendReleasePolicyContractError.accountScopeChanged
+                    }
+                    try self.releasePolicyStore.save(
+                        payload: payload,
+                        policySchemaVersion: snapshot.schemaVersion,
+                        policyVersion: snapshot.policyVersion,
+                        policyRevision: snapshot.policyRevision,
+                        emergencyRevision: snapshot.emergencyRevision,
+                        scope: requestedScope,
+                        fetchedAt: Date(),
+                        expiresAt: snapshot.expiresAt
+                    )
+                    completion(.success(snapshot))
                 } catch {
                     completion(.failure(error))
                 }
@@ -2901,6 +2971,28 @@ final class DreamJourneyBackendClient {
                 completion(.failure(error))
             }
         }
+    }
+
+    func cachedReleasePolicyEvaluation(
+        risk: ReleasePolicyRiskClass,
+        clientBuild: Int,
+        now: Date = Date(),
+        minimumEmergencyRevision: Int = 0
+    ) -> BackendCachedReleasePolicyEvaluation {
+        let cache = releasePolicyStore.evaluate(
+            scope: releasePolicyCacheScope(clientBuild: clientBuild),
+            risk: risk,
+            now: now,
+            minimumEmergencyRevision: minimumEmergencyRevision
+        )
+        return BackendCachedReleasePolicyEvaluation(cache: cache, risk: risk)
+    }
+
+    private func releasePolicyCacheScope(clientBuild: Int) -> ReleasePolicyCacheScope {
+        ReleasePolicyCacheScope(
+            accountUserId: authSessionStore.currentSession?.userId,
+            appBuild: String(max(0, clientBuild))
+        )
     }
 
     func fetchArchiveImageAnalysisRuntimeCapability(

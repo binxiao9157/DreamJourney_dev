@@ -33,6 +33,7 @@ RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE="${RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE:-
 RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE="${RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE:-0}"
 RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE="${RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE:-0}"
 RUN_BACKEND_RELEASE_POLICY_SMOKE="${RUN_BACKEND_RELEASE_POLICY_SMOKE:-0}"
+RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE="${RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE:-0}"
 RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE="${RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE:-0}"
 RUN_KNOWLEDGE_V2_SYNC_GATE="${RUN_KNOWLEDGE_V2_SYNC_GATE:-0}"
 RUN_KNOWLEDGE_PROPOSAL_PERSONA_GATE="${RUN_KNOWLEDGE_PROPOSAL_PERSONA_GATE:-0}"
@@ -102,6 +103,9 @@ if [[ "$RELEASE_HANDOFF_MODE" == "1" ]]; then
   # Release handoff must prove the server-authored policy snapshot is deployed,
   # value-free, no-store, and fail closed for unknown/version-downgrade inputs.
   RUN_BACKEND_RELEASE_POLICY_SMOKE=1
+  # Release handoff also verifies that the deployed payload survives the
+  # account/build-scoped iOS cache without becoming a cross-account allow.
+  RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE=1
 else
   RUN_RELEASE_LIKE_BACKEND="${RUN_RELEASE_LIKE_BACKEND:-0}"
 fi
@@ -147,6 +151,7 @@ Run ID: \`$RUN_ID\`
 - Backend cross-account authorization shadow smoke: \`$RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE\`
 - Backend route ownership audit smoke: \`$RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE\`
 - Backend release-policy shadow smoke: \`$RUN_BACKEND_RELEASE_POLICY_SMOKE\`
+- Release-policy deployed-to-cache smoke: \`$RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE\`
 - Backend deployed knowledge pipeline smoke: \`$RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE\`
 - Knowledge V2 three-way/deployed combo gate: \`$RUN_KNOWLEDGE_V2_SYNC_GATE\`
 - Knowledge proposal/persona local combo gate: \`$RUN_KNOWLEDGE_PROPOSAL_PERSONA_GATE\`
@@ -205,6 +210,7 @@ Run ID: \`$RUN_ID\`
 - Optional backend cross-account authorization shadow smoke when \`RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE=1\`; this verifies owner/family/time-letter/invitation policy decisions, forged-viewer deny evidence, and retained production shadow mode without invoking global dispatch.
 - Optional backend route ownership audit smoke when \`RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE=1\`; this verifies 59 classified routes, zero omissions, owner path/body denial (including knowledge governance), system-only denial, and retained global shadow mode without invoking global dispatch.
 - Optional backend release-policy smoke when \`RUN_BACKEND_RELEASE_POLICY_SMOKE=1\`; release handoff forces this gate to verify the deployed typed shadow snapshot, no-store response, explicit Closed Pilot allowlist, unknown-feature deny, and version-downgrade rejection.
+- Optional deployed-to-cache smoke when \`RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE=1\`; release handoff forces this G2 gate to verify the live snapshot can enter an account/build-scoped cache while account switch and app upgrade remain isolated.
 - Optional deployed knowledge pipeline smoke when \`RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE=1\`; this verifies login, revision sync, idempotent mutation, change feed, generation context, and stale-revision conflict against the configured backend.
 - Optional knowledge governance/source-cascade gate when \`RUN_KNOWLEDGE_GOVERNANCE_GATE=1\`; this verifies typed iOS actions, durable outbox, generation gating, three-way compatibility, public UI non-exposure, and deterministic backend governance/Archive cascade behavior without a true device or deployed database.
 - Local knowledge privacy maintenance gate when \`RUN_KNOWLEDGE_PRIVACY_MAINTENANCE_GATE=1\`; this verifies canonical mutation, dry-run/apply idempotency, rollback, redacted aggregate reporting, and default no-production-write behavior with fixtures only.
@@ -403,6 +409,9 @@ run_step "Swift model guard knowledge-context-policy" "$STATIC_LOG_DIR/knowledge
 run_step "Swift model guard knowledge-semantic-cache-isolation" "$STATIC_LOG_DIR/knowledge-semantic-cache-isolation-model-smoke.log" \
   "$SCRIPT_DIR/run-knowledge-semantic-cache-isolation-model-smoke.sh"
 
+run_step "Swift model guard release-policy-cache" "$STATIC_LOG_DIR/release-policy-cache-model-smoke.log" \
+  "$SCRIPT_DIR/run-release-policy-cache-model-smoke.sh"
+
 run_step "Swift guard knowledge-semantic-cache-isolation" "$STATIC_LOG_DIR/knowledge-semantic-cache-isolation-check.log" \
   "$SCRIPT_DIR/run-knowledge-semantic-cache-isolation-check.sh"
 
@@ -474,6 +483,7 @@ run_step "Product V4 credential rotation receipt" "$STATIC_LOG_DIR/product-v4-cr
 
 for guard in \
   release-policy-shadow-contract-check.swift \
+  release-policy-cache-contract-check.swift \
   release-feature-matrix-check.swift \
   prd-coverage-matrix-check.swift \
   prd-full-feature-closure-decisions-check.swift \
@@ -789,6 +799,17 @@ if [[ "$RUN_BACKEND_RELEASE_POLICY_SMOKE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/backend-release-policy-smoke/$RUN_ID"
   echo "Skipped by RUN_BACKEND_RELEASE_POLICY_SMOKE=0" > "$OUTPUT_DIR/backend-release-policy-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE" == "1" ]]; then
+  mkdir -p "$OUTPUT_DIR/release-policy-cache-deployed-smoke/$RUN_ID"
+  BACKEND_BASE_URL="${BACKEND_BASE_URL:-https://dreamjourney-api.liftora.cn}" \
+  OUTPUT_DIR="$OUTPUT_DIR/release-policy-cache-deployed-smoke/$RUN_ID" \
+  "$SCRIPT_DIR/run-release-policy-cache-deployed-smoke.sh" \
+    | tee "$OUTPUT_DIR/release-policy-cache-deployed-smoke/$RUN_ID/result.log"
+else
+  mkdir -p "$OUTPUT_DIR/release-policy-cache-deployed-smoke/$RUN_ID"
+  echo "Skipped by RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE=0" > "$OUTPUT_DIR/release-policy-cache-deployed-smoke/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE" == "1" ]]; then

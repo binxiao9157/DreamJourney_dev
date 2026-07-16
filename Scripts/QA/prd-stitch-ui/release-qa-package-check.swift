@@ -240,6 +240,9 @@ assertContains(releaseRegression, "RUN_P0_PROFILE_CARE_REGRESSION forces RUN_PRO
 assertContains(releaseRegression, "RUN_KNOWLEDGE_V2_SYNC_GATE", "release regression should expose the knowledge V2 cross-repository gate")
 assertContains(releaseRegression, "run-knowledge-three-way-merge-model-smoke.sh", "release regression should always run the knowledge three-way merge model")
 assertContains(releaseRegression, "run-knowledge-semantic-cache-isolation-model-smoke.sh", "release regression should always model semantic cache account isolation")
+assertContains(releaseRegression, "run-release-policy-cache-model-smoke.sh", "release regression should always model release-policy cache scope and TTL behavior")
+assertContains(releaseRegression, "release-policy-cache-contract-check.swift", "release regression should always guard release-policy cache wiring")
+assertContains(releaseRegression, "RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE", "release regression should expose deployed release-policy cache G2 evidence")
 assertContains(releaseRegression, "run-knowledge-semantic-cache-isolation-check.sh", "release regression should always guard semantic cache lifecycle wiring")
 assertContains(releaseRegression, "run-knowledge-local-storage-protection-model-smoke.sh", "release regression should always verify knowledge file attributes after atomic replacement")
 assertContains(releaseRegression, "run-knowledge-local-storage-protection-check.sh", "release regression should always guard every knowledge writer")
@@ -431,7 +434,14 @@ let requiredScripts = [
     "Scripts/QA/product-v4/product-v4-digital-human-secure-path-check.py",
     "Scripts/QA/product-v4/product-v4-credential-rotation-receipt-check.py",
     "Scripts/QA/prd-stitch-ui/release-policy-shadow-contract-check.swift",
+    "DreamJourney/Sources/Services/ReleasePolicyStore.swift",
+    "Scripts/QA/prd-stitch-ui/release-policy-cache-model-smoke.swift",
+    "Scripts/QA/prd-stitch-ui/run-release-policy-cache-model-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/release-policy-cache-deployed-smoke.swift",
+    "Scripts/QA/prd-stitch-ui/run-release-policy-cache-deployed-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/release-policy-cache-contract-check.swift",
     "docs/superpowers/status/2026-07-16-wi-s0-06-01-release-policy-shadow.md",
+    "docs/superpowers/status/2026-07-16-wi-s0-06-02-release-policy-cache.md",
     "docs/superpowers/status/2026-07-16-wi-s0-03-07-credential-rotation-receipt.json",
     "docs/superpowers/status/2026-07-16-wi-s0-03-07-credential-rotation-revoke-drain.md",
     "../DreamJourneyBackend/scripts/run-backend-credential-response-deployed-smoke.sh",
