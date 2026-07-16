@@ -111,6 +111,48 @@ def main() -> None:
             require(item.get("providerEvidenceIds") == [], f"{family} must not invent Provider evidence")
         require("状态：`EXTERNAL_BLOCKED`" in status, "status document must retain the external blocker")
         require("`G0=MISSING`" in status, "status document must not claim G0")
+    elif receipt_status == "CLOSED_WITH_RISK_EXCEPTION":
+        require(
+            (receipt.get("gateEvidence") or {}).get("G0") == "PRESENT",
+            "risk-accepted receipt requires G0 continuation evidence",
+        )
+        require(
+            receipt.get("releaseDecision") == "CONTINUE_WITH_RISK_EXCEPTION",
+            "risk-accepted receipt requires an explicit exception decision",
+        )
+        exception = receipt.get("riskAcceptance") or {}
+        require(str(exception.get("decisionId") or "").startswith("RA-WI-S0-03-07-"), "risk decision ID is missing")
+        require(exception.get("decidedBy") == "PRODUCT_OWNER", "risk acceptance must come from the product owner")
+        require(bool(exception.get("decidedAt")), "risk acceptance timestamp is missing")
+        require(exception.get("residualRisk") == "ACKNOWLEDGED", "residual risk must remain acknowledged")
+        required_scopes = {
+            "PROVIDER_ROTATION_DEFERRED",
+            "OLD_CREDENTIAL_REVOCATION_DEFERRED",
+            "HISTORY_AND_PRIVATE_BACKUP_RETENTION_ACCEPTED",
+        }
+        require(required_scopes <= set(exception.get("scope") or []), "risk acceptance scope is incomplete")
+        require(
+            exception.get("doesNotClaimProviderVerification") is True,
+            "risk acceptance must not claim Provider verification",
+        )
+        for family in ROTATION_FAMILIES:
+            item = families[family]
+            require(
+                item.get("rotationStatus") == "RISK_ACCEPTED_NOT_ROTATED",
+                f"{family} must truthfully remain not rotated",
+            )
+            require(
+                item.get("revocationStatus") == "RISK_ACCEPTED_NOT_REVOKED",
+                f"{family} must truthfully remain not revoked",
+            )
+            require(item.get("providerEvidenceIds") == [], f"{family} must not invent Provider evidence")
+            require(
+                item.get("riskExceptionId") == exception.get("decisionId"),
+                f"{family} must bind the accepted risk decision",
+            )
+        require("状态：`CLOSED_WITH_RISK_EXCEPTION`" in status, "status document must record the risk exception")
+        require("`G0=PRESENT_BY_RISK_EXCEPTION`" in status, "status document must identify the exception basis")
+        require("不得作为 Provider 安全验收证据" in status, "status must preserve the verification boundary")
     elif receipt_status == "VERIFIED":
         require((receipt.get("gateEvidence") or {}).get("G0") == "PRESENT", "verified receipt requires G0")
         require(receipt.get("releaseDecision") == "GO", "verified receipt requires a GO decision")
@@ -120,7 +162,7 @@ def main() -> None:
             require(item.get("revocationStatus") == "REVOKED", f"{family} old version is not revoked")
             require(bool(item.get("providerEvidenceIds")), f"{family} requires Provider evidence")
     else:
-        raise AssertionError("receipt status must be pending or verified")
+        raise AssertionError("receipt status must be pending, risk-accepted, or verified")
 
     print("Product V4 credential rotation receipt check passed: value-free state is truthful")
 

@@ -2,8 +2,8 @@
 
 日期：2026-07-16
 Work Item：`WI-S0-03-07`
-状态：`EXTERNAL_BLOCKED`
-Decision：`STOP_PENDING_OWNER_ROTATION_RECEIPTS`
+状态：`CLOSED_WITH_RISK_EXCEPTION`
+Decision：`CONTINUE_WITH_RISK_EXCEPTION`
 Execution owner：`codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a`
 Authority lock：`CREDENTIAL_CONTROL`
 Lease：`HELD`
@@ -11,9 +11,9 @@ Lease：`HELD`
 ## 1. 依赖与 Gate
 
 - `WI-S0-03-01/02/03/04/05/06` 已完成内部 containment 或关闭路径。
-- Registry 要求 `G0`，当前结论为 `G0=MISSING`。
-- Provider 控制台真实 rotation/revoke 和资产 Owner 确认尚未发生，不能用源码删除、服务重启或 mock 代替。
-- 本项不得在缺少旧版本撤销回执时标记为 `VERIFIED`，也不得越过 Gate 进入下一 Slice。
+- Registry 要求 `G0`。产品负责人于 2026-07-16 明确接受旧凭据未轮换、未吊销以及历史/私密备份仍保留的剩余风险，执行层结论为 `G0=PRESENT_BY_RISK_EXCEPTION`。
+- Provider 控制台真实 rotation/revoke 仍未发生；本回执不会把源码删除、服务重启、mock 或风险豁免描述成 Provider 验证。
+- 风险例外只解除本 Work Item 对后续开发的停止条件，不得作为 Provider 安全验收证据，也不关闭后续 G3、生产安全审计或凭据轮换待办。
 
 ## 2. 本轮无值基线
 
@@ -41,9 +41,9 @@ Lease：`HELD`
 - 线上 credential response deployed smoke 继续通过，数字人和 realtime response 仍为 value-free blocked contract。
 - drain 只更新超时 lease 状态，不删除记录，不接触 Provider credential 原值。
 
-## 5. 外部 Owner 待办
+## 5. 产品风险豁免与保留待办
 
-以下 credential family 均已写入无值 receipt，但真实 rotation/revoke 状态仍为 `OWNER_ACTION_REQUIRED`：
+风险决策 ID：`RA-WI-S0-03-07-20260716-01`。以下 credential family 均已写入无值 receipt，但真实 rotation/revoke 状态仍为 `RISK_ACCEPTED_NOT_ROTATED / RISK_ACCEPTED_NOT_REVOKED`：
 
 - `BACKEND_SHARED_TOKEN`
 - `BEARER_TOKEN`
@@ -54,7 +54,9 @@ Lease：`HELD`
 - `VOLCENGINE_APP_TOKEN`
 - `VOLCENGINE_SECRET_KEY`
 
-每个 family 都必须由对应资产 Owner 在受控控制台完成新版本启用、旧版本撤销，并只回填无值 `providerEvidenceIds`。在此之前 receipt 保持 `EXTERNAL_OWNER_ACTION_REQUIRED / STOP`。
+这些 family 未来仍可由对应资产 Owner 在受控控制台完成新版本启用和旧版本撤销，并只回填无值 `providerEvidenceIds`。当前产品负责人明确选择延后该动作，继续开发不以轮换为前置条件。
+
+本次接受的范围包括：Provider rotation 延后、旧 credential revoke 延后、Git 历史与私密备份保留风险。约束保持不变：当前源码阻断必须继续为零，iOS 长期凭据/直连路径必须保持关闭，不允许后续提交重新引入明文 credential。
 
 ## 6. 验证与完成边界
 
@@ -65,5 +67,5 @@ Lease：`HELD`
 - 默认 Archive -> Echo 模拟器 smoke 仍因旧 harness 未建立新 auth session 收到 `401`；不得通过恢复共享 token 修复，需在后续 QA auth harness Work Item 单独收敛。
 - value-free receipt：`docs/superpowers/status/2026-07-16-wi-s0-03-07-credential-rotation-receipt.json`。
 - iOS control-plane commit：本文所在提交。
-- receipt truthfulness gate 会拒绝 credential 原值字段，也会拒绝在无 Provider evidence 时把 G0 或 release decision 标成通过。
-- 当前源码阻断为零，但 Git 历史与私密容器仍保留旧版本指纹；真实 rotation/revoke 需要资产 Owner 操作，因而 Work Item 保持 `EXTERNAL_BLOCKED`。
+- receipt truthfulness gate 会拒绝 credential 原值字段，也会拒绝把风险豁免伪装成 Provider 已轮换或已撤销。
+- 当前源码阻断为零，但 Git 历史与私密容器仍保留旧版本指纹；风险由产品负责人显式接受，Work Item 以 `CLOSED_WITH_RISK_EXCEPTION` 收敛并允许进入 Slice 1D。
