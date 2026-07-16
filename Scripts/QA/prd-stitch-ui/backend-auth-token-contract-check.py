@@ -17,6 +17,9 @@ def request_json(method, path, payload=None, expected=200, token=None):
     url = f"{BASE_URL}{path}"
     data = None
     headers = {"Accept": "application/json"}
+    if path == "/config/runtime":
+        headers["X-DreamJourney-Runtime-Contract-Version"] = "2"
+        headers["X-DreamJourney-Client-Build"] = "9001"
     if token:
         headers["Authorization"] = f"Bearer {token}"
     if payload is not None:

@@ -21,6 +21,9 @@ BACKEND_TOKEN = (
 
 def request_json(method, path, payload=None, expected=200, *, access_token=None, backend_token=None):
     headers = {"Accept": "application/json"}
+    if path == "/config/runtime":
+        headers["X-DreamJourney-Runtime-Contract-Version"] = "2"
+        headers["X-DreamJourney-Client-Build"] = "9001"
     if access_token:
         headers["Authorization"] = f"Bearer {access_token}"
     if backend_token:

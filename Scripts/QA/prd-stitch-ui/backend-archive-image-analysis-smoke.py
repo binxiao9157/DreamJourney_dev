@@ -53,6 +53,9 @@ def request_json(
         url = f"{url}?{urllib.parse.urlencode(params)}"
     data = None
     headers = {"Accept": "application/json"}
+    if path == "/config/runtime":
+        headers["X-DreamJourney-Runtime-Contract-Version"] = "2"
+        headers["X-DreamJourney-Client-Build"] = "9001"
     if auth:
         headers["Authorization"] = f"Bearer {API_TOKEN}"
     if payload is not None:

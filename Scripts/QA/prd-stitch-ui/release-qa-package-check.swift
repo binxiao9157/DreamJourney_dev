@@ -464,12 +464,16 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/run-public-release-scope-uiqa-smoke.sh",
     "Scripts/QA/prd-stitch-ui/public-release-scope-evidence.py",
     "Scripts/QA/prd-stitch-ui/run-public-release-scope-regression.sh",
+    "Scripts/QA/prd-stitch-ui/release-policy-rollout-retirement-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-release-policy-rollout-gate.sh",
     "docs/superpowers/status/2026-07-16-wi-s0-06-01-release-policy-shadow.md",
     "docs/superpowers/status/2026-07-16-wi-s0-06-02-release-policy-cache.md",
     "docs/superpowers/status/2026-07-16-wi-s0-06-04-captured-policy-gate.md",
     "docs/superpowers/status/2026-07-16-wi-s0-06-05-runtime-capability-axes.md",
     "docs/superpowers/status/2026-07-16-wi-s0-06-06-qa-override-boundary.md",
     "docs/superpowers/status/2026-07-16-wi-s0-06-07-public-release-scope-gate.md",
+    "docs/superpowers/status/2026-07-16-wi-s0-06-08-legacy-retirement-manifest.json",
+    "docs/superpowers/status/2026-07-16-wi-s0-06-08-release-policy-rollout.md",
     "docs/superpowers/status/2026-07-16-wi-s0-03-07-credential-rotation-receipt.json",
     "docs/superpowers/status/2026-07-16-wi-s0-03-07-credential-rotation-revoke-drain.md",
     "../DreamJourneyBackend/scripts/run-backend-credential-response-deployed-smoke.sh",
@@ -478,6 +482,8 @@ let requiredScripts = [
     "../DreamJourneyBackend/scripts/run-backend-release-policy-command-deployed-smoke.sh",
     "../DreamJourneyBackend/scripts/backend-public-release-scope-deployed-smoke.py",
     "../DreamJourneyBackend/scripts/run-backend-public-release-scope-deployed-smoke.sh",
+    "../DreamJourneyBackend/scripts/backend-release-policy-rollout-deployed-smoke.py",
+    "../DreamJourneyBackend/scripts/run-backend-release-policy-rollout-deployed-smoke.sh",
     "../DreamJourneyBackend/scripts/backend-runtime-capability-deployed-smoke.py",
     "../DreamJourneyBackend/scripts/run-backend-runtime-capability-deployed-smoke.sh",
     "Scripts/QA/prd-stitch-ui/ios-doctor-check.swift",
@@ -793,6 +799,7 @@ let releaseRegressionDoc = read("docs/superpowers/status/2026-06-18-one-command-
 assertContains(releaseRegressionRunner, "RELEASE_HANDOFF_MODE", "release regression should support backend-required handoff mode")
 assertContains(releaseRegressionRunner, "RUN_RELEASE_QA_OVERRIDE_ARTIFACT_SCAN=1", "release handoff should force the QA override artifact scan")
 assertContains(releaseRegressionRunner, "RUN_PUBLIC_RELEASE_SCOPE_GATE=1", "release handoff should force the Public Release Scope gate")
+assertContains(releaseRegressionRunner, "RUN_RELEASE_POLICY_ROLLOUT_GATE=1", "release handoff should force the ReleasePolicy rollout gate")
 assertContains(releaseRegressionDoc, "Release Handoff Mode", "release regression docs should include handoff mode")
 
 print("Release QA package checks passed")

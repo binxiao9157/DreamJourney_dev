@@ -27,6 +27,9 @@ def safe_path(path):
 
 def request_json(method, path, payload=None, expected=200, *, access_token=None):
     headers = {"Accept": "application/json"}
+    if path == "/config/runtime":
+        headers["X-DreamJourney-Runtime-Contract-Version"] = "2"
+        headers["X-DreamJourney-Client-Build"] = "9001"
     if access_token:
         headers["Authorization"] = f"Bearer {access_token}"
     elif BACKEND_TOKEN:
@@ -103,7 +106,7 @@ def main():
     require(policy.get("mode") == "shadow", "deployed global ownership mode must remain shadow")
     require(policy.get("productionEnforceReady") is False, "deployed runtime must not claim global enforce readiness")
     require(policy.get("principalBoundRouteEnforcement") is True, "principal-bound enforcement is missing")
-    require(audit.get("routeCount") == 59, "deployed route audit count mismatch")
+    require(audit.get("routeCount") == 60, "deployed route audit count mismatch")
     require(audit.get("unclassifiedCount") == 0, "deployed backend contains unclassified routes")
     require(header(runtime_headers, "X-DreamJourney-Auth-Principal") == "user", "runtime user principal missing")
 

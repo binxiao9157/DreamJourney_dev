@@ -19,6 +19,8 @@ RUN_IPHONEOS_GENERIC_BUILD="${RUN_IPHONEOS_GENERIC_BUILD:-0}"
 RUN_RELEASE_QA_OVERRIDE_ARTIFACT_SCAN="${RUN_RELEASE_QA_OVERRIDE_ARTIFACT_SCAN:-0}"
 RUN_PUBLIC_RELEASE_SCOPE_GATE="${RUN_PUBLIC_RELEASE_SCOPE_GATE:-0}"
 RUN_PUBLIC_RELEASE_SCOPE_BACKEND_G2="${RUN_PUBLIC_RELEASE_SCOPE_BACKEND_G2:-0}"
+RUN_RELEASE_POLICY_ROLLOUT_GATE="${RUN_RELEASE_POLICY_ROLLOUT_GATE:-0}"
+RUN_RELEASE_POLICY_ROLLOUT_BACKEND_G2="${RUN_RELEASE_POLICY_ROLLOUT_BACKEND_G2:-0}"
 RUN_PUBLIC_MVP_REGRESSION="${RUN_PUBLIC_MVP_REGRESSION:-0}"
 RUN_SIMULATOR_SMOKE="${RUN_SIMULATOR_SMOKE:-1}"
 RUN_P0_ARCHIVE_ECHO_REGRESSION="${RUN_P0_ARCHIVE_ECHO_REGRESSION:-0}"
@@ -109,6 +111,10 @@ if [[ "$RELEASE_HANDOFF_MODE" == "1" ]]; then
   # fallback, deep-link denial, and deployed command denial as one bundle.
   RUN_PUBLIC_RELEASE_SCOPE_GATE=1
   RUN_PUBLIC_RELEASE_SCOPE_BACKEND_G2=1
+  # Release handoff must prove the deployed per-feature canary/kill-switch
+  # contract and collect a value-free runtime-contract observation receipt.
+  RUN_RELEASE_POLICY_ROLLOUT_GATE=1
+  RUN_RELEASE_POLICY_ROLLOUT_BACKEND_G2=1
   # Release handoff must prove deployed auth/provider responses are no-store
   # and never expose long-lived Provider credential fields.
   RUN_BACKEND_CREDENTIAL_RESPONSE_BOUNDARY_SMOKE=1
@@ -155,6 +161,8 @@ Run ID: \`$RUN_ID\`
 - Release QA override artifact scan: \`$RUN_RELEASE_QA_OVERRIDE_ARTIFACT_SCAN\`
 - Public Release Scope combination gate: \`$RUN_PUBLIC_RELEASE_SCOPE_GATE\`
 - Public Release Scope deployed G2: \`$RUN_PUBLIC_RELEASE_SCOPE_BACKEND_G2\`
+- ReleasePolicy rollout/retirement gate: \`$RUN_RELEASE_POLICY_ROLLOUT_GATE\`
+- ReleasePolicy rollout deployed G2: \`$RUN_RELEASE_POLICY_ROLLOUT_BACKEND_G2\`
 - Public MVP minimum regression: \`$RUN_PUBLIC_MVP_REGRESSION\`
 - P0 Archive -> Echo regression gate: \`$RUN_P0_ARCHIVE_ECHO_REGRESSION\`
 - Archive -> Echo simulator smoke: \`$RUN_SIMULATOR_SMOKE\`
@@ -218,6 +226,7 @@ Run ID: \`$RUN_ID\`
 - Optional iPhoneOS generic build when \`RUN_IPHONEOS_GENERIC_BUILD=1\`; this validates arm64 iPhoneOS compilation, Tencent SDK linkage, and bundle-id override without requiring an online physical device.
 - Optional Release QA override artifact scan when \`RUN_RELEASE_QA_OVERRIDE_ARTIFACT_SCAN=1\`; release handoff forces a Release iPhoneOS build and rejects QA launch arguments, process-only setters, and persistent local provider overrides.
 - Optional Public Release Scope gate when \`RUN_PUBLIC_RELEASE_SCOPE_GATE=1\`; release handoff forces the typed offline/expired/emergency model, Release artifact scan, Release simulator Owner screenshot, deep-link negative probes, and deployed policy/command negative smoke into one redacted evidence bundle.
+- Optional ReleasePolicy rollout gate when \`RUN_RELEASE_POLICY_ROLLOUT_GATE=1\`; release handoff forces per-feature canary, kill-switch priority, typed runtime-contract observation, and the legacy-alias retirement manifest check.
 - Optional public MVP minimum regression when \`RUN_PUBLIC_MVP_REGRESSION=1\`; this forces both P0 Archive -> Echo and P0 Profile Care gates.
 - Optional P0 Archive -> Echo regression gate when \`RUN_P0_ARCHIVE_ECHO_REGRESSION=1\`; this forces the core archive seed -> analysis -> Echo context UIQA smoke.
 - Core Archive -> Echo simulator smoke, unless \`RUN_SIMULATOR_SMOKE=0\`.
@@ -283,6 +292,7 @@ append_report_footer() {
 - iPhoneOS generic build: \`iphoneos-generic-build/$RUN_ID/\`
 - Release QA override artifact scan: \`release-qa-override-artifact-scan/$RUN_ID/\`
 - Public Release Scope combination gate: \`public-release-scope-regression/$RUN_ID/\`
+- ReleasePolicy rollout/retirement gate: \`release-policy-rollout/$RUN_ID/\`
 - Public MVP minimum regression: \`archive-to-echo-smoke/$RUN_ID/\`, \`profile-care-state-smoke/$RUN_ID/\`, and \`profile-care-backend-state-smoke/$RUN_ID/\`
 - P0 Archive -> Echo regression gate: \`archive-to-echo-smoke/$RUN_ID/\`
 - Archive -> Echo smoke: \`archive-to-echo-smoke/$RUN_ID/\`
@@ -524,6 +534,7 @@ for guard in \
   runtime-capability-axis-integration-check.swift \
   qa-override-release-boundary-check.swift \
   public-release-scope-regression-check.swift \
+  release-policy-rollout-retirement-check.swift \
   future-beta-default-deny-check.swift \
   release-feature-matrix-check.swift \
   prd-coverage-matrix-check.swift \
@@ -704,11 +715,29 @@ if [[ "$RUN_PUBLIC_RELEASE_SCOPE_GATE" == "1" ]]; then
   BACKEND_BASE_URL="${BACKEND_BASE_URL:-}" \
   BACKEND_API_TOKEN="${BACKEND_API_TOKEN:-}" \
   EXPECTED_RELEASE_POLICY_COMMAND_MODE="${EXPECTED_RELEASE_POLICY_COMMAND_MODE:-observe}" \
+  EXPECTED_RELEASE_POLICY_CANARY_FEATURES="${EXPECTED_RELEASE_POLICY_CANARY_FEATURES:-}" \
+  EXPECTED_RELEASE_POLICY_KILL_SWITCH_FEATURES="${EXPECTED_RELEASE_POLICY_KILL_SWITCH_FEATURES:-}" \
     "$SCRIPT_DIR/run-public-release-scope-regression.sh"
 else
   mkdir -p "$OUTPUT_DIR/public-release-scope-regression/$RUN_ID"
   echo "Skipped by RUN_PUBLIC_RELEASE_SCOPE_GATE=0" \
     > "$OUTPUT_DIR/public-release-scope-regression/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_RELEASE_POLICY_ROLLOUT_GATE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/release-policy-rollout" \
+  RUN_BACKEND_G2="$RUN_RELEASE_POLICY_ROLLOUT_BACKEND_G2" \
+  BACKEND_ROOT="$BACKEND_ROOT" \
+  BACKEND_BASE_URL="${BACKEND_BASE_URL:-}" \
+  BACKEND_API_TOKEN="${BACKEND_API_TOKEN:-}" \
+  EXPECTED_RELEASE_POLICY_CANARY_FEATURES="${EXPECTED_RELEASE_POLICY_CANARY_FEATURES:-}" \
+  EXPECTED_RELEASE_POLICY_KILL_SWITCH_FEATURES="${EXPECTED_RELEASE_POLICY_KILL_SWITCH_FEATURES:-}" \
+    "$SCRIPT_DIR/run-release-policy-rollout-gate.sh"
+else
+  mkdir -p "$OUTPUT_DIR/release-policy-rollout/$RUN_ID"
+  echo "Skipped by RUN_RELEASE_POLICY_ROLLOUT_GATE=0" \
+    > "$OUTPUT_DIR/release-policy-rollout/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_SIMULATOR_SMOKE" == "1" ]]; then

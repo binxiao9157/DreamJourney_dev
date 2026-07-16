@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "workItem": "WI-S0-06-08",
+  "status": "OBSERVING",
+  "requiredObservationWindowHours": 168,
+  "currentRuntimeContractVersion": 2,
+  "observationSource": "/ops/release-policy/observations",
+  "aliases": [
+    {
+      "id": "ios.featureFlags.userDefaults",
+      "state": "CONTAINED",
+      "currentBoundary": "schema-v11-owner-core-only-and-qa-process-only",
+      "retirementCondition": "current and rollback builds use typed ReleasePolicy without persisted flag authority"
+    },
+    {
+      "id": "runtime.capabilities.booleanAliases",
+      "state": "OBSERVING",
+      "currentBoundary": "capabilitySnapshots-v1-is-authoritative",
+      "retirementCondition": "legacyRuntimeAliasHitCount remains zero for the full observation window"
+    },
+    {
+      "id": "runtime.defaultReleaseVisibleAliases",
+      "state": "OBSERVING",
+      "currentBoundary": "ReleasePolicy releaseVisible is authoritative",
+      "retirementCondition": "supported client population reports runtime contract version 2 with zero legacy hits"
+    }
+  ],
+  "receipts": {
+    "iosRuntimeContractHeader": "IMPLEMENTED",
+    "serverObservationEndpoint": "IMPLEMENTED",
+    "productionZeroUseWindow": "ACTIVE_SINCE_2026-07-16T11:56:37Z",
+    "productionLegacyRuntimeAliasHitCountAtStart": 0,
+    "productionTypedRuntimeContractHitCountAtStart": 5,
+    "familyManagementCanary": "ACTIVE_POLICY_REVISION_3",
+    "killSwitchDrill": "VERIFIED_REVISION_2_AND_RESTORED_REVISION_3",
+    "emergencyRevisionAfterRestore": 2,
+    "operationsApproval": "PENDING",
+    "aliasRemoval": "PENDING"
+  }
+}

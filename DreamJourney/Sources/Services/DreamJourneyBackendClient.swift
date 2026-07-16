@@ -529,6 +529,10 @@ struct BackendReleasePolicyRuntimeDescriptor {
     let source: String
     let shadowMode: Bool
     let commandMode: String
+    let rolloutContractVersion: Int
+    let runtimeContractVersion: Int
+    let canaryFeatures: [String]
+    let killSwitchFeatures: [String]
 
     init(json: [String: Any]?) {
         endpoint = json?["endpoint"] as? String ?? "/v2/release-policy"
@@ -541,6 +545,10 @@ struct BackendReleasePolicyRuntimeDescriptor {
         source = json?["source"] as? String ?? "unknown"
         shadowMode = json?["shadowMode"] as? Bool ?? true
         commandMode = json?["commandMode"] as? String ?? (shadowMode ? "observe" : "enforce")
+        rolloutContractVersion = Self.intValue(json?["rolloutContractVersion"]) ?? 0
+        runtimeContractVersion = Self.intValue(json?["runtimeContractVersion"]) ?? 0
+        canaryFeatures = json?["canaryFeatures"] as? [String] ?? []
+        killSwitchFeatures = json?["killSwitchFeatures"] as? [String] ?? []
     }
 
     private static func intValue(_ value: Any?) -> Int? {
@@ -3280,7 +3288,15 @@ final class DreamJourneyBackendClient {
     }
 
     func fetchRuntimeConfig(completion: @escaping (Result<BackendRuntimeConfig, Error>) -> Void) {
-        requestJSON(path: "/config/runtime", method: .get, payload: nil) { result in
+        requestJSON(
+            path: "/config/runtime",
+            method: .get,
+            payload: nil,
+            additionalHeaders: [
+                "X-DreamJourney-Runtime-Contract-Version": "2",
+                "X-DreamJourney-Client-Build": String(FeatureGateService.shared.clientBuild),
+            ]
+        ) { result in
             let mapped = result.map(BackendRuntimeConfig.init(json:))
             if case .success(let config) = mapped {
                 RuntimeCapabilitySnapshotStore.shared.replace(with: config.capabilitySnapshots)
@@ -4326,6 +4342,7 @@ final class DreamJourneyBackendClient {
         authPolicy: RequestAuthPolicy = .automatic,
         allowsRefresh: Bool = true,
         featureDecision: FeatureDecision? = nil,
+        additionalHeaders: [String: String] = [:],
         completion: @escaping (Result<[String: Any], Error>) -> Void
     ) {
         let gatedFeature = FeatureGateService.shared.featureForRequest(
@@ -4353,6 +4370,13 @@ final class DreamJourneyBackendClient {
 
         let url = "\(baseURL)\(path)"
         var requestHeaders = authPolicy == .automatic ? authHeaders : authHeaders(for: authPolicy)
+        if !additionalHeaders.isEmpty {
+            var headers = requestHeaders ?? HTTPHeaders()
+            for (name, value) in additionalHeaders {
+                headers.add(name: name, value: value)
+            }
+            requestHeaders = headers
+        }
         if let preparedFeatureDecision {
             var headers = requestHeaders ?? HTTPHeaders()
             for (name, value) in FeatureGateService.shared.metadataHeaders(for: preparedFeatureDecision) {
@@ -4396,6 +4420,7 @@ final class DreamJourneyBackendClient {
                                     authPolicy: authPolicy,
                                     allowsRefresh: false,
                                     featureDecision: preparedFeatureDecision,
+                                    additionalHeaders: additionalHeaders,
                                     completion: completion
                                 )
                             } else {

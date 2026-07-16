@@ -95,6 +95,7 @@ Release handoff mode must include these gates:
 - Hidden media combo gate: `RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE=1`, which runs `run-archive-hidden-media-combo-gate.sh`
 - QA override artifact gate: `RUN_RELEASE_QA_OVERRIDE_ARTIFACT_SCAN=1`, which builds `Release + iphoneos` and rejects QA launch arguments, QA setter symbols, and packaged local Tencent asset overrides
 - Public Release Scope gate: `RUN_PUBLIC_RELEASE_SCOPE_GATE=1` with `RUN_PUBLIC_RELEASE_SCOPE_BACKEND_G2=1`, which combines the typed offline/expired/emergency model, Release artifact scan, Release simulator Owner default-entry screenshot, hidden deep-link negative probes, and deployed policy/command negative smoke into one redacted evidence bundle
+- ReleasePolicy rollout gate: `RUN_RELEASE_POLICY_ROLLOUT_GATE=1` with `RUN_RELEASE_POLICY_ROLLOUT_BACKEND_G2=1`, which verifies per-feature deny canary, kill-switch priority, typed runtime-contract observations, and the legacy alias retirement manifest without recording request bodies or credentials
 
 ## Public Release Scope Regression Gate
 
@@ -110,6 +111,22 @@ Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
 The focused entry is `Scripts/QA/prd-stitch-ui/run-public-release-scope-regression.sh`. It verifies `G0` Release artifacts and policy models, `G1` default-entry/deep-link behavior, and deployed `G2` policy/command boundaries. It records `G4` true-device regression as open rather than treating simulator evidence as device acceptance.
+
+## ReleasePolicy Rollout Gate
+
+Use the focused gate while moving a feature from observe to deny canary or exercising an emergency kill switch:
+
+```bash
+RUN_BACKEND_G2=1 \
+BACKEND_BASE_URL='<deployed backend URL>' \
+BACKEND_API_TOKEN='<server token from private access doc>' \
+EXPECTED_RELEASE_POLICY_CANARY_FEATURES='familyManagement' \
+EXPECTED_RELEASE_POLICY_KILL_SWITCH_FEATURES='' \
+RUN_ID=20260716-release-policy-rollout \
+Scripts/QA/prd-stitch-ui/run-release-policy-rollout-gate.sh
+```
+
+The server summary is bounded and value-free. `legacyRuntimeAliasHitCount` must stay at zero for the full 168-hour observation window before aliases are removed; a process restart resets the temporary recorder, so final retirement also requires the later `WI-S0-07` persistent metrics sink and Operations approval.
 
 For public MVP archive handoff, add `RUN_P0_ARCHIVE_ECHO_REGRESSION=1` to the release handoff command so archive seed, analysis, and Echo context run in the same package.
 

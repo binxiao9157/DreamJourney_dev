@@ -97,7 +97,13 @@ def assert_true(value: Any, message: str) -> None:
 
 def main() -> None:
     client = TestClient(app)
-    runtime = client.get("/config/runtime").json()
+    runtime = client.get(
+        "/config/runtime",
+        headers={
+            "X-DreamJourney-Runtime-Contract-Version": "2",
+            "X-DreamJourney-Client-Build": "9001",
+        },
+    ).json()
     lip_sync = (runtime.get("voiceClone") or {}).get("lipSyncTimeline") or {}
     assert_equal(lip_sync.get("field"), "visemeTimeline", "runtime lip sync field")
     assert_equal(lip_sync.get("source"), "providerOptional", "runtime lip sync source")
