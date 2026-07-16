@@ -28,9 +28,12 @@
   "receipts": {
     "iosRuntimeContractHeader": "IMPLEMENTED",
     "serverObservationEndpoint": "IMPLEMENTED",
-    "productionZeroUseWindow": "ACTIVE_SINCE_2026-07-16T11:56:37Z",
+    "productionZeroUseWindow": "ACTIVE_PERSISTENT_SINCE_2026-07-16T12:27:40.735577Z",
+    "previousProcessLocalWindow": "SUPERSEDED_BY_PERSISTENT_SINK",
+    "productionObservationSource": "postgres.evidence_events",
     "productionLegacyRuntimeAliasHitCountAtStart": 0,
     "productionTypedRuntimeContractHitCountAtStart": 5,
+    "persistentWindowEventCountAtStart": 1,
     "familyManagementCanary": "ACTIVE_POLICY_REVISION_3",
     "killSwitchDrill": "VERIFIED_REVISION_2_AND_RESTORED_REVISION_3",
     "emergencyRevisionAfterRestore": 2,

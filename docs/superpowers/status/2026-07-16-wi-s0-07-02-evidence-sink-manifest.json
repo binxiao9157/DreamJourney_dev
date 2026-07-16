@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "workItem": "WI-S0-07-02",
   "authorityLock": "OPERATIONS_EVIDENCE",
-  "status": "INTERNAL_READY_G2_PARTIAL",
+  "status": "INTERNAL_READY_G2_POSTGRES_VERIFIED_EXTERNAL_BLOCKED",
   "storage": {
     "table": "evidence_events",
     "mode": "appendOnlyShadow",
@@ -27,15 +27,16 @@
     "providerCost",
     "legalHold"
   ],
-  "currentWriter": "backend.releasePolicyDecisionRecorder",
+  "currentWriter": "backend.releasePolicyDecisionRecorder.productionShadow",
   "currentQuery": "systemOnly./ops/release-policy/observations",
   "ordinaryAccountPurgeDeletesEvidence": false,
   "retentionReceipt": "implementedNotExternallyScheduled",
   "iosEvidenceAuthority": "localQaCacheOnly",
   "gates": {
     "unitAndContract": "VERIFIED",
-    "realPostgresWriteRead": "PENDING_DEPLOYMENT",
-    "apiRestartContinuity": "PENDING_DEPLOYMENT",
+    "realPostgresWriteRead": "VERIFIED_BACKEND_39dc469",
+    "apiRestartContinuity": "VERIFIED_WINDOW_START_2026-07-16T12:27:40.735577Z",
+    "databaseUpdateRejection": "VERIFIED_TRIGGER",
     "backupIsolatedRestore": "BLOCKED_BY_WI-S0-04",
     "privacyLegalRetention": "EXTERNAL_BLOCKED",
     "highRiskMandatoryWriter": "NOT_STARTED"

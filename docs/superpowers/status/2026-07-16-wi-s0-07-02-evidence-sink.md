@@ -2,7 +2,7 @@
 
 日期：2026-07-16  
 Work Item：`WI-S0-07-02`  
-状态：`INTERNAL_READY / SHADOW_WRITER_READY / G2_PARTIAL / EXTERNAL_BLOCKED`  
+状态：`INTERNAL_READY / SHADOW_WRITER_DEPLOYED / G2_POSTGRES_VERIFIED / EXTERNAL_BLOCKED`
 Execution owner：`codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a`  
 Authority lock：`OPERATIONS_EVIDENCE`  
 Lease：`ACTIVE`
@@ -25,11 +25,15 @@ Lease：`ACTIVE`
 - ReleasePolicy recorder 重建后从 store 恢复 typed/legacy 计数通过。
 - 后端 `STORE_BACKEND=memory` 全量 `352` 项测试通过。
 - backend smoke Python compile、shell syntax、iOS release QA package 与 `git diff --check` 通过。
+- 后端提交 `39dc469` 已推送并部署，服务器运行 `production/postgres`。
+- before-restart smoke：event count `1`，window start `2026-07-16T12:27:40.735577Z`，sink/source failure 均为 `0`。
+- API 重启后的 after-restart smoke：event count `2`，原 anchor 仍可查询，window start 未变化。
+- 真实 Postgres 直接 `UPDATE evidence_events` 被 `evidence_events_no_update` trigger 拒绝。
+- ReleasePolicy deployed smoke 在 persistent source 下通过，常驻 canary 仍为 `familyManagement`，kill switch 为空。
 
 ## 未关闭边界
 
 - 当前项目还没有 `WI-S0-04` 统一 versioned migrator；本轮只能使用现有 `init_schema` 做 additive 建表，不能宣称正式 migration/rollback gate 完成。
-- 真实 Postgres 写入/读取和 API 重启连续性必须部署后取得 G2 回执。
 - backup/isolated restore/replay 依赖 `WI-S0-04`，本轮不伪造。
 - `EVIDENCE_ROLLOUT_RETENTION_DAYS=30` 是可配置的临时技术基线，不代表 Privacy/Legal 已批准正式 retention policy。
 - 只有 ReleasePolicy shadow writer 接入；credential rotation、delete/cutover 等高风险 mandatory writer 要等 sink failure denominator 和 S0-04 readiness 完成。
@@ -37,7 +41,6 @@ Lease：`ACTIVE`
 
 ## 下一步
 
-1. 分别提交后端和 iOS QA/状态变更。
-2. 部署后端，在生产 Postgres 运行 before-restart smoke。
-3. 重启 API 后用 baseline 运行 after-restart smoke。
-4. 更新本 manifest 的 G2 部署回执；保持 `EXTERNAL_BLOCKED`，直到 S0-04 backup/restore 和 Privacy/Legal retention 批准完成。
+1. 保持 ReleasePolicy shadow writer 运行，`WI-S0-06-08` 的 168 小时零使用窗口从持久化起点重新计算。
+2. 进入 `WI-S0-07-03` 前先核对 S0-04 readiness；可先做不切 Authority 的 request/operation/attempt schema 与 shadow denominator。
+3. 保持 `EXTERNAL_BLOCKED`，直到 S0-04 backup/isolated restore 和 Privacy/Legal retention 批准完成。

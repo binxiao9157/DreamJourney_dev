@@ -25,7 +25,7 @@ Lease：`ACTIVE`
 
 ## 当前边界
 
-- 当前 recorder 是单进程 bounded evidence；持久化聚合和跨实例指标仍由 `WI-S0-07` 接管。
+- `WI-S0-07-02` 已将 rollout shadow writer 接入 Postgres append-only evidence sink；system-only summary 在 API 重启后保持 event denominator 和 window start。
 - legacy alias 尚处于 `OBSERVING`，未伪造“已退役”结论。
 - 168 小时 G2 观察窗和 Operations 批准仍待完成；具体 feature 的真实设备公开仍需 G4。
 
@@ -36,7 +36,8 @@ Lease：`ACTIVE`
 - 两个提交均已推送并部署；服务器为 `production/postgres`。
 - kill switch 演练：policy revision `2` / emergency revision `1` 临时关闭 `digitalHumanLivePanel`，线上返回 `emergencyRevoked`；随后用 policy revision `3` / emergency revision `2` 恢复。
 - 最终常驻状态：全局 `mixed`，`familyManagement` 为 deny canary，kill-switch 集合为空。
-- 干净观察窗起点：`2026-07-16T11:56:37Z`；起点证据为 typed hit `5`、legacy hit `0`。
+- 原单进程观察起点 `2026-07-16T11:56:37Z` 已被持久化窗口取代，不再用于退休判定。
+- 当前持久化观察窗起点：`2026-07-16T12:27:40.735577Z`；API 重启前 count `1`、重启后 count `2`，window start 不变，sink/source failure 均为 `0`。
 - kill-switch 演练报告：`tmp/visual-qa/prd-stitch-ui/release-policy-rollout/20260716-wi-s0-06-08-kill-switch-drill/report.md`。
 - 恢复报告：`tmp/visual-qa/prd-stitch-ui/release-policy-rollout/20260716-wi-s0-06-08-restored/report.md`。
 - 干净观察窗报告：`tmp/visual-qa/prd-stitch-ui/release-policy-rollout/20260716-wi-s0-06-08-clean-window/report.md`。
