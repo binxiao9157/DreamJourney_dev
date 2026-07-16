@@ -32,6 +32,7 @@ RUN_BACKEND_CREDENTIAL_RESPONSE_BOUNDARY_SMOKE="${RUN_BACKEND_CREDENTIAL_RESPONS
 RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE="${RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE:-0}"
 RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE="${RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE:-0}"
 RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE="${RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE:-0}"
+RUN_BACKEND_RELEASE_POLICY_SMOKE="${RUN_BACKEND_RELEASE_POLICY_SMOKE:-0}"
 RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE="${RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE:-0}"
 RUN_KNOWLEDGE_V2_SYNC_GATE="${RUN_KNOWLEDGE_V2_SYNC_GATE:-0}"
 RUN_KNOWLEDGE_PROPOSAL_PERSONA_GATE="${RUN_KNOWLEDGE_PROPOSAL_PERSONA_GATE:-0}"
@@ -98,6 +99,9 @@ if [[ "$RELEASE_HANDOFF_MODE" == "1" ]]; then
   # Release handoff must prove deployed auth/provider responses are no-store
   # and never expose long-lived Provider credential fields.
   RUN_BACKEND_CREDENTIAL_RESPONSE_BOUNDARY_SMOKE=1
+  # Release handoff must prove the server-authored policy snapshot is deployed,
+  # value-free, no-store, and fail closed for unknown/version-downgrade inputs.
+  RUN_BACKEND_RELEASE_POLICY_SMOKE=1
 else
   RUN_RELEASE_LIKE_BACKEND="${RUN_RELEASE_LIKE_BACKEND:-0}"
 fi
@@ -142,6 +146,7 @@ Run ID: \`$RUN_ID\`
 - Backend auth session/ownership shadow smoke: \`$RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE\`
 - Backend cross-account authorization shadow smoke: \`$RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE\`
 - Backend route ownership audit smoke: \`$RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE\`
+- Backend release-policy shadow smoke: \`$RUN_BACKEND_RELEASE_POLICY_SMOKE\`
 - Backend deployed knowledge pipeline smoke: \`$RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE\`
 - Knowledge V2 three-way/deployed combo gate: \`$RUN_KNOWLEDGE_V2_SYNC_GATE\`
 - Knowledge proposal/persona local combo gate: \`$RUN_KNOWLEDGE_PROPOSAL_PERSONA_GATE\`
@@ -198,7 +203,8 @@ Run ID: \`$RUN_ID\`
 - Optional deployed credential boundary smoke when \`RUN_BACKEND_CREDENTIAL_RESPONSE_BOUNDARY_SMOKE=1\`; release handoff forces this gate and verifies no-store, value-free realtime voice, and blocked digital-human broker contracts.
 - Optional backend auth session/ownership shadow smoke when \`RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE=1\`; this verifies opaque login tokens, refresh rotation/replay rejection, logout revocation, and principal-bound owner mismatch rejection while global mode remains shadow.
 - Optional backend cross-account authorization shadow smoke when \`RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE=1\`; this verifies owner/family/time-letter/invitation policy decisions, forged-viewer deny evidence, and retained production shadow mode without invoking global dispatch.
-- Optional backend route ownership audit smoke when \`RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE=1\`; this verifies 57 classified routes, zero omissions, owner path/body denial (including knowledge governance), system-only denial, and retained global shadow mode without invoking global dispatch.
+- Optional backend route ownership audit smoke when \`RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE=1\`; this verifies 59 classified routes, zero omissions, owner path/body denial (including knowledge governance), system-only denial, and retained global shadow mode without invoking global dispatch.
+- Optional backend release-policy smoke when \`RUN_BACKEND_RELEASE_POLICY_SMOKE=1\`; release handoff forces this gate to verify the deployed typed shadow snapshot, no-store response, explicit Closed Pilot allowlist, unknown-feature deny, and version-downgrade rejection.
 - Optional deployed knowledge pipeline smoke when \`RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE=1\`; this verifies login, revision sync, idempotent mutation, change feed, generation context, and stale-revision conflict against the configured backend.
 - Optional knowledge governance/source-cascade gate when \`RUN_KNOWLEDGE_GOVERNANCE_GATE=1\`; this verifies typed iOS actions, durable outbox, generation gating, three-way compatibility, public UI non-exposure, and deterministic backend governance/Archive cascade behavior without a true device or deployed database.
 - Local knowledge privacy maintenance gate when \`RUN_KNOWLEDGE_PRIVACY_MAINTENANCE_GATE=1\`; this verifies canonical mutation, dry-run/apply idempotency, rollback, redacted aggregate reporting, and default no-production-write behavior with fixtures only.
@@ -467,6 +473,7 @@ run_step "Product V4 credential rotation receipt" "$STATIC_LOG_DIR/product-v4-cr
   python3 "$ROOT_DIR/Scripts/QA/product-v4/product-v4-credential-rotation-receipt-check.py"
 
 for guard in \
+  release-policy-shadow-contract-check.swift \
   release-feature-matrix-check.swift \
   prd-coverage-matrix-check.swift \
   prd-full-feature-closure-decisions-check.swift \
@@ -768,6 +775,20 @@ if [[ "$RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/backend-route-ownership-audit-smoke/$RUN_ID"
   echo "Skipped by RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE=0" > "$OUTPUT_DIR/backend-route-ownership-audit-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_BACKEND_RELEASE_POLICY_SMOKE" == "1" ]]; then
+  [[ -n "${BACKEND_BASE_URL:-}" ]] || {
+    echo "BACKEND_BASE_URL is required for RUN_BACKEND_RELEASE_POLICY_SMOKE=1" >&2
+    exit 1
+  }
+  mkdir -p "$OUTPUT_DIR/backend-release-policy-smoke/$RUN_ID"
+  BACKEND_BASE_URL="$BACKEND_BASE_URL" \
+  "$BACKEND_ROOT/scripts/run-backend-release-policy-deployed-smoke.sh" \
+    | tee "$OUTPUT_DIR/backend-release-policy-smoke/$RUN_ID/result.log"
+else
+  mkdir -p "$OUTPUT_DIR/backend-release-policy-smoke/$RUN_ID"
+  echo "Skipped by RUN_BACKEND_RELEASE_POLICY_SMOKE=0" > "$OUTPUT_DIR/backend-release-policy-smoke/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_BACKEND_KNOWLEDGE_PIPELINE_SMOKE" == "1" ]]; then

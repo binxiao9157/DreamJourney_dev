@@ -49,6 +49,168 @@ struct ArchiveImageAnalysisRuntimeCapability {
     }
 }
 
+struct BackendReleasePolicyFeatureDecision: Equatable {
+    let feature: String
+    let enabled: Bool
+    let releaseVisible: Bool
+    let audience: String
+    let cohort: String
+    let requiredGates: [String]
+    let reason: String
+
+    init?(_ json: [String: Any]) {
+        guard let feature = json["feature"] as? String,
+              let enabled = json["enabled"] as? Bool,
+              let releaseVisible = json["releaseVisible"] as? Bool,
+              let audience = json["audience"] as? String,
+              let cohort = json["cohort"] as? String,
+              let requiredGates = json["requiredGates"] as? [String],
+              let reason = json["reason"] as? String else {
+            return nil
+        }
+        self.feature = feature
+        self.enabled = enabled
+        self.releaseVisible = releaseVisible
+        self.audience = audience
+        self.cohort = cohort
+        self.requiredGates = requiredGates
+        self.reason = reason
+    }
+
+    private init(feature: String, reason: String) {
+        self.feature = feature
+        enabled = false
+        releaseVisible = false
+        audience = "unknown"
+        cohort = "unknown"
+        requiredGates = ["G0"]
+        self.reason = reason
+    }
+
+    static func failClosed(feature: String, reason: String) -> BackendReleasePolicyFeatureDecision {
+        BackendReleasePolicyFeatureDecision(feature: feature, reason: reason)
+    }
+}
+
+enum BackendReleasePolicyContractError: LocalizedError {
+    case malformedSnapshot
+
+    var errorDescription: String? {
+        "发布策略合同无效，相关可选功能已保持关闭"
+    }
+}
+
+struct BackendReleasePolicySnapshot {
+    let schemaVersion: Int
+    let policyVersion: String
+    let policyRevision: Int
+    let issuedAt: Date
+    let expiresAt: Date
+    let minClient: Int
+    let emergencyRevision: Int
+    let audience: String
+    let cohort: String
+    let source: String
+    let shadowMode: Bool
+    let snapshotDecision: String
+    let features: [BackendReleasePolicyFeatureDecision]
+
+    var isExpired: Bool {
+        Date() >= expiresAt
+    }
+
+    init(json: [String: Any]) throws {
+        guard let schemaVersion = Self.intValue(json["schemaVersion"]),
+              schemaVersion == 1,
+              let policyVersion = json["policyVersion"] as? String,
+              let policyRevision = Self.intValue(json["policyRevision"]),
+              let issuedAtValue = json["issuedAt"] as? String,
+              let issuedAt = BackendDateParser.date(from: issuedAtValue),
+              let expiresAtValue = json["expiresAt"] as? String,
+              let expiresAt = BackendDateParser.date(from: expiresAtValue),
+              let minClient = Self.intValue(json["minClient"]),
+              let emergencyRevision = Self.intValue(json["emergencyRevision"]),
+              let audience = json["audience"] as? String,
+              let cohort = json["cohort"] as? String,
+              let source = json["source"] as? String,
+              source == "server",
+              let shadowMode = json["shadowMode"] as? Bool,
+              let snapshotDecision = json["snapshotDecision"] as? String,
+              let rawFeatures = json["features"] as? [[String: Any]] else {
+            throw BackendReleasePolicyContractError.malformedSnapshot
+        }
+        let features = rawFeatures.compactMap(BackendReleasePolicyFeatureDecision.init)
+        guard features.count == rawFeatures.count else {
+            throw BackendReleasePolicyContractError.malformedSnapshot
+        }
+        self.schemaVersion = schemaVersion
+        self.policyVersion = policyVersion
+        self.policyRevision = policyRevision
+        self.issuedAt = issuedAt
+        self.expiresAt = expiresAt
+        self.minClient = minClient
+        self.emergencyRevision = emergencyRevision
+        self.audience = audience
+        self.cohort = cohort
+        self.source = source
+        self.shadowMode = shadowMode
+        self.snapshotDecision = snapshotDecision
+        self.features = features
+    }
+
+    func decision(for feature: DJFeature) -> BackendReleasePolicyFeatureDecision {
+        guard !isExpired else {
+            return .failClosed(feature: feature.rawValue, reason: "expiredPolicy")
+        }
+        return features.first(where: { $0.feature == feature.rawValue })
+            ?? .failClosed(feature: feature.rawValue, reason: "unknownFeature")
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.intValue
+        }
+        if let value = value as? String {
+            return Int(value)
+        }
+        return nil
+    }
+}
+
+struct BackendReleasePolicyRuntimeDescriptor {
+    let endpoint: String
+    let schemaVersion: Int
+    let policyVersion: String
+    let policyRevision: Int
+    let ttlSeconds: Int
+    let minClient: Int
+    let emergencyRevision: Int
+    let source: String
+    let shadowMode: Bool
+
+    init(json: [String: Any]?) {
+        endpoint = json?["endpoint"] as? String ?? "/v2/release-policy"
+        schemaVersion = Self.intValue(json?["schemaVersion"]) ?? 0
+        policyVersion = json?["policyVersion"] as? String ?? "unknown"
+        policyRevision = Self.intValue(json?["policyRevision"]) ?? 0
+        ttlSeconds = Self.intValue(json?["ttlSeconds"]) ?? 0
+        minClient = Self.intValue(json?["minClient"]) ?? Int.max
+        emergencyRevision = Self.intValue(json?["emergencyRevision"]) ?? 0
+        source = json?["source"] as? String ?? "unknown"
+        shadowMode = json?["shadowMode"] as? Bool ?? true
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = value as? String { return Int(value) }
+        return nil
+    }
+}
+
 struct VoiceCloneTencentAudioDriveCapability {
     let supported: Bool
     let synthesisEndpoint: String
@@ -316,6 +478,7 @@ struct BackendRuntimeConfig {
     let archiveImageAnalysis: ArchiveImageAnalysisRuntimeCapability
     let voiceClone: VoiceCloneRuntimeCapability
     let digitalHuman: DigitalHumanRuntimeCapability
+    let releasePolicy: BackendReleasePolicyRuntimeDescriptor
 
     init(json: [String: Any]) {
         let capabilities = json["capabilities"] as? [String: Any]
@@ -325,6 +488,7 @@ struct BackendRuntimeConfig {
         let archiveImageAnalysis = json["archiveImageAnalysis"] as? [String: Any]
         let voiceClone = json["voiceClone"] as? [String: Any]
         let digitalHuman = json["digitalHuman"] as? [String: Any]
+        let releasePolicy = json["releasePolicy"] as? [String: Any]
         realtimeTokenAvailable = capabilities?["realtimeToken"] as? Bool ?? false
         voiceRuntimeConfigEndpoint = voice?["runtimeConfigEndpoint"] as? String
         fallbackMode = fallback?["mode"] as? String
@@ -334,6 +498,7 @@ struct BackendRuntimeConfig {
         self.archiveImageAnalysis = ArchiveImageAnalysisRuntimeCapability(json: archiveImageAnalysis)
         self.voiceClone = VoiceCloneRuntimeCapability(json: voiceClone)
         self.digitalHuman = DigitalHumanRuntimeCapability(json: digitalHuman, capabilities: capabilities)
+        self.releasePolicy = BackendReleasePolicyRuntimeDescriptor(json: releasePolicy)
     }
 }
 
@@ -2667,6 +2832,10 @@ final class DreamJourneyBackendClient {
         hasExplicitBaseURL
     }
 
+    var isReleasePolicyConfigured: Bool {
+        hasExplicitBaseURL
+    }
+
     var isKnowledgeSyncConfigured: Bool {
         hasExplicitBaseURL
     }
@@ -2705,6 +2874,32 @@ final class DreamJourneyBackendClient {
     func fetchRuntimeConfig(completion: @escaping (Result<BackendRuntimeConfig, Error>) -> Void) {
         requestJSON(path: "/config/runtime", method: .get, payload: nil) { result in
             completion(result.map(BackendRuntimeConfig.init(json:)))
+        }
+    }
+
+    func fetchReleasePolicy(
+        audience: String = "owner",
+        cohort: String = "closedPilotAdultSelf",
+        clientBuild: Int,
+        knownPolicyRevision: Int = 0,
+        completion: @escaping (Result<BackendReleasePolicySnapshot, Error>) -> Void
+    ) {
+        let path = "/v2/release-policy"
+            + "?audience=\(queryComponent(audience))"
+            + "&cohort=\(queryComponent(cohort))"
+            + "&clientBuild=\(max(0, clientBuild))"
+            + "&knownPolicyRevision=\(max(0, knownPolicyRevision))"
+        requestJSON(path: path, method: .get, payload: nil) { result in
+            switch result {
+            case .success(let json):
+                do {
+                    completion(.success(try BackendReleasePolicySnapshot(json: json)))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
         }
     }
 
