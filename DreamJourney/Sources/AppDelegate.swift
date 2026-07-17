@@ -14,6 +14,7 @@ import MAMapKit
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
+    private var releasePolicyRefreshGeneration: UInt64 = 0
 
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
@@ -133,11 +134,29 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     private func refreshReleasePolicy() {
-        FeatureGateService.shared.refreshPolicy { result in
+        releasePolicyRefreshGeneration &+= 1
+        let refreshGeneration = releasePolicyRefreshGeneration
+        FeatureGateService.shared.refreshPolicy { [weak self] result in
+            guard let self,
+                  self.releasePolicyRefreshGeneration == refreshGeneration else {
+                return
+            }
             if case .failure(let error) = result {
-                print("[ReleasePolicy] refresh failed; cached fail-closed policy remains active: \(error.localizedDescription)")
+                self.invalidateReleasePolicyAuthorityAfterRefreshFailure(error)
             }
         }
+    }
+
+    private func invalidateReleasePolicyAuthorityAfterRefreshFailure(_ error: Error) {
+        DreamJourneyBackendClient.shared.invalidateCachedReleasePolicyAuthority(
+            clientBuild: FeatureGateService.shared.clientBuild
+        )
+        FeatureGateService.shared.invalidateCapturedRoutes()
+        RuntimeCapabilitySnapshotStore.shared.invalidate()
+        print(
+            "[ReleasePolicy] refresh failed; cached M1-M4 authority invalidated for fail-closed access: " +
+            error.localizedDescription
+        )
     }
 
     private func syncStoredPushDeviceTokenIfPossible() {

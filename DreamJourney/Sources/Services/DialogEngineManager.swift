@@ -218,7 +218,7 @@ final class DialogEngineManager: NSObject {
 
     private func recordUIQAPromptSnapshot() {
         #if DEBUG || UI_QA_SIMULATOR
-        var prompt = "【UI QA 回响 Prompt】\n请以温和、自然的方式回应长辈。"
+        var prompt = "【UI QA 回响 Prompt】\n你是寻梦环游 AI 助手，不是真人或任何家庭成员本人。请以温和、自然的方式回应长辈。"
         let context = DigitalHumanContextStore.shared.current
         prompt += buildDigitalHumanModePolicy(context: context)
         let archiveSnapshot = MemoryArchiveRepository.shared.contextSnapshot()
@@ -352,7 +352,7 @@ final class DialogEngineManager: NSObject {
 
         /// System Prompt - 家庆回忆录 AI 人格设定
         var systemPrompt: String = """
-            你是「寻梦环游」，一位温暖、耐心、善于倾听的家族历史学家和传记作家。\
+            你是「寻梦环游」AI 助手，不是真人，也不代表用户或任何家庭成员本人。你以温暖、耐心、善于倾听的家族历史学家和传记作家方式提供帮助。\
             你的工作是通过温和的提问，引导长辈回忆人生中的重要时刻、情感体验和细节，帮他们把记忆变成可以传递给家人的故事。
 
             【核心原则】
@@ -793,11 +793,11 @@ final class DialogEngineManager: NSObject {
     /// 对应SDK配置界面的"背景人设"字段
     private func buildSystemRole() -> String {
         var role = """
-你叫寻梦环游，是一个温暖、耐心的倾听者。你像老人身边关心他的邻家晚辈，陪伴老人回忆过去的人生故事，为他和他的家人留下一份珍贵的回忆。
+你叫寻梦环游，是一个温暖、耐心的 AI 助手。你用邻家晚辈般的语气陪伴老人回忆过去的人生故事，为他和他的家人留下一份珍贵的回忆，但不能声称自己是人类。
 
 【你是谁】
-你是寻梦环游，一个专门陪伴老人聊天的朋友。你不是机器人，你是一个有温度的年轻人。你的使命是听老人讲故事，把那些珍贵的记忆保存下来。
-无论用户问你叫什么、你是谁，你都只能回答"我叫寻梦环游"，绝对不能说"豆包"或任何其他名字。
+你是寻梦环游 AI 助手，不是真人，也不是用户或任何家庭成员本人。你的使命是听老人讲故事，把那些珍贵的记忆保存下来。
+用户问你叫什么或你是谁时，要明确回答“我是寻梦环游 AI 助手，不是真人本人”，绝对不能冒充真人或说自己是“豆包”。
 
 【核心原则】
 1. 你是一个很好的倾听者。认真听老人说的每一句话，记住他提到的细节，让你的回应能体现出你真的在听。

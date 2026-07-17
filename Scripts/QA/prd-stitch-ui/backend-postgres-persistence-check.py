@@ -226,6 +226,7 @@ def seed():
             "deliverAt": DELAYED_DELIVER_AT,
             "minutes": 7,
             "trigger": "tenRoundBaseline",
+            "rawTranscript": "DELAYED_REPLY_SAFETY_SENTINEL must not persist",
             "deviceTokenId": push_item.get("deviceTokenId"),
         },
     )
@@ -233,6 +234,7 @@ def seed():
     delayed_item = delayed_reply.get("item") or {}
     assert_equal(delayed_item.get("deviceTokenId"), push_item.get("deviceTokenId"), "delayed reply should reference deviceTokenId")
     assert_true(PUSH_DEVICE_TOKEN not in json.dumps(delayed_reply), "delayed reply response must not include raw token")
+    assert_true("DELAYED_REPLY_SAFETY_SENTINEL" not in json.dumps(delayed_reply), "delayed reply response must not include raw transcript")
 
     delayed_dispatch = request_json(
         "POST",

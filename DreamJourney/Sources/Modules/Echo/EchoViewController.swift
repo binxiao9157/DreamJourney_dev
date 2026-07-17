@@ -465,6 +465,7 @@ final class EchoViewController: UIViewController {
     private var hasRunTencentDigitalHumanPCMDriveSmoke = false
     private var hasRunTencentDigitalHumanBackendPCMDriveSmoke = false
     private var isStoppingForDelayedReply = false
+    private var isStoppingForNeutralSafety = false
     private var isStoppingVoiceCaptureManually = false
     private var showsVoiceSDKReadinessPreview = false
     private var backendRuntimeTokenApplied = false
@@ -1787,24 +1788,15 @@ final class EchoViewController: UIViewController {
         personaAvatarView.backgroundColor = context.isSelfAssistant
             ? DJDesignTokens.Color.accent.withAlphaComponent(0.14)
             : DJDesignTokens.Color.accentDeep.withAlphaComponent(0.12)
-        personaNameLabel.text = context.isSelfAssistant ? "自己 · AI 助手" : context.resolvedDisplayName
-        personaSubtitleLabel.text = makePersonaBadgeSubtitle(context: context)
+        personaNameLabel.text = context.isSelfAssistant
+            ? "自己 · AI 助手"
+            : "\(context.resolvedDisplayName) · AI 数字分身"
+        personaSubtitleLabel.text = EchoAIIdentityDisclosure.persistent.label
         personaBadgeView.accessibilityLabel = "\(personaNameLabel.text ?? "")，\(personaSubtitleLabel.text ?? "")"
         digitalHumanLivePanelView?.setPersona(
             name: personaNameLabel.text ?? context.resolvedDisplayName,
             subtitle: personaSubtitleLabel.text ?? ""
         )
-    }
-
-    private func makePersonaBadgeSubtitle(context: DigitalHumanContext) -> String {
-        if context.isSelfAssistant {
-            return "沉淀自己的个人数据库"
-        }
-        if let relation = context.relation?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !relation.isEmpty {
-            return "\(relation)的数字人回响"
-        }
-        return "家人数字人回响"
     }
 
     private func seedTranscriptPreview() {
@@ -1822,9 +1814,9 @@ final class EchoViewController: UIViewController {
     private func makeContextualOpeningLine() -> String {
         let context = DigitalHumanContextStore.shared.current
         if context.isSelfAssistant {
-            return "\"我是你的 AI 助手，会陪你把自己的故事慢慢讲出来。\""
+            return "\"我是你的 AI 助手，不是真人。可以把自己的故事慢慢讲出来。\""
         }
-        return "\"\(context.resolvedDisplayName)的回响已连接，想听你继续说说我们的故事。\""
+        return "\"我是\(context.resolvedDisplayName)的 AI 数字分身，不是真人本人。想听你继续说说我们的故事。\""
     }
 
     private func appendTranscript(text: String, isUser: Bool) {
@@ -1892,6 +1884,16 @@ final class EchoViewController: UIViewController {
                 accessibilityLabel: "先去窗边走走，约 \(minutes) 分钟后我再回信"
             )
             setMicPulse(active: false)
+        case .neutralSafety(let decision):
+            quoteLabel.text = decision.responseText ?? EchoSafetyPolicy.neutralChineseCrisisResponse
+            renderVoiceStatus(text: "请立即联系信任的真人", isVisible: true)
+            configureMicButton(
+                systemName: "mic.fill",
+                backgroundColor: DJDesignTokens.Color.accentDeep,
+                isEnabled: true,
+                accessibilityLabel: "再次开始语音"
+            )
+            setMicPulse(active: false)
         case .speaking:
             renderVoiceStatus(text: "回响正在抵达", isVisible: true)
             configureMicButton(
@@ -1943,6 +1945,8 @@ final class EchoViewController: UIViewController {
             liveState = .listening
         case .thinking, .waitingReply:
             liveState = .thinking
+        case .neutralSafety:
+            liveState = .idle
         case .speaking, .replied:
             liveState = .speaking
         case .error:
@@ -2043,6 +2047,7 @@ final class EchoViewController: UIViewController {
     }
 
     private func loadVoiceCloneRuntimeCapabilityIfNeeded(force: Bool = false) {
+        guard !viewModel.isNeutralSafetyMode else { return }
         let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "voiceCloneRuntimeCapability")
         if !force, voiceCloneRuntimeCapability != nil {
             return
@@ -2380,6 +2385,7 @@ final class EchoViewController: UIViewController {
     private func prepareCloudDigitalHumanRuntimeIfNeeded(
         lifecycleToken providedLifecycleToken: DigitalHumanLifecycleToken? = nil
     ) {
+        guard !viewModel.isNeutralSafetyMode else { return }
         if reconcileDigitalHumanRuntimeWithCurrentContext(reason: "prepare") {
             scheduleCloudDigitalHumanRuntimeRecovery(
                 reason: "prepareContextChanged",
@@ -3835,6 +3841,10 @@ final class EchoViewController: UIViewController {
     }
 
     private func handleDigitalHumanRuntimeStateChange(_ state: DigitalHumanSessionState) {
+        guard !viewModel.isNeutralSafetyMode else {
+            stopDigitalHumanAudioLevelMetering()
+            return
+        }
         switch state {
         case .speaking:
             if shouldTraceTrueDeviceBackendPCMDrive {
@@ -4512,12 +4522,38 @@ final class EchoViewController: UIViewController {
     }
 
     private func flushPendingAIReplyIfNeeded() {
+        guard !viewModel.isNeutralSafetyMode else {
+            pendingAIText = nil
+            return
+        }
         guard let aiText = pendingAIText,
               !aiText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return
         }
         viewModel.receiveAIReply(aiText)
         pendingAIText = nil
+    }
+
+    private func enterNeutralSafetyMode(_ decision: EchoSafetyDecision) {
+        guard decision.isCrisis else { return }
+
+        pendingAIText = nil
+        isStoppingForDelayedReply = false
+        isStoppingVoiceCaptureForAppLifecycle = false
+        isStoppingVoiceCaptureManually = false
+        EchoDelayedReplyNotificationScheduler.shared.cancelPendingDelayedReply()
+        _ = invalidateDigitalHumanLifecycle(reason: "neutralSafety")
+        resetDigitalHumanReplyDispatchState()
+        interruptDigitalHumanPlayback(reason: "neutralSafety")
+        stopDigitalHumanAudioLevelMetering()
+        DialogEngineManager.shared.interruptAI()
+
+        guard DialogEngineManager.shared.isDialogActive else {
+            isStoppingForNeutralSafety = false
+            return
+        }
+        isStoppingForNeutralSafety = true
+        DialogEngineManager.shared.stopDialog()
     }
 
     private func beginDelayedReplyWait() {
@@ -4529,13 +4565,17 @@ final class EchoViewController: UIViewController {
         DialogEngineManager.shared.stopDialog()
     }
 
-    private func scheduleDelayedReplyNotificationIfNeeded() {
-        guard let delayedReply = viewModel.pendingDelayedReply else {
+    private func scheduleDelayedReplyNotificationIfNeeded(rawTranscript: String) {
+        guard !viewModel.isNeutralSafetyMode,
+              let delayedReply = viewModel.pendingDelayedReply else {
             return
         }
 
-        EchoDelayedReplyNotificationScheduler.shared.requestAuthorizationIfNeeded { granted in
-            guard granted else { return }
+        EchoDelayedReplyNotificationScheduler.shared.requestAuthorizationIfNeeded { [weak self] granted in
+            guard let self,
+                  granted,
+                  !self.viewModel.isNeutralSafetyMode,
+                  self.viewModel.pendingDelayedReply?.id == delayedReply.id else { return }
             EchoDelayedReplyNotificationScheduler.shared.schedule(delayedReply) { error in
                 if let error {
                     print("[Echo] delayed reply local notification failed: \(error.localizedDescription)")
@@ -4563,17 +4603,34 @@ final class EchoViewController: UIViewController {
                    let registration = PushDeviceTokenRegistration(json: item) {
                     _ = tokenStore.saveRegistration(registration)
                 }
-                self?.submitDelayedReplyPush(userId: userId, delayedReply: delayedReply)
+                self?.submitDelayedReplyPush(
+                    userId: userId,
+                    delayedReply: delayedReply,
+                    rawTranscript: rawTranscript
+                )
             }
-        } else {
-            submitDelayedReplyPush(userId: userId, delayedReply: delayedReply)
+            return
         }
+        submitDelayedReplyPush(
+            userId: userId,
+            delayedReply: delayedReply,
+            rawTranscript: rawTranscript
+        )
     }
 
-    private func submitDelayedReplyPush(userId: String, delayedReply: EchoDelayedReply) {
+    private func submitDelayedReplyPush(
+        userId: String,
+        delayedReply: EchoDelayedReply,
+        rawTranscript: String
+    ) {
+        guard !viewModel.isNeutralSafetyMode,
+              viewModel.pendingDelayedReply?.id == delayedReply.id else {
+            return
+        }
         DreamJourneyBackendClient.shared.scheduleEchoDelayedReplyPush(
             userId: userId,
-            delayedReply: delayedReply
+            delayedReply: delayedReply,
+            rawTranscript: rawTranscript
         ) { result in
             if case .failure(let error) = result {
                 print("[Echo] delayed reply push contract failed: \(error.localizedDescription)")
@@ -4597,6 +4654,11 @@ extension EchoViewController: DialogEngineDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self,
                   let lifecycleToken = self.activeVoiceInteractionToken(reason: "asrFinal") else { return }
+            self.viewModel.finishUserVoice(text: text)
+            if let safetyDecision = self.viewModel.neutralSafetyDecision {
+                self.enterNeutralSafetyMode(safetyDecision)
+                return
+            }
             if self.routeEchoAudioThroughDigitalHuman,
                self.hasTencentDigitalHumanProviderSpeechInFlight {
                 self.preserveTencentProviderSessionAfterLocalDialogStop(reason: "userSpeechFinal")
@@ -4604,7 +4666,6 @@ extension EchoViewController: DialogEngineDelegate {
             self.resetDigitalHumanReplyDispatchState()
             let turnID = self.digitalHumanConversation.startUserTurn(makeID: self.makeTencentDigitalHumanRequestID)
             print("[TencentDigitalHuman] user turn started turnID=\(turnID)")
-            self.viewModel.finishUserVoice(text: text)
             self.recordEchoContextPacketForUserTurn(
                 text: text,
                 turnID: turnID,
@@ -4612,7 +4673,7 @@ extension EchoViewController: DialogEngineDelegate {
                 allowsGeneration: !self.viewModel.isWaitingForDelayedReply
             )
             if self.viewModel.isWaitingForDelayedReply {
-                self.scheduleDelayedReplyNotificationIfNeeded()
+                self.scheduleDelayedReplyNotificationIfNeeded(rawTranscript: text)
                 self.beginDelayedReplyWait()
             }
         }
@@ -4622,6 +4683,7 @@ extension EchoViewController: DialogEngineDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self,
                   self.activeVoiceInteractionToken(reason: "ttsStarted") != nil,
+                  !self.viewModel.isNeutralSafetyMode,
                   !self.viewModel.isWaitingForDelayedReply else { return }
             self.pendingAIText = nil
             self.cancelDigitalHumanReplyPrewarm()
@@ -4643,7 +4705,8 @@ extension EchoViewController: DialogEngineDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self,
                   let lifecycleToken = self.activeVoiceInteractionToken(reason: "ttsFinished") else { return }
-            guard !self.viewModel.isWaitingForDelayedReply else { return }
+            guard !self.viewModel.isNeutralSafetyMode,
+                  !self.viewModel.isWaitingForDelayedReply else { return }
             if self.routeEchoAudioThroughDigitalHuman,
                self.hasTencentDigitalHumanProviderSpeechInFlight {
                 print("[TencentDigitalHuman] waiting for provider TextOver before finishing Echo reply")
@@ -4670,6 +4733,7 @@ extension EchoViewController: DialogEngineDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self,
                   self.activeVoiceInteractionToken(reason: "chatStreaming") != nil,
+                  !self.viewModel.isNeutralSafetyMode,
                   !self.viewModel.isWaitingForDelayedReply else {
                 return
             }
@@ -4712,6 +4776,14 @@ extension EchoViewController: DialogEngineDelegate {
     func onDialogEnded(reason: DialogEndReason) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
+            if self.isStoppingForNeutralSafety || self.viewModel.isNeutralSafetyMode {
+                self.isStoppingForNeutralSafety = false
+                self.pendingAIText = nil
+                self.resetDigitalHumanReplyDispatchState()
+                self.stopDigitalHumanAudioLevelMetering()
+                ConversationMemoryManager.shared.endSession()
+                return
+            }
             if self.digitalHumanConversation.consumePausingForProviderSpeech() {
                 print("[TencentDigitalHuman] DialogEngine paused for provider speech")
                 return

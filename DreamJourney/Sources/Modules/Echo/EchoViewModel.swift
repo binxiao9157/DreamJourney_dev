@@ -6,6 +6,7 @@ enum EchoInteractionState {
     case listening
     case thinking
     case waitingReply(minutes: Int)
+    case neutralSafety(EchoSafetyDecision)
     case speaking
     case replied
     case error(String)
@@ -30,6 +31,9 @@ struct EchoReplyPacingPolicy {
     }
 
     static func triggerForWait(afterUserTurnCount userTurnCount: Int, userText: String) -> EchoDelayedReplyTrigger? {
+        guard EchoSafetyPolicy.evaluate(text: userText).allowsDelayedReply else {
+            return nil
+        }
         if shouldTriggerEarlyWait(for: userText) {
             return .contentSignal
         }
@@ -113,6 +117,13 @@ final class EchoViewModel {
         }
         return false
     }
+    var neutralSafetyDecision: EchoSafetyDecision? {
+        guard case .neutralSafety(let decision) = state else { return nil }
+        return decision
+    }
+    var isNeutralSafetyMode: Bool {
+        neutralSafetyDecision != nil
+    }
 
     init(
         contextStore: DigitalHumanContextStore = .shared,
@@ -143,6 +154,12 @@ final class EchoViewModel {
         let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedText.isEmpty else {
             updateState(.error("刚才没有听清，可以再说一次"))
+            return
+        }
+
+        let safetyDecision = EchoSafetyPolicy.evaluate(text: normalizedText)
+        guard !safetyDecision.isCrisis else {
+            enterNeutralSafetyMode(safetyDecision, userText: normalizedText)
             return
         }
 
@@ -181,6 +198,7 @@ final class EchoViewModel {
     }
 
     func receiveAIReply(_ text: String) {
+        guard !isNeutralSafetyMode else { return }
         let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedText.isEmpty else { return }
 
@@ -191,6 +209,7 @@ final class EchoViewModel {
     }
 
     func markReplyDelivered() {
+        guard !isNeutralSafetyMode else { return }
         pendingDelayedReply = nil
         EchoDelayedReplyStore.shared.clear()
         updateState(.replied)
@@ -204,6 +223,7 @@ final class EchoViewModel {
     }
 
     func fail(_ message: String) {
+        guard !isNeutralSafetyMode else { return }
         updateState(.error(message))
     }
 
@@ -236,6 +256,7 @@ final class EchoViewModel {
     }
 
     func refreshArchiveContextStatus() {
+        guard !isNeutralSafetyMode else { return }
         context = contextStore.current
         memoryManager.refreshForCurrentContext()
         let providedStatus = archiveContextStatusProvider()
@@ -267,5 +288,16 @@ final class EchoViewModel {
     private func updateState(_ newState: EchoInteractionState) {
         state = newState
         onStateChange?(newState)
+    }
+
+    private func enterNeutralSafetyMode(_ decision: EchoSafetyDecision, userText: String) {
+        pendingDelayedReply = nil
+        EchoDelayedReplyNotificationScheduler.shared.cancelPendingDelayedReply()
+        EchoDelayedReplyStore.shared.clear()
+        onTranscriptAppend?(userText, true)
+        if let responseText = decision.responseText {
+            onTranscriptAppend?(responseText, false)
+        }
+        updateState(.neutralSafety(decision))
     }
 }

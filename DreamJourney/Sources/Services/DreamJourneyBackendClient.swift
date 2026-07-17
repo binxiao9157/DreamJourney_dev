@@ -3372,6 +3372,10 @@ final class DreamJourneyBackendClient {
         return BackendCachedReleasePolicyEvaluation(cache: cache, risk: risk)
     }
 
+    func invalidateCachedReleasePolicyAuthority(clientBuild: Int) {
+        releasePolicyStore.remove(scope: releasePolicyCacheScope(clientBuild: clientBuild))
+    }
+
     private func releasePolicyCacheScope(clientBuild: Int) -> ReleasePolicyCacheScope {
         ReleasePolicyCacheScope(
             accountUserId: authSessionStore.currentSession?.userId,
@@ -4329,6 +4333,7 @@ final class DreamJourneyBackendClient {
     func scheduleEchoDelayedReplyPush(
         userId: String,
         delayedReply: EchoDelayedReply,
+        rawTranscript: String,
         completion: @escaping (Result<[String: Any], Error>) -> Void
     ) {
         var payload: [String: Any] = [
@@ -4337,6 +4342,7 @@ final class DreamJourneyBackendClient {
             "deliverAt": ISO8601DateFormatter().string(from: delayedReply.deliverAt),
             "minutes": delayedReply.minutes,
             "trigger": delayedReply.trigger.rawValue,
+            "rawTranscript": rawTranscript,
         ]
         if let registration = PushDeviceTokenStore.shared.registration(for: userId) {
             let registeredDeviceTokenPayload: [String: Any] = ["deviceTokenId": registration.deviceTokenId]
