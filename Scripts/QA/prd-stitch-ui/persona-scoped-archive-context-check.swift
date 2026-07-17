@@ -55,8 +55,13 @@ assertContains(
 )
 assertContains(
     archiveRepository,
-    "DigitalHumanContextStore.shared.current.ownerId",
-    "archive repository should derive owner from selected digital-human context"
+    "let context = DigitalHumanContextStore.shared.current",
+    "archive repository should capture the selected digital-human context"
+)
+assertContains(
+    archiveRepository,
+    "let ownerId = context.ownerId",
+    "archive repository should derive owner from the captured digital-human context"
 )
 assertContains(
     archiveRepository,
@@ -70,18 +75,18 @@ assertNotContains(
 )
 assertContains(
     archiveRepository,
-    "listArchiveItems(userId: currentArchiveOwnerId",
-    "backend archive fetch should request the selected owner archive"
+    "listArchiveItems(userId: lease.archiveOwnerId",
+    "backend archive fetch should request the leased selected-owner archive"
 )
 assertContains(
     archiveRepository,
-    "\"viewerUserId\": currentUserId",
-    "backend archive payload should include the logged-in viewer id"
+    "viewerUserId: lease.accountUserId",
+    "backend archive payload should include the leased logged-in viewer id"
 )
 assertContains(
     archiveRepository,
-    "\"ownerId\": currentArchiveOwnerId",
-    "backend archive payload should include the selected archive owner id"
+    "ownerId: ownerId",
+    "backend archive payload should include the leased selected archive owner id"
 )
 
 assertContains(
