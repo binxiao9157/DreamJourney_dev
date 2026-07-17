@@ -43,7 +43,7 @@ for category in [
 require(registry.contains("class RouteOwnershipRegistry"), "Route ownership registry is missing")
 require(registry.contains("owner_body_field=\"userId\""), "Body-owned routes must bind userId")
 require(registry.contains("owner_path_parameter=parameter"), "Path-owned routes must bind their owner parameter")
-require(registryTests.contains("self.assertEqual(len(app_routes), 62)"), "Route audit must pin the current route count")
+require(registryTests.contains("self.assertEqual(len(app_routes), 64)"), "Route audit must pin the current route count")
 require(registryTests.contains("self.assertEqual(registry_routes, app_routes)"), "Route audit must fail for unclassified routes")
 require(registryTests.contains("len(self.registry.rules), len(registry_routes)"), "Route audit must fail for duplicates")
 
@@ -64,12 +64,12 @@ require(
     !repository.contains("DreamJourneyBackendClient.shared.dispatchDueTimeLetters"),
     "Public iOS mailbox refresh must not invoke system-only time-letter dispatch"
 )
-require(backendClient.contains("func dispatchDueTimeLetters("), "QA/system client contract should remain available")
+require(!backendClient.contains("func dispatchDueTimeLetters("), "System-only dispatch must not remain in the app client")
 require(
     releaseRegression.contains("RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE"),
     "Release regression must expose the deployed ownership audit gate"
 )
-require(deployedSmoke.contains("routeCount\") == 62"), "Deployed ownership smoke must pin 62 routes")
+require(deployedSmoke.contains("routeCount\") == 64"), "Deployed ownership smoke must pin 64 routes")
 require(
     registry.contains("/ops/release-policy/observations"),
     "ReleasePolicy observation endpoint must remain system-only classified"

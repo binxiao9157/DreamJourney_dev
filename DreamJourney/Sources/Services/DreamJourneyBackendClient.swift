@@ -3154,13 +3154,15 @@ final class DreamJourneyBackendClient {
     }
 
     private enum RequestAuthPolicy {
-        case automatic
-        case anonymous
+        case publicRequest
+        case userRequired
+        case refreshExchange
     }
 
     enum ClientError: LocalizedError {
         case invalidJSONResponse
         case unsupportedJSONRoot
+        case userAuthenticationRequired
         case featurePolicyDenied(feature: String, reason: String)
         case recoveryAccessDenied(mode: String, code: String, reason: String)
         case backendError(statusCode: Int?, context: BackendErrorContext)
@@ -3176,6 +3178,8 @@ final class DreamJourneyBackendClient {
                 return "后端返回的数据不是有效 JSON"
             case .unsupportedJSONRoot:
                 return "后端返回的 JSON 根节点不是对象"
+            case .userAuthenticationRequired:
+                return "需要登录后才能继续"
             case .featurePolicyDenied(let feature, let reason):
                 return "功能请求已被发布策略拦截（\(feature)：\(reason)）"
             case .recoveryAccessDenied(let mode, let code, let reason):
@@ -3286,7 +3290,13 @@ final class DreamJourneyBackendClient {
     }
 
     func postArchiveItem(_ payload: [String: Any], completion: @escaping (Result<[String: Any], Error>) -> Void) {
-        requestJSON(path: "/archive/items", method: .post, payload: payload, completion: completion)
+        requestJSON(
+            path: "/archive/items",
+            method: .post,
+            payload: payload,
+            authPolicy: .userRequired,
+            completion: completion
+        )
     }
 
     func deleteArchiveItem(
@@ -3300,7 +3310,13 @@ final class DreamJourneyBackendClient {
            !operationId.isEmpty {
             path += "?operationId=\(queryComponent(operationId))"
         }
-        requestJSON(path: path, method: .delete, payload: nil, completion: completion)
+        requestJSON(
+            path: path,
+            method: .delete,
+            payload: nil,
+            authPolicy: .userRequired,
+            completion: completion
+        )
     }
 
     func fetchRuntimeConfig(completion: @escaping (Result<BackendRuntimeConfig, Error>) -> Void) {
@@ -3308,7 +3324,7 @@ final class DreamJourneyBackendClient {
             path: "/config/runtime",
             method: .get,
             payload: nil,
-            authPolicy: .anonymous,
+            authPolicy: .publicRequest,
             allowsRefresh: false,
             additionalHeaders: [
                 "X-DreamJourney-Runtime-Contract-Version": "2",
@@ -3337,7 +3353,12 @@ final class DreamJourneyBackendClient {
             + "&cohort=\(queryComponent(cohort))"
             + "&clientBuild=\(max(0, clientBuild))"
             + "&knownPolicyRevision=\(max(0, knownPolicyRevision))"
-        requestJSON(path: path, method: .get, payload: nil) { result in
+        requestJSON(
+            path: path,
+            method: .get,
+            payload: nil,
+            authPolicy: .publicRequest
+        ) { result in
             switch result {
             case .success(let json):
                 do {
@@ -3439,7 +3460,12 @@ final class DreamJourneyBackendClient {
             "deviceId": deviceId,
             "lifecycleMode": lifecycleMode.rawValue,
         ]
-        requestJSON(path: "/digital-human/sessions", method: .post, payload: payload) { result in
+        requestJSON(
+            path: "/digital-human/sessions",
+            method: .post,
+            payload: payload,
+            authPolicy: .userRequired
+        ) { result in
             switch result {
             case .success(let object):
                 guard let contract = DigitalHumanSessionContract(json: object) else {
@@ -3472,7 +3498,8 @@ final class DreamJourneyBackendClient {
         requestJSON(
             path: path,
             method: .post,
-            payload: ["userId": contract.userId, "deviceId": contract.deviceId]
+            payload: ["userId": contract.userId, "deviceId": contract.deviceId],
+            authPolicy: .userRequired
         ) { result in
             switch result {
             case .success(let object):
@@ -3510,7 +3537,8 @@ final class DreamJourneyBackendClient {
                 "userId": contract.userId,
                 "deviceId": contract.deviceId,
                 "reason": String(reason.prefix(80)),
-            ]
+            ],
+            authPolicy: .userRequired
         ) { result in
             switch result {
             case .success(let object):
@@ -3529,7 +3557,12 @@ final class DreamJourneyBackendClient {
         userId: String,
         completion: @escaping (Result<RealtimeVoiceRuntimeConfig, Error>) -> Void
     ) {
-        requestJSON(path: "/voice/realtime-token", method: .post, payload: ["userId": userId]) { result in
+        requestJSON(
+            path: "/voice/realtime-token",
+            method: .post,
+            payload: ["userId": userId],
+            authPolicy: .userRequired
+        ) { result in
             switch result {
             case .success(let object):
                 guard let runtimeConfig = RealtimeVoiceRuntimeConfig(json: object) else {
@@ -3547,7 +3580,12 @@ final class DreamJourneyBackendClient {
         payload: [String: Any],
         completion: @escaping (Result<VoiceCloneProfileContract, Error>) -> Void
     ) {
-        requestJSON(path: "/voice/profiles", method: .post, payload: payload) { result in
+        requestJSON(
+            path: "/voice/profiles",
+            method: .post,
+            payload: payload,
+            authPolicy: .userRequired
+        ) { result in
             switch result {
             case .success(let object):
                 guard let profileJSON = object["profile"] as? [String: Any],
@@ -3566,7 +3604,12 @@ final class DreamJourneyBackendClient {
         userId: String,
         completion: @escaping (Result<[VoiceCloneProfileContract], Error>) -> Void
     ) {
-        requestJSON(path: "/voice/profiles/\(pathComponent(userId))", method: .get, payload: nil) { result in
+        requestJSON(
+            path: "/voice/profiles/\(pathComponent(userId))",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired
+        ) { result in
             switch result {
             case .success(let object):
                 guard let profileJSONArray = object["profiles"] as? [[String: Any]] else {
@@ -3586,7 +3629,7 @@ final class DreamJourneyBackendClient {
         completion: @escaping (Result<VoiceCloneProfileContract, Error>) -> Void
     ) {
         let path = "/voice/profiles/\(pathComponent(userId))/\(pathComponent(voiceProfileId))/disable"
-        requestJSON(path: path, method: .post, payload: nil) { result in
+        requestJSON(path: path, method: .post, payload: nil, authPolicy: .userRequired) { result in
             switch result {
             case .success(let object):
                 guard let profileJSON = object["profile"] as? [String: Any],
@@ -3607,7 +3650,7 @@ final class DreamJourneyBackendClient {
         completion: @escaping (Result<VoiceCloneProfileContract, Error>) -> Void
     ) {
         let path = "/voice/profiles/\(pathComponent(userId))/\(pathComponent(voiceProfileId))/refresh"
-        requestJSON(path: path, method: .post, payload: nil) { result in
+        requestJSON(path: path, method: .post, payload: nil, authPolicy: .userRequired) { result in
             switch result {
             case .success(let object):
                 guard let profileJSON = object["profile"] as? [String: Any],
@@ -3628,7 +3671,12 @@ final class DreamJourneyBackendClient {
         completion: @escaping (Result<VoiceCloneProfileContract, Error>) -> Void
     ) {
         let path = "/voice/profiles/\(pathComponent(userId))/\(pathComponent(voiceProfileId))/quality-acceptance"
-        requestJSON(path: path, method: .post, payload: ["accepted": true]) { result in
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: ["accepted": true],
+            authPolicy: .userRequired
+        ) { result in
             switch result {
             case .success(let object):
                 guard let profileJSON = object["profile"] as? [String: Any],
@@ -3666,7 +3714,12 @@ final class DreamJourneyBackendClient {
         if let outputMode, !outputMode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             payload["outputMode"] = outputMode
         }
-        requestJSON(path: "/voice/synthesis", method: .post, payload: payload) { result in
+        requestJSON(
+            path: "/voice/synthesis",
+            method: .post,
+            payload: payload,
+            authPolicy: .userRequired
+        ) { result in
             switch result {
             case .success(let object):
                 guard let synthesis = VoiceCloneSynthesisResult(json: object) else {
@@ -3701,7 +3754,12 @@ final class DreamJourneyBackendClient {
            !viewerFamilyMemberID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             payload["viewerFamilyMemberID"] = viewerFamilyMemberID
         }
-        requestJSON(path: "/context/build", method: .post, payload: payload) { result in
+        requestJSON(
+            path: "/context/build",
+            method: .post,
+            payload: payload,
+            authPolicy: .userRequired
+        ) { result in
             switch result {
             case .success(let object):
                 guard let packetJSON = object["contextPacket"] as? [String: Any],
@@ -3722,7 +3780,7 @@ final class DreamJourneyBackendClient {
         completion: @escaping (Result<VoiceCloneProfileContract, Error>) -> Void
     ) {
         let path = "/voice/profiles/\(pathComponent(userId))/\(pathComponent(voiceProfileId))"
-        requestJSON(path: path, method: .delete, payload: nil) { result in
+        requestJSON(path: path, method: .delete, payload: nil, authPolicy: .userRequired) { result in
             switch result {
             case .success(let object):
                 guard let profileJSON = object["profile"] as? [String: Any],
@@ -3741,7 +3799,12 @@ final class DreamJourneyBackendClient {
         payload: [String: Any],
         completion: @escaping (Result<ArchiveMediaUploadIntent, Error>) -> Void
     ) {
-        requestJSON(path: "/archive/media/upload-intent", method: .post, payload: payload) { result in
+        requestJSON(
+            path: "/archive/media/upload-intent",
+            method: .post,
+            payload: payload,
+            authPolicy: .userRequired
+        ) { result in
             switch result {
             case .success(let object):
                 guard let intentJSON = object["uploadIntent"] as? [String: Any],
@@ -3768,7 +3831,13 @@ final class DreamJourneyBackendClient {
             "imageBase64": imageBase64,
             "privacyMetadata": ["scope": "generationAllowed"],
         ]
-        requestJSON(path: "/archive/image-analysis", method: .post, payload: payload, completion: completion)
+        requestJSON(
+            path: "/archive/image-analysis",
+            method: .post,
+            payload: payload,
+            authPolicy: .userRequired,
+            completion: completion
+        )
     }
 
     func postArchiveItem(
@@ -3797,7 +3866,7 @@ final class DreamJourneyBackendClient {
             path: "/auth/login",
             method: .post,
             payload: payload,
-            authPolicy: .anonymous,
+            authPolicy: .publicRequest,
             allowsRefresh: false
         ) { [weak self] result in
             guard let self else { return }
@@ -3843,7 +3912,7 @@ final class DreamJourneyBackendClient {
                 "target": phone,
                 "purpose": purpose,
             ],
-            authPolicy: .anonymous,
+            authPolicy: .publicRequest,
             allowsRefresh: false
         ) { result in
             completion(result.flatMap { object in
@@ -3869,7 +3938,7 @@ final class DreamJourneyBackendClient {
             path: "/v2/auth/challenges/\(pathComponent(challengeId))/verify",
             method: .post,
             payload: payload,
-            authPolicy: .anonymous,
+            authPolicy: .publicRequest,
             allowsRefresh: false
         ) { [weak self] result in
             guard let self else { return }
@@ -3906,8 +3975,9 @@ final class DreamJourneyBackendClient {
             path: "/auth/logout",
             method: .post,
             payload: ["refreshToken": session.refreshToken],
-            authPolicy: .automatic,
-            allowsRefresh: false
+            authPolicy: .userRequired,
+            allowsRefresh: false,
+            requiredAuthSession: session
         ) { _ in }
         authSessionStore.clear(ifCurrentMatches: session)
     }
@@ -3930,7 +4000,13 @@ final class DreamJourneyBackendClient {
         if let avatarName {
             payload["avatarName"] = avatarName
         }
-        requestJSON(path: "/profile", method: .post, payload: payload, completion: completion)
+        requestJSON(
+            path: "/profile",
+            method: .post,
+            payload: payload,
+            authPolicy: .userRequired,
+            completion: completion
+        )
     }
 
     func changePassword(
@@ -3943,6 +4019,7 @@ final class DreamJourneyBackendClient {
             path: "/auth/password",
             method: .post,
             payload: ["userId": userId, "oldPassword": oldPassword, "newPassword": newPassword],
+            authPolicy: .userRequired,
             completion: completion
         )
     }
@@ -3961,6 +4038,7 @@ final class DreamJourneyBackendClient {
                 "firstConfirmation": true,
                 "secondConfirmation": true,
             ],
+            authPolicy: .userRequired,
             completion: completion
         )
     }
@@ -3974,27 +4052,33 @@ final class DreamJourneyBackendClient {
         if let nickname, !nickname.isEmpty {
             payload["nickname"] = nickname
         }
-        requestJSON(path: "/auth/restore", method: .post, payload: payload, completion: completion)
+        requestJSON(
+            path: "/auth/restore",
+            method: .post,
+            payload: payload,
+            authPolicy: .publicRequest,
+            completion: completion
+        )
     }
 
     func listArchiveItems(userId: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
-        requestJSON(path: "/archive/items/\(pathComponent(userId))", method: .get, payload: nil, completion: completion)
-    }
-
-    func dispatchDueTimeLetters(
-        nowISO: String? = nil,
-        limit: Int = 25,
-        completion: @escaping (Result<[String: Any], Error>) -> Void
-    ) {
-        var payload: [String: Any] = ["limit": limit]
-        if let nowISO, !nowISO.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            payload["now"] = nowISO
-        }
-        requestJSON(path: "/archive/time-letters/dispatch-due", method: .post, payload: payload, completion: completion)
+        requestJSON(
+            path: "/archive/items/\(pathComponent(userId))",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            completion: completion
+        )
     }
 
     func listMailboxLetters(userId: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
-        requestJSON(path: "/mailbox/letters/\(pathComponent(userId))", method: .get, payload: nil, completion: completion)
+        requestJSON(
+            path: "/mailbox/letters/\(pathComponent(userId))",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            completion: completion
+        )
     }
 
     func getTimeLetterDetail(
@@ -4014,7 +4098,13 @@ final class DreamJourneyBackendClient {
         if let query = components.percentEncodedQuery, !query.isEmpty {
             path += "?\(query)"
         }
-        requestJSON(path: path, method: .get, payload: nil, completion: completion)
+        requestJSON(
+            path: path,
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            completion: completion
+        )
     }
 
     func markMailboxLetterRead(
@@ -4031,6 +4121,7 @@ final class DreamJourneyBackendClient {
             path: "/mailbox/letters/\(pathComponent(userId))/\(pathComponent(letterId))/read",
             method: .post,
             payload: payload,
+            authPolicy: .userRequired,
             completion: completion
         )
     }
@@ -4049,12 +4140,19 @@ final class DreamJourneyBackendClient {
             path: "/mailbox/letters/\(pathComponent(userId))/\(pathComponent(letterId))/archive",
             method: .post,
             payload: payload,
+            authPolicy: .userRequired,
             completion: completion
         )
     }
 
     func syncKnowledge(userId: String, graph: [String: Any], completion: @escaping (Result<[String: Any], Error>) -> Void) {
-        requestJSON(path: "/kb/sync", method: .post, payload: ["userId": userId, "graph": graph], completion: completion)
+        requestJSON(
+            path: "/kb/sync",
+            method: .post,
+            payload: ["userId": userId, "graph": graph],
+            authPolicy: .userRequired,
+            completion: completion
+        )
     }
 
     func mutateKnowledge(
@@ -4073,6 +4171,7 @@ final class DreamJourneyBackendClient {
                 "baseRevision": baseRevision,
                 "graph": graph,
             ],
+            authPolicy: .userRequired,
             completion: completion
         )
     }
@@ -4096,6 +4195,7 @@ final class DreamJourneyBackendClient {
                 "upserts": upserts,
                 "tombstones": tombstones,
             ],
+            authPolicy: .userRequired,
             completion: completion
         )
     }
@@ -4124,7 +4224,8 @@ final class DreamJourneyBackendClient {
                 "operationId": operationId,
                 "baseRevision": baseRevision,
                 "action": actionObject,
-            ]
+            ],
+            authPolicy: .userRequired
         ) { result in
             switch result {
             case .success(let object):
@@ -4170,7 +4271,8 @@ final class DreamJourneyBackendClient {
         requestJSON(
             path: path,
             method: .get,
-            payload: nil
+            payload: nil,
+            authPolicy: .userRequired
         ) { result in
             switch result {
             case .success(let object):
@@ -4197,7 +4299,8 @@ final class DreamJourneyBackendClient {
         requestJSON(
             path: "/kb/snapshot/\(pathComponent(userId))",
             method: .get,
-            payload: nil
+            payload: nil,
+            authPolicy: .userRequired
         ) { result in
             switch result {
             case .success(let object):
@@ -4222,7 +4325,8 @@ final class DreamJourneyBackendClient {
         requestJSON(
             path: "/kb/source-ref-audit/\(pathComponent(userId))",
             method: .get,
-            payload: nil
+            payload: nil,
+            authPolicy: .userRequired
         ) { result in
             switch result {
             case .success(let object):
@@ -4297,7 +4401,8 @@ final class DreamJourneyBackendClient {
                     "scope": "generationAllowed",
                     "sourceRefs": [],
                 ],
-            ]
+            ],
+            authPolicy: .userRequired
         ) { result in
             switch result {
             case .success(let object):
@@ -4338,7 +4443,13 @@ final class DreamJourneyBackendClient {
     }
 
     func listFamilyMembers(userId: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
-        requestJSON(path: "/family/members/\(pathComponent(userId))", method: .get, payload: nil, completion: completion)
+        requestJSON(
+            path: "/family/members/\(pathComponent(userId))",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            completion: completion
+        )
     }
 
     func inviteFamilyMember(
@@ -4356,7 +4467,8 @@ final class DreamJourneyBackendClient {
                 "name": name,
                 "relation": relation,
                 "phone": phone,
-            ]
+            ],
+            authPolicy: .userRequired
         ) { result in
             switch result {
             case .success(let object):
@@ -4391,7 +4503,13 @@ final class DreamJourneyBackendClient {
     }
 
     func latestCareSnapshot(userId: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
-        requestJSON(path: "/care/snapshots/latest/\(pathComponent(userId))", method: .get, payload: nil, completion: completion)
+        requestJSON(
+            path: "/care/snapshots/latest/\(pathComponent(userId))",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            completion: completion
+        )
     }
 
     func registerPushDeviceToken(
@@ -4408,7 +4526,13 @@ final class DreamJourneyBackendClient {
             "environment": environment,
             "deviceId": deviceId,
         ]
-        requestJSON(path: "/devices/push-token", method: .post, payload: payload, completion: completion)
+        requestJSON(
+            path: "/devices/push-token",
+            method: .post,
+            payload: payload,
+            authPolicy: .userRequired,
+            completion: completion
+        )
     }
 
     func scheduleEchoDelayedReplyPush(
@@ -4429,14 +4553,20 @@ final class DreamJourneyBackendClient {
             let registeredDeviceTokenPayload: [String: Any] = ["deviceTokenId": registration.deviceTokenId]
             payload.merge(registeredDeviceTokenPayload) { _, new in new }
         }
-        requestJSON(path: "/echo/delayed-replies", method: .post, payload: payload, completion: completion)
+        requestJSON(
+            path: "/echo/delayed-replies",
+            method: .post,
+            payload: payload,
+            authPolicy: .userRequired,
+            completion: completion
+        )
     }
 
     private func requestJSON(
         path: String,
         method: HTTPMethod,
         payload: [String: Any]?,
-        authPolicy: RequestAuthPolicy = .automatic,
+        authPolicy: RequestAuthPolicy,
         allowsRefresh: Bool = true,
         allowsRecoveryRefresh: Bool = true,
         recoveryClearSession: BackendAuthSessionContract? = nil,
@@ -4445,6 +4575,34 @@ final class DreamJourneyBackendClient {
         additionalHeaders: [String: String] = [:],
         completion: @escaping (Result<[String: Any], Error>) -> Void
     ) {
+        let requestAuthSession: BackendAuthSessionContract?
+        switch authPolicy {
+        case .userRequired:
+            let currentSession = authSessionStore.currentSession
+            guard let authenticatedSession = currentSession else {
+                DispatchQueue.main.async {
+                    completion(.failure(ClientError.userAuthenticationRequired))
+                }
+                return
+            }
+            if let requiredAuthSession,
+               currentSession?.matchesCASIdentity(requiredAuthSession) != true {
+                DispatchQueue.main.async {
+                    completion(.failure(ClientError.backendError(
+                        statusCode: 401,
+                        context: .init(
+                            code: "auth_session_changed",
+                            detail: "登录状态已变化，请重试"
+                        )
+                    )))
+                }
+                return
+            }
+            requestAuthSession = requiredAuthSession ?? authenticatedSession
+        case .publicRequest, .refreshExchange:
+            requestAuthSession = nil
+        }
+
         let recoveryDecision = RecoveryRuntimePolicyStore.shared.requestDecision(
             method: method.rawValue,
             path: path
@@ -4516,27 +4674,6 @@ final class DreamJourneyBackendClient {
             return
         }
 
-        let requestAuthSession: BackendAuthSessionContract?
-        if authPolicy == .automatic {
-            let currentSession = authSessionStore.currentSession
-            if let requiredAuthSession,
-               currentSession?.matchesCASIdentity(requiredAuthSession) != true {
-                DispatchQueue.main.async {
-                    completion(.failure(ClientError.backendError(
-                        statusCode: 401,
-                        context: .init(
-                            code: "auth_session_changed",
-                            detail: "登录状态已变化，请重试"
-                        )
-                    )))
-                }
-                return
-            }
-            requestAuthSession = requiredAuthSession ?? currentSession
-        } else {
-            requestAuthSession = nil
-        }
-
         let url = "\(baseURL)\(path)"
         var requestHeaders = authHeaders(for: authPolicy, session: requestAuthSession)
         if !additionalHeaders.isEmpty {
@@ -4596,7 +4733,7 @@ final class DreamJourneyBackendClient {
                     }
                     if statusCode == 401,
                        allowsRefresh,
-                       authPolicy == .automatic,
+                       authPolicy == .userRequired,
                        let requestAuthSession,
                        let currentSession = self.authSessionStore.currentSession {
                         if currentSession.isValidRefreshSuccessor(of: requestAuthSession) {
@@ -4785,7 +4922,7 @@ final class DreamJourneyBackendClient {
                 path: "/auth/refresh",
                 method: .post,
                 payload: ["refreshToken": capturedSession.refreshToken],
-                authPolicy: .anonymous,
+                authPolicy: .refreshExchange,
                 allowsRefresh: false,
                 allowsRecoveryRefresh: false,
                 recoveryClearSession: capturedSession
@@ -4917,7 +5054,7 @@ final class DreamJourneyBackendClient {
         for policy: RequestAuthPolicy,
         session: BackendAuthSessionContract?
     ) -> HTTPHeaders? {
-        guard policy == .automatic,
+        guard policy == .userRequired,
               let session else {
             return nil
         }

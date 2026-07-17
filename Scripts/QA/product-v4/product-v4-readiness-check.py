@@ -29,6 +29,7 @@ def main() -> None:
     migrator = read(BACKEND / "app/db/migrator.py")
     store = read(BACKEND / "app/services/postgres_store.py")
     routes = read(BACKEND / "app/services/route_ownership.py")
+    route_authentication = read(BACKEND / "app/services/route_authentication.py")
     compose = read(BACKEND / "docker-compose.yml")
     tests = read(BACKEND / "tests/test_readiness.py")
     verify = read(BACKEND / "scripts/verify_backend.sh")
@@ -42,8 +43,16 @@ def main() -> None:
         "infrastructure bypass inventory",
     )
     require(
-        "request.url.path in INFRASTRUCTURE_PATHS" in main_module,
-        "auth middleware must bypass infrastructure probes",
+        "ROUTE_AUTHENTICATION_POLICY.evaluate(" in main_module,
+        "infrastructure probes must pass through the typed route-authentication policy",
+    )
+    require(
+        "validate_route_authentication_startup(" in main_module,
+        "route-authentication inventory must be validated before readiness is served",
+    )
+    require(
+        "routeNotClassified" in route_authentication,
+        "unclassified routes must fail closed",
     )
     require(
         "request.url.path in DATABASE_TRANSACTION_BYPASS_PATHS" in main_module,
@@ -76,6 +85,7 @@ def main() -> None:
     require("def readiness_probe" in store, "PostgresStore readiness adapter")
     require("schema_verifier=migrator.verify_connection" in store, "shared migration verifier")
 
+    require('"/health", public, "publicHealth"' in routes, "public health route inventory")
     require('"/live", public, "publicLiveness"' in routes, "public liveness route inventory")
     require('"/ready", public, "publicReadiness"' in routes, "public readiness route inventory")
     require("127.0.0.1:8080/ready" in compose, "Docker readiness healthcheck")

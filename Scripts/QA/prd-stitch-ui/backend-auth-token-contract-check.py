@@ -1,135 +1,101 @@
 #!/usr/bin/env python3
+"""Compatibility smoke for public, user, and machine route boundaries.
+
+The second CLI argument is a server-only machine token. It must never be copied
+into an iOS build artifact.
+"""
+
 import json
 import sys
-import time
 import urllib.error
-import urllib.parse
 import urllib.request
 
 
 BASE_URL = (sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:3100").rstrip("/")
-API_TOKEN = sys.argv[2] if len(sys.argv) > 2 else "dj-local-test-token"
-RUN_SUFFIX = str(int(time.time()))
-USER_ID = f"backend_auth_{RUN_SUFFIX}"
+MACHINE_TOKEN = sys.argv[2] if len(sys.argv) > 2 else "dj-local-test-token"
 
 
-def request_json(method, path, payload=None, expected=200, token=None):
-    url = f"{BASE_URL}{path}"
-    data = None
+def request_json(method, path, *, expected=200, token=None):
     headers = {"Accept": "application/json"}
     if path == "/config/runtime":
         headers["X-DreamJourney-Runtime-Contract-Version"] = "2"
         headers["X-DreamJourney-Client-Build"] = "9001"
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    if payload is not None:
-        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        headers["Content-Type"] = "application/json"
-    request = urllib.request.Request(url, data=data, headers=headers, method=method)
+    request = urllib.request.Request(f"{BASE_URL}{path}", headers=headers, method=method)
     try:
         with urllib.request.urlopen(request, timeout=8) as response:
-            body = response.read().decode("utf-8")
             status = response.status
+            response_headers = {key.lower(): value for key, value in response.headers.items()}
+            body = response.read().decode("utf-8")
     except urllib.error.HTTPError as error:
+        status = error.code
+        response_headers = {key.lower(): value for key, value in error.headers.items()}
         body = error.read().decode("utf-8", errors="replace")
-        if error.code != expected:
-            raise AssertionError(f"{method} {path} expected {expected}, got {error.code}: {body}") from error
-        return json.loads(body) if body else {}
-    except urllib.error.URLError as error:
-        raise AssertionError(f"{method} {path} failed: {error}") from error
-
     if status != expected:
-        raise AssertionError(f"{method} {path} expected {expected}, got {status}: {body}")
-    return json.loads(body) if body else {}
+        raise AssertionError(f"{method} {path} expected {expected}, got {status}: {body[:160]}")
+    return (json.loads(body) if body else {}), response_headers
 
 
-def assert_equal(actual, expected, message):
-    if actual != expected:
-        raise AssertionError(f"{message}: expected {expected!r}, got {actual!r}")
+def require(condition, message):
+    if not condition:
+        raise AssertionError(message)
 
 
 def main():
-    health = request_json("GET", "/health", expected=200)
-    assert_equal(health.get("status"), "ok", "health should stay public")
+    health, _ = request_json("GET", "/health")
+    require(health.get("status") == "ok", "health must remain public")
 
-    unauth = request_json("GET", "/config/runtime", expected=401)
-    assert_equal(unauth.get("detail"), "invalid backend api token", "runtime should require backend token")
+    runtime, public_headers = request_json("GET", "/config/runtime")
+    route_auth = ((runtime.get("auth") or {}).get("routeAuthentication") or {})
+    require(route_auth.get("routeCount") == 64, "route auth inventory must pin 64 routes")
+    require(route_auth.get("unclassifiedCount") == 0, "route auth inventory is incomplete")
+    require(
+        public_headers.get("x-dreamjourney-route-auth-reason") == "publicRoute",
+        "runtime must use the explicit public route contract",
+    )
 
-    runtime = request_json("GET", "/config/runtime", expected=200, token=API_TOKEN)
-    if "capabilities" not in runtime:
-        raise AssertionError("authorized runtime config should expose capabilities")
+    _, anonymous_headers = request_json(
+        "GET",
+        "/kb/snapshot/backend_auth_probe",
+        expected=401,
+    )
+    require(
+        anonymous_headers.get("x-dreamjourney-route-auth-reason") == "userPrincipalRequired",
+        "anonymous business request must fail closed",
+    )
 
-    archive_payload = {
-        "userId": USER_ID,
-        "id": f"archive_auth_{RUN_SUFFIX}",
-        "kind": "photo",
-        "title": "Authorized Backend Photo",
-        "note": "Authorized metadata",
-        "createdAt": "2026-06-17T09:00:00Z",
-        "updatedAt": "2026-06-17T09:01:00Z",
-        "analysisStatus": "analyzed",
-        "privacyMetadata": {"scope": "generationAllowed"},
-    }
-    archive = request_json("POST", "/archive/items", payload=archive_payload, expected=200, token=API_TOKEN)
-    assert_equal(archive.get("status"), "saved", "authorized archive save")
+    _, machine_business_headers = request_json(
+        "GET",
+        "/kb/snapshot/backend_auth_probe",
+        expected=403,
+        token=MACHINE_TOKEN,
+    )
+    require(
+        machine_business_headers.get("x-dreamjourney-route-auth-reason") == "userPrincipalRequired",
+        "machine credential must not impersonate a user",
+    )
 
-    care_snapshot = {
-        "generatedAt": "2026-06-17T09:02:00Z",
-        "windowStart": "2026-06-10T00:00:00Z",
-        "windowEnd": "2026-06-17T00:00:00Z",
-        "windowDayCount": 7,
-        "dataCoverageSummary": "Authorized aggregate context",
-        "totalTurns": 12,
-        "userTurnCount": 8,
-        "characterCount": 420,
-        "uniqueTokenCount": 88,
-        "lexicalDiversity": 0.72,
-        "negativeEmotionMentions": 1,
-        "sleepMentions": 2,
-        "bodyDiscomfortMentions": 0,
-        "repetitionRatio": 0.25,
-        "averageWordsPerMinute": 88.5,
-        "slowSpeechTurnCount": 0,
-        "longPauseTurnCount": 1,
-        "emotionVolatilityScore": 0.3,
-        "riskLevel": "watch",
-        "summary": "Authorized mild fluctuation",
-        "trendSummary": "Authorized short family check-in",
-        "suggestions": ["Call today."],
-        "weeklyHighlights": ["Shared one positive memory."],
-        "riskSignalDescriptions": ["Sleep topic appeared twice."],
-        "dailyTrend": [
-            {
-                "date": "2026-06-17",
-                "userTurnCount": 8,
-                "negativeEmotionMentions": 1,
-                "sleepMentions": 2,
-                "bodyDiscomfortMentions": 0,
-                "repetitionRatio": 0.25,
-                "averageWordsPerMinute": 88.5,
-                "slowSpeechTurnCount": 0,
-                "longPauseTurnCount": 1,
-                "emotionVolatilityScore": 0.3,
-                "signalScore": 0.64,
-            }
-        ],
-    }
-    care = request_json("POST", "/care/snapshots", payload={"userId": USER_ID, "snapshot": care_snapshot}, expected=200, token=API_TOKEN)
-    assert_equal(care.get("status"), "saved", "authorized care save")
-
-    latest = request_json("GET", f"/care/snapshots/latest/{USER_ID}", expected=200, token=API_TOKEN)
-    snapshot = ((latest.get("item") or {}).get("snapshot") or {})
-    assert_equal(snapshot.get("riskLevel"), "watch", "authorized care latest")
+    observations, machine_headers = request_json(
+        "GET",
+        "/ops/release-policy/observations",
+        token=MACHINE_TOKEN,
+    )
+    require(
+        machine_headers.get("x-dreamjourney-auth-principal") == "machine",
+        "server credential must resolve to a typed machine principal",
+    )
+    require("routeAuthentication" in observations, "route decision evidence is missing")
 
     print(json.dumps({
-        "baseURL": BASE_URL,
+        "anonymousBusinessDenied": True,
         "completed": True,
-        "healthPublic": True,
-        "unauthorizedRuntimeStatus": 401,
-        "authorizedArchiveStatus": archive.get("status"),
-        "authorizedCareRiskLevel": snapshot.get("riskLevel"),
-        "userId": USER_ID,
-    }, ensure_ascii=False, sort_keys=True))
+        "machineBusinessDenied": True,
+        "machineSystemAllowed": True,
+        "publicRuntimeAllowed": True,
+        "routeCount": route_auth.get("routeCount"),
+        "tokensRedacted": True,
+    }, ensure_ascii=True, sort_keys=True))
 
 
 if __name__ == "__main__":

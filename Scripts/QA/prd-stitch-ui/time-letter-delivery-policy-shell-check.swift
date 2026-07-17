@@ -175,8 +175,6 @@ for required in [
 }
 
 for required in [
-    "func dispatchDueTimeLetters(",
-    "/archive/time-letters/dispatch-due",
     "func listMailboxLetters(",
     "/mailbox/letters/",
     "func getTimeLetterDetail(",
@@ -187,8 +185,14 @@ for required in [
     "/read",
     "/archive",
 ] {
-    assertContains(backendClient, required, "backend client should expose time-letter dispatch/mailbox contract \(required)")
+    assertContains(backendClient, required, "backend client should expose the user mailbox contract \(required)")
 }
+
+assertNotContains(
+    backendClient,
+    "/archive/time-letters/dispatch-due",
+    "system-only time-letter dispatch must not be exposed by the app client"
+)
 
 assertContains(
     releaseRegression,

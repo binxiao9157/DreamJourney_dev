@@ -50,7 +50,7 @@ def main() -> None:
         "signedOut recovery mode must clear the backend auth session",
     )
     runtime_request = client[client.index("func fetchRuntimeConfig"):client.index("func fetchReleasePolicy")]
-    require("authPolicy: .anonymous" in runtime_request, "runtime config must remain readable with a stale token")
+    require("authPolicy: .publicRequest" in runtime_request, "runtime config must remain explicitly public with a stale token")
     require("allowsRefresh: false" in runtime_request, "runtime config must not enter auth refresh recursion")
 
     print("Product V4 recovery runtime client check passed")

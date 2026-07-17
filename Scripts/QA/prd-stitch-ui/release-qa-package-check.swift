@@ -207,6 +207,7 @@ assertContains(releaseRegression, "RUN_BACKEND_CREDENTIAL_RESPONSE_BOUNDARY_SMOK
 assertContains(releaseRegression, "run-credential-inventory-scan.sh", "release regression should invoke the credential inventory runner")
 assertContains(releaseRegression, "product-v4-credential-response-boundary-check.py", "release regression should always enforce the credential response boundary")
 assertContains(releaseRegression, "product-v4-mobile-credential-path-retirement-check.py", "release regression should always enforce mobile credential path retirement")
+assertContains(releaseRegression, "product-v4-ios-client-auth-boundary-check.py", "release regression should always enforce the explicit iOS auth boundary")
 assertContains(releaseRegression, "product-v4-qa-mobile-credential-artifact-check.py", "release regression should always enforce the QA mobile credential artifact boundary")
 assertContains(releaseRegression, "product-v4-digital-human-secure-path-check.py", "release regression should always enforce the digital-human secure path")
 assertContains(releaseRegression, "product-v4-credential-rotation-receipt-check.py", "release regression should always enforce the value-free rotation receipt")
@@ -442,6 +443,7 @@ let requiredScripts = [
     "Scripts/doctor-ios.sh",
     "Scripts/QA/product-v4/product-v4-credential-response-boundary-check.py",
     "Scripts/QA/product-v4/product-v4-mobile-credential-path-retirement-check.py",
+    "Scripts/QA/product-v4/product-v4-ios-client-auth-boundary-check.py",
     "Scripts/QA/product-v4/product-v4-qa-mobile-credential-artifact-check.py",
     "Scripts/QA/product-v4/product-v4-digital-human-secure-path-check.py",
     "Scripts/QA/product-v4/product-v4-credential-rotation-receipt-check.py",

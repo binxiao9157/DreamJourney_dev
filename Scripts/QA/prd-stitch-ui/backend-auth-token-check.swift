@@ -10,37 +10,31 @@ func read(_ relativePath: String) -> String {
     return content
 }
 
-func assertContains(_ haystack: String, _ needle: String, _ message: String) {
-    guard haystack.contains(needle) else {
-        fatalError("\(message): missing \(needle)")
-    }
-}
-
-func assertOrder(_ haystack: String, _ first: String, _ second: String, _ message: String) {
-    guard let firstRange = haystack.range(of: first),
-          let secondRange = haystack.range(of: second),
-          firstRange.lowerBound < secondRange.lowerBound else {
-        fatalError("\(message): expected \(first) before \(second)")
-    }
+func require(_ condition: @autoclosure () -> Bool, _ message: String) {
+    guard condition() else { fatalError(message) }
 }
 
 let plist = read("DreamJourney/Resources/Info.plist")
 let client = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let project = read("DreamJourney.xcodeproj/project.pbxproj")
 
-assertContains(plist, "<key>DreamJourneyBackendAPIToken</key>", "Info.plist should define backend API token slot")
-assertContains(plist, "<string>$(DREAMJOURNEY_BACKEND_API_TOKEN)</string>", "backend API token should resolve from a build setting")
-assertContains(project, "DREAMJOURNEY_BACKEND_API_TOKEN = YOUR_DREAMJOURNEY_BACKEND_API_TOKEN;", "backend API token build setting should stay placeholder by default")
+for retired in ["DreamJourneyBackendAPIToken", "DREAMJOURNEY_BACKEND_API_TOKEN", "X-DreamJourney-Api-Token"] {
+    require(!plist.contains(retired), "Info.plist must not package retired shared credential \(retired)")
+    require(!project.contains(retired), "Xcode project must not define retired shared credential \(retired)")
+    require(!client.contains(retired), "Backend client must not read or send retired shared credential \(retired)")
+}
 
-assertContains(client, "DreamJourneyBackendAPIToken", "backend client should read backend API token")
-assertContains(client, "YOUR_DREAMJOURNEY_BACKEND_API_TOKEN", "backend client should ignore placeholder backend token")
-assertContains(client, "$(DREAMJOURNEY_BACKEND_API_TOKEN)", "backend client should ignore unexpanded backend token build setting")
-assertContains(client, "private let apiToken: String?", "backend client should keep optional token state")
-assertContains(client, "private var authHeaders: HTTPHeaders?", "backend client should build optional auth headers")
-assertContains(client, "Authorization", "backend client should send Authorization header when token is configured")
-assertContains(client, "Bearer \\(apiToken)", "backend client should use bearer token scheme")
-assertContains(client, "authHeaders(for: authPolicy)", "backend client requests should apply the selected auth policy")
-assertContains(client, "X-DreamJourney-Api-Token", "backend compatibility token should use a dedicated header beside user auth")
-assertOrder(client, "private let apiToken: String?", "AF.request", "token should be resolved before requests are made")
+for required in [
+    "case publicRequest",
+    "case userRequired",
+    "case refreshExchange",
+    "case userAuthenticationRequired",
+    "authPolicy: RequestAuthPolicy",
+    "guard let authenticatedSession = currentSession else",
+    "\"Authorization\": \"Bearer \\(session.accessToken)\"",
+] {
+    require(client.contains(required), "Explicit user-session auth contract is missing: \(required)")
+}
+require(!client.contains("authPolicy: RequestAuthPolicy ="), "Requests must not inherit an implicit auth policy")
 
-print("Backend auth token source checks passed")
+print("Backend user-session auth boundary checks passed")
