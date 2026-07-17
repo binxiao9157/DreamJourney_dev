@@ -1,9 +1,11 @@
 import Foundation
 import KeychainAccess
 
-struct BackendAuthSessionContract: Codable, Equatable {
+struct BackendAuthSessionContract: Codable, Equatable, Sendable {
     let sessionId: String
     let userId: String
+    let subjectId: String?
+    let parentSessionId: String?
     let tokenType: String
     let accessToken: String
     let refreshToken: String
@@ -18,6 +20,8 @@ struct BackendAuthSessionContract: Codable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case sessionId
         case userId
+        case subjectId
+        case parentSessionId
         case tokenType
         case accessToken
         case refreshToken
@@ -36,6 +40,7 @@ struct BackendAuthSessionContract: Codable, Equatable {
 
     var isPrivateAccessEligible: Bool {
         contractVersion == 2
+            && (subjectId == nil || subjectId == userId)
             && tokenFamilyId?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             && (sessionVersion ?? 0) > 0
             && isRefreshCredentialUsable
@@ -97,6 +102,11 @@ struct BackendAuthSessionContract: Codable, Equatable {
 
         self.sessionId = sessionId
         self.userId = userId
+        subjectId = Self.string(json["subjectId"])
+        parentSessionId = Self.string(json["parentSessionId"])
+        if let subjectId, subjectId != userId {
+            return nil
+        }
         tokenType = Self.string(json["tokenType"]) ?? "Bearer"
         self.accessToken = accessToken
         self.refreshToken = refreshToken
@@ -166,6 +176,17 @@ struct BackendAuthSessionContract: Codable, Equatable {
 
         sessionId = decodedSessionId
         userId = decodedUserId
+        subjectId = try container.decodeIfPresent(String.self, forKey: .subjectId)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        parentSessionId = try container.decodeIfPresent(String.self, forKey: .parentSessionId)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let subjectId, !subjectId.isEmpty, subjectId != decodedUserId {
+            throw DecodingError.dataCorruptedError(
+                forKey: .subjectId,
+                in: container,
+                debugDescription: "Stored auth subject does not match userId"
+            )
+        }
         tokenType = try container.decodeIfPresent(String.self, forKey: .tokenType) ?? "Bearer"
         accessToken = decodedAccessToken
         refreshToken = decodedRefreshToken
@@ -182,6 +203,8 @@ struct BackendAuthSessionContract: Codable, Equatable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(sessionId, forKey: .sessionId)
         try container.encode(userId, forKey: .userId)
+        try container.encodeIfPresent(subjectId, forKey: .subjectId)
+        try container.encodeIfPresent(parentSessionId, forKey: .parentSessionId)
         try container.encode(tokenType, forKey: .tokenType)
         try container.encode(accessToken, forKey: .accessToken)
         try container.encode(refreshToken, forKey: .refreshToken)
@@ -231,7 +254,10 @@ struct BackendAuthSessionContract: Codable, Equatable {
                   let sessionVersion else {
                 return false
             }
-            return tokenFamilyId == capturedFamilyId && sessionVersion > capturedVersion
+            return tokenFamilyId == capturedFamilyId
+                && sessionVersion == capturedVersion + 1
+                && (subjectId == nil || subjectId == userId)
+                && (parentSessionId == nil || parentSessionId == captured.sessionId)
         default:
             return false
         }
@@ -326,7 +352,7 @@ struct BackendAccountLease: Equatable {
     }
 }
 
-final class BackendAuthSessionStore {
+final class BackendAuthSessionStore: @unchecked Sendable {
     static let shared = BackendAuthSessionStore()
 
     private let storageKey = "current-auth-session"

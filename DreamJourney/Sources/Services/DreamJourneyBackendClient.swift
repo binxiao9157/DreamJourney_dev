@@ -3266,12 +3266,17 @@ final class DreamJourneyBackendClient {
     private let baseURL: String
     private let hasExplicitBaseURL: Bool
     private let authSessionStore = BackendAuthSessionStore.shared
+    private let accountSessionActor = AccountSessionActor.shared
     private let releasePolicyStore = ReleasePolicyStore.shared
     private let recoveryRuntimePolicyStore = RecoveryRuntimePolicyStore.shared
     private let authRefreshQueue = DispatchQueue(label: "com.dreamjourney.backend-auth-refresh")
     private struct AuthRefreshGroup {
         let capturedSession: BackendAuthSessionContract
+        let accountLease: AccountSessionRefreshLease
         var waiters: [(BackendAuthSessionContract?) -> Void]
+    }
+    private struct AuthRefreshClientReference: @unchecked Sendable {
+        let value: DreamJourneyBackendClient
     }
     private var activeAuthRefreshGroup: AuthRefreshGroup?
     private var pendingAuthRefreshGroups: [AuthRefreshGroup] = []
@@ -4700,6 +4705,7 @@ final class DreamJourneyBackendClient {
         allowsRefresh: Bool = true,
         allowsRecoveryRefresh: Bool = true,
         recoveryClearSession: BackendAuthSessionContract? = nil,
+        mutatesAuthenticatedSessionForRecoveryPolicy: Bool = true,
         requiredAuthSession: BackendAuthSessionContract? = nil,
         accountLease: BackendAccountLease? = nil,
         sessionUserId: String? = nil,
@@ -4792,6 +4798,7 @@ final class DreamJourneyBackendClient {
                             allowsRefresh: allowsRefresh,
                             allowsRecoveryRefresh: false,
                             recoveryClearSession: recoveryClearSession,
+                            mutatesAuthenticatedSessionForRecoveryPolicy: mutatesAuthenticatedSessionForRecoveryPolicy,
                             requiredAuthSession: requiredAuthSession,
                             accountLease: requestAccountLease,
                             sessionUserId: sessionUserId,
@@ -4926,7 +4933,8 @@ final class DreamJourneyBackendClient {
                             }
                             self.adoptRecoveryRuntimePolicy(
                                 recoveryPolicy,
-                                clearSessionIfCurrentMatches: recoveryClearSession
+                                clearSessionIfCurrentMatches: recoveryClearSession,
+                                mutateAuthenticatedSession: mutatesAuthenticatedSessionForRecoveryPolicy
                             )
                             let denied = recoveryPolicy.requestDecision(
                                 method: method.rawValue,
@@ -4972,6 +4980,7 @@ final class DreamJourneyBackendClient {
                                 allowsRefresh: false,
                                 allowsRecoveryRefresh: allowsRecoveryRefresh,
                                 recoveryClearSession: recoveryClearSession,
+                                mutatesAuthenticatedSessionForRecoveryPolicy: mutatesAuthenticatedSessionForRecoveryPolicy,
                                 requiredAuthSession: currentSession,
                                 accountLease: requestAccountLease,
                                 sessionUserId: sessionUserId,
@@ -5011,6 +5020,7 @@ final class DreamJourneyBackendClient {
                                     allowsRefresh: false,
                                     allowsRecoveryRefresh: allowsRecoveryRefresh,
                                     recoveryClearSession: recoveryClearSession,
+                                    mutatesAuthenticatedSessionForRecoveryPolicy: mutatesAuthenticatedSessionForRecoveryPolicy,
                                     requiredAuthSession: refreshedSession,
                                     accountLease: requestAccountLease,
                                     sessionUserId: sessionUserId,
@@ -5088,9 +5098,22 @@ final class DreamJourneyBackendClient {
 
     private func adoptRecoveryRuntimePolicy(
         _ policy: BackendRecoveryRuntimePolicy,
-        clearSessionIfCurrentMatches capturedSession: BackendAuthSessionContract? = nil
+        clearSessionIfCurrentMatches capturedSession: BackendAuthSessionContract? = nil,
+        mutateAuthenticatedSession: Bool = true
     ) {
         let transition = recoveryRuntimePolicyStore.update(policy)
+        if transition.authorityEpochChanged {
+            RuntimeCapabilitySnapshotStore.shared.invalidate()
+            NotificationCenter.default.post(
+                name: .djRecoveryAuthorityEpochDidChange,
+                object: nil,
+                userInfo: [
+                    "previousAuthorityEpoch": transition.previousAuthorityEpoch,
+                    "authorityEpoch": transition.currentAuthorityEpoch,
+                ]
+            )
+        }
+        guard mutateAuthenticatedSession else { return }
         if policy.mode == .signedOut || policy.authenticatedSessionPolicy == "clear" {
             let sessionToClear = capturedSession ?? authSessionStore.currentSession
             let didClear: Bool
@@ -5110,16 +5133,6 @@ final class DreamJourneyBackendClient {
                 reason: "recoveryPolicySuspended"
             )
         }
-        guard transition.authorityEpochChanged else { return }
-        RuntimeCapabilitySnapshotStore.shared.invalidate()
-        NotificationCenter.default.post(
-            name: .djRecoveryAuthorityEpochDidChange,
-            object: nil,
-            userInfo: [
-                "previousAuthorityEpoch": transition.previousAuthorityEpoch,
-                "authorityEpoch": transition.currentAuthorityEpoch,
-            ]
-        )
     }
 
     private static func recoveryRuntimePolicy(from data: Data?) -> BackendRecoveryRuntimePolicy? {
@@ -5181,35 +5194,65 @@ final class DreamJourneyBackendClient {
         return session
     }
 
+    private func accountCredentialSnapshot(
+        for session: BackendAuthSessionContract
+    ) -> AccountSessionCredentialSnapshot? {
+        guard session.isPrivateAccessEligible,
+              let tokenFamilyId = session.tokenFamilyId,
+              let sessionVersion = session.sessionVersion else {
+            return nil
+        }
+        return AccountSessionCredentialSnapshot(
+            subjectId: session.userId,
+            vaultId: session.userId,
+            sessionId: session.sessionId,
+            tokenFamilyId: tokenFamilyId,
+            sessionVersion: sessionVersion,
+            isPrivateAccessEligible: true,
+            trust: .requiresOnlineValidation
+        )
+    }
+
     private func refreshAuthSession(
         for capturedSession: BackendAuthSessionContract,
         completion: @escaping (BackendAuthSessionContract?) -> Void
     ) {
-        guard capturedSession.isPrivateAccessEligible else {
+        guard let credential = accountCredentialSnapshot(for: capturedSession) else {
             authSessionStore.clear(ifCurrentMatches: capturedSession)
             UserManager.shared.invalidateBackendSession(for: capturedSession.userId)
             DispatchQueue.main.async { completion(nil) }
             return
         }
-        authRefreshQueue.async {
-            if var active = self.activeAuthRefreshGroup,
-               active.capturedSession.matchesCASIdentity(capturedSession) {
-                active.waiters.append(completion)
-                self.activeAuthRefreshGroup = active
+        let clientReference = AuthRefreshClientReference(value: self)
+        Task { [accountSessionActor, clientReference] in
+            guard let accountLease = await accountSessionActor.captureRefreshLease(for: credential) else {
+                DispatchQueue.main.async { completion(nil) }
                 return
             }
+            clientReference.value.authRefreshQueue.async {
+                let client = clientReference.value
+                if var active = client.activeAuthRefreshGroup,
+                   active.capturedSession.matchesCASIdentity(capturedSession),
+                   active.accountLease == accountLease {
+                    active.waiters.append(completion)
+                    client.activeAuthRefreshGroup = active
+                    return
+                }
 
-            if let index = self.pendingAuthRefreshGroups.firstIndex(where: {
-                $0.capturedSession.matchesCASIdentity(capturedSession)
-            }) {
-                self.pendingAuthRefreshGroups[index].waiters.append(completion)
-            } else {
-                self.pendingAuthRefreshGroups.append(.init(
-                    capturedSession: capturedSession,
-                    waiters: [completion]
-                ))
+                if let index = client.pendingAuthRefreshGroups.firstIndex(where: {
+                    $0.capturedSession.matchesCASIdentity(capturedSession)
+                        && $0.accountLease == accountLease
+                }) {
+                    client.pendingAuthRefreshGroups[index].waiters.append(completion)
+                } else {
+                    client.pendingAuthRefreshGroups.append(.init(
+                        capturedSession: capturedSession,
+                        accountLease: accountLease,
+                        waiters: [completion]
+                    ))
+                }
+                client.startNextAuthRefreshIfNeeded()
             }
-            self.startNextAuthRefreshIfNeeded()
         }
     }
 
@@ -5230,7 +5273,33 @@ final class DreamJourneyBackendClient {
         }
 
         activeAuthRefreshGroup = group
+        let clientReference = AuthRefreshClientReference(value: self)
+        Task { [accountSessionActor, clientReference] in
+            let isCurrent = await accountSessionActor.isCurrentRefreshLease(group.accountLease)
+            clientReference.value.authRefreshQueue.async {
+                let client = clientReference.value
+                guard let active = client.activeAuthRefreshGroup,
+                      active.capturedSession.matchesCASIdentity(group.capturedSession),
+                      active.accountLease == group.accountLease else {
+                    return
+                }
+                guard isCurrent else {
+                    client.finishAuthRefresh(
+                        capturedSession: group.capturedSession,
+                        accountLease: group.accountLease,
+                        refreshedSession: nil
+                    )
+                    return
+                }
+                client.performAuthRefresh(group)
+            }
+        }
+    }
+
+    private func performAuthRefresh(_ group: AuthRefreshGroup) {
+        dispatchPrecondition(condition: .onQueue(authRefreshQueue))
         let capturedSession = group.capturedSession
+        let accountLease = group.accountLease
         requestJSON(
                 path: "/auth/refresh",
                 method: .post,
@@ -5238,44 +5307,82 @@ final class DreamJourneyBackendClient {
                 authPolicy: .refreshExchange,
                 allowsRefresh: false,
                 allowsRecoveryRefresh: false,
-                recoveryClearSession: capturedSession
+                recoveryClearSession: capturedSession,
+                mutatesAuthenticatedSessionForRecoveryPolicy: false
             ) { result in
-                let refreshedSession: BackendAuthSessionContract?
-                var shouldClearCapturedSession = false
                 switch result {
                 case .success(let object):
                     do {
                         if let session = try self.decodedAuthSession(from: object),
-                           session.isValidRefreshSuccessor(of: capturedSession) {
-                            let replaced = try self.authSessionStore.replace(
-                                session,
-                                ifCurrentMatches: capturedSession
-                            )
-                            refreshedSession = replaced ? session : nil
-                        } else {
-                            refreshedSession = nil
+                           session.isValidRefreshSuccessor(of: capturedSession),
+                           let credential = self.accountCredentialSnapshot(for: session) {
+                            let store = self.authSessionStore
+                            let clientReference = AuthRefreshClientReference(value: self)
+                            Task {
+                                let client = clientReference.value
+                                let accountSessionActor = client.accountSessionActor
+                                let committed = await accountSessionActor.commitRefreshedCredential(
+                                    credential,
+                                    lease: accountLease,
+                                    writer: {
+                                        try store.replace(
+                                            session,
+                                            ifCurrentMatches: capturedSession
+                                        )
+                                    }
+                                )
+                                clientReference.value.authRefreshQueue.async {
+                                    let client = clientReference.value
+                                    client.finishAuthRefresh(
+                                        capturedSession: capturedSession,
+                                        accountLease: accountLease,
+                                        refreshedSession: committed ? session : nil
+                                    )
+                                }
+                            }
+                            return
                         }
                     } catch {
-                        refreshedSession = nil
+                        break
                     }
                 case .failure(let error):
-                    refreshedSession = nil
-                    shouldClearCapturedSession = Self.isTerminalAuthRefreshError(error)
-                }
-                if shouldClearCapturedSession {
-                    let didClear = self.authSessionStore.clear(
-                        ifCurrentMatches: capturedSession
-                    )
-                    if didClear {
-                        UserManager.shared.invalidateBackendSession(
-                            for: capturedSession.userId
-                        )
+                    if Self.isTerminalAuthRefreshError(error) {
+                        let store = self.authSessionStore
+                        let clientReference = AuthRefreshClientReference(value: self)
+                        Task {
+                            let client = clientReference.value
+                            let accountSessionActor = client.accountSessionActor
+                            let didInvalidate = await accountSessionActor.invalidateRefreshLease(
+                                accountLease,
+                                reason: "terminalAuthRefreshFailure",
+                                clear: {
+                                    store.clear(ifCurrentMatches: capturedSession)
+                                }
+                            )
+                            if didInvalidate {
+                                DispatchQueue.main.async {
+                                    UserManager.shared.invalidateBackendSession(
+                                        for: capturedSession.userId
+                                    )
+                                }
+                            }
+                            clientReference.value.authRefreshQueue.async {
+                                let client = clientReference.value
+                                client.finishAuthRefresh(
+                                    capturedSession: capturedSession,
+                                    accountLease: accountLease,
+                                    refreshedSession: nil
+                                )
+                            }
+                        }
+                        return
                     }
                 }
                 self.authRefreshQueue.async {
                     self.finishAuthRefresh(
                         capturedSession: capturedSession,
-                        refreshedSession: refreshedSession
+                        accountLease: accountLease,
+                        refreshedSession: nil
                     )
                 }
             }
@@ -5283,11 +5390,13 @@ final class DreamJourneyBackendClient {
 
     private func finishAuthRefresh(
         capturedSession: BackendAuthSessionContract,
+        accountLease: AccountSessionRefreshLease,
         refreshedSession: BackendAuthSessionContract?
     ) {
         dispatchPrecondition(condition: .onQueue(authRefreshQueue))
         guard let active = activeAuthRefreshGroup,
-              active.capturedSession.matchesCASIdentity(capturedSession) else {
+              active.capturedSession.matchesCASIdentity(capturedSession),
+              active.accountLease == accountLease else {
             return
         }
         activeAuthRefreshGroup = nil

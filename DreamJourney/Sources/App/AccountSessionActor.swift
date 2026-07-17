@@ -56,10 +56,21 @@ struct AccountSession: Codable, Equatable, Sendable {
     let vaultId: String
     let sessionId: String
     let tokenFamilyId: String
+    let sessionVersion: Int
     let generation: UInt64
     let generationId: UUID
     let state: AccountSessionState
     let activatedAt: Date?
+}
+
+struct AccountSessionRefreshLease: Equatable, Sendable {
+    let subjectId: String
+    let vaultId: String
+    let sessionId: String
+    let tokenFamilyId: String
+    let sessionVersion: Int
+    let generation: UInt64
+    let generationId: UUID
 }
 
 struct AccountSessionTransitionReceipt: Codable, Equatable, Sendable {
@@ -263,6 +274,96 @@ actor AccountSessionActor {
         )
     }
 
+    func captureRefreshLease(
+        for credential: AccountSessionCredentialSnapshot
+    ) -> AccountSessionRefreshLease? {
+        guard credential.isUsable,
+              let currentSession,
+              currentSession.state == .active || currentSession.state == .activating,
+              currentSession.subjectId == credential.normalizedSubjectId,
+              currentSession.vaultId == credential.vaultId,
+              currentSession.sessionId == credential.sessionId,
+              currentSession.tokenFamilyId == credential.tokenFamilyId,
+              currentSession.sessionVersion == credential.sessionVersion else {
+            return nil
+        }
+        return AccountSessionRefreshLease(
+            subjectId: currentSession.subjectId,
+            vaultId: currentSession.vaultId,
+            sessionId: currentSession.sessionId,
+            tokenFamilyId: currentSession.tokenFamilyId,
+            sessionVersion: currentSession.sessionVersion,
+            generation: currentSession.generation,
+            generationId: currentSession.generationId
+        )
+    }
+
+    func isCurrentRefreshLease(_ lease: AccountSessionRefreshLease) -> Bool {
+        refreshLeaseIsCurrent(lease)
+    }
+
+    func commitRefreshedCredential(
+        _ credential: AccountSessionCredentialSnapshot,
+        lease: AccountSessionRefreshLease,
+        writer: @Sendable () throws -> Bool
+    ) -> Bool {
+        guard refreshLeaseIsCurrent(lease),
+              credential.isUsable,
+              credential.normalizedSubjectId == lease.subjectId,
+              credential.vaultId == lease.vaultId,
+              credential.sessionId != lease.sessionId,
+              credential.tokenFamilyId == lease.tokenFamilyId,
+              credential.sessionVersion == lease.sessionVersion + 1 else {
+            return false
+        }
+        do {
+            guard try writer() else { return false }
+        } catch {
+            return false
+        }
+        guard let currentSession else { return false }
+        let refreshedSession = AccountSession(
+            subjectId: currentSession.subjectId,
+            vaultId: currentSession.vaultId,
+            sessionId: credential.sessionId,
+            tokenFamilyId: credential.tokenFamilyId,
+            sessionVersion: credential.sessionVersion,
+            generation: currentSession.generation,
+            generationId: currentSession.generationId,
+            state: currentSession.state,
+            activatedAt: currentSession.activatedAt
+        )
+        self.currentSession = refreshedSession
+        let receipt = AccountSessionTransitionReceipt(
+            generation: generation,
+            generationId: generationId,
+            state: refreshedSession.state,
+            rootRoute: rootRoute(for: refreshedSession.state),
+            reason: "refreshSessionCASCommitted",
+            accepted: true,
+            activationPhase: currentActivationPhase,
+            session: refreshedSession
+        )
+        journal.record(receipt)
+        return true
+    }
+
+    func invalidateRefreshLease(
+        _ lease: AccountSessionRefreshLease,
+        reason: String,
+        clear: @Sendable () -> Bool
+    ) -> Bool {
+        guard refreshLeaseIsCurrent(lease), clear() else { return false }
+        _ = transition(
+            state: .suspended,
+            rootRoute: .authentication,
+            reason: reason,
+            session: currentSession,
+            activationPhase: nil
+        )
+        return true
+    }
+
     func beginSwitch(expectedGeneration: UInt64) -> AccountSessionTransitionReceipt {
         guard let currentSession,
               currentSession.generation == expectedGeneration,
@@ -357,6 +458,7 @@ actor AccountSessionActor {
                 vaultId: $0.vaultId,
                 sessionId: $0.sessionId,
                 tokenFamilyId: $0.tokenFamilyId,
+                sessionVersion: $0.sessionVersion,
                 generation: generation,
                 generationId: generationId,
                 state: state,
@@ -394,6 +496,7 @@ actor AccountSessionActor {
                 vaultId: $0.vaultId,
                 sessionId: $0.sessionId,
                 tokenFamilyId: $0.tokenFamilyId,
+                sessionVersion: $0.sessionVersion,
                 generation: generation,
                 generationId: generationId,
                 state: state,
@@ -447,6 +550,20 @@ actor AccountSessionActor {
         guard let value else { return nil }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func refreshLeaseIsCurrent(_ lease: AccountSessionRefreshLease) -> Bool {
+        guard let currentSession,
+              currentSession.state == .active || currentSession.state == .activating else {
+            return false
+        }
+        return currentSession.subjectId == lease.subjectId
+            && currentSession.vaultId == lease.vaultId
+            && currentSession.sessionId == lease.sessionId
+            && currentSession.tokenFamilyId == lease.tokenFamilyId
+            && currentSession.sessionVersion == lease.sessionVersion
+            && currentSession.generation == lease.generation
+            && currentSession.generationId == lease.generationId
     }
 
     private func coldStartValidationReason(

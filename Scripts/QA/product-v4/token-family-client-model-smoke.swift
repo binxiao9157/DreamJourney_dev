@@ -117,6 +117,9 @@ enum TokenFamilyClientModelSmoke {
         let sameVersion = requireSession(makeV2(sessionId: "session_a2", userId: "user_a", familyId: "family_a", version: 1))
         require(!sameVersion.isValidRefreshSuccessor(of: captured), "v2 sessionVersion must strictly increase")
 
+        let skippedVersion = requireSession(makeV2(sessionId: "session_a3", userId: "user_a", familyId: "family_a", version: 3))
+        require(!skippedVersion.isValidRefreshSuccessor(of: captured), "v2 sessionVersion must advance by exactly one")
+
         let lowerVersion = requireSession(makeV2(sessionId: "session_a2", userId: "user_a", familyId: "family_a", version: 0 + 1))
         require(!lowerVersion.isValidRefreshSuccessor(of: successor), "older v2 callbacks must be rejected")
 
@@ -125,6 +128,15 @@ enum TokenFamilyClientModelSmoke {
 
         let otherUser = requireSession(makeV2(sessionId: "session_b2", userId: "user_b", familyId: "family_a", version: 2))
         require(!otherUser.isValidRefreshSuccessor(of: captured), "refresh must not switch users")
+
+        var wrongSubjectJSON = v2JSON(sessionId: "session_subject", userId: "user_a", familyId: "family_a", version: 2)
+        wrongSubjectJSON["subjectId"] = "user_b"
+        require(BackendAuthSessionContract(json: wrongSubjectJSON) == nil, "refresh subject must match userId")
+
+        var wrongParentJSON = v2JSON(sessionId: "session_parent", userId: "user_a", familyId: "family_a", version: 2)
+        wrongParentJSON["parentSessionId"] = "session_other"
+        let wrongParent = requireSession(BackendAuthSessionContract(json: wrongParentJSON))
+        require(!wrongParent.isValidRefreshSuccessor(of: captured), "refresh parent must match captured session when provided")
 
         let legacyA = requireSession(BackendAuthSessionContract(json: authJSON(sessionId: "legacy_a", userId: "user_a", contractVersion: 1)))
         let legacyB = requireSession(BackendAuthSessionContract(json: authJSON(sessionId: "legacy_b", userId: "user_a", contractVersion: 1)))
@@ -194,6 +206,7 @@ enum TokenFamilyClientModelSmoke {
         version: Int
     ) -> [String: Any] {
         var json = authJSON(sessionId: sessionId, userId: userId, contractVersion: 2)
+        json["subjectId"] = userId
         json["tokenFamilyId"] = familyId
         json["sessionVersion"] = version
         return json

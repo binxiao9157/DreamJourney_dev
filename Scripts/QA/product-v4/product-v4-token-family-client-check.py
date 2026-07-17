@@ -29,6 +29,8 @@ def main() -> None:
     for snippet in (
         "let tokenFamilyId: String?",
         "let sessionVersion: Int?",
+        "let subjectId: String?",
+        "let parentSessionId: String?",
         "init(from decoder: Decoder) throws",
         "func encode(to encoder: Encoder) throws",
         "case 1:",
@@ -48,9 +50,17 @@ def main() -> None:
         "sessionVersion == captured.sessionVersion",
     ):
         require(comparison in store, f"session CAS identity comparison missing: {comparison}")
+    require(
+        "sessionVersion == capturedVersion + 1" in store,
+        "refresh successor must advance session version by exactly one",
+    )
 
     require("UUID(" not in store, "client must not fabricate token-family lineage")
-    require("AccountSessionActor" not in store + client, "WI-S0-01 AccountSessionActor is out of scope")
+    require("AccountSessionActor" not in store, "Keychain store must not own account lifecycle authority")
+    require(
+        "AccountSessionActor.shared" in client,
+        "refresh flow must bind its existing session CAS to AccountSessionActor generation",
+    )
 
     refresh = client.split("private func refreshAuthSession(", 1)[1].split(
         "private func validatedDigitalHumanLeasePath", 1

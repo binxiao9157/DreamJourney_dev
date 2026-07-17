@@ -55,9 +55,9 @@
       "cleanup": "clear on logout, revoke, invalid refresh, owner mismatch, or ineligible contract",
       "migration": "reject legacy/ineligible writes; do not migrate mobile shared or system tokens",
       "retention": "until session expiry, revoke, logout, or account deletion",
-      "testOwner": "WI-S0-01-02",
+      "testOwner": "WI-S0-01-03",
       "status": "REGISTERED_SCOPED",
-      "nextWorkItem": "WI-S0-01-02",
+      "nextWorkItem": "WI-S0-01-03",
       "sourcePaths": [
         "DreamJourney/Sources/Services/BackendAuthSessionStore.swift"
       ],
@@ -72,6 +72,7 @@
       ],
       "currentChecks": [
         "Scripts/QA/product-v4/token-family-client-model-smoke.swift",
+        "Scripts/QA/product-v4/account-session-refresh-cas-model-smoke.swift",
         "Scripts/QA/prd-stitch-ui/auth-session-ownership-shadow-check.swift"
       ]
     },
