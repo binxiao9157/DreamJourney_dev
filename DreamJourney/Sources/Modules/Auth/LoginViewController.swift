@@ -249,8 +249,10 @@ final class LoginViewController: UIViewController {
         }
 
         guard DreamJourneyBackendClient.shared.isLoginSyncConfigured else {
-            UserManager.shared.login(phone: rawPhone, nickname: "")
-            didLogin?()
+            showLoginAlert(
+                title: "登录服务暂不可用",
+                message: "当前无法验证你的身份，请检查网络后重试。"
+            )
             return
         }
 

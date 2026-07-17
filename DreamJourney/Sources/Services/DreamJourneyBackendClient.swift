@@ -3808,7 +3808,9 @@ final class DreamJourneyBackendClient {
                     return
                 }
                 do {
-                    try self.adoptAuthSession(from: object)
+                    guard try self.adoptAuthSession(from: object) else {
+                        throw ClientError.invalidJSONResponse
+                    }
                     completion(.success(object))
                 } catch {
                     completion(.failure(error))
