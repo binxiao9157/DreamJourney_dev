@@ -47,7 +47,7 @@ for required in [
     "let maxFileSizeBytes: Int64",
     "let requiredHeaders: [String: String]",
     "requestArchiveMediaUploadIntent(",
-    "requestJSON(path: \"/archive/media/upload-intent\"",
+    "path: \"/archive/media/upload-intent\"",
 ] {
     assertContains(client, required, "iOS backend client should define \(required)")
 }

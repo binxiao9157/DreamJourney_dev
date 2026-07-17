@@ -75,13 +75,17 @@ for state in [
     assertContains(matrix, state, "backend contract matrix should record \(state)")
 }
 
-assertContains(client, "requestJSON(path: \"/echo/delayed-replies\"", "iOS client should define echo delayed reply endpoint")
-assertContains(client, "requestJSON(path: \"/profile\"", "iOS client should define profile endpoint")
+assertContains(client, "func scheduleEchoDelayedReplyPush", "iOS client should define echo delayed reply scheduling")
+assertContains(client, "path: \"/echo/delayed-replies\"", "iOS client should define echo delayed reply endpoint")
+assertContains(client, "func updateProfile", "iOS client should define profile update")
+assertContains(client, "path: \"/profile\"", "iOS client should define profile endpoint")
 assertContains(client, "var isLoginSyncConfigured", "iOS client should expose login backend configuration")
 assertContains(client, "payload[\"password\"] = password", "iOS client should include password in auth payload")
 assertContains(client, "path: \"/auth/password\"", "iOS client should define password endpoint")
-assertContains(client, "requestJSON(path: \"/archive/items\"", "iOS client should define archive create endpoint")
-assertContains(client, "requestJSON(path: \"/care/snapshots/latest/\\(pathComponent(userId))\"", "iOS client should define care latest endpoint")
+assertContains(client, "func postArchiveItem", "iOS client should define archive create operation")
+assertContains(client, "path: \"/archive/items\"", "iOS client should define archive create endpoint")
+assertContains(client, "func latestCareSnapshot", "iOS client should define care snapshot lookup")
+assertContains(client, "path: \"/care/snapshots/latest/\\(pathComponent(userId))\"", "iOS client should define care latest endpoint")
 assertContains(userManager, "DreamJourneyBackendClient.shared.updateProfile", "Profile update should use the dedicated backend contract")
 
 assertContains(backendMain, "@app.post(\"/auth/login\")", "backend should expose auth login")

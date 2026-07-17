@@ -68,7 +68,7 @@ assertContains(echoViewModel, "EchoDelayedReplyStore.shared.save(delayedReply)",
 assertContains(echoViewModel, "EchoDelayedReplyStore.shared.clear()", "Echo view model should clear stale delayed reply state")
 assertContains(echoViewModel, "EchoReplyPacingPolicy.triggerForWait", "Echo view model should persist the wait trigger reason")
 
-assertContains(echoViewController, "scheduleDelayedReplyNotificationIfNeeded()", "Echo controller should schedule local notification after waiting starts")
+assertContains(echoViewController, "scheduleDelayedReplyNotificationIfNeeded(rawTranscript:", "Echo controller should schedule local notification after waiting starts")
 assertContains(echoViewController, "EchoDelayedReplyNotificationScheduler.shared.requestAuthorizationIfNeeded", "Echo controller should request local notification authorization")
 assertContains(echoViewController, "EchoDelayedReplyNotificationScheduler.shared.schedule", "Echo controller should schedule local notification")
 

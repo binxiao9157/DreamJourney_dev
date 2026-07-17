@@ -82,7 +82,7 @@ assertContains(userManager, "region: user.region", "UserManager should sync regi
 assertContains(userManager, "avatarName: user.avatarName", "UserManager should sync avatar metadata when available")
 
 assertContains(backendClient, "func updateProfile(", "backend client should expose dedicated profile update")
-assertContains(backendClient, "requestJSON(path: \"/profile\"", "profile sync should use the dedicated backend endpoint")
+assertContains(backendClient, "path: \"/profile\"", "profile sync should use the dedicated backend endpoint")
 assertContains(backendClient, "var isProfileSyncConfigured", "backend client should expose whether remote profile sync should run")
 
 assertContains(releasePackage, "Scripts/QA/prd-stitch-ui/profile-settings-save-state-check.swift", "release QA package should include profile save-state guard")

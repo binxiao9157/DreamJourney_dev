@@ -104,7 +104,7 @@ for phrase in [
 
 assertContains(
     backendClient,
-    "requestJSON(path: \"/care/snapshots/latest/\\(pathComponent(userId))\"",
+    "path: \"/care/snapshots/latest/\\(pathComponent(userId))\"",
     "backend client should keep latest care snapshot endpoint"
 )
 

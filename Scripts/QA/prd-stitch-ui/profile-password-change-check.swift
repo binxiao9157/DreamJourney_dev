@@ -90,6 +90,6 @@ assertNotContains(releaseMatrixCheck, "assertNotContains(settings, \"密码\"", 
 
 assertContains(releaseMatrix, "| `accountPasswordChange` | hidden |", "release matrix should document the V4 password-change boundary")
 assertContains(releaseMatrix, "auth security approval", "release matrix should retain the password-change promotion gate")
-assertContains(coverageMatrix, "password change hidden shell", "PRD coverage should record current password change state")
+assertContains(coverageMatrix, "Password change remains hidden", "PRD coverage should record current password change state")
 
 print("Profile password change checks passed")

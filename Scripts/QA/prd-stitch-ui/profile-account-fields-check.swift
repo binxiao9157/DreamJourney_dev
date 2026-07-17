@@ -40,7 +40,7 @@ assertContains(userManager, "region: user.region", "Profile sync should include 
 assertContains(userManager, "avatarName: user.avatarName", "Profile sync should include avatar metadata")
 
 assertContains(backendClient, "func updateProfile(", "Backend client should expose a profile update contract")
-assertContains(backendClient, "requestJSON(path: \"/profile\"", "Backend client should post profile metadata to /profile")
+assertContains(backendClient, "path: \"/profile\"", "Backend client should post profile metadata to /profile")
 assertContains(backendClient, "\"userId\": userId", "Profile payload should include userId")
 assertContains(backendClient, "\"nickname\": nickname", "Profile payload should include nickname")
 assertContains(backendClient, "payload[\"gender\"] = gender", "Profile payload should include gender when present")
