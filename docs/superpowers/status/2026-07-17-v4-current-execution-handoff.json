@@ -4,16 +4,16 @@
     "backendPendingPaths": [],
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "MISSING"
+      "G2": "MISSING"
     },
-    "id": "WI-S0-01-02",
+    "id": "WI-S0-01-03",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "Introduce AccountSessionActor and cold-start consistency without treating cached UserDefaults profile data as identity authority."
+    "summary": "Bind refresh attempts and Keychain saves to the originating session, token family and AccountSessionActor generation using compare-and-swap."
   },
   "baselines": {
     "backend": "main@ab668a7",
-    "ios": "feature/prd-stitch-ui-adaptation@af9cf12",
+    "ios": "feature/prd-stitch-ui-adaptation@5343122",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
@@ -22,6 +22,12 @@
       "id": "WI-S0-01-01",
       "implementationStatus": "INTERNAL_READY / G0_EXECUTABLE_MODEL_VERIFIED / IOS_LOCAL_COMMITTED / SECURITY_DATA_REVIEW_OPEN",
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_EXTERNAL_REVIEW_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-18-wi-s0-01-02-account-session-actor.md",
+      "id": "WI-S0-01-02",
+      "implementationStatus": "INTERNAL_READY / G0_G1_DETERMINISTIC_VERIFIED / G2_SESSION_BASELINE_DEPLOYED / IOS_LOCAL_COMMITTED / G4_EXTERNAL_BLOCKED",
+      "registryClosure": "SCOPED_G0_G1_EVIDENCE_PRESENT_G4_OPEN"
     },
     {
       "evidence": "docs/superpowers/status/2026-07-17-wi-s0-02-01-strong-identity-binding.md",
@@ -199,9 +205,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S0-01-03",
+    "id": "WI-S0-01-04",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "Bind refresh results to session, token family and account generation with compare-and-swap after AccountSessionActor is stable."
+    "summary": "Introduce AccountLease checkpoints across asynchronous request, commit, UI, timer and provider runtime effects."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -210,5 +216,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-18T04:15:00+08:00"
+  "updatedAt": "2026-07-18T04:40:00+08:00"
 }
