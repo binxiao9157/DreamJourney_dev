@@ -69,10 +69,12 @@ def main() -> None:
         "generated Registry must not self-promote implementation",
     )
 
-    registry_ids = {item["id"] for item in registry["workItems"]}
+    registry_items = {item["id"]: item for item in registry["workItems"]}
+    registry_ids = set(registry_items)
     evidence_items = handoff["evidenceItems"]
     evidence_ids = [item["id"] for item in evidence_items]
-    require(len(evidence_ids) == len(set(evidence_ids)) == 22, "handoff evidence set must contain 22 unique items")
+    require(len(evidence_ids) == len(set(evidence_ids)), "handoff evidence IDs must be unique")
+    require(len(evidence_ids) >= 22, "handoff must preserve the accepted evidence baseline")
     require(set(evidence_ids) <= registry_ids, "handoff references unknown Work Item")
     for item in evidence_items:
         evidence = ROOT / item["evidence"]
@@ -80,17 +82,20 @@ def main() -> None:
         require(item["id"] in evidence.read_text(encoding="utf-8"), f"evidence ID mismatch: {item['id']}")
 
     active = handoff["activeWorkItem"]
-    require(active["id"] == "WI-S0-06-09", "unexpected active Work Item")
     require(active["state"] == "IN_PROGRESS", "active Work Item must be IN_PROGRESS")
-    require(active["authorityLock"] == "RELEASE_POLICY", "active Authority lock drift")
     require(active["id"] in registry_ids, "active Work Item missing from Registry")
+    require(active["id"] not in evidence_ids, "active Work Item already listed as evidence-complete")
+    require(
+        active["authorityLock"] == registry_items[active["id"]]["authorityLock"],
+        "active Authority lock drift",
+    )
     for relative in active["backendPendingPaths"]:
         require((BACKEND / relative).is_file(), f"backend pending path missing: {relative}")
 
     next_item = handoff["nextWorkItem"]
-    require(next_item["id"] == "WI-S0-02-01", "unexpected next Work Item")
     require(next_item["id"] in registry_ids, "next Work Item missing from Registry")
     require(next_item["id"] not in evidence_ids, "next Work Item already listed as evidence-complete")
+    require(next_item["state"] == "PLANNED_AFTER_CURRENT", "next Work Item state drift")
 
     print(
         "Product V4 current handoff check passed: "

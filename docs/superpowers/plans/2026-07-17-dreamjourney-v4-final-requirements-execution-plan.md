@@ -155,11 +155,11 @@ GIC 需求在本计划中的唯一落点：
 
 ### 3.2 当前活动任务
 
-当前活动任务已切换为 `WI-S0-06-09`：新规即时安全止损。
+`WI-S0-06-09` 新规即时安全止损已经完成代码合同、后端部署和 scoped G0/G2 验证；证据见 `docs/superpowers/status/2026-07-17-wi-s0-06-09-safety-stop-loss.md`。M1-M4 仍默认关闭，G1/G4 外部门保持开放。
 
 `WI-S0-04-05` 已完成恢复工具、运行时围栏和真实 Postgres 隔离恢复演练，Backend 已部署至 `e1922f2`，iOS 恢复策略已提交至 `dde3081`。G2 实测结论为 `NO_GO`：历史数据存在 361 条 owner orphan，且全库 replay bundle 缺失；G3 仍未关闭。证据见 `docs/superpowers/status/2026-07-17-wi-s0-04-05-postgres-recovery.md`。
 
-该 NO_GO 不允许恢复切流，但不阻止继续不依赖切流的安全止损。当前 Authority lease 为 `RELEASE_POLICY`，完成 `WI-S0-06-09` 后进入 `WI-S0-02-01`。
+该 NO_GO 不允许恢复切流，但不阻止继续不依赖切流的身份与授权工作。当前活动任务为 `WI-S0-02-01`，Authority lease 为 `IDENTITY_AUTHZ`；完成后按 Slice 1C 顺序进入 `WI-S0-02-02`。
 
 ### 3.3 工作区保护
 
