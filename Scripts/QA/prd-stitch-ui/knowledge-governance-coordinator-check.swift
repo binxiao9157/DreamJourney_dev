@@ -30,8 +30,12 @@ require(coordinator.contains("func performGovernance("),
         "coordinator governance entry point is missing")
 require(coordinator.contains("private func startNextGovernance("),
         "governance requests must share the serial sync coordinator")
-require(coordinator.contains("guard isCurrent(userId: userId, generation: generation), !isSyncing"),
-        "governance must use the sync generation and single network owner gate")
+require(coordinator.contains("guard isCurrent(context, at: .request), !isSyncing"),
+        "governance must use the AccountLease context and single network owner gate")
+require(coordinator.contains("let accountLease: AccountLease"),
+        "governance context must carry the central AccountLease")
+require(coordinator.contains("accountLeaseRuntime.validate(context.accountLease, at: checkpoint).allowed"),
+        "governance callbacks and commits must validate their captured AccountLease")
 
 let enqueuePosition = position("try self.governanceOutboxStore.enqueue(item, for: userId)", in: coordinator)
 let requestPosition = position("DreamJourneyBackendClient.shared.governKnowledge(", in: coordinator)
@@ -49,7 +53,7 @@ require(coordinator.contains("activePersonaIdentity == item.expectedIdentity"),
 
 require(coordinator.contains("if Self.isRevisionConflict(error)"),
         "revision conflicts must be handled explicitly")
-require(coordinator.contains("enqueueSync(reason: \"governanceRevisionConflict\")"),
+require(coordinator.contains("enqueueSync(reason: \"governanceRevisionConflict\", context: context)"),
         "revision conflicts must refresh the remote base before retry")
 require(coordinator.contains("operationId: item.operationId"),
         "retryable governance requests must preserve their operation ID")
@@ -71,11 +75,11 @@ guard let recoveryRange = coordinator.range(of: "private func recoverPendingOper
 }
 let recoverySource = String(coordinator[recoveryRange.lowerBound...])
 let pendingRemoval = position("try pendingStore.remove(for: userId)", in: recoverySource)
-let pendingRefresh = position("refreshAfterConflict(userId: userId, generation: generation)", in: recoverySource)
+let pendingRefresh = position("refreshAfterConflict(context: context)", in: recoverySource)
 require(pendingRemoval < pendingRefresh,
         "the poisoned pending operation must be removed before authoritative refresh")
 
-let applyPosition = position("guard applyAuthoritativeRemote(remote, previousBase: previousBase, userId: userId)", in: coordinator)
+let applyPosition = position("guard applyAuthoritativeRemote(remote, previousBase: previousBase, context: context)", in: coordinator)
 guard let removeRange = coordinator.range(
     of: "try governanceOutboxStore.remove(operationId: item.operationId, for: userId)",
     range: applyPosition..<coordinator.endIndex
