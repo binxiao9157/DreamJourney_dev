@@ -124,6 +124,9 @@ final class AIRecordingViewController: UIViewController {
     private var pendingUserText: String?
     /// AI 流式拼接缓存（不直接显示，等 TTS 句子完整时再展示）
     private var pendingAIText: String?
+    private let accountLeaseRuntime = AccountLeaseRuntime.shared
+    private var mediaPickerAccountLease: AccountLease?
+    private var mediaPickerDigitalHumanContext: DigitalHumanContext?
 
     // MARK: - 对话录音（用于声音复刻）
     /// 并行录音器：对话期间录制用户语音，供声音复刻训练使用
@@ -300,18 +303,56 @@ final class AIRecordingViewController: UIViewController {
         #if targetEnvironment(simulator)
         showToast("模拟器无法使用相机，请在真机上测试", type: .info)
         #else
+        guard let accountLease = captureMediaPickerAccountLease() else {
+            showToast("账号状态已变化，请重新进入后再拍照", type: .error)
+            return
+        }
         let picker = UIImagePickerController()
         picker.sourceType = .camera
         picker.delegate = self
+        mediaPickerAccountLease = accountLease
+        mediaPickerDigitalHumanContext = DigitalHumanContextStore.shared.current
         present(picker, animated: true)
         #endif
     }
 
     @objc private func albumTapped() {
+        guard let accountLease = captureMediaPickerAccountLease() else {
+            showToast("账号状态已变化，请重新进入后再选择照片", type: .error)
+            return
+        }
         let picker = UIImagePickerController()
         picker.sourceType = .photoLibrary
         picker.delegate = self
+        mediaPickerAccountLease = accountLease
+        mediaPickerDigitalHumanContext = DigitalHumanContextStore.shared.current
         present(picker, animated: true)
+    }
+
+    private func captureMediaPickerAccountLease() -> AccountLease? {
+        guard let userId = UserManager.shared.currentUser?.id,
+              let accountLease = accountLeaseRuntime.capture(forSubjectId: userId),
+              validateMediaPickerAccountLease(accountLease, at: .request) else {
+            return nil
+        }
+        return accountLease
+    }
+
+    private func validateMediaPickerAccountLease(
+        _ accountLease: AccountLease,
+        at checkpoint: AccountLeaseCheckpoint
+    ) -> Bool {
+        accountLease.subjectId == UserManager.shared.currentUser?.id
+            && accountLeaseRuntime.validate(accountLease, at: checkpoint).allowed
+    }
+
+    private func validateMediaPickerOperation(
+        _ accountLease: AccountLease,
+        digitalHumanContext: DigitalHumanContext,
+        at checkpoint: AccountLeaseCheckpoint
+    ) -> Bool {
+        validateMediaPickerAccountLease(accountLease, at: checkpoint)
+            && digitalHumanContext == DigitalHumanContextStore.shared.current
     }
 
     // MARK: - Mock Dialog
@@ -453,10 +494,31 @@ extension AIRecordingViewController: UITableViewDelegate {
 extension AIRecordingViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
         picker.dismiss(animated: true)
+        defer {
+            mediaPickerAccountLease = nil
+            mediaPickerDigitalHumanContext = nil
+        }
+        guard let accountLease = mediaPickerAccountLease,
+              let digitalHumanContext = mediaPickerDigitalHumanContext,
+              validateMediaPickerOperation(
+                accountLease,
+                digitalHumanContext: digitalHumanContext,
+                at: .ui
+              ) else { return }
         guard let image = info[.originalImage] as? UIImage else { return }
 
         // 保存图片到本地 Documents/photos/ 目录
-        let imagePath = savePhotoToLocal(image)
+        guard let imagePath = try? savePhotoToLocal(image, accountLease: accountLease) else {
+            return
+        }
+        guard validateMediaPickerOperation(
+            accountLease,
+            digitalHumanContext: digitalHumanContext,
+            at: .commit
+        ) else {
+            try? FileManager.default.removeItem(atPath: imagePath)
+            return
+        }
 
         // 显示为用户消息气泡（含缩略图）
         messages.append(.photo(imagePath: imagePath, timestamp: Date()))
@@ -471,15 +533,34 @@ extension AIRecordingViewController: UIImagePickerControllerDelegate, UINavigati
         ConversationMemoryManager.shared.recordAITurn(text: "照片收到了！能不能跟我说说这张照片背后的故事？")
 
         // 【KBLite】异步分析图片
-        analyzeUploadedPhoto(image, aiMessageIndex: aiMessageIndex, imagePath: imagePath)
+        analyzeUploadedPhoto(
+            image,
+            aiMessageIndex: aiMessageIndex,
+            imagePath: imagePath,
+            accountLease: accountLease,
+            digitalHumanContext: digitalHumanContext
+        )
     }
 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         picker.dismiss(animated: true)
+        mediaPickerAccountLease = nil
+        mediaPickerDigitalHumanContext = nil
     }
 
     /// 异步分析上传的照片（KBLite）
-    private func analyzeUploadedPhoto(_ image: UIImage, aiMessageIndex: Int, imagePath: String) {
+    private func analyzeUploadedPhoto(
+        _ image: UIImage,
+        aiMessageIndex: Int,
+        imagePath: String,
+        accountLease: AccountLease,
+        digitalHumanContext: DigitalHumanContext
+    ) {
+        guard validateMediaPickerOperation(
+            accountLease,
+            digitalHumanContext: digitalHumanContext,
+            at: .request
+        ) else { return }
         // 压缩图片并转 base64（限制大小）
         let maxDimension: CGFloat = 1024
         let scaledImage: UIImage
@@ -500,8 +581,18 @@ extension AIRecordingViewController: UIImagePickerControllerDelegate, UINavigati
         print("[KBLite] 🖼️ 开始分析图片 (size: \(imageData.count) bytes)")
 
         DeepSeekService.shared.analyzeImage(imageBase64: base64) { [weak self] result in
-            guard let self = self else { return }
+            guard let self,
+                  self.validateMediaPickerOperation(
+                    accountLease,
+                    digitalHumanContext: digitalHumanContext,
+                    at: .runtime
+                  ) else { return }
             DispatchQueue.main.async {
+                guard self.validateMediaPickerOperation(
+                    accountLease,
+                    digitalHumanContext: digitalHumanContext,
+                    at: .ui
+                ) else { return }
                 switch result {
                 case .success(let analysis):
                     print("[KBLite] 🖼️ 图片分析完成: \(analysis.description.prefix(50))...")
@@ -511,6 +602,11 @@ extension AIRecordingViewController: UIImagePickerControllerDelegate, UINavigati
                     let sourceAssetId = URL(fileURLWithPath: imagePath)
                         .deletingPathExtension()
                         .lastPathComponent
+                    guard self.validateMediaPickerOperation(
+                        accountLease,
+                        digitalHumanContext: digitalHumanContext,
+                        at: .commit
+                    ) else { return }
                     KBLiteManager.shared.ingestImageAnalysis(
                         analysis,
                         sessionId: sessionId,
@@ -618,7 +714,13 @@ extension AIRecordingViewController: UIImagePickerControllerDelegate, UINavigati
     }
 
     /// 将图片保存到本地 Documents/photos/ 目录，返回文件路径
-    private func savePhotoToLocal(_ image: UIImage) -> String {
+    private func savePhotoToLocal(
+        _ image: UIImage,
+        accountLease: AccountLease
+    ) throws -> String {
+        guard validateMediaPickerAccountLease(accountLease, at: .commit) else {
+            throw AIRecordingMediaCommitError.accountSessionChanged
+        }
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let photosDir = docs.appendingPathComponent("photos")
         try? FileManager.default.createDirectory(at: photosDir, withIntermediateDirectories: true)
@@ -626,12 +728,25 @@ extension AIRecordingViewController: UIImagePickerControllerDelegate, UINavigati
         let fileName = "\(UUID().uuidString.lowercased()).jpg"
         let fileURL = photosDir.appendingPathComponent(fileName)
 
-        if let data = image.jpegData(compressionQuality: 0.8) {
-            try? data.write(to: fileURL)
+        guard let data = image.jpegData(compressionQuality: 0.8) else {
+            throw AIRecordingMediaCommitError.imageEncodingFailed
+        }
+        guard validateMediaPickerAccountLease(accountLease, at: .commit) else {
+            throw AIRecordingMediaCommitError.accountSessionChanged
+        }
+        try data.write(to: fileURL, options: [.atomic])
+        guard validateMediaPickerAccountLease(accountLease, at: .commit) else {
+            try? FileManager.default.removeItem(at: fileURL)
+            throw AIRecordingMediaCommitError.accountSessionChanged
         }
 
         return fileURL.path
     }
+}
+
+private enum AIRecordingMediaCommitError: Error {
+    case accountSessionChanged
+    case imageEncodingFailed
 }
 
 // MARK: - DialogEngineDelegate

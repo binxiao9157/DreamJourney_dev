@@ -9,6 +9,7 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
     private let recordButton = UIButton(type: .system)
     private let noteTextView = UITextView()
     private let placeholderLabel = UILabel()
+    private let accountLeaseRuntime = AccountLeaseRuntime.shared
     private lazy var saveButton = DJComponentFactory.primaryButton(
         title: "保存语音档案",
         target: self,
@@ -20,6 +21,7 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
     private var audioURL: URL?
     private var recordedDuration: TimeInterval = 0
     private var shouldKeepRecordedFile = false
+    private var recordingAccountLease: AccountLease?
 
     private var hasRecording: Bool {
         audioURL != nil && recordedDuration > 0
@@ -47,9 +49,14 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
         super.viewWillDisappear(animated)
         if isBeingDismissed || navigationController?.isBeingDismissed == true {
             finishRecordingIfNeeded()
-            if !shouldKeepRecordedFile, let audioURL {
+            let canKeepFile = shouldKeepRecordedFile
+                && recordingAccountLease.map {
+                    validateRecordingAccountLease($0, at: .commit)
+                } == true
+            if !canKeepFile, let audioURL {
                 try? FileManager.default.removeItem(at: audioURL)
             }
+            recordingAccountLease = nil
         }
     }
 
@@ -232,42 +239,74 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
     func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
         timer?.invalidate()
         timer = nil
+        guard let accountLease = recordingAccountLease,
+              validateRecordingAccountLease(accountLease, at: .runtime),
+              validateRecordingAccountLease(accountLease, at: .commit) else {
+            discardStaleRecording()
+            return
+        }
         recordedDuration = max(recordedDuration, recorder.currentTime)
         updateState(isRecording: false)
         updateSaveButton()
         if !flag {
             statusLabel.text = "录音未保存，请重新录制"
+            if let audioURL {
+                try? FileManager.default.removeItem(at: audioURL)
+            }
             audioURL = nil
             recordedDuration = 0
+            recordingAccountLease = nil
             updateSaveButton()
         }
     }
 
     @objc private func recordTapped() {
         if recorder?.isRecording == true {
+            guard let accountLease = recordingAccountLease,
+                  validateRecordingAccountLease(accountLease, at: .runtime) else {
+                discardStaleRecording()
+                return
+            }
             finishRecordingIfNeeded()
             updateSaveButton()
             return
         }
 
+        guard let accountLease = captureRecordingAccountLease() else {
+            statusLabel.text = "账号状态已变化，请重新进入后再录音"
+            updateSaveButton()
+            return
+        }
+        recordingAccountLease = accountLease
         MicrophonePermissionManager.shared.requestPermission { [weak self] granted in
-            guard let self else { return }
+            guard let self,
+                  self.recordingAccountLease == accountLease,
+                  self.validateRecordingAccountLease(accountLease, at: .runtime),
+                  self.validateRecordingAccountLease(accountLease, at: .ui) else {
+                self?.discardStaleRecording()
+                return
+            }
             guard granted else {
                 self.handleMicrophonePermissionDenied()
                 return
             }
-            self.startRecording()
+            self.startRecording(accountLease: accountLease)
         }
     }
 
     @objc private func cancelTapped() {
         shouldKeepRecordedFile = false
+        discardStaleRecording()
         dismiss(animated: true)
     }
 
     @objc private func saveTapped() {
         finishRecordingIfNeeded()
-        guard let audioURL, recordedDuration > 0 else {
+        guard let accountLease = recordingAccountLease,
+              validateRecordingAccountLease(accountLease, at: .commit),
+              let audioURL,
+              recordedDuration > 0 else {
+            discardStaleRecording()
             updateSaveButton()
             return
         }
@@ -276,17 +315,33 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
         let note = noteTextView.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let onSave = onSave
         let duration = recordedDuration
-        dismiss(animated: true) {
+        dismiss(animated: true) { [weak self] in
+            guard let self,
+                  self.validateRecordingAccountLease(accountLease, at: .ui) else {
+                try? FileManager.default.removeItem(at: audioURL)
+                return
+            }
             onSave?(audioURL, duration, note)
         }
     }
 
-    private func startRecording() {
+    private func startRecording(accountLease: AccountLease) {
         do {
-            let fileURL = try makeAudioFileURL()
+            guard recordingAccountLease == accountLease,
+                  validateRecordingAccountLease(accountLease, at: .runtime) else {
+                discardStaleRecording()
+                return
+            }
+            let fileURL = try makeAudioFileURL(accountLease: accountLease)
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
             try session.setActive(true)
+            guard validateRecordingAccountLease(accountLease, at: .runtime) else {
+                try? session.setActive(false, options: .notifyOthersOnDeactivation)
+                try? FileManager.default.removeItem(at: fileURL)
+                discardStaleRecording()
+                return
+            }
 
             let settings: [String: Any] = [
                 AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
@@ -307,14 +362,18 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
 
             self.recorder = recorder
             self.audioURL = fileURL
+            self.recordingAccountLease = accountLease
             recordedDuration = 0
             updateState(isRecording: true)
             updateSaveButton()
-            startTimer()
+            startTimer(accountLease: accountLease)
         } catch {
-            statusLabel.text = "录音启动失败，请稍后重试"
-            updateState(isRecording: false)
-            updateSaveButton()
+            discardStaleRecording()
+            if validateRecordingAccountLease(accountLease, at: .ui) {
+                statusLabel.text = "录音启动失败，请稍后重试"
+                updateState(isRecording: false)
+                updateSaveButton()
+            }
         }
     }
 
@@ -331,10 +390,16 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
         updateState(isRecording: false)
     }
 
-    private func startTimer() {
+    private func startTimer(accountLease: AccountLease) {
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
-            guard let self, let recorder = self.recorder else { return }
+            guard let self else { return }
+            guard self.recordingAccountLease == accountLease,
+                  self.validateRecordingAccountLease(accountLease, at: .timer),
+                  let recorder = self.recorder else {
+                self.discardStaleRecording()
+                return
+            }
             self.recordedDuration = recorder.currentTime
             self.durationLabel.text = self.formatDuration(self.recordedDuration)
         }
@@ -363,6 +428,7 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
 
     private func handleMicrophonePermissionDenied(shouldPresentAlert: Bool = true) {
         finishRecordingIfNeeded()
+        recordingAccountLease = nil
         updateState(isRecording: false)
         statusLabel.text = "录音需要麦克风权限，可在系统设置开启后再试"
         updateSaveButton()
@@ -382,7 +448,45 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
     }
     #endif
 
-    private func makeAudioFileURL() throws -> URL {
+    private func captureRecordingAccountLease() -> AccountLease? {
+        guard let userId = UserManager.shared.currentUser?.id,
+              let accountLease = accountLeaseRuntime.capture(forSubjectId: userId),
+              validateRecordingAccountLease(accountLease, at: .request) else {
+            return nil
+        }
+        return accountLease
+    }
+
+    private func validateRecordingAccountLease(
+        _ accountLease: AccountLease,
+        at checkpoint: AccountLeaseCheckpoint
+    ) -> Bool {
+        accountLease.subjectId == UserManager.shared.currentUser?.id
+            && accountLeaseRuntime.validate(accountLease, at: checkpoint).allowed
+    }
+
+    private func discardStaleRecording() {
+        recorder?.delegate = nil
+        if recorder?.isRecording == true {
+            recorder?.stop()
+        }
+        recorder = nil
+        timer?.invalidate()
+        timer = nil
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        if let audioURL {
+            try? FileManager.default.removeItem(at: audioURL)
+        }
+        audioURL = nil
+        recordedDuration = 0
+        shouldKeepRecordedFile = false
+        recordingAccountLease = nil
+    }
+
+    private func makeAudioFileURL(accountLease: AccountLease) throws -> URL {
+        guard validateRecordingAccountLease(accountLease, at: .commit) else {
+            throw AudioRecordingCommitError.accountSessionChanged
+        }
         let documentsURL = try FileManager.default.url(
             for: .documentDirectory,
             in: .userDomainMask,
@@ -391,6 +495,9 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
         )
         let directoryURL = documentsURL.appendingPathComponent("archive-audio", isDirectory: true)
         try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        guard validateRecordingAccountLease(accountLease, at: .commit) else {
+            throw AudioRecordingCommitError.accountSessionChanged
+        }
         return directoryURL.appendingPathComponent("\(UUID().uuidString).m4a")
     }
 
@@ -398,4 +505,8 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
         let totalSeconds = max(0, Int(duration.rounded()))
         return String(format: "%02d:%02d", totalSeconds / 60, totalSeconds % 60)
     }
+}
+
+private enum AudioRecordingCommitError: Error {
+    case accountSessionChanged
 }

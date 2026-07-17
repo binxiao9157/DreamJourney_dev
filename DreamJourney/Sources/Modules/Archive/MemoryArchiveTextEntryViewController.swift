@@ -24,10 +24,15 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
     private let openAtPicker = UIDatePicker()
     private let recipientsStack = UIStackView()
     private let imageStatusLabel = UILabel()
+    private let accountLeaseRuntime = AccountLeaseRuntime.shared
     private var recipientButtons: [String: UIButton] = [:]
     private var availableRecipients: [TimeLetterRecipientSelection] = []
     private var selectedRecipientIds: Set<String> = ["self"]
     private var selectedImageLocalPath: String?
+    private var imagePickerAccountLease: AccountLease?
+    private var entryAccountLease: AccountLease?
+    private var selectedImageCreatedByEntry = false
+    private var shouldKeepSelectedImage = false
     private lazy var saveButton = DJComponentFactory.primaryButton(
         title: isTimeLetter ? "封存时间信件" : (textSaveButtonTitle ?? "保存到档案馆"),
         target: self,
@@ -77,12 +82,20 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        entryAccountLease = captureCurrentAccountLease()
         view.backgroundColor = DJDesignTokens.Color.background
         configureTimeLetterDefaults()
         configureTextEntryDefaults()
         configureSheet()
         buildLayout()
         updateSaveButton()
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        if isBeingDismissed || navigationController?.isBeingDismissed == true {
+            removeEntryCreatedImageIfNeeded()
+        }
     }
 
     private func configureTimeLetterDefaults() {
@@ -233,6 +246,7 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
     }
 
     @objc private func cancelTapped() {
+        removeEntryCreatedImageIfNeeded()
         dismiss(animated: true)
     }
 
@@ -250,18 +264,25 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
 
     private func save(with handler: ((String) -> Void)?) {
         let rawText = textView.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !rawText.isEmpty else {
+        guard !rawText.isEmpty,
+              let accountLease = entryAccountLease,
+              validateImagePickerAccountLease(accountLease, at: .commit) else {
             updateSaveButton()
             return
         }
-        dismiss(animated: true) {
+        dismiss(animated: true) { [weak self] in
+            guard let self,
+                  self.validateImagePickerAccountLease(accountLease, at: .ui) else { return }
             handler?(rawText)
         }
     }
 
     private func saveTimeLetter(with handler: ((TimeLetterEntryPayload) -> Void)?) {
         let rawText = textView.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !rawText.isEmpty else {
+        guard !rawText.isEmpty,
+              let accountLease = entryAccountLease,
+              validateImagePickerAccountLease(accountLease, at: .commit) else {
+            removeEntryCreatedImageIfNeeded()
             updateSaveButton()
             return
         }
@@ -278,7 +299,14 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
             recipients: selectedRecipients,
             imageLocalPath: selectedImageLocalPath
         )
-        dismiss(animated: true) {
+        shouldKeepSelectedImage = true
+        dismiss(animated: true) { [weak self] in
+            guard let self,
+                  self.validateImagePickerAccountLease(accountLease, at: .ui) else {
+                self?.shouldKeepSelectedImage = false
+                self?.removeEntryCreatedImageIfNeeded()
+                return
+            }
             handler?(payload)
         }
     }
@@ -473,42 +501,125 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
     }
 
     @objc private func selectTimeLetterImageTapped() {
+        guard let accountLease = captureImagePickerAccountLease() else {
+            imageStatusLabel.text = "账号状态已变化，请重新进入后再选择图片"
+            imageStatusLabel.textColor = .systemRed
+            return
+        }
         let picker = UIImagePickerController()
         picker.sourceType = .photoLibrary
         picker.allowsEditing = false
         picker.delegate = self
+        imagePickerAccountLease = accountLease
         present(picker, animated: true)
     }
 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         picker.dismiss(animated: true)
+        imagePickerAccountLease = nil
     }
 
     func imagePickerController(
         _ picker: UIImagePickerController,
         didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
     ) {
-        defer { picker.dismiss(animated: true) }
-        guard let image = info[.originalImage] as? UIImage,
-              let imageData = image.jpegData(compressionQuality: 0.88),
-              let directoryURL = try? FileManager.default.url(
-                for: .documentDirectory,
-                in: .userDomainMask,
-                appropriateFor: nil,
-                create: true
-              ).appendingPathComponent("archive-time-letter-images", isDirectory: true) else {
+        defer {
+            imagePickerAccountLease = nil
+            picker.dismiss(animated: true)
+        }
+        guard let accountLease = imagePickerAccountLease,
+              validateImagePickerAccountLease(accountLease, at: .ui) else {
             return
         }
-        try? FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-        let fileURL = directoryURL.appendingPathComponent("\(UUID().uuidString).jpg")
+        guard let image = info[.originalImage] as? UIImage,
+              let imageData = image.jpegData(compressionQuality: 0.88) else {
+            return
+        }
         do {
-            try imageData.write(to: fileURL, options: [.atomic])
+            let fileURL = try commitSelectedImage(imageData, accountLease: accountLease)
+            guard validateImagePickerAccountLease(accountLease, at: .ui) else {
+                try? FileManager.default.removeItem(at: fileURL)
+                return
+            }
+            removeEntryCreatedImageIfNeeded()
             selectedImageLocalPath = fileURL.path
+            selectedImageCreatedByEntry = true
+            shouldKeepSelectedImage = false
             imageStatusLabel.text = "已添加 1 张图片"
             imageStatusLabel.textColor = DJDesignTokens.Color.accentDeep
         } catch {
-            imageStatusLabel.text = "图片保存失败，请重试"
-            imageStatusLabel.textColor = .systemRed
+            if validateImagePickerAccountLease(accountLease, at: .ui) {
+                imageStatusLabel.text = "图片保存失败，请重试"
+                imageStatusLabel.textColor = .systemRed
+            }
         }
     }
+
+    private func captureImagePickerAccountLease() -> AccountLease? {
+        guard let accountLease = entryAccountLease,
+              validateImagePickerAccountLease(accountLease, at: .request) else {
+            return nil
+        }
+        return accountLease
+    }
+
+    private func captureCurrentAccountLease() -> AccountLease? {
+        guard let userId = UserManager.shared.currentUser?.id,
+              let accountLease = accountLeaseRuntime.capture(forSubjectId: userId),
+              validateImagePickerAccountLease(accountLease, at: .request) else {
+            return nil
+        }
+        return accountLease
+    }
+
+    private func validateImagePickerAccountLease(
+        _ accountLease: AccountLease,
+        at checkpoint: AccountLeaseCheckpoint
+    ) -> Bool {
+        accountLease.subjectId == UserManager.shared.currentUser?.id
+            && accountLeaseRuntime.validate(accountLease, at: checkpoint).allowed
+    }
+
+    private func commitSelectedImage(
+        _ imageData: Data,
+        accountLease: AccountLease
+    ) throws -> URL {
+        guard validateImagePickerAccountLease(accountLease, at: .commit) else {
+            throw TimeLetterImageCommitError.accountSessionChanged
+        }
+        let documentsURL = try FileManager.default.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let directoryURL = documentsURL.appendingPathComponent(
+            "archive-time-letter-images",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        let fileURL = directoryURL.appendingPathComponent("\(UUID().uuidString).jpg")
+        guard validateImagePickerAccountLease(accountLease, at: .commit) else {
+            throw TimeLetterImageCommitError.accountSessionChanged
+        }
+        try imageData.write(to: fileURL, options: [.atomic])
+        guard validateImagePickerAccountLease(accountLease, at: .commit) else {
+            try? FileManager.default.removeItem(at: fileURL)
+            throw TimeLetterImageCommitError.accountSessionChanged
+        }
+        return fileURL
+    }
+
+    private func removeEntryCreatedImageIfNeeded() {
+        guard selectedImageCreatedByEntry,
+              !shouldKeepSelectedImage,
+              let selectedImageLocalPath else { return }
+        try? FileManager.default.removeItem(atPath: selectedImageLocalPath)
+        self.selectedImageLocalPath = nil
+        selectedImageCreatedByEntry = false
+    }
+}
+
+private enum TimeLetterImageCommitError: Error {
+    case accountSessionChanged
 }

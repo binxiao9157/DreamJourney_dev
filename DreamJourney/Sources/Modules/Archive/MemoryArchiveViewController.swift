@@ -505,6 +505,7 @@ private final class InAppMessageCell: UITableViewCell {
 
 final class MemoryArchiveViewController: UIViewController {
     private let repository: MemoryArchiveRepository
+    private let accountLeaseRuntime = AccountLeaseRuntime.shared
 
     private let scrollView = UIScrollView()
     private let contentView = UIView()
@@ -532,6 +533,8 @@ final class MemoryArchiveViewController: UIViewController {
     private var isRefreshingFromBackend = false
     private var isRefreshingTimeLetterMailbox = false
     private var activeKindFilter: ArchiveKindFilter?
+    private var photoPickerAccountLease: AccountLease?
+    private var photoPickerArchiveContext: DigitalHumanContext?
 
     private var creationOptions: [MemoryArchiveCreationOption] {
         guard isSelfAutobiographyMode else {
@@ -2777,12 +2780,27 @@ final class MemoryArchiveViewController: UIViewController {
             showReadOnlyArchiveToast()
             return
         }
+        guard let accountLease = captureMediaAccountLease() else {
+            showToast("账号状态已变化，请重新进入档案馆", type: .error)
+            return
+        }
+        let archiveContext = currentArchiveContext
 
         let isTimeLetter = kind == .timeLetter
         let entryViewController = MemoryArchiveTextEntryViewController(kind: kind)
         if isTimeLetter {
             entryViewController.onSaveTimeLetter = { [weak self] payload in
-                guard let self else { return }
+                guard let self,
+                      self.validateMediaOperation(
+                        accountLease,
+                        archiveContext: archiveContext,
+                        at: .commit
+                      ) else {
+                    if let imageLocalPath = payload.imageLocalPath {
+                        try? FileManager.default.removeItem(atPath: imageLocalPath)
+                    }
+                    return
+                }
                 let item = MemoryArchiveItemFactory.makeTimeLetter(
                     note: payload.note,
                     openAt: payload.openAt,
@@ -2790,11 +2808,26 @@ final class MemoryArchiveViewController: UIViewController {
                     imageLocalPath: payload.imageLocalPath
                 )
                 self.repository.add(item)
+                guard self.validateMediaOperation(
+                    accountLease,
+                    archiveContext: archiveContext,
+                    at: .ui
+                ) else { return }
                 self.refreshContent()
                 self.showToast("时间信件已封存", type: .success)
             }
             entryViewController.onSaveDraftTimeLetter = { [weak self] payload in
-                guard let self else { return }
+                guard let self,
+                      self.validateMediaOperation(
+                        accountLease,
+                        archiveContext: archiveContext,
+                        at: .commit
+                      ) else {
+                    if let imageLocalPath = payload.imageLocalPath {
+                        try? FileManager.default.removeItem(atPath: imageLocalPath)
+                    }
+                    return
+                }
                 let item = MemoryArchiveItemFactory.makeTimeLetterDraft(
                     note: payload.note,
                     openAt: payload.openAt,
@@ -2802,14 +2835,29 @@ final class MemoryArchiveViewController: UIViewController {
                     imageLocalPath: payload.imageLocalPath
                 )
                 self.repository.add(item)
+                guard self.validateMediaOperation(
+                    accountLease,
+                    archiveContext: archiveContext,
+                    at: .ui
+                ) else { return }
                 self.refreshContent()
                 self.showToast("时间信件草稿已保存", type: .success)
             }
         } else {
             entryViewController.onSave = { [weak self] rawText in
-                guard let self else { return }
+                guard let self,
+                      self.validateMediaOperation(
+                        accountLease,
+                        archiveContext: archiveContext,
+                        at: .commit
+                      ) else { return }
                 let item = MemoryArchiveItemFactory.makeTextItem(note: rawText)
                 self.repository.add(item)
+                guard self.validateMediaOperation(
+                    accountLease,
+                    archiveContext: archiveContext,
+                    at: .ui
+                ) else { return }
                 self.refreshContent()
                 self.showToast("已封存", type: .success)
             }
@@ -2822,16 +2870,34 @@ final class MemoryArchiveViewController: UIViewController {
             showReadOnlyArchiveToast()
             return
         }
+        guard let accountLease = captureMediaAccountLease() else {
+            showToast("账号状态已变化，请重新进入档案馆", type: .error)
+            return
+        }
+        let archiveContext = currentArchiveContext
 
         let entryViewController = MemoryArchiveAudioRecorderViewController()
         entryViewController.onSave = { [weak self] fileURL, duration, note in
-            guard let self else { return }
+            guard let self,
+                  self.validateMediaOperation(
+                    accountLease,
+                    archiveContext: archiveContext,
+                    at: .commit
+                  ) else {
+                try? FileManager.default.removeItem(at: fileURL)
+                return
+            }
             let item = MemoryArchiveItemFactory.makeAudioItem(
                 localPath: fileURL.path,
                 duration: duration,
                 note: note
             )
             self.repository.add(item)
+            guard self.validateMediaOperation(
+                accountLease,
+                archiveContext: archiveContext,
+                at: .ui
+            ) else { return }
             self.refreshContent()
             self.showToast("语音已封存", type: .success)
         }
@@ -2843,13 +2909,41 @@ final class MemoryArchiveViewController: UIViewController {
             showReadOnlyArchiveToast()
             return
         }
+        guard let accountLease = captureMediaAccountLease() else {
+            showToast("账号状态已变化，请重新进入档案馆", type: .error)
+            return
+        }
+        let archiveContext = currentArchiveContext
 
         let entryViewController = MemoryArchiveVideoEntryViewController()
         entryViewController.onCreateMockVideoArchive = { [weak self] in
-            guard let self else { return }
+            guard let self,
+                  self.validateMediaOperation(
+                    accountLease,
+                    archiveContext: archiveContext,
+                    at: .commit
+                  ) else { return }
             do {
                 let item = try self.makeHiddenQAMockVideoArchiveItem()
+                guard self.validateMediaOperation(
+                    accountLease,
+                    archiveContext: archiveContext,
+                    at: .commit
+                ) else {
+                    if let localPath = item.localPath {
+                        try? FileManager.default.removeItem(atPath: localPath)
+                    }
+                    if let thumbnailPath = item.metadata[MemoryArchiveItem.mediaThumbnailPathMetadataKey] {
+                        try? FileManager.default.removeItem(atPath: thumbnailPath)
+                    }
+                    return
+                }
                 self.repository.add(item)
+                guard self.validateMediaOperation(
+                    accountLease,
+                    archiveContext: archiveContext,
+                    at: .ui
+                ) else { return }
                 self.refreshContent()
                 self.showToast("测试视频档案已生成", type: .success)
             } catch {
@@ -2927,14 +3021,65 @@ final class MemoryArchiveViewController: UIViewController {
             return
         }
 
+        guard let accountLease = captureMediaAccountLease() else {
+            showToast("账号状态已变化，请重新进入档案馆", type: .error)
+            return
+        }
+
         let picker = UIImagePickerController()
         picker.sourceType = .photoLibrary
         picker.delegate = self
         picker.allowsEditing = false
+        photoPickerAccountLease = accountLease
+        photoPickerArchiveContext = currentArchiveContext
         present(picker, animated: true)
     }
 
-    private func saveImageToArchive(_ image: UIImage) throws -> URL {
+    private func captureMediaAccountLease() -> AccountLease? {
+        guard let userId = UserManager.shared.currentUser?.id,
+              let accountLease = accountLeaseRuntime.capture(forSubjectId: userId),
+              validateMediaAccountLease(accountLease, at: .request) else {
+            return nil
+        }
+        return accountLease
+    }
+
+    private func validateMediaAccountLease(
+        _ accountLease: AccountLease,
+        at checkpoint: AccountLeaseCheckpoint
+    ) -> Bool {
+        accountLease.subjectId == UserManager.shared.currentUser?.id
+            && accountLeaseRuntime.validate(accountLease, at: checkpoint).allowed
+    }
+
+    private func validateMediaOperation(
+        _ accountLease: AccountLease,
+        archiveContext: DigitalHumanContext,
+        at checkpoint: AccountLeaseCheckpoint
+    ) -> Bool {
+        validateMediaAccountLease(accountLease, at: checkpoint)
+            && archiveContext == currentArchiveContext
+    }
+
+    private func validatePhotoPickerOperation(
+        _ accountLease: AccountLease,
+        at checkpoint: AccountLeaseCheckpoint
+    ) -> Bool {
+        validateMediaAccountLease(accountLease, at: checkpoint)
+            && photoPickerAccountLease == accountLease
+            && photoPickerArchiveContext == currentArchiveContext
+            && isSelfAutobiographyMode
+    }
+
+    private func clearPhotoPickerOperation() {
+        photoPickerAccountLease = nil
+        photoPickerArchiveContext = nil
+    }
+
+    private func saveImageToArchive(_ image: UIImage, accountLease: AccountLease) throws -> URL {
+        guard validateMediaAccountLease(accountLease, at: .commit) else {
+            throw ArchiveImageSaveError.accountSessionChanged
+        }
         guard let data = image.jpegData(compressionQuality: 0.86) else {
             throw ArchiveImageSaveError.jpegEncodingFailed
         }
@@ -2949,7 +3094,14 @@ final class MemoryArchiveViewController: UIViewController {
         try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
 
         let fileURL = directoryURL.appendingPathComponent("\(UUID().uuidString).jpg")
+        guard validateMediaAccountLease(accountLease, at: .commit) else {
+            throw ArchiveImageSaveError.accountSessionChanged
+        }
         try data.write(to: fileURL, options: .atomic)
+        guard validateMediaAccountLease(accountLease, at: .commit) else {
+            try? FileManager.default.removeItem(at: fileURL)
+            throw ArchiveImageSaveError.accountSessionChanged
+        }
         return fileURL
     }
 
@@ -2957,63 +3109,149 @@ final class MemoryArchiveViewController: UIViewController {
         image.jpegData(compressionQuality: 0.72)?.base64EncodedString()
     }
 
-    private func savePhotoArchiveItem(_ item: MemoryArchiveItem, image: UIImage, successMessage: String) {
-        guard isSelfAutobiographyMode else {
-            showReadOnlyArchiveToast()
+    private func savePhotoArchiveItem(
+        _ item: MemoryArchiveItem,
+        image: UIImage,
+        successMessage: String,
+        accountLease: AccountLease,
+        archiveContext: DigitalHumanContext
+    ) {
+        guard isSelfAutobiographyMode,
+              validateMediaOperation(
+                accountLease,
+                archiveContext: archiveContext,
+                at: .commit
+              ) else {
+            if let localPath = item.localPath {
+                try? FileManager.default.removeItem(at: URL(fileURLWithPath: localPath))
+            }
             return
         }
 
         repository.add(item)
+        guard validateMediaOperation(
+            accountLease,
+            archiveContext: archiveContext,
+            at: .ui
+        ) else { return }
         refreshContent()
         showToast(successMessage, type: .success)
-        analyzePhotoArchiveItemIfPossible(item, image: image)
+        analyzePhotoArchiveItemIfPossible(
+            item,
+            image: image,
+            accountLease: accountLease,
+            archiveContext: archiveContext
+        )
     }
 
-    private func analyzePhotoArchiveItemIfPossible(_ item: MemoryArchiveItem, image: UIImage) {
-        guard DreamJourneyBackendClient.shared.isArchiveImageAnalysisConfigured else {
+    private func analyzePhotoArchiveItemIfPossible(
+        _ item: MemoryArchiveItem,
+        image: UIImage,
+        accountLease: AccountLease,
+        archiveContext: DigitalHumanContext
+    ) {
+        guard validateMediaOperation(
+                accountLease,
+                archiveContext: archiveContext,
+                at: .request
+              ),
+              DreamJourneyBackendClient.shared.isArchiveImageAnalysisConfigured else {
             return
         }
 
         DreamJourneyBackendClient.shared.fetchArchiveImageAnalysisRuntimeCapability { [weak self] result in
-            guard let self else { return }
+            guard let self,
+                  self.validateMediaOperation(
+                    accountLease,
+                    archiveContext: archiveContext,
+                    at: .runtime
+                  ) else { return }
             switch result {
             case .success(let capability):
                 guard capability.canRunVisionAnalysis else {
-                    markArchiveImageAnalysisUnavailable(item, capability: capability)
+                    markArchiveImageAnalysisUnavailable(
+                        item,
+                        capability: capability,
+                        accountLease: accountLease,
+                        archiveContext: archiveContext
+                    )
                     return
                 }
-                requestRemoteArchiveImageAnalysis(item, image: image)
+                requestRemoteArchiveImageAnalysis(
+                    item,
+                    image: image,
+                    accountLease: accountLease,
+                    archiveContext: archiveContext
+                )
             case .failure(let error):
-                markArchiveImageAnalysisFailed(item, reason: archiveAnalysisFailureReason(error))
+                markArchiveImageAnalysisFailed(
+                    item,
+                    reason: archiveAnalysisFailureReason(error),
+                    accountLease: accountLease,
+                    archiveContext: archiveContext
+                )
             }
         }
     }
 
-    private func requestRemoteArchiveImageAnalysis(_ item: MemoryArchiveItem, image: UIImage) {
-        guard let userId = currentArchiveAnalysisUserId else {
-            markArchiveImageAnalysisFailed(item, reason: "user_authentication_required")
+    private func requestRemoteArchiveImageAnalysis(
+        _ item: MemoryArchiveItem,
+        image: UIImage,
+        accountLease: AccountLease,
+        archiveContext: DigitalHumanContext
+    ) {
+        guard validateMediaOperation(
+            accountLease,
+            archiveContext: archiveContext,
+            at: .request
+        ) else {
             return
         }
         guard let imageBase64 = imageBase64ForArchiveAnalysis(image) else {
+            guard validateMediaOperation(
+                accountLease,
+                archiveContext: archiveContext,
+                at: .commit
+            ) else { return }
             var updatedItem = item
             updatedItem.markAnalysisFailed(reason: "image_encoding_failed")
             repository.update(updatedItem, syncToBackend: true)
+            guard validateMediaOperation(
+                accountLease,
+                archiveContext: archiveContext,
+                at: .ui
+            ) else { return }
             refreshContent()
             showToast("照片分析失败，可稍后重试", type: .error)
             return
         }
 
         DreamJourneyBackendClient.shared.requestArchiveImageAnalysis(
-            userId: userId,
+            userId: accountLease.subjectId,
             archiveItemId: item.id,
             imageBase64: imageBase64
         ) { [weak self] result in
-            guard let self else { return }
+            guard let self,
+                  self.validateMediaOperation(
+                    accountLease,
+                    archiveContext: archiveContext,
+                    at: .runtime
+                  ) else { return }
             var updatedItem = item
             switch result {
             case .success(let object):
                 updatedItem.applyRemoteImageAnalysisResult(object)
+                guard self.validateMediaOperation(
+                    accountLease,
+                    archiveContext: archiveContext,
+                    at: .commit
+                ) else { return }
                 repository.update(updatedItem, syncToBackend: true)
+                guard self.validateMediaOperation(
+                    accountLease,
+                    archiveContext: archiveContext,
+                    at: .ui
+                ) else { return }
                 refreshContent()
                 if updatedItem.analysisStatus.isRetryableFailureLike {
                     showToast("AI 分析暂不可用，可稍后重试", type: .error)
@@ -3021,15 +3259,27 @@ final class MemoryArchiveViewController: UIViewController {
                     showToast("已生成图像分析", type: .success)
                 }
             case .failure(let error):
-                markArchiveImageAnalysisFailed(item, reason: archiveAnalysisFailureReason(error))
+                markArchiveImageAnalysisFailed(
+                    item,
+                    reason: archiveAnalysisFailureReason(error),
+                    accountLease: accountLease,
+                    archiveContext: archiveContext
+                )
             }
         }
     }
 
     private func markArchiveImageAnalysisUnavailable(
         _ item: MemoryArchiveItem,
-        capability: ArchiveImageAnalysisRuntimeCapability
+        capability: ArchiveImageAnalysisRuntimeCapability,
+        accountLease: AccountLease,
+        archiveContext: DigitalHumanContext
     ) {
+        guard validateMediaOperation(
+            accountLease,
+            archiveContext: archiveContext,
+            at: .commit
+        ) else { return }
         var updatedItem = item
         updatedItem.markAnalysisUnavailableFromRuntime(
             provider: capability.provider,
@@ -3037,20 +3287,36 @@ final class MemoryArchiveViewController: UIViewController {
             message: capability.availabilityDisplayText
         )
         repository.update(updatedItem, syncToBackend: true)
+        guard validateMediaOperation(
+            accountLease,
+            archiveContext: archiveContext,
+            at: .ui
+        ) else { return }
         refreshContent()
         showToast(capability.availabilityDisplayText, type: .error)
     }
 
-    private func markArchiveImageAnalysisFailed(_ item: MemoryArchiveItem, reason: String) {
+    private func markArchiveImageAnalysisFailed(
+        _ item: MemoryArchiveItem,
+        reason: String,
+        accountLease: AccountLease,
+        archiveContext: DigitalHumanContext
+    ) {
+        guard validateMediaOperation(
+            accountLease,
+            archiveContext: archiveContext,
+            at: .commit
+        ) else { return }
         var updatedItem = item
         updatedItem.markAnalysisFailed(reason: reason)
         repository.update(updatedItem, syncToBackend: true)
+        guard validateMediaOperation(
+            accountLease,
+            archiveContext: archiveContext,
+            at: .ui
+        ) else { return }
         refreshContent()
         showToast("AI 分析暂不可用，可稍后重试", type: .error)
-    }
-
-    private var currentArchiveAnalysisUserId: String? {
-        UserManager.shared.currentUser?.id
     }
 
     private func archiveAnalysisFailureReason(_ error: Error) -> String {
@@ -3067,10 +3333,21 @@ final class MemoryArchiveViewController: UIViewController {
         }
 
         let image = UIImage(named: "default_memory_1") ?? makeFallbackArchiveImage()
+        let archiveContext = currentArchiveContext
+        guard let accountLease = captureMediaAccountLease() else {
+            showToast("账号状态已变化，请重新进入档案馆", type: .error)
+            return
+        }
         do {
-            let fileURL = try saveImageToArchive(image)
+            let fileURL = try saveImageToArchive(image, accountLease: accountLease)
             let item = MemoryArchiveItemFactory.makePhotoItem(localPath: fileURL.path, source: .samplePhoto)
-            savePhotoArchiveItem(item, image: image, successMessage: "照片已封存")
+            savePhotoArchiveItem(
+                item,
+                image: image,
+                successMessage: "照片已封存",
+                accountLease: accountLease,
+                archiveContext: archiveContext
+            )
         } catch {
             showToast("照片保存失败", type: .error)
         }
@@ -3688,6 +3965,13 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
         didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
     ) {
         picker.dismiss(animated: true)
+        defer { clearPhotoPickerOperation() }
+
+        guard let accountLease = photoPickerAccountLease,
+              let archiveContext = photoPickerArchiveContext,
+              validatePhotoPickerOperation(accountLease, at: .ui) else {
+            return
+        }
 
         guard let image = info[.originalImage] as? UIImage else {
             showToast("照片读取失败", type: .error)
@@ -3695,16 +3979,25 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
         }
 
         do {
-            let fileURL = try saveImageToArchive(image)
+            let fileURL = try saveImageToArchive(image, accountLease: accountLease)
             let item = MemoryArchiveItemFactory.makePhotoItem(localPath: fileURL.path)
-            savePhotoArchiveItem(item, image: image, successMessage: "照片已封存")
+            savePhotoArchiveItem(
+                item,
+                image: image,
+                successMessage: "照片已封存",
+                accountLease: accountLease,
+                archiveContext: archiveContext
+            )
         } catch {
-            showToast("照片保存失败", type: .error)
+            if validateMediaAccountLease(accountLease, at: .ui) {
+                showToast("照片保存失败", type: .error)
+            }
         }
     }
 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         picker.dismiss(animated: true)
+        clearPhotoPickerOperation()
     }
 }
 
@@ -3746,11 +4039,14 @@ extension MemoryArchiveViewController: MemoryArchiveCreationSheetViewControllerD
 
 private enum ArchiveImageSaveError: LocalizedError {
     case jpegEncodingFailed
+    case accountSessionChanged
 
     var errorDescription: String? {
         switch self {
         case .jpegEncodingFailed:
             return "照片编码失败"
+        case .accountSessionChanged:
+            return "账号状态已变化"
         }
     }
 }
