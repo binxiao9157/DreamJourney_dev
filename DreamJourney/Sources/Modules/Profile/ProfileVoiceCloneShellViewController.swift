@@ -2,9 +2,10 @@ import AVFoundation
 import UIKit
 import UniformTypeIdentifiers
 
-final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPickerDelegate {
+final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPickerDelegate, AVAudioPlayerDelegate {
     private var snapshot: VoiceCloneProfileSnapshot
     private var voiceCloneRuntimeCapability = VoiceCloneRuntimeCapability.localFallback(isBackendConfigured: false)
+    private let accountLeaseRuntime = AccountLeaseRuntime.shared
     private let scrollView = UIScrollView()
     private let contentStack = UIStackView()
     private let authorizationSwitch = UISwitch()
@@ -23,6 +24,9 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     private weak var disableButton: UIButton?
     private weak var deleteButton: UIButton?
     private var previewPlayer: AVAudioPlayer?
+    private var previewFileURL: URL?
+    private var viewAccountLease: AccountLease?
+    private var viewDigitalHumanContext: DigitalHumanContext?
 
     private var isBusy = false {
         didSet { updateActionAvailability() }
@@ -40,17 +44,43 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        viewDigitalHumanContext = DigitalHumanContextStore.shared.current
+        viewAccountLease = captureViewAccountLease()
         title = "音色复刻"
         view.backgroundColor = DJDesignTokens.Color.background
         view.accessibilityIdentifier = "profile-voice-clone-shell"
         setupLayout()
-        applySnapshot(snapshot, feedback: "先确认授权，再选择本人音频样本提交训练。")
+        renderSnapshot(snapshot, feedback: "先确认授权，再选择本人音频样本提交训练。")
         loadVoiceCloneRuntimeCapability()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         showPreviousLevelNavigationIfNeeded(animated: animated)
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        stopPreviewRuntime()
+    }
+
+    private func captureViewAccountLease() -> AccountLease? {
+        guard let userId = UserManager.shared.currentUser?.id,
+              let accountLease = accountLeaseRuntime.capture(forSubjectId: userId),
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            return nil
+        }
+        return accountLease
+    }
+
+    private func validateViewOperation(at checkpoint: AccountLeaseCheckpoint) -> Bool {
+        guard let accountLease = viewAccountLease,
+              let digitalHumanContext = viewDigitalHumanContext else {
+            return false
+        }
+        return accountLease.subjectId == UserManager.shared.currentUser?.id
+            && accountLeaseRuntime.validate(accountLease, at: checkpoint).allowed
+            && digitalHumanContext == DigitalHumanContextStore.shared.current
     }
 
     private func setupLayout() {
@@ -338,6 +368,10 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     }
 
     @objc private func submitSampleTapped() {
+        guard validateViewOperation(at: .request) else {
+            feedbackLabel?.text = "账号或回响角色已变化，请重新进入后再提交。"
+            return
+        }
         guard authorizationSwitch.isOn else {
             feedbackLabel?.text = "请先确认本人授权。"
             return
@@ -350,14 +384,16 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     }
 
     @objc private func refreshStatusTapped() {
+        guard validateViewOperation(at: .request) else { return }
         guard hasVoiceProfile else {
             feedbackLabel?.text = "还没有可刷新的音色。"
             return
         }
         setBusyFeedback("正在刷新训练状态...")
         VoiceCloneService.shared.queryStatus(speakerId: snapshot.voiceProfileId) { [weak self] result in
+            guard let self, self.validateViewOperation(at: .runtime) else { return }
             DispatchQueue.main.async {
-                guard let self else { return }
+                guard self.validateViewOperation(at: .ui) else { return }
                 switch result {
                 case .success:
                     self.reloadBackendSnapshot(feedback: "训练状态已刷新。")
@@ -369,28 +405,29 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     }
 
     @objc private func previewVoiceTapped() {
+        guard validateViewOperation(at: .request),
+              let accountLease = viewAccountLease else {
+            feedbackLabel?.text = "账号或回响角色已变化，请重新进入后再试听。"
+            return
+        }
         guard canPreviewVoice else {
             feedbackLabel?.text = "训练完成并确认合成服务可用后，才能试听复刻效果。"
             return
         }
-        guard let userId = UserManager.shared.currentUser?.id else {
-            feedbackLabel?.text = "请先登录后再试听音色。"
-            return
-        }
-
         setBusyFeedback("正在生成试听音频...")
         DreamJourneyBackendClient.shared.requestVoiceCloneSynthesis(
-            userId: userId,
+            userId: accountLease.subjectId,
             voiceProfileId: snapshot.voiceProfileId,
             text: "你好，我是你的复刻声音。请听听这段声音是否像你本人。",
             audioFormat: "mp3",
             sampleRate: 24000
         ) { [weak self] result in
+            guard let self, self.validateViewOperation(at: .runtime) else { return }
             DispatchQueue.main.async {
-                guard let self else { return }
+                guard self.validateViewOperation(at: .ui) else { return }
                 switch result {
                 case .success(let synthesis):
-                    self.playPreviewAudio(synthesis)
+                    self.playPreviewAudio(synthesis, accountLease: accountLease)
                 case .failure(let error):
                     self.finishBusy(feedback: "试听生成失败：\(error.localizedDescription)")
                 }
@@ -399,6 +436,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     }
 
     @objc private func acceptVoiceQualityTapped() {
+        guard validateViewOperation(at: .request) else { return }
         guard canAcceptVoiceQuality else {
             feedbackLabel?.text = "请先试听训练完成的音色，再确认使用。"
             return
@@ -426,22 +464,44 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         }
     }
 
-    private func playPreviewAudio(_ synthesis: VoiceCloneSynthesisResult) {
+    private func playPreviewAudio(
+        _ synthesis: VoiceCloneSynthesisResult,
+        accountLease: AccountLease
+    ) {
+        guard viewAccountLease == accountLease,
+              validateViewOperation(at: .runtime) else {
+            return
+        }
         guard let audioData = synthesis.audioData, !audioData.isEmpty else {
             finishBusy(feedback: "试听生成失败：后端未返回有效音频。")
             return
         }
         do {
+            stopPreviewRuntime()
             let fileExtension = synthesis.audioFormat.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? "mp3"
                 : synthesis.audioFormat
             let previewURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent("voice-clone-preview-\(snapshot.voiceProfileId)")
+                .appendingPathComponent(
+                    "voice-clone-preview-\(snapshot.voiceProfileId)-\(accountLease.generationId.uuidString)"
+                )
                 .appendingPathExtension(fileExtension)
+            guard validateViewOperation(at: .commit) else { return }
             try audioData.write(to: previewURL, options: .atomic)
+            guard validateViewOperation(at: .commit) else {
+                try? FileManager.default.removeItem(at: previewURL)
+                return
+            }
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
             try AVAudioSession.sharedInstance().setActive(true)
+            guard validateViewOperation(at: .runtime) else {
+                try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+                try? FileManager.default.removeItem(at: previewURL)
+                return
+            }
+            previewFileURL = previewURL
             previewPlayer = try AVAudioPlayer(contentsOf: previewURL)
+            previewPlayer?.delegate = self
             previewPlayer?.prepareToPlay()
             previewPlayer?.play()
             finishBusy(feedback: "试听已开始。若声音像本人，请点“确认使用此音色”；不满意可重新提交样本。")
@@ -450,11 +510,31 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         }
     }
 
+    private func stopPreviewRuntime() {
+        let ownedPreviewRuntime = previewPlayer != nil || previewFileURL != nil
+        previewPlayer?.stop()
+        previewPlayer = nil
+        if ownedPreviewRuntime {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
+        if let previewFileURL {
+            try? FileManager.default.removeItem(at: previewFileURL)
+        }
+        previewFileURL = nil
+    }
+
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        guard player === previewPlayer else { return }
+        stopPreviewRuntime()
+    }
+
     private func performAcceptVoiceQuality() {
+        guard validateViewOperation(at: .request) else { return }
         setBusyFeedback("正在确认音色效果...")
         VoiceCloneService.shared.acceptVoiceProfileQualityRemote(profileId: snapshot.voiceProfileId) { [weak self] result in
+            guard let self, self.validateViewOperation(at: .runtime) else { return }
             DispatchQueue.main.async {
-                guard let self else { return }
+                guard self.validateViewOperation(at: .ui) else { return }
                 switch result {
                 case .success(let snapshot):
                     self.applySnapshot(snapshot, feedback: "已确认使用此音色，后续回响可使用复刻语音。")
@@ -476,6 +556,8 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     }
 
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard validateViewOperation(at: .ui),
+              validateViewOperation(at: .request) else { return }
         guard let audioURL = urls.first else { return }
         let didAccess = audioURL.startAccessingSecurityScopedResource()
         defer {
@@ -489,13 +571,16 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
             audioURL: audioURL,
             authorizationConfirmed: authorizationSwitch.isOn,
             onProfileAccepted: { [weak self] snapshot in
+                guard let self, self.validateViewOperation(at: .runtime) else { return }
                 DispatchQueue.main.async {
-                    self?.applySnapshot(snapshot, feedback: "后端已接收声音样本，训练中；可稍后刷新状态。")
+                    guard self.validateViewOperation(at: .ui) else { return }
+                    self.applySnapshot(snapshot, feedback: "后端已接收声音样本，训练中；可稍后刷新状态。")
                 }
             }
         ) { [weak self] result in
+            guard let self, self.validateViewOperation(at: .runtime) else { return }
             DispatchQueue.main.async {
-                guard let self else { return }
+                guard self.validateViewOperation(at: .ui) else { return }
                 switch result {
                 case .success:
                     self.reloadBackendSnapshot(feedback: "音色训练状态已更新，请先试听确认效果。")
@@ -507,18 +592,21 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     }
 
     func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        guard validateViewOperation(at: .ui) else { return }
         feedbackLabel?.text = "已取消选择音频样本。"
     }
 
     private func performDisableVoice() {
+        guard validateViewOperation(at: .request) else { return }
         guard hasVoiceProfile else {
             feedbackLabel?.text = "还没有可禁用的音色。"
             return
         }
         setBusyFeedback("正在禁用音色...")
         VoiceCloneService.shared.disableVoiceProfileRemote(profileId: snapshot.voiceProfileId) { [weak self] result in
+            guard let self, self.validateViewOperation(at: .runtime) else { return }
             DispatchQueue.main.async {
-                guard let self else { return }
+                guard self.validateViewOperation(at: .ui) else { return }
                 switch result {
                 case .success(let snapshot):
                     self.applySnapshot(snapshot, feedback: "音色已禁用。")
@@ -530,14 +618,16 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     }
 
     private func performDeleteVoice() {
+        guard validateViewOperation(at: .request) else { return }
         guard hasVoiceProfile else {
             feedbackLabel?.text = "还没有可删除的音色。"
             return
         }
         setBusyFeedback("正在删除音色...")
         VoiceCloneService.shared.deleteVoiceProfileRemote(profileId: snapshot.voiceProfileId) { [weak self] result in
+            guard let self, self.validateViewOperation(at: .runtime) else { return }
             DispatchQueue.main.async {
-                guard let self else { return }
+                guard self.validateViewOperation(at: .ui) else { return }
                 switch result {
                 case .success(let snapshot):
                     self.applySnapshot(snapshot, feedback: "音色已删除。")
@@ -549,15 +639,20 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     }
 
     private func reloadBackendSnapshot(feedback: String) {
+        guard validateViewOperation(at: .request),
+              let accountLease = viewAccountLease else {
+            return
+        }
         guard DreamJourneyBackendClient.shared.isVoiceCloneProfileConfigured,
-              let userId = UserManager.shared.currentUser?.id else {
+              !accountLease.subjectId.isEmpty else {
             finishBusy(feedback: "后端语音服务尚未配置，无法刷新音色状态。")
             return
         }
 
-        DreamJourneyBackendClient.shared.fetchVoiceCloneProfiles(userId: userId) { [weak self] result in
+        DreamJourneyBackendClient.shared.fetchVoiceCloneProfiles(userId: accountLease.subjectId) { [weak self] result in
+            guard let self, self.validateViewOperation(at: .runtime) else { return }
             DispatchQueue.main.async {
-                guard let self else { return }
+                guard self.validateViewOperation(at: .ui) else { return }
                 switch result {
                 case .success(let profiles):
                     let currentProfileId = self.snapshot.voiceProfileId
@@ -575,14 +670,20 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     }
 
     private func loadVoiceCloneRuntimeCapability() {
+        guard validateViewOperation(at: .request) else {
+            synthesisStatusValueLabel?.text = voiceSynthesisStatusText(for: snapshot)
+            updateActionAvailability()
+            return
+        }
         guard DreamJourneyBackendClient.shared.isVoiceCloneProfileConfigured else {
             synthesisStatusValueLabel?.text = voiceSynthesisStatusText(for: snapshot)
             return
         }
 
         DreamJourneyBackendClient.shared.fetchVoiceCloneRuntimeCapability { [weak self] result in
+            guard let self, self.validateViewOperation(at: .runtime) else { return }
             DispatchQueue.main.async {
-                guard let self else { return }
+                guard self.validateViewOperation(at: .ui) else { return }
                 if case .success(let capability) = result {
                     self.voiceCloneRuntimeCapability = capability
                 }
@@ -593,7 +694,13 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     }
 
     private func applySnapshot(_ snapshot: VoiceCloneProfileSnapshot, feedback: String? = nil) {
+        guard validateViewOperation(at: .commit) else { return }
         VoiceCloneService.shared.persistSnapshot(snapshot)
+        guard validateViewOperation(at: .ui) else { return }
+        renderSnapshot(snapshot, feedback: feedback)
+    }
+
+    private func renderSnapshot(_ snapshot: VoiceCloneProfileSnapshot, feedback: String? = nil) {
         self.snapshot = snapshot
         statusTitleLabel?.text = voiceStatusTitle(for: snapshot)
         statusCaptionLabel?.text = voiceStatusCaption(for: snapshot)
@@ -635,12 +742,13 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     }
 
     private func updateActionAvailability() {
-        submitButton?.isEnabled = !isBusy && authorizationSwitch.isOn
-        previewButton?.isEnabled = !isBusy && canPreviewVoice
-        acceptQualityButton?.isEnabled = !isBusy && canAcceptVoiceQuality
-        refreshButton?.isEnabled = !isBusy && hasVoiceProfile && snapshot.sampleStatus != .deleted && snapshot.sampleStatus != .disabled
-        disableButton?.isEnabled = !isBusy && hasVoiceProfile && snapshot.sampleStatus != .disabled && snapshot.sampleStatus != .deleted
-        deleteButton?.isEnabled = !isBusy && hasVoiceProfile && snapshot.sampleStatus != .deleted
+        let hasValidLease = validateViewOperation(at: .ui)
+        submitButton?.isEnabled = hasValidLease && !isBusy && authorizationSwitch.isOn
+        previewButton?.isEnabled = hasValidLease && !isBusy && canPreviewVoice
+        acceptQualityButton?.isEnabled = hasValidLease && !isBusy && canAcceptVoiceQuality
+        refreshButton?.isEnabled = hasValidLease && !isBusy && hasVoiceProfile && snapshot.sampleStatus != .deleted && snapshot.sampleStatus != .disabled
+        disableButton?.isEnabled = hasValidLease && !isBusy && hasVoiceProfile && snapshot.sampleStatus != .disabled && snapshot.sampleStatus != .deleted
+        deleteButton?.isEnabled = hasValidLease && !isBusy && hasVoiceProfile && snapshot.sampleStatus != .deleted
         previewButton?.isHidden = !canPreviewVoice
         acceptQualityButton?.isHidden = !canAcceptVoiceQuality
         [refreshButton, disableButton, deleteButton].forEach { button in
