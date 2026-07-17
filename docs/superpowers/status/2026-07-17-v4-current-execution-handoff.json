@@ -6,14 +6,14 @@
     "gateEvidence": {
       "G2": "MISSING"
     },
-    "id": "WI-S0-02-02",
+    "id": "WI-S0-02-03",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "Add atomic access/refresh token-family rotation, reuse detection and session/family/all-device revocation on top of the verified Subject foundation."
+    "summary": "Implement typed principal middleware and a complete fail-closed route authentication matrix, with production startup completeness and deny evidence."
   },
   "baselines": {
-    "backend": "main@a12545e",
-    "ios": "feature/prd-stitch-ui-adaptation@f9208ab",
+    "backend": "main@5dfbaa5",
+    "ios": "feature/prd-stitch-ui-adaptation@d05e7cb",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
@@ -22,6 +22,12 @@
       "id": "WI-S0-02-01",
       "implementationStatus": "INTERNAL_READY / BACKEND_DEPLOYED / G0_G2_SCOPED_VERIFIED / G4_IDENTITY_PROVIDER_BLOCKED / LEGACY_REBIND_OPEN",
       "registryClosure": "G4_PROVIDER_AND_LEGACY_REBIND_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-17-wi-s0-02-02-token-family-sessions.md",
+      "id": "WI-S0-02-02",
+      "implementationStatus": "INTERNAL_READY / BACKEND_DEPLOYED / G2_POSTGRES_VERIFIED / IOS_LOCAL_COMMITTED",
+      "registryClosure": "SCOPED_G2_EVIDENCE_PRESENT"
     },
     {
       "evidence": "docs/superpowers/status/2026-07-15-wi-s0-03-01-credential-inventory.md",
@@ -163,9 +169,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S0-02-03",
+    "id": "WI-S0-02-04",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "Apply typed principal middleware and a fail-closed route authentication matrix after token-family semantics are established."
+    "summary": "Derive owner and vault from authenticated principal and database resource relationships, then enforce resource authorization without trusting payload owner fields."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -174,5 +180,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-17T16:10:35+08:00"
+  "updatedAt": "2026-07-17T18:13:31+08:00"
 }
