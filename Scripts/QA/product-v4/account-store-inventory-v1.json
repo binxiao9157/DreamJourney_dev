@@ -1,0 +1,1041 @@
+{
+  "schemaVersion": "dreamjourney.account-store-inventory.v1",
+  "inventoryName": "AccountStoreInventory",
+  "catalogVersion": 1,
+  "authority": "WI-S0-01-01",
+  "interpretation": {
+    "registrationIsNotImplementation": true,
+    "cleanupAndMigrationAreObligations": true,
+    "knownGapIsNotUnknownSurface": true
+  },
+  "testCarrier": {
+    "type": "executable shell/model gate",
+    "path": "Scripts/QA/product-v4/run-account-store-inventory-gate.sh",
+    "limitation": "source and deterministic model coverage; not simulator A/B switching or runtime race proof",
+    "futureRuntimeTestOwner": "WI-S1-03-01"
+  },
+  "discovery": {
+    "roots": [
+      "DreamJourney/Sources",
+      "DreamJourneyWidget"
+    ],
+    "markers": [
+      "UserDefaults",
+      "Keychain(",
+      "SecItem",
+      "FileManager.default",
+      "NSTemporaryDirectory",
+      "AVAudioRecorder",
+      "Data(contentsOf:",
+      ".write(to:",
+      ".documentDirectory",
+      ".applicationSupportDirectory",
+      ".cachesDirectory",
+      ".temporaryDirectory",
+      "containerURL(",
+      "containerURL(forSecurityApplicationGroupIdentifier",
+      "UNUserNotificationCenter",
+      "Timer.scheduledTimer",
+      "DispatchSource.makeTimerSource",
+      "user_001",
+      "legacy_unassigned"
+    ],
+    "exclusions": []
+  },
+  "surfaces": [
+    {
+      "catalogId": "S01",
+      "surfaceId": "S01.backend-auth-session-keychain",
+      "dataClass": "opaque user access and refresh session credentials",
+      "ownerScope": "verified backend subject plus token family and session version",
+      "storage": "iOS Keychain",
+      "pathOrKey": "service=com.dreamjourney.backend-auth-session; key=current-auth-session",
+      "writer": "BackendAuthSessionStore",
+      "readers": "UserManager, AppCoordinator, DreamJourneyBackendClient",
+      "cleanup": "clear on logout, revoke, invalid refresh, owner mismatch, or ineligible contract",
+      "migration": "reject legacy/ineligible writes; do not migrate mobile shared or system tokens",
+      "retention": "until session expiry, revoke, logout, or account deletion",
+      "testOwner": "WI-S0-01-02",
+      "status": "REGISTERED_SCOPED",
+      "nextWorkItem": "WI-S0-01-02",
+      "sourcePaths": [
+        "DreamJourney/Sources/Services/BackendAuthSessionStore.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Services/BackendAuthSessionStore.swift",
+          "contains": [
+            "current-auth-session",
+            "com.dreamjourney.backend-auth-session"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/product-v4/token-family-client-model-smoke.swift",
+        "Scripts/QA/prd-stitch-ui/auth-session-ownership-shadow-check.swift"
+      ]
+    },
+    {
+      "catalogId": "S02",
+      "surfaceId": "S02.profile-display-cache",
+      "dataClass": "display-only current user profile cache and private access state",
+      "ownerScope": "must match a validated typed session subject",
+      "storage": "standard UserDefaults",
+      "pathOrKey": "dj_current_user; dj_is_logged_in",
+      "writer": "UserManager",
+      "readers": "AppCoordinator and private UI composition",
+      "cleanup": "clear and unmount private state on logout, suspension, mismatch, or delete",
+      "migration": "global cached user is display data only and never identity authority",
+      "retention": "current validated session only",
+      "testOwner": "WI-S0-01-02",
+      "status": "REGISTERED_TRANSITIONAL",
+      "nextWorkItem": "WI-S0-01-02",
+      "sourcePaths": [
+        "DreamJourney/Sources/Services/UserManager.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Services/UserManager.swift",
+          "contains": [
+            "dj_current_user",
+            "dj_is_logged_in"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/product-v4/product-v4-ios-typed-auth-cutover-check.py"
+      ]
+    },
+    {
+      "catalogId": "S03",
+      "surfaceId": "S03.archive-draft-items",
+      "dataClass": "archive drafts, source metadata, time-letter metadata, and local message state",
+      "ownerScope": "archive owner id plus viewer account; current auto-claim path is legacy risk",
+      "storage": "standard UserDefaults with owner-suffixed keys",
+      "pathOrKey": "dj.memoryArchive.items.<owner>; dj.memoryArchive.timeLetterMailbox.<viewer>; dj.inAppMessage.localState.<viewer>",
+      "writer": "MemoryArchiveRepository",
+      "readers": "Archive UI, Echo context builder, InAppMessageCenter",
+      "cleanup": "unmount on switch; apply DR-041 on logout; delete owner-scoped records on account deletion",
+      "migration": "legacy_unassigned and empty owner records must enter quarantine instead of automatic current-user ownership",
+      "retention": "owner draft policy and sealed time-letter policy",
+      "testOwner": "WI-S0-01-05",
+      "status": "REGISTERED_LEGACY_MIGRATION_REQUIRED",
+      "nextWorkItem": "WI-S0-01-05",
+      "sourcePaths": [
+        "DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift",
+        "DreamJourney/Sources/Modules/Archive/MemoryArchiveItem.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift",
+          "contains": [
+            "dj.memoryArchive.items",
+            "dj.memoryArchive.timeLetterMailbox",
+            "dj.inAppMessage.localState"
+          ]
+        },
+        {
+          "path": "DreamJourney/Sources/Modules/Archive/MemoryArchiveItem.swift",
+          "contains": [
+            "legacy_unassigned"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/prd-stitch-ui/archive-ownership-visibility-check.swift"
+      ]
+    },
+    {
+      "catalogId": "S04",
+      "surfaceId": "S04.archive-media-staging",
+      "dataClass": "private photo, audio, video, thumbnail, and time-letter image staging files",
+      "ownerScope": "currently global Documents directories; target owner/vault envelope plus checksum",
+      "storage": "Documents and temporary file directories",
+      "pathOrKey": "archive-images; archive-audio; archive-video; archive-video-thumbnails; archive-time-letter-images; photos; TGSessionRecordings",
+      "writer": "Archive entry controllers, AIRecordingViewController, and QA fixture paths in AppDelegate",
+      "readers": "MemoryArchiveItem, Archive UI, upload pipeline, Echo context",
+      "cleanup": "cancel upload and remove temporary files on switch; remove owner media on delete",
+      "migration": "retain only readable files with proven owner and checksum; quarantine ambiguous files",
+      "retention": "draft retention decision DR-041; temporary recordings are session-only",
+      "testOwner": "WI-S0-01-05",
+      "status": "REGISTERED_GLOBAL_PATH_MIGRATION_REQUIRED",
+      "nextWorkItem": "WI-S0-01-05",
+      "sourcePaths": [
+        "DreamJourney/Sources/AppDelegate.swift",
+        "DreamJourney/Sources/Modules/Archive/MemoryArchiveAudioRecorderViewController.swift",
+        "DreamJourney/Sources/Modules/Archive/MemoryArchiveItem.swift",
+        "DreamJourney/Sources/Modules/Archive/MemoryArchiveItemFactory.swift",
+        "DreamJourney/Sources/Modules/Archive/MemoryArchiveTextEntryViewController.swift",
+        "DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift",
+        "DreamJourney/Sources/Modules/Home/AIRecordingViewController.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Modules/Archive/MemoryArchiveAudioRecorderViewController.swift",
+          "contains": [
+            "archive-audio"
+          ]
+        },
+        {
+          "path": "DreamJourney/Sources/Modules/Archive/MemoryArchiveTextEntryViewController.swift",
+          "contains": [
+            "archive-time-letter-images"
+          ]
+        },
+        {
+          "path": "DreamJourney/Sources/Modules/Home/AIRecordingViewController.swift",
+          "contains": [
+            "TGSessionRecordings"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/prd-stitch-ui/archive-audio-lifecycle-smoke-check.swift",
+        "Scripts/QA/prd-stitch-ui/archive-local-file-path-recovery-check.swift"
+      ]
+    },
+    {
+      "catalogId": "S05",
+      "surfaceId": "S05.knowledge-projection-and-outbox",
+      "dataClass": "knowledge graph, sync base, pending mutation, governance outbox, sync history, and temporary private exports",
+      "ownerScope": "main stores use owner/persona/generation/epoch; sync_history and temporary exports remain global legacy",
+      "storage": "Documents/Application Support JSON files plus temporary JSON/PDF exports",
+      "pathOrKey": "knowledge_base/kb_graph_<user>.json; kb_sync_base_<digest>.json; kb_pending_mutation_<digest>.json; kb_governance_outbox_<digest>.json; sync_history.json; temporary knowledge/family_book exports",
+      "writer": "KBLiteManager, KBLiteMultiUser, KnowledgeSyncCoordinator, KnowledgeThreeWayMerge stores",
+      "readers": "KBLite, Knowledge Sync, Echo context, Family projection",
+      "cleanup": "unmount and cancel sync on switch; clear projection on epoch change; delete owner files and shared export artifacts on lifecycle cleanup",
+      "migration": "legacy kb_graph.json is quarantined; global sync_history is not authority; temporary exports require deterministic post-share removal",
+      "retention": "rebuildable projection; pending/outbox until receipt or explicit cleanup",
+      "testOwner": "WI-S0-01-03",
+      "status": "REGISTERED_SCOPED_WITH_LEGACY_QUARANTINE",
+      "nextWorkItem": "WI-S0-01-03",
+      "sourcePaths": [
+        "DreamJourney/Sources/Services/KBLiteManager.swift",
+        "DreamJourney/Sources/Services/KBLiteMultiUser.swift",
+        "DreamJourney/Sources/Services/KBLitePDFExporter.swift",
+        "DreamJourney/Sources/Services/KBLiteTestHelper.swift",
+        "DreamJourney/Sources/Services/KnowledgeLocalStoragePolicy.swift",
+        "DreamJourney/Sources/Services/KnowledgeSyncCoordinator.swift",
+        "DreamJourney/Sources/Services/KnowledgeThreeWayMerge.swift",
+        "DreamJourney/Sources/Modules/Knowledge/KBSyncViewController.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Services/KBLiteManager.swift",
+          "contains": [
+            "kb_graph_",
+            "kb_graph_legacy_quarantine"
+          ]
+        },
+        {
+          "path": "DreamJourney/Sources/Services/KnowledgeThreeWayMerge.swift",
+          "contains": [
+            "kb_pending_mutation_",
+            "kb_governance_outbox_"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/prd-stitch-ui/knowledge-semantic-cache-isolation-model-smoke.swift",
+        "Scripts/QA/prd-stitch-ui/knowledge-local-storage-protection-model-smoke.swift"
+      ]
+    },
+    {
+      "catalogId": "S06",
+      "surfaceId": "S06.conversation-memory-cache",
+      "dataClass": "conversation summaries and extracted local conversation memory",
+      "ownerScope": "partially scoped filename with global legacy fallback user_001",
+      "storage": "Documents JSON files",
+      "pathOrKey": "conversation_memory.json; conversation_memory_<scope>.json",
+      "writer": "ConversationMemoryManager",
+      "readers": "Echo and memoir generation",
+      "cleanup": "clear active owner cache on switch/logout/delete",
+      "migration": "stop global writes; quarantine unproven conversation_memory.json and user_001-derived scope",
+      "retention": "conversation cache only; backend Message remains authority",
+      "testOwner": "WI-S0-01-06",
+      "status": "REGISTERED_GLOBAL_FALLBACK_MIGRATION_REQUIRED",
+      "nextWorkItem": "WI-S0-01-06",
+      "sourcePaths": [
+        "DreamJourney/Sources/Services/ConversationMemoryManager.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Services/ConversationMemoryManager.swift",
+          "contains": [
+            "conversation_memory.json",
+            "user_001"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/product-v4/product-v4-ios-account-store-rollout-check.py"
+      ]
+    },
+    {
+      "catalogId": "S07",
+      "surfaceId": "S07.reply-and-message-projections",
+      "dataClass": "delayed Echo reply, inbox source projections, unread/read/archive state, and local schedules",
+      "ownerScope": "mailbox state is viewer-scoped; delayed reply and source keys remain global legacy",
+      "storage": "standard UserDefaults plus local notification requests",
+      "pathOrKey": "dj.echo.delayedReply; dj.inAppMessage.systemNotice.sources; dj.inAppMessage.echoReply.sources; dj.memoryArchive.timeLetterMailbox.<viewer>",
+      "writer": "EchoDelayedReplyStore, InAppMessageCenter stores, MemoryArchiveRepository",
+      "readers": "Echo, message center, Archive reminders",
+      "cleanup": "cancel old timer/notification and clear unread projection on switch/logout/delete",
+      "migration": "do not migrate global message bodies; rebuild from backend by owner/resource",
+      "retention": "until delivered/read/archive or account lifecycle cleanup",
+      "testOwner": "WI-S0-01-07",
+      "status": "REGISTERED_MIXED_SCOPE_MIGRATION_REQUIRED",
+      "nextWorkItem": "WI-S0-01-07",
+      "sourcePaths": [
+        "DreamJourney/Sources/Modules/Archive/InAppMessageCenter.swift",
+        "DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift",
+        "DreamJourney/Sources/Modules/Echo/EchoViewController.swift",
+        "DreamJourney/Sources/Services/EchoDelayedReplyNotificationScheduler.swift",
+        "DreamJourney/Sources/Services/EchoDelayedReplyStore.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Services/EchoDelayedReplyStore.swift",
+          "contains": [
+            "dj.echo.delayedReply"
+          ]
+        },
+        {
+          "path": "DreamJourney/Sources/Modules/Archive/InAppMessageCenter.swift",
+          "contains": [
+            "dj.inAppMessage.systemNotice.sources",
+            "dj.inAppMessage.echoReply.sources"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/prd-stitch-ui/echo-delayed-reply-notification-check.swift",
+        "Scripts/QA/prd-stitch-ui/in-app-message-center-shell-check.swift"
+      ]
+    },
+    {
+      "catalogId": "S08",
+      "surfaceId": "S08.memoir-drafts-and-recordings",
+      "dataClass": "memoir JSON drafts and source recordings",
+      "ownerScope": "global legacy Application Support directory without proven owner envelope",
+      "storage": "Application Support files",
+      "pathOrKey": "memoirs/<id>.json; memoirs/recordings/<session>.m4a",
+      "writer": "MemoirRepository",
+      "readers": "Memoir list/detail and TTS generation",
+      "cleanup": "do not mount across account; delete proven owner files on account deletion",
+      "migration": "copy only with owner evidence; otherwise quarantine and never auto-upload",
+      "retention": "local draft policy DR-041",
+      "testOwner": "WI-S0-01-06",
+      "status": "REGISTERED_GLOBAL_DIRECTORY_MIGRATION_REQUIRED",
+      "nextWorkItem": "WI-S0-01-06",
+      "sourcePaths": [
+        "DreamJourney/Sources/Memoir/MemoirModel.swift",
+        "DreamJourney/Sources/Memoir/MemoirRepository.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Memoir/MemoirRepository.swift",
+          "contains": [
+            "memoirs",
+            "recordings"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/product-v4/product-v4-ios-account-store-rollout-check.py"
+      ]
+    },
+    {
+      "catalogId": "S09",
+      "surfaceId": "S09.legacy-memory-and-map-state",
+      "dataClass": "legacy memories, seed fixtures, map read state, and transient map presentation timers",
+      "ownerScope": "global UserDefaults with user_001 fixture fallback",
+      "storage": "standard UserDefaults and ephemeral UI timer",
+      "pathOrKey": "dj.persistedMemories; dj.readMemoryIds; dj.bouncedMemoryIds; user_001 seed",
+      "writer": "MemoryRepository and MapFootprintViewController",
+      "readers": "Memory and Map modules",
+      "cleanup": "hide on switch; remove proven owner state on delete; invalidate presentation timer",
+      "migration": "seed is do-not-migrate; ambiguous real records enter quarantine",
+      "retention": "legacy compatibility window only",
+      "testOwner": "WI-S0-01-06",
+      "status": "REGISTERED_FIXTURE_AND_GLOBAL_MIGRATION_REQUIRED",
+      "nextWorkItem": "WI-S0-01-06",
+      "sourcePaths": [
+        "DreamJourney/Sources/Modules/Map/FootprintNotificationBanner.swift",
+        "DreamJourney/Sources/Modules/Map/MapFootprintViewController.swift",
+        "DreamJourney/Sources/Services/MemoryModel.swift",
+        "DreamJourney/Sources/Services/MemoryRepository.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Services/MemoryRepository.swift",
+          "contains": [
+            "dj.persistedMemories",
+            "user_001"
+          ]
+        },
+        {
+          "path": "DreamJourney/Sources/Modules/Map/MapFootprintViewController.swift",
+          "contains": [
+            "dj.readMemoryIds",
+            "dj.bouncedMemoryIds"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/product-v4/product-v4-ios-account-store-rollout-check.py"
+      ]
+    },
+    {
+      "catalogId": "S10",
+      "surfaceId": "S10.voice-profile-cache-and-poll",
+      "dataClass": "voice profile id, sample/provider status, consent-derived enablement, and training poll",
+      "ownerScope": "currently global UserDefaults and process timer; backend profile binding is authority",
+      "storage": "standard UserDefaults plus Timer",
+      "pathOrKey": "dj.voiceclone.speakerId; dj.voiceclone.sampleStatus; dj.voiceclone.isEnabled; dj.voiceclone.provider*",
+      "writer": "VoiceCloneService and voice recording UI",
+      "readers": "Voice settings, Echo role voice selection, TTS synthesis",
+      "cleanup": "cancel poll, stop profile use, clear cache, and invoke backend rights flow on delete",
+      "migration": "reconcile against backend owner/persona profile; never trust global ready state",
+      "retention": "backend profile lifecycle; local status is rebuildable cache",
+      "testOwner": "WI-S0-01-07",
+      "status": "REGISTERED_GLOBAL_KEY_MIGRATION_REQUIRED",
+      "nextWorkItem": "WI-S0-01-07",
+      "sourcePaths": [
+        "DreamJourney/Sources/Memoir/VoiceCloneService.swift",
+        "DreamJourney/Sources/Modules/Home/AIRecordingViewController.swift",
+        "DreamJourney/Sources/Modules/Profile/ProfileVoiceCloneShellViewController.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Memoir/VoiceCloneService.swift",
+          "contains": [
+            "dj.voiceclone.speakerId",
+            "Timer.scheduledTimer"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/prd-stitch-ui/voice-clone-stale-ready-state-check.swift",
+        "Scripts/QA/prd-stitch-ui/echo-role-voice-profile-selection-check.swift"
+      ]
+    },
+    {
+      "catalogId": "S11",
+      "surfaceId": "S11.generated-audio-and-timeline-cache",
+      "dataClass": "generated memoir or TTS audio plus viseme timeline metadata and playback timer",
+      "ownerScope": "currently global memoir id paths; target owner plus answer/profile/purpose hash",
+      "storage": "Application Support files and ephemeral playback timer",
+      "pathOrKey": "memoir_audio/<memoir>.<format>; memoir_tts_cache/<memoir>.json",
+      "writer": "MemoirTTSService",
+      "readers": "MemoirAudioPlayer and Digital Human playback",
+      "cleanup": "stop playback on switch and purge audio without complete owner/profile binding",
+      "migration": "do not claim global cache; regenerate from authoritative text when allowed",
+      "retention": "bounded generated cache",
+      "testOwner": "WI-S0-01-07",
+      "status": "REGISTERED_GLOBAL_CACHE_MIGRATION_REQUIRED",
+      "nextWorkItem": "WI-S0-01-07",
+      "sourcePaths": [
+        "DreamJourney/Sources/Memoir/MemoirAudioPlayer.swift",
+        "DreamJourney/Sources/Memoir/MemoirTTSService.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Memoir/MemoirTTSService.swift",
+          "contains": [
+            "memoir_audio",
+            "memoir_tts_cache"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/prd-stitch-ui/voice-synthesis-viseme-contract-check.swift"
+      ]
+    },
+    {
+      "catalogId": "S12",
+      "surfaceId": "S12.digital-human-context-and-runtime",
+      "dataClass": "selected persona context, provider session lease, audio owner, work items, and metering probe",
+      "ownerScope": "context key is viewer-scoped; runtime must be bound to account generation and selected persona",
+      "storage": "owner-suffixed UserDefaults plus ephemeral provider runtime/timers/temp file",
+      "pathOrKey": "dj.digitalHuman.currentContext.<viewer>; digital-human-metering-probe.caf; provider session in memory",
+      "writer": "DigitalHumanContextStore and Echo/DigitalHuman runtime",
+      "readers": "Echo UI, Knowledge persona context, Archive visibility",
+      "cleanup": "close runtime/lease, cancel work items, stop audio, and remove temp probe on lifecycle boundary",
+      "migration": "never migrate provider session; restore only a currently authorized persona selection",
+      "retention": "persona selection until revoked; provider runtime process/session only",
+      "testOwner": "WI-S0-01-07",
+      "status": "REGISTERED_SCOPED_AND_EPHEMERAL",
+      "nextWorkItem": "WI-S0-01-07",
+      "sourcePaths": [
+        "DreamJourney/Sources/App/DigitalHumanContextStore.swift",
+        "DreamJourney/Sources/Modules/Echo/DigitalHumanAudioLevelMeter.swift",
+        "DreamJourney/Sources/Modules/Echo/DigitalHumanConversationCoordinator.swift",
+        "DreamJourney/Sources/Modules/Echo/EchoViewController.swift",
+        "DreamJourney/Sources/Services/DialogEngineManager.swift",
+        "DreamJourney/Sources/Services/DigitalHuman/AudioOnlyDigitalHumanRuntime.swift",
+        "DreamJourney/Sources/Services/DigitalHuman/DigitalHumanRuntime.swift",
+        "DreamJourney/Sources/Services/DigitalHuman/DigitalHumanRuntimeFactory.swift",
+        "DreamJourney/Sources/Services/DigitalHuman/TencentDigitalHumanCloudRuntime.swift",
+        "DreamJourney/Sources/Services/DigitalHuman/TencentDigitalHumanSDKBridge.swift",
+        "DreamJourney/Sources/Services/DigitalHuman/TencentVirtualmanSDKBridge.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/App/DigitalHumanContextStore.swift",
+          "contains": [
+            "dj.digitalHuman.currentContext"
+          ]
+        },
+        {
+          "path": "DreamJourney/Sources/Modules/Echo/DigitalHumanAudioLevelMeter.swift",
+          "contains": [
+            "digital-human-metering-probe.caf"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/prd-stitch-ui/echo-digital-human-lifecycle-coordinator-check.swift",
+        "Scripts/QA/prd-stitch-ui/echo-audio-owner-lifecycle-guard-check.swift"
+      ]
+    },
+    {
+      "catalogId": "S13",
+      "surfaceId": "S13.family-and-care-projections",
+      "dataClass": "family relationship projection, persona/voice overrides, authorization freshness, and care signal message",
+      "ownerScope": "relationship owner plus accepted member/grant; care key is owner-suffixed",
+      "storage": "owner-suffixed standard UserDefaults plus in-memory authorization projection",
+      "pathOrKey": "dj.family.digitalHumanModeOverrides.<owner>; dj.family.voiceProfileOverrides.<owner>; dj.profileCare.inAppMessageSignal.<owner>",
+      "writer": "FamilyRepository and ProfileCareSignalMessageStore",
+      "readers": "Family UI, Digital Human context, Echo role selection, message center",
+      "cleanup": "unmount and cancel callback on switch; clear projection on revoke/delete",
+      "migration": "pending/failed relationship is not authority; viewer/grant mismatch is discarded",
+      "retention": "rebuildable backend projection",
+      "testOwner": "WI-S0-01-07",
+      "status": "REGISTERED_SCOPED_PROJECTION",
+      "nextWorkItem": "WI-S0-01-07",
+      "sourcePaths": [
+        "DreamJourney/Sources/Modules/Profile/ProfileCareModels.swift",
+        "DreamJourney/Sources/Services/FamilyRepository.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Services/FamilyRepository.swift",
+          "contains": [
+            "dj.family.digitalHumanModeOverrides",
+            "dj.family.voiceProfileOverrides"
+          ]
+        },
+        {
+          "path": "DreamJourney/Sources/Modules/Profile/ProfileCareModels.swift",
+          "contains": [
+            "dj.profileCare.inAppMessageSignal"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/prd-stitch-ui/family-authorization-freshness-model-smoke.swift",
+        "Scripts/QA/prd-stitch-ui/family-context-reconciliation-model-smoke.swift"
+      ]
+    },
+    {
+      "catalogId": "S14",
+      "surfaceId": "S14.echo-trace-and-qa-evidence",
+      "dataClass": "value-minimized Echo traces, runtime diagnostics, evidence packages, bundles, and exported receipts",
+      "ownerScope": "hashed active owner digest plus validated record owner",
+      "storage": "owner-suffixed standard UserDefaults and owner-digest export directories",
+      "pathOrKey": "DreamJourney.Echo*Store.*.owner.<digest>; DreamJourneyEchoQAExports/<digest>/<namespace>",
+      "writer": "Echo owner-scoped stores in DreamJourneyBackendClient",
+      "readers": "QA evidence panel and export flow",
+      "cleanup": "remove owner records, manifests, and exports on switch/logout/delete",
+      "migration": "purge legacy global trace keys and temp exports; never infer owner",
+      "retention": "bounded recent records and QA-only exported files",
+      "testOwner": "WI-S0-01-07",
+      "status": "REGISTERED_SCOPED",
+      "nextWorkItem": "WI-S0-01-07",
+      "sourcePaths": [
+        "DreamJourney/Sources/Modules/Echo/EchoViewController.swift",
+        "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift",
+          "contains": [
+            "DreamJourney.EchoTraceStore.records.v2.owner.",
+            "DreamJourneyEchoQAExports"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/prd-stitch-ui/echo-trace-owner-isolation-model-smoke.swift",
+        "Scripts/QA/prd-stitch-ui/echo-qa-evidence-bundle-check.swift"
+      ]
+    },
+    {
+      "catalogId": "S15",
+      "surfaceId": "S15.release-policy-and-feature-cache",
+      "dataClass": "release policy, recovery runtime policy, runtime capability, and QA feature override",
+      "ownerScope": "policy scope includes subject/cohort/build; feature override is global QA-only",
+      "storage": "standard UserDefaults",
+      "pathOrKey": "dj.releasePolicy.cache.v1.<scope>; dj.recovery.runtime.policy.v1; dj.featureFlags.enabled; dj.featureFlags.schemaVersion",
+      "writer": "ReleasePolicyStore, RecoveryRuntimePolicyStore, FeatureFlagService, DreamJourneyBackendClient",
+      "readers": "all feature and runtime gates",
+      "cleanup": "invalidate on TTL, subject/cohort/build, authority epoch, or stricter local fallback",
+      "migration": "do not promote QA global override to production policy",
+      "retention": "policy TTL; QA override until schema reset",
+      "testOwner": "WI-S0-06-02",
+      "status": "REGISTERED_POLICY_SCOPE",
+      "nextWorkItem": "WI-S0-01-02",
+      "sourcePaths": [
+        "DreamJourney/Sources/App/FeatureFlagService.swift",
+        "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift",
+        "DreamJourney/Sources/Services/ReleasePolicyStore.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/App/FeatureFlagService.swift",
+          "contains": [
+            "dj.featureFlags.enabled"
+          ]
+        },
+        {
+          "path": "DreamJourney/Sources/Services/ReleasePolicyStore.swift",
+          "contains": [
+            "dj.releasePolicy.cache.v1",
+            "dj.recovery.runtime.policy.v1"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/product-v4/product-v4-ios-account-store-rollout-check.py"
+      ]
+    },
+    {
+      "catalogId": "S16",
+      "surfaceId": "S16.widget-app-group-projection",
+      "dataClass": "minimal knowledge widget projection and active owner digest",
+      "ownerScope": "active verified owner digest with snapshot owner match",
+      "storage": "App Group file plus suite UserDefaults",
+      "pathOrKey": "kb_widget_snapshot_v2.json; DreamJourneyKnowledgeWidgetActiveOwnerDigestV2",
+      "writer": "KnowledgeWidgetSnapshotStore",
+      "readers": "TodayInHistoryProvider",
+      "cleanup": "write empty/remove snapshot and reload widget timeline on switch/logout/delete",
+      "migration": "remove legacy global schema rather than assign it to current user",
+      "retention": "latest minimal authorized projection only",
+      "testOwner": "WI-S0-01-08",
+      "status": "REGISTERED_SCOPED_PROJECTION",
+      "nextWorkItem": "WI-S0-01-08",
+      "sourcePaths": [
+        "DreamJourney/Sources/Services/KnowledgeWidgetSnapshotStore.swift",
+        "DreamJourneyWidget/TodayInHistoryProvider.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Services/KnowledgeWidgetSnapshotStore.swift",
+          "contains": [
+            "kb_widget_snapshot_v2.json",
+            "DreamJourneyKnowledgeWidgetActiveOwnerDigestV2"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/prd-stitch-ui/knowledge-widget-snapshot-store-model-smoke.swift",
+        "Scripts/QA/prd-stitch-ui/knowledge-widget-snapshot-reader-model-smoke.swift"
+      ]
+    },
+    {
+      "catalogId": "S17",
+      "surfaceId": "S17.push-and-local-notification-registration",
+      "dataClass": "APNs device token, backend registration, owner-targeted local notification requests, and authorization state",
+      "ownerScope": "device token plus currently verified session owner and resource id",
+      "storage": "standard UserDefaults, backend subscription, and UNUserNotificationCenter",
+      "pathOrKey": "dj.pushDeviceToken.localToken; dj.pushDeviceToken.registration; dj.echo.delayedReply; time-letter-<item>",
+      "writer": "PushDeviceTokenStore, AppDelegate, EchoDelayedReplyNotificationScheduler, TimeLetterReminderScheduler",
+      "readers": "push registration flow and local reminder delivery",
+      "cleanup": "unregister owner binding and cancel owner/resource notification IDs on switch/logout/delete",
+      "migration": "re-register token only with current verified session; never reuse previous owner binding",
+      "retention": "device registration until token change or lifecycle cleanup; notifications until delivery/cancel",
+      "testOwner": "WI-S0-01-08",
+      "status": "REGISTERED_DEVICE_AND_OWNER_BINDING_REQUIRED",
+      "nextWorkItem": "WI-S0-01-08",
+      "sourcePaths": [
+        "DreamJourney/Sources/AppDelegate.swift",
+        "DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift",
+        "DreamJourney/Sources/Services/EchoDelayedReplyNotificationScheduler.swift",
+        "DreamJourney/Sources/Services/PushDeviceTokenStore.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Services/PushDeviceTokenStore.swift",
+          "contains": [
+            "dj.pushDeviceToken.registration",
+            "dj.pushDeviceToken.localToken"
+          ]
+        },
+        {
+          "path": "DreamJourney/Sources/Services/EchoDelayedReplyNotificationScheduler.swift",
+          "contains": [
+            "dj.echo.delayedReply"
+          ]
+        },
+        {
+          "path": "DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift",
+          "contains": [
+            "time-letter-"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/prd-stitch-ui/echo-delayed-reply-notification-check.swift",
+        "Scripts/QA/prd-stitch-ui/knowledge-widget-privacy-policy-model-smoke.swift"
+      ]
+    },
+    {
+      "catalogId": "S05",
+      "surfaceId": "S05.temporary-knowledge-share-exports",
+      "dataClass": "full private knowledge JSON and family-book PDF exports",
+      "ownerScope": "current graph snapshot only; filenames are not owner authority",
+      "storage": "OS temporary directory and external share destinations",
+      "pathOrKey": "knowledge export JSON; family_book_<timestamp>.pdf",
+      "writer": "KBSyncViewController and KBLitePDFExporter",
+      "readers": "UIActivityViewController and user-selected external destinations",
+      "cleanup": "current implementation has no deterministic post-share removal; WI-S0-01-08 owns cleanup",
+      "migration": "never import or auto-claim a prior temporary export as current owner state",
+      "retention": "currently OS-temporary lifetime; target delete after share completion or cancellation",
+      "testOwner": "WI-S0-01-08",
+      "status": "REGISTERED_CLEANUP_GAP",
+      "nextWorkItem": "WI-S0-01-08",
+      "sourcePaths": [
+        "DreamJourney/Sources/Modules/Knowledge/KBSyncViewController.swift",
+        "DreamJourney/Sources/Services/KBLitePDFExporter.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Modules/Knowledge/KBSyncViewController.swift",
+          "contains": [
+            "FileManager.default.temporaryDirectory"
+          ]
+        },
+        {
+          "path": "DreamJourney/Sources/Services/KBLitePDFExporter.swift",
+          "contains": [
+            "family_book_",
+            "NSTemporaryDirectory"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/prd-stitch-ui/knowledge-family-sync-import-authorization-check.swift"
+      ]
+    },
+    {
+      "catalogId": "S07",
+      "surfaceId": "S07.remote-delayed-reply-job",
+      "dataClass": "Echo transcript-derived delayed reply and push job metadata",
+      "ownerScope": "captured backend subject/resource; client generation is not yet part of cancellation",
+      "storage": "backend job and APNs delivery state",
+      "pathOrKey": "scheduleEchoDelayedReplyPush",
+      "writer": "EchoViewController through DreamJourneyBackendClient",
+      "readers": "backend dispatcher, APNs, and InAppMessageCenter",
+      "cleanup": "current client has no account-lifecycle cancel command; WI-S0-01-08 owns fencing/cancel policy",
+      "migration": "do not deliver a prior owner's job into a newly activated account",
+      "retention": "backend delivery lifecycle; bounded policy must be verified in WI-S0-01-08",
+      "testOwner": "WI-S0-01-08",
+      "status": "REGISTERED_REMOTE_EFFECT_GAP",
+      "nextWorkItem": "WI-S0-01-08",
+      "sourcePaths": [
+        "DreamJourney/Sources/Modules/Echo/EchoViewController.swift",
+        "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Modules/Echo/EchoViewController.swift",
+          "contains": [
+            "scheduleDelayedReplyNotificationIfNeeded"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/prd-stitch-ui/echo-delayed-reply-push-contract-check.swift"
+      ]
+    },
+    {
+      "catalogId": "S10",
+      "surfaceId": "S10.voice-preview-temporary-audio",
+      "dataClass": "synthesized cloned-voice preview audio",
+      "ownerScope": "voiceProfileId only; target requires active owner/profile lease",
+      "storage": "OS temporary file",
+      "pathOrKey": "voice-clone-preview-<voiceProfileId>.<format>",
+      "writer": "ProfileVoiceCloneShellViewController",
+      "readers": "local AVAudioPlayer preview only",
+      "cleanup": "current implementation does not deterministically delete after playback; WI-S0-01-07 owns cleanup",
+      "migration": "preview files are never user data authority and must not be mounted after account switch",
+      "retention": "currently OS-temporary lifetime; target playback/session lifetime",
+      "testOwner": "WI-S0-01-07",
+      "status": "REGISTERED_CLEANUP_GAP",
+      "nextWorkItem": "WI-S0-01-07",
+      "sourcePaths": [
+        "DreamJourney/Sources/Modules/Profile/ProfileVoiceCloneShellViewController.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Modules/Profile/ProfileVoiceCloneShellViewController.swift",
+          "contains": [
+            "voice-clone-preview-"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/prd-stitch-ui/voice-clone-synthesis-runtime-smoke-check.swift"
+      ]
+    },
+    {
+      "catalogId": "S10",
+      "surfaceId": "S10.voice-training-poll-runtime",
+      "dataClass": "speaker/profile id, persona target, completion closures, and training state",
+      "ownerScope": "captured target without a unified AccountLease checkpoint",
+      "storage": "process memory and repeating Timer",
+      "pathOrKey": "pollTimer; trainingSpeakerId; trainingPersonaTarget; pendingCompletion",
+      "writer": "VoiceCloneService",
+      "readers": "VoiceCloneService status callbacks and profile UI",
+      "cleanup": "current success/failure/timeout cancellation exists; account switch cancellation is pending",
+      "migration": "runtime is never migrated; stale callback must be rejected by generation",
+      "retention": "up to provider poll limit or singleton lifetime",
+      "testOwner": "WI-S0-01-07",
+      "status": "REGISTERED_ACCOUNT_LEASE_GAP",
+      "nextWorkItem": "WI-S0-01-07",
+      "sourcePaths": [
+        "DreamJourney/Sources/Memoir/VoiceCloneService.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Memoir/VoiceCloneService.swift",
+          "contains": [
+            "trainingPersonaTarget",
+            "pendingCompletion"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/prd-stitch-ui/voice-clone-stale-ready-state-check.swift"
+      ]
+    },
+    {
+      "catalogId": "S10",
+      "surfaceId": "S10.remote-voice-profile-artifacts",
+      "dataClass": "consented voice sample, provider training artifact, profile state, and synthesis authority",
+      "ownerScope": "backend subject plus persona target and voiceProfileId",
+      "storage": "DreamJourney backend and voice provider",
+      "pathOrKey": "/voice/profiles and provider artifact lifecycle",
+      "writer": "VoiceCloneService through backend-only provider contract",
+      "readers": "profile status, synthesis, disable, and delete APIs",
+      "cleanup": "explicit backend disable/delete; account deletion retention receipt remains a downstream obligation",
+      "migration": "never move a provider artifact between subjects or personas",
+      "retention": "backend/provider policy owned by voice-profile rights flow",
+      "testOwner": "WI-S0-01-07",
+      "status": "REGISTERED_REMOTE_AUTHORITY",
+      "nextWorkItem": "WI-S0-01-07",
+      "sourcePaths": [
+        "DreamJourney/Sources/Memoir/VoiceCloneService.swift",
+        "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Memoir/VoiceCloneService.swift",
+          "contains": [
+            "/voice/profiles"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/prd-stitch-ui/voice-clone-backend-contract-check.swift"
+      ]
+    },
+    {
+      "catalogId": "S12",
+      "surfaceId": "S12.digital-human-conversation-runtime",
+      "dataClass": "pending and last reply text, request ids, turn ids, and conversation state",
+      "ownerScope": "currently controller lifecycle; target account generation plus persona lease",
+      "storage": "process memory",
+      "pathOrKey": "DigitalHumanConversationCoordinator state",
+      "writer": "Echo digital-human provider route",
+      "readers": "Echo UI and playback coordinator",
+      "cleanup": "reset/release exists; unified account lifecycle checkpoint remains pending",
+      "migration": "never migrate conversation runtime across owner/persona selection",
+      "retention": "single Echo view/turn lifetime",
+      "testOwner": "WI-S0-01-07",
+      "status": "REGISTERED_ACCOUNT_LEASE_GAP",
+      "nextWorkItem": "WI-S0-01-07",
+      "sourcePaths": [
+        "DreamJourney/Sources/Modules/Echo/DigitalHumanConversationCoordinator.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Modules/Echo/DigitalHumanConversationCoordinator.swift",
+          "contains": [
+            "DigitalHumanConversationCoordinator"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/prd-stitch-ui/echo-digital-human-lifecycle-coordinator-check.swift"
+      ]
+    },
+    {
+      "catalogId": "S12",
+      "surfaceId": "S12.dialog-prompt-runtime",
+      "dataClass": "prompt, archive context, chat buffer, ASR text, and SDK event payload",
+      "ownerScope": "currently singleton/process state; target active AccountLease",
+      "storage": "process memory and debug log sink",
+      "pathOrKey": "DialogPromptDebugRecorder.lastSnapshot; dialog config/chatBuffer",
+      "writer": "DialogEngineManager",
+      "readers": "dialog engine and QA diagnostics",
+      "cleanup": "partial stop/reset exists; account lifecycle purge and log minimization remain pending",
+      "migration": "never carry prompt/chat buffer into another account generation",
+      "retention": "current process lifetime; target active dialog session only",
+      "testOwner": "WI-S0-01-07",
+      "status": "REGISTERED_ACCOUNT_LEASE_GAP",
+      "nextWorkItem": "WI-S0-01-07",
+      "sourcePaths": [
+        "DreamJourney/Sources/Services/DialogEngineManager.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Services/DialogEngineManager.swift",
+          "contains": [
+            "DialogPromptDebugRecorder",
+            "chatBuffer"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/prd-stitch-ui/dialog-archive-context-integration-check.swift"
+      ]
+    },
+    {
+      "catalogId": "S12",
+      "surfaceId": "S12.tencent-provider-bridge-runtime",
+      "dataClass": "remote audio user ids, raw SEI/WebSocket events, and provider session state",
+      "ownerScope": "provider session only; target account/persona lease",
+      "storage": "process memory and provider SDK logging",
+      "pathOrKey": "TencentVirtualmanSDKBridge remoteAudioUserIds/onRecvSEIMsg/onWsMessage",
+      "writer": "TencentVirtualmanSDKBridge",
+      "readers": "Tencent digital-human runtime",
+      "cleanup": "bridge close clears runtime; log value minimization remains pending",
+      "migration": "never reuse provider bridge state across account/persona switch",
+      "retention": "provider session lifetime plus external SDK log policy",
+      "testOwner": "WI-S0-01-07",
+      "status": "REGISTERED_PROVIDER_RUNTIME",
+      "nextWorkItem": "WI-S0-01-07",
+      "sourcePaths": [
+        "DreamJourney/Sources/Services/DigitalHuman/TencentVirtualmanSDKBridge.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Services/DigitalHuman/TencentVirtualmanSDKBridge.swift",
+          "contains": [
+            "remoteAudioUserIds",
+            "onRecvSEIMsg"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/prd-stitch-ui/digital-human-session-lease-check.swift"
+      ]
+    },
+    {
+      "catalogId": "S12",
+      "surfaceId": "S12.remote-digital-human-lease",
+      "dataClass": "provider session/lease plus persona, asset, device, and lifecycle identifiers",
+      "ownerScope": "captured account and selected persona with current lifecycle token",
+      "storage": "backend/provider lease state",
+      "pathOrKey": "create/heartbeat/release digital-human session",
+      "writer": "EchoViewController through DreamJourneyBackendClient",
+      "readers": "TencentDigitalHuman runtime and backend lease coordinator",
+      "cleanup": "normal/stale release and server expiry exist; account-switch receipt is verified downstream",
+      "migration": "provider sessions are never migrated or reused",
+      "retention": "server lease TTL or explicit release",
+      "testOwner": "WI-S0-01-07",
+      "status": "REGISTERED_REMOTE_LEASE",
+      "nextWorkItem": "WI-S0-01-07",
+      "sourcePaths": [
+        "DreamJourney/Sources/Modules/Echo/EchoViewController.swift",
+        "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Modules/Echo/EchoViewController.swift",
+          "contains": [
+            "digitalHumanSessionHeartbeatWorkItem"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/prd-stitch-ui/digital-human-session-lease-check.swift"
+      ]
+    },
+    {
+      "catalogId": "S14",
+      "surfaceId": "S14.qa-document-evidence-copies",
+      "dataClass": "QA-only Echo, provider, digital-human, voice-profile, and smoke result metadata",
+      "ownerScope": "mixed legacy QA artifacts; owner-scoped export store exists but Documents copies remain",
+      "storage": "Documents JSON files and copied QA export files",
+      "pathOrKey": "echo/digital-human/voice-clone UIQA result JSON files",
+      "writer": "AppDelegate UIQA harness and EchoViewController QA export",
+      "readers": "QA shell/static scripts",
+      "cleanup": "current overwrite-only behavior is insufficient; WI-S0-01-08 owns deterministic purge",
+      "migration": "QA evidence is never production authority and legacy ownerless files are deleted",
+      "retention": "current Documents lifetime; target bounded QA run lifetime",
+      "testOwner": "WI-S0-01-08",
+      "status": "REGISTERED_QA_CLEANUP_GAP",
+      "nextWorkItem": "WI-S0-01-08",
+      "sourcePaths": [
+        "DreamJourney/Sources/AppDelegate.swift",
+        "DreamJourney/Sources/Modules/Echo/EchoViewController.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Modules/Echo/EchoViewController.swift",
+          "contains": [
+            "preserveTemporaryEchoTraceUIQAExport"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/prd-stitch-ui/echo-qa-evidence-bundle-check.swift"
+      ]
+    },
+    {
+      "catalogId": "S14",
+      "surfaceId": "S14.private-runtime-log-sinks",
+      "dataClass": "value-bearing prompt, ASR, archive, request, session, profile, and provider event diagnostics",
+      "ownerScope": "not consistently owner-scoped; production logs must be value-minimized",
+      "storage": "console, DDLog, OS log, and provider SDK log sinks",
+      "pathOrKey": "DialogEngineManager, Echo diagnostics, and Tencent bridge log calls",
+      "writer": "dialog, Echo, backend client, and provider bridge diagnostics",
+      "readers": "developer/support tooling",
+      "cleanup": "current app cannot guarantee external sink purge; WI-S0-01-08 owns minimization and retention contract",
+      "migration": "never treat logs as memory/persona authority",
+      "retention": "external sink policy; app must emit only value-minimized events",
+      "testOwner": "WI-S0-01-08",
+      "status": "REGISTERED_LOG_POLICY_GAP",
+      "nextWorkItem": "WI-S0-01-08",
+      "sourcePaths": [
+        "DreamJourney/Sources/Services/DialogEngineManager.swift",
+        "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift",
+        "DreamJourney/Sources/Services/DigitalHuman/TencentVirtualmanSDKBridge.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Services/DialogEngineManager.swift",
+          "contains": [
+            "DialogPromptDebugRecorder"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/product-v4/product-v4-mobile-credential-path-retirement-check.py"
+      ]
+    }
+  ]
+}
