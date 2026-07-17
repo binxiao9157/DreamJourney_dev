@@ -141,6 +141,12 @@ struct FamilyMember: Codable, Identifiable {
     /// 家庭关系归属与授权来源。缺失/legacy 一律不具备家庭访问权限。
     var relationshipOwnerUserId: String
     var relationshipAuthoritySource: FamilyRelationshipAuthoritySource
+    var relationshipId: String
+    var memberSubjectId: String
+    var relationshipStatus: FamilyRelationshipStatus
+    var relationshipEpoch: Int
+    var accessGrants: [FamilyAccessGrant]
+    var grantEpoch: Int
     var accessStatus: String
     var invitationStatus: String
     var invitationURL: String?
@@ -162,9 +168,18 @@ struct FamilyMember: Codable, Identifiable {
         )
     }
 
-    func isAcceptedFamilyMember(for ownerUserId: String, allowQAFixtures: Bool = false) -> Bool {
-        FamilyRelationshipAuthorizationPolicy.isAuthorized(
+    var isAcceptedFamilyRelationship: Bool {
+        isAcceptedFamilyRelationship(
+            for: relationshipOwnerUserId,
+            allowQAFixtures: FamilyRelationshipAuthorizationPolicy.currentBuildAllowsQAFixtures
+        )
+    }
+
+    func isAcceptedFamilyRelationship(for ownerUserId: String, allowQAFixtures: Bool = false) -> Bool {
+        FamilyRelationshipAuthorizationPolicy.isAcceptedRelationship(
+            relationshipId: relationshipId,
             relationshipOwnerUserId: relationshipOwnerUserId,
+            relationshipStatus: relationshipStatus,
             authoritySource: relationshipAuthoritySource,
             accessStatus: accessStatus,
             invitationStatus: invitationStatus,
@@ -175,14 +190,67 @@ struct FamilyMember: Codable, Identifiable {
         )
     }
 
+    func isAcceptedFamilyMember(
+        for ownerUserId: String,
+        allowQAFixtures: Bool = false,
+        now: Date = Date()
+    ) -> Bool {
+        FamilyRelationshipAuthorizationPolicy.hasFamilyPersonaReadAccess(
+            familyMemberId: id,
+            memberSubjectId: memberSubjectId,
+            relationshipId: relationshipId,
+            relationshipOwnerUserId: relationshipOwnerUserId,
+            relationshipStatus: relationshipStatus,
+            authoritySource: relationshipAuthoritySource,
+            accessStatus: accessStatus,
+            invitationStatus: invitationStatus,
+            accessGrants: accessGrants,
+            context: FamilyRelationshipAuthorizationContext(
+                currentOwnerUserId: ownerUserId,
+                allowQAFixtures: allowQAFixtures
+            ),
+            now: now
+        )
+    }
+
+    func activeFamilyPersonaReadGrants(at now: Date = Date()) -> [FamilyAccessGrant] {
+        let normalizedRelationshipId = relationshipId.trimmingCharacters(in: .whitespacesAndNewlines)
+        return accessGrants.filter { grant in
+            grant.relationshipId.trimmingCharacters(in: .whitespacesAndNewlines) == normalizedRelationshipId
+                && grant.isValid(
+                    at: now,
+                    purpose: "family.persona",
+                    operation: "read",
+                    resourceType: "familyMember",
+                    resourceId: id
+                )
+        }
+    }
+
     var familyInvitationDisplayName: String {
-        if isAcceptedFamilyMember {
+        if isAcceptedFamilyRelationship {
             return "已加入"
+        }
+        if relationshipStatus == .paused {
+            return "关系已暂停"
+        }
+        if relationshipStatus == .revoked {
+            return "关系已撤销"
         }
         if invitationStatus.lowercased() == "failed" || accessStatus.lowercased() == "failed" {
             return "邀请失败"
         }
         return "邀请中"
+    }
+
+    var familyPersonaAuthorizationDisplayName: String {
+        if isAcceptedFamilyMember {
+            return "回响已授权"
+        }
+        if isAcceptedFamilyRelationship {
+            return "回响未授权"
+        }
+        return familyInvitationDisplayName
     }
 
     var normalizedVoiceProfileId: String? {
@@ -228,6 +296,12 @@ struct FamilyMember: Codable, Identifiable {
          defaultReleaseVisible: Bool = false,
          relationshipOwnerUserId: String = "",
          relationshipAuthoritySource: FamilyRelationshipAuthoritySource = .legacyUnverified,
+         relationshipId: String = "",
+         memberSubjectId: String = "",
+         relationshipStatus: FamilyRelationshipStatus = .pending,
+         relationshipEpoch: Int = 0,
+         accessGrants: [FamilyAccessGrant] = [],
+         grantEpoch: Int = 0,
          accessStatus: String = "pending",
          invitationStatus: String = "pending",
          invitationURL: String? = nil,
@@ -252,6 +326,12 @@ struct FamilyMember: Codable, Identifiable {
         self.defaultReleaseVisible = defaultReleaseVisible
         self.relationshipOwnerUserId = relationshipOwnerUserId
         self.relationshipAuthoritySource = relationshipAuthoritySource
+        self.relationshipId = relationshipId
+        self.memberSubjectId = memberSubjectId
+        self.relationshipStatus = relationshipStatus
+        self.relationshipEpoch = relationshipEpoch
+        self.accessGrants = accessGrants
+        self.grantEpoch = grantEpoch
         self.accessStatus = accessStatus
         self.invitationStatus = invitationStatus
         self.invitationURL = invitationURL
@@ -279,6 +359,12 @@ struct FamilyMember: Codable, Identifiable {
         case defaultReleaseVisible
         case relationshipOwnerUserId
         case relationshipAuthoritySource
+        case relationshipId
+        case memberSubjectId
+        case relationshipStatus
+        case relationshipEpoch
+        case accessGrants
+        case grantEpoch
         case accessStatus
         case invitationStatus
         case invitationURL
@@ -310,6 +396,15 @@ struct FamilyMember: Codable, Identifiable {
             FamilyRelationshipAuthoritySource.self,
             forKey: .relationshipAuthoritySource
         ) ?? .legacyUnverified
+        relationshipId = try container.decodeIfPresent(String.self, forKey: .relationshipId) ?? ""
+        memberSubjectId = try container.decodeIfPresent(String.self, forKey: .memberSubjectId) ?? ""
+        relationshipStatus = try container.decodeIfPresent(
+            FamilyRelationshipStatus.self,
+            forKey: .relationshipStatus
+        ) ?? .pending
+        relationshipEpoch = try container.decodeIfPresent(Int.self, forKey: .relationshipEpoch) ?? 0
+        accessGrants = try container.decodeIfPresent([FamilyAccessGrant].self, forKey: .accessGrants) ?? []
+        grantEpoch = try container.decodeIfPresent(Int.self, forKey: .grantEpoch) ?? 0
         accessStatus = try container.decodeIfPresent(String.self, forKey: .accessStatus) ?? "pending"
         invitationStatus = try container.decodeIfPresent(String.self, forKey: .invitationStatus) ?? "pending"
         invitationURL = try container.decodeIfPresent(String.self, forKey: .invitationURL)
@@ -346,6 +441,12 @@ struct FamilyMember: Codable, Identifiable {
                 ?? stringValue(in: object, for: "userId")
                 ?? "",
             relationshipAuthoritySource: .backendInvitation,
+            relationshipId: stringValue(in: object, for: "relationshipId") ?? "",
+            memberSubjectId: stringValue(in: object, for: "memberSubjectId") ?? "",
+            relationshipStatus: relationshipStatus(from: object),
+            relationshipEpoch: intValue(in: object, for: "relationshipEpoch") ?? 0,
+            accessGrants: accessGrants(from: object),
+            grantEpoch: intValue(in: object, for: "grantEpoch") ?? 0,
             accessStatus: stringValue(in: object, for: "accessStatus") ?? "pending",
             invitationStatus: stringValue(in: object, for: "invitationStatus") ?? "pending",
             invitationURL: stringValue(in: object, for: "invitationURL"),
@@ -355,6 +456,18 @@ struct FamilyMember: Codable, Identifiable {
             voiceSampleStatus: stringValue(in: object, for: "voiceSampleStatus") ?? "notProvided",
             voiceEnabled: boolValue(in: object, for: "voiceEnabled") ?? false
         )
+    }
+
+    private static func relationshipStatus(from object: [String: Any]) -> FamilyRelationshipStatus {
+        guard let rawValue = stringValue(in: object, for: "relationshipStatus") else {
+            return .pending
+        }
+        return FamilyRelationshipStatus(rawValue: rawValue.lowercased()) ?? .unknown
+    }
+
+    private static func accessGrants(from object: [String: Any]) -> [FamilyAccessGrant] {
+        guard let values = object["accessGrants"] as? [[String: Any]] else { return [] }
+        return values.compactMap(FamilyAccessGrant.fromBackendJSON)
     }
 
     private static func digitalHumanMode(from object: [String: Any]) -> DigitalHumanMode? {

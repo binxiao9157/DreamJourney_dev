@@ -261,6 +261,9 @@ assertContains(releaseRegression, "run-echo-trace-owner-isolation-model-smoke.sh
 assertContains(releaseRegression, "echo-trace-owner-isolation-check.swift", "release regression should always guard Echo trace owner lifecycle wiring")
 assertContains(releaseRegression, "run-knowledge-persona-ranking-prefilter-check.sh", "release regression should always guard persona filtering before ranking")
 assertContains(releaseRegression, "run-family-relationship-authorization-policy-model-smoke.sh", "release regression should always run family relationship authority model")
+assertContains(releaseRegression, "run-delegated-family-grant-contract-check.sh", "release regression should always guard delegated family grant consumption")
+assertContains(releaseRegression, "RUN_BACKEND_DELEGATED_ACCESS_POSTGRES_SMOKE", "release regression should expose deployed delegated access Postgres evidence")
+assertContains(releaseRegression, "run-backend-delegated-access-postgres-smoke.sh", "release regression should invoke deployed delegated access Postgres smoke")
 assertContains(releaseRegression, "run-family-authorization-freshness-model-smoke.sh", "release regression should always run family authorization freshness model")
 assertContains(releaseRegression, "run-family-context-reconciliation-model-smoke.sh", "release regression should always run family context reconciliation model")
 assertContains(releaseRegression, "run-knowledge-async-authorization-snapshot-check.sh", "release regression should always guard async knowledge authorization snapshots")
@@ -358,6 +361,7 @@ for handoffGuard in [
     "knowledge-pipeline-check.swift",
     "run-knowledge-three-way-merge-model-smoke.sh",
     "run-family-relationship-authorization-policy-model-smoke.sh",
+    "run-delegated-family-grant-contract-check.sh",
     "run-family-authorization-freshness-model-smoke.sh",
     "run-family-context-reconciliation-model-smoke.sh",
     "run-knowledge-async-authorization-snapshot-check.sh",
@@ -475,6 +479,8 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/operations-evidence-event-check.swift",
     "../DreamJourneyBackend/scripts/backend-evidence-persistence-deployed-smoke.py",
     "../DreamJourneyBackend/scripts/run-backend-evidence-persistence-deployed-smoke.sh",
+    "../DreamJourneyBackend/scripts/backend-delegated-access-postgres-smoke.py",
+    "../DreamJourneyBackend/scripts/run-backend-delegated-access-postgres-smoke.sh",
     "docs/superpowers/status/2026-07-16-wi-s0-07-01-event-envelope.md",
     "docs/superpowers/status/2026-07-16-wi-s0-07-01-event-mapping-manifest.json",
     "docs/superpowers/status/2026-07-16-wi-s0-07-02-evidence-sink.md",
@@ -540,6 +546,8 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/knowledge-widget-privacy-lifecycle-check.swift",
     "Scripts/QA/prd-stitch-ui/family-relationship-authorization-policy-model-smoke.swift",
     "Scripts/QA/prd-stitch-ui/run-family-relationship-authorization-policy-model-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/delegated-family-grant-contract-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-delegated-family-grant-contract-check.sh",
     "Scripts/QA/prd-stitch-ui/family-authorization-freshness-model-smoke.swift",
     "Scripts/QA/prd-stitch-ui/run-family-authorization-freshness-model-smoke.sh",
     "Scripts/QA/prd-stitch-ui/family-context-reconciliation-model-smoke.swift",

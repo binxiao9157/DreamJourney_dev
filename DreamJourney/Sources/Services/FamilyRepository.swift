@@ -447,13 +447,34 @@ final class FamilyRepository {
     }
 
     private func rawAcceptedAuthorizationKeys(ownerUserId: String) -> Set<String> {
-        Set(members.filter {
-            $0.isAcceptedFamilyMember(for: ownerUserId, allowQAFixtures: Self.isUIQARuntime)
-        }.map { member in
+        let now = Date()
+        return Set(members.compactMap { member in
+            guard member.isAcceptedFamilyMember(
+                for: ownerUserId,
+                allowQAFixtures: Self.isUIQARuntime,
+                now: now
+            ) else {
+                return nil
+            }
             let digitalHumanId = member.digitalHumanId
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             let resolvedDigitalHumanId = digitalHumanId.isEmpty ? member.id : digitalHumanId
-            return "\(member.id)|\(resolvedDigitalHumanId)"
+            let grantFingerprint = member.activeFamilyPersonaReadGrants(at: now)
+                .sorted { $0.id < $1.id }
+                .map { grant in
+                    let expiresAt = grant.expiresAt?.timeIntervalSince1970.description ?? "none"
+                    return "\(grant.id):\(grant.rowVersion):\(expiresAt)"
+                }
+                .joined(separator: ",")
+            let effectiveGrantFingerprint = grantFingerprint.isEmpty ? "qa-fixture" : grantFingerprint
+            return [
+                member.id,
+                resolvedDigitalHumanId,
+                member.relationshipId,
+                "relationshipEpoch=\(member.relationshipEpoch)",
+                "grantEpoch=\(member.grantEpoch)",
+                effectiveGrantFingerprint,
+            ].joined(separator: "|")
         })
     }
 
@@ -484,7 +505,7 @@ final class FamilyRepository {
         if let index = members.firstIndex(where: { $0.id == updatedMember.id }) {
             members[index] = updatedMember
         } else if let phone = updatedMember.phone,
-                  let index = members.firstIndex(where: { $0.phone == phone && !$0.isAcceptedFamilyMember }) {
+                  let index = members.firstIndex(where: { $0.phone == phone && !$0.isAcceptedFamilyRelationship }) {
             members[index] = updatedMember
         } else {
             members.append(updatedMember)

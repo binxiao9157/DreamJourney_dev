@@ -285,7 +285,7 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
 
     private func makeAvailableRecipients() -> [TimeLetterRecipientSelection] {
         var result = [TimeLetterRecipientSelection(id: "self", name: "我")]
-        FamilyRepository.shared.getAll().filter(\.isAcceptedFamilyMember).forEach { member in
+        FamilyRepository.shared.getAll().filter(\.isAcceptedFamilyRelationship).forEach { member in
             guard !result.contains(where: { $0.id == member.id }) else { return }
             result.append(TimeLetterRecipientSelection(id: member.id, name: member.name))
         }

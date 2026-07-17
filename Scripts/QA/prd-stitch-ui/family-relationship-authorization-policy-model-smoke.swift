@@ -5,51 +5,87 @@ enum FamilyRelationshipAuthorizationPolicyModelSmoke {
     static func main() {
         let production = FamilyRelationshipAuthorizationContext(currentOwnerUserId: "owner-A")
         require(
-            authorized(owner: "owner-A", source: .backendInvitation, access: "active", invitation: "accepted", context: production),
-            "current-owner accepted backend invitation must be authorized"
+            acceptedRelationship(
+                relationshipId: "relationship-A",
+                owner: "owner-A",
+                status: .accepted,
+                source: .backendInvitation,
+                access: "active",
+                invitation: "accepted",
+                context: production
+            ),
+            "current-owner accepted backend relationship must be visible"
         )
 
-        let denied: [(String, FamilyRelationshipAuthoritySource, String, String)] = [
-            ("", .backendInvitation, "active", "accepted"),
-            ("owner-B", .backendInvitation, "active", "accepted"),
-            ("owner-A", .backendInvitation, "pending", "accepted"),
-            ("owner-A", .backendInvitation, "active", "pending"),
-            ("owner-A", .backendInvitation, "failed", "failed"),
-            ("owner-A", .backendInvitation, "revoked", "revoked"),
-            ("owner-A", .knowledgeCandidate, "active", "accepted"),
-            ("owner-A", .localInvitationAttempt, "active", "accepted"),
-            ("owner-A", .legacyUnverified, "active", "accepted"),
-            ("owner-A", .qaFixture, "active", "accepted"),
+        let denied: [(String, String, FamilyRelationshipStatus, FamilyRelationshipAuthoritySource)] = [
+            ("", "owner-A", .accepted, .backendInvitation),
+            ("relationship-A", "", .accepted, .backendInvitation),
+            ("relationship-A", "owner-B", .accepted, .backendInvitation),
+            ("relationship-A", "owner-A", .pending, .backendInvitation),
+            ("relationship-A", "owner-A", .paused, .backendInvitation),
+            ("relationship-A", "owner-A", .revoked, .backendInvitation),
+            ("relationship-A", "owner-A", .accepted, .knowledgeCandidate),
+            ("relationship-A", "owner-A", .accepted, .localInvitationAttempt),
+            ("relationship-A", "owner-A", .accepted, .legacyUnverified),
+            ("relationship-A", "owner-A", .accepted, .qaFixture),
         ]
         for value in denied {
             require(
-                !authorized(owner: value.0, source: value.1, access: value.2, invitation: value.3, context: production),
-                "production policy must reject owner/source/status mismatch"
+                !acceptedRelationship(
+                    relationshipId: value.0,
+                    owner: value.1,
+                    status: value.2,
+                    source: value.3,
+                    access: "active",
+                    invitation: "accepted",
+                    context: production
+                ),
+                "production policy must reject relationship authority mismatch"
             )
         }
 
         let qa = FamilyRelationshipAuthorizationContext(currentOwnerUserId: "owner-A", allowQAFixtures: true)
         require(
-            authorized(owner: "owner-A", source: .qaFixture, access: "active", invitation: "accepted", context: qa),
-            "explicit QA context may authorize a QA fixture"
+            acceptedRelationship(
+                relationshipId: "",
+                owner: "owner-A",
+                status: .pending,
+                source: .qaFixture,
+                access: "active",
+                invitation: "accepted",
+                context: qa
+            ),
+            "explicit QA context may expose an accepted fixture relationship"
         )
         require(
-            !authorized(owner: "owner-A", source: .knowledgeCandidate, access: "active", invitation: "accepted", context: qa),
-            "knowledge candidates must remain unauthorized even in QA"
+            !acceptedRelationship(
+                relationshipId: "relationship-A",
+                owner: "owner-A",
+                status: .accepted,
+                source: .knowledgeCandidate,
+                access: "active",
+                invitation: "accepted",
+                context: qa
+            ),
+            "knowledge candidates must remain non-authoritative even in QA"
         )
 
         print("Family relationship authorization policy model smoke passed")
     }
 
-    private static func authorized(
+    private static func acceptedRelationship(
+        relationshipId: String,
         owner: String,
+        status: FamilyRelationshipStatus,
         source: FamilyRelationshipAuthoritySource,
         access: String,
         invitation: String,
         context: FamilyRelationshipAuthorizationContext
     ) -> Bool {
-        FamilyRelationshipAuthorizationPolicy.isAuthorized(
+        FamilyRelationshipAuthorizationPolicy.isAcceptedRelationship(
+            relationshipId: relationshipId,
             relationshipOwnerUserId: owner,
+            relationshipStatus: status,
             authoritySource: source,
             accessStatus: access,
             invitationStatus: invitation,

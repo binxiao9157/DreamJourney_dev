@@ -104,8 +104,8 @@ assertNotContains(profileView, "提交注销申请（未开放）", "Account del
 
 assertContains(
     timeLetterEntry,
-    "FamilyRepository.shared.getAll().filter(\\.isAcceptedFamilyMember)",
-    "Time-letter recipients should only include accepted family members"
+    "FamilyRepository.shared.getAll().filter(\\.isAcceptedFamilyRelationship)",
+    "Time-letter recipient selection should require an accepted relationship without inferring persona access"
 )
 
 for required in [

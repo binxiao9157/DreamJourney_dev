@@ -31,7 +31,16 @@ private enum FamilyPersonaOption {
         case .selfAssistant:
             return "当前回响对象"
         case .familyMember(let member):
-            return member.isAcceptedFamilyMember ? member.lastUpdated : member.familyInvitationDisplayName
+            return member.isAcceptedFamilyRelationship ? member.lastUpdated : member.familyInvitationDisplayName
+        }
+    }
+
+    var unavailableActionLabel: String {
+        switch self {
+        case .selfAssistant:
+            return ""
+        case .familyMember(let member):
+            return member.familyPersonaAuthorizationDisplayName
         }
     }
 
@@ -61,7 +70,7 @@ private enum FamilyPersonaOption {
         case .selfAssistant:
             return true
         case .familyMember(let member):
-            return member.isAcceptedFamilyMember && member.isOnline
+            return member.isAcceptedFamilyRelationship && member.isOnline
         }
     }
 
@@ -391,7 +400,10 @@ final class FamilyCircleViewController: UIViewController {
             showToast("已切换到自己 AI 助手", type: .success)
         case .familyMember(let member):
             guard member.isAcceptedFamilyMember else {
-                showToast(member.familyInvitationDisplayName, type: member.invitationStatus == "failed" ? .error : .info)
+                showToast(
+                    member.familyPersonaAuthorizationDisplayName,
+                    type: member.invitationStatus == "failed" ? .error : .info
+                )
                 return
             }
             DigitalHumanContextStore.shared.current = DigitalHumanContext(
@@ -786,12 +798,13 @@ final class FamilyMemberDetailViewController: UIViewController {
             && !DigitalHumanContextStore.shared.current.isSelfAssistant
         selectButton.configuration?.title = member.isAcceptedFamilyMember
             ? (isCurrent ? "当前回响对象" : "设为当前回响对象")
-            : member.familyInvitationDisplayName
+            : member.familyPersonaAuthorizationDisplayName
         selectButton.isEnabled = member.isAcceptedFamilyMember && !isCurrent
         selectButton.configuration?.baseBackgroundColor = isCurrent
             ? UIColor.warmAccent.withAlphaComponent(0.36)
             : .warmAccent
         starSwitch.setOn(member.digitalHumanMode == .star, animated: false)
+        starSwitch.isEnabled = member.isAcceptedFamilyMember
         boundarySection.backgroundColor = member.digitalHumanMode == .star
             ? UIColor(red: 0.86, green: 0.84, blue: 0.78, alpha: 0.58)
             : UIColor.white.withAlphaComponent(0.84)
@@ -1070,7 +1083,7 @@ final class FriendMemberCell: UITableViewCell {
         if isCurrent {
             footprintButton.setTitle("当前", for: .normal)
         } else if !option.isSelectable {
-            footprintButton.setTitle(option.lastUpdated, for: .normal)
+            footprintButton.setTitle(option.unavailableActionLabel, for: .normal)
         } else {
             footprintButton.setTitle(option.opensDetail ? "管理" : "切换", for: .normal)
         }

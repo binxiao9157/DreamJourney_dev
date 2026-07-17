@@ -57,6 +57,7 @@ RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMOKE="${RUN_BACKEND_TIME_LETTER_LIFECYCLE_SMO
 RUN_TIME_LETTER_DISPATCH_REMINDER_SMOKE="${RUN_TIME_LETTER_DISPATCH_REMINDER_SMOKE:-0}"
 RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE="${RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE:-0}"
 RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE="${RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE:-0}"
+RUN_BACKEND_DELEGATED_ACCESS_POSTGRES_SMOKE="${RUN_BACKEND_DELEGATED_ACCESS_POSTGRES_SMOKE:-0}"
 RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE="${RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE:-0}"
 RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE="${RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE:-0}"
 RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE="${RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE:-0}"
@@ -212,6 +213,7 @@ Run ID: \`$RUN_ID\`
 - Time-letter dispatch reminder UIQA smoke: \`$RUN_TIME_LETTER_DISPATCH_REMINDER_SMOKE\`
 - Backend family/voice contract smoke: \`$RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE\`
 - Backend family/account lifecycle smoke: \`$RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE\`
+- Backend delegated access Postgres smoke: \`$RUN_BACKEND_DELEGATED_ACCESS_POSTGRES_SMOKE\`
 - Backend digital-human session smoke: \`$RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE\`
 - Backend voice clone deployed smoke: \`$RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE\`
 - Voice clone profile selection UIQA smoke: \`$RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE\`
@@ -276,6 +278,7 @@ Run ID: \`$RUN_ID\`
 - Optional time-letter dispatch reminder UIQA smoke when \`RUN_TIME_LETTER_DISPATCH_REMINDER_SMOKE=1\`; this verifies iOS treats delivered time letters as final state and counts backend mailbox unread reminders exactly once.
 - Optional deployed backend family/voice contract smoke when \`RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE=1\`; this verifies hidden family digital-human modes and voice profile lifecycle contracts.
 - Optional deployed backend family/account lifecycle smoke when \`RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE=1\`; this verifies phone invitation, blocked family removal, account soft delete, one-time restore, and no-export retention policy.
+- Optional deployed backend delegated access Postgres smoke when \`RUN_BACKEND_DELEGATED_ACCESS_POSTGRES_SMOKE=1\`; this verifies relationship lifecycle, explicit scoped grants, expiry/revocation, event receipts, and cross-owner care/time-letter authorization against the deployed API and Postgres store.
 - Optional deployed backend digital-human session smoke when \`RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE=1\`; this verifies \`/config/runtime.digitalHuman\` and \`/digital-human/sessions\` have switched to Tencent \`cloudRender\` with backend-issued appkey/accesstoken and asset/project identity.
 - Optional deployed backend voice clone smoke when \`RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE=1\`; this verifies \`/config/runtime.voiceClone\`, ready \`S_\` synthesis, and Tencent audio-drive compatible \`pcm16kMono\` without printing raw audio.
 - Optional voice clone profile selection UIQA smoke when \`RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE=1\`; this verifies ready \`S_\` profiles win over pending/deleted profiles and pending backend replies do not overwrite a usable ready voice.
@@ -338,6 +341,7 @@ append_report_footer() {
 - Backend time-letter lifecycle smoke: \`backend-time-letter-lifecycle-smoke/$RUN_ID/\`
 - Backend family/voice contract smoke: \`backend-family-voice-contract-smoke/$RUN_ID/\`
 - Backend family/account lifecycle smoke: \`backend-family-account-lifecycle-smoke/$RUN_ID/\`
+- Backend delegated access Postgres smoke: \`backend-delegated-access-postgres-smoke/$RUN_ID/\`
 - Backend digital-human session smoke: \`backend-digital-human-session-smoke/$RUN_ID/\`
 - Backend voice clone deployed smoke: \`backend-voice-clone-deployed-smoke/$RUN_ID/\`
 - Voice clone profile selection UIQA smoke: \`voice-clone-profile-selection-smoke/$RUN_ID/\`
@@ -493,6 +497,9 @@ run_step "Swift guard knowledge-persona-ranking-prefilter" "$STATIC_LOG_DIR/know
 
 run_step "Swift model guard family-relationship-authorization" "$STATIC_LOG_DIR/family-relationship-authorization-policy-model-smoke.log" \
   "$SCRIPT_DIR/run-family-relationship-authorization-policy-model-smoke.sh"
+
+run_step "Swift contract guard delegated-family-grant" "$STATIC_LOG_DIR/delegated-family-grant-contract-check.log" \
+  "$SCRIPT_DIR/run-delegated-family-grant-contract-check.sh"
 
 run_step "Swift model guard family-authorization-freshness" "$STATIC_LOG_DIR/family-authorization-freshness-model-smoke.log" \
   "$SCRIPT_DIR/run-family-authorization-freshness-model-smoke.sh"
@@ -1138,6 +1145,30 @@ if [[ "$RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/backend-family-account-lifecycle-smoke/$RUN_ID"
   echo "Skipped by RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE=0" > "$OUTPUT_DIR/backend-family-account-lifecycle-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_BACKEND_DELEGATED_ACCESS_POSTGRES_SMOKE" == "1" ]]; then
+  [[ -n "${BACKEND_BASE_URL:-}" ]] || {
+    echo "BACKEND_BASE_URL is required for RUN_BACKEND_DELEGATED_ACCESS_POSTGRES_SMOKE=1" >&2
+    exit 1
+  }
+  [[ -n "${DATABASE_URL:-}" ]] || {
+    echo "DATABASE_URL is required for RUN_BACKEND_DELEGATED_ACCESS_POSTGRES_SMOKE=1" >&2
+    exit 1
+  }
+  [[ -n "${BACKEND_API_TOKEN:-}" ]] || {
+    echo "BACKEND_API_TOKEN is required for RUN_BACKEND_DELEGATED_ACCESS_POSTGRES_SMOKE=1" >&2
+    exit 1
+  }
+  mkdir -p "$OUTPUT_DIR/backend-delegated-access-postgres-smoke/$RUN_ID"
+  BACKEND_BASE_URL="$BACKEND_BASE_URL" \
+  DATABASE_URL="$DATABASE_URL" \
+  BACKEND_API_TOKEN="$BACKEND_API_TOKEN" \
+    "$BACKEND_ROOT/scripts/run-backend-delegated-access-postgres-smoke.sh" \
+      | tee "$OUTPUT_DIR/backend-delegated-access-postgres-smoke/$RUN_ID/result.log"
+else
+  mkdir -p "$OUTPUT_DIR/backend-delegated-access-postgres-smoke/$RUN_ID"
+  echo "Skipped by RUN_BACKEND_DELEGATED_ACCESS_POSTGRES_SMOKE=0" > "$OUTPUT_DIR/backend-delegated-access-postgres-smoke/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE" == "1" ]]; then
