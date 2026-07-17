@@ -1,12 +1,12 @@
 # DreamJourney V4 产品定义与目标架构 Product Spec
 
-版本：V4.3 Product Confirmed Baseline + Development Detail Decisions
+版本：V4.4 2026-07-16 引导式访谈与知识丰满化产品基线
 初版日期：2026-07-12
-更新日期：2026-07-15
-状态：独立方案评审40项产品回复及三级验证策略确认已同步为产品范围基线；工程实现、法律/供应商外部门、G2-G4与发布批准仍独立验收
-产品细节确认批次：2026-07-15 五项开发前确认已回写，详见 0.4 和决策登记册 3.8。
+更新日期：2026-07-16
+状态：已同步新规生效后的 M0-M4 风险边界与引导式访谈产品合同；工程实现、法律/供应商、算法备案、安全评估、G2-G4与发布批准仍独立验收
 工程基线：iOS `feature/prd-stitch-ui-adaptation@8a1922b`；Backend `main@4c0538b`
 评审控制面：[DreamJourney V4 评审与验收清单](./DreamJourney_V4_评审与验收清单_V1.0.md)
+引导式访谈专项合同：[DreamJourney V4 引导式访谈与知识丰满化功能说明](./DreamJourney_V4_引导式访谈与知识丰满化功能说明_V1.0.md)
 定稿边界：本文件已完成产品/架构文档评审，不表示 115 个 Work Item 已实现、G2-G4 已关闭或已获发布批准。
 产品范围权威：本文件定稿后取代 V1 PRD、V3 Blueprint 与相关分析文档的开发范围定义；工程事实仍以源码和[当前实现证据矩阵](./DreamJourney_V4_当前实现证据矩阵_V1.0.md)为准。
 
@@ -47,40 +47,34 @@ Product Spec 标签与决策登记册状态不是同一个状态轴，映射如�
 - 工程顺序：以 V4 可执行开发路线图为准。
 - V1 PRD、V3 Blueprint、iOS 一致性分析与 Hermes/AOS 分析为可修订底稿，不再与本文件并列充当最终范围权威。`CONFIRMED`
 
-### 0.3 2026-07-15 产品确认修订
+### 0.3 2026-07-16 新规生效后的产品修订
 
-产品负责人已完成独立方案评审第21章的40项确认，并于2026-07-15追加确认三级产品验证策略。本节与[产品决策登记册](./DreamJourney_V4_产品决策登记册_V1.0.md)共同覆盖本文早期仍标记为 `RECOMMENDED/DECISION_REQUIRED` 的冲突表述；出现冲突时，以本节、对应 `CONFIRMED` 决策和更严格的外部门为准。
+产品负责人已完成独立方案评审第21章的40项确认。2026-07-16 又依据《寻梦环游产品问题、风险分级与整体规避方案 V1.0》，对《人工智能拟人化互动服务管理暂行办法》生效后的产品边界作出收缩和重排。本节与[产品决策登记册](./DreamJourney_V4_产品决策登记册_V1.0.md)共同覆盖本文早期仍标记为 `RECOMMENDED/DECISION_REQUIRED` 或沿用旧三级验证的表述；出现冲突时，以本节、修订后的 `CONFIRMED` 决策和更严格的外部门为准。
 
 当前产品范围为：
 
 1. 当前采用百级用户、单一中国首发地域、模块化单体、单 Postgres、私有对象存储和单独 Worker 的 Startup Lean Profile；完整 C00-C11 保留为规模触发后的目标体系。
-2. 采用 `Closed Pilot -> Product MVP -> Beta Extension` 三级验证策略。Closed Pilot 先验证强身份与 Vault 隔离、文字记忆、带来源问答、纠正和删除，不等待 Family/Publication/Visitor、Voice Clone、数字人或媒体理解。
-3. Product MVP 必须具备手机号登录、本人/纪念人物档案、家庭人物切换和贡献、文字问答、家庭授权 Publication/Visitor、声音复刻；数字人、非必要媒体理解为 Beta Extension，Care/TimeLetter 后置。
+2. 采用 `M0 记忆资产 -> M1 在世本人私有语音 -> M2 成年授权互动 -> M3 老人健康/成人纪念试点 -> M4 知识许可`。M0 先验证强身份与 Vault 隔离、自传、静态“Ta 的故事”、文字记忆、带来源问答、纠正、复制/导出和删除，不等待 Publication/Visitor、Voice Clone、数字人或媒体理解。
+3. Family 在 M0 仅用于人物切换、材料贡献和静态只读故事；持续人格化家庭查询不由关系自动授权。M1 只允许在世成年人克隆并私用本人声音；M2 才允许在世主体主动发布、成年 Visitor 和在世数字分身；M3 才可能逐案开展成人纪念互动与老人健康协同；Care/TimeLetter 不自动进入任何阶段。
 4. 维持“记忆档案/回响/我的”三个主 Tab。
-5. 产品覆盖全年龄人物资料；未成年人由经核验监护人创建和管理。未成年人 Voice/Persona、外部 AI 和公开用途仍需专项法律与 Provider Gate。
-6. 未确认材料通过问答追问形成 Candidate 并持续持久化；退出页面或待审核数量/上下文预算达到服务端动态阈值时，以先到者触发批量确认。未确认材料与 AI 输出不能直接成为人物事实，模型上下文截断不得造成业务数据丢失。
-7. 家庭查询使用独立、可过期、可撤回的授权上下文；Visitor 默认 TTL 为7天，主控人默认看不到访问者问题正文。
-8. 首版不提供自助批量导出，但法定数据权利请求不能被协议排除；账号注销采用30日恢复，上传人删除自己的 Source 为不可撤回操作并触发依赖暂停。
-9. 声音复刻进入 Product MVP，数字人受控 Beta Extension；用途授权、来源绑定、AI 标识、资产删除和 Provider fail-closed 为强制合同。
+5. 未成年人只能作为由监护人管理的静态成长资料数据主体。产品不得向未成年人提供父母、祖辈、兄弟姐妹、伴侣等虚拟亲属，也不得以改名规避；未成年人 Voice/Persona 与虚拟亲属从当前路线硬删除。
+6. 未确认材料通过问答追问形成 Candidate，在退出页面前或约5至10轮后批量确认；未确认材料与 AI 输出不能直接成为人物事实。
+7. M2 家庭/Visitor 查询使用独立、可过期、可撤回的授权上下文，并额外要求成年状态；Visitor 默认 TTL 为7天，主控人默认看不到访问者问题正文。
+8. M0 提供本人交互记录、本人上传资料、已确认记忆和自传的复制、删除与导出；第三方受限内容按权利规则裁剪。账号注销采用30日恢复，上传人删除自己的 Source 为不可撤回操作并触发依赖暂停。
+9. M1 声音复刻仅限在世成年人本人私用；M2 的语音/数字分身必须由在世主体主动发布并仅面向成年访问者；逝者 Voice/Portrait/DH 无生前专项授权时保持 `NO_GO`，有完整权利链时也只进入 M3 逐案试点。
 10. 接受 WTMR、统一测量合同和 Projection/Retrieval DFX；精确商业成本与配额参数暂缓，但工程硬配额、熔断和文字降级必须首发具备。
 
-产品希望由监护人/纪念账户主控人承担日常内容、家庭冲突、第三方内容和高风险表达的选择，并在协议中明确责任。该产品意图不能取代中国首发法律、有效第三方权利请求、未成年人保护、供应商数据条款、生成内容标识或平台自身义务；这些仍按 `EXTERNAL_DEPENDENCY` fail-closed。
+11. 所有人格化互动在输出前执行年龄、授权、场景和安全策略；持续 AI 标识、依赖提醒、连续2小时提醒、UI/语音/关键词确定性退出、投诉举报、紧急联系人和危机切换中性助手为 M2/M3 强制能力。
+12. M2/M3 上线或发生适用重大变化前，必须完成安全评估报告、算法备案/变更、应用商店合规材料与发布审批。私人和敏感数据默认不用于平台或供应商通用模型训练。
+13. M0 的长期采集入口采用引导式访谈：一个自然输入主入口，最多两条动态推荐，分别承担“延续近期未完成故事”和“补足重要知识维度”；主题由系统内部管理，用户拥有跳过、暂缓、禁问和主动重开的控制权。`CONFIRMED`
 
-### 0.4 2026-07-15 开发前产品细节确认
-
-产品经理对[开发前问题与决策收敛清单](./DreamJourney_V4_开发前问题与决策收敛清单_V1.0.md)中的五项细节完成确认。以下内容补充 `DR-003/009/015/037/041/043`，不关闭任何工程或外部 Gate：
-
-1. Product MVP 基线要求 Owner private Voice 与经授权 Family Voice；Visitor Voice 使用独立 capability/cohort，不阻断基础 Product MVP 发布。家庭成员客户端必须解析目标 Owner/Represented Persona 已授权且 active/quality-accepted 的精确 `voiceProfileVersion`；不可用时明确降级，不得借用访问者、上一角色或默认音色冒充。`CONFIRMED`
-2. Closed Pilot 保留照片选择、本地草稿和本机预览，明确显示“仅本机保存/尚未云端保存”；无真实对象、checksum、HEAD/scan/delete receipt 时不得显示已上传、已同步或 verified。`CONFIRMED`
-3. Candidate、Message、Source 和 DecisionReceipt 在对话过程中持续持久化；用户退出页面，或待审核 Candidate 数量/上下文预算达到服务端 policy 动态阈值时，以先到者触发审核。强杀、断网后恢复批次，敏感候选逐条确认；模型上下文截断不得造成业务数据丢失。`CONFIRMED`
-4. Family relationship 支持暂停和终止；任一方可发起，敏感主控关系二次确认。终止立即撤销后续查询 grant，历史贡献和审计保留；重新建立关系必须重新邀请并重新授权，不恢复旧 grant。各类 Source、Publication、TimeLetter 按自身 Authority 和 rights 合同处理。`CONFIRMED`
-5. 首批 Closed Pilot 只开放 Adult Self；Memorial Controller 在死亡事实、亲属关系和主控任命闭环可验证后进入第二 cohort；Guardian/未成年人保持独立 G4 cohort。该顺序不缩减长期产品范围。`CONFIRMED`
+纪念账户主控人可以承担静态档案的日常整理、家庭冲突和第三方内容处理，但不能代表未成年人或逝者创造新的拟人化授权，也不能用服务协议替代中国首发法律、有效第三方权利请求、供应商条款、生成内容标识、安全评估、算法备案或平台自身义务；这些按 `EXTERNAL_DEPENDENCY` fail-closed。
 
 ## 1. 执行摘要
 
 ### 1.1 近期产品定位
 
-> DreamJourney 是一款由用户或经核验监护人/纪念账户主控人掌控证据、审核和分享边界的私人记忆与纪念人格产品：在世用户可以管理自己的私人记忆，监护人可以在专项规则下为未成年人建立受控资料，近亲属可以在身份、死亡事实和关系核验后为逝去亲人建立纪念档案并邀请家庭成员共同补充有来源的材料；Product MVP 提供独立授权副本与声音复刻，数字人为受控 Beta Extension。`CONFIRMED`
+> DreamJourney 是帮助用户在生前持续记录、整理、理解、授权和传承个人记忆与知识资产的私人 AI 平台。在世用户管理自己的记忆；监护人只可管理未成年人的静态成长资料；近亲属在完成身份、死亡事实和关系核验后，可以建立默认静态的纪念档案并邀请家庭成员补充有来源的材料。声音、发布和数字分身是后续独立授权能力，不是产品成立前提。`CONFIRMED`
 
 Owner Truth Loop 仍是两类场景共用的事实底座。逝者不会被注册为能够登录、同意或签署条款的账号主体；产品创建的是由在世 `Memorial Account Controller` 管理的 `MemorialVault + RepresentedPersona`，不是冒充逝者本人创建账号。数字人和声音复刻是高风险表达层，不因纪念档案建立、关系核验或家属持有账号而自动启用。`CONFIRMED`
 
@@ -90,6 +84,9 @@ Owner Truth Loop 仍是两类场景共用的事实底座。逝者不会被注册
 - 不是默认公开、未经关系核验和权利审查的数字遗产平台。
 - 不是医疗、心理诊断或危机干预服务。
 - 不是把逝者模拟成仍在世本人，或以数字人形象、复刻声音作为记忆档案成立前提的聊天机器人。
+- 不是复活逝者、替代亲人或真实社会关系的平台。
+- 不是让 Persona 劝导付费、替用户作医疗、金融、法律、职业或关系决定的平台。
+- 不是向未成年人提供父母、祖辈、兄弟姐妹或伴侣等虚拟亲属的平台。
 - 不是把全部用户资料发给通用模型的云盘。
 - 不是 Hermes/AOS 所描述的通用自主智能体或自研记忆基础设施。
 
@@ -105,13 +102,13 @@ Owner Truth Loop 仍是两类场景共用的事实底座。逝者不会被注册
 → 回到来源或记忆进行纠正
 ```
 
-Family、Publication/Visitor、Voice/Digital Human 都必须建立在该闭环之上并采用独立阶段门；Family、家庭授权 Publication/Visitor 与 Voice Clone 属于 Product MVP，Digital Human 与非必要媒体理解属于 Beta Extension，Care/TimeLetter 后置。Closed Pilot 只验证 Owner 文字闭环，不因上述扩展门未关闭而阻塞。`CONFIRMED`
+Family、Publication/Visitor、Voice/Digital Human 都必须建立在该闭环之上并采用独立阶段门：M0 只开放家庭材料贡献和静态故事；M1 只开放在世成年人本人私有语音；M2 才开放在世主体主动发布的成年 Visitor 与数字分身；M3 才可能逐案开展成人纪念互动。M0 不因上述扩展门未关闭而阻塞。`CONFIRMED`
 
 ## 2. 用户与 Jobs To Be Done
 
 ### 2.1 近期核心用户
 
-**Self Owner（本人档案控制者）**：完成手机号强身份、管理本人 Persona 与记忆资料、愿意审核 AI 整理结果并在意来源和隐私边界的注册用户。未成年人不能自行替代监护人接受高敏用途条款，其资料由经核验监护人按专项政策管理。`CONFIRMED`
+**Self Owner（本人档案控制者）**：完成手机号强身份、管理本人记忆资料、愿意审核 AI 整理结果并在意来源和隐私边界的注册成年人。未成年人不能成为拟人化互动的 Owner；其静态成长资料只由经核验监护人按独立政策管理。`CONFIRMED`
 
 **Memorial Account Controller（纪念账户主控人）**：18 岁以上、完成强身份、逝者死亡事实和近亲属关系核验，为逝去亲人建立并日常管理 MemorialVault 的注册用户。该角色拥有产品内的日常主导权，但不因此取得逝者人格权，也不能排除其他依法有权近亲属的异议、保护和权利请求。`CONFIRMED`
 
@@ -121,8 +118,9 @@ Family Contributor 是纪念场景的协作者；Visitor、Operator 和 Admin �
 
 1. **整理可信记忆**：当我的经历和资料散落在文字、照片、语音或文件中时，我希望系统先保留原始证据，再提出可审核的记忆候选，以便我低成本形成一份由自己确认的长期记录。`RECOMMENDED`
 2. **调用和纠正记忆**：当我想回顾某件事或基于过往经验思考时，我希望得到带来源的回答，并能从错误回答回到证据或记忆进行纠正。`RECOMMENDED`
-3. **家庭受控分享**：当我希望家庭成员或明确授权者访问部分故事时，我先生成独立、可检查、可撤回的发布副本，而不是暴露私人库。该 JTBD 是 Product MVP 上线条件；匿名公共访问仍后置。`CONFIRMED`
+3. **家庭受控分享**：当在世成年人希望家庭成员或明确授权者访问部分故事时，先生成独立、可检查、可撤回的发布副本，而不是暴露私人库。该 JTBD 属于 M2；匿名公共访问仍后置。`CONFIRMED`
 4. **共同整理逝者故事**：当直系亲属离世后，我希望在证明身份和关系后建立纪念档案，邀请家庭成员分别提交生前材料和回忆，由主控人审核形成带来源、保留陈述视角且可处理争议的家庭记忆库。`CONFIRMED`
+5. **丰满个人知识**：当我不知道从哪里讲起，或过去的表达长期零散、偏科时，我希望 AI 能顺着我正在说的内容自然追问、适时总结并提示值得继续的线索，让经历、选择、经验和边界逐步形成由我确认的个人知识资产。`CONFIRMED`
 
 声音复刻、实时语音和数字人是完成上述 JTBD 的交互方式或表达资产，不是独立 JTBD。
 
@@ -132,11 +130,13 @@ Family Contributor 是纪念场景的协作者；Visitor、Operator 和 Admin �
 
 | 层级 | 目标与最小范围 | 不阻塞本层的能力 | 对外边界 |
 | --- | --- | --- | --- |
-| `Closed Pilot` | 在受控小规模用户中验证强身份与 Vault 隔离、文字 Source/Candidate/Memory、带来源问答、纠正、Source/Memory 删除和最小权利状态 | Family/人物切换、Publication/Visitor、Voice Clone、Digital Human、非必要媒体理解 | 非公开、不可匿名访问、不得宣称完整 Product MVP；仅在本层适用的 G0-G4 证据通过后开放 |
-| `Product MVP` | 在 Closed Pilot 达标后增加 Family/人物切换与贡献、受控 Publication/Visitor、Voice Clone 及其授权、删除、Provider 与真机门 | Digital Human、非必要媒体理解、Care、TimeLetter | 只有 Product MVP 全部适用门关闭后，才能按完整 MVP 对外发布 |
-| `Beta Extension` | 独立验证 Digital Human、媒体理解以及后续 Care/TimeLetter 等高风险或非核心能力 | 任一 Beta 失败不得影响 Closed Pilot 或 Product MVP 的文字降级链 | 默认关闭、白名单扩量、独立授权/成本/质量/退出门 |
+| `M0 记忆资产验证` | 自传、静态“Ta 的故事”、家庭材料贡献、强身份与 Vault 隔离、文字 Source/Candidate/Memory、带来源中性问答、纠正、复制/导出/删除 | Publication/Visitor、Voice、Digital Human、持续人格化互动、健康与商业许可 | 受控 cohort；不得宣称复活、情感替代或完整数字人；不向未成年人提供虚拟亲属 |
+| `M1 在世本人私有语音` | 在世成年人强身份、随机授权语句、活体与质量通过后，训练并私用本人声音 | 家庭代录、第三方/未成年人/逝者声音、公开播放、任意配音与下载 | 独立授权、标识、撤回、删除回执、Provider 与真机门 |
+| `M2 成年授权互动` | 在世主体主动发布独立副本；完成成年人校验的 Visitor 在授权范围内进行文字、语音或数字分身互动 | 匿名访问、未成年人虚拟亲属、逝者人格互动、健康和商业代理 | 独立公开域；安全评估、算法备案、AI 标识、依赖/2小时提醒、确定性退出、投诉与危机门 |
+| `M3 受监管试点` | 老人主动授权的健康协同；权利链清晰的成人纪念互动逐案试点 | 无生前专项授权的逝者 Voice/Portrait/DH、诊断/用药、未成年人虚拟亲属 | 逐案法律/伦理、家庭争议冻结、紧急下线、专项同意与不诊断 |
+| `M4 知识许可` | 权利目录、知识授权、受益人指定、调用计量和收益结算 | 数字分身代本人作交易、法律或关系承诺 | 合同、权利分类、争议与结算证据完整 |
 
-三个层级是产品验证合同，不是三套数据 Authority。它们共享同一 Source→Candidate→MemoryVersion→Projection 主干，通过 ReleasePolicy 和独立 capability gate 逐层开放。Closed Pilot 通过不自动批准 Product MVP，Product MVP 通过也不自动批准任何 Beta Extension。`CONFIRMED`
+五个层级是产品验证合同，不是五套数据 Authority。它们共享同一 Source→Candidate→MemoryVersion→Projection 主干，通过 ReleasePolicy 和独立 capability gate 逐层开放。任一阶段通过不自动批准下一阶段。`CONFIRMED`
 
 ### 3.1 Stage 0：安全止损与数据权威前置
 
@@ -171,23 +171,26 @@ Family Contributor 是纪念场景的协作者；Visitor、Operator 和 Admin �
 - 高风险表达不会进入延迟回信或 Persona 模拟；AI 身份披露和离线降级已通过安全测试。
 - 未决合规项留在 fail-closed 状态。
 
-### 3.2 Stage 1 / Closed Pilot：Owner Truth Loop
+### 3.2 M0：记忆资产与 Owner Truth Loop
 
 目标：证明用户愿意把原始材料变成自己确认的记忆，并能通过来源引用获得真实价值。
 
 范围：
 
 - Persona 最小初始化，不承载 AI 推断人格。
-- 文字输入和现有可可靠保存的资料形成 Source；照片可作为 owner-scoped 本地草稿和本机预览，但必须明确未云端保存，不成为 verified SourceObject。
-- 异步生成 Candidate，通过自然问答追问补齐并持续持久化；退出页面或服务端 policy 判定待审核数量/上下文预算达到动态阈值时，以先到者提供批量确认、纠正、拒绝和敏感逐条审核，不在每轮对话后弹确认。
+- 文字输入和现有可可靠保存的资料形成 Source。
+- 异步生成 Candidate，通过自然问答追问补齐；退出页面前或约5至10轮后提供批量确认、纠正、拒绝和敏感逐条审核，不在每轮对话后弹确认。
+- 通过一个自然输入入口承载自由表达；系统内部维护当前话题、待续线索、深挖轮次、疲劳和跳过状态，每轮最多提出一个主要问题，同一线索通常深挖2至4轮后总结。
+- 最多展示两条动态推荐：第一条“接着聊”服务对话连续性，第二条“换个角度”服务知识完整性；没有安全候选时允许少于两条，禁止把不断增长的主题目录交给用户管理。
 - 形成 Canonical Memory 与不可覆盖的版本历史。
 - Knowledge Projection 由权威记忆生成，不反向成为事实源。
 - 提供文字优先的 Owner QA、来源引用、回答反馈和纠正入口。
-- 支持 Source/Memory 查看和删除闭环；首版不提供自助批量导出，法定数据权利请求通过人工受理和回执执行。
-- 支持同一受控 Owner/纪念账户主控人的私人文字闭环；Closed Pilot 不以家庭切换、家庭贡献或外部查询作为退出依赖。
-- 所有入口受 Closed Pilot cohort、ReleasePolicy、审计和回退控制；首批只开放 Adult Self，不开放匿名 Visitor，不训练声音，不启动数字人。Memorial Controller 和 Guardian/未成年人分别按后续 cohort 与 G4 放行。
+- 支持本人交互记录、本人 Source、已确认记忆和自传的查看、复制、可读导出、可机读清单与删除闭环；第三方受限内容按权利规则裁剪并披露。
+- 支持 Self Owner 的中性私人文字问答，以及纪念账户主控人的静态“Ta 的故事”整理；回答不得模拟逝者第一人称持续情感互动。
+- 支持经授权 Family Contributor 提交材料和静态人物切换，但家庭关系不产生查询或 Persona grant。
+- 所有入口受 M0 cohort、ReleasePolicy、审计和回退控制，不开放 Visitor，不训练声音，不启动数字人。
 
-非目标：Family/人物切换与贡献、Publication/Visitor、Voice Clone、Digital Human、非必要媒体理解、复杂实体图谱、Care 和 TimeLetter 不阻塞 Closed Pilot 退出。前三项仍是 Product MVP 必需切片，不因 Closed Pilot 通过而被删除或视为已验收。
+非目标：持续人格化 Publication/Visitor、Voice Clone、Digital Human、非必要媒体理解、复杂实体图谱、Care、TimeLetter 和知识收益不阻塞 M0。后续能力不因 M0 通过而被视为已验收。
 
 ### 3.3 Stage 2：摄入与质量
 
@@ -201,38 +204,36 @@ Family Contributor 是纪念场景的协作者；Visitor、Operator 和 Admin �
 - “回答错误 → 定位来源 → 生成修正 Candidate”闭环。
 - 模型、prompt、版本、token、成本和延迟审计。
 
-### 3.4 Product MVP-P：家庭协作、受控发布与 Visitor 文字切片
+### 3.4 M2：成年授权 Publication / Visitor / Digital Human
 
-目标：作为 Product MVP 的独立权限域，让家庭成员或明确授权用户从有限发布副本获得价值，同时不暴露私人 Projection。
+目标：作为持续人格化互动的独立权限域，让完成成年校验的明确授权用户从在世主体主动发布的有限副本获得价值，同时不暴露私人 Projection。
 
 范围：
 
 - Publication 是私人记忆的独立快照，可脱敏、改写、确认、撤回和重新发布。
 - Public Persona 仅包含用户明确设置和已发布内容。
-- 首版采用已认证家庭账号或过期/限次邀请 grant 和文字问答，不开放匿名公共索引。
+- 采用已完成成年校验的认证账号或过期/限次邀请 grant，不开放匿名公共索引。
 - Visitor 只检索公开副本，必须披露 AI 身份、无依据时表示不知道。
 - VisitorSession/Message 默认 TTL 7天；主控人只看聚合使用与安全事件，默认不看问题正文。
-- 限流、提示注入防护、举报、暂停和索引撤回 SLA 为 MVP 发布前置。
+- 限流、提示注入防护、举报、暂停、索引撤回、安全评估、算法备案、依赖/2小时提醒、确定性退出和危机演练为 M2 发布前置。
 
-非目标：公开克隆声音、公开数字人和开放社交传播不随文字 Visitor 自动开放。
+非目标：未成年人虚拟亲属、逝者人格互动、公开任意配音和开放社交传播不随文字 Visitor 自动开放。
 
-### 3.5 Product MVP-V：Voice Clone；Beta Extension：Digital Human
+### 3.5 M1 在世本人私有 Voice；M2 在世 Digital Human；M3 成人纪念试点
 
-声音复刻是 Product MVP 完成门，Digital Human 是独立 Beta Extension；两者均不能阻断 Closed Pilot 或 Product MVP 的文字 QA 降级可用性。`CONFIRMED`
+声音复刻不是 M0 完成门。M1 只允许在世成年人克隆并私用本人声音；M2 才允许在世主体主动发布的数字分身；M3 才可能逐案处理成人纪念互动。三者均不能阻断 M0 的文字 QA 降级可用性。`CONFIRMED`
 
-Owner private Voice 与经授权 Family Voice 构成基础 Voice MVP 退出范围；Visitor Voice 保留正式 purpose/Publication/answer 合同，但作为独立 capability/cohort，不阻断基础 Product MVP 发布。`CONFIRMED`
-
-| Beta | 范围 | 进入门 | 退出门 |
+| 阶段 | 范围 | 进入门 | 退出门 |
 | --- | --- | --- | --- |
-| Voice MVP 0 | 用途授权、主体/监护/主控证据、音质/SNR、样本与模型删除、试听确认 | 身份和最高敏感数据政策已确定 | 授权、训练、删除均有审计和 Provider 回执 |
-| Voice MVP 1 | 私人/家庭受控语音问答、复刻 TTS、打断与文字降级 | Stage 1 检索可用；真机/Provider 环境就绪 | 音色一致性、五轮稳定性、来源绑定、降级和工程配额门通过 |
-| Digital Human Beta | 数字人驱动和受控 Visitor 表达 | 文字/声音链稳定；独立用途授权和 AI 标识 | 撤回、滥用防护、显式/隐式标识、并发和成本验收通过 |
+| M1 Living Self Voice | 在世成年人本人声音、私人语音问答、复刻 TTS、打断与文字降级 | 强身份、随机授权语句、活体、SNR、独立同意、Provider 和真机就绪 | 音色一致性、五轮稳定性、AI 标识、来源绑定、撤回和删除回执通过 |
+| M2 Living Persona | 在世主体主动发布的成年 Visitor 文字/语音/数字分身 | M0/M1 稳定；独立 Publication、成年校验、用途授权、评估/备案和安全门通过 | 撤回、滥用防护、依赖/时长提醒、退出、危机、标识、并发和成本通过 |
+| M3 Adult Memorial Pilot | 权利链清晰且经过逐案审查的成人纪念互动 | 生前专项授权、素材权利、家属争议机制、法律/伦理和 Provider 许可全部通过 | 小范围试点、紧急下线、投诉、心理安全和删除回执通过；任一争议即冻结 |
 
 当前工程中的声音复刻、腾讯数字人和 Echo 生命周期代码属于可复用实现，不等于 Beta 已完成。`FACT`
 
-### 3.6 Stage 4：认知增强与未来场景
+### 3.6 M3/M4 与未来场景
 
-候选能力：事实/时间/关系语义冲突、实体关系合并、Timeline、Episode、Reflection、Care、TimeLetter，以及超出私人 MemorialVault 基础能力的公开数字遗产托管、继承和长期运营。
+候选能力：事实/时间/关系语义冲突、实体关系合并、Timeline、Episode、Reflection；M3 老人主动授权的健康协同和成人纪念试点；M4 权利目录、知识许可、受益人、计量和收益结算。TimeLetter 继续独立评审。
 
 进入门：Owner Truth Loop 的留存和价值指标成立，且每个场景有独立用户问题、权限模型、合规评审与停止条件。已经存在的代码应保持兼容和 feature flag 隔离，不因沉没成本自动公开。`RECOMMENDED`
 
@@ -243,11 +244,11 @@ Owner private Voice 与经授权 Family Voice 构成基础 Voice MVP 退出范�
 | 主阶段 | Requirement IDs | 数量 |
 | --- | --- | ---: |
 | Stage 0 安全止损 | `FR-ACC-001`、`FR-PRIV-001`、`FR-PRIV-002`、`FR-PRIV-003`、`FR-PRIV-005`、`FR-PRIV-006`、`FR-SAFE-001`、`FR-OPS-003` | 8 |
-| Stage 1 / Closed Pilot Owner Truth Loop | `FR-ACC-002`、`FR-CHAT-001`、`FR-CHAT-002`、`FR-CHAT-003`、`FR-MEM-001`、`FR-MEM-002`、`FR-QA-001`、`FR-SRC-003`、`FR-PRIV-004` | 9 |
+| M0 记忆资产 / Owner Truth Loop | `FR-ACC-002`、`FR-CHAT-001`、`FR-CHAT-002`、`FR-CHAT-003`、`FR-MEM-001`、`FR-MEM-002`、`FR-QA-001`、`FR-SRC-003`、`FR-PRIV-004` | 9 |
 | Stage 2 摄入与质量 | `FR-SRC-001`、`FR-SRC-002`、`FR-QA-002`、`FR-OPS-001`、`FR-OPS-002` | 5 |
-| Product MVP-P 家庭受控发布 | `FR-PUB-001`、`FR-PUB-002`、`FR-PUB-003`、`FR-VIS-001`、`FR-VIS-002`、`FR-VIS-003`、`FR-SAFE-002` | 7 |
-| Product MVP-V Voice Clone / Beta Extension DH | `FR-VOICE-001`、`FR-VOICE-002`、`FR-VOICE-003`、`FR-VOICE-004`、`FR-VOICE-005` | 5 |
-| Stage 4 认知增强 | `FR-MEM-003`、`FR-MEM-004` | 2 |
+| M2 成年授权发布与 Visitor | `FR-PUB-001`、`FR-PUB-002`、`FR-PUB-003`、`FR-VIS-001`、`FR-VIS-002`、`FR-VIS-003`、`FR-SAFE-002` | 7 |
+| M1 Voice / M2 Living DH / M3 Memorial Pilot | `FR-VOICE-001`、`FR-VOICE-002`、`FR-VOICE-003`、`FR-VOICE-004`、`FR-VOICE-005` | 5 |
+| M4 认知与许可准备 | `FR-MEM-003`、`FR-MEM-004` | 2 |
 | 合计 | 每个 FR 仅有一个主阶段，跨阶段依赖在路线图中表达 | 36 |
 
 原 PRD 中的 `P0/P1` 仍保留为来源字段，但不再直接决定并行开发顺序。`RECOMMENDED`
@@ -266,6 +267,9 @@ Owner private Voice 与经授权 Family Voice 构成基础 Voice MVP 退出范�
 
 ### 5.2 目标概念的渐进承载
 
+- “回响”长期保留一个自然输入主入口；其下最多显示一条连续性推荐和一条知识完整性推荐。推荐是可忽略的辅助，不得表现为待办，不得用成百上千个主题卡片替代自然表达。`CONFIRMED`
+- 当前话题只轻度可见；访谈模式半显性；深挖轮次和疲劳分数保持内部状态。用户始终可选择“这次跳过、以后再聊、不再问这个话题”。`CONFIRMED`
+- 人生地图与语义搜索作为次级回顾工具；主题聚类、合并和覆盖计算由系统处理，不新增主 Tab，不要求用户维护目录。`CONFIRMED`
 - Candidate Inbox 先作为“记忆档案”的一级视图或显著入口验证。
 - 家庭 Publication/Visitor 在 MVP 采用独立页面和权限域，不复用 Archive 的公开布尔字段。
 - Voice/Digital Human 作为“回响”的可选运行模式和“我的”的资产设置，不新增主 Tab。
@@ -315,11 +319,13 @@ Owner private Voice 与经授权 Family Voice 构成基础 Voice MVP 退出范�
 
 ## 7. 近期明确非目标
 
-- 不建设匿名公共 Visitor、开放社交传播、完整 Care/TimeLetter 和公开家庭社区；MVP 只建设家庭受控 Publication/Visitor、声音复刻和白名单 Digital Human Beta。
+- M0 不建设 Visitor、持续人格化家庭查询、Voice/Digital Human、Care/TimeLetter 或公开家庭社区；M1 只建设在世成年人本人私有声音，M2 才建设成年授权 Publication/Visitor 和在世数字分身。
 - 不以图谱可视化、六维权重、三温区、TimeRiver 或自研向量数据库作为 MVP 验收。
 - 不进行大规模 iOS 导航重写、全后端微服务化或一次性数据重建。
 - 不因创建纪念账户、上传旧录音或完成近亲属关系核验就自动提供逝者声音克隆；任意文本配音下载和默认公开的复刻声音仍禁止。
 - 不把“家属持有账户”解释为逝者声音、肖像、隐私或人格模拟授权的自动继承。
+- 不向未成年人提供父母、祖辈、兄弟姐妹、伴侣等虚拟亲属，也不以“家庭导师”等名称规避角色实质。
+- 不以逝者或亲属 Persona 发送情感召回、劝导续费、购买、金融医疗建议或重大现实承诺。
 - 不承诺“完全可信”“完全理解用户”“数字永生”或“替代本人”。
 - 不把 Care 数据用于医疗/心理诊断，也不让数字人格处理危机响应。
 - 不在没有对象存储、删除、审计和权限证明时扩大媒体摄入。
@@ -340,7 +346,7 @@ Owner private Voice 与经授权 Family Voice 构成基础 Voice MVP 退出范�
 | Rights Claimant | 对某一逝者完成自身身份和法定近亲属关系证明并提出保护、异议、限制、下架或删除请求的人 | 自动取得私人库全文访问权；自动替代 primary controller 的人 |
 | Data Subject | 被 Source 或记忆提及、可被识别的在世第三方或未成年人，是政策上的权利主体 | 登录 principal；其权利不能因没有账号而消失 |
 
-MVP 覆盖全年龄 Represented Persona；能够独立签署高敏条款和控制账户的 Self Owner、Memorial Controller 或 Guardian Controller 必须为具备相应民事行为能力且完成强身份的人。未成年人由经核验监护人建立和管理受控资料；其 Voice/Persona、外部 AI 和 Publication 只有在专项法律、监护关系、内容政策与 Provider Gate 全部通过后才能启用。涉及可识别第三方的公开内容需要独立政策和异议/删除渠道。`CONFIRMED`
+M0 可以保存由经核验监护人管理的未成年人静态成长资料，但未成年人不得成为拟人化互动 Owner、Visitor 或虚拟亲属的服务对象，其 Voice/Persona 不进入当前路线。能够控制账户、发布内容、训练声音或参加 M2/M3 互动的主体必须为完成强身份与成年人校验的人。涉及可识别第三方的公开内容需要独立政策和异议/删除渠道。`CONFIRMED`
 
 ### 8.2 权限矩阵
 
@@ -370,7 +376,7 @@ MVP 覆盖全年龄 Represented Persona；能够独立签署高敏条款和控�
 | 建立 MemorialVault | 完成成年人强身份、死亡事实和关系核验后允许 | 拒绝，可接受邀请 | 可另行提出已存在 Vault 的关联/异议请求 | 只核验流程和风险，不代建 |
 | 提交 Source | 允许，必须声明来源、取得方式和权利情况 | 在邀请 scope 内允许，保留 contributor 与 perspective | 不因提出请求而获得提交权 | 默认不得读取正文或代提交 |
 | 确认/纠正 Memory | 主控人允许；第三方陈述不得改写为逝者第一人称 | 只能提交 Candidate/纠正建议 | 可对涉及自身或逝者权益的内容提出限制/异议 | 不可代确认 |
-| 私人家庭 QA | 主控人允许；其他家庭成员需独立 Delegated AccessGrant | 仅在明确 query grant 范围允许 | 不因关系证明自动允许 | 默认仅脱敏健康元数据 |
+| 私人纪念检索 | M0 只允许主控人使用中性记忆助手检索静态材料，不得模拟逝者第一人称陪伴；其他家庭成员需独立 Delegated AccessGrant | M0 仅贡献/静态只读，持续人格化 query 进入 M3 逐案门 | 不因关系证明自动允许 | 默认仅脱敏任务元数据 |
 | Publication | 主控人可起草；发布仍需内容、法域、权利和二次确认门 | 不可直接发布 | 有实质权利异议时可触发暂停审查 | 可安全/法律暂停，不可代发布 |
 | Voice/Portrait/DH | 只能提出申请并提交证据，不能以主控身份自行授权 | 拒绝代授权或代训练 | 可提出异议并触发 scope hold | 只执行审核、暂停和 provider receipt，不产生授权 |
 | 暂停/争议 | 可主动暂停全部能力 | 可撤回自己的贡献并举报 | 证明通过后可申请限制相关内容/能力 | 可因安全、法律或法院/主管机关要求暂停 |
@@ -705,16 +711,16 @@ data_rights_allow = common
 - `pending/failed` Family 邀请及未接受关系。
 - Care snapshot 的诊断性推断、未验证危机标签或第三方健康信息。
 - Visitor、assistant、Operator 消息和 provider/runtime 状态。
-- 未经监护关系核验和专项用途批准的未成年人声音、Persona、敏感推断或可识别公开内容；即使监护关系有效，Voice/Persona、外部 AI 和 Publication 仍须分别通过专项法律、内容与 Provider Gate。
+- 未成年人声音、Persona、虚拟亲属、持续人格化互动、敏感人格推断或可识别公开内容；监护关系有效也不能放行虚拟亲属，其他未成年人扩展能力需另立产品与专项法律路线。
 
 ### 12.6 未成年人、第三方与 RightsRequest
 
 | 数据/用途 | 私人保存 | AI 处理与 Owner QA | Publication/Visitor | Voice/Persona |
 | --- | --- | --- | --- | --- |
 | Owner 对成年第三方的一般记录 | 仅在合法、必要且 owner_only 时保存，标 third_party | 默认只使用 Owner 原始陈述，不生成健康/财务/负面等敏感推断；高敏需专项 basis | 需独立脱敏、政策检查和必要的第三方同意/合法依据 | 不允许据此训练第三方声音或创建第三方 Persona |
-| 可识别未成年人内容 | 经监护关系核验后，可在 guardian-controlled Vault 保存必要的私人 Source 并按 high sensitivity 管理；Persona 与登录 principal 分离 | 仅在年龄保障、监护授权、专门 policy、处理商和用途均通过时处理；否则保持本地/确定性处理并 fail-closed | 仅在监护授权、内容审查、最小披露和专项法律门通过时形成独立 PublicationVersion | 产品范围允许受控未成年人 Persona；声音、肖像驱动和人格模拟仍需专项法律、Provider 与风险 Gate，不能仅凭监护人勾选启用 |
+| 可识别未成年人内容 | 经监护关系核验后，可在 guardian-controlled Vault 保存必要的静态成长 Source 并按 high sensitivity 管理；未成年人不是拟人化 Persona principal | 仅可做阶段性、中性、非定型的成长整理；未成年人模式、监护授权、专门 policy 和处理商用途未通过时保持本地/确定性处理 | M0/M2 均不默认发布；任何未来公开需独立项目、最小披露和专项法律门 | 当前路线硬禁止未成年人虚拟亲属、Voice/Persona 和持续人格化互动，不能凭监护人勾选启用 |
 | 第三方生物特征/声音 | MVP 不采集 | 不处理 | 不公开 | 禁止，除非未来该主体强认证并独立授权自己的资产 |
-| 已核验逝者的纪念材料 | 主控人和受邀贡献者可按来源、取得方式、陈述视角和敏感度保存到 MemorialVault | 仅在 purpose、processor、来源权利和争议状态允许时处理；家属陈述不得升级为逝者本人事实 | 必须形成独立 PublicationVersion，并通过内容、近亲属异议和法域政策检查 | 建立纪念档案不等于 Voice/Portrait/DH 获批；无独立权利依据时保持关闭 |
+| 已核验逝者的纪念材料 | 主控人和受邀贡献者可按来源、取得方式、陈述视角和敏感度保存到 MemorialVault | M0 只做静态整理和中性检索；家属陈述不得升级为逝者本人事实或第一人称情感回应 | M0 不发布人格副本；M3 逐案审查时才可能形成受限 PublicationVersion | 建立纪念档案不等于 Voice/Portrait/DH 获批；无生前专项授权时保持 `NO_GO` |
 
 Data Subject 不因没有 App 账号而失去权利；其权利通过独立请求流程，而不是直接授予私人库访问：
 
@@ -758,6 +764,8 @@ not_requested
 
 evidence_review -> rejected
 ```
+
+该状态机只表示未来若法律与产品 Gate 允许时的治理合同，不表示逝者高风险能力当前可申请即获批。无生前专项用途授权时，`voice_training/portrait_rendering/digital_human_*` 必须直接保持 `not_requested` 或进入 `rejected`；只有 M3 逐案评审可创建 `evidence_review`。`CONFIRMED`
 
 `voice_training`、`voice_synthesis_private`、`portrait_rendering`、`digital_human_private`、`publication_text`、`publication_voice` 和 `publication_digital_human` 是不同 purpose，不得相互推导。`private_active` 只表示纪念资料可在私人 Vault 内整理，不表示任一高风险能力已批准。`CONFIRMED`
 
@@ -842,13 +850,13 @@ requested -> access_revoked -> purging -> completed
 | Entity / Relation | 合并、别名、时间、视角和证据可管理，不授予权限 | 家庭列表、图节点或模型抽取人物 | `FR-MEM-004` |
 | Owner QA | 只检索授权且 active 的记忆；回答显示可解析来源、不确定性和纠正入口 | Context trace 存在但引用不可点击，或使用 observed 当确定事实 | `FR-QA-001`、`FR-QA-002` |
 | Publication | 独立快照、脱敏、二次确认、版本、暂停/撤回和 Public Index | `isPrivate=false` 或私人检索加过滤条件 | `FR-PUB-001`、`FR-PUB-002`、`FR-PUB-003` |
-| Visitor | 受控 share grant、独立 public retrieval、AI 披露、限流、举报和不知道策略 | 匿名页面、Family 权限或 Owner Echo 复用 | `FR-VIS-001`、`FR-VIS-002`、`FR-VIS-003` |
+| Visitor | M2 成年校验、受控 share grant、独立 public retrieval、AI 披露、限流、举报、依赖/时长提醒、确定性退出和不知道策略 | 匿名页面、Family 权限、未成年人入口或 Owner Echo 复用 | `FR-VIS-001`、`FR-VIS-002`、`FR-VIS-003` |
 | Privacy / data rights | tenant isolation、四维授权、第三方规则、真实导出、分层删除回执和声音最高敏感治理 | UI 文案、feature flag、soft delete 单字段或 QA JSON | `FR-PRIV-001` 至 `FR-PRIV-006` |
-| Safety | AI 身份披露、高风险表达即时安全路径、公开滥用治理和人工责任 | 禁止沿用声称“不是机器人”的 prompt；Care 情绪条或延迟回信也不能据此标记完成 | `FR-SAFE-001`、`FR-SAFE-002` |
+| Safety | AI 身份披露、成年人/联系人、依赖与连续2小时提醒、UI/语音/关键词确定性退出、高风险表达即时切换中性安全路径、公开滥用治理、投诉和人工责任 | 禁止沿用声称“不是机器人”的 prompt；仅有 Care 情绪条、模型自行退出或延迟回信不能据此标记完成 | `FR-SAFE-001`、`FR-SAFE-002` |
 | Operations | Job/Outbox、幂等、重试、成本/模型/prompt trace、关键操作审计和最小权限运营 | 本地日志、单次 smoke 或 provider log ID | `FR-OPS-001`、`FR-OPS-002`、`FR-OPS-003` |
 | Voice / Digital Human | 主体证明、独立用途授权、质量/活体、训练/试听/启停/删除回执、Owner/Visitor 分轨和真实设备/provider 验收 | provider ready、模拟器 PCM、数字人显示或一次真机有声 | `FR-VOICE-001` 至 `FR-VOICE-005` |
 
-MVP 的最小完成定义是：一个完成手机号强验证的成年人 Self Owner、Memorial Controller 或 Guardian Controller 可以提交文字 Source，通过引导问答积累素材，在退出或动态审核阈值先到时批量审核已持续持久化的 Candidate，形成版本化已确认记忆，用文字提问获得带来源回答并纠错；可以邀请家庭成员在授权范围贡献或查询，生成与私人 Authority 隔离的 PublicationVersion 并向已认证/受邀 Visitor 提供受控文字查询；Owner 私人回响和经授权 Family 回响支持对应人物 Voice Clone，并在声音不可用时明确降级为文字。Visitor Voice 是独立 capability/cohort，不阻断该基础 MVP。账号注销、Source 删除、恢复和人工数据权利回执必须闭环；首版不要求自助批量导出，也不以 Digital Human Beta、Care 或 TimeLetter 作为发布前提。首批 Closed Pilot 只开放 Adult Self，Memorial Controller 与 Guardian/未成年人按独立 cohort/G4 顺序进入。`CONFIRMED`
+M0 的最小完成定义是：一个完成手机号强验证的成年 Self Owner 或 Memorial Controller 可以提交文字 Source，通过引导问答积累素材，在退出或每 5–10 轮后批量审核 Candidate，形成版本化已确认记忆，用中性文字助手获得带来源回答并纠错；可以邀请家庭成员提交材料并查看静态“Ta 的故事”，但不形成持续人格化查询。本人交互记录、本人资料、已确认记忆和自传具备可验证复制、可读导出、可机读清单与删除；账号注销、Source 删除、恢复和数据权利回执闭环。M0 不要求 Voice、Publication/Visitor、Digital Human、Care 或 TimeLetter。`CONFIRMED`
 
 ## 15. AI、检索与安全行为合同
 
@@ -865,8 +873,6 @@ MVP 的最小完成定义是：一个完成手机号强验证的成年人 Self O
 - 每条 Candidate 必须引用至少一个 Source span/object、提取版本和内容类型。
 - 事实陈述、主观回忆、情绪观察、关系评价和 AI 推断使用不同类型，不互相升级。
 - 批量确认不得包含 high/unknown sensitivity、第三方负面评价或未成年人内容。
-- Message、Source、Candidate 和 DecisionReceipt 必须在对话过程中持续持久化，不依赖模型上下文窗口保存；上下文截断只影响本轮模型输入，不得丢失业务记录。
-- 用户退出页面或待审核 Candidate 数量/上下文预算达到服务端 policy 动态阈值时，以先到者触发审核；后台、强杀和断网后恢复同一批次，首版不向用户暴露轮数设置。
 - 模型失败只改变 processing operation；Source 保持可用，UI 不生成空人物/地点/场景线索。
 - 相同 Source/version/policy 的重试必须幂等，不重复制造审核项。
 
@@ -879,12 +885,25 @@ MVP 的最小完成定义是：一个完成手机号强验证的成年人 Self O
 - 用户指出错误时，定位答案、citation 和 Memory Version，创建 correction Candidate；不直接改写 Projection。
 - prompt、model、retrieval policy、selected/filtered/ranking、latency、fallback 和 cost trace 只保存必要元数据，正文按最小化政策处理。
 
+### 15.3A 引导式访谈与知识丰满化
+
+- `Interview Orchestrator` 只决定下一步使用 `LISTEN/DEEPEN/CLARIFY/BROADEN/SUMMARIZE/PAUSE` 中的哪一种动作，不拥有确认记忆的权限。
+- 每轮最多一个主要问题；用户连续讲述时优先倾听，同一线索通常深挖2至4轮后总结。该节奏与“约5至10轮或退出时批量确认 Candidate”是两个独立状态。
+- 系统最多产生两类推荐：连续性推荐延续近期主动表达或未完成故事，完整性推荐补足重要但覆盖较弱的知识维度；不得从同一总分榜机械取前两名。
+- 推荐优先级固定为“用户明确意愿 > 情绪与隐私安全 > 对话连续性 > 知识完整性 > 系统判断的重要性”。只有一个合格候选时展示一个，没有合格候选时不展示。
+- 创伤、丧亲、疾病、家庭冲突等内容不得仅因知识缺口大而主动推荐；`do_not_ask` 命中必须为0，用户主动重开前不得追问。
+- `KnowledgeGap`、话题归并和覆盖率都是可重建建议或 Projection，不是人物事实；只有经 Owner 审核的 MemoryVersion 可以提高已确认覆盖并进入确定性 QA。
+- 详细交互、数据对象、指标和 `GIC-001..016` 验收要求见[引导式访谈与知识丰满化功能说明](./DreamJourney_V4_引导式访谈与知识丰满化功能说明_V1.0.md)。`CONFIRMED`
+
 ### 15.4 AI 身份与高风险表达
 
 - 所有 Owner/Visitor 会话都必须清楚披露这是 AI；系统和数字人不得声称“不是机器人/真人本人”。
 - 数字人或复刻声音出现时持续提供可识别的 AI 标识，不能只在首次弹窗披露。
+- M2/M3 在服务协议之外还必须记录成年人状态和必要紧急联系人；每连续使用2小时由服务端/客户端确定性计时器展示不可被模型取消的现实提醒。
+- UI、语音命令和退出关键词必须立即结束 Persona 会话；退出逻辑由确定性代码执行，Persona 不得挽留、延迟、继续说话或通过情感表达阻止退出。
 - 自伤、伤害、失联、明显危机或“撑不住”等高风险表达不得进入普通 5-10 分钟延迟回信、角色扮演或情绪化 Persona 模拟。
-- 在地区政策和资源未确定前，安全路径只能提供非诊断性即时提醒、鼓励联系可信真人/当地紧急服务并退出 Persona 模式；不得承诺监护或治疗。
+- 自伤、自杀、重大丧失或“想去陪逝者”等表达必须立即切换到中性安全助手；在适用规则和用户预先设置范围内联系监护人/紧急联系人。地区资源未确定前只能提供非诊断性即时提醒、鼓励联系可信真人/当地紧急服务；不得承诺监护或治疗。
+- Persona、复刻声音和纪念角色不得参与续费/购买劝导、情感召回、医疗金融建议、签约、借款、赠与、遗嘱或关系承诺；支付和重大决策链使用平台中性身份。
 - Care 功能不能替代危机检测、值班、升级、误报处理和复盘责任；这些未完成时 Care 默认关闭。
 
 ### 15.5 Visitor 防护
@@ -903,8 +922,8 @@ MVP 的最小完成定义是：一个完成手机号强验证的成年人 Self O
 
 ### 16.1 首发边界
 
-- MVP 覆盖全年龄 Represented Persona；账户控制者必须完成手机号强验证，未成年人资料由经核验监护人管理。年龄保障、监护证明和账号恢复细节仍受 DR-022/DR-023 外部门约束。
-- 未成年人 Voice/Persona、外部 AI 和可识别公开内容不是默认开放能力；必须逐用途通过监护、法律、内容和 Provider Gate。
+- M0 可覆盖由经核验监护人管理的未成年人静态成长资料，但未成年人不得使用虚拟亲属或持续人格化互动。年龄保障、监护证明和账号恢复细节仍受 DR-022/DR-023 外部门约束。
+- 未成年人 Voice/Persona 与父母、祖辈、兄弟姐妹、伴侣等虚拟亲属从当前路线硬删除，不能通过监护人同意或功能改名放行。
 - 纪念账户仅由完成强身份、死亡事实和近亲属关系核验的成年人创建；Family Contributor 只能提交 Source/Candidate，不能代主控人确认、发布或授权声音。`CONFIRMED`
 - MemorialVault 私人档案与 Voice/Portrait/DH/Publication 分别放行；创建纪念账户不关闭任何高风险用途的法律、地域、处理商或供应商 Gate。`CONFIRMED`
 - 首发地域、processor 和跨境策略未完成前，真实正文和生物特征不得发送给未批准服务商。
@@ -925,7 +944,7 @@ MVP 的最小完成定义是：一个完成手机号强验证的成年人 Self O
 
 ### 16.4 导出、删除和第三方权利
 
-- 首版不提供自助批量导出入口；依法受理的数据访问、复制、转移或导出请求通过人工 Data Rights 流程执行，范围至少覆盖可依法提供的 Source metadata/content、已确认记忆及版本、授权、Publication 和操作回执。受限第三方数据与供应商内部资产必须单独说明，产品协议不能排除法定权利。
+- M0 提供本人交互记录、本人 Source metadata/content、已确认记忆及版本、自传、授权状态和关键操作回执的可读导出，并提供可机读结构化清单。受限第三方数据、争议材料、密钥与供应商内部资产必须逐项裁剪和说明；复制、删除、导出及停服迁移不能仅靠人工承诺，人工 Data Rights 流程只处理复杂或依法需核验的例外。
 - 删除先停止访问，再按数据库、对象、Projection、客户端、provider、日志和备份给出分层状态与最终回执。
 - 账号注销立即撤销登录和访问，进入 30 日可恢复窗口；到期后执行分模块物理清理并展示回执。未取得对象或 Provider 删除回执时只能显示“清理中/部分完成”，不得显示“彻底删除”。
 - 上传人可以删除自己提交的 Source，该动作不可撤回；依赖该 Source 的 MemoryVersion、Publication、Projection 和回答资格必须同步暂停、重算或下架，并保留最小删除回执。
@@ -983,7 +1002,7 @@ MVP 的最小完成定义是：一个完成手机号强验证的成年人 Self O
 
 ### 17.1 资产与授权
 
-- 在世成年人训练本人声音时，必须完成主体证明、随机授权语句、活体/质量检测和分用途授权。产品范围包含由经核验监护人为未成年人、由纪念账户主控人为逝者发起受控能力申请，但“可发起申请”不等于“已取得训练授权”；未成年人、家庭代录、第三方和逝者声音必须分别通过专项法律依据、关系/权利证据、异议机制与 Provider Gate，任一项缺失即拒绝真实训练。
+- M1 只允许在世成年人训练本人声音，且必须完成主体证明、随机授权语句、活体/质量检测和分用途授权。未成年人 Voice/Persona 与家庭代录从当前路线删除；第三方和逝者声音不得进入 M1。逝者只有在具备生前专项授权、完整权利链并进入 M3 逐案法律/伦理评审时，才可创建受限申请。
 - 逝者纪念场景使用独立 `deceased_memorial_voice` capability：关系核验、账户控制权、旧录音所有权或主控人接受条款均不能单独创建训练授权。只有生前明确用途证据、法域专项法律评估、其他近亲属异议机制、Provider 合同允许和 DR-031/036 外部门全部通过后，才可进入受限证据评审或私有试点；否则保持 `not_requested/rejected`。`CONFIRMED`
 - 随机授权语句、活体/本人证明、环境噪声和质量检测通过后才可训练。
 - 逝者无法完成随机授权语句和实时活体，因此不得伪造通过现有本人 Voice Clone 流程；若未来依法批准，必须采用单独证据合同、风险模型、训练入口和测试集，不能复用 `owner_self_voice` 的证明结果。
@@ -994,7 +1013,7 @@ MVP 的最小完成定义是：一个完成手机号强验证的成年人 Self O
 ### 17.2 Owner Echo runtime
 
 - 有 active Owner private voice grant 时，Echo 可调用后端 synthesis；无可用 profile 时清楚显示未启用，不静默冒充复刻声音。
-- MVP synthesis 请求必须绑定 `answerId`（家庭/Visitor 语音绑定 `publicationVersionId + visitorAnswerId`）、授权后的文本 hash/source、policy decision、voice profile version、purpose、output mode 和 idempotency key；当前通用任意文本合成接口不能直接进入正式主链路。
+- M1 synthesis 请求必须绑定 `answerId`、授权后的文本 hash/source、policy decision、voice profile version、purpose、output mode 和 idempotency key；M2 Visitor 语音另绑定 `publicationVersionId + visitorAnswerId`。当前通用任意文本合成接口不能直接进入正式主链路。
 - `GeneratedAudio` 是短期派生物，生命周期为 `requested -> synthesized -> streaming -> expired/deleted`，失败为独立 operation state；默认不提供下载，按最短 TTL 清理，并保留不含正文的生成/水印/删除 receipt。
 - provider 失败不得偷偷切成另一人的声音或把默认声音描述为复刻；允许明确的系统声音/文字降级。
 - 同时只有一个 audio owner。腾讯 audio-drive 负责播放和口型时，本地播放器不得并播；停止/打断必须取消旧请求和尾音并恢复麦克风。
@@ -1003,7 +1022,7 @@ MVP 的最小完成定义是：一个完成手机号强验证的成年人 Self O
 
 ### 17.3 Visitor voice / Digital Human
 
-- Family Voice 是基础 Voice MVP 的受控能力；家庭成员客户端必须使用目标 Owner/Represented Persona 对应且已授权的 `voiceProfileVersion`，不得使用访问者、上一角色或默认音色冒充。Visitor Voice 保留 MVP 合同但作为独立 capability/cohort，不阻断基础 Product MVP；只有文字 Visitor、独立声音用途授权、AI/声音披露、滥用治理、7 日会话 TTL、Provider 合同和成本门全部通过后才可开放，否则保持文字回答。Digital Human 为独立 Beta，不阻塞文字与已批准的声音链路。
+- M2 只允许在世主体主动发布的成年 Visitor 语音/数字分身。只有独立 Publication、成年校验、独立声音用途授权、持续 AI/声音披露、依赖/2小时提醒、确定性退出、危机路径、滥用治理、7日会话TTL、安全评估、算法备案、Provider合同和成本门全部通过后才可开放；否则保持中性文字回答。
 - 平台不提供下载并不能保证不会被外部录音；产品必须披露二次传播和冒用风险。
 - Digital Human 必须证明相对音频/文本的增量价值，并完成素材授权、并发、失败降级、口型/声音和真实设备验收。
 - adapter 只隔离调用，不保证声音模型和数字人资产可迁移；provider exit plan 是采购前置。
@@ -1045,13 +1064,15 @@ AND release_policy.enabled
 | Source durability | authority 写入成功后可重取；处理失败不丢原件 | 数据库/对象故障注入、恢复和删除演练 |
 | 非 AI API | 核心 metadata API p95 <= 800ms（同地域） | 生产等价负载报告 |
 | 文字 QA | p95 首个可见响应 <= 3s；超时可取消/重试且不重复消息 | 真实 provider 基线与降级 smoke |
-| Product MVP Voice Clone / Beta Extension Digital Human | p95 end-of-speech 到首音频目标 <= 2.5s；五轮无前字丢失/尾音/麦克风不恢复 | 真机、真实 provider、audio trace；Digital Human 另行提供 Beta 验收 |
+| M1 Voice / M2 Living Digital Human | p95 end-of-speech 到首音频目标 <= 2.5s；五轮无前字丢失/尾音/麦克风不恢复 | M1/M2 分开的真机、真实 provider、audio trace；年龄/授权/安全/备案证据不可由性能替代 |
 | App 稳定性 | crash-free sessions >= 99.5%；账号切换和后台恢复无数据串扰 | 发布等价构建、崩溃和多账号报告 |
 | 异步任务 | 可重试任务最终成功率 >= 99%，terminal failure 有用户/运营可见状态 | Job/Outbox 指标和失败注入 |
 | 撤回/删除 | 新访问同步阻断；各层物理清理按已披露 SLO 并有 receipt | end-to-end deletion/publication drill |
 | 可访问性 | 核心 Owner 文字闭环支持 Dynamic Type、VoiceOver、足够对比度和 Reduce Motion | iOS accessibility audit 与截图/录屏 |
 
 实际基线若表明目标不合理，必须通过决策登记册调整，不得删除失败证据。
+
+M2/M3 额外设置法规型发布 SLI：AI 标识覆盖率、未成年人虚拟亲属拦截率、三通道退出成功率、2小时提醒触达率、危机切换中性助手召回率、Persona 促购/重大决策拦截率均以严重漏放为0目标；安全评估、算法备案、投诉入口和上架合规包按证据存在性验收，不可用体验指标抵消。
 
 ### 18.2A Projection / Retrieval 后端 DFX 合同
 
@@ -1278,11 +1299,11 @@ DR-034 关闭迁移政策；Round 3 只能在上述证据分级下设计 schema 
 
 ### 21.1 决策入口
 
-所有决定进入[产品决策登记册](./DreamJourney_V4_产品决策登记册_V1.0.md)。2026-07-15 产品回复已经关闭 MVP 范围、三 Tab、手机号、家庭协作、受控 Publication/Visitor、Voice Clone、Digital Human Beta、30 日注销恢复、7 日 Visitor TTL、WTMR、DFX 和 Startup Lean Profile 等产品选择。当前优先关闭的不是重复产品投票，而是以下实现与外部门：
+所有决定进入[产品决策登记册](./DreamJourney_V4_产品决策登记册_V1.0.md)。2026-07-16 新规风险基线已经关闭 M0-M4 范围、三 Tab、手机号、静态家庭协作、在世本人 Voice、成年授权 Publication/Visitor、在世 Digital Human、30日注销恢复、7日 Visitor TTL、复制/导出、WTMR、DFX 和 Startup Lean Profile 等产品选择。当前优先关闭的不是重复产品投票，而是以下实现与外部门：
 
 1. G2 实现门：身份/恢复、模块 authority、备份恢复、Family、Publication/Visitor、Voice、Data Rights 与可观测性证据。
 2. G3 Provider 门：真实地域、凭据、配额、禁训练/留存、删除回执、Voice/DH 许可、质量、真机和退出方案。
-3. G4 法律/安全门：未成年人、第三方、逝者 Voice/DH、AI 标识、监护/亲属证明、RightsRequest、内部访问和危机流程。
+3. G4 法律/安全/监管门：未成年人静态资料、第三方、逝者 Voice/DH、AI 标识、年龄/联系人、监护/亲属证明、RightsRequest、内部访问、依赖/退出/危机、安全评估和算法备案。
 4. 商业扩量门：真实成本、并发和预算阈值；首版虽暂缓精确预算，工程硬配额、熔断和文字降级仍必须存在。
 
 正文只描述已确认、推荐或默认边界；不得把未决供应商、地域、商业和合规选择嵌入 API/schema 后再补决定。
@@ -1313,23 +1334,23 @@ DR-034 关闭迁移政策；Round 3 只能在上述证据分级下设计 schema 
 - V1 PRD、V3 Blueprint 和分析文档仅保留历史输入；V4 定稿后标记 `SUPERSEDED_BY_V4`。
 - 每个里程碑结束执行独立产品、安全、架构和成本复审。
 
-### 21.5 2026-07-15 产品确认基线与剩余外部门
+### 21.5 2026-07-16 M0-M4 基线与剩余外部门
 
-独立方案评审第 21 章的 40 项产品回复与初创团队轻量化确认，已经形成当前产品基线。产品确认允许团队按本规格开发，但不等于代码已实现、数据可迁移、Provider 可处理真实数据或高风险用途已取得法律依据。任何冲突均按“产品确认 + 更严格外部门 + fail-closed”处理。
+独立方案评审第21章的40项产品回复是历史输入；2026-07-16 新规风险基线完成了当前产品分层。产品确认允许团队按本规格开发，但不等于代码已实现、数据可迁移、Provider 可处理真实数据、高风险用途已取得法律依据或监管程序已完成。任何冲突均按“当前 M0-M4 决策 + 更严格外部门 + fail-closed”处理。
 
 | 输入域 | Decision IDs / 当前状态 | 已固定的产品/架构约束 | 仍须关闭的实现或外部门 |
 | --- | --- | --- | --- |
 | 文档权威与运行档位 | DR-030/033/040/042 `CONFIRMED` | V4 为产品范围权威；百级用户采用模块化单体、单 Postgres、独立 Worker 和四阶段轻量迁移 | backup/restore、维护窗、RPO/RTO、真实迁移演练和扩量触发器 |
 | Source/Candidate/Memory/Projection | DR-007/015/029 `CONFIRMED`；DR-034 `RECOMMENDED_PENDING` | 引导问答、每 5–10 轮或退出批量确认；类型化版本 Memory 为 Authority，Projection 可重建 | legacy confirmed 的证据阈值与真实数据迁移报告 |
-| 人物、家庭与纪念账户 | DR-003/004/013 `CONFIRMED`；DR-022/036 `EXTERNAL_REQUIRED` | Family、人物切换和受授权查询进入 MVP；单一成年人主控人负责日常决策 | 监护/亲属/死亡事实核验、第三方异议、未成年人及逝者专项法律流程 |
+| 人物、家庭与纪念账户 | DR-003/004/013 `CONFIRMED`；DR-022/036 `EXTERNAL_REQUIRED` | M0 允许家庭材料贡献、人物切换和静态“Ta 的故事”；持续人格化查询不由 Family 关系授权 | 监护/亲属/死亡事实核验、第三方异议、未成年人静态资料及逝者 M3 专项法律流程 |
 | 身份与内部授权 | DR-023/024 `CONFIRMED`；DR-035 `RECOMMENDED_PENDING` | 手机号 OTP 首发；客户端无 system token；Operator 最小元数据、Admin break-glass | 短信/恢复、防冒领、WorkAuthorization/DataRights 设计与运营双人审批证据 |
-| 删除、恢复与数据权利 | DR-005/011/041 `CONFIRMED` | 无首版自助批量导出；30 日注销恢复；上传人 Source 删除不可撤回；本地草稿按账号隔离 | 法定权利人工渠道、各模块 purge/provider receipt、RetentionHold 与共同材料处理 |
-| Publication/Visitor | DR-002/006/010/016/038 `CONFIRMED` | MVP 使用独立 PublicationVersion/Index；仅认证或受邀访问；Visitor TTL 7 天；Owner 不见问答正文 | AuthZ、限流、撤权/下架 SLO、举报、第三方内容与安全验收 |
-| Voice/Digital Human | DR-008/014/028/037/043 `CONFIRMED`；DR-031/036 `EXTERNAL_REQUIRED` | Voice Clone 为 Product MVP，DH 为受控 Beta Extension；按 purpose 授权并绑定回答来源；失败回文字；均不阻塞Closed Pilot | 真实 Provider 合同、地域、禁训练/留存/删除、未成年人/逝者依据、质量、配额和真机证据 |
+| 删除、恢复与数据权利 | DR-005/011/041 `CONFIRMED` | M0 提供本人数据复制、可读导出与可机读清单；30日注销恢复；Source删除不可撤回；本地草稿按账号隔离 | 第三方裁剪、各模块 purge/provider receipt、RetentionHold、停服迁移与共同材料处理 |
+| Publication/Visitor | DR-002/006/010/016/038 `CONFIRMED` | M2 使用独立 PublicationVersion/Index/读取角色；仅在世主体主动发布；仅成年认证或受邀访问；Visitor TTL 7 天 | AuthZ、年龄、限流、撤权/下架、投诉、依赖/退出/危机、安全评估、算法备案 |
+| Voice/Digital Human | DR-008/014/028/037/043 `CONFIRMED`；DR-031/036 `EXTERNAL_REQUIRED` | M1 仅在世成年人本人私有 Voice；M2 为在世主体发布的成年 Digital Human；M3 为成人纪念逐案试点；失败回中性文字 | 真实 Provider 合同、地域、禁训练/留存/删除、主体/逝者依据、标识、评估/备案、质量、配额和真机证据 |
 | 地域、处理商与成本 | DR-026/031 `EXTERNAL_REQUIRED`；DR-027 `DEFERRED` | 中国首发；Provider Adapter 不等于资产可迁移；工程必须有配额、熔断和文字降级 | 数据实际部署区、subprocessor、跨境、预算与扩量停止线 |
 | 指标、质量与北极星 | DR-019/032/039 `CONFIRMED` | WTMR 为北极星；服务端事件为指标 Authority；采用统一测量合同和 DFX 基线 | 真实 cohort、样本量、观测窗口、阈值校准与隐私最小化证明 |
 
-因此，目标架构可以按已确认范围进入分层实现；Publication、Voice、未成年人或逝者高风险能力只有在其实现门与外部门同时通过后才能向真实用户开放。产品回复不能被实现团队解释为越过法律、Provider 或生产验收的授权。
+因此，目标架构可以按 M0-M4 分层实现；未成年人虚拟亲属和无生前专项授权的逝者 Voice/DH 为硬拒绝，不因外部门待定而进入开发候选。M1-M3 的 Publication、Voice、Digital Human 或纪念互动只有在实现门、监管程序和外部门同时通过后才能向真实用户开放。
 
 ## 22. iOS 目标分层与渐进迁移
 
@@ -1391,10 +1412,10 @@ flowchart TD
 | Public Core | Capture / Archive | 本地 draft、Source 创建/状态、原件预览 | Stage 1，媒体 processor 在 Stage 2 |
 | Public Core | Memory Review | Candidate Inbox、确认/纠正/拒绝、版本历史 | Stage 1 |
 | Public Core | Owner QA | 文字问答、citation、反馈、纠正入口；Voice 不可用时保持文字 | Stage 1；Voice 由独立 capability 放行 |
-| Public Core | Profile / Data Rights | Persona 最小资料、授权、删除/恢复 receipt、人工权利请求状态 | Stage 0/1；首版无自助批量导出 |
-| MVP | Family / Persona Switch | 家庭邀请、人物切换、贡献范围和委托查询 | DR-003/004/013；AuthZ/关系核验 |
-| MVP | Publication / Visitor Management | 独立发布副本、分享、暂停/撤回和 Visitor aggregate | DR-002/006/010/016/038；G2/G4 |
-| MVP / Beta | Voice / Digital Human | Voice profile、分用途授权、试听和 Echo runtime；DH 独立 Beta | DR-008/014/037；Voice/DH 各自 G3/G4 |
+| M0 Core | Profile / Data Rights | Persona 最小资料、授权、交互数据复制、可读导出、机器可读清单、删除/恢复 receipt、人工权利请求状态 | M0；复制/导出/删除是首发权利闭环，不得以后续批量工具为由取消 |
+| M0 / M2 | Family / Persona Switch | M0 家庭材料贡献和静态人物切换；M2 才包含在世主体持续互动授权 | DR-003/004/013；强身份、成年人和关系核验 |
+| M2 | Publication / Visitor Management | 在世主体独立发布副本、分享、暂停/撤回和成年 Visitor aggregate | DR-002/006/010/016/038；G2/G4、上线前安全评估和算法备案 |
+| M1 / M2 / M3 | Voice / Digital Human | M1 在世成年人本人私有 Voice；M2 在世主体主动发布的 Voice/DH；M3 成人纪念互动逐案审批 | DR-008/014/037；三层分别满足 G3/G4，未成年人虚拟亲属和无专项授权逝者 Voice/DH 硬拒绝 |
 | Future | Care/TimeLetter/Messages | 已有壳层与合同的后置场景 | 默认关闭，独立同意/价值门 |
 
 现有“记忆档案 / 回响 / 我的”三个 Tab 继续作为 Feature composition，不因分层改变 Stitch 布局。家人管理位于“我的”，人物切换同步影响记忆档案与回响上下文。`CONFIRMED`
@@ -1463,7 +1484,7 @@ flowchart TD
 5. **Review/Memory seam**：先 hidden QA 接 Candidate/Memory repository；有 decision receipt、idempotency 和 immutable version 后才替换 KBLite governance 写入。
 6. **Owner QA seam**：Context builder 只从 Confirmed Memory/Projection port 读取并产生 typed citation；Echo UI/runtime 不变。
 7. **Projection cutover**：按 authorityEpoch 切换 KBLite 生成源，保留旧 UI 兼容 Projection；切换后禁止 legacy authority 双写。
-8. **Extension extraction**：Voice MVP、DH Beta 和 Future modules按自身 Gate 迁移；provider client 与 playback/runtime 分开，禁止扩展字段反向进入核心模型。
+8. **Extension extraction**：M1 Voice、M2 Voice/DH、M3 纪念互动和 M4 权益模块按自身 Gate 迁移；provider client 与 playback/runtime 分开，禁止扩展字段反向进入核心模型。
 
 每一步都必须可用旧 adapter 回滚 UI/网络调用，但不能在 authorityEpoch 切换后把 legacy 数据恢复成 authority。
 
@@ -1615,7 +1636,7 @@ iOS Tencent SDK -> heartbeat -> release
 | --- | --- | --- |
 | Blocker（生产安全） | `BACKEND_API_TOKEN` 缺失时业务 route 对 anonymous principal fail-open，可能暴露跨账号数据或 provider credential | 路线图 Stage 0；启动配置校验 + middleware fail-closed + 安全回归 |
 | Blocker（生产身份） | `/auth/login` 仅手机号即可创建/登录，密码可选；账号恢复也无 SMS/OTP 身份证明 | 路线图 Stage 0；OTP/受信身份 provider + 防枚举/rate limit |
-| Blocker（凭据） | realtime token 返回静态火山 app token/API key，数字人合同返回腾讯 access token；响应 expiry 不会使 provider 凭据失效 | Stage 0/Voice MVP 与 DH Beta；轮换现有凭据，移除客户端 system token，采用安全 broker 或 provider 支持的短期合同 |
+| Blocker（凭据） | realtime token 返回静态火山 app token/API key，数字人合同返回腾讯 access token；响应 expiry 不会使 provider 凭据失效 | M0 先完成凭据止损；M1/M2 Provider 能力放行前轮换现有凭据、移除客户端 system token，采用安全 broker 或 provider 支持的短期合同 |
 | Blocker（对 V4 Stage 1） | 后端没有独立 Candidate → Review → immutable MemoryVersion authority；KBLite graph/Archive 仍是主要事实路径 | Round 3B 数据/API 合同；路线图 Stage 0/1 |
 | High | ownership 默认 shadow、backend token 兼容且 `productionEnforceReady=false` | Round 3B AuthZ；上线前 enforce gate |
 | High | `app/main.py` 与 `PostgresStore` 跨全部域，模块无法独立测试/关闭 | P027 目标模块边界；路线图增量拆 port |
@@ -1625,8 +1646,8 @@ iOS Tencent SDK -> heartbeat -> release
 | High | 48 个请求处理器使用无类型字典，没有稳定 request/response schema，未知字段可进入 JSONB 聚合 | Round 3B `/v2` typed contracts；旧路由兼容 facade |
 | High | 时间信件 delivered 与 mailbox reminder 非原子，无 outbox/reconciliation | Round 3B jobs/outbox；上线前故障注入 |
 | High | mock 对象存储和 provider fallback 可能被 capability 文案误报为生产 ready | Runtime capability 四维化；release gate |
-| High | 数字人 readiness 只检查环境变量并下发静态 credential；本地 lease 与真实腾讯 session 可能漂移 | Voice/DH Beta gate；短期 credential/真实 provider receipt/清理对账 |
-| High | 声音 profile 禁用/删除未删除 provider 训练产物，账号清理与槽位容量不能闭环 | Voice MVP 数据权利与 provider lifecycle gate |
+| High | 数字人 readiness 只检查环境变量并下发静态 credential；本地 lease 与真实腾讯 session 可能漂移 | M2/M3 Digital Human gate；短期 credential/真实 provider receipt/清理对账 |
+| High | 声音 profile 禁用/删除未删除 provider 训练产物，账号清理与槽位容量不能闭环 | M1-M3 Voice 数据权利与 provider lifecycle gate |
 | Medium | Redis 容器存在但代码未使用 | P027 非目标与部署精简 |
 | Medium | worker 依赖服务器外 systemd，Git 不能证明定时器在线 | Round 3B worker heartbeat/readiness |
 | Medium | InMemory/Postgres 手工实现同一大接口，容易合同漂移 | 模块 repository contract suite |
@@ -1699,9 +1720,9 @@ flowchart LR
 | Conversation / Context | `conversations`、`messages`、`answers`、`citations`、`feedback`、`echo_traces` | Start/AppendConversation、AskOwner、RecordFeedback、RequestCorrection | BuildContext、GetTrace；AnswerCreated、CorrectionRequested | Identity/AuthZ、Persona policy、Memory/Projection read ports |
 | Data Rights / Audit | `rights_requests`、`deletion_executions`、`export_artifacts`、append-only `audit_events` | RequestExport/Delete/Restore、Execute/VerifyPropagation | GetRightsStatus/AuditTimeline；DeletionRequested/Completed/Failed | Identity/AuthZ；各模块 data-rights port；Jobs |
 | Jobs / Notification | `outbox_events`、`jobs`、`job_attempts`、`inbox_messages`、`delivery_receipts`、`device_subscriptions` | Enqueue/Claim/Complete/Retry/DeadLetter、MarkRead/Archive | GetJob/Inbox/Readiness；NotificationDelivered/Failed | Identity/AuthZ；不拥有业务状态 |
-| Publication / Visitor（MVP） | `publications`、`publication_versions`、`share_grants`、`visitor_sessions`、`visitor_feedback` | Publish/Pause/Withdraw、Issue/RevokeShare、StartVisitorSession | GetPublicCopy；PublicationChanged、ShareRevoked | Memory immutable version、Persona/Consent、Identity/AuthZ |
-| Voice / Digital Human（Voice MVP / DH Beta） | `voice_profiles`、`voice_samples`、`generated_audio`、`provider_receipts`、`digital_human_leases` | Train/Accept/Disable/DeleteVoice、Synthesize、Acquire/ReleaseDH | GetVoice/DHCapability；VoiceReady/Deleted、ProviderCallFailed | Persona/Consent、Identity/AuthZ、Jobs；Conversation output only |
-| Family / Care（Family MVP / Care Future） | `family_invitations`、`family_relationships`、`family_query_grants`、`care_policies`、`care_snapshots` | Invite/Accept/PauseRelationship、Grant/RevokeFamilyQuery、RecordCarePolicy/Snapshot | ListAuthorizedFamily/GetFamilyQueryScope/GetCareSummary；RelationshipChanged、CareSignalRaised | Identity/AuthZ、Persona/Consent、Publication、Jobs |
+| Publication / Visitor（M2） | `publications`、`publication_versions`、`share_grants`、`visitor_sessions`、`visitor_feedback` | Publish/Pause/Withdraw、Issue/RevokeShare、StartVisitorSession | GetPublicCopy；PublicationChanged、ShareRevoked | Memory immutable version、Persona/Consent、Identity/AuthZ；仅在世主体与成年 Visitor |
+| Voice / Digital Human（M1/M2/M3） | `voice_profiles`、`voice_samples`、`generated_audio`、`provider_receipts`、`digital_human_leases` | Train/Accept/Disable/DeleteVoice、Synthesize、Acquire/ReleaseDH | GetVoice/DHCapability；VoiceReady/Deleted、ProviderCallFailed | Persona/Consent、Identity/AuthZ、Jobs；按本人私用、在世发布、成人纪念三套 policy 隔离 |
+| Family / Care（M0/M3） | `family_invitations`、`family_relationships`、`family_query_grants`、`care_policies`、`care_snapshots` | Invite/Accept/PauseRelationship、Grant/RevokeFamilyQuery、RecordCarePolicy/Snapshot | ListAuthorizedFamily/GetFamilyQueryScope/GetCareSummary；RelationshipChanged、CareSignalRaised | M0 只做材料贡献与静态查看；老人健康共享进入 M3，Identity/AuthZ、Consent、Jobs 独立过门 |
 | Time Letter（Future） | `time_letters`、`time_letter_recipients`、`time_letter_versions`、`delivery_schedules` | Draft/Seal/Schedule/CancelBeforeSeal、DispatchDue | GetLetterForAuthorizedViewer；TimeLetterSealed/Due/Opened | Identity/AuthZ、Family relationship read port、Jobs/Notification |
 
 `/config/runtime` 的目标是 API composition read model，不是新的业务 authority 模块。它从 Release Policy、module readiness、provider capability 和 external verification receipt 汇总 `enabled / providerReady / releaseVisible / externalVerified`，不得仅凭环境变量存在返回“可用”。
@@ -1712,7 +1733,7 @@ flowchart LR
 - `Jobs` 拥有执行状态，不拥有业务真相。业务模块在同一事务写业务状态与 outbox，worker 消费后写 provider/delivery receipt。
 - `Projection` 可以被清空重建；Memory authority 不读取 KBLite 来决定事实。
 - `Context` 只读取 active Confirmed Memory Version、明确允许的 Persona/Care 摘要和 runtime capability；不得读取 rejected/candidate/legacy observed 作为事实。
-- 扩展模块只依赖核心 port；核心 aggregate 不增加 `familyMemberId`、`voiceProfileId` 或 `digitalHumanId` 作为必填字段。Family/Publication/Voice属于 Product MVP 不改变这一依赖方向，也不成为 Closed Pilot 的数据依赖。
+- 扩展模块只依赖核心 port；核心 aggregate 不增加 `familyMemberId`、`voiceProfileId` 或 `digitalHumanId` 作为必填字段。M0 Family 静态贡献、M1 Voice、M2 Publication/DH 与 M3 纪念互动的分层不改变这一依赖方向，后续能力不成为 M0 的数据依赖。
 
 ### 23.8 RECOMMENDED TARGET：事务、事件与幂等
 
@@ -2172,6 +2193,19 @@ EligibleCloseRelative
 
 Owner 明确选择“把本次输入保存为记忆”时，系统创建新的 Source command；不得把 `messages` 表直接标记成 Memory。发现回答错误时，`citation_id + memory_version_id + owner correction text` 创建 Correction Candidate，旧 Answer 保留历史并可标记 `outdated_by_version_id`。
 
+### 24.5A 引导式访谈控制与知识地图 Projection
+
+| 表/对象 | 关键字段 | 状态/约束 | 类型 |
+| --- | --- | --- | --- |
+| `interview_sessions` | `vault_id/id`、`conversation_id`、`blueprint_version`、`mode`、`current_thread_id?`、`state`、`row_version` | 保存访谈控制状态；不保存第二份人物事实 | Conversation control authority |
+| `conversation_threads` | `vault_id/id`、`title`、`dimension_key`、`state`、`sensitivity`、`last_user_activity_at`、`row_version` | `active/sufficiently_covered/deferred/do_not_ask/archived/disputed/suspended`；`do_not_ask` 只能由用户主动重开 | Owner-scoped topic control |
+| `thread_preferences` | `thread_id`、`actor_subject_id`、`preference`、`cooldown_until?`、`reason?`、`updated_at` | 区分本次跳过、以后再聊和不再问；用户控制优先于推荐评分 | User control authority |
+| `interview_decisions` | `session_id`、`message_id`、`action`、`reason_code`、`policy_version`、`target_dimension?`、`missing_facet?` | 最小化审计；只能决定对话动作，不能写 MemoryVersion | Decision/audit record |
+| `dimension_coverage` | `vault_id`、`dimension_key`、`memory_version_ids`、`coverage_facets`、`authority_epoch` | 只由 active/allowed MemoryVersion 重建；Candidate 不提高已确认覆盖 | Rebuildable projection |
+| `recommendation_candidates` | `vault_id`、`role`、`thread_id`、`question`、`evidence_refs`、`eligibility`、`expires_at` | `role=continuity/completeness`；最多各展示一条；权利、Thread 或安全状态变化立即失效 | Short-lived projection |
+
+首版稳定知识维度为“人生阶段、重要人物、关键选择、专业经验、价值观、愿望与边界”。这些维度用于组织和发现缺口，不要求用户维护主题目录，也不能把 AI 推断的空白写成真实经历。推荐只能读取当前 principal 有权访问的 Source/MemoryVersion、用户明确保存的待续线索或冷启动 Blueprint；跨 Vault、撤权、删除、争议、禁问和不可靠推断必须在生成前排除。`CONFIRMED`
+
 ### 24.6 Projection 与检索数据
 
 | 表/对象 | 关键字段 | 约束 | 类型 |
@@ -2202,7 +2236,7 @@ Owner 明确选择“把本次输入保存为记忆”时，系统创建新的 S
 | Family/Care | invitation、relationship、relationship grant、care policy/snapshot | subject identity、persona policy | family relationship 自动等于 access grant/consent；Care 写 Owner Memory |
 | TimeLetter | letter/version、recipient、delivery schedule/open receipt | owner vault、active family relationship、notification job | 作为 `archive_items.kind` 永久共表；封存后原地编辑；未到期收件人读取 |
 
-Extension table 可以包含 `vault_id` 以定位 Owner 资源，但其状态和字段不进入 Source/Memory/Conversation 核心表；关闭模块时核心 migration、API 和 UI 不需要 nullable extension 字段。这里的“可关闭”是故障降级与分域治理，不表示 Family/Publication/Voice 可以从 Product MVP 范围删除；它们仅不阻塞 Closed Pilot。
+Extension table 可以包含 `vault_id` 以定位 Owner 资源，但其状态和字段不进入 Source/Memory/Conversation 核心表；关闭模块时核心 migration、API 和 UI 不需要 nullable extension 字段。这里的“可关闭”是故障降级与分域治理；Family 静态贡献属于 M0，Voice 属 M1，Publication/Visitor 与在世 DH 属 M2，纪念互动属 M3，后续层级不阻塞 M0。
 
 ### 24.9 Legacy 数据映射规则
 
@@ -3188,7 +3222,7 @@ Keychain、UserDefaults 和文件系统无法组成一个原子事务，使用�
 | I03 | Store registry/envelope | 建 owner-scoped registry、migration ledger/quarantine | 回旧 adapter 读取当前 owner，但不恢复 global writes |
 | I04 | Core stores | Auth/Profile/Draft/Archive/KBLite/Receipt/Widget 迁移 | UI 使用兼容 ViewState；新 envelope 保留 |
 | I05 | Conversation/message stores | Conversation/DelayedReply/Inbox/Memoir/Memory 迁移/退役 | 从后端/兼容 cache重建，不把 global store设 Authority |
-| I06 | Extension runtime stores | Voice/TTS/DH/Family/Care/Notification 按 capability迁移 | 关闭受影响扩展能力；Owner 文字核心不回滚，Closed Pilot 可继续；Product MVP/Beta Extension 对应发布门单独阻断 |
+| I06 | Extension runtime stores | Voice/TTS/DH/Family/Care/Notification 按 capability迁移 | 关闭受影响扩展能力；Owner 文字核心不回滚，M0 可继续；M1-M4 对应发布门单独阻断 |
 | I07 | UI composition/canary | Coordinator 注入 AccountContext/use case；Stitch UI不变；按 cohort启用 | 关闭 cohort/新入口，旧页面读兼容 ViewState |
 | I08 | Legacy retirement | 删除 global writers、shared token读取、auto-claim、旧 timer/path | 只在零访问证据后删除；问题用 forward fix，不恢复跨账号 global store |
 

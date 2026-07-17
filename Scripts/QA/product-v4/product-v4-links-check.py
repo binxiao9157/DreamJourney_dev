@@ -49,6 +49,9 @@ def main() -> None:
     args = parser.parse_args()
 
     documents = sorted(PRODUCT.glob("DreamJourney_V4_*.md"))
+    risk_authority = PRODUCT / "寻梦环游_产品问题风险分级与整体规避方案_V1.0.md"
+    if risk_authority.is_file():
+        documents.append(risk_authority)
     require(documents, "no Product V4 Markdown documents found")
 
     checked_links = 0

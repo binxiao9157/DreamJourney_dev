@@ -1,11 +1,11 @@
 # DreamJourney V4 产品决策登记册
 
-版本：V1.4 2026-07-16 引导式访谈产品决策基线  
-初版日期：2026-07-12  
-更新日期：2026-07-16  
-状态：已同步 M0-M4 风险边界和引导式访谈交互原则；静态记忆、在世本人语音、成年人授权互动、纪念互动和知识许可分别过门，工程、法律、供应商、备案、生产与真实用户证据仍按各自 Gate 独立关闭  
-工程基线：iOS `feature/prd-stitch-ui-adaptation@8a1922b`；Backend `main@4c0538b`  
-关联：[Product Spec V4](./DreamJourney_V4_产品定义与目标架构_Product_Spec_V4.0.md) · [当前实现证据矩阵](./DreamJourney_V4_当前实现证据矩阵_V1.0.md) · [评审与验收清单](./DreamJourney_V4_评审与验收清单_V1.0.md)  
+版本：V1.4 2026-07-16 引导式访谈产品决策基线
+初版日期：2026-07-12
+更新日期：2026-07-16
+状态：已同步 M0-M4 风险边界和引导式访谈交互原则；静态记忆、在世本人语音、成年人授权互动、纪念互动和知识许可分别过门，工程、法律、供应商、备案、生产与真实用户证据仍按各自 Gate 独立关闭
+工程基线：iOS `feature/prd-stitch-ui-adaptation@8a1922b`；Backend `main@4c0538b`
+关联：[Product Spec V4](./DreamJourney_V4_产品定义与目标架构_Product_Spec_V4.0.md) · [当前实现证据矩阵](./DreamJourney_V4_当前实现证据矩阵_V1.0.md) · [评审与验收清单](./DreamJourney_V4_评审与验收清单_V1.0.md)
 定稿边界：登记册定稿不等于开放决定获批，不表示 115 个 Work Item 已实现、G2-G4 已关闭或已获发布批准。
 
 ## 1. 使用规则

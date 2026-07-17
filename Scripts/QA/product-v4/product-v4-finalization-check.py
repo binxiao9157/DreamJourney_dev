@@ -15,10 +15,11 @@ from typing import Any, Callable
 
 
 ROOT = Path(__file__).resolve().parents[3]
-STATUS = "2026-07-15"
+STATUS = "2026-07-16"
 IOS_BASELINE = "feature/prd-stitch-ui-adaptation@8a1922b"
 BACKEND_BASELINE = "main@4c0538b"
 CANONICAL_SOURCE_CHECK = ROOT / "Scripts/QA/product-v4/product-v4-canonical-source-check.py"
+CURRENT_HANDOFF_CHECK = ROOT / "Scripts/QA/product-v4/product-v4-current-handoff-check.py"
 
 FILES = {
     "spec": "docs/product/DreamJourney_V4_产品定义与目标架构_Product_Spec_V4.0.md",
@@ -371,20 +372,24 @@ def main() -> int:
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
 
-    canonical_check = subprocess.run(
-        [sys.executable, str(CANONICAL_SOURCE_CHECK)],
-        cwd=ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if canonical_check.returncode != 0:
-        if canonical_check.stdout:
-            print(canonical_check.stdout.rstrip(), file=sys.stderr)
-        if canonical_check.stderr:
-            print(canonical_check.stderr.rstrip(), file=sys.stderr)
-        print("Product V4 finalization check failed: canonical source guard", file=sys.stderr)
-        return 1
+    for label, check_path in (
+        ("canonical source guard", CANONICAL_SOURCE_CHECK),
+        ("current execution handoff", CURRENT_HANDOFF_CHECK),
+    ):
+        check_result = subprocess.run(
+            [sys.executable, str(check_path)],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if check_result.returncode != 0:
+            if check_result.stdout:
+                print(check_result.stdout.rstrip(), file=sys.stderr)
+            if check_result.stderr:
+                print(check_result.stderr.rstrip(), file=sys.stderr)
+            print(f"Product V4 finalization check failed: {label}", file=sys.stderr)
+            return 1
 
     values = read_inputs()
     if args.self_test:
@@ -399,7 +404,7 @@ def main() -> int:
 
     print(
         "Product V4 finalization check passed: "
-        "canonical_sources=guarded artifacts=5 wave1=23 wave2=22 verified=22 challenged=0 "
+        "canonical_sources=guarded current_handoff=guarded artifacts=5 wave1=23 wave2=22 verified=22 challenged=0 "
         "FR=36 DR=43 findings=22 risks=12 packages=13 work_items=115 fields=1840"
     )
     return 0

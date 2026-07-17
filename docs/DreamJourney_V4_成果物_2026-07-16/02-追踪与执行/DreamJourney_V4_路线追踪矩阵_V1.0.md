@@ -1,8 +1,8 @@
 # DreamJourney V4 路线追踪矩阵
 
-版本：V1.0 Generated Snapshot  
-日期：2026-07-15  
-状态：Round 4E1B 生成视图；不是实现完成证据  
+版本：V1.0 Generated Snapshot
+日期：2026-07-15
+状态：Round 4E1B 生成视图；不是实现完成证据
 权威源：Product Spec、当前实现证据矩阵、产品决策登记册、Round 3独立架构评审响应、V4可执行路线图
 
 ## 0. 使用边界
@@ -78,7 +78,7 @@
 | `DR-004` | `CONFIRMED` | `GOVERNS_IMPLEMENTATION` | `WI-S0-06-01`<br>`WI-S0-06-09`<br>`WI-S1-01-11` | Product + Privacy/Legal + Architecture | 2026-07-16 新规调整；M3 仍受 DR-026/031/036/037 与专项法律意见 | `PRODUCT_CONFIRMED_IMPLEMENTATION_GATED` |
 | `DR-005` | `CONFIRMED` | `GOVERNS_IMPLEMENTATION` | `WI-S0-05-01`<br>`WI-S0-05-06` | Product + Privacy/Legal | 2026-07-16 新规调整；格式、第三方裁剪和 G4 仍需冻结 | `PRODUCT_CONFIRMED_IMPLEMENTATION_GATED` |
 | `DR-006` | `CONFIRMED` | `GOVERNS_IMPLEMENTATION` | `WI-S3-01-01`<br>`WI-S3-01-02`<br>`WI-S3-01-04`<br>`WI-S3-01-05`<br>`WI-S3-01-06`<br>`WI-S3-01-08` | Architecture + Privacy/Legal | 2026-07-16 新规调整；G2/G4 后才可真实开放 | `PRODUCT_CONFIRMED_IMPLEMENTATION_GATED` |
-| `DR-007` | `CONFIRMED` | `GOVERNS_IMPLEMENTATION` | `WI-S1-01-01`<br>`WI-S1-01-03`<br>`WI-S1-01-04`<br>`WI-S1-01-08`<br>`WI-S1-01-11`<br>`WI-S1-02-11`<br>`WI-S1-03-04` | Product + Architecture | 2026-07-15 产品确认 | `PRODUCT_CONFIRMED_IMPLEMENTATION_GATED` |
+| `DR-007` | `CONFIRMED` | `GOVERNS_IMPLEMENTATION` | `WI-S1-01-01`<br>`WI-S1-01-03`<br>`WI-S1-01-04`<br>`WI-S1-01-08`<br>`WI-S1-01-11`<br>`WI-S1-02-11`<br>`WI-S1-03-04` | Product + Architecture | 2026-07-16 引导式访谈细化确认 | `PRODUCT_CONFIRMED_IMPLEMENTATION_GATED` |
 | `DR-008` | `CONFIRMED` | `GOVERNS_IMPLEMENTATION` | `WP-S1-03` | Product + iOS + Backend | 2026-07-16 新规调整；真实能力仍需法律、Provider、配额、备案和真机 G3/G4 | `PRODUCT_CONFIRMED_IMPLEMENTATION_GATED` |
 | `DR-009` | `EXTERNAL_REQUIRED` | `EXTERNAL_GATE` | `WI-S1-01-12`<br>`WI-S1-02-11` | Architecture + Operations | Stage 2 开发前 | `EXTERNAL_BLOCKED` |
 | `DR-010` | `CONFIRMED` | `GOVERNS_IMPLEMENTATION` | `WI-S0-06-01`<br>`WI-S3-01-01`<br>`WI-S3-01-03`<br>`WI-S3-01-05`<br>`WI-S3-01-06`<br>`WI-S3-01-07`<br>`WI-S3-01-08` | Product + Security | 2026-07-16 新规调整；G2/G4 后开放 | `PRODUCT_CONFIRMED_IMPLEMENTATION_GATED` |
@@ -86,7 +86,7 @@
 | `DR-012` | `REJECTED` | `ENFORCES_REJECTION` | `SCOPE-AOS-COMPONENTS` | Architecture | 已由证据审计关闭；重新采用需新证据 | `NEGATIVE_CONTROL_ONLY` |
 | `DR-013` | `CONFIRMED` | `GOVERNS_IMPLEMENTATION` | `WI-MIG-01-10`<br>`WI-S1-03-08`<br>`WI-V0-01-01`<br>`WI-V0-01-02`<br>`WI-V0-01-03`<br>`WI-V0-01-05`<br>`WI-V0-01-06`<br>`WI-V0-01-07`<br>`WI-V0-01-10`<br>`WI-V0-01-11` | Product + Engineering | 2026-07-16 新规调整 | `PRODUCT_CONFIRMED_IMPLEMENTATION_GATED` |
 | `DR-014` | `CONFIRMED` | `GOVERNS_IMPLEMENTATION` | `WI-MIG-01-10`<br>`WI-S0-06-01`<br>`WI-S1-03-07`<br>`WI-S1-03-08`<br>`WI-V0-01-01`<br>`WI-V0-01-02`<br>`WI-V0-01-06`<br>`WI-V0-01-08`<br>`WI-V0-01-09`<br>`WI-V0-01-10`<br>`WI-V0-01-11` | Product + Privacy/Legal | 2026-07-16 新规调整；真实训练/合成仍需 G3/G4 | `PRODUCT_CONFIRMED_IMPLEMENTATION_GATED` |
-| `DR-015` | `CONFIRMED` | `GOVERNS_IMPLEMENTATION` | `WI-S1-01-01`<br>`WI-S1-01-03`<br>`WI-S1-01-04`<br>`WI-S1-01-11`<br>`WI-S1-02-11` | Product + Architecture | 2026-07-15 产品确认 | `PRODUCT_CONFIRMED_IMPLEMENTATION_GATED` |
+| `DR-015` | `CONFIRMED` | `GOVERNS_IMPLEMENTATION` | `WI-S1-01-01`<br>`WI-S1-01-03`<br>`WI-S1-01-04`<br>`WI-S1-01-11`<br>`WI-S1-02-11` | Product + Architecture | 2026-07-16 引导式访谈细化确认 | `PRODUCT_CONFIRMED_IMPLEMENTATION_GATED` |
 | `DR-016` | `CONFIRMED` | `GOVERNS_IMPLEMENTATION` | `WI-S3-01-01`<br>`WI-S3-01-03`<br>`WI-S3-01-07` | Product + Privacy/Legal | 2026-07-15 产品确认；暂停 SLO 由测量合同验收 | `PRODUCT_CONFIRMED_IMPLEMENTATION_GATED` |
 | `DR-017` | `EXTERNAL_REQUIRED` | `EXTERNAL_GATE` | `GLOBAL-EXTERNAL-GATES` | Product + Privacy/Legal + Finance | 对应阶段开发前 | `EXTERNAL_BLOCKED` |
 | `DR-018` | `REJECTED` | `ENFORCES_REJECTION` | `WI-S0-06-09` | Product + Privacy/Legal | 所有公开文案前 | `NEGATIVE_CONTROL_ONLY` |

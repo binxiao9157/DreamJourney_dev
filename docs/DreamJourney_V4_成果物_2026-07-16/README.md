@@ -4,6 +4,8 @@
 更新日期：2026-07-16  
 状态：`REGULATORY_AND_GUIDED_INTERVIEW_BASELINE_SYNCED / M0_CONDITIONAL / M1-M4_DEFAULT_OFF / IMPLEMENTATION_UNVERIFIED`
 
+分类：`FINAL_REQUIREMENT_SNAPSHOT_NON_CANONICAL`。本目录是终版需求审计快照；可编辑 working source 位于 `docs/product/` 和 `docs/superpowers/plans/`。
+
 > 本目录最终交付时仅保留相对 `DreamJourney_V4_成果物_2026-07-15` 内容有变化的文档。使用时应覆盖到 7 月 15 日成果物副本上；它不是完整独立包，也不会重复未变化的历史复审、工具和交付记录。
 
 ## 1. 工程基线
@@ -40,8 +42,8 @@
 
 派生物 SHA-256：
 
-- Trace：`706023152ff8897fe310a6021e27dc3f3a16003cd2a1b7961c97d10534a93347`
-- Registry：`49388767e3a72e28a0e596ab081350105a717f65de5c596b0f95d270267000cb`
+- Trace：`e9311dd08e3f0934dc2d9131e2d87f4d542f453362bbd7b70fdd66bf08fba736`
+- Registry：`4bc4069d382269c95d9f42c5324476ca0f7853654bac93761ef292bb2b6e6213`
 
 ## 5. 使用边界
 

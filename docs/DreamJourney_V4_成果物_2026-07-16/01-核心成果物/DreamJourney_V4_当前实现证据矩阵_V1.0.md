@@ -1,11 +1,11 @@
 # DreamJourney V4 当前实现证据矩阵
 
-版本：V1.4 Guided Interview Target / Implementation Evidence Unchanged  
-初版日期：2026-07-12  
-更新日期：2026-07-16  
-状态：已同步 M0-M4 产品风险基线和引导式访谈目标合同；当前代码基线和实现成熟度未因文档调整而上调，仍不作为发布承诺  
-工程基线：iOS `feature/prd-stitch-ui-adaptation@8a1922b`；Backend `main@4c0538b`  
-评审控制面：[DreamJourney V4 评审与验收清单](./DreamJourney_V4_评审与验收清单_V1.0.md)  
+版本：V1.4 Guided Interview Target / Implementation Evidence Unchanged
+初版日期：2026-07-12
+更新日期：2026-07-16
+状态：已同步 M0-M4 产品风险基线和引导式访谈目标合同；当前代码基线和实现成熟度未因文档调整而上调，仍不作为发布承诺
+工程基线：iOS `feature/prd-stitch-ui-adaptation@8a1922b`；Backend `main@4c0538b`
+评审控制面：[DreamJourney V4 评审与验收清单](./DreamJourney_V4_评审与验收清单_V1.0.md)
 定稿边界：矩阵中的成熟度仍以当前代码证据为准；产品确认只更新目标范围和决策状态，不表示 115 个 Work Item 已实现、G2-G4 已关闭或已获发布批准。
 
 ## 1. 使用规则
@@ -152,7 +152,7 @@
 | FR-SRC-003 | P0 | `PARTIAL` | `IMPLEMENTED` metadata cascade | CONFIRMED: DR-011/039; OPEN: DR-035 | 对象/provider/备份删除 | PUBLIC_PARTIAL | `PARTIAL` | Stage 1 Owner 核心 | Source 删除语义已确认；Archive→KB cascade 已有，但无权威 Source/Object version 和完整回执 |
 | FR-CHAT-001 | P0 | `PARTIAL` Echo | `MISSING` Conversation messages | CONFIRMED: DR-008/015 | LLM streaming、来源 UX | PUBLIC_PARTIAL | `PARTIAL` | Stage 1 Owner 核心 | 一个自然输入的产品形态已确认；无服务端 Message authority、历史重取、InterviewSession/Thread 或取消/重试合同 |
 | FR-CHAT-002 | P0 | `IMPLEMENTED` extraction client | `IMPLEMENTED` proposal API | CONFIRMED: DR-007/015; EXTERNAL: DR-031 | 模型质量/安全/处理商 | PUBLIC_PARTIAL | `PARTIAL` | Stage 1 Owner 核心 | 提取组件存在，但无 Source/Job/Candidate authority，也无连续性/完整性推荐、知识缺口和访谈动作编排，不能按 FR 标 IMPLEMENTED |
-| FR-CHAT-003 | P0 | `CONTRACT_ONLY` governance | `MISSING` risk policy | CONFIRMED: DR-007/015; EXTERNAL: DR-022/036 | 安全/监护评审 | HIDDEN_QA | `CONTRACT_ONLY` | 批量确认与访谈节奏已确认；无跳过/暂缓/禁问 Authority、敏感推荐阻断、疲劳收束和完整体验 |
+| FR-CHAT-003 | P0 | `CONTRACT_ONLY` governance | `MISSING` risk policy | CONFIRMED: DR-007/015; EXTERNAL: DR-022/036 | 安全/监护评审 | HIDDEN_QA | `CONTRACT_ONLY` | Stage 1 Owner 核心 | 批量确认与访谈节奏已确认；无跳过/暂缓/禁问 Authority、敏感推荐阻断、疲劳收束和完整体验 |
 | FR-VOICE-001 | P0 | `PARTIAL` capture/consent | `PARTIAL` training | CONFIRMED: DR-004/008/014/023/037; EXTERNAL: DR-026/031/036 | 在世本人、成年、随机语句、活体、质量、合规、真机 | BETA_UNVERIFIED | `PARTIAL` | M1 Living Self Voice | 当前仍缺随机语句/活体/SNR；现有 Family/Guardian/逝者入口必须硬拒绝，不能构成训练授权 |
 | FR-VOICE-002 | P0 | `PARTIAL` profile UI | `PARTIAL` provider lifecycle | CONFIRMED: DR-011/037/039; EXTERNAL: DR-031 | provider deletion/receipt | BETA_UNVERIFIED | `PARTIAL` | M1 | 试听/启停/删除 UI 有；可靠删除任务和回执缺失 |
 | FR-VOICE-003 | P0 | `IMPLEMENTED` runtime | `IMPLEMENTED` provider adapter | CONFIRMED: DR-008/014/037/039; DEFERRED: DR-027 exact budget | 真机、provider、SLO、标识 | BETA_UNVERIFIED | `IMPLEMENTED` | M1 Voice / M2 Living DH | PCM/打断代码存在；主体限制、音色一致性、延迟、五轮稳定性和监管安全未验收 |

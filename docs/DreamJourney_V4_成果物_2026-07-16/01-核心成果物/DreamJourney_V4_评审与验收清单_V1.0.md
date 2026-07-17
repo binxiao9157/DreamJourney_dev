@@ -1,9 +1,9 @@
 # DreamJourney V4 评审与验收清单
 
-版本：V1.4 M0 Guided Interview Baseline + External Gates Open  
-日期：2026-07-16  
-状态：`REGULATORY_AND_GUIDED_INTERVIEW_BASELINE_SYNCED_IMPLEMENTATION_UNVERIFIED`  
-工程基线：iOS `feature/prd-stitch-ui-adaptation@8a1922b`；Backend `main@4c0538b`  
+版本：V1.4 M0 Guided Interview Baseline + External Gates Open
+日期：2026-07-16
+状态：`REGULATORY_AND_GUIDED_INTERVIEW_BASELINE_SYNCED_IMPLEMENTATION_UNVERIFIED`
+工程基线：iOS `feature/prd-stitch-ui-adaptation@8a1922b`；Backend `main@4c0538b`
 边界：本文件已同步新规生效后的产品风险方案、M0-M4、引导式访谈与 Startup Lean Profile；不证明115个Work Item已实现，不关闭G2-G4、安全评估、算法备案或监管发布门，不构成发布批准。
 
 ## 1. Authority 与使用规则

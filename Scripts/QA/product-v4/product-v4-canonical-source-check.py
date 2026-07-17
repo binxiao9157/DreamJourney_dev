@@ -11,15 +11,19 @@ ROOT = Path(__file__).resolve().parents[3]
 PRODUCT = ROOT / "docs/product"
 ROADMAP = ROOT / "docs/superpowers/plans/2026-07-12-dreamjourney-v4-executable-development-roadmap.md"
 QA_DIR = ROOT / "Scripts/QA/product-v4"
-SNAPSHOT = ROOT / "docs/DreamJourney_V4_成果物_2026-07-15"
+SNAPSHOT = ROOT / "docs/DreamJourney_V4_成果物_2026-07-16"
 SNAPSHOT_TOKEN = "docs/DreamJourney_V4_成果物_"
+SNAPSHOT_MARKER = "FINAL_REQUIREMENT_SNAPSHOT_NON_CANONICAL"
 
 CANONICAL_FILES = (
     PRODUCT / "README.md",
     PRODUCT / "DreamJourney_V4_产品定义与目标架构_Product_Spec_V4.0.md",
     PRODUCT / "DreamJourney_V4_产品决策登记册_V1.0.md",
+    PRODUCT / "DreamJourney_V4_引导式访谈与知识丰满化功能说明_V1.0.md",
+    PRODUCT / "寻梦环游_产品问题风险分级与整体规避方案_V1.0.md",
     PRODUCT / "DreamJourney_V4_当前实现证据矩阵_V1.0.md",
     PRODUCT / "DreamJourney_V4_评审与验收清单_V1.0.md",
+    PRODUCT / "DreamJourney_V4_方案架构评审解读_新规生效增量复审_2026-07-16.md",
     PRODUCT / "DreamJourney_V4_路线追踪矩阵_V1.0.md",
     PRODUCT / "DreamJourney_V4_路线执行注册表_V1.0.json",
     ROADMAP,
@@ -27,7 +31,7 @@ CANONICAL_FILES = (
 
 WORKING_SOURCE_MARKERS = (
     "CANONICAL_WORKING_SOURCE",
-    "DELIVERY_SNAPSHOT_NON_CANONICAL",
+    "FINAL_REQUIREMENT_SNAPSHOT_NON_CANONICAL",
     "Scripts/QA/product-v4",
 )
 
@@ -49,7 +53,7 @@ def main() -> int:
     snapshot_readme = SNAPSHOT / "README.md"
     if not snapshot_readme.is_file():
         errors.append("DELIVERY_SNAPSHOT_MISSING: README.md")
-    elif "DELIVERY_SNAPSHOT_NON_CANONICAL" not in snapshot_readme.read_text(encoding="utf-8"):
+    elif SNAPSHOT_MARKER not in snapshot_readme.read_text(encoding="utf-8"):
         errors.append("DELIVERY_SNAPSHOT_CLASSIFICATION_MISSING")
 
     for path in sorted(QA_DIR.glob("*.py")):

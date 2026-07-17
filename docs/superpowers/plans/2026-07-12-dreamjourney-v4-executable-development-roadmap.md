@@ -1,10 +1,9 @@
 # DreamJourney V4 可执行开发路线图
 
-版本：V1.2 Product Confirmed Baseline + Staged Validation + Startup Lean Profile
+版本：V1.3 2026-07-15 新规生效后的 M0-M4 路线基线
 初版日期：2026-07-12
-更新日期：2026-07-15
-状态：已同步独立方案评审第21章产品回复、三级验证策略及开发前五项产品细节；115 个 Work Item 保留并按“Closed Pilot / Product MVP / Beta Extension / 规模触发”执行。产品范围已确认不代表工程实现、G2-G4、Provider、法律或发布批准
-产品细节确认批次：2026-07-15 五项开发前确认已映射到既有 Work Item，不新增第二套路线图编号。
+更新日期：2026-07-16
+状态：已依据新规风险基线将 115 个 Work Item 重映射到 M0-M4；不重建第二套工程包。产品范围已确认不代表工程实现、G2-G4、Provider、算法备案、安全评估、法律或发布批准
 基线：iOS `feature/prd-stitch-ui-adaptation@8a1922b`；Backend `main@4c0538b`
 评审控制面：[DreamJourney V4 评审与验收清单](../../product/DreamJourney_V4_评审与验收清单_V1.0.md)
 定稿边界：路线图定稿只冻结执行依据；115 个 Work Item 仍按 Registry 的 `PLANNED/STOP/NO_GO`、Gate 和外部门推进。当前 Operating Profile 以 DR-040/042 的百级用户四阶段轻量迁移为默认，C00-C11 保留为规模触发目标。
@@ -26,16 +25,29 @@
 - 用“已规划”替代“已实现”，用静态检查替代真实环境/真机/Provider 验收。
 - 在工作包外创建第二套 Domain、Authority、migration runner、release policy 或 Provider credential path。
 - 为没有当前测量的数据承诺人日、日期、SLO、RPO/RTO、cohort 比例或 Provider 成本。
-- 让 Publication、Voice/DH、Family/Care/TimeLetter 的故障阻断 Owner 文字核心降级运行；Closed Pilot 可以独立验证，但这条技术隔离不等于 Product MVP 可以省略 Family、Publication/Visitor 或 Voice。
+- 让 Publication、Voice/DH、Family/Care/TimeLetter 的故障阻断 M0 文字核心降级运行；后续阶段未通过时只关闭对应能力，不得反向阻塞 M0。
 
-### 0.1 2026-07-15 产品确认与执行档位
+### 0.1 2026-07-16 M0-M4 执行档位
 
-- Closed Pilot：首批只开放 Adult Self；验证强身份与 Vault 隔离、备份恢复最低门、Source/Candidate/Memory/文字 QA、来源引用、纠正、删除与最小权利回执；照片只作为明确未云端保存的本地草稿；不等待 Family/Publication/Visitor、Voice、DH 或媒体 Provider。Memorial Controller 为第二 cohort，Guardian/未成年人保持独立 G4。
-- Product MVP：在 Closed Pilot 达标后增加三 Tab 完整体验、Family/人物切换与授权贡献、独立 Publication/Visitor、Owner private 与授权 Family Voice Clone 及其适用法律、Provider 和真机门；Visitor Voice 独立 capability/cohort，不阻断基础 MVP。
-- Beta Extension：Digital Human 和非必要媒体理解；必须能单独关闭并回退文字/已批准声音。
-- 后置：Care、TimeLetter；不占用首版 critical path。
-- 外部门：全年龄人物资料是产品范围，但未成年人、第三方和逝者 Voice/DH、真实 Provider、AI 标识与地域/处理商仍 fail-closed。
+- M0 记忆资产：强身份与 Vault 隔离、备份恢复最低门、自传、静态“Ta 的故事”、Family 材料贡献、Source/Candidate/Memory/中性文字 QA、来源引用、纠正、复制/导出、删除与最小权利回执；不等待 Publication/Visitor、Voice、DH 或媒体 Provider。
+- M1 在世本人私有语音：只允许完成成年人强身份、随机授权语句和活体/质量检测的在世主体训练并私用本人声音。
+- M2 成年授权互动：在世主体主动发布独立 PublicationVersion；完成成年校验的 Visitor 在授权范围内使用文字、语音或数字分身。安全评估、算法备案、AI 标识、依赖/2小时提醒、确定性退出、投诉与危机演练是硬门。
+- M3 受监管试点：老人主动授权的健康协同；权利链清晰的成人纪念互动逐案法律/伦理评审。无生前专项授权的逝者 Voice/Portrait/DH 为 `NO_GO`。
+- M4 知识许可：权利目录、授权合同、受益人、调用计量与收益结算。
+- 硬删除：未成年人虚拟亲属、未成年人 Voice/Persona、人格化促购、人格参与重大现实决策不进入规划。
 - 当前迁移：百级用户、可强制最低版本和可维护窗口时采用 L0 盘点/备份恢复、L1 离线演练、L2 维护窗切换、L3 24–72 小时观察；只有规模或运营触发器出现才升级到完整 C00-C11。
+
+### 0.2 旧 Lane 标识兼容映射
+
+为保持 Registry、checker 和 115 个稳定 Work Item ID 可重生成，工作项正文中已存在的 `Closed Pilot/Product MVP/Beta Extension` 字符串暂作为机器兼容标签保留，不再代表当前产品发布含义：
+
+| 旧标识 | 当前解释 |
+| --- | --- |
+| `Closed Pilot` / `Owner Text Core` | M0 记忆资产核心 |
+| `Product MVP Voice` | M1 在世成年人本人私有语音；任何 Family/第三方/逝者语音不在此映射内 |
+| `Product MVP Family/Publication` | Family 静态贡献属于 M0；持续 Publication/Visitor 属于 M2 |
+| `Beta Extension DH` | 在世主体 Digital Human 属于 M2；成人纪念互动属于 M3；未成年人虚拟亲属不映射 |
+| `Future/Care/TimeLetter` | 按 M3/M4 或独立决策重新进入，不因旧标签自动排期 |
 
 ## 1. 执行对象与状态模型
 
@@ -73,7 +85,7 @@ Package 不能因一个 Work Item `VERIFIED` 自动完成；必须满足该 Pack
 | --- | --- |
 | `Outcome` | 一个可观察结果，禁止只写“优化/完善/支持” |
 | `Product value` | 对 Owner、Visitor、Operator 或风险止损的直接价值 |
-| `Priority / lane` | P0/P1/P2；Foundation、Closed Pilot Owner Core、Product MVP Family/Publication、Product MVP Voice、Beta Extension、Future 或 Migration |
+| `Priority / lane` | P0/P1/P2；Foundation、M0 Memory Core、M1 Living Self Voice、M2 Adult Authorized Interaction、M3 Regulated Pilot、M4 Knowledge License、Future 或 Migration；旧 token 按0.2映射 |
 | `Risk / requirement` | CR、FR、DR、IAR/BAR/SOR 映射 |
 | `Dependencies` | 具体 package/work item/gate；区分 start 与 exit dependency |
 | `iOS scope` | 当前或明确新增的文件/模块/target |
@@ -96,7 +108,7 @@ Package 不能因一个 Work Item `VERIFIED` 自动完成；必须满足该 Pack
 | `G1` | 模拟器与 UIQA | 是，但不证明设备/Provider质量 | simulator smoke、截图、交互日志、无隐藏入口误露 |
 | `G2` | 真实 Postgres / 部署 | 否，需目标环境证据 | migration、concurrency、restore、deployed smoke、readiness、观察窗 |
 | `G3` | 真实 Provider | 否 | sandbox/production receipt、quota、region、retention、delete/exit、cost、quality |
-| `G4` | 真机 / 产品 / 法律外部门 | 否 | 设备日志与截图、产品签字、Privacy/Legal、未成年人/第三方政策、运营批准 |
+| `G4` | 真机 / 产品 / 法律与监管外部门 | 否 | 设备日志与截图、产品签字、Privacy/Legal、年龄/第三方政策、安全评估、算法备案、上架与运营批准 |
 
 `G0/G1` 通过不能推导 `G2–G4`。Provider 配置存在不等于 `G3`；安装成功不等于真机业务通过；产品讨论稿不等于 `G4` 批准。
 
@@ -116,15 +128,15 @@ Package 不能因一个 Work Item `VERIFIED` 自动完成；必须满足该 Pack
 | `WP-S1-01` | Owner Truth Authority | CR-05 | P0 | Stage 1 | S0-01、S0-02、S0-04、S0-06 | S1-02/S1-03；G2 shadow/cohort；MIG gate | `PLANNED` | Source→Candidate→DecisionReceipt→MemoryVersion→Projection 单 Authority |
 | `WP-S1-02` | Async Effect Authority | CR-06 | P0/P1 | Stage 1→2 | S0-02、S0-04、S0-07；S1-01 event contract | G2 worker/outbox/crash corpus；Provider effect适用G3 | `PLANNED` | transactional outbox、job lease、Inbox/business receipt、unknown reconcile |
 | `WP-S1-03` | iOS Composition & Runtime | CR-07 | P1 | Stage 1 | S0-01、S0-02、S0-06；S1-01 ports | G1 simulator；Voice/DH适用G4真机 | `PLANNED` | UI只发Intent/渲染ViewState；runtime/audio owner与业务Authority分离 |
-| `WP-S3-01` | Family Delegated Publication & Visitor | CR-08 | P0/P1 | Product MVP-P | S0-02、S0-05、S0-06、S0-07、S1-01、S1-02、Family identity/relationship slice | G2 public store/index；G4 privacy/safety | `EXTERNAL_BLOCKED` | 家庭授权不直读私库；独立 snapshot/Public Index/Visitor grant/7日TTL/撤回 |
-| `WP-V0-01` | Voice Product MVP / DH Beta Extension Governance | CR-09 | P0/P1/P2 | Product MVP Voice + Beta Extension DH | S0-02、S0-03、S0-05、S0-06、S0-07 | G3 provider/region/delete/quality；G4 consent/真机 | `EXTERNAL_BLOCKED` | Voice purpose/consent/profile/sample/audio/receipt/delete完整；DH独立放行 |
+| `WP-S3-01` | M0 Family Contribution + M2 Adult Publication/Visitor | CR-08 | P0/P1 | M0 static + M2 interaction | S0-02、S0-05、S0-06、S0-07、S1-01、S1-02、Family identity/relationship slice | G2 public store/index；M2 G4 privacy/safety/regulatory | `EXTERNAL_BLOCKED` | 家庭贡献不直读私库；M2 独立 snapshot/Public Index/adult Visitor grant/7日TTL/撤回 |
+| `WP-V0-01` | M1 Living Self Voice + M2 Living DH + M3 Memorial Governance | CR-09 | P0/P1/P2 | M1/M2/M3 | S0-02、S0-03、S0-05、S0-06、S0-07 | G3 provider/region/delete/quality；G4 consent/真机/评估/备案 | `EXTERNAL_BLOCKED` | M1 仅本人声音；M2 在世 DH；M3 逐案纪念；purpose/receipt/delete完整 |
 | `WP-MIG-01` | Lean Migration + Scale-triggered Composite Drills | CR-12 | P0 gate | Migration Cross-cutting | L0/C00 inventory 可立即开始 | 当前 L0-L3；规模触发后每 lane 对应 C/W/I/P/Q/O/V 与 G2/G3/G4 | `PLANNED` | 当前唯一轻量 go/no-go 与 restore 证据；保留完整 retirement/MRT 目标 |
 
 ### 2.2 Package ID 稳定规则
 
 - 13 个 ID 是 Round 3D canonical package，后续不得另起同义 package。
 - 一个 finding 可映射多个 package，但必须指定一个 primary owner；跨包依赖用 Work Item ID，不复制实现。
-- Family 是 Product MVP 横切切片：身份/关系与授权由 `WP-S0-02`，Persona/贡献与查询边界由 `WP-S1-01`，iOS 人物切换由 `WP-S1-03`，家庭查询副本与 Visitor grant 由 `WP-S3-01` 承担；不另建重复 Authority package，也不成为 Closed Pilot 退出依赖。Care/TimeLetter 继续后置并默认关闭。
+- Family 是跨阶段横切切片：M0 身份/关系、静态贡献与人物切换由 `WP-S0-02/WP-S1-01/WP-S1-03` 承担；M2 独立查询副本与成年 Visitor grant 由 `WP-S3-01` 承担。家庭关系不自动产生查询权；不另建重复 Authority package。Care/TimeLetter 继续后置并默认关闭。
 - Stage 2 媒体/processor 能力先作为 `WP-S1-01/02` 的后置 Work Item；真实对象存储或视觉 Provider 未通过时保持内部或 blocked。
 
 ## 3. Package 依赖 DAG
@@ -145,9 +157,9 @@ flowchart TD
     S101["WP-S1-01\nOwner Truth Authority"]
     S102["WP-S1-02\nAsync Effect Authority"]
     S103["WP-S1-03\niOS Composition & Runtime"]
-    CORE["Closed Pilot / Owner Text Core\nCapture → Review → QA → Correction → Rights"]
-    S301["WP-S3-01\nProduct MVP Family Publication"]
-    V001["WP-V0-01\nProduct MVP Voice / Beta DH"]
+    CORE["M0 Memory Asset Core\nCapture → Review → QA → Correction → Copy/Export/Delete"]
+    S301["WP-S3-01\nM0 Family Static / M2 Adult Publication"]
+    V001["WP-V0-01\nM1 Voice / M2 Living DH / M3 Memorial"]
     MIG["WP-MIG-01\nComposite Migration Evidence"]
 
     S003 --> S002
@@ -213,14 +225,14 @@ S0-03 credential baseline + S0-04 DB foundation + S0-06 release deny + S0-07 evi
 | `R0 Safety Baseline` | S0-03/S0-06/S0-07 最小止损；S0-04 preflight | 当前 build/schema/config inventory | credential/release/artifact checks；最小事件；DB风险清单 | 不新增功能；必要时关闭高风险入口 | 长期secret、future fail-open、unknown writer/effect |
 | `R1 Secure Account Boundary` | S0-02/S0-01/S0-04 | R0；identity test adapter | cross-vault、refresh/revoke、A/B/logout/delete、readiness/restore | 可保留现有三Tab；未验证身份功能不公开 | anonymous/shadow production、owner ambiguity、restore失败 |
 | `R2 Owner Truth Shadow` | S1-01 additive schema/API/shadow；S1-03 hidden adapter | R1；versioned migration | Source/Candidate/Decision/MemoryVersion shadow parity；无业务切换 | 现有 UI 不变；hidden review/trace | second Authority、missing provenance、stale owner write |
-| `R3 Closed Pilot / Owner Text Core` | S1-01 cohort cutover + S1-02 + S1-03 + S0-05 minimum | R2 parity；MIG go record | Capture→Review→QA→Citation→Correction→Deletion/Rights；G1/G2受控cohort/receipt/rollback及适用G4 | 仅受控 Closed Pilot cohort；非公开 | epoch/legacy write、effect gap、cross-vault、rights blocker |
+| `R3 / M0 Memory Asset Core` | S1-01 cohort cutover + S1-02 + S1-03 + S0-05 minimum + Family静态贡献 | R2 parity；MIG go record | Capture→Review→QA→Citation→Correction→Copy/Export/Delete；静态故事；G1/G2受控cohort/receipt/rollback及适用G4 | 仅受控 M0 cohort；非公开人格化互动 | epoch/legacy write、effect gap、cross-vault、rights blocker |
 | `R4 Beta Extension Media Quality` | SourceObject/processor/object/provider 后置项 | R3；object/provider policies | private object、scan/processing、failure/retry、delete receipt | 按媒体类型独立 Beta cohort | mock/temporary URL冒充uploaded、unknown provider effect |
-| `R5 Product MVP Family Publication` | Family 横切切片 + S3-01 | R3；身份/关系/Privacy门 | 人物切换、贡献授权、snapshot/Public Index/Visitor/revoke/7日TTL G2/G4 | 通过门后按 Product MVP cohort 开放 | private Projection exposure、家庭关系越权、grant/revoke失效 |
+| `R5 / M2 Adult Publication` | S3-01；M0 Family 静态切片已在R3 | R3；在世发布主体、成年Visitor、Privacy/监管门 | snapshot/Public Index/独立读取角色/adult Visitor/revoke/7日TTL/投诉/退出/安全评估/备案 G2/G4 | 通过门后按 M2 cohort 开放 | private Projection exposure、未成年人入口、家庭关系越权、grant/revoke失效 |
 | `RV0 Voice Governance` | V0-01 consent/profile/receipt/delete | R1；R0 credential | synthetic/internal contract G0；外部门仍 blocked | default-off/QA | long-term client credential、无purpose真实数据 |
-| `RV1 Product MVP Voice / Beta Extension DH` | Voice provider + device runtime；DH 独立 lane | RV0；R3；Family/Publication purpose 适用时依赖 R5 | Voice G3/G4 quality、audio owner、delete/exit；DH 另有 Beta evidence | Voice 受控 Product MVP cohort；DH 白名单 Beta | 默认音色冒充复刻、dual-send、真机无证据 |
+| `RV1 / M1-M3 Voice & DH` | M1本人Voice provider+device；M2在世DH；M3纪念独立lane | RV0；R3；M2依赖R5；M3依赖逐案法律/伦理 | M1/M2/M3 分开 G3/G4 quality、audio owner、delete/exit、标识/评估/备案 | M1私有；M2在世成年白名单；M3逐案 | 非本人训练、未成年人虚拟亲属、逝者无授权、默认音色冒充、真机无证据 |
 | `RC Contract/Retire` | MIG-01 C10/C11 | 每 lane C09；零使用窗 | restore/replay、retirement manifest、contract/revoke | 无新增功能 | old binary/timer/key/store/route仍命中 |
 
-`R3` 同时是可独立降级运行的 Owner 文字核心和 `Closed Pilot` 产品验证切片。`Closed Pilot` 通过不等于 Product MVP 发布批准；Product MVP release cut 至少还需要 `R5` 的 Family/受控 Publication/Visitor，以及 `RV0/RV1` 中 Voice Clone 的适用治理、Provider 和真机证据。Digital Human、R4 非必要媒体、Care 与 TimeLetter 属于 Beta Extension 或后置能力，不阻塞 Closed Pilot 或 Product MVP。任何扩展 lane 关闭时仍必须保持 R3 文字核心可用。
+`R3` 是可独立降级运行的 M0 记忆资产核心。M0 通过不批准 M1-M4：M1 需要 RV0/RV1 的在世本人 Voice 证据；M2 需要 R5 成年 Publication/Visitor 与在世 DH 的监管/安全证据；M3 需要老人健康或成人纪念的逐案门；M4 另行进入。任何后续 lane 关闭时仍必须保持 R3 中性文字核心可用。
 
 ## 5. Stage Gate 规则
 
@@ -233,19 +245,21 @@ S0-03 credential baseline + S0-04 DB foundation + S0-06 release deny + S0-07 evi
 - Data Rights 至少能先撤访问并披露 pending/partial/unsupported；不能宣称完整物理删除。
 - 最小 operation/rights/incident/provider cost 事件可生成，不以增长数字为退出条件。
 
-### 5.2 Stage 1 / Closed Pilot Exit
+### 5.2 M0 Exit
 
 - 只有一个 active Owner Authority；无 provenance/DecisionReceipt 的 legacy 数据不自动 confirmed。
 - `/v2` command 使用 stable commandId/expectedVersion/receipt，旧 route 只 facade/read compatibility。
 - outbox/job/Inbox/business completion 在 crash/duplicate/late callback 下可解释，unknown 不盲重试。
 - iOS UI 不拼 transport/信任 owner；切账号、取消、后台、回调都通过 lease/generation fence。
 - Owner Capture→Review→QA→Correction→Rights 六链通过；引用能回到具体 MemoryVersion/Source。
-- 只允许受控 cohort，不开放匿名 Visitor、Voice 或 DH；Closed Pilot 文案不得宣称完整 Product MVP。
+- 只允许受控 cohort，不开放 Visitor、Voice 或 DH；静态纪念不得以逝者第一人称持续互动；M0 文案不得宣称复活、情感替代或完整数字人。
+- 本人交互记录、本人资料、已确认记忆和自传具备可验证复制、可读导出、可机读清单与删除；未成年人虚拟亲属路由服务端硬拒绝。
 
-### 5.3 Product MVP 扩展 Lane 与 Beta Extension Exit
+### 5.3 M1-M4 扩展 Lane Exit
 
-- Family/Publication/Visitor、Voice 和 DH 分别通过自己的 AuthZ、Privacy/Legal、Provider、设备和成本门；产品范围确认不关闭外部门。
-- 任一扩展 lane 失败只暂停该 lane，不修改 Owner Vault epoch、不扩大权限、不回滚文字核心；Family/Publication/Visitor 或 Voice 未通过时，Product MVP 不得发布，但不撤销已经通过的 Closed Pilot 验证。
+- M1 Voice、M2 Publication/Visitor/DH、M3健康/纪念和M4许可分别通过自己的 AuthZ、Privacy/Legal、Provider、监管、设备和成本门；产品范围确认不关闭外部门。
+- M2/M3 人格化互动必须验证成年人/联系人、AI标识、依赖与2小时提醒、三通道确定性退出、投诉、危机切换、安全评估和算法备案。
+- 任一扩展 lane 失败只暂停该 lane，不修改 Owner Vault epoch、不扩大权限、不回滚 M0；未成年人虚拟亲属和无生前专项授权的逝者 Voice/DH 不进入可放行 lane。
 - Care/TimeLetter 的已有壳层继续受 Release Policy 管控，保持 hidden/future。
 
 ### 5.4 Migration / Retirement Exit
@@ -270,18 +284,19 @@ S0-03 credential baseline + S0-04 DB foundation + S0-06 release deny + S0-07 evi
 
 具体任务、命令、部署和回滚内容必须在对应子问题完成后合入本文件；任何人不得从“已合入”或 package 表直接推断生产代码已准备实施、已部署或已通过G2–G4。
 
-### 6.0A 115 项的 Startup Lean 与三级验证分层
+### 6.0A 115 项的 Startup Lean 与 M0-M4 分层
 
 115 项是完整风险目录，不是首版必须并行完成的待办列表。Selector 在排期时按以下层级过滤，且不能因降级而删除安全不变量：
 
 | 层级 | 当前包含 | 排期规则 |
 | --- | --- | --- |
-| Closed Pilot | `WP-S0-*` 中适用的身份/凭据/DB恢复/删除/发布策略/证据；`WP-S1-*` 的文字 Authority、任务与三 Tab 最小 composition；L0-L3 中本次 cutover 所需项 | 按依赖串行/小并行推进；只向受控 cohort 开放，不等待 Family、Publication/Visitor、Voice、DH 或非必要媒体 |
-| Product MVP | Family 横切切片；`WI-S3-01-01..09`；`WI-V0-01-01..07/10/11` 中 Voice 必需部分，以及完整三 Tab 产品体验 | Closed Pilot 达标后推进；缺适用 G2-G4 时保持 blocked，不能从 Product MVP 清单删除，也不能反向阻塞 Closed Pilot |
-| Beta Extension / 上线后补齐 | `WI-V0-01-08` Digital Human session、`09` 中 DH 口型/真机矩阵；非必要媒体 processor、深层分析和扩展运营自动化 | 不阻塞 Closed Pilot 和 Product MVP；有独立 cohort、预算、kill switch 与回退 |
+| M0 | `WP-S0-*` 适用项；`WP-S1-*` 文字 Authority、Family静态贡献、复制/导出/删除与三 Tab 最小 composition；L0-L3 | 按依赖串行/小并行；只向受控 cohort 开放，不等待 Publication/Visitor、Voice、DH 或非必要媒体 |
+| M1 | `WI-V0-01-*` 中强身份、随机授权、活体、本人私有Voice、Provider删除与真机必需部分 | M0 达标后推进；Family代录、第三方、未成年人和逝者声音不进入 M1 |
+| M2 | `WI-S3-01-01..09` 的独立发布/成年Visitor；`WI-V0-01-08/09` 中在世DH；新增监管安全验收 | M0/M1所需依赖达标后；缺安全评估、备案、成年/联系人、退出/危机等 G4 时 blocked |
+| M3/M4 / 后续 | 老人健康、逐案成人纪念互动、非必要媒体、知识许可/收益和扩展运营 | 独立产品决定、逐案 Gate、预算、kill switch 与回退；不阻塞 M0-M2 |
 | 规模触发 | `WP-MIG-01` 中超出 L0-L3 的多 cohort 组合编排、C00-C11 全轨证据、复杂 retirement 自动化，以及进入条件未满足的重型基础设施 | 只有无法强制升级/维护、跨地域、多团队、多 cohort 或容量越界时启动；不得为静态清单完整性提前建设 |
 
-Family 不通过“未来包”处理：它复用 Identity/AuthZ、Persona/Memory、iOS composition 与 Publication grant 的现有 Work Item，在 issue/branch 层以 `SCOPE-FAMILY-MVP` 标签形成 Product MVP 可验收切片。Digital Human 与 Voice 共用部分工作项时，DoD 必须分别给出 `voiceMvpOutcome` 与 `dhBetaOutcome`，避免 DH 阻塞 Voice，也避免二者阻塞 Closed Pilot。
+Family 不通过“未来包”处理：M0 静态贡献复用 Identity/AuthZ、Persona/Memory 和 iOS composition；M2 查询才使用 Publication grant。Digital Human 与 Voice 共用工作项时，DoD 必须分别给出 `m1LivingSelfVoiceOutcome`、`m2LivingDhOutcome` 和 `m3MemorialOutcome`，避免后续阶段互相或反向阻塞 M0。
 
 ### 6.1 Canonical 追踪例外与关键下钻边
 
@@ -291,7 +306,7 @@ Family 不通过“未来包”处理：它复用 Identity/AuthZ、Persona/Memor
 | --- | --- | --- | --- |
 | `FR-ACC-001` | `PRIMARY_WI` | `WI-S0-02-01` | 强身份challenge/binding是账号安全主责任 |
 | `FR-SAFE-001` | `PRIMARY_WI` | `WI-S0-06-09` | AI披露与危机表达即时安全路径 |
-| `FR-SAFE-002` | `PRIMARY_WI` | `WI-S3-01-06` | Visitor限流、注入、抓取、举报与暂停属于MVP-P |
+| `FR-SAFE-002` | `PRIMARY_WI` | `WI-S3-01-06` | M2 Visitor限流、注入、抓取、举报、依赖/时长提醒、退出与危机安全 |
 | `FR-MEM-003` | `DEFERRED_BY_GATE` | `STAGE4-VALUE-REENTRY` | 时间/情节推理需R3真实价值、质量和成本门，不创建当前implementation WI |
 | `FR-MEM-004` | `DEFERRED_BY_GATE` | `STAGE4-VALUE-REENTRY` | Entity/Relation图同样后置，不为追踪完整性提前扩张范围 |
 | `IAR-06` | `IMPLEMENTED_BY` | `WI-S1-01-09` | raw client/Archive legacy数据先分类、shadow与quarantine |
@@ -300,7 +315,7 @@ Family 不通过“未来包”处理：它复用 Identity/AuthZ、Persona/Memor
 | `SOR-04` | `EXTERNAL_GATE` | `WI-V0-01-11` | minor/third-party/Voice purpose需产品、Privacy/Legal与Provider证据 |
 | `DR-012` | `ENFORCES_REJECTION` | `SCOPE-AOS-COMPONENTS` | 拒绝无源码/无证据AOS组件；不得作为Voice/DH待实施需求 |
 | `DR-042` | `SETS_OPERATING_PROFILE` | `WP-MIG-01` | 百级用户默认四阶段Lean迁移；完整C00-C11由规模触发 |
-| `DR-043` | `SETS_RELEASE_VALIDATION_LEVELS` | `WP-S0-06` | R3=Closed Pilot；R5+Voice=Product MVP；DH/非必要媒体=Beta Extension，各层独立过门 |
+| `DR-043` | `SETS_RELEASE_VALIDATION_LEVELS` | `WP-S0-06` | R3=M0；M1本人Voice；R5+在世DH=M2；健康/成人纪念=M3；许可=M4，各层独立过门 |
 
 `FR-MEM-003`与`FR-MEM-004`只有在Stage4 re-entry记录明确用户价值、输入Authority、质量/成本/隐私门和不阻断R3后，才能建立新Work Item。`DR-012`不得出现在Voice/DH Work Item的`Risk / requirement`字段。
 
@@ -336,7 +351,7 @@ Family 不通过“未来包”处理：它复用 Identity/AuthZ、Persona/Memor
 
 | Registry字段 | 有限语义 | 权威边界 |
 | --- | --- | --- |
-| `releaseClass` | `CORE / MVP_EXTENSION / MIGRATION` | CORE可形成Closed Pilot；MVP Extension属于Product MVP且保持独立默认关闭，不能阻断Owner文字核心降级；Migration只提供迁移门 |
+| `releaseClass` | `CORE / MVP_EXTENSION / MIGRATION` | 机器枚举保持兼容：CORE形成M0；MVP_EXTENSION按具体包映射M1-M3且默认关闭，不能阻断M0；Migration只提供迁移门 |
 | `authorityLock` | 13个互斥lock，每Package恰一 | 同一lock同一时刻最多一个执行Owner；不是数据所有权转移 |
 | `lifecycle` | 1.2节八态 | 当前均`PLANNED`；生成器不能自升状态 |
 | `decision` | `STOP / NO_GO / GO` | 当前Core/MVP Extension为`STOP`、Migration为`NO_GO`；只有有权Owner可签`GO` |
@@ -701,7 +716,7 @@ Selector分为**planning**与**execution**两层。排序第一不等于授权�
 - **Verification**：G0 static/artifact、G1 screenshots/deeplink、G2 policy/command negative smoke；offline/expired/emergency revoke必测。
 - **Deployment**：作为merge/release mandatory gate；deployed smoke用显式环境开关避免本地误打生产。
 - **Rollback**：gate失败只能暂停发布或更严格关闭feature；不能删除失败断言。
-- **Definition of Done**：Closed Pilot Owner文字核心通过；Product MVP与Beta Extension的禁止入口/route/command均为0；每层policy/evidence可复现，且Closed Pilot文案不冒充完整MVP。
+- **Definition of Done**：M0 文字核心通过；M1-M4 未放行入口/route/command均为0；未成年人虚拟亲属和无生前授权逝者 Voice/DH 命中均为硬拒绝；每层policy/evidence可复现，且M0文案不冒充复活或完整数字人。
 - **External gates**：真机UI不是此gate完成条件，但最终Release仍需G4设备回归。
 - **Non-goals**：不在默认gate运行所有hidden Provider成本测试。
 
@@ -724,23 +739,23 @@ Selector分为**planning**与**execution**两层。排序第一不等于授权�
 - **External gates**：G2生产观察窗与Operations批准；具体feature公开仍需G4。
 - **Non-goals**：不借此强制所有用户升级，除非独立产品/运营决定批准。
 
-### `WI-S0-06-09` AI 身份披露与危机表达即时安全路径
+### `WI-S0-06-09` AI 身份、年龄/联系人、依赖/时长、退出与危机安全路径
 
-- **Outcome**：建立版本化 `SafetyPolicy`、`LegalPolicyRegistry` 与 `SafetyDisclosureDecision`，在普通回答、Persona/数字人呈现、延迟回信和Provider effect之前持续披露AI身份，并把自伤、伤害、失联或明显危机表达同步分流到非诊断安全路径；逝者纪念场景额外记录实际在世操作者、Represented Persona、适用法域、AI/合成内容显式与隐式标识。
+- **Outcome**：建立版本化 `SafetyPolicy`、`LegalPolicyRegistry` 与 `SafetyDisclosureDecision`。M2/M3 在普通回答、Persona/数字人、延迟回信和Provider effect之前验证成年人/必要联系人，持续披露AI身份，执行依赖风险与连续2小时提醒，并提供UI/语音/关键词确定性退出；自伤、自杀、重大丧失、失联或“想去陪逝者”等表达同步切换中性非诊断安全路径。纪念场景额外记录实际在世操作者、Represented Persona、适用法域、AI/合成内容显式与隐式标识。
 - **Product value**：用户不会把数字人或复刻声音误认为真人本人，高风险表达也不会被排队到5–10分钟后的角色化回复中。
 - **Priority / lane**：P0安全止损；Stage 0；R0/R1。
 - **Risk / requirement**：CR-08、CR-09、CR-11；FR-SAFE-001；DR-004、DR-018、DR-025、DR-026、DR-036；IAR-04、IAR-05；SOR-03、SOR-04、SOR-07。
 - **Dependencies**：start依赖WI-S0-06-01/04的server policy/command gate和WI-S0-07-01事件allowlist；真实地区资源、文案和人工责任流程只作为G4 exit dependency，不阻止先实现fail-closed技术合同。
 - **iOS scope**：新增typed SafetyDecision/use case与统一AI标识ViewState；收敛 `EchoViewModel`、`DialogEngineManager`、延迟回信、Care、TimeLetter和数字人入口，禁止页面或prompt各自判断危机/AI身份。
-- **Backend scope**：在Owner/Visitor conversation command、delayed-reply enqueue、Persona/Voice/DH effect前执行同一policy port；高风险结果不得写入普通delay queue或Persona prompt，并返回稳定安全response code。
-- **Data/API/Event**：`SafetyDecision(policyVersion,disclosureRequired,riskClass,action,resourcePolicyId,reason,expiresAt)`；`LegalAcceptanceReceipt(actor,region,purpose,representedPersona,controllerAppointment,policyVersion,copyHash,acceptedAt)`；`AIIdentityDisclosureReceipt(surface,explicitMark,implicitMark,labelPolicyVersion,deliveredAt)`。operation event只记录分类、版本、动作和延迟，不保存原始表达或诊断标签。
-- **Migration**：先以固定安全语料shadow比较当前prompt/延迟策略，再enforce所有已暴露Owner入口；删除“不是机器人”等冲突文案。Visitor滥用治理 `FR-SAFE-002` 由 MVP-P Publication/Visitor 工作项独立承接。
-- **Release policy**：AI标识不可由角色、声音、数字人或offline状态关闭；家属接受法律条款只证明在世操作者接受，不生成 `DeceasedConsent`。policy unknown/expired、地区资源未批准、逝者 capability 缺合法依据或分类失败时退出Persona/延迟模式并拒绝Provider effect。
-- **Verification**：G0多语言/变体/否定/引用/误报语料与route negative contract；G1 Owner文字、数字人、延迟回信、Care/TimeLetter入口UIQA；G2 enqueue/Provider effect为零和事件分母；安全评测与地区资源适用性不能由静态fixture替代。
+- **Backend scope**：在Owner/Visitor conversation command、delayed-reply enqueue、Persona/Voice/DH effect前执行同一policy port；未成年人虚拟亲属硬拒绝；高风险结果不得写入普通delay queue或Persona prompt，并返回稳定安全response code；退出无需模型判定且立即撤销 runtime lease。
+- **Data/API/Event**：`SafetyDecision(policyVersion,adultStatus,contactPolicy,disclosureRequired,dependencyClass,continuousUseSeconds,riskClass,action,resourcePolicyId,reason,expiresAt)`；`ExitReceipt(channel,keyword/runtimeLease,requestedAt,completedAt)`；`LegalAcceptanceReceipt(...)`；`AIIdentityDisclosureReceipt(...)`。operation event只记录分类、版本、动作和延迟，不保存原始表达或诊断标签。
+- **Migration**：先以固定安全语料shadow比较当前prompt/延迟策略，再enforce所有已暴露Owner入口；删除“不是机器人”等冲突文案。M2 Visitor 的年龄、依赖、2小时提醒、确定性退出、危机与滥用治理由 `FR-SAFE-002` / Publication 工作项承接。
+- **Release policy**：AI标识、2小时提醒和退出不可由角色、声音、数字人、模型或offline状态关闭；Persona不得在退出、支付或重大决策中挽留/劝导。家属接受法律条款只证明在世操作者接受，不生成 `DeceasedConsent`。policy unknown/expired、年龄未知、地区资源未批准、逝者 capability 缺合法依据或分类失败时退出Persona/延迟模式并拒绝Provider effect。
+- **Verification**：G0多语言/变体/否定/引用/误报、minor virtual-relative deny、2小时计时、UI/语音/关键词退出、Persona促购/重大决策拒绝与route negative contract；G1 Owner文字、数字人、延迟回信、Care/TimeLetter入口UIQA；G2 enqueue/Provider effect为零和事件分母；安全评估、算法备案与地区资源适用性不能由静态fixture替代。
 - **Deployment**：后端安全decision与delay deny先行，iOS typed response/持续AI标识后发；按Owner入口逐组canary，危机命中延迟队列或Persona即stop-the-line。
 - **Rollback**：只能回到更严格的即时通用安全响应并关闭Persona/延迟/Voice/DH，不得恢复普通延迟回信或“真人本人”呈现。
-- **Definition of Done**：所有当前公开Owner入口在effect前产生可审计decision；危机样本普通delay/Persona命中为零；AI标识持续可见；未知地区仅显示获批的非诊断通用指引，外部门如实未关闭。
-- **External gates**：G4 Product + Safety/Privacy/Legal批准地区、文案、误报处理和人工责任；真实种子发布前完成独立安全评测。缺门时最高`INTERNAL_READY/EXTERNAL_BLOCKED`。
+- **Definition of Done**：所有当前公开Owner入口在effect前产生可审计decision；未成年人虚拟亲属、危机样本普通delay/Persona、Persona促购和重大决策命中为零；AI标识持续可见；三通道退出立即完成；2小时提醒可审计；未知地区仅显示获批的非诊断通用指引。
+- **External gates**：G4 Product + Safety/Privacy/Legal批准地区、文案、联系人/误报处理和人工责任；M2/M3 真实发布前完成安全评估报告、算法备案/变更与上架合规包。缺门时最高`INTERNAL_READY/EXTERNAL_BLOCKED`。
 - **Non-goals**：不提供医疗或心理诊断、治疗、24小时监护、自动联系第三方或以Care替代危机运营；不在本项完成 `FR-SAFE-002` 的Visitor限流、注入、抓取与举报系统。
 
 ## 9. `WP-S0-02` Identity & AuthZ Enforce
@@ -825,20 +840,20 @@ Selector分为**planning**与**execution**两层。排序第一不等于授权�
 
 ### `WI-S0-02-05` Delegated Grant 与 Relationship Lifecycle
 
-- **Outcome**：Family/Care/TimeLetter委托访问绑定verified subject和独立AccessGrant；Family relationship 支持accept/pause/terminate/reinvite，grant支持accept/pause/revoke/expiry并在每次读取重验。
+- **Outcome**：Family/Care/TimeLetter委托访问绑定verified subject和独立AccessGrant，并支持accept/pause/revoke/expiry后每次读取重验。
 - **Product value**：家庭关系不自动等于永久读取权，撤销后立即阻止继续查看。
 - **Priority / lane**：P0安全合同；Future产品仍default-off；R1。
 - **Risk / requirement**：CR-02/09；BAR-01；SOR-04；FR-PRIV-002、FR-PRIV-006；SCOPE-FAMILY、SCOPE-CARE、SCOPE-TIME-LETTER；DR-022/036。
 - **Dependencies**：WI-S0-02-01/03/04；S0-05 rights；S0-06 release deny。
-- **iOS scope**：FamilyRepository只消费server grant/relationship epoch；不把手机号邀请或角色选择当授权。暂停/终止需稳定ViewState，敏感主控关系二次确认；终止后重新加入走新邀请，不恢复旧授权。
-- **Backend scope**：`authorization_policy.py:21,143+`、`main.py:2418` revoke route、Family/Care/TimeLetter policy；新增Grant/Relationship typed command，并让terminate原子递增relationship epoch、撤销active grant、写receipt。
-- **Data/API/Event**：`family_relationships/access_grants/grant_events` 分离；relationship含state/epoch/pausedAt/terminatedAt/initiator/confirmationReceipt，grant含resource/purpose/operation/expiry/revokedAt；reinvite生成新relationship/grant identity。
+- **iOS scope**：FamilyRepository只消费server grant/relationship epoch；不把手机号邀请或角色选择当授权。
+- **Backend scope**：`authorization_policy.py:21,143+`、`main.py:2418` revoke route、Family/Care/TimeLetter policy；新增Grant/Relationship typed command。
+- **Data/API/Event**：`family_relationships/access_grants/grant_events` 分离；grant含resource/purpose/operation/expiry/revokedAt。
 - **Migration**：已有accepted family只迁relationship，不自动生grant；需Owner重新授权或保持hidden legacy。
 - **Release policy**：Family/Care/TimeLetter仍default-off；安全合同完成不开放入口。
-- **Verification**：pending/failed/accepted/paused/terminated/reinvited、任一方发起、敏感主控二次确认、手机号重用、relationship无grant、purpose mismatch、expiry、owner delete、终止后旧grant拒绝、历史Source/Publication/TimeLetter不被误删、每次detail/list重验。
+- **Verification**：pending/failed/accepted/revoked、手机号重用、relationship无grant、purpose mismatch、expiry、owner delete、每次detail/list重验。
 - **Deployment**：typed tables/API→shadow policy→revoke修复→读取enforce；旧client只看到受限状态。
 - **Rollback**：可暂停委托功能并撤grant；不恢复revoke前访问或把relationship当grant。
-- **Definition of Done**：每次跨owner allow都有active grant receipt；revoke/expiry/relationship termination后访问=0；pending/failed不可用；重新邀请不恢复旧grant，历史数据按各自Authority和rights合同处理。
+- **Definition of Done**：每次跨owner allow都有active grant receipt；revoke/expiry后访问=0；pending/failed不可用。
 - **External gates**：G4 Family/Care产品与第三方/未成年人政策。
 - **Non-goals**：不扩大Family公开范围、不实现关怀医疗/干预能力。
 
@@ -1503,20 +1518,20 @@ Selector分为**planning**与**execution**两层。排序第一不等于授权�
 
 ### `WI-S1-01-04` Candidate Inbox、Owner Review 与 DecisionReceipt
 
-- **Outcome**：提供 owner-scoped Candidate 查询和 `accept/correct/reject` command，terminal transition 与 immutable DecisionReceipt 在同一 UoW完成；对话中持续持久化待审核批次，并在退出页面或服务端动态阈值先到时触发审核。
+- **Outcome**：提供 owner-scoped Candidate 查询和 `accept/correct/reject` command，terminal transition 与 immutable DecisionReceipt 在同一 UoW完成。
 - **Product value**：Owner 明确控制哪些建议成为自己的记忆，并能看见来源、敏感度和决定结果。
 - **Priority / lane**：P0；Stage 1；R2 hidden QA→R3 public core。
 - **Risk / requirement**：CR-02/05；FR-CHAT-003、FR-MEM-001；DR-007/015/034；IAR-02；BAR-02/03。
 - **Dependencies**：WI-S1-01-03；WI-S0-01 AccountLease、WI-S0-02 resource AuthZ、WI-S0-04 UoW、WI-S0-06 release gate。
-- **iOS scope**：新增 Candidate Inbox repository/use case/ViewState；监听页面退出和server `reviewDue`，后台、强杀、断网后恢复同一batch；第一阶段作为 Archive 内 hidden/QA 入口，复用现有卡片风格，不让 `KBLiteManager` 执行 review authority，也不向首版用户暴露轮数设置。
-- **Backend scope**：新增 `GET /v2/vaults/{vaultId}/candidates`、`POST .../{candidateId}/decisions` 和版本化review policy/batch query；按pending count/context budget生成持久化`reviewDue`，适配 `knowledge_governance.py` 只转发兼容 command。
-- **Data/API/Event**：batch含`batchId/vaultId/conversationId/pendingCount/contextBudgetUsed/policyVersion/reviewDueReason/createdAt`; command `commandId/expectedCandidateVersion/action/correctedValue/reasonCode`; receipt记录 actor、basis、source refs、policy、before/after hash、decidedAt；accepted触发 Memory creation outbox。
+- **iOS scope**：新增 Candidate Inbox repository/use case/ViewState；第一阶段作为 Archive 内 hidden/QA 入口，复用现有卡片风格，不让 `KBLiteManager` 执行 review authority。
+- **Backend scope**：新增 `GET /v2/vaults/{vaultId}/candidates`、`POST .../{candidateId}/decisions`；适配 `knowledge_governance.py` 只转发兼容 command。
+- **Data/API/Event**：command `commandId/expectedCandidateVersion/action/correctedValue/reasonCode`; receipt记录 actor、basis、source refs、policy、before/after hash、decidedAt；accepted触发 Memory creation outbox。
 - **Migration**：legacy governance action 先 shadow 映射并比较；没有 owner/source/terminal receipt 的 `confirmed` 进入 `legacy_needs_review`，不得补造决定。
-- **Release policy**：`candidateReviewV1` 默认 QA-only；退出或动态阈值先到即提示，敏感项禁止批量接受；policy/epoch/lease mismatch fail closed。模型上下文窗口不是业务存储，截断不得删除Message/Source/Candidate/DecisionReceipt。
-- **Verification**：G0 terminal-state CAS、duplicate command、accept/correct/reject、exit/threshold race、context truncation、crash/relaunch/offline recovery、deleted Source invalidation、cross-vault、stale client；G1 Inbox空/失败/冲突/批量与逐条审核；G2并发decision和batch唯一。
+- **Release policy**：`candidateReviewV1` 默认 QA-only；敏感项禁止批量接受；policy/epoch/lease mismatch fail closed。
+- **Verification**：G0 terminal-state CAS、duplicate command、accept/correct/reject、deleted Source invalidation、cross-vault、stale client；G1 Inbox空/失败/冲突/逐条审核；G2并发decision唯一。
 - **Deployment**：backend query/command→QA UI→operator-less owner cohort→公开核心；观察 pending age、decision冲突和receipt gap，不以接受率为质量证明。
 - **Rollback**：关闭入口但保留已作决定；accepted decision不可改回pending，只能新建 correction Candidate；旧 UI可读 compatibility projection。
-- **Definition of Done**：每个 terminal Candidate 恰一最终 DecisionReceipt；Owner之外无人代审；所有 accepted/corrected决定可追到Source和后续MemoryVersion；退出、动态阈值、强杀、断网和上下文截断均不丢待审核批次。
+- **Definition of Done**：每个 terminal Candidate 恰一最终 DecisionReceipt；Owner之外无人代审；所有 accepted/corrected决定可追到Source和后续MemoryVersion。
 - **External gates**：G2 deployed concurrency；G4产品/Privacy确认审核文案与敏感分级，未批准保持 hidden。
 - **Non-goals**：不允许 Operator 自动确认，不实现 Family 代审，不将 rejected 数据用于训练。
 
@@ -1626,9 +1641,9 @@ Selector分为**planning**与**execution**两层。排序第一不等于授权�
 - **Backend scope**：Vault epoch CAS、route/client cohort policy、legacy facade read、新writer deny、projection checkpoint、rights integration和retirement manifest。
 - **Data/API/Event**：`AuthorityCutoverRequested/Committed/Paused`、epoch/cohort/minClientVersion/checkpoint/parity/approver/evidence；所有command/event/cache/callback携带并校验epoch。
 - **Migration**：C00 inventory→backup/restore→shadow→candidate/memory backfill→projection parity→cohort epoch cutover→观察窗→legacy zero-use→contract；不以日期代替门。
-- **Release policy**：首批Owner core cohort只开放Adult Self，并独立于Publication、Voice/DH、Family/Care/TimeLetter；Memorial Controller在死亡/亲属/主控任命可验证后进入第二cohort，Guardian/未成年人保持独立G4。Product MVP仍要求Family、Publication/Visitor与Owner/Family Voice分别过门，cross-vault、second writer、receipt gap、projection/citation mismatch触发pause。
+- **Release policy**：Owner core cohort作为M0独立于Publication、Voice/DH、Care/TimeLetter；M0 Family静态贡献单独过AuthZ，M1 Voice、M2 Publication/Visitor/DH与M3纪念分别过门；cross-vault、second writer、receipt gap、projection/citation mismatch触发pause。
 - **Verification**：G0全状态/old-client/epoch/rollback corpus；G1 Capture→Review→QA→Correction→Rights模拟器；G2真实PG migration、cohort、crash/replay、restore、zero-use；G4产品可用性仅影响公开promotion。
-- **Deployment**：backend migration/API/worker先兼容→iOS min compatible build→QA→Adult Self小cohort→Memorial Controller独立cohort→扩大→retire；Guardian/未成年人不随前两者自动开放。每波有go/pause/no-go与current evidence manifest。
+- **Deployment**：backend migration/API/worker先兼容→iOS min compatible build→QA→小cohort→扩大→retire；每波有go/pause/no-go与current evidence manifest。
 - **Rollback**：epoch commit前可关cohort；commit后freeze新mutation、compat read由V4投影、forward fix/rebuild，禁止epoch下降、legacy direct writer复活或删除receipts。
 - **Definition of Done**：一个强认证成人Owner完成文字 Source→Candidate decision→MemoryVersion→带citation问答→correction→人工权利/delete最小闭环；第二Authority/跨账号/无来源事实/副作用缺口为0；扩展能力全关时文字降级链仍通过。
 - **External gates**：G2生产形态/观察窗，G4产品、Privacy/Data Rights与真实身份门；未满足最高`DEPLOYED_UNVERIFIED/EXTERNAL_BLOCKED`。
@@ -1658,14 +1673,14 @@ Selector分为**planning**与**execution**两层。排序第一不等于授权�
 - **Outcome**：为图片、音频、视频和文档建立私有 upload intent→PUT→commit→HEAD/checksum/MIME→quarantine/scan→verified 的 SourceObject Authority；local-only、mock URL和临时Provider URL不得标为uploaded/verified。
 - **Product value**：Owner 能分清设备草稿、传输中、云端已存在和可处理对象，避免“同步成功”但实际没有可恢复文件。
 - **Priority / lane**：P1；Stage 1→R4 Media Quality；Owner文字R3之后独立cohort。
-- **Risk / requirement**：CR-02、CR-05、CR-06、CR-09、CR-10；FR-SRC-001、FR-SRC-002、FR-PRIV-002、FR-PRIV-005、FR-PRIV-006；DR-009、DR-026、DR-031、DR-041；BAR-02、BAR-06、BAR-07；SOR-04、SOR-05、SOR-06。
+- **Risk / requirement**：CR-02、CR-05、CR-06、CR-09、CR-10；FR-SRC-001、FR-SRC-002、FR-PRIV-002、FR-PRIV-005、FR-PRIV-006；DR-026、DR-031、DR-037；BAR-02、BAR-06、BAR-07；SOR-04、SOR-05、SOR-06。
 - **Dependencies**：start依赖WI-S1-01-01/02 Source contract、WI-S0-02 object AuthZ、WI-S0-04 migrator/UoW、WI-S0-05 object rights；exit依赖私有对象Provider/region/delete合同和WI-S1-02-11 processor，不是WI-S1-01-10文字核心依赖。
-- **iOS scope**：Closed Pilot 保留照片选择、owner-scoped本地草稿和本机预览，并明确显示“仅本机保存/尚未云端保存”；Archive photo/audio/video/document entry管理draft与文件checksum，经 `SourceObjectClient` 申请intent/commit；mock视频、丢失文件或权限撤销显示local/failed，不写云端成功。
+- **iOS scope**：Archive photo/audio/video/document entry只管理owner-scoped draft与文件checksum，经 `SourceObjectClient` 申请intent/commit；mock视频、丢失文件或权限撤销显示local/failed，不写云端成功。
 - **Backend scope**：新增 object port、SourceObject aggregate、intent/commit/GET/delete/reconcile API与private namespace；禁止 `mockObjectStorage/mock://` 进入真实状态机。
 - **Data/API/Event**：`SourceObject/ObjectVersion/ObjectReceipt` 绑定vault/source/kind/size/magicMime/sha256/objectVersion/providerRef/state/purpose；signed URL短TTL且每次GET重新AuthZ，receipt不复制URL或credential。
 - **Migration**：旧Archive媒体只按metadata分类；无owner、可读文件、object key、checksum和HEAD receipt时保持`local_legacy/awaiting_owner_upload/missing`，需Owner显式提交，不后台批量上传相册/录音。
-- **Release policy**：`sourceObjectUploadV1=false`默认；Provider/region/scan/delete任一未知时只保留文字Source或本地草稿，照片入口不得显示uploaded/synced/verified，绝不返回mock uploaded；每类型独立cohort/quota。
-- **Verification**：G0 intent过期/重复commit/path注入/SSRF/mime/hash/size/owner mismatch/orphan；G1本地照片选择/重启预览/账号隔离及local/pending/failed/retry诚实UI；G2真实PG与对象HEAD/delete/reconcile；G3 private bucket/IAM/region/scan；G4相册/麦克风/文件权限另验。
+- **Release policy**：`sourceObjectUploadV1=false`默认；Provider/region/scan/delete任一未知时只保留文字Source或本地草稿，绝不返回mock uploaded；每类型独立cohort/quota。
+- **Verification**：G0 intent过期/重复commit/path注入/SSRF/mime/hash/size/owner mismatch/orphan；G1 local/pending/failed/retry UI；G2真实PG与对象HEAD/delete/reconcile；G3 private bucket/IAM/region/scan；G4相册/麦克风/文件权限另验。
 - **Deployment**：schema/object sandbox→QA object→新图片小cohort→音频/视频/文档逐类；commit与scan receipt先完整，再开放processor。
 - **Rollback**：停发intent/processor并保留已verified对象及receipt；orphan按保留窗清理；不把已提交对象降为local或恢复mock状态。
 - **Definition of Done**：每个server `verified` 对象可由HEAD、checksum、MIME、scan和owner/purpose receipt证明；mock/local/temp URL命中verified为零；撤权立即拒绝GET/processor且可追删除状态。
@@ -2138,30 +2153,30 @@ Selector分为**planning**与**execution**两层。排序第一不等于授权�
 - TimeLetter/Echo显示completed但缺business receipt，或APNs/local notification被当作业务完成。
 - Provider accepted/timeout被直接当failed重发，或配置存在被当作Provider ready。
 - ViewController/QA绕过typed port/AuthZ/ReleasePolicy，或只新增protocol但old-path counter仍命中。
-- Voice/DH、Family、Care、TimeLetter、Publication 任一扩展能力故障导致 Owner 文字 Capture→Review→QA→Correction→Rights 无法降级运行；Closed Pilot 是否满足由 R3 Gate 判定，Product MVP 是否满足另由 R5/RV Gate 判定。
+- Voice/DH、Care、TimeLetter、Publication 任一扩展能力故障导致 Owner 文字 Capture→Review→QA→Correction→Copy/Export/Delete 无法降级运行；M0 由 R3 Gate 判定，M1-M3 分别由 RV/R5 与监管 Gate 判定。
 - G0/G1/generic build被用来宣称G2 Postgres、G3 Provider或G4真机/产品/法律通过。
 
 ## 18. `WP-S3-01` Publication
 
 当前iOS的`MemoryModel.isPrivate`与`MemoryRepository.getPublicByOwner`只是同一全局本地数组上的可变布尔过滤，KBLite share导出完整graph且仅QA开放；Family关系只提供少量delegated路径；`.guest`页面没有Visitor identity/grant/backend且当前导航不可达。backend现有public路由只指健康和认证，没有Publication/Version/ShareGrant/VisitorSession/Public Index表或route。因此本包从零建立独立公开副本，不迁移这些遗留“公开”语义。
 
-### `WI-S3-01-01` Family Publication Privacy 与 Release Policy 硬门
+### `WI-S3-01-01` M2 Adult Publication Privacy、Regulatory 与 Release Policy 硬门
 
-- **Outcome**：把已确认的 MVP-P 范围落成 server policy 与 decision receipt：仅认证/受邀访问、独立副本、7日 Visitor TTL、Owner不见问答正文、AI披露、第三方/未成年人限制、举报和停止条件；尚未关闭的法律/安全子项保持 blocked。
+- **Outcome**：把 M2 范围落成 server policy 与 decision receipt：仅在世主体主动发布、仅成年认证/受邀访问、独立副本/读取角色、7日 Visitor TTL、Owner不见问答正文、持续AI披露、依赖/2小时提醒、确定性退出、危机切换、投诉举报、安全评估和算法备案；未成年人虚拟亲属与逝者人格互动硬拒绝。
 - **Product value**：在任何公开URL出现前，Owner知道发布什么、谁能看、平台保留什么以及撤回的真实边界。
 - **Priority / lane**：P0 policy；MVP-P 入口；R5。
 - **Risk / requirement**：CR-08/10/11；FR-PUB-001、FR-PUB-002、FR-PUB-003、FR-VIS-001、FR-VIS-002、FR-VIS-003；DR-002/006/010/016/038/039；SOR-05/07。
 - **Dependencies**：Owner text core R3稳定；S0-05 Rights、S0-06 ReleasePolicy、S0-07 evidence；产品范围已确认，Privacy/Legal/Security 与实现验收仍是 exit gate。
 - **iOS scope**：只新增typed policy/capability与hidden entry adapter；现有`isPrivate`、guest、KBLite share和Family UI不视为批准入口。
 - **Backend scope**：新增Publication policy schema/runtime response和kill switch；不新增public content route。
-- **Data/API/Event**：policy含version/allowedContent/thirdParty/minor/visitorIdentity/sessionTTL/ownerVisibility/AI disclosure/reporting/forwarding/withdraw wording/approvers/effectiveAt。
+- **Data/API/Event**：policy含version/livingPublisher/adultVisitor/allowedContent/thirdParty/minorHardDeny/visitorIdentity/emergencyContact/sessionTTL/continuousUseLimit/ownerVisibility/AI disclosure/dependencyReminder/exit/reporting/forwarding/withdraw/safetyAssessment/algorithmFiling/approvers/effectiveAt。
 - **Migration**：无用户数据；现有伪公开surface inventory并在Release继续deny/hidden。
 - **Release policy**：`publication.enabled=false`、`visitor.enabled=false`默认；missing/expired/offline deny；Voice/DH public另有独立policy。
 - **Verification**：G0 policy extra-forbid/TTL/offline/kill-switch/decision version；G1 Release无入口/guest误露；G4产品/Privacy/Legal签字。
 - **Deployment**：policy endpoint先部署但false→QA synthetic→批准后才允许下游schema/canary，不用客户端local true。
 - **Rollback**：server deny/hide/pause新操作，Rights/withdraw仍可用；不删决策历史。
 - **Definition of Done**：所有开放问题有owner/status/effective version；未批准时公开route/URL/index=0，工程状态`EXTERNAL_BLOCKED`。
-- **External gates**：G4 Privacy/Legal、安全、运营与产品体验验收；TTL 已固定为7日，举报/保留例外仍需批准。
+- **External gates**：G4 Privacy/Legal、安全、运营、产品、安全评估、算法备案与上架验收；TTL 已固定为7日，举报/保留例外仍需批准。
 - **Non-goals**：不公开内容、不批准公开声音/DH、不把Family关系自动变Visitor grant。
 
 ### `WI-S3-01-02` Publication、Version、ShareGrant 与 Visitor Schema/AuthZ
@@ -2221,41 +2236,41 @@ Selector分为**planning**与**execution**两层。排序第一不等于授权�
 - **External gates**：G2真实PG/store；外部search/object/CDN需G3 region/delete/exit/cost。
 - **Non-goals**：不建立私人向量索引、不让Public Index写回Memory、不支持公开Voice/DH。
 
-### `WI-S3-01-05` ShareGrant、Visitor Identity/Session 与 Public Gateway
+### `WI-S3-01-05` ShareGrant、Adult Visitor Identity/Session 与 Public Gateway
 
-- **Outcome**：Owner签发/撤销resource+version scoped ShareGrant，Visitor以受控身份或一次性secret创建短期Session，Public Gateway每次验证grant/state/expiry/useLimit。
+- **Outcome**：在世成年 Owner 签发/撤销 resource+version scoped ShareGrant；Visitor 完成成年人校验并以受控身份创建短期 Session，Public Gateway 每次验证 adult/grant/state/expiry/useLimit。一次性匿名 secret 不进入 M2。
 - **Product value**：Owner可以控制谁在多久内访问哪一版内容，Visitor权限不会因Family关系或链接泄漏无限扩张。
 - **Priority / lane**：P0/P1；MVP-P；R5。
 - **Risk / requirement**：CR-02/08/10；FR-PUB-003、FR-VIS-001、FR-VIS-003；DR-006/010/038；BAR-01/02/07。
 - **Dependencies**：WI-S3-01-01..04；S0-02 identity/session/route AuthZ、S0-05 revoke/delete、S0-07 audit。
 - **iOS scope**：Owner grant issue/revoke/share-link port与Visitor deep-link/session client；token只在URL/Keychain短期使用，不进日志/clipboard evidence。
 - **Backend scope**：新增grant/session commands、token hash/rotation/use CAS、Public Gateway middleware/rate limit；Family relationship不自动授权。
-- **Data/API/Event**：grant purpose/resource/version/expiry/maxUse/state/tokenHash；Visitor principal/session/deletion secret/TTL/risk state；command/issue/revoke/access receipts。
+- **Data/API/Event**：grant purpose/resource/version/expiry/maxUse/state/tokenHash；Visitor principal/adultVerification/emergencyContactRef/session/TTL/risk/dependency state；command/issue/revoke/access receipts。
 - **Migration**：family invite/deep link与KBLite share不迁为grant；legacy guest关闭；已有本地分享文件不受平台撤回承诺。
-- **Release policy**：anonymous unrestricted拒绝；policy/expiry/state/usage未知fail closed；每次query重新AuthZ，不仅登录时检查。
+- **Release policy**：anonymous、minor、adult unknown 一律拒绝；policy/expiry/state/usage未知 fail closed；每次 query 重新 AuthZ，不仅登录时检查。
 - **Verification**：G0 expired/revoked/wrong version/use race/token replay/cross-vault/family-no-grant；G1 link open/expired/revoke；G2 concurrent use/session/revoke和gateway deploy。
 - **Deployment**：synthetic token→internal authenticated Visitor→邀请式小cohort；开放可转发链接需额外G4。
 - **Rollback**：停止issue、新session并批量suspend/revoke；已访问事实保留receipt，不能数据库回滚“收回”。
 - **Definition of Done**：所有public query绑定active grant+version+session；revoke后新访问同步拒绝；token/PII不进日志/evidence。
-- **External gates**：G2 deployed；G4 Visitor身份、可转发性、TTL、未成年人/第三方规则。
+- **External gates**：G2 deployed；G4 Visitor成年人身份、联系人、可转发性、TTL、第三方规则与监管发布门。
 - **Non-goals**：不让Visitor写Owner Memory、不开放Family全库、不做社交关注关系。
 
-### `WI-S3-01-06` Visitor 文字回答、AI披露、不知道策略与举报
+### `WI-S3-01-06` Visitor 回答、AI披露、依赖/时长、退出、危机与举报
 
-- **Outcome**：Visitor问答只从当前PublicationVersion/Public Index构建context，始终披露AI身份，无依据回答不知道，并提供限流、prompt injection防护、举报/暂停和最小feedback。
+- **Outcome**：Visitor问答只从当前 PublicationVersion/Public Index 构建 context，始终披露AI身份，无依据回答不知道；提供依赖风险提示、连续2小时提醒、UI/语音/关键词确定性退出、危机切换中性安全助手、限流、prompt injection防护、举报/暂停和最小 feedback。
 - **Product value**：访客获得受控的文字体验，而不会被误导为真人本人或通过提问探测私人信息。
 - **Priority / lane**：P1；MVP-P 文字查询；R5。
 - **Risk / requirement**：CR-08/09/11；FR-VIS-002、FR-VIS-003、FR-PUB-003、FR-SAFE-002；DR-006/010/038；SOR-03/06/07。
 - **Dependencies**：WI-S3-01-04/05；S1-03 typed context pattern、S1-02 provider receipt；S0-07 incident/denominator；真实LLM需G3。
 - **iOS scope**：Visitor文字UI/client、AI披露、report/block状态；不复用Owner Echo私人context、Voice/DH或本地KBLite。
-- **Backend scope**：新增VisitorContextBuilder/Public QA service、risk/rate-limit/report ports；private repository不在dependency graph。
+- **Backend scope**：新增VisitorContextBuilder/Public QA service、adult/dependency/session-duration/exit/crisis/risk/rate-limit/report ports；private repository不在dependency graph。
 - **Data/API/Event**：session/message/answer/publicCitation/policy/risk/feedback最小字段；Visitor输入不成为Owner Source/Memory，除非未来单独贡献流程。
 - **Migration**：无legacy conversation；guest本地likes/comments不迁；synthetic attack corpus先行。
-- **Release policy**：文字only、Voice/DH off；unknown/blocked/rate-limited有明确响应；Provider失败不fallback私人QA。
-- **Verification**：G0 private-ID canary、prompt injection、no-evidence、revoked mid-turn、rate limit/report、Owner不可读Visitor正文；G1披露/举报/失败；G2 gateway；G3模型安全/retention。
+- **Release policy**：先文字、Voice/DH独立off；minor/adult unknown/exit/crisis/blocked/rate-limited有确定性响应；Provider失败不fallback私人QA，Persona不得参与支付或重大决策。
+- **Verification**：G0 private-ID canary、minor hard deny、prompt injection、no-evidence、revoked mid-turn、2小时计时、三通道退出、危机切换、Persona促购/重大决策拒绝、rate limit/report、Owner不可读Visitor正文；G1披露/举报/失败；G2 gateway；G3模型安全/retention；G4演练。
 - **Deployment**：synthetic→员工/internal→邀请cohort；abuse/unknown/incident分母current后再扩大。
 - **Rollback**：关闭Visitor session/QA并保留举报/receipt；不影响Owner text、Publication管理和Rights。
-- **Definition of Done**：所有回答citation只指PublicVersion；private canary命中=0；AI披露始终显示；举报可pause对应Publication/session。
+- **Definition of Done**：所有回答citation只指PublicVersion；private canary和minor虚拟亲属命中=0；AI披露始终显示；退出立即成功；2小时提醒和危机切换可审计；举报可pause对应Publication/session。
 - **External gates**：G3模型/反滥用Provider；G4产品、安全、Privacy/Legal与运营响应。
 - **Non-goals**：不开放公开声音/DH、不将Visitor消息自动存入Owner库、不承诺真人替身。
 
@@ -2297,9 +2312,9 @@ Selector分为**planning**与**execution**两层。排序第一不等于授权�
 - **External gates**：G1/G4产品设计、Privacy、Accessibility；生产入口需G2/G4。
 - **Non-goals**：不做营销落地页、社交feed、公开Voice/DH或Owner查看Visitor全部聊天。
 
-### `WI-S3-01-09` Family Publication Canary、Incident、Delete 与 MVP-P Exit
+### `WI-S3-01-09` M2 Adult Publication Canary、Incident、Delete 与 Regulatory Exit
 
-- **Outcome**：完成 synthetic→internal→小 cohort 的 MVP-P 组合门，验证 Family 委托授权、migration/restore、public-role隔离、grant/revoke、7日TTL、withdraw/delete、incident、成本和 legacy guest 零命中后决定是否放行真实用户。
+- **Outcome**：完成 synthetic→internal→成年小 cohort 的 M2 组合门，验证在世主体发布、成年身份、migration/restore、public-role隔离、grant/revoke、7日TTL、依赖/2小时提醒、退出/危机、withdraw/delete、投诉、incident、安全评估、算法备案、成本和 legacy guest 零命中后决定是否放行真实用户。
 - **Product value**：公开能力只有在可撤回、可止损、可恢复且产品/法律批准时上线，失败只关闭该lane。
 - **Priority / lane**：P0 gate；MVP-P Exit；R5/RC。
 - **Risk / requirement**：CR-02/04/08/10/11/12；FR-PUB-001、FR-PUB-002、FR-PUB-003、FR-VIS-001、FR-VIS-002、FR-VIS-003、FR-SAFE-002；DR-038/039/040；BAR/SOR高风险项。
@@ -2309,7 +2324,7 @@ Selector分为**planning**与**execution**两层。排序第一不等于授权�
 - **Data/API/Event**：decision record含cohort/policy/build/schema/evidence/approver/go-pause-no-go；不可逆public access与withdraw receipt保留。
 - **Migration**：additive→shadow projector→internal→cohort→zero-use old guest→contract；不backfill legacy public；每wave有MRT/restore。
 - **Release policy**：默认`EXTERNAL_BLOCKED`；任一private leak、revoke failure、missing evidence或open incident立即pause/suspend，不回Owner epoch。
-- **Verification**：G0/G1全negative corpus；G2真实PG/public role/restore/concurrency/deployed smoke；G3外部服务；G4产品/法律/安全/运营和真实Visitor验收。
+- **Verification**：G0/G1全negative corpus；G2真实PG/public role/restore/concurrency/deployed smoke；G3外部服务；G4成年人真实Visitor、产品/法律/安全/运营、安全评估/算法备案与上架验收。
 - **Deployment**：按approved cohort逐步，观察窗/阈值由真实基线和approver确定；Voice/DH public另立lane。
 - **Rollback**：停止new publish/grant/session、suspend全部cohort、revoke/clear public index并reconcile；Owner private core保持运行。
 - **Definition of Done**：required evidence current、private leak/revoke gap=0、legacy public path零命中且retirement可证；外部门全通过才`VERIFIED`。
@@ -2330,21 +2345,21 @@ Selector分为**planning**与**execution**两层。排序第一不等于授权�
 
 ### `WI-V0-01-01` Voice/DH Release Stop-Loss、Purpose 与 Immutable Consent
 
-- **Outcome**：将Voice Clone、TTS、DH分别改为server-authoritative default-off，并建立不可变ConsentReceipt，绑定voice subject、actor、年龄/监护关系、purpose、Provider、region、文本版本、期限与撤回链。
+- **Outcome**：将Voice Clone、TTS、DH分别改为server-authoritative default-off，并建立不可变ConsentReceipt。M1 只接受在世成年 subject=actor 本人、随机授权语句与活体证据；M2 绑定在世发布主体和成年 Visitor；M3 使用独立纪念证据合同。未成年人/家庭代录不得进入 M1。
 - **Product value**：只有被录音/建模主体真正理解并授权的用途才能启用，未配置或过期不会误开放高敏能力。
 - **Priority / lane**：P0 stop-loss；Voice MVP governance / DH Beta；R0/RV0。
 - **Risk / requirement**：CR-03/08/09/10；FR-VOICE-001、FR-VOICE-004、FR-VOICE-005；SCOPE-DIGITAL-HUMAN；DR-013/014/026/032；SOR-02/03/06。
-- **Dependencies**：S0-02 strong identity/subject、S0-06 server policy、S0-07 evidence；家人/未成年人需产品/Privacy/Legal G4。
+- **Dependencies**：S0-02 strong identity/subject、S0-06 server policy、S0-07 evidence；M2 在世主体发布与成年 Visitor、M3 纪念试点分别需要额外 Product/Privacy/Legal/监管 G4。
 - **iOS scope**：`FeatureFlagService` Voice/DH默认false，Profile/Echo只消费server capability/consent state；移除“本人授权”代替家人subject consent的路径。
 - **Backend scope**：新增ProcessingBasis/ConsentRecord/VoicePurposeGrant domain与runtime policy；当前布尔consent只作legacy observed，不构成批准。
 - **Data/API/Event**：purpose至少`training/preview/private_synthesis/memoir/dh_audio_drive/visitor_public_voice`独立；receipt含subject/actor/basis/policy/provider/region/issued/revoked/supersedes/hash。
 - **Migration**：现有profile/sample全部标legacy_consent_unknown并暂停新effect；Owner重新确认后才进入新purpose grant，不补造历史receipt。
 - **Release policy**：missing/expired/revoked/offline deny；各purpose独立开关和kill switch；Visitor voice默认off且依赖MVP-P独立授权与外部门。
-- **Verification**：G0 policy/consent状态、purpose mismatch、family/guardian负例、TTL/offline、release artifact hidden；G1入口/撤回/失败；G4主体证明与文案批准。
+- **Verification**：G0 policy/consent状态、purpose mismatch、family代录/guardian/未成年人/逝者负例、TTL/offline、release artifact hidden；G1入口/撤回/失败；G4主体证明与文案批准。
 - **Deployment**：server policy false先部署→iOS deny→consent schema/UI hidden→QA synthetic；不调用Provider。
 - **Rollback**：立即deny新effect并保留consent/revocation receipt；撤回不自动物理删除，转WI-V0-01-10。
 - **Definition of Done**：无有效consent+purpose时UI/API/runtime均拒绝；当前默认开放路径为0；Owner文字Echo不受影响。
-- **External gates**：G4产品、Privacy/Legal、未成年人/家人主体规则；未关闭保持`EXTERNAL_BLOCKED`。
+- **External gates**：G4产品、Privacy/Legal、成年人/主体本人规则、安全评估与算法备案；未成年人虚拟亲属和家庭代录不作为待关闭门，直接拒绝。
 - **Non-goals**：不训练/合成、不以家庭关系代替授权、不同时批准Visitor public voice。
 
 ### `WI-V0-01-02` VoiceProfile、Sample、GeneratedAudio 与 DHSession Authority Schema
@@ -2366,19 +2381,19 @@ Selector分为**planning**与**execution**两层。排序第一不等于授权�
 - **External gates**：G2 DB/Data/Security；G3/G4尚不由schema关闭。
 - **Non-goals**：不选择Provider、不做质量评分、不创建公开Voice/DH入口。
 
-### `WI-V0-01-03` 主体证明、受管样本与 Training Command
+### `WI-V0-01-03` 在世成年人本人证明、受管样本与 Training Command
 
-- **Outcome**：训练前完成subject/actor/guardian proof与consent snapshot，录音进入受管SampleObject并做格式、时长、噪声/单人/内容质量检查，再以stable command提交训练。
+- **Outcome**：M1 训练前证明 subject=actor 且为在世成年人，完成随机授权语句与活体检测并冻结 consent snapshot；录音进入受管 SampleObject，完成格式、时长、噪声、单人和内容质量检查后，以 stable command 提交训练。其他主体一律不进入该 command。
 - **Product value**：防止未经授权复刻他人或用错误/低质样本浪费槽位，用户可看见样本处理和失败原因。
 - **Priority / lane**：P0/P1；RV0；真实训练RV1。
 - **Risk / requirement**：CR-02/09/10；FR-VOICE-001、FR-VOICE-002；DR-013/026；BAR-02/06；SOR-03/05。
 - **Dependencies**：WI-V0-01-01/02；S0-02 identity/AuthZ、S0-05 rights、S1-02 provider effect、Object/Media gate；真实mic G4。
-- **iOS scope**：Profile/Family录音Intent、permission/quality ViewState与owner-scoped staging；不在请求外长期裸存样本，家人流程要求家人subject授权。
+- **iOS scope**：M1 仅 Profile 本人录音Intent、permission/quality/liveness ViewState与owner-scoped staging；移除/隐藏 Family 代录训练入口，不在请求外长期裸存样本。
 - **Backend scope**：新增CreateVoiceSample/Validate/SubmitTraining commands、private object port、sample scan/retention worker；适配现有Voice provider adapter。
 - **Data/API/Event**：command绑定sampleHash/profileVersion/consentReceipt/purpose/provider/model/requestHash；sample object格式/时长/size/checksum/scan/TTL/status。
 - **Migration**：旧请求内sample没有可验证object/consent时不迁；已训练profile走Provider query+重新授权，不补原sample。
 - **Release policy**：sample/consent/identity/quality任何不通过即不发Provider；真实数据单Provider，禁止dual-send；mock只internal。
-- **Verification**：G0 wrong subject/guardian、duplicate command、format/hash/quality、stale consent、object delete；G2 object/job/receipt；G3真实training；G4mic/主体确认。
+- **Verification**：G0 wrong subject、guardian代录、未成年人、第三方、逝者、duplicate command、format/hash/quality、stale consent、object delete；G2 object/job/receipt；G3真实training；G4mic/主体确认。
 - **Deployment**：synthetic sample→sandbox→单Owner/单slot cohort；观察失败/成本/unknown后扩大。
 - **Rollback**：停止新训练、清未accepted staging；Provider accepted后进入query/reconcile，不能重发或抹除。
 - **Definition of Done**：每次训练可追到subject/consent/sample/request/receipt；未授权或低质请求Provider effect=0。
@@ -2442,23 +2457,23 @@ Selector分为**planning**与**execution**两层。排序第一不等于授权�
 - **External gates**：G3 TTS/region/delete/cost，G4真机听感；Privacy对文本/音频保留。
 - **Non-goals**：不在本项实现数字人session、不承诺低延迟、不开Visitor public voice。
 
-### `WI-V0-01-07` 本人/家人 Role Voice Selection 与授权 Fallback
+### `WI-V0-01-07` 本人 / 在世已发布角色 Voice Selection 与安全 Fallback
 
-- **Outcome**：Echo角色选择只解析本人默认AI音色或目标Owner/Represented Persona对应、经subject consent且quality accepted的Family VoiceProfile精确版本，产生RoleVoiceSelection receipt；失败清旧profile并明确fallback。
-- **Product value**：切换父亲/本人等角色时声音与角色一致，不继续上一角色音色或声称未启用的复刻。
-- **Priority / lane**：P0/P1；RV1 Voice MVP private/family role。
-- **Risk / requirement**：CR-01/02/09；FR-VOICE-001、FR-VOICE-003；SCOPE-FAMILY；DR-013/024/037；IAR-03。
+- **Outcome**：M1 只解析本人默认 AI 音色或本人已授权 VoiceProfile；M2 角色只有在该在世主体独立完成训练并主动发布对应 purpose grant 后，才可解析其 profile。未成年人、逝者和仅由家庭关系创建的角色只能使用明确标注的中性 AI 音色或文字，产生 RoleVoiceSelection receipt；失败清旧 profile 并明确 fallback。
+- **Product value**：切换本人或授权在世角色时声音来源可解释；纪念/未成年人角色不会被错误套用复刻音色，也不会继续上一角色声音。
+- **Priority / lane**：P0/P1；RV1 / M1 Living Self Voice；Family role 不训练音色。
+- **Risk / requirement**：CR-01/02/09；FR-VOICE-001、FR-VOICE-003；SCOPE-FAMILY；DR-013/024；IAR-03。
 - **Dependencies**：WI-V0-01-01/02/05/06；S0-02 family/subject AuthZ、S1-03 runtime generation；family产品门不等于voice consent。
-- **iOS scope**：role selector/QA diagnostics显示roleVoiceSource/profileVersion/purpose/fallback；家庭成员客户端按目标人物解析，不使用当前访问者、本地默认或上一角色profile；账号/角色切换清pending request/cache/audio，generation fence旧回调。
-- **Backend scope**：新增ResolveRoleVoice query/policy，服务端按target persona/subject验证grant/profileVersion/consent/quality；不信任客户端voiceProfileId，不把viewer profile作为target fallback。
-- **Data/API/Event**：selection含owner/roleSubject/profileVersion/source(`defaultAI/familyProfile/none`)/purpose/policy/fallbackReason/receipt。
+- **iOS scope**：role selector/QA diagnostics显示roleVoiceSource/profileVersion/purpose/fallback；账号/角色切换清pending request/cache/audio，generation fence旧回调。
+- **Backend scope**：新增ResolveRoleVoice query/policy，服务端验证 living subject、adult、publisher grant、profile/consent/quality；不信任客户端voiceProfileId或Family关系。
+- **Data/API/Event**：selection含owner/roleSubject/profileVersion/source(`defaultAI/selfProfile/publishedLivingProfile/none`)/purpose/policy/fallbackReason/receipt。
 - **Migration**：现有global/default S IDs和family profile metadata仅inventory；无subject consent/quality receipt时不可选择，需重新绑定/确认。
-- **Release policy**：AI助手可明确用产品默认音色；Family profile不可用则文字Echo/明确无复刻，不使用访问者、前一角色、默认音色或任意全局槽位冒充目标人物。Visitor Voice保持独立关闭，不阻断Owner/Family Voice MVP。
+- **Release policy**：AI助手可明确用产品默认音色；Family/纪念/未成年人角色没有在世主体独立 M2 grant 时只允许中性文字/默认AI音色，不使用前一角色或任意全局槽位。
 - **Verification**：G0 rapid role switch、stale callback、wrong owner/subject、revoked consent、deleted profile/default labeling；G1 selector/diagnostics；G3/G4真实听感。
-- **Deployment**：QA synthetic roles→本人→单个已授权family profile；每角色独立cohort。
+- **Deployment**：QA synthetic roles→M1本人→M2单个独立授权在世主体；纪念和未成年人只验证拒绝/中性 fallback。
 - **Rollback**：递增role/runtime generation、停止旧audio/request并回defaultAI/文字；保留receipt，不切换Owner memory authority。
-- **Definition of Done**：每轮Echo可解释viewer/target persona/profileVersion/purpose/fallback；family未授权或viewer音色错用=0、旧角色声音=0、默认音色误标复刻=0。
-- **External gates**：G4家人主体/未成年人/产品授权与真机听感；G3profile Provider。
+- **Definition of Done**：每轮Echo可解释role/profile/purpose/fallback；Family关系直接授权=0、纪念/未成年人复刻音色=0、旧角色声音=0、默认音色误标复刻=0。
+- **External gates**：G4在世成年人本人授权、随机语句/活体、产品边界与真机听感；G3 profile Provider。Family/未成年人/第三方/逝者不得复用 M1。
 - **Non-goals**：不让Owner代家人授权、不自动训练家人、不决定数字人形象。
 
 ### `WI-V0-01-08` Tencent DH Asset、Provider Session 与 Cleanup Receipt
@@ -2518,9 +2533,9 @@ Selector分为**planning**与**execution**两层。排序第一不等于授权�
 - **External gates**：G2真实PG/backup、G3Provider delete/exit、G4Privacy/Legal/用户文案。
 - **Non-goals**：不承诺立即彻底删除、不用清本地cache代替Provider删除、不从receipt中删除历史。
 
-### `WI-V0-01-11` Quality、Cost、Incident 与 Voice MVP / DH Beta Exit Gate
+### `WI-V0-01-11` Quality、Cost、Incident 与 M1/M2/M3 分层 Exit Gate
 
-- **Outcome**：建立按 build/provider/policy/profile/asset/设备的 G0–G4 evidence manifest、usage/cost/失败分母、incident 与 go/pause/no-go；分别给出 Voice MVP 和 DH Beta 结论，任一外部门未通过则对应 lane 保持 blocked。
+- **Outcome**：建立按 build/provider/policy/profile/asset/设备的 G0-G4 evidence manifest、usage/cost/失败分母、incident 与 go/pause/no-go；分别给出 M1本人Voice、M2在世DH、M3成人纪念试点结论，任一外部门未通过则对应 lane 保持 blocked。
 - **Product value**：只有在授权、质量、稳定性、删除和成本都可接受时开放，失败能立即降回Owner文字Echo。
 - **Priority / lane**：P1 gate；RV0/RV1 Exit。
 - **Risk / requirement**：CR-03/07/09/10/11/12；FR-VOICE-001、FR-VOICE-002、FR-VOICE-003、FR-VOICE-004、FR-VOICE-005；SCOPE-DIGITAL-HUMAN；DR-013/014/027/032/039/040；SOR-04/06/07/08。
@@ -2529,11 +2544,11 @@ Selector分为**planning**与**execution**两层。排序第一不等于授权�
 - **Backend scope**：provider usage/cost/quota/quality/delete/exit/session reports、circuit breaker和cohort decision record；Voice 与 DH lane 独立。
 - **Data/API/Event**：manifest含env/build/provider/model/policy/profileVersion/asset/device/sample/window/exclusion/usage/cost/outcomes/evidenceHashes/approvers/expiresAt。
 - **Migration**：synthetic→internal→单Owner/单slot/单asset→小Beta；旧QA报告无manifest标legacy_unverified并重跑，不回填pass。
-- **Release policy**：任一long credential、invalid consent、default mislabeled、unknown effect、delete gap、multi-audio-owner、cost/quota或G4缺失使lane pause/blocked；Owner text继续。基础Voice MVP只以Owner private和授权Family Voice出结论，Visitor Voice另有capability/cohort结论。
+- **Release policy**：任一long credential、invalid consent、default mislabeled、unknown effect、delete gap、multi-audio-owner、cost/quota或G4缺失使lane pause/blocked；Owner text继续。
 - **Verification**：G0/G1 static/unit/simulator/generic；G2 broker/outbox/restore/deployed；G3 Volc/Tencent真实receipt/quality/delete/cost；G4真机矩阵、产品/Privacy/Legal。
 - **Deployment**：server policy和circuit breaker先行→QA→小cohort；扩大比例/观察窗由真实基线批准，不写虚构数字。
 - **Rollback**：disable new Voice/DH、revoke runtime/audio、close/reconcile sessions并回文字；保留Provider/rights/cost receipts和incident。
-- **Definition of Done**：Owner private与授权Family Voice的required evidence current且外部门批准，才可给基础Voice MVP `VERIFIED`；Visitor Voice和DH分别独立出结论，未通过不降级已验证的基础Voice，但保持自身关闭。
+- **Definition of Done**：所有required evidence current且外部门批准才`VERIFIED`；否则最高`INTERNAL_READY/EXTERNAL_BLOCKED`并列唯一下一行动。
 - **External gates**：G2–G4、Product、Privacy/Legal、Provider、Finance、Operations、真机全部适用。
 - **Non-goals**：不因 Voice 属于 MVP 而跳过真实门；DH 未通过不阻塞 Voice；不以一次真机成功或 Provider ready 替代完整门，也不自动开放 Visitor Voice/DH。
 
@@ -2801,8 +2816,8 @@ Round 4D不是三个能力并行上线队列，执行优先级固定如下：
 1. **立即止损**：若当前build仍默认开放Voice/DH、长期Provider/system credential进入iOS/API response或删除文案超出receipt，先执行`WI-V0-01-01/04/10`对应containment，并回S0-03/S0-06/S0-07；不得继续质量、Publication或Provider开发。
 2. **Lean迁移地基**：顺序执行 `WI-MIG-01-01/C00` 只读 inventory 与 `C01` 真实 backup/isolated restore。C01 未关闭时离线演练和生产切换全部 NO-GO。
 3. **Owner文字核心优先**：Stage0/1 未退出时 Family/Publication 只做 policy/schema/hidden UI，Voice/DH 只做 stop-loss/synthetic 治理，不能抢占 Owner text critical path。
-4. **Product MVP Family/Publication promotion**：Closed Pilot R3 稳定后实现并验收；产品范围已确认，仍需 Privacy/Legal/Security 与 G2/G4。文字 Visitor 通过不自动开放 Voice/DH。
-5. **Product MVP Voice / Beta Extension DH promotion**：Voice 与 DH 分别通过 consent/credential/Provider/quality/delete/真机门；Voice 未通过则 Product MVP 不发布，但 Closed Pilot 可继续；DH 失败只 pause Beta Extension lane。
+4. **M2 Adult Publication promotion**：M0 R3 稳定后实现并验收；只允许在世主体主动发布和成年 Visitor，仍需 Privacy/Legal/Security、评估/备案与 G2/G4。文字 Visitor 通过不自动开放 Voice/DH。
+5. **M1 Voice / M2 Living DH / M3 Memorial promotion**：三类分别通过主体、consent/credential/Provider/quality/delete/真机及监管门；任一未通过只阻断对应阶段，M0继续。未成年人虚拟亲属和无生前专项授权逝者复刻永不进入promotion。
 6. **组合授权**：当前由 Lean go/no-go 引用各 lane current evidence；规模触发后才使用 C07/C08/C11 完整组合授权，且不能替各 package“补签”缺失外部门。
 
 ### 20.3 Round 4D Stop-the-Line

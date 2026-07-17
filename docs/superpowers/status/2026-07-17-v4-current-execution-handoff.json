@@ -1,0 +1,164 @@
+{
+  "activeWorkItem": {
+    "authorityLock": "DB_RECOVERY",
+    "backendPendingPaths": [
+      "app/db/recovery.py",
+      "tests/test_recovery_record.py"
+    ],
+    "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
+    "gateEvidence": {
+      "G2": "MISSING",
+      "G3": "MISSING"
+    },
+    "id": "WI-S0-04-05",
+    "leaseState": "HELD",
+    "state": "IN_PROGRESS",
+    "summary": "Complete isolated restore, receipt replay, integrity checks, and traffic recovery GO/NO_GO evidence."
+  },
+  "baselines": {
+    "backend": "main@ecb2cf6",
+    "ios": "feature/prd-stitch-ui-adaptation@6a4142c",
+    "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
+  },
+  "evidenceItems": [
+    {
+      "evidence": "docs/superpowers/status/2026-07-15-wi-s0-03-01-credential-inventory.md",
+      "id": "WI-S0-03-01",
+      "implementationStatus": "INTERNAL_READY / EXTERNAL_BLOCKED",
+      "registryClosure": "OPEN_EXTERNAL_EVIDENCE"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-15-wi-s0-03-02-response-kill-switch.md",
+      "id": "WI-S0-03-02",
+      "implementationStatus": "COMPLETE",
+      "registryClosure": "SCOPED_G2_EVIDENCE_PRESENT"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-15-wi-s0-03-03-mobile-credential-path-retirement.md",
+      "id": "WI-S0-03-03",
+      "implementationStatus": "COMPLETE",
+      "registryClosure": "OPEN_DIRECT_DEPENDENCIES"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-16-wi-s0-03-04-realtime-voice-secure-path.md",
+      "id": "WI-S0-03-04",
+      "implementationStatus": "EXTERNAL_BLOCKED",
+      "registryClosure": "G3_G4_MISSING"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-16-wi-s0-03-05-digital-human-secure-path.md",
+      "id": "WI-S0-03-05",
+      "implementationStatus": "EXTERNAL_BLOCKED",
+      "registryClosure": "G3_G4_MISSING"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-15-wi-s0-03-06-qa-credential-artifact-retirement.md",
+      "id": "WI-S0-03-06",
+      "implementationStatus": "COMPLETE",
+      "registryClosure": "SCOPED_G2_EVIDENCE_PRESENT"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-16-wi-s0-03-07-credential-rotation-revoke-drain.md",
+      "id": "WI-S0-03-07",
+      "implementationStatus": "CLOSED_WITH_RISK_EXCEPTION",
+      "registryClosure": "RISK_EXCEPTION_NOT_PROVIDER_VERIFICATION"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-16-wi-s0-04-01-database-uow.md",
+      "id": "WI-S0-04-01",
+      "implementationStatus": "INTERNAL_READY / DEPLOYED / G0_G2_FUNCTIONAL_VERIFIED / CAPACITY_BASELINE_PENDING",
+      "registryClosure": "EXTERNAL_CAPACITY_REVIEW_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-16-wi-s0-04-02-versioned-migrator.md",
+      "id": "WI-S0-04-02",
+      "implementationStatus": "INTERNAL_READY / DEPLOYED / G2_PRODUCTION_BASELINE_VERIFIED / DATA_SRE_APPROVAL_PENDING",
+      "registryClosure": "EXTERNAL_DATA_SRE_REVIEW_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-16-wi-s0-04-03-readiness.md",
+      "id": "WI-S0-04-03",
+      "implementationStatus": "INTERNAL_READY / DEPLOYED / G2_PRODUCTION_READINESS_VERIFIED / OPS_LB_APPROVAL_PENDING",
+      "registryClosure": "EXTERNAL_OPS_REVIEW_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-17-wi-s0-04-04-postgres-backup.md",
+      "id": "WI-S0-04-04",
+      "implementationStatus": "INTERNAL_READY / DEPLOYED / G2_SERVER_LOCAL_BACKUP_VERIFIED / OFFHOST_KMS_PRIVACY_SRE_PENDING",
+      "registryClosure": "EXTERNAL_OFFHOST_KMS_PRIVACY_SRE_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-16-wi-s0-06-01-release-policy-shadow.md",
+      "id": "WI-S0-06-01",
+      "implementationStatus": "IMPLEMENTED_SHADOW / DEPLOYED",
+      "registryClosure": "G4_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-16-wi-s0-06-02-release-policy-cache.md",
+      "id": "WI-S0-06-02",
+      "implementationStatus": "IMPLEMENTED_SHADOW / G2_VERIFIED",
+      "registryClosure": "OPEN_DIRECT_DEPENDENCY"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-16-wi-s0-06-03-future-beta-default-deny.md",
+      "id": "WI-S0-06-03",
+      "implementationStatus": "IMPLEMENTED / G0_VERIFIED",
+      "registryClosure": "OPEN_DIRECT_DEPENDENCIES"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-16-wi-s0-06-04-captured-policy-gate.md",
+      "id": "WI-S0-06-04",
+      "implementationStatus": "IMPLEMENTED_OBSERVE / G2_VERIFIED",
+      "registryClosure": "G3_G4_AND_DEPENDENCIES_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-16-wi-s0-06-05-runtime-capability-axes.md",
+      "id": "WI-S0-06-05",
+      "implementationStatus": "IMPLEMENTED / G2_VERIFIED",
+      "registryClosure": "G3_G4_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-16-wi-s0-06-06-qa-override-boundary.md",
+      "id": "WI-S0-06-06",
+      "implementationStatus": "IMPLEMENTED / G0_VERIFIED / G2_VERIFIED",
+      "registryClosure": "OPEN_DIRECT_DEPENDENCIES"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-16-wi-s0-06-07-public-release-scope-gate.md",
+      "id": "WI-S0-06-07",
+      "implementationStatus": "IMPLEMENTED / G0-G1-G2_VERIFIED / G4_OPEN",
+      "registryClosure": "G4_AND_DEPENDENCIES_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-16-wi-s0-06-08-release-policy-rollout.md",
+      "id": "WI-S0-06-08",
+      "implementationStatus": "IMPLEMENTED / G0_VERIFIED / G2_CANARY_ACTIVE / ZERO_USE_WINDOW_ACTIVE / G4_OPEN",
+      "registryClosure": "G4_OBSERVATION_AND_DEPENDENCIES_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-16-wi-s0-07-01-event-envelope.md",
+      "id": "WI-S0-07-01",
+      "implementationStatus": "INTERNAL_READY / G0_VERIFIED / PERSISTENT_SINK_NOT_STARTED",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-16-wi-s0-07-02-evidence-sink.md",
+      "id": "WI-S0-07-02",
+      "implementationStatus": "INTERNAL_READY / SHADOW_WRITER_DEPLOYED / G2_POSTGRES_VERIFIED / EXTERNAL_BLOCKED",
+      "registryClosure": "EXTERNAL_RETENTION_OPS_REVIEW_OPEN"
+    }
+  ],
+  "nextWorkItem": {
+    "id": "WI-S0-06-09",
+    "state": "PLANNED_AFTER_CURRENT",
+    "summary": "Implement AI identity, crisis-neutral fallback, minor virtual-relative hard deny, and M1-M4 default-off regulatory stop-loss."
+  },
+  "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
+  "registry": {
+    "contract": "CONSERVATIVE_PLANNING_VIEW_DOES_NOT_SELF_CLAIM_IMPLEMENTATION",
+    "path": "docs/product/DreamJourney_V4_路线执行注册表_V1.0.json",
+    "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
+  },
+  "schemaVersion": "dreamjourney.current-execution-handoff.v1",
+  "updatedAt": "2026-07-17T10:20:00+08:00"
+}

@@ -325,10 +325,10 @@
       "id": "WP-S3-01",
       "lifecycle": "PLANNED",
       "migrationGateRefs": [],
-      "name": "Family Delegated Publication & Visitor",
+      "name": "M0 Family Contribution + M2 Adult Publication/Visitor",
       "priorityClass": "P0",
       "releaseClass": "MVP_EXTENSION",
-      "roadmapLane": "Product MVP-P",
+      "roadmapLane": "M0 static + M2 interaction",
       "selectorBand": 80,
       "startPackageDependencies": [
         "WP-S0-02",
@@ -347,10 +347,10 @@
       "id": "WP-V0-01",
       "lifecycle": "PLANNED",
       "migrationGateRefs": [],
-      "name": "Voice Product MVP / DH Beta Extension Governance",
+      "name": "M1 Living Self Voice + M2 Living DH + M3 Memorial Governance",
       "priorityClass": "P0",
       "releaseClass": "MVP_EXTENSION",
-      "roadmapLane": "Product MVP Voice + Beta Extension DH",
+      "roadmapLane": "M1/M2/M3",
       "selectorBand": 81,
       "startPackageDependencies": [
         "WP-S0-02",
@@ -380,7 +380,7 @@
   "source": {
     "authority": "ROADMAP_WORK_ITEMS_PLUS_TYPED_PACKAGE_CONTROLS",
     "path": "docs/superpowers/plans/2026-07-12-dreamjourney-v4-executable-development-roadmap.md",
-    "sha256": "6c56df6b16bf64f7979884cf4c825a3900af3135e8776ed1644fe997db1df562"
+    "sha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "workItems": [
     {
@@ -2879,7 +2879,7 @@
     {
       "authorityLock": "VOICE_DH_GOVERNANCE",
       "decision": "STOP",
-      "dependencyNotesHash": "a68fac01a0e0dbce0a3468ae695bbb64c051c6ee0b3fd622cf8c04c81c60a4e1",
+      "dependencyNotesHash": "18434331d34279b290cecdcaa18eae93b804414eca9d93055ba0d894281ca8f0",
       "directDependencies": [],
       "executionOwner": "UNASSIGNED",
       "gateEvidence": {

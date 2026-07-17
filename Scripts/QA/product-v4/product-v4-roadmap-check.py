@@ -599,13 +599,13 @@ def validate_inputs(
     if not all(
         marker in header
         for marker in (
-            "V1.2 Product Confirmed Baseline + Staged Validation + Startup Lean Profile",
+            "V1.3 2026-07-15 新规生效后的 M0-M4 路线基线",
             "115 个 Work Item",
             "产品范围已确认不代表工程实现",
             "当前 Operating Profile",
         )
     ):
-        error(errors, "ROUND4_STATUS", "Roadmap header is not the July 15 product-confirmed/implementation-unverified state")
+        error(errors, "ROUND4_STATUS", "Roadmap header is not the July 16 M0-M4/product-confirmed/implementation-unverified state")
     if selector.get("round4Acceptance") != ROUND4_ACCEPTANCE:
         error(
             errors,

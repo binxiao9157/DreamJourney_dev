@@ -1,8 +1,10 @@
 # DreamJourney V4 产品确认后开发执行计划
 
+> **已被替代（2026-07-17）**：本文仅保留为 2026-07-15 历史执行基线。当前唯一日常入口为 [DreamJourney V4 终版需求可执行开发计划](./2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md)，产品范围以 `docs/DreamJourney_V4_成果物_2026-07-16/` 的终版增量为准。
+
 版本：V1.1
 日期：2026-07-15
-状态：`DERIVED_EXECUTION_SLICE / NON_AUTHORITY`
+状态：`SUPERSEDED / HISTORICAL_ONLY / NON_AUTHORITY`
 基线：iOS `feature/prd-stitch-ui-adaptation@983cda7`；Backend `main@4c0538b`
 
 ## 0. 计划定位

@@ -1,11 +1,11 @@
 # DreamJourney V4 可执行开发路线图
 
-版本：V1.3 2026-07-15 新规生效后的 M0-M4 路线基线  
-初版日期：2026-07-12  
-更新日期：2026-07-16  
-状态：已依据新规风险基线将 115 个 Work Item 重映射到 M0-M4；不重建第二套工程包。产品范围已确认不代表工程实现、G2-G4、Provider、算法备案、安全评估、法律或发布批准  
+版本：V1.3 2026-07-15 新规生效后的 M0-M4 路线基线
+初版日期：2026-07-12
+更新日期：2026-07-16
+状态：已依据新规风险基线将 115 个 Work Item 重映射到 M0-M4；不重建第二套工程包。产品范围已确认不代表工程实现、G2-G4、Provider、算法备案、安全评估、法律或发布批准
 基线：iOS `feature/prd-stitch-ui-adaptation@8a1922b`；Backend `main@4c0538b`
-评审控制面：[DreamJourney V4 评审与验收清单](../../product/DreamJourney_V4_评审与验收清单_V1.0.md)  
+评审控制面：[DreamJourney V4 评审与验收清单](../../product/DreamJourney_V4_评审与验收清单_V1.0.md)
 定稿边界：路线图定稿只冻结执行依据；115 个 Work Item 仍按 Registry 的 `PLANNED/STOP/NO_GO`、Gate 和外部门推进。当前 Operating Profile 以 DR-040/042 的百级用户四阶段轻量迁移为默认，C00-C11 保留为规模触发目标。
 
 ## 0. 文档权威与使用边界

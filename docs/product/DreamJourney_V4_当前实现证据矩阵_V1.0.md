@@ -1,9 +1,9 @@
 # DreamJourney V4 当前实现证据矩阵
 
-版本：V1.2 Product Confirmed Staged Target / Implementation Evidence Unchanged
+版本：V1.4 Guided Interview Target / Implementation Evidence Unchanged
 初版日期：2026-07-12
-更新日期：2026-07-15
-状态：已同步独立方案评审第21章产品回复、三级验证策略与 Startup Lean Profile；当前代码基线和实现成熟度未因产品确认而上调，仍不作为发布承诺
+更新日期：2026-07-16
+状态：已同步 M0-M4 产品风险基线和引导式访谈目标合同；当前代码基线和实现成熟度未因文档调整而上调，仍不作为发布承诺
 工程基线：iOS `feature/prd-stitch-ui-adaptation@8a1922b`；Backend `main@4c0538b`
 评审控制面：[DreamJourney V4 评审与验收清单](./DreamJourney_V4_评审与验收清单_V1.0.md)
 定稿边界：矩阵中的成熟度仍以当前代码证据为准；产品确认只更新目标范围和决策状态，不表示 115 个 Work Item 已实现、G2-G4 已关闭或已获发布批准。
@@ -47,6 +47,8 @@
 | `DreamJourney_dev` 当前源码、QA、Git 历史 | 工程事实 | E1 | iOS 已实现行为、flag、构建和自动化边界 | 真实 provider、真机体验和产品批准 |
 | `DreamJourneyBackend` 当前源码、测试、部署证据 | 工程事实 | E1 | API、持久化、授权、任务和部署合同 | 未执行的生产规模与第三方 SLA |
 | 用户明确确认的历史产品决策 | 产品决策 | E2 | 当前公开/隐藏策略和重大取舍 | 未被明确讨论的新 PRD 范围 |
+| `寻梦环游_产品问题风险分级与整体规避方案_V1.0.md` | 2026-07-16 产品/合规风险基线 | E2/E3 | 新规生效后的禁用能力、M0-M4 范围、发布 Gate 与产品表达 | 工程已实现、法律意见或监管程序已完成 |
+| `DreamJourney_V4_引导式访谈与知识丰满化功能说明_V1.0.md` | 2026-07-16 引导式访谈产品合同 | E2/E3 | 一个自然入口、两类动态推荐、访谈编排、用户控制、知识地图 Projection 与验收要求 | 当前代码已实现、推荐效果或真实用户接受度 |
 | `寻梦环游_个人记忆库与数字分身平台_PRD_V1.0.md` | 评审 PRD | E3 | 目标需求、验收、指标和非目标 | 已实现状态或已批准发布日期 |
 | `DreamJourney_V3_产品蓝图_Product_Blueprint_V3.0.md` | 产品蓝图草案 | E4 | 领域方向与候选阶段划分 | 当前代码事实或最终 IA |
 | `寻梦环游_iOS工程_PRD_目标架构一致性分析_V1.0.md` | 架构分析 | E4 | 术语冲突与迁移建议 | 产品范围批准或完整代码审计 |
@@ -54,9 +56,9 @@
 | `Hermes-Skills-All_AOS-Memory_Analysis.md` | 静态分析 | E4/E6 | 待验证 AOS 概念线索 | 完整 AOS 生产实现 |
 | `/Users/yxj/Documents/Codex/AI/Hermes-Skills-All/aos-memory-project/code` | 部分 Go 源码 | E5 | 感知、动作、验证、规则和技能蒸馏局部机制 | MemoryStore、MCP、索引和完整部署能力 |
 
-### 2.1 2026-07-15 E2 产品确认增量
+### 2.1 2026-07-16 E2/E3 产品与监管增量
 
-独立方案评审第21章的产品回复及后续确认新增当前 E2 基线：三 Tab；手机号注册登录；全年龄人物资料由成年人本人、经核验监护人或纪念账户主控人管理；R3 Owner文字核心作为 Closed Pilot；Family/人物切换、受控 Publication/Visitor 和 Voice Clone 进入 Product MVP；Digital Human 与非必要媒体为 Beta Extension；Care/TimeLetter 后置；账号注销采用30日恢复、Visitor TTL为7日；当前百级用户采用 Startup Lean Profile。法律、未成年人/第三方/逝者高风险用途、Provider、地域、真机与生产证据不因 E2 确认自动关闭。
+当前增量基线：三 Tab；手机号注册登录；R3 Owner文字核心、自传、静态“Ta 的故事”、Family材料贡献、复制/导出/删除构成 M0；M0 的采集入口采用一个自然输入和最多两条动态推荐，由访谈编排器在用户控制下补充连续性与知识完整性；M1 只允许在世成年人本人私有Voice；M2 只允许在世主体主动发布和成年 Visitor 的文字/语音/DH；M3 承载老人健康与成人纪念逐案试点；M4 承载知识许可。未成年人虚拟亲属、未成年人 Voice/Persona、人格化促购、人格参与重大现实决策和无生前专项授权的逝者 Voice/DH 为硬拒绝。Provider、地域、真机、安全评估、算法备案与生产证据不因产品确认自动关闭。
 
 ### 2.2 审计基线与可复现性
 
@@ -69,24 +71,44 @@
 | 真机/provider | 未在 Round 1 重跑 | 只保留证据矩阵中的历史边界 | 状态=`EXTERNAL_NOT_RERUN` |
 | 签署时间 | 2026-07-12（Asia/Shanghai） | Task 27 Round 1/2 文档检查 | 任何后续代码提交都需要更新 commit 和受影响行 |
 
+### 2.3 2026-07-16 新规基线的实现缺口
+
+以下项目均是目标变化，不是当前代码已实现：
+
+| 新控制项 | 当前证据判断 | 安全默认 |
+| --- | --- | --- |
+| 未成年人虚拟亲属服务端硬阻断 | `MISSING`；当前 Family/Persona/feature flag 没有证明年龄+角色实质双重拒绝 | 所有未成年人 Persona/Voice/DH/Visitor route `DENY` |
+| M1 仅在世成年人本人训练声音 | `PARTIAL`；当前有录音/授权UI和Provider训练，但缺 subject=actor、成年人、随机语句和活体硬门，且存在 Family profile 路径 | 隐藏 Family 代录；不满足本人证明不发 Provider |
+| M2 成年 Visitor 与在世主体发布 | `MISSING`；无 Publication、adult verification、独立读取角色或Visitor authority | Publication/Visitor/DH 全部 default-off |
+| AI持续标识、依赖与2小时提醒 | `MISSING`；现有状态文案/数字人提示不能证明统一策略 | 禁止 M2/M3 人格化互动 |
+| UI/语音/关键词确定性退出 | `PARTIAL/MISSING`；现有页面关闭和runtime release不等于三通道即时退出，且未证明Persona不挽留 | 只提供中性文字或直接关闭人格能力 |
+| 危机切换中性助手与联系人 | `MISSING`；无统一风险判定、紧急联系人或演练 | 高风险表达拒绝 Persona/延迟/Provider effect |
+| 人格化促购与重大决策阻断 | `MISSING`；无服务端支付/高风险意图隔离证据 | Persona 不进入支付、医疗金融、法律或关系承诺链 |
+| 安全评估、算法备案、上架合规包 | `EXTERNAL_REQUIRED`；未见报告/备案/年度核验/上架材料证据 | M2/M3 `NO_GO` |
+| M0 本人数据复制/导出 | `PARTIAL`；只有QA导出，未形成产品化可读/可机读导出和第三方裁剪 | 不宣称可迁移，M0退出门保持开放 |
+| 平台/Provider 通用训练禁用 | `EXTERNAL_REQUIRED`；当前Provider合同和平台训练数据清单不足 | 私人/敏感正文、声音、人脸、健康和未成年人数据不进入通用训练 |
+| Interview Orchestrator 与 Thread 状态 | `MISSING`；未发现服务端 `InterviewSession/ConversationThread/ThreadPreference/InterviewDecision` Authority，也未证明每轮单问题、2至4轮总结和疲劳/跳过控制 | 退化为普通中性文字输入；不得宣称已实现结构化引导 |
+| 一个自然入口与两类动态推荐 | `MISSING`；未发现连续性/完整性固定角色、最多两条、去重、过期和少于两条的完整 UI/服务端合同 | 推荐默认关闭；自然输入保持可用，不用静态主题卡伪装动态推荐 |
+| Knowledge Dimension Coverage / Gap | `PARTIAL/MISSING`；现有 KBLite 可作为 Projection 输入，但没有六维覆盖、缺口、证据绑定或 Candidate 不计确认覆盖的实现证据 | 不显示完成百分比，不用 AI 推断或未确认 Candidate 驱动主动推荐 |
+
 ## 3. 已识别的跨文档冲突
 
 | ID | 冲突 | 当前安全默认 | 所需动作 |
 | --- | --- | --- | --- |
 | C-01 | 当前公开 IA 为“记忆档案 / 回响 / 我的”，Blueprint 建议“首页 / 记录 / 记忆 / 分身” | 已确认保留现有三 Tab，家人管理位于“我的” | 实现与真机验收 |
-| C-02 | 最新 PRD 将 Publication/Visitor 列为 P0，当前工程主线长期聚焦本人 Echo、家庭和关怀 | 已确认受控 Publication/Visitor 进入 Product MVP、不阻塞 Closed Pilot；仍不得把合同壳层误标为实现完成 | WP-S3-01 + G2/G4 |
-| C-03 | Blueprint 将 Family/Care/TimeLetter 后置，当前工程已实现其大量隐藏合同和部分 UI | Family/人物切换进入 Product MVP、不阻塞 Closed Pilot；Care/TimeLetter 后置并保持默认关闭 | Family 横切实现与 AuthZ |
-| C-04 | 产品已确认近亲属可创建逝者 MemorialVault，但当前工程的 Family role/voiceProfile 未实现 Controller、RepresentedPersona、关系证明、逝者生前意愿、RightsClaim 或 ConflictHold | 保留私人文字/合成数据原型；现有 family voice 不能迁为逝者授权或真实 Voice/DH capability | DR-004 已关闭产品边界；DR-036/Provider/法律与实现仍需关闭 |
-| C-05 | 最新 PRD 要求数据导出 P0，历史账号决策曾明确“不支持数据导出” | 首版不做自助批量导出；法定访问/复制/转移请求保留人工渠道和回执 | Data Rights 实现 + 法律流程 |
+| C-02 | 旧 PRD/7月15基线把 Publication/Visitor 放进统一 MVP；新规风险基线要求持续人格化互动后置 | M0 不开放 Visitor；M2 仅在世主体主动发布、成年 Visitor、独立副本/读取角色，并增加安全评估、算法备案与安全门 | WP-S3-01 + G2/G4/监管证据 |
+| C-03 | 当前工程已有 Family/Care/TimeLetter 隐藏合同和部分 UI，但新范围分层不同 | M0 只开放 Family 材料贡献、人物切换与静态故事；持续查询属M2；Care/TimeLetter后置 | Family 横切实现、AuthZ 与服务端阶段硬门 |
+| C-04 | 可创建逝者 MemorialVault，但当前 Family role/voiceProfile 未实现权利与安全模型 | M0 只保留静态纪念；现有 family voice 不能迁为逝者授权；无生前专项授权 Voice/DH=`NO_GO`，成人纪念互动最多进入M3逐案试点 | DR-004/036 + Provider/法律/监管与实现 |
+| C-05 | 旧产品回复“不支持首版导出”与新规风险基线、停服迁移和用户控制冲突 | M0 提供本人交互、资料、已确认记忆和自传的可读导出与可机读清单；第三方受限内容裁剪 | Data Rights 实现 + G4格式/裁剪验收 |
 | C-06 | 最新 PRD 要求独立公开人格知识域，当前 Knowledge 主要服务私人/家庭 Echo Context | 私人知识不得通过过滤视图直接公开 | 新建 Publication 边界设计 |
-| C-07 | 新 PRD 要求候选记忆审核，当前提取允许部分 observed 内容直接进入私人生成门禁 | 已确认引导问答 + 每5–10轮或退出批量确认；未确认内容不进确定性 QA/Publication | Candidate/Memory 实现与 legacy 迁移 |
-| C-08 | 最新 PRD 要求文字流式会话，当前核心 Echo 依赖火山实时语音与腾讯数字人链路 | 已确认文字 QA 先进入 Closed Pilot，Voice Clone 为 Product MVP、DH 为独立 Beta Extension；三条 runtime 分开验收 | Conversation + Voice G3/G4 |
+| C-07 | 新 PRD 要求候选记忆审核，当前提取允许部分 observed 内容直接进入私人生成门禁，且没有访谈编排与知识缺口控制 | 已确认一个自然入口、连续性/完整性双推荐、每轮单问题、2至4轮总结与每5–10轮或退出批量确认；未确认内容不进确定性 QA/Publication | ConversationThread/Orchestrator + Candidate/Memory 实现与 legacy 迁移 |
+| C-08 | 当前核心 Echo 依赖火山实时语音与腾讯数字人链路 | M0 中性文字 QA 独立；M1 仅在世成年人本人私有 Voice；M2 在世成年 DH；M3 成人纪念逐案。三条 runtime 分开验收 | Conversation + Voice/DH G3/G4/监管 |
 | C-09 | PRD 要求对象存储直传和 PDF/DOCX/OCR/ASR，当前媒体能力存在 mock upload intent 和部分 provider fallback | 不宣称文件处理 P0 完成 | 后端存储/任务方案 |
-| C-10 | PRD 将 Visitor 设为匿名分享入口，当前认证/ownership 主要面向注册用户和家庭授权 | 已确认仅认证或具有过期/限次 grant 的受邀访问，不开放匿名公共入口 | Visitor identity/AuthZ/限流实现 |
+| C-10 | PRD 将 Visitor 设为匿名分享入口，当前认证/ownership 主要面向注册用户和家庭授权 | M2 仅允许完成成年校验的认证/受邀访问；匿名、未成年人和 Family关系自动授权均拒绝 | Adult Visitor identity/AuthZ/限流/退出实现 |
 | C-11 | PRD 的账号删除要求全链路资产删除，当前实现包含 30 日 soft delete/一次恢复产品合同 | 已确认账号30日恢复；上传人删除自己的 Source 不可撤回并暂停依赖 | 分层 purge/provider receipt + G4 |
 | C-12 | AOS 分析声称 MemoryStore/Slot/Scatter 等能力，但本地包缺少完整实现 | 仅借鉴原则，不列为可集成组件 | 证据审计 |
-| C-13 | 36 条 FR 中有 32 条为 P0，优先级已无法表达 MVP 依赖和上线阻断关系 | 已按 Closed Pilot、Product MVP、Beta Extension 和规模触发重排115项；安全依赖仍先行 | Roadmap/Registry 同步 |
-| C-14 | PRD M0 要求声音克隆和可打断实时语音，Blueprint Phase A 不含 Voice | Voice Clone 是 Product MVP，DH 是独立 Beta Extension；两者失败均不阻断 Closed Pilot 文字降级 | Voice G3/G4 与真机 |
+| C-13 | 36 条 FR 中有 32 条为 P0，优先级无法表达阶段依赖 | 已按 M0-M4 和规模触发重映射115项；旧lane token仅作机器兼容 | Roadmap/Registry 同步 |
+| C-14 | 旧 PRD M0 要求声音克隆和实时语音，与新规风险分层冲突 | Voice不再阻塞M0；M1只允许在世成年人本人私用，DH进入M2/M3独立门 | Voice G3/G4、评估/备案与真机 |
 | C-15 | PRD 的 Source 包含“对话消息”，但未明确 assistant 回复是否可作为证据 | 已确认 `userEvidenceOnly`；assistant 只作上下文，用户陈述经批次确认后才入记忆 | 实现 typed Candidate batch |
 | C-16 | 删除 Source 只要求提示影响，记忆纠正后 Publication 只标记待确认，公开失效时点不明确 | 已确认 Source 删除/Memory修正/异议/grant过期立即 suspend 依赖 Publication | 撤回 SLO 与传播回执 |
 | C-17 | 地域、声音供应商、活体、音频留存和单位成本影响 MVP 架构 | 中国首发、认证/受邀 Visitor 已确认；具体 processor/跨境/Provider条款仍是外部门，精确预算暂缓但工程硬配额必须存在 | G3/G4 + 扩量预算 |
@@ -124,38 +146,38 @@
 | Requirement | PRD | iOS 实现 | 后端实现 | 决策门 | 外部门（未通过） | 当前暴露 | 实现成熟度 | 主交付阶段 | 主要证据/缺口 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | FR-ACC-001 | P0 | `IMPLEMENTED` session client | `PARTIAL` identity | CONFIRMED: DR-023/024; OPEN: DR-035 | SMS OTP、渗透、恢复 | PUBLIC_PARTIAL | `PARTIAL` | Stage 0 安全止损 | 手机号方案已确认；refresh/revoke 已有，但身份认领无强证明，client system token 必须移除 |
-| FR-ACC-002 | P0 | `PARTIAL` profile/family role | `MISSING` Persona/Memorial authority | CONFIRMED: DR-003/004/023; EXTERNAL: DR-022/036 | 身份、监护/关系核验、产品 UX | PUBLIC_PARTIAL | `PARTIAL` | Stage 1 + Family MVP | Profile/DigitalHumanContext/FamilyMember 不能替代服务端 Persona、ControllerAppointment 或 RepresentedPersona |
+| FR-ACC-002 | P0 | `PARTIAL` profile/family role | `MISSING` Persona/Memorial authority | CONFIRMED: DR-003/004/023; EXTERNAL: DR-022/036 | 身份、监护/关系核验、产品 UX | PUBLIC_PARTIAL | `PARTIAL` | M0 static Family | Profile/DigitalHumanContext/FamilyMember 不能替代服务端 Persona/ControllerAppointment；未成年人虚拟亲属和逝者互动不得由当前角色模型放行 |
 | FR-SRC-001 | P0 | `CONTRACT_ONLY` | `MOCK_ONLY` upload intent | OPEN: DR-026/031 | 对象存储、扫描、删除 | HIDDEN_QA | `MOCK_ONLY` | Stage 2 摄入与质量 | upload intent 为 `mock://`，无预签名直传 |
 | FR-SRC-002 | P0 | `PARTIAL` local media | `MISSING` processors | OPEN: DR-026/031 | OCR/ASR/parser、对象存储 | PUBLIC_PARTIAL | `PARTIAL` | Stage 2 摄入与质量 | 文字/照片本地能力存在；PDF/DOCX/OCR/ASR 与真实视频未闭环 |
 | FR-SRC-003 | P0 | `PARTIAL` | `IMPLEMENTED` metadata cascade | CONFIRMED: DR-011/039; OPEN: DR-035 | 对象/provider/备份删除 | PUBLIC_PARTIAL | `PARTIAL` | Stage 1 Owner 核心 | Source 删除语义已确认；Archive→KB cascade 已有，但无权威 Source/Object version 和完整回执 |
-| FR-CHAT-001 | P0 | `PARTIAL` Echo | `MISSING` Conversation messages | CONFIRMED: DR-008/015 | LLM streaming、来源 UX | PUBLIC_PARTIAL | `PARTIAL` | Stage 1 Owner 核心 | 产品形态已确认；无服务端文字 Message authority、历史重取和取消/重试合同 |
-| FR-CHAT-002 | P0 | `IMPLEMENTED` extraction client | `IMPLEMENTED` proposal API | CONFIRMED: DR-007/015; EXTERNAL: DR-031 | 模型质量/安全/处理商 | PUBLIC_PARTIAL | `PARTIAL` | Stage 1 Owner 核心 | 组件存在，但无 Source/Job/Candidate authority，不能按 FR 标 IMPLEMENTED |
-| FR-CHAT-003 | P0 | `CONTRACT_ONLY` governance | `MISSING` risk policy | CONFIRMED: DR-007/015; EXTERNAL: DR-022/036 | 安全/监护评审 | HIDDEN_QA | `CONTRACT_ONLY` | Stage 1 Owner 核心 | 批量确认节奏已确认；无低/中/高敏分级和完整体验 |
-| FR-VOICE-001 | P0 | `PARTIAL` capture/consent | `PARTIAL` training | CONFIRMED: DR-004/008/014/023/037; EXTERNAL: DR-022/026/031/036 | 活体、逝者/监护依据、质量、合规、真机 | BETA_UNVERIFIED | `PARTIAL` | Voice MVP | Voice 范围已确认；本人声音仍缺随机语句/活体/SNR，现有 family profile 不构成法律或用途授权 |
-| FR-VOICE-002 | P0 | `PARTIAL` profile UI | `PARTIAL` provider lifecycle | CONFIRMED: DR-011/037/039; EXTERNAL: DR-031 | provider deletion/receipt | BETA_UNVERIFIED | `PARTIAL` | Voice MVP | 试听/启停/删除 UI 有；可靠删除任务和回执缺失 |
-| FR-VOICE-003 | P0 | `IMPLEMENTED` runtime | `IMPLEMENTED` provider adapter | CONFIRMED: DR-008/014/037/039; DEFERRED: DR-027 exact budget | 真机、provider、SLO | BETA_UNVERIFIED | `IMPLEMENTED` | Voice MVP / DH Beta | PCM/打断代码存在；音色一致性、延迟和五轮稳定性未外部验收 |
-| FR-VOICE-004 | P0 | `MISSING` Visitor | `MISSING` public voice auth | CONFIRMED: DR-002/004/010/014/038; EXTERNAL: DR-036 | 权利依据、真机、provider、滥用 | DISABLED | `MISSING` | Voice MVP after MVP-P | 无 Visitor 域和声音独立授权；逝者公开 Voice/DH 不得复用 Owner Echo 或关系证明 |
-| FR-VOICE-005 | P0 | `PARTIAL` | `PARTIAL` | CONFIRMED: DR-004/028/037; EXTERNAL: DR-022/031/036 | 合规、provider、标识 | BETA_UNVERIFIED | `PARTIAL` | Voice MVP / DH Beta | 缺留存、显式/隐式标识、生成审计、近亲属异议、公开撤权和 provider 删除 SLA |
-| FR-MEM-001 | P0 | `HIDDEN_QA` service | `IMPLEMENTED` governance primitive | CONFIRMED: DR-007/015; OPEN: DR-034 | 审核 UX/迁移 | HIDDEN_QA | `CONTRACT_ONLY` | Stage 1 Owner 核心 | endpoint 有；批量确认产品规则已定，但无公开 Candidate Inbox、敏感审核和 authority |
-| FR-MEM-002 | P0 | `PARTIAL` | `IMPLEMENTED` projection version | CONFIRMED: DR-029; OPEN: DR-034 | migration/recovery | HIDDEN_QA | `PARTIAL` | Stage 1 Owner 核心 | Memory Ontology 已确认；仍缺 ConfirmedMemoryVersion authority 与类型化实现，legacy confirmed 需分级迁移 |
+| FR-CHAT-001 | P0 | `PARTIAL` Echo | `MISSING` Conversation messages | CONFIRMED: DR-008/015 | LLM streaming、来源 UX | PUBLIC_PARTIAL | `PARTIAL` | Stage 1 Owner 核心 | 一个自然输入的产品形态已确认；无服务端 Message authority、历史重取、InterviewSession/Thread 或取消/重试合同 |
+| FR-CHAT-002 | P0 | `IMPLEMENTED` extraction client | `IMPLEMENTED` proposal API | CONFIRMED: DR-007/015; EXTERNAL: DR-031 | 模型质量/安全/处理商 | PUBLIC_PARTIAL | `PARTIAL` | Stage 1 Owner 核心 | 提取组件存在，但无 Source/Job/Candidate authority，也无连续性/完整性推荐、知识缺口和访谈动作编排，不能按 FR 标 IMPLEMENTED |
+| FR-CHAT-003 | P0 | `CONTRACT_ONLY` governance | `MISSING` risk policy | CONFIRMED: DR-007/015; EXTERNAL: DR-022/036 | 安全/监护评审 | HIDDEN_QA | `CONTRACT_ONLY` | Stage 1 Owner 核心 | 批量确认与访谈节奏已确认；无跳过/暂缓/禁问 Authority、敏感推荐阻断、疲劳收束和完整体验 |
+| FR-VOICE-001 | P0 | `PARTIAL` capture/consent | `PARTIAL` training | CONFIRMED: DR-004/008/014/023/037; EXTERNAL: DR-026/031/036 | 在世本人、成年、随机语句、活体、质量、合规、真机 | BETA_UNVERIFIED | `PARTIAL` | M1 Living Self Voice | 当前仍缺随机语句/活体/SNR；现有 Family/Guardian/逝者入口必须硬拒绝，不能构成训练授权 |
+| FR-VOICE-002 | P0 | `PARTIAL` profile UI | `PARTIAL` provider lifecycle | CONFIRMED: DR-011/037/039; EXTERNAL: DR-031 | provider deletion/receipt | BETA_UNVERIFIED | `PARTIAL` | M1 | 试听/启停/删除 UI 有；可靠删除任务和回执缺失 |
+| FR-VOICE-003 | P0 | `IMPLEMENTED` runtime | `IMPLEMENTED` provider adapter | CONFIRMED: DR-008/014/037/039; DEFERRED: DR-027 exact budget | 真机、provider、SLO、标识 | BETA_UNVERIFIED | `IMPLEMENTED` | M1 Voice / M2 Living DH | PCM/打断代码存在；主体限制、音色一致性、延迟、五轮稳定性和监管安全未验收 |
+| FR-VOICE-004 | P0 | `MISSING` Visitor | `MISSING` public voice auth | CONFIRMED: DR-002/004/010/014/038; EXTERNAL: DR-036 | 成年身份、权利、安全评估/备案、真机、provider、滥用 | DISABLED | `MISSING` | M2 after Publication | 无成年 Visitor 域和声音独立授权；逝者 Voice/DH 不得复用 Owner Echo 或关系证明 |
+| FR-VOICE-005 | P0 | `PARTIAL` | `PARTIAL` | CONFIRMED: DR-004/028/037; EXTERNAL: DR-031/036 | 合规、provider、标识、评估/备案 | BETA_UNVERIFIED | `PARTIAL` | M1/M2/M3 split | 缺留存、显式/隐式标识、生成审计、依赖/退出/危机、近亲属异议、公开撤权和 provider 删除 SLA |
+| FR-MEM-001 | P0 | `HIDDEN_QA` service | `IMPLEMENTED` governance primitive | CONFIRMED: DR-007/015; OPEN: DR-034 | 审核 UX/迁移 | HIDDEN_QA | `CONTRACT_ONLY` | Stage 1 Owner 核心 | endpoint 有；批量确认产品规则已定，但无公开 Candidate Inbox、访谈批次来源、敏感审核和 authority |
+| FR-MEM-002 | P0 | `PARTIAL` | `IMPLEMENTED` projection version | CONFIRMED: DR-029; OPEN: DR-034 | migration/recovery | HIDDEN_QA | `PARTIAL` | Stage 1 Owner 核心 | Memory Ontology 已确认；仍缺 ConfirmedMemoryVersion authority、类型化实现及 DimensionCoverage/KnowledgeGap Projection，legacy confirmed 需分级迁移 |
 | FR-MEM-003 | P1 | `MISSING` | `MISSING` | INHERITS V4 | 模型评测 | DISABLED | `MISSING` | Stage 4 认知增强 | 当前 409 是同步并发冲突，不是语义冲突 |
 | FR-MEM-004 | P1 | `PARTIAL` graph/family | `CONTRACT_ONLY` | OPEN: DR-022/036 | 产品 UX/第三方政策 | HIDDEN_QA | `PARTIAL` | Stage 4 认知增强 | KBPerson 仅投影候选；无 Entity/Relation authority 与合并管理 |
 | FR-QA-001 | P0 | `IMPLEMENTED` Echo/Context | `IMPLEMENTED` private context | CONFIRMED: DR-007/008; OPEN: DR-034 | LLM质量、来源 UX | PUBLIC_PARTIAL | `PARTIAL` | Stage 1 Owner 核心 | Context trace 成熟；无 Memory authority、文字 QA 和完整可点击引用 |
 | FR-QA-002 | P1 | `CONTRACT_ONLY` | `IMPLEMENTED` governance primitive | CONFIRMED: DR-007/015 | 产品 UX/质量 | HIDDEN_QA | `CONTRACT_ONLY` | Stage 1/2 | 无“回答错误→定位来源→修正 Candidate”的公开闭环 |
-| FR-PUB-001 | P0 | `MISSING` | `MISSING` | CONFIRMED: DR-002/006/016/033; EXTERNAL: DR-022 | 隐私、安全、第三方规则 | DISABLED | `MISSING` | MVP-P | 产品范围已确认；`isPrivate=false` 不是 Publication snapshot |
-| FR-PUB-002 | P0 | `MISSING` | `MISSING` | CONFIRMED: DR-006/016/039 | 索引失效/撤回 SLO | DISABLED | `MISSING` | MVP-P | 无撤回、Public Index/cache 失效和会话策略 |
-| FR-PUB-003 | P0 | `MISSING` | `MISSING` | CONFIRMED: DR-002/006; REJECTED: DR-018 absolute claims; EXTERNAL: DR-022 | 法务/AI标识 | DISABLED | `MISSING` | MVP-P | 无 PublicPersona、主题 policy 和持续 AI 披露 |
-| FR-VIS-001 | P0 | `MISSING` | `MISSING` | CONFIRMED: DR-010/038; EXTERNAL: DR-022 | 限流、身份、第三方规则 | DISABLED | `MISSING` | MVP-P | 已确认认证/受邀与7日TTL；无 share grant、Visitor principal、暂停/关闭 |
-| FR-VIS-002 | P0 | `MISSING` | `MISSING` | CONFIRMED: DR-006/010/038 | LLM/注入/隔离 | DISABLED | `MISSING` | MVP-P | 无独立 public retrieval 与固定安全评测 |
-| FR-VIS-003 | P1 | `MISSING` | `MISSING` | CONFIRMED: DR-010/038; EXTERNAL: DR-022 | 运营/举报流程 | DISABLED | `MISSING` | MVP-P | Owner不可见正文规则已确认；无举报、消息隐私和待处理区实现 |
+| FR-PUB-001 | P0 | `MISSING` | `MISSING` | CONFIRMED: DR-002/006/016/033 | 隐私、安全、在世发布主体、监管规则 | DISABLED | `MISSING` | M2 | `isPrivate=false` 不是 Publication snapshot；逝者人格副本不进入M2 |
+| FR-PUB-002 | P0 | `MISSING` | `MISSING` | CONFIRMED: DR-006/016/039 | 索引失效/撤回 SLO | DISABLED | `MISSING` | M2 | 无独立读取角色、撤回、Public Index/cache失效和会话策略 |
+| FR-PUB-003 | P0 | `MISSING` | `MISSING` | CONFIRMED: DR-002/006; REJECTED: DR-018 absolute claims | AI标识、安全评估、算法备案 | DISABLED | `MISSING` | M2 | 无在世 PublicPersona、成年人策略、持续AI披露、依赖/退出/危机合同 |
+| FR-VIS-001 | P0 | `MISSING` | `MISSING` | CONFIRMED: DR-010/038 | 成年身份、限流、联系人、第三方规则 | DISABLED | `MISSING` | M2 | 无 adult verification、share grant、Visitor principal、暂停/关闭 |
+| FR-VIS-002 | P0 | `MISSING` | `MISSING` | CONFIRMED: DR-006/010/038 | LLM/注入/隔离/依赖/退出/危机 | DISABLED | `MISSING` | M2 | 无独立 public retrieval、安全评测、2小时提醒和确定性退出 |
+| FR-VIS-003 | P1 | `MISSING` | `MISSING` | CONFIRMED: DR-010/038 | 运营/投诉/举报流程 | DISABLED | `MISSING` | M2 | Owner不可见正文规则已确认；无投诉举报、消息隐私和待处理区实现 |
 | FR-PRIV-001 | P0 | `PARTIAL` Knowledge/Echo scope | `PARTIAL` ownership shadow/system token | CONFIRMED: DR-023/024; OPEN: DR-035 | 渗透、生产隔离 | CROSS_CUTTING | `PARTIAL` | Stage 0 安全止损 | Archive/Memoir/Conversation 清理不完整；全局 enforce/强身份缺失 |
 | FR-PRIV-002 | P0 | `PARTIAL` privacy scope | `PARTIAL` | CONFIRMED: DR-004; OPEN: DR-035; EXTERNAL: DR-036 | 隐私/法律评审 | CROSS_CUTTING | `PARTIAL` | Stage 0 安全止损 | 需拆 sensitivity、basis/consent、access/visibility、publication、Memorial capability 与 conflict hold |
-| FR-PRIV-003 | P0 | `PARTIAL` family private | `PARTIAL` context policy | CONFIRMED: DR-003/004; EXTERNAL: DR-022/036 | 合规/关系证明/权利请求 | CROSS_CUTTING | `PARTIAL` | Stage 0 + Family MVP | 无第三方/未成年人/逝者按用途政策、近亲属 RightsRequest 与争议冻结实现 |
-| FR-PRIV-004 | P0 | `PARTIAL` QA export | `MISSING` product export | CONFIRMED: DR-005/039; OPEN: DR-035 | 合规/人工权利渠道/大对象 | HIDDEN_QA | `PARTIAL` | Stage 1 Data Rights | 已确认首版无自助批量导出但保留法定人工渠道；当前实现仍缺产品 Data Rights 流程 |
+| FR-PRIV-003 | P0 | `PARTIAL` family private | `PARTIAL` context policy | CONFIRMED: DR-003/004; EXTERNAL: DR-022/036 | 合规/关系证明/权利请求 | CROSS_CUTTING | `PARTIAL` | M0 静态家庭贡献 + M2/M3 独立高风险门 | 无第三方/逝者按用途政策、近亲属 RightsRequest 与争议冻结实现；未成年人虚拟亲属/Voice/Persona 还缺服务端硬拒绝 |
+| FR-PRIV-004 | P0 | `PARTIAL` QA export | `MISSING` product export | CONFIRMED: DR-005/039; OPEN: DR-035 | 格式、第三方裁剪、停服迁移、大对象 | HIDDEN_QA | `PARTIAL` | M0 Data Rights | 新基线要求本人数据可读导出和可机读清单；当前只有QA导出，缺正式复制/删除/导出流程 |
 | FR-PRIV-005 | P0 | `PARTIAL` soft-delete UI | `PARTIAL` restore/purge | CONFIRMED: DR-011/039; OPEN: DR-035 | 对象/provider/备份 | PUBLIC_PARTIAL | `PARTIAL` | Stage 0 安全止损 | 30日语义已确认；缺 Account 状态机、全 session revoke、purge/receipt/恢复演练 |
-| FR-PRIV-006 | P0 | `PARTIAL` voice scope | `PARTIAL` | CONFIRMED: DR-004/037; EXTERNAL: DR-031/036 | provider/合规/真机 | BETA_UNVERIFIED | `PARTIAL` | Voice MVP / DH Beta | 纪念人格产品方向已确认；逝者意愿、Voice/DH 法律依据、标识和最高敏感治理仍是前置 |
-| FR-SAFE-001 | P0 | `MISSING` structured crisis flow | `MISSING` | CONFIRMED: DR-025; EXTERNAL: DR-026/036 | 内容安全、地区资源、安全评测 | CROSS_CUTTING | `MISSING` | Stage 0 安全止损 | 产品规则已确认，仍必须在所有已暴露入口实现 |
-| FR-SAFE-002 | P0 | `MISSING` Visitor abuse UX | `MISSING` public limiter | CONFIRMED: DR-010/038; EXTERNAL: DR-022 | 压测、公网、安全 | DISABLED | `MISSING` | MVP-P | 已确认7日TTL；无限流、抓取/注入防护和举报实现 |
+| FR-PRIV-006 | P0 | `PARTIAL` voice scope | `PARTIAL` | CONFIRMED: DR-004/037; EXTERNAL: DR-031/036 | provider/合规/真机/监管 | BETA_UNVERIFIED | `PARTIAL` | M1/M2/M3 split | M1仅在世本人；M2在世DH；M3成人纪念逐案；无生前授权逝者复刻=`NO_GO` |
+| FR-SAFE-001 | P0 | `MISSING` structured safety flow | `MISSING` | CONFIRMED: DR-025; EXTERNAL: DR-026/036 | 年龄/联系人、地区资源、安全评估、算法备案 | CROSS_CUTTING | `MISSING` | Stage 0 + M2/M3 | 缺持续AI标识、依赖/2小时提醒、三通道退出、危机切换和人格化促购/重大决策阻断 |
+| FR-SAFE-002 | P0 | `MISSING` Visitor abuse UX | `MISSING` public limiter | CONFIRMED: DR-010/038 | 成年身份、压测、公网、安全、投诉 | DISABLED | `MISSING` | M2 | 已确认7日TTL；无成年校验、限流、抓取/注入、依赖/退出/危机和举报实现 |
 | FR-OPS-001 | P0 | `PARTIAL` QA/runtime status | `CONTRACT_ONLY` | CONFIRMED: DR-024; OPEN: DR-035 | 运维/故障演练 | HIDDEN_QA | `CONTRACT_ONLY` | Stage 1 Foundation | 无统一 Job、WorkAuthorization、重试/超时和最小 Operator 面 |
 | FR-OPS-002 | P0 | `PARTIAL` Echo evidence | `PARTIAL` provider logs | CONFIRMED: DR-032/039; DEFERRED: DR-027 exact budget | 运维、成本、负载 | HIDDEN_QA | `PARTIAL` | Stage 1 + DFX | DFX已确认，但无集中 model/prompt/version/token/cost/latency 审计与完整 measurement contract 实现 |
 | FR-OPS-003 | P0 | `PARTIAL` operation receipts | `PARTIAL` | CONFIRMED: DR-024/039; OPEN: DR-035 | 安全审计/恢复 | CROSS_CUTTING | `PARTIAL` | Stage 0 安全止损 | Knowledge receipt 不覆盖发布、人工数据权利、删除、管理员访问和 legal hold |
@@ -167,13 +189,13 @@
 | Account / Auth | `PARTIAL` | `BackendAuthSessionStore` 使用 Keychain 保存 opaque access/refresh session；client 支持 401 refresh coalescing；`UserManager` 已串行化账号切换副作用 | 登录 UI 仍是手机号+密码，真实身份校验由后端缺口阻断；client 仍可发送共享 API token。证据：`BackendAuthSessionStore.swift:53`、`DreamJourneyBackendClient.swift:3738`、`:3838`、`LoginViewController.swift:231` |
 | Archive / Source / Media | `PARTIAL` | 公开 Archive 支持文字、照片、本地详情、metadata sync、sourceRef/owner/persona 字段；音频录制和时间信件有本地生命周期 | 尚无独立 Source Domain；视频入口明确只生成 mock；audio/video upload 默认关闭且后端 intent 为 mock。证据：`MemoryArchiveItem.swift`、`MemoryArchiveRepository.swift:297`、`MemoryArchiveVideoEntryViewController.swift:76` |
 | Knowledge / Memory | `IMPLEMENTED`（Projection） / `MISSING`（V4 权威模型） | KBLite 多账号图谱、evidence/source、Mutation V2、三方合并、governance、change feed、receipt、Context policy 均有代码与 gate | 当前是 Knowledge Projection，不是 Source/Candidate/Canonical Memory 权威模型；审核 UX 和正式记忆版本域缺失。证据：`KBLiteManager.swift`、`KnowledgeSyncCoordinator.swift`、`KnowledgeGenerationPolicy.swift` |
-| Echo / Conversation | `PARTIAL` + `EXTERNAL_ACCEPTANCE` | Echo 状态机、Context Packet、延迟回信、ASR/TTS、barge-in、audio owner、数字人生命周期与 QA evidence 很完整 | 没有服务端 Conversation/Message 权威存储和独立文字流式会话；生产语音延迟与多轮稳定性依赖真机/provider。证据：`DialogEngineManager.swift`、`EchoViewController.swift:3488`、`:4498` |
+| Echo / Conversation | `PARTIAL` + `EXTERNAL_ACCEPTANCE` | Echo 状态机、Context Packet、延迟回信、ASR/TTS、barge-in、audio owner、数字人生命周期与 QA evidence 很完整 | 没有服务端 Conversation/Message 权威存储和独立文字流式会话；也没有一个自然入口/双推荐、Interview Orchestrator、ThreadPreference、疲劳/禁问与知识覆盖 Projection 的实现证据。生产语音延迟与多轮稳定性依赖真机/provider。证据：`DialogEngineManager.swift`、`EchoViewController.swift:3488`、`:4498` |
 | Voice Clone / TTS / ASR | `PARTIAL` + `EXTERNAL_ACCEPTANCE` | iOS 只经后端训练/查询/合成，存在授权确认、轮询、试听、启停/删除 UI 和 role voice selection | 缺随机授权语句、活体/本人证明、SNR 质量门、private/public 双授权和 provider 删除回执；家庭音色能力与新 PRD 冲突。证据：`VoiceCloneService.swift:139`、`:545`、`ProfileVoiceCloneShellViewController.swift:129` |
 | Tencent Digital Human | `IMPLEMENTED` + `EXTERNAL_ACCEPTANCE` | `DigitalHumanRuntime` protocol、factory、真实 SDK/stub/audio-only fallback、text/PCM drive、interrupt/close 和 lease 生命周期已抽象 | 配额、素材授权、音频/口型和供应商会话仍需真实环境；不应作为私人记忆闭环的前置条件。证据：`DigitalHumanRuntime.swift:51`、`DigitalHumanRuntimeFactory.swift:20`、`EchoViewController.swift:4161` |
-| Family / Persona / Care | `PARTIAL` / `CONTRACT_ONLY` | Family invitation authority、persona context、授权 generation、Care snapshot/UI 状态和失败重试已有 | Family/人物切换已进入目标 MVP，但 Persona 尚非后端权威 Domain、委托查询与副本隔离未完成；Care 仍后置且缺同意、纠错和危机闭环。证据：`FamilyRepository.swift`、`DigitalHumanContextStore.swift`、`ProfileElderCareDashboardViewController.swift:93` |
+| Family / Persona / Care | `PARTIAL` / `CONTRACT_ONLY` | Family invitation authority、persona context、授权 generation、Care snapshot/UI 状态和失败重试已有 | M0 仅允许家庭材料贡献与静态人物查看；当前 Persona 尚非后端权威 Domain。M2 委托查询与发布副本隔离未完成；M3 Care 缺同意、纠错和危机闭环。证据：`FamilyRepository.swift`、`DigitalHumanContextStore.swift`、`ProfileElderCareDashboardViewController.swift:93` |
 | TimeLetter / Message | `PARTIAL` / `CONTRACT_ONLY` | 创建/草稿/封存/不可改删、openAt、收件人、本地通知、mailbox、已读/归档和统一消息壳层已实现 | APNs provider delivery 和稳定后台调度尚无完整验收；最新 Blueprint 将 TimeLetter 后置。证据：`MemoryArchiveTextEntryViewController.swift`、`MemoryArchiveRepository.swift:410`、`InAppMessageCenter.swift:181` |
 | Publication / Visitor | `MISSING` | 仅遗留 `MemoryRepository.getPublicByOwner()` 与 `isPrivate` 布尔、评论/点赞 mock social model | 无独立 Publication snapshot/index、public persona、Visitor/share/auth/rate-limit/feedback UI；不能复用 `isPrivate=false` 直接公开。证据：`MemoryRepository.swift:58`、`:112`，全工程无正式 Publication/Visitor 模块 |
-| Privacy / Delete / Export / Safety | `PARTIAL` | 知识本地文件保护、Echo QA 导出账号隔离、账号 soft-delete UI 和后端合同已有 | 首版无自助批量导出已确认，但人工法定权利流程未实现；30日注销/Source不可撤回删除缺完整传播；logout 不清全部本地业务数据；无结构化危机响应。证据：`ProfileViewController.swift:744`、`UserManager.swift:166`、`KBLiteMultiUser.swift:276` |
+| Privacy / Delete / Export / Safety | `PARTIAL` | 知识本地文件保护、Echo QA 导出账号隔离、账号 soft-delete UI 和后端合同已有 | M0 要求的交互数据复制、可读导出、机器可读清单和删除状态尚未形成完整自助闭环；30日注销/Source不可撤回删除缺完整传播；logout 不清全部本地业务数据；无 2 小时提醒、确定性退出和结构化危机响应。证据：`ProfileViewController.swift:744`、`UserManager.swift:166`、`KBLiteMultiUser.swift:276` |
 
 ### 6.1 iOS P0 风险
 
@@ -187,8 +209,8 @@
 
 - `KBLiteManager + KnowledgeSyncCoordinator`：保留为客户端 Projection/Cache 与离线 pending，不升级为产品事实源。
 - `KnowledgeGenerationPolicy + Context Packet`：保留证据、persona、权限过滤和可观察 trace。
-- `DigitalHumanRuntime` adapter：保留供应商隔离和 audio-only fallback，作为独立 Beta，不阻断文字/Voice MVP。
-- Echo lifecycle/audio owner/generation guards：保留为 Voice MVP 与 DH Beta 的稳定运行层。
+- `DigitalHumanRuntime` adapter：保留供应商隔离和 audio-only fallback，作为 M2/M3 独立运行层，不阻断 M0 文字核心或 M1 本人私有 Voice。
+- Echo lifecycle/audio owner/generation guards：保留为 M1 本人 Voice、M2 在世主体 Voice/DH 与 M3 成人纪念互动的稳定运行层，但三层授权和资产不得复用。
 - `MemoryArchiveItem/Repository` 的 owner/persona/source metadata：作为 Source 迁移输入，不能直接视为 Source 权威模型。
 - `FeatureFlagService` 机制：保留开关能力，但需改为 server/release policy 驱动并修正默认值。
 
@@ -343,7 +365,7 @@ mock URL、设备路径、Provider临时URL、base64响应或“本地已保存�
 | Independent reviews | `REVIEWED` | iOS IAR-01..07、Backend BAR-01..07、Security/Ops SOR-01..08 三份只读报告 | 报告范围不是全仓/生产证明，finding严重度不等于代码已修 |
 | Finding disposition | `DESIGNED` | 22项均映射 disposition、CR-01..12、WP工作包和owner/gate | `ACCEPTED_*` 只表示纳入目标/路线，不表示实现或外部验收完成 |
 | Stage 0 hardening | `RECOMMENDED` / `NOT_IMPLEMENTED` | Product Spec 3.1补AccountLease、credential、DB readiness/restore、delete receipt、async effect、ops/cost | 当前代码仍存在评审列出的BLOCKER/HIGH；生产enforce/rotation/restore尚无证据 |
-| Overdesign control | `PRODUCT_CONFIRMED / DESIGNED` | 百级用户采用 Startup Lean；R3 Owner文字核心形成Closed Pilot，Family/Publication/Voice 为Product MVP门，DH/非必要媒体为Beta Extension，Care/TimeLetter后置 | 已有代码尚需 server policy、Authority、外部门和兼容/退役计划 |
+| Overdesign control | `PRODUCT_CONFIRMED / DESIGNED` | 百级用户采用 Startup Lean；M0 先验证记忆资产，M1 独立验证在世本人私有 Voice，M2 再开放在世主体 Publication/成年 Visitor/DH，M3/M4 后置 | 已有代码尚需 server policy、Authority、监管/外部门和兼容/退役计划 |
 | External decisions | `PARTIALLY_CONFIRMED / EXTERNAL_ACCEPTANCE` | DR-023/024/028/037/039/040/042/043 已确认；DR-022/026/031/036 和 DR-035 仍有外部/待确认门 | 法律、地域、Provider条款、RPO/RTO、真机/生产门未关闭；精确成本 DR-027 暂缓 |
 
 Round 3D 响应完成不改变任何 FR 的实现成熟度。代码修复、凭据轮换、生产 AuthZ、真实 Postgres/restore、Provider/delete 和真机结果只能由 Round 4/5 的对应 artifact 升级。
