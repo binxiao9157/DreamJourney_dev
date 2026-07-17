@@ -36,20 +36,28 @@ final class MemoirTTSService {
 
     static let shared = MemoirTTSService()
 
+    private struct SynthesisOperation: Equatable {
+        let id: UUID
+        let accountLease: AccountLease
+    }
+
     // MARK: - 配置
 
     /// 音频存储目录
     private let audioDirectory: URL
     /// TTS 合成元数据缓存目录
     private let cacheDirectory: URL
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
 
     // MARK: - 合成状态
 
-    private var isSynthesizing = false
+    private let stateLock = NSLock()
+    private var activeSynthesisOperation: SynthesisOperation?
 
     // MARK: - Init
 
-    private init() {
+    private init(accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared) {
+        self.accountLeaseRuntime = accountLeaseRuntime
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         audioDirectory = appSupport.appendingPathComponent("memoir_audio", isDirectory: true)
         cacheDirectory = appSupport.appendingPathComponent("memoir_tts_cache", isDirectory: true)
@@ -75,6 +83,12 @@ final class MemoirTTSService {
             return
         }
 
+        guard let accountLease = accountLeaseRuntime.capture(forSubjectId: memoir.authorId),
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            completion(.failure(.accountSessionChanged))
+            return
+        }
+
         guard let speakerId = memoir.speakerId ?? VoiceCloneService.shared.currentUsableSpeakerId,
               !speakerId.isEmpty else {
             completion(.failure(.noSpeakerId))
@@ -86,22 +100,39 @@ final class MemoirTTSService {
             return
         }
 
-        guard !isSynthesizing else {
+        guard let operation = beginSynthesis(accountLease: accountLease) else {
             completion(.failure(.alreadySynthesizing))
             return
         }
 
-        isSynthesizing = true
-
         // 先检查音色是否就绪
-        VoiceCloneService.shared.isVoiceReady(speakerId: speakerId) { [weak self] ready in
-            guard let self = self else { return }
-            if !ready {
-                self.isSynthesizing = false
-                completion(.failure(.voiceNotReady))
+        VoiceCloneService.shared.isVoiceReady(
+            speakerId: speakerId,
+            accountLease: accountLease
+        ) { [weak self] ready in
+            guard let self,
+                  self.isCurrent(operation),
+                  self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+                self?.finishSynthesis(operation)
                 return
             }
-            self.performSynthesis(memoir: memoir, speakerId: speakerId, speed: speed, volume: volume, completion: completion)
+            if !ready {
+                self.finishSynthesis(operation)
+                self.deliver(
+                    .failure(.voiceNotReady),
+                    accountLease: accountLease,
+                    completion: completion
+                )
+                return
+            }
+            self.performSynthesis(
+                memoir: memoir,
+                speakerId: speakerId,
+                speed: speed,
+                volume: volume,
+                operation: operation,
+                completion: completion
+            )
         }
     }
 
@@ -189,7 +220,15 @@ final class MemoirTTSService {
                                    speakerId: String,
                                    speed: Int,
                                    volume: Int,
+                                   operation: SynthesisOperation,
                                    completion: @escaping (Result<URL, TTSError>) -> Void) {
+
+        let accountLease = operation.accountLease
+        guard isCurrent(operation),
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            finishSynthesis(operation)
+            return
+        }
 
         DDLogInfo("[MemoirTTS] 通过后端合成: memoirId=\(memoir.id), speakerId=\(speakerId), 文本长度=\(memoir.prose.count)")
         DreamJourneyBackendClient.shared.requestVoiceCloneSynthesis(
@@ -201,41 +240,169 @@ final class MemoirTTSService {
             speechRate: speed,
             loudnessRate: volume
         ) { [weak self] result in
-            guard let self = self else { return }
-            self.isSynthesizing = false
+            guard let self,
+                  self.isCurrent(operation),
+                  self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+                self?.finishSynthesis(operation)
+                return
+            }
             switch result {
             case .success(let synthesis):
                 guard let audioData = synthesis.audioData, !audioData.isEmpty else {
+                    self.finishSynthesis(operation)
                     DDLogError("[MemoirTTS] 后端合成音频为空或无法解码")
-                    completion(.failure(.synthesisFailed("合成音频解码失败")))
+                    self.deliver(
+                        .failure(.synthesisFailed("合成音频解码失败")),
+                        accountLease: accountLease,
+                        completion: completion
+                    )
                     return
                 }
                 let audioFormat = Self.normalizedAudioFormat(synthesis.audioFormat)
                 let outputPath = self.audioFileURL(for: memoir.id, audioFormat: audioFormat)
+                let cacheEntry = MemoirTTSCacheEntry(
+                    memoirId: memoir.id,
+                    audioFileURL: outputPath,
+                    voiceProfileId: synthesis.voiceProfileId,
+                    textHash: Self.textHash(for: memoir.prose),
+                    audioFormat: audioFormat,
+                    visemeTimeline: synthesis.visemeTimeline,
+                    createdAt: Date(),
+                    providerMode: synthesis.providerMode
+                )
                 do {
-                    try audioData.write(to: outputPath, options: .atomic)
-                    let cacheEntry = MemoirTTSCacheEntry(
-                        memoirId: memoir.id,
-                        audioFileURL: outputPath,
-                        voiceProfileId: synthesis.voiceProfileId,
-                        textHash: Self.textHash(for: memoir.prose),
-                        audioFormat: audioFormat,
-                        visemeTimeline: synthesis.visemeTimeline,
-                        createdAt: Date(),
-                        providerMode: synthesis.providerMode
+                    try self.commitSynthesisArtifacts(
+                        audioData: audioData,
+                        cacheEntry: cacheEntry,
+                        operation: operation
                     )
-                    try self.saveCacheEntry(cacheEntry)
+                    self.finishSynthesis(operation)
                     DDLogInfo("[MemoirTTS] 合成完成: \(outputPath.path), 大小=\(audioData.count) bytes, timeline=\(synthesis.visemeTimeline?.frames.count ?? 0)")
-                    completion(.success(outputPath))
+                    self.deliver(
+                        .success(outputPath),
+                        accountLease: accountLease,
+                        completion: completion
+                    )
                 } catch {
+                    self.finishSynthesis(operation)
                     DDLogError("[MemoirTTS] 写入文件失败: \(error.localizedDescription)")
-                    completion(.failure(.synthesisFailed("文件写入失败")))
+                    if self.accountLeaseRuntime.validate(accountLease, at: .ui).allowed {
+                        completion(.failure(.synthesisFailed("文件写入失败")))
+                    }
                 }
             case .failure(let error):
+                self.finishSynthesis(operation)
                 DDLogError("[MemoirTTS] 后端合成请求失败: \(error.localizedDescription)")
-                self.deleteAudio(for: memoir.id)
-                completion(.failure(.networkError(error.localizedDescription)))
+                self.deliver(
+                    .failure(.networkError(error.localizedDescription)),
+                    accountLease: accountLease,
+                    completion: completion
+                )
             }
+        }
+    }
+
+    private func beginSynthesis(accountLease: AccountLease) -> SynthesisOperation? {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        if let activeSynthesisOperation,
+           accountLeaseRuntime.validate(activeSynthesisOperation.accountLease, at: .runtime).allowed {
+            return nil
+        }
+        let operation = SynthesisOperation(id: UUID(), accountLease: accountLease)
+        activeSynthesisOperation = operation
+        return operation
+    }
+
+    private func isCurrent(_ operation: SynthesisOperation) -> Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return activeSynthesisOperation == operation
+    }
+
+    private func finishSynthesis(_ operation: SynthesisOperation) {
+        stateLock.lock()
+        if activeSynthesisOperation == operation {
+            activeSynthesisOperation = nil
+        }
+        stateLock.unlock()
+    }
+
+    private func deliver<T>(
+        _ result: Result<T, TTSError>,
+        accountLease: AccountLease,
+        completion: @escaping (Result<T, TTSError>) -> Void
+    ) {
+        guard accountLeaseRuntime.validate(accountLease, at: .ui).allowed else { return }
+        completion(result)
+    }
+
+    private func stagingFileURL(
+        for finalURL: URL,
+        operation: SynthesisOperation
+    ) -> URL {
+        finalURL.deletingLastPathComponent().appendingPathComponent(
+            ".\(finalURL.lastPathComponent).\(operation.id.uuidString).staging"
+        )
+    }
+
+    private func commitSynthesisArtifacts(
+        audioData: Data,
+        cacheEntry: MemoirTTSCacheEntry,
+        operation: SynthesisOperation
+    ) throws {
+        let accountLease = operation.accountLease
+        guard isCurrent(operation),
+              accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            throw TTSError.accountSessionChanged
+        }
+
+        let audioURL = cacheEntry.audioFileURL
+        let metadataURL = cacheFileURL(for: cacheEntry.memoirId)
+        let stagedAudioURL = stagingFileURL(for: audioURL, operation: operation)
+        let stagedMetadataURL = stagingFileURL(for: metadataURL, operation: operation)
+        defer {
+            try? FileManager.default.removeItem(at: stagedAudioURL)
+            try? FileManager.default.removeItem(at: stagedMetadataURL)
+        }
+
+        try audioData.write(to: stagedAudioURL, options: .atomic)
+        try saveCacheEntry(cacheEntry, to: stagedMetadataURL)
+        guard isCurrent(operation),
+              accountLeaseRuntime.validate(accountLease, at: .commit).allowed,
+              let stagedMetadata = try? Data(contentsOf: stagedMetadataURL) else {
+            throw TTSError.accountSessionChanged
+        }
+
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        guard activeSynthesisOperation == operation,
+              accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            throw TTSError.accountSessionChanged
+        }
+
+        let previousAudio = try? Data(contentsOf: audioURL)
+        let previousMetadata = try? Data(contentsOf: metadataURL)
+        do {
+            try audioData.write(to: audioURL, options: .atomic)
+            try stagedMetadata.write(to: metadataURL, options: .atomic)
+            guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                restore(previousAudio, at: audioURL)
+                restore(previousMetadata, at: metadataURL)
+                throw TTSError.accountSessionChanged
+            }
+        } catch {
+            restore(previousAudio, at: audioURL)
+            restore(previousMetadata, at: metadataURL)
+            throw error
+        }
+    }
+
+    private func restore(_ data: Data?, at url: URL) {
+        if let data {
+            try? data.write(to: url, options: .atomic)
+        } else {
+            try? FileManager.default.removeItem(at: url)
         }
     }
 
@@ -247,12 +414,12 @@ final class MemoirTTSService {
         cacheDirectory.appendingPathComponent("\(memoirId).json")
     }
 
-    private func saveCacheEntry(_ entry: MemoirTTSCacheEntry) throws {
+    private func saveCacheEntry(_ entry: MemoirTTSCacheEntry, to fileURL: URL) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
         let data = try encoder.encode(entry)
-        try data.write(to: cacheFileURL(for: entry.memoirId), options: .atomic)
+        try data.write(to: fileURL, options: .atomic)
     }
 
     private func loadCacheEntry(for memoirId: String) -> MemoirTTSCacheEntry? {
@@ -312,6 +479,7 @@ final class MemoirTTSService {
 
 enum TTSError: LocalizedError {
     case apiKeyMissing
+    case accountSessionChanged
     case noSpeakerId
     case voiceNotReady         // 音色未训练完成
     case emptyText
@@ -324,6 +492,8 @@ enum TTSError: LocalizedError {
         switch self {
         case .apiKeyMissing:
             return "声音复刻合成后端未配置"
+        case .accountSessionChanged:
+            return "账号状态已变化，请重新进入后再合成"
         case .noSpeakerId:
             return "未找到声音复刻音色，请先完成声音复刻训练"
         case .voiceNotReady:

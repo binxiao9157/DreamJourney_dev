@@ -170,10 +170,14 @@ final class VoiceCloneService {
     /// 训练中的 speakerId（用于 checkPendingTraining 匹配）
     private var trainingSpeakerId: String?
     private var trainingPersonaTarget: VoiceClonePersonaTarget?
+    private var trainingAccountLease: AccountLease?
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
 
     // MARK: - Init
 
-    private init() {}
+    private init(accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared) {
+        self.accountLeaseRuntime = accountLeaseRuntime
+    }
 
     // MARK: - 公开 API
 
@@ -321,16 +325,41 @@ final class VoiceCloneService {
             return
         }
 
-        let userId = UserManager.shared.currentUser?.id ?? "default"
-        let target = currentPersonaTarget(userId: userId)
-        DreamJourneyBackendClient.shared.disableVoiceCloneProfile(userId: userId, profileId: trimmedProfileId) { [weak self] result in
+        guard let operation = activePersonaOperation() else {
+            completion(.failure(.accountSessionChanged))
+            return
+        }
+        let accountLease = operation.accountLease
+        let target = operation.target
+        DreamJourneyBackendClient.shared.disableVoiceCloneProfile(
+            userId: accountLease.subjectId,
+            profileId: trimmedProfileId
+        ) { [weak self] result in
+            guard let self,
+                  self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+                return
+            }
             switch result {
             case .success(let profile):
-                self?.persistBackendProfileIfUsable(profile, target: target)
-                completion(.success(VoiceCloneProfileSnapshot(backendContract: profile)))
+                guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                    return
+                }
+                self.persistBackendProfileIfUsable(profile, target: target)
+                guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                    return
+                }
+                self.deliver(
+                    .success(VoiceCloneProfileSnapshot(backendContract: profile)),
+                    accountLease: accountLease,
+                    completion: completion
+                )
             case .failure(let error):
                 DDLogError("[VoiceClone] 后端禁用失败: \(error.localizedDescription)")
-                completion(.failure(.networkError(error.localizedDescription)))
+                self.deliver(
+                    .failure(.networkError(error.localizedDescription)),
+                    accountLease: accountLease,
+                    completion: completion
+                )
             }
         }
     }
@@ -350,16 +379,41 @@ final class VoiceCloneService {
             return
         }
 
-        let userId = UserManager.shared.currentUser?.id ?? "default"
-        let target = currentPersonaTarget(userId: userId)
-        DreamJourneyBackendClient.shared.deleteVoiceCloneProfile(userId: userId, profileId: trimmedProfileId) { [weak self] result in
+        guard let operation = activePersonaOperation() else {
+            completion(.failure(.accountSessionChanged))
+            return
+        }
+        let accountLease = operation.accountLease
+        let target = operation.target
+        DreamJourneyBackendClient.shared.deleteVoiceCloneProfile(
+            userId: accountLease.subjectId,
+            profileId: trimmedProfileId
+        ) { [weak self] result in
+            guard let self,
+                  self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+                return
+            }
             switch result {
             case .success(let profile):
-                self?.persistBackendProfileIfUsable(profile, target: target)
-                completion(.success(VoiceCloneProfileSnapshot(backendContract: profile)))
+                guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                    return
+                }
+                self.persistBackendProfileIfUsable(profile, target: target)
+                guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                    return
+                }
+                self.deliver(
+                    .success(VoiceCloneProfileSnapshot(backendContract: profile)),
+                    accountLease: accountLease,
+                    completion: completion
+                )
             case .failure(let error):
                 DDLogError("[VoiceClone] 后端删除失败: \(error.localizedDescription)")
-                completion(.failure(.networkError(error.localizedDescription)))
+                self.deliver(
+                    .failure(.networkError(error.localizedDescription)),
+                    accountLease: accountLease,
+                    completion: completion
+                )
             }
         }
     }
@@ -379,17 +433,38 @@ final class VoiceCloneService {
             return
         }
 
-        let userId = UserManager.shared.currentUser?.id ?? "default"
-        let target = currentPersonaTarget(userId: userId)
-        DreamJourneyBackendClient.shared.acceptVoiceCloneQuality(userId: userId, profileId: trimmedProfileId) { [weak self] result in
+        guard let operation = activePersonaOperation() else {
+            completion(.failure(.accountSessionChanged))
+            return
+        }
+        let accountLease = operation.accountLease
+        let target = operation.target
+        DreamJourneyBackendClient.shared.acceptVoiceCloneQuality(
+            userId: accountLease.subjectId,
+            profileId: trimmedProfileId
+        ) { [weak self] result in
+            guard let self,
+                  self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+                return
+            }
             switch result {
             case .success(let profile):
                 let snapshot = VoiceCloneProfileSnapshot(backendContract: profile)
-                self?.persistSnapshot(snapshot, target: target)
-                completion(.success(snapshot))
+                guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                    return
+                }
+                self.persistSnapshot(snapshot, target: target)
+                guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                    return
+                }
+                self.deliver(.success(snapshot), accountLease: accountLease, completion: completion)
             case .failure(let error):
                 DDLogError("[VoiceClone] 音色试听确认失败: \(error.localizedDescription)")
-                completion(.failure(.networkError(error.localizedDescription)))
+                self.deliver(
+                    .failure(.networkError(error.localizedDescription)),
+                    accountLease: accountLease,
+                    completion: completion
+                )
             }
         }
     }
@@ -443,6 +518,42 @@ final class VoiceCloneService {
             return nil
         }
         return trimmed
+    }
+
+    private func activePersonaOperation() -> (accountLease: AccountLease, target: VoiceClonePersonaTarget)? {
+        guard let userId = UserManager.shared.currentUser?.id,
+              let accountLease = accountLeaseRuntime.capture(forSubjectId: userId),
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            return nil
+        }
+        return (accountLease, currentPersonaTarget(userId: accountLease.subjectId))
+    }
+
+    private func deliver<T>(
+        _ result: Result<T, VoiceCloneError>,
+        accountLease: AccountLease,
+        completion: @escaping (Result<T, VoiceCloneError>) -> Void
+    ) {
+        guard accountLeaseRuntime.validate(accountLease, at: .ui).allowed else { return }
+        completion(result)
+    }
+
+    private func clearTrainingStateIfOwned(
+        speakerId: String,
+        accountLease: AccountLease,
+        timer: Timer? = nil
+    ) {
+        guard trainingSpeakerId == speakerId,
+              trainingAccountLease == accountLease else {
+            timer?.invalidate()
+            return
+        }
+        timer?.invalidate()
+        pollTimer?.invalidate()
+        pollTimer = nil
+        trainingSpeakerId = nil
+        trainingPersonaTarget = nil
+        trainingAccountLease = nil
     }
 
     private func currentPersonaTarget(userId: String) -> VoiceClonePersonaTarget {
@@ -559,6 +670,13 @@ final class VoiceCloneService {
             return
         }
 
+        guard let operation = activePersonaOperation() else {
+            completion(.failure(.accountSessionChanged))
+            return
+        }
+        let accountLease = operation.accountLease
+        let target = operation.target
+
         // 读取音频文件并 base64 编码
         guard let audioData = try? Data(contentsOf: audioURL) else {
             completion(.failure(.audioReadFailed))
@@ -576,9 +694,9 @@ final class VoiceCloneService {
         }
 
         let base64Audio = audioData.base64EncodedString()
-
-        let userId = UserManager.shared.currentUser?.id ?? "default"
-        let target = currentPersonaTarget(userId: userId)
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            return
+        }
 
         // 失败/删除/禁用后的重试不能复用旧 speakerId，否则 provider 侧可能继续命中
         // 已经失败或归属错误的音色资源，导致 resource mismatch 一直存在。
@@ -591,7 +709,7 @@ final class VoiceCloneService {
         }
 
         let payload: [String: Any] = [
-            "userId": userId,
+            "userId": accountLease.subjectId,
             "voiceProfileId": finalSpeakerId,
             "sampleStatus": VoiceCloneSampleStatus.pending.rawValue,
             "sampleCount": 1,
@@ -608,22 +726,55 @@ final class VoiceCloneService {
 
         DDLogInfo("[VoiceClone] 通过后端提交音色训练: \(finalSpeakerId), scope=\(target.personaScope), digitalHumanId=\(target.digitalHumanId), 音频大小: \(audioData.count) bytes")
         DreamJourneyBackendClient.shared.saveVoiceCloneProfile(payload: payload) { [weak self] result in
-            guard let self else { return }
+            guard let self,
+                  self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+                return
+            }
             switch result {
             case .success(let profile):
+                guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                    return
+                }
                 self.persistBackendProfileIfUsable(profile, target: target)
+                guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                    return
+                }
                 DDLogInfo("[VoiceClone] 后端已接收音色训练: \(profile.voiceProfileId), status=\(profile.sampleStatus.rawValue)")
-                onProfileAccepted?(VoiceCloneProfileSnapshot(backendContract: profile))
+                if self.accountLeaseRuntime.validate(accountLease, at: .ui).allowed {
+                    onProfileAccepted?(VoiceCloneProfileSnapshot(backendContract: profile))
+                }
                 if profile.sampleStatus == .ready {
-                    completion(.success(profile.voiceProfileId))
+                    self.deliver(
+                        .success(profile.voiceProfileId),
+                        accountLease: accountLease,
+                        completion: completion
+                    )
                 } else if profile.sampleStatus == .failed {
-                    completion(.failure(.trainingFailed(code: 3, message: Self.trainingFailureMessage(from: profile.providerMessage))))
+                    self.deliver(
+                        .failure(
+                            .trainingFailed(
+                                code: 3,
+                                message: Self.trainingFailureMessage(from: profile.providerMessage)
+                            )
+                        ),
+                        accountLease: accountLease,
+                        completion: completion
+                    )
                 } else {
-                    self.startPollingStatus(speakerId: profile.voiceProfileId, target: target, completion: completion)
+                    self.startPollingStatus(
+                        speakerId: profile.voiceProfileId,
+                        target: target,
+                        accountLease: accountLease,
+                        completion: completion
+                    )
                 }
             case .failure(let error):
                 DDLogError("[VoiceClone] 后端训练请求失败: \(error.localizedDescription)")
-                completion(.failure(.networkError(error.localizedDescription)))
+                self.deliver(
+                    .failure(.networkError(error.localizedDescription)),
+                    accountLease: accountLease,
+                    completion: completion
+                )
             }
         }
     }
@@ -631,37 +782,69 @@ final class VoiceCloneService {
     /// 查询声音复刻训练状态
     func queryStatus(speakerId: String? = nil,
                      completion: @escaping (Result<VoiceCloneStatus, VoiceCloneError>) -> Void) {
-        let userId = UserManager.shared.currentUser?.id ?? "default"
-        let target = currentPersonaTarget(userId: userId)
-        queryStatus(speakerId: speakerId, target: target, completion: completion)
+        guard let operation = activePersonaOperation() else {
+            completion(.failure(.accountSessionChanged))
+            return
+        }
+        queryStatus(
+            speakerId: speakerId,
+            target: operation.target,
+            accountLease: operation.accountLease,
+            completion: completion
+        )
     }
 
     private func queryStatus(
         speakerId: String? = nil,
         target: VoiceClonePersonaTarget,
+        accountLease: AccountLease,
         completion: @escaping (Result<VoiceCloneStatus, VoiceCloneError>) -> Void
     ) {
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed,
+              accountLease.subjectId == target.userId else {
+            return
+        }
         guard DreamJourneyBackendClient.shared.isVoiceCloneProfileConfigured else {
-            completion(.failure(.apiKeyMissing))
+            deliver(.failure(.apiKeyMissing), accountLease: accountLease, completion: completion)
             return
         }
 
         let sid = speakerId ?? reusableSpeakerIdForTraining(target: target) ?? currentSpeakerId ?? ""
         guard !sid.isEmpty else {
-            completion(.failure(.speakerIdNotFound))
+            deliver(.failure(.speakerIdNotFound), accountLease: accountLease, completion: completion)
             return
         }
 
-        let userId = target.userId.isEmpty ? (UserManager.shared.currentUser?.id ?? "default") : target.userId
-        DreamJourneyBackendClient.shared.refreshVoiceCloneProfile(userId: userId, profileId: sid) { [weak self] result in
+        DreamJourneyBackendClient.shared.refreshVoiceCloneProfile(
+            userId: accountLease.subjectId,
+            profileId: sid
+        ) { [weak self] result in
+            guard let self,
+                  self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+                return
+            }
             switch result {
             case .success(let profile):
-                self?.persistBackendProfileIfUsable(profile, target: target)
+                guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                    return
+                }
+                self.persistBackendProfileIfUsable(profile, target: target)
+                guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                    return
+                }
                 DDLogInfo("[VoiceClone] 后端查询状态: speakerId=\(sid), status=\(profile.sampleStatus.rawValue)")
-                completion(.success(Self.cloneStatus(from: profile)))
+                self.deliver(
+                    .success(Self.cloneStatus(from: profile)),
+                    accountLease: accountLease,
+                    completion: completion
+                )
             case .failure(let error):
                 DDLogError("[VoiceClone] 后端查询失败: \(error.localizedDescription)")
-                completion(.failure(.networkError(error.localizedDescription)))
+                self.deliver(
+                    .failure(.networkError(error.localizedDescription)),
+                    accountLease: accountLease,
+                    completion: completion
+                )
             }
         }
     }
@@ -741,7 +924,43 @@ final class VoiceCloneService {
 
     /// 检查当前音色是否已就绪（可用）
     func isVoiceReady(speakerId: String? = nil, completion: @escaping (Bool) -> Void) {
-        queryStatus(speakerId: speakerId) { result in
+        guard let operation = activePersonaOperation() else {
+            completion(false)
+            return
+        }
+        isVoiceReady(
+            speakerId: speakerId,
+            accountLease: operation.accountLease,
+            target: operation.target,
+            completion: completion
+        )
+    }
+
+    func isVoiceReady(
+        speakerId: String? = nil,
+        accountLease: AccountLease,
+        completion: @escaping (Bool) -> Void
+    ) {
+        let target = currentPersonaTarget(userId: accountLease.subjectId)
+        isVoiceReady(
+            speakerId: speakerId,
+            accountLease: accountLease,
+            target: target,
+            completion: completion
+        )
+    }
+
+    private func isVoiceReady(
+        speakerId: String?,
+        accountLease: AccountLease,
+        target: VoiceClonePersonaTarget,
+        completion: @escaping (Bool) -> Void
+    ) {
+        queryStatus(
+            speakerId: speakerId,
+            target: target,
+            accountLease: accountLease
+        ) { result in
             switch result {
             case .success(let status):
                 completion(status == .success || status == .active)
@@ -758,25 +977,46 @@ final class VoiceCloneService {
         guard let speakerId = trainingSpeakerId ?? currentSpeakerId else { return }
         // 只有在有 pendingCompletion 时才检查（说明有等待方）
         guard pendingCompletion != nil || pollTimer != nil else { return }
-        let target = trainingPersonaTarget ?? currentPersonaTarget(userId: UserManager.shared.currentUser?.id ?? "default")
-        queryStatus(speakerId: speakerId, target: target) { [weak self] result in
-            guard let self = self else { return }
+        guard let accountLease = trainingAccountLease,
+              accountLeaseRuntime.validate(accountLease, at: .timer).allowed,
+              let target = trainingPersonaTarget else {
+            pollTimer?.invalidate()
+            pollTimer = nil
+            pendingCompletion = nil
+            trainingSpeakerId = nil
+            trainingPersonaTarget = nil
+            trainingAccountLease = nil
+            return
+        }
+        queryStatus(
+            speakerId: speakerId,
+            target: target,
+            accountLease: accountLease
+        ) { [weak self] result in
+            guard let self,
+                  self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+                return
+            }
             guard case .success(let status) = result,
                   status == .success || status == .active else {
                 return
             }
             DDLogInfo("[VoiceClone] 回前台检测到声音复刻已就绪: \(speakerId)")
-            // 在主线程停止轮询（Timer 注册在主线程 RunLoop）
-            DispatchQueue.main.async {
-                self.pollTimer?.invalidate()
-                self.pollTimer = nil
+            DispatchQueue.main.async { [weak self] in
+                guard let self,
+                      self.accountLeaseRuntime.validate(accountLease, at: .ui).allowed,
+                      self.trainingSpeakerId == speakerId,
+                      self.trainingAccountLease == accountLease else {
+                    return
+                }
+                let pending = self.pendingCompletion
+                self.pendingCompletion = nil
+                self.clearTrainingStateIfOwned(
+                    speakerId: speakerId,
+                    accountLease: accountLease
+                )
+                pending?(.success(speakerId))
             }
-            // 直接回调等待方，不通过通知
-            let completion = self.pendingCompletion
-            self.pendingCompletion = nil
-            self.trainingSpeakerId = nil
-            self.trainingPersonaTarget = nil
-            completion?(.success(speakerId))
         }
     }
 
@@ -786,10 +1026,22 @@ final class VoiceCloneService {
     ///   - speakerId: 要等待的音色 ID
     ///   - completion: 结果回调
     func waitForVoiceReady(speakerId: String, completion: @escaping (Result<String, VoiceCloneError>) -> Void) {
-        let target = currentPersonaTarget(userId: UserManager.shared.currentUser?.id ?? "default")
+        guard let operation = activePersonaOperation() else {
+            completion(.failure(.accountSessionChanged))
+            return
+        }
+        let accountLease = operation.accountLease
+        let target = operation.target
         // 先快速检查一次
-        queryStatus(speakerId: speakerId, target: target) { [weak self] result in
-            guard let self = self else { return }
+        queryStatus(
+            speakerId: speakerId,
+            target: target,
+            accountLease: accountLease
+        ) { [weak self] result in
+            guard let self,
+                  self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+                return
+            }
             let ready: Bool
             switch result {
             case .success(let status):
@@ -799,21 +1051,37 @@ final class VoiceCloneService {
             }
             if ready {
                 DDLogInfo("[VoiceClone] 音色已就绪，无需等待: \(speakerId)")
-                completion(.success(speakerId))
+                self.deliver(
+                    .success(speakerId),
+                    accountLease: accountLease,
+                    completion: completion
+                )
             } else {
                 DDLogInfo("[VoiceClone] 音色尚未就绪，开始轮询等待: \(speakerId)")
+                guard self.accountLeaseRuntime.validate(accountLease, at: .timer).allowed else {
+                    return
+                }
                 // 如果已有轮询在进行（比如 trainVoice 启动的），保存 completion 等轮询完成时回调
-                if self.pollTimer != nil {
+                if self.pollTimer != nil,
+                   self.trainingSpeakerId == speakerId,
+                   self.trainingAccountLease == accountLease {
                     // 轮询已在进行，只需注册回调
                     self.pendingCompletion = completion
                     self.trainingSpeakerId = speakerId
                     self.trainingPersonaTarget = target
+                    self.trainingAccountLease = accountLease
                 } else {
                     // 没有轮询在进行，启动新的轮询
-                    self.startPollingStatus(speakerId: speakerId, target: target, completion: completion)
+                    self.startPollingStatus(
+                        speakerId: speakerId,
+                        target: target,
+                        accountLease: accountLease,
+                        completion: completion
+                    )
                     self.pendingCompletion = nil  // startPollingStatus 自己管理 completion
                     self.trainingSpeakerId = speakerId
                     self.trainingPersonaTarget = target
+                    self.trainingAccountLease = accountLease
                 }
             }
         }
@@ -824,77 +1092,136 @@ final class VoiceCloneService {
     private func startPollingStatus(
         speakerId: String,
         target: VoiceClonePersonaTarget,
+        accountLease: AccountLease,
         completion: @escaping (Result<String, VoiceCloneError>) -> Void
     ) {
+        guard accountLeaseRuntime.validate(accountLease, at: .timer).allowed,
+              accountLease.subjectId == target.userId else {
+            return
+        }
         var pollCount = 0
         let maxPolls = 30  // 最多轮询 30 次，约 2.5 分钟
 
         pollTimer?.invalidate()
         trainingSpeakerId = speakerId
         trainingPersonaTarget = target
+        trainingAccountLease = accountLease
         pollTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] timer in
             guard let self = self else { timer.invalidate(); return }
-
-            pollCount += 1
-            if pollCount > maxPolls {
-                timer.invalidate()
-                self.pollTimer = nil
-                self.trainingSpeakerId = nil
-                self.trainingPersonaTarget = nil
-                let pending = self.pendingCompletion
+            guard self.accountLeaseRuntime.validate(accountLease, at: .timer).allowed,
+                  self.trainingSpeakerId == speakerId,
+                  self.trainingAccountLease == accountLease else {
+                self.clearTrainingStateIfOwned(
+                    speakerId: speakerId,
+                    accountLease: accountLease,
+                    timer: timer
+                )
                 self.pendingCompletion = nil
-                // 通知两个回调方
-                completion(.failure(.trainingTimeout))
-                pending?(.failure(.trainingTimeout))
                 return
             }
 
-            self.queryStatus(speakerId: speakerId, target: target) { result in
+            pollCount += 1
+            if pollCount > maxPolls {
+                let pending = self.pendingCompletion
+                self.pendingCompletion = nil
+                self.clearTrainingStateIfOwned(
+                    speakerId: speakerId,
+                    accountLease: accountLease,
+                    timer: timer
+                )
+                self.deliver(
+                    .failure(.trainingTimeout),
+                    accountLease: accountLease,
+                    completion: completion
+                )
+                if let pending {
+                    self.deliver(
+                        .failure(.trainingTimeout),
+                        accountLease: accountLease,
+                        completion: pending
+                    )
+                }
+                return
+            }
+
+            self.queryStatus(
+                speakerId: speakerId,
+                target: target,
+                accountLease: accountLease
+            ) { result in
+                guard self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+                    return
+                }
                 switch result {
                 case .success(let status):
                     switch status {
                     case .success, .active:
                         DDLogInfo("[VoiceClone] 音色训练完成: \(speakerId)")
                         if !target.isFamilyMember {
+                            guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                                return
+                            }
                             self.saveSampleStatus(.ready)
                         }
-                        DispatchQueue.main.async {
-                            timer.invalidate()
-                            self.pollTimer = nil
-                            self.trainingSpeakerId = nil
-                            self.trainingPersonaTarget = nil
+                        DispatchQueue.main.async { [weak self] in
+                            guard let self,
+                                  self.accountLeaseRuntime.validate(accountLease, at: .ui).allowed else {
+                                return
+                            }
+                            let pending = self.pendingCompletion
+                            self.pendingCompletion = nil
+                            self.clearTrainingStateIfOwned(
+                                speakerId: speakerId,
+                                accountLease: accountLease,
+                                timer: timer
+                            )
+                            completion(.success(speakerId))
+                            pending?(.success(speakerId))
                         }
-                        // 回调原始调用方 + 等待方（如果有）
-                        let pending = self.pendingCompletion
-                        self.pendingCompletion = nil
-                        completion(.success(speakerId))
-                        pending?(.success(speakerId))
                     case .failed:
-                        DispatchQueue.main.async {
-                            timer.invalidate()
-                            self.pollTimer = nil
-                            self.trainingSpeakerId = nil
-                            self.trainingPersonaTarget = nil
+                        DispatchQueue.main.async { [weak self] in
+                            guard let self,
+                                  self.accountLeaseRuntime.validate(accountLease, at: .ui).allowed else {
+                                return
+                            }
+                            let pending = self.pendingCompletion
+                            self.pendingCompletion = nil
+                            self.clearTrainingStateIfOwned(
+                                speakerId: speakerId,
+                                accountLease: accountLease,
+                                timer: timer
+                            )
+                            let failure = VoiceCloneError.trainingFailed(
+                                code: 3,
+                                message: "音色训练失败"
+                            )
+                            completion(.failure(failure))
+                            pending?(.failure(failure))
                         }
-                        let pending = self.pendingCompletion
-                        self.pendingCompletion = nil
-                        completion(.failure(.trainingFailed(code: 3, message: "音色训练失败")))
-                        pending?(.failure(.trainingFailed(code: 3, message: "音色训练失败")))
                     case .training:
                         // 继续轮询
                         DDLogInfo("[VoiceClone] 音色训练中... (\(pollCount)/\(maxPolls))")
                         break
                     case .notFound:
-                        DispatchQueue.main.async {
-                            timer.invalidate()
-                            self.pollTimer = nil
-                            self.trainingSpeakerId = nil
-                            self.trainingPersonaTarget = nil
+                        DispatchQueue.main.async { [weak self] in
+                            guard let self,
+                                  self.accountLeaseRuntime.validate(accountLease, at: .ui).allowed else {
+                                return
+                            }
+                            let pending = self.pendingCompletion
+                            self.pendingCompletion = nil
+                            self.clearTrainingStateIfOwned(
+                                speakerId: speakerId,
+                                accountLease: accountLease,
+                                timer: timer
+                            )
+                            let failure = VoiceCloneError.trainingFailed(
+                                code: 0,
+                                message: "音色未找到"
+                            )
+                            completion(.failure(failure))
+                            pending?(.failure(failure))
                         }
-                        let pending = self.pendingCompletion
-                        self.pendingCompletion = nil
-                        completion(.failure(.trainingFailed(code: 0, message: "音色未找到")))
-                        pending?(.failure(.trainingFailed(code: 0, message: "音色未找到")))
                     }
                 case .failure(let error):
                     // 网络错误不中断轮询，继续尝试
@@ -924,6 +1251,7 @@ final class VoiceCloneService {
 
 enum VoiceCloneError: LocalizedError {
     case apiKeyMissing
+    case accountSessionChanged
     case authorizationRequired
     case speakerIdNotFound
     case audioReadFailed
@@ -938,6 +1266,8 @@ enum VoiceCloneError: LocalizedError {
         switch self {
         case .apiKeyMissing:
             return "声音复刻后端未配置，请先在服务器环境变量中配置火山声音复刻凭证"
+        case .accountSessionChanged:
+            return "账号状态已变化，请重新进入声音复刻页面后重试"
         case .authorizationRequired:
             return "请先确认本人授权后再提交声音样本"
         case .speakerIdNotFound:
