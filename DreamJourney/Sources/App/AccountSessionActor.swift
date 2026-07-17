@@ -142,9 +142,14 @@ actor AccountSessionActor {
     private var currentSession: AccountSession?
     private var currentActivationPhase: AccountSessionActivationPhase?
     private let journal: AccountSessionActivationJournalStore
+    private let accountLeaseRuntime: AccountLeaseRuntime
 
-    init(journal: AccountSessionActivationJournalStore = .shared) {
+    init(
+        journal: AccountSessionActivationJournalStore = .shared,
+        accountLeaseRuntime: AccountLeaseRuntime = .shared
+    ) {
         self.journal = journal
+        self.accountLeaseRuntime = accountLeaseRuntime
         let priorEntry = journal.load()
         generation = priorEntry?.generation ?? 0
         generationId = priorEntry?.generationId ?? UUID()
@@ -334,6 +339,7 @@ actor AccountSessionActor {
             activatedAt: currentSession.activatedAt
         )
         self.currentSession = refreshedSession
+        accountLeaseRuntime.publish(session: refreshedSession)
         let receipt = AccountSessionTransitionReceipt(
             generation: generation,
             generationId: generationId,
@@ -466,6 +472,7 @@ actor AccountSessionActor {
             )
         }
         currentSession = session
+        accountLeaseRuntime.publish(session: session)
         currentActivationPhase = activationPhase
         let receipt = AccountSessionTransitionReceipt(
             generation: generation,
@@ -504,6 +511,7 @@ actor AccountSessionActor {
             )
         }
         currentSession = nextSession
+        accountLeaseRuntime.publish(session: nextSession)
         currentActivationPhase = activationPhase
         let receipt = AccountSessionTransitionReceipt(
             generation: generation,

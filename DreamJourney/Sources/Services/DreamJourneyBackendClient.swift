@@ -3267,6 +3267,7 @@ final class DreamJourneyBackendClient {
     private let hasExplicitBaseURL: Bool
     private let authSessionStore = BackendAuthSessionStore.shared
     private let accountSessionActor = AccountSessionActor.shared
+    private let accountLeaseRuntime = AccountLeaseRuntime.shared
     private let releasePolicyStore = ReleasePolicyStore.shared
     private let recoveryRuntimePolicyStore = RecoveryRuntimePolicyStore.shared
     private let authRefreshQueue = DispatchQueue(label: "com.dreamjourney.backend-auth-refresh")
@@ -4708,6 +4709,7 @@ final class DreamJourneyBackendClient {
         mutatesAuthenticatedSessionForRecoveryPolicy: Bool = true,
         requiredAuthSession: BackendAuthSessionContract? = nil,
         accountLease: BackendAccountLease? = nil,
+        applicationLease: AccountLease? = nil,
         sessionUserId: String? = nil,
         featureDecision: FeatureDecision? = nil,
         additionalHeaders: [String: String] = [:],
@@ -4722,6 +4724,7 @@ final class DreamJourneyBackendClient {
         )
         let requestAuthSession: BackendAuthSessionContract?
         let requestAccountLease: BackendAccountLease?
+        let requestApplicationLease: AccountLease?
         switch endpoint.authPolicy {
         case .userRequired:
             guard UserManager.shared.canEnterPrivateUI else {
@@ -4772,9 +4775,20 @@ final class DreamJourneyBackendClient {
                 return
             }
             requestAccountLease = capturedLease
+            let capturedApplicationLease = applicationLease
+                ?? accountLeaseRuntime.capture(forSubjectId: selectedSession.userId)
+            guard let capturedApplicationLease,
+                  accountLeaseRuntime.validate(capturedApplicationLease, at: .request).allowed else {
+                DispatchQueue.main.async {
+                    completion(.failure(ClientError.accountScopeChanged))
+                }
+                return
+            }
+            requestApplicationLease = capturedApplicationLease
         case .publicRequest, .refreshExchange:
             requestAuthSession = nil
             requestAccountLease = nil
+            requestApplicationLease = nil
         }
 
         let recoveryDecision = RecoveryRuntimePolicyStore.shared.requestDecision(
@@ -4784,7 +4798,11 @@ final class DreamJourneyBackendClient {
         if !recoveryDecision.allowed {
             if allowsRecoveryRefresh, path != "/config/runtime" {
                 fetchRuntimeConfig { result in
-                    guard self.isCurrentAccountLease(requestAccountLease) else {
+                    guard self.isCurrentAccountLease(
+                        requestAccountLease,
+                        applicationLease: requestApplicationLease,
+                        at: .commit
+                    ) else {
                         completion(.failure(ClientError.accountScopeChanged))
                         return
                     }
@@ -4801,6 +4819,7 @@ final class DreamJourneyBackendClient {
                             mutatesAuthenticatedSessionForRecoveryPolicy: mutatesAuthenticatedSessionForRecoveryPolicy,
                             requiredAuthSession: requiredAuthSession,
                             accountLease: requestAccountLease,
+                            applicationLease: requestApplicationLease,
                             sessionUserId: sessionUserId,
                             featureDecision: featureDecision,
                             additionalHeaders: additionalHeaders,
@@ -4891,10 +4910,15 @@ final class DreamJourneyBackendClient {
         )
             .validate(statusCode: 200..<300)
             .responseData(queue: .global(qos: .utility)) { response in
-                guard self.isCurrentAccountLease(requestAccountLease) else {
+                guard self.isCurrentAccountLease(
+                    requestAccountLease,
+                    applicationLease: requestApplicationLease,
+                    at: .commit
+                ) else {
                     self.deliverRequestResult(
                         .failure(ClientError.accountScopeChanged),
                         accountLease: nil,
+                        applicationLease: nil,
                         completion: completion
                     )
                     return
@@ -4907,6 +4931,7 @@ final class DreamJourneyBackendClient {
                             self.deliverRequestResult(
                                 .failure(ClientError.unsupportedJSONRoot),
                                 accountLease: requestAccountLease,
+                                applicationLease: requestApplicationLease,
                                 completion: completion
                             )
                             return
@@ -4914,12 +4939,14 @@ final class DreamJourneyBackendClient {
                         self.deliverRequestResult(
                             .success(object),
                             accountLease: requestAccountLease,
+                            applicationLease: requestApplicationLease,
                             completion: completion
                         )
                     } catch {
                         self.deliverRequestResult(
                             .failure(ClientError.invalidJSONResponse),
                             accountLease: requestAccountLease,
+                            applicationLease: requestApplicationLease,
                             completion: completion
                         )
                     }
@@ -4927,7 +4954,11 @@ final class DreamJourneyBackendClient {
                     let statusCode = response.response?.statusCode
                     if let recoveryPolicy = Self.recoveryRuntimePolicy(from: response.data) {
                         DispatchQueue.main.async {
-                            guard self.isCurrentAccountLease(requestAccountLease) else {
+                            guard self.isCurrentAccountLease(
+                                requestAccountLease,
+                                applicationLease: requestApplicationLease,
+                                at: .ui
+                            ) else {
                                 completion(.failure(ClientError.accountScopeChanged))
                                 return
                             }
@@ -4962,6 +4993,7 @@ final class DreamJourneyBackendClient {
                                 accessMode: contract.accessMode
                             )),
                             accountLease: requestAccountLease,
+                            applicationLease: requestApplicationLease,
                             completion: completion
                         )
                         return
@@ -4983,6 +5015,7 @@ final class DreamJourneyBackendClient {
                                 mutatesAuthenticatedSessionForRecoveryPolicy: mutatesAuthenticatedSessionForRecoveryPolicy,
                                 requiredAuthSession: currentSession,
                                 accountLease: requestAccountLease,
+                                applicationLease: requestApplicationLease,
                                 sessionUserId: sessionUserId,
                                 featureDecision: preparedFeatureDecision,
                                 additionalHeaders: additionalHeaders,
@@ -5002,12 +5035,17 @@ final class DreamJourneyBackendClient {
                                     context: context
                                 )),
                                 accountLease: requestAccountLease,
+                                applicationLease: requestApplicationLease,
                                 completion: completion
                             )
                             return
                         }
                         self.refreshAuthSession(for: requestAuthSession) { refreshedSession in
-                            guard self.isCurrentAccountLease(requestAccountLease) else {
+                            guard self.isCurrentAccountLease(
+                                requestAccountLease,
+                                applicationLease: requestApplicationLease,
+                                at: .commit
+                            ) else {
                                 completion(.failure(ClientError.accountScopeChanged))
                                 return
                             }
@@ -5023,6 +5061,7 @@ final class DreamJourneyBackendClient {
                                     mutatesAuthenticatedSessionForRecoveryPolicy: mutatesAuthenticatedSessionForRecoveryPolicy,
                                     requiredAuthSession: refreshedSession,
                                     accountLease: requestAccountLease,
+                                    applicationLease: requestApplicationLease,
                                     sessionUserId: sessionUserId,
                                     featureDecision: preparedFeatureDecision,
                                     additionalHeaders: additionalHeaders,
@@ -5050,6 +5089,7 @@ final class DreamJourneyBackendClient {
                                 context: context
                             )),
                             accountLease: requestAccountLease,
+                            applicationLease: requestApplicationLease,
                             completion: completion
                         )
                         return
@@ -5061,12 +5101,14 @@ final class DreamJourneyBackendClient {
                                 context: .init(detail: error.localizedDescription)
                             )),
                             accountLease: requestAccountLease,
+                            applicationLease: requestApplicationLease,
                             completion: completion
                         )
                     } else {
                         self.deliverRequestResult(
                             .failure(error),
                             accountLease: requestAccountLease,
+                            applicationLease: requestApplicationLease,
                             completion: completion
                         )
                     }
@@ -5074,21 +5116,34 @@ final class DreamJourneyBackendClient {
             }
     }
 
-    private func isCurrentAccountLease(_ lease: BackendAccountLease?) -> Bool {
-        guard let lease else { return true }
-        return lease.permits(
-            session: authSessionStore.currentSession,
-            currentUserId: UserManager.shared.currentUser?.id
-        )
+    private func isCurrentAccountLease(
+        _ lease: BackendAccountLease?,
+        applicationLease: AccountLease?,
+        at checkpoint: AccountLeaseCheckpoint
+    ) -> Bool {
+        if let lease,
+           !lease.permits(
+               session: authSessionStore.currentSession,
+               currentUserId: UserManager.shared.currentUser?.id
+           ) {
+            return false
+        }
+        guard let applicationLease else { return lease == nil }
+        return accountLeaseRuntime.validate(applicationLease, at: checkpoint).allowed
     }
 
     private func deliverRequestResult(
         _ result: Result<[String: Any], Error>,
         accountLease: BackendAccountLease?,
+        applicationLease: AccountLease?,
         completion: @escaping (Result<[String: Any], Error>) -> Void
     ) {
         DispatchQueue.main.async {
-            guard self.isCurrentAccountLease(accountLease) else {
+            guard self.isCurrentAccountLease(
+                accountLease,
+                applicationLease: applicationLease,
+                at: .ui
+            ) else {
                 completion(.failure(ClientError.accountScopeChanged))
                 return
             }
@@ -5102,6 +5157,7 @@ final class DreamJourneyBackendClient {
         mutateAuthenticatedSession: Bool = true
     ) {
         let transition = recoveryRuntimePolicyStore.update(policy)
+        accountLeaseRuntime.updateAuthorityEpoch(policy.authorityEpoch)
         if transition.authorityEpochChanged {
             RuntimeCapabilitySnapshotStore.shared.invalidate()
             NotificationCenter.default.post(

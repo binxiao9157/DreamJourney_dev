@@ -31,6 +31,9 @@ final class AppCoordinator: Coordinator {
     }
 
     func start() {
+        AccountLeaseRuntime.shared.updateAuthorityEpoch(
+            RecoveryRuntimePolicyStore.shared.currentPolicy.authorityEpoch
+        )
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleLogout),
