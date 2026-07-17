@@ -1,20 +1,19 @@
 {
   "activeWorkItem": {
-    "authorityLock": "IDENTITY_AUTHZ",
+    "authorityLock": "ACCOUNT_LOCAL_STATE",
     "backendPendingPaths": [],
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G2": "MISSING",
-      "G4": "MISSING"
+      "G0": "MISSING"
     },
-    "id": "WI-S0-02-06",
+    "id": "WI-S0-01-01",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "Complete the iOS typed-auth cutover and old-client boundary without restoring mobile shared tokens, offline private login or client-derived owner authority."
+    "summary": "Inventory every private iOS store, key, path, timer and notification surface before introducing AccountSessionActor or migrating user data."
   },
   "baselines": {
-    "backend": "main@4236782",
-    "ios": "feature/prd-stitch-ui-adaptation@71b2960",
+    "backend": "main@ab668a7",
+    "ios": "feature/prd-stitch-ui-adaptation@4ec3715",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
@@ -46,6 +45,12 @@
       "evidence": "docs/superpowers/status/2026-07-18-wi-s0-02-05-delegated-grant-relationship-lifecycle.md",
       "id": "WI-S0-02-05",
       "implementationStatus": "INTERNAL_READY / BACKEND_DEPLOYED / G2_POSTGRES_VERIFIED / IOS_LOCAL_COMMITTED / HIDDEN_DEFAULT_OFF / G4_EXTERNAL_BLOCKED",
+      "registryClosure": "SCOPED_G2_EVIDENCE_PRESENT_G4_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-18-wi-s0-02-06-typed-auth-old-client-boundary.md",
+      "id": "WI-S0-02-06",
+      "implementationStatus": "INTERNAL_READY / BACKEND_DEPLOYED / G2_POSTGRES_VERIFIED / IOS_LOCAL_COMMITTED / G4_EXTERNAL_BLOCKED",
       "registryClosure": "SCOPED_G2_EVIDENCE_PRESENT_G4_OPEN"
     },
     {
@@ -188,9 +193,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S0-01-01",
+    "id": "WI-S0-01-02",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "Begin the owner-scoped iOS account session and lease boundary after the Stage 0 typed-auth cutover is closed."
+    "summary": "Introduce AccountSessionActor and cold-start consistency only after the private-state inventory reaches unknownPrivateSurface=0."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -199,5 +204,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-18T03:08:13+08:00"
+  "updatedAt": "2026-07-18T03:53:50+08:00"
 }
