@@ -12,6 +12,26 @@ enum KBLiteSyncedGraphApplyResult: Equatable {
     case invalidGraph
 }
 
+private struct KBLiteAccountLeaseScope {
+    let accountLease: AccountLease
+    let ownerUserId: String
+    let graphGeneration: UUID
+}
+
+private struct KBLiteStagedGraph {
+    let fileURL: URL
+    let stagingURL: URL
+    let previousData: Data?
+    let mutationToken: UInt64
+}
+
+private enum KBLitePersistenceCommitResult {
+    case committed
+    case staleLease
+    case staleMutation
+    case storageFailure
+}
+
 // MARK: - KBLiteManager
 
 /// Lite 版知识库中央管理器 — 单例
@@ -28,19 +48,28 @@ final class KBLiteManager {
 
     static let shared = KBLiteManager()
 
-    private init() {
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+
+    private init(accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared) {
+        self.accountLeaseRuntime = accountLeaseRuntime
         loadedUserId = Self.normalizedUserId(UserManager.shared.currentUser?.id)
         graph = loadGraph(for: loadedUserId)
         let semanticScope = semanticCacheScopeLocked()
         KBLiteSemanticSearch.shared.activate(scope: semanticScope)
-        warmSemanticCache(for: graph, scope: semanticScope)
         let activeOwner = loadedUserId == Self.signedOutUserId ? nil : loadedUserId
         widgetSnapshotStore.activate(ownerUserId: activeOwner, generation: userGeneration)
-        if let activeOwner {
+        if let activeOwner,
+           let accountScope = captureAccountLeaseScope(expectedOwnerUserId: activeOwner),
+           validateAccountLeaseScope(accountScope, at: .runtime) {
             widgetSnapshotStore.publish(
                 graph: graph,
                 ownerUserId: activeOwner,
                 generation: userGeneration
+            )
+            warmSemanticCache(
+                for: graph,
+                scope: semanticScope,
+                accountScope: accountScope
             )
         }
     }
@@ -95,10 +124,21 @@ final class KBLiteManager {
 
     /// 线程安全地修改 graph（修改后自动保存并发送通知）
     func writeGraph(_ block: (inout KBLiteGraph) -> Void) {
+        guard let accountScope = captureAccountLeaseScope(at: .request) else { return }
         graphLock.lock()
+        guard validateAccountLeaseScopeLocked(accountScope, at: .commit) else {
+            graphLock.unlock()
+            return
+        }
+        let rollbackGraph = graph
         block(&graph)
+        guard validateAccountLeaseScopeLocked(accountScope, at: .commit) else {
+            graph = rollbackGraph
+            graphLock.unlock()
+            return
+        }
         graphLock.unlock()
-        save()
+        save(accountScope: accountScope, rollbackGraph: rollbackGraph)
     }
 
     // MARK: - File Path
@@ -108,6 +148,71 @@ final class KBLiteManager {
     private static func normalizedUserId(_ userId: String?) -> String {
         let value = userId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return value.isEmpty ? signedOutUserId : value
+    }
+
+    private func captureAccountLeaseScope(
+        expectedOwnerUserId: String? = nil,
+        at checkpoint: AccountLeaseCheckpoint = .request
+    ) -> KBLiteAccountLeaseScope? {
+        graphLock.lock()
+        let ownerUserId = loadedUserId
+        let graphGeneration = userGeneration
+        let normalizedExpectedOwner = expectedOwnerUserId.map(Self.normalizedUserId)
+        let expectedOwnerMatches = normalizedExpectedOwner == nil || normalizedExpectedOwner == ownerUserId
+        graphLock.unlock()
+
+        guard ownerUserId != Self.signedOutUserId,
+              expectedOwnerMatches,
+              let accountLease = accountLeaseRuntime.capture(forSubjectId: ownerUserId) else {
+            logAccountLeaseDrop(checkpoint: checkpoint, reason: "leaseUnavailable")
+            return nil
+        }
+        let scope = KBLiteAccountLeaseScope(
+            accountLease: accountLease,
+            ownerUserId: ownerUserId,
+            graphGeneration: graphGeneration
+        )
+        return validateAccountLeaseScope(scope, at: checkpoint) ? scope : nil
+    }
+
+    private func validateAccountLeaseScope(
+        _ scope: KBLiteAccountLeaseScope,
+        at checkpoint: AccountLeaseCheckpoint
+    ) -> Bool {
+        let decision = accountLeaseRuntime.validate(scope.accountLease, at: checkpoint)
+        guard decision.allowed else {
+            logAccountLeaseDrop(checkpoint: checkpoint, reason: decision.reason.rawValue)
+            return false
+        }
+        graphLock.lock()
+        let graphMatches = accountLeaseScopeMatchesGraphLocked(scope)
+        graphLock.unlock()
+        guard graphMatches else {
+            logAccountLeaseDrop(checkpoint: checkpoint, reason: "graphGenerationMismatch")
+            return false
+        }
+        return true
+    }
+
+    private func accountLeaseScopeMatchesGraphLocked(_ scope: KBLiteAccountLeaseScope) -> Bool {
+        loadedUserId == scope.ownerUserId && userGeneration == scope.graphGeneration
+    }
+
+    private func validateAccountLeaseScopeLocked(
+        _ scope: KBLiteAccountLeaseScope,
+        at checkpoint: AccountLeaseCheckpoint
+    ) -> Bool {
+        let decision = accountLeaseRuntime.validate(scope.accountLease, at: checkpoint)
+        guard decision.allowed, accountLeaseScopeMatchesGraphLocked(scope) else {
+            let reason = decision.allowed ? "graphGenerationMismatch" : decision.reason.rawValue
+            logAccountLeaseDrop(checkpoint: checkpoint, reason: reason)
+            return false
+        }
+        return true
+    }
+
+    private func logAccountLeaseDrop(checkpoint: AccountLeaseCheckpoint, reason: String) {
+        print("[KBLite] AccountLease drop checkpoint=\(checkpoint.rawValue) reason=\(reason)")
     }
 
     static func resolvePersonaIdentity(for context: DigitalHumanContext) -> KBPersonaIdentity {
@@ -251,8 +356,27 @@ final class KBLiteManager {
 
     // MARK: - Persistence
 
-    private func save() {
+    @discardableResult
+    private func save(
+        accountScope: KBLiteAccountLeaseScope,
+        rollbackGraph: KBLiteGraph? = nil
+    ) -> Bool {
+        guard validateAccountLeaseScope(accountScope, at: .commit) else {
+            rollbackInMemoryGraphIfCurrent(
+                accountScope: accountScope,
+                expectedMutationToken: nil,
+                rollbackGraph: rollbackGraph
+            )
+            return false
+        }
         graphLock.lock()
+        guard validateAccountLeaseScopeLocked(accountScope, at: .commit) else {
+            if let rollbackGraph {
+                graph = rollbackGraph
+            }
+            graphLock.unlock()
+            return false
+        }
         graph.lastUpdated = Date()
         let graphSnapshot = graph
         let userId = loadedUserId
@@ -260,33 +384,206 @@ final class KBLiteManager {
         let semanticScope = semanticCacheScopeLocked()
         graphLock.unlock()
 
-        guard userId != Self.signedOutUserId else {
-            print("[KBLite] 登出态不持久化知识图谱")
-            return
-        }
         let encoder = JSONEncoder()
-        encoder.outputFormatting = .prettyPrinted
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(graphSnapshot) else {
+        guard let data = try? encoder.encode(graphSnapshot),
+              let mutationToken = Self.graphMutationToken(for: graphSnapshot) else {
             print("[KBLite] ❌ JSON 编码失败")
-            widgetSnapshotStore.invalidateSnapshot(ownerUserId: userId, generation: generation)
-            return
+            if validateAccountLeaseScope(accountScope, at: .runtime) {
+                widgetSnapshotStore.invalidateSnapshot(ownerUserId: userId, generation: generation)
+            }
+            return false
         }
+
+        let stagedGraph: KBLiteStagedGraph
         do {
-            try KnowledgeLocalStoragePolicy.write(data, to: graphFilePath(for: userId))
-            print("[KBLite] 💾 知识库已保存: \(graphSnapshot.people.count)人, \(graphSnapshot.places.count)地, \(graphSnapshot.events.count)事, \(graphSnapshot.facts.count)实")
-            widgetSnapshotStore.publish(
-                graph: graphSnapshot,
-                ownerUserId: userId,
-                generation: generation
-            )
-            warmSemanticCache(for: graphSnapshot, scope: semanticScope)
+            guard let staged = try stagePersistedGraph(
+                data,
+                mutationToken: mutationToken,
+                accountScope: accountScope
+            ) else {
+                rollbackInMemoryGraphIfCurrent(
+                    accountScope: accountScope,
+                    expectedMutationToken: mutationToken,
+                    rollbackGraph: rollbackGraph
+                )
+                return false
+            }
+            stagedGraph = staged
         } catch {
             print("[KBLite] ❌ 保存失败: \(error.localizedDescription)")
-            widgetSnapshotStore.invalidateSnapshot(ownerUserId: userId, generation: generation)
+            if validateAccountLeaseScope(accountScope, at: .runtime) {
+                widgetSnapshotStore.invalidateSnapshot(ownerUserId: userId, generation: generation)
+            }
+            return false
         }
-        // 通知 UI 数据已更新
-        DispatchQueue.main.async {
+
+        switch commitStagedGraph(
+            stagedGraph,
+            accountScope: accountScope,
+            rollbackGraph: rollbackGraph
+        ) {
+        case .committed:
+            print("[KBLite] 💾 知识库已保存: \(graphSnapshot.people.count)人, \(graphSnapshot.places.count)地, \(graphSnapshot.events.count)事, \(graphSnapshot.facts.count)实")
+            publishGraphEffects(
+                graph: graphSnapshot,
+                ownerUserId: userId,
+                generation: generation,
+                semanticScope: semanticScope,
+                accountScope: accountScope
+            )
+            return true
+        case .staleLease:
+            return false
+        case .staleMutation:
+            print("[KBLite] 跳过已被更新图谱取代的持久化提交")
+            return false
+        case .storageFailure:
+            if validateAccountLeaseScope(accountScope, at: .runtime) {
+                widgetSnapshotStore.invalidateSnapshot(ownerUserId: userId, generation: generation)
+            }
+            return false
+        }
+    }
+
+    private func stagePersistedGraph(
+        _ data: Data,
+        mutationToken: UInt64,
+        accountScope: KBLiteAccountLeaseScope
+    ) throws -> KBLiteStagedGraph? {
+        guard validateAccountLeaseScope(accountScope, at: .commit) else { return nil }
+        let fileURL = graphFilePath(for: accountScope.ownerUserId)
+        let stagingURL = fileURL.deletingLastPathComponent().appendingPathComponent(
+            ".\(fileURL.lastPathComponent).\(UUID().uuidString).staging"
+        )
+        let previousData: Data?
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+            previousData = try Data(contentsOf: fileURL)
+        } else {
+            previousData = nil
+        }
+        do {
+            try KnowledgeLocalStoragePolicy.write(data, to: stagingURL)
+        } catch {
+            try? FileManager.default.removeItem(at: stagingURL)
+            throw error
+        }
+        guard validateAccountLeaseScope(accountScope, at: .commit) else {
+            try? FileManager.default.removeItem(at: stagingURL)
+            return nil
+        }
+        return KBLiteStagedGraph(
+            fileURL: fileURL,
+            stagingURL: stagingURL,
+            previousData: previousData,
+            mutationToken: mutationToken
+        )
+    }
+
+    private func commitStagedGraph(
+        _ stagedGraph: KBLiteStagedGraph,
+        accountScope: KBLiteAccountLeaseScope,
+        rollbackGraph: KBLiteGraph?
+    ) -> KBLitePersistenceCommitResult {
+        defer { try? FileManager.default.removeItem(at: stagedGraph.stagingURL) }
+        graphLock.lock()
+        defer { graphLock.unlock() }
+
+        guard accountLeaseScopeMatchesGraphLocked(accountScope),
+              Self.graphMutationToken(for: graph) == stagedGraph.mutationToken else {
+            return .staleMutation
+        }
+        let beforeCommit = accountLeaseRuntime.validate(accountScope.accountLease, at: .commit)
+        guard beforeCommit.allowed else {
+            logAccountLeaseDrop(checkpoint: .commit, reason: beforeCommit.reason.rawValue)
+            if let rollbackGraph {
+                graph = rollbackGraph
+            }
+            return .staleLease
+        }
+
+        do {
+            if FileManager.default.fileExists(atPath: stagedGraph.fileURL.path) {
+                _ = try FileManager.default.replaceItemAt(
+                    stagedGraph.fileURL,
+                    withItemAt: stagedGraph.stagingURL
+                )
+            } else {
+                try FileManager.default.moveItem(
+                    at: stagedGraph.stagingURL,
+                    to: stagedGraph.fileURL
+                )
+            }
+            try? KnowledgeLocalStoragePolicy.hardenExistingItem(at: stagedGraph.fileURL)
+        } catch {
+            print("[KBLite] ❌ 保存失败: \(error.localizedDescription)")
+            return .storageFailure
+        }
+
+        let afterCommit = accountLeaseRuntime.validate(accountScope.accountLease, at: .commit)
+        guard afterCommit.allowed, accountLeaseScopeMatchesGraphLocked(accountScope) else {
+            let reason = afterCommit.allowed ? "graphGenerationMismatch" : afterCommit.reason.rawValue
+            logAccountLeaseDrop(checkpoint: .commit, reason: reason)
+            restorePersistedGraph(stagedGraph)
+            if let rollbackGraph {
+                graph = rollbackGraph
+            }
+            return .staleLease
+        }
+        return .committed
+    }
+
+    private func restorePersistedGraph(_ stagedGraph: KBLiteStagedGraph) {
+        do {
+            if let previousData = stagedGraph.previousData {
+                try KnowledgeLocalStoragePolicy.write(previousData, to: stagedGraph.fileURL)
+            } else if FileManager.default.fileExists(atPath: stagedGraph.fileURL.path) {
+                try FileManager.default.removeItem(at: stagedGraph.fileURL)
+            }
+        } catch {
+            print("[KBLite] stale persistence rollback failed reason=storageFailure")
+        }
+    }
+
+    private func rollbackInMemoryGraphIfCurrent(
+        accountScope: KBLiteAccountLeaseScope,
+        expectedMutationToken: UInt64?,
+        rollbackGraph: KBLiteGraph?
+    ) {
+        guard let rollbackGraph else { return }
+        graphLock.lock()
+        defer { graphLock.unlock() }
+        guard accountLeaseScopeMatchesGraphLocked(accountScope),
+              expectedMutationToken == nil || Self.graphMutationToken(for: graph) == expectedMutationToken else {
+            return
+        }
+        graph = rollbackGraph
+    }
+
+    private func publishGraphEffects(
+        graph: KBLiteGraph,
+        ownerUserId: String,
+        generation: UUID,
+        semanticScope: KBLiteSemanticCacheScope?,
+        accountScope: KBLiteAccountLeaseScope
+    ) {
+        guard validateAccountLeaseScope(accountScope, at: .runtime) else { return }
+        widgetSnapshotStore.publish(
+            graph: graph,
+            ownerUserId: ownerUserId,
+            generation: generation
+        )
+        warmSemanticCache(
+            for: graph,
+            scope: semanticScope,
+            accountScope: accountScope
+        )
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  self.validateAccountLeaseScope(accountScope, at: .ui) else {
+                return
+            }
             NotificationCenter.default.post(name: .kbLiteDidUpdate, object: nil)
             KnowledgeSyncCoordinator.shared.synchronizeCurrentUser(reason: "graphSaved")
         }
@@ -332,10 +629,15 @@ final class KBLiteManager {
 
     private func warmSemanticCache(
         for graph: KBLiteGraph,
-        scope semanticScope: KBLiteSemanticCacheScope?
+        scope semanticScope: KBLiteSemanticCacheScope?,
+        accountScope: KBLiteAccountLeaseScope
     ) {
         guard let semanticScope else { return }
-        DispatchQueue.global(qos: .utility).async {
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self,
+                  self.validateAccountLeaseScope(accountScope, at: .runtime) else {
+                return
+            }
             KBLiteSemanticSearch.shared.warmCache(
                 scope: semanticScope,
                 people: graph.people,
@@ -343,6 +645,7 @@ final class KBLiteManager {
                 events: graph.events,
                 facts: graph.facts
             )
+            _ = self.validateAccountLeaseScope(accountScope, at: .runtime)
         }
     }
 
@@ -382,16 +685,30 @@ final class KBLiteManager {
             ownerUserId: activeOwner,
             generation: activatedGeneration
         )
-        if let activeOwner {
+        if let activeOwner,
+           let accountScope = captureAccountLeaseScope(expectedOwnerUserId: activeOwner),
+           validateAccountLeaseScope(accountScope, at: .runtime) {
             widgetSnapshotStore.publish(
                 graph: loadedGraph,
                 ownerUserId: activeOwner,
                 generation: activatedGeneration
             )
-        }
-        warmSemanticCache(for: loadedGraph, scope: semanticScope)
-        DispatchQueue.main.async {
-            NotificationCenter.default.post(name: .kbLiteDidUpdate, object: nil)
+            warmSemanticCache(
+                for: loadedGraph,
+                scope: semanticScope,
+                accountScope: accountScope
+            )
+            DispatchQueue.main.async { [weak self] in
+                guard let self,
+                      self.validateAccountLeaseScope(accountScope, at: .ui) else {
+                    return
+                }
+                NotificationCenter.default.post(name: .kbLiteDidUpdate, object: nil)
+            }
+        } else if activeOwner == nil {
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .kbLiteDidUpdate, object: nil)
+            }
         }
         print("[KBLite] 已切换知识所有者: \(normalized)")
     }
@@ -465,6 +782,13 @@ final class KBLiteManager {
             completion(0)
             return
         }
+        guard let accountScope = captureAccountLeaseScope(
+            expectedOwnerUserId: ownerUserId,
+            at: .request
+        ) else {
+            completion(0)
+            return
+        }
 
         // 后端精提取使用独立水位；本地轻量提取仍可推进总 sessionCount。
         let shouldForceExtract: Bool
@@ -478,11 +802,16 @@ final class KBLiteManager {
         guard shouldForceExtract else {
             print("[KBLite] ⏭️ 后端提取频率控制：会话#\(sessionId)使用本地轻量提取")
             extractQueue.async { [weak self] in
-                self?.finishExtraction(
+                guard let self,
+                      self.validateAccountLeaseScope(accountScope, at: .runtime) else {
+                    return
+                }
+                self.finishExtraction(
                     result: nil,
                     turns: turns,
                     sessionId: sessionId,
                     authorizationSnapshot: capturedAuthorization,
+                    accountScope: accountScope,
                     fallbackReason: "frequencyControlled",
                     completion: completion
                 )
@@ -492,10 +821,15 @@ final class KBLiteManager {
 
         extractQueue.async { [weak self] in
             guard let self = self else { return }
+            guard self.validateAccountLeaseScope(accountScope, at: .runtime) else { return }
 
             guard !self.isExtracting else {
                 print("[KBLite] ⏳ 上一次提取尚未完成，跳过")
-                DispatchQueue.main.async { completion(0) }
+                self.deliverExtractionCompletion(
+                    0,
+                    accountScope: accountScope,
+                    completion: completion
+                )
                 return
             }
 
@@ -510,6 +844,10 @@ final class KBLiteManager {
             self.graphLock.lock()
             let existingSummary = self.buildExistingSummary(for: capturedIdentity)
             self.graphLock.unlock()
+            guard self.validateAccountLeaseScope(accountScope, at: .request) else {
+                self.isExtracting = false
+                return
+            }
 
             guard DreamJourneyBackendClient.shared.isKnowledgeSyncConfigured else {
                 self.finishExtraction(
@@ -517,6 +855,7 @@ final class KBLiteManager {
                     turns: turns,
                     sessionId: sessionId,
                     authorizationSnapshot: capturedAuthorization,
+                    accountScope: accountScope,
                     fallbackReason: "backendNotConfigured",
                     completion: completion
                 )
@@ -532,22 +871,29 @@ final class KBLiteManager {
                 personaScope: capturedIdentity.personaScope,
                 digitalHumanId: capturedIdentity.digitalHumanId
             ) { [weak self] result in
-                self?.extractQueue.async {
+                self?.extractQueue.async { [weak self] in
+                    guard let self else { return }
+                    guard self.validateAccountLeaseScope(accountScope, at: .runtime) else {
+                        self.isExtracting = false
+                        return
+                    }
                     let envelope: KBKnowledgeExtractionEnvelope?
                     let fallbackReason: String?
                     switch result {
                     case .success(let value):
                         envelope = value
                         fallbackReason = nil
-                    case .failure(let error):
+                    case .failure:
                         envelope = nil
-                        fallbackReason = error.localizedDescription
+                        fallbackReason = "backendFailure"
+                        print("[KBLite] backend extraction failed reason=providerFailure")
                     }
-                    self?.finishExtraction(
+                    self.finishExtraction(
                         result: envelope,
                         turns: turns,
                         sessionId: sessionId,
                         authorizationSnapshot: capturedAuthorization,
+                        accountScope: accountScope,
                         fallbackReason: fallbackReason,
                         completion: completion
                     )
@@ -561,22 +907,30 @@ final class KBLiteManager {
         turns: [ConversationTurn],
         sessionId: Int,
         authorizationSnapshot: KBPersonaAuthorizationSnapshot,
+        accountScope: KBLiteAccountLeaseScope,
         fallbackReason: String?,
         completion: @escaping (Int) -> Void
     ) {
+        guard validateAccountLeaseScope(accountScope, at: .commit) else {
+            isExtracting = false
+            return
+        }
         let identity = authorizationSnapshot.identity
         graphLock.lock()
-        guard isCurrentAuthorizationSnapshotLocked(authorizationSnapshot) else {
+        guard isCurrentAuthorizationSnapshotLocked(authorizationSnapshot),
+              validateAccountLeaseScopeLocked(accountScope, at: .commit) else {
             graphLock.unlock()
             isExtracting = false
-            print(
-                "[KBLite] 丢弃授权代次变化后的知识提取结果 " +
-                "captured=\(identity.personaScope)/\(identity.digitalHumanId)"
+            print("[KBLite] 丢弃授权代次变化后的知识提取结果 reason=authorizationGenerationChanged")
+            deliverExtractionCompletion(
+                0,
+                accountScope: accountScope,
+                completion: completion
             )
-            DispatchQueue.main.async { completion(0) }
             return
         }
 
+        let rollbackGraph = graph
         let addedCount: Int
         let completionMode: String
         let acceptedBackendExtraction: Bool
@@ -615,17 +969,43 @@ final class KBLiteManager {
             graph.lastBackendExtractionAt = Date()
         }
         graph.sessionCount = max(graph.sessionCount, sessionId)
+        guard validateAccountLeaseScopeLocked(accountScope, at: .commit) else {
+            graph = rollbackGraph
+            graphLock.unlock()
+            isExtracting = false
+            return
+        }
         graphLock.unlock()
         isExtracting = false
-        save()
+        guard save(accountScope: accountScope, rollbackGraph: rollbackGraph) else { return }
 
         if let fallbackReason {
             print("[KBLite] ⚠️ 后端提取降级为本地规则 reason=\(fallbackReason)")
         } else {
             print("[KBLite] ✅ 后端知识提取完成 mode=\(completionMode): 新增 \(addedCount) 实体")
         }
-        DispatchQueue.main.async {
-            KnowledgeSyncCoordinator.shared.synchronizeCurrentUser(reason: "extractionCompleted")
+        deliverExtractionCompletion(
+            addedCount,
+            accountScope: accountScope,
+            shouldSynchronize: true,
+            completion: completion
+        )
+    }
+
+    private func deliverExtractionCompletion(
+        _ addedCount: Int,
+        accountScope: KBLiteAccountLeaseScope,
+        shouldSynchronize: Bool = false,
+        completion: @escaping (Int) -> Void
+    ) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  self.validateAccountLeaseScope(accountScope, at: .ui) else {
+                return
+            }
+            if shouldSynchronize {
+                KnowledgeSyncCoordinator.shared.synchronizeCurrentUser(reason: "extractionCompleted")
+            }
             completion(addedCount)
         }
     }
@@ -2146,11 +2526,14 @@ final class KBLiteManager {
     ) {
         guard let identity = Self.resolveAuthorizedPersonaIdentity(
             for: DigitalHumanContextStore.shared.current
-        ),
-        identity.ownerUserId == loadedUserId else {
+        ) else {
             print("[KBLite] 图片分析缺少授权 persona identity，跳过知识入库")
             return
         }
+        guard let accountScope = captureAccountLeaseScope(
+            expectedOwnerUserId: identity.ownerUserId,
+            at: .request
+        ) else { return }
         guard let photoSource = KBKnowledgeSourceIdentityPolicy.conversationPhotoReference(
             assetId: sourceAssetId
         ) else {
@@ -2162,6 +2545,13 @@ final class KBLiteManager {
         )
         var addedCount = 0
         let now = Date()
+        graphLock.lock()
+        guard validateAccountLeaseScopeLocked(accountScope, at: .commit),
+              identity.ownerUserId == loadedUserId else {
+            graphLock.unlock()
+            return
+        }
+        let rollbackGraph = graph
 
         // 场景 → 地点
         if !result.scene.isEmpty {
@@ -2216,7 +2606,16 @@ final class KBLiteManager {
 
         if addedCount > 0 {
             graph.lastUpdated = now
-            save()
+        }
+        guard validateAccountLeaseScopeLocked(accountScope, at: .commit) else {
+            graph = rollbackGraph
+            graphLock.unlock()
+            return
+        }
+        graphLock.unlock()
+
+        if addedCount > 0,
+           save(accountScope: accountScope, rollbackGraph: rollbackGraph) {
             print("[KBLite] 🖼️ 图片分析入库: 新增 \(addedCount) 实体")
         }
     }
@@ -2282,25 +2681,54 @@ final class KBLiteManager {
 
     /// 外部模块（如 MultiUser）修改图谱后调用此方法持久化
     func notifyGraphUpdated() {
-        save()
+        guard let accountScope = captureAccountLeaseScope(at: .request) else { return }
+        save(accountScope: accountScope)
     }
 
     // MARK: - Maintenance
 
     /// 重置知识库（调试用 / 用户主动清除）
     func reset() {
+        guard let accountScope = captureAccountLeaseScope(at: .request) else { return }
+        graphLock.lock()
+        guard validateAccountLeaseScopeLocked(accountScope, at: .commit) else {
+            graphLock.unlock()
+            return
+        }
+        let rollbackGraph = graph
         graph = KBLiteGraph()
         didWarnCapacity = false
-        save()
-        print("[KBLite] 🔄 知识库已重置")
+        guard validateAccountLeaseScopeLocked(accountScope, at: .commit) else {
+            graph = rollbackGraph
+            graphLock.unlock()
+            return
+        }
+        graphLock.unlock()
+        if save(accountScope: accountScope, rollbackGraph: rollbackGraph) {
+            print("[KBLite] 🔄 知识库已重置")
+        }
     }
 
     /// 导出知识库为 JSON 字符串（用于备份/分享）
     func exportJSON() -> String? {
+        guard let accountScope = captureAccountLeaseScope(at: .request),
+              validateAccountLeaseScope(accountScope, at: .runtime) else {
+            return nil
+        }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(graph) else { return nil }
+        graphLock.lock()
+        guard validateAccountLeaseScopeLocked(accountScope, at: .runtime) else {
+            graphLock.unlock()
+            return nil
+        }
+        let graphSnapshot = graph
+        graphLock.unlock()
+        guard let data = try? encoder.encode(graphSnapshot),
+              validateAccountLeaseScope(accountScope, at: .runtime) else {
+            return nil
+        }
         return String(data: data, encoding: .utf8)
     }
 
@@ -2309,15 +2737,21 @@ final class KBLiteManager {
     }
 
     func exportGraphSnapshot() -> KBLiteGraphSnapshot? {
+        guard let accountScope = captureAccountLeaseScope(at: .request) else { return nil }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
         graphLock.lock()
+        guard validateAccountLeaseScopeLocked(accountScope, at: .runtime) else {
+            graphLock.unlock()
+            return nil
+        }
         let snapshot = graph
         let userId = loadedUserId
         graphLock.unlock()
         guard let data = try? encoder.encode(snapshot),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              validateAccountLeaseScope(accountScope, at: .runtime) else {
             return nil
         }
         return KBLiteGraphSnapshot(
@@ -2350,6 +2784,12 @@ final class KBLiteManager {
         expectedMutationToken: UInt64?,
         expectedUserId: String?
     ) -> KBLiteSyncedGraphApplyResult {
+        guard let accountScope = captureAccountLeaseScope(
+            expectedOwnerUserId: expectedUserId,
+            at: .request
+        ) else {
+            return .staleLocalMutation
+        }
         guard JSONSerialization.isValidJSONObject(dictionary),
               let data = try? JSONSerialization.data(withJSONObject: dictionary) else {
             return .invalidGraph
@@ -2360,6 +2800,10 @@ final class KBLiteManager {
             return .invalidGraph
         }
         graphLock.lock()
+        guard validateAccountLeaseScopeLocked(accountScope, at: .commit) else {
+            graphLock.unlock()
+            return .staleLocalMutation
+        }
         if expectedMutationToken != nil {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.sortedKeys]
@@ -2383,6 +2827,7 @@ final class KBLiteManager {
             graphLock.unlock()
             return .staleLocalMutation
         }
+        let rollbackGraph = graph
         if preservingLocalChanges {
             let local = graph
             graph = KBLiteGraph(
@@ -2427,9 +2872,15 @@ final class KBLiteManager {
             )
         }
         graph.lastUpdated = Date()
+        guard validateAccountLeaseScopeLocked(accountScope, at: .commit) else {
+            graph = rollbackGraph
+            graphLock.unlock()
+            return .staleLocalMutation
+        }
         graphLock.unlock()
-        save()
-        return .applied
+        return save(accountScope: accountScope, rollbackGraph: rollbackGraph)
+            ? .applied
+            : .staleLocalMutation
     }
 
     private static func graphMutationToken(_ data: Data) -> UInt64 {
@@ -2439,6 +2890,14 @@ final class KBLiteManager {
             hash &*= 1_099_511_628_211
         }
         return hash
+    }
+
+    private static func graphMutationToken(for graph: KBLiteGraph) -> UInt64? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(graph) else { return nil }
+        return graphMutationToken(data)
     }
 
     private func preferLocalByID<T>(
@@ -2461,6 +2920,7 @@ final class KBLiteManager {
     /// 从 JSON 字符串导入知识库（合并模式）
     @discardableResult
     func importJSON(_ jsonString: String) -> Bool {
+        guard let accountScope = captureAccountLeaseScope(at: .request) else { return false }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         guard let data = jsonString.data(using: .utf8),
@@ -2469,10 +2929,20 @@ final class KBLiteManager {
             return false
         }
         graphLock.lock()
+        guard validateAccountLeaseScopeLocked(accountScope, at: .commit) else {
+            graphLock.unlock()
+            return false
+        }
+        let rollbackGraph = graph
         let addedCount = mergeGraph(imported)
         graph.lastUpdated = Date()
+        guard validateAccountLeaseScopeLocked(accountScope, at: .commit) else {
+            graph = rollbackGraph
+            graphLock.unlock()
+            return false
+        }
         graphLock.unlock()
-        save()
+        guard save(accountScope: accountScope, rollbackGraph: rollbackGraph) else { return false }
         print("[KBLite] 📥 导入完成: 新增 \(addedCount) 实体")
         return true
     }
