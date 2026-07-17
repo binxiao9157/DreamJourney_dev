@@ -34,6 +34,25 @@ struct BackendAuthSessionContract: Codable, Equatable {
         contractVersion == 1
     }
 
+    var isPrivateAccessEligible: Bool {
+        contractVersion == 2
+            && tokenFamilyId?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            && (sessionVersion ?? 0) > 0
+            && isRefreshCredentialUsable
+    }
+
+    var isRefreshCredentialUsable: Bool {
+        guard let expiresAt = Self.backendDate(from: refreshExpiresAt) else { return false }
+        return expiresAt > Date()
+    }
+
+    func isPrivateAccessEligible(for userId: String) -> Bool {
+        let expectedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        return isPrivateAccessEligible
+            && !expectedUserId.isEmpty
+            && self.userId == expectedUserId
+    }
+
     init?(json: [String: Any]) {
         guard let sessionId = Self.string(json["sessionId"]),
               let userId = Self.string(json["userId"]),
@@ -205,8 +224,6 @@ struct BackendAuthSessionContract: Codable, Equatable {
         }
 
         switch (captured.contractVersion, contractVersion) {
-        case (1, 1):
-            return true
         case (2, 2):
             guard let capturedFamilyId = captured.tokenFamilyId,
                   let tokenFamilyId,
@@ -251,6 +268,20 @@ struct BackendAuthSessionContract: Codable, Equatable {
         if let value = value as? String { return Int(value) }
         return nil
     }
+
+    private static func backendDate(from value: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: value) {
+            return date
+        }
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: value)
+    }
+}
+
+enum BackendAuthSessionStoreError: Error {
+    case ineligibleSessionWriteRejected
 }
 
 struct BackendAccountLease: Equatable {
@@ -318,6 +349,9 @@ final class BackendAuthSessionStore {
     }
 
     func save(_ session: BackendAuthSessionContract) throws {
+        guard session.isPrivateAccessEligible else {
+            throw BackendAuthSessionStoreError.ineligibleSessionWriteRejected
+        }
         let encoded = try JSONEncoder().encode(session)
         lock.lock()
         defer { lock.unlock() }
@@ -331,6 +365,9 @@ final class BackendAuthSessionStore {
         _ session: BackendAuthSessionContract,
         ifCurrentMatches captured: BackendAuthSessionContract
     ) throws -> Bool {
+        guard session.isPrivateAccessEligible else {
+            throw BackendAuthSessionStoreError.ineligibleSessionWriteRejected
+        }
         let encoded = try JSONEncoder().encode(session)
         lock.lock()
         defer { lock.unlock() }

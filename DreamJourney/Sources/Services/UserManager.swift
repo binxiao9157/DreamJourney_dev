@@ -9,6 +9,13 @@ enum UserProfileSaveResult {
 // MARK: - UserManager 单例：管理登录态
 final class UserManager {
 
+    private enum PrivateAccessState {
+        case signedOut
+        case validating
+        case authenticated
+        case suspended
+    }
+
     static let shared = UserManager()
     private init() {
         loadFromDefaults()
@@ -19,18 +26,154 @@ final class UserManager {
     private let kUserKey = "dj_current_user"
     private let kLoggedInKey = "dj_is_logged_in"
 
+    #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+    private var syntheticPrivateUserId: String?
+    #endif
+
     private var storedCurrentUser: UserModel?
+    private var privateAccessState: PrivateAccessState = .signedOut
     var currentUser: UserModel? {
         accountStateLock.lock()
         defer { accountStateLock.unlock() }
         return storedCurrentUser
     }
-    var isLoggedIn: Bool { currentUser != nil }
+    var isLoggedIn: Bool { canEnterPrivateUI }
+
+    var canEnterPrivateUI: Bool {
+        accountStateLock.lock()
+        let user = storedCurrentUser
+        let state = privateAccessState
+        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        let syntheticUserId = syntheticPrivateUserId
+        #endif
+        accountStateLock.unlock()
+        guard let user else { return false }
+        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        if syntheticUserId == user.id {
+            return true
+        }
+        #endif
+        guard state == .authenticated else { return false }
+        if let session = BackendAuthSessionStore.shared.currentSession,
+           session.isPrivateAccessEligible(for: user.id) {
+            return true
+        }
+        return false
+    }
+
+    var requiresPrivateAccessValidation: Bool {
+        accountStateLock.lock()
+        let user = storedCurrentUser
+        let state = privateAccessState
+        accountStateLock.unlock()
+        guard state == .validating, let user else { return false }
+        return BackendAuthSessionStore.shared.currentSession?.isPrivateAccessEligible(for: user.id) == true
+    }
 
     // MARK: - 登录
+    @discardableResult
+    func loginVerifiedAccount(phone: String, nickname: String, userId: String) -> Bool {
+        let normalizedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let session = BackendAuthSessionStore.shared.currentSession,
+              session.isPrivateAccessEligible(for: normalizedUserId) else {
+            return false
+        }
+        activateUser(phone: phone, nickname: nickname, userId: normalizedUserId)
+        return true
+    }
+
+    #if UI_QA_SIMULATOR && targetEnvironment(simulator)
     func login(phone: String, nickname: String, id: String? = nil) {
+        let normalizedUserId = id?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let userId = normalizedUserId?.isEmpty == false
+            ? normalizedUserId!
+            : "uiqa_\(phone.suffix(4))"
+        syntheticPrivateUserId = userId
+        activateUser(phone: phone, nickname: nickname, userId: userId)
+    }
+    #endif
+
+    @discardableResult
+    func reconcilePrivateAccessSession() -> Bool {
+        let capturedUser = currentUser
+        let capturedSession = BackendAuthSessionStore.shared.currentSession
+        guard let user = capturedUser,
+              let session = capturedSession,
+              session.isPrivateAccessEligible(for: user.id) else {
+            BackendAuthSessionStore.shared.clear()
+            accountStateLock.lock()
+            privateAccessState = .signedOut
+            if storedCurrentUser?.id == capturedUser?.id {
+                storedCurrentUser = nil
+                UserDefaults.standard.removeObject(forKey: kUserKey)
+                UserDefaults.standard.removeObject(forKey: kLoggedInKey)
+            }
+            accountStateLock.unlock()
+            return false
+        }
+        accountStateLock.lock()
+        privateAccessState = .validating
+        accountStateLock.unlock()
+        return true
+    }
+
+    @discardableResult
+    func markPrivateAccessValidated(session: BackendAuthSessionContract) -> Bool {
+        accountStateLock.lock()
+        let userId = storedCurrentUser?.id
+        accountStateLock.unlock()
+        guard let userId,
+              session.isPrivateAccessEligible(for: userId),
+              BackendAuthSessionStore.shared.currentSession?.matchesCASIdentity(session) == true else {
+            accountStateLock.lock()
+            privateAccessState = .suspended
+            accountStateLock.unlock()
+            return false
+        }
+        accountStateLock.lock()
+        guard storedCurrentUser?.id == userId else {
+            accountStateLock.unlock()
+            return false
+        }
+        privateAccessState = .authenticated
+        accountStateLock.unlock()
+        KnowledgeSyncCoordinator.shared.userDidChange(to: userId)
+        KBLiteManager.shared.switchUser(to: userId)
+        KnowledgeSyncCoordinator.shared.synchronizeCurrentUser(reason: "privateAccessValidated")
+        return true
+    }
+
+    func suspendPrivateAccess(for userId: String, reason: String, notify: Bool = true) {
+        accountStateLock.lock()
+        guard storedCurrentUser?.id == userId else {
+            accountStateLock.unlock()
+            return
+        }
+        let stateChanged = privateAccessState != .suspended
+        privateAccessState = .suspended
+        accountStateLock.unlock()
+
+        let applySuspension = {
+            KnowledgeSyncCoordinator.shared.userDidChange(to: nil)
+            KBLiteManager.shared.switchUser(to: nil)
+            if notify && stateChanged {
+                NotificationCenter.default.post(
+                    name: .djPrivateAccessDidSuspend,
+                    object: nil,
+                    userInfo: ["reason": reason]
+                )
+            }
+        }
+        if Thread.isMainThread {
+            applySuspension()
+        } else {
+            DispatchQueue.main.async(execute: applySuspension)
+        }
+    }
+
+    private func activateUser(phone: String, nickname: String, userId: String) {
         let user = UserModel(
-            id: id ?? "user_\(phone.suffix(4))",
+            id: userId,
             nickname: nickname.isEmpty ? "寻梦环游用户" : nickname,
             phone: phone,
             avatarName: "person.circle.fill"
@@ -38,6 +181,7 @@ final class UserManager {
         accountStateLock.lock()
         let previousOwnerUserId = storedCurrentUser?.id
         storedCurrentUser = user
+        privateAccessState = .authenticated
         EchoTraceAccountLifecycle.switchOwner(from: previousOwnerUserId, to: user.id)
         _ = saveToDefaultsLocked(user: user)
         KnowledgeSyncCoordinator.shared.userDidChange(to: user.id)
@@ -170,6 +314,10 @@ final class UserManager {
         EchoTraceAccountLifecycle.invalidateAndClear(ownerUserId: ownerUserId)
         DreamJourneyBackendClient.shared.logoutAuthSession()
         storedCurrentUser = nil
+        privateAccessState = .signedOut
+        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        syntheticPrivateUserId = nil
+        #endif
         UserDefaults.standard.removeObject(forKey: kUserKey)
         UserDefaults.standard.removeObject(forKey: kLoggedInKey)
         KnowledgeSyncCoordinator.shared.userDidChange(to: nil)
@@ -186,6 +334,10 @@ final class UserManager {
         }
         let ownerUserId = storedCurrentUser?.id
         storedCurrentUser = nil
+        privateAccessState = .signedOut
+        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        syntheticPrivateUserId = nil
+        #endif
         EchoTraceAccountLifecycle.invalidateAndClear(ownerUserId: ownerUserId)
         UserDefaults.standard.removeObject(forKey: kUserKey)
         UserDefaults.standard.removeObject(forKey: kLoggedInKey)
@@ -215,5 +367,6 @@ extension Notification.Name {
     static let djUserDidLogin  = Notification.Name("dj.user.didLogin")
     static let djUserDidLogout = Notification.Name("dj.user.didLogout")
     static let djUserDidUpdate = Notification.Name("dj.user.didUpdate")
+    static let djPrivateAccessDidSuspend = Notification.Name("dj.privateAccess.didSuspend")
     static let djNewMemoryCreated = Notification.Name("dj.memory.newCreated")
 }

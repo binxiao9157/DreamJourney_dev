@@ -256,7 +256,8 @@ final class FamilyCircleViewController: UIViewController {
             navigationController?.setNavigationBarHidden(true, animated: animated)
         }
         updateMemberListUI()
-        FamilyRepository.shared.refreshFromBackend(userId: UserManager.shared.currentUser?.id ?? "user_001") { [weak self] result in
+        guard let userId = UserManager.shared.currentUser?.id else { return }
+        FamilyRepository.shared.refreshFromBackend(userId: userId) { [weak self] result in
             guard case .success = result else { return }
             self?.updateMemberListUI()
         }

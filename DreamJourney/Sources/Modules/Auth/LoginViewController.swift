@@ -324,9 +324,20 @@ final class LoginViewController: UIViewController {
             showLoginAlert(title: "登录失败", message: "后端返回的用户数据不可用。")
             return
         }
-        let userId = user["id"] as? String
+        guard let userId = user["id"] as? String,
+              !userId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            showLoginAlert(title: "登录失败", message: "后端返回的用户身份不可用。")
+            return
+        }
         let nickname = (user["nickname"] as? String) ?? ""
-        UserManager.shared.login(phone: phone, nickname: nickname, id: userId)
+        guard UserManager.shared.loginVerifiedAccount(
+            phone: phone,
+            nickname: nickname,
+            userId: userId
+        ) else {
+            showLoginAlert(title: "登录失败", message: "登录会话已失效，请重新验证手机号。")
+            return
+        }
         didLogin?()
     }
 

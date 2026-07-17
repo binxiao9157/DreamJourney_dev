@@ -3159,10 +3159,72 @@ final class DreamJourneyBackendClient {
         case refreshExchange
     }
 
+    private struct EndpointDescriptor {
+        let path: String
+        let method: HTTPMethod
+        let authPolicy: RequestAuthPolicy
+        let purpose: String
+        let ownerBinding: String
+        let sessionUserAssertions: [String]
+
+        init(
+            path: String,
+            method: HTTPMethod,
+            authPolicy: RequestAuthPolicy,
+            payload: [String: Any]?,
+            sessionUserId: String?
+        ) {
+            self.path = path
+            self.method = method
+            self.authPolicy = authPolicy
+            purpose = Self.purpose(for: path)
+            sessionUserAssertions = [
+                Self.normalizedUserId(sessionUserId),
+                Self.normalizedUserId(payload?["userId"]),
+            ].compactMap { $0 }
+            switch authPolicy {
+            case .publicRequest:
+                ownerBinding = "public"
+            case .userRequired:
+                ownerBinding = sessionUserAssertions.isEmpty
+                    ? "sessionActor"
+                    : "sessionActorAssertion"
+            case .refreshExchange:
+                ownerBinding = "refreshTokenFamily"
+            }
+        }
+
+        private static func normalizedUserId(_ value: Any?) -> String? {
+            guard let value = value as? String else { return nil }
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return normalized.isEmpty ? nil : normalized
+        }
+
+        private static func purpose(for path: String) -> String {
+            let normalizedPath = path.split(separator: "?", maxSplits: 1).first.map(String.init) ?? path
+            if normalizedPath.hasPrefix("/auth/") || normalizedPath.hasPrefix("/v2/auth/") {
+                return "identity"
+            }
+            if normalizedPath.hasPrefix("/archive/") { return "archive" }
+            if normalizedPath.hasPrefix("/family/") { return "family" }
+            if normalizedPath.hasPrefix("/care/") { return "care" }
+            if normalizedPath.hasPrefix("/voice/") { return "voice" }
+            if normalizedPath.hasPrefix("/digital-human/") { return "digitalHuman" }
+            if normalizedPath.hasPrefix("/kb/") { return "knowledge" }
+            if normalizedPath.hasPrefix("/echo/") || normalizedPath == "/context/build" { return "echo" }
+            if normalizedPath == "/profile" || normalizedPath.hasPrefix("/account/") { return "account" }
+            if normalizedPath.hasPrefix("/config/") || normalizedPath.hasPrefix("/v2/release-policy") {
+                return "runtimePolicy"
+            }
+            return "business"
+        }
+    }
+
     enum ClientError: LocalizedError {
         case invalidJSONResponse
         case unsupportedJSONRoot
         case userAuthenticationRequired
+        case sessionUpgradeRequired(minimumBuild: Int?, accessMode: String)
         case accountScopeChanged
         case featurePolicyDenied(feature: String, reason: String)
         case recoveryAccessDenied(mode: String, code: String, reason: String)
@@ -3181,6 +3243,9 @@ final class DreamJourneyBackendClient {
                 return "后端返回的 JSON 根节点不是对象"
             case .userAuthenticationRequired:
                 return "需要登录后才能继续"
+            case .sessionUpgradeRequired(let minimumBuild, let accessMode):
+                let buildText = minimumBuild.map { "（最低版本 \($0)）" } ?? ""
+                return "当前登录会话需要重新验证或升级 App\(buildText)，现处于 \(accessMode) 模式"
             case .accountScopeChanged:
                 return "账号已切换，旧请求结果已丢弃"
             case .featurePolicyDenied(let feature, let reason):
@@ -3318,6 +3383,7 @@ final class DreamJourneyBackendClient {
             method: .delete,
             payload: nil,
             authPolicy: .userRequired,
+            sessionUserId: userId,
             completion: completion
         )
     }
@@ -3611,7 +3677,8 @@ final class DreamJourneyBackendClient {
             path: "/voice/profiles/\(pathComponent(userId))",
             method: .get,
             payload: nil,
-            authPolicy: .userRequired
+            authPolicy: .userRequired,
+            sessionUserId: userId
         ) { result in
             switch result {
             case .success(let object):
@@ -3632,7 +3699,13 @@ final class DreamJourneyBackendClient {
         completion: @escaping (Result<VoiceCloneProfileContract, Error>) -> Void
     ) {
         let path = "/voice/profiles/\(pathComponent(userId))/\(pathComponent(voiceProfileId))/disable"
-        requestJSON(path: path, method: .post, payload: nil, authPolicy: .userRequired) { result in
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: nil,
+            authPolicy: .userRequired,
+            sessionUserId: userId
+        ) { result in
             switch result {
             case .success(let object):
                 guard let profileJSON = object["profile"] as? [String: Any],
@@ -3653,7 +3726,13 @@ final class DreamJourneyBackendClient {
         completion: @escaping (Result<VoiceCloneProfileContract, Error>) -> Void
     ) {
         let path = "/voice/profiles/\(pathComponent(userId))/\(pathComponent(voiceProfileId))/refresh"
-        requestJSON(path: path, method: .post, payload: nil, authPolicy: .userRequired) { result in
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: nil,
+            authPolicy: .userRequired,
+            sessionUserId: userId
+        ) { result in
             switch result {
             case .success(let object):
                 guard let profileJSON = object["profile"] as? [String: Any],
@@ -3678,7 +3757,8 @@ final class DreamJourneyBackendClient {
             path: path,
             method: .post,
             payload: ["accepted": true],
-            authPolicy: .userRequired
+            authPolicy: .userRequired,
+            sessionUserId: userId
         ) { result in
             switch result {
             case .success(let object):
@@ -3972,6 +4052,35 @@ final class DreamJourneyBackendClient {
         }
     }
 
+    func resumePrivateAccessSession(completion: @escaping (Bool) -> Void) {
+        guard let capturedSession = authSessionStore.currentSession,
+              capturedSession.isPrivateAccessEligible,
+              UserManager.shared.currentUser?.id == capturedSession.userId else {
+            if let userId = UserManager.shared.currentUser?.id {
+                UserManager.shared.suspendPrivateAccess(
+                    for: userId,
+                    reason: "startupSessionUnavailable",
+                    notify: false
+                )
+            }
+            DispatchQueue.main.async { completion(false) }
+            return
+        }
+
+        refreshAuthSession(for: capturedSession) { refreshedSession in
+            guard let refreshedSession else {
+                UserManager.shared.suspendPrivateAccess(
+                    for: capturedSession.userId,
+                    reason: "startupSessionValidationFailed",
+                    notify: false
+                )
+                completion(false)
+                return
+            }
+            completion(UserManager.shared.markPrivateAccessValidated(session: refreshedSession))
+        }
+    }
+
     func logoutAuthSession() {
         guard let session = authSessionStore.currentSession else { return }
         requestJSON(
@@ -4070,6 +4179,7 @@ final class DreamJourneyBackendClient {
             method: .get,
             payload: nil,
             authPolicy: .userRequired,
+            sessionUserId: userId,
             completion: completion
         )
     }
@@ -4080,6 +4190,7 @@ final class DreamJourneyBackendClient {
             method: .get,
             payload: nil,
             authPolicy: .userRequired,
+            sessionUserId: userId,
             completion: completion
         )
     }
@@ -4106,6 +4217,7 @@ final class DreamJourneyBackendClient {
             method: .get,
             payload: nil,
             authPolicy: .userRequired,
+            sessionUserId: viewerUserId,
             completion: completion
         )
     }
@@ -4125,6 +4237,7 @@ final class DreamJourneyBackendClient {
             method: .post,
             payload: payload,
             authPolicy: .userRequired,
+            sessionUserId: userId,
             completion: completion
         )
     }
@@ -4144,6 +4257,7 @@ final class DreamJourneyBackendClient {
             method: .post,
             payload: payload,
             authPolicy: .userRequired,
+            sessionUserId: userId,
             completion: completion
         )
     }
@@ -4275,7 +4389,8 @@ final class DreamJourneyBackendClient {
             path: path,
             method: .get,
             payload: nil,
-            authPolicy: .userRequired
+            authPolicy: .userRequired,
+            sessionUserId: userId
         ) { result in
             switch result {
             case .success(let object):
@@ -4303,7 +4418,8 @@ final class DreamJourneyBackendClient {
             path: "/kb/snapshot/\(pathComponent(userId))",
             method: .get,
             payload: nil,
-            authPolicy: .userRequired
+            authPolicy: .userRequired,
+            sessionUserId: userId
         ) { result in
             switch result {
             case .success(let object):
@@ -4329,7 +4445,8 @@ final class DreamJourneyBackendClient {
             path: "/kb/source-ref-audit/\(pathComponent(userId))",
             method: .get,
             payload: nil,
-            authPolicy: .userRequired
+            authPolicy: .userRequired,
+            sessionUserId: userId
         ) { result in
             switch result {
             case .success(let object):
@@ -4451,6 +4568,7 @@ final class DreamJourneyBackendClient {
             method: .get,
             payload: nil,
             authPolicy: .userRequired,
+            sessionUserId: userId,
             completion: completion
         )
     }
@@ -4511,6 +4629,7 @@ final class DreamJourneyBackendClient {
             method: .get,
             payload: nil,
             authPolicy: .userRequired,
+            sessionUserId: userId,
             completion: completion
         )
     }
@@ -4575,18 +4694,47 @@ final class DreamJourneyBackendClient {
         recoveryClearSession: BackendAuthSessionContract? = nil,
         requiredAuthSession: BackendAuthSessionContract? = nil,
         accountLease: BackendAccountLease? = nil,
+        sessionUserId: String? = nil,
         featureDecision: FeatureDecision? = nil,
         additionalHeaders: [String: String] = [:],
         completion: @escaping (Result<[String: Any], Error>) -> Void
     ) {
+        let endpoint = EndpointDescriptor(
+            path: path,
+            method: method,
+            authPolicy: authPolicy,
+            payload: payload,
+            sessionUserId: sessionUserId
+        )
         let requestAuthSession: BackendAuthSessionContract?
         let requestAccountLease: BackendAccountLease?
-        switch authPolicy {
+        switch endpoint.authPolicy {
         case .userRequired:
+            guard UserManager.shared.canEnterPrivateUI else {
+                DispatchQueue.main.async {
+                    completion(.failure(ClientError.userAuthenticationRequired))
+                }
+                return
+            }
             let currentSession = authSessionStore.currentSession
             guard let authenticatedSession = currentSession else {
                 DispatchQueue.main.async {
                     completion(.failure(ClientError.userAuthenticationRequired))
+                }
+                return
+            }
+            guard authenticatedSession.isPrivateAccessEligible else {
+                DispatchQueue.main.async {
+                    completion(.failure(ClientError.sessionUpgradeRequired(
+                        minimumBuild: nil,
+                        accessMode: "signedOut"
+                    )))
+                }
+                return
+            }
+            guard endpoint.sessionUserAssertions.allSatisfy({ $0 == authenticatedSession.userId }) else {
+                DispatchQueue.main.async {
+                    completion(.failure(ClientError.accountScopeChanged))
                 }
                 return
             }
@@ -4638,6 +4786,7 @@ final class DreamJourneyBackendClient {
                             recoveryClearSession: recoveryClearSession,
                             requiredAuthSession: requiredAuthSession,
                             accountLease: requestAccountLease,
+                            sessionUserId: sessionUserId,
                             featureDecision: featureDecision,
                             additionalHeaders: additionalHeaders,
                             completion: completion
@@ -4691,8 +4840,19 @@ final class DreamJourneyBackendClient {
             return
         }
 
-        let url = "\(baseURL)\(path)"
-        var requestHeaders = authHeaders(for: authPolicy, session: requestAuthSession)
+        let url = "\(baseURL)\(endpoint.path)"
+        var baselineHeaders = authHeaders(for: endpoint.authPolicy, session: requestAuthSession) ?? HTTPHeaders()
+        baselineHeaders.add(
+            name: "X-DreamJourney-Client-Build",
+            value: String(FeatureGateService.shared.clientBuild)
+        )
+        baselineHeaders.add(
+            name: "X-DreamJourney-Auth-Contract-Version",
+            value: String(requestAuthSession?.contractVersion ?? (endpoint.authPolicy == .refreshExchange ? 2 : 0))
+        )
+        baselineHeaders.add(name: "X-DreamJourney-Request-Purpose", value: endpoint.purpose)
+        baselineHeaders.add(name: "X-DreamJourney-Owner-Binding", value: endpoint.ownerBinding)
+        var requestHeaders: HTTPHeaders? = baselineHeaders
         if !additionalHeaders.isEmpty {
             var headers = requestHeaders ?? HTTPHeaders()
             for (name, value) in additionalHeaders {
@@ -4707,7 +4867,13 @@ final class DreamJourneyBackendClient {
             }
             requestHeaders = headers
         }
-        AF.request(url, method: method, parameters: payload, encoding: JSONEncoding.default, headers: requestHeaders)
+        AF.request(
+            url,
+            method: endpoint.method,
+            parameters: payload,
+            encoding: JSONEncoding.default,
+            headers: requestHeaders
+        )
             .validate(statusCode: 200..<300)
             .responseData(queue: .global(qos: .utility)) { response in
                 guard self.isCurrentAccountLease(requestAccountLease) else {
@@ -4766,6 +4932,24 @@ final class DreamJourneyBackendClient {
                         }
                         return
                     }
+                    if statusCode == 426 {
+                        let contract = Self.clientUpgradeContract(from: response.data)
+                        if let userId = requestAuthSession?.userId {
+                            UserManager.shared.suspendPrivateAccess(
+                                for: userId,
+                                reason: "clientUpgradeRequired"
+                            )
+                        }
+                        self.deliverRequestResult(
+                            .failure(ClientError.sessionUpgradeRequired(
+                                minimumBuild: contract.minimumBuild,
+                                accessMode: contract.accessMode
+                            )),
+                            accountLease: requestAccountLease,
+                            completion: completion
+                        )
+                        return
+                    }
                     if statusCode == 401,
                        allowsRefresh,
                        authPolicy == .userRequired,
@@ -4782,6 +4966,7 @@ final class DreamJourneyBackendClient {
                                 recoveryClearSession: recoveryClearSession,
                                 requiredAuthSession: currentSession,
                                 accountLease: requestAccountLease,
+                                sessionUserId: sessionUserId,
                                 featureDecision: preparedFeatureDecision,
                                 additionalHeaders: additionalHeaders,
                                 completion: completion
@@ -4820,11 +5005,16 @@ final class DreamJourneyBackendClient {
                                     recoveryClearSession: recoveryClearSession,
                                     requiredAuthSession: refreshedSession,
                                     accountLease: requestAccountLease,
+                                    sessionUserId: sessionUserId,
                                     featureDecision: preparedFeatureDecision,
                                     additionalHeaders: additionalHeaders,
                                     completion: completion
                                 )
                             } else {
+                                UserManager.shared.suspendPrivateAccess(
+                                    for: requestAuthSession.userId,
+                                    reason: "authRefreshUnavailable"
+                                )
                                 let context = Self.backendErrorContext(from: response.data)
                                     ?? .init(detail: "登录状态已失效，请重新登录")
                                 completion(.failure(ClientError.backendError(
@@ -4894,11 +5084,23 @@ final class DreamJourneyBackendClient {
     ) {
         let transition = recoveryRuntimePolicyStore.update(policy)
         if policy.mode == .signedOut || policy.authenticatedSessionPolicy == "clear" {
+            let sessionToClear = capturedSession ?? authSessionStore.currentSession
+            let didClear: Bool
             if let capturedSession {
-                authSessionStore.clear(ifCurrentMatches: capturedSession)
+                didClear = authSessionStore.clear(ifCurrentMatches: capturedSession)
             } else {
                 authSessionStore.clear()
+                didClear = sessionToClear != nil
             }
+            if didClear, let userId = sessionToClear?.userId {
+                UserManager.shared.invalidateBackendSession(for: userId)
+            }
+        } else if policy.authenticatedSessionPolicy == "suspend",
+                  let userId = (capturedSession ?? authSessionStore.currentSession)?.userId {
+            UserManager.shared.suspendPrivateAccess(
+                for: userId,
+                reason: "recoveryPolicySuspended"
+            )
         }
         guard transition.authorityEpochChanged else { return }
         RuntimeCapabilitySnapshotStore.shared.invalidate()
@@ -4921,11 +5123,35 @@ final class DreamJourneyBackendClient {
         return BackendRecoveryRuntimePolicy(json: recovery)
     }
 
+    private static func clientUpgradeContract(from data: Data?) -> (minimumBuild: Int?, accessMode: String) {
+        guard let data,
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let detail = object["detail"] as? [String: Any] else {
+            return (nil, "readOnly")
+        }
+        let minimumBuild: Int?
+        if let value = detail["minimumClientBuild"] as? Int {
+            minimumBuild = value
+        } else if let value = detail["minimumClientBuild"] as? NSNumber {
+            minimumBuild = value.intValue
+        } else if let value = detail["minimumClientBuild"] as? String {
+            minimumBuild = Int(value)
+        } else {
+            minimumBuild = nil
+        }
+        let accessMode = normalizedBackendErrorString(detail["accessMode"]) ?? "readOnly"
+        return (minimumBuild, accessMode)
+    }
+
     @discardableResult
     private func adoptAuthSession(from object: [String: Any]) throws -> Bool {
         guard let session = try decodedAuthSession(from: object) else {
             authSessionStore.clear()
             return false
+        }
+        guard session.isPrivateAccessEligible else {
+            authSessionStore.clear()
+            throw ClientError.sessionUpgradeRequired(minimumBuild: nil, accessMode: "signedOut")
         }
         try authSessionStore.save(session)
         return true
@@ -4951,6 +5177,12 @@ final class DreamJourneyBackendClient {
         for capturedSession: BackendAuthSessionContract,
         completion: @escaping (BackendAuthSessionContract?) -> Void
     ) {
+        guard capturedSession.isPrivateAccessEligible else {
+            authSessionStore.clear(ifCurrentMatches: capturedSession)
+            UserManager.shared.invalidateBackendSession(for: capturedSession.userId)
+            DispatchQueue.main.async { completion(nil) }
+            return
+        }
         authRefreshQueue.async {
             if var active = self.activeAuthRefreshGroup,
                active.capturedSession.matchesCASIdentity(capturedSession) {

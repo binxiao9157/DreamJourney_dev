@@ -33,6 +33,10 @@ enum TokenFamilyClientModelSmoke {
         require(decoded.isLegacy, "old Keychain data must be explicitly legacy")
         require(decoded.tokenFamilyId == nil, "legacy Keychain data must not fabricate a token family")
         require(decoded.sessionVersion == nil, "legacy Keychain data must not fabricate a session version")
+        require(!decoded.isPrivateAccessEligible, "legacy Keychain data must never authorize private access")
+        requireThrows("legacy Keychain data must remain read-only and cannot be saved again") {
+            try BackendAuthSessionStore.shared.save(decoded)
+        }
 
         let encoded = try JSONEncoder().encode(decoded)
         let object = try requireObject(encoded)
@@ -124,7 +128,7 @@ enum TokenFamilyClientModelSmoke {
 
         let legacyA = requireSession(BackendAuthSessionContract(json: authJSON(sessionId: "legacy_a", userId: "user_a", contractVersion: 1)))
         let legacyB = requireSession(BackendAuthSessionContract(json: authJSON(sessionId: "legacy_b", userId: "user_a", contractVersion: 1)))
-        require(legacyB.isValidRefreshSuccessor(of: legacyA), "legacy v1 rotation must remain compatible without lineage")
+        require(!legacyB.isValidRefreshSuccessor(of: legacyA), "legacy v1 rotation must require reauthentication")
         require(!successor.isValidRefreshSuccessor(of: legacyA), "legacy-to-v2 refresh must not infer lineage")
         require(!legacyB.isValidRefreshSuccessor(of: captured), "v2 refresh must not downgrade to legacy")
     }

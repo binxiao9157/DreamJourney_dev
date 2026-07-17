@@ -84,7 +84,7 @@ def main() -> None:
     request = client[request_span[0] : request_span[1]]
     for snippet in (
         "case userAuthenticationRequired",
-        "switch authPolicy",
+        "switch endpoint.authPolicy",
         "case .userRequired:",
         "let currentSession = authSessionStore.currentSession",
         "guard let authenticatedSession = currentSession else",
@@ -96,7 +96,7 @@ def main() -> None:
                 f"local user-session preflight is missing: {snippet}")
     preflight = request.index("guard let authenticatedSession = currentSession else")
     recovery_gate = request.index("RecoveryRuntimePolicyStore.shared.requestDecision")
-    network_request = request.index("AF.request(url")
+    network_request = request.index("AF.request(")
     require(
         preflight < recovery_gate < network_request,
         "user session preflight must run before recovery fetches and AF.request",

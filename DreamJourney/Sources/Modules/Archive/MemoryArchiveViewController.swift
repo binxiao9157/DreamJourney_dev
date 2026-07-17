@@ -2759,12 +2759,15 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     @objc private func mapFootprintTapped() {
-        guard isTimeLetterCreationEnabled else { return }
-        let currentUser = UserManager.shared.currentUser
+        guard isTimeLetterCreationEnabled,
+              let currentUser = UserManager.shared.currentUser else {
+            showToast("请先登录后查看足迹", type: .info)
+            return
+        }
         let viewController = MapFootprintViewController(
             viewMode: .host,
-            ownerId: currentUser?.id ?? "user_001",
-            ownerName: currentUser?.nickname
+            ownerId: currentUser.id,
+            ownerName: currentUser.nickname
         )
         navigationController?.pushViewController(viewController, animated: true)
     }
@@ -2987,6 +2990,10 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     private func requestRemoteArchiveImageAnalysis(_ item: MemoryArchiveItem, image: UIImage) {
+        guard let userId = currentArchiveAnalysisUserId else {
+            markArchiveImageAnalysisFailed(item, reason: "user_authentication_required")
+            return
+        }
         guard let imageBase64 = imageBase64ForArchiveAnalysis(image) else {
             var updatedItem = item
             updatedItem.markAnalysisFailed(reason: "image_encoding_failed")
@@ -2997,7 +3004,7 @@ final class MemoryArchiveViewController: UIViewController {
         }
 
         DreamJourneyBackendClient.shared.requestArchiveImageAnalysis(
-            userId: currentArchiveAnalysisUserId,
+            userId: userId,
             archiveItemId: item.id,
             imageBase64: imageBase64
         ) { [weak self] result in
@@ -3042,8 +3049,8 @@ final class MemoryArchiveViewController: UIViewController {
         showToast("AI 分析暂不可用，可稍后重试", type: .error)
     }
 
-    private var currentArchiveAnalysisUserId: String {
-        UserManager.shared.currentUser?.id ?? "user_001"
+    private var currentArchiveAnalysisUserId: String? {
+        UserManager.shared.currentUser?.id
     }
 
     private func archiveAnalysisFailureReason(_ error: Error) -> String {

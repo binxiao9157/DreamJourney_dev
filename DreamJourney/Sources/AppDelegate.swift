@@ -20,7 +20,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         TencentVirtualmanSDKBridge.registerFactory()
         configureLaunchArgumentFeatureFlagsIfNeeded()
-        let currentKnowledgeUserId = UserManager.shared.currentUser?.id
+        UserManager.shared.reconcilePrivateAccessSession()
+        let currentKnowledgeUserId = UserManager.shared.canEnterPrivateUI
+            ? UserManager.shared.currentUser?.id
+            : nil
         KnowledgeSyncCoordinator.shared.userDidChange(to: currentKnowledgeUserId)
         KBLiteManager.shared.switchUser(to: currentKnowledgeUserId)
 

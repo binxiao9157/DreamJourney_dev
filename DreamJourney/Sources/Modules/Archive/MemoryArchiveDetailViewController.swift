@@ -1821,6 +1821,10 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     }
 
     private func requestRemoteImageAnalysisRetryAfterRuntimeCheck() {
+        guard let userId = currentArchiveAnalysisUserId else {
+            showToast("请先登录后重新分析", type: .error)
+            return
+        }
         guard let localPath = item.resolvedLocalFilePath,
               let image = UIImage(contentsOfFile: localPath),
               let imageBase64 = imageBase64ForRemoteArchiveAnalysis(image) else {
@@ -1835,7 +1839,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         configureNavigationActions()
 
         DreamJourneyBackendClient.shared.requestArchiveImageAnalysis(
-            userId: currentArchiveAnalysisUserId,
+            userId: userId,
             archiveItemId: item.id,
             imageBase64: imageBase64
         ) { [weak self] result in
@@ -1874,8 +1878,8 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         showToast(capability.availabilityDisplayText, type: .error)
     }
 
-    private var currentArchiveAnalysisUserId: String {
-        UserManager.shared.currentUser?.id ?? "user_001"
+    private var currentArchiveAnalysisUserId: String? {
+        UserManager.shared.currentUser?.id
     }
 
     private func imageBase64ForRemoteArchiveAnalysis(_ image: UIImage) -> String? {

@@ -660,7 +660,7 @@ final class MemoryArchiveRepository {
     }
 
     private var currentUserId: String {
-        UserManager.shared.currentUser?.id ?? "user_001"
+        UserManager.shared.currentUser?.id ?? ""
     }
 
     private var currentArchiveOwnerId: String {

@@ -48,7 +48,7 @@ def main():
 
     runtime, public_headers = request_json("GET", "/config/runtime")
     route_auth = ((runtime.get("auth") or {}).get("routeAuthentication") or {})
-    require(route_auth.get("routeCount") == 64, "route auth inventory must pin 64 routes")
+    require(route_auth.get("routeCount") == 68, "route auth inventory must pin 68 routes")
     require(route_auth.get("unclassifiedCount") == 0, "route auth inventory is incomplete")
     require(
         public_headers.get("x-dreamjourney-route-auth-reason") == "publicRoute",
