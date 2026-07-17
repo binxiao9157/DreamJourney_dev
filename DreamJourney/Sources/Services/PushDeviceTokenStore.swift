@@ -47,6 +47,32 @@ struct PushDeviceTokenRegistration: Codable, Equatable {
     }
 }
 
+private struct PushDeviceTokenRegistrationEnvelope: Codable {
+    let subjectId: String
+    let vaultId: String
+    let generation: UInt64
+    let generationId: UUID
+    let authorityEpoch: String
+    let registration: PushDeviceTokenRegistration
+
+    init(registration: PushDeviceTokenRegistration, accountLease: AccountLease) {
+        subjectId = accountLease.subjectId
+        vaultId = accountLease.vaultId
+        generation = accountLease.generation
+        generationId = accountLease.generationId
+        authorityEpoch = accountLease.authorityEpoch
+        self.registration = registration
+    }
+
+    func matches(_ accountLease: AccountLease) -> Bool {
+        subjectId == accountLease.subjectId
+            && vaultId == accountLease.vaultId
+            && generation == accountLease.generation
+            && generationId == accountLease.generationId
+            && authorityEpoch == accountLease.authorityEpoch
+    }
+}
+
 enum PushDeviceTokenEnvironment {
     static var current: String {
         #if DEBUG
@@ -63,9 +89,14 @@ final class PushDeviceTokenStore {
     private let storageKey = "dj.pushDeviceToken.registration"
     private let deviceTokenKey = "dj.pushDeviceToken.localToken"
     private let defaults: UserDefaults
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
 
-    init(defaults: UserDefaults = .standard) {
+    init(
+        defaults: UserDefaults = .standard,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared
+    ) {
         self.defaults = defaults
+        self.accountLeaseRuntime = accountLeaseRuntime
     }
 
     func saveDeviceToken(_ token: String) {
@@ -82,19 +113,44 @@ final class PushDeviceTokenStore {
         return token
     }
 
-    func saveRegistration(_ registration: PushDeviceTokenRegistration) -> Bool {
-        guard let data = try? JSONEncoder().encode(registration) else {
+    func saveRegistration(
+        _ registration: PushDeviceTokenRegistration,
+        accountLease: AccountLease
+    ) -> Bool {
+        guard registration.userId == accountLease.subjectId,
+              accountLeaseRuntime.validate(accountLease, at: .commit).allowed,
+              let data = try? JSONEncoder().encode(
+                  PushDeviceTokenRegistrationEnvelope(
+                      registration: registration,
+                      accountLease: accountLease
+                  )
+              ) else {
             return false
         }
         defaults.set(data, forKey: storageKey)
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            if defaults.data(forKey: storageKey) == data {
+                defaults.removeObject(forKey: storageKey)
+            }
+            return false
+        }
         return true
     }
 
     func loadRegistration() -> PushDeviceTokenRegistration? {
-        guard let data = defaults.data(forKey: storageKey) else {
+        guard let accountLease = accountLeaseRuntime.capture(forSubjectId: nil),
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed,
+              let data = defaults.data(forKey: storageKey),
+              let envelope = try? JSONDecoder().decode(
+                  PushDeviceTokenRegistrationEnvelope.self,
+                  from: data
+              ),
+              envelope.matches(accountLease),
+              envelope.registration.userId == accountLease.subjectId,
+              accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
             return nil
         }
-        return try? JSONDecoder().decode(PushDeviceTokenRegistration.self, from: data)
+        return envelope.registration
     }
 
     func registration(for userId: String) -> PushDeviceTokenRegistration? {

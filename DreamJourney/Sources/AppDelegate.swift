@@ -165,6 +165,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     private func syncStoredPushDeviceTokenIfPossible() {
         guard DreamJourneyBackendClient.shared.isPushDeviceTokenRegistrationConfigured,
               let userId = UserManager.shared.currentUser?.id,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: userId),
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed,
               let deviceToken = PushDeviceTokenStore.shared.loadDeviceToken() else {
             return
         }
@@ -176,14 +178,23 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             environment: PushDeviceTokenEnvironment.current,
             deviceId: deviceId
         ) { result in
+            guard AccountLeaseRuntime.shared.validate(accountLease, at: .commit).allowed else {
+                return
+            }
             switch result {
             case .success(let object):
                 guard let item = object["item"] as? [String: Any],
                       let registration = PushDeviceTokenRegistration(json: item) else {
                     return
                 }
-                _ = PushDeviceTokenStore.shared.saveRegistration(registration)
+                _ = PushDeviceTokenStore.shared.saveRegistration(
+                    registration,
+                    accountLease: accountLease
+                )
             case .failure(let error):
+                guard AccountLeaseRuntime.shared.validate(accountLease, at: .runtime).allowed else {
+                    return
+                }
                 print("[PushDeviceToken] backend registration failed: \(error.localizedDescription)")
             }
         }

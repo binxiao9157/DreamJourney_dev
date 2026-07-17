@@ -4567,24 +4567,35 @@ final class EchoViewController: UIViewController {
 
     private func scheduleDelayedReplyNotificationIfNeeded(rawTranscript: String) {
         guard !viewModel.isNeutralSafetyMode,
-              let delayedReply = viewModel.pendingDelayedReply else {
+              let delayedReply = viewModel.pendingDelayedReply,
+              let userId = UserManager.shared.currentUser?.id,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: userId),
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
             return
         }
 
-        EchoDelayedReplyNotificationScheduler.shared.requestAuthorizationIfNeeded { [weak self] granted in
+        EchoDelayedReplyNotificationScheduler.shared.requestAuthorizationIfNeeded(
+            accountLease: accountLease
+        ) { [weak self] granted in
             guard let self,
                   granted,
+                  AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed,
                   !self.viewModel.isNeutralSafetyMode,
                   self.viewModel.pendingDelayedReply?.id == delayedReply.id else { return }
-            EchoDelayedReplyNotificationScheduler.shared.schedule(delayedReply) { error in
+            EchoDelayedReplyNotificationScheduler.shared.schedule(
+                delayedReply,
+                accountLease: accountLease
+            ) { error in
+                guard AccountLeaseRuntime.shared.validate(accountLease, at: .runtime).allowed else {
+                    return
+                }
                 if let error {
                     print("[Echo] delayed reply local notification failed: \(error.localizedDescription)")
                 }
             }
         }
 
-        guard DreamJourneyBackendClient.shared.isEchoDelayedReplyPushConfigured,
-              let userId = UserManager.shared.currentUser?.id else {
+        guard DreamJourneyBackendClient.shared.isEchoDelayedReplyPushConfigured else {
             return
         }
 
@@ -4598,15 +4609,22 @@ final class EchoViewController: UIViewController {
                 environment: PushDeviceTokenEnvironment.current,
                 deviceId: UIDevice.current.identifierForVendor?.uuidString ?? "ios-device"
             ) { [weak self] result in
+                guard AccountLeaseRuntime.shared.validate(accountLease, at: .commit).allowed else {
+                    return
+                }
                 if case .success(let object) = result,
                    let item = object["item"] as? [String: Any],
                    let registration = PushDeviceTokenRegistration(json: item) {
-                    _ = tokenStore.saveRegistration(registration)
+                    _ = tokenStore.saveRegistration(
+                        registration,
+                        accountLease: accountLease
+                    )
                 }
                 self?.submitDelayedReplyPush(
                     userId: userId,
                     delayedReply: delayedReply,
-                    rawTranscript: rawTranscript
+                    rawTranscript: rawTranscript,
+                    accountLease: accountLease
                 )
             }
             return
@@ -4614,16 +4632,20 @@ final class EchoViewController: UIViewController {
         submitDelayedReplyPush(
             userId: userId,
             delayedReply: delayedReply,
-            rawTranscript: rawTranscript
+            rawTranscript: rawTranscript,
+            accountLease: accountLease
         )
     }
 
     private func submitDelayedReplyPush(
         userId: String,
         delayedReply: EchoDelayedReply,
-        rawTranscript: String
+        rawTranscript: String,
+        accountLease: AccountLease
     ) {
-        guard !viewModel.isNeutralSafetyMode,
+        guard accountLease.subjectId == userId,
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed,
+              !viewModel.isNeutralSafetyMode,
               viewModel.pendingDelayedReply?.id == delayedReply.id else {
             return
         }
@@ -4632,6 +4654,9 @@ final class EchoViewController: UIViewController {
             delayedReply: delayedReply,
             rawTranscript: rawTranscript
         ) { result in
+            guard AccountLeaseRuntime.shared.validate(accountLease, at: .runtime).allowed else {
+                return
+            }
             if case .failure(let error) = result {
                 print("[Echo] delayed reply push contract failed: \(error.localizedDescription)")
             }
