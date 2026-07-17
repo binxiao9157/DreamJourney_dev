@@ -1,6 +1,191 @@
 import CryptoKit
 import Foundation
 
+enum BackendRecoveryRuntimeMode: String, Codable {
+    case normal
+    case readOnly
+    case signedOut
+    case maintenance
+}
+
+struct RecoveryRuntimeRequestDecision: Equatable {
+    let allowed: Bool
+    let code: String
+    let reason: String
+}
+
+struct RecoveryRuntimePolicyTransition: Equatable {
+    let authorityEpochChanged: Bool
+    let modeChanged: Bool
+    let previousAuthorityEpoch: String
+    let currentAuthorityEpoch: String
+}
+
+struct BackendRecoveryRuntimePolicy: Codable, Equatable {
+    private static let infrastructurePaths: Set<String> = [
+        "/health", "/live", "/ready", "/config/runtime",
+    ]
+    private static let readMethods: Set<String> = ["GET", "HEAD", "OPTIONS"]
+
+    let schemaVersion: Int
+    let mode: BackendRecoveryRuntimeMode
+    let authorityEpoch: String
+    let writesAllowed: Bool
+    let authenticatedSessionPolicy: String
+    let cacheWritePolicy: String
+    let scope: String
+    let configurationValid: Bool
+    let contractVersion: Int
+
+    static let unresolved = BackendRecoveryRuntimePolicy(
+        schemaVersion: 1,
+        mode: .maintenance,
+        authorityEpoch: "unresolved",
+        writesAllowed: false,
+        authenticatedSessionPolicy: "suspend",
+        cacheWritePolicy: "disabled",
+        scope: "globalRecoveryFence",
+        configurationValid: false,
+        contractVersion: 1
+    )
+
+    init(json: [String: Any]?) {
+        guard let json,
+              let modeValue = json["mode"] as? String,
+              let mode = BackendRecoveryRuntimeMode(rawValue: modeValue),
+              let authorityEpoch = (json["authorityEpoch"] as? String)?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+              !authorityEpoch.isEmpty,
+              Self.intValue(json["schemaVersion"]) ?? 0 >= 1,
+              Self.intValue(json["contractVersion"]) ?? 0 >= 1,
+              json["scope"] as? String == "globalRecoveryFence",
+              json["configurationValid"] as? Bool ?? false else {
+            self = .unresolved
+            return
+        }
+
+        schemaVersion = Self.intValue(json["schemaVersion"]) ?? 1
+        self.mode = mode
+        self.authorityEpoch = authorityEpoch
+        writesAllowed = (json["writesAllowed"] as? Bool ?? false) && mode == .normal
+        authenticatedSessionPolicy = json["authenticatedSessionPolicy"] as? String ?? "suspend"
+        cacheWritePolicy = json["cacheWritePolicy"] as? String ?? "disabled"
+        scope = "globalRecoveryFence"
+        configurationValid = true
+        contractVersion = Self.intValue(json["contractVersion"]) ?? 1
+    }
+
+    func requestDecision(method: String, path: String) -> RecoveryRuntimeRequestDecision {
+        let normalizedMethod = method.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let normalizedPath = path.split(separator: "?", maxSplits: 1).first.map(String.init) ?? path
+        if Self.infrastructurePaths.contains(normalizedPath) {
+            return .init(allowed: true, code: "recoveryInfrastructureAllowed", reason: "infrastructurePath")
+        }
+        guard configurationValid else {
+            return .init(allowed: false, code: "recoveryRuntimeUnknown", reason: "runtimePolicyUnresolved")
+        }
+        if mode == .normal {
+            if Self.readMethods.contains(normalizedMethod) || writesAllowed {
+                return .init(allowed: true, code: "recoveryNormal", reason: "normalOperation")
+            }
+            return .init(allowed: false, code: "recoveryWriteBlocked", reason: "writesDisabled")
+        }
+        if mode == .readOnly, Self.readMethods.contains(normalizedMethod) {
+            return .init(allowed: true, code: "recoveryReadAllowed", reason: "readOnlyOperation")
+        }
+        if mode == .readOnly {
+            return .init(allowed: false, code: "recoveryWriteBlocked", reason: "readOnlyRecoveryFence")
+        }
+        return .init(allowed: false, code: "recoveryMaintenance", reason: "\(mode.rawValue)RecoveryFence")
+    }
+
+    private init(
+        schemaVersion: Int,
+        mode: BackendRecoveryRuntimeMode,
+        authorityEpoch: String,
+        writesAllowed: Bool,
+        authenticatedSessionPolicy: String,
+        cacheWritePolicy: String,
+        scope: String,
+        configurationValid: Bool,
+        contractVersion: Int
+    ) {
+        self.schemaVersion = schemaVersion
+        self.mode = mode
+        self.authorityEpoch = authorityEpoch
+        self.writesAllowed = writesAllowed
+        self.authenticatedSessionPolicy = authenticatedSessionPolicy
+        self.cacheWritePolicy = cacheWritePolicy
+        self.scope = scope
+        self.configurationValid = configurationValid
+        self.contractVersion = contractVersion
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = value as? String { return Int(value) }
+        return nil
+    }
+}
+
+final class RecoveryRuntimePolicyStore {
+    static let shared = RecoveryRuntimePolicyStore()
+
+    private static let storageKey = "dj.recovery.runtime.policy.v1"
+    private let lock = NSLock()
+    private let userDefaults: UserDefaults
+    private var policy: BackendRecoveryRuntimePolicy
+
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+        if let data = userDefaults.data(forKey: Self.storageKey),
+           let restored = try? JSONDecoder().decode(BackendRecoveryRuntimePolicy.self, from: data),
+           restored.configurationValid {
+            policy = restored
+        } else {
+            policy = .unresolved
+        }
+    }
+
+    var currentPolicy: BackendRecoveryRuntimePolicy {
+        lock.lock()
+        defer { lock.unlock() }
+        return policy
+    }
+
+    @discardableResult
+    func update(_ nextPolicy: BackendRecoveryRuntimePolicy) -> RecoveryRuntimePolicyTransition {
+        lock.lock()
+        let previous = policy
+        policy = nextPolicy
+        if let data = try? JSONEncoder().encode(nextPolicy) {
+            userDefaults.set(data, forKey: Self.storageKey)
+        } else {
+            userDefaults.removeObject(forKey: Self.storageKey)
+        }
+        lock.unlock()
+
+        return RecoveryRuntimePolicyTransition(
+            authorityEpochChanged: previous.authorityEpoch != "unresolved"
+                && previous.authorityEpoch != nextPolicy.authorityEpoch,
+            modeChanged: previous.mode != nextPolicy.mode,
+            previousAuthorityEpoch: previous.authorityEpoch,
+            currentAuthorityEpoch: nextPolicy.authorityEpoch
+        )
+    }
+
+    func requestDecision(method: String, path: String) -> RecoveryRuntimeRequestDecision {
+        currentPolicy.requestDecision(method: method, path: path)
+    }
+}
+
+extension Notification.Name {
+    static let djRecoveryAuthorityEpochDidChange = Notification.Name(
+        "dj.recovery.authorityEpochDidChange"
+    )
+}
+
 enum ReleasePolicyRiskClass: String, Codable {
     case ownerTextCore
     case futureBeta

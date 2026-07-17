@@ -838,6 +838,7 @@ struct BackendRuntimeConfig {
     let voiceClone: VoiceCloneRuntimeCapability
     let digitalHuman: DigitalHumanRuntimeCapability
     let releasePolicy: BackendReleasePolicyRuntimeDescriptor
+    let recovery: BackendRecoveryRuntimePolicy
 
     init(json: [String: Any]) {
         capabilitySnapshotSchemaVersion = Self.intValue(json["capabilitySnapshotSchemaVersion"]) ?? 0
@@ -859,6 +860,7 @@ struct BackendRuntimeConfig {
         let voiceClone = json["voiceClone"] as? [String: Any]
         let digitalHuman = json["digitalHuman"] as? [String: Any]
         let releasePolicy = json["releasePolicy"] as? [String: Any]
+        let recovery = json["recovery"] as? [String: Any]
         realtimeTokenAvailable = capabilities?["realtimeToken"] as? Bool ?? false
         voiceRuntimeConfigEndpoint = voice?["runtimeConfigEndpoint"] as? String
         fallbackMode = fallback?["mode"] as? String
@@ -879,6 +881,7 @@ struct BackendRuntimeConfig {
             axisSnapshot: decodedSnapshots[RuntimeCapabilityID.digitalHumanLivePanel.rawValue]
         )
         self.releasePolicy = BackendReleasePolicyRuntimeDescriptor(json: releasePolicy)
+        self.recovery = BackendRecoveryRuntimePolicy(json: recovery)
     }
 
     private static func intValue(_ value: Any?) -> Int? {
@@ -3154,6 +3157,7 @@ final class DreamJourneyBackendClient {
         case invalidJSONResponse
         case unsupportedJSONRoot
         case featurePolicyDenied(feature: String, reason: String)
+        case recoveryAccessDenied(mode: String, code: String, reason: String)
         case backendError(statusCode: Int?, context: BackendErrorContext)
 
         var backendErrorContext: BackendErrorContext? {
@@ -3169,6 +3173,8 @@ final class DreamJourneyBackendClient {
                 return "后端返回的 JSON 根节点不是对象"
             case .featurePolicyDenied(let feature, let reason):
                 return "功能请求已被发布策略拦截（\(feature)：\(reason)）"
+            case .recoveryAccessDenied(let mode, let code, let reason):
+                return "服务处于恢复状态（\(mode)：\(code)，\(reason)）"
             case .backendError(let statusCode, let context):
                 if let statusCode {
                     return "后端请求失败（\(statusCode)）：\(context.detail)"
@@ -3184,6 +3190,7 @@ final class DreamJourneyBackendClient {
     private let hasExplicitBaseURL: Bool
     private let authSessionStore = BackendAuthSessionStore.shared
     private let releasePolicyStore = ReleasePolicyStore.shared
+    private let recoveryRuntimePolicyStore = RecoveryRuntimePolicyStore.shared
     private let authRefreshQueue = DispatchQueue(label: "com.dreamjourney.backend-auth-refresh")
     private var authRefreshWaiters: [(Bool) -> Void] = []
     private var isAuthRefreshInFlight = false
@@ -3292,6 +3299,8 @@ final class DreamJourneyBackendClient {
             path: "/config/runtime",
             method: .get,
             payload: nil,
+            authPolicy: .anonymous,
+            allowsRefresh: false,
             additionalHeaders: [
                 "X-DreamJourney-Runtime-Contract-Version": "2",
                 "X-DreamJourney-Client-Build": String(FeatureGateService.shared.clientBuild),
@@ -3299,6 +3308,7 @@ final class DreamJourneyBackendClient {
         ) { result in
             let mapped = result.map(BackendRuntimeConfig.init(json:))
             if case .success(let config) = mapped {
+                self.adoptRecoveryRuntimePolicy(config.recovery)
                 RuntimeCapabilitySnapshotStore.shared.replace(with: config.capabilitySnapshots)
             }
             completion(mapped)
@@ -4341,10 +4351,57 @@ final class DreamJourneyBackendClient {
         payload: [String: Any]?,
         authPolicy: RequestAuthPolicy = .automatic,
         allowsRefresh: Bool = true,
+        allowsRecoveryRefresh: Bool = true,
         featureDecision: FeatureDecision? = nil,
         additionalHeaders: [String: String] = [:],
         completion: @escaping (Result<[String: Any], Error>) -> Void
     ) {
+        let recoveryDecision = RecoveryRuntimePolicyStore.shared.requestDecision(
+            method: method.rawValue,
+            path: path
+        )
+        if !recoveryDecision.allowed {
+            if allowsRecoveryRefresh, path != "/config/runtime" {
+                fetchRuntimeConfig { result in
+                    switch result {
+                    case .success:
+                        self.requestJSON(
+                            path: path,
+                            method: method,
+                            payload: payload,
+                            authPolicy: authPolicy,
+                            allowsRefresh: allowsRefresh,
+                            allowsRecoveryRefresh: false,
+                            featureDecision: featureDecision,
+                            additionalHeaders: additionalHeaders,
+                            completion: completion
+                        )
+                    case .failure:
+                        let current = self.recoveryRuntimePolicyStore.currentPolicy
+                        let denied = self.recoveryRuntimePolicyStore.requestDecision(
+                            method: method.rawValue,
+                            path: path
+                        )
+                        completion(.failure(ClientError.recoveryAccessDenied(
+                            mode: current.mode.rawValue,
+                            code: denied.code,
+                            reason: denied.reason
+                        )))
+                    }
+                }
+                return
+            }
+            let current = recoveryRuntimePolicyStore.currentPolicy
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.recoveryAccessDenied(
+                    mode: current.mode.rawValue,
+                    code: recoveryDecision.code,
+                    reason: recoveryDecision.reason
+                )))
+            }
+            return
+        }
+
         let gatedFeature = FeatureGateService.shared.featureForRequest(
             path: path,
             method: method,
@@ -4407,6 +4464,21 @@ final class DreamJourneyBackendClient {
                     }
                 case .failure(let error):
                     let statusCode = response.response?.statusCode
+                    if let recoveryPolicy = Self.recoveryRuntimePolicy(from: response.data) {
+                        self.adoptRecoveryRuntimePolicy(recoveryPolicy)
+                        let denied = recoveryPolicy.requestDecision(
+                            method: method.rawValue,
+                            path: path
+                        )
+                        DispatchQueue.main.async {
+                            completion(.failure(ClientError.recoveryAccessDenied(
+                                mode: recoveryPolicy.mode.rawValue,
+                                code: denied.code,
+                                reason: denied.reason
+                            )))
+                        }
+                        return
+                    }
                     if statusCode == 401,
                        allowsRefresh,
                        authPolicy == .automatic,
@@ -4419,6 +4491,7 @@ final class DreamJourneyBackendClient {
                                     payload: payload,
                                     authPolicy: authPolicy,
                                     allowsRefresh: false,
+                                    allowsRecoveryRefresh: allowsRecoveryRefresh,
                                     featureDecision: preparedFeatureDecision,
                                     additionalHeaders: additionalHeaders,
                                     completion: completion
@@ -4455,6 +4528,32 @@ final class DreamJourneyBackendClient {
                     }
                 }
             }
+    }
+
+    private func adoptRecoveryRuntimePolicy(_ policy: BackendRecoveryRuntimePolicy) {
+        let transition = recoveryRuntimePolicyStore.update(policy)
+        if policy.mode == .signedOut || policy.authenticatedSessionPolicy == "clear" {
+            authSessionStore.clear()
+        }
+        guard transition.authorityEpochChanged else { return }
+        RuntimeCapabilitySnapshotStore.shared.invalidate()
+        NotificationCenter.default.post(
+            name: .djRecoveryAuthorityEpochDidChange,
+            object: nil,
+            userInfo: [
+                "previousAuthorityEpoch": transition.previousAuthorityEpoch,
+                "authorityEpoch": transition.currentAuthorityEpoch,
+            ]
+        )
+    }
+
+    private static func recoveryRuntimePolicy(from data: Data?) -> BackendRecoveryRuntimePolicy? {
+        guard let data,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let recovery = json["recovery"] as? [String: Any] else {
+            return nil
+        }
+        return BackendRecoveryRuntimePolicy(json: recovery)
     }
 
     @discardableResult
