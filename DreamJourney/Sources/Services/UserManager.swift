@@ -178,6 +178,23 @@ final class UserManager {
         accountStateLock.unlock()
     }
 
+    func invalidateBackendSession(for userId: String) {
+        accountStateLock.lock()
+        guard storedCurrentUser?.id == userId else {
+            accountStateLock.unlock()
+            return
+        }
+        let ownerUserId = storedCurrentUser?.id
+        storedCurrentUser = nil
+        EchoTraceAccountLifecycle.invalidateAndClear(ownerUserId: ownerUserId)
+        UserDefaults.standard.removeObject(forKey: kUserKey)
+        UserDefaults.standard.removeObject(forKey: kLoggedInKey)
+        KnowledgeSyncCoordinator.shared.userDidChange(to: nil)
+        KBLiteManager.shared.switchUser(to: nil)
+        NotificationCenter.default.post(name: .djUserDidLogout, object: nil)
+        accountStateLock.unlock()
+    }
+
     // MARK: - 持久化
     private func saveToDefaultsLocked(user: UserModel) -> Bool {
         guard let data = try? JSONEncoder().encode(user) else { return false }

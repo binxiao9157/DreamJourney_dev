@@ -3197,8 +3197,12 @@ final class DreamJourneyBackendClient {
     private let releasePolicyStore = ReleasePolicyStore.shared
     private let recoveryRuntimePolicyStore = RecoveryRuntimePolicyStore.shared
     private let authRefreshQueue = DispatchQueue(label: "com.dreamjourney.backend-auth-refresh")
-    private var authRefreshWaiters: [(Bool) -> Void] = []
-    private var isAuthRefreshInFlight = false
+    private struct AuthRefreshGroup {
+        let capturedSession: BackendAuthSessionContract
+        var waiters: [(BackendAuthSessionContract?) -> Void]
+    }
+    private var activeAuthRefreshGroup: AuthRefreshGroup?
+    private var pendingAuthRefreshGroups: [AuthRefreshGroup] = []
 
     var isProfileSyncConfigured: Bool {
         hasExplicitBaseURL
@@ -3905,7 +3909,7 @@ final class DreamJourneyBackendClient {
             authPolicy: .automatic,
             allowsRefresh: false
         ) { _ in }
-        authSessionStore.clear(sessionId: session.sessionId)
+        authSessionStore.clear(ifCurrentMatches: session)
     }
 
     func updateProfile(
@@ -4435,6 +4439,8 @@ final class DreamJourneyBackendClient {
         authPolicy: RequestAuthPolicy = .automatic,
         allowsRefresh: Bool = true,
         allowsRecoveryRefresh: Bool = true,
+        recoveryClearSession: BackendAuthSessionContract? = nil,
+        requiredAuthSession: BackendAuthSessionContract? = nil,
         featureDecision: FeatureDecision? = nil,
         additionalHeaders: [String: String] = [:],
         completion: @escaping (Result<[String: Any], Error>) -> Void
@@ -4455,6 +4461,8 @@ final class DreamJourneyBackendClient {
                             authPolicy: authPolicy,
                             allowsRefresh: allowsRefresh,
                             allowsRecoveryRefresh: false,
+                            recoveryClearSession: recoveryClearSession,
+                            requiredAuthSession: requiredAuthSession,
                             featureDecision: featureDecision,
                             additionalHeaders: additionalHeaders,
                             completion: completion
@@ -4508,8 +4516,29 @@ final class DreamJourneyBackendClient {
             return
         }
 
+        let requestAuthSession: BackendAuthSessionContract?
+        if authPolicy == .automatic {
+            let currentSession = authSessionStore.currentSession
+            if let requiredAuthSession,
+               currentSession?.matchesCASIdentity(requiredAuthSession) != true {
+                DispatchQueue.main.async {
+                    completion(.failure(ClientError.backendError(
+                        statusCode: 401,
+                        context: .init(
+                            code: "auth_session_changed",
+                            detail: "登录状态已变化，请重试"
+                        )
+                    )))
+                }
+                return
+            }
+            requestAuthSession = requiredAuthSession ?? currentSession
+        } else {
+            requestAuthSession = nil
+        }
+
         let url = "\(baseURL)\(path)"
-        var requestHeaders = authPolicy == .automatic ? authHeaders : authHeaders(for: authPolicy)
+        var requestHeaders = authHeaders(for: authPolicy, session: requestAuthSession)
         if !additionalHeaders.isEmpty {
             var headers = requestHeaders ?? HTTPHeaders()
             for (name, value) in additionalHeaders {
@@ -4548,7 +4577,10 @@ final class DreamJourneyBackendClient {
                 case .failure(let error):
                     let statusCode = response.response?.statusCode
                     if let recoveryPolicy = Self.recoveryRuntimePolicy(from: response.data) {
-                        self.adoptRecoveryRuntimePolicy(recoveryPolicy)
+                        self.adoptRecoveryRuntimePolicy(
+                            recoveryPolicy,
+                            clearSessionIfCurrentMatches: recoveryClearSession
+                        )
                         let denied = recoveryPolicy.requestDecision(
                             method: method.rawValue,
                             path: path
@@ -4565,9 +4597,40 @@ final class DreamJourneyBackendClient {
                     if statusCode == 401,
                        allowsRefresh,
                        authPolicy == .automatic,
-                       self.authSessionStore.currentSession != nil {
-                        self.refreshAuthSession { refreshed in
-                            if refreshed {
+                       let requestAuthSession,
+                       let currentSession = self.authSessionStore.currentSession {
+                        if currentSession.isValidRefreshSuccessor(of: requestAuthSession) {
+                            self.requestJSON(
+                                path: path,
+                                method: method,
+                                payload: payload,
+                                authPolicy: authPolicy,
+                                allowsRefresh: false,
+                                allowsRecoveryRefresh: allowsRecoveryRefresh,
+                                recoveryClearSession: recoveryClearSession,
+                                requiredAuthSession: currentSession,
+                                featureDecision: preparedFeatureDecision,
+                                additionalHeaders: additionalHeaders,
+                                completion: completion
+                            )
+                            return
+                        }
+                        guard currentSession.matchesCASIdentity(requestAuthSession) else {
+                            let context = Self.backendErrorContext(from: response.data)
+                                ?? .init(
+                                    code: "auth_session_changed",
+                                    detail: "登录状态已变化，请重试"
+                                )
+                            DispatchQueue.main.async {
+                                completion(.failure(ClientError.backendError(
+                                    statusCode: statusCode,
+                                    context: context
+                                )))
+                            }
+                            return
+                        }
+                        self.refreshAuthSession(for: requestAuthSession) { refreshedSession in
+                            if let refreshedSession {
                                 self.requestJSON(
                                     path: path,
                                     method: method,
@@ -4575,6 +4638,8 @@ final class DreamJourneyBackendClient {
                                     authPolicy: authPolicy,
                                     allowsRefresh: false,
                                     allowsRecoveryRefresh: allowsRecoveryRefresh,
+                                    recoveryClearSession: recoveryClearSession,
+                                    requiredAuthSession: refreshedSession,
                                     featureDecision: preparedFeatureDecision,
                                     additionalHeaders: additionalHeaders,
                                     completion: completion
@@ -4613,10 +4678,17 @@ final class DreamJourneyBackendClient {
             }
     }
 
-    private func adoptRecoveryRuntimePolicy(_ policy: BackendRecoveryRuntimePolicy) {
+    private func adoptRecoveryRuntimePolicy(
+        _ policy: BackendRecoveryRuntimePolicy,
+        clearSessionIfCurrentMatches capturedSession: BackendAuthSessionContract? = nil
+    ) {
         let transition = recoveryRuntimePolicyStore.update(policy)
         if policy.mode == .signedOut || policy.authenticatedSessionPolicy == "clear" {
-            authSessionStore.clear()
+            if let capturedSession {
+                authSessionStore.clear(ifCurrentMatches: capturedSession)
+            } else {
+                authSessionStore.clear()
+            }
         }
         guard transition.authorityEpochChanged else { return }
         RuntimeCapabilitySnapshotStore.shared.invalidate()
@@ -4641,9 +4713,17 @@ final class DreamJourneyBackendClient {
 
     @discardableResult
     private func adoptAuthSession(from object: [String: Any]) throws -> Bool {
-        guard let authObject = object["auth"] else {
+        guard let session = try decodedAuthSession(from: object) else {
             authSessionStore.clear()
             return false
+        }
+        try authSessionStore.save(session)
+        return true
+    }
+
+    private func decodedAuthSession(from object: [String: Any]) throws -> BackendAuthSessionContract? {
+        guard let authObject = object["auth"] else {
+            return nil
         }
         guard let authJSON = authObject as? [String: Any],
               let session = BackendAuthSessionContract(json: authJSON) else {
@@ -4654,50 +4734,132 @@ final class DreamJourneyBackendClient {
            session.userId != responseUserId {
             throw ClientError.invalidJSONResponse
         }
-        try authSessionStore.save(session)
-        return true
+        return session
     }
 
-    private func refreshAuthSession(completion: @escaping (Bool) -> Void) {
+    private func refreshAuthSession(
+        for capturedSession: BackendAuthSessionContract,
+        completion: @escaping (BackendAuthSessionContract?) -> Void
+    ) {
         authRefreshQueue.async {
-            self.authRefreshWaiters.append(completion)
-            guard !self.isAuthRefreshInFlight else { return }
-            guard let currentSession = self.authSessionStore.currentSession else {
-                self.finishAuthRefresh(success: false)
+            if var active = self.activeAuthRefreshGroup,
+               active.capturedSession.matchesCASIdentity(capturedSession) {
+                active.waiters.append(completion)
+                self.activeAuthRefreshGroup = active
                 return
             }
-            self.isAuthRefreshInFlight = true
-            self.requestJSON(
-                path: "/auth/refresh",
-                method: .post,
-                payload: ["refreshToken": currentSession.refreshToken],
-                authPolicy: .anonymous,
-                allowsRefresh: false
-            ) { result in
-                let refreshed: Bool
-                switch result {
-                case .success(let object):
-                    refreshed = (try? self.adoptAuthSession(from: object)) == true
-                case .failure:
-                    refreshed = false
-                }
-                if !refreshed {
-                    self.authSessionStore.clear(sessionId: currentSession.sessionId)
-                }
-                self.authRefreshQueue.async {
-                    self.finishAuthRefresh(success: refreshed)
-                }
+
+            if let index = self.pendingAuthRefreshGroups.firstIndex(where: {
+                $0.capturedSession.matchesCASIdentity(capturedSession)
+            }) {
+                self.pendingAuthRefreshGroups[index].waiters.append(completion)
+            } else {
+                self.pendingAuthRefreshGroups.append(.init(
+                    capturedSession: capturedSession,
+                    waiters: [completion]
+                ))
             }
+            self.startNextAuthRefreshIfNeeded()
         }
     }
 
-    private func finishAuthRefresh(success: Bool) {
-        let waiters = authRefreshWaiters
-        authRefreshWaiters.removeAll()
-        isAuthRefreshInFlight = false
-        DispatchQueue.main.async {
-            waiters.forEach { $0(success) }
+    private func startNextAuthRefreshIfNeeded() {
+        dispatchPrecondition(condition: .onQueue(authRefreshQueue))
+        guard activeAuthRefreshGroup == nil,
+              !pendingAuthRefreshGroups.isEmpty else {
+            return
         }
+
+        let group = pendingAuthRefreshGroups.removeFirst()
+        guard authSessionStore.currentSession?.matchesCASIdentity(group.capturedSession) == true else {
+            DispatchQueue.main.async {
+                group.waiters.forEach { $0(nil) }
+            }
+            startNextAuthRefreshIfNeeded()
+            return
+        }
+
+        activeAuthRefreshGroup = group
+        let capturedSession = group.capturedSession
+        requestJSON(
+                path: "/auth/refresh",
+                method: .post,
+                payload: ["refreshToken": capturedSession.refreshToken],
+                authPolicy: .anonymous,
+                allowsRefresh: false,
+                allowsRecoveryRefresh: false,
+                recoveryClearSession: capturedSession
+            ) { result in
+                let refreshedSession: BackendAuthSessionContract?
+                var shouldClearCapturedSession = false
+                switch result {
+                case .success(let object):
+                    do {
+                        if let session = try self.decodedAuthSession(from: object),
+                           session.isValidRefreshSuccessor(of: capturedSession) {
+                            let replaced = try self.authSessionStore.replace(
+                                session,
+                                ifCurrentMatches: capturedSession
+                            )
+                            refreshedSession = replaced ? session : nil
+                        } else {
+                            refreshedSession = nil
+                        }
+                    } catch {
+                        refreshedSession = nil
+                    }
+                case .failure(let error):
+                    refreshedSession = nil
+                    shouldClearCapturedSession = Self.isTerminalAuthRefreshError(error)
+                }
+                if shouldClearCapturedSession {
+                    let didClear = self.authSessionStore.clear(
+                        ifCurrentMatches: capturedSession
+                    )
+                    if didClear {
+                        UserManager.shared.invalidateBackendSession(
+                            for: capturedSession.userId
+                        )
+                    }
+                }
+                self.authRefreshQueue.async {
+                    self.finishAuthRefresh(
+                        capturedSession: capturedSession,
+                        refreshedSession: refreshedSession
+                    )
+                }
+            }
+    }
+
+    private func finishAuthRefresh(
+        capturedSession: BackendAuthSessionContract,
+        refreshedSession: BackendAuthSessionContract?
+    ) {
+        dispatchPrecondition(condition: .onQueue(authRefreshQueue))
+        guard let active = activeAuthRefreshGroup,
+              active.capturedSession.matchesCASIdentity(capturedSession) else {
+            return
+        }
+        activeAuthRefreshGroup = nil
+        DispatchQueue.main.async {
+            active.waiters.forEach { $0(refreshedSession) }
+        }
+        startNextAuthRefreshIfNeeded()
+    }
+
+    private static func isTerminalAuthRefreshError(_ error: Error) -> Bool {
+        guard case ClientError.backendError(let statusCode, let context) = error,
+              statusCode == 401,
+              let code = context.code else {
+            return false
+        }
+        return [
+            "invalid_or_expired_refresh_token",
+            "legacy_session_reauth_required",
+            "refresh_token_reuse_detected",
+            "token_family_revoked",
+            "session_revoked",
+        ].contains(code)
     }
 
     private func validatedDigitalHumanLeasePath(_ candidate: String, fallback: String) -> String {
@@ -4751,13 +4913,12 @@ final class DreamJourneyBackendClient {
         return normalized.isEmpty ? nil : normalized
     }
 
-    private var authHeaders: HTTPHeaders? {
-        authHeaders(for: .automatic)
-    }
-
-    private func authHeaders(for policy: RequestAuthPolicy) -> HTTPHeaders? {
+    private func authHeaders(
+        for policy: RequestAuthPolicy,
+        session: BackendAuthSessionContract?
+    ) -> HTTPHeaders? {
         guard policy == .automatic,
-              let session = authSessionStore.currentSession else {
+              let session else {
             return nil
         }
         return HTTPHeaders([

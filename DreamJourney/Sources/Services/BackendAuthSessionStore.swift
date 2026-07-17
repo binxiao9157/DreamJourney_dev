@@ -12,6 +12,27 @@ struct BackendAuthSessionContract: Codable, Equatable {
     let accessExpiresAt: String
     let refreshExpiresAt: String
     let contractVersion: Int
+    let tokenFamilyId: String?
+    let sessionVersion: Int?
+
+    private enum CodingKeys: String, CodingKey {
+        case sessionId
+        case userId
+        case tokenType
+        case accessToken
+        case refreshToken
+        case accessExpiresInSeconds
+        case refreshExpiresInSeconds
+        case accessExpiresAt
+        case refreshExpiresAt
+        case contractVersion
+        case tokenFamilyId
+        case sessionVersion
+    }
+
+    var isLegacy: Bool {
+        contractVersion == 1
+    }
 
     init?(json: [String: Any]) {
         guard let sessionId = Self.string(json["sessionId"]),
@@ -26,6 +47,35 @@ struct BackendAuthSessionContract: Codable, Equatable {
               refreshToken.hasPrefix("djr_") else {
             return nil
         }
+
+        let parsedContractVersion: Int
+        if json["contractVersion"] == nil {
+            parsedContractVersion = 1
+        } else if let contractVersion = Self.strictInt(json["contractVersion"]) {
+            parsedContractVersion = contractVersion
+        } else {
+            return nil
+        }
+
+        let tokenFamilyId: String?
+        let sessionVersion: Int?
+        switch parsedContractVersion {
+        case 1:
+            tokenFamilyId = nil
+            sessionVersion = nil
+        case 2:
+            guard let parsedTokenFamilyId = Self.string(json["tokenFamilyId"]),
+                  !parsedTokenFamilyId.isEmpty,
+                  let parsedSessionVersion = Self.strictInt(json["sessionVersion"]),
+                  parsedSessionVersion > 0 else {
+                return nil
+            }
+            tokenFamilyId = parsedTokenFamilyId
+            sessionVersion = parsedSessionVersion
+        default:
+            return nil
+        }
+
         self.sessionId = sessionId
         self.userId = userId
         tokenType = Self.string(json["tokenType"]) ?? "Bearer"
@@ -35,11 +85,164 @@ struct BackendAuthSessionContract: Codable, Equatable {
         refreshExpiresInSeconds = Self.int(json["refreshExpiresInSeconds"]) ?? 0
         self.accessExpiresAt = accessExpiresAt
         self.refreshExpiresAt = refreshExpiresAt
-        contractVersion = Self.int(json["contractVersion"]) ?? 1
+        contractVersion = parsedContractVersion
+        self.tokenFamilyId = tokenFamilyId
+        self.sessionVersion = sessionVersion
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let decodedSessionId = try container.decode(String.self, forKey: .sessionId)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let decodedUserId = try container.decode(String.self, forKey: .userId)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let decodedAccessToken = try container.decode(String.self, forKey: .accessToken)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let decodedRefreshToken = try container.decode(String.self, forKey: .refreshToken)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !decodedSessionId.isEmpty,
+              !decodedUserId.isEmpty,
+              decodedAccessToken.hasPrefix("dja_"),
+              decodedRefreshToken.hasPrefix("djr_") else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "Stored auth session identity or token format is invalid"
+            ))
+        }
+
+        let decodedContractVersion = try container.decodeIfPresent(Int.self, forKey: .contractVersion) ?? 1
+        let decodedTokenFamilyId: String?
+        let decodedSessionVersion: Int?
+        switch decodedContractVersion {
+        case 1:
+            decodedTokenFamilyId = nil
+            decodedSessionVersion = nil
+        case 2:
+            let familyId = try container.decodeIfPresent(String.self, forKey: .tokenFamilyId)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let familyId, !familyId.isEmpty else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .tokenFamilyId,
+                    in: container,
+                    debugDescription: "Contract v2 auth session requires tokenFamilyId"
+                )
+            }
+            guard let sessionVersion = try container.decodeIfPresent(Int.self, forKey: .sessionVersion),
+                  sessionVersion > 0 else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .sessionVersion,
+                    in: container,
+                    debugDescription: "Contract v2 auth session requires a positive sessionVersion"
+                )
+            }
+            decodedTokenFamilyId = familyId
+            decodedSessionVersion = sessionVersion
+        default:
+            throw DecodingError.dataCorruptedError(
+                forKey: .contractVersion,
+                in: container,
+                debugDescription: "Unsupported auth session contract version"
+            )
+        }
+
+        sessionId = decodedSessionId
+        userId = decodedUserId
+        tokenType = try container.decodeIfPresent(String.self, forKey: .tokenType) ?? "Bearer"
+        accessToken = decodedAccessToken
+        refreshToken = decodedRefreshToken
+        accessExpiresInSeconds = try container.decodeIfPresent(Int.self, forKey: .accessExpiresInSeconds) ?? 0
+        refreshExpiresInSeconds = try container.decodeIfPresent(Int.self, forKey: .refreshExpiresInSeconds) ?? 0
+        accessExpiresAt = try container.decode(String.self, forKey: .accessExpiresAt)
+        refreshExpiresAt = try container.decode(String.self, forKey: .refreshExpiresAt)
+        contractVersion = decodedContractVersion
+        tokenFamilyId = decodedTokenFamilyId
+        sessionVersion = decodedSessionVersion
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(sessionId, forKey: .sessionId)
+        try container.encode(userId, forKey: .userId)
+        try container.encode(tokenType, forKey: .tokenType)
+        try container.encode(accessToken, forKey: .accessToken)
+        try container.encode(refreshToken, forKey: .refreshToken)
+        try container.encode(accessExpiresInSeconds, forKey: .accessExpiresInSeconds)
+        try container.encode(refreshExpiresInSeconds, forKey: .refreshExpiresInSeconds)
+        try container.encode(accessExpiresAt, forKey: .accessExpiresAt)
+        try container.encode(refreshExpiresAt, forKey: .refreshExpiresAt)
+        try container.encode(contractVersion, forKey: .contractVersion)
+
+        switch contractVersion {
+        case 1:
+            break
+        case 2:
+            guard let tokenFamilyId, let sessionVersion, sessionVersion > 0 else {
+                throw EncodingError.invalidValue(
+                    self,
+                    .init(
+                        codingPath: encoder.codingPath,
+                        debugDescription: "Contract v2 auth session has incomplete lineage"
+                    )
+                )
+            }
+            try container.encode(tokenFamilyId, forKey: .tokenFamilyId)
+            try container.encode(sessionVersion, forKey: .sessionVersion)
+        default:
+            throw EncodingError.invalidValue(
+                self,
+                .init(
+                    codingPath: encoder.codingPath,
+                    debugDescription: "Unsupported auth session contract version"
+                )
+            )
+        }
+    }
+
+    func isValidRefreshSuccessor(of captured: BackendAuthSessionContract) -> Bool {
+        guard userId == captured.userId,
+              sessionId != captured.sessionId else {
+            return false
+        }
+
+        switch (captured.contractVersion, contractVersion) {
+        case (1, 1):
+            return true
+        case (2, 2):
+            guard let capturedFamilyId = captured.tokenFamilyId,
+                  let tokenFamilyId,
+                  let capturedVersion = captured.sessionVersion,
+                  let sessionVersion else {
+                return false
+            }
+            return tokenFamilyId == capturedFamilyId && sessionVersion > capturedVersion
+        default:
+            return false
+        }
+    }
+
+    func matchesCASIdentity(_ captured: BackendAuthSessionContract) -> Bool {
+        userId == captured.userId
+            && sessionId == captured.sessionId
+            && tokenFamilyId == captured.tokenFamilyId
+            && sessionVersion == captured.sessionVersion
     }
 
     private static func string(_ value: Any?) -> String? {
         (value as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func strictInt(_ value: Any?) -> Int? {
+        guard let value, !(value is Bool) else { return nil }
+        if let value = value as? Int { return value }
+        guard let number = value as? NSNumber else { return nil }
+        let doubleValue = number.doubleValue
+        guard doubleValue.isFinite,
+              doubleValue.rounded(.towardZero) == doubleValue,
+              number.compare(NSNumber(value: Int.min)) != .orderedAscending,
+              number.compare(NSNumber(value: Int.max)) != .orderedDescending else {
+            return nil
+        }
+        return number.intValue
     }
 
     private static func int(_ value: Any?) -> Int? {
@@ -68,10 +271,7 @@ final class BackendAuthSessionStore {
     var currentSession: BackendAuthSessionContract? {
         lock.lock()
         defer { lock.unlock() }
-        if !didLoad {
-            cachedSession = loadFromKeychain()
-            didLoad = true
-        }
+        loadIfNeededLocked()
         return cachedSession
     }
 
@@ -84,18 +284,48 @@ final class BackendAuthSessionStore {
         didLoad = true
     }
 
-    func clear(sessionId: String? = nil) {
+    @discardableResult
+    func replace(
+        _ session: BackendAuthSessionContract,
+        ifCurrentMatches captured: BackendAuthSessionContract
+    ) throws -> Bool {
+        let encoded = try JSONEncoder().encode(session)
         lock.lock()
         defer { lock.unlock() }
-        if !didLoad {
-            cachedSession = loadFromKeychain()
-            didLoad = true
+        loadIfNeededLocked()
+        guard cachedSession?.matchesCASIdentity(captured) == true else {
+            return false
         }
-        if let sessionId, cachedSession?.sessionId != sessionId {
-            return
+        try keychain.set(encoded, key: storageKey)
+        cachedSession = session
+        return true
+    }
+
+    func clear() {
+        lock.lock()
+        defer { lock.unlock() }
+        loadIfNeededLocked()
+        try? keychain.remove(storageKey)
+        cachedSession = nil
+    }
+
+    @discardableResult
+    func clear(ifCurrentMatches captured: BackendAuthSessionContract) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        loadIfNeededLocked()
+        guard cachedSession?.matchesCASIdentity(captured) == true else {
+            return false
         }
         try? keychain.remove(storageKey)
         cachedSession = nil
+        return true
+    }
+
+    private func loadIfNeededLocked() {
+        guard !didLoad else { return }
+        cachedSession = loadFromKeychain()
+        didLoad = true
     }
 
     private func loadFromKeychain() -> BackendAuthSessionContract? {
