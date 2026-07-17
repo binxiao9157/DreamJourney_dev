@@ -45,12 +45,23 @@ let acceptedMember = functionBody("func acceptedMember(by id: String)", in: repo
 require(acceptedMember.contains("authorizationFreshness.allowsPreviouslyVerifiedUse"), "failed family freshness must deny old members")
 require(repository.contains("DigitalHumanContextStore.shared.reconcileFamilyAuthorization()"), "family authority changes must reconcile persisted context")
 
-let reconcile = functionBody("func reconcileFamilyAuthorization()", in: store)
-require(reconcile.contains("guard Thread.isMainThread"), "reconciliation must serialize on the main thread")
+let reconcileEntry = functionBody("func reconcileFamilyAuthorization()", in: store)
+require(reconcileEntry.contains("guard Thread.isMainThread"), "reconciliation must serialize on the main thread")
+require(reconcileEntry.contains("accountLeaseRuntime.capture"), "reconciliation must capture source account authority")
+let reconcile = functionBody("private func reconcileFamilyAuthorization(", in: store)
 require(reconcile.contains("FamilyContextReconciliationPolicy.shouldFallbackToSelf"), "reconciliation must use the explicit fallback policy")
-require(reconcile.contains("current = .defaultContext(userId: userId)"), "revoked family context must persist self")
+require(reconcile.contains("applyCurrent("), "revoked family context must use the captured lease")
+require(reconcile.contains(".defaultContext(userId: userId)"), "revoked family context must persist self")
 
 let setter = functionBody("set {", in: store)
+for required in [
+    "let sourceUserId = normalizedUserId(UserManager.shared.currentUser?.id)",
+    "accountLeaseRuntime.capture(forSubjectId: sourceUserId)",
+    "applyCurrent(newValue, userId: sourceUserId, accountLease: accountLease)",
+] {
+    require(setter.contains(required), "context setter must include \(required)")
+}
+let applyCurrent = functionBody("private func applyCurrent(", in: store)
 for required in [
     "UserDefaults.standard.set(data, forKey: key(for: userId))",
     "KBLiteManager.shared.personaContextDidChange(to: identity)",
@@ -58,8 +69,10 @@ for required in [
     "guard previousContext != safeContext else { return }",
     "NotificationCenter.default.post(name: .djDigitalHumanContextDidChange",
 ] {
-    require(setter.contains(required), "context setter must include \(required)")
+    require(applyCurrent.contains(required), "context apply must include \(required)")
 }
+require(applyCurrent.contains("at: .commit"), "context persistence must validate its AccountLease")
+require(applyCurrent.contains("at: .ui"), "context notification must validate its AccountLease")
 
 require(echo.contains("name: .djDigitalHumanContextDidChange"), "Echo must observe context changes")
 let echoChange = functionBody("@objc private func digitalHumanContextDidChange()", in: echo)

@@ -70,8 +70,11 @@ final class DigitalHumanContextStore {
     static let shared = DigitalHumanContextStore()
 
     private let keyBase = "dj.digitalHuman.currentContext"
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
 
-    private init() {}
+    private init(accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared) {
+        self.accountLeaseRuntime = accountLeaseRuntime
+    }
 
     var current: DigitalHumanContext {
         get {
@@ -85,34 +88,84 @@ final class DigitalHumanContextStore {
             return .defaultContext(userId: userId)
         }
         set {
+            let sourceUserId = normalizedUserId(UserManager.shared.currentUser?.id)
+            guard !sourceUserId.isEmpty,
+                  let accountLease = accountLeaseRuntime.capture(forSubjectId: sourceUserId) else {
+                return
+            }
             guard Thread.isMainThread else {
                 DispatchQueue.main.async {
-                    self.current = newValue
+                    self.applyCurrent(
+                        newValue,
+                        userId: sourceUserId,
+                        accountLease: accountLease
+                    )
                 }
                 return
             }
-            let userId = normalizedUserId(UserManager.shared.currentUser?.id)
-            guard !userId.isEmpty else { return }
-            let safeContext = validatedContext(newValue, userId: userId) ?? .defaultContext(userId: userId)
-            let previousContext = storedContext(for: userId)
-            guard let data = try? JSONEncoder().encode(safeContext) else { return }
-            UserDefaults.standard.set(data, forKey: key(for: userId))
-            let identity = KBLiteManager.resolveAuthorizedPersonaIdentity(for: safeContext)
-            KBLiteManager.shared.personaContextDidChange(to: identity)
-            KnowledgeSyncCoordinator.shared.personaContextDidChange(to: identity)
-            guard previousContext != safeContext else { return }
-            NotificationCenter.default.post(name: .djDigitalHumanContextDidChange, object: safeContext)
+            applyCurrent(newValue, userId: sourceUserId, accountLease: accountLease)
         }
     }
 
     func reconcileFamilyAuthorization() {
+        let sourceUserId = normalizedUserId(UserManager.shared.currentUser?.id)
+        guard !sourceUserId.isEmpty,
+              let accountLease = accountLeaseRuntime.capture(forSubjectId: sourceUserId) else {
+            return
+        }
         guard Thread.isMainThread else {
             DispatchQueue.main.async {
-                self.reconcileFamilyAuthorization()
+                self.reconcileFamilyAuthorization(
+                    userId: sourceUserId,
+                    accountLease: accountLease
+                )
             }
             return
         }
-        let userId = normalizedUserId(UserManager.shared.currentUser?.id)
+        reconcileFamilyAuthorization(userId: sourceUserId, accountLease: accountLease)
+    }
+
+    private func applyCurrent(
+        _ newValue: DigitalHumanContext,
+        userId: String,
+        accountLease: AccountLease
+    ) {
+        guard normalizedUserId(UserManager.shared.currentUser?.id) == userId,
+              accountLease.subjectId == userId,
+              accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            return
+        }
+        let safeContext = validatedContext(newValue, userId: userId) ?? .defaultContext(userId: userId)
+        let storageKey = key(for: userId)
+        let previousData = UserDefaults.standard.data(forKey: storageKey)
+        let previousContext = storedContext(for: userId)
+        guard let data = try? JSONEncoder().encode(safeContext) else { return }
+        UserDefaults.standard.set(data, forKey: key(for: userId))
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            if let previousData {
+                UserDefaults.standard.set(previousData, forKey: storageKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: storageKey)
+            }
+            return
+        }
+        let identity = KBLiteManager.resolveAuthorizedPersonaIdentity(for: safeContext)
+        KBLiteManager.shared.personaContextDidChange(to: identity)
+        KnowledgeSyncCoordinator.shared.personaContextDidChange(to: identity)
+        guard previousContext != safeContext else { return }
+        guard accountLeaseRuntime.validate(accountLease, at: .ui).allowed else { return }
+        NotificationCenter.default.post(name: .djDigitalHumanContextDidChange, object: safeContext)
+    }
+
+    private func reconcileFamilyAuthorization(
+        userId: String,
+        accountLease: AccountLease
+    ) {
+        guard normalizedUserId(UserManager.shared.currentUser?.id) == userId,
+              accountLease.subjectId == userId,
+              accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            return
+        }
         guard !userId.isEmpty,
               let data = UserDefaults.standard.data(forKey: key(for: userId)),
               let storedContext = try? JSONDecoder().decode(DigitalHumanContext.self, from: data) else {
@@ -127,7 +180,11 @@ final class DigitalHumanContextStore {
             isSelfAssistant: storedContext.isSelfAssistant,
             hasAuthorizedFamilyMember: hasAuthorizedFamilyMember
         ) else { return }
-        current = .defaultContext(userId: userId)
+        applyCurrent(
+            .defaultContext(userId: userId),
+            userId: userId,
+            accountLease: accountLease
+        )
     }
 
     private func validatedContext(_ context: DigitalHumanContext, userId: String) -> DigitalHumanContext? {
