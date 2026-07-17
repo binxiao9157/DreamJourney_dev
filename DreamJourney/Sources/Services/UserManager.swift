@@ -19,7 +19,6 @@ final class UserManager {
     static let shared = UserManager()
     private init() {
         loadFromDefaults()
-        EchoTraceAccountLifecycle.activate(ownerUserId: currentUser?.id)
     }
 
     private let accountStateLock = NSRecursiveLock()
@@ -63,11 +62,48 @@ final class UserManager {
 
     var requiresPrivateAccessValidation: Bool {
         accountStateLock.lock()
-        let user = storedCurrentUser
         let state = privateAccessState
         accountStateLock.unlock()
-        guard state == .validating, let user else { return false }
-        return BackendAuthSessionStore.shared.currentSession?.isPrivateAccessEligible(for: user.id) == true
+        guard state == .validating else { return false }
+        return BackendAuthSessionStore.shared.currentSession?.isPrivateAccessEligible == true
+    }
+
+    func accountSessionCredentialSnapshot() -> AccountSessionCredentialSnapshot? {
+        accountStateLock.lock()
+        let user = storedCurrentUser
+        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        let syntheticUserId = syntheticPrivateUserId
+        #endif
+        accountStateLock.unlock()
+
+        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        if let user, syntheticUserId == user.id {
+            return AccountSessionCredentialSnapshot(
+                subjectId: user.id,
+                vaultId: user.id,
+                sessionId: "uiqa-session-\(user.id)",
+                tokenFamilyId: "uiqa-family-\(user.id)",
+                sessionVersion: 1,
+                isPrivateAccessEligible: true,
+                trust: .prevalidatedTestOnly
+            )
+        }
+        #endif
+
+        guard let session = BackendAuthSessionStore.shared.currentSession,
+              let tokenFamilyId = session.tokenFamilyId,
+              let sessionVersion = session.sessionVersion else {
+            return nil
+        }
+        return AccountSessionCredentialSnapshot(
+            subjectId: session.userId,
+            vaultId: session.userId,
+            sessionId: session.sessionId,
+            tokenFamilyId: tokenFamilyId,
+            sessionVersion: sessionVersion,
+            isPrivateAccessEligible: session.isPrivateAccessEligible,
+            trust: .requiresOnlineValidation
+        )
     }
 
     // MARK: - 登录
@@ -97,9 +133,8 @@ final class UserManager {
     func reconcilePrivateAccessSession() -> Bool {
         let capturedUser = currentUser
         let capturedSession = BackendAuthSessionStore.shared.currentSession
-        guard let user = capturedUser,
-              let session = capturedSession,
-              session.isPrivateAccessEligible(for: user.id) else {
+        guard let session = capturedSession,
+              session.isPrivateAccessEligible else {
             BackendAuthSessionStore.shared.clear()
             accountStateLock.lock()
             privateAccessState = .signedOut
@@ -112,9 +147,32 @@ final class UserManager {
             return false
         }
         accountStateLock.lock()
+        if capturedUser?.id != session.userId {
+            storedCurrentUser = nil
+            UserDefaults.standard.removeObject(forKey: kUserKey)
+            UserDefaults.standard.removeObject(forKey: kLoggedInKey)
+        }
         privateAccessState = .validating
         accountStateLock.unlock()
         return true
+    }
+
+    @discardableResult
+    func prepareCachedProfileForValidatedSession(_ session: BackendAuthSessionContract) -> Bool {
+        guard session.isPrivateAccessEligible else { return false }
+        accountStateLock.lock()
+        defer { accountStateLock.unlock() }
+        if storedCurrentUser?.id != session.userId {
+            storedCurrentUser = UserModel(
+                id: session.userId,
+                nickname: "寻梦环游用户",
+                phone: "",
+                avatarName: "person.circle.fill"
+            )
+        }
+        privateAccessState = .validating
+        guard let user = storedCurrentUser else { return false }
+        return saveToDefaultsLocked(user: user)
     }
 
     @discardableResult
@@ -137,6 +195,7 @@ final class UserManager {
         }
         privateAccessState = .authenticated
         accountStateLock.unlock()
+        EchoTraceAccountLifecycle.activate(ownerUserId: userId)
         KnowledgeSyncCoordinator.shared.userDidChange(to: userId)
         KBLiteManager.shared.switchUser(to: userId)
         KnowledgeSyncCoordinator.shared.synchronizeCurrentUser(reason: "privateAccessValidated")

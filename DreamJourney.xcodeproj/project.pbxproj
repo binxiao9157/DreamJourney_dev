@@ -30,6 +30,7 @@
 		48673DEDB4E6A975B309C688 /* VoiceCloneService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33790F6FDDECF7ADE231C869 /* VoiceCloneService.swift */; };
 		4CF0BD2D4F968542C121945F /* KBGraphNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9888BE646AFE99C369C35772 /* KBGraphNode.swift */; };
 		502F2FC9318D2718A929EFD5 /* AppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 165FB245CE23B3EF2C90C799 /* AppCoordinator.swift */; };
+		C7E1B2000000000000000001 /* AccountSessionActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1B2000000000000000101 /* AccountSessionActor.swift */; };
 		50F8EF0F3B0F4C70B9C80B7A /* MemoirService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFEC7EA9CB8D7181EFC70161 /* MemoirService.swift */; };
 		51E5260630E2B3EB0C6D96F1 /* TGLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4571331D3ED0551FB8C8DE7 /* TGLoadingView.swift */; };
 		52B3383F8F4517669DA70A7B /* MemoryDetailViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 830FF3B188863CA5E93ACA26 /* MemoryDetailViewController.swift */; };
@@ -194,6 +195,7 @@
 		0E34D9D2B8943EBBDECBC489 /* MemoirAudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirAudioPlayer.swift; sourceTree = "<group>"; };
 		101D4CAEA6C25FCE0B7B8C8A /* BridgingHeader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BridgingHeader.h; sourceTree = "<group>"; };
 		165FB245CE23B3EF2C90C799 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
+		C7E1B2000000000000000101 /* AccountSessionActor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSessionActor.swift; sourceTree = "<group>"; };
 		16DC1997EF2F7459C92D09EF /* Pods-DreamJourney.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DreamJourney.release.xcconfig"; path = "Target Support Files/Pods-DreamJourney/Pods-DreamJourney.release.xcconfig"; sourceTree = "<group>"; };
 		1EC2B6D3AE2C256785CCE388 /* MemoryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryModel.swift; sourceTree = "<group>"; };
 		2A0648C7E87957BF18381DE1 /* DHLiveMini.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = DHLiveMini.js; sourceTree = "<group>"; };
@@ -634,6 +636,7 @@
 		A353AEB5FE48C1961C1D7DF3 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				C7E1B2000000000000000101 /* AccountSessionActor.swift */,
 				165FB245CE23B3EF2C90C799 /* AppCoordinator.swift */,
 				8D7A1AAB6E1338AE2A2C4F75 /* AuthCoordinator.swift */,
 				F6C5E6FFF33ED30F772F732A /* Coordinator.swift */,
@@ -944,6 +947,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E6D53A82564EE472B1164972 /* AIRecordingViewController.swift in Sources */,
+				C7E1B2000000000000000001 /* AccountSessionActor.swift in Sources */,
 				502F2FC9318D2718A929EFD5 /* AppCoordinator.swift in Sources */,
 				885C95FBDAA6BCEA04BEC2F6 /* AppDelegate.swift in Sources */,
 				C51AC41EC608CEC137B1340F /* AuthCoordinator.swift in Sources */,

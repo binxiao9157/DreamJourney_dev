@@ -10,6 +10,7 @@ AUTH_STORE = ROOT / "DreamJourney/Sources/Services/BackendAuthSessionStore.swift
 CLIENT = ROOT / "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
 USER_MANAGER = ROOT / "DreamJourney/Sources/Services/UserManager.swift"
 APP_COORDINATOR = ROOT / "DreamJourney/Sources/App/AppCoordinator.swift"
+ACCOUNT_SESSION_ACTOR = ROOT / "DreamJourney/Sources/App/AccountSessionActor.swift"
 APP_DELEGATE = ROOT / "DreamJourney/Sources/AppDelegate.swift"
 
 BUSINESS_FALLBACK_FILES = (
@@ -66,6 +67,7 @@ def main() -> None:
     client = read(CLIENT)
     user_manager = read(USER_MANAGER)
     app_coordinator = read(APP_COORDINATOR)
+    account_session_actor = read(ACCOUNT_SESSION_ACTOR)
     app_delegate = read(APP_DELEGATE)
 
     require(
@@ -122,9 +124,21 @@ def main() -> None:
         "UserManager.shared.canEnterPrivateUI" in app_coordinator,
         "root routing must use authenticated private-UI eligibility",
     )
+    for snippet in (
+        "actor AccountSessionActor",
+        "func bootstrap(",
+        "coldStartOnlineValidationRequired",
+        "coldStartProfileRecoveryRequired",
+        "coldStartProfileMismatchQuarantined",
+    ):
+        require(snippet in account_session_actor, f"cold-start actor contract is missing: {snippet}")
     require(
-        "UserManager.shared.requiresPrivateAccessValidation" in app_coordinator,
-        "cold start must detect a cached session that still needs online validation",
+        "accountSessionActor.bootstrap(" in app_coordinator,
+        "root routing must consume the AccountSessionActor bootstrap receipt",
+    )
+    require(
+        "AccountSessionTransitionReceipt" in app_coordinator,
+        "root routing must retain an actor transition receipt",
     )
     require(
         "resumePrivateAccessSession" in app_coordinator,
@@ -133,6 +147,11 @@ def main() -> None:
     require(
         "if UserManager.shared.isLoggedIn" not in app_coordinator,
         "local UserDefaults login state must not authorize the private three-tab UI",
+    )
+    start_body = function_body(app_coordinator, "func start()")
+    require(
+        "UserManager.shared.canEnterPrivateUI" not in start_body,
+        "cached profile state must not choose the cold-start root route",
     )
 
     for snippet in (

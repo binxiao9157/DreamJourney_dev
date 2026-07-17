@@ -78,22 +78,30 @@
     {
       "catalogId": "S02",
       "surfaceId": "S02.profile-display-cache",
-      "dataClass": "display-only current user profile cache and private access state",
-      "ownerScope": "must match a validated typed session subject",
+      "dataClass": "display-only current user profile cache, replayable account activation phase receipt, and private access state",
+      "ownerScope": "profile must match a validated typed session subject; journal is value-minimized and owner-free",
       "storage": "standard UserDefaults",
-      "pathOrKey": "dj_current_user; dj_is_logged_in",
-      "writer": "UserManager",
-      "readers": "AppCoordinator and private UI composition",
-      "cleanup": "clear and unmount private state on logout, suspension, mismatch, or delete",
-      "migration": "global cached user is display data only and never identity authority",
-      "retention": "current validated session only",
+      "pathOrKey": "dj_current_user; dj_is_logged_in; dj.accountSession.activationJournal.v1",
+      "writer": "UserManager and AccountSessionActor activation journal",
+      "readers": "AccountSessionActor/AppCoordinator composition and private UI display",
+      "cleanup": "quarantine mismatched profile before validation; clear and unmount private state on logout, suspension, or delete",
+      "migration": "global cached user is display data only; valid Keychain session subject may rebuild a placeholder profile after online validation",
+      "retention": "current validated session profile plus latest value-minimized activation phase receipt",
       "testOwner": "WI-S0-01-02",
       "status": "REGISTERED_TRANSITIONAL",
       "nextWorkItem": "WI-S0-01-02",
       "sourcePaths": [
+        "DreamJourney/Sources/App/AccountSessionActor.swift",
         "DreamJourney/Sources/Services/UserManager.swift"
       ],
       "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/App/AccountSessionActor.swift",
+          "contains": [
+            "dj.accountSession.activationJournal.v1",
+            "actor AccountSessionActor"
+          ]
+        },
         {
           "path": "DreamJourney/Sources/Services/UserManager.swift",
           "contains": [
@@ -103,6 +111,8 @@
         }
       ],
       "currentChecks": [
+        "Scripts/QA/product-v4/product-v4-account-session-actor-check.py",
+        "Scripts/QA/product-v4/account-session-actor-model-smoke.swift",
         "Scripts/QA/product-v4/product-v4-ios-typed-auth-cutover-check.py"
       ]
     },

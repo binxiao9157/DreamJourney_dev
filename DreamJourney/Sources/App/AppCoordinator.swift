@@ -1,6 +1,7 @@
 import UIKit
 
 // MARK: - AppCoordinator：根协调器，路由到 Auth 或 Tab
+@MainActor
 final class AppCoordinator: Coordinator {
 
     private enum RootMode {
@@ -13,12 +14,20 @@ final class AppCoordinator: Coordinator {
     var navigationController: UINavigationController
     var childCoordinators: [Coordinator] = []
     private weak var window: UIWindow?
+    private let accountSessionActor: AccountSessionActor
     private var rootMode: RootMode = .unresolved
-    private var startupValidationGeneration = 0
+    private var accountSessionReceipt: AccountSessionTransitionReceipt?
+    private var accountSessionTask: Task<Void, Never>?
 
-    init(window: UIWindow) {
+    init(window: UIWindow, accountSessionActor: AccountSessionActor = .shared) {
         self.window = window
+        self.accountSessionActor = accountSessionActor
         self.navigationController = UINavigationController()
+    }
+
+    deinit {
+        accountSessionTask?.cancel()
+        NotificationCenter.default.removeObserver(self)
     }
 
     func start() {
@@ -35,13 +44,7 @@ final class AppCoordinator: Coordinator {
             object: nil
         )
 
-        if UserManager.shared.canEnterPrivateUI {
-            showMainTab()
-        } else if UserManager.shared.requiresPrivateAccessValidation {
-            validateCachedPrivateAccess()
-        } else {
-            showAuth()
-        }
+        bootstrapAccountSession()
     }
 
     func showAuth() {
@@ -51,7 +54,7 @@ final class AppCoordinator: Coordinator {
         let authCoordinator = AuthCoordinator(navigationController: navigationController)
         authCoordinator.didFinishLogin = { [weak self] in
             self?.removeChild(authCoordinator)
-            self?.showMainTab()
+            self?.activateVerifiedLogin()
         }
         addChild(authCoordinator)
         window?.rootViewController = navigationController
@@ -60,7 +63,13 @@ final class AppCoordinator: Coordinator {
     }
 
     func showMainTab() {
-        guard UserManager.shared.canEnterPrivateUI, rootMode != .main else { return }
+        guard accountSessionReceipt?.accepted == true,
+              accountSessionReceipt?.state == .active,
+              accountSessionReceipt?.rootRoute == .privateUI,
+              UserManager.shared.canEnterPrivateUI,
+              rootMode != .main else {
+            return
+        }
         rootMode = .main
         childCoordinators.removeAll()
         let tabCoordinator = TabCoordinator()
@@ -76,26 +85,156 @@ final class AppCoordinator: Coordinator {
     }
 
     @objc private func handleLogout() {
+        let expectedGeneration = accountSessionReceipt?.generation
+        accountSessionTask?.cancel()
+        accountSessionReceipt = nil
+        Task { [accountSessionActor] in
+            _ = await accountSessionActor.signOut(
+                expectedGeneration: expectedGeneration,
+                reason: "userLoggedOut"
+            )
+        }
         transitionToAuth()
     }
 
     @objc private func handlePrivateAccessSuspended() {
+        let expectedGeneration = accountSessionReceipt?.generation
+        accountSessionTask?.cancel()
+        accountSessionReceipt = nil
+        Task { [accountSessionActor] in
+            _ = await accountSessionActor.suspend(
+                expectedGeneration: expectedGeneration,
+                reason: "privateAccessSuspended"
+            )
+        }
         transitionToAuth()
     }
 
-    private func validateCachedPrivateAccess() {
+    private func bootstrapAccountSession() {
         rootMode = .validating
-        startupValidationGeneration += 1
-        let generation = startupValidationGeneration
         showStartupValidationGate()
-        DreamJourneyBackendClient.shared.resumePrivateAccessSession { [weak self] validated in
-            guard let self, generation == self.startupValidationGeneration else { return }
-            if validated, UserManager.shared.canEnterPrivateUI {
+        let cachedSubjectId = UserManager.shared.currentUser?.id
+        let credential = UserManager.shared.accountSessionCredentialSnapshot()
+        accountSessionTask?.cancel()
+        accountSessionTask = Task { [weak self, accountSessionActor] in
+            let receipt = await accountSessionActor.bootstrap(
+                cachedProfileSubjectId: cachedSubjectId,
+                credential: credential
+            )
+            guard !Task.isCancelled, let self else { return }
+            self.accountSessionTask = nil
+            self.accountSessionReceipt = receipt
+            switch receipt.rootRoute {
+            case .authentication:
+                self.transitionToAuth()
+            case .validation:
+                self.validateCachedPrivateAccess(expectedGeneration: receipt.generation)
+            case .privateUI:
+                self.showMainTab()
+            }
+        }
+    }
+
+    private func activateVerifiedLogin() {
+        guard let credential = UserManager.shared.accountSessionCredentialSnapshot(),
+              credential.trust == .requiresOnlineValidation,
+              credential.normalizedSubjectId == UserManager.shared.currentUser?.id else {
+            transitionToAuth()
+            return
+        }
+        rootMode = .validating
+        showStartupValidationGate()
+        accountSessionTask?.cancel()
+        accountSessionTask = Task { [weak self, accountSessionActor] in
+            let receipt = await accountSessionActor.activateVerifiedLogin(credential)
+            guard !Task.isCancelled, let self else { return }
+            self.accountSessionTask = nil
+            self.accountSessionReceipt = receipt.accepted ? receipt : nil
+            if receipt.accepted, receipt.rootRoute == .privateUI {
                 self.showMainTab()
             } else {
                 self.transitionToAuth()
             }
         }
+    }
+
+    private func validateCachedPrivateAccess(expectedGeneration: UInt64) {
+        DreamJourneyBackendClient.shared.resumePrivateAccessSession { [weak self] validated in
+            DispatchQueue.main.async {
+                guard let self,
+                      self.accountSessionReceipt?.generation == expectedGeneration else {
+                    return
+                }
+                guard validated,
+                      UserManager.shared.canEnterPrivateUI,
+                      let credential = UserManager.shared.accountSessionCredentialSnapshot(),
+                      credential.trust == .requiresOnlineValidation else {
+                    self.suspendActorAndShowAuth(
+                        expectedGeneration: expectedGeneration,
+                        reason: "startupSessionValidationFailed"
+                    )
+                    return
+                }
+                self.accountSessionTask?.cancel()
+                let actor = self.accountSessionActor
+                self.accountSessionTask = Task { [weak self, actor] in
+                    let sessionSaved = await actor.recordActivationPhase(
+                        .sessionSaved,
+                        expectedGeneration: expectedGeneration
+                    )
+                    let storesMounted = await actor.recordActivationPhase(
+                        .storesMounted,
+                        expectedGeneration: expectedGeneration
+                    )
+                    let profileCached = await actor.recordActivationPhase(
+                        .profileCached,
+                        expectedGeneration: expectedGeneration
+                    )
+                    guard sessionSaved.accepted,
+                          storesMounted.accepted,
+                          profileCached.accepted else {
+                        guard let self else { return }
+                        self.suspendActorAndShowAuth(
+                            expectedGeneration: expectedGeneration,
+                            reason: "startupActivationJournalRejected"
+                        )
+                        return
+                    }
+                    let receipt = await actor.activateValidatedCredential(
+                        credential,
+                        expectedGeneration: expectedGeneration
+                    )
+                    guard !Task.isCancelled,
+                          let self,
+                          self.accountSessionReceipt?.generation == expectedGeneration else {
+                        return
+                    }
+                    self.accountSessionTask = nil
+                    guard receipt.accepted,
+                          receipt.rootRoute == .privateUI else {
+                        self.suspendActorAndShowAuth(
+                            expectedGeneration: expectedGeneration,
+                            reason: "startupActorActivationRejected"
+                        )
+                        return
+                    }
+                    self.accountSessionReceipt = receipt
+                    self.showMainTab()
+                }
+            }
+        }
+    }
+
+    private func suspendActorAndShowAuth(expectedGeneration: UInt64?, reason: String) {
+        accountSessionTask?.cancel()
+        accountSessionReceipt = nil
+        Task { [accountSessionActor] in
+            _ = await accountSessionActor.suspend(
+                expectedGeneration: expectedGeneration,
+                reason: reason
+            )
+        }
+        transitionToAuth()
     }
 
     private func showStartupValidationGate() {
@@ -115,7 +254,6 @@ final class AppCoordinator: Coordinator {
     }
 
     private func transitionToAuth() {
-        startupValidationGeneration += 1
         childCoordinators.removeAll()
         navigationController = UINavigationController()
         rootMode = .unresolved

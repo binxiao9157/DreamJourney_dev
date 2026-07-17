@@ -1,6 +1,7 @@
 import UIKit
 
 // MARK: - Coordinator 协议
+@MainActor
 protocol Coordinator: AnyObject {
     var navigationController: UINavigationController { get set }
     var childCoordinators: [Coordinator] { get set }

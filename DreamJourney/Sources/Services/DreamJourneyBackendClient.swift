@@ -4054,8 +4054,7 @@ final class DreamJourneyBackendClient {
 
     func resumePrivateAccessSession(completion: @escaping (Bool) -> Void) {
         guard let capturedSession = authSessionStore.currentSession,
-              capturedSession.isPrivateAccessEligible,
-              UserManager.shared.currentUser?.id == capturedSession.userId else {
+              capturedSession.isPrivateAccessEligible else {
             if let userId = UserManager.shared.currentUser?.id {
                 UserManager.shared.suspendPrivateAccess(
                     for: userId,
@@ -4072,6 +4071,15 @@ final class DreamJourneyBackendClient {
                 UserManager.shared.suspendPrivateAccess(
                     for: capturedSession.userId,
                     reason: "startupSessionValidationFailed",
+                    notify: false
+                )
+                completion(false)
+                return
+            }
+            guard UserManager.shared.prepareCachedProfileForValidatedSession(refreshedSession) else {
+                UserManager.shared.suspendPrivateAccess(
+                    for: refreshedSession.userId,
+                    reason: "startupProfileRecoveryFailed",
                     notify: false
                 )
                 completion(false)
