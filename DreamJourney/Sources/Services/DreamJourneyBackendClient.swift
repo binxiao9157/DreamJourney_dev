@@ -3163,6 +3163,7 @@ final class DreamJourneyBackendClient {
         case invalidJSONResponse
         case unsupportedJSONRoot
         case userAuthenticationRequired
+        case accountScopeChanged
         case featurePolicyDenied(feature: String, reason: String)
         case recoveryAccessDenied(mode: String, code: String, reason: String)
         case backendError(statusCode: Int?, context: BackendErrorContext)
@@ -3180,6 +3181,8 @@ final class DreamJourneyBackendClient {
                 return "后端返回的 JSON 根节点不是对象"
             case .userAuthenticationRequired:
                 return "需要登录后才能继续"
+            case .accountScopeChanged:
+                return "账号已切换，旧请求结果已丢弃"
             case .featurePolicyDenied(let feature, let reason):
                 return "功能请求已被发布策略拦截（\(feature)：\(reason)）"
             case .recoveryAccessDenied(let mode, let code, let reason):
@@ -4571,11 +4574,13 @@ final class DreamJourneyBackendClient {
         allowsRecoveryRefresh: Bool = true,
         recoveryClearSession: BackendAuthSessionContract? = nil,
         requiredAuthSession: BackendAuthSessionContract? = nil,
+        accountLease: BackendAccountLease? = nil,
         featureDecision: FeatureDecision? = nil,
         additionalHeaders: [String: String] = [:],
         completion: @escaping (Result<[String: Any], Error>) -> Void
     ) {
         let requestAuthSession: BackendAuthSessionContract?
+        let requestAccountLease: BackendAccountLease?
         switch authPolicy {
         case .userRequired:
             let currentSession = authSessionStore.currentSession
@@ -4588,19 +4593,26 @@ final class DreamJourneyBackendClient {
             if let requiredAuthSession,
                currentSession?.matchesCASIdentity(requiredAuthSession) != true {
                 DispatchQueue.main.async {
-                    completion(.failure(ClientError.backendError(
-                        statusCode: 401,
-                        context: .init(
-                            code: "auth_session_changed",
-                            detail: "登录状态已变化，请重试"
-                        )
-                    )))
+                    completion(.failure(ClientError.accountScopeChanged))
                 }
                 return
             }
-            requestAuthSession = requiredAuthSession ?? authenticatedSession
+            let selectedSession = requiredAuthSession ?? authenticatedSession
+            requestAuthSession = selectedSession
+            let capturedLease = accountLease ?? BackendAccountLease(session: selectedSession)
+            guard capturedLease.permits(
+                session: requestAuthSession,
+                currentUserId: UserManager.shared.currentUser?.id
+            ) else {
+                DispatchQueue.main.async {
+                    completion(.failure(ClientError.accountScopeChanged))
+                }
+                return
+            }
+            requestAccountLease = capturedLease
         case .publicRequest, .refreshExchange:
             requestAuthSession = nil
+            requestAccountLease = nil
         }
 
         let recoveryDecision = RecoveryRuntimePolicyStore.shared.requestDecision(
@@ -4610,6 +4622,10 @@ final class DreamJourneyBackendClient {
         if !recoveryDecision.allowed {
             if allowsRecoveryRefresh, path != "/config/runtime" {
                 fetchRuntimeConfig { result in
+                    guard self.isCurrentAccountLease(requestAccountLease) else {
+                        completion(.failure(ClientError.accountScopeChanged))
+                        return
+                    }
                     switch result {
                     case .success:
                         self.requestJSON(
@@ -4621,6 +4637,7 @@ final class DreamJourneyBackendClient {
                             allowsRecoveryRefresh: false,
                             recoveryClearSession: recoveryClearSession,
                             requiredAuthSession: requiredAuthSession,
+                            accountLease: requestAccountLease,
                             featureDecision: featureDecision,
                             additionalHeaders: additionalHeaders,
                             completion: completion
@@ -4693,36 +4710,54 @@ final class DreamJourneyBackendClient {
         AF.request(url, method: method, parameters: payload, encoding: JSONEncoding.default, headers: requestHeaders)
             .validate(statusCode: 200..<300)
             .responseData(queue: .global(qos: .utility)) { response in
+                guard self.isCurrentAccountLease(requestAccountLease) else {
+                    self.deliverRequestResult(
+                        .failure(ClientError.accountScopeChanged),
+                        accountLease: nil,
+                        completion: completion
+                    )
+                    return
+                }
                 switch response.result {
                 case .success(let data):
                     do {
                         let json = try JSONSerialization.jsonObject(with: data)
                         guard let object = json as? [String: Any] else {
-                            DispatchQueue.main.async {
-                                completion(.failure(ClientError.unsupportedJSONRoot))
-                            }
+                            self.deliverRequestResult(
+                                .failure(ClientError.unsupportedJSONRoot),
+                                accountLease: requestAccountLease,
+                                completion: completion
+                            )
                             return
                         }
-                        DispatchQueue.main.async {
-                            completion(.success(object))
-                        }
+                        self.deliverRequestResult(
+                            .success(object),
+                            accountLease: requestAccountLease,
+                            completion: completion
+                        )
                     } catch {
-                        DispatchQueue.main.async {
-                            completion(.failure(ClientError.invalidJSONResponse))
-                        }
+                        self.deliverRequestResult(
+                            .failure(ClientError.invalidJSONResponse),
+                            accountLease: requestAccountLease,
+                            completion: completion
+                        )
                     }
                 case .failure(let error):
                     let statusCode = response.response?.statusCode
                     if let recoveryPolicy = Self.recoveryRuntimePolicy(from: response.data) {
-                        self.adoptRecoveryRuntimePolicy(
-                            recoveryPolicy,
-                            clearSessionIfCurrentMatches: recoveryClearSession
-                        )
-                        let denied = recoveryPolicy.requestDecision(
-                            method: method.rawValue,
-                            path: path
-                        )
                         DispatchQueue.main.async {
+                            guard self.isCurrentAccountLease(requestAccountLease) else {
+                                completion(.failure(ClientError.accountScopeChanged))
+                                return
+                            }
+                            self.adoptRecoveryRuntimePolicy(
+                                recoveryPolicy,
+                                clearSessionIfCurrentMatches: recoveryClearSession
+                            )
+                            let denied = recoveryPolicy.requestDecision(
+                                method: method.rawValue,
+                                path: path
+                            )
                             completion(.failure(ClientError.recoveryAccessDenied(
                                 mode: recoveryPolicy.mode.rawValue,
                                 code: denied.code,
@@ -4746,6 +4781,7 @@ final class DreamJourneyBackendClient {
                                 allowsRecoveryRefresh: allowsRecoveryRefresh,
                                 recoveryClearSession: recoveryClearSession,
                                 requiredAuthSession: currentSession,
+                                accountLease: requestAccountLease,
                                 featureDecision: preparedFeatureDecision,
                                 additionalHeaders: additionalHeaders,
                                 completion: completion
@@ -4758,15 +4794,21 @@ final class DreamJourneyBackendClient {
                                     code: "auth_session_changed",
                                     detail: "登录状态已变化，请重试"
                                 )
-                            DispatchQueue.main.async {
-                                completion(.failure(ClientError.backendError(
+                            self.deliverRequestResult(
+                                .failure(ClientError.backendError(
                                     statusCode: statusCode,
                                     context: context
-                                )))
-                            }
+                                )),
+                                accountLease: requestAccountLease,
+                                completion: completion
+                            )
                             return
                         }
                         self.refreshAuthSession(for: requestAuthSession) { refreshedSession in
+                            guard self.isCurrentAccountLease(requestAccountLease) else {
+                                completion(.failure(ClientError.accountScopeChanged))
+                                return
+                            }
                             if let refreshedSession {
                                 self.requestJSON(
                                     path: path,
@@ -4777,6 +4819,7 @@ final class DreamJourneyBackendClient {
                                     allowsRecoveryRefresh: allowsRecoveryRefresh,
                                     recoveryClearSession: recoveryClearSession,
                                     requiredAuthSession: refreshedSession,
+                                    accountLease: requestAccountLease,
                                     featureDecision: preparedFeatureDecision,
                                     additionalHeaders: additionalHeaders,
                                     completion: completion
@@ -4793,26 +4836,56 @@ final class DreamJourneyBackendClient {
                         return
                     }
                     if let context = Self.backendErrorContext(from: response.data) {
-                        DispatchQueue.main.async {
-                            completion(.failure(ClientError.backendError(
+                        self.deliverRequestResult(
+                            .failure(ClientError.backendError(
                                 statusCode: statusCode,
                                 context: context
-                            )))
-                        }
+                            )),
+                            accountLease: requestAccountLease,
+                            completion: completion
+                        )
                         return
                     }
-                    DispatchQueue.main.async {
-                        if let statusCode {
-                            completion(.failure(ClientError.backendError(
+                    if let statusCode {
+                        self.deliverRequestResult(
+                            .failure(ClientError.backendError(
                                 statusCode: statusCode,
                                 context: .init(detail: error.localizedDescription)
-                            )))
-                        } else {
-                            completion(.failure(error))
-                        }
+                            )),
+                            accountLease: requestAccountLease,
+                            completion: completion
+                        )
+                    } else {
+                        self.deliverRequestResult(
+                            .failure(error),
+                            accountLease: requestAccountLease,
+                            completion: completion
+                        )
                     }
                 }
             }
+    }
+
+    private func isCurrentAccountLease(_ lease: BackendAccountLease?) -> Bool {
+        guard let lease else { return true }
+        return lease.permits(
+            session: authSessionStore.currentSession,
+            currentUserId: UserManager.shared.currentUser?.id
+        )
+    }
+
+    private func deliverRequestResult(
+        _ result: Result<[String: Any], Error>,
+        accountLease: BackendAccountLease?,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        DispatchQueue.main.async {
+            guard self.isCurrentAccountLease(accountLease) else {
+                completion(.failure(ClientError.accountScopeChanged))
+                return
+            }
+            completion(result)
+        }
     }
 
     private func adoptRecoveryRuntimePolicy(

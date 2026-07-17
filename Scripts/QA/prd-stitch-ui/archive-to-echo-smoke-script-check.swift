@@ -33,7 +33,8 @@ assertContains(detail, "runUIQALocalAnalysisSmoke()", "archive detail exposes UI
 assertContains(detail, "analyzeArchiveItemTapped()", "archive detail UIQA wrapper uses existing analysis action")
 
 assertContains(echo, "runUIQAMicrophoneSmoke()", "echo exposes UIQA microphone wrapper")
-assertContains(echo, "micTapped()", "echo UIQA wrapper uses existing microphone action")
+assertContains(echo, "DialogEngineManager.shared.startDialog(", "echo UIQA wrapper starts the simulator dialog engine without backend credentials")
+assertContains(echo, "usesTurnScopedKnowledgeContext: true", "echo UIQA wrapper should match production turn-scoped context mode")
 
 assertContains(script, "DJRunArchiveToEchoSmoke", "smoke script launches the app with the auto-run argument")
 assertContains(script, "SWIFT_ACTIVE_COMPILATION_CONDITIONS='DEBUG UI_QA_SIMULATOR'", "smoke script builds UIQA variant")

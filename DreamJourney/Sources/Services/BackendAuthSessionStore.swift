@@ -253,6 +253,48 @@ struct BackendAuthSessionContract: Codable, Equatable {
     }
 }
 
+struct BackendAccountLease: Equatable {
+    let userId: String
+    let sessionId: String
+    let contractVersion: Int
+    let tokenFamilyId: String?
+    let sessionVersion: Int?
+
+    init(session: BackendAuthSessionContract) {
+        userId = session.userId
+        sessionId = session.sessionId
+        contractVersion = session.contractVersion
+        tokenFamilyId = session.tokenFamilyId
+        sessionVersion = session.sessionVersion
+    }
+
+    func permits(
+        session currentSession: BackendAuthSessionContract?,
+        currentUserId: String?
+    ) -> Bool {
+        guard currentUserId == userId,
+              let currentSession,
+              currentSession.userId == userId,
+              currentSession.contractVersion == contractVersion else {
+            return false
+        }
+
+        if currentSession.sessionId == sessionId {
+            return currentSession.tokenFamilyId == tokenFamilyId
+                && currentSession.sessionVersion == sessionVersion
+        }
+
+        guard contractVersion == 2,
+              let tokenFamilyId,
+              let sessionVersion,
+              currentSession.tokenFamilyId == tokenFamilyId,
+              let currentVersion = currentSession.sessionVersion else {
+            return false
+        }
+        return currentVersion > sessionVersion
+    }
+}
+
 final class BackendAuthSessionStore {
     static let shared = BackendAuthSessionStore()
 

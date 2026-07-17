@@ -188,6 +188,14 @@ private struct ArchiveVisibilityContext {
     let digitalHumanId: String
 }
 
+private struct ArchiveStorageLease {
+    let accountUserId: String
+    let archiveOwnerId: String
+    let personaScope: String
+    let digitalHumanId: String
+    let storageKey: String
+}
+
 private struct InAppMessageLocalState: Codable {
     let status: InAppMessageStatus
     let readAt: String?
@@ -564,6 +572,7 @@ final class MemoryArchiveRepository {
         _ reminder: TimeLetterMailboxReminder,
         completion: @escaping (Result<MemoryArchiveItem, Error>) -> Void
     ) {
+        let lease = currentArchiveStorageLease
         let ownerUserId = reminder.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines)
         let canFetchRemoteDetail = DreamJourneyBackendClient.shared.isTimeLetterDispatchConfigured && !ownerUserId.isEmpty
 
@@ -571,19 +580,23 @@ final class MemoryArchiveRepository {
             DreamJourneyBackendClient.shared.getTimeLetterDetail(
                 ownerUserId: ownerUserId,
                 itemId: reminder.sourceArchiveItemId,
-                viewerUserId: currentUserId
+                viewerUserId: lease.accountUserId
             ) { [weak self] result in
                 guard let self else { return }
+                guard isCurrentArchiveStorageLease(lease) else {
+                    completion(.failure(ArchiveRepositoryError.accountScopeChanged))
+                    return
+                }
                 switch result {
                 case .success(let object):
                     guard let item = Self.timeLetterDetailItem(from: object) else {
                         completion(.failure(ArchiveRepositoryError.invalidBackendDetail))
                         return
                     }
-                    upsertResolvedTimeLetterDetail(item)
+                    upsertResolvedTimeLetterDetail(item, lease: lease)
                     completion(.success(item))
                 case .failure(let error):
-                    if let localItem = localTimeLetterDetailItem(for: reminder) {
+                    if let localItem = localTimeLetterDetailItem(for: reminder, lease: lease) {
                         completion(.success(localItem))
                     } else {
                         completion(.failure(error))
@@ -593,7 +606,7 @@ final class MemoryArchiveRepository {
             return
         }
 
-        if let localItem = localTimeLetterDetailItem(for: reminder) {
+        if let localItem = localTimeLetterDetailItem(for: reminder, lease: lease) {
             completion(.success(localItem))
             return
         }
@@ -622,13 +635,22 @@ final class MemoryArchiveRepository {
             return
         }
 
-        DreamJourneyBackendClient.shared.listArchiveItems(userId: currentArchiveOwnerId) { [weak self] result in
+        let lease = currentArchiveStorageLease
+        DreamJourneyBackendClient.shared.listArchiveItems(userId: lease.archiveOwnerId) { [weak self] result in
             guard let self else { return }
+            guard isCurrentArchiveStorageLease(lease) else {
+                completion?(.failure(ArchiveRepositoryError.accountScopeChanged))
+                return
+            }
             switch result {
             case .success(let object):
-                let remoteItems = assignOwnerIfNeededForCurrentUser(Self.archiveItems(from: object))
-                let mergedItems = mergeRemoteItems(remoteItems)
-                save(mergedItems)
+                let remoteItems = Self.archiveItems(from: object)
+                    .map { $0.assigningOwnerIfNeeded(lease.accountUserId) }
+                let mergedItems = mergeRemoteItems(
+                    remoteItems,
+                    localItems: items(for: lease)
+                )
+                save(mergedItems, storageKey: lease.storageKey)
                 completion?(.success(mergedItems.sorted { $0.createdAt > $1.createdAt }))
             case .failure(let error):
                 print("[Archive] backend fetch failed: \(error.localizedDescription)")
@@ -664,6 +686,28 @@ final class MemoryArchiveRepository {
         "\(baseKey).\(currentArchiveOwnerId)"
     }
 
+    private var currentArchiveStorageLease: ArchiveStorageLease {
+        let accountUserId = currentUserId
+        let visibilityContext = currentArchiveVisibilityContext
+        let archiveOwnerId = visibilityContext.ownerId
+        return ArchiveStorageLease(
+            accountUserId: accountUserId,
+            archiveOwnerId: archiveOwnerId,
+            personaScope: visibilityContext.personaScope,
+            digitalHumanId: visibilityContext.digitalHumanId,
+            storageKey: "\(baseKey).\(archiveOwnerId)"
+        )
+    }
+
+    private func isCurrentArchiveStorageLease(_ lease: ArchiveStorageLease) -> Bool {
+        let visibilityContext = currentArchiveVisibilityContext
+        return currentUserId == lease.accountUserId
+            && visibilityContext.ownerId == lease.archiveOwnerId
+            && visibilityContext.personaScope == lease.personaScope
+            && visibilityContext.digitalHumanId == lease.digitalHumanId
+            && storageKey == lease.storageKey
+    }
+
     private var mailboxStorageKey: String {
         "\(mailboxBaseKey).\(currentUserId)"
     }
@@ -673,6 +717,10 @@ final class MemoryArchiveRepository {
     }
 
     private func save(_ items: [MemoryArchiveItem]) {
+        save(items, storageKey: storageKey)
+    }
+
+    private func save(_ items: [MemoryArchiveItem], storageKey: String) {
         let sortedItems = items.sorted { $0.createdAt > $1.createdAt }
         if let data = try? JSONEncoder().encode(sortedItems) {
             UserDefaults.standard.set(data, forKey: storageKey)
@@ -737,20 +785,27 @@ final class MemoryArchiveRepository {
         saveTimeLetterMailboxReminders(reminders)
     }
 
-    private func localTimeLetterDetailItem(for reminder: TimeLetterMailboxReminder) -> MemoryArchiveItem? {
-        allItems().first { item in
+    private func localTimeLetterDetailItem(
+        for reminder: TimeLetterMailboxReminder,
+        lease: ArchiveStorageLease
+    ) -> MemoryArchiveItem? {
+        items(for: lease).first { item in
             item.id == reminder.sourceArchiveItemId && item.kind == .timeLetter
         }
     }
 
-    private func upsertResolvedTimeLetterDetail(_ item: MemoryArchiveItem) {
-        var items = allItems()
+    private func upsertResolvedTimeLetterDetail(
+        _ item: MemoryArchiveItem,
+        lease: ArchiveStorageLease
+    ) {
+        guard isCurrentArchiveStorageLease(lease) else { return }
+        var items = items(for: lease)
         if let index = items.firstIndex(where: { $0.id == item.id }) {
             items[index] = item
         } else {
             items.insert(item, at: 0)
         }
-        save(items)
+        save(items, storageKey: lease.storageKey)
     }
 
     private func syncToBackend(_ item: MemoryArchiveItem) {
@@ -758,29 +813,31 @@ final class MemoryArchiveRepository {
             return
         }
 
-        let archiveVisibilityContext = currentArchiveVisibilityContext
-        let ownerId = archiveVisibilityContext.ownerId
+        let lease = currentArchiveStorageLease
+        let ownerId = lease.archiveOwnerId
         let payload = item.archiveBackendPayload(
             userId: ownerId,
-            viewerUserId: currentUserId,
+            viewerUserId: lease.accountUserId,
             ownerId: ownerId,
-            personaScope: archiveVisibilityContext.personaScope,
-            digitalHumanId: archiveVisibilityContext.digitalHumanId,
+            personaScope: lease.personaScope,
+            digitalHumanId: lease.digitalHumanId,
             isoFormatter: isoFormatter
         )
         DreamJourneyBackendClient.shared.postArchiveItem(
             payload
         ) { [weak self] result in
             guard let self else { return }
+            guard isCurrentArchiveStorageLease(lease) else { return }
             switch result {
             case .success:
-                markBackendSyncState(item.id, state: .synced)
+                markBackendSyncState(item.id, state: .synced, lease: lease)
             case .failure(let error):
                 print("[Archive] backend sync failed: \(error.localizedDescription)")
                 markBackendSyncState(
                     item.id,
                     state: .failed,
-                    error: sanitizeBackendSyncError(error)
+                    error: sanitizeBackendSyncError(error),
+                    lease: lease
                 )
             }
         }
@@ -795,9 +852,11 @@ final class MemoryArchiveRepository {
     private func markBackendSyncState(
         _ itemId: String,
         state: ArchiveBackendSyncState,
-        error: String? = nil
+        error: String? = nil,
+        lease: ArchiveStorageLease
     ) {
-        var items = allItems()
+        guard isCurrentArchiveStorageLease(lease) else { return }
+        var items = items(for: lease)
         guard let index = items.firstIndex(where: { $0.id == itemId }),
               items[index].isPublicBackendSyncEligible else {
             return
@@ -811,7 +870,7 @@ final class MemoryArchiveRepository {
         case .failed:
             items[index] = items[index].updatingBackendSyncState(.failed, error: error)
         }
-        save(items)
+        save(items, storageKey: lease.storageKey)
     }
 
     private func sanitizeBackendSyncError(_ error: Error) -> String {
@@ -888,9 +947,23 @@ final class MemoryArchiveRepository {
         return objects.isEmpty ? nil : objects
     }
 
-    private func mergeRemoteItems(_ remoteItems: [MemoryArchiveItem]) -> [MemoryArchiveItem] {
+    private func items(for lease: ArchiveStorageLease) -> [MemoryArchiveItem] {
+        guard let data = UserDefaults.standard.data(forKey: lease.storageKey),
+              let decodedItems = try? JSONDecoder().decode([MemoryArchiveItem].self, from: data) else {
+            return []
+        }
+        return decodedItems.map {
+            $0.assigningOwnerIfNeeded(lease.accountUserId)
+                .updatingRecoveredLocalPathIfNeeded()
+        }
+    }
+
+    private func mergeRemoteItems(
+        _ remoteItems: [MemoryArchiveItem],
+        localItems: [MemoryArchiveItem]
+    ) -> [MemoryArchiveItem] {
         var itemsById: [String: MemoryArchiveItem] = [:]
-        allItems().forEach { localItem in
+        localItems.forEach { localItem in
             guard let existingItem = itemsById[localItem.id] else {
                 itemsById[localItem.id] = localItem
                 return
@@ -921,6 +994,7 @@ private enum ArchiveRepositoryError: LocalizedError {
     case backendNotConfigured
     case invalidBackendDetail
     case timeLetterDetailUnavailable
+    case accountScopeChanged
 
     var errorDescription: String? {
         switch self {
@@ -930,6 +1004,8 @@ private enum ArchiveRepositoryError: LocalizedError {
             return "后端时间信件详情格式异常"
         case .timeLetterDetailUnavailable:
             return "时间信件详情暂不可用"
+        case .accountScopeChanged:
+            return "账号或回响对象已切换，旧档案结果已丢弃"
         }
     }
 }

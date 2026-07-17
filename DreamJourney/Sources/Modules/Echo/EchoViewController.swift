@@ -4828,7 +4828,13 @@ extension EchoViewController: DialogEngineDelegate {
 #if UI_QA_SIMULATOR && targetEnvironment(simulator)
 extension EchoViewController {
     func runUIQAMicrophoneSmoke() {
-        micTapped()
+        DialogEngineManager.shared.delegate = self
+        DialogEngineManager.shared.setup()
+        viewModel.prepareVoiceInteraction()
+        DialogEngineManager.shared.startDialog(
+            sendsGreeting: false,
+            usesTurnScopedKnowledgeContext: true
+        )
     }
 
     func runUIQAEchoVoiceStatePreview() {

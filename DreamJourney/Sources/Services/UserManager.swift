@@ -167,11 +167,11 @@ final class UserManager {
     func logout() {
         accountStateLock.lock()
         let ownerUserId = storedCurrentUser?.id
-        storedCurrentUser = nil
         EchoTraceAccountLifecycle.invalidateAndClear(ownerUserId: ownerUserId)
+        DreamJourneyBackendClient.shared.logoutAuthSession()
+        storedCurrentUser = nil
         UserDefaults.standard.removeObject(forKey: kUserKey)
         UserDefaults.standard.removeObject(forKey: kLoggedInKey)
-        DreamJourneyBackendClient.shared.logoutAuthSession()
         KnowledgeSyncCoordinator.shared.userDidChange(to: nil)
         KBLiteManager.shared.switchUser(to: nil)
         NotificationCenter.default.post(name: .djUserDidLogout, object: nil)
