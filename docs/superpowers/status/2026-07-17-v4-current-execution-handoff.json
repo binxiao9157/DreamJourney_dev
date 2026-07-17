@@ -4,19 +4,25 @@
     "backendPendingPaths": [],
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G4": "MISSING"
+      "G2": "MISSING"
     },
-    "id": "WI-S0-02-01",
+    "id": "WI-S0-02-02",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "Establish challenge and verification contracts that bind a verified external identity to a non-enumerable random Subject without allowing phone text to claim a private account."
+    "summary": "Add atomic access/refresh token-family rotation, reuse detection and session/family/all-device revocation on top of the verified Subject foundation."
   },
   "baselines": {
-    "backend": "main@9693dc7",
-    "ios": "feature/prd-stitch-ui-adaptation@de4cff4",
+    "backend": "main@a12545e",
+    "ios": "feature/prd-stitch-ui-adaptation@f9208ab",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
+    {
+      "evidence": "docs/superpowers/status/2026-07-17-wi-s0-02-01-strong-identity-binding.md",
+      "id": "WI-S0-02-01",
+      "implementationStatus": "INTERNAL_READY / BACKEND_DEPLOYED / G0_G2_SCOPED_VERIFIED / G4_IDENTITY_PROVIDER_BLOCKED / LEGACY_REBIND_OPEN",
+      "registryClosure": "G4_PROVIDER_AND_LEGACY_REBIND_OPEN"
+    },
     {
       "evidence": "docs/superpowers/status/2026-07-15-wi-s0-03-01-credential-inventory.md",
       "id": "WI-S0-03-01",
@@ -157,9 +163,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S0-02-02",
+    "id": "WI-S0-02-03",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "Add atomic access/refresh token-family rotation, reuse detection and session revocation after verified Subject binding is established."
+    "summary": "Apply typed principal middleware and a fail-closed route authentication matrix after token-family semantics are established."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -168,5 +174,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-17T13:19:54+08:00"
+  "updatedAt": "2026-07-17T16:10:35+08:00"
 }
