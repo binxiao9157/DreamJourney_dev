@@ -4,16 +4,17 @@
     "backendPendingPaths": [],
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
+      "G0": "MISSING",
       "G2": "MISSING"
     },
-    "id": "WI-S0-02-03",
+    "id": "WI-S0-02-04",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "Implement typed principal middleware and a complete fail-closed route authentication matrix, with production startup completeness and deny evidence."
+    "summary": "Derive owner and vault from authenticated principal and database resource relationships, then enforce resource authorization without trusting payload owner fields."
   },
   "baselines": {
-    "backend": "main@5dfbaa5",
-    "ios": "feature/prd-stitch-ui-adaptation@d05e7cb",
+    "backend": "main@a9b02d5",
+    "ios": "feature/prd-stitch-ui-adaptation@4002ae9",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
@@ -28,6 +29,12 @@
       "id": "WI-S0-02-02",
       "implementationStatus": "INTERNAL_READY / BACKEND_DEPLOYED / G2_POSTGRES_VERIFIED / IOS_LOCAL_COMMITTED",
       "registryClosure": "SCOPED_G2_EVIDENCE_PRESENT"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-17-wi-s0-02-03-principal-route-authentication.md",
+      "id": "WI-S0-02-03",
+      "implementationStatus": "INTERNAL_READY / BACKEND_DEPLOYED / G0_G2_POSTGRES_VERIFIED / IOS_LOCAL_COMMITTED",
+      "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT"
     },
     {
       "evidence": "docs/superpowers/status/2026-07-15-wi-s0-03-01-credential-inventory.md",
@@ -169,9 +176,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S0-02-04",
+    "id": "WI-S0-02-05",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "Derive owner and vault from authenticated principal and database resource relationships, then enforce resource authorization without trusting payload owner fields."
+    "summary": "Separate delegated grants from family relationships and enforce grant lifecycle, purpose, expiry and revocation on every delegated read."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -180,5 +187,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-17T18:13:31+08:00"
+  "updatedAt": "2026-07-17T18:56:27+08:00"
 }
