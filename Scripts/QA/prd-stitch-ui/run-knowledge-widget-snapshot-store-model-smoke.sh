@@ -10,6 +10,8 @@ mkdir -p "$OUTPUT_DIR"
 
 swiftc \
   -parse-as-library \
+  "$ROOT_DIR/DreamJourney/Sources/App/AccountLease.swift" \
+  "$ROOT_DIR/DreamJourney/Sources/App/AccountSessionActor.swift" \
   "$ROOT_DIR/DreamJourney/Sources/Services/KBLiteModels.swift" \
   "$ROOT_DIR/DreamJourney/Sources/Services/KnowledgeWidgetPrivacyPolicy.swift" \
   "$ROOT_DIR/DreamJourney/Sources/Services/KnowledgeWidgetSnapshotStore.swift" \

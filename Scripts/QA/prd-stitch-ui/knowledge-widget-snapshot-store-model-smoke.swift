@@ -6,6 +6,32 @@ enum KnowledgeWidgetSnapshotStoreModelSmoke {
         var value = 0
     }
 
+    private final class LeaseRuntime: AccountLeaseRuntimePort, @unchecked Sendable {
+        var currentLease: AccountLease?
+        var isValid = true
+
+        func capture(forSubjectId subjectId: String?) -> AccountLease? {
+            guard let currentLease,
+                  subjectId == nil || subjectId == currentLease.subjectId else {
+                return nil
+            }
+            return currentLease
+        }
+
+        func validate(
+            _ lease: AccountLease,
+            at checkpoint: AccountLeaseCheckpoint
+        ) -> AccountLeaseValidationDecision {
+            let allowed = isValid && lease == currentLease
+            return AccountLeaseValidationDecision(
+                checkpoint: checkpoint,
+                allowed: allowed,
+                reason: allowed ? .allowed : .authorityEpochMismatch,
+                sessionRotated: false
+            )
+        }
+    }
+
     static func main() throws {
         let fileManager = FileManager.default
         let root = fileManager.temporaryDirectory
@@ -21,10 +47,13 @@ enum KnowledgeWidgetSnapshotStoreModelSmoke {
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let reloads = Counter()
+        let leaseRuntime = LeaseRuntime()
+        leaseRuntime.currentLease = lease(subjectId: "owner-A", generation: 1)
         let store = KnowledgeWidgetSnapshotStore(
             containerURLProvider: { root },
             sharedDefaultsProvider: { defaults },
-            timelineReloader: { reloads.value += 1 }
+            timelineReloader: { reloads.value += 1 },
+            accountLeaseRuntime: leaseRuntime
         )
         let generationA = UUID()
         let generationB = UUID()
@@ -38,6 +67,18 @@ enum KnowledgeWidgetSnapshotStoreModelSmoke {
             "active owner digest must be shared"
         )
 
+        leaseRuntime.isValid = false
+        require(
+            !store.publish(graph: graph(owner: "owner-A"), ownerUserId: "owner-A", generation: generationA),
+            "authority epoch mismatch must reject Widget publication"
+        )
+        require(
+            !fileManager.fileExists(atPath: store.snapshotURLForTesting.path),
+            "invalid active lease must revoke the last Widget snapshot"
+        )
+
+        leaseRuntime.isValid = true
+        leaseRuntime.currentLease = lease(subjectId: "owner-B", generation: 2)
         store.activate(ownerUserId: "owner-B", generation: generationB)
         require(!fileManager.fileExists(atPath: store.snapshotURLForTesting.path), "switch must invalidate old snapshot before new publish")
         require(
@@ -57,6 +98,17 @@ enum KnowledgeWidgetSnapshotStoreModelSmoke {
         require(reloads.value >= 5, "activation, publication and clearing must invalidate Widget timelines")
 
         print("Knowledge widget snapshot store model smoke passed")
+    }
+
+    private static func lease(subjectId: String, generation: UInt64) -> AccountLease {
+        AccountLease(
+            subjectId: subjectId,
+            vaultId: "vault-\(subjectId)",
+            sessionId: "session-\(generation)",
+            generation: generation,
+            generationId: UUID(),
+            authorityEpoch: "epoch-\(generation)"
+        )
     }
 
     private static func graph(owner: String) -> KBLiteGraph {

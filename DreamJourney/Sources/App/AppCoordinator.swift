@@ -89,6 +89,7 @@ final class AppCoordinator: Coordinator {
 
     @objc private func handleLogout() {
         let expectedGeneration = accountSessionReceipt?.generation
+        AccountLeaseRuntime.shared.publish(session: nil)
         accountSessionTask?.cancel()
         accountSessionReceipt = nil
         Task { [accountSessionActor] in
@@ -102,6 +103,7 @@ final class AppCoordinator: Coordinator {
 
     @objc private func handlePrivateAccessSuspended() {
         let expectedGeneration = accountSessionReceipt?.generation
+        AccountLeaseRuntime.shared.publish(session: nil)
         accountSessionTask?.cancel()
         accountSessionReceipt = nil
         Task { [accountSessionActor] in

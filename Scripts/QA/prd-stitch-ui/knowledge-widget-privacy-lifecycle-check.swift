@@ -54,6 +54,9 @@ excludes(policy, "sourceRefs", "snapshot schema must not include source referenc
 
 contains(store, "activeOwnerDigestKey", "store must publish active owner identity")
 contains(store, "generation == activeGeneration", "store must reject stale generations")
+contains(store, "AccountLeaseRuntimePort", "store must consume the central AccountLease runtime")
+contains(store, "at: .commit", "snapshot file publication must validate the account lease")
+contains(store, "at: .runtime", "Widget timeline reload must validate the account lease")
 contains(store, "reloadTimelines(ofKind:", "store must invalidate Widget timeline")
 contains(store, "completeUntilFirstUserAuthentication", "snapshot must define file protection")
 contains(manager, "widgetSnapshotStore.activate", "account lifecycle must activate or revoke Widget identity")

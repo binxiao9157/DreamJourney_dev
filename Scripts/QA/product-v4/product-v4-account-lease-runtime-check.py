@@ -61,6 +61,10 @@ def main() -> None:
         "AppCoordinator must seed AccountLease authority epoch before account bootstrap",
     )
     require(
+        coordinator.count("AccountLeaseRuntime.shared.publish(session: nil)") >= 2,
+        "logout and private-access suspension must revoke AccountLease synchronously",
+    )
+    require(
         "accountLeaseRuntime.updateAuthorityEpoch(policy.authorityEpoch)" in backend_client,
         "backend runtime policy adoption must invalidate leases on authority epoch change",
     )
