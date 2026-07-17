@@ -1,23 +1,22 @@
 {
   "activeWorkItem": {
-    "authorityLock": "DB_RECOVERY",
-    "backendPendingPaths": [
-      "app/db/recovery.py",
-      "tests/test_recovery_record.py"
-    ],
+    "authorityLock": "RELEASE_POLICY",
+    "backendPendingPaths": [],
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
+      "G0": "MISSING",
+      "G1": "MISSING",
       "G2": "MISSING",
-      "G3": "MISSING"
+      "G4": "MISSING"
     },
-    "id": "WI-S0-04-05",
+    "id": "WI-S0-06-09",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "Complete isolated restore, receipt replay, integrity checks, and traffic recovery GO/NO_GO evidence."
+    "summary": "Implement AI identity, crisis-neutral fallback, minor virtual-relative and ineligible Voice hard deny, and M1-M4 fail-closed release policy."
   },
   "baselines": {
-    "backend": "main@ecb2cf6",
-    "ios": "feature/prd-stitch-ui-adaptation@6a4142c",
+    "backend": "main@e1922f2",
+    "ios": "feature/prd-stitch-ui-adaptation@dde3081",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
@@ -88,6 +87,12 @@
       "registryClosure": "EXTERNAL_OFFHOST_KMS_PRIVACY_SRE_OPEN"
     },
     {
+      "evidence": "docs/superpowers/status/2026-07-17-wi-s0-04-05-postgres-recovery.md",
+      "id": "WI-S0-04-05",
+      "implementationStatus": "DEPLOYED / G2_ISOLATED_RESTORE_EXECUTED / NO_GO_OWNER_ORPHANS_AND_REPLAY_AUTHORITY / G3_OPEN",
+      "registryClosure": "NO_GO_REMEDIATION_AND_G3_OPEN"
+    },
+    {
       "evidence": "docs/superpowers/status/2026-07-16-wi-s0-06-01-release-policy-shadow.md",
       "id": "WI-S0-06-01",
       "implementationStatus": "IMPLEMENTED_SHADOW / DEPLOYED",
@@ -149,9 +154,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S0-06-09",
+    "id": "WI-S0-02-01",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "Implement AI identity, crisis-neutral fallback, minor virtual-relative hard deny, and M1-M4 default-off regulatory stop-loss."
+    "summary": "Begin strong identity and resource authorization with server-derived principals and deny-by-default ownership checks."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -160,5 +165,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-17T10:20:00+08:00"
+  "updatedAt": "2026-07-17T12:26:00+08:00"
 }

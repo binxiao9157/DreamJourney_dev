@@ -155,14 +155,11 @@ GIC 需求在本计划中的唯一落点：
 
 ### 3.2 当前活动任务
 
-当前应续接 `WI-S0-04-05`：隔离 Restore、Receipt Replay 与流量恢复门。
+当前活动任务已切换为 `WI-S0-06-09`：新规即时安全止损。
 
-Backend 工作区已有未提交的：
+`WI-S0-04-05` 已完成恢复工具、运行时围栏和真实 Postgres 隔离恢复演练，Backend 已部署至 `e1922f2`，iOS 恢复策略已提交至 `dde3081`。G2 实测结论为 `NO_GO`：历史数据存在 361 条 owner orphan，且全库 replay bundle 缺失；G3 仍未关闭。证据见 `docs/superpowers/status/2026-07-17-wi-s0-04-05-postgres-recovery.md`。
 
-- `app/db/recovery.py`
-- `tests/test_recovery_record.py`
-
-它们属于进行中的恢复合同和测试，不是已完成证据。Phase 0 文档收敛后必须先复核并完成该 Work Item，不能遗弃或提前宣称通过。
+该 NO_GO 不允许恢复切流，但不阻止继续不依赖切流的安全止损。当前 Authority lease 为 `RELEASE_POLICY`，完成 `WI-S0-06-09` 后进入 `WI-S0-02-01`。
 
 ### 3.3 工作区保护
 
@@ -524,9 +521,9 @@ M3 老人健康或成人纪念互动、M4 知识许可和收益不进入自动�
 从本文启用后严格按以下顺序开始：
 
 1. 执行 Phase 0 Slice 0A-0C，晋升终版需求并重算证据。
-2. 复核 Backend 未提交的 `WI-S0-04-05` 文件，补齐 restore/replay/runbook 和 G0 测试。
-3. 部署到隔离 Postgres 运行 G2 restore/replay，生成 GO/NO_GO 证据并提交。
-4. 自动进入 `WI-S0-06-09` 新规安全止损。
+2. `WI-S0-04-05` restore/replay/runbook 和 G0 测试已实现并部署。
+3. G2 isolated restore/replay 已执行，结论 `NO_GO`；owner orphan 与 replay authority 作为显式 blocker 保留。
+4. 当前执行 `WI-S0-06-09` 新规安全止损。
 5. 再按 Phase 1 的 Identity -> Account Isolation -> Rights -> Operations 顺序关闭 Stage 0。
 
 在 Phase 0 完成前，不启动新的 M0 功能编码；在 Stage 0 退出前，M0 只允许 additive schema、typed contract、fake 和 shadow，不切生产 Authority。
