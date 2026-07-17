@@ -41,6 +41,9 @@ def main() -> None:
     require("return" in guard_body, "signed-out fallback must stop login")
     require("UserManager.shared.login" not in guard_body, "offline login must not create a private user")
     require("didLogin" not in guard_body, "offline login must not enter the private application")
+    require("performLegacyLogin" not in source, "runtime capability failure must not fall back to legacy login")
+    require("identityChallenge.canStartClientFlow" in body, "login must require a supported typed challenge capability")
+    require("let submittedPhone = rawPhone" in body, "login must snapshot the submitted identity before async work")
 
     client = CLIENT.read_text(encoding="utf-8")
     upsert = function_body(client, "func upsertUser(")

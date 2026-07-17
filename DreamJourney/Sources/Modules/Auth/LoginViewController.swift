@@ -46,31 +46,6 @@ final class LoginViewController: UIViewController {
         return field
     }()
 
-    private let passwordFieldContainer = UIView()
-    private let passwordIcon = UIImageView(image: UIImage(systemName: "lock"))
-    private let passwordField: UITextField = {
-        let field = UITextField()
-        field.attributedPlaceholder = NSAttributedString(
-            string: "密码",
-            attributes: [.foregroundColor: DJDesignTokens.Color.textSecondary.withAlphaComponent(0.42)]
-        )
-        field.font = DJDesignTokens.Font.body(16)
-        field.textColor = DJDesignTokens.Color.textPrimary
-        field.isSecureTextEntry = true
-        field.returnKeyType = .done
-        field.borderStyle = .none
-        return field
-    }()
-
-    private lazy var forgotButton: UIButton = {
-        let button = UIButton(type: .system)
-        button.setTitle("忘记密码？", for: .normal)
-        button.titleLabel?.font = DJDesignTokens.Font.label(13)
-        button.setTitleColor(DJDesignTokens.Color.accentDeep.withAlphaComponent(0.8), for: .normal)
-        button.addTarget(self, action: #selector(forgotTapped), for: .touchUpInside)
-        return button
-    }()
-
     private lazy var loginButton: UIButton = {
         let button = DJComponentFactory.primaryButton(title: "登录", target: self, action: #selector(loginTapped))
         button.titleLabel?.font = DJDesignTokens.Font.label(16)
@@ -114,7 +89,6 @@ final class LoginViewController: UIViewController {
 
     private func setupLayout() {
         configureFieldContainer(phoneFieldContainer, icon: phoneIcon, textField: phoneField)
-        configureFieldContainer(passwordFieldContainer, icon: passwordIcon, textField: passwordField)
 
         let registerStack = UIStackView(arrangedSubviews: [registerPrefixLabel, registerButton])
         registerStack.axis = .horizontal
@@ -125,8 +99,6 @@ final class LoginViewController: UIViewController {
             titleLabel,
             subtitleLabel,
             phoneFieldContainer,
-            passwordFieldContainer,
-            forgotButton,
             loginButton,
             registerStack,
         ].forEach {
@@ -148,15 +120,7 @@ final class LoginViewController: UIViewController {
             phoneFieldContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
             phoneFieldContainer.heightAnchor.constraint(equalToConstant: 56),
 
-            passwordFieldContainer.topAnchor.constraint(equalTo: phoneFieldContainer.bottomAnchor, constant: 12),
-            passwordFieldContainer.leadingAnchor.constraint(equalTo: phoneFieldContainer.leadingAnchor),
-            passwordFieldContainer.trailingAnchor.constraint(equalTo: phoneFieldContainer.trailingAnchor),
-            passwordFieldContainer.heightAnchor.constraint(equalToConstant: 56),
-
-            forgotButton.topAnchor.constraint(equalTo: passwordFieldContainer.bottomAnchor, constant: 18),
-            forgotButton.trailingAnchor.constraint(equalTo: passwordFieldContainer.trailingAnchor),
-
-            loginButton.topAnchor.constraint(equalTo: forgotButton.bottomAnchor, constant: 20),
+            loginButton.topAnchor.constraint(equalTo: phoneFieldContainer.bottomAnchor, constant: 24),
             loginButton.leadingAnchor.constraint(equalTo: phoneFieldContainer.leadingAnchor),
             loginButton.trailingAnchor.constraint(equalTo: phoneFieldContainer.trailingAnchor),
             loginButton.heightAnchor.constraint(equalToConstant: 57),
@@ -195,7 +159,6 @@ final class LoginViewController: UIViewController {
 
     private func setupActions() {
         phoneField.delegate = self
-        passwordField.delegate = self
         phoneField.addTarget(self, action: #selector(phoneChanged), for: .editingChanged)
     }
 
@@ -216,14 +179,12 @@ final class LoginViewController: UIViewController {
         loginButton.isEnabled = true
     }
 
-    @objc private func forgotTapped() {
-        let alert = UIAlertController(title: "暂未开放", message: "密码找回功能将在后续版本开放。", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "知道了", style: .default))
-        present(alert, animated: true)
-    }
-
     @objc private func registerTapped() {
-        let alert = UIAlertController(title: "暂未开放", message: "当前版本可使用手机号和密码登录。", preferredStyle: .alert)
+        let alert = UIAlertController(
+            title: "手机号验证",
+            message: "输入手机号并完成验证码验证后，将自动创建账号。",
+            preferredStyle: .alert
+        )
         alert.addAction(UIAlertAction(title: "知道了", style: .default))
         present(alert, animated: true)
     }
@@ -236,18 +197,6 @@ final class LoginViewController: UIViewController {
             return
         }
 
-        let password = normalizedPassword()
-        guard !password.isEmpty else {
-            showLoginAlert(title: "密码不能为空", message: "请输入登录密码。")
-            passwordField.becomeFirstResponder()
-            return
-        }
-        guard password.count >= 8 else {
-            showLoginAlert(title: "密码至少 8 位", message: "请检查后重新输入。")
-            passwordField.becomeFirstResponder()
-            return
-        }
-
         guard DreamJourneyBackendClient.shared.isLoginSyncConfigured else {
             showLoginAlert(
                 title: "登录服务暂不可用",
@@ -256,21 +205,118 @@ final class LoginViewController: UIViewController {
             return
         }
 
+        let submittedPhone = rawPhone
         setLoginInProgress(true)
-        DreamJourneyBackendClient.shared.upsertUser(phone: rawPhone, nickname: "", password: password) { [weak self] result in
+        DreamJourneyBackendClient.shared.fetchRuntimeConfig { [weak self] result in
             guard let self else { return }
-            self.setLoginInProgress(false)
             switch result {
-            case .success(let response):
-                self.handleBackendLoginSuccess(response, phone: self.rawPhone)
+            case .success(let runtime):
+                let identityChallenge = runtime.identityChallenge
+                guard identityChallenge.canStartClientFlow else {
+                    self.setLoginInProgress(false)
+                    self.showLoginAlert(
+                        title: "身份验证暂不可用",
+                        message: "当前无法安全验证手机号，请稍后重试。"
+                    )
+                    return
+                }
+                self.beginIdentityChallengeLogin(
+                    phone: submittedPhone,
+                    capability: identityChallenge
+                )
             case .failure(let error):
+                self.setLoginInProgress(false)
                 self.showLoginAlert(title: "登录失败", message: error.localizedDescription)
             }
         }
     }
 
-    private func normalizedPassword() -> String {
-        (passwordField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    private func beginIdentityChallengeLogin(
+        phone: String,
+        capability: BackendIdentityChallengeCapability
+    ) {
+        DreamJourneyBackendClient.shared.createIdentityChallenge(phone: phone) { [weak self] result in
+            guard let self else { return }
+            self.setLoginInProgress(false)
+            switch result {
+            case .success(let challenge):
+                self.presentIdentityVerification(
+                    challenge: challenge,
+                    phone: phone,
+                    capability: capability
+                )
+            case .failure(let error):
+                self.showLoginAlert(title: "身份验证失败", message: error.localizedDescription)
+            }
+        }
+    }
+
+    private func presentIdentityVerification(
+        challenge: BackendIdentityChallengeContract,
+        phone: String,
+        capability: BackendIdentityChallengeCapability
+    ) {
+        guard !challenge.isExpired() else {
+            showLoginAlert(title: "验证已过期", message: "请重新发起身份验证。")
+            return
+        }
+        let verificationMessage = capability.providerMode == "synthetic"
+            ? "请输入测试环境验证码完成身份验证。"
+            : "请输入验证码完成身份验证。"
+        let alert = UIAlertController(
+            title: "验证手机号",
+            message: verificationMessage,
+            preferredStyle: .alert
+        )
+        alert.addTextField { textField in
+            textField.placeholder = "验证码"
+            textField.keyboardType = .numberPad
+            textField.textContentType = .oneTimeCode
+        }
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "验证", style: .default) { [weak self, weak alert] _ in
+            guard let self else { return }
+            let verificationCode = alert?.textFields?.first?.text?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !verificationCode.isEmpty else {
+                self.showLoginAlert(title: "验证码不能为空", message: "请重新发起验证。")
+                return
+            }
+            self.setLoginInProgress(true)
+            DreamJourneyBackendClient.shared.verifyIdentityChallenge(
+                challengeId: challenge.challengeId,
+                verificationCode: verificationCode,
+                nickname: ""
+            ) { [weak self] result in
+                guard let self else { return }
+                self.setLoginInProgress(false)
+                switch result {
+                case .success(let response):
+                    self.handleBackendLoginSuccess(response, phone: phone)
+                case .failure(let error):
+                    let retry: (() -> Void)?
+                    if challenge.isExpired() {
+                        retry = nil
+                    } else {
+                        retry = { [weak self] in
+                            guard let self else { return }
+                            self.presentIdentityVerification(
+                                challenge: challenge,
+                                phone: phone,
+                                capability: capability
+                            )
+                        }
+                    }
+                    self.showLoginAlert(
+                        title: "身份验证失败",
+                        message: error.localizedDescription,
+                        actionTitle: retry == nil ? "知道了" : "重新输入",
+                        action: retry
+                    )
+                }
+            }
+        })
+        present(alert, animated: true)
     }
 
     private func handleBackendLoginSuccess(_ response: [String: Any], phone: String) {
@@ -287,12 +333,21 @@ final class LoginViewController: UIViewController {
     private func setLoginInProgress(_ inProgress: Bool) {
         isLoginInProgress = inProgress
         loginButton.isEnabled = !inProgress
+        phoneField.isEnabled = !inProgress
+        registerButton.isEnabled = !inProgress
         loginButton.setTitle(inProgress ? "登录中..." : "登录", for: .normal)
     }
 
-    private func showLoginAlert(title: String, message: String) {
+    private func showLoginAlert(
+        title: String,
+        message: String,
+        actionTitle: String = "知道了",
+        action: (() -> Void)? = nil
+    ) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "知道了", style: .default))
+        alert.addAction(UIAlertAction(title: actionTitle, style: .default) { _ in
+            action?()
+        })
         present(alert, animated: true)
     }
 }
@@ -300,11 +355,7 @@ final class LoginViewController: UIViewController {
 // MARK: - UITextFieldDelegate
 extension LoginViewController: UITextFieldDelegate {
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-        if textField == phoneField {
-            passwordField.becomeFirstResponder()
-        } else {
-            textField.resignFirstResponder()
-        }
+        textField.resignFirstResponder()
         return true
     }
 }

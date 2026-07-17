@@ -42,8 +42,12 @@ def main() -> None:
         "infrastructure bypass inventory",
     )
     require(
-        main_module.count("request.url.path in INFRASTRUCTURE_PATHS") >= 2,
-        "auth and business UoW must both bypass infrastructure probes",
+        "request.url.path in INFRASTRUCTURE_PATHS" in main_module,
+        "auth middleware must bypass infrastructure probes",
+    )
+    require(
+        "request.url.path in DATABASE_TRANSACTION_BYPASS_PATHS" in main_module,
+        "business UoW must use the explicit transaction bypass inventory",
     )
     require("status_code=200 if payload[\"status\"] == \"ready\" else 503" in main_module, "readiness HTTP gate")
 

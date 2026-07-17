@@ -839,6 +839,7 @@ struct BackendRuntimeConfig {
     let digitalHuman: DigitalHumanRuntimeCapability
     let releasePolicy: BackendReleasePolicyRuntimeDescriptor
     let recovery: BackendRecoveryRuntimePolicy
+    let identityChallenge: BackendIdentityChallengeCapability
 
     init(json: [String: Any]) {
         capabilitySnapshotSchemaVersion = Self.intValue(json["capabilitySnapshotSchemaVersion"]) ?? 0
@@ -861,6 +862,7 @@ struct BackendRuntimeConfig {
         let digitalHuman = json["digitalHuman"] as? [String: Any]
         let releasePolicy = json["releasePolicy"] as? [String: Any]
         let recovery = json["recovery"] as? [String: Any]
+        let auth = json["auth"] as? [String: Any]
         realtimeTokenAvailable = capabilities?["realtimeToken"] as? Bool ?? false
         voiceRuntimeConfigEndpoint = voice?["runtimeConfigEndpoint"] as? String
         fallbackMode = fallback?["mode"] as? String
@@ -882,6 +884,9 @@ struct BackendRuntimeConfig {
         )
         self.releasePolicy = BackendReleasePolicyRuntimeDescriptor(json: releasePolicy)
         self.recovery = BackendRecoveryRuntimePolicy(json: recovery)
+        identityChallenge = BackendIdentityChallengeCapability(
+            json: auth?["identityChallenge"] as? [String: Any]
+        )
     }
 
     private static func intValue(_ value: Any?) -> Int? {
@@ -3813,6 +3818,76 @@ final class DreamJourneyBackendClient {
                     }
                     completion(.success(object))
                 } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func createIdentityChallenge(
+        phone: String,
+        purpose: String = "login",
+        completion: @escaping (Result<BackendIdentityChallengeContract, Error>) -> Void
+    ) {
+        requestJSON(
+            path: "/v2/auth/challenges",
+            method: .post,
+            payload: [
+                "identityType": "phone",
+                "target": phone,
+                "purpose": purpose,
+            ],
+            authPolicy: .anonymous,
+            allowsRefresh: false
+        ) { result in
+            completion(result.flatMap { object in
+                guard let challenge = BackendIdentityChallengeContract(json: object) else {
+                    return .failure(ClientError.invalidJSONResponse)
+                }
+                return .success(challenge)
+            })
+        }
+    }
+
+    func verifyIdentityChallenge(
+        challengeId: String,
+        verificationCode: String,
+        nickname: String,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        let payload: [String: Any] = [
+            "code": verificationCode,
+            "nickname": nickname,
+        ]
+        requestJSON(
+            path: "/v2/auth/challenges/\(pathComponent(challengeId))/verify",
+            method: .post,
+            payload: payload,
+            authPolicy: .anonymous,
+            allowsRefresh: false
+        ) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let object):
+                guard let identity = BackendIdentityVerificationContract(json: object),
+                      let user = object["user"] as? [String: Any],
+                      let userId = user["id"] as? String,
+                      userId == identity.subjectId,
+                      let auth = object["auth"] as? [String: Any],
+                      auth["userId"] as? String == identity.subjectId else {
+                    self.authSessionStore.clear()
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                do {
+                    guard try self.adoptAuthSession(from: object) else {
+                        throw ClientError.invalidJSONResponse
+                    }
+                    completion(.success(object))
+                } catch {
+                    self.authSessionStore.clear()
                     completion(.failure(error))
                 }
             case .failure(let error):

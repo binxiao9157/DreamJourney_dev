@@ -53,7 +53,7 @@ let requiredRowMarkers = [
     "| 档案录音 | hidden candidate with non-true-device lifecycle",
     "| 档案文字描述 | implemented with sync error recovery |",
     "| 时间信件 | public delivery foundation implemented with text + image creation",
-    "| 个人资料管理 | implemented for profile fields and login password participation",
+    "| 个人资料管理 | implemented for profile fields; login now uses the typed strong identity challenge/verify contract",
     "| 心境追踪 | implemented fallback and data states |",
     "| 家人管理 | implemented public phone invitation foundation",
     "| 法律法规 | implemented | yes |",
@@ -152,9 +152,9 @@ assertContains(coverage, "APNs provider delivery and true-device notification ac
 assertContains(coverage, "name/gender/region validation", "coverage matrix should document updated profile scope")
 assertContains(coverage, "Password change hidden shell", "coverage matrix should document password shell state")
 assertContains(coverage, "PasswordAPITests", "coverage matrix should document local password backend tests")
-assertContains(coverage, "Login password participation is covered", "coverage matrix should document completed iOS password login participation")
-assertContains(coverage, "selected-backend password acceptance has passed", "coverage matrix should record selected backend password acceptance")
-assertContains(coverage, "auth/security review and true-device acceptance remain open", "coverage matrix should preserve password external gates")
+assertContains(coverage, "Strong identity challenge participation is covered", "coverage matrix should document the typed identity login boundary")
+assertContains(coverage, "Legacy `/auth/login` is retired in production", "coverage matrix should not reopen legacy password login")
+assertContains(coverage, "a real identity provider, auth/security review, and true-device acceptance remain open", "coverage matrix should preserve identity external gates")
 assertContains(coverage, "`profile-password-change-check.swift`", "coverage matrix should reference password shell guard")
 assertContains(coverage, "后端合同闭环", "coverage matrix should include backend contract closure row")
 assertContains(coverage, "2026-06-18-backend-contract-gap-matrix.md", "coverage matrix should reference backend contract gap matrix")
