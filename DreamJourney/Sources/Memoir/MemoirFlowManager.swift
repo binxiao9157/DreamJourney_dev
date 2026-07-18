@@ -3,6 +3,11 @@ import CocoaLumberjack
 
 // MARK: - 回忆录流程管理器
 
+private struct MemoirGenerationRequestScope: Equatable {
+    let accountLease: AccountLease
+    let ownerId: String
+}
+
 /// 统一管理回忆录相关流程的入口，将外部 VC 与 Memoir 模块解耦
 /// 外部只需调用：
 ///   1. MemoirFlowManager.shared.startGeneration(on: vc, dialogMessages: dialogs, recordingURL: url)  — 直接生成
@@ -30,6 +35,11 @@ final class MemoirFlowManager {
                             sourceView: UIView? = nil) {
         guard !dialogMessages.isEmpty else {
             DDLogWarn("[MemoirFlow] 对话为空，跳过生成按钮")
+            return
+        }
+        guard let requestScope = captureGenerationRequestScope(),
+              validateGenerationRequestScope(requestScope, at: .ui) else {
+            DDLogWarn("[MemoirFlow] 账号或 owner 不可用，跳过生成按钮")
             return
         }
 
@@ -73,8 +83,18 @@ final class MemoirFlowManager {
         let memoirMessages = dialogMessages  // 捕获
         let capturedRecordingURL = recordingURL  // 捕获录音 URL
         button.addTargetClosure { [weak self, weak viewController] in
-            guard let vc = viewController else { return }
-            self?.startMemoirGeneration(on: vc, dialogMessages: memoirMessages, recordingURL: capturedRecordingURL)
+            guard let self,
+                  let vc = viewController,
+                  self.validateGenerationRequestScope(requestScope, at: .request),
+                  self.validateGenerationRequestScope(requestScope, at: .ui) else {
+                return
+            }
+            self.startMemoirGeneration(
+                on: vc,
+                dialogMessages: memoirMessages,
+                recordingURL: capturedRecordingURL,
+                requestScope: requestScope
+            )
             // 移除按钮
             vc.view.viewWithTag(999_777)?.removeFromSuperview()
         }
@@ -88,8 +108,12 @@ final class MemoirFlowManager {
         })
 
         // 8秒后自动消失
-        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak button] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self, weak button] in
             guard let btn = button, btn.superview != nil else { return }
+            guard self?.validateGenerationRequestScope(requestScope, at: .timer) == true else {
+                btn.removeFromSuperview()
+                return
+            }
             UIView.animate(withDuration: 0.3, animations: {
                 btn.alpha = 0
                 btn.transform = CGAffineTransform(scaleX: 0.8, y: 0.8)
@@ -111,7 +135,38 @@ final class MemoirFlowManager {
                          dialogMessages: [DialogMessage],
                          recordingURL: URL? = nil,
                          sessionId: String? = nil) {
-        startMemoirGeneration(on: viewController, dialogMessages: dialogMessages, recordingURL: recordingURL, sessionId: sessionId)
+        guard let requestScope = captureGenerationRequestScope() else {
+            viewController.showToast("账号状态已变化，请重新发起", type: .error)
+            return
+        }
+        startMemoirGeneration(
+            on: viewController,
+            dialogMessages: dialogMessages,
+            recordingURL: recordingURL,
+            sessionId: sessionId,
+            requestScope: requestScope
+        )
+    }
+
+    /// 上游已经持有 AccountLease 时使用，避免在模块边界重新捕获当前账号。
+    func startGeneration(on viewController: UIViewController,
+                         dialogMessages: [DialogMessage],
+                         recordingURL: URL? = nil,
+                         sessionId: String? = nil,
+                         accountLease: AccountLease,
+                         ownerId: String) {
+        let requestScope = MemoirGenerationRequestScope(
+            accountLease: accountLease,
+            ownerId: ownerId
+        )
+        guard validateGenerationRequestScope(requestScope, at: .request) else { return }
+        startMemoirGeneration(
+            on: viewController,
+            dialogMessages: dialogMessages,
+            recordingURL: recordingURL,
+            sessionId: sessionId,
+            requestScope: requestScope
+        )
     }
 
     // MARK: - 生成回忆录（内部实现）
@@ -122,7 +177,12 @@ final class MemoirFlowManager {
     private func startMemoirGeneration(on viewController: UIViewController,
                                         dialogMessages: [DialogMessage],
                                         recordingURL: URL? = nil,
-                                        sessionId: String? = nil) {
+                                        sessionId: String? = nil,
+                                        requestScope: MemoirGenerationRequestScope) {
+        guard validateGenerationRequestScope(requestScope, at: .request),
+              validateGenerationRequestScope(requestScope, at: .ui) else {
+            return
+        }
         // 显示 loading
         let loadingView = createLoadingView(message: "正在生成回忆录...")
         viewController.view.addSubview(loadingView)
@@ -143,7 +203,14 @@ final class MemoirFlowManager {
         }
 
         // ── 第一步：DeepSeek 生成回忆录文本 ──
-        MemoirService.shared.generateMemoir(dialogMessages: dialogMessages) { [weak viewController] result in
+        MemoirService.shared.generateMemoir(
+            dialogMessages: dialogMessages,
+            accountLease: requestScope.accountLease,
+            ownerId: requestScope.ownerId
+        ) { [weak viewController] result in
+            guard self.validateGenerationRequestScope(requestScope, at: .runtime) else {
+                return
+            }
             switch result {
             case .success(let originalMemoir):
                 DDLogInfo("[MemoirFlow] 回忆录文本生成成功: \(originalMemoir.title)")
@@ -152,7 +219,14 @@ final class MemoirFlowManager {
                 var memoir = originalMemoir
                 if let sid = sessionId, !sid.isEmpty {
                     memoir.sessionId = sid
-                    MemoirRepository.shared.save(memoir)
+                    guard self.validateGenerationRequestScope(requestScope, at: .commit),
+                          MemoirRepository.shared.save(
+                              memoir,
+                              accountLease: requestScope.accountLease,
+                              ownerId: requestScope.ownerId
+                          ) else {
+                        return
+                    }
                     DDLogInfo("[MemoirFlow] 已绑定 sessionId 到 memoir: \(sid)")
                 }
 
@@ -160,11 +234,20 @@ final class MemoirFlowManager {
                 // 场景 A：已有 speakerId → 等待就绪（可能还在训练中）
                 // 场景 B：无 speakerId 但有录音 → 先训练，再等待就绪
                 // 场景 C：无 speakerId 也无录音 → 跳过，直接跳转（无音频）
-                self.prepareVoiceClone(recordingURL: recordingURL) { [weak viewController] speakerId in
+                self.prepareVoiceClone(
+                    recordingURL: recordingURL,
+                    requestScope: requestScope
+                ) { [weak viewController] speakerId in
+                    guard self.validateGenerationRequestScope(requestScope, at: .runtime) else {
+                        return
+                    }
                     if let speakerId = speakerId {
                         // ── 第三步：音频合成 ──
                         DDLogInfo("[MemoirFlow] 音色就绪，开始合成音频: \(speakerId)")
                         DispatchQueue.main.async {
+                            guard self.validateGenerationRequestScope(requestScope, at: .ui) else {
+                                return
+                            }
                             self.updateLoadingView(loadingView, message: "正在合成语音...")
                         }
 
@@ -172,47 +255,90 @@ final class MemoirFlowManager {
                         var memoirForSynth = memoir
                         if memoirForSynth.speakerId == nil {
                             memoirForSynth.speakerId = speakerId
-                            MemoirRepository.shared.save(memoirForSynth)
+                            guard self.validateGenerationRequestScope(requestScope, at: .commit),
+                                  MemoirRepository.shared.save(
+                                      memoirForSynth,
+                                      accountLease: requestScope.accountLease,
+                                      ownerId: requestScope.ownerId
+                                  ) else {
+                                return
+                            }
                         }
 
+                        guard self.validateGenerationRequestScope(requestScope, at: .runtime) else {
+                            return
+                        }
                         MemoirTTSService.shared.synthesize(memoir: memoirForSynth) { result in
+                            guard self.validateGenerationRequestScope(requestScope, at: .runtime) else {
+                                return
+                            }
+                            if case .success(let audioURL) = result,
+                               self.validateGenerationRequestScope(requestScope, at: .commit),
+                               var updated = MemoirRepository.shared.get(
+                                   by: memoir.id,
+                                   accountLease: requestScope.accountLease,
+                                   ownerId: requestScope.ownerId
+                               ) {
+                                updated.audioFileName = audioURL.lastPathComponent
+                                if updated.speakerId == nil {
+                                    updated.speakerId = speakerId
+                                }
+                                _ = MemoirRepository.shared.save(
+                                    updated,
+                                    accountLease: requestScope.accountLease,
+                                    ownerId: requestScope.ownerId
+                                )
+                            }
                             DispatchQueue.main.async {
+                                guard self.validateGenerationRequestScope(requestScope, at: .ui),
+                                      let vc = viewController else {
+                                    return
+                                }
                                 dismissLoading()
-                                guard let vc = viewController else { return }
 
                                 switch result {
                                 case .success(let audioURL):
                                     DDLogInfo("[MemoirFlow] 音频合成完成: \(audioURL.lastPathComponent)")
-                                    // 更新 Repository 中的音频文件名
-                                    if var updated = MemoirRepository.shared.get(by: memoir.id) {
-                                        updated.audioFileName = audioURL.lastPathComponent
-                                        if updated.speakerId == nil {
-                                            updated.speakerId = speakerId
-                                        }
-                                        MemoirRepository.shared.save(updated)
-                                    }
-                                    self.showMemoirReadyBanner(in: vc, memoirTitle: memoir.title)
+                                    self.showMemoirReadyBanner(
+                                        in: vc,
+                                        memoir: memoir,
+                                        requestScope: requestScope
+                                    )
 
                                 case .failure(let error):
                                     DDLogWarn("[MemoirFlow] 音频合成失败: \(error.localizedDescription)，已保存回忆录（无音频）")
-                                    self.showMemoirReadyBanner(in: vc, memoirTitle: memoir.title)
+                                    self.showMemoirReadyBanner(
+                                        in: vc,
+                                        memoir: memoir,
+                                        requestScope: requestScope
+                                    )
                                 }
                             }
                         }
                     } else {
                         // 无音色，跳过合成，回忆录已保存，展示引导提示
                         DispatchQueue.main.async {
+                            guard self.validateGenerationRequestScope(requestScope, at: .ui),
+                                  let vc = viewController else {
+                                return
+                            }
                             dismissLoading()
-                            guard let vc = viewController else { return }
-                            self.showMemoirReadyBanner(in: vc, memoirTitle: memoir.title)
+                            self.showMemoirReadyBanner(
+                                in: vc,
+                                memoir: memoir,
+                                requestScope: requestScope
+                            )
                         }
                     }
                 }
 
             case .failure(let error):
                 DispatchQueue.main.async {
+                    guard self.validateGenerationRequestScope(requestScope, at: .ui),
+                          let vc = viewController else {
+                        return
+                    }
                     dismissLoading()
-                    guard let vc = viewController else { return }
                     DDLogError("[MemoirFlow] 回忆录生成失败: \(error.localizedDescription)")
                     vc.showToast("生成失败：\(error.localizedDescription)", type: .error)
                 }
@@ -227,11 +353,16 @@ final class MemoirFlowManager {
     /// B. 无 speakerId 但有录音 → 先发起训练，再等待就绪
     /// C. 无 speakerId 也无录音 → 回调 nil（跳过合成）
     private func prepareVoiceClone(recordingURL: URL?,
+                                    requestScope: MemoirGenerationRequestScope,
                                     completion: @escaping (_ speakerId: String?) -> Void) {
+        guard validateGenerationRequestScope(requestScope, at: .runtime) else { return }
         // A. 已有 speakerId
         if let existingId = VoiceCloneService.shared.currentSpeakerId {
             DDLogInfo("[MemoirFlow] 已有 speakerId: \(existingId)，等待音色就绪")
             VoiceCloneService.shared.waitForVoiceReady(speakerId: existingId) { result in
+                guard self.validateGenerationRequestScope(requestScope, at: .runtime) else {
+                    return
+                }
                 switch result {
                 case .success(let id):
                     completion(id)
@@ -259,18 +390,36 @@ final class MemoirFlowManager {
 
     /// 推入回忆录详情页（供外部调用，足迹页内部查看用）
     func pushMemoirDetail(from viewController: UIViewController, memoir: MemoirModel) {
+        guard let requestScope = captureGenerationRequestScope(),
+              requestScope.ownerId == memoir.authorId,
+              validateGenerationRequestScope(requestScope, at: .ui) else {
+            return
+        }
         let detailVC = MemoirDetailViewController(memoir: memoir)
         viewController.navigationController?.pushViewController(detailVC, animated: true)
     }
 
     /// 回忆录生成成功后：在当前上下文显示引导横幅（不切换 Tab）
-    private func showMemoirReadyBanner(in viewController: UIViewController, memoirTitle: String) {
+    private func showMemoirReadyBanner(
+        in viewController: UIViewController,
+        memoir: MemoirModel,
+        requestScope: MemoirGenerationRequestScope
+    ) {
+        guard validateGenerationRequestScope(requestScope, at: .ui) else { return }
         let targetView: UIView = viewController.view.window?.rootViewController?.view ?? viewController.view
         let banner = FootprintNotificationBanner()
-        banner.configure(message: "回忆录「\(memoirTitle)」已保存")
-        banner.onDetailTapped = { [weak viewController] in
-            guard let memoir = MemoirRepository.shared.getAll().first(where: { $0.title == memoirTitle }) else { return }
-            let detailVC = MemoirDetailViewController(memoir: memoir)
+        banner.configure(message: "回忆录「\(memoir.title)」已保存")
+        banner.onDetailTapped = { [weak self, weak viewController] in
+            guard let self,
+                  self.validateGenerationRequestScope(requestScope, at: .ui),
+                  let currentMemoir = MemoirRepository.shared.get(
+                      by: memoir.id,
+                      accountLease: requestScope.accountLease,
+                      ownerId: requestScope.ownerId
+                  ) else {
+                return
+            }
+            let detailVC = MemoirDetailViewController(memoir: currentMemoir)
             if let navigationController = viewController?.navigationController {
                 navigationController.pushViewController(detailVC, animated: true)
             } else if let viewController {
@@ -278,7 +427,7 @@ final class MemoirFlowManager {
             }
         }
         banner.show(in: targetView, topOffset: 60)
-        DDLogInfo("[MemoirFlow] 回忆录已保存，展示引导横幅: \(memoirTitle)")
+        DDLogInfo("[MemoirFlow] 回忆录已保存，展示引导横幅: \(memoir.title)")
     }
 
     /// 推入回忆录列表弹窗（简易版：ActionSheet 选择已有回忆录）
@@ -297,6 +446,30 @@ final class MemoirFlowManager {
         }
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
         viewController.present(alert, animated: true)
+    }
+
+    private func captureGenerationRequestScope() -> MemoirGenerationRequestScope? {
+        guard let captured = MemoirRepository.shared.captureAccountLeaseAndOwner() else {
+            return nil
+        }
+        let requestScope = MemoirGenerationRequestScope(
+            accountLease: captured.accountLease,
+            ownerId: captured.ownerId
+        )
+        return validateGenerationRequestScope(requestScope, at: .request)
+            ? requestScope
+            : nil
+    }
+
+    private func validateGenerationRequestScope(
+        _ requestScope: MemoirGenerationRequestScope,
+        at checkpoint: AccountLeaseCheckpoint
+    ) -> Bool {
+        MemoirRepository.shared.validateAccountLease(
+            requestScope.accountLease,
+            ownerId: requestScope.ownerId,
+            at: checkpoint
+        )
     }
 
     // MARK: - 对话内容质量检测（本地规则，即时反馈）

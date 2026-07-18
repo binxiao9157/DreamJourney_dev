@@ -46,7 +46,7 @@ struct MemoirModel: Codable, Identifiable {
          longitude: Double = 121.4737,
          keyPeople: [String] = [],
          isPrivate: Bool = false,
-         authorId: String = "user_001",
+         authorId: String,
          sessionId: String? = nil,
          speakerId: String? = nil,
          audioFileName: String? = nil) {
@@ -67,6 +67,49 @@ struct MemoirModel: Codable, Identifiable {
         self.audioFileName = audioFileName
         self.createdAt = Date()
         self.updatedAt = Date()
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case prose
+        case timeDescription
+        case year
+        case month
+        case location
+        case latitude
+        case longitude
+        case keyPeople
+        case isPrivate
+        case authorId
+        case createdAt
+        case updatedAt
+        case sessionId
+        case speakerId
+        case audioFileName
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        prose = try container.decode(String.self, forKey: .prose)
+        timeDescription = try container.decode(String.self, forKey: .timeDescription)
+        year = try container.decode(Int.self, forKey: .year)
+        month = try container.decode(Int.self, forKey: .month)
+        location = try container.decode(String.self, forKey: .location)
+        latitude = try container.decode(Double.self, forKey: .latitude)
+        longitude = try container.decode(Double.self, forKey: .longitude)
+        keyPeople = try container.decode([String].self, forKey: .keyPeople)
+        isPrivate = try container.decode(Bool.self, forKey: .isPrivate)
+        // Missing legacy ownership is preserved as missing evidence. Migration decides
+        // whether to quarantine it; decoding must never assign the active account.
+        authorId = try container.decodeIfPresent(String.self, forKey: .authorId) ?? ""
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        sessionId = try container.decodeIfPresent(String.self, forKey: .sessionId)
+        speakerId = try container.decodeIfPresent(String.self, forKey: .speakerId)
+        audioFileName = try container.decodeIfPresent(String.self, forKey: .audioFileName)
     }
 
     // MARK: - 音频播放状态（非持久化，运行时使用）

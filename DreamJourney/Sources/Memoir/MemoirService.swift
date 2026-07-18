@@ -3,6 +3,23 @@ import CocoaLumberjack
 
 // MARK: - 回忆录生成服务
 
+enum MemoirServiceError: LocalizedError {
+    case accountSessionChanged
+    case ownerUnavailable
+    case persistenceRejected
+
+    var errorDescription: String? {
+        switch self {
+        case .accountSessionChanged:
+            return "账号状态已变化，请重新发起回忆录生成"
+        case .ownerUnavailable:
+            return "当前回忆录归属不可用"
+        case .persistenceRejected:
+            return "回忆录保存失败"
+        }
+    }
+}
+
 /// 核心业务层：构建 prompt → 调用 DeepSeek API → 解析 JSON → 保存回忆录
 /// 使用方式：
 ///   1. 调用 MemoirService.shared.generateMemoir(dialogMessages:completion:) 传入对话上下文
@@ -73,18 +90,75 @@ final class MemoirService {
         dialogMessages: [DialogMessage],
         completion: @escaping (Result<MemoirModel, Error>) -> Void
     ) {
+        guard let captured = MemoirRepository.shared.captureAccountLeaseAndOwner() else {
+            DispatchQueue.main.async {
+                completion(.failure(MemoirServiceError.ownerUnavailable))
+            }
+            return
+        }
+        generateMemoir(
+            dialogMessages: dialogMessages,
+            accountLease: captured.accountLease,
+            ownerId: captured.ownerId,
+            completion: completion
+        )
+    }
+
+    /// 从请求开始持有同一 AccountLease 与 owner，异步完成时不得改绑当前账号。
+    func generateMemoir(
+        dialogMessages: [DialogMessage],
+        accountLease: AccountLease,
+        ownerId: String,
+        completion: @escaping (Result<MemoirModel, Error>) -> Void
+    ) {
+        guard MemoirRepository.shared.validateAccountLease(
+            accountLease,
+            ownerId: ownerId,
+            at: .request
+        ) else {
+            deliverFailureIfCurrent(
+                .accountSessionChanged,
+                accountLease: accountLease,
+                ownerId: ownerId,
+                completion: completion
+            )
+            return
+        }
+
         generateQueue.async { [weak self] () -> Void in
             guard let self = self else { return }
+            guard MemoirRepository.shared.validateAccountLease(
+                accountLease,
+                ownerId: ownerId,
+                at: .request
+            ) else {
+                return
+            }
 
             // 1. 构建消息列表
             let chatMessages = self.buildChatMessages(from: dialogMessages)
+            guard MemoirRepository.shared.validateAccountLease(
+                accountLease,
+                ownerId: ownerId,
+                at: .runtime
+            ) else {
+                return
+            }
 
             // 2. 调用 DeepSeek API
             DeepSeekService.shared.chat(messages: chatMessages) { result in
+                guard MemoirRepository.shared.validateAccountLease(
+                    accountLease,
+                    ownerId: ownerId,
+                    at: .runtime
+                ) else {
+                    DDLogWarn("[MemoirService] 丢弃 stale 生成回调")
+                    return
+                }
                 switch result {
                 case .success(let content):
                     // 3. 解析 JSON 响应
-                    var memoir = self.parseMemoirResponse(content)
+                    var memoir = self.parseMemoirResponse(content, ownerId: ownerId)
 
                     // 4. 关联当前用户的 speaker_id（声音复刻音色）
                     if let speakerId = VoiceCloneService.shared.currentSpeakerId {
@@ -93,18 +167,48 @@ final class MemoirService {
 
                     // 5. 保存到 Repository
                     DDLogInfo("[MemoirSync] MemoirService → save: id=\(memoir.id), title=\(memoir.title), location=\(memoir.location), lat=\(memoir.latitude), lng=\(memoir.longitude), authorId=\(memoir.authorId)")
-                    MemoirRepository.shared.save(memoir)
+                    guard MemoirRepository.shared.validateAccountLease(
+                        accountLease,
+                        ownerId: ownerId,
+                        at: .commit
+                    ), MemoirRepository.shared.save(
+                        memoir,
+                        accountLease: accountLease,
+                        ownerId: ownerId
+                    ) else {
+                        self.deliverFailureIfCurrent(
+                            .persistenceRejected,
+                            accountLease: accountLease,
+                            ownerId: ownerId,
+                            completion: completion
+                        )
+                        return
+                    }
 
                     // 注意：音频合成交由 MemoirFlowManager 统一编排
                     // 不再在此处自动触发，避免与声音复刻训练产生竞态
 
                     // 6. 主线程回调
                     DispatchQueue.main.async {
+                        guard MemoirRepository.shared.validateAccountLease(
+                            accountLease,
+                            ownerId: ownerId,
+                            at: .ui
+                        ) else {
+                            return
+                        }
                         completion(.success(memoir))
                     }
 
                 case .failure(let error):
                     DispatchQueue.main.async {
+                        guard MemoirRepository.shared.validateAccountLease(
+                            accountLease,
+                            ownerId: ownerId,
+                            at: .ui
+                        ) else {
+                            return
+                        }
                         completion(.failure(error))
                     }
                 }
@@ -171,7 +275,7 @@ final class MemoirService {
     ///   1. 纯 JSON — 直接解析
     ///   2. Markdown 代码块包裹的 JSON — 提取后解析
     /// 解析失败时使用回退策略：整段文本作为 prose
-    private func parseMemoirResponse(_ content: String) -> MemoirModel {
+    private func parseMemoirResponse(_ content: String, ownerId: String) -> MemoirModel {
         // 尝试提取 JSON
         let jsonString = extractJSON(from: content)
 
@@ -179,7 +283,7 @@ final class MemoirService {
               let dict = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
             // 回退策略：整段文本作为散文
             DDLogInfo("[MemoirService] JSON 解析失败，使用回退策略。原始内容: \(content.prefix(200))")
-            return createFallbackMemoir(from: content)
+            return createFallbackMemoir(from: content, ownerId: ownerId)
         }
 
         let now = Date()
@@ -215,7 +319,8 @@ final class MemoirService {
             location: location,
             latitude: latitude,
             longitude: longitude,
-            keyPeople: keyPeople
+            keyPeople: keyPeople,
+            authorId: ownerId
         )
     }
 
@@ -325,7 +430,7 @@ final class MemoirService {
     }
 
     /// 回退策略：JSON 解析失败时，将整段文本作为散文
-    private func createFallbackMemoir(from rawText: String) -> MemoirModel {
+    private func createFallbackMemoir(from rawText: String, ownerId: String) -> MemoirModel {
         let now = Date()
         let calendar = Calendar.current
 
@@ -342,8 +447,27 @@ final class MemoirService {
             location: "上海",
             latitude: 31.2304,
             longitude: 121.4737,
-            keyPeople: []
+            keyPeople: [],
+            authorId: ownerId
         )
+    }
+
+    private func deliverFailureIfCurrent(
+        _ error: MemoirServiceError,
+        accountLease: AccountLease,
+        ownerId: String,
+        completion: @escaping (Result<MemoirModel, Error>) -> Void
+    ) {
+        DispatchQueue.main.async {
+            guard MemoirRepository.shared.validateAccountLease(
+                accountLease,
+                ownerId: ownerId,
+                at: .ui
+            ) else {
+                return
+            }
+            completion(.failure(error))
+        }
     }
 
     // MARK: - TTS 音频合成（由 MemoirFlowManager 统一编排，不再在此自动触发）
