@@ -2,6 +2,17 @@
   "activeWorkItem": {
     "authorityLock": "ACCOUNT_LOCAL_STATE",
     "backendPendingPaths": [],
+    "completedSubSlices": [
+      {
+        "commits": [
+          "3e77dd1",
+          "97d6149"
+        ],
+        "evidence": "docs/superpowers/status/2026-07-18-wi-s0-01-07a-message-notification-owner-scope.md",
+        "id": "WI-S0-01-07A"
+      }
+    ],
+    "currentSubSlice": "WI-S0-01-07B",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
         "gateEvidence": {
             "G0": "MISSING",
@@ -12,11 +23,11 @@
         "id": "WI-S0-01-07",
         "leaseState": "HELD",
         "state": "IN_PROGRESS",
-        "summary": "Scope voice, delayed reply, message, notification and digital-human local state to the captured account generation."
+        "summary": "Message/notification owner scope is internally verified; continue Voice/TTS/Digital Human local state and lifecycle adapter isolation."
   },
   "baselines": {
     "backend": "main@32a081f",
-        "ios": "feature/prd-stitch-ui-adaptation@fef51cf",
+        "ios": "feature/prd-stitch-ui-adaptation@97d6149",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
