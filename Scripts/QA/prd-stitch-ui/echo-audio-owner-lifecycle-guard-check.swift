@@ -61,7 +61,7 @@ require(releaseBody.contains("runtime?.close()"), "release helper should close p
 require(releaseBody.contains("digitalHumanRuntime = nil"), "release helper should nil out provider runtime")
 require(releaseBody.contains("hasRequestedCloudDigitalHumanRuntime = false"), "release helper should clear session request latch")
 require(releaseBody.contains("removeHostedProviderView(showFallbackMessage:"), "release helper should own failed provider view removal")
-require(releaseBody.contains("DialogEngineManager.shared.setLocalTTSPlaybackEnabled(true)"), "ordinary fallback release should re-enable ordinary Echo audio")
+require(releaseBody.contains("setDialogEngineLocalTTSPlaybackEnabled(true)"), "ordinary fallback release should re-enable ordinary Echo audio through its owner-scoped binding")
 require(releaseBody.contains("setEchoAudioOwner(.volcengineLocalTTS"), "ordinary fallback release should reset audio owner")
 require(releaseBody.contains("recordEchoRuntimeDiagnosticsSnapshot"), "release helper should emit diagnostics")
 

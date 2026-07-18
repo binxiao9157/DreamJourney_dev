@@ -148,7 +148,7 @@ require(blockedVoiceBody.contains("providerCredentialBlocked"), "blocked realtim
 require(!echo.contains("startDialogWithLocalVoiceFallback"), "Tencent mode must not revive a static local Provider credential fallback")
 let viewWillAppearBody = functionBody(named: "viewWillAppear", in: echo)
 require(viewWillAppearBody.contains("shouldShowDigitalHumanLivePanel"), "Echo view appearance should explicitly account for digital-human audio ownership before DialogEngine setup")
-require(viewWillAppearBody.contains("setLocalTTSPlaybackEnabled(false)"), "Echo must disable Fire/Volcengine local TTS before prewarming DialogEngine on the digital-human page")
+require(viewWillAppearBody.contains("setDialogEngineLocalTTSPlaybackEnabled(false)"), "Echo must disable Fire/Volcengine local TTS through its owner-scoped binding before prewarming DialogEngine")
 let cloudOpenBody = functionBody(named: "open", in: cloudRuntime)
 require(cloudOpenBody.contains("case .connecting, .ready, .buffering, .speaking"), "Tencent runtime open must be idempotent while a stream is connecting or active")
 require(cloudOpenBody.contains("ignored duplicate open"), "Tencent runtime must log duplicate open suppression for stream-in-progress diagnosis")

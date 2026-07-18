@@ -129,6 +129,20 @@ struct VoiceSDKReadinessSummary {
     }
 }
 
+struct DialogEngineBindingHandle: Equatable, Sendable {
+    fileprivate let bindingId: UUID
+    fileprivate let ownerId: UUID
+    let accountLease: AccountLease
+}
+
+private func isSameDialogAccountGeneration(_ lhs: AccountLease, _ rhs: AccountLease) -> Bool {
+    lhs.subjectId == rhs.subjectId
+        && lhs.vaultId == rhs.vaultId
+        && lhs.generation == rhs.generation
+        && lhs.generationId == rhs.generationId
+        && lhs.authorityEpoch == rhs.authorityEpoch
+}
+
 #if (UI_QA_SIMULATOR || RELEASE_SCOPE_SIMULATOR) && targetEnvironment(simulator)
 
 enum DialogEndReason {
@@ -152,6 +166,11 @@ final class DialogEngineManager: NSObject {
     static let shared = DialogEngineManager()
 
     weak var delegate: DialogEngineDelegate?
+    private let accountLeaseRuntime = AccountLeaseRuntime.shared
+    private var boundAccountLease: AccountLease?
+    private var activeDialogAccountLease: AccountLease?
+    private var boundBindingHandle: DialogEngineBindingHandle?
+    private var activeDialogBindingHandle: DialogEngineBindingHandle?
     private(set) var isEngineReady = false
     private(set) var isDialogActive = false
     var currentTopic: String?
@@ -165,6 +184,73 @@ final class DialogEngineManager: NSObject {
         super.init()
     }
 
+    @discardableResult
+    func bindAccountLease(
+        _ accountLease: AccountLease,
+        ownerId: UUID
+    ) -> DialogEngineBindingHandle? {
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            return nil
+        }
+
+        if let boundBindingHandle,
+           boundBindingHandle.ownerId == ownerId,
+           isSameDialogAccountGeneration(boundBindingHandle.accountLease, accountLease) {
+            let rotatedHandle = DialogEngineBindingHandle(
+                bindingId: boundBindingHandle.bindingId,
+                ownerId: ownerId,
+                accountLease: accountLease
+            )
+            self.boundBindingHandle = rotatedHandle
+            boundAccountLease = accountLease
+            if activeDialogBindingHandle?.bindingId == rotatedHandle.bindingId {
+                activeDialogBindingHandle = rotatedHandle
+                activeDialogAccountLease = accountLease
+            }
+            return rotatedHandle
+        }
+
+        if boundBindingHandle != nil {
+            isDialogActive = false
+            activeDialogAccountLease = nil
+            activeDialogBindingHandle = nil
+            delegate = nil
+        }
+        let handle = DialogEngineBindingHandle(
+            bindingId: UUID(),
+            ownerId: ownerId,
+            accountLease: accountLease
+        )
+        boundBindingHandle = handle
+        boundAccountLease = accountLease
+        return handle
+    }
+
+    @discardableResult
+    func unbindAccountLease(_ handle: DialogEngineBindingHandle) -> Bool {
+        guard boundBindingHandle == handle else { return false }
+        boundBindingHandle = nil
+        boundAccountLease = nil
+        activeDialogBindingHandle = nil
+        activeDialogAccountLease = nil
+        isDialogActive = false
+        delegate = nil
+        return true
+    }
+
+    func isCurrentBinding(_ handle: DialogEngineBindingHandle?) -> Bool {
+        guard let handle,
+              boundBindingHandle == handle else { return false }
+        return accountLeaseRuntime.validate(handle.accountLease, at: .runtime).allowed
+    }
+
+    private func isActiveAccountLeaseValid(at checkpoint: AccountLeaseCheckpoint) -> Bool {
+        guard let accountLease = activeDialogAccountLease ?? boundAccountLease else {
+            return false
+        }
+        return accountLeaseRuntime.validate(accountLease, at: checkpoint).allowed
+    }
+
     func configure(runtimeConfig: RealtimeVoiceRuntimeConfig) -> Bool { !runtimeConfig.isBlocked }
     func interruptAI() {}
     @discardableResult
@@ -174,6 +260,7 @@ final class DialogEngineManager: NSObject {
     }
 
     func setup() {
+        guard isActiveAccountLeaseValid(at: .request) else { return }
         isEngineReady = true
     }
 
@@ -181,10 +268,17 @@ final class DialogEngineManager: NSObject {
         sendsGreeting: Bool = true,
         usesTurnScopedKnowledgeContext: Bool = false
     ) {
+        guard isActiveAccountLeaseValid(at: .request),
+              let accountLease = boundAccountLease,
+              let bindingHandle = boundBindingHandle else { return }
+        activeDialogAccountLease = accountLease
+        activeDialogBindingHandle = bindingHandle
         self.usesTurnScopedKnowledgeContext = usesTurnScopedKnowledgeContext
         recordUIQAPromptSnapshot()
         isDialogActive = true
-        delegate?.onDialogStarted()
+        if isActiveAccountLeaseValid(at: .runtime) {
+            delegate?.onDialogStarted()
+        }
     }
 
     @discardableResult
@@ -193,7 +287,8 @@ final class DialogEngineManager: NSObject {
         traceID: String?,
         source: String
     ) -> Bool {
-        guard isDialogActive else { return false }
+        guard isDialogActive,
+              isActiveAccountLeaseValid(at: .runtime) else { return false }
         lastSubmittedTurnKnowledgeContextSource = source
         lastSubmittedTurnKnowledgeContextLength = content.utf8.count
         print(
@@ -205,13 +300,20 @@ final class DialogEngineManager: NSObject {
 
     func stopDialog() {
         guard isDialogActive else { return }
+        let shouldDeliver = isActiveAccountLeaseValid(at: .runtime)
         isDialogActive = false
-        delegate?.onDialogEnded(reason: .manual)
+        activeDialogBindingHandle = nil
+        activeDialogAccountLease = nil
+        if shouldDeliver {
+            delegate?.onDialogEnded(reason: .manual)
+        }
     }
 
     func destroyEngine() {
         isEngineReady = false
         isDialogActive = false
+        activeDialogBindingHandle = nil
+        activeDialogAccountLease = nil
         usesTurnScopedKnowledgeContext = false
         delegate = nil
     }
@@ -290,6 +392,31 @@ protocol DialogEngineDelegate: AnyObject {
     func onDialogEnded(reason: DialogEndReason)
 }
 
+private final class DialogEngineProviderDelegateProxy: NSObject, SpeechEngineDelegate {
+    weak var owner: DialogEngineManager?
+    let engineGeneration: UUID
+
+    init(owner: DialogEngineManager, engineGeneration: UUID) {
+        self.owner = owner
+        self.engineGeneration = engineGeneration
+    }
+
+    func onMessage(with type: SEMessageType, andData data: Data) {
+        owner?.enqueueProviderMessage(
+            type: type,
+            data: data,
+            engineGeneration: engineGeneration
+        )
+    }
+}
+
+private struct DialogEngineProviderCallbackContext {
+    let engineGeneration: UUID
+    let dialogOperationId: UUID
+    let bindingHandle: DialogEngineBindingHandle
+    let delegateIdentity: ObjectIdentifier
+}
+
 // MARK: - DialogEngineManager
 
 /// Dialog 语音对话引擎管理器 - 直接封装火山引擎 SpeechEngineToB SDK
@@ -303,6 +430,18 @@ final class DialogEngineManager: NSObject {
     // MARK: - Properties
 
     weak var delegate: DialogEngineDelegate?
+    private let accountLeaseRuntime = AccountLeaseRuntime.shared
+    private var boundAccountLease: AccountLease?
+    private var engineAccountLease: AccountLease?
+    private var activeDialogAccountLease: AccountLease?
+    private var boundBindingHandle: DialogEngineBindingHandle?
+    private var engineBindingId: UUID?
+    private var activeDialogBindingHandle: DialogEngineBindingHandle?
+    private var activeDialogOperationId: UUID?
+    private var providerSessionOperationId: UUID?
+    private var engineCallbackGeneration: UUID?
+    private var engineDelegateProxy: DialogEngineProviderDelegateProxy?
+    private var requiresEngineRecreationBeforeNextDialog = false
 
     /// 引擎是否就绪（已初始化完成）
     private(set) var isEngineReady = false
@@ -472,6 +611,72 @@ final class DialogEngineManager: NSObject {
         super.init()
     }
 
+    @discardableResult
+    func bindAccountLease(
+        _ accountLease: AccountLease,
+        ownerId: UUID
+    ) -> DialogEngineBindingHandle? {
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            return nil
+        }
+
+        if let boundBindingHandle,
+           boundBindingHandle.ownerId == ownerId,
+           isSameDialogAccountGeneration(boundBindingHandle.accountLease, accountLease) {
+            let rotatedHandle = DialogEngineBindingHandle(
+                bindingId: boundBindingHandle.bindingId,
+                ownerId: ownerId,
+                accountLease: accountLease
+            )
+            self.boundBindingHandle = rotatedHandle
+            boundAccountLease = accountLease
+            if engineBindingId == rotatedHandle.bindingId {
+                engineAccountLease = accountLease
+            }
+            if activeDialogBindingHandle?.bindingId == rotatedHandle.bindingId {
+                activeDialogBindingHandle = rotatedHandle
+                activeDialogAccountLease = accountLease
+            }
+            return rotatedHandle
+        }
+
+        if boundBindingHandle != nil {
+            destroyEngine()
+            delegate = nil
+        }
+        let handle = DialogEngineBindingHandle(
+            bindingId: UUID(),
+            ownerId: ownerId,
+            accountLease: accountLease
+        )
+        boundBindingHandle = handle
+        boundAccountLease = accountLease
+        return handle
+    }
+
+    @discardableResult
+    func unbindAccountLease(_ handle: DialogEngineBindingHandle) -> Bool {
+        guard boundBindingHandle == handle else { return false }
+        destroyEngine()
+        boundBindingHandle = nil
+        boundAccountLease = nil
+        delegate = nil
+        return true
+    }
+
+    func isCurrentBinding(_ handle: DialogEngineBindingHandle?) -> Bool {
+        guard let handle,
+              boundBindingHandle == handle else { return false }
+        return accountLeaseRuntime.validate(handle.accountLease, at: .runtime).allowed
+    }
+
+    private func isActiveAccountLeaseValid(at checkpoint: AccountLeaseCheckpoint) -> Bool {
+        guard let accountLease = activeDialogAccountLease ?? engineAccountLease ?? boundAccountLease else {
+            return false
+        }
+        return accountLeaseRuntime.validate(accountLease, at: checkpoint).allowed
+    }
+
     // MARK: - Public API
 
     @discardableResult
@@ -528,6 +733,11 @@ final class DialogEngineManager: NSObject {
 
     /// 初始化引擎（预加载）
     func setup() {
+        guard let setupAccountLease = boundAccountLease,
+              let setupBindingHandle = boundBindingHandle,
+              accountLeaseRuntime.validate(setupAccountLease, at: .request).allowed else {
+            return
+        }
         guard !isEngineReady else {
             DDLogInfo("[DialogEngine] 引擎已就绪，跳过重复初始化")
             return
@@ -553,7 +763,12 @@ final class DialogEngineManager: NSObject {
 
         // 创建引擎实例
         let speechEngine = SpeechEngine()
-        let created = speechEngine.createEngine(with: self)
+        let callbackGeneration = UUID()
+        let delegateProxy = DialogEngineProviderDelegateProxy(
+            owner: self,
+            engineGeneration: callbackGeneration
+        )
+        let created = speechEngine.createEngine(with: delegateProxy)
         guard created else {
             DDLogError("[DialogEngine] createEngine 失败")
             isSettingUp = false
@@ -570,7 +785,18 @@ final class DialogEngineManager: NSObject {
 
         print("[DialogEngine] initEngine 返回: \(result.rawValue)")
         if result == SENoError {
+            guard let currentBindingHandle = boundBindingHandle,
+                  currentBindingHandle.bindingId == setupBindingHandle.bindingId,
+                  isSameDialogAccountGeneration(currentBindingHandle.accountLease, setupAccountLease),
+                  accountLeaseRuntime.validate(currentBindingHandle.accountLease, at: .runtime).allowed else {
+                speechEngine.destroy()
+                return
+            }
             self.engine = speechEngine
+            self.engineAccountLease = currentBindingHandle.accountLease
+            self.engineBindingId = currentBindingHandle.bindingId
+            self.engineCallbackGeneration = callbackGeneration
+            self.engineDelegateProxy = delegateProxy
             self.isEngineReady = true
             print("[DialogEngine] ✅ 引擎初始化成功")
             DDLogInfo("[DialogEngine] 引擎初始化成功")
@@ -587,26 +813,61 @@ final class DialogEngineManager: NSObject {
         sendsGreeting: Bool = true,
         usesTurnScopedKnowledgeContext: Bool = false
     ) {
+        guard let accountLease = boundAccountLease,
+              let bindingHandle = boundBindingHandle,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            return
+        }
+        if isDialogActive, let engine {
+            _ = engine.send(SEDirectiveSyncStopEngine)
+            isDialogActive = false
+            activeDialogAccountLease = nil
+            activeDialogBindingHandle = nil
+            activeDialogOperationId = nil
+            providerSessionOperationId = nil
+            requiresEngineRecreationBeforeNextDialog = true
+        }
+        rotateProviderEngineBeforeNextDialogIfNeeded()
+        let dialogOperationId = UUID()
+        activeDialogAccountLease = accountLease
+        activeDialogBindingHandle = bindingHandle
+        activeDialogOperationId = dialogOperationId
         self.usesTurnScopedKnowledgeContext = usesTurnScopedKnowledgeContext
         suppressGreetingForNextStart = !sendsGreeting
         // 引擎未就绪时先初始化
-        guard isEngineReady, let engine = engine else {
+        guard isEngineReady, engine != nil else {
             DDLogInfo("[DialogEngine] 引擎未就绪，先初始化")
             setup()
+            if isEngineReady {
+                performStartDialog(
+                    accountLease: accountLease,
+                    bindingHandle: bindingHandle,
+                    dialogOperationId: dialogOperationId
+                )
+                return
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                guard let self = self, self.isEngineReady else { return }
-                self.performStartDialog()
+                guard let self,
+                      self.boundBindingHandle == bindingHandle,
+                      self.activeDialogBindingHandle == bindingHandle,
+                      self.activeDialogOperationId == dialogOperationId,
+                      self.activeDialogAccountLease == accountLease,
+                      self.accountLeaseRuntime.validate(accountLease, at: .timer).allowed,
+                      self.isEngineReady else { return }
+                self.performStartDialog(
+                    accountLease: accountLease,
+                    bindingHandle: bindingHandle,
+                    dialogOperationId: dialogOperationId
+                )
             }
             return
         }
 
-        // 如果已有活跃对话先同步停止
-        if isDialogActive {
-            _ = engine.send(SEDirectiveSyncStopEngine)
-            isDialogActive = false
-        }
-
-        performStartDialog()
+        performStartDialog(
+            accountLease: accountLease,
+            bindingHandle: bindingHandle,
+            dialogOperationId: dialogOperationId
+        )
     }
 
     /// 结束语音对话
@@ -616,7 +877,9 @@ final class DialogEngineManager: NSObject {
 
     /// 结束语音对话（带原因）
     func stopDialog(reason: DialogEndReason) {
-        guard isDialogActive, let engine = engine else { return }
+        guard isDialogActive,
+              let engine,
+              let callbackContext = currentProviderCallbackContext() else { return }
 
         isEnding = true
         invalidateSilenceTimer()
@@ -631,6 +894,11 @@ final class DialogEngineManager: NSObject {
         isDialogActive = false
         isAISpeaking = false
         isEnding = false
+        activeDialogAccountLease = nil
+        activeDialogBindingHandle = nil
+        activeDialogOperationId = nil
+        providerSessionOperationId = nil
+        requiresEngineRecreationBeforeNextDialog = true
         restoreAudioSessionIfNeeded()
 
         switch reason {
@@ -644,8 +912,11 @@ final class DialogEngineManager: NSObject {
             DDLogInfo("[DialogEngine] 对话已停止")
         }
 
-        DispatchQueue.main.async { [weak self] in
-            self?.delegate?.onDialogEnded(reason: reason)
+        deliverProviderCallback(
+            callbackContext,
+            requiresActiveOperation: false
+        ) { _, delegate in
+            delegate.onDialogEnded(reason: reason)
         }
     }
 
@@ -709,6 +980,15 @@ final class DialogEngineManager: NSObject {
         }
         engine?.destroy()
         engine = nil
+        engineAccountLease = nil
+        engineBindingId = nil
+        engineCallbackGeneration = nil
+        engineDelegateProxy = nil
+        activeDialogBindingHandle = nil
+        activeDialogOperationId = nil
+        providerSessionOperationId = nil
+        requiresEngineRecreationBeforeNextDialog = false
+        activeDialogAccountLease = nil
         isEngineReady = false
         isDialogActive = false
         isAISpeaking = false
@@ -716,6 +996,13 @@ final class DialogEngineManager: NSObject {
         usesTurnScopedKnowledgeContext = false
         restoreAudioSessionIfNeeded()
         DDLogInfo("[DialogEngine] 引擎已销毁")
+    }
+
+    private func rotateProviderEngineBeforeNextDialogIfNeeded() {
+        guard requiresEngineRecreationBeforeNextDialog else { return }
+        let retiredGeneration = engineCallbackGeneration?.uuidString ?? "none"
+        destroyEngine()
+        DDLogInfo("[DialogEngine] 已轮换 provider callback generation，隔离上一会话晚到事件 retiredGeneration=\(retiredGeneration)")
     }
 
     // MARK: - Audio Session 管理
@@ -917,8 +1204,20 @@ final class DialogEngineManager: NSObject {
     }
 
     /// 执行开始对话
-    private func performStartDialog() {
-        guard let engine = engine else {
+    private func performStartDialog(
+        accountLease: AccountLease,
+        bindingHandle: DialogEngineBindingHandle,
+        dialogOperationId: UUID
+    ) {
+        guard boundBindingHandle == bindingHandle,
+              activeDialogBindingHandle == bindingHandle,
+              activeDialogOperationId == dialogOperationId,
+              activeDialogAccountLease == accountLease,
+              accountLeaseRuntime.validate(accountLease, at: .runtime).allowed,
+              engineBindingId == bindingHandle.bindingId,
+              let engineAccountLease,
+              isSameDialogAccountGeneration(engineAccountLease, accountLease),
+              let engine = engine else {
             print("[DialogEngine] ❌ performStartDialog: engine 为 nil")
             return
         }
@@ -1032,7 +1331,19 @@ final class DialogEngineManager: NSObject {
         if startResult != SENoError {
             DDLogError("[DialogEngine] StartEngine 失败: \(startResult.rawValue)")
             restoreAudioSessionIfNeeded()
-            delegate?.onError(error: DialogEngineError.startFailed(code: Int(startResult.rawValue)))
+            if let callbackContext = currentProviderCallbackContext(),
+               finishProviderOperation(callbackContext) {
+                deliverProviderCallback(
+                    callbackContext,
+                    requiresActiveOperation: false
+                ) { _, delegate in
+                    delegate.onError(
+                        error: DialogEngineError.startFailed(
+                            code: Int(startResult.rawValue)
+                        )
+                    )
+                }
+            }
             return
         }
 
@@ -1061,13 +1372,18 @@ final class DialogEngineManager: NSObject {
     /// 启动/重置静音超时计时器
     private func resetSilenceTimer() {
         invalidateSilenceTimer()
-        guard config.silenceTimeoutSeconds > 0 else { return }
+        guard config.silenceTimeoutSeconds > 0,
+              let accountLease = activeDialogAccountLease,
+              accountLeaseRuntime.validate(accountLease, at: .timer).allowed else { return }
 
         silenceTimer = Timer.scheduledTimer(
             withTimeInterval: config.silenceTimeoutSeconds,
             repeats: false
         ) { [weak self] _ in
-            guard let self = self, self.isDialogActive else { return }
+            guard let self,
+                  self.activeDialogAccountLease == accountLease,
+                  self.accountLeaseRuntime.validate(accountLease, at: .timer).allowed,
+                  self.isDialogActive else { return }
             print("[DialogEngine] ⏰ 静音超时 \(self.config.silenceTimeoutSeconds)秒，自动结束对话")
             self.stopDialog(reason: .silenceTimeout)
         }
@@ -1080,11 +1396,140 @@ final class DialogEngineManager: NSObject {
     }
 }
 
-// MARK: - SpeechEngineDelegate
+// MARK: - Provider callback provenance
 
-extension DialogEngineManager: SpeechEngineDelegate {
+extension DialogEngineManager {
 
-    func onMessage(with type: SEMessageType, andData data: Data) {
+    fileprivate func enqueueProviderMessage(
+        type: SEMessageType,
+        data: Data,
+        engineGeneration: UUID
+    ) {
+        DispatchQueue.main.async { [weak self] in
+            self?.handleProviderMessage(
+                type: type,
+                data: data,
+                engineGeneration: engineGeneration
+            )
+        }
+    }
+
+    private func currentProviderCallbackContext(
+        engineGeneration: UUID? = nil
+    ) -> DialogEngineProviderCallbackContext? {
+        guard let currentEngineGeneration = engineCallbackGeneration,
+              engineGeneration == nil || engineGeneration == currentEngineGeneration,
+              let dialogOperationId = activeDialogOperationId,
+              let bindingHandle = activeDialogBindingHandle,
+              let delegate,
+              bindingHandle == boundBindingHandle,
+              bindingHandle.bindingId == engineBindingId,
+              activeDialogAccountLease == bindingHandle.accountLease,
+              accountLeaseRuntime.validate(bindingHandle.accountLease, at: .runtime).allowed else {
+            return nil
+        }
+        return DialogEngineProviderCallbackContext(
+            engineGeneration: currentEngineGeneration,
+            dialogOperationId: dialogOperationId,
+            bindingHandle: bindingHandle,
+            delegateIdentity: ObjectIdentifier(delegate)
+        )
+    }
+
+    private func isCurrentProviderCallbackContext(
+        _ context: DialogEngineProviderCallbackContext,
+        checkpoint: AccountLeaseCheckpoint = .ui,
+        requiresActiveOperation: Bool = true
+    ) -> Bool {
+        guard engineCallbackGeneration == context.engineGeneration,
+              boundBindingHandle == context.bindingHandle,
+              engineBindingId == context.bindingHandle.bindingId,
+              let delegate,
+              ObjectIdentifier(delegate) == context.delegateIdentity,
+              accountLeaseRuntime.validate(
+                context.bindingHandle.accountLease,
+                at: checkpoint
+              ).allowed else {
+            return false
+        }
+        guard requiresActiveOperation else { return true }
+        return activeDialogOperationId == context.dialogOperationId
+            && activeDialogBindingHandle == context.bindingHandle
+            && activeDialogAccountLease == context.bindingHandle.accountLease
+    }
+
+    private func deliverProviderCallback(
+        _ context: DialogEngineProviderCallbackContext,
+        checkpoint: AccountLeaseCheckpoint = .ui,
+        requiresActiveOperation: Bool = true,
+        _ action: (DialogEngineManager, DialogEngineDelegate) -> Void
+    ) {
+        guard isCurrentProviderCallbackContext(
+            context,
+            checkpoint: checkpoint,
+            requiresActiveOperation: requiresActiveOperation
+        ), let delegate else {
+            DDLogWarn("[DialogEngine] 丢弃已失去来源归属的 provider 回调")
+            return
+        }
+        action(self, delegate)
+    }
+
+    @discardableResult
+    private func finishProviderOperation(
+        _ context: DialogEngineProviderCallbackContext
+    ) -> Bool {
+        guard isCurrentProviderCallbackContext(
+            context,
+            checkpoint: .runtime,
+            requiresActiveOperation: true
+        ) else { return false }
+        isDialogActive = false
+        isAISpeaking = false
+        activeDialogAccountLease = nil
+        activeDialogBindingHandle = nil
+        activeDialogOperationId = nil
+        providerSessionOperationId = nil
+        requiresEngineRecreationBeforeNextDialog = true
+        return true
+    }
+
+    private func handleProviderMessage(
+        type: SEMessageType,
+        data: Data,
+        engineGeneration: UUID
+    ) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        guard let callbackContext = currentProviderCallbackContext(
+            engineGeneration: engineGeneration
+        ) else {
+            DDLogWarn(
+                "[DialogEngine] 忽略失效 provider 回调 " +
+                "type=\(type.rawValue) generation=\(engineGeneration.uuidString)"
+            )
+            return
+        }
+        switch type {
+        case SEEventConnectionStarted,
+             SEEventConnectionFailed,
+             SEEventConnectionFinished,
+             SEEventSessionStarted,
+             SEEventSessionFailed,
+             SEEventSessionFinished,
+             SEEventSessionCanceled,
+             SEEngineStart,
+             SEEngineStop,
+             SEEngineError:
+            break
+        default:
+            guard providerSessionOperationId == callbackContext.dialogOperationId else {
+                DDLogWarn(
+                    "[DialogEngine] 忽略未归属到当前 session 的 provider 回调 " +
+                    "type=\(type.rawValue)"
+                )
+                return
+            }
+        }
         // 正在结束对话时，忽略除连接/会话结束外的所有事件
         if isEnding {
             switch type {
@@ -1108,52 +1553,75 @@ extension DialogEngineManager: SpeechEngineDelegate {
             let msg = parseErrorMessage(from: data)
             print("[DialogEngine] ❌ 连接失败: \(msg)")
             DDLogError("[DialogEngine] 连接失败: \(msg)")
-            isDialogActive = false
+            guard finishProviderOperation(callbackContext) else { return }
             restoreAudioSessionIfNeeded()
-            DispatchQueue.main.async { [weak self] in
-                self?.delegate?.onError(error: DialogEngineError.sdkError(code: Int(type.rawValue), message: msg))
+            deliverProviderCallback(
+                callbackContext,
+                requiresActiveOperation: false
+            ) { _, delegate in
+                delegate.onError(
+                    error: DialogEngineError.sdkError(
+                        code: Int(type.rawValue),
+                        message: msg
+                    )
+                )
             }
 
         case SEEventConnectionFinished:
             DDLogInfo("[DialogEngine] 连接已关闭")
-            isDialogActive = false
+            _ = finishProviderOperation(callbackContext)
 
         // MARK: Session Events
         case SEEventSessionStarted:
             print("[DialogEngine] ✅ 对话会话已开始")
             DDLogInfo("[DialogEngine] 对话会话已开始")
             isDialogActive = true
+            providerSessionOperationId = callbackContext.dialogOperationId
             // 发送开场白
             sendGreetingIfNeeded()
             // 启动静音超时计时器
-            DispatchQueue.main.async { [weak self] in
-                self?.resetSilenceTimer()
-                self?.delegate?.onDialogStarted()
+            deliverProviderCallback(callbackContext) { manager, delegate in
+                manager.resetSilenceTimer()
+                delegate.onDialogStarted()
             }
 
         case SEEventSessionFinished:
             DDLogInfo("[DialogEngine] 对话会话已结束")
             invalidateSilenceTimer()
-            isDialogActive = false
-            DispatchQueue.main.async { [weak self] in
-                self?.delegate?.onDialogEnded(reason: .serverEnded)
+            guard finishProviderOperation(callbackContext) else { return }
+            deliverProviderCallback(
+                callbackContext,
+                requiresActiveOperation: false
+            ) { _, delegate in
+                delegate.onDialogEnded(reason: .serverEnded)
             }
 
         case SEEventSessionFailed:
             let msg = parseErrorMessage(from: data)
             print("[DialogEngine] ❌ 会话失败: \(msg)")
             DDLogError("[DialogEngine] 会话失败: \(msg)")
-            isDialogActive = false
-            DispatchQueue.main.async { [weak self] in
-                self?.delegate?.onError(error: DialogEngineError.sdkError(code: Int(type.rawValue), message: msg))
+            guard finishProviderOperation(callbackContext) else { return }
+            deliverProviderCallback(
+                callbackContext,
+                requiresActiveOperation: false
+            ) { _, delegate in
+                delegate.onError(
+                    error: DialogEngineError.sdkError(
+                        code: Int(type.rawValue),
+                        message: msg
+                    )
+                )
             }
 
         case SEEventSessionCanceled:
             DDLogInfo("[DialogEngine] 会话已取消")
             invalidateSilenceTimer()
-            isDialogActive = false
-            DispatchQueue.main.async { [weak self] in
-                self?.delegate?.onDialogEnded(reason: .serverEnded)
+            guard finishProviderOperation(callbackContext) else { return }
+            deliverProviderCallback(
+                callbackContext,
+                requiresActiveOperation: false
+            ) { _, delegate in
+                delegate.onDialogEnded(reason: .serverEnded)
             }
 
         // MARK: ASR Events
@@ -1166,8 +1634,8 @@ extension DialogEngineManager: SpeechEngineDelegate {
             // 用户开始说话 → 自动打断 AI 回复
             interruptAI()
             // 重置静音超时计时器
-            DispatchQueue.main.async { [weak self] in
-                self?.resetSilenceTimer()
+            deliverProviderCallback(callbackContext) { manager, _ in
+                manager.resetSilenceTimer()
             }
             // 解析 ASR 结果
             let asrRawStr = String(data: data, encoding: .utf8) ?? ""
@@ -1179,15 +1647,15 @@ extension DialogEngineManager: SpeechEngineDelegate {
                     if let keyword = checkEndKeyword(in: result.text) {
                         print("[DialogEngine] 🛑 检测到结束关键词: \(keyword)")
                         isEnding = true
-                        DispatchQueue.main.async { [weak self] in
-                            self?.delegate?.onASRResult(text: result.text, isFinal: true)
-                            self?.stopDialog(reason: .keyword(keyword))
+                        deliverProviderCallback(callbackContext) { manager, delegate in
+                            delegate.onASRResult(text: result.text, isFinal: true)
+                            manager.stopDialog(reason: .keyword(keyword))
                         }
                         return
                     }
                 }
-                DispatchQueue.main.async { [weak self] in
-                    self?.delegate?.onASRResult(text: result.text, isFinal: result.isFinal)
+                deliverProviderCallback(callbackContext) { _, delegate in
+                    delegate.onASRResult(text: result.text, isFinal: result.isFinal)
                 }
             } else {
                 // 解析失败，尝试从 raw JSON 中提取任何文本
@@ -1197,32 +1665,32 @@ extension DialogEngineManager: SpeechEngineDelegate {
                     if let keyword = checkEndKeyword(in: extractedText) {
                         print("[DialogEngine] 🛑 raw 匹配到结束关键词: \(keyword)")
                         isEnding = true
-                        DispatchQueue.main.async { [weak self] in
-                            self?.delegate?.onASRResult(text: extractedText, isFinal: true)
-                            self?.stopDialog(reason: .keyword(keyword))
+                        deliverProviderCallback(callbackContext) { manager, delegate in
+                            delegate.onASRResult(text: extractedText, isFinal: true)
+                            manager.stopDialog(reason: .keyword(keyword))
                         }
                         return
                     }
                     // 转发为中间结果
-                    DispatchQueue.main.async { [weak self] in
-                        self?.delegate?.onASRResult(text: extractedText, isFinal: false)
+                    deliverProviderCallback(callbackContext) { _, delegate in
+                        delegate.onASRResult(text: extractedText, isFinal: false)
                     }
                 } else {
                     // 最终兜底：raw string 中匹配关键词或提取中文文本
                     if let keyword = checkEndKeyword(in: asrRawStr) {
                         print("[DialogEngine] 🛑 raw string 匹配到结束关键词: \(keyword)")
                         isEnding = true
-                        DispatchQueue.main.async { [weak self] in
-                            self?.delegate?.onASRResult(text: keyword, isFinal: true)
-                            self?.stopDialog(reason: .keyword(keyword))
+                        deliverProviderCallback(callbackContext) { manager, delegate in
+                            delegate.onASRResult(text: keyword, isFinal: true)
+                            manager.stopDialog(reason: .keyword(keyword))
                         }
                         return
                     }
                     // 尝试从 raw string 中提取引号内文本或中文字符
                     let chineseText = extractChineseText(from: asrRawStr)
                     if !chineseText.isEmpty {
-                        DispatchQueue.main.async { [weak self] in
-                            self?.delegate?.onASRResult(text: chineseText, isFinal: false)
+                        deliverProviderCallback(callbackContext) { _, delegate in
+                            delegate.onASRResult(text: chineseText, isFinal: false)
                         }
                     }
                 }
@@ -1235,8 +1703,8 @@ extension DialogEngineManager: SpeechEngineDelegate {
                 return
             }
             // ASR 识别结果（流式，通过 is_interim 区分中间/最终）
-            DispatchQueue.main.async { [weak self] in
-                self?.resetSilenceTimer()
+            deliverProviderCallback(callbackContext) { manager, _ in
+                manager.resetSilenceTimer()
             }
             if let result = parseASRResult(from: data) {
                 print("[DialogEngine] 🎤 ASRResponse: text=\(result.text), isFinal=\(result.isFinal)")
@@ -1244,15 +1712,15 @@ extension DialogEngineManager: SpeechEngineDelegate {
                     if let keyword = checkEndKeyword(in: result.text) {
                         print("[DialogEngine] 🛑 ASRResponse 检测到结束关键词: \(keyword)")
                         isEnding = true
-                        DispatchQueue.main.async { [weak self] in
-                            self?.delegate?.onASRResult(text: result.text, isFinal: true)
-                            self?.stopDialog(reason: .keyword(keyword))
+                        deliverProviderCallback(callbackContext) { manager, delegate in
+                            delegate.onASRResult(text: result.text, isFinal: true)
+                            manager.stopDialog(reason: .keyword(keyword))
                         }
                         return
                     }
                 }
-                DispatchQueue.main.async { [weak self] in
-                    self?.delegate?.onASRResult(text: result.text, isFinal: result.isFinal)
+                deliverProviderCallback(callbackContext) { _, delegate in
+                    delegate.onASRResult(text: result.text, isFinal: result.isFinal)
                 }
             }
 
@@ -1267,8 +1735,8 @@ extension DialogEngineManager: SpeechEngineDelegate {
             }
             // 用户语音已确认，这是发送给 LLM 的最终文本
             print("[DialogEngine] ✅ 用户语音确认: \(dataStr.prefix(300))")
-            DispatchQueue.main.async { [weak self] in
-                self?.resetSilenceTimer()
+            deliverProviderCallback(callbackContext) { manager, _ in
+                manager.resetSilenceTimer()
             }
             // 解析用户查询文本
             if let queryText = parseQueryConfirmedText(from: data), !queryText.isEmpty {
@@ -1276,14 +1744,14 @@ extension DialogEngineManager: SpeechEngineDelegate {
                 if let keyword = checkEndKeyword(in: queryText) {
                     print("[DialogEngine] 🛑 用户确认文本中检测到结束关键词: \(keyword)")
                     isEnding = true
-                    DispatchQueue.main.async { [weak self] in
-                        self?.delegate?.onASRResult(text: queryText, isFinal: true)
-                        self?.stopDialog(reason: .keyword(keyword))
+                    deliverProviderCallback(callbackContext) { manager, delegate in
+                        delegate.onASRResult(text: queryText, isFinal: true)
+                        manager.stopDialog(reason: .keyword(keyword))
                     }
                     return
                 }
-                DispatchQueue.main.async { [weak self] in
-                    self?.delegate?.onASRResult(text: queryText, isFinal: true)
+                deliverProviderCallback(callbackContext) { _, delegate in
+                    delegate.onASRResult(text: queryText, isFinal: true)
                 }
             }
 
@@ -1296,8 +1764,8 @@ extension DialogEngineManager: SpeechEngineDelegate {
             // TTS 句子开始 - 标记 AI 正在播报
             isAISpeaking = true
             // AI 说话时也重置静音计时器（AI 播报期间不应触发超时）
-            DispatchQueue.main.async { [weak self] in
-                self?.resetSilenceTimer()
+            deliverProviderCallback(callbackContext) { manager, _ in
+                manager.resetSilenceTimer()
             }
             if let text = parseTTSText(from: data), !text.isEmpty {
                 if !chatBuffer.isEmpty {
@@ -1305,8 +1773,8 @@ extension DialogEngineManager: SpeechEngineDelegate {
                     chatBuffer = ""
                 } else {
                     // 没有 streaming，TTS 是唯一的文本来源
-                    DispatchQueue.main.async { [weak self] in
-                        self?.delegate?.onTTSStarted(text: text)
+                    deliverProviderCallback(callbackContext) { _, delegate in
+                        delegate.onTTSStarted(text: text)
                     }
                 }
             } else if !chatBuffer.isEmpty {
@@ -1323,8 +1791,8 @@ extension DialogEngineManager: SpeechEngineDelegate {
             // SentenceEnd。数字人主音频模式依赖这里的文本转交给腾讯云渲染。
             if let text = parseTTSText(from: data), !text.isEmpty {
                 chatBuffer = ""
-                DispatchQueue.main.async { [weak self] in
-                    self?.delegate?.onTTSStarted(text: text)
+                deliverProviderCallback(callbackContext) { _, delegate in
+                    delegate.onTTSStarted(text: text)
                 }
             }
 
@@ -1335,8 +1803,8 @@ extension DialogEngineManager: SpeechEngineDelegate {
             }
             isAISpeaking = false
             DDLogInfo("[DialogEngine] TTS 播放结束")
-            DispatchQueue.main.async { [weak self] in
-                self?.delegate?.onTTSFinished()
+            deliverProviderCallback(callbackContext) { _, delegate in
+                delegate.onTTSFinished()
             }
 
         case SEPlayerFinishPlayAudio:
@@ -1346,8 +1814,8 @@ extension DialogEngineManager: SpeechEngineDelegate {
             }
             isAISpeaking = false
             DDLogInfo("[DialogEngine] 播放器播放完毕")
-            DispatchQueue.main.async { [weak self] in
-                self?.delegate?.onTTSFinished()
+            deliverProviderCallback(callbackContext) { _, delegate in
+                delegate.onTTSFinished()
             }
 
         // MARK: Chat Events
@@ -1357,8 +1825,8 @@ extension DialogEngineManager: SpeechEngineDelegate {
                 chatBuffer += text
                 // 实时更新 UI（流式效果）
                 let currentText = chatBuffer
-                DispatchQueue.main.async { [weak self] in
-                    self?.delegate?.onChatStreaming(text: currentText)
+                deliverProviderCallback(callbackContext) { _, delegate in
+                    delegate.onChatStreaming(text: currentText)
                 }
             }
 
@@ -1368,8 +1836,8 @@ extension DialogEngineManager: SpeechEngineDelegate {
             if !chatBuffer.isEmpty {
                 let finalText = chatBuffer
                 chatBuffer = ""
-                DispatchQueue.main.async { [weak self] in
-                    self?.delegate?.onTTSStarted(text: finalText)
+                deliverProviderCallback(callbackContext) { _, delegate in
+                    delegate.onTTSStarted(text: finalText)
                 }
             }
 
@@ -1386,8 +1854,13 @@ extension DialogEngineManager: SpeechEngineDelegate {
             let msg = parseErrorMessage(from: data)
             print("[DialogEngine] ❌ 引擎错误: \(msg)")
             DDLogError("[DialogEngine] 引擎错误: \(msg)")
-            DispatchQueue.main.async { [weak self] in
-                self?.delegate?.onError(error: DialogEngineError.sdkError(code: Int(type.rawValue), message: msg))
+            deliverProviderCallback(callbackContext) { _, delegate in
+                delegate.onError(
+                    error: DialogEngineError.sdkError(
+                        code: Int(type.rawValue),
+                        message: msg
+                    )
+                )
             }
 
         default:
@@ -1399,9 +1872,9 @@ extension DialogEngineManager: SpeechEngineDelegate {
                 let hasChinese = extracted.unicodeScalars.contains { $0.value >= 0x4E00 && $0.value <= 0x9FFF }
                 if hasChinese {
                     print("[DialogEngine] 📨 default 分支提取到 ASR 文本: \(extracted)")
-                    DispatchQueue.main.async { [weak self] in
-                        self?.resetSilenceTimer()
-                        self?.delegate?.onASRResult(text: extracted, isFinal: false)
+                    deliverProviderCallback(callbackContext) { manager, delegate in
+                        manager.resetSilenceTimer()
+                        delegate.onASRResult(text: extracted, isFinal: false)
                     }
                 }
             }

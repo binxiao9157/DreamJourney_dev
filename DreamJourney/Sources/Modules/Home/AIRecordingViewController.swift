@@ -125,12 +125,16 @@ final class AIRecordingViewController: UIViewController {
     /// AI 流式拼接缓存（不直接显示，等 TTS 句子完整时再展示）
     private var pendingAIText: String?
     private let accountLeaseRuntime = AccountLeaseRuntime.shared
+    private let dialogEngineOwnerId = UUID()
+    private var dialogAccountLease: AccountLease?
+    private var dialogEngineBindingHandle: DialogEngineBindingHandle?
     private var mediaPickerAccountLease: AccountLease?
     private var mediaPickerDigitalHumanContext: DigitalHumanContext?
 
     // MARK: - 对话录音（用于声音复刻）
     /// 并行录音器：对话期间录制用户语音，供声音复刻训练使用
     private var sessionRecorder: AVAudioRecorder?
+    private var sessionRecordingAccountLease: AccountLease?
     /// 最近一次对话的录音文件 URL
     private(set) var lastSessionRecordingURL: URL?
     /// 与录音文件配对的 sessionId（用于详情页查找 recordings/{sessionId}.m4a）
@@ -145,9 +149,27 @@ final class AIRecordingViewController: UIViewController {
         setupLayout()
         setupNotifications()
         updateVoiceBallState(.idle)
-        // 预初始化 Dialog 引擎
-        DialogEngineManager.shared.delegate = self
-        DialogEngineManager.shared.setup()
+        activateDialogAccountLeaseIfAvailable()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        activateDialogAccountLeaseIfAvailable()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if let accountLease = dialogAccountLease,
+           validateDialogEngineBinding(accountLease: accountLease, at: .runtime) {
+            if DialogEngineManager.shared.isDialogActive {
+                DialogEngineManager.shared.stopDialog()
+            } else {
+                stopSessionRecording(accountLease: accountLease)
+            }
+        }
+        discardStaleSessionRecording()
+        releaseDialogEngineBinding()
+        dialogAccountLease = nil
     }
 
     override func viewDidLayoutSubviews() {
@@ -170,6 +192,8 @@ final class AIRecordingViewController: UIViewController {
     }
 
     deinit {
+        discardStaleSessionRecording()
+        releaseDialogEngineBinding()
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -355,15 +379,105 @@ final class AIRecordingViewController: UIViewController {
             && digitalHumanContext == DigitalHumanContextStore.shared.current
     }
 
+    private func captureInitialDialogAccountLease() -> AccountLease? {
+        guard dialogAccountLease == nil,
+              let userId = UserManager.shared.currentUser?.id,
+              let accountLease = accountLeaseRuntime.capture(forSubjectId: userId),
+              accountLease.subjectId == userId,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            return nil
+        }
+        return accountLease
+    }
+
+    @discardableResult
+    private func activateDialogAccountLeaseIfAvailable() -> Bool {
+        if let existingAccountLease = dialogAccountLease,
+           validateDialogAccountLease(existingAccountLease, at: .request),
+           bindDialogEngine(accountLease: existingAccountLease) {
+            DialogEngineManager.shared.delegate = self
+            DialogEngineManager.shared.setup()
+            return true
+        }
+
+        if dialogAccountLease != nil {
+            releaseDialogEngineBinding()
+            dialogAccountLease = nil
+        }
+        guard let accountLease = captureInitialDialogAccountLease() else {
+            return false
+        }
+        dialogAccountLease = accountLease
+        guard bindDialogEngine(accountLease: accountLease) else {
+            dialogAccountLease = nil
+            return false
+        }
+        DialogEngineManager.shared.delegate = self
+        DialogEngineManager.shared.setup()
+        return true
+    }
+
+    private func validateDialogAccountLease(
+        _ accountLease: AccountLease,
+        at checkpoint: AccountLeaseCheckpoint
+    ) -> Bool {
+        dialogAccountLease == accountLease
+            && accountLease.subjectId == UserManager.shared.currentUser?.id
+            && accountLeaseRuntime.validate(accountLease, at: checkpoint).allowed
+    }
+
+    @discardableResult
+    private func bindDialogEngine(accountLease: AccountLease) -> Bool {
+        guard validateDialogAccountLease(accountLease, at: .request),
+              let bindingHandle = DialogEngineManager.shared.bindAccountLease(
+                accountLease,
+                ownerId: dialogEngineOwnerId
+              ) else {
+            releaseDialogEngineBinding()
+            return false
+        }
+        dialogEngineBindingHandle = bindingHandle
+        return DialogEngineManager.shared.isCurrentBinding(bindingHandle)
+    }
+
+    private func releaseDialogEngineBinding() {
+        guard let bindingHandle = dialogEngineBindingHandle else { return }
+        _ = DialogEngineManager.shared.unbindAccountLease(bindingHandle)
+        dialogEngineBindingHandle = nil
+    }
+
+    private func validateDialogEngineBinding(
+        accountLease: AccountLease,
+        at checkpoint: AccountLeaseCheckpoint
+    ) -> Bool {
+        validateDialogAccountLease(accountLease, at: checkpoint)
+            && DialogEngineManager.shared.isCurrentBinding(dialogEngineBindingHandle)
+    }
+
     // MARK: - Mock Dialog
     private func startRecording() {
+        guard let accountLease = dialogAccountLease,
+              validateDialogAccountLease(accountLease, at: .request),
+              bindDialogEngine(accountLease: accountLease) else {
+            discardStaleSessionRecording()
+            return
+        }
+        DialogEngineManager.shared.delegate = self
         MicrophonePermissionManager.shared.requestPermission { [weak self] granted in
-            guard let self = self else { return }
+            guard let self,
+                  self.dialogAccountLease == accountLease,
+                  self.validateDialogEngineBinding(accountLease: accountLease, at: .runtime),
+                  self.validateDialogAccountLease(accountLease, at: .ui) else {
+                self?.discardStaleSessionRecording()
+                return
+            }
             if granted {
                 // 先启动 DialogEngine（由 SDK 配置 AudioSession），再启动并行录音（共享同一 AudioSession）
                 // 顺序很重要：如果先启动 AVAudioRecorder，它会隐式修改 AudioSession 配置，可能影响 SDK 的 AEC
+                guard self.bindDialogEngine(accountLease: accountLease) else { return }
+                DialogEngineManager.shared.delegate = self
                 DialogEngineManager.shared.startDialog()
-                self.startSessionRecording()
+                self.startSessionRecording(accountLease: accountLease)
             } else {
                 MicrophonePermissionManager.shared.showPermissionDeniedAlert(on: self)
                 self.updateVoiceBallState(.idle)
@@ -372,8 +486,14 @@ final class AIRecordingViewController: UIViewController {
     }
 
     private func stopRecording() {
+        guard let accountLease = dialogAccountLease,
+              validateDialogEngineBinding(accountLease: accountLease, at: .runtime) else {
+            discardStaleSessionRecording()
+            return
+        }
         // 先停止并行录音，再停止 DialogEngine
-        stopSessionRecording()
+        stopSessionRecording(accountLease: accountLease)
+        guard validateDialogEngineBinding(accountLease: accountLease, at: .runtime) else { return }
         DialogEngineManager.shared.stopDialog()
     }
 
@@ -390,8 +510,20 @@ final class AIRecordingViewController: UIViewController {
     private func setupNotifications() {
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(handleLogout),
+            selector: #selector(handleAccountDidChange),
             name: .djUserDidLogout,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAccountDidChange),
+            name: .djUserDidLogin,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleDialogAuthorityEpochDidChange),
+            name: .djRecoveryAuthorityEpochDidChange,
             object: nil
         )
         NotificationCenter.default.addObserver(
@@ -408,23 +540,63 @@ final class AIRecordingViewController: UIViewController {
         )
     }
 
-    @objc private func handleLogout() {
-        messages = []
-        messageTableView.reloadData()
+    @objc private func handleAccountDidChange() {
+        performDialogAccountScopeResetOnMain(clearsMessages: true)
+    }
+
+    @objc private func handleDialogAuthorityEpochDidChange() {
+        performDialogAccountScopeResetOnMain(clearsMessages: false)
+    }
+
+    private func performDialogAccountScopeResetOnMain(clearsMessages: Bool) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.performDialogAccountScopeResetOnMain(clearsMessages: clearsMessages)
+            }
+            return
+        }
+        releaseDialogEngineBinding()
+        dialogAccountLease = nil
+        mediaPickerAccountLease = nil
+        mediaPickerDigitalHumanContext = nil
+        discardStaleSessionRecording()
+        pendingUserText = nil
+        pendingAIText = nil
+        if clearsMessages {
+            messages = []
+            messageTableView.reloadData()
+        }
         updateVoiceBallState(.idle)
-        DialogEngineManager.shared.destroyEngine()
+        if view.window != nil {
+            activateDialogAccountLeaseIfAvailable()
+        }
     }
 
     @objc private func handleDidEnterBackground() {
+        guard let accountLease = dialogAccountLease,
+              validateDialogEngineBinding(accountLease: accountLease, at: .runtime) else {
+            discardStaleSessionRecording()
+            return
+        }
         if DialogEngineManager.shared.isDialogActive {
             DialogEngineManager.shared.stopDialog()
-            updateVoiceBallState(.idle)
+            if validateDialogAccountLease(accountLease, at: .ui) {
+                updateVoiceBallState(.idle)
+            }
         }
         // 安全防护：确保并行录音也被停止（正常流程由 onDialogEnded 触发，此处兜底）
-        stopSessionRecording()
+        stopSessionRecording(accountLease: accountLease)
     }
 
     @objc private func handleWillEnterForeground() {
+        guard view.window != nil,
+              let accountLease = dialogAccountLease,
+              validateDialogAccountLease(accountLease, at: .runtime),
+              bindDialogEngine(accountLease: accountLease) else {
+            discardStaleSessionRecording()
+            return
+        }
+        DialogEngineManager.shared.delegate = self
         if !DialogEngineManager.shared.isEngineReady {
             DialogEngineManager.shared.setup()
         }
@@ -753,6 +925,11 @@ private enum AIRecordingMediaCommitError: Error {
 extension AIRecordingViewController: DialogEngineDelegate {
 
     func onDialogStarted() {
+        guard let accountLease = dialogAccountLease,
+              validateDialogEngineBinding(accountLease: accountLease, at: .ui) else {
+            discardStaleSessionRecording()
+            return
+        }
         // 保留历史消息，不清空（新会话消息追加在旧消息下方）
         pendingUserText = nil
         pendingAIText = nil
@@ -760,6 +937,11 @@ extension AIRecordingViewController: DialogEngineDelegate {
     }
 
     func onASRResult(text: String, isFinal: Bool) {
+        guard let accountLease = dialogAccountLease,
+              validateDialogEngineBinding(accountLease: accountLease, at: .ui) else {
+            discardStaleSessionRecording()
+            return
+        }
         if isFinal {
             // 最终结果：直接显示为正式用户消息
             pendingUserText = nil
@@ -775,8 +957,13 @@ extension AIRecordingViewController: DialogEngineDelegate {
     }
 
     func onTTSStarted(text: String) {
+        guard let accountLease = dialogAccountLease,
+              validateDialogEngineBinding(accountLease: accountLease, at: .ui) else {
+            discardStaleSessionRecording()
+            return
+        }
         // AI 开始说话前，将待确认的用户文本显示出来
-        flushPendingUserText()
+        flushPendingUserText(accountLease: accountLease)
         // 清空流式缓存（TTS 已提供完整文本）
         pendingAIText = nil
         // 显示完整的 AI 句子
@@ -788,12 +975,18 @@ extension AIRecordingViewController: DialogEngineDelegate {
     }
 
     func onChatStreaming(text: String) {
+        guard let accountLease = dialogAccountLease,
+              validateDialogEngineBinding(accountLease: accountLease, at: .ui) else {
+            discardStaleSessionRecording()
+            return
+        }
         // 流式拼接：不更新 UI，只记录最新累积文本（用于 chat 结束时兜底展示）
         pendingAIText = text
     }
 
     /// 将待确认的用户文本发布为正式消息
-    private func flushPendingUserText() {
+    private func flushPendingUserText(accountLease: AccountLease) {
+        guard validateDialogAccountLease(accountLease, at: .ui) else { return }
         if let text = pendingUserText, !text.isEmpty {
             messages.append(.user(text: text, timestamp: Date()))
             // 记录到对话记忆
@@ -803,17 +996,33 @@ extension AIRecordingViewController: DialogEngineDelegate {
     }
 
     func onTTSFinished() {
+        guard let accountLease = dialogAccountLease,
+              validateDialogEngineBinding(accountLease: accountLease, at: .ui) else { return }
         // TTS 播报结束，保持 active 状态等待用户继续说话
     }
 
     func onError(error: Error) {
+        guard let accountLease = dialogAccountLease,
+              validateDialogEngineBinding(accountLease: accountLease, at: .ui) else {
+            discardStaleSessionRecording()
+            return
+        }
+        stopSessionRecording(accountLease: accountLease)
+        guard validateDialogAccountLease(accountLease, at: .ui) else { return }
         updateVoiceBallState(.idle)
         showToast(error.localizedDescription, type: .error)
     }
 
     func onDialogEnded(reason: DialogEndReason) {
+        guard let accountLease = dialogAccountLease,
+              validateDialogEngineBinding(accountLease: accountLease, at: .ui) else {
+            discardStaleSessionRecording()
+            return
+        }
+        stopSessionRecording(accountLease: accountLease)
+        guard validateDialogAccountLease(accountLease, at: .ui) else { return }
         // 对话结束时，刷新未展示的待确认文本
-        flushPendingUserText()
+        flushPendingUserText(accountLease: accountLease)
         // 如果有未展示的 AI 流式文本（没有经过 TTS），兜底展示
         if let aiText = pendingAIText, !aiText.isEmpty {
             messages.append(.ai(text: aiText, timestamp: Date()))
@@ -823,6 +1032,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
             scrollToBottom()
         }
         // 结束会话：提取摘要并持久化
+        guard validateDialogAccountLease(accountLease, at: .commit) else { return }
         ConversationMemoryManager.shared.endSession()
         updateVoiceBallState(.idle)
 
@@ -839,14 +1049,23 @@ extension AIRecordingViewController: DialogEngineDelegate {
 
         // 延迟弹出回忆录生成卡片（等待 toast 消失后）
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-            self?.showMemoirGenerationCard()
+            guard let self,
+                  self.dialogAccountLease == accountLease,
+                  self.validateDialogAccountLease(accountLease, at: .timer),
+                  self.validateDialogAccountLease(accountLease, at: .ui) else { return }
+            self.showMemoirGenerationCard(accountLease: accountLease)
         }
     }
 
     // MARK: - 对话并行录音（用于声音复刻训练）
 
     /// 开始并行录音（与豆包 SDK 同时录制，用于声音复刻）
-    private func startSessionRecording() {
+    private func startSessionRecording(accountLease: AccountLease) {
+        guard dialogAccountLease == accountLease,
+              validateDialogAccountLease(accountLease, at: .runtime) else {
+            discardStaleSessionRecording()
+            return
+        }
         let recordingsDir = FileManager.default.temporaryDirectory.appendingPathComponent("TGSessionRecordings")
         try? FileManager.default.createDirectory(at: recordingsDir, withIntermediateDirectories: true)
         let fileURL = recordingsDir.appendingPathComponent("session_\(Int(Date().timeIntervalSince1970)).m4a")
@@ -859,19 +1078,37 @@ extension AIRecordingViewController: DialogEngineDelegate {
         ]
 
         do {
-            sessionRecorder = try AVAudioRecorder(url: fileURL, settings: settings)
-            sessionRecorder?.record()
+            let recorder = try AVAudioRecorder(url: fileURL, settings: settings)
+            guard validateDialogAccountLease(accountLease, at: .runtime) else {
+                try? FileManager.default.removeItem(at: fileURL)
+                discardStaleSessionRecording()
+                return
+            }
+            sessionRecorder = recorder
+            sessionRecordingAccountLease = accountLease
+            guard recorder.record() else {
+                discardStaleSessionRecording()
+                return
+            }
             DDLogInfo("[AIRecording] 并行录音已启动: \(fileURL.lastPathComponent)")
         } catch {
             DDLogWarn("[AIRecording] 并行录音启动失败: \(error.localizedDescription)")
+            try? FileManager.default.removeItem(at: fileURL)
             sessionRecorder = nil
+            sessionRecordingAccountLease = nil
         }
     }
 
     /// 停止并行录音并保存到持久化目录
-    private func stopSessionRecording() {
-        guard let recorder = sessionRecorder, recorder.isRecording else {
-            sessionRecorder = nil
+    private func stopSessionRecording(accountLease: AccountLease) {
+        guard let recorder = sessionRecorder else {
+            sessionRecordingAccountLease = nil
+            return
+        }
+        guard sessionRecordingAccountLease == accountLease,
+              validateDialogAccountLease(accountLease, at: .runtime),
+              recorder.isRecording else {
+            discardStaleSessionRecording()
             return
         }
 
@@ -880,15 +1117,36 @@ extension AIRecordingViewController: DialogEngineDelegate {
         recorder.stop()
 
         let url = recorder.url
+        sessionRecorder = nil
+        sessionRecordingAccountLease = nil
+        guard validateDialogAccountLease(accountLease, at: .commit) else {
+            try? FileManager.default.removeItem(at: url)
+            lastSessionRecordingURL = nil
+            lastSessionId = nil
+            return
+        }
         // 检查录音时长，至少 3 秒才有价值用于声音复刻
         if duration >= 3 {
             // 移动到 Application Support 持久化目录（tmp 目录可能被系统清理）
             let sessionId = "session_\(Int(Date().timeIntervalSince1970))"
             if let persistentURL = MemoirRepository.shared.saveRecording(from: url, sessionId: sessionId) {
+                guard validateDialogAccountLease(accountLease, at: .commit) else {
+                    MemoirRepository.shared.deleteRecording(sessionId: sessionId)
+                    try? FileManager.default.removeItem(at: url)
+                    lastSessionRecordingURL = nil
+                    lastSessionId = nil
+                    return
+                }
                 lastSessionRecordingURL = persistentURL
                 lastSessionId = sessionId   // 记录 sessionId，生成回忆录时一并传给 MemoirFlowManager
                 DDLogInfo("[AIRecording] 对话录音已持久化: \(persistentURL.lastPathComponent), 时长: \(String(format: "%.1f", duration))秒")
             } else {
+                guard validateDialogAccountLease(accountLease, at: .commit) else {
+                    try? FileManager.default.removeItem(at: url)
+                    lastSessionRecordingURL = nil
+                    lastSessionId = nil
+                    return
+                }
                 // 持久化失败则退回使用 tmp 文件
                 lastSessionRecordingURL = url
                 lastSessionId = nil
@@ -900,21 +1158,38 @@ extension AIRecordingViewController: DialogEngineDelegate {
             try? FileManager.default.removeItem(at: url)
             DDLogInfo("[AIRecording] 对话录音太短(\(String(format: "%.1f", duration))秒)，已丢弃")
         }
+    }
+
+    private func discardStaleSessionRecording() {
+        if let recorder = sessionRecorder {
+            if recorder.isRecording {
+                recorder.stop()
+            }
+            try? FileManager.default.removeItem(at: recorder.url)
+        }
         sessionRecorder = nil
+        sessionRecordingAccountLease = nil
+        lastSessionRecordingURL = nil
+        lastSessionId = nil
     }
 
     /// 显示回忆录生成弹窗
-    private func showMemoirGenerationCard() {
+    private func showMemoirGenerationCard(accountLease: AccountLease) {
+        guard validateDialogAccountLease(accountLease, at: .ui) else { return }
         MemoirGenerationCard.show(in: view,
             onGenerate: { [weak self] in
-                self?.handleMemoirGeneration()
+                guard let self,
+                      self.dialogAccountLease == accountLease,
+                      self.validateDialogAccountLease(accountLease, at: .ui) else { return }
+                self.handleMemoirGeneration(accountLease: accountLease)
             },
             onDismiss: nil
         )
     }
 
     /// 处理回忆录生成请求
-    private func handleMemoirGeneration() {
+    private func handleMemoirGeneration(accountLease: AccountLease) {
+        guard validateDialogAccountLease(accountLease, at: .request) else { return }
         // 将 TGMessage 转换为 Memoir 模块的 DialogMessage 格式
         let dialogMessages = MemoirFlowManager.convertToDialogMessages(messages)
 
@@ -924,6 +1199,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
             return
         }
 
+        guard validateDialogAccountLease(accountLease, at: .request) else { return }
         MemoirFlowManager.shared.startGeneration(
             on: self,
             dialogMessages: dialogMessages,

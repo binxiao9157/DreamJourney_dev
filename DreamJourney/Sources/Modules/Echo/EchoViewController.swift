@@ -57,6 +57,12 @@ private struct EchoRoleVoiceProfileSelection {
     }
 }
 
+private struct DeferredDigitalHumanSessionRelease {
+    let contract: DigitalHumanSessionContract
+    let originatingAccountLease: AccountLease
+    let reason: String
+}
+
 private struct TencentBackendPCMDriveTrueDeviceTrace {
     var isActive = false
     var startedAt = Date()
@@ -217,6 +223,10 @@ final class EchoViewController: UIViewController {
     private static let echoTurnKnowledgeTimeout: TimeInterval = 0.9
 
     private let viewModel: EchoViewModel
+    private let accountLeaseRuntime = AccountLeaseRuntime.shared
+    private let dialogEngineOwnerId = UUID()
+    private var echoAccountLease: AccountLease?
+    private var dialogEngineBindingHandle: DialogEngineBindingHandle?
 
     private let scenicView = EchoScenicParkView()
     private var digitalHumanLivePanelView: DigitalHumanLivePanelView?
@@ -239,6 +249,8 @@ final class EchoViewController: UIViewController {
     private var digitalHumanRuntimeContextKey: String?
     private var digitalHumanRuntimeLifecycleGeneration: UInt64?
     private var activeDigitalHumanSessionContract: DigitalHumanSessionContract?
+    private var activeDigitalHumanSessionAccountLease: AccountLease?
+    private var deferredDigitalHumanSessionReleases: [DeferredDigitalHumanSessionRelease] = []
     private var pendingDigitalHumanSessionRequestID: String?
     private var pendingDigitalHumanSessionContextKey: String?
 
@@ -608,6 +620,8 @@ final class EchoViewController: UIViewController {
         let arguments = ProcessInfo.processInfo.arguments
         return arguments.contains("DJShowDigitalHumanLivePanel")
             || arguments.contains("DJRunDigitalHumanLivePanelSmoke")
+            || arguments.contains("DJRunEchoDigitalHumanLifecycleSmoke")
+            || arguments.contains("DJRunDigitalHumanRuntimeStubSmoke")
             || arguments.contains("DJRunTencentDigitalHumanTextDriveSmoke")
             || arguments.contains("DJRunTencentDigitalHumanPCMDriveSmoke")
             || arguments.contains("DJRunTencentDigitalHumanBackendPCMDriveSmoke")
@@ -750,9 +764,10 @@ final class EchoViewController: UIViewController {
         observeDigitalHumanContext()
         observeEchoAccountLifecycle()
         observeEchoAppLifecycle()
+        let accountLease = captureEchoAccountLease(reason: "viewDidLoad")
         _ = captureDigitalHumanLifecycleToken(reason: "viewDidLoad")
         setupLayout()
-        bindViewModel()
+        bindViewModel(accountLease: accountLease)
         updatePersonaBadge()
         loadVoiceCloneRuntimeCapabilityIfNeeded()
         seedTranscriptPreview()
@@ -768,14 +783,22 @@ final class EchoViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        DialogEngineManager.shared.delegate = self
-        if shouldShowDigitalHumanLivePanel {
-            DialogEngineManager.shared.setLocalTTSPlaybackEnabled(false)
-            reconcileDigitalHumanRuntimeWithCurrentContext(reason: "viewWillAppear")
-        }
-        if !DialogEngineManager.shared.isEngineReady,
-           !DreamJourneyBackendClient.shared.isRealtimeVoiceConfigConfigured {
-            DialogEngineManager.shared.setup()
+        let accountLease = captureEchoAccountLease(reason: "viewWillAppear")
+        bindViewModel(accountLease: accountLease)
+        if let accountLease,
+           validateEchoAccountLease(at: .request, expected: accountLease, reason: "viewWillAppear"),
+           bindDialogEngineToEchoAccountLease(reason: "viewWillAppear") {
+            DialogEngineManager.shared.delegate = self
+            if shouldShowDigitalHumanLivePanel {
+                setDialogEngineLocalTTSPlaybackEnabled(false)
+                reconcileDigitalHumanRuntimeWithCurrentContext(reason: "viewWillAppear")
+            }
+            if !DialogEngineManager.shared.isEngineReady,
+               !DreamJourneyBackendClient.shared.isRealtimeVoiceConfigConfigured {
+                DialogEngineManager.shared.setup()
+            }
+        } else {
+            DialogEngineManager.shared.delegate = nil
         }
         viewModel.refreshArchiveContextStatus()
         updatePersonaBadge()
@@ -785,6 +808,9 @@ final class EchoViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        guard validateEchoAccountLease(at: .request, reason: "viewDidAppear") else {
+            return
+        }
         let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "viewDidAppear")
         prepareCloudDigitalHumanRuntimeIfNeeded(lifecycleToken: lifecycleToken)
     }
@@ -795,6 +821,7 @@ final class EchoViewController: UIViewController {
         invalidateDigitalHumanLifecycle(reason: "viewWillDisappear")
         activeVoiceInteractionLifecycleToken = nil
         let ownsDialogDelegate = DialogEngineManager.shared.delegate === self
+            && ownsCurrentDialogEngineBinding()
         if ownsDialogDelegate {
             if DialogEngineManager.shared.isDialogActive {
                 interruptDigitalHumanPlayback(reason: "viewWillDisappear")
@@ -807,6 +834,7 @@ final class EchoViewController: UIViewController {
         releaseDigitalHumanRuntime(reason: "viewWillDisappear", resetsAudioOwnerToOrdinaryEcho: true)
         if ownsDialogDelegate {
             DialogEngineManager.shared.delegate = nil
+            releaseDialogEngineBinding()
         }
     }
 
@@ -1036,22 +1064,43 @@ final class EchoViewController: UIViewController {
         }
     }
 
-    private func bindViewModel() {
+    private func bindViewModel(accountLease: AccountLease?) {
         viewModel.onStateChange = { [weak self] state in
             DispatchQueue.main.async {
-                self?.render(state: state)
+                guard let self,
+                      let accountLease,
+                      self.validateEchoAccountLease(
+                        at: .ui,
+                        expected: accountLease,
+                        reason: "viewModelState"
+                      ) else { return }
+                self.render(state: state)
             }
         }
 
         viewModel.onTranscriptAppend = { [weak self] text, isUser in
             DispatchQueue.main.async {
-                self?.appendTranscript(text: text, isUser: isUser)
+                guard let self,
+                      let accountLease,
+                      self.validateEchoAccountLease(
+                        at: .ui,
+                        expected: accountLease,
+                        reason: "viewModelTranscript"
+                      ) else { return }
+                self.appendTranscript(text: text, isUser: isUser)
             }
         }
 
         viewModel.onArchiveContextStatusChange = { [weak self] status in
             DispatchQueue.main.async {
-                self?.renderArchiveContextStatus(status)
+                guard let self,
+                      let accountLease,
+                      self.validateEchoAccountLease(
+                        at: .ui,
+                        expected: accountLease,
+                        reason: "viewModelArchiveContext"
+                      ) else { return }
+                self.renderArchiveContextStatus(status)
             }
         }
     }
@@ -1078,16 +1127,44 @@ final class EchoViewController: UIViewController {
             name: .djUserDidLogout,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(echoAuthorityEpochDidChange),
+            name: .djRecoveryAuthorityEpochDidChange,
+            object: nil
+        )
     }
 
     @objc private func echoAccountDidChange() {
-        invalidateDigitalHumanLifecycle(reason: "accountDidChange")
+        performEchoAccountScopeRebindOnMain(reason: "accountDidChange")
+    }
+
+    @objc private func echoAuthorityEpochDidChange() {
+        performEchoAccountScopeRebindOnMain(reason: "authorityEpochDidChange")
+    }
+
+    private func performEchoAccountScopeRebindOnMain(reason: String) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.rebindEchoAccountScope(reason: reason)
+            }
+            return
+        }
+        rebindEchoAccountScope(reason: reason)
+    }
+
+    private func rebindEchoAccountScope(reason: String) {
+        invalidateDigitalHumanLifecycle(reason: reason)
+        activeVoiceInteractionLifecycleToken = nil
+        activeEchoTurnKnowledgeContextGate?.cancel()
+        activeEchoTurnKnowledgeContextGate = nil
         releaseDigitalHumanRuntime(
-            reason: "accountDidChange",
+            reason: reason,
             resetsAudioOwnerToOrdinaryEcho: true,
             removeProviderViewMessage: nil,
             recordsDiagnostics: false
         )
+        releaseDialogEngineBinding()
         voiceCloneRuntimeCapability = nil
         isLoadingVoiceCloneRuntimeCapability = false
         lastEchoTraceRecord = nil
@@ -1097,10 +1174,41 @@ final class EchoViewController: UIViewController {
         lastVoiceCloneProviderRequestId = nil
         lastVoiceCloneProviderMode = nil
         lastEchoRuntimeFallbackReason = nil
+        pendingAIText = nil
+        transcriptEntries.removeAll()
+        resetDigitalHumanReplyDispatchState()
         echoRuntimeDiagnosticsPanelLabel.text = ""
+        let accountLease = captureEchoAccountLease(reason: reason)
+        bindViewModel(accountLease: accountLease)
+        guard accountLease != nil else {
+            quoteLabel.text = nil
+            render(state: .idle)
+            return
+        }
+        viewModel.resetTransientStateForAccountRebind()
+        _ = viewModel.restoreStoredDelayedReplyIfAvailable()
+        seedTranscriptPreview()
+        if view.window != nil,
+           bindDialogEngineToEchoAccountLease(reason: reason) {
+            DialogEngineManager.shared.delegate = self
+            applyEchoAudioRoutePolicy()
+            updatePersonaBadge()
+            viewModel.refreshArchiveContextStatus()
+            loadVoiceCloneRuntimeCapabilityIfNeeded(force: true)
+            prepareCloudDigitalHumanRuntimeIfNeeded()
+        }
     }
 
     @objc private func digitalHumanContextDidChange() {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.digitalHumanContextDidChange()
+            }
+            return
+        }
+        guard validateEchoAccountLease(at: .ui, reason: "digitalHumanContextDidChange") else {
+            return
+        }
         let didReleaseStaleRuntime = reconcileDigitalHumanRuntimeWithCurrentContext(reason: "contextDidChange")
         viewModel.refreshArchiveContextStatus()
         updatePersonaBadge()
@@ -1170,7 +1278,8 @@ final class EchoViewController: UIViewController {
             return
         }
 
-        let shouldSuspendRuntime = DialogEngineManager.shared.isDialogActive
+        let ownsDialogBinding = ownsCurrentDialogEngineBinding()
+        let shouldSuspendRuntime = (ownsDialogBinding && DialogEngineManager.shared.isDialogActive)
             || hasTencentDigitalHumanProviderSpeechInFlight
             || digitalHumanConversation.shouldResumeAfterProviderSpeech
             || !isCurrentEchoInteractionIdle
@@ -1186,7 +1295,8 @@ final class EchoViewController: UIViewController {
         preserveTencentProviderSessionAfterLocalDialogStop(reason: "appLifecycle:\(reason)")
         muteTencentProviderRemoteAudioForUserCapture(reason: "appLifecycle:\(reason)")
         recordEchoRuntimeDiagnosticsSnapshot(reason: "appLifecycleSuspended:\(reason)")
-        if DialogEngineManager.shared.isDialogActive {
+        if ownsDialogBinding,
+           DialogEngineManager.shared.isDialogActive {
             isStoppingVoiceCaptureForAppLifecycle = true
             DialogEngineManager.shared.stopDialog()
         } else {
@@ -1207,11 +1317,24 @@ final class EchoViewController: UIViewController {
         }
 
         cancelCloudDigitalHumanBackgroundRelease(reason: "reschedule")
+        guard let accountLease = echoAccountLease,
+              validateEchoAccountLease(
+                at: .request,
+                expected: accountLease,
+                reason: "scheduleBackgroundRelease"
+              ) else {
+            return
+        }
         let contextKey = currentDigitalHumanRuntimeContextKey()
         let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "backgroundReleaseLease")
         let lease = digitalHumanLifecycle.beginBackgroundReleaseLease(contextKey: contextKey)
         let workItem = DispatchWorkItem { [weak self] in
             guard let self,
+                  self.validateEchoAccountLease(
+                    at: .timer,
+                    expected: accountLease,
+                    reason: "backgroundReleaseLeaseExpired"
+                  ),
                   self.digitalHumanLifecycle.isCurrentBackgroundReleaseLease(
                     lease,
                     contextKey: self.currentDigitalHumanRuntimeContextKey()
@@ -1285,12 +1408,18 @@ final class EchoViewController: UIViewController {
             return
         }
 
+        guard bindDialogEngineToEchoAccountLease(reason: "appLifecycleRestore:\(reason)") else {
+            isSuspendedByAppLifecycle = false
+            isStoppingVoiceCaptureForAppLifecycle = false
+            return
+        }
+
         isSuspendedByAppLifecycle = false
         isStoppingVoiceCaptureForAppLifecycle = false
         DialogEngineManager.shared.delegate = self
 
         if shouldShowDigitalHumanLivePanel {
-            DialogEngineManager.shared.setLocalTTSPlaybackEnabled(false)
+            setDialogEngineLocalTTSPlaybackEnabled(false)
             if digitalHumanRuntime == nil {
                 hasRequestedCloudDigitalHumanRuntime = false
                 prepareCloudDigitalHumanRuntimeIfNeeded()
@@ -1298,7 +1427,7 @@ final class EchoViewController: UIViewController {
                 applyEchoAudioRoutePolicy()
             }
         } else {
-            DialogEngineManager.shared.setLocalTTSPlaybackEnabled(true)
+            setDialogEngineLocalTTSPlaybackEnabled(true)
         }
 
         loadVoiceCloneRuntimeCapabilityIfNeeded(force: true)
@@ -1318,7 +1447,7 @@ final class EchoViewController: UIViewController {
             return
         }
 
-        DialogEngineManager.shared.setLocalTTSPlaybackEnabled(false)
+        setDialogEngineLocalTTSPlaybackEnabled(false)
         prepareCloudDigitalHumanRuntimeIfNeeded()
         loadVoiceCloneRuntimeCapabilityIfNeeded(force: true)
         recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanForegroundPrepare:\(reason)")
@@ -1347,14 +1476,29 @@ final class EchoViewController: UIViewController {
         _ contract: DigitalHumanSessionContract,
         lifecycleToken: DigitalHumanLifecycleToken
     ) {
+        guard let accountLease = echoAccountLease,
+              validateEchoAccountLease(
+                at: .commit,
+                expected: accountLease,
+                reason: "activateDigitalHumanSessionLease"
+              ) else {
+            return
+        }
         if let activeContract = activeDigitalHumanSessionContract,
            activeContract.sessionId != contract.sessionId {
+            let replacedAccountLease = activeDigitalHumanSessionAccountLease
             activeDigitalHumanSessionContract = nil
+            activeDigitalHumanSessionAccountLease = nil
             cancelDigitalHumanSessionHeartbeat(reason: "replaceActiveSession")
-            releaseDigitalHumanSessionLease(activeContract, reason: "replacedByNewSession")
+            releaseDigitalHumanSessionLease(
+                activeContract,
+                accountLease: replacedAccountLease,
+                reason: "replacedByNewSession"
+            )
         }
 
         activeDigitalHumanSessionContract = contract
+        activeDigitalHumanSessionAccountLease = accountLease
         digitalHumanSessionHeartbeatFailureCount = 0
         scheduleDigitalHumanSessionHeartbeat(for: contract, lifecycleToken: lifecycleToken)
         if let lease = contract.lease {
@@ -1373,7 +1517,13 @@ final class EchoViewController: UIViewController {
         delayOverride: TimeInterval? = nil
     ) {
         cancelDigitalHumanSessionHeartbeat(reason: "reschedule")
-        guard let lease = contract.lease,
+        guard let accountLease = activeDigitalHumanSessionAccountLease,
+              validateEchoAccountLease(
+                at: .request,
+                expected: accountLease,
+                reason: "scheduleDigitalHumanSessionHeartbeat"
+              ),
+              let lease = contract.lease,
               lease.isActive else {
             return
         }
@@ -1382,6 +1532,11 @@ final class EchoViewController: UIViewController {
         let sessionId = contract.sessionId
         let workItem = DispatchWorkItem { [weak self] in
             guard let self,
+                  self.validateEchoAccountLease(
+                    at: .timer,
+                    expected: accountLease,
+                    reason: "digitalHumanSessionHeartbeat"
+                  ),
                   self.activeDigitalHumanSessionContract?.sessionId == sessionId,
                   self.isCurrentDigitalHumanSessionToken(
                     lifecycleToken,
@@ -1392,6 +1547,11 @@ final class EchoViewController: UIViewController {
             self.digitalHumanSessionHeartbeatWorkItem = nil
             DreamJourneyBackendClient.shared.heartbeatDigitalHumanSession(contract) { [weak self] result in
                 guard let self,
+                      self.validateEchoAccountLease(
+                        at: .ui,
+                        expected: accountLease,
+                        reason: "digitalHumanSessionHeartbeatResponse"
+                      ),
                       self.activeDigitalHumanSessionContract?.sessionId == sessionId,
                       self.isCurrentDigitalHumanSessionToken(
                         lifecycleToken,
@@ -1453,17 +1613,22 @@ final class EchoViewController: UIViewController {
         guard let contract = activeDigitalHumanSessionContract else {
             return
         }
+        let accountLease = activeDigitalHumanSessionAccountLease
         activeDigitalHumanSessionContract = nil
-        releaseDigitalHumanSessionLease(contract, reason: reason)
+        activeDigitalHumanSessionAccountLease = nil
+        releaseDigitalHumanSessionLease(
+            contract,
+            accountLease: accountLease,
+            reason: reason
+        )
     }
 
     private func releaseDigitalHumanSessionLease(
         _ contract: DigitalHumanSessionContract,
+        accountLease: AccountLease?,
         reason: String
     ) {
-        guard contract.lease != nil else {
-            return
-        }
+        guard contract.lease != nil, let accountLease else { return }
         guard activeDigitalHumanSessionContract?.sessionId != contract.sessionId else {
             print(
                 "[TencentDigitalHuman] skipped stale lease release because session is active " +
@@ -1471,22 +1636,112 @@ final class EchoViewController: UIViewController {
             )
             return
         }
+        guard let authorizationLease = echoAccountLease,
+              authorizationLease.subjectId == accountLease.subjectId,
+              authorizationLease.vaultId == accountLease.vaultId,
+              contract.userId.isEmpty || contract.userId == accountLease.subjectId,
+              validateEchoAccountLease(
+                at: .request,
+                expected: authorizationLease,
+                reason: "releaseDigitalHumanSessionLease:\(reason)"
+              ) else {
+            enqueueDeferredDigitalHumanSessionRelease(
+                contract,
+                accountLease: accountLease,
+                reason: reason
+            )
+            return
+        }
+        performDigitalHumanSessionRelease(
+            contract,
+            accountLease: authorizationLease,
+            originatingAccountLease: accountLease,
+            reason: reason
+        )
+    }
+
+    private func performDigitalHumanSessionRelease(
+        _ contract: DigitalHumanSessionContract,
+        accountLease: AccountLease,
+        originatingAccountLease: AccountLease,
+        reason: String
+    ) {
         DreamJourneyBackendClient.shared.releaseDigitalHumanSession(
             contract,
             reason: reason
-        ) { result in
+        ) { [weak self] result in
+            guard let self else { return }
             switch result {
             case .success(let operation):
+                self.deferredDigitalHumanSessionReleases.removeAll {
+                    $0.contract.sessionId == contract.sessionId
+                }
                 print(
                     "[TencentDigitalHuman] lease released sessionId=\(operation.sessionId) " +
                     "status=\(operation.status) reason=\(reason)"
                 )
             case .failure(let error):
+                self.enqueueDeferredDigitalHumanSessionRelease(
+                    contract,
+                    accountLease: originatingAccountLease,
+                    reason: "retryAfterFailure:\(reason)"
+                )
                 print(
                     "[TencentDigitalHuman] lease release failed sessionId=\(contract.sessionId) " +
-                    "reason=\(reason) error=\(error.localizedDescription)"
+                    "reason=\(reason) authSubject=\(accountLease.subjectId) " +
+                    "error=\(error.localizedDescription)"
                 )
             }
+        }
+    }
+
+    private func enqueueDeferredDigitalHumanSessionRelease(
+        _ contract: DigitalHumanSessionContract,
+        accountLease: AccountLease,
+        reason: String
+    ) {
+        guard deferredDigitalHumanSessionReleases.contains(where: {
+            $0.contract.sessionId == contract.sessionId
+        }) == false else { return }
+        if deferredDigitalHumanSessionReleases.count >= 8 {
+            deferredDigitalHumanSessionReleases.removeFirst()
+        }
+        deferredDigitalHumanSessionReleases.append(
+            DeferredDigitalHumanSessionRelease(
+                contract: contract,
+                originatingAccountLease: accountLease,
+                reason: reason
+            )
+        )
+        print(
+            "[TencentDigitalHuman] deferred lease release sessionId=\(contract.sessionId) " +
+            "subject=\(accountLease.subjectId) reason=\(reason); backend TTL remains the final fallback"
+        )
+    }
+
+    private func drainDeferredDigitalHumanSessionReleases(
+        authorizationLease: AccountLease
+    ) {
+        guard validateEchoAccountLease(
+            at: .request,
+            expected: authorizationLease,
+            reason: "drainDeferredDigitalHumanSessionReleases"
+        ) else { return }
+        let matching = deferredDigitalHumanSessionReleases.filter {
+            $0.originatingAccountLease.subjectId == authorizationLease.subjectId
+                && $0.originatingAccountLease.vaultId == authorizationLease.vaultId
+        }
+        guard matching.isEmpty == false else { return }
+        deferredDigitalHumanSessionReleases.removeAll { deferred in
+            matching.contains { $0.contract.sessionId == deferred.contract.sessionId }
+        }
+        for deferred in matching {
+            performDigitalHumanSessionRelease(
+                deferred.contract,
+                accountLease: authorizationLease,
+                originatingAccountLease: deferred.originatingAccountLease,
+                reason: "deferred:\(deferred.reason)"
+            )
         }
     }
 
@@ -1532,7 +1787,7 @@ final class EchoViewController: UIViewController {
             digitalHumanLivePanelView?.removeHostedProviderView(showFallbackMessage: removeProviderViewMessage)
         }
         if resetsAudioOwnerToOrdinaryEcho {
-            DialogEngineManager.shared.setLocalTTSPlaybackEnabled(true)
+            setDialogEngineLocalTTSPlaybackEnabled(true)
             setEchoAudioOwner(.volcengineLocalTTS, reason: "release:\(reason)")
         }
         if recordsDiagnostics {
@@ -1548,6 +1803,112 @@ final class EchoViewController: UIViewController {
 
     private func currentDigitalHumanRuntimeContextKey() -> String {
         digitalHumanRuntimeContextKey(for: DigitalHumanContextStore.shared.current)
+    }
+
+    @discardableResult
+    private func captureEchoAccountLease(reason: String) -> AccountLease? {
+        let previousAccountLease = echoAccountLease
+        guard let subjectId = UserManager.shared.currentUser?.id,
+              let accountLease = accountLeaseRuntime.capture(forSubjectId: subjectId) else {
+            if previousAccountLease != nil {
+                releaseDialogEngineBinding()
+            }
+            echoAccountLease = nil
+            print("[Echo][AccountLease] capture rejected reason=\(reason)")
+            return nil
+        }
+        echoAccountLease = accountLease
+        guard validateEchoAccountLease(
+            at: .request,
+            expected: accountLease,
+            reason: "capture:\(reason)"
+        ) else {
+            releaseDialogEngineBinding()
+            echoAccountLease = nil
+            return nil
+        }
+        drainDeferredDigitalHumanSessionReleases(authorizationLease: accountLease)
+        return accountLease
+    }
+
+    private func validateEchoAccountLease(
+        at checkpoint: AccountLeaseCheckpoint,
+        reason: String
+    ) -> Bool {
+        guard let accountLease = echoAccountLease else {
+            print(
+                "[Echo][AccountLease] rejected checkpoint=\(checkpoint.rawValue) " +
+                "reason=\(reason) cause=missingLease"
+            )
+            return false
+        }
+        return validateEchoAccountLease(
+            at: checkpoint,
+            expected: accountLease,
+            reason: reason
+        )
+    }
+
+    private func validateEchoAccountLease(
+        at checkpoint: AccountLeaseCheckpoint,
+        expected accountLease: AccountLease,
+        reason: String
+    ) -> Bool {
+        guard
+              accountLease == echoAccountLease,
+              accountLease.subjectId == UserManager.shared.currentUser?.id else {
+            print(
+                "[Echo][AccountLease] rejected checkpoint=\(checkpoint.rawValue) " +
+                "reason=\(reason) cause=ownerMismatch"
+            )
+            return false
+        }
+        let decision = accountLeaseRuntime.validate(accountLease, at: checkpoint)
+        guard decision.allowed else {
+            print(
+                "[Echo][AccountLease] rejected checkpoint=\(checkpoint.rawValue) " +
+                "reason=\(reason) cause=\(decision.reason.rawValue)"
+            )
+            return false
+        }
+        return true
+    }
+
+    @discardableResult
+    private func bindDialogEngineToEchoAccountLease(reason: String) -> Bool {
+        guard validateEchoAccountLease(at: .request, reason: "dialogEngineBind:\(reason)") else {
+            releaseDialogEngineBinding()
+            return false
+        }
+        guard let echoAccountLease,
+              let bindingHandle = DialogEngineManager.shared.bindAccountLease(
+                echoAccountLease,
+                ownerId: dialogEngineOwnerId
+              ) else {
+            releaseDialogEngineBinding()
+            return false
+        }
+        dialogEngineBindingHandle = bindingHandle
+        return DialogEngineManager.shared.isCurrentBinding(bindingHandle)
+    }
+
+    private func releaseDialogEngineBinding() {
+        guard let bindingHandle = dialogEngineBindingHandle else { return }
+        _ = DialogEngineManager.shared.unbindAccountLease(bindingHandle)
+        dialogEngineBindingHandle = nil
+    }
+
+    private func ownsCurrentDialogEngineBinding() -> Bool {
+        DialogEngineManager.shared.isCurrentBinding(dialogEngineBindingHandle)
+    }
+
+    @discardableResult
+    private func setDialogEngineLocalTTSPlaybackEnabled(_ enabled: Bool) -> Bool {
+        guard ownsCurrentDialogEngineBinding() else {
+            print("[Echo][DialogEngine] ignored audio-owner mutation from stale binding")
+            return false
+        }
+        return DialogEngineManager.shared.setLocalTTSPlaybackEnabled(enabled)
     }
 
     private func captureDigitalHumanLifecycleToken(reason: String) -> DigitalHumanLifecycleToken {
@@ -1570,7 +1931,8 @@ final class EchoViewController: UIViewController {
         reason: String
     ) -> Bool {
         let contextKey = currentDigitalHumanRuntimeContextKey()
-        guard digitalHumanLifecycle.isCurrent(token, contextKey: contextKey) else {
+        guard validateEchoAccountLease(at: .runtime, reason: reason),
+              digitalHumanLifecycle.isCurrent(token, contextKey: contextKey) else {
             print(
                 "[TencentDigitalHuman] ignored stale lifecycle callback " +
                 "reason=\(reason) tokenGeneration=\(token.generation) " +
@@ -1588,7 +1950,8 @@ final class EchoViewController: UIViewController {
         reason: String
     ) -> Bool {
         let contextKey = currentDigitalHumanRuntimeContextKey()
-        guard digitalHumanLifecycle.isCurrentSession(token, contextKey: contextKey) else {
+        guard validateEchoAccountLease(at: .runtime, reason: reason),
+              digitalHumanLifecycle.isCurrentSession(token, contextKey: contextKey) else {
             print(
                 "[TencentDigitalHuman] ignored stale lifecycle callback " +
                 "reason=\(reason) sessionGeneration=\(token.generation) " +
@@ -1642,6 +2005,7 @@ final class EchoViewController: UIViewController {
 
     private func activeVoiceInteractionToken(reason: String) -> DigitalHumanLifecycleToken? {
         guard let token = activeVoiceInteractionLifecycleToken,
+              ownsCurrentDialogEngineBinding(),
               isCurrentDigitalHumanLifecycleToken(token, reason: reason) else {
             print("[TencentDigitalHuman] ignored callback without an active voice interaction reason=\(reason)")
             return nil
@@ -1703,7 +2067,7 @@ final class EchoViewController: UIViewController {
             resetsAudioOwnerToOrdinaryEcho: false,
             removeProviderViewMessage: "正在切换回响对象"
         )
-        DialogEngineManager.shared.setLocalTTSPlaybackEnabled(false)
+        setDialogEngineLocalTTSPlaybackEnabled(false)
         setEchoAudioOwner(.fallbackMuted, reason: "contextChanged")
         lastEchoRuntimeFallbackReason = nil
         digitalHumanRuntimeRecoveryAttemptsByContext[desiredContextKey] = 0
@@ -1718,7 +2082,13 @@ final class EchoViewController: UIViewController {
 
     private func scheduleCloudDigitalHumanRuntimeRecovery(reason: String, delay: TimeInterval) {
         guard shouldShowDigitalHumanLivePanel,
-              view.window != nil else {
+              view.window != nil,
+              let accountLease = echoAccountLease,
+              validateEchoAccountLease(
+                at: .request,
+                expected: accountLease,
+                reason: "scheduleRuntimeRecovery:\(reason)"
+              ) else {
             return
         }
 
@@ -1730,6 +2100,11 @@ final class EchoViewController: UIViewController {
 
         let workItem = DispatchWorkItem { [weak self] in
             guard let self,
+                  self.validateEchoAccountLease(
+                    at: .timer,
+                    expected: accountLease,
+                    reason: "runtimeRecovery:\(reason)"
+                  ),
                   self.isCurrentDigitalHumanSessionToken(
                     lifecycleToken,
                     reason: "runtimeRecovery:\(reason)"
@@ -2047,7 +2422,13 @@ final class EchoViewController: UIViewController {
     }
 
     private func loadVoiceCloneRuntimeCapabilityIfNeeded(force: Bool = false) {
-        guard !viewModel.isNeutralSafetyMode else { return }
+        guard !viewModel.isNeutralSafetyMode,
+              let accountLease = echoAccountLease,
+              validateEchoAccountLease(
+                at: .request,
+                expected: accountLease,
+                reason: "voiceCloneRuntimeCapability"
+              ) else { return }
         let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "voiceCloneRuntimeCapability")
         if !force, voiceCloneRuntimeCapability != nil {
             return
@@ -2059,6 +2440,11 @@ final class EchoViewController: UIViewController {
         DreamJourneyBackendClient.shared.fetchVoiceCloneRuntimeCapability { [weak self] result in
             DispatchQueue.main.async {
                 guard let self,
+                      self.validateEchoAccountLease(
+                        at: .ui,
+                        expected: accountLease,
+                        reason: "voiceCloneRuntimeCapabilityResponse"
+                      ),
                       self.isCurrentDigitalHumanSessionToken(
                         lifecycleToken,
                         reason: "voiceCloneRuntimeCapabilityResponse"
@@ -2084,12 +2470,12 @@ final class EchoViewController: UIViewController {
     private func applyEchoAudioRoutePolicy() {
         let shouldRouteThroughDigitalHuman = routeEchoAudioThroughDigitalHuman
         if shouldRouteThroughDigitalHuman {
-            DialogEngineManager.shared.setLocalTTSPlaybackEnabled(false)
+            setDialogEngineLocalTTSPlaybackEnabled(false)
             digitalHumanStatusDetailLabel.text = "腾讯数智人负责声音与口型同步"
             setEchoAudioOwner(.tencentDigitalHuman, reason: "routePolicy")
         } else {
             if !tencentDigitalHumanAudioRouteReserved {
-                DialogEngineManager.shared.setLocalTTSPlaybackEnabled(true)
+                setDialogEngineLocalTTSPlaybackEnabled(true)
             }
             if shouldShowDigitalHumanLivePanel,
                let digitalHumanRuntime,
@@ -2385,7 +2771,13 @@ final class EchoViewController: UIViewController {
     private func prepareCloudDigitalHumanRuntimeIfNeeded(
         lifecycleToken providedLifecycleToken: DigitalHumanLifecycleToken? = nil
     ) {
-        guard !viewModel.isNeutralSafetyMode else { return }
+        guard !viewModel.isNeutralSafetyMode,
+              let accountLease = echoAccountLease,
+              validateEchoAccountLease(
+                at: .request,
+                expected: accountLease,
+                reason: "prepareCloudRuntime"
+              ) else { return }
         if reconcileDigitalHumanRuntimeWithCurrentContext(reason: "prepare") {
             scheduleCloudDigitalHumanRuntimeRecovery(
                 reason: "prepareContextChanged",
@@ -2395,9 +2787,7 @@ final class EchoViewController: UIViewController {
         }
         let context = DigitalHumanContextStore.shared.current
         let contextKey = digitalHumanRuntimeContextKey(for: context)
-        let requestOwnerUserId = EchoTraceOwnerScope.normalizedOwnerUserId(UserManager.shared.currentUser?.id)
-            ?? EchoTraceOwnerScope.normalizedOwnerUserId(context.viewerUserId)
-            ?? "ios-device-qa"
+        let requestOwnerUserId = accountLease.subjectId
         let lifecycleToken = providedLifecycleToken
             ?? captureDigitalHumanLifecycleToken(reason: "prepareCloudRuntime")
         guard isCurrentDigitalHumanSessionToken(
@@ -2455,6 +2845,7 @@ final class EchoViewController: UIViewController {
                         contextKey: contextKey,
                         requestID: requestID,
                         lifecycleToken: lifecycleToken,
+                        accountLease: accountLease,
                         requestOwnerUserId: requestOwnerUserId
                     )
                 }
@@ -2494,6 +2885,7 @@ final class EchoViewController: UIViewController {
         contextKey: String,
         requestID: String,
         lifecycleToken: DigitalHumanLifecycleToken,
+        accountLease: AccountLease,
         requestOwnerUserId: String
     ) {
         let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? "ios-device"
@@ -2512,6 +2904,7 @@ final class EchoViewController: UIViewController {
                     contextKey: contextKey,
                     requestID: requestID,
                     lifecycleToken: lifecycleToken,
+                    accountLease: accountLease,
                     requestOwnerUserId: requestOwnerUserId
                 )
             }
@@ -2525,10 +2918,16 @@ final class EchoViewController: UIViewController {
         contextKey: String,
         requestID: String,
         lifecycleToken: DigitalHumanLifecycleToken,
+        accountLease: AccountLease,
         requestOwnerUserId: String
     ) {
         let activeOwnerUserId = EchoTraceOwnerScope.normalizedOwnerUserId(UserManager.shared.currentUser?.id)
         guard activeOwnerUserId == EchoTraceOwnerScope.normalizedOwnerUserId(requestOwnerUserId),
+              validateEchoAccountLease(
+                at: .ui,
+                expected: accountLease,
+                reason: "digitalHumanSessionResponse"
+              ),
               isCurrentDigitalHumanSessionToken(
                 lifecycleToken,
                 reason: "digitalHumanSessionResponse"
@@ -2537,6 +2936,7 @@ final class EchoViewController: UIViewController {
             if case .success(let staleContract) = result {
                 releaseDigitalHumanSessionLease(
                     staleContract,
+                    accountLease: accountLease,
                     reason: "staleSessionResponse"
                 )
             }
@@ -2725,6 +3125,7 @@ final class EchoViewController: UIViewController {
     @discardableResult
     private func pauseDialogEngineForTencentProviderSpeechIfNeeded() -> Bool {
         guard routeEchoAudioThroughDigitalHuman,
+              ownsCurrentDialogEngineBinding(),
               DialogEngineManager.shared.isDialogActive else {
             return false
         }
@@ -2806,8 +3207,12 @@ final class EchoViewController: UIViewController {
               view.window != nil else {
             return true
         }
+        guard bindDialogEngineToEchoAccountLease(reason: "resumeDialog:\(reason)") else {
+            return false
+        }
         DialogEngineManager.shared.delegate = self
-        if DialogEngineManager.shared.isDialogActive {
+        if ownsCurrentDialogEngineBinding(),
+           DialogEngineManager.shared.isDialogActive {
             DialogEngineManager.shared.stopDialog()
         }
         resumeVoiceCaptureAfterTencentProviderSpeech(
@@ -2828,6 +3233,9 @@ final class EchoViewController: UIViewController {
             lifecycleToken,
             reason: "resumeVoiceCapture:\(reason)"
         ) else {
+            return
+        }
+        guard bindDialogEngineToEchoAccountLease(reason: "resumeVoiceCapture:\(reason)") else {
             return
         }
         activeVoiceInteractionLifecycleToken = lifecycleToken
@@ -3358,6 +3766,15 @@ final class EchoViewController: UIViewController {
             )
             return
         }
+        guard let accountLease = echoAccountLease,
+              validateEchoAccountLease(
+                at: .runtime,
+                expected: accountLease,
+                reason: "submitTurnKnowledgeContext"
+              ),
+              ownsCurrentDialogEngineBinding() else {
+            return
+        }
 
         let submitted = DialogEngineManager.shared.submitTurnKnowledgeContext(
             normalizedContent,
@@ -3783,12 +4200,28 @@ final class EchoViewController: UIViewController {
     }
 
     private func startVoiceCapture() {
+        guard let accountLease = echoAccountLease,
+              validateEchoAccountLease(
+                at: .request,
+                expected: accountLease,
+                reason: "startVoiceCapture"
+              ),
+              bindDialogEngineToEchoAccountLease(reason: "startVoiceCapture") else {
+            viewModel.fail("账号状态已变化，请重新进入回响")
+            return
+        }
         let lifecycleToken = invalidateDigitalHumanInteraction(reason: "userStartedVoiceCapture")
         activeVoiceInteractionLifecycleToken = lifecycleToken
         MicrophonePermissionManager.shared.requestPermission { [weak self] granted in
             guard let self = self else { return }
             DispatchQueue.main.async {
-                guard self.isCurrentDigitalHumanLifecycleToken(
+                guard self.validateEchoAccountLease(
+                    at: .ui,
+                    expected: accountLease,
+                    reason: "microphonePermissionResponse"
+                ),
+                self.ownsCurrentDialogEngineBinding(),
+                self.isCurrentDigitalHumanLifecycleToken(
                     lifecycleToken,
                     reason: "microphonePermissionResponse"
                 ) else {
@@ -3807,6 +4240,11 @@ final class EchoViewController: UIViewController {
                 if self.prepareTencentProviderForUserCaptureIfNeeded() {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
                         guard let self,
+                              self.validateEchoAccountLease(
+                                at: .timer,
+                                expected: accountLease,
+                                reason: "providerCaptureHandoff"
+                              ),
                               self.isCurrentDigitalHumanLifecycleToken(
                                 lifecycleToken,
                                 reason: "providerCaptureHandoff"
@@ -4410,6 +4848,16 @@ final class EchoViewController: UIViewController {
     private func configureVoiceRuntimeThenStart(
         lifecycleToken providedLifecycleToken: DigitalHumanLifecycleToken? = nil
     ) {
+        guard let accountLease = echoAccountLease,
+              validateEchoAccountLease(
+                at: .request,
+                expected: accountLease,
+                reason: "configureVoiceRuntime"
+              ),
+              bindDialogEngineToEchoAccountLease(reason: "configureVoiceRuntime") else {
+            handleBlockedRealtimeVoice(reason: "accountLeaseInvalid")
+            return
+        }
         let lifecycleToken = providedLifecycleToken
             ?? captureDigitalHumanLifecycleToken(reason: "configureVoiceRuntime")
         guard isCurrentDigitalHumanLifecycleToken(
@@ -4425,12 +4873,15 @@ final class EchoViewController: UIViewController {
             return
         }
 
-        let userId = UserManager.shared.currentUser?.id
-            ?? UIDevice.current.identifierForVendor?.uuidString
-            ?? "anonymous-ios-user"
-        DreamJourneyBackendClient.shared.fetchRealtimeVoiceConfig(userId: userId) { [weak self] result in
+        DreamJourneyBackendClient.shared.fetchRealtimeVoiceConfig(userId: accountLease.subjectId) { [weak self] result in
             guard let self = self else { return }
-            guard self.isCurrentDigitalHumanLifecycleToken(
+            guard self.validateEchoAccountLease(
+                at: .ui,
+                expected: accountLease,
+                reason: "realtimeVoiceConfigResponse"
+            ),
+            self.ownsCurrentDialogEngineBinding(),
+            self.isCurrentDigitalHumanLifecycleToken(
                 lifecycleToken,
                 reason: "realtimeVoiceConfigResponse"
             ) else {
@@ -4463,7 +4914,8 @@ final class EchoViewController: UIViewController {
     private func handleBlockedRealtimeVoice(reason: String) {
         backendRuntimeTokenApplied = false
         activeVoiceInteractionLifecycleToken = nil
-        if DialogEngineManager.shared.isDialogActive {
+        if ownsCurrentDialogEngineBinding(),
+           DialogEngineManager.shared.isDialogActive {
             DialogEngineManager.shared.stopDialog()
         }
         lastEchoRuntimeFallbackReason = reason
@@ -4510,7 +4962,8 @@ final class EchoViewController: UIViewController {
         } else {
             preserveTencentProviderSessionAfterLocalDialogStop(reason: "userStop")
         }
-        if DialogEngineManager.shared.isDialogActive {
+        if ownsCurrentDialogEngineBinding(),
+           DialogEngineManager.shared.isDialogActive {
             DialogEngineManager.shared.stopDialog()
         } else {
             isStoppingVoiceCaptureManually = false
@@ -4546,8 +4999,12 @@ final class EchoViewController: UIViewController {
         resetDigitalHumanReplyDispatchState()
         interruptDigitalHumanPlayback(reason: "neutralSafety")
         stopDigitalHumanAudioLevelMetering()
-        DialogEngineManager.shared.interruptAI()
 
+        guard ownsCurrentDialogEngineBinding() else {
+            isStoppingForNeutralSafety = false
+            return
+        }
+        DialogEngineManager.shared.interruptAI()
         guard DialogEngineManager.shared.isDialogActive else {
             isStoppingForNeutralSafety = false
             return
@@ -4560,7 +5017,8 @@ final class EchoViewController: UIViewController {
         pendingAIText = nil
         resetDigitalHumanReplyDispatchState()
         preserveTencentProviderSessionAfterLocalDialogStop(reason: "delayedReplyWait")
-        guard DialogEngineManager.shared.isDialogActive else { return }
+        guard ownsCurrentDialogEngineBinding(),
+              DialogEngineManager.shared.isDialogActive else { return }
         isStoppingForDelayedReply = true
         DialogEngineManager.shared.stopDialog()
     }
@@ -4668,6 +5126,7 @@ extension EchoViewController: DialogEngineDelegate {
     func onDialogStarted() {
         DispatchQueue.main.async { [weak self] in
             guard let self,
+                  self.validateEchoAccountLease(at: .ui, reason: "dialogStarted"),
                   self.activeVoiceInteractionToken(reason: "dialogStarted") != nil else { return }
             self.resetDigitalHumanReplyDispatchState()
             self.viewModel.beginVoiceInteraction()
@@ -4678,6 +5137,7 @@ extension EchoViewController: DialogEngineDelegate {
         guard isFinal else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self,
+                  self.validateEchoAccountLease(at: .ui, reason: "asrFinal"),
                   let lifecycleToken = self.activeVoiceInteractionToken(reason: "asrFinal") else { return }
             self.viewModel.finishUserVoice(text: text)
             if let safetyDecision = self.viewModel.neutralSafetyDecision {
@@ -4707,6 +5167,7 @@ extension EchoViewController: DialogEngineDelegate {
     func onTTSStarted(text: String) {
         DispatchQueue.main.async { [weak self] in
             guard let self,
+                  self.validateEchoAccountLease(at: .ui, reason: "ttsStarted"),
                   self.activeVoiceInteractionToken(reason: "ttsStarted") != nil,
                   !self.viewModel.isNeutralSafetyMode,
                   !self.viewModel.isWaitingForDelayedReply else { return }
@@ -4729,6 +5190,7 @@ extension EchoViewController: DialogEngineDelegate {
     func onTTSFinished() {
         DispatchQueue.main.async { [weak self] in
             guard let self,
+                  self.validateEchoAccountLease(at: .ui, reason: "ttsFinished"),
                   let lifecycleToken = self.activeVoiceInteractionToken(reason: "ttsFinished") else { return }
             guard !self.viewModel.isNeutralSafetyMode,
                   !self.viewModel.isWaitingForDelayedReply else { return }
@@ -4741,6 +5203,7 @@ extension EchoViewController: DialogEngineDelegate {
             self.viewModel.markReplyDelivered()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
                 guard let self,
+                      self.validateEchoAccountLease(at: .timer, reason: "ttsFinishedResume"),
                       self.isCurrentDigitalHumanLifecycleToken(
                         lifecycleToken,
                         reason: "ttsFinishedResume"
@@ -4757,6 +5220,7 @@ extension EchoViewController: DialogEngineDelegate {
     func onChatStreaming(text: String) {
         DispatchQueue.main.async { [weak self] in
             guard let self,
+                  self.validateEchoAccountLease(at: .ui, reason: "chatStreaming"),
                   self.activeVoiceInteractionToken(reason: "chatStreaming") != nil,
                   !self.viewModel.isNeutralSafetyMode,
                   !self.viewModel.isWaitingForDelayedReply else {
@@ -4779,6 +5243,7 @@ extension EchoViewController: DialogEngineDelegate {
     func onError(error: Error) {
         DispatchQueue.main.async { [weak self] in
             guard let self,
+                  self.validateEchoAccountLease(at: .ui, reason: "dialogError"),
                   self.activeVoiceInteractionToken(reason: "dialogError") != nil else { return }
             if self.shouldSuppressDialogEngineErrorDuringTencentProviderSpeech(error) {
                 if self.hasTencentDigitalHumanProviderSpeechInFlight {
@@ -4800,7 +5265,8 @@ extension EchoViewController: DialogEngineDelegate {
 
     func onDialogEnded(reason: DialogEndReason) {
         DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
+            guard let self,
+                  self.validateEchoAccountLease(at: .ui, reason: "dialogEnded") else { return }
             if self.isStoppingForNeutralSafety || self.viewModel.isNeutralSafetyMode {
                 self.isStoppingForNeutralSafety = false
                 self.pendingAIText = nil
@@ -4853,6 +5319,9 @@ extension EchoViewController: DialogEngineDelegate {
 #if UI_QA_SIMULATOR && targetEnvironment(simulator)
 extension EchoViewController {
     func runUIQAMicrophoneSmoke() {
+        guard bindDialogEngineToEchoAccountLease(reason: "uiqaMicrophoneSmoke") else {
+            return
+        }
         DialogEngineManager.shared.delegate = self
         DialogEngineManager.shared.setup()
         viewModel.prepareVoiceInteraction()
@@ -5864,23 +6333,40 @@ extension EchoViewController {
 
     func runUIQADigitalHumanRuntimeStubSmoke(completion: @escaping ([String: Any]) -> Void) {
         let context = DigitalHumanContextStore.shared.current
-        let userId = UserManager.shared.currentUser?.id ?? context.viewerUserId ?? "user_9999"
+        guard let accountLease = echoAccountLease ?? captureEchoAccountLease(reason: "uiqaRuntimeStub"),
+              validateEchoAccountLease(
+                at: .request,
+                expected: accountLease,
+                reason: "uiqaRuntimeStub"
+              ) else {
+            completion([
+                "completed": false,
+                "failureReason": "accountLeaseUnavailable",
+            ])
+            return
+        }
         let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "uiqaRuntimeStub")
         DreamJourneyBackendClient.shared.createDigitalHumanSession(
-            userId: userId,
+            userId: accountLease.subjectId,
             personaId: context.ownerId,
             scene: "echo",
             deviceId: "ios-uiqa-simulator",
             lifecycleMode: context.mode
         ) { [weak self] result in
             guard let self else { return }
-            guard self.isCurrentDigitalHumanSessionToken(
+            guard self.validateEchoAccountLease(
+                at: .ui,
+                expected: accountLease,
+                reason: "uiqaRuntimeStubSessionResponse"
+            ),
+            self.isCurrentDigitalHumanSessionToken(
                 lifecycleToken,
                 reason: "uiqaRuntimeStubSessionResponse"
             ) else {
                 if case .success(let staleContract) = result {
                     self.releaseDigitalHumanSessionLease(
                         staleContract,
+                        accountLease: accountLease,
                         reason: "uiqaStaleSessionResponse"
                     )
                 }

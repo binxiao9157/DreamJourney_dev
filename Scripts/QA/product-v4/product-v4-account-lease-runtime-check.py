@@ -91,6 +91,24 @@ def main() -> None:
 
     require("AccountLease.swift" in runner, "runner must compile production AccountLease")
     require("AccountSessionActor.swift" in runner, "runner must compile production AccountSessionActor")
+    for check in (
+        "archive-account-lease-static-check.py",
+        "family-account-lease-static-check.py",
+        "knowledge-sync-account-lease-check.py",
+        "media-capture-account-lease-check.py",
+        "message-notification-account-lease-check.py",
+        "profile-voice-clone-account-lease-check.py",
+        "voice-tts-account-lease-check.py",
+        "dialog-engine-account-lease-check.py",
+        "dialog-engine-provider-operation-model-smoke.swift",
+        "ai-recording-dialog-account-lease-check.py",
+        "echo-runtime-account-lease-check.py",
+        "run-kblite-account-lease-gate.sh",
+        "family-context-reconciliation-check.swift",
+        "knowledge-widget-privacy-lifecycle-check.swift",
+        "run-knowledge-widget-snapshot-store-model-smoke.sh",
+    ):
+        require(check in runner, f"AccountLease gate missing surface check: {check}")
 
     print("Product V4 AccountLease runtime static check passed")
 

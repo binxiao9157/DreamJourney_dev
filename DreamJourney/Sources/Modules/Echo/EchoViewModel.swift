@@ -222,6 +222,13 @@ final class EchoViewModel {
         updateState(.idle)
     }
 
+    func resetTransientStateForAccountRebind() {
+        context = contextStore.current
+        currentSessionUserTurnCount = 0
+        pendingDelayedReply = nil
+        updateState(.idle)
+    }
+
     func fail(_ message: String) {
         guard !isNeutralSafetyMode else { return }
         updateState(.error(message))

@@ -167,8 +167,7 @@ final class RecoveryRuntimePolicyStore {
         lock.unlock()
 
         return RecoveryRuntimePolicyTransition(
-            authorityEpochChanged: previous.authorityEpoch != "unresolved"
-                && previous.authorityEpoch != nextPolicy.authorityEpoch,
+            authorityEpochChanged: previous.authorityEpoch != nextPolicy.authorityEpoch,
             modeChanged: previous.mode != nextPolicy.mode,
             previousAuthorityEpoch: previous.authorityEpoch,
             currentAuthorityEpoch: nextPolicy.authorityEpoch

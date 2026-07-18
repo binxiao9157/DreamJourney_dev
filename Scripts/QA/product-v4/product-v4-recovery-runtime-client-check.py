@@ -39,11 +39,15 @@ def main() -> None:
         require(token in client, f"missing recovery client integration: {token}")
 
     gate = client.index("RecoveryRuntimePolicyStore.shared.requestDecision")
-    request = client.index("AF.request(url")
+    request = client.index("AF.request(")
     require(gate < request, "recovery decision must run before the network request")
     require(
         "RuntimeCapabilitySnapshotStore.shared.invalidate()" in client,
         "authority epoch change must invalidate runtime capability snapshots",
+    )
+    require(
+        "authorityEpochChanged: previous.authorityEpoch != nextPolicy.authorityEpoch" in store,
+        "initial unresolved-to-resolved authority adoption must invalidate captured leases",
     )
     require(
         "authSessionStore.clear()" in client,
