@@ -99,13 +99,41 @@ struct ConversationMemory: Codable {
     var recentTopics: [String] = []
 }
 
+private struct ConversationStorageLease: Equatable {
+    let accountLease: AccountLease
+    let scope: ConversationStorageScope
+
+    static func == (lhs: ConversationStorageLease, rhs: ConversationStorageLease) -> Bool {
+        lhs.scope == rhs.scope
+            && lhs.accountLease.subjectId == rhs.accountLease.subjectId
+            && lhs.accountLease.vaultId == rhs.accountLease.vaultId
+            && lhs.accountLease.generation == rhs.accountLease.generation
+            && lhs.accountLease.generationId == rhs.accountLease.generationId
+            && lhs.accountLease.authorityEpoch == rhs.accountLease.authorityEpoch
+    }
+}
+
 // MARK: - ConversationMemoryManager
 
 /// 对话记忆管理器 - 围绕时间/地点/人物/事件四维度提取摘要
 final class ConversationMemoryManager {
 
     static let shared = ConversationMemoryManager()
-    private init() { loadForCurrentScope() }
+    private init() {
+        let center = NotificationCenter.default
+        lifecycleObservationTokens = [
+            center.addObserver(forName: .djUserDidLogin, object: nil, queue: .main) { [weak self] _ in
+                self?.refreshForCurrentContext()
+            },
+            center.addObserver(forName: .djUserDidLogout, object: nil, queue: .main) { [weak self] _ in
+                self?.unmountAndDiscardPendingTranscript(reason: "logout")
+            },
+            center.addObserver(forName: .djPrivateAccessDidSuspend, object: nil, queue: .main) { [weak self] _ in
+                self?.unmountAndDiscardPendingTranscript(reason: "privateAccessSuspended")
+            },
+        ]
+        refreshForCurrentContext()
+    }
 
     // MARK: - Public
 
@@ -114,19 +142,36 @@ final class ConversationMemoryManager {
 
     /// 当前会话的临时对话记录
     private var currentTranscript: [ConversationTurn] = []
-    private var loadedScopeId = ""
+    private var loadedStorageLease: ConversationStorageLease?
+    private var transcriptStorageLease: ConversationStorageLease?
+    private var lifecycleObservationTokens: [NSObjectProtocol] = []
+    private let accountLeaseRuntime = AccountLeaseRuntime.shared
+    private let localStorage = ConversationLocalStorage.shared
 
     func refreshForCurrentContext() {
-        let scopeId = currentMemoryScopeId
-        guard scopeId != loadedScopeId else { return }
-        if !currentTranscript.isEmpty {
-            endSession()
+        guard let lease = currentConversationStorageLease,
+              isCurrentConversationStorageLease(lease, at: .request) else {
+            unmountAndDiscardPendingTranscript(reason: "noActiveAccountLease")
+            return
         }
-        load(scopeId: scopeId)
+        guard loadedStorageLease != lease else { return }
+        if !currentTranscript.isEmpty {
+            print("[Memory] discarded pending transcript after account/persona scope changed")
+        }
+        currentTranscript = []
+        transcriptStorageLease = nil
+        loadedStorageLease = lease
+        currentMemory = localStorage.mount(scope: lease.scope) { [weak self] in
+            self?.isCurrentConversationStorageLease(lease, at: .commit) == true
+        }
+        let s = currentMemory.lastSummary
+        print("[Memory] loaded owner-scoped memory sessions=\(currentMemory.sessionCount)")
+        print("[Memory] time=\(s.time), place=\(s.place), person=\(s.person), event=\(s.event)")
     }
 
     /// 获取当前会话的对话记录（用于回忆录生成等）
     func getCurrentTranscript() -> [ConversationTurn] {
+        refreshForCurrentContext()
         if !currentTranscript.isEmpty {
             return currentTranscript
         }
@@ -136,51 +181,76 @@ final class ConversationMemoryManager {
     // MARK: - 记录对话
 
     func recordUserTurn(text: String) {
-        guard !text.isEmpty else { return }
-        let turn = ConversationTurn(role: "user", text: text, timestamp: Date())
-        currentTranscript.append(turn)
+        guard recordTurn(role: "user", text: text) else { return }
         print("[Memory] 📝 记录用户: \(text.prefix(50))")
     }
 
     func recordAITurn(text: String) {
-        guard !text.isEmpty else { return }
-        let turn = ConversationTurn(role: "ai", text: text, timestamp: Date())
-        currentTranscript.append(turn)
+        guard recordTurn(role: "ai", text: text) else { return }
         print("[Memory] 📝 记录AI: \(text.prefix(50))")
     }
 
     /// 对话结束时调用：提取四维度摘要并持久化
     func endSession() {
-        guard !currentTranscript.isEmpty else { return }
+        guard !currentTranscript.isEmpty,
+              let sessionLease = transcriptStorageLease,
+              loadedStorageLease == sessionLease,
+              isCurrentConversationStorageLease(sessionLease, at: .commit) else {
+            if !currentTranscript.isEmpty {
+                print("[Memory] rejected stale transcript commit")
+                currentTranscript = []
+                transcriptStorageLease = nil
+            }
+            return
+        }
 
         // 提取四维度摘要
-        currentMemory.lastSummary = extractFourDimensionSummary()
+        var updatedMemory = currentMemory
+        updatedMemory.lastSummary = extractFourDimensionSummary()
 
         // 更新元数据
-        currentMemory.lastSessionDate = Date()
-        currentMemory.sessionCount += 1
-        currentMemory.recentTranscript = Array(currentTranscript.suffix(20))
+        updatedMemory.lastSessionDate = Date()
+        updatedMemory.sessionCount += 1
+        updatedMemory.recentTranscript = Array(currentTranscript.suffix(20))
 
         // 清理旧字段
-        currentMemory.mentionedPeople = []
-        currentMemory.mentionedPlaces = []
-        currentMemory.mentionedFoods = []
-        currentMemory.lastTopic = ""
-        currentMemory.recentTopics = []
+        updatedMemory.mentionedPeople = []
+        updatedMemory.mentionedPlaces = []
+        updatedMemory.mentionedFoods = []
+        updatedMemory.lastTopic = ""
+        updatedMemory.recentTopics = []
 
         // 持久化
-        save()
+        do {
+            try localStorage.save(
+                memory: updatedMemory,
+                scope: sessionLease.scope
+            ) { [weak self] in
+                self?.isCurrentConversationStorageLease(sessionLease, at: .commit) == true
+            }
+        } catch {
+            print("[Memory] owner-scoped save failed: \(error.localizedDescription)")
+            return
+        }
+        guard isCurrentConversationStorageLease(sessionLease, at: .commit) else {
+            currentTranscript = []
+            transcriptStorageLease = nil
+            return
+        }
+        currentMemory = updatedMemory
 
         // 捕获 transcript 快照（清空前）
         let transcriptSnapshot = currentTranscript
-        let sessionId = currentMemory.sessionCount
+        let sessionId = updatedMemory.sessionCount
         let knowledgeAuthorization = KBLiteManager.captureCurrentPersonaAuthorizationSnapshot()
+        let accountLease = sessionLease.accountLease
 
         // 清空当前会话临时记录
         currentTranscript = []
+        transcriptStorageLease = nil
 
-        let s = currentMemory.lastSummary
-        print("[Memory] ✅ 会话摘要已保存 (第\(currentMemory.sessionCount)次对话)")
+        let s = updatedMemory.lastSummary
+        print("[Memory] ✅ 会话摘要已保存 (第\(updatedMemory.sessionCount)次对话)")
         print("[Memory]   时间: \(s.time)")
         print("[Memory]   地点: \(s.place)")
         print("[Memory]   人物: \(s.person)")
@@ -188,7 +258,11 @@ final class ConversationMemoryManager {
         print("[Memory]   自然摘要: \(s.toNaturalSentence())")
 
         // 【KBLite】触发 LLM 知识提取（异步，不阻塞 UI）
-        DispatchQueue.global(qos: .utility).async {
+        DispatchQueue.global(qos: .utility).async { [accountLeaseRuntime] in
+            guard accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+                print("[Memory] skipped stale transcript knowledge extraction")
+                return
+            }
             KBLiteManager.shared.extractFromTranscript(
                 turns: transcriptSnapshot,
                 sessionId: sessionId,
@@ -199,6 +273,19 @@ final class ConversationMemoryManager {
                 }
             }
         }
+    }
+
+    @discardableResult
+    func purgeLocalDataForAccountDeletion(accountLease: AccountLease) -> Bool {
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            return false
+        }
+        localStorage.purge(accountLease: accountLease)
+        if loadedStorageLease?.accountLease.subjectId == accountLease.subjectId,
+           loadedStorageLease?.accountLease.vaultId == accountLease.vaultId {
+            unmountAndDiscardPendingTranscript(reason: "accountDeletion")
+        }
+        return true
     }
 
     // MARK: - 四维度摘要提取
@@ -375,71 +462,69 @@ final class ConversationMemoryManager {
         return trimmed.count >= 4
     }
 
-    // MARK: - 持久化
+    // MARK: - Owner-scoped persistence
 
-    private var currentMemoryScopeId: String {
-        let userId = UserManager.shared.currentUser?.id ?? "user_001"
-        let context = DigitalHumanContextStore.shared.current
-        if context.isSelfAssistant {
-            return sanitizedScopeId("personal_\(userId)")
+    private var currentConversationStorageLease: ConversationStorageLease? {
+        guard let userId = UserManager.shared.currentUser?.id,
+              let accountLease = accountLeaseRuntime.capture(forSubjectId: userId),
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            return nil
         }
-        let ownerId = context.ownerId.trimmingCharacters(in: .whitespacesAndNewlines)
-        return sanitizedScopeId("family_\(ownerId.isEmpty ? userId : ownerId)")
+        let context = DigitalHumanContextStore.shared.current
+        let personaScope: ConversationPersonaScope = context.isSelfAssistant ? .personal : .family
+        let contextOwner = context.ownerId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let ownerId = personaScope == .personal ? userId : contextOwner
+        guard let scope = ConversationStorageScope(
+            accountLease: accountLease,
+            ownerId: ownerId,
+            personaScope: personaScope
+        ) else {
+            return nil
+        }
+        return ConversationStorageLease(accountLease: accountLease, scope: scope)
     }
 
-    private func sanitizedScopeId(_ value: String) -> String {
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_-"))
-        let scalars = value.unicodeScalars.map { allowed.contains($0) ? Character(String($0)) : Character("_") }
-        let sanitized = String(scalars).trimmingCharacters(in: CharacterSet(charactersIn: "_-"))
-        return sanitized.isEmpty ? "personal_user_001" : sanitized
+    private func isCurrentConversationStorageLease(
+        _ lease: ConversationStorageLease,
+        at checkpoint: AccountLeaseCheckpoint
+    ) -> Bool {
+        guard accountLeaseRuntime.validate(lease.accountLease, at: checkpoint).allowed,
+              let current = currentConversationStorageLease else {
+            return false
+        }
+        return current == lease
     }
 
-    private var documentsDirectory: URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+    private func recordTurn(role: String, text: String) -> Bool {
+        let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedText.isEmpty else { return false }
+        refreshForCurrentContext()
+        guard let lease = loadedStorageLease,
+              isCurrentConversationStorageLease(lease, at: .commit) else {
+            return false
+        }
+        if let transcriptStorageLease {
+            guard transcriptStorageLease == lease else {
+                currentTranscript = []
+                self.transcriptStorageLease = nil
+                return false
+            }
+        } else {
+            transcriptStorageLease = lease
+        }
+        currentTranscript.append(
+            ConversationTurn(role: role, text: normalizedText, timestamp: Date())
+        )
+        return true
     }
 
-    private var legacyFilePath: URL {
-        documentsDirectory.appendingPathComponent("conversation_memory.json")
-    }
-
-    private func filePath(for scopeId: String) -> URL {
-        documentsDirectory.appendingPathComponent("conversation_memory_\(scopeId).json")
-    }
-
-    private func loadForCurrentScope() {
-        load(scopeId: currentMemoryScopeId)
-    }
-
-    private var filePath: URL {
-        let scopeId = loadedScopeId.isEmpty ? currentMemoryScopeId : loadedScopeId
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        return docs.appendingPathComponent("conversation_memory_\(scopeId).json")
-    }
-
-    private func save() {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = .prettyPrinted
-        guard let data = try? encoder.encode(currentMemory) else { return }
-        try? data.write(to: filePath)
-    }
-
-    private func load(scopeId: String) {
-        loadedScopeId = scopeId
+    private func unmountAndDiscardPendingTranscript(reason: String) {
+        if !currentTranscript.isEmpty {
+            print("[Memory] discarded uncommitted transcript reason=\(reason)")
+        }
+        currentTranscript = []
+        transcriptStorageLease = nil
+        loadedStorageLease = nil
         currentMemory = ConversationMemory()
-        let scopedFilePath = filePath(for: scopeId)
-        let fallbackPath = scopeId.hasPrefix("personal_") ? legacyFilePath : scopedFilePath
-        let pathToLoad = FileManager.default.fileExists(atPath: scopedFilePath.path)
-            ? scopedFilePath
-            : fallbackPath
-        guard FileManager.default.fileExists(atPath: pathToLoad.path) else { return }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        guard let data = try? Data(contentsOf: pathToLoad),
-              let memory = try? decoder.decode(ConversationMemory.self, from: data) else { return }
-        currentMemory = memory
-        let s = memory.lastSummary
-        print("[Memory] 📂 已加载历史记忆 scope=\(scopeId) (第\(memory.sessionCount)次)")
-        print("[Memory]   时间: \(s.time), 地点: \(s.place), 人物: \(s.person), 事件: \(s.event)")
     }
 }

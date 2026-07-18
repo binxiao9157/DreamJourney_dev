@@ -265,30 +265,43 @@
       "catalogId": "S06",
       "surfaceId": "S06.conversation-memory-cache",
       "dataClass": "conversation summaries and extracted local conversation memory",
-      "ownerScope": "partially scoped filename with global legacy fallback user_001",
-      "storage": "Documents JSON files",
-      "pathOrKey": "conversation_memory.json; conversation_memory_<scope>.json",
-      "writer": "ConversationMemoryManager",
-      "readers": "Echo and memoir generation",
-      "cleanup": "clear active owner cache on switch/logout/delete",
-      "migration": "stop global writes; quarantine unproven conversation_memory.json and user_001-derived scope",
+      "ownerScope": "authenticated subject plus vault plus persona owner; generation fences async commits without changing the persistent owner key",
+      "storage": "Application Support owner envelope with migration receipt and quarantine directories",
+      "pathOrKey": "DreamJourney/Conversation/v2/<scopeDigest>/memory.json; receipts/<sourceHash>.json; quarantine/<sourceHash>.json; Documents conversation_memory*.json is legacy read-only input",
+      "writer": "ConversationMemoryManager through ConversationLocalStorage",
+      "readers": "Echo and dialog context",
+      "cleanup": "unmount on login scope change, logout or private-access suspension; purge proven subject/vault envelopes on account deletion",
+      "migration": "explicit personal_<subject> legacy may copy-on-write with receipt; global, family owner-only, fallback-owner and corrupt legacy is quarantined and never auto-mounted",
       "retention": "conversation cache only; backend Message remains authority",
       "testOwner": "WI-S0-01-06",
-      "status": "REGISTERED_GLOBAL_FALLBACK_MIGRATION_REQUIRED",
-      "nextWorkItem": "WI-S0-01-06",
+      "status": "REGISTERED_OWNER_SCOPED_WITH_LEGACY_QUARANTINE",
+      "nextWorkItem": "WI-S0-01-08",
       "sourcePaths": [
+        "DreamJourney/Sources/Services/ConversationLocalStorage.swift",
         "DreamJourney/Sources/Services/ConversationMemoryManager.swift"
       ],
       "sourceAnchors": [
         {
-          "path": "DreamJourney/Sources/Services/ConversationMemoryManager.swift",
+          "path": "DreamJourney/Sources/Services/ConversationLocalStorage.swift",
           "contains": [
             "conversation_memory.json",
-            "user_001"
+            "ConversationStoreEnvelope",
+            "ConversationLegacyMigrationReceipt",
+            "ConversationQuarantineRecord"
+          ]
+        },
+        {
+          "path": "DreamJourney/Sources/Services/ConversationMemoryManager.swift",
+          "contains": [
+            "ConversationStorageLease",
+            "isCurrentConversationStorageLease"
           ]
         }
       ],
       "currentChecks": [
+        "Scripts/QA/product-v4/run-conversation-owner-storage-gate.sh",
+        "Scripts/QA/product-v4/conversation-owner-storage-model-smoke.swift",
+        "Scripts/QA/product-v4/conversation-owner-storage-static-check.py",
         "Scripts/QA/product-v4/product-v4-ios-account-store-rollout-check.py"
       ]
     },

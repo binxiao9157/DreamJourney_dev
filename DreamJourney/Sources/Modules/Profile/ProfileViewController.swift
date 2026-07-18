@@ -810,6 +810,9 @@ final class ProfileViewController: UIViewController {
                     _ = MemoryArchiveRepository.shared.purgeLocalArchiveDataForAccountDeletion(
                         accountLease: accountLease
                     )
+                    _ = ConversationMemoryManager.shared.purgeLocalDataForAccountDeletion(
+                        accountLease: accountLease
+                    )
                 }
                 UserManager.shared.logout()
                 self?.didRequestLogout?()
