@@ -11,6 +11,7 @@ MEMOIR_GATE="$QA_DIR/run-memoir-owner-storage-gate.sh"
 MEMORY_MAP_GATE="$QA_DIR/run-memory-map-owner-storage-gate.sh"
 ACCOUNT_PRIVATE_MEDIA_GATE="$QA_DIR/run-account-private-media-store-gate.sh"
 RETIREMENT_STATIC_CHECK="$QA_DIR/global-private-store-retirement-static-check.py"
+UIQA_STATIC_CHECK="$QA_DIR/global-private-store-retirement-uiqa-check.py"
 
 missing=0
 
@@ -31,6 +32,7 @@ require_child "Memoir owner storage" "$MEMOIR_GATE"
 require_child "Memory/Map owner storage" "$MEMORY_MAP_GATE"
 require_child "Home account-private media storage" "$ACCOUNT_PRIVATE_MEDIA_GATE"
 require_child "global private store retirement static check" "$RETIREMENT_STATIC_CHECK"
+require_child "global private store retirement UIQA static check" "$UIQA_STATIC_CHECK"
 
 if (( missing != 0 )); then
   printf 'ERROR: WI-S0-01-06 total gate cannot run until every required child script is present.\n' >&2
@@ -57,5 +59,8 @@ bash "$ACCOUNT_PRIVATE_MEDIA_GATE"
 
 printf '[WI-S0-01-06] Running global private store retirement static check\n'
 python3 "$RETIREMENT_STATIC_CHECK"
+
+printf '[WI-S0-01-06] Running global private store retirement UIQA static check\n'
+python3 "$UIQA_STATIC_CHECK"
 
 printf 'WI-S0-01-06 global private store retirement gate passed\n'

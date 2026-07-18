@@ -305,6 +305,10 @@ private extension AppDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 self?.runProfileFamilyPersonaReleaseSmoke()
             }
+        } else if arguments.contains("DJRunGlobalPrivateStoreRetirementSmoke") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.runGlobalPrivateStoreRetirementSmoke()
+            }
         } else if arguments.contains("DJRunArchiveMediaEntriesSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
@@ -388,6 +392,32 @@ private extension AppDelegate {
         } else if arguments.contains("DJSeedPendingArchiveAnalysis") {
             seedPendingArchiveAnalysisContext()
         }
+    }
+
+    func runGlobalPrivateStoreRetirementSmoke() {
+        let result = ProductV4GlobalPrivateStoreRetirementUIQASmoke.run()
+        do {
+            let resultURL = try result.writeToDocuments()
+            print("[UI_QA] GlobalPrivateStoreRetirementSmoke result=\(resultURL.path)")
+        } catch {
+            print(
+                "[UI_QA] GlobalPrivateStoreRetirementSmoke failed to write result " +
+                "error=\(error.localizedDescription)"
+            )
+        }
+
+        if let keyWindow = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }) {
+            keyWindow.rootViewController = ProductV4GlobalPrivateStoreRetirementUIQASmoke
+                .makeResultViewController(result: result)
+            keyWindow.makeKeyAndVisible()
+        }
+        print(
+            "[UI_QA] GlobalPrivateStoreRetirementSmoke completed " +
+            "success=\(result.completed) receipts=\(result.legacyReceiptCount)"
+        )
     }
 
     func runProfileCareEscalationBoundarySmoke() {
