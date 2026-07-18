@@ -1159,6 +1159,89 @@ struct DigitalHumanSessionLeaseOperationResult {
     }
 }
 
+enum AccountDeletionAcceptanceContractError: LocalizedError {
+    case incompleteAccessFirstReceipt
+
+    var errorDescription: String? {
+        switch self {
+        case .incompleteAccessFirstReceipt:
+            return "注销回执未确认访问暂停与会话撤销，本地数据尚未清理"
+        }
+    }
+}
+
+struct AccountDeletionAcceptanceContract {
+    let contractVersion: Int
+    let status: String
+    let deletionState: String
+    let accessState: String
+    let authEpoch: Int
+    let providerCapabilityState: String
+    let sessionRevocationScope: String
+    let accessRevocationEventId: String
+    let accessRevocationStatus: String
+
+    var isAccessFirstAccepted: Bool {
+        status == "softDeleted"
+            && deletionState == "softDeleted"
+            && accessState == "suspended_restorable"
+            && authEpoch > 0
+            && providerCapabilityState == "revoked"
+            && sessionRevocationScope == "allDevices"
+            && !accessRevocationEventId.isEmpty
+            && ["pending", "dispatched"].contains(accessRevocationStatus)
+    }
+
+    init(json: [String: Any]) throws {
+        guard let status = json["status"] as? String,
+              let deletion = json["deletion"] as? [String: Any],
+              let deletionState = deletion["deletionState"] as? String,
+              let accessState = deletion["accessState"] as? String,
+              let authEpoch = Self.intValue(deletion["authEpoch"]),
+              let providerCapabilityState = deletion["providerCapabilityState"] as? String,
+              let sessionRevocation = json["sessionRevocation"] as? [String: Any],
+              let sessionRevocationScope = sessionRevocation["scope"] as? String,
+              let accessRevocation = json["accessRevocation"] as? [String: Any],
+              let accessRevocationEventId = accessRevocation["eventId"] as? String,
+              let accessRevocationEventType = accessRevocation["eventType"] as? String,
+              let accessRevocationStatus = accessRevocation["status"] as? String,
+              status == "softDeleted",
+              deletionState == "softDeleted",
+              accessState == "suspended_restorable",
+              authEpoch > 0,
+              providerCapabilityState == "revoked",
+              sessionRevocationScope == "allDevices",
+              !accessRevocationEventId.isEmpty,
+              accessRevocationEventType == "RightsAccessRevoked",
+              ["pending", "dispatched"].contains(accessRevocationStatus) else {
+            throw AccountDeletionAcceptanceContractError.incompleteAccessFirstReceipt
+        }
+
+        contractVersion = Self.intValue(json["contractVersion"]) ?? 1
+        self.status = status
+        self.deletionState = deletionState
+        self.accessState = accessState
+        self.authEpoch = authEpoch
+        self.providerCapabilityState = providerCapabilityState
+        self.sessionRevocationScope = sessionRevocationScope
+        self.accessRevocationEventId = accessRevocationEventId
+        self.accessRevocationStatus = accessRevocationStatus
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.intValue
+        }
+        if let value = value as? String {
+            return Int(value)
+        }
+        return nil
+    }
+}
+
 struct DigitalHumanSessionContract {
     #if DEBUG || UI_QA_SIMULATOR
     private static let localAssetVirtualmanKeyEnvironmentKey = "DREAMJOURNEY_DIGITAL_HUMAN_ASSET_VIRTUALMAN_KEY"
@@ -4153,7 +4236,7 @@ final class DreamJourneyBackendClient {
     func softDeleteAccount(
         userId: String,
         phone: String,
-        completion: @escaping (Result<[String: Any], Error>) -> Void
+        completion: @escaping (Result<AccountDeletionAcceptanceContract, Error>) -> Void
     ) {
         requestJSON(
             path: "/auth/delete",
@@ -4165,7 +4248,18 @@ final class DreamJourneyBackendClient {
                 "secondConfirmation": true,
             ],
             authPolicy: .userRequired,
-            completion: completion
+            completion: { result in
+                switch result {
+                case .success(let object):
+                    do {
+                        completion(.success(try AccountDeletionAcceptanceContract(json: object)))
+                    } catch {
+                        completion(.failure(error))
+                    }
+                case .failure(let error):
+                    completion(.failure(error))
+                }
+            }
         )
     }
 

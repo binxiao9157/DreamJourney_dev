@@ -808,7 +808,11 @@ final class ProfileViewController: UIViewController {
             phone: user.phone
         ) { [weak self] result in
             switch result {
-            case .success:
+            case .success(let deletionAcceptance):
+                guard deletionAcceptance.isAccessFirstAccepted else {
+                    self?.showToast("注销回执不完整，暂未清理本地数据", type: .error)
+                    return
+                }
                 let started = UserManager.shared.completeAccountDeletion(
                     accountLease: accountLease
                 ) { lifecycleResult in

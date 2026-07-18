@@ -11,6 +11,7 @@ PROFILE = ROOT / "DreamJourney/Sources/Modules/Profile/ProfileViewController.swi
 USER_MANAGER = ROOT / "DreamJourney/Sources/Services/UserManager.swift"
 RUNTIME = ROOT / "DreamJourney/Sources/App/AccountLifecycleRuntimeRegistry.swift"
 COORDINATOR = ROOT / "DreamJourney/Sources/App/AccountLifecycleCoordinator.swift"
+BACKEND_CLIENT = ROOT / "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
 
 
 class ContractViolations:
@@ -69,7 +70,7 @@ def registration_block(source: str, module_id: str) -> str:
 
 def main() -> None:
     violations = ContractViolations()
-    for path in (PROFILE, USER_MANAGER, RUNTIME, COORDINATOR):
+    for path in (PROFILE, USER_MANAGER, RUNTIME, COORDINATOR, BACKEND_CLIENT):
         violations.require(path.is_file(), f"missing production source {path.relative_to(ROOT)}")
     violations.finish()
 
@@ -77,6 +78,45 @@ def main() -> None:
     user_manager = USER_MANAGER.read_text(encoding="utf-8")
     runtime = RUNTIME.read_text(encoding="utf-8")
     coordinator = COORDINATOR.read_text(encoding="utf-8")
+    backend_client = BACKEND_CLIENT.read_text(encoding="utf-8")
+
+    deletion_contract_signature, deletion_contract_body = function_body(
+        backend_client,
+        ("struct AccountDeletionAcceptanceContract",),
+    )
+    violations.require(
+        bool(deletion_contract_body),
+        "backend client must parse an AccountDeletionAcceptanceContract before local cleanup",
+    )
+    if deletion_contract_body:
+        for required_field in (
+            '"softDeleted"',
+            '"suspended_restorable"',
+            '"revoked"',
+            '"allDevices"',
+            '"RightsAccessRevoked"',
+        ):
+            violations.require(
+                required_field in deletion_contract_body,
+                f"{deletion_contract_signature} must validate {required_field} from the backend receipt",
+            )
+
+    client_deletion_start = backend_client.find("func softDeleteAccount(")
+    client_deletion_brace = backend_client.find("{", client_deletion_start)
+    client_deletion_header = (
+        backend_client[client_deletion_start:client_deletion_brace]
+        if client_deletion_start >= 0 and client_deletion_brace >= 0
+        else ""
+    )
+    _, client_deletion = function_body(backend_client, ("func softDeleteAccount(",))
+    violations.require(
+        "Result<AccountDeletionAcceptanceContract, Error>" in client_deletion_header,
+        "softDeleteAccount must return a validated AccountDeletionAcceptanceContract",
+    )
+    violations.require(
+        "AccountDeletionAcceptanceContract(json: object)" in client_deletion,
+        "softDeleteAccount must reject an incomplete backend deletion receipt",
+    )
 
     _, profile_deletion = function_body(profile, ("private func submitAccountDeletion(",))
     violations.require(bool(profile_deletion), "Profile must retain a submitAccountDeletion entry point")
@@ -105,6 +145,11 @@ def main() -> None:
             or "UserManager.shared.requestAccountDeletion(" in profile_deletion
             or "UserManager.shared.deleteAccount(" in profile_deletion,
             "Profile success callback must call the dedicated UserManager account-deletion API",
+        )
+        violations.require(
+            "case .success(let deletionAcceptance)" in profile_deletion
+            and "deletionAcceptance.isAccessFirstAccepted" in profile_deletion,
+            "Profile must only begin local deletion after a validated access-first receipt",
         )
 
     deletion_signature, deletion_body = function_body(
