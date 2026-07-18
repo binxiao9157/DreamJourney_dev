@@ -66,26 +66,83 @@ struct DigitalHumanContext: Codable, Equatable {
     }
 }
 
+private struct DigitalHumanContextStorageEnvelope: Codable, Equatable {
+    static let currentSchemaVersion = 2
+
+    let schemaVersion: Int
+    let subjectId: String
+    let accountGeneration: UInt64
+    let accountGenerationId: UUID
+    let context: DigitalHumanContext
+
+    init(context: DigitalHumanContext, accountLease: AccountLease) {
+        schemaVersion = Self.currentSchemaVersion
+        subjectId = accountLease.subjectId
+        accountGeneration = accountLease.generation
+        accountGenerationId = accountLease.generationId
+        self.context = context
+    }
+
+    func matches(_ accountLease: AccountLease) -> Bool {
+        schemaVersion == Self.currentSchemaVersion
+            && subjectId == accountLease.subjectId
+            && accountGeneration == accountLease.generation
+            && accountGenerationId == accountLease.generationId
+    }
+}
+
+private struct DigitalHumanContextLegacyQuarantineRecord: Codable, Equatable {
+    static let currentSchemaVersion = 1
+
+    let schemaVersion: Int
+    let sourceStorageKey: String
+    let observedSubjectId: String
+    let observedAccountGeneration: UInt64
+    let observedAccountGenerationId: UUID
+    let reason: String
+    let payload: Data
+    let quarantinedAt: Date
+}
+
 final class DigitalHumanContextStore {
     static let shared = DigitalHumanContextStore()
 
-    private let keyBase = "dj.digitalHuman.currentContext"
-    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private enum ReadResult {
+        case stored(DigitalHumanContext)
+        case empty
+        case denied
+    }
 
-    private init(accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared) {
+    private let legacyKeyBase = "dj.digitalHuman.currentContext"
+    private let scopedKeyBase = "dj.digitalHuman.currentContext.v2"
+    private let legacyQuarantineKeyBase = "dj.digitalHuman.currentContext.legacy-quarantine.v1"
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let defaults: UserDefaults
+    private let storageLock = NSRecursiveLock()
+
+    private init(
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        defaults: UserDefaults = .standard
+    ) {
         self.accountLeaseRuntime = accountLeaseRuntime
+        self.defaults = defaults
     }
 
     var current: DigitalHumanContext {
         get {
             let userId = normalizedUserId(UserManager.shared.currentUser?.id)
-            guard !userId.isEmpty else { return .defaultContext(userId: "") }
-            if let data = UserDefaults.standard.data(forKey: key(for: userId)),
-               let context = try? JSONDecoder().decode(DigitalHumanContext.self, from: data),
-               let validated = validatedContext(context, userId: userId) {
-                return validated
+            guard !userId.isEmpty,
+                  let accountLease = accountLeaseRuntime.capture(forSubjectId: userId) else {
+                return unavailableContext
             }
-            return .defaultContext(userId: userId)
+            switch readCurrent(accountLease: accountLease) {
+            case .stored(let context):
+                return context
+            case .empty:
+                return .defaultContext(userId: accountLease.subjectId)
+            case .denied:
+                return unavailableContext
+            }
         }
         set {
             let sourceUserId = normalizedUserId(UserManager.shared.currentUser?.id)
@@ -132,25 +189,41 @@ final class DigitalHumanContextStore {
     ) {
         guard normalizedUserId(UserManager.shared.currentUser?.id) == userId,
               accountLease.subjectId == userId,
-              accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed,
+              let safeContext = validatedContext(newValue, userId: userId) else {
             return
         }
-        let safeContext = validatedContext(newValue, userId: userId) ?? .defaultContext(userId: userId)
-        let storageKey = key(for: userId)
-        let previousData = UserDefaults.standard.data(forKey: storageKey)
-        let previousContext = storedContext(for: userId)
-        guard let data = try? JSONEncoder().encode(safeContext) else { return }
-        UserDefaults.standard.set(data, forKey: key(for: userId))
-        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
-            if let previousData {
-                UserDefaults.standard.set(previousData, forKey: storageKey)
-            } else {
-                UserDefaults.standard.removeObject(forKey: storageKey)
-            }
+
+        storageLock.lock()
+        guard quarantineLegacySubjectPayloadIfNeeded(accountLease: accountLease) else {
+            storageLock.unlock()
             return
         }
+        let storageKey = scopedKey(for: accountLease)
+        let previousData = defaults.data(forKey: storageKey)
+        let previousContext = storedContext(accountLease: accountLease)
+        let envelope = DigitalHumanContextStorageEnvelope(
+            context: safeContext,
+            accountLease: accountLease
+        )
+        guard let data = try? JSONEncoder().encode(envelope) else {
+            storageLock.unlock()
+            return
+        }
+        defaults.set(data, forKey: storageKey)
+        guard defaults.data(forKey: storageKey) == data,
+              accountLeaseRuntime.validate(accountLease, at: .commit).allowed,
+              accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+            restore(previousData, forKey: storageKey)
+            storageLock.unlock()
+            return
+        }
+        storageLock.unlock()
+
+        guard accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else { return }
         let identity = KBLiteManager.resolveAuthorizedPersonaIdentity(for: safeContext)
         KBLiteManager.shared.personaContextDidChange(to: identity)
+        guard accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else { return }
         KnowledgeSyncCoordinator.shared.personaContextDidChange(to: identity)
         guard previousContext != safeContext else { return }
         guard accountLeaseRuntime.validate(accountLease, at: .ui).allowed else { return }
@@ -163,12 +236,10 @@ final class DigitalHumanContextStore {
     ) {
         guard normalizedUserId(UserManager.shared.currentUser?.id) == userId,
               accountLease.subjectId == userId,
-              accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
             return
         }
-        guard !userId.isEmpty,
-              let data = UserDefaults.standard.data(forKey: key(for: userId)),
-              let storedContext = try? JSONDecoder().decode(DigitalHumanContext.self, from: data) else {
+        guard case .stored(let storedContext) = readCurrent(accountLease: accountLease) else {
             return
         }
         let hasAuthorizedFamilyMember = FamilyRepository.shared.acceptedMember(
@@ -185,6 +256,33 @@ final class DigitalHumanContextStore {
             userId: userId,
             accountLease: accountLease
         )
+    }
+
+    private func readCurrent(accountLease: AccountLease) -> ReadResult {
+        guard normalizedUserId(UserManager.shared.currentUser?.id) == accountLease.subjectId,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            return .denied
+        }
+
+        storageLock.lock()
+        defer { storageLock.unlock() }
+        guard quarantineLegacySubjectPayloadIfNeeded(accountLease: accountLease),
+              accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+            return .denied
+        }
+        guard let data = defaults.data(forKey: scopedKey(for: accountLease)) else {
+            return .empty
+        }
+        guard let envelope = try? JSONDecoder().decode(
+            DigitalHumanContextStorageEnvelope.self,
+            from: data
+        ),
+        envelope.matches(accountLease),
+        let context = validatedContext(envelope.context, userId: accountLease.subjectId),
+        accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+            return .denied
+        }
+        return .stored(context)
     }
 
     private func validatedContext(_ context: DigitalHumanContext, userId: String) -> DigitalHumanContext? {
@@ -208,17 +306,99 @@ final class DigitalHumanContextStore {
         )
     }
 
-    private func key(for userId: String) -> String {
-        "\(keyBase).\(userId)"
+    private func scopedKey(for accountLease: AccountLease) -> String {
+        [
+            scopedKeyBase,
+            storageKeyComponent(accountLease.subjectId),
+            String(accountLease.generation),
+            accountLease.generationId.uuidString.lowercased()
+        ].joined(separator: ".")
     }
 
-    private func storedContext(for userId: String) -> DigitalHumanContext? {
-        guard let data = UserDefaults.standard.data(forKey: key(for: userId)) else { return nil }
-        return try? JSONDecoder().decode(DigitalHumanContext.self, from: data)
+    private func legacyKey(for subjectId: String) -> String {
+        "\(legacyKeyBase).\(subjectId)"
+    }
+
+    private func legacyQuarantineKey(for subjectId: String) -> String {
+        "\(legacyQuarantineKeyBase).\(storageKeyComponent(subjectId))"
+    }
+
+    private func storedContext(accountLease: AccountLease) -> DigitalHumanContext? {
+        guard let data = defaults.data(forKey: scopedKey(for: accountLease)),
+              let envelope = try? JSONDecoder().decode(
+                DigitalHumanContextStorageEnvelope.self,
+                from: data
+              ),
+              envelope.matches(accountLease) else {
+            return nil
+        }
+        return validatedContext(envelope.context, userId: accountLease.subjectId)
+    }
+
+    private func quarantineLegacySubjectPayloadIfNeeded(accountLease: AccountLease) -> Bool {
+        let sourceStorageKey = legacyKey(for: accountLease.subjectId)
+        guard let legacyPayload = defaults.data(forKey: sourceStorageKey) else { return true }
+
+        let quarantineStorageKey = legacyQuarantineKey(for: accountLease.subjectId)
+        if let existingData = defaults.data(forKey: quarantineStorageKey),
+           let existingRecord = try? JSONDecoder().decode(
+            DigitalHumanContextLegacyQuarantineRecord.self,
+            from: existingData
+           ) {
+            guard existingRecord.sourceStorageKey == sourceStorageKey,
+                  existingRecord.payload == legacyPayload else {
+                return false
+            }
+            defaults.removeObject(forKey: sourceStorageKey)
+            return defaults.data(forKey: sourceStorageKey) == nil
+        }
+
+        let record = DigitalHumanContextLegacyQuarantineRecord(
+            schemaVersion: DigitalHumanContextLegacyQuarantineRecord.currentSchemaVersion,
+            sourceStorageKey: sourceStorageKey,
+            observedSubjectId: accountLease.subjectId,
+            observedAccountGeneration: accountLease.generation,
+            observedAccountGenerationId: accountLease.generationId,
+            reason: "missingAccountGeneration",
+            payload: legacyPayload,
+            quarantinedAt: Date()
+        )
+        guard let quarantineData = try? JSONEncoder().encode(record) else { return false }
+        defaults.set(quarantineData, forKey: quarantineStorageKey)
+        guard defaults.data(forKey: quarantineStorageKey) == quarantineData else { return false }
+        defaults.removeObject(forKey: sourceStorageKey)
+        return defaults.data(forKey: sourceStorageKey) == nil
+    }
+
+    private func restore(_ data: Data?, forKey key: String) {
+        if let data {
+            defaults.set(data, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
+    private func storageKeyComponent(_ value: String) -> String {
+        Data(value.utf8)
+            .base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
     }
 
     private func normalizedUserId(_ userId: String?) -> String {
         userId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    private var unavailableContext: DigitalHumanContext {
+        DigitalHumanContext(
+            viewerUserId: nil,
+            ownerId: "",
+            displayName: "",
+            relation: nil,
+            mode: .silent,
+            isSelfAssistant: false
+        )
     }
 }
 
