@@ -171,17 +171,17 @@
       "catalogId": "S04",
       "surfaceId": "S04.archive-media-staging",
       "dataClass": "private photo, audio, video, thumbnail, and time-letter image staging files",
-      "ownerScope": "archive media uses authenticated subject plus vault plus archive owner; Home photos and temporary conversation recordings remain transitional",
-      "storage": "scoped Application Support originals and scoped Caches thumbnails; remaining Home Documents/photos and temporary TGSessionRecordings are legacy",
-      "pathOrKey": "DreamJourney/Archive/v2/<scopeDigest>/<UUID>; archive legacy allowlist for migration only; remaining photos; TGSessionRecordings",
+      "ownerScope": "archive media uses authenticated subject plus vault plus archive owner; Home photos and temporary conversation recordings use authenticated subject plus vault",
+      "storage": "scoped Application Support originals and scoped Caches thumbnails/staging; Home legacy files are quarantined or discarded with durable receipts",
+      "pathOrKey": "DreamJourney/Archive/v2/<scopeDigest>/<UUID>; DreamJourney/AccountPrivateMedia/v1/<scopeDigest>/photo-staging/<UUID>; DreamJourney/AccountPrivateMedia/v1/<scopeDigest>/photos/<UUID>; DreamJourney/AccountPrivateMedia/v1/<scopeDigest>/recording-staging/<UUID>; DreamJourney/AccountPrivateMedia/legacy-retirement/v1",
       "writer": "Archive entry controllers, AIRecordingViewController, and QA fixture paths in AppDelegate",
       "readers": "MemoryArchiveItem, Archive UI, upload pipeline, Echo context",
-      "cleanup": "remove scoped archive media on item or account deletion; Home photo and session-recording lifecycle remains assigned to WI-S0-01-06",
-      "migration": "legacy archive files require allowlisted canonical path, verified owner receipt, file identity, checksum and copy-on-write binding; ambiguous paths are rejected",
-      "retention": "draft retention decision DR-041; temporary recordings are session-only",
-      "testOwner": "WI-S0-01-05 for archive media; WI-S0-01-06 for Home and conversation remainder",
-      "status": "REGISTERED_ARCHIVE_MEDIA_SCOPED_HOME_MEDIA_TRANSITIONAL",
-      "nextWorkItem": "WI-S0-01-06",
+      "cleanup": "remove scoped archive media on item deletion; stale Home staging is discarded on lease change; account-wide scoped purge remains WI-S0-01-08",
+      "migration": "legacy archive files require allowlisted canonical path and verified owner binding; Home Documents/photos are quarantined and temporary TGSessionRecordings are discarded with deterministic receipts",
+      "retention": "draft retention decision DR-041; Home temporary recordings are session-only; quarantined files follow migration retention policy",
+      "testOwner": "WI-S0-01-05 for archive media; WI-S0-01-06 for Home account-private media; WI-S0-01-08 for account-wide purge",
+      "status": "REGISTERED_OWNER_SCOPED_WITH_LEGACY_RETIREMENT_ACCOUNT_PURGE_PENDING",
+      "nextWorkItem": "WI-S0-01-08",
       "sourcePaths": [
         "DreamJourney/Sources/AppDelegate.swift",
         "DreamJourney/Sources/Modules/Archive/ArchiveMediaStore.swift",
@@ -190,7 +190,8 @@
         "DreamJourney/Sources/Modules/Archive/MemoryArchiveItemFactory.swift",
         "DreamJourney/Sources/Modules/Archive/MemoryArchiveTextEntryViewController.swift",
         "DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift",
-        "DreamJourney/Sources/Modules/Home/AIRecordingViewController.swift"
+        "DreamJourney/Sources/Modules/Home/AIRecordingViewController.swift",
+        "DreamJourney/Sources/Services/AccountPrivateMediaStore.swift"
       ],
       "sourceAnchors": [
         {
@@ -202,14 +203,17 @@
           ]
         },
         {
-          "path": "DreamJourney/Sources/Modules/Home/AIRecordingViewController.swift",
+          "path": "DreamJourney/Sources/Services/AccountPrivateMediaStore.swift",
           "contains": [
-            "TGSessionRecordings"
+            "AccountPrivateMediaArtifact",
+            "AccountPrivateMediaLegacyReceipt",
+            "retireLegacyGlobalMedia"
           ]
         }
       ],
       "currentChecks": [
         "Scripts/QA/product-v4/run-archive-local-storage-gate.sh",
+        "Scripts/QA/product-v4/run-account-private-media-store-gate.sh",
         "Scripts/QA/product-v4/archive-media-store-model-smoke.swift",
         "Scripts/QA/prd-stitch-ui/archive-audio-lifecycle-smoke-check.swift",
         "Scripts/QA/prd-stitch-ui/archive-local-file-path-recovery-check.swift"
@@ -351,17 +355,17 @@
       "catalogId": "S08",
       "surfaceId": "S08.memoir-drafts-and-recordings",
       "dataClass": "memoir JSON drafts and source recordings",
-      "ownerScope": "global legacy Application Support directory without proven owner envelope",
-      "storage": "Application Support files",
-      "pathOrKey": "memoirs/<id>.json; memoirs/recordings/<session>.m4a",
+      "ownerScope": "authenticated subject plus vault plus explicit memoir owner; generation fences async commits without changing the persistent owner key",
+      "storage": "Application Support owner envelopes with migration receipts and quarantine directories",
+      "pathOrKey": "memoirs/v2/<scopeDigest>/records/<idHash>.json; memoirs/v2/<scopeDigest>/recordings/<sessionHash>.m4a; memoirs/migration-receipts/v1; memoirs/quarantine/v1",
       "writer": "MemoirRepository",
       "readers": "Memoir list/detail and TTS generation",
-      "cleanup": "do not mount across account; delete proven owner files on account deletion",
-      "migration": "copy only with owner evidence; otherwise quarantine and never auto-upload",
+      "cleanup": "unmount on account generation or owner mismatch; account-wide scoped purge remains WI-S0-01-08",
+      "migration": "copy explicit owner-matching legacy memoirs with receipts; seed, ownerless, mismatched, corrupt and unclaimed recordings enter quarantine and never auto-upload",
       "retention": "local draft policy DR-041",
       "testOwner": "WI-S0-01-06",
-      "status": "REGISTERED_GLOBAL_DIRECTORY_MIGRATION_REQUIRED",
-      "nextWorkItem": "WI-S0-01-06",
+      "status": "REGISTERED_OWNER_SCOPED_WITH_LEGACY_QUARANTINE_ACCOUNT_PURGE_PENDING",
+      "nextWorkItem": "WI-S0-01-08",
       "sourcePaths": [
         "DreamJourney/Sources/Memoir/MemoirModel.swift",
         "DreamJourney/Sources/Memoir/MemoirRepository.swift"
@@ -370,12 +374,16 @@
         {
           "path": "DreamJourney/Sources/Memoir/MemoirRepository.swift",
           "contains": [
-            "memoirs",
-            "recordings"
+            "MemoirStorageScope",
+            "MemoirLegacyMigrationReceipt",
+            "migration-receipts/v1"
           ]
         }
       ],
       "currentChecks": [
+        "Scripts/QA/product-v4/run-memoir-owner-storage-gate.sh",
+        "Scripts/QA/product-v4/memoir-owner-storage-model-smoke.swift",
+        "Scripts/QA/product-v4/memoir-owner-storage-static-check.py",
         "Scripts/QA/product-v4/product-v4-ios-account-store-rollout-check.py"
       ]
     },
@@ -383,17 +391,17 @@
       "catalogId": "S09",
       "surfaceId": "S09.legacy-memory-and-map-state",
       "dataClass": "legacy memories, seed fixtures, map read state, and transient map presentation timers",
-      "ownerScope": "global UserDefaults with user_001 fixture fallback",
-      "storage": "standard UserDefaults and ephemeral UI timer",
-      "pathOrKey": "dj.persistedMemories; dj.readMemoryIds; dj.bouncedMemoryIds; user_001 seed",
+      "ownerScope": "authenticated subject plus vault plus explicit memory owner; map presentation state uses the same owner envelope",
+      "storage": "owner-scoped UserDefaults envelopes, device quarantine and deterministic migration receipts; presentation timers remain ephemeral",
+      "pathOrKey": "dj.memory.items.v2.<scopeDigest>; dj.memory.quarantine.v2.<scopeDigest>; dj.memoryMap.presentation.v2.<scopeDigest>; dj.memoryMap.quarantine.v2.<scopeDigest>; dj.memory.quarantine.device.v2",
       "writer": "MemoryRepository and MapFootprintViewController",
       "readers": "Memory and Map modules",
-      "cleanup": "hide on switch; remove proven owner state on delete; invalidate presentation timer",
-      "migration": "seed is do-not-migrate; ambiguous real records enter quarantine",
-      "retention": "legacy compatibility window only",
+      "cleanup": "unmount on owner mismatch and invalidate presentation timers; account-wide scoped purge remains WI-S0-01-08",
+      "migration": "seed fixtures are do-not-migrate; legacy memories and map state enter deterministic quarantine with item-level receipts and are never auto-claimed",
+      "retention": "owner-scoped local projection plus legacy quarantine retention policy",
       "testOwner": "WI-S0-01-06",
-      "status": "REGISTERED_FIXTURE_AND_GLOBAL_MIGRATION_REQUIRED",
-      "nextWorkItem": "WI-S0-01-06",
+      "status": "REGISTERED_OWNER_SCOPED_WITH_LEGACY_QUARANTINE_ACCOUNT_PURGE_PENDING",
+      "nextWorkItem": "WI-S0-01-08",
       "sourcePaths": [
         "DreamJourney/Sources/Modules/Map/FootprintNotificationBanner.swift",
         "DreamJourney/Sources/Modules/Map/MapFootprintViewController.swift",
@@ -404,19 +412,23 @@
         {
           "path": "DreamJourney/Sources/Services/MemoryRepository.swift",
           "contains": [
-            "dj.persistedMemories",
-            "user_001"
+            "dj.memory.items.v2.",
+            "MemoryLegacyMigrationReceipt"
           ]
         },
         {
           "path": "DreamJourney/Sources/Modules/Map/MapFootprintViewController.swift",
           "contains": [
-            "dj.readMemoryIds",
-            "dj.bouncedMemoryIds"
+            "MemoryMapPresentationStore",
+            "presentationStore.load(",
+            "AccountLeaseRuntime.shared.validate"
           ]
         }
       ],
       "currentChecks": [
+        "Scripts/QA/product-v4/run-memory-map-owner-storage-gate.sh",
+        "Scripts/QA/product-v4/memory-map-owner-storage-model-smoke.swift",
+        "Scripts/QA/product-v4/memory-map-owner-storage-static-check.py",
         "Scripts/QA/product-v4/product-v4-ios-account-store-rollout-check.py"
       ]
     },
