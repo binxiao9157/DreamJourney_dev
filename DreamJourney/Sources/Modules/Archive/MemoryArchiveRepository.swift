@@ -199,6 +199,7 @@ private struct ArchiveStorageLease {
 }
 
 private struct InAppMessageLocalState: Codable {
+    let messageId: String
     let status: InAppMessageStatus
     let readAt: String?
     let archivedAt: String?
@@ -207,12 +208,14 @@ private struct InAppMessageLocalState: Codable {
 final class MemoryArchiveRepository {
     static let shared = MemoryArchiveRepository()
 
-    private let mailboxBaseKey = "dj.memoryArchive.timeLetterMailbox"
-    private let inAppMessageStateBaseKey = "dj.inAppMessage.localState"
+    private let legacyMailboxBaseKey = "dj.memoryArchive.timeLetterMailbox"
+    private let legacyInAppMessageStateBaseKey = "dj.inAppMessage.localState"
+    private let timeLetterMailboxOperationId = "time-letter-mailbox"
     private let accountLeaseRuntime = AccountLeaseRuntime.shared
     private let localStorage = ArchiveLocalStorage.shared
     private let mediaStore = ArchiveMediaStore.shared
     private let isoFormatter = ISO8601DateFormatter()
+    private let messageStateLock = NSRecursiveLock()
     private static let personalPersonaScope = "personal"
     private static let familyPersonaScope = "family"
     private static let defaultFamilyDigitalHumanId = "family_default"
@@ -404,16 +407,37 @@ final class MemoryArchiveRepository {
     }
 
     func timeLetterMailboxReminders() -> [TimeLetterMailboxReminder] {
-        timeLetterMailboxReminders(accountUserId: currentUserId)
+        guard let accountLease = captureCurrentAccountLease() else { return [] }
+        return timeLetterMailboxReminders(accountLease: accountLease)
     }
 
-    private func timeLetterMailboxReminders(accountUserId: String) -> [TimeLetterMailboxReminder] {
-        guard !accountUserId.isEmpty,
-              let data = UserDefaults.standard.data(forKey: mailboxStorageKey(for: accountUserId)),
-              let decoded = try? JSONDecoder().decode([TimeLetterMailboxReminder].self, from: data) else {
+    private func timeLetterMailboxReminders(
+        accountLease: AccountLease
+    ) -> [TimeLetterMailboxReminder] {
+        guard isCurrentAccountLease(accountLease, at: .request),
+              let scope = timeLetterMailboxOwnerScope(accountLease: accountLease) else {
             return []
         }
-        return decoded
+        let reminders: [TimeLetterMailboxReminder]? = withMessageStateLock {
+            guard retireLegacyMailboxIfNeeded(accountLease: accountLease) else { return nil }
+            guard let data = UserDefaults.standard.data(
+                forKey: scope.storageKey(for: .timeLetterMailbox)
+            ) else {
+                return []
+            }
+            guard let envelope = try? JSONDecoder().decode(
+                InAppMessageSourceEnvelope<TimeLetterMailboxReminder>.self,
+                from: data
+            ), envelope.matches(scope) else {
+                return nil
+            }
+            return envelope.sources
+        }
+        guard let reminders,
+              isCurrentAccountLease(accountLease, at: .runtime) else {
+            return []
+        }
+        return reminders
     }
 
     func timeLetterReminderCount(now: Date = Date()) -> Int {
@@ -431,20 +455,44 @@ final class MemoryArchiveRepository {
         echoReplySources: [EchoReplyMessageSource] = [],
         systemNoticeSources: [SystemNoticeMessageSource] = []
     ) -> InAppMessageCenterSnapshot {
-        let timeLetterMessages = timeLetterMailboxReminders()
+        guard let accountLease = captureCurrentAccountLease() else {
+            return InAppMessageCenterSnapshot(messages: [], hiddenCandidateMessages: [])
+        }
+        return inAppMessageCenterSnapshot(
+            accountLease: accountLease,
+            includeUnavailableCandidates: includeUnavailableCandidates,
+            familyInvitationSources: familyInvitationSources,
+            careSignalSources: careSignalSources,
+            echoReplySources: echoReplySources,
+            systemNoticeSources: systemNoticeSources
+        )
+    }
+
+    func inAppMessageCenterSnapshot(
+        accountLease: AccountLease,
+        includeUnavailableCandidates: Bool = false,
+        familyInvitationSources: [FamilyInvitationMessageSource] = [],
+        careSignalSources: [CareSignalMessageSource] = [],
+        echoReplySources: [EchoReplyMessageSource] = [],
+        systemNoticeSources: [SystemNoticeMessageSource] = []
+    ) -> InAppMessageCenterSnapshot {
+        guard isCurrentAccountLease(accountLease, at: .request) else {
+            return InAppMessageCenterSnapshot(messages: [], hiddenCandidateMessages: [])
+        }
+        let timeLetterMessages = timeLetterMailboxReminders(accountLease: accountLease)
             .map(InAppMessage.fromTimeLetterReminder)
         let familyInvitationMessages = familyInvitationSources
             .compactMap(InAppMessage.fromFamilyInvitation)
-            .map(applyLocalInAppMessageStateIfNeeded)
+            .map { applyLocalInAppMessageStateIfNeeded($0, accountLease: accountLease) }
         let careSignalMessages = careSignalSources
             .compactMap(InAppMessage.fromCareSignal)
-            .map(applyLocalInAppMessageStateIfNeeded)
+            .map { applyLocalInAppMessageStateIfNeeded($0, accountLease: accountLease) }
         let systemNoticeMessages = systemNoticeSources
             .compactMap(InAppMessage.fromSystemNotice)
-            .map(applyLocalInAppMessageStateIfNeeded)
+            .map { applyLocalInAppMessageStateIfNeeded($0, accountLease: accountLease) }
         let echoReplyMessages = echoReplySources
             .compactMap(InAppMessage.fromEchoReply)
-            .map(applyLocalInAppMessageStateIfNeeded)
+            .map { applyLocalInAppMessageStateIfNeeded($0, accountLease: accountLease) }
         let hiddenCandidates: [InAppMessage] = []
         let visibleMessages = InAppMessageCenterSnapshot.sortedMessages(
             timeLetterMessages
@@ -454,6 +502,9 @@ final class MemoryArchiveRepository {
                 + echoReplyMessages
         )
         let candidateMessages = includeUnavailableCandidates ? hiddenCandidates : []
+        guard isCurrentAccountLease(accountLease, at: .runtime) else {
+            return InAppMessageCenterSnapshot(messages: [], hiddenCandidateMessages: [])
+        }
         return InAppMessageCenterSnapshot(
             messages: visibleMessages,
             hiddenCandidateMessages: candidateMessages
@@ -461,10 +512,19 @@ final class MemoryArchiveRepository {
     }
 
     func timeLetterMailboxReminder(for message: InAppMessage) -> TimeLetterMailboxReminder? {
+        guard let accountLease = captureCurrentAccountLease() else { return nil }
+        return timeLetterMailboxReminder(for: message, accountLease: accountLease)
+    }
+
+    func timeLetterMailboxReminder(
+        for message: InAppMessage,
+        accountLease: AccountLease
+    ) -> TimeLetterMailboxReminder? {
         guard message.kind == .timeLetter else {
             return nil
         }
-        return timeLetterMailboxReminders().first { reminder in
+        guard isCurrentAccountLease(accountLease, at: .request) else { return nil }
+        return timeLetterMailboxReminders(accountLease: accountLease).first { reminder in
             reminder.id == message.id || reminder.sourceArchiveItemId == message.sourceArchiveItemId
         }
     }
@@ -473,14 +533,33 @@ final class MemoryArchiveRepository {
         _ message: InAppMessage,
         completion: ((Result<InAppMessage, Error>) -> Void)? = nil
     ) {
+        guard let accountLease = captureCurrentAccountLease() else {
+            completion?(.failure(ArchiveRepositoryError.accountScopeChanged))
+            return
+        }
+        markInAppMessageRead(message, accountLease: accountLease, completion: completion)
+    }
+
+    func markInAppMessageRead(
+        _ message: InAppMessage,
+        accountLease: AccountLease,
+        completion: ((Result<InAppMessage, Error>) -> Void)? = nil
+    ) {
+        guard isCurrentAccountLease(accountLease, at: .request) else {
+            completion?(.failure(ArchiveRepositoryError.accountScopeChanged))
+            return
+        }
         guard message.kind == .timeLetter else {
             let updatedMessage = message.markingRead(readAt: isoFormatter.string(from: Date()))
-            updateLocalInAppMessageState(updatedMessage)
-            completion?(.success(updatedMessage))
+            guard updateLocalInAppMessageState(updatedMessage, accountLease: accountLease) else {
+                completion?(.failure(ArchiveRepositoryError.accountScopeChanged))
+                return
+            }
+            deliver(.success(updatedMessage), lease: accountLease, completion: completion)
             return
         }
         guard message.kind == .timeLetter,
-              let reminder = timeLetterMailboxReminder(for: message) else {
+              let reminder = timeLetterMailboxReminder(for: message, accountLease: accountLease) else {
             completion?(.failure(NSError(
                 domain: "DreamJourney.InAppMessageCenter",
                 code: 404,
@@ -488,7 +567,7 @@ final class MemoryArchiveRepository {
             )))
             return
         }
-        markTimeLetterMailboxReminderRead(reminder) { result in
+        markTimeLetterMailboxReminderRead(reminder, accountLease: accountLease) { result in
             switch result {
             case .success(let updatedReminder):
                 completion?(.success(InAppMessage.fromTimeLetterReminder(updatedReminder)))
@@ -502,14 +581,33 @@ final class MemoryArchiveRepository {
         _ message: InAppMessage,
         completion: ((Result<InAppMessage, Error>) -> Void)? = nil
     ) {
+        guard let accountLease = captureCurrentAccountLease() else {
+            completion?(.failure(ArchiveRepositoryError.accountScopeChanged))
+            return
+        }
+        archiveInAppMessage(message, accountLease: accountLease, completion: completion)
+    }
+
+    func archiveInAppMessage(
+        _ message: InAppMessage,
+        accountLease: AccountLease,
+        completion: ((Result<InAppMessage, Error>) -> Void)? = nil
+    ) {
+        guard isCurrentAccountLease(accountLease, at: .request) else {
+            completion?(.failure(ArchiveRepositoryError.accountScopeChanged))
+            return
+        }
         guard message.kind == .timeLetter else {
             let updatedMessage = message.markingArchived(archivedAt: isoFormatter.string(from: Date()))
-            updateLocalInAppMessageState(updatedMessage)
-            completion?(.success(updatedMessage))
+            guard updateLocalInAppMessageState(updatedMessage, accountLease: accountLease) else {
+                completion?(.failure(ArchiveRepositoryError.accountScopeChanged))
+                return
+            }
+            deliver(.success(updatedMessage), lease: accountLease, completion: completion)
             return
         }
         guard message.kind == .timeLetter,
-              let reminder = timeLetterMailboxReminder(for: message) else {
+              let reminder = timeLetterMailboxReminder(for: message, accountLease: accountLease) else {
             completion?(.failure(NSError(
                 domain: "DreamJourney.InAppMessageCenter",
                 code: 404,
@@ -517,7 +615,7 @@ final class MemoryArchiveRepository {
             )))
             return
         }
-        markTimeLetterMailboxReminderArchived(reminder) { result in
+        markTimeLetterMailboxReminderArchived(reminder, accountLease: accountLease) { result in
             switch result {
             case .success(let updatedReminder):
                 completion?(.success(InAppMessage.fromTimeLetterReminder(updatedReminder)))
@@ -531,14 +629,28 @@ final class MemoryArchiveRepository {
         _ reminder: TimeLetterMailboxReminder,
         completion: ((Result<TimeLetterMailboxReminder, Error>) -> Void)? = nil
     ) {
-        guard let accountLease = captureCurrentAccountLease(),
-              isCurrentAccountLease(accountLease, at: .commit) else {
+        guard let accountLease = captureCurrentAccountLease() else {
+            completion?(.failure(ArchiveRepositoryError.accountScopeChanged))
+            return
+        }
+        markTimeLetterMailboxReminderRead(reminder, accountLease: accountLease, completion: completion)
+    }
+
+    func markTimeLetterMailboxReminderRead(
+        _ reminder: TimeLetterMailboxReminder,
+        accountLease: AccountLease,
+        completion: ((Result<TimeLetterMailboxReminder, Error>) -> Void)? = nil
+    ) {
+        guard isCurrentAccountLease(accountLease, at: .request) else {
             completion?(.failure(ArchiveRepositoryError.accountScopeChanged))
             return
         }
         let readAt = isoFormatter.string(from: Date())
         let updatedReminder = reminder.markingRead(readAt: readAt)
-        updateCachedTimeLetterMailboxReminder(updatedReminder, accountLease: accountLease)
+        guard updateCachedTimeLetterMailboxReminder(updatedReminder, accountLease: accountLease) else {
+            completion?(.failure(ArchiveRepositoryError.accountScopeChanged))
+            return
+        }
 
         guard DreamJourneyBackendClient.shared.isTimeLetterDispatchConfigured else {
             deliver(.success(updatedReminder), lease: accountLease, completion: completion)
@@ -555,7 +667,9 @@ final class MemoryArchiveRepository {
             switch result {
             case .success(let object):
                 if let item = Self.timeLetterMailboxReminder(fromReadResponse: object) {
-                    updateCachedTimeLetterMailboxReminder(item, accountLease: accountLease)
+                    guard updateCachedTimeLetterMailboxReminder(item, accountLease: accountLease) else {
+                        return
+                    }
                     deliver(.success(item), lease: accountLease, completion: completion)
                 } else {
                     deliver(.success(updatedReminder), lease: accountLease, completion: completion)
@@ -571,14 +685,28 @@ final class MemoryArchiveRepository {
         _ reminder: TimeLetterMailboxReminder,
         completion: ((Result<TimeLetterMailboxReminder, Error>) -> Void)? = nil
     ) {
-        guard let accountLease = captureCurrentAccountLease(),
-              isCurrentAccountLease(accountLease, at: .commit) else {
+        guard let accountLease = captureCurrentAccountLease() else {
+            completion?(.failure(ArchiveRepositoryError.accountScopeChanged))
+            return
+        }
+        markTimeLetterMailboxReminderArchived(reminder, accountLease: accountLease, completion: completion)
+    }
+
+    func markTimeLetterMailboxReminderArchived(
+        _ reminder: TimeLetterMailboxReminder,
+        accountLease: AccountLease,
+        completion: ((Result<TimeLetterMailboxReminder, Error>) -> Void)? = nil
+    ) {
+        guard isCurrentAccountLease(accountLease, at: .request) else {
             completion?(.failure(ArchiveRepositoryError.accountScopeChanged))
             return
         }
         let archivedAt = isoFormatter.string(from: Date())
         let updatedReminder = reminder.markingArchived(archivedAt: archivedAt)
-        updateCachedTimeLetterMailboxReminder(updatedReminder, accountLease: accountLease)
+        guard updateCachedTimeLetterMailboxReminder(updatedReminder, accountLease: accountLease) else {
+            completion?(.failure(ArchiveRepositoryError.accountScopeChanged))
+            return
+        }
 
         guard DreamJourneyBackendClient.shared.isTimeLetterDispatchConfigured else {
             deliver(.success(updatedReminder), lease: accountLease, completion: completion)
@@ -595,7 +723,9 @@ final class MemoryArchiveRepository {
             switch result {
             case .success(let object):
                 if let item = Self.timeLetterMailboxReminder(fromReadResponse: object) {
-                    updateCachedTimeLetterMailboxReminder(item, accountLease: accountLease)
+                    guard updateCachedTimeLetterMailboxReminder(item, accountLease: accountLease) else {
+                        return
+                    }
                     deliver(.success(item), lease: accountLease, completion: completion)
                 } else {
                     deliver(.success(updatedReminder), lease: accountLease, completion: completion)
@@ -627,7 +757,17 @@ final class MemoryArchiveRepository {
             switch result {
             case .success(let object):
                 let reminders = Self.timeLetterMailboxReminders(from: object)
-                saveTimeLetterMailboxReminders(reminders, accountLease: accountLease)
+                guard replaceCachedTimeLetterMailboxReminders(
+                    reminders,
+                    accountLease: accountLease
+                ) else {
+                    deliver(
+                        .failure(ArchiveRepositoryError.accountScopeChanged),
+                        lease: accountLease,
+                        completion: completion
+                    )
+                    return
+                }
                 deliver(.success(reminders), lease: accountLease, completion: completion)
             case .failure(let error):
                 print("[Archive] timeLetter mailbox fetch failed: \(error.localizedDescription)")
@@ -812,16 +952,61 @@ final class MemoryArchiveRepository {
             ).storageKey == lease.storageKey
     }
 
-    private var mailboxStorageKey: String {
-        mailboxStorageKey(for: currentUserId)
+    private func legacyMailboxStorageKey(for accountUserId: String) -> String {
+        "\(legacyMailboxBaseKey).\(accountUserId)"
     }
 
-    private var inAppMessageStateStorageKey: String {
-        "\(inAppMessageStateBaseKey).\(currentUserId)"
+    private func legacyInAppMessageStateStorageKey(for accountUserId: String) -> String {
+        "\(legacyInAppMessageStateBaseKey).\(accountUserId)"
     }
 
-    private func mailboxStorageKey(for accountUserId: String) -> String {
-        "\(mailboxBaseKey).\(accountUserId)"
+    private func timeLetterMailboxOwnerScope(
+        accountLease: AccountLease
+    ) -> InAppMessageOwnerScope? {
+        let scope = InAppMessageOwnerScope(
+            accountLease: accountLease,
+            resourceOwnerId: accountLease.subjectId,
+            operationId: timeLetterMailboxOperationId
+        )
+        return scope.isValid ? scope : nil
+    }
+
+    private func retireLegacyMailboxIfNeeded(accountLease: AccountLease) -> Bool {
+        let legacyStorageKey = legacyMailboxStorageKey(for: accountLease.subjectId)
+        let sourceItemCount = UserDefaults.standard.data(forKey: legacyStorageKey).flatMap {
+            try? JSONDecoder().decode([TimeLetterMailboxReminder].self, from: $0).count
+        }
+        return InAppMessageLegacyRetirementStorage.retireIfNeeded(
+            surface: .timeLetterMailbox,
+            legacyStorageKey: legacyStorageKey,
+            sourceItemCount: sourceItemCount,
+            defaults: .standard,
+            namespace: legacyRetirementNamespace(accountLease.subjectId)
+        )
+    }
+
+    private func retireLegacyInAppMessageStateIfNeeded(accountLease: AccountLease) -> Bool {
+        let legacyStorageKey = legacyInAppMessageStateStorageKey(for: accountLease.subjectId)
+        return withMessageStateLock {
+            InAppMessageLegacyRetirementStorage.retireIfNeeded(
+                surface: .localState,
+                legacyStorageKey: legacyStorageKey,
+                sourceItemCount: nil,
+                defaults: .standard,
+                namespace: legacyRetirementNamespace(accountLease.subjectId)
+            )
+        }
+    }
+
+    private func legacyRetirementNamespace(_ accountUserId: String) -> String {
+        ArchiveLocalStoragePolicy.sha256("legacy-owner:\(accountUserId)")
+            .replacingOccurrences(of: "sha256:", with: "")
+    }
+
+    private func withMessageStateLock<T>(_ body: () -> T) -> T {
+        messageStateLock.lock()
+        defer { messageStateLock.unlock() }
+        return body()
     }
 
     private func captureCurrentAccountLease() -> AccountLease? {
@@ -893,49 +1078,104 @@ final class MemoryArchiveRepository {
         }
     }
 
-    private func saveTimeLetterMailboxReminders(
+    @discardableResult
+    func replaceCachedTimeLetterMailboxReminders(
         _ reminders: [TimeLetterMailboxReminder],
         accountLease: AccountLease
-    ) {
-        guard isCurrentAccountLease(accountLease, at: .commit) else { return }
-        if let data = try? JSONEncoder().encode(reminders) {
-            UserDefaults.standard.set(
-                data,
-                forKey: mailboxStorageKey(for: accountLease.subjectId)
-            )
+    ) -> Bool {
+        guard isCurrentAccountLease(accountLease, at: .request),
+              let scope = timeLetterMailboxOwnerScope(accountLease: accountLease),
+              let data = try? JSONEncoder().encode(
+                  InAppMessageSourceEnvelope(sources: reminders, scope: scope)
+              ) else {
+            return false
+        }
+        return withMessageStateLock {
+            guard retireLegacyMailboxIfNeeded(accountLease: accountLease),
+                  isCurrentAccountLease(accountLease, at: .commit) else {
+                return false
+            }
+            let storageKey = scope.storageKey(for: .timeLetterMailbox)
+            let previousData = UserDefaults.standard.data(forKey: storageKey)
+            UserDefaults.standard.set(data, forKey: storageKey)
+            guard UserDefaults.standard.data(forKey: storageKey) == data else { return false }
+            guard isCurrentAccountLease(accountLease, at: .commit) else {
+                if let previousData {
+                    UserDefaults.standard.set(previousData, forKey: storageKey)
+                } else {
+                    UserDefaults.standard.removeObject(forKey: storageKey)
+                }
+                return false
+            }
+            return true
         }
     }
 
-    private func localInAppMessageStates() -> [String: InAppMessageLocalState] {
-        guard let data = UserDefaults.standard.data(forKey: inAppMessageStateStorageKey),
-              let decoded = try? JSONDecoder().decode([String: InAppMessageLocalState].self, from: data) else {
-            return [:]
+    private func localInAppMessageState(
+        for message: InAppMessage,
+        accountLease: AccountLease
+    ) -> InAppMessageLocalState? {
+        guard isCurrentAccountLease(accountLease, at: .request),
+              retireLegacyInAppMessageStateIfNeeded(accountLease: accountLease),
+              let scope = inAppMessageOwnerScope(for: message, accountLease: accountLease),
+              let data = UserDefaults.standard.data(forKey: scope.storageKey(for: .localState)),
+              let envelope = try? JSONDecoder().decode(
+                InAppMessageSourceEnvelope<InAppMessageLocalState>.self,
+                from: data
+              ),
+              envelope.matches(scope),
+              let state = envelope.sources.first,
+              state.messageId == message.id,
+              isCurrentAccountLease(accountLease, at: .runtime) else {
+            return nil
         }
-        return decoded
+        return state
     }
 
-    private func saveLocalInAppMessageStates(_ states: [String: InAppMessageLocalState]) {
-        if let data = try? JSONEncoder().encode(states) {
-            UserDefaults.standard.set(data, forKey: inAppMessageStateStorageKey)
-        }
-    }
-
-    private func updateLocalInAppMessageState(_ message: InAppMessage) {
+    @discardableResult
+    private func updateLocalInAppMessageState(
+        _ message: InAppMessage,
+        accountLease: AccountLease
+    ) -> Bool {
         guard message.kind != .timeLetter else {
-            return
+            return false
         }
-        var states = localInAppMessageStates()
-        states[message.id] = InAppMessageLocalState(
+        guard isCurrentAccountLease(accountLease, at: .commit),
+              retireLegacyInAppMessageStateIfNeeded(accountLease: accountLease),
+              let scope = inAppMessageOwnerScope(for: message, accountLease: accountLease) else {
+            return false
+        }
+        let state = InAppMessageLocalState(
+            messageId: message.id,
             status: message.status,
             readAt: message.readAt,
             archivedAt: message.archivedAt
         )
-        saveLocalInAppMessageStates(states)
+        let envelope = InAppMessageSourceEnvelope(sources: [state], scope: scope)
+        guard let data = try? JSONEncoder().encode(envelope) else { return false }
+        let storageKey = scope.storageKey(for: .localState)
+        return withMessageStateLock {
+            let previousData = UserDefaults.standard.data(forKey: storageKey)
+            UserDefaults.standard.set(data, forKey: storageKey)
+            guard UserDefaults.standard.data(forKey: storageKey) == data else { return false }
+            guard isCurrentAccountLease(accountLease, at: .commit) else {
+                if let previousData {
+                    UserDefaults.standard.set(previousData, forKey: storageKey)
+                } else {
+                    UserDefaults.standard.removeObject(forKey: storageKey)
+                }
+                return false
+            }
+            return true
+        }
     }
 
-    private func applyLocalInAppMessageStateIfNeeded(_ message: InAppMessage) -> InAppMessage {
+    private func applyLocalInAppMessageStateIfNeeded(
+        _ message: InAppMessage,
+        accountLease: AccountLease
+    ) -> InAppMessage {
         guard message.kind != .timeLetter,
-              let state = localInAppMessageStates()[message.id] else {
+              let state = localInAppMessageState(for: message, accountLease: accountLease) else {
             return message
         }
         switch state.status {
@@ -948,18 +1188,37 @@ final class MemoryArchiveRepository {
         }
     }
 
+    private func inAppMessageOwnerScope(
+        for message: InAppMessage,
+        accountLease: AccountLease
+    ) -> InAppMessageOwnerScope? {
+        guard let resourceOwnerId = message.ownerUserId?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !resourceOwnerId.isEmpty else {
+            return nil
+        }
+        let scope = InAppMessageOwnerScope(
+            accountLease: accountLease,
+            resourceOwnerId: resourceOwnerId,
+            operationId: message.id
+        )
+        return scope.isValid ? scope : nil
+    }
+
+    @discardableResult
     private func updateCachedTimeLetterMailboxReminder(
         _ reminder: TimeLetterMailboxReminder,
         accountLease: AccountLease
-    ) {
-        guard isCurrentAccountLease(accountLease, at: .commit) else { return }
-        var reminders = timeLetterMailboxReminders(accountUserId: accountLease.subjectId)
-        if let index = reminders.firstIndex(where: { $0.id == reminder.id }) {
-            reminders[index] = reminder
-        } else {
-            reminders.insert(reminder, at: 0)
+    ) -> Bool {
+        return withMessageStateLock {
+            guard isCurrentAccountLease(accountLease, at: .commit) else { return false }
+            var reminders = timeLetterMailboxReminders(accountLease: accountLease)
+            if let index = reminders.firstIndex(where: { $0.id == reminder.id }) {
+                reminders[index] = reminder
+            } else {
+                reminders.insert(reminder, at: 0)
+            }
+            return replaceCachedTimeLetterMailboxReminders(reminders, accountLease: accountLease)
         }
-        saveTimeLetterMailboxReminders(reminders, accountLease: accountLease)
     }
 
     private func localTimeLetterDetailItem(
@@ -1250,10 +1509,25 @@ final class TimeLetterReminderScheduler {
     func scheduleIfNeeded(_ item: MemoryArchiveItem) {
         guard item.isSealedTimeLetter,
               let openAt = item.timeLetterOpenAt,
-              let accountLease = accountLeaseRuntime.capture() else {
+              let accountLease = accountLeaseRuntime.capture(),
+              item.ownerUserId == accountLease.subjectId else {
             return
         }
-        let identifier = "time-letter-\(item.id)"
+        let accountLeaseIdentity = identityDigest([
+            "account-lease",
+            accountLease.subjectId,
+            accountLease.vaultId,
+            String(accountLease.generation),
+            accountLease.generationId.uuidString,
+            accountLease.authorityEpoch,
+        ])
+        let resourceOwnerIdentity = identityDigest(["resource-owner", item.ownerUserId])
+        let operationIdentity = identityDigest(["operation", item.id])
+        let identifier = notificationIdentifier(
+            itemId: item.id,
+            resourceOwnerId: item.ownerUserId,
+            accountLease: accountLease
+        )
         notificationCenter.requestAuthorization(options: [.alert, .badge, .sound]) { [weak self] granted, _ in
             guard let self,
                   granted,
@@ -1270,9 +1544,11 @@ final class TimeLetterReminderScheduler {
             content.body = "你封存给 \(recipientText) 的时间信件可以打开了。"
             content.sound = .default
             content.userInfo = [
-                "archiveItemId": item.id,
                 "kind": "timeLetter",
                 "deliveryStatus": item.timeLetterDeliveryStatus,
+                "accountLeaseIdentity": accountLeaseIdentity,
+                "resourceOwnerIdentity": resourceOwnerIdentity,
+                "operationIdentity": operationIdentity,
             ]
 
             let trigger: UNNotificationTrigger
@@ -1290,8 +1566,41 @@ final class TimeLetterReminderScheduler {
             guard self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
                 return
             }
-            self.notificationCenter.add(request)
+            self.notificationCenter.add(request) { [weak self] _ in
+                guard let self else { return }
+                guard self.accountLeaseRuntime.validate(accountLease, at: .timer).allowed,
+                      self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+                    self.notificationCenter.removePendingNotificationRequests(withIdentifiers: [identifier])
+                    return
+                }
+            }
         }
+    }
+
+    private func notificationIdentifier(
+        itemId: String,
+        resourceOwnerId: String,
+        accountLease: AccountLease
+    ) -> String {
+        let digest = identityDigest([
+            "time-letter-notification-v2",
+            accountLease.subjectId,
+            accountLease.vaultId,
+            String(accountLease.generation),
+            accountLease.generationId.uuidString,
+            accountLease.authorityEpoch,
+            resourceOwnerId,
+            itemId,
+        ])
+        return "dj.timeLetter.reminder.\(digest)"
+    }
+
+    private func identityDigest(_ values: [String]) -> String {
+        let canonical = values
+            .map { "\($0.utf8.count):\($0)" }
+            .joined(separator: "|")
+        return ArchiveLocalStoragePolicy.sha256(canonical)
+            .replacingOccurrences(of: "sha256:", with: "")
     }
 }
 

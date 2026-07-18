@@ -131,10 +131,12 @@ private final class InAppMessageCenterViewController: UIViewController {
     }
 
     private let repository: MemoryArchiveRepository
+    private let accountLease: AccountLease
+    private let snapshotProvider: (AccountLease) -> InAppMessageCenterSnapshot?
     private var messages: [InAppMessage]
-    private let onOpenMessage: (InAppMessage) -> Void
-    private let onShowAllTimeLetters: () -> Void
-    private let onMessageStateChanged: () -> Void
+    private let onOpenMessage: (InAppMessage, AccountLease) -> Void
+    private let onShowAllTimeLetters: (AccountLease) -> Void
+    private let onMessageStateChanged: (AccountLease) -> Void
 
     private let tableView = UITableView(frame: .zero, style: .plain)
     private let headerStack = UIStackView()
@@ -151,11 +153,15 @@ private final class InAppMessageCenterViewController: UIViewController {
     init(
         snapshot: InAppMessageCenterSnapshot,
         repository: MemoryArchiveRepository,
-        onOpenMessage: @escaping (InAppMessage) -> Void,
-        onShowAllTimeLetters: @escaping () -> Void,
-        onMessageStateChanged: @escaping () -> Void
+        accountLease: AccountLease,
+        snapshotProvider: @escaping (AccountLease) -> InAppMessageCenterSnapshot?,
+        onOpenMessage: @escaping (InAppMessage, AccountLease) -> Void,
+        onShowAllTimeLetters: @escaping (AccountLease) -> Void,
+        onMessageStateChanged: @escaping (AccountLease) -> Void
     ) {
         self.repository = repository
+        self.accountLease = accountLease
+        self.snapshotProvider = snapshotProvider
         self.messages = snapshot.messages
         self.onOpenMessage = onOpenMessage
         self.onShowAllTimeLetters = onShowAllTimeLetters
@@ -259,13 +265,30 @@ private final class InAppMessageCenterViewController: UIViewController {
         ])
     }
 
-    private func refreshMessagesFromRepository() {
-        messages = repository.inAppMessageCenterSnapshot().messages
+    @discardableResult
+    private func refreshMessagesFromRepository() -> Bool {
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed,
+              let snapshot = snapshotProvider(accountLease),
+              AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+            failClosedForStaleAccountLease()
+            return false
+        }
+        messages = snapshot.messages
         tableView.reloadData()
         updateEmptyState()
+        return true
+    }
+
+    private func failClosedForStaleAccountLease() {
+        messages = []
+        tableView.reloadData()
+        updateEmptyState()
+        subtitleLabel.text = "账号状态已变化，请重新打开消息中心。"
+        emptyStateLabel.text = "当前消息已停止显示"
     }
 
     private func updateEmptyState() {
+        emptyStateLabel.text = "还没有新的应用内提醒"
         let inboxCount = messages.filter { !$0.isArchived }.count
         let unreadCount = messages.filter { !$0.isArchived && $0.isUnread }.count
         subtitleLabel.text = unreadCount > 0
@@ -277,7 +300,12 @@ private final class InAppMessageCenterViewController: UIViewController {
     }
 
     @objc private func showAllTimeLettersTapped() {
-        onShowAllTimeLetters()
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+            failClosedForStaleAccountLease()
+            showToast("账号已切换，请重新打开消息中心", type: .info)
+            return
+        }
+        onShowAllTimeLetters(accountLease)
     }
 
     @objc private func archiveReadRemindersTapped() {
@@ -286,7 +314,7 @@ private final class InAppMessageCenterViewController: UIViewController {
             showToast("暂无已读消息可归档", type: .info)
             return
         }
-        readMessages.forEach(archiveMessage)
+        readMessages.forEach { archiveMessage($0) }
     }
 
     private func messages(in section: Section) -> [InAppMessage] {
@@ -303,30 +331,68 @@ private final class InAppMessageCenterViewController: UIViewController {
         return messages(in: section)[indexPath.row]
     }
 
-    private func replaceLocalMessage(_ message: InAppMessage) {
-        if let index = messages.firstIndex(where: { $0.id == message.id }) {
-            messages[index] = message
-        } else {
-            messages.insert(message, at: 0)
+    private func archiveMessage(
+        _ message: InAppMessage,
+        completion: ((Bool) -> Void)? = nil
+    ) {
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+            failClosedForStaleAccountLease()
+            showToast("账号已切换，请重新打开消息中心", type: .info)
+            completion?(false)
+            return
         }
-        messages = InAppMessageCenterSnapshot.sortedMessages(messages)
-        tableView.reloadData()
-        updateEmptyState()
-        onMessageStateChanged()
+        repository.archiveInAppMessage(message, accountLease: accountLease) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else {
+                    completion?(false)
+                    return
+                }
+                guard AccountLeaseRuntime.shared.validate(self.accountLease, at: .ui).allowed else {
+                    self.failClosedForStaleAccountLease()
+                    completion?(false)
+                    return
+                }
+                switch result {
+                case .success:
+                    guard self.refreshMessagesFromRepository() else {
+                        completion?(false)
+                        return
+                    }
+                    self.onMessageStateChanged(self.accountLease)
+                    completion?(true)
+                case .failure:
+                    self.showToast("归档失败，请稍后重试", type: .info)
+                    completion?(false)
+                }
+            }
+        }
     }
 
-    private func archiveMessage(_ message: InAppMessage) {
-        let archivedMessage = message.markingArchived(archivedAt: ISO8601DateFormatter().string(from: Date()))
-        replaceLocalMessage(archivedMessage)
-        repository.archiveInAppMessage(message) { [weak self] result in
-            switch result {
-            case .success(let updated):
-                DispatchQueue.main.async {
-                    self?.replaceLocalMessage(updated)
+    private func markMessageReadAndOpen(_ message: InAppMessage) {
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+            failClosedForStaleAccountLease()
+            showToast("账号已切换，请重新打开消息中心", type: .info)
+            return
+        }
+        guard message.isUnread else {
+            onOpenMessage(message, accountLease)
+            return
+        }
+
+        repository.markInAppMessageRead(message, accountLease: accountLease) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                guard AccountLeaseRuntime.shared.validate(self.accountLease, at: .ui).allowed else {
+                    self.failClosedForStaleAccountLease()
+                    return
                 }
-            case .failure:
-                DispatchQueue.main.async {
-                    self?.showToast("归档同步失败，本地已收起", type: .info)
+                switch result {
+                case .success(let updated):
+                    guard self.refreshMessagesFromRepository() else { return }
+                    self.onMessageStateChanged(self.accountLease)
+                    self.onOpenMessage(updated, self.accountLease)
+                case .failure:
+                    self.showToast("标记已读失败，请稍后重试", type: .info)
                 }
             }
         }
@@ -353,10 +419,13 @@ extension InAppMessageCenterViewController: UITableViewDataSource, UITableViewDe
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+            failClosedForStaleAccountLease()
+            showToast("账号已切换，请重新打开消息中心", type: .info)
+            return
+        }
         let message = message(at: indexPath)
-        let readMessage = message.markingRead(readAt: ISO8601DateFormatter().string(from: Date()))
-        replaceLocalMessage(readMessage)
-        onOpenMessage(message)
+        markMessageReadAndOpen(message)
     }
 
     func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
@@ -373,8 +442,11 @@ extension InAppMessageCenterViewController: UITableViewDataSource, UITableViewDe
             return nil
         }
         let archiveAction = UIContextualAction(style: .normal, title: "归档") { [weak self] _, _, completion in
-            self?.archiveMessage(message)
-            completion(true)
+            guard let self else {
+                completion(false)
+                return
+            }
+            self.archiveMessage(message, completion: completion)
         }
         archiveAction.backgroundColor = DJDesignTokens.Color.textTertiary
         archiveAction.image = UIImage(systemName: "archivebox")
@@ -625,6 +697,7 @@ final class MemoryArchiveViewController: UIViewController {
     }()
 
     private static let warmTabBarFloatingBottomInset: CGFloat = 16
+    private static let systemNoticeInboxOperationId = "compatibility-current-inbox"
 
     private static func archiveListBottomInset(safeAreaBottomInset: CGFloat) -> CGFloat {
         DJDesignTokens.Spacing.tabBarHeight + warmTabBarFloatingBottomInset + safeAreaBottomInset + DJDesignTokens.Spacing.page
@@ -962,9 +1035,16 @@ final class MemoryArchiveViewController: UIViewController {
             return
         }
 
-        let snapshot = currentInAppMessageCenterSnapshot()
+        guard let accountLease = captureInAppMessageCenterAccountLease(at: .request),
+              let snapshot = currentInAppMessageCenterSnapshot(accountLease: accountLease) else {
+            timeLetterReminderButton.setTitle(nil, for: .normal)
+            timeLetterReminderButton.accessibilityLabel = nil
+            timeLetterReminderButton.isHidden = true
+            return
+        }
         let reminderCount = repository.timeLetterReminderCount()
-        guard let title = snapshot.entryButtonTitle(timeLetterReminderCount: reminderCount) else {
+        guard accountLeaseRuntime.validate(accountLease, at: .ui).allowed,
+              let title = snapshot.entryButtonTitle(timeLetterReminderCount: reminderCount) else {
             timeLetterReminderButton.setTitle(nil, for: .normal)
             timeLetterReminderButton.accessibilityLabel = nil
             timeLetterReminderButton.isHidden = true
@@ -2602,27 +2682,85 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     @objc private func timeLetterReminderTapped() {
-        let snapshot = currentInAppMessageCenterSnapshot()
+        guard let accountLease = captureInAppMessageCenterAccountLease(at: .request) else {
+            showToast("账号状态已变化，请稍后重试", type: .info)
+            return
+        }
+        let snapshotProvider: (AccountLease) -> InAppMessageCenterSnapshot? = { [weak self] lease in
+            self?.currentInAppMessageCenterSnapshot(accountLease: lease)
+        }
+        guard let snapshot = snapshotProvider(accountLease),
+              accountLeaseRuntime.validate(accountLease, at: .ui).allowed else {
+            showToast("账号状态已变化，请稍后重试", type: .info)
+            return
+        }
         guard !snapshot.messages.isEmpty else {
             applyArchiveKindFilter(.timeLetter)
             return
         }
-        presentInAppMessageCenter(snapshot)
-    }
-
-    private func currentInAppMessageCenterSnapshot() -> InAppMessageCenterSnapshot {
-        repository.inAppMessageCenterSnapshot(
-            familyInvitationSources: FamilyRepository.shared.getAll().map { $0 as FamilyInvitationMessageSource },
-            careSignalSources: currentCareSignalMessageSources(),
-            echoReplySources: EchoReplyMessageStore.shared.sources(),
-            systemNoticeSources: SystemNoticeMessageStore.shared.sources()
+        presentInAppMessageCenter(
+            snapshot,
+            accountLease: accountLease,
+            snapshotProvider: snapshotProvider
         )
     }
 
-    private func currentCareSignalMessageSources() -> [CareSignalMessageSource] {
+    private func captureInAppMessageCenterAccountLease(
+        at checkpoint: AccountLeaseCheckpoint
+    ) -> AccountLease? {
+        guard let userId = UserManager.shared.currentUser?.id,
+              !userId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let accountLease = accountLeaseRuntime.capture(forSubjectId: userId),
+              accountLease.subjectId == userId,
+              accountLeaseRuntime.validate(accountLease, at: checkpoint).allowed else {
+            return nil
+        }
+        return accountLease
+    }
+
+    private func currentInAppMessageCenterSnapshot(
+        accountLease: AccountLease
+    ) -> InAppMessageCenterSnapshot? {
+        guard accountLease.subjectId == UserManager.shared.currentUser?.id,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            return nil
+        }
+
+        let familyInvitationSources = FamilyRepository.shared.getAll().map {
+            $0 as FamilyInvitationMessageSource
+        }
+        let careSignalSources = currentCareSignalMessageSources(accountLease: accountLease)
+        let echoReplySources = EchoReplyMessageStore.shared.inboxSources(
+            accountLease: accountLease,
+            resourceOwnerId: accountLease.subjectId
+        )
+        let systemNoticeSources = SystemNoticeMessageStore.shared.sources(
+            accountLease: accountLease,
+            resourceOwnerId: accountLease.subjectId,
+            operationId: Self.systemNoticeInboxOperationId
+        )
+
+        guard accountLease.subjectId == UserManager.shared.currentUser?.id,
+              accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+            return nil
+        }
+        let snapshot = repository.inAppMessageCenterSnapshot(
+            accountLease: accountLease,
+            familyInvitationSources: familyInvitationSources,
+            careSignalSources: careSignalSources,
+            echoReplySources: echoReplySources,
+            systemNoticeSources: systemNoticeSources
+        )
+        guard accountLeaseRuntime.validate(accountLease, at: .ui).allowed else { return nil }
+        return snapshot
+    }
+
+    private func currentCareSignalMessageSources(
+        accountLease: AccountLease
+    ) -> [CareSignalMessageSource] {
         let contextOwnerId = DigitalHumanContextStore.shared.current.ownerId
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let userId = contextOwnerId.isEmpty ? UserManager.shared.currentUser?.id : contextOwnerId
+        let userId = contextOwnerId.isEmpty ? accountLease.subjectId : contextOwnerId
         guard let signal = ProfileCareSignalMessageStore.shared.cachedSignal(userId: userId) else {
             return []
         }
@@ -2639,18 +2777,35 @@ final class MemoryArchiveViewController: UIViewController {
         ]
     }
 
-    private func presentInAppMessageCenter(_ snapshot: InAppMessageCenterSnapshot) {
+    private func presentInAppMessageCenter(
+        _ snapshot: InAppMessageCenterSnapshot,
+        accountLease: AccountLease,
+        snapshotProvider: @escaping (AccountLease) -> InAppMessageCenterSnapshot?
+    ) {
+        guard accountLease.subjectId == UserManager.shared.currentUser?.id,
+              accountLeaseRuntime.validate(accountLease, at: .ui).allowed else {
+            showToast("账号状态已变化，请稍后重试", type: .info)
+            return
+        }
         let center = InAppMessageCenterViewController(
             snapshot: snapshot,
             repository: repository,
-            onOpenMessage: { [weak self] message in
-                self?.openInAppMessage(message)
+            accountLease: accountLease,
+            snapshotProvider: snapshotProvider,
+            onOpenMessage: { [weak self] message, capturedLease in
+                self?.openInAppMessage(message, accountLease: capturedLease)
             },
-            onShowAllTimeLetters: { [weak self] in
+            onShowAllTimeLetters: { [weak self] capturedLease in
+                guard AccountLeaseRuntime.shared.validate(capturedLease, at: .ui).allowed else {
+                    return
+                }
                 self?.navigationController?.popViewController(animated: true)
                 self?.applyArchiveKindFilter(.timeLetter)
             },
-            onMessageStateChanged: { [weak self] in
+            onMessageStateChanged: { [weak self] capturedLease in
+                guard AccountLeaseRuntime.shared.validate(capturedLease, at: .ui).allowed else {
+                    return
+                }
                 self?.refreshContent()
             }
         )
@@ -2662,29 +2817,33 @@ final class MemoryArchiveViewController: UIViewController {
         }
     }
 
-    private func openInAppMessage(_ message: InAppMessage) {
+    private func openInAppMessage(_ message: InAppMessage, accountLease: AccountLease) {
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+            showToast("账号已切换，请重新打开消息中心", type: .info)
+            return
+        }
         switch message.kind {
         case .timeLetter:
-            guard let reminder = repository.timeLetterMailboxReminder(for: message) else {
+            guard let reminder = repository.timeLetterMailboxReminder(
+                for: message,
+                accountLease: accountLease
+            ) else {
                 showToast("时间信件暂不可打开", type: .error)
                 return
             }
-            openTimeLetterReminder(reminder)
+            openTimeLetterReminder(reminder, accountLease: accountLease)
         case .familyInvitation:
             openFamilyInvitationMessage(message)
         case .careSignal:
-            openCareSignalMessage(message)
+            openCareSignalMessage()
         case .systemNotice:
             openSystemNoticeMessage(message)
         case .echoReply:
-            openEchoReplyMessage(message)
+            openEchoReplyMessage()
         }
     }
 
     private func openFamilyInvitationMessage(_ message: InAppMessage) {
-        repository.markInAppMessageRead(message) { [weak self] _ in
-            self?.refreshContent()
-        }
         if let familyMemberId = message.familyMemberId,
            let member = FamilyRepository.shared.get(by: familyMemberId) {
             let detailViewController = FamilyMemberDetailViewController(member: member)
@@ -2694,10 +2853,7 @@ final class MemoryArchiveViewController: UIViewController {
         navigationController?.pushViewController(FamilyCircleViewController(), animated: true)
     }
 
-    private func openCareSignalMessage(_ message: InAppMessage) {
-        repository.markInAppMessageRead(message) { [weak self] _ in
-            self?.refreshContent()
-        }
+    private func openCareSignalMessage() {
         guard let tabBarController else {
             navigationController?.pushViewController(ProfileViewController(), animated: true)
             return
@@ -2706,9 +2862,6 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     private func openSystemNoticeMessage(_ message: InAppMessage) {
-        repository.markInAppMessageRead(message) { [weak self] _ in
-            self?.refreshContent()
-        }
         let alert = UIAlertController(
             title: message.title,
             message: message.summary,
@@ -2718,10 +2871,7 @@ final class MemoryArchiveViewController: UIViewController {
         present(alert, animated: true)
     }
 
-    private func openEchoReplyMessage(_ message: InAppMessage) {
-        repository.markInAppMessageRead(message) { [weak self] _ in
-            self?.refreshContent()
-        }
+    private func openEchoReplyMessage() {
         guard let tabBarController else {
             navigationController?.pushViewController(EchoViewController(), animated: true)
             return
@@ -2729,15 +2879,23 @@ final class MemoryArchiveViewController: UIViewController {
         tabBarController.selectedIndex = min(1, (tabBarController.viewControllers?.count ?? 1) - 1)
     }
 
-    private func openTimeLetterReminder(_ reminder: TimeLetterMailboxReminder) {
+    private func openTimeLetterReminder(
+        _ reminder: TimeLetterMailboxReminder,
+        accountLease: AccountLease
+    ) {
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+            showToast("账号已切换，请重新打开消息中心", type: .info)
+            return
+        }
         showToast("正在打开时间信件", type: .info)
         repository.resolveTimeLetterReminderDetail(reminder) { [weak self] result in
             guard let self else { return }
+            guard AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+                showToast("账号已切换，请重新打开消息中心", type: .info)
+                return
+            }
             switch result {
             case .success(let item):
-                repository.markTimeLetterMailboxReminderRead(reminder) { [weak self] _ in
-                    self?.refreshContent()
-                }
                 let detailViewController = MemoryArchiveDetailViewController(item: item, repository: repository, isReadOnly: true)
                 navigationController?.pushViewController(detailViewController, animated: true)
             case .failure(let error):
