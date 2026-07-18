@@ -42,6 +42,7 @@
 		C7E1D0000000000000000001 /* ArchiveLocalStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1D0000000000000000101 /* ArchiveLocalStorage.swift */; };
 		C7E1E0000000000000000001 /* ArchiveMediaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1E0000000000000000101 /* ArchiveMediaStore.swift */; };
 		C7E1F0000000000000000001 /* ConversationLocalStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1F0000000000000000101 /* ConversationLocalStorage.swift */; };
+		C7E200000000000000000001 /* AccountPrivateMediaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E200000000000000000101 /* AccountPrivateMediaStore.swift */; };
 		56272F68DA6D144F29C65952 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 41B3D2BD9BE7DFE0AABF34F1 /* Assets.xcassets */; };
 		596491B3EBC0F9D31FB1C2E1 /* MemoryAnnotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89ABFCBCF51B9FD6CEB5799F /* MemoryAnnotation.swift */; };
 		5B5ABAB79A4B0C533DF4E21C /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = DEB0707389E5BC6A57EAB3BD /* LaunchScreen.storyboard */; };
@@ -269,6 +270,7 @@
 		C7E1D0000000000000000101 /* ArchiveLocalStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveLocalStorage.swift; sourceTree = "<group>"; };
 		C7E1E0000000000000000101 /* ArchiveMediaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveMediaStore.swift; sourceTree = "<group>"; };
 		C7E1F0000000000000000101 /* ConversationLocalStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLocalStorage.swift; sourceTree = "<group>"; };
+		C7E200000000000000000101 /* AccountPrivateMediaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountPrivateMediaStore.swift; sourceTree = "<group>"; };
 		B1B000000000000000000002 /* MemoryArchiveRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveRepository.swift; sourceTree = "<group>"; };
 		B1B000000000000000000003 /* MemoryArchiveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveViewController.swift; sourceTree = "<group>"; };
 		B1B000000000000000000050 /* InAppMessageCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InAppMessageCenter.swift; sourceTree = "<group>"; };
@@ -399,6 +401,7 @@
 			children = (
 				97D922D4C28AF76D7CB85DFF /* ConversationMemoryManager.swift */,
 				C7E1F0000000000000000101 /* ConversationLocalStorage.swift */,
+				C7E200000000000000000101 /* AccountPrivateMediaStore.swift */,
 				9B3A23A2BA7FD3D92A7BC975 /* DialogEngineManager.swift */,
 				EF8F1D6D1A0C1160E11C410B /* DreamJourneyBackendClient.swift */,
 				A9F000000000000000000101 /* BackendAuthSessionStore.swift */,
@@ -966,6 +969,7 @@
 				C51AC41EC608CEC137B1340F /* AuthCoordinator.swift in Sources */,
 				A45E9D7E5541F7288DD4141D /* ConversationMemoryManager.swift in Sources */,
 				C7E1F0000000000000000001 /* ConversationLocalStorage.swift in Sources */,
+				C7E200000000000000000001 /* AccountPrivateMediaStore.swift in Sources */,
 				EB8C6638C1D5E34AC579873D /* Coordinator.swift in Sources */,
 				F90DDD2F07DD62057280F6B1 /* DeepSeekService.swift in Sources */,
 				7FE1A54F9280057AA970D224 /* DialogEngineManager.swift in Sources */,

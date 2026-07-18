@@ -338,7 +338,7 @@ final class MemoryDetailViewController: UIViewController {
         photoStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         let caption = "\(memory.location) — \(memory.year)年\(memory.month)月"
 
-        let displayImages = memory.imageNames.compactMap { UIImage(named: $0) }
+        let displayImages = memory.imageNames.compactMap(resolveMemoryImage)
         photoScrollView.isHidden = displayImages.isEmpty
 
         let isSingle = displayImages.count <= 1
@@ -353,6 +353,19 @@ final class MemoryDetailViewController: UIViewController {
             let card = makePolaroid(image: img, caption: cap, cardWidth: cardWidth)
             photoStack.addArrangedSubview(card)
         }
+    }
+
+    private func resolveMemoryImage(_ reference: String) -> UIImage? {
+        if let accountLease,
+           memory.authorId == accountLease.subjectId,
+           AccountLeaseRuntime.shared.validate(accountLease, at: .runtime).allowed,
+           let fileURL = AccountPrivateMediaStore.shared.resolvePersistentPhoto(
+               reference: reference,
+               accountLease: accountLease
+           ) {
+            return UIImage(contentsOfFile: fileURL.path)
+        }
+        return UIImage(named: reference)
     }
 
     private func makePolaroid(image: UIImage?, caption: String, cardWidth: CGFloat) -> UIView {

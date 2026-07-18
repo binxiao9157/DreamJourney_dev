@@ -475,7 +475,8 @@ extension MapFootprintViewController: MAMapViewDelegate {
         annotationView?.configure(with: memoryAnnotation.memory,
                                   isNew: isNew,
                                   shouldBounce: shouldBounce,
-                                  isHost: isHost)
+                                  isHost: isHost,
+                                  accountLease: isHost ? accountLease : nil)
 
         // 显式点击回调：标记已读 + 跳详情页（兜底 didSelect 不触发）
         annotationView?.onTap = { [weak self, weak annotationView] in

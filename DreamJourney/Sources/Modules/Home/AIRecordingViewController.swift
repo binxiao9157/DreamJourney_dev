@@ -125,20 +125,22 @@ final class AIRecordingViewController: UIViewController {
     /// AI 流式拼接缓存（不直接显示，等 TTS 句子完整时再展示）
     private var pendingAIText: String?
     private let accountLeaseRuntime = AccountLeaseRuntime.shared
+    private let privateMediaStore = AccountPrivateMediaStore.shared
     private let dialogEngineOwnerId = UUID()
     private var dialogAccountLease: AccountLease?
     private var dialogEngineBindingHandle: DialogEngineBindingHandle?
     private var mediaPickerAccountLease: AccountLease?
     private var mediaPickerDigitalHumanContext: DigitalHumanContext?
+    private var pendingPhotoArtifacts: [String: AccountPrivateMediaArtifact] = [:]
 
     // MARK: - 对话录音（用于声音复刻）
     /// 并行录音器：对话期间录制用户语音，供声音复刻训练使用
     private var sessionRecorder: AVAudioRecorder?
     private var sessionRecordingAccountLease: AccountLease?
-    /// 最近一次对话的录音文件 URL
+    private var sessionRecordingArtifact: AccountPrivateMediaArtifact?
+    private var lastSessionRecordingArtifact: AccountPrivateMediaArtifact?
+    /// 最近一次对话的账号隔离录音 staging URL
     private(set) var lastSessionRecordingURL: URL?
-    /// 与录音文件配对的 sessionId（用于详情页查找 recordings/{sessionId}.m4a）
-    private(set) var lastSessionId: String?
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -149,6 +151,7 @@ final class AIRecordingViewController: UIViewController {
         setupLayout()
         setupNotifications()
         updateVoiceBallState(.idle)
+        retireLegacyGlobalMedia()
         activateDialogAccountLeaseIfAvailable()
     }
 
@@ -192,9 +195,24 @@ final class AIRecordingViewController: UIViewController {
     }
 
     deinit {
+        discardPendingPhotoArtifacts()
         discardStaleSessionRecording()
         releaseDialogEngineBinding()
         NotificationCenter.default.removeObserver(self)
+    }
+
+    private func retireLegacyGlobalMedia() {
+        let privateMediaStore = privateMediaStore
+        DispatchQueue.global(qos: .utility).async {
+            do {
+                try privateMediaStore.purgeExpiredStaging(
+                    before: Date().addingTimeInterval(-24 * 60 * 60)
+                )
+                try privateMediaStore.retireLegacyGlobalMedia()
+            } catch {
+                DDLogWarn("[AIRecording] 旧全局媒体处置失败，将在下次进入时重试: \(error)")
+            }
+        }
     }
 
     // MARK: - Layout
@@ -559,11 +577,18 @@ final class AIRecordingViewController: UIViewController {
         dialogAccountLease = nil
         mediaPickerAccountLease = nil
         mediaPickerDigitalHumanContext = nil
+        discardPendingPhotoArtifacts()
         discardStaleSessionRecording()
         pendingUserText = nil
         pendingAIText = nil
         if clearsMessages {
             messages = []
+            messageTableView.reloadData()
+        } else {
+            messages.removeAll {
+                if case .photo = $0 { return true }
+                return false
+            }
             messageTableView.reloadData()
         }
         updateVoiceBallState(.idle)
@@ -679,18 +704,19 @@ extension AIRecordingViewController: UIImagePickerControllerDelegate, UINavigati
               ) else { return }
         guard let image = info[.originalImage] as? UIImage else { return }
 
-        // 保存图片到本地 Documents/photos/ 目录
-        guard let imagePath = try? savePhotoToLocal(image, accountLease: accountLease) else {
+        guard let photoArtifact = try? savePhotoToLocal(image, accountLease: accountLease) else {
             return
         }
+        let imagePath = photoArtifact.fileURL.path
         guard validateMediaPickerOperation(
             accountLease,
             digitalHumanContext: digitalHumanContext,
             at: .commit
         ) else {
-            try? FileManager.default.removeItem(atPath: imagePath)
+            privateMediaStore.discard(photoArtifact)
             return
         }
+        pendingPhotoArtifacts[imagePath] = photoArtifact
 
         // 显示为用户消息气泡（含缩略图）
         messages.append(.photo(imagePath: imagePath, timestamp: Date()))
@@ -708,7 +734,7 @@ extension AIRecordingViewController: UIImagePickerControllerDelegate, UINavigati
         analyzeUploadedPhoto(
             image,
             aiMessageIndex: aiMessageIndex,
-            imagePath: imagePath,
+            photoArtifact: photoArtifact,
             accountLease: accountLease,
             digitalHumanContext: digitalHumanContext
         )
@@ -724,7 +750,7 @@ extension AIRecordingViewController: UIImagePickerControllerDelegate, UINavigati
     private func analyzeUploadedPhoto(
         _ image: UIImage,
         aiMessageIndex: Int,
-        imagePath: String,
+        photoArtifact: AccountPrivateMediaArtifact,
         accountLease: AccountLease,
         digitalHumanContext: DigitalHumanContext
     ) {
@@ -771,7 +797,7 @@ extension AIRecordingViewController: UIImagePickerControllerDelegate, UINavigati
 
                     // 入库
                     let sessionId = ConversationMemoryManager.shared.currentMemory.sessionCount + 1
-                    let sourceAssetId = URL(fileURLWithPath: imagePath)
+                    let sourceAssetId = photoArtifact.fileURL
                         .deletingPathExtension()
                         .lastPathComponent
                     guard self.validateMediaPickerOperation(
@@ -787,7 +813,11 @@ extension AIRecordingViewController: UIImagePickerControllerDelegate, UINavigati
 
                     // 关联照片到足迹地图
                     if !analysis.scene.isEmpty || analysis.estimatedDecade != nil {
-                        self.associatePhotoToMemory(imagePath: imagePath, analysis: analysis)
+                        self.associatePhotoToMemory(
+                            photoArtifact: photoArtifact,
+                            analysis: analysis,
+                            accountLease: accountLease
+                        )
                     }
 
                     // 替换 AI 回复为分析结果
@@ -842,11 +872,15 @@ extension AIRecordingViewController: UIImagePickerControllerDelegate, UINavigati
     /// - Parameters:
     ///   - imagePath: 本地图片路径
     ///   - analysis: DeepSeek Vision 分析结果
-    private func associatePhotoToMemory(imagePath: String, analysis: KBImageAnalysisResult) {
-        let allMemories = MemoryRepository.shared.getAll()
+    private func associatePhotoToMemory(
+        photoArtifact: AccountPrivateMediaArtifact,
+        analysis: KBImageAnalysisResult,
+        accountLease: AccountLease
+    ) {
+        guard validateMediaPickerAccountLease(accountLease, at: .runtime) else { return }
+        let allMemories = MemoryRepository.shared.getAllByOwner(accountLease.subjectId, accountLease: accountLease)
         guard !allMemories.isEmpty else { return }
 
-        let fileName = (imagePath as NSString).lastPathComponent
         var bestMatch: MemoryModel?
         var bestScore = 0
 
@@ -877,42 +911,85 @@ extension AIRecordingViewController: UIImagePickerControllerDelegate, UINavigati
         }
 
         if var match = bestMatch, bestScore >= 2 {
-            match.imageNames.append(fileName)
-            MemoryRepository.shared.update(match)
-            print("[KBLite] 🖼️ 照片 '\(fileName)' 已关联到足迹记忆: \(match.title) (匹配度: \(bestScore))")
+            let persistentArtifact: AccountPrivateMediaArtifact
+            do {
+                persistentArtifact = try privateMediaStore.promotePhotoStaging(
+                    photoArtifact,
+                    accountLease: accountLease
+                )
+            } catch {
+                DDLogWarn("[AIRecording] 照片持久化提交失败: \(error.localizedDescription)")
+                return
+            }
+            replacePendingPhotoArtifact(
+                photoArtifact,
+                with: persistentArtifact
+            )
+            guard let persistentReference = try? privateMediaStore.persistentPhotoReference(
+                for: persistentArtifact
+            ) else {
+                return
+            }
+            match.imageNames.append(persistentReference)
+            guard validateMediaPickerAccountLease(accountLease, at: .commit),
+                  MemoryRepository.shared.update(
+                    match,
+                    ownerId: accountLease.subjectId,
+                    accountLease: accountLease
+                  ) else { return }
+            pendingPhotoArtifacts.removeValue(forKey: persistentArtifact.fileURL.path)
+            print("[KBLite] 🖼️ 照片 '\(persistentArtifact.fileURL.lastPathComponent)' 已关联到足迹记忆: \(match.title) (匹配度: \(bestScore))")
         } else {
-            print("[KBLite] 🖼️ 照片 '\(fileName)' 未找到高度匹配的足迹记忆 (最高: \(bestScore))")
+            print("[KBLite] 🖼️ 照片 '\(photoArtifact.fileURL.lastPathComponent)' 未找到高度匹配的足迹记忆 (最高: \(bestScore))")
         }
     }
 
-    /// 将图片保存到本地 Documents/photos/ 目录，返回文件路径
+    private func replacePendingPhotoArtifact(
+        _ sourceArtifact: AccountPrivateMediaArtifact,
+        with destinationArtifact: AccountPrivateMediaArtifact
+    ) {
+        pendingPhotoArtifacts.removeValue(forKey: sourceArtifact.fileURL.path)
+        pendingPhotoArtifacts[destinationArtifact.fileURL.path] = destinationArtifact
+        messages = messages.map { message in
+            guard case .photo(let path, let timestamp) = message,
+                  path == sourceArtifact.fileURL.path else {
+                return message
+            }
+            return .photo(imagePath: destinationArtifact.fileURL.path, timestamp: timestamp)
+        }
+        messageTableView.reloadData()
+    }
+
+    private func discardPendingPhotoArtifacts() {
+        let artifacts = Array(pendingPhotoArtifacts.values)
+        pendingPhotoArtifacts.removeAll()
+        artifacts.forEach { privateMediaStore.discard($0) }
+    }
+
+    /// 将图片保存到账号隔离的临时媒体目录，关联到记忆后再持久化。
     private func savePhotoToLocal(
         _ image: UIImage,
         accountLease: AccountLease
-    ) throws -> String {
+    ) throws -> AccountPrivateMediaArtifact {
         guard validateMediaPickerAccountLease(accountLease, at: .commit) else {
             throw AIRecordingMediaCommitError.accountSessionChanged
         }
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let photosDir = docs.appendingPathComponent("photos")
-        try? FileManager.default.createDirectory(at: photosDir, withIntermediateDirectories: true)
-
-        let fileName = "\(UUID().uuidString.lowercased()).jpg"
-        let fileURL = photosDir.appendingPathComponent(fileName)
-
         guard let data = image.jpegData(compressionQuality: 0.8) else {
             throw AIRecordingMediaCommitError.imageEncodingFailed
         }
         guard validateMediaPickerAccountLease(accountLease, at: .commit) else {
             throw AIRecordingMediaCommitError.accountSessionChanged
         }
-        try data.write(to: fileURL, options: [.atomic])
+        let artifact = try privateMediaStore.writePhotoStaging(
+            data,
+            fileExtension: "jpg",
+            accountLease: accountLease
+        )
         guard validateMediaPickerAccountLease(accountLease, at: .commit) else {
-            try? FileManager.default.removeItem(at: fileURL)
+            privateMediaStore.discard(artifact)
             throw AIRecordingMediaCommitError.accountSessionChanged
         }
-
-        return fileURL.path
+        return artifact
     }
 }
 
@@ -1066,9 +1143,7 @@ extension AIRecordingViewController: DialogEngineDelegate {
             discardStaleSessionRecording()
             return
         }
-        let recordingsDir = FileManager.default.temporaryDirectory.appendingPathComponent("TGSessionRecordings")
-        try? FileManager.default.createDirectory(at: recordingsDir, withIntermediateDirectories: true)
-        let fileURL = recordingsDir.appendingPathComponent("session_\(Int(Date().timeIntervalSince1970)).m4a")
+        discardStaleSessionRecording()
 
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
@@ -1077,38 +1152,52 @@ extension AIRecordingViewController: DialogEngineDelegate {
             AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue
         ]
 
+        let recordingArtifact: AccountPrivateMediaArtifact
         do {
-            let recorder = try AVAudioRecorder(url: fileURL, settings: settings)
+            recordingArtifact = try privateMediaStore.prepareRecordingStaging(
+                accountLease: accountLease
+            )
+            sessionRecordingArtifact = recordingArtifact
+            let recorder = try AVAudioRecorder(url: recordingArtifact.fileURL, settings: settings)
             guard validateDialogAccountLease(accountLease, at: .runtime) else {
-                try? FileManager.default.removeItem(at: fileURL)
+                privateMediaStore.discard(recordingArtifact)
                 discardStaleSessionRecording()
                 return
             }
             sessionRecorder = recorder
             sessionRecordingAccountLease = accountLease
-            guard recorder.record() else {
+            guard recorder.record(),
+                  validateDialogAccountLease(accountLease, at: .runtime) else {
                 discardStaleSessionRecording()
                 return
             }
-            DDLogInfo("[AIRecording] 并行录音已启动: \(fileURL.lastPathComponent)")
+            DDLogInfo(
+                "[AIRecording] 并行录音已启动: \(recordingArtifact.fileURL.lastPathComponent)"
+            )
         } catch {
             DDLogWarn("[AIRecording] 并行录音启动失败: \(error.localizedDescription)")
-            try? FileManager.default.removeItem(at: fileURL)
+            if let artifact = sessionRecordingArtifact {
+                privateMediaStore.discard(artifact)
+            }
             sessionRecorder = nil
             sessionRecordingAccountLease = nil
+            sessionRecordingArtifact = nil
         }
     }
 
-    /// 停止并行录音并保存到持久化目录
+    /// 停止并行录音并保留账号隔离的会话 staging。
     private func stopSessionRecording(accountLease: AccountLease) {
-        guard let recorder = sessionRecorder else {
+        guard let recorder = sessionRecorder,
+              let recordingArtifact = sessionRecordingArtifact else {
+            sessionRecorder = nil
             sessionRecordingAccountLease = nil
+            sessionRecordingArtifact = nil
             return
         }
         guard sessionRecordingAccountLease == accountLease,
               validateDialogAccountLease(accountLease, at: .runtime),
               recorder.isRecording else {
-            discardStaleSessionRecording()
+            discardActiveSessionRecording()
             return
         }
 
@@ -1116,61 +1205,69 @@ extension AIRecordingViewController: DialogEngineDelegate {
         let duration = recorder.currentTime
         recorder.stop()
 
-        let url = recorder.url
         sessionRecorder = nil
         sessionRecordingAccountLease = nil
+        sessionRecordingArtifact = nil
         guard validateDialogAccountLease(accountLease, at: .commit) else {
-            try? FileManager.default.removeItem(at: url)
+            privateMediaStore.discard(recordingArtifact)
+            lastSessionRecordingArtifact = nil
             lastSessionRecordingURL = nil
-            lastSessionId = nil
             return
         }
         // 检查录音时长，至少 3 秒才有价值用于声音复刻
         if duration >= 3 {
-            // 移动到 Application Support 持久化目录（tmp 目录可能被系统清理）
-            let sessionId = "session_\(Int(Date().timeIntervalSince1970))"
-            if let persistentURL = MemoirRepository.shared.saveRecording(from: url, sessionId: sessionId) {
+            do {
+                let finalizedArtifact = try privateMediaStore.finalizeRecordingStaging(
+                    recordingArtifact,
+                    accountLease: accountLease
+                )
                 guard validateDialogAccountLease(accountLease, at: .commit) else {
-                    MemoirRepository.shared.deleteRecording(sessionId: sessionId)
-                    try? FileManager.default.removeItem(at: url)
+                    privateMediaStore.discard(finalizedArtifact)
+                    lastSessionRecordingArtifact = nil
                     lastSessionRecordingURL = nil
-                    lastSessionId = nil
                     return
                 }
-                lastSessionRecordingURL = persistentURL
-                lastSessionId = sessionId   // 记录 sessionId，生成回忆录时一并传给 MemoirFlowManager
-                DDLogInfo("[AIRecording] 对话录音已持久化: \(persistentURL.lastPathComponent), 时长: \(String(format: "%.1f", duration))秒")
-            } else {
-                guard validateDialogAccountLease(accountLease, at: .commit) else {
-                    try? FileManager.default.removeItem(at: url)
-                    lastSessionRecordingURL = nil
-                    lastSessionId = nil
-                    return
+                if let previousArtifact = lastSessionRecordingArtifact {
+                    privateMediaStore.discard(previousArtifact)
                 }
-                // 持久化失败则退回使用 tmp 文件
-                lastSessionRecordingURL = url
-                lastSessionId = nil
-                DDLogWarn("[AIRecording] 录音持久化失败，使用 tmp 文件: \(url.lastPathComponent)")
+                lastSessionRecordingArtifact = finalizedArtifact
+                lastSessionRecordingURL = finalizedArtifact.fileURL
+                DDLogInfo("[AIRecording] 对话录音 staging 已完成: \(finalizedArtifact.fileURL.lastPathComponent), 时长: \(duration)秒")
+            } catch {
+                privateMediaStore.discard(recordingArtifact)
+                lastSessionRecordingArtifact = nil
+                lastSessionRecordingURL = nil
+                DDLogWarn("[AIRecording] 对话录音 staging 提交失败: \(error.localizedDescription)")
             }
         } else {
+            privateMediaStore.discard(recordingArtifact)
+            lastSessionRecordingArtifact = nil
             lastSessionRecordingURL = nil
-            lastSessionId = nil
-            try? FileManager.default.removeItem(at: url)
             DDLogInfo("[AIRecording] 对话录音太短(\(String(format: "%.1f", duration))秒)，已丢弃")
         }
     }
 
     private func discardStaleSessionRecording() {
+        discardActiveSessionRecording()
+        if let artifact = lastSessionRecordingArtifact {
+            privateMediaStore.discard(artifact)
+        }
+        lastSessionRecordingArtifact = nil
+        lastSessionRecordingURL = nil
+    }
+
+    private func discardActiveSessionRecording() {
         if let recorder = sessionRecorder {
             if recorder.isRecording {
                 recorder.stop()
             }
-            try? FileManager.default.removeItem(at: recorder.url)
+        }
+        if let artifact = sessionRecordingArtifact {
+            privateMediaStore.discard(artifact)
         }
         sessionRecorder = nil
         sessionRecordingAccountLease = nil
-        lastSessionRecordingURL = nil
-        lastSessionId = nil
+        sessionRecordingArtifact = nil
     }
 
     /// 显示回忆录生成弹窗
@@ -1189,7 +1286,14 @@ extension AIRecordingViewController: DialogEngineDelegate {
 
     /// 处理回忆录生成请求
     private func handleMemoirGeneration(accountLease: AccountLease) {
-        guard validateDialogAccountLease(accountLease, at: .request) else { return }
+        guard validateDialogAccountLease(accountLease, at: .request),
+              let memoirAuthorization = MemoirRepository.shared.captureAccountLeaseAndOwner(),
+              memoirAuthorization.accountLease == accountLease,
+              MemoirRepository.shared.validateAccountLease(
+                accountLease,
+                ownerId: memoirAuthorization.ownerId,
+                at: .request
+              ) else { return }
         // 将 TGMessage 转换为 Memoir 模块的 DialogMessage 格式
         let dialogMessages = MemoirFlowManager.convertToDialogMessages(messages)
 
@@ -1199,12 +1303,48 @@ extension AIRecordingViewController: DialogEngineDelegate {
             return
         }
 
-        guard validateDialogAccountLease(accountLease, at: .request) else { return }
+        guard dialogAccountLease == accountLease,
+              validateDialogAccountLease(accountLease, at: .request),
+              MemoirRepository.shared.validateAccountLease(
+                accountLease,
+                ownerId: memoirAuthorization.ownerId,
+                at: .request
+              ) else { return }
+        let recordingInput = persistLastSessionRecording(
+            accountLease: accountLease,
+            ownerId: memoirAuthorization.ownerId
+        )
         MemoirFlowManager.shared.startGeneration(
             on: self,
             dialogMessages: dialogMessages,
-            recordingURL: lastSessionRecordingURL,
-            sessionId: lastSessionId
+            recordingURL: recordingInput.url,
+            sessionId: recordingInput.sessionId,
+            accountLease: accountLease,
+            ownerId: memoirAuthorization.ownerId
         )
+    }
+
+    private func persistLastSessionRecording(
+        accountLease: AccountLease,
+        ownerId: String
+    ) -> (url: URL?, sessionId: String?) {
+        guard let stagingArtifact = lastSessionRecordingArtifact,
+              let stagingURL = lastSessionRecordingURL else {
+            return (nil, nil)
+        }
+        let recordingSessionId = "session_\(UUID().uuidString.lowercased())"
+        guard let persistentURL = MemoirRepository.shared.saveRecording(
+            from: stagingURL,
+            sessionId: recordingSessionId,
+            accountLease: accountLease,
+            ownerId: ownerId
+        ) else {
+            DDLogWarn("[AIRecording] 回忆录录音持久化失败，本轮不绑定原始录音")
+            return (stagingURL, nil)
+        }
+        privateMediaStore.discard(stagingArtifact)
+        lastSessionRecordingArtifact = nil
+        lastSessionRecordingURL = nil
+        return (persistentURL, recordingSessionId)
     }
 }

@@ -207,6 +207,7 @@ final class MemoryAnnotationView: MAAnnotationView {
                    isNew: Bool = false,
                    shouldBounce: Bool = false,
                    isHost: Bool = true,
+                   accountLease: AccountLease? = nil,
                    fallbackImageName: String? = nil) {
         titleLabel.text = memory.location
         timeLabel.text = "\(memory.year)年\(memory.month)月"
@@ -239,7 +240,12 @@ final class MemoryAnnotationView: MAAnnotationView {
         }
 
         // 缩略图：优先用户上传的第一张 → 默认图（兜底）
-        if let firstName = memory.imageNames.first, let img = UIImage(named: firstName) {
+        if let firstReference = memory.imageNames.first,
+           let img = resolveMemoryImage(
+               firstReference,
+               memory: memory,
+               accountLease: accountLease
+           ) {
             photoView.image = img
             photoView.backgroundColor = .clear
         } else if let fb = fallbackImageName, let img = UIImage(named: fb) {
@@ -249,6 +255,23 @@ final class MemoryAnnotationView: MAAnnotationView {
             photoView.image = nil
             photoView.backgroundColor = TGColors.headerFallback.withAlphaComponent(0.15)
         }
+    }
+
+    private func resolveMemoryImage(
+        _ reference: String,
+        memory: MemoryModel,
+        accountLease: AccountLease?
+    ) -> UIImage? {
+        if let accountLease,
+           memory.authorId == accountLease.subjectId,
+           AccountLeaseRuntime.shared.validate(accountLease, at: .runtime).allowed,
+           let fileURL = AccountPrivateMediaStore.shared.resolvePersistentPhoto(
+               reference: reference,
+               accountLease: accountLease
+           ) {
+            return UIImage(contentsOfFile: fileURL.path)
+        }
+        return UIImage(named: reference)
     }
 
     // MARK: - Bounce 动画
