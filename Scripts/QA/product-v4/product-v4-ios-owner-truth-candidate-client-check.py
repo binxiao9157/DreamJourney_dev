@@ -10,6 +10,8 @@ ROOT = Path(__file__).resolve().parents[3]
 CONTRACTS = ROOT / "DreamJourney/Sources/Domain/OwnerTruth/OwnerTruthContracts.swift"
 CLIENT = ROOT / "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
 TESTS = ROOT / "DreamJourneyTests/OwnerTruthContractsTests.swift"
+ARCHIVE = ROOT / "DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift"
+APP_DELEGATE = ROOT / "DreamJourney/Sources/AppDelegate.swift"
 
 
 def require(condition: bool, message: str) -> None:
@@ -38,6 +40,8 @@ def main() -> None:
     contracts = CONTRACTS.read_text(encoding="utf-8")
     client = CLIENT.read_text(encoding="utf-8")
     tests = TESTS.read_text(encoding="utf-8")
+    archive = ARCHIVE.read_text(encoding="utf-8")
+    app_delegate = APP_DELEGATE.read_text(encoding="utf-8")
 
     for required in (
         "enum OwnerTruthCandidateReviewAction",
@@ -140,9 +144,43 @@ def main() -> None:
     ):
         require(test_name in tests, f"Candidate review use-case test missing: {test_name}")
 
+    for required in (
+        "private let candidateReviewQAButton = UIButton(type: .system)",
+        "configureCandidateReviewQAButton()",
+        "updateCandidateReviewQAButton()",
+        "@objc private func ownerTruthCandidateReviewQATapped()",
+        "OwnerTruthCandidateInboxViewController(accountLease: accountLease)",
+        "final class OwnerTruthCandidateInboxViewController",
+        "OwnerTruthCandidateReviewUseCase",
+        "owner-truth-candidate-inbox-list",
+        "owner-truth-candidate-inbox-item",
+        "OwnerTruthCandidateInboxUIQASmoke",
+    ):
+        require(required in archive, f"Candidate Inbox QA UI missing: {required}")
+    require(
+        "let isVisible = isSelfAutobiographyMode && OwnerTruthCandidateReviewQAGate.isEnabled" in archive,
+        "Candidate Inbox must stay hidden outside self-mode QA",
+    )
+    require(
+        "candidateReviewQAButton.isHidden = !isVisible" in archive,
+        "Candidate Inbox must remain default-hidden",
+    )
+    require(
+        "guard OwnerTruthCandidateReviewQAGate.isEnabled," in archive,
+        "Candidate Inbox route must enforce the QA gate at the tap boundary",
+    )
+    require(
+        'arguments.contains("DJRunOwnerTruthCandidateInboxSmoke")' in app_delegate,
+        "Candidate Inbox UIQA smoke launch route missing",
+    )
+    require(
+        "OwnerTruthCandidateInboxUIQASmoke.makeViewController(accountLease: accountLease)" in app_delegate,
+        "Candidate Inbox UIQA smoke must render the typed inbox page",
+    )
+
     print(
         "Product V4 iOS Owner Truth candidate client check passed: typed inbox/decision "
-        "contracts and lease-fenced Intent/ViewState remain QA-only, owner-authenticated, and default-off"
+        "contracts plus the hidden lease-fenced Archive Inbox remain QA-only, owner-authenticated, and default-off"
     )
 
 

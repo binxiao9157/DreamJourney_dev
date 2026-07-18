@@ -603,6 +603,7 @@ final class MemoryArchiveViewController: UIViewController {
     private let remoteSyncCaptionLabel = PaddingLabel(horizontalInset: 12, verticalInset: 8)
     private let analysisPrivacyDisclaimerLabel = PaddingLabel(horizontalInset: 12, verticalInset: 8)
     private let timeLetterReminderButton = UIButton(type: .system)
+    private let candidateReviewQAButton = UIButton(type: .system)
     private var isRefreshingFromBackend = false
     private var isRefreshingTimeLetterMailbox = false
     private var activeKindFilter: ArchiveKindFilter?
@@ -793,6 +794,7 @@ final class MemoryArchiveViewController: UIViewController {
         configureAnalysisPrivacyDisclaimerLabel()
         configureRemoteSyncCaptionLabel()
         configureTimeLetterReminderButton()
+        configureCandidateReviewQAButton()
         configureArchiveFilterButton()
         let bookEntry = makeBookEntryCard()
         let materialsHeader = makeMaterialsHeader()
@@ -802,6 +804,7 @@ final class MemoryArchiveViewController: UIViewController {
         mainStack.addArrangedSubview(analysisPrivacyDisclaimerLabel)
         mainStack.addArrangedSubview(remoteSyncCaptionLabel)
         mainStack.addArrangedSubview(timeLetterReminderButton)
+        mainStack.addArrangedSubview(candidateReviewQAButton)
         mainStack.addArrangedSubview(bookEntry)
         mainStack.addArrangedSubview(materialsHeader)
         mainStack.addArrangedSubview(primaryCTA)
@@ -812,6 +815,7 @@ final class MemoryArchiveViewController: UIViewController {
         mainStack.setCustomSpacing(ArchiveLayout.afterFeatureGridSpacing, after: analysisPrivacyDisclaimerLabel)
         mainStack.setCustomSpacing(8, after: remoteSyncCaptionLabel)
         mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: timeLetterReminderButton)
+        mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: candidateReviewQAButton)
         mainStack.setCustomSpacing(22, after: bookEntry)
         mainStack.setCustomSpacing(10, after: materialsHeader)
         mainStack.setCustomSpacing(18, after: primaryCTA)
@@ -853,6 +857,7 @@ final class MemoryArchiveViewController: UIViewController {
         updateAutobiographyPageCopy()
         reloadFeatureCards(summary: summary)
         updateTimeLetterReminderButton()
+        updateCandidateReviewQAButton()
         updateArchiveFilterButton()
         reloadArchiveList()
     }
@@ -983,6 +988,23 @@ final class MemoryArchiveViewController: UIViewController {
         timeLetterReminderButton.addTarget(self, action: #selector(timeLetterReminderTapped), for: .touchUpInside)
     }
 
+    private func configureCandidateReviewQAButton() {
+        candidateReviewQAButton.titleLabel?.font = DJDesignTokens.Font.label(12)
+        candidateReviewQAButton.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
+        candidateReviewQAButton.backgroundColor = DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.72)
+        candidateReviewQAButton.layer.cornerRadius = 14
+        candidateReviewQAButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
+        candidateReviewQAButton.contentHorizontalAlignment = .leading
+        candidateReviewQAButton.accessibilityIdentifier = "archive-owner-truth-candidate-inbox-qa"
+        candidateReviewQAButton.accessibilityLabel = "审核候选记忆，仅 QA"
+        candidateReviewQAButton.isHidden = true
+        candidateReviewQAButton.addTarget(
+            self,
+            action: #selector(ownerTruthCandidateReviewQATapped),
+            for: .touchUpInside
+        )
+    }
+
     private func configureArchiveFilterButton() {
         archiveFilterButton.titleLabel?.font = DJDesignTokens.Font.label(12)
         archiveFilterButton.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
@@ -1054,6 +1076,13 @@ final class MemoryArchiveViewController: UIViewController {
         timeLetterReminderButton.setTitle(title, for: .normal)
         timeLetterReminderButton.accessibilityLabel = title
         timeLetterReminderButton.isHidden = false
+    }
+
+    private func updateCandidateReviewQAButton() {
+        let isVisible = isSelfAutobiographyMode && OwnerTruthCandidateReviewQAGate.isEnabled
+        candidateReviewQAButton.setTitle(isVisible ? "审核候选记忆（QA）" : nil, for: .normal)
+        candidateReviewQAButton.isHidden = !isVisible
+        candidateReviewQAButton.isUserInteractionEnabled = isVisible
     }
 
     private func reloadFeatureCards(summary: (total: Int, photos: Int, audio: Int, text: Int)) {
@@ -2705,6 +2734,31 @@ final class MemoryArchiveViewController: UIViewController {
         )
     }
 
+    @objc private func ownerTruthCandidateReviewQATapped() {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled,
+              isSelfAutobiographyMode,
+              let accountLease = captureOwnerTruthCandidateReviewAccountLease() else {
+            return
+        }
+        navigationController?.pushViewController(
+            OwnerTruthCandidateInboxViewController(accountLease: accountLease),
+            animated: true
+        )
+    }
+
+    private func captureOwnerTruthCandidateReviewAccountLease() -> AccountLease? {
+        guard let userId = UserManager.shared.currentUser?.id,
+              !userId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let accountLease = accountLeaseRuntime.capture(forSubjectId: userId),
+              accountLease.subjectId == userId,
+              OwnerTruthVaultID(accountLease.vaultId) != nil,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            showToast("账号状态已变化，请稍后重试", type: .info)
+            return nil
+        }
+        return accountLease
+    }
+
     private func captureInAppMessageCenterAccountLease(
         at checkpoint: AccountLeaseCheckpoint
     ) -> AccountLease? {
@@ -3618,6 +3672,587 @@ final class MemoryArchiveViewController: UIViewController {
         showToast("家人故事仅可阅读，切回自己后可管理我的自传", type: .info)
     }
 }
+
+/// QA-only Archive page for reviewing Owner Truth candidates. The page consumes
+/// a lease-fenced Intent/ViewState use case and deliberately has no direct
+/// archive, KBLite or legacy-writer authority.
+final class OwnerTruthCandidateInboxViewController: UIViewController {
+    private let accountLease: AccountLease
+    private let useCase: OwnerTruthCandidateReviewUseCase
+    private let tableView = UITableView(frame: .zero, style: .plain)
+    private let headerStack = UIStackView()
+    private let titleLabel = UILabel()
+    private let subtitleLabel = UILabel()
+    private let statusLabel = UILabel()
+    private let emptyStateLabel = UILabel()
+    private lazy var refreshButton = UIBarButtonItem(
+        barButtonSystemItem: .refresh,
+        target: self,
+        action: #selector(refreshTapped)
+    )
+
+    private var renderedState: OwnerTruthCandidateInboxViewState = .idle
+    var onViewStateRendered: ((OwnerTruthCandidateInboxViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        client: OwnerTruthCandidateReviewClient = DreamJourneyBackendClient.shared,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled }
+    ) {
+        self.accountLease = accountLease
+        self.useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: accountLease,
+            client: client,
+            accountLeaseRuntime: accountLeaseRuntime,
+            qaGateEnabled: qaGateEnabled
+        )
+        super.init(nibName: nil, bundle: nil)
+        hidesBottomBarWhenPushed = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "候选记忆审核"
+        view.backgroundColor = DJDesignTokens.Color.background
+        navigationItem.rightBarButtonItem = refreshButton
+        refreshButton.accessibilityIdentifier = "owner-truth-candidate-inbox-refresh"
+        configureHeader()
+        configureTableView()
+        configureUseCase()
+        render(useCase.viewState)
+        useCase.send(.refresh)
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+        navigationController?.navigationBar.tintColor = DJDesignTokens.Color.textPrimary
+        navigationController?.navigationBar.titleTextAttributes = [
+            .foregroundColor: DJDesignTokens.Color.textPrimary,
+            .font: DJDesignTokens.Font.title(18),
+        ]
+    }
+
+    private func configureHeader() {
+        headerStack.axis = .vertical
+        headerStack.alignment = .fill
+        headerStack.spacing = 6
+        headerStack.isLayoutMarginsRelativeArrangement = true
+        headerStack.directionalLayoutMargins = NSDirectionalEdgeInsets(
+            top: 18,
+            leading: DJDesignTokens.Spacing.page,
+            bottom: 14,
+            trailing: DJDesignTokens.Spacing.page
+        )
+
+        titleLabel.text = "待确认记忆"
+        titleLabel.font = DJDesignTokens.Font.title(24)
+        titleLabel.textColor = DJDesignTokens.Color.textPrimary
+
+        subtitleLabel.text = "仅用于 QA 审核；候选内容不会直接写入档案。"
+        subtitleLabel.font = DJDesignTokens.Font.body(14)
+        subtitleLabel.textColor = DJDesignTokens.Color.textTertiary
+        subtitleLabel.numberOfLines = 0
+
+        statusLabel.font = DJDesignTokens.Font.label(12)
+        statusLabel.textColor = DJDesignTokens.Color.textSecondary
+        statusLabel.numberOfLines = 0
+        statusLabel.accessibilityIdentifier = "owner-truth-candidate-inbox-status"
+
+        headerStack.addArrangedSubview(titleLabel)
+        headerStack.addArrangedSubview(subtitleLabel)
+        headerStack.addArrangedSubview(statusLabel)
+    }
+
+    private func configureTableView() {
+        tableView.backgroundColor = .clear
+        tableView.separatorStyle = .none
+        tableView.alwaysBounceVertical = true
+        tableView.showsVerticalScrollIndicator = false
+        tableView.dataSource = self
+        tableView.delegate = self
+        tableView.register(
+            OwnerTruthCandidateInboxCell.self,
+            forCellReuseIdentifier: OwnerTruthCandidateInboxCell.reuseIdentifier
+        )
+        tableView.accessibilityIdentifier = "owner-truth-candidate-inbox-list"
+
+        emptyStateLabel.font = DJDesignTokens.Font.body(15)
+        emptyStateLabel.textColor = DJDesignTokens.Color.textTertiary
+        emptyStateLabel.textAlignment = .center
+        emptyStateLabel.numberOfLines = 0
+        emptyStateLabel.isHidden = true
+        emptyStateLabel.accessibilityIdentifier = "owner-truth-candidate-inbox-empty"
+        tableView.backgroundView = emptyStateLabel
+
+        view.addSubview(headerStack)
+        view.addSubview(tableView)
+        headerStack.translatesAutoresizingMaskIntoConstraints = false
+        tableView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            headerStack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            headerStack.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            headerStack.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.topAnchor.constraint(equalTo: headerStack.bottomAnchor),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+    }
+
+    private func configureUseCase() {
+        useCase.onViewStateChange = { [weak self] state in
+            guard let self else { return }
+            if Thread.isMainThread {
+                render(state)
+            } else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.render(state)
+                }
+            }
+        }
+    }
+
+    private func render(_ state: OwnerTruthCandidateInboxViewState) {
+        renderedState = state
+        let isSubmitting: Bool
+        if case .submitting = state.phase {
+            isSubmitting = true
+        } else {
+            isSubmitting = false
+        }
+        tableView.isUserInteractionEnabled = !isSubmitting
+        refreshButton.isEnabled = !isSubmitting
+        statusLabel.text = statusText(for: state)
+        statusLabel.accessibilityLabel = statusLabel.text
+        emptyStateLabel.text = emptyText(for: state)
+        emptyStateLabel.isHidden = emptyStateLabel.text == nil
+        tableView.reloadData()
+        onViewStateRendered?(state)
+    }
+
+    private func statusText(for state: OwnerTruthCandidateInboxViewState) -> String {
+        switch state.phase {
+        case .idle:
+            return "准备审核入口"
+        case .unavailable:
+            return noticeText(state.notice) ?? "审核入口暂不可用"
+        case .loading:
+            return "正在读取待确认候选记忆"
+        case .ready:
+            return "已加载 \(state.items.count) 条候选记忆"
+        case .empty:
+            return noticeText(state.notice) ?? "没有待确认候选记忆"
+        case .submitting:
+            return "正在提交审核结果"
+        case .failed:
+            return noticeText(state.notice) ?? "读取失败，可重新载入"
+        }
+    }
+
+    private func emptyText(for state: OwnerTruthCandidateInboxViewState) -> String? {
+        guard state.items.isEmpty else { return nil }
+        switch state.phase {
+        case .empty:
+            return "当前没有需要你确认的候选记忆。"
+        case .unavailable:
+            return "审核入口仅在受控 QA 环境可用。"
+        case .failed:
+            return "暂时无法读取候选记忆，请点右上角重新载入。"
+        default:
+            return nil
+        }
+    }
+
+    private func noticeText(_ notice: OwnerTruthCandidateInboxNotice?) -> String? {
+        guard let notice else { return nil }
+        switch notice {
+        case .qaOnlyDisabled:
+            return "审核入口仅在受控 QA 环境可用"
+        case .accountUnavailable, .staleAccountLease:
+            return "账号已变化，请重新进入审核入口"
+        case .invalidVault:
+            return "当前档案空间不可用于候选审核"
+        case .candidateUnavailable:
+            return "该候选记忆已不可用，请重新载入"
+        case .correctionRequired:
+            return "请填写更正后的记忆描述"
+        case .reviewResultMismatch:
+            return "审核回执不匹配，未更新候选状态"
+        case .requestFailed:
+            return "读取或提交失败，可重新载入后重试"
+        case .candidateAccepted:
+            return "已确认并生成记忆版本"
+        case .candidateCorrected:
+            return "已按更正内容生成记忆版本"
+        case .candidateRejected:
+            return "已拒绝该候选记忆"
+        }
+    }
+
+    @objc private func refreshTapped() {
+        useCase.send(.refresh)
+    }
+
+    private func showActions(for item: OwnerTruthCandidateInboxItemViewState, sourceView: UIView) {
+        let alert = UIAlertController(
+            title: "审核候选记忆",
+            message: "操作会通过受控 QA 合同提交；不会直接写入旧档案链路。",
+            preferredStyle: .actionSheet
+        )
+        alert.addAction(UIAlertAction(title: "确认", style: .default) { [weak self] _ in
+            self?.useCase.send(.accept(candidateID: item.id))
+        })
+        if item.supportsCorrection {
+            alert.addAction(UIAlertAction(title: "更正后确认", style: .default) { [weak self] _ in
+                self?.presentCorrectionAlert(for: item)
+            })
+        }
+        alert.addAction(UIAlertAction(title: "拒绝", style: .destructive) { [weak self] _ in
+            self?.useCase.send(.reject(candidateID: item.id))
+        })
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = sourceView
+            popover.sourceRect = sourceView.bounds
+        }
+        present(alert, animated: true)
+    }
+
+    private func presentCorrectionAlert(for item: OwnerTruthCandidateInboxItemViewState) {
+        let alert = UIAlertController(
+            title: "更正候选记忆",
+            message: "确认后将保留原候选内容并以更正后的摘要生成新版本。",
+            preferredStyle: .alert
+        )
+        alert.addTextField { textField in
+            textField.text = item.proposalPreview
+            textField.clearButtonMode = .whileEditing
+            textField.accessibilityIdentifier = "owner-truth-candidate-correction-input"
+        }
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "提交更正", style: .default) { [weak self, weak alert] _ in
+            self?.useCase.send(.correct(
+                candidateID: item.id,
+                correctedSummary: alert?.textFields?.first?.text ?? ""
+            ))
+        })
+        present(alert, animated: true)
+    }
+}
+
+extension OwnerTruthCandidateInboxViewController: UITableViewDataSource, UITableViewDelegate {
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        renderedState.items.count
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        cellForRowAt indexPath: IndexPath
+    ) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(
+            withIdentifier: OwnerTruthCandidateInboxCell.reuseIdentifier,
+            for: indexPath
+        ) as! OwnerTruthCandidateInboxCell
+        cell.configure(renderedState.items[indexPath.row])
+        return cell
+    }
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        guard renderedState.items.indices.contains(indexPath.row),
+              let cell = tableView.cellForRow(at: indexPath) else {
+            return
+        }
+        tableView.deselectRow(at: indexPath, animated: true)
+        showActions(for: renderedState.items[indexPath.row], sourceView: cell)
+    }
+}
+
+private final class OwnerTruthCandidateInboxCell: UITableViewCell {
+    static let reuseIdentifier = "OwnerTruthCandidateInboxCell"
+
+    private let cardView = UIView()
+    private let summaryLabel = UILabel()
+    private let metadataLabel = UILabel()
+    private let evidenceLabel = UILabel()
+    private let reviewBadgeLabel = PaddingLabel(horizontalInset: 8, verticalInset: 4)
+    private let chevronImageView = UIImageView(image: UIImage(systemName: "chevron.right"))
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        selectionStyle = .none
+        backgroundColor = .clear
+        contentView.backgroundColor = .clear
+
+        cardView.backgroundColor = DJDesignTokens.Color.surface
+        cardView.layer.cornerRadius = 18
+        cardView.layer.borderWidth = 1
+        cardView.layer.borderColor = DJDesignTokens.Color.textTertiary.withAlphaComponent(0.16).cgColor
+
+        summaryLabel.font = DJDesignTokens.Font.body(16)
+        summaryLabel.textColor = DJDesignTokens.Color.textPrimary
+        summaryLabel.numberOfLines = 3
+
+        metadataLabel.font = DJDesignTokens.Font.label(12)
+        metadataLabel.textColor = DJDesignTokens.Color.textSecondary
+        metadataLabel.numberOfLines = 2
+
+        evidenceLabel.font = DJDesignTokens.Font.label(12)
+        evidenceLabel.textColor = DJDesignTokens.Color.textTertiary
+
+        reviewBadgeLabel.font = DJDesignTokens.Font.label(11)
+        reviewBadgeLabel.textColor = DJDesignTokens.Color.accentDeep
+        reviewBadgeLabel.backgroundColor = DJDesignTokens.Color.accent.withAlphaComponent(0.16)
+        reviewBadgeLabel.layer.cornerRadius = 10
+        reviewBadgeLabel.layer.masksToBounds = true
+
+        chevronImageView.tintColor = DJDesignTokens.Color.textTertiary
+        chevronImageView.contentMode = .scaleAspectFit
+
+        contentView.addSubview(cardView)
+        [summaryLabel, metadataLabel, evidenceLabel, reviewBadgeLabel, chevronImageView].forEach {
+            cardView.addSubview($0)
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
+        cardView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            cardView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
+            cardView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DJDesignTokens.Spacing.page),
+            cardView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
+            cardView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
+
+            reviewBadgeLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 14),
+            reviewBadgeLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 16),
+
+            summaryLabel.topAnchor.constraint(equalTo: reviewBadgeLabel.bottomAnchor, constant: 10),
+            summaryLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 16),
+            summaryLabel.trailingAnchor.constraint(equalTo: chevronImageView.leadingAnchor, constant: -12),
+
+            metadataLabel.topAnchor.constraint(equalTo: summaryLabel.bottomAnchor, constant: 8),
+            metadataLabel.leadingAnchor.constraint(equalTo: summaryLabel.leadingAnchor),
+            metadataLabel.trailingAnchor.constraint(equalTo: summaryLabel.trailingAnchor),
+
+            evidenceLabel.topAnchor.constraint(equalTo: metadataLabel.bottomAnchor, constant: 6),
+            evidenceLabel.leadingAnchor.constraint(equalTo: summaryLabel.leadingAnchor),
+            evidenceLabel.trailingAnchor.constraint(equalTo: summaryLabel.trailingAnchor),
+            evidenceLabel.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -16),
+
+            chevronImageView.centerYAnchor.constraint(equalTo: cardView.centerYAnchor),
+            chevronImageView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -16),
+            chevronImageView.widthAnchor.constraint(equalToConstant: 12),
+            chevronImageView.heightAnchor.constraint(equalToConstant: 18),
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(_ item: OwnerTruthCandidateInboxItemViewState) {
+        summaryLabel.text = item.proposalPreview
+        metadataLabel.text = "\(memoryKindText(item.memoryKind)) · \(perspectiveText(item.perspective)) · \(epistemicText(item.epistemicStatus))"
+        evidenceLabel.text = "\(item.evidenceCount) 条证据 · \(sensitivityText(item.sensitivity))"
+        reviewBadgeLabel.text = item.reviewMode == "single" ? "待本人确认" : "待确认"
+        accessibilityIdentifier = "owner-truth-candidate-inbox-item"
+        accessibilityLabel = "候选记忆，\(item.proposalPreview)，\(item.evidenceCount) 条证据"
+    }
+
+    private func memoryKindText(_ value: OwnerTruthMemoryKind) -> String {
+        switch value {
+        case .experience: return "经历"
+        case .knowledge: return "知识"
+        case .emotion: return "感受"
+        }
+    }
+
+    private func perspectiveText(_ value: OwnerTruthPerspectiveType) -> String {
+        switch value {
+        case .firstPerson: return "本人视角"
+        case .reported: return "转述"
+        case .inferred: return "推断"
+        }
+    }
+
+    private func epistemicText(_ value: OwnerTruthEpistemicStatus) -> String {
+        switch value {
+        case .observed: return "观察"
+        case .recalled: return "回忆"
+        case .reported: return "转述"
+        case .inferred: return "推断"
+        case .uncertain: return "待核实"
+        }
+    }
+
+    private func sensitivityText(_ value: OwnerTruthSensitivityLevel) -> String {
+        switch value {
+        case .standard: return "普通敏感度"
+        case .sensitive: return "敏感内容"
+        case .restricted: return "受限内容"
+        }
+    }
+}
+
+#if UI_QA_SIMULATOR && targetEnvironment(simulator)
+struct OwnerTruthCandidateInboxUIQASmokeResult: Codable {
+    static let fileName = "owner-truth-candidate-inbox-uiqa-result.json"
+
+    let completed: Bool
+    let qaGateEnabled: Bool
+    let candidateVisible: Bool
+    let candidatePreviewVisible: Bool
+    let reviewActionsAvailable: Bool
+    let launchArgument: String
+    let failureReason: String?
+
+    func writeToDocuments(fileManager: FileManager = .default) throws -> URL {
+        let documentsURL = try fileManager.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let resultURL = documentsURL.appendingPathComponent(Self.fileName, isDirectory: false)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(self).write(to: resultURL, options: [.atomic])
+        return resultURL
+    }
+}
+
+enum OwnerTruthCandidateInboxUIQASmoke {
+    static func makeViewController(accountLease: AccountLease) -> OwnerTruthCandidateInboxViewController {
+        let client = CandidateInboxUIQAClient(vaultID: OwnerTruthVaultID(accountLease.vaultId))
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: accountLease,
+            client: client,
+            qaGateEnabled: { OwnerTruthCandidateReviewQAGate.isEnabled }
+        )
+        let reporter = CandidateInboxUIQAReporter()
+        controller.onViewStateRendered = { state in
+            reporter.consume(state)
+        }
+        return controller
+    }
+
+    static func writeFailure(_ reason: String) {
+        let result = OwnerTruthCandidateInboxUIQASmokeResult(
+            completed: false,
+            qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
+            candidateVisible: false,
+            candidatePreviewVisible: false,
+            reviewActionsAvailable: false,
+            launchArgument: OwnerTruthCandidateReviewQAGate.launchArgument,
+            failureReason: reason
+        )
+        do {
+            let resultURL = try result.writeToDocuments()
+            print("[UI_QA] OwnerTruthCandidateInboxSmoke failed result=\(resultURL.path) reason=\(reason)")
+        } catch {
+            print("[UI_QA] OwnerTruthCandidateInboxSmoke failed reason=\(reason) write=\(error.localizedDescription)")
+        }
+    }
+}
+
+private final class CandidateInboxUIQAReporter {
+    private var didWrite = false
+
+    func consume(_ state: OwnerTruthCandidateInboxViewState) {
+        guard !didWrite,
+              case .ready = state.phase,
+              let firstItem = state.items.first else {
+            return
+        }
+        didWrite = true
+        let result = OwnerTruthCandidateInboxUIQASmokeResult(
+            completed: OwnerTruthCandidateReviewQAGate.isEnabled
+                && !state.items.isEmpty
+                && !firstItem.proposalPreview.isEmpty
+                && firstItem.supportsCorrection,
+            qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
+            candidateVisible: true,
+            candidatePreviewVisible: !firstItem.proposalPreview.isEmpty,
+            reviewActionsAvailable: firstItem.supportsCorrection,
+            launchArgument: OwnerTruthCandidateReviewQAGate.launchArgument,
+            failureReason: nil
+        )
+        do {
+            let resultURL = try result.writeToDocuments()
+            print("[UI_QA] OwnerTruthCandidateInboxSmoke completed result=\(resultURL.path)")
+        } catch {
+            print("[UI_QA] OwnerTruthCandidateInboxSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+}
+
+private final class CandidateInboxUIQAClient: OwnerTruthCandidateReviewClient {
+    private let vaultID: OwnerTruthVaultID?
+
+    init(vaultID: OwnerTruthVaultID?) {
+        self.vaultID = vaultID
+    }
+
+    func fetchOwnerTruthCandidateInbox(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthCandidateInbox, Error>) -> Void
+    ) {
+        guard self.vaultID == vaultID else {
+            completion(.failure(CandidateInboxUIQAClientError.invalidVault))
+            return
+        }
+        do {
+            let inbox = try OwnerTruthCandidateInbox(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+                    "vaultId": vaultID.rawValue,
+                    "candidates": [[
+                        "candidateId": "00000000-0000-0000-0000-000000000151",
+                        "sourceId": "00000000-0000-0000-0000-000000000152",
+                        "memoryKind": OwnerTruthMemoryKind.experience.rawValue,
+                        "perspectiveType": OwnerTruthPerspectiveType.firstPerson.rawValue,
+                        "epistemicStatus": OwnerTruthEpistemicStatus.recalled.rawValue,
+                        "sensitivity": OwnerTruthSensitivityLevel.standard.rawValue,
+                        "contentSchemaVersion": "owner-truth-candidate-content-v1",
+                        "content": [
+                            "summary": "小时候在院子里听家人讲故事",
+                            "confidence": 0.92,
+                        ],
+                        "contentHash": "uiqa-owner-truth-candidate-hash",
+                        "sourceRefs": [[
+                            "sourceId": "00000000-0000-0000-0000-000000000152",
+                            "sourceVersion": 1,
+                        ]],
+                        "reviewMode": "single",
+                        "candidateVersion": 1,
+                    ]],
+                ],
+                expectedVaultID: vaultID
+            )
+            completion(.success(inbox))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    func reviewOwnerTruthCandidate(
+        vaultID: OwnerTruthVaultID,
+        candidateID: OwnerTruthRecordID,
+        command: OwnerTruthCandidateReviewCommand,
+        completion: @escaping (Result<OwnerTruthCandidateDecisionResult, Error>) -> Void
+    ) {
+        completion(.failure(CandidateInboxUIQAClientError.reviewNotExercised))
+    }
+}
+
+private enum CandidateInboxUIQAClientError: Error {
+    case invalidVault
+    case reviewNotExercised
+}
+#endif
 
 private enum AutobiographyBookLayout {
     static let pageCornerRadius: CGFloat = 12
