@@ -40,7 +40,12 @@
       "user_001",
       "legacy_unassigned"
     ],
-    "exclusions": []
+    "exclusions": [
+      {
+        "path": "DreamJourney/Sources/Services/ProductV4GlobalPrivateStoreRetirementUIQASmoke.swift",
+        "reason": "QA-only synthetic harness; writes isolated temporary fixtures and a user-invoked evidence report, not production account state"
+      }
+    ]
   },
   "surfaces": [
     {
@@ -313,21 +318,22 @@
       "catalogId": "S07",
       "surfaceId": "S07.reply-and-message-projections",
       "dataClass": "delayed Echo reply, inbox source projections, unread/read/archive state, and local schedules",
-      "ownerScope": "mailbox state is viewer-scoped; delayed reply and source keys remain global legacy",
-      "storage": "standard UserDefaults plus local notification requests",
-      "pathOrKey": "dj.echo.delayedReply; dj.inAppMessage.systemNotice.sources; dj.inAppMessage.echoReply.sources; dj.memoryArchive.timeLetterMailbox.<viewer>",
+      "ownerScope": "AccountLease subject, vault, generation, generationId, resource owner and operation; notification metadata carries only digested identities",
+      "storage": "generation-scoped UserDefaults envelopes plus owner-scoped local notification requests",
+      "pathOrKey": "dj.echo.delayedReply.scoped.v2; dj.echo.delayedReply.callsite-scope.v1; dj.inAppMessage.<surface>.sources.v2.<scopeDigest>; generation-scoped time-letter mailbox/local state",
       "writer": "EchoDelayedReplyStore, InAppMessageCenter stores, MemoryArchiveRepository",
       "readers": "Echo, message center, Archive reminders",
       "cleanup": "cancel old timer/notification and clear unread projection on switch/logout/delete",
-      "migration": "do not migrate global message bodies; rebuild from backend by owner/resource",
+      "migration": "quarantine legacy global message bodies without auto-claim; rebuild from backend by owner/resource",
       "retention": "until delivered/read/archive or account lifecycle cleanup",
       "testOwner": "WI-S0-01-07",
-      "status": "REGISTERED_MIXED_SCOPE_MIGRATION_REQUIRED",
-      "nextWorkItem": "WI-S0-01-07",
+      "status": "REGISTERED_GENERATION_SCOPED_AND_QUARANTINED",
+      "nextWorkItem": "WI-S0-01-08",
       "sourcePaths": [
         "DreamJourney/Sources/Modules/Archive/InAppMessageCenter.swift",
         "DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift",
         "DreamJourney/Sources/Modules/Echo/EchoViewController.swift",
+        "DreamJourney/Sources/Modules/Echo/EchoViewModel.swift",
         "DreamJourney/Sources/Services/EchoDelayedReplyNotificationScheduler.swift",
         "DreamJourney/Sources/Services/EchoDelayedReplyStore.swift"
       ],
@@ -335,18 +341,29 @@
         {
           "path": "DreamJourney/Sources/Services/EchoDelayedReplyStore.swift",
           "contains": [
-            "dj.echo.delayedReply"
+            "dj.echo.delayedReply.scoped.v2",
+            "dj.echo.delayedReply.legacy-quarantine.payload"
           ]
         },
         {
           "path": "DreamJourney/Sources/Modules/Archive/InAppMessageCenter.swift",
           "contains": [
-            "dj.inAppMessage.systemNotice.sources",
-            "dj.inAppMessage.echoReply.sources"
+            "dj.inAppMessage.\\(surface.rawValue).sources.v2",
+            "InAppMessageLegacyRetirementStorage"
+          ]
+        },
+        {
+          "path": "DreamJourney/Sources/Modules/Echo/EchoViewModel.swift",
+          "contains": [
+            "dj.echo.delayedReply.callsite-scope.v1",
+            "generation-id"
           ]
         }
       ],
       "currentChecks": [
+        "Scripts/QA/product-v4/run-message-notification-owner-scope-gate.sh",
+        "Scripts/QA/product-v4/echo-delayed-reply-owner-scope-static-check.py",
+        "Scripts/QA/product-v4/in-app-message-owner-scope-static-check.py",
         "Scripts/QA/prd-stitch-ui/echo-delayed-reply-notification-check.swift",
         "Scripts/QA/prd-stitch-ui/in-app-message-center-shell-check.swift"
       ]
@@ -436,17 +453,17 @@
       "catalogId": "S10",
       "surfaceId": "S10.voice-profile-cache-and-poll",
       "dataClass": "voice profile id, sample/provider status, consent-derived enablement, and training poll",
-      "ownerScope": "currently global UserDefaults and process timer; backend profile binding is authority",
-      "storage": "standard UserDefaults plus Timer",
-      "pathOrKey": "dj.voiceclone.speakerId; dj.voiceclone.sampleStatus; dj.voiceclone.isEnabled; dj.voiceclone.provider*",
+      "ownerScope": "AccountLease subject, vault, generation and generationId; backend profile binding remains authority",
+      "storage": "generation-scoped UserDefaults envelope plus AccountLease-bound Timer",
+      "pathOrKey": "dj.voiceclone.localState.scoped.v2.<scopeDigest>; dj.voiceclone.legacyQuarantine.v1",
       "writer": "VoiceCloneService and voice recording UI",
       "readers": "Voice settings, Echo role voice selection, TTS synthesis",
       "cleanup": "cancel poll, stop profile use, clear cache, and invoke backend rights flow on delete",
-      "migration": "reconcile against backend owner/persona profile; never trust global ready state",
+      "migration": "legacy global keys are quarantined as unverified owner evidence and never auto-claimed; rebuild from backend owner/persona profile",
       "retention": "backend profile lifecycle; local status is rebuildable cache",
       "testOwner": "WI-S0-01-07",
-      "status": "REGISTERED_GLOBAL_KEY_MIGRATION_REQUIRED",
-      "nextWorkItem": "WI-S0-01-07",
+      "status": "REGISTERED_SCOPED_AND_QUARANTINED",
+      "nextWorkItem": "WI-S1-03-01",
       "sourcePaths": [
         "DreamJourney/Sources/Memoir/VoiceCloneService.swift",
         "DreamJourney/Sources/Modules/Home/AIRecordingViewController.swift",
@@ -456,12 +473,15 @@
         {
           "path": "DreamJourney/Sources/Memoir/VoiceCloneService.swift",
           "contains": [
-            "dj.voiceclone.speakerId",
+            "dj.voiceclone.localState.scoped.v2",
+            "dj.voiceclone.legacyQuarantine.v1",
             "Timer.scheduledTimer"
           ]
         }
       ],
       "currentChecks": [
+        "Scripts/QA/product-v4/run-voice-clone-local-owner-scope-gate.sh",
+        "Scripts/QA/product-v4/voice-clone-local-owner-scope-static-check.py",
         "Scripts/QA/prd-stitch-ui/voice-clone-stale-ready-state-check.swift",
         "Scripts/QA/prd-stitch-ui/echo-role-voice-profile-selection-check.swift"
       ]
@@ -470,17 +490,17 @@
       "catalogId": "S11",
       "surfaceId": "S11.generated-audio-and-timeline-cache",
       "dataClass": "generated memoir or TTS audio plus viseme timeline metadata and playback timer",
-      "ownerScope": "currently global memoir id paths; target owner plus answer/profile/purpose hash",
-      "storage": "Application Support files and ephemeral playback timer",
-      "pathOrKey": "memoir_audio/<memoir>.<format>; memoir_tts_cache/<memoir>.json",
+      "ownerScope": "AccountLease subject, vault, generation and generationId plus hashed memoir id",
+      "storage": "generation-scoped Application Support files and ephemeral playback timer",
+      "pathOrKey": "memoir_audio_scoped_v2/<scopeDigest>/<memoirDigest>.<format>; memoir_tts_cache_scoped_v2/<scopeDigest>/<memoirDigest>.json",
       "writer": "MemoirTTSService",
       "readers": "MemoirAudioPlayer and Digital Human playback",
       "cleanup": "stop playback on switch and purge audio without complete owner/profile binding",
-      "migration": "do not claim global cache; regenerate from authoritative text when allowed",
+      "migration": "move legacy global cache to quarantine without owner attribution; regenerate from authoritative text when allowed",
       "retention": "bounded generated cache",
       "testOwner": "WI-S0-01-07",
-      "status": "REGISTERED_GLOBAL_CACHE_MIGRATION_REQUIRED",
-      "nextWorkItem": "WI-S0-01-07",
+      "status": "REGISTERED_SCOPED_AND_QUARANTINED",
+      "nextWorkItem": "WI-S1-03-01",
       "sourcePaths": [
         "DreamJourney/Sources/Memoir/MemoirAudioPlayer.swift",
         "DreamJourney/Sources/Memoir/MemoirTTSService.swift"
@@ -489,12 +509,15 @@
         {
           "path": "DreamJourney/Sources/Memoir/MemoirTTSService.swift",
           "contains": [
-            "memoir_audio",
-            "memoir_tts_cache"
+            "memoir_audio_scoped_v2",
+            "memoir_tts_cache_scoped_v2",
+            "memoir_tts_quarantine"
           ]
         }
       ],
       "currentChecks": [
+        "Scripts/QA/product-v4/run-memoir-tts-cache-owner-scope-gate.sh",
+        "Scripts/QA/product-v4/memoir-tts-cache-owner-scope-check.py",
         "Scripts/QA/prd-stitch-ui/voice-synthesis-viseme-contract-check.swift"
       ]
     },
@@ -502,17 +525,17 @@
       "catalogId": "S12",
       "surfaceId": "S12.digital-human-context-and-runtime",
       "dataClass": "selected persona context, provider session lease, audio owner, work items, and metering probe",
-      "ownerScope": "context key is viewer-scoped; runtime must be bound to account generation and selected persona",
-      "storage": "owner-suffixed UserDefaults plus ephemeral provider runtime/timers/temp file",
-      "pathOrKey": "dj.digitalHuman.currentContext.<viewer>; digital-human-metering-probe.caf; provider session in memory",
+      "ownerScope": "context envelope is bound to AccountLease subject, generation and generationId; runtime is bound to the same lease and selected persona",
+      "storage": "generation-scoped UserDefaults envelope plus ephemeral provider runtime/timers/temp file",
+      "pathOrKey": "dj.digitalHuman.currentContext.v2.<subjectDigest>.<generation>.<generationId>; digital-human-metering-probe.caf; provider session in memory",
       "writer": "DigitalHumanContextStore and Echo/DigitalHuman runtime",
       "readers": "Echo UI, Knowledge persona context, Archive visibility",
       "cleanup": "close runtime/lease, cancel work items, stop audio, and remove temp probe on lifecycle boundary",
-      "migration": "never migrate provider session; restore only a currently authorized persona selection",
+      "migration": "quarantine subject-only legacy context without auto-claim; never migrate provider session; restore only a currently authorized scoped selection",
       "retention": "persona selection until revoked; provider runtime process/session only",
       "testOwner": "WI-S0-01-07",
-      "status": "REGISTERED_SCOPED_AND_EPHEMERAL",
-      "nextWorkItem": "WI-S0-01-07",
+      "status": "REGISTERED_GENERATION_SCOPED_AND_EPHEMERAL",
+      "nextWorkItem": "WI-S1-03-01",
       "sourcePaths": [
         "DreamJourney/Sources/App/DigitalHumanContextStore.swift",
         "DreamJourney/Sources/Modules/Echo/DigitalHumanAudioLevelMeter.swift",
@@ -530,7 +553,8 @@
         {
           "path": "DreamJourney/Sources/App/DigitalHumanContextStore.swift",
           "contains": [
-            "dj.digitalHuman.currentContext"
+            "dj.digitalHuman.currentContext.v2",
+            "dj.digitalHuman.currentContext.legacy-quarantine.v1"
           ]
         },
         {
@@ -541,6 +565,8 @@
         }
       ],
       "currentChecks": [
+        "Scripts/QA/product-v4/run-digital-human-context-owner-scope-gate.sh",
+        "Scripts/QA/product-v4/digital-human-context-owner-scope-check.py",
         "Scripts/QA/prd-stitch-ui/echo-digital-human-lifecycle-coordinator-check.swift",
         "Scripts/QA/prd-stitch-ui/echo-audio-owner-lifecycle-guard-check.swift"
       ]

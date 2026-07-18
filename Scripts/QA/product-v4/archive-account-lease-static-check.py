@@ -128,25 +128,46 @@ def main() -> None:
         "time-letter detail identity validator",
     )
 
-    for signature in (
-        "func markTimeLetterMailboxReminderRead(",
-        "func markTimeLetterMailboxReminderArchived(",
+    for function_name in (
+        "markTimeLetterMailboxReminderRead",
+        "markTimeLetterMailboxReminderArchived",
     ):
-        operation = body(source, signature)
+        wrapper_signature = (
+            f"func {function_name}(\n"
+            "        _ reminder: TimeLetterMailboxReminder,\n"
+            "        completion:"
+        )
+        wrapper = body(source, wrapper_signature)
+        includes(
+            wrapper,
+            (
+                "let accountLease = captureCurrentAccountLease()",
+                f"{function_name}(reminder, accountLease: accountLease, completion: completion)",
+            ),
+            f"{function_name} wrapper",
+        )
+
+        scoped_signature = (
+            f"func {function_name}(\n"
+            "        _ reminder: TimeLetterMailboxReminder,\n"
+            "        accountLease: AccountLease,"
+        )
+        operation = body(source, scoped_signature)
         includes(
             operation,
             (
-                "let accountLease = captureCurrentAccountLease()",
+                "isCurrentAccountLease(accountLease, at: .request)",
                 "isCurrentAccountLease(accountLease, at: .commit)",
+                "updateCachedTimeLetterMailboxReminder(",
                 "userId: accountLease.subjectId",
                 "deliver(",
                 "lease: accountLease",
             ),
-            signature,
+            f"{function_name} scoped operation",
         )
         require(
             "userId: currentUserId" not in operation,
-            f"{signature} must not re-read the current account for its request",
+            f"{function_name} must not re-read the current account for its request",
         )
 
     mailbox = body(source, "func refreshTimeLetterMailboxReminders(")
@@ -157,7 +178,8 @@ def main() -> None:
             "isCurrentAccountLease(accountLease, at: .request)",
             "isCurrentAccountLease(accountLease, at: .commit)",
             "userId: accountLease.subjectId",
-            "saveTimeLetterMailboxReminders(reminders, accountLease: accountLease)",
+            "replaceCachedTimeLetterMailboxReminders(",
+            "accountLease: accountLease",
             "lease: accountLease",
         ),
         "mailbox refresh",
