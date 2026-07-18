@@ -2,21 +2,40 @@
   "activeWorkItem": {
     "authorityLock": "OWNER_TRUTH",
     "backendPendingPaths": [],
-    "completedSubSlices": [],
-    "currentSubSlice": "WI-S1-01-01-OWNER_TRUTH_SCHEMA",
+    "completedSubSlices": [
+      "WI-S1-01-01-OWNER_TRUTH_SCHEMA",
+      "WI-S1-01-02-CREATE_SOURCE_COMPATIBILITY_FACADE",
+      "WI-S1-02-01-EFFECT_KERNEL_OUTBOX",
+      "WI-S1-02-02-CREATE_SOURCE_ATOMIC_OUTBOX",
+      "WI-S1-02-03-WORKER_LEASE_FOUNDATION",
+      "WI-S1-02-03-SCHEDULER_SHADOW_FOUNDATION",
+      "WI-S1-02-04-SYNTHETIC_CONSUMER_KERNEL",
+      "WI-S1-02-04-SOURCE_TARGET_AUTHZ_RECHECK",
+      "WI-S1-02-04-TYPED_BLOCKED_SOURCE_COMPLETION",
+      "WI-S1-01-03-CANDIDATE_SCHEMA_AND_SYNTHETIC_EXTRACTION",
+      "WI-S1-01-04-CANDIDATE_REVIEW_AND_DECISION_RECEIPT",
+      "WI-S1-01-05-MEMORY_VERSION_ACTIVATION",
+      "WI-S1-01-06-PROJECTION_FOUNDATION_AND_KBLITE_COMPATIBILITY_SHADOW",
+      "WI-S1-01-07-TYPED_CONTEXT_ANSWER_CITATION_SHADOW",
+      "WI-S1-01-08-CORRECTION_REQUEST_AND_RESOLVER_SHADOW",
+      "WI-S1-01-09-LEGACY_INVENTORY_CLASSIFIER"
+    ],
+    "currentSubSlice": "WI-S1-01-09-SHADOW_PARITY_OBSERVER",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "MISSING",
-      "G2": "MISSING"
+      "G0": "SCOPED_EVIDENCE_PRESENT",
+      "G1": "MISSING",
+      "G2": "INVENTORY_DEPLOYED_PARITY_AND_CUTOVER_PENDING",
+      "G4": "MISSING"
     },
-    "id": "WI-S1-01-01",
+    "id": "WI-S1-01-09",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-03-01 is complete at its scoped G0 boundary: hosted DreamJourneyTests compile with the App target, while the same pure account/audio model tests execute through the unhosted DreamJourneyCore SwiftPM target. This does not claim simulator runtime coverage because provider SDK slices keep the full app scheme off runnable simulator destinations. The selected next primary writer lane is WI-S1-01-01 Owner Truth core schema; it remains additive, write-disabled and requires its own G0/G2 evidence."
+    "summary": "WI-S1-01-04 through WI-S1-01-08 now have scoped QA-only Owner Truth evidence: Owner Candidate review/immutable DecisionReceipt, initial MemoryVersion activation, rebuildable Projection/KBLite compatibility shadow, typed Context/Answer/Citation shadow, and same-record correction lineage. WI-S1-01-09 legacy inventory implementation cd739fb and smoke correction 224e56e are deployed with migration 0023 and disposable Postgres evidence; d654307 records that deployment. The active work is a value-free shadow parity observer; it must not backfill, promote legacy facts, change authorityEpoch, or expose public Context before its own evidence and external gates."
   },
   "baselines": {
-    "backend": "main@933af48",
-    "ios": "feature/prd-stitch-ui-adaptation@b0cd090",
+    "backend": "main@d654307",
+    "ios": "feature/prd-stitch-ui-adaptation@158ff15",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
@@ -267,6 +286,12 @@
       "registryClosure": "SCOPED_G2_EVIDENCE_PRESENT_EXTERNAL_RETENTION_OPS_REVIEW_OPEN"
     },
     {
+      "evidence": "docs/superpowers/status/2026-07-18-wi-s0-07-05-provider-cost-preflight.md",
+      "id": "WI-S0-07-05",
+      "implementationStatus": "INTERNAL_PREFLIGHT / BACKEND_DEPLOYED / G0_G2_ISOLATED_POSTGRES_VERIFIED / G3_COMMERCIAL_COST_BUDGET_CIRCUIT_OPEN",
+      "registryClosure": "SCOPED_G0_G2_PRECHECK_EVIDENCE_PRESENT_G3_OPEN"
+    },
+    {
       "evidence": "docs/superpowers/status/2026-07-18-wi-s0-07-06-incident-lifecycle.md",
       "id": "WI-S0-07-06",
       "implementationStatus": "INTERNAL_READY / BACKEND_DEPLOYED / G0_G2_POSTGRES_INCIDENT_LIFECYCLE_VERIFIED / G3_G4_EXTERNAL_OPEN",
@@ -289,12 +314,54 @@
       "id": "WI-S1-03-01",
       "implementationStatus": "INTERNAL_READY / G0_TEST_FOUNDATION_VERIFIED / IOS_LOCAL_COMMITTED / SIMULATOR_RUNTIME_UNAVAILABLE_BY_PROVIDER_SDK",
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-01-01-owner-truth-core.md",
+      "id": "WI-S1-01-01",
+      "implementationStatus": "VERIFIED / G0_G2_SCOPED_EVIDENCE_PRESENT / BACKEND_DEPLOYED / IOS_LOCAL_COMMITTED / WRITE_DISABLED",
+      "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-01-02-create-source-archive-shadow.md",
+      "id": "WI-S1-01-02",
+      "implementationStatus": "IMPLEMENTED / G0_G2_SCOPED_EVIDENCE_PRESENT / BACKEND_DEPLOYED / IOS_LOCAL_COMMITTED / G1_SIMULATOR_RUNTIME_UNAVAILABLE_BY_PROVIDER_SDK / SHADOW_ONLY",
+      "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT_G1_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-02-01-async-effect-kernel.md",
+      "id": "WI-S1-02-01",
+      "implementationStatus": "IMPLEMENTED / G0_G2_SCOPED_EVIDENCE_PRESENT / BACKEND_DEPLOYED / IOS_LOCAL_COMMITTED / WORKER_DISABLED",
+      "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-02-02-source-effect-atomic-outbox.md",
+      "id": "WI-S1-02-02",
+      "implementationStatus": "IMPLEMENTED / G0_G2_SCOPED_EVIDENCE_PRESENT / BACKEND_DEPLOYED / SHADOW_ONLY / WORKER_DISABLED",
+      "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-02-03-scheduler-lease-foundation.md",
+      "id": "WI-S1-02-03",
+      "implementationStatus": "INTERNAL_READY / WORKER_AND_SCHEDULER_LEASE_G0_G2_VERIFIED / BACKEND_DEPLOYED / DEFAULT_DISABLED / G3_PROVIDER_SCOPE_OPEN",
+      "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT_G3_PROVIDER_SCOPE_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-02-04-typed-blocked-source-completion.md",
+      "id": "WI-S1-02-04",
+      "implementationStatus": "INTERNAL_READY / G0_G2_SCOPED_EVIDENCE_PRESENT / BACKEND_DEPLOYED / WORKER_DISABLED / NO_PROVIDER_OR_PUBLIC_AUTHORITY",
+      "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-01-03-candidate-synthetic-extraction.md",
+      "id": "WI-S1-01-03",
+      "implementationStatus": "INTERNAL_READY / G0_G2_SCOPED_EVIDENCE_PRESENT / BACKEND_DEPLOYED / G3_PROVIDER_EVIDENCE_OPEN / WORKER_DISABLED / NO_PUBLIC_AUTHORITY",
+      "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT_G3_OPEN"
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S1-01-02",
+    "id": "WI-S1-01-10",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "After WI-S1-01-01 has its additive schema and G0/G2 evidence, proceed to CreateSource command and Archive compatibility facade. Do not start a second writer before the Owner Truth epoch contract is established."
+    "summary": "After the read-only shadow parity observer has deterministic evidence, do not cut over automatically. WI-S1-01-10 requires the separate Adult Self cohort, authorityEpoch CAS, rollback/forward-fix and applicable G1/G2/G4 evidence."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -303,5 +370,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-18T23:36:00+08:00"
+  "updatedAt": "2026-07-19T06:31:00+0800"
 }
