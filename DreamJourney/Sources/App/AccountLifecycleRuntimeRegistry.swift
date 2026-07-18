@@ -7,6 +7,23 @@ struct AccountLifecycleTransitionResult: Sendable {
     var canFinalize: Bool {
         actorReceipt.accepted && lifecycleReceipt.isTerminal
     }
+
+    var cleanupCompleted: Bool {
+        lifecycleReceipt.event == .accountDeletion
+            && actorReceipt.accepted
+            && actorReceipt.state == .signedOut
+            && lifecycleReceipt.isTerminal
+            && lifecycleReceipt.moduleReceipts.count == 13
+            && lifecycleReceipt.remainingLocalDataCount == 0
+            && !lifecycleReceipt.hasFailures
+    }
+
+    var cleanupPendingAfterSignOut: Bool {
+        lifecycleReceipt.event == .accountDeletion
+            && actorReceipt.accepted
+            && actorReceipt.state == .signedOut
+            && !cleanupCompleted
+    }
 }
 
 private final class AccountLifecycleBooleanBox: @unchecked Sendable {
@@ -65,8 +82,10 @@ actor AccountLifecycleTransitionController {
                 reason: reason
             )
         case .accountDeletion:
-            actorReceipt = await accountSessionActor.beginDeleting(
-                expectedGeneration: oldGeneration
+            return await performAccountDeletionAfterBackendSoftDelete(
+                operationId: operationId,
+                oldAccountLease: oldAccountLease,
+                oldGeneration: oldGeneration
             )
         case .coldStartRecovery:
             actorReceipt = await accountSessionActor.snapshot()
@@ -78,6 +97,46 @@ actor AccountLifecycleTransitionController {
             oldAccountLease: oldAccountLease,
             oldGeneration: oldGeneration,
             actorReceipt: actorReceipt
+        )
+    }
+
+    func performAccountDeletionAfterBackendSoftDelete(
+        operationId: UUID = UUID(),
+        oldAccountLease: AccountLease?,
+        oldGeneration: UInt64
+    ) async -> AccountLifecycleTransitionResult {
+        let deletingReceipt = await accountSessionActor.beginDeleting(
+            expectedGeneration: oldGeneration
+        )
+        guard deletingReceipt.accepted else {
+            return AccountLifecycleTransitionResult(
+                actorReceipt: deletingReceipt,
+                lifecycleReceipt: rejectedAccountDeletionReceipt(
+                    operationId: operationId,
+                    oldGeneration: oldGeneration,
+                    detailCode: "accountDeletionFenceRejected"
+                )
+            )
+        }
+
+        let transitionResult = await performAfterExistingFence(
+            event: .accountDeletion,
+            operationId: operationId,
+            oldAccountLease: oldAccountLease,
+            oldGeneration: oldGeneration,
+            actorReceipt: deletingReceipt
+        )
+        let receipt = transitionResult.lifecycleReceipt
+        guard receipt.isTerminal, receipt.moduleReceipts.count == 13 else {
+            return transitionResult
+        }
+        let signedOutReceipt = await accountSessionActor.signOut(
+            expectedGeneration: deletingReceipt.generation,
+            reason: "accountDeletionLocalTeardownFinished"
+        )
+        return AccountLifecycleTransitionResult(
+            actorReceipt: signedOutReceipt,
+            lifecycleReceipt: transitionResult.lifecycleReceipt
         )
     }
 
@@ -121,6 +180,36 @@ actor AccountLifecycleTransitionController {
             AccountLifecycleRuntimeRegistry.registrations()
         )
         registryInstalled = true
+    }
+
+    private func rejectedAccountDeletionReceipt(
+        operationId: UUID,
+        oldGeneration: UInt64,
+        detailCode: String
+    ) -> AccountLifecycleOperationReceipt {
+        let now = Date()
+        let moduleReceipt = AccountLifecycleModuleReceipt(
+            schemaVersion: 1,
+            operationId: operationId,
+            moduleId: "account.lifecycle.deletionFence",
+            event: .accountDeletion,
+            phase: .fence,
+            requestedOutcome: .purged,
+            outcome: .failed,
+            remainingLocalData: true,
+            detailCode: detailCode,
+            completedAt: now
+        )
+        return AccountLifecycleOperationReceipt(
+            schemaVersion: 1,
+            operationId: operationId,
+            event: .accountDeletion,
+            oldGeneration: oldGeneration,
+            startedAt: now,
+            completedAt: now,
+            moduleReceipts: [moduleReceipt],
+            isTerminal: true
+        )
     }
 }
 
@@ -394,13 +483,6 @@ enum AccountLifecycleRuntimeRegistry {
         context: AccountLifecycleContext,
         requestedOutcome: AccountLifecycleModuleOutcome
     ) -> AccountLifecycleModuleResult {
-        guard context.event != .accountDeletion else {
-            return .completed(
-                .failed,
-                remainingLocalData: true,
-                detailCode: "messageRemoteDeletionReceiptPending"
-            )
-        }
         let oldAccountLease = context.oldAccountLease
         let localResults = [
             EchoDelayedReplyStore.shared.teardownForAccountLifecycle(
@@ -434,6 +516,13 @@ enum AccountLifecycleRuntimeRegistry {
                     : "messageNotificationTeardownTimedOut"
             )
         }
+        if context.event == .accountDeletion {
+            return .completed(
+                .failed,
+                remainingLocalData: false,
+                detailCode: "messageRemoteDeletionReceiptPending"
+            )
+        }
         return .completed(
             requestedOutcome,
             remainingLocalData: false,
@@ -448,7 +537,7 @@ enum AccountLifecycleRuntimeRegistry {
         guard context.event != .accountDeletion else {
             return .completed(
                 .failed,
-                remainingLocalData: true,
+                remainingLocalData: false,
                 detailCode: "voiceRightsDeletionReceiptPending"
             )
         }
@@ -466,7 +555,7 @@ enum AccountLifecycleRuntimeRegistry {
         guard context.event != .accountDeletion else {
             return .completed(
                 .failed,
-                remainingLocalData: true,
+                remainingLocalData: false,
                 detailCode: "digitalHumanDeletionReceiptPending"
             )
         }
@@ -511,17 +600,49 @@ enum AccountLifecycleRuntimeRegistry {
         context: AccountLifecycleContext,
         requestedOutcome: AccountLifecycleModuleOutcome
     ) -> AccountLifecycleModuleResult {
-        guard context.event != .accountDeletion else {
+        guard context.event == .accountDeletion else {
+            return .completed(
+                requestedOutcome,
+                remainingLocalData: true,
+                detailCode: "explicitDraftsRetainedOwnerLocked"
+            )
+        }
+        guard let oldAccountLease = context.oldAccountLease,
+              oldAccountLease.generation == context.oldGeneration else {
             return .completed(
                 .failed,
                 remainingLocalData: true,
-                detailCode: "explicitDraftDeletionPending"
+                detailCode: "explicitDraftDeletionScopeUnavailable"
+            )
+        }
+        let purgeResults = [
+            MemoryArchiveRepository.shared.purgeLocalArchiveDataForAccountDeletion(
+                accountLease: oldAccountLease
+            ),
+            AccountPrivateMediaStore.shared.purgeAccountDataForAccountDeletion(
+                accountLease: oldAccountLease
+            ),
+            MemoirRepository.shared.purgeLocalDataForAccountDeletion(
+                accountLease: oldAccountLease
+            ),
+            MemoryRepository.shared.purgeLocalDataForAccountDeletion(
+                accountLease: oldAccountLease
+            ),
+            MemoryMapPresentationStore.shared.purgeLocalDataForAccountDeletion(
+                accountLease: oldAccountLease
+            ),
+        ]
+        guard purgeResults.allSatisfy({ $0 }) else {
+            return .completed(
+                .failed,
+                remainingLocalData: true,
+                detailCode: "explicitDraftDeletionFailed"
             )
         }
         return .completed(
             requestedOutcome,
-            remainingLocalData: true,
-            detailCode: "explicitDraftsRetainedOwnerLocked"
+            remainingLocalData: false,
+            detailCode: "explicitDraftsPurged"
         )
     }
 

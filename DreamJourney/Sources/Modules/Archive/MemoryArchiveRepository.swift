@@ -368,8 +368,11 @@ final class MemoryArchiveRepository {
 
     @discardableResult
     func purgeLocalArchiveDataForAccountDeletion(accountLease: AccountLease) -> Bool {
-        guard accountLease.subjectId == UserManager.shared.currentUser?.id,
-              accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+        let ownerScope = ArchiveStorageScope(
+            accountLease: accountLease,
+            archiveOwnerId: accountLease.subjectId
+        )
+        guard ownerScope.isValid else {
             return false
         }
         let mediaDirectories = localStorage.mediaDirectoryRelativePaths(accountLease: accountLease)

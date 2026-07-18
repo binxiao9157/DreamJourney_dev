@@ -385,6 +385,42 @@ final class AccountPrivateMediaStore: @unchecked Sendable {
     }
 
     @discardableResult
+    func purgeAccountDataForAccountDeletion(accountLease: AccountLease) -> Bool {
+        do {
+            let scopeDigest = try Self.scopeDigest(for: accountLease)
+            let kinds: [AccountPrivateMediaKind] = [
+                .persistentPhoto,
+                .photoStaging,
+                .recordingStaging,
+            ]
+            var visitedScopeDirectories = Set<URL>()
+            for kind in kinds {
+                let storageRoot = try storageRoot(for: kind, create: false)
+                    .standardizedFileURL
+                let scopeDirectory = (Self.managedRootComponents + [scopeDigest]).reduce(
+                    storageRoot
+                ) { partial, component in
+                    partial.appendingPathComponent(component, isDirectory: true)
+                }.standardizedFileURL
+                guard Self.isDescendant(
+                    scopeDirectory.resolvingSymlinksInPath().standardizedFileURL,
+                    of: storageRoot.resolvingSymlinksInPath().standardizedFileURL
+                ) else {
+                    throw AccountPrivateMediaStoreError.invalidScope
+                }
+                guard visitedScopeDirectories.insert(scopeDirectory).inserted,
+                      fileManager.fileExists(atPath: scopeDirectory.path) else {
+                    continue
+                }
+                try fileManager.removeItem(at: scopeDirectory)
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    @discardableResult
     func retireLegacyGlobalMedia() throws -> [AccountPrivateMediaLegacyReceipt] {
         legacyRetirementLock.lock()
         defer { legacyRetirementLock.unlock() }

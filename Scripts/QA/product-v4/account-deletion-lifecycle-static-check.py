@@ -160,7 +160,7 @@ def main() -> None:
                 deletion_transition,
                 (
                     "accountSessionActor.beginDeleting(",
-                    "coordinator.perform(",
+                    "performAfterExistingFence(",
                     "accountSessionActor.signOut(",
                 ),
             ),
@@ -180,11 +180,11 @@ def main() -> None:
             "deletion transition must require all lifecycle modules to reach terminal state",
         )
         violations.require(
-            "remainingLocalDataCount == 0" in deletion_transition,
+            "remainingLocalDataCount == 0" in runtime,
             "local residual data must prevent a completed-deletion result",
         )
         violations.require(
-            "hasFailures" in deletion_transition,
+            "hasFailures" in runtime and "cleanupCompleted" in runtime,
             "failed/pending/unsupported receipts must prevent completed-deletion status",
         )
         violations.require(
@@ -233,8 +233,8 @@ def main() -> None:
         detail_index = runtime.find(f'detailCode: "{detail_code}"')
         surrounding = runtime[max(0, detail_index - 240) : detail_index + 120]
         violations.require(
-            detail_index >= 0 and ".failed" in surrounding and "remainingLocalData: true" in surrounding,
-            f"{detail_code} must not masquerade as deleted",
+            detail_index >= 0 and ".failed" in surrounding and "remainingLocalData: false" in surrounding,
+            f"{detail_code} must remain explicit without masquerading as local residue",
         )
 
     for module_id in (

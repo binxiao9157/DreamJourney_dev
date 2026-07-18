@@ -462,6 +462,40 @@ final class UserManager {
     }
 
     @discardableResult
+    func completeAccountDeletion(
+        accountLease: AccountLease,
+        completion: @escaping @MainActor (AccountLifecycleTransitionResult) -> Void
+    ) -> Bool {
+        let ownerUserId = accountLease.subjectId
+        let oldGeneration = accountLease.generation
+        accountStateLock.lock()
+        guard storedCurrentUser?.id == ownerUserId,
+              lifecycleTransitionOwnerUserId == nil else {
+            accountStateLock.unlock()
+            return false
+        }
+        lifecycleTransitionOwnerUserId = ownerUserId
+        accountStateLock.unlock()
+
+        Task {
+            let result = await AccountLifecycleTransitionController.shared
+                .performAccountDeletionAfterBackendSoftDelete(
+                oldAccountLease: accountLease,
+                oldGeneration: oldGeneration
+            )
+            await MainActor.run {
+                self.finalizeAccountDeletion(
+                    expectedOwnerUserId: ownerUserId,
+                    expectedGeneration: oldGeneration,
+                    lifecycleResult: result
+                )
+                completion(result)
+            }
+        }
+        return true
+    }
+
+    @discardableResult
     func teardownProfileForAccountLifecycle(context: AccountLifecycleContext) -> Bool {
         accountStateLock.lock()
         defer { accountStateLock.unlock() }
@@ -532,6 +566,44 @@ final class UserManager {
             name: .djPrivateAccessDidSuspend,
             object: nil,
             userInfo: ["reason": reason]
+        )
+    }
+
+    @MainActor
+    private func finalizeAccountDeletion(
+        expectedOwnerUserId: String,
+        expectedGeneration: UInt64,
+        lifecycleResult: AccountLifecycleTransitionResult
+    ) {
+        accountStateLock.lock()
+        defer { accountStateLock.unlock() }
+        guard lifecycleTransitionOwnerUserId == expectedOwnerUserId else { return }
+        lifecycleTransitionOwnerUserId = nil
+        let cleanupCompleted = lifecycleResult.cleanupCompleted
+        guard lifecycleResult.lifecycleReceipt.isTerminal,
+              lifecycleResult.lifecycleReceipt.oldGeneration == expectedGeneration,
+              lifecycleResult.actorReceipt.accepted,
+              lifecycleResult.actorReceipt.state == .signedOut else {
+            return
+        }
+        if let currentOwnerUserId = storedCurrentUser?.id,
+           currentOwnerUserId != expectedOwnerUserId {
+            return
+        }
+        storedCurrentUser = nil
+        privateAccessState = .signedOut
+        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        syntheticPrivateUserId = nil
+        #endif
+        UserDefaults.standard.removeObject(forKey: kUserKey)
+        UserDefaults.standard.removeObject(forKey: kLoggedInKey)
+        NotificationCenter.default.post(
+            name: .djUserDidLogout,
+            object: nil,
+            userInfo: [
+                "reason": "accountDeletion",
+                "cleanupCompleted": cleanupCompleted,
+            ]
         )
     }
 

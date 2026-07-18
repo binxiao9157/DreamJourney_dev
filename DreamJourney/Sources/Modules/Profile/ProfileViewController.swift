@@ -799,23 +799,30 @@ final class ProfileViewController: UIViewController {
             showToast("后端账号服务未配置，暂时无法注销", type: .error)
             return
         }
-        let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: user.id)
+        guard let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: user.id) else {
+            showToast("账号状态已变化，请重新登录后再试", type: .error)
+            return
+        }
         DreamJourneyBackendClient.shared.softDeleteAccount(
             userId: user.id,
             phone: user.phone
         ) { [weak self] result in
             switch result {
             case .success:
-                if let accountLease {
-                    _ = MemoryArchiveRepository.shared.purgeLocalArchiveDataForAccountDeletion(
-                        accountLease: accountLease
-                    )
-                    _ = ConversationMemoryManager.shared.purgeLocalDataForAccountDeletion(
-                        accountLease: accountLease
-                    )
+                let started = UserManager.shared.completeAccountDeletion(
+                    accountLease: accountLease
+                ) { lifecycleResult in
+                    let receipt = lifecycleResult.lifecycleReceipt
+                    if lifecycleResult.cleanupPendingAfterSignOut {
+                        print(
+                            "[AccountLifecycle] account deletion signed out with pending cleanup receipts="
+                                + "\(receipt.moduleReceipts.filter { $0.outcome == .failed }.count)"
+                        )
+                    }
                 }
-                UserManager.shared.logout()
-                self?.didRequestLogout?()
+                if !started {
+                    self?.showToast("账号状态已变化，本次注销回调已忽略", type: .info)
+                }
             case .failure(let error):
                 self?.showToast("注销失败：\(error.localizedDescription)", type: .error)
             }

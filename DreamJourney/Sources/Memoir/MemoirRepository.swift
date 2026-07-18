@@ -398,6 +398,59 @@ final class MemoirOwnerStorage {
         return true
     }
 
+    func purge(scope: MemoirStorageScope) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        guard scope.isValid else { throw MemoirOwnerStorageError.invalidIdentifier }
+        let scopeDirectory = scopedURL("v2/\(scope.scopeDigest)")
+        if fileManager.fileExists(atPath: scopeDirectory.path) {
+            try fileManager.removeItem(at: scopeDirectory)
+        }
+    }
+
+    @discardableResult
+    func purgeAccount(subjectId: String, vaultId: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let normalizedSubjectId = MemoirOwnerStoragePolicy.normalized(subjectId)
+        let normalizedVaultId = MemoirOwnerStoragePolicy.normalized(vaultId)
+        guard !normalizedSubjectId.isEmpty, !normalizedVaultId.isEmpty else { return false }
+        let v2Directory = scopedURL("v2")
+        guard let scopeDirectories = try? fileManager.contentsOfDirectory(
+            at: v2Directory,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return !fileManager.fileExists(atPath: v2Directory.path)
+        }
+
+        do {
+            for scopeDirectory in scopeDirectories {
+                let recordsDirectory = scopeDirectory.appendingPathComponent(
+                    "records",
+                    isDirectory: true
+                )
+                guard let recordURLs = try? fileManager.contentsOfDirectory(
+                    at: recordsDirectory,
+                    includingPropertiesForKeys: nil,
+                    options: [.skipsHiddenFiles]
+                ), let envelope = recordURLs.lazy.compactMap({ url -> MemoirStoreEnvelope? in
+                    guard url.pathExtension == "json",
+                          let data = try? Data(contentsOf: url) else { return nil }
+                    return try? self.decoder.decode(MemoirStoreEnvelope.self, from: data)
+                }).first,
+                MemoirOwnerStoragePolicy.normalized(envelope.subjectId) == normalizedSubjectId,
+                MemoirOwnerStoragePolicy.normalized(envelope.vaultId) == normalizedVaultId else {
+                    continue
+                }
+                try fileManager.removeItem(at: scopeDirectory)
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
+
     func migrationReceipts() -> [MemoirLegacyMigrationReceipt] {
         lock.lock()
         defer { lock.unlock() }
@@ -1211,6 +1264,24 @@ final class MemoirRepository {
     func captureAccountLeaseAndOwner() -> (accountLease: AccountLease, ownerId: String)? {
         guard let authorization = captureAuthorization(at: .request) else { return nil }
         return (authorization.accountLease, authorization.scope.ownerId)
+    }
+
+    @discardableResult
+    func purgeLocalDataForAccountDeletion(accountLease: AccountLease) -> Bool {
+        let selfScope = MemoirStorageScope(
+            accountLease: accountLease,
+            ownerId: accountLease.subjectId
+        )
+        guard selfScope.isValid else { return false }
+        do {
+            try storage.purge(scope: selfScope)
+        } catch {
+            return false
+        }
+        return storage.purgeAccount(
+            subjectId: accountLease.subjectId,
+            vaultId: accountLease.vaultId
+        )
     }
 
     func validateAccountLease(

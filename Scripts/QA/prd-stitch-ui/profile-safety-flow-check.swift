@@ -77,7 +77,7 @@ for hidden in ["familyManagement", "familySpace", "personaSettings", "timeLetter
 }
 
 assertContains(profile, "private func shouldShowCareDashboard(context: DigitalHumanContext) -> Bool", "profile should expose explicit care visibility helper")
-assertContains(profile, "featureFlags.isEnabled(.careDashboard)", "care visibility should still respect careDashboard flag")
+assertContains(profile, "isFeatureRouteAllowed(.careDashboard)", "care visibility should still respect the routed careDashboard policy")
 assertContains(profile, "context.isSelfAssistant", "default self assistant should preserve current care dashboard")
 assertContains(profile, "context.mode == .star", "family star persona should enable care dashboard")
 assertContains(profile, "if shouldShowCareDashboard(context: personaContext)", "buildContent should use care visibility helper")
@@ -98,7 +98,8 @@ assertContains(profile, "private func submitAccountDeletion(user:", "account del
 assertContains(backendClient, "softDeleteAccount(", "account deletion should call backend soft-delete contract")
 assertContains(backendClient, "\"firstConfirmation\": true", "account deletion backend payload should include first confirmation")
 assertContains(backendClient, "\"secondConfirmation\": true", "account deletion backend payload should include second confirmation")
-assertContains(profile, "UserManager.shared.logout()", "account deletion should log out after backend soft delete succeeds")
+assertContains(profile, "UserManager.shared.completeAccountDeletion(", "account deletion should enter the dedicated lifecycle after backend soft delete succeeds")
+assertNotContains(profile, "case .success:\n                UserManager.shared.logout()", "account deletion must not collapse into ordinary logout")
 assertNotContains(deletionBody, "UserDefaults.standard.remove", "account deletion shell must not delete local data")
 
 assertContains(profile, "showDoctorContactSafetyNotice()", "doctor contact should use safety notice")

@@ -552,6 +552,47 @@ final class MemoryRepository {
         }
     }
 
+    @discardableResult
+    func purgeLocalDataForAccountDeletion(accountLease: AccountLease) -> Bool {
+        let selfScope = MemoryStorageScope(
+            accountLease: accountLease,
+            ownerId: accountLease.subjectId
+        )
+        guard selfScope.isValid else { return false }
+        return withLock {
+            let itemPrefix = "dj.memory.items.v2."
+            var scopeDigests: Set<String> = [selfScope.scopeDigest]
+            for (key, value) in defaults.dictionaryRepresentation()
+            where key.hasPrefix(itemPrefix) {
+                guard let data = value as? Data,
+                      let envelope = try? JSONDecoder().decode(
+                          MemoryStoreEnvelope.self,
+                          from: data
+                      ),
+                      MemoryStoragePolicy.normalized(envelope.subjectId)
+                        == MemoryStoragePolicy.normalized(accountLease.subjectId),
+                      MemoryStoragePolicy.normalized(envelope.vaultId)
+                        == MemoryStoragePolicy.normalized(accountLease.vaultId) else {
+                    continue
+                }
+                scopeDigests.insert(String(key.dropFirst(itemPrefix.count)))
+            }
+            for scopeDigest in scopeDigests {
+                let storageKey = itemPrefix + scopeDigest
+                let quarantineStorageKey = "dj.memory.quarantine.v2." + scopeDigest
+                defaults.removeObject(forKey: storageKey)
+                defaults.removeObject(forKey: quarantineStorageKey)
+                defaults.removeObject(
+                    forKey: quarantineStorageKey + ".migrationReceipts.v1"
+                )
+            }
+            return scopeDigests.allSatisfy {
+                defaults.object(forKey: itemPrefix + $0) == nil
+                    && defaults.object(forKey: "dj.memory.quarantine.v2." + $0) == nil
+            }
+        }
+    }
+
     // MARK: Actor mutations
     @discardableResult
     func addComment(
@@ -943,6 +984,47 @@ final class MemoryMapPresentationStore {
             ownerId: ownerId,
             accountLease: accountLease
         ) { $0.bouncedMemoryIds.insert(memoryId) }
+    }
+
+    @discardableResult
+    func purgeLocalDataForAccountDeletion(accountLease: AccountLease) -> Bool {
+        let selfScope = MemoryStorageScope(
+            accountLease: accountLease,
+            ownerId: accountLease.subjectId
+        )
+        guard selfScope.isValid else { return false }
+        return withLock {
+            let presentationPrefix = "dj.memoryMap.presentation.v2."
+            var scopeDigests: Set<String> = [selfScope.scopeDigest]
+            for (key, value) in defaults.dictionaryRepresentation()
+            where key.hasPrefix(presentationPrefix) {
+                guard let data = value as? Data,
+                      let envelope = try? JSONDecoder().decode(
+                          MemoryMapPresentationEnvelope.self,
+                          from: data
+                      ),
+                      MemoryStoragePolicy.normalized(envelope.subjectId)
+                        == MemoryStoragePolicy.normalized(accountLease.subjectId),
+                      MemoryStoragePolicy.normalized(envelope.vaultId)
+                        == MemoryStoragePolicy.normalized(accountLease.vaultId) else {
+                    continue
+                }
+                scopeDigests.insert(String(key.dropFirst(presentationPrefix.count)))
+            }
+            for scopeDigest in scopeDigests {
+                let storageKey = presentationPrefix + scopeDigest
+                let quarantineStorageKey = "dj.memoryMap.quarantine.v2." + scopeDigest
+                defaults.removeObject(forKey: storageKey)
+                defaults.removeObject(forKey: quarantineStorageKey)
+                defaults.removeObject(
+                    forKey: quarantineStorageKey + ".migrationReceipts.v1"
+                )
+            }
+            return scopeDigests.allSatisfy {
+                defaults.object(forKey: presentationPrefix + $0) == nil
+                    && defaults.object(forKey: "dj.memoryMap.quarantine.v2." + $0) == nil
+            }
+        }
     }
 
     private func mutate(
