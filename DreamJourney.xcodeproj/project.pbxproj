@@ -155,6 +155,11 @@
 		FE0FA33C09E4349B2A4D0028 /* TGToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7750B20E0FBEFB67B5664936 /* TGToast.swift */; };
 		FE8668AF8032B5ED0673C7D2 /* TGButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CA664A32F94C89A9CE536C1 /* TGButton.swift */; };
 		FEF405C138F6D1A6B57DD767 /* MemoryEditViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56ED8B99EE2B18AC4D06CC30 /* MemoryEditViewController.swift */; };
+		D4F000000000000000000001 /* TestDoubles.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000101 /* TestDoubles.swift */; };
+		D4F000000000000000000002 /* AccountLeaseRuntimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000102 /* AccountLeaseRuntimeTests.swift */; };
+		D4F000000000000000000003 /* AudioOwnerLeaseModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000103 /* AudioOwnerLeaseModelTests.swift */; };
+		D4F000000000000000000004 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000105 /* XCTest.framework */; };
+		D4F000000000000000000005 /* AudioOwnerLeaseModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000106 /* AudioOwnerLeaseModel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -164,6 +169,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 14D813E1BAF7F066DE226016;
 			remoteInfo = DreamJourneyWidget;
+		};
+		D4F000000000000000000501 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 30BC97AD07A459B78C06D936 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AD8A0F107BD0211216A04FE4;
+			remoteInfo = DreamJourney;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -347,6 +359,12 @@
 		F000C9191CDE42D8FB0D946A /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		F6C5E6FFF33ED30F772F732A /* Coordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Coordinator.swift; sourceTree = "<group>"; };
 		FF7E1F392A912E6A3B365A8C /* TodayInHistoryProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayInHistoryProvider.swift; sourceTree = "<group>"; };
+		D4F000000000000000000101 /* TestDoubles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestDoubles.swift; sourceTree = "<group>"; };
+		D4F000000000000000000102 /* AccountLeaseRuntimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountLeaseRuntimeTests.swift; sourceTree = "<group>"; };
+		D4F000000000000000000103 /* AudioOwnerLeaseModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioOwnerLeaseModelTests.swift; sourceTree = "<group>"; };
+		D4F000000000000000000104 /* DreamJourneyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DreamJourneyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D4F000000000000000000105 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
+		D4F000000000000000000106 /* AudioOwnerLeaseModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioOwnerLeaseModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -356,6 +374,14 @@
 			files = (
 				D3A000000000000000000008 /* VirtualmanStreamSDK.xcframework in Frameworks */,
 				8C9B58C4A5C3BD5EF09847E6 /* Pods_DreamJourney.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D4F000000000000000000302 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D4F000000000000000000004 /* XCTest.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -495,6 +521,7 @@
 			children = (
 				D3A000000000000000000108 /* VirtualmanStreamSDK.xcframework */,
 				6F92F68CA0C355AE2B34198A /* Pods_DreamJourney.framework */,
+				D4F000000000000000000105 /* XCTest.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -624,6 +651,7 @@
 			children = (
 				06E17BD90B489ADAD5BB3B17 /* DreamJourney.app */,
 				C31B66E6C099EABF318FC693 /* DreamJourneyWidget.appex */,
+				D4F000000000000000000104 /* DreamJourneyTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -657,6 +685,7 @@
 		A353AEB5FE48C1961C1D7DF3 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				D4F000000000000000000106 /* AudioOwnerLeaseModel.swift */,
 				C7E1B4000000000000000101 /* AccountLifecycleCoordinator.swift */,
 				C7E1B5000000000000000101 /* AccountLifecycleRuntimeRegistry.swift */,
 				C7E1B3000000000000000101 /* AccountLease.swift */,
@@ -721,6 +750,7 @@
 		C58D179B05A500658642EB93 = {
 			isa = PBXGroup;
 			children = (
+				D4F000000000000000000201 /* DreamJourneyTests */,
 				F9A16ACB58DF276F2BF39DE4 /* DreamJourney */,
 				697A85CBA95E64BD34FC210E /* DreamJourneyWidget */,
 				7DE936DB591FFBAD8E9E50A5 /* Products */,
@@ -770,6 +800,16 @@
 			path = web;
 			sourceTree = "<group>";
 		};
+		D4F000000000000000000201 /* DreamJourneyTests */ = {
+			isa = PBXGroup;
+			children = (
+				D4F000000000000000000101 /* TestDoubles.swift */,
+				D4F000000000000000000102 /* AccountLeaseRuntimeTests.swift */,
+				D4F000000000000000000103 /* AudioOwnerLeaseModelTests.swift */,
+			);
+			path = DreamJourneyTests;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -812,6 +852,23 @@
 			productReference = 06E17BD90B489ADAD5BB3B17 /* DreamJourney.app */;
 			productType = "com.apple.product-type.application";
 		};
+		D4F000000000000000000401 /* DreamJourneyTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D4F000000000000000000603 /* Build configuration list for PBXNativeTarget "DreamJourneyTests" */;
+			buildPhases = (
+				D4F000000000000000000301 /* Sources */,
+				D4F000000000000000000302 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D4F000000000000000000502 /* PBXTargetDependency */,
+			);
+			name = DreamJourneyTests;
+			productName = DreamJourneyTests;
+			productReference = D4F000000000000000000104 /* DreamJourneyTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -821,6 +878,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+				D4F000000000000000000401 = {
+					CreatedOnToolsVersion = 16.4;
+					TestTargetID = AD8A0F107BD0211216A04FE4;
+				};
 					14D813E1BAF7F066DE226016 = {
 						ProvisioningStyle = Automatic;
 					};
@@ -844,6 +905,7 @@
 			projectRoot = "";
 			targets = (
 				AD8A0F107BD0211216A04FE4 /* DreamJourney */,
+				D4F000000000000000000401 /* DreamJourneyTests */,
 				14D813E1BAF7F066DE226016 /* DreamJourneyWidget */,
 			);
 		};
@@ -970,6 +1032,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D4F000000000000000000005 /* AudioOwnerLeaseModel.swift in Sources */,
 				E6D53A82564EE472B1164972 /* AIRecordingViewController.swift in Sources */,
 				C7E1B4000000000000000001 /* AccountLifecycleCoordinator.swift in Sources */,
 				C7E1B5000000000000000001 /* AccountLifecycleRuntimeRegistry.swift in Sources */,
@@ -1099,6 +1162,16 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D4F000000000000000000301 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D4F000000000000000000001 /* TestDoubles.swift in Sources */,
+				D4F000000000000000000002 /* AccountLeaseRuntimeTests.swift in Sources */,
+				D4F000000000000000000003 /* AudioOwnerLeaseModelTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -1106,6 +1179,11 @@
 			isa = PBXTargetDependency;
 			target = 14D813E1BAF7F066DE226016 /* DreamJourneyWidget */;
 			targetProxy = C7E150000000000000000201 /* PBXContainerItemProxy */;
+		};
+		D4F000000000000000000502 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AD8A0F107BD0211216A04FE4 /* DreamJourney */;
+			targetProxy = D4F000000000000000000501 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1337,6 +1415,54 @@
 			};
 			name = Debug;
 		};
+		D4F000000000000000000601 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = CCCEC476950937337FC59A5C /* Pods-DreamJourney.debug.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.gaominge.dreamjourney.app.tests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DreamJourney.app/DreamJourney";
+				TEST_TARGET_NAME = DreamJourney;
+			};
+			name = Debug;
+		};
+		D4F000000000000000000602 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 16DC1997EF2F7459C92D09EF /* Pods-DreamJourney.release.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.gaominge.dreamjourney.app.tests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DreamJourney.app/DreamJourney";
+				TEST_TARGET_NAME = DreamJourney;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1363,6 +1489,15 @@
 			buildConfigurations = (
 				25CE1E172972FE0AC1FE6A31 /* Debug */,
 				00D804E67862C69AA3D0E395 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D4F000000000000000000603 /* Build configuration list for PBXNativeTarget "DreamJourneyTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D4F000000000000000000601 /* Debug */,
+				D4F000000000000000000602 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
