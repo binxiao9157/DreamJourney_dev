@@ -2300,6 +2300,7 @@ final class EchoTraceOwnerScope {
 private enum EchoDiagnosticExportRedactor {
     private static let identifierKeys: Set<String> = [
         "bundleId",
+        "evidenceId",
         "ownerUserId",
         "packageId",
         "personaId",
@@ -2329,15 +2330,19 @@ private enum EchoDiagnosticExportRedactor {
         "assetSource",
         "audioFormat",
         "audioOwner",
+        "build",
         "contextVersion",
         "credentialMode",
         "digitalHumanProviderMode",
         "digitalHumanRuntimeState",
         "driveMode",
+        "environment",
         "failureReason",
         "fallbackMode",
         "fallbackReason",
         "lifecycleMode",
+        "manifestStatus",
+        "manifestType",
         "outputMode",
         "provider",
         "providerMode",
@@ -2345,13 +2350,16 @@ private enum EchoDiagnosticExportRedactor {
         "roleVoiceSource",
         "scene",
         "source",
+        "sourceCommit",
         "status",
     ]
 
     private static let codeArrayKeys: Set<String> = [
         "fallbacks",
+        "exclusionCodes",
         "filteredContextReasons",
         "inferredFallbacks",
+        "sourceSchemaVersions",
     ]
 
     private static let detailKeys: Set<String> = [
@@ -2571,6 +2579,28 @@ private final class EchoOwnerScopedDefaultsStore<Value: Codable> {
             loadValues(forOwnerDigest: ownerDigest).filter {
                 ownerIsValid($0, normalizedOwnerUserId)
             }
+        } ?? []
+    }
+
+    /// Keeps owner-scoped QA data bounded without giving expired records a
+    /// chance to be reused by a later export.
+    func retainValues(
+        ownerUserId: String,
+        ownerIsValid: (Value, String) -> Bool,
+        shouldRetain: (Value) -> Bool
+    ) -> [Value] {
+        guard let normalizedOwnerUserId = EchoTraceOwnerScope.normalizedOwnerUserId(ownerUserId) else {
+            return []
+        }
+        return ownerScope.withActiveOwner(ownerUserId: normalizedOwnerUserId) { ownerDigest in
+            let existing = loadValues(forOwnerDigest: ownerDigest)
+            let retained = existing.filter {
+                ownerIsValid($0, normalizedOwnerUserId) && shouldRetain($0)
+            }
+            if retained.count != existing.count {
+                _ = save(retained, forOwnerDigest: ownerDigest)
+            }
+            return retained
         } ?? []
     }
 
@@ -3426,9 +3456,16 @@ final class EchoQAEvidenceBundleStore {
     }
 
     func recentBundles(ownerUserId: String) -> [EchoQAEvidenceBundle] {
-        storage.values(ownerUserId: ownerUserId) { bundle, normalizedOwnerUserId in
-            bundle.derivedOwnerUserId == normalizedOwnerUserId
-        }
+        let now = Date()
+        return storage.retainValues(
+            ownerUserId: ownerUserId,
+            ownerIsValid: { bundle, normalizedOwnerUserId in
+                bundle.derivedOwnerUserId == normalizedOwnerUserId
+            },
+            shouldRetain: { bundle in
+                bundle.generatedAt.addingTimeInterval(EchoQAEvidenceManifest.localBundleTTL) > now
+            }
+        )
     }
 
     @discardableResult
@@ -3441,6 +3478,7 @@ final class EchoQAEvidenceBundleStore {
         to directory: URL = FileManager.default.temporaryDirectory,
         fileName: String = "echo-qa-evidence-bundle.json"
     ) throws -> URL {
+        _ = recentBundles(ownerUserId: ownerUserId)
         let url = directory.appendingPathComponent(fileName)
         return try storage.export(
             ownerUserId: ownerUserId,
@@ -3465,6 +3503,224 @@ final class EchoQAEvidenceBundleStore {
         storage.purgeLegacyStorage()
     }
 
+}
+
+enum EchoQAEvidenceManifestIdentity {
+    static func configuredSourceCommit(arguments: [String] = ProcessInfo.processInfo.arguments) -> String? {
+        let candidates = [
+            Bundle.main.object(forInfoDictionaryKey: "DreamJourneySourceCommit") as? String,
+            arguments.first(where: { $0.hasPrefix("DJEvidenceSourceCommit=") })
+                .map { String($0.dropFirst("DJEvidenceSourceCommit=".count)) },
+        ]
+        for candidate in candidates {
+            let normalized = candidate?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+            guard normalized.count >= 7,
+                  normalized.count <= 64,
+                  normalized.unicodeScalars.allSatisfy({ scalar in
+                      switch scalar.value {
+                      case 48...57, 97...102:
+                          return true
+                      default:
+                          return false
+                      }
+                  }) else {
+                continue
+            }
+            return normalized
+        }
+        return nil
+    }
+
+    static func sha256(_ data: Data) -> String {
+        SHA256.hash(data: data)
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+
+    static func buildIdentity() -> String {
+        let marketing = PrivacySafeDiagnostics.safeCode(
+            Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+            fallback: "0"
+        )
+        let build = PrivacySafeDiagnostics.safeCode(
+            Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
+            fallback: "0"
+        )
+        return "ios-\(marketing)-\(build)"
+    }
+
+    static var environment: String {
+        #if UI_QA_SIMULATOR
+        return "qa"
+        #elseif DEBUG
+        return "debug"
+        #else
+        return "release"
+        #endif
+    }
+}
+
+struct EchoQAEvidenceManifest: Codable {
+    static let localBundleTTL: TimeInterval = 7 * 24 * 60 * 60
+
+    let schemaVersion: Int
+    let manifestVersion: Int
+    let evidenceId: String
+    let manifestType: String
+    let sourceCommit: String
+    let build: String
+    let environment: String
+    let commandId: String
+    let sampleCount: Int
+    let sampleSetHash: String
+    let exclusionCodes: [String]
+    let sourceSchemaVersions: [String]
+    let redactionVersion: String
+    let artifactHashes: [String]
+    let windowStartedAt: Date
+    let windowEndedAt: Date
+    let issuedAt: Date
+    let expiresAt: Date
+    let issuer: String
+    let manifestStatus: String
+    let ownerLeaseHash: String
+
+    init?(
+        bundle: EchoQAEvidenceBundle,
+        ownerUserId: String,
+        artifactData: Data,
+        sourceCommit: String?,
+        issuedAt: Date = Date()
+    ) {
+        guard let ownerLeaseHash = EchoTraceOwnerScope.ownerDigest(for: ownerUserId) else {
+            return nil
+        }
+        let effectiveIssuedAt = max(issuedAt, bundle.generatedAt)
+        let artifactHash = EchoQAEvidenceManifestIdentity.sha256(artifactData)
+        let sourceCommit = sourceCommit ?? "untracked"
+
+        self.schemaVersion = 1
+        self.manifestVersion = 1
+        self.evidenceId = "echo_manifest_" + String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(24))
+        self.manifestType = "echoQaEvidenceBundle"
+        self.sourceCommit = sourceCommit
+        self.build = EchoQAEvidenceManifestIdentity.buildIdentity()
+        self.environment = EchoQAEvidenceManifestIdentity.environment
+        self.commandId = "exportEchoQAEvidenceBundle"
+        self.sampleCount = 1
+        self.sampleSetHash = EchoQAEvidenceManifestIdentity.sha256(
+            Data((artifactHash + "|" + String(bundle.schemaVersion)).utf8)
+        )
+        self.exclusionCodes = ["rawAudio", "providerSecret", "reportBody", "userContent"]
+        self.sourceSchemaVersions = ["echoQaBundle-v2", "echoEvidenceManifest-v1"]
+        self.redactionVersion = PrivacySafeDiagnostics.redactionPolicyVersion
+        self.artifactHashes = [artifactHash]
+        self.windowStartedAt = bundle.generatedAt
+        self.windowEndedAt = effectiveIssuedAt
+        self.issuedAt = effectiveIssuedAt
+        self.expiresAt = effectiveIssuedAt.addingTimeInterval(Self.localBundleTTL)
+        self.issuer = "iosQaHarness"
+        self.manifestStatus = sourceCommit == "untracked" ? "legacyUnverified" : "passed"
+        self.ownerLeaseHash = ownerLeaseHash
+    }
+
+    func validity(at now: Date = Date()) -> String {
+        guard expiresAt > now else { return "expired" }
+        return manifestStatus == "passed" ? "current" : "unverified"
+    }
+
+    func belongs(to ownerUserId: String) -> Bool {
+        ownerLeaseHash == EchoTraceOwnerScope.ownerDigest(for: ownerUserId)
+    }
+}
+
+final class EchoQAEvidenceManifestStore {
+    static let shared = EchoQAEvidenceManifestStore()
+
+    private static let storageKeyPrefix = "DreamJourney.EchoQAEvidenceManifestStore.manifests.v1.owner."
+    private static let legacyStorageKey = "DreamJourney.EchoQAEvidenceManifestStore.manifests.v0"
+    private let maximumManifestCount = 20
+    private let storage: EchoOwnerScopedDefaultsStore<EchoQAEvidenceManifest>
+
+    init(userDefaults: UserDefaults = .standard) {
+        storage = EchoOwnerScopedDefaultsStore(
+            userDefaults: userDefaults,
+            storageKeyPrefix: Self.storageKeyPrefix,
+            legacyStorageKey: Self.legacyStorageKey,
+            legacyExportFileName: "echo-qa-evidence-manifest.json",
+            maximumValueCount: maximumManifestCount
+        )
+    }
+
+    @discardableResult
+    func record(
+        bundle: EchoQAEvidenceBundle,
+        ownerUserId: String,
+        artifactData: Data,
+        sourceCommit: String? = EchoQAEvidenceManifestIdentity.configuredSourceCommit(),
+        issuedAt: Date = Date()
+    ) -> EchoQAEvidenceManifest? {
+        guard let manifest = EchoQAEvidenceManifest(
+            bundle: bundle,
+            ownerUserId: ownerUserId,
+            artifactData: artifactData,
+            sourceCommit: sourceCommit,
+            issuedAt: issuedAt
+        ), storage.record(manifest, ownerUserId: ownerUserId, ownerIsValid: { normalizedOwnerUserId in
+            manifest.belongs(to: normalizedOwnerUserId)
+        }) else {
+            return nil
+        }
+        return manifest
+    }
+
+    func recentManifests(ownerUserId: String, now: Date = Date()) -> [EchoQAEvidenceManifest] {
+        storage.retainValues(
+            ownerUserId: ownerUserId,
+            ownerIsValid: { manifest, normalizedOwnerUserId in
+                manifest.belongs(to: normalizedOwnerUserId)
+            },
+            shouldRetain: { manifest in
+                manifest.expiresAt > now
+            }
+        )
+    }
+
+    @discardableResult
+    func clear(ownerUserId: String) -> Bool {
+        storage.clear(ownerUserId: ownerUserId)
+    }
+
+    func exportLatestManifest(
+        ownerUserId: String,
+        to directory: URL = FileManager.default.temporaryDirectory,
+        fileName: String = "echo-qa-evidence-manifest.json"
+    ) throws -> URL {
+        _ = recentManifests(ownerUserId: ownerUserId)
+        let url = directory.appendingPathComponent(fileName)
+        return try storage.export(
+            ownerUserId: ownerUserId,
+            to: url,
+            latestValueOnly: true,
+            exportEncoder: { values, _ in
+                let currentValues = values.filter { $0.expiresAt > Date() }
+                guard let latest = currentValues.last else {
+                    throw EchoTraceStorageError.noEvidenceBundle
+                }
+                return try EchoDiagnosticExportRedactor.encode([latest], latestValueOnly: true)
+            }
+        ) { manifest, normalizedOwnerUserId in
+            manifest.belongs(to: normalizedOwnerUserId) && manifest.expiresAt > Date()
+        }
+    }
+
+    fileprivate func clearStorage(forOwnerDigest ownerDigest: String) {
+        storage.clearStorage(forOwnerDigest: ownerDigest)
+    }
+
+    fileprivate func purgeLegacyStorage() {
+        storage.purgeLegacyStorage()
+    }
 }
 
 enum EchoTraceAccountLifecycle {
@@ -3496,6 +3752,7 @@ enum EchoTraceAccountLifecycle {
                 EchoRuntimeDiagnosticsStore.shared.clearStorage(forOwnerDigest: ownerDigest)
                 EchoTraceEvidencePackageStore.shared.clearStorage(forOwnerDigest: ownerDigest)
                 EchoQAEvidenceBundleStore.shared.clearStorage(forOwnerDigest: ownerDigest)
+                EchoQAEvidenceManifestStore.shared.clearStorage(forOwnerDigest: ownerDigest)
                 let defaultOwnerExportDirectory = FileManager.default.temporaryDirectory
                     .appendingPathComponent("DreamJourneyEchoQAExports", isDirectory: true)
                     .appendingPathComponent(ownerDigest, isDirectory: true)
@@ -3505,6 +3762,7 @@ enum EchoTraceAccountLifecycle {
             EchoRuntimeDiagnosticsStore.shared.purgeLegacyStorage()
             EchoTraceEvidencePackageStore.shared.purgeLegacyStorage()
             EchoQAEvidenceBundleStore.shared.purgeLegacyStorage()
+            EchoQAEvidenceManifestStore.shared.purgeLegacyStorage()
         }
     }
 }

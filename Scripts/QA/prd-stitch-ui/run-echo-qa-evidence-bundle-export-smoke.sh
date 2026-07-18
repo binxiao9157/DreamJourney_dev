@@ -18,12 +18,19 @@ OS_LOG="$OUTPUT_DIR/oslog.log"
 SCREENSHOT_PATH="$OUTPUT_DIR/01-echo-qa-evidence-bundle-export-smoke.png"
 RESULT_COPY_PATH="$OUTPUT_DIR/echo-qa-evidence-bundle-export-smoke-result.json"
 BUNDLE_EXPORT_COPY_PATH="$OUTPUT_DIR/echo-qa-evidence-bundle.json"
+MANIFEST_EXPORT_COPY_PATH="$OUTPUT_DIR/echo-qa-evidence-manifest.json"
 REPORT_PATH="$OUTPUT_DIR/report.md"
 COMPLETION_PATTERN="EchoQAEvidenceBundleExportSmoke completed"
 LOG_WAIT_TIMEOUT="${LOG_WAIT_TIMEOUT:-45}"
+SOURCE_COMMIT="${SOURCE_COMMIT:-$(git rev-parse --verify HEAD)}"
 
 mkdir -p "$OUTPUT_DIR"
 cd "$ROOT_DIR"
+
+[[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{7,64}$ ]] || {
+  echo "[echo-qa-evidence-bundle-export-smoke] SOURCE_COMMIT must be a lowercase Git commit" >&2
+  exit 1
+}
 
 fail() {
   echo "[echo-qa-evidence-bundle-export-smoke] $*" >&2
@@ -74,7 +81,9 @@ OSLOG_PID="$!"
 sleep 1
 
 echo "[echo-qa-evidence-bundle-export-smoke] Launching QA evidence bundle export harness..."
-xcrun simctl launch --console "$SIMULATOR_UDID" "$BUNDLE_ID" DJRunEchoQAEvidenceBundleExportSmoke > "$RUNTIME_LOG" 2>&1 &
+xcrun simctl launch --console "$SIMULATOR_UDID" "$BUNDLE_ID" \
+  DJRunEchoQAEvidenceBundleExportSmoke \
+  "DJEvidenceSourceCommit=$SOURCE_COMMIT" > "$RUNTIME_LOG" 2>&1 &
 CONSOLE_PID="$!"
 
 deadline=$((SECONDS + LOG_WAIT_TIMEOUT))
@@ -88,7 +97,7 @@ done
 [[ -s "$RESULT_FILE" ]] || fail "Result file was not written."
 cp "$RESULT_FILE" "$RESULT_COPY_PATH"
 
-python3 - "$RESULT_FILE" "$BUNDLE_EXPORT_COPY_PATH" <<'PY'
+python3 - "$RESULT_FILE" "$BUNDLE_EXPORT_COPY_PATH" "$MANIFEST_EXPORT_COPY_PATH" "$SOURCE_COMMIT" <<'PY'
 import json
 import hashlib
 import pathlib
@@ -96,6 +105,8 @@ import sys
 
 result_path = pathlib.Path(sys.argv[1])
 bundle_copy_path = pathlib.Path(sys.argv[2])
+manifest_copy_path = pathlib.Path(sys.argv[3])
+source_commit = sys.argv[4]
 result = json.loads(result_path.read_text())
 
 def require(condition, message):
@@ -121,8 +132,17 @@ require(
 require(result.get("latestClueSummaryCareRefHashes") == correlation_hash("care:latest"), "QA evidence bundle care clue hash changed")
 require(result.get("latestRankingTraceCount") == 6, "QA evidence bundle ranking trace count changed")
 require(result.get("fileExists") is True, "QA evidence bundle export file should exist")
+require(result.get("manifestSchemaVersion") == 1, "QA evidence manifest schemaVersion changed")
+require(result.get("manifestStatus") == "passed", "QA evidence manifest should be passed")
+require(result.get("manifestSourceCommit") == source_commit, "QA evidence manifest source commit changed")
+require(result.get("manifestCurrent") is True, "QA evidence manifest should be current")
+require(result.get("manifestOwnerIsolation") is True, "QA evidence manifest must remain owner-isolated")
+require(result.get("manifestExpiryObserved") is True, "QA evidence manifest expiry guard changed")
+require(result.get("manifestFileExists") is True, "QA evidence manifest export file should exist")
 export_path = result.get("exportPath")
 require(isinstance(export_path, str) and export_path.endswith("echo-qa-evidence-bundle.json"), "Missing QA bundle export path")
+manifest_export_path = result.get("manifestExportPath")
+require(isinstance(manifest_export_path, str) and manifest_export_path.endswith("echo-qa-evidence-manifest.json"), "Missing QA manifest export path")
 
 export_file = pathlib.Path(export_path)
 require(export_file.exists(), f"Exported QA evidence bundle file missing: {export_file}")
@@ -145,6 +165,26 @@ require("accesstoken" not in serialized.lower(), "QA evidence bundle must not ex
 require("uiqa-bundle-provider-log" not in serialized, "QA evidence bundle must not export raw provider log IDs")
 require("archive_qa_bundle" not in serialized, "QA evidence bundle must not export raw archive references")
 bundle_copy_path.write_text(json.dumps(bundle, ensure_ascii=False, indent=2, sort_keys=True))
+
+manifest_file = pathlib.Path(manifest_export_path)
+require(manifest_file.exists(), f"Exported QA evidence manifest file missing: {manifest_file}")
+manifest = json.loads(manifest_file.read_text())
+bundle_hash = hashlib.sha256(export_file.read_bytes()).hexdigest()
+require(manifest.get("schemaVersion") == 1, "Exported manifest schemaVersion changed")
+require(manifest.get("manifestVersion") == 1, "Exported manifest version changed")
+require(manifest.get("manifestType") == "echoQaEvidenceBundle", "Exported manifest type changed")
+require(manifest.get("sourceCommit") == source_commit, "Exported manifest source commit changed")
+require(manifest.get("manifestStatus") == "passed", "Exported manifest must be passed")
+require(manifest.get("artifactHashes") == [bundle_hash], "Manifest must bind the exact redacted bundle hash")
+require(manifest.get("sourceSchemaVersions") == ["echoQaBundle-v2", "echoEvidenceManifest-v1"], "Manifest schema source changed")
+require(manifest.get("exclusionCodes") == ["rawAudio", "providerSecret", "reportBody", "userContent"], "Manifest exclusion set changed")
+require(isinstance(manifest.get("ownerLeaseHash"), str) and len(manifest["ownerLeaseHash"]) == 64, "Manifest owner lease hash missing")
+require("evidenceIdHash" in manifest, "Manifest evidence id should be redacted at export")
+manifest_serialized = json.dumps(manifest, ensure_ascii=False)
+require("uiqa_echo_qa_bundle_user" not in manifest_serialized, "Manifest must not export raw owner identity")
+require("uiqa-bundle-provider-log" not in manifest_serialized, "Manifest must not export raw provider log ID")
+require("archive_qa_bundle" not in manifest_serialized, "Manifest must not export raw archive reference")
+manifest_copy_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True))
 PY
 
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null
@@ -165,6 +205,8 @@ Run ID: \`$RUN_ID\`
 
 - Result JSON: \`echo-qa-evidence-bundle-export-smoke-result.json\`
 - QA evidence bundle: \`echo-qa-evidence-bundle.json\`
+- QA evidence manifest: \`echo-qa-evidence-manifest.json\`
+- Source commit: \`$SOURCE_COMMIT\`
 - Screenshot: \`01-echo-qa-evidence-bundle-export-smoke.png\`
 - Build log: \`build.log\`
 - Runtime log: \`runtime.log\`
@@ -177,4 +219,5 @@ echo "[echo-qa-evidence-bundle-export-smoke] Runtime log: $RUNTIME_LOG"
 echo "[echo-qa-evidence-bundle-export-smoke] OS log: $OS_LOG"
 echo "[echo-qa-evidence-bundle-export-smoke] Result: $RESULT_COPY_PATH"
 echo "[echo-qa-evidence-bundle-export-smoke] QA bundle: $BUNDLE_EXPORT_COPY_PATH"
+echo "[echo-qa-evidence-bundle-export-smoke] QA manifest: $MANIFEST_EXPORT_COPY_PATH"
 echo "[echo-qa-evidence-bundle-export-smoke] Screenshot: $SCREENSHOT_PATH"

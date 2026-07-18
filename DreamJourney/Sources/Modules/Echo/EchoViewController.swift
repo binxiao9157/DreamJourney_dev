@@ -2961,7 +2961,16 @@ final class EchoViewController: UIViewController {
             throw EchoTraceStorageError.invalidEvidenceOwner
         }
         EchoQAEvidenceBundleStore.shared.record(bundle, ownerUserId: ownerUserId)
-        return try EchoQAEvidenceBundleStore.shared.exportLatestBundle(ownerUserId: ownerUserId)
+        let exportURL = try EchoQAEvidenceBundleStore.shared.exportLatestBundle(ownerUserId: ownerUserId)
+        let artifactData = try Data(contentsOf: exportURL)
+        guard EchoQAEvidenceManifestStore.shared.record(
+            bundle: bundle,
+            ownerUserId: ownerUserId,
+            artifactData: artifactData
+        ) != nil else {
+            throw EchoTraceStorageError.invalidEvidenceOwner
+        }
+        return exportURL
     }
 
     private func presentEchoTraceEvidencePackageShareSheet(fileURL: URL) {
@@ -6765,6 +6774,7 @@ extension EchoViewController {
         EchoRuntimeDiagnosticsStore.shared.clear(ownerUserId: ownerUserId)
         EchoTraceEvidencePackageStore.shared.clear(ownerUserId: ownerUserId)
         EchoQAEvidenceBundleStore.shared.clear(ownerUserId: ownerUserId)
+        EchoQAEvidenceManifestStore.shared.clear(ownerUserId: ownerUserId)
 
         let record = EchoTraceRecord(
             turnID: "uiqa-qa-bundle-turn",
@@ -6836,9 +6846,19 @@ extension EchoViewController {
                 scopedExportURL,
                 ownerContext: ownerContext
             )
+            let scopedManifestExportURL = try EchoQAEvidenceManifestStore.shared.exportLatestManifest(
+                ownerUserId: ownerUserId
+            )
+            let manifestExportURL = try preserveTemporaryEchoTraceUIQAExport(
+                scopedManifestExportURL,
+                ownerContext: ownerContext
+            )
             let data = try Data(contentsOf: exportURL)
             let bundle = try readRedactedEchoExportObject(from: data)
+            let manifestData = try Data(contentsOf: manifestExportURL)
+            let manifest = try readRedactedEchoExportObject(from: manifestData)
             let serialized = String(data: data, encoding: .utf8) ?? ""
+            let manifestSerialized = String(data: manifestData, encoding: .utf8) ?? ""
             let evidencePackage = bundle["evidencePackage"] as? [String: Any]
             let clueSummary = bundle["contextClues"] as? [String: Any]
             let voiceSynthesis = bundle["voiceSynthesis"] as? [String: Any]
@@ -6865,6 +6885,20 @@ extension EchoViewController {
                 clueSummary,
                 key: "careRefsHashes"
             )
+            let manifestArtifactHashes = redactedEchoExportStrings(manifest, key: "artifactHashes")
+            let manifestSourceCommit = redactedEchoExportString(manifest, key: "sourceCommit")
+            let manifestStatus = redactedEchoExportString(manifest, key: "manifestStatus")
+            let expectedManifestSourceCommit = EchoQAEvidenceManifestIdentity.configuredSourceCommit()
+            let localManifest = EchoQAEvidenceManifestStore.shared
+                .recentManifests(ownerUserId: ownerUserId)
+                .last
+            let manifestCurrent = localManifest?.validity() == "current"
+            let manifestOwnerIsolation = EchoQAEvidenceManifestStore.shared
+                .recentManifests(ownerUserId: "uiqa_foreign_owner")
+                .isEmpty
+            let manifestExpiryObserved = localManifest?.validity(
+                at: Date().addingTimeInterval(EchoQAEvidenceManifest.localBundleTTL + 1)
+            ) == "expired"
             completion([
                 "completed": bundle["schemaVersion"] as? Int == 2
                     && evidencePackage?["schemaVersion"] as? Int == 1
@@ -6890,7 +6924,19 @@ extension EchoViewController {
                     && !serialized.localizedCaseInsensitiveContains("appkey")
                     && !serialized.localizedCaseInsensitiveContains("accesstoken")
                     && !serialized.contains("uiqa-bundle-provider-log")
-                    && !serialized.contains("archive_qa_bundle"),
+                    && !serialized.contains("archive_qa_bundle")
+                    && manifest["schemaVersion"] as? Int == 1
+                    && redactedEchoExportString(manifest, key: "manifestType") == "echoQaEvidenceBundle"
+                    && manifestStatus == "passed"
+                    && expectedManifestSourceCommit.map { manifestSourceCommit == $0 } == true
+                    && manifestArtifactHashes == [EchoQAEvidenceManifestIdentity.sha256(data)]
+                    && manifestCurrent
+                    && manifestOwnerIsolation
+                    && manifestExpiryObserved
+                    && expectedManifestSourceCommit != nil
+                    && !manifestSerialized.contains("uiqa_echo_qa_bundle_user")
+                    && !manifestSerialized.contains("uiqa-bundle-provider-log")
+                    && !manifestSerialized.contains("archive_qa_bundle"),
                 "schemaVersion": bundle["schemaVersion"] as? Int ?? -1,
                 "latestTurnIDHash": latestTurnIDHash,
                 "latestTraceIdHash": latestTraceIdHash,
@@ -6917,6 +6963,15 @@ extension EchoViewController {
                     key: "filteredContextReasons"
                 ).joined(separator: ","),
                 "latestRankingTraceCount": clueSummary?["rankingTraceCount"] as? Int ?? -1,
+                "manifestSchemaVersion": manifest["schemaVersion"] as? Int ?? -1,
+                "manifestStatus": manifestStatus,
+                "manifestSourceCommit": manifestSourceCommit,
+                "manifestArtifactHash": manifestArtifactHashes.first ?? "",
+                "manifestCurrent": manifestCurrent,
+                "manifestOwnerIsolation": manifestOwnerIsolation,
+                "manifestExpiryObserved": manifestExpiryObserved,
+                "manifestExportPath": manifestExportURL.path,
+                "manifestFileExists": FileManager.default.fileExists(atPath: manifestExportURL.path),
                 "exportPath": exportURL.path,
                 "fileExists": FileManager.default.fileExists(atPath: exportURL.path),
             ])

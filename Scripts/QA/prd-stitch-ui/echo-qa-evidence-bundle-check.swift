@@ -34,8 +34,13 @@ for required in [
     "struct EchoQAEvidenceBundle",
     "struct EchoQAFallbackSummary",
     "final class EchoQAEvidenceBundleStore",
+    "struct EchoQAEvidenceManifest",
+    "final class EchoQAEvidenceManifestStore",
+    "configuredSourceCommit",
     "func exportLatestBundle(",
+    "func exportLatestManifest(",
     "echo-qa-evidence-bundle.json",
+    "echo-qa-evidence-manifest.json",
     "schemaVersion = 2",
 ] {
     require(backendClient.contains(required), "backend client should define QA bundle support: \(required)")
@@ -50,6 +55,9 @@ for field in [
     "fallbackSummary",
     "runtimeDiagnostics",
     "redactionPolicy",
+    "artifactHashes",
+    "expiresAt",
+    "ownerLeaseHash",
 ] {
     require(backendClient.contains("let \(field)"), "EchoQAEvidenceBundle should include \(field)")
 }
@@ -68,11 +76,15 @@ for required in [
     "exportEchoQAEvidenceBundleForQA(source:",
     "EchoQAEvidenceBundleStore.shared.record(bundle, ownerUserId:",
     "EchoQAEvidenceBundleStore.shared.exportLatestBundle",
+    "EchoQAEvidenceManifestStore.shared.record(",
+    "EchoQAEvidenceManifestStore.shared.exportLatestManifest",
+    "manifestOwnerIsolation",
+    "manifestExpiryObserved",
     "runUIQAEchoQAEvidenceBundleExportSmoke",
     "latestFallbacks",
     "latestVoiceOutputMode",
     "latestDigitalHumanStatus",
-    "latestClueSummaryArchiveRefs",
+    "latestArchiveClueHashes",
 ] {
     require(echo.contains(required), "Echo should build/export QA evidence bundle: \(required)")
 }
@@ -112,6 +124,11 @@ for required in [
     "DJRunEchoQAEvidenceBundleExportSmoke",
     "echo-qa-evidence-bundle-export-smoke-result.json",
     "echo-qa-evidence-bundle.json",
+    "echo-qa-evidence-manifest.json",
+    "DJEvidenceSourceCommit=",
+    "artifactHashes",
+    "manifestOwnerIsolation",
+    "manifestExpiryObserved",
     "schemaVersion",
     "contextClues",
     "digitalHumanSession",
