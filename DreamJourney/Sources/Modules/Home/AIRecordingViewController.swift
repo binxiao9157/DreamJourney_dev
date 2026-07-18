@@ -546,16 +546,24 @@ final class AIRecordingViewController: UIViewController {
         )
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(handleDidEnterBackground),
-            name: UIApplication.didEnterBackgroundNotification,
+            selector: #selector(handleAppLifecycleEventForwarded(_:)),
+            name: .djAppLifecycleEventForwarded,
             object: nil
         )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleWillEnterForeground),
-            name: UIApplication.willEnterForegroundNotification,
-            object: nil
-        )
+    }
+
+    @objc private func handleAppLifecycleEventForwarded(_ notification: Notification) {
+        guard let event = AppLifecycleEventNotification.event(from: notification.userInfo) else {
+            return
+        }
+        switch event {
+        case .didEnterBackground:
+            handleDidEnterBackground()
+        case .willEnterForeground:
+            handleWillEnterForeground()
+        case .sceneConnected, .didBecomeActive, .willResignActive, .didDisconnect:
+            break
+        }
     }
 
     @objc private func handleAccountDidChange() {

@@ -40,19 +40,20 @@
       "migrationOrder": 1,
       "targetSlice": "WI-S1-03-03-ECHO_LIFECYCLE_MIGRATION",
       "migrationStatus": "root-event-forwarded"
-    }
-  ],
-  "directUIKitConsumers": [
+    },
     {
       "id": "ai-recording-runtime",
       "source": "DreamJourney/Sources/Modules/Home/AIRecordingViewController.swift",
+      "eventSource": "djAppLifecycleEventForwarded",
       "events": ["didEnterBackground", "willEnterForeground"],
       "effects": ["stopCapture", "stopSessionRecording", "rebindDialogEngine", "checkVoiceCloneTraining"],
       "fence": "dialogAccountLease + DialogEngine binding",
       "migrationOrder": 2,
-      "targetSlice": "WI-S1-03-03-AI_RECORDING_LIFECYCLE_MIGRATION"
+      "targetSlice": "WI-S1-03-03-AI_RECORDING_LIFECYCLE_MIGRATION",
+      "migrationStatus": "root-event-forwarded"
     }
   ],
+  "directUIKitConsumers": [],
   "leaseFencedAsyncConsumers": [
     {
       "id": "family-repository",

@@ -23,20 +23,21 @@
       "WI-S1-03-02-APP_COMPOSITION_SEAM",
       "WI-S1-03-03-APP_SCENE_EVENT_FORWARDING",
       "WI-S1-03-03-LIFECYCLE_CONSUMER_INVENTORY",
-      "WI-S1-03-03-ECHO_LIFECYCLE_MIGRATION"
+      "WI-S1-03-03-ECHO_LIFECYCLE_MIGRATION",
+      "WI-S1-03-03-AI_RECORDING_LIFECYCLE_MIGRATION"
     ],
-    "currentSubSlice": "WI-S1-03-03-AI_RECORDING_LIFECYCLE_MIGRATION",
+    "currentSubSlice": "WI-S1-03-03-LIFECYCLE_PROPAGATION_G0_COMPLETE",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
       "G0": "WI_S1_03_01_TEST_FOUNDATION_AND_WI_S1_03_02_COMPOSITION_SEAM_VERIFIED",
-      "G1": "SIMULATOR_ROOT_LIFECYCLE_UIQA_VERIFIED; REAL_PROVIDER_AUDIO_ROUTE_PARITY_OPEN",
+      "G1": "ECHO_SIMULATOR_ROOT_LIFECYCLE_UIQA_VERIFIED; AI_RECORDING_G0_ONLY; REAL_PROVIDER_AUDIO_ROUTE_PARITY_OPEN",
       "G2": "CROSS_MODULE_LIFECYCLE_AND_STORE_EVIDENCE_OPEN",
       "G4": "EXTERNAL_PRIVACY_AND_RELEASE_DECISION_OPEN"
     },
     "id": "WI-S1-03-03",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-03-03 now has a source-checked lifecycle consumer inventory. App/Scene forwarding and Echo migration are complete for the root boundary: Echo consumes the value-minimized root event and retains its existing AccountLease/DigitalHuman lifecycle fences without direct UIKit observer double-firing. A simulator root-event smoke verified pause, restore, provider-view preservation, background grace release, and no microphone auto-start. AIRecording is now the only direct UIKit lifecycle consumer; Family/Knowledge/Dialog/notification paths remain inventory-recorded as lease-fenced async consumers. Active work migrates AIRecording while preserving its stop/rebind/training checks. G2 evidence and G4 rollout remain open."
+    "summary": "WI-S1-03-03 now has a source-checked lifecycle consumer inventory. App/Scene forwarding, Echo, and AIRecording all consume the value-minimized root event without direct UIKit observer double-firing. Echo retains its AccountLease/DigitalHuman lifecycle fences and has simulator root-event evidence for pause, restore, provider-view preservation, background grace release, and no microphone auto-start. AIRecording preserves its lease-fenced recording stop, foreground DialogEngine rebind, voice-clone training check, and account-private-media model evidence. Family/Knowledge/Dialog/notification paths remain inventory-recorded as lease-fenced async consumers. G2 evidence and G4 rollout remain open."
   },
   "baselines": {
     "backend": "main@32c38f2",

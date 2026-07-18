@@ -7,9 +7,9 @@
 - Work Item：`WI-S1-03-03`
 - Authority lock：`IOS_COMPOSITION`
 - Execution owner：`codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a`
-- 当前结果：`INTERNAL_READY / G0_ROOT_AND_ECHO_EVENT_FORWARDING_VERIFIED / G1_SIMULATOR_LIFECYCLE_UIQA_VERIFIED / IOS_LOCAL_COMMITTED / G2_G4_OPEN`
-- 本切片：`WI-S1-03-03-ECHO_LIFECYCLE_MIGRATION`
-- 范围：统一 Scene 生命周期事件向根协调器的转发，并将 Echo 的前后台事件来源迁移到 root forwarding；不改变 Echo 的音频、腾讯数字人、通知或定时器行为。
+- 当前结果：`INTERNAL_READY / G0_ROOT_LIFECYCLE_PROPAGATION_VERIFIED / G1_ECHO_SIMULATOR_UIQA_VERIFIED / IOS_LOCAL_COMMITTED / G2_G4_OPEN`
+- 本切片：`WI-S1-03-03-LIFECYCLE_PROPAGATION_G0_COMPLETE`
+- 范围：统一 Scene 生命周期事件向根协调器的转发，并将 Echo 与 AIRecording 的前后台事件来源迁移到 root forwarding；不改变既有音频、腾讯数字人、录音、训练检查、通知或定时器行为。
 
 ## 已实现
 
@@ -25,6 +25,7 @@
   4. 仅在同一代租约仍有效时同步 Knowledge。
 - `AppLifecycleEventForwarder` 发布仅含事件、序号、runtime disposition 和可选 lifecycle generation 的 root 通知；不携带 subject、vault、session 或 policy authority 值。
 - Echo 只订阅 `djAppLifecycleEventForwarded`，再调用既有 `echoAppWillResignActive`、`echoAppDidEnterBackground`、`echoAppWillEnterForeground` 与 `echoAppDidBecomeActive`。因此暂停、8 秒后台释放、音频恢复、腾讯 runtime 保护和既有 lease/lifecycle token fence 均保持原路径，且不会和 UIKit observer 双触发。
+- AIRecording 只订阅同一 root event，再调用既有 `handleDidEnterBackground` 与 `handleWillEnterForeground`。因此后台停止 DialogEngine/并行录音、前台可见性检查、原租约验证、DialogEngine binding 重绑及声音复刻训练检查均保持原路径，且不再与 UIKit observer 双触发。
 - 这不会改变三 Tab、Echo 全屏、登录路由或任何后端 API。
 
 ## 验证证据
@@ -46,12 +47,16 @@
    - `lifecycleSuspended`、`lifecycleRestored`、`providerViewPreserved`、`backgroundLeaseScheduled`、`backgroundLeaseCancelled`、`backgroundLeaseExpired`、`runtimeReleasedAfterGrace` 为 `true`；
    - `microphoneAutoStart=false`，暂停文案保持“已暂停，轻点话筒继续”；
    - 截图：`tmp/visual-qa/prd-stitch-ui/echo-digital-human-lifecycle-smoke/20260719-071454/01-echo-digital-human-lifecycle-smoke.png`。
-5. `git diff --check` 通过。
+5. `Scripts/QA/product-v4/run-ios-ai-recording-lifecycle-forwarding-gate.sh` 通过。
+   - AIRecording root-event mapping、原有 dialog AccountLease guard、lifecycle consumer inventory 与 root forwarding static guard；
+   - `run-account-private-media-store-gate.sh`，包括 account-private-media model smoke；
+   - `generic/platform=iOS` 的无签名 `build-for-testing`。
+6. `git diff --check` 通过。
 
 ## 未完成边界
 
-- 这不是完整的跨模块生命周期迁移：AIRecording 仍直接监听 UIKit；Echo、音频、腾讯数字人、通知、Archive 与 Knowledge 的具体 timer/callback fence 仍保留既有实现，后续必须按模块迁移并记录 stale callback 证据。
-- 已有模拟器 root-event 生命周期 smoke，但还没有真机前后台、真实腾讯 Provider 或真实音频路由验收。
+- 当前已没有直接 UIKit 生命周期 consumer；Echo、AIRecording、音频、腾讯数字人、通知、Archive 与 Knowledge 的具体 timer/callback fence 仍保留既有实现，后续必须按模块迁移并记录 stale callback 证据。
+- 已有 Echo 模拟器 root-event 生命周期 smoke，但还没有真机前后台、真实腾讯 Provider 或真实音频路由验收；AIRecording 因不是当前公开路径，本切片仅保留 G0 source/model/build 证据，不虚构 UIQA 结论。
 - 不将本切片作为任何 Voice/Digital Human、真实后台保活或公开发布放行依据。
 
 ## Lifecycle Consumer Inventory v1
@@ -62,7 +67,7 @@
 | --- | --- | --- | --- |
 | App/Scene root | 6 个 Scene 事件、前台 Family/Knowledge refresh | `AppFeatureRuntimeContext`，runtime + commit lease check | 已完成 forwarding seam |
 | Echo | root lifecycle event -> 前后台、云端数字人 8 秒释放、音频/回调恢复 | `echoAccountLease`、`DigitalHumanLifecycleToken`、background release lease | 已迁移，不再直接订阅 UIKit |
-| AIRecording | 后台停止录音、前台重绑 DialogEngine/检查训练 | `dialogAccountLease`、DialogEngine binding | 2 |
+| AIRecording | root lifecycle event -> 后台停止录音、前台重绑 DialogEngine/检查训练 | `dialogAccountLease`、DialogEngine binding | 已迁移，不再直接订阅 UIKit |
 | FamilyRepository | startup work item、后端 bootstrap | `AccountLeaseRuntime` checkpoint | 维持，迁移时只接事件 intent |
 | KnowledgeSync | debounce、pull/governance callback | `KnowledgeSyncLeaseContext` | 维持，迁移时只接事件 intent |
 | DialogEngine | silence timer、provider callback、local TTS | binding + `AccountLeaseRuntime` | 由 Echo/AIRecording consumer 迁移带入 |
@@ -72,4 +77,4 @@
 
 ## 下一步
 
-`WI-S1-03-03` 保持进行中，下一子切片迁移 AIRecording 的后台/前台 observer；必须保留现有录音停止、DialogEngine 重绑和训练检查行为，改为消费 root forwarding event，不能同时保留两个会实际触发副作用的 observer。
+`WI-S1-03-03` 的可控生命周期传播已完成 G0。下一 Work Item 进入 `WI-S1-03-04` 前，必须保持 Registry 的保守 Gate 状态，不因本地/模拟器证据声称真实 Provider、真机或外部发布已完成。

@@ -46,16 +46,20 @@ def main() -> None:
     )
     root_event_consumers = inventory["rootEventConsumers"]
     require(
-        [item["id"] for item in root_event_consumers] == ["echo-runtime"],
+        [item["id"] for item in root_event_consumers]
+        == ["echo-runtime", "ai-recording-runtime"],
         "root lifecycle event consumer allowlist drifted",
     )
     require(
-        root_event_consumers[0]["eventSource"] == "djAppLifecycleEventForwarded",
-        "Echo root lifecycle event source drifted",
+        all(
+            item["eventSource"] == "djAppLifecycleEventForwarded"
+            for item in root_event_consumers
+        ),
+        "root lifecycle event source drifted",
     )
     direct_consumers = inventory["directUIKitConsumers"]
     require(
-        [item["id"] for item in direct_consumers] == ["ai-recording-runtime"],
+        direct_consumers == [],
         "direct UIKit lifecycle consumer allowlist drifted",
     )
 
@@ -86,6 +90,15 @@ def main() -> None:
         )
     require("scheduleCloudDigitalHumanRuntimeReleaseForBackgroundIfNeeded" in echo, "Echo background release inventory drifted")
     require("setupNotifications" in ai_recording, "AI recording lifecycle consumer missing from source")
+    require("djAppLifecycleEventForwarded" in ai_recording, "AI recording must consume root lifecycle event")
+    for direct_notification in (
+        "UIApplication.didEnterBackgroundNotification",
+        "UIApplication.willEnterForegroundNotification",
+    ):
+        require(
+            direct_notification not in ai_recording,
+            f"AI recording must not retain direct UIKit lifecycle observer: {direct_notification}",
+        )
     require("handleDidEnterBackground" in ai_recording, "AI recording background handler missing")
     require("handleWillEnterForeground" in ai_recording, "AI recording foreground handler missing")
     require("startupWorkItem" in family and "AccountLeaseRuntime" in family, "Family async lease fence inventory drifted")
@@ -95,8 +108,8 @@ def main() -> None:
     require("actor AccountLifecycleTransitionController" in account_lifecycle, "serialized account teardown authority missing")
 
     print(
-        "Product V4 lifecycle consumer inventory check passed: 1 root-event consumer, "
-        "1 direct UIKit consumer, and 4 lease-fenced async consumers are accounted for"
+        "Product V4 lifecycle consumer inventory check passed: 2 root-event consumers, "
+        "no direct UIKit consumers, and 4 lease-fenced async consumers are accounted for"
     )
 
 
