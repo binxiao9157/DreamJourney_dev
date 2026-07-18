@@ -95,6 +95,7 @@ struct MemoryLegacyMigrationReceipt: Codable, Equatable {
     let state: State
     let reason: MemoryQuarantineReason
     let sourceContentHash: String
+    let itemIds: [String]
     let createdAt: Date
 }
 
@@ -221,13 +222,16 @@ private enum MemoryStoragePolicy {
         itemIds: [String],
         payload: Data
     ) -> MemoryQuarantineRecord {
-        MemoryQuarantineRecord(
-            recordId: UUID().uuidString,
+        let contentHash = sha256(payload)
+        return MemoryQuarantineRecord(
+            recordId: sha256(
+                "memory-quarantine-v2|\(sourceStorageKey)|\(contentHash)|\(reason.rawValue)"
+            ),
             sourceStorageKey: sourceStorageKey,
             reason: reason,
             itemIds: normalizedIds(Set(itemIds)),
             payload: payload,
-            contentHash: sha256(payload),
+            contentHash: contentHash,
             createdAt: Date()
         )
     }
@@ -286,6 +290,14 @@ private enum MemoryQuarantineStorage {
         lock.lock()
         defer { lock.unlock() }
         var records = load(storageKey: storageKey, defaults: defaults)
+        if let existing = records.first(where: { $0.recordId == record.recordId }) {
+            return existing == record
+                || (existing.sourceStorageKey == record.sourceStorageKey
+                    && existing.reason == record.reason
+                    && existing.itemIds == record.itemIds
+                    && existing.contentHash == record.contentHash
+                    && existing.payload == record.payload)
+        }
         records.append(record)
         guard let data = try? JSONEncoder().encode(records) else { return false }
         defaults.set(data, forKey: storageKey)
@@ -317,6 +329,14 @@ private enum MemoryQuarantineStorage {
             quarantineStorageKey: quarantineStorageKey,
             defaults: defaults
         )
+        if let existing = receipts.first(where: { $0.receiptId == receipt.receiptId }) {
+            return existing == receipt
+                || (existing.sourceStorageKey == receipt.sourceStorageKey
+                    && existing.sourceContentHash == receipt.sourceContentHash
+                    && existing.state == receipt.state
+                    && existing.reason == receipt.reason
+                    && existing.itemIds == receipt.itemIds)
+        }
         receipts.append(receipt)
         guard let data = try? JSONEncoder().encode(receipts) else { return false }
         defaults.set(data, forKey: storageKey)
@@ -817,7 +837,9 @@ final class MemoryRepository {
             defaults: defaults
         ), MemoryQuarantineStorage.append(
             MemoryLegacyMigrationReceipt(
-                receiptId: UUID().uuidString,
+                receiptId: MemoryStoragePolicy.sha256(
+                    "memory-receipt-v2|\(sourceStorageKey)|\(record.contentHash)|\(reason.rawValue)"
+                ),
                 surfaceId: "memory",
                 sourceStorageKey: sourceStorageKey,
                 quarantineStorageKey: quarantineStorageKey,
@@ -827,6 +849,7 @@ final class MemoryRepository {
                 state: .quarantined,
                 reason: reason,
                 sourceContentHash: record.contentHash,
+                itemIds: record.itemIds,
                 createdAt: Date()
             ),
             quarantineStorageKey: quarantineStorageKey,
@@ -1068,7 +1091,9 @@ final class MemoryMapPresentationStore {
                 defaults: defaults
             ), MemoryQuarantineStorage.append(
                 MemoryLegacyMigrationReceipt(
-                    receiptId: UUID().uuidString,
+                    receiptId: MemoryStoragePolicy.sha256(
+                        "memory-map-receipt-v2|\(storageKey)|\(record.contentHash)|\(reason.rawValue)"
+                    ),
                     surfaceId: "memoryMapPresentation",
                     sourceStorageKey: storageKey,
                     quarantineStorageKey: MemoryQuarantineStorage.deviceStorageKey,
@@ -1076,6 +1101,7 @@ final class MemoryMapPresentationStore {
                     state: .quarantined,
                     reason: reason,
                     sourceContentHash: record.contentHash,
+                    itemIds: record.itemIds,
                     createdAt: Date()
                 ),
                 quarantineStorageKey: MemoryQuarantineStorage.deviceStorageKey,
@@ -1110,7 +1136,9 @@ final class MemoryMapPresentationStore {
             defaults: defaults
         ), MemoryQuarantineStorage.append(
             MemoryLegacyMigrationReceipt(
-                receiptId: UUID().uuidString,
+                receiptId: MemoryStoragePolicy.sha256(
+                    "memory-map-receipt-v2|\(sourceStorageKey)|\(record.contentHash)|\(reason.rawValue)"
+                ),
                 surfaceId: "memoryMapPresentation",
                 sourceStorageKey: sourceStorageKey,
                 quarantineStorageKey: quarantineStorageKey,
@@ -1118,6 +1146,7 @@ final class MemoryMapPresentationStore {
                 state: .quarantined,
                 reason: reason,
                 sourceContentHash: record.contentHash,
+                itemIds: record.itemIds,
                 createdAt: Date()
             ),
             quarantineStorageKey: quarantineStorageKey,

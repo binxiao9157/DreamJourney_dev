@@ -40,6 +40,9 @@ def main() -> None:
         "MemoryMapPresentationStore",
         "accountLeaseRuntime.validate",
         "quarantineLegacyGlobalPayloadIfNeeded",
+        "itemIds: [String]",
+        '"memory-quarantine-v2|',
+        '"memory-receipt-v2|',
     ):
         require(snippet in repository, f"Memory owner storage contract missing: {snippet}")
 

@@ -341,20 +341,34 @@ private enum MemoryMapOwnerStorageModelSmoke {
             defaults.data(forKey: "dj.persistedMemories") == nil,
             "legacy \(label) live key should be retired after quarantine"
         )
+        let quarantineRecords = repository.deviceQuarantineRecords()
         require(
-            repository.deviceQuarantineRecords().contains(where: {
+            quarantineRecords.contains(where: {
                 $0.reason == expectedReason && $0.sourceStorageKey == "dj.persistedMemories"
             }),
             "legacy \(label) payload has no expected quarantine record"
         )
+        let expectedItemIds = (try? JSONDecoder().decode([MemoryModel].self, from: payload))?
+            .map(\.id)
+            .sorted() ?? []
+        let migrationReceipts = repository.deviceMigrationReceipts()
         require(
-            repository.deviceMigrationReceipts().contains(where: {
+            migrationReceipts.contains(where: {
                 $0.state == .quarantined
                     && $0.reason == expectedReason
                     && $0.sourceStorageKey == "dj.persistedMemories"
                     && $0.ownerEvidence == "none"
+                    && $0.itemIds == expectedItemIds
             }),
             "legacy \(label) payload has no quarantine migration receipt"
+        )
+
+        defaults.set(payload, forKey: "dj.persistedMemories")
+        _ = repository.getAllByOwner("owner-a", accountLease: lease)
+        require(
+            repository.deviceQuarantineRecords().count == quarantineRecords.count
+                && repository.deviceMigrationReceipts().count == migrationReceipts.count,
+            "re-observing identical legacy \(label) evidence must be idempotent"
         )
     }
 }
