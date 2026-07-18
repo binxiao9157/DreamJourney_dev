@@ -3941,6 +3941,7 @@ final class DreamJourneyBackendClient {
             if normalizedPath.hasPrefix("/voice/") { return "voice" }
             if normalizedPath.hasPrefix("/digital-human/") { return "digitalHuman" }
             if normalizedPath.hasPrefix("/kb/") { return "knowledge" }
+            if normalizedPath.hasPrefix("/v2/vaults/") { return "ownerTruth" }
             if normalizedPath.hasPrefix("/echo/") || normalizedPath == "/context/build" { return "echo" }
             if normalizedPath == "/profile" || normalizedPath.hasPrefix("/account/") { return "account" }
             if normalizedPath.hasPrefix("/config/") || normalizedPath.hasPrefix("/v2/release-policy") {
@@ -4082,6 +4083,10 @@ final class DreamJourneyBackendClient {
 
     var isTimeLetterDispatchConfigured: Bool {
         hasExplicitBaseURL
+    }
+
+    var isOwnerTruthCandidateReviewQAConfigured: Bool {
+        hasExplicitBaseURL && OwnerTruthCandidateReviewQAGate.isEnabled
     }
 
     private init() {
@@ -4587,6 +4592,80 @@ final class DreamJourneyBackendClient {
                     return
                 }
                 completion(.success(packet))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func fetchOwnerTruthCandidateInbox(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthCandidateInbox, Error>) -> Void
+    ) {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthCandidateReview",
+                    reason: "qaOnlyDisabled"
+                )))
+            }
+            return
+        }
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(vaultID.rawValue))/candidates",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthCandidateInbox(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func reviewOwnerTruthCandidate(
+        vaultID: OwnerTruthVaultID,
+        candidateID: OwnerTruthRecordID,
+        command: OwnerTruthCandidateReviewCommand,
+        completion: @escaping (Result<OwnerTruthCandidateDecisionResult, Error>) -> Void
+    ) {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthCandidateReview",
+                    reason: "qaOnlyDisabled"
+                )))
+            }
+            return
+        }
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(vaultID.rawValue))/candidates/\(pathComponent(candidateID.rawValue.uuidString))/decisions",
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthCandidateDecisionResult(
+                        backendJSONObject: object,
+                        expectedCandidateID: candidateID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
             case .failure(let error):
                 completion(.failure(error))
             }

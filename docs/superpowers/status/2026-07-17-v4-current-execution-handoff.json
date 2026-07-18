@@ -24,20 +24,21 @@
       "WI-S1-03-03-APP_SCENE_EVENT_FORWARDING",
       "WI-S1-03-03-LIFECYCLE_CONSUMER_INVENTORY",
       "WI-S1-03-03-ECHO_LIFECYCLE_MIGRATION",
-      "WI-S1-03-03-AI_RECORDING_LIFECYCLE_MIGRATION"
+      "WI-S1-03-03-AI_RECORDING_LIFECYCLE_MIGRATION",
+      "WI-S1-03-04-OWNER_TRUTH_CANDIDATE_CLIENT_G0_COMPLETE"
     ],
-    "currentSubSlice": "WI-S1-03-03-LIFECYCLE_PROPAGATION_G0_COMPLETE",
+    "currentSubSlice": "WI-S1-03-04-OWNER_TRUTH_CANDIDATE_CLIENT_G0_COMPLETE",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "WI_S1_03_01_TEST_FOUNDATION_AND_WI_S1_03_02_COMPOSITION_SEAM_VERIFIED",
-      "G1": "ECHO_SIMULATOR_ROOT_LIFECYCLE_UIQA_VERIFIED; AI_RECORDING_G0_ONLY; REAL_PROVIDER_AUDIO_ROUTE_PARITY_OPEN",
-      "G2": "CROSS_MODULE_LIFECYCLE_AND_STORE_EVIDENCE_OPEN",
+      "G0": "TYPED_OWNER_TRUTH_CANDIDATE_CLIENT_AND_GENERIC_IOS_BUILD_VERIFIED",
+      "G1": "HIDDEN_ARCHIVE_CANDIDATE_INBOX_UIQA_OPEN",
+      "G2": "QA_ONLY_DEPLOYED_CANDIDATE_ROUTE_SMOKE_OPEN",
       "G4": "EXTERNAL_PRIVACY_AND_RELEASE_DECISION_OPEN"
     },
-    "id": "WI-S1-03-03",
+    "id": "WI-S1-03-04",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-03-03 now has a source-checked lifecycle consumer inventory. App/Scene forwarding, Echo, and AIRecording all consume the value-minimized root event without direct UIKit observer double-firing. Echo retains its AccountLease/DigitalHuman lifecycle fences and has simulator root-event evidence for pause, restore, provider-view preservation, background grace release, and no microphone auto-start. AIRecording preserves its lease-fenced recording stop, foreground DialogEngine rebind, voice-clone training check, and account-private-media model evidence. Family/Knowledge/Dialog/notification paths remain inventory-recorded as lease-fenced async consumers. G2 evidence and G4 rollout remain open."
+    "summary": "WI-S1-03-04 has completed its typed Owner Truth Candidate client foundation. Inbox, review command, immutable receipt and MemoryVersion activation responses are parsed fail-closed; the client requires the existing user session, a QA-only launch gate and the owner-truth header. No Archive UI, public entry, legacy writer switch, KBLite authority write or backend change is included. The next sub-slice is a hidden Archive Intent/ViewState composition layer, with G1 UIQA and G2 deployed route evidence still open."
   },
   "baselines": {
     "backend": "main@32c38f2",
@@ -377,9 +378,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S1-03-04",
+    "id": "WI-S1-03-05",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "Only after lifecycle propagation has scoped evidence may typed Capture/Review/Memory UI consumption be considered. It must still re-check its own G1/G2 scope and must not switch legacy writers or expose new capabilities."
+    "summary": "After WI-S1-03-04 has hidden Candidate Inbox/ViewState evidence, extract Echo application coordination without changing public layout or granting VC direct authority. It must retain text-only fallback and re-check its own G0/G1/G2 scope."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -388,5 +389,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-19T06:57:00+0800"
+  "updatedAt": "2026-07-19T07:32:36+0800"
 }
