@@ -1280,28 +1280,28 @@ final class EchoViewController: UIViewController {
     private func observeEchoAppLifecycle() {
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(echoAppWillResignActive),
-            name: UIApplication.willResignActiveNotification,
+            selector: #selector(echoAppLifecycleEventForwarded(_:)),
+            name: .djAppLifecycleEventForwarded,
             object: nil
         )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(echoAppDidEnterBackground),
-            name: UIApplication.didEnterBackgroundNotification,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(echoAppWillEnterForeground),
-            name: UIApplication.willEnterForegroundNotification,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(echoAppDidBecomeActive),
-            name: UIApplication.didBecomeActiveNotification,
-            object: nil
-        )
+    }
+
+    @objc private func echoAppLifecycleEventForwarded(_ notification: Notification) {
+        guard let event = AppLifecycleEventNotification.event(from: notification.userInfo) else {
+            return
+        }
+        switch event {
+        case .willResignActive:
+            echoAppWillResignActive()
+        case .didEnterBackground:
+            echoAppDidEnterBackground()
+        case .willEnterForeground:
+            echoAppWillEnterForeground()
+        case .didBecomeActive:
+            echoAppDidBecomeActive()
+        case .sceneConnected, .didDisconnect:
+            break
+        }
     }
 
     @objc private func echoAppWillResignActive() {
@@ -6085,6 +6085,22 @@ extension EchoViewController {
             return
         }
 
+        func forwardUIQALifecycleEvent(
+            _ event: AppLifecycleEvent,
+            sequence: UInt64
+        ) {
+            let receipt = AppLifecycleEventReceipt(
+                event: event,
+                sequence: sequence,
+                runtimeContext: nil
+            )
+            NotificationCenter.default.post(
+                name: .djAppLifecycleEventForwarded,
+                object: nil,
+                userInfo: AppLifecycleEventNotification.userInfo(for: receipt)
+            )
+        }
+
         invalidateDigitalHumanLifecycle(reason: "uiqaLifecycleSmokeSetup")
         releaseDigitalHumanRuntime(
             reason: "uiqaLifecycleSmokeSetup",
@@ -6128,8 +6144,8 @@ extension EchoViewController {
             $0.accessibilityIdentifier == "digitalHumanLiveProviderView"
         }
 
-        suspendEchoForAppLifecycle(reason: "uiqaWillResignActive")
-        scheduleCloudDigitalHumanRuntimeReleaseForBackgroundIfNeeded()
+        forwardUIQALifecycleEvent(.willResignActive, sequence: 1)
+        forwardUIQALifecycleEvent(.didEnterBackground, sequence: 2)
         let backgroundLeaseScheduled = digitalHumanBackgroundReleaseWorkItem != nil
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self, weak panel] in
             guard let self,
@@ -6149,7 +6165,8 @@ extension EchoViewController {
                 && self.currentStateIsIdleForUIQA
                 && self.voiceStatusLabel.text == "已暂停，轻点话筒继续"
 
-            self.restoreEchoAfterAppLifecycleIfNeeded(reason: "uiqaDidBecomeActive")
+            forwardUIQALifecycleEvent(.willEnterForeground, sequence: 3)
+            forwardUIQALifecycleEvent(.didBecomeActive, sequence: 4)
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self, weak panel] in
                 guard let self,

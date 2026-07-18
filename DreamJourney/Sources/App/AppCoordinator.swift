@@ -421,6 +421,11 @@ final class AppLifecycleEventForwarder {
             runtimeContext: runtimeContext
         )
         latestReceipt = receipt
+        NotificationCenter.default.post(
+            name: .djAppLifecycleEventForwarded,
+            object: nil,
+            userInfo: AppLifecycleEventNotification.userInfo(for: receipt)
+        )
 
         guard receipt.canRunPrivateForegroundRefresh,
               let runtimeContext,

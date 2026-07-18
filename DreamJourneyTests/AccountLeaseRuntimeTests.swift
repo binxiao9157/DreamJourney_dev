@@ -121,6 +121,30 @@ final class AccountLeaseRuntimeTests: XCTestCase {
         XCTAssertFalse(backgroundReceipt.canRunPrivateForegroundRefresh)
     }
 
+    func testLifecycleEventNotificationOnlyCarriesRoutingMetadata() throws {
+        let receipt = AppLifecycleEventReceipt(
+            event: .willEnterForeground,
+            sequence: 9,
+            runtimeContext: nil
+        )
+        let userInfo = AppLifecycleEventNotification.userInfo(for: receipt)
+
+        XCTAssertEqual(
+            AppLifecycleEventNotification.event(from: userInfo),
+            .willEnterForeground
+        )
+        XCTAssertEqual(userInfo[AppLifecycleEventNotification.sequenceKey] as? NSNumber, 9)
+        XCTAssertEqual(
+            userInfo[AppLifecycleEventNotification.runtimeDispositionKey] as? String,
+            AppLifecycleRuntimeDisposition.noActiveRuntime.rawValue
+        )
+        XCTAssertNil(userInfo[AppLifecycleEventNotification.lifecycleGenerationKey])
+        XCTAssertNil(userInfo["subjectId"])
+        XCTAssertNil(userInfo["vaultId"])
+        XCTAssertNil(userInfo["sessionId"])
+        XCTAssertNil(userInfo["authorityEpoch"])
+    }
+
     private func session(
         subjectId: String,
         vaultId: String,

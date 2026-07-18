@@ -33,9 +33,13 @@ for required in [
 
 for required in [
     "runUIQAEchoDigitalHumanLifecycleSmoke",
-    "suspendEchoForAppLifecycle(reason: \"uiqaWillResignActive\")",
-    "restoreEchoAfterAppLifecycleIfNeeded(reason: \"uiqaDidBecomeActive\")",
-    "scheduleCloudDigitalHumanRuntimeReleaseForBackgroundIfNeeded()",
+    "forwardUIQALifecycleEvent",
+    "AppLifecycleEventReceipt(",
+    "name: .djAppLifecycleEventForwarded",
+    "forwardUIQALifecycleEvent(.willResignActive, sequence: 1)",
+    "forwardUIQALifecycleEvent(.didEnterBackground, sequence: 2)",
+    "forwardUIQALifecycleEvent(.willEnterForeground, sequence: 3)",
+    "forwardUIQALifecycleEvent(.didBecomeActive, sequence: 4)",
     "\"appLifecycleSuspended\"",
     "\"appLifecycleRestored\"",
     "\"microphoneAutoStart\"",

@@ -111,6 +111,40 @@ struct AppLifecycleEventReceipt: Equatable, Sendable {
     }
 }
 
+enum AppLifecycleEventNotification {
+    static let eventKey = "event"
+    static let sequenceKey = "sequence"
+    static let runtimeDispositionKey = "runtimeDisposition"
+    static let lifecycleGenerationKey = "lifecycleGeneration"
+
+    static func userInfo(
+        for receipt: AppLifecycleEventReceipt
+    ) -> [AnyHashable: Any] {
+        var userInfo: [AnyHashable: Any] = [
+            eventKey: receipt.event.rawValue,
+            sequenceKey: NSNumber(value: receipt.sequence),
+            runtimeDispositionKey: receipt.runtimeDisposition.rawValue,
+        ]
+        if let lifecycleGeneration = receipt.lifecycleGeneration {
+            userInfo[lifecycleGenerationKey] = NSNumber(value: lifecycleGeneration)
+        }
+        return userInfo
+    }
+
+    static func event(from userInfo: [AnyHashable: Any]?) -> AppLifecycleEvent? {
+        guard let rawValue = userInfo?[eventKey] as? String else {
+            return nil
+        }
+        return AppLifecycleEvent(rawValue: rawValue)
+    }
+}
+
+extension Notification.Name {
+    static let djAppLifecycleEventForwarded = Notification.Name(
+        "dj.appLifecycle.eventForwarded"
+    )
+}
+
 struct AccountLeaseValidationDecision: Equatable, Sendable {
     let checkpoint: AccountLeaseCheckpoint
     let allowed: Bool

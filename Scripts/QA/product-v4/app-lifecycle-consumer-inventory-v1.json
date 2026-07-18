@@ -18,10 +18,11 @@
       "policyContext": "AppFeatureRuntimeContext"
     }
   },
-  "directUIKitConsumers": [
+  "rootEventConsumers": [
     {
       "id": "echo-runtime",
       "source": "DreamJourney/Sources/Modules/Echo/EchoViewController.swift",
+      "eventSource": "djAppLifecycleEventForwarded",
       "events": [
         "willResignActive",
         "didEnterBackground",
@@ -37,8 +38,11 @@
       ],
       "fence": "echoAccountLease + DigitalHumanLifecycleToken + backgroundReleaseLease",
       "migrationOrder": 1,
-      "targetSlice": "WI-S1-03-03-ECHO_LIFECYCLE_MIGRATION"
-    },
+      "targetSlice": "WI-S1-03-03-ECHO_LIFECYCLE_MIGRATION",
+      "migrationStatus": "root-event-forwarded"
+    }
+  ],
+  "directUIKitConsumers": [
     {
       "id": "ai-recording-runtime",
       "source": "DreamJourney/Sources/Modules/Home/AIRecordingViewController.swift",

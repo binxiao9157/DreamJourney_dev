@@ -52,10 +52,16 @@ let releaseQA = try read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swif
 require(echo.contains("private var isSuspendedByAppLifecycle"), "Echo should track app lifecycle suspension explicitly")
 require(echo.contains("private var isStoppingVoiceCaptureForAppLifecycle"), "Echo should distinguish lifecycle stop from manual user stop")
 require(echo.contains("observeEchoAppLifecycle()"), "Echo viewDidLoad should install app lifecycle observers")
-require(echo.contains("UIApplication.willResignActiveNotification"), "Echo should observe will-resign-active for microphone/provider pause")
-require(echo.contains("UIApplication.didEnterBackgroundNotification"), "Echo should observe did-enter-background for microphone/provider pause")
-require(echo.contains("UIApplication.willEnterForegroundNotification"), "Echo should observe foreground restoration")
-require(echo.contains("UIApplication.didBecomeActiveNotification"), "Echo should observe active restoration")
+require(echo.contains("name: .djAppLifecycleEventForwarded"), "Echo should consume the root lifecycle event")
+require(echo.contains("@objc private func echoAppLifecycleEventForwarded"), "Echo should map root lifecycle events to its existing lifecycle behavior")
+for directObserver in [
+    "UIApplication.willResignActiveNotification",
+    "UIApplication.didEnterBackgroundNotification",
+    "UIApplication.willEnterForegroundNotification",
+    "UIApplication.didBecomeActiveNotification",
+] {
+    require(!echo.contains(directObserver), "Echo must not duplicate the root lifecycle observer: \(directObserver)")
+}
 
 let suspendBody = functionBody(named: "suspendEchoForAppLifecycle", in: echo)
 require(suspendBody.contains("isSuspendedByAppLifecycle = true"), "lifecycle suspend should mark suspended state")
