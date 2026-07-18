@@ -45,6 +45,22 @@
 - 还没有做模拟器/真机的前后台视觉与 Provider 行为验收；当前仅声明 G0 代码与构建通过。
 - 不将本切片作为任何 Voice/Digital Human、真实后台保活或公开发布放行依据。
 
+## Lifecycle Consumer Inventory v1
+
+来源：`Scripts/QA/product-v4/app-lifecycle-consumer-inventory-v1.json`。
+
+| 消费者 | 当前事件/异步入口 | 现有 fence | 后续迁移顺序 |
+| --- | --- | --- | --- |
+| App/Scene root | 6 个 Scene 事件、前台 Family/Knowledge refresh | `AppFeatureRuntimeContext`，runtime + commit lease check | 已完成 forwarding seam |
+| Echo | 前后台、云端数字人 8 秒释放、音频/回调恢复 | `echoAccountLease`、`DigitalHumanLifecycleToken`、background release lease | 1 |
+| AIRecording | 后台停止录音、前台重绑 DialogEngine/检查训练 | `dialogAccountLease`、DialogEngine binding | 2 |
+| FamilyRepository | startup work item、后端 bootstrap | `AccountLeaseRuntime` checkpoint | 维持，迁移时只接事件 intent |
+| KnowledgeSync | debounce、pull/governance callback | `KnowledgeSyncLeaseContext` | 维持，迁移时只接事件 intent |
+| DialogEngine | silence timer、provider callback、local TTS | binding + `AccountLeaseRuntime` | 由 Echo/AIRecording consumer 迁移带入 |
+| 延迟回信通知 | 授权/通知 request callback | `EchoDelayedReplyOperationScope` | 独立 notification-entry slice |
+
+账户登出、切号、私有访问冻结和注销仍由 `AccountLifecycleTransitionController` 的 13 个 module teardown registration 串行处理。Scene 生命周期不得复制或抢占该路径。
+
 ## 下一步
 
-`WI-S1-03-03` 保持进行中，先完成 lifecycle consumer inventory：列出当前各模块的 observer、timer、后台释放和 callback commit 点，再逐个迁移到同一 lease fence；禁止直接重写或并行创建第二个 AccountLease actor。
+`WI-S1-03-03` 保持进行中，下一子切片先迁移 Echo 的生命周期 observer：必须保留其现有 audio/runtime 行为，改为消费 root forwarding event 后再验证同一 lease，不能同时保留两个会实际触发副作用的 observer。

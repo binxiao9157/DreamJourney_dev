@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "scope": "WI-S1-03-03 lifecycle consumer inventory; no module migration or public behavior change",
+  "rootForwarder": {
+    "source": "DreamJourney/Sources/App/AppCoordinator.swift",
+    "sceneBoundary": "DreamJourney/Sources/SceneDelegate.swift",
+    "events": [
+      "sceneConnected",
+      "didBecomeActive",
+      "willResignActive",
+      "willEnterForeground",
+      "didEnterBackground",
+      "didDisconnect"
+    ],
+    "privateForegroundRefresh": {
+      "effect": "FamilyRepository.bootstrapCurrentUserFromBackend -> KnowledgeSyncCoordinator.synchronizeCurrentUser",
+      "leaseCheckpoints": ["runtime", "commit"],
+      "policyContext": "AppFeatureRuntimeContext"
+    }
+  },
+  "directUIKitConsumers": [
+    {
+      "id": "echo-runtime",
+      "source": "DreamJourney/Sources/Modules/Echo/EchoViewController.swift",
+      "events": [
+        "willResignActive",
+        "didEnterBackground",
+        "willEnterForeground",
+        "didBecomeActive"
+      ],
+      "effects": [
+        "stopCapture",
+        "interruptPlayback",
+        "backgroundReleaseGrace",
+        "restoreBinding",
+        "recoverDigitalHumanRuntime"
+      ],
+      "fence": "echoAccountLease + DigitalHumanLifecycleToken + backgroundReleaseLease",
+      "migrationOrder": 1,
+      "targetSlice": "WI-S1-03-03-ECHO_LIFECYCLE_MIGRATION"
+    },
+    {
+      "id": "ai-recording-runtime",
+      "source": "DreamJourney/Sources/Modules/Home/AIRecordingViewController.swift",
+      "events": ["didEnterBackground", "willEnterForeground"],
+      "effects": ["stopCapture", "stopSessionRecording", "rebindDialogEngine", "checkVoiceCloneTraining"],
+      "fence": "dialogAccountLease + DialogEngine binding",
+      "migrationOrder": 2,
+      "targetSlice": "WI-S1-03-03-AI_RECORDING_LIFECYCLE_MIGRATION"
+    }
+  ],
+  "leaseFencedAsyncConsumers": [
+    {
+      "id": "family-repository",
+      "source": "DreamJourney/Sources/Services/FamilyRepository.swift",
+      "effects": ["startupWorkItem", "knowledgeSync", "backendBootstrap"],
+      "fence": "AccountLeaseRuntime checkpoints"
+    },
+    {
+      "id": "knowledge-sync",
+      "source": "DreamJourney/Sources/Services/KnowledgeSyncCoordinator.swift",
+      "effects": ["debouncedSync", "pullCallbacks", "governanceOutbox"],
+      "fence": "KnowledgeSyncLeaseContext + AccountLeaseRuntime checkpoints"
+    },
+    {
+      "id": "dialog-engine",
+      "source": "DreamJourney/Sources/Services/DialogEngineManager.swift",
+      "effects": ["silenceTimer", "providerCallbacks", "localTTS"],
+      "fence": "DialogEngine binding + AccountLeaseRuntime checkpoints"
+    },
+    {
+      "id": "notification-scheduler",
+      "source": "DreamJourney/Sources/Services/EchoDelayedReplyNotificationScheduler.swift",
+      "effects": ["authorizationCallbacks", "pendingRequestMutation"],
+      "fence": "EchoDelayedReplyOperationScope + AccountLeaseRuntime checkpoints"
+    }
+  ],
+  "accountTeardownAuthority": {
+    "source": "DreamJourney/Sources/App/AccountLifecycleRuntimeRegistry.swift",
+    "controller": "AccountLifecycleTransitionController",
+    "modules": 13,
+    "rule": "logout/switch/suspension/deletion remain on the existing serialized account lifecycle path; scene events do not duplicate that teardown"
+  },
+  "outOfScope": [
+    "provider callback rewrite",
+    "timer ownership migration",
+    "notification deep-link handling",
+    "background execution policy",
+    "public UI changes"
+  ]
+}

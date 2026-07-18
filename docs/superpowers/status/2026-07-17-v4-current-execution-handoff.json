@@ -21,9 +21,10 @@
       "WI-S1-01-09-LEGACY_INVENTORY_CLASSIFIER",
       "WI-S1-01-09-SHADOW_PARITY_OBSERVER",
       "WI-S1-03-02-APP_COMPOSITION_SEAM",
-      "WI-S1-03-03-APP_SCENE_EVENT_FORWARDING"
+      "WI-S1-03-03-APP_SCENE_EVENT_FORWARDING",
+      "WI-S1-03-03-LIFECYCLE_CONSUMER_INVENTORY"
     ],
-    "currentSubSlice": "WI-S1-03-03-LIFECYCLE_CONSUMER_INVENTORY",
+    "currentSubSlice": "WI-S1-03-03-ECHO_LIFECYCLE_MIGRATION",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
       "G0": "WI_S1_03_01_TEST_FOUNDATION_AND_WI_S1_03_02_COMPOSITION_SEAM_VERIFIED",
@@ -34,7 +35,7 @@
     "id": "WI-S1-03-03",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-03-03 now has its first no-behavior App/Scene forwarding seam: SceneDelegate only forwards UIKit events, while AppCoordinator captures the existing AccountLease/lifecycle generation/ReleasePolicy authority and validates it at runtime plus callback commit before the existing foreground family/knowledge refresh. Active work remains WI-S1-03-03 for consumer inventory and staged module migration; timers, provider callbacks, public UI, G2 evidence and G4 rollout remain open."
+    "summary": "WI-S1-03-03 now has a source-checked lifecycle consumer inventory. App/Scene forwarding is complete for the root boundary; Echo and AIRecording remain the only direct UIKit lifecycle consumers, while Family/Knowledge/Dialog/notification paths are inventory-recorded as lease-fenced async consumers. Active work is the first controlled consumer migration: Echo must consume the root event without double-firing, preserve existing audio/runtime behavior, and retain its current AccountLease/DigitalHuman lifecycle fences. G2 evidence and G4 rollout remain open."
   },
   "baselines": {
     "backend": "main@32c38f2",
