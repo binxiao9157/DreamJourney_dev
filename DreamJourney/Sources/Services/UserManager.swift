@@ -24,6 +24,7 @@ final class UserManager {
     private let accountStateLock = NSRecursiveLock()
     private let kUserKey = "dj_current_user"
     private let kLoggedInKey = "dj_is_logged_in"
+    private var lifecycleTransitionOwnerUserId: String?
 
     #if UI_QA_SIMULATOR && targetEnvironment(simulator)
     private var syntheticPrivateUserId: String?
@@ -212,21 +213,34 @@ final class UserManager {
         privateAccessState = .suspended
         accountStateLock.unlock()
 
-        let applySuspension = {
-            KnowledgeSyncCoordinator.shared.userDidChange(to: nil)
-            KBLiteManager.shared.switchUser(to: nil)
-            if notify && stateChanged {
-                NotificationCenter.default.post(
-                    name: .djPrivateAccessDidSuspend,
-                    object: nil,
-                    userInfo: ["reason": reason]
+        guard notify && stateChanged else { return }
+        let oldAccountLease = AccountLeaseRuntime.shared.capture(forSubjectId: userId)
+        accountStateLock.lock()
+        guard lifecycleTransitionOwnerUserId == nil else {
+            accountStateLock.unlock()
+            return
+        }
+        lifecycleTransitionOwnerUserId = userId
+        accountStateLock.unlock()
+
+        Task {
+            let actorSnapshot = await AccountSessionActor.shared.snapshot()
+            let resolvedOldAccountLease = oldAccountLease
+                ?? self.lifecycleAccountLease(from: actorSnapshot.session)
+            let oldGeneration = resolvedOldAccountLease?.generation ?? actorSnapshot.generation
+            let result = await AccountLifecycleTransitionController.shared.perform(
+                event: .privateSuspension,
+                oldAccountLease: resolvedOldAccountLease,
+                oldGeneration: oldGeneration,
+                reason: reason
+            )
+            await MainActor.run {
+                self.finalizePrivateSuspension(
+                    expectedOwnerUserId: userId,
+                    reason: reason,
+                    lifecycleResult: result
                 )
             }
-        }
-        if Thread.isMainThread {
-            applySuspension()
-        } else {
-            DispatchQueue.main.async(execute: applySuspension)
         }
     }
 
@@ -370,40 +384,167 @@ final class UserManager {
     func logout() {
         accountStateLock.lock()
         let ownerUserId = storedCurrentUser?.id
-        EchoTraceAccountLifecycle.invalidateAndClear(ownerUserId: ownerUserId)
-        DreamJourneyBackendClient.shared.logoutAuthSession()
-        storedCurrentUser = nil
-        privateAccessState = .signedOut
-        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
-        syntheticPrivateUserId = nil
-        #endif
-        UserDefaults.standard.removeObject(forKey: kUserKey)
-        UserDefaults.standard.removeObject(forKey: kLoggedInKey)
-        KnowledgeSyncCoordinator.shared.userDidChange(to: nil)
-        KBLiteManager.shared.switchUser(to: nil)
-        NotificationCenter.default.post(name: .djUserDidLogout, object: nil)
+            ?? BackendAuthSessionStore.shared.currentSession?.userId
+        guard lifecycleTransitionOwnerUserId == nil else {
+            accountStateLock.unlock()
+            return
+        }
+        guard ownerUserId != nil else {
+            accountStateLock.unlock()
+            DreamJourneyBackendClient.shared.logoutAuthSession()
+            return
+        }
+        lifecycleTransitionOwnerUserId = ownerUserId
         accountStateLock.unlock()
+
+        let oldAccountLease = AccountLeaseRuntime.shared.capture(forSubjectId: ownerUserId)
+        DreamJourneyBackendClient.shared.logoutAuthSession()
+        Task {
+            let actorSnapshot = await AccountSessionActor.shared.snapshot()
+            let resolvedOldAccountLease = oldAccountLease
+                ?? self.lifecycleAccountLease(from: actorSnapshot.session)
+            let oldGeneration = resolvedOldAccountLease?.generation ?? actorSnapshot.generation
+            let result = await AccountLifecycleTransitionController.shared.perform(
+                event: .logout,
+                oldAccountLease: resolvedOldAccountLease,
+                oldGeneration: oldGeneration,
+                reason: "userLoggedOut"
+            )
+            _ = await MainActor.run {
+                self.finalizeLogout(
+                    expectedOwnerUserId: ownerUserId,
+                    lifecycleResult: result
+                )
+            }
+        }
     }
 
     func invalidateBackendSession(for userId: String) {
         accountStateLock.lock()
-        guard storedCurrentUser?.id == userId else {
+        let isCurrentOwner = storedCurrentUser?.id == userId
+        accountStateLock.unlock()
+        guard isCurrentOwner else { return }
+        logout()
+    }
+
+    func switchAccount(completion: @escaping (Bool) -> Void) {
+        accountStateLock.lock()
+        let ownerUserId = storedCurrentUser?.id
+        guard ownerUserId != nil, lifecycleTransitionOwnerUserId == nil else {
             accountStateLock.unlock()
+            completion(false)
             return
         }
-        let ownerUserId = storedCurrentUser?.id
+        lifecycleTransitionOwnerUserId = ownerUserId
+        accountStateLock.unlock()
+
+        let oldAccountLease = AccountLeaseRuntime.shared.capture(forSubjectId: ownerUserId)
+        DreamJourneyBackendClient.shared.logoutAuthSession()
+        Task {
+            let actorSnapshot = await AccountSessionActor.shared.snapshot()
+            let resolvedOldAccountLease = oldAccountLease
+                ?? self.lifecycleAccountLease(from: actorSnapshot.session)
+            let oldGeneration = resolvedOldAccountLease?.generation ?? actorSnapshot.generation
+            let result = await AccountLifecycleTransitionController.shared.perform(
+                event: .switchAccount,
+                oldAccountLease: resolvedOldAccountLease,
+                oldGeneration: oldGeneration,
+                reason: "accountSwitchRequested"
+            )
+            await MainActor.run {
+                let finalized = self.finalizeLogout(
+                    expectedOwnerUserId: ownerUserId,
+                    lifecycleResult: result
+                )
+                completion(finalized)
+            }
+        }
+    }
+
+    @discardableResult
+    func teardownProfileForAccountLifecycle(context: AccountLifecycleContext) -> Bool {
+        accountStateLock.lock()
+        defer { accountStateLock.unlock() }
+        let expectedOwnerUserId = context.oldAccountLease?.subjectId
+        if let currentOwnerUserId = storedCurrentUser?.id,
+           let expectedOwnerUserId,
+           currentOwnerUserId != expectedOwnerUserId {
+            return true
+        }
+        guard expectedOwnerUserId != nil || context.event == .coldStartRecovery else {
+            return false
+        }
+        storedCurrentUser = nil
+        privateAccessState = context.event == .privateSuspension ? .suspended : .signedOut
+        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        syntheticPrivateUserId = nil
+        #endif
+        UserDefaults.standard.removeObject(forKey: kUserKey)
+        UserDefaults.standard.removeObject(forKey: kLoggedInKey)
+        return true
+    }
+
+    @MainActor
+    @discardableResult
+    private func finalizeLogout(
+        expectedOwnerUserId: String?,
+        lifecycleResult: AccountLifecycleTransitionResult
+    ) -> Bool {
+        accountStateLock.lock()
+        defer { accountStateLock.unlock() }
+        guard lifecycleTransitionOwnerUserId == expectedOwnerUserId else {
+            return false
+        }
+        lifecycleTransitionOwnerUserId = nil
+        guard lifecycleResult.canFinalize else { return false }
+        if let currentOwnerUserId = storedCurrentUser?.id,
+           let expectedOwnerUserId,
+           currentOwnerUserId != expectedOwnerUserId {
+            return false
+        }
         storedCurrentUser = nil
         privateAccessState = .signedOut
         #if UI_QA_SIMULATOR && targetEnvironment(simulator)
         syntheticPrivateUserId = nil
         #endif
-        EchoTraceAccountLifecycle.invalidateAndClear(ownerUserId: ownerUserId)
         UserDefaults.standard.removeObject(forKey: kUserKey)
         UserDefaults.standard.removeObject(forKey: kLoggedInKey)
-        KnowledgeSyncCoordinator.shared.userDidChange(to: nil)
-        KBLiteManager.shared.switchUser(to: nil)
         NotificationCenter.default.post(name: .djUserDidLogout, object: nil)
-        accountStateLock.unlock()
+        return true
+    }
+
+    @MainActor
+    private func finalizePrivateSuspension(
+        expectedOwnerUserId: String,
+        reason: String,
+        lifecycleResult: AccountLifecycleTransitionResult
+    ) {
+        accountStateLock.lock()
+        defer { accountStateLock.unlock() }
+        guard lifecycleTransitionOwnerUserId == expectedOwnerUserId else { return }
+        lifecycleTransitionOwnerUserId = nil
+        guard lifecycleResult.canFinalize else { return }
+        if let currentOwnerUserId = storedCurrentUser?.id,
+           currentOwnerUserId != expectedOwnerUserId {
+            return
+        }
+        NotificationCenter.default.post(
+            name: .djPrivateAccessDidSuspend,
+            object: nil,
+            userInfo: ["reason": reason]
+        )
+    }
+
+    private func lifecycleAccountLease(from session: AccountSession?) -> AccountLease? {
+        guard let session else { return nil }
+        return AccountLease(
+            subjectId: session.subjectId,
+            vaultId: session.vaultId,
+            sessionId: session.sessionId,
+            generation: session.generation,
+            generationId: session.generationId,
+            authorityEpoch: RecoveryRuntimePolicyStore.shared.currentPolicy.authorityEpoch
+        )
     }
 
     // MARK: - 持久化
@@ -427,5 +568,6 @@ extension Notification.Name {
     static let djUserDidLogout = Notification.Name("dj.user.didLogout")
     static let djUserDidUpdate = Notification.Name("dj.user.didUpdate")
     static let djPrivateAccessDidSuspend = Notification.Name("dj.privateAccess.didSuspend")
+    static let djAccountLifecycleWillTeardown = Notification.Name("dj.accountLifecycle.willTeardown")
     static let djNewMemoryCreated = Notification.Name("dj.memory.newCreated")
 }

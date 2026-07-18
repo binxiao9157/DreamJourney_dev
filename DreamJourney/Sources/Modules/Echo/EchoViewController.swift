@@ -1138,6 +1138,12 @@ final class EchoViewController: UIViewController {
         )
         NotificationCenter.default.addObserver(
             self,
+            selector: #selector(echoAccountDidChange),
+            name: .djAccountLifecycleWillTeardown,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
             selector: #selector(echoAuthorityEpochDidChange),
             name: .djRecoveryAuthorityEpochDidChange,
             object: nil

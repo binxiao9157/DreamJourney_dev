@@ -88,30 +88,14 @@ final class AppCoordinator: Coordinator {
     }
 
     @objc private func handleLogout() {
-        let expectedGeneration = accountSessionReceipt?.generation
-        AccountLeaseRuntime.shared.publish(session: nil)
         accountSessionTask?.cancel()
         accountSessionReceipt = nil
-        Task { [accountSessionActor] in
-            _ = await accountSessionActor.signOut(
-                expectedGeneration: expectedGeneration,
-                reason: "userLoggedOut"
-            )
-        }
         transitionToAuth()
     }
 
     @objc private func handlePrivateAccessSuspended() {
-        let expectedGeneration = accountSessionReceipt?.generation
-        AccountLeaseRuntime.shared.publish(session: nil)
         accountSessionTask?.cancel()
         accountSessionReceipt = nil
-        Task { [accountSessionActor] in
-            _ = await accountSessionActor.suspend(
-                expectedGeneration: expectedGeneration,
-                reason: "privateAccessSuspended"
-            )
-        }
         transitionToAuth()
     }
 
@@ -120,6 +104,9 @@ final class AppCoordinator: Coordinator {
         showStartupValidationGate()
         let cachedSubjectId = UserManager.shared.currentUser?.id
         let credential = UserManager.shared.accountSessionCredentialSnapshot()
+        let priorAccountLease = AccountLeaseRuntime.shared.capture(
+            forSubjectId: cachedSubjectId
+        )
         accountSessionTask?.cancel()
         accountSessionTask = Task { [weak self, accountSessionActor] in
             let receipt = await accountSessionActor.bootstrap(
@@ -131,6 +118,15 @@ final class AppCoordinator: Coordinator {
             self.accountSessionReceipt = receipt
             switch receipt.rootRoute {
             case .authentication:
+                let oldAccountLease = priorAccountLease
+                    ?? self.lifecycleAccountLease(from: receipt.session)
+                _ = await AccountLifecycleTransitionController.shared.performAfterExistingFence(
+                    event: .coldStartRecovery,
+                    oldAccountLease: oldAccountLease,
+                    oldGeneration: oldAccountLease?.generation ?? receipt.generation,
+                    actorReceipt: receipt
+                )
+                guard !Task.isCancelled else { return }
                 self.transitionToAuth()
             case .validation:
                 self.validateCachedPrivateAccess(expectedGeneration: receipt.generation)
@@ -232,14 +228,38 @@ final class AppCoordinator: Coordinator {
 
     private func suspendActorAndShowAuth(expectedGeneration: UInt64?, reason: String) {
         accountSessionTask?.cancel()
-        accountSessionReceipt = nil
-        Task { [accountSessionActor] in
-            _ = await accountSessionActor.suspend(
-                expectedGeneration: expectedGeneration,
+        let oldAccountLease = AccountLeaseRuntime.shared.capture(
+            forSubjectId: UserManager.shared.currentUser?.id
+        ) ?? lifecycleAccountLease(from: accountSessionReceipt?.session)
+        let oldGeneration = oldAccountLease?.generation
+            ?? expectedGeneration
+            ?? accountSessionReceipt?.generation
+            ?? 0
+        accountSessionTask = Task { [weak self] in
+            let result = await AccountLifecycleTransitionController.shared.perform(
+                event: .privateSuspension,
+                oldAccountLease: oldAccountLease,
+                oldGeneration: oldGeneration,
                 reason: reason
             )
+            guard !Task.isCancelled, let self else { return }
+            self.accountSessionTask = nil
+            self.accountSessionReceipt = nil
+            guard result.lifecycleReceipt.isTerminal else { return }
+            self.transitionToAuth()
         }
-        transitionToAuth()
+    }
+
+    private func lifecycleAccountLease(from session: AccountSession?) -> AccountLease? {
+        guard let session else { return nil }
+        return AccountLease(
+            subjectId: session.subjectId,
+            vaultId: session.vaultId,
+            sessionId: session.sessionId,
+            generation: session.generation,
+            generationId: session.generationId,
+            authorityEpoch: RecoveryRuntimePolicyStore.shared.currentPolicy.authorityEpoch
+        )
     }
 
     private func showStartupValidationGate() {
