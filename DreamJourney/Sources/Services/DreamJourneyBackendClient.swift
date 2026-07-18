@@ -17,6 +17,104 @@ private enum BackendDateParser {
     }
 }
 
+enum AsyncEffectOperationStatus: String {
+    case accepted
+    case cancelRequested
+    case cancelled
+    case completed
+    case failed
+    case unknown
+    case blocked
+
+    var isTerminal: Bool {
+        switch self {
+        case .accepted, .cancelRequested:
+            return false
+        case .cancelled, .completed, .failed, .unknown, .blocked:
+            return true
+        }
+    }
+}
+
+/// Value-free result of a server-side async operation acceptance/completion.
+/// A local timer or notification is never treated as server completion merely
+/// because it renders the same user-facing reminder.
+struct AsyncEffectReceiptSummary: Equatable {
+    let schemaVersion: String
+    let outcome: String
+    let operationId: String
+    let operationState: AsyncEffectOperationStatus
+    let outboxEventId: String
+    let outboxState: String
+    let jobId: String
+    let jobState: String
+    let businessReceiptId: String
+    let businessOutcome: String
+    let stableKey: String
+
+    init?(_ json: [String: Any]) {
+        guard let schemaVersion = json["schemaVersion"] as? String,
+              let outcome = json["outcome"] as? String,
+              let operationId = json["operationId"] as? String,
+              let operationStateRaw = json["operationState"] as? String,
+              let operationState = AsyncEffectOperationStatus(rawValue: operationStateRaw),
+              let outboxEventId = json["outboxEventId"] as? String,
+              let outboxState = json["outboxState"] as? String,
+              let jobId = json["jobId"] as? String,
+              let jobState = json["jobState"] as? String,
+              let businessReceiptId = json["businessReceiptId"] as? String,
+              let businessOutcome = json["businessOutcome"] as? String,
+              let stableKey = json["stableKey"] as? String else {
+            return nil
+        }
+        self.schemaVersion = schemaVersion
+        self.outcome = outcome
+        self.operationId = operationId
+        self.operationState = operationState
+        self.outboxEventId = outboxEventId
+        self.outboxState = outboxState
+        self.jobId = jobId
+        self.jobState = jobState
+        self.businessReceiptId = businessReceiptId
+        self.businessOutcome = businessOutcome
+        self.stableKey = stableKey
+    }
+
+    var representsServerCompletion: Bool {
+        operationState.isTerminal && ["completed", "skipped", "blocked", "failed", "unknown"].contains(businessOutcome)
+    }
+}
+
+struct AsyncEffectRuntimeCapability: Equatable {
+    let enabled: Bool
+    let workerEnabled: Bool
+    let serverCompletionAvailable: Bool
+    let reason: String
+    let defaultReleaseVisible: Bool
+    let contractVersion: Int
+
+    init(json: [String: Any]?) {
+        enabled = json?["enabled"] as? Bool ?? false
+        workerEnabled = json?["workerEnabled"] as? Bool ?? false
+        serverCompletionAvailable = json?["serverCompletionAvailable"] as? Bool ?? false
+        reason = json?["reason"] as? String ?? "asyncEffectRuntimeUnavailable"
+        defaultReleaseVisible = json?["defaultReleaseVisible"] as? Bool ?? false
+        if let value = json?["contractVersion"] as? Int {
+            contractVersion = value
+        } else if let value = json?["contractVersion"] as? NSNumber {
+            contractVersion = value.intValue
+        } else if let value = json?["contractVersion"] as? String, let parsed = Int(value) {
+            contractVersion = parsed
+        } else {
+            contractVersion = 1
+        }
+    }
+
+    var localSignalsAreServerCompletion: Bool {
+        false
+    }
+}
+
 struct ArchiveImageAnalysisRuntimeCapability {
     let enabled: Bool
     let endpoint: String
@@ -837,6 +935,7 @@ struct BackendRuntimeConfig {
     let archiveImageAnalysis: ArchiveImageAnalysisRuntimeCapability
     let voiceClone: VoiceCloneRuntimeCapability
     let digitalHuman: DigitalHumanRuntimeCapability
+    let asyncEffect: AsyncEffectRuntimeCapability
     let releasePolicy: BackendReleasePolicyRuntimeDescriptor
     let recovery: BackendRecoveryRuntimePolicy
     let identityChallenge: BackendIdentityChallengeCapability
@@ -860,6 +959,7 @@ struct BackendRuntimeConfig {
         let archiveImageAnalysis = json["archiveImageAnalysis"] as? [String: Any]
         let voiceClone = json["voiceClone"] as? [String: Any]
         let digitalHuman = json["digitalHuman"] as? [String: Any]
+        let asyncEffect = json["asyncEffect"] as? [String: Any]
         let releasePolicy = json["releasePolicy"] as? [String: Any]
         let recovery = json["recovery"] as? [String: Any]
         let auth = json["auth"] as? [String: Any]
@@ -882,6 +982,7 @@ struct BackendRuntimeConfig {
             capabilities: capabilities,
             axisSnapshot: decodedSnapshots[RuntimeCapabilityID.digitalHumanLivePanel.rawValue]
         )
+        self.asyncEffect = AsyncEffectRuntimeCapability(json: asyncEffect)
         self.releasePolicy = BackendReleasePolicyRuntimeDescriptor(json: releasePolicy)
         self.recovery = BackendRecoveryRuntimePolicy(json: recovery)
         identityChallenge = BackendIdentityChallengeCapability(
