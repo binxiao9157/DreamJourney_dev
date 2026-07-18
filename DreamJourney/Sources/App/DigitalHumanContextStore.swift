@@ -104,6 +104,22 @@ private struct DigitalHumanContextLegacyQuarantineRecord: Codable, Equatable {
     let quarantinedAt: Date
 }
 
+private enum DigitalHumanContextLifecycleDisposition: Equatable {
+    case absent
+    case retained
+    case removed
+    case invalidEnvelope
+
+    var remainingLocalData: Bool {
+        switch self {
+        case .retained, .invalidEnvelope:
+            return true
+        case .absent, .removed:
+            return false
+        }
+    }
+}
+
 final class DigitalHumanContextStore {
     static let shared = DigitalHumanContextStore()
 
@@ -180,6 +196,48 @@ final class DigitalHumanContextStore {
             return
         }
         reconcileFamilyAuthorization(userId: sourceUserId, accountLease: accountLease)
+    }
+
+    func handleAccountLifecycle(
+        _ context: AccountLifecycleContext,
+        requestedOutcome: AccountLifecycleModuleOutcome
+    ) -> AccountLifecycleModuleResult {
+        guard requestedOutcome != .failed else {
+            return .completed(
+                .failed,
+                remainingLocalData: true,
+                detailCode: "digitalHumanContextLifecycleRequestedFailure"
+            )
+        }
+        guard let oldAccountLease = context.oldAccountLease,
+              oldAccountLease.generation == context.oldGeneration,
+              !normalizedUserId(oldAccountLease.subjectId).isEmpty else {
+            return .completed(
+                .failed,
+                remainingLocalData: true,
+                detailCode: "digitalHumanContextLifecycleOldScopeMissing"
+            )
+        }
+
+        let purge = context.event == .accountDeletion
+            || requestedOutcome == .cleared
+            || requestedOutcome == .purged
+        let disposition = handleScopedContextLifecycle(
+            accountLease: oldAccountLease,
+            purge: purge
+        )
+        guard disposition != .invalidEnvelope else {
+            return .completed(
+                .failed,
+                remainingLocalData: true,
+                detailCode: "digitalHumanContextLifecycleScopeValidationFailed"
+            )
+        }
+        return .completed(
+            requestedOutcome,
+            remainingLocalData: disposition.remainingLocalData,
+            detailCode: digitalHumanContextLifecycleDetailCode(for: requestedOutcome)
+        )
     }
 
     private func applyCurrent(
@@ -333,6 +391,53 @@ final class DigitalHumanContextStore {
             return nil
         }
         return validatedContext(envelope.context, userId: accountLease.subjectId)
+    }
+
+    /// Teardown uses the transition's captured lease and intentionally avoids validating it
+    /// against the newly mounted runtime lease. Exact envelope matching prevents cross-owner
+    /// deletion even when the old lease is already stale.
+    private func handleScopedContextLifecycle(
+        accountLease: AccountLease,
+        purge: Bool
+    ) -> DigitalHumanContextLifecycleDisposition {
+        storageLock.lock()
+        defer { storageLock.unlock() }
+        let storageKey = scopedKey(for: accountLease)
+        guard let data = defaults.data(forKey: storageKey) else {
+            return .absent
+        }
+        guard let envelope = try? JSONDecoder().decode(
+            DigitalHumanContextStorageEnvelope.self,
+            from: data
+        ), envelope.matches(accountLease) else {
+            return .invalidEnvelope
+        }
+        guard purge else {
+            return .retained
+        }
+        defaults.removeObject(forKey: storageKey)
+        return defaults.data(forKey: storageKey) == nil ? .removed : .invalidEnvelope
+    }
+
+    private func digitalHumanContextLifecycleDetailCode(
+        for outcome: AccountLifecycleModuleOutcome
+    ) -> String {
+        switch outcome {
+        case .retainedLocked:
+            return "digitalHumanContextLifecycleRetainedLocked"
+        case .unmounted:
+            return "digitalHumanContextLifecycleUnmounted"
+        case .cancelled:
+            return "digitalHumanContextLifecycleCancelled"
+        case .cleared:
+            return "digitalHumanContextLifecycleCleared"
+        case .purged:
+            return "digitalHumanContextLifecyclePurged"
+        case .skipped:
+            return "digitalHumanContextLifecycleSkipped"
+        case .failed:
+            return "digitalHumanContextLifecycleRequestedFailure"
+        }
     }
 
     private func quarantineLegacySubjectPayloadIfNeeded(accountLease: AccountLease) -> Bool {

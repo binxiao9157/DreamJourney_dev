@@ -98,6 +98,22 @@ private struct MemoirTTSLegacyQuarantineReceipt: Codable {
     let quarantinedAt: Date
 }
 
+private enum MemoirTTSCacheLifecycleDisposition: Equatable {
+    case absent
+    case retained
+    case removed
+    case failed
+
+    var remainingLocalData: Bool {
+        switch self {
+        case .retained, .failed:
+            return true
+        case .absent, .removed:
+            return false
+        }
+    }
+}
+
 final class MemoirTTSService {
 
     static let shared = MemoirTTSService()
@@ -310,6 +326,47 @@ final class MemoirTTSService {
         }
     }
 
+    func handleAccountLifecycle(
+        _ context: AccountLifecycleContext,
+        requestedOutcome: AccountLifecycleModuleOutcome
+    ) -> AccountLifecycleModuleResult {
+        guard requestedOutcome != .failed else {
+            return .completed(
+                .failed,
+                remainingLocalData: true,
+                detailCode: "memoirTTSLifecycleRequestedFailure"
+            )
+        }
+        guard let oldAccountLease = context.oldAccountLease,
+              oldAccountLease.generation == context.oldGeneration,
+              let oldScope = MemoirTTSCacheScope(accountLease: oldAccountLease) else {
+            return .completed(
+                .failed,
+                remainingLocalData: true,
+                detailCode: "memoirTTSLifecycleOldScopeMissing"
+            )
+        }
+
+        cancelSynthesisRuntime(for: oldScope)
+        let purge = context.event == .accountDeletion
+            || requestedOutcome == .cleared
+            || requestedOutcome == .purged
+        let disposition = handleScopedCacheLifecycle(scope: oldScope, purge: purge)
+        guard disposition != .failed else {
+            return .completed(
+                .failed,
+                remainingLocalData: true,
+                detailCode: "memoirTTSLifecycleScopeRemovalFailed"
+            )
+        }
+
+        return .completed(
+            requestedOutcome,
+            remainingLocalData: disposition.remainingLocalData,
+            detailCode: memoirTTSLifecycleDetailCode(for: requestedOutcome)
+        )
+    }
+
     // MARK: - 内部实现
 
     private func performSynthesis(memoir: MemoirModel,
@@ -435,6 +492,101 @@ final class MemoirTTSService {
             activeSynthesisOperation = nil
         }
         stateLock.unlock()
+    }
+
+    private func cancelSynthesisRuntime(for oldScope: MemoirTTSCacheScope) {
+        stateLock.lock()
+        if let activeSynthesisOperation,
+           MemoirTTSCacheScope(accountLease: activeSynthesisOperation.accountLease) == oldScope {
+            self.activeSynthesisOperation = nil
+        }
+        stateLock.unlock()
+    }
+
+    private func handleScopedCacheLifecycle(
+        scope: MemoirTTSCacheScope,
+        purge: Bool
+    ) -> MemoirTTSCacheLifecycleDisposition {
+        let scopedAudioDirectory = audioDirectory(for: scope)
+        let scopedMetadataDirectory = cacheDirectory(for: scope)
+        guard isExpectedLifecycleDirectory(
+            scopedAudioDirectory,
+            root: scopedAudioRootDirectory,
+            scope: scope
+        ), isExpectedLifecycleDirectory(
+            scopedMetadataDirectory,
+            root: scopedCacheRootDirectory,
+            scope: scope
+        ) else {
+            return .failed
+        }
+
+        storageLock.lock()
+        defer { storageLock.unlock() }
+        let hasPayload = directoryHasPayload(scopedAudioDirectory)
+            || directoryHasPayload(scopedMetadataDirectory)
+        guard purge else {
+            return hasPayload ? .retained : .absent
+        }
+
+        do {
+            if FileManager.default.fileExists(atPath: scopedAudioDirectory.path) {
+                try FileManager.default.removeItem(at: scopedAudioDirectory)
+            }
+            if FileManager.default.fileExists(atPath: scopedMetadataDirectory.path) {
+                try FileManager.default.removeItem(at: scopedMetadataDirectory)
+            }
+        } catch {
+            return .failed
+        }
+        guard !FileManager.default.fileExists(atPath: scopedAudioDirectory.path),
+              !FileManager.default.fileExists(atPath: scopedMetadataDirectory.path) else {
+            return .failed
+        }
+        return hasPayload ? .removed : .absent
+    }
+
+    private func isExpectedLifecycleDirectory(
+        _ directory: URL,
+        root: URL,
+        scope: MemoirTTSCacheScope
+    ) -> Bool {
+        let expected = root.appendingPathComponent(scope.scopeDigest, isDirectory: true)
+        return directory.standardizedFileURL == expected.standardizedFileURL
+            && directory.deletingLastPathComponent().standardizedFileURL
+                == root.standardizedFileURL
+    }
+
+    private func directoryHasPayload(_ directory: URL) -> Bool {
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil,
+            options: []
+        ) else {
+            return false
+        }
+        return !entries.isEmpty
+    }
+
+    private func memoirTTSLifecycleDetailCode(
+        for outcome: AccountLifecycleModuleOutcome
+    ) -> String {
+        switch outcome {
+        case .retainedLocked:
+            return "memoirTTSLifecycleRetainedLocked"
+        case .unmounted:
+            return "memoirTTSLifecycleUnmounted"
+        case .cancelled:
+            return "memoirTTSLifecycleCancelled"
+        case .cleared:
+            return "memoirTTSLifecycleCleared"
+        case .purged:
+            return "memoirTTSLifecyclePurged"
+        case .skipped:
+            return "memoirTTSLifecycleSkipped"
+        case .failed:
+            return "memoirTTSLifecycleRequestedFailure"
+        }
     }
 
     private func deliver<T>(

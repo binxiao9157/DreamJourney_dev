@@ -254,6 +254,22 @@ private struct VoiceCloneLegacyQuarantineEnvelope: Codable, Equatable {
     var records: [VoiceCloneLegacyQuarantineRecord]
 }
 
+private enum VoiceCloneLocalStateLifecycleDisposition: Equatable {
+    case absent
+    case retained
+    case removed
+    case invalidEnvelope
+
+    var remainingLocalData: Bool {
+        switch self {
+        case .retained, .invalidEnvelope:
+            return true
+        case .absent, .removed:
+            return false
+        }
+    }
+}
+
 private final class VoiceCloneLocalStateStore {
     private enum LegacyKey {
         static let speakerId = "dj.voiceclone.speakerId"
@@ -367,6 +383,36 @@ private final class VoiceCloneLocalStateStore {
             return nil
         }
         return state
+    }
+
+    /// Lifecycle teardown deliberately accepts a captured, stale AccountLease. It never
+    /// consults the current runtime lease, and only touches an envelope that exactly
+    /// matches the deterministic scope captured before the account transition.
+    func handleAccountLifecycle(
+        accountLease: AccountLease,
+        purge: Bool
+    ) -> VoiceCloneLocalStateLifecycleDisposition {
+        guard let scope = VoiceCloneLocalOwnerScope(accountLease: accountLease) else {
+            return .invalidEnvelope
+        }
+
+        lock.lock()
+        defer { lock.unlock() }
+        guard let data = defaults.data(forKey: scope.storageKey) else {
+            return .absent
+        }
+        guard let envelope = try? JSONDecoder().decode(
+            VoiceCloneLocalStateEnvelope.self,
+            from: data
+        ), envelope.matches(scope) else {
+            return .invalidEnvelope
+        }
+        guard purge else {
+            return .retained
+        }
+
+        defaults.removeObject(forKey: scope.storageKey)
+        return defaults.data(forKey: scope.storageKey) == nil ? .removed : .invalidEnvelope
     }
 
     private func restore(previousData: Data?, replacing replacementData: Data, forKey key: String) {
@@ -490,6 +536,50 @@ final class VoiceCloneService {
             return nil
         }
         return speakerId
+    }
+
+    func handleAccountLifecycle(
+        _ context: AccountLifecycleContext,
+        requestedOutcome: AccountLifecycleModuleOutcome
+    ) -> AccountLifecycleModuleResult {
+        guard requestedOutcome != .failed else {
+            return .completed(
+                .failed,
+                remainingLocalData: true,
+                detailCode: "voiceLifecycleRequestedFailure"
+            )
+        }
+        guard let oldAccountLease = context.oldAccountLease,
+              oldAccountLease.generation == context.oldGeneration,
+              VoiceCloneLocalOwnerScope(accountLease: oldAccountLease) != nil else {
+            return .completed(
+                .failed,
+                remainingLocalData: true,
+                detailCode: "voiceLifecycleOldScopeMissing"
+            )
+        }
+
+        cancelTrainingRuntime(for: oldAccountLease)
+        let purge = context.event == .accountDeletion
+            || requestedOutcome == .cleared
+            || requestedOutcome == .purged
+        let disposition = localStateStore.handleAccountLifecycle(
+            accountLease: oldAccountLease,
+            purge: purge
+        )
+        guard disposition != .invalidEnvelope else {
+            return .completed(
+                .failed,
+                remainingLocalData: true,
+                detailCode: "voiceLifecycleScopeValidationFailed"
+            )
+        }
+
+        return .completed(
+            requestedOutcome,
+            remainingLocalData: disposition.remainingLocalData,
+            detailCode: voiceLifecycleDetailCode(for: requestedOutcome)
+        )
     }
 
     func voiceCloneShellSnapshot() -> VoiceCloneProfileSnapshot {
@@ -930,6 +1020,41 @@ final class VoiceCloneService {
             return nil
         }
         return (accountLease, currentPersonaTarget(userId: accountLease.subjectId))
+    }
+
+    private func cancelTrainingRuntime(for oldAccountLease: AccountLease) {
+        guard let oldScope = VoiceCloneLocalOwnerScope(accountLease: oldAccountLease),
+              let trainingAccountLease,
+              VoiceCloneLocalOwnerScope(accountLease: trainingAccountLease) == oldScope else {
+            return
+        }
+        pollTimer?.invalidate()
+        pollTimer = nil
+        pendingCompletion = nil
+        trainingSpeakerId = nil
+        trainingPersonaTarget = nil
+        self.trainingAccountLease = nil
+    }
+
+    private func voiceLifecycleDetailCode(
+        for outcome: AccountLifecycleModuleOutcome
+    ) -> String {
+        switch outcome {
+        case .retainedLocked:
+            return "voiceLifecycleRetainedLocked"
+        case .unmounted:
+            return "voiceLifecycleUnmounted"
+        case .cancelled:
+            return "voiceLifecycleCancelled"
+        case .cleared:
+            return "voiceLifecycleCleared"
+        case .purged:
+            return "voiceLifecyclePurged"
+        case .skipped:
+            return "voiceLifecycleSkipped"
+        case .failed:
+            return "voiceLifecycleRequestedFailure"
+        }
     }
 
     private func deliver<T>(
