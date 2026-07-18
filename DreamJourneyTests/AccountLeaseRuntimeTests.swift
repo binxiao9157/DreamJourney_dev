@@ -54,6 +54,37 @@ final class AccountLeaseRuntimeTests: XCTestCase {
         XCTAssertEqual(result.reason, .generationMismatch)
     }
 
+    func testFeatureRuntimeContextRejectsMismatchedLifecycleOrPolicyAuthority() throws {
+        let lease = AccountLease(
+            subjectId: "owner-a",
+            vaultId: "vault-a",
+            sessionId: "session-a",
+            generation: 7,
+            generationId: UUID(uuidString: "00000000-0000-0000-0000-000000000007")!,
+            authorityEpoch: "epoch-v1"
+        )
+
+        XCTAssertNil(AppFeatureRuntimeContext(
+            accountLease: lease,
+            lifecycleGeneration: 8,
+            releasePolicyAuthorityEpoch: "epoch-v1"
+        ))
+        XCTAssertNil(AppFeatureRuntimeContext(
+            accountLease: lease,
+            lifecycleGeneration: 7,
+            releasePolicyAuthorityEpoch: "epoch-v2"
+        ))
+
+        let context = try XCTUnwrap(AppFeatureRuntimeContext(
+            accountLease: lease,
+            lifecycleGeneration: 7,
+            releasePolicyAuthorityEpoch: "epoch-v1"
+        ))
+        XCTAssertEqual(context.accountLease, lease)
+        XCTAssertEqual(context.lifecycleGeneration, lease.generation)
+        XCTAssertEqual(context.releasePolicyAuthorityEpoch, lease.authorityEpoch)
+    }
+
     private func session(
         subjectId: String,
         vaultId: String,

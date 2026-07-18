@@ -1,6 +1,6 @@
 {
   "activeWorkItem": {
-    "authorityLock": "OWNER_TRUTH",
+    "authorityLock": "IOS_COMPOSITION",
     "backendPendingPaths": [],
     "completedSubSlices": [
       "WI-S1-01-01-OWNER_TRUTH_SCHEMA",
@@ -19,20 +19,21 @@
       "WI-S1-01-07-TYPED_CONTEXT_ANSWER_CITATION_SHADOW",
       "WI-S1-01-08-CORRECTION_REQUEST_AND_RESOLVER_SHADOW",
       "WI-S1-01-09-LEGACY_INVENTORY_CLASSIFIER",
-      "WI-S1-01-09-SHADOW_PARITY_OBSERVER"
+      "WI-S1-01-09-SHADOW_PARITY_OBSERVER",
+      "WI-S1-03-02-APP_COMPOSITION_SEAM"
     ],
-    "currentSubSlice": "WI-S1-03-02-APP_COMPOSITION_SEAM",
+    "currentSubSlice": "WI-S1-03-03-LIFECYCLE_EVENT_INVENTORY",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "SCOPED_EVIDENCE_PRESENT",
-      "G1": "MISSING",
-      "G2": "LEGACY_INVENTORY_AND_PARITY_OBSERVER_DEPLOYED; REAL_DATA_LINEAGE_BACKFILL_AND_COHORT_EVIDENCE_MISSING",
-      "G4": "MISSING"
+      "G0": "WI_S1_03_01_TEST_FOUNDATION_AND_WI_S1_03_02_COMPOSITION_SEAM_VERIFIED",
+      "G1": "RUNTIME_VISUAL_AND_ROUTE_PARITY_OPEN",
+      "G2": "CROSS_MODULE_LIFECYCLE_AND_STORE_EVIDENCE_OPEN",
+      "G4": "EXTERNAL_PRIVACY_AND_RELEASE_DECISION_OPEN"
     },
-    "id": "WI-S1-01-09",
+    "id": "WI-S1-03-03",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-01-04 through WI-S1-01-08 have scoped QA-only Owner Truth evidence: Owner Candidate review/immutable DecisionReceipt, initial MemoryVersion activation, rebuildable Projection/KBLite compatibility shadow, typed Context/Answer/Citation shadow, and same-record correction lineage. WI-S1-01-09 legacy inventory (cd739fb/224e56e) and the value-free shadow parity observer (3d2f54b) are deployed with schema head 0023 and disposable Postgres evidence. The observer reports only hashes/counts, keeps cutoverAllowed=false, and does not backfill, promote legacy facts, change authorityEpoch or expose public Context. Real per-record lineage mapping/backfill/cohort cutover remains G2-gated, so active implementation moves to the no-behavior iOS composition seam WI-S1-03-02."
+    "summary": "WI-S1-03-02 is now recorded as evidence-complete at its scoped G0 boundary. Active work moves to the first no-behavior sub-slice of WI-S1-03-03: inventory and normalize App/Scene lifecycle event forwarding before changing module ownership, timers, callbacks or public UI. AccountLease, lifecycle generation and ReleasePolicy authority must remain the only propagated root context; cross-module G2 and external G4 rollout remain open."
   },
   "baselines": {
     "backend": "main@32c38f2",
@@ -317,6 +318,12 @@
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT"
     },
     {
+      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-03-02-app-composition-seam.md",
+      "id": "WI-S1-03-02",
+      "implementationStatus": "INTERNAL_READY / G0_COMPOSITION_AND_BUILD_VERIFIED / IOS_LOCAL_COMMITTED / G1_RUNTIME_EVIDENCE_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_RUNTIME_OPEN"
+    },
+    {
       "evidence": "docs/superpowers/status/2026-07-19-wi-s1-01-01-owner-truth-core.md",
       "id": "WI-S1-01-01",
       "implementationStatus": "VERIFIED / G0_G2_SCOPED_EVIDENCE_PRESENT / BACKEND_DEPLOYED / IOS_LOCAL_COMMITTED / WRITE_DISABLED",
@@ -366,9 +373,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S1-03-02",
-    "state": "SELECTED_AFTER_GATED_MIGRATION_SLICE",
-    "summary": "Do not automatically enter WI-S1-01-10: it requires Adult Self cohort, authorityEpoch CAS, rollback/forward-fix and applicable G1/G2/G4 evidence. Continue with the no-behavior AppComposition/Feature Factory seam after confirming the existing XCTest foundation."
+    "id": "WI-S1-03-04",
+    "state": "PLANNED_AFTER_CURRENT",
+    "summary": "Only after lifecycle propagation has scoped evidence may typed Capture/Review/Memory UI consumption be considered. It must still re-check its own G1/G2 scope and must not switch legacy writers or expose new capabilities."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -377,5 +384,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-19T06:50:00+0800"
+  "updatedAt": "2026-07-19T06:57:00+0800"
 }

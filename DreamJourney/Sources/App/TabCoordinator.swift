@@ -8,8 +8,15 @@ final class TabCoordinator: Coordinator {
     var didRequestLogout: (() -> Void)?
 
     let tabBarController = WarmTabBarController()
+    private let runtimeContext: AppFeatureRuntimeContext
+    private let featureFactory: AppFeatureFactory
 
-    init() {
+    init(
+        runtimeContext: AppFeatureRuntimeContext,
+        featureFactory: AppFeatureFactory
+    ) {
+        self.runtimeContext = runtimeContext
+        self.featureFactory = featureFactory
         self.navigationController = UINavigationController()
     }
 
@@ -19,18 +26,18 @@ final class TabCoordinator: Coordinator {
     }
 
     private func setupTabs() {
-        let archiveNav = UINavigationController(rootViewController: MemoryArchiveViewController())
-        archiveNav.navigationBar.tintColor = DJDesignTokens.Color.textPrimary
-
-        let echoNav = UINavigationController(rootViewController: EchoViewController())
-        echoNav.navigationBar.tintColor = DJDesignTokens.Color.textPrimary
-
-        let profileVC = ProfileViewController()
-        profileVC.didRequestLogout = { [weak self] in
-            self?.didRequestLogout?()
-        }
-        let profileNav = UINavigationController(rootViewController: profileVC)
-        profileNav.navigationBar.tintColor = DJDesignTokens.Color.textPrimary
+        let archiveNav = featureFactory.makeArchiveNavigationController(
+            runtimeContext: runtimeContext
+        )
+        let echoNav = featureFactory.makeEchoNavigationController(
+            runtimeContext: runtimeContext
+        )
+        let profileNav = featureFactory.makeProfileNavigationController(
+            runtimeContext: runtimeContext,
+            didRequestLogout: { [weak self] in
+                self?.didRequestLogout?()
+            }
+        )
 
         tabBarController.viewControllers = [archiveNav, echoNav, profileNav]
         tabBarController.selectedIndex = 1

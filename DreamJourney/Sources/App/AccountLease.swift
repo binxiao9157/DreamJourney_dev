@@ -27,6 +27,32 @@ struct AccountLease: Codable, Equatable, Sendable {
     let authorityEpoch: String
 }
 
+/// Immutable runtime input passed from the app root into feature construction.
+/// It intentionally contains identity and policy authority only; feature-specific
+/// writers remain behind their existing repositories until their own migration slice.
+struct AppFeatureRuntimeContext: Equatable, Sendable {
+    let accountLease: AccountLease
+    let lifecycleGeneration: UInt64
+    let releasePolicyAuthorityEpoch: String
+
+    init?(
+        accountLease: AccountLease,
+        lifecycleGeneration: UInt64,
+        releasePolicyAuthorityEpoch: String
+    ) {
+        let normalizedAuthorityEpoch = releasePolicyAuthorityEpoch
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard lifecycleGeneration == accountLease.generation,
+              !normalizedAuthorityEpoch.isEmpty,
+              normalizedAuthorityEpoch == accountLease.authorityEpoch else {
+            return nil
+        }
+        self.accountLease = accountLease
+        self.lifecycleGeneration = lifecycleGeneration
+        self.releasePolicyAuthorityEpoch = normalizedAuthorityEpoch
+    }
+}
+
 struct AccountLeaseValidationDecision: Equatable, Sendable {
     let checkpoint: AccountLeaseCheckpoint
     let allowed: Bool

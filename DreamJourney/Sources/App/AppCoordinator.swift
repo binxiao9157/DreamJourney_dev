@@ -15,13 +15,19 @@ final class AppCoordinator: Coordinator {
     var childCoordinators: [Coordinator] = []
     private weak var window: UIWindow?
     private let accountSessionActor: AccountSessionActor
+    private let appComposition: AppComposition
     private var rootMode: RootMode = .unresolved
     private var accountSessionReceipt: AccountSessionTransitionReceipt?
     private var accountSessionTask: Task<Void, Never>?
 
-    init(window: UIWindow, accountSessionActor: AccountSessionActor = .shared) {
+    init(
+        window: UIWindow,
+        accountSessionActor: AccountSessionActor = .shared,
+        appComposition: AppComposition? = nil
+    ) {
         self.window = window
         self.accountSessionActor = accountSessionActor
+        self.appComposition = appComposition ?? AppComposition()
         self.navigationController = UINavigationController()
     }
 
@@ -70,12 +76,19 @@ final class AppCoordinator: Coordinator {
               accountSessionReceipt?.state == .active,
               accountSessionReceipt?.rootRoute == .privateUI,
               UserManager.shared.canEnterPrivateUI,
-              rootMode != .main else {
+              rootMode != .main,
+              let accountSession = accountSessionReceipt?.session,
+              let tabCoordinator = appComposition.makeTabCoordinator(
+                  accountSession: accountSession,
+                  lifecycleGeneration: accountSessionReceipt?.generation ?? 0
+              ) else {
+            if rootMode != .main {
+                transitionToAuth()
+            }
             return
         }
         rootMode = .main
         childCoordinators.removeAll()
-        let tabCoordinator = TabCoordinator()
         tabCoordinator.didRequestLogout = { [weak self] in
             self?.removeChild(tabCoordinator)
             self?.navigationController = UINavigationController()
@@ -283,5 +296,101 @@ final class AppCoordinator: Coordinator {
         navigationController = UINavigationController()
         rootMode = .unresolved
         showAuth()
+    }
+}
+
+// MARK: - App composition
+
+/// The only root-level factory for the current three-tab private UI. It captures
+/// the account lease, lifecycle generation and release-policy authority once at
+/// the root boundary before handing construction to feature factories.
+@MainActor
+final class AppComposition {
+    private let featureFactory: AppFeatureFactory
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let releasePolicyAuthorityEpochProvider: () -> String
+
+    init(
+        featureFactory: AppFeatureFactory? = nil,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        releasePolicyAuthorityEpochProvider: @escaping () -> String = {
+            RecoveryRuntimePolicyStore.shared.currentPolicy.authorityEpoch
+        }
+    ) {
+        self.featureFactory = featureFactory ?? AppFeatureFactory()
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.releasePolicyAuthorityEpochProvider = releasePolicyAuthorityEpochProvider
+    }
+
+    func makeTabCoordinator(
+        accountSession: AccountSession,
+        lifecycleGeneration: UInt64
+    ) -> TabCoordinator? {
+        guard accountSession.state == .active,
+              let accountLease = accountLeaseRuntime.capture(
+                  forSubjectId: accountSession.subjectId
+              ),
+              accountLease.subjectId == accountSession.subjectId,
+              accountLease.vaultId == accountSession.vaultId,
+              accountLease.sessionId == accountSession.sessionId,
+              accountLeaseRuntime.validate(accountLease, at: .ui).allowed,
+              let runtimeContext = AppFeatureRuntimeContext(
+                  accountLease: accountLease,
+                  lifecycleGeneration: lifecycleGeneration,
+                  releasePolicyAuthorityEpoch: releasePolicyAuthorityEpochProvider()
+              ) else {
+            return nil
+        }
+        return featureFactory.makeTabCoordinator(runtimeContext: runtimeContext)
+    }
+}
+
+@MainActor
+final class AppFeatureFactory {
+    func makeTabCoordinator(runtimeContext: AppFeatureRuntimeContext) -> TabCoordinator {
+        TabCoordinator(runtimeContext: runtimeContext, featureFactory: self)
+    }
+
+    func makeArchiveNavigationController(
+        runtimeContext: AppFeatureRuntimeContext
+    ) -> UINavigationController {
+        makeNavigationController(
+            rootViewController: MemoryArchiveViewController(),
+            runtimeContext: runtimeContext
+        )
+    }
+
+    func makeEchoNavigationController(
+        runtimeContext: AppFeatureRuntimeContext
+    ) -> UINavigationController {
+        makeNavigationController(
+            rootViewController: EchoViewController(),
+            runtimeContext: runtimeContext
+        )
+    }
+
+    func makeProfileNavigationController(
+        runtimeContext: AppFeatureRuntimeContext,
+        didRequestLogout: @escaping () -> Void
+    ) -> UINavigationController {
+        let profileViewController = ProfileViewController()
+        profileViewController.didRequestLogout = didRequestLogout
+        return makeNavigationController(
+            rootViewController: profileViewController,
+            runtimeContext: runtimeContext
+        )
+    }
+
+    private func makeNavigationController(
+        rootViewController: UIViewController,
+        runtimeContext: AppFeatureRuntimeContext
+    ) -> UINavigationController {
+        precondition(
+            runtimeContext.lifecycleGeneration == runtimeContext.accountLease.generation,
+            "Feature construction must retain the active account lifecycle generation"
+        )
+        let navigationController = UINavigationController(rootViewController: rootViewController)
+        navigationController.navigationBar.tintColor = DJDesignTokens.Color.textPrimary
+        return navigationController
     }
 }
