@@ -173,8 +173,13 @@ struct MemoryArchiveItem: Codable, Identifiable {
         metadata = Self.metadataFromRemoteAnalysisContract(object, baseMetadata: metadata)
         metadata = Self.metadataFromRemoteTimeLetterContract(object, baseMetadata: metadata)
         metadata = Self.removingRemoteLocalMediaMetadata(metadata)
-        if (kind == .photo || kind == .text || kind == .timeLetter),
-           metadata[Self.backendSyncStateMetadataKey] == nil {
+        if kind == .photo {
+            metadata[Self.mediaUploadStatusMetadataKey] = ArchiveMediaUploadStatus.localOnly.rawValue
+            metadata.removeValue(forKey: Self.backendSyncStateMetadataKey)
+            metadata.removeValue(forKey: Self.backendSyncErrorMetadataKey)
+            metadata.removeValue(forKey: Self.backendSyncAttemptedAtMetadataKey)
+        } else if (kind == .text || kind == .timeLetter),
+                  metadata[Self.backendSyncStateMetadataKey] == nil {
             metadata[Self.backendSyncStateMetadataKey] = ArchiveBackendSyncState.synced.rawValue
         }
 
@@ -512,7 +517,17 @@ extension MemoryArchiveItem {
     }
 
     var isPublicBackendSyncEligible: Bool {
-        kind == .photo || kind == .text || kind == .timeLetter
+        kind == .text || kind == .timeLetter
+    }
+
+    func enforcingLocalOnlyPhotoTransferState() -> MemoryArchiveItem {
+        guard kind == .photo else { return self }
+        var updatedItem = self
+        updatedItem.metadata[Self.mediaUploadStatusMetadataKey] = ArchiveMediaUploadStatus.localOnly.rawValue
+        updatedItem.metadata.removeValue(forKey: Self.backendSyncStateMetadataKey)
+        updatedItem.metadata.removeValue(forKey: Self.backendSyncErrorMetadataKey)
+        updatedItem.metadata.removeValue(forKey: Self.backendSyncAttemptedAtMetadataKey)
+        return updatedItem
     }
 
     var isMediaUploadIntentEligible: Bool {

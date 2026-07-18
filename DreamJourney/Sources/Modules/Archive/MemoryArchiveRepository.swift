@@ -238,7 +238,7 @@ final class MemoryArchiveRepository {
             print("[Archive] rejected ownerless or mismatched local insert")
             return false
         }
-        let ownedItem = item
+        let ownedItem = item.enforcingLocalOnlyPhotoTransferState()
         let shouldAttemptBackendSync = shouldSyncToBackend
             && ownedItem.isPublicBackendSyncEligible
             && DreamJourneyBackendClient.shared.isArchiveSyncConfigured
@@ -251,7 +251,7 @@ final class MemoryArchiveRepository {
             return false
         }
         scheduleTimeLetterReminderIfNeeded(itemForStorage)
-        if shouldSyncToBackend {
+        if shouldAttemptBackendSync {
             syncToBackend(itemForStorage, lease: lease)
         }
         return true
@@ -265,7 +265,7 @@ final class MemoryArchiveRepository {
             print("[Archive] rejected ownerless or mismatched local update")
             return false
         }
-        let ownedItem = item
+        let ownedItem = item.enforcingLocalOnlyPhotoTransferState()
         let shouldAttemptBackendSync = shouldSyncToBackend
             && ownedItem.isPublicBackendSyncEligible
             && DreamJourneyBackendClient.shared.isArchiveSyncConfigured
@@ -285,7 +285,7 @@ final class MemoryArchiveRepository {
             scope: lease.storageScope
         )
         scheduleTimeLetterReminderIfNeeded(itemForStorage)
-        if shouldSyncToBackend {
+        if shouldAttemptBackendSync {
             syncToBackend(itemForStorage, lease: lease)
         }
         return true
@@ -1266,6 +1266,12 @@ final class MemoryArchiveRepository {
         lease: ArchiveStorageLease
     ) {
         guard DreamJourneyBackendClient.shared.isArchiveSyncConfigured else {
+            return
+        }
+
+        // Media files remain device-local until a dedicated upload authority
+        // is introduced. Do not let a future direct caller bypass add/update.
+        guard item.isPublicBackendSyncEligible else {
             return
         }
 
