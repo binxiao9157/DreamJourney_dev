@@ -723,34 +723,44 @@ private extension AppDelegate {
     }
 
     func runEchoDelayedReplyNotificationSmoke() {
-        EchoDelayedReplyStore.shared.clear()
+        guard let userId = UserManager.shared.currentUser?.id,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: userId),
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+            print("[UI_QA] EchoDelayedReplyNotificationSmoke failed reason=accountLeaseUnavailable")
+            return
+        }
+        let resourceOwnerId = accountLease.subjectId
+        let roleContextKey = "uiqa-echo-delayed-reply-role"
 
         let viewModel = EchoViewModel()
         for turn in 1..<EchoReplyPacingPolicy.waitAfterUserTurnCount {
             viewModel.beginVoiceInteraction()
-            viewModel.finishUserVoice(text: "第 \(turn) 次想起爸爸小时候的故事")
+            viewModel.finishUserVoice(
+                text: "第 \(turn) 次想起爸爸小时候的故事",
+                accountLease: accountLease,
+                resourceOwnerId: resourceOwnerId,
+                roleContextKey: roleContextKey
+            )
             viewModel.receiveAIReply("我在听，慢慢说。")
         }
         viewModel.beginVoiceInteraction()
-        viewModel.finishUserVoice(text: "第十次想起这件事")
+        viewModel.finishUserVoice(
+            text: "第十次想起这件事",
+            accountLease: accountLease,
+            resourceOwnerId: resourceOwnerId,
+            roleContextKey: roleContextKey
+        )
 
         let delayedReply = viewModel.pendingDelayedReply
-        let storedReply = EchoDelayedReplyStore.shared.load()
         let delayMinutesInRange = delayedReply.map {
             EchoReplyPacingPolicy.replyDelayMinuteRange.contains($0.minutes)
         } ?? false
-        let storedDelayedReply = delayedReply != nil
-            && storedReply?.id == delayedReply?.id
-            && storedReply?.userTurnCount == delayedReply?.userTurnCount
-            && storedReply?.trigger == delayedReply?.trigger
-        let localNotificationContractPresent =
-            EchoDelayedReplyNotificationScheduler.notificationIdentifier == "dj.echo.delayedReply"
         guard let delayedReply else {
             writeEchoDelayedReplyNotificationSmokeResult(
                 completed: false,
                 delayMinutesInRange: delayMinutesInRange,
-                storedDelayedReply: storedDelayedReply,
-                localNotificationContractPresent: localNotificationContractPresent,
+                storedDelayedReply: false,
+                localNotificationContractPresent: false,
                 restoredWaitingState: false,
                 restoredWaitingMinutes: 0,
                 restoredWaitingMinutesInRange: false,
@@ -769,9 +779,48 @@ private extension AppDelegate {
             print("[UI_QA] EchoDelayedReplyNotificationSmoke failed reason=missingDelayedReply")
             return
         }
+        guard let callsiteContext = viewModel.pendingDelayedReplyContext,
+              callsiteContext.accountLease == accountLease,
+              callsiteContext.resourceOwnerId == resourceOwnerId,
+              callsiteContext.operationId == delayedReply.id,
+              callsiteContext.roleContextKey == roleContextKey else {
+            print("[UI_QA] EchoDelayedReplyNotificationSmoke failed reason=missingCallsiteContext")
+            return
+        }
+        let notificationOperationId = callsiteContext.operationId
+        let storedReply = EchoDelayedReplyStore.shared.load(
+            resourceOwnerId: callsiteContext.resourceOwnerId,
+            operationId: callsiteContext.operationId,
+            accountLease: callsiteContext.accountLease
+        )
+        let storedDelayedReply = storedReply?.id == delayedReply.id
+            && storedReply?.userTurnCount == delayedReply.userTurnCount
+            && storedReply?.trigger == delayedReply.trigger
+        let rawNotificationMetadataValues = [
+            accountLease.subjectId,
+            accountLease.vaultId,
+            accountLease.sessionId,
+            accountLease.authorityEpoch,
+            accountLease.generationId.uuidString,
+            resourceOwnerId,
+            delayedReply.id,
+            notificationOperationId,
+        ].filter { !$0.isEmpty }
+        let expectedNotificationIdentifier = EchoDelayedReplyNotificationScheduler.notificationIdentifier(
+            resourceOwnerId: resourceOwnerId,
+            operationId: notificationOperationId,
+            accountLease: accountLease
+        )
+        let localNotificationContractPresent = expectedNotificationIdentifier.map { identifier in
+            identifier.hasPrefix("dj.echo.delayedReply.")
+                && !rawNotificationMetadataValues.contains { identifier.contains($0) }
+        } ?? false
 
         let restoreViewModel = EchoViewModel()
         let restoredWaitingState = restoreViewModel.restoreStoredDelayedReplyIfAvailable(
+            accountLease: accountLease,
+            resourceOwnerId: resourceOwnerId,
+            roleContextKey: roleContextKey,
             now: delayedReply.scheduledAt.addingTimeInterval(60)
         ) && restoreViewModel.isWaitingForDelayedReply
         let restoredWaitingMinutes: Int
@@ -785,16 +834,24 @@ private extension AppDelegate {
         let restoredDelayedReplyIdMatched = restoreViewModel.pendingDelayedReply?.id == delayedReply.id
 
         let expiredDelayedReply = EchoDelayedReply(
-            id: "expired-\(delayedReply.id)",
+            id: delayedReply.id,
             scheduledAt: delayedReply.scheduledAt.addingTimeInterval(-600),
             deliverAt: delayedReply.scheduledAt.addingTimeInterval(-60),
             minutes: delayedReply.minutes,
             userTurnCount: delayedReply.userTurnCount,
             trigger: delayedReply.trigger
         )
-        _ = EchoDelayedReplyStore.shared.save(expiredDelayedReply)
+        _ = EchoDelayedReplyStore.shared.save(
+            expiredDelayedReply,
+            resourceOwnerId: callsiteContext.resourceOwnerId,
+            operationId: callsiteContext.operationId,
+            accountLease: callsiteContext.accountLease
+        )
         let expiredViewModel = EchoViewModel()
         let expiredDelayedReplyHandled = expiredViewModel.restoreStoredDelayedReplyIfAvailable(
+            accountLease: accountLease,
+            resourceOwnerId: resourceOwnerId,
+            roleContextKey: roleContextKey,
             now: delayedReply.scheduledAt
         )
         let expiredDelayedReplyArrived: Bool
@@ -803,8 +860,29 @@ private extension AppDelegate {
         } else {
             expiredDelayedReplyArrived = false
         }
-        let expiredDelayedReplyCleared = EchoDelayedReplyStore.shared.load() == nil
-        _ = EchoDelayedReplyStore.shared.save(delayedReply)
+        let expiredDelayedReplyCleared = EchoDelayedReplyStore.shared.load(
+            resourceOwnerId: callsiteContext.resourceOwnerId,
+            operationId: callsiteContext.operationId,
+            accountLease: callsiteContext.accountLease
+        ) == nil
+            && EchoDelayedReplyCallsiteScopeStore().load(
+                accountLease: accountLease,
+                resourceOwnerId: resourceOwnerId,
+                roleContextKey: roleContextKey
+            ) == nil
+        _ = EchoReplyMessageStore.shared.removeArrivedReply(
+            id: notificationOperationId,
+            accountLease: accountLease,
+            resourceOwnerId: resourceOwnerId,
+            operationId: notificationOperationId
+        )
+        _ = EchoDelayedReplyStore.shared.save(
+            delayedReply,
+            resourceOwnerId: callsiteContext.resourceOwnerId,
+            operationId: callsiteContext.operationId,
+            accountLease: callsiteContext.accountLease
+        )
+        _ = EchoDelayedReplyCallsiteScopeStore().save(callsiteContext)
 
         let authorizationOptions: UNAuthorizationOptions = [.alert, .sound, .badge, .provisional]
         UNUserNotificationCenter.current().requestAuthorization(options: authorizationOptions) { [weak self] granted, _ in
@@ -833,14 +911,20 @@ private extension AppDelegate {
                 return
             }
 
-            EchoDelayedReplyNotificationScheduler.shared.schedule(delayedReply) { scheduleError in
+            EchoDelayedReplyNotificationScheduler.shared.schedule(
+                delayedReply,
+                resourceOwnerId: resourceOwnerId,
+                operationId: notificationOperationId,
+                accountLease: accountLease
+            ) { scheduleError in
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
-                        let pendingRequest = requests.first {
-                            $0.identifier == EchoDelayedReplyNotificationScheduler.notificationIdentifier
+                        let pendingRequest = expectedNotificationIdentifier.flatMap { identifier in
+                            requests.first { $0.identifier == identifier }
                         }
-                        let pendingNotificationIdentifierMatched = pendingRequest?.identifier
-                            == EchoDelayedReplyNotificationScheduler.notificationIdentifier
+                        let pendingNotificationIdentifierMatched = expectedNotificationIdentifier.map {
+                            pendingRequest?.identifier == $0
+                        } ?? false
                         let pendingNotificationTriggerMatched: Bool
                         if let trigger = pendingRequest?.trigger as? UNTimeIntervalNotificationTrigger {
                             pendingNotificationTriggerMatched = !trigger.repeats
@@ -848,10 +932,77 @@ private extension AppDelegate {
                         } else {
                             pendingNotificationTriggerMatched = false
                         }
-                        let pendingNotificationUserInfoMatched = pendingRequest?.content.userInfo["type"] as? String
+                        let userInfo = pendingRequest?.content.userInfo ?? [:]
+                        let expectedSubjectIdentity = EchoDelayedReplyOperationScope.identityDigest(
+                            values: ["subject", accountLease.subjectId]
+                        )
+                        let expectedGenerationIdentity = EchoDelayedReplyOperationScope.identityDigest(
+                            values: ["generation-id", accountLease.generationId.uuidString]
+                        )
+                        let expectedVaultIdentity = EchoDelayedReplyOperationScope.identityDigest(
+                            values: ["vault", accountLease.vaultId]
+                        )
+                        let expectedAuthorityEpochIdentity = EchoDelayedReplyOperationScope.identityDigest(
+                            values: ["authority-epoch", accountLease.authorityEpoch]
+                        )
+                        let expectedResourceOwnerIdentity = EchoDelayedReplyOperationScope.identityDigest(
+                            values: ["resource-owner", resourceOwnerId]
+                        )
+                        let expectedOperationIdentity = EchoDelayedReplyOperationScope.identityDigest(
+                            values: ["operation", notificationOperationId]
+                        )
+                        let expectedNotificationUserInfoKeys: Set<String> = [
+                            "type",
+                            "trigger",
+                            "accountSubjectIdentity",
+                            "accountLeaseGeneration",
+                            "accountLeaseGenerationIdentity",
+                            "accountLeaseVaultIdentity",
+                            "accountLeaseAuthorityEpochIdentity",
+                            "resourceOwnerIdentity",
+                            "operationIdentity",
+                        ]
+                        let notificationUserInfoKeys = Set(
+                            userInfo.keys.compactMap { $0 as? String }
+                        )
+                        let rawNotificationMetadataKeys: Set<String> = [
+                            "subjectId",
+                            "vaultId",
+                            "sessionId",
+                            "authorityEpoch",
+                            "generationId",
+                            "accountLeaseGenerationId",
+                            "resourceOwnerId",
+                            "delayedReplyId",
+                            "operationId",
+                        ]
+                        let rawNotificationFieldsAbsent = rawNotificationMetadataKeys.isDisjoint(
+                            with: notificationUserInfoKeys
+                        )
+                        let containsRawNotificationMetadata = userInfo.contains { key, value in
+                            rawNotificationMetadataValues.contains { rawValue in
+                                String(describing: key).contains(rawValue)
+                                    || String(describing: value).contains(rawValue)
+                            }
+                        }
+                        let pendingNotificationUserInfoMatched = userInfo["type"] as? String
                             == "echoDelayedReply"
-                            && pendingRequest?.content.userInfo["delayedReplyId"] as? String == delayedReply.id
-                            && pendingRequest?.content.userInfo["trigger"] as? String == delayedReply.trigger.rawValue
+                            && userInfo["trigger"] as? String == delayedReply.trigger.rawValue
+                            && userInfo["accountSubjectIdentity"] as? String == expectedSubjectIdentity
+                            && (userInfo["accountLeaseGeneration"] as? NSNumber)?.uint64Value
+                                == accountLease.generation
+                            && userInfo["accountLeaseGenerationIdentity"] as? String
+                                == expectedGenerationIdentity
+                            && userInfo["accountLeaseVaultIdentity"] as? String == expectedVaultIdentity
+                            && userInfo["accountLeaseAuthorityEpochIdentity"] as? String
+                                == expectedAuthorityEpochIdentity
+                            && userInfo["resourceOwnerIdentity"] as? String
+                                == expectedResourceOwnerIdentity
+                            && userInfo["operationIdentity"] as? String == expectedOperationIdentity
+                            && notificationUserInfoKeys == expectedNotificationUserInfoKeys
+                            && notificationUserInfoKeys.count == userInfo.count
+                            && rawNotificationFieldsAbsent
+                            && !containsRawNotificationMetadata
                         let pendingNotificationMatched = pendingNotificationIdentifierMatched
                             && pendingNotificationTriggerMatched
                             && pendingNotificationUserInfoMatched
@@ -2470,11 +2621,24 @@ private extension AppDelegate {
     }
 
     func runTimeLetterDispatchReminderSmoke() {
-        let userId = UserManager.shared.currentUser?.id ?? "user_001"
+        guard let userId = UserManager.shared.currentUser?.id,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: userId),
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+            writeTimeLetterDispatchReminderSmokeResult([
+                "completed": false,
+                "failureReason": "accountLeaseUnavailable",
+            ])
+            print("[UI_QA] TimeLetterDispatchReminderSmoke failed reason=accountLeaseUnavailable")
+            return
+        }
+        let resourceOwnerId = accountLease.subjectId
+        let messageOperationId = "time-letter-dispatch-reminder-uiqa"
         UserDefaults.standard.removeObject(forKey: "dj.memoryArchive.items.\(userId)")
-        UserDefaults.standard.removeObject(forKey: "dj.memoryArchive.timeLetterMailbox.\(userId)")
-        UserDefaults.standard.removeObject(forKey: "dj.inAppMessage.localState.\(userId)")
-        EchoReplyMessageStore.shared.clear()
+        _ = EchoReplyMessageStore.shared.clear(
+            accountLease: accountLease,
+            resourceOwnerId: resourceOwnerId,
+            operationId: messageOperationId
+        )
 
         var deliveredLetter = MemoryArchiveItemFactory.makeTimeLetter(
             note: "这封信已由后端投递，不应再被本地 due 计数重复计算。",
@@ -2528,10 +2692,15 @@ private extension AppDelegate {
             "metadataOnly": true,
             "contentRedacted": true,
         ])
-        if let reminder,
-           let secondReminder,
-           let data = try? JSONEncoder().encode([reminder, secondReminder]) {
-            UserDefaults.standard.set(data, forKey: "dj.memoryArchive.timeLetterMailbox.\(userId)")
+        let mailboxFixtureInjectionSucceeded: Bool
+        if let reminder, let secondReminder {
+            mailboxFixtureInjectionSucceeded = MemoryArchiveRepository.shared
+                .replaceCachedTimeLetterMailboxReminders(
+                    [reminder, secondReminder],
+                    accountLease: accountLease
+                )
+        } else {
+            mailboxFixtureInjectionSucceeded = false
         }
 
         let pendingFamilyMember = FamilyMember(
@@ -2622,7 +2791,8 @@ private extension AppDelegate {
                 systemNoticeStatus: "published",
                 systemNoticeCategory: "maintenance",
                 systemNoticeSeverity: "info",
-                systemNoticeUpdatedAt: now
+                systemNoticeUpdatedAt: now,
+                resourceOwnerId: resourceOwnerId
             ),
             StaticSystemNoticeMessageSource(
                 systemNoticeId: "system-notice-draft-uiqa",
@@ -2631,26 +2801,36 @@ private extension AppDelegate {
                 systemNoticeStatus: "draft",
                 systemNoticeCategory: "debug",
                 systemNoticeSeverity: "info",
-                systemNoticeUpdatedAt: now
+                systemNoticeUpdatedAt: now,
+                resourceOwnerId: resourceOwnerId
             ),
         ]
-        EchoReplyMessageStore.shared.save([
+        let echoReplySaved = EchoReplyMessageStore.shared.save([
             StaticEchoReplyMessageSource(
                 echoReplyId: "echo-delayed-reply-uiqa",
                 echoReplyTitle: "回响回信已抵达",
                 echoReplySummary: "之前等待的回响已经准备好，可以继续对话。",
                 echoReplyStatus: "unread",
                 echoReplyDeliveredAt: now,
-                echoReplyTrigger: "contentSignal"
+                echoReplyTrigger: "contentSignal",
+                resourceOwnerId: resourceOwnerId
             ),
-        ])
+        ], accountLease: accountLease,
+           resourceOwnerId: resourceOwnerId,
+           operationId: messageOperationId)
+        let echoReplySources = EchoReplyMessageStore.shared.sources(
+            accountLease: accountLease,
+            resourceOwnerId: resourceOwnerId,
+            operationId: messageOperationId
+        )
 
         let dueLetters = MemoryArchiveRepository.shared.dueTimeLetters()
         let mailboxReminders = MemoryArchiveRepository.shared.timeLetterMailboxReminders()
         let inAppMessageSnapshot = MemoryArchiveRepository.shared.inAppMessageCenterSnapshot(
+            accountLease: accountLease,
             familyInvitationSources: familyInvitationSources,
             careSignalSources: careSignalSources,
-            echoReplySources: EchoReplyMessageStore.shared.sources(),
+            echoReplySources: echoReplySources,
             systemNoticeSources: systemNoticeSources
         )
         let reminderCount = MemoryArchiveRepository.shared.timeLetterReminderCount()
@@ -2689,9 +2869,10 @@ private extension AppDelegate {
         }
         let remindersAfterArchive = MemoryArchiveRepository.shared.timeLetterMailboxReminders()
         let inAppMessageSnapshotAfterArchive = MemoryArchiveRepository.shared.inAppMessageCenterSnapshot(
+            accountLease: accountLease,
             familyInvitationSources: familyInvitationSources,
             careSignalSources: careSignalSources,
-            echoReplySources: EchoReplyMessageStore.shared.sources(),
+            echoReplySources: echoReplySources,
             systemNoticeSources: systemNoticeSources
         )
         let familyInvitationMessageCount = inAppMessageSnapshot.sourceCounts["familyInvitation"] ?? 0
@@ -2708,6 +2889,7 @@ private extension AppDelegate {
         let reminderCountAfterArchive = MemoryArchiveRepository.shared.timeLetterReminderCount()
         let completed = reminder != nil
             && secondReminder != nil
+            && mailboxFixtureInjectionSucceeded
             && restoredDelivered?.timeLetterDeliveryStatus == "delivered"
             && restoredDelivered?.isTimeLetterDelivered == true
             && dueLetters.contains(where: { $0.id == deliveredLetter.id }) == false
@@ -2719,6 +2901,7 @@ private extension AppDelegate {
             && familyInvitationMessageCount == 2
             && careSignalMessageCount == 3
             && systemNoticeMessageCount == 1
+            && echoReplySaved
             && echoReplyMessageCount == 1
             && inAppMessageCenterEntryTitle == "9 条消息待处理 · 查看"
             && reminderCount == 2
@@ -2743,6 +2926,7 @@ private extension AppDelegate {
             "dueLetterIds": dueLetters.map(\.id),
             "mailboxReminderIds": mailboxReminders.map(\.id),
             "mailboxSourceArchiveItemIds": mailboxReminders.map(\.sourceArchiveItemId),
+            "mailboxFixtureInjectionSucceeded": mailboxFixtureInjectionSucceeded,
             "inAppMessageCenterKindCounts": inAppMessageSnapshot.sourceCounts,
             "inAppMessageCenterEntryTitle": inAppMessageCenterEntryTitle,
             "inAppMessageCenterUnreadCount": inAppMessageSnapshot.unreadCount,
@@ -2753,6 +2937,7 @@ private extension AppDelegate {
             "careNormalSignalExcluded": inAppMessageSnapshot.messages.contains { $0.careSignalId == "care-signal-normal-uiqa" } == false,
             "systemNoticeMessageCount": systemNoticeMessageCount,
             "systemDraftNoticeExcluded": inAppMessageSnapshot.messages.contains { $0.systemNoticeId == "system-notice-draft-uiqa" } == false,
+            "echoReplyOwnerScopedSaveSucceeded": echoReplySaved,
             "echoReplyMessageCount": echoReplyMessageCount,
             "reminderCount": reminderCount,
             "timeLetterReminderDetailResolved": reminderDetailResolved,

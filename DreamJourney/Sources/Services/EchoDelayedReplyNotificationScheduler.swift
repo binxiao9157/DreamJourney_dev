@@ -226,11 +226,12 @@ final class EchoDelayedReplyNotificationScheduler: @unchecked Sendable {
         content.sound = .default
         content.userInfo = [
             "type": "echoDelayedReply",
-            "delayedReplyId": delayedReply.id,
             "trigger": delayedReply.trigger.rawValue,
             "accountSubjectIdentity": scope.subjectIdentity,
             "accountLeaseGeneration": NSNumber(value: scope.accountLease.generation),
-            "accountLeaseGenerationId": scope.accountLease.generationId.uuidString,
+            "accountLeaseGenerationIdentity": Self.generationIdentity(
+                for: scope.accountLease
+            ),
             "accountLeaseVaultIdentity": scope.vaultIdentity,
             "accountLeaseAuthorityEpochIdentity": scope.authorityEpochIdentity,
             "resourceOwnerIdentity": scope.resourceOwnerIdentity,
@@ -253,6 +254,12 @@ final class EchoDelayedReplyNotificationScheduler: @unchecked Sendable {
     ) {
         guard accountLeaseRuntime.validate(scope.accountLease, at: .ui).allowed else { return }
         completion(granted)
+    }
+
+    private static func generationIdentity(for accountLease: AccountLease) -> String {
+        EchoDelayedReplyOperationScope.identityDigest(
+            values: ["generation-id", accountLease.generationId.uuidString]
+        )
     }
 
     private func removeStaleRequestIfOwned(scope: EchoDelayedReplyOperationScope) {
@@ -346,8 +353,8 @@ final class EchoDelayedReplyNotificationScheduler: @unchecked Sendable {
                 )
             && (userInfo["accountLeaseGeneration"] as? NSNumber)?.uint64Value
                 == accountLease.generation
-            && userInfo["accountLeaseGenerationId"] as? String
-                == accountLease.generationId.uuidString
+            && userInfo["accountLeaseGenerationIdentity"] as? String
+                == Self.generationIdentity(for: accountLease)
             && userInfo["accountLeaseAuthorityEpochIdentity"] as? String
                 == EchoDelayedReplyOperationScope.identityDigest(
                     values: ["authority-epoch", accountLease.authorityEpoch]

@@ -269,14 +269,20 @@ private enum EchoDelayedReplyOwnerScopeModelSmoke {
         let identifierA = requireIdentifier(
             lease: leaseA,
             owner: leaseA.subjectId,
+            delayedReplyId: delayedReply.id,
             operationId: operationId
         )
         guard let requestA = requestCenter.requests[identifierA] else {
             fatalError("account A notification was not staged")
         }
         require(identifierA != EchoDelayedReplyNotificationScheduler.notificationIdentifier, "identifier must be scoped")
-        require(!identifierA.contains(leaseA.subjectId), "identifier must not expose raw subject")
-        try verifyUserInfo(requestA.content.userInfo, lease: leaseA)
+        try verifyUserInfo(
+            requestA.content.userInfo,
+            lease: leaseA,
+            resourceOwnerId: leaseA.subjectId,
+            delayedReply: delayedReply,
+            operationId: operationId
+        )
 
         runtime.activeLease = leaseB
         scheduler.schedule(
@@ -288,6 +294,7 @@ private enum EchoDelayedReplyOwnerScopeModelSmoke {
         let identifierB = requireIdentifier(
             lease: leaseB,
             owner: leaseB.subjectId,
+            delayedReplyId: delayedReply.id,
             operationId: operationId
         )
         require(identifierA != identifierB, "A/B same reply id must use different notification identifiers")
@@ -318,6 +325,7 @@ private enum EchoDelayedReplyOwnerScopeModelSmoke {
         let identifierANext = requireIdentifier(
             lease: leaseANext,
             owner: leaseANext.subjectId,
+            delayedReplyId: delayedReply.id,
             operationId: operationId
         )
         require(identifierANext != identifierA, "new generation must rotate notification identifier")
@@ -364,30 +372,107 @@ private enum EchoDelayedReplyOwnerScopeModelSmoke {
 
     private static func verifyUserInfo(
         _ userInfo: [AnyHashable: Any],
-        lease: AccountLease
+        lease: AccountLease,
+        resourceOwnerId: String,
+        delayedReply: EchoDelayedReply,
+        operationId: String
     ) throws {
+        let expectedKeys: Set<String> = [
+            "type",
+            "trigger",
+            "accountSubjectIdentity",
+            "accountLeaseGeneration",
+            "accountLeaseGenerationIdentity",
+            "accountLeaseVaultIdentity",
+            "accountLeaseAuthorityEpochIdentity",
+            "resourceOwnerIdentity",
+            "operationIdentity",
+        ]
+        let actualKeys = Set(userInfo.keys.compactMap { $0 as? String })
+        require(
+            actualKeys == expectedKeys && actualKeys.count == userInfo.count,
+            "notification userInfo must contain only the metadata allowlist"
+        )
+        require(userInfo["type"] as? String == "echoDelayedReply", "notification type mismatch")
+        require(
+            userInfo["trigger"] as? String == delayedReply.trigger.rawValue,
+            "notification trigger mismatch"
+        )
+        require(
+            userInfo["accountSubjectIdentity"] as? String
+                == EchoDelayedReplyOperationScope.identityDigest(
+                    values: ["subject", lease.subjectId]
+                ),
+            "notification subject identity digest mismatch"
+        )
         require(
             (userInfo["accountLeaseGeneration"] as? NSNumber)?.uint64Value == lease.generation,
             "notification generation metadata mismatch"
         )
         require(
-            userInfo["accountLeaseGenerationId"] as? String == lease.generationId.uuidString,
-            "notification generation id metadata mismatch"
+            userInfo["accountLeaseGenerationIdentity"] as? String
+                == EchoDelayedReplyOperationScope.identityDigest(
+                    values: ["generation-id", lease.generationId.uuidString]
+                ),
+            "notification generation identity digest mismatch"
         )
-        for key in [
-            "accountLeaseVaultIdentity",
-            "accountLeaseAuthorityEpochIdentity",
-            "resourceOwnerIdentity",
-            "operationIdentity"
-        ] {
-            require(!(userInfo[key] as? String ?? "").isEmpty, "notification identity metadata missing: \(key)")
-        }
+        require(
+            userInfo["accountLeaseVaultIdentity"] as? String
+                == EchoDelayedReplyOperationScope.identityDigest(
+                    values: ["vault", lease.vaultId]
+                ),
+            "notification vault identity digest mismatch"
+        )
+        require(
+            userInfo["accountLeaseAuthorityEpochIdentity"] as? String
+                == EchoDelayedReplyOperationScope.identityDigest(
+                    values: ["authority-epoch", lease.authorityEpoch]
+                ),
+            "notification authority identity digest mismatch"
+        )
+        require(
+            userInfo["resourceOwnerIdentity"] as? String
+                == EchoDelayedReplyOperationScope.identityDigest(
+                    values: ["resource-owner", resourceOwnerId]
+                ),
+            "notification resource owner identity digest mismatch"
+        )
+        require(
+            userInfo["operationIdentity"] as? String
+                == EchoDelayedReplyOperationScope.identityDigest(
+                    values: ["operation", operationId]
+                ),
+            "notification operation identity digest mismatch"
+        )
+        let rawMetadataKeys: Set<String> = [
+            "subjectId",
+            "vaultId",
+            "sessionId",
+            "authorityEpoch",
+            "generationId",
+            "accountLeaseGenerationId",
+            "resourceOwnerId",
+            "delayedReplyId",
+            "operationId",
+        ]
+        require(
+            rawMetadataKeys.isDisjoint(with: actualKeys),
+            "notification userInfo exposed a raw metadata field"
+        )
+        let rawValues = rawNotificationMetadataValues(
+            lease: lease,
+            resourceOwnerId: resourceOwnerId,
+            delayedReplyId: delayedReply.id,
+            operationId: operationId
+        )
         for (key, value) in userInfo {
-            require(
-                !String(describing: key).contains(lease.subjectId)
-                    && !String(describing: value).contains(lease.subjectId),
-                "notification userInfo exposed raw subject"
-            )
+            for rawValue in rawValues {
+                require(
+                    !String(describing: key).contains(rawValue)
+                        && !String(describing: value).contains(rawValue),
+                    "notification userInfo exposed raw identity or operation metadata"
+                )
+            }
         }
     }
 
@@ -409,6 +494,7 @@ private enum EchoDelayedReplyOwnerScopeModelSmoke {
     private static func requireIdentifier(
         lease: AccountLease,
         owner: String,
+        delayedReplyId: String,
         operationId: String
     ) -> String {
         guard let identifier = EchoDelayedReplyNotificationScheduler.notificationIdentifier(
@@ -418,7 +504,36 @@ private enum EchoDelayedReplyOwnerScopeModelSmoke {
         ) else {
             fatalError("expected a valid notification identifier")
         }
+        for rawValue in rawNotificationMetadataValues(
+            lease: lease,
+            resourceOwnerId: owner,
+            delayedReplyId: delayedReplyId,
+            operationId: operationId
+        ) {
+            require(
+                !identifier.contains(rawValue),
+                "notification identifier exposed raw identity or operation metadata"
+            )
+        }
         return identifier
+    }
+
+    private static func rawNotificationMetadataValues(
+        lease: AccountLease,
+        resourceOwnerId: String,
+        delayedReplyId: String,
+        operationId: String
+    ) -> [String] {
+        [
+            lease.subjectId,
+            lease.vaultId,
+            lease.sessionId,
+            lease.authorityEpoch,
+            lease.generationId.uuidString,
+            resourceOwnerId,
+            delayedReplyId,
+            operationId,
+        ].filter { !$0.isEmpty }
     }
 
     private static func makeLease(

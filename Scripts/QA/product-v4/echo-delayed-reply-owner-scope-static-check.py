@@ -126,18 +126,59 @@ def main() -> None:
 
     request_builder = body_after(scheduler, "func makeRequest(")
     for metadata_key in (
+        '"type"',
+        '"trigger"',
+        '"accountSubjectIdentity"',
         '"accountLeaseGeneration"',
-        '"accountLeaseGenerationId"',
+        '"accountLeaseGenerationIdentity"',
         '"accountLeaseVaultIdentity"',
         '"accountLeaseAuthorityEpochIdentity"',
         '"resourceOwnerIdentity"',
         '"operationIdentity"',
     ):
         require(metadata_key in request_builder, f"notification metadata missing: {metadata_key}")
-    require('"subjectId"' not in request_builder, "notification userInfo must not expose raw subject")
+    for raw_metadata_key in (
+        '"subjectId"',
+        '"vaultId"',
+        '"sessionId"',
+        '"authorityEpoch"',
+        '"generationId"',
+        '"accountLeaseGenerationId"',
+        '"resourceOwnerId"',
+        '"delayedReplyId"',
+        '"operationId"',
+    ):
+        require(
+            raw_metadata_key not in request_builder,
+            f"notification userInfo must reject raw metadata field: {raw_metadata_key}",
+        )
+    require(
+        "delayedReply.id" not in request_builder,
+        "notification userInfo must not serialize the raw delayed-reply operation",
+    )
+    generation_identity = body_after(scheduler, "static func generationIdentity(")
+    require(
+        "EchoDelayedReplyOperationScope.identityDigest(" in generation_identity
+        and "accountLease.generationId.uuidString" in generation_identity,
+        "generation UUID metadata must be represented only by its one-way identity digest",
+    )
     require(
         "scope.notificationIdentifier" in request_builder,
         "notification request identifier must come from the owner/generation scope",
+    )
+
+    owner_match = body_after(
+        scheduler,
+        "private func requestIsOwned(\n        _ request: UNNotificationRequest,\n        by accountLease",
+    )
+    require(
+        'userInfo["accountLeaseGenerationIdentity"] as? String' in owner_match
+        and "Self.generationIdentity(for: accountLease)" in owner_match,
+        "notification ownership queries must compare the generation UUID digest",
+    )
+    require(
+        'userInfo["accountLeaseGenerationId"]' not in owner_match,
+        "notification ownership queries must not depend on a raw generation UUID field",
     )
 
     stale_callback = body_after(scheduler, "requestCenter.add(request)")

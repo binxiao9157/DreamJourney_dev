@@ -771,7 +771,16 @@ final class EchoViewController: UIViewController {
         updatePersonaBadge()
         loadVoiceCloneRuntimeCapabilityIfNeeded()
         seedTranscriptPreview()
-        if !viewModel.restoreStoredDelayedReplyIfAvailable() {
+        let restoredDelayedReply = accountLease.map {
+            viewModel.restoreStoredDelayedReplyIfAvailable(
+                accountLease: $0,
+                resourceOwnerId: $0.subjectId,
+                roleContextKey: digitalHumanRuntimeContextKey(
+                    for: DigitalHumanContextStore.shared.current
+                )
+            )
+        } ?? false
+        if !restoredDelayedReply {
             render(state: .idle)
         }
         renderArchiveContextStatus(viewModel.archiveContextStatus)
@@ -828,7 +837,7 @@ final class EchoViewController: UIViewController {
                 DialogEngineManager.shared.stopDialog()
                 flushPendingAIReplyIfNeeded()
                 ConversationMemoryManager.shared.endSession()
-                viewModel.resetToIdle()
+                resetEchoViewModelToIdle()
             }
         }
         releaseDigitalHumanRuntime(reason: "viewWillDisappear", resetsAudioOwnerToOrdinaryEcho: true)
@@ -1186,7 +1195,15 @@ final class EchoViewController: UIViewController {
             return
         }
         viewModel.resetTransientStateForAccountRebind()
-        _ = viewModel.restoreStoredDelayedReplyIfAvailable()
+        if let accountLease {
+            _ = viewModel.restoreStoredDelayedReplyIfAvailable(
+                accountLease: accountLease,
+                resourceOwnerId: accountLease.subjectId,
+                roleContextKey: digitalHumanRuntimeContextKey(
+                    for: DigitalHumanContextStore.shared.current
+                )
+            )
+        }
         seedTranscriptPreview()
         if view.window != nil,
            bindDialogEngineToEchoAccountLease(reason: reason) {
@@ -1208,6 +1225,16 @@ final class EchoViewController: UIViewController {
         }
         guard validateEchoAccountLease(at: .ui, reason: "digitalHumanContextDidChange") else {
             return
+        }
+        viewModel.resetTransientStateForAccountRebind()
+        if let echoAccountLease {
+            _ = viewModel.restoreStoredDelayedReplyIfAvailable(
+                accountLease: echoAccountLease,
+                resourceOwnerId: echoAccountLease.subjectId,
+                roleContextKey: digitalHumanRuntimeContextKey(
+                    for: DigitalHumanContextStore.shared.current
+                )
+            )
         }
         let didReleaseStaleRuntime = reconcileDigitalHumanRuntimeWithCurrentContext(reason: "contextDidChange")
         viewModel.refreshArchiveContextStatus()
@@ -1462,7 +1489,7 @@ final class EchoViewController: UIViewController {
     }
 
     private func resetToLifecyclePausedIdle() {
-        viewModel.resetToIdle()
+        resetEchoViewModelToIdle()
         DispatchQueue.main.async { [weak self] in
             self?.renderVoiceStatus(
                 text: "已暂停，轻点话筒继续",
@@ -1872,6 +1899,54 @@ final class EchoViewController: UIViewController {
             return false
         }
         return true
+    }
+
+    private func validateDelayedReplyCallsiteContext(
+        _ callsiteContext: EchoDelayedReplyCallsiteContext,
+        at checkpoint: AccountLeaseCheckpoint,
+        reason: String
+    ) -> Bool {
+        guard callsiteContext.accountLease == echoAccountLease,
+              callsiteContext.resourceOwnerId == callsiteContext.accountLease.subjectId,
+              viewModel.matchesPendingDelayedReplyContext(callsiteContext),
+              digitalHumanRuntimeContextKey(for: DigitalHumanContextStore.shared.current)
+                == callsiteContext.roleContextKey,
+              validateEchoAccountLease(
+                  at: checkpoint,
+                  expected: callsiteContext.accountLease,
+                  reason: "delayedReply:\(reason)"
+              ) else {
+            print(
+                "[Echo][DelayedReply] rejected checkpoint=\(checkpoint.rawValue) " +
+                "reason=\(reason) operationId=\(callsiteContext.operationId)"
+            )
+            return false
+        }
+        return true
+    }
+
+    private func markEchoReplyDelivered() {
+        guard let echoAccountLease,
+              validateEchoAccountLease(
+                  at: .commit,
+                  expected: echoAccountLease,
+                  reason: "markReplyDelivered"
+              ) else {
+            return
+        }
+        viewModel.markReplyDelivered(accountLease: echoAccountLease)
+    }
+
+    private func resetEchoViewModelToIdle() {
+        guard let echoAccountLease,
+              validateEchoAccountLease(
+                  at: .commit,
+                  expected: echoAccountLease,
+                  reason: "resetToIdle"
+              ) else {
+            return
+        }
+        viewModel.resetToIdle(accountLease: echoAccountLease)
     }
 
     @discardableResult
@@ -3845,7 +3920,7 @@ final class EchoViewController: UIViewController {
         cancelTencentDigitalHumanTextOverTimeout()
         digitalHumanConversation.clearProviderRequest()
         stopDigitalHumanAudioLevelMetering()
-        viewModel.markReplyDelivered()
+        markEchoReplyDelivered()
         lastVoiceCloneProviderLogId = providerLogId
         lastVoiceCloneProviderRequestId = providerRequestId
         lastVoiceCloneProviderMode = outputMode
@@ -3884,7 +3959,7 @@ final class EchoViewController: UIViewController {
             if DialogEngineManager.shared.isDialogActive {
                 self.viewModel.beginVoiceInteraction()
             } else {
-                self.viewModel.resetToIdle()
+                self.resetEchoViewModelToIdle()
             }
         }
     }
@@ -3972,7 +4047,7 @@ final class EchoViewController: UIViewController {
         digitalHumanConversation.clearProviderRequest()
         stopDigitalHumanAudioLevelMetering()
         digitalHumanRuntime?.interrupt()
-        viewModel.markReplyDelivered()
+        markEchoReplyDelivered()
         print("[TencentDigitalHuman] TextOver timeout turnID=\(turnID) requestID=\(requestID); recovered Echo state")
 
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.tencentDigitalHumanPostTextOverResumeDelay) { [weak self] in
@@ -3990,7 +4065,7 @@ final class EchoViewController: UIViewController {
             if DialogEngineManager.shared.isDialogActive {
                 self.viewModel.beginVoiceInteraction()
             } else {
-                self.viewModel.resetToIdle()
+                self.resetEchoViewModelToIdle()
             }
         }
     }
@@ -4380,7 +4455,7 @@ final class EchoViewController: UIViewController {
         let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "providerTextOver")
         cancelTencentDigitalHumanTextOverTimeout()
         stopDigitalHumanAudioLevelMetering()
-        viewModel.markReplyDelivered()
+        markEchoReplyDelivered()
         if shouldTraceTrueDeviceBackendPCMDrive,
            trueDeviceBackendPCMDriveTrace.requestID == completion.requestID {
             trueDeviceBackendPCMDriveTrace.providerPlaybackCompleted = true
@@ -4406,7 +4481,7 @@ final class EchoViewController: UIViewController {
             if DialogEngineManager.shared.isDialogActive {
                 self.viewModel.beginVoiceInteraction()
             } else {
-                self.viewModel.resetToIdle()
+                self.resetEchoViewModelToIdle()
             }
         }
     }
@@ -4684,7 +4759,7 @@ final class EchoViewController: UIViewController {
                     self.emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "stopProbeFired")
                 }
                 if !resumedVoiceCapture {
-                    self.viewModel.resetToIdle()
+                    self.resetEchoViewModelToIdle()
                 }
                 print(
                     "[TencentDigitalHuman][QA] PCM-drive stop probe fired " +
@@ -4970,7 +5045,7 @@ final class EchoViewController: UIViewController {
             if !hasTencentDigitalHumanProviderSpeechInFlight {
                 resetDigitalHumanReplyDispatchState()
             }
-            viewModel.resetToIdle()
+            resetEchoViewModelToIdle()
         }
     }
 
@@ -4994,7 +5069,6 @@ final class EchoViewController: UIViewController {
         isStoppingForDelayedReply = false
         isStoppingVoiceCaptureForAppLifecycle = false
         isStoppingVoiceCaptureManually = false
-        EchoDelayedReplyNotificationScheduler.shared.cancelPendingDelayedReply()
         _ = invalidateDigitalHumanLifecycle(reason: "neutralSafety")
         resetDigitalHumanReplyDispatchState()
         interruptDigitalHumanPlayback(reason: "neutralSafety")
@@ -5026,25 +5100,42 @@ final class EchoViewController: UIViewController {
     private func scheduleDelayedReplyNotificationIfNeeded(rawTranscript: String) {
         guard !viewModel.isNeutralSafetyMode,
               let delayedReply = viewModel.pendingDelayedReply,
-              let userId = UserManager.shared.currentUser?.id,
-              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: userId),
-              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+              let callsiteContext = viewModel.pendingDelayedReplyContext,
+              delayedReply.id == callsiteContext.operationId,
+              validateDelayedReplyCallsiteContext(
+                  callsiteContext,
+                  at: .request,
+                  reason: "schedule"
+              ) else {
             return
         }
+        let userId = callsiteContext.resourceOwnerId
 
         EchoDelayedReplyNotificationScheduler.shared.requestAuthorizationIfNeeded(
-            accountLease: accountLease
+            resourceOwnerId: callsiteContext.resourceOwnerId,
+            operationId: callsiteContext.operationId,
+            accountLease: callsiteContext.accountLease
         ) { [weak self] granted in
             guard let self,
                   granted,
-                  AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed,
+                  self.validateDelayedReplyCallsiteContext(
+                      callsiteContext,
+                      at: .ui,
+                      reason: "authorization"
+                  ),
                   !self.viewModel.isNeutralSafetyMode,
                   self.viewModel.pendingDelayedReply?.id == delayedReply.id else { return }
             EchoDelayedReplyNotificationScheduler.shared.schedule(
                 delayedReply,
-                accountLease: accountLease
+                resourceOwnerId: callsiteContext.resourceOwnerId,
+                operationId: callsiteContext.operationId,
+                accountLease: callsiteContext.accountLease
             ) { error in
-                guard AccountLeaseRuntime.shared.validate(accountLease, at: .runtime).allowed else {
+                guard self.validateDelayedReplyCallsiteContext(
+                    callsiteContext,
+                    at: .runtime,
+                    reason: "localNotificationCompletion"
+                ) else {
                     return
                 }
                 if let error {
@@ -5067,7 +5158,12 @@ final class EchoViewController: UIViewController {
                 environment: PushDeviceTokenEnvironment.current,
                 deviceId: UIDevice.current.identifierForVendor?.uuidString ?? "ios-device"
             ) { [weak self] result in
-                guard AccountLeaseRuntime.shared.validate(accountLease, at: .commit).allowed else {
+                guard let self,
+                      self.validateDelayedReplyCallsiteContext(
+                          callsiteContext,
+                          at: .commit,
+                          reason: "pushTokenRegistration"
+                      ) else {
                     return
                 }
                 if case .success(let object) = result,
@@ -5075,14 +5171,14 @@ final class EchoViewController: UIViewController {
                    let registration = PushDeviceTokenRegistration(json: item) {
                     _ = tokenStore.saveRegistration(
                         registration,
-                        accountLease: accountLease
+                        accountLease: callsiteContext.accountLease
                     )
                 }
-                self?.submitDelayedReplyPush(
+                self.submitDelayedReplyPush(
                     userId: userId,
                     delayedReply: delayedReply,
                     rawTranscript: rawTranscript,
-                    accountLease: accountLease
+                    callsiteContext: callsiteContext
                 )
             }
             return
@@ -5091,7 +5187,7 @@ final class EchoViewController: UIViewController {
             userId: userId,
             delayedReply: delayedReply,
             rawTranscript: rawTranscript,
-            accountLease: accountLease
+            callsiteContext: callsiteContext
         )
     }
 
@@ -5099,10 +5195,14 @@ final class EchoViewController: UIViewController {
         userId: String,
         delayedReply: EchoDelayedReply,
         rawTranscript: String,
-        accountLease: AccountLease
+        callsiteContext: EchoDelayedReplyCallsiteContext
     ) {
-        guard accountLease.subjectId == userId,
-              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed,
+        guard callsiteContext.resourceOwnerId == userId,
+              validateDelayedReplyCallsiteContext(
+                  callsiteContext,
+                  at: .request,
+                  reason: "pushSubmit"
+              ),
               !viewModel.isNeutralSafetyMode,
               viewModel.pendingDelayedReply?.id == delayedReply.id else {
             return
@@ -5111,8 +5211,13 @@ final class EchoViewController: UIViewController {
             userId: userId,
             delayedReply: delayedReply,
             rawTranscript: rawTranscript
-        ) { result in
-            guard AccountLeaseRuntime.shared.validate(accountLease, at: .runtime).allowed else {
+        ) { [weak self] result in
+            guard let self,
+                  self.validateDelayedReplyCallsiteContext(
+                      callsiteContext,
+                      at: .runtime,
+                      reason: "pushCompletion"
+                  ) else {
                 return
             }
             if case .failure(let error) = result {
@@ -5138,8 +5243,16 @@ extension EchoViewController: DialogEngineDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self,
                   self.validateEchoAccountLease(at: .ui, reason: "asrFinal"),
-                  let lifecycleToken = self.activeVoiceInteractionToken(reason: "asrFinal") else { return }
-            self.viewModel.finishUserVoice(text: text)
+                  let lifecycleToken = self.activeVoiceInteractionToken(reason: "asrFinal"),
+                  let accountLease = self.echoAccountLease else { return }
+            self.viewModel.finishUserVoice(
+                text: text,
+                accountLease: accountLease,
+                resourceOwnerId: accountLease.subjectId,
+                roleContextKey: self.digitalHumanRuntimeContextKey(
+                    for: DigitalHumanContextStore.shared.current
+                )
+            )
             if let safetyDecision = self.viewModel.neutralSafetyDecision {
                 self.enterNeutralSafetyMode(safetyDecision)
                 return
@@ -5200,7 +5313,7 @@ extension EchoViewController: DialogEngineDelegate {
                 return
             }
             self.stopDigitalHumanAudioLevelMetering()
-            self.viewModel.markReplyDelivered()
+            self.markEchoReplyDelivered()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
                 guard let self,
                       self.validateEchoAccountLease(at: .timer, reason: "ttsFinishedResume"),
@@ -5211,7 +5324,7 @@ extension EchoViewController: DialogEngineDelegate {
                 if DialogEngineManager.shared.isDialogActive {
                     self.viewModel.beginVoiceInteraction()
                 } else {
-                    self.viewModel.resetToIdle()
+                    self.resetEchoViewModelToIdle()
                 }
             }
         }
@@ -5300,7 +5413,7 @@ extension EchoViewController: DialogEngineDelegate {
                 if !self.hasTencentDigitalHumanProviderSpeechInFlight {
                     self.resetDigitalHumanReplyDispatchState()
                 }
-                self.viewModel.resetToIdle()
+                self.resetEchoViewModelToIdle()
                 return
             }
             self.flushPendingAIReplyIfNeeded()
@@ -5311,7 +5424,7 @@ extension EchoViewController: DialogEngineDelegate {
             } else {
                 self.resetDigitalHumanReplyDispatchState()
             }
-            self.viewModel.resetToIdle()
+            self.resetEchoViewModelToIdle()
         }
     }
 }
@@ -5332,13 +5445,27 @@ extension EchoViewController {
     }
 
     func runUIQAEchoVoiceStatePreview() {
+        guard let echoAccountLease else { return }
+        let roleContextKey = digitalHumanRuntimeContextKey(
+            for: DigitalHumanContextStore.shared.current
+        )
         for turn in 1..<EchoReplyPacingPolicy.waitAfterUserTurnCount {
             viewModel.beginVoiceInteraction()
-            viewModel.finishUserVoice(text: "第 \(turn) 次想起爸爸小时候的故事")
+            viewModel.finishUserVoice(
+                text: "第 \(turn) 次想起爸爸小时候的故事",
+                accountLease: echoAccountLease,
+                resourceOwnerId: echoAccountLease.subjectId,
+                roleContextKey: roleContextKey
+            )
             viewModel.receiveAIReply("我在听，慢慢说。")
         }
         viewModel.beginVoiceInteraction()
-        viewModel.finishUserVoice(text: "第十次想起这件事")
+        viewModel.finishUserVoice(
+            text: "第十次想起这件事",
+            accountLease: echoAccountLease,
+            resourceOwnerId: echoAccountLease.subjectId,
+            roleContextKey: roleContextKey
+        )
         if viewModel.isWaitingForDelayedReply {
             beginDelayedReplyWait()
         }
