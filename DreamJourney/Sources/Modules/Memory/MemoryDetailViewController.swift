@@ -13,6 +13,7 @@ final class MemoryDetailViewController: UIViewController {
     // MARK: - Properties
     private var memory: MemoryModel
     private let viewMode: MemoryDetailViewMode
+    private let accountLease: AccountLease?
     private var isPlaying = false
     /// 原始录音播放器（lazy 初始化，文件存在时才创建）
     private var audioPlayer: AVAudioPlayer?
@@ -23,6 +24,7 @@ final class MemoryDetailViewController: UIViewController {
     init(memory: MemoryModel, viewMode: MemoryDetailViewMode = .host) {
         self.memory = memory
         self.viewMode = viewMode
+        accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: nil)
         super.init(nibName: nil, bundle: nil)
         // push 进入时隐藏底部 TabBar；返回足迹页时自动恢复
         hidesBottomBarWhenPushed = true
@@ -176,6 +178,10 @@ final class MemoryDetailViewController: UIViewController {
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
+        guard validateAccountLease(at: .ui) else {
+            view.backgroundColor = .warmBackground
+            return
+        }
         print("[MemoirSync] MemoryDetailVC.viewDidLoad: id=\(memory.id), title=\(memory.title), subtitle=\(memory.subtitle), location=\(memory.location), year=\(memory.year), month=\(memory.month), images=\(memory.imageNames.count), audio=\(memory.audioName ?? "nil"), authorId=\(memory.authorId), viewMode=\(viewMode)")
         view.backgroundColor = .warmBackground
         setupNavigationBar()
@@ -186,6 +192,10 @@ final class MemoryDetailViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        guard validateAccountLease(at: .ui) else {
+            navigationController?.popViewController(animated: false)
+            return
+        }
         navigationController?.navigationBar.prefersLargeTitles = false
         // 详情页从足迹 host 模式 push 进入，host 隐藏了 navigationBar，
         // 这里需恢复显示，确保返回按钮可用
@@ -324,19 +334,12 @@ final class MemoryDetailViewController: UIViewController {
     // MARK: - 拍立得照片卡
     /// 单张：占满屏幕宽度（与 contentStack 一致），photoScrollView 不可横滑；
     /// 多张：保持原有卡片宽度（屏幕 - 80），允许横滑。
-    /// 用户未上传图片时，使用一张内置默认图（按 memory.id hash 选 4 张之一）。
     private func buildPolaroidPhotos() {
         photoStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         let caption = "\(memory.location) — \(memory.year)年\(memory.month)月"
 
-        // 解析展示用的图片：优先用户上传，否则使用内置默认图
-        let displayImages: [UIImage] = {
-            let userImgs = memory.imageNames.compactMap { UIImage(named: $0) }
-            if !userImgs.isEmpty { return userImgs }
-            let idx = abs(memory.id.hashValue) % 4
-            if let img = UIImage(named: "default_memory_\(idx + 1)") { return [img] }
-            return []
-        }()
+        let displayImages = memory.imageNames.compactMap { UIImage(named: $0) }
+        photoScrollView.isHidden = displayImages.isEmpty
 
         let isSingle = displayImages.count <= 1
         let fullWidth: CGFloat = UIScreen.main.bounds.width - 32
@@ -394,19 +397,10 @@ final class MemoryDetailViewController: UIViewController {
         return card
     }
 
-    // MARK: - 音频卡内容（按数据显隐）
+    // MARK: - 音频卡内容
     private func buildAudioCard() {
-        // 1) 优先使用原始对话录音：sessionId 存在 audioName，文件保存在 MemoirRepository.recordingsDirectory
-        if let sessionId = memory.audioName,
-           !sessionId.isEmpty,
-           let url = MemoirRepository.shared.getRecordingURL(sessionId: sessionId) {
-            recordingURL = url
-            audioCard.isHidden = false
-            audioTitleLabel.text = "原始录音回放"
-            audioDurationLabel.text = formatDuration(of: url)
-            return
-        }
-        // 2) 无录音文件 → 隐藏整个音频卡
+        // Legacy Memoir recordings have no verified owner envelope. Keep them
+        // unavailable until the Memoir bridge supplies an owner-scoped resolver.
         recordingURL = nil
         audioCard.isHidden = true
     }
@@ -421,20 +415,15 @@ final class MemoryDetailViewController: UIViewController {
 
     // MARK: - 正文（完整生成内容）
     private func buildQuote() {
-        // 优先级：MemoryModel.fullContent（已持久化到本地）
-        //       → MemoirRepository.prose（兼容老数据/未桥接情形）
-        //       → subtitle（mock 数据兜底）
-        //       → title
-        let raw: String
-        if let content = memory.fullContent, !content.isEmpty {
-            raw = content
-        } else if let prose = MemoirRepository.shared.get(by: memory.id)?.prose, !prose.isEmpty {
-            raw = prose
-        } else if !memory.subtitle.isEmpty {
-            raw = memory.subtitle
-        } else {
-            raw = memory.title
+        guard let content = memory.fullContent,
+              !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            quoteLabel.text = nil
+            quoteLabel.attributedText = nil
+            quoteLabel.isHidden = true
+            return
         }
+        let raw = content
+        quoteLabel.isHidden = false
         quoteLabel.text = raw
         // 正文样式：常规字号 + 行距，去掉引号包裹
         let attr = NSMutableAttributedString(string: raw)
@@ -447,8 +436,7 @@ final class MemoryDetailViewController: UIViewController {
 
     // MARK: - 互动数
     private func updateLikeButton() {
-        let userId = UserManager.shared.currentUser?.id ?? ""
-        let isLiked = memory.isLikedBy(userId: userId)
+        let isLiked = accountLease.map { memory.isLikedBy(userId: $0.subjectId) } ?? false
         let cfg = UIImage.SymbolConfiguration(pointSize: 18, weight: .regular)
         let img = UIImage(systemName: isLiked ? "heart.fill" : "heart", withConfiguration: cfg)
         likeButton.setImage(img, for: .normal)
@@ -564,10 +552,32 @@ final class MemoryDetailViewController: UIViewController {
 
     // MARK: - Actions
     @objc private func likeTapped() {
-        let userId = UserManager.shared.currentUser?.id ?? "unknown"
-        let userName = UserManager.shared.currentUser?.nickname ?? "我"
-        let didLike = MemoryRepository.shared.toggleLike(userId: userId, userName: userName, on: memory.id)
-        if let updated = MemoryRepository.shared.get(by: memory.id) { memory = updated }
+        guard let accountLease,
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed,
+              let user = UserManager.shared.currentUser,
+              user.id == accountLease.subjectId else {
+            showToast("账号状态已变化", type: .info)
+            return
+        }
+        let userName = user.nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !userName.isEmpty,
+              let didLike = MemoryRepository.shared.toggleLike(
+                  userName: userName,
+                  on: memory.id,
+                  ownerId: memory.authorId,
+                  accountLease: accountLease
+              ),
+              AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+            showToast("暂时无法更新点赞", type: .info)
+            return
+        }
+        if let updated = MemoryRepository.shared.get(
+            by: memory.id,
+            ownerId: memory.authorId,
+            accountLease: accountLease
+        ) {
+            memory = updated
+        }
         updateLikeButton()
         showToast(didLike ? "已点赞 ❤️" : "取消点赞", type: didLike ? .success : .info)
     }
@@ -610,15 +620,30 @@ final class MemoryDetailViewController: UIViewController {
 
     /// 主态：进入编辑页，回调里用最新数据全量重建详情
     @objc private func editTapped() {
+        guard let accountLease,
+              accountLease.subjectId == memory.authorId,
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+            showToast("账号状态已变化", type: .info)
+            return
+        }
         let editVC = MemoryEditViewController(memory: memory)
         editVC.onSaved = { [weak self] updated in
-            guard let self = self else { return }
+            guard let self = self,
+                  AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed,
+                  updated.authorId == accountLease.subjectId else {
+                return
+            }
             self.memory = updated
             // 编辑可能改了正文/标题/私密，全量重建相关 UI
             self.buildQuote()
             self.configureForViewMode()
         }
         navigationController?.pushViewController(editVC, animated: true)
+    }
+
+    private func validateAccountLease(at checkpoint: AccountLeaseCheckpoint) -> Bool {
+        guard let accountLease else { return false }
+        return AccountLeaseRuntime.shared.validate(accountLease, at: checkpoint).allowed
     }
 }
 

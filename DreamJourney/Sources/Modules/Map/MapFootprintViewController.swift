@@ -34,7 +34,7 @@ final class MapFootprintViewController: UIViewController {
             navigationController?.setNavigationBarHidden(true, animated: animated)
         case .guest:
             navigationController?.setNavigationBarHidden(false, animated: animated)
-            title = "\(ownerName ?? "亲属")的足迹"
+            title = ownerName.map { "\($0)的足迹" } ?? "足迹"
         }
     }
 
@@ -82,41 +82,20 @@ final class MapFootprintViewController: UIViewController {
     private let viewMode: FootprintViewMode
     private let ownerId: String           // 足迹所属用户 ID
     private let ownerName: String?        // 足迹所属用户名称（客态显示用）
+    private let accountLease: AccountLease?
     private var mapView: MAMapView?       // 安全可选：缺 ApiKey 等场景下为 nil，避免崩溃
     private var annotations: [MemoryAnnotation] = []
     private var memories: [MemoryModel] = []
-
-    // 已读回忆 ID（持久化在 UserDefaults，点击后 NEW 标签不再展示）
-    private static let readMemoriesKey = "dj.readMemoryIds"
-    private var readMemoryIds: Set<String> {
-        get { Set(UserDefaults.standard.stringArray(forKey: Self.readMemoriesKey) ?? []) }
-        set { UserDefaults.standard.set(Array(newValue), forKey: Self.readMemoriesKey) }
-    }
-
-    // 历次冷启已跳动过的回忆 ID（持久化）。
-    // previousBouncedIds 在进程启动后只初始化一次（lazy static），
-    // 保证：本次冷启内多次进入页面 NEW 仍跳动；下次冷启进入时不再跳动。
-    private static let bouncedMemoriesKey = "dj.bouncedMemoryIds"
-    private static let previousBouncedIds: Set<String> = {
-        Set(UserDefaults.standard.stringArray(forKey: bouncedMemoriesKey) ?? [])
-    }()
-    private func markBounced(_ id: String) {
-        var ids = Set(UserDefaults.standard.stringArray(forKey: Self.bouncedMemoriesKey) ?? [])
-        ids.insert(id)
-        UserDefaults.standard.set(Array(ids), forKey: Self.bouncedMemoriesKey)
-    }
-
-    // 默认图：用户未上传图片时按索引循环使用 4 张内置默认图
-    private static let defaultImageNames = [
-        "default_memory_1", "default_memory_2",
-        "default_memory_3", "default_memory_4"
-    ]
+    private let presentationStore = MemoryMapPresentationStore.shared
+    private var readMemoryIds: Set<String> = []
+    private var previouslyBouncedMemoryIds: Set<String> = []
 
     // MARK: - Init
     init(viewMode: FootprintViewMode = .host, ownerId: String, ownerName: String? = nil) {
         self.viewMode = viewMode
         self.ownerId = ownerId
         self.ownerName = ownerName
+        accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: nil)
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -237,7 +216,7 @@ final class MapFootprintViewController: UIViewController {
             navigationItem.rightBarButtonItem = nil
             titleLabel.isHidden = false
         case .guest:
-            title = "\(ownerName ?? "亲属")的足迹"
+            title = ownerName.map { "\($0)的足迹" } ?? "足迹"
             titleLabel.isHidden = true
         }
     }
@@ -330,20 +309,71 @@ final class MapFootprintViewController: UIViewController {
 
     // MARK: - Load Memories
     private func loadMemories() {
-        var allMemories = MemoryRepository.shared.getAllByOwner(ownerId)
-        // 兜底：主态登录用户 ID 与 mock 数据 user_001 不一致时，回退使用 user_001 的演示足迹
-        if viewMode == .host && allMemories.isEmpty {
-            allMemories = MemoryRepository.shared.getAllByOwner("user_001")
+        let normalizedOwnerId = ownerId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let accountLease,
+              !normalizedOwnerId.isEmpty,
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed,
+              viewMode != .host || normalizedOwnerId == accountLease.subjectId else {
+            clearMemories()
+            return
         }
         switch viewMode {
         case .host:
-            memories = allMemories   // 主态：展示全部（含私密）
+            memories = MemoryRepository.shared.getAllByOwner(
+                normalizedOwnerId,
+                accountLease: accountLease
+            )
         case .guest:
-            memories = allMemories.filter { !$0.isPrivate }  // 客态：仅展示公开
+            memories = MemoryRepository.shared.getPublicByOwner(
+                normalizedOwnerId,
+                accountLease: accountLease
+            )
         }
-        print("[MemoirSync] MapFootprintVC.loadMemories: ownerId=\(ownerId), viewMode=\(viewMode), allMemories=\(allMemories.count), memories=\(memories.count), firstId=\(memories.first?.id ?? "nil"), firstTitle=\(memories.first?.title ?? "nil")")
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+            clearMemories()
+            return
+        }
+        let presentationState = presentationStore.load(
+            ownerId: normalizedOwnerId,
+            accountLease: accountLease
+        )
+        readMemoryIds = presentationState.readMemoryIds
+        previouslyBouncedMemoryIds = presentationState.bouncedMemoryIds
+        print("[MemoirSync] MapFootprintVC.loadMemories: ownerId=\(ownerId), viewMode=\(viewMode), memories=\(memories.count), firstId=\(memories.first?.id ?? "nil"), firstTitle=\(memories.first?.title ?? "nil")")
         updateStats()
         addAnnotations()
+    }
+
+    private func clearMemories() {
+        memories = []
+        readMemoryIds = []
+        previouslyBouncedMemoryIds = []
+        updateStats()
+        addAnnotations()
+    }
+
+    @discardableResult
+    private func markRead(_ memoryId: String) -> Bool {
+        guard let accountLease,
+              presentationStore.markRead(
+                  memoryId: memoryId,
+                  ownerId: ownerId,
+                  accountLease: accountLease
+              ) else {
+            return false
+        }
+        readMemoryIds.insert(memoryId)
+        return true
+    }
+
+    @discardableResult
+    private func markBounced(_ memoryId: String) -> Bool {
+        guard let accountLease else { return false }
+        return presentationStore.markBounced(
+            memoryId: memoryId,
+            ownerId: ownerId,
+            accountLease: accountLease
+        )
     }
 
     private func addAnnotations() {
@@ -392,8 +422,13 @@ final class MapFootprintViewController: UIViewController {
     }
 
     @objc private func handleNewMemory(_ notification: Notification) {
-        let memId = (notification.object as? MemoryModel)?.id ?? "nil"
-        print("[MemoirSync] MapFootprintVC.handleNewMemory: receive .djNewMemoryCreated, memoryId=\(memId), thread=\(Thread.isMainThread ? "main" : "bg")")
+        guard let accountLease,
+              AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed,
+              let createdMemory = notification.object as? MemoryModel,
+              createdMemory.authorId == ownerId else {
+            return
+        }
+        print("[MemoirSync] MapFootprintVC.handleNewMemory: receive .djNewMemoryCreated, memoryId=\(createdMemory.id), thread=\(Thread.isMainThread ? "main" : "bg")")
         // 通知可能在子线程派发（如 MemoirService 的 generateQueue），地图刷新必须切回主线程
         DispatchQueue.main.async { [weak self] in
             self?.loadMemories()
@@ -426,21 +461,13 @@ extension MapFootprintViewController: MAMapViewDelegate {
             annotationView = MemoryAnnotationView(annotation: memoryAnnotation, reuseIdentifier: reuseId)
         }
 
-        // 仅当：是最新一条 + 未被点击过 + 不是 mock 数据时，才展示 NEW 与跳动
-        // mock 数据 (id 以 "mem_" 开头) 的 createdAt 在 seed 时几乎同时，排序不稳定，
-        // 不能把"恰好排在第一位的 mock"当作 NEW；NEW 只对用户真实新生成的回忆生效。
-        let isMock = memoryAnnotation.memory.id.hasPrefix("mem_")
+        // 仅当是最新一条且未被点击过时，展示 NEW 与跳动。
         let isLatest = memoryAnnotation.memory.id == memories.first?.id
         let isUnread = !readMemoryIds.contains(memoryAnnotation.memory.id)
-        let isNew = !isMock && isLatest && isUnread
+        let isNew = isLatest && isUnread
         let isHost = viewMode == .host
 
-        // 默认图：按 memories 中的索引循环使用 4 张内置默认图（用户未上传图时使用）
-        let idx = memories.firstIndex(where: { $0.id == memoryAnnotation.memory.id }) ?? 0
-        let fallbackImage = Self.defaultImageNames[idx % Self.defaultImageNames.count]
-
-        // 跳动条件：本次冷启首次曝光的 NEW 才跳动；下次冷启时该 ID 已在 previousBouncedIds → 不再跳
-        let shouldBounce = isNew && !MapFootprintViewController.previousBouncedIds.contains(memoryAnnotation.memory.id)
+        let shouldBounce = isNew && !previouslyBouncedMemoryIds.contains(memoryAnnotation.memory.id)
         if shouldBounce {
             markBounced(memoryAnnotation.memory.id)
         }
@@ -448,16 +475,12 @@ extension MapFootprintViewController: MAMapViewDelegate {
         annotationView?.configure(with: memoryAnnotation.memory,
                                   isNew: isNew,
                                   shouldBounce: shouldBounce,
-                                  isHost: isHost,
-                                  fallbackImageName: fallbackImage)
+                                  isHost: isHost)
 
         // 显式点击回调：标记已读 + 跳详情页（兜底 didSelect 不触发）
         annotationView?.onTap = { [weak self, weak annotationView] in
             guard let self = self else { return }
-            // 标记已读
-            var ids = self.readMemoryIds
-            ids.insert(memoryAnnotation.memory.id)
-            self.readMemoryIds = ids
+            guard self.markRead(memoryAnnotation.memory.id) else { return }
             // 让 view 层级回归，避免遮挡其他卡片
             annotationView?.layer.zPosition = 0
             // 跳详情
@@ -481,9 +504,7 @@ extension MapFootprintViewController: MAMapViewDelegate {
         // 取消选中态（避免 SDK 锁定 selected 状态导致下次点击不触发）
         mapView.deselectAnnotation(view.annotation, animated: false)
         // 同步标记已读 + 关闭 NEW
-        var ids = readMemoryIds
-        ids.insert(memoryAnnotation.memory.id)
-        readMemoryIds = ids
+        guard markRead(memoryAnnotation.memory.id) else { return }
         (view as? MemoryAnnotationView)?.dismissNewBadgeAnimated()
         // 跳详情
         openDetail(for: memoryAnnotation.memory)
@@ -491,6 +512,11 @@ extension MapFootprintViewController: MAMapViewDelegate {
 
     /// 公共跳详情入口（onTap 与 didSelect 共用）
     private func openDetail(for memory: MemoryModel) {
+        guard let accountLease,
+              memory.authorId == ownerId,
+              AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+            return
+        }
         let detailViewMode: MemoryDetailViewMode = (viewMode == .host) ? .host : .guest
         print("[MemoirSync] MapFootprintVC.openDetail: id=\(memory.id), title=\(memory.title), location=\(memory.location), authorId=\(memory.authorId), images=\(memory.imageNames.count), audio=\(memory.audioName ?? "nil"), viewMode=\(detailViewMode)")
         let detailVC = MemoryDetailViewController(memory: memory, viewMode: detailViewMode)

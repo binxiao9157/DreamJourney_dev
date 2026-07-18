@@ -1,186 +1,1139 @@
+import CryptoKit
 import Foundation
 
-// MARK: - MemoryRepository 单例：内存回忆数据存储（含持久化）
+enum MemoryQuarantineReason: String, Codable, Equatable {
+    case missingOwner
+    case ambiguousOwner
+    case seedFixture
+    case mismatch
+    case corrupt
+}
+
+enum MemoryEnvelopeValidation: Equatable {
+    case accepted
+    case mismatch
+    case corrupt
+}
+
+struct MemoryStorageScope: Equatable {
+    static let storeSchemaVersion = 2
+
+    let subjectId: String
+    let vaultId: String
+    let ownerId: String
+    let generation: UInt64
+    let generationId: UUID
+
+    init(accountLease: AccountLease, ownerId: String) {
+        subjectId = Self.normalized(accountLease.subjectId)
+        vaultId = Self.normalized(accountLease.vaultId)
+        self.ownerId = Self.normalized(ownerId)
+        generation = accountLease.generation
+        generationId = accountLease.generationId
+    }
+
+    var storageKey: String {
+        "dj.memory.items.v2.\(scopeDigest)"
+    }
+
+    var quarantineStorageKey: String {
+        "dj.memory.quarantine.v2.\(scopeDigest)"
+    }
+
+    var mapPresentationStorageKey: String {
+        "dj.memoryMap.presentation.v2.\(scopeDigest)"
+    }
+
+    var mapQuarantineStorageKey: String {
+        "dj.memoryMap.quarantine.v2.\(scopeDigest)"
+    }
+
+    var isValid: Bool {
+        !subjectId.isEmpty && !vaultId.isEmpty && !ownerId.isEmpty
+    }
+
+    fileprivate var scopeDigest: String {
+        MemoryStoragePolicy.sha256("memory-scope-v2|\(subjectId)|\(vaultId)|\(ownerId)")
+    }
+
+    private static func normalized(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+struct MemoryStoreEnvelope: Codable {
+    let storeSchemaVersion: Int
+    let subjectId: String
+    let vaultId: String
+    let ownerId: String
+    let generation: UInt64
+    let generationId: UUID
+    var contentHash: String
+    let memories: [MemoryModel]
+}
+
+struct MemoryQuarantineRecord: Codable, Equatable {
+    let recordId: String
+    let sourceStorageKey: String
+    let reason: MemoryQuarantineReason
+    let itemIds: [String]
+    let payload: Data
+    let contentHash: String
+    let createdAt: Date
+}
+
+struct MemoryLegacyMigrationReceipt: Codable, Equatable {
+    enum State: String, Codable {
+        case quarantined
+    }
+
+    let receiptId: String
+    let surfaceId: String
+    let sourceStorageKey: String
+    let quarantineStorageKey: String
+    let ownerEvidence: String
+    let state: State
+    let reason: MemoryQuarantineReason
+    let sourceContentHash: String
+    let createdAt: Date
+}
+
+struct MemoryMapPresentationState: Equatable {
+    var readMemoryIds: Set<String>
+    var bouncedMemoryIds: Set<String>
+
+    static let empty = MemoryMapPresentationState(
+        readMemoryIds: [],
+        bouncedMemoryIds: []
+    )
+}
+
+private struct MemoryMapPresentationEnvelope: Codable {
+    let storeSchemaVersion: Int
+    let subjectId: String
+    let vaultId: String
+    let ownerId: String
+    let generation: UInt64
+    let generationId: UUID
+    var contentHash: String
+    let readMemoryIds: [String]
+    let bouncedMemoryIds: [String]
+}
+
+private struct MemoryMapPresentationHashPayload: Codable {
+    let readMemoryIds: [String]
+    let bouncedMemoryIds: [String]
+}
+
+private enum MemoryStorageError: Error {
+    case invalidScope
+    case ownerMismatch
+    case encodingFailed
+}
+
+private enum MemoryStoragePolicy {
+    static func makeEnvelope(
+        memories: [MemoryModel],
+        scope: MemoryStorageScope
+    ) throws -> MemoryStoreEnvelope {
+        guard scope.isValid else { throw MemoryStorageError.invalidScope }
+        guard memories.allSatisfy({ normalized($0.authorId) == scope.ownerId }) else {
+            throw MemoryStorageError.ownerMismatch
+        }
+        return MemoryStoreEnvelope(
+            storeSchemaVersion: MemoryStorageScope.storeSchemaVersion,
+            subjectId: scope.subjectId,
+            vaultId: scope.vaultId,
+            ownerId: scope.ownerId,
+            generation: scope.generation,
+            generationId: scope.generationId,
+            contentHash: try memoriesContentHash(memories),
+            memories: memories
+        )
+    }
+
+    static func validate(
+        _ envelope: MemoryStoreEnvelope,
+        expectedScope: MemoryStorageScope
+    ) -> MemoryEnvelopeValidation {
+        guard expectedScope.isValid,
+              envelope.storeSchemaVersion == MemoryStorageScope.storeSchemaVersion,
+              normalized(envelope.subjectId) == expectedScope.subjectId,
+              normalized(envelope.vaultId) == expectedScope.vaultId,
+              normalized(envelope.ownerId) == expectedScope.ownerId,
+              envelope.memories.allSatisfy({ normalized($0.authorId) == expectedScope.ownerId }) else {
+            return .mismatch
+        }
+        let ids = envelope.memories.map { normalized($0.id) }
+        guard ids.allSatisfy({ !$0.isEmpty }), Set(ids).count == ids.count,
+              let expectedHash = try? memoriesContentHash(envelope.memories),
+              envelope.contentHash == expectedHash else {
+            return .corrupt
+        }
+        return .accepted
+    }
+
+    static func makeMapEnvelope(
+        state: MemoryMapPresentationState,
+        scope: MemoryStorageScope
+    ) throws -> MemoryMapPresentationEnvelope {
+        guard scope.isValid else { throw MemoryStorageError.invalidScope }
+        let readIds = normalizedIds(state.readMemoryIds)
+        let bouncedIds = normalizedIds(state.bouncedMemoryIds)
+        return MemoryMapPresentationEnvelope(
+            storeSchemaVersion: MemoryStorageScope.storeSchemaVersion,
+            subjectId: scope.subjectId,
+            vaultId: scope.vaultId,
+            ownerId: scope.ownerId,
+            generation: scope.generation,
+            generationId: scope.generationId,
+            contentHash: try mapContentHash(readIds: readIds, bouncedIds: bouncedIds),
+            readMemoryIds: readIds,
+            bouncedMemoryIds: bouncedIds
+        )
+    }
+
+    static func validateMapEnvelope(
+        _ envelope: MemoryMapPresentationEnvelope,
+        expectedScope: MemoryStorageScope
+    ) -> MemoryEnvelopeValidation {
+        guard expectedScope.isValid,
+              envelope.storeSchemaVersion == MemoryStorageScope.storeSchemaVersion,
+              normalized(envelope.subjectId) == expectedScope.subjectId,
+              normalized(envelope.vaultId) == expectedScope.vaultId,
+              normalized(envelope.ownerId) == expectedScope.ownerId else {
+            return .mismatch
+        }
+        let readIds = normalizedIds(Set(envelope.readMemoryIds))
+        let bouncedIds = normalizedIds(Set(envelope.bouncedMemoryIds))
+        guard readIds.count == envelope.readMemoryIds.count,
+              bouncedIds.count == envelope.bouncedMemoryIds.count,
+              let expectedHash = try? mapContentHash(readIds: readIds, bouncedIds: bouncedIds),
+              envelope.contentHash == expectedHash else {
+            return .corrupt
+        }
+        return .accepted
+    }
+
+    static func quarantineRecord(
+        sourceStorageKey: String,
+        reason: MemoryQuarantineReason,
+        itemIds: [String],
+        payload: Data
+    ) -> MemoryQuarantineRecord {
+        MemoryQuarantineRecord(
+            recordId: UUID().uuidString,
+            sourceStorageKey: sourceStorageKey,
+            reason: reason,
+            itemIds: normalizedIds(Set(itemIds)),
+            payload: payload,
+            contentHash: sha256(payload),
+            createdAt: Date()
+        )
+    }
+
+    static func sha256(_ value: String) -> String {
+        sha256(Data(value.utf8))
+    }
+
+    static func sha256(_ data: Data) -> String {
+        let digest = SHA256.hash(data: data)
+        return "sha256:" + digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    static func normalized(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func memoriesContentHash(_ memories: [MemoryModel]) throws -> String {
+        sha256(try encoder().encode(memories))
+    }
+
+    private static func mapContentHash(
+        readIds: [String],
+        bouncedIds: [String]
+    ) throws -> String {
+        sha256(
+            try encoder().encode(
+                MemoryMapPresentationHashPayload(
+                    readMemoryIds: readIds,
+                    bouncedMemoryIds: bouncedIds
+                )
+            )
+        )
+    }
+
+    private static func normalizedIds(_ ids: Set<String>) -> [String] {
+        ids.map(normalized).filter { !$0.isEmpty }.sorted()
+    }
+
+    private static func encoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return encoder
+    }
+}
+
+private enum MemoryQuarantineStorage {
+    static let deviceStorageKey = "dj.memory.quarantine.device.v2"
+    private static let lock = NSRecursiveLock()
+
+    static func append(
+        _ record: MemoryQuarantineRecord,
+        storageKey: String,
+        defaults: UserDefaults
+    ) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        var records = load(storageKey: storageKey, defaults: defaults)
+        records.append(record)
+        guard let data = try? JSONEncoder().encode(records) else { return false }
+        defaults.set(data, forKey: storageKey)
+        return defaults.data(forKey: storageKey) == data
+    }
+
+    static func load(
+        storageKey: String,
+        defaults: UserDefaults
+    ) -> [MemoryQuarantineRecord] {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let data = defaults.data(forKey: storageKey),
+              let records = try? JSONDecoder().decode([MemoryQuarantineRecord].self, from: data) else {
+            return []
+        }
+        return records
+    }
+
+    static func append(
+        _ receipt: MemoryLegacyMigrationReceipt,
+        quarantineStorageKey: String,
+        defaults: UserDefaults
+    ) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let storageKey = receiptStorageKey(for: quarantineStorageKey)
+        var receipts = loadReceipts(
+            quarantineStorageKey: quarantineStorageKey,
+            defaults: defaults
+        )
+        receipts.append(receipt)
+        guard let data = try? JSONEncoder().encode(receipts) else { return false }
+        defaults.set(data, forKey: storageKey)
+        return defaults.data(forKey: storageKey) == data
+    }
+
+    static func loadReceipts(
+        quarantineStorageKey: String,
+        defaults: UserDefaults
+    ) -> [MemoryLegacyMigrationReceipt] {
+        lock.lock()
+        defer { lock.unlock() }
+        let storageKey = receiptStorageKey(for: quarantineStorageKey)
+        guard let data = defaults.data(forKey: storageKey),
+              let receipts = try? JSONDecoder().decode(
+                  [MemoryLegacyMigrationReceipt].self,
+                  from: data
+              ) else {
+            return []
+        }
+        return receipts
+    }
+
+    private static func receiptStorageKey(for quarantineStorageKey: String) -> String {
+        "\(quarantineStorageKey).migrationReceipts.v1"
+    }
+}
+
+// MARK: - Owner-scoped Memory storage
 final class MemoryRepository {
-
     static let shared = MemoryRepository()
-    private init() {
-        seedMockData()
-        loadPersistedMemories()
+
+    static let legacyPersistKey = "dj.persistedMemories"
+
+    private enum ScopedLoadResult {
+        case missing
+        case loaded([MemoryModel])
+        case rejected
     }
 
-    private var memories: [MemoryModel] = []
+    private let defaults: UserDefaults
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let notificationCenter: NotificationCenter
+    private let lock = NSRecursiveLock()
 
-    // MARK: - 持久化
-    /// UserDefaults Key（仅持久化非 mock 的用户新增回忆，mock 每次启动重新 seed）
-    private static let persistKey = "dj.persistedMemories"
-    /// mock 数据 ID 前缀，用于区分是否需要持久化
-    private static let mockIdPrefix = "mem_"
-
-    private func loadPersistedMemories() {
-        guard let data = UserDefaults.standard.data(forKey: Self.persistKey) else {
-            print("[MemoirSync] MemoryRepository.loadPersisted: no data, mockOnly=\(memories.count)")
-            return
-        }
-        do {
-            let arr = try JSONDecoder().decode([MemoryModel].self, from: data)
-            // 去重：避免与 mock 或已存在的同 ID 重复
-            let existing = Set(memories.map { $0.id })
-            let newOnes = arr.filter { !existing.contains($0.id) }
-            memories.insert(contentsOf: newOnes, at: 0)
-            print("[MemoirSync] MemoryRepository.loadPersisted: loaded=\(newOnes.count), totalNow=\(memories.count)")
-        } catch {
-            print("[MemoirSync] MemoryRepository.loadPersisted: decode error=\(error)")
-        }
+    init(
+        defaults: UserDefaults = .standard,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        notificationCenter: NotificationCenter = .default
+    ) {
+        self.defaults = defaults
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.notificationCenter = notificationCenter
     }
 
-    /// 写盘（仅持久化非 mock 的回忆）
-    private func savePersistedMemories() {
-        let nonMock = memories.filter { !$0.id.hasPrefix(Self.mockIdPrefix) }
-        do {
-            let data = try JSONEncoder().encode(nonMock)
-            UserDefaults.standard.set(data, forKey: Self.persistKey)
-            print("[MemoirSync] MemoryRepository.savePersisted: count=\(nonMock.count)")
-        } catch {
-            print("[MemoirSync] MemoryRepository.savePersisted: encode error=\(error)")
-        }
-    }
-
-    // MARK: - CRUD
+    // MARK: Reads
     func getAll() -> [MemoryModel] {
-        return memories.sorted { $0.createdAt > $1.createdAt }
+        guard let accountLease = accountLeaseRuntime.capture(forSubjectId: nil) else { return [] }
+        return getAllByOwner(accountLease.subjectId, accountLease: accountLease)
     }
 
     func getAllByOwner(_ ownerId: String) -> [MemoryModel] {
-        return memories.filter { $0.authorId == ownerId }.sorted { $0.createdAt > $1.createdAt }
+        guard let accountLease = accountLeaseRuntime.capture(forSubjectId: nil) else { return [] }
+        return getAllByOwner(ownerId, accountLease: accountLease)
+    }
+
+    func getAllByOwner(
+        _ ownerId: String,
+        accountLease: AccountLease
+    ) -> [MemoryModel] {
+        guard let scope = validatedScope(
+            ownerId: ownerId,
+            accountLease: accountLease,
+            checkpoint: .request
+        ) else {
+            return []
+        }
+        let memories: [MemoryModel] = withLock {
+            guard quarantineLegacyGlobalPayloadIfNeeded() else { return [] }
+            switch loadScopedMemories(scope: scope) {
+            case .missing, .rejected:
+                return []
+            case .loaded(let memories):
+                return memories
+            }
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else { return [] }
+        return memories.sorted { $0.createdAt > $1.createdAt }
     }
 
     func getPublicByOwner(_ ownerId: String) -> [MemoryModel] {
-        return memories.filter { $0.authorId == ownerId && !$0.isPrivate }.sorted { $0.createdAt > $1.createdAt }
+        guard let accountLease = accountLeaseRuntime.capture(forSubjectId: nil) else { return [] }
+        return getPublicByOwner(ownerId, accountLease: accountLease)
+    }
+
+    func getPublicByOwner(
+        _ ownerId: String,
+        accountLease: AccountLease
+    ) -> [MemoryModel] {
+        getAllByOwner(ownerId, accountLease: accountLease).filter { !$0.isPrivate }
     }
 
     func get(by id: String) -> MemoryModel? {
-        return memories.first { $0.id == id }
+        guard let accountLease = accountLeaseRuntime.capture(forSubjectId: nil) else { return nil }
+        return get(by: id, ownerId: accountLease.subjectId, accountLease: accountLease)
     }
 
-    func add(_ memory: MemoryModel) {
-        memories.insert(memory, at: 0)
-        savePersistedMemories()
-        print("[MemoirSync] MemoryRepository.add: id=\(memory.id), title=\(memory.title), authorId=\(memory.authorId), total=\(memories.count) → post .djNewMemoryCreated")
-        NotificationCenter.default.post(name: .djNewMemoryCreated, object: memory)
+    func get(
+        by id: String,
+        ownerId: String,
+        accountLease: AccountLease
+    ) -> MemoryModel? {
+        let normalizedId = MemoryStoragePolicy.normalized(id)
+        guard !normalizedId.isEmpty else { return nil }
+        return getAllByOwner(ownerId, accountLease: accountLease).first { $0.id == normalizedId }
     }
 
-    func update(_ memory: MemoryModel) {
-        if let index = memories.firstIndex(where: { $0.id == memory.id }) {
-            memories[index] = memory
-            savePersistedMemories()
+    // MARK: Owner mutations
+    @discardableResult
+    func add(_ memory: MemoryModel) -> Bool {
+        guard let accountLease = accountLeaseRuntime.capture(forSubjectId: memory.authorId) else {
+            return false
+        }
+        return add(memory, ownerId: memory.authorId, accountLease: accountLease)
+    }
+
+    @discardableResult
+    func add(
+        _ memory: MemoryModel,
+        ownerId: String,
+        accountLease: AccountLease
+    ) -> Bool {
+        guard MemoryStoragePolicy.normalized(memory.id).isEmpty == false,
+              MemoryStoragePolicy.normalized(memory.authorId) == MemoryStoragePolicy.normalized(ownerId),
+              let scope = validatedOwnerMutationScope(
+                  ownerId: ownerId,
+                  accountLease: accountLease
+              ) else {
+            return false
+        }
+        let saved = withLock {
+            guard quarantineLegacyGlobalPayloadIfNeeded() else { return false }
+            let memories: [MemoryModel]
+            switch loadScopedMemories(scope: scope) {
+            case .missing:
+                memories = []
+            case .loaded(let loaded):
+                memories = loaded
+            case .rejected:
+                return false
+            }
+            guard !memories.contains(where: { $0.id == memory.id }) else { return false }
+            var updated = memories
+            updated.insert(memory, at: 0)
+            return save(memories: updated, scope: scope, accountLease: accountLease)
+        }
+        guard saved else { return false }
+        notificationCenter.post(name: .djNewMemoryCreated, object: memory)
+        return true
+    }
+
+    @discardableResult
+    func update(_ memory: MemoryModel) -> Bool {
+        guard let accountLease = accountLeaseRuntime.capture(forSubjectId: memory.authorId) else {
+            return false
+        }
+        return update(memory, ownerId: memory.authorId, accountLease: accountLease)
+    }
+
+    @discardableResult
+    func update(
+        _ memory: MemoryModel,
+        ownerId: String,
+        accountLease: AccountLease
+    ) -> Bool {
+        guard MemoryStoragePolicy.normalized(memory.authorId) == MemoryStoragePolicy.normalized(ownerId) else {
+            return false
+        }
+        return mutateMemory(
+            id: memory.id,
+            ownerId: ownerId,
+            accountLease: accountLease,
+            requiresOwnerLease: true
+        ) { stored in
+            guard stored.authorId == memory.authorId else { return nil }
+            stored = memory
+            return true
+        } ?? false
+    }
+
+    @discardableResult
+    func delete(id: String) -> Bool {
+        guard let accountLease = accountLeaseRuntime.capture(forSubjectId: nil) else { return false }
+        return delete(id: id, ownerId: accountLease.subjectId, accountLease: accountLease)
+    }
+
+    @discardableResult
+    func delete(id: String, ownerId: String, accountLease: AccountLease) -> Bool {
+        guard let scope = validatedOwnerMutationScope(
+            ownerId: ownerId,
+            accountLease: accountLease
+        ) else {
+            return false
+        }
+        return withLock {
+            guard quarantineLegacyGlobalPayloadIfNeeded() else { return false }
+            guard case .loaded(var memories) = loadScopedMemories(scope: scope),
+                  let index = memories.firstIndex(where: { $0.id == id && $0.authorId == scope.ownerId }) else {
+                return false
+            }
+            memories.remove(at: index)
+            return save(memories: memories, scope: scope, accountLease: accountLease)
         }
     }
 
-    func delete(id: String) {
-        memories.removeAll { $0.id == id }
-        savePersistedMemories()
-    }
-
-    func addComment(_ comment: CommentModel, to memoryId: String) {
-        if let index = memories.firstIndex(where: { $0.id == memoryId }) {
-            memories[index].comments.append(comment)
-            savePersistedMemories()
+    // MARK: Actor mutations
+    @discardableResult
+    func addComment(
+        _ comment: CommentModel,
+        to memoryId: String,
+        ownerId: String,
+        accountLease: AccountLease
+    ) -> Bool {
+        guard MemoryStoragePolicy.normalized(comment.authorId) == accountLease.subjectId else {
+            return false
         }
+        return mutateMemory(
+            id: memoryId,
+            ownerId: ownerId,
+            accountLease: accountLease,
+            requiresOwnerLease: false
+        ) { memory in
+            guard !memory.comments.contains(where: { $0.id == comment.id }) else { return nil }
+            memory.comments.append(comment)
+            return true
+        } ?? false
     }
 
-    func toggleLike(userId: String, userName: String, on memoryId: String) -> Bool {
-        guard let index = memories.firstIndex(where: { $0.id == memoryId }) else { return false }
-        if let likeIndex = memories[index].likes.firstIndex(where: { $0.userId == userId }) {
-            memories[index].likes.remove(at: likeIndex)
-            savePersistedMemories()
-            return false  // 取消点赞
-        } else {
-            memories[index].likes.append(LikeModel(userId: userId, userName: userName))
-            savePersistedMemories()
-            return true   // 点赞成功
-        }
-    }
-
-    func addSupplement(_ supplement: SupplementModel, to memoryId: String) {
-        if let index = memories.firstIndex(where: { $0.id == memoryId }) {
-            memories[index].supplements.append(supplement)
-            savePersistedMemories()
-        }
-    }
-
-    func togglePrivacy(memoryId: String) {
-        if let index = memories.firstIndex(where: { $0.id == memoryId }) {
-            memories[index].isPrivate.toggle()
-            savePersistedMemories()
-        }
-    }
-
-    // MARK: - Mock 数据
-    private func seedMockData() {
-        memories = [
-            MemoryModel(
-                id: "mem_001",
-                title: "上海 · 1975年7月",
-                subtitle: "外公结婚纪念日，全家在外滩合影",
-                location: "上海外滩",
-                year: 1975, month: 7,
-                latitude: 31.2397, longitude: 121.4901,
-                imageNames: [],
-                authorId: "user_001"
-            ),
-            MemoryModel(
-                id: "mem_002",
-                title: "北京 · 1988年10月",
-                subtitle: "爸爸第一次去北京出差，带回了故宫明信片",
-                location: "北京故宫",
-                year: 1988, month: 10,
-                latitude: 39.9163, longitude: 116.3972,
-                imageNames: [],
-                authorId: "user_001"
-            ),
-            MemoryModel(
-                id: "mem_003",
-                title: "成都 · 2003年5月",
-                subtitle: "全家旅行，第一次吃正宗火锅，妈妈辣哭了",
-                location: "成都宽窄巷子",
-                year: 2003, month: 5,
-                latitude: 30.6654, longitude: 104.0498,
-                imageNames: [],
-                authorId: "user_001"
-            ),
-            MemoryModel(
-                id: "mem_004",
-                title: "杭州 · 2015年9月",
-                subtitle: "爷爷最后一次看西湖，说这里是他心里最美的地方",
-                location: "杭州西湖",
-                year: 2015, month: 9,
-                latitude: 30.2590, longitude: 120.1532,
-                imageNames: [],
-                isPrivate: false,
-                authorId: "user_001"
-            ),
-            MemoryModel(
-                id: "mem_005",
-                title: "广州 · 2022年2月",
-                subtitle: "过年回老家，奶奶亲手做的年糕，香极了",
-                location: "广州花都",
-                year: 2022, month: 2,
-                latitude: 23.4034, longitude: 113.2197,
-                imageNames: [],
-                authorId: "user_001"
-            ),
-            MemoryModel(
-                id: "mem_006",
-                title: "南京 · 1990年3月",
-                subtitle: "第一次独自出远门，在夫子庙迷了路",
-                location: "南京夫子庙",
-                year: 1990, month: 3,
-                latitude: 32.0408, longitude: 118.7969,
-                imageNames: [],
-                isPrivate: true,
-                authorId: "user_001"
+    func toggleLike(
+        userName: String,
+        on memoryId: String,
+        ownerId: String,
+        accountLease: AccountLease
+    ) -> Bool? {
+        let normalizedUserName = MemoryStoragePolicy.normalized(userName)
+        guard !normalizedUserName.isEmpty else { return nil }
+        return mutateMemory(
+            id: memoryId,
+            ownerId: ownerId,
+            accountLease: accountLease,
+            requiresOwnerLease: false
+        ) { memory in
+            if let index = memory.likes.firstIndex(where: { $0.userId == accountLease.subjectId }) {
+                memory.likes.remove(at: index)
+                return false
+            }
+            memory.likes.append(
+                LikeModel(userId: accountLease.subjectId, userName: normalizedUserName)
             )
-        ]
+            return true
+        }
+    }
+
+    @discardableResult
+    func addSupplement(
+        _ supplement: SupplementModel,
+        to memoryId: String,
+        ownerId: String,
+        accountLease: AccountLease
+    ) -> Bool {
+        guard MemoryStoragePolicy.normalized(supplement.authorId) == accountLease.subjectId else {
+            return false
+        }
+        return mutateMemory(
+            id: memoryId,
+            ownerId: ownerId,
+            accountLease: accountLease,
+            requiresOwnerLease: false
+        ) { memory in
+            guard !memory.supplements.contains(where: { $0.id == supplement.id }) else { return nil }
+            memory.supplements.append(supplement)
+            return true
+        } ?? false
+    }
+
+    @discardableResult
+    func togglePrivacy(
+        memoryId: String,
+        ownerId: String,
+        accountLease: AccountLease
+    ) -> Bool {
+        mutateMemory(
+            id: memoryId,
+            ownerId: ownerId,
+            accountLease: accountLease,
+            requiresOwnerLease: true
+        ) { memory in
+            memory.isPrivate.toggle()
+            return true
+        } ?? false
+    }
+
+    func quarantineRecords(
+        ownerId: String,
+        accountLease: AccountLease
+    ) -> [MemoryQuarantineRecord] {
+        guard let scope = validatedScope(
+            ownerId: ownerId,
+            accountLease: accountLease,
+            checkpoint: .runtime
+        ) else {
+            return []
+        }
+        return MemoryQuarantineStorage.load(
+            storageKey: scope.quarantineStorageKey,
+            defaults: defaults
+        )
+    }
+
+    func deviceQuarantineRecords() -> [MemoryQuarantineRecord] {
+        MemoryQuarantineStorage.load(
+            storageKey: MemoryQuarantineStorage.deviceStorageKey,
+            defaults: defaults
+        )
+    }
+
+    func deviceMigrationReceipts() -> [MemoryLegacyMigrationReceipt] {
+        MemoryQuarantineStorage.loadReceipts(
+            quarantineStorageKey: MemoryQuarantineStorage.deviceStorageKey,
+            defaults: defaults
+        )
+    }
+
+    private func mutateMemory<Result>(
+        id: String,
+        ownerId: String,
+        accountLease: AccountLease,
+        requiresOwnerLease: Bool,
+        mutation: (inout MemoryModel) -> Result?
+    ) -> Result? {
+        let normalizedId = MemoryStoragePolicy.normalized(id)
+        guard !normalizedId.isEmpty,
+              let scope = validatedScope(
+                  ownerId: ownerId,
+                  accountLease: accountLease,
+                  checkpoint: .commit
+              ),
+              !requiresOwnerLease || scope.ownerId == scope.subjectId else {
+            return nil
+        }
+        return withLock {
+            guard quarantineLegacyGlobalPayloadIfNeeded() else { return nil }
+            guard case .loaded(var memories) = loadScopedMemories(scope: scope),
+                  let index = memories.firstIndex(where: {
+                      $0.id == normalizedId && $0.authorId == scope.ownerId
+                  }),
+                  let result = mutation(&memories[index]),
+                  save(memories: memories, scope: scope, accountLease: accountLease) else {
+                return nil
+            }
+            return result
+        }
+    }
+
+    private func validatedOwnerMutationScope(
+        ownerId: String,
+        accountLease: AccountLease
+    ) -> MemoryStorageScope? {
+        guard let scope = validatedScope(
+            ownerId: ownerId,
+            accountLease: accountLease,
+            checkpoint: .commit
+        ), scope.ownerId == scope.subjectId else {
+            return nil
+        }
+        return scope
+    }
+
+    private func validatedScope(
+        ownerId: String,
+        accountLease: AccountLease,
+        checkpoint: AccountLeaseCheckpoint
+    ) -> MemoryStorageScope? {
+        guard accountLeaseRuntime.validate(accountLease, at: checkpoint).allowed else { return nil }
+        let scope = MemoryStorageScope(accountLease: accountLease, ownerId: ownerId)
+        return scope.isValid ? scope : nil
+    }
+
+    private func loadScopedMemories(scope: MemoryStorageScope) -> ScopedLoadResult {
+        guard let data = defaults.data(forKey: scope.storageKey) else { return .missing }
+        guard let envelope = try? JSONDecoder().decode(MemoryStoreEnvelope.self, from: data) else {
+            quarantine(
+                data,
+                sourceStorageKey: scope.storageKey,
+                quarantineStorageKey: scope.quarantineStorageKey,
+                reason: .corrupt,
+                itemIds: []
+            )
+            return .rejected
+        }
+        switch MemoryStoragePolicy.validate(envelope, expectedScope: scope) {
+        case .accepted:
+            return .loaded(envelope.memories)
+        case .mismatch:
+            quarantine(
+                data,
+                sourceStorageKey: scope.storageKey,
+                quarantineStorageKey: scope.quarantineStorageKey,
+                reason: .mismatch,
+                itemIds: envelope.memories.map(\.id)
+            )
+        case .corrupt:
+            quarantine(
+                data,
+                sourceStorageKey: scope.storageKey,
+                quarantineStorageKey: scope.quarantineStorageKey,
+                reason: .corrupt,
+                itemIds: envelope.memories.map(\.id)
+            )
+        }
+        return .rejected
+    }
+
+    private func save(
+        memories: [MemoryModel],
+        scope: MemoryStorageScope,
+        accountLease: AccountLease
+    ) -> Bool {
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed,
+              let envelope = try? MemoryStoragePolicy.makeEnvelope(
+                  memories: memories,
+                  scope: scope
+              ),
+              let data = try? JSONEncoder().encode(envelope) else {
+            return false
+        }
+        let previousData = defaults.data(forKey: scope.storageKey)
+        defaults.set(data, forKey: scope.storageKey)
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            if defaults.data(forKey: scope.storageKey) == data {
+                if let previousData {
+                    defaults.set(previousData, forKey: scope.storageKey)
+                } else {
+                    defaults.removeObject(forKey: scope.storageKey)
+                }
+            }
+            return false
+        }
+        return true
+    }
+
+    @discardableResult
+    private func quarantineLegacyGlobalPayloadIfNeeded() -> Bool {
+        guard let data = defaults.data(forKey: Self.legacyPersistKey) else { return true }
+        let reason: MemoryQuarantineReason
+        let itemIds: [String]
+        if let memories = try? JSONDecoder().decode([MemoryModel].self, from: data) {
+            itemIds = memories.map(\.id)
+            if memories.contains(where: {
+                MemoryStoragePolicy.normalized($0.authorId).isEmpty
+            }) {
+                reason = .missingOwner
+            } else if !memories.isEmpty && memories.allSatisfy({ $0.id.hasPrefix("mem_") }) {
+                reason = .seedFixture
+            } else {
+                reason = .ambiguousOwner
+            }
+        } else {
+            itemIds = []
+            reason = .corrupt
+        }
+        return quarantine(
+            data,
+            sourceStorageKey: Self.legacyPersistKey,
+            quarantineStorageKey: MemoryQuarantineStorage.deviceStorageKey,
+            reason: reason,
+            itemIds: itemIds
+        )
+    }
+
+    @discardableResult
+    private func quarantine(
+        _ data: Data,
+        sourceStorageKey: String,
+        quarantineStorageKey: String,
+        reason: MemoryQuarantineReason,
+        itemIds: [String]
+    ) -> Bool {
+        let record = MemoryStoragePolicy.quarantineRecord(
+            sourceStorageKey: sourceStorageKey,
+            reason: reason,
+            itemIds: itemIds,
+            payload: data
+        )
+        guard MemoryQuarantineStorage.append(
+            record,
+            storageKey: quarantineStorageKey,
+            defaults: defaults
+        ), MemoryQuarantineStorage.append(
+            MemoryLegacyMigrationReceipt(
+                receiptId: UUID().uuidString,
+                surfaceId: "memory",
+                sourceStorageKey: sourceStorageKey,
+                quarantineStorageKey: quarantineStorageKey,
+                ownerEvidence: sourceStorageKey == Self.legacyPersistKey
+                    ? "none"
+                    : "rejectedEnvelope",
+                state: .quarantined,
+                reason: reason,
+                sourceContentHash: record.contentHash,
+                createdAt: Date()
+            ),
+            quarantineStorageKey: quarantineStorageKey,
+            defaults: defaults
+        ) else {
+            return false
+        }
+        if defaults.data(forKey: sourceStorageKey) == data {
+            defaults.removeObject(forKey: sourceStorageKey)
+        }
+        return true
+    }
+
+    private func withLock<Result>(_ operation: () -> Result) -> Result {
+        lock.lock()
+        defer { lock.unlock() }
+        return operation()
+    }
+}
+
+// MARK: - Owner-scoped Map presentation state
+final class MemoryMapPresentationStore {
+    static let shared = MemoryMapPresentationStore()
+
+    private static let legacyReadKey = "dj.readMemoryIds"
+    private static let legacyBouncedKey = "dj.bouncedMemoryIds"
+
+    private enum ScopedLoadResult {
+        case missing
+        case loaded(MemoryMapPresentationState)
+        case rejected
+    }
+
+    private let defaults: UserDefaults
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let lock = NSRecursiveLock()
+
+    init(
+        defaults: UserDefaults = .standard,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared
+    ) {
+        self.defaults = defaults
+        self.accountLeaseRuntime = accountLeaseRuntime
+    }
+
+    func load(
+        ownerId: String,
+        accountLease: AccountLease
+    ) -> MemoryMapPresentationState {
+        guard let scope = validatedScope(
+            ownerId: ownerId,
+            accountLease: accountLease,
+            checkpoint: .request
+        ) else {
+            return .empty
+        }
+        let state = withLock {
+            guard quarantineLegacyMapStateIfNeeded() else { return MemoryMapPresentationState.empty }
+            switch loadScopedState(scope: scope) {
+            case .missing, .rejected:
+                return .empty
+            case .loaded(let state):
+                return state
+            }
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else { return .empty }
+        return state
+    }
+
+    @discardableResult
+    func markRead(
+        memoryId: String,
+        ownerId: String,
+        accountLease: AccountLease
+    ) -> Bool {
+        mutate(
+            memoryId: memoryId,
+            ownerId: ownerId,
+            accountLease: accountLease
+        ) { $0.readMemoryIds.insert(memoryId) }
+    }
+
+    @discardableResult
+    func markBounced(
+        memoryId: String,
+        ownerId: String,
+        accountLease: AccountLease
+    ) -> Bool {
+        mutate(
+            memoryId: memoryId,
+            ownerId: ownerId,
+            accountLease: accountLease
+        ) { $0.bouncedMemoryIds.insert(memoryId) }
+    }
+
+    private func mutate(
+        memoryId: String,
+        ownerId: String,
+        accountLease: AccountLease,
+        mutation: (inout MemoryMapPresentationState) -> Void
+    ) -> Bool {
+        let normalizedId = MemoryStoragePolicy.normalized(memoryId)
+        guard !normalizedId.isEmpty,
+              let scope = validatedScope(
+                  ownerId: ownerId,
+                  accountLease: accountLease,
+                  checkpoint: .commit
+              ) else {
+            return false
+        }
+        return withLock {
+            guard quarantineLegacyMapStateIfNeeded() else { return false }
+            var state: MemoryMapPresentationState
+            switch loadScopedState(scope: scope) {
+            case .missing:
+                state = .empty
+            case .loaded(let loaded):
+                state = loaded
+            case .rejected:
+                return false
+            }
+            mutation(&state)
+            return save(state: state, scope: scope, accountLease: accountLease)
+        }
+    }
+
+    private func validatedScope(
+        ownerId: String,
+        accountLease: AccountLease,
+        checkpoint: AccountLeaseCheckpoint
+    ) -> MemoryStorageScope? {
+        guard accountLeaseRuntime.validate(accountLease, at: checkpoint).allowed else { return nil }
+        let scope = MemoryStorageScope(accountLease: accountLease, ownerId: ownerId)
+        return scope.isValid ? scope : nil
+    }
+
+    private func loadScopedState(scope: MemoryStorageScope) -> ScopedLoadResult {
+        let storageKey = scope.mapPresentationStorageKey
+        guard let data = defaults.data(forKey: storageKey) else { return .missing }
+        guard let envelope = try? JSONDecoder().decode(
+            MemoryMapPresentationEnvelope.self,
+            from: data
+        ) else {
+            quarantine(
+                data,
+                sourceStorageKey: storageKey,
+                quarantineStorageKey: scope.mapQuarantineStorageKey,
+                reason: .corrupt,
+                itemIds: []
+            )
+            return .rejected
+        }
+        switch MemoryStoragePolicy.validateMapEnvelope(envelope, expectedScope: scope) {
+        case .accepted:
+            return .loaded(
+                MemoryMapPresentationState(
+                    readMemoryIds: Set(envelope.readMemoryIds),
+                    bouncedMemoryIds: Set(envelope.bouncedMemoryIds)
+                )
+            )
+        case .mismatch:
+            quarantine(
+                data,
+                sourceStorageKey: storageKey,
+                quarantineStorageKey: scope.mapQuarantineStorageKey,
+                reason: .mismatch,
+                itemIds: envelope.readMemoryIds + envelope.bouncedMemoryIds
+            )
+        case .corrupt:
+            quarantine(
+                data,
+                sourceStorageKey: storageKey,
+                quarantineStorageKey: scope.mapQuarantineStorageKey,
+                reason: .corrupt,
+                itemIds: envelope.readMemoryIds + envelope.bouncedMemoryIds
+            )
+        }
+        return .rejected
+    }
+
+    private func save(
+        state: MemoryMapPresentationState,
+        scope: MemoryStorageScope,
+        accountLease: AccountLease
+    ) -> Bool {
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed,
+              let envelope = try? MemoryStoragePolicy.makeMapEnvelope(state: state, scope: scope),
+              let data = try? JSONEncoder().encode(envelope) else {
+            return false
+        }
+        let storageKey = scope.mapPresentationStorageKey
+        let previousData = defaults.data(forKey: storageKey)
+        defaults.set(data, forKey: storageKey)
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            if defaults.data(forKey: storageKey) == data {
+                if let previousData {
+                    defaults.set(previousData, forKey: storageKey)
+                } else {
+                    defaults.removeObject(forKey: storageKey)
+                }
+            }
+            return false
+        }
+        return true
+    }
+
+    @discardableResult
+    private func quarantineLegacyMapStateIfNeeded() -> Bool {
+        for storageKey in [Self.legacyReadKey, Self.legacyBouncedKey] {
+            guard let object = defaults.object(forKey: storageKey) else { continue }
+            let payload: Data
+            let itemIds: [String]
+            let reason: MemoryQuarantineReason
+            if let ids = object as? [String],
+               let encoded = try? JSONEncoder().encode(ids.sorted()) {
+                payload = encoded
+                itemIds = ids
+                reason = !ids.isEmpty && ids.allSatisfy({ $0.hasPrefix("mem_") })
+                    ? .seedFixture
+                    : .missingOwner
+            } else if let data = object as? Data {
+                payload = data
+                itemIds = []
+                reason = .corrupt
+            } else {
+                payload = Data(String(describing: object).utf8)
+                itemIds = []
+                reason = .corrupt
+            }
+            let record = MemoryStoragePolicy.quarantineRecord(
+                sourceStorageKey: storageKey,
+                reason: reason,
+                itemIds: itemIds,
+                payload: payload
+            )
+            guard MemoryQuarantineStorage.append(
+                record,
+                storageKey: MemoryQuarantineStorage.deviceStorageKey,
+                defaults: defaults
+            ), MemoryQuarantineStorage.append(
+                MemoryLegacyMigrationReceipt(
+                    receiptId: UUID().uuidString,
+                    surfaceId: "memoryMapPresentation",
+                    sourceStorageKey: storageKey,
+                    quarantineStorageKey: MemoryQuarantineStorage.deviceStorageKey,
+                    ownerEvidence: "none",
+                    state: .quarantined,
+                    reason: reason,
+                    sourceContentHash: record.contentHash,
+                    createdAt: Date()
+                ),
+                quarantineStorageKey: MemoryQuarantineStorage.deviceStorageKey,
+                defaults: defaults
+            ) else {
+                return false
+            }
+            if defaults.object(forKey: storageKey) != nil {
+                defaults.removeObject(forKey: storageKey)
+            }
+        }
+        return true
+    }
+
+    @discardableResult
+    private func quarantine(
+        _ data: Data,
+        sourceStorageKey: String,
+        quarantineStorageKey: String,
+        reason: MemoryQuarantineReason,
+        itemIds: [String]
+    ) -> Bool {
+        let record = MemoryStoragePolicy.quarantineRecord(
+            sourceStorageKey: sourceStorageKey,
+            reason: reason,
+            itemIds: itemIds,
+            payload: data
+        )
+        guard MemoryQuarantineStorage.append(
+            record,
+            storageKey: quarantineStorageKey,
+            defaults: defaults
+        ), MemoryQuarantineStorage.append(
+            MemoryLegacyMigrationReceipt(
+                receiptId: UUID().uuidString,
+                surfaceId: "memoryMapPresentation",
+                sourceStorageKey: sourceStorageKey,
+                quarantineStorageKey: quarantineStorageKey,
+                ownerEvidence: "rejectedEnvelope",
+                state: .quarantined,
+                reason: reason,
+                sourceContentHash: record.contentHash,
+                createdAt: Date()
+            ),
+            quarantineStorageKey: quarantineStorageKey,
+            defaults: defaults
+        ) else {
+            return false
+        }
+        if defaults.data(forKey: sourceStorageKey) == data {
+            defaults.removeObject(forKey: sourceStorageKey)
+        }
+        return true
+    }
+
+    private func withLock<Result>(_ operation: () -> Result) -> Result {
+        lock.lock()
+        defer { lock.unlock() }
+        return operation()
     }
 }
