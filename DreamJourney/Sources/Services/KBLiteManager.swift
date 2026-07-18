@@ -58,6 +58,9 @@ final class KBLiteManager {
         let semanticScope = semanticCacheScopeLocked()
         KBLiteSemanticSearch.shared.activate(scope: semanticScope)
         let activeOwner = loadedUserId == Self.signedOutUserId ? nil : loadedUserId
+        mountedAccountLease = activeOwner.flatMap {
+            accountLeaseRuntime.capture(forSubjectId: $0)
+        }
         widgetSnapshotStore.activate(ownerUserId: activeOwner, generation: userGeneration)
         if let activeOwner,
            let accountScope = captureAccountLeaseScope(expectedOwnerUserId: activeOwner),
@@ -93,6 +96,9 @@ final class KBLiteManager {
 
     /// 用户切换代次，用于丢弃旧用户尚未返回的异步提取结果。
     private var userGeneration = UUID()
+
+    /// Mount identity captured before a lifecycle fence; deletion must never infer it afterward.
+    private var mountedAccountLease: AccountLease? = nil
 
     /// 当前角色及其代次。异步提取只能比较这份锁内状态，不能在后台重读 FamilyRepository。
     private var activePersonaIdentity: KBPersonaIdentity?
@@ -364,6 +370,71 @@ final class KBLiteManager {
         }
 
         return userFile
+    }
+
+    @discardableResult
+    func purgeLocalDataForAccountDeletion(accountLease: AccountLease) -> Bool {
+        let ownerUserId = accountLease.subjectId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !ownerUserId.isEmpty,
+              accountLease.vaultId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
+              !hasConflictingCurrentLease(accountLease) else {
+            return false
+        }
+        do {
+            try removePersistedGraphArtifacts(forOwnerUserId: ownerUserId)
+            return true
+        } catch {
+            print("[KBLite] account deletion purge failed reason=storageFailure")
+            return false
+        }
+    }
+
+    private func removePersistedGraphArtifacts(forOwnerUserId ownerUserId: String) throws {
+        let graphFileName = "kb_graph_\(ownerUserId).json"
+        guard ownerUserId != Self.signedOutUserId,
+              !ownerUserId.contains("/"),
+              !ownerUserId.contains("\\"),
+              URL(fileURLWithPath: graphFileName).lastPathComponent == graphFileName else {
+            throw CocoaError(.fileReadInvalidFileName)
+        }
+
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let kbDirectory = docs.appendingPathComponent("knowledge_base", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: kbDirectory.path) else { return }
+        let candidates = try FileManager.default.contentsOfDirectory(
+            at: kbDirectory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: []
+        )
+        for candidate in candidates {
+            let name = candidate.lastPathComponent
+            let isPrimaryGraph = name == graphFileName
+            let isCorruptedBackup = name.hasPrefix("\(graphFileName).corrupted")
+            let isStagingArtifact = name.hasPrefix(".\(graphFileName).")
+                && name.hasSuffix(".staging")
+            guard isPrimaryGraph || isCorruptedBackup || isStagingArtifact else { continue }
+            try FileManager.default.removeItem(at: candidate)
+        }
+    }
+
+    private func hasConflictingCurrentLease(_ oldAccountLease: AccountLease) -> Bool {
+        guard let currentAccountLease = accountLeaseRuntime.capture(
+            forSubjectId: oldAccountLease.subjectId
+        ) else {
+            return false
+        }
+        return !Self.isSameAccountLeaseGeneration(currentAccountLease, oldAccountLease)
+    }
+
+    private static func isSameAccountLeaseGeneration(
+        _ lhs: AccountLease,
+        _ rhs: AccountLease
+    ) -> Bool {
+        lhs.subjectId == rhs.subjectId
+            && lhs.vaultId == rhs.vaultId
+            && lhs.generation == rhs.generation
+            && lhs.generationId == rhs.generationId
+            && lhs.authorityEpoch == rhs.authorityEpoch
     }
 
     // MARK: - Persistence
@@ -664,14 +735,21 @@ final class KBLiteManager {
     /// 在进程内切换知识所有者；旧用户异步结果会因 generation 不匹配而被丢弃。
     func switchUser(to userId: String?) {
         let normalized = Self.normalizedUserId(userId)
+        let nextAccountLease = normalized == Self.signedOutUserId
+            ? nil
+            : accountLeaseRuntime.capture(forSubjectId: normalized)
         var loadedGraph: KBLiteGraph?
         var activatedGeneration: UUID?
         var semanticScope: KBLiteSemanticCacheScope?
         performSynchronouslyOnExtractQueue {
             graphLock.lock()
             defer { graphLock.unlock() }
-            guard normalized != loadedUserId else { return }
+            guard normalized != loadedUserId else {
+                mountedAccountLease = nextAccountLease
+                return
+            }
             loadedUserId = normalized
+            mountedAccountLease = nextAccountLease
             userGeneration = UUID()
             activePersonaIdentity = normalized == Self.signedOutUserId
                 ? nil
@@ -737,13 +815,32 @@ final class KBLiteManager {
             detailCode: "knowledgeTeardownNotExecuted"
         )
         performSynchronouslyOnExtractQueue {
+            if let oldAccountLease = context.oldAccountLease,
+               hasConflictingCurrentLease(oldAccountLease) {
+                result = .completed(
+                    .failed,
+                    remainingLocalData: true,
+                    detailCode: "knowledgeTeardownGenerationConflict"
+                )
+                return
+            }
             graphLock.lock()
             let mountedOwner = loadedUserId
-            let oldOwner = context.oldAccountLease?.subjectId
+            let oldAccountLease = context.oldAccountLease
+            let oldOwner = oldAccountLease?.subjectId
             let scopeMatches = mountedOwner == Self.signedOutUserId
                 || oldOwner == nil
                 || mountedOwner == oldOwner
-            guard scopeMatches else {
+            let mountedLeaseMatches: Bool
+            if let mountedAccountLease, let oldAccountLease {
+                mountedLeaseMatches = Self.isSameAccountLeaseGeneration(
+                    mountedAccountLease,
+                    oldAccountLease
+                )
+            } else {
+                mountedLeaseMatches = true
+            }
+            guard scopeMatches, mountedLeaseMatches else {
                 graphLock.unlock()
                 result = .completed(
                     .failed,
@@ -762,16 +859,34 @@ final class KBLiteManager {
             graph = KBLiteGraph()
             isExtracting = false
             didWarnCapacity = false
+            mountedAccountLease = nil
             graphLock.unlock()
 
             KBLiteSemanticSearch.shared.activate(scope: nil)
             widgetSnapshotStore.activate(ownerUserId: nil, generation: unmountedGeneration)
             switch context.event {
             case .accountDeletion:
+                guard let oldAccountLease,
+                      oldAccountLease.generation == context.oldGeneration else {
+                    result = .completed(
+                        .failed,
+                        remainingLocalData: true,
+                        detailCode: "knowledgeDeletionPurgeUnsupported"
+                    )
+                    return
+                }
+                guard purgeLocalDataForAccountDeletion(accountLease: oldAccountLease) else {
+                    result = .completed(
+                        .failed,
+                        remainingLocalData: true,
+                        detailCode: "knowledgeDeletionPurgeFailed"
+                    )
+                    return
+                }
                 result = .completed(
-                    .failed,
-                    remainingLocalData: true,
-                    detailCode: "knowledgeDeletionPurgeUnsupported"
+                    .purged,
+                    remainingLocalData: false,
+                    detailCode: "knowledgeDeletionPurged"
                 )
             case .coldStartRecovery:
                 result = .completed(

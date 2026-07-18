@@ -46,6 +46,7 @@ final class FamilyRepository {
         // 延迟首次同步（等知识库加载完成）
         let startupOwnerUserId = activeOwnerUserId
         let startupAccountLease = captureAccountLease(for: startupOwnerUserId)
+        activeAccountLease = startupAccountLease
         let startupWorkItem = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.startupWorkItem = nil
@@ -90,7 +91,8 @@ final class FamilyRepository {
         context: AccountLifecycleContext
     ) -> AccountLifecycleModuleResult {
         performSynchronouslyOnMain {
-            let oldOwner = context.oldAccountLease?.subjectId
+            let oldAccountLease = context.oldAccountLease
+            let oldOwner = oldAccountLease?.subjectId
             if !activeOwnerUserId.isEmpty,
                let oldOwner,
                activeOwnerUserId != oldOwner {
@@ -98,6 +100,23 @@ final class FamilyRepository {
                     .failed,
                     remainingLocalData: true,
                     detailCode: "familyTeardownScopeMismatch"
+                )
+            }
+            if let activeAccountLease,
+               let oldAccountLease,
+               !Self.isSameAccountLeaseGeneration(activeAccountLease, oldAccountLease) {
+                return .completed(
+                    .failed,
+                    remainingLocalData: true,
+                    detailCode: "familyTeardownScopeMismatch"
+                )
+            }
+            if let oldAccountLease,
+               hasConflictingCurrentLease(oldAccountLease) {
+                return .completed(
+                    .failed,
+                    remainingLocalData: true,
+                    detailCode: "familyTeardownGenerationConflict"
                 )
             }
 
@@ -110,13 +129,29 @@ final class FamilyRepository {
             knowledgeCandidates = []
             modeOverrides = [:]
             voiceProfileOverrides = [:]
+            activeAccountLease = nil
 
             switch context.event {
             case .accountDeletion:
+                guard let oldAccountLease,
+                      oldAccountLease.generation == context.oldGeneration else {
+                    return .completed(
+                        .failed,
+                        remainingLocalData: true,
+                        detailCode: "familyDeletionPurgeUnsupported"
+                    )
+                }
+                guard purgeLocalDataForAccountDeletion(accountLease: oldAccountLease) else {
+                    return .completed(
+                        .failed,
+                        remainingLocalData: true,
+                        detailCode: "familyDeletionPurgeFailed"
+                    )
+                }
                 return .completed(
-                    .failed,
-                    remainingLocalData: true,
-                    detailCode: "familyDeletionPurgeUnsupported"
+                    .purged,
+                    remainingLocalData: false,
+                    detailCode: "familyDeletionLocalProjectionPurgedRemoteRightsPending"
                 )
             case .coldStartRecovery:
                 return .completed(
@@ -149,6 +184,7 @@ final class FamilyRepository {
     private var members: [FamilyMember] = []
     private(set) var knowledgeCandidates: [FamilyRelationshipCandidate] = []
     private var activeOwnerUserId: String
+    private var activeAccountLease: AccountLease? = nil
     private var userGeneration = UUID()
     private var authorizationFreshness = FamilyAuthorizationFreshness()
     private var modeOverrides: [String: DigitalHumanMode] = [:]
@@ -803,8 +839,12 @@ final class FamilyRepository {
 
     private func activateUser(_ userId: String?, accountLease: AccountLease?) {
         let normalizedOwner = Self.normalizedUserId(userId)
-        guard normalizedOwner != activeOwnerUserId else { return }
+        guard normalizedOwner != activeOwnerUserId else {
+            activeAccountLease = accountLease
+            return
+        }
         activeOwnerUserId = normalizedOwner
+        activeAccountLease = accountLease
         userGeneration = UUID()
         authorizationFreshness.reset()
         KBLiteManager.shared.familyAuthorizationGenerationDidChange(
@@ -894,6 +934,48 @@ final class FamilyRepository {
     private func ownerScopedKey(base: String, ownerUserId: String) -> String? {
         guard !ownerUserId.isEmpty else { return nil }
         return "\(base).\(ownerUserId)"
+    }
+
+    @discardableResult
+    func purgeLocalDataForAccountDeletion(accountLease: AccountLease) -> Bool {
+        let ownerUserId = Self.normalizedUserId(accountLease.subjectId)
+        guard !ownerUserId.isEmpty,
+              accountLease.vaultId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
+              !hasConflictingCurrentLease(accountLease),
+              let modeKey = ownerScopedKey(
+                  base: modeOverridesBaseKey,
+                  ownerUserId: ownerUserId
+              ),
+              let voiceKey = ownerScopedKey(
+                  base: voiceProfileOverridesBaseKey,
+                  ownerUserId: ownerUserId
+              ) else {
+            return false
+        }
+        UserDefaults.standard.removeObject(forKey: modeKey)
+        UserDefaults.standard.removeObject(forKey: voiceKey)
+        return UserDefaults.standard.object(forKey: modeKey) == nil
+            && UserDefaults.standard.object(forKey: voiceKey) == nil
+    }
+
+    private func hasConflictingCurrentLease(_ oldAccountLease: AccountLease) -> Bool {
+        guard let currentAccountLease = accountLeaseRuntime.capture(
+            forSubjectId: oldAccountLease.subjectId
+        ) else {
+            return false
+        }
+        return !Self.isSameAccountLeaseGeneration(currentAccountLease, oldAccountLease)
+    }
+
+    private static func isSameAccountLeaseGeneration(
+        _ lhs: AccountLease,
+        _ rhs: AccountLease
+    ) -> Bool {
+        lhs.subjectId == rhs.subjectId
+            && lhs.vaultId == rhs.vaultId
+            && lhs.generation == rhs.generation
+            && lhs.generationId == rhs.generationId
+            && lhs.authorityEpoch == rhs.authorityEpoch
     }
 
     private func captureAccountLease(for ownerUserId: String) -> AccountLease? {
