@@ -1,6 +1,6 @@
 {
   "activeWorkItem": {
-    "authorityLock": "ACCOUNT_LOCAL_STATE",
+    "authorityLock": "RIGHTS_DELETION",
     "backendPendingPaths": [],
     "completedSubSlices": [
       {
@@ -19,22 +19,32 @@
         ],
         "evidence": "docs/superpowers/status/2026-07-18-wi-s0-01-08b-account-lifecycle-runtime.md",
         "id": "WI-S0-01-08B"
+      },
+      {
+        "commits": [
+          "4d37450",
+          "aa949e8"
+        ],
+        "evidence": "docs/superpowers/status/2026-07-18-wi-s0-05-01a-rights-contract-storage.md",
+        "id": "WI-S0-05-01A"
       }
     ],
-    "currentSubSlice": "WI-S0-01-08C",
+    "currentSubSlice": "WI-S0-05-01B",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
+      "G0": "PASS",
       "G1": "MISSING",
+      "G2": "MISSING",
       "G4": "MISSING"
     },
-    "id": "WI-S0-01-08",
+    "id": "WI-S0-05-01",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "Switch, logout, suspension and cold-start teardown are wired and verified; complete irreversible account-deletion local purge without changing ordinary logout semantics."
+    "summary": "Rights Request/Execution/Receipt G0 contract and additive 0006 schema are verified; continue with dual-store persistence and legacy /auth/delete compatibility without claiming G2/G4."
   },
   "baselines": {
-    "backend": "main@32a081f",
-    "ios": "feature/prd-stitch-ui-adaptation@b9f6c52",
+    "backend": "main@aa949e8",
+    "ios": "feature/prd-stitch-ui-adaptation@593c05b",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
@@ -256,9 +266,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S0-05-01",
-    "state": "PLANNED_AFTER_CURRENT",
-    "summary": "Begin access-first rights and deletion lifecycle after account-local cleanup orchestration is verified."
+    "id": "WI-S0-05-01B",
+    "state": "IN_PROGRESS",
+    "summary": "Add InMemoryStore/PostgresStore persistence and a narrow internal/service contract for rights requests, executions, and redacted receipts; preserve legacy auth deletion behavior."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -267,5 +277,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-18T17:20:52+08:00"
+  "updatedAt": "2026-07-18T18:20:00+08:00"
 }

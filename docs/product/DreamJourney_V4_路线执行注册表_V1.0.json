@@ -2455,13 +2455,13 @@
       "decision": "STOP",
       "dependencyNotesHash": "a6ec299df8c1ed0a9016d998f27765f7e8140a24bfa59e85a4461182bd9d83f9",
       "directDependencies": [],
-      "executionOwner": "UNASSIGNED",
+      "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
       "gateEvidence": {
         "G2": "MISSING",
         "G4": "MISSING"
       },
       "id": "WI-S0-05-01",
-      "lifecycle": "PLANNED",
+      "lifecycle": "IN_PROGRESS",
       "packageId": "WP-S0-05",
       "priorityClass": "P0",
       "releaseClass": "CORE",
