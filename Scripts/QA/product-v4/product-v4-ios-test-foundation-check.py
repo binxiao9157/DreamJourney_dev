@@ -57,9 +57,9 @@ def main() -> None:
     for required in (
         'name: "DreamJourneyCore"',
         'name: "DreamJourneyCoreTests"',
-        '"AccountSessionActor.swift"',
-        '"AccountLease.swift"',
-        '"AudioOwnerLeaseModel.swift"',
+        '"App/AccountSessionActor.swift"',
+        '"App/AccountLease.swift"',
+        '"App/AudioOwnerLeaseModel.swift"',
         'path: "DreamJourneyTests"',
     ):
         require(required in package, f"unhosted XCTest package contract missing: {required}")
