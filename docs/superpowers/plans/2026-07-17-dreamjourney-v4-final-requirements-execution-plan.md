@@ -159,7 +159,7 @@ GIC 需求在本计划中的唯一落点：
 
 `WI-S0-04-05` 已完成恢复工具、运行时围栏和真实 Postgres 隔离恢复演练，Backend 已部署至 `e1922f2`，iOS 恢复策略已提交至 `dde3081`。G2 实测结论为 `NO_GO`：历史数据存在 361 条 owner orphan，且全库 replay bundle 缺失；G3 仍未关闭。证据见 `docs/superpowers/status/2026-07-17-wi-s0-04-05-postgres-recovery.md`。
 
-该 NO_GO 不允许恢复切流，但不阻止继续不依赖切流的身份与授权工作。当前活动任务为 `WI-S0-02-01`，Authority lease 为 `IDENTITY_AUTHZ`；完成后按 Slice 1C 顺序进入 `WI-S0-02-02`。
+该 NO_GO 不允许恢复切流，但不阻止继续不依赖切流的账户本地状态隔离工作。`WI-S0-01-06` 已完成 Conversation、Memoir、Memory/Map、Home 私有媒体的 owner-scoped store、旧全局数据 quarantine/receipt、固定 fallback writer 退役，并通过 G0 总 Gate、G1 模拟器 A/B 隔离和通用 iOS 构建；G4 显式认领产品文案仍保持开放。证据见 `docs/superpowers/status/2026-07-18-wi-s0-01-06-global-private-store-retirement.md`。当前活动任务为 `WI-S0-01-07`，Authority lease 继续为 `ACCOUNT_LOCAL_STATE`；先推进 Reply/Message/Notification owner scope，再推进 Voice/TTS/Digital Human 本地状态和 lifecycle adapter，完成后进入 `WI-S0-01-08`。
 
 ### 3.3 工作区保护
 

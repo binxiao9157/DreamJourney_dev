@@ -150,7 +150,7 @@
 | FR-SRC-001 | P0 | `CONTRACT_ONLY` | `MOCK_ONLY` upload intent | OPEN: DR-026/031 | 对象存储、扫描、删除 | HIDDEN_QA | `MOCK_ONLY` | Stage 2 摄入与质量 | upload intent 为 `mock://`，无预签名直传 |
 | FR-SRC-002 | P0 | `PARTIAL` local media | `MISSING` processors | OPEN: DR-026/031 | OCR/ASR/parser、对象存储 | PUBLIC_PARTIAL | `PARTIAL` | Stage 2 摄入与质量 | 文字/照片本地能力存在；PDF/DOCX/OCR/ASR 与真实视频未闭环 |
 | FR-SRC-003 | P0 | `PARTIAL` | `IMPLEMENTED` metadata cascade | CONFIRMED: DR-011/039; OPEN: DR-035 | 对象/provider/备份删除 | PUBLIC_PARTIAL | `PARTIAL` | Stage 1 Owner 核心 | Source 删除语义已确认；Archive→KB cascade 已有，但无权威 Source/Object version 和完整回执 |
-| FR-CHAT-001 | P0 | `PARTIAL` Echo | `MISSING` Conversation messages | CONFIRMED: DR-008/015 | LLM streaming、来源 UX | PUBLIC_PARTIAL | `PARTIAL` | Stage 1 Owner 核心 | 一个自然输入的产品形态已确认；无服务端 Message authority、历史重取、InterviewSession/Thread 或取消/重试合同 |
+| FR-CHAT-001 | P0 | `PARTIAL` Echo + owner-scoped local cache | `MISSING` Conversation messages | CONFIRMED: DR-008/015 | LLM streaming、来源 UX | PUBLIC_PARTIAL | `PARTIAL` | Stage 1 Owner 核心 | 一个自然输入的产品形态已确认；Conversation 本地 cache 已按 subject/vault/owner 隔离并通过 WI-S0-01-06 G0/G1；仍无服务端 Message authority、历史重取、InterviewSession/Thread 或取消/重试合同 |
 | FR-CHAT-002 | P0 | `IMPLEMENTED` extraction client | `IMPLEMENTED` proposal API | CONFIRMED: DR-007/015; EXTERNAL: DR-031 | 模型质量/安全/处理商 | PUBLIC_PARTIAL | `PARTIAL` | Stage 1 Owner 核心 | 提取组件存在，但无 Source/Job/Candidate authority，也无连续性/完整性推荐、知识缺口和访谈动作编排，不能按 FR 标 IMPLEMENTED |
 | FR-CHAT-003 | P0 | `CONTRACT_ONLY` governance | `MISSING` risk policy | CONFIRMED: DR-007/015; EXTERNAL: DR-022/036 | 安全/监护评审 | HIDDEN_QA | `CONTRACT_ONLY` | Stage 1 Owner 核心 | 批量确认与访谈节奏已确认；无跳过/暂缓/禁问 Authority、敏感推荐阻断、疲劳收束和完整体验 |
 | FR-VOICE-001 | P0 | `PARTIAL` capture/consent | `PARTIAL` training | CONFIRMED: DR-004/008/014/023/037; EXTERNAL: DR-026/031/036 | 在世本人、成年、随机语句、活体、质量、合规、真机 | BETA_UNVERIFIED | `PARTIAL` | M1 Living Self Voice | 当前仍缺随机语句/活体/SNR；现有 Family/Guardian/逝者入口必须硬拒绝，不能构成训练授权 |
@@ -159,7 +159,7 @@
 | FR-VOICE-004 | P0 | `MISSING` Visitor | `MISSING` public voice auth | CONFIRMED: DR-002/004/010/014/038; EXTERNAL: DR-036 | 成年身份、权利、安全评估/备案、真机、provider、滥用 | DISABLED | `MISSING` | M2 after Publication | 无成年 Visitor 域和声音独立授权；逝者 Voice/DH 不得复用 Owner Echo 或关系证明 |
 | FR-VOICE-005 | P0 | `PARTIAL` | `PARTIAL` | CONFIRMED: DR-004/028/037; EXTERNAL: DR-031/036 | 合规、provider、标识、评估/备案 | BETA_UNVERIFIED | `PARTIAL` | M1/M2/M3 split | 缺留存、显式/隐式标识、生成审计、依赖/退出/危机、近亲属异议、公开撤权和 provider 删除 SLA |
 | FR-MEM-001 | P0 | `HIDDEN_QA` service | `IMPLEMENTED` governance primitive | CONFIRMED: DR-007/015; OPEN: DR-034 | 审核 UX/迁移 | HIDDEN_QA | `CONTRACT_ONLY` | Stage 1 Owner 核心 | endpoint 有；批量确认产品规则已定，但无公开 Candidate Inbox、访谈批次来源、敏感审核和 authority |
-| FR-MEM-002 | P0 | `PARTIAL` | `IMPLEMENTED` projection version | CONFIRMED: DR-029; OPEN: DR-034 | migration/recovery | HIDDEN_QA | `PARTIAL` | Stage 1 Owner 核心 | Memory Ontology 已确认；仍缺 ConfirmedMemoryVersion authority、类型化实现及 DimensionCoverage/KnowledgeGap Projection，legacy confirmed 需分级迁移 |
+| FR-MEM-002 | P0 | `PARTIAL` owner-scoped legacy store | `IMPLEMENTED` projection version | CONFIRMED: DR-029; OPEN: DR-034 | migration/recovery | HIDDEN_QA | `PARTIAL` | Stage 1 Owner 核心 | Memory Ontology 已确认；Memory/Map 本地 legacy store 已按 owner 隔离、旧全局 key quarantine 并通过 WI-S0-01-06 G0/G1；仍缺 ConfirmedMemoryVersion authority、类型化实现及 DimensionCoverage/KnowledgeGap Projection |
 | FR-MEM-003 | P1 | `MISSING` | `MISSING` | INHERITS V4 | 模型评测 | DISABLED | `MISSING` | Stage 4 认知增强 | 当前 409 是同步并发冲突，不是语义冲突 |
 | FR-MEM-004 | P1 | `PARTIAL` graph/family | `CONTRACT_ONLY` | OPEN: DR-022/036 | 产品 UX/第三方政策 | HIDDEN_QA | `PARTIAL` | Stage 4 认知增强 | KBPerson 仅投影候选；无 Entity/Relation authority 与合并管理 |
 | FR-QA-001 | P0 | `IMPLEMENTED` Echo/Context | `IMPLEMENTED` private context | CONFIRMED: DR-007/008; OPEN: DR-034 | LLM质量、来源 UX | PUBLIC_PARTIAL | `PARTIAL` | Stage 1 Owner 核心 | Context trace 成熟；无 Memory authority、文字 QA 和完整可点击引用 |
@@ -170,7 +170,7 @@
 | FR-VIS-001 | P0 | `MISSING` | `MISSING` | CONFIRMED: DR-010/038 | 成年身份、限流、联系人、第三方规则 | DISABLED | `MISSING` | M2 | 无 adult verification、share grant、Visitor principal、暂停/关闭 |
 | FR-VIS-002 | P0 | `MISSING` | `MISSING` | CONFIRMED: DR-006/010/038 | LLM/注入/隔离/依赖/退出/危机 | DISABLED | `MISSING` | M2 | 无独立 public retrieval、安全评测、2小时提醒和确定性退出 |
 | FR-VIS-003 | P1 | `MISSING` | `MISSING` | CONFIRMED: DR-010/038 | 运营/投诉/举报流程 | DISABLED | `MISSING` | M2 | Owner不可见正文规则已确认；无投诉举报、消息隐私和待处理区实现 |
-| FR-PRIV-001 | P0 | `PARTIAL` Knowledge/Echo scope | `PARTIAL` ownership shadow/system token | CONFIRMED: DR-023/024; OPEN: DR-035 | 渗透、生产隔离 | CROSS_CUTTING | `PARTIAL` | Stage 0 安全止损 | Archive/Memoir/Conversation 清理不完整；全局 enforce/强身份缺失 |
+| FR-PRIV-001 | P0 | `PARTIAL` owner-scoped local stores | `PARTIAL` ownership shadow/system token | CONFIRMED: DR-023/024; OPEN: DR-035 | 渗透、生产隔离 | CROSS_CUTTING | `PARTIAL` | Stage 0 安全止损 | Archive（WI-S0-01-05）及 Conversation/Memoir/Memory/Map/Home（WI-S0-01-06）目标本地 writer 已 owner-scoped，并有各自 G0/G1 隔离证据；账号级统一 purge、剩余私有 surface、后端权威、生产隔离与 G4 仍未关闭 |
 | FR-PRIV-002 | P0 | `PARTIAL` privacy scope | `PARTIAL` | CONFIRMED: DR-004; OPEN: DR-035; EXTERNAL: DR-036 | 隐私/法律评审 | CROSS_CUTTING | `PARTIAL` | Stage 0 安全止损 | 需拆 sensitivity、basis/consent、access/visibility、publication、Memorial capability 与 conflict hold |
 | FR-PRIV-003 | P0 | `PARTIAL` family private | `PARTIAL` context policy | CONFIRMED: DR-003/004; EXTERNAL: DR-022/036 | 合规/关系证明/权利请求 | CROSS_CUTTING | `PARTIAL` | M0 静态家庭贡献 + M2/M3 独立高风险门 | 无第三方/逝者按用途政策、近亲属 RightsRequest 与争议冻结实现；未成年人虚拟亲属/Voice/Persona 还缺服务端硬拒绝 |
 | FR-PRIV-004 | P0 | `PARTIAL` QA export | `MISSING` product export | CONFIRMED: DR-005/039; OPEN: DR-035 | 格式、第三方裁剪、停服迁移、大对象 | HIDDEN_QA | `PARTIAL` | M0 Data Rights | 新基线要求本人数据可读导出和可机读清单；当前只有QA导出，缺正式复制/删除/导出流程 |
@@ -187,9 +187,9 @@
 | 能力域 | 成熟度 | 当前可复用实现 | 关键缺口与证据 |
 | --- | --- | --- | --- |
 | Account / Auth | `PARTIAL` | `BackendAuthSessionStore` 使用 Keychain 保存 opaque access/refresh session；client 支持 401 refresh coalescing；`UserManager` 已串行化账号切换副作用 | 登录 UI 仍是手机号+密码，真实身份校验由后端缺口阻断；client 仍可发送共享 API token。证据：`BackendAuthSessionStore.swift:53`、`DreamJourneyBackendClient.swift:3738`、`:3838`、`LoginViewController.swift:231` |
-| Archive / Source / Media | `PARTIAL` | 公开 Archive 支持文字、照片、本地详情、metadata sync、sourceRef/owner/persona 字段；音频录制和时间信件有本地生命周期 | 尚无独立 Source Domain；视频入口明确只生成 mock；audio/video upload 默认关闭且后端 intent 为 mock。证据：`MemoryArchiveItem.swift`、`MemoryArchiveRepository.swift:297`、`MemoryArchiveVideoEntryViewController.swift:76` |
-| Knowledge / Memory | `IMPLEMENTED`（Projection） / `MISSING`（V4 权威模型） | KBLite 多账号图谱、evidence/source、Mutation V2、三方合并、governance、change feed、receipt、Context policy 均有代码与 gate | 当前是 Knowledge Projection，不是 Source/Candidate/Canonical Memory 权威模型；审核 UX 和正式记忆版本域缺失。证据：`KBLiteManager.swift`、`KnowledgeSyncCoordinator.swift`、`KnowledgeGenerationPolicy.swift` |
-| Echo / Conversation | `PARTIAL` + `EXTERNAL_ACCEPTANCE` | Echo 状态机、Context Packet、延迟回信、ASR/TTS、barge-in、audio owner、数字人生命周期与 QA evidence 很完整 | 没有服务端 Conversation/Message 权威存储和独立文字流式会话；也没有一个自然入口/双推荐、Interview Orchestrator、ThreadPreference、疲劳/禁问与知识覆盖 Projection 的实现证据。生产语音延迟与多轮稳定性依赖真机/provider。证据：`DialogEngineManager.swift`、`EchoViewController.swift:3488`、`:4498` |
+| Archive / Source / Media | `PARTIAL` | 公开 Archive 支持文字、照片、本地详情、metadata sync、sourceRef/owner/persona 字段；音频录制和时间信件有本地生命周期；Home 照片和录音 staging 已迁入 AccountLease 派生的账号私有媒体 store，旧全局照片 quarantine、临时录音 discard | 尚无独立 Source Domain；视频入口明确只生成 mock；audio/video upload 默认关闭且后端 intent 为 mock；账号级统一 purge 待 WI-S0-01-08。证据：`ArchiveLocalStorage.swift`、`AccountPrivateMediaStore.swift`、`MemoryArchiveVideoEntryViewController.swift` |
+| Knowledge / Memory | `IMPLEMENTED`（Projection） / `MISSING`（V4 权威模型） | KBLite 多账号图谱、evidence/source、Mutation V2、三方合并、governance、change feed、receipt、Context policy 均有代码与 gate；legacy `MemoryRepository` 与 Map presentation 已使用 owner-scoped envelope | 当前仍是 Knowledge/legacy local Projection，不是 Source/Candidate/Canonical Memory 权威模型；审核 UX 和正式记忆版本域缺失。证据：`KBLiteManager.swift`、`MemoryRepository.swift`、`MapFootprintViewController.swift` |
+| Echo / Conversation | `PARTIAL` + `EXTERNAL_ACCEPTANCE` | Echo 状态机、Context Packet、延迟回信、ASR/TTS、barge-in、audio owner、数字人生命周期与 QA evidence 很完整；Conversation 本地 cache 已使用 owner-scoped envelope、legacy quarantine 与 AccountLease commit fence | 没有服务端 Conversation/Message 权威存储和独立文字流式会话；也没有一个自然入口/双推荐、Interview Orchestrator、ThreadPreference、疲劳/禁问与知识覆盖 Projection。生产语音仍依赖真机/provider。证据：`ConversationLocalStorage.swift`、`ConversationMemoryManager.swift`、`EchoViewController.swift` |
 | Voice Clone / TTS / ASR | `PARTIAL` + `EXTERNAL_ACCEPTANCE` | iOS 只经后端训练/查询/合成，存在授权确认、轮询、试听、启停/删除 UI 和 role voice selection | 缺随机授权语句、活体/本人证明、SNR 质量门、private/public 双授权和 provider 删除回执；家庭音色能力与新 PRD 冲突。证据：`VoiceCloneService.swift:139`、`:545`、`ProfileVoiceCloneShellViewController.swift:129` |
 | Tencent Digital Human | `IMPLEMENTED` + `EXTERNAL_ACCEPTANCE` | `DigitalHumanRuntime` protocol、factory、真实 SDK/stub/audio-only fallback、text/PCM drive、interrupt/close 和 lease 生命周期已抽象 | 配额、素材授权、音频/口型和供应商会话仍需真实环境；不应作为私人记忆闭环的前置条件。证据：`DigitalHumanRuntime.swift:51`、`DigitalHumanRuntimeFactory.swift:20`、`EchoViewController.swift:4161` |
 | Family / Persona / Care | `PARTIAL` / `CONTRACT_ONLY` | Family invitation authority、persona context、授权 generation、Care snapshot/UI 状态和失败重试已有 | M0 仅允许家庭材料贡献与静态人物查看；当前 Persona 尚非后端权威 Domain。M2 委托查询与发布副本隔离未完成；M3 Care 缺同意、纠错和危机闭环。证据：`FamilyRepository.swift`、`DigitalHumanContextStore.swift`、`ProfileElderCareDashboardViewController.swift:93` |
@@ -201,8 +201,8 @@
 
 1. `FeatureFlagService.defaultEnabled` 默认公开 Care、Family、TimeLetter、VoiceClone 和 DigitalHuman；Family/Voice 即使属于目标 MVP 也必须由服务端 AuthZ/capability 放行，Care/TimeLetter/DH 仍不能默认公开。
 2. 客户端共享 backend API token 可进入认证头，破坏“客户端不持有系统权限”的信任边界。
-3. `MemoryRepository` 是全局 UserDefaults、启动 seed mock、用 `isPrivate` 代表公开，不能作为 V4 正式记忆或 Publication 权威源。
-4. 账号 logout 只清登录、Echo trace 和 Knowledge scope，没有统一业务数据生命周期协调器。
+3. `MemoryRepository` 已退役全局 UserDefaults live store 和生产自动 seed，改用 owner-scoped legacy projection 与 quarantine；它仍使用 `isPrivate` 表达旧公开语义，不能作为 V4 正式记忆或 Publication 权威源。
+4. 账号 switch/logout 已 unmount WI-S0-01-06 的目标 store，但尚无覆盖全部业务 surface 的统一账号级 purge/生命周期协调器；该缺口归 `WI-S0-01-08`。
 5. `DeepSeekService` 等历史直连 provider 路径仍需确认是否能在 release 构建触达，并从客户端彻底移除长期密钥。
 
 ### 6.2 可复用稳定模块
@@ -220,7 +220,7 @@
 | --- | --- | --- | --- |
 | AccountSessionActor/Lease | `DESIGNED` | Product Spec 29.1–29.3 定义 snapshot、generation、CAS 和 8 个异步 checkpoint | 当前仍是 `UserManager`/Keychain/各 service 分散状态，生产 Swift 未实现 |
 | 冷启动/账号生命周期 | `DESIGNED` | 29.2 定义 journal 与 login/refresh/switch/logout/revoke/delete 顺序 | 没有 crash recovery、A/B refresh 竞态或 session/profile reconciliation 测试 |
-| 本地 store registry | `DESIGNED` | S01–S17 覆盖 17 类私有 store/runtime/cache | global key/path 尚未迁移，legacy owner 分布未知 |
+| 本地 store registry | `PARTIAL / WI-S0-01-06 INTERNAL_READY` | S04 Home media、S06 Conversation、S08 Memoir、S09 Memory/Map 已完成 owner scope、legacy quarantine/receipt，并通过 G0/G1 | S07/S10/S11 等后续 surface 与账号级统一 purge 尚未收敛；本地隔离不等于后端业务权威，G4 仍开放 |
 | Draft/Archive local-only | `CONTRACT_ONLY` | S03/S04 与场景 11 固定显式 submit/seal 前不建后端 Authority | 当前 TimeLetter draft 仍可能走 repository sync |
 | iOS rollout waves | `DESIGNED` | I00–I08 从 XCTest/Actor 到 legacy retirement | 工程尚无 XCTest target，未运行升级/canary/回滚 |
 | 本地草稿保留 | `PRODUCT_CONFIRMED / NOT_IMPLEMENTED` | DR-041 已确认 switch/logout/delete 边界 | 加密 owner scope、恢复/清理入口、容量策略与迁移测试尚未实现 |
