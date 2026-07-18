@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 // MARK: - 数据模型
@@ -167,9 +168,15 @@ final class ConversationMemoryManager {
         currentMemory = localStorage.mount(scope: lease.scope) { [weak self] in
             self?.isCurrentConversationStorageLease(lease, at: .commit) == true
         }
-        let s = currentMemory.lastSummary
-        print("[Memory] loaded owner-scoped memory sessions=\(currentMemory.sessionCount)")
-        print("[Memory] time=\(s.time), place=\(s.place), person=\(s.person), event=\(s.event)")
+        let summary = currentMemory.lastSummary
+        PrivacySafeDiagnostics.log(
+            subsystem: "Memory",
+            event: "ownerScopedMemoryMounted",
+            counts: [
+                "sessionCount": currentMemory.sessionCount,
+                "summaryDimensionCount": summary.dimensionCount,
+            ]
+        )
     }
 
     /// 获取当前会话的对话记录（用于回忆录生成等）
@@ -185,12 +192,22 @@ final class ConversationMemoryManager {
 
     func recordUserTurn(text: String) {
         guard recordTurn(role: "user", text: text) else { return }
-        print("[Memory] 📝 记录用户: \(text.prefix(50))")
+        PrivacySafeDiagnostics.log(
+            subsystem: "Memory",
+            event: "conversationTurnRecorded",
+            states: ["role": "user"],
+            counts: ["textUTF8ByteCount": text.utf8.count]
+        )
     }
 
     func recordAITurn(text: String) {
         guard recordTurn(role: "ai", text: text) else { return }
-        print("[Memory] 📝 记录AI: \(text.prefix(50))")
+        PrivacySafeDiagnostics.log(
+            subsystem: "Memory",
+            event: "conversationTurnRecorded",
+            states: ["role": "assistant"],
+            counts: ["textUTF8ByteCount": text.utf8.count]
+        )
     }
 
     /// 对话结束时调用：提取四维度摘要并持久化
@@ -232,7 +249,11 @@ final class ConversationMemoryManager {
                 self?.isCurrentConversationStorageLease(sessionLease, at: .commit) == true
             }
         } catch {
-            print("[Memory] owner-scoped save failed: \(error.localizedDescription)")
+            PrivacySafeDiagnostics.log(
+                subsystem: "Memory",
+                event: "ownerScopedMemorySaveFailed",
+                states: ["failure": "storageFailure"]
+            )
             return
         }
         guard isCurrentConversationStorageLease(sessionLease, at: .commit) else {
@@ -252,13 +273,16 @@ final class ConversationMemoryManager {
         currentTranscript = []
         transcriptStorageLease = nil
 
-        let s = updatedMemory.lastSummary
-        print("[Memory] ✅ 会话摘要已保存 (第\(updatedMemory.sessionCount)次对话)")
-        print("[Memory]   时间: \(s.time)")
-        print("[Memory]   地点: \(s.place)")
-        print("[Memory]   人物: \(s.person)")
-        print("[Memory]   事件: \(s.event)")
-        print("[Memory]   自然摘要: \(s.toNaturalSentence())")
+        let summary = updatedMemory.lastSummary
+        PrivacySafeDiagnostics.log(
+            subsystem: "Memory",
+            event: "conversationSummaryPersisted",
+            counts: [
+                "sessionCount": updatedMemory.sessionCount,
+                "summaryDimensionCount": summary.dimensionCount,
+                "transcriptTurnCount": transcriptSnapshot.count,
+            ]
+        )
 
         // 【KBLite】触发 LLM 知识提取（异步，不阻塞 UI）
         DispatchQueue.global(qos: .utility).async { [accountLeaseRuntime] in
@@ -608,7 +632,12 @@ final class ConversationMemoryManager {
     private func unmountAndDiscardPendingTranscript(reason: String) {
         runtimeGeneration = UUID()
         if !currentTranscript.isEmpty {
-            print("[Memory] discarded uncommitted transcript reason=\(reason)")
+            PrivacySafeDiagnostics.log(
+                subsystem: "Memory",
+                event: "uncommittedTranscriptDiscarded",
+                states: ["reason": reason],
+                counts: ["turnCount": currentTranscript.count]
+            )
         }
         currentTranscript = []
         transcriptStorageLease = nil
@@ -632,5 +661,62 @@ final class ConversationMemoryManager {
             return block()
         }
         return DispatchQueue.main.sync(execute: block)
+    }
+}
+
+/// A deliberately narrow diagnostics surface for private-memory runtime paths.
+/// It only accepts state codes, counts, and one-way correlation hashes so console
+/// output cannot become another copy of user memory, Provider payloads, or IDs.
+enum PrivacySafeDiagnostics {
+    static let redactionPolicyVersion = "iosDiagnostics-v1"
+    private static let correlationDigestLength = 16
+
+    static func correlationHash(_ value: String?) -> String {
+        let normalized = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !normalized.isEmpty else { return "none" }
+        let digest = SHA256.hash(data: Data(normalized.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return "sha256:" + String(digest.prefix(correlationDigestLength))
+    }
+
+    static func safeCode(_ value: String?, fallback: String = "redacted") -> String {
+        let normalized = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !normalized.isEmpty,
+              normalized.utf8.count <= 96,
+              normalized.unicodeScalars.allSatisfy({ scalar in
+                  switch scalar.value {
+                  case 48...57, 65...90, 97...122, 45, 46, 58, 95:
+                      return true
+                  default:
+                      return false
+                  }
+              }) else {
+            return fallback
+        }
+        return normalized
+    }
+
+    static func log(
+        subsystem: String,
+        event: String,
+        states: [String: String] = [:],
+        counts: [String: Int] = [:],
+        correlations: [String: String?] = [:]
+    ) {
+        var fields = [
+            "policy=" + redactionPolicyVersion,
+            "event=" + safeCode(event, fallback: "redactedEvent"),
+        ]
+        fields += states.keys.sorted().map { key in
+            safeCode(key, fallback: "state") + "=" + safeCode(states[key], fallback: "redactedState")
+        }
+        fields += counts.keys.sorted().map { key in
+            safeCode(key, fallback: "count") + "=" + String(max(0, counts[key] ?? 0))
+        }
+        fields += correlations.keys.sorted().map { key in
+            safeCode(key, fallback: "correlation") + "=" + correlationHash(correlations[key] ?? nil)
+        }
+        print("[\(safeCode(subsystem, fallback: "Diagnostics"))] " + fields.joined(separator: " "))
     }
 }

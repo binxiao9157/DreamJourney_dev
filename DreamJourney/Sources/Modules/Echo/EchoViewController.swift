@@ -123,8 +123,11 @@ private struct TencentBackendPCMDriveTrueDeviceTrace {
     }
 
     mutating func markFailure(reason: String, detail: String) {
-        failureReason = reason
-        failureDetail = detail
+        failureReason = PrivacySafeDiagnostics.safeCode(
+            reason,
+            fallback: "redactedFailure"
+        )
+        failureDetail = detail.isEmpty ? "none" : "redacted"
     }
 
     var completed: Bool {
@@ -140,17 +143,30 @@ private struct TencentBackendPCMDriveTrueDeviceTrace {
     func jsonLine(audioOwner: EchoDigitalHumanAudioOwner, emitReason: String) -> String {
         let elapsedMilliseconds = Int(Date().timeIntervalSince(startedAt) * 1000)
         let payload: [String: Any] = [
-            "schemaVersion": 1,
-            "emitReason": emitReason,
+            "schemaVersion": 2,
+            "redactionPolicyVersion": PrivacySafeDiagnostics.redactionPolicyVersion,
+            "emitReason": PrivacySafeDiagnostics.safeCode(
+                emitReason,
+                fallback: "redactedEmitReason"
+            ),
             "completed": completed,
-            "trigger": trigger,
-            "requestID": requestID,
-            "turnID": turnID,
-            "voiceProfileId": voiceProfileId,
-            "outputMode": outputMode,
-            "providerLogId": providerLogId,
-            "providerRequestId": providerRequestId,
-            "providerMode": providerMode,
+            "trigger": PrivacySafeDiagnostics.safeCode(
+                trigger,
+                fallback: "redactedTrigger"
+            ),
+            "requestIDHash": PrivacySafeDiagnostics.correlationHash(requestID),
+            "turnIDHash": PrivacySafeDiagnostics.correlationHash(turnID),
+            "voiceProfileIdHash": PrivacySafeDiagnostics.correlationHash(voiceProfileId),
+            "outputMode": PrivacySafeDiagnostics.safeCode(
+                outputMode,
+                fallback: "unknown"
+            ),
+            "providerLogIdHash": PrivacySafeDiagnostics.correlationHash(providerLogId),
+            "providerRequestIdHash": PrivacySafeDiagnostics.correlationHash(providerRequestId),
+            "providerMode": PrivacySafeDiagnostics.safeCode(
+                providerMode,
+                fallback: "unknown"
+            ),
             "rawByteCount": rawByteCount,
             "preparedByteCount": preparedByteCount,
             "expectedChunkCount": expectedChunkCount,
@@ -160,7 +176,10 @@ private struct TencentBackendPCMDriveTrueDeviceTrace {
             "providerPlaybackCompleted": providerPlaybackCompleted,
             "stopProbeFired": stopProbeFired,
             "resumedVoiceCapture": resumedVoiceCapture,
-            "audioOwner": audioOwner.rawValue,
+            "audioOwner": PrivacySafeDiagnostics.safeCode(
+                audioOwner.rawValue,
+                fallback: "unknown"
+            ),
             "failureReason": failureReason,
             "failureDetail": failureDetail,
             "elapsedMilliseconds": elapsedMilliseconds
@@ -168,7 +187,7 @@ private struct TencentBackendPCMDriveTrueDeviceTrace {
         guard JSONSerialization.isValidJSONObject(payload),
               let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]),
               let string = String(data: data, encoding: .utf8) else {
-            return "{\"schemaVersion\":1,\"emitReason\":\"\(emitReason)\",\"completed\":false,\"failureReason\":\"jsonEncodingFailed\"}"
+            return "{\"schemaVersion\":2,\"redactionPolicyVersion\":\"iosDiagnostics-v1\",\"completed\":false,\"failureReason\":\"jsonEncodingFailed\"}"
         }
         return string
     }
@@ -1398,9 +1417,11 @@ final class EchoViewController: UIViewController {
             deadline: .now() + gracePeriod,
             execute: workItem
         )
-        print(
-            "[TencentDigitalHuman] scheduled background session release " +
-            "graceSeconds=\(gracePeriod) contextKey=\(contextKey)"
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "backgroundReleaseScheduled",
+            counts: ["graceMs": Int(gracePeriod * 1_000)],
+            correlations: ["context": contextKey]
         )
     }
 
@@ -1535,12 +1556,18 @@ final class EchoViewController: UIViewController {
         digitalHumanSessionHeartbeatFailureCount = 0
         scheduleDigitalHumanSessionHeartbeat(for: contract, lifecycleToken: lifecycleToken)
         if let lease = contract.lease {
-            print(
-                "[TencentDigitalHuman] lease activated sessionId=\(contract.sessionId) " +
-                "reused=\(lease.reused) heartbeatSeconds=\(lease.heartbeatIntervalSeconds)"
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "sessionLeaseActivated",
+                states: ["reused": lease.reused ? "true" : "false"],
+                counts: ["heartbeatSeconds": lease.heartbeatIntervalSeconds],
+                correlations: ["session": contract.sessionId]
             )
         } else {
-            print("[TencentDigitalHuman] backend session has no lease contract; heartbeat disabled")
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "sessionLeaseMissing"
+            )
         }
     }
 
@@ -1599,17 +1626,21 @@ final class EchoViewController: UIViewController {
                         for: contract,
                         lifecycleToken: lifecycleToken
                     )
-                    print(
-                        "[TencentDigitalHuman] lease heartbeat succeeded " +
-                        "sessionId=\(operation.sessionId) status=\(operation.lease.status)"
+                    PrivacySafeDiagnostics.log(
+                        subsystem: "TencentDigitalHuman",
+                        event: "sessionLeaseHeartbeatSucceeded",
+                        states: ["status": operation.lease.status],
+                        correlations: ["session": operation.sessionId]
                     )
                 case .failure(let error):
                     self.digitalHumanSessionHeartbeatFailureCount += 1
                     let isInactive = self.isInactiveDigitalHumanSessionLeaseError(error)
-                    print(
-                        "[TencentDigitalHuman] lease heartbeat failed " +
-                        "sessionId=\(sessionId) attempt=\(self.digitalHumanSessionHeartbeatFailureCount) " +
-                        "error=\(error.localizedDescription)"
+                    PrivacySafeDiagnostics.log(
+                        subsystem: "TencentDigitalHuman",
+                        event: "sessionLeaseHeartbeatFailed",
+                        states: ["failure": "transportOrLeaseFailure"],
+                        counts: ["attempt": self.digitalHumanSessionHeartbeatFailureCount],
+                        correlations: ["session": sessionId]
                     )
                     if isInactive || self.digitalHumanSessionHeartbeatFailureCount >= 3 {
                         self.degradeTencentDigitalHumanRoute(
@@ -1637,7 +1668,11 @@ final class EchoViewController: UIViewController {
         }
         digitalHumanSessionHeartbeatWorkItem?.cancel()
         digitalHumanSessionHeartbeatWorkItem = nil
-        print("[TencentDigitalHuman] lease heartbeat cancelled reason=\(reason)")
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "sessionLeaseHeartbeatCancelled",
+            states: ["reason": reason]
+        )
     }
 
     private func releaseActiveDigitalHumanSessionLease(reason: String) {
@@ -1663,9 +1698,11 @@ final class EchoViewController: UIViewController {
     ) {
         guard contract.lease != nil, let accountLease else { return }
         guard activeDigitalHumanSessionContract?.sessionId != contract.sessionId else {
-            print(
-                "[TencentDigitalHuman] skipped stale lease release because session is active " +
-                "sessionId=\(contract.sessionId) reason=\(reason)"
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "sessionLeaseReleaseSkipped",
+                states: ["reason": reason],
+                correlations: ["session": contract.sessionId]
             )
             return
         }
@@ -1709,20 +1746,32 @@ final class EchoViewController: UIViewController {
                 self.deferredDigitalHumanSessionReleases.removeAll {
                     $0.contract.sessionId == contract.sessionId
                 }
-                print(
-                    "[TencentDigitalHuman] lease released sessionId=\(operation.sessionId) " +
-                    "status=\(operation.status) reason=\(reason)"
+                PrivacySafeDiagnostics.log(
+                    subsystem: "TencentDigitalHuman",
+                    event: "sessionLeaseReleased",
+                    states: [
+                        "status": operation.status,
+                        "reason": reason,
+                    ],
+                    correlations: ["session": operation.sessionId]
                 )
-            case .failure(let error):
+            case .failure:
                 self.enqueueDeferredDigitalHumanSessionRelease(
                     contract,
                     accountLease: originatingAccountLease,
                     reason: "retryAfterFailure:\(reason)"
                 )
-                print(
-                    "[TencentDigitalHuman] lease release failed sessionId=\(contract.sessionId) " +
-                    "reason=\(reason) authSubject=\(accountLease.subjectId) " +
-                    "error=\(error.localizedDescription)"
+                PrivacySafeDiagnostics.log(
+                    subsystem: "TencentDigitalHuman",
+                    event: "sessionLeaseReleaseFailed",
+                    states: [
+                        "failure": "transportOrLeaseFailure",
+                        "reason": reason,
+                    ],
+                    correlations: [
+                        "session": contract.sessionId,
+                        "account": accountLease.subjectId,
+                    ]
                 )
             }
         }
@@ -1746,9 +1795,14 @@ final class EchoViewController: UIViewController {
                 reason: reason
             )
         )
-        print(
-            "[TencentDigitalHuman] deferred lease release sessionId=\(contract.sessionId) " +
-            "subject=\(accountLease.subjectId) reason=\(reason); backend TTL remains the final fallback"
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "sessionLeaseReleaseDeferred",
+            states: ["reason": reason],
+            correlations: [
+                "session": contract.sessionId,
+                "account": accountLease.subjectId,
+            ]
         )
     }
 
@@ -1998,10 +2052,15 @@ final class EchoViewController: UIViewController {
         let token = digitalHumanLifecycle.token(for: contextKey)
         if token.generation != previousGeneration {
             isLoadingVoiceCloneRuntimeCapability = false
-            print(
-                "[TencentDigitalHuman] lifecycle generation advanced " +
-                "reason=\(reason) generation=\(token.generation) " +
-                "interactionGeneration=\(token.interactionGeneration) contextKey=\(contextKey)"
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "lifecycleGenerationAdvanced",
+                states: ["reason": reason],
+                counts: [
+                    "generation": Int(token.generation),
+                    "interactionGeneration": Int(token.interactionGeneration),
+                ],
+                correlations: ["context": contextKey]
             )
         }
         return token
@@ -2118,10 +2177,14 @@ final class EchoViewController: UIViewController {
         let desiredContextKey = currentDigitalHumanRuntimeContextKey()
         if let pendingContextKey = pendingDigitalHumanSessionContextKey,
            pendingContextKey != desiredContextKey {
-            print(
-                "[TencentDigitalHuman] invalidated stale session request " +
-                "reason=\(reason) pendingContextKey=\(pendingContextKey) " +
-                "desiredContextKey=\(desiredContextKey)"
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "staleSessionRequestInvalidated",
+                states: ["reason": reason],
+                correlations: [
+                    "desiredContext": desiredContextKey,
+                    "pendingContext": pendingContextKey,
+                ]
             )
             pendingDigitalHumanSessionRequestID = nil
             pendingDigitalHumanSessionContextKey = nil
@@ -2134,10 +2197,14 @@ final class EchoViewController: UIViewController {
         }
 
         guard view.window != nil else {
-            print(
-                "[TencentDigitalHuman] deferred stale runtime release " +
-                "reason=\(reason) runtimeContextKey=\(runtimeContextKey) " +
-                "desiredContextKey=\(desiredContextKey)"
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "staleRuntimeReleaseDeferred",
+                states: ["reason": reason],
+                correlations: [
+                    "desiredContext": desiredContextKey,
+                    "runtimeContext": runtimeContextKey,
+                ]
             )
             return false
         }
@@ -2199,9 +2266,11 @@ final class EchoViewController: UIViewController {
             self.hasRequestedCloudDigitalHumanRuntime = false
             self.prepareCloudDigitalHumanRuntimeIfNeeded(lifecycleToken: lifecycleToken)
             self.recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanRuntimeRecovery:\(reason)")
-            print(
-                "[TencentDigitalHuman] retrying provider session " +
-                "reason=\(reason) contextKey=\(contextKey)"
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "providerSessionRetrying",
+                states: ["reason": reason],
+                correlations: ["context": contextKey]
             )
         }
         digitalHumanRuntimeRecoveryWorkItem = workItem
@@ -2534,15 +2603,22 @@ final class EchoViewController: UIViewController {
                 switch result {
                 case .success(let capability):
                     self.voiceCloneRuntimeCapability = capability
-                    print(
-                        "[TencentDigitalHuman] voice clone runtime capability " +
-                        "canSynthesize=\(capability.canSynthesize) " +
-                        "tencentAudioDriveSupported=\(capability.tencentAudioDrive.supported) " +
-                        "provider=\(capability.provider)"
+                    PrivacySafeDiagnostics.log(
+                        subsystem: "TencentDigitalHuman",
+                        event: "voiceCloneRuntimeCapabilityLoaded",
+                        states: [
+                            "canSynthesize": String(capability.canSynthesize),
+                            "provider": capability.provider,
+                            "tencentAudioDriveSupported": String(capability.tencentAudioDrive.supported),
+                        ]
                     )
-                case .failure(let error):
+                case .failure:
                     self.voiceCloneRuntimeCapability = VoiceCloneRuntimeCapability.localFallback(isBackendConfigured: false)
-                    print("[TencentDigitalHuman] voice clone runtime capability failed: \(error.localizedDescription)")
+                    PrivacySafeDiagnostics.log(
+                        subsystem: "TencentDigitalHuman",
+                        event: "voiceCloneRuntimeCapabilityFailed",
+                        states: ["reason": "backendFailure"]
+                    )
                 }
             }
         }
@@ -2621,21 +2697,14 @@ final class EchoViewController: UIViewController {
 
     private func setEchoAudioOwner(_ owner: EchoDigitalHumanAudioOwner, reason: String) {
         currentEchoAudioOwner = owner
-        let ownerLabel: String
-        switch owner {
-        case .tencentDigitalHuman:
-            ownerLabel = "audioOwner=tencentDigitalHuman"
-        case .localPreview:
-            ownerLabel = "audioOwner=localPreview"
-        case .fallbackMuted:
-            ownerLabel = "audioOwner=fallbackMuted"
-        case .volcengineLocalTTS:
-            ownerLabel = "audioOwner=volcengineLocalTTS"
-        }
-        print(
-            "[TencentDigitalHuman] \(ownerLabel) " +
-            "reason=\(reason) runtimeState=\(String(describing: digitalHumanRuntime?.state)) " +
-            "providerSpeechInFlight=\(hasTencentDigitalHumanProviderSpeechInFlight)"
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "audioOwnerUpdated",
+            states: [
+                "audioOwner": owner.rawValue,
+                "reason": reason,
+                "providerSpeechInFlight": hasTencentDigitalHumanProviderSpeechInFlight ? "true" : "false",
+            ]
         )
     }
 
@@ -2660,6 +2729,45 @@ final class EchoViewController: UIViewController {
         print("[TencentDigitalHuman][QA_RESULT] \(json)")
     }
 
+    private func diagnosticDigitalHumanRuntimeState(
+        _ state: DigitalHumanSessionState?
+    ) -> String {
+        guard let state else {
+            return "none"
+        }
+        switch state {
+        case .idle:
+            return "idle"
+        case .preparing:
+            return "preparing"
+        case .connecting:
+            return "connecting"
+        case .ready:
+            return "ready"
+        case .listening:
+            return "listening"
+        case .thinking:
+            return "thinking"
+        case .buffering:
+            return "buffering"
+        case .speaking:
+            return "speaking"
+        case .interrupting:
+            return "interrupting"
+        case .reconnecting:
+            return "reconnecting"
+        case .degraded:
+            return "degraded"
+        case .failed(let code):
+            return "failed:" + PrivacySafeDiagnostics.safeCode(
+                code,
+                fallback: "redacted"
+            )
+        case .closed:
+            return "closed"
+        }
+    }
+
     private func makeEchoRuntimeDiagnosticsSnapshot(reason: String) -> EchoRuntimeDiagnosticsSnapshot {
         let ownerUserId = EchoTraceOwnerScope.normalizedOwnerUserId(UserManager.shared.currentUser?.id)
             ?? EchoTraceOwnerScope.normalizedOwnerUserId(lastEchoTraceRecord?.userId)
@@ -2667,7 +2775,7 @@ final class EchoViewController: UIViewController {
             EchoTraceOwnerScope.normalizedOwnerUserId(trace.userId) == ownerUserId ? trace : nil
         }
         let runtime = digitalHumanRuntime
-        let runtimeState = runtime.map { String(describing: $0.state) } ?? "none"
+        let runtimeState = diagnosticDigitalHumanRuntimeState(runtime?.state)
         let profile = runtime?.profile
         let providerMode = profile?.driveMode ?? ownerTrace?.digitalHumanProviderMode ?? "unknown"
         let fallbackReason = lastEchoRuntimeFallbackReason ?? ownerTrace?.fallbacks.first
@@ -2706,16 +2814,25 @@ final class EchoViewController: UIViewController {
             EchoTraceEvidencePackageStore.shared.record(package, ownerUserId: ownerUserId)
         }
         renderEchoRuntimeDiagnosticsPanel(snapshot: snapshot)
-        print(
-            "[CFLite] runtime diagnostics snapshot " +
-            "snapshotId=\(snapshot.snapshotId) turnID=\(snapshot.turnID) traceId=\(snapshot.traceId) " +
-            "audioOwner=\(snapshot.audioOwner) digitalHumanState=\(snapshot.digitalHumanRuntimeState) " +
-            "voiceProfileId=\(snapshot.voiceProfileId ?? "none") outputMode=\(snapshot.voiceOutputMode) " +
-            "roleVoiceSource=\(snapshot.roleVoiceSource ?? "unknown") " +
-            "roleVoiceDisplayName=\(snapshot.roleVoiceDisplayName ?? "unknown") " +
-            "roleVoiceContextOwnerId=\(snapshot.roleVoiceContextOwnerId ?? "unknown") " +
-            "providerLogId=\(snapshot.providerLogId ?? "none") " +
-            "fallbackReason=\(snapshot.fallbackReason ?? "none") source=\(snapshot.source)"
+        PrivacySafeDiagnostics.log(
+            subsystem: "CFLite",
+            event: "runtimeDiagnosticsSnapshotRecorded",
+            states: [
+                "audioOwner": snapshot.audioOwner,
+                "digitalHumanState": snapshot.digitalHumanRuntimeState,
+                "outputMode": snapshot.voiceOutputMode,
+                "roleVoiceSource": snapshot.roleVoiceSource ?? "unknown",
+                "fallbackReason": snapshot.fallbackReason ?? "none",
+                "source": snapshot.source,
+            ],
+            correlations: [
+                "snapshot": snapshot.snapshotId,
+                "turn": snapshot.turnID,
+                "trace": snapshot.traceId,
+                "voiceProfile": snapshot.voiceProfileId,
+                "roleVoiceContextOwner": snapshot.roleVoiceContextOwnerId,
+                "providerLog": snapshot.providerLogId,
+            ]
         )
         return snapshot
     }
@@ -2760,15 +2877,22 @@ final class EchoViewController: UIViewController {
             return
         }
         let contextClues = EchoContextV2ClueSummary(record: lastEchoTraceRecord)
-        let archiveIDs = snapshot.archiveItemIDs.isEmpty
+        let archiveIDHashes = snapshot.archiveItemIDs.isEmpty
             ? "none"
-            : snapshot.archiveItemIDs.prefix(3).joined(separator: ",")
-        let fallback = snapshot.fallbackReason?.isEmpty == false ? snapshot.fallbackReason! : "none"
-        let voiceProfile = snapshot.voiceProfileId?.isEmpty == false ? snapshot.voiceProfileId! : "none"
+            : snapshot.archiveItemIDs
+                .prefix(3)
+                .map { PrivacySafeDiagnostics.correlationHash($0) }
+                .joined(separator: ",")
+        let fallback = PrivacySafeDiagnostics.safeCode(
+            snapshot.fallbackReason,
+            fallback: "none"
+        )
+        let voiceProfileHash = PrivacySafeDiagnostics.correlationHash(snapshot.voiceProfileId)
         let policyLines = (snapshot.featurePolicyDecisions ?? []).map { decision in
             let revision = decision.validatedPolicyRevision ?? decision.capturedPolicyRevision ?? 0
             return "policy.\(decision.feature): \(decision.allowed ? "allow" : "deny") "
-                + "v=\(decision.policyVersion ?? "none") r=\(revision) reason=\(decision.reason)"
+                + "v=\(PrivacySafeDiagnostics.safeCode(decision.policyVersion, fallback: "none")) "
+                + "r=\(revision) reason=\(PrivacySafeDiagnostics.safeCode(decision.reason, fallback: "redacted"))"
         }
         let capabilityLines = [
             RuntimeCapabilitySnapshotStore.shared.snapshot(for: .voiceCloneShell),
@@ -2778,18 +2902,18 @@ final class EchoViewController: UIViewController {
         }
         let baseLines = [
             "Echo QA clues",
-            "turn: \(snapshot.turnID)",
-            "档案: \(snapshot.archiveItemsIncluded)/\(snapshot.archiveItemsAvailable) [\(archiveIDs)]",
+            "turnHash: \(PrivacySafeDiagnostics.correlationHash(snapshot.turnID))",
+            "档案: \(snapshot.archiveItemsIncluded)/\(snapshot.archiveItemsAvailable) [\(archiveIDHashes)]",
             "KBLite facts: \(snapshot.kbFactCount)",
-            "persona: \(snapshot.privacyScopeLabel)",
+            "personaHash: \(PrivacySafeDiagnostics.correlationHash(snapshot.privacyScopeLabel))",
             "family: \(snapshot.canUseFamilyData) cross: \(snapshot.crossScopeArchiveIncluded)",
-            "voice: \(voiceProfile) \(snapshot.voiceOutputMode)",
-            "roleVoiceSource: \(snapshot.roleVoiceSource ?? "unknown")",
-            "roleVoiceDisplayName: \(snapshot.roleVoiceDisplayName ?? "unknown")",
-            "roleVoiceContextOwnerId: \(snapshot.roleVoiceContextOwnerId ?? "unknown")",
-            "audioOwner: \(snapshot.audioOwner)",
-            "digitalHuman: \(snapshot.digitalHumanRuntimeState) / \(snapshot.digitalHumanProviderMode)",
-            "providerLogId: \(snapshot.providerLogId ?? "none")",
+            "voiceHash: \(voiceProfileHash) \(PrivacySafeDiagnostics.safeCode(snapshot.voiceOutputMode, fallback: "unknown"))",
+            "roleVoiceSource: \(PrivacySafeDiagnostics.safeCode(snapshot.roleVoiceSource, fallback: "unknown"))",
+            "roleVoiceDisplayNameHash: \(PrivacySafeDiagnostics.correlationHash(snapshot.roleVoiceDisplayName))",
+            "roleVoiceContextOwnerHash: \(PrivacySafeDiagnostics.correlationHash(snapshot.roleVoiceContextOwnerId))",
+            "audioOwner: \(PrivacySafeDiagnostics.safeCode(snapshot.audioOwner, fallback: "unknown"))",
+            "digitalHuman: \(PrivacySafeDiagnostics.safeCode(snapshot.digitalHumanRuntimeState, fallback: "redacted")) / \(PrivacySafeDiagnostics.safeCode(snapshot.digitalHumanProviderMode, fallback: "unknown"))",
+            "providerLogIdHash: \(PrivacySafeDiagnostics.correlationHash(snapshot.providerLogId))",
             "fallback: \(fallback)",
             "latencyMs: \(snapshot.contextLatencyMs)"
         ]
@@ -2917,7 +3041,12 @@ final class EchoViewController: UIViewController {
                             reason: "runtimeCapabilitySuccess"
                           ),
                           self.isCurrentDigitalHumanSessionRequest(requestID: requestID, contextKey: contextKey) else {
-                        print("[TencentDigitalHuman] ignored stale runtime capability response requestID=\(requestID)")
+                        PrivacySafeDiagnostics.log(
+                            subsystem: "TencentDigitalHuman",
+                            event: "runtimeCapabilityIgnored",
+                            states: ["reason": "staleResponse"],
+                            correlations: ["request": requestID]
+                        )
                         return
                     }
                     self.createCloudDigitalHumanSession(
@@ -2938,7 +3067,12 @@ final class EchoViewController: UIViewController {
                             reason: "runtimeCapabilityFailure"
                           ),
                           self.isCurrentDigitalHumanSessionRequest(requestID: requestID, contextKey: contextKey) else {
-                        print("[TencentDigitalHuman] ignored stale runtime capability failure requestID=\(requestID)")
+                        PrivacySafeDiagnostics.log(
+                            subsystem: "TencentDigitalHuman",
+                            event: "runtimeCapabilityIgnored",
+                            states: ["reason": "staleFailure"],
+                            correlations: ["request": requestID]
+                        )
                         return
                     }
                     self.pendingDigitalHumanSessionRequestID = nil
@@ -2954,7 +3088,11 @@ final class EchoViewController: UIViewController {
                     self.lastEchoRuntimeFallbackReason = "digitalHumanRuntimeCapabilityFailed"
                     self.recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanRuntimeCapabilityFailed")
                     self.applyEchoAudioRoutePolicy()
-                    print("[TencentDigitalHuman] runtime capability failed: \(error.localizedDescription)")
+                    PrivacySafeDiagnostics.log(
+                        subsystem: "TencentDigitalHuman",
+                        event: "runtimeCapabilityFailed",
+                        states: ["reason": "backendFailure"]
+                    )
                 }
             }
         }
@@ -3021,7 +3159,12 @@ final class EchoViewController: UIViewController {
                     reason: "staleSessionResponse"
                 )
             }
-            print("[TencentDigitalHuman] ignored stale session response requestID=\(requestID)")
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "sessionResponseIgnored",
+                states: ["reason": "staleResponse"],
+                correlations: ["request": requestID]
+            )
             return
         }
         pendingDigitalHumanSessionRequestID = nil
@@ -3036,11 +3179,20 @@ final class EchoViewController: UIViewController {
                 contract: contract,
                 ownerUserId: requestOwnerUserId
             )
-            print(
-                "[TencentDigitalHuman] session contract received " +
-                "provider=\(contract.provider) providerMode=\(contract.providerMode) " +
-                "assetSource=\(contract.assetSource) hasAsset=\((contract.assetKey ?? contract.providerAssetId) != nil) " +
-                "hasProject=\(contract.providerProjectId != nil)"
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "sessionContractReceived",
+                states: [
+                    "assetSource": contract.assetSource,
+                    "hasAsset": String((contract.assetKey ?? contract.providerAssetId) != nil),
+                    "hasProject": String(contract.providerProjectId != nil),
+                    "provider": contract.provider,
+                    "providerMode": contract.providerMode,
+                ],
+                correlations: [
+                    "asset": contract.assetKey ?? contract.providerAssetId,
+                    "project": contract.providerProjectId,
+                ]
             )
             let runtimeSelection = DigitalHumanRuntimeFactory.makeRuntime(
                 for: contract,
@@ -3070,7 +3222,11 @@ final class EchoViewController: UIViewController {
                 lastEchoRuntimeFallbackReason = runtimeSelection.fallbackReason ?? "digitalHumanRuntimeNotSDKBacked"
                 recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanRuntimeNotSDKBacked")
                 applyEchoAudioRoutePolicy()
-                print("[TencentDigitalHuman] fallback=\(runtimeSelection.fallbackReason ?? "unknown")")
+                PrivacySafeDiagnostics.log(
+                    subsystem: "TencentDigitalHuman",
+                    event: "runtimeFallback",
+                    states: ["reason": runtimeSelection.fallbackReason ?? "unknown"]
+                )
                 return
             }
 
@@ -3094,7 +3250,11 @@ final class EchoViewController: UIViewController {
                 lastEchoRuntimeFallbackReason = "digitalHumanOpenFailed"
                 recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanOpenFailed")
                 applyEchoAudioRoutePolicy()
-                print("[TencentDigitalHuman] open failed: \(error.localizedDescription)")
+                PrivacySafeDiagnostics.log(
+                    subsystem: "TencentDigitalHuman",
+                    event: "runtimeOpenFailed",
+                    states: ["reason": "openFailed"]
+                )
             }
         case .failure(let error):
             let reason = error.localizedDescription
@@ -3117,7 +3277,15 @@ final class EchoViewController: UIViewController {
                 : "digitalHumanSessionFailed"
             recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanSessionFailed")
             applyEchoAudioRoutePolicy()
-            print("[TencentDigitalHuman] session failed: \(reason)")
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "sessionFailed",
+                states: [
+                    "reason": quotaFailure
+                        ? "digital_human_session_capacity_exhausted"
+                        : "digitalHumanSessionFailed",
+                ]
+            )
         }
     }
 
@@ -3163,7 +3331,15 @@ final class EchoViewController: UIViewController {
         }
         digitalHumanReplyPrewarmWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
-        print("[TencentDigitalHuman] scheduled reply prewarm source=chatStreamingPrewarm delay=\(String(format: "%.2f", delay)) textLength=\(normalizedText.count)")
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "replyPrewarmScheduled",
+            states: ["source": "chatStreamingPrewarm"],
+            counts: [
+                "delayMs": Int(delay * 1_000),
+                "textLength": normalizedText.count,
+            ]
+        )
     }
 
     private func cancelDigitalHumanReplyPrewarm() {
@@ -3189,12 +3365,20 @@ final class EchoViewController: UIViewController {
                 )
             }
             try session.setActive(true)
-            print(
-                "[TencentDigitalHuman] AVAudioSession prepared for provider playback " +
-                "preserveRecordingCategory=\(preserveRecordingCategory) category=playAndRecord"
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "audioSessionPrepared",
+                states: [
+                    "category": "playAndRecord",
+                    "preserveRecordingCategory": String(preserveRecordingCategory),
+                ]
             )
         } catch {
-            print("[TencentDigitalHuman] AVAudioSession provider playback prepare failed: \(error.localizedDescription)")
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "audioSessionPrepareFailed",
+                states: ["reason": "audioSessionFailure"]
+            )
         }
     }
 
@@ -3337,7 +3521,11 @@ final class EchoViewController: UIViewController {
             trueDeviceBackendPCMDriveTrace.resumedVoiceCapture = true
             emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "voiceCaptureResumed:\(reason)")
         }
-        print("[TencentDigitalHuman] resume voice capture after provider speech reason=\(reason)")
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "voiceCaptureResumed",
+            states: ["reason": reason]
+        )
     }
 
     @discardableResult
@@ -3349,7 +3537,11 @@ final class EchoViewController: UIViewController {
         stopDigitalHumanAudioLevelMetering()
         cloudRuntime.setRemoteAudioMuted(true)
         setEchoAudioOwner(.fallbackMuted, reason: reason)
-        print("[TencentDigitalHuman] muted provider remote audio before user capture reason=\(reason)")
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "providerRemoteAudioMuted",
+            states: ["reason": reason]
+        )
         return true
     }
 
@@ -3407,11 +3599,19 @@ final class EchoViewController: UIViewController {
             )
             lastEchoRuntimeFallbackReason = "voiceCloneBackendNotConfigured"
             recordEchoRuntimeDiagnosticsSnapshot(reason: "voiceCloneBackendNotConfigured")
-            print(
-                "[TencentDigitalHuman] voice-clone PCM-drive unavailable; no default voice fallback " +
-                "source=\(source) voiceProfileId=\(voiceProfileId) outputMode=tencentAudioDrive " +
-                "voiceSource=\(voiceSelection.source.rawValue) contextOwnerId=\(voiceSelection.contextOwnerId) " +
-                "\(currentEchoAudioOwner.logLabel) reason=backendNotConfigured"
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "voiceClonePCMDriveUnavailable",
+                states: [
+                    "audioOwner": currentEchoAudioOwner.rawValue,
+                    "outputMode": "tencentAudioDrive",
+                    "reason": "backendNotConfigured",
+                    "voiceSource": voiceSelection.source.rawValue,
+                ],
+                correlations: [
+                    "voiceProfile": voiceProfileId,
+                    "contextOwner": voiceSelection.contextOwnerId,
+                ]
             )
             return true
         }
@@ -3427,12 +3627,21 @@ final class EchoViewController: UIViewController {
             )
             lastEchoRuntimeFallbackReason = "voiceCloneRuntimeUnsupported"
             recordEchoRuntimeDiagnosticsSnapshot(reason: "voiceCloneRuntimeUnsupported")
-            print(
-                "[TencentDigitalHuman] voice-clone PCM-drive unavailable; no default voice fallback " +
-                "source=\(source) voiceProfileId=\(voiceProfileId) outputMode=tencentAudioDrive " +
-                "voiceSource=\(voiceSelection.source.rawValue) contextOwnerId=\(voiceSelection.contextOwnerId) " +
-                "\(currentEchoAudioOwner.logLabel) canSynthesize=\(capability.canSynthesize) " +
-                "tencentAudioDriveSupported=\(capability.tencentAudioDrive.supported)"
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "voiceClonePCMDriveUnavailable",
+                states: [
+                    "audioOwner": currentEchoAudioOwner.rawValue,
+                    "canSynthesize": capability.canSynthesize ? "true" : "false",
+                    "outputMode": "tencentAudioDrive",
+                    "reason": "runtimeUnsupported",
+                    "tencentAudioDriveSupported": capability.tencentAudioDrive.supported ? "true" : "false",
+                    "voiceSource": voiceSelection.source.rawValue,
+                ],
+                correlations: [
+                    "voiceProfile": voiceProfileId,
+                    "contextOwner": voiceSelection.contextOwnerId,
+                ]
             )
             return true
         }
@@ -3453,11 +3662,23 @@ final class EchoViewController: UIViewController {
         renderVoiceStatus(text: "正在生成复刻声音", isVisible: true, accessibilityIdentifier: "echoVoiceClonePCMDriveStatus")
 
         let userId = UserManager.shared.currentUser?.id ?? "default"
-        print(
-            "[TencentDigitalHuman] requesting voice-clone PCM-drive " +
-            "turnID=\(turnID) source=\(source) requestID=\(requestID) voiceProfileId=\(voiceProfileId) " +
-            "voiceSource=\(voiceSelection.source.rawValue) contextOwnerId=\(voiceSelection.contextOwnerId) " +
-            "contextKey=\(contextKey) outputMode=tencentAudioDrive \(currentEchoAudioOwner.logLabel)"
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "voiceClonePCMDriveRequested",
+            states: [
+                "audioOwner": currentEchoAudioOwner.rawValue,
+                "outputMode": "tencentAudioDrive",
+                "source": source,
+                "voiceSource": voiceSelection.source.rawValue,
+            ],
+            correlations: [
+                "context": contextKey,
+                "contextOwner": voiceSelection.contextOwnerId,
+                "request": requestID,
+                "turn": turnID,
+                "user": userId,
+                "voiceProfile": voiceProfileId,
+            ]
         )
         DreamJourneyBackendClient.shared.requestVoiceCloneSynthesis(
             userId: userId,
@@ -3479,10 +3700,15 @@ final class EchoViewController: UIViewController {
                       ),
                       self.digitalHumanConversation.activeRequestID == requestID,
                       self.currentDigitalHumanRuntimeContextKey() == contextKey else {
-                    print(
-                        "[TencentDigitalHuman] ignored stale voice-clone PCM-drive response " +
-                        "requestID=\(requestID) contextKey=\(contextKey) " +
-                        "currentContextKey=\(self.currentDigitalHumanRuntimeContextKey())"
+                    PrivacySafeDiagnostics.log(
+                        subsystem: "TencentDigitalHuman",
+                        event: "voiceClonePCMDriveResponseIgnored",
+                        states: ["reason": "staleLifecycle"],
+                        correlations: [
+                            "context": contextKey,
+                            "currentContext": self.currentDigitalHumanRuntimeContextKey(),
+                            "request": requestID,
+                        ]
                     )
                     return
                 }
@@ -3503,12 +3729,24 @@ final class EchoViewController: UIViewController {
                             detail: "format=\(synthesis.audioFormat) sampleRate=\(synthesis.sampleRate ?? 0) bits=\(synthesis.bitsPerSample ?? 0) channels=\(synthesis.channelCount ?? 0)",
                             lifecycleToken: lifecycleToken
                         )
-                        print(
-                            "[TencentDigitalHuman] voice-clone PCM-drive incompatible; no default voice fallback " +
-                            "requestID=\(requestID) format=\(synthesis.audioFormat) sampleRate=\(synthesis.sampleRate ?? 0) " +
-                            "bits=\(synthesis.bitsPerSample ?? 0) channels=\(synthesis.channelCount ?? 0) " +
-                            "voiceProfileId=\(synthesis.voiceProfileId) outputMode=\(synthesis.outputMode ?? "none") " +
-                            "providerLogId=\(synthesis.providerLogId ?? "none") \(self.currentEchoAudioOwner.logLabel)"
+                        PrivacySafeDiagnostics.log(
+                            subsystem: "TencentDigitalHuman",
+                            event: "voiceClonePCMDriveIncompatible",
+                            states: [
+                                "audioFormat": synthesis.audioFormat,
+                                "audioOwner": self.currentEchoAudioOwner.rawValue,
+                                "outputMode": synthesis.outputMode ?? "none",
+                            ],
+                            counts: [
+                                "bitsPerSample": synthesis.bitsPerSample ?? 0,
+                                "channelCount": synthesis.channelCount ?? 0,
+                                "sampleRate": synthesis.sampleRate ?? 0,
+                            ],
+                            correlations: [
+                                "providerLog": synthesis.providerLogId,
+                                "request": requestID,
+                                "voiceProfile": synthesis.voiceProfileId,
+                            ]
                         )
                         return
                     }
@@ -3530,13 +3768,22 @@ final class EchoViewController: UIViewController {
                         source: "voiceClonePCMDrive",
                         lifecycleToken: lifecycleToken
                     )
-                    print(
-                        "[TencentDigitalHuman] voice-clone PCM-drive synthesis ready " +
-                        "turnID=\(turnID) requestID=\(requestID) voiceProfileId=\(synthesis.voiceProfileId) " +
-                        "bytes=\(synthesis.byteCount) providerMode=\(synthesis.providerMode) " +
-                        "outputMode=\(synthesis.outputMode ?? "none") providerLogId=\(synthesis.providerLogId ?? "none") " +
-                        "providerRequestId=\(synthesis.providerRequestId ?? "none") " +
-                        "durationSeconds=\(synthesis.durationSeconds ?? 0) \(self.currentEchoAudioOwner.logLabel)"
+                    PrivacySafeDiagnostics.log(
+                        subsystem: "TencentDigitalHuman",
+                        event: "voiceClonePCMDriveReady",
+                        states: [
+                            "audioOwner": self.currentEchoAudioOwner.rawValue,
+                            "outputMode": synthesis.outputMode ?? "none",
+                            "providerMode": synthesis.providerMode,
+                        ],
+                        counts: ["byteCount": synthesis.byteCount],
+                        correlations: [
+                            "providerLog": synthesis.providerLogId,
+                            "providerRequest": synthesis.providerRequestId,
+                            "request": requestID,
+                            "turn": turnID,
+                            "voiceProfile": synthesis.voiceProfileId,
+                        ]
                     )
                 case .failure(let error):
                     self.handleVoiceClonePCMDriveFailureWithoutDefaultVoice(
@@ -3551,10 +3798,18 @@ final class EchoViewController: UIViewController {
                         detail: error.localizedDescription,
                         lifecycleToken: lifecycleToken
                     )
-                    print(
-                        "[TencentDigitalHuman] voice-clone PCM-drive request failed; no default voice fallback " +
-                        "requestID=\(requestID) voiceProfileId=\(voiceProfileId) outputMode=tencentAudioDrive " +
-                        "providerLogId=none \(self.currentEchoAudioOwner.logLabel) error=\(error.localizedDescription)"
+                    PrivacySafeDiagnostics.log(
+                        subsystem: "TencentDigitalHuman",
+                        event: "voiceClonePCMDriveRequestFailed",
+                        states: [
+                            "audioOwner": self.currentEchoAudioOwner.rawValue,
+                            "failure": "providerRequestFailed",
+                            "outputMode": "tencentAudioDrive",
+                        ],
+                        correlations: [
+                            "request": requestID,
+                            "voiceProfile": voiceProfileId,
+                        ]
                     )
                 }
             }
@@ -3580,10 +3835,16 @@ final class EchoViewController: UIViewController {
         )
         lastEchoRuntimeFallbackReason = voiceSelection.source.rawValue
         recordEchoRuntimeDiagnosticsSnapshot(reason: voiceSelection.source.rawValue)
-        print(
-            "[TencentDigitalHuman] voice clone not enabled for Echo " +
-            "source=\(source) voiceProfileId=none voiceSource=\(voiceSelection.source.rawValue) " +
-            "contextOwnerId=\(voiceSelection.contextOwnerId) outputMode=tencentText \(currentEchoAudioOwner.logLabel)"
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "voiceCloneNotEnabled",
+            states: [
+                "audioOwner": currentEchoAudioOwner.rawValue,
+                "outputMode": "tencentText",
+                "source": source,
+                "voiceSource": voiceSelection.source.rawValue,
+            ],
+            correlations: ["contextOwner": voiceSelection.contextOwnerId]
         )
     }
 
@@ -3606,7 +3867,12 @@ final class EchoViewController: UIViewController {
             latestEchoContextRequestTurnID = turnID
             lastEchoRuntimeFallbackReason = "familyRelationshipUnauthorized"
             recordEchoRuntimeDiagnosticsSnapshot(reason: "familyRelationshipUnauthorized")
-            print("[CFLite] context build skipped turnID=\(turnID) reason=familyRelationshipUnauthorized")
+            PrivacySafeDiagnostics.log(
+                subsystem: "CFLite",
+                event: "contextBuildSkipped",
+                states: ["reason": "familyRelationshipUnauthorized"],
+                correlations: ["turn": turnID]
+            )
             return
         }
 
@@ -3647,7 +3913,12 @@ final class EchoViewController: UIViewController {
                     source: "localKBLiteBackendNotConfigured"
                 )
             }
-            print("[CFLite] context build skipped turnID=\(turnID) reason=backendNotConfigured")
+            PrivacySafeDiagnostics.log(
+                subsystem: "CFLite",
+                event: "contextBuildSkipped",
+                states: ["reason": "backendNotConfigured"],
+                correlations: ["turn": turnID]
+            )
             return
         }
         DreamJourneyBackendClient.shared.buildEchoContextPacket(
@@ -3680,19 +3951,30 @@ final class EchoViewController: UIViewController {
                                 source: "localKBLitePacketIdentityMismatch"
                             )
                         }
-                        print(
-                            "[CFLite] ignored context packet identity mismatch " +
-                            "turnID=\(turnID) expectedUser=\(expectedIdentity.userId) " +
-                            "expectedPersona=\(expectedIdentity.personaScope) " +
-                            "expectedDigitalHuman=\(expectedIdentity.digitalHumanId) " +
-                            "actualUser=\(packet.userId) actualPersona=\(packet.personaScope ?? "missing") " +
-                            "actualDigitalHuman=\(packet.digitalHumanId ?? "missing")"
+                        PrivacySafeDiagnostics.log(
+                            subsystem: "CFLite",
+                            event: "contextPacketIgnored",
+                            states: ["reason": "identityMismatch"],
+                            correlations: [
+                                "turn": turnID,
+                                "expectedUser": expectedIdentity.userId,
+                                "expectedPersona": expectedIdentity.personaScope,
+                                "expectedDigitalHuman": expectedIdentity.digitalHumanId,
+                                "actualUser": packet.userId,
+                                "actualPersona": packet.personaScope,
+                                "actualDigitalHuman": packet.digitalHumanId,
+                            ]
                         )
                         return
                     }
                     EchoTraceStore.shared.record(record, ownerUserId: expectedIdentity.userId)
                     guard self.latestEchoContextRequestTurnID == turnID else {
-                        print("[CFLite] ignored stale context trace turnID=\(turnID)")
+                        PrivacySafeDiagnostics.log(
+                            subsystem: "CFLite",
+                            event: "contextTraceIgnored",
+                            states: ["reason": "stale"],
+                            correlations: ["turn": turnID]
+                        )
                         return
                     }
                     self.lastEchoTraceRecord = record
@@ -3714,26 +3996,37 @@ final class EchoViewController: UIViewController {
                         }
                     }
                 }
-                print(
-                    "[CFLite] context built " +
-                    "turnID=\(turnID) traceId=\(packet.traceId) schemaVersion=\(packet.schemaVersion) " +
-                    "personaScope=\(packet.personaScope ?? "missing") " +
-                    "digitalHumanId=\(packet.digitalHumanId ?? "missing") " +
-                    "archiveIncluded=\(packet.archiveItemsIncluded)/\(packet.archiveItemsAvailable) " +
-                    "kbFacts=\(packet.kbFactCount) cloneReady=\(packet.cloneReady) " +
-                    "voiceProfileId=\(packet.voiceProfileId ?? "none") outputMode=\(packet.voiceOutputMode) " +
-                    "digitalHumanReady=\(packet.digitalHumanSessionReady) " +
-                    "digitalHumanProviderMode=\(packet.digitalHumanProviderMode) " +
-                    "privacyScope=\(packet.privacyScopeLabel) " +
-                    "crossScopeArchiveIncluded=\(packet.crossScopeArchiveIncluded) " +
-                    "generationVersion=\(packet.generationContextVersion) " +
-                    "generationHash=\(packet.generationContextContentHash ?? "none") " +
-                    "generationRefs=\(packet.generationContextSourceRefs.count) " +
-                    "generationTruncated=\(packet.generationContextTruncated) " +
-                    "fallbacks=\(packet.fallbacks.joined(separator: ",")) latencyMs=\(packet.latencyMs)"
+                PrivacySafeDiagnostics.log(
+                    subsystem: "CFLite",
+                    event: "contextBuilt",
+                    states: [
+                        "cloneReady": String(packet.cloneReady),
+                        "digitalHumanReady": String(packet.digitalHumanSessionReady),
+                        "digitalHumanProviderMode": packet.digitalHumanProviderMode,
+                        "generationTruncated": String(packet.generationContextTruncated),
+                        "outputMode": packet.voiceOutputMode,
+                        "privacyScope": packet.privacyScopeLabel,
+                    ],
+                    counts: [
+                        "archiveItemsAvailable": packet.archiveItemsAvailable,
+                        "archiveItemsIncluded": packet.archiveItemsIncluded,
+                        "fallbackCount": packet.fallbacks.count,
+                        "generationRefCount": packet.generationContextSourceRefs.count,
+                        "kbFactCount": packet.kbFactCount,
+                        "latencyMs": packet.latencyMs,
+                        "schemaVersion": packet.schemaVersion,
+                    ],
+                    correlations: [
+                        "digitalHuman": packet.digitalHumanId,
+                        "generation": packet.generationContextContentHash,
+                        "persona": packet.personaScope,
+                        "trace": packet.traceId,
+                        "turn": turnID,
+                        "voiceProfile": packet.voiceProfileId,
+                    ]
                 )
-                print(record.logLine + " archiveItemIDs=\(record.archiveItemIDs.joined(separator: ","))")
-            case .failure(let error):
+                print(record.logLine)
+            case .failure:
                 DispatchQueue.main.async {
                     guard let self,
                           self.isCurrentDigitalHumanLifecycleToken(
@@ -3746,7 +4039,12 @@ final class EchoViewController: UIViewController {
                         source: "localKBLiteBackendFailure"
                     )
                 }
-                print("[CFLite] context build failed turnID=\(turnID) error=\(error.localizedDescription)")
+                PrivacySafeDiagnostics.log(
+                    subsystem: "CFLite",
+                    event: "contextBuildFailed",
+                    states: ["reason": "backendFailure"],
+                    correlations: ["turn": turnID]
+                )
             }
         }
     }
@@ -3768,11 +4066,15 @@ final class EchoViewController: UIViewController {
             if activeEchoTurnKnowledgeContextGate === gate {
                 activeEchoTurnKnowledgeContextGate = nil
             }
-            print(
-                "[CFLite] family_local_fallback_forbidden " +
-                "turnID=\(gate.turnID) source=\(source) " +
-                "personaScope=\(gate.expectedPersonaScope) " +
-                "digitalHumanId=\(gate.expectedDigitalHumanID)"
+            PrivacySafeDiagnostics.log(
+                subsystem: "CFLite",
+                event: "localFallbackForbidden",
+                states: ["source": source],
+                correlations: [
+                    "digitalHuman": gate.expectedDigitalHumanID,
+                    "persona": gate.expectedPersonaScope,
+                    "turn": gate.turnID,
+                ]
             )
             return
         }
@@ -3785,9 +4087,11 @@ final class EchoViewController: UIViewController {
             if activeEchoTurnKnowledgeContextGate === gate {
                 activeEchoTurnKnowledgeContextGate = nil
             }
-            print(
-                "[CFLite] turn knowledge finished without local context " +
-                "turnID=\(gate.turnID) source=\(source)"
+            PrivacySafeDiagnostics.log(
+                subsystem: "CFLite",
+                event: "localContextUnavailable",
+                states: ["source": source],
+                correlations: ["turn": gate.turnID]
             )
             return
         }
@@ -3813,9 +4117,11 @@ final class EchoViewController: UIViewController {
            !gate.didFinishWithoutContext {
             gate.finishWithoutContext()
             activeEchoTurnKnowledgeContextGate = nil
-            print(
-                "[CFLite] turn knowledge finished without backend context " +
-                "turnID=\(gate.turnID) source=\(source)"
+            PrivacySafeDiagnostics.log(
+                subsystem: "CFLite",
+                event: "contextUnavailable",
+                states: ["source": source],
+                correlations: ["turn": gate.turnID]
             )
             return
         }
@@ -3833,17 +4139,28 @@ final class EchoViewController: UIViewController {
         guard let currentIdentity = echoKnowledgeContextIdentity(
             for: DigitalHumanContextStore.shared.current
         ) else {
-            print("[CFLite] ignored turn knowledge because family relationship is no longer authorized turnID=\(gate.turnID)")
+            PrivacySafeDiagnostics.log(
+                subsystem: "CFLite",
+                event: "contextIgnored",
+                states: ["reason": "familyRelationshipUnauthorized"],
+                correlations: ["turn": gate.turnID]
+            )
             return
         }
         guard currentIdentity == gate.expectedIdentity else {
-            print(
-                "[CFLite] ignored stale turn knowledge identity " +
-                "turnID=\(gate.turnID) expectedUser=\(gate.expectedUserID) " +
-                "expectedPersona=\(gate.expectedPersonaScope) " +
-                "expectedDigitalHuman=\(gate.expectedDigitalHumanID) " +
-                "currentUser=\(currentIdentity.userId) currentPersona=\(currentIdentity.personaScope) " +
-                "currentDigitalHuman=\(currentIdentity.digitalHumanId)"
+            PrivacySafeDiagnostics.log(
+                subsystem: "CFLite",
+                event: "contextIgnored",
+                states: ["reason": "staleIdentity"],
+                correlations: [
+                    "currentDigitalHuman": currentIdentity.digitalHumanId,
+                    "currentPersona": currentIdentity.personaScope,
+                    "currentUser": currentIdentity.userId,
+                    "expectedDigitalHuman": gate.expectedDigitalHumanID,
+                    "expectedPersona": gate.expectedPersonaScope,
+                    "expectedUser": gate.expectedUserID,
+                    "turn": gate.turnID,
+                ]
             )
             return
         }
@@ -3873,10 +4190,18 @@ final class EchoViewController: UIViewController {
                 gate: gate
             )
         }
-        print(
-            "[CFLite] turn knowledge submission " +
-            "turnID=\(gate.turnID) source=\(source) submitted=\(submitted) " +
-            "bytes=\(normalizedContent.utf8.count) traceID=\(traceID ?? "none")"
+        PrivacySafeDiagnostics.log(
+            subsystem: "CFLite",
+            event: "contextSubmission",
+            states: [
+                "source": source,
+                "submitted": String(submitted),
+            ],
+            counts: ["byteCount": normalizedContent.utf8.count],
+            correlations: [
+                "trace": traceID,
+                "turn": gate.turnID,
+            ]
         )
     }
 
@@ -3887,9 +4212,11 @@ final class EchoViewController: UIViewController {
         gate: EchoTurnKnowledgeContextGate
     ) {
         guard gate.failedSubmissionCount < 2 else {
-            print(
-                "[CFLite] turn knowledge retry exhausted " +
-                "turnID=\(gate.turnID) source=\(source)"
+            PrivacySafeDiagnostics.log(
+                subsystem: "CFLite",
+                event: "contextRetryExhausted",
+                states: ["source": source],
+                correlations: ["turn": gate.turnID]
             )
             return
         }
@@ -3943,12 +4270,21 @@ final class EchoViewController: UIViewController {
         recordEchoRuntimeDiagnosticsSnapshot(reason: "voiceClonePCMDriveFailed")
         renderVoiceStatus(text: "复刻声音生成失败，请稍后重试", isVisible: true, accessibilityIdentifier: "echoVoiceClonePCMDriveStatus")
         digitalHumanStatusDetailLabel.text = "复刻声音生成失败，未切换默认音色"
-        print(
-            "[TencentDigitalHuman] voice-clone PCM-drive failed; no default voice fallback " +
-            "turnID=\(turnID) requestID=\(requestID) voiceProfileId=\(voiceProfileId) " +
-            "outputMode=\(outputMode) providerLogId=\(providerLogId ?? "none") " +
-            "providerRequestId=\(providerRequestId ?? "none") \(currentEchoAudioOwner.logLabel) " +
-            "reason=\(reason) detail=\(detail)"
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "voiceClonePCMDriveFailed",
+            states: [
+                "audioOwner": currentEchoAudioOwner.rawValue,
+                "outputMode": outputMode,
+                "reason": reason,
+            ],
+            correlations: [
+                "providerLog": providerLogId,
+                "providerRequest": providerRequestId,
+                "request": requestID,
+                "turn": turnID,
+                "voiceProfile": voiceProfileId,
+            ]
         )
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
             guard let self,
@@ -3989,10 +4325,26 @@ final class EchoViewController: UIViewController {
                 keepsPendingReply: routeEchoAudioThroughDigitalHuman
             )
             scheduleTencentDigitalHumanTextOverTimeout(requestID: requestID, source: source)
-            print("[TencentDigitalHuman] sent reply text turnID=\(turnID) source=\(source) requestID=\(requestID) textLength=\(normalizedText.count)")
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "textReplySent",
+                states: ["source": source],
+                counts: ["textLength": normalizedText.count],
+                correlations: [
+                    "request": requestID,
+                    "turn": turnID,
+                ]
+            )
         } catch {
             resumeDialogEngineAfterTencentProviderSpeechIfNeeded(reason: "sendTextFailed")
-            print("[TencentDigitalHuman] send text failed source=\(source): \(error.localizedDescription)")
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "textReplyFailed",
+                states: [
+                    "reason": "sendTextFailed",
+                    "source": source,
+                ]
+            )
         }
     }
 
@@ -4019,10 +4371,15 @@ final class EchoViewController: UIViewController {
             deadline: .now() + Self.tencentDigitalHumanTextOverTimeout,
             execute: workItem
         )
-        print(
-            "[TencentDigitalHuman] scheduled TextOver timeout " +
-            "turnID=\(turnID) source=\(source) requestID=\(requestID) " +
-            "timeout=\(Self.tencentDigitalHumanTextOverTimeout)"
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "textOverTimeoutScheduled",
+            states: ["source": source],
+            counts: ["timeoutMs": Int(Self.tencentDigitalHumanTextOverTimeout * 1_000)],
+            correlations: [
+                "request": requestID,
+                "turn": turnID,
+            ]
         )
     }
 
@@ -4040,10 +4397,15 @@ final class EchoViewController: UIViewController {
                 reason: "textOverTimeout"
               ),
               digitalHumanConversation.activeRequestID == requestID else {
-            print(
-                "[TencentDigitalHuman] ignored stale TextOver timeout " +
-                "turnID=\(digitalHumanConversation.currentTurnID ?? "unknown") requestID=\(requestID) " +
-                "activeRequestID=\(digitalHumanConversation.activeRequestID ?? "none")"
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "textOverTimeoutIgnored",
+                states: ["reason": "stale"],
+                correlations: [
+                    "activeRequest": digitalHumanConversation.activeRequestID,
+                    "request": requestID,
+                    "turn": digitalHumanConversation.currentTurnID,
+                ]
             )
             return
         }
@@ -4054,7 +4416,14 @@ final class EchoViewController: UIViewController {
         stopDigitalHumanAudioLevelMetering()
         digitalHumanRuntime?.interrupt()
         markEchoReplyDelivered()
-        print("[TencentDigitalHuman] TextOver timeout turnID=\(turnID) requestID=\(requestID); recovered Echo state")
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "textOverTimeoutRecovered",
+            correlations: [
+                "request": requestID,
+                "turn": turnID,
+            ]
+        )
 
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.tencentDigitalHumanPostTextOverResumeDelay) { [weak self] in
             guard let self,
@@ -4088,7 +4457,12 @@ final class EchoViewController: UIViewController {
             digitalHumanRuntime?.interrupt()
         }
         stopDigitalHumanAudioLevelMetering()
-        print("[TencentDigitalHuman] interrupted provider playback turnID=\(digitalHumanConversation.currentTurnID ?? "unknown") reason=\(reason)")
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "providerPlaybackInterrupted",
+            states: ["reason": reason],
+            correlations: ["turn": digitalHumanConversation.currentTurnID]
+        )
 
         guard reason == "pcmDriveSmokeStopProbe",
               shouldRunTencentDigitalHumanBackendPCMDriveSmoke || shouldRunTencentDigitalHumanPCMDriveSmoke,
@@ -4153,10 +4527,14 @@ final class EchoViewController: UIViewController {
         cancelDigitalHumanReplyPrewarm()
         digitalHumanConversation.clearResumeState()
         stopDigitalHumanAudioLevelMetering()
-        print(
-            "[TencentDigitalHuman] preserved provider session after local dialog stop " +
-            "turnID=\(digitalHumanConversation.currentTurnID ?? "unknown") reason=\(reason) " +
-            "providerSpeechInFlight=\(hasTencentDigitalHumanProviderSpeechInFlight)"
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "providerSessionPreserved",
+            states: [
+                "providerSpeechInFlight": String(hasTencentDigitalHumanProviderSpeechInFlight),
+                "reason": reason,
+            ],
+            correlations: ["turn": digitalHumanConversation.currentTurnID]
         )
     }
 
@@ -4167,7 +4545,11 @@ final class EchoViewController: UIViewController {
             try digitalHumanAudioLevelMeter?.startUIQAMeteredPlayback()
             return true
         } catch {
-            print("[Echo] digital human UIQA metered playback failed: \(error.localizedDescription)")
+            PrivacySafeDiagnostics.log(
+                subsystem: "Echo",
+                event: "uiqaMeteredPlaybackFailed",
+                states: ["reason": "audioSessionFailure"]
+            )
             return false
         }
     }
@@ -4435,7 +4817,12 @@ final class EchoViewController: UIViewController {
                 delay: Self.tencentDigitalHumanOpenFailureRecoveryDelay
             )
         }
-        print("[TencentDigitalHuman] route fallback after runtime failure turnID=\(digitalHumanConversation.currentTurnID ?? "unknown"): \(reason)")
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "routeFallback",
+            states: ["reason": reason],
+            correlations: ["turn": digitalHumanConversation.currentTurnID]
+        )
     }
 
     private func digitalHumanRouteFailureMessage(for reason: String) -> (detail: String, panel: String) {
@@ -4467,10 +4854,17 @@ final class EchoViewController: UIViewController {
             trueDeviceBackendPCMDriveTrace.providerPlaybackCompleted = true
             emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "providerPlaybackCompleted")
         }
-        print(
-            "[TencentDigitalHuman] provider playback completed turnID=\(completion.turnID) " +
-            "requestID=\(completion.requestID) textLength=\(completion.replyText?.count ?? 0) " +
-            "resumeDelay=\(String(format: "%.2f", resumeDelay))"
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "providerPlaybackCompleted",
+            counts: [
+                "resumeDelayMs": Int(resumeDelay * 1_000),
+                "textLength": completion.replyText?.count ?? 0,
+            ],
+            correlations: [
+                "request": completion.requestID,
+                "turn": completion.turnID,
+            ]
         )
         DispatchQueue.main.asyncAfter(deadline: .now() + resumeDelay) { [weak self] in
             guard let self,
@@ -4504,7 +4898,11 @@ final class EchoViewController: UIViewController {
         let text = "真机数字人文本驱动测试。请用腾讯数智人说出这句话。"
         viewModel.receiveAIReply(text)
         sendEchoReplyToDigitalHumanRuntimeIfReady(text, source: "trueDeviceTextDriveSmoke")
-        print("[TencentDigitalHuman][QA] true device text-drive smoke triggered by \(trigger)")
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "textDriveSmokeTriggered",
+            states: ["trigger": trigger]
+        )
     }
 
     private func runTencentDigitalHumanPCMDriveSmokeIfNeeded(trigger: String) {
@@ -4523,7 +4921,11 @@ final class EchoViewController: UIViewController {
             source: "trueDevicePCMDriveSmoke",
             replyText: text
         )
-        print("[TencentDigitalHuman][QA] true device PCM-drive smoke triggered by \(trigger)")
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "pcmDriveSmokeTriggered",
+            states: ["trigger": trigger]
+        )
     }
 
     private func runTencentDigitalHumanBackendPCMDriveSmokeIfNeeded(trigger: String) {
@@ -4567,9 +4969,17 @@ final class EchoViewController: UIViewController {
         let text = tencentBackendPCMDriveText
         let userId = tencentBackendPCMDriveUserId
         renderVoiceStatus(text: "正在请求复刻音频", isVisible: true, accessibilityIdentifier: "echoBackendPCMDriveStatus")
-        print(
-            "[TencentDigitalHuman][QA] requesting backend PCM-drive synthesis " +
-            "trigger=\(trigger) userId=\(userId) voiceProfileId=\(voiceProfileId)"
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "backendPCMDriveRequested",
+            states: [
+                "outputMode": "tencentAudioDrive",
+                "trigger": trigger,
+            ],
+            correlations: [
+                "user": userId,
+                "voiceProfile": voiceProfileId,
+            ]
         )
         DreamJourneyBackendClient.shared.requestVoiceCloneSynthesis(
             userId: userId,
@@ -4616,10 +5026,12 @@ final class EchoViewController: UIViewController {
                         )
                         self.emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "sendSynthesisFailed")
                     }
-                    print(
-                        "[TencentDigitalHuman][QA] backend PCM-drive smoke synthesis ready " +
-                        "voiceProfileId=\(synthesis.voiceProfileId) bytes=\(synthesis.byteCount) " +
-                        "providerMode=\(synthesis.providerMode)"
+                    PrivacySafeDiagnostics.log(
+                        subsystem: "TencentDigitalHuman",
+                        event: "backendPCMDriveReady",
+                        states: ["providerMode": synthesis.providerMode],
+                        counts: ["byteCount": synthesis.byteCount],
+                        correlations: ["voiceProfile": synthesis.voiceProfileId]
                     )
                 case .failure(let error):
                     self.renderVoiceStatus(text: nil, isVisible: false)
@@ -4629,7 +5041,11 @@ final class EchoViewController: UIViewController {
                         detail: error.localizedDescription
                     )
                     self.emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "requestFailed")
-                    print("[TencentDigitalHuman][QA] backend PCM-drive smoke failed reason=requestFailed error=\(error.localizedDescription)")
+                    PrivacySafeDiagnostics.log(
+                        subsystem: "TencentDigitalHuman",
+                        event: "backendPCMDriveFailed",
+                        states: ["reason": "requestFailed"]
+                    )
                 }
             }
         }
@@ -4651,11 +5067,19 @@ final class EchoViewController: UIViewController {
         replyText: String
     ) -> Bool {
         guard let signal = makeTencentDigitalHumanPCMDriveSignal(from: synthesis) else {
-            print(
-                "[TencentDigitalHuman][QA] skipped backend PCM-drive synthesis " +
-                "source=\(source) reason=incompatibleAudioFormat format=\(synthesis.audioFormat) " +
-                "sampleRate=\(synthesis.sampleRate ?? 0) bits=\(synthesis.bitsPerSample ?? 0) " +
-                "channels=\(synthesis.channelCount ?? 0)"
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "backendPCMDriveSkipped",
+                states: [
+                    "audioFormat": synthesis.audioFormat,
+                    "reason": "incompatibleAudioFormat",
+                    "source": source,
+                ],
+                counts: [
+                    "bitsPerSample": synthesis.bitsPerSample ?? 0,
+                    "channelCount": synthesis.channelCount ?? 0,
+                    "sampleRate": synthesis.sampleRate ?? 0,
+                ]
             )
             return false
         }
@@ -4697,7 +5121,14 @@ final class EchoViewController: UIViewController {
                 )
                 emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "runtimeNotReady")
             }
-            print("[TencentDigitalHuman][QA] skipped PCM-drive smoke source=\(source) reason=runtimeNotReady")
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "pcmDriveSkipped",
+                states: [
+                    "reason": "runtimeNotReady",
+                    "source": source,
+                ]
+            )
             return
         }
         guard digitalHumanConversation.activeRequestID == nil else {
@@ -4708,7 +5139,14 @@ final class EchoViewController: UIViewController {
                 )
                 emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "providerBusy")
             }
-            print("[TencentDigitalHuman][QA] skipped PCM-drive smoke source=\(source) reason=providerBusy")
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "pcmDriveSkipped",
+                states: [
+                    "reason": "providerBusy",
+                    "source": source,
+                ]
+            )
             return
         }
 
@@ -4767,9 +5205,11 @@ final class EchoViewController: UIViewController {
                 if !resumedVoiceCapture {
                     self.resetEchoViewModelToIdle()
                 }
-                print(
-                    "[TencentDigitalHuman][QA] PCM-drive stop probe fired " +
-                    "requestID=\(requestID) resumedVoiceCapture=\(resumedVoiceCapture)"
+                PrivacySafeDiagnostics.log(
+                    subsystem: "TencentDigitalHuman",
+                    event: "pcmDriveStopProbeFired",
+                    states: ["resumedVoiceCapture": String(resumedVoiceCapture)],
+                    correlations: ["request": requestID]
                 )
             }
         }
@@ -4796,11 +5236,21 @@ final class EchoViewController: UIViewController {
             source: source,
             lifecycleToken: lifecycleToken
         )
-        print(
-            "[TencentDigitalHuman][QA] sent PCM-drive signal " +
-            "turnID=\(digitalHumanConversation.currentTurnID ?? "unknown") source=\(source) " +
-            "requestID=\(requestID) format=\(signal.formatDescription) " +
-            "bytes=\(signal.data.count) chunks=\(signal.chunkCount)"
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "pcmDriveSignalSent",
+            states: [
+                "format": signal.formatDescription,
+                "source": source,
+            ],
+            counts: [
+                "byteCount": signal.data.count,
+                "chunkCount": signal.chunkCount,
+            ],
+            correlations: [
+                "request": requestID,
+                "turn": digitalHumanConversation.currentTurnID,
+            ]
         )
     }
 
@@ -4832,9 +5282,15 @@ final class EchoViewController: UIViewController {
                     if source == "trueDeviceBackendPCMDriveSmoke" {
                         self.trueDeviceBackendPCMDriveTrace.markChunkSent()
                     }
-                    print(
-                        "[TencentDigitalHuman][QA] sent PCM chunk " +
-                        "source=\(source) requestID=\(requestID) sequence=\(sequence) bytes=\(chunk.count)"
+                    PrivacySafeDiagnostics.log(
+                        subsystem: "TencentDigitalHuman",
+                        event: "pcmChunkSent",
+                        states: ["source": source],
+                        counts: [
+                            "byteCount": chunk.count,
+                            "sequence": sequence,
+                        ],
+                        correlations: ["request": requestID]
                     )
                 } catch {
                     self.digitalHumanConversation.clearProviderRequest()
@@ -4849,9 +5305,15 @@ final class EchoViewController: UIViewController {
                         )
                         self.emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "sendPCMChunkFailed")
                     }
-                    print(
-                        "[TencentDigitalHuman][QA] PCM chunk failed " +
-                        "source=\(source) requestID=\(requestID) sequence=\(sequence): \(error.localizedDescription)"
+                    PrivacySafeDiagnostics.log(
+                        subsystem: "TencentDigitalHuman",
+                        event: "pcmChunkFailed",
+                        states: [
+                            "reason": "sendPCMChunkFailed",
+                            "source": source,
+                        ],
+                        counts: ["sequence": sequence],
+                        correlations: ["request": requestID]
                     )
                 }
             }
@@ -4876,7 +5338,13 @@ final class EchoViewController: UIViewController {
                 if source == "trueDeviceBackendPCMDriveSmoke" {
                     self.trueDeviceBackendPCMDriveTrace.markFinalSent()
                 }
-                print("[TencentDigitalHuman][QA] sent PCM final source=\(source) requestID=\(requestID) sequence=\(sequence)")
+                PrivacySafeDiagnostics.log(
+                    subsystem: "TencentDigitalHuman",
+                    event: "pcmFinalSent",
+                    states: ["source": source],
+                    counts: ["sequence": sequence],
+                    correlations: ["request": requestID]
+                )
             } catch {
                 self.digitalHumanConversation.clearProviderRequest()
                 self.resumeDialogEngineAfterTencentProviderSpeechIfNeeded(
@@ -4890,7 +5358,15 @@ final class EchoViewController: UIViewController {
                     )
                     self.emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "sendPCMFinalFailed")
                 }
-                print("[TencentDigitalHuman][QA] PCM final failed source=\(source) requestID=\(requestID): \(error.localizedDescription)")
+                PrivacySafeDiagnostics.log(
+                    subsystem: "TencentDigitalHuman",
+                    event: "pcmFinalFailed",
+                    states: [
+                        "reason": "sendPCMFinalFailed",
+                        "source": source,
+                    ],
+                    correlations: ["request": requestID]
+                )
             }
         }
     }
@@ -4983,8 +5459,12 @@ final class EchoViewController: UIViewController {
                     self.renderVoiceSDKReadinessPreviewIfNeeded()
                     self.handleBlockedRealtimeVoice(reason: "providerCredentialBlocked")
                 }
-            case .failure(let error):
-                print("[Echo] backend voice runtime config unavailable; local provider fallback is disabled: \(error.localizedDescription)")
+            case .failure:
+                PrivacySafeDiagnostics.log(
+                    subsystem: "Echo",
+                    event: "voiceRuntimeConfigUnavailable",
+                    states: ["reason": "backendFailure"]
+                )
                 self.backendRuntimeTokenApplied = false
                 self.renderVoiceSDKReadinessPreviewIfNeeded()
                 self.handleBlockedRealtimeVoice(reason: "backendVoiceRuntimeRequestFailed")
@@ -5144,8 +5624,12 @@ final class EchoViewController: UIViewController {
                 ) else {
                     return
                 }
-                if let error {
-                    print("[Echo] delayed reply local notification failed: \(error.localizedDescription)")
+                if error != nil {
+                    PrivacySafeDiagnostics.log(
+                        subsystem: "Echo",
+                        event: "delayedReplyLocalNotificationFailed",
+                        states: ["reason": "notificationFailure"]
+                    )
                 }
             }
         }
@@ -5226,8 +5710,12 @@ final class EchoViewController: UIViewController {
                   ) else {
                 return
             }
-            if case .failure(let error) = result {
-                print("[Echo] delayed reply push contract failed: \(error.localizedDescription)")
+            if case .failure = result {
+                PrivacySafeDiagnostics.log(
+                    subsystem: "Echo",
+                    event: "delayedReplyPushContractFailed",
+                    states: ["reason": "backendFailure"]
+                )
             }
         }
     }
@@ -5269,7 +5757,11 @@ extension EchoViewController: DialogEngineDelegate {
             }
             self.resetDigitalHumanReplyDispatchState()
             let turnID = self.digitalHumanConversation.startUserTurn(makeID: self.makeTencentDigitalHumanRequestID)
-            print("[TencentDigitalHuman] user turn started turnID=\(turnID)")
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "userTurnStarted",
+                correlations: ["turn": turnID]
+            )
             self.recordEchoContextPacketForUserTurn(
                 text: text,
                 turnID: turnID,
@@ -5368,7 +5860,11 @@ extension EchoViewController: DialogEngineDelegate {
                 if self.hasTencentDigitalHumanProviderSpeechInFlight {
                     self.preserveTencentProviderSessionAfterLocalDialogStop(reason: "dialogErrorSuppressedDuringProviderSpeech")
                 }
-                print("[TencentDigitalHuman] suppressed DialogEngine error during provider speech: \(error.localizedDescription)")
+                PrivacySafeDiagnostics.log(
+                    subsystem: "TencentDigitalHuman",
+                    event: "dialogEngineErrorSuppressed",
+                    states: ["reason": "providerAudioHandoff"]
+                )
                 return
             }
 
@@ -5753,6 +6249,34 @@ extension EchoViewController {
         return destinationURL
     }
 
+    private func readRedactedEchoExportArray(from data: Data) throws -> [[String: Any]] {
+        guard let values = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            throw EchoTraceStorageError.noEvidenceBundle
+        }
+        return values
+    }
+
+    private func readRedactedEchoExportObject(from data: Data) throws -> [String: Any] {
+        guard let value = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw EchoTraceStorageError.noEvidenceBundle
+        }
+        return value
+    }
+
+    private func redactedEchoExportString(
+        _ object: [String: Any]?,
+        key: String
+    ) -> String {
+        object?[key] as? String ?? "missing"
+    }
+
+    private func redactedEchoExportStrings(
+        _ object: [String: Any]?,
+        key: String
+    ) -> [String] {
+        object?[key] as? [String] ?? []
+    }
+
     func runUIQAEchoTraceExportSmoke(completion: @escaping ([String: Any]) -> Void) {
         let ownerContext = prepareEchoTraceUIQAOwner(fallbackOwnerUserId: "uiqa_echo_trace_user")
         let ownerUserId = ownerContext.ownerUserId
@@ -5790,16 +6314,23 @@ extension EchoViewController {
                 ownerContext: ownerContext
             )
             let data = try Data(contentsOf: exportURL)
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            let records = try decoder.decode([EchoTraceRecord].self, from: data)
+            let records = try readRedactedEchoExportArray(from: data)
+            let oldestTurnIDHash = redactedEchoExportString(records.first, key: "turnIDHash")
+            let latestTurnIDHash = redactedEchoExportString(records.last, key: "turnIDHash")
+            let serialized = String(data: data, encoding: .utf8) ?? ""
             completion([
                 "completed": records.count == 20
-                    && records.first?.turnID == "uiqa-turn-2"
-                    && records.last?.turnID == "uiqa-turn-21",
+                    && oldestTurnIDHash == PrivacySafeDiagnostics.correlationHash("uiqa-turn-2")
+                    && latestTurnIDHash == PrivacySafeDiagnostics.correlationHash("uiqa-turn-21")
+                    && records.allSatisfy {
+                        redactedEchoExportString($0, key: "redactionPolicyVersion")
+                            == PrivacySafeDiagnostics.redactionPolicyVersion
+                    }
+                    && !serialized.contains("uiqa-turn-21")
+                    && !serialized.contains("archive_21"),
                 "recordCount": records.count,
-                "oldestRetainedTurnID": records.first?.turnID ?? "missing",
-                "latestTurnID": records.last?.turnID ?? "missing",
+                "oldestRetainedTurnIDHash": oldestTurnIDHash,
+                "latestTurnIDHash": latestTurnIDHash,
                 "exportPath": exportURL.path,
                 "fileExists": FileManager.default.fileExists(atPath: exportURL.path),
             ])
@@ -5807,7 +6338,7 @@ extension EchoViewController {
             completion([
                 "completed": false,
                 "failureReason": "exportFailed",
-                "error": error.localizedDescription,
+                "error": "redacted",
             ])
         }
     }
@@ -5855,23 +6386,39 @@ extension EchoViewController {
                 ownerContext: ownerContext
             )
             let data = try Data(contentsOf: exportURL)
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            let snapshots = try decoder.decode([EchoRuntimeDiagnosticsSnapshot].self, from: data)
+            let snapshots = try readRedactedEchoExportArray(from: data)
+            let oldestTurnIDHash = redactedEchoExportString(snapshots.first, key: "turnIDHash")
+            let latestTurnIDHash = redactedEchoExportString(snapshots.last, key: "turnIDHash")
+            let latestVoiceProfileIdHash = redactedEchoExportString(
+                snapshots.last,
+                key: "voiceProfileIdHash"
+            )
+            let latestProviderLogIdHash = redactedEchoExportString(
+                snapshots.last,
+                key: "providerLogIdHash"
+            )
+            let latestAudioOwner = redactedEchoExportString(snapshots.last, key: "audioOwner")
+            let latestProviderMode = redactedEchoExportString(
+                snapshots.last,
+                key: "digitalHumanProviderMode"
+            )
+            let serialized = String(data: data, encoding: .utf8) ?? ""
             completion([
                 "completed": snapshots.count == 20
-                    && snapshots.first?.turnID == "uiqa-runtime-turn-2"
-                    && snapshots.last?.turnID == "uiqa-runtime-turn-21"
-                    && snapshots.last?.voiceProfileId == "S_uiqa_runtime_diagnostics"
-                    && snapshots.last?.audioOwner == currentEchoAudioOwner.rawValue
-                    && snapshots.last?.providerLogId == "uiqa-provider-log-21",
+                    && oldestTurnIDHash == PrivacySafeDiagnostics.correlationHash("uiqa-runtime-turn-2")
+                    && latestTurnIDHash == PrivacySafeDiagnostics.correlationHash("uiqa-runtime-turn-21")
+                    && latestVoiceProfileIdHash == PrivacySafeDiagnostics.correlationHash("S_uiqa_runtime_diagnostics")
+                    && latestAudioOwner == currentEchoAudioOwner.rawValue
+                    && latestProviderLogIdHash == PrivacySafeDiagnostics.correlationHash("uiqa-provider-log-21")
+                    && !serialized.contains("uiqa-provider-log-21")
+                    && !serialized.contains("S_uiqa_runtime_diagnostics"),
                 "snapshotCount": snapshots.count,
-                "oldestRetainedTurnID": snapshots.first?.turnID ?? "missing",
-                "latestTurnID": snapshots.last?.turnID ?? "missing",
-                "latestVoiceProfileId": snapshots.last?.voiceProfileId ?? "missing",
-                "latestAudioOwner": snapshots.last?.audioOwner ?? "missing",
-                "latestProviderLogId": snapshots.last?.providerLogId ?? "missing",
-                "latestDigitalHumanProviderMode": snapshots.last?.digitalHumanProviderMode ?? "missing",
+                "oldestRetainedTurnIDHash": oldestTurnIDHash,
+                "latestTurnIDHash": latestTurnIDHash,
+                "latestVoiceProfileIdHash": latestVoiceProfileIdHash,
+                "latestAudioOwner": latestAudioOwner,
+                "latestProviderLogIdHash": latestProviderLogIdHash,
+                "latestDigitalHumanProviderMode": latestProviderMode,
                 "diagnosticsPanelText": echoRuntimeDiagnosticsPanelLabel.text ?? "",
                 "exportPath": exportURL.path,
                 "fileExists": FileManager.default.fileExists(atPath: exportURL.path),
@@ -5880,7 +6427,7 @@ extension EchoViewController {
             completion([
                 "completed": false,
                 "failureReason": "exportFailed",
-                "error": error.localizedDescription,
+                "error": "redacted",
             ])
         }
     }
@@ -5942,27 +6489,44 @@ extension EchoViewController {
                 ownerContext: ownerContext
             )
             let data = try Data(contentsOf: exportURL)
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            let packages = try decoder.decode([EchoTraceEvidencePackage].self, from: data)
+            let packages = try readRedactedEchoExportArray(from: data)
             let latestPackage = packages.last
+            let runtimeDiagnostics = latestPackage?["runtimeDiagnostics"] as? [String: Any]
+            let contextBuild = latestPackage?["contextBuild"] as? [String: Any]
+            let voiceSynthesis = latestPackage?["voiceSynthesis"] as? [String: Any]
+            let oldestTurnIDHash = redactedEchoExportString(packages.first, key: "turnIDHash")
+            let latestTurnIDHash = redactedEchoExportString(latestPackage, key: "turnIDHash")
+            let latestTraceIdHash = redactedEchoExportString(latestPackage, key: "traceIdHash")
+            let latestVoiceProfileIdHash = redactedEchoExportString(
+                voiceSynthesis,
+                key: "voiceProfileIdHash"
+            )
+            let latestProviderLogIdHash = redactedEchoExportString(
+                voiceSynthesis,
+                key: "providerLogIdHash"
+            )
+            let latestAudioOwner = redactedEchoExportString(runtimeDiagnostics, key: "audioOwner")
             completion([
                 "completed": packages.count == 20
-                    && packages.first?.turnID == "uiqa-evidence-turn-2"
-                    && latestPackage?.turnID == "uiqa-evidence-turn-21"
-                    && latestPackage?.runtimeDiagnostics?.audioOwner == currentEchoAudioOwner.rawValue
-                    && latestPackage?.contextBuild.kbFactCount == 23
-                    && latestPackage?.digitalHumanSession?.status == "unavailable"
-                    && latestPackage?.voiceSynthesis?.providerLogId == "uiqa-evidence-provider-log-21",
+                    && oldestTurnIDHash == PrivacySafeDiagnostics.correlationHash("uiqa-evidence-turn-2")
+                    && latestTurnIDHash == PrivacySafeDiagnostics.correlationHash("uiqa-evidence-turn-21")
+                    && latestAudioOwner == currentEchoAudioOwner.rawValue
+                    && contextBuild?["kbFactCount"] as? Int == 23
+                    && (latestPackage?["digitalHumanSession"] as? [String: Any])?["status"] as? String == "unavailable"
+                    && latestProviderLogIdHash
+                        == PrivacySafeDiagnostics.correlationHash("uiqa-evidence-provider-log-21"),
                 "packageCount": packages.count,
-                "oldestRetainedTurnID": packages.first?.turnID ?? "missing",
-                "latestTurnID": latestPackage?.turnID ?? "missing",
-                "latestTraceId": latestPackage?.traceId ?? "missing",
-                "latestVoiceProfileId": latestPackage?.voiceSynthesis?.voiceProfileId ?? "missing",
-                "latestProviderLogId": latestPackage?.voiceSynthesis?.providerLogId ?? "missing",
-                "latestAudioOwner": latestPackage?.runtimeDiagnostics?.audioOwner ?? "missing",
-                "latestContextKBFacts": latestPackage?.contextBuild.kbFactCount ?? -1,
-                "redactionPolicyCount": latestPackage?.redactionPolicy.count ?? 0,
+                "oldestRetainedTurnIDHash": oldestTurnIDHash,
+                "latestTurnIDHash": latestTurnIDHash,
+                "latestTraceIdHash": latestTraceIdHash,
+                "latestVoiceProfileIdHash": latestVoiceProfileIdHash,
+                "latestProviderLogIdHash": latestProviderLogIdHash,
+                "latestAudioOwner": latestAudioOwner,
+                "latestContextKBFacts": contextBuild?["kbFactCount"] as? Int ?? -1,
+                "redactionPolicyCount": redactedEchoExportStrings(
+                    latestPackage,
+                    key: "redactionPolicy"
+                ).count,
                 "exportPath": exportURL.path,
                 "fileExists": FileManager.default.fileExists(atPath: exportURL.path),
             ])
@@ -5970,7 +6534,7 @@ extension EchoViewController {
             completion([
                 "completed": false,
                 "failureReason": "exportFailed",
-                "error": error.localizedDescription,
+                "error": "redacted",
             ])
         }
     }
@@ -6083,50 +6647,104 @@ extension EchoViewController {
                 ownerContext: ownerContext
             )
             let data = try Data(contentsOf: exportURL)
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            let packages = try decoder.decode([EchoTraceEvidencePackage].self, from: data)
+            let packages = try readRedactedEchoExportArray(from: data)
             let serialized = String(data: data, encoding: .utf8) ?? ""
             let latestPackage = packages.last
-            let clueSummary = latestPackage?.contextBuild.clueSummary
-            let runtimeDiagnostics = latestPackage?.runtimeDiagnostics
+            let runtimeDiagnostics = latestPackage?["runtimeDiagnostics"] as? [String: Any]
+            let voiceSynthesis = latestPackage?["voiceSynthesis"] as? [String: Any]
+            let contextBuild = latestPackage?["contextBuild"] as? [String: Any]
+            let clueSummary = contextBuild?["clueSummary"] as? [String: Any]
+            let latestTurnIDHash = redactedEchoExportString(latestPackage, key: "turnIDHash")
+            let latestProviderLogIdHash = redactedEchoExportString(
+                voiceSynthesis,
+                key: "providerLogIdHash"
+            )
+            let latestRoleVoiceSource = redactedEchoExportString(
+                runtimeDiagnostics,
+                key: "roleVoiceSource"
+            )
+            let latestRoleVoiceDisplayNameHash = redactedEchoExportString(
+                runtimeDiagnostics,
+                key: "roleVoiceDisplayNameHash"
+            )
+            let latestRoleVoiceContextOwnerIdHash = redactedEchoExportString(
+                runtimeDiagnostics,
+                key: "roleVoiceContextOwnerIdHash"
+            )
+            let latestRuntimeVoiceProfileIdHash = redactedEchoExportString(
+                runtimeDiagnostics,
+                key: "voiceProfileIdHash"
+            )
+            let latestRuntimeAudioOwner = redactedEchoExportString(
+                runtimeDiagnostics,
+                key: "audioOwner"
+            )
+            let archiveClueHashes = redactedEchoExportStrings(
+                clueSummary,
+                key: "archiveRefsHashes"
+            )
+            let kbFactClueHashes = redactedEchoExportStrings(
+                clueSummary,
+                key: "kbFactRefsHashes"
+            )
+            let personaClueHashes = redactedEchoExportStrings(
+                clueSummary,
+                key: "personaRefsHashes"
+            )
+            let careClueHashes = redactedEchoExportStrings(
+                clueSummary,
+                key: "careRefsHashes"
+            )
+            let filteredReasons = redactedEchoExportStrings(
+                clueSummary,
+                key: "filteredContextReasons"
+            )
             completion([
                 "completed": echoTraceEvidenceExportButton.superview === echoRuntimeDiagnosticsPanelView
                     && echoTraceEvidenceExportButton.title(for: .normal) == "导出证据包"
-                    && latestPackage?.turnID == "uiqa-panel-evidence-turn"
-                    && latestPackage?.voiceSynthesis?.providerLogId == "uiqa-panel-provider-log"
-                    && runtimeDiagnostics?.roleVoiceSource == "familyMember"
-                    && runtimeDiagnostics?.roleVoiceDisplayName == "UIQA 家人音色"
-                    && runtimeDiagnostics?.roleVoiceContextOwnerId == "uiqa_family_voice_panel_member"
-                    && runtimeDiagnostics?.voiceProfileId == "S_uiqa_family_panel_voice"
-                    && runtimeDiagnostics?.audioOwner == "tencentDigitalHuman"
-                    && clueSummary?.archiveRefs == ["archive_panel_evidence"]
-                    && clueSummary?.kbFactRefs == ["fact_panel_evidence"]
-                    && clueSummary?.personaRefs == ["persona:personal:uiqa_echo_panel_evidence_user"]
-                    && clueSummary?.careRefs == ["care:latest"]
-                    && clueSummary?.contextVersion == "echo-context-v2"
-                    && clueSummary?.filteredContextReasons == ["archive_panel_filtered:analysis_failed_empty_context"]
-                    && clueSummary?.rankingTraceCount == 5
+                    && latestTurnIDHash
+                        == PrivacySafeDiagnostics.correlationHash("uiqa-panel-evidence-turn")
+                    && latestProviderLogIdHash
+                        == PrivacySafeDiagnostics.correlationHash("uiqa-panel-provider-log")
+                    && latestRoleVoiceSource == "familyMember"
+                    && latestRoleVoiceDisplayNameHash
+                        == PrivacySafeDiagnostics.correlationHash("UIQA 家人音色")
+                    && latestRoleVoiceContextOwnerIdHash
+                        == PrivacySafeDiagnostics.correlationHash("uiqa_family_voice_panel_member")
+                    && latestRuntimeVoiceProfileIdHash
+                        == PrivacySafeDiagnostics.correlationHash("S_uiqa_family_panel_voice")
+                    && latestRuntimeAudioOwner == "tencentDigitalHuman"
+                    && archiveClueHashes == [PrivacySafeDiagnostics.correlationHash("archive_panel_evidence")]
+                    && kbFactClueHashes == [PrivacySafeDiagnostics.correlationHash("fact_panel_evidence")]
+                    && personaClueHashes
+                        == [PrivacySafeDiagnostics.correlationHash("persona:personal:uiqa_echo_panel_evidence_user")]
+                    && careClueHashes == [PrivacySafeDiagnostics.correlationHash("care:latest")]
+                    && redactedEchoExportString(clueSummary, key: "contextVersion") == "echo-context-v2"
+                    && filteredReasons == ["archive_panel_filtered:analysis_failed_empty_context"]
+                    && ((clueSummary?["rankingTraceCount"] as? Int) == 5)
                     && !serialized.localizedCaseInsensitiveContains("audioBase64")
                     && !serialized.localizedCaseInsensitiveContains("appkey")
-                    && !serialized.localizedCaseInsensitiveContains("accesstoken"),
+                    && !serialized.localizedCaseInsensitiveContains("accesstoken")
+                    && !serialized.contains("UIQA 家人音色")
+                    && !serialized.contains("uiqa-panel-provider-log")
+                    && !serialized.contains("archive_panel_evidence"),
                 "buttonVisible": echoTraceEvidenceExportButton.superview === echoRuntimeDiagnosticsPanelView,
                 "buttonTitle": echoTraceEvidenceExportButton.title(for: .normal) ?? "",
                 "packageCount": packages.count,
-                "latestTurnID": latestPackage?.turnID ?? "missing",
-                "latestProviderLogId": latestPackage?.voiceSynthesis?.providerLogId ?? "missing",
-                "latestRuntimeRoleVoiceSource": runtimeDiagnostics?.roleVoiceSource ?? "missing",
-                "latestRuntimeRoleVoiceDisplayName": runtimeDiagnostics?.roleVoiceDisplayName ?? "missing",
-                "latestRuntimeRoleVoiceContextOwnerId": runtimeDiagnostics?.roleVoiceContextOwnerId ?? "missing",
-                "latestRuntimeVoiceProfileId": runtimeDiagnostics?.voiceProfileId ?? "missing",
-                "latestRuntimeAudioOwner": runtimeDiagnostics?.audioOwner ?? "missing",
-                "latestArchiveClues": clueSummary?.archiveRefs.joined(separator: ",") ?? "missing",
-                "latestKbFactClues": clueSummary?.kbFactRefs.joined(separator: ",") ?? "missing",
-                "latestPersonaClues": clueSummary?.personaRefs.joined(separator: ",") ?? "missing",
-                "latestCareClues": clueSummary?.careRefs.joined(separator: ",") ?? "missing",
-                "latestContextVersion": clueSummary?.contextVersion ?? "missing",
-                "latestFilteredReasons": clueSummary?.filteredContextReasons.joined(separator: ",") ?? "missing",
-                "latestRankingTraceCount": clueSummary?.rankingTraceCount ?? -1,
+                "latestTurnIDHash": latestTurnIDHash,
+                "latestProviderLogIdHash": latestProviderLogIdHash,
+                "latestRuntimeRoleVoiceSource": latestRoleVoiceSource,
+                "latestRuntimeRoleVoiceDisplayNameHash": latestRoleVoiceDisplayNameHash,
+                "latestRuntimeRoleVoiceContextOwnerIdHash": latestRoleVoiceContextOwnerIdHash,
+                "latestRuntimeVoiceProfileIdHash": latestRuntimeVoiceProfileIdHash,
+                "latestRuntimeAudioOwner": latestRuntimeAudioOwner,
+                "latestArchiveClueHashes": archiveClueHashes.joined(separator: ","),
+                "latestKbFactClueHashes": kbFactClueHashes.joined(separator: ","),
+                "latestPersonaClueHashes": personaClueHashes.joined(separator: ","),
+                "latestCareClueHashes": careClueHashes.joined(separator: ","),
+                "latestContextVersion": redactedEchoExportString(clueSummary, key: "contextVersion"),
+                "latestFilteredReasons": filteredReasons.joined(separator: ","),
+                "latestRankingTraceCount": clueSummary?["rankingTraceCount"] as? Int ?? -1,
                 "exportPath": exportURL.path,
                 "fileExists": FileManager.default.fileExists(atPath: exportURL.path),
             ])
@@ -6134,7 +6752,7 @@ extension EchoViewController {
             completion([
                 "completed": false,
                 "failureReason": "panelExportFailed",
-                "error": error.localizedDescription,
+                "error": "redacted",
             ])
         }
     }
@@ -6219,43 +6837,86 @@ extension EchoViewController {
                 ownerContext: ownerContext
             )
             let data = try Data(contentsOf: exportURL)
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            let bundle = try decoder.decode(EchoQAEvidenceBundle.self, from: data)
+            let bundle = try readRedactedEchoExportObject(from: data)
             let serialized = String(data: data, encoding: .utf8) ?? ""
+            let evidencePackage = bundle["evidencePackage"] as? [String: Any]
+            let clueSummary = bundle["contextClues"] as? [String: Any]
+            let voiceSynthesis = bundle["voiceSynthesis"] as? [String: Any]
+            let fallbackSummary = bundle["fallbackSummary"] as? [String: Any]
+            let latestTurnIDHash = redactedEchoExportString(bundle, key: "turnIDHash")
+            let latestTraceIdHash = redactedEchoExportString(bundle, key: "traceIdHash")
+            let latestProviderLogIdHash = redactedEchoExportString(
+                voiceSynthesis,
+                key: "providerLogIdHash"
+            )
+            let archiveClueHashes = redactedEchoExportStrings(
+                clueSummary,
+                key: "archiveRefsHashes"
+            )
+            let kbFactClueHashes = redactedEchoExportStrings(
+                clueSummary,
+                key: "kbFactRefsHashes"
+            )
+            let personaClueHashes = redactedEchoExportStrings(
+                clueSummary,
+                key: "personaRefsHashes"
+            )
+            let careClueHashes = redactedEchoExportStrings(
+                clueSummary,
+                key: "careRefsHashes"
+            )
             completion([
-                "completed": bundle.schemaVersion == 2
-                    && bundle.evidencePackage.schemaVersion == 1
-                    && bundle.turnID == "uiqa-qa-bundle-turn"
-                    && bundle.contextClues.contextVersion == "echo-context-v2"
-                    && bundle.contextClues.archiveRefs == ["archive_qa_bundle"]
-                    && bundle.contextClues.kbFactRefs == ["fact_qa_bundle"]
-                    && bundle.contextClues.personaRefs == ["persona:personal:uiqa_echo_qa_bundle_user"]
-                    && bundle.contextClues.careRefs == ["care:latest"]
-                    && bundle.contextClues.filteredContextReasons.count == 2
-                    && bundle.contextClues.rankingTraceCount == 6
-                    && bundle.digitalHumanSession?.status == "unavailable"
-                    && bundle.voiceSynthesis?.providerLogId == "uiqa-bundle-provider-log"
-                    && bundle.voiceSynthesis?.outputMode == "tencentAudioDrive"
-                    && bundle.fallbackSummary.contextFallbacks == ["voice_clone_provider_retry"]
-                    && bundle.fallbackSummary.inferredFallbacks.contains("voiceSynthesis:uiqaBundleSynthesisSummary")
+                "completed": bundle["schemaVersion"] as? Int == 2
+                    && evidencePackage?["schemaVersion"] as? Int == 1
+                    && latestTurnIDHash
+                        == PrivacySafeDiagnostics.correlationHash("uiqa-qa-bundle-turn")
+                    && redactedEchoExportString(clueSummary, key: "contextVersion") == "echo-context-v2"
+                    && archiveClueHashes == [PrivacySafeDiagnostics.correlationHash("archive_qa_bundle")]
+                    && kbFactClueHashes == [PrivacySafeDiagnostics.correlationHash("fact_qa_bundle")]
+                    && personaClueHashes
+                        == [PrivacySafeDiagnostics.correlationHash("persona:personal:uiqa_echo_qa_bundle_user")]
+                    && careClueHashes == [PrivacySafeDiagnostics.correlationHash("care:latest")]
+                    && redactedEchoExportStrings(clueSummary, key: "filteredContextReasons").count == 2
+                    && ((clueSummary?["rankingTraceCount"] as? Int) == 6)
+                    && (bundle["digitalHumanSession"] as? [String: Any])?["status"] as? String == "unavailable"
+                    && latestProviderLogIdHash
+                        == PrivacySafeDiagnostics.correlationHash("uiqa-bundle-provider-log")
+                    && redactedEchoExportString(voiceSynthesis, key: "outputMode") == "tencentAudioDrive"
+                    && redactedEchoExportStrings(fallbackSummary, key: "contextFallbacks")
+                        == ["voice_clone_provider_retry"]
+                    && redactedEchoExportStrings(fallbackSummary, key: "inferredFallbacks")
+                        .contains("voiceSynthesis:uiqaBundleSynthesisSummary")
                     && !serialized.localizedCaseInsensitiveContains("audioBase64")
                     && !serialized.localizedCaseInsensitiveContains("appkey")
-                    && !serialized.localizedCaseInsensitiveContains("accesstoken"),
-                "schemaVersion": bundle.schemaVersion,
-                "latestTurnID": bundle.turnID,
-                "latestTraceId": bundle.traceId,
-                "latestVoiceOutputMode": bundle.voiceSynthesis?.outputMode ?? "missing",
-                "latestProviderLogId": bundle.voiceSynthesis?.providerLogId ?? "missing",
-                "latestDigitalHumanStatus": bundle.digitalHumanSession?.status ?? "missing",
-                "latestFallbacks": bundle.fallbackSummary.contextFallbacks.joined(separator: ","),
-                "latestInferredFallbacks": bundle.fallbackSummary.inferredFallbacks.joined(separator: ","),
-                "latestClueSummaryArchiveRefs": bundle.contextClues.archiveRefs.joined(separator: ","),
-                "latestClueSummaryKbFactRefs": bundle.contextClues.kbFactRefs.joined(separator: ","),
-                "latestClueSummaryPersonaRefs": bundle.contextClues.personaRefs.joined(separator: ","),
-                "latestClueSummaryCareRefs": bundle.contextClues.careRefs.joined(separator: ","),
-                "latestFilteredReasons": bundle.contextClues.filteredContextReasons.joined(separator: ","),
-                "latestRankingTraceCount": bundle.contextClues.rankingTraceCount,
+                    && !serialized.localizedCaseInsensitiveContains("accesstoken")
+                    && !serialized.contains("uiqa-bundle-provider-log")
+                    && !serialized.contains("archive_qa_bundle"),
+                "schemaVersion": bundle["schemaVersion"] as? Int ?? -1,
+                "latestTurnIDHash": latestTurnIDHash,
+                "latestTraceIdHash": latestTraceIdHash,
+                "latestVoiceOutputMode": redactedEchoExportString(voiceSynthesis, key: "outputMode"),
+                "latestProviderLogIdHash": latestProviderLogIdHash,
+                "latestDigitalHumanStatus": redactedEchoExportString(
+                    bundle["digitalHumanSession"] as? [String: Any],
+                    key: "status"
+                ),
+                "latestFallbacks": redactedEchoExportStrings(
+                    fallbackSummary,
+                    key: "contextFallbacks"
+                ).joined(separator: ","),
+                "latestInferredFallbacks": redactedEchoExportStrings(
+                    fallbackSummary,
+                    key: "inferredFallbacks"
+                ).joined(separator: ","),
+                "latestClueSummaryArchiveRefHashes": archiveClueHashes.joined(separator: ","),
+                "latestClueSummaryKbFactRefHashes": kbFactClueHashes.joined(separator: ","),
+                "latestClueSummaryPersonaRefHashes": personaClueHashes.joined(separator: ","),
+                "latestClueSummaryCareRefHashes": careClueHashes.joined(separator: ","),
+                "latestFilteredReasons": redactedEchoExportStrings(
+                    clueSummary,
+                    key: "filteredContextReasons"
+                ).joined(separator: ","),
+                "latestRankingTraceCount": clueSummary?["rankingTraceCount"] as? Int ?? -1,
                 "exportPath": exportURL.path,
                 "fileExists": FileManager.default.fileExists(atPath: exportURL.path),
             ])
@@ -6263,7 +6924,7 @@ extension EchoViewController {
             completion([
                 "completed": false,
                 "failureReason": "qaEvidenceBundleExportFailed",
-                "error": error.localizedDescription,
+                "error": "redacted",
             ])
         }
     }

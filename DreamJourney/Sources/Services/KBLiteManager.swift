@@ -363,9 +363,17 @@ final class KBLiteManager {
             do {
                 try FileManager.default.moveItem(at: legacyFile, to: quarantineFile)
                 try? KnowledgeLocalStoragePolicy.hardenExistingItem(at: quarantineFile)
-                print("[KBLite] 已隔离无 owner 证明的旧知识库: \(quarantineFile.lastPathComponent)")
+                PrivacySafeDiagnostics.log(
+                    subsystem: "KBLite",
+                    event: "legacyGraphQuarantined",
+                    states: ["ownerEvidence": "missing"]
+                )
             } catch {
-                print("[KBLite] 旧知识库隔离失败: \(error.localizedDescription)")
+                PrivacySafeDiagnostics.log(
+                    subsystem: "KBLite",
+                    event: "legacyGraphQuarantineFailed",
+                    states: ["failure": "storageFailure"]
+                )
             }
         }
 
@@ -495,7 +503,11 @@ final class KBLiteManager {
             }
             stagedGraph = staged
         } catch {
-            print("[KBLite] ❌ 保存失败: \(error.localizedDescription)")
+            PrivacySafeDiagnostics.log(
+                subsystem: "KBLite",
+                event: "graphSaveFailed",
+                states: ["failure": "storageFailure"]
+            )
             if validateAccountLeaseScope(accountScope, at: .runtime) {
                 widgetSnapshotStore.invalidateSnapshot(ownerUserId: userId, generation: generation)
             }
@@ -600,7 +612,11 @@ final class KBLiteManager {
             }
             try? KnowledgeLocalStoragePolicy.hardenExistingItem(at: stagedGraph.fileURL)
         } catch {
-            print("[KBLite] ❌ 保存失败: \(error.localizedDescription)")
+            PrivacySafeDiagnostics.log(
+                subsystem: "KBLite",
+                event: "stagedGraphCommitFailed",
+                states: ["failure": "storageFailure"]
+            )
             return .storageFailure
         }
 
@@ -678,7 +694,11 @@ final class KBLiteManager {
         }
         let filePath = graphFilePath(for: userId)
         guard FileManager.default.fileExists(atPath: filePath.path) else {
-            print("[KBLite] 📂 知识库文件不存在，使用空图谱")
+            PrivacySafeDiagnostics.log(
+                subsystem: "KBLite",
+                event: "graphLoadEmpty",
+                states: ["reason": "missingStorage"]
+            )
             return KBLiteGraph()
         }
         let decoder = JSONDecoder()
@@ -687,15 +707,34 @@ final class KBLiteManager {
             try? KnowledgeLocalStoragePolicy.hardenExistingItem(at: filePath)
             let data = try Data(contentsOf: filePath)
             let loaded = try decoder.decode(KBLiteGraph.self, from: data)
-            print("[KBLite] 📂 已加载知识库: v\(loaded.version), \(loaded.people.count)人, \(loaded.places.count)地, \(loaded.events.count)事, \(loaded.facts.count)实, 共\(loaded.sessionCount)次会话")
+            PrivacySafeDiagnostics.log(
+                subsystem: "KBLite",
+                event: "graphLoaded",
+                counts: [
+                    "people": loaded.people.count,
+                    "places": loaded.places.count,
+                    "events": loaded.events.count,
+                    "facts": loaded.facts.count,
+                    "sessionCount": loaded.sessionCount,
+                    "version": loaded.version,
+                ]
+            )
             return loaded
         } catch {
-            print("[KBLite] ⚠️ 知识库加载失败: \(error.localizedDescription)，使用空图谱")
+            PrivacySafeDiagnostics.log(
+                subsystem: "KBLite",
+                event: "graphLoadFailed",
+                states: ["failure": "storageFailure"]
+            )
             // 备份损坏文件
             let backupPath = filePath.appendingPathExtension("corrupted")
             try? FileManager.default.moveItem(at: filePath, to: backupPath)
             try? KnowledgeLocalStoragePolicy.hardenExistingItem(at: backupPath)
-            print("[KBLite] 📦 已备份损坏文件到: \(backupPath.lastPathComponent)")
+            PrivacySafeDiagnostics.log(
+                subsystem: "KBLite",
+                event: "corruptGraphBackupAttempted",
+                states: ["status": "completed"]
+            )
             return KBLiteGraph()
         }
     }
@@ -800,7 +839,11 @@ final class KBLiteManager {
                 NotificationCenter.default.post(name: .kbLiteDidUpdate, object: nil)
             }
         }
-        print("[KBLite] 已切换知识所有者: \(normalized)")
+        PrivacySafeDiagnostics.log(
+            subsystem: "KBLite",
+            event: "graphOwnerSwitched",
+            correlations: ["owner": normalized]
+        )
     }
 
     /// Invalidates all in-memory knowledge runtime without mounting data for another owner.
@@ -2427,7 +2470,15 @@ final class KBLiteManager {
         // 使用 NSLinguisticTagger 做中文分词
         let keywords = tokenizeChinese(query)
 
-        print("[KBLite] 🔍 检索: \"\(query)\" → 关键词: \(keywords)")
+        PrivacySafeDiagnostics.log(
+            subsystem: "KBLite",
+            event: "keywordSearchStarted",
+            counts: [
+                "queryUTF8ByteCount": query.utf8.count,
+                "keywordCount": keywords.count,
+            ],
+            correlations: ["query": query]
+        )
 
         // 人物匹配
         result.people = graphSnapshot.people.filter { person in
@@ -2522,9 +2573,10 @@ final class KBLiteManager {
     ) -> String {
         let identity = expectedIdentity ?? Self.resolveCurrentPersonaIdentity()
         guard identity.isComplete, loadedUserId == identity.ownerUserId else {
-            print(
-                "[KBLite] 跳过生成上下文：知识所有者不匹配 " +
-                "loaded=\(loadedUserId) expected=\(identity.ownerUserId)"
+            PrivacySafeDiagnostics.log(
+                subsystem: "KBLite",
+                event: "generationContextSkipped",
+                states: ["reason": "ownerMismatch"]
             )
             return ""
         }

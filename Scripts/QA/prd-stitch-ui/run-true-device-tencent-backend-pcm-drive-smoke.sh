@@ -202,23 +202,23 @@ append_report "- Console log: \`$LAUNCH_LOG\`"
 append_report
 append_report "## Observed Signals"
 for pattern in \
-  "session contract received" \
+  "event=sessionContractReceived" \
   "assetSource=backendSession" \
   "audioOwner=tencentDigitalHuman" \
   "audioOwner=fallbackMuted" \
-  "requesting backend PCM-drive synthesis" \
-  "backend PCM-drive smoke synthesis ready" \
-  "sent PCM-drive signal" \
-  "sent PCM chunk" \
-  "AudioStart" \
-  "AudioOver" \
-  "provider playback completed" \
+  "event=backendPCMDriveRequested" \
+  "event=backendPCMDriveReady" \
+  "event=pcmDriveSignalSent" \
+  "event=pcmChunkSent" \
+  "event=providerAudioStarted" \
+  "event=providerAudioCompleted" \
+  "event=providerPlaybackCompleted" \
   "[TencentDigitalHuman][QA_RESULT]" \
-  "providerLogId" \
+  "providerLogIdHash" \
   "sentChunkCount" \
-  "PCM-drive stop probe fired" \
+  "event=pcmDriveStopProbeFired" \
   "forced provider playback interrupt" \
-  "resume voice capture after provider speech reason=pcmDriveSmokeStopProbe"; do
+  "event=voiceCaptureResumed"; do
   if grep -Fq "$pattern" "$LAUNCH_LOG"; then
     append_report "- \`$pattern\`: observed"
   else
@@ -229,7 +229,7 @@ done
 if grep -q "assetSource=localQAOverride" "$LAUNCH_LOG"; then
   fail "local digital-human asset override was used during the true-device smoke; inspect $LAUNCH_LOG"
 fi
-if ! grep -q "session contract received" "$LAUNCH_LOG"; then
+if ! grep -q "event=sessionContractReceived" "$LAUNCH_LOG"; then
   fail "Tencent session contract was not received; inspect $LAUNCH_LOG"
 fi
 if ! grep -q "assetSource=backendSession" "$LAUNCH_LOG"; then
@@ -241,19 +241,19 @@ fi
 if ! grep -q "audioOwner=fallbackMuted" "$LAUNCH_LOG"; then
   fail "Tencent muted handoff audio owner was not observed before capture resume; inspect $LAUNCH_LOG"
 fi
-if ! grep -q "backend PCM-drive smoke synthesis ready" "$LAUNCH_LOG"; then
+if ! grep -q "event=backendPCMDriveReady" "$LAUNCH_LOG"; then
   fail "backend synthesis did not complete; inspect $LAUNCH_LOG"
 fi
-if ! grep -q "sent PCM chunk" "$LAUNCH_LOG"; then
+if ! grep -q "event=pcmChunkSent" "$LAUNCH_LOG"; then
   fail "PCM chunks were not sent; inspect $LAUNCH_LOG"
 fi
-if ! grep -q "AudioStart" "$LAUNCH_LOG"; then
+if ! grep -q "event=providerAudioStarted" "$LAUNCH_LOG"; then
   fail "Tencent AudioStart was not observed; inspect $LAUNCH_LOG"
 fi
-if ! grep -q "PCM-drive stop probe fired" "$LAUNCH_LOG"; then
+if ! grep -q "event=pcmDriveStopProbeFired" "$LAUNCH_LOG"; then
   fail "PCM stop probe was not observed; inspect $LAUNCH_LOG"
 fi
-if ! grep -q "resume voice capture after provider speech reason=pcmDriveSmokeStopProbe" "$LAUNCH_LOG"; then
+if ! grep -q "event=voiceCaptureResumed.*reason=pcmDriveSmokeStopProbe" "$LAUNCH_LOG"; then
   fail "voice capture did not resume after stop probe; inspect $LAUNCH_LOG"
 fi
 
@@ -292,10 +292,11 @@ with open(path, "r", encoding="utf-8") as handle:
     payload = json.load(handle)
 
 required = [
-    "voiceProfileId",
+    "redactionPolicyVersion",
+    "voiceProfileIdHash",
     "outputMode",
-    "providerLogId",
-    "providerRequestId",
+    "providerLogIdHash",
+    "providerRequestIdHash",
     "providerMode",
     "rawByteCount",
     "preparedByteCount",
@@ -335,11 +336,11 @@ if payload.get("failureReason"):
 
 lines = [
     f"- Completed: `{payload.get('completed')}`",
-    f"- Voice profile: `{payload.get('voiceProfileId')}`",
+    f"- Voice profile hash: `{payload.get('voiceProfileIdHash')}`",
     f"- Output mode: `{payload.get('outputMode')}`",
     f"- Provider mode: `{payload.get('providerMode')}`",
-    f"- Provider log ID: `{payload.get('providerLogId') or 'none'}`",
-    f"- Provider request ID: `{payload.get('providerRequestId') or 'none'}`",
+    f"- Provider log ID hash: `{payload.get('providerLogIdHash') or 'none'}`",
+    f"- Provider request ID hash: `{payload.get('providerRequestIdHash') or 'none'}`",
     f"- Raw/prepared bytes: `{payload.get('rawByteCount')}` / `{payload.get('preparedByteCount')}`",
     f"- Sent chunks: `{payload.get('sentChunkCount')}` / expected `{payload.get('expectedChunkCount')}`, final=`{payload.get('sentFinalChunk')}`",
     f"- Provider state: speaking=`{payload.get('providerSpeakingObserved')}`, playbackCompleted=`{payload.get('providerPlaybackCompleted')}`",

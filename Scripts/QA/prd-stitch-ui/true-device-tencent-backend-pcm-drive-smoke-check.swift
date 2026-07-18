@@ -30,11 +30,11 @@ require(script.contains("assetSource=backendSession"), "true-device script shoul
 require(script.contains("assetSource=localQAOverride"), "true-device script should fail when local QA asset override is used")
 require(script.contains("audioOwner=tencentDigitalHuman"), "true-device script should verify Tencent owns Echo playback")
 require(script.contains("audioOwner=fallbackMuted"), "true-device script should verify muted provider handoff before capture resumes")
-require(script.contains("PCM-drive stop probe fired"), "true-device script should verify provider interruption was triggered")
-require(script.contains("resume voice capture after provider speech reason=pcmDriveSmokeStopProbe"), "true-device script should verify mic capture resumes after stop probe")
-require(script.contains("provider playback completed"), "true-device script should record normal provider completion when AudioOver is observed")
+require(script.contains("event=pcmDriveStopProbeFired"), "true-device script should verify provider interruption was triggered")
+require(script.contains("event=voiceCaptureResumed.*reason=pcmDriveSmokeStopProbe"), "true-device script should verify mic capture resumes after stop probe")
+require(script.contains("event=providerPlaybackCompleted"), "true-device script should record normal provider completion when AudioOver is observed")
 require(script.contains("[TencentDigitalHuman][QA_RESULT]"), "true-device script should extract the structured QA result")
-require(script.contains("providerLogId"), "true-device script should report providerLogId for support lookup")
+require(script.contains("providerLogIdHash"), "true-device script should report a hashed provider log ID for support lookup")
 require(script.contains("sentChunkCount"), "true-device script should report sentChunkCount")
 require(script.contains("Manual visual checks"), "true-device script should separate human visual/audio checks from automated logs")
 require(script.contains("Human confirmation required"), "true-device script should not claim audible sound or lip movement without human confirmation")
@@ -49,14 +49,15 @@ require(
         && echo.contains("lifecycleToken: lifecycleToken"),
     "Echo stop probe should resume voice capture with the current lifecycle token"
 )
-require(echo.contains("[TencentDigitalHuman][QA] PCM-drive stop probe fired"), "Echo should log stop probe with a QA marker")
+require(echo.contains("event: \"pcmDriveStopProbeFired\""), "Echo should emit a redacted stop-probe diagnostic event")
 require(echo.contains("[TencentDigitalHuman][QA_RESULT]"), "Echo should emit structured true-device backend PCM-drive QA result")
 require(echo.contains("TencentBackendPCMDriveTrueDeviceTrace"), "Echo should keep a structured trace for backend PCM-drive true-device smoke")
 for field in [
-    "voiceProfileId",
+    "redactionPolicyVersion",
+    "voiceProfileIdHash",
     "outputMode",
-    "providerLogId",
-    "providerRequestId",
+    "providerLogIdHash",
+    "providerRequestIdHash",
     "providerMode",
     "rawByteCount",
     "preparedByteCount",
@@ -71,9 +72,21 @@ for field in [
 ] {
     require(echo.contains("\"\(field)\""), "Echo QA result should include \(field)")
 }
-require(echo.contains("assetSource=\\(contract.assetSource)"), "Echo should log backend/local asset source for true-device verification")
-require(echo.contains("audioOwner=tencentDigitalHuman"), "Echo should log Tencent playback ownership")
-require(echo.contains("audioOwner=fallbackMuted"), "Echo should log provider muted handoff ownership")
+require(
+    echo.contains("event: \"sessionContractReceived\"")
+        && echo.contains("\"assetSource\": contract.assetSource"),
+    "Echo should emit backend/local asset source through the redacted session diagnostic"
+)
+require(
+    echo.contains("event: \"audioOwnerUpdated\"")
+        && echo.contains("\"audioOwner\": owner.rawValue"),
+    "Echo should emit a redacted audio-owner transition diagnostic"
+)
+require(
+    echo.contains("setEchoAudioOwner(.tencentDigitalHuman")
+        && echo.contains("setEchoAudioOwner(.fallbackMuted"),
+    "Echo should retain Tencent playback ownership and muted-handoff transitions"
+)
 require(echo.contains("DJRunTencentDigitalHumanBackendPCMDriveSmoke"), "Echo should keep backend PCM-drive launch argument")
 require(echo.contains("DJTencentBackendPCMDriveUserId="), "Echo QA smoke should accept a voice profile owner override")
 

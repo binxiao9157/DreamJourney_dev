@@ -90,6 +90,7 @@ cp "$RESULT_FILE" "$RESULT_COPY_PATH"
 
 python3 - "$RESULT_FILE" "$BUNDLE_EXPORT_COPY_PATH" <<'PY'
 import json
+import hashlib
 import pathlib
 import sys
 
@@ -101,20 +102,23 @@ def require(condition, message):
     if not condition:
         raise SystemExit(message)
 
+def correlation_hash(value):
+    return "sha256:" + hashlib.sha256(value.encode()).hexdigest()[:16]
+
 require(result.get("completed") is True, "Echo QA evidence bundle smoke did not complete")
 require(result.get("schemaVersion") == 2, "QA evidence bundle schemaVersion changed")
-require(result.get("latestTurnID") == "uiqa-qa-bundle-turn", "QA evidence bundle latest turn changed")
+require(result.get("latestTurnIDHash") == correlation_hash("uiqa-qa-bundle-turn"), "QA evidence bundle latest turn hash changed")
 require(result.get("latestVoiceOutputMode") == "tencentAudioDrive", "QA evidence bundle voice output mode changed")
-require(result.get("latestProviderLogId") == "uiqa-bundle-provider-log", "QA evidence bundle provider log changed")
+require(result.get("latestProviderLogIdHash") == correlation_hash("uiqa-bundle-provider-log"), "QA evidence bundle provider log hash changed")
 require(result.get("latestDigitalHumanStatus") == "unavailable", "QA evidence bundle digital human status changed")
 require(result.get("latestFallbacks") == "voice_clone_provider_retry", "QA evidence bundle fallback summary changed")
-require(result.get("latestClueSummaryArchiveRefs") == "archive_qa_bundle", "QA evidence bundle archive clues changed")
-require(result.get("latestClueSummaryKbFactRefs") == "fact_qa_bundle", "QA evidence bundle kbFact clues changed")
+require(result.get("latestClueSummaryArchiveRefHashes") == correlation_hash("archive_qa_bundle"), "QA evidence bundle archive clue hash changed")
+require(result.get("latestClueSummaryKbFactRefHashes") == correlation_hash("fact_qa_bundle"), "QA evidence bundle kbFact clue hash changed")
 require(
-    result.get("latestClueSummaryPersonaRefs") == "persona:personal:uiqa_echo_qa_bundle_user",
-    "QA evidence bundle persona clues changed",
+    result.get("latestClueSummaryPersonaRefHashes") == correlation_hash("persona:personal:uiqa_echo_qa_bundle_user"),
+    "QA evidence bundle persona clue hash changed",
 )
-require(result.get("latestClueSummaryCareRefs") == "care:latest", "QA evidence bundle care clues changed")
+require(result.get("latestClueSummaryCareRefHashes") == correlation_hash("care:latest"), "QA evidence bundle care clue hash changed")
 require(result.get("latestRankingTraceCount") == 6, "QA evidence bundle ranking trace count changed")
 require(result.get("fileExists") is True, "QA evidence bundle export file should exist")
 export_path = result.get("exportPath")
@@ -125,10 +129,11 @@ require(export_file.exists(), f"Exported QA evidence bundle file missing: {expor
 bundle = json.loads(export_file.read_text())
 require(bundle.get("schemaVersion") == 2, "Exported QA bundle schemaVersion changed")
 require(bundle.get("evidencePackage", {}).get("schemaVersion") == 1, "Nested evidence package schemaVersion changed")
-require(bundle.get("contextClues", {}).get("archiveRefs") == ["archive_qa_bundle"], "Exported archive clue summary changed")
-require(bundle.get("contextClues", {}).get("kbFactRefs") == ["fact_qa_bundle"], "Exported kbFact clue summary changed")
+require(bundle.get("redactionPolicyVersion") == "iosDiagnostics-v1", "QA evidence bundle should declare its redaction policy")
+require(bundle.get("contextClues", {}).get("archiveRefsHashes") == [correlation_hash("archive_qa_bundle")], "Exported archive clue summary changed")
+require(bundle.get("contextClues", {}).get("kbFactRefsHashes") == [correlation_hash("fact_qa_bundle")], "Exported kbFact clue summary changed")
 require(bundle.get("digitalHumanSession", {}).get("status") == "unavailable", "Exported digital human status changed")
-require(bundle.get("voiceSynthesis", {}).get("providerLogId") == "uiqa-bundle-provider-log", "Exported voice provider log changed")
+require(bundle.get("voiceSynthesis", {}).get("providerLogIdHash") == correlation_hash("uiqa-bundle-provider-log"), "Exported voice provider log changed")
 require(
     bundle.get("fallbackSummary", {}).get("contextFallbacks") == ["voice_clone_provider_retry"],
     "Exported fallback summary changed",
@@ -137,6 +142,8 @@ serialized = json.dumps(bundle, ensure_ascii=False)
 require("audioBase64" not in serialized, "QA evidence bundle must not export audioBase64")
 require("appkey" not in serialized.lower(), "QA evidence bundle must not export appkey")
 require("accesstoken" not in serialized.lower(), "QA evidence bundle must not export accesstoken")
+require("uiqa-bundle-provider-log" not in serialized, "QA evidence bundle must not export raw provider log IDs")
+require("archive_qa_bundle" not in serialized, "QA evidence bundle must not export raw archive references")
 bundle_copy_path.write_text(json.dumps(bundle, ensure_ascii=False, indent=2, sort_keys=True))
 PY
 

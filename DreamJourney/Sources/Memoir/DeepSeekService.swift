@@ -22,8 +22,8 @@ final class DeepSeekService {
             switch self {
             case .apiKeyMissing, .directProviderDisabled:
                 return "客户端大模型直连已停用，请使用后端代理能力"
-            case .networkError(let error):
-                return "网络请求失败: \(error.localizedDescription)"
+            case .networkError:
+                return "网络请求失败，请稍后再试"
             case .invalidResponse:
                 return "服务端返回了无效的响应格式"
             case .emptyContent:

@@ -90,6 +90,7 @@ cp "$RESULT_FILE" "$RESULT_COPY_PATH"
 
 python3 - "$RESULT_FILE" "$PACKAGE_EXPORT_COPY_PATH" <<'PY'
 import json
+import hashlib
 import pathlib
 import sys
 
@@ -101,20 +102,23 @@ def require(condition, message):
     if not condition:
         raise SystemExit(message)
 
+def correlation_hash(value):
+    return "sha256:" + hashlib.sha256(value.encode()).hexdigest()[:16]
+
 require(result.get("completed") is True, "Echo evidence panel export smoke did not complete")
 require(result.get("buttonVisible") is True, "QA evidence export button should be visible")
 require(result.get("buttonTitle") == "导出证据包", "QA evidence export button title changed")
-require(result.get("latestTurnID") == "uiqa-panel-evidence-turn", "Panel export latest turn changed")
-require(result.get("latestProviderLogId") == "uiqa-panel-provider-log", "Panel export provider log changed")
-require(result.get("latestArchiveClues") == "archive_panel_evidence", "Panel export archive clues changed")
-require(result.get("latestKbFactClues") == "fact_panel_evidence", "Panel export kbFact clues changed")
-require(result.get("latestPersonaClues") == "persona:personal:uiqa_echo_panel_evidence_user", "Panel export persona clues changed")
-require(result.get("latestCareClues") == "care:latest", "Panel export care clues changed")
+require(result.get("latestTurnIDHash") == correlation_hash("uiqa-panel-evidence-turn"), "Panel export latest turn hash changed")
+require(result.get("latestProviderLogIdHash") == correlation_hash("uiqa-panel-provider-log"), "Panel export provider log hash changed")
+require(result.get("latestArchiveClueHashes") == correlation_hash("archive_panel_evidence"), "Panel export archive clue hash changed")
+require(result.get("latestKbFactClueHashes") == correlation_hash("fact_panel_evidence"), "Panel export kbFact clue hash changed")
+require(result.get("latestPersonaClueHashes") == correlation_hash("persona:personal:uiqa_echo_panel_evidence_user"), "Panel export persona clue hash changed")
+require(result.get("latestCareClueHashes") == correlation_hash("care:latest"), "Panel export care clue hash changed")
 require(result.get("latestContextVersion") == "echo-context-v2", "Panel export context version changed")
 require(result.get("latestFilteredReasons") == "archive_panel_filtered:analysis_failed_empty_context", "Panel export filtered reasons changed")
 require(result.get("latestRankingTraceCount") == 5, "Panel export ranking trace count changed")
 require(result.get("latestRuntimeRoleVoiceSource") == "familyMember", "Panel export role voice source changed")
-require(result.get("latestRuntimeVoiceProfileId") == "S_uiqa_family_panel_voice", "Panel export role voice profile changed")
+require(result.get("latestRuntimeVoiceProfileIdHash") == correlation_hash("S_uiqa_family_panel_voice"), "Panel export role voice profile hash changed")
 require(result.get("latestRuntimeAudioOwner") == "tencentDigitalHuman", "Panel export audio owner changed")
 require(result.get("fileExists") is True, "Panel evidence export file should exist")
 export_path = result.get("exportPath")
@@ -123,23 +127,23 @@ require(isinstance(export_path, str) and export_path.endswith("echo-trace-eviden
 export_file = pathlib.Path(export_path)
 require(export_file.exists(), f"Exported evidence package file missing: {export_file}")
 packages = json.loads(export_file.read_text())
-require(packages[-1].get("turnID") == "uiqa-panel-evidence-turn", "Exported panel package latest turn changed")
+require(packages[-1].get("turnIDHash") == correlation_hash("uiqa-panel-evidence-turn"), "Exported panel package latest turn hash changed")
 runtime_diagnostics = packages[-1].get("runtimeDiagnostics", {})
 require(runtime_diagnostics.get("roleVoiceSource") == "familyMember", "Exported role voice source changed")
 require(
-    runtime_diagnostics.get("roleVoiceContextOwnerId") == "uiqa_family_voice_panel_member",
-    "Exported role voice context owner changed",
+    runtime_diagnostics.get("roleVoiceContextOwnerIdHash") == correlation_hash("uiqa_family_voice_panel_member"),
+    "Exported role voice context owner hash changed",
 )
-require(runtime_diagnostics.get("voiceProfileId") == "S_uiqa_family_panel_voice", "Exported role voice profile changed")
+require(runtime_diagnostics.get("voiceProfileIdHash") == correlation_hash("S_uiqa_family_panel_voice"), "Exported role voice profile hash changed")
 require(runtime_diagnostics.get("audioOwner") == "tencentDigitalHuman", "Exported audio owner changed")
 clue_summary = packages[-1].get("contextBuild", {}).get("clueSummary", {})
-require(clue_summary.get("archiveRefs") == ["archive_panel_evidence"], "Exported archive clue summary changed")
-require(clue_summary.get("kbFactRefs") == ["fact_panel_evidence"], "Exported kbFact clue summary changed")
+require(clue_summary.get("archiveRefsHashes") == [correlation_hash("archive_panel_evidence")], "Exported archive clue summary changed")
+require(clue_summary.get("kbFactRefsHashes") == [correlation_hash("fact_panel_evidence")], "Exported kbFact clue summary changed")
 require(
-    clue_summary.get("personaRefs") == ["persona:personal:uiqa_echo_panel_evidence_user"],
+    clue_summary.get("personaRefsHashes") == [correlation_hash("persona:personal:uiqa_echo_panel_evidence_user")],
     "Exported persona clue summary changed",
 )
-require(clue_summary.get("careRefs") == ["care:latest"], "Exported care clue summary changed")
+require(clue_summary.get("careRefsHashes") == [correlation_hash("care:latest")], "Exported care clue summary changed")
 require(clue_summary.get("contextVersion") == "echo-context-v2", "Exported context version changed")
 require(
     clue_summary.get("filteredContextReasons") == ["archive_panel_filtered:analysis_failed_empty_context"],
@@ -150,6 +154,8 @@ serialized = json.dumps(packages, ensure_ascii=False)
 require("audioBase64" not in serialized, "Evidence package must not export audioBase64")
 require("appkey" not in serialized.lower(), "Evidence package must not export appkey")
 require("accesstoken" not in serialized.lower(), "Evidence package must not export accesstoken")
+require("uiqa-panel-provider-log" not in serialized, "Evidence package must not export raw provider log IDs")
+require("archive_panel_evidence" not in serialized, "Evidence package must not export raw archive references")
 package_copy_path.write_text(json.dumps(packages, ensure_ascii=False, indent=2, sort_keys=True))
 PY
 

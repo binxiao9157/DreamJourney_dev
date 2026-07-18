@@ -90,6 +90,7 @@ cp "$RESULT_FILE" "$RESULT_COPY_PATH"
 
 python3 - "$RESULT_FILE" "$PACKAGE_EXPORT_COPY_PATH" <<'PY'
 import json
+import hashlib
 import pathlib
 import sys
 
@@ -101,12 +102,15 @@ def require(condition, message):
     if not condition:
         raise SystemExit(message)
 
+def correlation_hash(value):
+    return "sha256:" + hashlib.sha256(value.encode()).hexdigest()[:16]
+
 require(result.get("completed") is True, "Echo trace evidence package smoke did not complete")
 require(result.get("packageCount") == 20, "Evidence package export should retain exactly 20 packages")
-require(result.get("oldestRetainedTurnID") == "uiqa-evidence-turn-2", "Oldest retained turn should be uiqa-evidence-turn-2")
-require(result.get("latestTurnID") == "uiqa-evidence-turn-21", "Latest retained turn should be uiqa-evidence-turn-21")
+require(result.get("oldestRetainedTurnIDHash") == correlation_hash("uiqa-evidence-turn-2"), "Oldest retained turn hash changed")
+require(result.get("latestTurnIDHash") == correlation_hash("uiqa-evidence-turn-21"), "Latest retained turn hash changed")
 require(result.get("latestContextKBFacts") == 23, "Context summary should preserve kb fact count")
-require(result.get("latestProviderLogId") == "uiqa-evidence-provider-log-21", "Voice synthesis summary should preserve provider log id")
+require(result.get("latestProviderLogIdHash") == correlation_hash("uiqa-evidence-provider-log-21"), "Voice synthesis summary should preserve provider log hash")
 require(result.get("fileExists") is True, "Evidence package export file should exist")
 export_path = result.get("exportPath")
 require(isinstance(export_path, str) and export_path.endswith("echo-trace-evidence-packages.json"), "Missing evidence package export path")
@@ -116,14 +120,17 @@ require(export_file.exists(), f"Exported evidence package file missing: {export_
 packages = json.loads(export_file.read_text())
 require(len(packages) == 20, "Exported evidence package JSON should contain 20 packages")
 latest = packages[-1]
-require(latest.get("turnID") == "uiqa-evidence-turn-21", "Exported evidence latest turn changed")
+require(latest.get("turnIDHash") == correlation_hash("uiqa-evidence-turn-21"), "Exported evidence latest turn hash changed")
+require(latest.get("redactionPolicyVersion") == "iosDiagnostics-v1", "Evidence package should declare its redaction policy")
 require(latest.get("contextBuild", {}).get("kbFactCount") == 23, "Exported context summary changed")
 require(latest.get("digitalHumanSession", {}).get("status") == "unavailable", "Exported digital-human summary changed")
-require(latest.get("voiceSynthesis", {}).get("providerLogId") == "uiqa-evidence-provider-log-21", "Exported voice synthesis summary changed")
+require(latest.get("voiceSynthesis", {}).get("providerLogIdHash") == correlation_hash("uiqa-evidence-provider-log-21"), "Exported voice synthesis summary changed")
 serialized = json.dumps(packages, ensure_ascii=False)
 require("audioBase64" not in serialized, "Evidence package must not export audioBase64")
 require("appkey" not in serialized.lower(), "Evidence package must not export appkey")
 require("accesstoken" not in serialized.lower(), "Evidence package must not export accesstoken")
+require("uiqa-evidence-turn-21" not in serialized, "Evidence package must not export raw turn IDs")
+require("uiqa-evidence-provider-log-21" not in serialized, "Evidence package must not export raw provider log IDs")
 package_copy_path.write_text(json.dumps(packages, ensure_ascii=False, indent=2, sort_keys=True))
 PY
 

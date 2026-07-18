@@ -46,7 +46,10 @@ final class TencentDigitalHumanCloudRuntime: DigitalHumanRuntime {
         }
         switch state {
         case .connecting, .ready, .buffering, .speaking:
-            print("[TencentDigitalHuman] ignored duplicate open while state=\(state)")
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "duplicateOpenIgnored"
+            )
             return
         default:
             break
@@ -89,12 +92,20 @@ final class TencentDigitalHumanCloudRuntime: DigitalHumanRuntime {
 
     func setRemoteAudioMuted(_ muted: Bool) {
         guard isRemoteAudioMuted != muted else {
-            print("[TencentDigitalHuman] remote audio mute unchanged muted=\(muted)")
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "remoteAudioMuteUnchanged",
+                states: ["muted": muted ? "true" : "false"]
+            )
             return
         }
         bridge.setRemoteAudioMuted(muted)
         isRemoteAudioMuted = muted
-        print("[TencentDigitalHuman] remote audio muted=\(muted)")
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "runtimeRemoteAudioMuteUpdated",
+            states: ["muted": muted ? "true" : "false"]
+        )
     }
 
     func interrupt() {
@@ -104,9 +115,17 @@ final class TencentDigitalHumanCloudRuntime: DigitalHumanRuntime {
             bridge.interrupt()
             state = .interrupting
         case .closed:
-            print("[TencentDigitalHuman] ignored provider interrupt while state=closed")
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "providerInterruptIgnored",
+                states: ["reason": "closed"]
+            )
         default:
-            print("[TencentDigitalHuman] ignored provider interrupt while state=\(state)")
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "providerInterruptIgnored",
+                states: ["reason": "notInterruptible"]
+            )
         }
     }
 
@@ -120,11 +139,23 @@ final class TencentDigitalHumanCloudRuntime: DigitalHumanRuntime {
             } else {
                 state = .interrupting
             }
-            print("[TencentDigitalHuman] forced provider playback interrupt reason=\(reason)")
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "providerPlaybackInterrupted",
+                states: ["reason": reason]
+            )
         case .closed:
-            print("[TencentDigitalHuman] ignored forced provider interrupt while state=closed reason=\(reason)")
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "providerPlaybackInterruptIgnored",
+                states: ["reason": "closed"]
+            )
         default:
-            print("[TencentDigitalHuman] ignored forced provider interrupt while state=\(state) reason=\(reason)")
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "providerPlaybackInterruptIgnored",
+                states: ["reason": "notInterruptible"]
+            )
         }
     }
 
@@ -166,7 +197,12 @@ final class TencentDigitalHumanCloudRuntime: DigitalHumanRuntime {
             state = .speaking(requestID: requestID ?? currentRequestID ?? contract.sessionId)
         case .speechProgress(let requestID, let status):
             state = .speaking(requestID: requestID ?? currentRequestID ?? contract.sessionId)
-            print("[TencentDigitalHuman] provider speech progress status=\(status) requestID=\(requestID ?? currentRequestID ?? "unknown")")
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "providerSpeechProgress",
+                states: ["status": status],
+                correlations: ["request": requestID ?? currentRequestID]
+            )
         case .textOver:
             currentRequestID = nil
             state = .ready
@@ -183,7 +219,7 @@ final class TencentDigitalHumanCloudRuntime: DigitalHumanRuntime {
                 return
             }
             currentRequestID = nil
-            state = .failed(code: "tencent_cloud_\(code)_\(message)")
+            state = .failed(code: "tencent_cloud_\(code)")
         case .closed:
             currentRequestID = nil
             state = .closed

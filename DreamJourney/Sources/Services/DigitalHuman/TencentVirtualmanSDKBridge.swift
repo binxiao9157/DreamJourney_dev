@@ -49,9 +49,15 @@ final class TencentVirtualmanSDKBridge: NSObject, TencentDigitalHumanSDKBridge {
 
         if isFinal, !text.isEmpty {
             let accepted = virtualman.sendText(TextParams(text: text, reqId: requestID))
-            print(
-                "[TencentDigitalHuman] sendText requestID=\(requestID) " +
-                "accepted=\(accepted) textLength=\(text.count)"
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "textSent",
+                states: [
+                    "accepted": accepted ? "true" : "false",
+                    "isFinal": "true",
+                ],
+                counts: ["textUTF8ByteCount": text.utf8.count],
+                correlations: ["request": requestID]
             )
             guard accepted else {
                 throw Self.providerError(code: 5, message: "Tencent text was rejected")
@@ -60,9 +66,18 @@ final class TencentVirtualmanSDKBridge: NSObject, TencentDigitalHumanSDKBridge {
         }
 
         let accepted = virtualman.sendStreamText(StreamTextParams(reqId: requestID, text: text, seq: sequence, isFinal: isFinal))
-        print(
-            "[TencentDigitalHuman] sendStreamText requestID=\(requestID) " +
-            "accepted=\(accepted) sequence=\(sequence) isFinal=\(isFinal) textLength=\(text.count)"
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "streamTextSent",
+            states: [
+                "accepted": accepted ? "true" : "false",
+                "isFinal": isFinal ? "true" : "false",
+            ],
+            counts: [
+                "sequence": sequence,
+                "textUTF8ByteCount": text.utf8.count,
+            ],
+            correlations: ["request": requestID]
         )
         guard accepted else {
             throw Self.providerError(code: 5, message: "Tencent stream text was rejected")
@@ -72,6 +87,19 @@ final class TencentVirtualmanSDKBridge: NSObject, TencentDigitalHumanSDKBridge {
     func sendPCM(_ data: Data, requestID: String, sequence: Int, isFinal: Bool) throws {
         let base64Audio = data.base64EncodedString()
         let accepted = virtualman.sendAudio(AudioParams(reqId: requestID, audio: base64Audio, seq: sequence, isFinal: isFinal))
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "pcmSent",
+            states: [
+                "accepted": accepted ? "true" : "false",
+                "isFinal": isFinal ? "true" : "false",
+            ],
+            counts: [
+                "audioByteCount": data.count,
+                "sequence": sequence,
+            ],
+            correlations: ["request": requestID]
+        )
         if !accepted {
             throw Self.providerError(code: 4, message: "Tencent audio chunk was rejected")
         }
@@ -88,9 +116,14 @@ final class TencentVirtualmanSDKBridge: NSObject, TencentDigitalHumanSDKBridge {
                 trtc.muteRemoteAudio(userId, mute: muted)
             }
         }
-        print(
-            "[TencentDigitalHuman] TRTC remote audio muted=\(muted) " +
-            "userIds=\(userIds.isEmpty ? "all" : userIds.joined(separator: ","))"
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "remoteAudioMuteUpdated",
+            states: [
+                "muted": muted ? "true" : "false",
+                "target": userIds.isEmpty ? "all" : "knownRemotes",
+            ],
+            counts: ["remoteUserCount": userIds.count]
         )
     }
 
@@ -116,25 +149,37 @@ extension TencentVirtualmanSDKBridge: VirtualmanDelegate {
     func onRecvSEIMsg(_ userId: String, message: Data) {
         rememberRemoteAudioUserId(userId)
         #if DEBUG
-        guard message.count > 16 else { return }
-        let jsonData = message.subdata(in: 16..<message.count)
-        if let jsonString = String(data: jsonData, encoding: .utf8) {
-            print("[TencentDigitalHuman][SEI] userId=\(userId), data=\(jsonString)")
-        }
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "seiReceived",
+            counts: ["payloadByteCount": max(0, message.count - 16)]
+        )
         #endif
     }
 
     func onFirstVideoFrame(_ userId: String, streamType: Int32, width: Int32, height: Int32) {
         rememberRemoteAudioUserId(userId)
         #if DEBUG
-        print("[TencentDigitalHuman] first video frame userId=\(userId), streamType=\(streamType), size=\(width)x\(height)")
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "firstVideoFrame",
+            counts: [
+                "streamType": Int(streamType),
+                "width": Int(width),
+                "height": Int(height),
+            ]
+        )
         #endif
     }
 
     func onError(_ errCode: Int32, errMsg: String?) {
         eventHandler?(.error(code: errCode, message: errMsg ?? "unknown"))
         #if DEBUG
-        print("[TencentDigitalHuman] TRTC error code=\(errCode), message=\(errMsg ?? "unknown")")
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "trtcError",
+            counts: ["code": Int(errCode)]
+        )
         #endif
     }
 
@@ -144,7 +189,12 @@ extension TencentVirtualmanSDKBridge: VirtualmanDelegate {
         let inserted = remoteAudioUserIds.insert(normalized).inserted
         guard inserted, isRemoteAudioMuted else { return }
         TRTCCloud.sharedInstance().muteRemoteAudio(normalized, mute: true)
-        print("[TencentDigitalHuman] TRTC remote audio mute applied to new userId=\(normalized)")
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "remoteAudioMuteApplied",
+            states: ["muted": "true"],
+            counts: ["remoteUserCount": remoteAudioUserIds.count]
+        )
     }
 }
 
@@ -152,7 +202,10 @@ extension TencentVirtualmanSDKBridge: VirtualmanWsDelegate {
     func onWsOpen() {
         eventHandler?(.webSocketOpen)
         #if DEBUG
-        print("[TencentDigitalHuman] WebSocket opened")
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "webSocketOpened"
+        )
         #endif
     }
 
@@ -160,21 +213,34 @@ extension TencentVirtualmanSDKBridge: VirtualmanWsDelegate {
         emitBridgeEventIfNeeded(from: text)
 
         #if DEBUG
-        print("[TencentDigitalHuman] WebSocket message received: \(text)")
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "webSocketMessageReceived",
+            counts: ["payloadUTF8ByteCount": text.utf8.count]
+        )
         #endif
     }
 
     func onWsClosed(code: UInt16, reason: String) {
         eventHandler?(.closed)
         #if DEBUG
-        print("[TencentDigitalHuman] WebSocket closed code=\(code), reason=\(reason)")
+        _ = reason
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "webSocketClosed",
+            counts: ["code": Int(code)]
+        )
         #endif
     }
 
     func onWsFailure(_ error: Error?) {
         eventHandler?(.error(code: -1, message: error?.localizedDescription ?? "unknown"))
         #if DEBUG
-        print("[TencentDigitalHuman] WebSocket failed: \(error?.localizedDescription ?? "unknown")")
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "webSocketFailure",
+            states: ["failure": "transportFailure"]
+        )
         #endif
     }
 
@@ -197,6 +263,11 @@ extension TencentVirtualmanSDKBridge: VirtualmanWsDelegate {
             eventHandler?(.textStart(requestID: requestID))
         case "AudioStart":
             eventHandler?(.audioStart(requestID: requestID))
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "providerAudioStarted",
+                correlations: ["request": requestID]
+            )
         case "WaitingTextOver", "SentenceStart", "SentenceNext", "WaitingTextStart", "WaitingAudioStart", "WaitingAudioOver":
             if let status = payload["SpeakStatus"] as? String {
                 eventHandler?(.speechProgress(requestID: requestID, status: status))
@@ -205,6 +276,11 @@ extension TencentVirtualmanSDKBridge: VirtualmanWsDelegate {
             eventHandler?(.textOver(requestID: requestID))
         case "AudioOver":
             eventHandler?(.audioOver(requestID: requestID))
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "providerAudioCompleted",
+                correlations: ["request": requestID]
+            )
         default:
             break
         }

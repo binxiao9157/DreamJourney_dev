@@ -90,6 +90,7 @@ cp "$RESULT_FILE" "$RESULT_COPY_PATH"
 
 python3 - "$RESULT_FILE" "$TRACE_EXPORT_COPY_PATH" <<'PY'
 import json
+import hashlib
 import pathlib
 import sys
 
@@ -101,10 +102,13 @@ def require(condition, message):
     if not condition:
         raise SystemExit(message)
 
+def correlation_hash(value):
+    return "sha256:" + hashlib.sha256(value.encode()).hexdigest()[:16]
+
 require(result.get("completed") is True, "Echo trace export smoke did not complete")
 require(result.get("recordCount") == 20, "Echo trace export should retain exactly 20 records")
-require(result.get("oldestRetainedTurnID") == "uiqa-turn-2", "Oldest retained turn should be uiqa-turn-2")
-require(result.get("latestTurnID") == "uiqa-turn-21", "Latest retained turn should be uiqa-turn-21")
+require(result.get("oldestRetainedTurnIDHash") == correlation_hash("uiqa-turn-2"), "Oldest retained turn hash changed")
+require(result.get("latestTurnIDHash") == correlation_hash("uiqa-turn-21"), "Latest retained turn hash changed")
 require(result.get("fileExists") is True, "Echo trace export file should exist")
 export_path = result.get("exportPath")
 require(isinstance(export_path, str) and export_path.endswith("echo-trace-records.json"), "Missing echo-trace-records.json export path")
@@ -113,10 +117,14 @@ export_file = pathlib.Path(export_path)
 require(export_file.exists(), f"Exported trace file missing: {export_file}")
 records = json.loads(export_file.read_text())
 require(len(records) == 20, "Exported trace JSON should contain 20 records")
-require(records[0].get("turnID") == "uiqa-turn-2", "Exported trace oldest turn changed")
-require(records[-1].get("turnID") == "uiqa-turn-21", "Exported trace latest turn changed")
+require(records[0].get("turnIDHash") == correlation_hash("uiqa-turn-2"), "Exported trace oldest turn hash changed")
+require(records[-1].get("turnIDHash") == correlation_hash("uiqa-turn-21"), "Exported trace latest turn hash changed")
+require(records[-1].get("redactionPolicyVersion") == "iosDiagnostics-v1", "Trace export should declare its redaction policy")
 require(records[-1].get("voiceOutputMode") == "tencentAudioDrive", "Trace should preserve voice output mode")
 require(records[-1].get("digitalHumanSessionReady") is True, "Trace should preserve digital-human readiness")
+serialized = json.dumps(records, ensure_ascii=False)
+require("uiqa-turn-21" not in serialized, "Trace export must not retain raw turn IDs")
+require("archive_21" not in serialized, "Trace export must not retain raw archive IDs")
 trace_copy_path.write_text(json.dumps(records, ensure_ascii=False, indent=2, sort_keys=True))
 PY
 

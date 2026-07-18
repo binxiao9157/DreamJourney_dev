@@ -2073,34 +2073,54 @@ struct EchoTraceRecord: Codable {
     }
 
     var logLine: String {
-        let archiveIDs = archiveItemIDs.joined(separator: ",")
-        let selectedRefs = selectedContextRefs.joined(separator: ",")
+        let archiveHashes = archiveItemIDs
+            .map(PrivacySafeDiagnostics.correlationHash)
+            .joined(separator: ",")
+        let selectedRefHashes = selectedContextRefs
+            .map(PrivacySafeDiagnostics.correlationHash)
+            .joined(separator: ",")
         let selectedRefsBySource = selectedContextRefsBySource
             .sorted { $0.key < $1.key }
-            .map { "\($0.key):\($0.value.joined(separator: "|"))" }
+            .map {
+                let source = PrivacySafeDiagnostics.safeCode($0.key, fallback: "source")
+                let hashes = $0.value.map(PrivacySafeDiagnostics.correlationHash).joined(separator: "|")
+                return "\(source):\(hashes)"
+            }
             .joined(separator: ",")
-        let filteredReasons = filteredContextReasons.joined(separator: ",")
+        let filteredReasons = filteredContextReasons
+            .map { PrivacySafeDiagnostics.safeCode($0, fallback: "redacted") }
+            .joined(separator: ",")
         let sourceCounts = selectedContextSourceCounts
             .sorted { $0.key < $1.key }
-            .map { "\($0.key):\($0.value)" }
+            .map {
+                let source = PrivacySafeDiagnostics.safeCode($0.key, fallback: "source")
+                return "\(source):\($0.value)"
+            }
             .joined(separator: ",")
-        let fallbackList = fallbacks.joined(separator: ",")
-        let profileID = voiceProfileId ?? "none"
+        let fallbackList = fallbacks
+            .map { PrivacySafeDiagnostics.safeCode($0, fallback: "redacted") }
+            .joined(separator: ",")
+        let profileHash = PrivacySafeDiagnostics.correlationHash(voiceProfileId)
         return "[CFLite] trace record " +
-        "turnID=\(turnID) traceId=\(traceId) userId=\(userId) " +
-        "contextVersion=\(contextVersion) " +
-        "privacyScope=\(privacyScopeLabel) canUseFamilyData=\(canUseFamilyData) " +
+        "policy=\(PrivacySafeDiagnostics.redactionPolicyVersion) " +
+        "turnIDHash=\(PrivacySafeDiagnostics.correlationHash(turnID)) " +
+        "traceIdHash=\(PrivacySafeDiagnostics.correlationHash(traceId)) " +
+        "userIdHash=\(PrivacySafeDiagnostics.correlationHash(userId)) " +
+        "contextVersion=\(PrivacySafeDiagnostics.safeCode(contextVersion, fallback: "unknown")) " +
+        "privacyScopeHash=\(PrivacySafeDiagnostics.correlationHash(privacyScopeLabel)) " +
+        "canUseFamilyData=\(canUseFamilyData) " +
         "archiveIncluded=\(archiveItemsIncluded)/\(archiveItemsAvailable) " +
-        "archiveItemIDs=\(archiveIDs) " +
-        "selectedContextRefs=\(selectedRefs) selectedContextCount=\(selectedContextCount) " +
-        "selectedContextRefsBySource=\(selectedRefsBySource) " +
+        "archiveItemIDHashes=\(archiveHashes) " +
+        "selectedContextRefHashes=\(selectedRefHashes) selectedContextCount=\(selectedContextCount) " +
+        "selectedContextRefHashesBySource=\(selectedRefsBySource) " +
         "selectedContextSourceCounts=\(sourceCounts) " +
         "filteredContextReasons=\(filteredReasons) filteredContextCount=\(filteredContextCount) " +
         "rankingTraceCount=\(rankingTraceCount) " +
         "kbFacts=\(kbFactCount) cloneReady=\(voiceCloneReady) " +
-        "voiceProfileId=\(profileID) outputMode=\(voiceOutputMode) " +
+        "voiceProfileIdHash=\(profileHash) " +
+        "outputMode=\(PrivacySafeDiagnostics.safeCode(voiceOutputMode, fallback: "unknown")) " +
         "digitalHumanReady=\(digitalHumanSessionReady) " +
-        "digitalHumanProviderMode=\(digitalHumanProviderMode) " +
+        "digitalHumanProviderMode=\(PrivacySafeDiagnostics.safeCode(digitalHumanProviderMode, fallback: "unknown")) " +
         "crossScopeArchiveIncluded=\(crossScopeArchiveIncluded) " +
         "fallbacks=\(fallbackList) latencyMs=\(latencyMs)"
     }
@@ -2275,6 +2295,223 @@ final class EchoTraceOwnerScope {
     }
 }
 
+/// Redacts diagnostic exports at the file boundary while preserving the internal
+/// owner-scoped models needed for runtime decisions and QA assertions.
+private enum EchoDiagnosticExportRedactor {
+    private static let identifierKeys: Set<String> = [
+        "bundleId",
+        "ownerUserId",
+        "packageId",
+        "personaId",
+        "providerLogId",
+        "providerRequestId",
+        "roleVoiceContextOwnerId",
+        "roleVoiceDisplayName",
+        "sessionId",
+        "snapshotId",
+        "traceId",
+        "turnID",
+        "userId",
+        "voiceProfileId",
+        "privacyScopeLabel",
+    ]
+
+    private static let identifierArrayKeys: Set<String> = [
+        "archiveItemIDs",
+        "archiveRefs",
+        "careRefs",
+        "kbFactRefs",
+        "personaRefs",
+        "selectedContextRefs",
+    ]
+
+    private static let codeKeys: Set<String> = [
+        "assetSource",
+        "audioFormat",
+        "audioOwner",
+        "contextVersion",
+        "credentialMode",
+        "digitalHumanProviderMode",
+        "digitalHumanRuntimeState",
+        "driveMode",
+        "failureReason",
+        "fallbackMode",
+        "fallbackReason",
+        "lifecycleMode",
+        "outputMode",
+        "provider",
+        "providerMode",
+        "reason",
+        "roleVoiceSource",
+        "scene",
+        "source",
+        "status",
+    ]
+
+    private static let codeArrayKeys: Set<String> = [
+        "fallbacks",
+        "filteredContextReasons",
+        "inferredFallbacks",
+    ]
+
+    private static let detailKeys: Set<String> = [
+        "detail",
+        "error",
+        "failureDetail",
+        "message",
+    ]
+
+    private static let fixedPolicyCodes = [
+        "allowlistedMetadataOnly",
+        "hashedCorrelations",
+        "noProviderSecrets",
+        "noRawMedia",
+    ]
+
+    static func encode<T: Encodable>(
+        _ values: [T],
+        latestValueOnly: Bool
+    ) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+
+        let encoded: Data
+        if latestValueOnly {
+            guard let latest = values.last else {
+                throw EchoTraceStorageError.noEvidenceBundle
+            }
+            encoded = try encoder.encode(latest)
+        } else {
+            encoded = try encoder.encode(values)
+        }
+
+        let object = try JSONSerialization.jsonObject(with: encoded)
+        let redacted = redact(object, fieldName: nil, reportRoot: true)
+        return try JSONSerialization.data(
+            withJSONObject: redacted,
+            options: [.prettyPrinted, .sortedKeys]
+        )
+    }
+
+    static func identifierHash(_ value: String?) -> String {
+        PrivacySafeDiagnostics.correlationHash(value)
+    }
+
+    private static func redact(
+        _ value: Any,
+        fieldName: String?,
+        reportRoot: Bool
+    ) -> Any {
+        if let dictionary = value as? [String: Any] {
+            var redacted: [String: Any] = [:]
+            for (key, child) in dictionary {
+                if identifierKeys.contains(key) {
+                    if let identifier = child as? String {
+                        redacted[key + "Hash"] = identifierHash(identifier)
+                    }
+                    continue
+                }
+
+                if identifierArrayKeys.contains(key) {
+                    redacted[key + "Hashes"] = identifierHashes(from: child)
+                    continue
+                }
+
+                if key == "selectedContextRefsBySource" {
+                    redacted["selectedContextRefHashesBySource"] = redactRefsBySource(child)
+                    continue
+                }
+
+                if codeKeys.contains(key) {
+                    redacted[key] = PrivacySafeDiagnostics.safeCode(
+                        child as? String,
+                        fallback: "redacted"
+                    )
+                    continue
+                }
+
+                if codeArrayKeys.contains(key) {
+                    redacted[key] = safeCodes(from: child)
+                    continue
+                }
+
+                if detailKeys.contains(key) {
+                    redacted[key] = "redacted"
+                    continue
+                }
+
+                if key == "redactionPolicy" {
+                    redacted[key] = fixedPolicyCodes
+                    continue
+                }
+
+                redacted[key] = redact(child, fieldName: key, reportRoot: false)
+            }
+            if reportRoot {
+                redacted["redactionPolicyVersion"] = PrivacySafeDiagnostics.redactionPolicyVersion
+            }
+            return redacted
+        }
+
+        if let array = value as? [Any] {
+            return array.map {
+                redact($0, fieldName: fieldName, reportRoot: reportRoot)
+            }
+        }
+
+        if let string = value as? String {
+            if let fieldName, identifierKeys.contains(fieldName) {
+                return identifierHash(string)
+            }
+            if let fieldName, codeKeys.contains(fieldName) {
+                return PrivacySafeDiagnostics.safeCode(string, fallback: "redacted")
+            }
+            if let fieldName, detailKeys.contains(fieldName) {
+                return "redacted"
+            }
+            return string
+        }
+
+        return value
+    }
+
+    private static func identifierHashes(from value: Any) -> [String] {
+        guard let values = value as? [Any] else {
+            return []
+        }
+        return values.compactMap { value in
+            guard let identifier = value as? String else {
+                return nil
+            }
+            return identifierHash(identifier)
+        }
+    }
+
+    private static func redactRefsBySource(_ value: Any) -> [String: [String]] {
+        guard let refsBySource = value as? [String: Any] else {
+            return [:]
+        }
+        var result: [String: [String]] = [:]
+        for (source, refs) in refsBySource {
+            result[PrivacySafeDiagnostics.safeCode(source, fallback: "source")] = identifierHashes(from: refs)
+        }
+        return result
+    }
+
+    private static func safeCodes(from value: Any) -> [String] {
+        guard let values = value as? [Any] else {
+            return []
+        }
+        return values.compactMap { value in
+            guard let code = value as? String else {
+                return nil
+            }
+            return PrivacySafeDiagnostics.safeCode(code, fallback: "redacted")
+        }
+    }
+}
+
 private final class EchoOwnerScopedDefaultsStore<Value: Codable> {
     private let userDefaults: UserDefaults
     private let storageKeyPrefix: String
@@ -2351,6 +2588,7 @@ private final class EchoOwnerScopedDefaultsStore<Value: Codable> {
         ownerUserId: String,
         to url: URL,
         latestValueOnly: Bool = false,
+        exportEncoder: (([Value], Bool) throws -> Data)? = nil,
         ownerIsValid: (Value, String) -> Bool
     ) throws -> URL {
         guard let normalizedOwnerUserId = EchoTraceOwnerScope.normalizedOwnerUserId(ownerUserId),
@@ -2361,7 +2599,9 @@ private final class EchoOwnerScopedDefaultsStore<Value: Codable> {
                         ownerIsValid($0, normalizedOwnerUserId)
                     }
                     let data: Data
-                    if latestValueOnly {
+                    if let exportEncoder {
+                        data = try exportEncoder(values, latestValueOnly)
+                    } else if latestValueOnly {
                         guard let latestValue = values.last else {
                             throw EchoTraceStorageError.noEvidenceBundle
                         }
@@ -2494,7 +2734,16 @@ final class EchoTraceStore {
         fileName: String = "echo-trace-records.json"
     ) throws -> URL {
         let url = directory.appendingPathComponent(fileName)
-        return try storage.export(ownerUserId: ownerUserId, to: url) { record, normalizedOwnerUserId in
+        return try storage.export(
+            ownerUserId: ownerUserId,
+            to: url,
+            exportEncoder: { values, latestValueOnly in
+                try EchoDiagnosticExportRedactor.encode(
+                    values,
+                    latestValueOnly: latestValueOnly
+                )
+            }
+        ) { record, normalizedOwnerUserId in
             EchoTraceOwnerScope.normalizedOwnerUserId(record.userId) == normalizedOwnerUserId
         }
     }
@@ -2550,7 +2799,16 @@ final class EchoRuntimeDiagnosticsStore {
         fileName: String = "echo-runtime-diagnostics.json"
     ) throws -> URL {
         let url = directory.appendingPathComponent(fileName)
-        return try storage.export(ownerUserId: ownerUserId, to: url) { snapshot, normalizedOwnerUserId in
+        return try storage.export(
+            ownerUserId: ownerUserId,
+            to: url,
+            exportEncoder: { values, latestValueOnly in
+                try EchoDiagnosticExportRedactor.encode(
+                    values,
+                    latestValueOnly: latestValueOnly
+                )
+            }
+        ) { snapshot, normalizedOwnerUserId in
             EchoTraceOwnerScope.normalizedOwnerUserId(snapshot.userId) == normalizedOwnerUserId
         }
     }
@@ -2605,23 +2863,38 @@ struct EchoContextV2ClueSummary: Codable {
     func panelLines(prefix: String = "ctx") -> [String] {
         [
             "\(prefix) 使用线索",
-            "\(prefix) archive: \(Self.preview(archiveRefs))",
-            "\(prefix) kbFact: \(Self.preview(kbFactRefs))",
-            "\(prefix) persona: \(Self.preview(personaRefs))",
-            "\(prefix) care: \(Self.preview(careRefs))",
-            "\(prefix) filtered: \(Self.preview(filteredContextReasons))",
+            "\(prefix) archive: \(Self.previewHashes(archiveRefs))",
+            "\(prefix) kbFact: \(Self.previewHashes(kbFactRefs))",
+            "\(prefix) persona: \(Self.previewHashes(personaRefs))",
+            "\(prefix) care: \(Self.previewHashes(careRefs))",
+            "\(prefix) filtered: \(Self.previewCodes(filteredContextReasons))",
             "\(prefix) ranking: \(rankingTraceCount)",
             "\(prefix) sources: \(Self.previewSourceCounts(selectedContextSourceCounts))",
-            "\(prefix) fallbacks: \(Self.preview(fallbacks))",
+            "\(prefix) fallbacks: \(Self.previewCodes(fallbacks))",
             "\(prefix) latencyMs: \(latencyMs)"
         ]
     }
 
-    private static func preview(_ values: [String], limit: Int = 3) -> String {
+    private static func previewHashes(_ values: [String], limit: Int = 3) -> String {
         guard !values.isEmpty else {
             return "none"
         }
-        let prefix = values.prefix(limit).joined(separator: ",")
+        let prefix = values
+            .prefix(limit)
+            .map { PrivacySafeDiagnostics.correlationHash($0) }
+            .joined(separator: ",")
+        let overflow = values.count > limit ? "+\(values.count - limit)" : ""
+        return prefix + overflow
+    }
+
+    private static func previewCodes(_ values: [String], limit: Int = 3) -> String {
+        guard !values.isEmpty else {
+            return "none"
+        }
+        let prefix = values
+            .prefix(limit)
+            .map { PrivacySafeDiagnostics.safeCode($0, fallback: "redacted") }
+            .joined(separator: ",")
         let overflow = values.count > limit ? "+\(values.count - limit)" : ""
         return prefix + overflow
     }
@@ -3016,7 +3289,16 @@ final class EchoTraceEvidencePackageStore {
         fileName: String = "echo-trace-evidence-packages.json"
     ) throws -> URL {
         let url = directory.appendingPathComponent(fileName)
-        return try storage.export(ownerUserId: ownerUserId, to: url) { package, normalizedOwnerUserId in
+        return try storage.export(
+            ownerUserId: ownerUserId,
+            to: url,
+            exportEncoder: { values, latestValueOnly in
+                try EchoDiagnosticExportRedactor.encode(
+                    values,
+                    latestValueOnly: latestValueOnly
+                )
+            }
+        ) { package, normalizedOwnerUserId in
             package.derivedOwnerUserId == normalizedOwnerUserId
         }
     }
@@ -3163,7 +3445,13 @@ final class EchoQAEvidenceBundleStore {
         return try storage.export(
             ownerUserId: ownerUserId,
             to: url,
-            latestValueOnly: true
+            latestValueOnly: true,
+            exportEncoder: { values, latestValueOnly in
+                try EchoDiagnosticExportRedactor.encode(
+                    values,
+                    latestValueOnly: latestValueOnly
+                )
+            }
         ) { bundle, normalizedOwnerUserId in
             bundle.derivedOwnerUserId == normalizedOwnerUserId
         }
