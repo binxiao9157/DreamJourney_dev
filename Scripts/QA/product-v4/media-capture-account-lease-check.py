@@ -43,7 +43,7 @@ def main() -> None:
             "validateMediaAccountLease(accountLease, at: .commit)",
             "validateMediaOperation(",
             "archiveContext: DigitalHumanContext",
-            "saveImageToArchive(_ image: UIImage, accountLease: AccountLease)",
+            "private func saveImageToArchive(",
             "analyzePhotoArchiveItemIfPossible(",
             "accountLease: AccountLease",
         ),

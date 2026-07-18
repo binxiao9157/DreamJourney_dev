@@ -39,6 +39,8 @@
 		56155288BF68EFE839397BB1 /* DreamJourneyBackendClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF8F1D6D1A0C1160E11C410B /* DreamJourneyBackendClient.swift */; };
 		A9F000000000000000000001 /* BackendAuthSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9F000000000000000000101 /* BackendAuthSessionStore.swift */; };
 		C7E1B0000000000000000001 /* BackendIdentityChallenge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1B0000000000000000101 /* BackendIdentityChallenge.swift */; };
+		C7E1D0000000000000000001 /* ArchiveLocalStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1D0000000000000000101 /* ArchiveLocalStorage.swift */; };
+		C7E1E0000000000000000001 /* ArchiveMediaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1E0000000000000000101 /* ArchiveMediaStore.swift */; };
 		56272F68DA6D144F29C65952 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 41B3D2BD9BE7DFE0AABF34F1 /* Assets.xcassets */; };
 		596491B3EBC0F9D31FB1C2E1 /* MemoryAnnotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89ABFCBCF51B9FD6CEB5799F /* MemoryAnnotation.swift */; };
 		5B5ABAB79A4B0C533DF4E21C /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = DEB0707389E5BC6A57EAB3BD /* LaunchScreen.storyboard */; };
@@ -263,6 +265,8 @@
 		AB6F020939B8B3A55A3A9013 /* LoginViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginViewController.swift; sourceTree = "<group>"; };
 		AE23737BEAD63674ABA24223 /* MemoirGenerationCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirGenerationCard.swift; sourceTree = "<group>"; };
 		B1B000000000000000000001 /* MemoryArchiveItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveItem.swift; sourceTree = "<group>"; };
+		C7E1D0000000000000000101 /* ArchiveLocalStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveLocalStorage.swift; sourceTree = "<group>"; };
+		C7E1E0000000000000000101 /* ArchiveMediaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveMediaStore.swift; sourceTree = "<group>"; };
 		B1B000000000000000000002 /* MemoryArchiveRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveRepository.swift; sourceTree = "<group>"; };
 		B1B000000000000000000003 /* MemoryArchiveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveViewController.swift; sourceTree = "<group>"; };
 		B1B000000000000000000050 /* InAppMessageCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InAppMessageCenter.swift; sourceTree = "<group>"; };
@@ -545,6 +549,8 @@
 		69A100000000000000000001 /* Archive */ = {
 			isa = PBXGroup;
 			children = (
+				C7E1D0000000000000000101 /* ArchiveLocalStorage.swift */,
+				C7E1E0000000000000000101 /* ArchiveMediaStore.swift */,
 				B1B000000000000000000001 /* MemoryArchiveItem.swift */,
 				B1B000000000000000000008 /* MemoryArchiveCreationOption.swift */,
 				B1B000000000000000000009 /* MemoryArchiveCreationSheetViewController.swift */,
@@ -1026,6 +1032,8 @@
 				596491B3EBC0F9D31FB1C2E1 /* MemoryAnnotation.swift in Sources */,
 				179BE070081D916DE52040A2 /* MemoryAnnotationView.swift in Sources */,
 				A1A000000000000000000001 /* MemoryArchiveItem.swift in Sources */,
+				C7E1D0000000000000000001 /* ArchiveLocalStorage.swift in Sources */,
+				C7E1E0000000000000000001 /* ArchiveMediaStore.swift in Sources */,
 				A1A000000000000000000008 /* MemoryArchiveCreationOption.swift in Sources */,
 				A1A000000000000000000009 /* MemoryArchiveCreationSheetViewController.swift in Sources */,
 				A1A000000000000000000010 /* MemoryArchiveDetailViewController.swift in Sources */,

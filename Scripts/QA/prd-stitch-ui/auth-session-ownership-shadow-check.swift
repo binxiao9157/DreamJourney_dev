@@ -64,7 +64,11 @@ require(client.contains("isCurrentAccountLease"), "Authenticated responses must 
 
 require(archiveRepository.contains("struct ArchiveStorageLease"), "Archive callbacks must capture their destination scope")
 require(archiveRepository.contains("isCurrentArchiveStorageLease"), "Archive callbacks must reject stale account or role destinations")
-require(archiveRepository.contains("storageKey: lease.storageKey"), "Archive callback writes must use the captured storage destination")
+require(archiveRepository.contains("let storageScope: ArchiveStorageScope"), "Archive leases must retain the captured owner envelope scope")
+require(
+    archiveRepository.contains("try localStorage.save(items: sortedItems, scope: lease.storageScope)"),
+    "Archive callback writes must use the captured owner envelope scope"
+)
 
 require(userManager.contains("DreamJourneyBackendClient.shared.logoutAuthSession()"), "User logout must revoke and clear auth state")
 require(project.contains("BackendAuthSessionStore.swift"), "Auth session store must belong to the app target")

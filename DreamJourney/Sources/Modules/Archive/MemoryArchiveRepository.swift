@@ -194,6 +194,7 @@ private struct ArchiveStorageLease {
     let archiveOwnerId: String
     let personaScope: String
     let digitalHumanId: String
+    let storageScope: ArchiveStorageScope
     let storageKey: String
 }
 
@@ -206,10 +207,11 @@ private struct InAppMessageLocalState: Codable {
 final class MemoryArchiveRepository {
     static let shared = MemoryArchiveRepository()
 
-    private let baseKey = "dj.memoryArchive.items"
     private let mailboxBaseKey = "dj.memoryArchive.timeLetterMailbox"
     private let inAppMessageStateBaseKey = "dj.inAppMessage.localState"
     private let accountLeaseRuntime = AccountLeaseRuntime.shared
+    private let localStorage = ArchiveLocalStorage.shared
+    private let mediaStore = ArchiveMediaStore.shared
     private let isoFormatter = ISO8601DateFormatter()
     private static let personalPersonaScope = "personal"
     private static let familyPersonaScope = "family"
@@ -218,60 +220,70 @@ final class MemoryArchiveRepository {
     private init() {}
 
     func allItems() -> [MemoryArchiveItem] {
-        guard let data = UserDefaults.standard.data(forKey: storageKey),
-              let decodedItems = try? JSONDecoder().decode([MemoryArchiveItem].self, from: data) else {
+        guard let lease = currentArchiveStorageLease,
+              isCurrentArchiveStorageLease(lease, at: .request) else {
             return []
         }
-        let needsOwnerMigration = decodedItems.contains { item in
-            item.ownerUserId == MemoryArchiveItem.legacyOwnerUserId
-                || item.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }
-        let ownedItems = assignOwnerIfNeededForCurrentUser(decodedItems)
-        let items = ownedItems.map { $0.updatingRecoveredLocalPathIfNeeded() }
-        let needsLocalPathRecovery = zip(ownedItems, items).contains { original, recovered in
-            original.localPath != recovered.localPath || original.metadata != recovered.metadata
-        }
-        if needsOwnerMigration || needsLocalPathRecovery {
-            save(items)
-        }
-        return items.sorted { $0.createdAt > $1.createdAt }
+        return items(for: lease).sorted { $0.createdAt > $1.createdAt }
     }
 
-    func add(_ item: MemoryArchiveItem, syncToBackend shouldSyncToBackend: Bool = true) {
-        let ownedItem = item.assigningOwnerIfNeeded(currentUserId)
+    @discardableResult
+    func add(_ item: MemoryArchiveItem, syncToBackend shouldSyncToBackend: Bool = true) -> Bool {
+        guard let lease = currentArchiveStorageLease,
+              isCurrentArchiveStorageLease(lease, at: .request),
+              item.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines) == lease.archiveOwnerId else {
+            print("[Archive] rejected ownerless or mismatched local insert")
+            return false
+        }
+        let ownedItem = item
         let shouldAttemptBackendSync = shouldSyncToBackend
             && ownedItem.isPublicBackendSyncEligible
             && DreamJourneyBackendClient.shared.isArchiveSyncConfigured
         let itemForStorage = shouldAttemptBackendSync
             ? ownedItem.updatingBackendSyncState(.pending)
             : ownedItem
-        var items = allItems()
+        var items = items(for: lease)
         items.insert(itemForStorage, at: 0)
-        save(items)
+        guard save(items, lease: lease) else {
+            return false
+        }
         scheduleTimeLetterReminderIfNeeded(itemForStorage)
         if shouldSyncToBackend {
-            syncToBackend(itemForStorage)
+            syncToBackend(itemForStorage, lease: lease)
         }
+        return true
     }
 
     @discardableResult
     func update(_ item: MemoryArchiveItem, syncToBackend shouldSyncToBackend: Bool = true) -> Bool {
-        let ownedItem = item.assigningOwnerIfNeeded(currentUserId)
+        guard let lease = currentArchiveStorageLease,
+              isCurrentArchiveStorageLease(lease, at: .request),
+              item.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines) == lease.archiveOwnerId else {
+            print("[Archive] rejected ownerless or mismatched local update")
+            return false
+        }
+        let ownedItem = item
         let shouldAttemptBackendSync = shouldSyncToBackend
             && ownedItem.isPublicBackendSyncEligible
             && DreamJourneyBackendClient.shared.isArchiveSyncConfigured
         let itemForStorage = shouldAttemptBackendSync
             ? ownedItem.updatingBackendSyncState(.pending)
             : ownedItem
-        var items = allItems()
+        var items = items(for: lease)
         guard let index = items.firstIndex(where: { $0.id == itemForStorage.id }) else {
             return false
         }
+        let previousItem = items[index]
         items[index] = itemForStorage
-        save(items)
+        guard save(items, lease: lease) else { return false }
+        removeReplacedMediaIfNeeded(
+            previousItem: previousItem,
+            updatedItem: itemForStorage,
+            scope: lease.storageScope
+        )
         scheduleTimeLetterReminderIfNeeded(itemForStorage)
         if shouldSyncToBackend {
-            syncToBackend(itemForStorage)
+            syncToBackend(itemForStorage, lease: lease)
         }
         return true
     }
@@ -281,7 +293,12 @@ final class MemoryArchiveRepository {
             return
         }
 
-        var items = allItems()
+        guard let lease = currentArchiveStorageLease,
+              isCurrentArchiveStorageLease(lease, at: .request) else {
+            return
+        }
+
+        var items = items(for: lease)
         var retryItems: [MemoryArchiveItem] = []
         var didUpdateItems = false
 
@@ -299,24 +316,26 @@ final class MemoryArchiveRepository {
         }
 
         if didUpdateItems {
-            save(items)
+            save(items, lease: lease)
         }
-        retryItems.forEach(syncToBackend)
+        retryItems.forEach { syncToBackend($0, lease: lease) }
     }
 
     func archiveMediaUploadIntentPayload(for item: MemoryArchiveItem) -> [String: Any]? {
-        guard item.isMediaUploadIntentEligible,
+        guard let lease = currentArchiveStorageLease,
+              isCurrentArchiveStorageLease(lease, at: .request),
+              item.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines) == lease.archiveOwnerId,
+              item.isMediaUploadIntentEligible,
               let fileName = item.mediaUploadFileName,
               let contentType = item.mediaUploadContentType,
               let fileSizeBytes = item.mediaUploadFileSizeBytes else {
             return nil
         }
 
-        let archiveVisibilityContext = currentArchiveVisibilityContext
         return item.archiveMediaUploadIntentPayload(
-            userId: archiveVisibilityContext.ownerId,
-            personaScope: archiveVisibilityContext.personaScope,
-            digitalHumanId: archiveVisibilityContext.digitalHumanId,
+            userId: lease.archiveOwnerId,
+            personaScope: lease.personaScope,
+            digitalHumanId: lease.digitalHumanId,
             fileName: fileName,
             contentType: contentType,
             fileSizeBytes: fileSizeBytes
@@ -325,17 +344,40 @@ final class MemoryArchiveRepository {
 
     @discardableResult
     func remove(id: String) -> Bool {
-        var items = allItems()
-        if items.contains(where: { $0.id == id && $0.isSealedTimeLetter }) {
+        guard let lease = currentArchiveStorageLease,
+              isCurrentArchiveStorageLease(lease, at: .request) else {
             return false
         }
-        let originalCount = items.count
+        var items = items(for: lease)
+        guard let removedItem = items.first(where: { $0.id == id }),
+              removedItem.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+                == lease.archiveOwnerId else {
+            return false
+        }
+        if removedItem.isSealedTimeLetter {
+            return false
+        }
         items.removeAll { $0.id == id }
-        guard items.count != originalCount else {
+        guard save(items, lease: lease) else { return false }
+        removeMedia(for: removedItem, scope: lease.storageScope)
+        return true
+    }
+
+    @discardableResult
+    func purgeLocalArchiveDataForAccountDeletion(accountLease: AccountLease) -> Bool {
+        guard accountLease.subjectId == UserManager.shared.currentUser?.id,
+              accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
             return false
         }
-        save(items)
-        return true
+        let mediaDirectories = localStorage.mediaDirectoryRelativePaths(accountLease: accountLease)
+        do {
+            try mediaStore.purgeScopedDirectories(relativePaths: mediaDirectories)
+            localStorage.purgeAccount(accountLease: accountLease)
+            return true
+        } catch {
+            print("[Archive] account deletion local purge failed: \(error.localizedDescription)")
+            return false
+        }
     }
 
     func summary() -> (total: Int, photos: Int, audio: Int, text: Int) {
@@ -616,7 +658,8 @@ final class MemoryArchiveRepository {
                 guard isCurrentArchiveStorageLease(lease, at: .commit) else { return }
                 switch result {
                 case .success(let object):
-                    guard let item = Self.timeLetterDetailItem(from: object) else {
+                    guard let item = Self.timeLetterDetailItem(from: object),
+                          isExpectedTimeLetterDetail(item, reminder: reminder, lease: lease) else {
                         deliver(
                             .failure(ArchiveRepositoryError.invalidBackendDetail),
                             lease: lease.accountLease,
@@ -624,7 +667,10 @@ final class MemoryArchiveRepository {
                         )
                         return
                     }
-                    upsertResolvedTimeLetterDetail(item, lease: lease)
+                    if item.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+                        == lease.archiveOwnerId {
+                        upsertResolvedTimeLetterDetail(item, lease: lease)
+                    }
                     deliver(.success(item), lease: lease.accountLease, completion: completion)
                 case .failure(let error):
                     if let localItem = localTimeLetterDetailItem(for: reminder, lease: lease) {
@@ -681,12 +727,16 @@ final class MemoryArchiveRepository {
             switch result {
             case .success(let object):
                 let remoteItems = Self.archiveItems(from: object)
-                    .map { $0.assigningOwnerIfNeeded(lease.accountUserId) }
+                    .filter {
+                        $0.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+                            == lease.archiveOwnerId
+                    }
                 let mergedItems = mergeRemoteItems(
                     remoteItems,
-                    localItems: items(for: lease)
+                    localItems: items(for: lease),
+                    expectedArchiveOwnerId: lease.archiveOwnerId
                 )
-                save(mergedItems, storageKey: lease.storageKey)
+                save(mergedItems, lease: lease)
                 deliver(
                     .success(mergedItems.sorted { $0.createdAt > $1.createdAt }),
                     lease: lease.accountLease,
@@ -722,10 +772,6 @@ final class MemoryArchiveRepository {
         )
     }
 
-    private var storageKey: String {
-        "\(baseKey).\(currentArchiveOwnerId)"
-    }
-
     private var currentArchiveStorageLease: ArchiveStorageLease? {
         let accountUserId = currentUserId
         guard !accountUserId.isEmpty,
@@ -734,13 +780,19 @@ final class MemoryArchiveRepository {
         }
         let visibilityContext = currentArchiveVisibilityContext
         let archiveOwnerId = visibilityContext.ownerId
+        let storageScope = ArchiveStorageScope(
+            accountLease: accountLease,
+            archiveOwnerId: archiveOwnerId
+        )
+        guard storageScope.isValid else { return nil }
         return ArchiveStorageLease(
             accountLease: accountLease,
             accountUserId: accountUserId,
             archiveOwnerId: archiveOwnerId,
             personaScope: visibilityContext.personaScope,
             digitalHumanId: visibilityContext.digitalHumanId,
-            storageKey: "\(baseKey).\(archiveOwnerId)"
+            storageScope: storageScope,
+            storageKey: storageScope.storageKey
         )
     }
 
@@ -754,7 +806,10 @@ final class MemoryArchiveRepository {
             && visibilityContext.ownerId == lease.archiveOwnerId
             && visibilityContext.personaScope == lease.personaScope
             && visibilityContext.digitalHumanId == lease.digitalHumanId
-            && storageKey == lease.storageKey
+            && ArchiveStorageScope(
+                accountLease: lease.accountLease,
+                archiveOwnerId: visibilityContext.ownerId
+            ).storageKey == lease.storageKey
     }
 
     private var mailboxStorageKey: String {
@@ -795,14 +850,46 @@ final class MemoryArchiveRepository {
         completion(result)
     }
 
-    private func save(_ items: [MemoryArchiveItem]) {
-        save(items, storageKey: storageKey)
+    @discardableResult
+    private func save(_ items: [MemoryArchiveItem]) -> Bool {
+        guard let lease = currentArchiveStorageLease else { return false }
+        return save(items, lease: lease)
     }
 
-    private func save(_ items: [MemoryArchiveItem], storageKey: String) {
+    @discardableResult
+    private func save(_ items: [MemoryArchiveItem], lease: ArchiveStorageLease) -> Bool {
+        guard isCurrentArchiveStorageLease(lease, at: .commit) else { return false }
         let sortedItems = items.sorted { $0.createdAt > $1.createdAt }
-        if let data = try? JSONEncoder().encode(sortedItems) {
-            UserDefaults.standard.set(data, forKey: storageKey)
+        do {
+            try localStorage.save(items: sortedItems, scope: lease.storageScope)
+            return true
+        } catch {
+            print("[Archive] scoped local save rejected: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    private func removeReplacedMediaIfNeeded(
+        previousItem: MemoryArchiveItem,
+        updatedItem: MemoryArchiveItem,
+        scope: ArchiveStorageScope
+    ) {
+        if previousItem.localMediaMetadata?.relativePath != updatedItem.localMediaMetadata?.relativePath,
+           let previousMetadata = previousItem.localMediaMetadata {
+            try? mediaStore.remove(previousMetadata, scope: scope, storageClass: .original)
+        }
+        if previousItem.localThumbnailMetadata?.relativePath != updatedItem.localThumbnailMetadata?.relativePath,
+           let previousThumbnailMetadata = previousItem.localThumbnailMetadata {
+            try? mediaStore.remove(previousThumbnailMetadata, scope: scope, storageClass: .thumbnail)
+        }
+    }
+
+    private func removeMedia(for item: MemoryArchiveItem, scope: ArchiveStorageScope) {
+        if let mediaMetadata = item.localMediaMetadata {
+            try? mediaStore.remove(mediaMetadata, scope: scope, storageClass: .original)
+        }
+        if let thumbnailMetadata = item.localThumbnailMetadata {
+            try? mediaStore.remove(thumbnailMetadata, scope: scope, storageClass: .thumbnail)
         }
     }
 
@@ -880,31 +967,49 @@ final class MemoryArchiveRepository {
         lease: ArchiveStorageLease
     ) -> MemoryArchiveItem? {
         items(for: lease).first { item in
-            item.id == reminder.sourceArchiveItemId && item.kind == .timeLetter
+            isExpectedTimeLetterDetail(item, reminder: reminder, lease: lease)
         }
+    }
+
+    private func isExpectedTimeLetterDetail(
+        _ item: MemoryArchiveItem,
+        reminder: TimeLetterMailboxReminder,
+        lease: ArchiveStorageLease
+    ) -> Bool {
+        let reminderOwner = reminder.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let expectedOwner = reminderOwner.isEmpty ? lease.archiveOwnerId : reminderOwner
+        return item.id == reminder.sourceArchiveItemId
+            && item.kind == .timeLetter
+            && item.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines) == expectedOwner
     }
 
     private func upsertResolvedTimeLetterDetail(
         _ item: MemoryArchiveItem,
         lease: ArchiveStorageLease
     ) {
-        guard isCurrentArchiveStorageLease(lease, at: .commit) else { return }
+        guard isCurrentArchiveStorageLease(lease, at: .commit),
+              item.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+                == lease.archiveOwnerId else { return }
         var items = items(for: lease)
         if let index = items.firstIndex(where: { $0.id == item.id }) {
             items[index] = item
         } else {
             items.insert(item, at: 0)
         }
-        save(items, storageKey: lease.storageKey)
+        save(items, lease: lease)
     }
 
-    private func syncToBackend(_ item: MemoryArchiveItem) {
+    private func syncToBackend(
+        _ item: MemoryArchiveItem,
+        lease: ArchiveStorageLease
+    ) {
         guard DreamJourneyBackendClient.shared.isArchiveSyncConfigured else {
             return
         }
 
-        guard let lease = currentArchiveStorageLease,
-              isCurrentArchiveStorageLease(lease, at: .request) else {
+        guard isCurrentArchiveStorageLease(lease, at: .request),
+              item.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+                == lease.archiveOwnerId else {
             return
         }
         let ownerId = lease.archiveOwnerId
@@ -963,7 +1068,7 @@ final class MemoryArchiveRepository {
         case .failed:
             items[index] = items[index].updatingBackendSyncState(.failed, error: error)
         }
-        save(items, storageKey: lease.storageKey)
+        save(items, lease: lease)
     }
 
     private func sanitizeBackendSyncError(_ error: Error) -> String {
@@ -1025,10 +1130,6 @@ final class MemoryArchiveRepository {
         return nil
     }
 
-    private func assignOwnerIfNeededForCurrentUser(_ items: [MemoryArchiveItem]) -> [MemoryArchiveItem] {
-        items.map { $0.assigningOwnerIfNeeded(currentUserId) }
-    }
-
     private static func rawArchiveItemObjects(from value: Any?) -> [[String: Any]]? {
         if let objects = value as? [[String: Any]] {
             return objects
@@ -1041,45 +1142,80 @@ final class MemoryArchiveRepository {
     }
 
     private func items(for lease: ArchiveStorageLease) -> [MemoryArchiveItem] {
-        guard let data = UserDefaults.standard.data(forKey: lease.storageKey),
-              let decodedItems = try? JSONDecoder().decode([MemoryArchiveItem].self, from: data) else {
-            return []
+        guard isCurrentArchiveStorageLease(lease, at: .request) else { return [] }
+        let loaded = localStorage.load(scope: lease.storageScope)
+        guard isCurrentArchiveStorageLease(lease, at: .commit) else { return [] }
+        return migrateLegacyMediaBindingsIfNeeded(loaded.items, lease: lease)
+    }
+
+    private func migrateLegacyMediaBindingsIfNeeded(
+        _ items: [MemoryArchiveItem],
+        lease: ArchiveStorageLease
+    ) -> [MemoryArchiveItem] {
+        let candidates = items.filter {
+            $0.localMediaMetadata == nil && $0.localPath?.hasPrefix("/") == true
         }
-        return decodedItems.map {
-            $0.assigningOwnerIfNeeded(lease.accountUserId)
-                .updatingRecoveredLocalPathIfNeeded()
+        guard !candidates.isEmpty else { return items }
+
+        let receipts = localStorage.migrationReceipts(scope: lease.storageScope)
+        guard !receipts.isEmpty else { return items }
+        var migratedItems = items
+        var copiedMedia: [ArchiveMediaMetadata] = []
+
+        for candidate in candidates {
+            guard isCurrentArchiveStorageLease(lease, at: .runtime),
+                  let index = migratedItems.firstIndex(where: { $0.id == candidate.id }),
+                  let receipt = receipts.first(where: {
+                      $0.migratedItemIds.contains(candidate.id)
+                          && ($0.state == .migrated || $0.state == .mixed)
+                  }),
+                  let migrationBinding = try? mediaStore.legacyMigrationBinding(
+                      for: candidate,
+                      receipt: receipt,
+                      scope: lease.storageScope
+                  ),
+                  let mediaMetadata = try? mediaStore.migrateLegacyOriginal(
+                      for: candidate,
+                      receipt: receipt,
+                      binding: migrationBinding,
+                      scope: lease.storageScope
+                  ) else {
+                continue
+            }
+            migratedItems[index] = candidate.migratingLegacyLocalMedia(to: mediaMetadata)
+            copiedMedia.append(mediaMetadata)
         }
+
+        guard !copiedMedia.isEmpty else { return items }
+        guard save(migratedItems, lease: lease) else {
+            copiedMedia.forEach {
+                try? mediaStore.remove($0, scope: lease.storageScope, storageClass: .original)
+            }
+            return items
+        }
+        return migratedItems
     }
 
     private func mergeRemoteItems(
         _ remoteItems: [MemoryArchiveItem],
-        localItems: [MemoryArchiveItem]
+        localItems: [MemoryArchiveItem],
+        expectedArchiveOwnerId: String
     ) -> [MemoryArchiveItem] {
-        var itemsById: [String: MemoryArchiveItem] = [:]
-        localItems.forEach { localItem in
-            guard let existingItem = itemsById[localItem.id] else {
-                itemsById[localItem.id] = localItem
-                return
+        let mergedItems = ArchiveLocalStoragePolicy.merge(
+            remoteItems: remoteItems,
+            localItems: localItems,
+            expectedArchiveOwnerId: expectedArchiveOwnerId
+        )
+        let localItemsById = Dictionary(
+            localItems.map { ($0.id, $0) },
+            uniquingKeysWith: { existing, candidate in
+                existing.updatedAt >= candidate.updatedAt ? existing : candidate
             }
-            if localItem.updatedAt > existingItem.updatedAt {
-                itemsById[localItem.id] = localItem
-            }
+        )
+        return mergedItems.map { item in
+            guard let localItem = localItemsById[item.id] else { return item }
+            return item.preservingLocalMediaBinding(from: localItem)
         }
-
-        remoteItems.forEach { remoteItem in
-            guard let localItem = itemsById[remoteItem.id] else {
-                itemsById[remoteItem.id] = remoteItem
-                return
-            }
-
-            var selectedItem = remoteItem.updatedAt >= localItem.updatedAt ? remoteItem : localItem
-            if selectedItem.localPath == nil {
-                selectedItem.localPath = localItem.localPath
-            }
-            itemsById[remoteItem.id] = selectedItem
-        }
-
-        return itemsById.values.sorted { $0.createdAt > $1.createdAt }
     }
 }
 

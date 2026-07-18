@@ -6,12 +6,12 @@ enum MemoryArchiveItemFactory {
         case samplePhoto = "sample_photo"
     }
 
-    static func makeTextItem(note: String) -> MemoryArchiveItem {
-        MemoryArchiveItem(
+    static func makeTextItem(note: String, ownerUserId: String? = nil) -> MemoryArchiveItem {
+        return MemoryArchiveItem(
             kind: .text,
             title: "文字记忆",
             note: note,
-            ownerUserId: currentUploaderUserId,
+            ownerUserId: ownerUserId ?? currentUploaderUserId,
             analysisStatus: .manual,
             analysisSummary: "这是一段手动封存的文字片段，可作为后续回响生成的语义线索。",
             tags: ["文字片段"],
@@ -23,14 +23,16 @@ enum MemoryArchiveItemFactory {
         note: String,
         openAt: Date = defaultTimeLetterOpenAt,
         recipients: [TimeLetterRecipientSelection] = [TimeLetterRecipientSelection(id: "self", name: "我")],
-        imageLocalPath: String? = nil
+        imageLocalPath: String? = nil,
+        imageMediaMetadata: ArchiveMediaMetadata? = nil,
+        ownerUserId: String? = nil
     ) -> MemoryArchiveItem {
-        MemoryArchiveItem(
+        return MemoryArchiveItem(
             kind: .timeLetter,
             title: "时间信件草稿",
             note: note,
             localPath: imageLocalPath,
-            ownerUserId: currentUploaderUserId,
+            ownerUserId: ownerUserId ?? currentUploaderUserId,
             analysisStatus: .manual,
             analysisSummary: "这封信暂存为草稿，可继续编辑打开时间、收件人和图片附件。",
             tags: ["时间信件", "草稿"],
@@ -41,6 +43,7 @@ enum MemoryArchiveItemFactory {
                 openAt: openAt,
                 recipients: recipients,
                 imageLocalPath: imageLocalPath,
+                imageMediaMetadata: imageMediaMetadata,
                 sealedAt: nil
             )
         )
@@ -50,14 +53,16 @@ enum MemoryArchiveItemFactory {
         note: String,
         openAt: Date = defaultTimeLetterOpenAt,
         recipients: [TimeLetterRecipientSelection] = [TimeLetterRecipientSelection(id: "self", name: "我")],
-        imageLocalPath: String? = nil
+        imageLocalPath: String? = nil,
+        imageMediaMetadata: ArchiveMediaMetadata? = nil,
+        ownerUserId: String? = nil
     ) -> MemoryArchiveItem {
         MemoryArchiveItem(
             kind: .timeLetter,
             title: "时间信件",
             note: note,
             localPath: imageLocalPath,
-            ownerUserId: currentUploaderUserId,
+            ownerUserId: ownerUserId ?? currentUploaderUserId,
             analysisStatus: .manual,
             analysisSummary: "这封信已封存，到达打开时间后会提醒本人和收件人查看。",
             tags: ["时间信件"],
@@ -68,27 +73,37 @@ enum MemoryArchiveItemFactory {
                 openAt: openAt,
                 recipients: recipients,
                 imageLocalPath: imageLocalPath,
+                imageMediaMetadata: imageMediaMetadata,
                 sealedAt: Date()
             )
         )
     }
 
-    static func makePhotoItem(localPath: String, source: PhotoSource = .photoLibrary) -> MemoryArchiveItem {
-        MemoryArchiveItem(
+    static func makePhotoItem(
+        localPath: String,
+        source: PhotoSource = .photoLibrary,
+        mediaMetadata: ArchiveMediaMetadata? = nil,
+        ownerUserId: String? = nil
+    ) -> MemoryArchiveItem {
+        var metadata: [String: String] = [
+            "source": source.rawValue,
+            "contentKind": "photo",
+            "fileType": fileExtension(from: localPath),
+            "storage": "local_file",
+        ]
+        if let mediaMetadata, mediaMetadata.relativePath == localPath {
+            metadata.merge(mediaMetadata.itemMetadata(for: .original)) { _, newValue in newValue }
+        }
+        return MemoryArchiveItem(
             kind: .photo,
             title: "相册影像",
             note: "从相册封存的一张照片",
             localPath: localPath,
-            ownerUserId: currentUploaderUserId,
+            ownerUserId: ownerUserId ?? currentUploaderUserId,
             analysisStatus: .pending,
             analysisSummary: "照片已保存，等待后续图像分析提取人物、地点与场景线索。",
             tags: ["相册影像"],
-            metadata: [
-                "source": source.rawValue,
-                "contentKind": "photo",
-                "fileType": fileExtension(from: localPath),
-                "storage": "local_file",
-            ]
+            metadata: metadata
         )
     }
 
@@ -99,7 +114,9 @@ enum MemoryArchiveItemFactory {
         transcriptText: String? = nil,
         transcriptionStatus: ArchiveMediaTranscriptionStatus = .notRequested,
         analysisStatus: MemoryArchiveAnalysisStatus = .manual,
-        uploadStatus: ArchiveMediaUploadStatus = .localOnly
+        uploadStatus: ArchiveMediaUploadStatus = .localOnly,
+        mediaMetadata: ArchiveMediaMetadata? = nil,
+        ownerUserId: String? = nil
     ) -> MemoryArchiveItem {
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedTranscript = transcriptText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -121,8 +138,11 @@ enum MemoryArchiveItemFactory {
             "backendStorageContract": MemoryArchiveMediaReleaseReadiness.backendMediaStorageContract,
             "transcriptLanguage": "zh-CN",
         ]
-        if let fileSizeBytes = localFileSizeBytes(at: localPath) {
+        if let fileSizeBytes = mediaMetadata?.sizeBytes ?? localFileSizeBytes(at: localPath) {
             metadata[MemoryArchiveItem.mediaFileSizeBytesMetadataKey] = "\(fileSizeBytes)"
+        }
+        if let mediaMetadata, mediaMetadata.relativePath == localPath {
+            metadata.merge(mediaMetadata.itemMetadata(for: .original)) { _, newValue in newValue }
         }
         if !trimmedTranscript.isEmpty {
             metadata[MemoryArchiveItem.mediaTranscriptTextMetadataKey] = trimmedTranscript
@@ -133,7 +153,7 @@ enum MemoryArchiveItemFactory {
             title: "语音档案",
             note: trimmedNote.isEmpty ? "录入了一段 \(durationText) 的声音记忆。" : trimmedNote,
             localPath: localPath,
-            ownerUserId: currentUploaderUserId,
+            ownerUserId: ownerUserId ?? currentUploaderUserId,
             analysisStatus: analysisStatus,
             analysisSummary: "这段声音已封存，可作为之后回响生成时的语气、称呼与情绪线索。",
             tags: ["语音档案", durationText],
@@ -147,7 +167,10 @@ enum MemoryArchiveItemFactory {
         fileSizeBytes: Int64? = nil,
         note: String = "",
         analysisStatus: MemoryArchiveAnalysisStatus = .pending,
-        uploadStatus: ArchiveMediaUploadStatus = .localOnly
+        uploadStatus: ArchiveMediaUploadStatus = .localOnly,
+        mediaMetadata: ArchiveMediaMetadata? = nil,
+        thumbnailMetadata: ArchiveMediaMetadata? = nil,
+        ownerUserId: String? = nil
     ) -> MemoryArchiveItem {
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
         var metadata: [String: String] = [
@@ -161,12 +184,20 @@ enum MemoryArchiveItemFactory {
         ]
         if let fileSizeBytes {
             metadata[MemoryArchiveItem.mediaFileSizeBytesMetadataKey] = "\(fileSizeBytes)"
+        } else if let mediaMetadata {
+            metadata[MemoryArchiveItem.mediaFileSizeBytesMetadataKey] = "\(mediaMetadata.sizeBytes)"
+        }
+        if let mediaMetadata, mediaMetadata.relativePath == localPath {
+            metadata.merge(mediaMetadata.itemMetadata(for: .original)) { _, newValue in newValue }
         }
         if let thumbnailPath, !thumbnailPath.isEmpty {
             metadata[MemoryArchiveItem.mediaThumbnailPathMetadataKey] = thumbnailPath
             metadata["thumbnailFileType"] = fileExtension(from: thumbnailPath)
             metadata["thumbnailStorage"] = "local_file"
             metadata["thumbnailStatus"] = "generated"
+            if let thumbnailMetadata, thumbnailMetadata.relativePath == thumbnailPath {
+                metadata.merge(thumbnailMetadata.itemMetadata(for: .thumbnail)) { _, newValue in newValue }
+            }
         } else {
             metadata["thumbnailStatus"] = "pending"
         }
@@ -176,7 +207,7 @@ enum MemoryArchiveItemFactory {
             title: "视频片段",
             note: trimmedNote.isEmpty ? "封存了一段等待分析的视频片段。" : trimmedNote,
             localPath: localPath,
-            ownerUserId: currentUploaderUserId,
+            ownerUserId: ownerUserId ?? currentUploaderUserId,
             analysisStatus: analysisStatus,
             analysisSummary: "视频已保存，等待后续提取动态场景、人物与时间线索。",
             tags: ["视频片段"],
@@ -208,6 +239,7 @@ enum MemoryArchiveItemFactory {
         openAt: Date,
         recipients: [TimeLetterRecipientSelection],
         imageLocalPath: String?,
+        imageMediaMetadata: ArchiveMediaMetadata?,
         sealedAt: Date?
     ) -> [String: String] {
         let isSealed = deliveryState == "sealed"
@@ -231,6 +263,10 @@ enum MemoryArchiveItemFactory {
         }
         if let imageLocalPath, !imageLocalPath.isEmpty {
             metadata[MemoryArchiveItem.timeLetterImageLocalPathMetadataKey] = imageLocalPath
+        }
+        if let imageMediaMetadata,
+           imageMediaMetadata.relativePath == imageLocalPath {
+            metadata.merge(imageMediaMetadata.itemMetadata(for: .original)) { _, newValue in newValue }
         }
         return metadata
     }

@@ -2,7 +2,7 @@ import AVFoundation
 import UIKit
 
 final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextViewDelegate, AVAudioRecorderDelegate {
-    var onSave: ((URL, TimeInterval, String) -> Void)?
+    var onSave: ((ArchiveMediaMetadata, TimeInterval, String) -> Void)?
 
     private let statusLabel = UILabel()
     private let durationLabel = UILabel()
@@ -10,6 +10,7 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
     private let noteTextView = UITextView()
     private let placeholderLabel = UILabel()
     private let accountLeaseRuntime = AccountLeaseRuntime.shared
+    private let mediaStore = ArchiveMediaStore.shared
     private lazy var saveButton = DJComponentFactory.primaryButton(
         title: "保存语音档案",
         target: self,
@@ -19,15 +20,18 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
     private var recorder: AVAudioRecorder?
     private var timer: Timer?
     private var audioURL: URL?
+    private var audioWriteTarget: ArchiveMediaWriteTarget?
     private var recordedDuration: TimeInterval = 0
     private var shouldKeepRecordedFile = false
     private var recordingAccountLease: AccountLease?
+    private var entryAccountLease: AccountLease?
 
     private var hasRecording: Bool {
         audioURL != nil && recordedDuration > 0
     }
 
-    init() {
+    init(accountLease: AccountLease? = nil) {
+        entryAccountLease = accountLease
         super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .pageSheet
     }
@@ -53,8 +57,8 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
                 && recordingAccountLease.map {
                     validateRecordingAccountLease($0, at: .commit)
                 } == true
-            if !canKeepFile, let audioURL {
-                try? FileManager.default.removeItem(at: audioURL)
+            if !canKeepFile {
+                discardCurrentAudioFile()
             }
             recordingAccountLease = nil
         }
@@ -250,10 +254,7 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
         updateSaveButton()
         if !flag {
             statusLabel.text = "录音未保存，请重新录制"
-            if let audioURL {
-                try? FileManager.default.removeItem(at: audioURL)
-            }
-            audioURL = nil
+            discardCurrentAudioFile()
             recordedDuration = 0
             recordingAccountLease = nil
             updateSaveButton()
@@ -304,8 +305,21 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
         finishRecordingIfNeeded()
         guard let accountLease = recordingAccountLease,
               validateRecordingAccountLease(accountLease, at: .commit),
-              let audioURL,
+              let audioWriteTarget,
               recordedDuration > 0 else {
+            discardStaleRecording()
+            updateSaveButton()
+            return
+        }
+
+        let mediaMetadata: ArchiveMediaMetadata
+        do {
+            mediaMetadata = try mediaStore.finalizeWriteTarget(audioWriteTarget)
+            guard validateRecordingAccountLease(accountLease, at: .commit) else {
+                removeCommittedAudio(mediaMetadata, accountLease: accountLease)
+                throw AudioRecordingCommitError.accountSessionChanged
+            }
+        } catch {
             discardStaleRecording()
             updateSaveButton()
             return
@@ -318,10 +332,10 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
         dismiss(animated: true) { [weak self] in
             guard let self,
                   self.validateRecordingAccountLease(accountLease, at: .ui) else {
-                try? FileManager.default.removeItem(at: audioURL)
+                self?.removeCommittedAudio(mediaMetadata, accountLease: accountLease)
                 return
             }
-            onSave?(audioURL, duration, note)
+            onSave?(mediaMetadata, duration, note)
         }
     }
 
@@ -332,13 +346,17 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
                 discardStaleRecording()
                 return
             }
+            finishRecordingIfNeeded()
+            if audioURL != nil {
+                discardCurrentAudioFile()
+            }
             let fileURL = try makeAudioFileURL(accountLease: accountLease)
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
             try session.setActive(true)
             guard validateRecordingAccountLease(accountLease, at: .runtime) else {
                 try? session.setActive(false, options: .notifyOthersOnDeactivation)
-                try? FileManager.default.removeItem(at: fileURL)
+                discardCurrentAudioFile()
                 discardStaleRecording()
                 return
             }
@@ -349,11 +367,6 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
                 AVNumberOfChannelsKey: 1,
                 AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue,
             ]
-
-            finishRecordingIfNeeded()
-            if let audioURL, audioURL != fileURL {
-                try? FileManager.default.removeItem(at: audioURL)
-            }
 
             let recorder = try AVAudioRecorder(url: fileURL, settings: settings)
             recorder.delegate = self
@@ -449,11 +462,14 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
     #endif
 
     private func captureRecordingAccountLease() -> AccountLease? {
-        guard let userId = UserManager.shared.currentUser?.id,
-              let accountLease = accountLeaseRuntime.capture(forSubjectId: userId),
+        let accountLease = entryAccountLease ?? (UserManager.shared.currentUser?.id).flatMap {
+            accountLeaseRuntime.capture(forSubjectId: $0)
+        }
+        guard let accountLease,
               validateRecordingAccountLease(accountLease, at: .request) else {
             return nil
         }
+        entryAccountLease = accountLease
         return accountLease
     }
 
@@ -474,10 +490,7 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
         timer?.invalidate()
         timer = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        if let audioURL {
-            try? FileManager.default.removeItem(at: audioURL)
-        }
-        audioURL = nil
+        discardCurrentAudioFile()
         recordedDuration = 0
         shouldKeepRecordedFile = false
         recordingAccountLease = nil
@@ -487,18 +500,45 @@ final class MemoryArchiveAudioRecorderViewController: UIViewController, UITextVi
         guard validateRecordingAccountLease(accountLease, at: .commit) else {
             throw AudioRecordingCommitError.accountSessionChanged
         }
-        let documentsURL = try FileManager.default.url(
-            for: .documentDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
+        let scope = ArchiveStorageScope(
+            accountLease: accountLease,
+            archiveOwnerId: accountLease.subjectId
         )
-        let directoryURL = documentsURL.appendingPathComponent("archive-audio", isDirectory: true)
-        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        guard scope.isValid else { throw AudioRecordingCommitError.accountSessionChanged }
+        let target = try mediaStore.prepareWriteTarget(
+            fileExtension: "m4a",
+            scope: scope,
+            storageClass: .original
+        )
         guard validateRecordingAccountLease(accountLease, at: .commit) else {
+            mediaStore.discardWriteTarget(target)
             throw AudioRecordingCommitError.accountSessionChanged
         }
-        return directoryURL.appendingPathComponent("\(UUID().uuidString).m4a")
+        audioWriteTarget = target
+        return target.fileURL
+    }
+
+    private func discardCurrentAudioFile() {
+        if let audioWriteTarget {
+            mediaStore.discardWriteTarget(audioWriteTarget)
+        } else if let audioURL {
+            try? FileManager.default.removeItem(at: audioURL)
+        }
+        audioWriteTarget = nil
+        audioURL = nil
+    }
+
+    private func removeCommittedAudio(
+        _ mediaMetadata: ArchiveMediaMetadata,
+        accountLease: AccountLease
+    ) {
+        let scope = ArchiveStorageScope(
+            accountLease: accountLease,
+            archiveOwnerId: accountLease.subjectId
+        )
+        try? mediaStore.remove(mediaMetadata, scope: scope, storageClass: .original)
+        audioWriteTarget = nil
+        audioURL = nil
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {

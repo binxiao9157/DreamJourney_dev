@@ -5,6 +5,21 @@ struct TimeLetterEntryPayload {
     let openAt: Date
     let recipients: [TimeLetterRecipientSelection]
     let imageLocalPath: String?
+    let imageMediaMetadata: ArchiveMediaMetadata?
+
+    init(
+        note: String,
+        openAt: Date,
+        recipients: [TimeLetterRecipientSelection],
+        imageLocalPath: String?,
+        imageMediaMetadata: ArchiveMediaMetadata? = nil
+    ) {
+        self.note = note
+        self.openAt = openAt
+        self.recipients = recipients
+        self.imageLocalPath = imageLocalPath
+        self.imageMediaMetadata = imageMediaMetadata
+    }
 }
 
 final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDelegate, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
@@ -25,10 +40,12 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
     private let recipientsStack = UIStackView()
     private let imageStatusLabel = UILabel()
     private let accountLeaseRuntime = AccountLeaseRuntime.shared
+    private let mediaStore = ArchiveMediaStore.shared
     private var recipientButtons: [String: UIButton] = [:]
     private var availableRecipients: [TimeLetterRecipientSelection] = []
     private var selectedRecipientIds: Set<String> = ["self"]
     private var selectedImageLocalPath: String?
+    private var selectedImageMediaMetadata: ArchiveMediaMetadata?
     private var imagePickerAccountLease: AccountLease?
     private var entryAccountLease: AccountLease?
     private var selectedImageCreatedByEntry = false
@@ -60,7 +77,8 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
         textEntryTitle: String? = nil,
         textEntrySubtitle: String? = nil,
         textSaveButtonTitle: String? = nil,
-        initialTimeLetterPayload: TimeLetterEntryPayload? = nil
+        initialTimeLetterPayload: TimeLetterEntryPayload? = nil,
+        accountLease: AccountLease? = nil
     ) {
         self.kind = kind
         self.initialText = initialText
@@ -68,11 +86,13 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
         self.textEntrySubtitle = textEntrySubtitle
         self.textSaveButtonTitle = textSaveButtonTitle
         self.initialTimeLetterPayload = initialTimeLetterPayload
+        entryAccountLease = accountLease
         super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .pageSheet
         if let initialTimeLetterPayload {
             selectedRecipientIds = Set(initialTimeLetterPayload.recipients.map(\.id))
             selectedImageLocalPath = initialTimeLetterPayload.imageLocalPath
+            selectedImageMediaMetadata = initialTimeLetterPayload.imageMediaMetadata
         }
     }
 
@@ -82,7 +102,13 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        entryAccountLease = captureCurrentAccountLease()
+        if let entryAccountLease {
+            if !validateImagePickerAccountLease(entryAccountLease, at: .request) {
+                self.entryAccountLease = nil
+            }
+        } else {
+            entryAccountLease = captureCurrentAccountLease()
+        }
         view.backgroundColor = DJDesignTokens.Color.background
         configureTimeLetterDefaults()
         configureTextEntryDefaults()
@@ -297,7 +323,8 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
             note: rawText,
             openAt: openAtPicker.date,
             recipients: selectedRecipients,
-            imageLocalPath: selectedImageLocalPath
+            imageLocalPath: selectedImageLocalPath,
+            imageMediaMetadata: selectedImageMediaMetadata
         )
         shouldKeepSelectedImage = true
         dismiss(animated: true) { [weak self] in
@@ -536,13 +563,14 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
             return
         }
         do {
-            let fileURL = try commitSelectedImage(imageData, accountLease: accountLease)
+            let mediaMetadata = try commitSelectedImage(imageData, accountLease: accountLease)
             guard validateImagePickerAccountLease(accountLease, at: .ui) else {
-                try? FileManager.default.removeItem(at: fileURL)
+                removeMedia(mediaMetadata, accountLease: accountLease)
                 return
             }
             removeEntryCreatedImageIfNeeded()
-            selectedImageLocalPath = fileURL.path
+            selectedImageLocalPath = mediaMetadata.relativePath
+            selectedImageMediaMetadata = mediaMetadata
             selectedImageCreatedByEntry = true
             shouldKeepSelectedImage = false
             imageStatusLabel.text = "已添加 1 张图片"
@@ -583,40 +611,48 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
     private func commitSelectedImage(
         _ imageData: Data,
         accountLease: AccountLease
-    ) throws -> URL {
+    ) throws -> ArchiveMediaMetadata {
         guard validateImagePickerAccountLease(accountLease, at: .commit) else {
             throw TimeLetterImageCommitError.accountSessionChanged
         }
-        let documentsURL = try FileManager.default.url(
-            for: .documentDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
+        let scope = ArchiveStorageScope(
+            accountLease: accountLease,
+            archiveOwnerId: accountLease.subjectId
         )
-        let directoryURL = documentsURL.appendingPathComponent(
-            "archive-time-letter-images",
-            isDirectory: true
+        guard scope.isValid else { throw TimeLetterImageCommitError.accountSessionChanged }
+        let mediaMetadata = try mediaStore.write(
+            imageData,
+            fileExtension: "jpg",
+            scope: scope,
+            storageClass: .original
         )
-        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-        let fileURL = directoryURL.appendingPathComponent("\(UUID().uuidString).jpg")
         guard validateImagePickerAccountLease(accountLease, at: .commit) else {
+            try? mediaStore.remove(mediaMetadata, scope: scope, storageClass: .original)
             throw TimeLetterImageCommitError.accountSessionChanged
         }
-        try imageData.write(to: fileURL, options: [.atomic])
-        guard validateImagePickerAccountLease(accountLease, at: .commit) else {
-            try? FileManager.default.removeItem(at: fileURL)
-            throw TimeLetterImageCommitError.accountSessionChanged
-        }
-        return fileURL
+        return mediaMetadata
     }
 
     private func removeEntryCreatedImageIfNeeded() {
         guard selectedImageCreatedByEntry,
               !shouldKeepSelectedImage,
-              let selectedImageLocalPath else { return }
-        try? FileManager.default.removeItem(atPath: selectedImageLocalPath)
+              let selectedImageMediaMetadata,
+              let entryAccountLease else { return }
+        removeMedia(selectedImageMediaMetadata, accountLease: entryAccountLease)
         self.selectedImageLocalPath = nil
+        self.selectedImageMediaMetadata = nil
         selectedImageCreatedByEntry = false
+    }
+
+    private func removeMedia(
+        _ mediaMetadata: ArchiveMediaMetadata,
+        accountLease: AccountLease
+    ) {
+        let scope = ArchiveStorageScope(
+            accountLease: accountLease,
+            archiveOwnerId: accountLease.subjectId
+        )
+        try? mediaStore.remove(mediaMetadata, scope: scope, storageClass: .original)
     }
 }
 

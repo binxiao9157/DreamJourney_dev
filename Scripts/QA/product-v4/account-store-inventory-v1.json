@@ -121,26 +121,34 @@
       "catalogId": "S03",
       "surfaceId": "S03.archive-draft-items",
       "dataClass": "archive drafts, source metadata, time-letter metadata, and local message state",
-      "ownerScope": "archive owner id plus viewer account; current auto-claim path is legacy risk",
-      "storage": "standard UserDefaults with owner-suffixed keys",
-      "pathOrKey": "dj.memoryArchive.items.<owner>; dj.memoryArchive.timeLetterMailbox.<viewer>; dj.inAppMessage.localState.<viewer>",
-      "writer": "MemoryArchiveRepository",
+      "ownerScope": "archive items use authenticated subject plus vault plus archive owner; mailbox and in-app state remain viewer scoped",
+      "storage": "UserDefaults V2 hashed owner envelope, device-neutral quarantine and migration receipts; viewer-scoped message keys remain transitional",
+      "pathOrKey": "dj.memoryArchive.items.v2.<scopeDigest>; dj.memoryArchive.quarantine.v1.<scopeDigest>; dj.memoryArchive.quarantine.device.v2; dj.memoryArchive.migrationReceipts.v1.<scopeDigest>; dj.memoryArchive.timeLetterMailbox.<viewer>; dj.inAppMessage.localState.<viewer>",
+      "writer": "ArchiveLocalStorage and MemoryArchiveRepository",
       "readers": "Archive UI, Echo context builder, InAppMessageCenter",
-      "cleanup": "unmount on switch; apply DR-041 on logout; delete owner-scoped records on account deletion",
-      "migration": "legacy_unassigned and empty owner records must enter quarantine instead of automatic current-user ownership",
+      "cleanup": "unmount on switch; scoped purge on account deletion; message state follows its viewer lifecycle",
+      "migration": "explicit self-owned legacy records may copy-on-write with a receipt; ownerless, ambiguous, corrupt or family legacy without source evidence enters quarantine and is never auto-claimed",
       "retention": "owner draft policy and sealed time-letter policy",
-      "testOwner": "WI-S0-01-05",
-      "status": "REGISTERED_LEGACY_MIGRATION_REQUIRED",
-      "nextWorkItem": "WI-S0-01-05",
+      "testOwner": "WI-S0-01-05 for archive envelopes; WI-S0-01-07 for remaining message state",
+      "status": "REGISTERED_ARCHIVE_OWNER_ENVELOPE_MESSAGE_STATE_TRANSITIONAL",
+      "nextWorkItem": "WI-S0-01-07",
       "sourcePaths": [
+        "DreamJourney/Sources/Modules/Archive/ArchiveLocalStorage.swift",
         "DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift",
         "DreamJourney/Sources/Modules/Archive/MemoryArchiveItem.swift"
       ],
       "sourceAnchors": [
         {
+          "path": "DreamJourney/Sources/Modules/Archive/ArchiveLocalStorage.swift",
+          "contains": [
+            "dj.memoryArchive.items.v2",
+            "deviceQuarantineStorageKey",
+            "ArchiveLegacySourceEvidence"
+          ]
+        },
+        {
           "path": "DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift",
           "contains": [
-            "dj.memoryArchive.items",
             "dj.memoryArchive.timeLetterMailbox",
             "dj.inAppMessage.localState"
           ]
@@ -153,6 +161,9 @@
         }
       ],
       "currentChecks": [
+        "Scripts/QA/product-v4/run-archive-local-storage-gate.sh",
+        "Scripts/QA/product-v4/archive-local-storage-model-smoke.swift",
+        "Scripts/QA/product-v4/archive-local-storage-static-check.py",
         "Scripts/QA/prd-stitch-ui/archive-ownership-visibility-check.swift"
       ]
     },
@@ -160,19 +171,20 @@
       "catalogId": "S04",
       "surfaceId": "S04.archive-media-staging",
       "dataClass": "private photo, audio, video, thumbnail, and time-letter image staging files",
-      "ownerScope": "currently global Documents directories; target owner/vault envelope plus checksum",
-      "storage": "Documents and temporary file directories",
-      "pathOrKey": "archive-images; archive-audio; archive-video; archive-video-thumbnails; archive-time-letter-images; photos; TGSessionRecordings",
+      "ownerScope": "archive media uses authenticated subject plus vault plus archive owner; Home photos and temporary conversation recordings remain transitional",
+      "storage": "scoped Application Support originals and scoped Caches thumbnails; remaining Home Documents/photos and temporary TGSessionRecordings are legacy",
+      "pathOrKey": "DreamJourney/Archive/v2/<scopeDigest>/<UUID>; archive legacy allowlist for migration only; remaining photos; TGSessionRecordings",
       "writer": "Archive entry controllers, AIRecordingViewController, and QA fixture paths in AppDelegate",
       "readers": "MemoryArchiveItem, Archive UI, upload pipeline, Echo context",
-      "cleanup": "cancel upload and remove temporary files on switch; remove owner media on delete",
-      "migration": "retain only readable files with proven owner and checksum; quarantine ambiguous files",
+      "cleanup": "remove scoped archive media on item or account deletion; Home photo and session-recording lifecycle remains assigned to WI-S0-01-06",
+      "migration": "legacy archive files require allowlisted canonical path, verified owner receipt, file identity, checksum and copy-on-write binding; ambiguous paths are rejected",
       "retention": "draft retention decision DR-041; temporary recordings are session-only",
-      "testOwner": "WI-S0-01-05",
-      "status": "REGISTERED_GLOBAL_PATH_MIGRATION_REQUIRED",
-      "nextWorkItem": "WI-S0-01-05",
+      "testOwner": "WI-S0-01-05 for archive media; WI-S0-01-06 for Home and conversation remainder",
+      "status": "REGISTERED_ARCHIVE_MEDIA_SCOPED_HOME_MEDIA_TRANSITIONAL",
+      "nextWorkItem": "WI-S0-01-06",
       "sourcePaths": [
         "DreamJourney/Sources/AppDelegate.swift",
+        "DreamJourney/Sources/Modules/Archive/ArchiveMediaStore.swift",
         "DreamJourney/Sources/Modules/Archive/MemoryArchiveAudioRecorderViewController.swift",
         "DreamJourney/Sources/Modules/Archive/MemoryArchiveItem.swift",
         "DreamJourney/Sources/Modules/Archive/MemoryArchiveItemFactory.swift",
@@ -182,15 +194,11 @@
       ],
       "sourceAnchors": [
         {
-          "path": "DreamJourney/Sources/Modules/Archive/MemoryArchiveAudioRecorderViewController.swift",
+          "path": "DreamJourney/Sources/Modules/Archive/ArchiveMediaStore.swift",
           "contains": [
-            "archive-audio"
-          ]
-        },
-        {
-          "path": "DreamJourney/Sources/Modules/Archive/MemoryArchiveTextEntryViewController.swift",
-          "contains": [
-            "archive-time-letter-images"
+            "ArchiveLegacyMediaMigrationBinding",
+            "legacyMediaDirectoryNames",
+            "mediaDirectoryRelativePath"
           ]
         },
         {
@@ -201,6 +209,8 @@
         }
       ],
       "currentChecks": [
+        "Scripts/QA/product-v4/run-archive-local-storage-gate.sh",
+        "Scripts/QA/product-v4/archive-media-store-model-smoke.swift",
         "Scripts/QA/prd-stitch-ui/archive-audio-lifecycle-smoke-check.swift",
         "Scripts/QA/prd-stitch-ui/archive-local-file-path-recovery-check.swift"
       ]

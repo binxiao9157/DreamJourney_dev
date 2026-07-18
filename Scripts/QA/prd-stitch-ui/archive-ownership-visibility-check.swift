@@ -17,6 +17,7 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
 }
 
 let item = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveItem.swift")
+let localStorage = read("DreamJourney/Sources/Modules/Archive/ArchiveLocalStorage.swift")
 let factory = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveItemFactory.swift")
 let repository = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift")
 let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
@@ -28,17 +29,21 @@ assertContains(item, "let ownerUserId: String", "Archive item should store uploa
 assertContains(item, "case ownerUserId", "Archive item coding should persist uploader ownership")
 assertContains(item, "decodeIfPresent(String.self, forKey: .ownerUserId)", "Archive item should decode legacy records safely")
 assertContains(item, "func canManage(by userId: String) -> Bool", "Archive item should enforce management ownership")
-assertContains(item, "func assigningOwnerIfNeeded(_ ownerUserId: String) -> MemoryArchiveItem", "Archive item should support legacy owner migration")
+assertContains(localStorage, "struct ArchiveStoreEnvelope", "Archive records should use an owner envelope")
+assertContains(localStorage, "struct ArchiveLegacyMigrationReceipt", "Archive legacy migration should be auditable")
+assertContains(localStorage, "case missingOwner", "Ownerless archive records should have a quarantine reason")
+assertContains(localStorage, "case mismatch", "Cross-owner archive records should have a quarantine reason")
 
 assertContains(factory, "private static var currentUploaderUserId: String", "Archive factory should resolve current uploader")
-assertContains(factory, "ownerUserId: currentUploaderUserId", "Archive factory should assign uploader ownership")
+assertContains(factory, "ownerUserId: ownerUserId ?? currentUploaderUserId", "Archive factory should assign uploader ownership")
 
-assertContains(repository, "assignOwnerIfNeededForCurrentUser", "Archive repository should migrate legacy local owners")
+assertContains(repository, "ArchiveLocalStorage.shared", "Archive repository should use owner-scoped local storage")
+assertContains(repository, "let storageScope: ArchiveStorageScope", "Archive writes should retain their original scope")
 assertContains(item, "\"ownerUserId\": ownerUserId", "Archive backend sync should include uploader ownership")
 assertContains(repository, "ArchiveVisibilityContext", "Archive repository should centralize persona visibility contract")
 assertContains(repository, "currentArchiveVisibilityContext", "Archive repository should resolve current persona visibility")
-assertContains(repository, "archiveVisibilityContext.personaScope", "Archive sync should distinguish personal/family visibility")
-assertContains(repository, "archiveVisibilityContext.digitalHumanId", "Archive sync should scope items by digital human")
+assertContains(repository, "personaScope: lease.personaScope", "Archive sync should distinguish personal/family visibility")
+assertContains(repository, "digitalHumanId: lease.digitalHumanId", "Archive sync should scope items by digital human")
 
 assertContains(backendClient, "personaScope: String", "Backend archive sync should accept persona scope")
 assertContains(backendClient, "digitalHumanId: String", "Backend archive sync should accept digital human id")

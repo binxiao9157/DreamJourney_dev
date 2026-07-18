@@ -28,6 +28,8 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     private var item: MemoryArchiveItem
     private let repository: MemoryArchiveRepository
     private let isReadOnly: Bool
+    private let accountLeaseRuntime = AccountLeaseRuntime.shared
+    private let mediaStore = ArchiveMediaStore.shared
     private let scrollView = UIScrollView()
     private let contentStack = UIStackView()
     private var audioPlayer: AVAudioPlayer?
@@ -39,6 +41,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     private var archiveMediaRuntimeCapability: ArchiveMediaRuntimeCapability?
     private var archiveMediaRuntimeErrorText: String?
     private var didRequestArchiveMediaRuntimeCapability = false
+    private var detailAccountLease: AccountLease?
 
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -73,6 +76,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         super.viewDidLoad()
         title = "档案详情"
         view.backgroundColor = DJDesignTokens.Color.background
+        detailAccountLease = captureDetailAccountLease()
         setupLayout()
         configureNavigationActions()
         refreshArchiveMediaRuntimeCapabilityIfNeeded()
@@ -147,6 +151,26 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
 
     private var canManageCurrentArchiveItem: Bool {
         !isReadOnly && item.canManage(by: UserManager.shared.currentUser?.id ?? "")
+    }
+
+    private func captureDetailAccountLease() -> AccountLease? {
+        guard canManageCurrentArchiveItem,
+              let userId = UserManager.shared.currentUser?.id,
+              let accountLease = accountLeaseRuntime.capture(forSubjectId: userId),
+              validateDetailAccountLease(accountLease, at: .request) else {
+            return nil
+        }
+        return accountLease
+    }
+
+    private func validateDetailAccountLease(
+        _ accountLease: AccountLease,
+        at checkpoint: AccountLeaseCheckpoint
+    ) -> Bool {
+        canManageCurrentArchiveItem
+            && accountLease.subjectId == UserManager.shared.currentUser?.id
+            && accountLease.subjectId == item.ownerUserId
+            && accountLeaseRuntime.validate(accountLease, at: checkpoint).allowed
     }
 
     private var shouldShowLocalAnalysisAction: Bool {
@@ -1211,7 +1235,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         item.archiveDetailMetadataRows.forEach { row in
             stack.addArrangedSubview(makeMetadataRow(title: row.title, value: row.value))
         }
-        if item.isMediaUploadIntentEligible {
+        if item.isMediaUploadIntentEligible && canManageCurrentArchiveItem {
             stack.addArrangedSubview(makeMediaUploadIntentButton())
         }
 
@@ -1308,7 +1332,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         stack.addArrangedSubview(makeInsightSection(title: "人物线索", iconName: "person.2", values: item.detectedPeople, emptyText: item.analysisStatus == .pending ? "等待识别" : "暂无人物线索"))
         stack.addArrangedSubview(makeInsightSection(title: "地点线索", iconName: "mappin.and.ellipse", values: item.detectedLocationClues, emptyText: item.analysisStatus == .pending ? "等待识别" : "暂无地点线索"))
         stack.addArrangedSubview(makeInsightSection(title: "场景线索", iconName: "camera.viewfinder", values: item.detectedSceneClues, emptyText: item.analysisStatus == .pending ? "等待识别" : "暂无场景线索"))
-        if item.analysisStatus == .failed {
+        if item.analysisStatus == .failed && canManageCurrentArchiveItem {
             stack.addArrangedSubview(makeAnalysisRetryButton())
         }
 
@@ -1600,48 +1624,86 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     }
 
     @objc private func analyzeArchiveItemTapped() {
+        guard let accountLease = detailAccountLease,
+              validateDetailAccountLease(accountLease, at: .commit) else { return }
         if item.analysisStatus == .failed {
             item.retryLocalAnalysis()
         }
         item.applyLocalAnalysisResult()
         let didPersist = repository.update(item, syncToBackend: shouldSyncArchiveUpdateToBackend)
+        guard validateDetailAccountLease(accountLease, at: .ui) else { return }
         reloadContent()
         configureNavigationActions()
         showToast(didPersist ? "已生成本地分析" : "已生成本地分析预览", type: .success)
     }
 
     @objc private func editTimeLetterDraftTapped() {
-        guard item.isTimeLetterDraft, canManageCurrentArchiveItem else { return }
+        guard item.isTimeLetterDraft,
+              let accountLease = detailAccountLease,
+              validateDetailAccountLease(accountLease, at: .request) else { return }
         let payload = TimeLetterEntryPayload(
             note: item.note,
             openAt: item.timeLetterOpenAt ?? Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date(),
             recipients: item.timeLetterRecipients,
-            imageLocalPath: item.localPath
+            imageLocalPath: item.localPath,
+            imageMediaMetadata: item.localMediaMetadata
         )
         let entryViewController = MemoryArchiveTextEntryViewController(
             kind: .timeLetter,
-            initialTimeLetterPayload: payload
+            initialTimeLetterPayload: payload,
+            accountLease: accountLease
         )
+        let existingMediaRelativePath = item.localMediaMetadata?.relativePath
+        let mediaStore = mediaStore
+        let cleanupUncommittedMedia: (TimeLetterEntryPayload) -> Void = { payload in
+            guard let mediaMetadata = payload.imageMediaMetadata,
+                  mediaMetadata.relativePath != existingMediaRelativePath else { return }
+            let scope = ArchiveStorageScope(
+                accountLease: accountLease,
+                archiveOwnerId: accountLease.subjectId
+            )
+            try? mediaStore.remove(mediaMetadata, scope: scope, storageClass: .original)
+        }
         entryViewController.onSaveDraftTimeLetter = { [weak self] payload in
-            guard let self else { return }
-            item = item.updatingTimeLetterDraft(
+            guard let self,
+                  self.validateDetailAccountLease(accountLease, at: .commit) else {
+                cleanupUncommittedMedia(payload)
+                return
+            }
+            let updatedItem = item.updatingTimeLetterDraft(
                 note: payload.note,
                 openAt: payload.openAt,
                 recipients: payload.recipients,
-                imageLocalPath: payload.imageLocalPath
+                imageLocalPath: payload.imageLocalPath,
+                imageMediaMetadata: payload.imageMediaMetadata
             )
-            _ = repository.update(item)
+            guard repository.update(updatedItem) else {
+                cleanupUncommittedMedia(payload)
+                return
+            }
+            item = updatedItem
+            guard validateDetailAccountLease(accountLease, at: .ui) else { return }
             reloadContent()
             showToast("草稿已更新", type: .success)
         }
         entryViewController.onSaveTimeLetter = { [weak self] payload in
-            guard let self else { return }
-            item = item.sealingTimeLetter(
+            guard let self,
+                  self.validateDetailAccountLease(accountLease, at: .commit) else {
+                cleanupUncommittedMedia(payload)
+                return
+            }
+            let updatedItem = item.sealingTimeLetter(
                 openAt: payload.openAt,
                 recipients: payload.recipients,
-                imageLocalPath: payload.imageLocalPath
+                imageLocalPath: payload.imageLocalPath,
+                imageMediaMetadata: payload.imageMediaMetadata
             )
-            _ = repository.update(item)
+            guard repository.update(updatedItem) else {
+                cleanupUncommittedMedia(payload)
+                return
+            }
+            item = updatedItem
+            guard validateDetailAccountLease(accountLease, at: .ui) else { return }
             reloadContent()
             showToast("时间信件已封存", type: .success)
         }
@@ -1649,16 +1711,20 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     }
 
     @objc private func editTextArchiveTapped() {
-        guard item.kind == .text, canManageCurrentArchiveItem else { return }
+        guard item.kind == .text,
+              let accountLease = detailAccountLease,
+              validateDetailAccountLease(accountLease, at: .request) else { return }
         let entryViewController = MemoryArchiveTextEntryViewController(
             kind: .text,
             initialText: item.note,
             textEntryTitle: "编辑文字",
             textEntrySubtitle: "调整这段自传内容，保存后会同步更新当前档案。",
-            textSaveButtonTitle: "保存修改"
+            textSaveButtonTitle: "保存修改",
+            accountLease: accountLease
         )
         entryViewController.onSave = { [weak self] rawText in
-            guard let self else { return }
+            guard let self,
+                  self.validateDetailAccountLease(accountLease, at: .commit) else { return }
             item.note = rawText
             item.title = "文字记忆"
             item.updatedAt = Date()
@@ -1671,7 +1737,11 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
             item.metadata["contentKind"] = "text"
             item.metadata["characterCount"] = "\(rawText.count)"
             item.metadata["storage"] = "local_user_defaults"
-            _ = repository.update(item)
+            guard repository.update(item) else {
+                showToast("文字保存失败，请稍后重试", type: .error)
+                return
+            }
+            guard validateDetailAccountLease(accountLease, at: .ui) else { return }
             reloadContent()
             configureNavigationActions()
             showToast("文字已更新", type: .success)
@@ -1680,15 +1750,23 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     }
 
     @objc private func sealTimeLetterDraftTapped() {
-        guard item.isTimeLetterDraft, canManageCurrentArchiveItem else { return }
+        guard item.isTimeLetterDraft,
+              let accountLease = detailAccountLease,
+              validateDetailAccountLease(accountLease, at: .commit) else { return }
         item = item.sealingTimeLetterDraft()
-        _ = repository.update(item)
+        guard repository.update(item) else {
+            showToast("时间信件封存失败，请稍后重试", type: .error)
+            return
+        }
+        guard validateDetailAccountLease(accountLease, at: .ui) else { return }
         reloadContent()
         showToast("时间信件已封存", type: .success)
     }
 
     @objc private func deleteTimeLetterDraftTapped() {
-        guard item.isTimeLetterDraft, canManageCurrentArchiveItem else { return }
+        guard item.isTimeLetterDraft,
+              let accountLease = detailAccountLease,
+              validateDetailAccountLease(accountLease, at: .request) else { return }
         let alert = UIAlertController(
             title: "删除时间信件草稿？",
             message: "删除后不会触发投递，也不会同步到后端。",
@@ -1696,69 +1774,90 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         )
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
         alert.addAction(UIAlertAction(title: "删除草稿", style: .destructive) { [weak self] _ in
-            guard let self else { return }
-            _ = repository.remove(id: item.id)
+            guard let self,
+                  self.validateDetailAccountLease(accountLease, at: .commit) else { return }
+            guard repository.remove(id: item.id) else {
+                showToast("草稿删除失败，请稍后重试", type: .error)
+                return
+            }
+            guard validateDetailAccountLease(accountLease, at: .ui) else { return }
             navigationController?.popViewController(animated: true)
         })
         present(alert, animated: true)
     }
 
     @objc private func requestMediaUploadIntentTapped() {
+        guard let accountLease = detailAccountLease,
+              validateDetailAccountLease(accountLease, at: .request) else { return }
         guard item.isMediaUploadIntentEligible else {
-            markMediaUploadFailure("缺少本地媒体文件")
+            markMediaUploadFailure("缺少本地媒体文件", accountLease: accountLease)
             return
         }
         guard DreamJourneyBackendClient.shared.isArchiveMediaUploadIntentConfigured else {
-            markMediaUploadFailure("后端未配置")
+            markMediaUploadFailure("后端未配置", accountLease: accountLease)
             return
         }
         guard effectiveArchiveMediaRuntimeCapability.uploadIntentAvailable,
               effectiveArchiveMediaRuntimeCapability.supports(kind: item.kind) else {
-            markMediaUploadFailure("后端暂不支持该媒体类型")
+            markMediaUploadFailure("后端暂不支持该媒体类型", accountLease: accountLease)
             return
         }
         guard !effectiveArchiveMediaRuntimeCapability.requiresClientUpload else {
-            markMediaUploadFailure("真实对象存储上传尚未开放")
+            markMediaUploadFailure("真实对象存储上传尚未开放", accountLease: accountLease)
             return
         }
         guard let payload = repository.archiveMediaUploadIntentPayload(for: item) else {
-            markMediaUploadFailure("媒体上传参数不完整")
+            markMediaUploadFailure("媒体上传参数不完整", accountLease: accountLease)
             return
         }
 
+        guard validateDetailAccountLease(accountLease, at: .commit) else { return }
         isRequestingMediaUploadIntent = true
         item = item.markingMediaUploadPending()
         _ = repository.update(item, syncToBackend: false)
+        guard validateDetailAccountLease(accountLease, at: .ui) else { return }
         reloadContent()
 
         DreamJourneyBackendClient.shared.requestArchiveMediaUploadIntent(payload: payload) { [weak self] result in
-            guard let self else { return }
+            guard let self,
+                  self.validateDetailAccountLease(accountLease, at: .runtime) else { return }
             isRequestingMediaUploadIntent = false
             switch result {
             case .success(let intent):
                 guard !intent.requiresClientUpload else {
-                    markMediaUploadFailure("真实对象存储上传尚未开放")
+                    markMediaUploadFailure("真实对象存储上传尚未开放", accountLease: accountLease)
                     return
                 }
+                guard validateDetailAccountLease(accountLease, at: .commit) else { return }
                 item = item.markingMediaUploadUploaded(intent: intent)
                 _ = repository.update(item, syncToBackend: false)
+                guard validateDetailAccountLease(accountLease, at: .ui) else { return }
                 reloadContent()
                 showToast("媒体元数据已同步", type: .success)
             case .failure(let error):
-                markMediaUploadFailure(error.localizedDescription)
+                markMediaUploadFailure(error.localizedDescription, accountLease: accountLease)
             }
         }
     }
 
-    private func markMediaUploadFailure(_ reason: String) {
+    private func markMediaUploadFailure(
+        _ reason: String,
+        accountLease: AccountLease
+    ) {
+        guard validateDetailAccountLease(accountLease, at: .commit) else { return }
         isRequestingMediaUploadIntent = false
         item = item.markingMediaUploadFailed(reason.isEmpty ? "上传失败" : reason)
         _ = repository.update(item, syncToBackend: false)
+        guard validateDetailAccountLease(accountLease, at: .ui) else { return }
         reloadContent()
         showToast("上传失败，可重试", type: .error)
     }
 
     private func refreshArchiveMediaRuntimeCapabilityIfNeeded() {
+        guard let accountLease = detailAccountLease,
+              validateDetailAccountLease(accountLease, at: .request) else {
+            return
+        }
         guard item.kind == .audio || item.kind == .video else {
             return
         }
@@ -1767,14 +1866,18 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         }
         didRequestArchiveMediaRuntimeCapability = true
         guard DreamJourneyBackendClient.shared.isArchiveMediaUploadIntentConfigured else {
+            guard validateDetailAccountLease(accountLease, at: .commit) else { return }
             archiveMediaRuntimeCapability = ArchiveMediaRuntimeCapability.localFallback(isBackendConfigured: false)
             archiveMediaRuntimeErrorText = "后端媒体同步未配置"
+            guard validateDetailAccountLease(accountLease, at: .ui) else { return }
             reloadContent()
             return
         }
 
         DreamJourneyBackendClient.shared.fetchArchiveMediaRuntimeCapability { [weak self] result in
-            guard let self else { return }
+            guard let self,
+                  self.validateDetailAccountLease(accountLease, at: .runtime),
+                  self.validateDetailAccountLease(accountLease, at: .ui) else { return }
             switch result {
             case .success(let capability):
                 archiveMediaRuntimeCapability = capability
@@ -1792,6 +1895,8 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
     }
 
     private func requestRemoteImageAnalysisRetry() {
+        guard let accountLease = detailAccountLease,
+              validateDetailAccountLease(accountLease, at: .request) else { return }
         guard item.kind == .photo else {
             showToast("该素材暂不支持云端重新分析", type: .info)
             return
@@ -1802,17 +1907,23 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         }
 
         DreamJourneyBackendClient.shared.fetchArchiveImageAnalysisRuntimeCapability { [weak self] result in
-            guard let self else { return }
+            guard let self,
+                  self.validateDetailAccountLease(accountLease, at: .runtime) else { return }
             switch result {
             case .success(let capability):
                 guard capability.canRunVisionAnalysis else {
-                    markArchiveImageAnalysisUnavailable(capability: capability)
+                    markArchiveImageAnalysisUnavailable(
+                        capability: capability,
+                        accountLease: accountLease
+                    )
                     return
                 }
-                requestRemoteImageAnalysisRetryAfterRuntimeCheck()
+                requestRemoteImageAnalysisRetryAfterRuntimeCheck(accountLease: accountLease)
             case .failure(let error):
+                guard validateDetailAccountLease(accountLease, at: .commit) else { return }
                 item.markAnalysisFailed(reason: archiveAnalysisFailureReason(error))
                 _ = repository.update(item, syncToBackend: shouldSyncArchiveUpdateToBackend)
+                guard validateDetailAccountLease(accountLease, at: .ui) else { return }
                 reloadContent()
                 configureNavigationActions()
                 showToast("AI 分析暂不可用，可稍后重试", type: .error)
@@ -1820,11 +1931,10 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         }
     }
 
-    private func requestRemoteImageAnalysisRetryAfterRuntimeCheck() {
-        guard let userId = currentArchiveAnalysisUserId else {
-            showToast("请先登录后重新分析", type: .error)
-            return
-        }
+    private func requestRemoteImageAnalysisRetryAfterRuntimeCheck(
+        accountLease: AccountLease
+    ) {
+        guard validateDetailAccountLease(accountLease, at: .request) else { return }
         guard let localPath = item.resolvedLocalFilePath,
               let image = UIImage(contentsOfFile: localPath),
               let imageBase64 = imageBase64ForRemoteArchiveAnalysis(image) else {
@@ -1832,6 +1942,7 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
             return
         }
 
+        guard validateDetailAccountLease(accountLease, at: .commit) else { return }
         isRetryingRemoteAnalysis = true
         item.retryLocalAnalysis()
         _ = repository.update(item, syncToBackend: false)
@@ -1839,16 +1950,19 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         configureNavigationActions()
 
         DreamJourneyBackendClient.shared.requestArchiveImageAnalysis(
-            userId: userId,
+            userId: accountLease.subjectId,
             archiveItemId: item.id,
             imageBase64: imageBase64
         ) { [weak self] result in
-            guard let self else { return }
+            guard let self,
+                  self.validateDetailAccountLease(accountLease, at: .runtime) else { return }
             isRetryingRemoteAnalysis = false
             switch result {
             case .success(let object):
+                guard validateDetailAccountLease(accountLease, at: .commit) else { return }
                 item.applyRemoteImageAnalysisResult(object)
                 _ = repository.update(item, syncToBackend: shouldSyncArchiveUpdateToBackend)
+                guard validateDetailAccountLease(accountLease, at: .ui) else { return }
                 reloadContent()
                 configureNavigationActions()
                 if item.analysisStatus.isRetryableFailureLike {
@@ -1857,8 +1971,10 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
                     showToast("已重新生成图像分析", type: .success)
                 }
             case .failure(let error):
+                guard validateDetailAccountLease(accountLease, at: .commit) else { return }
                 item.markAnalysisFailed(reason: archiveAnalysisFailureReason(error))
                 _ = repository.update(item, syncToBackend: shouldSyncArchiveUpdateToBackend)
+                guard validateDetailAccountLease(accountLease, at: .ui) else { return }
                 reloadContent()
                 configureNavigationActions()
                 showToast("AI 分析暂不可用，可稍后重试", type: .error)
@@ -1866,20 +1982,21 @@ final class MemoryArchiveDetailViewController: UIViewController, AVAudioPlayerDe
         }
     }
 
-    private func markArchiveImageAnalysisUnavailable(capability: ArchiveImageAnalysisRuntimeCapability) {
+    private func markArchiveImageAnalysisUnavailable(
+        capability: ArchiveImageAnalysisRuntimeCapability,
+        accountLease: AccountLease
+    ) {
+        guard validateDetailAccountLease(accountLease, at: .commit) else { return }
         item.markAnalysisUnavailableFromRuntime(
             provider: capability.provider,
             fallbackMode: capability.fallbackMode,
             message: capability.availabilityDisplayText
         )
         _ = repository.update(item, syncToBackend: shouldSyncArchiveUpdateToBackend)
+        guard validateDetailAccountLease(accountLease, at: .ui) else { return }
         reloadContent()
         configureNavigationActions()
         showToast(capability.availabilityDisplayText, type: .error)
-    }
-
-    private var currentArchiveAnalysisUserId: String? {
-        UserManager.shared.currentUser?.id
     }
 
     private func imageBase64ForRemoteArchiveAnalysis(_ image: UIImage) -> String? {

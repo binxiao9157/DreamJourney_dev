@@ -799,12 +799,18 @@ final class ProfileViewController: UIViewController {
             showToast("后端账号服务未配置，暂时无法注销", type: .error)
             return
         }
+        let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: user.id)
         DreamJourneyBackendClient.shared.softDeleteAccount(
             userId: user.id,
             phone: user.phone
         ) { [weak self] result in
             switch result {
             case .success:
+                if let accountLease {
+                    _ = MemoryArchiveRepository.shared.purgeLocalArchiveDataForAccountDeletion(
+                        accountLease: accountLease
+                    )
+                }
                 UserManager.shared.logout()
                 self?.didRequestLogout?()
             case .failure(let error):

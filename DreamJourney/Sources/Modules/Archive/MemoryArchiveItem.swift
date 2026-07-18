@@ -172,6 +172,7 @@ struct MemoryArchiveItem: Codable, Identifiable {
         var metadata = Self.stringDictionary(object["metadata"])
         metadata = Self.metadataFromRemoteAnalysisContract(object, baseMetadata: metadata)
         metadata = Self.metadataFromRemoteTimeLetterContract(object, baseMetadata: metadata)
+        metadata = Self.removingRemoteLocalMediaMetadata(metadata)
         if (kind == .photo || kind == .text || kind == .timeLetter),
            metadata[Self.backendSyncStateMetadataKey] == nil {
             metadata[Self.backendSyncStateMetadataKey] = ArchiveBackendSyncState.synced.rawValue
@@ -182,7 +183,7 @@ struct MemoryArchiveItem: Codable, Identifiable {
             kind: kind,
             title: Self.stringValue(object["title"]) ?? kind.remoteDefaultTitle,
             note: Self.stringValue(object["note"]) ?? "",
-            localPath: Self.stringValue(object["localPath"]),
+            localPath: nil,
             ownerUserId: Self.stringValue(object["ownerUserId"])
                 ?? Self.stringValue(object["uploadedByUserId"])
                 ?? Self.stringValue(object["uploaderUserId"])
@@ -435,6 +436,29 @@ private extension MemoryArchiveItem {
         }
         return metadata
     }
+
+    static func removingRemoteLocalMediaMetadata(_ metadata: [String: String]) -> [String: String] {
+        var sanitized = metadata
+        [
+            MemoryArchiveItem.mediaRelativePathMetadataKey,
+            MemoryArchiveItem.mediaSHA256MetadataKey,
+            MemoryArchiveItem.mediaSizeBytesMetadataKey,
+            MemoryArchiveItem.mediaScopeDigestMetadataKey,
+            MemoryArchiveItem.mediaThumbnailPathMetadataKey,
+            MemoryArchiveItem.thumbnailRelativePathMetadataKey,
+            MemoryArchiveItem.thumbnailSHA256MetadataKey,
+            MemoryArchiveItem.thumbnailSizeBytesMetadataKey,
+            MemoryArchiveItem.thumbnailScopeDigestMetadataKey,
+            MemoryArchiveItem.timeLetterImageLocalPathMetadataKey,
+            "localPath",
+            "fileURL",
+            "absolutePath",
+            "rawAudioURL",
+            "rawVideoURL",
+            "localThumbnailPath",
+        ].forEach { sanitized.removeValue(forKey: $0) }
+        return sanitized
+    }
 }
 
 extension MemoryArchiveItem {
@@ -446,6 +470,14 @@ extension MemoryArchiveItem {
     static let mediaTranscriptTextMetadataKey = "transcriptText"
     static let mediaThumbnailPathMetadataKey = "thumbnailPath"
     static let mediaFileSizeBytesMetadataKey = "fileSizeBytes"
+    static let mediaRelativePathMetadataKey = "archiveMediaRelativePath"
+    static let mediaSHA256MetadataKey = "archiveMediaSHA256"
+    static let mediaSizeBytesMetadataKey = "archiveMediaSizeBytes"
+    static let mediaScopeDigestMetadataKey = "archiveMediaScopeDigest"
+    static let thumbnailRelativePathMetadataKey = "archiveThumbnailRelativePath"
+    static let thumbnailSHA256MetadataKey = "archiveThumbnailSHA256"
+    static let thumbnailSizeBytesMetadataKey = "archiveThumbnailSizeBytes"
+    static let thumbnailScopeDigestMetadataKey = "archiveThumbnailScopeDigest"
     static let mediaFileSizeLimitMBMetadataKey = "fileSizeLimitMB"
     static let mediaUploadIntentIdMetadataKey = "uploadIntentId"
     static let mediaObjectKeyMetadataKey = "objectKey"
@@ -487,8 +519,35 @@ extension MemoryArchiveItem {
         (kind == .audio || kind == .video) && resolvedLocalFilePath?.isEmpty == false
     }
 
+    var localMediaMetadata: ArchiveMediaMetadata? {
+        guard let localPath,
+              let mediaMetadata = ArchiveMediaMetadata(itemMetadata: metadata, role: .original),
+              mediaMetadata.relativePath == localPath else {
+            return nil
+        }
+        return mediaMetadata
+    }
+
+    var localThumbnailMetadata: ArchiveMediaMetadata? {
+        guard let thumbnailPath = metadata[Self.mediaThumbnailPathMetadataKey],
+              let thumbnailMetadata = ArchiveMediaMetadata(itemMetadata: metadata, role: .thumbnail),
+              thumbnailMetadata.relativePath == thumbnailPath else {
+            return nil
+        }
+        return thumbnailMetadata
+    }
+
     var resolvedLocalFilePath: String? {
-        Self.resolvedLocalFilePath(localPath, candidateDirectoryNames: archiveLocalDirectoryNames)
+        guard isAuthorizedForCurrentLocalMediaRead,
+              let localMediaMetadata,
+              let fileURL = try? ArchiveMediaStore.shared.resolvedFileURL(
+                for: localMediaMetadata,
+                archiveOwnerId: ownerUserId,
+                storageClass: .original
+              ) else {
+            return nil
+        }
+        return fileURL.path
     }
 
     var hasResolvedLocalFile: Bool {
@@ -496,83 +555,76 @@ extension MemoryArchiveItem {
     }
 
     var resolvedThumbnailPath: String? {
-        Self.resolvedLocalFilePath(
-            metadata[Self.mediaThumbnailPathMetadataKey],
-            candidateDirectoryNames: ["archive-video-thumbnails"]
-        )
-    }
-
-    var needsLocalPathRecovery: Bool {
-        guard let localPath,
-              let resolvedLocalFilePath else {
-            return false
-        }
-        return localPath != resolvedLocalFilePath
-    }
-
-    func updatingRecoveredLocalPathIfNeeded() -> MemoryArchiveItem {
-        var recovered = self
-        if let resolvedLocalFilePath,
-           localPath != resolvedLocalFilePath {
-            recovered.localPath = resolvedLocalFilePath
-        }
-        if let resolvedThumbnailPath,
-           metadata[Self.mediaThumbnailPathMetadataKey] != resolvedThumbnailPath {
-            recovered.metadata[Self.mediaThumbnailPathMetadataKey] = resolvedThumbnailPath
-        }
-        return recovered
-    }
-
-    private var archiveLocalDirectoryNames: [String] {
-        switch kind {
-        case .photo:
-            return ["archive-images"]
-        case .audio:
-            return ["archive-audio"]
-        case .video:
-            return ["archive-video", "archive-video-thumbnails"]
-        case .timeLetter:
-            return ["archive-time-letter-images"]
-        case .text:
-            return []
-        }
-    }
-
-    private static func resolvedLocalFilePath(
-        _ path: String?,
-        candidateDirectoryNames: [String]
-    ) -> String? {
-        guard let path,
-              !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return nil
-        }
-
-        if FileManager.default.fileExists(atPath: path) {
-            return path
-        }
-
-        let fileName = URL(fileURLWithPath: path).lastPathComponent
-        guard !fileName.isEmpty,
-              !candidateDirectoryNames.isEmpty,
-              let documentsURL = try? FileManager.default.url(
-                for: .documentDirectory,
-                in: .userDomainMask,
-                appropriateFor: nil,
-                create: false
+        guard isAuthorizedForCurrentLocalMediaRead,
+              let localThumbnailMetadata,
+              let fileURL = try? ArchiveMediaStore.shared.resolvedFileURL(
+                for: localThumbnailMetadata,
+                archiveOwnerId: ownerUserId,
+                storageClass: .thumbnail
               ) else {
             return nil
         }
+        return fileURL.path
+    }
 
-        for directoryName in candidateDirectoryNames {
-            let candidate = documentsURL
-                .appendingPathComponent(directoryName, isDirectory: true)
-                .appendingPathComponent(fileName)
-            if FileManager.default.fileExists(atPath: candidate.path) {
-                return candidate.path
+    private var isAuthorizedForCurrentLocalMediaRead: Bool {
+        let normalizedOwner = ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedOwner.isEmpty,
+              normalizedOwner != Self.legacyOwnerUserId,
+              let userId = UserManager.shared.currentUser?.id,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: userId),
+              AccountLeaseRuntime.shared.validate(accountLease, at: .runtime).allowed else {
+            return false
+        }
+        let context = DigitalHumanContextStore.shared.current
+        let activeOwner = context.ownerId.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalizedOwner == (activeOwner.isEmpty ? userId : activeOwner)
+    }
+
+    var needsLocalPathRecovery: Bool {
+        false
+    }
+
+    func updatingRecoveredLocalPathIfNeeded() -> MemoryArchiveItem {
+        self
+    }
+
+    func preservingLocalMediaBinding(from localItem: MemoryArchiveItem) -> MemoryArchiveItem {
+        guard ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+                == localItem.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines) else {
+            return self
+        }
+        var merged = self
+        if let localMediaMetadata = localItem.localMediaMetadata {
+            merged.localPath = localMediaMetadata.relativePath
+            merged.metadata.merge(localMediaMetadata.itemMetadata(for: .original)) { _, localValue in
+                localValue
             }
         }
+        if let localThumbnailMetadata = localItem.localThumbnailMetadata {
+            merged.metadata[Self.mediaThumbnailPathMetadataKey] = localThumbnailMetadata.relativePath
+            merged.metadata.merge(localThumbnailMetadata.itemMetadata(for: .thumbnail)) { _, localValue in
+                localValue
+            }
+        }
+        if kind == .timeLetter,
+           let localPath,
+           localItem.metadata[Self.timeLetterImageLocalPathMetadataKey] == localPath {
+            merged.metadata[Self.timeLetterImageLocalPathMetadataKey] = localPath
+        }
+        return merged
+    }
 
-        return nil
+    func migratingLegacyLocalMedia(to mediaMetadata: ArchiveMediaMetadata) -> MemoryArchiveItem {
+        var migrated = self
+        migrated.localPath = mediaMetadata.relativePath
+        migrated.metadata.merge(mediaMetadata.itemMetadata(for: .original)) { _, newValue in
+            newValue
+        }
+        if kind == .timeLetter {
+            migrated.metadata[Self.timeLetterImageLocalPathMetadataKey] = mediaMetadata.relativePath
+        }
+        return migrated
     }
 
     var mediaUploadContentType: String? {
@@ -609,10 +661,6 @@ extension MemoryArchiveItem {
     }
 
     var mediaUploadFileSizeBytes: Int64? {
-        if let rawValue = metadata[Self.mediaFileSizeBytesMetadataKey],
-           let value = Int64(rawValue) {
-            return value
-        }
         guard let localPath = resolvedLocalFilePath,
               let attributes = try? FileManager.default.attributesOfItem(atPath: localPath),
               let size = attributes[.size] as? NSNumber else {
@@ -894,6 +942,7 @@ extension MemoryArchiveItem {
             openAt: timeLetterOpenAt ?? Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date(),
             recipients: timeLetterRecipients,
             imageLocalPath: localPath,
+            imageMediaMetadata: localMediaMetadata,
             now: Date()
         )
     }
@@ -904,6 +953,7 @@ extension MemoryArchiveItem {
             openAt: timeLetterOpenAt ?? Calendar.current.date(byAdding: .day, value: 1, to: now) ?? now,
             recipients: timeLetterRecipients,
             imageLocalPath: localPath,
+            imageMediaMetadata: localMediaMetadata,
             now: now
         )
     }
@@ -913,13 +963,17 @@ extension MemoryArchiveItem {
         openAt: Date,
         recipients: [TimeLetterRecipientSelection],
         imageLocalPath: String?,
+        imageMediaMetadata: ArchiveMediaMetadata? = nil,
         now: Date = Date()
     ) -> MemoryArchiveItem {
         var updatedItem = self
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
         updatedItem.note = trimmedNote
         updatedItem.title = "时间信件草稿"
-        updatedItem.localPath = imageLocalPath
+        updatedItem.replaceOriginalMediaBinding(
+            relativePath: imageLocalPath,
+            mediaMetadata: imageMediaMetadata
+        )
         updatedItem.analysisSummary = "这封信暂存为草稿，可继续编辑打开时间、收件人和图片附件。"
         updatedItem.metadata["deliveryState"] = "draft"
         updatedItem.metadata["timeLetterStatus"] = "draft"
@@ -955,6 +1009,7 @@ extension MemoryArchiveItem {
             openAt: timeLetterOpenAt ?? Calendar.current.date(byAdding: .day, value: 1, to: now) ?? now,
             recipients: timeLetterRecipients,
             imageLocalPath: localPath,
+            imageMediaMetadata: localMediaMetadata,
             now: now
         )
     }
@@ -963,11 +1018,15 @@ extension MemoryArchiveItem {
         openAt: Date,
         recipients: [TimeLetterRecipientSelection],
         imageLocalPath: String?,
+        imageMediaMetadata: ArchiveMediaMetadata? = nil,
         now: Date = Date()
     ) -> MemoryArchiveItem {
         var updatedItem = self
         updatedItem.title = "时间信件"
-        updatedItem.localPath = imageLocalPath
+        updatedItem.replaceOriginalMediaBinding(
+            relativePath: imageLocalPath,
+            mediaMetadata: imageMediaMetadata
+        )
         updatedItem.analysisSummary = "这封信已封存，到达打开时间后会提醒本人和收件人查看。"
         updatedItem.tags = Self.mergingUnique(updatedItem.tags.filter { $0 != "草稿" }, with: ["时间信件"])
         updatedItem.metadata["deliveryState"] = "sealed"
@@ -992,6 +1051,28 @@ extension MemoryArchiveItem {
         }
         updatedItem.updatedAt = now
         return updatedItem
+    }
+
+    private mutating func replaceOriginalMediaBinding(
+        relativePath: String?,
+        mediaMetadata: ArchiveMediaMetadata?
+    ) {
+        let previousPath = localPath
+        localPath = relativePath
+        if let mediaMetadata,
+           mediaMetadata.relativePath == relativePath {
+            metadata.merge(mediaMetadata.itemMetadata(for: .original)) { _, newValue in newValue }
+            return
+        }
+        guard relativePath == previousPath, relativePath != nil else {
+            [
+                Self.mediaRelativePathMetadataKey,
+                Self.mediaSHA256MetadataKey,
+                Self.mediaSizeBytesMetadataKey,
+                Self.mediaScopeDigestMetadataKey,
+            ].forEach { metadata.removeValue(forKey: $0) }
+            return
+        }
     }
 
     func canManage(by userId: String) -> Bool {
@@ -1112,6 +1193,14 @@ extension MemoryArchiveItem {
             Self.backendSyncAttemptedAtMetadataKey,
             Self.mediaThumbnailPathMetadataKey,
             Self.timeLetterImageLocalPathMetadataKey,
+            Self.mediaRelativePathMetadataKey,
+            Self.mediaSHA256MetadataKey,
+            Self.mediaSizeBytesMetadataKey,
+            Self.mediaScopeDigestMetadataKey,
+            Self.thumbnailRelativePathMetadataKey,
+            Self.thumbnailSHA256MetadataKey,
+            Self.thumbnailSizeBytesMetadataKey,
+            Self.thumbnailScopeDigestMetadataKey,
             "localPath",
             "fileURL",
             "absolutePath",
@@ -1122,30 +1211,6 @@ extension MemoryArchiveItem {
             backendMetadata.removeValue(forKey: $0)
         }
         return backendMetadata
-    }
-
-    func assigningOwnerIfNeeded(_ ownerUserId: String) -> MemoryArchiveItem {
-        let normalizedOwnerUserId = ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalizedOwnerUserId.isEmpty,
-              self.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || self.ownerUserId == Self.legacyOwnerUserId else {
-            return self
-        }
-
-        return MemoryArchiveItem(
-            id: id,
-            kind: kind,
-            title: title,
-            note: note,
-            localPath: localPath,
-            ownerUserId: normalizedOwnerUserId,
-            createdAt: createdAt,
-            updatedAt: updatedAt,
-            analysisStatus: analysisStatus,
-            analysisSummary: analysisSummary,
-            detectedPeople: detectedPeople,
-            tags: tags,
-            metadata: metadata
-        )
     }
 
     mutating func applyLocalAnalysisResult(now: Date = Date()) {

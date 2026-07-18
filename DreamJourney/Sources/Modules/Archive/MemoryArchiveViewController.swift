@@ -506,6 +506,7 @@ private final class InAppMessageCell: UITableViewCell {
 final class MemoryArchiveViewController: UIViewController {
     private let repository: MemoryArchiveRepository
     private let accountLeaseRuntime = AccountLeaseRuntime.shared
+    private let mediaStore = ArchiveMediaStore.shared
 
     private let scrollView = UIScrollView()
     private let contentView = UIView()
@@ -2787,7 +2788,10 @@ final class MemoryArchiveViewController: UIViewController {
         let archiveContext = currentArchiveContext
 
         let isTimeLetter = kind == .timeLetter
-        let entryViewController = MemoryArchiveTextEntryViewController(kind: kind)
+        let entryViewController = MemoryArchiveTextEntryViewController(
+            kind: kind,
+            accountLease: accountLease
+        )
         if isTimeLetter {
             entryViewController.onSaveTimeLetter = { [weak self] payload in
                 guard let self,
@@ -2796,8 +2800,8 @@ final class MemoryArchiveViewController: UIViewController {
                         archiveContext: archiveContext,
                         at: .commit
                       ) else {
-                    if let imageLocalPath = payload.imageLocalPath {
-                        try? FileManager.default.removeItem(atPath: imageLocalPath)
+                    if let imageMediaMetadata = payload.imageMediaMetadata {
+                        self?.removeArchiveMedia(imageMediaMetadata, accountLease: accountLease)
                     }
                     return
                 }
@@ -2805,9 +2809,17 @@ final class MemoryArchiveViewController: UIViewController {
                     note: payload.note,
                     openAt: payload.openAt,
                     recipients: payload.recipients,
-                    imageLocalPath: payload.imageLocalPath
+                    imageLocalPath: payload.imageLocalPath,
+                    imageMediaMetadata: payload.imageMediaMetadata,
+                    ownerUserId: accountLease.subjectId
                 )
-                self.repository.add(item)
+                guard self.repository.add(item) else {
+                    if let imageMediaMetadata = payload.imageMediaMetadata {
+                        self.removeArchiveMedia(imageMediaMetadata, accountLease: accountLease)
+                    }
+                    self.showToast("时间信件保存失败，请稍后重试", type: .error)
+                    return
+                }
                 guard self.validateMediaOperation(
                     accountLease,
                     archiveContext: archiveContext,
@@ -2823,8 +2835,8 @@ final class MemoryArchiveViewController: UIViewController {
                         archiveContext: archiveContext,
                         at: .commit
                       ) else {
-                    if let imageLocalPath = payload.imageLocalPath {
-                        try? FileManager.default.removeItem(atPath: imageLocalPath)
+                    if let imageMediaMetadata = payload.imageMediaMetadata {
+                        self?.removeArchiveMedia(imageMediaMetadata, accountLease: accountLease)
                     }
                     return
                 }
@@ -2832,9 +2844,17 @@ final class MemoryArchiveViewController: UIViewController {
                     note: payload.note,
                     openAt: payload.openAt,
                     recipients: payload.recipients,
-                    imageLocalPath: payload.imageLocalPath
+                    imageLocalPath: payload.imageLocalPath,
+                    imageMediaMetadata: payload.imageMediaMetadata,
+                    ownerUserId: accountLease.subjectId
                 )
-                self.repository.add(item)
+                guard self.repository.add(item) else {
+                    if let imageMediaMetadata = payload.imageMediaMetadata {
+                        self.removeArchiveMedia(imageMediaMetadata, accountLease: accountLease)
+                    }
+                    self.showToast("草稿保存失败，请稍后重试", type: .error)
+                    return
+                }
                 guard self.validateMediaOperation(
                     accountLease,
                     archiveContext: archiveContext,
@@ -2851,8 +2871,14 @@ final class MemoryArchiveViewController: UIViewController {
                         archiveContext: archiveContext,
                         at: .commit
                       ) else { return }
-                let item = MemoryArchiveItemFactory.makeTextItem(note: rawText)
-                self.repository.add(item)
+                let item = MemoryArchiveItemFactory.makeTextItem(
+                    note: rawText,
+                    ownerUserId: accountLease.subjectId
+                )
+                guard self.repository.add(item) else {
+                    self.showToast("文字记忆保存失败，请稍后重试", type: .error)
+                    return
+                }
                 guard self.validateMediaOperation(
                     accountLease,
                     archiveContext: archiveContext,
@@ -2876,23 +2902,29 @@ final class MemoryArchiveViewController: UIViewController {
         }
         let archiveContext = currentArchiveContext
 
-        let entryViewController = MemoryArchiveAudioRecorderViewController()
-        entryViewController.onSave = { [weak self] fileURL, duration, note in
+        let entryViewController = MemoryArchiveAudioRecorderViewController(accountLease: accountLease)
+        entryViewController.onSave = { [weak self] mediaMetadata, duration, note in
             guard let self,
                   self.validateMediaOperation(
                     accountLease,
                     archiveContext: archiveContext,
                     at: .commit
                   ) else {
-                try? FileManager.default.removeItem(at: fileURL)
+                self?.removeArchiveMedia(mediaMetadata, accountLease: accountLease)
                 return
             }
             let item = MemoryArchiveItemFactory.makeAudioItem(
-                localPath: fileURL.path,
+                localPath: mediaMetadata.relativePath,
                 duration: duration,
-                note: note
+                note: note,
+                mediaMetadata: mediaMetadata,
+                ownerUserId: accountLease.subjectId
             )
-            self.repository.add(item)
+            guard self.repository.add(item) else {
+                self.removeArchiveMedia(mediaMetadata, accountLease: accountLease)
+                self.showToast("语音保存失败，请稍后重试", type: .error)
+                return
+            }
             guard self.validateMediaOperation(
                 accountLease,
                 archiveContext: archiveContext,
@@ -2924,21 +2956,20 @@ final class MemoryArchiveViewController: UIViewController {
                     at: .commit
                   ) else { return }
             do {
-                let item = try self.makeHiddenQAMockVideoArchiveItem()
+                let item = try self.makeHiddenQAMockVideoArchiveItem(accountLease: accountLease)
                 guard self.validateMediaOperation(
                     accountLease,
                     archiveContext: archiveContext,
                     at: .commit
                 ) else {
-                    if let localPath = item.localPath {
-                        try? FileManager.default.removeItem(atPath: localPath)
-                    }
-                    if let thumbnailPath = item.metadata[MemoryArchiveItem.mediaThumbnailPathMetadataKey] {
-                        try? FileManager.default.removeItem(atPath: thumbnailPath)
-                    }
+                    self.removeArchiveMedia(for: item, accountLease: accountLease)
                     return
                 }
-                self.repository.add(item)
+                guard self.repository.add(item) else {
+                    self.removeArchiveMedia(for: item, accountLease: accountLease)
+                    self.showToast("测试视频档案保存失败", type: .error)
+                    return
+                }
                 guard self.validateMediaOperation(
                     accountLease,
                     archiveContext: archiveContext,
@@ -2953,23 +2984,24 @@ final class MemoryArchiveViewController: UIViewController {
         present(entryViewController, animated: true)
     }
 
-    private func makeHiddenQAMockVideoArchiveItem() throws -> MemoryArchiveItem {
-        let documentsURL = try FileManager.default.url(
-            for: .documentDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
+    private func makeHiddenQAMockVideoArchiveItem(
+        accountLease: AccountLease
+    ) throws -> MemoryArchiveItem {
+        guard validateMediaAccountLease(accountLease, at: .commit) else {
+            throw ArchiveImageSaveError.accountSessionChanged
+        }
+        let scope = ArchiveStorageScope(
+            accountLease: accountLease,
+            archiveOwnerId: accountLease.subjectId
         )
-        let videoDirectoryURL = documentsURL.appendingPathComponent("archive-video", isDirectory: true)
-        let thumbnailDirectoryURL = documentsURL.appendingPathComponent("archive-video-thumbnails", isDirectory: true)
-        try FileManager.default.createDirectory(at: videoDirectoryURL, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: thumbnailDirectoryURL, withIntermediateDirectories: true)
-
-        let identifier = UUID().uuidString
-        let videoURL = videoDirectoryURL.appendingPathComponent("hidden-qa-\(identifier).mov")
-        let thumbnailURL = thumbnailDirectoryURL.appendingPathComponent("hidden-qa-\(identifier).jpg")
+        guard scope.isValid else { throw ArchiveImageSaveError.accountSessionChanged }
         let mockVideoData = Data("DreamJourney hidden QA mock video placeholder".utf8)
-        try mockVideoData.write(to: videoURL, options: [.atomic])
+        let videoMetadata = try mediaStore.write(
+            mockVideoData,
+            fileExtension: "mov",
+            scope: scope,
+            storageClass: .original
+        )
 
         let thumbnailImage = UIGraphicsImageRenderer(size: CGSize(width: 160, height: 96)).image { context in
             DJDesignTokens.Color.surfaceContainer.setFill()
@@ -2978,19 +3010,39 @@ final class MemoryArchiveViewController: UIViewController {
             context.fill(CGRect(x: 56, y: 28, width: 48, height: 40))
         }
         guard let thumbnailData = thumbnailImage.jpegData(compressionQuality: 0.72) else {
+            try? mediaStore.remove(videoMetadata, scope: scope, storageClass: .original)
             throw NSError(
                 domain: "DreamJourney.Archive.VideoShell",
                 code: 1,
                 userInfo: [NSLocalizedDescriptionKey: "Unable to encode mock thumbnail"]
             )
         }
-        try thumbnailData.write(to: thumbnailURL, options: [.atomic])
+        let thumbnailMetadata: ArchiveMediaMetadata
+        do {
+            thumbnailMetadata = try mediaStore.write(
+                thumbnailData,
+                fileExtension: "jpg",
+                scope: scope,
+                storageClass: .thumbnail
+            )
+        } catch {
+            try? mediaStore.remove(videoMetadata, scope: scope, storageClass: .original)
+            throw error
+        }
+        guard validateMediaAccountLease(accountLease, at: .commit) else {
+            try? mediaStore.remove(videoMetadata, scope: scope, storageClass: .original)
+            try? mediaStore.remove(thumbnailMetadata, scope: scope, storageClass: .thumbnail)
+            throw ArchiveImageSaveError.accountSessionChanged
+        }
 
         return MemoryArchiveItemFactory.makeVideoItem(
-            localPath: videoURL.path,
-            thumbnailPath: thumbnailURL.path,
-            fileSizeBytes: Int64(mockVideoData.count),
-            note: "隐藏 QA 生成的 mock 视频档案。"
+            localPath: videoMetadata.relativePath,
+            thumbnailPath: thumbnailMetadata.relativePath,
+            fileSizeBytes: videoMetadata.sizeBytes,
+            note: "隐藏 QA 生成的 mock 视频档案。",
+            mediaMetadata: videoMetadata,
+            thumbnailMetadata: thumbnailMetadata,
+            ownerUserId: accountLease.subjectId
         )
     }
 
@@ -3076,7 +3128,42 @@ final class MemoryArchiveViewController: UIViewController {
         photoPickerArchiveContext = nil
     }
 
-    private func saveImageToArchive(_ image: UIImage, accountLease: AccountLease) throws -> URL {
+    private func removeArchiveMedia(
+        _ mediaMetadata: ArchiveMediaMetadata,
+        accountLease: AccountLease,
+        storageClass: ArchiveMediaStorageClass = .original
+    ) {
+        let scope = ArchiveStorageScope(
+            accountLease: accountLease,
+            archiveOwnerId: accountLease.subjectId
+        )
+        try? mediaStore.remove(
+            mediaMetadata,
+            scope: scope,
+            storageClass: storageClass
+        )
+    }
+
+    private func removeArchiveMedia(
+        for item: MemoryArchiveItem,
+        accountLease: AccountLease
+    ) {
+        if let mediaMetadata = item.localMediaMetadata {
+            removeArchiveMedia(mediaMetadata, accountLease: accountLease)
+        }
+        if let thumbnailMetadata = item.localThumbnailMetadata {
+            removeArchiveMedia(
+                thumbnailMetadata,
+                accountLease: accountLease,
+                storageClass: .thumbnail
+            )
+        }
+    }
+
+    private func saveImageToArchive(
+        _ image: UIImage,
+        accountLease: AccountLease
+    ) throws -> ArchiveMediaMetadata {
         guard validateMediaAccountLease(accountLease, at: .commit) else {
             throw ArchiveImageSaveError.accountSessionChanged
         }
@@ -3084,25 +3171,22 @@ final class MemoryArchiveViewController: UIViewController {
             throw ArchiveImageSaveError.jpegEncodingFailed
         }
 
-        let documentsURL = try FileManager.default.url(
-            for: .documentDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
+        let scope = ArchiveStorageScope(
+            accountLease: accountLease,
+            archiveOwnerId: accountLease.subjectId
         )
-        let directoryURL = documentsURL.appendingPathComponent("archive-images", isDirectory: true)
-        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-
-        let fileURL = directoryURL.appendingPathComponent("\(UUID().uuidString).jpg")
+        guard scope.isValid else { throw ArchiveImageSaveError.accountSessionChanged }
+        let mediaMetadata = try mediaStore.write(
+            data,
+            fileExtension: "jpg",
+            scope: scope,
+            storageClass: .original
+        )
         guard validateMediaAccountLease(accountLease, at: .commit) else {
+            try? mediaStore.remove(mediaMetadata, scope: scope, storageClass: .original)
             throw ArchiveImageSaveError.accountSessionChanged
         }
-        try data.write(to: fileURL, options: .atomic)
-        guard validateMediaAccountLease(accountLease, at: .commit) else {
-            try? FileManager.default.removeItem(at: fileURL)
-            throw ArchiveImageSaveError.accountSessionChanged
-        }
-        return fileURL
+        return mediaMetadata
     }
 
     private func imageBase64ForArchiveAnalysis(_ image: UIImage) -> String? {
@@ -3122,13 +3206,15 @@ final class MemoryArchiveViewController: UIViewController {
                 archiveContext: archiveContext,
                 at: .commit
               ) else {
-            if let localPath = item.localPath {
-                try? FileManager.default.removeItem(at: URL(fileURLWithPath: localPath))
-            }
+            removeArchiveMedia(for: item, accountLease: accountLease)
             return
         }
 
-        repository.add(item)
+        guard repository.add(item) else {
+            removeArchiveMedia(for: item, accountLease: accountLease)
+            showToast("照片保存失败，请稍后重试", type: .error)
+            return
+        }
         guard validateMediaOperation(
             accountLease,
             archiveContext: archiveContext,
@@ -3339,8 +3425,13 @@ final class MemoryArchiveViewController: UIViewController {
             return
         }
         do {
-            let fileURL = try saveImageToArchive(image, accountLease: accountLease)
-            let item = MemoryArchiveItemFactory.makePhotoItem(localPath: fileURL.path, source: .samplePhoto)
+            let mediaMetadata = try saveImageToArchive(image, accountLease: accountLease)
+            let item = MemoryArchiveItemFactory.makePhotoItem(
+                localPath: mediaMetadata.relativePath,
+                source: .samplePhoto,
+                mediaMetadata: mediaMetadata,
+                ownerUserId: accountLease.subjectId
+            )
             savePhotoArchiveItem(
                 item,
                 image: image,
@@ -3979,8 +4070,12 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
         }
 
         do {
-            let fileURL = try saveImageToArchive(image, accountLease: accountLease)
-            let item = MemoryArchiveItemFactory.makePhotoItem(localPath: fileURL.path)
+            let mediaMetadata = try saveImageToArchive(image, accountLease: accountLease)
+            let item = MemoryArchiveItemFactory.makePhotoItem(
+                localPath: mediaMetadata.relativePath,
+                mediaMetadata: mediaMetadata,
+                ownerUserId: accountLease.subjectId
+            )
             savePhotoArchiveItem(
                 item,
                 image: image,

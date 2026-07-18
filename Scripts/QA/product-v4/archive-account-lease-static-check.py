@@ -69,11 +69,12 @@ def main() -> None:
         "archive refresh callback must keep its original lease",
     )
 
-    sync = body(source, "private func syncToBackend(_ item: MemoryArchiveItem)")
+    sync = body(source, "private func syncToBackend(")
     includes(
         sync,
         (
             "isCurrentArchiveStorageLease(lease, at: .request)",
+            "item.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines) == lease.archiveOwnerId",
             "isCurrentArchiveStorageLease(lease, at: .commit)",
             "markBackendSyncState(",
             "lease: lease",
@@ -87,10 +88,44 @@ def main() -> None:
         (
             "isCurrentArchiveStorageLease(lease, at: .request)",
             "isCurrentArchiveStorageLease(lease, at: .commit)",
+            "isExpectedTimeLetterDetail(item, reminder: reminder, lease: lease)",
             "deliver(",
             "lease: lease.accountLease",
         ),
         "time-letter detail",
+    )
+
+    add = body(source, "func add(_ item: MemoryArchiveItem")
+    require(
+        "func add(_ item: MemoryArchiveItem, syncToBackend shouldSyncToBackend: Bool = true) -> Bool"
+        in source,
+        "archive insert must report durable persistence success",
+    )
+    includes(
+        add,
+        (
+            "item.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines) == lease.archiveOwnerId",
+            "guard save(items, lease: lease) else",
+            "scheduleTimeLetterReminderIfNeeded(itemForStorage)",
+            "return true",
+        ),
+        "archive insert",
+    )
+    require(
+        add.find("guard save(items, lease: lease)")
+        < add.find("scheduleTimeLetterReminderIfNeeded(itemForStorage)"),
+        "archive side effects must happen only after durable local save",
+    )
+
+    detail_validator = body(source, "private func isExpectedTimeLetterDetail(")
+    includes(
+        detail_validator,
+        (
+            "item.id == reminder.sourceArchiveItemId",
+            "item.kind == .timeLetter",
+            "item.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines) == expectedOwner",
+        ),
+        "time-letter detail identity validator",
     )
 
     for signature in (

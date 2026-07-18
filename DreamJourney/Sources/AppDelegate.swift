@@ -347,11 +347,9 @@ private extension AppDelegate {
                 self?.runArchiveToEchoSmoke()
             }
         } else if arguments.contains("DJRunArchiveMediaEchoContextSmoke") {
+            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DialogPromptDebugRecorder.reset()
-            seedArchiveMediaEchoContext()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-                self?.runArchiveMediaEchoContextSmoke()
-            }
+            prepareArchiveMediaEchoContextSmoke()
         } else if arguments.contains("DJRunTimeLetterDispatchReminderSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
@@ -2214,29 +2212,58 @@ private extension AppDelegate {
         print("[UI_QA] Seeded pending archive analysis available=\(snapshot.availableItemCount)")
     }
 
-    func seedArchiveMediaEchoContext() {
-        UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
-        UserDefaults.standard.removeObject(forKey: "dj.memoryArchive.items.user_9999")
+    func prepareArchiveMediaEchoContextSmoke(retryCount: Int = 0) {
+        guard let userId = UserManager.shared.currentUser?.id,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: userId),
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+            guard retryCount < 40 else {
+                print("[UI_QA] ArchiveMediaEchoContextSmoke failed reason=accountLeaseUnavailable")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                self?.prepareArchiveMediaEchoContextSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+
+        DigitalHumanContextStore.shared.current = .defaultContext(userId: userId)
+        let scope = ArchiveStorageScope(accountLease: accountLease, archiveOwnerId: userId)
+        ArchiveLocalStorage.shared.purge(scope: scope)
+        seedArchiveMediaEchoContext(ownerUserId: userId)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.runArchiveMediaEchoContextSmoke()
+        }
+    }
+
+    func seedArchiveMediaEchoContext(ownerUserId: String) {
 
         let audioItem = MemoryArchiveItemFactory.makeAudioItem(
             localPath: "/tmp/uiqa-media-context-audio.m4a",
             duration: 9,
             note: "这段语音说明不应覆盖已转写文本",
-            transcriptText: "妈妈在厨房讲起桂花糕的声音"
+            transcriptText: "妈妈在厨房讲起桂花糕的声音",
+            ownerUserId: ownerUserId
         )
 
         var videoItem = MemoryArchiveItemFactory.makeVideoItem(
             localPath: "/tmp/uiqa-media-context-video.mov",
             note: "视频里记录了院子里的桂花树",
-            analysisStatus: .pending
+            analysisStatus: .pending,
+            ownerUserId: ownerUserId
         )
         videoItem.detectedPeople = ["不应注入视频人物"]
         videoItem.tags = ["不应注入视频标签"]
         videoItem.metadata[MemoryArchiveItem.analysisLocationCluesMetadataKey] = "不应注入视频地点"
         videoItem.metadata[MemoryArchiveItem.analysisSceneCluesMetadataKey] = "不应注入视频场景"
 
-        let draftLetter = MemoryArchiveItemFactory.makeTimeLetterDraft(note: "这封草稿不应进入回响上下文")
-        var sealedLetter = MemoryArchiveItemFactory.makeTimeLetter(note: "这封封存信可以进入回响上下文")
+        let draftLetter = MemoryArchiveItemFactory.makeTimeLetterDraft(
+            note: "这封草稿不应进入回响上下文",
+            ownerUserId: ownerUserId
+        )
+        var sealedLetter = MemoryArchiveItemFactory.makeTimeLetter(
+            note: "这封封存信可以进入回响上下文",
+            ownerUserId: ownerUserId
+        )
         sealedLetter.analysisSummary = "封存信内容：这封封存信可以进入回响上下文"
 
         MemoryArchiveRepository.shared.add(audioItem, syncToBackend: false)
