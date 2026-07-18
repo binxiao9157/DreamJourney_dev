@@ -111,6 +111,77 @@ struct InAppMessageSourceEnvelope<Source: Codable>: Codable {
     }
 }
 
+private struct InAppMessageLifecycleEnvelopeHeader: Decodable {
+    let storeSchemaVersion: Int
+    let subjectId: String
+    let vaultId: String
+    let generation: UInt64
+    let generationId: UUID
+    let authorityEpoch: String
+
+    func matchesLifecycleLease(_ accountLease: AccountLease) -> Bool {
+        storeSchemaVersion == InAppMessageOwnerScope.storeSchemaVersion
+            && subjectId == accountLease.subjectId
+            && vaultId == accountLease.vaultId
+            && generation == accountLease.generation
+            && generationId == accountLease.generationId
+            && authorityEpoch == accountLease.authorityEpoch
+    }
+}
+
+private func teardownInAppMessageProjections(
+    surfaces: [InAppMessageSourceSurface],
+    oldAccountLease: AccountLease,
+    defaults: UserDefaults
+) -> Bool {
+    var ownedKeys: [String] = []
+
+    for surface in surfaces {
+        let prefix = "dj.inAppMessage.\(surface.rawValue).sources.v2."
+        let candidateKeys = defaults.dictionaryRepresentation().keys.filter {
+            $0.hasPrefix(prefix)
+        }
+        for key in candidateKeys {
+            guard let data = defaults.data(forKey: key),
+                  let header = try? JSONDecoder().decode(
+                      InAppMessageLifecycleEnvelopeHeader.self,
+                      from: data
+                  ) else {
+                return false
+            }
+            if header.matchesLifecycleLease(oldAccountLease) {
+                ownedKeys.append(key)
+            }
+        }
+    }
+
+    ownedKeys.forEach(defaults.removeObject(forKey:))
+    return ownedKeys.allSatisfy { defaults.object(forKey: $0) == nil }
+}
+
+final class InAppMessageLifecycleProjectionStore {
+    static let shared = InAppMessageLifecycleProjectionStore()
+
+    private let defaults: UserDefaults
+    private let lock = NSLock()
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    @discardableResult
+    func teardownForAccountLifecycle(oldAccountLease: AccountLease?) -> Bool {
+        guard let oldAccountLease else { return false }
+        lock.lock()
+        defer { lock.unlock() }
+        return teardownInAppMessageProjections(
+            surfaces: [.systemNotice, .echoReply, .localState, .timeLetterMailbox],
+            oldAccountLease: oldAccountLease,
+            defaults: defaults
+        )
+    }
+}
+
 enum InAppMessageLegacyRetirementStatus: String, Codable, Equatable {
     case notFound
     case pending
@@ -1048,6 +1119,18 @@ final class SystemNoticeMessageStore {
         }
     }
 
+    @discardableResult
+    func teardownForAccountLifecycle(oldAccountLease: AccountLease?) -> Bool {
+        guard let oldAccountLease else { return false }
+        return withLock {
+            teardownInAppMessageProjections(
+                surfaces: [.systemNotice],
+                oldAccountLease: oldAccountLease,
+                defaults: defaults
+            )
+        }
+    }
+
     func legacyRetirementStatus() -> InAppMessageLegacyRetirementStatus {
         withLock {
             InAppMessageLegacyRetirementStorage.status(
@@ -1272,6 +1355,18 @@ final class EchoReplyMessageStore {
                 return false
             }
             return true
+        }
+    }
+
+    @discardableResult
+    func teardownForAccountLifecycle(oldAccountLease: AccountLease?) -> Bool {
+        guard let oldAccountLease else { return false }
+        return withLock {
+            teardownInAppMessageProjections(
+                surfaces: [.echoReply],
+                oldAccountLease: oldAccountLease,
+                defaults: defaults
+            )
         }
     }
 

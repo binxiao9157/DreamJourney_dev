@@ -71,6 +71,14 @@ private struct PushDeviceTokenRegistrationEnvelope: Codable {
             && generationId == accountLease.generationId
             && authorityEpoch == accountLease.authorityEpoch
     }
+
+    func matchesLifecycleLease(_ accountLease: AccountLease) -> Bool {
+        subjectId == accountLease.subjectId
+            && vaultId == accountLease.vaultId
+            && generation == accountLease.generation
+            && generationId == accountLease.generationId
+            && authorityEpoch == accountLease.authorityEpoch
+    }
 }
 
 enum PushDeviceTokenEnvironment {
@@ -90,6 +98,7 @@ final class PushDeviceTokenStore {
     private let deviceTokenKey = "dj.pushDeviceToken.localToken"
     private let defaults: UserDefaults
     private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let lock = NSLock()
 
     init(
         defaults: UserDefaults = .standard,
@@ -102,15 +111,19 @@ final class PushDeviceTokenStore {
     func saveDeviceToken(_ token: String) {
         let normalizedToken = token.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !normalizedToken.isEmpty else { return }
-        defaults.set(normalizedToken, forKey: deviceTokenKey)
+        withLock {
+            defaults.set(normalizedToken, forKey: deviceTokenKey)
+        }
     }
 
     func loadDeviceToken() -> String? {
-        guard let token = defaults.string(forKey: deviceTokenKey),
-              !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return nil
+        withLock {
+            guard let token = defaults.string(forKey: deviceTokenKey),
+                  !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return nil
+            }
+            return token
         }
-        return token
     }
 
     func saveRegistration(
@@ -127,30 +140,37 @@ final class PushDeviceTokenStore {
               ) else {
             return false
         }
-        defaults.set(data, forKey: storageKey)
-        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
-            if defaults.data(forKey: storageKey) == data {
-                defaults.removeObject(forKey: storageKey)
+        return withLock {
+            defaults.set(data, forKey: storageKey)
+            guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                if defaults.data(forKey: storageKey) == data {
+                    defaults.removeObject(forKey: storageKey)
+                }
+                return false
             }
-            return false
+            return defaults.data(forKey: storageKey) == data
         }
-        return true
     }
 
     func loadRegistration() -> PushDeviceTokenRegistration? {
         guard let accountLease = accountLeaseRuntime.capture(forSubjectId: nil),
-              accountLeaseRuntime.validate(accountLease, at: .request).allowed,
-              let data = defaults.data(forKey: storageKey),
-              let envelope = try? JSONDecoder().decode(
-                  PushDeviceTokenRegistrationEnvelope.self,
-                  from: data
-              ),
-              envelope.matches(accountLease),
-              envelope.registration.userId == accountLease.subjectId,
-              accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
             return nil
         }
-        return envelope.registration
+        let registration = withLock { () -> PushDeviceTokenRegistration? in
+            guard let data = defaults.data(forKey: storageKey),
+                  let envelope = try? JSONDecoder().decode(
+                      PushDeviceTokenRegistrationEnvelope.self,
+                      from: data
+                  ),
+                  envelope.matches(accountLease),
+                  envelope.registration.userId == accountLease.subjectId else {
+                return nil
+            }
+            return envelope.registration
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else { return nil }
+        return registration
     }
 
     func registration(for userId: String) -> PushDeviceTokenRegistration? {
@@ -161,7 +181,34 @@ final class PushDeviceTokenStore {
     }
 
     func clear() {
-        defaults.removeObject(forKey: storageKey)
-        defaults.removeObject(forKey: deviceTokenKey)
+        withLock {
+            defaults.removeObject(forKey: storageKey)
+            defaults.removeObject(forKey: deviceTokenKey)
+        }
+    }
+
+    @discardableResult
+    func teardownForAccountLifecycle(oldAccountLease: AccountLease?) -> Bool {
+        guard let oldAccountLease else { return false }
+        return withLock {
+            guard let data = defaults.data(forKey: storageKey) else { return true }
+            guard let envelope = try? JSONDecoder().decode(
+                PushDeviceTokenRegistrationEnvelope.self,
+                from: data
+            ) else {
+                return false
+            }
+            guard envelope.matchesLifecycleLease(oldAccountLease) else { return true }
+            let deviceTokenBeforeTeardown = defaults.string(forKey: deviceTokenKey)
+            defaults.removeObject(forKey: storageKey)
+            return defaults.data(forKey: storageKey) == nil
+                && defaults.string(forKey: deviceTokenKey) == deviceTokenBeforeTeardown
+        }
+    }
+
+    private func withLock<T>(_ body: () -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return body()
     }
 }

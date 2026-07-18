@@ -4,8 +4,35 @@ import Foundation
 import WidgetKit
 #endif
 
+private struct KnowledgeWidgetProjectionOwnerEnvelope: Codable {
+    let subjectId: String
+    let vaultId: String
+    let generation: UInt64
+    let generationId: UUID
+    let authorityEpoch: String
+    let ownerDigest: String
+
+    init(accountLease: AccountLease, ownerDigest: String) {
+        subjectId = accountLease.subjectId
+        vaultId = accountLease.vaultId
+        generation = accountLease.generation
+        generationId = accountLease.generationId
+        authorityEpoch = accountLease.authorityEpoch
+        self.ownerDigest = ownerDigest
+    }
+
+    func matchesLifecycleLease(_ accountLease: AccountLease) -> Bool {
+        subjectId == accountLease.subjectId
+            && vaultId == accountLease.vaultId
+            && generation == accountLease.generation
+            && generationId == accountLease.generationId
+            && authorityEpoch == accountLease.authorityEpoch
+    }
+}
+
 final class KnowledgeWidgetSnapshotStore {
     static let activeOwnerDigestKey = "DreamJourneyKnowledgeWidgetActiveOwnerDigestV2"
+    static let projectionOwnerEnvelopeKey = "DreamJourneyKnowledgeWidgetProjectionOwnerV1"
     static let snapshotFileName = "kb_widget_snapshot_v2.json"
     static let widgetKind = "TodayInHistory"
 
@@ -63,10 +90,21 @@ final class KnowledgeWidgetSnapshotStore {
             activeAccountLease = capturedLease
 
             if let defaults = sharedDefaultsProvider() {
-                if let digest {
+                if let digest,
+                   let capturedLease,
+                   let ownerUserId,
+                   capturedLease.subjectId == ownerUserId,
+                   let envelopeData = try? JSONEncoder().encode(
+                       KnowledgeWidgetProjectionOwnerEnvelope(
+                           accountLease: capturedLease,
+                           ownerDigest: digest
+                       )
+                   ) {
                     defaults.set(digest, forKey: Self.activeOwnerDigestKey)
+                    defaults.set(envelopeData, forKey: Self.projectionOwnerEnvelopeKey)
                 } else {
                     defaults.removeObject(forKey: Self.activeOwnerDigestKey)
+                    defaults.removeObject(forKey: Self.projectionOwnerEnvelopeKey)
                 }
             } else {
                 activeOwnerDigest = nil
@@ -150,6 +188,93 @@ final class KnowledgeWidgetSnapshotStore {
         }
     }
 
+    @discardableResult
+    func teardownForAccountLifecycle(oldAccountLease: AccountLease?) -> Bool {
+        guard let oldAccountLease,
+              let expectedOwnerDigest = KnowledgeWidgetPrivacyPolicy.ownerDigest(
+                  for: oldAccountLease.subjectId
+              ) else {
+            return false
+        }
+
+        return queue.sync {
+            guard let defaults = sharedDefaultsProvider() else { return false }
+            let persistedEnvelopeData = defaults.data(forKey: Self.projectionOwnerEnvelopeKey)
+            let persistedEnvelope = persistedEnvelopeData.flatMap {
+                try? JSONDecoder().decode(
+                    KnowledgeWidgetProjectionOwnerEnvelope.self,
+                    from: $0
+                )
+            }
+            guard persistedEnvelopeData == nil || persistedEnvelope != nil else { return false }
+            let inMemoryOwnsProjection = activeAccountLease.map {
+                KnowledgeWidgetProjectionOwnerEnvelope(
+                    accountLease: $0,
+                    ownerDigest: activeOwnerDigest ?? ""
+                ).matchesLifecycleLease(oldAccountLease)
+            } ?? false
+            let persistedOwnsProjection = persistedEnvelope?.matchesLifecycleLease(
+                oldAccountLease
+            ) == true
+
+            if let persistedEnvelope, !persistedEnvelope.matchesLifecycleLease(oldAccountLease) {
+                if inMemoryOwnsProjection {
+                    activeOwnerDigest = persistedEnvelope.ownerDigest
+                    activeAccountLease = nil
+                    activeGeneration = UUID()
+                }
+                return true
+            }
+
+            let currentDigest = defaults.string(forKey: Self.activeOwnerDigestKey)
+            let fileURL = containerURLProvider()?.appendingPathComponent(Self.snapshotFileName)
+            let snapshot: KnowledgeWidgetSnapshot? = fileURL.flatMap { url in
+                guard FileManager.default.fileExists(atPath: url.path),
+                      let data = try? Data(contentsOf: url) else {
+                    return nil
+                }
+                let decoder = JSONDecoder()
+                decoder.dateDecodingStrategy = .iso8601
+                return try? decoder.decode(KnowledgeWidgetSnapshot.self, from: data)
+            }
+            let hasSnapshotFile = fileURL.map {
+                FileManager.default.fileExists(atPath: $0.path)
+            } ?? false
+
+            guard persistedOwnsProjection || inMemoryOwnsProjection else {
+                return currentDigest != expectedOwnerDigest
+                    && snapshot?.ownerDigest != expectedOwnerDigest
+            }
+            guard currentDigest == nil || currentDigest == expectedOwnerDigest,
+                  !hasSnapshotFile || snapshot?.ownerDigest == expectedOwnerDigest else {
+                return false
+            }
+
+            if let fileURL, hasSnapshotFile {
+                do {
+                    try FileManager.default.removeItem(at: fileURL)
+                } catch {
+                    return false
+                }
+                guard !FileManager.default.fileExists(atPath: fileURL.path) else { return false }
+            }
+            if currentDigest == expectedOwnerDigest {
+                defaults.removeObject(forKey: Self.activeOwnerDigestKey)
+            }
+            if persistedOwnsProjection {
+                defaults.removeObject(forKey: Self.projectionOwnerEnvelopeKey)
+            }
+            if inMemoryOwnsProjection {
+                activeOwnerDigest = nil
+                activeAccountLease = nil
+                activeGeneration = UUID()
+            }
+            timelineReloader()
+            return defaults.string(forKey: Self.activeOwnerDigestKey) != expectedOwnerDigest
+                && defaults.data(forKey: Self.projectionOwnerEnvelopeKey) == nil
+        }
+    }
+
     var snapshotURLForTesting: URL {
         queue.sync {
             (containerURLProvider() ?? FileManager.default.temporaryDirectory)
@@ -183,6 +308,7 @@ final class KnowledgeWidgetSnapshotStore {
         activeAccountLease = nil
         activeOwnerDigest = nil
         sharedDefaultsProvider()?.removeObject(forKey: Self.activeOwnerDigestKey)
+        sharedDefaultsProvider()?.removeObject(forKey: Self.projectionOwnerEnvelopeKey)
         removeSnapshotIfPresent(containerURL: containerURL)
         timelineReloader()
     }

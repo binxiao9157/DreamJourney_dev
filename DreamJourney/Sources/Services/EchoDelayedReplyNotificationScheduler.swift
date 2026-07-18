@@ -216,6 +216,44 @@ final class EchoDelayedReplyNotificationScheduler: @unchecked Sendable {
         )
     }
 
+    func teardownForAccountLifecycle(
+        oldAccountLease: AccountLease?,
+        completion: @escaping @Sendable (Bool) -> Void
+    ) {
+        guard let oldAccountLease else {
+            completion(false)
+            return
+        }
+
+        requestCenter.getPendingNotificationRequests { [weak self] requests in
+            guard let self else {
+                completion(false)
+                return
+            }
+            let identifiers = requests.compactMap { request in
+                self.requestIsOwned(request, byLifecycleLease: oldAccountLease)
+                    ? request.identifier
+                    : nil
+            }
+            if !identifiers.isEmpty {
+                self.requestCenter.removePendingNotificationRequests(
+                    withIdentifiers: identifiers
+                )
+            }
+            self.requestCenter.getPendingNotificationRequests { [weak self] remaining in
+                guard let self else {
+                    completion(false)
+                    return
+                }
+                completion(
+                    !remaining.contains {
+                        self.requestIsOwned($0, byLifecycleLease: oldAccountLease)
+                    }
+                )
+            }
+        }
+    }
+
     private func makeRequest(
         for delayedReply: EchoDelayedReply,
         scope: EchoDelayedReplyOperationScope
@@ -360,5 +398,28 @@ final class EchoDelayedReplyNotificationScheduler: @unchecked Sendable {
                     values: ["authority-epoch", accountLease.authorityEpoch]
                 )
             && userInfo["resourceOwnerIdentity"] as? String == resourceOwnerIdentity
+    }
+
+    private func requestIsOwned(
+        _ request: UNNotificationRequest,
+        byLifecycleLease accountLease: AccountLease
+    ) -> Bool {
+        let userInfo = request.content.userInfo
+        return userInfo["accountSubjectIdentity"] as? String
+                == EchoDelayedReplyOperationScope.identityDigest(
+                    values: ["subject", accountLease.subjectId]
+                )
+            && userInfo["accountLeaseVaultIdentity"] as? String
+                == EchoDelayedReplyOperationScope.identityDigest(
+                    values: ["vault", accountLease.vaultId]
+                )
+            && (userInfo["accountLeaseGeneration"] as? NSNumber)?.uint64Value
+                == accountLease.generation
+            && userInfo["accountLeaseGenerationIdentity"] as? String
+                == Self.generationIdentity(for: accountLease)
+            && userInfo["accountLeaseAuthorityEpochIdentity"] as? String
+                == EchoDelayedReplyOperationScope.identityDigest(
+                    values: ["authority-epoch", accountLease.authorityEpoch]
+                )
     }
 }

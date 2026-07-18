@@ -129,6 +129,14 @@ private struct EchoDelayedReplyEnvelope: Codable {
             && resourceOwnerId == scope.resourceOwnerId
             && operationId == scope.operationId
     }
+
+    func matchesLifecycleLease(_ accountLease: AccountLease) -> Bool {
+        subjectId == accountLease.subjectId
+            && vaultId == accountLease.vaultId
+            && generation == accountLease.generation
+            && generationId == accountLease.generationId
+            && authorityEpoch == accountLease.authorityEpoch
+    }
 }
 
 private struct EchoDelayedReplyOperationIndexEnvelope: Codable {
@@ -161,6 +169,14 @@ private struct EchoDelayedReplyOperationIndexEnvelope: Codable {
 
     func matchesOwnership(_ scope: EchoDelayedReplyOperationScope) -> Bool {
         matchesLeaseAndOwner(scope) && operationId == scope.operationId
+    }
+
+    func matchesLifecycleLease(_ accountLease: AccountLease) -> Bool {
+        subjectId == accountLease.subjectId
+            && vaultId == accountLease.vaultId
+            && generation == accountLease.generation
+            && generationId == accountLease.generationId
+            && authorityEpoch == accountLease.authorityEpoch
     }
 }
 
@@ -375,6 +391,48 @@ final class EchoDelayedReplyStore {
             return false
         }
         return true
+    }
+
+    @discardableResult
+    func teardownForAccountLifecycle(oldAccountLease: AccountLease?) -> Bool {
+        guard let oldAccountLease else { return false }
+
+        lock.lock()
+        defer { lock.unlock() }
+
+        let indexPrefix = "\(storageNamespace).index."
+        let candidateKeys = defaults.dictionaryRepresentation().keys.filter {
+            $0.hasPrefix("\(storageNamespace).")
+        }
+        var ownedKeys: [String] = []
+
+        for key in candidateKeys {
+            guard let data = defaults.data(forKey: key) else { return false }
+            if key.hasPrefix(indexPrefix) {
+                guard let envelope = try? JSONDecoder().decode(
+                    EchoDelayedReplyOperationIndexEnvelope.self,
+                    from: data
+                ) else {
+                    return false
+                }
+                if envelope.matchesLifecycleLease(oldAccountLease) {
+                    ownedKeys.append(key)
+                }
+            } else {
+                guard let envelope = try? JSONDecoder().decode(
+                    EchoDelayedReplyEnvelope.self,
+                    from: data
+                ) else {
+                    return false
+                }
+                if envelope.matchesLifecycleLease(oldAccountLease) {
+                    ownedKeys.append(key)
+                }
+            }
+        }
+
+        ownedKeys.forEach(defaults.removeObject(forKey:))
+        return ownedKeys.allSatisfy { defaults.object(forKey: $0) == nil }
     }
 
     func storageKey(
