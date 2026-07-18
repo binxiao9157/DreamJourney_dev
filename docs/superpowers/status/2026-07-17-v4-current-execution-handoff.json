@@ -2,62 +2,21 @@
   "activeWorkItem": {
     "authorityLock": "RIGHTS_DELETION",
     "backendPendingPaths": [],
-    "completedSubSlices": [
-      {
-        "commits": [
-          "aa33ed1"
-        ],
-        "evidence": "docs/superpowers/status/2026-07-18-wi-s0-01-08a-account-lifecycle-coordinator.md",
-        "id": "WI-S0-01-08A"
-      },
-      {
-        "commits": [
-          "d4798e8",
-          "a2ac9ca",
-          "8560654",
-          "b9f6c52"
-        ],
-        "evidence": "docs/superpowers/status/2026-07-18-wi-s0-01-08b-account-lifecycle-runtime.md",
-        "id": "WI-S0-01-08B"
-      },
-      {
-        "commits": [
-          "4d37450",
-          "aa949e8"
-        ],
-        "evidence": "docs/superpowers/status/2026-07-18-wi-s0-05-01a-rights-contract-storage.md",
-        "id": "WI-S0-05-01A"
-      },
-      {
-        "commits": [
-          "27ffd59"
-        ],
-        "evidence": "docs/superpowers/status/2026-07-18-wi-s0-05-01b-rights-store-persistence.md",
-        "id": "WI-S0-05-01B"
-      },
-      {
-        "commits": [
-          "36265f8"
-        ],
-        "evidence": "docs/superpowers/status/2026-07-18-wi-s0-05-01c-rights-route-adapter.md",
-        "id": "WI-S0-05-01C"
-      }
-    ],
-    "currentSubSlice": "WI-S0-05-01-G2",
+    "completedSubSlices": [],
+    "currentSubSlice": "WI-S0-05-02-G0",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "PASS",
-      "G1": "MISSING",
+      "G0": "MISSING",
       "G2": "MISSING",
-      "G4": "MISSING"
+      "G4": "EXTERNAL_OPEN"
     },
-    "id": "WI-S0-05-01",
+    "id": "WI-S0-05-02",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "Rights Request/Execution/Receipt contract, dual-store persistence, and legacy /auth/delete adapter are G0-verified. Backend main@8b63333 and migration 0006 are deployed; G2 requires the deployed Postgres rights lifecycle smoke, while G4 remains external."
+    "summary": "WI-S0-05-02 is the active additive rights/deletion slice. Its prerequisite WI-S0-05-01 has deployed G2 evidence on backend main@31d4e86; this work item must establish its own G0/G2 evidence and must not close the parent G4 identity, legal scope, provider, or backup-receipt boundary."
   },
   "baselines": {
-    "backend": "main@8b63333",
+    "backend": "main@31d4e86",
     "ios": "feature/prd-stitch-ui-adaptation@593c05b",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
@@ -103,6 +62,12 @@
       "id": "WI-S0-01-07",
       "implementationStatus": "INTERNAL_READY / G0_VERIFIED / IOS_LOCAL_COMMITTED / G1_G3_G4_OPEN",
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G3_G4_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-18-wi-s0-05-01c-rights-route-adapter.md",
+      "id": "WI-S0-05-01",
+      "implementationStatus": "INTERNAL_READY / BACKEND_DEPLOYED / G0_G2_POSTGRES_VERIFIED / G4_EXTERNAL_OPEN",
+      "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT_G4_OPEN"
     },
     {
       "evidence": "docs/superpowers/status/2026-07-17-wi-s0-02-01-strong-identity-binding.md",
@@ -286,9 +251,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S0-05-01",
+    "id": "WI-S0-05-03",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "Complete the current WI-S0-05-01 G2 sub-slice: backend main@8b63333 and migration 0006 are deployed; run the Postgres rights lifecycle smoke for concurrent same-command requests, command conflict, rollback, restart persistence, and cross-account denial before advancing to WI-S0-05-02."
+    "summary": "After WI-S0-05-02, assess WI-S0-05-03 only with its required G2 and G4 boundaries intact; it is not pre-authorized for public release."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -297,5 +262,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-18T19:08:06+08:00"
+  "updatedAt": "2026-07-18T22:10:00+08:00"
 }
