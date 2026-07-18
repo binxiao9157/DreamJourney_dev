@@ -69,6 +69,19 @@ def main() -> None:
         repository.count("accountLeaseRuntime.validate(accountLease, at: .commit)") >= 3,
         "Memoir JSON and recording commits must reject stale leases",
     )
+    for snippet in (
+        "syncToMemoryRepository(",
+        "normalizedOwner == accountLease.subjectId",
+        "MemoryRepository.shared.get(",
+        "MemoryRepository.shared.add(",
+        "ownerId: ownerId",
+        "accountLease: accountLease",
+    ):
+        require(snippet in repository, f"Memoir-to-Memory owner bridge missing: {snippet}")
+    require(
+        "MemoryRepository.shared.add(memory)" not in repository,
+        "Memoir-to-Memory bridge must not recapture a global/current owner",
+    )
 
     for snippet in (
         "accountLease: AccountLease",

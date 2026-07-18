@@ -1015,12 +1015,72 @@ final class MemoirRepository {
         memoirStorageLog(
             "save id=\(memoir.id) isNew=\(isNew) scope=\(scope.scopeDigest)"
         )
+        #if canImport(UIKit)
+        if isNew {
+            syncToMemoryRepository(
+                memoir,
+                accountLease: accountLease,
+                ownerId: ownerId
+            )
+        }
+        #endif
         if isNew,
            validateAuthorization(accountLease, ownerId: ownerId, at: .ui) {
             NotificationCenter.default.post(name: .djNewMemoirGenerated, object: memoir)
         }
         return true
     }
+
+    #if canImport(UIKit)
+    private func syncToMemoryRepository(
+        _ memoir: MemoirModel,
+        accountLease: AccountLease,
+        ownerId: String
+    ) {
+        let normalizedOwner = MemoirOwnerStoragePolicy.normalized(ownerId)
+        guard normalizedOwner == accountLease.subjectId,
+              validateAuthorization(accountLease, ownerId: ownerId, at: .commit),
+              MemoryRepository.shared.get(
+                  by: memoir.id,
+                  ownerId: ownerId,
+                  accountLease: accountLease
+              ) == nil else {
+            return
+        }
+
+        let prose = memoir.prose.replacingOccurrences(of: "\n", with: " ")
+        let subtitle: String
+        if let sentenceEnd = prose.firstIndex(where: { "。！？.!?".contains($0) }) {
+            subtitle = String(prose[..<sentenceEnd])
+        } else {
+            subtitle = String(prose.prefix(30))
+        }
+        let memory = MemoryModel(
+            id: memoir.id,
+            title: "\(memoir.location) · \(memoir.year)年\(memoir.month)月",
+            subtitle: subtitle,
+            fullContent: memoir.prose,
+            location: memoir.location,
+            year: memoir.year,
+            month: memoir.month,
+            latitude: memoir.latitude,
+            longitude: memoir.longitude,
+            imageNames: [],
+            audioName: memoir.sessionId,
+            isPrivate: memoir.isPrivate,
+            authorId: ownerId
+        )
+        guard MemoryRepository.shared.add(
+            memory,
+            ownerId: ownerId,
+            accountLease: accountLease
+        ) else {
+            memoirStorageLog("memory bridge rejected id=\(memoir.id) owner=\(ownerId)")
+            return
+        }
+        memoirStorageLog("memory bridge saved id=\(memoir.id) owner=\(ownerId)")
+    }
+    #endif
 
     @discardableResult
     func delete(id: String) -> Bool {
