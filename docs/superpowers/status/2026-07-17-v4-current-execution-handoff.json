@@ -1,21 +1,21 @@
 {
   "activeWorkItem": {
-    "authorityLock": "OPERATIONS_EVIDENCE",
+    "authorityLock": "IOS_COMPOSITION",
     "backendPendingPaths": [],
     "completedSubSlices": [],
-    "currentSubSlice": "WI-S0-07-08-G2-PREFLIGHT",
+    "currentSubSlice": "WI-S1-03-01-XCTEST-FOUNDATION",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G2": "MISSING"
+      "G0": "MISSING"
     },
-    "id": "WI-S0-07-08",
+    "id": "WI-S1-03-01",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S0-07-07 provider diagnostics allowlist/body-log governance is implemented, locally verified, committed in both repositories, deployed to the production API, and verified through an opaque-user Postgres smoke. Default-hidden TTS/image analysis are intentionally counted as safe policy denials rather than forced open. Execution advances to WI-S0-07-08 provider cost evidence G2 preflight."
+    "summary": "WI-S0-07-08 immutable evidence manifest and TTL is complete at its scoped G0/G1/G2 boundary: iOS commit b0cd090 binds redacted Echo QA exports to owner-scoped expiring manifests, and backend main@933af48 is deployed with migration 0010, retention timer and isolated Postgres smoke. WI-S0-07-09 remains external-gated and is not promoted. Per Stage 1 rule 17.3, WI-S1-03-01 XCTest foundation may begin independently without changing Owner Authority, writer, runtime or public UI."
   },
   "baselines": {
-    "backend": "main@5c42385",
-    "ios": "feature/prd-stitch-ui-adaptation@593c05b",
+    "backend": "main@933af48",
+    "ios": "feature/prd-stitch-ui-adaptation@b0cd090",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
@@ -276,12 +276,18 @@
       "id": "WI-S0-07-07",
       "implementationStatus": "INTERNAL_READY / BACKEND_DEPLOYED / G0_G1_G2_SCOPED_VERIFIED / IOS_LOCAL_COMMITTED / G3_G4_EXTERNAL_OPEN",
       "registryClosure": "SCOPED_G0_G1_G2_EVIDENCE_PRESENT_G3_G4_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-18-wi-s0-07-08-evidence-manifest-ttl.md",
+      "id": "WI-S0-07-08",
+      "implementationStatus": "INTERNAL_READY / BACKEND_DEPLOYED / G0_G1_G2_SCOPED_VERIFIED / IOS_LOCAL_COMMITTED / G3_G4_EXTERNAL_OPEN",
+      "registryClosure": "SCOPED_G0_G1_G2_EVIDENCE_PRESENT_G3_G4_OPEN"
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S0-07-09",
+    "id": "WI-S1-01-01",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "After WI-S0-07-08 provider-cost evidence is resolved or conservatively recorded, WI-S0-07-09 immutable evidence manifest/TTL must remain blocked until its G2 and G4 prerequisites are independently satisfied."
+    "summary": "After the additive XCTest foundation is established, select the next non-conflicting S1-0 additive schema lane. WI-S1-01-01 Owner Truth schema remains the preferred next primary writer candidate; WI-S0-07-09 is still external-gated and is not silently promoted."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -290,5 +296,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-18T22:20:00+08:00"
+  "updatedAt": "2026-07-18T23:17:33+08:00"
 }
