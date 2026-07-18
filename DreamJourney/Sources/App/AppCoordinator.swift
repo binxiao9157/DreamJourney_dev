@@ -16,6 +16,7 @@ final class AppCoordinator: Coordinator {
     private weak var window: UIWindow?
     private let accountSessionActor: AccountSessionActor
     private let appComposition: AppComposition
+    private let lifecycleEventForwarder: AppLifecycleEventForwarder
     private var rootMode: RootMode = .unresolved
     private var accountSessionReceipt: AccountSessionTransitionReceipt?
     private var accountSessionTask: Task<Void, Never>?
@@ -23,11 +24,13 @@ final class AppCoordinator: Coordinator {
     init(
         window: UIWindow,
         accountSessionActor: AccountSessionActor = .shared,
-        appComposition: AppComposition? = nil
+        appComposition: AppComposition? = nil,
+        lifecycleEventForwarder: AppLifecycleEventForwarder? = nil
     ) {
         self.window = window
         self.accountSessionActor = accountSessionActor
         self.appComposition = appComposition ?? AppComposition()
+        self.lifecycleEventForwarder = lifecycleEventForwarder ?? AppLifecycleEventForwarder()
         self.navigationController = UINavigationController()
     }
 
@@ -98,6 +101,17 @@ final class AppCoordinator: Coordinator {
         window?.rootViewController = tabCoordinator.tabBarController
         window?.makeKeyAndVisible()
         tabCoordinator.start()
+    }
+
+    /// SceneDelegate owns only UIKit callback forwarding. The coordinator
+    /// captures a coherent account/policy context before any private effect is
+    /// allowed to run.
+    func handleSceneLifecycleEvent(_ event: AppLifecycleEvent) {
+        let runtimeContext = currentFeatureRuntimeContext()
+        _ = lifecycleEventForwarder.forward(
+            event: event,
+            runtimeContext: runtimeContext
+        )
     }
 
     @objc private func handleLogout() {
@@ -275,6 +289,19 @@ final class AppCoordinator: Coordinator {
         )
     }
 
+    private func currentFeatureRuntimeContext() -> AppFeatureRuntimeContext? {
+        guard accountSessionReceipt?.accepted == true,
+              accountSessionReceipt?.state == .active,
+              accountSessionReceipt?.rootRoute == .privateUI,
+              let accountSession = accountSessionReceipt?.session else {
+            return nil
+        }
+        return appComposition.makeRuntimeContext(
+            accountSession: accountSession,
+            lifecycleGeneration: accountSessionReceipt?.generation ?? 0
+        )
+    }
+
     private func showStartupValidationGate() {
         let viewController = UIViewController()
         viewController.view.backgroundColor = UIColor(red: 0.99, green: 0.97, blue: 0.93, alpha: 1)
@@ -326,6 +353,19 @@ final class AppComposition {
         accountSession: AccountSession,
         lifecycleGeneration: UInt64
     ) -> TabCoordinator? {
+        guard let runtimeContext = makeRuntimeContext(
+            accountSession: accountSession,
+            lifecycleGeneration: lifecycleGeneration
+        ) else {
+            return nil
+        }
+        return featureFactory.makeTabCoordinator(runtimeContext: runtimeContext)
+    }
+
+    func makeRuntimeContext(
+        accountSession: AccountSession,
+        lifecycleGeneration: UInt64
+    ) -> AppFeatureRuntimeContext? {
         guard accountSession.state == .active,
               let accountLease = accountLeaseRuntime.capture(
                   forSubjectId: accountSession.subjectId
@@ -341,7 +381,73 @@ final class AppComposition {
               ) else {
             return nil
         }
-        return featureFactory.makeTabCoordinator(runtimeContext: runtimeContext)
+        return runtimeContext
+    }
+}
+
+// MARK: - App/Scene lifecycle forwarding
+
+/// Keeps UIKit lifecycle callbacks at the boundary and starts the existing
+/// private foreground refresh only after a valid lease was captured. Individual
+/// feature runtimes still own their current notification observers until their
+/// later lifecycle migration slices.
+@MainActor
+final class AppLifecycleEventForwarder {
+    typealias PrivateForegroundRefresh = (AppFeatureRuntimeContext) -> Void
+
+    private let privateForegroundRefresh: PrivateForegroundRefresh
+    private var nextSequence: UInt64 = 0
+    private(set) var latestReceipt: AppLifecycleEventReceipt?
+
+    init(
+        privateForegroundRefresh: @escaping PrivateForegroundRefresh = AppLifecycleEventForwarder
+            .refreshPrivateForegroundRuntime
+    ) {
+        self.privateForegroundRefresh = privateForegroundRefresh
+    }
+
+    @discardableResult
+    func forward(
+        event: AppLifecycleEvent,
+        runtimeContext: AppFeatureRuntimeContext?
+    ) -> AppLifecycleEventReceipt {
+        nextSequence &+= 1
+        if nextSequence == 0 {
+            nextSequence = 1
+        }
+        let receipt = AppLifecycleEventReceipt(
+            event: event,
+            sequence: nextSequence,
+            runtimeContext: runtimeContext
+        )
+        latestReceipt = receipt
+
+        guard receipt.canRunPrivateForegroundRefresh,
+              let runtimeContext,
+              AccountLeaseRuntime.shared.validate(
+                  runtimeContext.accountLease,
+                  at: .runtime
+              ).allowed else {
+            return receipt
+        }
+        privateForegroundRefresh(runtimeContext)
+        return receipt
+    }
+
+    private static func refreshPrivateForegroundRuntime(
+        runtimeContext: AppFeatureRuntimeContext
+    ) {
+        FamilyRepository.shared.bootstrapCurrentUserFromBackend { _ in
+            guard AccountLeaseRuntime.shared.validate(
+                runtimeContext.accountLease,
+                at: .commit
+            ).allowed else {
+                return
+            }
+            KnowledgeSyncCoordinator.shared.synchronizeCurrentUser(
+                reason: "foregroundAfterFamilyRefresh"
+            )
+        }
     }
 }
 

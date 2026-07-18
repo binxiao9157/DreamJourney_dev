@@ -53,6 +53,64 @@ struct AppFeatureRuntimeContext: Equatable, Sendable {
     }
 }
 
+/// Process-level lifecycle signals forwarded by SceneDelegate. The payload is
+/// intentionally separate from account teardown events: it never carries a
+/// subject, vault, session identifier, or provider state.
+enum AppLifecycleEvent: String, CaseIterable, Codable, Sendable {
+    case sceneConnected
+    case didBecomeActive
+    case willResignActive
+    case willEnterForeground
+    case didEnterBackground
+    case didDisconnect
+
+    var triggersPrivateForegroundRefresh: Bool {
+        self == .willEnterForeground
+    }
+}
+
+enum AppLifecycleRuntimeDisposition: String, Codable, Equatable, Sendable {
+    case activeRuntime
+    case noActiveRuntime
+}
+
+/// Value-minimized receipt for App/Scene lifecycle forwarding. It makes the
+/// active generation observable without persisting an account or policy value.
+struct AppLifecycleEventReceipt: Equatable, Sendable {
+    let schemaVersion: Int
+    let event: AppLifecycleEvent
+    let sequence: UInt64
+    let runtimeDisposition: AppLifecycleRuntimeDisposition
+    let lifecycleGeneration: UInt64?
+    let hasReleasePolicyAuthority: Bool
+
+    init(
+        event: AppLifecycleEvent,
+        sequence: UInt64,
+        runtimeContext: AppFeatureRuntimeContext?
+    ) {
+        self.schemaVersion = 1
+        self.event = event
+        self.sequence = sequence
+        if let runtimeContext {
+            self.runtimeDisposition = .activeRuntime
+            self.lifecycleGeneration = runtimeContext.lifecycleGeneration
+            self.hasReleasePolicyAuthority = !runtimeContext.releasePolicyAuthorityEpoch.isEmpty
+        } else {
+            self.runtimeDisposition = .noActiveRuntime
+            self.lifecycleGeneration = nil
+            self.hasReleasePolicyAuthority = false
+        }
+    }
+
+    var canRunPrivateForegroundRefresh: Bool {
+        event.triggersPrivateForegroundRefresh
+            && runtimeDisposition == .activeRuntime
+            && lifecycleGeneration != nil
+            && hasReleasePolicyAuthority
+    }
+}
+
 struct AccountLeaseValidationDecision: Equatable, Sendable {
     let checkpoint: AccountLeaseCheckpoint
     let allowed: Bool

@@ -85,6 +85,42 @@ final class AccountLeaseRuntimeTests: XCTestCase {
         XCTAssertEqual(context.releasePolicyAuthorityEpoch, lease.authorityEpoch)
     }
 
+    func testLifecycleEventReceiptMinimizesActiveRuntimeContext() throws {
+        let lease = AccountLease(
+            subjectId: "owner-a",
+            vaultId: "vault-a",
+            sessionId: "session-a",
+            generation: 7,
+            generationId: UUID(uuidString: "00000000-0000-0000-0000-000000000007")!,
+            authorityEpoch: "epoch-v1"
+        )
+        let context = try XCTUnwrap(AppFeatureRuntimeContext(
+            accountLease: lease,
+            lifecycleGeneration: 7,
+            releasePolicyAuthorityEpoch: "epoch-v1"
+        ))
+
+        let foregroundReceipt = AppLifecycleEventReceipt(
+            event: .willEnterForeground,
+            sequence: 3,
+            runtimeContext: context
+        )
+        XCTAssertEqual(foregroundReceipt.runtimeDisposition, .activeRuntime)
+        XCTAssertEqual(foregroundReceipt.lifecycleGeneration, 7)
+        XCTAssertTrue(foregroundReceipt.hasReleasePolicyAuthority)
+        XCTAssertTrue(foregroundReceipt.canRunPrivateForegroundRefresh)
+
+        let backgroundReceipt = AppLifecycleEventReceipt(
+            event: .didEnterBackground,
+            sequence: 4,
+            runtimeContext: nil
+        )
+        XCTAssertEqual(backgroundReceipt.runtimeDisposition, .noActiveRuntime)
+        XCTAssertNil(backgroundReceipt.lifecycleGeneration)
+        XCTAssertFalse(backgroundReceipt.hasReleasePolicyAuthority)
+        XCTAssertFalse(backgroundReceipt.canRunPrivateForegroundRefresh)
+    }
+
     private func session(
         subjectId: String,
         vaultId: String,

@@ -19,15 +19,26 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let coordinator = AppCoordinator(window: window)
         appCoordinator = coordinator
         coordinator.start()
+        coordinator.handleSceneLifecycleEvent(.sceneConnected)
     }
 
-    func sceneDidDisconnect(_ scene: UIScene) {}
-    func sceneDidBecomeActive(_ scene: UIScene) {}
-    func sceneWillResignActive(_ scene: UIScene) {}
-    func sceneWillEnterForeground(_ scene: UIScene) {
-        FamilyRepository.shared.bootstrapCurrentUserFromBackend { _ in
-            KnowledgeSyncCoordinator.shared.synchronizeCurrentUser(reason: "foregroundAfterFamilyRefresh")
-        }
+    func sceneDidDisconnect(_ scene: UIScene) {
+        appCoordinator?.handleSceneLifecycleEvent(.didDisconnect)
     }
-    func sceneDidEnterBackground(_ scene: UIScene) {}
+
+    func sceneDidBecomeActive(_ scene: UIScene) {
+        appCoordinator?.handleSceneLifecycleEvent(.didBecomeActive)
+    }
+
+    func sceneWillResignActive(_ scene: UIScene) {
+        appCoordinator?.handleSceneLifecycleEvent(.willResignActive)
+    }
+
+    func sceneWillEnterForeground(_ scene: UIScene) {
+        appCoordinator?.handleSceneLifecycleEvent(.willEnterForeground)
+    }
+
+    func sceneDidEnterBackground(_ scene: UIScene) {
+        appCoordinator?.handleSceneLifecycleEvent(.didEnterBackground)
+    }
 }
