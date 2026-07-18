@@ -47,6 +47,10 @@ def main() -> None:
         "struct OwnerTruthCandidateReviewCommand",
         "struct OwnerTruthCandidateDecisionResult",
         "enum OwnerTruthCandidateReviewQAGate",
+        "protocol OwnerTruthCandidateReviewClient",
+        "enum OwnerTruthCandidateReviewIntent",
+        "struct OwnerTruthCandidateInboxViewState",
+        "final class OwnerTruthCandidateReviewUseCase",
         'static let launchArgument = "DJEnableOwnerTruthCandidateReviewQA"',
         "#if DEBUG || UI_QA_SIMULATOR",
         'return ProcessInfo.processInfo.arguments.contains(launchArgument)',
@@ -69,6 +73,22 @@ def main() -> None:
         "rejected or invalidated decisions must not activate memory" in contracts,
         "rejected candidate response must remain non-authoritative",
     )
+    require(
+        "guard generation == operationGeneration else { return }" in contracts,
+        "Candidate Inbox must reject stale async callbacks",
+    )
+    require(
+        "accountLeaseRuntime.validate(accountLease, at: .request).allowed" in contracts,
+        "Candidate Inbox must fence request work with AccountLease",
+    )
+    require(
+        "accountLeaseRuntime.validate(accountLease, at: .commit).allowed" in contracts,
+        "Candidate Inbox must fence completion work with AccountLease",
+    )
+    require(
+        "decision.receipt.decision == expectedAction.terminalDecision" in contracts,
+        "Candidate Inbox must reject a terminal receipt that mismatches the requested action",
+    )
 
     inbox_body = function_body(client, "fetchOwnerTruthCandidateInbox")
     decision_body = function_body(client, "reviewOwnerTruthCandidate")
@@ -87,6 +107,10 @@ def main() -> None:
     require(
         'if normalizedPath.hasPrefix("/v2/vaults/") { return "ownerTruth" }' in client,
         "Owner Truth routes must retain a dedicated request purpose",
+    )
+    require(
+        "extension DreamJourneyBackendClient: OwnerTruthCandidateReviewClient {}" in client,
+        "Concrete backend client must conform to the typed Candidate review port",
     )
     require(
         "func testCandidateInboxDecodesTypedProposalAndEvidence()" in tests,
@@ -108,10 +132,17 @@ def main() -> None:
         "func testAcceptedDecisionRejectsMissingMemoryVersionActivation()" in tests,
         "accepted Candidate activation negative test missing",
     )
+    for test_name in (
+        "func testCandidateReviewUseCaseMapsInboxAndAcceptsThroughTypedReceipt()",
+        "func testCandidateReviewUseCasePreservesCandidateContentForCorrection()",
+        "func testCandidateReviewUseCaseRejectsStaleCompletionAfterAccountSwitch()",
+        "func testCandidateReviewUseCaseRejectsMismatchedTerminalDecision()",
+    ):
+        require(test_name in tests, f"Candidate review use-case test missing: {test_name}")
 
     print(
         "Product V4 iOS Owner Truth candidate client check passed: typed inbox/decision "
-        "contracts remain QA-only, owner-authenticated, and default-off"
+        "contracts and lease-fenced Intent/ViewState remain QA-only, owner-authenticated, and default-off"
     )
 
 

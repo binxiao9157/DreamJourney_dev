@@ -667,6 +667,405 @@ enum OwnerTruthCandidateReviewQAGate {
     }
 }
 
+/// Narrow port consumed by the hidden Archive review use case. The concrete
+/// backend client owns transport, authentication and QA headers; the use case
+/// owns lease checks, intent mapping and ViewState only.
+protocol OwnerTruthCandidateReviewClient: AnyObject {
+    func fetchOwnerTruthCandidateInbox(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthCandidateInbox, Error>) -> Void
+    )
+
+    func reviewOwnerTruthCandidate(
+        vaultID: OwnerTruthVaultID,
+        candidateID: OwnerTruthRecordID,
+        command: OwnerTruthCandidateReviewCommand,
+        completion: @escaping (Result<OwnerTruthCandidateDecisionResult, Error>) -> Void
+    )
+}
+
+enum OwnerTruthCandidateReviewIntent: Equatable, Sendable {
+    case refresh
+    case accept(candidateID: OwnerTruthRecordID)
+    case correct(candidateID: OwnerTruthRecordID, correctedSummary: String)
+    case reject(candidateID: OwnerTruthRecordID)
+}
+
+enum OwnerTruthCandidateInboxPhase: Equatable, Sendable {
+    case idle
+    case unavailable
+    case loading
+    case ready
+    case empty
+    case submitting(OwnerTruthRecordID)
+    case failed
+}
+
+enum OwnerTruthCandidateInboxNotice: Equatable, Sendable {
+    case qaOnlyDisabled
+    case accountUnavailable
+    case staleAccountLease
+    case invalidVault
+    case candidateUnavailable
+    case correctionRequired
+    case reviewResultMismatch
+    case requestFailed
+    case candidateAccepted
+    case candidateCorrected
+    case candidateRejected
+}
+
+struct OwnerTruthCandidateInboxItemViewState: Equatable, Sendable, Identifiable {
+    let id: OwnerTruthRecordID
+    let proposalPreview: String
+    let memoryKind: OwnerTruthMemoryKind
+    let perspective: OwnerTruthPerspectiveType
+    let epistemicStatus: OwnerTruthEpistemicStatus
+    let sensitivity: OwnerTruthSensitivityLevel
+    let evidenceCount: Int
+    let reviewMode: String
+    let candidateVersion: Int
+    let supportsCorrection: Bool
+}
+
+struct OwnerTruthCandidateReviewReceiptViewState: Equatable, Sendable {
+    let candidateID: OwnerTruthRecordID
+    let decision: OwnerTruthCandidateDecision
+    let outcome: OwnerTruthCommandOutcome
+    let createdMemoryVersion: Bool
+}
+
+struct OwnerTruthCandidateInboxViewState: Equatable, Sendable {
+    let phase: OwnerTruthCandidateInboxPhase
+    let items: [OwnerTruthCandidateInboxItemViewState]
+    let notice: OwnerTruthCandidateInboxNotice?
+    let latestReceipt: OwnerTruthCandidateReviewReceiptViewState?
+
+    static let idle = OwnerTruthCandidateInboxViewState(
+        phase: .idle,
+        items: [],
+        notice: nil,
+        latestReceipt: nil
+    )
+}
+
+/// QA-only application boundary for Candidate review. It never accepts an
+/// owner identifier from the UI, does not write legacy Archive/KBLite state,
+/// and rejects stale account or stale async completion paths before ViewState
+/// is updated.
+final class OwnerTruthCandidateReviewUseCase {
+    typealias CommandIDFactory = () -> String
+
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let client: OwnerTruthCandidateReviewClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let qaGateEnabled: () -> Bool
+    private let commandIDFactory: CommandIDFactory
+
+    private var candidatesByID: [OwnerTruthRecordID: OwnerTruthCandidateInboxItem] = [:]
+    private var orderedCandidateIDs: [OwnerTruthRecordID] = []
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState: OwnerTruthCandidateInboxViewState = .idle {
+        didSet {
+            onViewStateChange?(viewState)
+        }
+    }
+
+    var onViewStateChange: ((OwnerTruthCandidateInboxViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        client: OwnerTruthCandidateReviewClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled },
+        commandIDFactory: @escaping CommandIDFactory = { UUID().uuidString.lowercased() }
+    ) {
+        self.accountLease = accountLease
+        self.vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.qaGateEnabled = qaGateEnabled
+        self.commandIDFactory = commandIDFactory
+    }
+
+    func send(_ intent: OwnerTruthCandidateReviewIntent) {
+        switch intent {
+        case .refresh:
+            refresh()
+        case .accept(let candidateID):
+            submit(candidateID: candidateID, action: .accept, correctedSummary: nil)
+        case .correct(let candidateID, let correctedSummary):
+            submit(candidateID: candidateID, action: .correct, correctedSummary: correctedSummary)
+        case .reject(let candidateID):
+            submit(candidateID: candidateID, action: .reject, correctedSummary: nil)
+        }
+    }
+
+    private func refresh() {
+        guard let vaultID = beginRequestOrFail() else { return }
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthCandidateInboxViewState(
+            phase: .loading,
+            items: currentItems,
+            notice: nil,
+            latestReceipt: nil
+        )
+        client.fetchOwnerTruthCandidateInbox(vaultID: vaultID) { [weak self] result in
+            self?.receiveInbox(result, vaultID: vaultID, generation: generation)
+        }
+    }
+
+    private func submit(
+        candidateID: OwnerTruthRecordID,
+        action: OwnerTruthCandidateReviewAction,
+        correctedSummary: String?
+    ) {
+        guard let vaultID = beginRequestOrFail() else { return }
+        guard let candidate = candidatesByID[candidateID] else {
+            transitionFailure(.candidateUnavailable)
+            return
+        }
+        guard let command = makeCommand(
+            candidate: candidate,
+            action: action,
+            correctedSummary: correctedSummary
+        ) else {
+            return
+        }
+
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthCandidateInboxViewState(
+            phase: .submitting(candidateID),
+            items: currentItems,
+            notice: nil,
+            latestReceipt: nil
+        )
+        client.reviewOwnerTruthCandidate(
+            vaultID: vaultID,
+            candidateID: candidateID,
+            command: command
+        ) { [weak self] result in
+            self?.receiveDecision(
+                result,
+                candidate: candidate,
+                expectedAction: action,
+                generation: generation
+            )
+        }
+    }
+
+    private func beginRequestOrFail() -> OwnerTruthVaultID? {
+        guard qaGateEnabled() else {
+            resetForUnavailable(.qaOnlyDisabled)
+            return nil
+        }
+        guard let vaultID else {
+            resetForUnavailable(.invalidVault)
+            return nil
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            resetForUnavailable(.accountUnavailable)
+            return nil
+        }
+        return vaultID
+    }
+
+    private func makeCommand(
+        candidate: OwnerTruthCandidateInboxItem,
+        action: OwnerTruthCandidateReviewAction,
+        correctedSummary: String?
+    ) -> OwnerTruthCandidateReviewCommand? {
+        do {
+            switch action {
+            case .accept:
+                return try OwnerTruthCandidateReviewCommand(
+                    commandID: commandIDFactory(),
+                    expectedCandidateVersion: candidate.candidateVersion,
+                    action: .accept,
+                    reasonCode: "ownerReviewed"
+                )
+            case .reject:
+                return try OwnerTruthCandidateReviewCommand(
+                    commandID: commandIDFactory(),
+                    expectedCandidateVersion: candidate.candidateVersion,
+                    action: .reject,
+                    reasonCode: "ownerReviewed"
+                )
+            case .correct:
+                let normalizedSummary = correctedSummary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                guard !normalizedSummary.isEmpty else {
+                    transitionFailure(.correctionRequired)
+                    return nil
+                }
+                var correctedValue = candidate.content
+                correctedValue[Self.correctionTextKey(for: candidate)] = .string(normalizedSummary)
+                return try OwnerTruthCandidateReviewCommand(
+                    commandID: commandIDFactory(),
+                    expectedCandidateVersion: candidate.candidateVersion,
+                    action: .correct,
+                    correctedValue: correctedValue,
+                    correctedValueSchemaVersion: candidate.contentSchemaVersion,
+                    reasonCode: "ownerCorrected"
+                )
+            }
+        } catch {
+            transitionFailure(.requestFailed)
+            return nil
+        }
+    }
+
+    private func receiveInbox(
+        _ result: Result<OwnerTruthCandidateInbox, Error>,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+        switch result {
+        case .success(let inbox):
+            guard inbox.vaultID == vaultID,
+                  inbox.vaultID.rawValue == accountLease.vaultId else {
+                transitionFailure(.requestFailed)
+                return
+            }
+            var nextCandidates: [OwnerTruthRecordID: OwnerTruthCandidateInboxItem] = [:]
+            for candidate in inbox.candidates {
+                guard nextCandidates[candidate.id] == nil else {
+                    transitionFailure(.requestFailed)
+                    return
+                }
+                nextCandidates[candidate.id] = candidate
+            }
+            candidatesByID = nextCandidates
+            orderedCandidateIDs = inbox.candidates.map(\.id)
+            viewState = OwnerTruthCandidateInboxViewState(
+                phase: inbox.candidates.isEmpty ? .empty : .ready,
+                items: currentItems,
+                notice: nil,
+                latestReceipt: nil
+            )
+        case .failure:
+            transitionFailure(.requestFailed)
+        }
+    }
+
+    private func receiveDecision(
+        _ result: Result<OwnerTruthCandidateDecisionResult, Error>,
+        candidate: OwnerTruthCandidateInboxItem,
+        expectedAction: OwnerTruthCandidateReviewAction,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+        switch result {
+        case .success(let decision):
+            guard decision.receipt.candidateID == candidate.id,
+                  decision.receipt.decision == expectedAction.terminalDecision else {
+                transitionFailure(.reviewResultMismatch)
+                return
+            }
+            candidatesByID.removeValue(forKey: candidate.id)
+            orderedCandidateIDs.removeAll { $0 == candidate.id }
+            let receipt = OwnerTruthCandidateReviewReceiptViewState(
+                candidateID: candidate.id,
+                decision: decision.receipt.decision,
+                outcome: decision.outcome,
+                createdMemoryVersion: decision.memoryActivation.memoryVersionID != nil
+            )
+            viewState = OwnerTruthCandidateInboxViewState(
+                phase: orderedCandidateIDs.isEmpty ? .empty : .ready,
+                items: currentItems,
+                notice: Self.successNotice(for: expectedAction),
+                latestReceipt: receipt
+            )
+        case .failure:
+            transitionFailure(.requestFailed)
+        }
+    }
+
+    private var currentItems: [OwnerTruthCandidateInboxItemViewState] {
+        orderedCandidateIDs.compactMap { candidateID in
+            guard let candidate = candidatesByID[candidateID] else { return nil }
+            return OwnerTruthCandidateInboxItemViewState(
+                id: candidate.id,
+                proposalPreview: Self.proposalPreview(for: candidate),
+                memoryKind: candidate.memoryKind,
+                perspective: candidate.perspective,
+                epistemicStatus: candidate.epistemicStatus,
+                sensitivity: candidate.sensitivity,
+                evidenceCount: candidate.sourceReferences.count,
+                reviewMode: candidate.reviewMode,
+                candidateVersion: candidate.candidateVersion,
+                supportsCorrection: true
+            )
+        }
+    }
+
+    private func resetForUnavailable(_ notice: OwnerTruthCandidateInboxNotice) {
+        operationGeneration &+= 1
+        candidatesByID.removeAll()
+        orderedCandidateIDs.removeAll()
+        viewState = OwnerTruthCandidateInboxViewState(
+            phase: .unavailable,
+            items: [],
+            notice: notice,
+            latestReceipt: nil
+        )
+    }
+
+    private func transitionFailure(_ notice: OwnerTruthCandidateInboxNotice) {
+        viewState = OwnerTruthCandidateInboxViewState(
+            phase: .failed,
+            items: currentItems,
+            notice: notice,
+            latestReceipt: nil
+        )
+    }
+
+    private static func proposalPreview(for candidate: OwnerTruthCandidateInboxItem) -> String {
+        for key in ["summary", "title", "text"] {
+            guard case .string(let rawValue)? = candidate.content[key] else { continue }
+            let normalized = rawValue
+                .replacingOccurrences(of: "\n", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !normalized.isEmpty {
+                return String(normalized.prefix(160))
+            }
+        }
+        return "待确认记忆"
+    }
+
+    private static func correctionTextKey(for candidate: OwnerTruthCandidateInboxItem) -> String {
+        for key in ["summary", "title", "text"] where candidate.content[key] != nil {
+            return key
+        }
+        return "summary"
+    }
+
+    private static func successNotice(
+        for action: OwnerTruthCandidateReviewAction
+    ) -> OwnerTruthCandidateInboxNotice {
+        switch action {
+        case .accept:
+            return .candidateAccepted
+        case .correct:
+            return .candidateCorrected
+        case .reject:
+            return .candidateRejected
+        }
+    }
+}
+
 struct OwnerTruthSourceReference: Codable, Equatable, Sendable {
     let vaultID: OwnerTruthVaultID
     let sourceID: OwnerTruthRecordID

@@ -25,12 +25,13 @@
       "WI-S1-03-03-LIFECYCLE_CONSUMER_INVENTORY",
       "WI-S1-03-03-ECHO_LIFECYCLE_MIGRATION",
       "WI-S1-03-03-AI_RECORDING_LIFECYCLE_MIGRATION",
-      "WI-S1-03-04-OWNER_TRUTH_CANDIDATE_CLIENT_G0_COMPLETE"
+      "WI-S1-03-04-OWNER_TRUTH_CANDIDATE_CLIENT_G0_COMPLETE",
+      "WI-S1-03-04-OWNER_TRUTH_CANDIDATE_USE_CASE_G0_COMPLETE"
     ],
-    "currentSubSlice": "WI-S1-03-04-OWNER_TRUTH_CANDIDATE_CLIENT_G0_COMPLETE",
+    "currentSubSlice": "WI-S1-03-04-OWNER_TRUTH_CANDIDATE_USE_CASE_G0_COMPLETE",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "TYPED_OWNER_TRUTH_CANDIDATE_CLIENT_AND_GENERIC_IOS_BUILD_VERIFIED",
+      "G0": "TYPED_OWNER_TRUTH_CANDIDATE_CLIENT_AND_LEASE_FENCED_INTENT_VIEWSTATE_VERIFIED",
       "G1": "HIDDEN_ARCHIVE_CANDIDATE_INBOX_UIQA_OPEN",
       "G2": "QA_ONLY_DEPLOYED_CANDIDATE_ROUTE_SMOKE_OPEN",
       "G4": "EXTERNAL_PRIVACY_AND_RELEASE_DECISION_OPEN"
@@ -38,7 +39,7 @@
     "id": "WI-S1-03-04",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-03-04 has completed its typed Owner Truth Candidate client foundation. Inbox, review command, immutable receipt and MemoryVersion activation responses are parsed fail-closed; the client requires the existing user session, a QA-only launch gate and the owner-truth header. No Archive UI, public entry, legacy writer switch, KBLite authority write or backend change is included. The next sub-slice is a hidden Archive Intent/ViewState composition layer, with G1 UIQA and G2 deployed route evidence still open."
+    "summary": "WI-S1-03-04 has completed its typed Owner Truth Candidate client and lease-fenced Intent/ViewState foundation. Inbox, review command, immutable receipt and MemoryVersion activation responses are parsed fail-closed; the review use case rejects stale AccountLease callbacks and mismatched terminal receipts. The client requires the existing user session, a QA-only launch gate and the owner-truth header. No Archive UI, public entry, legacy writer switch, KBLite authority write or backend change is included. The next sub-slice is a hidden Archive Candidate Inbox page that consumes this use case, with G1 UIQA and G2 deployed route evidence still open."
   },
   "baselines": {
     "backend": "main@32c38f2",

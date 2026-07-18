@@ -6391,3 +6391,5 @@ final class DreamJourneyBackendClient {
         return candidates.compactMap(FamilyMember.fromBackendJSON)
     }
 }
+
+extension DreamJourneyBackendClient: OwnerTruthCandidateReviewClient {}

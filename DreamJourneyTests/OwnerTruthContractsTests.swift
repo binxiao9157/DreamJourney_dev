@@ -238,4 +238,252 @@ final class OwnerTruthContractsTests: XCTestCase {
             )
         }
     }
+
+    func testCandidateReviewUseCaseMapsInboxAndAcceptsThroughTypedReceipt() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-000000000041")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try candidateInbox(vaultID: lease.vaultId, candidateID: candidateID))
+        client.reviewResult = .success(try decisionResult(candidateID: candidateID, decision: .accepted))
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { "candidate-review-accept-001" }
+        )
+
+        useCase.send(.refresh)
+
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertEqual(useCase.viewState.items.count, 1)
+        XCTAssertEqual(useCase.viewState.items.first?.proposalPreview, "小时候在院子里听父亲讲故事")
+        XCTAssertEqual(useCase.viewState.items.first?.evidenceCount, 1)
+
+        useCase.send(.accept(candidateID: candidateID))
+
+        XCTAssertEqual(client.reviewedCommands.count, 1)
+        XCTAssertEqual(client.reviewedCommands.first?.action, .accept)
+        XCTAssertEqual(client.reviewedCommands.first?.expectedCandidateVersion, 1)
+        XCTAssertEqual(useCase.viewState.phase, .empty)
+        XCTAssertEqual(useCase.viewState.notice, .candidateAccepted)
+        XCTAssertEqual(useCase.viewState.latestReceipt?.decision, .accepted)
+        XCTAssertTrue(useCase.viewState.latestReceipt?.createdMemoryVersion == true)
+    }
+
+    func testCandidateReviewUseCasePreservesCandidateContentForCorrection() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-000000000042")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try candidateInbox(vaultID: lease.vaultId, candidateID: candidateID))
+        client.reviewResult = .success(try decisionResult(candidateID: candidateID, decision: .corrected))
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { "candidate-review-correct-001" }
+        )
+
+        useCase.send(.refresh)
+        useCase.send(.correct(candidateID: candidateID, correctedSummary: "实际是在外祖父的院子里听故事"))
+
+        let command = try XCTUnwrap(client.reviewedCommands.first)
+        XCTAssertEqual(command.action, .correct)
+        XCTAssertEqual(command.reasonCode, "ownerCorrected")
+        XCTAssertEqual(command.correctedValue?["summary"], .string("实际是在外祖父的院子里听故事"))
+        XCTAssertEqual(command.correctedValue?["confidence"], .number(0.92))
+        XCTAssertEqual(command.correctedValueSchemaVersion, "owner-truth-candidate-content-v1")
+        XCTAssertEqual(useCase.viewState.notice, .candidateCorrected)
+        XCTAssertEqual(useCase.viewState.latestReceipt?.decision, .corrected)
+    }
+
+    func testCandidateReviewUseCaseRejectsStaleCompletionAfterAccountSwitch() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-000000000043")
+        let client = CandidateReviewClientSpy()
+        client.deferInbox = true
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        useCase.send(.refresh)
+        XCTAssertEqual(useCase.viewState.phase, .loading)
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+        ))
+        client.completeDeferredInbox(.success(try candidateInbox(vaultID: lease.vaultId, candidateID: candidateID)))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .staleAccountLease)
+        XCTAssertTrue(useCase.viewState.items.isEmpty)
+    }
+
+    func testCandidateReviewUseCaseRejectsMismatchedTerminalDecision() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-000000000044")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try candidateInbox(vaultID: lease.vaultId, candidateID: candidateID))
+        client.reviewResult = .success(try decisionResult(candidateID: candidateID, decision: .rejected))
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { "candidate-review-mismatch-001" }
+        )
+
+        useCase.send(.refresh)
+        useCase.send(.accept(candidateID: candidateID))
+
+        XCTAssertEqual(useCase.viewState.phase, .failed)
+        XCTAssertEqual(useCase.viewState.notice, .reviewResultMismatch)
+        XCTAssertEqual(useCase.viewState.items.map(\.id), [candidateID])
+    }
+
+    private func makeActiveRuntime() throws -> (AccountLeaseRuntime, AccountLease) {
+        let runtime = AccountLeaseRuntime(authorityEpoch: "epoch-v1")
+        runtime.publish(session: accountSession(
+            subjectId: "owner-a",
+            vaultId: "vault-a",
+            generation: 1,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000101")!
+        ))
+        return (runtime, try XCTUnwrap(runtime.capture(forSubjectId: "owner-a")))
+    }
+
+    private func accountSession(
+        subjectId: String,
+        vaultId: String,
+        generation: UInt64,
+        generationID: UUID
+    ) -> AccountSession {
+        AccountSession(
+            subjectId: subjectId,
+            vaultId: vaultId,
+            sessionId: "session-\(generation)",
+            tokenFamilyId: "family-\(generation)",
+            sessionVersion: Int(generation),
+            generation: generation,
+            generationId: generationID,
+            state: .active,
+            activatedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+    }
+
+    private func recordID(_ rawValue: String) -> OwnerTruthRecordID {
+        OwnerTruthRecordID(rawValue: UUID(uuidString: rawValue)!)
+    }
+
+    private func candidateInbox(
+        vaultID: String,
+        candidateID: OwnerTruthRecordID
+    ) throws -> OwnerTruthCandidateInbox {
+        let sourceID = "00000000-0000-0000-0000-000000000045"
+        let expectedVaultID = try XCTUnwrap(OwnerTruthVaultID(vaultID))
+        return try OwnerTruthCandidateInbox(
+            backendJSONObject: [
+                "schemaVersion": "owner-truth-candidate-inbox-v1",
+                "vaultId": vaultID,
+                "candidates": [[
+                    "candidateId": candidateID.rawValue.uuidString.lowercased(),
+                    "sourceId": sourceID,
+                    "memoryKind": "experience",
+                    "perspectiveType": "firstPerson",
+                    "epistemicStatus": "recalled",
+                    "sensitivity": "standard",
+                    "contentSchemaVersion": "owner-truth-candidate-content-v1",
+                    "content": [
+                        "summary": "小时候在院子里听父亲讲故事",
+                        "confidence": 0.92,
+                    ],
+                    "contentHash": "content-hash",
+                    "sourceRefs": [[
+                        "sourceId": sourceID,
+                        "sourceVersion": 1,
+                    ]],
+                    "reviewMode": "single",
+                    "candidateVersion": 1,
+                ]],
+            ],
+            expectedVaultID: expectedVaultID
+        )
+    }
+
+    private func decisionResult(
+        candidateID: OwnerTruthRecordID,
+        decision: OwnerTruthCandidateDecision
+    ) throws -> OwnerTruthCandidateDecisionResult {
+        let activatesMemory = decision == .accepted || decision == .corrected
+        let receipt: [String: Any] = [
+            "receiptId": "00000000-0000-0000-0000-000000000046",
+            "candidateId": candidateID.rawValue.uuidString.lowercased(),
+            "decision": decision.rawValue,
+            "candidateVersion": 2,
+            "candidateBeforeHash": "before-hash",
+            "candidateAfterHash": "after-hash",
+            "correctedValueId": NSNull(),
+        ]
+        let memoryActivation: [String: Any] = [
+            "status": activatesMemory ? "created" : "notApplicable",
+            "memoryId": activatesMemory ? "00000000-0000-0000-0000-000000000047" : NSNull(),
+            "memoryVersionId": activatesMemory ? "00000000-0000-0000-0000-000000000048" : NSNull(),
+            "contentHash": activatesMemory ? "memory-hash" : NSNull(),
+        ]
+        return try OwnerTruthCandidateDecisionResult(
+            backendJSONObject: [
+                "schemaVersion": "owner-truth-candidate-decision-memory-v1",
+                "status": "created",
+                "receipt": receipt,
+                "memoryActivation": memoryActivation,
+            ],
+            expectedCandidateID: candidateID
+        )
+    }
+}
+
+private final class CandidateReviewClientSpy: OwnerTruthCandidateReviewClient {
+    var inboxResult: Result<OwnerTruthCandidateInbox, Error>?
+    var reviewResult: Result<OwnerTruthCandidateDecisionResult, Error>?
+    var deferInbox = false
+    private var deferredInboxCompletion: ((Result<OwnerTruthCandidateInbox, Error>) -> Void)?
+    private(set) var reviewedCommands: [OwnerTruthCandidateReviewCommand] = []
+
+    func fetchOwnerTruthCandidateInbox(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthCandidateInbox, Error>) -> Void
+    ) {
+        if deferInbox {
+            deferredInboxCompletion = completion
+            return
+        }
+        completion(inboxResult ?? .failure(CandidateReviewClientSpyError.missingInboxResult))
+    }
+
+    func reviewOwnerTruthCandidate(
+        vaultID: OwnerTruthVaultID,
+        candidateID: OwnerTruthRecordID,
+        command: OwnerTruthCandidateReviewCommand,
+        completion: @escaping (Result<OwnerTruthCandidateDecisionResult, Error>) -> Void
+    ) {
+        reviewedCommands.append(command)
+        completion(reviewResult ?? .failure(CandidateReviewClientSpyError.missingReviewResult))
+    }
+
+    func completeDeferredInbox(_ result: Result<OwnerTruthCandidateInbox, Error>) {
+        let completion = deferredInboxCompletion
+        deferredInboxCompletion = nil
+        completion?(result)
+    }
+}
+
+private enum CandidateReviewClientSpyError: Error {
+    case missingInboxResult
+    case missingReviewResult
 }
