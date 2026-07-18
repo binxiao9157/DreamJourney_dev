@@ -1,5 +1,6 @@
-import Foundation
 import CocoaLumberjack
+import CryptoKit
+import Foundation
 
 enum VoiceCloneSampleStatus: String, Codable {
     case notProvided
@@ -135,6 +136,306 @@ private struct VoiceClonePersonaTarget {
     }
 }
 
+private struct VoiceCloneLocalOwnerScope: Equatable {
+    static let storeSchemaVersion = 2
+
+    let subjectId: String
+    let vaultId: String
+    let generation: UInt64
+    let generationId: UUID
+
+    init?(accountLease: AccountLease) {
+        let subjectId = accountLease.subjectId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let vaultId = accountLease.vaultId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !subjectId.isEmpty, !vaultId.isEmpty else { return nil }
+        self.subjectId = subjectId
+        self.vaultId = vaultId
+        generation = accountLease.generation
+        generationId = accountLease.generationId
+    }
+
+    var storageKey: String {
+        let identity = [
+            "subject", subjectId,
+            "vault", vaultId,
+            "generation", String(generation),
+            "generation-id", generationId.uuidString.lowercased(),
+        ]
+        let canonicalIdentity = identity
+            .map { "\($0.utf8.count):\($0)" }
+            .joined(separator: "|")
+        let digest = SHA256.hash(data: Data(canonicalIdentity.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return "dj.voiceclone.localState.scoped.v2.\(digest)"
+    }
+}
+
+private struct VoiceClonePersistedState: Codable, Equatable {
+    var speakerId: String?
+    var sampleStatus: VoiceCloneSampleStatus?
+    var isEnabled: Bool?
+    var realCloneProviderReady: Bool?
+    var qualityAcceptanceRequired: Bool?
+    var providerMode: String?
+    var providerStatus: String?
+    var providerMessage: String?
+
+    static let empty = VoiceClonePersistedState(
+        speakerId: nil,
+        sampleStatus: nil,
+        isEnabled: nil,
+        realCloneProviderReady: nil,
+        qualityAcceptanceRequired: nil,
+        providerMode: nil,
+        providerStatus: nil,
+        providerMessage: nil
+    )
+}
+
+private struct VoiceCloneLocalStateEnvelope: Codable, Equatable {
+    let storeSchemaVersion: Int
+    let subjectId: String
+    let vaultId: String
+    let generation: UInt64
+    let generationId: UUID
+    let state: VoiceClonePersistedState
+
+    init(state: VoiceClonePersistedState, scope: VoiceCloneLocalOwnerScope) {
+        storeSchemaVersion = VoiceCloneLocalOwnerScope.storeSchemaVersion
+        subjectId = scope.subjectId
+        vaultId = scope.vaultId
+        generation = scope.generation
+        generationId = scope.generationId
+        self.state = state
+    }
+
+    func matches(_ scope: VoiceCloneLocalOwnerScope) -> Bool {
+        storeSchemaVersion == VoiceCloneLocalOwnerScope.storeSchemaVersion
+            && subjectId == scope.subjectId
+            && vaultId == scope.vaultId
+            && generation == scope.generation
+            && generationId == scope.generationId
+    }
+}
+
+private struct VoiceCloneLegacyStateSnapshot: Codable, Equatable {
+    let speakerId: String?
+    let sampleStatus: String?
+    let isEnabled: Bool?
+    let realCloneProviderReady: Bool?
+    let qualityAcceptanceRequired: Bool?
+    let providerMode: String?
+    let providerStatus: String?
+    let providerMessage: String?
+
+    var hasPayload: Bool {
+        speakerId != nil
+            || sampleStatus != nil
+            || isEnabled != nil
+            || realCloneProviderReady != nil
+            || qualityAcceptanceRequired != nil
+            || providerMode != nil
+            || providerStatus != nil
+            || providerMessage != nil
+    }
+}
+
+private struct VoiceCloneLegacyQuarantineRecord: Codable, Equatable {
+    let recordSchemaVersion: Int
+    let ownerEvidence: String
+    let sourceStorageKeys: [String]
+    let payload: VoiceCloneLegacyStateSnapshot
+    let quarantinedAt: Date
+}
+
+private struct VoiceCloneLegacyQuarantineEnvelope: Codable, Equatable {
+    let quarantineSchemaVersion: Int
+    var records: [VoiceCloneLegacyQuarantineRecord]
+}
+
+private final class VoiceCloneLocalStateStore {
+    private enum LegacyKey {
+        static let speakerId = "dj.voiceclone.speakerId"
+        static let sampleStatus = "dj.voiceclone.sampleStatus"
+        static let isEnabled = "dj.voiceclone.isEnabled"
+        static let realCloneProviderReady = "dj.voiceclone.realCloneProviderReady"
+        static let qualityAcceptanceRequired = "dj.voiceclone.qualityAcceptanceRequired"
+        static let providerMode = "dj.voiceclone.providerMode"
+        static let providerStatus = "dj.voiceclone.providerStatus"
+        static let providerMessage = "dj.voiceclone.providerMessage"
+
+        static let all = [
+            speakerId,
+            sampleStatus,
+            isEnabled,
+            realCloneProviderReady,
+            qualityAcceptanceRequired,
+            providerMode,
+            providerStatus,
+            providerMessage,
+        ]
+    }
+
+    private let legacyQuarantineKey = "dj.voiceclone.legacyQuarantine.v1"
+    private let defaults: UserDefaults
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let now: () -> Date
+    private let lock = NSLock()
+
+    init(
+        defaults: UserDefaults = .standard,
+        accountLeaseRuntime: AccountLeaseRuntimePort,
+        now: @escaping () -> Date = Date.init
+    ) {
+        self.defaults = defaults
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.now = now
+    }
+
+    func load(accountLease: AccountLease) -> VoiceClonePersistedState? {
+        guard let scope = VoiceCloneLocalOwnerScope(accountLease: accountLease),
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            return nil
+        }
+
+        lock.lock()
+        defer { lock.unlock() }
+        guard isolateLegacyPayloadIfNeeded(),
+              accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+            return nil
+        }
+        guard let data = defaults.data(forKey: scope.storageKey) else {
+            return nil
+        }
+        guard let envelope = try? JSONDecoder().decode(
+            VoiceCloneLocalStateEnvelope.self,
+            from: data
+        ), envelope.matches(scope) else {
+            return nil
+        }
+        return envelope.state
+    }
+
+    @discardableResult
+    func update(
+        accountLease: AccountLease,
+        mutate: (inout VoiceClonePersistedState) -> Void
+    ) -> VoiceClonePersistedState? {
+        guard let scope = VoiceCloneLocalOwnerScope(accountLease: accountLease),
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            return nil
+        }
+
+        lock.lock()
+        defer { lock.unlock() }
+        guard isolateLegacyPayloadIfNeeded(),
+              accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            return nil
+        }
+
+        let storageKey = scope.storageKey
+        let previousData = defaults.data(forKey: storageKey)
+        let previousEnvelope: VoiceCloneLocalStateEnvelope?
+        if let previousData {
+            guard let decoded = try? JSONDecoder().decode(
+                VoiceCloneLocalStateEnvelope.self,
+                from: previousData
+            ), decoded.matches(scope) else {
+                return nil
+            }
+            previousEnvelope = decoded
+        } else {
+            previousEnvelope = nil
+        }
+
+        var state = previousEnvelope?.state ?? .empty
+        mutate(&state)
+        let envelope = VoiceCloneLocalStateEnvelope(state: state, scope: scope)
+        guard let replacementData = try? JSONEncoder().encode(envelope) else {
+            return nil
+        }
+        defaults.set(replacementData, forKey: storageKey)
+
+        guard defaults.data(forKey: storageKey) == replacementData,
+              accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            restore(
+                previousData: previousData,
+                replacing: replacementData,
+                forKey: storageKey
+            )
+            return nil
+        }
+        return state
+    }
+
+    private func restore(previousData: Data?, replacing replacementData: Data, forKey key: String) {
+        guard defaults.data(forKey: key) == replacementData else { return }
+        if let previousData {
+            defaults.set(previousData, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
+    private func isolateLegacyPayloadIfNeeded() -> Bool {
+        let payload = VoiceCloneLegacyStateSnapshot(
+            speakerId: defaults.string(forKey: LegacyKey.speakerId),
+            sampleStatus: defaults.string(forKey: LegacyKey.sampleStatus),
+            isEnabled: optionalBool(forKey: LegacyKey.isEnabled),
+            realCloneProviderReady: optionalBool(forKey: LegacyKey.realCloneProviderReady),
+            qualityAcceptanceRequired: optionalBool(forKey: LegacyKey.qualityAcceptanceRequired),
+            providerMode: defaults.string(forKey: LegacyKey.providerMode),
+            providerStatus: defaults.string(forKey: LegacyKey.providerStatus),
+            providerMessage: defaults.string(forKey: LegacyKey.providerMessage)
+        )
+        guard payload.hasPayload else { return true }
+
+        var quarantine: VoiceCloneLegacyQuarantineEnvelope
+        if let data = defaults.data(forKey: legacyQuarantineKey) {
+            guard let decoded = try? JSONDecoder().decode(
+                VoiceCloneLegacyQuarantineEnvelope.self,
+                from: data
+            ), decoded.quarantineSchemaVersion == 1 else {
+                return false
+            }
+            quarantine = decoded
+        } else {
+            quarantine = VoiceCloneLegacyQuarantineEnvelope(
+                quarantineSchemaVersion: 1,
+                records: []
+            )
+        }
+
+        if !quarantine.records.contains(where: { $0.payload == payload }) {
+            quarantine.records.append(
+                VoiceCloneLegacyQuarantineRecord(
+                    recordSchemaVersion: 1,
+                    ownerEvidence: "unverified",
+                    sourceStorageKeys: LegacyKey.all,
+                    payload: payload,
+                    quarantinedAt: now()
+                )
+            )
+        }
+        guard let quarantineData = try? JSONEncoder().encode(quarantine) else {
+            return false
+        }
+        defaults.set(quarantineData, forKey: legacyQuarantineKey)
+        guard defaults.data(forKey: legacyQuarantineKey) == quarantineData else {
+            return false
+        }
+
+        LegacyKey.all.forEach { defaults.removeObject(forKey: $0) }
+        return LegacyKey.all.allSatisfy { defaults.object(forKey: $0) == nil }
+    }
+
+    private func optionalBool(forKey key: String) -> Bool? {
+        guard defaults.object(forKey: key) != nil else { return nil }
+        return defaults.bool(forKey: key)
+    }
+}
+
 /// 封装 DreamJourney 后端声音复刻合同：
 /// 1. iOS 只提交授权后的声音样本给后端
 /// 2. 后端持有火山引擎声音复刻 API Key 并代理训练/查询
@@ -145,15 +446,6 @@ final class VoiceCloneService {
 
     // MARK: - 配置
 
-    /// 当前用户的 speaker_id（持久化到 UserDefaults）
-    private let speakerIdKey = "dj.voiceclone.speakerId"
-    private let sampleStatusKey = "dj.voiceclone.sampleStatus"
-    private let isEnabledKey = "dj.voiceclone.isEnabled"
-    private let realCloneProviderReadyKey = "dj.voiceclone.realCloneProviderReady"
-    private let qualityAcceptanceRequiredKey = "dj.voiceclone.qualityAcceptanceRequired"
-    private let providerModeKey = "dj.voiceclone.providerMode"
-    private let providerStatusKey = "dj.voiceclone.providerStatus"
-    private let providerMessageKey = "dj.voiceclone.providerMessage"
     private static let emptyVoiceProfileId = "voiceProfileId_not_created"
     static let backendContractEndpoint = "/voice/profiles"
     private static let authorizationCopy = "音色复刻必须由用户主动授权，仅使用用户确认提交的声音样本；训练、查询、合成、禁用和删除都通过 DreamJourney 后端代理执行，iOS 不保存火山语音密钥。"
@@ -172,18 +464,23 @@ final class VoiceCloneService {
     private var trainingPersonaTarget: VoiceClonePersonaTarget?
     private var trainingAccountLease: AccountLease?
     private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let localStateStore: VoiceCloneLocalStateStore
 
     // MARK: - Init
 
     private init(accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared) {
         self.accountLeaseRuntime = accountLeaseRuntime
+        localStateStore = VoiceCloneLocalStateStore(accountLeaseRuntime: accountLeaseRuntime)
     }
 
     // MARK: - 公开 API
 
     /// 获取当前保存的 speaker_id
     var currentSpeakerId: String? {
-        return UserDefaults.standard.string(forKey: speakerIdKey)
+        guard let operation = activePersonaOperation() else { return nil }
+        return normalizedVoiceProfileId(
+            localStateStore.load(accountLease: operation.accountLease)?.speakerId
+        )
     }
 
     var currentUsableSpeakerId: String? {
@@ -196,31 +493,56 @@ final class VoiceCloneService {
     }
 
     func voiceCloneShellSnapshot() -> VoiceCloneProfileSnapshot {
-        let userId = UserManager.shared.currentUser?.id ?? "default"
-        let target = currentPersonaTarget(userId: userId)
+        guard let operation = activePersonaOperation() else {
+            return emptyVoiceCloneShellSnapshot()
+        }
+        return voiceCloneShellSnapshot(
+            accountLease: operation.accountLease,
+            target: operation.target
+        )
+    }
+
+    private func voiceCloneShellSnapshot(
+        accountLease: AccountLease,
+        target: VoiceClonePersonaTarget
+    ) -> VoiceCloneProfileSnapshot {
+        guard accountLease.subjectId == target.userId,
+              accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+            return emptyVoiceCloneShellSnapshot()
+        }
         if let familySnapshot = familyVoiceCloneShellSnapshot(for: target) {
             return familySnapshot
         }
 
-        let storedStatus = UserDefaults.standard.string(forKey: sampleStatusKey)
-            .flatMap(VoiceCloneSampleStatus.init(rawValue:))
-        let profileId = currentSpeakerId ?? Self.emptyVoiceProfileId
-        let sampleStatus = storedStatus ?? (currentSpeakerId == nil ? .notProvided : .pending)
-        let storedProviderMode = UserDefaults.standard.string(forKey: providerModeKey) ?? "localFallback"
-        let storedProviderStatus = UserDefaults.standard.string(forKey: providerStatusKey) ?? ""
-        let storedProviderMessage = UserDefaults.standard.string(forKey: providerMessageKey) ?? ""
+        let state = localStateStore.load(accountLease: accountLease)
+        let speakerId = normalizedVoiceProfileId(state?.speakerId)
+        let profileId = speakerId ?? Self.emptyVoiceProfileId
+        let sampleStatus = state?.sampleStatus ?? (speakerId == nil ? .notProvided : .pending)
         return VoiceCloneProfileSnapshot(
             voiceProfileId: profileId,
             sampleStatus: sampleStatus,
             authorizationCopy: Self.authorizationCopy,
-            isEnabled: storedBool(forKey: isEnabledKey) ?? false,
-            realCloneProviderReady: storedBool(forKey: realCloneProviderReadyKey) ?? false,
-            qualityAcceptanceRequired: storedBool(forKey: qualityAcceptanceRequiredKey) ?? true,
+            isEnabled: state?.isEnabled ?? false,
+            realCloneProviderReady: state?.realCloneProviderReady ?? false,
+            qualityAcceptanceRequired: state?.qualityAcceptanceRequired ?? true,
             disableContract: Self.disableContract,
             deleteContract: Self.deleteContract,
-            providerMode: storedProviderMode,
-            providerStatus: storedProviderStatus,
-            providerMessage: storedProviderMessage
+            providerMode: state?.providerMode ?? "localFallback",
+            providerStatus: state?.providerStatus ?? "",
+            providerMessage: state?.providerMessage ?? ""
+        )
+    }
+
+    private func emptyVoiceCloneShellSnapshot() -> VoiceCloneProfileSnapshot {
+        VoiceCloneProfileSnapshot(
+            voiceProfileId: Self.emptyVoiceProfileId,
+            sampleStatus: .notProvided,
+            authorizationCopy: Self.authorizationCopy,
+            isEnabled: false,
+            realCloneProviderReady: false,
+            qualityAcceptanceRequired: true,
+            disableContract: Self.disableContract,
+            deleteContract: Self.deleteContract
         )
     }
 
@@ -233,8 +555,8 @@ final class VoiceCloneService {
         preferredProfileId: String? = nil
     ) -> VoiceCloneProfileContract? {
         let activeProfiles = profiles.filter { $0.sampleStatus != .deleted }
-        let userId = UserManager.shared.currentUser?.id ?? "default"
-        let target = currentPersonaTarget(userId: userId)
+        guard let operation = activePersonaOperation() else { return nil }
+        let target = operation.target
         let targetProfiles = activeProfiles.filter { profile($0, matches: target) }
         let personalCompatibleProfiles = activeProfiles.filter {
             $0.personaScope.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() != "family"
@@ -262,11 +584,23 @@ final class VoiceCloneService {
     }
 
     func persistSnapshot(_ snapshot: VoiceCloneProfileSnapshot) {
-        let userId = UserManager.shared.currentUser?.id ?? "default"
-        persistSnapshot(snapshot, target: currentPersonaTarget(userId: userId))
+        guard let operation = activePersonaOperation() else { return }
+        persistSnapshot(
+            snapshot,
+            target: operation.target,
+            accountLease: operation.accountLease
+        )
     }
 
-    private func persistSnapshot(_ snapshot: VoiceCloneProfileSnapshot, target: VoiceClonePersonaTarget) {
+    private func persistSnapshot(
+        _ snapshot: VoiceCloneProfileSnapshot,
+        target: VoiceClonePersonaTarget,
+        accountLease: AccountLease
+    ) {
+        guard accountLease.subjectId == target.userId,
+              accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            return
+        }
         if let memberId = target.familyMemberId {
             FamilyRepository.shared.updateVoiceProfile(
                 memberId: memberId,
@@ -277,15 +611,22 @@ final class VoiceCloneService {
             return
         }
 
-        if let speakerId = normalizedVoiceProfileId(snapshot.voiceProfileId),
-           snapshot.sampleStatus != .notProvided,
-           snapshot.sampleStatus != .deleted {
-            UserDefaults.standard.set(speakerId, forKey: speakerIdKey)
-        } else if snapshot.sampleStatus == .notProvided || snapshot.sampleStatus == .deleted {
-            clearStoredSpeakerId()
+        _ = localStateStore.update(accountLease: accountLease) { state in
+            if let speakerId = normalizedVoiceProfileId(snapshot.voiceProfileId),
+               snapshot.sampleStatus != .notProvided,
+               snapshot.sampleStatus != .deleted {
+                state.speakerId = speakerId
+            } else if snapshot.sampleStatus == .notProvided || snapshot.sampleStatus == .deleted {
+                state.speakerId = nil
+            }
+            state.sampleStatus = snapshot.sampleStatus
+            state.isEnabled = snapshot.isEnabled
+            state.realCloneProviderReady = snapshot.realCloneProviderReady
+            state.qualityAcceptanceRequired = snapshot.qualityAcceptanceRequired
+            state.providerMode = snapshot.providerMode
+            state.providerStatus = snapshot.providerStatus
+            state.providerMessage = snapshot.providerMessage
         }
-        saveSampleStatus(snapshot.sampleStatus)
-        saveBackendState(snapshot)
     }
 
     @discardableResult
@@ -293,9 +634,27 @@ final class VoiceCloneService {
         guard !profileId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return voiceCloneShellSnapshot()
         }
-        UserDefaults.standard.set(VoiceCloneSampleStatus.disabled.rawValue, forKey: sampleStatusKey)
-        UserDefaults.standard.set(false, forKey: isEnabledKey)
-        return voiceCloneShellSnapshot()
+        guard let operation = activePersonaOperation() else {
+            return emptyVoiceCloneShellSnapshot()
+        }
+        let current = voiceCloneShellSnapshot(
+            accountLease: operation.accountLease,
+            target: operation.target
+        )
+        let disabled = snapshot(
+            current,
+            sampleStatus: .disabled,
+            isEnabled: false
+        )
+        persistSnapshot(
+            disabled,
+            target: operation.target,
+            accountLease: operation.accountLease
+        )
+        return voiceCloneShellSnapshot(
+            accountLease: operation.accountLease,
+            target: operation.target
+        )
     }
 
     @discardableResult
@@ -303,11 +662,29 @@ final class VoiceCloneService {
         guard !profileId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return voiceCloneShellSnapshot()
         }
-        UserDefaults.standard.removeObject(forKey: speakerIdKey)
-        UserDefaults.standard.set(VoiceCloneSampleStatus.deleted.rawValue, forKey: sampleStatusKey)
-        UserDefaults.standard.set(false, forKey: isEnabledKey)
-        UserDefaults.standard.set(false, forKey: realCloneProviderReadyKey)
-        return voiceCloneShellSnapshot()
+        guard let operation = activePersonaOperation() else {
+            return emptyVoiceCloneShellSnapshot()
+        }
+        let current = voiceCloneShellSnapshot(
+            accountLease: operation.accountLease,
+            target: operation.target
+        )
+        let deleted = snapshot(
+            current,
+            voiceProfileId: Self.emptyVoiceProfileId,
+            sampleStatus: .deleted,
+            isEnabled: false,
+            realCloneProviderReady: false
+        )
+        persistSnapshot(
+            deleted,
+            target: operation.target,
+            accountLease: operation.accountLease
+        )
+        return voiceCloneShellSnapshot(
+            accountLease: operation.accountLease,
+            target: operation.target
+        )
     }
 
     func disableVoiceProfileRemote(
@@ -344,7 +721,11 @@ final class VoiceCloneService {
                 guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
                     return
                 }
-                self.persistBackendProfileIfUsable(profile, target: target)
+                self.persistBackendProfileIfUsable(
+                    profile,
+                    target: target,
+                    accountLease: accountLease
+                )
                 guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
                     return
                 }
@@ -398,7 +779,11 @@ final class VoiceCloneService {
                 guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
                     return
                 }
-                self.persistBackendProfileIfUsable(profile, target: target)
+                self.persistBackendProfileIfUsable(
+                    profile,
+                    target: target,
+                    accountLease: accountLease
+                )
                 guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
                     return
                 }
@@ -453,7 +838,11 @@ final class VoiceCloneService {
                 guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
                     return
                 }
-                self.persistSnapshot(snapshot, target: target)
+                self.persistSnapshot(
+                    snapshot,
+                    target: target,
+                    accountLease: accountLease
+                )
                 guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
                     return
                 }
@@ -469,46 +858,33 @@ final class VoiceCloneService {
         }
     }
 
-    /// 保存 speaker_id
-    private func saveSpeakerId(_ id: String) {
-        UserDefaults.standard.set(id, forKey: speakerIdKey)
-        UserDefaults.standard.set(VoiceCloneSampleStatus.pending.rawValue, forKey: sampleStatusKey)
-        UserDefaults.standard.set(false, forKey: isEnabledKey)
+    private func saveSampleStatus(
+        _ status: VoiceCloneSampleStatus,
+        accountLease: AccountLease
+    ) {
+        _ = localStateStore.update(accountLease: accountLease) { state in
+            state.sampleStatus = status
+        }
     }
 
-    private func saveSampleStatus(_ status: VoiceCloneSampleStatus) {
-        UserDefaults.standard.set(status.rawValue, forKey: sampleStatusKey)
-    }
-
-    private func clearStoredSpeakerId() {
-        UserDefaults.standard.removeObject(forKey: speakerIdKey)
-    }
-
-    private func persistBackendProfileIfUsable(_ profile: VoiceCloneProfileContract, target: VoiceClonePersonaTarget? = nil) {
+    private func persistBackendProfileIfUsable(
+        _ profile: VoiceCloneProfileContract,
+        target: VoiceClonePersonaTarget? = nil,
+        accountLease: AccountLease
+    ) {
         let snapshot = VoiceCloneProfileSnapshot(backendContract: profile)
-        let userId = UserManager.shared.currentUser?.id ?? "default"
-        let resolvedTarget = target ?? personaTarget(from: profile, fallbackUserId: userId) ?? currentPersonaTarget(userId: userId)
-        persistSnapshot(snapshot, target: resolvedTarget)
+        let resolvedTarget = target
+            ?? personaTarget(from: profile, fallbackUserId: accountLease.subjectId)
+            ?? currentPersonaTarget(userId: accountLease.subjectId)
+        persistSnapshot(
+            snapshot,
+            target: resolvedTarget,
+            accountLease: accountLease
+        )
     }
 
     private static func isBackendProfileReadyForUse(_ profile: VoiceCloneProfileContract) -> Bool {
         profile.sampleStatus == .ready && profile.isEnabled && profile.realCloneProviderReady && !profile.qualityAcceptanceRequired
-    }
-
-    private func storedBool(forKey key: String) -> Bool? {
-        guard UserDefaults.standard.object(forKey: key) != nil else {
-            return nil
-        }
-        return UserDefaults.standard.bool(forKey: key)
-    }
-
-    private func saveBackendState(_ snapshot: VoiceCloneProfileSnapshot) {
-        UserDefaults.standard.set(snapshot.isEnabled, forKey: isEnabledKey)
-        UserDefaults.standard.set(snapshot.realCloneProviderReady, forKey: realCloneProviderReadyKey)
-        UserDefaults.standard.set(snapshot.qualityAcceptanceRequired, forKey: qualityAcceptanceRequiredKey)
-        UserDefaults.standard.set(snapshot.providerMode, forKey: providerModeKey)
-        UserDefaults.standard.set(snapshot.providerStatus, forKey: providerStatusKey)
-        UserDefaults.standard.set(snapshot.providerMessage, forKey: providerMessageKey)
     }
 
     private func normalizedVoiceProfileId(_ value: String?) -> String? {
@@ -518,6 +894,33 @@ final class VoiceCloneService {
             return nil
         }
         return trimmed
+    }
+
+    private func snapshot(
+        _ source: VoiceCloneProfileSnapshot,
+        voiceProfileId: String? = nil,
+        sampleStatus: VoiceCloneSampleStatus? = nil,
+        isEnabled: Bool? = nil,
+        realCloneProviderReady: Bool? = nil
+    ) -> VoiceCloneProfileSnapshot {
+        VoiceCloneProfileSnapshot(
+            voiceProfileId: voiceProfileId ?? source.voiceProfileId,
+            sampleStatus: sampleStatus ?? source.sampleStatus,
+            authorizationCopy: source.authorizationCopy,
+            isEnabled: isEnabled ?? source.isEnabled,
+            realCloneProviderReady: realCloneProviderReady ?? source.realCloneProviderReady,
+            qualityAcceptanceRequired: source.qualityAcceptanceRequired,
+            disableContract: source.disableContract,
+            deleteContract: source.deleteContract,
+            providerMode: source.providerMode,
+            providerStatus: source.providerStatus,
+            providerMessage: source.providerMessage,
+            contractVersion: source.contractVersion,
+            defaultReleaseVisible: source.defaultReleaseVisible,
+            providerBindingMode: source.providerBindingMode,
+            providerSlotManaged: source.providerSlotManaged,
+            providerSlotState: source.providerSlotState
+        )
     }
 
     private func activePersonaOperation() -> (accountLease: AccountLease, target: VoiceClonePersonaTarget)? {
@@ -700,7 +1103,9 @@ final class VoiceCloneService {
 
         // 失败/删除/禁用后的重试不能复用旧 speakerId，否则 provider 侧可能继续命中
         // 已经失败或归属错误的音色资源，导致 resource mismatch 一直存在。
-        let finalSpeakerId = speakerId ?? reusableSpeakerIdForTraining(target: target) ?? Self.makeSpeakerId()
+        let finalSpeakerId = speakerId
+            ?? reusableSpeakerIdForTraining(target: target, accountLease: accountLease)
+            ?? Self.makeSpeakerId()
 
         // 确定音频格式
         guard let format = audioFormat(from: audioURL) else {
@@ -735,7 +1140,11 @@ final class VoiceCloneService {
                 guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
                     return
                 }
-                self.persistBackendProfileIfUsable(profile, target: target)
+                self.persistBackendProfileIfUsable(
+                    profile,
+                    target: target,
+                    accountLease: accountLease
+                )
                 guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
                     return
                 }
@@ -809,7 +1218,9 @@ final class VoiceCloneService {
             return
         }
 
-        let sid = speakerId ?? reusableSpeakerIdForTraining(target: target) ?? currentSpeakerId ?? ""
+        let sid = speakerId
+            ?? reusableSpeakerIdForTraining(target: target, accountLease: accountLease)
+            ?? ""
         guard !sid.isEmpty else {
             deliver(.failure(.speakerIdNotFound), accountLease: accountLease, completion: completion)
             return
@@ -828,7 +1239,11 @@ final class VoiceCloneService {
                 guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
                     return
                 }
-                self.persistBackendProfileIfUsable(profile, target: target)
+                self.persistBackendProfileIfUsable(
+                    profile,
+                    target: target,
+                    accountLease: accountLease
+                )
                 guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
                     return
                 }
@@ -871,9 +1286,11 @@ final class VoiceCloneService {
         }
     }
 
-    private func reusableSpeakerIdForTraining(target: VoiceClonePersonaTarget? = nil) -> String? {
-        if let target,
-           let memberId = target.familyMemberId,
+    private func reusableSpeakerIdForTraining(
+        target: VoiceClonePersonaTarget,
+        accountLease: AccountLease
+    ) -> String? {
+        if let memberId = target.familyMemberId,
            let member = FamilyRepository.shared.get(by: memberId),
            let voiceProfileId = member.normalizedVoiceProfileId {
             let storedStatus = VoiceCloneSampleStatus(rawValue: member.voiceSampleStatus)
@@ -887,13 +1304,13 @@ final class VoiceCloneService {
             }
         }
 
-        guard let speakerId = currentSpeakerId?.trimmingCharacters(in: .whitespacesAndNewlines),
+        guard accountLease.subjectId == target.userId,
+              let state = localStateStore.load(accountLease: accountLease),
+              let speakerId = normalizedVoiceProfileId(state.speakerId),
               !speakerId.isEmpty else {
             return nil
         }
-        let storedStatus = UserDefaults.standard.string(forKey: sampleStatusKey)
-            .flatMap(VoiceCloneSampleStatus.init(rawValue:))
-        switch storedStatus {
+        switch state.sampleStatus {
         case .failed, .deleted, .disabled:
             return nil
         case .notProvided, .none:
@@ -974,12 +1391,16 @@ final class VoiceCloneService {
     /// VoiceCloneService 使用 Timer 轮询训练状态，App 进入后台后 Timer 会被挂起
     /// 此方法在 App 回前台时调用，如果训练已完成则直接回调等待方（而不是发通知）
     func checkPendingTraining() {
-        guard let speakerId = trainingSpeakerId ?? currentSpeakerId else { return }
         // 只有在有 pendingCompletion 时才检查（说明有等待方）
         guard pendingCompletion != nil || pollTimer != nil else { return }
         guard let accountLease = trainingAccountLease,
               accountLeaseRuntime.validate(accountLease, at: .timer).allowed,
-              let target = trainingPersonaTarget else {
+              let target = trainingPersonaTarget,
+              let speakerId = trainingSpeakerId
+                ?? reusableSpeakerIdForTraining(
+                    target: target,
+                    accountLease: accountLease
+                ) else {
             pollTimer?.invalidate()
             pollTimer = nil
             pendingCompletion = nil
@@ -1161,7 +1582,10 @@ final class VoiceCloneService {
                             guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
                                 return
                             }
-                            self.saveSampleStatus(.ready)
+                            self.saveSampleStatus(
+                                .ready,
+                                accountLease: accountLease
+                            )
                         }
                         DispatchQueue.main.async { [weak self] in
                             guard let self,
