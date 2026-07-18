@@ -34,9 +34,16 @@
         ],
         "evidence": "docs/superpowers/status/2026-07-18-wi-s0-05-01b-rights-store-persistence.md",
         "id": "WI-S0-05-01B"
+      },
+      {
+        "commits": [
+          "36265f8"
+        ],
+        "evidence": "docs/superpowers/status/2026-07-18-wi-s0-05-01c-rights-route-adapter.md",
+        "id": "WI-S0-05-01C"
       }
     ],
-    "currentSubSlice": "WI-S0-05-01C",
+    "currentSubSlice": "WI-S0-05-01-G2",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
       "G0": "PASS",
@@ -47,10 +54,10 @@
     "id": "WI-S0-05-01",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "Rights Request/Execution/Receipt contract and dual-store persistence are G0-verified; continue with legacy /auth/delete compatibility without claiming G2/G4."
+    "summary": "Rights Request/Execution/Receipt contract, dual-store persistence, and legacy /auth/delete adapter are G0-verified; G2 deployed Postgres smoke is the next gate and G4 remains external."
   },
   "baselines": {
-    "backend": "main@27ffd59",
+    "backend": "main@36265f8",
     "ios": "feature/prd-stitch-ui-adaptation@593c05b",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
@@ -136,6 +143,12 @@
     {
       "evidence": "docs/superpowers/status/2026-07-18-wi-s0-05-01b-rights-store-persistence.md",
       "id": "WI-S0-05-01B",
+      "implementationStatus": "INTERNAL_READY / G0_VERIFIED / BACKEND_PUSHED / G2_POSTGRES_DEPLOYMENT_OPEN / G4_EXTERNAL_BLOCKED",
+      "registryClosure": "G2_AND_G4_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-18-wi-s0-05-01c-rights-route-adapter.md",
+      "id": "WI-S0-05-01C",
       "implementationStatus": "INTERNAL_READY / G0_VERIFIED / BACKEND_PUSHED / G2_POSTGRES_DEPLOYMENT_OPEN / G4_EXTERNAL_BLOCKED",
       "registryClosure": "G2_AND_G4_OPEN"
     },
@@ -279,9 +292,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S0-05-01C",
+    "id": "WI-S0-05-01-G2",
     "state": "IN_PROGRESS",
-    "summary": "Add a narrow internal/service adapter and integrate legacy /auth/delete with rights request/execution/receipt persistence while preserving existing lifecycle behavior."
+    "summary": "Deploy backend main@36265f8, apply migration 0006, and run Postgres rights lifecycle smoke before advancing to WI-S0-05-02."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -290,5 +303,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-18T18:45:00+08:00"
+  "updatedAt": "2026-07-18T19:05:00+08:00"
 }
