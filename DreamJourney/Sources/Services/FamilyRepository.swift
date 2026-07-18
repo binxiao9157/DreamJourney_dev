@@ -46,9 +46,10 @@ final class FamilyRepository {
         // 延迟首次同步（等知识库加载完成）
         let startupOwnerUserId = activeOwnerUserId
         let startupAccountLease = captureAccountLease(for: startupOwnerUserId)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            guard let self,
-                  let startupAccountLease,
+        let startupWorkItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.startupWorkItem = nil
+            guard let startupAccountLease,
                   self.isCurrentAccountLease(
                       startupAccountLease,
                       ownerUserId: startupOwnerUserId,
@@ -59,6 +60,8 @@ final class FamilyRepository {
             self.syncFromKnowledgeBase(accountLease: startupAccountLease)
             self.bootstrapCurrentUserFromBackend(accountLease: startupAccountLease)
         }
+        self.startupWorkItem = startupWorkItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: startupWorkItem)
     }
 
     @objc private func onKBUpdated() {
@@ -80,6 +83,69 @@ final class FamilyRepository {
         activateUser(nil, accountLease: nil)
     }
 
+    /// Removes the old owner's in-memory family projection and authorization snapshot.
+    /// Backend family relationship authority and owner-scoped overrides are never deleted here.
+    @discardableResult
+    func teardownForAccountLifecycle(
+        context: AccountLifecycleContext
+    ) -> AccountLifecycleModuleResult {
+        performSynchronouslyOnMain {
+            let oldOwner = context.oldAccountLease?.subjectId
+            if !activeOwnerUserId.isEmpty,
+               let oldOwner,
+               activeOwnerUserId != oldOwner {
+                return .completed(
+                    .failed,
+                    remainingLocalData: true,
+                    detailCode: "familyTeardownScopeMismatch"
+                )
+            }
+
+            startupWorkItem?.cancel()
+            startupWorkItem = nil
+            activeOwnerUserId = ""
+            userGeneration = UUID()
+            authorizationFreshness.reset()
+            members = []
+            knowledgeCandidates = []
+            modeOverrides = [:]
+            voiceProfileOverrides = [:]
+
+            switch context.event {
+            case .accountDeletion:
+                return .completed(
+                    .failed,
+                    remainingLocalData: true,
+                    detailCode: "familyDeletionPurgeUnsupported"
+                )
+            case .coldStartRecovery:
+                return .completed(
+                    .unmounted,
+                    remainingLocalData: true,
+                    detailCode: "familyColdStartUnmounted"
+                )
+            case .switchAccount:
+                return .completed(
+                    .retainedLocked,
+                    remainingLocalData: true,
+                    detailCode: "familySwitchRetainedLocked"
+                )
+            case .logout:
+                return .completed(
+                    .retainedLocked,
+                    remainingLocalData: true,
+                    detailCode: "familyLogoutRetainedLocked"
+                )
+            case .privateSuspension:
+                return .completed(
+                    .retainedLocked,
+                    remainingLocalData: true,
+                    detailCode: "familySuspensionRetainedLocked"
+                )
+            }
+        }
+    }
+
     private var members: [FamilyMember] = []
     private(set) var knowledgeCandidates: [FamilyRelationshipCandidate] = []
     private var activeOwnerUserId: String
@@ -87,6 +153,7 @@ final class FamilyRepository {
     private var authorizationFreshness = FamilyAuthorizationFreshness()
     private var modeOverrides: [String: DigitalHumanMode] = [:]
     private var voiceProfileOverrides: [String: VoiceProfileOverride] = [:]
+    private var startupWorkItem: DispatchWorkItem?
     private let modeOverridesBaseKey = "dj.family.digitalHumanModeOverrides"
     private let voiceProfileOverridesBaseKey = "dj.family.voiceProfileOverrides"
 
@@ -905,6 +972,13 @@ final class FamilyRepository {
         #else
         return false
         #endif
+    }
+
+    private func performSynchronouslyOnMain<T>(_ block: () -> T) -> T {
+        if Thread.isMainThread {
+            return block()
+        }
+        return DispatchQueue.main.sync(execute: block)
     }
 }
 

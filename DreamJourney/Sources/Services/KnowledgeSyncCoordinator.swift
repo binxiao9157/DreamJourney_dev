@@ -68,6 +68,118 @@ final class KnowledgeSyncCoordinator {
         }
     }
 
+    /// Cancels the old owner's sync runtime without binding or mounting a replacement owner.
+    /// Durable pending mutations and governance outbox items remain owner-locked except on deletion.
+    @discardableResult
+    func teardownForAccountLifecycle(
+        context: AccountLifecycleContext
+    ) -> AccountLifecycleModuleResult {
+        let authorizationEpoch = rotateAuthorizationEpoch(
+            ownerUserId: nil,
+            personaIdentity: nil
+        )
+        var result = AccountLifecycleModuleResult.completed(
+            .failed,
+            remainingLocalData: true,
+            detailCode: "knowledgeSyncTeardownNotExecuted"
+        )
+
+        performSynchronouslyOnQueue {
+            let oldOwner = context.oldAccountLease?.subjectId
+            if let activeUserId = self.activeUserId,
+               let oldOwner,
+               activeUserId != oldOwner {
+                result = .completed(
+                    .failed,
+                    remainingLocalData: true,
+                    detailCode: "knowledgeSyncTeardownScopeMismatch"
+                )
+                return
+            }
+            if let activeAccountLease = self.activeAccountLease,
+               let oldAccountLease = context.oldAccountLease,
+               !Self.isSameAccountLeaseGeneration(activeAccountLease, oldAccountLease) {
+                result = .completed(
+                    .failed,
+                    remainingLocalData: true,
+                    detailCode: "knowledgeSyncTeardownScopeMismatch"
+                )
+                return
+            }
+
+            self.governanceCompletions.removeAll()
+            self.debounceWorkItem?.cancel()
+            self.debounceWorkItem = nil
+            self.activeUserId = nil
+            self.activeAccountLease = nil
+            self.activeSyncAuthorization = nil
+            self.activePersonaIdentity = nil
+            self.syncGeneration = UUID()
+            self.activeAuthorizationEpoch = authorizationEpoch
+            self.isSyncing = false
+            self.needsResync = false
+            self.activePullSessionID = nil
+            self.snapshotFallbackAttemptedPullSessionID = nil
+
+            switch context.event {
+            case .accountDeletion:
+                guard let oldOwner, !oldOwner.isEmpty else {
+                    result = .completed(
+                        .failed,
+                        remainingLocalData: true,
+                        detailCode: "knowledgeSyncDeletionLeaseUnavailable"
+                    )
+                    return
+                }
+                do {
+                    try self.baseStore.remove(for: oldOwner)
+                    try self.pendingStore.remove(for: oldOwner)
+                    try self.governanceOutboxStore.removeAll(for: oldOwner)
+                    result = .completed(
+                        .purged,
+                        remainingLocalData: false,
+                        detailCode: "knowledgeSyncDeletionPurged"
+                    )
+                } catch {
+                    result = .completed(
+                        .failed,
+                        remainingLocalData: true,
+                        detailCode: "knowledgeSyncDeletionPurgeFailed"
+                    )
+                }
+
+            case .coldStartRecovery:
+                result = .completed(
+                    .unmounted,
+                    remainingLocalData: true,
+                    detailCode: "knowledgeSyncColdStartUnmounted"
+                )
+
+            case .switchAccount:
+                result = .completed(
+                    .retainedLocked,
+                    remainingLocalData: true,
+                    detailCode: "knowledgeSyncSwitchRetainedLocked"
+                )
+
+            case .logout:
+                result = .completed(
+                    .retainedLocked,
+                    remainingLocalData: true,
+                    detailCode: "knowledgeSyncLogoutRetainedLocked"
+                )
+
+            case .privateSuspension:
+                result = .completed(
+                    .retainedLocked,
+                    remainingLocalData: true,
+                    detailCode: "knowledgeSyncSuspensionRetainedLocked"
+                )
+            }
+        }
+        return result
+    }
+
     func personaContextDidChange(to identity: KBPersonaIdentity?) {
         guard let authorizationEpoch = rotateAuthorizationEpochForPersonaChange(identity) else {
             return

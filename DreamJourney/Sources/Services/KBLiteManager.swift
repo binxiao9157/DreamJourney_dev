@@ -52,6 +52,7 @@ final class KBLiteManager {
 
     private init(accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared) {
         self.accountLeaseRuntime = accountLeaseRuntime
+        extractQueue.setSpecific(key: extractQueueIdentityKey, value: extractQueueIdentityValue)
         loadedUserId = Self.normalizedUserId(UserManager.shared.currentUser?.id)
         graph = loadGraph(for: loadedUserId)
         let semanticScope = semanticCacheScopeLocked()
@@ -109,6 +110,8 @@ final class KBLiteManager {
 
     /// 提取队列（串行）
     private let extractQueue = DispatchQueue(label: "com.dreamjourney.kblite.extract")
+    private let extractQueueIdentityKey = DispatchSpecificKey<UInt8>()
+    private let extractQueueIdentityValue: UInt8 = 1
 
     /// 是否已输出过容量警告
     private var didWarnCapacity = false
@@ -196,6 +199,15 @@ final class KBLiteManager {
 
     private func accountLeaseScopeMatchesGraphLocked(_ scope: KBLiteAccountLeaseScope) -> Bool {
         loadedUserId == scope.ownerUserId && userGeneration == scope.graphGeneration
+    }
+
+    private func clearExtractionFlagIfCurrent(_ scope: KBLiteAccountLeaseScope) {
+        graphLock.lock()
+        let isCurrentGeneration = accountLeaseScopeMatchesGraphLocked(scope)
+        graphLock.unlock()
+        if isCurrentGeneration {
+            isExtracting = false
+        }
     }
 
     private func validateAccountLeaseScopeLocked(
@@ -655,7 +667,7 @@ final class KBLiteManager {
         var loadedGraph: KBLiteGraph?
         var activatedGeneration: UUID?
         var semanticScope: KBLiteSemanticCacheScope?
-        extractQueue.sync {
+        performSynchronouslyOnExtractQueue {
             graphLock.lock()
             defer { graphLock.unlock() }
             guard normalized != loadedUserId else { return }
@@ -711,6 +723,91 @@ final class KBLiteManager {
             }
         }
         print("[KBLite] 已切换知识所有者: \(normalized)")
+    }
+
+    /// Invalidates all in-memory knowledge runtime without mounting data for another owner.
+    /// Persisted owner-scoped graph files remain locked; deletion requires a separate old-lease purge API.
+    @discardableResult
+    func teardownForAccountLifecycle(
+        context: AccountLifecycleContext
+    ) -> AccountLifecycleModuleResult {
+        var result = AccountLifecycleModuleResult.completed(
+            .failed,
+            remainingLocalData: true,
+            detailCode: "knowledgeTeardownNotExecuted"
+        )
+        performSynchronouslyOnExtractQueue {
+            graphLock.lock()
+            let mountedOwner = loadedUserId
+            let oldOwner = context.oldAccountLease?.subjectId
+            let scopeMatches = mountedOwner == Self.signedOutUserId
+                || oldOwner == nil
+                || mountedOwner == oldOwner
+            guard scopeMatches else {
+                graphLock.unlock()
+                result = .completed(
+                    .failed,
+                    remainingLocalData: true,
+                    detailCode: "knowledgeTeardownScopeMismatch"
+                )
+                return
+            }
+
+            loadedUserId = Self.signedOutUserId
+            userGeneration = UUID()
+            let unmountedGeneration = userGeneration
+            activePersonaIdentity = nil
+            personaGeneration = UUID()
+            familyAuthorizationGeneration = nil
+            graph = KBLiteGraph()
+            isExtracting = false
+            didWarnCapacity = false
+            graphLock.unlock()
+
+            KBLiteSemanticSearch.shared.activate(scope: nil)
+            widgetSnapshotStore.activate(ownerUserId: nil, generation: unmountedGeneration)
+            switch context.event {
+            case .accountDeletion:
+                result = .completed(
+                    .failed,
+                    remainingLocalData: true,
+                    detailCode: "knowledgeDeletionPurgeUnsupported"
+                )
+            case .coldStartRecovery:
+                result = .completed(
+                    .unmounted,
+                    remainingLocalData: true,
+                    detailCode: "knowledgeColdStartUnmounted"
+                )
+            case .switchAccount:
+                result = .completed(
+                    .retainedLocked,
+                    remainingLocalData: true,
+                    detailCode: "knowledgeSwitchRetainedLocked"
+                )
+            case .logout:
+                result = .completed(
+                    .retainedLocked,
+                    remainingLocalData: true,
+                    detailCode: "knowledgeLogoutRetainedLocked"
+                )
+            case .privateSuspension:
+                result = .completed(
+                    .retainedLocked,
+                    remainingLocalData: true,
+                    detailCode: "knowledgeSuspensionRetainedLocked"
+                )
+            }
+        }
+        return result
+    }
+
+    private func performSynchronouslyOnExtractQueue(_ block: () -> Void) {
+        if DispatchQueue.getSpecific(key: extractQueueIdentityKey) == extractQueueIdentityValue {
+            block()
+        } else {
+            extractQueue.sync(execute: block)
+        }
     }
 
     // MARK: - Public API: Stats
@@ -845,7 +942,7 @@ final class KBLiteManager {
             let existingSummary = self.buildExistingSummary(for: capturedIdentity)
             self.graphLock.unlock()
             guard self.validateAccountLeaseScope(accountScope, at: .request) else {
-                self.isExtracting = false
+                self.clearExtractionFlagIfCurrent(accountScope)
                 return
             }
 
@@ -874,7 +971,7 @@ final class KBLiteManager {
                 self?.extractQueue.async { [weak self] in
                     guard let self else { return }
                     guard self.validateAccountLeaseScope(accountScope, at: .runtime) else {
-                        self.isExtracting = false
+                        self.clearExtractionFlagIfCurrent(accountScope)
                         return
                     }
                     let envelope: KBKnowledgeExtractionEnvelope?
@@ -912,7 +1009,7 @@ final class KBLiteManager {
         completion: @escaping (Int) -> Void
     ) {
         guard validateAccountLeaseScope(accountScope, at: .commit) else {
-            isExtracting = false
+            clearExtractionFlagIfCurrent(accountScope)
             return
         }
         let identity = authorizationSnapshot.identity
@@ -920,7 +1017,7 @@ final class KBLiteManager {
         guard isCurrentAuthorizationSnapshotLocked(authorizationSnapshot),
               validateAccountLeaseScopeLocked(accountScope, at: .commit) else {
             graphLock.unlock()
-            isExtracting = false
+            clearExtractionFlagIfCurrent(accountScope)
             print("[KBLite] 丢弃授权代次变化后的知识提取结果 reason=authorizationGenerationChanged")
             deliverExtractionCompletion(
                 0,
@@ -972,7 +1069,7 @@ final class KBLiteManager {
         guard validateAccountLeaseScopeLocked(accountScope, at: .commit) else {
             graph = rollbackGraph
             graphLock.unlock()
-            isExtracting = false
+            clearExtractionFlagIfCurrent(accountScope)
             return
         }
         graphLock.unlock()

@@ -102,6 +102,7 @@ struct ConversationMemory: Codable {
 private struct ConversationStorageLease: Equatable {
     let accountLease: AccountLease
     let scope: ConversationStorageScope
+    let runtimeGeneration: UUID
 
     static func == (lhs: ConversationStorageLease, rhs: ConversationStorageLease) -> Bool {
         lhs.scope == rhs.scope
@@ -110,6 +111,7 @@ private struct ConversationStorageLease: Equatable {
             && lhs.accountLease.generation == rhs.accountLease.generation
             && lhs.accountLease.generationId == rhs.accountLease.generationId
             && lhs.accountLease.authorityEpoch == rhs.accountLease.authorityEpoch
+            && lhs.runtimeGeneration == rhs.runtimeGeneration
     }
 }
 
@@ -144,6 +146,7 @@ final class ConversationMemoryManager {
     private var currentTranscript: [ConversationTurn] = []
     private var loadedStorageLease: ConversationStorageLease?
     private var transcriptStorageLease: ConversationStorageLease?
+    private var runtimeGeneration = UUID()
     private var lifecycleObservationTokens: [NSObjectProtocol] = []
     private let accountLeaseRuntime = AccountLeaseRuntime.shared
     private let localStorage = ConversationLocalStorage.shared
@@ -277,7 +280,11 @@ final class ConversationMemoryManager {
 
     @discardableResult
     func purgeLocalDataForAccountDeletion(accountLease: AccountLease) -> Bool {
-        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+        let targetsMountedScope = loadedStorageLease.map {
+            Self.isSameAccountLeaseGeneration($0.accountLease, accountLease)
+        } == true
+        guard targetsMountedScope
+                || accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
             return false
         }
         localStorage.purge(accountLease: accountLease)
@@ -286,6 +293,82 @@ final class ConversationMemoryManager {
             unmountAndDiscardPendingTranscript(reason: "accountDeletion")
         }
         return true
+    }
+
+    /// Unmounts conversation runtime using the lifecycle operation's captured old scope.
+    /// Owner-scoped files remain locked for recovery except during an explicit account deletion.
+    @discardableResult
+    func teardownForAccountLifecycle(
+        context: AccountLifecycleContext
+    ) -> AccountLifecycleModuleResult {
+        performSynchronouslyOnMain {
+            if let oldAccountLease = context.oldAccountLease,
+               let mountedAccountLease = loadedStorageLease?.accountLease,
+               !Self.isSameAccountLeaseGeneration(mountedAccountLease, oldAccountLease) {
+                return .completed(
+                    .failed,
+                    remainingLocalData: true,
+                    detailCode: "conversationTeardownScopeMismatch"
+                )
+            }
+
+            switch context.event {
+            case .accountDeletion:
+                guard let oldAccountLease = context.oldAccountLease else {
+                    unmountAndDiscardPendingTranscript(reason: "accountDeletionMissingLease")
+                    return .completed(
+                        .failed,
+                        remainingLocalData: true,
+                        detailCode: "conversationDeletionLeaseUnavailable"
+                    )
+                }
+                guard purgeLocalDataForAccountDeletion(accountLease: oldAccountLease) else {
+                    unmountAndDiscardPendingTranscript(reason: "accountDeletionPurgeFailed")
+                    return .completed(
+                        .failed,
+                        remainingLocalData: true,
+                        detailCode: "conversationDeletionPurgeFailed"
+                    )
+                }
+                return .completed(
+                    .purged,
+                    remainingLocalData: false,
+                    detailCode: "conversationDeletionPurged"
+                )
+
+            case .coldStartRecovery:
+                unmountAndDiscardPendingTranscript(reason: "coldStartRecovery")
+                return .completed(
+                    .unmounted,
+                    remainingLocalData: true,
+                    detailCode: "conversationColdStartUnmounted"
+                )
+
+            case .switchAccount:
+                unmountAndDiscardPendingTranscript(reason: "switchAccount")
+                return .completed(
+                    .retainedLocked,
+                    remainingLocalData: true,
+                    detailCode: "conversationSwitchRetainedLocked"
+                )
+
+            case .logout:
+                unmountAndDiscardPendingTranscript(reason: "logout")
+                return .completed(
+                    .retainedLocked,
+                    remainingLocalData: true,
+                    detailCode: "conversationLogoutRetainedLocked"
+                )
+
+            case .privateSuspension:
+                unmountAndDiscardPendingTranscript(reason: "privateSuspension")
+                return .completed(
+                    .retainedLocked,
+                    remainingLocalData: true,
+                    detailCode: "conversationSuspensionRetainedLocked"
+                )
+            }
+        }
     }
 
     // MARK: - 四维度摘要提取
@@ -481,7 +564,11 @@ final class ConversationMemoryManager {
         ) else {
             return nil
         }
-        return ConversationStorageLease(accountLease: accountLease, scope: scope)
+        return ConversationStorageLease(
+            accountLease: accountLease,
+            scope: scope,
+            runtimeGeneration: runtimeGeneration
+        )
     }
 
     private func isCurrentConversationStorageLease(
@@ -519,6 +606,7 @@ final class ConversationMemoryManager {
     }
 
     private func unmountAndDiscardPendingTranscript(reason: String) {
+        runtimeGeneration = UUID()
         if !currentTranscript.isEmpty {
             print("[Memory] discarded uncommitted transcript reason=\(reason)")
         }
@@ -526,5 +614,23 @@ final class ConversationMemoryManager {
         transcriptStorageLease = nil
         loadedStorageLease = nil
         currentMemory = ConversationMemory()
+    }
+
+    private static func isSameAccountLeaseGeneration(
+        _ lhs: AccountLease,
+        _ rhs: AccountLease
+    ) -> Bool {
+        lhs.subjectId == rhs.subjectId
+            && lhs.vaultId == rhs.vaultId
+            && lhs.generation == rhs.generation
+            && lhs.generationId == rhs.generationId
+            && lhs.authorityEpoch == rhs.authorityEpoch
+    }
+
+    private func performSynchronouslyOnMain<T>(_ block: () -> T) -> T {
+        if Thread.isMainThread {
+            return block()
+        }
+        return DispatchQueue.main.sync(execute: block)
     }
 }
