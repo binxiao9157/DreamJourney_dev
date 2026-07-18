@@ -9,9 +9,19 @@
         ],
         "evidence": "docs/superpowers/status/2026-07-18-wi-s0-01-08a-account-lifecycle-coordinator.md",
         "id": "WI-S0-01-08A"
+      },
+      {
+        "commits": [
+          "d4798e8",
+          "a2ac9ca",
+          "8560654",
+          "b9f6c52"
+        ],
+        "evidence": "docs/superpowers/status/2026-07-18-wi-s0-01-08b-account-lifecycle-runtime.md",
+        "id": "WI-S0-01-08B"
       }
     ],
-    "currentSubSlice": "WI-S0-01-08B",
+    "currentSubSlice": "WI-S0-01-08C",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
       "G1": "MISSING",
@@ -20,11 +30,11 @@
     "id": "WI-S0-01-08",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "Lifecycle coordinator and 29-surface registry are verified; connect switch, logout, suspension and cold-start runtime entry points."
+    "summary": "Switch, logout, suspension and cold-start teardown are wired and verified; complete irreversible account-deletion local purge without changing ordinary logout semantics."
   },
   "baselines": {
     "backend": "main@32a081f",
-    "ios": "feature/prd-stitch-ui-adaptation@aa33ed1",
+    "ios": "feature/prd-stitch-ui-adaptation@b9f6c52",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
@@ -257,5 +267,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-18T16:50:00+08:00"
+  "updatedAt": "2026-07-18T17:20:52+08:00"
 }
