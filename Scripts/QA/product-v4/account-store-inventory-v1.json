@@ -644,6 +644,38 @@
       ]
     },
     {
+      "catalogId": "S14",
+      "surfaceId": "S14.account-lifecycle-receipts",
+      "dataClass": "value-minimized account lifecycle operation and per-module cleanup receipts",
+      "ownerScope": "owner-free operation metadata bound to the retired account generation; no raw account or credential value",
+      "storage": "bounded standard UserDefaults receipt list",
+      "pathOrKey": "dj.accountLifecycle.receipts.v1",
+      "writer": "AccountLifecycleCoordinator through AccountLifecycleReceiptStore",
+      "readers": "account lifecycle recovery and QA gate",
+      "cleanup": "retain the latest bounded receipts for deterministic resume; never use receipts as account authority",
+      "migration": "no legacy payload is imported; malformed or identity-bearing payload is rejected",
+      "retention": "latest 30 value-minimized lifecycle operations",
+      "testOwner": "WI-S0-01-08",
+      "status": "REGISTERED_VALUE_MINIMIZED_RECEIPT",
+      "nextWorkItem": "WI-S0-01-08",
+      "sourcePaths": [
+        "DreamJourney/Sources/App/AccountLifecycleCoordinator.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/App/AccountLifecycleCoordinator.swift",
+          "contains": [
+            "dj.accountLifecycle.receipts.v1",
+            "AccountLifecycleModuleReceipt"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/product-v4/product-v4-account-lifecycle-coordinator-check.py",
+        "Scripts/QA/product-v4/account-lifecycle-coordinator-model-smoke.swift"
+      ]
+    },
+    {
       "catalogId": "S15",
       "surfaceId": "S15.release-policy-and-feature-cache",
       "dataClass": "release policy, recovery runtime policy, runtime capability, and QA feature override",

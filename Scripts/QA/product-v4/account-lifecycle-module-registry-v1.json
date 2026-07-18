@@ -1,0 +1,510 @@
+{
+  "schemaVersion": "dreamjourney.account-lifecycle-module-registry.v1",
+  "registryName": "AccountLifecycleModuleRegistry",
+  "authority": "WI-S0-01-08A",
+  "inventorySource": "Scripts/QA/product-v4/account-store-inventory-v1.json",
+  "surfaceIdentityFormat": "<catalogId>::<surfaceId>",
+  "phaseSequence": [
+    "P01_REVOKE_SESSION",
+    "P02_INVALIDATE_GENERATION",
+    "P03_CANCEL_ASYNC_EFFECTS",
+    "P04_STOP_RUNTIME",
+    "P05_UNMOUNT_PRIVATE_STORES",
+    "P06_CLEAR_DERIVED_OUTPUTS",
+    "P07_FINALIZE_RECEIPTS"
+  ],
+  "invariants": {
+    "surfaceMappingCardinality": "exactlyOne",
+    "switchExplicitDrafts": "retainedLockedAndUnmounted",
+    "logoutExplicitDrafts": "retainedLockedAndUnmounted",
+    "accountDeletionLocalUserData": "purged",
+    "accountDeletionExternalData": "receiptRequired",
+    "nextAccountMountBarrier": "allModulesTerminal"
+  },
+  "modules": [
+    {
+      "moduleId": "LM-01-auth-session",
+      "surfaceIds": [
+        "S01::S01.backend-auth-session-keychain"
+      ],
+      "phase": "P01_REVOKE_SESSION",
+      "containsExplicitDrafts": false,
+      "localDataPresent": true,
+      "externalDataPresent": true,
+      "switchPolicy": {
+        "localDisposition": "clearedAndUnmounted",
+        "explicitDraftDisposition": "notApplicable",
+        "runtimeCacheExportNotificationDisposition": "cleared",
+        "remoteDisposition": "revokedWithReceipt",
+        "receipt": "required"
+      },
+      "logoutPolicy": {
+        "localDisposition": "clearedAndUnmounted",
+        "explicitDraftDisposition": "notApplicable",
+        "runtimeCacheExportNotificationDisposition": "cleared",
+        "remoteDisposition": "revokedWithReceipt",
+        "receipt": "required"
+      },
+      "deletePolicy": {
+        "localDisposition": "purged",
+        "remoteDisposition": "deletionReceiptRequired",
+        "receipt": "required"
+      },
+      "remainingDataPolicy": {
+        "afterSwitch": ["none"],
+        "afterLogout": ["none"],
+        "afterAccountDeletion": ["externalDispositionReceiptOnly"]
+      },
+      "owner": "iOS Identity and Security",
+      "status": "MAPPED"
+    },
+    {
+      "moduleId": "LM-02-profile-and-release-cache",
+      "surfaceIds": [
+        "S02::S02.profile-display-cache",
+        "S15::S15.release-policy-and-feature-cache"
+      ],
+      "phase": "P02_INVALIDATE_GENERATION",
+      "containsExplicitDrafts": false,
+      "localDataPresent": true,
+      "externalDataPresent": false,
+      "switchPolicy": {
+        "localDisposition": "clearedAndUnmounted",
+        "explicitDraftDisposition": "notApplicable",
+        "runtimeCacheExportNotificationDisposition": "cleared",
+        "remoteDisposition": "notApplicable",
+        "receipt": "required"
+      },
+      "logoutPolicy": {
+        "localDisposition": "clearedAndUnmounted",
+        "explicitDraftDisposition": "notApplicable",
+        "runtimeCacheExportNotificationDisposition": "cleared",
+        "remoteDisposition": "notApplicable",
+        "receipt": "required"
+      },
+      "deletePolicy": {
+        "localDisposition": "purged",
+        "remoteDisposition": "notApplicable",
+        "receipt": "required"
+      },
+      "remainingDataPolicy": {
+        "afterSwitch": ["none"],
+        "afterLogout": ["none"],
+        "afterAccountDeletion": ["none"]
+      },
+      "owner": "iOS Account Composition",
+      "status": "MAPPED"
+    },
+    {
+      "moduleId": "LM-03-message-notification-effects",
+      "surfaceIds": [
+        "S07::S07.reply-and-message-projections",
+        "S07::S07.remote-delayed-reply-job",
+        "S17::S17.push-and-local-notification-registration"
+      ],
+      "phase": "P03_CANCEL_ASYNC_EFFECTS",
+      "containsExplicitDrafts": false,
+      "localDataPresent": true,
+      "externalDataPresent": true,
+      "switchPolicy": {
+        "localDisposition": "clearedAndUnmounted",
+        "explicitDraftDisposition": "notApplicable",
+        "runtimeCacheExportNotificationDisposition": "cleared",
+        "remoteDisposition": "cancelledOrUnregisteredWithReceipt",
+        "receipt": "required"
+      },
+      "logoutPolicy": {
+        "localDisposition": "clearedAndUnmounted",
+        "explicitDraftDisposition": "notApplicable",
+        "runtimeCacheExportNotificationDisposition": "cleared",
+        "remoteDisposition": "cancelledOrUnregisteredWithReceipt",
+        "receipt": "required"
+      },
+      "deletePolicy": {
+        "localDisposition": "purged",
+        "remoteDisposition": "deletionReceiptRequired",
+        "receipt": "required"
+      },
+      "remainingDataPolicy": {
+        "afterSwitch": ["none"],
+        "afterLogout": ["none"],
+        "afterAccountDeletion": ["externalDispositionReceiptOnly"]
+      },
+      "owner": "iOS Messaging and Notifications",
+      "status": "MAPPED"
+    },
+    {
+      "moduleId": "LM-04-voice-profile-remote-rights",
+      "surfaceIds": [
+        "S10::S10.remote-voice-profile-artifacts"
+      ],
+      "phase": "P03_CANCEL_ASYNC_EFFECTS",
+      "containsExplicitDrafts": false,
+      "localDataPresent": false,
+      "externalDataPresent": true,
+      "switchPolicy": {
+        "localDisposition": "notApplicable",
+        "explicitDraftDisposition": "notApplicable",
+        "runtimeCacheExportNotificationDisposition": "notApplicable",
+        "remoteDisposition": "ownerFenced",
+        "receipt": "required"
+      },
+      "logoutPolicy": {
+        "localDisposition": "notApplicable",
+        "explicitDraftDisposition": "notApplicable",
+        "runtimeCacheExportNotificationDisposition": "notApplicable",
+        "remoteDisposition": "ownerFenced",
+        "receipt": "required"
+      },
+      "deletePolicy": {
+        "localDisposition": "notApplicable",
+        "remoteDisposition": "deletionReceiptRequired",
+        "receipt": "required"
+      },
+      "remainingDataPolicy": {
+        "afterSwitch": ["ownerBoundRemoteAuthority"],
+        "afterLogout": ["ownerBoundRemoteAuthority"],
+        "afterAccountDeletion": ["externalDispositionReceiptOnly"]
+      },
+      "owner": "Backend Voice Rights",
+      "status": "MAPPED"
+    },
+    {
+      "moduleId": "LM-05-digital-human-remote-lease",
+      "surfaceIds": [
+        "S12::S12.remote-digital-human-lease"
+      ],
+      "phase": "P03_CANCEL_ASYNC_EFFECTS",
+      "containsExplicitDrafts": false,
+      "localDataPresent": false,
+      "externalDataPresent": true,
+      "switchPolicy": {
+        "localDisposition": "notApplicable",
+        "explicitDraftDisposition": "notApplicable",
+        "runtimeCacheExportNotificationDisposition": "notApplicable",
+        "remoteDisposition": "releasedWithReceipt",
+        "receipt": "required"
+      },
+      "logoutPolicy": {
+        "localDisposition": "notApplicable",
+        "explicitDraftDisposition": "notApplicable",
+        "runtimeCacheExportNotificationDisposition": "notApplicable",
+        "remoteDisposition": "releasedWithReceipt",
+        "receipt": "required"
+      },
+      "deletePolicy": {
+        "localDisposition": "notApplicable",
+        "remoteDisposition": "deletionReceiptRequired",
+        "receipt": "required"
+      },
+      "remainingDataPolicy": {
+        "afterSwitch": ["none"],
+        "afterLogout": ["none"],
+        "afterAccountDeletion": ["externalDispositionReceiptOnly"]
+      },
+      "owner": "Backend Digital Human Sessions",
+      "status": "MAPPED"
+    },
+    {
+      "moduleId": "LM-06-voice-runtime-and-cache",
+      "surfaceIds": [
+        "S10::S10.voice-profile-cache-and-poll",
+        "S10::S10.voice-preview-temporary-audio",
+        "S10::S10.voice-training-poll-runtime",
+        "S11::S11.generated-audio-and-timeline-cache"
+      ],
+      "phase": "P04_STOP_RUNTIME",
+      "containsExplicitDrafts": false,
+      "localDataPresent": true,
+      "externalDataPresent": false,
+      "switchPolicy": {
+        "localDisposition": "clearedAndUnmounted",
+        "explicitDraftDisposition": "notApplicable",
+        "runtimeCacheExportNotificationDisposition": "cleared",
+        "remoteDisposition": "notApplicable",
+        "receipt": "required"
+      },
+      "logoutPolicy": {
+        "localDisposition": "clearedAndUnmounted",
+        "explicitDraftDisposition": "notApplicable",
+        "runtimeCacheExportNotificationDisposition": "cleared",
+        "remoteDisposition": "notApplicable",
+        "receipt": "required"
+      },
+      "deletePolicy": {
+        "localDisposition": "purged",
+        "remoteDisposition": "notApplicable",
+        "receipt": "required"
+      },
+      "remainingDataPolicy": {
+        "afterSwitch": ["none"],
+        "afterLogout": ["none"],
+        "afterAccountDeletion": ["none"]
+      },
+      "owner": "iOS Voice Runtime",
+      "status": "MAPPED"
+    },
+    {
+      "moduleId": "LM-07-digital-human-dialog-runtime",
+      "surfaceIds": [
+        "S12::S12.digital-human-context-and-runtime",
+        "S12::S12.digital-human-conversation-runtime",
+        "S12::S12.dialog-prompt-runtime",
+        "S12::S12.tencent-provider-bridge-runtime"
+      ],
+      "phase": "P04_STOP_RUNTIME",
+      "containsExplicitDrafts": false,
+      "localDataPresent": true,
+      "externalDataPresent": true,
+      "switchPolicy": {
+        "localDisposition": "clearedAndUnmounted",
+        "explicitDraftDisposition": "notApplicable",
+        "runtimeCacheExportNotificationDisposition": "cleared",
+        "remoteDisposition": "releasedWithReceipt",
+        "receipt": "required"
+      },
+      "logoutPolicy": {
+        "localDisposition": "clearedAndUnmounted",
+        "explicitDraftDisposition": "notApplicable",
+        "runtimeCacheExportNotificationDisposition": "cleared",
+        "remoteDisposition": "releasedWithReceipt",
+        "receipt": "required"
+      },
+      "deletePolicy": {
+        "localDisposition": "purged",
+        "remoteDisposition": "unsupportedRetentionReceiptRequired",
+        "receipt": "required"
+      },
+      "remainingDataPolicy": {
+        "afterSwitch": ["unsupportedExternalRetentionReceipt"],
+        "afterLogout": ["unsupportedExternalRetentionReceipt"],
+        "afterAccountDeletion": ["unsupportedExternalRetentionReceipt"]
+      },
+      "owner": "iOS Digital Human Runtime",
+      "status": "MAPPED"
+    },
+    {
+      "moduleId": "LM-08-owner-explicit-draft-stores",
+      "surfaceIds": [
+        "S03::S03.archive-draft-items",
+        "S04::S04.archive-media-staging",
+        "S08::S08.memoir-drafts-and-recordings",
+        "S09::S09.legacy-memory-and-map-state"
+      ],
+      "phase": "P05_UNMOUNT_PRIVATE_STORES",
+      "containsExplicitDrafts": true,
+      "localDataPresent": true,
+      "externalDataPresent": false,
+      "switchPolicy": {
+        "localDisposition": "retainedLockedAndUnmounted",
+        "explicitDraftDisposition": "retainedLocked",
+        "runtimeCacheExportNotificationDisposition": "cleared",
+        "remoteDisposition": "notApplicable",
+        "receipt": "required"
+      },
+      "logoutPolicy": {
+        "localDisposition": "retainedLockedAndUnmounted",
+        "explicitDraftDisposition": "retainedLocked",
+        "runtimeCacheExportNotificationDisposition": "cleared",
+        "remoteDisposition": "notApplicable",
+        "receipt": "required"
+      },
+      "deletePolicy": {
+        "localDisposition": "purged",
+        "remoteDisposition": "notApplicable",
+        "receipt": "required"
+      },
+      "remainingDataPolicy": {
+        "afterSwitch": ["sameOwnerExplicitDraftsRetainedLocked"],
+        "afterLogout": ["sameOwnerExplicitDraftsRetainedLocked"],
+        "afterAccountDeletion": ["none"]
+      },
+      "owner": "iOS Archive and Memoir Storage",
+      "status": "MAPPED"
+    },
+    {
+      "moduleId": "LM-09-knowledge-draft-and-outbox-store",
+      "surfaceIds": [
+        "S05::S05.knowledge-projection-and-outbox"
+      ],
+      "phase": "P05_UNMOUNT_PRIVATE_STORES",
+      "containsExplicitDrafts": true,
+      "localDataPresent": true,
+      "externalDataPresent": false,
+      "switchPolicy": {
+        "localDisposition": "retainedLockedAndUnmounted",
+        "explicitDraftDisposition": "retainedLocked",
+        "runtimeCacheExportNotificationDisposition": "cleared",
+        "remoteDisposition": "notApplicable",
+        "receipt": "required"
+      },
+      "logoutPolicy": {
+        "localDisposition": "retainedLockedAndUnmounted",
+        "explicitDraftDisposition": "retainedLocked",
+        "runtimeCacheExportNotificationDisposition": "cleared",
+        "remoteDisposition": "notApplicable",
+        "receipt": "required"
+      },
+      "deletePolicy": {
+        "localDisposition": "purged",
+        "remoteDisposition": "notApplicable",
+        "receipt": "required"
+      },
+      "remainingDataPolicy": {
+        "afterSwitch": ["sameOwnerExplicitDraftsRetainedLocked"],
+        "afterLogout": ["sameOwnerExplicitDraftsRetainedLocked"],
+        "afterAccountDeletion": ["none"]
+      },
+      "owner": "iOS Knowledge Storage",
+      "status": "MAPPED"
+    },
+    {
+      "moduleId": "LM-10-rebuildable-private-projections",
+      "surfaceIds": [
+        "S06::S06.conversation-memory-cache",
+        "S13::S13.family-and-care-projections"
+      ],
+      "phase": "P05_UNMOUNT_PRIVATE_STORES",
+      "containsExplicitDrafts": false,
+      "localDataPresent": true,
+      "externalDataPresent": false,
+      "switchPolicy": {
+        "localDisposition": "clearedAndUnmounted",
+        "explicitDraftDisposition": "notApplicable",
+        "runtimeCacheExportNotificationDisposition": "cleared",
+        "remoteDisposition": "notApplicable",
+        "receipt": "required"
+      },
+      "logoutPolicy": {
+        "localDisposition": "clearedAndUnmounted",
+        "explicitDraftDisposition": "notApplicable",
+        "runtimeCacheExportNotificationDisposition": "cleared",
+        "remoteDisposition": "notApplicable",
+        "receipt": "required"
+      },
+      "deletePolicy": {
+        "localDisposition": "purged",
+        "remoteDisposition": "notApplicable",
+        "receipt": "required"
+      },
+      "remainingDataPolicy": {
+        "afterSwitch": ["none"],
+        "afterLogout": ["none"],
+        "afterAccountDeletion": ["none"]
+      },
+      "owner": "iOS Conversation and Family Projection",
+      "status": "MAPPED"
+    },
+    {
+      "moduleId": "LM-11-widget-and-temporary-exports",
+      "surfaceIds": [
+        "S05::S05.temporary-knowledge-share-exports",
+        "S16::S16.widget-app-group-projection"
+      ],
+      "phase": "P06_CLEAR_DERIVED_OUTPUTS",
+      "containsExplicitDrafts": false,
+      "localDataPresent": true,
+      "externalDataPresent": false,
+      "switchPolicy": {
+        "localDisposition": "clearedAndUnmounted",
+        "explicitDraftDisposition": "notApplicable",
+        "runtimeCacheExportNotificationDisposition": "cleared",
+        "remoteDisposition": "notApplicable",
+        "receipt": "required"
+      },
+      "logoutPolicy": {
+        "localDisposition": "clearedAndUnmounted",
+        "explicitDraftDisposition": "notApplicable",
+        "runtimeCacheExportNotificationDisposition": "cleared",
+        "remoteDisposition": "notApplicable",
+        "receipt": "required"
+      },
+      "deletePolicy": {
+        "localDisposition": "purged",
+        "remoteDisposition": "notApplicable",
+        "receipt": "required"
+      },
+      "remainingDataPolicy": {
+        "afterSwitch": ["none"],
+        "afterLogout": ["none"],
+        "afterAccountDeletion": ["none"]
+      },
+      "owner": "iOS Knowledge Export and Widget",
+      "status": "MAPPED"
+    },
+    {
+      "moduleId": "LM-12-qa-evidence-and-log-policy",
+      "surfaceIds": [
+        "S14::S14.echo-trace-and-qa-evidence",
+        "S14::S14.qa-document-evidence-copies",
+        "S14::S14.private-runtime-log-sinks"
+      ],
+      "phase": "P07_FINALIZE_RECEIPTS",
+      "containsExplicitDrafts": false,
+      "localDataPresent": true,
+      "externalDataPresent": true,
+      "switchPolicy": {
+        "localDisposition": "clearedAndUnmounted",
+        "explicitDraftDisposition": "notApplicable",
+        "runtimeCacheExportNotificationDisposition": "cleared",
+        "remoteDisposition": "valueMinimizedWithUnsupportedRetentionReceipt",
+        "receipt": "required"
+      },
+      "logoutPolicy": {
+        "localDisposition": "clearedAndUnmounted",
+        "explicitDraftDisposition": "notApplicable",
+        "runtimeCacheExportNotificationDisposition": "cleared",
+        "remoteDisposition": "valueMinimizedWithUnsupportedRetentionReceipt",
+        "receipt": "required"
+      },
+      "deletePolicy": {
+        "localDisposition": "purged",
+        "remoteDisposition": "unsupportedRetentionReceiptRequired",
+        "receipt": "required"
+      },
+      "remainingDataPolicy": {
+        "afterSwitch": ["unsupportedExternalRetentionReceipt"],
+        "afterLogout": ["unsupportedExternalRetentionReceipt"],
+        "afterAccountDeletion": ["unsupportedExternalRetentionReceipt"]
+      },
+      "owner": "iOS QA and Privacy",
+      "status": "MAPPED"
+    },
+    {
+      "moduleId": "LM-13-account-lifecycle-receipts",
+      "surfaceIds": [
+        "S14::S14.account-lifecycle-receipts"
+      ],
+      "phase": "P07_FINALIZE_RECEIPTS",
+      "containsExplicitDrafts": false,
+      "localDataPresent": true,
+      "externalDataPresent": false,
+      "switchPolicy": {
+        "localDisposition": "retainedBoundedOwnerFreeReceipt",
+        "explicitDraftDisposition": "notApplicable",
+        "runtimeCacheExportNotificationDisposition": "notApplicable",
+        "remoteDisposition": "notApplicable",
+        "receipt": "required"
+      },
+      "logoutPolicy": {
+        "localDisposition": "retainedBoundedOwnerFreeReceipt",
+        "explicitDraftDisposition": "notApplicable",
+        "runtimeCacheExportNotificationDisposition": "notApplicable",
+        "remoteDisposition": "notApplicable",
+        "receipt": "required"
+      },
+      "deletePolicy": {
+        "localDisposition": "retainedBoundedOwnerFreeReceipt",
+        "remoteDisposition": "notApplicable",
+        "receipt": "required"
+      },
+      "remainingDataPolicy": {
+        "afterSwitch": ["boundedValueMinimizedLifecycleReceipts"],
+        "afterLogout": ["boundedValueMinimizedLifecycleReceipts"],
+        "afterAccountDeletion": ["boundedValueMinimizedLifecycleReceipts"]
+      },
+      "owner": "iOS Account Lifecycle Recovery",
+      "status": "MAPPED"
+    }
+  ]
+}

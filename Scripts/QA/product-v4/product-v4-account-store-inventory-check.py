@@ -20,6 +20,7 @@ REQUIRED_FIELDS = (
     "testOwner",
 )
 REQUIRED_SOURCE_PATHS = {
+    "DreamJourney/Sources/App/AccountLifecycleCoordinator.swift",
     "DreamJourney/Sources/Services/UserManager.swift",
     "DreamJourney/Sources/Services/BackendAuthSessionStore.swift",
     "DreamJourney/Sources/Services/KBLiteManager.swift",
