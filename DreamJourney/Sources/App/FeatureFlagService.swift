@@ -201,6 +201,20 @@ enum QALaunchScenario: String, CaseIterable {
         }
     }
 
+    /// These backend-backed Profile smokes must use a real, isolated V2 user
+    /// session. They intentionally do not inherit the synthetic UIQA login:
+    /// the client must prove its principal/owner checks before it can reach a
+    /// user-owned care route.
+    var requiresAuthenticatedBackendFixture: Bool {
+        switch self {
+        case .profileCareBackendFailureRetrySmoke,
+             .profileCareBackendStateSmoke:
+            return true
+        default:
+            return false
+        }
+    }
+
     /// Keep UIQA startup timing declarative so AppDelegate dispatch does not
     /// accumulate per-scenario magic delays. `nil` means the legacy path is
     /// intentionally immediate because it only prepares a local QA seed.
@@ -442,6 +456,78 @@ enum QAProfileScenarioRunner {
         } catch {
             print("[UI_QA] \(smokeName) failed reason=resultWrite error=\(error.localizedDescription)")
         }
+    }
+}
+
+/// Consumes one short-lived, server-issued UIQA session from the Simulator
+/// Documents directory. The shell harness writes this file after installation
+/// and before launch, then this type removes it immediately after decoding.
+/// It is compiled only into simulator QA artifacts and never accepts a token
+/// through build settings or process arguments.
+enum QAAuthenticatedBackendSessionFixture {
+    private static let fileName = "uiqa-profile-care-auth-session.json"
+
+    static func prepare(
+        expectedUserId: String,
+        completion: @escaping (String?) -> Void
+    ) {
+        let normalizedExpectedUserId = expectedUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedExpectedUserId.isEmpty else {
+            completion("missingExpectedUserId")
+            return
+        }
+        guard let documentsDirectory = FileManager.default.urls(
+            for: .documentDirectory,
+            in: .userDomainMask
+        ).first else {
+            completion("missingDocumentsDirectory")
+            return
+        }
+
+        let fixtureURL = documentsDirectory.appendingPathComponent(fileName)
+        guard let data = try? Data(contentsOf: fixtureURL) else {
+            completion("missingAuthenticatedBackendFixture")
+            return
+        }
+        defer { try? FileManager.default.removeItem(at: fixtureURL) }
+
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let userId = object["userId"] as? String,
+              let phone = object["phone"] as? String,
+              let nickname = object["nickname"] as? String,
+              let auth = object["auth"] as? [String: Any],
+              userId == normalizedExpectedUserId,
+              let session = BackendAuthSessionContract(json: auth),
+              session.isPrivateAccessEligible(for: normalizedExpectedUserId) else {
+            completion("invalidAuthenticatedBackendFixture")
+            return
+        }
+
+        do {
+            try BackendAuthSessionStore.shared.save(session)
+        } catch {
+            completion("authenticatedBackendSessionSaveFailed")
+            return
+        }
+        guard UserManager.shared.loginVerifiedAccount(
+            phone: phone,
+            nickname: nickname,
+            userId: normalizedExpectedUserId
+        ), let credential = UserManager.shared.accountSessionCredentialSnapshot(),
+          credential.trust == .requiresOnlineValidation,
+          credential.normalizedSubjectId == normalizedExpectedUserId else {
+            BackendAuthSessionStore.shared.clear(ifCurrentMatches: session)
+            completion("authenticatedBackendSessionAdoptionFailed")
+            return
+        }
+
+        // Scene composition owns AccountSessionActor activation. Calling the
+        // actor here races the SceneDelegate cold-start bootstrap and can leave
+        // the app visually on the login root despite an otherwise valid V2
+        // fixture. AppDelegate asks the existing AppCoordinator to perform the
+        // same verified-login transition once a scene is available.
+        print("[UI_QA] Authenticated backend fixture prepared for profile care smoke")
+        completion(nil)
     }
 }
 #endif

@@ -30,6 +30,8 @@ func assertNotContains(_ haystack: String, _ needle: String, _ message: String) 
 }
 
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
+let appCoordinator = read("DreamJourney/Sources/App/AppCoordinator.swift")
 let careModels = read("DreamJourney/Sources/Modules/Profile/ProfileCareModels.swift")
 let profileView = read("DreamJourney/Sources/Modules/Profile/ProfileViewController.swift")
 let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
@@ -54,20 +56,64 @@ let smokeScript = read("Scripts/QA/prd-stitch-ui/run-profile-care-backend-state-
 let statusDoc = read("docs/superpowers/status/2026-06-19-profile-care-backend-state-smoke.md")
 
 for phrase in [
-    "DJRunProfileCareBackendStateSmoke",
-    "DJRunProfileCareBackendFailureRetrySmoke",
     "runProfileCareBackendStateSmoke",
     "runProfileCareBackendFailureRetrySmoke",
     "writeProfileCareBackendStateSmokeResult",
     "writeProfileCareBackendFailureRetrySmokeResult",
     "profile-care-backend-state-smoke-result.json",
     "profile-care-backend-failure-retry-smoke-result.json",
-    "DJCareActiveUserId=",
-    "DJCareEmptyUserId=",
-    "DJCareStaleUserId=",
+    "DJCareCaseName=",
+    "DJCareStateUserId=",
+    "DJCareSessionUserId=",
     "DJCareFailureRetryUserId=",
+    "QAAuthenticatedBackendSessionFixture.prepare",
+    "careSessionUserMismatch",
 ] {
     assertContains(appDelegate, phrase, "AppDelegate should wire deployed backend care state smoke \(phrase)")
+}
+
+for phrase in [
+    "DJRunProfileCareBackendStateSmoke",
+    "DJRunProfileCareBackendFailureRetrySmoke",
+    "requiresAuthenticatedBackendFixture",
+    "QAAuthenticatedBackendSessionFixture",
+    "uiqa-profile-care-auth-session.json",
+    "Authenticated backend fixture prepared",
+] {
+    assertContains(featureFlags, phrase, "QA scenario registry should expose deployed backend care state smoke \(phrase)")
+}
+
+assertContains(
+    appDelegate,
+    "activateUIQAAuthenticatedBackendProfileSession",
+    "AppDelegate should route authenticated care fixtures through the root coordinator"
+)
+assertContains(
+    appCoordinator,
+    "activateVerifiedLoginForUIQA",
+    "AppCoordinator should expose a QA-only verified login bridge"
+)
+assertContains(
+    appCoordinator,
+    "verifiedLoginTransitionCancelled",
+    "QA bridge should expose a deterministic coordinator activation result"
+)
+assertContains(
+    appCoordinator,
+    "requiresAuthenticatedBackendFixture",
+    "AppCoordinator should defer cold-start validation for authenticated QA fixture scenarios"
+)
+assertContains(
+    appDelegate,
+    "uiqaCoordinatorActivationRejected",
+    "AppDelegate should persist coordinator activation failures instead of relying on timing"
+)
+
+for phrase in [
+    "QAProfileScenarioRunner.selectRootProfileViewController()",
+    "QAProfileScenarioRunner.writeResult(",
+] {
+    assertContains(appDelegate, phrase, "AppDelegate should use shared Profile UIQA runner \(phrase)")
 }
 
 for phrase in [
@@ -118,6 +164,21 @@ for phrase in [
     "careActiveRiskLevel",
     "careStaleWindowEnd",
     "careMissingStatus",
+    "AuthSessionService",
+    "PostgresStore",
+    "stable_user_id",
+    "ON CONFLICT (id) DO NOTHING",
+    "qaFixtureMarker",
+    "fixture collision changed existing user",
+    "cleanup fixture marker mismatch",
+    "cleanup fixture user still present",
+    "cleanupVerification",
+    "clean",
+    "seed-failure-retry",
+    "failureRetryOnly",
+    "sessionFixtureSchemaVersion",
+    "careDashboardNotApprovedForClosedPilot",
+    "/v2/release-policy",
 ] {
     assertContains(fixtureSeeder, phrase, "fixture seeder should cover deployed backend care state \(phrase)")
 }
@@ -128,11 +189,30 @@ for phrase in [
     "DJRunProfileCareBackendStateSmoke",
     "profile-care-backend-state-smoke-result.json",
     "DREAMJOURNEY_BACKEND_BASE_URL",
-    "BACKEND_API_TOKEN",
+    "BACKEND_REMOTE_HOST",
+    "docker compose exec",
+    "sudo chown",
+    "REMOTE_CONTAINER_PREFIX",
+    "Mark cleanup as pending before the fixture command",
+    "finalize_remote_fixture_cleanup",
+    "backend-care-auth-cleanup-result.json",
+    "cleanup contract mismatch",
+    "DJCareCaseName=",
+    "DJCareStateUserId=",
+    "DJCareSessionUserId=",
+    "uiqa-profile-care-auth-session.json",
+    "DJEnableProfileHiddenBranches",
     "backend-private.xcconfig",
     "backend-unreachable.xcconfig",
-    "QA_MOBILE_CREDENTIAL_APP_PATH",
-    "product-v4-qa-mobile-credential-artifact-check.py",
+    "RUN_PROFILE_CARE_FAILURE_RETRY_ONLY",
+    "run_failure_retry_case",
+    "run-installable-simulator-uiqa.sh",
+    "source \"$INSTALL_DIR/install.env\"",
+    "source \"$FAILURE_INSTALL_DIR/install.env\"",
+    "LOCAL_BUNDLE_ID=\"$LOCAL_QA_BUNDLE_ID\"",
+    "LOCAL_DEVELOPMENT_TEAM=\"$LOCAL_QA_TEAM_ID\"",
+    "XCCONFIG_PATH=\"$PRIVATE_XCCONFIG\"",
+    "XCCONFIG_PATH=\"$UNREACHABLE_PRIVATE_XCCONFIG\"",
     "profileCareStateAvailable",
     "profileCareStateEmpty",
     "profileCareStateStale",
@@ -151,6 +231,16 @@ assertNotContains(
     smokeScript,
     "DREAMJOURNEY_BACKEND_API_TOKEN",
     "profile care smoke must not inject the server compatibility token into iOS"
+)
+assertNotContains(
+    smokeScript,
+    "BACKEND_API_TOKEN",
+    "profile care smoke must not use a machine credential for user-owned care routes"
+)
+assertNotContains(
+    fixtureSeeder,
+    "BACKEND_API_TOKEN",
+    "fixture seeder must issue isolated user sessions instead of accepting a machine credential"
 )
 
 assertContains(

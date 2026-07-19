@@ -283,10 +283,26 @@ private extension AppDelegate {
             FeatureFlagService.shared.enableForCurrentLaunch(.digitalHumanLivePanel)
             print("[UI_QA] Digital human live panel enabled")
         }
-        if launchPlan.shouldSeedProfileCareFamilyMember {
+        if launchPlan.shouldSeedProfileCareFamilyMember,
+           launchPlan.scenario?.requiresAuthenticatedBackendFixture != true {
             seedUIQAStarCareFamilyMember()
         }
         guard let scenario = launchPlan.scenario else { return }
+        if scenario.requiresAuthenticatedBackendFixture {
+            FeatureFlagService.shared.resetToDefaults()
+            prepareUIQAProfileCareBackendSession(for: scenario) { [weak self] failureReason in
+                guard let self else { return }
+                if let failureReason {
+                    self.writeProfileCareBackendFixtureFailure(
+                        scenario: scenario,
+                        reason: failureReason
+                    )
+                    return
+                }
+                self.activateUIQAAuthenticatedBackendProfileSession(for: scenario)
+            }
+            return
+        }
         QAScenarioRunner.prepareSession(
             for: launchPlan,
             login: { UserManager.shared.login(phone: "13800009999", nickname: "UI QA") },
@@ -379,6 +395,137 @@ private extension AppDelegate {
         case .seedPendingArchiveAnalysis:
             seedPendingArchiveAnalysisContext()
         }
+    }
+
+    func prepareUIQAProfileCareBackendSession(
+        for scenario: QALaunchScenario,
+        completion: @escaping (String?) -> Void
+    ) {
+        guard let userId = uiqaArgumentValue(prefix: "DJCareSessionUserId=") else {
+            completion("missingCareSessionUserId")
+            return
+        }
+        QAAuthenticatedBackendSessionFixture.prepare(
+            expectedUserId: userId,
+            completion: completion
+        )
+    }
+
+    func activateUIQAAuthenticatedBackendProfileSession(
+        for scenario: QALaunchScenario,
+        retryCount: Int = 0
+    ) {
+        let maximumCoordinatorRetries = 20
+        guard let coordinator = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .compactMap({ $0.delegate as? SceneDelegate })
+            .compactMap(\.appCoordinator)
+            .first else {
+            guard retryCount < maximumCoordinatorRetries else {
+                writeProfileCareBackendFixtureFailure(
+                    scenario: scenario,
+                    reason: "missingUIQAAppCoordinator"
+                )
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                self?.activateUIQAAuthenticatedBackendProfileSession(
+                    for: scenario,
+                    retryCount: retryCount + 1
+                )
+            }
+            return
+        }
+
+        coordinator.activateVerifiedLoginForUIQA { [weak self] accepted, reason in
+            guard let self else { return }
+            guard accepted else {
+                self.writeProfileCareBackendFixtureFailure(
+                    scenario: scenario,
+                    reason: "uiqaCoordinatorActivationRejected.\(reason)"
+                )
+                return
+            }
+            self.prepareUIQAProfileCareDashboardFixture(
+                for: scenario
+            ) { prepared in
+                guard prepared else {
+                    self.writeProfileCareBackendFixtureFailure(
+                        scenario: scenario,
+                        reason: "profileCareQADashboardFixtureUnavailable"
+                    )
+                    return
+                }
+                switch scenario {
+                case .profileCareBackendFailureRetrySmoke:
+                    self.scheduleUIQAScenario(scenario) { $0.runProfileCareBackendFailureRetrySmoke() }
+                case .profileCareBackendStateSmoke:
+                    self.scheduleUIQAScenario(scenario) { $0.runProfileCareBackendStateSmoke() }
+                default:
+                    break
+                }
+            }
+        }
+    }
+
+    func prepareUIQAProfileCareDashboardFixture(
+        for scenario: QALaunchScenario,
+        retryCount: Int = 0,
+        completion: @escaping (Bool) -> Void
+    ) {
+        guard scenario.requiresAuthenticatedBackendFixture else {
+            completion(true)
+            return
+        }
+
+        // The authenticated fixture proves a real principal/owner path. The
+        // family member here only unlocks the Profile care-card presentation
+        // prerequisite in the simulator; it is never persisted or exposed in
+        // a release artifact.
+        FeatureFlagService.shared.enableForCurrentLaunch(.careDashboard)
+        seedUIQAStarCareFamilyMember()
+        guard FamilyRepository.shared.hasStarModeMember else {
+            guard retryCount < 10 else {
+                completion(false)
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                self?.prepareUIQAProfileCareDashboardFixture(
+                    for: scenario,
+                    retryCount: retryCount + 1,
+                    completion: completion
+                )
+            }
+            return
+        }
+        completion(true)
+    }
+
+    func writeProfileCareBackendFixtureFailure(
+        scenario: QALaunchScenario,
+        reason: String
+    ) {
+        switch scenario {
+        case .profileCareBackendStateSmoke:
+            writeProfileCareBackendStateSmokeResult(
+                completed: false,
+                states: [],
+                profileTabSelected: false,
+                backendConfigured: DreamJourneyBackendClient.shared.isCareSnapshotConfigured,
+                failureReason: reason
+            )
+        case .profileCareBackendFailureRetrySmoke:
+            writeProfileCareBackendFailureRetrySmokeResult(
+                completed: false,
+                retry: [:],
+                profileTabSelected: false,
+                backendConfigured: DreamJourneyBackendClient.shared.isCareSnapshotConfigured,
+                failureReason: reason
+            )
+        default:
+            return
+        }
+        print("[UI_QA] Profile care backend smoke failed reason=\(reason)")
     }
 
     /// The runtime-stub smoke intentionally exercises the authenticated route
@@ -613,65 +760,96 @@ private extension AppDelegate {
         )
     }
 
-    func runProfileCareBackendStateSmoke() {
-        guard let tabBarController = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .flatMap({ $0.windows })
-            .first(where: { $0.isKeyWindow })?
-            .rootViewController as? WarmTabBarController,
-              let viewControllers = tabBarController.viewControllers,
-              viewControllers.indices.contains(2),
-              let profileNavigationController = viewControllers[2] as? UINavigationController,
-              let profileViewController = profileNavigationController.viewControllers.first as? ProfileViewController else {
+    func runProfileCareBackendStateSmoke(profileRootRetryCount: Int = 0) {
+        let maximumProfileRootRetries = 20
+        guard let profileViewController = QAProfileScenarioRunner.selectRootProfileViewController() else {
+            guard profileRootRetryCount < maximumProfileRootRetries else {
+                writeProfileCareBackendStateSmokeResult(
+                    completed: false,
+                    states: [],
+                    profileTabSelected: false,
+                    backendConfigured: DreamJourneyBackendClient.shared.isCareSnapshotConfigured,
+                    failureReason: "missingProfileRoot"
+                )
+                print("[UI_QA] ProfileCareBackendStateSmoke failed reason=missingProfileRoot")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                self?.runProfileCareBackendStateSmoke(
+                    profileRootRetryCount: profileRootRetryCount + 1
+                )
+            }
+            return
+        }
+        guard UserManager.shared.currentUser?.id != nil else {
             writeProfileCareBackendStateSmokeResult(
                 completed: false,
                 states: [],
                 profileTabSelected: false,
                 backendConfigured: DreamJourneyBackendClient.shared.isCareSnapshotConfigured,
-                failureReason: "missingProfileRoot"
+                failureReason: "missingCareSessionUser"
             )
-            print("[UI_QA] ProfileCareBackendStateSmoke failed reason=missingProfileRoot")
+            print("[UI_QA] ProfileCareBackendStateSmoke failed reason=missingCareSessionUser")
             return
         }
 
-        guard let activeUserId = uiqaArgumentValue(prefix: "DJCareActiveUserId="),
-              let emptyUserId = uiqaArgumentValue(prefix: "DJCareEmptyUserId="),
-              let staleUserId = uiqaArgumentValue(prefix: "DJCareStaleUserId=") else {
+        guard let caseName = uiqaArgumentValue(prefix: "DJCareCaseName="),
+              let userId = uiqaArgumentValue(prefix: "DJCareStateUserId=") else {
             writeProfileCareBackendStateSmokeResult(
                 completed: false,
                 states: [],
                 profileTabSelected: false,
                 backendConfigured: DreamJourneyBackendClient.shared.isCareSnapshotConfigured,
-                failureReason: "missingCareUserIds"
+                failureReason: "missingCareStateCase"
             )
-            print("[UI_QA] ProfileCareBackendStateSmoke failed reason=missingCareUserIds")
+            print("[UI_QA] ProfileCareBackendStateSmoke failed reason=missingCareStateCase")
             return
         }
 
-        profileNavigationController.popToRootViewController(animated: false)
-        tabBarController.selectedIndex = 2
+        let expectedState: String
+        switch caseName {
+        case "active":
+            expectedState = ProfileCareDataState.available.accessibilityIdentifier
+        case "empty":
+            expectedState = ProfileCareDataState.empty.accessibilityIdentifier
+        case "stale":
+            expectedState = ProfileCareDataState.stale.accessibilityIdentifier
+        default:
+            writeProfileCareBackendStateSmokeResult(
+                completed: false,
+                states: [],
+                profileTabSelected: false,
+                backendConfigured: DreamJourneyBackendClient.shared.isCareSnapshotConfigured,
+                failureReason: "unsupportedCareStateCase"
+            )
+            print("[UI_QA] ProfileCareBackendStateSmoke failed reason=unsupportedCareStateCase")
+            return
+        }
+
+        guard UserManager.shared.currentUser?.id == userId else {
+            writeProfileCareBackendStateSmokeResult(
+                completed: false,
+                states: [],
+                profileTabSelected: false,
+                backendConfigured: DreamJourneyBackendClient.shared.isCareSnapshotConfigured,
+                failureReason: "careSessionUserMismatch"
+            )
+            print("[UI_QA] ProfileCareBackendStateSmoke failed reason=careSessionUserMismatch")
+            return
+        }
+
         profileViewController.loadViewIfNeeded()
 
         let cases = [
             ProfileCareBackendStateSmokeCase(
-                name: "active",
-                userId: activeUserId,
-                expectedState: ProfileCareDataState.available.accessibilityIdentifier
-            ),
-            ProfileCareBackendStateSmokeCase(
-                name: "empty",
-                userId: emptyUserId,
-                expectedState: ProfileCareDataState.empty.accessibilityIdentifier
-            ),
-            ProfileCareBackendStateSmokeCase(
-                name: "stale",
-                userId: staleUserId,
-                expectedState: ProfileCareDataState.stale.accessibilityIdentifier
+                name: caseName,
+                userId: userId,
+                expectedState: expectedState
             ),
         ]
 
         profileViewController.runUIQAProfileCareBackendStateSmoke(cases: cases) { [weak self] states in
-            let profileTabSelected = tabBarController.selectedIndex == 2
+            let profileTabSelected = true
             let expectedStates = Dictionary(uniqueKeysWithValues: cases.map { ($0.name, $0.expectedState) })
             let actualStates = Dictionary(uniqueKeysWithValues: states.compactMap { state -> (String, String)? in
                 guard let name = state["name"] as? String,
@@ -715,17 +893,8 @@ private extension AppDelegate {
                 && retryContractsValid
                 && sourceContractsValid
 
-            profileViewController.runUIQAProfileCareBackendRetrySmoke(retryUserId: activeUserId) { retry in
-                let retryCompleted = (retry["retryActionFired"] as? Bool) == true
-                    && (retry["retryButtonVisible"] as? Bool) == true
-                    && (retry["retryRequestCountAdvanced"] as? Bool) == true
-                    && (retry["retryInitialState"] as? String) == ProfileCareDataState.stale.accessibilityIdentifier
-                    && (retry["retryIntermediateState"] as? String) == ProfileCareDataState.loading.accessibilityIdentifier
-                    && ((retry["retryIntermediateSyncCaption"] as? String) ?? "").contains("正在重新同步关怀信号")
-                    && (retry["retryFinalState"] as? String) == ProfileCareDataState.available.accessibilityIdentifier
-                    && (retry["retryRequestedUserId"] as? String) == activeUserId
+            func finish(retry: [String: Any], retryCompleted: Bool) {
                 let completed = stateContractsCompleted && retryCompleted
-
                 self?.writeProfileCareBackendStateSmokeResult(
                     completed: completed,
                     states: states,
@@ -737,33 +906,63 @@ private extension AppDelegate {
                 print(
                     "[UI_QA] ProfileCareBackendStateSmoke completed " +
                     "completed=\(completed) " +
+                    "case=\(caseName) " +
                     "retryActionFired=\(retry["retryActionFired"] as? Bool ?? false) " +
-                    "retryFinalState=\(retry["retryFinalState"] as? String ?? "missing") " +
+                    "retryFinalState=\(retry["retryFinalState"] as? String ?? "notApplicable") " +
                     "profileStates=\(actualStates.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: "|")) " +
                     "dashboardStates=\(dashboardStates.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: "|"))"
                 )
             }
+
+            guard caseName == "active" else {
+                finish(retry: ["skipped": true], retryCompleted: true)
+                return
+            }
+
+            profileViewController.runUIQAProfileCareBackendRetrySmoke(retryUserId: userId) { retry in
+                let retryCompleted = (retry["retryActionFired"] as? Bool) == true
+                    && (retry["retryButtonVisible"] as? Bool) == true
+                    && (retry["retryRequestCountAdvanced"] as? Bool) == true
+                    && (retry["retryInitialState"] as? String) == ProfileCareDataState.stale.accessibilityIdentifier
+                    && (retry["retryIntermediateState"] as? String) == ProfileCareDataState.loading.accessibilityIdentifier
+                    && ((retry["retryIntermediateSyncCaption"] as? String) ?? "").contains("正在重新同步关怀信号")
+                    && (retry["retryFinalState"] as? String) == ProfileCareDataState.available.accessibilityIdentifier
+                    && (retry["retryRequestedUserId"] as? String) == userId
+                finish(retry: retry, retryCompleted: retryCompleted)
+            }
         }
     }
 
-    func runProfileCareBackendFailureRetrySmoke() {
-        guard let tabBarController = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .flatMap({ $0.windows })
-            .first(where: { $0.isKeyWindow })?
-            .rootViewController as? WarmTabBarController,
-              let viewControllers = tabBarController.viewControllers,
-              viewControllers.indices.contains(2),
-              let profileNavigationController = viewControllers[2] as? UINavigationController,
-              let profileViewController = profileNavigationController.viewControllers.first as? ProfileViewController else {
+    func runProfileCareBackendFailureRetrySmoke(profileRootRetryCount: Int = 0) {
+        let maximumProfileRootRetries = 20
+        guard let profileViewController = QAProfileScenarioRunner.selectRootProfileViewController() else {
+            guard profileRootRetryCount < maximumProfileRootRetries else {
+                writeProfileCareBackendFailureRetrySmokeResult(
+                    completed: false,
+                    retry: [:],
+                    profileTabSelected: false,
+                    backendConfigured: DreamJourneyBackendClient.shared.isCareSnapshotConfigured,
+                    failureReason: "missingProfileRoot"
+                )
+                print("[UI_QA] ProfileCareBackendFailureRetrySmoke failed reason=missingProfileRoot")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                self?.runProfileCareBackendFailureRetrySmoke(
+                    profileRootRetryCount: profileRootRetryCount + 1
+                )
+            }
+            return
+        }
+        guard UserManager.shared.currentUser?.id != nil else {
             writeProfileCareBackendFailureRetrySmokeResult(
                 completed: false,
                 retry: [:],
                 profileTabSelected: false,
                 backendConfigured: DreamJourneyBackendClient.shared.isCareSnapshotConfigured,
-                failureReason: "missingProfileRoot"
+                failureReason: "missingCareSessionUser"
             )
-            print("[UI_QA] ProfileCareBackendFailureRetrySmoke failed reason=missingProfileRoot")
+            print("[UI_QA] ProfileCareBackendFailureRetrySmoke failed reason=missingCareSessionUser")
             return
         }
 
@@ -779,12 +978,22 @@ private extension AppDelegate {
             return
         }
 
-        profileNavigationController.popToRootViewController(animated: false)
-        tabBarController.selectedIndex = 2
+        guard UserManager.shared.currentUser?.id == retryUserId else {
+            writeProfileCareBackendFailureRetrySmokeResult(
+                completed: false,
+                retry: [:],
+                profileTabSelected: false,
+                backendConfigured: DreamJourneyBackendClient.shared.isCareSnapshotConfigured,
+                failureReason: "careSessionUserMismatch"
+            )
+            print("[UI_QA] ProfileCareBackendFailureRetrySmoke failed reason=careSessionUserMismatch")
+            return
+        }
+
         profileViewController.loadViewIfNeeded()
 
         profileViewController.runUIQAProfileCareBackendFailureRetrySmoke(retryUserId: retryUserId) { [weak self] retry in
-            let profileTabSelected = tabBarController.selectedIndex == 2
+            let profileTabSelected = true
             let completed = DreamJourneyBackendClient.shared.isCareSnapshotConfigured
                 && profileTabSelected
                 && (retry["retryActionFired"] as? Bool) == true
@@ -3686,18 +3895,11 @@ private extension AppDelegate {
             result["failureReason"] = failureReason
         }
 
-        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
-              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-            print("[UI_QA] ProfileCareBackendStateSmoke failed reason=resultEncoding")
-            return
-        }
-
-        let resultURL = documentsURL.appendingPathComponent("profile-care-backend-state-smoke-result.json")
-        do {
-            try data.write(to: resultURL, options: [.atomic])
-        } catch {
-            print("[UI_QA] ProfileCareBackendStateSmoke failed reason=resultWrite error=\(error.localizedDescription)")
-        }
+        QAProfileScenarioRunner.writeResult(
+            result,
+            fileName: "profile-care-backend-state-smoke-result.json",
+            smokeName: "ProfileCareBackendStateSmoke"
+        )
     }
 
     func writeProfileCareBackendFailureRetrySmokeResult(
@@ -3718,18 +3920,11 @@ private extension AppDelegate {
             result["failureReason"] = failureReason
         }
 
-        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
-              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-            print("[UI_QA] ProfileCareBackendFailureRetrySmoke failed reason=resultEncoding")
-            return
-        }
-
-        let resultURL = documentsURL.appendingPathComponent("profile-care-backend-failure-retry-smoke-result.json")
-        do {
-            try data.write(to: resultURL, options: [.atomic])
-        } catch {
-            print("[UI_QA] ProfileCareBackendFailureRetrySmoke failed reason=resultWrite error=\(error.localizedDescription)")
-        }
+        QAProfileScenarioRunner.writeResult(
+            result,
+            fileName: "profile-care-backend-failure-retry-smoke-result.json",
+            smokeName: "ProfileCareBackendFailureRetrySmoke"
+        )
     }
 
     func writeProfileFamilyPersonaReleaseSmokeResult(

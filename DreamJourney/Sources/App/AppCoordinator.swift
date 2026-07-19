@@ -73,6 +73,18 @@ final class AppCoordinator: Coordinator {
             }
         }
 
+        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        if QALaunchConfiguration.shared.startupScenario?.requiresAuthenticatedBackendFixture == true {
+            // The fixture session is prepared in AppDelegate and must be
+            // activated through the coordinator below. A cold-start online
+            // validation here would race that handoff and, in the deliberate
+            // unreachable-backend smoke, clear the fixture before its failure
+            // state can be exercised.
+            rootMode = .validating
+            showStartupValidationGate()
+            return
+        }
+        #endif
         bootstrapAccountSession()
     }
 
@@ -122,6 +134,17 @@ final class AppCoordinator: Coordinator {
         tabCoordinator.start()
         routePendingNotificationRuntimeRoutesIfPossible()
     }
+
+    #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+    /// QA-only bridge for a server-issued fixture session. It deliberately
+    /// reuses the same coordinator transition as a verified interactive login
+    /// so simulator smokes cannot bypass root composition or AccountLease.
+    func activateVerifiedLoginForUIQA(
+        completion: @escaping (_ accepted: Bool, _ reason: String) -> Void
+    ) {
+        activateVerifiedLogin(completion: completion)
+    }
+    #endif
 
     /// App/Scene ingress can queue a route before account bootstrap completes.
     /// This method intentionally routes only after `showMainTab` has established
@@ -204,11 +227,14 @@ final class AppCoordinator: Coordinator {
         }
     }
 
-    private func activateVerifiedLogin() {
+    private func activateVerifiedLogin(
+        completion: ((_ accepted: Bool, _ reason: String) -> Void)? = nil
+    ) {
         guard let credential = UserManager.shared.accountSessionCredentialSnapshot(),
               credential.trust == .requiresOnlineValidation,
               credential.normalizedSubjectId == UserManager.shared.currentUser?.id else {
             transitionToAuth()
+            completion?(false, "verifiedLoginCredentialUnavailable")
             return
         }
         rootMode = .validating
@@ -216,13 +242,18 @@ final class AppCoordinator: Coordinator {
         accountSessionTask?.cancel()
         accountSessionTask = Task { [weak self, accountSessionActor] in
             let receipt = await accountSessionActor.activateVerifiedLogin(credential)
-            guard !Task.isCancelled, let self else { return }
+            guard !Task.isCancelled, let self else {
+                completion?(false, "verifiedLoginTransitionCancelled")
+                return
+            }
             self.accountSessionTask = nil
             self.accountSessionReceipt = receipt.accepted ? receipt : nil
             if receipt.accepted, receipt.rootRoute == .privateUI {
                 self.showMainTab()
+                completion?(self.rootMode == .main, receipt.reason)
             } else {
                 self.transitionToAuth()
+                completion?(false, receipt.reason)
             }
         }
     }
