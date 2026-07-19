@@ -6,7 +6,7 @@
 
 - Work Item：`WI-S1-01-06`
 - Authority lock：`OWNER_TRUTH`
-- 执行结果：`SCOPED_G0_G2_EVIDENCE_PRESENT / BACKEND_DEPLOYED / IOS_UNCHANGED`
+- 执行结果：`SCOPED_G0_G2_PROJECTION_EVIDENCE_PRESENT / KBLITE_READ_ENVELOPE_INTERNAL_READY / G2_READ_ENVELOPE_DEPLOYMENT_PENDING`
 - 范围：只实现确认态 `MemoryVersion` 的 owner-only、默认关闭、可重复重建 Projection 基础；不切换 KBLite、Context Packet、Echo 或公开 UI。
 
 ## 已实现
@@ -29,9 +29,11 @@
 
 ### iOS
 
-- 本项没有修改 iOS runtime、Archive、KBLite、Context Packet 或 Echo UI。
-- iOS 仅记录后端 evidence，避免在 Projection 还未成为正式兼容读取前出现
-  客户端依赖或公开入口。
+- 初始 Projection foundation 没有修改 iOS runtime、Archive、KBLite、Context
+  Packet 或 Echo UI。
+- 后续 bounded read-envelope 子闭环新增了 QA-only typed parser 和独立的
+  `OwnerTruthKBLiteCompatibilityStore`；它不读取/写入 legacy KBLite，也没有公开
+  入口。详见 `2026-07-19-wi-s1-01-06-kblite-compatibility-read-envelope.md`。
 
 ## 验证证据
 
@@ -59,6 +61,5 @@
 
 ## 下一项
 
-继续 `WI-S1-01-06` 的下一小闭环：建立 default-off 的 KBLite compatibility
-adapter/read envelope，以本 Projection 为唯一输入，保持 legacy KBLite 不能再成为
-confirmed-fact Authority。
+完成 read-envelope 部署和 G2 smoke 后，进入 `WI-S1-01-07` 的 Owner QA Context
+与 typed Citation 子闭环；保持 legacy KBLite 不能成为 confirmed-fact Authority。

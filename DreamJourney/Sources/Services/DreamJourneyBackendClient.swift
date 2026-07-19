@@ -4141,6 +4141,10 @@ final class DreamJourneyBackendClient {
         hasExplicitBaseURL && OwnerTruthCandidateReviewQAGate.isEnabled
     }
 
+    var isOwnerTruthKBLiteCompatibilityQAConfigured: Bool {
+        hasExplicitBaseURL && OwnerTruthKBLiteCompatibilityQAGate.isEnabled
+    }
+
     private init() {
         let configured = Bundle.main.object(forInfoDictionaryKey: "DreamJourneyBackendBaseURL") as? String
         let raw = configured?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -4718,6 +4722,44 @@ final class DreamJourneyBackendClient {
                     completion(.success(try OwnerTruthCandidateDecisionResult(
                         backendJSONObject: object,
                         expectedCandidateID: candidateID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func fetchOwnerTruthKBLiteCompatibilityReadEnvelope(
+        vaultID: OwnerTruthVaultID,
+        expectedOwnerSubjectID: String,
+        completion: @escaping (Result<OwnerTruthKBLiteCompatibilityReadEnvelope, Error>) -> Void
+    ) {
+        guard OwnerTruthKBLiteCompatibilityQAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthKBLiteCompatibility",
+                    reason: "qaOnlyDisabled"
+                )))
+            }
+            return
+        }
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(vaultID.rawValue))/kblite-compatibility/read-envelope",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthKBLiteCompatibilityReadEnvelope(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID,
+                        expectedOwnerSubjectID: expectedOwnerSubjectID
                     )))
                 } catch {
                     completion(.failure(error))
@@ -6449,3 +6491,4 @@ final class DreamJourneyBackendClient {
 }
 
 extension DreamJourneyBackendClient: OwnerTruthCandidateReviewClient {}
+extension DreamJourneyBackendClient: OwnerTruthKBLiteCompatibilityClient {}

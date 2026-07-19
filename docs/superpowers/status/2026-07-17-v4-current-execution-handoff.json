@@ -3,20 +3,21 @@
     "authorityLock": "OWNER_TRUTH",
     "backendPendingPaths": [],
     "completedSubSlices": [
-      "WI-S1-01-04-G0-CANDIDATE-INBOX-OWNER-REVIEW-ACTION-UIQA"
+      "WI-S1-01-04-G0-CANDIDATE-INBOX-OWNER-REVIEW-ACTION-UIQA",
+      "WI-S1-01-06-G0-KBLITE-COMPATIBILITY-READ-ENVELOPE"
     ],
-    "currentSubSlice": "WI-S1-01-06-G0-KBLITE-COMPATIBILITY-READ-ENVELOPE-DISCOVERY",
+    "currentSubSlice": "WI-S1-01-06-G2-KBLITE-COMPATIBILITY-READ-ENVELOPE-DEPLOYMENT",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
       "G0": "SCOPED_EVIDENCE_PRESENT",
       "G1": "MISSING",
-      "G2": "SCOPED_EVIDENCE_PRESENT",
+      "G2": "PROJECTION_FOUNDATION_DEPLOYED / READ_ENVELOPE_DEPLOYMENT_PENDING",
       "G4": "NOT_APPLICABLE_TO_CURRENT_INTERNAL_DISCOVERY"
     },
     "id": "WI-S1-01-06",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-01-04 is internally ready: backend Owner-only CAS/receipt evidence is deployed and the hidden iOS QA Inbox now executes an accept action, consumes the receipt, activates a MemoryVersion and removes the pending candidate. WI-S1-01-05 MemoryVersion activation and WI-S1-01-06 Projection foundation already have scoped backend evidence; the current bounded task is to audit and close the KBLite compatibility read-envelope gap without changing public Archive or Echo UI. G1/G3/G4 remain open."
+    "summary": "WI-S1-01-06 now has a default-off Projection-only KBLite compatibility read envelope: backend returns only standard confirmed facts with a content hash; iOS parses it through a dedicated QA-gated client and stores it in a lease-bound, fail-closed cache that never touches legacy KBLite. Local G0 evidence is complete. Commit, deploy and isolated Postgres G2 smoke remain before advancing to WI-S1-01-07. G1/G3/G4 remain open."
   },
   "baselines": {
     "backend": "main@32c38f2",
@@ -409,5 +410,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-19T14:12:00+0800"
+  "updatedAt": "2026-07-19T14:35:50+0800"
 }

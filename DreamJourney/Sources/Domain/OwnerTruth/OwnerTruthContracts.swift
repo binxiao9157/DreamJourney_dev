@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 // Owner Truth V1 remains a pure domain boundary until the gated CreateSource
@@ -130,6 +131,7 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     case invalidInbox(String)
     case invalidDecision(String)
     case invalidCommand(String)
+    case invalidKBLiteCompatibilityReadEnvelope(String)
 
     var errorDescription: String? {
         switch self {
@@ -139,6 +141,8 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
             return "候选审核回执合同无效：\(detail)"
         case .invalidCommand(let detail):
             return "候选审核命令无效：\(detail)"
+        case .invalidKBLiteCompatibilityReadEnvelope(let detail):
+            return "兼容读取合同无效：\(detail)"
         }
     }
 }
@@ -681,6 +685,476 @@ protocol OwnerTruthCandidateReviewClient: AnyObject {
         candidateID: OwnerTruthRecordID,
         command: OwnerTruthCandidateReviewCommand,
         completion: @escaping (Result<OwnerTruthCandidateDecisionResult, Error>) -> Void
+    )
+}
+
+// MARK: - Default-off Owner Truth Projection compatibility read
+
+/// This gate is intentionally separate from candidate review.  The read
+/// envelope is a narrow QA cohort contract, not a switch for legacy KBLite or
+/// public Echo context selection.
+enum OwnerTruthKBLiteCompatibilityQAGate {
+    static let launchArgument = "DJEnableOwnerTruthKBLiteCompatibilityQA"
+
+    static var isEnabled: Bool {
+        #if DEBUG || UI_QA_SIMULATOR
+        return ProcessInfo.processInfo.arguments.contains(launchArgument)
+        #else
+        return false
+        #endif
+    }
+}
+
+enum OwnerTruthKBLiteCompatibilityReadState: String, Codable, Equatable, Sendable {
+    case disabled
+    case rebuilding
+    case ready
+}
+
+enum OwnerTruthKBLiteCompatibilityCacheDisposition: String, Codable, Equatable, Sendable {
+    case discard
+    case replace
+}
+
+struct OwnerTruthKBLiteCompatibilityFactCitation: Codable, Equatable, Sendable {
+    let memoryID: String
+    let memoryVersionID: String
+    let sourceID: String
+    let sourceVersion: Int
+    let contentHash: String
+    let memoryVersion: Int
+
+    init(backendJSONObject object: [String: Any]) throws {
+        guard let memoryID = Self.nonEmptyString(object["memoryId"]),
+              let memoryVersionID = Self.nonEmptyString(object["memoryVersionId"]),
+              let sourceID = Self.nonEmptyString(object["sourceId"]),
+              let sourceVersion = Self.positiveInt(object["sourceVersion"]),
+              let contentHash = Self.nonEmptyString(object["contentHash"]),
+              let memoryVersion = Self.positiveInt(object["memoryVersion"]) else {
+            throw OwnerTruthRemoteContractError.invalidKBLiteCompatibilityReadEnvelope(
+                "fact citation is incomplete"
+            )
+        }
+        self.memoryID = memoryID
+        self.memoryVersionID = memoryVersionID
+        self.sourceID = sourceID
+        self.sourceVersion = sourceVersion
+        self.contentHash = contentHash
+        self.memoryVersion = memoryVersion
+    }
+
+    var backendJSONObject: [String: Any] {
+        [
+            "memoryId": memoryID,
+            "memoryVersionId": memoryVersionID,
+            "sourceId": sourceID,
+            "sourceVersion": sourceVersion,
+            "contentHash": contentHash,
+            "memoryVersion": memoryVersion,
+        ]
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func positiveInt(_ value: Any?) -> Int? {
+        guard !(value is Bool), let value = value as? Int, value > 0 else { return nil }
+        return value
+    }
+}
+
+struct OwnerTruthKBLiteCompatibilityFact: Codable, Equatable, Sendable, Identifiable {
+    let id: String
+    let statement: String
+    let confidence: String
+    let evidenceStatus: String
+    let compatibilitySource: String
+    let citation: OwnerTruthKBLiteCompatibilityFactCitation
+
+    init(backendJSONObject object: [String: Any]) throws {
+        guard let id = Self.nonEmptyString(object["id"]),
+              let statement = Self.nonEmptyString(object["statement"]),
+              Self.nonEmptyString(object["confidence"]) == "confirmed",
+              Self.nonEmptyString(object["evidenceStatus"]) == "confirmed",
+              Self.nonEmptyString(object["compatibilitySource"])
+                == OwnerTruthKBLiteCompatibilityReadEnvelope.compatibilitySource,
+              let citationObject = object["citation"] as? [String: Any] else {
+            throw OwnerTruthRemoteContractError.invalidKBLiteCompatibilityReadEnvelope(
+                "fact is not a confirmed standard compatibility fact"
+            )
+        }
+        self.id = id
+        self.statement = statement
+        self.confidence = "confirmed"
+        self.evidenceStatus = "confirmed"
+        self.compatibilitySource = OwnerTruthKBLiteCompatibilityReadEnvelope.compatibilitySource
+        self.citation = try OwnerTruthKBLiteCompatibilityFactCitation(
+            backendJSONObject: citationObject
+        )
+    }
+
+    var backendJSONObject: [String: Any] {
+        [
+            "id": id,
+            "statement": statement,
+            "confidence": confidence,
+            "evidenceStatus": evidenceStatus,
+            "compatibilitySource": compatibilitySource,
+            "citation": citation.backendJSONObject,
+        ]
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+}
+
+/// The compatibility graph remains intentionally smaller than a legacy
+/// KBLite graph.  Projection facts are the only cacheable values in this
+/// cohort; people, places, and events must stay empty until their own policy
+/// is approved.
+struct OwnerTruthKBLiteCompatibilityGraph: Codable, Equatable, Sendable {
+    let facts: [OwnerTruthKBLiteCompatibilityFact]
+
+    static let empty = OwnerTruthKBLiteCompatibilityGraph(facts: [])
+
+    init(facts: [OwnerTruthKBLiteCompatibilityFact]) {
+        self.facts = facts
+    }
+
+    init(backendJSONObject object: [String: Any]) throws {
+        guard let people = object["people"] as? [Any], people.isEmpty,
+              let places = object["places"] as? [Any], places.isEmpty,
+              let events = object["events"] as? [Any], events.isEmpty,
+              let factObjects = object["facts"] as? [[String: Any]] else {
+            throw OwnerTruthRemoteContractError.invalidKBLiteCompatibilityReadEnvelope(
+                "graph must contain only an empty legacy shape and typed facts"
+            )
+        }
+        facts = try factObjects.map(OwnerTruthKBLiteCompatibilityFact.init(backendJSONObject:))
+    }
+
+    var isEmpty: Bool {
+        facts.isEmpty
+    }
+
+    var backendJSONObject: [String: Any] {
+        [
+            "people": [],
+            "places": [],
+            "events": [],
+            "facts": facts.map(\.backendJSONObject),
+        ]
+    }
+}
+
+/// Typed parsing boundary for the only cacheable Owner Truth -> KBLite
+/// compatibility response.  It fails closed before any data reaches disk.
+struct OwnerTruthKBLiteCompatibilityReadEnvelope: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-kblite-read-envelope-v1"
+    static let projectionSource = "v4"
+    static let compatibilitySource = "owner-truth-memory-projection"
+
+    let state: OwnerTruthKBLiteCompatibilityReadState
+    let vaultID: OwnerTruthVaultID
+    let ownerSubjectID: String
+    let authorityEpoch: Int?
+    let projectionCheckpoint: String?
+    let cacheDisposition: OwnerTruthKBLiteCompatibilityCacheDisposition
+    let contentHash: String?
+    let graph: OwnerTruthKBLiteCompatibilityGraph
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID,
+        expectedOwnerSubjectID: String
+    ) throws {
+        let normalizedOwnerSubjectID = Self.nonEmptyString(expectedOwnerSubjectID)
+        guard Self.nonEmptyString(object["schemaVersion"]) == Self.schemaVersion,
+              Self.nonEmptyString(object["projectionSource"]) == Self.projectionSource,
+              Self.nonEmptyString(object["compatibilitySource"]) == Self.compatibilitySource,
+              Self.nonEmptyString(object["vaultId"]) == expectedVaultID.rawValue,
+              let normalizedOwnerSubjectID,
+              Self.nonEmptyString(object["ownerSubjectId"]) == normalizedOwnerSubjectID,
+              let state = OwnerTruthKBLiteCompatibilityReadState(
+                rawValue: Self.nonEmptyString(object["state"]) ?? ""
+              ),
+              let cacheDisposition = OwnerTruthKBLiteCompatibilityCacheDisposition(
+                rawValue: Self.nonEmptyString(object["cacheDisposition"]) ?? ""
+              ),
+              let graphObject = object["graph"] as? [String: Any] else {
+            throw OwnerTruthRemoteContractError.invalidKBLiteCompatibilityReadEnvelope(
+                "schema, owner, vault or graph does not match the contract"
+            )
+        }
+
+        let graph = try OwnerTruthKBLiteCompatibilityGraph(backendJSONObject: graphObject)
+        let authorityEpoch = try Self.optionalNonnegativeInt(object["authorityEpoch"])
+        let projectionCheckpoint = try Self.optionalNonEmptyString(
+            object["projectionCheckpoint"],
+            field: "projectionCheckpoint"
+        )
+        let contentHash = try Self.optionalNonEmptyString(
+            object["contentHash"],
+            field: "contentHash"
+        )
+
+        switch state {
+        case .ready:
+            guard cacheDisposition == .replace,
+                  authorityEpoch != nil,
+                  projectionCheckpoint != nil,
+                  let contentHash,
+                  Self.isSHA256Digest(contentHash),
+                  try Self.graphContentHash(graph) == contentHash else {
+                throw OwnerTruthRemoteContractError.invalidKBLiteCompatibilityReadEnvelope(
+                    "ready envelope integrity fields are invalid"
+                )
+            }
+        case .disabled, .rebuilding:
+            guard cacheDisposition == .discard,
+                  projectionCheckpoint == nil,
+                  contentHash == nil,
+                  graph.isEmpty else {
+                throw OwnerTruthRemoteContractError.invalidKBLiteCompatibilityReadEnvelope(
+                    "non-ready envelope must discard an empty graph"
+                )
+            }
+        }
+
+        self.state = state
+        self.vaultID = expectedVaultID
+        self.ownerSubjectID = normalizedOwnerSubjectID
+        self.authorityEpoch = authorityEpoch
+        self.projectionCheckpoint = projectionCheckpoint
+        self.cacheDisposition = cacheDisposition
+        self.contentHash = contentHash
+        self.graph = graph
+    }
+
+    static func graphContentHash(
+        _ graph: OwnerTruthKBLiteCompatibilityGraph
+    ) throws -> String {
+        let object = graph.backendJSONObject
+        guard JSONSerialization.isValidJSONObject(object) else {
+            throw OwnerTruthRemoteContractError.invalidKBLiteCompatibilityReadEnvelope(
+                "graph cannot be canonicalized"
+            )
+        }
+        let data = try JSONSerialization.data(
+            withJSONObject: object,
+            options: [.sortedKeys, .withoutEscapingSlashes]
+        )
+        return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func optionalNonEmptyString(_ value: Any?, field: String) throws -> String? {
+        guard let value, !(value is NSNull) else { return nil }
+        guard let normalized = nonEmptyString(value) else {
+            throw OwnerTruthRemoteContractError.invalidKBLiteCompatibilityReadEnvelope(
+                "\(field) must be a non-empty string or null"
+            )
+        }
+        return normalized
+    }
+
+    private static func optionalNonnegativeInt(_ value: Any?) throws -> Int? {
+        guard let value, !(value is NSNull) else { return nil }
+        guard !(value is Bool), let value = value as? Int, value >= 0 else {
+            throw OwnerTruthRemoteContractError.invalidKBLiteCompatibilityReadEnvelope(
+                "authorityEpoch must be a non-negative integer or null"
+            )
+        }
+        return value
+    }
+
+    private static func isSHA256Digest(_ value: String) -> Bool {
+        value.count == 64 && value.allSatisfy { $0.isHexDigit }
+    }
+}
+
+struct OwnerTruthKBLiteCompatibilityCachedProjection: Codable, Equatable, Sendable {
+    let projectionAuthorityEpoch: Int
+    let projectionCheckpoint: String
+    let contentHash: String
+    let graph: OwnerTruthKBLiteCompatibilityGraph
+}
+
+enum OwnerTruthKBLiteCompatibilityCacheLoadResult: Equatable, Sendable {
+    case ready(OwnerTruthKBLiteCompatibilityCachedProjection)
+    case rebuilding
+    case unavailable
+}
+
+/// Separate disk store for the QA compatibility cohort.  It never imports or
+/// writes the legacy `kb_graph_<userId>.json` store.  A cache line is bound to
+/// all account-lease identity fields so an A -> B -> A account transition
+/// cannot revive the first account's projection.
+final class OwnerTruthKBLiteCompatibilityStore {
+    static let fileName = "owner_truth_kblite_compatibility_v1.json"
+
+    private static let cacheSchemaVersion = "owner-truth-kblite-compatibility-cache-v1"
+
+    private struct CacheEnvelope: Codable {
+        let schemaVersion: String
+        let subjectID: String
+        let vaultID: String
+        let sessionID: String
+        let generation: UInt64
+        let generationID: UUID
+        let leaseAuthorityEpoch: String
+        let projection: OwnerTruthKBLiteCompatibilityCachedProjection
+
+        init(accountLease: AccountLease, projection: OwnerTruthKBLiteCompatibilityCachedProjection) {
+            schemaVersion = OwnerTruthKBLiteCompatibilityStore.cacheSchemaVersion
+            subjectID = accountLease.subjectId
+            vaultID = accountLease.vaultId
+            sessionID = accountLease.sessionId
+            generation = accountLease.generation
+            generationID = accountLease.generationId
+            leaseAuthorityEpoch = accountLease.authorityEpoch
+            self.projection = projection
+        }
+
+        func matches(_ accountLease: AccountLease) -> Bool {
+            schemaVersion == OwnerTruthKBLiteCompatibilityStore.cacheSchemaVersion
+                && subjectID == accountLease.subjectId
+                && vaultID == accountLease.vaultId
+                && sessionID == accountLease.sessionId
+                && generation == accountLease.generation
+                && generationID == accountLease.generationId
+                && leaseAuthorityEpoch == accountLease.authorityEpoch
+        }
+    }
+
+    private let directoryURL: URL
+    private let fileManager: FileManager
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+
+    init(
+        directoryURL: URL,
+        fileManager: FileManager = .default,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared
+    ) {
+        self.directoryURL = directoryURL
+        self.fileManager = fileManager
+        self.accountLeaseRuntime = accountLeaseRuntime
+    }
+
+    @discardableResult
+    func apply(
+        _ envelope: OwnerTruthKBLiteCompatibilityReadEnvelope,
+        for accountLease: AccountLease
+    ) -> OwnerTruthKBLiteCompatibilityCacheLoadResult {
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            discardCachedProjection()
+            return .unavailable
+        }
+        guard envelope.vaultID.rawValue == accountLease.vaultId,
+              envelope.ownerSubjectID == accountLease.subjectId else {
+            discardCachedProjection()
+            return .unavailable
+        }
+        guard envelope.state == .ready,
+              envelope.cacheDisposition == .replace,
+              let projectionAuthorityEpoch = envelope.authorityEpoch,
+              let projectionCheckpoint = envelope.projectionCheckpoint,
+              let contentHash = envelope.contentHash else {
+            discardCachedProjection()
+            return .rebuilding
+        }
+
+        let projection = OwnerTruthKBLiteCompatibilityCachedProjection(
+            projectionAuthorityEpoch: projectionAuthorityEpoch,
+            projectionCheckpoint: projectionCheckpoint,
+            contentHash: contentHash,
+            graph: envelope.graph
+        )
+        guard (try? OwnerTruthKBLiteCompatibilityReadEnvelope.graphContentHash(projection.graph))
+            == projection.contentHash else {
+            discardCachedProjection()
+            return .rebuilding
+        }
+
+        do {
+            try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            let data = try encoder.encode(CacheEnvelope(accountLease: accountLease, projection: projection))
+            guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                discardCachedProjection()
+                return .unavailable
+            }
+            try data.write(to: cacheURL, options: [.atomic])
+            #if os(iOS)
+            try fileManager.setAttributes(
+                [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                ofItemAtPath: cacheURL.path
+            )
+            #endif
+            guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed,
+                  accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+                discardCachedProjection()
+                return .unavailable
+            }
+            return .ready(projection)
+        } catch {
+            discardCachedProjection()
+            return .rebuilding
+        }
+    }
+
+    func load(for accountLease: AccountLease) -> OwnerTruthKBLiteCompatibilityCacheLoadResult {
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed,
+              accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+            discardCachedProjection()
+            return .unavailable
+        }
+        guard fileManager.fileExists(atPath: cacheURL.path) else {
+            return .rebuilding
+        }
+        guard let data = try? Data(contentsOf: cacheURL),
+              let cache = try? JSONDecoder().decode(CacheEnvelope.self, from: data),
+              cache.matches(accountLease),
+              (try? OwnerTruthKBLiteCompatibilityReadEnvelope.graphContentHash(cache.projection.graph))
+                == cache.projection.contentHash,
+              accountLeaseRuntime.validate(accountLease, at: .commit).allowed,
+              accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+            discardCachedProjection()
+            return .rebuilding
+        }
+        return .ready(cache.projection)
+    }
+
+    func discardCachedProjection() {
+        try? fileManager.removeItem(at: cacheURL)
+    }
+
+    private var cacheURL: URL {
+        directoryURL.appendingPathComponent(Self.fileName, isDirectory: false)
+    }
+}
+
+/// Narrow transport port for the default-off compatibility cohort.  The
+/// concrete backend client authenticates the request and owns the QA header;
+/// callers must still validate and scope the returned envelope through the
+/// store above.
+protocol OwnerTruthKBLiteCompatibilityClient: AnyObject {
+    func fetchOwnerTruthKBLiteCompatibilityReadEnvelope(
+        vaultID: OwnerTruthVaultID,
+        expectedOwnerSubjectID: String,
+        completion: @escaping (Result<OwnerTruthKBLiteCompatibilityReadEnvelope, Error>) -> Void
     )
 }
 

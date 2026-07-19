@@ -347,6 +347,129 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(useCase.viewState.items.map(\.id), [candidateID])
     }
 
+    func testKBLiteCompatibilityReadEnvelopeAcceptsOnlyConfirmedProjectionFacts() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let envelope = try compatibilityReadEnvelope(for: lease)
+
+        XCTAssertEqual(envelope.state, .ready)
+        XCTAssertEqual(envelope.cacheDisposition, .replace)
+        XCTAssertEqual(envelope.vaultID.rawValue, lease.vaultId)
+        XCTAssertEqual(envelope.ownerSubjectID, lease.subjectId)
+        XCTAssertEqual(envelope.graph.facts.count, 1)
+        XCTAssertEqual(envelope.graph.facts.first?.statement, "院子里有一棵树")
+        XCTAssertEqual(
+            try OwnerTruthKBLiteCompatibilityReadEnvelope.graphContentHash(envelope.graph),
+            envelope.contentHash
+        )
+    }
+
+    func testKBLiteCompatibilityReadEnvelopeRejectsTamperedContentHash() throws {
+        let (_, lease) = try makeActiveRuntime()
+        var object = try compatibilityReadEnvelopeJSONObject(for: lease)
+        object["contentHash"] = String(repeating: "0", count: 64)
+
+        XCTAssertThrowsError(
+            try OwnerTruthKBLiteCompatibilityReadEnvelope(
+                backendJSONObject: object,
+                expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId)),
+                expectedOwnerSubjectID: lease.subjectId
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? OwnerTruthRemoteContractError,
+                .invalidKBLiteCompatibilityReadEnvelope(
+                    "ready envelope integrity fields are invalid"
+                )
+            )
+        }
+    }
+
+    func testKBLiteCompatibilityStoreFailsClosedAcrossAccountABA() throws {
+        let (runtime, firstLease) = try makeActiveRuntime()
+        let directoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("owner-truth-kblite-aba-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directoryURL) }
+        let store = OwnerTruthKBLiteCompatibilityStore(
+            directoryURL: directoryURL,
+            accountLeaseRuntime: runtime
+        )
+        let envelope = try compatibilityReadEnvelope(for: firstLease)
+
+        guard case .ready(let written) = store.apply(envelope, for: firstLease) else {
+            return XCTFail("expected a valid first compatibility projection")
+        }
+        XCTAssertEqual(written.graph.facts.count, 1)
+
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000202")!
+        ))
+        XCTAssertEqual(store.load(for: firstLease), .unavailable)
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: directoryURL
+                    .appendingPathComponent(OwnerTruthKBLiteCompatibilityStore.fileName)
+                    .path
+            )
+        )
+
+        runtime.publish(session: accountSession(
+            subjectId: "owner-a",
+            vaultId: "vault-a",
+            generation: 1,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000101")!,
+            sessionID: "session-owner-a-relogged"
+        ))
+        let recoveredLease = try XCTUnwrap(runtime.capture(forSubjectId: "owner-a"))
+        XCTAssertNotEqual(recoveredLease.sessionId, firstLease.sessionId)
+        XCTAssertEqual(store.load(for: recoveredLease), .rebuilding)
+    }
+
+    func testKBLiteCompatibilityStoreDiscardsNonReadyAndCorruptCaches() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let directoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("owner-truth-kblite-corruption-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directoryURL) }
+        let store = OwnerTruthKBLiteCompatibilityStore(
+            directoryURL: directoryURL,
+            accountLeaseRuntime: runtime
+        )
+        let readyEnvelope = try compatibilityReadEnvelope(for: lease)
+        guard case .ready = store.apply(readyEnvelope, for: lease) else {
+            return XCTFail("expected a cacheable projection")
+        }
+
+        let cacheURL = directoryURL.appendingPathComponent(
+            OwnerTruthKBLiteCompatibilityStore.fileName
+        )
+        try Data("not-json".utf8).write(to: cacheURL, options: .atomic)
+        XCTAssertEqual(store.load(for: lease), .rebuilding)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: cacheURL.path))
+
+        let nonReadyEnvelope = try OwnerTruthKBLiteCompatibilityReadEnvelope(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthKBLiteCompatibilityReadEnvelope.schemaVersion,
+                "projectionSource": OwnerTruthKBLiteCompatibilityReadEnvelope.projectionSource,
+                "compatibilitySource": OwnerTruthKBLiteCompatibilityReadEnvelope.compatibilitySource,
+                "state": "rebuilding",
+                "vaultId": lease.vaultId,
+                "ownerSubjectId": lease.subjectId,
+                "authorityEpoch": 2,
+                "projectionCheckpoint": NSNull(),
+                "cacheDisposition": "discard",
+                "contentHash": NSNull(),
+                "graph": ["people": [], "places": [], "events": [], "facts": []],
+                "filteredEntries": [],
+            ],
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId)),
+            expectedOwnerSubjectID: lease.subjectId
+        )
+        XCTAssertEqual(store.apply(nonReadyEnvelope, for: lease), .rebuilding)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: cacheURL.path))
+    }
+
     private func makeActiveRuntime() throws -> (AccountLeaseRuntime, AccountLease) {
         let runtime = AccountLeaseRuntime(authorityEpoch: "epoch-v1")
         runtime.publish(session: accountSession(
@@ -362,12 +485,13 @@ final class OwnerTruthContractsTests: XCTestCase {
         subjectId: String,
         vaultId: String,
         generation: UInt64,
-        generationID: UUID
+        generationID: UUID,
+        sessionID: String? = nil
     ) -> AccountSession {
         AccountSession(
             subjectId: subjectId,
             vaultId: vaultId,
-            sessionId: "session-\(generation)",
+            sessionId: sessionID ?? "session-\(generation)",
             tokenFamilyId: "family-\(generation)",
             sessionVersion: Int(generation),
             generation: generation,
@@ -375,6 +499,55 @@ final class OwnerTruthContractsTests: XCTestCase {
             state: .active,
             activatedAt: Date(timeIntervalSince1970: 1_700_000_000)
         )
+    }
+
+    private func compatibilityReadEnvelope(
+        for lease: AccountLease
+    ) throws -> OwnerTruthKBLiteCompatibilityReadEnvelope {
+        try OwnerTruthKBLiteCompatibilityReadEnvelope(
+            backendJSONObject: try compatibilityReadEnvelopeJSONObject(for: lease),
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId)),
+            expectedOwnerSubjectID: lease.subjectId
+        )
+    }
+
+    private func compatibilityReadEnvelopeJSONObject(
+        for lease: AccountLease
+    ) throws -> [String: Any] {
+        let graph = try OwnerTruthKBLiteCompatibilityGraph(backendJSONObject: [
+            "people": [],
+            "places": [],
+            "events": [],
+            "facts": [[
+                "id": "owner_truth_fact_memory-version-1",
+                "statement": "院子里有一棵树",
+                "confidence": "confirmed",
+                "evidenceStatus": "confirmed",
+                "compatibilitySource": OwnerTruthKBLiteCompatibilityReadEnvelope.compatibilitySource,
+                "citation": [
+                    "memoryId": "memory-1",
+                    "memoryVersionId": "memory-version-1",
+                    "sourceId": "source-1",
+                    "sourceVersion": 1,
+                    "contentHash": "source-content-hash",
+                    "memoryVersion": 1,
+                ],
+            ]],
+        ])
+        return [
+            "schemaVersion": OwnerTruthKBLiteCompatibilityReadEnvelope.schemaVersion,
+            "projectionSource": OwnerTruthKBLiteCompatibilityReadEnvelope.projectionSource,
+            "compatibilitySource": OwnerTruthKBLiteCompatibilityReadEnvelope.compatibilitySource,
+            "state": "ready",
+            "vaultId": lease.vaultId,
+            "ownerSubjectId": lease.subjectId,
+            "authorityEpoch": 2,
+            "projectionCheckpoint": "projection-checkpoint-2",
+            "cacheDisposition": "replace",
+            "contentHash": try OwnerTruthKBLiteCompatibilityReadEnvelope.graphContentHash(graph),
+            "graph": graph.backendJSONObject,
+            "filteredEntries": [],
+        ]
     }
 
     private func recordID(_ rawValue: String) -> OwnerTruthRecordID {
