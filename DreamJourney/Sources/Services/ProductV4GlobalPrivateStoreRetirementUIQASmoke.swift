@@ -40,6 +40,34 @@ enum ProductV4GlobalPrivateStoreRetirementUIQASmoke {
     private static let accountA = "uiqa-account-a"
     private static let accountB = "uiqa-account-b"
 
+    /// Runs the self-contained UIQA scenario and replaces the temporary QA
+    /// root only after its evidence is persisted. Keeping this lifecycle next
+    /// to the smoke prevents AppDelegate from owning product-v4 QA details.
+    static func runAndPresent() {
+        let result = run()
+        do {
+            let resultURL = try result.writeToDocuments()
+            print("[UI_QA] GlobalPrivateStoreRetirementSmoke result=\(resultURL.path)")
+        } catch {
+            print(
+                "[UI_QA] GlobalPrivateStoreRetirementSmoke failed to write result " +
+                "error=\(error.localizedDescription)"
+            )
+        }
+
+        if let keyWindow = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }) {
+            keyWindow.rootViewController = makeResultViewController(result: result)
+            keyWindow.makeKeyAndVisible()
+        }
+        print(
+            "[UI_QA] GlobalPrivateStoreRetirementSmoke completed " +
+            "success=\(result.completed) receipts=\(result.legacyReceiptCount)"
+        )
+    }
+
     static func run() -> GlobalPrivateStoreRetirementUIQAResult {
         let fileManager = FileManager.default
         let root = fileManager.temporaryDirectory.appendingPathComponent(

@@ -38,8 +38,12 @@ require(
     "AppDelegate must route WI-S0-01-06 through the typed QA scenario registry",
 )
 require(
-    "runGlobalPrivateStoreRetirementSmoke()" in app_delegate,
-    "AppDelegate must launch the WI-S0-01-06 runtime smoke",
+    "ProductV4GlobalPrivateStoreRetirementUIQASmoke.runAndPresent()" in app_delegate,
+    "AppDelegate must dispatch WI-S0-01-06 through its isolated UIQA runner",
+)
+require(
+    "func runGlobalPrivateStoreRetirementSmoke()" not in app_delegate,
+    "AppDelegate must not retain the WI-S0-01-06 run/persist/present implementation",
 )
 
 required_source_snippets = (
@@ -53,6 +57,8 @@ required_source_snippets = (
     "accountB",
     "legacyGlobalConversationQuarantined",
     "global-private-store-retirement-uiqa-result.json",
+    "static func runAndPresent()",
+    "GlobalPrivateStoreRetirementSmoke completed",
 )
 for snippet in required_source_snippets:
     require(snippet in smoke_source, f"UIQA source is missing contract anchor: {snippet}")

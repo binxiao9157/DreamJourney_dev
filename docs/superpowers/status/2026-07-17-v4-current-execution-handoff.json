@@ -13,12 +13,13 @@
       "WI-S1-03-10-G0-QA-DIGITAL-HUMAN-LIFECYCLE-RUNNER-PARITY",
       "WI-S1-03-10-G0-QA-DIGITAL-HUMAN-RUNTIME-STUB-RUNNER-PARITY",
       "WI-S1-03-10-G0-QA-TENCENT-BACKEND-PCM-DRIVE-RUNNER-PARITY",
-      "WI-S1-03-10-G0-QA-NON-ECHO-DISPATCH-INVENTORY"
+      "WI-S1-03-10-G0-QA-NON-ECHO-DISPATCH-INVENTORY",
+      "WI-S1-03-10-G0-QA-GLOBAL-PRIVATE-STORE-RUNNER-PARITY"
     ],
-    "currentSubSlice": "WI-S1-03-10-G0-QA-GLOBAL-PRIVATE-STORE-RUNNER-PARITY",
+    "currentSubSlice": "WI-S1-03-10-G0-QA-PROFILE-CARE-ESCALATION-RUNNER-PARITY",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "PARTIAL_QA_LAUNCH_CONFIGURATION_RUNNER_EXPORT_WRITER_DISPATCH_METADATA_FIVE_ECHO_EVIDENCE_EXPORTS_DIGITAL_HUMAN_LIFECYCLE_AUTHENTICATED_RUNTIME_STUB_TENCENT_BACKEND_PCM_DRIVE_ROUTE_AND_NON_ECHO_DISPATCH_INVENTORY_VERIFIED",
+      "G0": "PARTIAL_QA_LAUNCH_CONFIGURATION_RUNNER_EXPORT_WRITER_DISPATCH_METADATA_FIVE_ECHO_EVIDENCE_EXPORTS_DIGITAL_HUMAN_LIFECYCLE_AUTHENTICATED_RUNTIME_STUB_TENCENT_BACKEND_PCM_DRIVE_ROUTE_NON_ECHO_DISPATCH_INVENTORY_AND_GLOBAL_PRIVATE_STORE_RUNNER_PARITY_VERIFIED",
       "G1": "NOT_STARTED",
       "G3": "NOT_STARTED",
       "G4": "NOT_STARTED"
@@ -26,7 +27,7 @@
     "id": "WI-S1-03-10",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-03-09 is internally ready at G0: notification, remote notification and deeplink ingress are parsed only as opaque owner-scoped route intents, validated against the active AccountLease at request/runtime/UI checkpoints, cleared on old-account lifecycle teardown, and routed only to a neutral Tab. G1/G3/G4 remain open. WI-S1-03-10 has completed eleven bounded G0 sub-slices: AppDelegate and Echo consume centralized smoke-harness launch configuration, startup scenarios use an explicit legacy-compatible priority registry, QAScenarioRunner owns launch-plan/session-preparation semantics, QAScenarioResultWriter owns Echo QA JSON export persistence, QALaunchScenario owns startup timing metadata, and QAEchoScenarioRunner owns the root/Echo route/retry path for five evidence exports, the digital-human lifecycle scenario, the authenticated runtime-stub broker boundary, and Tencent backend PCM-drive mock routing. The remaining 35 startup scenarios are now explicitly classified; the next low-risk non-Echo migration is GlobalPrivateStoreRetirementSmoke, while authenticated, seeded, and AccountLease-sensitive routes remain intentionally in AppDelegate."
+    "summary": "WI-S1-03-09 is internally ready at G0: notification, remote notification and deeplink ingress are parsed only as opaque owner-scoped route intents, validated against the active AccountLease at request/runtime/UI checkpoints, cleared on old-account lifecycle teardown, and routed only to a neutral Tab. G1/G3/G4 remain open. WI-S1-03-10 has completed twelve bounded G0 sub-slices: AppDelegate and Echo consume centralized smoke-harness launch configuration, startup scenarios use an explicit legacy-compatible priority registry, QAScenarioRunner owns launch-plan/session-preparation semantics, QAScenarioResultWriter owns Echo QA JSON export persistence, QALaunchScenario owns startup timing metadata, and QAEchoScenarioRunner owns the root/Echo route/retry path for five evidence exports, the digital-human lifecycle scenario, the authenticated runtime-stub broker boundary, and Tencent backend PCM-drive mock routing. The remaining 35 startup scenarios are explicitly classified; GlobalPrivateStoreRetirementSmoke now owns its own run/persist/present lifecycle, while authenticated, seeded, and AccountLease-sensitive routes remain intentionally in AppDelegate."
   },
   "baselines": {
     "backend": "main@32c38f2",
@@ -401,5 +402,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-19T12:39:01+0800"
+  "updatedAt": "2026-07-19T12:41:00+0800"
 }

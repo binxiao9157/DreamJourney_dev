@@ -126,9 +126,9 @@ def main() -> None:
     candidate = "globalPrivateStoreRetirementSmoke"
     require(candidate in standard_scheduled, "next non-Echo migration target must remain low risk")
     require(
-        "case .globalPrivateStoreRetirementSmoke:\n            scheduleUIQAScenario(scenario) { $0.runGlobalPrivateStoreRetirementSmoke() }"
+        "case .globalPrivateStoreRetirementSmoke:\n            scheduleUIQAScenario(scenario) { _ in\n                ProductV4GlobalPrivateStoreRetirementUIQASmoke.runAndPresent()\n            }"
         in app_delegate,
-        "global private store smoke must remain an isolated scheduled AppDelegate action before migration",
+        "global private store smoke must dispatch through its isolated QA runner",
     )
 
     print(

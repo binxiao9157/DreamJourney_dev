@@ -330,7 +330,9 @@ private extension AppDelegate {
         case .profileFamilyPersonaReleaseSmoke:
             scheduleUIQAScenario(scenario) { $0.runProfileFamilyPersonaReleaseSmoke() }
         case .globalPrivateStoreRetirementSmoke:
-            scheduleUIQAScenario(scenario) { $0.runGlobalPrivateStoreRetirementSmoke() }
+            scheduleUIQAScenario(scenario) { _ in
+                ProductV4GlobalPrivateStoreRetirementUIQASmoke.runAndPresent()
+            }
         case .archiveMediaEntriesSmoke:
             scheduleUIQAScenario(scenario) { $0.runArchiveMediaEntriesSmoke() }
         case .archiveAudioLifecycleSmoke:
@@ -516,32 +518,6 @@ private extension AppDelegate {
                 guard let self else { return }
                 action(self)
             }
-        )
-    }
-
-    func runGlobalPrivateStoreRetirementSmoke() {
-        let result = ProductV4GlobalPrivateStoreRetirementUIQASmoke.run()
-        do {
-            let resultURL = try result.writeToDocuments()
-            print("[UI_QA] GlobalPrivateStoreRetirementSmoke result=\(resultURL.path)")
-        } catch {
-            print(
-                "[UI_QA] GlobalPrivateStoreRetirementSmoke failed to write result " +
-                "error=\(error.localizedDescription)"
-            )
-        }
-
-        if let keyWindow = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .flatMap({ $0.windows })
-            .first(where: { $0.isKeyWindow }) {
-            keyWindow.rootViewController = ProductV4GlobalPrivateStoreRetirementUIQASmoke
-                .makeResultViewController(result: result)
-            keyWindow.makeKeyAndVisible()
-        }
-        print(
-            "[UI_QA] GlobalPrivateStoreRetirementSmoke completed " +
-            "success=\(result.completed) receipts=\(result.legacyReceiptCount)"
         )
     }
 
