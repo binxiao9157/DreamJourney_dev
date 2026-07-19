@@ -7,10 +7,11 @@
 - Work Item：`WI-S1-03-07`
 - Authority lock：`IOS_COMPOSITION`
 - Execution owner：`codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a`
-- 当前结果：`IN_PROGRESS / THREE_G0_OBSERVE_ONLY_SLICES_VERIFIED / G1_G4_OPEN`
+- 当前结果：`INTERNAL_READY / FOUR_G0_OBSERVE_ONLY_SLICES_VERIFIED / G1_G4_OPEN`
 - 已完成切片：`WI-S1-03-07-AUDIO_OWNER_INVENTORY_AND_MODEL_G0`、
   `WI-S1-03-07-ECHO_DH_OBSERVE_ONLY_ADAPTER_G0`、
-  `WI-S1-03-07-ECHO_RUNTIME_EVENT_ORDERING_G0`
+  `WI-S1-03-07-ECHO_RUNTIME_EVENT_ORDERING_G0`、
+  `WI-S1-03-07-ECHO_FALLBACK_AND_BACKGROUND_EVENT_AUDIT_G0`
 - 范围：先建立纯 AudioOwnerLease 合同、直接 `AVAudioSession` 写入清单，以及 Echo/DH 的 observe-only
   adapter；不迁移运行时播放/录音行为，不修改 Echo 全屏 UI、Provider、声音复刻或公开发布范围。
 
@@ -46,6 +47,12 @@
   Profile 或 Archive 播放；
 - 页面退出会释放该页面持有的 observation lease。这个释放不触碰腾讯 runtime、DialogEngine 或
   `AVAudioSession`，只避免诊断层遗留旧 owner。
+- 角色切换、普通 Echo fallback、后台宽限期到期和页面退出现在都经由 runtime teardown 显式释放
+  `tencentDigitalHumanPlayback` observation lease；它不会误清理正在进行的 capture/local playback。这样旧
+  角色或已释放的云端 session 不会在诊断层阻塞下一轮 Echo capture；
+- 新增 fallback/background release smoke：先释放上一代 Tencent playback，再验证下一代 runtime 的 Echo
+  capture 可以取得新 lease。静态 gate 同时钉住角色切换进入 `fallbackMuted`、前后台 interrupt 与后台宽限期
+  release 的收尾路径。
 
 本切片仍是 observe-only：以上 7 个业务写入点尚未迁移到统一 runtime coordinator。虽然 Echo 的
 capture/local-TTS/Tencent playback 已按实际关键事件进入观察模型，但 lease 还不强制配置或阻断既有
@@ -66,7 +73,7 @@ git diff --check
   XCTest 声明、Echo 实际事件 observer 以及 7 个直接 AVAudioSession configurator 的完整清单；
 - `audio-owner-lease-model-smoke.swift` 实际编译运行，覆盖数字人播放抢占 Echo capture、系统中断、
   stale capture interruption/resume/route-change 拒绝、owner route/purpose 默认值，以及 observe-only
-  Tencent/local transition 的 stale release 拒绝；
+  Tencent/local transition 的 stale release 拒绝、fallback/background release 后下一代 Echo capture 的恢复；
 - Debug、`generic/platform=iOS`、`CODE_SIGNING_ALLOWED=NO` 的 `build-for-testing` 成功；
 - `git diff --check` 通过。
 
@@ -88,6 +95,6 @@ placeholder，未暴露本机已启动的具体 Simulator destination，因此�
 
 ## 下一步
 
-继续 `WI-S1-03-07`：复核单 Echo cohort 的 fallback、角色切换、后台释放与本地 TTS 是否都能以正确的
-lease token 收尾；仍不改变实际 `AVAudioSession` 配置。确认没有跨 owner 的残留后，再决定是否引入最小
-强制仲裁；Archive/Profile/Memoir 保持在 inventory 中，不能在同一批次一起迁移。
+`WI-S1-03-07` 的 G0 observe-only 边界已闭合。下一项进入 `WI-S1-03-08`：在不扩大公开范围的前提下，
+为 Voice/Digital Human 建立 typed client ports 与 runtime adapters。任何实际 `AVAudioSession` 强制仲裁、
+Archive/Profile/Memoir 迁移或真机音频行为验收仍必须独立排期。

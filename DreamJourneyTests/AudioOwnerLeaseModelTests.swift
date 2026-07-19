@@ -239,6 +239,34 @@ final class AudioOwnerLeaseCoordinatorTests: XCTestCase {
             .resumed(digitalHuman)
         )
     }
+
+    func testFallbackOrBackgroundReleaseClearsTencentLeaseBeforeNewCapture() {
+        let coordinator = AudioOwnerLeaseCoordinator()
+        let previousScope = AudioOwnerLeaseScope(accountGeneration: 4, runtimeGeneration: 9)
+        let nextScope = AudioOwnerLeaseScope(accountGeneration: 4, runtimeGeneration: 10)
+
+        guard case let .acquired(digitalHuman) = coordinator.observeOwner(
+            .tencentDigitalHumanPlayback,
+            priority: .tencentDigitalHumanPlayback,
+            scope: previousScope
+        ) else {
+            return XCTFail("Tencent playback should acquire its observation lease")
+        }
+        XCTAssertEqual(
+            coordinator.releaseObservedLease(digitalHuman),
+            .released(digitalHuman)
+        )
+
+        guard case let .acquired(capture) = coordinator.observeOwner(
+            .echoCapture,
+            priority: .echoCapture,
+            scope: nextScope
+        ) else {
+            return XCTFail("a new Echo capture must start after fallback or background release")
+        }
+        XCTAssertEqual(capture.scope, nextScope)
+        XCTAssertEqual(coordinator.diagnosticsSnapshot().activeLease, capture)
+    }
 }
 
 final class EchoTurnIntentReducerTests: XCTestCase {

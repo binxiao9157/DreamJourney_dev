@@ -1911,11 +1911,14 @@ final class EchoViewController: UIViewController {
         if let removeProviderViewMessage {
             digitalHumanLivePanelView?.removeHostedProviderView(showFallbackMessage: removeProviderViewMessage)
         }
+        // Runtime teardown must retire only Tencent's observed playback lease. This keeps
+        // a role switch, fallback, or background release from leaving the old provider
+        // session visible as the current audio owner in diagnostics.
+        releaseObservedEchoAudioOwnerLease(
+            expectedOwner: .tencentDigitalHumanPlayback,
+            reason: "runtimeReleased:\(reason)"
+        )
         if resetsAudioOwnerToOrdinaryEcho {
-            releaseObservedEchoAudioOwnerLease(
-                expectedOwner: .tencentDigitalHumanPlayback,
-                reason: "runtimeReleased:\(reason)"
-            )
             setDialogEngineLocalTTSPlaybackEnabled(true)
             setEchoAudioOwner(.volcengineLocalTTS, reason: "release:\(reason)")
         }

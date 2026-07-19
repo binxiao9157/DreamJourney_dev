@@ -75,6 +75,7 @@ def main() -> None:
         "func testObserveOnlyTransitionRejectsStaleRelease()",
         "func testRepeatedObserveOnlyOwnerDoesNotCreateAnotherLease()",
         "func testObserveOnlySystemEventsRequireTheCurrentLeaseToken()",
+        "func testFallbackOrBackgroundReleaseClearsTencentLeaseBeforeNewCapture()",
     ):
         require(test_name in tests, f"audio owner lease XCTest missing: {test_name}")
 
@@ -112,6 +113,11 @@ def main() -> None:
         "reason: \"dialogStarted\"",
         "reason: \"digitalHumanRuntimeSpeaking\"",
         "releaseObservedEchoAudioOwnerLease(reason: \"viewWillDisappear\")",
+        "expectedOwner: .tencentDigitalHumanPlayback",
+        "reason: \"runtimeReleased:\\(reason)\"",
+        "reason: \"contextChanged\"",
+        "interruptDigitalHumanPlayback(reason: \"appLifecycle:\\(reason)\")",
+        "reason: \"appLifecycle:backgroundGraceExpired\"",
     ):
         require(required in echo, f"Echo observe-only audio owner adapter missing: {required}")
 

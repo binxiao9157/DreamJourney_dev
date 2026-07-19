@@ -7,6 +7,7 @@ enum AudioOwnerLeaseModelSmoke {
         verifyOwnerDefaultsDescribeTheIntendedRoute()
         verifyObserveOnlyTransitionRejectsStaleRelease()
         verifyObserveOnlySystemEventsRequireCurrentLease()
+        verifyFallbackOrBackgroundReleaseClearsTencentLease()
         print("Audio owner lease model smoke passed")
     }
 
@@ -117,6 +118,31 @@ enum AudioOwnerLeaseModelSmoke {
             coordinator.observeResume(for: interruptedDigitalHuman) == .resumed(digitalHuman),
             "only the current interrupted Tencent lease may resume"
         )
+    }
+
+    private static func verifyFallbackOrBackgroundReleaseClearsTencentLease() {
+        let coordinator = AudioOwnerLeaseCoordinator()
+        let previousScope = AudioOwnerLeaseScope(accountGeneration: 4, runtimeGeneration: 9)
+        let nextScope = AudioOwnerLeaseScope(accountGeneration: 4, runtimeGeneration: 10)
+        guard case let .acquired(digitalHuman) = coordinator.observeOwner(
+            .tencentDigitalHumanPlayback,
+            priority: .tencentDigitalHumanPlayback,
+            scope: previousScope
+        ) else {
+            fail("Tencent playback should acquire before runtime teardown")
+        }
+        require(
+            coordinator.releaseObservedLease(digitalHuman) == .released(digitalHuman),
+            "fallback or background teardown must retire the current Tencent lease"
+        )
+        guard case let .acquired(capture) = coordinator.observeOwner(
+            .echoCapture,
+            priority: .echoCapture,
+            scope: nextScope
+        ) else {
+            fail("the next Echo capture must not be blocked by a released Tencent lease")
+        }
+        require(capture.scope == nextScope, "new capture must use the current runtime scope")
     }
 
     private static func acquire(
