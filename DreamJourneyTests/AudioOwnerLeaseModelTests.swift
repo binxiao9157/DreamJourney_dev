@@ -210,4 +210,93 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
         XCTAssertFalse(coordinator.isCurrent(first))
         XCTAssertTrue(coordinator.isCurrent(replacement))
     }
+
+    func testCoordinatorDropsSupersededTransportCallbackBeforeDelivery() {
+        let transport = DeferredEchoContextBuildTransport()
+        let coordinator = EchoApplicationCoordinator(contextBuildTransport: transport)
+        let identity = EchoKnowledgeContextIdentity(
+            userId: "owner-1",
+            personaScope: "self",
+            digitalHumanId: "digital-human-1"
+        )
+        let expectation = expectation(description: "only current context callback delivered")
+        expectation.assertForOverFulfill = true
+        var deliveredLeases: [EchoContextBuildLease] = []
+
+        let first = coordinator.requestContextBuild(
+            turnID: "turn-1",
+            query: "first query",
+            expectedIdentity: identity,
+            lifecycleMode: .sunlight,
+            viewerFamilyMemberID: nil
+        ) { lease, _ in
+            deliveredLeases.append(lease)
+        }
+        let second = coordinator.requestContextBuild(
+            turnID: "turn-2",
+            query: "second query",
+            expectedIdentity: identity,
+            lifecycleMode: .sunlight,
+            viewerFamilyMemberID: nil
+        ) { lease, _ in
+            deliveredLeases.append(lease)
+            expectation.fulfill()
+        }
+
+        XCTAssertNotNil(first)
+        XCTAssertNotNil(second)
+        transport.complete(at: 0, result: .failure(DeferredEchoContextBuildTransport.TestError.failed))
+        transport.complete(at: 1, result: .failure(DeferredEchoContextBuildTransport.TestError.failed))
+
+        wait(for: [expectation], timeout: 1)
+        XCTAssertEqual(deliveredLeases, [second].compactMap { $0 })
+    }
+
+    func testCoordinatorDoesNotStartWhenContextTransportIsUnavailable() {
+        let transport = DeferredEchoContextBuildTransport()
+        transport.isContextBuildConfigured = false
+        let coordinator = EchoApplicationCoordinator(contextBuildTransport: transport)
+        let result = coordinator.requestContextBuild(
+            turnID: "turn-1",
+            query: "query",
+            expectedIdentity: EchoKnowledgeContextIdentity(
+                userId: "owner-1",
+                personaScope: "self",
+                digitalHumanId: "digital-human-1"
+            ),
+            lifecycleMode: .sunlight,
+            viewerFamilyMemberID: nil
+        ) { _, _ in
+            XCTFail("unavailable context transport must not invoke completion")
+        }
+
+        XCTAssertNil(result)
+        XCTAssertTrue(transport.completions.isEmpty)
+        XCTAssertNil(coordinator.activeContextBuildLease)
+    }
+}
+
+private final class DeferredEchoContextBuildTransport: EchoContextBuildTransport {
+    enum TestError: Error {
+        case failed
+    }
+
+    var isContextBuildConfigured = true
+    private(set) var completions: [(Result<EchoContextPacket, Error>) -> Void] = []
+
+    func buildEchoContextPacket(
+        userId: String,
+        query: String,
+        personaScope: String,
+        digitalHumanId: String,
+        lifecycleMode: DigitalHumanMode,
+        viewerFamilyMemberID: String?,
+        completion: @escaping (Result<EchoContextPacket, Error>) -> Void
+    ) {
+        completions.append(completion)
+    }
+
+    func complete(at index: Int, result: Result<EchoContextPacket, Error>) {
+        completions[index](result)
+    }
 }

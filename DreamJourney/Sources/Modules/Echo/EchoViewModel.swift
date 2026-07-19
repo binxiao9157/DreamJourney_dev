@@ -386,6 +386,22 @@ struct EchoArchiveContextStatus: Equatable {
     }
 }
 
+protocol EchoContextBuildTransport {
+    var isContextBuildConfigured: Bool { get }
+
+    func buildEchoContextPacket(
+        userId: String,
+        query: String,
+        personaScope: String,
+        digitalHumanId: String,
+        lifecycleMode: DigitalHumanMode,
+        viewerFamilyMemberID: String?,
+        completion: @escaping (Result<EchoContextPacket, Error>) -> Void
+    )
+}
+
+extension DreamJourneyBackendClient: EchoContextBuildTransport {}
+
 /// Provider-independent ownership for one backend context-build request.
 /// The controller still owns rendering and DialogEngine submission; this lease
 /// only prevents an older asynchronous response from mutating a newer Echo turn.
@@ -399,7 +415,12 @@ struct EchoContextBuildLease: Equatable {
 /// Runtime digital-human/audio lifecycles intentionally remain outside this seam.
 final class EchoApplicationCoordinator {
     private var nextContextBuildGeneration: UInt64 = 0
+    private let contextBuildTransport: EchoContextBuildTransport
     private(set) var activeContextBuildLease: EchoContextBuildLease?
+
+    init(contextBuildTransport: EchoContextBuildTransport = DreamJourneyBackendClient.shared) {
+        self.contextBuildTransport = contextBuildTransport
+    }
 
     @discardableResult
     func beginContextBuild(
@@ -425,6 +446,40 @@ final class EchoApplicationCoordinator {
 
     func isCurrent(_ lease: EchoContextBuildLease) -> Bool {
         activeContextBuildLease == lease
+    }
+
+    @discardableResult
+    func requestContextBuild(
+        turnID: String,
+        query: String,
+        expectedIdentity: EchoKnowledgeContextIdentity,
+        lifecycleMode: DigitalHumanMode,
+        viewerFamilyMemberID: String?,
+        completion: @escaping (EchoContextBuildLease, Result<EchoContextPacket, Error>) -> Void
+    ) -> EchoContextBuildLease? {
+        guard contextBuildTransport.isContextBuildConfigured else {
+            return nil
+        }
+        let lease = beginContextBuild(
+            turnID: turnID,
+            expectedIdentity: expectedIdentity
+        )
+        contextBuildTransport.buildEchoContextPacket(
+            userId: expectedIdentity.userId,
+            query: query,
+            personaScope: expectedIdentity.personaScope,
+            digitalHumanId: expectedIdentity.digitalHumanId,
+            lifecycleMode: lifecycleMode,
+            viewerFamilyMemberID: viewerFamilyMemberID
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self, self.isCurrent(lease) else {
+                    return
+                }
+                completion(lease, result)
+            }
+        }
+        return lease
     }
 }
 

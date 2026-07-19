@@ -31,10 +31,12 @@ def main() -> None:
     tests = TESTS.read_text(encoding="utf-8")
 
     for required in (
+        "protocol EchoContextBuildTransport",
         "struct EchoContextBuildLease: Equatable",
         "final class EchoApplicationCoordinator",
         "private(set) var activeContextBuildLease: EchoContextBuildLease?",
         "func beginContextBuild(",
+        "func requestContextBuild(",
         "func invalidateContextBuild() -> EchoContextBuildLease?",
         "func isCurrent(_ lease: EchoContextBuildLease) -> Bool",
     ):
@@ -59,23 +61,24 @@ def main() -> None:
         "    private func submitLocalEchoTurnKnowledgeContext(",
     )
     require(
-        "let contextBuildLease = echoApplicationCoordinator.beginContextBuild(" in context_build,
-        "context build must allocate a coordinator lease before calling the backend",
+        "echoApplicationCoordinator.requestContextBuild(" in context_build,
+        "context build must start through the application coordinator",
     )
     require(
-        "echoApplicationCoordinator.isCurrent(contextBuildLease)" in context_build,
-        "backend callbacks must be fenced by the coordinator lease",
+        "DreamJourneyBackendClient.shared.buildEchoContextPacket" not in context_build,
+        "EchoViewController must not directly compose context-build transport",
     )
     require(
-        context_build.find("echoApplicationCoordinator.isCurrent(contextBuildLease)")
-        < context_build.find("EchoTraceStore.shared.record"),
-        "stale context packets must be rejected before trace persistence",
+        "echoApplicationCoordinator.isCurrent(contextBuildLease)" not in context_build,
+        "the coordinator must own stale lease filtering before invoking the controller callback",
     )
 
     for test_name in (
         "func testContextBuildLeaseSupersedesEarlierRequest()",
         "func testInvalidatingContextBuildRejectsLateCallback()",
         "func testSameTurnNewGenerationRejectsOldCallback()",
+        "func testCoordinatorDropsSupersededTransportCallbackBeforeDelivery()",
+        "func testCoordinatorDoesNotStartWhenContextTransportIsUnavailable()",
     ):
         require(test_name in tests, f"Echo application coordinator test missing: {test_name}")
 

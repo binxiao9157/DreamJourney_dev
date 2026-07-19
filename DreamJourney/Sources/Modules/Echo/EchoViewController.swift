@@ -3919,100 +3919,67 @@ final class EchoViewController: UIViewController {
             gate = nil
         }
 
-        guard DreamJourneyBackendClient.shared.isContextBuildConfigured else {
-            if let gate {
-                submitLocalEchoTurnKnowledgeContext(
-                    text: text,
-                    gate: gate,
-                    source: "localKBLiteBackendNotConfigured"
-                )
-            }
-            PrivacySafeDiagnostics.log(
-                subsystem: "CFLite",
-                event: "contextBuildSkipped",
-                states: ["reason": "backendNotConfigured"],
-                correlations: ["turn": turnID]
-            )
-            return
-        }
-        let contextBuildLease = echoApplicationCoordinator.beginContextBuild(
+        let contextBuildLease = echoApplicationCoordinator.requestContextBuild(
             turnID: turnID,
-            expectedIdentity: expectedIdentity
-        )
-        DreamJourneyBackendClient.shared.buildEchoContextPacket(
-            userId: expectedIdentity.userId,
             query: text,
-            personaScope: expectedIdentity.personaScope,
-            digitalHumanId: expectedIdentity.digitalHumanId,
+            expectedIdentity: expectedIdentity,
             lifecycleMode: context.mode,
             viewerFamilyMemberID: context.isSelfAssistant ? nil : context.ownerId
-        ) { [weak self] result in
+        ) { [weak self] _, result in
             switch result {
             case .success(let packet):
                 let record = EchoTraceRecord(turnID: turnID, packet: packet)
-                DispatchQueue.main.async {
-                    guard let self else { return }
-                    guard self.echoApplicationCoordinator.isCurrent(contextBuildLease) else {
-                        PrivacySafeDiagnostics.log(
-                            subsystem: "CFLite",
-                            event: "contextTraceIgnored",
-                            states: ["reason": "staleCoordinatorLease"],
-                            correlations: ["turn": turnID]
-                        )
-                        return
-                    }
-                    guard
-                          self.isCurrentDigitalHumanLifecycleToken(
-                            lifecycleToken,
-                            reason: "contextPacketResponse"
-                          ) else { return }
-                    guard EchoKnowledgeContextPolicy.responseIdentityMatches(
-                        expected: expectedIdentity,
-                        responseUserId: packet.userId,
-                        responsePersonaScope: packet.personaScope,
-                        responseDigitalHumanId: packet.digitalHumanId
-                    ) else {
-                        if let gate {
-                            self.submitLocalEchoTurnKnowledgeContext(
-                                text: text,
-                                gate: gate,
-                                source: "localKBLitePacketIdentityMismatch"
-                            )
-                        }
-                        PrivacySafeDiagnostics.log(
-                            subsystem: "CFLite",
-                            event: "contextPacketIgnored",
-                            states: ["reason": "identityMismatch"],
-                            correlations: [
-                                "turn": turnID,
-                                "expectedUser": expectedIdentity.userId,
-                                "expectedPersona": expectedIdentity.personaScope,
-                                "expectedDigitalHuman": expectedIdentity.digitalHumanId,
-                                "actualUser": packet.userId,
-                                "actualPersona": packet.personaScope,
-                                "actualDigitalHuman": packet.digitalHumanId,
-                            ]
-                        )
-                        return
-                    }
-                    EchoTraceStore.shared.record(record, ownerUserId: expectedIdentity.userId)
-                    self.lastEchoTraceRecord = record
-                    self.recordEchoRuntimeDiagnosticsSnapshot(reason: "contextPacketBuilt")
+                guard let self,
+                      self.isCurrentDigitalHumanLifecycleToken(
+                        lifecycleToken,
+                        reason: "contextPacketResponse"
+                      ) else { return }
+                guard EchoKnowledgeContextPolicy.responseIdentityMatches(
+                    expected: expectedIdentity,
+                    responseUserId: packet.userId,
+                    responsePersonaScope: packet.personaScope,
+                    responseDigitalHumanId: packet.digitalHumanId
+                ) else {
                     if let gate {
-                        if packet.generationContextContentHash != nil {
-                            self.submitEchoTurnKnowledgeContext(
-                                packet.generationContextText,
-                                traceID: packet.traceId,
-                                source: "backendContextPacket",
-                                gate: gate
-                            )
-                        } else {
-                            self.submitLocalEchoTurnKnowledgeContext(
-                                text: text,
-                                gate: gate,
-                                source: "localKBLiteBackendContractMissing"
-                            )
-                        }
+                        self.submitLocalEchoTurnKnowledgeContext(
+                            text: text,
+                            gate: gate,
+                            source: "localKBLitePacketIdentityMismatch"
+                        )
+                    }
+                    PrivacySafeDiagnostics.log(
+                        subsystem: "CFLite",
+                        event: "contextPacketIgnored",
+                        states: ["reason": "identityMismatch"],
+                        correlations: [
+                            "turn": turnID,
+                            "expectedUser": expectedIdentity.userId,
+                            "expectedPersona": expectedIdentity.personaScope,
+                            "expectedDigitalHuman": expectedIdentity.digitalHumanId,
+                            "actualUser": packet.userId,
+                            "actualPersona": packet.personaScope,
+                            "actualDigitalHuman": packet.digitalHumanId,
+                        ]
+                    )
+                    return
+                }
+                EchoTraceStore.shared.record(record, ownerUserId: expectedIdentity.userId)
+                self.lastEchoTraceRecord = record
+                self.recordEchoRuntimeDiagnosticsSnapshot(reason: "contextPacketBuilt")
+                if let gate {
+                    if packet.generationContextContentHash != nil {
+                        self.submitEchoTurnKnowledgeContext(
+                            packet.generationContextText,
+                            traceID: packet.traceId,
+                            source: "backendContextPacket",
+                            gate: gate
+                        )
+                    } else {
+                        self.submitLocalEchoTurnKnowledgeContext(
+                            text: text,
+                            gate: gate,
+                            source: "localKBLiteBackendContractMissing"
+                        )
                     }
                 }
                 PrivacySafeDiagnostics.log(
@@ -4046,19 +4013,16 @@ final class EchoViewController: UIViewController {
                 )
                 print(record.logLine)
             case .failure:
-                DispatchQueue.main.async {
-                    guard let self,
-                          self.echoApplicationCoordinator.isCurrent(contextBuildLease),
-                          self.isCurrentDigitalHumanLifecycleToken(
-                            lifecycleToken,
-                            reason: "contextPacketFailure"
-                          ), let gate else { return }
-                    self.submitLocalEchoTurnKnowledgeContext(
-                        text: text,
-                        gate: gate,
-                        source: "localKBLiteBackendFailure"
-                    )
-                }
+                guard let self,
+                      self.isCurrentDigitalHumanLifecycleToken(
+                        lifecycleToken,
+                        reason: "contextPacketFailure"
+                      ), let gate else { return }
+                self.submitLocalEchoTurnKnowledgeContext(
+                    text: text,
+                    gate: gate,
+                    source: "localKBLiteBackendFailure"
+                )
                 PrivacySafeDiagnostics.log(
                     subsystem: "CFLite",
                     event: "contextBuildFailed",
@@ -4066,6 +4030,22 @@ final class EchoViewController: UIViewController {
                     correlations: ["turn": turnID]
                 )
             }
+        }
+        guard contextBuildLease != nil else {
+            if let gate {
+                submitLocalEchoTurnKnowledgeContext(
+                    text: text,
+                    gate: gate,
+                    source: "localKBLiteBackendNotConfigured"
+                )
+            }
+            PrivacySafeDiagnostics.log(
+                subsystem: "CFLite",
+                event: "contextBuildSkipped",
+                states: ["reason": "backendNotConfigured"],
+                correlations: ["turn": turnID]
+            )
+            return
         }
     }
 
