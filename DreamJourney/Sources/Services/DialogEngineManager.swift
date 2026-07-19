@@ -143,6 +143,96 @@ private func isSameDialogAccountGeneration(_ lhs: AccountLease, _ rhs: AccountLe
         && lhs.authorityEpoch == rhs.authorityEpoch
 }
 
+/// Local SpeechEngine playback can only use a profile selected by the current
+/// Echo binding. This prevents a role switch from falling back to whichever
+/// profile the process-global VoiceCloneService happens to expose.
+struct DialogEngineScopedTTSVoiceSelection: Equatable, Sendable {
+    let bindingID: UUID
+    let accountLease: AccountLease
+    let contextKey: String
+    let lifecycleGeneration: UInt64
+    let voiceProfileId: String?
+
+    init?(
+        bindingID: UUID,
+        accountLease: AccountLease,
+        contextKey: String,
+        lifecycleGeneration: UInt64,
+        voiceProfileId: String?
+    ) {
+        let normalizedContextKey = contextKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedContextKey.isEmpty else { return nil }
+
+        self.bindingID = bindingID
+        self.accountLease = accountLease
+        self.contextKey = normalizedContextKey
+        self.lifecycleGeneration = lifecycleGeneration
+        let normalizedProfileId = voiceProfileId?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.voiceProfileId = normalizedProfileId?.isEmpty == false ? normalizedProfileId : nil
+    }
+
+    func matches(bindingID: UUID, accountLease: AccountLease) -> Bool {
+        self.bindingID == bindingID
+            && isSameDialogAccountGeneration(self.accountLease, accountLease)
+    }
+}
+
+struct DialogEngineScopedTTSVoiceSelectionStore {
+    private(set) var selection: DialogEngineScopedTTSVoiceSelection?
+
+    @discardableResult
+    mutating func update(
+        bindingID: UUID,
+        accountLease: AccountLease,
+        contextKey: String,
+        lifecycleGeneration: UInt64,
+        voiceProfileId: String?
+    ) -> Bool {
+        guard let candidate = DialogEngineScopedTTSVoiceSelection(
+            bindingID: bindingID,
+            accountLease: accountLease,
+            contextKey: contextKey,
+            lifecycleGeneration: lifecycleGeneration,
+            voiceProfileId: voiceProfileId
+        ) else {
+            return false
+        }
+
+        if let selection,
+           selection.bindingID == bindingID {
+            guard isSameDialogAccountGeneration(selection.accountLease, accountLease),
+                  candidate.lifecycleGeneration >= selection.lifecycleGeneration else {
+                return false
+            }
+        }
+
+        selection = candidate
+        return true
+    }
+
+    func resolvedVoiceProfileId(
+        bindingID: UUID,
+        accountLease: AccountLease
+    ) -> String? {
+        guard let selection,
+              selection.matches(bindingID: bindingID, accountLease: accountLease) else {
+            return nil
+        }
+        return selection.voiceProfileId
+    }
+
+    @discardableResult
+    mutating func clear(bindingID: UUID) -> Bool {
+        guard selection?.bindingID == bindingID else { return false }
+        selection = nil
+        return true
+    }
+
+    mutating func clearAll() {
+        selection = nil
+    }
+}
+
 #if (UI_QA_SIMULATOR || RELEASE_SCOPE_SIMULATOR) && targetEnvironment(simulator)
 
 enum DialogEndReason {
@@ -179,6 +269,7 @@ final class DialogEngineManager: NSObject {
     private(set) var usesTurnScopedKnowledgeContext = false
     private(set) var lastSubmittedTurnKnowledgeContextSource: String?
     private(set) var lastSubmittedTurnKnowledgeContextLength = 0
+    private var scopedTTSVoiceSelectionStore = DialogEngineScopedTTSVoiceSelectionStore()
 
     private override init() {
         super.init()
@@ -214,6 +305,7 @@ final class DialogEngineManager: NSObject {
             isDialogActive = false
             activeDialogAccountLease = nil
             activeDialogBindingHandle = nil
+            scopedTTSVoiceSelectionStore.clearAll()
             delegate = nil
         }
         let handle = DialogEngineBindingHandle(
@@ -234,6 +326,7 @@ final class DialogEngineManager: NSObject {
         activeDialogBindingHandle = nil
         activeDialogAccountLease = nil
         isDialogActive = false
+        _ = scopedTTSVoiceSelectionStore.clear(bindingID: handle.bindingId)
         delegate = nil
         return true
     }
@@ -257,6 +350,23 @@ final class DialogEngineManager: NSObject {
     func setLocalTTSPlaybackEnabled(_ enabled: Bool) -> Bool {
         isLocalTTSPlaybackEnabled = enabled
         return true
+    }
+
+    @discardableResult
+    func setLocalTTSVoiceSelection(
+        voiceProfileId: String?,
+        contextKey: String,
+        lifecycleGeneration: UInt64,
+        for handle: DialogEngineBindingHandle
+    ) -> Bool {
+        guard isCurrentBinding(handle) else { return false }
+        return scopedTTSVoiceSelectionStore.update(
+            bindingID: handle.bindingId,
+            accountLease: handle.accountLease,
+            contextKey: contextKey,
+            lifecycleGeneration: lifecycleGeneration,
+            voiceProfileId: voiceProfileId
+        )
     }
 
     func setup() {
@@ -442,6 +552,7 @@ final class DialogEngineManager: NSObject {
     private var engineCallbackGeneration: UUID?
     private var engineDelegateProxy: DialogEngineProviderDelegateProxy?
     private var requiresEngineRecreationBeforeNextDialog = false
+    private var scopedTTSVoiceSelectionStore = DialogEngineScopedTTSVoiceSelectionStore()
 
     /// 引擎是否就绪（已初始化完成）
     private(set) var isEngineReady = false
@@ -642,6 +753,7 @@ final class DialogEngineManager: NSObject {
 
         if boundBindingHandle != nil {
             destroyEngine()
+            scopedTTSVoiceSelectionStore.clearAll()
             delegate = nil
         }
         let handle = DialogEngineBindingHandle(
@@ -658,6 +770,7 @@ final class DialogEngineManager: NSObject {
     func unbindAccountLease(_ handle: DialogEngineBindingHandle) -> Bool {
         guard boundBindingHandle == handle else { return false }
         destroyEngine()
+        _ = scopedTTSVoiceSelectionStore.clear(bindingID: handle.bindingId)
         boundBindingHandle = nil
         boundAccountLease = nil
         delegate = nil
@@ -697,6 +810,23 @@ final class DialogEngineManager: NSObject {
             destroyEngine()
         }
         return true
+    }
+
+    @discardableResult
+    func setLocalTTSVoiceSelection(
+        voiceProfileId: String?,
+        contextKey: String,
+        lifecycleGeneration: UInt64,
+        for handle: DialogEngineBindingHandle
+    ) -> Bool {
+        guard isCurrentBinding(handle) else { return false }
+        return scopedTTSVoiceSelectionStore.update(
+            bindingID: handle.bindingId,
+            accountLease: handle.accountLease,
+            contextKey: contextKey,
+            lifecycleGeneration: lifecycleGeneration,
+            voiceProfileId: voiceProfileId
+        )
     }
 
     /// 共享静态凭据已停用；真正的短期 session broker 在后续 Work Item 接入。
@@ -1233,7 +1363,7 @@ final class DialogEngineManager: NSObject {
 
         // 构建 StartEngine 配置 JSON
         let systemRole = buildSystemRole()
-        let ttsSpeaker = resolvedTTSSpeaker()
+        let ttsSpeaker = resolvedTTSSpeaker(for: bindingHandle)
 
         var dialogConfig: [String: Any] = [
             "asr": [
@@ -1350,8 +1480,11 @@ final class DialogEngineManager: NSObject {
         print("[DialogEngine] ⏳ 引擎启动中，等待回调...")
     }
 
-    private func resolvedTTSSpeaker() -> String {
-        guard let speakerId = VoiceCloneService.shared.currentUsableSpeakerId else {
+    private func resolvedTTSSpeaker(for bindingHandle: DialogEngineBindingHandle) -> String {
+        guard let speakerId = scopedTTSVoiceSelectionStore.resolvedVoiceProfileId(
+            bindingID: bindingHandle.bindingId,
+            accountLease: bindingHandle.accountLease
+        ) else {
             DDLogInfo("[DialogEngine] 使用默认 TTS speaker: \(Self.defaultTTSSpeaker)")
             return Self.defaultTTSSpeaker
         }

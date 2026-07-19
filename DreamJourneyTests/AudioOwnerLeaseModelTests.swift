@@ -919,6 +919,77 @@ final class VoiceDigitalHumanClientPortModelTests: XCTestCase {
     }
 }
 
+final class DialogEngineScopedTTSVoiceSelectionStoreTests: XCTestCase {
+    func testNewerRoleGenerationKeepsSelectedVoiceProfile() {
+        var store = DialogEngineScopedTTSVoiceSelectionStore()
+        let bindingID = UUID()
+        let lease = makeAccountLease(subjectId: "viewer-1", generation: 7)
+
+        XCTAssertTrue(
+            store.update(
+                bindingID: bindingID,
+                accountLease: lease,
+                contextKey: "viewer-1|family-1|sunlight",
+                lifecycleGeneration: 12,
+                voiceProfileId: " S_family_1 "
+            )
+        )
+        XCTAssertFalse(
+            store.update(
+                bindingID: bindingID,
+                accountLease: lease,
+                contextKey: "viewer-1|self|sunlight",
+                lifecycleGeneration: 11,
+                voiceProfileId: "S_personal_old"
+            )
+        )
+        XCTAssertEqual(
+            store.resolvedVoiceProfileId(bindingID: bindingID, accountLease: lease),
+            "S_family_1"
+        )
+    }
+
+    func testSelectionRejectsDifferentAccountGenerationAndClearsByBinding() {
+        var store = DialogEngineScopedTTSVoiceSelectionStore()
+        let bindingID = UUID()
+        let lease = makeAccountLease(subjectId: "viewer-1", generation: 7)
+        let otherLease = makeAccountLease(subjectId: "viewer-1", generation: 8)
+
+        XCTAssertTrue(
+            store.update(
+                bindingID: bindingID,
+                accountLease: lease,
+                contextKey: "viewer-1|self|sunlight",
+                lifecycleGeneration: 1,
+                voiceProfileId: "S_personal_1"
+            )
+        )
+        XCTAssertFalse(
+            store.update(
+                bindingID: bindingID,
+                accountLease: otherLease,
+                contextKey: "viewer-1|self|sunlight",
+                lifecycleGeneration: 2,
+                voiceProfileId: "S_personal_2"
+            )
+        )
+        XCTAssertNil(store.resolvedVoiceProfileId(bindingID: bindingID, accountLease: otherLease))
+        XCTAssertTrue(store.clear(bindingID: bindingID))
+        XCTAssertNil(store.resolvedVoiceProfileId(bindingID: bindingID, accountLease: lease))
+    }
+
+    private func makeAccountLease(subjectId: String, generation: UInt64) -> AccountLease {
+        AccountLease(
+            subjectId: subjectId,
+            vaultId: "vault-\(subjectId)",
+            sessionId: "session-\(generation)",
+            generation: generation,
+            generationId: UUID(),
+            authorityEpoch: "epoch-v1"
+        )
+    }
+}
+
 private final class DeferredEchoContextBuildTransport: EchoContextBuildTransport {
     enum TestError: Error {
         case failed

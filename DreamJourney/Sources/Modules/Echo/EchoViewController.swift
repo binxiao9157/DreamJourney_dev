@@ -1282,6 +1282,7 @@ final class EchoViewController: UIViewController {
                 prepareCloudDigitalHumanRuntimeIfNeeded()
             }
         }
+        _ = updateDialogEngineLocalTTSVoiceSelection(reason: "contextDidChange")
     }
 
     private func observeEchoAppLifecycle() {
@@ -2100,7 +2101,11 @@ final class EchoViewController: UIViewController {
             return false
         }
         dialogEngineBindingHandle = bindingHandle
-        return DialogEngineManager.shared.isCurrentBinding(bindingHandle)
+        guard DialogEngineManager.shared.isCurrentBinding(bindingHandle) else {
+            return false
+        }
+        _ = updateDialogEngineLocalTTSVoiceSelection(reason: "dialogEngineBind:\(reason)")
+        return true
     }
 
     private func releaseDialogEngineBinding() {
@@ -2120,6 +2125,49 @@ final class EchoViewController: UIViewController {
             return false
         }
         return DialogEngineManager.shared.setLocalTTSPlaybackEnabled(enabled)
+    }
+
+    /// Keeps ordinary Echo's local TTS bound to the current role. Tencent
+    /// audio-drive stays on its existing provider path because that route
+    /// disables local SpeechEngine playback.
+    @discardableResult
+    private func updateDialogEngineLocalTTSVoiceSelection(reason: String) -> Bool {
+        guard let bindingHandle = dialogEngineBindingHandle,
+              ownsCurrentDialogEngineBinding(),
+              validateEchoAccountLease(
+                  at: .runtime,
+                  expected: bindingHandle.accountLease,
+                  reason: "dialogEngineVoiceSelection:\(reason)"
+              ) else {
+            return false
+        }
+
+        let context = DigitalHumanContextStore.shared.current
+        let roleSelection = resolveEchoRoleVoiceProfileSelection()
+        let isCloneCapabilityUsable = voiceCloneRuntimeCapability?.canSynthesize == true
+        let selectedVoiceProfileId = isCloneCapabilityUsable
+            ? roleSelection.voiceProfileId
+            : nil
+        let accepted = DialogEngineManager.shared.setLocalTTSVoiceSelection(
+            voiceProfileId: selectedVoiceProfileId,
+            contextKey: digitalHumanRuntimeContextKey(for: context),
+            lifecycleGeneration: digitalHumanLifecycle.generation,
+            for: bindingHandle
+        )
+
+        PrivacySafeDiagnostics.log(
+            subsystem: "EchoVoiceSelection",
+            event: "dialogEngineLocalTTSSelectionUpdated",
+            states: [
+                "reason": reason,
+                "roleVoiceSource": roleSelection.source.rawValue,
+                "cloneCapabilityUsable": String(isCloneCapabilityUsable),
+                "profileSelected": String(selectedVoiceProfileId != nil),
+                "accepted": String(accepted),
+            ],
+            correlations: ["context": digitalHumanRuntimeContextKey(for: context)]
+        )
+        return accepted
     }
 
     private func captureDigitalHumanLifecycleToken(reason: String) -> DigitalHumanLifecycleToken {
@@ -2724,6 +2772,9 @@ final class EchoViewController: UIViewController {
                         states: ["reason": "backendFailure"]
                     )
                 }
+                _ = self.updateDialogEngineLocalTTSVoiceSelection(
+                    reason: "voiceCloneRuntimeCapabilityResponse"
+                )
             }
         }
     }

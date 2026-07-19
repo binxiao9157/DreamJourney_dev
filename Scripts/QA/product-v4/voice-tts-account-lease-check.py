@@ -24,6 +24,8 @@ def require_all(source: str, snippets: tuple[str, ...], label: str) -> None:
 def main() -> None:
     voice = read("DreamJourney/Sources/Memoir/VoiceCloneService.swift")
     tts = read("DreamJourney/Sources/Memoir/MemoirTTSService.swift")
+    dialog = read("DreamJourney/Sources/Services/DialogEngineManager.swift")
+    echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
 
     require_all(
         voice,
@@ -77,6 +79,32 @@ def main() -> None:
             "commitSynthesisArtifacts",
         ),
         "Memoir TTS AccountLease contract",
+    )
+
+    require_all(
+        dialog,
+        (
+            "struct DialogEngineScopedTTSVoiceSelection",
+            "struct DialogEngineScopedTTSVoiceSelectionStore",
+            "func setLocalTTSVoiceSelection(",
+            "scopedTTSVoiceSelectionStore.resolvedVoiceProfileId(",
+            "candidate.lifecycleGeneration >= selection.lifecycleGeneration",
+        ),
+        "DialogEngine scoped local TTS selection contract",
+    )
+    require(
+        "VoiceCloneService.shared.currentUsableSpeakerId" not in dialog,
+        "DialogEngine must not read process-global VoiceCloneService selection",
+    )
+    require_all(
+        echo,
+        (
+            "private func updateDialogEngineLocalTTSVoiceSelection(",
+            "DialogEngineManager.shared.setLocalTTSVoiceSelection(",
+            "voiceCloneRuntimeCapability?.canSynthesize == true",
+            "_ = updateDialogEngineLocalTTSVoiceSelection(reason: \"contextDidChange\")",
+        ),
+        "Echo scoped local TTS selection integration",
     )
 
     print("Voice/TTS AccountLease check passed")
