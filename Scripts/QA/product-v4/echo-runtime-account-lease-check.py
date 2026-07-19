@@ -148,8 +148,8 @@ def main() -> None:
 
     transient_reset = function_body(view_model, "resetTransientStateForAccountRebind")
     require(
-        "updateState(.idle)" in transient_reset,
-        "account rebind must recover a disabled starting UI to idle",
+        "_ = applyTurnIntent(.reset, state: .idle)" in transient_reset,
+        "account rebind must recover a disabled starting UI to idle through the turn reducer",
     )
     require(
         "EchoDelayedReplyStore.shared.clear()" not in transient_reset,

@@ -133,6 +133,7 @@ final class MemoirTTSService {
     private let legacyCacheDirectory: URL
     private let legacyQuarantineDirectory: URL
     private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let voiceCloneSynthesisClient: VoiceCloneSynthesisClientPort
 
     // MARK: - 合成状态
 
@@ -143,8 +144,12 @@ final class MemoirTTSService {
 
     // MARK: - Init
 
-    private init(accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared) {
+    private init(
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        voiceCloneSynthesisClient: VoiceCloneSynthesisClientPort = DreamJourneyBackendClient.shared
+    ) {
         self.accountLeaseRuntime = accountLeaseRuntime
+        self.voiceCloneSynthesisClient = voiceCloneSynthesisClient
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         scopedAudioRootDirectory = appSupport.appendingPathComponent("memoir_audio_scoped_v2", isDirectory: true)
         scopedCacheRootDirectory = appSupport.appendingPathComponent("memoir_tts_cache_scoped_v2", isDirectory: true)
@@ -169,7 +174,7 @@ final class MemoirTTSService {
                     volume: Int = 10,
                     completion: @escaping (Result<URL, TTSError>) -> Void) {
 
-        guard DreamJourneyBackendClient.shared.isVoiceCloneSynthesisConfigured else {
+        guard voiceCloneSynthesisClient.isVoiceCloneSynthesisConfigured else {
             completion(.failure(.apiKeyMissing))
             return
         }
@@ -383,16 +388,31 @@ final class MemoirTTSService {
             return
         }
 
-        DDLogInfo("[MemoirTTS] 通过后端合成: memoirId=\(memoir.id), speakerId=\(speakerId), 文本长度=\(memoir.prose.count)")
-        DreamJourneyBackendClient.shared.requestVoiceCloneSynthesis(
-            userId: memoir.authorId,
+        guard let scope = VoiceDigitalHumanOperationScope(
+            accountLease: accountLease,
+            personaOwnerId: memoir.authorId,
+            roleKey: "memoir",
+            runtimeGeneration: accountLease.generation
+        ), let request = VoiceCloneSynthesisRequest(
+            scope: scope,
             voiceProfileId: speakerId,
             text: memoir.prose,
             audioFormat: "mp3",
             sampleRate: 24000,
             speechRate: speed,
             loudnessRate: volume
-        ) { [weak self] result in
+        ) else {
+            finishSynthesis(operation)
+            deliver(
+                .failure(.accountSessionChanged),
+                accountLease: accountLease,
+                completion: completion
+            )
+            return
+        }
+
+        DDLogInfo("[MemoirTTS] 通过后端合成: memoirId=\(memoir.id), speakerId=\(speakerId), 文本长度=\(memoir.prose.count)")
+        voiceCloneSynthesisClient.requestVoiceCloneSynthesis(request) { [weak self] result in
             guard let self,
                   self.isCurrent(operation),
                   self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {

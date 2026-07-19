@@ -751,6 +751,113 @@ final class EchoRuntimeSessionCoordinatorTests: XCTestCase {
     }
 }
 
+final class VoiceDigitalHumanClientPortModelTests: XCTestCase {
+    func testOperationScopeCarriesAccountPersonaRoleAndRuntimeGeneration() throws {
+        let lease = makeAccountLease(subjectId: "viewer-1", generation: 8)
+        let scope = try XCTUnwrap(
+            VoiceDigitalHumanOperationScope(
+                accountLease: lease,
+                personaOwnerId: " family-owner-1 ",
+                roleKey: " familyMember ",
+                runtimeGeneration: 21
+            )
+        )
+
+        XCTAssertEqual(scope.ownerUserId, "viewer-1")
+        XCTAssertEqual(scope.personaOwnerId, "family-owner-1")
+        XCTAssertEqual(scope.roleKey, "familyMember")
+        XCTAssertEqual(scope.runtimeGeneration, 21)
+        XCTAssertEqual(scope.accountLease, lease)
+    }
+
+    func testOperationScopeRejectsMissingPersonaOrRole() {
+        let lease = makeAccountLease(subjectId: "viewer-1", generation: 8)
+
+        XCTAssertNil(
+            VoiceDigitalHumanOperationScope(
+                accountLease: lease,
+                personaOwnerId: " ",
+                roleKey: "memoir",
+                runtimeGeneration: 21
+            )
+        )
+        XCTAssertNil(
+            VoiceDigitalHumanOperationScope(
+                accountLease: lease,
+                personaOwnerId: "owner-1",
+                roleKey: "\n",
+                runtimeGeneration: 21
+            )
+        )
+    }
+
+    func testVoiceCloneRequestPreservesScopedProfileAndNormalizesOptionalOutputMode() throws {
+        let scope = try XCTUnwrap(
+            VoiceDigitalHumanOperationScope(
+                accountLease: makeAccountLease(subjectId: "viewer-1", generation: 8),
+                personaOwnerId: "owner-1",
+                roleKey: "memoir",
+                runtimeGeneration: 21
+            )
+        )
+        let request = try XCTUnwrap(
+            VoiceCloneSynthesisRequest(
+                scope: scope,
+                voiceProfileId: " voice-family-1 ",
+                text: " 一段回忆 ",
+                audioFormat: " mp3 ",
+                sampleRate: 24_000,
+                speechRate: 10,
+                loudnessRate: 8,
+                outputMode: "  "
+            )
+        )
+
+        XCTAssertEqual(request.ownerUserId, "viewer-1")
+        XCTAssertEqual(request.voiceProfileId, "voice-family-1")
+        XCTAssertEqual(request.text, "一段回忆")
+        XCTAssertEqual(request.audioFormat, "mp3")
+        XCTAssertEqual(request.outputMode, nil)
+        XCTAssertEqual(request.scope.runtimeGeneration, 21)
+    }
+
+    func testDigitalHumanSessionRequestUsesScopedOwnerAndPersona() throws {
+        let scope = try XCTUnwrap(
+            VoiceDigitalHumanOperationScope(
+                accountLease: makeAccountLease(subjectId: "viewer-1", generation: 8),
+                personaOwnerId: "family-owner-1",
+                roleKey: "familyMember",
+                runtimeGeneration: 21
+            )
+        )
+        let request = try XCTUnwrap(
+            DigitalHumanSessionRequest(
+                scope: scope,
+                scene: " echo ",
+                deviceId: " device-1 ",
+                lifecycleMode: .sunlight
+            )
+        )
+
+        XCTAssertEqual(request.ownerUserId, "viewer-1")
+        XCTAssertEqual(request.personaId, "family-owner-1")
+        XCTAssertEqual(request.scene, "echo")
+        XCTAssertEqual(request.deviceId, "device-1")
+        XCTAssertEqual(request.lifecycleMode, .sunlight)
+    }
+
+    private func makeAccountLease(subjectId: String, generation: UInt64) -> AccountLease {
+        AccountLease(
+            subjectId: subjectId,
+            vaultId: "vault-\(subjectId)",
+            sessionId: "session-\(generation)",
+            generation: generation,
+            generationId: UUID(),
+            authorityEpoch: "epoch-v1"
+        )
+    }
+}
+
 private final class DeferredEchoContextBuildTransport: EchoContextBuildTransport {
     enum TestError: Error {
         case failed

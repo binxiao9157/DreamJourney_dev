@@ -243,6 +243,7 @@ final class EchoViewController: UIViewController {
 
     private let viewModel: EchoViewModel
     private let accountLeaseRuntime = AccountLeaseRuntime.shared
+    private let digitalHumanSessionClient: DigitalHumanSessionClientPort
     private let dialogEngineOwnerId = UUID()
     private var echoAccountLease: AccountLease?
     private var dialogEngineBindingHandle: DialogEngineBindingHandle?
@@ -764,8 +765,12 @@ final class EchoViewController: UIViewController {
         #endif
     }
 
-    init(viewModel: EchoViewModel = EchoViewModel()) {
+    init(
+        viewModel: EchoViewModel = EchoViewModel(),
+        digitalHumanSessionClient: DigitalHumanSessionClientPort = DreamJourneyBackendClient.shared
+    ) {
         self.viewModel = viewModel
+        self.digitalHumanSessionClient = digitalHumanSessionClient
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -1636,7 +1641,11 @@ final class EchoViewController: UIViewController {
                 return
             }
             self.digitalHumanSessionHeartbeatWorkItem = nil
-            DreamJourneyBackendClient.shared.heartbeatDigitalHumanSession(contract) { [weak self] result in
+            let leaseRequest = DigitalHumanSessionLeaseOperationRequest(
+                accountLease: accountLease,
+                contract: contract
+            )
+            self.digitalHumanSessionClient.heartbeatDigitalHumanSession(leaseRequest) { [weak self] result in
                 guard let self,
                       self.validateEchoAccountLease(
                         at: .ui,
@@ -1773,10 +1782,12 @@ final class EchoViewController: UIViewController {
         originatingAccountLease: AccountLease,
         reason: String
     ) {
-        DreamJourneyBackendClient.shared.releaseDigitalHumanSession(
-            contract,
+        let leaseRequest = DigitalHumanSessionLeaseOperationRequest(
+            accountLease: accountLease,
+            contract: contract,
             reason: reason
-        ) { [weak self] result in
+        )
+        digitalHumanSessionClient.releaseDigitalHumanSession(leaseRequest) { [weak self] result in
             guard let self else { return }
             switch result {
             case .success(let operation):
@@ -3387,13 +3398,25 @@ final class EchoViewController: UIViewController {
         requestOwnerUserId: String
     ) {
         let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? "ios-device"
-        DreamJourneyBackendClient.shared.createDigitalHumanSession(
-            userId: requestOwnerUserId,
-            personaId: context.ownerId,
+        guard let scope = VoiceDigitalHumanOperationScope(
+            accountLease: accountLease,
+            personaOwnerId: context.ownerId,
+            roleKey: context.mode.rawValue,
+            runtimeGeneration: runtimeSessionCallback.runtimeGeneration
+        ), let request = DigitalHumanSessionRequest(
+            scope: scope,
             scene: "echo",
             deviceId: deviceId,
             lifecycleMode: context.mode
-        ) { [weak self] result in
+        ) else {
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "sessionRequestRejected",
+                states: ["reason": "typedScopeInvalid"]
+            )
+            return
+        }
+        digitalHumanSessionClient.createDigitalHumanSession(request) { [weak self] result in
             DispatchQueue.main.async {
                 self?.handleCloudDigitalHumanSession(
                     result,
